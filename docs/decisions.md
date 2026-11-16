@@ -2230,6 +2230,24 @@ Hills). Decided by the agent building it (the owner away):
   and count too. Play, replay and build tools never wait.
 - Jobs already running when this came in are counted (their entries say `running`) but didn't wait themselves.
 
+## 2026-11-15 — Manhandla's dropped bombs first; his drop forced to bombs in training (round 25, `r25-manhandla`)
+
+- **What:** `reward.drops_first` (once the objective is no fight, the wanted drops, bombs below the maximum and a
+  heart or fairy below max health, are the only PBRS and `target` destinations; chains build the `target` wavefront
+  the same way), `reward.left_drop_penalty` (`penalty-left-drop` per wanted drop left on the floor, REWARD_TERMS 58)
+  and `ram_randomization.drop_bombs` (training envs only, `EnvOptions::forced_drops`: the game's help drop armed as
+  bombs, `$50` = $0A and `$51` = 1, at reset and after every step while a monster is in the room). boss-manhandla sets
+  all three (0.75, 3.0) and draws bombs 2-8. `BombStats` counts dropped bombs (`dropped`, `drop_taken`, `drop_left`,
+  `drop_expired`); chain records carry `bombs_in` / `bombs_out`.
+- **Why:** the owner: "the agent often leaves without taking bombs if dropped ... force manhandla to always drop
+  bombs in training and make it a primary objective to pick them up on win". The game's own mechanism, not a written
+  item id: the last hand's group has no bombs, only the help drop gives them. Measured before: 15 of 344 dropped
+  bombs left in the d3 segment, 23 of 246 on the full route; after: none.
+- **Models:** r75-mh-drop (r71-e + 1M) and r75-mh-fight (+1M, bombs 2-8). r75-mh-fight is the run to promote: d3
+  segment arrivals 62.9% → 75.8% (+12.9 ± 1.7, paired seeds), full route D3 exit 36.9% → 45.4% (+8.5 ± 1.4), out of
+  Dungeon 4 49.7 → 60.2% clips on, 44.2 → 51.9% clips off (docs/routes/d3.md "Manhandla's drop"). It enters Dungeon 4
+  with fewer bombs (3.64 against 4.15: sword kills arm no bomb drop).
+
 ## 2026-11-15 — The line drains the fastest jobs first; an express place for short ones (Lee)
 
 The first-come line (above) let long jobs hog it: a three-minute chain queued behind two waiting rounds waited for
@@ -2259,6 +2277,53 @@ hours. Lee: "fast jobs run sooner than later ... the time waited check will EVEN
   the old rule in every join order.
 - Still no controller, no new knob: `--no-wait` and `--nice` are the only opt-outs; `$TRIFORCE_MAX_JOBS` keeps
   meaning the regular places.
+
+## 2026-11-15 — Checkpoints are chosen by the chain and confirmed on fresh seeds (round 25, `r25-ckpt`)
+
+- **What:** `train --checkpoint-every N` (`train_round.py --checkpoint-every N`) keeps numbered checkpoints in the
+  run dir (`checkpoints/it<N>/`, each loadable like the run); `triforce select-checkpoint FAMILY RUN --segment NAME`
+  plays every one, the run's last and the promoted run on the same chain seeds as one batch job, ranks them by
+  arrivals then hearts on arrival, and plays the winner, the next best, the last and the promoted again on fresh
+  seeds; `--apply` makes the choice the run's `ckpt.pt` (architecture.md "Numbered checkpoints", eval-batch list).
+- **Why:** single-room evaluations can't see what the route needs (round 24: r74-darknut4 and r74-darknut5 both 97%
+  in single rooms, 34.9% and 46.4% on the Dungeon 5 segment), and the best of N noisy chain measurements is biased
+  up, so the number reported is the confirmation's.
+- **The darknut curve** (`r75-ck-darknut`: r74-darknut5 + 977 iterations with `--sil-coeff 0.1`, a checkpoint every
+  61; D5 segment, clips on, 1000 runs each): the 17 checkpoints span 42.4-47.7% (SD 1.6 points, the binomial
+  standard error 1.6), the promoted run 46.4%; on 1000 fresh seeds the screen's winner (it009831, 61 iterations in)
+  47.4%, the promoted 47.0%, the last 43.7%. Selection gains nothing over the promoted run (+0.4 ± 2.2 points
+  paired); the run's last checkpoint is the worst of the three (−3.3 ± 2.2). What does vary beyond noise is the
+  hearts Link carries out of the Olive Garden (6.43 promoted, 5.9-6.4 across the run; SD 0.17 against a standard
+  error of 0.08), and it moves the arrivals (correlation 0.69 across checkpoints). Training success, value loss and
+  entropy say nothing about it; the Garden alone (300 episodes, 2 bombs) follows it weakly (0.5). Clips off (the
+  same fresh seeds): it009831 36.9%, it010014 36.4%, the last 35.6%, it010746 34.1%, the promoted 34.3% (all
+  within 2.1 points of noise of each other).
+- **Outcome:** darknut stays r74-darknut5; nothing of `r75-ck-darknut` is to be promoted, and gibdo was not run (the
+  selection's condition, a confirmed gain, was not met). A model change is judged by 1000-run chains on fresh seeds:
+  the paired difference of two models on the same 1000 seeds has a standard error of 2.2 points (the same seeds
+  don't make two different models' runs alike), so one arm against another needs about 5 points to be a result,
+  3 points need about 2200 runs an arm and 2 points 5000; for darknut, the hearts out of the Garden (step 194's
+  `health_in`) is the sharper secondary.
+
+## 2026-11-15 — Hearts priced by what they are worth to the run: `reward.heart_value` (round 25, `r25-value`)
+
+- **What:** `triforce/heart_value.json` ships beside `routes.yaml`: V(step, hearts), the chance that a run entering a
+  route step's room with that many hearts is alive when it takes the next triforce, per way (clips on / off), at
+  every half heart. `python -m triforce.heart_value <chain jsonl>...` fits it (round 24's `r74-1k` and `r74b-1k-d5`,
+  clips on and off, the full route with the segments). A family's `reward.heart_value` turns on `exit` (the success
+  terminal's health part V(next step, h) / V(next step, max) instead of h / max), `potential: S` (every change of
+  hearts in a room pays S × ΔV at the room's step, beside the flat hit and pickup terms, outside the step's ±1 clamp)
+  and `low_health: F` (the hit penalty × 1 + F × (1 − h / max)). All off by default: today's reward bit for bit
+  (tested); a family that reads the table refuses to load when its steps no longer match the route.
+- **Why:** the reward paid about 2 per heart anywhere (20 × w × h / max and 0.25 per half heart) while a heart's worth
+  is steep and local: Gleeok 1 / 2 / 3 / 4 hearts V = 0.22 / 0.59 / 0.86 / 0.95, 5:0x37 0.00 / 0.58 / 0.81 / 0.93, flat
+  above 3 at Manhandla and after any boss (the triforce refills). The fit agrees with `Hearts`' independent table
+  (round 25) within 0.01-0.04. A potential term gives the price at the hit, not 100 steps later at a discounted exit.
+- **The table is data, not a model:** refit it after a round that changes the team or the route (the route check
+  enforces the second).
+- **Results:** round25.md (the darknut screen: base continued against `{exit: true, potential: 20}`, three seeds,
+  1000 paired D5 runs each). Continuations of a round 24 model must pass `--sil-coeff 0.1` as round 24 did (the
+  train.py default is 0; the first screen without it lost 12 points of D5 in both arms).
 
 ## 2026-11-16 — The honest planner beside the models (the owner, round 25)
 

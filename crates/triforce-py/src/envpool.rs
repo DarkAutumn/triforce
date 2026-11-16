@@ -378,6 +378,7 @@ fn build(py: Python<'_>, task: &Bound<'_, PyAny>, opts: PoolOptions) -> PyResult
                 shaping: Some(shaping.clone()),
                 start_weights: start_weights.as_ref().map(|(w, _)| w.clone()),
                 staged_kills: true,
+                forced_drops: true,
                 ..Default::default()
             };
             let mut env = TrainEnv::new(

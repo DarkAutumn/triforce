@@ -3,8 +3,8 @@ rooms: ['(0, 0x67)', '(0, 0x67, cave)', '(0, 0x68)', '(0, 0x58)', '(0, 0x37)', '
 start_states: ['0_67*_[0-9]', '0_68*_[0-9]', '0_58*_[0-9]', '0_37*_[0-9]', '0_4c*_[0-9]', '0_3c*_[0-9]', '0_78*_[0-9]', '0_64*_[0-9]', '0_66*_[0-9]', '0_57*_[0-9]']
 success: [exit-correct, enter-room:1:0x73, enter-room:2:0x7d]
 reward_profile: default
-reward: {pbrs: true}
-obs: {objective: true, target: true}       # schema 2 pointer, no item targets (round 10 §10, r42)
+reward: {pbrs: true, heal_targets: true}   # round 25: dropped hearts and fairies are targets while hurt
+obs: {objective: true, target: true}       # schema 2 pointer; no item targets beyond the hearts (round 10 §10, r42)
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chain arrives with partial hearts (round 5)
 items: {bombs: required}                   # round 22: 0x67's rock wall (its requires_bombs room); else the 10th kill
 clips: true                               # round 21: the screen wrap (W/E)

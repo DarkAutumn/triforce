@@ -22,6 +22,7 @@ use crate::end_conditions::{
     NO_ROOM_PROGRESS, RETREAT,
 };
 use crate::error::EnvError;
+use crate::heart_value::HeartContext;
 use crate::objective::{Attached, attach, needs_wavefront};
 use crate::observation::{Observation, ObservationBuilder};
 use crate::rewards::{SUCCESS, Scored, score_step};
@@ -49,7 +50,7 @@ use zelda::visits::{
     EXIT_DEATH, EXIT_OTHER, EXIT_SUCCESS, EXIT_TIMEOUT, RoomVisit, VisitEnd, VisitStep, VisitTracker,
     VisitView,
 };
-use zelda::{Action, LoadOptions, Nes, Session, SessionCheckpoint, SessionSnapshot};
+use zelda::{Action, LoadOptions, Nes, Session, SessionCheckpoint, SessionSnapshot, Var};
 
 /// The terminal part of an info.
 #[derive(Clone, Debug, PartialEq)]
@@ -321,6 +322,10 @@ pub struct SpecialistEnv<N: Nes, St: StateStore<N::State>> {
     staged_kills: bool,
     /// The kills the last reset banked in its start room (`ram_randomization.room_kills`), 0 if none.
     pub banked_kills: u8,
+    /// Training: `ram_randomization.drop_bombs` forces the room's next drop to be bombs (`EnvOptions::forced_drops`).
+    forced_drops: bool,
+    /// This episode forces it (drawn at reset).
+    pub drop_bombs: bool,
     /// Kills every reset banks, whatever the config draws ([`SpecialistEnv::set_banked_kills`]: exploring a staged
     /// start).
     fixed_kills: Option<Vec<((u8, u8), u8)>>,
@@ -406,6 +411,9 @@ pub struct EnvOptions {
     /// A training env: resets draw the family's `ram_randomization.room_kills` (round 24, staged starts with banked
     /// kills). Off for evaluation, chains, exploration, state builds and play: they meet the room as the game has it.
     pub staged_kills: bool,
+    /// A training env: resets draw the family's `ram_randomization.drop_bombs` (round 25, the room's next drop forced
+    /// to bombs). Off for evaluation, chains, exploration, state builds and play: they meet the game's own drops.
+    pub forced_drops: bool,
 }
 
 impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
@@ -458,6 +466,8 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             decision: None,
             staged_kills: opts.staged_kills,
             banked_kills: 0,
+            forced_drops: opts.forced_drops,
+            drop_bombs: false,
             fixed_kills: None,
             pool,
             curriculum,
@@ -660,6 +670,13 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
                 state = self.session.apply_ram(&values).clone();
             }
         }
+        // A forced bomb drop (training only): the help drop armed as bombs from the start.
+        let spec = &self.config.ram_randomization;
+        self.drop_bombs = self.forced_drops
+            && spec.drop_bombs.is_some_and(|p| rand::RngExt::random::<f64>(&mut self.rng) < p);
+        if let Some(armed) = self.arm_bomb_drop() {
+            state = armed;
+        }
         let entry_name = entry_name.as_deref().unwrap_or(&name);
         let (entry, visit) = (state_entry(entry_name), state_visit(entry_name));
         // A start the route enters on one way of a stretch only fixes the switch (4:0x21 from S: the clip way); else
@@ -697,6 +714,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         name: &str,
     ) -> Result<(Observation, StepInfo), EnvError> {
         self.curriculum_tag = None;
+        self.drop_bombs = false;
         self.session.restore(snapshot);
         self.clips_fixed = None;
         if let Some(on) = self.clips_plan {
@@ -727,6 +745,21 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             return Vec::new();
         }
         spec.staged_rooms().into_iter().map(|(at, (lo, hi))| (at, rand::RngExt::random_range(&mut self.rng, lo..=hi))).collect()
+    }
+
+    /// With the episode's forced bomb drop ([`SpecialistEnv::drop_bombs`]) and a monster left in the room (alive or
+    /// dying: the last hand's death sparkle ends in the drop, asm:Obj_EndMetastate), arms the game's help drop as
+    /// bombs (`HelpDropCount` $0A, `IsHelpDropBomb` 1; asm:Drop_SetUpItem) unless it is; any harm to Link clears both
+    /// (asm:Link_BeHarmed), so this runs after every step. The state written, None when nothing was.
+    fn arm_bomb_drop(&mut self) -> Option<Arc<GameView>> {
+        let state = self.session.state();
+        if !self.drop_bombs
+            || state.enemies.is_empty()
+            || (state.help_drop_count() == 10 && state.help_drop_is_bombs())
+        {
+            return None;
+        }
+        Some(self.session.apply_ram(&[(Var::HelpDropCount, 10), (Var::HelpDropValue, 1)]).clone())
     }
 
     /// The session's disabled kinds for Link's state: the config's `items` (bombs by [`crate::config::BombUse`],
@@ -917,10 +950,12 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             self.objectives.as_ref().expect("episode started"),
             change.previous.full_location(),
         );
+        let state = self.arm_bomb_drop().unwrap_or(state);
         self.left_with = cheats.left_with;
         let taken = self.hearts.taken;
         self.hearts.follow(&HeartView::of(&state), &change);
         let prev = self.attached.take().expect("episode started");
+        let route_step = self.objectives.as_ref().and_then(GameCompletion::step);
         let curr = attach(
             self.objectives.as_mut().expect("episode started"),
             Some(&change.previous),
@@ -942,6 +977,13 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         self.bomb_stats.update(&change);
         self.clip_stats.update(&change);
         let scale = self.shaping.as_ref().map_or(self.config.reward.shaping_scale, ShapingDial::get);
+        let gc = self.objectives.as_ref().expect("episode started");
+        let heart = HeartContext {
+            values: self.data.heart_values_for(&self.config, gc.route()),
+            step: route_step,
+            next: gc.step(),
+            clips: gc.clips_allowed(),
+        };
         let Scored { rewards, ending, outcome, terminated, truncated } = score_step(
             &self.config,
             &mut self.critic,
@@ -957,6 +999,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             scale,
             self.session.steps,
             &state,
+            &heart,
         )?;
 
         self.episode_steps += 1;

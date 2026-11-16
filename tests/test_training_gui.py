@@ -967,7 +967,7 @@ def test_estimates_and_run_times_read_coarsely():
     assert [gui.fmt_estimate(s) for s in (3, 40, 42, 59, 180, 2400, 3599, 3600, 4800, 7290)] == [
         '~5 s', '~40 s', '~40 s', '~1 min', '~3 min', '~40 min', '~1 h', '~1 h', '~1 h 20 min', '~2 h']
     assert [gui.fmt_coarse(s) for s in (0, 42, 725, 3725)] == ['0s', '42s', '12m', '1h 02m']
-    now = time_now()
+    now = float(int(time_now()))        # whole seconds: a stamp keeps microseconds, 'ran 30s' must not read 29.99
     folder = Path('/nonexistent/261115_009_x')
     # an old plan (no estimate, no lane): nothing; the plan's own lane and estimate (ran since it was created)
     assert gui.run_facts(folder, running_plan(os.getpid(), now), [], now) == {'express': False, 'est': ''}

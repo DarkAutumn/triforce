@@ -388,13 +388,13 @@ def chain_source(path: Path, runs: list[dict], provenance: dict) -> dict:
 
 def chain_team(provenance: dict) -> dict[str, dict]:
     """The models a chain played: specialist -> {'run', 'act', 'checkpoint_sha1'} (checkpoints are recorded as
-    ``<specialist>/<run>/ckpt.pt``)."""
+    ``<specialist>/<run>/ckpt.pt``; a numbered checkpoint's run is ``<run>/checkpoints/it<N>``, its own dir)."""
     team = {}
     for model in provenance.get('models') or []:
         parts = str(model.get('checkpoint') or '').split('/')
         if len(parts) >= 3:
-            team[model['name']] = {'run': parts[-2], 'act': model.get('act'),
-                                   'checkpoint_sha1': model.get('checkpoint_sha1')}
+            team[model['name']] = {'run': '/'.join(parts[1:-1]) if len(parts) == 5 else parts[-2],
+                                   'act': model.get('act'), 'checkpoint_sha1': model.get('checkpoint_sha1')}
     return team
 
 

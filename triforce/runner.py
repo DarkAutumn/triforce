@@ -207,6 +207,8 @@ class RoomRecord:
     max_health: int = 0
     keys_in: Optional[int] = None   # keys carried on entering / leaving the room (None in pre-Nov-6 records)
     keys_out: Optional[int] = None
+    bombs_in: Optional[int] = None  # natural bombs carried on entering / leaving the room (None before round 25)
+    bombs_out: Optional[int] = None
     outcome: str = 'in-progress'    # exit-correct, exit-wrong, retreat, retreat-limit, missed (heart waypoint), death,
     #                                 stuck (room or run budgets, wrong-exit or bounce limit), milestone, error
     # Dropped hearts during the visit: healed = real hearts gained, wasted = taken - healed, left = still on the
@@ -233,7 +235,8 @@ class RoomRecord:
     boss_eats: int = 0
     # Bombs in the visit (crates/zelda/src/bombs.rs): placed, enemy hits credited to them, placed without a hit,
     # damage dealt (wood-sword hits: HP lost, a kill's remaining HP), 10th damage-free kills (any weapon), bombs
-    # placed while the next kill was the 10th, forced bomb drops armed (a bomb made the 10th kill), bomb pickups.
+    # placed while the next kill was the 10th, forced bomb drops armed (a bomb made the 10th kill), bomb pickups;
+    # round 25: dropped bombs that appeared, were taken, were left on the floor on leaving, expired.
     # 0 in older records.
     bomb_placed: int = 0
     bomb_hits: int = 0
@@ -243,6 +246,10 @@ class RoomRecord:
     bomb_tenth_tries: int = 0
     bomb_armed: int = 0
     bomb_picked_up: int = 0
+    bomb_dropped: int = 0
+    bomb_drop_taken: int = 0
+    bomb_drop_left: int = 0
+    bomb_drop_expired: int = 0
     # Grid-point skips in the visit (crates/zelda/src/clips.rs): completed, aborted, completed per direction, and
     # aborted ones a MOVE finished (round 22). 0 in older records.
     clip_done: int = 0
@@ -270,6 +277,15 @@ class RoomRecord:
     # edge, the visit goes on) and wrong ones (each one of the run's wrong exits).  0 in older records.
     maze_loops: int = 0
     maze_wrong_loops: int = 0
+    # Round 25 (crates/zelda/src/supply.rs; 0/[] in older records): kills in the visit, the damage-free kill streak
+    # ($627) on entering and its highest value, fairies dropped and taken, and every dropped heart or fairy
+    # ({kind, step, deficit, to_drop, to_objective, fate: taken|expired|left|death, after, hits}).
+    kills: int = 0
+    streak_in: int = 0
+    streak_max: int = 0
+    fairies_dropped: int = 0
+    fairies_taken: int = 0
+    drops: List[dict] = field(default_factory=list)
 
 
 @dataclass

@@ -64,12 +64,32 @@ won), from the round 23 chains (`r73-1k` and `r73-1k-noclips`: the D2, D3 and D4
 Tried before and dropped: a flat damage penalty for rooms Link only crosses (round 6, twice: no chain gain), a
 "collect hearts" objective (round 6 §10: more pickups on d2-rope, no chain gain).
 
+**Supply (round 25, `Pickups`; measured with the chain's new supply fields, 1000 full runs clips on, r74 team with
+darknut5):** the supply is nearly used. 102 kills a run; 8.2 hearts and 1.06 fairies drop, 0.52 fairies are taken
+(healing about 0.76 hearts a run); 93% of runs make a 10-kill damage-free streak somewhere (3.3 a run), 74% a
+16-kill one (1.4 a run; Manhandla's reviving base, moldorm, D2's ropes and Goriyas, vire 4:0x12). Hearts left while
+Link is hurt are the overworld families' (no item targets): the heart lies 2 tiles away and the exit 9-17, and the
+model walks past it; the dungeon families take nearly all. `reward.heal_targets` on ow-tektite, ow-octorok and
+ow-zora, untrained (the pointer alone), 300 paired runs from `0_3cc_0` to the D1 triforce: +0.12 ± 0.04 hearts at
+Dungeon 1's entrance, no frame cost, 253 = 253 arrivals. Not pursued: the drop order (needs `$52A` in the
+observation, a schema change, for a few tenths of a heart), streak protection (fairies already fall often; a
+fairy left while hurt is 0.12 hearts a run outside Aquamentus' room), wallmaster gathering (Aquamentus kills only
+arrivals under 1 heart: 17 of 39, 0 of 1645 at 1 or more; at most the 16 Aquamentus deaths per 1000 full runs).
+
 **Proposed order:** (a) option 7, one chain set with a health-aware act rule against the standing one (no
 training); (b) option 1 with option 3 folded in, on the families that feed the four rooms of the table (vire,
 like-like, trap-room and stalfos-keese-gel in Dungeon 4; darknut and zol in Dungeon 3; d2-rope and goriya in
 Dungeon 2), judged by chains, since single rooms cannot see it; (c) option 5 for wallmaster (item 7 below), where
 gathering was lost. Items 2 (Gleeok at low health), 4 (the plain way's heart cost), 7 and 8 below are cases of
 this one.
+
+### 1b. Manhandla (round 25, `r25-manhandla`)
+
+Done: his dropped bombs are taken (`drops_first`, `left_drop_penalty`, the drop forced in training), and the fight is
+won more (r75-mh-fight; docs/routes/d3.md "Manhandla's drop"). Open: the fight's gain is the bomb range 2-8 and a
+second million steps together (no control arm); the new model kills with the sword more often, which arms no bomb
+drop, so Link enters Dungeon 4 with 0.5 bombs fewer and its walls take more cheated bombs; at 1 heart the fight is
+still lost half the time.
 
 ### 2. The way back after the Olive Garden at low hearts (round 24)
 
@@ -97,8 +117,11 @@ as an ending in training.
 ### 5. 0x37's column (round 24)
 
 The models cross at X `$78` (the probe's median), not the owner's `$70` (one ladder crossing; D5Paths: 0 hits in 54
-of 54 at `$70` swinging, hit in 17-30 of 54 at `$78`); 94 deaths per 1000 D5 runs. Ideas: the objective's path on
-column `$70`, a curriculum track there.
+of 54 at `$70` swinging, hit in 17-30 of 54 at `$78`); 94 deaths per 1000 D5 runs. Round 25 (§5): `path_costs` and
+hand-made tracks did not move the model (it never samples MOVE W there); cloning the scripted rule (`train --demos`,
+`r75-d537-c5`) did: 0.20 hearts a visit, 28 deaths per 1000 (from 1.19, 91), the other rooms kept. Left: the clone's
+missed swings (the rule loses 0.03); one DAgger round made it worse; more rule rows near the Darknut, or cloning at
+0.1 with an anchor on the other rooms.
 
 ### 6. The plain 0x64 (round 24, clips off)
 
@@ -582,9 +605,18 @@ Left open by round 21 (round21.md §10):
   2:0x1e was not taken (overall 94.7% −0.12 by argmax, 14 loops; it plays sample): take it first.
 - [ ] **Clips for levels 5-9.** Only levels 1 and 4 were scanned for skips; level 5's Blue Darknut rooms (`$05`,
   `$64`: blocks round their stairs; `zelda-asm/levels/level-5.md`) are the first to check when the route gets there.
-- [ ] **The final PPO update can change a model after its last logged iteration** (round21-trap-room.md §4:
+- [x] **The final PPO update can change a model after its last logged iteration** (round21-trap-room.md §4:
   `kind-nocur` s1 fell from 100% to 75% training success in its last two iterations; `long-north` s1 logged 100% for
-  10 iterations, its checkpoint scores 75-82%). There is no best-checkpoint selection.
+  10 iterations, its checkpoint scores 75-82%). There is no best-checkpoint selection. **Done (round 25, `r25-ckpt`):**
+  `train --checkpoint-every N` keeps numbered checkpoints and `triforce select-checkpoint` chooses one by a chain
+  segment, confirmed on fresh seeds (decisions 2026-11-15 "Checkpoints are chosen by the chain"). On darknut's 4M
+  continuation of r74-darknut5 the 17 checkpoints differ on the D5 segment by no more than noise (42.4-47.7%, SE
+  1.6); selection gained +0.4 ± 2.2 points over the promoted run after confirmation.
+- [ ] **Darknut loses the Olive Garden's hearts as it trains on** (round 25, `r75-ck-darknut`): hearts out of the
+  Garden in the D5 chain were 6.43 with r74-darknut5, 6.2-6.4 in the first 600 of 977 more iterations (5.96 once) and
+  5.9-6.1 in the last 300 (SD 0.17 across checkpoints, SE 0.08 each) while its training metrics stayed level; the
+  D5 arrivals follow it (correlation 0.69). A longer darknut training is no free gain; what to train against (hearts
+  out of the Garden as the measure, a hearts term) is open.
 - [ ] **`triforce.explore --variant` loses its tracks when `--specialist` is a YAML path** (it looks under the path,
   the explorer writes under the config name, and still prints "solved" with the wrong path; round21-trap-room.md
   §4). `1_22e_0` and `1_22e_1` give identical explore tracks for every seed.

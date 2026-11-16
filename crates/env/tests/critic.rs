@@ -14,9 +14,10 @@ use env::end_conditions::{
     NO_DAMAGE, NO_ROOM_PROGRESS, STUCK, StepView, TRIFORCE_COLLECTED, WALLMASTERED, classify_ending,
     enter_room_name,
 };
+use env::heart_value::HeartContext;
 use env::rewards::{
     HARD_FAILURE, REWARD_LARGE, REWARD_MAXIMUM, REWARD_MEDIUM, REWARD_MINIMUM, REWARD_SMALL,
-    REWARD_TINY, StepRewards,
+    REWARD_TINY, StepRewards, score_step,
 };
 use indexmap::IndexMap;
 use std::collections::BTreeSet;
@@ -1139,4 +1140,137 @@ fn classification_errors_say_what_to_fix() {
         classify_ending(DEATH, &success, &endings),
         Ok("soft-failure")
     );
+}
+
+// --- reward.heart_value (round 25) ---
+
+/// `goriya` (whose rooms hold 1:0x44) with `reward.heart_value` set to `exit`, `potential`, `low_health`.
+fn heart_config(exit: bool, potential: f64, low_health: f64) -> SpecialistConfig {
+    let mut config = (*common::game_data().specialist("goriya").unwrap()).clone();
+    config.reward.heart_value = env::config::HeartValueConfig { exit, potential, low_health };
+    config
+}
+
+/// d2first's step 64 is 1:0x44 W -> E (goriya), step 65 1:0x45 W -> N (wallmaster).
+fn heart_context(values: &env::heart_value::HeartValues, next: Option<usize>) -> HeartContext<'_> {
+    HeartContext { values: Some(values), step: Some(64), next, clips: true }
+}
+
+fn score(config: &SpecialistConfig, change: &Change, heart: &HeartContext) -> env::rewards::Scored {
+    let objective = objective(&[EAST]);
+    let mut critic = GameplayCritic::for_config(config).unwrap();
+    let mut ends = EndConditions::new(
+        &config.rooms,
+        &config.success,
+        config.one_room,
+        None,
+        None,
+        config.max_steps as u32,
+    );
+    let c = Critique {
+        change,
+        map: &MAP,
+        prev_objective: &objective,
+        objective: &objective,
+        prev_wavefront: None,
+        quiet_steps: 0,
+    };
+    score_step(config, &mut critic, &mut ends, &c, 1.0, 1, &change.state, heart).unwrap()
+}
+
+/// Off (the default) is today's reward exactly: the table and the route steps change nothing.
+#[test]
+fn heart_value_off_is_todays_reward() {
+    let data = common::game_data();
+    let values = data.heart_values.as_deref().expect("triforce/heart_value.json ships with the route");
+    let config = heart_config(false, 0.0, 0.0);
+    assert_eq!(config.reward.heart_value, env::config::HeartValueConfig::default());
+    assert!(data.heart_values_for(&config, "d2first").is_none(), "off reads no table");
+    let full = Ram::new();
+    let hurt = full.with(Var::HeartsAndContainers, 0x21).with(Var::PartialHearts, 0x7F); // 1.5 of 3
+    let pickup = step(&hurt, &hurt.with(Var::PartialHearts, 0xFF), "WAIT 8");
+    let hit = step(&full, &hurt, "WAIT 8");
+    let exit = step(&hurt, &hurt.room(EAST), "MOVE E 8");
+    for change in [&pickup, &hit, &exit] {
+        let without = score(&config, change, &HeartContext::default());
+        let with = score(&config, change, &heart_context(values, Some(65)));
+        assert_eq!(without.rewards.terms().collect::<Vec<_>>(), with.rewards.terms().collect::<Vec<_>>());
+        assert_eq!(without.rewards.value().to_bits(), with.rewards.value().to_bits());
+        assert_eq!((without.ending, without.outcome), (with.ending, with.outcome));
+    }
+    let scored = score(&config, &exit, &heart_context(values, Some(65)));
+    assert_eq!(scored.outcome, Some("success"));
+    let terminal = scored.rewards.get("reward-terminal-success").unwrap().value;
+    assert!(approx(terminal, env::rewards::success_reward_value(1.5, 3.0, 0.5)), "{terminal}");
+}
+
+/// `potential`: a change of hearts pays scale × (V(step, after) − V(step, before)), outside the step's clamp;
+/// `low_health`: the hit penalty grows with the hearts lost; `exit`: the success terminal's health part is
+/// V(next step, hearts) / V(next step, max).
+#[test]
+fn heart_value_terms() {
+    let data = common::game_data();
+    let values = data.heart_values.as_deref().unwrap();
+    let curve = |step: usize| values.curve(Some(step), true).unwrap();
+    let full = Ram::new();
+    let low = full.with(Var::HeartsAndContainers, 0x20).with(Var::PartialHearts, 0x7F); // 0.5 of 3
+    let one = full.with(Var::HeartsAndContainers, 0x20).with(Var::PartialHearts, 0xFF); // 1 of 3
+    let heart = heart_context(values, Some(65));
+
+    // A hit from 1 to 0.5 hearts at 1:0x44: the flat −0.25, then 20 × ΔV unclamped.
+    let config = heart_config(false, 20.0, 0.0);
+    let hit = step(&one, &low, "WAIT 8");
+    let r = score(&config, &hit, &heart).rewards;
+    let dv = curve(64).at(0.5) - curve(64).at(1.0);
+    assert!(dv < -0.1, "a heart at one heart is worth much: {dv}");
+    assert!(approx(value(&r, "penalty-heart-value"), 20.0 * dv));
+    assert!(approx(r.value(), -REWARD_SMALL + 20.0 * dv), "the term is outside the clamp: {}", r.value());
+    // The pickup back pays the same.
+    let r = score(&config, &step(&low, &one, "WAIT 8"), &heart).rewards;
+    assert!(approx(value(&r, "reward-heart-value"), -20.0 * dv));
+    // Off the route or without a curve: no term.
+    let r = score(&config, &hit, &HeartContext { step: None, ..heart }).rewards;
+    assert!(!r.contains("penalty-heart-value"));
+
+    // low_health 2: the hit's penalty × (1 + 2 × (1 − 0.5 / 3)).
+    let config = heart_config(false, 0.0, 2.0);
+    let r = score(&config, &hit, &heart).rewards;
+    assert!(approx(value(&r, "penalty-heart-value"), -REWARD_SMALL * 2.0 * (1.0 - 0.5 / 3.0)));
+
+    // exit: 20 × (0.5 + 0.5 × V(65, 1) / V(65, top)) instead of 20 × (0.5 + 0.5 × 1/3).
+    let config = heart_config(true, 0.0, 0.0);
+    let exit = step(&one, &one.room(EAST), "MOVE E 8");
+    let r = score(&config, &exit, &heart).rewards;
+    let priced = 20.0 * (0.5 + 0.5 * curve(65).at(1.0) / curve(65).top());
+    assert!(approx(value(&r, "reward-terminal-success"), priced));
+    // No next step (off the route): the linear fraction.
+    let r = score(&config, &exit, &HeartContext { next: None, ..heart }).rewards;
+    assert!(approx(value(&r, "reward-terminal-success"), env::rewards::success_reward_value(1.0, 3.0, 0.5)));
+}
+
+/// The shipped table matches d2first; an edited route is refused by the families that read it, and the curve
+/// interpolates between half hearts.
+#[test]
+fn heart_value_table_checks_the_route() {
+    let data = common::game_data();
+    let values = data.heart_values.as_deref().unwrap();
+    let steps = &data.map.routes["d2first"];
+    let visits = &data.map.visits["d2first"];
+    values.check(steps, visits).unwrap();
+    let mut moved = steps.clone();
+    moved[64].exit = "N".into();
+    let err = values.check(&moved, visits).unwrap_err().0;
+    assert!(err.contains("step 64") && err.contains("refit"), "{err}");
+    assert!(values.check(&steps[1..], &visits[1..]).is_err());
+    let curve = values.curve(Some(64), true).unwrap();
+    assert!(approx(curve.at(0.75), (curve.values[1] + curve.values[2]) / 2.0));
+    assert_eq!(curve.at(99.0), curve.top());
+    assert_eq!(curve.at(0.0), 0.0);
+    // Steps on one way only have no curve on the other (0x31 E -> N is the clip way's).
+    let clip_only = steps.iter().position(|s| s.way == Some(zelda::game_map::Way::Clips)).unwrap();
+    assert!(values.curve(Some(clip_only), false).is_none() && values.curve(Some(clip_only), true).is_some());
+    let mut config = heart_config(true, 0.0, 0.0);
+    data.check_heart_values(&config).unwrap();
+    config.route = Some("clips-gauntlet".into());
+    assert!(data.check_heart_values(&config).is_err(), "a table for another route");
 }

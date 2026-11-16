@@ -15,6 +15,7 @@
 use crate::config::{GameData, SpecialistConfig};
 use crate::critic::BossTransitions;
 use crate::error::EnvError;
+use crate::heart_value::HeartContext;
 use crate::objective;
 use crate::observation::{Observation, ObservationBuilder};
 use crate::reward_track::RewardTrack;
@@ -38,6 +39,7 @@ use zelda::linger::{LingerState, LingerStep, LingerSummary, LingerTracker, linge
 use zelda::objectives::{GameCompletion, Objective, ObjectiveKind, exit_is_correct, start_route};
 use zelda::power_on;
 use zelda::room::Wavefront;
+use zelda::supply::{DropNote, SupplyStats, SupplyTracker};
 use zelda::{Action, Change, LoadOptions, MapLocation, Nes, Session};
 
 /// Default run cap.
@@ -346,6 +348,9 @@ pub struct RoomRecord {
     /// `keys_in` is the Dodongo arrival's key count).
     pub keys_in: i32,
     pub keys_out: i32,
+    /// Bombs Link carried on entering the room, and on leaving it, without cheated ones (round 25).
+    pub bombs_in: i32,
+    pub bombs_out: i32,
     /// in-progress, exit-correct, exit-wrong, retreat (the route step's `retreat` exit), retreat-limit (one retreat
     /// more than `MAX_RETREATS`: the run ends), missed (a route `heart` waypoint missed), death, stuck, milestone,
     /// error.
@@ -390,20 +395,26 @@ pub struct RoomRecord {
     /// on through both; leaving by the sequence's last edge is the visit's exit.
     pub maze_loops: u32,
     pub maze_wrong_loops: u32,
+    /// Kills, the damage-free kill streak and fairies in the visit, and every dropped heart and fairy with its fate
+    /// (`zelda::supply`; JSON `kills`, `streak_in`, `streak_max`, `fairies_dropped`, `fairies_taken`, `drops`; round
+    /// 25).
+    pub supply: SupplyStats,
+    pub drops: Vec<DropNote>,
 }
 
 impl RoomRecord {
-    /// `keys`: Link's natural keys (`CheatLedger::natural`); `clips_allowed`: the run-time clips switch now (the
-    /// milestone record's too: the switch the run ended with).
+    /// `carried`: Link's natural keys and bombs (`CheatLedger::natural`); `clips_allowed`: the run-time clips switch
+    /// now (the milestone record's too: the switch the run ended with).
     fn new(
         index: usize,
         location: MapLocation,
         specialist: &str,
         state: &GameView,
-        keys: i32,
+        carried: (i32, i32),
         outcome: &str,
         clips_allowed: bool,
     ) -> Self {
+        let (keys, bombs) = carried;
         RoomRecord {
             index,
             level: location.level,
@@ -417,6 +428,8 @@ impl RoomRecord {
             max_health: state.max_health(),
             keys_in: keys,
             keys_out: keys,
+            bombs_in: bombs,
+            bombs_out: bombs,
             outcome: outcome.to_owned(),
             hearts_dropped: 0,
             hearts_taken: 0,
@@ -441,6 +454,8 @@ impl RoomRecord {
             clips_flips: Vec::new(),
             maze_loops: 0,
             maze_wrong_loops: 0,
+            supply: SupplyStats::default(),
+            drops: Vec::new(),
         }
     }
 
@@ -455,7 +470,7 @@ impl RoomRecord {
             "index": self.index, "level": self.level, "room": self.room, "in_cave": self.in_cave,
             "specialist": self.specialist, "steps": self.steps, "frames": self.frames,
             "health_in": self.health_in, "health_out": self.health_out, "max_health": self.max_health,
-            "keys_in": self.keys_in, "keys_out": self.keys_out,
+            "keys_in": self.keys_in, "keys_out": self.keys_out, "bombs_in": self.bombs_in, "bombs_out": self.bombs_out,
             "outcome": self.outcome, "hearts_dropped": self.hearts_dropped, "hearts_taken": self.hearts_taken,
             "hearts_healed": self.hearts_healed, "hearts_wasted": self.hearts_wasted,
             "hearts_left": self.hearts_left, "hearts_expired": self.hearts_expired,
@@ -468,6 +483,9 @@ impl RoomRecord {
             "clips_flips": self.clips_flips.iter().map(|(steps, on)| json!({"step": steps, "clips": on}))
                 .collect::<Vec<_>>(),
             "maze_loops": self.maze_loops, "maze_wrong_loops": self.maze_wrong_loops,
+            "kills": self.supply.kills, "streak_in": self.supply.streak_in, "streak_max": self.supply.streak_max,
+            "fairies_dropped": self.supply.fairies_dropped, "fairies_taken": self.supply.fairies_taken,
+            "drops": self.drops.iter().map(drop_json).collect::<Vec<_>>(),
         });
         let o = m.as_object_mut().expect("object");
         for item in CheatItem::ALL {
@@ -481,6 +499,13 @@ impl RoomRecord {
         }
         m
     }
+}
+
+/// One dropped heart or fairy of a visit (`zelda::supply::DropNote`).
+fn drop_json(d: &DropNote) -> Value {
+    json!({"kind": if d.fairy { "fairy" } else { "heart" }, "step": d.step, "deficit": d.deficit,
+           "to_drop": d.to_drop, "to_objective": d.to_objective, "fate": d.fate.name(), "after": d.after,
+           "hits": d.hits})
 }
 
 /// Everything one run produced.
@@ -594,6 +619,7 @@ pub struct ChainEnv<N: Nes, St: StateStore<N::State>> {
     change: Option<Change>,
     prev_objective: Option<Objective>,
     hearts: HeartTracker,
+    supply: SupplyTracker,
     linger: LingerTracker,
     /// The run's cheated bombs, keys and rupees (`zelda::cheats`).
     cheats: CheatLedger,
@@ -648,6 +674,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             change: None,
             prev_objective: None,
             hearts: HeartTracker::default(),
+            supply: SupplyTracker::default(),
             linger: LingerTracker::default(),
             cheats: CheatLedger::default(),
             left_with: ItemCounts::default(),
@@ -1002,6 +1029,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         let taken = self.hearts.taken;
         self.hearts.follow(&HeartView::of(&state), &change);
         let prev_objective = self.objective.take().expect("run started");
+        let route_step = self.objectives.as_ref().and_then(GameCompletion::step);
         let entered = state.full_location() != change.previous.full_location();
         // A new room: the path search follows its family's `clips:` switch from the objective on.
         let clips = entered.then(|| self.clips_in(state.full_location()));
@@ -1026,6 +1054,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             gc.set_clips_allowed(false);
             objective = gc.objectives(None, &state);
         }
+        self.supply.update(&change, &state, &objective);
         self.linger.update(
             &LingerState::of(&change.previous, &prev_objective),
             &LingerState::of(&state, &objective),
@@ -1034,7 +1063,17 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             || linger_wavefront(&state, &objective, None),
         );
         self.scored = match &mut self.track {
-            Some(track) => Some(track.step(&self.data.map, &change, &state, &objective)?),
+            Some(track) => {
+                let gc = self.objectives.as_ref().expect("run started");
+                let config = &self.current.as_ref().expect("run started").config;
+                let heart = HeartContext {
+                    values: self.data.heart_values_for(config, gc.route()),
+                    step: route_step,
+                    next: gc.step(),
+                    clips: gc.clips_allowed(),
+                };
+                Some(track.step(&self.data.map, &change, &state, &objective, &heart)?)
+            }
             None => None,
         };
         let summary = self.linger.summary();
@@ -1094,7 +1133,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         {
             self.result.as_mut().unwrap().rooms.last_mut().unwrap().outcome = "exit-correct".into();
             self.finish_record(&state);
-            let keys = self.cheats.natural(CheatItem::Keys, &state);
+            let keys = (self.cheats.natural(CheatItem::Keys, &state), self.cheats.natural(CheatItem::Bombs, &state));
             let result = self.result.as_mut().unwrap();
             result.result = "success".into();
             result.reason = format!("took the level {level} triforce");
@@ -1132,6 +1171,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
     fn finish_record(&mut self, state: &GameView) {
         self.hearts.finish(Some(&HeartView::of(state)));
         let h = self.hearts.summary();
+        let supply = self.supply.finish(state.game_over());
         let record = self
             .result
             .as_mut()
@@ -1145,12 +1185,17 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             state.health()
         };
         record.keys_out = self.cheats.natural(CheatItem::Keys, state);
+        record.bombs_out = self.cheats.natural(CheatItem::Bombs, state);
         record.hearts_dropped = h.dropped;
         record.hearts_taken = h.taken;
         record.hearts_left = h.left;
         record.hearts_healed = h.healed;
         record.hearts_wasted = h.wasted;
         record.hearts_expired = h.expired;
+        if let Some((stats, drops)) = supply {
+            record.supply = stats;
+            record.drops = drops;
+        }
     }
 
     /// The session's disabled kinds for the acting specialist's `items` in Link's state, with the route's bomb
@@ -1261,7 +1306,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                     return Ok(ChainStatus::Done(result.clone()));
                 }
             }
-            let keys = self.cheats.natural(CheatItem::Keys, &state);
+            let keys = (self.cheats.natural(CheatItem::Keys, &state), self.cheats.natural(CheatItem::Bombs, &state));
             let on_step = self.objectives.as_ref().and_then(GameCompletion::step);
             let result = self.result.as_mut().unwrap();
             // The stop room, or the stop step's room entered by the route's own exit from the room before it
@@ -1333,6 +1378,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             record.clips_flips.extend(self.entry_flip.take().map(|on| (0, on)));
             result.rooms.push(record);
             self.hearts.reset(&HeartView::of(&state));
+            self.supply.reset(&state);
             self.no_damage = 0;
             self.linger.reset(&LingerState::of(&state, &objective), || {
                 linger_wavefront(&state, &objective, None)

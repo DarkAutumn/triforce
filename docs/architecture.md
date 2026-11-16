@@ -31,7 +31,7 @@ flowchart LR
 | `crates/theater` | Replays for watching: `queues.rs` (`Queues`: `success`/`stuck`/`died`/`random` first-in-first-out and `best`, the top runs seen), `feed.rs` (`Feed`: the background thread that files every finished run of a `Producer` and pauses it while nothing is wanted), `screen.rs` (`Screen`: one thread per cell playing a replay at a frame rate, one cell heard), `speaker.rs` (`Ring`, `Speaker`: the sound device, `cpal`), `overlay.rs` (the controller drawn into a frame). Knows replays and the emulator only. |
 | `crates/policy` | `Policy`: the network's Rust copy that acts inside the pool (forward pass, masked heads, keyed Gumbel noise `noise.rs`). |
 | `crates/tools` | The `tf` CLI (below). |
-| `triforce/` (Python) | `ppo.py`, `rollout_buffer.py`, `metrics.py`, `model.py`, `train.py`, `evaluate.py`, `runner.py`, `replay.py`, `golden.py`, `provenance.py`, `run.py`, `cli.py`, `play.py`, `play_grid.py`, `play_view.py`, `video.py`, `explore.py`, `entry_states.py`, `chain_hp.py`, `events.py`, `registry.py`, `plr.py`, `best_of_n.py`; thin `observation.py` (gym space from `OBS_SPEC`), `actions.py` (`Action`, `ActionMask` flat-mask view), `zelda_enums.py` (`ActionKind`, `Direction`, `MapLocation`), `specialist.py`, `paths.py` (`STATES_DIR`, `TRAJECTORIES_DIR`). |
+| `triforce/` (Python) | `ppo.py`, `rollout_buffer.py`, `metrics.py`, `model.py`, `train.py`, `evaluate.py`, `runner.py`, `replay.py`, `golden.py`, `provenance.py`, `run.py`, `cli.py`, `play.py`, `play_grid.py`, `play_view.py`, `video.py`, `explore.py`, `entry_states.py`, `chain_hp.py`, `heart_value.py`, `events.py`, `registry.py`, `plr.py`, `best_of_n.py`, `eval_batch.py`, `select_checkpoint.py`; thin `observation.py` (gym space from `OBS_SPEC`), `actions.py` (`Action`, `ActionMask` flat-mask view), `zelda_enums.py` (`ActionKind`, `Direction`, `MapLocation`), `specialist.py`, `paths.py` (`STATES_DIR`, `TRAJECTORIES_DIR`). |
 
 ## Processes and threads
 
@@ -323,7 +323,8 @@ from the family of the room Link is in) offers the CLIP kind in every direction 
 the executor); MOVE never performs a skip. With clips on, the path search behind PBRS, linger and the `target`
 observation (`Room::wavefront(..., clips)`, `clips::skip_jumps`) treats every block clip and ladder clip as a jump
 from each rest position of its zone to its end, at its frames converted to tiles (1.5 pixels a frame, 8 a tile); the
-search becomes Dijkstra only when a room has jumps, and the `target` direction follows a jump on the shortest way.
+search becomes Dijkstra only when a room has jumps or `path_costs` (below), and the `target` direction follows a
+jump on the shortest way.
 The overworld wrap is no jump (it ends one MOVE from the opposite edge: a jump would point the way to that edge's
 exit out of the entry edge; the round-21 policies learned the wrap without one). The wrap exit is one: the wrap
 rows' W edge tiles are W exit tiles of the room (`Room::with_wrap_exit`; solid, walking never reaches them) and its
@@ -414,8 +415,9 @@ the builder.
 Schema v2 added `target` (`TARGET_FEATURES`), filled only with `obs.target: true` (default false; the key always
 exists, so every specialist shares one layout). It reads the PBRS wavefront, which the env computes whenever
 `reward.pbrs` or `obs.target` is on (dropped items are targets as `reward.item_targets`/`nearby_items` say):
-`target_N/S/W/E` is a one-hot of the neighbour of Link's tile with the lowest distance below his own, over legal
-steps only (ties N, S, W, E; all 0 on a target tile, when unreachable or when no legal step goes lower), `target_distance` is Link's wavefront distance / 32 clamped
+`target_N/S/W/E` is a one-hot of the neighbour of Link's tile whose distance plus the step's cost (1, plus the
+room's `path_costs` on that tile) is lowest and no more than his own, over legal steps only (ties N, S, W, E; all 0
+on a target tile, when unreachable or when no legal step goes lower), `target_distance` is Link's wavefront distance / 32 clamped
 to 1 (1 when unreachable or without a wavefront), `target_dx`/`target_dy` are the pixel offset from Link to the
 target tile the steepest descent reaches (/256, /176; 0 if none) and `target_is_item` says whether that tile
 belongs to a dropped item. Chains rebuild the same wavefront (the acting specialist's `reward` decides the item
@@ -485,6 +487,18 @@ and `keys_in/keys_out` (Link's natural keys carried into and out of the room, ch
 `arrival_keys` counts milestone arrivals by keys carried, so full key carriage is reported separately from reaching
 Dodongo).
 
+### Supply (`crates/zelda/src/supply.rs`, round 25)
+
+`SupplyTracker` follows the same room visit for the chain's `RoomRecord`: `kills` (increments of `$627`
+WorldKillCount; a step whose hit to Link cleared it counts what remains), `streak_in` / `streak_max` (`$627` on
+entering and its highest value in the visit; the game drops a fairy for a drop-capable death that ends while it
+reads 16, `zelda-asm/enemies.md` "Drop tables"), `fairies_dropped` / `fairies_taken`, and `drops`: one entry per
+heart or fairy that fell during the visit (`kind`, `step` into the visit, `deficit` = max − health then,
+`to_drop` / `to_objective` = Link's walking distance in tiles to it and to the route objective's targets then, None
+when unreachable, `fate` taken | expired | left | death, `after` = actions until then, `hits` = actions in that
+time that cost health). Drops already on the floor on entry are not followed. Fates follow the hearts rule above
+(lifetime timer, else a health rise).
+
 ### Cheated items (`crates/zelda/src/cheats.rs`)
 
 Bombs ($658), keys ($66E) and rupees ($66D) stay natural (never refilled; `items: {bombs: ...}` only masks the
@@ -524,9 +538,11 @@ Bomb use (`zelda::bombs::BombStats`, `_native.BOMB_STATS`, Lee Nov 11): `placed`
 step: every session looks ahead for bombs), `misses` (placed, no hit), `damage` (dealt by those hits, in wood-sword
 hits: an enemy's HP lost, a kill's remaining HP), `tenth_kills` (`$50` 9 → 10, any weapon),
 `tenth_tries` (placed while the next kill was the 10th), `armed` (the 10th kill made with a bomb: a forced bomb drop),
-`picked_up` (bomb pickups). Terminal `info['bombs']` holds them next to `used` → training `bombs/<stat>` per episode
+`picked_up` (bomb pickups), and (round 25) the dropped bombs: `dropped` (bomb drops that appeared), `drop_taken`
+(gone with lifetime left, or with Link's count up), `drop_left` (on the floor when Link left the room),
+`drop_expired`. Terminal `info['bombs']` holds them next to `used` → training `bombs/<stat>` per episode
 (progress events too); eval `mean_bomb_<stat>` and per-visit `bomb_<stat>` / `bomb_<stat>_per_visit`; chain
-`RoomRecord.bomb_<stat>`.
+`RoomRecord.bomb_<stat>`. Chain records also carry `bombs_in` / `bombs_out` (natural bombs on entering and leaving).
 
 Boss fights (`crates/env/src/critic.rs` `BossTransitions`): a Dodongo whose ObjState ($AC+slot) enters 2 was
 *stunned* by a bomb's smoke (the sword can kill him then; a stun timer that goes up is a new stun); a rise in
@@ -587,6 +603,15 @@ not change. This is not the old heart-only objective.
 treasure) a PBRS target the same way, hearts and fairies only while Link is below max health (they only heal).
 `reward.fixed_pickup_reward` (default false) pays `reward-gained-health` a flat `REWARD_MAXIMUM` for any health
 gained instead of 0.25–0.75 scaled by how hurt Link was. Both are the round 10 §8 heart experiments' controls.
+`reward.drops_first` (round 25, boss-manhandla; default false): once the objective is no fight, the wanted drops
+(bombs below Link's bomb maximum, a heart or fairy below max health; `objective::wanted_drop`) replace the
+objective's PBRS and `target` destinations until they are taken or gone, so Link takes them before the treasure and
+the exits (chains build the `target` wavefront the same way); with it, dropped bombs at the maximum are no target.
+`reward.left_drop_penalty` (default 0) is `penalty-left-drop` per wanted drop with 16+ lifetime ticks left on the
+floor when Link leaves the room.
+`reward.heal_targets` (default false; round 25) makes dropped hearts and fairies alone PBRS targets while Link is
+below max health (`item_targets` includes them): for the overworld families, whose rupees and bombs `item_targets`
+would chase.
 `reward.boss_ate_bomb_penalty` (default 0.5, ≥ 0; 0 drops the term) is `penalty-boss-ate-bomb` per step in which a
 Dodongo swallowed a bomb (round 12).
 `clips: true|false` (round 21; default false; "Grid-point skip" above; the removed designs' `{action: ...,
@@ -613,6 +638,24 @@ its confirmation evaluation plays both.
 `reward.exit_health_weight` w (default 0.5, in [0, 1]; better-play §1b) sets how much of the success terminal rides
 on the health Link leaves with: `reward-terminal-success` = 20 × ((1 − w) + w × hp/max_hp) (`success_reward_value`;
 0.5 is the long-standing 20 × (0.5 + 0.5 × hp/max_hp), bit for bit; 1.0 pays 20 × hp/max_hp, 0 a flat 20).
+`reward.heart_value` (round 25; `crates/env/src/heart_value.rs`; all off by default, today's reward exactly) prices
+hearts by what they are worth to the run. `triforce/heart_value.json` holds V(step, hearts) for every route step at
+every half heart, per way (`clips`: the run-time clips switch on, `plain`: off; a step on one way only has no curve
+on the other): the chance that a run entering the step's room with that many hearts is alive when it takes the next
+triforce (which refills him). `python -m triforce.heart_value <chain jsonl>...` fits it from chain runs, clips on and
+off, the full route's with the segments' (each arrival bin's own transitions mixed with 20 pseudo-visits of a prior
+that assumes the damage a room deals does not depend on the hearts brought, a Kaplan-Meier estimate over the step's
+visits; backwards from each triforce; made non-decreasing in hearts); refit it after a round that changes the team
+or the route. The table names each step's room, entry, exit and visit, and a family that reads it refuses to load
+when they no longer match the route (`GameData::check_heart_values`); a family that doesn't read it ignores it. The
+terms: `exit: true` makes the success terminal's health part V(next step, hearts out) / V(next step, max hearts)
+instead of hp/max_hp (still weighted by w); `potential: S` pays S × (V(step, after) − V(step, before)) for every
+change of hearts in a room (a hit or a pickup; not the triforce's refill or a heart container) at the room's route
+step, as `reward-heart-value` / `penalty-heart-value`, beside the flat `penalty-lost-health` /
+`reward-gained-health`; `low_health: F` adds F × (1 − hearts after / max) × the step's `penalty-lost-health` to the
+same term. The heart-value term is added after the step's ±1 clamp (so it can price a heart at more than 1), and
+scaled by `shaping_scale` like the critic's terms. Training and a chain's reward recording build the same
+`HeartContext` (the route step before and after the action, the clips switch) for `score_step`.
 `reward.shaping_scale` (default 1.0, in [0, 1]) multiplies every term the critic produces each step, rewards and
 penalties alike; the terminal terms (`reward-terminal-success`, already health-scaled, and
 `penalty-terminal-failure`) are never scaled. `reward.frame_penalty` (default 0, ≥ 0; e.g. 0.001/8) adds an unscaled
@@ -621,11 +664,17 @@ penalties alike; the terminal terms (`reward-terminal-success`, already health-s
 `triforce.train --shaping-anneal N` (`PPOConfig.shaping_anneal`) lowers it linearly to 0 over the first N iterations
 (iteration k rolls out at start × max(0, 1 − (k−1)/N)) and reports it as `charts/shaping_scale` (better-play §1a
 outcome fine-tuning: after normal training, the policy optimizes the true outcome).
-`triforce.train --ent-anneal SHARE` (`PPOConfig.ent_anneal`) lowers the entropy bonus linearly to 0 over the last
+`triforce.train --ent-coeff C` sets the entropy bonus (`PPOConfig.ent_coeff`, default 0.01); `--ent-anneal SHARE`
+(`PPOConfig.ent_anneal`) lowers it linearly to 0 over the last
 SHARE of a run's iterations (`charts/ent_coeff`; §6b). `--best-of-n RUNS` (`best_of_n.collect_best`; §3) replaces the
 demo-regularization batch, at the start and every `--best-every` iterations, with the current policy's best
 `--best-keep` successful runs per seed start state out of RUNS (ranked by success, hearts lost, frames; played on a
 separate `EvalTask` pool), weighted `--best-coeff`; a batch larger than a minibatch is sampled per minibatch.
+`--demos FILE... [--demo-coeff C]` (`triforce/demos.py`; not with best-of-N) fills the same term for the whole run
+with demonstration rows a scripted rule recorded through the env (`DemoRecorder`: observation, action mask, action;
+`.npz`; a rare decision can be written several times to weigh more). A row whose duration is `demos.ANY_DURATION`
+(-1) leaves the duration head's term out (`ppo.demo_log_prob`, `PolicyOutput.head_log_prob`): kind and direction are
+cloned, the pace stays the policy's. Round 25 §5: `scripts/experiments/r25_d5_37_tracks.py --demos` for 5:0x37.
 `--sil-coeff C` (`PPOConfig.sil_coeff`, self-imitation learning, Oh et al. 2018; §3) is the alternative to best-of-N:
 after each rollout `ppo.SilReplay` keeps the rows whose λ = 1 return R (`RolloutBuffer.monte_carlo_returns`:
 frame-aware discount to the episode end, bootstrapped exactly like GAE, against the learner's recomputed values)
@@ -771,6 +820,15 @@ every step, so following an enemy that moves away pays again, and knockback rese
   default to `DEFAULT_ACT`. The act modes and the run-time clips switch (round 22) are independent: every tool
   that takes `--act` takes `--clips` beside it, and a record carries both its switch fields and its decision
   statistics.
+- **Numbered checkpoints** (round 25): `train --checkpoint-every N` (`train_round.py --checkpoint-every N`, passed
+  to every training; off by default) also keeps the checkpoint of every Nth iteration of the run as
+  `<run dir>/checkpoints/it<iteration:06d>/` (`registry.snapshot_checkpoint`, `snapshot_dir`, `list_snapshots`):
+  a byte copy of `ckpt.pt` as saved at that iteration, with its own `version` and an `act` bound to the copy's sha1
+  (the run's mode), so the dir goes wherever a run dir does (`eval-chain --checkpoint FAMILY=DIR`, `evaluate
+  --checkpoint DIR`, `--load DIR`). `--checkpoint-keep K` keeps the newest K. A run without the option trains as
+  before; with it the weights, optimizer and metrics are the same for the same seed (tested on the CPU). Provenance
+  records a numbered checkpoint as `<family>/<run>/checkpoints/it<N>/ckpt.pt`. A new training into the run dir sets
+  `checkpoints/` and `selection.json` aside with the rest (`PREVIOUS_RUN_FILES`).
 - Metrics (design §12) go to TensorBoard and `metrics.jsonl` in the run directory; `run.json` records the
   arguments and configs, `harvested` ({dir, states, fraction, drawn}) and `curriculum_tracks` (each track loaded,
   with its trajectory.json time); `train_summary.json`
@@ -968,6 +1026,11 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `$627` = n, `$51` = 0), so bomb use and the 10th kill's forced bomb drop come up in every family's training.
   Curriculum starts get them too (like hp); harvested starts don't (they keep what the upstream specialist handed
   over).
+- A forced bomb drop (round 25; boss-manhandla): `ram_randomization: {drop_bombs: P}` arms the game's help drop as
+  bombs (`HelpDropCount` $0A, `IsHelpDropBomb` 1, asm:Drop_SetUpItem) in a share P of resets, at the reset and again
+  after every step while a monster is in the room (harm to Link clears both), so the room's next drop (Manhandla's
+  last hand) is 4 bombs, unless it is the 16th damage-free kill (a fairy). Only a training env draws it
+  (`EnvOptions::forced_drops`, set by the training pool; Python `Env(..., forced_drops=True)`, `Env.drop_bombs`).
 - Staged starts (round 24; darknut): `ram_randomization: {room_kills: {'(5, 0x05)': [1, 5]}, room_kills_share: 0.5}`
   banks k kills in `LevelKillCounts` before a pre-entry start's dungeon room is entered (`LoadOptions::banked_kills`,
   asm:RoomHistory_ModifyObjCountUW), so the game makes k fewer monsters and clearing the rest clears the room. Only a
@@ -1038,6 +1101,23 @@ every step, so following an enemy that moves away pays again, and knockback rese
   batch can't run (a bad entry, nothing to run). A rerun skips what is done: a chain whose output exists, an
   evaluation whose result file is the same measurement (`eval_batch.same_measurement`: specialist, act mode,
   episodes per state, seed, checkpoint sha1, code and data versions); `--redo` measures those again.
+- `triforce select-checkpoint FAMILY RUN (--segment NAME | --from STATE [--stop-at X] [--target L:0xRR]) [--runs
+  1000] [--clips on|off] [--confirm 1000] [--confirm-top K] [--only LABELS] [--apply]` (`select_checkpoint.py`,
+  round 25): a run's numbered checkpoints (`it<N>`), its `ckpt.pt` (`last`) and the family's promoted run
+  (`promoted`, the reference) each play the same chain seeds in place of the family's promoted model, the rest of
+  the team as promoted, as one `eval-batch` job (`run_batch`; entries `screen-<label>`, then `confirm-top<k>`,
+  `confirm-last`, `confirm-promoted`, whose candidate is picked from the screen when they start). The screen ranks
+  the run's checkpoints by arrivals (a segment's: the next segment's start room, `eval_batch.TARGETS`; the last
+  segment's: the route's end), then hearts on arrival, with standard errors and paired differences (same seeds)
+  against `last` and `promoted`; the winner, the next K-1 best other than `last`, `last` and `promoted` are played
+  again on fresh seeds (`--confirm` runs after the screen's), and that is the number to report (the best of N noisy
+  measurements is biased up). `chosen` is the winner if its confirmed paired arrival difference against `last` is
+  above zero, else `last`. `<run>/selection.json` holds every candidate's training metrics of its iteration, both
+  scores and the differences; chains go to `target/select/<family>-<run>-<segment>[...]-clips<on|off>/` and are
+  reused by a rerun when played by the same weights (sha1), act mode, start, clips switch and seeds.
+  `--apply` makes `chosen` the run's `ckpt.pt`: the old file and its `eval*.json` move into its own numbered dir,
+  the chosen bytes are copied in as a new file (never through a hard link), `version` and `act` (the run's mode)
+  follow; the run then needs a new canonical evaluation.
 
 ## Runner and CLI (`crates/env/src/chain.rs`, `runner.py`, `run.py`, `cli.py`)
 
@@ -1090,6 +1170,14 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `push_block_opens: E` for a shutter on the step's exit side (Dungeon 4's 0x12: any way). A block moves only once
   the room's monsters are dead (`IsRoomAllDead` $34D; Bubbles don't count), so until then the objective is to fight.
   `reward-pushed-block` pays for a push in a listed direction.
+- **Path costs** (round 25): game.yaml `path_costs: [{cols: [c0, c1], rows: [r0, r1], cost: N}]` on a room
+  (`GameRoom::path_costs`, `Room::with_path_costs` in `GameView::room`) charges every step of the path search onto
+  one of those Link tiles (inclusive rectangles, the wavefront's tile grid: X / 8, (Y - `$3D`) / 8, his feet on the
+  row below) `1 + N` instead of 1, so the objective's way (PBRS, the `target` observation, linger) goes round them
+  when that is cheaper; every tile keeps a distance (a Link standing in the band is led out of it), and walkability,
+  the action mask and the executor don't change. Dungeon 5's 0x37 charges columns 15-16 (X `$78`-`$87`) in rows
+  6-15: its S-to-N way goes up X `$70` (one ladder crossing, the owner's column) instead of `$78` (two crossings,
+  through the middle pocket where the way back's Darknuts spawn; `docs/routes/d5.md`).
 - **Room names**: game.yaml `name:` (`GameRoom::name`, `_native.game_rooms()[...]['name']`) is what people call a
   room (4:0x32 is the Breakfast Room); the viewer's strip shows it. `dark: true` (attr E bit 7) is recorded and
   read by nothing.
@@ -1186,8 +1274,8 @@ every step, so following an enemy that moves away pays again, and knockback rese
   / `clips_flips`); `CLIPS=on|off` passes `--clips` in `scripts/experiments/r56_chains.sh`.
   `--checkpoint` must name a known specialist and an existing checkpoint. Exit 2 on a bad `--from`, `--stop-at` or
   `--checkpoint`; exit 1 if any run ends `error`. `triforce promote <specialist> <run-id>`; `triforce list`;
-  `triforce train|run|play|evaluate|eval-batch|room-stats ...` forward to the module CLIs (`triforce --models-dir DIR
-  train|run|evaluate|eval-batch|room-stats` forwards the models dir). `eval-chain --events FILE` appends its events to a
+  `triforce train|run|play|evaluate|eval-batch|room-stats|convert-model|select-checkpoint ...` forward to the module
+  CLIs (`triforce --models-dir DIR ...` forwards the models dir to all but `play`). `eval-chain --events FILE` appends its events to a
   caller's stream (no folder of its own); `--nice N` (CPU priority), `--no-wait` (start without waiting its turn;
   both above).
 - `scripts/yardstick.py report --run RUN [--mode sample|argmax] [--chain NAME=PATH[@L:0xRR] ...] --output OUT.json`

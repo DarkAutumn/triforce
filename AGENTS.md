@@ -357,8 +357,8 @@ test them, keep what helps, and log everything.
   the same batch again skips what is done (an existing chain output, an evaluation file holding the same
   measurement; `--redo` measures again).
 - **Training and evaluation jobs lower their own priority and wait their turn: you do nothing** (Lee, Nov 13 and
-  Nov 15). `scripts/train_round.py`, `triforce train`, `triforce evaluate`, `triforce eval-chain` and `triforce
-  eval-batch` set their own CPU priority to nice 15 at start (never raised; recorded in the plan and `run.json`;
+  Nov 15). `scripts/train_round.py`, `triforce train`, `triforce evaluate`, `triforce eval-chain`, `triforce
+  eval-batch` and `triforce select-checkpoint` set their own CPU priority to nice 15 at start (never raised; recorded in the plan and `run.json`;
   what they start inherits it), and at most two of them run at once on the machine, plus one short job (estimated
   at most 10 minutes) in an express place beside them. The others wait, the shortest first: each job estimates its
   own run time from what it will do (training steps, evaluation episodes, chain route steps) and how long such work
@@ -380,7 +380,13 @@ test them, keep what helps, and log everything.
 - **Compare models fairly:** re-evaluate the old model under the *current* yaml (hp distribution, one_room) before
   comparing, and rank by success **and** `mean_health_change` (per-room numbers are in `eval.json` `by_room`). A model
   that wins 3% more but takes twice the damage loses in a chain. After a COMPAT bump the old model doesn't load:
-  compare with its own `eval.json`, knowing the code under it differs (round 21).
+  compare with its own `eval.json`, knowing the code under it differs (round 21). **Single rooms don't decide a
+  promotion; the chain does** (round 25): r74-darknut4 and r74-darknut5 were both 97% in single rooms and 34.9 /
+  46.4% on the Dungeon 5 segment. Measure the segments the family plays (1000 runs, clips on first), and report a
+  number measured on seeds that were not used to choose it: the best of several noisy chains is biased up
+  (`triforce select-checkpoint` does both). Two models on the same 1000 seeds differ by 2.2 points of noise
+  (standard error of the paired difference; same seeds don't make different models' runs alike): about 5 points is
+  a result, 2-3 points need 2000-5000 runs an arm; secondaries such as the hearts on entering a room are sharper.
 - **Every job is in the job registry, and every job has a plan** (Lee, Nov 13; replaces round 21's "start single
   trainings without `--events`"). Each plan (`train_round.py`, `triforce train|evaluate|eval-chain|eval-batch`,
   from any worktree or `--logs-dir`) registers itself in `$HOME/.local/state/triforce/jobs/` (`$XDG_STATE_HOME`;
@@ -442,5 +448,9 @@ to `$TRIFORCE_MODELS_DIR` or `<repo>/models`. Event logs go to `logs/<yymmdd>_<N
 With two trainings or evaluations already running, the round waits its turn before anything starts (the "paused
 until resources are available" line; Working rules): start it as usual and let it wait. `--parallel 16` is the
 measured best for a run alone; two rounds at once take `--parallel 8` each (20 hardware threads;
-`docs/performance.md` "How many envs"). Then compare, `triforce promote <specialist> <run-id>`, run the chain
-segments, write the results into the round doc, commit.
+`docs/performance.md` "How many envs"). For a family whose rooms the chains can score, train with `--checkpoint-every
+N` (about 16 checkpoints a run) and choose the checkpoint by its segment: `triforce select-checkpoint FAMILY RUN
+--segment d5 --runs 1000 --confirm 1000 [--confirm-top 3]` (one batch job: every checkpoint, the run's last and the
+promoted run on seeds 0-999, the best again on 1000-1999; `selection.json` in the run dir; `--apply` makes the choice
+the run's `ckpt.pt`, which then needs a new evaluation). Then compare, `triforce promote <specialist> <run-id>`, run
+the chain segments, write the results into the round doc, commit.

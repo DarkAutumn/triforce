@@ -522,7 +522,7 @@ impl GameView {
     }
 
     /// The room model built from the current tiles (with the ladder's crossings while Link holds it, the game.yaml W
-    /// wrap exit's rows and its `wrap_in` exit).
+    /// wrap exit's rows, its `wrap_in` exit and its `path_costs`).
     pub fn room(&self) -> &Room {
         self.room.get_or_init(|| {
             let room = self.map.get(self.full_location());
@@ -536,6 +536,7 @@ impl GameView {
             Room::new(self.full_location(), self.current_tiles(), self.ladder())
                 .with_wrap_exit(wrap_exit)
                 .with_wrap_in(wrap_in)
+                .with_path_costs(room.map_or(&[], |r| r.path_costs.as_slice()))
         })
     }
 
@@ -910,6 +911,11 @@ impl GameView {
 
     pub fn bombs(&self) -> i32 {
         self.var(Var::Bombs)
+    }
+
+    /// Link's bomb maximum (`InvMaxBombs`: 8, more with the bomb bag upgrades).
+    pub fn bomb_max(&self) -> i32 {
+        self.var(Var::BombMax)
     }
 
     /// Damage-free kills toward the forced drop (`$50` HelpDropCount, 0-10; asm:Damage_KillMonster).  Any hit to

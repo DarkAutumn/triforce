@@ -548,11 +548,11 @@ class PPO:
                         rows = demo[2].shape[0]
                         if rows > minibatch_size:   # a large batch (best-of-N runs): a minibatch-sized sample
                             pick = torch.randperm(rows, device=self.device)[:minibatch_size]
-                            demo_out = network.evaluate({k: v[pick] for k, v in demo[0].items()}, demo[1][pick],
-                                                        demo[2][pick])
+                            demo_lp = demo_log_prob(network, {k: v[pick] for k, v in demo[0].items()},
+                                                    demo[1][pick], demo[2][pick])
                         else:
-                            demo_out = network.evaluate(demo[0], demo[1], demo[2])
-                        demo_bc_loss = -demo_out.log_prob.mean()
+                            demo_lp = demo_log_prob(network, demo[0], demo[1], demo[2])
+                        demo_bc_loss = -demo_lp.mean()
                         loss = loss + cfg.demo_bc_coeff * demo_bc_loss
                     if sil is not None and len(sil) > 0:
                         sil_obs, sil_masks, sil_actions, sil_returns = sil.sample(minibatch_size, self.device)
@@ -705,6 +705,21 @@ def joint_kl(old_log_probs: torch.Tensor, new_log_probs: torch.Tensor) -> torch.
     return (old.exp() * (old - new)).sum(dim=-1).mean()
 
 
+def demo_log_prob(network, obs, masks, targets: torch.Tensor) -> torch.Tensor:
+    """Log-prob ``[B]`` of demonstration targets; a row whose duration is -1 (``demos.ANY_DURATION``) leaves the
+    duration head out (its kind and direction are cloned, the pace is the policy's)."""
+    free = targets[:, 2] < 0
+    scored = targets.clone()
+    scored[free, 2] = 0                 # any index: its head's term is dropped below
+    out = network.evaluate(obs, masks, scored)
+    lp = out.head_log_prob
+    return lp['kind'] + lp['direction'] + torch.where(free, torch.zeros_like(lp['duration']), lp['duration'])
+
+
 def compute_demo_accuracy(pred_actions: torch.Tensor, target_actions: torch.Tensor) -> float:
-    """Exact (kind, direction, duration) accuracy of ``demo_batch`` targets; heads that don't apply are 0 in both."""
-    return (pred_actions.long() == target_actions.long()).all(dim=-1).float().mean().item()
+    """Exact (kind, direction, duration) accuracy of ``demo_batch`` targets (a duration of -1 matches any); heads that
+    don't apply are 0 in both."""
+    pred, target = pred_actions.long(), target_actions.long()
+    same = pred == target
+    same[:, 2] |= target[:, 2] < 0
+    return same.all(dim=-1).float().mean().item()

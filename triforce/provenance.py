@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 from . import _native
-from .registry import CHECKPOINT_NAME, model_version
+from .registry import CHECKPOINT_NAME, SNAPSHOTS_NAME, model_version
 
 
 @lru_cache(maxsize=1)
@@ -40,12 +40,14 @@ def location_text(location) -> Optional[str]:
 
 
 def checkpoint_label(checkpoint) -> str:
-    """A checkpoint (a ``ckpt.pt`` or its run dir) as provenance records it: ``<specialist>/<run>/ckpt.pt``, no
-    local directory (the ``checkpoint_sha1`` / network ``hash`` next to it identify the weights)."""
+    """A checkpoint (a ``ckpt.pt`` or its run dir) as provenance records it: ``<specialist>/<run>/ckpt.pt``, a
+    numbered checkpoint (``registry.snapshot_dir``) ``<specialist>/<run>/checkpoints/it<N>/ckpt.pt``; no local
+    directory (the ``checkpoint_sha1`` / network ``hash`` next to it identify the weights)."""
     path = Path(checkpoint)
     if path.is_dir():
         path = path / CHECKPOINT_NAME
-    return '/'.join(path.parts[-3:])
+    numbered = len(path.parts) >= 5 and path.parts[-3] == SNAPSHOTS_NAME
+    return '/'.join(path.parts[-5:] if numbered else path.parts[-3:])
 
 
 def models_header(names: Iterable[str], policies: Iterable, checkpoints: dict, acts: Iterable[str]) -> list:

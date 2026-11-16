@@ -177,6 +177,50 @@ pub struct GameRoom {
     pub trigger: Option<String>,
     /// `dark: true` (attr E bit 7): black without a candle; the tiles are the same.  For display.
     pub dark: bool,
+    /// `path_costs: [{cols: [c0, c1], rows: [r0, r1], cost: N}]`: Link-tile rectangles (inclusive) the objective's
+    /// path search charges `N` extra tiles a step onto ([`crate::room::Room::with_path_costs`]): a way the route
+    /// avoids though it is shorter (Dungeon 5's 0x37: the X `$78` and `$80` columns, so Link crosses at `$70`).
+    pub path_costs: Vec<PathCost>,
+}
+
+/// One game.yaml `path_costs` rectangle: Link's tile columns and rows (inclusive) and the extra cost of a step onto
+/// one of them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PathCost {
+    pub cols: (i32, i32),
+    pub rows: (i32, i32),
+    pub cost: u8,
+}
+
+const PATH_COST_KEYS: [&str; 3] = ["cols", "rows", "cost"];
+
+/// A room's `path_costs` list (absent: empty): each rectangle inside the 32 x 22 tile grid, its cost 1 to 255.
+fn path_costs(entry: &Value, what: &str) -> Result<Vec<PathCost>, MapError> {
+    let Some(list) = get(entry, "path_costs") else {
+        return Ok(Vec::new());
+    };
+    let Some(list) = list.as_sequence() else {
+        return err(format!("{what}: path_costs must be a list of {{cols, rows, cost}}"));
+    };
+    list.iter()
+        .map(|v| {
+            let what = format!("{what}: path_costs");
+            check_keys(v, &PATH_COST_KEYS, &what)?;
+            let range = |key: &str, limit: i32| -> Result<(i32, i32), MapError> {
+                let (a, b) = pair(get(v, key).ok_or_else(|| MapError(format!("{what}: {key} missing")))?, &what)?;
+                if !(0 <= a && a <= b && b < limit) {
+                    return err(format!("{what}: {key} [{a}, {b}] is not a range inside 0..{limit}"));
+                }
+                Ok((a, b))
+            };
+            let cost = get(v, "cost")
+                .and_then(Value::as_u64)
+                .and_then(|c| u8::try_from(c).ok())
+                .filter(|&c| c > 0)
+                .ok_or_else(|| MapError(format!("{what}: cost must be an integer 1 to 255")))?;
+            Ok(PathCost { cols: range("cols", 32)?, rows: range("rows", 22)?, cost })
+        })
+        .collect()
 }
 
 /// A `[col, row]` game.yaml tile (absent: None; anything but two integers: an error naming `what`).
@@ -230,7 +274,7 @@ fn opt_string(v: &Value, key: &str, what: &str) -> Result<Option<String>, MapErr
 
 /// game.yaml room keys (several are read elsewhere or by nothing yet: `entrance`, `edge_spawn`, `trigger`, `stairs`,
 /// `dark`).
-const ROOM_KEYS: [&str; 22] = [
+const ROOM_KEYS: [&str; 23] = [
     "level",
     "location",
     "in_cave",
@@ -253,6 +297,7 @@ const ROOM_KEYS: [&str; 22] = [
     "push_block_opens",
     "stairs",
     "dark",
+    "path_costs",
 ];
 const EXIT_KEYS: [&str; 8] = ["level", "location", "in_cave", "locked", "shutter", "span", "wrap", "wrap_in"];
 const RAFT_EXIT_KEYS: [&str; 3] = ["level", "location", "dock"];
@@ -929,6 +974,7 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
             maze,
             trigger: opt_string(entry, "trigger", &what)?,
             dark: flag(entry, "dark", &what)?,
+            path_costs: path_costs(entry, &what)?,
         };
         // Unknown keys last: a missing required block (`maze:`) gets its own message first.
         check_keys(entry, &ROOM_KEYS, &what)?;
@@ -2251,6 +2297,28 @@ mod tests {
         ] {
             let error = edit(from, to).unwrap_err().0;
             assert!(error.contains(why), "{error}");
+        }
+    }
+
+    /// `path_costs` (round 25): Dungeon 5's 0x37 charges Link's tile columns 15-16 in rows 6-15 (the X `$70` column
+    /// is the way); a rectangle off the grid, a zero cost or an unknown key is refused.
+    #[test]
+    fn path_costs_parse() {
+        let map = GameMap::builtin();
+        assert_eq!(map.get(loc(5, 0x37)).unwrap().path_costs, [PathCost { cols: (15, 16), rows: (6, 15), cost: 1 }]);
+        assert!(map.get(loc(5, 0x47)).unwrap().path_costs.is_empty());
+        let line = "  path_costs: [{cols: [15, 16], rows: [6, 15], cost: 1}]";
+        let edit = |to: &str| GameMap::from_yaml(&GAME_YAML.replacen(line, to, 1), ROUTES_YAML).map(|_| ());
+        for (to, why) in [
+            ("  path_costs: [{cols: [15, 32], rows: [6, 15], cost: 1}]", "not a range inside 0..32"),
+            ("  path_costs: [{cols: [16, 15], rows: [6, 15], cost: 1}]", "not a range"),
+            ("  path_costs: [{cols: [15, 16], rows: [6, 15], cost: 0}]", "cost must be an integer 1 to 255"),
+            ("  path_costs: [{cols: [15, 16], rows: [6, 15]}]", "cost must be"),
+            ("  path_costs: [{cols: [15, 16], row: [6, 15], cost: 1}]", "unknown key"),
+            ("  path_costs: {cols: [15, 16], rows: [6, 15], cost: 1}", "must be a list"),
+        ] {
+            let error = edit(to).unwrap_err().0;
+            assert!(error.contains(why), "{to}: {error}");
         }
     }
 

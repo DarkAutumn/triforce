@@ -13,6 +13,7 @@ use crate::end_conditions::{
     DEFAULT_ENDINGS, ENTER_ROOM_PREFIX, MAX_STEPS, NO_DAMAGE, NO_ROOM_PROGRESS, SUCCESS_KINDS,
     validate_success_kind,
 };
+use crate::heart_value::HeartValues;
 use crate::rewards::OUTCOMES;
 use crate::start_states::MIN_CHAIN_SAMPLES;
 use indexmap::IndexMap;
@@ -234,6 +235,19 @@ pub struct RewardConfig {
     /// hearts and fairies only while Link is below max health (they only heal).
     #[serde(default, deserialize_with = "de_bool")]
     pub item_targets: bool,
+    /// Round 25 (Manhandla's bombs): once the room's fight is over, the wanted drops (bombs below Link's bomb
+    /// maximum, a heart or fairy below max health) are the only PBRS and `target` destinations until taken or gone,
+    /// before the treasure and the exits (`objective::is_wanted_drop`); dropped bombs at the maximum are no target.
+    #[serde(default, deserialize_with = "de_bool")]
+    pub drops_first: bool,
+    /// `penalty-left-drop` per wanted drop (as `drops_first` says, still takeable for a while) on the floor when Link
+    /// leaves the room (positive magnitude; 0 = off).
+    #[serde(default)]
+    pub left_drop_penalty: f64,
+    /// Dropped hearts and fairies alone are PBRS targets while Link is below max health (round 25: the overworld
+    /// families, where `item_targets`' rupees and bombs pulled Link into fights); `item_targets` includes them.
+    #[serde(default, deserialize_with = "de_bool")]
+    pub heal_targets: bool,
     /// `penalty-boss-ate-bomb` per bomb a Dodongo swallows (round 12; the stun-and-sword kill wants none).
     #[serde(default = "half")]
     pub boss_ate_bomb_penalty: f64,
@@ -248,6 +262,9 @@ pub struct RewardConfig {
     /// 20 × ((1 − w) + w × hp/max_hp) (better-play §1b; 0.5 is the long-standing formula).
     #[serde(default = "half")]
     pub exit_health_weight: f64,
+    /// Hearts priced by what they are worth to the run (`env::heart_value`, round 25); all off by default.
+    #[serde(default)]
+    pub heart_value: HeartValueConfig,
 }
 
 impl Default for RewardConfig {
@@ -259,11 +276,42 @@ impl Default for RewardConfig {
             quiet_enemy_penalty: 0.0,
             fixed_pickup_reward: false,
             item_targets: false,
+            drops_first: false,
+            left_drop_penalty: 0.0,
+            heal_targets: false,
             boss_ate_bomb_penalty: 0.5,
             shaping_scale: 1.0,
             frame_penalty: 0.0,
             exit_health_weight: 0.5,
+            heart_value: HeartValueConfig::default(),
         }
+    }
+}
+
+/// `reward.heart_value:` the reward's health terms priced by `triforce/heart_value.json` (V(step, hearts), the
+/// chance to reach the next triforce alive) or by the hearts left. Every term is off by default (today's reward
+/// exactly); the two table terms need the table to match the route.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HeartValueConfig {
+    /// The success terminal's health part is V(next step, hearts out) / V(next step, max hearts) instead of
+    /// hp / max_hp (still weighted by `exit_health_weight`).
+    #[serde(default, deserialize_with = "de_bool")]
+    pub exit: bool,
+    /// Every change of hearts in a room pays `potential` × (V(step, after) − V(step, before))
+    /// (`reward-heart-value` / `penalty-heart-value`), beside today's hit penalty and pickup reward; 0 = off.
+    #[serde(default)]
+    pub potential: f64,
+    /// A hit's `penalty-lost-health` is multiplied by 1 + `low_health` × (1 − hearts after / max hearts) (the
+    /// extra is `penalty-heart-value`); 0 = off.
+    #[serde(default)]
+    pub low_health: f64,
+}
+
+impl HeartValueConfig {
+    /// A term that reads the table is on.
+    pub fn uses_table(&self) -> bool {
+        self.exit || self.potential != 0.0
     }
 }
 
@@ -460,6 +508,13 @@ pub struct RamRandomization {
     /// Share of resets that draw `room_kills` (the rest keep the full room); absent = every reset.
     #[serde(default)]
     pub room_kills_share: Option<f64>,
+    /// `drop_bombs: P` (round 25, Manhandla's bombs): the share of training resets whose next drop is bombs, by
+    /// the game's own help drop (asm:Drop_SetUpItem): `HelpDropCount` ($50) = $0A and `IsHelpDropBomb` ($51) set at
+    /// the reset and again after every step while a monster is left, so the death that drops next (Manhandla's last
+    /// hand) drops bombs unless it is the 16th kill (a fairy). Training envs only (`EnvOptions::forced_drops`):
+    /// evaluation, chains, exploration and state builds keep the natural drop.
+    #[serde(default)]
+    pub drop_bombs: Option<f64>,
 }
 
 impl RamRandomization {
@@ -480,6 +535,7 @@ impl RamRandomization {
             ("chain_hp", self.chain_hp),
             ("bombs_share", self.bombs_share),
             ("room_kills_share", self.room_kills_share),
+            ("drop_bombs", self.drop_bombs),
         ] {
             if let Some(v) = value
                 && !(0.0..=1.0).contains(&v)
@@ -756,6 +812,10 @@ impl SpecialistConfig {
         if !(0.0..=1.0).contains(&self.reward.exit_health_weight) {
             return Err(fail("reward.exit_health_weight", "must be in [0, 1]".into()));
         }
+        let hv = &self.reward.heart_value;
+        if !(hv.potential >= 0.0 && hv.low_health >= 0.0) {
+            return Err(fail("reward.heart_value", "potential and low_health must be >= 0".into()));
+        }
         self.ram_randomization
             .validate()
             .map_err(|e| fail("ram_randomization", e))?;
@@ -885,8 +945,8 @@ pub fn fnmatch(pattern: &[u8], name: &[u8]) -> bool {
     }
 }
 
-/// `specialists/`, `triforce/game.yaml`, `triforce/routes.yaml`, `triforce/chain_hp.json`, states and
-/// trajectories, loaded once and cross-checked.
+/// `specialists/`, `triforce/game.yaml`, `triforce/routes.yaml`, `triforce/chain_hp.json`,
+/// `triforce/heart_value.json`, states and trajectories, loaded once and cross-checked.
 #[derive(Clone, Debug)]
 pub struct GameData {
     pub root: PathBuf,
@@ -895,6 +955,8 @@ pub struct GameData {
     pub families: IndexMap<String, Vec<MapLocation>>,
     /// Room key ('1:0x44', '0:0x77:cave') -> hearts chain runs entered it with.
     pub chain_hp: HashMap<String, Vec<f64>>,
+    /// `triforce/heart_value.json` (None without one): what a heart is worth at each route step.
+    pub heart_values: Option<Arc<HeartValues>>,
     /// Every specialists/*.yaml by name (sorted).
     pub specialists: IndexMap<String, Arc<SpecialistConfig>>,
     pub states_dir: PathBuf,
@@ -934,6 +996,12 @@ impl GameData {
         } else {
             HashMap::new()
         };
+        let values_path = root.join("triforce/heart_value.json");
+        let heart_values = if values_path.exists() {
+            Some(Arc::new(HeartValues::parse(&read("triforce/heart_value.json")?)?))
+        } else {
+            None
+        };
         let mut names: Vec<String> = std::fs::read_dir(root.join("specialists"))
             .map_err(|e| ConfigError(format!("specialists/: {e}")))?
             .filter_map(Result::ok)
@@ -957,6 +1025,7 @@ impl GameData {
             map: Arc::new(map),
             families,
             chain_hp,
+            heart_values,
             specialists,
             states_dir: root.join(STATES_DIR),
             trajectories_dir: root.join("trajectories"),
@@ -977,6 +1046,7 @@ impl GameData {
         }
         for (name, config) in &self.specialists {
             self.check_chain_hp(config)?;
+            self.check_heart_values(config)?;
             let rooms: BTreeSet<MapLocation> = config.rooms.iter().copied().collect();
             let tagged: BTreeSet<MapLocation> =
                 self.map.rooms_for_specialist(name).into_iter().collect();
@@ -1033,6 +1103,7 @@ impl GameData {
                 .map_err(|e| ConfigError(format!("{name_or_path}: {e}")))?;
             let config = SpecialistConfig::from_yaml(&text, name_or_path, Some(&self.map))?;
             self.check_chain_hp(&config)?;
+            self.check_heart_values(&config)?;
             return Ok(Arc::new(config));
         }
         let known: Vec<&String> = self.specialists.keys().collect();
@@ -1066,6 +1137,36 @@ impl GameData {
             config.name,
             fmt_rooms(&config.rooms.iter().copied().collect())
         ))
+    }
+
+    /// A config whose `reward.heart_value` reads the table needs `triforce/heart_value.json` fitted for its route as
+    /// the route stands now ([`HeartValues::check`]).
+    pub fn check_heart_values(&self, config: &SpecialistConfig) -> Result<(), ConfigError> {
+        if !config.reward.heart_value.uses_table() {
+            return Ok(());
+        }
+        let route = config.route.as_deref().unwrap_or(zelda::game_map::DEFAULT_ROUTE);
+        let Some(values) = &self.heart_values else {
+            return err(format!(
+                "{}: reward.heart_value needs triforce/heart_value.json (fit it with `python -m triforce.heart_value \
+                 <chain jsonl>...`)",
+                config.name
+            ));
+        };
+        if values.route != route {
+            return err(format!(
+                "{}: reward.heart_value: triforce/heart_value.json is fitted for route {:?}, the family plays {route:?}",
+                config.name, values.route
+            ));
+        }
+        values.check(&self.map.routes[route], &self.map.visits[route])
+    }
+
+    /// The table that prices hearts for `config` on `route` (None when its `reward.heart_value` reads no table or
+    /// the table is another route's).
+    pub fn heart_values_for(&self, config: &SpecialistConfig, route: &str) -> Option<&HeartValues> {
+        let values = self.heart_values.as_deref()?;
+        (config.reward.heart_value.uses_table() && values.route == route).then_some(values)
     }
 
     /// The specialist tagged on a room.
@@ -1122,6 +1223,7 @@ mod tests {
             ("{room_kills: {'(5, 0x05)': [1, 15]}}", "0 <= lo <= hi <= 14"),
             ("{room_kills: {'5:0x05': [1, 2]}}", "Bad room"),
             ("{room_kills_share: 2}", "probability"),
+            ("{drop_bombs: 2}", "probability"),
         ] {
             let e = minimal(&format!("ram_randomization: {bad}\n")).unwrap_err().0;
             assert!(e.contains(why), "{bad}: {e}");

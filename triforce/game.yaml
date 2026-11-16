@@ -630,6 +630,11 @@ rooms:
     how: open
     tile: [12, 8]
     stakes: 10
+  # Round 25: entered from W (facing right) the Peahats spawn on ($50, $5D) and ($80, $7D) (asm:Spawn_AssignPositions):
+  # one on the top strip the way N-then-E walked, one rising up X $80, the gap's column. That way met both on every
+  # visit (2 hits, 1.00 hearts). Steps onto Link's tile rows 2-6 W of column 15 cost 2 tiles more, so the objective's
+  # way goes E along the middle (Y $85) and then N up X $80.
+  path_costs: [{cols: [0, 14], rows: [2, 6], cost: 2}]
 - level: 0
   location: '0x20'
   exits:
@@ -774,6 +779,12 @@ rooms:
     how: bomb
     tile: [28, 2]
     wares: [[blue-potion, 40], [red-potion, 68]]  # [item, rupees], left to right
+  # Round 25: entered from N (facing down) only three spawn spots of the game's list are safe here, (X $50, $A0,
+  # Y $7D) and ($70, $8D), two Peahats on each (asm:Spawn_AssignPositions); they rise slowly up X $70 and $A0 for
+  # 129 frames. The straight way down X $A0 (the chain's entry from 0x17) met the one there on every visit (0.50
+  # hearts). Steps onto Link's tile columns 14-15 and 18-23 above row 10 cost 3 tiles more, so the objective's way
+  # goes down the corridor's middle (X $80-$88) between the two columns, then E along Y $8D below them.
+  path_costs: [{cols: [14, 15], rows: [0, 9], cost: 3}, {cols: [18, 23], rows: [0, 9], cost: 3}]
 - level: 0
   location: '0x28'
   specialist: ow-zora
@@ -3907,6 +3918,12 @@ rooms:
   treasure: compass
   trigger: kill-all-item  # attr F & 7 = 7
   dark: true
+  # The owner's column (round 25): S to N at X $70 (Link's tile column 14), one ladder crossing (block row 4), not the
+  # straight X $78 (two crossings) or $80: the Darknuts that spawn in the middle pocket (block row 3) hit every chain
+  # crossing at $78 (round 24: 1.20 hearts a visit, all hit); scripted from the chain's own entries $70 with a swing on
+  # the ladder is never hit (docs/routes/d5.md).  Steps onto Link's tile columns 15-16 (X $78-$87) in tile rows 6-15
+  # cost the path search one tile more, so the objective's way (2 tiles longer) goes up column 14.
+  path_costs: [{cols: [15, 16], rows: [6, 15], cost: 1}]
 - level: 5
   location: '0x46'
   exits:

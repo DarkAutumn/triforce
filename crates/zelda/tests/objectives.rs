@@ -855,6 +855,18 @@ fn a_treasure_left_behind_does_not_take_the_next_rooms() {
 /// A session in the Dungeon 4 start state `name`, at its first controllable frame, with the completion of its
 /// d2first step.
 fn d4_room(map: &Arc<GameMap>, name: &str, room: u8, entry: &str) -> Option<(Session<Counted>, GameCompletion)> {
+    dungeon_room(map, name, 4, room, entry)
+}
+
+/// A session in the start state `name` (Link in `level`'s `room`, come in from `entry`), at its first controllable
+/// frame, with the completion of its d2first step.
+fn dungeon_room(
+    map: &Arc<GameMap>,
+    name: &str,
+    level: u8,
+    room: u8,
+    entry: &str,
+) -> Option<(Session<Counted>, GameCompletion)> {
     let nes = open_core()?;
     let mut s = Session::new(Counted(nes, 0), map.clone());
     let mut rng = ChaCha8Rng::seed_from_u64(0);
@@ -864,10 +876,59 @@ fn d4_room(map: &Arc<GameMap>, name: &str, room: u8, entry: &str) -> Option<(Ses
             break;
         }
     }
-    let (route, step) = start_route(map, loc(4, room), Some(entry), None, &mut rng, None, s.state(), true);
+    let (route, step) = start_route(map, loc(level, room), Some(entry), None, &mut rng, None, s.state(), true);
     assert_eq!(route, "d2first");
     let gc = GameCompletion::new(map.clone(), &route, step).unwrap();
     Some((s, gc))
+}
+
+/// The way down `wavefront` from `from` as the `target` observation follows it: each step to the neighbour, N S W E,
+/// Link can move to whose distance plus the step's cost (1 + the room's `path_costs` there) is lowest and no more
+/// than his own; the target tile last.
+fn descent(room: &zelda::room::Room, wavefront: &zelda::room::Wavefront, from: (i32, i32)) -> Vec<(i32, i32)> {
+    let mut path = vec![from];
+    let mut here = from;
+    while let Some(d) = wavefront.get(here).filter(|&d| d > 0) {
+        let next = [(Direction::N, (0, -1)), (Direction::S, (0, 1)), (Direction::W, (-1, 0)), (Direction::E, (1, 0))]
+            .into_iter()
+            .filter(|&(dir, _)| room.can_move(here.0, here.1, dir))
+            .map(|(_, (dx, dy))| (here.0 + dx, here.1 + dy))
+            .filter_map(|t| Some((wavefront.get(t)? + 1 + room.path_cost(t.0, t.1), t)))
+            .filter(|&(cost, _)| cost <= d)
+            .min_by_key(|&(cost, _)| cost);
+        let Some((_, next)) = next else { break };
+        path.push(next);
+        here = next;
+    }
+    path
+}
+
+/// Dungeon 5's 0x37 S to N (round 25): the objective's way crosses at X `$70` (Link's tile column 14, one ladder
+/// crossing), the owner's column, not straight up at `$78` (two crossings, through the middle pocket where the
+/// chain's Darknuts spawn): game.yaml `path_costs` charges tile columns 15-16 in rows 6-15.  The room without
+/// them goes straight up column 15.
+#[test]
+fn d5_0x37_is_crossed_at_x70() {
+    let map = Arc::new(GameMap::builtin());
+    let Some((s, mut gc)) = dungeon_room(&map, "5_37s_0", 5, 0x37, "S") else { return };
+    let state = s.state().clone();
+    assert!(state.ladder());
+    let objective = gc.objectives(None, &state);
+    let targets: Vec<Target> = objective.pbrs_targets.iter().copied().collect();
+    let start = state.link.tile();
+    let middle = |path: &[(i32, i32)]| -> Vec<i32> {
+        let mut cols: Vec<i32> = path.iter().filter(|t| (6..=15).contains(&t.1)).map(|t| t.0).collect();
+        cols.dedup();
+        cols
+    };
+    let room = state.room();
+    let costed = descent(room, &room.wavefront(&targets, &[], &[], objective.clips), start);
+    assert_eq!(middle(&costed), [14], "{costed:?}");
+    assert_eq!(costed.last().map(|t| t.0), Some(15), "on to the N door: {costed:?}");
+    let plain = zelda::room::Room::new(state.full_location(), state.current_tiles(), true);
+    let straight = descent(&plain, &plain.wavefront(&targets, &[], &[], objective.clips), start);
+    assert_eq!(middle(&straight), [15], "{straight:?}");
+    assert_eq!(costed.len(), straight.len() + 2, "two tiles longer");
 }
 
 /// Empties the monster slots except Bubbles (they never die and don't count) and lets the game notice.

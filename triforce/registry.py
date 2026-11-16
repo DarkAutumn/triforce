@@ -28,6 +28,11 @@ written by ``save_checkpoint``.  A model whose first three numbers differ from t
 known to be compatible.  The stamp is a file of its own because ``act`` and ``eval.json`` bind to ``ckpt.pt``'s
 sha1: stamping must not rewrite the checkpoint.
 
+Numbered checkpoints (``train --checkpoint-every N``, round 25): ``<run dir>/checkpoints/it<iteration:06d>/`` each
+hold a copy of ``ckpt.pt`` as saved at that iteration with its own ``version`` and ``act`` (bound to that copy's
+sha1), so a numbered checkpoint dir is used wherever a run dir is (``eval-chain --checkpoint NAME=DIR``, ``evaluate
+--checkpoint DIR``, ``train --load DIR``); ``snapshot_checkpoint`` writes one, ``list_snapshots`` lists them.
+
 CLI: ``python -m triforce.registry list <specialist>`` / ``promote <specialist> <run-id> [--act MODE]``.
 """
 
@@ -37,6 +42,7 @@ import json
 import numbers
 import os
 import pickle
+import shutil
 import time
 import warnings
 from pathlib import Path
@@ -54,6 +60,7 @@ CHECKPOINT_NAME = 'ckpt.pt'
 PROMOTED_NAME = 'promoted'
 ACT_NAME = 'act'
 VERSION_NAME = 'version'
+SNAPSHOTS_NAME = 'checkpoints'
 # The act mode of the whole project (round 23, decided Nov 14; docs/decisions.md "One act mode"): evaluation,
 # chains, the early-stop confirmation, a run without an ``act`` file, and play (``PLAY_ACT``).
 ACT_RULE = 'temperature:0.5+relax:16'
@@ -181,6 +188,41 @@ def save_checkpoint(specialist: str, run_id: str, network, optimizer=None, *, it
     os.replace(tmp, path)
     write_model_version(path)
     return path
+
+
+def snapshot_dir(run: Path, iteration: int) -> Path:
+    """``<run dir>/checkpoints/it<iteration:06d>``: the numbered checkpoint of ``iteration``."""
+    return Path(run) / SNAPSHOTS_NAME / f'it{int(iteration):06d}'
+
+
+def snapshot_checkpoint(checkpoint, iteration: int, keep: int = 0) -> Path:
+    """Copies the run's ``ckpt.pt`` (``checkpoint``: the file or its run dir, as just saved at ``iteration``) into
+    its numbered checkpoint dir (``snapshot_dir``) with the run's version stamp and act mode, the act bound to the
+    copy's sha1; ``keep`` > 0 then removes all but the newest ``keep`` numbered checkpoints.  Returns the dir."""
+    ckpt = _resolve(checkpoint)
+    target = snapshot_dir(ckpt.parent, iteration)
+    target.mkdir(parents=True, exist_ok=True)
+    tmp = target / f'.{CHECKPOINT_NAME}.{os.getpid()}.tmp'
+    shutil.copyfile(ckpt, tmp)
+    os.replace(tmp, target / CHECKPOINT_NAME)
+    write_model_version(target, model_version(ckpt) or __version__)
+    set_act_mode(target, act_mode(ckpt))
+    if keep > 0:
+        for _, old in list_snapshots(ckpt.parent)[:-keep]:
+            shutil.rmtree(old)
+    return target
+
+
+def list_snapshots(run) -> list[tuple[int, Path]]:
+    """(iteration, dir) of a run dir's numbered checkpoints that hold a ``ckpt.pt``, oldest first."""
+    base = Path(run) / SNAPSHOTS_NAME
+    if not base.is_dir():
+        return []
+    found = []
+    for path in base.iterdir():
+        if path.name.startswith('it') and path.name[2:].isdigit() and (path / CHECKPOINT_NAME).is_file():
+            found.append((int(path.name[2:]), path))
+    return sorted(found)
 
 
 def _plain_metrics(metrics: dict) -> dict:

@@ -14,7 +14,7 @@ trajectories/
 logs/
 target/
 triforce/_native*.so
-/roms/
+/roms
 triforce/states/**/*.lock
 crates/zcore/test_results/
 .coverage
