@@ -562,6 +562,7 @@ rooms:
     cave: '0x15'
     contents: hint
     how: armos
+    tile: [22, 8]  # round 26: x=176 y=128 (the Armos's square; Y $80 is row 8 as 0x34's)
 - level: 0
   location: '0x1d'
   specialist: ow-peahat  # round 24: to Dungeon 5, S -> E, then E -> N (its E part)
@@ -1037,19 +1038,46 @@ rooms:
     wares: [[blue-potion, 40], [red-potion, 68]]  # [item, rupees], left to right
 - level: 0
   location: '0x34'
+  specialist: ow-leever  # round 26: 4 Blue Leevers; the armos shop's food on the way to Dungeon 7
   exits:
     S:
       level: 0
       location: '0x44'
+    cave:  # the armos stairs (route step `exit: cave`: the objective leads to the statue's side, then the stairs)
+      level: 0
+      location: '0x34'
+      in_cave: true
   enemies:
     BlueLeever: 4
   treasure: null
-  entrance:  # cave index $20 (OW attr B >> 2); the armos at x=64 y=128 hides stairs (asm:Armos_SecretXs); touched from the side it costs nothing, from below a heart (walked Nov 13); the stairs are not saved
+  # cave index $20 (OW attr B >> 2); the armos at x=64 y=128 hides stairs (asm:Armos_SecretXs); touched from the side
+  # it costs nothing, from below a heart (walked Nov 13); the stairs are not saved. Walked Nov 16 (Walks26): tiles C0
+  # C2 / C1 C3 wake on the first frame of Right from ($30,$7D), Left from ($50,$7D) or Down from ($40,$6D); the Armos
+  # ($1E) stands on the square and the stairs (70 72 / 71 73) show 63 frames later; out of the cave Link stands at
+  # ($40,$6D) facing down with the statue back (Down there wakes it again).
+  entrance:
     cave: '0x20'
     contents: shop
     how: armos
     tile: [8, 8]
     wares: [[key, 80], [blue-ring, 250], [food, 60]]  # [item, rupees], left to right
+- level: 0
+  location: '0x34'
+  in_cave: true
+  specialist: ow-leever
+  exits:
+    S:
+      level: 0
+      location: '0x34'
+  enemies: null
+  # The shop $20 (round 26): key 80 (X $58), blue ring 250 (X $78), food 60 (X $98, the route's `waypoint: food`).
+  # Link comes in at ($70,$D5) and can't go above Y $8D; a ware is bought when his X equals its X with Y $95 or $9D
+  # (asm:Cave_State2TalkOrShopOrDoorCharge), so the path search keeps him off the other wares' squares (`path_costs`)
+  # and he walks to the food along Y $A5 (Walks26, Nov 16). One ware a visit; any sets 0x34's item flag $10.
+  treasure: food
+  treasure_tile: [19, 11]
+  requires_rupees: 60
+  path_costs: [{cols: [11, 11], rows: [11, 12], cost: 255}, {cols: [15, 15], rows: [11, 12], cost: 255}]
 - level: 0
   location: '0x35'
   exits:
@@ -1258,6 +1286,7 @@ rooms:
   treasure: null
 - level: 0
   location: '0x42'
+  specialist: ow-moblin  # round 26: the recorder drains the pond into Dungeon 7
   exits:
     S:
       level: 0
@@ -1268,7 +1297,10 @@ rooms:
   enemies:
     RedMoblin: 1
   treasure: null
-  entrance:  # cave index $07 (OW attr B >> 2); the recorder drains the pond; stairs at tiles (12, 10) (emulator: B with the recorder selected)
+  # cave index $07 (OW attr B >> 2); the recorder drains the pond; stairs at tiles (12, 10) (emulator: B with the
+  # recorder selected). The pond fills again on every visit (walked Nov 16, Walks26): flag $80 is set but the next
+  # visit needs another play; B works one step in from the S edge (Y $D5).
+  entrance:
     cave: '0x07'
     contents: level-7
     how: recorder
@@ -1284,6 +1316,7 @@ rooms:
   treasure: null
 - level: 0
   location: '0x44'
+  specialist: ow-zora  # round 26: the Zora rule (as 0x54 and 0x65); the shop's arrows on the way to Dungeon 7
   exits:
     N:
       level: 0
@@ -1291,6 +1324,10 @@ rooms:
     S:
       level: 0
       location: '0x54'
+    cave:
+      level: 0
+      location: '0x44'
+      in_cave: true
   enemies:
     RedSlowOctorok: 4
     Zora: 1
@@ -1301,6 +1338,22 @@ rooms:
     how: open
     tile: [8, 2]
     wares: [[magic-shield, 130], [bombs, 20], [wood-arrow, 80]]  # [item, rupees], left to right
+- level: 0
+  location: '0x44'
+  in_cave: true
+  specialist: ow-zora
+  exits:
+    S:
+      level: 0
+      location: '0x44'
+  enemies: null
+  # The shop $1D (round 26): magic shield 130 (X $58), bombs 20 (X $78), the wood arrow 80 (X $98, the route's
+  # `waypoint: arrows`). As 0x34's: off the other wares' squares, to the arrow along Y $A5 (walked Nov 16, Walks26:
+  # up at X $70 to Y $9D and Right crosses X $78 and buys the bombs). It sells again on every visit.
+  treasure: wood-arrow
+  treasure_tile: [19, 11]
+  requires_rupees: 80
+  path_costs: [{cols: [11, 11], rows: [11, 12], cost: 255}, {cols: [15, 15], rows: [11, 12], cost: 255}]
 - level: 0
   location: '0x45'  # the island of Dungeon 4: reached by raft from the dock of 0x55
   specialist: ow-peahat  # Dungeon 4 (Nov 11)
@@ -1497,6 +1550,7 @@ rooms:
     cave: '0x23'
     contents: secret-rupees
     how: armos
+    tile: [20, 8]  # round 26: x=160 y=128
     rupees: 10
 - level: 0
   location: '0x4f'
@@ -4606,6 +4660,8 @@ rooms:
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 7
   location: '0x0c'
+  specialist: dodongo-crossing  # Dungeon 7 (round 26): past 3 Dodongos to the E wall
+  requires_bombs: true    # round 26: its E wall is bombed open into 0x0d (zelda::cheats cheats one in)
   exits:
     E:  # bomb wall
       level: 7
@@ -4620,6 +4676,7 @@ rooms:
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 7
   location: '0x0d'
+  specialist: wallmaster  # Dungeon 7 (round 26): the 5 Wallmasters die before the block moves
   exits:
     W:  # bomb wall
       level: 7
@@ -4638,6 +4695,7 @@ rooms:
   stairs: [26, 4]
 - level: 7
   location: '0x18'
+  specialist: goriya  # Dungeon 7 (round 26): Blue Goriyas (the lead's answer 6)
   exits:
     N:  # bomb wall
       level: 7
@@ -4660,6 +4718,8 @@ rooms:
   dark: true
 - level: 7
   location: '0x19'
+  specialist: goriya  # Dungeon 7 (round 26)
+  requires_bombs: true    # round 26: its E wall is bombed open into 0x1a (zelda::cheats cheats one in)
   exits:
     N:  # shutter
       level: 7
@@ -4679,6 +4739,8 @@ rooms:
   trigger: kill-all  # attr F & 7 = 1
 - level: 7
   location: '0x1a'
+  specialist: goriya  # Dungeon 7 (round 26)
+  requires_bombs: true    # round 26: its E wall is bombed open into 0x1b on the way back up from the candle
   exits:
     E:  # bomb wall
       level: 7
@@ -4699,6 +4761,7 @@ rooms:
   stairs: [16, 10]
 - level: 7
   location: '0x1b'
+  specialist: goriya  # Dungeon 7 (round 26): fought for its 4 bombs while the bag isn't full
   exits:
     N:
       level: 7
@@ -4718,6 +4781,7 @@ rooms:
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 7
   location: '0x1c'
+  specialist: boss-digdogger  # Dungeon 7 (round 26): the recorder, 3 small Digdoggers, the N shutter
   exits:
     N:  # shutter
       level: 7
@@ -4733,6 +4797,7 @@ rooms:
   trigger: kill-all  # attr F & 7 = 1
 - level: 7
   location: '0x28'
+  specialist: goriya  # Dungeon 7 (round 26): the Grumble Goriya, fed the food (no monster)
   exits:
     N:  # open here; a shutter on 0x18's side
       level: 7
@@ -4746,6 +4811,8 @@ rooms:
   treasure: null
 - level: 7
   location: '0x29'
+  specialist: goriya  # Dungeon 7 (round 26)
+  requires_bombs: true    # round 26: its E wall is bombed open into the boss room (a dead end without a bomb)
   exits:
     E:  # bomb wall
       level: 7
@@ -4763,6 +4830,7 @@ rooms:
   stairs: [16, 10]
 - level: 7
   location: '0x2a'  # the boss room
+  specialist: boss-aquamentus  # Dungeon 7 (round 26): entered from W, the heart container at X $80
   exits:
     E:  # shutter
       level: 7
@@ -4778,6 +4846,7 @@ rooms:
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 7
   location: '0x2b'  # the triforce room
+  specialist: goriya  # Dungeon 7 (round 26): no monsters; the dungeon's main family, as its entrance 0x79
   exits:
     W:  # open here; a shutter on 0x2a's side
       level: 7
@@ -4786,6 +4855,7 @@ rooms:
   treasure: triforce
 - level: 7
   location: '0x38'
+  specialist: goriya  # Dungeon 7 (round 26)
   exits:
     N:
       level: 7
@@ -4802,6 +4872,7 @@ rooms:
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 7
   location: '0x39'
+  specialist: boss-digdogger  # Dungeon 7 (round 26): crossed round the big Digdogger (the recorder never offered here)
   exits:
     E:  # bomb wall
       level: 7
@@ -4839,6 +4910,7 @@ rooms:
   treasure: null
 - level: 7
   location: '0x49'
+  specialist: goriya  # Dungeon 7 (round 26)
   exits:
     N:  # shutter
       level: 7
@@ -4872,6 +4944,7 @@ rooms:
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 7
   location: '0x59'
+  specialist: goriya  # Dungeon 7 (round 26)
   exits:
     N:
       level: 7
@@ -4934,6 +5007,8 @@ rooms:
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 7
   location: '0x69'
+  specialist: goriya  # Dungeon 7 (round 26)
+  requires_bombs: true    # round 26: its N wall is bombed open into 0x59 (zelda::cheats cheats one in)
   exits:
     N:  # bomb wall
       level: 7
@@ -5023,6 +5098,7 @@ rooms:
   treasure: key
 - level: 7
   location: '0x79'  # the start room: S leaves to the overworld
+  specialist: goriya  # Dungeon 7 (round 26): no monsters; the dungeon's main family
   exits:
     N:
       level: 7
@@ -5048,6 +5124,7 @@ rooms:
 - level: 7
   location: '0x7b'
   in_cave: true  # the tunnel between 0x29 and 0x0d (side view)
+  specialist: equipment-room  # Dungeon 7 (round 26): left by its left ladder into 0x29
   exits:
     E:  # up the right ladder (attr B = $0D)
       level: 7
@@ -5061,6 +5138,7 @@ rooms:
 - level: 7
   location: '0x4a'
   in_cave: true  # the item cellar under 0x1a (side view)
+  specialist: equipment-room  # Dungeon 7 (round 26): the red candle
   exits:
     N:  # up the ladder (attr A = attr B = $1A)
       level: 7

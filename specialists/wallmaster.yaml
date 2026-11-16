@@ -1,5 +1,5 @@
 name: wallmaster
-rooms: ['(1, 0x45)']
+rooms: ['(1, 0x45)', '(7, 0x0d)']
 start_states: ['1_45*_[0-9]']
 success: [exit-correct]
 reward_profile: default

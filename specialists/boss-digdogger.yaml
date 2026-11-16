@@ -1,5 +1,5 @@
 name: boss-digdogger
-rooms: ['(5, 0x24)']
+rooms: ['(5, 0x24)', '(7, 0x1c)', '(7, 0x39)']
 start_states: ['5_24*_[0-9]']
 success: [exit-correct]                    # the recorder, kill the small one, take the heart container, leave N to 0x14
 reward_profile: default

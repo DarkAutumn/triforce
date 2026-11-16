@@ -309,13 +309,16 @@ impl fmt::Display for ActionMask {
 /// or a turn first, inside asm:Link_FilterInput's border bands, no sideways turn the game refuses); a B item that
 /// is not the selected one also needs the item sub-screen to open ([`crate::submenu::can_open`]). RECORDER, FOOD and
 /// CANDLE follow the same rules (the item held, the game would use it, the buttons can); RECORDER only where
-/// [`recorder_wanted`]. A family's `items:` switches mask them further (`env::config::ItemsConfig`).
+/// [`recorder_wanted`] (a route narrows it per step: `crate::Session::set_recorder_facings`), FOOD only where a
+/// Grumble waits for it ([`food_wanted`]), and no BOOMERANG while placed food lies (round 26: the boomerang shares its
+/// slot and would take it away, asm:Boomerang_Wield). MOVE also presses into a secret Armos from its side
+/// ([`GameView::is_secret_armos_direction`]). A family's `items:` switches mask them further
+/// (`env::config::ItemsConfig`).
 pub fn compute_action_mask(state: &GameView) -> ActionMask {
     let mut mask = ActionMask::default();
-    let available = state.available_actions();
 
     for d in CARDINALS {
-        if state.can_link_move(d) || state.is_push_block_direction(d) {
+        if state.can_link_move(d) || state.is_push_block_direction(d) || state.is_secret_armos_direction(d) {
             mask.allow(ActionKind::Move, Some(d));
         }
     }
@@ -325,11 +328,8 @@ pub fn compute_action_mask(state: &GameView) -> ActionMask {
     let has_items = !state.items.is_empty();
     let has_bomb_walls = !state.bomb_walls().is_empty() || state.ow_bomb_secret_closed();
     let menu_opens = crate::submenu::can_open(state);
-    let usable = |kind: ActionKind| {
-        available[kind.index()]
-            && state.weapon_ready(kind)
-            && !(crate::submenu::needs_selection(state, kind) && !menu_opens)
-    };
+    let available = state.available_actions();
+    let ready = |kind: ActionKind| usable(state, &available, kind, menu_opens);
 
     for kind in [
         ActionKind::Sword,
@@ -338,7 +338,7 @@ pub fn compute_action_mask(state: &GameView) -> ActionMask {
         ActionKind::Arrow,
         ActionKind::Bomb,
     ] {
-        if !usable(kind) {
+        if !ready(kind) || (kind == ActionKind::Boomerang && food_lies(state)) {
             continue;
         }
         let pickup = matches!(
@@ -357,14 +357,14 @@ pub fn compute_action_mask(state: &GameView) -> ActionMask {
         }
     }
     for kind in [ActionKind::Food, ActionKind::Candle] {
-        if usable(kind) {
+        if ready(kind) && (kind != ActionKind::Food || food_wanted(state)) {
             for d in state.attack_directions(kind) {
                 mask.allow(kind, Some(d));
             }
         }
     }
-    if usable(ActionKind::Recorder)
-        && recorder_wanted(state)
+    if recorder_wanted(state)
+        && ready(ActionKind::Recorder)
         && crate::attack::plan(state, ActionKind::Recorder, Direction::None).is_some()
     {
         mask.allow(ActionKind::Recorder, None);
@@ -378,12 +378,28 @@ pub fn compute_action_mask(state: &GameView) -> ActionMask {
     mask
 }
 
-/// Where playing the recorder does something the route wants (round 24): a dungeon room in play (mode 5) that holds
-/// a big Digdogger ($38, $39) and has not heard the recorder since Link came in (`FluteUsedState` $51B = 0; the
+/// The inventory holds `kind` (`available`, [`GameView::available_actions`]), the game would start it now and, for a B
+/// item not selected, the sub-screen opens (`menu_opens`, [`crate::submenu::can_open`]).
+fn usable(state: &GameView, available: &[bool; NUM_KINDS], kind: ActionKind, menu_opens: bool) -> bool {
+    available[kind.index()]
+        && state.weapon_ready(kind)
+        && !(crate::submenu::needs_selection(state, kind) && !menu_opens)
+}
+
+/// The game would play the recorder now, and the buttons can from here (the game's rules only: where the route wants
+/// it is [`recorder_wanted`]'s, or the route's).
+pub fn recorder_playable(state: &GameView) -> bool {
+    usable(state, &state.available_actions(), ActionKind::Recorder, crate::submenu::can_open(state))
+        && crate::attack::plan(state, ActionKind::Recorder, Direction::None).is_some()
+}
+
+/// Where playing the recorder does something a dungeon route wants (round 24): a dungeon room in play (mode 5) that
+/// holds a big Digdogger ($38, $39) and has not heard the recorder since Link came in (`FluteUsedState` $51B = 0; the
 /// game zeroes it on room entry). There the tune starts the Digdogger's shrink and split (asm:Digdogger_HandleFlute,
-/// zelda-asm/enemies.md "Digdogger"); a second play changes nothing. Not offered on the overworld, where it summons
-/// the whirlwind (asm:Whirlwind_Summon) or drains the pond of Q1 room 0x42 (asm:Flute_SecretRoomIdsOW): no route
-/// step uses those yet, and this is the one function a round that does widens.
+/// zelda-asm/enemies.md "Digdogger"); a second play changes nothing. Without a route nowhere else: on the overworld
+/// it summons the whirlwind (asm:Whirlwind_Summon) or drains the pond of Q1 room 0x42 (asm:Flute_SecretRoomIdsOW),
+/// which only a route step wants (round 26: `crate::objectives::GameCompletion::recorder_facings`, which also keeps it
+/// from a big Digdogger Link only crosses, 7:0x39).
 pub fn recorder_wanted(state: &GameView) -> bool {
     use crate::enums::enemy::{DIGDOGGER2, DIGDOGGER3};
     state.level() != 0
@@ -392,10 +408,26 @@ pub fn recorder_wanted(state: &GameView) -> bool {
         && state.enemies.iter().any(|e| matches!(e.id, DIGDOGGER2 | DIGDOGGER3))
 }
 
+/// A Grumble Goriya waits for food (round 26, 7:0x28): slot 1 holds it (type `$36`) in its state 1, its text typed
+/// (asm:Grumble_State1WaitForFood takes food lying anywhere in the room). Nowhere else is food wanted: placed, it
+/// only lies there (asm:Food_Wield doesn't consume it) and keeps the boomerang's slot.
+pub fn food_wanted(state: &GameView) -> bool {
+    state.peek(ADDR_OBJ_TYPE + 1) == OBJ_GRUMBLE && state.peek(ADDR_OBJ_STATE + 1) == 1
+}
+
+/// Placed food lies in slot `$0F` (its state's bit 7, asm:Food_Wield).
+pub fn food_lies(state: &GameView) -> bool {
+    state.peek(ADDR_OBJ_STATE + 0x0F) & 0x80 != 0
+}
+
 const ADDR_MODE: u16 = 0x12;
 const MODE_PLAY: u8 = 5;
 /// asm:FluteUsedState: 0, 1 once the recorder was played in this room, 2 while a Digdogger shrinks.
 const ADDR_FLUTE_USED_STATE: u16 = 0x51B;
+/// `ObjType` and `ObjState` tables; the Grumble Goriya's type.
+const ADDR_OBJ_TYPE: u16 = 0x34F;
+const ADDR_OBJ_STATE: u16 = 0xAC;
+const OBJ_GRUMBLE: u8 = 0x36;
 
 #[cfg(test)]
 mod tests {

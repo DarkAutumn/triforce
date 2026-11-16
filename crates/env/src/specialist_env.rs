@@ -763,16 +763,20 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
     }
 
     /// The session's disabled kinds for Link's state: the config's `items` (bombs by [`crate::config::BombUse`],
-    /// with the route's bomb reserve at the step Link plays), and that reserve for the observation; the bomb targets
-    /// a `required` family is kept to (`ItemsConfig::bomb_targets`); its `clips:` switch and the run-time one (the
-    /// CLIP kind), and the wraps `objective` vetoes.  Recomputed every step: the 10th kill and the bomb count change
-    /// within a room.
+    /// with the route's bomb reserve at the step Link plays, arrows above its rupee reserve), and that bomb reserve for
+    /// the observation; the bomb targets a `required` family is kept to (`ItemsConfig::bomb_targets`); the facings the
+    /// route plays the recorder with (`GameCompletion::recorder_facings`, round 26); its `clips:` switch and the
+    /// run-time one (the CLIP kind), and the wraps `objective` vetoes.  Recomputed every step: the 10th kill and the
+    /// bomb count change within a room.
     fn update_disabled_kinds(&mut self, objective: &zelda::objectives::Objective) {
         let reserve = self.objectives.as_ref().map_or(0, GameCompletion::bomb_reserve);
-        let kinds = self.config.items.disabled_kinds(&self.data.map, self.session.state(), reserve);
+        let rupees = self.objectives.as_ref().map_or(0, GameCompletion::rupee_reserve);
+        let kinds = self.config.items.disabled_kinds(&self.data.map, self.session.state(), reserve, rupees);
         self.session.set_disabled_kinds(&kinds);
         let targets = self.config.items.bomb_targets(&self.data.map, self.session.state(), Some(objective));
         self.session.set_bomb_targets(targets.as_deref());
+        let facings = self.objectives.as_ref().map(|gc| gc.recorder_facings(self.session.state()));
+        self.session.set_recorder_facings(facings);
         self.session.set_clips(self.config.clips.enabled);
         // The switch in force: a switch off waits while Link stands stranded without the skips (round 24).
         let allowed = self.objectives.as_ref().map_or(self.clips_allowed, GameCompletion::clips_allowed);

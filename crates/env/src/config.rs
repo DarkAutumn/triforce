@@ -399,7 +399,10 @@ impl BombUse {
 
 /// `items:` block: inventory items the specialist may use (false = masked out even when Link has it; bombs:
 /// [`BombUse`]). `recorder`, `food` and `candle` (round 24) are off unless a family turns them on: no family before
-/// Dungeon 5 uses them, and a model that never had them unmasked never learned what they do.
+/// Dungeon 5 uses them, and a model that never had them unmasked never learned what they do. `arrows` too (round 26,
+/// the lead's answer 1: every shot costs a rupee the route needs for Gohma's and Ganon's arrows; the families that
+/// need arrows turn it on), and where on, ARROW waits while Link holds no more rupees than the route's
+/// `rupee_reserve` (the game itself refuses at 0, asm:Arrow_Wield).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ItemsConfig {
@@ -407,7 +410,7 @@ pub struct ItemsConfig {
     pub bombs: BombUse,
     #[serde(default = "yes", deserialize_with = "de_bool")]
     pub boomerang: bool,
-    #[serde(default = "yes", deserialize_with = "de_bool")]
+    #[serde(default, deserialize_with = "de_bool")]
     pub arrows: bool,
     #[serde(default, deserialize_with = "de_bool")]
     pub recorder: bool,
@@ -422,7 +425,7 @@ impl Default for ItemsConfig {
         ItemsConfig {
             bombs: BombUse::default(),
             boomerang: true,
-            arrows: true,
+            arrows: false,
             recorder: false,
             food: false,
             candle: false,
@@ -431,9 +434,17 @@ impl Default for ItemsConfig {
 }
 
 impl ItemsConfig {
-    /// Action kinds masked out in `state` with `reserve` bombs to keep, in kind order.
-    pub fn disabled_kinds(&self, map: &zelda::GameMap, state: &zelda::GameView, reserve: u8) -> Vec<ActionKind> {
-        self.kinds_off(self.bombs.allows(map, state, reserve))
+    /// Action kinds masked out in `state` with `bomb_reserve` bombs and `rupee_reserve` rupees to keep (routes.yaml),
+    /// in kind order.
+    pub fn disabled_kinds(
+        &self,
+        map: &zelda::GameMap,
+        state: &zelda::GameView,
+        bomb_reserve: u8,
+        rupee_reserve: u8,
+    ) -> Vec<ActionKind> {
+        let arrows = self.arrows && state.rupees() > i32::from(rupee_reserve);
+        self.kinds_off(self.bombs.allows(map, state, bomb_reserve), arrows)
     }
 
     /// What BOMB is kept to in `state` (round 22, 4:0x21's bomb waste): in a `requires_bombs` room where the mode is
@@ -457,14 +468,14 @@ impl ItemsConfig {
     /// Action kinds masked out whatever the state (`bombs: never`, `boomerang: false`, `arrows: false`, and
     /// `recorder`, `food`, `candle` unless on).
     pub fn fixed_disabled_kinds(&self) -> Vec<ActionKind> {
-        self.kinds_off(self.bombs != BombUse::Never)
+        self.kinds_off(self.bombs != BombUse::Never, self.arrows)
     }
 
-    fn kinds_off(&self, bombs: bool) -> Vec<ActionKind> {
+    fn kinds_off(&self, bombs: bool, arrows: bool) -> Vec<ActionKind> {
         [
             (bombs, ActionKind::Bomb),
             (self.boomerang, ActionKind::Boomerang),
-            (self.arrows, ActionKind::Arrow),
+            (arrows, ActionKind::Arrow),
             (self.recorder, ActionKind::Recorder),
             (self.food, ActionKind::Food),
             (self.candle, ActionKind::Candle),
@@ -1364,13 +1375,40 @@ mod tests {
         let items = ItemsConfig { bombs: BombUse::Tenth, arrows: false, recorder: true, ..Default::default() };
         let (food, candle) = (ActionKind::Food, ActionKind::Candle);
         assert_eq!(items.fixed_disabled_kinds(), vec![ActionKind::Arrow, food, candle]);
-        assert_eq!(items.disabled_kinds(&map, &view(field, 4, 0), 0), vec![ActionKind::Bomb, ActionKind::Arrow, food, candle]);
-        assert_eq!(items.disabled_kinds(&map, &view(field, 4, 9), 0), vec![ActionKind::Arrow, food, candle]);
-        // The round 24 kinds are off by default; a family's yaml turns them on.
+        assert_eq!(items.disabled_kinds(&map, &view(field, 4, 0), 0, 0), vec![ActionKind::Bomb, ActionKind::Arrow, food, candle]);
+        assert_eq!(items.disabled_kinds(&map, &view(field, 4, 9), 0, 0), vec![ActionKind::Arrow, food, candle]);
+        // The round 24 kinds are off by default, and (round 26) the arrows; a family's yaml turns them on.
         let default: ItemsConfig = serde_yaml_ng::from_str("{}").unwrap();
-        assert!(!(default.recorder || default.food || default.candle));
-        let on: ItemsConfig = serde_yaml_ng::from_str("{recorder: true, food: true, candle: true}").unwrap();
+        assert!(!(default.arrows || default.recorder || default.food || default.candle));
+        assert_eq!(default, ItemsConfig::default());
+        let on: ItemsConfig = serde_yaml_ng::from_str("{arrows: true, recorder: true, food: true, candle: true}").unwrap();
         assert_eq!(on.fixed_disabled_kinds(), vec![]);
+    }
+
+    /// Round 26: a family with arrows shoots only above the route's rupee reserve (`rupee_reserve`); without arrows
+    /// never; the game's own refusal at 0 rupees is the inventory's (`GameView::available_actions`).
+    #[test]
+    fn arrows_wait_above_the_rupee_reserve() {
+        use zelda::{GameView, Var, tables::RAM_SIZE};
+        let map = std::sync::Arc::new(zelda::GameMap::builtin());
+        let view = |rupees: u8| {
+            let mut ram = [0u8; RAM_SIZE];
+            ram[Var::Mode.addr() as usize] = 5;
+            ram[Var::Location.addr() as usize] = 0x44;
+            ram[Var::Rupees.addr() as usize] = rupees;
+            ram[Var::Arrows.addr() as usize] = 1;
+            ram[Var::Bow.addr() as usize] = 1;
+            GameView::new(&ram, 0, false, map.clone())
+        };
+        let arrows = ItemsConfig { arrows: true, ..Default::default() };
+        let off = |items: &ItemsConfig, rupees, reserve| {
+            items.disabled_kinds(&map, &view(rupees), 0, reserve).contains(&ActionKind::Arrow)
+        };
+        assert!(!off(&arrows, 3, 2) && off(&arrows, 2, 2) && off(&arrows, 0, 0));
+        assert!(!off(&arrows, 1, 0), "no reserve: down to the game's own limit");
+        assert!(off(&ItemsConfig::default(), 200, 0), "arrows off by default");
+        assert!(view(1).available_actions()[ActionKind::Arrow.index()]);
+        assert!(!view(0).available_actions()[ActionKind::Arrow.index()], "the game refuses an arrow at 0 rupees");
     }
 
     #[test]

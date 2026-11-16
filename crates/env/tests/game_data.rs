@@ -82,13 +82,13 @@ fn config_rooms_must_match_the_game_yaml_tags() {
     edit(
         tmp.path(),
         "specialists/boss-aquamentus.yaml",
-        "rooms: ['(1, 0x35)']",
-        "rooms: ['(1, 0x35)', '(1, 0x36)']",
+        "rooms: ['(1, 0x35)', '(7, 0x2a)']",
+        "rooms: ['(1, 0x35)', '(7, 0x2a)', '(1, 0x36)']",
     );
     assert_eq!(
         load_error(tmp.path()),
-        "specialists/boss-aquamentus.yaml: rooms: [(1, 0x35), (1, 0x36)] != game.yaml rooms tagged \
-         `specialist: boss-aquamentus` [(1, 0x35)]"
+        "specialists/boss-aquamentus.yaml: rooms: [(1, 0x35), (1, 0x36), (7, 0x2a)] != game.yaml rooms tagged \
+         `specialist: boss-aquamentus` [(1, 0x35), (7, 0x2a)]"
     );
 }
 

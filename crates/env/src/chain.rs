@@ -1204,11 +1204,15 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
     /// wraps the objective vetoes; every step (the 10th kill and the bomb count change within a room).
     fn update_disabled_kinds(&mut self) {
         let reserve = self.objectives.as_ref().map_or(0, GameCompletion::bomb_reserve);
+        let rupees = self.objectives.as_ref().map_or(0, GameCompletion::rupee_reserve);
         let config = &self.current.as_ref().expect("acting specialist").config;
-        let kinds = config.items.disabled_kinds(&self.data.map, self.session.state(), reserve);
+        let kinds = config.items.disabled_kinds(&self.data.map, self.session.state(), reserve, rupees);
         self.session.set_disabled_kinds(&kinds);
         let targets = config.items.bomb_targets(&self.data.map, self.session.state(), self.objective.as_ref());
         self.session.set_bomb_targets(targets.as_deref());
+        // The facings the route plays the recorder with (round 26: the whirlwind's count, the pond, a Digdogger fought).
+        let facings = self.objectives.as_ref().map(|gc| gc.recorder_facings(self.session.state()));
+        self.session.set_recorder_facings(facings);
         self.session.set_clips(config.clips.enabled);
         // The switch in force: a switch off waits while Link stands stranded without the skips (round 24).
         let allowed = self.objectives.as_ref().map_or(self.clips_allowed, GameCompletion::clips_allowed);

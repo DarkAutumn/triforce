@@ -675,6 +675,31 @@ impl GameView {
                 .any(|t| block.contains(t))
     }
 
+    /// Whether a MOVE in `direction` presses into the room's secret Armos statue from a side (round 26; game.yaml
+    /// `entrance: {how: armos}` in a room whose `cave` exit a route can take: 0x34): the statue still stands (tiles
+    /// `$C0`-`$C3`; asm:Spawn_CheckTouchedArmosOrGravestone wakes it when Link, blocked by it on a grid point, holds a
+    /// direction) and Link presses E or W into it (from below the Armos touches him as it wakes: a heart; Walks26:
+    /// from (`$30`, `$7D`) Right and (`$50`, `$7D`) Left). The statue is a wall to [`GameView::can_link_move`], so the
+    /// mask offers this MOVE only through here; the secrets of rooms without a game.yaml `cave` exit (0x1c's hint, a
+    /// d2first room) stay walls.
+    pub fn is_secret_armos_direction(&self, direction: Direction) -> bool {
+        if !matches!(direction, Direction::E | Direction::W) || self.level() != 0 || self.in_cave() {
+            return false;
+        }
+        let room = self.map.get(self.full_location());
+        let secret = room.filter(|r| r.exits.contains_key("cave")).and_then(|r| r.secret);
+        let Some(crate::game_map::Secret::Armos((c, r))) = secret else {
+            return false;
+        };
+        let statue = [(c, r), (c + 1, r), (c, r + 1), (c + 1, r + 1)];
+        let tiles = self.current_tiles();
+        let armos = |&(x, y): &Tile| (0xC0..=0xC3).contains(&tiles[(x * crate::room::ROWS + y) as usize]);
+        let (x, y) = (self.link.position.x, self.link.position.y);
+        statue.iter().all(armos)
+            && self.var(Var::LinkGridOffset) == 0
+            && Room::hotspot_tiles(x, y, direction).iter().any(|t| statue.contains(t))
+    }
+
     pub fn is_door_locked(&self, direction: Direction) -> bool {
         self.level() != 0 && Room::is_door_locked(direction, self.current_tiles())
     }

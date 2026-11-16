@@ -13,8 +13,9 @@ from triforce.specialist import list_specialists
 
 def test_the_route_and_families():
     # d2first is the one route the game is played on (Dungeon 4 merged in, Nov 12; the leg and Dungeon 5, round 24);
-    # clips-gauntlet is round 21's experiment route (two targets per room and entry, drawn by a specialist naming it).
-    assert native.routes() == [native.DEFAULT_ROUTE, 'clips-gauntlet'] and native.DEFAULT_ROUTE == 'd2first'
+    # d7 is round 26's scouting route (d2first, then the leg and Dungeon 7); clips-gauntlet is round 21's experiment
+    # route (two targets per room and entry, drawn by a specialist naming it).
+    assert native.routes() == [native.DEFAULT_ROUTE, 'd7', 'clips-gauntlet'] and native.DEFAULT_ROUTE == 'd2first'
     assert sorted(native.families()) == list_specialists()
 
 
@@ -43,8 +44,9 @@ def test_specialist_tags():
     assert native.specialist_for((0, 0x2c)) == native.specialist_for((0, 0x2c, True)) == 'ow-tektite'
     for room in [(0, 0x29), (0, 0x39), (0, 0x49), (0, 0x6a), (2, 0x6d), (3, 0x4a)]:     # off the route, untagged
         assert native.specialist_for(room) is None, room
+    d7 = {(7, room, False) for room in (0x79, 0x69, 0x59, 0x49, 0x38, 0x28, 0x18, 0x19, 0x1a, 0x1b, 0x29, 0x2b)}
     assert {tuple(r) for r in native.families()['goriya']} == {(1, 0x44, False), (1, 0x23, False),
-                                                                (2, 0x5e, False), (2, 0x1e, False)}
+                                                                (2, 0x5e, False), (2, 0x1e, False)} | d7
 
 
 def test_d2_then_the_heart_and_white_sword_then_the_d1_triforce():
@@ -77,7 +79,7 @@ def test_the_bow_detour_goes_north_from_0x43_and_back():
     assert native.families()['trap-room'] == [(1, 0x22, False), (3, 0x4c, False), (3, 0x5a, False), (4, 0x02, False),
                                               (4, 0x11, False)]
     assert native.families()['equipment-room'] == [(1, 0x7f, True), (3, 0x0f, True), (4, 0x60, True), (5, 0x04, True),
-                                                   (5, 0x07, True)]
+                                                   (5, 0x07, True), (7, 0x4a, True), (7, 0x7b, True)]
 
 
 def test_dungeon_3_follows_lees_directions_with_the_treasure_rules():

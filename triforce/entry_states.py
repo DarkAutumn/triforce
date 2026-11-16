@@ -84,8 +84,10 @@ START_STATE = 'start'
 # Not part of the room's monster list at entry: Zoras (spawned by water rooms) and the overworld Boulders (object type
 # $20 = decimal 32, named '32' natively and 'Unknown_32' in game.yaml), which the boulder spawner (type $1F) drops
 # later (asm:Boulder_UpdateSpawner).  Hazards (the spawner, $1F = decimal 31 = game.yaml 'Unknown_31', Bubbles, traps)
-# are not enemies at all: a state's enemy list leaves them out (zelda's object classifier, review F067).
-NOT_ROOM_MONSTERS = ('Zora', 'Unknown_32', '32', 'Unknown_31', 'Bubble', 'BlueBubble', 'RedBubble', 'Trap')
+# are not enemies at all: a state's enemy list leaves them out (zelda's object classifier, review F067); nor are
+# persons, such as Dungeon 7's Grumble Goriya in 7:0x28 ($36 = decimal 54, game.yaml 'Unknown_54'; round 26).
+NOT_ROOM_MONSTERS = ('Zora', 'Unknown_32', '32', 'Unknown_31', 'Bubble', 'BlueBubble', 'RedBubble', 'Trap',
+                     'Unknown_54')
 BASE_HEARTS = 3                      # Link's containers at the start; each heart container on the route adds one
 
 # RAM (docs/ram-catalog.md; zelda::room_entry, zelda::room_state).
@@ -123,11 +125,16 @@ class RouteStep:
         return f"{state_stem(self.level, self.room, self.in_cave, self.entry, self.visit)}_{chain}.state"
 
 
+# The file-name side of each routes.yaml entry that isn't a room edge.
+ENTRY_SIDES = {'cave': 'c', 'recorder': 'r'}
+
+
 def state_stem(level: int, room: int, in_cave: bool, entry: str, visit: int = 1) -> str:
     """A state name without its chain (docs/architecture.md "Start states"): ``<level>_<room><side>[_v<visit>]``,
-    side n/s/e/w, ``c`` out of a cave or dungeon stairs, ``cave`` a cave or cellar interior; a later visit of the
-    route to the room from that side (2, 3, ...) adds ``_v<visit>``, the first has none."""
-    side = 'cave' if in_cave else ('c' if entry == 'cave' else entry.lower())
+    side n/s/e/w, ``c`` out of a cave or dungeon stairs, ``r`` set down by the whirlwind (round 26), ``cave`` a cave or
+    cellar interior; a later visit of the route to the room from that side (2, 3, ...) adds ``_v<visit>``, the first
+    has none."""
+    side = 'cave' if in_cave else ENTRY_SIDES.get(entry, entry.lower())
     return f"{level}_{room:02x}{side}" + (f"_v{visit}" if visit > 1 else '')
 
 
@@ -623,7 +630,7 @@ def install(staged: str, states_dir: str = STATES_DIR, partial: bool = False) ->
 
 # --- audit ---
 
-STATE_NAME = re.compile(r'^(\d)_([0-9a-f]{2})(n|s|e|w|c|cave)(?:_v([2-9]|[1-9]\d+))?_([0-2])$')
+STATE_NAME = re.compile(r'^(\d)_([0-9a-f]{2})(n|s|e|w|c|r|cave)(?:_v([2-9]|[1-9]\d+))?_([0-2])$')
 HEARTS_NEVER = 16                    # a 16-heart state is never a route state (Lee)
 
 
@@ -657,14 +664,20 @@ def _named_room(label: str) -> Optional[tuple]:
         return None
 
 
+WHIRLWIND_RELEASE_X = 0x80          # the whirlwind sets Link down here, facing E (asm:Whirlwind_Update_Full)
+
+
 def entry_side(state) -> str:
     """The side Link entered his room from, as a file name spells it (n/s/e/w, ``c`` out of a cave, cellar or
-    level, ``cave`` inside one), read at the first controllable frame: Link faces into the room from the edge he
-    came through; coming out of a cave or cellar he faces S away from the top edge."""
+    level, ``r`` set down by the whirlwind, ``cave`` inside one), read at the first controllable frame: Link faces into
+    the room from the edge he came through; coming out of a cave or cellar he faces S away from the top edge; the
+    whirlwind lets him go facing E at X $80 (round 26; from the W edge he is controllable at its rim)."""
     level, _, in_cave = state.full_location
     if in_cave:
         return 'cave'
     link = state.link
+    if level == 0 and link['direction'] == 'E' and link['x'] == WHIRLWIND_RELEASE_X:
+        return 'r'
     facing = {'E': 'w', 'W': 'e', 'N': 's'}.get(link['direction'])
     if facing is not None:
         return facing

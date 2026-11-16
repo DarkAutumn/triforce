@@ -1,5 +1,5 @@
 name: boss-aquamentus
-rooms: ['(1, 0x35)']
+rooms: ['(1, 0x35)', '(7, 0x2a)']
 start_states: ['1_35*_[0-9]']
 success: [exit-correct]
 reward_profile: default

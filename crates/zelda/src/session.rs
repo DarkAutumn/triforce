@@ -106,6 +106,10 @@ pub struct Session<N: Nes> {
     /// `crate::objectives::route_bomb_targets`) that no live bomb of Link's reaches yet (round 23,
     /// `BombTarget::awaits_bomb`); None: wherever the game places it.  The env sets it every step.
     bomb_targets: Option<Vec<crate::bombs::BombTarget>>,
+    /// RECORDER only facing these ways ([`Direction::value`] bits; 0: not at all), round 26: the route's rule
+    /// (`crate::objectives::GameCompletion::recorder_facings`: the whirlwind's count, the pond, a Digdogger fought);
+    /// None: the game state's alone ([`crate::actions::recorder_wanted`]).  The env sets it every step.
+    recorder_facings: Option<u8>,
     /// The skip a CLIP of this room left cut short ([`OpenClip`]), until a MOVE finishes it (`Change::
     /// clip_finished_by_move`), Link leaves the room or another CLIP starts.
     open_clip: Option<OpenClip>,
@@ -133,6 +137,7 @@ impl<N: Nes> Session<N> {
             clips_allowed: true,
             vetoed_wraps: Vec::new(),
             bomb_targets: None,
+            recorder_facings: None,
             open_clip: None,
             look_ahead: LookAhead::All,
             stash: None,
@@ -279,6 +284,16 @@ impl<N: Nes> Session<N> {
             return;
         }
         self.bomb_targets = targets.map(<[_]>::to_vec);
+        self.refresh_mask();
+    }
+
+    /// The facings RECORDER is kept to (None: the game state's rule, the `recorder_facings` field's); the mask is
+    /// recomputed when they change.
+    pub fn set_recorder_facings(&mut self, facings: Option<u8>) {
+        if self.recorder_facings == facings {
+            return;
+        }
+        self.recorder_facings = facings;
         self.refresh_mask();
     }
 
@@ -548,6 +563,12 @@ impl<N: Nes> Session<N> {
 
     fn compute_mask(&self, state: &GameView) -> ActionMask {
         let mut mask = compute_action_mask(state);
+        if let Some(facings) = self.recorder_facings {
+            mask.disallow_kind(ActionKind::Recorder);
+            if facings & state.link.direction.value() != 0 && crate::actions::recorder_playable(state) {
+                mask.allow(ActionKind::Recorder, None);
+            }
+        }
         if self.clips_effective() {
             clips::allow_clips(&mut mask, state, &self.vetoed_wraps);
         }
