@@ -20,8 +20,8 @@ import statistics
 from r28_walks import (ALL_DEAD, BOMBS, BUBBLE, CELLAR, CUR_OPENED_DOORS, D8_ROUTE, DARKNUT_BLUE, DARKNUT_RED,
                        FIREBALL_STATUE, GIBDO, HEARTS, KEYS, LEVEL_KILL_COUNTS, OBJ_DIR, OBJ_META, OBJ_STATE,
                        OBJ_TYPE, OBJ_X, OBJ_Y, PLAY, ROOM_HISTORY, ROOM_KILL_COUNT, ROOM_OBJ_COUNT, RUPEES,
-                       SWORD_BLOCKED, TRIFORCE, UW_FLAGS_7TO9, StagingWalk, Tally28, alive, d8_cellar_states,
-                       d8_state, hop, kill_all, load, name, stage_d8, summary)
+                       SWORD_BLOCKED, TRIFORCE, UW_FLAGS_7TO9, Dodger, StagingWalk, Tally28, alive,
+                       d8_cellar_states, d8_state, hop, kill_all, load, name, stage_d8, summary)
 
 DOOR_BITS = {'N': 8, 'S': 4, 'W': 2, 'E': 1}
 
@@ -163,6 +163,38 @@ def crossings(args):
                 extra['sword blocked on leaving'] += 1
         print(f'{label}: in at ({r["start"][0]:#04x},{r["start"][1]:#04x}); {summary(rows)}; arrives {dict(ends)}; '
               f'{dict(extra)}' if room != 0x2C else f'{label}: {summary(rows)}; {dict(ends)}')
+    # the same crossings stepping aside from what is predicted to touch Link (`r28_walks.Dodger`)
+    for label, room, entry, points, button, line in (
+            ('0x4e S->N (key door), stepping aside', 0x4E, 'S', [(0x78, 0x5D)], 'UP', ('x', 0x78)),
+            ('0x3f W->stairs, stepping aside', 0x3F, 'W', [(0xB0, 0x8D)], 'RIGHT', ('y', 0x8D))):
+        for hearts in (None, 6.0, 3.0):
+            rows, blocked = [], 0
+            for seed in range(args.seeds):
+                w = enter(room, entry, seed)
+                if hearts is not None:
+                    from r28_walks import hearts_bytes           # pylint: disable=import-outside-toplevel
+                    hb = hearts_bytes(hearts, 13)
+                    w.game.set_value('hearts_and_containers', hb['hearts_and_containers'])
+                    w.game.set_value('partial_hearts', hb['partial_hearts'])
+                t = Tally28(w)
+                d = Dodger(t)
+                ok = d.walk(*points, limit=1500)
+                if ok:
+                    ok = False
+                    for _ in range(600):
+                        if w.mode not in (PLAY, CELLAR) or w.room != room:
+                            ok = True
+                            break
+                        if w.hearts() <= 0:
+                            break
+                        cur = w.x if line[0] == 'x' else w.y
+                        if cur != line[1]:
+                            t.press(d.choose((line[1], w.y) if line[0] == 'x' else (w.x, line[1])))
+                        else:
+                            t.press(button)
+                blocked += 1 if w.r(SWORD_BLOCKED) else 0
+                rows.append((ok, t.lost(), t.frames, t.by))
+            print(f'{label}, from {hearts or 13.0} hearts: {summary(rows)}; sword blocked on leaving in {blocked}')
     # 0x3f from fewer hearts: the one-way room is where a run is low
     for hearts in (6.0, 3.0):
         rows = []

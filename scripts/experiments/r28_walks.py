@@ -429,3 +429,94 @@ def d8_cellar_states(out: Path = None, bombs: int = 1) -> dict:
     unclear()
     w.game.save_state_file(str(paths['8_4cc']))
     return paths
+
+
+# ---- a walker that looks where the monsters are going ---------------------------------------------------------------
+
+MOVES = {'UP': (0, -1, 'MOVE N'), 'DOWN': (0, 1, 'MOVE S'), 'LEFT': (-1, 0, 'MOVE W'), 'RIGHT': (1, 0, 'MOVE E')}
+SHOTS = (FIREBALL_STATUE, FIREBALL_BOSS, 0x53, 0x5B, 0x57, 0x58, 0x59)
+
+
+class Dodger:
+    """Walks a Tally's Link toward a point a frame at a time and steps aside from what would touch him: every
+    object's position is carried forward `horizon` frames along its last frame's motion, each of Link's moves (the
+    four directions the mask allows, or none) along his 1.5 px a frame, and the move with the fewest predicted
+    overlaps wins, ties by the distance left.  It reads positions only (no look-ahead in the emulator): what a
+    player sees.  `harmless` object types are ignored."""
+
+    def __init__(self, tally, horizon: int = 14, radius: int = 0x13, shot_radius: int = 0x0D, harmless=(),
+                 bounds=(0x20, 0x5D, 0xD0, 0xBD)):
+        self.t, self.w = tally, tally.w
+        self.horizon, self.radius, self.shot_radius, self.harmless = horizon, radius, shot_radius, set(harmless)
+        self.bounds = bounds                  # the floor Link keeps to (a dungeon room's, doorways excluded)
+        self.prev = {}
+
+    def threats(self):
+        """[(x, y, vx, vy, radius)] of what can hurt: the motion is the mean of the last frames seen (up to 6); a
+        shot that has not moved yet (a fireball waits 15 frames) is taken to fly at 1.5 px a frame toward where
+        Link stood when it appeared (they are aimed once)."""
+        out, now = [], {}
+        for s, t, x, y, _state, meta, _hp in self.w.objects():
+            old = self.prev.get(s)
+            if old and old['type'] == t and abs(x - old['trail'][-1][0]) < 8 and abs(y - old['trail'][-1][1]) < 8:
+                rec = old
+                rec['trail'] = (rec['trail'] + [(x, y)])[-7:]
+            else:
+                rec = {'type': t, 'trail': [(x, y)], 'aim': (self.w.x, self.w.y)}
+            now[s] = rec
+            if t in self.harmless or t >= 0x60 or meta >= 0x10:
+                continue
+            trail = rec['trail']
+            n = len(trail) - 1
+            vx, vy = ((x - trail[0][0]) / n, (y - trail[0][1]) / n) if n else (0.0, 0.0)
+            if t in SHOTS and vx == 0 and vy == 0:
+                ax, ay = rec['aim'][0] - x, rec['aim'][1] - y
+                d = max(1.0, (ax * ax + ay * ay) ** 0.5)
+                vx, vy = 1.5 * ax / d, 1.5 * ay / d
+            out.append((x, y, vx, vy, self.shot_radius if t in SHOTS else self.radius))
+        self.prev = now
+        return out
+
+    def danger(self, x, y, dx, dy, threats, first: int = 0) -> float:
+        total = 0.0
+        for f in range(first, self.horizon + 1):
+            lx, ly = x + dx * 1.5 * f, y + dy * 1.5 * f
+            for ox, oy, vx, vy, r in threats:
+                if abs(ox + vx * f - lx) < r and abs(oy + vy * f - ly) < r:
+                    total += 1.0 / (1 + f)
+        return total
+
+    def choose(self, goal, threats=None):
+        """The button of this frame toward `goal` = (x, y)."""
+        w = self.w
+        threats = self.threats() if threats is None else threats
+        x, y = w.x, w.y
+        best = None
+        for button, (dx, dy, action) in list(MOVES.items()) + [('NONE', (0, 0, None))]:
+            if action is not None and not w.game.is_allowed(action):
+                continue
+            b = self.bounds
+            if b and ((dx < 0 and x <= b[0]) or (dx > 0 and x >= b[2]) or (dy < 0 and y <= b[1])
+                      or (dy > 0 and y >= b[3])):
+                continue                      # a step off the floor (into a doorway); stepping back in is free
+            left = abs(goal[0] - (x + dx * 1.5)) + abs(goal[1] - (y + dy * 1.5))
+            cost = (round(self.danger(x, y, dx, dy, threats), 3), left)
+            if best is None or cost < best[0]:
+                best = (cost, button)
+        return best[1] if best else 'NONE'
+
+    def go(self, goal, limit: int = 900, done=None) -> bool:
+        """Toward `goal` until Link stands on it (or `done(w)`); False: `limit` frames, a room or mode change, or
+        death."""
+        w = self.w
+        room = (w.level, w.room, w.mode)
+        for _ in range(limit):
+            if (w.level, w.room, w.mode) != room or w.hearts() <= 0:
+                return False
+            if (done(w) if done else (w.x, w.y) == tuple(goal)):
+                return True
+            self.t.press(self.choose(goal))
+        return False
+
+    def walk(self, *points, limit: int = 900) -> bool:
+        return all(self.go(p, limit) for p in points)
