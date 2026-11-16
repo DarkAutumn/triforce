@@ -1,12 +1,18 @@
 name: goriya
 rooms: ['(1, 0x44)', '(1, 0x23)', '(2, 0x5e)', '(2, 0x1e)', '(7, 0x79)', '(7, 0x69)', '(7, 0x59)', '(7, 0x49)', '(7, 0x38)', '(7, 0x28)', '(7, 0x18)', '(7, 0x19)', '(7, 0x1a)', '(7, 0x1b)', '(7, 0x29)', '(7, 0x2b)']
-start_states: ['1_44*_[0-9]', '1_23*_[0-9]', '2_5e*_[0-9]', '2_1e*_[0-9]']
-success: [exit-correct]
+start_states: ['1_44*_[0-9]', '1_23*_[0-9]', '2_5e*_[0-9]', '2_1e*_[0-9]', '7_79*_[0-9]', '7_69*_[0-9]', '7_59*_[0-9]', '7_49*_[0-9]', '7_38*_[0-9]', '7_28*_[0-9]', '7_18*_[0-9]', '7_19*_[0-9]', '7_1a*_[0-9]', '7_1b*_[0-9]', '7_29*_[0-9]', '7_2b*_[0-9]']
+success: [exit-correct, triforce-collected]   # round 26: 7:0x2b ends on the D7 triforce
 reward_profile: default
 reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20}}   # round 10 §8 (r40): dropped items are shaping targets; round 25: hearts priced by their worth to the run
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target (r40)
-ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chains arrive with partial hearts (round 5)
+# hp, bombs and help_count as round 5 and 19 set them (chains arrive with partial hearts).  room_kills (round 26, as
+# darknut's Olive Garden): half the resets into Dungeon 7's rooms that must be cleared bank 1-5 kills before the
+# entry, so the game itself makes fewer monsters (training only): 0x49 (3 Blue Goriyas and 3 Keese: the N shutter),
+# 0x1a (3 Blue and 3 Red Goriyas, then the push: the plain way) and 0x1b (6 Blue Goriyas: its bombs).
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9],
+                    room_kills: {'(7, 0x49)': [1, 5], '(7, 0x1a)': [1, 5], '(7, 0x1b)': [1, 5]}, room_kills_share: 0.5}
 items: {bombs: free, food: true}           # Lee, Nov 11: bombs as a weapon (enemies with more than 3 hits); above the route's bomb reserve; round 26: the food where a Grumble waits (7:0x28)
+clips: true                                # round 26: 7:0x1a's block clip to the stairs (half the episodes without: the fight and the push)
 curriculum: {enabled: true}             # trajectories/goriya (Go-Explore paths per start state)
 one_room: true
 max_steps: 2000
@@ -16,3 +22,10 @@ notes: >-
   room whose boomerang appears when all are dead (Link has no boomerang yet) and the 3-Goriya key room 0x23 north
   of the Stalfos key room, crossed twice on the bow detour (S to W, then W to S; Nov 9). Dungeon 2: the 5-Goriya
   room and the 5-Goriya room whose N shutter opens only once all are dead (N leads into the Dodongo room).
+  Dungeon 7 (round 26; docs/routes/d7.md): Blue Goriyas (3 white-sword hits, 1 heart a touch, boomerangs) join the
+  Red. Crossed: the entrance 0x79, 0x69 (5 Blue; bomb the N wall), 0x59, 0x38 (the N key door), 0x18 (dark, the
+  ladder; the E key door), 0x19 (bomb the E wall), 0x1a out of the candle cellar (bomb the E wall), 0x29 out of the
+  tunnel (bomb the E wall); the Grumble's 0x28 (FOOD once his text has typed); cleared: 0x49 (3 Blue and 3 Keese:
+  the N shutter), 0x1a from W without clips (3 Blue and 3 Red, then the push; with clips the block clip N to the
+  stairs and no fight) and 0x1b (6 Blue: its 4 bombs while the bag isn't full; the E key door); the triforce room
+  0x2b (`triforce-collected`).

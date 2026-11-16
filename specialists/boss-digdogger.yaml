@@ -1,6 +1,6 @@
 name: boss-digdogger
 rooms: ['(5, 0x24)', '(7, 0x1c)', '(7, 0x39)']
-start_states: ['5_24*_[0-9]']
+start_states: ['5_24*_[0-9]', '7_39*_[0-9]', '7_1c*_[0-9]']
 success: [exit-correct]                    # the recorder, kill the small one, take the heart container, leave N to 0x14
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8)
@@ -9,7 +9,7 @@ ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0
 items: {bombs: free, recorder: true}       # the owner (Nov 14): bombs on the boss (the route's reserve is 0 here); the recorder splits him
 curriculum: {enabled: true}             # trajectories/boss-digdogger (Go-Explore paths per start state)
 one_room: true
-max_steps: 600                             # round 24: explored tracks 91-142 steps (the recorder, the kill, the heart, N)
+max_steps: 900                             # round 24: explored tracks 91-142 steps (the recorder, the kill, the heart, N); round 26: 7:0x1c's three small ones take the explorer 161-300 steps (600 before)
 warm_start: null
 notes: >-
   Digdogger (Dungeon 5, round 24; docs/routes/d5.md): the big body (32x32, object $38) can't be hurt; the recorder
@@ -20,3 +20,6 @@ notes: >-
   through the key door; the heart container (11 hearts) appears on the kill; the N shutter to the triforce room 0x14.
   RECORDER (round 24) is offered while the big one hasn't heard it: the play that starts the split pays
   reward-recorder-split once, and the small one's hits are boss hits (reward-boss-hit). Copied from boss-manhandla.
+  Dungeon 7 (round 26; docs/routes/d7.md): 0x1c from W, the recorder, the three small ones (the N shutter opens on
+  the third), no heart container; 0x39 from S is only crossed to the W door past the big one (RECORDER never
+  offered there: the split would fill a room Link walks through).

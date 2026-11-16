@@ -345,16 +345,20 @@ def write_entry_state(game: Game, pre_entry: Snapshot, path: str, expected: MapL
 OBJ_METASTATE = 0x405                # ObjMetastate (asm:Obj_EndMetastate): $10 starts a death sparkle
 DEATH_SPARKLE = 0x10
 FIGHT_SKIP_FRAMES = 600
+OBJ_TYPE, DROPPED_ITEM, MONSTER_SLOTS = 0x34F, 0x60, range(1, 12)     # ObjType; a death's slot becomes a drop ($60)
+DROP_SETTLE_FRAMES = 8
 
 
 def fight_skipped_source(source: str, out_dir: str, states_dir: str = STATES_DIR) -> str:
     """A source whose room fight is skipped by the game's own death (round 24, ``build --skip-fights``): loaded from
     the pre-entry ``source`` (its room fresh), every monster put into its death sparkle as it comes out (ObjMetastate
-    $10, asm:Obj_EndMetastate: the game counts the kill, drops what it drops and clears the room), the hearts kept,
-    until the room is empty; written as ``<out_dir>/<source's name>`` (the same route entry), a controllable state
-    the explorer goes on from.  Stands in for a fight beyond the explorer (the Olive Garden's six Blue Darknuts), so
-    the rooms after it get states now; those states are marked ``fight_skipped`` and are to be replaced by played
-    ones."""
+    $10, asm:Obj_EndMetastate: the game counts the kill and clears the room, so its own treasure appears), the hearts
+    kept, until the room is empty; written as ``<out_dir>/<source's name>`` (the same route entry), a controllable
+    state the explorer goes on from.  What the dead monsters drop is removed (round 26: six kills at once left 4
+    bombs and rupees lying in 7:0x1a, which the explorer took: a state after a skipped fight holds what the route's
+    ledger gives a run that fought, the room's treasure and no luck).  Stands in for a fight beyond the explorer
+    (the Olive Garden's six Blue Darknuts, 7:0x1a and 7:0x1b's Goriyas), so the rooms after it get states now; those
+    states are marked ``fight_skipped`` and are to be replaced by played ones."""
     game = Game(seed=0, states_dir=str(states_dir))
     state = game.load(source, randomize_rng=False, fresh_room=True)
     hearts = (game.read(CONTAINERS_ADDR), game.read(CONTAINERS_ADDR + 1))
@@ -369,6 +373,11 @@ def fight_skipped_source(source: str, out_dir: str, states_dir: str = STATES_DIR
             break
     else:
         raise RuntimeError(f"{source}: the room's monsters did not die in {FIGHT_SKIP_FRAMES} frames")
+    for _ in range(DROP_SETTLE_FRAMES):
+        for slot in MONSTER_SLOTS:
+            if game.read(OBJ_TYPE + slot) == DROPPED_ITEM:
+                game.write(OBJ_TYPE + slot, 0)
+        game.press('NONE', 1)
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, os.path.basename(source if source.endswith('.state') else f'{source}.state'))
     game.save_state_file(path)

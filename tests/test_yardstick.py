@@ -228,3 +228,16 @@ def test_chain_files_without_runs_or_with_several_routes_are_errors(tmp_path):
     other = {**_run(1, [_room(0, '0x77')]), 'route': 'other'}
     with pytest.raises(yardstick.YardstickError, match='several routes'):
         yardstick.chain_row('full', _chain(tmp_path, [_run(0, [_room(0, '0x77')]), other]))
+
+
+def test_a_chain_row_counts_the_cheated_items_up_to_the_arrival(tmp_path):
+    """Round 26: bombs, keys and rupees the cheat ledger handed out before the arrival room, and the runs handed any;
+    a run that never arrives counts its whole length."""
+    arrived = _run(0, [{**_room(0, '0x44'), 'cheated_rupees': 50}, {**_room(7, '0x79'), 'cheated_bombs': 1}])
+    died = _run(1, [{**_room(0, '0x44'), 'cheated_keys': 1}, {**_room(0, '0x34', outcome='death'), 'cheated_rupees': 60}])
+    clean = _run(2, [_room(0, '0x44'), _room(7, '0x79')])
+    row = yardstick.chain_row('post-d5', _chain(tmp_path, [arrived, died, clean]), '7:0x79')
+    assert row['arrived'] == 2 and row['cheated'] == {'bombs': 0, 'keys': 1, 'rupees': 110}
+    assert row['runs_with_cheats'] == 2
+    whole = yardstick.chain_row('d7', _chain(tmp_path, [arrived, clean]))
+    assert whole['cheated'] == {'bombs': 1, 'keys': 0, 'rupees': 50} and whole['runs_with_cheats'] == 1

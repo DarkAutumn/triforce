@@ -1,6 +1,6 @@
 name: boss-aquamentus
 rooms: ['(1, 0x35)', '(7, 0x2a)']
-start_states: ['1_35*_[0-9]']
+start_states: ['1_35*_[0-9]', '7_2a*_[0-9]']
 success: [exit-correct]
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # round 10 §9 (r41): dropped items are shaping targets

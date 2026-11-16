@@ -1,6 +1,6 @@
 name: dodongo-crossing
 rooms: ['(5, 0x56)', '(7, 0x0c)']
-start_states: ['5_56*_[0-9]']
+start_states: ['5_56*_[0-9]', '7_0c*_[0-9]']
 success: [exit-correct]
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8): dropped items are shaping targets

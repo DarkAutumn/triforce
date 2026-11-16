@@ -382,3 +382,17 @@ def test_old_room_stats_files_still_read(tmp_path):
     path.write_text(json.dumps({'format': 0, 'scopes': {}}))
     with pytest.raises(ValueError, match='format 1 or 2'):
         room_stats.read(path)
+
+
+def test_the_cheat_ledger_is_summed_for_bombs_keys_and_rupees():
+    """Round 26: a room's cheated bombs, keys and rupees are each counted per visit and in total (rupees at the
+    shops of the leg to Dungeon 7, keys at a locked route door), where only bombs were read before."""
+    runs = [run(0, [ok(0, 0x10, cheated_rupees=50), ok(0, 0x11, cheated_keys=1, cheated_bombs=2)]),
+            run(1, [ok(0, 0x10, cheated_rupees=30), ok(0, 0x11)])]
+    rooms = room_stats.chain_scope(runs, PLAN, FULL)['rooms']
+    assert rooms['0:0x10']['cheated'] == {'bombs': 0, 'keys': 0, 'rupees': 80}
+    assert rooms['0:0x10']['cheated_rupees_per_visit'] == 40.0
+    assert rooms['0:0x11']['cheated'] == {'bombs': 2, 'keys': 1, 'rupees': 0}
+    assert (rooms['0:0x11']['cheated_bombs_per_visit'], rooms['0:0x11']['cheated_keys_per_visit']) == (1.0, 0.5)
+    assert rooms['0:0x11']['steps']['1']['cheated'] == {'bombs': 2, 'keys': 1, 'rupees': 0}
+    assert tuple(f'cheated_{item}' for item in _native.CHEAT_ITEMS) == room_stats.CHEATED
