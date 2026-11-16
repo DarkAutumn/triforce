@@ -57,8 +57,8 @@ def test_every_trainable_specialist_has_start_states():
 
 def test_configured_start_states_are_clean():
     """Every configured state passes the audit: named room and entry side, pre-entry, the full room, the route's max
-    hearts at full health, a route step.  A state is audited against the route its manifest entry names (every
-    shipped state is a step of ``d2first``)."""
+    hearts at full health, a route step.  A state is audited against the route its manifest entry names: a step of
+    ``d2first``, or (round 27, until it is merged into ``d2first``) of the scouting route ``d6``, steps 248-280."""
     require_rom()
     paths = configured_states()
     if not paths:
@@ -71,7 +71,7 @@ def test_configured_start_states_are_clean():
         index = indexes.setdefault(route, entry_states.RouteIndex(route))
         problems[os.path.basename(path)] = audit_problems(audit_state(game, path, loads=2, full=full, index=index))
     assert {name: found for name, found in problems.items() if found} == {}
-    assert set(indexes) == {DEFAULT_ROUTE}
+    assert set(indexes) == {DEFAULT_ROUTE, 'd6'}
 
 
 def test_every_shipped_state_but_start_has_a_manifest_entry():

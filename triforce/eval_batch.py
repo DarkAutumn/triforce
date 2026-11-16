@@ -82,10 +82,16 @@ TERMINATE_SECONDS = 60
 # (the leg: the whirlwind, the shops, the pond) and `d7` (Dungeon 7 to its triforce, the route's end).
 SEGMENTS = ('full:start d2:2_7ds_0 post-d2:0_3cc_0 d1:1_73s_0 post-d1:0_37c_0 d3:3_7cs_0 post-d3:0_74c_0 '
             'd4:4_71s_0 post-d4:0_45c_0 d5:5_76s_0 post-d5:0_0bc_0 d7:7_79s_0')
+# Round 27: the scouting route d6's two segments, `post-d7:0_42c_0` (the leg from Dungeon 7's triforce exit: the Lost
+# Woods or round them, the graveyard, the magic sword) and `d6:6_79s_0` (Dungeon 6 to its triforce), run with
+# `--route d6` (r56_chains.sh `ROUTE=d6 SEGMENTS=...`) until d6 merges into d2first.
+D6_SEGMENTS = 'post-d7:0_42c_0 d6:6_79s_0'
+ALL_SEGMENTS = f'{SEGMENTS} {D6_SEGMENTS}'
 # 0x0b is entered twice (into Dungeon 5 and out of it): Dungeon 5's arrival is the entry after 5:0x14, the triforce
 # room (`arrival`'s ordered list).
 TARGETS = {'d2': '0:0x3c', 'post-d2': '1:0x73', 'd1': '0:0x37', 'post-d1': '3:0x7c', 'd3': '0:0x74',
-           'post-d3': '4:0x71', 'd4': '0:0x45', 'post-d4': '5:0x76', 'd5': '5:0x14,0:0x0b', 'post-d5': '7:0x79'}
+           'post-d3': '4:0x71', 'd4': '0:0x45', 'post-d4': '5:0x76', 'd5': '5:0x14,0:0x0b', 'post-d5': '7:0x79',
+           'post-d7': '6:0x79'}
 # The full run is also reported at each milestone room, in order (yardstick ``@L:0xRR,...``).
 MILESTONES = (('d2', '2:0x7d'), ('post-d2', '0:0x3c'), ('d1', '1:0x73'), ('post-d1', '0:0x37'), ('d3', '3:0x7c'),
               ('post-d3', '0:0x74'), ('d4', '4:0x71'), ('post-d4', '0:0x45'), ('d5', '5:0x76'),
@@ -95,8 +101,8 @@ EVAL_RESERVED = ('--events', '--no-log', '--logs-dir')
 
 
 def segment_starts() -> dict:
-    """Segment start state -> segment name (``SEGMENTS``, the game start left out)."""
-    return {start: name for name, start in (item.split(':', 1) for item in SEGMENTS.split()) if start != 'start'}
+    """Segment start state -> segment name (``SEGMENTS`` and the scouting route d6's, the game start left out)."""
+    return {start: name for name, start in (item.split(':', 1) for item in ALL_SEGMENTS.split()) if start != 'start'}
 
 
 # ------------------------------------------------------------------------------------------------------ arrivals

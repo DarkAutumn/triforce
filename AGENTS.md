@@ -32,12 +32,18 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   pushes it, the MOVE ends on the stairs; **a MOVE ends before any gravestone square**), `waypoint: sword` (the
   cave's refusal under 12 containers is `missed`), game.yaml exits with `keep_out: true` (6:0x28 N, 6:0x29 N, 6:0x2c
   S: no MOVE into them unless the step leaves there), Gohma (ARROW only facing N while it lives, the stand tile under
-  it as the fight's target, `requires_rupees` in its room), families ow-ghini, wizzrobe, boss-gohma (no start
-  states yet, `trainable: false`), the scripted walk `crates/zelda/tests/d6.rs` to the D6 triforce, and 300 paired
+  it as the fight's target, `requires_rupees` in its room), families ow-ghini, wizzrobe, boss-gohma (`warm_start`
+  ow-moblin, like-like, boss-digdogger), the scripted walk `crates/zelda/tests/d6.rs` to the D6 triforce, and 300 paired
   full-route runs showing `d2first` plays the same (round27.md §4). The lead's working answers to the walks' nine
   questions are in `docs/decisions.md` 2026-11-17, the owner's to overrule. **The main risk** (round27.md §3): the
-  best plays seen of the stretch cost 21 hearts of 12; without 0x38 and 0x3a, 10.3. Not built yet: the stretch's
-  start states (round27.md §5 names them), curricula, training, chains.
+  best plays seen of the stretch cost 21 hearts of 12; without 0x38 and 0x3a, 10.3. (3) **The states step**
+  (round27.md §5-11): 96 start states of steps 248-280 installed (chains 0-2; 0x38 and 0x3a crossed with their fights
+  skipped but for chain 0's 0x38; no family yaml names `route: d6`, a state's step is found on the route that has
+  it), tracks (`scripts/experiments/r27_d6_curricula.sh`), three scripted rules in the env's own actions
+  (`r27_d6_rules.py`: the gravestone, 0x28's bomb, Gohma), the segments `post-d7` (`0_42c_0`) and `d6` (`6_79s_0`;
+  `ROUTE=d6 SEGMENTS="post-d7:0_42c_0 d6:6_79s_0" scripts/experiments/r56_chains.sh`), and the baseline `r77-base`:
+  **0 of 100 on both segments** (no run passes ow-lynel's 0x50 or 6:0x28). Not done: the demonstration files, the
+  proof trainings read, 0x38's and 0x3a's staged tracks confirmed, any training.
 - **Round 26, begun (Nov 16-17, 1.5.1.0; `docs/experiments/round26.md`; the plan for the rest of the game:
   `docs/routes/rest-of-game.md`):** the leg from Dungeon 5 to Dungeon 7 and Dungeon 7. Built so far, nothing trained:
   **`d2first` now has 248 steps and ends on the D7 triforce** (steps 209-247; decisions 2026-11-17).
