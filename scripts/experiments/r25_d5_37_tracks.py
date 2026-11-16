@@ -16,12 +16,12 @@ reads it: ``OUT_DIR/5_37s_<chain>~x70s<seed>/NNNN.state`` and ``trajectory.json`
 ``--demos`` writes demonstration rows (``triforce.demos``) for ``train --demos``, the fix that worked (round 25 §5;
 the curriculum alone did not move the promoted policy off X $78): the rule plays ``RUNS_PER_STATE`` times (default
 200) from each state in every spawn layout and the decisions of the runs that leave without losing health are kept;
-with ``--policy`` (DAgger) a checkpoint plays and the rule labels every state it visits.  The round-25 recipe:
+with ``--policy`` (DAgger) a checkpoint plays and the rule labels every state it visits (one round of it made 0x37
+worse, 0.29 against 0.17 hearts a pocket visit).  The round-25 recipe (``r75-d537-c5``):
 
     python scripts/experiments/r25_d5_37_tracks.py --demos rule.npz
-    python -m triforce.train --specialist darknut --load <run> --demos rule.npz --demo-coeff 0.05 ...   # -> A
-    python scripts/experiments/r25_d5_37_tracks.py --demos dagger.npz 100 --policy <A>
-    python -m triforce.train ... --demos rule.npz dagger.npz --demo-coeff 0.05 ...
+    python -m triforce.train --specialist darknut --load <run> --iterations 60 --sil-coeff 0.1 \\
+        --demos rule.npz --demo-coeff 0.05 --stop-success 1.01
 """
 
 import argparse

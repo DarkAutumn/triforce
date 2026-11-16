@@ -431,6 +431,36 @@ under the path-cost code, on the same seeds 0-299, reached the D5 triforce in 10
 `r74-darknut5`'s 143/300. A continuation arm therefore has to beat the promoted model, not only that baseline (§7 has
 the cause of the drop). Not done: the arm, a committed track maker, and a 1000-run paired chain clips on and off.
 
+**Follow-up: the column by behaviour cloning** (branch `r25-d537`). The final darknut retrain `r75-f-dk-s75` (the six
+tracks, `--sil-coeff 0.1`, the heart-value reward) did not change 0x37 either: 1.19 hearts a visit, 91 deaths per 1000
+D5 runs (`B-s75-d5`). *Cause:* in 0x37 alone (3 states × 60 seeds, temperature 0.5) the model crosses at X `$78` in
+180 of 180 episodes, and the pocket's Darknut is there in 87 of them (training draws every spawn cycle; the chain meets
+it always): hit in all 87, 1.29 hearts a pocket visit, 0.00 in the others. Past the door its probability of any MOVE W
+is 0.0000 (max 0.001) at temperature 1: the policy never tries the column. PBRS doesn't push it (with the path cost,
+MOVE N up X `$78` earns +0.05 a tile like MOVE W; only the `target` direction moved), the heart-value potential
+prices a hit near 0 above 6 hearts (V(0x37, h) ≥ 0.99), and the tracks complete at once (7 stages × 10 episodes;
+success is the exit, hit or not). Arms, all continued from `r75-f-dk-s75` (seed 75), in 0x37 alone (hearts a pocket
+visit) and the family evaluation (100 episodes per state, clips both; s75 under this code: 0x05 −1.41, 0x64 −1.40):
+
+| arm | what | 0x37 pocket | other rooms |
+|---|---|---|---|
+| a | 40 it, `start_states` 0x37 ×3 its share, the six tracks only, `--ent-coeff 0.05` (new flag) | 1.29, P(W) 0.0002 | – |
+| b | a + `heart_value.potential` 100 + curriculum fraction 1.0 | 1.29, P(W) 0.0003 | – |
+| c | 60 it, `train --demos` (new: the rule's clean runs, 17,423 rows, `--demo-coeff 0.2`) | 0.38 (X `$70` 180/180, never swings: swings are 1% of rows) | 0x64 −1.74 |
+| c2 | c, swing rows ×40 | 0.10 | 0x05 −1.65, 0x64 −1.66 |
+| ctl | 60 it, no demos | = s75 | 0x05 −1.38, 0x64 −1.44 |
+| c3 | c2, every duration free | X `$50` overshoots (MOVE W 32), 0.76 a visit | 0x05 −1.45, 0x64 −1.42 |
+| c4 | c2, MOVE N durations free unless a monster is within 48 px (`demos.ANY_DURATION`) | 0.14 | 0x05 −1.55, 0x64 −1.54 |
+| **c5** | c4 at `--demo-coeff 0.05` | **0.13** | **0x05 −1.38, 0x64 −1.46; all −0.49 vs −0.52** |
+| c6 | c5 + one DAgger round (c5 plays, the rule labels) | 0.29 | – |
+
+The cloned rule's MOVE N 4 rows were what spread to the Blue Darknut rooms (c2: MOVE N 4 from 29% to 39% of moves
+in 0x64/0x05). D5 chain, 1000 runs, seeds 0-999, clips on, paired with `B-s75-d5`: c2 52.5% (+0.2 ± 2.2; Garden 126
+deaths against 76), c4 55.2% (+2.9 ± 2.2; 0x37 0.15 a visit, 10 deaths; Garden 105), **c5 55.5% (+3.2 ± 2.2; 0x37
+0.20 a visit, 80% clean, 28 deaths against 1.19, 0%, 91; Garden 79, 0x64 back 45 deaths as before)**, ctl 49.7%
+(c5 − ctl +5.8 ± 2.1). The remaining 0x37 hits are swings the clone misses where its own path leaves the rule's (the
+rule is hit in 1 of 300 single-room episodes, c5 in 27). Recipe: `scripts/experiments/r25_d5_37_tracks.py --demos`.
+
 **The other rooms are real fights** (no mechanical cause found):
 
 - **0x47 S→N (gibdo), 202 visits:** 0.84 a visit, 22 deaths. 58 of 91 first hits come within 50 frames, right after
