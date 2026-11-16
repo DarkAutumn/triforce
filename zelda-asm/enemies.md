@@ -37,30 +37,30 @@ Contents (generated; `L` = line in this file):
 - L1036 Vire
 - L1081 Wizzrobe (blue, red)
 - L1135 Lanmola (red, blue)
-- L1184 Aquamentus
-- L1240 Dodongo
-- L1308 Manhandla
-- L1365 Gleeok
-- L1425 Digdogger
-- L1482 Gohma (blue, red)
-- L1529 Moldorm
-- L1574 Patra
-- L1620 Ganon
-- L1668 Trap
-- L1699 Statue fireballs
-- L1731 Fireball
-- L1762 Monster shots (rock, sword shot, magic shot)
-- L1798 Monster arrow
-- L1823 Monster boomerang
-- L1848 Standing fire
-- L1873 Guard fire
-- L1896 Zelda
-- L1917 Old men and shopkeepers (cave and dungeon persons)
-- L1975 Grumble Goriya
-- L2000 Rupee stash
-- L2019 Pond fairy
-- L2042 Item fairy
-- L2065 Dropped items
+- L1185 Aquamentus
+- L1241 Dodongo
+- L1309 Manhandla
+- L1366 Gleeok
+- L1426 Digdogger
+- L1483 Gohma (blue, red)
+- L1530 Moldorm
+- L1575 Patra
+- L1624 Ganon
+- L1675 Trap
+- L1706 Statue fireballs
+- L1738 Fireball
+- L1769 Monster shots (rock, sword shot, magic shot)
+- L1805 Monster arrow
+- L1830 Monster boomerang
+- L1855 Standing fire
+- L1880 Guard fire
+- L1903 Zelda
+- L1924 Old men and shopkeepers (cave and dungeon persons)
+- L1982 Grumble Goriya
+- L2007 Rupee stash
+- L2026 Pond fairy
+- L2049 Item fairy
+- L2072 Dropped items
 <!-- /toc -->
 
 # How to read this
@@ -1166,7 +1166,7 @@ Two five-segment worms. Each segment is its own object; kills shorten the worm f
 **Spawn**
 - All ten segments start at (`$40`, `$8D`) with no spawn cloud; only the heads start with a direction (up), and a segment with direction 0 is neither moved, drawn nor tested. [`Lanmola_Init`](src/bank4/zelda-lanmola-inits.asm#L75) [`Lanmola_Update`](src/bank4/lanmola.asm#L43)
 - The segments emerge one by one as directions are passed down the chain. [`Lanmola_UpdateHead@PropagateDirs`](src/bank4/lanmola.asm#L190)
-- `RoomObjCount` is set to 8, not 10. It makes no difference: the count is read again only when the room is left, against a `RoomKillCount` of at most 2. [`Lanmola_Init`](src/bank4/zelda-lanmola-inits.asm#L75) [`RoomHistory_SaveKillCountUW`](src/bank5/room-history-uw.asm#L110)
+- `RoomObjCount` is set to 8, not 10. The count is read again only when the room is left, against a `RoomKillCount` of at most 2, so the room is never banked as all dead. [`Lanmola_Init`](src/bank4/zelda-lanmola-inits.asm#L75) [`RoomHistory_SaveKillCountUW`](src/bank5/room-history-uw.asm#L110)
 
 **Drops**
 - Segment kill while the worm has more than its head: the hit segment lives on; the worm's lowest live slot (the tail) is moved to the hit segment's position and becomes a dead dummy (`$5D`) that plays the death sparkle. [`Lanmola_Update@FindTail`](src/bank4/lanmola.asm#L116)
@@ -1179,6 +1179,7 @@ Two five-segment worms. Each segment is its own object; kills shorten the worm f
 - Hitting any segment has the same effect: the worm always loses its tail end, and the head is always the last to go. [`Lanmola_Update@FindTail`](src/bank4/lanmola.asm#L116)
 - Starting from `HelpDropCount` 0 and taking no damage, the tenth segment kill (the second head) brings the count to `$0A`, so that head's death gives a forced help drop (or a fairy if `WorldKillCount` reads `$10`); the first head's death gets only the ordinary 41% roll. [`Damage_KillMonster`](src/bank1/weapon-damage-death.asm#L216) [`Drop_SetUpItem`](src/bank4/drop-items.asm#L157)
 - With `RoomKillCount` at most 2 against `RoomObjCount` 8, the count comparison on leaving never marks the room fully killed. [`Lanmola_Init`](src/bank4/zelda-lanmola-inits.asm#L75) [`RoomHistory_SaveKillCountUW`](src/bank5/room-history-uw.asm#L110)
+- The room still comes back empty: a Lanmola room's list count is 1 (ids `$32`-`$61`), each head's death is banked as one kill in `LevelKillCounts` when Link leaves, and a room not flagged all dead makes its count minus the banked kills on every entry, in or out of the room history. So once one head has died the room makes no Lanmola again while the level stays loaded. (trace, level 9 room `$55`, 20 trials each: three segments killed, out by the south wall and back: ten segments; one worm killed, the other alive: none, `IsRoomAllDead` set; both killed, also with the room written out of the history: none) [`Room_EnterCommon`](src/bank5/enter-room.asm#L143) [`RoomHistory_ModifyObjCountUW@CalcObjCount`](src/bank5/room-history-uw.asm#L86)
 - The direction search in the head routine has no exit if all three allowed directions are blocked, but no Lanmola room lets that happen: in their layouts (`$25`, `$26`, `$1A`, `$0A`, `$24`, `$1D`) the only squares with a single open neighbour lie inside the ring of blocks of layout `$1A`, which opens only by its push block, and that moves only when every Lanmola is dead. [`Lanmola_UpdateHead@FindNonOpposite`](src/bank4/lanmola.asm#L266) [`PushBlock_State0Idle`](src/bank4/push-block.asm#L74)
 
 # Aquamentus
@@ -1600,6 +1601,7 @@ A slow flyer circled by eight children. The body cannot be hit by any weapon unt
 - Children appear one at a time straight above Patra: slot `$02` at once, each later slot when slot `$02`'s angle reaches its entry, so they end up 1/8 circle apart. Start radius `$2C` pixels (type `$25`), `$18` (type `$26`). [`Patra_ChildStartAngles`](src/bank4/patra.asm#L164) [`Patra_UpdateChild@Ready`](src/bank4/patra.asm#L215)
 - Orbit: 32 angle steps per circle, decreasing `$70`/256 step per frame for type `$25` (about 73 frames per orbit) and `$60`/256 for type `$26` (about 85 frames). [`Patra_UpdateChild_State1Orbit`](src/bank4/patra.asm#L261) [`Obj_DecreaseOrbitAngle`](src/bank4/orbit-rotation-math.asm#L181)
 - Two patterns, chosen by a maneuver index (0 or 1) held by Patra. Type `$25`: 0 = circle, 1 = ring half as tall (ellipse). Type `$26`: 0 = small circle, 1 = circle twice as wide. [`Patra_Child1RotationCosineBits`](src/bank4/patra.asm#L169) [`Patra_Child2RotationBits`](src/bank4/patra.asm#L174) [`Patra_Child1RotationSineBits`](src/bank4/patra.asm#L181)
+- The index changes the size of a child's steps, not its place, so a pattern starts from wherever the child is at the flip (trace, level 9 rooms `$61` and `$16`, 20 entries each). Index 0: a ring 38-53 pixels from Patra for type `$25`, 18-35 for type `$26`. Type `$25`, index 1: each child keeps its sideways swing and halves its up-and-down swing about the height it had at the flip, so the eight no longer share a ring and pass 0-59 pixels from Patra, through its middle. Type `$26`, index 1: each child circles twice as wide about a point on the far side of Patra, so the whole ring swells from about 21 to 85 pixels from Patra and back once per orbit. [`Patra_UpdateChild_State1Orbit`](src/bank4/patra.asm#L261) [`Obj_MoveAlongOrbit`](src/bank4/orbit-rotation-math.asm#L51)
 - The index flips when the maneuver timer (the `ObjTimer` of slot `$02`) is 0 and the child in slot `$03` is at angle 0; the timer is then reloaded with `$FF` frames. So the pattern changes at most once per 255 frames. [`Patra_Update@TryChangeManeuver`](src/bank4/patra.asm#L96) [`Patra_ManeuverTimes`](src/bank4/patra.asm#L52)
 - Children follow Patra by adding its last per-frame displacement to their own position before rotating. [`Patra_UpdateChild_State1Orbit`](src/bank4/patra.asm#L261) [`Patra_Update`](src/bank4/patra.asm#L62)
 - No clock test in Patra's or the children's update: they keep flying and orbiting with the clock, but cannot touch Link. [`Patra_Update`](src/bank4/patra.asm#L62) [`Link_CheckMonsterTouch`](src/bank1/link-collision-harm.asm#L48)
@@ -1615,6 +1617,8 @@ A slow flyer circled by eight children. The body cannot be hit by any weapon unt
 
 **Notes**
 - The first pattern flip does not wait `$FF` frames: the `$FF` that Patra's init puts in the timer is zeroed on the next frame by the init of the child in slot `$02`, so the index goes 0 -> 1 the first time the child in slot `$03` reaches angle 0, 63 frames after Patra's init for type `$47` and 74 for type `$48`; later flips follow every 292-293 frames for type `$47` (trace). [`Patra_Init`](src/bank4/patra-ganon-inits.asm#L42) [`Patra_Update@TryChangeManeuver`](src/bank4/patra.asm#L96)
+- The flip needs the angle byte of slot `$03` to read 0, whether or not a child is still there: once the child in slot `$03` is dead its angle stands still and the pattern never changes again (trace: that child put into its death state in either pattern, 10 entries of each Patra type: no flip in the next 1500 frames, against 5 or 6 with any other child or none killed). The death of the child in slot `$02` uses that slot's timer and leaves it 0, so the next flip comes as soon as slot `$03`'s angle reads 0 (trace: within 100 frames instead of up to 293). [`Patra_Update@TryChangeManeuver`](src/bank4/patra.asm#L96)
+- Trace of the weapons (Link beside the ring for 400 frames, 10 entries per weapon and Patra type): the sword and the sword shot hurt the children; 170 silver arrows, 50 bombs and 170 boomerang throws did nothing, and no child was stunned. The body kept HP `$B0` under the sword with eight children or one alive and died to three magic sword hits with none. [`Patra_Init`](src/bank4/patra-ganon-inits.asm#L42) [`Patra_Update@LoopChildren`](src/bank4/patra.asm#L77)
 - The sword shot counts as sword damage against children and body alike, at the damage of the sword held. [`SwordShot_CheckMonsterCollision`](src/bank1/sword-bomb-arrow-collision.asm#L64)
 
 # Ganon
@@ -1644,12 +1648,15 @@ Type `$3E`. The fight has an entry scene, an invisible sword phase, and a brown 
 - Scene phase 0: Link is halted holding a Triforce piece in the dark for `$40` frames, then the room fades to light. Phase 1: `$C0` more frames, then control returns and the fight (phase 2) begins. [`Ganon_ScenePhase0_LiftInDark`](src/bank4/ganon.asm#L71) [`Ganon_ScenePhase1_LiftInLight`](src/bank4/ganon.asm#L127)
 - Blue, timer 0: not drawn; moves 1 pixel per frame with the Blue Wizzrobe's teleport movement (passes over blocks and water, turns toward Link at intervals). [`Ganon_MoveAndShoot`](src/bank4/ganon.asm#L195) [`Wizzrobe_Blue_TurnSometimesAndMoveAndCheckTile`](src/bank4/wizzrobe.asm#L164)
 - While moving he shoots a type `$56` fireball whenever `FrameCounter AND $3F` = 0 (every 64 frames) if a monster slot is free; it aims once at Link's position. [`Ganon_MoveAndShoot`](src/bank4/ganon.asm#L195) [`Fireball_Update`](src/bank4/monster-shots-fireballs.asm#L286)
+- Trace of the fireballs (480 of them): every one was born on a frame with `FrameCounter AND $3F` = 0, 4 pixels right of his position, stood there 18 frames (it harms on touch meanwhile) and then flew at 1.7 to 1.9 pixels per frame; a hit cost 1 heart, 1/2 with the blue ring, 1/4 with the red. [`Fireball_Shoot`](src/bank4/monster-shots-fireballs.asm#L58) [`Fireball_Update`](src/bank4/monster-shots-fireballs.asm#L286)
 - When the visible timer reaches 1 he jumps to Y `$A0`, X `$30` (even `FrameCounter`) or `$B0` (odd) and goes invisible again. [`Ganon_RandomizeLocation`](src/bank4/ganon.asm#L180) [`Ganon_StartXs`](src/bank4/ganon.asm#L223)
 - Brown: state starts at `$FF` and drops by 1 on odd frames (about 510 frames). He stands still, does not shoot, is drawn every frame until the state is below `$30`, then flickers. At 0 he turns blue at a start spot with full HP: the sword phase starts over. [`Ganon_UpdateBrownState`](src/bank4/ganon.asm#L234)
 - Dying: a count rises 1 per frame. Below `$50` the body is drawn; at `$50` he becomes ashes (8 rays burst out, boss death cry); at `$A0` the room item appears at the ashes and `RoomKillCount` is incremented. [`Ganon_UpdateDying`](src/bank4/ganon.asm#L271) [`Ganon_SetUpBurstRays`](src/bank4/ganon-draw-collisions.asm#L86)
 
 **Spawn**
 - No spawn cloud. The init halts Link (state `$40`) with Link's timer at `$40` and requests the roar. [`Ganon_Init`](src/bank4/patra-ganon-inits.asm#L96)
+- The init sets no position: he stands on the spawn spot the room gave slot `$01`, which differs from entry to entry (trace, 20 entries by the south door: (`$50`,`$5D`) 5, (`$A0`,`$5D`) 4, (`$60`,`$7D`) 4, (`$A0`,`$9D`) 2, (`$90`,`$7D`) 2, (`$30`,`$6D`) 2, (`$80`,`$8D`) 1). He is drawn there from frame 50 of the scene to its end at frame 272. [`Spawn_AssignPositions`](src/bank5/spawn-positions.asm#L64) [`Ganon_Init`](src/bank4/patra-ganon-inits.asm#L96)
+- He starts the fight with direction 0 and so stands still, hidden, on that spot until his turn counter first reads a multiple of `$40`: his first step comes 63 frames into the fight, toward Link on the vertical axis; after that he turns every 64 frames, each time on the other axis (trace, 20 entries: 440 of 440 turns). [`Ganon_MoveAndShoot`](src/bank4/ganon.asm#L195) [`Wizzrobe_Blue_AdvanceCounterAndTurnTowardLinkIfNeeded`](src/bank4/wizzrobe.asm#L226)
 
 **Drops**
 - None: his object is never destroyed and never becomes a dropped item. [`Ganon_UpdateDying`](src/bank4/ganon.asm#L271)

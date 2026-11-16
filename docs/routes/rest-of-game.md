@@ -59,6 +59,15 @@ cost 4.75 and 6.1 hearts in their best wins (like-like zero-shot: 4 of 10 with t
 outright from 8 hearts (2 of 20, 0 of 20). The table's "12-22 (draft)" for Dungeon 6 is of that order. A doorway is
 out of reach of Wizzrobe shots and Gohma's fireballs (0 of 320; 0 in 3000 frames).
 
+**Walked in round 29 (`d9-fights-walks.md`), the fights of Dungeon 9 with live monsters:** no model family clears
+any of them (0 of 1,760 episodes, the red ring on); a rule-based fighter reading RAM positions clears all of them, and
+its hearts are the best play seen: Lanmolas 1.0, the two `$47` Patras 0.7 and 2.5, 0x16's `$48` Patra 8.65 (2.33
+with the ring), the Wizzrobe rooms 5.8-13 each without the ring and 1.5-6 with it, 0x07 before the ring 9.35, Ganon
+1.25 with RAM eyes (screen only: 10-14 of 20 without the ring). **The fights alone sum to 41 hearts without the ring
+and 26 with it, of 15 with no refill**: the table's "~60 one-heart-equivalent hits" after the ring is not a margin.
+The Lanmolas do not return once a head has died; a Patra's pattern stops flipping when its slot-3 child dies; Ganon
+stands on the room's spawn spot, not at one place.
+
 **Rooms a 11-15 heart Link cannot be expected to cross the way today's models cross rooms**, ranked (synthesis; each
 dossier's own ranking is in its section):
 
