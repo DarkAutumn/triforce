@@ -25,22 +25,24 @@ mountain (two heart containers, 100 rupees, the Lost Hills), and finish on the t
 
 ## How well it plays
 
-Out of 1,000 runs from the start of the game with the current team (round 24's models, act mode
-`temperature:0.5+relax:16`, `docs/experiments/round24.md` §10), with the speedrunners' clips allowed and with them
+Out of 1,000 runs from the start of the game with the current team (round 25's models, act mode
+`temperature:0.5+relax:16`, `docs/experiments/round25.md` §13), with the speedrunners' clips allowed and with them
 switched off for the whole run:
 
 | Link reaches | Clips on | Clips off |
 |---|---:|---:|
-| Dungeon 1 (after Dungeon 2 and the white sword) | 81% | 65% |
-| Dungeon 3 | 67% | 47% |
-| The Dungeon 3 triforce | 42% | 28% |
-| The Dungeon 4 triforce | 33% | 19% |
-| Dungeon 5 | 33% | 18% |
-| The Dungeon 5 triforce (the end of the route) | 5% | 0.3% |
+| Dungeon 1 (after Dungeon 2 and the white sword) | 84% | 68% |
+| Dungeon 3 | 74% | 57% |
+| The Dungeon 3 triforce | 57% | 42% |
+| The Dungeon 4 triforce | 51% | 32% |
+| Dungeon 5 | 51% | 32% |
+| The Dungeon 5 triforce (the end of the route) | 20% | 2.6% |
 
-Dungeon 5 is the hard part: of 1,000 runs started at its entrance, 35% reach its triforce with clips on and 22%
-without with this team, and 46% and 34% with the Darknut model promoted after it. Round 23's team, on the route
-that ended in Dungeon 4, reached the D4 triforce in 29% and 15%.
+Dungeon 5 is still the hard part: of 1,000 runs started at its entrance, 68% reach its triforce with clips on and
+48% without. Round 24's team reached the D5 triforce in 5% and 0.3% of runs from the start. With the planner
+switched on (an act mode that tries each action in the emulator before playing it, on random numbers of its own, and
+takes another if Link is hit; `docs/experiments/round25.md` §12), 83% of runs from the start reach the D5 triforce
+with clips on; the models alone are the number the training is judged by.
 
 Every round of training is written up in `docs/experiments/` (start with the newest `round*.md`), and
 `docs/experiments/backlog.md` has what's next.

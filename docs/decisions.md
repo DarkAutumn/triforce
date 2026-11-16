@@ -2351,3 +2351,65 @@ not to become a default anywhere."
   first and the planner beside them, labelled.
 - **Not chosen: `guard:K`** (the game's real future): a valid run of button presses chosen with knowledge a player
   doesn't have. It stays a spelling for comparison only.
+
+## 2026-11-16 — Round 25's team: eleven families priced by heart value, darknut by a cloned rule (round 25)
+
+- **What:** `reward.heart_value: {exit: true, potential: 20}` in the yaml of darknut, gibdo, goriya, vire,
+  stalfos-keese-gel, moldorm, zol, like-like, d2-rope, trap-room and equipment-room; each continued 244 iterations
+  from its promoted run (`--sil-coeff 0.1`, `--stop-success 1.01`, seed 75; rounds `r75-f-a`, `-b`, `-c`, darknut
+  `r75-f-dk-s75`) and promoted with act mode `temperature:0.5+relax:16`. Darknut is `r75-d537-c5`: 60 more
+  iterations from `r75-f-dk-s75` with the scripted 5:0x37 rule's clean runs cloned at weight 0.05 (`train --demos`).
+  With them `boss-manhandla/r75-mh-fight` and `ow-peahat/r75-bow-ow` (the 0x1f path costs).
+- **Why the whole team at once:** the families were judged as a team on each segment against the team before
+  (1000 paired runs, round25.md §11): Dungeon 5 +13.5 ± 2.2, Dungeon 4 +11.0 ± 1.5, Dungeon 3 +5.2 ± 1.8, Dungeon 1
+  0.0, Dungeon 2 −1.7 ± 1.4 (its per-room deaths moved both ways between two pairs of files). No segment lost beyond
+  noise, so no family was bisected out. The bosses, the wallmaster, pols-voice, dodongo-crossing and the overworld
+  families were not retrained.
+- **Why cloning for 0x37:** the room's objective was moved to the X `$70` column by `path_costs` and six hand-made
+  tracks were put in the curriculum; three retrained seeds still walked X `$78` (1.19 hearts a visit). The straight
+  walk already leaves the room 85% of the time, so the curriculum completes at once, and past the door the policy's
+  probability of a step west is 0.0000: nothing in PPO makes it try. Cloning the rule's own actions did (0.20 hearts
+  a visit, deaths 91 → 28 per 1000 Dungeon 5 runs), at weight 0.05 so the Olive Garden did not pay for it.
+- **Measured:** chains `r75-1k` | `r75-1k-noclips`, round25.md §13.
+
+## 2026-11-16 — Not landed: the spawn rule, the clear landing, the 0x1a wrap, the low-health act rules (round 25)
+
+Each was built, measured and left on its branch (`r25-spawns`, `r25-bleedow-tr`, `r25-act`); the numbers are in
+round25.md §4 and §10 and in the backlog ("Left open by round 25").
+
+- **`reward.spawn_cost`** (the game's spawn spots as costs in the path search, for every room at once) failed its
+  own check: it does not reproduce the hand-placed 0x27 gain, hurts or does nothing untrained, and of three trained
+  ow-peahat seeds one helped. Hand-placed `path_costs` with a retrain are the tool that worked. A general mechanism
+  that needs per-room judgment anyway is not worth its code.
+- **The ladder clip's clear landing** gains 0.05 hearts before Gleeok for 32 frames and a new mask rule; too small
+  to carry a rule models were not trained with.
+- **The 0x1a wrap** saves hearts in 0x1a and doubles its deaths.
+- **Low-health act rules** change nothing: hits per decision at 2 hearts or fewer never drop under any of them.
+
+## 2026-11-16 — 1.5.0.1 (round 25)
+
+REV +1: reward terms, objective data, training options, the planner act mode and thirteen promoted runs. Nothing a
+loaded model reads changed, so COMPAT stays 0 and the Cargo workspace stays 1.5.0.
+
+## 2026-11-16 — The rest of the game: order, the planner, cheats, clips off, breaking models (Lee)
+
+Lee, Nov 16, after round 25: "After all of these are done, go for the rest. You beat d5. Now d7 d6 d8 d9. You have
+the scouting runs for the route, to get the magic sword." And on its size: "It's going to be harder than you think";
+the plan is to come from deeply mining the disassembly and the level documents (`docs/routes/rest-of-game.md` and
+the documents it indexes), treated as a project nobody is sure can be finished. Asked before starting, Lee decided:
+
+1. **The planner:** the honest planner runs beside the models (the entry above).
+2. **Order:** breadth first to Ganon. Each dungeon and leg gets rooms, states, families and a first trained team
+   that completes its own segment at a working rate (about 30% or better), then the next; one optimisation round
+   over the whole route after the first complete run.
+3. **Check-ins:** run through; a report, a tag and a push at the end of each dungeon; stop only for a decision that
+   is Lee's (route, cheats, rules).
+4. **Clips off:** built and measured, not tuned: every new stretch has its plain way in the route, states and
+   tracks and a clips-off number in each report; no training effort on raising it until the game is finished with
+   clips on.
+5. **Bombs, rupees, keys a run lacks:** cheated and counted per room (today's rule, extended to rupees at the two
+   shops), reported, aim zero. No route change.
+6. **Breaking models:** allowed when a family cannot be trained without it; converted where the models stay
+   identical, otherwise every family retrained; reported with the COMPAT bump.
+
+The route's order stays Lee's of Nov 13: 5, 7, the magic sword, 6, 8, 9 (`docs/routes/first-quest.md`).

@@ -1,4 +1,4 @@
-# Round 25: leaving rooms with more hearts
+# Round 25: leaving rooms with more hearts; 1.5.0.1
 
 The owner (Nov 15) set the round's direction: "the problem with current death rate is that we enter dangerous rooms
 with too few hearts", and fix that, starting from the backlog's hearts item but exploring beyond it. Results are
@@ -11,6 +11,49 @@ The yardstick is the chain, 1000 runs per segment. The baseline is round 24's te
 clips on | off): D2 89.9 | 89.9, D3 67.3 | 67.3, D4 81.3 | 59.7, the leg 99.8 | 92.0, D5 34.9 | 22.0 (46.4 | 34.0
 with `darknut/r74-darknut5`), and the full route to the D5 triforce 4.8 | 0.3. Measurements are paired by seed against
 that baseline wherever possible.
+
+## Summary
+
+- **From the game start to the D5 triforce: 4.8 | 0.3% → 19.7 | 2.6%** (1000 runs, models alone, act
+  `temperature:0.5+relax:16`, clips on | off; §13). By segment, arrivals with clips on: D2 89.9 → 88.2%, D3 67.3 →
+  81.0%, D4 81.3 → 92.3%, the leg 99.8 → 99.9%, **D5 34.9 → 68.0%** (46.4% with round 24's last darknut). Clips off:
+  D3 67.3 → 81.0%, D4 59.7 → 79.9%, the leg 92.0 → 97.0%, D5 22.0 → 47.5%. Dungeon 2 did not gain (−1.7 ± 1.4).
+- **What did it, in the order of what it was worth:**
+  1. **Hearts priced by what they are worth to the run** (`reward.heart_value`, §9): a table V(route step, hearts) =
+     the chance to reach the next triforce alive, fitted from round 24's chains; the leaving reward's health part is
+     scaled by the next step's V, and every hit or pickup pays the change in V. On darknut, three seeds each: 50.7%
+     of Dungeon 5 runs against 44.8% for the same training without it. Eleven dungeon families were then continued
+     with it (§11): Dungeon 5 46.8 → 60.3%, Dungeon 4 81.3 → 92.3%, Dungeon 3 75.8 → 81.0% with nothing else changed.
+  2. **Manhandla** (§3): the owner's fix (his drop forced to bombs in training, the dropped bombs the first
+     objective, a penalty for leaving them) and bombs drawn 2-8 in training: out of Dungeon 3 62.9 → 75.8%; no
+     dropped bomb left behind (15 of 344 before).
+  3. **Rooms that lose a heart on every visit for a mechanical reason** (§5, §6, §10): the objective's path moved off
+     the monsters' spawn spots by `path_costs` in 0:0x27 (0.50 → 0.21 hearts a visit, no training) and 0:0x1f (1.02 →
+     0.27 with ow-peahat retrained; +0.91 hearts on entering Dungeon 5); 5:0x37's column learned only by cloning a
+     scripted rule (`train --demos`: 1.19 → 0.20 hearts a visit, deaths 91 → 28 per 1000 Dungeon 5 runs).
+  4. **Dropped hearts and fairies as targets while hurt** on three overworld families (`reward.heal_targets`, §2):
+     +0.12 ± 0.04 hearts at Dungeon 1's entrance, no training.
+- **Hearts on entering the killer rooms** (full route, clips on, round 24 → 25; §13): Gleeok 3.78 → 4.73, the Olive
+  Garden 5.76 → 6.70, 5:0x64 on the way back 4.42 → 5.45, 5:0x66 3.63 → 4.25, 5:0x37 3.44 → 4.05, Digdogger 3.18 →
+  3.95, 1:0x23 2.92 → 3.41; Manhandla 3.35 → 3.43 (his deaths 185 → 108 of 1000 full runs: the fight, not the
+  hearts).
+- **One action of foresight** (§12): the honest planner (`temperature:0.5+relax:16+plan:16:1`: before each action
+  the emulator tries it on redrawn random numbers and takes another if Link is hit) is, by the owner's decision of
+  Nov 16, a second labelled act mode beside the models, never a default. With the round's final team it takes the
+  full route from 19.7% to **82.6%** with clips on (§13).
+- **Tried and not kept:** low-health act rules (§4: no effect in any of seven variants); choosing a checkpoint by
+  the chain (§7: the tool is kept, but inside one continuation no checkpoint differs beyond the noise of 1000 runs);
+  monsters' spawn spots as a general rule in the path search (§10: it does not reproduce the hand-placed gains and
+  hurts untrained); the hand-made 0x37 tracks without the cloning (§11: the curriculum completes at once and changes
+  nothing); the ladder clip withheld while its landing is occupied (§10: +0.05 hearts, not landed).
+- **What the round says about measuring** (§7, §9): one 1000-run chain has a standard error of 1.6 points and two
+  models on the same seeds differ with 2.2; separate trainings of one family differ by more than checkpoints of one
+  training (darknut, three plain seeds: 41.5-48.5%), so an arm needs seeds and a comparison with the promoted model;
+  a continuation of a round 24 model without `--sil-coeff 0.1` loses 12 points on Dungeon 5.
+- **Tooling:** trainings and evaluations wait their turn in one line for the whole machine, shortest first, with an
+  express place for short jobs (§8); numbered checkpoints and `triforce select-checkpoint` (§7); supply fields in the
+  chain records (§2); `train --demos` and `--ent-coeff` (§5).
+- **Version 1.5.0.1** (§14): rewards, objective data and the promoted models changed; nothing a loaded model reads.
 
 ## 1. Where the hearts go: the ledger and the value of a heart
 
@@ -1307,3 +1350,118 @@ run already carries it (`decisions.foresight.replaced`).
 - **The proposed order of trials, simplest first:** a penalty on the refused action, labelled during ordinary
   rollouts by `plan:1:1` (which tries but never changes play); then a cross-entropy target toward the planner's action;
   a mask during rollouts only as a curriculum aid. It proposes to start with darknut and ow-peahat.
+
+## 13. Chains of record (1000 runs per segment; clips on | off; round 24 alongside)
+
+The team as promoted at the end of the round: the eleven families of §11 (darknut `r75-d537-c5`),
+`boss-manhandla/r75-mh-fight`, `ow-peahat/r75-bow-ow`, the other fifteen families as round 24 left them; the 0x27 and
+0x1f path costs; every run with act mode `temperature:0.5+relax:16`. Tags `r75-1k` and `r75-1k-noclips`
+(`RUNS=1000 scripts/experiments/r56_chains.sh`, seeds 0-999), against round 24's `r74-1k` and `r74-1k-noclips` on the
+same seeds. Each segment plays on to the route's end; "arrive" is the first entry into the next segment's start room
+(for D5 and the full route, the D5 triforce), "to the end" the share of the segment's runs that take the D5 triforce.
+Differences are paired by seed, ± one standard error.
+
+**Clips on** (the primary number):
+
+| Segment | Round 24 arrive | Round 25 arrive | Difference | To the end, 24 → 25 |
+|---|---:|---:|---:|---:|
+| Full route (start → the D5 triforce) | 4.8 | **19.7** | +14.9 ± 1.4 | 4.8 → 19.7 |
+| D2 | 89.9 | 88.2 | −1.7 ± 1.4 | 5.6 → 22.2 |
+| After D2 (to Dungeon 1) | 95.2 | 96.2 | +1.0 ± 0.5 | 6.5 → 25.4 |
+| D1 | 99.7 | 99.7 | 0.0 ± 0.2 | 8.9 → 27.8 |
+| After D1 (to Dungeon 3) | 100.0 | 100.0 | 0.0 | 8.5 → 29.4 |
+| D3 | 67.3 | **81.0** | +13.7 ± 1.9 | 7.6 → 30.6 |
+| After D3 (to Dungeon 4) | 100.0 | 100.0 | 0.0 | 9.8 → 36.9 |
+| D4 | 81.3 | **92.3** | +11.0 ± 1.5 | 13.0 → 43.2 |
+| After D4 (the leg to Dungeon 5) | 99.8 | 99.9 | +0.1 ± 0.2 | 15.2 → 45.7 |
+| D5 | 34.9 (46.4 with `r74-darknut5`) | **68.0** | +33.1 ± 2.1 | 34.9 → 68.0 |
+
+**Clips off:**
+
+| Segment | Round 24 arrive | Round 25 arrive | Difference | To the end, 24 → 25 |
+|---|---:|---:|---:|---:|
+| Full route | 0.3 | **2.6** | +2.3 ± 0.5 | 0.3 → 2.6 |
+| D2 | 89.9 | 88.2 | −1.7 ± 1.4 | 0.6 → 3.1 |
+| After D2 | 92.3 | 93.6 | +1.3 ± 0.6 | 0.7 → 4.0 |
+| D1 | 99.4 | 99.7 | +0.3 ± 0.3 | 1.0 → 6.9 |
+| After D1 | 99.9 | 99.9 | 0.0 ± 0.1 | 0.6 → 5.8 |
+| D3 | 67.3 | 81.0 | +13.7 ± 1.9 | 0.8 → 4.8 |
+| After D3 | 100.0 | 100.0 | 0.0 | 0.8 → 6.1 |
+| D4 | 59.7 | **79.9** | +20.2 ± 2.0 | 1.0 → 7.5 |
+| After D4 (the leg) | 92.0 | 97.0 | +5.0 ± 1.0 | 2.9 → 10.4 |
+| D5 | 22.0 (34.0 with `r74-darknut5`) | **47.5** | +25.5 ± 2.1 | 22.0 → 47.5 |
+
+Dungeons 2 and 3 have no clip way, so their segments are the same runs with clips on and off.
+
+**Hearts on entering the killer rooms** (the full-route files; visits: hearts in / hearts lost a visit / deaths):
+
+| Room | Round 24, clips on | Round 25, clips on | Round 24, clips off | Round 25, clips off |
+|---|---|---|---|---|
+| 2:0x5e | 997: 2.74 / 0.71 / 44 | 995: 2.76 / 0.76 / 36 | 962: 2.30 / 0.71 / 97 | 969: 2.33 / 0.75 / 96 |
+| 2:0x1e | 915: 2.69 / 0.72 / 48 | 926: 2.69 / 0.68 / 38 | 783: 2.59 / 0.64 / 53 | 787: 2.62 / 0.62 / 39 |
+| 1:0x23 | 759: 2.92 / 0.38 / 32 | 812: 3.41 / 0.33 / 18 | 569: 2.60 / 0.40 / 33 | 641: 3.07 / 0.31 / 13 |
+| 3:0x59 N→S | 668: 4.55 / 1.27 / 17 | 734: 4.85 / 1.28 / 13 | 475: 4.15 / 1.22 / 28 | 564: 4.48 / 1.24 / 24 |
+| 3:0x5b W→E | 618: 3.13 / 0.22 / 15 | 683: 3.30 / 0.22 / 7 | 420: 2.83 / 0.25 / 11 | 502: 3.05 / 0.17 / 6 |
+| Manhandla | 603: 3.35 / 0.98 / 185 | 680: 3.43 / 0.68 / 108 | 409: 3.02 / 0.94 / 133 | 499: 3.29 / 0.55 / 77 |
+| 4:0x32 (Like-Likes) | 418: 5.47 / 1.10 / 1 | 568: 5.63 / 0.41 / 0 | 273: 5.09 / 0.95 / 0 | 418: 5.08 / 0.47 / 3 |
+| Gleeok | 403: 3.78 / 0.74 / 70 | 552: 4.73 / 0.77 / 40 | 240: 3.47 / 0.61 / 48 | 393: 3.78 / 0.66 / 74 |
+| The Olive Garden | 320: 5.76 / 4.10 / 150 | 482: 6.70 / 3.86 / 143 | 26: 3.21 / 2.62 / 18 | 80: 4.34 / 2.78 / 46 |
+| 5:0x64 on the way back | 169: 4.42 / 1.35 / 37 | 337: 5.45 / 1.38 / 34 | 8: 3.62 / 0.00 / 0 | 34: 5.04 / 0.00 / 0 |
+| 5:0x66 W→N | 122: 3.63 / 1.14 / 30 | 280: 4.25 / 0.55 / 25 | 7: 3.00 / 0.14 / 1 | 31: 4.84 / 0.42 / 1 |
+| 5:0x47 | 89: 3.69 / 0.95 / 18 | 252: 4.36 / 0.68 / 23 | 6: 3.67 / 0.33 / 0 | 30: 4.77 / 0.52 / 1 |
+| 5:0x37 | 71: 3.44 / 1.08 / 16 | 229: 4.05 / 0.19 / 10 | 6: 3.33 / 1.17 / 1 | 29: 4.40 / 0.31 / 0 |
+| Digdogger | 50: 3.18 / 0.15 / 2 | 207: 3.95 / 0.05 / 10 | 3: 4.00 / 0.00 / 0 | 28: 3.98 / 0.05 / 2 |
+
+Hearts lost a visit count a death as all the hearts Link came in with, and add back what drops healed.
+
+- **Link enters every room after Dungeon 2 with more hearts,** about one more from Gleeok on (Gleeok +0.95, the
+  Garden +0.94, the way back +0.6 to +1.0), and more runs get there (the Garden 320 → 482, Digdogger 50 → 207).
+- **Three rooms lose fewer hearts a visit by themselves:** 4:0x32 (1.10 → 0.41), 5:0x66 W→N (1.14 → 0.55) and 5:0x37
+  (1.08 → 0.19); Manhandla 0.98 → 0.68 with his deaths down from 31% of visits to 16%.
+- **Two rooms did not move:** 3:0x59 N→S still costs 1.28 hearts a visit and the Olive Garden 3.86.
+- **Dungeon 2 is where the round did nothing:** Link has 3 heart containers there, and the Goriya rooms lose what
+  they lost (0.68-0.76 hearts a visit).
+
+**Where the runs end now** (clips on, the full route: 803 of 1000 fail): the Olive Garden 143, Manhandla 108, 5:0x64
+57, Gleeok 40, 2:0x1e 39, 2:0x5e 36, 5:0x65 30, 3:0x69 27, 5:0x66 26, 5:0x47 23, 1:0x44 22, 2:0x3e 20. From Dungeon
+5's entrance (320 of 1000 fail): the Garden 83, 0x64 57, 0x66 47, 0x47 38, 0x65 35, 0x37 20, 0x25 18, Digdogger 16.
+With clips off (the full route: 974 fail): the plain 0x64 fight 220, 2:0x5e 96, Manhandla 77, Gleeok 74, 2:0x3e 53,
+the Garden 46; from Dungeon 5's entrance with clips off the Garden 266 and 0x64 137.
+
+Cheated bombs a run on the full route, clips on: 1.63 → 2.32 (more runs reach Dungeon 5's two walls).
+
+The canonical single-room evaluation of every promoted run in its act mode (batch `r75-canonical`) was run for the
+report; it also replaced the five `eval.json` files that round 24's conversion had left describing other weights
+(§14 of round 24), which the yardstick refuses.
+
+## 14. Version 1.5.0.1
+
+REV +1: rewards (`reward.heart_value`, `drops_first`, `left_drop_penalty`, `heal_targets`, the forced drop in
+training), objective data (`path_costs` in 0:0x27, 0:0x1f and 5:0x37), training options (`--demos`, `--ent-coeff`,
+`--checkpoint-every`), a new act mode (`plan:K:S`, `guard:K`) and thirteen promoted runs replaced. Nothing a loaded
+model reads changed (observation, action space and network are 1.5.0's), so COMPAT stays 0 and every earlier 1.5.0
+run loads. `VERSION` and `pyproject.toml` moved; the Cargo workspace stays 1.5.0.
+
+## 15. Problems and next steps
+
+The owner's direction after this round (Nov 16): the rest of the game, Dungeons 7, 6, 8 and 9 with the magic sword
+between 7 and 6 (`docs/routes/rest-of-game.md` and the documents it indexes). What this round leaves open goes to
+`backlog.md`:
+
+- **The Olive Garden** is the route's largest loss with clips on (143 of 1000 full runs; 3.86 hearts a visit), and
+  3:0x59 N→S did not move (1.28). Both are fights that a heart's price alone did not shorten.
+- **Manhandla** still kills 16% of his visits and is the planner's largest loss too (§12).
+- **Dungeon 2** gained nothing: at three containers the Goriya rooms and Moldorm lose 0.6-0.8 hearts a visit.
+- **Clips off** is 2.6% from the start: the plain 0x64 fight ends 220 of 1000 full runs and half of the Dungeon 5
+  runs that reach it.
+- **The planner gets stuck** more than the models do (§12: 6 → 33 stuck runs on the full route, clips on, with the
+  round 24 team; `darknut exceeded 2000 steps` and a cave beside the route with the final team): to be looked at
+  before it is the golden path's mode.
+- **The planner as a teacher** (`round25-planner-teacher.md`) was analysed, not trained.
+- **`heart_value.json` is fitted from round 24's chains.** With the new team Link carries about one heart more into
+  the late rooms; the table is to be refitted from `r75-1k` when the families are next retrained.
+- **Not landed, on their branches:** `reward.spawn_cost` (`r25-spawns`; its one lead, ow-octorok out of the 0x37
+  cave, was not confirmed at 1000 runs), the ladder clip's clear landing (same branch), the low-health act rules
+  (`r25-act`), the ow-tektite wrap out of 0x1a (`r25-bleedow-tr`).
+- **Heart value's untried arms:** the exit term alone, the low-health multiplier, other scales than 20; the
+  overworld families and the bosses were not retrained with it.
