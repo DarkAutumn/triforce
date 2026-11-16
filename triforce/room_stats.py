@@ -21,6 +21,8 @@ scope (``SCOPES``):
   (overworld 0x38) has an entry in each.
 - ``d2``, ``d1``, ``d3``, ``d4``, ``d5``, ``d7``: the dungeon files (from the dungeon's entrance), cut like the
   segments.
+- ``to-d6``, ``d6`` (round 27, the scouting route ``d6``, whose files are ``post-d7`` and ``d6``): 0:0x42 out of
+  Dungeon 7 -> the D6 triforce, and Dungeon 6 alone.
 - ``room``: the single-room evaluations (``triforce.evaluate``, ``visited_rooms``) of the models the chains played
   (each in its chain act mode), merged per room weighted by visits.  Here a run is an isolated episode that entered
   the room: ``death_rate`` = such episodes that died in it / such episodes.
@@ -126,6 +128,8 @@ SCOPES = (
     Scope('d4', 'dungeon', 'Dungeon 4: 4:0x71 → out (0:0x45)', 'd4', '4_71s_0', '0_45c_0'),
     Scope('d5', 'dungeon', 'Dungeon 5: 5:0x76 → out (0:0x0b)', 'd5', '5_76s_0', '0_0bc_0'),
     Scope('d7', 'dungeon', 'Dungeon 7: 7:0x79 → the D7 triforce', 'd7', '7_79s_0', None),
+    Scope('to-d6', 'segment', 'To D6: 0:0x42 → the D6 triforce', 'post-d7', '0_42c_0', None),
+    Scope('d6', 'dungeon', 'Dungeon 6: 6:0x79 → the D6 triforce', 'd6', '6_79s_0', None),
 )
 ROOM_SCOPE = 'room'
 ROOM_LABEL = 'Room only: isolated single-room evaluations'

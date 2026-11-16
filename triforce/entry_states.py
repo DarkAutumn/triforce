@@ -240,15 +240,16 @@ def step_config(step: RouteStep, source: str, route: str = DEFAULT_ROUTE,
     where the bomb opens it (``required``, round 22).  The grid-point skips (CLIP) follow the step's family's
     ``clips:`` switch, as in a chain: 4:0x21 entered from S is left only by the ladder clip.  The run-time switch is
     no draw: on, off on a step of a stretch's plain way (round 22).  The recorder, food and candle follow the family
-    (round 24)."""
+    (round 24), and the arrows (round 27: Gohma dies to nothing else)."""
     rooms = game_rooms() if rooms is None else rooms
     bombs = 'never'
     if rooms.get(step.location.as_tuple(), {}).get('requires_bombs'):
         bombs = 'free' if step.specialist.startswith('boss-') else 'required'
     family = load_specialist(step.specialist)
     clips = {'enabled': family.clips.enabled, 'off_share': 1.0 if step.way == 'plain' else 0.0}
-    # The recorder, food and candle as the family has them (round 24: Digdogger needs the recorder).
-    items = {'bombs': bombs, **{kind: getattr(family.items, kind) for kind in ('recorder', 'food', 'candle')}}
+    # The recorder, food, candle and arrows as the family has them (round 24: Digdogger needs the recorder).
+    items = {'bombs': bombs,
+             **{kind: getattr(family.items, kind) for kind in ('recorder', 'food', 'candle', 'arrows')}}
     return SpecialistConfig(name=f'entry-step-{step.index}', rooms=[step.location], start_states=[source],
                             success=['exit-correct', 'triforce-collected'], max_steps=3000,
                             items=items, fresh_rooms=True, route=route, clips=clips)
