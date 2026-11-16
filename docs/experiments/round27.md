@@ -30,8 +30,11 @@ reaches its triforce from its entrance (0x38 is cleared in 13 of 99 visits and a
   0x3a crossed with their fights skipped but for chain 0's 0x38), family files, tracks for every new state but the
   two block rooms' and one Lost Woods state, three scripted rules in the environment's actions (the gravestone 60 of
   60, 0x28's bomb 60 of 60, Gohma 59 of 60), the segments `post-d7` and `d6`, the baseline.
-- **Not done**: the demonstration files, the proof trainings' result, the staged tracks of 0x38 and 0x3a confirmed,
-  the suites after the merge of `r26` (§8-10 say where each stands); any training.
+- **Suites** after the merge of `r26` and this step: cargo workspace 991 passed, 1 ignored; pytest 820 passed, 6
+  skipped; `tf replay verify` the three corpus replays ok; `entry_states audit` 823 states, no problem; `asm.py check
+  --final` ok.
+- **Not done**: the proof trainings' result and a training with `--demos`, the staged tracks of 0x38 and 0x3a
+  (§8, §10 say where each stands); any training.
 
 ## 1. The walks: what the running game says
 
@@ -370,10 +373,18 @@ state, 60 a rule, the family's own hp and bombs draws):
   here because it changes what `crates/zelda/tests/d6.rs` walks.
 - **Gohma needs one arrow in 16 of 20 runs and two in 4**, from the first eye opening, with the mask as built
   (ARROW offered facing N only).
-- **Not done: the demonstration files themselves.** The command for each is `nice -n 10 .venv/bin/python
-  scripts/experiments/r27_d6_rules.py demos RULE target/r27-demos/RULE.npz` (200 episodes a state; it prints the
-  rows and the clean runs it kept), then `train --demos target/r27-demos/RULE.npz --demo-coeff 0.05`. The row
-  counts are therefore not known yet.
+- **The demonstration files** (`nice -n 10 .venv/bin/python scripts/experiments/r27_d6_rules.py demos RULE
+  target/r27-demos/RULE.npz`: 200 episodes a state, 600 a rule; not committed, a clone rebuilds them in three
+  minutes). A row is one decision; the rule's own decision is written 20 times.
+
+  | Rule | Success | Clean runs kept | Rows | Its own decisions a run | Hearts lost in the successes |
+  |---|---|---|---:|---|---|
+  | `gravestone` | 600 of 600 | 558 (no heart lost) | 35,700 | 2-3 `MOVE N 32` (onto the column, the push, down the stairs) | 0.10-0.18 a state |
+  | `bomb28` | 600 of 600 | 444 (at most half a heart) | 27,673 | 1 `BOMB E` | 0.60-0.62 |
+  | `gohma` | 588 of 600 (12 ran out of steps on chain 2) | 588 (at most a heart) | 42,812 | 1 `ARROW N` in 142 of 200 a state, 2 in 58 | 0.22-0.80 |
+
+  Use: `train --demos target/r27-demos/RULE.npz --demo-coeff 0.05` (round 25's coefficient for 5:0x37). **No
+  training has loaded them yet.**
 
 ## 10. Proof trainings
 

@@ -30,10 +30,10 @@ answers `docs/decisions.md` 2026-11-17.
 - [ ] **Merge `d6` into `d2first`** when the owner fixes the route (as round 26 did with `d7`), then refit
   `triforce/heart_value.json` and move `eval_batch.D6_SEGMENTS`, `MILESTONES`, the `d7` target and the room-stats
   cuts (round27.md §7). No family yaml names a route, so none has to change.
-- [ ] **Left by the states step** (round27.md §8-10): the demonstration files (`r27_d6_rules.py demos`), the proof
-  round `r77-proof` read (`run.json` `curriculum_tracks`) and wizzrobe's proof training, a training with `--demos`,
-  the staged tracks of 6:0x38 and 6:0x3a (`SKIP_DONE=1 scripts/experiments/r27_d6_curricula.sh`), `0_61n_1`'s
-  track, `max_steps` near the track lengths.
+- [ ] **Left by the states step** (round27.md §8-10): the proof round `r77-proof` read (`run.json`
+  `curriculum_tracks`) and wizzrobe's proof training, a training with `--demos` (the three files are written by
+  `r27_d6_rules.py demos`, round27.md §9), the staged tracks of 6:0x38 and 6:0x3a (`SKIP_DONE=1
+  scripts/experiments/r27_d6_curricula.sh`), `0_61n_1`'s track, `max_steps` near the track lengths.
 - [ ] **6:0x28's objective path runs along the Blue Wizzrobes' row**: a rule walking by `target` loses 1.75 hearts
   and 9 of 60 runs there, the walked path (bottom row, then column X `$D0`) 0.95 and none. Give the room
   `path_costs` (and re-pin `crates/zelda/tests/d6.rs`).
