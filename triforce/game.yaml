@@ -774,6 +774,12 @@ rooms:
     how: bomb
     tile: [28, 2]
     wares: [[blue-potion, 40], [red-potion, 68]]  # [item, rupees], left to right
+  # Round 25: entered from N (facing down) only three spawn spots of the game's list are safe here, (X $50, $A0,
+  # Y $7D) and ($70, $8D), two Peahats on each (asm:Spawn_AssignPositions); they rise slowly up X $70 and $A0 for
+  # 129 frames. The straight way down X $A0 (the chain's entry from 0x17) met the one there on every visit (0.50
+  # hearts). Steps onto Link's tile columns 14-15 and 18-23 above row 10 cost 3 tiles more, so the objective's way
+  # goes down the corridor's middle (X $80-$88) between the two columns, then E along Y $8D below them.
+  path_costs: [{cols: [14, 15], rows: [0, 9], cost: 3}, {cols: [18, 23], rows: [0, 9], cost: 3}]
 - level: 0
   location: '0x28'
   specialist: ow-zora
