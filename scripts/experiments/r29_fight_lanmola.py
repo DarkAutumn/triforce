@@ -85,10 +85,6 @@ class LanmolaBot(Bot):
 
 def clear(w, limit=6000):
     """The rule-based clear; returns the bot."""
-    for _ in range(40):
-        if w.y <= 0xB5:
-            break
-        w.press('UP', 1)                                         # the rest of the walk in through the bombed wall
     bot = LanmolaBot(w)
     while bot.frames < limit and bot.alive() and monsters(w, {LANMOLA_RED}):
         bot.fight_frame()
@@ -189,10 +185,6 @@ def facts(args):
               f'{dict(flash)}')
     # 3. how segments die: one scripted clear, every death logged
     w = load(path, 0)
-    for _ in range(40):
-        if w.y <= 0xB5:
-            break
-        w.press('UP', 1)
     bot = LanmolaBot(w)
     before, log = segments(w), []
     while bot.frames < 6000 and bot.alive() and monsters(w, {LANMOLA_RED}):
@@ -251,10 +243,6 @@ def reentry(args):
                                        ('the room cleared, RoomHistory WRITTEN to hold no $55', 10, 2, True)):
         for seed in range(args.seeds):
             w = load(path, seed)
-            for _ in range(40):
-                if w.y <= 0xB5:
-                    break
-                w.press('UP', 1)
             bot = LanmolaBot(w)
             while bot.frames < 6000 and bot.alive() and len(segments(w)) > 10 - kills and w.r(ROOM_KILLS) < heads:
                 bot.fight_frame()
@@ -330,10 +318,6 @@ def trick(args):
             rows, away, back = [], collections.Counter(), collections.Counter()
             for seed in range(args.seeds):
                 w = load(path, seed)
-                for _ in range(40):
-                    if w.y <= 0xB5:
-                        break
-                    w.press('UP', 1)
                 bot = LanmolaBot(w)
                 bot.one_worm = one
                 while bot.frames < 6000 and bot.alive() and monsters(w, {LANMOLA_RED}) and \

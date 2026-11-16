@@ -272,12 +272,21 @@ class Bot(Fight):
     horizon = 14          # frames a harmful object's motion is looked ahead (a stab holds Link for 13)
     stab_lead = (4, 6, 9)  # the frames after A on which the target must be in the sword's box
     stab_margin = 2
+    stab_safe = 13        # frames Link's spot must stay untouched for a stab to start (the stab holds him 13)
 
     def __init__(self, w: Walk, targets, harmful=None, graph_key=None):
         super().__init__(w)
+        still = 0
+        for _ in range(80):                                      # the walk in through the door: no input is read
+            at = (w.x, w.y)
+            self.w.press('NONE', 1)
+            self.frames += 1
+            still = still + 1 if (w.x, w.y) == at else 0
+            if still >= 2:
+                break
         self.graph = walk_graph(w, graph_key)
         self.targets, self.harmful = set(targets), harmful
-        self.prev, self.vel, self.heading, self.goal = {}, {}, None, None
+        self.prev, self.vel, self.heading, self.goal, self.shot_trail, self.born = {}, {}, None, None, {}, {}
         self._track()
 
     # ---- what the bot reads
@@ -292,6 +301,15 @@ class Bot(Fight):
         for s, v in self.vel.items():
             if abs(v[0]) > 4 or abs(v[1]) > 4:
                 self.vel[s] = (0, 0)                             # a jump, not a walk
+        # shots move by fractions of a pixel: their speed is the mean of the last four frames
+        self.shot_trail = {s: (self.shot_trail.get(s, []) + [(o[1], o[2])])[-5:]
+                           for s, o in now.items() if o[0] >= 0x53 and s in self.prev and self.prev[s][0] == o[0]}
+        for s, trail in self.shot_trail.items():
+            if len(trail) >= 2:
+                n = len(trail) - 1
+                self.vel[s] = ((trail[-1][0] - trail[0][0]) / n, (trail[-1][1] - trail[0][1]) / n)
+        self.born = {s: self.born.get(s, self.frames) if s in self.prev and self.prev[s][0] == o[0] else self.frames
+                     for s, o in now.items()}
         self.prev = now
 
     def press(self, buttons='NONE', frames: int = 1):
@@ -390,7 +408,7 @@ class Bot(Fight):
         for s in self.prev:
             if not self.is_target(s):
                 continue
-            px, py = self.future(s, 8)
+            px, py = (int(round(v)) for v in self.future(s, 8))
             for nx in range((px - 32) & 0xF8, px + 40, 8):
                 for ny in range(((py - 32 - 5) & 0xF8) + 5, py + 40, 8):
                     if (nx, ny) in self.graph and not self.danger((nx, ny)) and \
@@ -421,8 +439,11 @@ class Bot(Fight):
             ends = [('LEFT', (w.x & 0xF8, w.y)), ('RIGHT', ((w.x & 0xF8) + 8, w.y))]
         elif (w.y - 5) % 8:
             ends = [('UP', (w.x, ((w.y - 5) & 0xF8) + 5)), ('DOWN', (w.x, ((w.y - 5) & 0xF8) + 13))]
-        else:
-            return self.heading or 'DOWN'                        # on the grid but off the floor graph (a doorway)
+        else:                                                    # on the grid but off the floor graph (a doorway)
+            near = min(self.graph, key=lambda n: abs(n[0] - w.x) + abs(n[1] - w.y))
+            if near[0] != w.x and (near[1] == w.y or abs(near[0] - w.x) >= abs(near[1] - w.y)):
+                return 'RIGHT' if near[0] > w.x else 'LEFT'
+            return 'DOWN' if near[1] > w.y else 'UP'
         inside = [e for e in ends if e[1] in self.graph] or ends
         safe = [e for e in inside if not self.danger(e[1])]
         for pick in (safe, inside):
@@ -439,7 +460,7 @@ class Bot(Fight):
         if w.r(SWORD_BLOCKED):
             return False
         button = self.stab_button(w.x, w.y)
-        if not button or self.danger((w.x, w.y), 13):
+        if not button or self.danger((w.x, w.y), self.stab_safe):
             return False
         if w.r(OBJ_DIR) != DIR_OF[button]:
             self.press(button)                                   # a frame of the direction turns him
