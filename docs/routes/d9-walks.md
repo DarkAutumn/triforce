@@ -50,9 +50,11 @@ the D8 piece refills), the magic sword, the red candle, the bow and bought arrow
 5. **0x14's spiral must be fought, and the sword does it.** Walking it, a Like-Like holds Link in 20 of 20 runs
    (4.4 hearts); stabbing what stands in the lane, with beams while the hearts are full, 1 hold in 20 and 0.05
    hearts. The same guard takes 0x26 from 0.7 to 0.15 and 0x51 from 2.0 to 1.2 without the ring.
-6. **Today's `stuck` rule ends every Like-Like room.** Link held 50 actions in one place is `stuck`
-   (`end_conditions.rs`): 0x14 0 of 20, 0x51 0 of 20, 0x41 2 of 20, 0x17 0 and 11 of 40, 0x31 0 of 40, 0x03 0 of
-   20, all `stuck` (like-like, goriya, zol).
+6. **Today's `stuck` rule ends the Like-Like rooms.** Link 50 actions in one place is `stuck`
+   (`end_conditions.rs`), and a held Link cannot move: 0x14 0 of 20, 0x51 0 of 20, 0x41 2 of 20 (trap-room 14 of
+   40), 0x17 0 and 11 of 40, 0x31 0 of 40, 0x03 0 of 20 (like-like too), nearly all ending `stuck` (like-like,
+   goriya, zol). The hold itself was not read from those episodes: like-like also ended `stuck` in 0x16 (12 of 20),
+   which has no Like-Like.
 7. **Rooms the route has emptied are filled again by the evaluation.** The game keeps 0x07, 0x10 and 0x20 empty and
    0x61's Patra dead on the return visits (walked); the env's fresh-room write puts five Wizzrobes back into 0x20
    (goriya 0 of 40, 40 deaths) and the Patra back into 0x61.
@@ -535,18 +537,18 @@ the walks above.
 | Rooms | Tried | Result |
 |---|---|---|
 | 0x37; 0x38 ×2, 0x28, 0x27; 0x07 | ow-octorok; ow-zora; ow-lynel | play today (36-40 of 40) |
-| 0x6d | ow-moblin | 0/40: does not play the recorder |
+| 0x6d | ow-moblin | 0/40: does not play the recorder. 0x6d is ow-moblin's and 0x28, 0x27 ow-zora's by `d2first`'s own steps (a room has one family: a scaffold that gives 0x6d to ow-leever, which plays 0x0b's whirlwind, or 0x28 and 0x27 to ow-peahat does not load) |
 | 0x48 ×2; 0x17; 0x06, 0x05 | ow-leever; ow-boulder; ow-lynel | 0-12 of 40: new exits, the ladder, Lynels, the wall |
 | 9:0x76, 0x66, 0x26 ×2, 0x06, 0x62; 0x63; the six tunnel passages | stalfos-keese-gel; zol; equipment-room | play today (0x26's wall 34/40) |
-| 9:0x65, 0x15, 0x17 ×2, 0x31, 0x04 (Wizzrobe crossings, four with a bomb wait) | goriya | 0-28 of 40; a wizzrobe family that crosses and waits out a fuse is new work |
-| 9:0x16 W → S, 0x27 ×2 (Patra crossings) | goriya | 27, 15, 40 of 40 (the last with the ring) |
-| 9:0x14, 0x51, 0x41 (Like-Like rooms), 0x03 | like-like; zol | `stuck`: see below |
+| 9:0x65, 0x15, 0x17 ×2, 0x31, 0x04 (Wizzrobe crossings, four with a bomb wait) | goriya; like-like (20 a room) | goriya 8, 0, 0, 11, 0, 28 of 40; like-like 16 (−10.0 hearts), 0, 4, 0, 5, 20 (−3.3, the ring) of 20: no family crosses them; one that crosses and waits out a fuse is new work |
+| 9:0x16 W → S, 0x27 ×2 (Patra crossings) | goriya; like-like | goriya 27, 15, 40 of 40 (the last with the ring); like-like 2, 0, 20 of 20 |
+| 9:0x14, 0x51, 0x41 (Like-Like rooms), 0x03 | like-like, trap-room (0x41); zol, like-like (0x03) | 0x14 0/20, 0x51 0/20, 0x41 2/20 and trap-room 14/40, 0x03 0/20 twice: `stuck`, see below |
 
 **Does a route this long strain anything?**
 
 - **The `stuck` rule against a Like-Like's hold** (`EndCondition::Timeout`, `position_timeout: 50`): a held Link
-  cannot move, and 50 actions in one place end the episode. Every Like-Like room ended so (finding 6). The script
-  frees itself with stabs in 77 frames; the rule or the families must change before 0x14 can be played.
+  cannot move, and 50 actions in one place end the episode. The Like-Like rooms ended so (finding 6). The script
+  frees itself with stabs (d6-walks.md: 77 frames); the rule or the families must change before 0x14 can be played.
 - **Step budgets.** The longest scripted crossings are 0x14 (1044-1050 frames) and 0x48 with the guard (856); a
   family's `max_steps` 2000 holds them.
 - **The six-room history**: not strained (§3.4).
@@ -594,8 +596,8 @@ crossings and three bombs, and is paid back only in the fights.
 - **0x03's fight** (§5.3): no script written; the one model ended `stuck`.
 - 0x30's Trap lure with its Wizzrobes alive; the block clips of the ring rooms.
 - Other lanes through overworld 0x06 and 0x05; a missed whirlwind with the Moblins live (it never missed).
-- The whirlwind and 0x47 under a family model: the burn has no objective; a second family for 0x6d (ow-leever, which
-  plays 0x0b's whirlwind) was not tried.
+- The whirlwind and 0x47 under a family model: the burn has no objective; ow-leever (which plays 0x0b's whirlwind)
+  could not be given 0x6d (§7).
 - Why ow-boulder leaves 0x17 by a wrong exit in 115 frames (whether the objective's path knows the ladder) and
   whether BOMB is offered under 0x05's wall: only the results were read.
 - The fall-back ways (0x56's key, 0x23's bombs, 0x50/0x40) and the bomb recovery loop north of 0x31.

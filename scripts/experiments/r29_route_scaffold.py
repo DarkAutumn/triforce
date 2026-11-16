@@ -7,7 +7,7 @@ made by the walks' staging (`r29_route_walks.route_states`: 15 hearts, the magic
 doors, the red ring after cellar 0x00; `ram_randomization: {}`).  Nothing in the checkout changes.
 
     python scripts/experiments/r29_route_scaffold.py OUT [--wizzrobe FAMILY] [--likelike FAMILY] [--trap FAMILY]
-        [--peahat FAMILY] [--zol FAMILY] [--no-ring]
+        [--peahat FAMILY] [--zol FAMILY] [--whirlwind FAMILY] [--no-ring]
     TRIFORCE_MODELS_DIR=$PWD/models TRIFORCE_STATES_DIR=OUT/triforce/states PYTHONPATH=OUT \
         python -m triforce.eval_batch NAME --families ow-lynel,like-like --episodes-per-state 20 --output-dir DIR
 
@@ -33,7 +33,7 @@ from r29_route_walks import route_states
 # (level, room, in_cave, entry, exit, family key, the staged state that enters it (None: not played), extra step keys)
 STEPS = [
     (8, 0x2C, False, 'S', 'triforce', 'stalfos-keese-gel', None, {}),   # Dungeon 8's piece: the route's progress
-    (0, 0x6D, False, 'cave', 'recorder', 'ow-moblin', '0_6dc', {'bomb_reserve': 8}),   # bombs for the walls only
+    (0, 0x6D, False, 'cave', 'recorder', 'WHIRLWIND', '0_6dc', {'bomb_reserve': 8}),   # bombs for the walls only
     (0, 0x37, False, 'recorder', 'E', 'ow-octorok', '0_37r', {}),
     (0, 0x38, False, 'W', 'S', 'ow-zora', '0_38w', {}),
     (0, 0x48, False, 'N', 'W', 'ow-leever', '0_48n', {}),
@@ -124,13 +124,14 @@ def main():
     parser.add_argument('--trap', default='like-like', help='plays 0x41')
     parser.add_argument('--peahat', default='ow-zora', help='plays overworld 0x28 and 0x27 (tagged ow-zora today)')
     parser.add_argument('--zol', default='zol', help='plays 0x63 and 0x03')
+    parser.add_argument('--whirlwind', default='ow-moblin', help="plays 0x6d (the recorder must be in its `items`)")
     parser.add_argument('--no-ring', action='store_true', help='the way without the red ring detour')
     parser.add_argument('--hearts', type=float, default=None, help="the states' hearts (default: as staged, full)")
     parser.add_argument('--extends', default='d6', help='the route d9walk is appended to (d6, d2first)')
     args = parser.parse_args()
     out = args.out.resolve()
     sub = {'WIZZROBE': args.wizzrobe, 'LIKELIKE': args.likelike, 'TRAP': args.trap, 'PEAHAT': args.peahat,
-           'ZOL': args.zol}
+           'ZOL': args.zol, 'WHIRLWIND': args.whirlwind}
     steps = [s for s in STEPS if not (args.no_ring and (s[0], s[1]) in NO_RING)]
     if args.no_ring:                                             # 0x16 is entered once, from W, and left N
         steps = [s for s in steps if (s[1], s[3]) != (0x16, 'S')]
