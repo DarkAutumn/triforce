@@ -1434,6 +1434,24 @@ The canonical single-room evaluation of every promoted run in its act mode (batc
 report; it also replaced the five `eval.json` files that round 24's conversion had left describing other weights
 (§14 of round 24), which the yardstick refuses.
 
+**The honest planner with this team** (`ACT=temperature:0.5+relax:16+plan:16:1`, tag `r75-1k-plan`, the same seeds;
+§12's tables were measured with round 24's team). A second, labelled number beside the models, never the primary
+one. Clips on, paired with `r75-1k`:
+
+| Segment | Models alone arrive (to the end) | Planner arrive (to the end) | Difference in arrivals |
+|---|---:|---:|---:|
+| Full route | 19.7 (19.7) | **82.6** (82.6) | +62.9 ± 1.8 |
+| D2 | 88.2 (22.2) | 99.3 (85.6) | +11.1 ± 1.0 |
+| After D2 | 96.2 (25.4) | 98.8 (86.7) | +2.6 ± 0.7 |
+
+The planner's full route with the round 24 team was 60.9% (§12): the round's models are worth 22 points under the
+planner too. Its 174 failed runs of 1000: 5:0x64 on the way back 69, the Olive Garden 33, Manhandla 27, 2:0x1e 5,
+5:0x37 5, 0:0x0a 4; four runs end `darknut exceeded 2000 steps` and three leave the route into 0x1a's cave. Hearts on
+entering, models alone → planner: Manhandla 3.43 → 5.23, Gleeok 4.73 → 6.54, the Olive Garden 6.70 → 8.95, 5:0x64 on
+the way back 5.45 → 8.38, Digdogger 3.95 → 7.28; hearts lost a visit in the Garden 3.86 → 1.96, at Manhandla 0.68 →
+0.46. Cheated bombs a run 2.32 → 3.78 (more runs reach Dungeon 5). The other segments and clips off were cut by a
+restart of the machine on Nov 17 and are measured after this commit; they are appended below when done.
+
 ## 14. Version 1.5.0.1
 
 REV +1: rewards (`reward.heart_value`, `drops_first`, `left_drop_penalty`, `heal_targets`, the forced drop in
