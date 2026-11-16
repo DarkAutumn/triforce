@@ -1431,7 +1431,7 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
   route's last (`golden.checkpoints('d2first') == [24, 68]`: outside Dungeon 2 and Dungeon 1). For each segment
   `parallel` games race from the same state to the segment's stop (`golden.race`: a `ChainPool` of the
   segment's seeds with `stop_step`, every run recorded). The first success seen wins (of several in one poll:
-  the fewest frames, then the lowest seed), the other games are dropped, and the winner's end state is the
+  the fewest cheated items, then the fewest frames, then the lowest seed), the other games are dropped, and the winner's end state is the
   checkpoint every game of the next segment starts from (`Route.load(checkpoint=...)`: no frame run, nothing
   written). The winners are joined with `replay_stitch` into one replay from the start to the route's last
   triforce, `OUT/golden-<first seed>-<ending>.tfreplay`. With every model drawing its actions (the default,
@@ -1461,8 +1461,9 @@ A power-on run is shown from the frame the models took over. When a replay ends 
   the route in a chain pool (`--parallel` games, no picture, unpaced, every run recorded) and
   `_native.ReplayFeed` (`theater::Feed`, a Rust thread) takes every finished run off the pool: into its ending's
   queue, a copy of any run into `random`, and into `best`, which keeps the best runs seen and not yet watched (a
-  win, then the furthest route step, then the most hearts at the end, then the fewest frames from the moment the
-  models took over). Each queue holds `--capacity` (32) runs. A cell on `best` takes the top one, which owes
+  win, then the furthest route step, then the fewest cheated items (bombs, keys and rupees together, from the
+  replay's ledger; Nov 17), then the most hearts at the end, then the fewest frames from the moment the models took
+  over). Each queue holds `--capacity` (32) runs. A cell on `best` takes the top one, which owes
   `best` `--parallel` candidate runs per missing entry; `best` hands out runs once it was half full. The feed
   pauses the pool (`Pool::set_paused`) while no queue wants a run and resumes it when a cell takes one. `stuck`
   never asks for a run (stuck runs are rare: it holds those that came by, and its cells wait once they are

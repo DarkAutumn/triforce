@@ -7,8 +7,8 @@ cell 0 is a live game (below).  Where the replays come from is the grid's *sourc
 - One of the queues ``best``, ``success``, ``stuck``, ``died``, ``random`` (``QUEUES``).  The promoted models play
   the route headless in a chain pool that records every run, and a background thread in Rust
   (``_native.ReplayFeed``, ``crates/theater``) files each finished run: into its ending's queue, a copy of any
-  run into ``random``, and the best runs seen (a win, then the furthest route step, then the most hearts, then
-  the fewest frames) into ``best``.  Each queue holds ``capacity`` runs.  A cell on ``best`` takes the top run;
+  run into ``random``, and the best runs seen (a win, then the furthest route step, then the fewest cheated items, then
+  the most hearts, then the fewest frames) into ``best``.  Each queue holds ``capacity`` runs.  A cell on ``best`` takes the top run;
   for every run taken, ``parallel`` more are simulated and the best of them kept.  The simulations pause once
   nothing wants a run and resume when a cell takes one; after ``patience`` finished runs in a row that no queue
   took (a queue for an ending that hardly ever happens) they pause until the next take (0: never give up).
