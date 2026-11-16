@@ -1,5 +1,5 @@
 name: stalfos-keese-gel
-rooms: ['(1, 0x73)', '(1, 0x72)', '(1, 0x74)', '(1, 0x63)', '(1, 0x53)', '(1, 0x52)', '(1, 0x42)', '(1, 0x43)', '(1, 0x36)', '(1, 0x33)', '(4, 0x51)', '(4, 0x21)', '(4, 0x01)', '(6, 0x79)', '(6, 0x58)', '(6, 0x0c)']
+rooms: ['(1, 0x73)', '(1, 0x72)', '(1, 0x74)', '(1, 0x63)', '(1, 0x53)', '(1, 0x52)', '(1, 0x42)', '(1, 0x43)', '(1, 0x36)', '(1, 0x33)', '(4, 0x51)', '(4, 0x21)', '(4, 0x01)', '(6, 0x79)', '(6, 0x58)', '(6, 0x0c)', '(8, 0x7e)', '(8, 0x2c)']
 start_states: ['1_73*_[0-9]', '1_72*_[0-9]', '1_74*_[0-9]', '1_63*_[0-9]', '1_53*_[0-9]', '1_52*_[0-9]', '1_42*_[0-9]', '1_43*_[0-9]', '1_36*_[0-9]', '1_33*_[0-9]', '4_51*_[0-9]', '4_21*_[0-9]', '4_01*_[0-9]']
 success: [exit-correct, triforce-collected]
 reward_profile: default
@@ -23,3 +23,5 @@ notes: >-
   Dungeon 6 (round 27, route `d6`; no start states yet): the empty entrance 0x79 (S to its W key door), 0x58 (eight
   Blue Keese and four statues that shoot: kill them for the key and the N shutter; walked zero-shot 40 of 40, 1.8
   hearts lost) and the triforce room 0x0c.
+  Dungeon 8 (round 28, route `d8`; no start states yet): the empty entrance 0x7e (S to N; its statues do not
+  shoot) and the triforce room 0x2c; walked zero-shot 40 of 40 each.

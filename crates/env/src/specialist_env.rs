@@ -772,15 +772,21 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
     fn update_disabled_kinds(&mut self, objective: &zelda::objectives::Objective) {
         let reserve = self.objectives.as_ref().map_or(0, GameCompletion::bomb_reserve);
         let rupees = self.objectives.as_ref().map_or(0, GameCompletion::rupee_reserve);
-        let kinds = self.config.items.disabled_kinds(&self.data.map, self.session.state(), reserve, rupees);
+        // Round 28: a route step may name its own bomb mode (8:0x6e, crossed by the mask of `required`).
+        let step_bombs = self.objectives.as_ref().and_then(|gc| gc.step_bombs(self.session.state()));
+        let items = self.config.items.on_step(step_bombs);
+        let kinds = items.disabled_kinds(&self.data.map, self.session.state(), reserve, rupees);
         self.session.set_disabled_kinds(&kinds);
-        let targets = self.config.items.bomb_targets(&self.data.map, self.session.state(), Some(objective));
+        let targets = items.bomb_targets(&self.data.map, self.session.state(), Some(objective));
         self.session.set_bomb_targets(targets.as_deref());
         let facings = self.objectives.as_ref().map(|gc| gc.recorder_facings(self.session.state()));
         self.session.set_recorder_facings(facings);
         // Round 27: ARROW's facings by the route (N under a Gohma) and the doorways MOVE keeps out of.
         let arrows = self.objectives.as_ref().and_then(|gc| gc.arrow_facings(self.session.state()));
         self.session.set_arrow_facings(arrows);
+        // Round 28: CANDLE's facings by the route (on the overworld only at the tree a step burns).
+        let candle = self.objectives.as_ref().and_then(|gc| gc.candle_facings(self.session.state()));
+        self.session.set_candle_facings(candle);
         let doorways = zelda::objectives::doorways_kept_out(&self.data.map, self.session.state(), objective);
         self.session.set_vetoed_doorways(doorways);
         self.session.set_clips(self.config.clips.enabled);

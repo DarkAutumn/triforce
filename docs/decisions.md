@@ -2524,6 +2524,48 @@ no leftover 'in case the old version of the code' is running."
 - **Rule from here:** a new worktree branches from a branch that has this commit; a branch from before it is
   merged with `main` before anything is trained or evaluated in its worktree.
 
+## 2026-11-17 — The leg to Dungeon 7 and Dungeon 7 are `d2first` (round 26)
+
+Round 26 first carried the stretch as a scouting route `d7` (`{extends: d2first}`, steps 209-247), as round 24 had
+scouted the leg and Dungeon 5. Before any state was built it was merged into the trained route, for the reason round
+24 gave: the route is the owner's and fixed, and two routes mean two sets of states, chains and step numbers.
+
+- **`d2first` has 248 steps** and ends on taking the D7 triforce in 7:0x2b (steps 0-208 unchanged: the game start to
+  the D5 triforce; 209-247 the leg from 0:0x0b and Dungeon 7). The route `d7` is gone; the draft `first-quest`
+  starts at Dungeon 7's exit.
+- **Comparing with round 25.** A full run now plays on after the D5 triforce, so "the full route" of round 25 is
+  `--stop-at step:209` (the first step after the triforce, reached only by the route's own exit) or the yardstick's
+  milestone `full→post-d5`; the segment `d5` arrives at 0:0x0b entered after 5:0x14 (`eval_batch.TARGETS`). The new
+  segments are `post-d5` (from `0_0bc_0`) and `d7` (from `7_79s_0`); room-stats has the scopes `to-d7` and `d7`.
+- **`heart_value.json`** has a row per route step, so the merge made the table stale and `GameData::load` failed in
+  every tool, the fitter included. The length is now checked where a specialist is handed out
+  (`GameData::specialist`, the Python config build); the fitter gives the steps up to a triforce that no chain has
+  played no curve at all (not the prior's flat 1), and the env prices hearts there by the plain health terms. The
+  table was refit from its own r74 chains: rows 0-208 are identical, 209-247 have no curve. So the eleven
+  `heart_value` families train Dungeon 7's rooms without the heart price until a team reaches the D7 triforce
+  often enough to fit one (`python -m triforce.heart_value <chain jsonl>...`).
+- **No version bump:** no trained model reads the route's length; on steps 0-208 the chains play as before
+  (round26.md §5).
+
+## 2026-11-17 — 7:0x1b is fought only at 4 bombs or fewer; clips off is not a concern (Lee)
+
+Lee, on the room the explorer could not clear: "as long as you bomb into it, that room IS clearable. You do so to
+grab the bombs. Only grab bombs at 4 or less, otherwise traverse the room and get out asap." And: "Clips-off is not
+a problem. We might even drop it in the future."
+
+- **7:0x1b** (six Blue Goriyas; the four bombs appear when all are dead; E is a key door, so the room can be
+  crossed with the Goriyas alive): the route step is `treasure: {if_bombs_below: 5}` (it was `8`, "when the bag
+  isn't full", 2026-11-14). By the ledger a run arrives with 0-1 bombs (three walls before it), so the fight stays
+  the usual case and it is the room's bombs that open 0x0c's and 0x29's walls; a run that cannot win it and leaves
+  has those two bombs cheated and counted.
+- **What stays open in the room** (not rules, work): no full-fight track (the explorer's search does not find 18
+  white-sword hits under six boomerangs; staged starts with 2-5 kills banked exist on all chains); today's goriya
+  model wins 4%, the honest planner 5 of 10; the rule is read live, so a Link crossing with 5 who throws a bomb as a
+  weapon turns the crossing into the fight (round 23's 3:0x5b problem); the N key door spends a key if touched (to
+  be vetoed with round 27's `keep_out` doorways when that branch is merged).
+- **Clips off:** still built (a plain way for every stretch) and measured in the chains of record, but no work is
+  spent on it: no tuning, no scoping of a clip family's switch to single rooms, and its numbers gate nothing.
+
 ## 2026-11-17 — Round 27's working answers: the magic sword and Dungeon 6 (the lead; Lee may overrule any of them)
 
 `docs/routes/d6-walks.md` §10 ends with nine questions that are Lee's. Round 27's route vocabulary (the scouting
@@ -2562,3 +2604,65 @@ changes if he says otherwise.
    run, which crossed all four rooms 100% zero-shot.
 9. **ow-lynel's 0x50.** Retrained for the corridor N from both entries (the wrap's E and the plain way's S), with
    0x60 E → N, 0x32 and 0x22; the clip way keeps its own 0x50 step. Neither way is played today (0 of 40).
+
+## 2026-11-17 — Round 28's working answers: the leg to Dungeon 8 and Dungeon 8 (the lead; Lee may overrule any of them)
+
+`docs/routes/d8-walks.md` §10 ends with nine questions that are Lee's. Round 28's route vocabulary (the scouting
+route `d8`, `docs/routes/d8.md` §15) had to be built before he answered, so the lead gave each a **working answer**,
+as round 27 did. They are not Lee's decisions: each is the cheapest thing to undo that the walks support, and each
+names what changes if he says otherwise.
+
+1. **The leg.** Out of Dungeon 6 the recorder twice from the spot the game sets Link down on in 0x22 (the whirlwind
+   was built in round 26; the room's family, ow-lynel, gets `items: {recorder: true}`), then on foot: 0x3c S, 0x4c E,
+   0x4d S, 0x5d S by its right opening, 0x6d. Rooms go to families by enemy and were theirs already: 0x22 ow-lynel,
+   0x3c and 0x4c ow-octorok, 0x4d, 0x5d and 0x6d ow-moblin. The leg has no clip: `d8` has one way and no stretch.
+2. **The burned tree of 0:0x6d** is a secret kind, `burn` (game.yaml's `entrance: {how: burn}`, which nothing read):
+   the objective targets the stand tiles of the tree's row (the three E of it, facing W, which is where the route's
+   N entry comes down; the three W of it, facing E, for a Link who came by 0x5d's left opening), the model plays its
+   own `CANDLE` there, and the stairs are the target once they show. No macro. CANDLE is on for ow-moblin (`items:
+   {candle: true}`) and offered on the overworld only where a fire made on the spot burns the route's tree, toward
+   it, while it stands and no fire of Link's burns: never beside 0x4d's shop tree, two rooms before in the same
+   family. The plain way is the same step (clips change nothing here).
+3. **Dungeon 8's steps** are the draft's ten, checked against the walked trace: 0x7e N, 0x6e's N bomb wall, 0x5e
+   fought for its key and the N shutter, 0x4e's N key door, 0x3e fought for the E shutter, the one-way 0x3f to its
+   stairs, the tunnel 0x2f out by its left ladder (`exit: W`; the right one leads back into 0x3f), 0x4c with its
+   corner key and N bomb wall, Gleeok, the piece. Both keys are taken (0x5e's pays 0x4e's door, 0x4c's corner key
+   is Dungeon 9's third). game.yaml's wrong note on 0:0x5d ("only the right opening counts") is corrected in this
+   step: the file's bytes are in every run's data stamp, which is why the walk left it alone, and a vocabulary step
+   changes the file anyway.
+4. **Bombs.** BOMB in 0x6e and 0x4c only at their walls (both rooms `requires_bombs`, both played by the BOMB mask of
+   `required`). 0x3f's four bombs by Lee's rule for 7:0x1b (Nov 17: a room is fought for its bombs only at 4 bombs
+   or fewer, else crossed): `treasure: {if_bombs_below: 5}`. A run arrives there with 0 (one bomb in, 0x6e's wall),
+   so the fight is the usual case, and its bombs pay 0x4c's wall and 0:0x05's rock wall on the way to Dungeon 9; a
+   run that cannot win it and leaves by the stairs has 0x4c's bomb cheated and counted. Reserves: 1 to 0x6e's wall,
+   2 from 0x5e (the two walls still ahead), 1 after 0x4c's. `rupee_reserve: 8` from 8:0x4c: its arrows (the walk: 2.8
+   a crossing, 5 at most) are paid from what Link holds above 8 (runs arrive with 25-40), and 8 shots stay for
+   Ganon's silver arrow. The 8 is the lead's number, not a measured need.
+5. **Masks.** `keep_out: true` on 8:0x5e E and 8:0x4e W (key doors off the route: each takes a key on the first frame
+   of pressing into it). ARROW is on for 0x4c's family (`arrows: true` on pols-voice), **not** narrowed to "a Pols
+   Voice on Link's line": a miss costs a rupee and the model learns the line from the positions it sees, as with
+   Gohma's eye (round 27's answer 6). The aimed mask stays the alternative if a trained pols-voice wastes the purse.
+6. **Families, by enemy.** darknut: 0x5e and 0x3e (fought), and the two rooms that are only crossed, 0x4e and 0x3f
+   (a Blue and two Red Darknuts, three Gibdos, two Bubbles: half Darknuts, and today's darknut model is the one that
+   crosses 0x3f 40 of 40). pols-voice: 0x4c. boss-gleeok: the four-headed fight. **0x6e stays boss-manhandla** (a
+   Manhandla is in it) though it is crossed, not fought: a route step may now name its own bomb mode (`bombs:
+   required` on the step replaces the family's `items.bombs` there), which was the smallest mechanism that keeps the
+   room with its monster's family. If Lee would rather have it in a crossing family (trap-room and gibdo crossed it
+   60 of 60 zero-shot), it is the step's `specialist:` and one line of game.yaml. Fighting a Darknut room in parts is
+   dropped from the plan (the walk: no gain); `MAX_RETREATS` stays as it is.
+7. **The `stuck` rule against a hold** (found by the Dungeon 9 walk, needed from Dungeon 6 on: 6:0x38 and 0x3a hold
+   three Like-Likes each). A one-room episode ended `stuck` after 50 decisions in one place, and a Link held by a
+   Like-Like cannot move. Decisions made or ended while he is held (`IsLinkParalyzed` `$512`) no longer count toward
+   the 50; the count neither grows nor starts anew, and `max-steps` still ends a hold that never does. The rule lives
+   in the single-room env (`env::end_conditions`, the `Timeout` condition); a chain run has no such limit (it ends a
+   room by its step count or its family's no-progress limit), so chains play as before.
+8. **Demonstrations.** The walks' winning scripts are rules over the env's own actions in
+   `scripts/experiments/r28_demos.py` (one rule a room: the whirlwind, the tree, 0x5e, 0x3e, 0x4c, Gleeok), each with
+   the share of runs it wins through the env from staged states (`docs/experiments/round28.md` §5). They are for
+   `train --demos` beside the planner, not instead of it; which teacher a family gets is decided when it is trained.
+9. **Proof.** `crates/zelda/tests/d8.rs` walks the stretch by the objective and the masks from Dungeon 6's triforce
+   to Dungeon 8's, and the round 25 team plays 300 full-route `d2first` runs on the build before and after the
+   change, compared field by field (round28.md §4).
+
+Not answered here, still Lee's (round28.md §7): the bar for the stretch (the best plays leave about four hearts
+after Gleeok), and whether 0x5e and 0x3e are trained with hearts-at-exit priced above everything else.

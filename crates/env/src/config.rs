@@ -413,6 +413,17 @@ impl BombUse {
             BombUse::Free => required() || state.bombs() > i32::from(reserve),
         }
     }
+
+    /// The mode a routes.yaml step's `bombs:` names (`zelda::game_map::STEP_BOMBS`, checked by the route's loader).
+    pub fn named(name: &str) -> Option<BombUse> {
+        Some(match name {
+            "never" => BombUse::Never,
+            "tenth" => BombUse::Tenth,
+            "required" => BombUse::Required,
+            "free" => BombUse::Free,
+            _ => return None,
+        })
+    }
 }
 
 /// `items:` block: inventory items the specialist may use (false = masked out even when Link has it; bombs:
@@ -452,6 +463,13 @@ impl Default for ItemsConfig {
 }
 
 impl ItemsConfig {
+    /// These switches on a route step with its own bomb mode (routes.yaml `bombs:`, round 28,
+    /// `zelda::objectives::GameCompletion::step_bombs`; None: the family's): 8:0x6e, which boss-manhandla (`free`)
+    /// crosses to its bomb wall by the mask of `required`.
+    pub fn on_step(&self, bombs: Option<&str>) -> ItemsConfig {
+        ItemsConfig { bombs: bombs.and_then(BombUse::named).unwrap_or(self.bombs), ..self.clone() }
+    }
+
     /// Action kinds masked out in `state` with `bomb_reserve` bombs and `rupee_reserve` rupees to keep (routes.yaml),
     /// in kind order.
     pub fn disabled_kinds(
@@ -1430,6 +1448,33 @@ mod tests {
         assert!(off(&ItemsConfig::default(), 200, 0), "arrows off by default");
         assert!(view(1).available_actions()[ActionKind::Arrow.index()]);
         assert!(!view(0).available_actions()[ActionKind::Arrow.index()], "the game refuses an arrow at 0 rupees");
+    }
+
+    /// Round 28: a route step's own bomb mode replaces the family's on that step (`ItemsConfig::on_step`): a `free`
+    /// family on a `bombs: required` step is kept to the bomb targets in a `requires_bombs` room, as a `required`
+    /// family is; no step mode, or an unknown name, leaves the family's.
+    #[test]
+    fn a_step_names_its_own_bomb_mode() {
+        let free = ItemsConfig { bombs: BombUse::Free, arrows: true, ..Default::default() };
+        assert_eq!(free.on_step(None), free);
+        assert_eq!(free.on_step(Some("sometimes")), free);
+        let step = free.on_step(Some("required"));
+        assert_eq!(step, ItemsConfig { bombs: BombUse::Required, ..free.clone() });
+        for (name, mode) in [("never", BombUse::Never), ("tenth", BombUse::Tenth), ("free", BombUse::Free)] {
+            assert_eq!(BombUse::named(name), Some(mode));
+        }
+        assert_eq!(zelda::game_map::STEP_BOMBS.map(|n| BombUse::named(n).is_some()), [true; 4]);
+        use zelda::{GameView, Var, tables::RAM_SIZE};
+        let map = std::sync::Arc::new(zelda::GameMap::builtin());
+        let mut ram = [0u8; RAM_SIZE];
+        ram[Var::Mode.addr() as usize] = 5;
+        ram[Var::Level.addr() as usize] = 8;
+        ram[Var::Location.addr() as usize] = 0x6e;
+        ram[Var::Bombs.addr() as usize] = 4;
+        let view = GameView::new(&ram, 0, false, map.clone());
+        assert!(map.requires_bombs(view.full_location()));
+        assert!(free.bomb_targets(&map, &view, None).is_none(), "free: wherever the game places a bomb");
+        assert_eq!(step.bomb_targets(&map, &view, None), Some(Vec::new()), "required: only the route's wall");
     }
 
     #[test]

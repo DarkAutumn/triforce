@@ -345,7 +345,7 @@ def test_the_route_families_play_each_start_state_in_the_switch_states_it_allows
         for state, _, on in jobs:
             played.setdefault(state, set()).add(on)
         for prefix, mode in rooms.items():
-            chains = [state for state in played if state.startswith(prefix + '_')]
+            chains = [state for state in played if state.rsplit('_', 1)[0] == prefix]
             assert len(chains) == 3, (name, prefix, sorted(played))
             want = {'both': {True, False}, 'on': {True}, 'off': {False}}[mode]
             assert all(played[state] == want for state in chains), (name, prefix, {s: played[s] for s in chains})

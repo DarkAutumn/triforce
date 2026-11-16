@@ -14,9 +14,10 @@ from triforce.specialist import list_specialists
 def test_the_route_and_families():
     # d2first is the one route the game is played on (Dungeon 4 merged in, Nov 12; the leg and Dungeon 5, round 24;
     # the leg to Dungeon 7 and Dungeon 7, round 26: scouted as the route d7, merged Nov 16); d6 is round 27's scouting
-    # route (d2first, then the magic sword and Dungeon 6); clips-gauntlet is round 21's experiment route (two targets
-    # per room and entry, drawn by a specialist naming it).
-    assert native.routes() == [native.DEFAULT_ROUTE, 'd6', 'clips-gauntlet'] and native.DEFAULT_ROUTE == 'd2first'
+    # route (d2first, then the magic sword and Dungeon 6) and d8 round 28's (d6, then the leg to Dungeon 8 and Dungeon
+    # 8); clips-gauntlet is round 21's experiment route (two targets per room and entry, drawn by a specialist naming
+    # it).
+    assert native.routes() == [native.DEFAULT_ROUTE, 'd6', 'd8', 'clips-gauntlet'] and native.DEFAULT_ROUTE == 'd2first'
     assert sorted(native.families()) == list_specialists()
 
 
@@ -48,6 +49,35 @@ def test_the_scouting_route_d6_goes_on_to_the_d6_triforce():
     assert {s['specialist'] for s in own} == {
         'ow-moblin', 'ow-lynel', 'ow-ghini', 'stalfos-keese-gel', 'wizzrobe', 'zol', 'trap-room', 'vire',
         'equipment-room', 'like-like', 'boss-gohma'}
+
+
+def test_the_scouting_route_d8_goes_on_to_the_d8_triforce():
+    """Round 28: d8 is d6 and steps 281-296, one way (no stretch): the whirlwind out of 0x22, the leg, the burned
+    tree's stairs, Dungeon 8 with its tunnel and the four-headed Gleeok; 8:0x6e names its own bomb mode, 0x3f takes its
+    bombs at 4 or fewer; every room is in its step's family."""
+    base, steps = native.route_steps('d6'), native.route_steps('d8')
+    assert steps[:len(base)] == base and len(steps) == 297
+    own = steps[len(base):]
+    assert all(s['way'] is None and s['stretch'] is None for s in own)
+    assert [(s['level'], s['room'], s['in_cave'], s['entry'], s['exit'], s['specialist']) for s in own] == [
+        (0, 0x22, False, 'cave', 'recorder', 'ow-lynel'), (0, 0x3c, False, 'recorder', 'S', 'ow-octorok'),
+        (0, 0x4c, False, 'N', 'E', 'ow-octorok'), (0, 0x4d, False, 'W', 'S', 'ow-moblin'),
+        (0, 0x5d, False, 'N', 'S', 'ow-moblin'), (0, 0x6d, False, 'N', 'cave', 'ow-moblin'),
+        (8, 0x7e, False, 'S', 'N', 'stalfos-keese-gel'), (8, 0x6e, False, 'S', 'N', 'boss-manhandla'),
+        (8, 0x5e, False, 'S', 'N', 'darknut'), (8, 0x4e, False, 'S', 'N', 'darknut'),
+        (8, 0x3e, False, 'S', 'E', 'darknut'), (8, 0x3f, False, 'W', 'cave', 'darknut'),
+        (8, 0x2f, True, 'S', 'W', 'equipment-room'), (8, 0x4c, False, 'cave', 'N', 'pols-voice'),
+        (8, 0x3c, False, 'S', 'N', 'boss-gleeok'), (8, 0x2c, False, 'S', 'triforce', 'stalfos-keese-gel')]
+    assert [(s['index'], s['bombs']) for s in steps if s['bombs']] == [(288, 'required')]
+    assert [(s['index'], s['treasure']) for s in own if s['treasure']] == [
+        (288, 'skip'), (290, 'skip'), (292, 'if_bombs_below: 5')]
+    assert [(s['index'], s['bomb_reserve']) for s in own if s['bomb_reserve'] is not None] == [
+        (281, 1), (289, 2), (295, 1)]
+    families = native.families()
+    for step in own:
+        room = (step['level'], step['room'], step['in_cave'])
+        assert room in [tuple(r) for r in families[step['specialist']]], step
+        assert native.specialist_for(room) == step['specialist']
 
 
 def test_every_route_room_is_in_its_family():
@@ -102,7 +132,8 @@ def test_the_bow_detour_goes_north_from_0x43_and_back():
     assert native.families()['trap-room'] == [(1, 0x22, False), (3, 0x4c, False), (3, 0x5a, False), (4, 0x02, False),
                                               (4, 0x11, False), (6, 0x48, False)]
     assert native.families()['equipment-room'] == [(1, 0x7f, True), (3, 0x0f, True), (4, 0x60, True), (5, 0x04, True),
-                                                   (5, 0x07, True), (7, 0x4a, True), (7, 0x7b, True), (6, 0x08, True)]
+                                                   (5, 0x07, True), (7, 0x4a, True), (7, 0x7b, True), (6, 0x08, True),
+                                                   (8, 0x2f, True)]
 
 
 def test_dungeon_3_follows_lees_directions_with_the_treasure_rules():
@@ -121,12 +152,12 @@ def test_dungeon_3_follows_lees_directions_with_the_treasure_rules():
     assert steps[start + 9]['waypoint'] == 'raft'
     # 0x5b's last pass (W) takes its bombs whatever Link holds (round 23; decisions 2026-11-14).  Dungeon 5's rules
     # (round 24): 0x66 is passed on entry, 0x65's bombs are refused westbound.  Dungeon 7's (round 26): 0x69's bombs,
-    # 0x38's rupees and 0x0c's item are left, 0x1b's bombs taken while the bag isn't full.
+    # 0x38's rupees and 0x0c's item are left, 0x1b's bombs taken at 4 bombs or fewer (the owner, Nov 17).
     assert [(s['level'], s['room'], s['entry'], s['treasure']) for s in steps if s['treasure']] == [
         (2, 0x5e, 'S', 'clear'), (3, 0x5b, 'S', 'skip'), (3, 0x69, 'N', 'skip'), (3, 0x69, 'cave', 'skip'),
         (5, 0x66, 'S', 'skip'), (5, 0x65, 'E', 'refuse'), (5, 0x56, 'S', 'skip'), (5, 0x57, 'W', 'skip'),
         (5, 0x47, 'S', 'skip'), (5, 0x37, 'S', 'skip'), (5, 0x26, 'E', 'skip'),
-        (7, 0x69, 'S', 'skip'), (7, 0x38, 'E', 'skip'), (7, 0x1b, 'W', 'if_bombs_below: 8'), (7, 0x0c, 'S', 'skip')]
+        (7, 0x69, 'S', 'skip'), (7, 0x38, 'E', 'skip'), (7, 0x1b, 'W', 'if_bombs_below: 5'), (7, 0x0c, 'S', 'skip')]
     assert [(s['level'], s['room'], s['bomb_reserve']) for s in steps if s['bomb_reserve'] is not None] == [
         (3, 0x7c, 6), (4, 0x71, 2), (0, 0x45, 2), (5, 0x76, 8), (5, 0x05, 0), (5, 0x05, 8), (5, 0x24, 0),
         (7, 0x79, 3), (7, 0x1b, 2), (7, 0x2a, 0)]

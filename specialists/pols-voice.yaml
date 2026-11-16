@@ -1,12 +1,12 @@
 name: pols-voice
-rooms: ['(5, 0x27)', '(5, 0x25)']
+rooms: ['(5, 0x27)', '(5, 0x25)', '(8, 0x4c)']
 start_states: ['5_27*_[0-9]', '5_25*_[0-9]']
 success: [exit-correct]
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8): dropped items are shaping targets
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chains arrive with partial hearts (round 5)
-items: {bombs: tenth}                      # the owner (Nov 14): no bombs in Dungeon 5 but the Olive Garden and Digdogger; the 10th kill's bomb stays
+items: {bombs: required, arrows: true}     # round 28: BOMB only at 8:0x4c's N wall (its requires_bombs room; elsewhere as `tenth`: the owner, Nov 14: no bombs in Dungeon 5); ARROW above the route's rupee reserve: one arrow kills every Pols Voice on its line
 curriculum: {enabled: true}             # trajectories/pols-voice (Go-Explore paths per start state)
 one_room: true
 max_steps: 600                             # round 24: explored tracks 66-136 steps
@@ -19,3 +19,10 @@ notes: >-
   0x27 S to W (two Pols Voices, two Gibdos, two Keese): its key just above the S door taken, no fight, through the W
   key door. 0x27 joins this family rather than gibdo: its Pols Voices are what it asks Link to get past.
   Copied from zol (one-room, curriculum).
+  Dungeon 8 (round 28, route `d8`; docs/routes/d8.md §15, d8-walks.md §5; no start state yet): 0x4c, eight Pols
+  Voices, Link up the tunnel's stairs inside the block ring. Out by the ring's S side, round to the key in the NE
+  corner (in the open from the start), back along the top row to the N bomb wall, BOMB N from (X $78, Y $5D). ARROW
+  is on (the lead's working answer, docs/decisions.md 2026-11-17: not narrowed to a Pols Voice on Link's line; the
+  model learns it): an arrow costs a rupee and kills every Pols Voice on its line, the sword needs three hits each.
+  Walked: with arrows 30 of 30 at 0.40 hearts and 2.8 rupees, without 9 of 30; the round 24 run 0 of 20. In Dungeon
+  5 Link has no arrows yet (the shop is on the leg to Dungeon 7), so ARROW changes nothing there.

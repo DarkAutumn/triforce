@@ -166,7 +166,10 @@ pub enum EndCondition {
         one_room: bool,
     },
     /// Link stuck in one position, or no new correct room for longer than the specialist's `max_steps` (v1
-    /// Timeout; in a one_room episode the `max-steps` truncation always comes first).
+    /// Timeout; in a one_room episode the `max-steps` truncation always comes first). A decision made or ended
+    /// while a Like-Like holds Link (`GameView::link_held`) is not counted toward the position limit (round 28: he
+    /// cannot move until it dies, and three of them in a room hold him longer than the limit; the count neither
+    /// grows nor starts anew, and `max-steps` still ends a hold that never does).
     Timeout {
         position_timeout: u32,
         no_progress_timeout: u32,
@@ -264,7 +267,9 @@ impl EndCondition {
                 last_progress,
                 entered_rooms,
             } => {
-                if prev.link.position == curr.link.position && v.change.observed.hits() == 0 {
+                if prev.link_held() || curr.link_held() {
+                    // Held: not Link's standing still.
+                } else if prev.link.position == curr.link.position && v.change.observed.hits() == 0 {
                     *position_duration += 1;
                     if *position_duration >= *position_timeout {
                         return Some(STUCK.to_owned());

@@ -33,7 +33,7 @@ pub fn whirlwind_level(location: MapLocation) -> Option<u8> {
 }
 
 /// An overworld secret over a room's stairs that a route step opens without a bomb (game.yaml `entrance:` with
-/// `how: armos`, `how: recorder` or `how: push` and its `tile`; a rock wall is `bomb_secret`).
+/// `how: armos`, `how: recorder`, `how: push` or `how: burn` and its `tile`; a rock wall is `bomb_secret`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Secret {
     /// The room's secret Armos statue (asm:Spawn_CheckTouchedArmosOrGravestone): Link pressing into it from a side
@@ -51,12 +51,18 @@ pub enum Secret {
     /// stairs square: pressing on into the moved stone releases a flying Ghini. The stairs last until the room is
     /// left (the stone is back on every entry, whatever room flag `$20` says).
     Push(Tile),
+    /// A tree the candle burns (round 28; Q1 room 0x6d, Dungeon 8's stairs): `Tile` is the tree's top-left tile (2x2
+    /// tiles, tile object `$64`), where the stairs show 92 frames after the candle's B. The fire comes to rest `$20`
+    /// pixels ahead of Link and burns the tree when it rests within `$10` pixels of it: facing W from X tree +
+    /// `$18`..`$2F`, facing E from X tree − `$28`..`$11`, on the tree's row (walked, docs/routes/d8-walks.md §1.3:
+    /// 24 of 24 X each; [`crate::GameView::burn_facings`]). The room flag keeps the stairs on later visits.
+    Burn(Tile),
 }
 
 impl Secret {
     pub fn tile(self) -> Tile {
         match self {
-            Secret::Armos(t) | Secret::Recorder(t) | Secret::Push(t) => t,
+            Secret::Armos(t) | Secret::Recorder(t) | Secret::Push(t) | Secret::Burn(t) => t,
         }
     }
 }
@@ -354,9 +360,9 @@ const EXIT_KEYS: [&str; 9] =
     ["level", "location", "in_cave", "locked", "shutter", "span", "wrap", "wrap_in", "keep_out"];
 const RAFT_EXIT_KEYS: [&str; 3] = ["level", "location", "dock"];
 const EXIT_NAMES: [&str; 5] = ["N", "S", "E", "W", "cave"];
-const STEP_KEYS: [&str; 12] = [
+const STEP_KEYS: [&str; 13] = [
     "level", "room", "in_cave", "specialist", "entry", "exit", "waypoint", "retreat", "treasure", "bomb_reserve",
-    "rupee_reserve", "note",
+    "rupee_reserve", "bombs", "note",
 ];
 /// `recorder` ([`RECORDER`]): set down by the whirlwind.
 const STEP_ENTRIES: [&str; 7] = ["start", "N", "S", "E", "W", "cave", RECORDER];
@@ -367,6 +373,8 @@ const WAYPOINTS: [&str; 10] =
     ["heart", "rupees", "bow", "raft", "ladder", "recorder", "arrows", "food", "candle", "sword"];
 /// The ware a purchase waypoint (`waypoint: arrows` / `food`) buys: the game.yaml treasure of its shop's cave room.
 pub const PURCHASES: [(&str, &str); 2] = [("arrows", "wood-arrow"), ("food", "food")];
+/// A step's `bombs:` ([`RouteStep::bombs`], round 28): the bomb modes of a family's `items:` (`env::config::BombUse`).
+pub const STEP_BOMBS: [&str; 4] = ["never", "tenth", "required", "free"];
 const DIRECTIONS: [&str; 4] = ["N", "S", "E", "W"];
 
 impl GameRoom {
@@ -490,6 +498,11 @@ pub struct RouteStep {
     /// arrows the route needs (Gohma's, Ganon's silver one: 1 rupee a shot, asm:Arrow_Wield): ARROW is masked while
     /// he holds N or fewer.  None keeps the reserve of the steps before; the route starts at 0.
     pub rupee_reserve: Option<u8>,
+    /// `bombs: never|tenth|required|free` (round 28; [`STEP_BOMBS`]): on this step the family's `items: {bombs:}`
+    /// mode is this one instead (`env::config::BombUse`). For a room a family crosses by the bomb mask of `required`
+    /// though it fights its other rooms `free` (8:0x6e: a Manhandla crossed to its N bomb wall with the route's one
+    /// bomb; boss-manhandla is `free`). None: the family's own mode.
+    pub bombs: Option<String>,
     /// The way of a `stretch:` this step belongs to (None: a step both ways share).
     pub way: Option<Way>,
     /// The name of that stretch.
@@ -630,6 +643,7 @@ fn parse_step(v: &Value) -> Result<RouteStep, MapError> {
         treasure: TreasureRule::parse(get(v, "treasure")).map_err(|e| MapError(format!("{loc} {entry}: {}", e.0)))?,
         bomb_reserve: get(v, "bomb_reserve").map(|n| as_u8(n, &format!("{what}: bomb_reserve"))).transpose()?,
         rupee_reserve: get(v, "rupee_reserve").map(|n| as_u8(n, &format!("{what}: rupee_reserve"))).transpose()?,
+        bombs: one_of("bombs", &STEP_BOMBS, false)?,
         entry,
         way: None,
         stretch: None,
@@ -1066,8 +1080,9 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
 }
 
 /// The [`Secret`] of a game.yaml room's `entrance:` block (`how: armos`, `how: recorder` or, in a room with a `cave`
-/// exit, `how: push`: 0x21's gravestone, round 27; with its `tile`); None for the other ways in (open, bomb:
-/// `bomb_secret`, burn, the pushed rocks of rooms no route enters) and for rooms without the block.
+/// exit, `how: push` (0x21's gravestone, round 27) or `how: burn` (0x6d's tree, round 28); with its `tile`); None
+/// for the other ways in (open, bomb: `bomb_secret`, the pushed rocks and burned trees of rooms no route enters) and
+/// for rooms without the block.
 fn secret(entry: &Value, loc: MapLocation, what: &str) -> Result<Option<Secret>, MapError> {
     let Some(entrance) = get(entry, "entrance") else {
         return Ok(None);
@@ -1077,6 +1092,7 @@ fn secret(entry: &Value, loc: MapLocation, what: &str) -> Result<Option<Secret>,
         Some("armos") => Secret::Armos,
         Some("recorder") => Secret::Recorder,
         Some("push") if get(entry, "exits").is_some_and(|e| get(e, "cave").is_some()) => Secret::Push,
+        Some("burn") if get(entry, "exits").is_some_and(|e| get(e, "cave").is_some()) => Secret::Burn,
         _ => return Ok(None),
     };
     if loc.level != 0 || loc.in_cave {
@@ -1698,6 +1714,9 @@ mod tests {
                 loc(7, 0x1a),
                 loc(7, 0x29),
                 loc(7, 0x69),
+                // Round 28: Dungeon 8's two bomb walls on the way (0x6e N, 0x4c N).
+                loc(8, 0x4c),
+                loc(8, 0x6e),
             ]
         );
         assert!(!map.requires_bombs(loc(9, 0x7f)));
@@ -1805,7 +1824,7 @@ mod tests {
         );
         // 0x5b's last pass (W) takes its bombs whatever Link holds (round 23; decisions 2026-11-14); Dungeon 5's
         // crossed rooms skip their items, 0x66 on entry too, and 0x65 refuses its bombs westbound (round 24); Dungeon
-        // 7 leaves 0x69's bombs, 0x38's rupees and 0x0c's item and takes 0x1b's bombs while the bag isn't full.
+        // 7 leaves 0x69's bombs, 0x38's rupees and 0x0c's item and takes 0x1b's bombs at 4 bombs or fewer (the owner, Nov 17).
         let rules: Vec<_> = steps
             .iter()
             .filter(|s| s.treasure != TreasureRule::Take)
@@ -1827,7 +1846,7 @@ mod tests {
                 (loc(5, 0x26), "E", TreasureRule::Skip),
                 (loc(7, 0x69), "S", TreasureRule::Skip),
                 (loc(7, 0x38), "E", TreasureRule::Skip),
-                (loc(7, 0x1b), "W", TreasureRule::IfBombsBelow(8)),
+                (loc(7, 0x1b), "W", TreasureRule::IfBombsBelow(5)),
                 (loc(7, 0x0c), "S", TreasureRule::Skip),
             ]
         );
@@ -2046,7 +2065,7 @@ mod tests {
     #[test]
     fn only_route_rooms_are_tagged() {
         let map = GameMap::builtin();
-        assert_eq!(map.routes.keys().collect::<Vec<_>>(), [DEFAULT_ROUTE, "d6", "clips-gauntlet"]);
+        assert_eq!(map.routes.keys().collect::<Vec<_>>(), [DEFAULT_ROUTE, "d6", "d8", "clips-gauntlet"]);
         let played = map.routes.values().flatten().filter(|s| s.exit != "terminal");
         let mut route: BTreeSet<L> = played.map(RouteStep::location).collect();
         route.extend(map.alternates.iter().flat_map(|a| a.with.iter().map(RouteStep::location)));
@@ -2067,7 +2086,12 @@ mod tests {
         let new: BTreeSet<L> = d6.difference(&default).copied().collect();
         assert_eq!(new.len(), 24, "{new:?}");
         assert!(new.iter().all(|l| l.level == 6 || [0x61, 0x40, 0x41, 0x31, 0x21, 0x32, 0x22].contains(&l.value)), "{new:?}");
-        assert_eq!(beyond, new.union(&[loc(0, 0x78)].into()).copied().collect());
+        // Round 28's scouting route `d8` (steps 281 on): Dungeon 8's ten rooms (the leg's six were route rooms).
+        let d8: BTreeSet<L> = map.routes["d8"][map.routes["d6"].len()..].iter().map(RouteStep::location).collect();
+        let new8: BTreeSet<L> = d8.difference(&default).filter(|l| !d6.contains(l)).copied().collect();
+        assert_eq!((new8.len(), new8.iter().all(|l| l.level == 8)), (10, true), "{new8:?}");
+        let all: BTreeSet<L> = new.union(&new8).copied().collect();
+        assert_eq!(beyond, all.union(&[loc(0, 0x78)].into()).copied().collect());
         // Round 26's steps (209 on) add 24 rooms: the shops and the pond with the shops' caves, and Dungeon 7's way.
         let before: BTreeSet<L> = map.routes[DEFAULT_ROUTE][..209].iter().map(RouteStep::location).collect();
         let d7: BTreeSet<L> =
@@ -2544,7 +2568,10 @@ mod tests {
             .values()
             .flat_map(|r| r.exits.values().filter(|e| e.keep_out).map(|e| (r.location, e.direction.as_str())))
             .collect();
-        assert_eq!(kept_out, [(loc(6, 0x28), "N"), (loc(6, 0x29), "N"), (loc(6, 0x2c), "S")]);
+        assert_eq!(
+            kept_out,
+            [(loc(6, 0x28), "N"), (loc(6, 0x29), "N"), (loc(6, 0x2c), "S"), (loc(8, 0x4e), "W"), (loc(8, 0x5e), "E")]
+        );
         let load = |game: &str, routes: &str| GameMap::from_yaml(game, routes).map(|_| ()).map_err(|e| e.0);
         let overworld = GAME_YAML.replacen("      location: '0x01'\n", "      location: '0x01'\n      keep_out: true\n", 1);
         assert_ne!(overworld, GAME_YAML);
@@ -2552,6 +2579,61 @@ mod tests {
         let cellar = ROUTES_YAML.replacen("exit: N, waypoint: bow", "exit: N, waypoint: sword", 1);
         assert_ne!(cellar, ROUTES_YAML);
         assert!(load(GAME_YAML, &cellar).unwrap_err().contains("waypoint sword takes a sword"));
+    }
+
+    /// Round 28's scouting route `d8`: `d6`, then steps 281-296 (one way: no stretch): the two recorder plays out of
+    /// 0x22, the burned tree (`Secret::Burn`, only in a room with a `cave` exit), a step's own bomb mode (`bombs:`),
+    /// 0x3f's bombs by the owner's rule, the reserves; the loader refuses an unknown bomb mode.
+    #[test]
+    fn the_d8_route_speaks_the_new_vocabulary() {
+        let map = GameMap::builtin();
+        let (base, steps) = (map.routes["d6"].len(), &map.routes["d8"]);
+        assert_eq!((base, steps.len()), (281, 297));
+        assert_eq!(steps[..base], map.routes["d6"][..]);
+        assert!(steps[base..].iter().all(|s| s.way.is_none() && s.stretch.is_none()), "one way");
+        let at = |i: usize| (steps[i].location(), steps[i].entry.as_str(), steps[i].exit.as_str());
+        assert_eq!(at(281), (loc(0, 0x22), "cave", RECORDER));
+        assert_eq!(at(282), (loc(0, 0x3c), RECORDER, "S"));
+        assert_eq!(at(286), (loc(0, 0x6d), "N", "cave"));
+        assert_eq!(at(287), (loc(8, 0x7e), "S", "N"));
+        assert_eq!(at(293), (L::new(8, 0x2f, true), "S", "W"));
+        assert_eq!(at(296), (loc(8, 0x2c), "S", "triforce"));
+        let families: Vec<&str> = steps[base..].iter().map(|s| s.specialist.as_deref().unwrap()).collect();
+        assert_eq!(
+            families,
+            [
+                "ow-lynel", "ow-octorok", "ow-octorok", "ow-moblin", "ow-moblin", "ow-moblin", "stalfos-keese-gel",
+                "boss-manhandla", "darknut", "darknut", "darknut", "darknut", "equipment-room", "pols-voice",
+                "boss-gleeok", "stalfos-keese-gel",
+            ]
+        );
+        let own_bombs: Vec<(usize, &str)> =
+            steps.iter().enumerate().filter_map(|(i, s)| Some((i, s.bombs.as_deref()?))).collect();
+        assert_eq!(own_bombs, [(288, "required")], "8:0x6e, boss-manhandla's crossing");
+        let rules: Vec<(usize, TreasureRule)> = steps[base..]
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| s.treasure != TreasureRule::Take)
+            .map(|(i, s)| (base + i, s.treasure))
+            .collect();
+        assert_eq!(
+            rules,
+            [(288, TreasureRule::Skip), (290, TreasureRule::Skip), (292, TreasureRule::IfBombsBelow(5))]
+        );
+        let reserves: Vec<(usize, Option<u8>, Option<u8>)> = steps[base..]
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| s.bomb_reserve.is_some() || s.rupee_reserve.is_some())
+            .map(|(i, s)| (base + i, s.bomb_reserve, s.rupee_reserve))
+            .collect();
+        assert_eq!(reserves, [(281, Some(1), None), (289, Some(2), None), (294, None, Some(8)), (295, Some(1), None)]);
+        assert_eq!(map.get(loc(0, 0x6d)).unwrap().secret, Some(Secret::Burn((20, 4))));
+        assert_eq!(map.get(loc(0, 0x4d)).unwrap().secret, None, "the shop tree: a burned tree no route enters");
+        assert!(map.requires_bombs(loc(8, 0x6e)) && map.requires_bombs(loc(8, 0x4c)));
+        let load = |game: &str, routes: &str| GameMap::from_yaml(game, routes).map(|_| ()).map_err(|e| e.0);
+        let typo = ROUTES_YAML.replacen("bombs: required}", "bombs: always}", 1);
+        assert_ne!(typo, ROUTES_YAML);
+        assert!(load(GAME_YAML, &typo).unwrap_err().contains("bombs \"always\" is not one of"));
     }
 
     /// The loader refuses whirlwind steps that don't pair up, a whirlwind into a room it never lands in, and a

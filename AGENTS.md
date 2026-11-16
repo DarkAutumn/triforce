@@ -6,6 +6,23 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
 
 ## Where things stand (Nov 17)
 
+- **Round 28, begun (Nov 17, 1.5.1.0; `docs/experiments/round28.md`):** the leg from Dungeon 6 and Dungeon 8, on
+  round 27's branch (Dungeons 6, 8 and 9 are prepared side by side). Built so far, nothing trained: (1) **the
+  walks** (`docs/routes/d8-walks.md`: today's models cannot play the whirlwind out of 0x22, the tree of 0x6d, the
+  Blue Darknut rooms 8:0x5e and 0x3e, 8:0x4c or the four-headed Gleeok; a script wins each); (2) **the route
+  vocabulary** (`docs/routes/d8.md` §15, `docs/architecture.md` "The leg to Dungeon 8 and Dungeon 8"): the scouting
+  route `d8` = `d6` plus steps 281-296 (one way, no stretch), 0x6d's tree as a burned secret (game.yaml `entrance:
+  {how: burn}`: the stand tiles of its row are the target, **CANDLE is offered on the overworld only where a fire
+  burns the route's tree**), a route step's own bomb mode (`bombs: required` on 8:0x6e: boss-manhandla's room,
+  crossed by the BOMB mask of `required`), `keep_out` on 8:0x5e E and 8:0x4e W, pols-voice with `bombs: required`
+  and `arrows: true`, 0x3f's bombs at 4 or fewer (`treasure: {if_bombs_below: 5}`), **decisions made while a
+  Like-Like holds Link no longer count toward `stuck`** (single-room episodes), the scripted walk
+  `crates/zelda/tests/d8.rs` to the D8 triforce, the walks' scripts as rules over env actions
+  (`scripts/experiments/r28_demos.py`, for `train --demos`), and 300 paired full-route `d2first` runs (round28.md
+  §4). The lead's working answers are in `docs/decisions.md` 2026-11-17 ("Round 28's working answers"), the owner's
+  to overrule. **The main risk** (round28.md §3): the best plays seen leave about four hearts after Gleeok, and
+  Dungeon 8's piece is the last refill of the game. Not built yet: the stretch's start states (round28.md §6 names
+  them), curricula, training, chains.
 - **Round 27, begun (Nov 16-17, 1.5.1.0; `docs/experiments/round27.md`):** the magic sword and Dungeon 6. Built so
   far, nothing trained: (1) **the walks** (`docs/routes/d6-walks.md`: the leg, the gravestone and the cave, every
   room of level 6, Wizzrobes and Gohma measured; today's models cannot play 0x28, 0x38, 0x3a, Gohma, or ow-lynel's
@@ -23,10 +40,11 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   start states (round27.md §5 names them), curricula, training, chains.
 - **Round 26, begun (Nov 16-17, 1.5.1.0; `docs/experiments/round26.md`; the plan for the rest of the game:
   `docs/routes/rest-of-game.md`):** the leg from Dungeon 5 to Dungeon 7 and Dungeon 7. Built so far, nothing trained:
+  **`d2first` now has 248 steps and ends on the D7 triforce** (steps 209-247; decisions 2026-11-17).
   (1) **the walks** of the running game (`docs/routes/d7-walks.md`: rupees and bombs at 0x0b, the whirlwind, the
   shops, the pond, every forced room of level 7 with today's models, which cannot play the Blue Goriya rooms); (2)
-  **the route vocabulary** (`docs/architecture.md` "The leg to Dungeon 7", `docs/routes/d7.md` §11): the scouting
-  route `d7` = `d2first` plus steps 209-247 (`{extends: d2first}`), `exit`/`entry: recorder` (the whirlwind, state
+  **the route vocabulary** (`docs/architecture.md` "The leg to Dungeon 7", `docs/routes/d7.md` §11; built as the
+  scouting route `d7`, then merged into `d2first`), `exit`/`entry: recorder` (the whirlwind, state
   side `r`), `waypoint: arrows|food|candle`, overworld secrets as targets (game.yaml `entrance: {how:
   armos|recorder}`), `rupee_reserve` (as `bomb_reserve`), shop caves with `requires_rupees`, **ARROW off in every
   family unless its `items: {arrows: true}`**, RECORDER/FOOD/BOOMERANG masks by the route step, an opened bomb hole
@@ -35,8 +53,17 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   **observation schema 6** (the one input change for Dungeon 7 to Ganon, `docs/observation-next.md`, decisions
   2026-11-16): columns added at the end of `entity_features` (33 → 41), `link` (87 → 93) and `room_state` (85 →
   89), no schema 5 column changed; the 28 promoted 1.5.0 runs converted (`triforce convert-model`), proven identical
-  (38,360 of 38,360 episodes in both act modes). Not built yet: the stretch's start states, curricula, family
-  rooms' training, any D7 chain number.
+  (38,360 of 38,360 episodes in both act modes); (4) **the start states** of steps 209-247 (114, 38 a chain;
+  round26.md §7 has each state's rupees, bombs, keys and items; only 7:0x1b from W is crossed by `--skip-fights`),
+  the families' rooms (ow-leever, ow-peahat, ow-zora, ow-octorok, ow-moblin, goriya with `clips: true` for 7:0x1a's
+  block clip and `room_kills` staging of 0x49, 0x1a and 0x1b, boss-digdogger, equipment-room, dodongo-crossing,
+  wallmaster, boss-aquamentus) and **their curriculum tracks** (`scripts/experiments/r26_d7_curricula.sh`;
+  round26.md §8 lists the states left without one); (5) **the baseline** `r76-base` (200 runs a segment, round 25's
+  models): `post-d5` 0 of 200 reach Dungeon 7 with clips on or off (0x0b's model walks back into Dungeon 5: 196
+  wrong exits, no recorder played), `d7` 0 of 200 reach the triforce (184 die in 7:0x49, 12 in 0x69, 4 in 0x59),
+  with the single-room numbers of every new state beside it (round26.md §11). `heart_value.json` has no curve for
+  steps 209-247 (hearts priced by the plain health terms there until a team reaches the D7 triforce). Not built
+  yet: any trained model for the stretch.
 - **Round 25 (Nov 16, 1.5.0.1):** the route is unchanged (`d2first`, game start to the D5 triforce, 209 steps);
   the round was "leave rooms with more hearts" (`docs/experiments/round25.md`, decisions 2026-11-15 and 2026-11-16).
   Chains, 1000 runs per segment, models alone, clips on (`r75-1k`) | off (`r75-1k-noclips`), round 24 → 25: D2 89.9 →
@@ -204,7 +231,10 @@ off) (the raft; 0x5b E → 0x5c → 0x4c S, Manhandla), then by raft to Dungeon 
 ladder clip or round by 0x30 and 0x20, 0x01's key, Gleeok) and its triforce, then (round 24) the leg to Dungeon 5
 (by raft to 0x55, the coast's heart containers 0x5f and 0x2f's cave, 0x0f's 100 rupees, the mountain or the Lost
 Hills) and Dungeon 5 (0x64's block clip, the Olive Garden and the recorder, the way back, Digdogger) and its
-triforce (the route ends on taking it). Lee owns the direction; the standing invitation is to come up with ideas,
+triforce, then (round 26, nothing trained yet) the leg to Dungeon 7 (the whirlwind from 0x0b to 0x45, the arrows
+of 0x44's shop, the food behind 0x34's Armos, 0x42's pond) and Dungeon 7 (`docs/routes/d7.md`: Blue Goriyas, the
+Grumble, the red candle, two Digdoggers, the Wallmaster room, Aquamentus) and its triforce (the route ends on
+taking it). Lee owns the direction; the standing invitation is to come up with ideas,
 test them, keep what helps, and log everything.
 
 ## Lee's standing rules
@@ -226,14 +256,19 @@ test them, keep what helps, and log everything.
   0x0b; ow-start 0x2f, 0x0f and their caves, 0x1b's Lost Hills) and Dungeon 5's rooms: darknut (its Blue Darknuts:
   0x64, 0x05 the Olive Garden, 0x06, 0x37), gibdo (0x76, 0x66, 0x65, 0x47, 0x26, 0x14), pols-voice (0x27, 0x25),
   dodongo-crossing (0x56), boss-digdogger (0x24), zol (0x57), equipment-room (the cellars 0x04, 0x07)
-  (`routes.yaml` `families`). 3:0x4b left the route in round 22 but stays tagged (no start states); 0:0x56 and
+  (`routes.yaml` `families`). Round 26 adds the leg to Dungeon 7 (ow-leever 0x0b out of Dungeon 5, 0x34 and its
+  cave; ow-peahat 0x45 by the whirlwind; ow-zora 0x55, 0x54, 0x65, 0x44 and its cave; ow-octorok 0x64 from E to N;
+  ow-moblin 0x53, 0x52, 0x42) and Dungeon 7's rooms: goriya (0x79, 0x69, 0x59, 0x49, 0x38, 0x28, 0x18, 0x19, 0x1a,
+  0x1b, 0x29, 0x2b), boss-digdogger (0x39, 0x1c), equipment-room (the cellars 0x4a, 0x7b), dodongo-crossing (0x0c),
+  wallmaster (0x0d), boss-aquamentus (0x2a). 3:0x4b left the route in round 22 but stays tagged (no start states); 0:0x56 and
   0:0x57 are back on the route (the coast stretch's plain way).
 - Rejected ideas stay rejected (marked in `backlog.md`), e.g. skipping the optional D1 boomerang *pickup*. (Lee
   also had the boomerang usable vs masked after D1 tested: round 10 §2, no effect; the boomerang stays.)
 - **Start states** (`triforce/states/`, `TFZSTATE` files) must be clean pre-entry states: delete bad ones
   rather than keep them (originals are on the `v2-stable-retro` branch). No 16-heart states: max hearts follow
   the route (3 through Dungeon 2, 4 after Dodongo, 5 after the 0x2c heart cave, 6 after Aquamentus, 7 after
-  Manhandla, 8 after Gleeok, 9 after 0x5f's heart container, 10 after 0x2f's cave, 11 after Digdogger), counted
+  Manhandla, 8 after Gleeok, 9 after 0x5f's heart container, 10 after 0x2f's cave, 11 after Digdogger, 12 after
+  Dungeon 7's Aquamentus), counted
   along the stretch way a step is on (a plain-way step doesn't count the clip way's heart room). States are chains
   0–2, `<level>_<room><entry>[_v<visit>]_<chain>`: a later visit of the route to a room from the same side adds
   `_v2`, `_v3`, ... (`0_1be_v2_0`; the first visit keeps the bare name; `docs/architecture.md` "State names"). Boss
@@ -458,11 +493,13 @@ test them, keep what helps, and log everything.
   that writes no folder (`--no-log`). Invisible, and neither waiting nor counted: a job whose `--events` go into a
   folder whose plan is someone else's (it is taken for that plan's child, as a round's trainings are).
 - **Chain segments** (20–40 runs each; several at once go in one batch: `triforce eval-batch NAME --chain 'd2:
-  --from 2_7ds_0 --runs 40' --chain ...`, or all ten with `--chains TAG`): full `triforce eval-chain --runs 20
+  --from 2_7ds_0 --runs 40' --chain ...`, or all twelve with `--chains TAG`): full `triforce eval-chain --runs 20
   --parallel 10` (route `d2first`, the default); Dungeon 2 `--from 2_7ds_0`; after Dungeon 2 `--from 0_3cc_0`;
   Dungeon 1 `--from 1_73s_0`; after Dungeon 1 `--from 0_37c_0`; Dungeon 3 `--from 3_7cs_0`; after Dungeon 3
   `--from 0_74c_0`; Dungeon 4 `--from 4_71s_0` (round 22: the same names; `3_7cs`, `0_74c` and `4_71s` rebuilt);
-  after Dungeon 4 (the leg) `--from 0_45c_0`; Dungeon 5 `--from 5_76s_0` (round 24).
+  after Dungeon 4 (the leg) `--from 0_45c_0`; Dungeon 5 `--from 5_76s_0` (round 24); after Dungeon 5 (the leg to
+  Dungeon 7) `--from 0_0bc_0`; Dungeon 7 `--from 7_79s_0` (round 26). The route ends on the D7 triforce since
+  round 26: round 25's full route is `--stop-at step:209` (or the yardstick's milestone `full→post-d5`).
   The five stretches (`d3-approach` after Dungeon 1, `d4-island` in Dungeon 4, `coast-heart`, `lake-3e`, `mountain`
   on the leg) follow the run-time switch: `--clips
   on|off` measures each way (`--clips-off-from ROOM|step:N` flips it mid-run). `--from`/`--stop-at` are checked

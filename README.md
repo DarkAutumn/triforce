@@ -36,13 +36,15 @@ switched off for the whole run:
 | The Dungeon 3 triforce | 57% | 42% |
 | The Dungeon 4 triforce | 51% | 32% |
 | Dungeon 5 | 51% | 32% |
-| The Dungeon 5 triforce (the end of the route) | 20% | 2.6% |
+| The Dungeon 5 triforce (the end of round 25's route) | 20% | 2.6% |
 
 Dungeon 5 is still the hard part: of 1,000 runs started at its entrance, 68% reach its triforce with clips on and
 48% without. Round 24's team reached the D5 triforce in 5% and 0.3% of runs from the start. With the planner
 switched on (an act mode that tries each action in the emulator before playing it, on random numbers of its own, and
 takes another if Link is hit; `docs/experiments/round25.md` §12), 83% of runs from the start reach the D5 triforce
-with clips on; the models alone are the number the training is judged by.
+with clips on; the models alone are the number the training is judged by. Since round 26 the route runs on to the
+Dungeon 7 triforce (the leg from Dungeon 5 and Dungeon 7: start states and curricula are built, no model is trained
+there yet, and today's team reaches neither Dungeon 7 nor its triforce: `docs/experiments/round26.md`).
 
 Every round of training is written up in `docs/experiments/` (start with the newest `round*.md`), and
 `docs/experiments/backlog.md` has what's next.
@@ -113,7 +115,7 @@ triforce eval-chain --runs 20 --parallel 20                     # route d2first;
 triforce eval-chain --from 4_71s_0 --runs 20 --clips off       # every run with clips off (the plain way through every stretch); --clips-off-from 4:0x31 turns them off on the way
 triforce eval-chain --runs 20 --parallel 20 --power-on --stop-at step:24   # from console power on (random idle delay per seed) to the overworld with Dungeon 2's triforce
 triforce eval-chain --runs 20 --parallel 20 --replays runs/replays   # also record every run as runs/replays/<seed>-<ending>.tfreplay (--streams rewards,decisions,keyframes)
-triforce eval-batch r71-1k --chains r71-1k --runs 1000 --act model   # the eight chain segments as one batch (one log folder, a GUI bar each) into target/r56-chains/r71-1k-*.jsonl, then yardstick + room-stats
+triforce eval-batch r71-1k --chains r71-1k --runs 1000 --act model   # the twelve chain segments (full, d2, post-d2, d1, post-d1, d3, post-d3, d4, post-d4, d5, post-d5, d7) as one batch (one log folder, a GUI bar each) into target/r56-chains/r71-1k-*.jsonl, then yardstick + room-stats
 triforce eval-batch r71-families --families all --acts sample,argmax --jobs 4   # every family's promoted run in both act modes, 4 side by side
 triforce eval-batch r71-check --chain 'd3: --from 3_7cs_0 --runs 200' --evaluate 'darknut: --specialist darknut --act argmax'   # a mixed batch (rerun: skips what is done)
 triforce room-stats r70-1k                                     # per-room stats by scope (full run, segments, room only) of target/r56-chains/r70-1k-*.jsonl -> r70-1k-room-stats.json

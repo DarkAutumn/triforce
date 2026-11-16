@@ -70,6 +70,7 @@ fn step_dict<'py>(
     d.set_item("retreat", s.retreat.as_deref())?;
     d.set_item("treasure", s.treasure.describe())?;
     d.set_item("bomb_reserve", s.bomb_reserve)?;
+    d.set_item("bombs", s.bombs.as_deref())?;
     d.set_item("way", s.way.map(|w| w.name()))?;
     d.set_item("stretch", s.stretch.as_deref())?;
     d.set_item("visit", visit)?;

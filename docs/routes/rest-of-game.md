@@ -41,8 +41,8 @@ no damage but block the sword 151-160 frames and zero the 10/16-kill counters (`
 | Dungeon 7 | 11, 12 after Aquamentus; the D5 piece | white | 0x49: 3 Blue Goriyas (3 hits; touch 1, boomerang 1, parryable), 3 Keese (1; ½), 2 Bubbles; 0x1a plain way only: 3 Blue + 3 Red Goriyas (15 hits; red touch ½); 0x1b for its bombs: 6 Blue Goriyas (18 hits, six boomerangs); 0x1c: 3 small Digdoggers (4 hits each, 12; touch 2; 1.25-1.5 px/frame), 4 statues (½); 0x0d: 5 Wallmasters (1 hit, only on a trip; ½ + capture), 3 Bubbles; 0x2a Aquamentus (3 hits or 2 bombs; touch 1, three fireballs ½ each) | ~11 over the dungeon (trace), 2-3 each in 0x69 and 0x19 | 6 two-heart Digdogger touches; 11 one-heart; 22 half-heart | `d7.md` §2, §4; `late-monsters.md` §3.1-§3.6, §4 |
 | D7 → sword → D6 leg (0x42 ... 0x22) | 12; the D7 piece | white until 0x21's cave, then magic `$40` | none forced; crossed: 0x50 5 red Lynels (2 white; touch 1, shot 2) on a slow corridor; 0x40/0x41/0x31/0x21 Ghinis (5 white, 3 magic; touch 1) and immortal flying Ghinis (1); 0x32 2 blue Lynels (2 magic; touch 2, shot 2), 2 red; 0x22 red Lynel | **2.2 by a straight scripted walk, clip way, the sword stop included (walked, `d6-walks.md` §1-§2)** | 6 blue-Lynel shots; 12 one-heart | `d6.md` §1.1-§1.4; `late-monsters.md` §3.22; `d6-walks.md` |
 | Dungeon 6 | 12 minus the leg, 13 after Gohma; the D7 piece | magic | 0x58: 8 Keese (any hit; ½), 4 statues (½); 0x38: 2 Red Wizzrobes (1 hit; touch 1, **shot 4**), 2 Blue (3 hits; touch 2 even while flashing, shot 2), 3 Like-Likes (3 hits; 1 + hold), 1 Bubble, then the push; 0x39: 5 Vires (1 hit; 1), dark; 0x3a: as 0x38; 0x2d (for level 9's key): 3 Vires, 2 Bubbles; 0x1c Gohma: one arrow into the open eye (touch 2, fireball 1 every 65 frames) | 12-22 (draft); 0x48 traps 2 hearts in 30 frames on the door row (trace) | **3 Red Wizzrobe shots from full**; 2 Red + 1 Blue at 9-10 | `d6.md` §2, §4.5, §5, §6; `late-monsters.md` §3.7-§3.10, §4 |
-| D6 → D8 leg (0x22 ... 0x6d) | 13; the D6 piece | magic | none forced; 0x22 red Lynel (touch 1, shot 2: a hit costs the whirlwind); Octoroks, Moblins ½; own candle fire ½ | none given | 13 one-heart | `d8.md` §2.3, §7.2 |
-| Dungeon 8 | 13, 14 after Gleeok; the D6 piece | magic | 0x6e crossed with Manhandla (hands 1 hit or a bomb; touch 1, fireball 1) while bombing its wall; 0x5e: 5 Blue Darknuts (2 hits, not from the front; touch 2), 4 statues (½); 0x4e, 0x3f crossed (Blue Darknut 2, Red 1, Gibdos 2, Bubbles); 0x4c crossed among 8 Pols Voices (3 hits; touch 2); 0x3e: 6 Blue Darknuts, statue fire; 0x3c Gleeok, four heads: 9 hits (3+2+2+2), up to 3 immortal flying heads (1), neck base 1, attached head 3/8, fireball 1 | none (hearts written back); 0x3f "1-2 touches" a crossing (trace) | 7 two-heart touches | `d8.md` §4-§6, §7.1-§7.2; `late-monsters.md` §3.11-§3.14 |
+| D6 → D8 leg (0x22 ... 0x6d) | 13; the D6 piece | magic | none forced; 0x22 red Lynel (touch 1, shot 2: a hit costs the whirlwind); Octoroks, Moblins ½; own candle fire ½ | **1.9 by straight scripted walks, 0.6 with ow-octorok in 0x4c (walked, `d8-walks.md` §1)**; the whirlwind and the tree 0 | 13 one-heart | `d8.md` §2.3, §7.2 |
+| Dungeon 8 | 13, 14 after Gleeok; the D6 piece | magic | 0x6e crossed with Manhandla (hands 1 hit or a bomb; touch 1, fireball 1) while bombing its wall; 0x5e: 5 Blue Darknuts (2 hits, not from the front; touch 2), 4 statues (½); 0x4e, 0x3f crossed (Blue Darknut 2, Red 1, Gibdos 2, Bubbles); 0x4c crossed among 8 Pols Voices (3 hits; touch 2); 0x3e: 6 Blue Darknuts, statue fire; 0x3c Gleeok, four heads: 9 hits (3+2+2+2), up to 3 immortal flying heads (1), neck base 1, attached head 3/8, fireball 1 | **10.0 lost by the best plays seen, 2.5 taken back from the Darknuts' drops (walked, `d8-walks.md` §7)**: 0x6e 0.5, 0x5e 2.7, 0x4e 0.3, 0x3e 3.3, 0x3f 0.9, 0x4c 0.4 with arrows, Gleeok 1.9 from 13 hearts (3.0 from 6) | 7 two-heart touches | `d8.md` §4-§6, §7.1-§7.2; `late-monsters.md` §3.11-§3.14 |
 | D8 → D9 leg (0x6d ... 0x05) | 14 full; 15 after 0x47 (+1, no refill); **the D8 piece is the last refill** | magic | none forced; 0x06 and 0x05 two blue Lynels each (touch 2, shot 2, unblockable), 0x05's bomb wait among six monsters; 0x17 ladder among Boulders; 0x38/0x48 Zora fireballs ½ unblockable | **walked Nov 17: 8.6 by a straight scripted walk, 7.2 by the best play per room (0x06 2.2, 0x05 2.9)** (`d9-walks.md` §1.2) | the 7th two-heart touch at 14 (the 8th at 15) | `d9.md` §1.2; `late-mechanics.md` §2.2; `d9-walks.md` |
 | Dungeon 9 before the red ring (0x76 ... 0x00) | ≤ 15 minus the leg | magic | 0x55: 2 red Lanmolas (10 segment hits, 1 each; touch 2); 0x14's 5 Like-Likes in a spiral; 0x07 on the ring detour: 3 Blue (3 hits) + 2 Red Wizzrobes (1 hit), 3 Bubbles (11 hits; Red shot 4, Blue 2); crossings 0x65, 0x15, 0x17 with Wizzrobes and bomb waits | **walked Nov 17, crossings only: 12.6 (0x65's bomb wait 4.5, 0x27's 4.1, 0x17's 2.8; 0x14 0.05 fought with the sword, 4.4 walked)**; the fights are the other walk's (`d9-walks.md` §5.1) | from 15: the 4th Red shot, the 8th two-heart touch | `d9.md` §3.1, §4.1, §4.4; `late-monsters.md` §4; `d9-walks.md` |
 | Dungeon 9 after the ring (0x00 ... 0x32) | ≤ 15, no refill; ring divides all damage by 4 | magic + silver arrow | 0x16 Patra (8 children 2 hits + body 3 = 19 hits; touch 2 → ½) for its bombs; 0x05, 0x20, 0x10 (Wizzrobes, 11 hits each; 0x10 + 3 Bubbles); 0x61 Patra (19); 0x30 (2 Blue + 2 Red among 4 Traps, 8 hits; Trap 1 → ¼); 0x03 (2 Zols, 2 Like-Likes, 2 Bubbles, 8 hits); 0x52 Patra (19); 0x42 Ganon: 4 sword hits while invisible, then one silver arrow in ~510 frames (touch 4 → 1, fireball 1 → ¼); 0x32's guard fires (1 hit; ⅛) | **walked Nov 17, crossings only to Ganon's door: 3.3 with the ring (the same rooms without it 8.9 from 0x06 on)**; the route part in all 23 of 15 with the ring, 21 without (`d9-walks.md` §6) | ~60 one-heart-equivalent hits; 15 Ganon touches | `d9.md` §3.1, §4.1-§4.5, §5, §6; `late-monsters.md` §3.15-§3.18; `d9-walks.md` |
@@ -58,6 +58,14 @@ crossings, today's models in 0x58, 0x39, 0x2d, a script for Gohma): 10.3 of 12 b
 cost 4.75 and 6.1 hearts in their best wins (like-like zero-shot: 4 of 10 with the planner, 10 of 20) and are lost
 outright from 8 hearts (2 of 20, 0 of 20). The table's "12-22 (draft)" for Dungeon 6 is of that order. A doorway is
 out of reach of Wizzrobe shots and Gohma's fireballs (0 of 320; 0 in 3000 frames).
+
+**Walked in round 28 (`d8-walks.md` §7), the leg to Dungeon 8 and Dungeon 8 with live monsters:** the leg costs 0.6
+hearts. In Dungeon 8 the best plays seen are scripts that read positions only: both Darknut rooms cleared 30 of 30
+(2.7 and 3.3 hearts lost, 1.0 and 1.5 taken back from drops), 0x4c and its corner key with arrows 30 of 30 at 0.4
+hearts and 3 rupees, Gleeok killed 30 of 30 from 13 hearts and 26 of 30 from 6. Link reaches Gleeok with about 6.8
+hearts and leaves with about 4; about 0.7 of such runs would get through. **Today's models alone win next to nothing
+in 0x5e and 0x3e (1 of 80), 0x4c (0 of 60) and Gleeok's room (0 of 40)**, nor the whirlwind step out of 0x22 or
+0x6d's burn (0 of 40 each).
 
 **Walked in round 29 (`d9-fights-walks.md`), the fights of Dungeon 9 with live monsters:** no model family clears
 any of them (0 of 1,760 episodes, the red ring on); a rule-based fighter reading RAM positions clears all of them, and
@@ -308,7 +316,7 @@ and BEAMS masked while a Bubble blocks the sword (`late-monsters.md` §2.3, `d6.
 | Graveyard 0x40, 0x41, 0x31, 0x21 | Press into a gravestone | An immortal flying Ghini (1 a touch); unkillable once the room's Ghini is dead | Walk the free columns; mask or penalty but the secret stone | `d6.md` §1.3; `late-mechanics.md` §2.4 |
 | 0x21's cave | Fewer than 12 containers; not at X `$78` | Nothing taken (retry possible) | Assert 12 before the step | `d6.md` §1.5 |
 | 6:0x58, 6:0x2d, 8:0x4c, 9:0x61 | Leave without the key | Level 9 one key short | Key waypoints | `d6.md` §8; `d8.md` §5.5 |
-| 6:0x29 N, 7:0x1b N, 8:0x5e E, 8:0x4e W, 9:0x63 N/S | Touch an off-route key door | A ledger key spent; 8:0x5f is a dead end with a keyless pass in (inferred); 9:0x63 W no longer opens | Key-door masks | `d6.md` §8; `d8.md` §5.4; `d9.md` §3.5 |
+| 6:0x29 N, 7:0x1b N, 8:0x5e E, 8:0x4e W, 9:0x63 N/S | Touch an off-route key door | A ledger key spent (8:0x5e E's keyless pass takes a key too when Link has one; with none it opens the door for good and he is not shut into 0x5f: walked, `d8-walks.md` §2.2); 9:0x63 W no longer opens | Key-door masks | `d6.md` §8; `d8.md` §5.4; `d9.md` §3.5 |
 | 6:0x28 N, 6:0x2c S | Walk through the open doorway | Shut in with Gleeok (3 heads) or 5 Wizzrobes; in a chain the run ends | Doorway masks | `d6.md` §5.7, §8 |
 | 6:0x48 | Stop on the door row or the top row | Caught between traps: 10-12 hearts in 600 frames | trap-room family | `d6.md` §5.3 |
 | Before 6:0x28 | A bomb spent fighting | No bomb for the wall: Gleeok detour or a cheat; Dungeon 8 cheats one more | `bomb_reserve` 2 to 0x28, 1 after | `d6.md` §8, §11 |
@@ -316,9 +324,9 @@ and BEAMS masked while a Bubble blocks the sword (`late-monsters.md` §2.3, `d6.
 | 6:0x1c, 8:0x3c, 7:0x2a | Leave without the container | The container lost unless the level is walked again | Heart waypoints | `d6.md` §8 |
 | 0x4d | CANDLE at the shop tree | A wrong cave exit | CANDLE mask | `d8.md` §2.3 |
 | 8:0x7e | Leave S | Level reload: every partial kill lost | none | `d8.md` §3.2 |
-| 8:0x6e | Bomb at the Manhandla, or miss the wall | The only bomb gone; each dead hand speeds the rest | Per-step bomb rule | `d8.md` §5.1 |
-| 8:0x3f | Enter | One way; a W-facing Darknut in the one-wide corridor cannot be hit | none | `d8.md` §5.2 |
-| 8:0x3c | Retreat S | Gleeok back with 4 heads and full HP (inferred) | none | `d8.md` §6 |
+| 8:0x6e | Bomb at the Manhandla, or miss the wall | The only bomb gone; each dead hand speeds the rest. Walked (`d8-walks.md` §4): a `required` family lays exactly the wall's bomb (60 of 60); boss-manhandla (`free`) uses 4.3 a run, 3.15 of them cheated in by the room's `requires_bombs` | Per-step bomb rule, or the room in a `required` family | `d8.md` §5.1 |
+| 8:0x3f | Enter | One way; a W-facing Darknut in the one-wide corridor cannot be hit (not isolated in the walk) | none | `d8.md` §5.2 |
+| 8:0x3c | Retreat S | Gleeok back with 4 heads and full HP (walked, `d8-walks.md` §6.3) | none | `d8.md` §6 |
 | 0x47's take-any | The potion | The last container gone (14 hearts) | `missed` exists | `late-mechanics.md` §6; `d9.md` §1.2 |
 | Overworld 0x07 | Bomb its rock wall and walk in | Door repair: −20 rupees with no test → too few for Ganon | Mask the cave entry | `d9.md` §1.2 |
 | 9:0x66 | Arrive with 7 pieces | The man stays, the shutters stay shut | 8 pieces precondition | `d9.md` §3.1 |
@@ -413,6 +421,14 @@ held Link; 0x2d first at (`$78`,`$4D`); 0x18 and 0x3c shut). Item 2 only by butt
 
 **Round 28 (Dungeon 8 and the leg from Dungeon 6)**
 
+*Walked Nov 17: `d8-walks.md` answers items 1-6 (two plays from the chain-made counter land in 0x3c 30 of 30, the
+second play counts on frames 152-216, a miss is recovered by one play down and one up after a re-entry; the tree
+burns from X `$B8`-`$CF` facing W and from 0x5d's left opening too; the wall bomb kills a hand in 3 of 60 and never
+armed the bomb drop; both Darknut rooms are won 30 of 30 by a script and 1 of 80 by today's model, banked kills
+outlast the history; the keyless pass takes a key or opens the door, it never strands; with arrows 0x4c and its key
+cost 0.4 hearts; Gleeok resets on a retreat, rows `$9D` and lower are out of the heads' reach, a script kills it 30
+of 30 from 13 hearts and 19 of 30 from 4). Not isolated: 0x3f's corridor Darknut.*
+
 1. 0x22 → 0x3c from a chain-made state (index from 0x0b's plays), the Lynel live; the second play's window; recovery
    from a missed pickup (`d8.md` §12 #1; `late-mechanics.md` §9 #4).
 2. 0x6d's burn with the CANDLE action from the draft's stand tile and from 0x5d's left opening (`d8.md` §12 #2;
@@ -468,8 +484,8 @@ scaffold's episodes (the env refills 0x07, 0x10, 0x20 and puts 0x61's Patra back
 | 6:0x38's push | level-6.md: both shutters open (trace) | game.yaml `push_block_opens: N` | Incomplete, not wrong: add the other side |
 | 7:0x69's bombs | level-7.md: a route source (+4) | Lee (Nov 14): 7:0x1b only; the draft: "need not die" (`d7.md` §3 #2) | Lee |
 | 7:0x2a's heart | 1:0x35 (same layout): heart at X `$C0`, entered from S | 7:0x2a: heart at X `$80`, entered from W (`d7.md` §2, §3 #8) | Both right; boss-aquamentus has seen only one |
-| 0x5d's openings | game.yaml: only the right one counts | Layout and level-8.md: the tree burns from the W part too (inferred) (`d8.md` §8 #4) | `d8.md` §12 #2 |
-| 0x6d's tree | level-8.md: "Not walked: the entrance tree" | game.yaml: walked Nov 14 (`d8.md` §8 #2) | level-8.md is out of date |
+| 0x5d's openings | game.yaml: only the right one counts | Layout and level-8.md: the tree burns from the W part too (`d8.md` §8 #4) | Walked: both (`d8-walks.md` §1.3); game.yaml's note is wrong, its `span` a fair choice |
+| 0x6d's tree | level-8.md: "Not walked: the entrance tree" | game.yaml: walked Nov 14 (`d8.md` §8 #2) | Walked again Nov 17; level-8.md corrected |
 | 8:0x4e/0x3f's family | A new crossing family (`d8.md` §11.6) | darknut (`late-monsters.md` §7) | Lee (families) |
 | Sword grade in the observation | None found (`d8.md` §4.4, inferred) | `sword_0`-`sword_3` in `link` (synthesis, `observation.rs`) | The code |
 | Held by a Like-Like | Missing (`d9.md` §8) | `paralyzed` observed (`d6.md` §4.4; `observation.rs`) | The code |

@@ -1,5 +1,5 @@
 name: darknut
-rooms: ['(3, 0x5b)', '(3, 0x59)', '(3, 0x69)', '(3, 0x5c)', '(5, 0x64)', '(5, 0x06)', '(5, 0x05)', '(5, 0x37)']
+rooms: ['(3, 0x5b)', '(3, 0x59)', '(3, 0x69)', '(3, 0x5c)', '(5, 0x64)', '(5, 0x06)', '(5, 0x05)', '(5, 0x37)', '(8, 0x5e)', '(8, 0x4e)', '(8, 0x3e)', '(8, 0x3f)']
 start_states: ['3_5b*_[0-9]', '3_59*_[0-9]', '3_69*_[0-9]', '3_5c*_[0-9]', '5_64*_[0-9]', '5_06*_[0-9]', '5_05*_[0-9]', '5_37*_[0-9]']
 success: [exit-correct]
 reward_profile: default
@@ -34,3 +34,14 @@ notes: >-
   out E. 0x06 (no monsters): out of the tunnel W, back E to its stairs (push the W block N). 0x37 (3 Red Darknuts,
   dark) S to N at X $70 over the water by the ladder, swinging at a Darknut that comes from the side (its compass
   skipped).
+  Dungeon 8 (round 28, route `d8`; docs/routes/d8.md §15, d8-walks.md §2-3; no start states yet). Fought: 0x5e (five
+  Blue Darknuts on an open floor, four corner statues that shoot from the first frame: all dead for the key at the
+  centre and the N shutter; its E key door is masked) and 0x3e (six, two statues on the door row: all dead for the E
+  shutter, reached round the statue by row Y $9D). Crossed: 0x4e (two Bubbles, a Blue and two Red Darknuts, three
+  Gibdos: S to the N key door; its rupees left, its W key door masked) and the one-way 0x3f (the same eight: W to the
+  stairs at the end of a corridor one square wide; fought for its four bombs only at 4 bombs or fewer, `treasure:
+  {if_bombs_below: 5}`, the owner's rule for 7:0x1b). A Blue Darknut takes two magic sword hits from the side or
+  behind and parries from the front; a touch is 2 hearts. Walked with the round 25 run: 0x5e 1 of 40, 0x3e 0 of 40
+  (517 of 530 hearts lost to Darknut touches), 0x4e 15 of 40, 0x3f 40 of 40 at 2.9 hearts; a script reading
+  positions and facings wins both fights 30 of 30 (scripts/experiments/r28_darknut_demos.py: its rule through the
+  env's actions, as demonstrations). `clips: true` has no room list: CLIP is offered here wherever a skip exists.

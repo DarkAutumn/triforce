@@ -14,6 +14,41 @@ the gap list of what must be walked in the game first, where the documents disag
 of work) and the documents it indexes (`d7.md`, `d6.md`, `d8.md`, `d9.md`, `late-monsters.md`, `late-mechanics.md`).
 The owner's decisions of Nov 16 are in `docs/decisions.md` ("The rest of the game").
 
+### Round 28 (begun Nov 17): the leg from Dungeon 6 and Dungeon 8
+
+round28.md; the walks `docs/routes/d8-walks.md`; the route as built `docs/routes/d8.md` §15; the lead's working
+answers `docs/decisions.md` 2026-11-17 ("Round 28's working answers"). Built on round 27's branch (Dungeons 6, 8 and
+9 are prepared side by side).
+
+- [x] **The walks** (Nov 17): every room of the stretch in the running game.
+- [x] **The route vocabulary** (Nov 17): the scouting route `d8` (steps 281-296, one way), the burned tree
+  (`Secret::Burn`, CANDLE only where it burns the route's tree), a step's own bomb mode (`bombs:`; 8:0x6e stays
+  boss-manhandla's), `keep_out` on 8:0x5e E and 8:0x4e W, ARROW and `required` bombs for pols-voice, 0x3f's bombs at
+  4 or fewer, reserves, `stuck` not counting a Like-Like's hold, the scripted walk `crates/zelda/tests/d8.rs` to
+  the D8 triforce, the walks' scripts as rules over env actions (`scripts/experiments/r28_demos.py`).
+- [ ] **Start states** of steps 281-296, chains 0-2 (round28.md §6 names them), from Dungeon 6's triforce-room
+  states once round 27's exist; then start-state patterns for the eight families' new rooms.
+- [ ] **Merge `d8` into `d2first`** when the owner fixes the route, after `d6`; refit `triforce/heart_value.json`
+  (darknut, stalfos-keese-gel and equipment-room price hearts by the table of their route).
+- [ ] **Curricula and a first team**: darknut on open floors with statue fire (today 1 of 80 in 0x5e and 0x3e),
+  pols-voice with ARROW (0 of 60), boss-gleeok with four heads from the S wall at 4-13 hearts (0 of 20), ow-lynel's
+  two plays (0 of 40), ow-moblin's tree (0 of 40), boss-manhandla's crossing. The rules of `r28_demos.py` as
+  demonstrations (`train --demos`), run again from the real states.
+- [ ] **The main risk: the survival budget closes by about four hearts** only if every room is played as well as its
+  best script (round28.md §3), and Dungeon 8's piece is the last refill of the game.
+- [ ] **Gleeok from 6 hearts through the env's actions**: the rule wins 17 of 30 where the frame-by-frame script won
+  26 (round28.md §5). Whether a shorter MOVE/WAIT would close it is an action-space question, which is closed
+  (schema 6 is final): the model has to do better than the rule at 4 frames a decision, or arrive with more hearts.
+- [ ] **`rupee_reserve: 8` at 8:0x4c** is the lead's number: a run with 8 rupees or fewer gets no arrow there. Check
+  the purses of real chain arrivals when a chain reaches Dungeon 8.
+- [ ] **CANDLE in dungeons has no route rule** (the family's switch alone); Dungeon 9's dark rooms need a decision
+  before a dungeon family turns `candle` on. **A tree burned facing N or S** (0:0x47, Dungeon 9's leg) is not in
+  `GameView::burn_facings`.
+- [ ] **darknut's `clips: true` in Dungeon 8**: CLIP is offered wherever a skip exists (`clips:` has no room list,
+  round 26's item); not scanned for 8:0x5e, 0x4e, 0x3e, 0x3f.
+- [ ] **0x3f's corridor Darknut** (a W-facing Darknut in the one-wide corridor before the stairs): not isolated by
+  the walks.
+
 ### Round 27 (begun Nov 17): the magic sword and Dungeon 6
 
 round27.md; the walks `docs/routes/d6-walks.md`; the route as built `docs/routes/d6.md` §14; the lead's working
@@ -42,6 +77,36 @@ answers `docs/decisions.md` 2026-11-17.
   cheated one).
 - [ ] **A scripted fight for 0x38 and 0x3a** does not exist (the walks' doorway script fails); a teacher for the
   wizzrobe family would have to be the planner.
+
+## Round 26 (the leg to Dungeon 7 and Dungeon 7): found while building states, curricula and the baseline (Nov 17)
+
+round26.md §7-11. Nothing is trained yet; these are open.
+
+- [ ] **The first team.** The baseline `r76-base` is 0 of 200 on both segments, clips on and off (round26.md §11):
+  0x0b's model walks back into Dungeon 5, and every run dies in 7:0x49 at the latest. New skills nobody has: the
+  whirlwind (0x0b), both shops, the Armos stairs, the pond, FOOD for the Grumble; fights lost: 7:0x49, 0x19, 0x1a,
+  0x1b, 0x39, 0x1c, 0x0d.
+- [ ] **7:0x1b has no full-fight track.** The explorer does not clear six Blue Goriyas (9000 iterations, 190k env
+  steps a state, twice); the staged starts with kills banked (`--room-kills`) are solved. The family trains the
+  full room from `room_kills` staging only. Its 21 states after it are `fight_skipped`: rebuild them from harvested
+  chain states once a model clears the room (`eval-chain --harvest`, as round 24's after the Olive Garden).
+- [ ] **`clips:` has no room list.** goriya's `clips: true` (for 7:0x1a) also offers CLIP in 7:0x29, 7:0x18 and
+  7:0x2b (`scripts/experiments/r26_clip_scan.py`; nowhere in its Dungeon 1 and 2 rooms, where today's model plays
+  the same episodes with the switch on, off or `clips: false`). Scoping needs `rooms:` in `env::config::ClipsConfig`,
+  read where the family's switch is set (`SpecialistEnv`, `ChainEnv`, `GameCompletion::set_clips`). Decide after the
+  first goriya training: does the model waste steps on the skips of those three rooms?
+- [ ] **The explorer turns a cheat grant into Link's own item.** `SpecialistEnv::restore` begins the cheat ledger
+  anew, so a bomb granted for a wall and not yet placed is Link's after the next cell restore: chain 2's states
+  from `7_4acave_2` on held one bomb too many and were rebuilt by hand (`r26_d7_states.py bombs`). The ledger's
+  grants should be part of what a cell saves and restores.
+- [ ] **`heart_value.json` has no curve for steps 209-247** (no chain has reached the D7 triforce). goriya and
+  equipment-room price hearts there by the plain health terms. Refit when a team arrives: `python -m
+  triforce.heart_value <chain jsonl>...`.
+- [ ] **0x34 back out of its cave costs 2.5 hearts a visit** with today's ow-leever (the woken Armos walks off its
+  square onto the stairs' exit; 15 deaths in 120 episodes).
+- [ ] **7:0x1c's leave-and-return shortcut** (one small Digdogger dead, out W and back in: the room is empty,
+  `d7-walks.md` §5) is not in the route; the explorer needs 161-300 steps for the three small ones (boss-digdogger
+  `max_steps` 900).
 
 ## Done (Nov 16): round 25 (leave rooms with more hearts; 1.5.0.1)
 

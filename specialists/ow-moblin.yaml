@@ -6,7 +6,7 @@ reward_profile: default
 reward: {pbrs: true}
 obs: {objective: true, target: true}       # schema 2 pointer, no item targets (round 10 §10, r42)
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chain arrives with partial hearts (round 5)
-items: {bombs: tenth, recorder: true}     # the 10th kill's bomb; round 26: the recorder where the route plays it (0x42's pond)
+items: {bombs: tenth, recorder: true, candle: true}   # the 10th kill's bomb; round 26: the recorder where the route plays it (0x42's pond); round 28: the candle where the route burns a tree (0x6d's, nowhere else on the overworld)
 clips: {enabled: true, off_share: 0.75}  # round 21: the screen wrap (W/E); r72: 0x5b W→E without it at 90% (wrap 100%)
 curriculum: {enabled: true}             # trajectories/ow-moblin (round 6: the row-5 tree mazes)
 one_room: true                          # round 5: per-room episodes
@@ -23,3 +23,8 @@ notes: >-
   Round 27, the leg from Dungeon 7 to the magic sword (route `d6`, docs/routes/d6.md §14; no start states yet): 0x42
   out of Dungeon 7 leaves S, 0x52 N→W, 0x51 E→W by its wrap exit again (clips) or E→S (plain), and the Lost Woods
   0x61 (`exit: maze`: N, W, S, W). Walked zero-shot with the round 25 run: 100% in all of them.
+  Round 28, the leg to Dungeon 8 (route `d8`, docs/routes/d8.md §15; no start states yet): 0x4d W→S, 0x5d N→S by
+  its right opening, and 0x6d N→the stairs under its tree: to a stand tile E of the tree on its row (X $B8-$CF),
+  CANDLE W (offered only there, while the tree stands and no fire burns), still while the fire burns (walking W at
+  once costs half a heart), then W onto the stairs. Walked: by script 30 of 30; this family zero-shot 0x4d 35 of
+  40, 0x5d 40 of 40, 0x6d 0 of 40.

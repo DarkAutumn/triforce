@@ -138,7 +138,7 @@ Link back in). MOVE E past the overworld's right bound (X `$F8`, where a screen 
 reads the tile under him (no look-ahead at X >= `$F0`), and N/S there read column `$1F` and the bytes after the tile
 map (`$67F0` on) as column `$20`, as the game does.
 
-### The leg to Dungeon 7 (round 26; `docs/routes/d7.md` §11, scouting route `d7`)
+### The leg to Dungeon 7 (round 26; `docs/routes/d7.md` §11; steps 209-247 of `d2first`)
 
 The whirlwind, the shops, the Armos and the pond are no executor macros: the model presses the buttons through its
 own actions (MOVE, RECORDER, FOOD), and the rules live in the mask (an action is offered only where and when the
@@ -176,8 +176,19 @@ route step wants it) and in the objective (targets, outcomes).
   path search and so the `target` input and PBRS after a bomb in every N or W bomb wall (7:0x69 N; on `d2first`
   4:0x21 N, 4:0x11 N).
 - **States and segments.** The entry side `r` names a state entered by the whirlwind (`0_45r_<chain>`,
-  `entry_states.ENTRY_SIDES`, `StateName`). `eval_batch.D7_SEGMENTS`: `post-d5` from `0_0bc_0` (target 7:0x79) and
-  `d7` from `7_79s_0` (the D7 triforce); `r56_chains.sh` takes them with `ROUTE=d7 SEGMENTS=...`.
+  `entry_states.ENTRY_SIDES`, `StateName`). The stretch is part of `d2first` (decisions 2026-11-17: the scouting
+  route `d7` was merged before any state was built), so its segments are two more of `eval_batch.SEGMENTS`:
+  `post-d5` from `0_0bc_0` (arrival: 7:0x79) and `d7` from `7_79s_0` (the D7 triforce, the route's end); `d5` arrives
+  at 0:0x0b entered after 5:0x14, and a run of round 25's full route is `--stop-at step:209`. Room-stats has the
+  scopes `to-d7` and `d7`. The start states of steps 209-247 (114: 38 a chain) come from
+  `scripts/experiments/r26_d7_states.py sources` (the D5 triforce-room states with the bombs a run brings: 3, 4
+  and none) and `entry_states build --start-step 208 --source ... --skip-fights 7:0x1b:W` (the one fight the
+  explorer cannot clear; the 21 states after it are `fight_skipped`), the plain way of `dock-44` by `entry_states
+  path`; their curriculum tracks from `scripts/experiments/r26_d7_curricula.sh` (`docs/experiments/round26.md` §7-8).
+- **goriya's clips.** `clips: true` on goriya is for 7:0x1a's block clip to the candle cellar's stairs. `clips:`
+  has no room list, so CLIP is offered wherever `zelda::clips::skip_target` finds a skip in the family's rooms: by
+  `scripts/experiments/r26_clip_scan.py` nowhere in its Dungeon 1 and 2 rooms, and in 7:0x1a, 7:0x29 (the same
+  diamond), 7:0x18 (ladder clips over its water) and 7:0x2b (round26.md §9).
 - **Walked** (`crates/zelda/tests/d7.rs`, from `5_14s_0`, monsters removed): every step and its rule asserted, to the
   D7 triforce; beside it a wrong ware is `missed`, the rupee top-up, the whirlwind mask for seven counter and piece
   cases, the Armos from either side.
@@ -234,6 +245,45 @@ MOVE ends.
 - **Walked** (`crates/zelda/tests/d6.rs`, from `7_2bw_0`, monsters removed but Gohma): to the D6 triforce by the
   objective and the masks, each step's rule asserted; beside it the plain way of `woods`, the cave's refusal, a
   gravestone never pressed, the three doorways.
+
+### The leg to Dungeon 8 and Dungeon 8 (round 28; `docs/routes/d8.md` §15, scouting route `d8`)
+
+The same rule again: no macros. The whirlwind, the tree and the walls are played by RECORDER, CANDLE and BOMB; what
+is new lives in the objective (targets), in the mask, and in which bomb mode a step plays under.
+
+- **Route** (routes.yaml): `d8` = `{extends: d6}` plus steps 281-296, one way (no stretch). A step may carry
+  `bombs: never|tenth|required|free` (`game_map::STEP_BOMBS`, `RouteStep::bombs`): its own bomb mode, see below.
+- **The burned tree** (`game_map::Secret::Burn(tile)`, game.yaml `entrance: {how: burn, tile}` in a room with a
+  `cave` exit: 0:0x6d). `GameCompletion::cave_tiles`: the stairs once they show, before that the three tiles E and
+  the three W of the tree on its row. `GameView::secret_burn` is the tree while it stands (no stairs tile in the
+  room); `GameView::burn_facings` the facing a fire made where Link stands would burn it from (W from the tree's X
+  + `$18`..`$2F`, E from − `$28`..− `$11`, within 8 pixels of its row; walked, `d8-walks.md` §1.3);
+  `GameView::link_fire_burning` whether a fire of his is out (slots `$10`/`$11`, state `$2x`). The room flag keeps
+  the stairs; nothing here remembers them.
+- **Masks** (`Session::compute_mask`; the env sets them every step in `update_disabled_kinds`, training and chains).
+  `set_candle_facings(GameCompletion::candle_facings(state))`: on the overworld `burn_facings` while the objective
+  heads for the stairs (`ObjectiveKind::Cave`) and no fire of Link's burns, else nothing; in a dungeon None (the
+  family's `items.candle` alone). The bomb mode in force is `ItemsConfig::on_step(GameCompletion::step_bombs(state))`:
+  the step's `bombs:` while Link is in the step's room, else the family's; `disabled_kinds` and `bomb_targets` read
+  that (8:0x6e: boss-manhandla, `free`, plays the room under `required`: BOMB only in reach of the N wall).
+  RECORDER at 0x22, ARROW in 8:0x4c and the two `keep_out` key doors (8:0x5e E, 8:0x4e W) are the rules of rounds
+  26 and 27 with new data.
+- **`stuck` under a hold** (`env::end_conditions::EndCondition::Timeout`, single-room episodes): a decision made or
+  ended while a Like-Like holds Link (`GameView::link_held`: `IsLinkParalyzed` `$512`) neither counts toward the 50
+  decisions in one place nor starts the count anew. `ChainEnv` has no position limit (a chain room ends by its step
+  count or its family's no-progress limit; the stall budget is the player's), so chains are untouched.
+- **Data** (game.yaml): level 8's ten rooms tagged; `requires_bombs` on 8:0x6e and 8:0x4c; `keep_out` on 8:0x5e E
+  and 8:0x4e W; the note on 0:0x5d's S exit corrected (both openings reach the tree; the `span` stays the right
+  one). Reserves (routes.yaml): bombs 1 from 0:0x22, 2 from 8:0x5e, 1 from 8:0x3c; rupees 8 from 8:0x4c.
+- **Families**: no new one. darknut +8:0x5e, 0x4e, 0x3e, 0x3f; boss-manhandla +8:0x6e; pols-voice +8:0x4c with
+  `items: {bombs: required, arrows: true}`; boss-gleeok +8:0x3c; stalfos-keese-gel +8:0x7e, 0x2c; equipment-room
+  +8:0x2f; ow-lynel `recorder: true`; ow-moblin `candle: true`. None of the stretch's rooms has start states yet.
+- **Walked** (`crates/zelda/tests/d8.rs`): from the D6 triforce (staged by walking round 27's steps from
+  `7_2bw_0`) to the D8 triforce by the objective and the masks, each step's rule asserted, Gleeok's heads cut by
+  the walk's own swings; beside it CANDLE at both trees, 0x3f at 5 and 4 bombs, the two key doors, 0x6e's BOMB mask,
+  0x4c's ARROW at the rupee reserve.
+- **Demonstrations** (`scripts/experiments/r28_demos.py`): the walks' scripts as rules over env actions, with a
+  scaffold of staged states under `d8` until the stretch has its own (`docs/experiments/round28.md` §5).
 
 ### Randomness at a start (`crates/zelda/src/rng.rs`, `room_entry.rs`; round 22)
 
@@ -1261,7 +1311,7 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `--parallel` envs, chains and the report alone. `--chain` takes everything `eval-chain` does but `--append`
   (its output is written as `<output>.tmp` and moved into place when it succeeded; a segment start without
   `--stop-at` also counts arrivals at the next segment's start room); `--evaluate` everything `evaluate` does.
-  `--chains TAG` is `r56_chains.sh`: the eight segments into `target/r56-chains/<TAG>-<segment>.jsonl` (+ `.log`),
+  `--chains TAG` is `r56_chains.sh`: the twelve segments into `target/r56-chains/<TAG>-<segment>.jsonl` (+ `.log`),
   then the report entry (`scripts/yardstick.py report`, `triforce room-stats TAG`); `--families` the evaluation of
   each family's promoted (or `--run-id`) run in each of `--acts` (`model` or act mode spellings; `--clips` for
   every one; `--output-dir DIR` writes `DIR/<family>-<act>[-clips<mode>].json` instead of into the run dir). A

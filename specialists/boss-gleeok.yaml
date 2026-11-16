@@ -1,5 +1,5 @@
 name: boss-gleeok
-rooms: ['(4, 0x13)']
+rooms: ['(4, 0x13)', '(8, 0x3c)']
 start_states: ['4_13*_[0-9]']
 success: [exit-correct]                    # kill, take the heart container, leave N to the triforce room 0x03
 reward_profile: default
@@ -18,3 +18,9 @@ notes: >-
   and treats the body and the flying heads as hazards: only head damage pays. Entered from W through 0x12's shutter
   (opened by its push block); the N and W shutters open and the heart container appears when he dies; success is
   the N exit to the triforce room (the heart first). Copied from boss-manhandla without the bombs.
+  Dungeon 8 (round 28, route `d8`; docs/routes/d8.md §15, d8-walks.md §6; no start state yet): Gleeok with four
+  heads in 0x3c, entered through the bombed S wall. 3 + 2 + 2 + 2 magic sword hits, 36 frames apart at best; up to
+  three flying heads (1 heart, cannot be hurt); one fireball at a time (1 heart). The attached heads never reach row
+  Y $9D or lower, where the blade still reaches them. A retreat S resets the fight. Then the heart container (14)
+  and the N shutter. Walked zero-shot: 0 of 20; a script on row Y $9D wins 30 of 30 from 13 hearts, 26 of 30 from 6
+  (scripts/experiments/r28_gleeok_demos.py).

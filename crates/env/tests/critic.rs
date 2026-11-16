@@ -1049,6 +1049,32 @@ fn timeout_catches_stuck_link_and_rooms_without_progress() {
     assert_eq!((ending.as_deref(), n), (Some(NO_PROGRESS), 2001));
 }
 
+/// Round 28: decisions made or ended while a Like-Like holds Link (`IsLinkParalyzed` `$512`) are not counted toward
+/// the position limit (he cannot move until it dies): a hold of any length is not `stuck`, the count from before the
+/// hold is kept (not begun anew), and standing still after it counts on.
+#[test]
+fn a_hold_does_not_count_toward_stuck() {
+    let base = Ram::new();
+    let mut held = base.clone();
+    held.0[0x512] = 1;
+    let (still, caught, holding, freed) =
+        (step(&base, &base, "WAIT 8"), step(&base, &held, "WAIT 8"), step(&held, &held, "SWORD N"), step(&held, &base, "SWORD N"));
+    let mut c = conditions(&[EXIT_CORRECT], false, None);
+    for _ in 0..30 {
+        assert_eq!(ends(&mut c, &still, &[EAST], 0), None);
+    }
+    assert_eq!(ends(&mut c, &caught, &[EAST], 0), None);
+    for _ in 0..500 {
+        assert_eq!(ends(&mut c, &holding, &[EAST], 0), None);
+    }
+    assert_eq!(ends(&mut c, &freed, &[EAST], 0), None);
+    // 30 counted before the hold: the 20th still decision after it is the 50th.
+    for _ in 1..20 {
+        assert_eq!(ends(&mut c, &still, &[EAST], 0), None);
+    }
+    assert_eq!(ends(&mut c, &still, &[EAST], 0).as_deref(), Some(STUCK));
+}
+
 /// F078: the no-new-room limit follows the specialist's max_steps: with max_steps 3000 a one_room episode moving
 /// in its room has no ending through step 3000 (the env's `max-steps` truncation comes first).
 #[test]
