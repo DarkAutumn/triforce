@@ -423,7 +423,7 @@ Voice harmless ~32 frames (the family's learned trick, pols-voice.yaml).
 - **Walked (round 29, `d9-fights-walks.md` §2).** Children live from frame 66 (`$47`) / 77 (`$48`); the second
   pattern is eight flat ellipses passing through the body (`$47`) or a ring that swells 21 → 85 px every orbit
   (`$48`), and both fights begin in it; **the child in slot 3 dead: no flip ever again**; arrows, bombs, boomerang 0
-  of 390; the beam hurts the children. By rule: 0x52 20 of 20 at 0.70 hearts, 0x61 20 of 20 at 2.50, 0x16 17 of 20 at
+  of 780; the beam hurts the children. By rule: 0x52 20 of 20 at 0.70 hearts, 0x61 20 of 20 at 2.50, 0x16 17 of 20 at
   8.65 without the ring and 20 of 20 at 2.33 with it. Every model family: no kill.
 - **Reward.** `PATRA` (`$47`) is in the boss list, **`PATRA2` (`$48`) is not** (enums.rs:333-352): 0x16's body hits
   pay `reward-hit` 0.25 where 0x61's pay `reward-boss-hit` 0.75 (repo). Children are never bosses.
