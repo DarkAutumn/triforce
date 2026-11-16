@@ -180,6 +180,18 @@ test them, keep what helps, and log everything.
 
 - **Commit after each finished item.** If an experiment makes no forward progress, ask whether to commit the code or
   only update the experiment ledger.
+- **Every completed stretch lands in the main checkout and is pushed, playable** (Lee, Nov 17: "after each
+  completion (like d6 done, d8 -> d9 etc) gets merged back into triforce and pushed. I really want to be able to do
+  play-zelda and see the progress as you work"). A stretch is a dungeon with its leg (the D7 triforce, the magic
+  sword and the D6 triforce, D8, D9 and Ganon), complete when its first team takes it at a working rate. Landing
+  means all of: `main` merged into the line of work and the five suites green there; `main` fast-forwarded; the
+  module rebuilt in the main checkout (`.venv/bin/maturin develop --release`); every promoted run copied into the
+  main checkout's `models/` with its `promoted`, `act`, `version` and `eval.json` (`triforce stamp` when needed),
+  the trajectories copied, the start states as committed; a short chain run from the main checkout as the proof
+  that `play-zelda.py` there plays the new stretch; the tag `v<VERSION>`; `git push` of `main` and the tag; the
+  report. Nothing else waits on the next stretch: a stretch is never held back to be landed together with a later
+  one. Work in progress is watched from its worktree in the meantime (`cd ../triforce-<line> &&
+  TRIFORCE_MODELS_DIR=$PWD/models .venv/bin/python play-zelda.py 3x2`).
 - **Log every experiment** in `docs/experiments/roundN.md` (setup, numbers, what was promoted, what wasn't and why)
   and every idea or problem found along the way in `docs/experiments/backlog.md`.
 - **Families are by enemy, not by dungeon** (`docs/specialists.md`, `docs/decisions.md` 2026-11-03): a Red Goriya

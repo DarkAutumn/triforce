@@ -2428,3 +2428,21 @@ no leftover 'in case the old version of the code' is running."
   worktrees that were behind `main` with nothing of their own were fast-forwarded to it.
 - **Rule from here:** a new worktree branches from a branch that has this commit; a branch from before it is
   merged with `main` before anything is trained or evaluated in its worktree.
+
+## 2026-11-17 — Every completed stretch lands in the main checkout, pushed and playable (Lee)
+
+Lee: "I want to add a directive, that after each completion (like d6 done, d8 -> d9 etc) gets merged back into
+triforce and pushed. I really want to be able to do play-zelda and see the progress as you work."
+
+- **What lands:** each stretch of the rest of the game when its first team takes it at a working rate (decision 2
+  of 2026-11-16): Dungeon 7 with its leg, the magic sword and Dungeon 6, Dungeon 8, Dungeon 9 with Ganon. It sharpens
+  decision 3 ("a report, a tag and a push per dungeon"): the push is of `main`, and the main checkout itself is left
+  able to play the stretch.
+- **How:** the checklist in `AGENTS.md` "Lee's standing rules": `main` merged into the line and the suites green,
+  `main` fast-forwarded, the module rebuilt in the main checkout, the promoted runs copied into its `models/` with
+  their `promoted`, `act`, `version` and `eval.json`, trajectories copied, a short chain from the main checkout as
+  the proof, the tag, the push, the report.
+- **Not held back:** a stretch is landed when it is complete, not together with a later one. The optimisation round
+  after the first complete game lands the same way.
+- **In between:** work in progress is watched from the line's worktree with its own models
+  (`TRIFORCE_MODELS_DIR=$PWD/models .venv/bin/python play-zelda.py`).
