@@ -1,17 +1,16 @@
 name: boss-gohma
 rooms: ['(6, 0x1c)']
-start_states: []                           # round 27: the stretch's states are the next step (6_1cs)
-trainable: false                           # until it has start states
+start_states: ['6_1c*_[0-9]']
 success: [exit-correct]                    # the arrow, the heart container, leave N to 0x0c
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8), as boss-digdogger
 obs: {objective: true, target: true}       # schema 2
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # as boss-digdogger (round 25)
 items: {bombs: tenth, arrows: true}        # round 27: the only family with arrows; ARROW is offered facing N while Gohma lives and Link holds more rupees than the route's reserve (1 here)
-curriculum: {enabled: true}             # trajectories/boss-gohma, once explored
+curriculum: {enabled: true}             # trajectories/boss-gohma (Go-Explore paths per start state)
 one_room: true
 max_steps: 900
-warm_start: null
+warm_start: boss-digdogger                 # round 27: a first training starts from boss-digdogger's promoted run (nothing transfers zero-shot: 0 of 20 with five boss families)
 notes: >-
   Gohma (Dungeon 6's 0x1c, round 27, route `d6`; docs/routes/d6.md §14, d6-walks.md §6): only an arrow into its open
   eye kills it, one arrow, a rupee a shot. The eye is fully open on frames 19-114 of the room and again every 386-510

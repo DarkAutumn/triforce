@@ -1,6 +1,6 @@
 name: equipment-room
 rooms: ['(1, 0x7f, cave)', '(3, 0x0f, cave)', '(4, 0x60, cave)', '(5, 0x04, cave)', '(5, 0x07, cave)', '(7, 0x4a, cave)', '(7, 0x7b, cave)', '(6, 0x08, cave)']
-start_states: ['1_7f*_[0-9]', '3_0f*_[0-9]', '4_60*_[0-9]', '5_04*_[0-9]', '5_07*_[0-9]', '7_4a*_[0-9]', '7_7b*_[0-9]']
+start_states: ['1_7f*_[0-9]', '3_0f*_[0-9]', '4_60*_[0-9]', '5_04*_[0-9]', '5_07*_[0-9]', '7_4a*_[0-9]', '7_7b*_[0-9]', '6_08*_[0-9]']
 success: [exit-correct]
 reward_profile: default
 reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20}}   # as the dungeon families (round 10 §8): dropped items are shaping targets; round 25: hearts priced by their worth to the run

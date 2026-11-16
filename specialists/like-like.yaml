@@ -1,6 +1,6 @@
 name: like-like
 rooms: ['(4, 0x32)', '(6, 0x1d)']
-start_states: ['4_32*_[0-9]']
+start_states: ['4_32*_[0-9]', '6_1d*_[0-9]']
 success: [exit-correct]                    # down the stairs to the ladder cellar; on the way back, W
 reward_profile: default
 reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20}}   # dungeon family (round 10 §8): dropped items are shaping targets; round 25: hearts priced by their worth to the run

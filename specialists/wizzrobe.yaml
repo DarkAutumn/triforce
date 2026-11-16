@@ -1,17 +1,22 @@
 name: wizzrobe
 rooms: ['(6, 0x78)', '(6, 0x38)', '(6, 0x28)', '(6, 0x29)', '(6, 0x3a)', '(6, 0x2c)']
-start_states: []                           # round 27: the stretch's states are the next step (6_78e, 6_38s, 6_28s, 6_29w, 6_3aw, 6_2ce)
-trainable: false                           # until it has start states
+start_states: ['6_78*_[0-9]', '6_38*_[0-9]', '6_28*_[0-9]', '6_29*_[0-9]', '6_3a*_[0-9]', '6_2c*_[0-9]']
 success: [exit-correct]                    # 0x3a: down its stairs into the tunnel
 reward_profile: default
 reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20}}   # as like-like (round 25): hearts priced by their worth to the run
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
-ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # as like-like (round 25)
+# hp, bombs and help_count as like-like (round 25).  room_kills (round 27, as darknut's Olive Garden and goriya's
+# Dungeon 7 fights): half the resets into the two rooms that must be emptied before their block moves bank 1-6 of
+# the seven kills before the entry, so the game itself makes fewer monsters (training only; the room's list is a
+# Bubble, three Like-Likes, two Blue and two Red Wizzrobes, and the game leaves out the last of it first: 1 kill a
+# Red, 2 both Reds, 3-4 the Blues, 5-6 Like-Likes).
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9],
+                    room_kills: {'(6, 0x38)': [1, 6], '(6, 0x3a)': [1, 6]}, room_kills_share: 0.5}
 items: {bombs: required}                   # 0x28's E wall only (offered in reach of it), else the 10th damage-free kill's bomb: both of Dungeon 6's bombs are spoken for
-curriculum: {enabled: true}             # trajectories/wizzrobe, once explored
+curriculum: {enabled: true}             # trajectories/wizzrobe (Go-Explore paths per start state; staged `~k<K>` tracks for 0x38 and 0x3a)
 one_room: true
 max_steps: 2000
-warm_start: null
+warm_start: like-like                      # round 27: a first training starts from like-like's promoted run (it knows the block and the Like-Like's hold)
 notes: >-
   Wizzrobe rooms (Dungeon 6, round 27, route `d6`; docs/routes/d6.md §14, d6-walks.md §4-5). Red Wizzrobes appear on
   Link's row or column 32-80 px away, shoot 79 frames later (4 hearts; a shot ends at the room's bound, so a doorway
