@@ -859,6 +859,54 @@ fn bombs_follow_the_mode_the_reserve_and_the_tenth_kill() {
     }
 }
 
+/// Round 26 (schema 6): the `link` block's `rupee_reserve`, `rupees_spare`, `rupees_few` and `arrow_usable` read the
+/// reserve of the route step Link plays (`update_disabled_kinds` hands it to the observation builder as it does the
+/// bomb reserve).  The route's step of 1:0x44 from W is given `rupee_reserve: 2`; Link holds the bow and arrows and
+/// 1, 2, 3 rupees: only the third rupee is spare and only then is ARROW offered.
+#[test]
+fn the_link_block_reads_the_routes_rupee_reserve() {
+    let Some(mut nes) = open_core() else { return };
+    let read = |name: &str| std::fs::read_to_string(common::repo().join("triforce").join(name)).unwrap();
+    let step = "- {level: 1, room: '0x44', specialist: goriya, entry: W, exit: E}";
+    let routes = read("routes.yaml");
+    assert_eq!(routes.matches(step).count(), 1, "the route's step of 1:0x44 from W");
+    let routes = routes.replace(step, &step.replace("exit: E}", "exit: E, rupee_reserve: 2}"));
+    let mut with_reserve = (**data()).clone();
+    with_reserve.map = Arc::new(zelda::GameMap::from_yaml(&read("game.yaml"), &routes).unwrap());
+    let with_reserve = Arc::new(with_reserve);
+    let at = |name: &str| feature_names().link.iter().position(|n| n == name).unwrap();
+    for (reserve, data) in [(0u8, data().clone()), (2, with_reserve)] {
+        for rupees in [1u8, 2, 3] {
+            let mut config = (*data.specialists["goriya"]).clone();
+            config.ram_randomization = RamRandomization::default();
+            config.items.arrows = true;
+            let opts = EnvOptions { start_state: Some("1_44w_0".into()), ..Default::default() };
+            let mut env: Env = SpecialistEnv::new(Arc::new(config), data.clone(), nes, TfzStore::new(), opts).unwrap();
+            env.reset(Some(0), None).unwrap();
+            // Off the door tile (items can't be used there).
+            for _ in 0..10 {
+                act(&mut env, "MOVE E 16");
+                if (0x20..=0xD0).contains(&state(&env).link.position.x) {
+                    break;
+                }
+            }
+            env.session_mut().apply_ram(&[(Var::Rupees, rupees), (Var::Arrows, 1), (Var::Bow, 1)]);
+            let obs = act(&mut env, "MOVE E 4").obs;
+            let what = format!("reserve {reserve}, {rupees} rupees");
+            assert_eq!(state(&env).rupees(), i32::from(rupees), "{what}");
+            let spare = rupees.saturating_sub(reserve);
+            let sixteenth = |n: u8| f32::from(n) / 16.0;
+            assert_eq!(obs.link[at("rupee_reserve")], sixteenth(reserve), "{what}");
+            assert_eq!(obs.link[at("rupees_spare")], sixteenth(spare), "{what}");
+            assert_eq!(obs.link[at("rupees_few")], sixteenth(rupees), "{what}");
+            let offered = env.session().mask().kind[ActionKind::Arrow.index()];
+            assert_eq!(offered, spare > 0, "{what}: ARROW waits at the reserve");
+            assert_eq!(obs.link[at("arrow_usable")] == 1.0, offered, "{what}");
+            nes = release(env);
+        }
+    }
+}
+
 /// The 10th damage-free kill made with a bomb arms a forced bomb drop (`$51`, asm:Damage_KillMonster) and the
 /// drop falls as bombs: the step of the kill pays `reward-armed-bomb-drop`, once.  The search tries every legal
 /// bomb from each position (`save`/`load`) until one kills a Goriya.
