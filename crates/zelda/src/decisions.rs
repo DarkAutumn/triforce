@@ -8,6 +8,10 @@
 //! `FOLLOW - 1` steps of the same visit ([`FOLLOW`] decisions in all, about half a second of play), and *followed by
 //! a death* when the episode or run ends in death within them. Each decision counts at most once per kind. The
 //! same is counted for every decision (`hit`, `death`): the base rate a low decision's is compared with.
+//!
+//! Decisions are also counted by Link's health when they were taken ([`DecisionStats::by_health`], half hearts), with
+//! the hits their own step took: hits per decision at low and at normal health (round 25, `low` act modes), and what
+//! an act mode's foresight did ([`ForesightStats`]: `guard:K`, `plan:K:S[:R]`).
 
 use std::fmt::Write;
 
@@ -24,7 +28,44 @@ pub struct DecisionNote {
     /// The entropy (nats) of the distribution the action was drawn from (0 for argmax).
     pub act_entropy: f32,
     /// The joint action index (`kind * 32 + direction * 4 + duration`).
-    pub action: u8,
+    pub joint: u16,
+    /// Link's health (hearts) when the decision was taken; None where the env has none.
+    pub health: Option<f32>,
+    /// What the decision's foresight did (None: the mode has none at this decision).
+    pub foresight: Option<ForesightNote>,
+}
+
+/// What a decision's foresight did (`pool::rollout::Foresee`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ForesightNote {
+    /// 1: the decision's own action was kept as safe; 2: replaced by a safe alternative; 3: nothing safe was found
+    /// (the decision's own action taken).
+    pub outcome: u8,
+    /// Trials run (executions of a candidate from the decision's state) and the frames they emulated.
+    pub trials: u32,
+    pub frames: u32,
+    /// The refused action of a replaced decision: its joint index, its log-prob under the policy and its rank among
+    /// the policy's joint actions (0: the most likely).
+    pub refused: Option<(u16, f32, u16)>,
+}
+
+/// A visit's foresight ([`ForesightNote`]s).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ForesightStats {
+    /// Decisions kept as safe, replaced, with nothing safe found.
+    pub outcomes: [u32; 3],
+    pub trials: u64,
+    pub frames: u64,
+    /// Each replaced decision: (its index in the visit, the refused action's joint index, its log-prob, its rank,
+    /// the taken action's joint index, its log-prob, Link's health then (hearts; -1 without)).
+    pub replaced: Vec<(u32, u16, f32, u16, u16, f32, f32)>,
+}
+
+impl ForesightStats {
+    /// Decisions the foresight ran on.
+    pub fn decisions(&self) -> u32 {
+        self.outcomes.iter().sum()
+    }
 }
 
 /// A visit's decisions.
@@ -44,6 +85,11 @@ pub struct DecisionStats {
     pub act_entropy: f64,
     /// The joint action of every decision, in order.
     pub actions: Vec<u8>,
+    /// By Link's health at the decision in half hearts (index 5: 2.5 hearts): decisions, and those whose own step
+    /// lost health. Only as long as the highest health seen.
+    pub by_health: Vec<[u32; 2]>,
+    /// What the act mode's foresight did, over the decisions it ran on.
+    pub foresight: ForesightStats,
     /// The last [`FOLLOW`] steps' decisions: bit i below `LOW_PROBS[i]`, bit [`ANY`] a decision; most recent first.
     recent: [u8; FOLLOW],
     /// Whether a hit, a death was already counted for each of `recent`.
@@ -62,10 +108,31 @@ impl DecisionStats {
         self.hit_done[0] = false;
         self.dead[0] = false;
         if let Some(note) = note {
+            let index = self.decisions;
             self.decisions += 1;
             self.surprisal -= note.log_prob as f64;
             self.act_entropy += note.act_entropy as f64;
-            self.actions.push(note.action);
+            self.actions.push(u8::try_from(note.joint).unwrap_or(u8::MAX));
+            if let Some(hearts) = note.health {
+                let half = (hearts * 2.0).round().max(0.0) as usize;
+                if self.by_health.len() <= half {
+                    self.by_health.resize(half + 1, [0, 0]);
+                }
+                self.by_health[half][0] += 1;
+                self.by_health[half][1] += hit as u32;
+            }
+            if let Some(f) = note.foresight {
+                let s = &mut self.foresight;
+                if (1..=3).contains(&f.outcome) {
+                    s.outcomes[f.outcome as usize - 1] += 1;
+                }
+                s.trials += f.trials as u64;
+                s.frames += f.frames as u64;
+                if let Some((refused, refused_lp, rank)) = f.refused {
+                    let hearts = note.health.unwrap_or(-1.0);
+                    s.replaced.push((index, refused, refused_lp, rank, note.joint, note.log_prob, hearts));
+                }
+            }
             self.recent[0] |= 1 << ANY;
             for (i, &p) in LOW_PROBS.iter().enumerate() {
                 if note.log_prob < p.ln() {
@@ -118,12 +185,45 @@ fn count(bits: u8, into: &mut [u32; 2], any: &mut u32) {
 mod tests {
     use super::*;
 
-    fn note(p: f32, action: u8) -> Option<DecisionNote> {
+    fn note(p: f32, joint: u16) -> Option<DecisionNote> {
         Some(DecisionNote {
             log_prob: p.ln(),
             act_entropy: 0.5,
-            action,
+            joint,
+            health: None,
+            foresight: None,
         })
+    }
+
+    #[test]
+    fn decisions_by_health_count_their_own_steps_hits() {
+        let mut s = DecisionStats::default();
+        let at = |hearts: f32| Some(DecisionNote { health: Some(hearts), ..note(0.5, 0).unwrap() });
+        s.update(at(3.0), false, false);
+        s.update(at(3.0), true, false);
+        s.update(at(2.5), false, false);
+        s.update(None, true, false); // no decision: nothing by health
+        s.update(at(0.5), true, true);
+        assert_eq!(s.by_health, vec![[0, 0], [1, 1], [0, 0], [0, 0], [0, 0], [1, 0], [2, 1]]);
+    }
+
+    #[test]
+    fn foresight_counts_outcomes_trials_and_replaced_decisions() {
+        let mut s = DecisionStats::default();
+        s.update(note(0.5, 300), false, false); // no foresight; a joint index past 255 shows as ff
+        assert_eq!(s.foresight, ForesightStats::default());
+        for (outcome, trials) in [(1, 1), (2, 3), (3, 8), (2, 2)] {
+            let refused = (outcome == 2).then_some((9, 0.25f32.ln(), 0));
+            let foresight = Some(ForesightNote { outcome, trials, frames: 10 * trials, refused });
+            s.update(Some(DecisionNote { health: Some(2.0), foresight, ..note(0.5, 4).unwrap() }), false, false);
+        }
+        assert_eq!(s.foresight.outcomes, [1, 2, 1]);
+        assert_eq!(s.foresight.decisions(), 4);
+        assert_eq!((s.foresight.trials, s.foresight.frames), (14, 140));
+        let replaced = (9, 0.25f32.ln(), 0, 4, 0.5f32.ln(), 2.0);
+        let at = |i| (i, replaced.0, replaced.1, replaced.2, replaced.3, replaced.4, replaced.5);
+        assert_eq!(s.foresight.replaced, vec![at(2), at(4)]);
+        assert_eq!(s.actions_hex(), "ff04040404");
     }
 
     #[test]

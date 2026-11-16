@@ -11,8 +11,10 @@ The models root is, in order: the ``root`` argument, ``$TRIFORCE_MODELS_DIR``, `
 
 How a run's model acts (better-play §6b) is ``<run dir>/act``: ``<mode> <sha1 of ckpt.pt>``, ``mode`` being an act
 mode spelling (docs/rust-actor.md "Act modes": ``sample``, the default when the file is absent, ``argmax``,
-``temperature:T``, ``floor:P``, ``minp:R``, ``topp:P``, ``escape:N`` and ``+`` combinations; ``parse_act`` gives
-the canonical spelling), chosen by evaluating and set with ``promote --act``.  The mode belongs to the weights it was measured for: when ``ckpt.pt`` no longer has that
+``temperature:T``, ``floor:P``, ``minp:R``, ``topp:P``, ``escape:N``, ``relax:N`` and ``+`` combinations, optionally
+with a foresight part ``+guard:K`` or ``+plan:K:S[:R]`` and followed by ``+low:H:MODE`` for low health;
+``parse_act`` gives the canonical spelling), chosen by evaluating and set with ``promote --act``.  The mode belongs to
+the weights it was measured for: when ``ckpt.pt`` no longer has that
 hash (retrained or replaced in place) or the file is the old one-word format, ``act_mode`` warns and returns
 ``sample``.  Chains, the watch player and evaluation follow it unless told otherwise.
 
@@ -63,6 +65,11 @@ SNAPSHOTS_NAME = 'checkpoints'
 # chains, the early-stop confirmation, a run without an ``act`` file, and play (``PLAY_ACT``).
 ACT_RULE = 'temperature:0.5+relax:16'
 DEFAULT_ACT = ACT_RULE
+# The honest planner (round 25, the owner's decision of Nov 16; docs/decisions.md "The honest planner beside the
+# models"): the project's rule with one-step foresight against one future whose random numbers are redrawn
+# (docs/rust-actor.md "Foresight"). A second, labelled act mode beside the models alone (chain reports, the golden
+# path, play, a teacher to try); never a default.
+PLAN_ACT = f'{ACT_RULE}+plan:16:1'
 # ``--act model``: each model acts by its own act mode.
 MODEL_ACT = 'model'
 
@@ -86,8 +93,13 @@ def act_argument(allow_model: bool = True):
     return parse
 
 
+# ``%%``: argparse formats help strings.
 ACT_HELP = ("act mode: sample, argmax, temperature:T, floor:P, minp:R, topp:P, escape:N, relax:N or a '+' "
-            "combination (docs/rust-actor.md \"Act modes\")")
+            "combination, optionally with foresight (+guard:K: try the action against the game's own future and take "
+            "the next of the K best that loses no health; +plan:K:S[:R]: the same against S futures with the game's "
+            "random numbers redrawn, refused when it loses health in more than the share R of them) and followed by "
+            "+low:H:MODE (MODE while Link holds H hearts or fewer, or H%% of his maximum) (docs/rust-actor.md \"Act "
+            "modes\")")
 
 
 # How the play tools (play-zelda.py with its live cell, zelda-headless.py, the golden path) act by default: never
@@ -97,9 +109,15 @@ PLAY_ACT = ACT_RULE
 
 def draws(mode: str) -> bool:
     """Whether act mode ``mode`` draws every decision at random (``sample``, the rules, and ``relax``: a rule's draw,
-    a plain one when stalled), unlike ``argmax`` and ``escape`` (argmax until stalled)."""
-    mode = parse_act(mode)
-    return mode != 'argmax' and 'escape:' not in mode
+    a plain one when stalled), unlike ``argmax`` and ``escape`` (argmax until stalled); with ``+low:H:MODE`` both
+    parts must draw."""
+    return all(style != 'argmax' and 'escape:' not in style for style in _styles(parse_act(mode)))
+
+
+def _styles(mode: str) -> list:
+    """The styles of canonical act mode ``mode``: the normal one, and the low-health one when it has ``+low:H:``."""
+    normal, low, rest = mode.partition('+low:')
+    return [normal, rest.split(':', 1)[1]] if low else [normal]
 
 
 def act_override(choice: str) -> Optional[str]:

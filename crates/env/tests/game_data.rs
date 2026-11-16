@@ -6,13 +6,14 @@ mod common;
 use env::GameData;
 use std::path::Path;
 
-/// A copy of the game data (`triforce/game.yaml`, `triforce/routes.yaml`, `specialists/`) under a temp dir.
+/// A copy of the game data (`triforce/game.yaml`, `triforce/routes.yaml`, `triforce/heart_value.json`,
+/// `specialists/`) under a temp dir.
 fn copy_data() -> tempfile::TempDir {
     let tmp = tempfile::tempdir().unwrap();
     let repo = common::repo();
     std::fs::create_dir_all(tmp.path().join("triforce")).unwrap();
     std::fs::create_dir_all(tmp.path().join("specialists")).unwrap();
-    for rel in ["triforce/game.yaml", "triforce/routes.yaml"] {
+    for rel in ["triforce/game.yaml", "triforce/routes.yaml", "triforce/heart_value.json"] {
         std::fs::copy(repo.join(rel), tmp.path().join(rel)).unwrap();
     }
     for entry in std::fs::read_dir(repo.join("specialists")).unwrap() {

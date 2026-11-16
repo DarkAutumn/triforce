@@ -3,8 +3,9 @@
     python -m triforce.train --specialist stalfos-keese-gel [--load CKPT] [--parallel N] [--threads N]
         [--iterations N] [--steps-per-update N] [--device cuda|cpu] [--run-id ID] [--models-dir DIR]
         [--stop-success RATE [--stop-patience N]] [--curriculum TRAJECTORIES_DIR] [--events JSONL | --logs-dir DIR]
-        [--ent-anneal SHARE] [--shaping-anneal N] [--best-of-n RUNS [--best-keep K] [--best-every N]
-        [--best-coeff C] [--best-parallel P]] [--sil-coeff C [--sil-value-coeff B] [--sil-capacity ROWS]]
+        [--ent-coeff C] [--ent-anneal SHARE] [--shaping-anneal N] [--best-of-n RUNS [--best-keep K] [--best-every N]
+        [--best-coeff C] [--best-parallel P]] [--demos FILE... [--demo-coeff C]]
+        [--sil-coeff C [--sil-value-coeff B] [--sil-capacity ROWS]]
         [--search JSON [--search-coeff C]] [--plr [--plr-beta B] [--plr-rho R] [--plr-uniform U]]
         [--ppg [--ppg-every N] [--ppg-aux-epochs E] [--ppg-clone-coeff C]]
 
@@ -44,11 +45,15 @@ trajectory.json times (``curriculum_tracks``).
 ``--shaping-anneal N`` (outcome fine-tuning, better-play §1a) lowers the pool's shaping scale (``reward.shaping_scale``:
 every non-terminal reward and penalty is multiplied by it) linearly to 0 over the first N iterations, then keeps it
 at 0, so the policy optimizes the health-scaled terminal outcome (plus ``reward.frame_penalty``, if set).
-``--ent-anneal SHARE`` lowers the entropy bonus linearly to 0 over the last SHARE of the iterations (§6b).
+``--ent-coeff C`` sets the entropy bonus (default 0.01); ``--ent-anneal SHARE`` lowers it linearly to 0 over the last
+SHARE of the iterations (§6b).
 ``--best-of-n RUNS`` (best-of-N self-distillation, §3; ``best_of_n.py``): at the start and every ``--best-every``
 iterations the current policy plays RUNS episodes from every seed start state on its own ``EvalTask`` pool
 (``--best-parallel`` envs), and its best ``--best-keep`` successful runs per state (success, hearts lost, frames)
 become the behavior-cloning batch, weighted ``--best-coeff`` (the demo-regularization term; ``best/*`` metrics).
+``--demos FILE... [--demo-coeff C]`` (``demos.py``) fills the same term, for the whole run, with demonstration rows
+recorded from a scripted rule (``losses/demo_bc_loss``, ``charts/demo_bc_accuracy``); not with ``--best-of-n``. A row
+whose duration is ``demos.ANY_DURATION`` clones its kind and direction only.
 ``--sil-coeff C`` (self-imitation learning, §3; ``ppo.SilReplay``): each rollout's rows whose λ=1 return R beat the
 critic's value V(s) go into a FIFO replay of ``--sil-capacity`` rows; every minibatch adds
 ``C · (−log π(a|s) · max(0, R − V) + ½ β · max(0, R − V)²)`` over a minibatch-sized uniform sample of it
@@ -109,6 +114,7 @@ from . import registry
 from ._native import CurriculumSpec, EnvPool, TrainTask
 from .best_of_n import collect_best, success_by_state
 from .clips import OFF_LABEL, episode_jobs
+from .demos import load_demos
 from .events import (LOGS_DIR_ENV, PROGRESS_METRICS, EventLog, TrainingPlan, has_plan, new_log_dir,
                      write_json_atomic)
 from .jobs import add_job_arguments, begin_job, work
@@ -269,6 +275,8 @@ def parse_args(argv=None):
     parser.add_argument('--checkpoint-keep', type=int, default=0, metavar='K',
                         help="keep only the newest K numbered checkpoints (0 = all)")
     parser.add_argument('--learning-rate', type=float, default=PPOConfig.learning_rate)
+    parser.add_argument('--ent-coeff', type=float, default=PPOConfig.ent_coeff,
+                        help="entropy bonus weight (default %(default)s)")
     parser.add_argument('--ent-anneal', type=float, default=PPOConfig.ent_anneal,
                         help="share of the iterations, at the end, over which the entropy bonus falls to 0")
     parser.add_argument('--shaping-anneal', type=int, default=PPOConfig.shaping_anneal,
@@ -284,6 +292,10 @@ def parse_args(argv=None):
     parser.add_argument('--best-every', type=int, default=20)
     parser.add_argument('--best-coeff', type=float, default=0.2)
     parser.add_argument('--best-parallel', type=int, default=4, help="envs of the best-of-N collection pool")
+    parser.add_argument('--demos', nargs='+', default=None, metavar='FILE',
+                        help="demonstration files (triforce.demos, .npz) to behavior-clone during PPO (weight "
+                             "--demo-coeff); not with --best-of-n, which fills the same term")
+    parser.add_argument('--demo-coeff', type=float, default=0.2, help="weight of the --demos cloning loss")
     parser.add_argument('--sil-coeff', type=float, default=PPOConfig.sil_coeff,
                         help="self-imitation learning (better-play §3): weight of the SIL loss on replayed rows whose "
                              "Monte-Carlo return beat the critic; 0 = off")
@@ -429,6 +441,8 @@ def validate_args(args):
               (args.stop_bombs_delta >= 0, "--stop-bombs-delta must be >= 0"),
               (args.stop_check_gap >= 1, "--stop-check-gap must be >= 1"),
               (args.best_of_n <= 0 or args.best_every >= 1, "--best-every must be >= 1"),
+              (not (args.demos and args.best_of_n > 0), "--demos and --best-of-n both fill the cloning term"),
+              (args.demo_coeff >= 0, "--demo-coeff must be >= 0"),
               (args.steps_per_update >= args.parallel, "--steps-per-update must be >= --parallel"),
               (args.device != 'cuda' or torch.cuda.is_available(),
                "--device cuda (the default) needs a GPU, and none is available: pass --device cpu to train on the CPU")]
@@ -599,7 +613,8 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
                      states_dir=args.states_dir)
 
     ppo_config = PPOConfig(target_steps=args.steps_per_update, learning_rate=args.learning_rate,
-                           ent_anneal=args.ent_anneal, shaping_anneal=args.shaping_anneal,
+                           ent_coeff=args.ent_coeff, ent_anneal=args.ent_anneal, shaping_anneal=args.shaping_anneal,
+                           demo_bc_coeff=args.demo_coeff if args.demos else 0.0,
                            sil_coeff=args.sil_coeff, sil_value_coeff=args.sil_value_coeff,
                            sil_capacity=args.sil_capacity, search=args.search, search_coeff=args.search_coeff,
                            plr=args.plr, plr_beta=args.plr_beta, plr_rho=args.plr_rho, plr_uniform=args.plr_uniform,
@@ -662,6 +677,10 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
                 'best/kept': best.kept, 'best/states': best.states, 'best/steps': best.steps}
 
     best_metrics = refresh_best(0) if args.best_of_n > 0 else {}
+    if args.demos:
+        ppo.demo_batch = load_demos(args.demos)
+        print(f"[train] demonstrations: {ppo.demo_batch[2].shape[0]} rows from {', '.join(args.demos)} "
+              f"(weight {args.demo_coeff})", flush=True)
 
     def save():
         registry.save_checkpoint(specialist, run_id, network, ppo.optimizer, iterations=state['iteration'],

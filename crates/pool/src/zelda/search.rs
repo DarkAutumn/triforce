@@ -340,7 +340,7 @@ impl<E: SearchEnv<Action = ZeldaAction>> Planner<E> for GumbelSearch {
                 .map_err(|e| PlanError::Usage(e.0))?
         };
         let mut g = vec![0f32; joint];
-        if self.actor.modes[p] != ActMode::Argmax {
+        if self.actor.modes[p] != ActMode::ARGMAX {
             gumbel(key_of(&[job as u64, step as u64, TAG_ROOT]), &mut g);
         }
         // Gumbel-top-k: the legal joint actions by g + logit, best first.

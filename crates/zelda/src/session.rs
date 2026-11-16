@@ -56,6 +56,24 @@ pub struct SessionCheckpoint<S> {
     open_clip: Option<OpenClip>,
 }
 
+/// What [`Session::trial`] found.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TrialOutcome {
+    /// Hearts the action lost (net of what it gained: `Change::health_lost`).
+    pub health_lost: f64,
+    /// The game ended (Link died).
+    pub game_over: bool,
+    /// Frames the trial emulated (the option's, menus included; no look-ahead).
+    pub frames: u32,
+}
+
+impl TrialOutcome {
+    /// The action would cost Link health or his life.
+    pub fn lost(&self) -> bool {
+        self.health_lost > 0.0 || self.game_over
+    }
+}
+
 /// What simulation mode put aside (`Session::set_simulating`).
 struct Stash<N: Nes> {
     sink: Option<FrameSink<N>>,
@@ -169,6 +187,11 @@ impl<N: Nes> Session<N> {
 
     pub fn just_exited_cave(&self) -> bool {
         self.executor.just_exited_cave
+    }
+
+    /// The skip a CLIP of this room left cut short, if any.
+    pub fn open_clip(&self) -> Option<OpenClip> {
+        self.open_clip
     }
 
     /// Keep `last_pre_entry`: the snapshot of the last frame before each room entry an action causes.
@@ -475,6 +498,37 @@ impl<N: Nes> Session<N> {
         change.clip_finished_by_move = finished;
         self.state = Some(curr);
         Ok(change)
+    }
+
+    /// Executes `action` as a trial (act modes' foresight, `policy::act::Foresight`) and comes back to exactly where
+    /// the session stood: the machine (RAM, the game's random numbers, CPU and PPU), the frame and step counters, the
+    /// credit ledger, the state, the mask, the open clip and the last pre-entry snapshot. It runs in simulation mode
+    /// (nothing rendered, published or paced; a recording is cut back to the restore point) without the weapon
+    /// look-ahead (only Link's health is wanted). `rng_phase`: first write the game's random numbers at this phase
+    /// ([`crate::rng::write`]), a redrawn future; None: the game's own future.
+    pub fn trial(&mut self, action: Action, rng_phase: Option<u32>) -> Result<TrialOutcome, ZeldaError> {
+        let checkpoint = self.checkpoint();
+        let pre_entry = self.executor.last_pre_entry.take();
+        let simulating = self.simulating();
+        self.set_simulating(true);
+        let look_ahead = std::mem::replace(&mut self.look_ahead, LookAhead::Off);
+        if let Some(phase) = rng_phase {
+            rng::write(&mut self.machine.nes, phase);
+            self.rebuild();
+        }
+        let start = self.machine.frame;
+        let result = self.act(action);
+        let frames = (self.machine.frame - start) as u32;
+        self.resume(&checkpoint);
+        self.look_ahead = look_ahead;
+        self.set_simulating(simulating);
+        self.executor.last_pre_entry = pre_entry;
+        let change = result?;
+        Ok(TrialOutcome {
+            health_lost: change.health_lost,
+            game_over: change.state.game_over(),
+            frames,
+        })
     }
 
     fn build_state(&self) -> GameView {

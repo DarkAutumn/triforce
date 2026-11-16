@@ -6,7 +6,7 @@ use env::EnvError;
 use env::StateStore;
 use env::config::GameData;
 use env::specialist_env::EnvOptions;
-use pool::rollout::{Actor, Decision};
+use pool::rollout::{Actor, Decision, Situation};
 use pool::zelda::{ACTION_MASK, TrainEnv, ZeldaAction};
 use pool::{ObsData, Pool, PoolOptions};
 use std::path::{Path, PathBuf};
@@ -54,7 +54,7 @@ impl Actor<ZeldaAction> for Waits {
         _: i64,
         _: i64,
         _: i64,
-        _: u32,
+        _: Situation,
         _: &mut (),
     ) -> Result<(ZeldaAction, Decision), String> {
         let flat: [bool; MASK_SIZE] = obs.bool(ACTION_MASK).try_into().unwrap();

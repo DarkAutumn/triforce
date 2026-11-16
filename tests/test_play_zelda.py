@@ -517,17 +517,17 @@ def test_the_act_mode_and_the_live_cell_remake_the_grid(qapp):  # pylint: disabl
 
 
 def test_the_act_menu_lists_the_standing_modes_and_the_one_in_use():
-    """The default first and marked, the mode given with --act added; with a fixed power-on delay only the modes
-    that draw every action (nothing else is random then)."""
+    """The default first and marked, the honest planner (round 25) beside it, the mode given with --act added; with a
+    fixed power-on delay only the modes that draw every action (nothing else is random then)."""
     module = _load_script()
     default = registry.PLAY_ACT
     assert module.menu_acts(default, fixed_delay=False) == [
-        (default, f"{default} (default)"), ('sample', 'sample'),
+        (default, f"{default} (default)"), (registry.PLAN_ACT, 'honest planner (plan:16:1)'), ('sample', 'sample'),
         ('temperature:0.75+relax:16', 'temperature:0.75+relax:16'), ('escape:16', 'escape:16'),
         ('argmax', 'argmax'), ('model', "each model's own")]
     assert module.menu_acts('floor:0.03', fixed_delay=False)[-1] == ('floor:0.03', 'floor:0.03')
     assert [mode for mode, _ in module.menu_acts(default, fixed_delay=True)] == [
-        default, 'sample', 'temperature:0.75+relax:16']
+        default, registry.PLAN_ACT, 'sample', 'temperature:0.75+relax:16']
 
 
 def test_one_cell_is_heard_s_toggles_it_a_click_moves_it_and_it_is_muted_off_the_nes_rate(qapp):  # pylint: disable=redefined-outer-name, unused-argument

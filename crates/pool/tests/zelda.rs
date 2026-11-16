@@ -7,9 +7,9 @@ use env::explore::random_action;
 use env::observation::Observation;
 use env::specialist_env::{EnvOptions, SpecialistEnv};
 use env::{EnvError, StateStore};
-use pool::rollout::{Actor, Decision, EnvRollout, Record};
+use pool::rollout::{Actor, Decision, EnvRollout, Record, Situation};
 use pool::zelda::{
-    ACTION_MASK, ChainRunEnv, EvalEnv, EvalJob, TrainEnv, ZeldaAction, ZeldaEvent, interrupt_code, obs_layout,
+    ACTION_MASK, ChainRunEnv, EvalEnv, EvalJob, LINK, TrainEnv, ZeldaAction, ZeldaEvent, interrupt_code, obs_layout,
     write_observation,
 };
 use parking_lot::Mutex;
@@ -238,7 +238,7 @@ impl<F: FnMut(&ActionMask, i64) -> zelda::Action + Send> Actor<ZeldaAction> for 
         _: i64,
         job: i64,
         _: i64,
-        _: u32,
+        _: Situation,
         _: &mut (),
     ) -> Result<(ZeldaAction, Decision), String> {
         let flat: [bool; MASK_SIZE] = obs.bool(ACTION_MASK).try_into().unwrap();
@@ -442,11 +442,13 @@ fn chain_runs_in_a_pool_match_direct_runs() {
     }
 }
 
-/// A test actor that records (policy, job, step) of every decision: the zora policy walks E (MOVE E 16), any
-/// other waits (WAIT 8), each falling back to a legal action where the mask forbids it.
+/// A test actor that records (policy, job, step) of every decision, and the situation the env reported with the
+/// observation's health (`link` hearts / 16, containers / 16): the zora policy walks E (MOVE E 16), any other waits
+/// (WAIT 8), each falling back to a legal action where the mask forbids it.
 struct Recorder {
     zora: i64,
     decisions: Mutex<Vec<(i64, i64, i64)>>,
+    situations: Mutex<Vec<(i64, Situation, [f32; 2])>>,
 }
 
 impl Actor<ZeldaAction> for Recorder {
@@ -460,10 +462,13 @@ impl Actor<ZeldaAction> for Recorder {
         policy: i64,
         job: i64,
         step: i64,
-        _: u32,
+        situation: Situation,
         _: &mut (),
     ) -> Result<(ZeldaAction, Decision), String> {
         self.decisions.lock().push((policy, job, step));
+        // observation.rs `l::HP` and `l::MAX_HP`.
+        let link = obs.f32(LINK);
+        self.situations.lock().push((job, situation, [link[10], link[11]]));
         let flat: [bool; MASK_SIZE] = obs.bool(ACTION_MASK).try_into().unwrap();
         let mask = ActionMask::from_flat(&flat);
         let wanted = zelda::Action::parse(if policy == self.zora { "MOVE E 16" } else { "WAIT 8" }).unwrap();
@@ -483,7 +488,8 @@ impl Actor<ZeldaAction> for Recorder {
 /// F153: past a handoff (ow-zora walks E out of 0x5a into ow-moblin's 0x5b) every decision is acted on by the
 /// room's specialist's policy index, keyed by the run's seed, and `step` counts the run's decisions from 0 across
 /// rooms (the keyed noise of a sampled policy depends on it). Chain 1's entry state: walking straight E from it
-/// reaches 0x5b (chain 0's Link enters in line with an obstacle).
+/// reaches 0x5b (chain 0's Link enters in line with an obstacle). Round 25: every decision's situation carries the
+/// health of the observation it acts on (`low` act modes switch on it), hits included.
 #[test]
 fn chain_decisions_carry_the_room_specialists_policy_and_the_run_step() {
     let Some(nes) = open_core() else { return };
@@ -511,6 +517,7 @@ fn chain_decisions_carry_the_room_specialists_policy_and_the_run_step() {
     let actor = Arc::new(Recorder {
         zora: 1,
         decisions: Mutex::new(Vec::new()),
+        situations: Mutex::new(Vec::new()),
     });
     pool.play(actor.clone(), Record::Off).unwrap();
     assert!(pool.wait_idle(None).unwrap());
@@ -524,6 +531,8 @@ fn chain_decisions_carry_the_room_specialists_policy_and_the_run_step() {
         .collect();
     assert_eq!(runs.len(), seeds.len());
     let decisions = actor.decisions.lock();
+    let situations = actor.situations.lock();
+    let mut hurt = false;
     for run in &runs {
         let job = run.seed.unwrap() as i64;
         let names: Vec<&str> = run.rooms.iter().map(|r| r.specialist.as_str()).collect();
@@ -541,7 +550,15 @@ fn chain_decisions_carry_the_room_specialists_policy_and_the_run_step() {
         let recorded: Vec<(i64, i64, i64)> = decisions.iter().copied().filter(|d| d.1 == job).collect();
         assert_eq!(recorded.len() as u64, run.steps);
         assert_eq!(recorded, expected);
+        let seen: Vec<_> = situations.iter().filter(|s| s.0 == job).collect();
+        assert_eq!(seen[0].1.health.unwrap().0 as f64, run.rooms[0].health_in);
+        for (_, situation, [hp, max]) in &seen {
+            let (hearts, containers) = situation.health.expect("a chain reports Link's health");
+            assert_eq!((hearts / 16.0, containers / 16.0), (*hp, *max));
+        }
+        hurt |= seen.windows(2).any(|w| w[1].1.health.unwrap().0 < w[0].1.health.unwrap().0);
     }
+    assert!(hurt, "Link takes a hit in one of the runs (the health the actor sees changes)");
 }
 
 #[test]

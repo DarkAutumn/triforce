@@ -2,7 +2,7 @@
 //! else waits on the pool (F077), `close` stops a rollout before its next step (F082), a timed `wait_idle` never
 //! reports idle with a failure unreported (F128), and `set_hold` on a closed pool is an error (F072).
 
-use pool::rollout::{Actor, Decision, Record};
+use pool::rollout::{Actor, Decision, Record, Situation};
 use pool::{
     Dtype, EnvControl, EnvInit, KeySpec, ObsData, ObsLayout, ObsRow, Outcome, Pool, PoolEnv, PoolError,
     PoolOptions, Start,
@@ -74,7 +74,7 @@ struct Zero;
 impl Actor<i64> for Zero {
     type Scratch = ();
     fn scratch(&self) {}
-    fn act(&self, _: &ObsData, _: i64, _: i64, _: i64, _: u32, _: &mut ()) -> Result<(i64, Decision), String> {
+    fn act(&self, _: &ObsData, _: i64, _: i64, _: i64, _: Situation, _: &mut ()) -> Result<(i64, Decision), String> {
         Ok((0, Decision::default()))
     }
     fn value(&self, _: &ObsData, _: i64, _: &mut ()) -> Result<f32, String> {

@@ -240,6 +240,7 @@ class PolicyOutput:
     value: torch.Tensor            # [B]
     head_entropy: dict             # name → [B] entropy (0 where the head doesn't apply)
     head_applies: dict             # name → [B] bool
+    head_log_prob: dict            # name → [B] log-prob of that head's choice (0 where the head doesn't apply)
 
 
 class ZeldaPolicy(nn.Module):
@@ -374,7 +375,8 @@ class ZeldaPolicy(nn.Module):
                             entropy=kind_ent + dir_ent + dur_ent,
                             value=value,
                             head_entropy={'kind': kind_ent, 'direction': dir_ent, 'duration': dur_ent},
-                            head_applies={'kind': kind_applies, 'direction': dir_applies, 'duration': dur_applies})
+                            head_applies={'kind': kind_applies, 'direction': dir_applies, 'duration': dur_applies},
+                            head_log_prob={'kind': kind_lp, 'direction': dir_lp, 'duration': dur_lp})
 
     @staticmethod
     def _sub_head(logits, row_mask, given, deterministic, noise=None):

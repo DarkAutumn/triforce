@@ -146,12 +146,25 @@ pub fn linger_json(s: &LingerSummary) -> Value {
 /// 1%/5% under the policy), `low1_hit`/`low5_hit`/`low1_death`/`low5_death` (those followed by a hit or death
 /// within `zelda::decisions::FOLLOW` decisions), `hit`/`death` (any decision followed by one: the base rate),
 /// `surprisal` (sum of -ln p), `act_entropy` (sum of the acting
-/// distributions' entropies) and `actions` (two hex digits per decision: the joint action index).
+/// distributions' entropies), `actions` (two hex digits per decision: the joint action index), `health`
+/// ([decisions, hits on their own step] by Link's health at the decision in half hearts, index 0 = 0 hearts) and,
+/// when the act mode's foresight ran in the visit (`guard:K`, `plan:K:S[:R]`), `foresight`: `outcomes` (decisions
+/// kept as safe, replaced by a safe alternative, nothing safe found), `trials` and `trial_frames` (the trials' cost)
+/// and `replaced` (per replaced decision: its index in the visit, the refused action's joint index, log-prob under
+/// the policy and rank among the policy's actions (0: its first choice), the taken action's joint index and
+/// log-prob, and Link's hearts).
 pub fn decisions_json(d: &DecisionStats) -> Value {
-    json!({"n": d.decisions, "low1": d.low[0], "low5": d.low[1], "low1_hit": d.low_hit[0], "low5_hit": d.low_hit[1],
-           "low1_death": d.low_death[0], "low5_death": d.low_death[1], "hit": d.hit, "death": d.death,
-           "surprisal": d.surprisal,
-           "act_entropy": d.act_entropy, "actions": d.actions_hex()})
+    let mut v = json!({"n": d.decisions, "low1": d.low[0], "low5": d.low[1], "low1_hit": d.low_hit[0],
+           "low5_hit": d.low_hit[1], "low1_death": d.low_death[0], "low5_death": d.low_death[1], "hit": d.hit,
+           "death": d.death, "surprisal": d.surprisal,
+           "act_entropy": d.act_entropy, "actions": d.actions_hex(), "health": d.by_health});
+    let f = &d.foresight;
+    if f.decisions() > 0 {
+        v["foresight"] = json!({"outcomes": f.outcomes, "trials": f.trials, "trial_frames": f.frames,
+                                "replaced": f.replaced.iter().map(|r| json!([r.0, r.1, r.2, r.3, r.4, r.5, r.6]))
+                                    .collect::<Vec<_>>()});
+    }
+    v
 }
 
 /// `{bombs, keys, rupees}`: cheated items used (`zelda::cheats`).

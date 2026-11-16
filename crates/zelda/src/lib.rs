@@ -39,5 +39,5 @@ pub use executor::{Interrupt, OptionResult, ZeldaError};
 pub use game::GameView;
 pub use game_map::GameMap;
 pub use nes::Nes;
-pub use session::{LoadOptions, Session, SessionCheckpoint, SessionSnapshot};
+pub use session::{LoadOptions, Session, SessionCheckpoint, SessionSnapshot, TrialOutcome};
 pub use vars::Var;

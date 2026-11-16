@@ -117,8 +117,11 @@ as an ending in training.
 ### 5. 0x37's column (round 24)
 
 The models cross at X `$78` (the probe's median), not the owner's `$70` (one ladder crossing; D5Paths: 0 hits in 54
-of 54 at `$70` swinging, hit in 17-30 of 54 at `$78`); 94 deaths per 1000 D5 runs. Ideas: the objective's path on
-column `$70`, a curriculum track there.
+of 54 at `$70` swinging, hit in 17-30 of 54 at `$78`); 94 deaths per 1000 D5 runs. Round 25 (§5): `path_costs` and
+hand-made tracks did not move the model (it never samples MOVE W there); cloning the scripted rule (`train --demos`,
+`r75-d537-c5`) did: 0.20 hearts a visit, 28 deaths per 1000 (from 1.19, 91), the other rooms kept. Left: the clone's
+missed swings (the rule loses 0.03); one DAgger round made it worse; more rule rows near the Darknut, or cloning at
+0.1 with an anchor on the other rooms.
 
 ### 6. The plain 0x64 (round 24, clips off)
 
