@@ -255,3 +255,177 @@ def leg_states(out: Path) -> dict:
     w.game.restore(snapshot)
     w.game.save_state_file(str(paths['8_7es']))
     return paths
+
+
+# ---- Dungeon 8 -----------------------------------------------------------------------------------------------------
+
+# The draft's way through level 8 (triforce/draft_routes.yaml): (room, entry), and what each step opens behind it
+# ({room: door bits; 1 E, 2 W, 4 S, 8 N}), the keys it spends (negative: finds) and the bombs it spends.
+D8_ROUTE = [(0x7E, 'S'), (0x6E, 'S'), (0x5E, 'S'), (0x4E, 'S'), (0x3E, 'S'), (0x3F, 'W'), (0x2F, 'cave'),
+            (0x4C, 'cave'), (0x3C, 'S'), (0x2C, 'S')]
+D8_OPENS = {0x6E: ({0x6E: 8, 0x5E: 4}, 0, 1), 0x5E: ({}, -1, 0), 0x4E: ({0x4E: 8, 0x3E: 4}, 1, 0),
+            0x4C: ({0x4C: 8, 0x3C: 4}, -1, 1)}
+D8_KEY_TAKEN = {0x5E: 0x10, 0x4C: 0x10}                        # the room item's flag once the key is taken
+
+
+def d8_ledger(room: int, entry: str, keys: int = 2, bombs: int = 1):
+    """What the route has done on reaching step (room, entry): {room: flag bits}, keys and bombs left (bombs never
+    below 0: 0x4c's wall takes a bomb the no-drop run does not have)."""
+    flags = {}
+    for step in D8_ROUTE:
+        if step == (room, entry):
+            return flags, keys, bombs
+        if step[0] in D8_OPENS:
+            opened, k, b = D8_OPENS[step[0]]
+            for r, bits in opened.items():
+                flags[r] = flags.get(r, 0) | bits
+            if step[0] in D8_KEY_TAKEN:
+                flags[step[0]] = flags.get(step[0], 0) | D8_KEY_TAKEN[step[0]]
+            keys, bombs = keys - k, max(0, bombs - b)
+    raise ValueError(f'8:0x{room:02x} from {entry} is not a step of D8_ROUTE')
+
+
+def stage_d8(room: int, entry: str = None, hearts: float = None, on_route: bool = True, extra: dict = None,
+             ram: dict = None, lit: bool = False):
+    """Link playing in 8:`room` come in by `entry` as the route leaves him (`D8_INVENTORY`, `d8_ledger`'s doors,
+    keys and bombs when `on_route`); `hearts` (None: 13 full).  Returns (Walk, side, probe); `probe.pre_entry` is
+    the frame before the room's entry.  Rooms entered from a cellar are not the probe's: `d8_cellar_states`."""
+    from triforce.probe import Probe          # pylint: disable=import-outside-toplevel
+    inv = dict(D8_INVENTORY)
+    flags = {}
+    if room == 0x7E and entry == 'S':
+        entry = None                                             # the level entry itself
+    elif on_route and (room, entry) in D8_ROUTE:
+        flags, inv['keys'], inv['bombs'] = d8_ledger(room, entry)
+    if hearts is not None:
+        inv.update(hearts_bytes(hearts, 13))
+    inv.update(extra or {})
+    writes = {UW_FLAGS_7TO9 + r: bits for r, bits in flags.items()}
+    writes.update(ram or {})
+    probe = Probe(STATES)
+
+    def setup(game):
+        for key, value in inv.items():
+            game.set_value(key, value)
+        for addr, value in writes.items():
+            game.write(addr, value)
+
+    side = probe.enter_room(8, room, entry, lit=lit, setup=setup)
+    return StagingWalk(game=probe.game), side, probe
+
+
+def d8_state(room: int, entry: str = None, path=None, **kwargs) -> str:
+    """`stage_d8`'s room entry saved as a pre-entry TFZSTATE; `load(path, seed)` plays a trial from it."""
+    tag = '-'.join(f'{k}{v}' for k, v in sorted(kwargs.items()) if k in ('hearts',))
+    path = Path(path or TMP / f'8_{room:02x}{(entry or "s").lower()}_{tag or "route"}.state')
+    if path.exists() and not kwargs.get('extra') and not kwargs.get('ram'):
+        return str(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _, _, probe = stage_d8(room, entry, **kwargs)
+    if probe.pre_entry is not None:                              # the start room: its first frame (no monsters)
+        probe.game.restore(probe.pre_entry)
+    probe.game.save_state_file(str(path))
+    return str(path)
+
+
+def kill_all(w: Walk, types=None):
+    """Measurement only: puts the room's monsters (of `types`; None: all but Bubbles and shots) into the death state
+    (`ObjMetastate` $10, what a kill sets), so the game runs its own death, drop and count."""
+    for o in alive(w, types):
+        w.game.write(OBJ_META + o[0], 0x10)
+
+
+def alive(w: Walk, types=None):
+    """Monsters not dying (metastate 0) of `types` (None: every type under $40 but Bubbles)."""
+    out = []
+    for o in w.objects():
+        if o[5] != 0:
+            continue
+        if types is None:
+            if o[1] >= 0x40 and o[1] not in (GLEEOK4,) or o[1] == BUBBLE:
+                continue
+        elif o[1] not in types:
+            continue
+        out.append(o)
+    return out
+
+
+def hop(w: Walk, room: int, entry: str, clear: bool = True):
+    """`triforce.probe`'s room hop with this Walk's game: the room id written to `room`'s neighbour on its `entry`
+    side, that neighbour's door there opened in the level block, Link on its door spot, and the game scrolls into
+    `room` (the level's room history, kill counts and flags are the game's own).  With `clear` the monsters of the
+    room on screen are emptied on the way out (they would knock him off the door spot).  Returns the pre-entry
+    snapshot."""
+    from triforce.probe import BUTTON, DELTA, DOOR_SHIFT, DOOR_SPOT, OPPOSITE   # pylint: disable=import-outside-toplevel
+    game, leave, level = w.game, OPPOSITE[entry], w.level
+    source = room + DELTA[entry]
+    address, shift = DOOR_SHIFT[leave]
+    game.write(address + source, game.read(address + source) & ~(7 << shift) & 0xFF)
+    game.apply_ram({'location': source, 'link_x': DOOR_SPOT[leave][0], 'link_y': DOOR_SPOT[leave][1]})
+    game.write(0xC0, 0)                       # ObjShoveDir, ObjShoveDistance of Link: no knockback under way
+    game.write(0xD3, 0)
+    left, pre = False, None
+    for _ in range(400):
+        if left and is_pre_entry(w):
+            pre = game.snapshot()
+        if clear and not left:
+            for s in range(1, 0x0C):
+                game.write(OBJ_TYPE + s, 0)
+        game.press(BUTTON[leave], 1)
+        left = left or w.mode != PLAY
+        if left and w.mode == PLAY:
+            break
+    if not (left and w.mode == PLAY and w.level == level and w.room == room):
+        raise RuntimeError(f'hop: did not get into {level}:0x{room:02x} from {entry}: {w.where()}')
+    return pre
+
+
+def d8_cellar_states(out: Path = None, bombs: int = 1) -> dict:
+    """The two rooms of the way that are entered by stairs, as pre-entry states: '8_2fc' (the tunnel, come down
+    0x3f's stairs) and '8_4cc' (0x4c, come up the tunnel's left ladder).  0x3f is staged by the probe and walked E
+    with its monsters emptied; `bombs` is written for 0x4c's wall (the no-drop run has 0 there: one is cheated)."""
+    out = Path(out or TMP)
+    out.mkdir(parents=True, exist_ok=True)
+    paths = {'8_2fc': out / '8_2fc.state', '8_4cc': out / f'8_4cc_b{bombs}.state'}
+    if all(p.exists() for p in paths.values()):
+        return paths
+    w, _, _ = stage_d8(0x3F, 'W')
+    flag = w.r(UW_FLAGS_7TO9 + 0x3F)
+    w.staging = True                          # the emptied room counts as cleared: its 4 bombs lie on the door row
+    if w.path(('y', 0x7D), ('x', 0xA0), ('y', 0x8D), ('x', 0xC8)) < 0:
+        raise RuntimeError('8:0x3f: the walk to the stairs stopped at ' + w.where())
+    snapshot = None
+    for _ in range(400):
+        if w.mode not in (PLAY, CELLAR) and is_pre_entry(w):
+            snapshot = w.game.snapshot()
+        w.press('RIGHT', 1)
+        if w.mode == CELLAR:
+            break
+    if w.mode != CELLAR or snapshot is None:
+        raise RuntimeError('8:0x3f: the stairs did not lead into the tunnel: ' + w.where())
+
+    def unclear():                            # 0x3f as a crossing leaves it: nothing killed there
+        w.game.write(UW_FLAGS_7TO9 + 0x3F, flag | 0x20)
+        w.game.write(LEVEL_KILL_COUNTS + 0x3F, 0)
+
+    now = w.game.snapshot()
+    w.game.restore(snapshot)
+    unclear()
+    w.game.save_state_file(str(paths['8_2fc']))
+    w.game.restore(now)
+    w.game.write(BOMBS, bombs)
+    if w.goto(y=0xBD) < 0 or w.goto(x=0x30) < 0:
+        raise RuntimeError('8:0x2f: the tunnel walk stopped at ' + w.where())
+    snapshot = None
+    for _ in range(600):
+        if w.mode not in (PLAY, CELLAR) and is_pre_entry(w):
+            snapshot = w.game.snapshot()
+        w.press('UP', 1)
+        if w.mode == PLAY:
+            break
+    if w.mode != PLAY or w.room != 0x4C or snapshot is None:
+        raise RuntimeError("8:0x2f: the left ladder did not lead into 0x4c: " + w.where())
+    w.game.restore(snapshot)
+    unclear()
+    w.game.save_state_file(str(paths['8_4cc']))
+    return paths
