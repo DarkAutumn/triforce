@@ -15,6 +15,9 @@
 #   d4       4_71s_0   0:0x45 (out of Dungeon 4: the triforce's warp, the post-d4 start)
 #   post-d4  0_45c_0   5:0x76 (Dungeon 5's entrance; round 24: the leg, its three stretches)
 #   d5       5_76s_0   the D5 triforce
+#   (round 26, the scouting route d7: ROUTE=d7 SEGMENTS="post-d5:0_0bc_0 d7:7_79s_0")
+#   post-d5  0_0bc_0   7:0x79 (Dungeon 7's entrance: the whirlwind, the shops, the pond)
+#   d7       7_79s_0   the D7 triforce
 #
 #   [ACT=model] TAG=r73-1k RUNS=1000 scripts/experiments/r56_chains.sh [run|report]
 #
@@ -39,8 +42,11 @@ RUNS=${RUNS:-120}
 OUT=${OUT:-target/r56-chains}
 SEGMENTS=${SEGMENTS:-"full:start d2:2_7ds_0 post-d2:0_3cc_0 d1:1_73s_0 post-d1:0_37c_0 d3:3_7cs_0 post-d3:0_74c_0 d4:4_71s_0 post-d4:0_45c_0 d5:5_76s_0"}
 
+chain_args=()
+[ -n "${CLIPS:-}" ] && chain_args+=("--clips $CLIPS")
+[ -n "${ROUTE:-}" ] && chain_args+=("--route $ROUTE")
 clips=()
-if [ -n "${CLIPS:-}" ]; then clips=(--chain-args "--clips $CLIPS"); fi
+if [ ${#chain_args[@]} -gt 0 ]; then clips=(--chain-args "${chain_args[*]}"); fi
 
 case ${1:-all} in
   run) mode=(--no-report) ;;

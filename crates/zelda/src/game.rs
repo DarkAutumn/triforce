@@ -21,6 +21,8 @@ pub const MODE_DYING: u8 = 17;
 
 const OBJ_BLOCK_ID: u8 = 0x68;
 const PUSH_BLOCK_SLOT: usize = 11;
+/// asm:RoomFirstUnwalkableTile: tiles at or above it block movement.
+const ADDR_FIRST_UNWALKABLE: u16 = 0x34A;
 
 const ANIMATION_BEAMS_ACTIVE: u8 = 16;
 const ANIMATION_BEAMS_HIT: u8 = 17;
@@ -521,8 +523,9 @@ impl GameView {
         (&self.ram[offset..offset + len]).try_into().unwrap()
     }
 
-    /// The room model built from the current tiles (with the ladder's crossings while Link holds it, the game.yaml W
-    /// wrap exit's rows, its `wrap_in` exit and its `path_costs`).
+    /// The room model built from the current tiles (with the ladder's crossings while Link holds it, the game's walkable
+    /// limit where a drained pond raised it, opened bomb holes as doorways, the game.yaml W wrap exit's rows, its
+    /// `wrap_in` exit and its `path_costs`).
     pub fn room(&self) -> &Room {
         self.room.get_or_init(|| {
             let room = self.map.get(self.full_location());
@@ -533,7 +536,11 @@ impl GameView {
             let wrap_in = room.and_then(|r| {
                 r.exits.values().find_map(|e| Some((Direction::from_exit(&e.direction)?, e.wrap_in?)))
             });
+            let holes: Vec<Direction> =
+                [Direction::N, Direction::S, Direction::W, Direction::E].into_iter().filter(|&d| self.is_bomb_door_open(d)).collect();
             Room::new(self.full_location(), self.current_tiles(), self.ladder())
+                .with_first_unwalkable(self.peek(ADDR_FIRST_UNWALKABLE))
+                .with_open_doorways(&holes)
                 .with_wrap_exit(wrap_exit)
                 .with_wrap_in(wrap_in)
                 .with_path_costs(room.map_or(&[], |r| r.path_costs.as_slice()))
@@ -673,6 +680,31 @@ impl GameView {
             && Room::hotspot_tiles(x, y, direction)
                 .iter()
                 .any(|t| block.contains(t))
+    }
+
+    /// Whether a MOVE in `direction` presses into the room's secret Armos statue from a side (round 26; game.yaml
+    /// `entrance: {how: armos}` in a room whose `cave` exit a route can take: 0x34): the statue still stands (tiles
+    /// `$C0`-`$C3`; asm:Spawn_CheckTouchedArmosOrGravestone wakes it when Link, blocked by it on a grid point, holds a
+    /// direction) and Link presses E or W into it (from below the Armos touches him as it wakes: a heart; Walks26:
+    /// from (`$30`, `$7D`) Right and (`$50`, `$7D`) Left). The statue is a wall to [`GameView::can_link_move`], so the
+    /// mask offers this MOVE only through here; the secrets of rooms without a game.yaml `cave` exit (0x1c's hint, a
+    /// d2first room) stay walls.
+    pub fn is_secret_armos_direction(&self, direction: Direction) -> bool {
+        if !matches!(direction, Direction::E | Direction::W) || self.level() != 0 || self.in_cave() {
+            return false;
+        }
+        let room = self.map.get(self.full_location());
+        let secret = room.filter(|r| r.exits.contains_key("cave")).and_then(|r| r.secret);
+        let Some(crate::game_map::Secret::Armos((c, r))) = secret else {
+            return false;
+        };
+        let statue = [(c, r), (c + 1, r), (c, r + 1), (c + 1, r + 1)];
+        let tiles = self.current_tiles();
+        let armos = |&(x, y): &Tile| (0xC0..=0xC3).contains(&tiles[(x * crate::room::ROWS + y) as usize]);
+        let (x, y) = (self.link.position.x, self.link.position.y);
+        statue.iter().all(armos)
+            && self.var(Var::LinkGridOffset) == 0
+            && Room::hotspot_tiles(x, y, direction).iter().any(|t| statue.contains(t))
     }
 
     pub fn is_door_locked(&self, direction: Direction) -> bool {
@@ -1059,7 +1091,8 @@ impl GameView {
 
     /// The game would start `kind`'s weapon now (Link_HandleInput and the *_Wield routines): Link is in his normal
     /// state ($AC = 0), the sword is not blocked and its slot ($B9) is free for SWORD/BEAMS, the boomerang ($BB) and
-    /// arrow ($BE) slots are free or returning (bit 7), and Bomb_Wield finds a bomb slot ($BC/$BD). The food needs
+    /// arrow ($BE) slots are free or hold a state with bit 7 (in $0F food, which a throw replaces; never in $12;
+    /// asm:Boomerang_Wield, asm:Arrow_Wield), and Bomb_Wield finds a bomb slot ($BC/$BD). The food needs
     /// slot $0F empty (asm:Food_Wield: no boomerang out, no food down); the candle an empty $10 or $11 and, blue, no
     /// fire yet in this room (asm:Candle_Wield, `HasUsedCandle` $513); the recorder no tune playing (`FluteTimer`
     /// $3C; asm:Flute_Wield leaves Link's state at 0).

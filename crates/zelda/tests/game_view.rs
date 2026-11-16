@@ -472,8 +472,13 @@ fn the_mask_offers_only_attacks_the_game_starts() {
     let mut busy = r.clone();
     busy.table(tables::OBJ_STATUS, 0x0F, 0x10);
     assert!(!allowed(&busy, Boomerang, Direction::N));
-    busy.table(tables::OBJ_STATUS, 0x0F, 0x90); // returning: the game lets Link throw again
-    assert!(allowed(&busy, Boomerang, Direction::N));
+    // A boomerang coming back ($4x slow, $5x fast) is still out: the game refuses another (asm:Boomerang_Wield).
+    busy.table(tables::OBJ_STATUS, 0x0F, 0x50);
+    assert!(!allowed(&busy, Boomerang, Direction::N));
+    // Bit 7 is food lying in the slot ($80-$82, asm:Boomerang_UpdateOrFood): the game would throw the boomerang
+    // and take the food away, so the mask keeps it (round 26, 7:0x28's Grumble).
+    busy.table(tables::OBJ_STATUS, 0x0F, 0x80);
+    assert!(!allowed(&busy, Boomerang, Direction::N));
     let mut blocked = r.clone();
     blocked.0[0x4C] = 5;
     assert!(!allowed(&blocked, Sword, Direction::N) && allowed(&blocked, Bomb, Direction::N));

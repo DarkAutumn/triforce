@@ -1,12 +1,12 @@
 name: ow-leever
-rooms: ['(0, 0x48)', '(0, 0x75)', '(0, 0x0b)']
+rooms: ['(0, 0x48)', '(0, 0x75)', '(0, 0x0b)', '(0, 0x34)', '(0, 0x34, cave)']
 start_states: ['0_48*_[0-9]', '0_75*_[0-9]', '0_0b*_[0-9]']
 success: [exit-correct, enter-room:5:0x76]
 reward_profile: default
 reward: {pbrs: true}
 obs: {objective: true, target: true}       # schema 2 pointer, no item targets (as the overworld families)
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chain arrives with partial hearts (round 5)
-items: {bombs: tenth}                      # only the 10th damage-free kill's bomb (arms a forced bomb drop)
+items: {bombs: tenth, recorder: true}     # the 10th kill's bomb; round 26: the recorder where the route plays it (0x0b's whirlwind)
 clips: true                               # round 21: the screen wrap (W/E; none in 0x48)
 curriculum: {enabled: true}             # trajectories/ow-leever (Go-Explore paths per start state)
 one_room: true                          # round 5: per-room episodes

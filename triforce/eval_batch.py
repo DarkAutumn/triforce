@@ -78,11 +78,15 @@ POLL_SECONDS = 0.2
 TERMINATE_SECONDS = 60
 
 # The chain segments (r56_chains.sh): name:start state ('start' = the game start).  Every segment plays on to the
-# route's end; its arrival is the first entry into the next segment's start room (TARGETS).
+# route's end; its arrival is the first entry into the next segment's start room (TARGETS).  Round 26: the scouting
+# route d7's two segments, `post-d5:0_0bc_0` (the leg: the whirlwind, the shops, the pond) and `d7:7_79s_0`, run with
+# `--route d7` (r56_chains.sh `ROUTE=d7 SEGMENTS=...`) until d7 merges into d2first.
 SEGMENTS = ('full:start d2:2_7ds_0 post-d2:0_3cc_0 d1:1_73s_0 post-d1:0_37c_0 d3:3_7cs_0 post-d3:0_74c_0 '
             'd4:4_71s_0 post-d4:0_45c_0 d5:5_76s_0')
+D7_SEGMENTS = 'post-d5:0_0bc_0 d7:7_79s_0'
+ALL_SEGMENTS = f'{SEGMENTS} {D7_SEGMENTS}'
 TARGETS = {'d2': '0:0x3c', 'post-d2': '1:0x73', 'd1': '0:0x37', 'post-d1': '3:0x7c', 'd3': '0:0x74',
-           'post-d3': '4:0x71', 'd4': '0:0x45', 'post-d4': '5:0x76'}
+           'post-d3': '4:0x71', 'd4': '0:0x45', 'post-d4': '5:0x76', 'post-d5': '7:0x79'}
 # The full run is also reported at each milestone room, in order (yardstick ``@L:0xRR,...``).
 MILESTONES = (('d2', '2:0x7d'), ('post-d2', '0:0x3c'), ('d1', '1:0x73'), ('post-d1', '0:0x37'), ('d3', '3:0x7c'),
               ('post-d3', '0:0x74'), ('d4', '4:0x71'), ('post-d4', '0:0x45'), ('d5', '5:0x76'))
@@ -91,8 +95,8 @@ EVAL_RESERVED = ('--events', '--no-log', '--logs-dir')
 
 
 def segment_starts() -> dict:
-    """Segment start state -> segment name (``SEGMENTS``, the game start left out)."""
-    return {start: name for name, start in (item.split(':', 1) for item in SEGMENTS.split()) if start != 'start'}
+    """Segment start state -> segment name (``SEGMENTS`` and the scouting route d7's, the game start left out)."""
+    return {start: name for name, start in (item.split(':', 1) for item in ALL_SEGMENTS.split()) if start != 'start'}
 
 
 # ------------------------------------------------------------------------------------------------------ arrivals

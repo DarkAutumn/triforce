@@ -382,9 +382,10 @@ pub fn state_visit(name: &str) -> Option<u32> {
 
 /// What an entry-state name says (`docs/architecture.md` "Start states"): `<level>_<room><side>[_v<visit>]_<chain>`,
 /// harvested chain handoffs `<level>_<room><side>[_v<visit>]_h<seed>_<n>`. `side` is the routes.yaml entry: n/s/e/w,
-/// `c` = out of a cave or dungeon stairs, `cave` = a cave or cellar interior (entered from S). `visit` is the route's
-/// visit to the room from that side (`zelda::game_map::route_visits`): the first has no `_v` field, a later one is
-/// `_v2`, `_v3`, ... (no leading zeros), so every visit has one name.
+/// `c` = out of a cave or dungeon stairs, `r` = set down by the whirlwind (round 26, `entry: recorder`), `cave` = a
+/// cave or cellar interior (entered from S). `visit` is the route's visit to the room from that side
+/// (`zelda::game_map::route_visits`): the first has no `_v` field, a later one is `_v2`, `_v3`, ... (no leading
+/// zeros), so every visit has one name.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StateName {
     pub location: MapLocation,
@@ -428,6 +429,7 @@ impl StateName {
         let entry = match side {
             "cave" => "S",
             "c" => "cave",
+            "r" => zelda::game_map::RECORDER,
             "n" => "N",
             "s" => "S",
             "e" => "E",
@@ -444,6 +446,8 @@ impl StateName {
             "cave".to_owned()
         } else if self.entry == "cave" {
             "c".to_owned()
+        } else if self.entry == zelda::game_map::RECORDER {
+            "r".to_owned()
         } else {
             self.entry.to_ascii_lowercase()
         };
@@ -825,6 +829,7 @@ mod tests {
             ("5_07cave_v2_0", m(5, 0x07, true), "S", 2),
             ("0_3cc_v3_1", m(0, 0x3c, false), "cave", 3),
             ("4_31e_0", m(4, 0x31, false), "E", 1),
+            ("0_45r_0", m(0, 0x45, false), "recorder", 1), // round 26: set down by the whirlwind
         ] {
             let parsed = StateName::parse(name).unwrap_or_else(|| panic!("{name}"));
             assert_eq!(parsed, StateName { location, entry, visit }, "{name}");
@@ -845,6 +850,7 @@ mod tests {
             (m(1, 0x7f, true), m(1, 0x22, false), 1, "1_22c_h42_3.state"),   // back up
             (m(0, 0x1c, false), m(0, 0x1b, false), 2, "0_1be_v2_h42_3.state"), // a later visit
             (m(5, 0x06, false), m(5, 0x07, true), 2, "5_07cave_v2_h42_3.state"),
+            (m(0, 0x0b, false), m(0, 0x45, false), 1, "0_45r_h42_3.state"), // round 26: the whirlwind
         ] {
             let harvested = harvest_filename(prev, curr, visit, 42, 3).unwrap();
             assert_eq!(harvested, name);

@@ -155,9 +155,21 @@ def test_candle_by_buttons(probe, candle):
     assert ('CANDLE' in kinds(game)) == (candle == 2)
 
 
+OBJ_TYPE_SLOT1, OBJ_STATE_SLOT1, GRUMBLE = 0x350, 0xAD, 0x36    # ObjType+1, ObjState+1, the Grumble Goriya
+
+
+def grumble_waits(game, waits: bool):
+    """Slot 1 as the Grumble Goriya waiting for food (its text typed, asm:Grumble_State1WaitForFood), or empty."""
+    game.write(OBJ_TYPE_SLOT1, GRUMBLE if waits else 0)
+    game.write(OBJ_STATE_SLOT1, 1 if waits else 0)
+
+
 def test_food_by_buttons(probe):
     game = entrance(probe, {FOOD: 1})
+    assert 'FOOD' not in kinds(game), "round 26: FOOD only where a Grumble waits for it"
+    grumble_waits(game, True)
     assert 'FOOD' in kinds(game)
+    grumble_waits(game, False)    # the Grumble would take the food at once: lay it in an empty room instead
     change = game.act('FOOD N')
     assert change.menu_frames > 100
     assert game.read(SELECTED) == 6
@@ -165,12 +177,14 @@ def test_food_by_buttons(probe):
     assert state == 0x80 and x == game.read(OBJ_X) and game.read(OBJ_Y) - y == 0x10, (state, x, y)
     assert game.read(FOOD) == 1, "laying the food doesn't use it up"
     game.act('WAIT 8')
+    grumble_waits(game, True)
     assert 'FOOD' not in kinds(game), "refused while it lies on the floor"
 
 
 def test_a_family_switch_masks_them(probe):
     game = entrance(probe, {FOOD: 1, CANDLE: 2})
+    grumble_waits(game, True)
     assert {'FOOD', 'CANDLE'} <= kinds(game)
     game.set_disabled_kinds(['FOOD', 'CANDLE', 'RECORDER'])
     assert not {'FOOD', 'CANDLE'} & kinds(game)
-    assert native.SpecialistConfig.load('goriya').disabled_kinds()[-3:] == ['RECORDER', 'FOOD', 'CANDLE']
+    assert native.SpecialistConfig.load('goriya').disabled_kinds()[-2:] == ['RECORDER', 'CANDLE']

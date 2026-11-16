@@ -19,9 +19,10 @@ def test_load_and_fields(tmp_path):
     assert config.max_steps == 321
     assert config.reward.pbrs is False and config.items.bombs == 'never'
     assert config.curriculum.enabled is False
-    assert config.disabled_kinds() == ['BOMB', 'RECORDER', 'FOOD', 'CANDLE']
-    assert config.replace(items={'bombs': 'tenth'}).disabled_kinds() == ['RECORDER', 'FOOD', 'CANDLE']
-    assert config.replace(items={'bombs': 'tenth', 'recorder': True, 'food': True, 'candle': True}
+    # Round 26: ARROW is off by default too (every shot costs a rupee the route needs).
+    assert config.disabled_kinds() == ['BOMB', 'ARROW', 'RECORDER', 'FOOD', 'CANDLE']
+    assert config.replace(items={'bombs': 'tenth'}).disabled_kinds() == ['ARROW', 'RECORDER', 'FOOD', 'CANDLE']
+    assert config.replace(items={'bombs': 'tenth', 'arrows': True, 'recorder': True, 'food': True, 'candle': True}
                           ).disabled_kinds() == []
     ram = config.to_dict()['ram_randomization']
     assert (ram['hp'], ram['full_hp']) == ([0.25, 'max'], 0.3)
@@ -50,7 +51,7 @@ def test_build_from_fields():
     config = native.SpecialistConfig(name='entry-step-3', rooms=[(0, 0x67)], start_states=['0_67s_0'],
                                      success=['exit-correct', 'triforce-collected'], max_steps=3000,
                                      items={'bombs': 'free'}, route='d2first')
-    assert config.rooms == [(0, 0x67, False)] and config.items.bombs == 'free' and config.items.arrows is True
+    assert config.rooms == [(0, 0x67, False)] and config.items.bombs == 'free' and config.items.arrows is False
     with pytest.raises(native.ConfigError, match='rooms'):
         native.SpecialistConfig(name='x', rooms=[], success=['exit-correct'])
 

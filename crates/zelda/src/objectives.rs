@@ -12,7 +12,7 @@
 
 use crate::enums::{Direction, MapLocation, Position, SwordKind, Tile};
 use crate::game::{BombWall, GameView};
-use crate::game_map::{GameMap, MAZE_EXIT, MAZE_STEP, RouteStep, Way};
+use crate::game_map::{GameMap, MAZE_EXIT, MAZE_STEP, RECORDER, RouteStep, Secret, Way, whirlwind_level};
 use crate::room::Target;
 use crate::room_entry::ROOM_FLAGS_OW;
 use crate::room_state::{SecretTrigger, decode_room_state, room_flags};
@@ -43,6 +43,15 @@ pub const WAYPOINT_LADDER: &str = "ladder";
 /// routes.yaml `waypoint: recorder` (on Dungeon 5's cellar step under 0x05, the Olive Garden): take the cellar's
 /// recorder, as the bow (`StepProgress::recorder`; it also tells the two visits of the tunnel cellar 0x07 apart).
 pub const WAYPOINT_RECORDER: &str = "recorder";
+/// routes.yaml `waypoint: arrows` / `waypoint: food` (round 26, on a shop's cave step: 0x44's wood arrow, 0x34's
+/// food): buy the ware (the cave room's game.yaml treasure, at its `treasure_tile`); done once Link holds it (the
+/// inventory: a purchase sets the overworld room's item flag whichever ware is bought, and a shop sells again on the
+/// next visit). Leaving the room without it, or buying another ware, is `missed`.
+pub const WAYPOINT_ARROWS: &str = "arrows";
+pub const WAYPOINT_FOOD: &str = "food";
+/// routes.yaml `waypoint: candle` (round 26, Dungeon 7's cellar 0x4a under 0x1a): take the cellar's red candle, as the
+/// bow (no route step needs it to tell visits apart).
+pub const WAYPOINT_CANDLE: &str = "candle";
 /// A cellar's ladders at X >= $80 (tile column 16) lead to the room in its attribute B, the rest to attribute A's
 /// (asm:Warp_CheckSubroomExit): the game.yaml exits `E` and `W` of a tunnel cellar.
 const CELLAR_EAST_COLUMN: i32 = 16;
@@ -56,11 +65,12 @@ const COMBAT_SHUTTER_TRIGGERS: [SecretTrigger; 4] = [
     SecretTrigger::AllDeadItem,
 ];
 
-/// Sword upgrades: (current sword, treasure, minimum max health).
+/// Sword upgrades: (current sword, treasure, minimum max health).  The man of the magic sword cave hands it over at 12
+/// heart containers (`HeartValues >= $B0`, asm:Cave_State2TalkOrShopOrDoorCharge; round 26 fixed 13).
 const SWORD_UPGRADES: [(SwordKind, &str, i32); 3] = [
     (SwordKind::None, "wood-sword", 0),
     (SwordKind::Wood, "white-sword", 5),
-    (SwordKind::White, "magic-sword", 13),
+    (SwordKind::White, "magic-sword", 12),
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -202,13 +212,22 @@ fn progress_ways(map: &GameMap, steps: &[RouteStep]) -> [Vec<Option<StepProgress
     })
 }
 
-/// The bomb reserve in force at each step (its own `bomb_reserve`, else the last before it on its way), per way.
-fn reserve_ways(steps: &[RouteStep]) -> [Vec<Option<u8>>; 2] {
-    let [clips, plain] = along_ways(steps, 0u8, |reserve, s| *reserve = s.bomb_reserve.unwrap_or(*reserve));
+/// A reserve in force at each step (its own value, `of` it: `bomb_reserve` or `rupee_reserve`, else the last before it
+/// on its way), per way.
+fn reserve_ways(steps: &[RouteStep], of: fn(&RouteStep) -> Option<u8>) -> [Vec<Option<u8>>; 2] {
+    let [clips, plain] = along_ways(steps, 0u8, |reserve, s| *reserve = of(s).unwrap_or(*reserve));
     let own = |ways: Vec<Option<u8>>| -> Vec<Option<u8>> {
-        ways.into_iter().zip(steps).map(|(r, s)| r.map(|r| s.bomb_reserve.unwrap_or(r))).collect()
+        ways.into_iter().zip(steps).map(|(r, s)| r.map(|r| of(s).unwrap_or(r))).collect()
     };
     [own(clips), own(plain)]
+}
+
+fn bomb_reserve_of(step: &RouteStep) -> Option<u8> {
+    step.bomb_reserve
+}
+
+fn rupee_reserve_of(step: &RouteStep) -> Option<u8> {
+    step.rupee_reserve
 }
 
 /// [`StepProgress`] on entering each of `steps`, along the step's way.
@@ -216,22 +235,26 @@ pub fn route_progress(map: &GameMap, steps: &[RouteStep]) -> Vec<StepProgress> {
     per_step(progress_ways(map, steps))
 }
 
-/// Both ways of every stretch lead to the same thing (round 22): at every shared step the progress and the bomb
-/// reserve are the same whichever way Link came.
+/// Both ways of every stretch lead to the same thing (round 22): at every shared step the progress and the bomb and
+/// rupee reserves are the same whichever way Link came.
 pub fn check_route_ways(map: &GameMap, route: &str, steps: &[RouteStep]) -> Result<(), String> {
     let [pc, pp] = progress_ways(map, steps);
-    let [rc, rp] = reserve_ways(steps);
+    let [rc, rp] = reserve_ways(steps, bomb_reserve_of);
+    let [uc, up] = reserve_ways(steps, rupee_reserve_of);
     for (i, step) in steps.iter().enumerate().filter(|(_, s)| s.way.is_none()) {
-        if pc[i] != pp[i] || rc[i] != rp[i] {
+        if pc[i] != pp[i] || rc[i] != rp[i] || uc[i] != up[i] {
             return Err(format!(
-                "routes.yaml: {route}: step {i} {} from {} is reached with {:?}/{:?} bombs kept by the clip way and \
-                 {:?}/{:?} by the plain way: a stretch's ways must carry the same progress and bomb reserve",
+                "routes.yaml: {route}: step {i} {} from {} is reached with {:?}/{:?} bombs/{:?} rupees kept by the clip \
+                 way and {:?}/{:?} bombs/{:?} rupees by the plain way: a stretch's ways must carry the same progress \
+                 and reserves",
                 step.location(),
                 step.entry,
                 pc[i],
                 rc[i],
+                uc[i],
                 pp[i],
-                rp[i]
+                rp[i],
+                up[i]
             ));
         }
     }
@@ -240,7 +263,9 @@ pub fn check_route_ways(map: &GameMap, route: &str, steps: &[RouteStep]) -> Resu
 
 /// The routes.yaml entry of `curr` when Link comes from `prev`: the side he crossed (N/S/E/W), `S` into a cave, down
 /// a level's stairs or down a cellar's, `cave` out of a cave, a cellar or a level (stairs, or the triforce's warp)
-/// onto the overworld.  None for a jump that isn't one room (a Wallmaster's drag).
+/// onto the overworld, `recorder` for an overworld jump into a room the whirlwind sets Link down in (round 26: it
+/// carries him from any overworld room; the scroll from the room W of the landing room is no room he plays in).
+/// None for any other jump that isn't one room (a Wallmaster's drag).
 pub fn route_entry(prev: MapLocation, curr: MapLocation) -> Option<&'static str> {
     if curr.in_cave && !prev.in_cave {
         return Some("S");
@@ -255,6 +280,9 @@ pub fn route_entry(prev: MapLocation, curr: MapLocation) -> Option<&'static str>
         return Some("S");
     }
     let side = curr.direction_to(prev);
+    if side == Direction::None && curr.level == 0 && whirlwind_level(curr).is_some() {
+        return Some(RECORDER);
+    }
     side.is_cardinal().then(|| side.name())
 }
 
@@ -296,9 +324,17 @@ pub fn route_waypoints(steps: &[RouteStep]) -> Vec<Waypoint> {
 
 /// The heart waypoint's stop is over: the cave's item was taken (the take-any cave sets its overworld room's item
 /// flag on either pick; the objective points at the heart container).  Overworld room flags stay in RAM in every
-/// level, so a Dungeon 1 state knows the heart was taken.
+/// level, so a Dungeon 1 state knows the heart was taken.  A purchase (round 26) is over once Link holds the ware:
+/// any ware sets the flag, and a shop sells again on every visit.
 fn waypoint_done(waypoint: &Waypoint, state: &GameView) -> bool {
-    let room = waypoint.location;
+    if let Some(held) = purchase_held(&waypoint.kind, state) {
+        return held;
+    }
+    item_taken(waypoint.location, state)
+}
+
+/// The item-taken flag of `room` (its overworld room's for a cave), when Link is where it can be read.
+fn item_taken(room: MapLocation, state: &GameView) -> bool {
     let flags = if room.level == 0 {
         state.ram()[ROOM_FLAGS_OW as usize + (room.value & 0x7F) as usize]
     } else if state.level() == room.level {
@@ -307,6 +343,16 @@ fn waypoint_done(waypoint: &Waypoint, state: &GameView) -> bool {
         return false;
     };
     flags & FLAG_ITEM_TAKEN != 0
+}
+
+/// For a purchase waypoint ([`WAYPOINT_ARROWS`], [`WAYPOINT_FOOD`]): whether Link holds its ware (`InvArrow` $659,
+/// `InvFood` $65D). None for other kinds.
+fn purchase_held(kind: &str, state: &GameView) -> Option<bool> {
+    match kind {
+        WAYPOINT_ARROWS => Some(state.arrows() != crate::enums::ArrowKind::None),
+        WAYPOINT_FOOD => Some(state.var(crate::vars::Var::Food) != 0),
+        _ => None,
+    }
 }
 
 fn overlap(tiles: Vec<Tile>) -> impl Iterator<Item = Target> {
@@ -352,6 +398,8 @@ pub struct GameCompletion {
     last_step: Option<usize>,
     /// The bomb reserve (routes.yaml `bomb_reserve`) in force at each route step.
     reserves: Vec<u8>,
+    /// The rupee reserve (routes.yaml `rupee_reserve`, round 26) in force at each route step.
+    rupee_reserves: Vec<u8>,
     /// Remembered room treasure per visited room (`RoomMemory.item`).
     rooms: HashMap<MapLocation, Option<String>>,
     /// The last map objective, keyed by its route key and the room's shape then: the intact bomb walls' direction
@@ -366,6 +414,12 @@ pub struct GameCompletion {
     waypoints: Vec<Waypoint>,
     /// Max hearts on entering the active `heart` waypoint's cave (to tell the heart container from the other ware).
     heart_baseline: Option<i32>,
+    /// The shop's item-taken flag on entering the active purchase waypoint's cave (round 26): set during the visit
+    /// without the ware held, another ware was bought.
+    shop_baseline: Option<bool>,
+    /// The kind of the last objective (`objectives`): the recorder rules ask whether Link fights in his room or
+    /// heads for its stairs ([`GameCompletion::recorder_facings`]).
+    last_kind: ObjectiveKind,
     /// Why the route can't be finished any more: a `heart` waypoint missed (its room left without the heart
     /// container, or the other ware taken).  The objective then has no correct exit.
     missed: Option<String>,
@@ -428,7 +482,8 @@ impl GameCompletion {
             progress: route_progress(&map, steps),
             step,
             last_step: step,
-            reserves: per_step(reserve_ways(steps)),
+            reserves: per_step(reserve_ways(steps, bomb_reserve_of)),
+            rupee_reserves: per_step(reserve_ways(steps, rupee_reserve_of)),
             rooms: HashMap::new(),
             last_route: None,
             collected_key_rooms: BTreeSet::new(),
@@ -437,6 +492,8 @@ impl GameCompletion {
             seeded_location: None,
             waypoints,
             heart_baseline: None,
+            shop_baseline: None,
+            last_kind: ObjectiveKind::None,
             missed: None,
             rafts_open: false,
             clips: false,
@@ -539,6 +596,59 @@ impl GameCompletion {
     /// or was on last while off the route; 0 before any step.
     pub fn bomb_reserve(&self) -> u8 {
         self.step.or(self.last_step).map_or(0, |s| self.reserves[s])
+    }
+
+    /// Rupees Link keeps for the route's arrows (routes.yaml `rupee_reserve`, round 26) at the route step he is on, or
+    /// was on last while off the route; 0 before any step.
+    pub fn rupee_reserve(&self) -> u8 {
+        self.step.or(self.last_step).map_or(0, |s| self.rupee_reserves[s])
+    }
+
+    /// The facings ([`Direction::value`] bits) Link may play the recorder in `state` with, by the route (round 26;
+    /// 0: not at all), after [`GameCompletion::objectives`] for `state`. Where it plays, the session offers RECORDER
+    /// only facing so (`crate::Session::set_recorder_facings`; the game's own rules apply too):
+    /// - the whirlwind step (`exit: recorder`): facing the way the next play must step the game's index, while plays
+    ///   remain ([`crate::whirlwind::plan`]);
+    /// - the pond of the route's cave step (game.yaml `entrance: {how: recorder}`, Q1 0x42): any facing, while the
+    ///   objective heads for the stairs and the pond is full (its colour cycle `$51A` idle and no stairs tile on the
+    ///   entrance tile: the pond fills again on every visit, Walks26, Nov 16);
+    /// - a dungeon room with a big Digdogger that hasn't heard it ([`crate::actions::recorder_wanted`]) while the
+    ///   objective fights there (5:0x24, 7:0x1c: their shutters; never 7:0x39, which Link only crosses).
+    pub fn recorder_facings(&self, state: &GameView) -> u8 {
+        const ANY: u8 = 0x0F;
+        let here = state.full_location();
+        if here.in_cave || state.mode() != 5 {
+            return 0;
+        }
+        if here.level != 0 {
+            let fights = self.last_kind == ObjectiveKind::Fight;
+            return if fights && crate::actions::recorder_wanted(state) { ANY } else { 0 };
+        }
+        if let Some(level) = self.whirlwind_level_here(here) {
+            return match crate::whirlwind::plan(state, level) {
+                crate::whirlwind::Plan::Play { facings, .. } => facings,
+                _ => 0,
+            };
+        }
+        let pond = self.map.get(here).and_then(|r| r.secret).and_then(|s| match s {
+            Secret::Recorder(tile) => Some(tile),
+            Secret::Armos(_) => None,
+        });
+        match pond {
+            Some(tile) if self.last_kind == ObjectiveKind::Cave && pond_full(state, tile) => ANY,
+            _ => 0,
+        }
+    }
+
+    /// The destination level of the whirlwind step Link plays in `here` (the level whose landing room the next step
+    /// is), if the current step is one.
+    fn whirlwind_level_here(&self, here: MapLocation) -> Option<u8> {
+        let step = self.current_step(here)?;
+        if step.exit != RECORDER {
+            return None;
+        }
+        let next = self.map.routes[&self.route].get(self.step? + 1)?;
+        whirlwind_level(next.location())
     }
 
     /// The step of the route on the way it follows that enters Link's room from `entry` with exactly Link's progress
@@ -720,6 +830,16 @@ impl GameCompletion {
         {
             self.step = self.adopt_plain_step(state, stretch);
         }
+        // A whirlwind step is played again whichever side Link comes back in by (round 26: a missed whirlwind comes
+        // again only after the room is entered again; 0x0b's way out and back is the Lost Hills).
+        if self.step.is_none()
+            && let Some(last) = self.last_step
+            && self.map.routes[&self.route][last].exit == RECORDER
+            && self.map.routes[&self.route][last].location() == state.full_location()
+            && self.progress[last].matches(state)
+        {
+            self.step = Some(last);
+        }
         match self.step.map(|i| self.map.routes[&self.route][i].way) {
             // A shared step: the route takes the switch's way from here (the rejoin ends a held plain way).
             Some(None) => {
@@ -757,23 +877,21 @@ impl GameCompletion {
         self.open_raft_crossings(state);
         self.check_cave_waypoint(prev, state);
         // Every finished waypoint goes, not one per call (a completion without a step keeps them all at first); the
-        // heart baseline with it, so the next `heart` waypoint (0x2f's cave after 0x2c's) is judged on its own.
+        // heart and shop baselines with it, so the next waypoint (0x2f's cave after 0x2c's) is judged on its own.
         while let Some(i) = self.active_waypoint(state)
             && waypoint_done(&self.waypoints[i], state)
         {
             self.waypoints.remove(i);
             self.heart_baseline = None;
+            self.shop_baseline = None;
         }
         if self.missed.is_some() {
-            return Objective {
-                kind: ObjectiveKind::Move,
-                targets: BTreeSet::new(),
-                next_rooms: BTreeSet::new(),
-                pbrs_targets: BTreeSet::new(),
-                retreats: BTreeSet::new(),
-                clips: self.clips_effective(),
-                treasure_refused: false,
-            };
+            self.last_kind = ObjectiveKind::Move;
+            return self.no_objective();
+        }
+        if let Some(objective) = self.whirlwind_objective(state) {
+            self.last_kind = objective.kind;
+            return objective;
         }
         self.update_exits(state);
         self.update_opened_doors(state);
@@ -794,6 +912,7 @@ impl GameCompletion {
             next_rooms.extend(rooms);
             pbrs.extend(exit_tiles);
         }
+        self.last_kind = kind;
         Objective {
             kind,
             targets: tiles.into_iter().collect(),
@@ -807,6 +926,72 @@ impl GameCompletion {
         }
     }
 
+    /// No target and no correct exit (the route is missed).
+    fn no_objective(&self) -> Objective {
+        Objective {
+            kind: ObjectiveKind::Move,
+            targets: BTreeSet::new(),
+            next_rooms: BTreeSet::new(),
+            pbrs_targets: BTreeSet::new(),
+            retreats: BTreeSet::new(),
+            clips: self.clips_effective(),
+            treasure_refused: false,
+        }
+    }
+
+    /// The whirlwind step's objective (round 26), when Link plays one in his room ([`crate::whirlwind::plan`]): the
+    /// landing room (the next step's) is the correct exit, the target his own tile, on the coming whirlwind's row
+    /// (play while the mask offers RECORDER, then stand still; [`GameCompletion::recorder_facings`]). A whirlwind that
+    /// came and went comes again only once the room is entered again: then the room's edges Link can walk to are
+    /// retreats (no failure) and their exits the targets, and the neighbour leads back ([`GameCompletion::target`]).
+    /// Without the level's triforce piece no whirlwind goes there: the route is `missed`.
+    fn whirlwind_objective(&mut self, state: &GameView) -> Option<Objective> {
+        use crate::whirlwind::Plan;
+        let here = state.full_location();
+        let level = self.whirlwind_level_here(here)?;
+        let landing = self.map.routes[&self.route][self.step? + 1].location();
+        let mut objective = self.no_objective();
+        let tile = |x: i32, y: i32| Target::Tile(Position::new(x, y).tile());
+        match crate::whirlwind::plan(state, level) {
+            Plan::Never => {
+                self.missed = Some(format!("no triforce piece of level {level}: no whirlwind goes to {landing}"));
+            }
+            Plan::Missed => {
+                let walls = state.bomb_walls().iter().fold(0u8, |mask, w| mask | w.wall_direction.value());
+                let room = self.map.get(here)?;
+                for exit in room.exits.values().filter(|e| Direction::from_exit(&e.direction).is_some()) {
+                    let targets = self.exit_targets(state, exit.destination, walls);
+                    if Self::walkable(state, &targets) {
+                        objective.targets.extend(targets.iter().copied());
+                        objective.pbrs_targets.extend(targets);
+                        objective.retreats.insert(exit.destination);
+                    }
+                }
+            }
+            Plan::Wait { row } => {
+                objective.targets.insert(tile(state.link.position.x, row));
+                objective.next_rooms.insert(landing);
+            }
+            Plan::Play { .. } | Plan::Carried => {
+                objective.targets.insert(tile(state.link.position.x, state.link.position.y));
+                objective.next_rooms.insert(landing);
+            }
+        }
+        objective.pbrs_targets.extend(objective.targets.iter().copied());
+        Some(objective)
+    }
+
+    /// Off the route after the whirlwind step (Link left its room, a whirlwind missed): that room, while he holds its
+    /// progress and is on the overworld.
+    fn pending_whirlwind(&self, state: &GameView) -> Option<MapLocation> {
+        if self.step.is_some() || state.level() != 0 || state.full_location().in_cave {
+            return None;
+        }
+        let last = self.last_step?;
+        let step = &self.map.routes[&self.route][last];
+        (step.exit == RECORDER && self.progress[last].matches(state)).then(|| step.location())
+    }
+
     fn active_waypoint(&self, state: &GameView) -> Option<usize> {
         self.waypoints.iter().position(|w| {
             w.after.iter().all(|&l| state.has_triforce(l))
@@ -814,9 +999,10 @@ impl GameCompletion {
         })
     }
 
-    /// An active `heart` or `rupees` waypoint is missed when Link leaves its overworld room other than into the cave
-    /// before the item is taken; a `heart` one also when he takes the cave's item without gaining a heart container
-    /// (the potion).
+    /// An active `heart`, `rupees`, `arrows` or `food` waypoint is missed when Link leaves its overworld room other than
+    /// into the cave before the item is taken; a `heart` one also when he takes the cave's item without gaining a heart
+    /// container (the potion), a purchase (round 26) when the shop's item flag is set during the visit without the ware
+    /// held (another ware bought: the shield or the bombs at 0x44, the key at 0x34).
     fn check_cave_waypoint(&mut self, prev: Option<&GameView>, state: &GameView) {
         if self.missed.is_some() {
             return;
@@ -828,19 +1014,29 @@ impl GameCompletion {
         let what = match waypoint.kind.as_str() {
             WAYPOINT_HEART => "the heart container",
             WAYPOINT_RUPEES => "the rupees",
+            WAYPOINT_ARROWS => "the arrows",
+            WAYPOINT_FOOD => "the food",
             _ => return,
         };
         let heart = waypoint.kind == WAYPOINT_HEART;
+        let purchase = purchase_held(&waypoint.kind, state).is_some();
         let cave = waypoint.location;
         let room = MapLocation::new(cave.level, cave.value, false);
         let here = state.full_location();
         if heart && here == cave && self.heart_baseline.is_none() {
             self.heart_baseline = Some(state.max_health());
         }
+        if purchase && here == cave && self.shop_baseline.is_none() {
+            self.shop_baseline = Some(item_taken(cave, state));
+        }
         if waypoint_done(waypoint, state) {
             if heart && self.heart_baseline.is_some_and(|b| state.max_health() <= b) {
                 self.missed = Some(format!("took the other ware in {cave}, not the heart container"));
             }
+            return;
+        }
+        if purchase && self.shop_baseline == Some(false) && item_taken(cave, state) {
+            self.missed = Some(format!("bought another ware in {cave}, not {what}"));
             return;
         }
         if let Some(prev) = prev
@@ -922,7 +1118,8 @@ impl GameCompletion {
     }
 
     fn target(&self, state: &GameView) -> Option<MapLocation> {
-        self.sword_target(state)
+        self.pending_whirlwind(state)
+            .or_else(|| self.sword_target(state))
             .or_else(|| {
                 self.active_waypoint(state)
                     .map(|i| self.waypoints[i].location)
@@ -977,8 +1174,11 @@ impl GameCompletion {
     }
 
     /// The tiles that enter this room's sub-room.  Overworld: the cave mouth, else the game.yaml `bomb_secret` rock
-    /// wall (2x2 tiles: bombed open, the opening is the entrance).  Underworld: the stairs down to the cellar (the top-
-    /// left tile of each stairs square).
+    /// wall (2x2 tiles: bombed open, the opening is the entrance), else (round 26) a [`Secret`]'s: its stairs once
+    /// they show, before that the tiles Link wakes the Armos from (beside the statue, W and E: from below it costs a
+    /// heart) or the pond's shore ([`pond_shore`]: the recorder drains it from anywhere out of the border band, and
+    /// its stairs lie in the water, out of the path search's reach until then).  Underworld: the stairs down to the
+    /// cellar (the top-left tile of each stairs square).
     fn cave_tiles(&self, state: &GameView) -> Vec<Tile> {
         if state.level() > 0 {
             return state.room().stairs_tiles();
@@ -986,11 +1186,21 @@ impl GameCompletion {
         if let Some(tile) = state.room().cave_tile {
             return vec![tile];
         }
-        self.map
-            .get(state.full_location())
-            .and_then(|r| r.bomb_secret)
-            .map(|(c, r)| vec![(c, r), (c + 1, r), (c, r + 1), (c + 1, r + 1)])
-            .unwrap_or_default()
+        let room = self.map.get(state.full_location());
+        if let Some((c, r)) = room.and_then(|r| r.bomb_secret) {
+            return vec![(c, r), (c + 1, r), (c, r + 1), (c + 1, r + 1)];
+        }
+        let Some(secret) = room.and_then(|r| r.secret) else {
+            return Vec::new();
+        };
+        let stairs = state.room().stairs_tiles();
+        if !stairs.is_empty() {
+            return stairs;
+        }
+        match secret {
+            Secret::Armos((c, r)) => vec![(c - 2, r), (c + 2, r)],
+            Secret::Recorder(tile) => pond_shore(&state.room(), tile),
+        }
     }
 
     /// With the raft, every game.yaml raft crossing counts as open for the path searches (`RoomExit::raft`).
@@ -1453,6 +1663,41 @@ impl GameCompletion {
     }
 }
 
+/// `SecretColorCycle` ($51A): the pond's colour cycle, 0 while idle (asm:FluteSecret_Update).
+const SECRET_COLOR_CYCLE: u16 = 0x51A;
+
+/// The pond whose stairs lie on `tile` is full in `state`: its colour cycle idle and no stairs drawn there. It fills
+/// again on every visit, whatever room flag `$80` says (Walks26's walk, Nov 16), so a play is wanted each visit the
+/// route goes down its stairs.
+pub fn pond_full(state: &GameView, tile: Tile) -> bool {
+    state.peek(SECRET_COLOR_CYCLE) == 0 && !state.room().stairs_tiles().contains(&tile)
+}
+
+/// The pond's shore (round 26, the objective while its stairs don't show): the walkable tiles beside the water that
+/// holds `tile` (the stairs' tile; the unwalkable tiles 4-connected to it). The recorder plays from anywhere out of
+/// the border band, so Link heads for the pond, and once it drains he stands beside its stairs.
+pub fn pond_shore(room: &crate::room::Room, tile: Tile) -> Vec<Tile> {
+    use crate::room::{COLS, ROWS};
+    let inside = |(c, r): Tile| (0..COLS).contains(&c) && (0..ROWS).contains(&r);
+    let mut water = BTreeSet::from([tile]);
+    let mut queue = vec![tile];
+    let mut shore = BTreeSet::new();
+    while let Some((c, r)) = queue.pop() {
+        for next in [(c + 1, r), (c - 1, r), (c, r + 1), (c, r - 1)] {
+            if !inside(next) || water.contains(&next) {
+                continue;
+            }
+            if room.is_tile_walkable(next.0, next.1) {
+                shore.insert(next);
+            } else {
+                water.insert(next);
+                queue.push(next);
+            }
+        }
+    }
+    shore.into_iter().collect()
+}
+
 /// Link stands where only a skip leads on (round 24): in an overworld room, no exit (an edge or the cave mouth) he can
 /// walk to, and one he can reach with the room's skips. 0x5f's water after 0x60's wrap exit until the ladder clip's
 /// platform: without the clip the only move is E, back into 0x60 inside its wall (mechanics.md "Room `$60` to `$5F`
@@ -1868,5 +2113,100 @@ mod tests {
         let last = w.last().unwrap();
         assert_eq!((last.kind.as_str(), last.location, last.before), (WAYPOINT_RECORDER, steps[first - 1].location(), Some(5)));
         assert_eq!(last.after, [2, 1, 3, 4].into_iter().collect());
+    }
+
+    /// A view of overworld room `room` with Link's sword, heart containers and rupees set.
+    fn overworld(map: &Arc<GameMap>, room: u8, sword: u8, containers: u8) -> GameView {
+        use crate::{Var, tables::RAM_SIZE};
+        let mut ram = [0u8; RAM_SIZE];
+        ram[Var::Mode.addr() as usize] = 5;
+        ram[Var::Location.addr() as usize] = room;
+        ram[Var::Sword.addr() as usize] = sword;
+        ram[Var::HeartsAndContainers.addr() as usize] = ((containers - 1) << 4) | (containers - 1);
+        GameView::new(&ram, 0, false, map.clone())
+    }
+
+    /// Round 26 (late-mechanics.md §0.1): the magic sword's man hands it over at 12 heart containers
+    /// (asm:Cave_State2TalkOrShopOrDoorCharge, `HeartValues >= $B0`), not 13: with a cave holding it, Link with the
+    /// white sword and 12 containers is sent there, with 11 not.
+    #[test]
+    fn the_magic_sword_is_a_target_at_12_containers() {
+        let game = crate::game_map::GAME_YAML.replacen("treasure: white-sword", "treasure: magic-sword", 1);
+        let map = Arc::new(GameMap::from_yaml(&game, crate::game_map::ROUTES_YAML).unwrap());
+        let gc = GameCompletion::new(map.clone(), "d2first", None).unwrap();
+        let cave = MapLocation::new(0, 0x0a, true);
+        assert_eq!(gc.sword_target(&overworld(&map, 0x0a, 2, 12)), Some(cave));
+        assert_eq!(gc.sword_target(&overworld(&map, 0x0a, 2, 11)), None);
+        assert_eq!(gc.sword_target(&overworld(&map, 0x0a, 3, 16)), None, "the magic sword held");
+    }
+
+    /// Round 26: an overworld jump into a room the whirlwind sets Link down in is the entry `recorder`; a jump
+    /// anywhere else stays no entry, and the neighbour W of a landing room is entered from its side.
+    #[test]
+    fn route_entry_names_the_whirlwind() {
+        let m = |room| MapLocation::new(0, room, false);
+        assert_eq!(route_entry(m(0x0b), m(0x45)), Some(RECORDER));
+        assert_eq!(route_entry(m(0x22), m(0x3c)), Some(RECORDER));
+        assert_eq!(route_entry(m(0x0b), m(0x55)), None);
+        assert_eq!(route_entry(m(0x44), m(0x45)), Some("W"));
+        assert_eq!(route_entry(MapLocation::new(7, 0x0d, false), MapLocation::new(7, 0x79, false)), None);
+    }
+
+    /// Round 26: the scouting route d7's waypoints after the D5 triforce, before the D7 one: the arrows and the food
+    /// (purchases, done by the inventory) and the red candle (a cellar's); the arrows' step sets the rupee reserve.
+    #[test]
+    fn d7_buys_arrows_and_food_and_takes_the_candle() {
+        let map = Arc::new(GameMap::builtin());
+        let steps = &map.routes["d7"];
+        let w: Vec<_> = route_waypoints(steps).into_iter().filter(|w| w.after.contains(&5)).collect();
+        let kinds: Vec<_> = w.iter().map(|w| (w.kind.as_str(), w.location, w.before)).collect();
+        assert_eq!(
+            kinds,
+            [
+                (WAYPOINT_ARROWS, MapLocation::new(0, 0x44, true), Some(7)),
+                (WAYPOINT_FOOD, MapLocation::new(0, 0x34, true), Some(7)),
+                (WAYPOINT_CANDLE, MapLocation::new(7, 0x4a, true), Some(7)),
+            ]
+        );
+        let mut view = overworld(&map, 0x44, 2, 11);
+        assert_eq!(purchase_held(WAYPOINT_ARROWS, &view), Some(false));
+        let mut ram = *view.ram();
+        ram[crate::Var::Arrows.addr() as usize] = 1;
+        view = GameView::new(&ram, 0, false, map.clone());
+        assert_eq!(purchase_held(WAYPOINT_ARROWS, &view), Some(true));
+        assert_eq!(purchase_held(WAYPOINT_FOOD, &view), Some(false));
+        assert_eq!(purchase_held(WAYPOINT_HEART, &view), None);
+        let reserves = per_step(reserve_ways(steps, rupee_reserve_of));
+        assert_eq!((reserves[217], reserves[218], reserves[247]), (0, 2, 2));
+        let bombs = per_step(reserve_ways(steps, bomb_reserve_of));
+        assert_eq!((bombs[227], bombs[228], bombs[240], bombs[246]), (0, 3, 2, 0));
+    }
+
+    /// Round 26: while 0x42's pond is full its stairs tile lies in water no path reaches, so the objective's target
+    /// is the pond's shore: the walkable tiles 4-adjacent to the water around the stairs tile, not a separate rock.
+    #[test]
+    fn the_pond_s_target_is_its_shore() {
+        use crate::room::{COLS, ROWS, Room};
+        let mut tiles = [0x24u8; (COLS * ROWS) as usize];
+        let mut set = |c: i32, r: i32, t: u8| tiles[(c * ROWS + r) as usize] = t;
+        // The pond: columns 10-13, rows 8-11 (water $90); a rock apart at (5, 5).
+        for c in 10..=13 {
+            for r in 8..=11 {
+                set(c, r, 0x90);
+            }
+        }
+        set(5, 5, 0x90);
+        let room = Room::new(MapLocation::new(0, 0x42, false), &tiles, false);
+        let shore = pond_shore(&room, (12, 10));
+        let mut want: Vec<Tile> = Vec::new();
+        for c in 10..=13 {
+            want.extend([(c, 7), (c, 12)]);
+        }
+        for r in 8..=11 {
+            want.extend([(9, r), (14, r)]);
+        }
+        want.sort_unstable();
+        assert_eq!(shore, want);
+        assert!(!shore.contains(&(5, 4)), "a separate rock's side is no shore");
     }
 }

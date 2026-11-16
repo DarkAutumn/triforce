@@ -31,6 +31,7 @@ pub mod tables;
 pub mod tiles;
 pub mod vars;
 pub mod visits;
+pub mod whirlwind;
 
 pub use actions::{Action, ActionMask, MASK_SIZE, compute_action_mask};
 pub use change::{Change, LookAhead, MazeLoop, Observed};
