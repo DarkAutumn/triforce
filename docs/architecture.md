@@ -878,8 +878,7 @@ every step, so following an enemy that moves away pays again, and knockback rese
   / `chain_progress` / `chain` or `eval_start` / `eval_progress` / `eval`, then the batch's `error` and `end`), and
   `round.jsonl` (`start`, `entry_start`, `entry_end`, `end`). Plans record the niceness the job runs at (`nice`).
   `training-gui.py`'s [currently running] shows every live job on the machine, wherever it writes: the registry's
-  running and queued jobs (pid alive with the recorded start time), its own logs root's, and, for code from before
-  the registry, the logs roots the running triforce processes use (`process_log_roots`). Folders from another checkout
+  running and queued jobs (pid alive with the recorded start time) and its own logs root's. Folders from another checkout
   are labelled with its directory and branch. Under a "finished" heading below the live ones: folders whose
   training ended while shown (its plan is no longer `running`, or its process is gone: `plan_is_live`) and the
   registry's jobs that ended in the last 24 hours (`RECENT_SECONDS`; one whose process died without ending its plan
@@ -941,21 +940,17 @@ every step, so following an enemy that moves away pays again, and knockback rese
   short chain doesn't wait for the hour-long trainings that usually hold both regular places: at most two regular
   jobs and one short one. A short job takes the express place when it is free, else a regular one; express jobs
   count only against the express place; a job that gets no place waits, and a later one may take a place it can use
-  (a short job passes long ones blocked on the regular places). Old and new code in one line: while any live queued
-  entry has no `estimate` (code from before the scored line), every job uses the old rule exactly (first come first
-  served by `queued_ts`, any running job counting against the limit, no express place); the score and the express
-  place apply again once no such entry waits. Without that a cycle is possible (an old job waits for a new one that
-  joined before it, which waits for a shorter new one that joined later, which waits for the old one); with it,
-  everyone agrees on one order while old jobs wait (`tests/test_job_queue.py` runs every join order of an old job, a
-  long and a short one). Entries of other hosts and of a job's own process are ignored; an old running entry (no
-  `lane`) is regular. Liveness is read from `/proc` (pid and process start time, `job_alive`), never from a job
+  (a short job passes long ones blocked on the regular places). Every checkout runs this one rule (since Nov 17
+  there is no fallback for code from before it: an entry without an `estimate` counts as estimate 0). Entries of
+  other hosts and of a job's own process are ignored; a running entry without a `lane`
+  is regular. Liveness is read from `/proc` (pid and process start time, `job_alive`), never from a job
   reporting in: a job that dies, running or queued, simply stops counting and nothing has to be cleaned up for the
   line to move. Registration (the `queued_ts` stamp) and each check with its change to `running` (and its `lane`)
   happen under an exclusive `flock` on `<jobs_dir>/.lock`, held only for that moment (the kernel drops it if the
   holder dies), so two jobs starting at the same instant for one free place can't both take it.
   `TrainingPlan.__init__` registers and blocks until its turn: a job that starts at once never shows as queued; one
   that has to wait saves its plan with status `queued` and a `queue` object (`queued`, `place`, `running`, `ahead`,
-  `limit`, `mode` (`score` or `legacy`), `estimate`, `work`, `score`, `lane`, `checked`, then `admitted`, `waited`),
+  `limit`, `estimate`, `work`, `score`, `lane`, `checked`, then `admitted`, `waited`),
   writes `queue.jsonl` in its folder (`queued`, `waiting` every 5 minutes, then `admitted` with `waited` and its
   lane, or `interrupted`), polls every 5 s (`POLL_SECONDS`) and prints on stdout, at first and every 5 minutes
   (`UPDATE_SECONDS`), `triforce: NAME is paused until resources are available: estimated 40 minutes; 2 jobs are
@@ -965,8 +960,8 @@ every step, so following an enemy that moves away pays again, and knockback rese
   before its plan (argument and checkpoint checks, counting its work) runs before it waits, so a wrong command fails
   at once. `--no-wait` (every training and evaluation command; `$TRIFORCE_NO_WAIT=1` for wrappers) starts the job
   at once in a regular place; it still counts as running for the others. The training GUI is a reader: [currently
-  running] lists the queued plans after the running ones in the order they will start (its own copy of the score
-  and the legacy rule) as `queued` (purple), with their place, what they wait for, the estimate and the wait (`short
+  running] lists the queued plans after the running ones in the order they will start (its own copy of the
+  score) as `queued` (purple), with their place, what they wait for, the estimate and the wait (`short
   ~5 min · waited 12m`; `short` for express-sized jobs), `process gone` when the process died; running jobs show
   their `express` lane and `est ~40 min · ran 12m`; the web view shows queued plans as dashed "waiting" lines under
   the running plans, in the same order, with no cards; the window title and the web's running count count running

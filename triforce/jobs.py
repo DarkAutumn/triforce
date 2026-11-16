@@ -30,8 +30,7 @@ line, ``admitted`` / ``admitted_ts`` (when it started running), ``lane`` (``regu
 ``work`` (``{unit: amount}``: training steps, evaluation episodes, chain route steps; ``work``), ``estimate``
 (seconds, ``estimate``), ``finished`` and ``ran`` (seconds from admitted to finished).  The plan's ``finish`` marks
 it (``JobRecord.finish``); a job killed before that keeps its status with its process gone (``job_alive`` False).
-Entries of code from before the line say ``running`` from the start and have no queue fields; entries of code from
-before the scored line have no ``estimate``.  Each ``register`` deletes the entries that ended (or whose process is
+Each ``register`` deletes the entries that ended (or whose process is
 gone) more than ``PRUNE_SECONDS`` ago.  A registry that can't be written is warned about once and otherwise ignored
 (no coordination: the job starts).  ``training-gui.py`` reads it (its own copy of ``jobs_dir``, ``job_alive`` and
 the line's order).
@@ -46,10 +45,9 @@ waited`` (lowest first; ties by join time, then file name), so a short job goes 
 moves up as it waits, passing fresh short jobs once it has waited about twice its own estimate.  They take the free
 places in that order: up to ``max_jobs()`` (``$TRIFORCE_MAX_JOBS``, default ``DEFAULT_MAX_JOBS``; 0 = no limit)
 regular places, and ``EXPRESS_JOBS`` express place for a job estimated at most ``EXPRESS_SECONDS``, so a short job
-doesn't wait for the hour-long ones that hold the regular places.  While any live waiting job has no estimate (code
-from before), every job keeps the old rule (first come, first served, any running job counting against the limit),
-so old and new code agree on one order and can't wait for each other in a cycle; the score applies again once no
-such job waits.  Liveness comes from ``/proc`` (pid and process start time), never from a job reporting in, so a
+doesn't wait for the hour-long ones that hold the regular places.  Every checkout runs this one rule (an entry
+without an estimate counts as estimate 0).  Liveness comes from ``/proc`` (pid and process start time), never from
+a job reporting in, so a
 job that dies, running or queued, simply stops counting: nothing has to be cleaned up for the line to move.  The
 check and the change to ``running`` happen under an exclusive ``flock`` on ``<jobs_dir>/.lock``, held only for that
 moment (the kernel drops it if the holder dies), so two jobs starting at the same instant for one free place can't
@@ -333,15 +331,13 @@ def express_sized(job: dict) -> bool:
 @dataclass
 class Turn:
     """A job's turn (``turn``): whether it may start and in which place (``lane``: regular or express), the live
-    ``running`` jobs it waits for (in the scored line, a job too long for the express place doesn't wait for the job
-    there) and the live ``queued`` jobs ahead of it in the line (registry entries, in line order), the regular limit,
-    how the line was ordered (``mode``: score, or legacy first come first served), the job's own estimate and its
-    score now."""
+    ``running`` jobs it waits for (a job too long for the express place doesn't wait for the job there) and the live
+    ``queued`` jobs ahead of it in the line (registry entries, in line order), the regular limit, the job's own
+    estimate and its score now."""
     admitted: bool
     running: list = field(default_factory=list)
     ahead: list = field(default_factory=list)
     limit: int = DEFAULT_MAX_JOBS
-    mode: str = 'score'
     lane: Optional[str] = None
     estimate: Optional[float] = None
     score: Optional[float] = None
@@ -354,7 +350,7 @@ class Turn:
     def fields(self) -> dict:
         """What it waits for, as the plan and ``queue.jsonl`` record it (a change of these is reported)."""
         return {'place': self.place, 'running': [label(job) for job in self.running],
-                'ahead': [label(job) for job in self.ahead], 'limit': self.limit, 'mode': self.mode}
+                'ahead': [label(job) for job in self.ahead], 'limit': self.limit}
 
     def details(self) -> dict:
         """``fields`` with the estimate, the score and the lane."""
@@ -379,17 +375,13 @@ def turn(job: dict, others: list[dict], limit: int, proc: Path = Path('/proc'), 
     """``job``'s turn among the registry entries ``others`` (``read_jobs``; ``job`` itself may be among them).
     Entries of another host, of ``job``'s own process and those not alive are ignored.
 
-    While any live queued entry has no ``estimate`` (code from before the scored line; ``job`` too), the line is
-    the old one exactly, so old and new code agree on one order: ``job`` may start when ``limit`` is 0, or fewer
-    than ``limit`` of the others run (any place) and no other queued job joined the line before it.
-
-    Otherwise the line is ordered by ``score`` (lowest first; ties by join time, then file name) and its jobs take
+    The line is ordered by ``score`` (lowest first; ties by join time, then file name) and its jobs take
     the free places in that order: an express-sized job the express place while one of ``express`` is free (running
     jobs there count only against it), else a regular place while fewer than ``limit`` (0: no limit) run outside
     it; a job that gets neither waits, and a later job may still get a place it can use.  ``job`` may start when it
     gets a place.  ``now``: the time scores are taken at (default now); ``express``: the express places (default
     ``EXPRESS_JOBS``)."""
-    host, mine = socket.gethostname(), _order(job)
+    host = socket.gethostname()
     now = time.time() if now is None else now
     express = EXPRESS_JOBS if express is None else express
     running, waiting = [], []
@@ -398,12 +390,7 @@ def turn(job: dict, others: list[dict], limit: int, proc: Path = Path('/proc'), 
             continue
         (running if other.get('status') == 'running' else waiting).append(other)
     running.sort(key=_order)
-    mine_score = None if job.get('estimate') is None else score(job, now)
-    if job.get('estimate') is None or any(other.get('estimate') is None for other in waiting):
-        ahead = sorted((other for other in waiting if _order(other) < mine), key=_order)
-        admitted = limit <= 0 or (len(running) < limit and not ahead)
-        return Turn(admitted, running, ahead, limit, 'legacy', 'regular' if admitted else None, job.get('estimate'),
-                    mine_score)
+    mine_score = score(job, now)
     line = sorted([*waiting, job], key=lambda entry: (score(entry, now), *_order(entry)))
     regular = float('inf') if limit <= 0 else limit - sum(other.get('lane') != 'express' for other in running)
     spare = express - sum(other.get('lane') == 'express' for other in running)
@@ -422,7 +409,7 @@ def turn(job: dict, others: list[dict], limit: int, proc: Path = Path('/proc'), 
     # for the one there)
     blocking = running if limit > 0 and express_sized(job) else [
         other for other in running if other.get('lane') != 'express']
-    return Turn(lane is not None, blocking, ahead, limit, 'score', lane, job['estimate'], mine_score)
+    return Turn(lane is not None, blocking, ahead, limit, lane, job.get('estimate'), mine_score)
 
 
 @contextmanager
