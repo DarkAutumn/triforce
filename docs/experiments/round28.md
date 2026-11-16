@@ -148,7 +148,40 @@ with the Manhandla alive and 4 bombs BOMB is not offered in the middle of the ro
 there under the family's own `free`, and is offered at the wall; in 0x4c with its Pols Voices alive ARROW is offered
 at 9 rupees and not at 8, a shot costs one, and in 0x5e (darknut) ARROW is never offered.
 
-**The identity chain** (as rounds 26 and 27 did). IDENTITY_PLACEHOLDER
+**The identity chain** (as rounds 26 and 27 did). The vocabulary touches code every room runs through (the mask's
+CANDLE and BOMB rules, the bomb mode in force, three families' `items:`), so the round 25 team played the full
+route `d2first` on the build before the change (this branch after merging `r26`, its own worktree) and on the build
+with it: 300 runs each, `triforce eval-chain --route d2first --runs 300 --parallel 10 --act model --clips on`,
+seeds 0-299, compared by `scripts/experiments/r27_identity.py` (a run matched by its seed, every field of the run
+and of every room record).
+
+| | Before | With the vocabulary |
+|---|---:|---:|
+| Runs | 300 | 300 |
+| Room records | 36,579 | 36,579 |
+| Runs identical in every field | | **300 of 300** |
+| Runs that reach Dungeon 5 | 159 | 159 |
+| Runs that take the D5 triforce | 67 | 67 |
+| Runs that reach a room of Dungeon 7 | 0 | 0 |
+
+There is no difference to explain. The records of the families whose yaml changed are in it and are the same:
+ow-moblin 2,741 (`candle: true`: Link holds no candle before Dungeon 7), ow-lynel 1,071 (`recorder: true`: no
+recorder before Dungeon 5's, and the mask plays it by the route's plan only), pols-voice 146 (`required`: its two
+Dungeon 5 rooms are not `requires_bombs`, so that is `tenth` as before; `arrows: true`: no arrows before the shop
+on the leg to Dungeon 7), darknut 2,638, boss-manhandla 207, like-like 362. As in round 27 the chain covers
+`d2first` up to step 209 only (no run leaves 0x0b by the whirlwind: round 26's open work); steps 210-247 are the
+same by `d7.rs`, which passes unchanged, and by construction (no `Secret::Burn` room with a route step, no step
+with `bombs:`, no candle in any family that plays there but ow-moblin on the overworld, where the rule offers none).
+
+**The `stuck` rule is not in that chain**, and the chain cannot show anything about it: the limit of 50 decisions
+in one place is the single-room env's (`EndCondition::Timeout`: training and `triforce evaluate`); a
+chain run ends a room by its step count or its family's no-progress limit. So the one trained room with Like-Likes,
+4:0x32, was evaluated alone on both builds (`triforce eval-batch ... --families like-like --episodes-per-state
+100`: 600 episodes, the promoted run, its own act mode): **598 `exit-correct` and 2 `death` on both, no `stuck`
+on either, every summary field equal** (success, health change, drops, linger, bombs, per state and per room; only
+the code and data stamps differ). The rule changes nothing where today's model plays; it matters where a hold
+outlasts 50 decisions, which the Dungeon 9 walk met and Dungeon 6's 0x38 and 0x3a (three Like-Likes each) can.
+The unit test is `a_hold_does_not_count_toward_stuck` (`crates/env/tests/critic.rs`).
 
 ## 5. The walks' scripts as rules over the env's actions
 

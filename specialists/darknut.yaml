@@ -43,5 +43,5 @@ notes: >-
   {if_bombs_below: 5}`, the owner's rule for 7:0x1b). A Blue Darknut takes two magic sword hits from the side or
   behind and parries from the front; a touch is 2 hearts. Walked with the round 25 run: 0x5e 1 of 40, 0x3e 0 of 40
   (517 of 530 hearts lost to Darknut touches), 0x4e 15 of 40, 0x3f 40 of 40 at 2.9 hearts; a script reading
-  positions and facings wins both fights 30 of 30 (scripts/experiments/r28_darknut_demos.py: its rule through the
+  positions and facings wins both fights 30 of 30 (scripts/experiments/r28_demos.py darknut-5e|darknut-3e: its rule through the
   env's actions, as demonstrations). `clips: true` has no room list: CLIP is offered here wherever a skip exists.
