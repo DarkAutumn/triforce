@@ -2523,3 +2523,26 @@ no leftover 'in case the old version of the code' is running."
   worktrees that were behind `main` with nothing of their own were fast-forwarded to it.
 - **Rule from here:** a new worktree branches from a branch that has this commit; a branch from before it is
   merged with `main` before anything is trained or evaluated in its worktree.
+
+## 2026-11-17 — The leg to Dungeon 7 and Dungeon 7 are `d2first` (round 26)
+
+Round 26 first carried the stretch as a scouting route `d7` (`{extends: d2first}`, steps 209-247), as round 24 had
+scouted the leg and Dungeon 5. Before any state was built it was merged into the trained route, for the reason round
+24 gave: the route is the owner's and fixed, and two routes mean two sets of states, chains and step numbers.
+
+- **`d2first` has 248 steps** and ends on taking the D7 triforce in 7:0x2b (steps 0-208 unchanged: the game start to
+  the D5 triforce; 209-247 the leg from 0:0x0b and Dungeon 7). The route `d7` is gone; the draft `first-quest`
+  starts at Dungeon 7's exit.
+- **Comparing with round 25.** A full run now plays on after the D5 triforce, so "the full route" of round 25 is
+  `--stop-at step:209` (the first step after the triforce, reached only by the route's own exit) or the yardstick's
+  milestone `full→post-d5`; the segment `d5` arrives at 0:0x0b entered after 5:0x14 (`eval_batch.TARGETS`). The new
+  segments are `post-d5` (from `0_0bc_0`) and `d7` (from `7_79s_0`); room-stats has the scopes `to-d7` and `d7`.
+- **`heart_value.json`** has a row per route step, so the merge made the table stale and `GameData::load` failed in
+  every tool, the fitter included. The length is now checked where a specialist is handed out
+  (`GameData::specialist`, the Python config build); the fitter gives the steps up to a triforce that no chain has
+  played no curve at all (not the prior's flat 1), and the env prices hearts there by the plain health terms. The
+  table was refit from its own r74 chains: rows 0-208 are identical, 209-247 have no curve. So the eleven
+  `heart_value` families train Dungeon 7's rooms without the heart price until a team reaches the D7 triforce
+  often enough to fit one (`python -m triforce.heart_value <chain jsonl>...`).
+- **No version bump:** no trained model reads the route's length; on steps 0-208 the chains play as before
+  (round26.md §5).
