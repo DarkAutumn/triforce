@@ -35,8 +35,15 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   (`scripts/experiments/r28_demos.py`, for `train --demos`), and 300 paired full-route `d2first` runs (round28.md
   §4). The lead's working answers are in `docs/decisions.md` 2026-11-17 ("Round 28's working answers"), the owner's
   to overrule. **The main risk** (round28.md §3): the best plays seen leave about four hearts after Gleeok, and
-  Dungeon 8's piece is the last refill of the game. Not built yet: the stretch's start states (round28.md §6 names
-  them), curricula, training, chains.
+  Dungeon 8's piece is the last refill of the game. (3) **The states step** (round28.md §6-12): 48 start states of
+  steps 281-296 on chains 0-2 (no fight skipped: where the explorer failed, 0x3e on one chain, 0x4c and Gleeok, the
+  room's scripted rule played it and its won run gives the next state, `r28_demos.py ROOM --harvest`), family
+  `start_states` and darknut's `room_kills` staging of 8:0x5e and 0x3e, chain segments `post-d6` (`0_22c_0`) and
+  `d8` (`8_7es_0`), a track for every state (`scripts/experiments/r28_d8_curricula.sh`, rule tracks `~rule<seed>`),
+  Gleeok's rule rebuilt for the env's grain (267 of 300 from 6 hearts; it was 17 of 30), and the baseline
+  `r78-base` (`scripts/experiments/r28_d8_baseline.sh`): 0 of 100 on both segments. Not done: the explorer's
+  fight and staged tracks of 0x5e and 0x3e, a `--demos` training with the three large demonstration files (two ran
+  out of GPU memory, round28.md §10), any trained model.
 - **Round 27, begun (Nov 16-17, 1.5.1.0; `docs/experiments/round27.md`):** the magic sword and Dungeon 6. Built so
   far, nothing trained: (1) **the walks** (`docs/routes/d6-walks.md`: the leg, the gravestone and the cave, every
   room of level 6, Wizzrobes and Gohma measured; today's models cannot play 0x28, 0x38, 0x3a, Gohma, or ow-lynel's

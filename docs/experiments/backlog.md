@@ -64,8 +64,23 @@ answers `docs/decisions.md` 2026-11-17 ("Round 28's working answers"). Built on 
   boss-manhandla's), `keep_out` on 8:0x5e E and 8:0x4e W, ARROW and `required` bombs for pols-voice, 0x3f's bombs at
   4 or fewer, reserves, `stuck` not counting a Like-Like's hold, the scripted walk `crates/zelda/tests/d8.rs` to
   the D8 triforce, the walks' scripts as rules over env actions (`scripts/experiments/r28_demos.py`).
-- [ ] **Start states** of steps 281-296, chains 0-2 (round28.md §6 names them), from Dungeon 6's triforce-room
-  states once round 27's exist; then start-state patterns for the eight families' new rooms.
+- [x] **Start states** of steps 281-296, chains 0-2 (Nov 17, round28.md §6): 48 states, audit clean, no fight
+  skipped (the explorer cleared 0x5e on all three chains and 0x3e on two; 0x3e on chain 2, 0x4c and Gleeok were
+  played by their rules, `r28_demos.py ROOM --harvest`); family patterns, darknut's `room_kills` for 0x5e and 0x3e;
+  chain segments `post-d6` and `d8`; the baseline `r78-base`: 0 of 100 on both (round28.md §12).
+- [ ] **Finish the tracks**: `FIGHTS=only SKIP_DONE=1 nice -n 10 scripts/experiments/r28_d8_curricula.sh` (the
+  explorer's full fights of 0x5e and 0x3e and their staged starts `~k1`..; 0x4c on chains 1 and 2 failed at 9000
+  iterations; Gleeok untried). Every state already has a track, the fights' from the rules (round28.md §9).
+- [ ] **The large demonstration files do not train beside other trainings**: `train --demos` takes all rows in one
+  piece; darknut-5e (92,878 rows) and gleeok (106,171) died with `CUDA out of memory` (3.9 and 4.5 GiB asked, about
+  3 free), darknut-3e (103,208) untried; whirlwind, tree and pols (71,721) trained. Batch the demonstration loss in
+  `triforce.train`, or write the files with `--runs 40` (round28.md §10).
+- [ ] **Rebuild the stretch's states when Dungeon 6's skipped fights are replaced** (they descend from `6_0cs`;
+  their bombs, 4 / 7 / 3 in 0x5e, are Dungeon 6's luck and not the ledger's 0: chain 1 does not fight 0x3f).
+- [ ] **0x4e: 38 of 120 baseline episodes end `stuck`** (darknut `r75-d537-c5`, 0 successes; the walk's scaffold
+  had 15 of 40); **pols' rule stands still 50 decisions in 4 of 300 runs** (always the same four seeds).
+- [ ] **`triforce evaluate --states`** (the baseline works around it with yaml copies); **`train_round.py`'s
+  estimate ignores `--iterations` in `--train-args`** (a 5-minute proof round estimated itself at 6.5 hours).
 - [ ] **Merge `d8` into `d2first`** when the owner fixes the route, after `d6`; refit `triforce/heart_value.json`
   (darknut, stalfos-keese-gel and equipment-room price hearts by the table of their route).
 - [ ] **Curricula and a first team**: darknut on open floors with statue fire (today 1 of 80 in 0x5e and 0x3e),
@@ -74,9 +89,11 @@ answers `docs/decisions.md` 2026-11-17 ("Round 28's working answers"). Built on 
   demonstrations (`train --demos`), run again from the real states.
 - [ ] **The main risk: the survival budget closes by about four hearts** only if every room is played as well as its
   best script (round28.md §3), and Dungeon 8's piece is the last refill of the game.
-- [ ] **Gleeok from 6 hearts through the env's actions**: the rule wins 17 of 30 where the frame-by-frame script won
-  26 (round28.md §5). Whether a shorter MOVE/WAIT would close it is an action-space question, which is closed
-  (schema 6 is final): the model has to do better than the rule at 4 frames a decision, or arrive with more hearts.
+- [x] **Gleeok from 6 hearts through the env's actions** (Nov 17, round28.md §10): the first rule (17 of 30) lost
+  to fireballs (102 of 136 hearts in 30 runs) because a waiting shot was carried 14 frames and seen nowhere, a
+  starting shot was read at a quarter of its speed, and Link's own way ignored the grid turn and the wall. Rebuilt
+  (`Seer`, `link_path`): 28 of 30 on the same seeds, 267 of 300 from 6 hearts on the real states (the frame script:
+  26 of 30). No new action. Left: flying heads (still a straight line of 14 frames).
 - [ ] **`rupee_reserve: 8` at 8:0x4c** is the lead's number: a run with 8 rupees or fewer gets no arrow there. Check
   the purses of real chain arrivals when a chain reaches Dungeon 8.
 - [ ] **CANDLE in dungeons has no route rule** (the family's switch alone); Dungeon 9's dark rooms need a decision

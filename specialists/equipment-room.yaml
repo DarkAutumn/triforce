@@ -1,6 +1,6 @@
 name: equipment-room
 rooms: ['(1, 0x7f, cave)', '(3, 0x0f, cave)', '(4, 0x60, cave)', '(5, 0x04, cave)', '(5, 0x07, cave)', '(7, 0x4a, cave)', '(7, 0x7b, cave)', '(6, 0x08, cave)', '(8, 0x2f, cave)', '(9, 0x60, cave)', '(9, 0x70, cave)', '(9, 0x75, cave)', '(9, 0x67, cave)', '(9, 0x77, cave)', '(9, 0x00, cave)', '(9, 0x4f, cave)']
-start_states: ['1_7f*_[0-9]', '3_0f*_[0-9]', '4_60*_[0-9]', '5_04*_[0-9]', '5_07*_[0-9]', '7_4a*_[0-9]', '7_7b*_[0-9]', '6_08*_[0-9]']
+start_states: ['1_7f*_[0-9]', '3_0f*_[0-9]', '4_60*_[0-9]', '5_04*_[0-9]', '5_07*_[0-9]', '7_4a*_[0-9]', '7_7b*_[0-9]', '6_08*_[0-9]', '8_2f*_[0-9]']
 success: [exit-correct]
 reward_profile: default
 reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20}}   # as the dungeon families (round 10 §8): dropped items are shaping targets; round 25: hearts priced by their worth to the run
@@ -23,7 +23,7 @@ notes: >-
   (the step's ladder is the only correct exit).
   Dungeon 6 (round 27, route `d6`; state `6_08cave`): the tunnel 0x08 from 0x3a's stairs (the left ladder) to 0x1d
   (the right one, E); back up the left ladder is a wrong exit into 0x3a with its block back.
-  Dungeon 8 (round 28, route `d8`; no start state yet): the tunnel 0x2f from 0x3f's stairs (the right ladder) to
+  Dungeon 8 (round 28, route `d8`; state `8_2fcave`): the tunnel 0x2f from 0x3f's stairs (the right ladder) to
   0x4c (the left one, W); back up the right ladder is a wrong exit into 0x3f with its eight monsters and the shutter
   shut. Walked zero-shot 20 of 20, 0.05 hearts.
   Dungeon 9 (round 29, route `d9`; no start state yet): five tunnels of four blue Keese, each left by the route

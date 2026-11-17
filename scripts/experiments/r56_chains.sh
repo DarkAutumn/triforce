@@ -20,6 +20,9 @@
 #   (round 27, the scouting route d6: ROUTE=d6 SEGMENTS="post-d7:0_42c_0 d6:6_79s_0")
 #   post-d7  0_42c_0   6:0x79 (Dungeon 6's entrance: the Lost Woods or round them, the graveyard, the magic sword)
 #   d6       6_79s_0   the D6 triforce
+#   (round 28, the scouting route d8: ROUTE=d8 SEGMENTS="post-d6:0_22c_0 d8:8_7es_0")
+#   post-d6  0_22c_0   8:0x7e (Dungeon 8's entrance: the whirlwind out of 0x22, the walk to 0x6d, the burned tree)
+#   d8       8_7es_0   the D8 triforce
 #
 # The route ended on the D5 triforce until round 26: a full run to there is the milestone `full→post-d5` of the
 # report, or a chain of its own, `triforce eval-chain --stop-at step:209 ...` (0:0x0b out of Dungeon 5).

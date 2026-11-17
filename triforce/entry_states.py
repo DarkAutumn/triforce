@@ -3,7 +3,7 @@ state, and install a finished build into the states dir.
 
     python -m triforce.entry_states start [--out DIR]
     python -m triforce.entry_states build [--chains 0,1,2] [--iterations 3000] [--patience 200] [--out DIR]
-                                          [--start-step N --source STATE] [--route NAME]
+                                          [--start-step N --source STATE] [--last-step N] [--route NAME]
                                           [--skip-fights 5:0x05:E,...]
     python -m triforce.entry_states path --source STATE --rooms 1:0x33,1:0x23,1:0x22 [--chain 2] [--route NAME]
                                          [--out DIR]
@@ -391,14 +391,16 @@ def fight_skipped_source(source: str, out_dir: str, states_dir: str = STATES_DIR
 
 def build_chain(chain: int, out: str, iterations: int, patience: int, log: Callable = print, start_step: int = 0,
                 source: str = START_STATE, states_dir: str = STATES_DIR, route: str = DEFAULT_ROUTE,
-                command: Optional[str] = None, skip_fights: Optional[set] = None, attempts: int = 3) -> tuple:
+                command: Optional[str] = None, skip_fights: Optional[set] = None, attempts: int = 3,
+                last_step: Optional[int] = None) -> tuple:
     """Plays ``route`` from ``source`` (the entry state of route step ``start_step``; the game's 'start' by
     default), writing the entry state of every later step on the clip way through the route's stretches (and of
     alternates; a plain way's states are built with ``path``, round 22).  Each written file's entry is merged
     into ``<out>/entry_states.json`` right away, so an interrupted build keeps every file it wrote listed.  Returns
     (manifest entries, the file name of the first on-route step not rebuilt or None).  ``skip_fights`` (a set of
     (level, room, entry)) crosses those steps' rooms with their fight skipped (``fight_skipped_source``): the states
-    from there on are marked ``fight_skipped`` in the manifest."""
+    from there on are marked ``fight_skipped`` in the manifest.  ``last_step`` ends the build with that step's state
+    (round 28: the rooms after it are played by a scripted rule, whose won run gives the next state)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     game, rooms = Game(seed=chain, states_dir=str(states_dir)), game_rooms()
     skipped = False
@@ -410,6 +412,8 @@ def build_chain(chain: int, out: str, iterations: int, patience: int, log: Calla
     os.makedirs(out, exist_ok=True)
     manifest = []
     for step, target in zip(way[first:], way[first + 1:]):
+        if last_step is not None and target.index > last_step:
+            break
         jobs = [(target, True)] + [(alt, False) for origin, alt in alternates if origin == step.index]
         next_source = None
         crossing = source
@@ -446,7 +450,8 @@ def build_chain(chain: int, out: str, iterations: int, patience: int, log: Calla
 
 def build(chain_ids: List[int], out: str, iterations: int, patience: int, start_step: int = 0,
           source: str = START_STATE, states_dir: str = STATES_DIR, command: Optional[str] = None,
-          route: str = DEFAULT_ROUTE, skip_fights: Optional[set] = None, attempts: int = 3) -> tuple:
+          route: str = DEFAULT_ROUTE, skip_fights: Optional[set] = None, attempts: int = 3,
+          last_step: Optional[int] = None) -> tuple:
     """Runs one route chain per id (one thread each; exploration runs natively without the GIL); every written file
     is merged into ``<out>/entry_states.json`` as it is written (a rebuilt file replaces its old entry; ``command``,
     the invocation, is recorded in each entry).  ``source`` may hold ``{chain}`` (round 27: each chain goes on from
@@ -457,7 +462,7 @@ def build(chain_ids: List[int], out: str, iterations: int, patience: int, start_
         return build_chain(chain, out, iterations, patience, log=lambda text: print(text, flush=True),
                            start_step=start_step, source=source.replace('{chain}', str(chain)),
                            states_dir=states_dir, route=route, command=command,
-                           skip_fights=skip_fights, attempts=attempts)
+                           skip_fights=skip_fights, attempts=attempts, last_step=last_step)
 
     with ThreadPoolExecutor(max_workers=len(chain_ids)) as pool:
         parts = list(pool.map(run, chain_ids))
@@ -894,6 +899,8 @@ def build_parser() -> argparse.ArgumentParser:
                               help="entry state of --start-step (default: 'start'); '{chain}' in it is each chain's id")
     chain_parser.add_argument('--route', default=DEFAULT_ROUTE, help="routes.yaml route to play")
     chain_parser.add_argument('--attempts', type=int, default=3, help="explorer attempts per room (seeds)")
+    chain_parser.add_argument('--last-step', type=int, default=None,
+                              help="the last route step whose entry state is written (default: the route's end)")
     chain_parser.add_argument('--skip-fights', default=None, metavar='L:0xRR:ENTRY,...',
                               help="cross these steps' rooms with their fight skipped by the game's own death state "
                                    "(round 24: fights beyond the explorer); the states after are marked fight_skipped")
@@ -961,7 +968,8 @@ def main(argv=None):
                     (text.split(':') for text in args.skip_fights.split(','))} if args.skip_fights else None
             manifest, failed = build([int(c) for c in args.chains.split(',')], out, args.iterations, args.patience,
                                      args.start_step, args.source, states_dir=states_dir, command=command,
-                                     route=args.route, skip_fights=skip, attempts=args.attempts)
+                                     route=args.route, skip_fights=skip, attempts=args.attempts,
+                                     last_step=args.last_step)
         print(f"{len(manifest)} entry states in {out}")
         if failed:
             print(f"FAILED: not rebuilt from {', '.join(failed)}")

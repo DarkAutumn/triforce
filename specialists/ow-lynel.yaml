@@ -27,7 +27,7 @@ notes: >-
   (out of 0x51's wrap, up the corridor at X $E0) and S→N (plain), 0x60 E→N (plain), 0x32 W→N, 0x22 S into Dungeon 6
   past its Armos statues. Walked zero-shot with the round 25 run: 0x50 0 of 40, 0x60 5 of 20, 0x32 7 of 40, 0x22 35
   of 40: the family must be trained on them (docs/decisions.md 2026-11-17).
-  Round 28, the leg to Dungeon 8 (route `d8`, docs/routes/d8.md §15; no start state yet): 0x22 out of Dungeon 6
+  Round 28, the leg to Dungeon 8 (route `d8`, docs/routes/d8.md §15; state `0_22c`): 0x22 out of Dungeon 6
   (`exit: recorder`): RECORDER twice from the spot the game sets Link down on, facing down (the mask offers it only
   so, while plays remain: the second counts on frames 152-216 after the first), then wait for the whirlwind: Dungeon
   2's entrance 0x3c. Walked: 30 of 30 by buttons, 20 of 20 through the env; this family zero-shot 0 of 40.
