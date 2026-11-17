@@ -800,6 +800,8 @@ RUN_DIR --iterations 244 --seed 76 --stop-success 1.01 --sil-coeff 0.1 ..."`, ju
 | `r76-b`, untrained, fixed objective | | | 300 / 300, the same episodes | 55 / 300 (18.3%) | 170 | 55 `no-damage`, 20 `exit-wrong` | −0.24 |
 | **`r76-wall-1`** | `r76-b` | none: PPO alone | 300 / 300, 0 lost | **259 / 300 (86.3%)** | **26 (8.7%)** | 15 `no-damage` | +0.27 |
 | `r76-wall-2` | `r76-wall-1` | `--demos rule.npz --demo-coeff 0.05` | 300 / 300, 0 lost | 258 / 300 (86.0%) | 26 (8.7%) | 16 `no-damage` | +0.23 |
+| `r76-wall-3` | `r76-wall-2` | `--demos rule.npz dagger.npz --demo-coeff 0.05` | 300 / 300, 0 lost | 254 / 300 (84.7%) | 24 (8.0%) | 22 `no-damage` | +0.24 |
+| `r76-wall-4` | `r76-wall-3` | the same rows, `--demo-coeff 0.2` | 300 / 300, 0 lost | 265 / 300 (88.3%) | 30 (10.0%) | 4 `no-damage`, 1 `exit-wrong` | +0.23 |
 
 **The objective was the cause: on the fixed one PPO alone takes the room from 4% to 86%** in one continuation of
 244 iterations (1M env steps), with 1:0x45 unchanged (300 of 300, no heart lost, worst linger 4 decisions). By
@@ -820,6 +822,7 @@ time in six), and the clock (about one in five that drop is taken).
 **Round 2, the rule's rows at 0.05: the clone takes and the play does not change.** The policy's accuracy on the
 rule's rows went from 17% to 94% over the 244 iterations (`charts/demo_bc_accuracy`; loss 3.88 to 0.21), and the
 room is where it was: 258 of 300, 26 captured, 16 `no-damage` (by state 76, 94 and 88 of 100; a winning episode 57
+<<<<<<< HEAD
 decisions), 1:0x45 300 of 300 with no heart lost. The policy knows the rule's answer in the rule's states and does
 not visit them: it plays its own, faster fight, and is caught there (round 25 §5 again). A higher weight would not
 change which states it visits, so round 3 adds DAgger rows instead (`r76-wall-2` plays, the rule labels).
@@ -868,3 +871,46 @@ that entry out of chain replays at X 128 (the frame before the room entry, as `e
 handoff, which this entry is not: 0x54 and 0x44 are both ow-zora's), 75 states from the diagnostic's replays, written
 as harvested states (`triforce/states/harvested/ow-zora/0_44s_h<seed>_0.state`, not committed), and ow-zora draws
 them at `harvested_fraction: 0.03` (about the share of its three seed states of 0x44 from S among its 105).
+=======
+decisions), 1:0x45 300 of 300 with no heart lost. Read from that (its episodes were not traced): the policy knows
+the rule's answer in the rule's states and plays its own, faster fight elsewhere (57 decisions a win against the
+rule's 121), where it is caught, as round 25 §5 found for 5:0x37. So round 3 adds DAgger rows (`r76-wall-2` plays,
+the rule labels).
+
+**Round 3, DAgger rows beside the rule's: no gain.** `r76-wall-2` drawn at temperature 0.5 played 40 runs a state
+(96 of 120 won, 11 captured, a clock taken in 9) and the rule labelled every state: 30,822 rows, 59,176 with the
+rule's. After 244 iterations the accuracy on all of them is 89% (75% at the start; loss 1.20 to 0.46) and the room
+is within noise of rounds 1 and 2: 254 of 300, 24 captured (8.0%), 22 `no-damage` (by state 71, 86 and 97 of 100:
+`7_0dw_2` 3 captured, `7_0dw_1` 14), a win 58 decisions; 1:0x45 300 of 300 with no heart lost. Three rounds end at
+84.7-86.3% with 24-26 captures in 300 (the standard error of 300 episodes at 86% is 2 points): at a weight of 0.05
+the rule's labels do not move what the policy does when it draws its actions.
+
+**Round 4, the same rows at 0.2: fewer `no-damage` endings, as many captures.** Accuracy on the rows 89% to 96%
+(loss 0.42 to 0.12). 7:0x0d 265 of 300, the most of the four, with 4 `no-damage` where the others had 15-22 and 30
+captured where they had 24-26 (by state 83, 90 and 92 of 100; `7_0dw_0` 13 captured and 4 `no-damage`), a win 67
+decisions; 1:0x45 300 of 300 with no heart lost, 17 decisions at the median (21 before): the rule's short steps
+did not spread there.
+
+**`r76-wall-4` depends on how its actions are drawn; `r76-wall-1` does not.** `--measure 100 --policy` draws from
+the joint action at temperature 0.5 (round 25's sampler), without the stall rule. `r76-wall-1` plays the same
+under it as in its evaluation (267 of 300 against 259). `r76-wall-4` does not: **40 of 300**, 174 `exit-wrong` (out
+through the W doorway), 64 captured, 11 `stuck`, against 265 of 300 in its `eval.json`. Not explained by a
+measurement; the likely cause (inferred) is the clone's free durations: a kind whose duration head was left flat
+(WAIT, the rows without a duration) loses weight when the joint is tempered, a kind with a sharp one gains, so the
+sampler walks where the act rule waits. Whatever the cause, the run's play rests on one way of drawing, and other
+act modes (the planner's) were not measured.
+
+**Recommended: `wallmaster/r76-wall-1`** (PPO alone on the fixed objective): 7:0x0d 259 of 300 (86.3%), 26
+captured (8.7%), 15 `no-damage`, 0.27 hearts gained a visit; 1:0x45 300 of 300, no heart lost, as `r71-e`. It has
+the fewest captures but `r76-wall-3`'s 24, needs no demonstration, and plays the same under both ways of drawing
+that were measured. `r76-wall-4` wins six more episodes in 300 in the evaluation (within noise), with 4 `no-damage`
+endings against 15 (the clock's state; its clocks were not counted under the act rule) and four more captures, and
+is the alternative only if a chain says so.
+
+**The target is not reached**: 80% is (84.7-88.3% in all four runs), captures under 5% are not (8.0-10.0%). The
+rule shows the room can be played without a capture (0 in 300), and four rounds did not make the policy play it:
+cloning at 0.05 did not change its play, at 0.2 it changed the clock and not the captures. Not tried: the capture's
+price in the reward (a capture ends the episode as any hard failure; in a chain it costs the whole way back from
+0x79), the rule's labels made sound on the ring outside the C (there the rule walks toward the W column whatever
+comes along it), a model of its own for the room, the way out W and back for a clock taken.
+>>>>>>> f582feb
