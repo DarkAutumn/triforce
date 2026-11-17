@@ -515,6 +515,11 @@ rule tracks); ow-octorok and stalfos-keese-gel have no `curriculum:` and load no
 the round's evaluations (2 episodes a state) only show that the rooms run (worst rooms 8:0x3e, 8:0x4c and 8:0x3c
 at 0%, 0:0x6d 33%, as the baseline). The trainings with `--demos` are in §10.
 
+**Suites at the end of the step**: cargo workspace 1000 passed, 0 failed; pytest 822 passed, 6 skipped (one test
+changed: `test_d5`'s staged Olive Garden test drew, with two more rooms in darknut's `room_kills`, a reset at full
+hearts, where BEAMS stands in SWORD's place; it now takes a reset below full hearts); `tf replay verify` 3 of 3
+ok; `entry_states audit --route d8` 871 states, no problem; `asm.py check --final` ok.
+
 ## 12. The baseline: today's models on the stretch
 
 One batch job, `r78-base` (`scripts/experiments/r28_d8_baseline.sh`): 100 runs a segment, each model in its own act
