@@ -159,15 +159,33 @@ result `success`, that reason, 197 frames, and `tf replay verify` passes on all 
 `$13` is recorded and read as a win; the replay format needed no change and `REPLAY_VERSION` stands. (A
 single-room episode's replay carries its ending as text, `game-completed`, with the class `success`.)
 
-**The identity chain** (as rounds 26-28 did). The before half is round 28's own "with the vocabulary" chain (300
-runs of `d2first`, seeds 0-299, the round 25 team; between its code and this step's base only a test file
-differs). **The after half is waiting in the job line as this is written and has not run**: `triforce eval-chain
---runs 300 --parallel 10 --act model --output target/r29-identity/after.jsonl`, then
-`scripts/experiments/r27_identity.py`. What on `d2first` this step could touch, read from the code and the data,
-not yet from the chain: 0:0x17's new `path_costs` row (step 41 crosses that room E to S; the row is water E of
-the river, which a Link without the ladder cannot stand on and the path does not use); ow-zora's `candle: true`
-(no candle before Dungeon 7, and CANDLE on the overworld is offered only at a route's tree); the two new fields of
-a step's progress (false on every `d2first` step); the end target (no `d2first` step ends the game).
+**The identity chain** (as rounds 26-28 did). The vocabulary touches code every room runs through (the step
+matching, the masks, the objective's last target, three families' yamls and game.yaml), so the round 25 team
+played the full route `d2first` on the build before the change and on the build with it: 300 runs each, `triforce
+eval-chain --runs 300 --parallel 10 --act model` (clips on, seeds 0-299), compared by
+`scripts/experiments/r27_identity.py` (a run matched by its seed, every field of the run and of every room
+record). The before half is round 28's own "with the vocabulary" chain: between its code and this step's base
+only a test file differs. The after half waited 1 hour 43 minutes in the job line and ran on this step's build.
+
+| | Before | With the vocabulary |
+|---|---:|---:|
+| Runs | 300 | 300 |
+| Room records | 36,579 | 36,579 |
+| Runs identical in every field | | **300 of 300** |
+| Runs that reach Dungeon 5 | 159 | 159 |
+| Runs that take the D5 triforce | 67 | 67 |
+| Runs that reach a room of Dungeon 7 | 0 | 0 |
+
+There is no difference to explain. The two things the step changed that `d2first` rooms read are in it and are
+the same: 0:0x17 with its new `path_costs` row (252 records of that room: step 41 crosses it E to S; the row is
+water E of the river, which a Link without the ladder cannot stand on and the path does not use) and ow-zora with
+`candle: true` (3,437 records: Link holds no candle before Dungeon 7, and CANDLE on the overworld is offered only
+at a route's tree). Also the same: ow-boulder 756 records, ow-lynel 1,071, ow-moblin 2,741, like-like 362,
+stalfos-keese-gel 3,941, zol 1,340, equipment-room 989 (families whose yamls gained rooms). The two new fields of
+a step's progress are false on every `d2first` step and no `d2first` step ends the game. As in rounds 27 and 28
+the chain covers `d2first` up to step 209 only (no run leaves 0x0b by the whirlwind); steps 210-247 are the same
+by `d7.rs`, which passes unchanged. One function changed after the chain ran (`zelda_tiles`, Zelda's place before
+her init): it is reached only on a step with `exit: end`.
 
 **The two data changes, without the job line** (`scripts/experiments/r29_data_ab.py`). The two changes named
 above that `d2first` rooms read were tested directly: a data root that is this checkout without 0:0x17's
