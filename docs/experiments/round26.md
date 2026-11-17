@@ -707,6 +707,7 @@ RUN_DIR --iterations 244 --seed 76 --stop-success 1.01 --sil-coeff 0.1 ..."`, ju
 | `r76-b`, untrained, fixed objective | | | 300 / 300, the same episodes | 55 / 300 (18.3%) | 170 | 55 `no-damage`, 20 `exit-wrong` | −0.24 |
 | **`r76-wall-1`** | `r76-b` | none: PPO alone | 300 / 300, 0 lost | **259 / 300 (86.3%)** | **26 (8.7%)** | 15 `no-damage` | +0.27 |
 | `r76-wall-2` | `r76-wall-1` | `--demos rule.npz --demo-coeff 0.05` | 300 / 300, 0 lost | 258 / 300 (86.0%) | 26 (8.7%) | 16 `no-damage` | +0.23 |
+| `r76-wall-3` | `r76-wall-2` | `--demos rule.npz dagger.npz --demo-coeff 0.05` | 300 / 300, 0 lost | 254 / 300 (84.7%) | 24 (8.0%) | 22 `no-damage` | +0.24 |
 
 **The objective was the cause: on the fixed one PPO alone takes the room from 4% to 86%** in one continuation of
 244 iterations (1M env steps), with 1:0x45 unchanged (300 of 300, no heart lost, worst linger 4 decisions). By
@@ -727,6 +728,15 @@ time in six), and the clock (about one in five that drop is taken).
 **Round 2, the rule's rows at 0.05: the clone takes and the play does not change.** The policy's accuracy on the
 rule's rows went from 17% to 94% over the 244 iterations (`charts/demo_bc_accuracy`; loss 3.88 to 0.21), and the
 room is where it was: 258 of 300, 26 captured, 16 `no-damage` (by state 76, 94 and 88 of 100; a winning episode 57
-decisions), 1:0x45 300 of 300 with no heart lost. The policy knows the rule's answer in the rule's states and does
-not visit them: it plays its own, faster fight, and is caught there (round 25 §5 again). A higher weight would not
-change which states it visits, so round 3 adds DAgger rows instead (`r76-wall-2` plays, the rule labels).
+decisions), 1:0x45 300 of 300 with no heart lost. Read from that (its episodes were not traced): the policy knows
+the rule's answer in the rule's states and plays its own, faster fight elsewhere (57 decisions a win against the
+rule's 121), where it is caught, as round 25 §5 found for 5:0x37. So round 3 adds DAgger rows (`r76-wall-2` plays,
+the rule labels).
+
+**Round 3, DAgger rows beside the rule's: no gain.** `r76-wall-2` drawn at temperature 0.5 played 40 runs a state
+(96 of 120 won, 11 captured, a clock taken in 9) and the rule labelled every state: 30,822 rows, 59,176 with the
+rule's. After 244 iterations the accuracy on all of them is 89% (75% at the start; loss 1.20 to 0.46) and the room
+is within noise of rounds 1 and 2: 254 of 300, 24 captured (8.0%), 22 `no-damage` (by state 71, 86 and 97 of 100:
+`7_0dw_2` 3 captured, `7_0dw_1` 14), a win 58 decisions; 1:0x45 300 of 300 with no heart lost. Three rounds end at
+84.7-86.3% with 24-26 captures in 300 (the standard error of 300 episodes at 86% is 2 points): at a weight of 0.05
+the rule's labels do not move what the policy does when it draws its actions.
