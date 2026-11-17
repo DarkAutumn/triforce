@@ -66,6 +66,28 @@ fn a_stale_heart_value_table_stops_only_the_families_that_read_it() {
     data.specialist("ow-start").unwrap();
 }
 
+/// Round 27: a table prices its own route and the routes it extends.  Cut to `d2first`'s steps and named for it, it
+/// prices `d2first` only: a family reading it on `d6` (the scouting route, `d2first` and Dungeon 6) is refused, and an
+/// episode on `d6` gets no table (the plain health terms).
+#[test]
+fn a_table_prices_the_routes_its_own_extends() {
+    let tmp = copy_data();
+    let path = tmp.path().join("triforce/heart_value.json");
+    let mut table: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let base = GameData::load(tmp.path()).unwrap().map.routes["d2first"].len();
+    table["route"] = "d2first".into();
+    table["steps"].as_array_mut().unwrap().truncate(base);
+    std::fs::write(&path, serde_json::to_string(&table).unwrap()).unwrap();
+    let data = GameData::load(tmp.path()).unwrap();
+    assert_eq!(data.heart_values.as_deref().unwrap().routes, ["d2first"]);
+    let goriya = data.specialist("goriya").unwrap();
+    assert!(data.heart_values_for(&goriya, "d2first").is_some() && data.heart_values_for(&goriya, "d6").is_none());
+    let mut on_d6 = (*goriya).clone();
+    on_d6.route = Some("d6".into());
+    let error = data.check_heart_values(&on_d6).unwrap_err().to_string();
+    assert!(error.contains("neither is nor extends"), "{error}");
+}
+
 #[test]
 fn a_family_without_a_config_is_rejected() {
     let tmp = copy_data();

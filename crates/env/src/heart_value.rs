@@ -5,11 +5,14 @@
 //! triforce, per way of the route (`clips`: the run-time clips switch on; `plain`: off), at every half heart from 0
 //! to the step's max hearts; between grid points it is interpolated, beyond the top it is the top's value.  The
 //! table names each step's room, entry, exit and visit: a table fitted for another route (the route changed since)
-//! is refused by the families that use it ([`HeartValues::check`]) and ignored by everyone else.
+//! is refused by the families that use it ([`HeartValues::check`]) and ignored by everyone else.  A table prices its
+//! own route and every route whose steps are its first ones ([`HeartValues::prices`]; round 27: fitted on the
+//! scouting route `d6`, it prices `d2first`, which `d6` extends): V at a step depends only on the steps up to the
+//! next triforce, the same on both routes.
 
 use crate::config::{ConfigError, room_key};
 use serde::Deserialize;
-use zelda::game_map::RouteStep;
+use zelda::game_map::{GameMap, RouteStep};
 
 /// One way's curve at a step.
 #[derive(Clone, Debug, Deserialize)]
@@ -57,6 +60,9 @@ pub struct StepRow {
 pub struct HeartValues {
     pub route: String,
     pub steps: Vec<StepRow>,
+    /// The routes the table prices ([`Self::prices`]), set where the data is loaded (`GameData::load`).
+    #[serde(skip)]
+    pub routes: Vec<String>,
 }
 
 impl HeartValues {
@@ -81,26 +87,50 @@ impl HeartValues {
     /// The table was fitted for `steps`, the route it names as it stands now (same rooms, entries, exits and
     /// visits); refit with `python -m triforce.heart_value` otherwise.
     pub fn check(&self, steps: &[RouteStep], visits: &[u32]) -> Result<(), ConfigError> {
-        let fail = |what: String| {
-            Err(ConfigError(format!(
-                "triforce/heart_value.json does not match route {:?} ({what}): refit it with `python -m \
-                 triforce.heart_value <chain jsonl>...`",
-                self.route
-            )))
-        };
         if self.steps.len() != steps.len() {
-            return fail(format!("{} steps, the route has {}", self.steps.len(), steps.len()));
+            return self.mismatch(format!("{} steps, the route has {}", self.steps.len(), steps.len()));
+        }
+        self.check_rows(steps, visits)
+    }
+
+    /// The table's first rows are `steps` (a route its own extends, or its own route).
+    fn check_rows(&self, steps: &[RouteStep], visits: &[u32]) -> Result<(), ConfigError> {
+        if steps.len() > self.steps.len() {
+            return self.mismatch(format!("{} steps, the route has {}", self.steps.len(), steps.len()));
         }
         for ((row, step), &visit) in self.steps.iter().zip(steps).zip(visits) {
             let room = room_key(step.location());
             if row.room != room || row.entry != step.entry || row.exit != step.exit || row.visit != visit {
-                return fail(format!(
+                return self.mismatch(format!(
                     "step {}: table {} {}->{} visit {}, route {room} {}->{} visit {visit}",
                     row.step, row.room, row.entry, row.exit, row.visit, step.entry, step.exit
                 ));
             }
         }
         Ok(())
+    }
+
+    fn mismatch(&self, what: String) -> Result<(), ConfigError> {
+        Err(ConfigError(format!(
+            "triforce/heart_value.json does not match route {:?} ({what}): refit it with `python -m \
+             triforce.heart_value <chain jsonl>...`",
+            self.route
+        )))
+    }
+
+    /// The routes of `map` the table prices: none when it no longer matches its own route ([`Self::check`]), else
+    /// its own and every route whose steps are its first rows (one it extends).
+    pub fn prices(&self, map: &GameMap) -> Vec<String> {
+        let fitted =
+            map.routes.get(&self.route).is_some_and(|steps| self.check(steps, &map.visits[&self.route]).is_ok());
+        if !fitted {
+            return Vec::new();
+        }
+        map.routes
+            .iter()
+            .filter(|(name, steps)| self.check_rows(steps, &map.visits[*name]).is_ok())
+            .map(|(name, _)| name.clone())
+            .collect()
     }
 
     /// The curve of route step `step` on the way the run-time clips switch selects; None off the route or for a step
