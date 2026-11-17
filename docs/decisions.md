@@ -2477,3 +2477,22 @@ the retraining you would do... that all can be front loaded looking at the dunge
   time per agent (an explorer, a state build, cargo, pytest or a many-trial walk script), explorers on 4 threads,
   `CARGO_BUILD_JOBS=4`, all under `nice -n 10`, full suites once at the end of a task, and nothing heavy started
   while the load average is above 30. The GPU has not been a limit in any round.
+
+## 2026-11-18 — Clips only: the no-clip way is dropped; the Lanmola room is clipped (Lee)
+
+Lee: "The lanmola room should be bypassed with a block clip. From here on, you can drop the no-clip runs. They
+were an interesting spot of comparison, but should be dropped in favor of just clipping through blocks when needed."
+(Nov 17 already: "Clips-off is not a problem. We might even drop it in the future.")
+
+- **Supersedes** the Nov 13 rule (round 22) that clip families train half their episodes with CLIP masked and that
+  every chain and evaluation is measured both ways, and decision 4 of 2026-11-16 ("clips off built and measured,
+  not tuned").
+- **From here on:** chains, checkpoint selection and evaluations with clips on only; no `-noclips` tags; a clip
+  family's new rounds train with `off_share: 0`; no new plain way is built; a room the route clips is not fought,
+  staged or demonstrated (Dungeon 9: 0x55's Lanmolas, 0x07 before the ring, 0x20 from N, 0x03); where a hard room
+  can be passed by a block clip, that is the way (the remaining hard rooms of Dungeons 6-8 are scanned for it).
+- **Kept as it is:** the route's existing plain ways and forks, the run-time switch and `play-zelda.py`'s key `c`
+  (from Dungeon 7 onward a run with clips off plays ways no model is trained on), the clips-off numbers already in
+  the round documents.
+- **What it buys:** half of every clip family's training episodes, half of the chain measurements, and in Dungeon 9
+  the worst fight of the stretch (0x07 before the red ring: 9.35 hearts by the rule against 1.3 by the clip).

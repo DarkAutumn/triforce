@@ -226,13 +226,16 @@ test them, keep what helps, and log everything.
   harvested states (`eval-chain --harvest`), their hearts refilled as every entry state's (`write_entry_state`).
 - **Training mixes full health (sword beams) and partial health** (`full_hp: 0.5`; partial down to
   `hp: [0.15, max]`; Lee, Nov 12: boss-gleeok `[0.5, max]`). The beam look-ahead must credit the firing step.
-- **Clip families train with clips on and with CLIP masked** (Lee, Nov 13, round 22): "the models need to be
-  trained with clips enabled, and also with the clip action masked so it has to traverse as normal". A family's
-  `clips: true` is `{enabled: true, off_share: 0.5}`: half the episodes start with the run-time clips switch off
-  (the plain way, also through a route `stretch:`; ow-moblin and ow-zora `off_share: 0.75` since the r72 retrain,
-  for their weak plain crossings 0x5b and 0x5a), and the early stop and the evaluation (`--clips both`) take
-  both. Lee can turn clips off at any moment while watching (`play-zelda.py`, key `c`), so the plain way must stay
-  trained; track rooms with and without clips (`by_clips` in `eval.json` and `room-stats`).
+- **Clips only: the no-clip way is dropped** (Lee, Nov 18; supersedes "clip families train with clips on and with
+  CLIP masked" of Nov 13, round 22): "From here on, you can drop the no-clip runs. They were an interesting spot of
+  comparison, but should be dropped in favor of just clipping through blocks when needed." From here on: no
+  clips-off chains, tags or evaluations (`CLIPS=off`, `-noclips`, `--clips both`); a clip family's new rounds train
+  with `clips: {enabled: true, off_share: 0}` (no episode with CLIP masked); a room the route clips is not fought
+  and gets no demonstrations or staging for its fight (9:0x55, the Lanmolas: "should be bypassed with a block
+  clip"; 9:0x07's first visit, 0x20 from N, 0x03); no new plain way is built; where a hard room can be passed by a
+  block clip, that is the way. What exists stays: the route's plain ways and `stretch:` forks, the run-time switch
+  and `play-zelda.py`'s key `c` (turning clips off now plays ways no model is trained on from Dungeon 7 onward),
+  the clips-off numbers of rounds 22-26 in their documents.
 - **Bombs (Lee, Nov 11; supersedes "bombs only where the route needs them")**: a family's `items: {bombs: MODE}`
   (`env::config::BombUse`, checked every step in training and chains): `free` (goriya, darknut, moldorm, Dodongo,
   Manhandla, vire: bombs as a weapon, above the route's `bomb_reserve`; always in `requires_bombs` rooms), `required`
