@@ -169,6 +169,16 @@ the river, which a Link without the ladder cannot stand on and the path does not
 (no candle before Dungeon 7, and CANDLE on the overworld is offered only at a route's tree); the two new fields of
 a step's progress (false on every `d2first` step); the end target (no `d2first` step ends the game).
 
+**The two data changes, without the job line** (`scripts/experiments/r29_data_ab.py`). The two changes named
+above that `d2first` rooms read were tested directly: a data root that is this checkout without 0:0x17's
+`path_costs` row and without ow-zora's `candle: true`, against the checkout. Every installed `d2first` start state
+of ow-boulder and ow-zora (38 states, chains 0-2, seeds 0-3) was played through the single-room env in both, each
+decision drawn by a seeded generator from the actions the mask offers, and every observation (the mask is in it),
+action, reward and ending hashed: **456 rollouts, 8,553 decisions, none differs.** A control root with the cost
+moved onto the rows Link walks in 0x17 differs in 9 of that room's 12 rollouts, so the comparison sees a path cost
+that matters. This says the two changes alter no input and no mask in those rooms; it is not the chain (models did
+not play, and only two families' rooms were asked).
+
 **The suites** at the end of the step: `cargo test --release --workspace --features zelda/zcore` green; pytest
 green after two data pins followed the route (the route list, equipment-room's seven new cellars;
 `tests/test_game_map.py` gains the `d9` route's own test); `tf replay verify` on the three corpus replays ok; the
