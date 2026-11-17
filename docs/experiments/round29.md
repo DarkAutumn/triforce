@@ -812,3 +812,109 @@ of 20, 0.55 below, 14 of 20 above; 0x20 20 of 20, 0.33 from the door; 0x03 20 of
   tracks; 0x07 and 0x10 are the dearest fights and the rules themselves lose a third to half of them from 8
   hearts. Next lanmola (82 of 100 `d9` runs die in 0x55; the rule wins 300 of 300 at 1.68 hearts), then the
   overworld items no model plays (the whirlwind, the tree, the rock wall), patra and ganon.
+
+## 16. The first team for the stretch (rounds `r79t5-*`): nine rounds trained, not finished
+
+**State of this section (Nov 17, 17:30).** Nine of ten rounds have trained and been evaluated in single rooms.
+Wizzrobe's round was still training and the evaluation of the continued runs under this code (`r79t5-base`) had
+not run, so the old rooms below are compared with each continued run's own `eval.json` (its team's code, and for
+a clip family both switch states: not the same measurement). **Not done: wizzrobe's evaluation, any second round,
+any promotion of a continued family, the chains, a recorded run to the ending.** Nothing here says what the
+stretch does in a chain.
+
+**The checkout.** The states step's branch with `r26` merged (the bomb rule, 7:0x0d's objective fixes, Dungeon 7's
+heart fit, demonstration rows on the device) and the two heart fits that are not on `r26` picked from the Dungeon
+8 team's branch (`heart_value.json` fitted on `d6` and on `d8`: one table prices `d2first`, `d6` and `d8`; level
+9's steps have no curve and are priced by the plain health terms). The picks were this team's own call: the
+wizzrobe run it continues was trained with Dungeon 6's hearts priced. The merge left one test uncompiled
+(`bomb_targets` gained `reserve` and `granted`); fixed as the Dungeon 8 team did. Trajectories: this branch's with
+round 28's, 27's and 26's (1,113 tracks; names in common were byte for byte the same).
+
+**The owner's decision of Nov 18** (decisions 2026-11-18: no no-clip runs; the Lanmola room is bypassed by its
+block clip) came before anything was queued. For every round here: `off_share: 0` in the nine clip families
+trained, evaluations with the switch on only, wizzrobe's `room_kills` without 9:0x07 and 0x20, no demonstration
+file of a clipped room's fight (lanmola, wizzrobe-07, wizzrobe-20, room-03 unused), and the `~plain` tracks and
+fight-rule tracks of 9:0x55, 0x07, 0x20 and 0x03 out of the curriculum (57 tracks, set aside).
+
+**The clips as rules** (`scripts/experiments/r29_clip_demos.py`: `r29_clips.py`'s lane to the clip's grid point,
+`CLIP`, the stairs' row, the stairs), the family's draws, 100 runs a state on chains 0-2:
+
+| Rule (family) | Won of 300 | Hearts lost in the wins | Rows |
+|---|---|---:|---:|
+| clip-55 (lanmola) | 300 | 0 | 4,500 |
+| clip-07, no ring (wizzrobe) | 269 (25 deaths, 4 wrong exits, 2 stuck) | 1.32 | 6,223 |
+| clip-20n (wizzrobe) | 300 | 0.45 | 4,383 |
+| clip-03 (like-like) | 300 | 0 | 4,926 |
+
+```bash
+python scripts/experiments/r29_clip_demos.py ROOM --runs 100 --hearts family --out target/r29-demos/ROOM.npz
+```
+
+**The rounds.** One `train_round.py` round a family (ow-leever and ow-boulder together), `--chain-runs 0 --parallel
+8 --eval-parallel 3`, `--train-args "[--load {name}] --iterations N --seed 79 --stop-success 1.01 --sil-coeff 0.1
+--checkpoint-every 30 [--demos FILES --demo-coeff 0.05]"`. Each waited five to eight hours in the job line.
+
+| Round | Family | Starts from | Iterations | Demonstration files |
+|---|---|---|---:|---|
+| `r79t5-ganon` | ganon | boss-gohma `r77-gohma` (warm start) | 488 | ganon, zelda |
+| `r79t5-patra` | patra | moldorm `r75-f-b` (warm start) | 488 | patra-16, patra-61, patra-52 |
+| `r79t5-lanmola` | lanmola | moldorm `r75-f-b` (warm start) | 488 | clip-55 |
+| `r79t5-wizz` | wizzrobe | `r78-wizz-s78` | 488 | wizzrobe-05, -10, -30, clip-07, clip-20n, round 27's bomb28 |
+| `r79t5-like` | like-like | `r77-b` | 244 | like-like-14, clip-03 |
+| `r79t5-moblin` | ow-moblin | `r78t4-moblin` | 244 | whirlwind, round 28's tree |
+| `r79t5-zora` | ow-zora | `r76-zora-arrows` | 244 | tree |
+| `r79t5-ow` | ow-leever, ow-boulder | `r76-b`, `r72-ow` | 244 | none |
+| `r79t5-lynel` | ow-lynel | `r78t4-lynel` | 244 | rock-wall, round 28's whirlwind |
+| `r79t5-skg` | stalfos-keese-gel | `r78-skg` | 244 | none |
+
+Two of the starting runs were the newest of their family but not yet confirmed by their own teams' chains when
+they were taken: `r78-skg` (Dungeon 6's team) and `r76-zora-arrows` (Dungeon 7's). ow-octorok, zol and
+equipment-room were not trained (§13: their new rooms at 100%).
+
+**Single rooms** (`eval.json`, 100 episodes a state, seed 0, clips on; "before" is §13's `r79-base`, 20 episodes
+a state, a clip family's there with the switch on and off):
+
+| Room | Family | Before | After | Hearts a visit | Endings other than success |
+|---|---|---:|---:|---:|---|
+| 0:0x6d, the whirlwind (`0_6dc`) | ow-moblin | 0% | 300 of 300 | 0.00 | |
+| 0:0x47, the tree (`0_47e`) | ow-zora | 0% | 300 of 300 | −0.22 | |
+| 0:0x47 cave and out (`0_47cave`, `0_47c`) | ow-zora | 100%, 98% | 300, 300 of 300 | +1.00, 0.00 | |
+| 0:0x27 E → N (`0_27e`) | ow-zora | 0% | 300 of 300 | −0.06 | |
+| 0:0x48 (`0_48n_v2`, `0_48w`) | ow-leever | 98%, 77% | 300, 300 of 300 | −0.10, −0.19 | |
+| 0:0x17 S → N (`0_17s`) | ow-boulder | 0% | **0 of 300** | −7.9 | 72 deaths, 7 wrong exits, 221 `max-steps` |
+| 0:0x07, 0:0x06 | ow-lynel | 100%, 92% | 300, 300 of 300 | −0.53, 0.00 | |
+| 0:0x05, the rock wall (`0_05e`) | ow-lynel | 0% | 297 of 300 | −1.33 | 3 deaths |
+| 9:0x76, 0x66, 0x26, 0x06, 0x62 | stalfos-keese-gel | 75-100% | 100% each | 0.00 to −0.04 | |
+| 9:0x55, the clip (`9_55s`) | lanmola | 4% | **251 of 300 (83.7%)** | −3.57 | 46 deaths, 3 wrong exits |
+| 9:0x14, cleared | like-like | 2% | 300 of 300 | −0.30 | |
+| 9:0x51, 0x41 | like-like | 0%, 58% | 300, 300 of 300 | −0.12, −0.05 | |
+| 9:0x03, the clip | like-like | 65% | 300 of 300 | 0.00 | |
+| 9:0x16 (two entries) | patra | 30%, 90% | 99.2% of 600 | −0.90 | 4 deaths, 1 wrong exit |
+| 9:0x27 (two entries) | patra | 32%, 68% | 98.8% of 600 | −1.49 | 7 deaths |
+| 9:0x61 (two entries) | patra | 0%, 100% | 99.7% of 600 | −0.24 | 2 deaths |
+| 9:0x52 | patra | 0% | 98.0% of 300 | −0.96 | 6 deaths |
+| 9:0x42, Ganon | ganon | 0% | 300 of 300 | −0.34 | |
+| 9:0x32, Zelda | ganon | 100% | 300 of 300 (`game-completed`) | 0.00 | |
+
+- **Two rooms are not learned.**
+  - *0:0x17 from S* (ow-boulder, the ladder): 0 of 300 after 244 iterations, as before. The family has no
+    curriculum and no demonstration file; its other starts are unchanged (0:0x17 from E, 0x18 and 0x19 300 of 300
+    each). Why it fails (the objective's target on the ladder, the mask) was not looked at; that comes before a
+    second round.
+  - *9:0x55* (lanmola): the model does 0.84 clips an episode (0.83 `CLIP N`; 0.13 more aborted) and dies in 46 of
+    300, where the rule does the same clip 300 of 300 without a heart lost. Not looked at either. The run is
+    promoted in the team's checkout as the family's only run.
+- **Old rooms**, against each continued run's own `eval.json` (see the note at the top): every room in common is
+  within 1.5 points or better but ow-zora's 0:0x55, 99.3% → 97.0% (26 wrong exits in 900; `0_55n_v2` 93%), and
+  ow-lynel's 0:0x0a, 97.8% → 96.8%. Both are under the three-point bar and neither is measured on equal terms yet.
+  Better: ow-leever 0:0x34 98.2% → 99.7% (−0.85 → −0.31 hearts), ow-moblin 0:0x5b 97.6% → 99.3%.
+- **Kept so far** (promoted in the team's checkout only): ganon `r79t5-ganon`, patra `r79t5-patra`, lanmola
+  `r79t5-lanmola`. The continued families wait for `r79t5-base`, which evaluates each family's promoted run:
+  promoting before it runs would make it measure the new run.
+
+**Left**: wizzrobe's evaluation (Dungeons 6 and 9 together, against `r78-wizz-s78`); `r79t5-base` and the
+judgment of the seven continued families on equal terms; the causes in 0:0x17 and 9:0x55 and at most one more
+round each; the promotions; the chains (`TAG=r79t5-1k RUNS=1000 scripts/experiments/r29_d9_baseline.sh`) against
+`r79-base`, with where runs end, the hearts on entering and lost a visit and the cheated items; a recorded run to
+the ending, verified, if one exists; and what the survival budget looks like in real chains against the walks'
+estimate of about 38 hearts for 15 containers.
