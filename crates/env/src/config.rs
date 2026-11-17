@@ -1067,7 +1067,9 @@ impl GameData {
         };
         let values_path = root.join("triforce/heart_value.json");
         let heart_values = if values_path.exists() {
-            Some(Arc::new(HeartValues::parse(&read("triforce/heart_value.json")?)?))
+            let mut values = HeartValues::parse(&read("triforce/heart_value.json")?)?;
+            values.routes = values.prices(&map);
+            Some(Arc::new(values))
         } else {
             None
         };
@@ -1211,8 +1213,9 @@ impl GameData {
         ))
     }
 
-    /// A config whose `reward.heart_value` reads the table needs `triforce/heart_value.json` fitted for its route as
-    /// the route stands now ([`HeartValues::check`]).
+    /// A config whose `reward.heart_value` reads the table needs `triforce/heart_value.json` fitted for the route it
+    /// names as that route stands now ([`HeartValues::check`]), and that route the family's or one extending it
+    /// ([`HeartValues::prices`]).
     pub fn check_heart_values(&self, config: &SpecialistConfig) -> Result<(), ConfigError> {
         if !config.reward.heart_value.uses_table() {
             return Ok(());
@@ -1225,20 +1228,29 @@ impl GameData {
                 config.name
             ));
         };
-        if values.route != route {
+        let Some(fitted) = self.map.routes.get(&values.route) else {
             return err(format!(
-                "{}: reward.heart_value: triforce/heart_value.json is fitted for route {:?}, the family plays {route:?}",
+                "{}: reward.heart_value: triforce/heart_value.json is fitted for route {:?}, which routes.yaml lacks: \
+                 refit it with `python -m triforce.heart_value <chain jsonl>... --route <route>`",
+                config.name, values.route
+            ));
+        };
+        values.check(fitted, &self.map.visits[&values.route])?;
+        if !values.routes.iter().any(|r| r == route) {
+            return err(format!(
+                "{}: reward.heart_value: triforce/heart_value.json is fitted for route {:?}, which neither is nor \
+                 extends the family's {route:?}",
                 config.name, values.route
             ));
         }
-        values.check(&self.map.routes[route], &self.map.visits[route])
+        Ok(())
     }
 
     /// The table that prices hearts for `config` on `route` (None when its `reward.heart_value` reads no table or
-    /// the table is another route's).
+    /// the table prices another route: [`HeartValues::prices`]).
     pub fn heart_values_for(&self, config: &SpecialistConfig, route: &str) -> Option<&HeartValues> {
         let values = self.heart_values.as_deref()?;
-        (config.reward.heart_value.uses_table() && values.route == route).then_some(values)
+        (config.reward.heart_value.uses_table() && values.routes.iter().any(|r| r == route)).then_some(values)
     }
 
     /// The specialist tagged on a room.

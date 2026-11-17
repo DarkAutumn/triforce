@@ -950,9 +950,13 @@ off, the full route's with the segments' (each arrival bin's own transitions mix
 that assumes the damage a room deals does not depend on the hearts brought, a Kaplan-Meier estimate over the step's
 visits; backwards from each triforce; made non-decreasing in hearts); refit it after a round that changes the team
 or the route. The table names each step's room, entry, exit and visit, and a family that reads it refuses to load
-when they no longer match the route (`GameData::check_heart_values`); a family that doesn't read it ignores it. The
-terms: `exit: true` makes the success terminal's health part V(next step, hearts out) / V(next step, max hearts)
-instead of hp/max_hp (still weighted by w); `potential: S` pays S × (V(step, after) − V(step, before)) for every
+when they no longer match the route the table names (`GameData::check_heart_values`); a family that doesn't read it
+ignores it. A table prices its own route and every route whose steps are its first ones (`HeartValues::prices`;
+round 27: fitted with `--route d6`, the scouting route that extends `d2first`, it prices both, an episode on
+either reads it, and its rows 0-247 are the `d2first` fit's); on a route it does not price the family is paid the
+plain health reward. The terms: `exit: true` makes the success terminal's health part V(next step, hearts out) /
+V(next step, max hearts) instead of hp/max_hp (still weighted by w); `potential: S` pays S × (V(step, after) −
+V(step, before)) for every
 change of hearts in a room (a hit or a pickup; not the triforce's refill or a heart container) at the room's route
 step, as `reward-heart-value` / `penalty-heart-value`, beside the flat `penalty-lost-health` /
 `reward-gained-health`; `low_health: F` adds F × (1 − hearts after / max) × the step's `penalty-lost-health` to the
