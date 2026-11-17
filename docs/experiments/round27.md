@@ -701,3 +701,48 @@ and 0x3a, the family's hp draw): the model alone wins 0x38 74.0% (−4.68 hearts
 `temperature:0.5+relax:16+plan:16:1` 85.3% (−3.09) and 86.3% (−2.99). One action of foresight wins 11-18 points more
 and keeps 1.6-2.3 hearts a visit: **the rooms are winnable at a far lower price, and the policy is the gap**, not the
 rooms. (The planner is never the primary number.)
+
+### 13.4 The planner on the `d6` segment, and the next levers
+
+**The honest planner on the whole segment** (a diagnostic, never the primary number): the promoted team with
+`r78-wizz-s78`, every model in `temperature:0.5+relax:16+plan:16:1`, 300 runs on seeds 0-299 (`triforce eval-chain
+--route d6 --from 6_79s_0 --clips on --runs 300 --first-seed 0 --parallel 10 --act temperature:0.5+relax:16+plan:16:1`):
+**162 of 300, 54.0%**, where `r77a-1k` won 9.0% of the same seeds (the model alone with `r78-wizz-s78` confirmed
+18.4% on 1000-1999, §13.3). The ledger of the 300 runs (hearts on entering, lost a visit, deaths):
+
+| room | `r77a-1k` seeds 0-299: visits | in | lost | deaths | planner: visits | in | lost | deaths |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 6:0x58 | 300 | 11.83 | 1.17 | 0 | 300 | 11.97 | 0.51 | 0 |
+| **6:0x38** | 300 | 10.66 | 6.54 | **72** | 300 | 11.46 | 3.25 | **14** |
+| 6:0x28 | 228 | 5.42 | 0.26 | 4 | 360 | 8.48 | 1.43 | 43 |
+| 6:0x29 | 225 | 5.24 | 0.61 | 17 | 317 | 8.01 | 0.35 | 7 |
+| 6:0x39 | 208 | 5.00 | −0.04 | 9 | 253 | 7.80 | −0.48 | 0 |
+| **6:0x3a** | 198 | 5.29 | 4.05 | **141** | 253 | 8.28 | 2.89 | **53** |
+| 6:0x2c | 56 | 4.33 | 2.39 | 28 | 180 | 7.02 | 1.41 | 16 |
+| 6:0x1c (Gohma) | 28 | 3.88 | −1.14 | 1 | 164 | 6.16 | −1.42 | 2 |
+
+With one action of foresight 0x58 costs half a heart instead of 1.2 (Link reaches 0x38 with his beam), 0x38 half
+its hearts and a fifth of its deaths, and 0x3a, entered with 8.3 hearts instead of 5.3, kills 21% instead of 71%:
+**the segment is winnable well above 30% by this policy plus one step of foresight**, and the hearts carried into
+0x3a are the lever, as §13.1 said. The planner is worse only in 0x28 (360 visits for 300 runs: it walks back out
+and in, 43 deaths), which the model alone does not do.
+
+**The `r78-1k` chains** (`ROUTE=d6 SEGMENTS="post-d7:0_42c_0 d6:6_79s_0" TAG=r78-1k RUNS=1000 ACT=model
+scripts/experiments/r56_chains.sh`, clips on, the paired difference against `r77a-1k` on seeds 0-999) were still
+waiting in the job queue when this was written. `d6`'s seeds 0-999 are the ones `r78-wizz-s78` was screened on, so
+that segment's number is biased up; the unbiased one is the confirmation's 18.4% against 10.7% (§13.3). `post-d7`
+is not.
+
+**Next levers, one at a time, each three seeds and chosen by the `d6` segment:**
+
+1. Training length (queued: `r79-wizz-s78`, `-s79`, `-s80`, each 488 more iterations from its own `r78` run, seeds
+   81-83, the same arguments as §13.3): every `r78` run's checkpoints were still rising on the screen.
+2. Staged starts at the hearts runs bring: `ram_randomization.chain_hp` (the existing mechanism, rounds 6 and 10)
+   with `triforce/chain_hp.json` built from the `d6` chains (`python -m triforce.chain_hp`), so a share of 0x3a's
+   resets start with the 4-8 hearts the runs bring rather than the uniform `hp` draw. No profile ships yet.
+3. A lower `room_kills_share` in 0x38 and 0x3a (more full rooms in training).
+
+What I would build next (not built here: no reward or observation change in this round): the planner's lesson is
+that one step of foresight halves 0x38's hearts. Distilling it, the planner's choices in 0x38 and 0x3a recorded as
+demonstrations (`--demos`, as 0x28's bomb is), would teach the policy the dodges it now finds only by search,
+without changing the reward or the observation; the planner's 0x28 back-and-forth would be left out of the file.
