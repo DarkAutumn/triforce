@@ -151,6 +151,16 @@ def test_train_args_expand_only_the_name_placeholder(round_, tmp_path, monkeypat
     assert commands[0][-4:] == ['--load', '/x/goriya', '--search', '{"candidates": 4}']
 
 
+def test_the_estimate_reads_iterations_and_steps_from_train_args(round_):
+    direct = round_.parse_args(['--round', 'r', '--steps', '8192', '--steps-per-update', '4096'])
+    assert round_.effective_schedule(direct) == (2, 4096)
+    inside = round_.parse_args(['--round', 'r', '--train-args', '--iterations 2 --load /x/{name}'])
+    assert round_.effective_schedule(inside) == (2, 4096)
+    assert round_.round_work(inside, [SPECIALIST], *round_.effective_schedule(inside))['train_steps'] == 2 * 4096
+    per_update = round_.parse_args(['--round', 'r', '--train-args', '--steps 1024 --iterations=3'])
+    assert round_.effective_schedule(per_update) == (3, 1024)    # triforce.train reads --steps as --steps-per-update
+
+
 def test_runs_are_evaluated_in_the_project_act_mode_by_default(round_):
     assert round_.parse_args(['--round', 'r']).eval_act == registry.DEFAULT_ACT
 

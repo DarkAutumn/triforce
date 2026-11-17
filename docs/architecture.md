@@ -892,6 +892,10 @@ with demonstration rows a scripted rule recorded through the env (`DemoRecorder`
 `.npz`; a rare decision can be written several times to weigh more). A row whose duration is `demos.ANY_DURATION`
 (-1) leaves the duration head's term out (`ppo.demo_log_prob`, `PolicyOutput.head_log_prob`): kind and direction are
 cloned, the pace stays the policy's. Round 25 §5: `scripts/experiments/r25_d5_37_tracks.py --demos` for 5:0x37.
+The rows stay in host memory: a batch larger than a minibatch moves only each minibatch's sample to the device (drawn
+on the device as before, so a seed's draws are unchanged) and `charts/demo_bc_accuracy` is computed a minibatch of rows
+at a time (round 28: `gleeok.npz`'s 106k rows, 0.87 GiB, put whole on the GPU, whose accuracy pass then asked for 4.5
+GiB more and died out of memory; now an update's peak is about 0.3 GiB).
 `--sil-coeff C` (`PPOConfig.sil_coeff`, self-imitation learning, Oh et al. 2018; §3) is the alternative to best-of-N:
 after each rollout `ppo.SilReplay` keeps the rows whose λ = 1 return R (`RolloutBuffer.monte_carlo_returns`:
 frame-aware discount to the episode end, bootstrapped exactly like GAE, against the learner's recomputed values)
@@ -1141,7 +1145,8 @@ every step, so following an enemy that moves away pays again, and knockback rese
   never wait (`tests/conftest.py`: `$TRIFORCE_MAX_JOBS=0`; the line's own tests set their limit).
 - Work and estimates (`jobs.py`, Nov 15): every job names its `work` when it creates its plan (`TrainingPlan(...,
   work=jobs.work(...))`), in three coarse units: `train_steps` (the training steps asked for: a round's
-  specialists x iterations x steps per update, a training's iterations x steps per iteration), `eval_episodes` (an
+  specialists x iterations x steps per update, those `--train-args` sets winning as they do in the training's command
+  (`train_round.effective_schedule`), a training's iterations x steps per iteration), `eval_episodes` (an
   evaluation's `evaluate.episode_count`; a round's evaluation of each specialist, seed states x episodes per state x
   the clips switch states it plays, counted without loading a state; a batch's evaluation entries) and
   `chain_steps` (runs x the route steps a run plays from its start to its stop, `runner.steps_played`: a full-route
