@@ -692,29 +692,25 @@ checkpoint's endings with the clocks it took while a hand lived, which `eval.jso
 .venv/bin/python scripts/experiments/r26_d7_0d_demos.py dagger.npz 40 --policy RUN_DIR   # DAgger rows
 ```
 
-### Training: not done on this branch
+### Training
 
-**No run was trained under the fixed objective, so there is no run to recommend and the target (80% in 7:0x0d,
-captures under 5%) is not measured.** The lead's order was PPO alone first (if the objective was the whole cause,
-the curriculum may be enough, and that is the cleaner result), the demonstrations only if it is not. Round 1 was
-started so and was still waiting its turn in the job line when the branch was handed back:
+The lead's order: PPO alone first (if the objective was the whole cause the curriculum may be enough, and that is
+the cleaner result), the demonstrations only if it is not. Every round is `scripts/train_round.py --round R
+--specialists wallmaster --chain-runs 0 --parallel 8 --eval-parallel 3 --models-dir $PWD/models --train-args "--load
+RUN_DIR --iterations 244 --seed 76 --stop-success 1.01 --sil-coeff 0.1 ..."`, judged by the round's own `eval.json`
+(100 episodes a state, `temperature:0.5+relax:16`).
 
-```bash
-.venv/bin/python scripts/train_round.py --round r76-wall-1 --specialists wallmaster --chain-runs 0 --parallel 8 \
-    --eval-parallel 3 --models-dir $PWD/models \
-    --train-args "--load $PWD/models/wallmaster/r76-b --iterations 244 --seed 76 --stop-success 1.01 --sil-coeff 0.1"
-# if 7:0x0d stays below 80% or captures at 5% or more: the same from the better run, with the rule's rows
-#   ... --round r76-wall-2 --train-args "--load RUN_DIR ... --sil-coeff 0.1 --demos rule.npz --demo-coeff 0.05"
-# (0.1 if the clone does not take: `charts/demo_bc_accuracy`), then DAgger rows beside rule.npz if the policy
-# fails off the rule's path.
-```
+| Run | From | Extra | 1:0x45 | 7:0x0d | Captured | Other endings | Hearts a visit |
+|---|---|---|---|---:|---:|---|---:|
+| `r71-e` (promoted) | | | 300 / 300, 0 lost | not played | | | |
+| `r76-b` (the first team's) | `r71-e` | old objective | 300 / 300, 0 lost | 11 / 300 (3.7%) | 37 | 251 `no-damage`, 1 `stuck` | −0.02 |
+| `r76-b`, untrained, fixed objective | | | 300 / 300, the same episodes | 55 / 300 (18.3%) | 170 | 55 `no-damage`, 20 `exit-wrong` | −0.24 |
+| **`r76-wall-1`** | `r76-b` | none: PPO alone | 300 / 300, 0 lost | **259 / 300 (86.3%)** | **26 (8.7%)** | 15 `no-damage` | +0.27 |
 
-What stands as measured: `r76-b` itself, untrained, on the fixed objective (100 episodes a state, its act mode):
-
-| Room | Before the fixes (`r76-b`'s `eval.json`) | After both fixes |
-|---|---|---|
-| 1:0x45 | 300 / 300, no heart lost | 300 / 300, the same 300 episodes |
-| 7:0x0d | 11 / 300: 37 captured, 251 `no-damage`, 1 `stuck` | 55 / 300: 170 captured, 55 `no-damage`, 20 `exit-wrong`; 0.24 hearts lost a visit |
-
-Judge a trained run by its `eval.json` `by_room` (7:0x0d's success and endings, captures first; 1:0x45 not below
-`r71-e`'s 300 of 300 with no heart lost) and by `--measure --policy` for the clocks taken.
+**The objective was the cause: on the fixed one PPO alone takes the room from 4% to 86%** in one continuation of
+244 iterations (1M env steps), with 1:0x45 unchanged (300 of 300, no heart lost, worst linger 4 decisions). By
+state: `7_0dw_0` 79 of 100 (6 captured, 15 `no-damage`), `7_0dw_1` 90 (10 captured), `7_0dw_2` 90 (10 captured).
+A winning episode takes 55 decisions and 1049 frames at the median, faster than the rule (121 and 1747). All 15
+`no-damage` episodes are from `7_0dw_0`, the state whose kill cycle drops the clock. The target is half met: 80%
+is passed, captures are 8.7%, not under 5%. So round 2 continues `r76-wall-1` with the rule's rows (`--demos
+rule.npz --demo-coeff 0.05`, the 28,354-row file).
