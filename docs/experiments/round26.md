@@ -714,3 +714,11 @@ A winning episode takes 55 decisions and 1049 frames at the median, faster than 
 `no-damage` episodes are from `7_0dw_0`, the state whose kill cycle drops the clock. The target is half met: 80%
 is passed, captures are 8.7%, not under 5%. So round 2 continues `r76-wall-1` with the rule's rows (`--demos
 rule.npz --demo-coeff 0.05`, the 28,354-row file).
+
+`r76-wall-1` by cause (`r26_d7_0d_demos.py --measure 100 --policy RUN_DIR`: the checkpoint drawn at temperature
+0.5 without the stall rule, 100 runs a state with the yaml's staging, the clocks read from RAM): 267 of 300
+`exit-correct`, **26 captured**, 6 still in the room after 600 decisions, 1 `exit-wrong`. A clock dropped in 42 runs
+(all from `7_0dw_0`) and **was taken while a hand lived in 9** of them; the 6 runs that never ended are from that
+state too. By kills banked at the start, won of played: none 129 of 156, one 20 of 21, two 49 of 51, three 39 of
+42, four 30 of 30. So what is left of the room is the capture, mostly in the full fight (the unstaged runs fail one
+time in six), and the clock (about one in five that drop is taken).
