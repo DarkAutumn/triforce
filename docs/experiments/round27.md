@@ -636,3 +636,39 @@ of 12 now pays the exit's health part 0.19 of full (V(0x28, 6) / V(0x28, 12)) wh
 wizzrobe and stalfos-keese-gel already carry round 25's `heart_value: {exit: true, potential: 20}`; with the table
 they price Dungeon 6 by it (checked: an episode from `6_38s_0` pays `penalty-heart-value` beside
 `penalty-lost-health`).
+
+### 13.3 The continuations, and the planner's diagnostic
+
+wizzrobe continued from `r77-wizz` with the table on (three seeds, round 25's rule for an arm), stalfos-keese-gel
+from its promoted `r77-b` (one seed), each 488 iterations, `--sil-coeff 0.1 --checkpoint-every 30 --parallel 8`;
+wizzrobe kept 0x28's bomb demonstrations as `r77-wizz` had them:
+
+```bash
+python scripts/train_round.py --round r78-wizz-s78 --specialists wizzrobe --chain-runs 0 --parallel 8 --eval-parallel 3 \
+    --train-args "--load models/wizzrobe/r77-wizz --iterations 488 --seed 78 --stop-success 1.01 --sil-coeff 0.1 \
+                  --demos target/r27-demos/bomb28.npz --demo-coeff 0.05 --checkpoint-every 30"     # and seeds 79, 80
+python scripts/train_round.py --round r78-skg --specialists stalfos-keese-gel --chain-runs 0 --parallel 8 --eval-parallel 3 \
+    --train-args "--load stalfos-keese-gel --iterations 488 --seed 78 --stop-success 1.01 --sil-coeff 0.1 --checkpoint-every 30"
+```
+
+Canonical single-room evaluations (100 episodes a state, the family's hp draw, its act mode):
+
+| run | success | hearts a visit | 0x38 | 0x3a | 0x2c | 0x29 |
+|---|---:|---:|---:|---:|---:|---:|
+| `r77-wizz` (promoted) | 89.1% | −2.24 | 71.0% | 67.7% | 96.3% | 99.3% |
+| `r78-wizz-s78` | 91.2% | −1.82 | 78.0% | 72.0% | 97.7% | 99.7% |
+| `r78-wizz-s79` | 90.9% | −1.86 | 73.3% | 75.0% | 97.7% | 99.7% |
+| `r78-wizz-s80` | 91.4% | −1.90 | 74.7% | 75.7% | 98.7% | 99.7% |
+
+All three seeds keep about 0.4 hearts a visit more and win both block rooms more often than the promoted run, as
+round 25's priced darknut did in single rooms; single rooms do not decide a promotion. **The choice by the chain is
+running**: `triforce select-checkpoint wizzrobe r78-wizz-s<N> --from 6_79s_0 --route d6 --runs 1000 --confirm 1000
+--parallel 10` for each seed (the tool has no `--segment d6`; `--from` with `--route d6` is the segment, scored to the
+route's end, the D6 triforce), then the best confirmed is promoted and the `d6` and `post-d7` chains are measured
+again against `r77a-1k`. stalfos-keese-gel's run (`r78-skg`) was still training when this was written.
+
+**The honest planner as a teacher's diagnostic** (batch `r27w-plan`, `r77-wizz`, 100 episodes on each state of 0x38
+and 0x3a, the family's hp draw): the model alone wins 0x38 74.0% (−4.68 hearts) and 0x3a 68.3% (−5.24); with
+`temperature:0.5+relax:16+plan:16:1` 85.3% (−3.09) and 86.3% (−2.99). One action of foresight wins 11-18 points more
+and keeps 1.6-2.3 hearts a visit: **the rooms are winnable at a far lower price, and the policy is the gap**, not the
+rooms. (The planner is never the primary number.)
