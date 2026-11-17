@@ -813,14 +813,14 @@ of 20, 0.55 below, 14 of 20 above; 0x20 20 of 20, 0.33 from the door; 0x03 20 of
   hearts. Next lanmola (82 of 100 `d9` runs die in 0x55; the rule wins 300 of 300 at 1.68 hearts), then the
   overworld items no model plays (the whirlwind, the tree, the rock wall), patra and ganon.
 
-## 16. The first team for the stretch (rounds `r79t5-*`): nine rounds trained, not finished
+## 16. The first team for the stretch (rounds `r79t5-*`): ten rounds trained, not finished
 
-**State of this section (Nov 17, 17:30).** Nine of ten rounds have trained and been evaluated in single rooms.
-Wizzrobe's round was still training and the evaluation of the continued runs under this code (`r79t5-base`) had
-not run, so the old rooms below are compared with each continued run's own `eval.json` (its team's code, and for
-a clip family both switch states: not the same measurement). **Not done: wizzrobe's evaluation, any second round,
-any promotion of a continued family, the chains, a recorded run to the ending.** Nothing here says what the
-stretch does in a chain.
+**State of this section (Nov 17, 17:45).** All ten rounds have trained and been evaluated in single rooms. The
+evaluation of the continued runs under this code (`r79t5-base`) had only begun, so the old rooms below are
+compared with each continued run's own `eval.json` (its team's code, and for a clip family but wizzrobe and
+like-like both switch states: not the same measurement). **Not done: the old rooms on equal terms, any second
+round, any promotion of a continued family, the chains, a recorded run to the ending.** Nothing here says what
+the stretch does in a chain.
 
 **The checkout.** The states step's branch with `r26` merged (the bomb rule, 7:0x0d's objective fixes, Dungeon 7's
 heart fit, demonstration rows on the device) and the two heart fits that are not on `r26` picked from the Dungeon
@@ -912,8 +912,33 @@ a state, a clip family's there with the switch on and off):
   `r79t5-lanmola`. The continued families wait for `r79t5-base`, which evaluates each family's promoted run:
   promoting before it runs would make it measure the new run.
 
-**Left**: wizzrobe's evaluation (Dungeons 6 and 9 together, against `r78-wizz-s78`); `r79t5-base` and the
-judgment of the seven continued families on equal terms; the causes in 0:0x17 and 9:0x55 and at most one more
+**Wizzrobe** (`r79t5-wizz`, 488 iterations from `r78-wizz-s78`; 600 episodes a room with two entries):
+
+| Room (state) | Before (§13) | After | Hearts a visit | Endings other than success |
+|---|---:|---:|---:|---|
+| 9:0x65 (`9_65e`) | 94% | 287 of 300 | −1.50 | 13 deaths |
+| 9:0x15 (`9_15w`) | 100% | 300 of 300 | −0.38 | |
+| 9:0x17 S → N wall (`9_17s`) | 15% | 285 of 300 | −3.46 | 15 deaths |
+| 9:0x07, the clip, no ring (`9_07s`) | 4% | 296 of 300 | −1.45 | 4 deaths |
+| 9:0x07 out of the ring (`9_07c`) | 100% | 300 of 300 | −0.44 | |
+| 9:0x17 N → S (`9_17n`) | 33% | 300 of 300 | −0.68 | |
+| 9:0x05, fought (`9_05e`) | 75% | 287 of 300 | −1.71 | 10 deaths, 3 wrong exits |
+| 9:0x20 out of the tunnel (`9_20c`) | 37% | 300 of 300 | −0.17 | |
+| 9:0x10, fought (`9_10s`) | 19% | 262 of 300 | −2.98 | 36 deaths, 2 wrong exits |
+| 9:0x10 out of its cellar (`9_10c`) | 0% | 300 of 300 | 0.00 | |
+| 9:0x20 from N, the clip (`9_20n`) | 38% | 300 of 300 | −0.33 | |
+| 9:0x31 (`9_31s`) | 91% | 300 of 300 | −0.18 | |
+| 9:0x30, fought (`9_30e`) | 92% | 286 of 300 | −1.41 | 6 deaths, 8 wrong exits |
+| 9:0x04 (`9_04c`) | 76% | 300 of 300 | −0.18 | |
+
+Its Dungeon 6 rooms against `r78-wizz-s78`'s own `eval.json` (Dungeon 6's team's code; both clips on): **6:0x38
+78.0% → 70.7%** (deaths 64 → 85; −4.49 → −5.33 hearts), 6:0x3a 72.0% → 69.3% (deaths 67 → 90, wrong exits 16 → 2;
+−4.10 → −5.17), 6:0x2c 97.7% → 96.7%, 6:0x28, 0x29 and 0x78 unchanged in success. 0x38 is past the three-point
+bar and both fought rooms lose about a heart more: on these numbers the run pays for level 9 with Dungeon 6. It is
+not promoted; `r79t5-base` measures `r78-wizz-s78` under this code, and the `d6` segment decides.
+
+**Left**: `r79t5-base` and the judgment of the eight continued families on equal terms (wizzrobe's Dungeon 6
+rooms first, then the `d6` segment); the causes in 0:0x17 and 9:0x55 and at most one more
 round each; the promotions; the chains (`TAG=r79t5-1k RUNS=1000 scripts/experiments/r29_d9_baseline.sh`) against
 `r79-base`, with where runs end, the hearts on entering and lost a visit and the cheated items; a recorded run to
 the ending, verified, if one exists; and what the survival budget looks like in real chains against the walks'
