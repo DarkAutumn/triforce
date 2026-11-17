@@ -830,10 +830,13 @@ with demonstration rows a scripted rule recorded through the env (`DemoRecorder`
 `.npz`; a rare decision can be written several times to weigh more). A row whose duration is `demos.ANY_DURATION`
 (-1) leaves the duration head's term out (`ppo.demo_log_prob`, `PolicyOutput.head_log_prob`): kind and direction are
 cloned, the pace stays the policy's. Round 25 §5: `scripts/experiments/r25_d5_37_tracks.py --demos` for 5:0x37.
-The rows stay in host memory: a batch larger than a minibatch moves only each minibatch's sample to the device (drawn
-on the device as before, so a seed's draws are unchanged) and `charts/demo_bc_accuracy` is computed a minibatch of rows
-at a time (round 28: `gleeok.npz`'s 106k rows, 0.87 GiB, put whole on the GPU, whose accuracy pass then asked for 4.5
-GiB more and died out of memory; now an update's peak is about 0.3 GiB).
+The rows go to the device once when they fit there (`ppo.DEMO_DEVICE_BYTES`, 4 GiB, and on CUDA a quarter of the
+free memory), else they stay in host memory and each minibatch's sample moves as it is drawn (drawn on the device
+either way, so a seed's draws are unchanged). `charts/demo_bc_accuracy` reads every row of a batch of at most
+`ppo.DEMO_ACCURACY_ROWS` (8192) rows and a sample of that many of a larger one, drawn by a generator of its own.
+Round 28: `gleeok.npz`'s 106k rows are 0.87 GiB; the accuracy pass over all of them at once asked for 4.5 GiB more
+and died out of memory, and made a minibatch at a time it took most of an update (darknut's 196k rows: 8.7 s an
+update against 1-2 s without demonstrations, 460 steps a second against 1100).
 `--sil-coeff C` (`PPOConfig.sil_coeff`, self-imitation learning, Oh et al. 2018; §3) is the alternative to best-of-N:
 after each rollout `ppo.SilReplay` keeps the rows whose λ = 1 return R (`RolloutBuffer.monte_carlo_returns`:
 frame-aware discount to the episode end, bootstrapped exactly like GAE, against the learner's recomputed values)
