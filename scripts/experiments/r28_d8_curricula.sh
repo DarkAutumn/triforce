@@ -3,13 +3,13 @@
 # Dungeon 6 to Dungeon 8 and of Dungeon 8 (route `d8`, steps 281-296), per family, written under the trajectories
 # root (not committed).
 #
-#   [CHAINS="0 1 2"] [ONLY="darknut boss-gleeok"] [SKIP_DONE=1] scripts/experiments/r28_d8_curricula.sh [OUT]
+#   [CHAINS="0 1 2"] [ONLY="darknut boss-gleeok"] [SKIP_DONE=1] [FIGHTS=0|only] scripts/experiments/r28_d8_curricula.sh [OUT]
 #
 # OUT: the trajectories root (default `trajectories`).  Each line of the log names the state, whether it was solved
 # and the track written; the script exits 1 if any plain (unstaged) state was left without a track.  SKIP_DONE=1
 # leaves out every state whose track is already there (to go on after an interruption); FIGHT_ITERATIONS (9000) is
-# the explorer's budget for the fights; PARALLEL (4) its threads (the machine's cap for explorers).  Run it under
-# `nice -n 10`.
+# the explorer's budget for the fights; PARALLEL (4) its threads (the machine's cap for explorers).  FIGHTS=0 leaves
+# the fights out (the crossings only: minutes), FIGHTS=only runs them alone (hours).  Run it under `nice -n 10`.
 #
 # ow-octorok and stalfos-keese-gel have no `curriculum:` in their yamls; their tracks are written anyway (they show
 # the states are solvable and how long the way is) and are not loaded by a training.
@@ -29,6 +29,7 @@ ONLY=${ONLY:-}
 PARALLEL=${PARALLEL:-4}
 SKIP_DONE=${SKIP_DONE:-}
 FIGHT_ITERATIONS=${FIGHT_ITERATIONS:-9000}
+FIGHTS=${FIGHTS:-1}
 
 states() {
   local out=
@@ -76,16 +77,20 @@ staged() {       # NAME STATES [explore arguments]: a failure is reported, not c
     || echo "staged: not every state solved ($name $*)"
 }
 
-explore ow-lynel "$(states 0_22c)"
-explore ow-octorok "$(states 0_3cr 0_4cn_v2)"
-explore ow-moblin "$(states 0_4dw_v2 0_5dn 0_6dn_v2)"
-explore stalfos-keese-gel "$(states 8_7es 8_2cs)"
-explore boss-manhandla "$(states 8_6es)"
-explore darknut "$(states 8_4es 8_3fw)"
-explore equipment-room "$(states 8_2fcave)"
-explore pols-voice "$(states 8_4cc)"
+if [ "$FIGHTS" != only ]; then
+  explore ow-lynel "$(states 0_22c)"
+  explore ow-octorok "$(states 0_3cr 0_4cn_v2)"
+  explore ow-moblin "$(states 0_4dw_v2 0_5dn 0_6dn_v2)"
+  explore stalfos-keese-gel "$(states 8_7es 8_2cs)"
+  explore boss-manhandla "$(states 8_6es)"
+  explore darknut "$(states 8_4es 8_3fw)"
+  explore equipment-room "$(states 8_2fcave)"
+fi
+[ "$FIGHTS" = 0 ] && exit $fail
 
-# The fights: the full room first (reported, not counted), then the staged starts, the easiest first.
+# The fights: the full room first (reported, not counted), then the staged starts, the easiest first.  0x4c (eight
+# Pols Voices, the corner key, the wall) is one of them: the state build's explorer failed it on every try.
+staged pols-voice "$(states 8_4cc)" --iterations "$FIGHT_ITERATIONS"
 staged boss-gleeok "$(states 8_3cs)" --iterations "$FIGHT_ITERATIONS"
 staged darknut "$(states 8_5es)" --iterations "$FIGHT_ITERATIONS"
 staged darknut "$(states 8_3es)" --iterations "$FIGHT_ITERATIONS"

@@ -1,6 +1,6 @@
 name: pols-voice
 rooms: ['(5, 0x27)', '(5, 0x25)', '(8, 0x4c)']
-start_states: ['5_27*_[0-9]', '5_25*_[0-9]']
+start_states: ['5_27*_[0-9]', '5_25*_[0-9]', '8_4c*_[0-9]']
 success: [exit-correct]
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8): dropped items are shaping targets
@@ -19,7 +19,7 @@ notes: >-
   0x27 S to W (two Pols Voices, two Gibdos, two Keese): its key just above the S door taken, no fight, through the W
   key door. 0x27 joins this family rather than gibdo: its Pols Voices are what it asks Link to get past.
   Copied from zol (one-room, curriculum).
-  Dungeon 8 (round 28, route `d8`; docs/routes/d8.md §15, d8-walks.md §5; no start state yet): 0x4c, eight Pols
+  Dungeon 8 (round 28, route `d8`; docs/routes/d8.md §15, d8-walks.md §5; state `8_4cc`): 0x4c, eight Pols
   Voices, Link up the tunnel's stairs inside the block ring. Out by the ring's S side, round to the key in the NE
   corner (in the open from the start), back along the top row to the N bomb wall, BOMB N from (X $78, Y $5D). ARROW
   is on (the lead's working answer, docs/decisions.md 2026-11-17: not narrowed to a Pols Voice on Link's line; the

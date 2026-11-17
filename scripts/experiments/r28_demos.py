@@ -573,6 +573,42 @@ def write_track(directory, state, seed, what, points, actions, health, ending):
     return track
 
 
+def harvest(directory, what, state, seed, point, action, steps, health, ending):
+    """The next route step's entry state out of a won run, as `entry_states build` writes one (staged in
+    `directory`, for `entry_states install`): the snapshot before the run's last action is played again in a Game
+    with the pre-entry capture on, the hearts refilled and the room fresh (`write_entry_state`).  It is a state after
+    a played fight: it holds what the run holds (the key, the bomb at the wall, the arrows' rupees, the heart
+    container).  Returns its manifest entry."""
+    from triforce._native import Game                           # pylint: disable=import-outside-toplevel
+    from triforce import entry_states                           # pylint: disable=import-outside-toplevel
+    from triforce.paths import STATES_DIR                       # pylint: disable=import-outside-toplevel
+    route = entry_states.route_steps('d8')
+    step, goal = route[ROOMS[what][1]], route[ROOMS[what][1] + 1]
+    chain = int(state.rsplit('_', 1)[1])
+    game = Game(seed=chain, states_dir=str(STATES_DIR))
+    now = game.restore(point)
+    game.capture_pre_entry = True
+    for _ in range(30):
+        if now.full_location == goal.location:
+            break
+        now = game.act(action).state
+    if now.full_location != goal.location or game.last_pre_entry is None:
+        raise RuntimeError(f'{state} seed {seed}: the last action {action} does not enter {goal.filename(chain)}')
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / goal.filename(chain)
+    entry_states.write_entry_state(game, game.last_pre_entry, str(path), goal.location)
+    source = entry_states.read_manifest(str(STATES_DIR)).get(f'{state}.state', {})
+    entry = {'file': path.name, 'chain': chain, 'route': 'd8', 'route_step': goal.index, 'from_step': step.index,
+             'specialist': goal.specialist, 'level': goal.level, 'room': f'0x{goal.room:02x}',
+             'in_cave': goal.in_cave, 'entry': goal.entry, 'exit': goal.exit, 'alternate': False, 'steps': steps,
+             'health': health, 'ending': ending, 'env_steps': steps, 'attempts': 1, 'seconds': 0.0,
+             'played_by': f'scripts/experiments/r28_demos.py {what} (seed {seed})'}
+    if source.get('fight_skipped'):
+        entry['fight_skipped'] = True
+    entry_states._merge_manifest(str(directory), [entry], ' '.join(['python'] + sys.argv))   # pylint: disable=protected-access
+    return entry
+
+
 def play(args):
     from triforce.demos import DemoRecorder, action_indices, legal  # pylint: disable=import-outside-toplevel
     from triforce.paths import STATES_DIR                       # pylint: disable=import-outside-toplevel
@@ -584,10 +620,12 @@ def play(args):
     mean = lambda v: sum(v) / len(v) if v else float('nan')     # noqa: E731
     total = {'won': 0, 'runs': 0, 'endings': collections.Counter(), 'lost': [], 'kinds': collections.Counter(),
              'tracks': 0}
+    harvested = []
     for state in (f'{stem}_{chain}' for chain in chains):
         env = rule_env(family, state, args.hearts)
         endings, lost, steps_won, kinds, hearts_in = collections.Counter(), [], [], collections.Counter(), []
         kept = tracks = 0
+        entry = None
         for seed in range(SEED0, SEED0 + args.runs):
             obs, _ = env.reset(seed=seed, options={'start_state': state})
             rule = RULES[args.what]()
@@ -605,7 +643,7 @@ def play(args):
                     kinds[kind] += 1
                 else:
                     illegal += 1
-                if args.tracks:
+                if args.tracks or args.harvest:
                     points.append(env.snapshot())
                     actions.append(step)
                 obs, _, terminated, truncated, info = env.step(step)
@@ -626,6 +664,13 @@ def play(args):
                     print(f'{write_track(args.tracks, state, seed, args.what, points, actions, health, info["ending"])}'
                           f': {n} steps, {down} hearts lost', file=sys.stderr)
                     tracks += 1
+                if args.harvest and entry is None and not illegal and (
+                        args.max_loss is None or down <= args.max_loss):
+                    entry = harvest(args.harvest, args.what, state, seed, points[-1], actions[-1], n, health,
+                                    info['ending'])
+                    harvested.append(entry)
+                    print(f"{args.harvest / entry['file']}: from seed {seed}, {n} steps, {down} hearts lost",
+                          file=sys.stderr)
             else:
                 recorder.drop()
             if args.verbose:
@@ -642,6 +687,11 @@ def play(args):
         total['lost'] += lost
         total['kinds'].update(kinds)
         total['tracks'] += tracks
+    if args.harvest:
+        from triforce import entry_states                       # pylint: disable=import-outside-toplevel
+        missed = [f'{stem}_{chain}' for chain in chains if chain not in {e['chain'] for e in harvested}]
+        entry_states._write_build_record(str(args.harvest), ' '.join(['python'] + sys.argv), harvested,   # pylint: disable=protected-access
+                                         missed)
     rows = recorder.save(args.out) if args.out and total['won'] else 0
     print(json.dumps({'room': args.what, 'family': family, 'states': len(chains), 'hearts': args.hearts,
                       'runs': total['runs'], 'won': total['won'], 'endings': dict(total['endings']),
@@ -662,7 +712,11 @@ def main():
     parser.add_argument('--chains', default=None, help='ROOM: chains to play (default: every chain with a state)')
     parser.add_argument('--tracks', type=Path, default=None, help='ROOM: write curriculum tracks under this directory')
     parser.add_argument('--per-state', type=int, default=1, help='--tracks: tracks a state')
-    parser.add_argument('--max-loss', type=float, default=None, help='--tracks: hearts a track\'s run may lose')
+    parser.add_argument('--max-loss', type=float, default=None,
+                        help='--tracks, --harvest: hearts the run may lose')
+    parser.add_argument('--harvest', type=Path, default=None,
+                        help="ROOM: stage the next route step's entry state of each chain from its first won run "
+                             "here (for `entry_states install`)")
     parser.add_argument('--runs', type=int, default=RUNS)
     parser.add_argument('--max-steps', type=int, default=3000, help='decisions a run may take')
     parser.add_argument('--out', type=Path, default=None, help='write the kept runs\' rows here (.npz)')
