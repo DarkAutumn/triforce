@@ -3,7 +3,7 @@
 
 use crate::config::{RewardConfig, SpecialistConfig};
 use std::sync::Arc;
-use zelda::enums::{Direction, item};
+use zelda::enums::{Direction, Tile, enemy, item};
 use zelda::game::GameView;
 use zelda::objectives::{GameCompletion, Objective, ObjectiveKind};
 use zelda::room::{Target, Wavefront};
@@ -16,13 +16,31 @@ pub struct Attached {
     pub wavefront: Option<Arc<Wavefront>>,
 }
 
+/// A clock Link must not take (round 26, 7:0x0d): one lying in a room while a Wallmaster lives.  Under the clock a
+/// Wallmaster that comes out stays where it starts, two squares inside the wall, out of the sword's and the
+/// boomerang's reach, and the room can't be cleared any more.
+fn clock_is_a_trap(state: &GameView, id: i16) -> bool {
+    id == item::CLOCK && state.enemies.iter().any(|e| e.id == enemy::WALLMASTER)
+}
+
+/// The tiles on which Link touches such a clock ([`clock_is_a_trap`]): the path search goes round them and no
+/// target lies on them (a hand dies on the wall line, so its clock lies on a spot that would bring the next out).
+fn trap_tiles(state: &GameView) -> Vec<Tile> {
+    state
+        .items
+        .iter()
+        .filter(|it| clock_is_a_trap(state, it.id))
+        .flat_map(|it| it.link_overlap_tiles())
+        .collect()
+}
+
 /// Whether the dropped item `id` is a PBRS target under `reward` with Link at `state`'s health:
 /// `nearby_items` takes hearts and clocks; `item_targets` every dropped item, hearts and fairies only below max
 /// health (and with `drops_first`, bombs only below the bomb maximum); `heal_targets` hearts and fairies alone,
 /// below max health. The room's own treasure is never one (it is
-/// the objective's business).
+/// the objective's business), nor a clock while a Wallmaster lives ([`clock_is_a_trap`]).
 fn is_item_target(reward: &RewardConfig, state: &GameView, id: i16) -> bool {
-    if id < 0 {
+    if id < 0 || clock_is_a_trap(state, id) {
         return false;
     }
     let heals = id == item::HEART || id == item::FAIRY;
@@ -79,7 +97,8 @@ fn drops_first_targets(reward: &RewardConfig, state: &GameView, objective: &Obje
 }
 
 /// The wavefront to `objective`'s `targets` (locked doors count as open while Link holds a key in a dungeon; the
-/// grid-point skips are jumps when the objective's specialist has clips on).
+/// grid-point skips are jumps when the objective's specialist has clips on; a clock that must not be taken is
+/// walked round, [`trap_tiles`]).
 fn wavefront_to(state: &GameView, objective: &Objective, targets: &[Target]) -> Wavefront {
     let locked: Vec<Direction> = if state.keys() > 0 && state.level() > 0 {
         [Direction::N, Direction::S, Direction::E, Direction::W]
@@ -89,7 +108,7 @@ fn wavefront_to(state: &GameView, objective: &Objective, targets: &[Target]) -> 
     } else {
         Vec::new()
     };
-    state.room().wavefront(targets, &[], &locked, objective.clips)
+    state.room().wavefront(targets, &trap_tiles(state), &locked, objective.clips)
 }
 
 /// Whether a specialist needs the wavefront: for PBRS or for its `target` observation.
@@ -161,4 +180,46 @@ pub fn exit_bits(state: &GameView, objective: &Objective) -> u8 {
         .next_rooms
         .iter()
         .fold(0, |bits, next| bits | state.game_map().exit_direction(location, *next, maze_step).value())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use zelda::GameMap;
+    use zelda::tables::RAM_SIZE;
+
+    const LEVEL: usize = 0x10;
+    const ROOM_ID: usize = 0xEB;
+    const GAME_MODE: usize = 0x12;
+    const OBJ_X: usize = 0x70;
+    const OBJ_Y: usize = 0x84;
+    const OBJ_STATE: usize = 0xAC;
+    const OBJ_TYPE: usize = 0x34F;
+
+    /// `item_targets` makes every dropped item a target, a clock too; with a Wallmaster alive the clock is left
+    /// out (taken, it freezes the hands in their wall for the rest of the visit) and the rupee stays.
+    #[test]
+    fn a_clock_is_no_target_while_a_wallmaster_lives() {
+        let map = Arc::new(GameMap::builtin());
+        let mut ram = [0u8; RAM_SIZE];
+        (ram[LEVEL], ram[ROOM_ID], ram[GAME_MODE]) = (7, 0x0d, 5);
+        (ram[OBJ_X], ram[OBJ_Y]) = (0x30, 0x9D);
+        // Dropped items are object type $60 with the item in ObjState: a clock where a hand died, a rupee.
+        for (slot, kind, x, y) in [(3, item::CLOCK, 0x20, 0xA6), (5, item::RUPEE, 0x60, 0x8D)] {
+            (ram[OBJ_TYPE + slot], ram[OBJ_STATE + slot], ram[OBJ_X + slot], ram[OBJ_Y + slot]) = (0x60, kind as u8, x, y);
+        }
+        let targets = |ram: &[u8; RAM_SIZE], reward: &RewardConfig| -> Vec<Target> {
+            item_targets(reward, &GameView::new(ram, 0, false, map.clone())).collect()
+        };
+        let all = RewardConfig { item_targets: true, ..Default::default() };
+        let near = RewardConfig { nearby_items: true, ..Default::default() };
+        let (clock_and_rupee, clock) = (targets(&ram, &all), targets(&ram, &near));
+        assert_eq!((clock_and_rupee.len(), clock.len()), (8, 4));
+        // A Wallmaster waiting in its wall (state 0).
+        (ram[OBJ_TYPE + 4], ram[OBJ_STATE + 4]) = (enemy::WALLMASTER, 0);
+        let rupee = targets(&ram, &all);
+        assert_eq!(rupee.len(), 4);
+        assert!(rupee.iter().all(|t| clock_and_rupee.contains(t) && !clock.contains(t)));
+        assert!(targets(&ram, &near).is_empty());
+    }
 }

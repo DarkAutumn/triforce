@@ -159,7 +159,8 @@ def test_dungeon_3_follows_lees_directions_with_the_treasure_rules():
         (5, 0x47, 'S', 'skip'), (5, 0x37, 'S', 'skip'), (5, 0x26, 'E', 'skip'),
         (7, 0x69, 'S', 'skip'), (7, 0x38, 'E', 'skip'), (7, 0x1b, 'W', 'if_bombs_below: 5'), (7, 0x0c, 'S', 'skip')]
     assert [(s['level'], s['room'], s['bomb_reserve']) for s in steps if s['bomb_reserve'] is not None] == [
-        (3, 0x7c, 6), (4, 0x71, 2), (0, 0x45, 2), (5, 0x76, 8), (5, 0x05, 0), (5, 0x05, 8), (5, 0x24, 0),
+        (3, 0x7c, 6), (3, 0x5b, 0), (3, 0x5c, 6), (3, 0x4d, 0), (3, 0x3d, 6),
+        (4, 0x71, 2), (0, 0x45, 2), (5, 0x76, 8), (5, 0x05, 0), (5, 0x05, 8), (5, 0x24, 0),
         (7, 0x79, 3), (7, 0x1b, 2), (7, 0x2a, 0)]
     assert steps[start - 1]['room'] == 0x74 and steps[start - 1]['exit'] == 'cave'
     rooms_info = native.game_rooms()
