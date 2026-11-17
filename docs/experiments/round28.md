@@ -628,7 +628,7 @@ Read by what a first team needs:
   rule under a hold; no observation or action change, every model loads). Round 27's branch owes the same bump; one
   bump covers both if they merge together.
 
-## 14. The first team (Nov 17): five families trained, darknut evaluating, chains not yet run
+## 14. The first team (Nov 17): six families trained and kept, chains not yet run
 
 One round per family through `scripts/train_round.py` (`--chain-runs 0 --parallel 8 --eval-parallel 3`, each its
 own round so the job line orders them), every one `--load {name} --seed 78 --stop-success 1.01 --sil-coeff 0.1
@@ -650,14 +650,14 @@ own round so the job line orders them), every one `--load {name} --seed 78 --sto
 | boss-manhandla | `r78t4-manhandla2` (`r78t4-manhandla`, 488, none) | 8:0x6e 99.7% (1 death in 300), **-0.88** | 3:0x4d 91.0% (-0.59) | yes |
 | ow-lynel | `r78t4-lynel` (`r77-b`, 244, whirlwind) | 0:0x22 from the cave (the whirlwind) **600/600**, 0 hearts | 0x32 94.5 → 97.2%, 0x50 99.8 → 99.9%, 0x60 99.7 → 100%, 0x0a 97.1 → 97.8%, 0x22 (D6) 100% | yes |
 | ow-moblin | `r78t4-moblin` (`r77-b`, 244, tree) | the tree 0x6d **599/600** (1 wrong exit), 0x4d from W 600/600 (-0.14), 0x5d 600/600 | all 14 rooms within noise of `r77-b` (lowest 0x5c 96.9%) | yes |
-| darknut | `r78t4-darknut` (`r75-d537-c5`, 488, darknut-5e + darknut-3e) | trained (4,892 s); its evaluation was running when this was written | (5:0x64, 0x05, 0x06, 0x37, 3:0x5c must hold) | open |
+| darknut | `r78t4-darknut` (`r75-d537-c5`, 488, darknut-5e + darknut-3e) | 8:0x5e 8.2 → **80.5%** (-9.59 → -4.26), 0x4e 0.0 → **93.3%** (no `stuck`; -6.83 → -3.09), 0x3e 0.3 → **68.7%** (-10.01 → -5.84), 0x3f 77.2 → 92.2% (-4.75 → -3.09) | 5:0x05 91.5 → 88.7%, 5:0x64 91.5 → 89.8%, 5:0x06 100 → 100%, 5:0x37 99.8 → 100%, 3:0x5c 100 → 100%, 3:0x59 99.2 → 98.7% (within the 3 points of noise) | yes |
 
 - **Baseline of darknut under this code** (`r75-d537-c5`, 11,400 episodes, clips both): 8:0x5e 8.2%, 0x4e 0.0%
   (220 of 600 `stuck`), 0x3e 0.3%, 0x3f 77.2% (-4.75 hearts); 5:0x05 91.5%, 5:0x64 91.5%, 5:0x06 100%, 5:0x37
   99.8%, 3:0x5c 100%.
 - **Why 0x4e ends `stuck`** (10 episodes a state, clips on, replays with decisions): in every `stuck` episode Link
   stands in the S doorway (X `$78`, Y `$D3`) and plays MOVE W fifty times without moving; the mask offers a MOVE
-  the doorway's walls refuse. The rest die. Whether the trained run still does it is what its evaluation shows.
+  the doorway's walls refuse. The rest die. The trained run has no `stuck` ending in 0x4e (600 episodes).
 - **Manhandla's crossing** came down from 2.98 to 0.88 hearts an episode in two rounds; the walk's script crosses
   for 0.47.
 - **Gleeok** trains with the yaml's `hp: [0.5, max]` (6.5-13 hearts); a run arrives with 6-7, so its 100% is at
@@ -667,8 +667,10 @@ own round so the job line orders them), every one `--load {name} --seed 78 --sto
   promoted only once their evaluation under this code is not worse than the runs they continued (batch
   `r78t4-d6runs`, the seven `r77-b` runs and the seven runs before them, 100 a state: queued, not run when this was
   written).
-- **Not done yet**: darknut's judgement and, if 0x5e, 0x4e or 0x3e are not learned, its one more round; the
-  `r78t4-d6runs` comparison; the chains, 1000 runs each of `post-d6` and `d8`, clips on, against `r78-base` (§12):
+- **Darknut is the stretch's weak point**: 0x3e (68.7%) and 0x5e (80.5%) still cost 4-6 hearts an episode, and the
+  two Dungeon 5 rooms lost 1.7 and 2.8 points (within noise, to be watched on the chains). No second darknut round
+  was run.
+- **Not done yet**: the `r78t4-d6runs` comparison; the chains, 1000 runs each of `post-d6` and `d8`, clips on, against `r78-base` (§12):
 
 ```bash
 TAG=r78t4-1k RUNS=1000 EPISODES=20 scripts/experiments/r28_d8_baseline.sh run
