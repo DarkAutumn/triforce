@@ -812,9 +812,10 @@ fn triforce_pickup_is_success_in_the_triforce_room() {
 
 /// Lee, Nov 11: BOMB by the family's mode, in 1:0x44 (no `requires_bombs` room; no reserve in Dungeon 1) with 4
 /// bombs: `free` allows it, `tenth` only on the 10th damage-free kill (`$50` = 9), `never` not even then; and in
-/// Dungeon 3 (reserve 6 since round 22, 3:0x59) `free` only above the reserve, and since round 26 the same in its
-/// bomb-wall room 3:0x5b on the last pass (W → E, away from the wall: at 6 the bombs are the walls').  The
-/// observation's `bomb_usable` says the same.
+/// Dungeon 3 (reserve 6 since round 22, 3:0x59) `free` only above the reserve.  Round 26: the same inside its
+/// bomb-wall room 3:0x5b on the first pass (S → W, the E wall no exit of that step: nothing at 6), and on the last
+/// pass (W → E, the route's reserve 0 there: the fight's) from the first bomb of his own.  The observation's
+/// `bomb_usable` says the same.
 #[test]
 fn bombs_follow_the_mode_the_reserve_and_the_tenth_kill() {
     let Some(mut nes) = open_core() else { return };
@@ -830,9 +831,10 @@ fn bombs_follow_the_mode_the_reserve_and_the_tenth_kill() {
         ("darknut", "3_59e_0", "MOVE W 16", BombUse::Free, 6, 0, false),
         ("darknut", "3_59e_0", "MOVE W 16", BombUse::Free, 7, 0, true),
         ("darknut", "3_59e_0", "MOVE W 16", BombUse::Free, 1, 9, true),
-        ("darknut", "3_5bw_0", "MOVE E 16", BombUse::Free, 6, 0, false),
-        ("darknut", "3_5bw_0", "MOVE E 16", BombUse::Free, 7, 0, true),
-        ("darknut", "3_5bw_0", "MOVE E 16", BombUse::Free, 1, 9, true),
+        ("darknut", "3_5bs_0", "MOVE N 16", BombUse::Free, 6, 0, false),
+        ("darknut", "3_5bs_0", "MOVE N 16", BombUse::Free, 7, 0, true),
+        ("darknut", "3_5bs_0", "MOVE N 16", BombUse::Free, 1, 9, true),
+        ("darknut", "3_5bw_0", "MOVE E 16", BombUse::Free, 1, 0, true),
     ];
     for (family, start, walk, mode, bombs, help, legal) in cases {
         let mut env = make_env(nes, family, Some(start), |c| {
@@ -2386,8 +2388,8 @@ fn required_families_bomb_only_where_the_route_wall_opens() {
 /// too; laid there it is one cheated bomb, and nothing is offered after it (in its fuse, and with the N wall open
 /// and the re-armed bomb in hand: the room's W bomb wall, which the route never opens, keeps the room's need).
 /// Dodongo's room has no wall: its granted bomb stays the weapon
-/// (`requires_bombs_room_cheats_one_bomb_and_counts_it_when_placed`); Manhandla's wall is open once Link is in: his
-/// bombs stay free below the reserve (`required_families_bomb_only_where_the_route_wall_opens`).
+/// (`requires_bombs_room_cheats_one_bomb_and_counts_it_when_placed`); Manhandla's route step has reserve 0: his
+/// bombs are the fight's (`required_families_bomb_only_where_the_route_wall_opens`).
 #[test]
 fn a_granted_bomb_only_opens_the_wall() {
     let Some(mut nes) = open_core() else { return };
@@ -2405,6 +2407,7 @@ fn a_granted_bomb_only_opens_the_wall() {
         env.reset(Some(0), None).unwrap();
         env
     };
+    let shut = |env: &Env| state(env).bomb_walls().iter().any(|w| w.wall_direction == Direction::N);
     // Bombs of his own, above the reserve, at it and below it.
     for (own, free) in [(4, true), (3, false), (1, false)] {
         let mut env = goriya(nes, own);
@@ -2415,6 +2418,20 @@ fn a_granted_bomb_only_opens_the_wall() {
         assert!(!bomb(&env).is_empty(), "{own} bombs of his own, the 10th kill: {}", env.session().mask());
         place(&mut env, WALL, 0);
         assert!(bomb(&env).contains(&Direction::N), "{own} bombs of his own, under the N wall");
+        if own == 3 {
+            // The wall bomb is his own, and with the wall open the two left are still the reserve's.
+            act(&mut env, "BOMB N");
+            for _ in 0..40 {
+                if !shut(&env) {
+                    break;
+                }
+                act(&mut env, "WAIT 8");
+            }
+            assert!(!shut(&env), "his own bomb opened the N wall");
+            place(&mut env, MIDDLE, 0);
+            assert!(bomb(&env).is_empty(), "the wall open, 2 bombs kept: {}", env.session().mask());
+            assert_eq!((state(&env).bombs(), env.cheats.used.bombs, env.cheats.cheated.bombs), (2, 1, 0));
+        }
         nes = release(env);
     }
     // None: the granted bomb.
@@ -2434,7 +2451,6 @@ fn a_granted_bomb_only_opens_the_wall() {
     let r = act(&mut env, "BOMB N");
     assert_eq!((env.cheats.used.bombs, env.cheats.cheated.bombs, r.info.cheated.bombs), (1, 1, 1));
     assert_eq!((state(&env).bombs(), env.cheats.granted(CheatItem::Bombs)), (1, 1), "re-armed in the fuse");
-    let shut = |env: &Env| state(env).bomb_walls().iter().any(|w| w.wall_direction == Direction::N);
     for step in 0..40 {
         assert!(bomb(&env).is_empty(), "step {step}: a second granted bomb offered: {}", env.session().mask());
         if !shut(&env) {

@@ -1802,6 +1802,10 @@ mod tests {
             reserves,
             [
                 (L::new(3, 0x7c, false), 6),
+                (L::new(3, 0x5b, false), 0),
+                (L::new(3, 0x5c, false), 6),
+                (L::new(3, 0x4d, false), 0),
+                (L::new(3, 0x3d, false), 6),
                 (L::new(4, 0x71, false), 2),
                 (L::new(0, 0x45, false), 2),
                 (L::new(5, 0x76, false), 8),
@@ -1812,7 +1816,8 @@ mod tests {
                 (L::new(7, 0x1b, false), 2),
                 (L::new(7, 0x2a, false), 0),
             ],
-            "Dungeon 3 keeps 6 bombs from its entrance (round 22: two walls and a spare each, two for Manhandla), \
+            "Dungeon 3 keeps 6 bombs from its entrance (round 22: two walls and a spare each, two for Manhandla) but \
+             on 0x5b's last pass and on Manhandla (round 26: 0, the fights the bombs are for), \
              Dungeon 4 2 (its two bomb walls), the leg 2 (Dungeon 5's two walls), Dungeon 5 8 but in the Olive \
              Garden's first visit and on Digdogger (round 24); Dungeon 7 3 (the walls before 0x1b's bombs), 2 from \
              0x1b (two more walls), none on Aquamentus (round 26)"

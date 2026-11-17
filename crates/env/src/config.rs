@@ -397,10 +397,11 @@ pub enum BombUse {
     /// In the family's game.yaml `requires_bombs` rooms (the 0x2c rock wall, D3's bomb wall), and the 10th kill.
     Required,
     /// Wherever there is something to bomb while Link holds more than the route's bomb reserve (routes.yaml
-    /// `bomb_reserve`), and the 10th kill.  In a `requires_bombs` room also at or below the reserve: with a wall
-    /// still to open, only at the wall the objective leaves through (round 26: the reserve is what the walls are
-    /// opened with, [`ItemsConfig::bomb_targets`]); with none (Dodongo's room, Manhandla's once Link is in),
-    /// anywhere: the fight the reserve was kept for.
+    /// `bomb_reserve`), and the 10th kill.  In a `requires_bombs` room also at or below the reserve: where the
+    /// room's bomb is for a wall, only at the wall the objective leaves through (round 26: the reserve means the same
+    /// inside a bomb-wall room as outside, [`ItemsConfig::bomb_targets`]; a fight the reserve is kept for has a
+    /// route step with a lower one: 0 for Manhandla and for 3:0x5b's last pass); in Dodongo's room (no wall)
+    /// anywhere.
     Free,
 }
 
@@ -477,9 +478,9 @@ impl ItemsConfig {
     /// - while a granted bomb is outstanding (`granted`, the cheat ledger's `CheatLedger::granted`) and the room's
     ///   bomb is for something it opens (`zelda::cheats::bomb_opens`: not Dodongo's room, where the granted bomb is
     ///   the weapon): a granted bomb opens the wall and does nothing else (round 26), on the 10th kill too;
-    /// - where the mode is `required` (round 22, 4:0x21's bomb waste), and where it is `free` while the room still
-    ///   has something to open (`zelda::cheats::bomb_need`) and Link holds no more bombs of his own than the route's
-    ///   `reserve` (round 26: the reserve means the same inside a bomb-wall room as outside); neither when the next
+    /// - where the mode is `required` (round 22, 4:0x21's bomb waste), and where it is `free` in a room whose bomb is
+    ///   for something it opens while Link holds no more bombs of his own than the route's `reserve` (round 26: the
+    ///   reserve means the same inside a bomb-wall room as outside, its wall open or shut); neither when the next
     ///   kill arms a forced drop (any bomb kill pays itself back).
     pub fn bomb_targets(
         &self,
@@ -497,11 +498,7 @@ impl ItemsConfig {
         let grant = granted > 0 && opens;
         let kept = match self.bombs {
             BombUse::Required => true,
-            BombUse::Free => {
-                opens
-                    && zelda::cheats::bomb_need(map, state) > 0
-                    && state.bombs() - granted <= i32::from(reserve)
-            }
+            BombUse::Free => opens && state.bombs() - granted <= i32::from(reserve),
             BombUse::Tenth | BombUse::Never => false,
         };
         let limited = grant || (kept && !state.next_kill_arms_drop());
