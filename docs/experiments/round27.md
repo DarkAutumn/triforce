@@ -674,7 +674,9 @@ screen on seeds 0-999, confirmation on 1000-1999): the screen ranks the run's la
 against the promoted `r77-wizz`'s 8.2% (the `r77a-1k` figure exactly), the checkpoints rising over the run from
 9.5-12% to 17-18%; **confirmed on fresh seeds: last 18.4 ± 1.2%, it000968 18.3%, promoted 10.7 ± 1.0%; last −
 promoted +7.7 ± 1.6 points paired**, hearts on arrival at the triforce 5.64 against 5.18. The tool keeps the last
-checkpoint. Seeds 79 and 80 are still being chosen; the best confirmed of the three is to be promoted.
+checkpoint. **Seed 79** the same way: the last checkpoint chosen, screen 17.4 ± 1.2%, confirmed 16.5 ± 1.2% against
+the promoted run's 10.7%, **+5.8 ± 1.5 points paired**, hearts on arrival 5.41. Seed 80 is still being chosen; the
+best confirmed of the three is to be promoted.
 
 **The honest planner as a teacher's diagnostic** (batch `r27w-plan`, `r77-wizz`, 100 episodes on each state of 0x38
 and 0x3a, the family's hp draw): the model alone wins 0x38 74.0% (−4.68 hearts) and 0x3a 68.3% (−5.24); with
