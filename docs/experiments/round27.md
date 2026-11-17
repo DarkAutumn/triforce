@@ -675,8 +675,21 @@ against the promoted `r77-wizz`'s 8.2% (the `r77a-1k` figure exactly), the check
 9.5-12% to 17-18%; **confirmed on fresh seeds: last 18.4 ± 1.2%, it000968 18.3%, promoted 10.7 ± 1.0%; last −
 promoted +7.7 ± 1.6 points paired**, hearts on arrival at the triforce 5.64 against 5.18. The tool keeps the last
 checkpoint. **Seed 79** the same way: the last checkpoint chosen, screen 17.4 ± 1.2%, confirmed 16.5 ± 1.2% against
-the promoted run's 10.7%, **+5.8 ± 1.5 points paired**, hearts on arrival 5.41. Seed 80 is still being chosen; the
-best confirmed of the three is to be promoted.
+the promoted run's 10.7%, **+5.8 ± 1.5 points paired**, hearts on arrival 5.41. **Seed 80**: it000968 chosen
+(screen 18.0%, last 15.6%), confirmed 15.7 ± 1.2% (last 15.0%), **+5.0 ± 1.5 points paired** against the promoted.
+
+| wizzrobe on `d6` (fresh seeds 1000-1999) | confirmed | paired vs `r77-wizz` |
+|---|---:|---:|
+| `r77-wizz` (promoted) | 10.7 ± 1.0% | |
+| `r78-wizz-s78` last | **18.4 ± 1.2%** | +7.7 ± 1.6 |
+| `r78-wizz-s79` last | 16.5 ± 1.2% | +5.8 ± 1.5 |
+| `r78-wizz-s80` it000968 | 15.7 ± 1.2% | +5.0 ± 1.5 |
+
+**The priced arm gains 5-8 points on every seed (mean +6.2, the seeds within 2.7 points of each other)**: the
+segment's rate goes from about 10% to about 17%, still far under the 30% the block rooms were to reach. Every
+run's checkpoints rise through the 488 iterations (seed 78 from 9.5-12% to 17-21% on the screen), so the runs had
+not stopped learning. The candidate to promote is `r78-wizz-s78` (its `ckpt.pt` is the chosen last checkpoint); it
+is promoted once stalfos-keese-gel's selection, which plays the promoted wizzrobe, has finished.
 
 **The honest planner as a teacher's diagnostic** (batch `r27w-plan`, `r77-wizz`, 100 episodes on each state of 0x38
 and 0x3a, the family's hp draw): the model alone wins 0x38 74.0% (−4.68 hearts) and 0x3a 68.3% (−5.24); with
