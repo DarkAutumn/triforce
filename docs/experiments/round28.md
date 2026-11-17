@@ -758,7 +758,11 @@ TAG=r78t4-1k scripts/experiments/r28_d8_baseline.sh report
   Pricing Dungeon 8's hearts moved every seed the same way: 0x3e 68.7% → 81-84% at about 2 hearts less a visit,
   0x5e 4 points up and 1 heart less. Arm B keeps 0x37's column (0.06-0.11 hearts against 0.23-0.36 in arm A). The
   Dungeon 3 rooms are unchanged in all six.
-- **Not done when this was written** (the jobs wait in the line): `select-checkpoint` of the six runs on `d8`
+- **The first selection** (`r78-dark-s81`, `d8`, 17 candidates on seeds 2000-2999, confirmed on 3000-3999): the
+  D8 triforce from Dungeon 8's entrance in **25.4%** of the confirmation's runs with `it010922` (`last` 24.9%,
+  `r78t4-darknut` 6.2%; paired against it **+19.2 ± 1.5 points**); the checkpoints climb with training (12.2% at
+  it10592, 23-26% from it10892). Chosen `it010922`, not applied.
+- **Not done when this was written** (the jobs wait in the line): `select-checkpoint` of the other five runs on `d8`
   (`--from 8_7es_0 --route d8 --runs 1000 --first-seed 2000 --confirm 1000`: screen seeds 2000-2999, confirmation
   3000-3999, so the chains of record on seeds 0-999 stay fresh), the chosen run's `d3` and `d5` segments paired with
   the two rows above, and the chains `r78-dark-1k` against `r78t4-1k`. Nothing promoted; the bar (the lead): `d5` and
