@@ -795,3 +795,39 @@ Visits surviving by hearts on entering, `d6` (`r77a-1k` → `r78-1k`):
 entered with under 6 hearts and kills 48% of its visits (369 of 766). The rest of the dungeon is unchanged per
 visit (0x58 1.2 hearts, 0x2c 2.3 and a death in 3-4 of its visits). The honest planner's 0x38 costs 3.25 hearts
 (§13.4): the lever is still 0x38's price, then 0x3a at the hearts it gets.
+
+### 13.6 The levers on `d6`: training length, the planner as a teacher, starts at the hearts runs bring
+
+Every arm is three seeds, each continuing its own `r78-wizz-s7x` run for 488 iterations (976 → 1464, the §13.3
+arguments: `--sil-coeff 0.1 --checkpoint-every 30`, bomb28's demonstrations at 0.05, the heart value table on), and
+is judged on `d6` by `triforce select-checkpoint wizzrobe RUN --from 6_79s_0 --route d6 --runs 1000 --confirm 1000
+--parallel 10` against the promoted run. The plain continuation (`r79-wizz-s7x`, seeds 81-83) is the training-length
+arm and the control of the others: each lever arm uses the same base and seed as its `r79` run, so the two differ
+by the lever alone.
+
+**The planner as a teacher (`r80-wplan-s7x`).** Recording the honest planner needs no engine vocabulary: the eval
+pool's `play(act=registry.PLAN_ACT, record='observations')` keeps every decision's observation (with its action
+mask) and the action executed after the foresight, and each eval record's visit names the decisions the planner
+replaced (`decisions.foresight.replaced`). `scripts/experiments/r27_plan_demos.py` plays the family in 0x38 and
+0x3a (`6_38s_0..2`, `6_3aw_0..2`, 100 episodes each, seeds 5000-5599, the family's hp and bombs draws, full rooms)
+with `r78-wizz-s78` under the planner, keeps the episodes won with at most 6 hearts lost and writes every decision
+of them once and each replaced decision five times (a job: it waits its turn like `triforce evaluate`):
+
+```bash
+python scripts/experiments/r27_plan_demos.py models/wizzrobe/r78-wizz-s78 target/r27-demos/plan38-3a.npz --runs 100
+```
+
+| state | 6_38s_0 | 6_38s_1 | 6_38s_2 | 6_3aw_0 | 6_3aw_1 | 6_3aw_2 |
+|---|---:|---:|---:|---:|---:|---:|
+| planner won (of 100) | 86 | 89 | 82 | 86 | 78 | 77 |
+| hearts lost in the wins | 2.53 | 2.40 | 2.59 | 2.23 | 2.47 | 2.40 |
+| kept | 80 | 81 | 75 | 80 | 71 | 73 |
+| replaced decisions in them | 349 | 271 | 237 | 218 | 237 | 229 |
+
+56,368 rows from 460 episodes, 1,541 of their decisions replaced by the planner (7,705 rows). The training loads
+both files at the lineage's coefficient (`--demos target/r27-demos/bomb28.npz target/r27-demos/plan38-3a.npz
+--demo-coeff 0.05`; the cloning term samples the two files' rows together, so 0x28's bomb rows are now a third of
+them); 0x28's planner play (it walks out and back in) is not recorded.
+
+The planner arm went into the job line first, ahead of `chain_hp`: it changes no yaml, while `chain_hp` changes
+wizzrobe's yaml and ships `triforce/chain_hp.json`, which waits until no job of this checkout runs or waits.
