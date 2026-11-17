@@ -897,7 +897,8 @@ or the route. The table names each step's room, entry, exit and visit, and a fam
 when they no longer match the route the table names (`GameData::check_heart_values`); a family that doesn't read it
 ignores it. A table prices its own route and every route whose steps are its first ones (`HeartValues::prices`;
 round 27: fitted with `--route d6`, the scouting route that extends `d2first`, it prices both, an episode on
-either reads it, and its rows 0-247 are the `d2first` fit's); on a route it does not price the family is paid the
+either reads it, and its rows 0-247 are the `d2first` fit's; round 28: fitted with `--route d8`, which extends `d6`,
+it prices all three and Dungeons 7, 6 and 8 have curves); on a route it does not price the family is paid the
 plain health reward. The terms: `exit: true` makes the success terminal's health part V(next step, hearts out) /
 V(next step, max hearts) instead of hp/max_hp (still weighted by w); `potential: S` pays S × (V(step, after) −
 V(step, before)) for every
