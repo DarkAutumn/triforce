@@ -23,7 +23,8 @@ notes: >-
   ladder to the heart container, N) on the plain way only; the shared 0x4f S→N, 0x3f S→N (the raft up) and N→W;
   0x3e from E W by its wrap exit (clips) or N (plain); 0x2d S→N (clips, `0_2ds_v2`), 0x2e S→W, 0x2d E→N and N→W
   (plain). States the route enters on one way only fix the switch.
-  Round 29, the leg to Dungeon 9 (route `d9`, docs/routes/d9.md "as built"; no start state yet): 0x38 W→S and S→N,
+  Round 29, the leg to Dungeon 9 (route `d9`, docs/routes/d9.md "as built"; seven states on chains 0-2, round29.md
+  §9): 0x38 W→S and S→N,
   0x28 S→W, 0x27 E→N (walked zero-shot 36-40 of 40, under half a heart each) and 0x47 (one Zora; a strip two squares
   high): from E to a tile of the tree's column above it (X $A8-$B7, Y $8D-$9D), CANDLE S (offered only there, while
   the tree stands and no fire burns; the stairs show 94 frames later), down the stairs, the take-any cave's right

@@ -30,6 +30,6 @@ notes: >-
   CANDLE W (offered only there, while the tree stands and no fire burns), still while the fire burns (walking W at
   once costs half a heart), then W onto the stairs. Walked: by script 30 of 30; this family zero-shot 0x4d 35 of
   40, 0x5d 40 of 40, 0x6d 0 of 40.
-  Round 29, the leg to Dungeon 9 (route `d9`; no start state yet): 0x6d out of Dungeon 8 (`exit: recorder`):
+  Round 29, the leg to Dungeon 9 (route `d9`; state `0_6dc` on chains 0-2): 0x6d out of Dungeon 8 (`exit: recorder`):
   RECORDER once from the spot the game sets Link down on, facing down, then wait for the whirlwind: Dungeon 1's
   entrance 0x37. Walked: 30 of 30 with the four Moblins live, 0 hearts; this family zero-shot 0 of 40.

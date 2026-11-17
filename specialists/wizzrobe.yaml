@@ -1,6 +1,6 @@
 name: wizzrobe
 rooms: ['(6, 0x78)', '(6, 0x38)', '(6, 0x28)', '(6, 0x29)', '(6, 0x3a)', '(6, 0x2c)', '(9, 0x65)', '(9, 0x15)', '(9, 0x17)', '(9, 0x07)', '(9, 0x05)', '(9, 0x20)', '(9, 0x10)', '(9, 0x31)', '(9, 0x30)', '(9, 0x04)']
-start_states: ['6_78*_[0-9]', '6_38*_[0-9]', '6_28*_[0-9]', '6_29*_[0-9]', '6_3a*_[0-9]', '6_2c*_[0-9]', '9_65*_[0-9]', '9_15*_[0-9]', '9_17*_[0-9]', '9_07*_[0-9]', '9_05*_[0-9]']
+start_states: ['6_78*_[0-9]', '6_38*_[0-9]', '6_28*_[0-9]', '6_29*_[0-9]', '6_3a*_[0-9]', '6_2c*_[0-9]', '9_65*_[0-9]', '9_15*_[0-9]', '9_17*_[0-9]', '9_07*_[0-9]', '9_05*_[0-9]', '9_20*_[0-9]', '9_10*_[0-9]', '9_31*_[0-9]', '9_30*_[0-9]', '9_04*_[0-9]']
 success: [exit-correct]                    # 0x3a: down its stairs into the tunnel
 reward_profile: default
 reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20}}   # as like-like (round 25): hearts priced by their worth to the run
@@ -36,7 +36,8 @@ notes: >-
   zero-shot with every round 25 family: the crossings 95-100% but 2-3 hearts each, 0x28 0-25%, 0x38 20% and 0x3a 50%
   at best (like-like, 11 and 9 hearts lost): the dungeon's two hard rooms. To be initialised from like-like's promoted
   run (it knows the block and the Like-Like's hold); settings copied from like-like.
-  Dungeon 9 (round 29, route `d9`, docs/routes/d9.md "as built"; no start states yet). Emptied for their blocks:
+  Dungeon 9 (round 29, route `d9`, docs/routes/d9.md "as built"; 14 states on chains 0-2, round29.md §9). Emptied
+  for their blocks:
   0x07 (three Blue, two Red, three Bubbles; before the red ring, the worst fight of the route: a rule 17 of 20 at
   9.35 hearts), 0x05 and 0x20 (three Blue, two Red), 0x10 (as 0x07; the silver arrow's room), 0x30 (two Blue, two
   Red among four Traps); Bubbles and Traps do not count for a block. 0x20 is emptied on its first visit (out of the

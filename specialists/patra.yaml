@@ -1,6 +1,6 @@
 name: patra
 rooms: ['(9, 0x16)', '(9, 0x27)', '(9, 0x61)', '(9, 0x52)']
-start_states: ['9_16*_[0-9]', '9_27*_[0-9]']
+start_states: ['9_16*_[0-9]', '9_27*_[0-9]', '9_61*_[0-9]', '9_52*_[0-9]']
 trainable: true                            # round 29's states step: 9_16w, 9_27w, 9_27n, 9_16s, 9_61e, 9_61c, 9_52c on chains 0-2
 success: [exit-correct]                    # 0x61: down its stairs into the tunnel; 0x52: N into Ganon's room
 reward_profile: default

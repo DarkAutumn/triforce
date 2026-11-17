@@ -1,6 +1,6 @@
 name: equipment-room
 rooms: ['(1, 0x7f, cave)', '(3, 0x0f, cave)', '(4, 0x60, cave)', '(5, 0x04, cave)', '(5, 0x07, cave)', '(7, 0x4a, cave)', '(7, 0x7b, cave)', '(6, 0x08, cave)', '(8, 0x2f, cave)', '(9, 0x60, cave)', '(9, 0x70, cave)', '(9, 0x75, cave)', '(9, 0x67, cave)', '(9, 0x77, cave)', '(9, 0x00, cave)', '(9, 0x4f, cave)']
-start_states: ['1_7f*_[0-9]', '3_0f*_[0-9]', '4_60*_[0-9]', '5_04*_[0-9]', '5_07*_[0-9]', '7_4a*_[0-9]', '7_7b*_[0-9]', '6_08*_[0-9]', '8_2f*_[0-9]', '9_60*_[0-9]', '9_00*_[0-9]']
+start_states: ['1_7f*_[0-9]', '3_0f*_[0-9]', '4_60*_[0-9]', '5_04*_[0-9]', '5_07*_[0-9]', '7_4a*_[0-9]', '7_7b*_[0-9]', '6_08*_[0-9]', '8_2f*_[0-9]', '9_60*_[0-9]', '9_00*_[0-9]', '9_70*_[0-9]', '9_75*_[0-9]', '9_4f*_[0-9]', '9_67*_[0-9]', '9_77*_[0-9]']
 success: [exit-correct]
 reward_profile: default
 reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20}}   # as the dungeon families (round 10 §8): dropped items are shaping targets; round 25: hearts priced by their worth to the run
@@ -26,7 +26,8 @@ notes: >-
   Dungeon 8 (round 28, route `d8`; state `8_2fcave`): the tunnel 0x2f from 0x3f's stairs (the right ladder) to
   0x4c (the left one, W); back up the right ladder is a wrong exit into 0x3f with its eight monsters and the shutter
   shut. Walked zero-shot 20 of 20, 0.05 hearts.
-  Dungeon 9 (round 29, route `d9`; no start state yet): five tunnels of four blue Keese, each left by the route
+  Dungeon 9 (round 29, route `d9`; states `9_60cave`, `9_00cave`, `9_70cave`, `9_75cave`, `9_4fcave`, `9_75cave_v2`,
+  `9_67cave`, `9_77cave` on chains 0-2, round29.md §9): five tunnels of four blue Keese, each left by the route
   step's ladder (0x60 and 0x70 and 0x77 in right, out left; 0x67 in left, out right; 0x75 both ways: before the
   silver arrow in right, out left, with it in left, out right); the ladder Link came down leads back into the room
   he left, its block back. The item cellars 0x00 (the red ring, `waypoint: ring`) and 0x4f (the silver arrow,

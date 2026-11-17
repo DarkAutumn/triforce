@@ -31,7 +31,8 @@ notes: >-
   (`exit: recorder`): RECORDER twice from the spot the game sets Link down on, facing down (the mask offers it only
   so, while plays remain: the second counts on frames 152-216 after the first), then wait for the whirlwind: Dungeon
   2's entrance 0x3c. Walked: 30 of 30 by buttons, 20 of 20 through the env; this family zero-shot 0 of 40.
-  Round 29, the leg to Dungeon 9 (route `d9`, docs/routes/d9.md "as built"; no start state yet): 0x07 S→W (one Red
+  Round 29, the leg to Dungeon 9 (route `d9`, docs/routes/d9.md "as built"; states `0_07s`, `0_06e`, `0_05e` on
+  chains 0-2): 0x07 S→W (one Red
   Lynel; `bombs: never` on the step: a bomb at X $A0 opens a cave that takes 20 rupees on entry; walked zero-shot 40
   of 40), 0x06 E→W (two Blue and two Red Lynels, two Peahats, along Y $8D: a straight scripted walk loses 2.2
   hearts; zero-shot 12 of 40, 28 deaths) and 0x05 E→the rock wall over Dungeon 9's stairs (two Blue, two Red Lynels,

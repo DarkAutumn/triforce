@@ -459,7 +459,7 @@ Left open by the step itself:
   objectives; no observation or action change, every model loads). Rounds 27 and 28 owe the same bump; one covers
   all three if they merge together.
 
-## 9. The states step (in progress): the clips way and the start states of steps 297-332
+## 9. The states step (in progress): the clips way and the start states of steps 297-357
 
 Round 28's branch (Dungeon 8's states `8_2cs_0..2`, its tools) and `r26` (demonstration rows in host memory,
 `train_round.py` reads `--iterations` in `--train-args`) were merged first.
@@ -502,17 +502,42 @@ python scripts/experiments/r29_demos.py patra-16 --runs 10 --harvest $D/h16     
 python -m triforce.entry_states install $D/h16
 python -m triforce.entry_states build --route d9 --start-step 331 --last-step 332 --chains 0,1,2 \
     --source "triforce/states/9_06s_{chain}.state" --out $D/c3 && python -m triforce.entry_states install $D/c3
-python -m triforce.entry_states audit --route d9        # 976 states, no problem (69 MISSING: steps 333-357)
+python scripts/experiments/r29_demos.py wizzrobe-05 --runs 10 --harvest $D/h05      # 9_70cave: 28 of 30, 2.29 hearts
+python -m triforce.entry_states install $D/h05
+python -m triforce.entry_states build --route d9 --start-step 333 --last-step 336 --chains 0,1,2 \
+    --source "triforce/states/9_70cave_{chain}.state" --out $D/c4 && python -m triforce.entry_states install $D/c4
+python scripts/experiments/r29_demos.py patra-61 --runs 10 --harvest $D/h61         # 9_75cave: 30 of 30, 0.35 hearts
+python -m triforce.entry_states install $D/h61
+python -m triforce.entry_states build --route d9 --start-step 337 --last-step 340 --chains 0,1,2 \
+    --source "triforce/states/9_75cave_{chain}.state" --out $D/c5 && python -m triforce.entry_states install $D/c5
+python scripts/experiments/r29_demos.py wizzrobe-10 --runs 10 --harvest $D/h10      # 9_4fcave: 23 of 30, 7.42 hearts
+python -m triforce.entry_states install $D/h10
+python -m triforce.entry_states build --route d9 --start-step 341 --last-step 350 --chains 0,1,2 \
+    --source "triforce/states/9_4fcave_{chain}.state" --out $D/c6 && python -m triforce.entry_states install $D/c6
+python scripts/experiments/r29_demos.py wizzrobe-30 --runs 10 --harvest $D/h30      # 9_67cave: 30 of 30, 1.86 hearts
+python -m triforce.entry_states install $D/h30
+python -m triforce.entry_states build --route d9 --start-step 351 --last-step 355 --chains 0,1,2 \
+    --source "triforce/states/9_67cave_{chain}.state" --out $D/c7 && python -m triforce.entry_states install $D/c7
+python scripts/experiments/r29_demos.py patra-52 --runs 10 --harvest $D/h52         # 9_42s: 30 of 30, 0.74 hearts
+python -m triforce.entry_states install $D/h52
+python scripts/experiments/r29_demos.py ganon --runs 10 --harvest $D/h42            # 9_32s: 30 of 30, 0.59 hearts
+python -m triforce.entry_states install $D/h42
+python -m triforce.entry_states audit --route d9        # 1045 states, 0 problems, 0 directory problems
 ```
 
-- The explorer did every crossing and both clips it met (0x55 and 0x07 by `CLIP`, 0x07's return past its five
-  Wizzrobes with the ring), the heart cave (15 containers from `0_47c` on), the ring cellar and every bomb wall;
-  the two fights on the way were played by the rules (`r29_demos.py --harvest`, now from installed states):
-  0x14's Like-Likes (its E key door: keys 3 → 2) and 0x16's Patra (its four bombs and its N key door: 2 → 1).
+- The explorer did every crossing and every clip it met (0x55, 0x07, 0x20 out of the tunnel and from N, 0x03 by
+  `CLIP`, 0x07's return past its five Wizzrobes with the ring), the heart cave (15 containers from `0_47c` on), the
+  ring and silver-arrow cellars and every bomb wall; every fight on the way was played by a rule
+  (`r29_demos.py --harvest`, from the installed states; a state comes from the first won run of each chain, seed
+  1000 on every chain here): 0x14's Like-Likes (its E key door: keys 3 → 2), 0x16's Patra (its four bombs and its N
+  key door: 2 → 1), 0x05's Wizzrobes for the block, 0x61's Patra for its key (0x63's W key door spent the last: 1 →
+  0 → 1), 0x10's Wizzrobes for the silver arrow's stairs, 0x30's, 0x52's Patra and Ganon. **No fight was skipped**
+  (no `--skip-fights` anywhere in steps 297-357). `9_32s` ends 30 of 30 runs of the `zelda` rule `game-completed`.
 - **What they hold**: the bombs Dungeon 8's states brought (7 / 6 / 6), one a wall (0:0x05, 0x65, 0x26, 0x27,
   0x17), chain 2 four more from a drop in 0x07's return, then 0x16's four (capped at 8 on chain 2). The audit's
   monster count now leaves the people of a room out (types $4B-$52: 0x66's old man leaves for the eight pieces,
-  0x06's stands).
+  0x06's stands) and Zelda (type $37, game.yaml `Unknown_55`: her init makes the four guard fires on the room's
+  first update, after the entry state; `9_32s` was `SHORT` without it).
 
 | Step | State | Way | Family | Hearts / containers | Bombs (chains 0 / 1 / 2) | Keys | Rupees |
 |---:|---|---|---|---|---|---|---|
@@ -528,14 +553,26 @@ python -m triforce.entry_states audit --route d9        # 976 states, no problem
 | 327-330 | `9_17n`, `9_27n`, `9_26e`, `9_16s` | | | 15 / 15 | 2 / 1 / 5 | 2 | 33 / 37 / 33 |
 | 331 | `9_06s` | | stalfos-keese-gel | 15 / 15 | 6 / 5 / 8 | 1 | 33 / 37 / 33 |
 | 332 | `9_05e` | | wizzrobe | 15 / 15 | 5 / 4 / 7 | 1 | 33 / 37 / 33 |
+| 333 | `9_70cave` | | equipment-room | 15 / 15 | 5 / 4 / 7 | 1 | 33 / 38 / 34 |
+| 334 | `9_63c` | | zol | 15 / 15 | 5 / 4 / 7 | 1 | 33 / 38 / 34 |
+| 335-336 | `9_62e`, `9_61e` | | | 15 / 15 | 5 / 4 / 7 | 0 | 33 / 38 / 39 |
+| 337 | `9_75cave` | | equipment-room | 15 / 15 | 5 / 4 / 7 | 1 | 33 / 38 / 39 |
+| 338 / 339 | `9_20c` | clips / plain | wizzrobe | 15 / 15 | 5 / 4 / 7 | 1 | 33 / 38 / 39 |
+| 340-341 | `9_10s`, `9_4fcave` | | | 15 / 15 | 4 / 7 / 8 | 1 | 33 / 38 / 39 |
+| 342 | `9_10c` | | wizzrobe | 15 / 15 | 4 / 7 / 8 | 1 | 33 / 38 / 39 |
+| 343 / 344 | `9_20n` | clips / plain | wizzrobe | 15 / 15 | 4 / 7 / 8 | 1 | 33 / 38 / 39 |
+| 345-349 | `9_75cave_v2`, `9_61c`, `9_51s`, `9_41s`, `9_31s` | | | 15 / 15 | 4 / 7 / 8 | 1 | 33 / 40 / 39 |
+| 350 | `9_30e` | | wizzrobe | 15 / 15 | 3 / 6 / 7 | 1 | 33 / 40 / 39 |
+| 351-352 | `9_67cave`, `9_04c` | | | 15 / 15 | 3 / 6 / 7 | 1 | 35 / 40 / 39 |
+| 353 | `9_03e` | | like-like | 15 / 15 | 2 / 5 / 6 | 1 | 35 / 40 / 39 |
+| 354-356 | `9_77cave`, `9_52c`, `9_42s` | | | 15 / 15 | 2 / 5 / 6 | 1 | 35 / 40 / 39 |
+| 357 | `9_32s` | | ganon | 15 / 15 | 2 / 5 / 6 | 1 | 34 / 39 / 38 |
 
-All hold the magic sword, the wooden arrow, eight pieces; the red ring from `9_07c` on.
+All hold the magic sword, eight pieces, the wooden arrow (the silver arrow from `9_10c` on), the red ring from
+`9_07c` on. Ganon's arrow costs the rupee `9_32s` is short of. Chains 1 and 2 picked up a drop of four bombs in
+0x20's first visit (one went on its N wall: 4 → 7, 7 → 8 capped); one bomb each on 0x31's and 0x04's W walls.
 
-**Still to build** (steps 333-357; the commands go on as above): `r29_demos.py wizzrobe-05 --harvest` (→
-`9_70cave`), build 333-336, `patra-61 --harvest` (→ `9_75cave`), build 337-340, `wizzrobe-10 --harvest` (→
-`9_4fcave`), build 341-350, `wizzrobe-30 --harvest` (→ `9_67cave`), build 351-355, `patra-52 --harvest` (→
-`9_42s`), `ganon --harvest` (→ `9_32s`). Until then the family files list only the states that exist (ganon none:
-`trainable: false`; lanmola and patra `trainable: true`, warm starts moldorm, moldorm, boss-gohma), and the
-curricula (`scripts/experiments/r29_d9_curricula.sh`), the rules from real states, the proof trainings and the
-baseline (`scripts/experiments/r29_d9_baseline.sh`, the segments `post-d8:0_6dc_0` and `d9:9_76s_0` in
-`eval_batch.D9_SEGMENTS`, `r56_chains.sh`, room-stats scopes `to-d9`, `d9`) have not run.
+**The family files** list every state of the stretch (`audit --route d9`: no orphan, nothing missing): equipment-room
+the eight tunnels and cellars, like-like `9_14c`, `9_51s`, `9_41s`, `9_03e`, patra the seven, stalfos-keese-gel six,
+wizzrobe fourteen, zol `9_63c`, lanmola `9_55s`, ganon `9_42s` and `9_32s` (now `trainable: true`; warm starts
+lanmola and patra moldorm, ganon boss-gohma).

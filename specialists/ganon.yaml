@@ -1,7 +1,7 @@
 name: ganon
 rooms: ['(9, 0x42)', '(9, 0x32)']
-start_states: []                           # 9_42s, 9_32s: round 29's states step, still to harvest (round29.md)
-trainable: false                           # true once 9_42s and 9_32s are harvested (round 29's states step, not yet: round29.md)
+start_states: ['9_42*_[0-9]', '9_32*_[0-9]']   # round 29's states step: 9_42s from patra-52's rule-won runs, 9_32s from the ganon rule's (round29.md §9)
+trainable: true
 success: [exit-correct, game-completed]    # 0x42: N with the Triforce of Power; 0x32: the game ends (the first frame of game mode $13)
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # as boss-gohma (round 27)

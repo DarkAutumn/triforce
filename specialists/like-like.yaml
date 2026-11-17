@@ -1,6 +1,6 @@
 name: like-like
 rooms: ['(4, 0x32)', '(6, 0x1d)', '(9, 0x14)', '(9, 0x51)', '(9, 0x41)', '(9, 0x03)']
-start_states: ['4_32*_[0-9]', '6_1d*_[0-9]', '9_14*_[0-9]']
+start_states: ['4_32*_[0-9]', '6_1d*_[0-9]', '9_14*_[0-9]', '9_51*_[0-9]', '9_41*_[0-9]', '9_03*_[0-9]']
 success: [exit-correct]                    # down the stairs to the ladder cellar; on the way back, W
 reward_profile: default
 reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20}}   # dungeon family (round 10 §8): dropped items are shaping targets; round 25: hearts priced by their worth to the run
@@ -23,7 +23,8 @@ notes: >-
   (one-room, curriculum, 2000 steps).
   Dungeon 6 (round 27, route `d6`; state `6_1dc`): 0x1d (two Like-Likes, two Zols, two Bubbles) out of the
   tunnel's stairs, crossed to the S door without a fight.
-  Dungeon 9 (round 29, route `d9`; no start state yet): the spiral 0x14 (five Like-Likes in corridors one square
+  Dungeon 9 (round 29, route `d9`; states `9_14c`, `9_51s`, `9_41s`, `9_03e` on chains 0-2, round29.md §9): the
+  spiral 0x14 (five Like-Likes in corridors one square
   wide: fought, `treasure: clear`; a walk through is held in 20 of 20 and loses 4.4 hearts, the sword from range
   0.05), 0x51 (six Like-Likes between rows of blocks, S to N) and the dark 0x41 (four Traps, four Like-Likes,
   straight up; its S shutter never opens again) crossed, and 0x03 (two Zols, two Like-Likes, two Bubbles: the
