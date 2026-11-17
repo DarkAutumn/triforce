@@ -120,17 +120,33 @@ the recorder or a blue candle's fire was used, and the family's switch, are visi
 BOMB follows the acting family's `items: {bombs: MODE}` (`env::config::BombUse`, Lee Nov 11; in `SpecialistEnv` and
 chains, recomputed every step): `never`; `tenth`, only for the 10th damage-free kill (`$50` HelpDropCount = 9: a
 bomb kill then arms a forced drop of 4 bombs, `asm:Damage_KillMonster`); `required`, in game.yaml `requires_bombs`
-rooms and the 10th kill; `free`, in `requires_bombs` rooms, elsewhere while Link holds more than the route's bomb
-reserve (routes.yaml `bomb_reserve`, `GameCompletion::bomb_reserve`: 6 from Dungeon 3's entrance, 2 from Dungeon
-4's), and the 10th kill (whatever the reserve). Families: `free` goriya, darknut, moldorm, boss-dodongo,
-boss-manhandla, vire; `required` ow-tektite, ow-octorok, trap-room, stalfos-keese-gel; `never` boss-gleeok; `tenth`
-the rest. In a `requires_bombs` room a `required` family is kept to the bombs that open the wall the objective
-leaves through (`ItemsConfig::bomb_targets`, `Session::set_bomb_targets`; round 22): BOMB only where the bomb lands
-in reach of it (`zelda::bombs::landing`, `BombTarget::in_reach`: a dungeon wall within `$18` px of its hotspot, a
-rock wall within `$10`) and, since round 23, not while one of Link's bombs (slot `$10`/`$11` in state `$11`-`$14`,
+rooms and the 10th kill; `free`, wherever Link holds more bombs of his own than the route's bomb reserve (routes.yaml
+`bomb_reserve`, `GameCompletion::bomb_reserve`: 6 from Dungeon 3's entrance, 2 from Dungeon 4's, 3 from Dungeon
+7's; 0 on the steps of the fights the bombs are kept for: 3:0x5b's last pass, Manhandla, the Olive Garden,
+Digdogger, Dungeon 7's Aquamentus), at the wall of a `requires_bombs` room whatever he holds, in Dodongo's room
+(`requires_bombs`, no wall) always, and the 10th kill (whatever the reserve). Families: `free` goriya, darknut,
+moldorm, boss-dodongo, boss-manhandla, boss-digdogger, vire; `required` ow-tektite, ow-octorok, trap-room,
+stalfos-keese-gel, gibdo, dodongo-crossing; `never` boss-gleeok; `tenth` the rest.
+
+**BOMB kept to the wall** (`ItemsConfig::bomb_targets`, `Session::set_bomb_targets`; round 22): BOMB only where the
+bomb lands in reach of what the objective leaves through (`zelda::objectives::route_bomb_targets`: the intact bomb
+wall of the route's exit, 0x2c's and 0x67's rock walls; nothing while the objective fights first or leaves another
+way; `zelda::bombs::landing`, `BombTarget::in_reach`: a dungeon wall within `$18` px of its hotspot, a rock wall
+within `$10`) and, since round 23, not while one of Link's bombs (slot `$10`/`$11` in state `$11`-`$14`,
 `zelda::bombs::live_bombs`) already lies in reach of that wall: the wall test comes once, when that bomb's blast ends
-(`asm:Bomb_TryOpenWall`), so a second bomb only spends a bomb (`BombTarget::awaits_bomb`). The 10th damage-free kill
-lifts both limits. The game's own rule comes first (bombs held, a free slot, an enemy or a bomb wall) and BOMB stays legal at an
+(`asm:Bomb_TryOpenWall`), so a second bomb only spends a bomb (`BombTarget::awaits_bomb`). It holds in a
+`requires_bombs` room, in every mode but `never`:
+
+- for a `required` family (round 22);
+- for a `free` family while Link holds no more bombs of his own than the reserve, in a room whose bomb is for a wall
+  (`zelda::cheats::bomb_opens`), the wall open or shut (round 26: the reserve means the same inside a bomb-wall room
+  as outside; before, such a room was free ground whatever the reserve);
+- for every family while the cheat ledger holds a granted bomb there (`CheatLedger::granted`; round 26, decisions
+  2026-11-17 "A granted bomb opens the wall and does nothing else"): the granted bomb opens the wall and does
+  nothing else. Not in Dodongo's room (no wall: the granted bomb is the weapon, the owner's Nov 8 rule).
+
+The 10th damage-free kill lifts the first two limits (that bomb pays itself back), not the third: a granted bomb is
+not spent on a monster even for a forced drop. The game's own rule comes first (bombs held, a free slot, an enemy or a bomb wall) and BOMB stays legal at an
 unopened overworld rock wall. MOVE N at the overworld top edge scrolls; a key works only at the
 room bound next to the locked door; a push counts only when Link is aligned with the block and the room is clear;
 an opened bomb wall is passable. Off the grid on a cave or dungeon mouth only MOVE S is legal (any other move walks
@@ -625,11 +641,16 @@ time that cost health). Drops already on the floor on entry are not followed. Fa
 ### Cheated items (`crates/zelda/src/cheats.rs`)
 
 Bombs ($658), keys ($66E) and rupees ($66D) stay natural (never refilled; `items: {bombs: ...}` only masks the
-action, and BOMB is masked outside `requires_bombs` rooms anyway) except where the room Link is in *needs* some
-(`cheats::needs`), Lee's Nov 8–9 rule:
+action) except where the room Link is in *needs* some (`cheats::needs`), Lee's Nov 8–9 rule:
 
-- **bombs:** 1 in rooms game.yaml tags `requires_bombs: true` (Dodongo 2:0x0e, the 0x2c rock wall, and off the
-  route so far Dungeon 3's bombed wall 3:0x4c and Manhandla's room 3:0x4d);
+- **bombs:** 1 in rooms game.yaml tags `requires_bombs: true` (Dodongo 2:0x0e; the rock walls of 0x2c and 0x67; the
+  bomb-wall rooms 3:0x5b, 3:0x4c, 4:0x21, 4:0x11, 5:0x66, 5:0x65, 7:0x69, 7:0x19, 7:0x1a, 7:0x0c, 7:0x29;
+  Manhandla's 3:0x4d, whose only bomb wall is the one Link comes in through, so it grants none), until what the room
+  is bombed for is open (an overworld rock wall's secret; every bomb wall
+  of a dungeon room, also one the route never opens: 7:0x69's W, 4:0x11's E and W; `cheats::bomb_need`). The
+  granted bomb only opens the wall: while it is outstanding the envs offer BOMB only in reach of what the objective
+  leaves through ("BOMB kept to the wall" above; round 26), so every cheated bomb of such a room was laid at the
+  route's wall. Dodongo's room has no wall (`cheats::bomb_opens` is false): there the granted bomb is the weapon;
 - **keys:** 1 in a dungeon room whose route step leaves through an edge whose door is still locked (the game's door
   tiles, and no opening animation on it: `$54` 6–8 with `$55`'s bit, the game spends the key as it starts), unless
   Link has the magic key or the room's treasure is a key whose item-taken flag isn't set: that key comes first, and

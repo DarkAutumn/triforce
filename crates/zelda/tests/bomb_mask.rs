@@ -1,6 +1,7 @@
 //! Round 22 (4:0x21's bomb waste): BOMB kept to the bombs that open the route's wall (`Session::set_bomb_targets`,
 //! `zelda::bombs::BombTarget`, `zelda::bombs::landing`).  Played in the game for every room the rule touches on the
-//! route (the `requires_bombs` rooms of the `required` families): around each wall, from every grid point and in
+//! route (the `requires_bombs` rooms of the `required` families; round 26: every bomb-wall room, where a granted
+//! bomb only opens the wall whatever the family's mode): around each wall, from every grid point and in
 //! every direction the game lets Link place a bomb, a BOMB the mask offers opens the wall with that one bomb, and one
 //! it doesn't offer leaves the wall shut.  Round 23: one bomb per wall (`BombTarget::awaits_bomb`, `one_bomb`).
 mod common;
@@ -243,4 +244,39 @@ fn bombs_at_4_0x11_open_its_north_wall() {
 fn bombs_at_4_0x21_open_its_north_wall_from_both_entries() {
     room("4_21w_0", BombTarget::Wall(Direction::N), (0x78, 0x6D));
     room("4_21s_0", BombTarget::Wall(Direction::N), (0x78, 0x6D));
+}
+
+/// darknut (`free`): Dungeon 3's central Darknut room, its E wall into 0x5c on the last pass (round 26: a granted
+/// bomb goes to the wall only).
+#[test]
+fn bombs_at_3_0x5b_open_its_east_wall() {
+    room("3_5bw_0", BombTarget::Wall(Direction::E), (0xC0, 0x8D));
+}
+
+/// gibdo: Dungeon 5's 0x66 and 0x65, their W walls on the way in (round 24).
+#[test]
+fn bombs_at_5_0x66_and_0x65_open_their_west_walls() {
+    room("5_66s_0", BombTarget::Wall(Direction::W), (0x30, 0x8D));
+    room("5_65e_0", BombTarget::Wall(Direction::W), (0x30, 0x8D));
+}
+
+/// goriya (`free`): Dungeon 7's Blue Goriya wall rooms on the way up, 0x69 N and 0x19 E (round 26: a granted bomb
+/// goes to the wall only).
+#[test]
+fn bombs_at_7_0x69_and_0x19_open_their_walls() {
+    room("7_69s_0", BombTarget::Wall(Direction::N), (0x78, 0x6D));
+    room("7_19w_0", BombTarget::Wall(Direction::E), (0xC0, 0x8D));
+}
+
+/// goriya (`free`): 7:0x1a's E wall back from the candle cellar, and 7:0x29's (a dead end without a bomb).
+#[test]
+fn bombs_at_7_0x1a_and_0x29_open_their_east_walls() {
+    room("7_1ac_0", BombTarget::Wall(Direction::E), (0xC0, 0x8D));
+    room("7_29c_0", BombTarget::Wall(Direction::E), (0xC0, 0x8D));
+}
+
+/// dodongo-crossing: 7:0x0c's E wall into the Wallmaster room (round 26).
+#[test]
+fn bombs_at_7_0x0c_open_its_east_wall() {
+    room("7_0cs_0", BombTarget::Wall(Direction::E), (0xC0, 0x8D));
 }

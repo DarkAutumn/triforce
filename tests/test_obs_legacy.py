@@ -52,6 +52,35 @@ ROUTE_CHANGES = {
         '4_11s_2.state': '624e980fe5d876ced673767812234e36b2b2f5035cd3bf5be8628e1669a36ad9',
     },
 }
+# Traces the round 26 bomb rule changed (decisions 2026-11-17 "A granted bomb opens the wall and does nothing else"),
+# with their hashes on that code.  Each was compared key by key and step by step with the code before the rule (same
+# seeds; no column's computation changed):
+# - boss-manhandla `3_4dw_*` and darknut `3_5bw_0`: the same actions to the end; only `link`'s `bomb_reserve` and
+#   `bombs_spare` differ, at every step: routes.yaml gives Manhandla's room and 3:0x5b's last pass reserve 0 (was 6).
+# - darknut `3_5bw_1`, `3_5bw_2`: those two columns, then (steps 27 and 42) Link has laid his own bombs and holds
+#   the granted one, which the mask now keeps to the E wall (`bomb_usable` 1 -> 0): the seeded draw parts there.
+# - darknut `3_5bs_1` (3 bombs of his own, reserve 6) and `3_5bs_2` (the granted bomb, the next kill the 10th): the
+#   first pass through 3:0x5b; BOMB was offered anywhere in a `requires_bombs` room, now nothing below the reserve
+#   and nothing with a granted bomb (`bomb_usable` and the mask from steps 2 and 5), and the draw parts.
+# - gibdo `5_65e_2` (also a `ROUTE_CHANGES` trace): the granted bomb with the next kill the 10th; the 10th kill no
+#   longer lifts the wall limit for a granted bomb (`bomb_usable` 1 -> 0 from the reset), and the draw parts.
+BOMB_RULE_CHANGES = {
+    'boss-manhandla': {
+        '3_4dw_0.state': 'ee2d547eaa353db9a0e68c9aa337f3c9bab9fb88c91b20efa9db9f53b883ef0c',
+        '3_4dw_1.state': '3617f99f572a34470f40e9e67b91fd867327666ed76e25d265a650a0a28bd0b9',
+        '3_4dw_2.state': '04f37a52ba7a1bebef900636013193a87bdb4e16cdae69786439aced876df018',
+    },
+    'darknut': {
+        '3_5bs_1.state': '1608423985e049936c270cc5ca9ac1e4f81c88790b12475514abab03176be24c',
+        '3_5bs_2.state': '71e5820e60547cf61d7196d3f370de3bb9d17c633a2107d2e499ce94a2cc3dea',
+        '3_5bw_0.state': '5408bf082dda119e815a1ed787c2564a9a0d5743af0e3de798a59fe6f6727a7e',
+        '3_5bw_1.state': 'c580a34bcbdc1a73d32360f42ece6cf6aa532acd4b923dba4862e8879a250c9d',
+        '3_5bw_2.state': 'aa3a18ab994b475aa823c0f7ec17b7ef078562e46a65db7d6c6debeb873162a9',
+    },
+    'gibdo': {
+        '5_65e_2.state': '759b1ad911d12582e94319e01e130047850f43514c82c8f782341e133cfac36a',
+    },
+}
 
 
 def _old_columns(obs: dict) -> dict:
@@ -115,7 +144,8 @@ def test_schema5_columns_are_unchanged(name):
     if name not in golden['families']:
         pytest.skip(f"{name}: no schema 5 record (a family added after the record)")
     recorded = golden['families'][name]
-    assert family_hashes(name, recorded) == recorded | ROUTE_CHANGES.get(name, {})
+    changed = ROUTE_CHANGES.get(name, {}) | BOMB_RULE_CHANGES.get(name, {})
+    assert family_hashes(name, recorded) == recorded | changed
 
 
 def main(argv=None) -> int:

@@ -568,3 +568,96 @@ ignored; pytest 818 passed, 3 skipped (five tests that pinned the route's end at
 the schema 5 record is read over its recorded states only, and `5_14s_0`'s terminal observation is pinned anew:
 with the route cut at step 209 the code computes the hash pinned before); `tf replay verify` the three corpus
 replays ok; `entry_states audit` 727 states, no problem; `asm.py check --final` ok.
+
+## 13. Granted bombs: the loophole, the rule, before and after
+
+**The finding.** The first 1000-run chain of Dungeon 7 with the first team (`r76a-1k`) counted 7,657 cheated bombs,
+7.7 a run, all in the wall rooms 0x69, 0x19 and 0x1a. A `requires_bombs` room tops Link up to one bomb whenever he
+holds none, and a `free` family could bomb anywhere in such a room whatever the reserve: goriya had learned to throw
+the granted bomb at a Goriya and take the next (3.0-4.0 bombs a visit). Round 25's darknut does the same in 3:0x5b
+(1.1 cheated bombs a Dungeon 3 run).
+
+**The rule** (decisions 2026-11-17; `docs/architecture.md` "BOMB kept to the wall"): (A) a granted bomb opens the
+wall and does nothing else, in every bomb mode and on the 10th kill too (not in Dodongo's room, which has no wall);
+(B) the reserve means the same inside a bomb-wall room as outside: at or below it a `free` family bombs only the
+route's wall; the fights the bombs are for carry `bomb_reserve: 0` on their own step (new: 3:0x5b's last pass and
+Manhandla's room).
+
+**Before and after** (300 runs a segment, seeds 0-299, `--act model`, clips on; D3 played on through D4 to step 134,
+D5 to step 209; the chains `target/r56-chains/r76bombs-{ref,a,ab1,ab1r}-{d3,d5,d7}.jsonl`, each arm one batch
+`triforce eval-batch r76bombs-<arm> --chain 'd3: --from 3_7cs_0 --stop-at step:134 --runs 300 --act model
+--parallel 10 --output ...' --chain 'd5: --from 5_76s_0 --stop-at step:209 ...' --chain 'd7: --from 7_79s_0 ...'`;
+tables by `scripts/experiments/r26_bomb_table.py BEFORE.jsonl --against AFTER.jsonl`):
+
+| | out of D3 | D3 + D4 | D5 | D7: runs into 0x1b / 0x1c / 0x0d | cheated bombs a run: D3+D4 | D5 | D7 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| before (`ref`) | 84.7% | 75.0% | 66.0% | 179 / 64 / 33 | 1.79 | 0 | 7.77 |
+| rule A (`a`) | 79.3% | 69.0% | 66.0% | 176 / 79 / 28 | 1.01 | 0 | 1.57 |
+| A + B while a wall is shut (`ab1`) | 68.3% | 58.7% | 66.0% | 167 / 78 / 36 | 0.49 | 0 | 0.18 |
+| A + B as built (`ab1r`) | 79.3% | 72.3% | 66.0% | 170 / 79 / 37 | 1.00 | 0 | 0.00 |
+
+Per room, before → as built (300 runs):
+
+| room | deaths | hearts lost a visit | bombs placed a visit | cheated bombs |
+|---|---:|---:|---:|---:|
+| 3:0x5b last pass | 3 → 3 of 294 / 288 | 0.13 → 0.19 | 4.09 → 3.31 | 334 → 131 |
+| 3:0x4d Manhandla | 35 → 45 of 289 / 284 | 0.76 → 0.72 | 2.72 → 2.63 | 0 |
+| 4:0x21, 4:0x11 (walls) | 0 | 0.09, 0.00 → 0.08, 0.00 | 1.02, 1.00 → 1.00, 1.00 | 203 → 169 |
+| 7:0x69 | 0 → 1 of 300 | 1.07 → 1.66 | 3.63 → 1.00 | 191 → 0 |
+| 7:0x19 | 33 → 36 of 287 / 281 | 1.41 → 1.41 | 3.92 → 0.91 | 1128 → 0 |
+| 7:0x1a from W | 11 → 21 of 254 / 245 | 0.82 → 0.58 | 1.31 → 0.00 | 333 → 0 |
+| 7:0x1a from the cellar | 38 → 35 of 217 / 206 | 1.20 → 1.13 | 3.27 → 0.88 | 677 → 0 |
+| 7:0x1b | 115 → 91 of 179 / 170 | 1.85 → 1.72 | 0.12 → 0.05 | 0 |
+
+Dungeon 5's 300 runs are the same room for room under every arm (gibdo is `required`). Dungeon 3 loses about 5
+points, all to rule A: the last passes of 3:0x5b that arrive with 0-1 bombs (95 of 294) had 3.1 cheated bombs each
+as their weapon. The form "B only while a wall is shut" was rejected by these numbers (decisions).
+
+**The schema 5 record** (`tests/test_obs_legacy.py`, `BOMB_RULE_CHANGES`): nine traces differ, each explained there
+(the reserve inputs of Manhandla's room and 3:0x5b's last pass; the mask where a granted bomb or the reserve now
+keeps BOMB to the wall).
+
+**The retrained run** `r76-goriya3`: one continuation of `r76-goriya2` under the rule (244 iterations, 1M steps,
+`--seed 76 --stop-success 1.01 --sil-coeff 0.1 --demos <food-demos.npz> --demo-coeff 0.05 --checkpoint-every 30`,
+`scripts/train_round.py --round r76-goriya3 --specialists goriya --chain-runs 0 --parallel 8 --eval-parallel 3`).
+Single rooms (100 episodes a state, clips both, seed 0; `scripts/experiments/r26_eval_rooms.py`): `r76-goriya2`
+under the old rule | `r76-goriya2` under the rule | `r76-goriya3` under the rule, success % and hearts lost an
+episode:
+
+| room | success % | hearts lost | bombs placed | cheated bombs |
+|---|---:|---:|---:|---:|
+| 7:0x69 | 97.2 \| 95.5 \| 95.8 | 1.30 \| 1.65 \| 1.40 | 3.86 \| 1.77 \| 1.67 | 1.39 \| 0.23 \| 0.24 |
+| 7:0x19 | 96.7 \| 96.7 \| 97.7 | 1.44 \| 1.53 \| 1.39 | 3.78 \| 1.58 \| 1.57 | 1.55 \| 0.19 \| 0.19 |
+| 7:0x1a (both entries) | 79.8 \| 78.8 \| 79.6 | 1.61 \| 1.66 \| 1.70 | 3.84 \| 1.29 \| 1.41 | 1.75 \| 0.03 \| 0.03 |
+| 7:0x29 | 95.8 \| 95.7 \| 96.5 | 0.99 \| 1.10 \| 1.13 | 4.41 \| 2.98 \| 2.85 | 0.83 \| 0.04 \| 0.04 |
+| 7:0x38 | 97.5 \| 97.5 \| 98.7 | 1.12 \| 1.12 \| 0.61 | 0.06 \| 0.06 \| 0.08 | 0 |
+| 7:0x1b | 93.8 \| 93.8 \| 92.7 | 1.47 \| 1.47 \| 1.16 | 0.34 \| 0.34 \| 0.33 | 0 |
+| all 10,800 episodes | 94.9 \| 94.7 \| 95.0 | 0.57 \| 0.60 \| 0.53 | 1.53 \| 0.92 \| 0.89 | 0.40 \| 0.03 \| 0.03 |
+
+The rule costs `r76-goriya2` 1.7 points in 0x69 and 0.05-0.35 hearts in the wall rooms, nothing elsewhere (every
+other room is the same to the digit); the continuation takes the hearts back (0x69 1.40, 0x19 1.39) and the old
+rooms hold (1:0x23 99.2, 1:0x44 98.7, 2:0x1e 88.3, 2:0x5e 88.0%). The cheated bombs left in single rooms are wall
+bombs of resets drawn with none.
+
+Dungeon 7, 1000 runs with `r76-goriya3` (`r76bombs-1k-d7.jsonl`, seeds 0-999, the rule as built; beside it the first
+chain `r76a-1k` with `r76-goriya2` under the old rule, and `r76-goriya2` under the rule on 300 runs): no cheated
+bomb in 1000 runs (7,657 before); 2 runs take the triforce (0 before).
+
+| runs that enter | `r76a-1k` (old rule, goriya2) | goriya2 under the rule (300) | **goriya3 under the rule** |
+|---|---:|---:|---:|
+| 7:0x19 | 93.9% | 93.7% | 94.8% |
+| 7:0x1b | 58.0% | 56.7% | **70.4%** |
+| 7:0x1c | 24.8% | 26.3% | 34.2% |
+| 7:0x0c | 20.8% | 23.3% | 29.9% |
+| 7:0x0d (the Wallmaster room) | 11.4% | 12.3% | 18.3% |
+
+On the 300 seeds both runs played under the rule, 217 against 170 reach 0x1b. Per room with `r76-goriya3` (1000
+runs, first visits): deaths and hearts lost a visit 0x69 0, 1.37; 0x59 0, 1.14; 0x49 5, 1.35; 0x38 25 of 991, 1.10;
+0x18 18 of 966, 0.58; 0x19 59 of 948, 1.13; 0x1a from W 44 of 889, 0.47; the candle cellar 27 of 843, 0.43; 0x1a
+from the cellar 72 of 778, 1.04; **0x1b 362 of 704, 1.88**; 0x1c 43 of 342, 1.00; 0x0c 116 of 299, 2.54; 0x0d 17 of
+183 (and 161 runs sent back to the entrance, of which 53 die in 0x69 on the way up again). One bomb a wall: 1.00
+placed in 0x69, 0.96 in 0x19, 0.93 in 0x1a. The Blue Goriya wall rooms did not fall apart, so no second continuation
+was run. `r76-goriya3` is the run to take; 7:0x1b (half its visits die) and 0x0c are what Dungeon 7 loses next.
+
+Suites on this code: `cargo test --release --workspace --features zelda/zcore` 994 passed, 1 ignored; the others
+are in the branch's last commit message.

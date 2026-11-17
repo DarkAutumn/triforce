@@ -2565,3 +2565,59 @@ a problem. We might even drop it in the future."
   be vetoed with round 27's `keep_out` doorways when that branch is merged).
 - **Clips off:** still built (a plain way for every stretch) and measured in the chains of record, but no work is
   spent on it: no tuning, no scoping of a clip family's switch to single rooms, and its numbers gate nothing.
+
+## 2026-11-17 — A granted bomb opens the wall and does nothing else; the reserve holds inside bomb-wall rooms (round 26)
+
+Lee's standing decision is that bombs a run lacks are cheated and counted, aim zero. The first 1000-run chain of
+Dungeon 7 counted 7.7 cheated bombs a run. They were no need of the route: a `requires_bombs` room tops Link up to
+one bomb whenever he holds none, and the Nov 11 rule let a `free` family bomb anywhere in such a room whatever the
+reserve ("It doesn't apply in `requires_bombs` rooms"). goriya threw the granted bomb at a Goriya and was handed the
+next (3.9 bombs a visit of 7:0x19 with none of its own); darknut did the same in 3:0x5b.
+
+- **Rule A.** While the cheat ledger holds a granted bomb in a room whose bomb is for something it opens
+  (`zelda::cheats::bomb_opens`: every `requires_bombs` room but Dodongo's), BOMB is offered only in reach of what
+  the objective leaves through (`ItemsConfig::bomb_targets` with `CheatLedger::granted`, both envs), in every mode
+  but `never`. So a cheated bomb in such a room is a bomb laid at the route's wall.
+  - *The criterion is the outstanding grant*, not "Link holds none of his own": F173 uses the grant first, so after
+    a pickup the next bomb laid would still be the cheated one wherever it lands.
+  - *The 10th kill* did let a grant be spent as a weapon (BOMB anywhere, a forced drop of four for one cheated bomb):
+    with a granted bomb outstanding it no longer lifts the limit. With bombs of his own it stays as it was.
+  - *Dodongo's room 2:0x0e* is `requires_bombs` without a wall: there the granted bomb is the weapon (Lee, Nov 8),
+    unchanged. Manhandla's room grants none once Link is in (its only bomb wall is his way in).
+- **Rule B (replaces the Nov 11 sentence).** The reserve means the same inside a bomb-wall room as outside: a
+  `free` family at or below it is kept to the route's wall there, the wall open or shut. A fight the bombs are kept
+  for says so on its own route step, as Digdogger, the Olive Garden and Dungeon 7's Aquamentus already did:
+  `bomb_reserve: 0` on 3:0x5b's last pass (Link's own bombs are the fight's; the room's four, taken after it, pay
+  for both walls and Manhandla) and in Manhandla's room; 6 again on 0x5c and from 0x3d on.
+  - *Measured first as "only while a wall is still shut"* (so Manhandla needed no route data): Dungeon 7 kept 0.18
+    cheated bombs a run, because in 7:0x19 Link threw his second bomb at a Goriya once the wall was open (68 of 250
+    visits) and paid for 0x1a's wall with a granted one; and Dungeon 3 lost 16.3 points (3:0x5b's last pass without
+    bombs: deaths 3 → 20 of 294, hearts lost 0.13 → 0.74, Manhandla 35 → 62). Rejected in that form.
+  - *B2* (keep only the last bomb for the room's wall) was not built: it would leave Dungeon 7 two granted bombs a
+    run (0x19, 0x1a) where B leaves none, and the route's reserve already says what 3:0x5b needs.
+  - *The reserve is an observation input* (`bomb_reserve`, `bombs_spare`): darknut on that pass and boss-manhandla
+    read 0 where they read 6. Measured: they play as under rule A alone (below). No COMPAT bump (no layout or
+    meaning changed); a REV bump is due at the merge (the mask and a route's data changed what trained models may
+    do).
+- **Measured** (300 runs a segment, seeds 0-299, models alone, clips on, round 25's models with the first team's
+  goriya `r76-goriya2`; paired differences with their standard error; `scripts/experiments/r26_bomb_table.py`):
+
+  | | out of Dungeon 3 | D3 and D4 (step 134) | cheated bombs, D3+D4 | Dungeon 5 | Dungeon 7 cheated bombs a run | D7 runs reaching 0x1b / 0x0d |
+  |---|---:|---:|---:|---:|---:|---:|
+  | before | 84.7% | 75.0% | 1.79 | 66.0%, 0 cheated | 7.77 | 179 / 33 |
+  | rule A | 79.3% (−5.3 ± 1.8) | 69.0% (−6.0 ± 1.9) | 1.01 | the same 300 runs | 1.57 | 176 / 28 |
+  | A + B, first form | 68.3% (−16.3 ± 3.2) | 58.7% | 0.49 | the same 300 runs | 0.18 | 167 / 36 |
+  | **A + B as built** | 79.3% (−5.3 ± 3.2) | 72.3% (−2.7 ± 3.8) | 1.00 | the same 300 runs | **0.00** | 170 / 37 |
+
+  - *Dungeon 7:* 7.77 → 0.00 cheated bombs a run, and the Blue Goriya wall rooms do not fall apart without the
+    bombs: 0x69 costs 1.07 → 1.66 hearts a visit, 0x19 kills 33 → 36 of 281, 0x1a 49 → 56 of two visits, and as many
+    runs reach 0x1b and the Wallmaster room as before; one of 300 took the triforce.
+  - *Dungeon 5:* untouched (gibdo is `required`; the 300 runs are the same room for room).
+  - *Dungeon 3:* about 5 points lost, all of it rule A: the 95 of 294 last passes of 3:0x5b that arrive with 0-1
+    bombs had used 3.1 cheated bombs each as their weapon; without them they lose 0.61 hearts there (it was −0.09)
+    and Manhandla kills 27 of them (14). The other 199 play as before. Not weakened to save the number: darknut
+    needs a continuation under the rule (the fight by sword at 0-1 bombs).
+  - *What is still counted:* 3:0x5b 131 per 300 runs, F173's accounting (the granted bomb is used first at the wall
+    although Link then holds the room's four); Dungeon 4's walls 169 per 300 (runs that arrive with none: honest).
+- **Left as it is:** F173; `cheats::bomb_need` (a room keeps its need while any of its bomb walls is shut, also one
+  the route never opens: 7:0x69's W, 4:0x11's E and W; the bomb in hand is unusable and taken back on leaving).
