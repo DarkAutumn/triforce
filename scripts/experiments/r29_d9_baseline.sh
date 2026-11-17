@@ -12,7 +12,8 @@
 #           one evaluation a family of the stretch, EPISODES a state  target/TAG-rooms/<family>.json
 #         A family is evaluated from a copy of its yaml whose `start_states` are the stretch's states only
 #         (target/TAG-rooms/specialists/<family>.yaml), so no episode is spent on its other rooms; everything else
-#         (hp and bombs draws, clips both ways for a clip family, the model's own act mode) is the family's.  A family
+#         (hp and bombs draws, the model's own act mode) is the family's; the switch is on in every episode (`--clips
+#         on`: the owner, Nov 18, dropped the no-clip measurements; r79-base measured a clip family both ways).  A family
 #         with no promoted run in MODELS (the new lanmola, patra, ganon until they train) needs one there: the baseline
 #         links each to its warm start (round29.md).
 # report  `triforce room-stats TAG` and the two Markdown tables (per room of the chains; per state of the rooms).
@@ -53,7 +54,7 @@ EOF
 )
   entries=()
   for family in $families; do
-    entries+=(--evaluate "$family: --specialist $ROOMS/specialists/$family.yaml --episodes-per-state $EPISODES --parallel 8 --output $ROOMS/$family.json")
+    entries+=(--evaluate "$family: --specialist $ROOMS/specialists/$family.yaml --episodes-per-state $EPISODES --clips on --parallel 8 --output $ROOMS/$family.json")
   done
   TRIFORCE_MODELS_DIR=$MODELS $PY -m triforce.cli eval-batch "$TAG" \
     --chain "post-d8: --route $ROUTE --from 0_6dc_0 --runs $RUNS --act model --parallel 10 --output $CHAINS/$TAG-post-d8.jsonl" \

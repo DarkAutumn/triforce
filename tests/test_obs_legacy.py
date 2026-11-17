@@ -81,6 +81,12 @@ BOMB_RULE_CHANGES = {
         '5_65e_2.state': '759b1ad911d12582e94319e01e130047850f43514c82c8f782341e133cfac36a',
     },
 }
+# A trace's run-time clips switch is drawn at the family's `clips.off_share`, and with it whether CLIP is in the mask
+# its steps are drawn from.  The record was made at the shares of 1.5.0.0; the owner's decision of Nov 18 (no episode
+# with CLIP masked: `off_share: 0` as a family is next trained) changed these yamls, so their traces are played at
+# the recorded share.  No column's computation is involved.
+RECORDED_OFF_SHARE = {'ow-boulder': 0.5, 'ow-leever': 0.5, 'ow-lynel': 0.5, 'ow-moblin': 0.75, 'ow-zora': 0.75,
+                      'stalfos-keese-gel': 0.5}
 
 
 def _old_columns(obs: dict) -> dict:
@@ -115,7 +121,10 @@ def family_hashes(name: str, recorded=None) -> dict:
     """{start state file name: sha256 of the schema 5 columns of the reset and ``STEPS`` steps from it}, over every
     start state of the family or only the ``recorded`` ones (file names): a state's seed is its place in the sorted
     list, so states added after the record (round 26: Dungeon 7's) must not shift the recorded ones."""
-    env = _native.Env(name, states_dir=str(REPO_STATES_DIR), seed=0, strict_actions=False)
+    config = _native.SpecialistConfig.load(name)
+    if name in RECORDED_OFF_SHARE:
+        config = config.replace(clips={'enabled': True, 'off_share': RECORDED_OFF_SHARE[name]})
+    env = _native.Env(config, states_dir=str(REPO_STATES_DIR), seed=0, strict_actions=False)
     out = {}
     paths = sorted(env.config.resolve_start_states(str(REPO_STATES_DIR)))
     if recorded is not None:

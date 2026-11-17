@@ -7,7 +7,7 @@ reward: {pbrs: true}
 obs: {objective: true, target: true}       # schema 2 pointer, no item targets (round 10 §10, r42)
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chain arrives with partial hearts (round 5)
 items: {bombs: tenth, recorder: true, candle: true}   # the 10th kill's bomb; round 26: the recorder where the route plays it (0x42's pond; round 29: 0x6d's whirlwind out of Dungeon 8); round 28: the candle where the route burns a tree (0x6d's, nowhere else on the overworld)
-clips: {enabled: true, off_share: 0.75}  # round 21: the screen wrap (W/E); r72: 0x5b W→E without it at 90% (wrap 100%)
+clips: {enabled: true, off_share: 0}     # round 21: the screen wrap (W/E); the owner, Nov 18: no episode with CLIP masked (it was 0.75 since r72, for 0x5b W→E without the wrap)
 curriculum: {enabled: true}             # trajectories/ow-moblin (round 6: the row-5 tree mazes)
 one_room: true                          # round 5: per-room episodes
 max_steps: 600                        # explored paths are 12-70 steps; 2000-step timeouts starved r24 of episodes

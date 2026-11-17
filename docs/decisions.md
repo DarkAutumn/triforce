@@ -2793,3 +2793,25 @@ cheapest thing to undo that the walks support, and each names what changes if he
 Not answered here, still Lee's (round29.md §8): the survival gap (the best plays seen cost about 23 hearts on the
 route and 26 in the fights with the ring, of 15 containers and no refill; with the block clips of 0x55, 0x07, 0x20
 and 0x03 the fights cost 15), and the clips way above.
+
+## 2026-11-18 — The no-clip runs are dropped; the Lanmola room is bypassed by its block clip (Lee)
+
+Lee, Nov 18: "From here on, you can drop the no-clip runs. They were an interesting spot of comparison, but should
+be dropped in favor of just clipping through blocks when needed." And: "The lanmola room should be bypassed with a
+block clip." As the lead passed it on, and as the first Dungeon 9 team applied it (round29.md §16):
+
+- **No clips-off measurement**: no `CLIPS=off` chain, no `-noclips` tag, no `--clips both` evaluation. Chains,
+  checkpoint selection and evaluations play with the run-time clips switch on.
+- **No episode with CLIP masked**: a clip family's yaml is `clips: {enabled: true, off_share: 0}` from the next
+  round that trains it (round 29's first team: wizzrobe, lanmola, like-like, ow-moblin, ow-zora, ow-leever,
+  ow-boulder, ow-lynel, stalfos-keese-gel; the others keep their line until they are trained again). A family with
+  `off_share: 0` is evaluated with the switch on only (`triforce.clips.default_mode`; it was `both` for every clip
+  family). A start state the route enters on its plain way alone still fixes the switch off, so such a state is
+  still drawn in training and is left out of a clips-on evaluation.
+- **A room the route clips is not fought**: 9:0x55 (the Lanmolas), 0x07 on its first visit, 0x20 from N, 0x03. The
+  family's work there is the `CLIP` and the way on; their fights get no demonstration rows, no staged starts
+  (wizzrobe's `room_kills` lost 0x07 and 0x20) and no curriculum tracks.
+- **No new plain way** is built; the plain ways in the route stay as they are, untrained.
+
+This supersedes Nov 13's "the models need to be trained with clips enabled, and also with the clip action masked"
+and round 29's working answer 11 in so far as it kept the fights as the clips-off way.

@@ -313,13 +313,15 @@ test them, keep what helps, and log everything.
   harvested states (`eval-chain --harvest`), their hearts refilled as every entry state's (`write_entry_state`).
 - **Training mixes full health (sword beams) and partial health** (`full_hp: 0.5`; partial down to
   `hp: [0.15, max]`; Lee, Nov 12: boss-gleeok `[0.5, max]`). The beam look-ahead must credit the firing step.
-- **Clip families train with clips on and with CLIP masked** (Lee, Nov 13, round 22): "the models need to be
-  trained with clips enabled, and also with the clip action masked so it has to traverse as normal". A family's
-  `clips: true` is `{enabled: true, off_share: 0.5}`: half the episodes start with the run-time clips switch off
-  (the plain way, also through a route `stretch:`; ow-moblin and ow-zora `off_share: 0.75` since the r72 retrain,
-  for their weak plain crossings 0x5b and 0x5a), and the early stop and the evaluation (`--clips both`) take
-  both. Lee can turn clips off at any moment while watching (`play-zelda.py`, key `c`), so the plain way must stay
-  trained; track rooms with and without clips (`by_clips` in `eval.json` and `room-stats`).
+- **Clips on only; the no-clip runs are dropped** (Lee, Nov 18: "From here on, you can drop the no-clip runs. They
+  were an interesting spot of comparison, but should be dropped in favor of just clipping through blocks when
+  needed"; `docs/decisions.md` 2026-11-18). No clips-off chain, tag, `--clips both` evaluation or new plain way. A
+  clip family's yaml becomes `clips: {enabled: true, off_share: 0}` as it is next trained (no episode with CLIP
+  masked; such a family's evaluation and early stop play the switch on only, `clips.default_mode`); a room the
+  route clips (9:0x55, 0x07 on its first visit, 0x20 from N, 0x03) is not fought. The plain ways in the route stay
+  as they are, untrained. Before that (Lee, Nov 13, round 22) clip families trained half their episodes with CLIP
+  masked (`clips: true` = `off_share: 0.5`; ow-moblin and ow-zora 0.75) and were evaluated both ways (`by_clips`):
+  families not retrained since still carry those yamls.
 - **Bombs (Lee, Nov 11; supersedes "bombs only where the route needs them"; round 26: granted bombs and the reserve
   inside bomb-wall rooms)**: a family's `items: {bombs: MODE}`
   (`env::config::BombUse`, checked every step in training and chains): `free` (goriya, darknut, moldorm, Dodongo,

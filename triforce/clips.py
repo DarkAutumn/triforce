@@ -2,8 +2,10 @@
 
 A family's ``clips:`` (``env::config::ClipsConfig``: ``enabled`` and ``off_share``, the share of training episodes
 drawn with the switch off; ``DEFAULT_CLIPS_OFF_SHARE``, 0.5, for a clip family) decides what an evaluation plays:
-``default_mode`` is ``both`` for a family with clips enabled (every start state with the switch on and with it off,
-as far as the state allows) and ``on`` for the others.  A start state the route enters on one way of a stretch only
+``default_mode`` is ``both`` for a family with clips enabled that trains some episodes with the switch off (every
+start state with the switch on and with it off, as far as the state allows) and ``on`` for the others: a family
+without clips, and one with ``off_share: 0`` (the owner, Nov 18: the no-clip runs are dropped, so a family that
+never trains the plain way is not measured on it).  A start state the route enters on one way of a stretch only
 fixes the switch (``zelda::objectives::start_clips``: 4:0x21 from S the clip way, 4:0x30 from E the plain way):
 ``start_clips`` asks the env, and ``episode_jobs`` plays such a state only in the switch state it allows.
 ``label`` names a (start state, switch) pair the way the early stop and the evaluation's ``by_clips`` read it.
@@ -30,8 +32,8 @@ def label(state: Optional[str], clips: Optional[bool]) -> Optional[str]:
 
 
 def default_mode(config) -> str:
-    """``both`` for a family with clips enabled, else ``on``."""
-    return 'both' if config.clips.enabled else 'on'
+    """``both`` for a family with clips enabled and an ``off_share`` above 0, else ``on``."""
+    return 'both' if config.clips.enabled and config.clips.off_share > 0 else 'on'
 
 
 def switches(mode: str) -> tuple[bool, ...]:

@@ -1507,8 +1507,8 @@ mod tests {
         ram[Var::Bombs.addr() as usize] = 4;
         let view = GameView::new(&ram, 0, false, map.clone());
         assert!(map.requires_bombs(view.full_location()));
-        assert!(free.bomb_targets(&map, &view, None).is_none(), "free: wherever the game places a bomb");
-        assert_eq!(step.bomb_targets(&map, &view, None), Some(Vec::new()), "required: only the route's wall");
+        assert!(free.bomb_targets(&map, &view, None, 0, 0).is_none(), "free: wherever the game places a bomb");
+        assert_eq!(step.bomb_targets(&map, &view, None, 0, 0), Some(Vec::new()), "required: only the route's wall");
     }
 
     #[test]

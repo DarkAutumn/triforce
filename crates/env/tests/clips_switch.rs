@@ -458,7 +458,8 @@ fn the_switch_is_drawn_per_episode() {
     }
 }
 
-/// The families round 22's route changed, as they train (their own `clips:`, the default `off_share`): a reset draws
+/// The families round 22's route changed, at the default `off_share` (0.5; since Nov 18 the owner's decision sets
+/// a family's own to 0 as it is next trained, so the test sets it): a reset draws
 /// the switch where both ways of a stretch enter the room that way and takes the way and the next room that fit it;
 /// a room one way alone enters fixes it. 0x67 out of the cave: S into 0x77 with clips, W into 0x66 without; 0x75
 /// from E (the wrap exit's room, clip way only): on, W into 0x74 by the CLIP; 4:0x31 from E: N or W; 4:0x21 from S
@@ -477,7 +478,8 @@ fn the_route_families_draw_the_switch_and_take_its_way() {
     ];
     for (family, state, fixed, with, without) in cases {
         let mut config = (*DATA.specialists[family]).clone();
-        assert!(config.clips.enabled && config.clips.off_share == 0.5, "{family}: {:?}", config.clips);
+        assert!(config.clips.enabled, "{family}: {:?}", config.clips);
+        config.clips.off_share = env::config::DEFAULT_CLIPS_OFF_SHARE;
         config.ram_randomization = RamRandomization::default();
         let opts = EnvOptions { start_state: Some(state.into()), ..Default::default() };
         let mut env = SpecialistEnv::new(Arc::new(config), DATA.clone(), nes, TfzStore::new(), opts).expect("env");

@@ -8,7 +8,7 @@ reward: {pbrs: true}
 obs: {objective: true, target: true}       # schema 2 pointer, no item targets (as ow-moblin)
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chain arrives with partial hearts (round 5)
 items: {bombs: tenth, recorder: true}      # the 10th kill's bomb; round 28: the recorder where the route plays it (0x22's whirlwind out of Dungeon 6)
-clips: {enabled: true, off_share: 0.5}  # round 21: the screen wrap (W/E; none in 0x0a); round 24: 0x50/0x60 fix it on
+clips: {enabled: true, off_share: 0}    # round 21: the screen wrap (W/E; none in 0x0a); round 24: 0x50/0x60 fix it on; the owner, Nov 18: no episode with CLIP masked (it was 0.5)
 curriculum: {enabled: true}             # round 24: 0x60's wrap exit (CLIP E on Y $85/$8D only), 0x0a's sword cave
 one_room: true                          # round 5: per-room episodes
 max_steps: 600
