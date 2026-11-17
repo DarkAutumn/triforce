@@ -1,6 +1,6 @@
 """What a heart is worth at every route step: V(step, hearts), fitted from chain runs, for the reward's heart terms.
 
-    python -m triforce.heart_value CHAIN.jsonl... [--route d8] [--out triforce/heart_value.json]
+    python -m triforce.heart_value CHAIN.jsonl... [--route d9] [--out triforce/heart_value.json]
 
 V(k, h) is the chance that a run entering route step k's room with h hearts is alive when it takes the next
 triforce (which refills him): 0 at no hearts, non-decreasing in h, flat where nothing downstream can kill him before
@@ -16,7 +16,8 @@ with it off; a step on one way only has no table on the other), backwards from e
   damage a room deals does not depend on the hearts Link brings: a Kaplan-Meier estimate of the damage (half
   hearts, a gain negative) over every visit of the step, a death at h censoring it at "at least h".  Rare
   arrivals (a room usually entered at full health) follow the prior; common ones their own data.
-- V(k, h) = the expected V(next step, hearts out) over that transition (V = 1 after a triforce step), then made
+- V(k, h) = the expected V(next step, hearts out) over that transition (V = 1 after a triforce step, and after the
+  route's last step: round 29's ending), then made
   non-decreasing in h (weighted pool-adjacent-violators).
 
 Refit after every round that changes the team or the route (the env refuses a table whose steps no longer match the
@@ -25,7 +26,8 @@ the start state's hearts only: give the fit the full route's runs as well as the
 route: a table prices its own route and every route whose steps are its first ones (``HeartValues::prices``; round
 27: fitted on the scouting route ``d6`` from round 24's chains and Dungeon 6's, it prices ``d2first`` as well, whose
 rows it reproduces, since V at a step depends only on the steps up to the next triforce; round 28: on ``d8``, from
-those, Dungeon 7's and Dungeon 8's chains, pricing ``d2first``, ``d6`` and ``d8``).
+those, Dungeon 7's and Dungeon 8's chains, pricing ``d2first``, ``d6`` and ``d8``; round 29: on ``d9``, from those
+and the first Dungeon 9 team's ``d9`` chain, rows 0-296 unchanged, pricing all four).
 """
 
 import argparse
