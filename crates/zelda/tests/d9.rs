@@ -259,7 +259,6 @@ struct Tick {
     arrows: Vec<Direction>,
     bombs: Vec<Direction>,
     candles: Vec<Direction>,
-    moves: Vec<Direction>,
     sword: bool,
     recorder: bool,
     /// The route's rules for the state.
@@ -299,10 +298,6 @@ fn cellar(room: u8) -> MapLocation {
 /// The ticks of `room` on route step `step`.
 fn at(ticks: &[Tick], room: MapLocation, step: usize) -> Vec<&Tick> {
     ticks.iter().filter(|t| t.room == room && t.step == Some(step)).collect()
-}
-
-fn played(ticks: &[&Tick], kind: ActionKind) -> usize {
-    ticks.iter().filter(|k| k.action.kind == kind).count()
 }
 
 const CARDINALS: [Direction; 4] = [Direction::N, Direction::S, Direction::W, Direction::E];
@@ -548,7 +543,6 @@ impl Walk {
             arrows: offered(&self.s, ActionKind::Arrow),
             bombs: offered(&self.s, ActionKind::Bomb),
             candles: offered(&self.s, ActionKind::Candle),
-            moves: offered(&self.s, ActionKind::Move),
             sword,
             recorder: self.s.mask().is_allowed(&Action::new(ActionKind::Recorder, Direction::None, 0).unwrap()),
             kept_out: doorways_kept_out(map, state, objective),
@@ -1363,7 +1357,10 @@ fn the_silver_arrow_is_offered_only_at_the_brown_ganon() {
 #[test]
 fn the_game_ends_in_front_of_zelda() {
     let Some(mut w) = walk_to(354) else { return };
-    // Her init has run when she stands at Y $88 (on Link's first frames she is on the room's spawn spot).
+    // On Link's first tick her object may still be on the room's spawn spot, her init not run: the target is the row
+    // under where the init puts her all the same.
+    assert_eq!(zelda_tiles(w.s.state()), [(14, 11), (15, 11)], "{}", describe(&w.s));
+    // Her init has run when she stands at Y $88.
     assert!(frames_until(&mut w.s, 60, |s| (1..=11u16).any(|slot| s.state().peek(OBJ_TYPE + slot) == ZELDA && s.state().peek(OBJ_Y + slot) == 0x88)));
     assert_eq!(zelda_tiles(w.s.state()), [(14, 11), (15, 11)]);
     assert!(w.gc.ends_game(w.s.state()) && !game_ended(w.s.state()));

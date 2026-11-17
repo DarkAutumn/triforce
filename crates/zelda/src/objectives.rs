@@ -2186,11 +2186,22 @@ pub fn patra_children(state: &GameView) -> bool {
 
 /// Where the game ends in `state`'s room (round 29, the last step's target): Link's tiles in front of Zelda (object
 /// type `$37`), X within 8 pixels of hers on the row 13 pixels under her (asm:Zelda_Update: Link's X `$70`-`$80`,
-/// his Y exactly `$95`, with her at (`$78`, `$88`); the guard fires are not asked). Empty without her.
+/// his Y exactly `$95`, with her at (`$78`, `$88`); the guard fires are not asked). Empty without her.  On Link's
+/// first frames in the room her object is there but her init has not run (asm:ObjUninitialized): she is still on
+/// the room's spawn spot, and her place is read from where the init will put her (asm:Zelda_RoomObjXs,
+/// asm:Zelda_RoomObjYs: (`$78`, `$88`)), so the target does not start under the spawn spot.
 pub fn zelda_tiles(state: &GameView) -> Vec<Tile> {
+    const OBJ_UNINITIALIZED: u16 = 0x492;
+    const ZELDA_PLACE: (i32, i32) = (0x78, 0x88);
     (1..=11u16)
         .find(|&slot| state.peek(0x34F + slot) == ZELDA)
-        .map(|slot| (i32::from(state.peek(0x70 + slot)), i32::from(state.peek(0x84 + slot))))
+        .map(|slot| {
+            if state.peek(OBJ_UNINITIALIZED + slot) != 0 {
+                ZELDA_PLACE
+            } else {
+                (i32::from(state.peek(0x70 + slot)), i32::from(state.peek(0x84 + slot)))
+            }
+        })
         .map_or_else(Vec::new, |(x, y)| vec![Position::new(x - 8, y + 0x0D).tile(), Position::new(x, y + 0x0D).tile()])
 }
 

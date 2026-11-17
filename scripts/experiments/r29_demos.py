@@ -37,7 +37,8 @@ Every rule decides once per environment action from the RAM the env exposes and 
 the walks' own (`r29_fight_walks.Bot` and its four subclasses), which decided once a frame and pressed buttons: here
 their decision is asked once per action (`EnvBot`), a direction becomes `MOVE <d> 4`, a stab `SWORD <d>` (`BEAMS`
 where offered), a wait `WAIT 4`; what moved is the motion between two decisions spread over the frames between
-them.  What that grain costs is the point of the numbers this prints.
+them.  What that grain costs is the point of the numbers this prints (with every heart
+lost booked to the object nearest to Link when the action that cost it ended).
 
 Rows: a MOVE or WAIT row is cloned without its duration; an item or sword row is written `REPEAT` times.  Only runs
 that end as the family's success are kept."""
@@ -67,6 +68,27 @@ ROOMS = {'whirlwind': ('ow-moblin', 297), 'tree': ('ow-zora', 301), 'rock-wall':
          'wizzrobe-07': ('wizzrobe', 323), 'wizzrobe-05': ('wizzrobe', 331), 'wizzrobe-20': ('wizzrobe', 337),
          'wizzrobe-10': ('wizzrobe', 338), 'wizzrobe-30': ('wizzrobe', 347), 'room-03': ('like-like', 350),
          'ganon': ('ganon', 353), 'zelda': ('ganon', 354)}
+
+
+# What a lost heart is booked to: the object nearest to Link at the end of the action that cost it.
+NAMES = {0x23: 'Blue Wizzrobe', 0x24: 'Red Wizzrobe', 0x58: 'Blue shot', 0x59: 'Red shot', 0x2B: 'Bubble',
+         0x49: 'Trap', 0x4A: 'Trap', 0x17: 'Like-Like', 0x13: 'Zol', 0x14: 'Gel', 0x15: 'Gel', 0x3A: 'Lanmola',
+         0x25: 'Patra child', 0x26: 'Patra child', 0x47: 'Patra', 0x48: 'Patra', 0x3E: 'Ganon', 0x56: 'fireball',
+         0x55: 'fireball', 0x3F: 'guard fire', 0x40: 'fire', 0x11: 'Zora', 0x01: 'Blue Lynel', 0x02: 'Red Lynel',
+         0x0F: 'Blue Leever', 0x10: 'Red Leever', 0x57: 'sword shot', 0x1A: 'Peahat', 0x5D: 'dead dummy'}
+
+
+def nearest(ram) -> str:
+    """The name of the object (slots 1-$11: monsters, shots, and what Link laid: a fire, a bomb) nearest to Link;
+    a type without a name here as `$XX`."""
+    best = None
+    for s in range(1, 0x12):
+        t = ram[OBJ_TYPE + s]
+        if t and s not in (0x0D, 0x0E, 0x0F) and t not in (0x60, 0x68):
+            d = max(abs(ram[OBJ_X + s] - ram[OBJ_X]), abs(ram[OBJ_Y + s] - ram[OBJ_Y]))
+            if best is None or d < best[0]:
+                best = (d, t)
+    return NAMES.get(best[1], f'${best[1]:02X}') if best else '?'
 
 
 def hearts_of(ram) -> float:
@@ -779,12 +801,14 @@ def play(args):
     env = Env(family, explicit_starts=True, strict_actions=False, seed=0)
     recorder = DemoRecorder()
     endings, lost, steps_won, kinds, masked = collections.Counter(), [], [], collections.Counter(), 0
+    by = collections.Counter()
     kept, start = 0, None
     for seed in range(SEED0, SEED0 + args.runs):
         obs, _ = env.reset(seed=seed, options={'start_state': state})
         rule = RULES[args.what]()
         ram = bytes(env.state.ram)
         health = start = hearts_of(ram)
+        level, room = ram[LEVEL], ram[ROOM]
         info, n, illegal = {}, 0, 0
         for n in range(1, args.max_steps + 1):
             mask = obs['action_mask']
@@ -798,8 +822,11 @@ def play(args):
             kind = step.split()[0]
             recorder.add(obs, step, repeat=REPEAT.get(kind, 1), any_duration=kind in ('MOVE', 'WAIT'))
             kinds[kind] += 1
+            before = hearts_of(ram)
             obs, _, terminated, truncated, info = env.step(step)
             ram = bytes(env.state.ram)
+            if hearts_of(ram) < before and ram[LEVEL] == level and ram[ROOM] == room:
+                by[nearest(ram)] += before - hearts_of(ram)
             if terminated or truncated:
                 break
         won = info.get('outcome') == 'success'
@@ -821,6 +848,7 @@ def play(args):
                       'won': kept, 'endings': dict(endings), 'hearts_lost_in_wins': round(mean(lost), 2),
                       'hearts_lost_max': round(max(lost), 2) if lost else None,
                       'decisions_in_wins': round(mean(steps_won), 1), 'masked_choices': masked,
+                      'hearts_lost_to_all_runs': {k: round(v, 2) for k, v in by.most_common()},
                       'actions': dict(kinds), 'rows': rows, 'file': str(args.out) if rows else None}))
     return 0 if kept else 1
 
