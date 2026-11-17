@@ -568,3 +568,153 @@ ignored; pytest 818 passed, 3 skipped (five tests that pinned the route's end at
 the schema 5 record is read over its recorded states only, and `5_14s_0`'s terminal observation is pinned anew:
 with the route cut at step 209 the code computes the hash pinned before); `tf replay verify` the three corpus
 replays ok; `entry_states audit` 727 states, no problem; `asm.py check --final` ok.
+
+## 7:0x0d, the Wallmaster room (branch `r26-wall0d`)
+
+The room the first team's training did not teach. `wallmaster/r76-b` (244 iterations from `r71-e` with `--sil-coeff
+0.1`, the explorer's tracks `7_0dw_*` as curriculum, `room_kills` staging) left it at 11 of 300 evaluation
+episodes: 37 captured, 251 `no-damage` (600 decisions without a hit either way), 1 `stuck`; 1:0x45 300 of 300.
+
+### Why PPO failed: the objective, not the fight
+
+Watched `r76-b` in the room (decisions, positions, the objective's target and the mask at every step; the run's
+policy drawn at temperature 0.5): of 30 episodes 1 `exit-correct`, 1 captured, 13 `no-damage`, 15 `stuck`, and in 28
+the five hands were never all dead. The three failures traced step by step are the same episode: Link steps off
+the entry spot on his first frame, walks to the middle of the room and WAITs there (0 hands out in 81, 373 and 600
+decisions, 1 decision on a spot that brings one out), touched by the Bubbles. The one win happened to walk down the
+W wall and along the S wall, killed all five in 34 decisions there and pushed the block.
+
+- **The target was in the middle of the room.** A Wallmaster comes out only while Link stands against a wall
+  (asm:Wallmaster_Update@CheckLinkAtWall). With every hand in its wall the Fight objective's targets were the
+  monsters' RAM positions, and a hidden hand's is the spawn spot the game never uses: (`$80`, `$7D`), (`$80`,
+  `$9D`), (`$A0`, `$7D`), (`$A0`, `$9D`), (`$D0`, `$8D`). The `target` input and PBRS led there; on the target tile
+  the block has no direction and nothing ever happens.
+- **The critic charged the lure.** `critique_wallmaster` (1:0x45's "stay off the walls") takes 0.05 a decision on
+  any wall-line tile while a Wallmaster is in the room, unless the tile is one of the objective's.
+- **The mask was right**: SWORD is offered with a hand out and not beside a Bubble's sword-off timer, and MOVE W is
+  offered beside the block.
+- **The room itself** (walked through the env): its walkable ring IS the wall line (top corridor Y `$5D`, bottom Y
+  `$BD`, W column X `$20`, E column X `$D0`); off it are only the inside of the C of blocks (X `$20`-`$B0`, Y
+  `$75`-`$9D`, open to the W) and the bottom corridor's upper row. On the door row MOVE W from inside the C walks
+  out through the bombed doorway (a wrong exit); a row lower it stops at the wall.
+
+**Fix 1** (`zelda::objectives`, `object_rules::wallmaster_lure_tiles`): a Fight objective with no active monster
+and every monster a Wallmaster targets the spots that bring one out (Link's tiles against the four walls, outside
+the corners); a hand that is out stays the target. The critic's own exemption then stops charging the lure.
+
+### A second trap: the clock
+
+Found measuring the rule below. A Wallmaster drops from group 1 (59% of kills; `zelda-asm/enemies.md` "Drop
+tables"), the clock at kill-cycle column 6. A clock taken while a hand lives ends the room:
+
+- Under the clock (asm:InvClock) a hand that comes out stays where it starts, at X `$00`, two squares inside the
+  wall. From every spot tried the sword and the boomerang do not reach it; a bomb from (`$20`, `$BD`) facing W kills
+  it, and BOMB is masked in the family (`bombs: tenth`). The hands still come out one per `$60` frames and freeze.
+- The drop lies where the hand died: on the wall line, 9 pixels below the lure spot and under the blade of the next
+  swing (the sword takes items), and where a Bubble's knock from the strike spot ends.
+- The family's `reward: item_targets: true` made the clock a PBRS target.
+- How often: the cycle start decides. `7_0dw_0`'s puts the clock on the third kill: of 100 rule runs from it (half
+  staged with 1-4 kills banked) 45-49 saw a clock drop; `7_0dw_1` and `7_0dw_2` none in 100 each. With a uniform
+  start one of the first four kills is the clock's in 4 of 10 visits, times 59%: about a quarter (computed).
+- **A way out exists and is not built**: leaving W into 0x0c and coming back resets the clock and keeps the kills
+  (walked: two of five dead, the clock held, three frozen hands; out and back in: `InvClock` 0, three Wallmasters in
+  the wall). A one-room episode that has taken the clock runs to `no-damage` (600 decisions) or `stuck`; a chain
+  run has no reason to leave and stays until the runner's room budget (2000 decisions).
+
+**Fix 2** (`env::objective`, `clock_is_a_trap`): while a Wallmaster lives a lying clock is no item target and the
+wavefront treats the tiles on which Link would touch it as impassible, so no lure spot under it is a target and the
+way to the others goes round it. Nothing stops a knock or a careless swing from taking it; that is the policy's to
+learn (counted below).
+
+Both are changes of the objective (REV level: rewards and the `target` input in a room where a Wallmaster must
+die; no layout or action change), checked for leaving everything else alone: `cargo test --release -p env -p zelda
+--features zelda/zcore` passes with three new tests (`d7_wallmaster_room_lures_fights_pushes_and_takes_the_stairs`:
+hands in, the lure tiles; one out, the hand; all dead, the tile E of the block, then the stairs;
+`a_clock_is_no_target_while_a_wallmaster_lives`; `a_lying_clock_is_walked_round_while_a_wallmaster_lives`),
+`tests/test_obs_legacy.py` 28 passed, and `r76-b` in 1:0x45 plays the same 300 of 300 evaluation episodes before
+and after (1:0x45 has no Fight objective: the key, then the door). In 7:0x0d the untrained `r76-b` under the new
+objective: 55 of 300, 170 captured, 55 `no-damage`, 20 `exit-wrong`. It goes to the wall now and does not know what
+to do there.
+
+### The rule
+
+`scripts/experiments/r26_d7_0d_demos.py`: the button script `r26_wallmaster_bot.py` (40 of 40) in the env's
+actions.
+
+- **Lure** at (`$20`, `$9D`): `MOVE W` on the row below the door row stops at the wall. The reset's own spot lures
+  the first hand.
+- **Step off** when a hand is out: `MOVE E 8`, `MOVE E 4` (X `$30`-`$37`), `MOVE S` to the row; the hand walks the
+  wall line a square away.
+- **Strike**: `SWORD W` (`BEAMS W` at full health) while the hand is at most `$18` pixels W of Link and less than
+  12 from his row. The window is what the env's grain needs: a hand walks 0.375 pixels a frame, so it stays in the
+  window for some 60 frames, a SWORD takes 17 and the longest WAIT 32; every decision inside it hits. The waits
+  before it are as long as the hand's distance allows.
+- The sword taken by a Bubble, or a hand's death sparkle running: off the wall, wait. **A clock lying**: deeper into
+  the C (X `$58`) and wait until it has gone (some 500 frames).
+- **All dead**: follow the `target` block in short steps (it gives the first step and the way's length, not where
+  the way turns: a long MOVE walks back and forth past the turn into the bottom corridor's upper row), `MOVE W 16`
+  beside the block (the push counts only on the grid point (`$D0`, `$8D`), where the block has no direction; off it
+  the same MOVE W first walks Link on to the point), then the target to the stairs.
+
+What it took to get there, each measured on 100 runs a state (`7_0dw_0..2`, seeds 1000-1099, the reset's own hp and
+bomb draws, the yaml's staging: half the runs with 1-4 kills banked):
+
+| Rule | `exit-correct` | Captured | Other endings | Clock taken, a hand alive |
+|---|---:|---:|---|---:|
+| lure, step off, strike, push; a lying clock waited out at the strike spot | 282 / 300 | 0 | 16 `stuck`, 2 `exit-wrong` | 11 |
+| + wait during a hand's death sparkle | 279 / 300 | 0 | 20 `stuck`, 1 `exit-wrong` | 14 |
+| + wait for the clock deep in the C; a last step on the stairs' tile | 299 / 300 | 0 | 1 `exit-wrong` | 0 |
+
+A clock taken in the second rule's runs, traced: a Bubble's knock from the strike spot on to the wall line, on to
+the clock. A `stuck` run with all five dead, traced: Link on the stairs' tile two pixels short of the stairs, where
+the `target` block has no direction. The last `exit-wrong` is a MOVE whose last frame was the first of the stairs'
+transition (backlog).
+With the last rule, measured again on the code as committed (both objective fixes): 299 of 300 (`7_0dw_0` 100,
+`7_0dw_1` 99, `7_0dw_2` 100 of 100), no capture, no heart lost (0.27 gained a run from drops), 2.9 Bubble touches a
+run, a clock dropped in 49 runs (all from `7_0dw_0`) and none taken, a winning run 121 decisions and 1747 frames at
+the median (the button script: 1739 frames to the clear, then the push). By staged kills, won of played: none 149 of
+150, one 51 of 51, two 21 of 21, three 57 of 57, four 21 of 21.
+
+### The demonstrations
+
+The rows of the winning runs (`triforce.demos`): a SWORD or BEAMS row 10 times and the push 20 times (five and one
+decisions of a run of some 115), a WAIT and a MOVE that ends at a wall without its duration (`ANY_DURATION`), the
+other MOVEs with theirs (the step off the wall and the short steps along the target are the rule). 100 runs a
+state give 69,633 rows from 299 runs; `train --demos` scores the whole file once an iteration for its accuracy
+chart, so the file meant for training is 40 runs a state (28,354 rows from 120 of 120 runs). `--policy RUN_DIR` is DAgger (the
+checkpoint plays at temperature 0.5, the rule labels every state), and `--measure --policy RUN_DIR` counts a
+checkpoint's endings with the clocks it took while a hand lived, which `eval.json` does not record.
+
+```bash
+.venv/bin/python scripts/experiments/r26_d7_0d_demos.py --measure 100                    # the table's last row
+.venv/bin/python scripts/experiments/r26_d7_0d_demos.py rule.npz 40                      # rows for train --demos
+.venv/bin/python scripts/experiments/r26_d7_0d_demos.py --measure 100 --policy RUN_DIR   # a checkpoint, by cause
+.venv/bin/python scripts/experiments/r26_d7_0d_demos.py dagger.npz 40 --policy RUN_DIR   # DAgger rows
+```
+
+### Training: not done on this branch
+
+**No run was trained under the fixed objective, so there is no run to recommend and the target (80% in 7:0x0d,
+captures under 5%) is not measured.** The lead's order was PPO alone first (if the objective was the whole cause,
+the curriculum may be enough, and that is the cleaner result), the demonstrations only if it is not. Round 1 was
+started so and was still waiting its turn in the job line when the branch was handed back:
+
+```bash
+.venv/bin/python scripts/train_round.py --round r76-wall-1 --specialists wallmaster --chain-runs 0 --parallel 8 \
+    --eval-parallel 3 --models-dir $PWD/models \
+    --train-args "--load $PWD/models/wallmaster/r76-b --iterations 244 --seed 76 --stop-success 1.01 --sil-coeff 0.1"
+# if 7:0x0d stays below 80% or captures at 5% or more: the same from the better run, with the rule's rows
+#   ... --round r76-wall-2 --train-args "--load RUN_DIR ... --sil-coeff 0.1 --demos rule.npz --demo-coeff 0.05"
+# (0.1 if the clone does not take: `charts/demo_bc_accuracy`), then DAgger rows beside rule.npz if the policy
+# fails off the rule's path.
+```
+
+What stands as measured: `r76-b` itself, untrained, on the fixed objective (100 episodes a state, its act mode):
+
+| Room | Before the fixes (`r76-b`'s `eval.json`) | After both fixes |
+|---|---|---|
+| 1:0x45 | 300 / 300, no heart lost | 300 / 300, the same 300 episodes |
+| 7:0x0d | 11 / 300: 37 captured, 251 `no-damage`, 1 `stuck` | 55 / 300: 170 captured, 55 `no-damage`, 20 `exit-wrong`; 0.24 hearts lost a visit |
+
+Judge a trained run by its `eval.json` `by_room` (7:0x0d's success and endings, captures first; 1:0x45 not below
+`r71-e`'s 300 of 300 with no heart lost) and by `--measure --policy` for the clocks taken.
