@@ -994,3 +994,75 @@ triforce eval-batch r79t5-1k --chain "d9: --route d9 --from 9_76s_0 --runs 1000 
 Dungeon 6 held; zol on 9:0x63 at low hearts); then the whole batch (`TAG=r79t5-1k RUNS=1000
 scripts/experiments/r29_d9_baseline.sh run`: the `post-d8` segment and the single rooms; it keeps the `d9` chain
 above) and a run to the ending from Dungeon 8's triforce.
+
+## 17. The second round for the stretch (rounds `r79b-*`)
+
+**State of this section.** Written as the round goes; the chains are at its end.
+
+**What the first round left** (§16): 0:0x17 from S not crossed (0 of 300), so no `post-d8` run could arrive; 9:0x55's
+clip at 3.63 hearts a visit where its rule loses none; about 12 hearts lost before the red ring; zol's 0x63 untrained
+at low hearts; wizzrobe kept for this stretch only.
+
+### 17.1 0:0x17 from S: the cause, the rule, the round
+
+**The cause.** Thirty episodes of the first round's run (`r79t5-ow`) from `0_17s` with replays and the decision
+stream (an evaluation from a copy of the family's yaml with that state only): **29 of 30 never leave the entry row
+Y `$DD`**. Link walks W onto the river's S end (X `$60`, the ladder laid over it, rock beyond) and back E to about X
+`$8C`, and waits half of his decisions; the Boulders kill him there (7 deaths) or the 600 steps run out. One run got
+up to Y `$BD`. The objective's path is right: a lane rule's target pointer shrinks steadily along it, up, W over
+the river, up. What the family lacked: `ow-boulder.yaml` had **no `curriculum:`**, so the explorer's three tracks of
+`0_17s` (written in the states step, §10) were never loaded, and there was no demonstration file. Its only habit in
+0x17 was the old start's way out, the S edge.
+
+**The rule** (`r29_demos.py ladder-17`): up X `$88` out of the S pocket to the walked row Y `$9D`, W along it (a
+MOVE W onto the river lays the ladder), up the corridor at X `$40` (`d9-walks.md` §1.4). 100 runs a state, chains
+0-2: **298 of 300 from the state's own hearts and 298 of 300 with the family's draws** (2 `stuck`), 0.38 hearts lost
+in the wins (most to the Boulders, `$20`; the Zora next), about 36 decisions. One rule track a state
+(`0_17s_<c>~rule1000`) and the demonstration file `target/r29-demos/ladder-17.npz` (11,111 rows).
+
+**The round** `r79b-boulder` (ow-boulder from `r72-ow`, 244 iterations, `curriculum: {enabled: true}`, the six
+tracks, `--demos ladder-17.npz --demo-coeff 0.05`, `--seed 79 --stop-success 1.01 --sil-coeff 0.1`): **`0_17s` 300
+of 300 at −0.32 hearts** (−0.33, −0.29, −0.34 by chain); `0_17e`, `0_18e`, `0_19e` 900 of 900, as before. Promoted.
+
+### 17.2 9:0x55: the model's clip costs hearts on the way to it
+
+120 episodes of `r79t5-lanmola` (40 a state, the family's draws, clips on) with replays and the decision stream:
+96 won, 18 died, 6 left S into 0x65. Read decision by decision:
+
+- **The clip itself works.** 112 CLIPs were played; **96 went straight through to the stairs** (3 or 4 decisions
+  after the CLIP). CLIP N is offered from two places: X `$60` on Y `$95`-`$A2` (the rule's lane, under the ring's W
+  block) and X `$70` on Y `$A5`-`$B5` (under the ring); both lead to the stairs. The 16 that did not were broken off
+  by a touch (the evaluation's 0.13 aborted clips an episode). CLIP is not offered anywhere it leads nowhere.
+- **The time to the clip is the cost.** In the wins CLIP is first offered at the 34th decision on average (median
+  28.5, tenth percentile 8, ninetieth 69.5) and taken a median of 1 decision later; **the rule reaches its CLIP at
+  the 12th decision of 15.** The model walks the S rows W to X `$20`-`$50`, goes up X `$50` (one column W of the
+  lane, where no CLIP is offered), comes back down and E as far as X `$CE`, while the worms come out of ($40, $8D).
+- **The deaths are runs that never got there**: 14 of the 18 never stood where CLIP is offered (drawn hearts 8.6 on
+  the first decision). 5 of the 6 wrong exits never did either.
+- **In the chain** (`r79t5-1k`, first visits): 868 of 999 clear (2.90 hearts lost, 41.7 decisions; only 41% lose
+  none), 98 die, **33 leave S into 0x65 and end `bounce-limit`** (five returns in a row; these are the 33 `stuck` of
+  §16), the 66 wrong exits being theirs.
+
+**What it needs**: the lane, which is what demonstrations and tracks teach, not a mask. The family's three
+curriculum tracks were the explorer's (26, 57 and 98 decisions, 2 to 7 hearts lost, two of them wandering the room
+before a CLIP N or S): they were set aside (`target/r79b/tracks-dropped/lanmola`, not committed) for the clip
+rule's (`9_55s_<c>~rule1000..1002`, 15 decisions, no heart lost); the demonstration rows tripled (`clip-55.npz` and
+`clip-55-300.npz`, 300 runs a state with the family's draws, 13,500 rows; every run of the rule is the same 15
+decisions) at twice the weight (`--demo-coeff 0.1`); and the round twice as long (976 iterations, from
+`r79t5-lanmola`).
+
+**The mask, tried and not used**: game.yaml's `keep_out` on 0x55's S doorway (the way back to 0x65, which this
+route never takes from here) would end the 33 bounces. It does not hold at the entry square: from ($78, $BD), where
+every start and every chain arrival stands, MOVE S walks Link out in two decisions (observed through the env with the
+yaml changed and the module rebuilt). Why the executor's veto misses there was not traced; making it hold is an
+engine change. Reverted; in the backlog.
+
+### 17.3 The prices of hearts on level 9 (`heart_value.json` on route `d9`)
+
+`python -m triforce.heart_value <the 28 chains of the d8 table> r79t5-1k-d9.jsonl --route d9`: **rows 0-296 equal
+the `d8` table's field by field (0 of 297 differ)**; steps 297-357 get curves on the clips way, V after the last
+step (the ending) being 1. The leg (297-311) has no visit yet and takes 9:0x76's curve. Because 5 runs of 1000 end
+the game, V is small early in the level (9:0x55 at 15 hearts 0.0086, 0x16's fight 0.25, 0x10 0.41, 0x30 0.45): the
+`potential` term pays little there; the `exit` term's ratio V(out)/V(max) still prices the hearts carried out
+(out of 0x55 into its tunnel: 9 hearts 0.02 of 15's, 12 hearts 0.23, 13 hearts 0.35). Commit 0b79e4a; `critic.rs`
+pins the table to `d9` and four routes.
