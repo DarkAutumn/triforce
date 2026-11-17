@@ -14,6 +14,44 @@ the gap list of what must be walked in the game first, where the documents disag
 of work) and the documents it indexes (`d7.md`, `d6.md`, `d8.md`, `d9.md`, `late-monsters.md`, `late-mechanics.md`).
 The owner's decisions of Nov 16 are in `docs/decisions.md` ("The rest of the game").
 
+### Round 29 (begun Nov 17): the leg to Dungeon 9, Dungeon 9, Ganon and the end
+
+round29.md; the walks `docs/routes/d9-walks.md` and `d9-fights-walks.md`; the route as built `docs/routes/d9.md`
+§13; the lead's working answers `docs/decisions.md` 2026-11-17 ("Round 29's working answers"). Built on round 28's
+branch.
+
+- [x] **The walks** (Nov 17): the route part and the fights, every room in the running game.
+- [x] **The route vocabulary** (Nov 17): the scouting route `d9` (steps 297-354, one way), `exit: end` and
+  `game-completed`, waypoints `ring` and `silver-arrow`, `banked_kills`, `sword: false`, `never_opens`,
+  `requires_pieces`, a tree burned from above, a rock wall over a level's stairs as a bomb target, Patra's children
+  first, Ganon's phases, arrow mask and rupee, families lanmola, patra, ganon, the scripted walk
+  `crates/zelda/tests/d9.rs` to the first frame of mode `$13`.
+- [x] **The block clips of the ring rooms** scanned and walked (`scripts/experiments/r29_clips.py`; round29.md §5).
+- [x] **The walks' fighters as rules over env actions** (`scripts/experiments/r29_demos.py`; round29.md §6).
+- [ ] **The main risk: the survival budget does not close.** About 23 hearts for the route and 26 for the fights
+  with the ring, of 15 containers and no refill; 37.9 with the clips (round29.md §3, §5). The owner's question.
+- [ ] **Start states** of steps 297-354, chains 0-2 (round29.md §7 names the 58), from Dungeon 8's triforce-room
+  states once round 28's exist; every fight by `--skip-fights` until a model clears it.
+- [ ] **The clips way**: a `stretch:` for 0x07 (steps 323-325) and 0x20 (337, 341) whose clips way banks no kills,
+  `clips: true` for wizzrobe, lanmola and like-like, the return states on both ways. Needs a room or step list for
+  `clips:` (round 26's item): CLIP is offered at 27 points of every ring room on every visit.
+- [ ] **Merge `d9` into `d2first`** when the owner fixes the route, after `d6` and `d8`; refit
+  `triforce/heart_value.json`.
+- [ ] **Curricula and a first team**: wizzrobe on both dungeons (level 9's rooms have three Blue Wizzrobes, Bubbles
+  and Traps; the three bomb waits 0x65, 0x17, 0x31/0x04), patra, lanmola, ganon, like-like's 0x14, 0x51, 0x41 and
+  0x03, ow-moblin's whirlwind (0 of 40), ow-zora's tree, ow-leever's 0x48 (0 and 12 of 40), ow-boulder's ladder (0
+  of 40), ow-lynel's 0x06 and the rock wall (12 and 0 of 40). The rules of `r29_demos.py` as demonstrations, run
+  again from the real states.
+- [ ] **Ganon's hidden position** is on `ram` until the owner decides; `last_seen` or `zero` needs the fight target
+  changed too (it follows his RAM position).
+- [ ] **What the env's grain costs the rules** (round29.md §6): where a rule wins fewer runs or loses more hearts
+  through MOVE and WAIT of 4 frames than the frame script did.
+- [ ] **Python tests** of `game-completed` and of a reset's kept kills through `_native.Env`, once states exist.
+- [ ] **A crossing family** for the Wizzrobe and Patra rooms that are only crossed (five and two rooms): today they
+  are their monsters' families'.
+- [ ] **0x30's stairs on a Trap's home**: the lure of `d9-walks.md` §3.4 is no rule of the objective.
+- [ ] **Drops** in the Wizzrobe rooms (hearts and fairies from 24 Wizzrobes) were not measured by any walk.
+
 ### Round 28 (begun Nov 17): the leg from Dungeon 6 and Dungeon 8
 
 round28.md; the walks `docs/routes/d8-walks.md`; the route as built `docs/routes/d8.md` §15; the lead's working

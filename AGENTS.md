@@ -6,6 +6,20 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
 
 ## Where things stand (Nov 17)
 
+- **Round 29, begun (Nov 17, 1.5.1.0; `docs/experiments/round29.md`):** the leg to Dungeon 9, Dungeon 9, Ganon and
+  the end of the game, on round 28's branch. Built, nothing trained: (1) **the walks** (`docs/routes/d9-walks.md`,
+  `d9-fights-walks.md`: no model clears any fight of level 9; a rule reading positions wins each); (2) **the route
+  vocabulary** (`docs/routes/d9.md` §13, `docs/architecture.md` "The leg to Dungeon 9, Dungeon 9 and the end"): the
+  scouting route `d9` = `d8` plus steps 297-354 (one way), **`exit: end` (the first frame of game mode `$13`; the
+  ending `game-completed`)**, waypoints `ring` and `silver-arrow`, **`banked_kills` (a start in a room the route
+  comes back to keeps the kills the game keeps)**, `sword: false`, exits that `never_opens`, `requires_pieces`,
+  Ganon's phases with **ARROW only at the brown Ganon from his row or column**, families lanmola, patra, ganon
+  (`trainable: false`), the scripted walk `crates/zelda/tests/d9.rs`; (3) the block clips of the ring rooms
+  (`scripts/experiments/r29_clips.py`: offered in 0x55, 0x07, 0x61, 0x20, 0x03; not used by the route yet) and the
+  walks' fighters as rules over env actions (`scripts/experiments/r29_demos.py`). The lead's working answers are in
+  `docs/decisions.md` 2026-11-17 ("Round 29's working answers"). **The main finding** (round29.md §3): the best
+  plays seen cost about 23 hearts on the route and 26 in the fights, of 15 containers with no refill; 37.9 with
+  the clips. Not built: start states (round29.md §7 names the 58), curricula, training, chains.
 - **Round 28, begun (Nov 17, 1.5.1.0; `docs/experiments/round28.md`):** the leg from Dungeon 6 and Dungeon 8, on
   round 27's branch (Dungeons 6, 8 and 9 are prepared side by side). Built so far, nothing trained: (1) **the
   walks** (`docs/routes/d8-walks.md`: today's models cannot play the whirlwind out of 0x22, the tree of 0x6d, the
