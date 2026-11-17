@@ -28,7 +28,8 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   --checkpoint-every N` and `triforce select-checkpoint` choose a checkpoint by a chain segment with fresh-seed
   confirmation. **Jobs** (trainings, evaluations, chains) wait their turn in one line for the machine by themselves:
   two regular places, shortest estimate first with waiting counted, and an express place for jobs under ten
-  minutes; never `--no-wait`, never kill a waiting job. **Next** (the owner, Nov 16): the rest of the game, Dungeons
+  minutes; never `--no-wait`, never kill a job only to get ahead (one nobody needs any more is ended). **Next**
+  (the owner, Nov 16): the rest of the game, Dungeons
   7, 6, 8, 9 with the magic sword after 7, breadth first to Ganon (`docs/routes/rest-of-game.md`: the survival
   budget, everything the engine lacks, the gap list of what must be walked, the order of work; `d7.md`, `d6.md`,
   `d8.md`, `d9.md`, `late-monsters.md`, `late-mechanics.md`). Left open by round 25 (backlog): the Olive Garden (143
@@ -412,8 +413,12 @@ test them, keep what helps, and log everything.
   update in 5 minutes.`, repeats it every 5 minutes and prints `triforce: NAME starts after waiting N minutes` when
   it starts; the training GUI lists it as waiting in the order the line will drain, with its estimate. **Seeing
   that line, wait** (check back as for any long job; a long job can wait for hours behind short ones, that is by
-  design): don't kill it or the jobs it waits for, don't stagger, split or nice jobs by hand, don't restart it with
-  `--no-wait`. A job that dies, running or waiting, stops counting by itself (liveness comes from `/proc`, nothing
+  design): don't kill it or the jobs it waits for to get ahead, don't stagger, split or nice jobs by hand, don't
+  restart it with `--no-wait`. **A job there is no reason to run any more is ended** (Lee, Nov 18: "kill running
+  jobs if there's no reason to run something. I more meant don't needlessly kill running jobs"): a duplicate, a
+  measurement a decision made pointless (a clips-off chain after Nov 18), an arm already decided. End your own job
+  with one SIGTERM (its plan ends `interrupted`), running or waiting; never another agent's or the owner's without
+  asking. A job that dies, running or waiting, stops counting by itself (liveness comes from `/proc`, nothing
   has to report in). The opt-outs exist for the owner: `--nice N` (0 leaves the priority alone; `$TRIFORCE_NICE`
   changes the default), `--no-wait` (start now; still counts as running for the others; `$TRIFORCE_NO_WAIT=1` for a
   wrapper), `$TRIFORCE_MAX_JOBS` (regular places, default 2, 0 = no limit). A round or batch waits once as one job;
