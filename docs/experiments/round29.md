@@ -113,8 +113,10 @@ model did better anywhere it matters):
 | **Together** | **48.8** | **61.7** |
 
 Read plainly: **about 23 hearts for the route and 26 for the fights with the ring, against 15 containers and no
-refill.** By these plays Link is dead on the leg's far side of level 9's first rooms: the leg and the crossings to
-0x16 alone are 12.7 hearts, and 0x07's fight before the ring is 9.35 more. Without the ring it is worse by 13.
+refill.** By these plays, taken in the route's order, Link does not
+reach the ring: the leg and the crossings to 0x16 are 12.7 hearts, the Lanmolas one more, and the detour's first
+bomb wait (0x27, 4.1) is the sixteenth heart; 0x17's wait and 0x07's fight, 12 hearts more, come after it.
+Without the ring it is worse by 13.
 
 What the numbers are and are not:
 
