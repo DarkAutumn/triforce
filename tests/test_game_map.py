@@ -15,9 +15,10 @@ def test_the_route_and_families():
     # d2first is the one route the game is played on (Dungeon 4 merged in, Nov 12; the leg and Dungeon 5, round 24;
     # the leg to Dungeon 7 and Dungeon 7, round 26: scouted as the route d7, merged Nov 16); d6 is round 27's scouting
     # route (d2first, then the magic sword and Dungeon 6) and d8 round 28's (d6, then the leg to Dungeon 8 and Dungeon
-    # 8); clips-gauntlet is round 21's experiment route (two targets per room and entry, drawn by a specialist naming
-    # it).
-    assert native.routes() == [native.DEFAULT_ROUTE, 'd6', 'd8', 'clips-gauntlet'] and native.DEFAULT_ROUTE == 'd2first'
+    # 8) and d9 round 29's (d8, then the leg to Dungeon 9, Dungeon 9, Ganon and Zelda); clips-gauntlet is round 21's
+    # experiment route (two targets per room and entry, drawn by a specialist naming it).
+    assert native.routes() == [native.DEFAULT_ROUTE, 'd6', 'd8', 'd9', 'clips-gauntlet']
+    assert native.DEFAULT_ROUTE == 'd2first'
     assert sorted(native.families()) == list_specialists()
 
 
@@ -80,6 +81,45 @@ def test_the_scouting_route_d8_goes_on_to_the_d8_triforce():
         assert native.specialist_for(room) == step['specialist']
 
 
+def test_the_scouting_route_d9_goes_on_to_the_end_of_the_game():
+    """Round 29: d9 is d8 and steps 297-354, one way (no stretch): the whirlwind out of 0x6d, the leg with 0x47's
+    heart cave, the rock wall of 0x05, Dungeon 9 with the red ring's detour and the silver arrow, Ganon, and Zelda's
+    room, whose exit is the end of the game; the rooms the route comes back to keep their kills; every room is in its
+    step's family."""
+    base, steps = native.route_steps('d8'), native.route_steps('d9')
+    assert steps[:len(base)] == base and len(steps) == 355
+    own = steps[len(base):]
+    assert all(s['way'] is None and s['stretch'] is None for s in own)
+    first, last = own[0], own[-1]
+    assert (first['level'], first['room'], first['entry'], first['exit'], first['specialist']) == (
+        0, 0x6d, 'cave', 'recorder', 'ow-moblin')
+    assert (last['level'], last['room'], last['entry'], last['exit'], last['specialist']) == (9, 0x32, 'S', 'end', 'ganon')
+    assert [s['index'] for s in steps if s['exit'] == 'end'] == [354]
+    assert [(s['index'], s['waypoint']) for s in own if s['waypoint']] == [
+        (302, 'heart'), (324, 'ring'), (339, 'silver-arrow')]
+    assert [(s['index'], s['room'], s['banked_kills']) for s in own if s['banked_kills']] == [
+        (325, 0x07, 5), (340, 0x10, 5), (341, 0x20, 15), (343, 0x61, 15)]
+    assert [(s['index'], s['bomb_reserve']) for s in own if s['bomb_reserve'] is not None] == [
+        (297, 5), (312, 4), (315, 3), (321, 2), (322, 1), (323, 0), (330, 4), (331, 3), (338, 2), (347, 1), (350, 0)]
+    assert [(s['index'], s['rupee_reserve']) for s in own if s['rupee_reserve'] is not None] == [(312, 1), (353, 0)]
+    assert [(s['index'], s['bombs']) for s in own if s['bombs']] == [(309, 'never'), (311, 'required')]
+    assert [(s['index'], s['treasure']) for s in own if s['treasure']] == [
+        (317, 'clear'), (318, 'skip'), (319, 'skip'), (320, 'skip'), (321, 'skip'), (327, 'skip'), (328, 'skip'),
+        (334, 'skip'), (337, 'clear')]
+    assert [s['index'] for s in steps if not s['sword']] == [330]          # the old man of 9:0x06
+    # Rooms the route enters twice from the same side (with d2first's and d8's earlier visits).
+    assert [(s['index'], s['room'], s['in_cave'], s['visit']) for s in own if s['visit'] > 1] == [
+        (299, 0x38, False, 2), (300, 0x48, False, 2), (342, 0x75, True, 2)]
+    families = native.families()
+    for step in own:
+        room = (step['level'], step['room'], step['in_cave'])
+        assert room in [tuple(r) for r in families[step['specialist']]], step
+        assert native.specialist_for(room) == step['specialist']
+    assert {s['specialist'] for s in own} == {
+        'ow-moblin', 'ow-octorok', 'ow-zora', 'ow-leever', 'ow-boulder', 'ow-lynel', 'stalfos-keese-gel', 'wizzrobe',
+        'lanmola', 'equipment-room', 'like-like', 'patra', 'zol', 'ganon'}
+
+
 def test_every_route_room_is_in_its_family():
     families = native.families()
     for step in native.route_steps('d2first'):
@@ -133,7 +173,8 @@ def test_the_bow_detour_goes_north_from_0x43_and_back():
                                               (4, 0x11, False), (6, 0x48, False)]
     assert native.families()['equipment-room'] == [(1, 0x7f, True), (3, 0x0f, True), (4, 0x60, True), (5, 0x04, True),
                                                    (5, 0x07, True), (7, 0x4a, True), (7, 0x7b, True), (6, 0x08, True),
-                                                   (8, 0x2f, True)]
+                                                   (8, 0x2f, True), (9, 0x60, True), (9, 0x70, True), (9, 0x75, True),
+                                                   (9, 0x67, True), (9, 0x77, True), (9, 0x00, True), (9, 0x4f, True)]
 
 
 def test_dungeon_3_follows_lees_directions_with_the_treasure_rules():
