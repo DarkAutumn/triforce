@@ -813,14 +813,13 @@ of 20, 0.55 below, 14 of 20 above; 0x20 20 of 20, 0.33 from the door; 0x03 20 of
   hearts. Next lanmola (82 of 100 `d9` runs die in 0x55; the rule wins 300 of 300 at 1.68 hearts), then the
   overworld items no model plays (the whirlwind, the tree, the rock wall), patra and ganon.
 
-## 16. The first team for the stretch (rounds `r79t5-*`): ten rounds trained, not finished
+## 16. The first team for the stretch (rounds `r79t5-*`): ten rounds trained and judged in single rooms, not finished
 
-**State of this section (Nov 17, 17:45).** All ten rounds have trained and been evaluated in single rooms. The
-evaluation of the continued runs under this code (`r79t5-base`) had only begun, so the old rooms below are
-compared with each continued run's own `eval.json` (its team's code, and for a clip family but wizzrobe and
-like-like both switch states: not the same measurement). **Not done: the old rooms on equal terms, any second
-round, any promotion of a continued family, the chains, a recorded run to the ending.** Nothing here says what
-the stretch does in a chain.
+**State of this section (Nov 17, 18:10).** All ten rounds have trained and been evaluated in single rooms, and
+the continued runs were evaluated under this code on the same states and seeds (`r79t5-base`, 100 episodes a
+state, clips on). **Not done: any second round (two rooms are not learned, wizzrobe lost in Dungeon 6), the
+chains (the `d9` segment's 1000 runs were queued, the leg's not), a recorded run to the ending.** Nothing here
+says what the stretch does in a chain.
 
 **The checkout.** The states step's branch with `r26` merged (the bomb rule, 7:0x0d's objective fixes, Dungeon 7's
 heart fit, demonstration rows on the device) and the two heart fits that are not on `r26` picked from the Dungeon
@@ -904,13 +903,18 @@ a state, a clip family's there with the switch on and off):
   - *9:0x55* (lanmola): the model does 0.84 clips an episode (0.83 `CLIP N`; 0.13 more aborted) and dies in 46 of
     300, where the rule does the same clip 300 of 300 without a heart lost. Not looked at either. The run is
     promoted in the team's checkout as the family's only run.
-- **Old rooms**, against each continued run's own `eval.json` (see the note at the top): every room in common is
-  within 1.5 points or better but ow-zora's 0:0x55, 99.3% → 97.0% (26 wrong exits in 900; `0_55n_v2` 93%), and
-  ow-lynel's 0:0x0a, 97.8% → 96.8%. Both are under the three-point bar and neither is measured on equal terms yet.
-  Better: ow-leever 0:0x34 98.2% → 99.7% (−0.85 → −0.31 hearts), ow-moblin 0:0x5b 97.6% → 99.3%.
-- **Kept so far** (promoted in the team's checkout only): ganon `r79t5-ganon`, patra `r79t5-patra`, lanmola
-  `r79t5-lanmola`. The continued families wait for `r79t5-base`, which evaluates each family's promoted run:
-  promoting before it runs would make it measure the new run.
+- **Old rooms on equal terms** (`r79t5-base`: the continued run under this code, the same states and seeds). Every
+  old room of like-like, ow-moblin, ow-leever, ow-lynel and stalfos-keese-gel is within one point of the run it
+  continued or better (ow-leever 0:0x48 91.0% → 100%: its two new starts; 0:0x34 98.5% → 99.7%, −0.83 → −0.31
+  hearts). ow-zora loses 2.4 points in 0:0x55 (99.4% → 97.0%: wrong exits 4 → 26 of 900, `0_55n_v2` 93%), under
+  the three-point bar; its other rooms are within a point. ow-boulder's old rooms are unchanged and its new one
+  not learned.
+- **Kept** (promoted in the team's checkout only): ganon `r79t5-ganon`, patra `r79t5-patra`, lanmola
+  `r79t5-lanmola` (the family's only run), like-like `r79t5-like`, ow-moblin `r79t5-moblin`, ow-zora `r79t5-zora`,
+  ow-leever `r79t5-ow`, ow-lynel `r79t5-lynel`, stalfos-keese-gel `r79t5-skg`, and wizzrobe `r79t5-wizz` for
+  this stretch's chains only (below). Not kept: ow-boulder's `r79t5-ow` (`r72-ow` stays). Not trained and
+  measured in the same batch: ow-octorok `r74-leg2` (0:0x37 100%), zol `r77-b` (9:0x63 100%), equipment-room
+  `r76-c` (level 9's cellars 98.7-100%).
 
 **Wizzrobe** (`r79t5-wizz`, 488 iterations from `r78-wizz-s78`; 600 episodes a room with two entries):
 
@@ -931,15 +935,18 @@ a state, a clip family's there with the switch on and off):
 | 9:0x30, fought (`9_30e`) | 92% | 286 of 300 | −1.41 | 6 deaths, 8 wrong exits |
 | 9:0x04 (`9_04c`) | 76% | 300 of 300 | −0.18 | |
 
-Its Dungeon 6 rooms against `r78-wizz-s78`'s own `eval.json` (Dungeon 6's team's code; both clips on): **6:0x38
-78.0% → 70.7%** (deaths 64 → 85; −4.49 → −5.33 hearts), 6:0x3a 72.0% → 69.3% (deaths 67 → 90, wrong exits 16 → 2;
-−4.10 → −5.17), 6:0x2c 97.7% → 96.7%, 6:0x28, 0x29 and 0x78 unchanged in success. 0x38 is past the three-point
-bar and both fought rooms lose about a heart more: on these numbers the run pays for level 9 with Dungeon 6. It is
-not promoted; `r79t5-base` measures `r78-wizz-s78` under this code, and the `d6` segment decides.
+Its Dungeon 6 rooms against `r78-wizz-s78` under this code (`r79t5-base` gives that run the figures of its own
+`eval.json` to the episode): **6:0x38 78.0% → 70.7%** (deaths 64 → 85; −4.49 → −5.33 hearts), 6:0x3a 72.0% →
+69.3% (deaths 67 → 90, wrong exits 16 → 2; −4.10 → −5.17), 6:0x2c 97.7% → 96.7%, 6:0x28, 0x29 and 0x78 unchanged
+in success. 0x38 is past the three-point bar and both fought rooms lose about a heart more: **the run pays for
+level 9 with Dungeon 6**, with Dungeon 6's demonstration file passed. It is promoted in the team's checkout
+because nothing else plays level 9's Wizzrobe rooms and the stretch's chains need them; it is **not** recommended
+in place of `r78-wizz-s78` for the route as a whole until the `d6` segment has measured it or a second round has
+Dungeon 6 back (42 of the family's 60 start states are now level 9's).
 
-**Left**: `r79t5-base` and the judgment of the eight continued families on equal terms (wizzrobe's Dungeon 6
-rooms first, then the `d6` segment); the causes in 0:0x17 and 9:0x55 and at most one more
-round each; the promotions; the chains (`TAG=r79t5-1k RUNS=1000 scripts/experiments/r29_d9_baseline.sh`) against
+**Left**: the second rounds (ow-boulder's 0:0x17 from S and lanmola's clip, their causes first; wizzrobe with
+Dungeon 6 held); the chains (`TAG=r79t5-1k RUNS=1000 scripts/experiments/r29_d9_baseline.sh`; the leg cannot
+arrive while 0:0x17 is not crossed) against
 `r79-base`, with where runs end, the hearts on entering and lost a visit and the cheated items; a recorded run to
 the ending, verified, if one exists; and what the survival budget looks like in real chains against the walks'
 estimate of about 38 hearts for 15 containers.
