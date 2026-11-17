@@ -799,3 +799,16 @@ run 60 of 60. Wizzrobe's run, trained on Dungeon 6, crosses most of level 9's Wi
 same on the clips-way build (0x55 20 of 20, 0; 0x07 20 of 20, 1.30 under the ring, 19 of 20 by the W lane; 0x61 20
 of 20, 0.55 below, 14 of 20 above; 0x20 20 of 20, 0.33 from the door; 0x03 20 of 20, 0 and 0.06; the returns 0.11,
 0.85 and 0.61 after a clip, 0 as the fights leave them).
+
+## 15. The suites at the end of the states step, and the first training
+
+- **Suites**: cargo workspace (`--no-fail-fast`) 1009 passed, 0 failed; pytest 825 passed, 9 skipped; `tf replay
+  verify` 3 of 3 ok; `entry_states audit --route d9` 1045 states, no problem; `asm.py check --final` ok. Two tests
+  counted states that the step added: `test_plr`'s ow-zora glob `0_38*` now matches 18 states (round 29's
+  `0_38w_v2` and `0_38s`), and `clips.rs`'s gauntlet test lets a family's state play on `d9` as on `d6` and `d8`.
+- **The first training** (the lead's recommendation): wizzrobe on Dungeons 6 and 9 from `r77-wizz` (Dungeon 6's
+  tracks come from round 27's checkout: this one has level 9's only), with its five demonstration files (`--demos
+  target/r29-demos/wizzrobe-07.npz ...-05 ...-20 ...-10 ...-30 --demo-coeff 0.05`, 448,340 rows) and the staged
+  tracks; 0x07 and 0x10 are the dearest fights and the rules themselves lose a third to half of them from 8
+  hearts. Next lanmola (82 of 100 `d9` runs die in 0x55; the rule wins 300 of 300 at 1.68 hearts), then the
+  overworld items no model plays (the whirlwind, the tree, the rock wall), patra and ganon.
