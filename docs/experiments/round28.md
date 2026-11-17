@@ -628,7 +628,7 @@ Read by what a first team needs:
   rule under a hold; no observation or action change, every model loads). Round 27's branch owes the same bump; one
   bump covers both if they merge together.
 
-## 14. The first team (Nov 17): six families trained and kept, chains not yet run
+## 14. The first team (Nov 17): six families trained and kept; the D8 triforce in 6% of runs
 
 One round per family through `scripts/train_round.py` (`--chain-runs 0 --parallel 8 --eval-parallel 3`, each its
 own round so the job line orders them), every one `--load {name} --seed 78 --stop-success 1.01 --sil-coeff 0.1
@@ -670,9 +670,40 @@ own round so the job line orders them), every one `--load {name} --seed 78 --sto
 - **Darknut is the stretch's weak point**: 0x3e (68.7%) and 0x5e (80.5%) still cost 4-6 hearts an episode, and the
   two Dungeon 5 rooms lost 1.7 and 2.8 points (within noise, to be watched on the chains). No second darknut round
   was run.
-- **Not done yet**: the `r78t4-d6runs` comparison; the chains, 1000 runs each of `post-d6` and `d8`, clips on, against `r78-base` (§12):
+- **The chains** (`r78t4-1k`, one batch, 1000 runs a segment, clips on, `--act model`, the runs kept above;
+  stalfos-keese-gel still `r75-f-b`, equipment-room `r75-f-c`, ow-octorok `r74-leg2`):
 
 ```bash
 TAG=r78t4-1k RUNS=1000 EPISODES=20 scripts/experiments/r28_d8_baseline.sh run
 TAG=r78t4-1k scripts/experiments/r28_d8_baseline.sh report
 ```
+
+| Segment | `r78-base` (100 runs) | `r78t4-1k` (1000 runs) |
+|---|---:|---:|
+| `post-d6`: arrivals at 8:0x7e | 0 / 100 | **1000 / 1000** |
+| `post-d6`: the D8 triforce | 0 / 100 | **60 / 1000** (940 deaths) |
+| `d8`: the D8 triforce | 0 / 100 | **63 / 1000** (935 deaths, 2 other) |
+
+  Per room on `d8` (visits, correct, deaths, hearts lost a visit; `post-d6` within a few runs of it):
+
+| step | room | family | visits | correct | deaths | hearts lost a visit |
+|---:|---|---|---:|---:|---:|---:|
+| 287 | 8:0x7e | stalfos-keese-gel | 1000 | 1000 | 0 | 0.00 |
+| 288 | 8:0x6e | boss-manhandla | 1000 | 1000 | 0 | 0.82 |
+| 289 | 8:0x5e | darknut | 1002 | 950 | 50 | 5.68 |
+| 290 | 8:0x4e | darknut | 951 | 783 | 167 | 2.91 |
+| 291 | 8:0x3e | darknut | 784 | 210 | **571** | 3.65 |
+| 292 | 8:0x3f | darknut | 210 | 108 | 102 | 2.81 |
+| 293 | 8:0x2f cave | equipment-room | 108 | 107 | 1 | 0.08 |
+| 294 | 8:0x4c | pols-voice | 107 | 107 | 0 | 0.02 |
+| 295 | 8:0x3c | boss-gleeok | 108 | 63 | 44 | 1.48 |
+| 296 | 8:0x2c | stalfos-keese-gel | 64 | 63 | 0 | 0.00 |
+
+  The leg (`post-d6`, steps 281-286) is played without a death: the whirlwind 1000 of 1000, the tree 1000 of 1000,
+  0.74 hearts lost over the six rooms. **Nothing was cheated** (bombs, keys, rupees: 0 on both segments).
+- **Where runs end**: the hearts. 0x5e costs 5.7 hearts a visit, so Link reaches 0x4e and 0x3e low; 0x3e kills 571 of
+  784 entering it on `d8` (73% in single rooms from the state's hearts, 27% on the chain), 0x3f half of what reaches
+  it, Gleeok 41% of its visitors (100% in single rooms from 6.5-13 hearts). Next for darknut: 0x5e's and 0x3e's
+  fights at fewer hearts lost (the rules lose 2.1-2.5 a win), not their rates alone.
+- **Not done**: the `r78t4-d6runs` comparison (round 27's other `r77-b` runs: stalfos-keese-gel, zol, trap-room,
+  like-like, vire; queued); a second darknut round.
