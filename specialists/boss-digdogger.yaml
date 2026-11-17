@@ -3,7 +3,7 @@ rooms: ['(5, 0x24)', '(7, 0x1c)', '(7, 0x39)']
 start_states: ['5_24*_[0-9]', '7_39*_[0-9]', '7_1c*_[0-9]']
 success: [exit-correct]                    # the recorder, kill the small one, take the heart container, leave N to 0x14
 reward_profile: default
-reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8)
+reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20}}   # dungeon family (round 10 §8); round 26: hearts priced by their worth to the run (as round 25's dungeon families)
 obs: {objective: true, target: true}       # schema 2
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}
 items: {bombs: free, recorder: true}       # the owner (Nov 14): bombs on the boss (the route's reserve is 0 here); the recorder splits him
