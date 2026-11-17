@@ -285,6 +285,62 @@ is new lives in the objective (targets), in the mask, and in which bomb mode a s
 - **Demonstrations** (`scripts/experiments/r28_demos.py`): the walks' scripts as rules over env actions, with a
   scaffold of staged states under `d8` until the stretch has its own (`docs/experiments/round28.md` §5).
 
+### The leg to Dungeon 9, Dungeon 9 and the end (round 29; `docs/routes/d9.md` §13, scouting route `d9`)
+
+No macros here either: the whirlwind, the tree, the walls and Ganon's arrow are RECORDER, CANDLE, BOMB and ARROW;
+the new things are an exit kind, step keys, targets and masks.
+
+- **Route** (routes.yaml): `d9` = `{extends: d8}` plus steps 297-354, one way (no stretch). New step keys
+  (`game_map::STEP_KEYS`, `RouteStep`): `exit: end` (`END_EXIT`; `check_ends`: the route's last step, a dungeon
+  room, on no stretch), `banked_kills: 1-15` (a dungeon room an earlier step of the route is in), `sword: false`;
+  new waypoints `ring` and `silver-arrow` (`WAYPOINTS`).
+- **The end of the game** (`objectives::game_ended`: game mode `MODE_END` = `$13`, the first frame after Link stood
+  in front of Zelda). `GameCompletion::ends_game` is the step with `exit: end`; its objective (`end_objective`) is
+  a move to `zelda_tiles`: the tiles on the row 13 pixels under Zelda (object type `$37`), within 8 pixels of her
+  X. After the route's last waypoint the end room is the objective's last target (`end_target`), so a return visit
+  with nothing left to fetch still has one. `env::end_conditions::EndCondition::GameCompleted` is the ending
+  `game-completed` (a success where the family lists it: ganon); `env::chain::Route::final_end` ends a chain run
+  "the game ended in ..." as `final_triforce` ends one on a piece; `triforce/runner.py` accepts a route that ends
+  on `end`. A replay of such a run is a `win` (`pool::zelda::envs::chain_ending`: by the run's result).
+- **What a step is matched by** (`objectives::StepProgress`): the red ring (`GameView::red_ring`) and the silver
+  arrow (`GameView::silver_arrow`) join pieces, sword, bow, raft, ladder and recorder. A state that holds one of
+  them where the route does not is off the route, as with any of the others.
+- **Kept kills** (`objectives::start_banked_kills`): the `banked_kills` of the step a start state's name spells
+  (room, side, visit). `SpecialistEnv::reset` and a chain's `--from` write them into the level's kill count for
+  the start room after the fresh-room write, so the room's entry makes what the game makes on that visit; without
+  the key a start room is fresh as before. The entry-state audit loads fresh and sees the full room.
+- **Doors and rooms** (game.yaml): an exit's `never_opens: true` (a shutter with no trigger: `GameMap`'s path
+  search does not leave through it); `keep_out` (round 27) on four more key doors; a room's `requires_pieces: N`
+  (9:0x66: with fewer pieces the objective is `missed`, as a refused sword cave).
+- **Secrets**: `GameView::burn_facings` answers S from within 8 pixels of the tree's X, one to two squares above
+  its row (0:0x47); `GameCompletion::cave_tiles` targets those tiles when the tree is entered from above.
+  `objectives::route_bomb_targets` knows a rock wall whose cave is a level's entrance (0:0x05: the next room is
+  the level's first, which `MapLocation::direction_to` calls S of every overworld room, so it is asked first).
+  0:0x17 carries a `path_costs` row under its top water.
+- **Fights** (`objectives`): `patra_children`: while a child lives the children are the targets, then the body.
+  `ganon` reads his slot and `GanonPhase` (Hidden, Shown, Brown, Dying; from `ObjState`, `ObjTimer`, the scene
+  phase `$445` and the dying count `$42C`); `ganon_tiles`: hidden, the tiles a stab reaches a 16-pixel monster at
+  his position + 8 from; shown, both jump spots (asm:Ganon_StartXs); brown, `ganon_stand`: the tiles of his row
+  and column two squares clear of him; dying, his ashes. The Triforce of Power is the room's treasure (the
+  frozen-frames rule takes the fanfare).
+- **Masks** (`Session::compute_mask`, set every step by the env, training and chains):
+  `set_arrow_facings(ganon_arrow_facings(...))`: ARROW only while he is brown, toward him, with Link's Y − his in
+  0..=20 (sideways) or Link's X − his in −3..=17 (up or down), never in Zelda's room; SWORD and BEAMS off on a
+  step with `sword: false` (`GameCompletion::step_sword`); `cheats::rupee_need`: game.yaml `requires_rupees: 1` in
+  9:0x42 counts only while Ganon lives. BOMB by the rules of round 22 and 28 (`requires_bombs` on 0:0x05 and the
+  eight wall rooms; 0:0x07 and 0:0x05 name their step's mode).
+- **Data** (game.yaml): 39 rooms of level 9 and the leg tagged; `bomb_secret` on 0:0x05; 0:0x47's cave room.
+  Reserves (routes.yaml): bombs 5 from 0:0x6d, one fewer after each wall, 4 again from 9:0x06, 0 after 0x04's;
+  rupees 1 from 9:0x76, 0 in 9:0x42.
+- **Families**: lanmola, patra, ganon (new, `trainable: false`, no start states); wizzrobe, like-like,
+  stalfos-keese-gel, zol, equipment-room and six overworld families widened; ow-zora `candle: true`.
+- **Walked** (`crates/zelda/tests/d9.rs`): from the D8 triforce to mode `$13` by the objective and the masks, and
+  six side tests (kept kills, the potion, seven pieces, 0x63's doors, the arrow mask, the end).
+- **Demonstrations** (`scripts/experiments/r29_demos.py`): the walks' fighters asked once per env action, with a
+  scaffold of staged states under `d9` (`docs/experiments/round29.md` §6). **Clips**
+  (`scripts/experiments/r29_clips.py`): the engine's skip search offers the block clip in the five ring rooms; no
+  level 9 family has `clips:` yet (`d9.md` §13.4).
+
 ### Randomness at a start (`crates/zelda/src/rng.rs`, `room_entry.rs`; round 22)
 
 The game's only random source is the 13-byte shift register `$18-$24` (`zelda-asm/mechanics.md` "# Random

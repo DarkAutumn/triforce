@@ -2666,3 +2666,63 @@ names what changes if he says otherwise.
 
 Not answered here, still Lee's (round28.md §7): the bar for the stretch (the best plays leave about four hearts
 after Gleeok), and whether 0x5e and 0x3e are trained with hearts-at-exit priced above everything else.
+
+## 2026-11-17 — Round 29's working answers: the leg to Dungeon 9, Dungeon 9, Ganon and the end (the lead; Lee may overrule any of them)
+
+`docs/routes/d9-walks.md` ends with six questions and `docs/routes/d9-fights-walks.md` §9 with seven that are Lee's.
+Round 29's route vocabulary (the scouting route `d9`, `docs/routes/d9.md` §13) had to be built before he answered,
+so the lead gave each a **working answer**, as rounds 27 and 28 did. They are not Lee's decisions: each is the
+cheapest thing to undo that the walks support, and each names what changes if he says otherwise.
+
+1. **The red ring detour is taken.** On the crossings alone it loses 1.4 hearts and costs three bombs
+   (`d9-walks.md` §4); it pays through the fights: by the best play seen the fights cost 41 hearts without the ring
+   and 26 with it (`d9-fights-walks.md` §6). So `d9` has the detour's nine steps (0x26 E wall, 0x27 N wall, 0x17 N
+   wall, 0x07 emptied, cellar 0x00 with `waypoint: ring`, and back). Without the ring the route would be the same
+   steps less 321-328, and 0x16 left N on its first visit.
+2. **0x16's Patra is fought for its four bombs, after the ring** (step 329, the second visit, from S). On the first
+   visit (step 319, W to S) it is passed: `treasure: skip`. By rule the fight costs 8.65 hearts without the ring and
+   2.33 with it, so its place after the detour is the walk's.
+3. **Missing bombs are cheated and counted.** A run with no drops reaches 0:0x6d with none and meets five walls
+   before 0x16's four (the rock wall of 0:0x05, 9:0x65 N, 0x26 E, 0x27 N, 0x17 N): each is one bomb written and
+   counted in the run's ledger, by the standing rule (Lee, Nov 14: bombs only from rooms on the way and drops, else
+   cheated). `bomb_reserve` is the walls ahead before the next bombs (5 from 0x6d, one fewer after each; 4 again
+   from 0x06, down to 0 after 0x04's). A full bag out of Dungeon 8 is not made a goal of the earlier rounds.
+4. **9:0x14 is cleared** (`treasure: clear` on step 317): walking its spiral a Like-Like holds Link in 20 of 20
+   runs (4.4 hearts), killing what stands in the lane costs 0.05. The room's exit counts only when its five
+   Like-Likes are dead. The same key on 0x20's first visit (step 337): its five Wizzrobes are fought on arrival, so
+   the second visit finds the room empty and the block moves at once.
+5. **0x47's potion ends the step as `missed`.** The take-any cave's left ware takes the fifteenth heart container
+   for good; nothing masks the walk onto it. The step's `waypoint: heart` is satisfied by the container alone, and a
+   Link who leaves with the potion has missed it: the run ends there, as a refused sword cave does.
+6. **The silver arrow is a masked action, not a learned one.** ARROW is offered in Ganon's room only while he is
+   brown, only facing him, only from his row or column (Link's Y − his in 0..20, or Link's X − his in −3..17), and
+   never in Zelda's room. `requires_rupees: 1` in 9:0x42 while he lives (topped up to 1, cheated and counted, when
+   Link has none); `rupee_reserve: 1` through level 9. The walk: one arrow kills in 20 of 20, a wooden arrow or a
+   shot at the blue Ganon only burns the rupee the kill needs.
+7. **The walks' fighters are demonstrations.** `scripts/experiments/r29_demos.py` asks each of them once per
+   environment action and plays its choice by MOVE, WAIT, SWORD, BEAMS, BOMB, CANDLE, RECORDER and ARROW; the rows of
+   the runs that win are for `train --demos`, beside the planner, for the new families (lanmola, patra, ganon) and
+   the widened wizzrobe. The shares each rule wins through the env are in `docs/experiments/round29.md` §6. The
+   Patra rule kills the child in slot 3 first while the first pattern runs (the pattern then never changes): that
+   quirk is in the demonstrations and in no reward. The one-worm re-entry of 0x55 is not used (it is a wrong exit
+   and no cheaper).
+8. **The first frame of game mode `$13` is the route's last step**: 9:0x32 `exit: end`, the ending
+   `game-completed`, a chain run's success "the game ended in ...". The credits are not played.
+9. **Ganon's hidden position stays on `ram`** (`obs.hidden_positions`, the default; the ganon family names
+   nothing) **until Lee decides.** The walk's table, 20 runs each from 15 hearts
+   (`d9-fights-walks.md` §4.6):
+
+   | Eyes | no ring | red ring |
+   |---|---|---|
+   | `ram` (his true position every frame) | 20 of 20, 1.25 hearts lost | 20 of 20, 0.31 |
+   | the screen, "tells" (the last flash, a fireball's birth, the two jump spots) | 14 of 20, 6.25 | 20 of 20, 1.79 |
+   | the screen, "sweep" (no births) | 10 of 20, 10.1 | 20 of 20, 3.68 |
+
+   With `last_seen` or `zero` the fight objective's target, which follows his RAM position, would leak it through
+   the `target` input and would have to change with the key.
+10. **`keep_out` on 9:0x26 S and W** is the vocabulary step's own addition, beside the walk's 0x63 N and S: 0x26
+    is crossed twice with exactly the keys the route needs, and both are key doors off the way.
+
+Not answered here, still Lee's (round29.md §8): the survival gap (the best plays seen cost about 23 hearts on the
+route and 26 in the fights with the ring, of 15 containers and no refill; with the block clips of 0x55, 0x07, 0x20
+and 0x03 the fights cost 15), and with it whether the families of the ring rooms get `clips: true`.
