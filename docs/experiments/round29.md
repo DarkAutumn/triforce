@@ -576,3 +576,33 @@ All hold the magic sword, eight pieces, the wooden arrow (the silver arrow from 
 the eight tunnels and cellars, like-like `9_14c`, `9_51s`, `9_41s`, `9_03e`, patra the seven, stalfos-keese-gel six,
 wizzrobe fourteen, zol `9_63c`, lanmola `9_55s`, ganon `9_42s` and `9_32s` (now `trainable: true`; warm starts
 lanmola and patra moldorm, ganon boss-gohma).
+
+## 10. Curricula
+
+```bash
+FIGHTS=0 SKIP_DONE=1 nice -n 10 scripts/experiments/r29_d9_curricula.sh                         # 22 minutes
+FIGHTS=only SKIP_DONE=1 FIGHT_ITERATIONS=3000 nice -n 10 scripts/experiments/r29_d9_curricula.sh  # 68 minutes
+```
+
+- **The crossings: 159 of 159 tracks** (every state of steps 297-357 that is not a fight, chains 0-2, with the
+  clips switch on; `~plain` tracks of 9_07c, 9_20n, 9_04c and 9_51s with it off), none longer than a minute.
+- **The fights, 3000 iterations an attempt** (round 28's budget; 9000 would have been about 17 minutes a failed
+  state, 28 hours for the list): **80 of 99 explorations solved**. §7's "every fight of level 9 is beyond the
+  explorer" held for the models, not for the explorer with the room's objective:
+
+  | Start | Solved | Not solved |
+  |---|---|---|
+  | like-like `9_14c` | 3 of 3 | |
+  | patra `9_16s`, `9_61e`, `9_52c` | 3 of 9 | `9_16s_1`, `9_16s_2`, `9_61e_0..2`, `9_52c_2` |
+  | wizzrobe `9_05e`, `9_10s`, `9_30e` | 6 of 9 | `9_10s_0`, `9_30e_0`, `9_30e_2` |
+  | ganon `9_42s`, `9_32s` | 6 of 6 | |
+  | the plain way: lanmola `9_55s`, like-like `9_03e` | 6 of 6 | |
+  | the plain way: wizzrobe `9_07s` (no ring), `9_20c` | 3 of 6 | `9_07s_0..2` |
+  | staged `~k4..k1`: 0x14 | 12 of 12 | |
+  | staged 0x05 | 11 of 12 | `9_05e_1~k1` |
+  | staged 0x10 | 9 of 12 | `9_10s_0~k2`, `9_10s_0~k1`, `9_10s_1~k1` |
+  | staged 0x07 (plain) | 9 of 12 | `9_07s_1~k2`, `9_07s_1~k1`, `9_07s_2~k1` |
+  | staged 0x20 (plain) | 12 of 12 | |
+
+  (`~kK`: K of the room's monsters banked before the entry.) The explorer's fight tracks win with whatever hearts
+  are left (patra `9_16s_0` with 5.5 of 15). Every fight state also gets a track of its rule (§11, `--tracks`).
