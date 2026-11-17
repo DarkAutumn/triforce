@@ -1,6 +1,6 @@
 name: like-like
 rooms: ['(4, 0x32)', '(6, 0x1d)', '(9, 0x14)', '(9, 0x51)', '(9, 0x41)', '(9, 0x03)']
-start_states: ['4_32*_[0-9]']
+start_states: ['4_32*_[0-9]', '6_1d*_[0-9]']
 success: [exit-correct]                    # down the stairs to the ladder cellar; on the way back, W
 reward_profile: default
 reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20}}   # dungeon family (round 10 §8): dropped items are shaping targets; round 25: hearts priced by their worth to the run
@@ -17,7 +17,7 @@ notes: >-
   Likes and Zols (the Bubbles don't count), push the block (any way; it moves only once the room is clear) so the
   stairs appear at tiles (26-27, 4-5), and go down to the ladder cellar 0x60; back up, leave W. Copied from zol
   (one-room, curriculum, 2000 steps).
-  Dungeon 6 (round 27, route `d6`; no start state yet): 0x1d (two Like-Likes, two Zols, two Bubbles) out of the
+  Dungeon 6 (round 27, route `d6`; state `6_1dc`): 0x1d (two Like-Likes, two Zols, two Bubbles) out of the
   tunnel's stairs, crossed to the S door without a fight.
   Dungeon 9 (round 29, route `d9`; no start state yet): the spiral 0x14 (five Like-Likes in corridors one square
   wide: fought, `treasure: clear`; a walk through is held in 20 of 20 and loses 4.4 hearts, the sword from range

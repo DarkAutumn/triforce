@@ -1,17 +1,16 @@
 name: ow-ghini
 rooms: ['(0, 0x40)', '(0, 0x41)', '(0, 0x31)', '(0, 0x21)', '(0, 0x21, cave)']
-start_states: []                           # round 27: the stretch's states are the next step (0_40s, 0_41w, 0_31s, 0_21s, 0_21cave, 0_21c, 0_31n)
-trainable: false                           # until it has start states
+start_states: ['0_40*_[0-9]', '0_41*_[0-9]', '0_31*_[0-9]', '0_21*_[0-9]']
 success: [exit-correct]
 reward_profile: default
 reward: {pbrs: true}
 obs: {objective: true, target: true}       # schema 2 pointer, no item targets (as ow-moblin)
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # as ow-moblin (round 25)
 items: {bombs: tenth}                      # only the 10th damage-free kill's bomb
-curriculum: {enabled: true}             # trajectories/ow-ghini, once explored
+curriculum: {enabled: true}             # trajectories/ow-ghini (Go-Explore paths per start state)
 one_room: true
 max_steps: 600
-warm_start: null
+warm_start: ow-moblin                      # round 27: a first training starts from ow-moblin's promoted run (100% zero-shot on the four crossings)
 notes: >-
   The graveyard (round 27, route `d6`; docs/routes/d6.md §14, d6-walks.md §1-2; families are by enemy: its Ghinis are
   nothing ow-moblin's rooms hold). One Ghini a room (5 white or 3 magic sword hits, touch 1 heart) and 13 scenery

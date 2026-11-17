@@ -17,6 +17,9 @@
 #   d5       5_76s_0   0:0x0b after 5:0x14 (out of Dungeon 5 with its triforce, the post-d5 start)
 #   post-d5  0_0bc_0   7:0x79 (Dungeon 7's entrance; round 26: the whirlwind, the shops, the pond)
 #   d7       7_79s_0   the D7 triforce
+#   (round 27, the scouting route d6: ROUTE=d6 SEGMENTS="post-d7:0_42c_0 d6:6_79s_0")
+#   post-d7  0_42c_0   6:0x79 (Dungeon 6's entrance: the Lost Woods or round them, the graveyard, the magic sword)
+#   d6       6_79s_0   the D6 triforce
 #
 # The route ended on the D5 triforce until round 26: a full run to there is the milestone `full→post-d5` of the
 # report, or a chain of its own, `triforce eval-chain --stop-at step:209 ...` (0:0x0b out of Dungeon 5).
@@ -46,6 +49,7 @@ SEGMENTS=${SEGMENTS:-"full:start d2:2_7ds_0 post-d2:0_3cc_0 d1:1_73s_0 post-d1:0
 
 chain_args=()
 [ -n "${CLIPS:-}" ] && chain_args+=("--clips $CLIPS")
+[ -n "${ROUTE:-}" ] && chain_args+=("--route $ROUTE")
 clips=()
 if [ ${#chain_args[@]} -gt 0 ]; then clips=(--chain-args "${chain_args[*]}"); fi
 

@@ -6,8 +6,11 @@ of 0x21 and the magic sword, Dungeon 6 with its Wizzrobes, Gohma and the sixth p
 walked before a document is trusted, what does not work said plainly. Version 1.5.1.0 (observation schema 6)
 throughout this document; nothing has been trained yet.
 
-This document covers the round's first two steps: the walks and the route vocabulary. **The round's main risk is in
-§3: the survival budget of the stretch does not close on the best plays seen.**
+This document covers the round's first three steps: the walks, the route vocabulary, and the start states with the
+family files, curricula, scripted rules, chain tooling and the baseline (§5-11). **The round's main risk is in §3:
+the survival budget of the stretch does not close on the best plays seen. The baseline is zero** (§11): of 100 runs
+a segment by today's models none reaches Dungeon 6 from Dungeon 7's exit (ow-lynel loses every run in 0x50) and none
+reaches its triforce from its entrance (0x38 is cleared in 13 of 99 visits and all 13 die in 0x28).
 
 ## Summary
 
@@ -23,7 +26,15 @@ This document covers the round's first two steps: the walks and the route vocabu
 - **Proven** (§4): a scripted walk by the route's objective and masks from the D7 triforce to the D6 triforce
   (`crates/zelda/tests/d6.rs`: 715 actions, 10,479 frames, nothing cheated, 2 arrows), and 300 full-route runs of
   the round 25 team on the build before and after the change, compared field by field.
-- **Not built**: start states, curricula, any training or chain of the stretch (§5 names the states).
+- **States and baseline** (Nov 17, §5-11): 96 start states installed (chains 0-2, both ways of `woods`; 0x38 and
+  0x3a crossed with their fights skipped but for chain 0's 0x38), family files, tracks for every new state but the
+  two block rooms' and one Lost Woods state, three scripted rules in the environment's actions (the gravestone 60 of
+  60, 0x28's bomb 60 of 60, Gohma 59 of 60), the segments `post-d7` and `d6`, the baseline.
+- **Suites** after the merge of `r26` and this step: cargo workspace 991 passed, 1 ignored; pytest 820 passed, 6
+  skipped; `tf replay verify` the three corpus replays ok; `entry_states audit` 823 states, no problem; `asm.py check
+  --final` ok.
+- **Not done**: the proof trainings' result and a training with `--demos`, the staged tracks of 0x38 and 0x3a
+  (§8, §10 say where each stands); any training.
 
 ## 1. The walks: what the running game says
 
@@ -153,31 +164,353 @@ which passes
 unchanged, and by construction: none of the new rules can fire there (no gravestone tile, no `Secret::Push`, no
 `keep_out` exit, no Gohma, no sword cave with a waypoint on `d2first`).
 
-## 5. What the next step must build
+## 5. The start states (steps 248-280, chains 0-2, installed)
 
-**Start states** (chains 0-2 each; names by `docs/architecture.md` "State names", visits as
-`_native.route_steps('d6')` counts them):
+96 states, 32 a chain (29 on the clip way by `build`, 3 on the plain way of `woods` by `path`), in `triforce/states`;
+`entry_states audit`: 823 states, no problem, with `--route d6` and without (a state built on a scouting route is
+now audited by the route its manifest entry names).
 
-| Family | States |
-|---|---|
-| ow-moblin | `0_42c`, `0_52n`, `0_51e_v2` (one state, both ways of `woods`), `0_61n` |
-| ow-lynel | `0_50e_v2`, `0_60e`, `0_50s`, `0_32w`, `0_22s` |
-| ow-ghini | `0_40s`, `0_41w`, `0_31s`, `0_21s`, `0_21cave`, `0_21c`, `0_31n` |
-| stalfos-keese-gel | `6_79s`, `6_58s`, `6_0cs` |
-| wizzrobe | `6_78e`, `6_38s`, `6_28s`, `6_29w`, `6_3aw`, `6_2ce` |
-| zol, trap-room, like-like | `6_68s`; `6_48s`; `6_1dc` |
-| vire | `6_39n`, `6_2dn` |
-| equipment-room | `6_08cave` |
-| boss-gohma | `6_1cs` |
+```bash
+D=target/entry-states/r27-d6        # sources: the installed 7_2bw_0, 7_2bw_1, 7_2bw_2 (chain 2's is round 26's corrected one)
+python -m triforce.entry_states build --route d6 --start-step 247 --chains 0,1,2 --source "$D/sources/7_2bw_{chain}.state" --out $D/c
+python -m triforce.entry_states build --route d6 --start-step 270 --chains 1,2 --attempts 12 \
+    --source "$D/c/6_38s_{chain}.state" --skip-fights 6:0x38:S,6:0x3a:W --out $D/c12      # chain 0 cleared 0x38 itself
+python -m triforce.entry_states build --route d6 --start-step 274 --chains 0 --source $D/c/6_3aw_0.state --skip-fights 6:0x3a:W --out $D/c0b
+for c in 0 1 2; do
+  TRIFORCE_STATES_DIR=$D/c python -m triforce.entry_states path --source 0_51e_v2_$c \
+      --rooms 0:0x61,0:0x60,0:0x50 --route d6 --chain $c --out $D/plain$c
+done
+for d in plain0 plain1 plain2; do python -m triforce.entry_states install $D/$d; done
+python -m triforce.entry_states install $D/c --partial; python -m triforce.entry_states install $D/c12; python -m triforce.entry_states install $D/c0b
+python -m triforce.entry_states audit --route d6
+python scripts/experiments/r27_d6_states.py table --markdown      # the table below
+```
 
-0x38 and 0x3a are fights the explorer will not clear: the states after them (`6_28s`, and `6_08cave` on) come from
-`build --skip-fights` first and from chain harvests once a model clears the rooms, as the Olive Garden's did.
+(As run, the first build was three builds side by side, one a chain, and chain 2's tail was built twice; `build
+--source` takes `{chain}` since, so one build runs a thread a chain.)
 
-**Then**: the three new families' `start_states` and `trainable: true`; start-state patterns for the rooms added to
-the eight old families; the route merged into `d2first` when the owner fixes it (wizzrobe's `reward.heart_value`
-reads the table fitted for the family's route: refit `triforce/heart_value.json` then), or `route: d6` in the new
-yamls until then; curricula; ow-lynel's retraining; chain segments for the stretch (`eval_batch` has none yet).
+- **What the explorer did by the objective alone**: the leg, the wrap exit, the Lost Woods' four turns (140-274
+  steps), the gravestone (64-94 steps to the cave: the stand square, MOVE N), the cave and the sword, 0x22's mouth,
+  0x79's key door, 0x58's eight Keese and its key, 0x28's bomb (one, at the E wall), 0x39 and 0x2d's Vires and key,
+  the tunnel, **and Gohma, on all three chains** (34-147 steps; the build's step config now takes the family's
+  `arrows`, without which the explorer had no weapon against it).
+- **0x38**: the explorer cleared it on chain 0 (218 steps, the third attempt, 146k env steps) and failed on chains
+  1 and 2 (three attempts each, 158k and 177k env steps), where the fight is skipped. **0x3a**: failed on chain 0
+  (three attempts, 171k env steps) and is skipped on all three chains. So 26 states are marked `fight_skipped`
+  (`6_28s` on for chains 1 and 2, `6_08cave` on for chain 0), to be replaced by states harvested from chain runs
+  once a model clears the rooms.
+- **What a state after a skipped fight holds**, checked against a run that fought: nothing of the two rooms is
+  owed to a run but what it fights for (neither has a treasure; the skip removes the drops), and everything after
+  them was played: the bomb at 0x28 (spent on every chain), 0x2d's key (taken: keys 2 → 3), the heart container
+  (13 containers in `6_0cs`), the magic sword from `0_21c` on.
+- **One state set was wrong and is rebuilt.** Chain 2's explorer took 6:0x29's key in passing (the step has
+  `treasure: skip`: the ring key is left), so every state after it held 3 keys where a run holds 2. `cross_room`
+  now rejects a crossing that takes a treasure its step leaves (`skip` as `refuse`), and chain 2 was rebuilt from
+  `6_38s_2` (`--attempts 12`: three seeds in a row walk over the key).
+- **Where the states differ from what `d6-walks.md` says a run brings** (12 containers, the white sword until the
+  cave, 2 keys, 2 bombs, 31 rupees of 28-40): chain 0 is that run until 0x38, where its real fight left a drop of
+  four bombs (2 → 6; 5 after the wall, where the ledger has 1); chains 1 and 2 come out of Dungeon 7 with 7 and 5
+  bombs (round 26's states: 0x1b's four and a drop), chain 1 takes one more from a drop in 0x78. Rupees 30-41 on
+  the way in. **Gohma took the explorer 5, 1 and 6 arrows** (36, 32 and 26 rupees in `6_0cs`) where the walks'
+  script spends 1-3: the explorer shoots at random, and nothing in the build prefers the cheaper kill. A training
+  draws bombs 0-8 in half its resets anyway; the states' own counts matter for the chain segments (chain 0) and for
+  what Dungeon 8's states inherit.
 
+What each state holds at its first playable frame, chains 0 / 1 / 2 where they differ (hearts are full; arrows 1 is
+the wooden arrow; pieces 6 are Dungeons 1-5 and 7):
+
+| Step | State | Way | Family | Sword | Hearts / containers | Bombs | Keys | Rupees | Arrows | Pieces | After a skipped fight |
+|---:|---|---|---|---|---|---|---|---|---|---|---|
+| 248 | `0_42c` |  | ow-moblin | white | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 249 | `0_52n` |  | ow-moblin | white | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 250 | `0_51e_v2` | clips | ow-moblin | white | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 251 | `0_50e_v2` | clips | ow-lynel | white | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 252 | `0_51e_v2` | plain | ow-moblin | white | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 253 | `0_61n` | plain | ow-moblin | white | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 254 | `0_60e` | plain | ow-lynel | white | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 255 | `0_50s` | plain | ow-lynel | white | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 256 | `0_40s` |  | ow-ghini | white | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 257 | `0_41w` |  | ow-ghini | white | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 258 | `0_31s` |  | ow-ghini | white | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 259 | `0_21s` |  | ow-ghini | white | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 260 | `0_21cave` |  | ow-ghini | white | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 261 | `0_21c` |  | ow-ghini | magic | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 262 | `0_31n` |  | ow-ghini | magic | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 263 | `0_32w` |  | ow-lynel | magic | 12 / 12 | 2 / 7 / 5 | 2 | 37 / 32 / 30 | 1 | 6 |  |
+| 264 | `0_22s` |  | ow-lynel | magic | 12 / 12 | 2 / 7 / 5 | 2 | 38 / 32 / 30 | 1 | 6 |  |
+| 265 | `6_79s` |  | stalfos-keese-gel | magic | 12 / 12 | 2 / 7 / 5 | 2 | 38 / 32 / 30 | 1 | 6 |  |
+| 266 | `6_78e` |  | wizzrobe | magic | 12 / 12 | 2 / 7 / 5 | 1 | 38 / 32 / 30 | 1 | 6 |  |
+| 267 | `6_68s` |  | zol | magic | 12 / 12 | 2 / 8 / 5 | 1 | 39 / 32 / 30 | 1 | 6 |  |
+| 268 | `6_58s` |  | stalfos-keese-gel | magic | 12 / 12 | 2 / 8 / 5 | 1 | 39 / 32 / 30 | 1 | 6 |  |
+| 269 | `6_48s` |  | trap-room | magic | 12 / 12 | 2 / 8 / 5 | 2 | 39 / 32 / 30 | 1 | 6 |  |
+| 270 | `6_38s` |  | wizzrobe | magic | 12 / 12 | 2 / 8 / 5 | 2 | 39 / 32 / 30 | 1 | 6 |  |
+| 271 | `6_28s` |  | wizzrobe | magic | 12 / 12 | 6 / 8 / 5 | 2 | 39 / 32 / 30 | 1 | 6 | some |
+| 272 | `6_29w` |  | wizzrobe | magic | 12 / 12 | 5 / 7 / 4 | 2 | 39 / 32 / 30 | 1 | 6 | some |
+| 273 | `6_39n` |  | vire | magic | 12 / 12 | 5 / 7 / 4 | 2 | 40 / 32 / 30 | 1 | 6 | some |
+| 274 | `6_3aw` |  | wizzrobe | magic | 12 / 12 | 5 / 7 / 4 | 2 | 41 / 32 / 31 | 1 | 6 | some |
+| 275 | `6_08cave` |  | equipment-room | magic | 12 / 12 | 5 / 7 / 4 | 2 | 41 / 32 / 31 | 1 | 6 | yes |
+| 276 | `6_1dc` |  | like-like | magic | 12 / 12 | 5 / 7 / 4 | 2 | 41 / 32 / 31 | 1 | 6 | yes |
+| 277 | `6_2dn` |  | vire | magic | 12 / 12 | 5 / 7 / 4 | 2 | 41 / 32 / 32 | 1 | 6 | yes |
+| 278 | `6_2ce` |  | wizzrobe | magic | 12 / 12 | 5 / 7 / 4 | 3 | 41 / 33 / 32 | 1 | 6 | yes |
+| 279 | `6_1cs` |  | boss-gohma | magic | 12 / 12 | 5 / 7 / 4 | 2 | 41 / 33 / 32 | 1 | 6 | yes |
+| 280 | `6_0cs` |  | stalfos-keese-gel | magic | 13 / 13 | 5 / 7 / 4 | 2 | 36 / 32 / 26 | 1 | 6 | yes |
+
+Keys along Dungeon 6 are the walks' 2 → 1 (0x79 W) → 2 (0x58) → 3 (0x2d) → 2 (0x2c N) on every chain.
+
+## 6. Family files
+
+- **Start states**: `ow-ghini` (`0_40*`, `0_41*`, `0_31*`, `0_21*`), `wizzrobe` (`6_78*`, `6_38*`, `6_28*`, `6_29*`,
+  `6_3a*`, `6_2c*`) and `boss-gohma` (`6_1c*`) have them and are trainable; patterns were added to ow-moblin
+  (`0_61*`; its `0_42*`, `0_52*`, `0_51*` already match the new states), ow-lynel (`0_32*`, `0_22*`; `0_50*` and
+  `0_60*` match), stalfos-keese-gel (`6_79*`, `6_58*`, `6_0c*`), zol (`6_68*`), trap-room (`6_48*`), like-like
+  (`6_1d*`), vire (`6_39*`, `6_2d*`) and equipment-room (`6_08*`).
+- **No yaml needs `route: d6`.** A start state's route step is looked up on every route when the family names none
+  (`zelda::objectives::start_route`), and steps 0-247 are the same step on both routes with `d2first` preferred. So
+  an episode from an old state plays on `d2first` and one from a new state on `d6` (checked for every new stem:
+  `Env.route` reads `('d6', 248..280)`, and `('d2first', n)` for the old ones), in one family, with nothing to
+  undo when the route is merged.
+- **`reward.heart_value`** therefore needs no change either: the fitted table is `d2first`'s and
+  `GameData::heart_values_for` hands it out only for a step played on that route, so the seven table families of
+  the stretch (stalfos-keese-gel, zol, trap-room, like-like, vire, equipment-room, wizzrobe) price hearts in
+  Dungeon 6 by the plain health terms, as round 26's do in Dungeon 7, until chains reach the D6 triforce and a
+  table is fitted for the merged route.
+- **Staging**: wizzrobe `room_kills: {'(6, 0x38)': [1, 6], '(6, 0x3a)': [1, 6]}`, `room_kills_share: 0.5`. The
+  rooms' list is a Bubble, three Like-Likes, two Blue and two Red Wizzrobes; the game leaves out the end of the list
+  first, so 1-2 banked kills remove the Reds, 3-4 the Blues, 5-6 Like-Likes (7 would leave the Bubble alone and the
+  block free).
+- **Initialisation**: `warm_start: like-like` (wizzrobe), `ow-moblin` (ow-ghini), `boss-digdogger` (boss-gohma): a
+  training of a new family without `--load` starts from that family's promoted run (weights only; round 24's new
+  families were all trained from scratch, so this is the first use of `warm_start` for a new family).
+
+## 7. Chain tooling
+
+- `eval_batch.D6_SEGMENTS`: `post-d7` from `0_42c_0` (arrival 6:0x79) and `d6` from `6_79s_0` (to the D6
+  triforce), beside `SEGMENTS` until the route is merged (`ALL_SEGMENTS`; `segment_starts` knows both, so a chain
+  from `0_42c_0` reports its arrivals at Dungeon 6's entrance). `ROUTE=d6 SEGMENTS="post-d7:0_42c_0 d6:6_79s_0"
+  TAG=<tag> scripts/experiments/r56_chains.sh` runs them as a batch.
+- `triforce room-stats`: the scopes `to-d6` (file `post-d7`) and `d6`; `zelda-map.py` labels them.
+- Left for the merge: `MILESTONES` (the full run reported at 0:0x42 after 7:0x2b and at 6:0x79), the `d7`
+  segment's target (0:0x42 entered after 7:0x2b) and the cut of the scopes `to-d7` and `d7`, which all assume
+  today that `d2first` ends on the D7 triforce.
+
+## 8. Curricula
+
+The Go-Explore tracks of the new states, per family (`trajectories/` is not committed; a fresh clone rebuilds them):
+
+```bash
+SKIP_DONE=1 nice -n 10 scripts/experiments/r27_d6_curricula.sh     # chains 0-2, every family; SKIP_DONE goes on after an interruption
+.venv/bin/python scripts/experiments/r26_d7_tracks.py --route d6 --first-step 248 --last-step 280     # the table below
+```
+
+Steps of each track on chains 0 / 1 / 2 (read when this was written: the plain states were done, the staged
+starts of the two block rooms were still being explored):
+
+| step | state | family | track, steps on chains 0 / 1 / 2 | staged and plain-way tracks |
+|---:|---|---|---|---|
+| 248 | `0_42c` | ow-moblin | 65 / 57 / 46 |  |
+| 249 | `0_52n` | ow-moblin | 27 / 26 / 25 |  |
+| 250 | `0_51e_v2` | ow-moblin | 25 / 11 / 107 | `~plain` 68 / 20 / 83 |
+| 251 | `0_50e_v2` | ow-lynel | 73 / 60 / 77 |  |
+| 253 | `0_61n` | ow-moblin | 274 / - / 234 |  |
+| 254 | `0_60e` | ow-lynel | 12 / 25 / 16 |  |
+| 255 | `0_50s` | ow-lynel | 88 / 93 / 76 |  |
+| 256 | `0_40s` | ow-ghini | 8 / 13 / 8 |  |
+| 257 | `0_41w` | ow-ghini | 6 / 19 / 21 |  |
+| 258 | `0_31s` | ow-ghini | 23 / 23 / 21 |  |
+| 259 | `0_21s` | ow-ghini | 76 / 99 / 167 |  |
+| 260 | `0_21cave` | ow-ghini | 12 / 12 / 12 |  |
+| 261 | `0_21c` | ow-ghini | 11 / 7 / 6 |  |
+| 262 | `0_31n` | ow-ghini | 24 / 10 / 63 |  |
+| 263 | `0_32w` | ow-lynel | 126 / 45 / 87 |  |
+| 264 | `0_22s` | ow-lynel | 14 / 14 / 14 |  |
+| 265 | `6_79s` | stalfos-keese-gel | 20 / 20 / 20 |  |
+| 266 | `6_78e` | wizzrobe | 24 / 35 / 35 |  |
+| 267 | `6_68s` | zol | 102 / 32 / 90 |  |
+| 268 | `6_58s` | stalfos-keese-gel | 175 / 120 / 118 |  |
+| 269 | `6_48s` | trap-room | 42 / 42 / 47 |  |
+| 270 | `6_38s` | wizzrobe | none |  |
+| 271 | `6_28s` | wizzrobe | 75 / 84 / 65 |  |
+| 272 | `6_29w` | wizzrobe | 51 / 41 / 41 |  |
+| 273 | `6_39n` | vire | 85 / 118 / 97 |  |
+| 274 | `6_3aw` | wizzrobe | none |  |
+| 275 | `6_08cave` | equipment-room | 56 / 45 / 41 |  |
+| 276 | `6_1dc` | like-like | 71 / 184 / 80 |  |
+| 277 | `6_2dn` | vire | 122 / 76 / 110 |  |
+| 278 | `6_2ce` | wizzrobe | 56 / 44 / 53 |  |
+| 279 | `6_1cs` | boss-gohma | 66 / 117 / 132 |  |
+| 280 | `6_0cs` | stalfos-keese-gel | 2 / 2 / 2 |  |
+
+- **Every new state has a track on all three chains but seven.** `0_61n_1` (the Lost Woods, chain 1) was not solved
+  in 3000 iterations (59k env steps), where chains 0 and 2 took 274 and 234 steps: rerun it with `--iterations
+  9000` or `--seed 1`. `6_38s` and `6_3aw` have no full-fight track yet on any chain: the script tries the full
+  room at 9000 iterations and then staged starts `~k6` down to `~k1` (`--room-kills 6:0x38=K`); it was at the first
+  of them when this was written, so **the staged tracks are not confirmed here** (the state build's explorer did
+  clear 0x38 once, on chain 0, in 218 steps).
+- `0_51e_v2` has both ways: its own track is the wrap exit (`CLIP E`), `~plain` the way S.
+- Gohma's tracks (66-132 steps) are the explorer's, which shoots at random; the scripted rule (§9) kills in a
+  third of the steps.
+- No `max_steps` was changed: ow-ghini 600 (longest track 167), boss-gohma 900 (132), wizzrobe 2000 (crossings
+  24-84; the fights unknown). Lower them toward the track lengths once the fights' tracks exist.
+
+## 9. Scripted rules and demonstrations
+
+`scripts/experiments/r27_d6_rules.py` plays three rules of the walks through the family's own environment in its own
+actions (`play`), writes the clean runs' decisions as demonstration rows for `train --demos` (`demos`) and as
+curriculum tracks (`tracks`, `<state>~rule<seed>`). Each rule walks by the observation's own `target` direction
+(`MOVE <dir> 4` a decision) and adds one decision of its own. Measured with `play --runs 20` (20 episodes a start
+state, 60 a rule, the family's own hp and bombs draws):
+
+| Rule | Family, states | Its own decision | Success | Hearts lost in the successes | Clean runs |
+|---|---|---|---|---|---|
+| `gravestone` | ow-ghini, `0_21s` | `MOVE N 32` on the stand square, within 3 px of its column | 60 of 60 | 0.10-0.30 a state (max 6) | 56 (no heart lost) |
+| `bomb28` | wizzrobe, `6_28s` | `BOMB E` at the door spot (`$D0`, `$8D`), reached along the bottom row and up the column X `$D0` | 60 of 60 | 0.95 (max 5) | 36 (at most half a heart) |
+| `gohma` | boss-gohma, `6_1cs` | `ARROW N` on the stand row with the eye fully open, more than 22 frames left, Link's X − Gohma's X in [−9, +4] | 59 of 60 (one ran out of steps) | 0.45-0.65 (max 1) | 59 (at most a heart) |
+
+- **0x28: the objective's own path is the dear one.** The same rule walking by `target` alone goes up the middle
+  and E along the door row, in the Blue Wizzrobes' row: 51 of 60, 9 deaths, 1.75 hearts lost in the successes. On
+  the walked path it is 60 of 60 at 0.95. The demonstration therefore walks against the `target` input in that
+  room; the clean fix is `path_costs` for 6:0x28 in `game.yaml` (the middle rows W of column X `$D0`), not made
+  here because it changes what `crates/zelda/tests/d6.rs` walks.
+- **Gohma needs one arrow in 16 of 20 runs and two in 4**, from the first eye opening, with the mask as built
+  (ARROW offered facing N only).
+- **The demonstration files** (`nice -n 10 .venv/bin/python scripts/experiments/r27_d6_rules.py demos RULE
+  target/r27-demos/RULE.npz`: 200 episodes a state, 600 a rule; not committed, a clone rebuilds them in three
+  minutes). A row is one decision; the rule's own decision is written 20 times.
+
+  | Rule | Success | Clean runs kept | Rows | Its own decisions a run | Hearts lost in the successes |
+  |---|---|---|---:|---|---|
+  | `gravestone` | 600 of 600 | 558 (no heart lost) | 35,700 | 2-3 `MOVE N 32` (onto the column, the push, down the stairs) | 0.10-0.18 a state |
+  | `bomb28` | 600 of 600 | 444 (at most half a heart) | 27,673 | 1 `BOMB E` | 0.60-0.62 |
+  | `gohma` | 588 of 600 (12 ran out of steps on chain 2) | 588 (at most a heart) | 42,812 | 1 `ARROW N` in 142 of 200 a state, 2 in 58 | 0.22-0.80 |
+
+  Use: `train --demos target/r27-demos/RULE.npz --demo-coeff 0.05` (round 25's coefficient for 5:0x37). **No
+  training has loaded them yet.**
+
+## 10. Proof trainings
+
+Two iterations of every family with new states from its run (the new families from the run `warm_start` names), into
+a scratch models directory holding each family's `promoted` file and a link to the run:
+
+```bash
+.venv/bin/python scripts/train_round.py --round r77-proof --chain-runs 0 --parallel 8 --episodes-per-state 2 \
+    --models-dir SCRATCH --specialists ow-moblin,ow-lynel,ow-ghini,stalfos-keese-gel,zol,trap-room,like-like,vire,equipment-room,boss-gohma \
+    --train-args "--load {name} --iterations 2 --sil-coeff 0.1 --stop-success 1.01"
+```
+
+**All ten trained and evaluated** (exit 0; states, tracks and masks load). Each `run.json` `curriculum_tracks`
+lists the stretch's tracks of §8 beside the old ones: ow-moblin 80 tracks (14 of the stretch: the twelve states less
+`0_61n_1`, and the three `~plain`), ow-lynel 30 (15), ow-ghini 21 (21), boss-gohma 3 (3), vire 36 (6), zol 24 (3),
+trap-room 24 (3), like-like 9 (3), equipment-room 27 (3); stalfos-keese-gel has no `curriculum:` in its yaml and
+loads none (its nine Dungeon 6 tracks exist and are unused, as its old rooms'). Two iterations train nothing: the
+round's evaluations (2 episodes a state) only show that the rooms run (ow-ghini 100%, boss-gohma 50%, ow-lynel 74%
+with 0x50 at 33%). **Not in the round: wizzrobe** (its block rooms' tracks were not written yet). **Not run at
+all: a training with `--demos`.**
+
+## 11. The baseline: today's models on the stretch
+
+One batch, `r77-base`: 100 runs a segment, each model in its own act mode (`temperature:0.5+relax:16`), clips on,
+route `d6`. The three new families play the run they are initialised from (wizzrobe: like-like `r75-f-c`; ow-ghini:
+ow-moblin `r74-leg`; boss-gohma: boss-digdogger `r74-d5boss`), through a scratch models directory with their
+`promoted` files. This is what the first team is measured against.
+
+```bash
+D=$PWD/target/r56-chains
+TRIFORCE_MODELS_DIR=SCRATCH .venv/bin/python -m triforce.cli eval-batch r77-base \
+  --chain "post-d7: --route d6 --from 0_42c_0 --runs 100 --act model --parallel 10 --output $D/r77-base-post-d7.jsonl" \
+  --chain "d6: --route d6 --from 6_79s_0 --runs 100 --act model --parallel 10 --output $D/r77-base-d6.jsonl"
+TRIFORCE_MODELS_DIR=SCRATCH .venv/bin/python -m triforce.cli room-stats r77-base
+.venv/bin/python scripts/experiments/r26_baseline_table.py target/r56-chains/r77-base-room-stats.json to-d6 d6
+```
+
+| Segment | Result |
+|---|---:|
+| `post-d7`: arrivals at 6:0x79 | 0 / 100 |
+| `post-d7`: the D6 triforce | 0 / 100 |
+| `d6`: the D6 triforce | 0 / 100 |
+
+**No run passes 0x50, and none passes 0x28.** On the leg ow-moblin plays 0x42, 0x52 and the wrap out of 0x51 in 100
+of 100, and ow-lynel loses every run in 0x50 (86 deaths, 14 wrong exits back into the Lost Woods' rooms). In
+Dungeon 6 the first five rooms are played (99 of 100 reach 0x38, at 3.4 hearts lost on the way), like-like's weights
+clear 0x38 in 13 of 99 visits, and all 13 die in 0x28. Nothing was cheated. Per room and route step (visits,
+correct exits, deaths, wrong exits, timeouts, stuck endings, hearts lost a visit, the cheat ledger):
+
+To D6: 0:0x42 → the D6 triforce: 100 runs, arrived 0; runs ended: death 100
+
+| step | room | family | visits | correct | deaths | wrong exits | timeouts | stuck | other | hearts lost a visit | cheated bombs | keys | rupees |
+|---:|---|---|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|
+| 248 | 0:0x42 | ow-moblin | 100 | 100 | 0 | 0 | 0 | 0 |  | 0.15 | 0 | 0 | 0 |
+| 249 | 0:0x52 | ow-moblin | 100 | 100 | 0 | 0 | 0 | 0 |  | 0.16 | 0 | 0 | 0 |
+| 250 | 0:0x51 | ow-moblin | 100 | 100 | 0 | 0 | 0 | 0 |  | 0.00 | 0 | 0 | 0 |
+| 251 | 0:0x50 | ow-lynel | 100 | 0 | 86 | 14 | 0 | 0 |  | 10.28 | 0 | 0 | 0 |
+| off | 0:0x50 | ow-lynel | 7 | 0 | 5 | 2 | 0 | 0 |  | 7.07 | 0 | 0 | 0 |
+| off | 0:0x60 | ow-lynel | 21 | 7 | 2 | 12 | 0 | 0 |  | 0.90 | 0 | 0 | 0 |
+| off | 0:0x61 | ow-moblin | 12 | 5 | 7 | 0 | 0 | 0 |  | 6.00 | 0 | 0 | 0 |
+
+Dungeon 6: 6:0x79 → the D6 triforce: 100 runs, arrived 0; runs ended: death 99, stuck 1
+
+| step | room | family | visits | correct | deaths | wrong exits | timeouts | stuck | other | hearts lost a visit | cheated bombs | keys | rupees |
+|---:|---|---|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|
+| 265 | 6:0x79 | stalfos-keese-gel | 100 | 100 | 0 | 0 | 0 | 0 |  | 0.00 | 0 | 0 | 0 |
+| 266 | 6:0x78 | wizzrobe | 100 | 99 | 1 | 0 | 0 | 0 |  | 0.97 | 0 | 0 | 0 |
+| 267 | 6:0x68 | zol | 99 | 99 | 0 | 0 | 0 | 0 |  | 0.36 | 0 | 0 | 0 |
+| 268 | 6:0x58 | stalfos-keese-gel | 99 | 99 | 0 | 0 | 0 | 0 |  | 2.04 | 0 | 0 | 0 |
+| 269 | 6:0x48 | trap-room | 99 | 99 | 0 | 0 | 0 | 0 |  | 0.00 | 0 | 0 | 0 |
+| 270 | 6:0x38 | wizzrobe | 99 | 13 | 85 | 0 | 0 | 1 |  | 8.38 | 0 | 0 | 0 |
+| 271 | 6:0x28 | wizzrobe | 13 | 0 | 13 | 0 | 0 | 0 |  | 2.65 | 0 | 0 | 0 |
+
+**The rooms the chains never reach**, from single-room evaluations of the same models on the new start states (batch
+`r77-base-rooms`: 20 episodes a state, three chains a stem, each model's act mode, hp and bombs as the family's yaml
+draws them; clip families in both switch states; `scripts/experiments/r26_room_baseline.py EVAL.json... --route d6
+--first-step 248 --last-step 280`). Hearts a visit is the mean health change. These are isolated episodes: a
+room's rate here is not its rate on a run.
+
+| step | state | room | entry → exit | family | episodes | success | deaths | wrong exits | timeouts | stuck | other | hearts a visit |
+|---:|---|---|---|---|---:|---:|---:|---:|---:|---:|---|---:|
+| 248 | `0_42c` | 0:0x42 | cave → S | ow-moblin | 120 | 120 (100%) | 0 | 0 | 0 | 0 |  | -0.10 |
+| 249 | `0_52n` | 0:0x52 | N → W | ow-moblin | 120 | 120 (100%) | 0 | 0 | 0 | 0 |  | -0.11 |
+| 250 | `0_51e_v2` | 0:0x51 | E → W (clips) | ow-moblin | 120 | 120 (100%) | 0 | 0 | 0 | 0 |  | -0.12 |
+| 251 | `0_50e_v2` | 0:0x50 | E → N (clips) | ow-lynel | 60 | 0 (0%) | 56 | 4 | 0 | 0 |  | -9.05 |
+| 253 | `0_61n` | 0:0x61 | N → maze (plain) | ow-moblin | 60 | 60 (100%) | 0 | 0 | 0 | 0 |  | -0.72 |
+| 254 | `0_60e` | 0:0x60 | E → N (plain) | ow-lynel | 60 | 13 (22%) | 3 | 43 | 1 | 0 |  | -1.66 |
+| 255 | `0_50s` | 0:0x50 | S → N (plain) | ow-lynel | 60 | 0 (0%) | 58 | 2 | 0 | 0 |  | -9.17 |
+| 256 | `0_40s` | 0:0x40 | S → E | ow-ghini | 60 | 60 (100%) | 0 | 0 | 0 | 0 |  | -0.03 |
+| 257 | `0_41w` | 0:0x41 | W → N | ow-ghini | 60 | 60 (100%) | 0 | 0 | 0 | 0 |  | -0.10 |
+| 258 | `0_31s` | 0:0x31 | S → N | ow-ghini | 60 | 60 (100%) | 0 | 0 | 0 | 0 |  | -0.05 |
+| 259 | `0_21s` | 0:0x21 | S → cave | ow-ghini | 60 | 45 (75%) | 14 | 1 | 0 | 0 |  | -3.62 |
+| 260 | `0_21cave` | 0:0x21 cave | S → S | ow-ghini | 60 | 60 (100%) | 0 | 0 | 0 | 0 |  | +0.00 |
+| 261 | `0_21c` | 0:0x21 | cave → S | ow-ghini | 60 | 47 (78%) | 2 | 11 | 0 | 0 |  | -0.54 |
+| 262 | `0_31n` | 0:0x31 | N → E | ow-ghini | 60 | 59 (98%) | 0 | 1 | 0 | 0 |  | -0.33 |
+| 263 | `0_32w` | 0:0x32 | W → N | ow-lynel | 120 | 36 (30%) | 74 | 10 | 0 | 0 |  | -6.56 |
+| 264 | `0_22s` | 0:0x22 | S → cave | ow-lynel | 120 | 106 (88%) | 14 | 0 | 0 | 0 |  | -1.05 |
+| 265 | `6_79s` | 6:0x79 | S → W | stalfos-keese-gel | 120 | 120 (100%) | 0 | 0 | 0 | 0 |  | +0.00 |
+| 266 | `6_78e` | 6:0x78 | E → N | wizzrobe | 60 | 60 (100%) | 0 | 0 | 0 | 0 |  | -1.17 |
+| 267 | `6_68s` | 6:0x68 | S → N | zol | 60 | 60 (100%) | 0 | 0 | 0 | 0 |  | -0.65 |
+| 268 | `6_58s` | 6:0x58 | S → N | stalfos-keese-gel | 120 | 117 (98%) | 3 | 0 | 0 | 0 |  | -1.80 |
+| 269 | `6_48s` | 6:0x48 | S → N | trap-room | 120 | 120 (100%) | 0 | 0 | 0 | 0 |  | -0.01 |
+| 270 | `6_38s` | 6:0x38 | S → N | wizzrobe | 60 | 7 (12%) | 50 | 0 | 0 | 0 | no-damage 3 | -8.61 |
+| 271 | `6_28s` | 6:0x28 | S → E | wizzrobe | 60 | 0 (0%) | 60 | 0 | 0 | 0 |  | -9.61 |
+| 272 | `6_29w` | 6:0x29 | W → S | wizzrobe | 60 | 2 (3%) | 58 | 0 | 0 | 0 |  | -9.32 |
+| 273 | `6_39n` | 6:0x39 | N → E | vire | 120 | 119 (99%) | 0 | 1 | 0 | 0 |  | -0.93 |
+| 274 | `6_3aw` | 6:0x3a | W → cave | wizzrobe | 60 | 19 (32%) | 40 | 0 | 0 | 1 |  | -8.21 |
+| 275 | `6_08cave` | 6:0x08 cave | S → E | equipment-room | 60 | 60 (100%) | 0 | 0 | 0 | 0 |  | -0.28 |
+| 276 | `6_1dc` | 6:0x1d | cave → S | like-like | 60 | 60 (100%) | 0 | 0 | 0 | 0 |  | -0.70 |
+| 277 | `6_2dn` | 6:0x2d | N → W | vire | 120 | 113 (94%) | 2 | 5 | 0 | 0 |  | -1.36 |
+| 278 | `6_2ce` | 6:0x2c | E → N | wizzrobe | 60 | 39 (65%) | 17 | 2 | 0 | 2 |  | -6.06 |
+| 279 | `6_1cs` | 6:0x1c | S → N | boss-gohma | 60 | 17 (28%) | 42 | 1 | 0 | 0 |  | -7.57 |
+| 280 | `6_0cs` | 6:0x0c | S → triforce | stalfos-keese-gel | 120 | 119 (99%) | 0 | 1 | 0 | 0 |  | +2.38 |
+
+Read by what a first team needs:
+
+- **Already played** (98-100%): ow-moblin's four rooms with the Lost Woods, the graveyard's crossings, 0x79, 0x78
+  (1.2 hearts), 0x68, 0x58 (1.8 hearts), 0x48, 0x39, the tunnel, 0x1d, 0x2d (94%), the triforce room.
+- **The new steps work zero-shot more often than the walks expected**: the gravestone 45 of 60 with ow-moblin's
+  weights (the mask and the stand square do it; 14 deaths, 3.6 hearts a visit, so the way to the stone is not
+  learned), leaving 0x21 after the cave 47 of 60 (11 wrong exits), **Gohma 17 of 60 with boss-digdogger's weights**
+  (the walks had 0 of 20 for five boss families before the ARROW facing and the stand tile existed).
+- **Not played**: 0x50 from either side (0 of 120), 0x28 (0 of 60), 0x29 (2 of 60), 0x38 (7 of 60), 0x3a (19 of
+  60), 0x60 (13 of 60: 43 wrong exits), 0x32 (36 of 120), 0x2c (39 of 60, 6 hearts a visit).
+
+## 12. Left open by the vocabulary step
 ## 6. Left open by the vocabulary step
 
 - Armos statues are still pressed by a MOVE that arrives before one (0x22). The gravestone stop would cover them; an

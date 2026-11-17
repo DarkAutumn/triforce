@@ -253,6 +253,23 @@ def test_chains_tag_is_the_twelve_segments_then_the_report(tmp_path):
     assert room_stats[-4:] == ['room-stats', 'r71', '--chains-dir', str(tmp_path)]
 
 
+def test_the_scouting_route_d6_has_its_two_segments(tmp_path):
+    """Round 27: `post-d7` (from Dungeon 7's triforce exit, arriving at Dungeon 6's entrance) and `d6` (to its
+    triforce) are no part of the default batch until d6 merges into d2first; with `--route d6` they are a batch."""
+    assert 'post-d7' not in eval_batch.SEGMENTS and eval_batch.ALL_SEGMENTS.endswith(eval_batch.D6_SEGMENTS)
+    assert eval_batch.segment_starts()['0_42c_0'] == 'post-d7' and eval_batch.segment_starts()['6_79s_0'] == 'd6'
+    options = eval_batch.Options('r77', cores=20, eval_parallel=4)
+    entries = eval_batch.chains_entries('r77', options, act='model', runs=100, segments=eval_batch.D6_SEGMENTS,
+                                        chains_dir=tmp_path, chain_args=['--route', 'd6'], report=False,
+                                        only_report=False)
+    assert [e.name for e in entries] == ['post-d7', 'd6']
+    assert [e.fields['target'] for e in entries] == ['6:0x79', None]
+    assert [e.fields['route'] for e in entries] == ['d6', 'd6']
+    assert entries[0].commands[0][entries[0].commands[0].index('--from') + 1] == '0_42c_0'
+    script = (ROOT / 'scripts' / 'experiments' / 'r56_chains.sh').read_text()
+    assert '[ -n "${ROUTE:-}" ] && chain_args+=("--route $ROUTE")' in script
+
+
 def test_chains_act_by_each_models_act_file_by_default():
     """Round 23: ``--chains`` and r56_chains.sh measure the team as registered (``model``), not in one forced mode."""
     assert eval_batch.build_parser().parse_args(['b', '--chains', 't']).act == 'model'

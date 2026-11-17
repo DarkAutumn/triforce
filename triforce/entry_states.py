@@ -70,6 +70,7 @@ from typing import Callable, Dict, List, Optional
 from ._native import DEFAULT_ROUTE, AcceptSpec, Explorer, Game, Snapshot, game_rooms, power_on_idle_states
 from ._native import route_alternates
 from ._native import route_steps as native_route_steps
+from ._native import routes as native_routes
 from ._native import specialist_for
 from .events import write_json_atomic
 from .paths import BASE_MOVIE, ROOT, STATES_DIR
@@ -240,15 +241,16 @@ def step_config(step: RouteStep, source: str, route: str = DEFAULT_ROUTE,
     where the bomb opens it (``required``, round 22).  The grid-point skips (CLIP) follow the step's family's
     ``clips:`` switch, as in a chain: 4:0x21 entered from S is left only by the ladder clip.  The run-time switch is
     no draw: on, off on a step of a stretch's plain way (round 22).  The recorder, food and candle follow the family
-    (round 24)."""
+    (round 24), and the arrows (round 27: Gohma dies to nothing else)."""
     rooms = game_rooms() if rooms is None else rooms
     bombs = 'never'
     if rooms.get(step.location.as_tuple(), {}).get('requires_bombs'):
         bombs = 'free' if step.specialist.startswith('boss-') else 'required'
     family = load_specialist(step.specialist)
     clips = {'enabled': family.clips.enabled, 'off_share': 1.0 if step.way == 'plain' else 0.0}
-    # The recorder, food and candle as the family has them (round 24: Digdogger needs the recorder).
-    items = {'bombs': bombs, **{kind: getattr(family.items, kind) for kind in ('recorder', 'food', 'candle')}}
+    # The recorder, food, candle and arrows as the family has them (round 24: Digdogger needs the recorder).
+    items = {'bombs': bombs,
+             **{kind: getattr(family.items, kind) for kind in ('recorder', 'food', 'candle', 'arrows')}}
     return SpecialistConfig(name=f'entry-step-{step.index}', rooms=[step.location], start_states=[source],
                             success=['exit-correct', 'triforce-collected'], max_steps=3000,
                             items=items, fresh_rooms=True, route=route, clips=clips)
@@ -315,8 +317,11 @@ def cross_room(step: RouteStep, target: RouteStep, source: str, seed: int, itera
         state = explorer.state
         if objective and state.full_location != target.location:
             pre_entry, state = follow_to(explorer.snapshot(), target.location, states_dir)
-        # A treasure the step refuses (`treasure: refuse`, 5:0x65 westbound: the owner's "never") stays in its room.
-        refused = step.treasure == 'refuse' and room_flags(state, step.room) & FLAG_ITEM_TAKEN
+        # A treasure the step refuses (`treasure: refuse`, 5:0x65 westbound: the owner's "never") stays in its room,
+        # and so does one it leaves (`treasure: skip`; round 27: chain 2's explorer took 6:0x29's key in passing and
+        # every state after it held a key more than a run does), unless an earlier visit took it.
+        left = step.treasure in ('refuse', 'skip') and not room_flags(initial, step.room) & FLAG_ITEM_TAKEN
+        refused = left and room_flags(state, step.room) & FLAG_ITEM_TAKEN
         if accept.accepts(state) and pre_entry is not None and not refused:
             stats.update(steps=len(result.actions), health=result.health, ending=result.ending)
             return pre_entry, stats
@@ -444,12 +449,14 @@ def build(chain_ids: List[int], out: str, iterations: int, patience: int, start_
           route: str = DEFAULT_ROUTE, skip_fights: Optional[set] = None, attempts: int = 3) -> tuple:
     """Runs one route chain per id (one thread each; exploration runs natively without the GIL); every written file
     is merged into ``<out>/entry_states.json`` as it is written (a rebuilt file replaces its old entry; ``command``,
-    the invocation, is recorded in each entry).  Returns (manifest entries, the first file not rebuilt per failed
-    chain); ``<out>/build.json`` records both."""
+    the invocation, is recorded in each entry).  ``source`` may hold ``{chain}`` (round 27: each chain goes on from
+    its own state of ``start_step``, ``DIR/7_2bw_{chain}.state``).  Returns (manifest entries, the first file not
+    rebuilt per failed chain); ``<out>/build.json`` records both."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     def run(chain):
         return build_chain(chain, out, iterations, patience, log=lambda text: print(text, flush=True),
-                           start_step=start_step, source=source, states_dir=states_dir, route=route, command=command,
+                           start_step=start_step, source=source.replace('{chain}', str(chain)),
+                           states_dir=states_dir, route=route, command=command,
                            skip_fights=skip_fights, attempts=attempts)
 
     with ThreadPoolExecutor(max_workers=len(chain_ids)) as pool:
@@ -675,6 +682,7 @@ def _named_room(label: str) -> Optional[tuple]:
 
 WHIRLWIND_RELEASE_X = 0x80          # the whirlwind sets Link down here, facing E (asm:Whirlwind_Update_Full)
 OBJ_TYPE, OBJ_WHIRLWIND = 0x34F, 0x2E   # object types by slot; the whirlwind's (`zelda::whirlwind::OBJ_WHIRLWIND`)
+DOOR_COLUMN_X, SHUTTER_ENTRY_Y = 0x78, 0x5D     # a dungeon's N and S doors; Link's first Y past a shutting N door
 
 
 def entry_side(state) -> str:
@@ -682,7 +690,9 @@ def entry_side(state) -> str:
     level, ``r`` set down by the whirlwind, ``cave`` inside one), read at the first controllable frame: Link faces into
     the room from the edge he came through; coming out of a cave or cellar he faces S away from the top edge; the
     whirlwind brings him in from the W edge facing E, as a walk in from the W does, but with the whirlwind in the
-    room (a built ``r`` state's first playable frame: X 0, carried for 87 more frames), and lets him go at X $80."""
+    room (a built ``r`` state's first playable frame: X 0, carried for 87 more frames), and lets him go at X $80.
+    Through a dungeon's N door whose shutter closes behind him the game walks Link a square further in (6:0x39 from
+    N: Y $5D on the door's column X $78, where an open doorway leaves him at $4D; round 27)."""
     level, _, in_cave = state.full_location
     if in_cave:
         return 'cave'
@@ -695,6 +705,8 @@ def entry_side(state) -> str:
     if facing is not None:
         return facing
     if link['direction'] == 'S':
+        if level != 0 and link['x'] == DOOR_COLUMN_X and link['y'] <= SHUTTER_ENTRY_Y:
+            return 'n'
         return 'n' if link['y'] <= (61 if level == 0 else 77) else 'c'
     return '?'
 
@@ -722,6 +734,19 @@ class RouteIndex:
         self.max_hearts = BASE_HEARTS + len({s.location.as_tuple() for s in self._containers})
         self.boss_rooms = {step.location.as_tuple() for step in self.steps if step.specialist.startswith('boss-')}
         self._manifests: Dict[str, Dict[str, dict]] = {}
+        self._others: Dict[str, 'RouteIndex'] = {}
+
+    def of_state(self, path: str) -> 'RouteIndex':
+        """The index a state is audited by: this one, or (round 27) that of the route its manifest entry names when
+        that is another route that extends this one (a scouting route's state, built with ``build --route``: on the
+        default route its step does not exist, and a heart container before it would not be counted)."""
+        entry = self.manifest_entry(path)
+        name = entry.get('route') if entry else None
+        if not name or name == self.route or name not in native_routes():
+            return self
+        if name not in self._others:
+            self._others[name] = RouteIndex(name)
+        return self._others[name]
 
     def hearts(self, route_step: int) -> int:
         """Max hearts at ``route_step``: one per heart-container room before it along the way it is on.  A stretch
@@ -770,7 +795,7 @@ def audit_state(game: Game, path: str, loads: int = 9, full: Optional[dict] = No
         counts.add(len(monsters))
     level, room, in_cave = state.full_location
     full = full if full is not None else full_monster_counts()
-    index = index if index is not None else RouteIndex()
+    index = (index if index is not None else RouteIndex()).of_state(path)
     expected = 0 if in_cave and level == 0 else full.get((level, room))     # an overworld cave has no monsters
     label = state_label(path)
     parsed = parse_state_name(label)
@@ -866,7 +891,7 @@ def build_parser() -> argparse.ArgumentParser:
     chain_parser.add_argument('--out', default=None, help=out_help)
     chain_parser.add_argument('--start-step', type=int, default=0, help="route step index to start from")
     chain_parser.add_argument('--source', default=START_STATE,
-                              help="entry state of --start-step (default: 'start')")
+                              help="entry state of --start-step (default: 'start'); '{chain}' in it is each chain's id")
     chain_parser.add_argument('--route', default=DEFAULT_ROUTE, help="routes.yaml route to play")
     chain_parser.add_argument('--attempts', type=int, default=3, help="explorer attempts per room (seeds)")
     chain_parser.add_argument('--skip-fights', default=None, metavar='L:0xRR:ENTRY,...',

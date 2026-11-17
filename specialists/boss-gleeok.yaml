@@ -23,4 +23,4 @@ notes: >-
   three flying heads (1 heart, cannot be hurt); one fireball at a time (1 heart). The attached heads never reach row
   Y $9D or lower, where the blade still reaches them. A retreat S resets the fight. Then the heart container (14)
   and the N shutter. Walked zero-shot: 0 of 20; a script on row Y $9D wins 30 of 30 from 13 hearts, 26 of 30 from 6
-  (scripts/experiments/r28_gleeok_demos.py).
+  (its rule through the env's actions: scripts/experiments/r28_demos.py gleeok, 29 of 30 from 13, 17 of 30 from 6).

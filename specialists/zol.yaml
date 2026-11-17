@@ -1,6 +1,6 @@
 name: zol
 rooms: ['(3, 0x7c)', '(3, 0x7b)', '(3, 0x6b)', '(3, 0x49)', '(3, 0x4b)', '(3, 0x3d)', '(4, 0x40)', '(5, 0x57)', '(6, 0x68)', '(9, 0x63)']
-start_states: ['3_7c*_[0-9]', '3_7b*_[0-9]', '3_6b*_[0-9]', '3_49*_[0-9]', '3_3d*_[0-9]', '4_40*_[0-9]', '5_57*_[0-9]']
+start_states: ['3_7c*_[0-9]', '3_7b*_[0-9]', '3_6b*_[0-9]', '3_49*_[0-9]', '3_3d*_[0-9]', '4_40*_[0-9]', '5_57*_[0-9]', '6_68*_[0-9]']
 success: [exit-correct, triforce-collected]   # 0x3d ends on the D3 triforce
 reward_profile: default
 reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20}}   # dungeon family (round 10 §8): dropped items are shaping targets; round 25: hearts priced by their worth to the run
@@ -19,7 +19,7 @@ notes: >-
   room. Copied from stalfos-keese-gel/goriya (one-room, curriculum, 2000 steps). Dungeon 4 (Nov 11-12): its dark
   Zol room 0x40 (five Zols, the key in the open from the start: take it, S to N). Dungeon 5 (round 24): the dark 0x57
   (five Zols) W to N along row 3 by the ladder, not stopping for the 5 rupees its kills show (`treasure: skip`).
-  Dungeon 6 (round 27, route `d6`; no start state yet): 0x68 (five Zols) S to N straight up, its compass left
+  Dungeon 6 (round 27, route `d6`; state `6_68s`): 0x68 (five Zols) S to N straight up, its compass left
   (`treasure: skip`; walked zero-shot 20 of 20).
   Dungeon 9 (round 29, route `d9`; no start state yet): 0x63 (five Zols) out of the tunnel at ($A0, $9D), up to the
   door row and W through its key door; its N and S key doors are masked (the route's last key), and the stairs at
