@@ -563,6 +563,12 @@ force combat. The shutter rule excludes block/money triggers and non-foe-only ro
 classification covers vertical tiles 0xa8–0xab and horizontal tiles 0xac–0xaf. Routing resumes after clearing.
 A room's treasure counts as taken from the room's item-taken flag, and a fresh-room load reads the room flags
 through the level's room-flag pointer.
+A room whose block the objective needs pushed fights first (the block moves only with the room clear). A fight's
+targets are the active monsters (a Wallmaster only while it is out of its wall), else every monster's position;
+but where every monster is a Wallmaster in its wall they are the spots that bring one out (round 26, 7:0x0d;
+`object_rules::wallmaster_lure_tiles`: Link's tiles against the four walls outside the corners), because a hidden
+hand's RAM position is a spawn spot the game never uses, in the middle of the room, and none comes out while Link
+stands there.
 
 `game.yaml` and `routes.yaml` are validated strictly: unknown keys, YAML 1.1 booleans such as `yes`, unquoted hex
 ids and route steps whose exit isn't an exit of the room are load errors. Dungeon exits follow one convention,
@@ -725,7 +731,10 @@ exits. Multi-source walking distance picks the nearer target; the task, accepted
 not change. This is not the old heart-only objective.
 
 `reward.item_targets` (default false) makes every dropped item (bombs, rupees, clock, heart, fairy; not the room's
-treasure) a PBRS target the same way, hearts and fairies only while Link is below max health (they only heal).
+treasure) a PBRS target the same way, hearts and fairies only while Link is below max health (they only heal). A
+lying clock is none while a Wallmaster lives, and the wavefront goes round the tiles on which Link would touch it,
+so no lure spot under it is a target (`objective::clock_is_a_trap`, round 26: under the clock a hand that comes out
+stays two squares inside its wall, out of the sword's reach, and the room can't be cleared).
 `reward.fixed_pickup_reward` (default false) pays `reward-gained-health` a flat `REWARD_MAXIMUM` for any health
 gained instead of 0.25–0.75 scaled by how hurt Link was. Both are the round 10 §8 heart experiments' controls.
 `reward.drops_first` (round 25, boss-manhandla; default false): once the objective is no fight, the wanted drops

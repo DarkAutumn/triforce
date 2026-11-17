@@ -2389,3 +2389,52 @@ fn gleeoks_heads_are_observed_and_his_base_is_not_killable() {
     assert_eq!(obs.entity_features[0][killable], 0.0);
     assert!(obs.entity_features[1..=2].iter().all(|f| f[killable] == 1.0));
 }
+
+/// Dungeon 7's Wallmaster room (0x0d, round 26): Link inside the C of blocks at the strike spot ($30, $9D), every
+/// hand in its wall, and with `clock` a dropped clock where a hand died beside the lure spot ($20, $A6).
+fn wallmaster_room(nes: ZCore, clock: bool) -> Env {
+    let mut env = make_env(nes, "wallmaster", Some("7_0dw_0"), |_| {});
+    env.reset(Some(1), None).unwrap();
+    let s = env.session_mut();
+    s.apply_ram(&[(Var::LinkX, 0x30), (Var::LinkY, 0x9D)]);
+    let hands: Vec<u16> = (1..12u16).filter(|&slot| s.state().ram()[0x34F + slot as usize] == enemy::WALLMASTER).collect();
+    assert_eq!(hands.len(), 5);
+    let nes = s.nes_mut();
+    for slot in hands {
+        nes.poke(0xAC + slot, 0);
+    }
+    if clock {
+        for (address, value) in [(0x34F, 0x60), (0xAC, item::CLOCK as u8), (0x70, 0x20), (0x84, 0xA6), (0x405, 0), (0x3A8, 0xC0)] {
+            nes.poke(address + 9, value);
+        }
+    }
+    s.apply_ram(&[]);
+    let snapshot = env.session().snapshot();
+    env.restore(&snapshot, "7_0dw_0").unwrap();
+    env
+}
+
+/// A clock taken while a Wallmaster lives freezes the hands in their wall, out of reach: the room can't be cleared
+/// any more.  So a lying clock is no target of `item_targets` there, the spots that bring a hand out stop being
+/// targets where Link would touch it, and the way to the others goes round it.
+#[test]
+fn a_lying_clock_is_walked_round_while_a_wallmaster_lives() {
+    let Some(nes) = open_core() else { return };
+    let env = wallmaster_room(nes, false);
+    let attached = env.objective().unwrap();
+    let wavefront = attached.wavefront.as_ref().unwrap();
+    assert_eq!(attached.objective.kind, ObjectiveKind::Fight);
+    assert_eq!(state(&env).link.tile(), (6, 12));
+    assert_eq!((wavefront.get((6, 12)), wavefront.get((4, 12))), (Some(2), Some(0)), "straight W to the wall");
+
+    let env = wallmaster_room(release(env), true);
+    let attached = env.objective().unwrap();
+    let wavefront = attached.wavefront.as_ref().unwrap();
+    let lying = &state(&env).items;
+    assert_eq!((lying.len(), lying[0].id, lying[0].tile()), (1, item::CLOCK, (4, 13)));
+    for tile in [(3, 12), (4, 12), (3, 13), (4, 13)] {
+        assert_eq!(wavefront.get(tile), None, "{tile:?}: Link would touch the clock");
+    }
+    assert_eq!((wavefront.get((4, 11)), wavefront.get((6, 12))), (Some(0), Some(3)), "the next spot up the wall");
+    assert_eq!(wavefront.get((5, 12)), Some(2), "past the clock, a tile E of it");
+}

@@ -43,6 +43,20 @@ round26.md §7-11. Nothing is trained yet; these are open.
 - [ ] **7:0x1c's leave-and-return shortcut** (one small Digdogger dead, out W and back in: the room is empty,
   `d7-walks.md` §5) is not in the route; the explorer needs 161-300 steps for the three small ones (boss-digdogger
   `max_steps` 900).
+- [ ] **7:0x0d: a clock taken while a hand lives ends the room** (round26.md "7:0x0d, the Wallmaster room"): the
+  hands that come out afterwards stay inside the wall, out of the sword's reach. The objective no longer leads to a
+  lying clock there, but nothing stops a knock or a swing from taking it, and then nothing leads out. **Leaving W
+  into 0x0c and coming back resets the clock and keeps the kills** (walked): the objective could make W the way
+  while Link holds the clock with a Wallmaster alive (a one-room episode would need that exit and the re-entry to
+  count as no failure). Not built.
+- [ ] **The `target` block has no direction on the tile it leads to**, also where more is needed there: beside
+  7:0x0d's block off its grid point (the push counts only on (`$D0`, `$8D`)), and on the stairs' tile a pixel or two
+  short of them. The rule of `r26_d7_0d_demos.py` has a case for each; a model has to find the last step itself.
+- [ ] **A MOVE whose last frame is the first of a stairs transition ends `exit-wrong`** (found in 7:0x0d, 1 of 300
+  rule runs: `7_0dw_1`, seed 1080 of `r26_d7_0d_demos.py --measure`). `MOVE N 8` from (`$D0`, `$6A`) returned after
+  its 9 frames with no interrupt and the room read 7:0x7b, not yet a cellar (`in_cave` false): the end conditions
+  took it for another room. The winning runs took the same stairs as a `transition` interrupt (115 frames) and
+  `exit-correct`. If that is the cause, the executor should finish a transition that begins on a MOVE's last frame.
 
 ## Done (Nov 16): round 25 (leave rooms with more hearts; 1.5.0.1)
 
