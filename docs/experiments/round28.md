@@ -789,3 +789,31 @@ TAG=r78t4-1k scripts/experiments/r28_d8_baseline.sh report
   `ckpt.pt` is `checkpoints/it011050`) and promoted in this checkout. It meets the three bars: `d8` +21.6 ± 1.6 over
   `r78t4-darknut`, `d5` +6.8 ± 2.0 and `d3` +1.4 ± 2.0 over round 25's `r75-d537-c5`. Its `eval.json` is stale
   (the weights moved); the chains below are its measurement.
+- **The chains `r78-dark-1k`** (`TAG=r78-dark-1k RUNS=1000 EPISODES=20 scripts/experiments/r28_d8_baseline.sh run`,
+  clips on, `--act model`, the team promoted in this checkout: §14's runs, round 27's five `r77-b` runs promoted
+  after `r78t4-1k`, and darknut `r78-dark37-s85`), paired with `r78t4-1k` on the same seeds 0-999:
+
+| Segment | `r78t4-1k` | `r78-dark-1k` | paired |
+|---|---:|---:|---:|
+| `post-d6`: arrivals at 8:0x7e | 1000 | 1000 | 0 |
+| `post-d6`: the D8 triforce | 60 | **263** | **+20.3 ± 1.6** |
+| `d8`: the D8 triforce | 63 | **272** | **+20.9 ± 1.6** |
+
+  Nothing cheated (bombs, keys, rupees 0 on both segments). The other families' differences are not the cause:
+  the `r77-b` runs play 8:0x7e and 0x2c, where no run dies and no heart is lost on either chain. Per room on `d8`
+  (hearts on entering / lost a visit / deaths, `r78t4-1k` → `r78-dark-1k`; `post-d6` within a few runs of it):
+
+| room | hearts on entering | hearts lost a visit | deaths |
+|---|---|---|---|
+| 8:0x5e | 12.16 → 12.18 | 5.67 → **4.25** | 50 → 22 |
+| 8:0x4e | 6.82 → **8.11** | 2.90 → 2.96 | 167 → 72 |
+| 8:0x3e | 4.76 → **5.56** | 3.55 → **2.54** | 571 of 784 → 429 of 906 |
+| 8:0x3f | 4.46 → 5.74 | 2.75 → 2.20 | 102 of 210 → 138 of 476 |
+| 8:0x3c (Gleeok) | 4.18 → 5.80 | 1.34 → 1.46 | 44 of 109 → 64 of 336 |
+
+- **Gleeok** trains from 6.5-13 hearts and runs arrive with 5.8 on average (4.2 before). Won by whole hearts on
+  entering, `d8`: 0-1 hearts 0 of 9, 2 hearts 8 of 35, 3 hearts 32 of 45, 4 hearts 47 of 58, 5 hearts 31 of 34, 6
+  or more 159 of 160. So Gleeok is not a problem from 4 hearts up; below that the run is lost whoever plays it. 44 of
+  its 64 deaths come with 3 hearts or fewer: the hearts are lost in the darknut rooms, not in Gleeok's.
+- **Where runs end now**: 0x3e still kills 429 of the 906 runs that reach it (47%; 73% before), on 5.6 hearts. The
+  next lever is 0x3e's fight itself (2.5 hearts a visit; the script's fight costs 2.1-2.5 a win) and 0x5e's 4.25.
