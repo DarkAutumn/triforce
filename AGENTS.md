@@ -320,18 +320,31 @@ test them, keep what helps, and log everything.
   for their weak plain crossings 0x5b and 0x5a), and the early stop and the evaluation (`--clips both`) take
   both. Lee can turn clips off at any moment while watching (`play-zelda.py`, key `c`), so the plain way must stay
   trained; track rooms with and without clips (`by_clips` in `eval.json` and `room-stats`).
-- **Bombs (Lee, Nov 11; supersedes "bombs only where the route needs them")**: a family's `items: {bombs: MODE}`
+- **Bombs (Lee, Nov 11; supersedes "bombs only where the route needs them"; round 26: granted bombs and the reserve
+  inside bomb-wall rooms)**: a family's `items: {bombs: MODE}`
   (`env::config::BombUse`, checked every step in training and chains): `free` (goriya, darknut, moldorm, Dodongo,
-  Manhandla, vire: bombs as a weapon, above the route's `bomb_reserve`; always in `requires_bombs` rooms), `required`
-  (ow-tektite, ow-octorok since round 22, trap-room, stalfos-keese-gel: their `requires_bombs` rooms, the 0x2c and
+  Manhandla, Digdogger, vire: bombs as a weapon while Link holds more of his own than the route's `bomb_reserve`),
+  `required` (ow-tektite, ow-octorok since round 22, trap-room, stalfos-keese-gel, gibdo, dodongo-crossing: their
+  `requires_bombs` rooms, the 0x2c and
   0x67 rock walls, D3's 0x4c wall and D4's 0x21/0x11 walls; 0x21 from S since round 21: `CLIP N` off the island, one
   step down, then `BOMB N`; round 22: BOMB is offered there only where the bomb opens the wall the objective
   leaves through, else only on the 10th kill),
   `never` (boss-gleeok: only the sword hurts him), `tenth` (the rest:
   only the 10th damage-free kill, `$50` = 9, whose bomb kill arms a forced drop of 4 bombs; allowed in every mode
-  but `never`, below any reserve). routes.yaml `bomb_reserve: 6` from Dungeon 3's entrance (round 22: the walls of
-  0x5b and 0x4c, a spare each, 2 for Manhandla), 2 from Dungeon 4's (its two walls); D3's central Darknut room takes
-  its bombs at 5 or fewer on its last pass (W → E through its own bomb wall).
+  but `never`, below any reserve). **A granted bomb opens the wall and does nothing else** (round 26, decisions
+  2026-11-17): while the cheat ledger holds a granted bomb in a bomb-wall room, BOMB is offered only in reach of the
+  wall the objective leaves through, in every mode and on the 10th kill too (before, a `free` family threw it at a
+  monster and was handed the next: 7.8 cheated bombs a Dungeon 7 run, 1.1 a Dungeon 3 run in 3:0x5b); Dodongo's
+  room has no wall, there the granted bomb is the weapon. **The reserve means the same inside a `requires_bombs`
+  room as outside**: a `free` family at or below it bombs only the route's wall there (before, such a room was free
+  ground whatever the reserve). A fight the bombs are kept for says so on its own route step: `bomb_reserve: 0` on
+  3:0x5b's last pass (the room's own four bombs pay for what follows), in Manhandla's room, the Olive Garden, on
+  Digdogger and on Dungeon 7's Aquamentus. routes.yaml `bomb_reserve: 6` from Dungeon 3's entrance (round 22: the
+  walls of 0x5b and 0x4c, a spare each, 2 for Manhandla), 2 from Dungeon 4's (its two walls), 8 in Dungeon 5, 3 from
+  Dungeon 7's (the walls of 0x69, 0x19, 0x1a) and 2 from 7:0x1b (0x0c, 0x29); D3's central Darknut room fights first
+  and takes its bombs on its last pass whatever Link holds (round 23; W → E through its own bomb wall). A model
+  trained before the rule used granted bombs as its weapon where it had none: darknut in 3:0x5b (Dungeon 3 loses
+  about 5 points until it is continued under the rule), goriya in Dungeon 7's wall rooms.
   Every family trains with
   `ram_randomization: {bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}` (`bombs_share`: half the resets keep
   the start state's own bombs, round 19). A Darknut facing opposite to Link's facing when he placed

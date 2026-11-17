@@ -159,6 +159,17 @@ answers `docs/decisions.md` 2026-11-17.
 
 round26.md §7-11. Nothing is trained yet; these are open.
 
+- [ ] **darknut under the bomb rule** (round26.md §13, decisions 2026-11-17): Dungeon 3 loses about 5 points
+  (84.7 → 79.3% of 300 paired runs) because the last pass of 3:0x5b had cheated bombs as its weapon when Link came
+  with 0-1 (95 of 294 passes; now 0.61 hearts lost there and Manhandla kills 27 of them, 14 before). One darknut
+  continuation under the rule (round 25's settings), its checkpoint chosen by the D3 and D5 segments.
+- [x] **goriya under the bomb rule:** `r76-goriya3` (one continuation; round26.md §13): no cheated bomb in 1000
+  Dungeon 7 runs, 70.4% of runs reach 7:0x1b (58.0% with `r76-goriya2` under the old rule), 18.3% the Wallmaster
+  room (11.4%). Promote it with the rule's merge. Next in Dungeon 7: 0x1b (362 of 704 visits die), 0x0c (116 of 299).
+- [ ] **Cheated bombs still counted:** 3:0x5b about 0.44 a Dungeon 3 run (F173: the granted bomb is used first at
+  the wall although Link holds the room's four by then; the owner's call whether a pickup repays a grant), Dungeon
+  4's walls 0.56 a run (runs that arrive with none). `cheats::bomb_need` keeps a room's need while any bomb wall is
+  shut, also one the route never opens (7:0x69 W, 4:0x11 E and W): the bomb in hand is unusable and taken back.
 - [ ] **The first team.** The baseline `r76-base` is 0 of 200 on both segments, clips on and off (round26.md §11):
   0x0b's model walks back into Dungeon 5, and every run dies in 7:0x49 at the latest. New skills nobody has: the
   whirlwind (0x0b), both shops, the Armos stairs, the pond, FOOD for the Grumble; fights lost: 7:0x49, 0x19, 0x1a,
@@ -184,6 +195,20 @@ round26.md §7-11. Nothing is trained yet; these are open.
 - [ ] **7:0x1c's leave-and-return shortcut** (one small Digdogger dead, out W and back in: the room is empty,
   `d7-walks.md` §5) is not in the route; the explorer needs 161-300 steps for the three small ones (boss-digdogger
   `max_steps` 900).
+- [ ] **7:0x0d: a clock taken while a hand lives ends the room** (round26.md "7:0x0d, the Wallmaster room"): the
+  hands that come out afterwards stay inside the wall, out of the sword's reach. The objective no longer leads to a
+  lying clock there, but nothing stops a knock or a swing from taking it, and then nothing leads out. **Leaving W
+  into 0x0c and coming back resets the clock and keeps the kills** (walked): the objective could make W the way
+  while Link holds the clock with a Wallmaster alive (a one-room episode would need that exit and the re-entry to
+  count as no failure). Not built.
+- [ ] **The `target` block has no direction on the tile it leads to**, also where more is needed there: beside
+  7:0x0d's block off its grid point (the push counts only on (`$D0`, `$8D`)), and on the stairs' tile a pixel or two
+  short of them. The rule of `r26_d7_0d_demos.py` has a case for each; a model has to find the last step itself.
+- [ ] **A MOVE whose last frame is the first of a stairs transition ends `exit-wrong`** (found in 7:0x0d, 1 of 300
+  rule runs: `7_0dw_1`, seed 1080 of `r26_d7_0d_demos.py --measure`). `MOVE N 8` from (`$D0`, `$6A`) returned after
+  its 9 frames with no interrupt and the room read 7:0x7b, not yet a cellar (`in_cave` false): the end conditions
+  took it for another room. The winning runs took the same stairs as a `transition` interrupt (115 frames) and
+  `exit-correct`. If that is the cause, the executor should finish a transition that begins on a MOVE's last frame.
 
 ## Done (Nov 16): round 25 (leave rooms with more hearts; 1.5.0.1)
 

@@ -568,3 +568,347 @@ ignored; pytest 818 passed, 3 skipped (five tests that pinned the route's end at
 the schema 5 record is read over its recorded states only, and `5_14s_0`'s terminal observation is pinned anew:
 with the route cut at step 209 the code computes the hash pinned before); `tf replay verify` the three corpus
 replays ok; `entry_states audit` 727 states, no problem; `asm.py check --final` ok.
+
+## 13. Granted bombs: the loophole, the rule, before and after
+
+**The finding.** The first 1000-run chain of Dungeon 7 with the first team (`r76a-1k`) counted 7,657 cheated bombs,
+7.7 a run, all in the wall rooms 0x69, 0x19 and 0x1a. A `requires_bombs` room tops Link up to one bomb whenever he
+holds none, and a `free` family could bomb anywhere in such a room whatever the reserve: goriya had learned to throw
+the granted bomb at a Goriya and take the next (3.0-4.0 bombs a visit). Round 25's darknut does the same in 3:0x5b
+(1.1 cheated bombs a Dungeon 3 run).
+
+**The rule** (decisions 2026-11-17; `docs/architecture.md` "BOMB kept to the wall"): (A) a granted bomb opens the
+wall and does nothing else, in every bomb mode and on the 10th kill too (not in Dodongo's room, which has no wall);
+(B) the reserve means the same inside a bomb-wall room as outside: at or below it a `free` family bombs only the
+route's wall; the fights the bombs are for carry `bomb_reserve: 0` on their own step (new: 3:0x5b's last pass and
+Manhandla's room).
+
+**Before and after** (300 runs a segment, seeds 0-299, `--act model`, clips on; D3 played on through D4 to step 134,
+D5 to step 209; the chains `target/r56-chains/r76bombs-{ref,a,ab1,ab1r}-{d3,d5,d7}.jsonl`, each arm one batch
+`triforce eval-batch r76bombs-<arm> --chain 'd3: --from 3_7cs_0 --stop-at step:134 --runs 300 --act model
+--parallel 10 --output ...' --chain 'd5: --from 5_76s_0 --stop-at step:209 ...' --chain 'd7: --from 7_79s_0 ...'`;
+tables by `scripts/experiments/r26_bomb_table.py BEFORE.jsonl --against AFTER.jsonl`):
+
+| | out of D3 | D3 + D4 | D5 | D7: runs into 0x1b / 0x1c / 0x0d | cheated bombs a run: D3+D4 | D5 | D7 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| before (`ref`) | 84.7% | 75.0% | 66.0% | 179 / 64 / 33 | 1.79 | 0 | 7.77 |
+| rule A (`a`) | 79.3% | 69.0% | 66.0% | 176 / 79 / 28 | 1.01 | 0 | 1.57 |
+| A + B while a wall is shut (`ab1`) | 68.3% | 58.7% | 66.0% | 167 / 78 / 36 | 0.49 | 0 | 0.18 |
+| A + B as built (`ab1r`) | 79.3% | 72.3% | 66.0% | 170 / 79 / 37 | 1.00 | 0 | 0.00 |
+
+Per room, before → as built (300 runs):
+
+| room | deaths | hearts lost a visit | bombs placed a visit | cheated bombs |
+|---|---:|---:|---:|---:|
+| 3:0x5b last pass | 3 → 3 of 294 / 288 | 0.13 → 0.19 | 4.09 → 3.31 | 334 → 131 |
+| 3:0x4d Manhandla | 35 → 45 of 289 / 284 | 0.76 → 0.72 | 2.72 → 2.63 | 0 |
+| 4:0x21, 4:0x11 (walls) | 0 | 0.09, 0.00 → 0.08, 0.00 | 1.02, 1.00 → 1.00, 1.00 | 203 → 169 |
+| 7:0x69 | 0 → 1 of 300 | 1.07 → 1.66 | 3.63 → 1.00 | 191 → 0 |
+| 7:0x19 | 33 → 36 of 287 / 281 | 1.41 → 1.41 | 3.92 → 0.91 | 1128 → 0 |
+| 7:0x1a from W | 11 → 21 of 254 / 245 | 0.82 → 0.58 | 1.31 → 0.00 | 333 → 0 |
+| 7:0x1a from the cellar | 38 → 35 of 217 / 206 | 1.20 → 1.13 | 3.27 → 0.88 | 677 → 0 |
+| 7:0x1b | 115 → 91 of 179 / 170 | 1.85 → 1.72 | 0.12 → 0.05 | 0 |
+
+Dungeon 5's 300 runs are the same room for room under every arm (gibdo is `required`). Dungeon 3 loses about 5
+points, all to rule A: the last passes of 3:0x5b that arrive with 0-1 bombs (95 of 294) had 3.1 cheated bombs each
+as their weapon. The form "B only while a wall is shut" was rejected by these numbers (decisions).
+
+**The schema 5 record** (`tests/test_obs_legacy.py`, `BOMB_RULE_CHANGES`): nine traces differ, each explained there
+(the reserve inputs of Manhandla's room and 3:0x5b's last pass; the mask where a granted bomb or the reserve now
+keeps BOMB to the wall).
+
+**The retrained run** `r76-goriya3`: one continuation of `r76-goriya2` under the rule (244 iterations, 1M steps,
+`--seed 76 --stop-success 1.01 --sil-coeff 0.1 --demos <food-demos.npz> --demo-coeff 0.05 --checkpoint-every 30`,
+`scripts/train_round.py --round r76-goriya3 --specialists goriya --chain-runs 0 --parallel 8 --eval-parallel 3`).
+Single rooms (100 episodes a state, clips both, seed 0; `scripts/experiments/r26_eval_rooms.py`): `r76-goriya2`
+under the old rule | `r76-goriya2` under the rule | `r76-goriya3` under the rule, success % and hearts lost an
+episode:
+
+| room | success % | hearts lost | bombs placed | cheated bombs |
+|---|---:|---:|---:|---:|
+| 7:0x69 | 97.2 \| 95.5 \| 95.8 | 1.30 \| 1.65 \| 1.40 | 3.86 \| 1.77 \| 1.67 | 1.39 \| 0.23 \| 0.24 |
+| 7:0x19 | 96.7 \| 96.7 \| 97.7 | 1.44 \| 1.53 \| 1.39 | 3.78 \| 1.58 \| 1.57 | 1.55 \| 0.19 \| 0.19 |
+| 7:0x1a (both entries) | 79.8 \| 78.8 \| 79.6 | 1.61 \| 1.66 \| 1.70 | 3.84 \| 1.29 \| 1.41 | 1.75 \| 0.03 \| 0.03 |
+| 7:0x29 | 95.8 \| 95.7 \| 96.5 | 0.99 \| 1.10 \| 1.13 | 4.41 \| 2.98 \| 2.85 | 0.83 \| 0.04 \| 0.04 |
+| 7:0x38 | 97.5 \| 97.5 \| 98.7 | 1.12 \| 1.12 \| 0.61 | 0.06 \| 0.06 \| 0.08 | 0 |
+| 7:0x1b | 93.8 \| 93.8 \| 92.7 | 1.47 \| 1.47 \| 1.16 | 0.34 \| 0.34 \| 0.33 | 0 |
+| all 10,800 episodes | 94.9 \| 94.7 \| 95.0 | 0.57 \| 0.60 \| 0.53 | 1.53 \| 0.92 \| 0.89 | 0.40 \| 0.03 \| 0.03 |
+
+The rule costs `r76-goriya2` 1.7 points in 0x69 and 0.05-0.35 hearts in the wall rooms, nothing elsewhere (every
+other room is the same to the digit); the continuation takes the hearts back (0x69 1.40, 0x19 1.39) and the old
+rooms hold (1:0x23 99.2, 1:0x44 98.7, 2:0x1e 88.3, 2:0x5e 88.0%). The cheated bombs left in single rooms are wall
+bombs of resets drawn with none.
+
+Dungeon 7, 1000 runs with `r76-goriya3` (`r76bombs-1k-d7.jsonl`, seeds 0-999, the rule as built; beside it the first
+chain `r76a-1k` with `r76-goriya2` under the old rule, and `r76-goriya2` under the rule on 300 runs): no cheated
+bomb in 1000 runs (7,657 before); 2 runs take the triforce (0 before).
+
+| runs that enter | `r76a-1k` (old rule, goriya2) | goriya2 under the rule (300) | **goriya3 under the rule** |
+|---|---:|---:|---:|
+| 7:0x19 | 93.9% | 93.7% | 94.8% |
+| 7:0x1b | 58.0% | 56.7% | **70.4%** |
+| 7:0x1c | 24.8% | 26.3% | 34.2% |
+| 7:0x0c | 20.8% | 23.3% | 29.9% |
+| 7:0x0d (the Wallmaster room) | 11.4% | 12.3% | 18.3% |
+
+On the 300 seeds both runs played under the rule, 217 against 170 reach 0x1b. Per room with `r76-goriya3` (1000
+runs, first visits): deaths and hearts lost a visit 0x69 0, 1.37; 0x59 0, 1.14; 0x49 5, 1.35; 0x38 25 of 991, 1.10;
+0x18 18 of 966, 0.58; 0x19 59 of 948, 1.13; 0x1a from W 44 of 889, 0.47; the candle cellar 27 of 843, 0.43; 0x1a
+from the cellar 72 of 778, 1.04; **0x1b 362 of 704, 1.88**; 0x1c 43 of 342, 1.00; 0x0c 116 of 299, 2.54; 0x0d 17 of
+183 (and 161 runs sent back to the entrance, of which 53 die in 0x69 on the way up again). One bomb a wall: 1.00
+placed in 0x69, 0.96 in 0x19, 0.93 in 0x1a. The Blue Goriya wall rooms did not fall apart, so no second continuation
+was run. `r76-goriya3` is the run to take; 7:0x1b (half its visits die) and 0x0c are what Dungeon 7 loses next.
+
+Suites on this code: `cargo test --release --workspace --features zelda/zcore` 994 passed, 1 ignored; the others
+are in the branch's last commit message.
+
+## 14. 7:0x0d, the Wallmaster room (branch `r26-wall0d`)
+
+The room the first team's training did not teach. `wallmaster/r76-b` (244 iterations from `r71-e` with `--sil-coeff
+0.1`, the explorer's tracks `7_0dw_*` as curriculum, `room_kills` staging) left it at 11 of 300 evaluation
+episodes: 37 captured, 251 `no-damage` (600 decisions without a hit either way), 1 `stuck`; 1:0x45 300 of 300.
+
+### Why PPO failed: the objective, not the fight
+
+Watched `r76-b` in the room (decisions, positions, the objective's target and the mask at every step; the run's
+policy drawn at temperature 0.5): of 30 episodes 1 `exit-correct`, 1 captured, 13 `no-damage`, 15 `stuck`, and in 28
+the five hands were never all dead. The three failures traced step by step are the same episode: Link steps off
+the entry spot on his first frame, walks to the middle of the room and WAITs there (0 hands out in 81, 373 and 600
+decisions, 1 decision on a spot that brings one out), touched by the Bubbles. The one win happened to walk down the
+W wall and along the S wall, killed all five in 34 decisions there and pushed the block.
+
+- **The target was in the middle of the room.** A Wallmaster comes out only while Link stands against a wall
+  (asm:Wallmaster_Update@CheckLinkAtWall). With every hand in its wall the Fight objective's targets were the
+  monsters' RAM positions, and a hidden hand's is the spawn spot the game never uses: (`$80`, `$7D`), (`$80`,
+  `$9D`), (`$A0`, `$7D`), (`$A0`, `$9D`), (`$D0`, `$8D`). The `target` input and PBRS led there; on the target tile
+  the block has no direction and nothing ever happens.
+- **The critic charged the lure.** `critique_wallmaster` (1:0x45's "stay off the walls") takes 0.05 a decision on
+  any wall-line tile while a Wallmaster is in the room, unless the tile is one of the objective's.
+- **The mask was right**: SWORD is offered with a hand out and not beside a Bubble's sword-off timer, and MOVE W is
+  offered beside the block.
+- **The room itself** (walked through the env): its walkable ring IS the wall line (top corridor Y `$5D`, bottom Y
+  `$BD`, W column X `$20`, E column X `$D0`); off it are only the inside of the C of blocks (X `$20`-`$B0`, Y
+  `$75`-`$9D`, open to the W) and the bottom corridor's upper row. On the door row MOVE W from inside the C walks
+  out through the bombed doorway (a wrong exit); a row lower it stops at the wall.
+
+**Fix 1** (`zelda::objectives`, `object_rules::wallmaster_lure_tiles`): a Fight objective with no active monster
+and every monster a Wallmaster targets the spots that bring one out (Link's tiles against the four walls, outside
+the corners); a hand that is out stays the target. The critic's own exemption then stops charging the lure.
+
+### A second trap: the clock
+
+Found measuring the rule below. A Wallmaster drops from group 1 (59% of kills; `zelda-asm/enemies.md` "Drop
+tables"), the clock at kill-cycle column 6. A clock taken while a hand lives ends the room:
+
+- Under the clock (asm:InvClock) a hand that comes out stays where it starts, at X `$00`, two squares inside the
+  wall. From every spot tried the sword and the boomerang do not reach it; a bomb from (`$20`, `$BD`) facing W kills
+  it, and BOMB is masked in the family (`bombs: tenth`). The hands still come out one per `$60` frames and freeze.
+- The drop lies where the hand died: on the wall line, 9 pixels below the lure spot and under the blade of the next
+  swing (the sword takes items), and where a Bubble's knock from the strike spot ends.
+- The family's `reward: item_targets: true` made the clock a PBRS target.
+- How often: the cycle start decides. `7_0dw_0`'s puts the clock on the third kill: of 100 rule runs from it (half
+  staged with 1-4 kills banked) 45-49 saw a clock drop; `7_0dw_1` and `7_0dw_2` none in 100 each. With a uniform
+  start one of the first four kills is the clock's in 4 of 10 visits, times 59%: about a quarter (computed).
+- **A way out exists and is not built**: leaving W into 0x0c and coming back resets the clock and keeps the kills
+  (walked: two of five dead, the clock held, three frozen hands; out and back in: `InvClock` 0, three Wallmasters in
+  the wall). A one-room episode that has taken the clock runs to `no-damage` (600 decisions) or `stuck`; a chain
+  run has no reason to leave and stays until the runner's room budget (2000 decisions).
+
+**Fix 2** (`env::objective`, `clock_is_a_trap`): while a Wallmaster lives a lying clock is no item target and the
+wavefront treats the tiles on which Link would touch it as impassible, so no lure spot under it is a target and the
+way to the others goes round it. Nothing stops a knock or a careless swing from taking it; that is the policy's to
+learn (counted below).
+
+Both are changes of the objective (REV level: rewards and the `target` input in a room where a Wallmaster must
+die; no layout or action change), checked for leaving everything else alone: `cargo test --release -p env -p zelda
+--features zelda/zcore` passes with three new tests (`d7_wallmaster_room_lures_fights_pushes_and_takes_the_stairs`:
+hands in, the lure tiles; one out, the hand; all dead, the tile E of the block, then the stairs;
+`a_clock_is_no_target_while_a_wallmaster_lives`; `a_lying_clock_is_walked_round_while_a_wallmaster_lives`),
+`tests/test_obs_legacy.py` 28 passed, and `r76-b` in 1:0x45 plays the same 300 of 300 evaluation episodes before
+and after (1:0x45 has no Fight objective: the key, then the door). In 7:0x0d the untrained `r76-b` under the new
+objective: 55 of 300, 170 captured, 55 `no-damage`, 20 `exit-wrong`. It goes to the wall now and does not know what
+to do there.
+
+### The rule
+
+`scripts/experiments/r26_d7_0d_demos.py`: the button script `r26_wallmaster_bot.py` (40 of 40) in the env's
+actions.
+
+- **Lure** at (`$20`, `$9D`): `MOVE W` on the row below the door row stops at the wall. The reset's own spot lures
+  the first hand.
+- **Step off** when a hand is out: `MOVE E 8`, `MOVE E 4` (X `$30`-`$37`), `MOVE S` to the row; the hand walks the
+  wall line a square away.
+- **Strike**: `SWORD W` (`BEAMS W` at full health) while the hand is at most `$18` pixels W of Link and less than
+  12 from his row. The window is what the env's grain needs: a hand walks 0.375 pixels a frame, so it stays in the
+  window for some 60 frames, a SWORD takes 17 and the longest WAIT 32; every decision inside it hits. The waits
+  before it are as long as the hand's distance allows.
+- The sword taken by a Bubble, or a hand's death sparkle running: off the wall, wait. **A clock lying**: deeper into
+  the C (X `$58`) and wait until it has gone (some 500 frames).
+- **All dead**: follow the `target` block in short steps (it gives the first step and the way's length, not where
+  the way turns: a long MOVE walks back and forth past the turn into the bottom corridor's upper row), `MOVE W 16`
+  beside the block (the push counts only on the grid point (`$D0`, `$8D`), where the block has no direction; off it
+  the same MOVE W first walks Link on to the point), then the target to the stairs.
+
+What it took to get there, each measured on 100 runs a state (`7_0dw_0..2`, seeds 1000-1099, the reset's own hp and
+bomb draws, the yaml's staging: half the runs with 1-4 kills banked):
+
+| Rule | `exit-correct` | Captured | Other endings | Clock taken, a hand alive |
+|---|---:|---:|---|---:|
+| lure, step off, strike, push; a lying clock waited out at the strike spot | 282 / 300 | 0 | 16 `stuck`, 2 `exit-wrong` | 11 |
+| + wait during a hand's death sparkle | 279 / 300 | 0 | 20 `stuck`, 1 `exit-wrong` | 14 |
+| + wait for the clock deep in the C; a last step on the stairs' tile | 299 / 300 | 0 | 1 `exit-wrong` | 0 |
+
+A clock taken in the second rule's runs, traced: a Bubble's knock from the strike spot on to the wall line, on to
+the clock. A `stuck` run with all five dead, traced: Link on the stairs' tile two pixels short of the stairs, where
+the `target` block has no direction. The last `exit-wrong` is a MOVE whose last frame was the first of the stairs'
+transition (backlog).
+With the last rule, measured again on the code as committed (both objective fixes): 299 of 300 (`7_0dw_0` 100,
+`7_0dw_1` 99, `7_0dw_2` 100 of 100), no capture, no heart lost (0.27 gained a run from drops), 2.9 Bubble touches a
+run, a clock dropped in 49 runs (all from `7_0dw_0`) and none taken, a winning run 121 decisions and 1747 frames at
+the median (the button script: 1739 frames to the clear, then the push). By staged kills, won of played: none 149 of
+150, one 51 of 51, two 21 of 21, three 57 of 57, four 21 of 21.
+
+### The demonstrations
+
+The rows of the winning runs (`triforce.demos`): a SWORD or BEAMS row 10 times and the push 20 times (five and one
+decisions of a run of some 115), a WAIT and a MOVE that ends at a wall without its duration (`ANY_DURATION`), the
+other MOVEs with theirs (the step off the wall and the short steps along the target are the rule). 100 runs a
+state give 69,633 rows from 299 runs; `train --demos` scores the whole file once an iteration for its accuracy
+chart, so the file meant for training is 40 runs a state (28,354 rows from 120 of 120 runs). `--policy RUN_DIR` is DAgger (the
+checkpoint plays at temperature 0.5, the rule labels every state), and `--measure --policy RUN_DIR` counts a
+checkpoint's endings with the clocks it took while a hand lived, which `eval.json` does not record.
+
+```bash
+.venv/bin/python scripts/experiments/r26_d7_0d_demos.py --measure 100                    # the table's last row
+.venv/bin/python scripts/experiments/r26_d7_0d_demos.py rule.npz 40                      # rows for train --demos
+.venv/bin/python scripts/experiments/r26_d7_0d_demos.py --measure 100 --policy RUN_DIR   # a checkpoint, by cause
+.venv/bin/python scripts/experiments/r26_d7_0d_demos.py dagger.npz 40 --policy RUN_DIR   # DAgger rows
+```
+
+### Training
+
+The lead's order: PPO alone first (if the objective was the whole cause the curriculum may be enough, and that is
+the cleaner result), the demonstrations only if it is not. Every round is `scripts/train_round.py --round R
+--specialists wallmaster --chain-runs 0 --parallel 8 --eval-parallel 3 --models-dir $PWD/models --train-args "--load
+RUN_DIR --iterations 244 --seed 76 --stop-success 1.01 --sil-coeff 0.1 ..."`, judged by the round's own `eval.json`
+(100 episodes a state, `temperature:0.5+relax:16`).
+
+| Run | From | Extra | 1:0x45 | 7:0x0d | Captured | Other endings | Hearts a visit |
+|---|---|---|---|---:|---:|---|---:|
+| `r71-e` (promoted) | | | 300 / 300, 0 lost | not played | | | |
+| `r76-b` (the first team's) | `r71-e` | old objective | 300 / 300, 0 lost | 11 / 300 (3.7%) | 37 | 251 `no-damage`, 1 `stuck` | −0.02 |
+| `r76-b`, untrained, fixed objective | | | 300 / 300, the same episodes | 55 / 300 (18.3%) | 170 | 55 `no-damage`, 20 `exit-wrong` | −0.24 |
+| **`r76-wall-1`** | `r76-b` | none: PPO alone | 300 / 300, 0 lost | **259 / 300 (86.3%)** | **26 (8.7%)** | 15 `no-damage` | +0.27 |
+| `r76-wall-2` | `r76-wall-1` | `--demos rule.npz --demo-coeff 0.05` | 300 / 300, 0 lost | 258 / 300 (86.0%) | 26 (8.7%) | 16 `no-damage` | +0.23 |
+| `r76-wall-3` | `r76-wall-2` | `--demos rule.npz dagger.npz --demo-coeff 0.05` | 300 / 300, 0 lost | 254 / 300 (84.7%) | 24 (8.0%) | 22 `no-damage` | +0.24 |
+| `r76-wall-4` | `r76-wall-3` | the same rows, `--demo-coeff 0.2` | 300 / 300, 0 lost | 265 / 300 (88.3%) | 30 (10.0%) | 4 `no-damage`, 1 `exit-wrong` | +0.23 |
+
+**The objective was the cause: on the fixed one PPO alone takes the room from 4% to 86%** in one continuation of
+244 iterations (1M env steps), with 1:0x45 unchanged (300 of 300, no heart lost, worst linger 4 decisions). By
+state: `7_0dw_0` 79 of 100 (6 captured, 15 `no-damage`), `7_0dw_1` 90 (10 captured), `7_0dw_2` 90 (10 captured).
+A winning episode takes 55 decisions and 1049 frames at the median, faster than the rule (121 and 1747). All 15
+`no-damage` episodes are from `7_0dw_0`, the state whose kill cycle drops the clock. The target is half met: 80%
+is passed, captures are 8.7%, not under 5%. So round 2 continues `r76-wall-1` with the rule's rows (`--demos
+rule.npz --demo-coeff 0.05`, the 28,354-row file).
+
+`r76-wall-1` by cause (`r26_d7_0d_demos.py --measure 100 --policy RUN_DIR`: the checkpoint drawn at temperature
+0.5 without the stall rule, 100 runs a state with the yaml's staging, the clocks read from RAM): 267 of 300
+`exit-correct`, **26 captured**, 6 still in the room after 600 decisions, 1 `exit-wrong`. A clock dropped in 42 runs
+(all from `7_0dw_0`) and **was taken while a hand lived in 9** of them; the 6 runs that never ended are from that
+state too. By kills banked at the start, won of played: none 129 of 156, one 20 of 21, two 49 of 51, three 39 of
+42, four 30 of 30. So what is left of the room is the capture, mostly in the full fight (the unstaged runs fail one
+time in six), and the clock (about one in five that drop is taken).
+
+**Round 2, the rule's rows at 0.05: the clone takes and the play does not change.** The policy's accuracy on the
+rule's rows went from 17% to 94% over the 244 iterations (`charts/demo_bc_accuracy`; loss 3.88 to 0.21), and the
+room is where it was: 258 of 300, 26 captured, 16 `no-damage` (by state 76, 94 and 88 of 100; a winning episode 57
+decisions), 1:0x45 300 of 300 with no heart lost. Read from that (its episodes were not traced): the policy knows
+the rule's answer in the rule's states and plays its own, faster fight elsewhere (57 decisions a win against the
+rule's 121), where it is caught, as round 25 §5 found for 5:0x37. So round 3 adds DAgger rows (`r76-wall-2` plays,
+the rule labels).
+
+**Round 3, DAgger rows beside the rule's: no gain.** `r76-wall-2` drawn at temperature 0.5 played 40 runs a state
+(96 of 120 won, 11 captured, a clock taken in 9) and the rule labelled every state: 30,822 rows, 59,176 with the
+rule's. After 244 iterations the accuracy on all of them is 89% (75% at the start; loss 1.20 to 0.46) and the room
+is within noise of rounds 1 and 2: 254 of 300, 24 captured (8.0%), 22 `no-damage` (by state 71, 86 and 97 of 100:
+`7_0dw_2` 3 captured, `7_0dw_1` 14), a win 58 decisions; 1:0x45 300 of 300 with no heart lost. Three rounds end at
+84.7-86.3% with 24-26 captures in 300 (the standard error of 300 episodes at 86% is 2 points): at a weight of 0.05
+the rule's labels do not move what the policy does when it draws its actions.
+
+**Round 4, the same rows at 0.2: fewer `no-damage` endings, as many captures.** Accuracy on the rows 89% to 96%
+(loss 0.42 to 0.12). 7:0x0d 265 of 300, the most of the four, with 4 `no-damage` where the others had 15-22 and 30
+captured where they had 24-26 (by state 83, 90 and 92 of 100; `7_0dw_0` 13 captured and 4 `no-damage`), a win 67
+decisions; 1:0x45 300 of 300 with no heart lost, 17 decisions at the median (21 before): the rule's short steps
+did not spread there.
+
+**`r76-wall-4` depends on how its actions are drawn; `r76-wall-1` does not.** `--measure 100 --policy` draws from
+the joint action at temperature 0.5 (round 25's sampler), without the stall rule. `r76-wall-1` plays the same
+under it as in its evaluation (267 of 300 against 259). `r76-wall-4` does not: **40 of 300**, 174 `exit-wrong` (out
+through the W doorway), 64 captured, 11 `stuck`, against 265 of 300 in its `eval.json`. Not explained by a
+measurement; the likely cause (inferred) is the clone's free durations: a kind whose duration head was left flat
+(WAIT, the rows without a duration) loses weight when the joint is tempered, a kind with a sharp one gains, so the
+sampler walks where the act rule waits. Whatever the cause, the run's play rests on one way of drawing, and other
+act modes (the planner's) were not measured.
+
+**Recommended: `wallmaster/r76-wall-1`** (PPO alone on the fixed objective): 7:0x0d 259 of 300 (86.3%), 26
+captured (8.7%), 15 `no-damage`, 0.27 hearts gained a visit; 1:0x45 300 of 300, no heart lost, as `r71-e`. It has
+the fewest captures but `r76-wall-3`'s 24, needs no demonstration, and plays the same under both ways of drawing
+that were measured. `r76-wall-4` wins six more episodes in 300 in the evaluation (within noise), with 4 `no-damage`
+endings against 15 (the clock's state; its clocks were not counted under the act rule) and four more captures, and
+is the alternative only if a chain says so.
+
+**The target is not reached**: 80% is (84.7-88.3% in all four runs), captures under 5% are not (8.0-10.0%). The
+rule shows the room can be played without a capture (0 in 300), and four rounds did not make the policy play it:
+cloning at 0.05 did not change its play, at 0.2 it changed the clock and not the captures. Not tried: the capture's
+price in the reward (a capture ends the episode as any hard failure; in a chain it costs the whole way back from
+0x79), the rule's labels made sound on the ring outside the C (there the rule walks toward the W column whatever
+comes along it), a model of its own for the room, the way out W and back for a clock taken.
+
+decisions), 1:0x45 300 of 300 with no heart lost. The policy knows the rule's answer in the rule's states and does
+not visit them: it plays its own, faster fight, and is caught there (round 25 §5 again). A higher weight would not
+change which states it visits, so round 3 adds DAgger rows instead (`r76-wall-2` plays, the rule labels).
+
+## 15. The first team for Dungeon 7
+
+### The team's starting point: the first chains (`r76t1-1k`)
+
+The team as integrated (r26 at `20c8f69`: the bomb rule, the Wallmaster objective fixes): goriya `r76-goriya3` (§13),
+wallmaster `r76-wall-1` (§14; `r76-wall-2` played the room the same, 258 of 300), ow-leever, ow-zora, ow-moblin,
+boss-digdogger and boss-aquamentus `r76-b`, dodongo-crossing and equipment-room `r76-c` (the first rounds of the
+team), the rest round 25's converted runs. 1000 runs a segment, clips on, `--act model` (`SEGMENTS="post-d5:0_0bc_0
+d7:7_79s_0" RUNS=1000 ACT=model TAG=r76t1-1k scripts/experiments/r56_chains.sh`):
+
+| segment | arrived | the D7 triforce |
+|---|---:|---:|
+| `post-d5` (0:0x0b → 7:0x79) | 924 (92.4%) | 97 (9.7%) |
+| `d7` (7:0x79 → the triforce) | | **263 (26.3%)** |
+
+The step from `r76bombs-1k-d7` (2 of 1000; that chain played wallmaster `r71-e` and dodongo-crossing `r74-d5boss`) is
+two rooms. 7:0x0d no longer sends runs back to the entrance (283 of 327 leave by the cellar, 34 wrong exits, 5
+deaths), and what follows it is played (the cellar 283 of 283, 0x29 269 of 283, Aquamentus 263 of 269, the triforce
+room 263 of 263). 7:0x0c with dodongo-crossing `r76-c` is crossed in 18 steps for 0.03 hearts (3 deaths of 330),
+where `r74-d5boss` took 127 steps and 2.54 hearts (116 deaths of 299, at the same 4.67 hearts on entry). The
+segment's deaths, first visits (`d7`, 1000 runs; hearts on entry in brackets): **7:0x1b 367 of 745 (3.87)**, 0x1a
+from the cellar 89 of 837 (4.52), 0x19 63 of 960 (5.67), 0x1a from W 49 of 897, 0x1c 48 of 378 (4.53), 0x38 29 of
+1012 (7.09), 0x18 23, 0x29 14, the candle cellar 12, 0x59 11. Runs from the leg arrive at 7:0x79 with 7.87 hearts,
+not the start state's 11 (0x34's woken Armos costs 2.04 hearts a visit), and take the triforce at 97 of 924
+(10.5%); they enter 0x1b with 3.00 hearts and lose 307 of 457 there. So goriya decides the segment, then
+boss-digdogger's 0x1c and wallmaster's captures; dodongo-crossing is not continued.
+
+### The arrow shop: 0:0x44 entered at X 128
+
+In the first team's leg chain (`r76a-1k-post-d5`, 1000 runs, clips on) 64 runs end `missed` ("left (0, 0x44) without
+the arrows"), all at step 217 (0x44 from S, objective: the shop's cave) and all after 0x54 crossed by the clips way
+(E → N). The shop itself and the way out are not the problem: every run that goes in buys the arrows (933 of 933)
+and 924 of them leave N. A 150-run diagnostic with replays (`--from 0_0bc_0 --stop-at 0:0x34`) misses on the same
+seeds (55, 110, 111, 142 and 147): Link walks straight up column X 128 and on N into 0x34, past the fork at Y 85
+where the runs that buy turn W to the cave mouth (X 64, Y 77). What decides it is where he enters: the seed states
+`0_44s_0..2` were built on the plain way and start at X 112, 112 and 120, while the clips way enters at X 128 in 70
+of 147 runs. At 112 and 120 none of 72 runs misses; at 128 5 of 75 do. ow-zora never trained from X 128 (it is 99-100%
+on the seed states in single rooms).
+
+The fix is a start of its own: `scripts/experiments/r26_arrow_states.py REPLAY_DIR OUT` cuts the pre-entry state of
+that entry out of chain replays at X 128 (the frame before the room entry, as `eval-chain --harvest` saves a
+handoff, which this entry is not: 0x54 and 0x44 are both ow-zora's), 75 states from the diagnostic's replays, written
+as harvested states (`triforce/states/harvested/ow-zora/0_44s_h<seed>_0.state`, not committed), and ow-zora draws
+them at `harvested_fraction: 0.03` (about the share of its three seed states of 0x44 from S among its 105).

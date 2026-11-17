@@ -18,12 +18,18 @@
 //! One rule for every item, in [`CheatLedger::settle`] order:
 //! - every fall of the count is a use (`used`); a fall while some of the count is granted uses the grant first:
 //!   those units are *cheated* uses (`cheated`; a grant merely given never counts);
-//! - a natural rise (a pickup) repays the grant unit for unit (the count keeps them, as natural ones);
+//! - a natural rise (a pickup) leaves the grant alone (F173): the grant is still used first;
 //! - leaving the room takes back what is still granted (never natural units);
 //! - in the room Link is in now, a count below the need is topped up to it (the new top-up is granted).
 //!
 //! The env writes the new counts with `Session::apply_ram` and carries the rebuilt state on (mask, observation);
 //! the action's `Change` keeps what the action itself did, so a grant is never a pickup to the critic.
+//!
+//! A granted bomb opens the wall and does nothing else (round 26): where the bomb is for something it opens
+//! ([`bomb_opens`]: every `requires_bombs` room but Dodongo's, whose bomb is the weapon), the envs offer BOMB only
+//! in reach of what the objective leaves through while a grant is outstanding ([`CheatLedger::granted`];
+//! `env::config::ItemsConfig::bomb_targets`), in every bomb mode and on the 10th kill too.  So a cheated bomb in
+//! such a room is always a bomb laid at the route's wall.
 
 use std::ops::{AddAssign, Index, IndexMut};
 use std::sync::Arc;
@@ -156,9 +162,19 @@ fn rupee_need(map: &GameMap, state: &GameView) -> i32 {
     if pending || done { 0 } else { i32::from(map.requires_rupees(room)) }
 }
 
+/// Whether `room` is `requires_bombs` for something a bomb opens, whatever its state now: an overworld room with a
+/// `bomb_secret` rock wall, a dungeon room with a bomb wall.  Not a room that needs its bomb as the weapon (Dodongo's
+/// 2:0x0e: no wall).
+pub fn bomb_opens(map: &GameMap, room: MapLocation) -> bool {
+    map.requires_bombs(room)
+        && map.get(room).is_some_and(|info| {
+            if room.level == 0 { info.bomb_secret.is_some() } else { info.exits.values().any(|e| e.bomb_wall) }
+        })
+}
+
 /// 1 in a `requires_bombs` room while it still has something the route bombs: an overworld room's secret rock wall
 /// still closed, a dungeon room's bomb walls not all open (a room with none, Dodongo's, always needs its bomb).
-fn bomb_need(map: &GameMap, state: &GameView) -> i32 {
+pub fn bomb_need(map: &GameMap, state: &GameView) -> i32 {
     let room = state.full_location();
     if !map.requires_bombs(room) {
         return 0;
@@ -527,6 +543,49 @@ mod tests {
         let s = l.settle(SOUTH, NONE, of(4, 0, 0));
         assert_eq!(s.set, set(None, None, None), "nothing left to take back");
         assert_eq!((l.used.bombs, l.cheated.bombs), (1, 1));
+    }
+
+    /// Round 26, a bomb-wall room entered with no bombs (7:0x19, its E wall the only one): the granted bomb laid at
+    /// the wall is one cheated bomb; while its fuse burns the wall is still shut, so the floor re-arms; once the
+    /// wall is open the room needs none, and the re-armed bomb, which the envs never offered anywhere, is taken back
+    /// on leaving: one cheated bomb for the wall, and Link leaves with none.  (A room with a second bomb wall the
+    /// route never opens, 7:0x69's W, keeps its need: the same, the bomb in hand is taken back on leaving.)
+    #[test]
+    fn a_grant_spent_at_the_wall_is_one_cheated_bomb() {
+        const WALL: MapLocation = MapLocation::new(7, 0x19, false);
+        const NEXT: MapLocation = MapLocation::new(7, 0x1a, false);
+        let mut l = CheatLedger::default();
+        assert_eq!(l.reset(WALL, BOMB, of(0, 5, 0)).set.bombs, Some(1));
+        let s = l.settle(WALL, BOMB, of(0, 5, 0));
+        assert_eq!((s.used.bombs, s.cheated.bombs, s.set.bombs), (1, 1, Some(1)), "laid; the fuse burns: re-armed");
+        assert_eq!(l.settle(WALL, NONE, of(1, 5, 0)), CheatStep::default(), "the wall is open: no need");
+        assert_eq!(l.granted(CheatItem::Bombs), 1, "the re-armed bomb waits, granted");
+        let s = l.settle(NEXT, NONE, of(1, 5, 0));
+        assert_eq!((s.set.bombs, s.left_with.bombs), (Some(0), Some(0)), "taken back on leaving");
+        assert_eq!((l.used.bombs, l.cheated.bombs), (1, 1));
+        // Entered with the wall open (the way back): no need, no grant.
+        let mut l = CheatLedger::default();
+        assert_eq!(l.reset(WALL, NONE, of(0, 5, 0)), CheatStep::default());
+        assert_eq!(l.granted(CheatItem::Bombs), 0);
+    }
+
+    /// [`bomb_opens`] on game.yaml: every `requires_bombs` room is bombed for something it opens (a dungeon bomb
+    /// wall, an overworld rock wall) but Dodongo's 2:0x0e, where the bomb is the weapon; an untagged room is none.
+    #[test]
+    fn every_requires_bombs_room_but_dodongos_has_something_to_open() {
+        let map = GameMap::builtin();
+        let weapon: Vec<MapLocation> = map
+            .rooms()
+            .keys()
+            .copied()
+            .filter(|&room| map.requires_bombs(room) && !bomb_opens(&map, room))
+            .collect();
+        assert_eq!(weapon, [DODONGO]);
+        for (level, room) in [(0, 0x2c), (0, 0x67), (3, 0x5b), (3, 0x4c), (3, 0x4d), (5, 0x66), (7, 0x69), (7, 0x1a)] {
+            assert!(bomb_opens(&map, MapLocation::new(level, room, false)), "{level}:{room:#04x}");
+        }
+        assert!(!bomb_opens(&map, SOUTH), "2:0x1e is no requires_bombs room");
+        assert!(!bomb_opens(&map, MapLocation::new(7, 0x1b, false)), "7:0x1b's W wall is how the route comes in");
     }
 
     /// Items are independent: a bomb room that is also a key room grants both and counts each separately.
