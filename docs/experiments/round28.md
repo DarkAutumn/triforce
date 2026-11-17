@@ -763,7 +763,8 @@ TAG=r78t4-1k scripts/experiments/r28_d8_baseline.sh report
   `r78t4-darknut` 6.2%; paired against it **+19.2 ± 1.5 points**); the checkpoints climb with training (12.2% at
   it10592, 23-26% from it10892). Chosen `it010922`, not applied.
   `r78-dark-s83`: the screen's winner is `last`, confirmed **21.6%** (`r78t4-darknut` 6.2%, +15.4 ± 1.5).
-- **Not done when this was written** (the jobs wait in the line): `select-checkpoint` of the other four runs on `d8`
+  `r78-dark-s82`: `it010982`, confirmed **24.8%** (`last` 23.0%; +18.6 ± 1.5).
+- **Not done when this was written** (the jobs wait in the line): `select-checkpoint` of arm B's three runs on `d8`
   (`--from 8_7es_0 --route d8 --runs 1000 --first-seed 2000 --confirm 1000`: screen seeds 2000-2999, confirmation
   3000-3999, so the chains of record on seeds 0-999 stay fresh), the chosen run's `d3` and `d5` segments paired with
   the two rows above, and the chains `r78-dark-1k` against `r78t4-1k`. Nothing promoted; the bar (the lead): `d5` and
