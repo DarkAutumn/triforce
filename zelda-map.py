@@ -161,7 +161,7 @@ SEGMENTS = tuple(scope.name for scope in STAT_SCOPES if scope.kind in ('segment'
 SEGMENT_LABELS = {'to-d2': 'To D2', 'to-d1': 'To D1', 'to-d3': 'To D3', 'to-d4': 'To D4', 'to-d5': 'To D5',
                   'to-d7': 'To D7', 'd2': 'D2 alone', 'd1': 'D1 alone', 'd3': 'D3 alone', 'd4': 'D4 alone',
                   'd5': 'D5 alone', 'd7': 'D7 alone', 'to-d6': 'To D6', 'd6': 'D6 alone', 'to-d8': 'To D8',
-                  'd8': 'D8 alone'}
+                  'd8': 'D8 alone', 'to-d9': 'To the end', 'd9': 'D9 alone'}
 SCOPE_TABLE = ('Scope', 'Runs', 'Visits', 'Reach', 'Death', 'Stuck', '♥ ±/v', 'Clips/v')
 ZOOM_STEP = 1.15           # per wheel notch
 MAX_SCALE = 8.0            # 8x the NES pixels

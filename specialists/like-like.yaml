@@ -1,11 +1,14 @@
 name: like-like
 rooms: ['(4, 0x32)', '(6, 0x1d)', '(9, 0x14)', '(9, 0x51)', '(9, 0x41)', '(9, 0x03)']
-start_states: ['4_32*_[0-9]', '6_1d*_[0-9]']
+start_states: ['4_32*_[0-9]', '6_1d*_[0-9]', '9_14*_[0-9]']
 success: [exit-correct]                    # down the stairs to the ladder cellar; on the way back, W
 reward_profile: default
 reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20}}   # dungeon family (round 10 §8): dropped items are shaping targets; round 25: hearts priced by their worth to the run
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
-ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chains arrive with partial hearts (round 5)
+# room_kills (round 29, as wizzrobe's): half the resets into 9:0x14, whose five Like-Likes must die for its exit,
+# bank 1-4 of them before the entry, so the game makes fewer (training only; one at least is left).
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9],
+                    room_kills: {'(9, 0x14)': [1, 4]}, room_kills_share: 0.5}
 items: {bombs: tenth}                      # only the 10th damage-free kill's bomb (arms a forced bomb drop)
 clips: true                                # round 29: the block clip of 9:0x03 to its stairs (half the episodes without: the fight and the push)
 curriculum: {enabled: true}             # trajectories/like-like (Go-Explore paths per start state)

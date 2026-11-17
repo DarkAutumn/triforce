@@ -458,3 +458,83 @@ Left open by the step itself:
 - No `VERSION` change was made. One is due with the merge by the repository's rule: `REV` +1 (new masks and
   objectives; no observation or action change, every model loads). Rounds 27 and 28 owe the same bump; one covers
   all three if they merge together.
+
+## 9. The states step (in progress): the clips way and the start states of steps 297-332
+
+Round 28's branch (Dungeon 8's states `8_2cs_0..2`, its tools) and `r26` (demonstration rows in host memory,
+`train_round.py` reads `--iterations` in `--train-args`) were merged first.
+
+**The clips way** (decisions 2026-11-17, answer 11: clips on is the owner's primary way). `d9` is now 358 steps
+(297-357). The clip rooms 0x55, 0x07 (first visit), 0x20 (from N) and 0x03 stay one step each, the switch deciding
+in the room (as 5:0x64). What differs after a clip are three steps, each now a one-step `stretch:` whose two ways
+leave the room by the same exit: `ring-07` (325 clips: 0x07 out of the ring cellar, full; 326 plain: `banked_kills:
+5`), `arrow-20` (338 clips: 0x20's first visit crossed to its wall; 339 plain: `treasure: clear`), `arrow-20n` (343
+clips: 0x20 from N, full, `CLIP` to the stairs; 344 plain: `banked_kills: 15`). No other step after a clipped room
+differs (0x55 and 0x03 are never entered again; 0x07's and 0x20's bomb reserves are the same on both ways). A
+stretch's two steps share one visit and one state name, and a start's kept kills follow its switch
+(`objectives::start_banked_kills(.., clips)`; the env decides the switch before it loads such a state, the chain
+passes its own). wizzrobe, lanmola and like-like have `clips: true`, not scoped to rooms.
+
+- `crates/zelda/tests/d9.rs` walks both ways (8 tests green). Plain: 2,334 actions, 25,471 frames from the D8
+  triforce, no CLIP, every block room fought, the kills kept as before. Clips: 2,262 actions, 24,886 frames, eight
+  CLIPs in 0x55, 0x07 (first visit), 0x20 (out of the ring on the first visit, into it from N), 0x03, and on two
+  crossings where the objective's path takes a skip, 0x51 (like-like, through its rows of blocks) and 0x04
+  (wizzrobe, out of the tunnel's ring): unscoped clips, as the owner said. 0x07's return leaves its ring without a
+  clip. The two walks pin the monsters, so their hearts are not a measure.
+- **d2first.** The only file outside level 9's data that a `d2first` room reads is like-like's yaml (4:0x32).
+  `r26_clip_scan.py` finds no CLIP offered in 4:0x32 (from W, from its cellar), 6:0x1d or any Dungeon 6 Wizzrobe
+  room. The 300-run identity chain on this build (`target/r29-identity/clipsway.jsonl`, against the vocabulary
+  step's `after.jsonl` by `r27_identity.py`) was queued and had not run when this section was written.
+
+**Start states, built along the clip way** (`build` follows it; a state serves both ways), chains 0-2, no fight
+skipped:
+
+```bash
+D=target/entry-states/r29-d9
+python -m triforce.entry_states build --route d9 --start-step 296 --last-step 317 --chains 0,1,2 \
+    --source "triforce/states/8_2cs_{chain}.state" --out $D/c1 && python -m triforce.entry_states install $D/c1
+python scripts/experiments/r29_demos.py like-like-14 --runs 10 --harvest $D/h14     # 9_15w: 30 of 30 won, 0 hearts
+python -m triforce.entry_states install $D/h14
+python -m triforce.entry_states build --route d9 --start-step 318 --last-step 330 --chains 0,1,2 \
+    --source "triforce/states/9_15w_{chain}.state" --out $D/c2 && python -m triforce.entry_states install $D/c2
+python scripts/experiments/r29_demos.py patra-16 --runs 10 --harvest $D/h16         # 9_06s: 30 of 30, 1.51 hearts
+python -m triforce.entry_states install $D/h16
+python -m triforce.entry_states build --route d9 --start-step 331 --last-step 332 --chains 0,1,2 \
+    --source "triforce/states/9_06s_{chain}.state" --out $D/c3 && python -m triforce.entry_states install $D/c3
+python -m triforce.entry_states audit --route d9        # 976 states, no problem (69 MISSING: steps 333-357)
+```
+
+- The explorer did every crossing and both clips it met (0x55 and 0x07 by `CLIP`, 0x07's return past its five
+  Wizzrobes with the ring), the heart cave (15 containers from `0_47c` on), the ring cellar and every bomb wall;
+  the two fights on the way were played by the rules (`r29_demos.py --harvest`, now from installed states):
+  0x14's Like-Likes (its E key door: keys 3 → 2) and 0x16's Patra (its four bombs and its N key door: 2 → 1).
+- **What they hold**: the bombs Dungeon 8's states brought (7 / 6 / 6), one a wall (0:0x05, 0x65, 0x26, 0x27,
+  0x17), chain 2 four more from a drop in 0x07's return, then 0x16's four (capped at 8 on chain 2). The audit's
+  monster count now leaves the people of a room out (types $4B-$52: 0x66's old man leaves for the eight pieces,
+  0x06's stands).
+
+| Step | State | Way | Family | Hearts / containers | Bombs (chains 0 / 1 / 2) | Keys | Rupees |
+|---:|---|---|---|---|---|---|---|
+| 297-302 | `0_6dc` .. `0_47cave` | | the leg | 14 / 14 | 7 / 6 / 6 | 3 | 33 / 37 / 32 |
+| 303-311 | `0_47c` .. `0_05e` | | the leg | 15 / 15 | 7 / 6 / 6 | 3 | 33 / 37 / 33 |
+| 312-314 | `9_76s`, `9_66s`, `9_65e` | | | 15 / 15 | 6 / 5 / 5 | 3 | 33 / 37 / 33 |
+| 315-317 | `9_55s`, `9_60cave`, `9_14c` | | | 15 / 15 | 5 / 4 / 4 | 3 | 33 / 37 / 33 |
+| 318-320 | `9_15w`, `9_16w`, `9_26n` | | | 15 / 15 | 5 / 4 / 4 | 2 | 33 / 37 / 33 |
+| 321 | `9_27w` | | patra | 15 / 15 | 4 / 3 / 3 | 2 | 33 / 37 / 33 |
+| 322 | `9_17s` | | wizzrobe | 15 / 15 | 3 / 2 / 2 | 2 | 33 / 37 / 33 |
+| 323-324 | `9_07s`, `9_00cave` | | | 15 / 15 | 2 / 1 / 1 | 2 | 33 / 37 / 33 |
+| 325 / 326 | `9_07c` | clips / plain | wizzrobe | 15 / 15 | 2 / 1 / 1 | 2 | 33 / 37 / 33 |
+| 327-330 | `9_17n`, `9_27n`, `9_26e`, `9_16s` | | | 15 / 15 | 2 / 1 / 5 | 2 | 33 / 37 / 33 |
+| 331 | `9_06s` | | stalfos-keese-gel | 15 / 15 | 6 / 5 / 8 | 1 | 33 / 37 / 33 |
+| 332 | `9_05e` | | wizzrobe | 15 / 15 | 5 / 4 / 7 | 1 | 33 / 37 / 33 |
+
+All hold the magic sword, the wooden arrow, eight pieces; the red ring from `9_07c` on.
+
+**Still to build** (steps 333-357; the commands go on as above): `r29_demos.py wizzrobe-05 --harvest` (→
+`9_70cave`), build 333-336, `patra-61 --harvest` (→ `9_75cave`), build 337-340, `wizzrobe-10 --harvest` (→
+`9_4fcave`), build 341-350, `wizzrobe-30 --harvest` (→ `9_67cave`), build 351-355, `patra-52 --harvest` (→
+`9_42s`), `ganon --harvest` (→ `9_32s`). Until then the family files list only the states that exist (ganon none:
+`trainable: false`; lanmola and patra `trainable: true`, warm starts moldorm, moldorm, boss-gohma), and the
+curricula (`scripts/experiments/r29_d9_curricula.sh`), the rules from real states, the proof trainings and the
+baseline (`scripts/experiments/r29_d9_baseline.sh`, the segments `post-d8:0_6dc_0` and `d9:9_76s_0` in
+`eval_batch.D9_SEGMENTS`, `r56_chains.sh`, room-stats scopes `to-d9`, `d9`) have not run.

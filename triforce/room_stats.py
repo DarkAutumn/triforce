@@ -25,6 +25,8 @@ scope (``SCOPES``):
   Dungeon 7 -> the D6 triforce, and Dungeon 6 alone.
 - ``to-d8``, ``d8`` (round 28, the scouting route ``d8``, whose files are ``post-d6`` and ``d8``): 0:0x22 out of
   Dungeon 6 -> the D8 triforce, and Dungeon 8 alone.
+- ``to-d9``, ``d9`` (round 29, the scouting route ``d9``, whose files are ``post-d8`` and ``d9``): 0:0x6d out of
+  Dungeon 8 -> the end of the game, and Dungeon 9 with Ganon and Zelda alone.
 - ``room``: the single-room evaluations (``triforce.evaluate``, ``visited_rooms``) of the models the chains played
   (each in its chain act mode), merged per room weighted by visits.  Here a run is an isolated episode that entered
   the room: ``death_rate`` = such episodes that died in it / such episodes.
@@ -134,6 +136,8 @@ SCOPES = (
     Scope('d6', 'dungeon', 'Dungeon 6: 6:0x79 → the D6 triforce', 'd6', '6_79s_0', None),
     Scope('to-d8', 'segment', 'To D8: 0:0x22 → the D8 triforce', 'post-d6', '0_22c_0', None),
     Scope('d8', 'dungeon', 'Dungeon 8: 8:0x7e → the D8 triforce', 'd8', '8_7es_0', None),
+    Scope('to-d9', 'segment', 'To the end: 0:0x6d → the end of the game', 'post-d8', '0_6dc_0', None),
+    Scope('d9', 'dungeon', 'Dungeon 9: 9:0x76 → the end of the game', 'd9', '9_76s_0', None),
 )
 ROOM_SCOPE = 'room'
 ROOM_LABEL = 'Room only: isolated single-room evaluations'

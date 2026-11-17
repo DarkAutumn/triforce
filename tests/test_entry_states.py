@@ -72,7 +72,7 @@ def test_configured_start_states_are_clean():
         index = indexes.setdefault(route, entry_states.RouteIndex(route))
         problems[os.path.basename(path)] = audit_problems(audit_state(game, path, loads=2, full=full, index=index))
     assert {name: found for name, found in problems.items() if found} == {}
-    assert set(indexes) == {DEFAULT_ROUTE, 'd6', 'd8'}
+    assert set(indexes) == {DEFAULT_ROUTE, 'd6', 'd8', 'd9'}
 
 
 def test_every_shipped_state_but_start_has_a_manifest_entry():

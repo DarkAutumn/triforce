@@ -23,6 +23,9 @@
 #   (round 28, the scouting route d8: ROUTE=d8 SEGMENTS="post-d6:0_22c_0 d8:8_7es_0")
 #   post-d6  0_22c_0   8:0x7e (Dungeon 8's entrance: the whirlwind out of 0x22, the walk to 0x6d, the burned tree)
 #   d8       8_7es_0   the D8 triforce
+#   (round 29, the scouting route d9: ROUTE=d9 SEGMENTS="post-d8:0_6dc_0 d9:9_76s_0")
+#   post-d8  0_6dc_0   9:0x76 (Dungeon 9's entrance: the whirlwind out of 0x6d, 0x47's heart cave, 0x05's rock wall)
+#   d9       9_76s_0   the end of the game (Ganon, Zelda: the first frame of game mode $13)
 #
 # The route ended on the D5 triforce until round 26: a full run to there is the milestone `full→post-d5` of the
 # report, or a chain of its own, `triforce eval-chain --stop-at step:209 ...` (0:0x0b out of Dungeon 5).

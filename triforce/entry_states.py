@@ -87,8 +87,10 @@ START_STATE = 'start'
 # later (asm:Boulder_UpdateSpawner).  Hazards (the spawner, $1F = decimal 31 = game.yaml 'Unknown_31', Bubbles, traps)
 # are not enemies at all: a state's enemy list leaves them out (zelda's object classifier, review F067); nor are
 # persons, such as Dungeon 7's Grumble Goriya in 7:0x28 ($36 = decimal 54, game.yaml 'Unknown_54'; round 26).
+# Round 29: the people of a dungeon room (object types $4B-$52, game.yaml `Unknown_75`..`Unknown_82`: 9:0x66's old
+# man, who leaves for the eight pieces; 9:0x06's, who stands and is no monster) are not counted either.
 NOT_ROOM_MONSTERS = ('Zora', 'Unknown_32', '32', 'Unknown_31', 'Bubble', 'BlueBubble', 'RedBubble', 'Trap',
-                     'Unknown_54')
+                     'Unknown_54') + tuple(f'Unknown_{t}' for t in range(0x4B, 0x53))
 BASE_HEARTS = 3                      # Link's containers at the start; each heart container on the route adds one
 
 # RAM (docs/ram-catalog.md; zelda::room_entry, zelda::room_state).

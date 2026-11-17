@@ -1,7 +1,7 @@
 name: ganon
 rooms: ['(9, 0x42)', '(9, 0x32)']
-start_states: []                           # round 29: the stretch's states are the next step (9_42s, 9_32s)
-trainable: false                           # until it has start states
+start_states: []                           # 9_42s, 9_32s: round 29's states step, still to harvest (round29.md)
+trainable: false                           # true once 9_42s and 9_32s are harvested (round 29's states step, not yet: round29.md)
 success: [exit-correct, game-completed]    # 0x42: N with the Triforce of Power; 0x32: the game ends (the first frame of game mode $13)
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # as boss-gohma (round 27)
@@ -11,7 +11,7 @@ items: {bombs: never, arrows: true}        # nothing of his is hurt by a bomb; A
 curriculum: {enabled: true}             # trajectories/ganon, once explored
 one_room: true
 max_steps: 900
-warm_start: null
+warm_start: boss-gohma                     # round 29: a first training starts from boss-gohma's promoted run (the arrow's rule, a boss fought by sword and one arrow)
 notes: >-
   Ganon and Zelda (Dungeon 9's 0x42 and 0x32, round 29, route `d9`; docs/routes/d9.md "as built",
   d9-fights-walks.md §4-5). 0x42 from its S shutter: Link is halted 272 frames by the scene, both doors shut. Ganon
