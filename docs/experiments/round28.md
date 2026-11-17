@@ -713,7 +713,7 @@ TAG=r78t4-1k scripts/experiments/r28_d8_baseline.sh report
   (600 wrong exits; `r78t4-lynel` 600 of 600) and ow-moblin `r77-b` the tree 0 of 600 (`r78t4-moblin` 599 of 600).
 - **Not done**: a second darknut round (0x5e's and 0x3e's hearts).
 
-## 15. Darknut continued with Dungeon 8's hearts priced (Nov 17-18; chains of choice still queued)
+## 15. Darknut continued with Dungeon 8's hearts priced (Nov 17-18): `r78-dark37-s85` kept
 
 - **The branch** merges `r26` (the bomb rule, Dungeon 7's heart fit; `bomb_targets` now takes the route step's own
   items, the reserve and the granted bombs), takes round 27's `f35db65` as it is (`HeartValues::prices`: a table
@@ -758,19 +758,34 @@ TAG=r78t4-1k scripts/experiments/r28_d8_baseline.sh report
   Pricing Dungeon 8's hearts moved every seed the same way: 0x3e 68.7% → 81-84% at about 2 hearts less a visit,
   0x5e 4 points up and 1 heart less. Arm B keeps 0x37's column (0.06-0.11 hearts against 0.23-0.36 in arm A). The
   Dungeon 3 rooms are unchanged in all six.
-- **The first selection** (`r78-dark-s81`, `d8`, 17 candidates on seeds 2000-2999, confirmed on 3000-3999): the
-  D8 triforce from Dungeon 8's entrance in **25.4%** of the confirmation's runs with `it010922` (`last` 24.9%,
-  `r78t4-darknut` 6.2%; paired against it **+19.2 ± 1.5 points**); the checkpoints climb with training (12.2% at
-  it10592, 23-26% from it10892). Chosen `it010922`, not applied.
-  `r78-dark-s83`: the screen's winner is `last`, confirmed **21.6%** (`r78t4-darknut` 6.2%, +15.4 ± 1.5).
-  `r78-dark-s82`: `it010982`, confirmed **24.8%** (`last` 23.0%; +18.6 ± 1.5).
-  `r78-dark37-s85` (arm B): `it011042`, confirmed **27.8%** (`last` 23.1%; +21.6 ± 1.6), the best so far.
-- **`r78-dark-s81` `it010922` on `d5`** (seeds 0-999, paired with the table above): 652 of 1000, against
-  `r75-d537-c5` **-1.3 ± 2.1** (within noise) and against `r78t4-darknut` +10.2 ± 2.1; 0x37 deaths 35 (21 and 56),
-  the Olive Garden 1.71 hearts a visit (1.63 and 2.12). Pricing Dungeon 8's hearts gave most of Dungeon 5 back
-  without the 0x37 rows. Its `d3` chain is queued.
-- **Not done when this was written** (the jobs wait in the line): `select-checkpoint` of arm B's three runs on `d8`
-  (`--from 8_7es_0 --route d8 --runs 1000 --first-seed 2000 --confirm 1000`: screen seeds 2000-2999, confirmation
-  3000-3999, so the chains of record on seeds 0-999 stay fresh), the chosen run's `d3` and `d5` segments paired with
-  the two rows above, and the chains `r78-dark-1k` against `r78t4-1k`. Nothing promoted; the bar (the lead): `d5` and
-  `d3` not worse than `r75-d537-c5` beyond noise, `d8` better than `r78t4-darknut`.
+- **Chosen by chains** (`select-checkpoint darknut RUN --from 8_7es_0 --route d8 --runs 1000 --first-seed 2000
+  --confirm 1000`: every checkpoint screened on seeds 2000-2999, the winner, `last` and the promoted run confirmed on
+  3000-3999). The D8 triforce from Dungeon 8's entrance, confirmation:
+
+| Run | Arm | Chosen | Confirmed | `last` | vs `r78t4-darknut` (6.2%) |
+|---|---|---|---:|---:|---:|
+| `r78-dark-s81` | A | `it010922` | 25.4% | 24.9% | +19.2 ± 1.5 |
+| `r78-dark-s82` | A | `it010982` | 24.8% | 23.0% | +18.6 ± 1.5 |
+| `r78-dark-s83` | A | `last` | 21.6% | 21.6% | +15.4 ± 1.5 |
+| `r78-dark37-s84` | B | `it011012` | 25.1% | 19.8% | +18.9 ± 1.5 |
+| `r78-dark37-s85` | B | `it011042` | **27.8%** | 23.1% | **+21.6 ± 1.6** |
+| `r78-dark37-s86` | B | `last` | 25.4% | 25.4% | +19.2 ± 1.5 |
+
+  Every seed of both arms is about four times `r78t4-darknut`; the checkpoints climb with training (s81: 12.2% at
+  it10592, 23-26% from it10892).
+- **Dungeons 3 and 5** for the best of each arm (`--only LABEL --no-promoted`, seeds 0-999, paired with the two rows
+  of the first table):
+
+| Run | `d5` | vs `r75-d537-c5` | vs `r78t4-darknut` | `d3` | vs `r75-d537-c5` | vs `r78t4-darknut` |
+|---|---:|---:|---:|---:|---:|---:|
+| `r78-dark-s81` `it010922` | 652 | -1.3 ± 2.1 | +10.2 ± 2.1 | 683 | **-5.5 ± 2.0** | -1.4 ± 2.1 |
+| `r78-dark37-s85` `it011042` | **733** | **+6.8 ± 2.0** | +18.3 ± 2.1 | **752** | +1.4 ± 2.0 | +5.5 ± 1.9 |
+
+  With the 0x37 rule's rows the column comes back and better: 0x37 7 deaths in 761 visits at 0.14 hearts (round
+  25's 21 at 0.21, `r78t4-darknut`'s 56 at 0.73); the Olive Garden 1.50 hearts a visit (1.63, 2.12). In Dungeon 3
+  `s85` enters Manhandla's 0x4d with 4.05 hearts (3.87) and loses 134 runs there (144); `s81` loses 170 there on
+  3.71 hearts. Pricing Dungeon 8's hearts alone gave Dungeon 5 back to within noise, not Dungeon 3.
+- **Kept: `r78-dark37-s85`** with `it011042` applied (`select-checkpoint ... --report-only --apply`; its old
+  `ckpt.pt` is `checkpoints/it011050`) and promoted in this checkout. It meets the three bars: `d8` +21.6 ± 1.6 over
+  `r78t4-darknut`, `d5` +6.8 ± 2.0 and `d3` +1.4 ± 2.0 over round 25's `r75-d537-c5`. Its `eval.json` is stale
+  (the weights moved); the chains below are its measurement.
