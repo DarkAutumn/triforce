@@ -447,7 +447,8 @@ test them, keep what helps, and log everything.
   from any worktree or `--logs-dir`) registers itself in `$HOME/.local/state/triforce/jobs/` (`$XDG_STATE_HOME`;
   `$TRIFORCE_JOBS_DIR` overrides; `triforce/jobs.py`) with its folder, checkout, branch and commit, and marks the
   entry when it ends, so `training-gui.py`'s [currently running] lists every job on the machine with its checkout
-  (waiting ones as queued), and those that ended in the last 24 hours under "finished". The registry is also the
+  (waiting ones as queued), and those that ended in the last 60 minutes under "finished" (Lee, Nov 18: then they
+  leave the list by themselves, so it never piles up). The registry is also the
   line jobs wait in. `--events FILE` into a folder without a `training.json` now writes a plan there (a driver's
   folder with a plan keeps owning the stream). Not shown by the GUI (but still waiting its turn and counted): a job
   that writes no folder (`--no-log`). Invisible, and neither waiting nor counted: a job whose `--events` go into a

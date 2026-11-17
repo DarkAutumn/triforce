@@ -28,10 +28,12 @@ has waited; a running job shows its estimate beside how long it has run, and 'ex
 place.  The GUI only reads the registry, it controls nothing.  The running folders are on top, the one that began to
 run last first: a job that starts is added at the top and pushes the others down.  Then the waiting ones, in the
 order they will start.  Below the live folders, under a 'finished' heading: the folders whose training ended while
-shown, and the registered jobs (any checkout) that ended in the last 24 hours (``RECENT_SECONDS``; a job whose
+shown, and the registered jobs (any checkout) that ended in the last 60 minutes (``RECENT_SECONDS``; a job whose
 process died without ending its plan, a waiting one too, shows as 'process gone'), the one that ended last first:
-a folder that ends joins that list at its top, so nothing below the running folders ever changes places.
-'Clear finished' hides those, leaving the live ones, and trainings that start later still appear.
+a folder that ends joins that list at its top, so nothing below the running folders ever changes places.  A
+finished folder leaves the list by itself 60 minutes after it ended (after the window saw it end, for one that was
+shown live), so the list never piles up; 'Clear finished' hides them at once, leaving the live ones, and trainings
+that start later still appear.
 
 Reads ``training.json`` (the plan, rewritten atomically) and tails ``round.jsonl`` plus every ``<specialist>.jsonl``
 twice a second; see ``triforce/events.py`` for the format.  Self-contained (PEP 723 inline dependencies): it does
@@ -1161,7 +1163,7 @@ def find_log_dirs(root: Path) -> list[Path]:
 
 # The machine's job registry (``triforce/jobs.py``): every plan any checkout's jobs started, one JSON file each.
 JOBS_DIR_ENV = 'TRIFORCE_JOBS_DIR'
-RECENT_SECONDS = 24 * 3600     # finished registered jobs stay in [currently running] (under 'finished') this long
+RECENT_SECONDS = 3600          # finished jobs stay in [currently running] (under 'finished') this long, then leave
 # The line's order (as ``triforce.jobs``): a queued job's score is its estimate (seconds) minus AGING seconds per
 # second it has waited, lowest first; a job estimated at EXPRESS_SECONDS or less may also take one of EXPRESS_JOBS
 # express places besides the ``$TRIFORCE_MAX_JOBS`` regular ones.
@@ -1939,6 +1941,7 @@ def paint_sparkline(p: QPainter, rect: QRectF, points: list[tuple[float, float]]
     p.setPen(QPen(with_alpha(C.border, 255), 1, Qt.PenStyle.DotLine))
     p.drawLine(QPointF(rect.left(), rect.bottom()), QPointF(rect.right(), rect.bottom()))
     if len(points) >= 2:
+        points = thin(points, max(2, int(rect.width())))    # a point a pixel: a run's 500 iterations in 78 pixels
         x0, x1 = points[0][0], points[-1][0]
         span = (x1 - x0) or 1
 
@@ -2006,15 +2009,42 @@ class Header(Clickable):
         self.view = view
         self.setFixedHeight(138)
         self.shown = {}
+        self.settled = False        # nothing left to animate until the folder's data changes (FolderView.poll)
+        self._facts = (None, {})    # (second, registry snapshot) -> run_facts: looked up once a second, not a paint
+        self._second = None         # the second a waiting plan's header was last repainted in
 
-    def step(self):
-        """Eases each segment toward its run's progress (called every frame)."""
+    def targets(self) -> dict:
+        """Each run's bar fill now, by run index."""
         model = self.view.model
         if model is None:
-            return
+            return {}
         now = time.time()
-        for run, status in zip(model.runs, model.statuses()):
-            self.shown[run.index] = ease(self.shown.get(run.index, 0.0), run.fraction(now, status))
+        return {run.index: run.fraction(now, status) for run, status in zip(model.runs, model.statuses())}
+
+    def step(self):
+        """Eases each segment toward its run's progress (called every frame while ``animating``)."""
+        for index, target in self.targets().items():
+            self.shown[index] = ease(self.shown.get(index, 0.0), target)
+
+    def animating(self) -> bool:
+        """Is the header due a step and a repaint this frame?  Every frame while its plan runs (the shimmer and
+        stripes of its segments) or a segment still eases toward its fill; once a second while its plan waits in
+        line (only its clocks move); never once a finished folder has settled.  [currently running] keeps a day of
+        finished folders (Nov 18: 153 of them stepped and repainted 30 times a second took a whole core)."""
+        model = self.view.model
+        if model is None or self.settled:
+            return False
+        status = model.status()
+        if status == 'running':
+            return True
+        if any(abs(self.shown.get(index, 0.0) - target) > 0.001 for index, target in self.targets().items()):
+            return True
+        if status == 'queued':
+            second = int(time.time())
+            due, self._second = second != self._second, second
+            return due
+        self.settled = True
+        return False
 
     def paintEvent(self, _event):
         model = self.view.model
@@ -2103,11 +2133,16 @@ class Header(Clickable):
         return waiting_text(queue, now)
 
     def facts(self, now: float) -> dict:
-        """A running plan's ``run_facts`` (its express lane, 'est ~40 min · ran 12m'); nothing for any other plan."""
+        """A running plan's ``run_facts`` (its express lane, 'est ~40 min · ran 12m'); nothing for any other plan.
+        Kept for the second and the registry snapshot it was read in: the lookup walks every registry entry, and
+        the header is painted 30 times a second while its plan runs."""
         model = self.view.model
         if model is None or model.status() != 'running':
             return {'express': False, 'est': ''}
-        return run_facts(model.dir, model.plan, self.view.owner.jobs, now)
+        key = (int(now), id(self.view.owner.jobs))
+        if self._facts[0] != key:
+            self._facts = (key, run_facts(model.dir, model.plan, self.view.owner.jobs, now))
+        return self._facts[1]
 
 
 def chain_sections(result: dict) -> list:
@@ -2207,17 +2242,23 @@ class RunRow(Clickable):
         self.view = view
         self.index = index
         self.shown = 0.0
+        self.settled = False        # nothing left to animate until the folder's data changes (FolderView.poll)
         self.setFixedHeight(self.HEIGHT)
 
     def step(self):
-        """Eases the bar toward the run's progress (called every frame)."""
+        """Eases the bar toward the run's progress (called every frame while ``animating``)."""
         self.shown = ease(self.shown, self.target())
 
     def animating(self) -> bool:
+        """While the run trains or evaluates, or its bar still eases; a settled row is not looked at again until
+        its folder's data changes."""
         model = self.view.model
-        if model is None or self.index >= len(model.runs):
+        if model is None or self.index >= len(model.runs) or self.settled:
             return False
-        return model.run_status(model.runs[self.index]) in ACTIVE or abs(self.shown - self.target()) > 0.001
+        if model.run_status(model.runs[self.index]) in ACTIVE or abs(self.shown - self.target()) > 0.001:
+            return True
+        self.settled = True
+        return False
 
     def target(self) -> float:
         """Bar fill: training progress, or episodes evaluated while evaluating."""
@@ -2912,9 +2953,11 @@ class FolderView(QWidget):
             self.rows.append(row)
         for row in self.rows:
             row.shown = 0.0
+            row.settled = False
 
     def poll(self, force: bool = False) -> bool:
-        """Reads new events; True if anything changed."""
+        """Reads new events; True if anything changed.  What changed is repainted here: the frame timer only
+        repaints what animates."""
         if self.model is None:
             self.header.update()
             return False
@@ -2923,11 +2966,19 @@ class FolderView(QWidget):
             self.rebuild_rows()
         if changed or force:
             self.chain_card.refresh()
+            self.header.settled = False
+            self.header.update()
+            for row in self.rows:
+                row.settled = False
+                row.update()
         return changed
 
     def frame(self):
-        self.header.step()
-        self.header.update()
+        """One animation frame: only what animates is stepped and repainted (a live plan's header, a run that is
+        training or evaluating, a bar still easing)."""
+        if self.header.animating():
+            self.header.step()
+            self.header.update()
         for row in self.rows:
             if row.animating():
                 row.step()
@@ -3045,7 +3096,8 @@ class Window(QMainWindow):
         self.auto_live = initial is None
         self.live_mode = False
         self.kept: list[Path] = []          # folders shown in this [currently running] session (live or finished;
-                                            # 'Clear finished' drops the finished ones)
+                                            # 'Clear finished' drops the finished ones, RECENT_SECONDS expires them)
+        self.left_live: dict[Path, float] = {}  # kept folders no longer live -> when the window first saw that
         self.live_dirs: list[Path] = []
         self.recent: list[Path] = []        # registered jobs (any checkout) that ended in the last RECENT_SECONDS
         self.cleared: set[Path] = set()     # finished folders 'Clear finished' hid (they don't come back)
@@ -3100,7 +3152,7 @@ class Window(QMainWindow):
         self.views_layout.setSpacing(18)
         self.views_layout.addStretch(1)
         # [currently running]: the live folders first, then this heading and the finished ones.
-        self.finished_heading = QLabel(f"FINISHED · LAST {RECENT_SECONDS // 3600} H", left)
+        self.finished_heading = QLabel(f"FINISHED · LAST {RECENT_SECONDS // 60} MIN", left)
         self.finished_heading.setStyleSheet(f"color: {C.muted.name()}; font-weight: 700; padding: 6px 2px 0 2px;")
         self.finished_heading.hide()
         splitter.addWidget(scrolling(left))
@@ -3199,6 +3251,7 @@ class Window(QMainWindow):
         picked stays put."""
         if self.live_mode:
             self.kept += [path for path in self.live_dirs if path not in self.kept]
+            self._expire_finished(time.time())
             self._show_live()
         elif self.auto_live:
             self._enter_live()
@@ -3207,6 +3260,13 @@ class Window(QMainWindow):
     def empty_text(self) -> str:
         """What an empty view says."""
         return 'nothing is running' if self.live_mode else f"no training logs under {self.root}"
+
+    def _expire_finished(self, now: float):
+        """Drops the kept folders that stopped being live more than ``RECENT_SECONDS`` ago (by the window's own
+        clock: a job that dies has no finish stamp, and should still be seen as 'process gone' for the hour)."""
+        ended = {path: self.left_live.get(path, now) for path in self.kept if path not in self.live_dirs}
+        self.left_live = {path: seen for path, seen in ended.items() if now - seen <= RECENT_SECONDS}
+        self.kept = [path for path in self.kept if path in self.live_dirs or path in self.left_live]
 
     def _enter_live(self):
         self.live_mode = True

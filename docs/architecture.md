@@ -886,9 +886,16 @@ every step, so following an enemy that moves away pays again, and knockback rese
   that ends joins that list at its top and nothing below the running ones changes places. Under a "finished"
   heading below the live ones: folders whose
   training ended while shown (its plan is no longer `running`, or its process is gone: `plan_is_live`) and the
-  registry's jobs that ended in the last 24 hours (`RECENT_SECONDS`; one whose process died without ending its plan
-  shows "process gone"); the "Clear finished" button hides those for the rest of the session, and trainings that
-  start later still appear. A batch folder is one group with its name and one row per evaluation: waiting,
+  registry's jobs that ended in the last 60 minutes (`RECENT_SECONDS`; one whose process died without ending its
+  plan shows "process gone"). A finished folder leaves the list by itself 60 minutes after it ended (after the
+  window saw it end, for one that was shown live: `Window._expire_finished`), so the list never piles up; the
+  "Clear finished" button hides them at once for the rest of the session, and trainings that start later still
+  appear. The 30-a-second frame timer steps and repaints only what moves (`Header.animating`, `RunRow.animating`):
+  a running plan's header and its training or evaluating rows every frame, a waiting plan's header once a second,
+  a finished folder not at all once its bars have eased to their fill (`settled`, cleared when the folder's data
+  changes: `FolderView.poll` repaints it then); a header's registry facts are looked up once a second, not in
+  every paint, and a row's sparkline draws a point a pixel. A batch folder is one group with its name and one row
+  per evaluation: waiting,
   running (the bar is the runs or episodes done of the total, from `chain_progress` / `eval_progress`), done (its
   headline: a chain's arrivals and route-end success, an evaluation's success and health change; `resumed` when an
   earlier run had measured it) or failed. Its Eval tab lists every entry's result and, for a selected entry, the
