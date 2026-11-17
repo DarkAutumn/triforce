@@ -483,8 +483,9 @@ passes its own). wizzrobe, lanmola and like-like have `clips: true`, not scoped 
   clip. The two walks pin the monsters, so their hearts are not a measure.
 - **d2first.** The only file outside level 9's data that a `d2first` room reads is like-like's yaml (4:0x32).
   `r26_clip_scan.py` finds no CLIP offered in 4:0x32 (from W, from its cellar), 6:0x1d or any Dungeon 6 Wizzrobe
-  room. The 300-run identity chain on this build (`target/r29-identity/clipsway.jsonl`, against the vocabulary
-  step's `after.jsonl` by `r27_identity.py`) was queued and had not run when this section was written.
+  room. The 300-run identity chain on this build (`triforce eval-chain --runs 300 --parallel 10 --act model`, clips
+  on, seeds 0-299, compared with the vocabulary step's `after` half by `r27_identity.py`): **300 of 300 runs
+  identical in every field of every room record** (36,579 records). `d2first` does not move.
 
 **Start states, built along the clip way** (`build` follows it; a state serves both ways), chains 0-2, no fight
 skipped:
