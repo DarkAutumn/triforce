@@ -469,6 +469,11 @@ rooms:
     Unknown_32: 2
     Zora: 1
   treasure: null
+  # Round 29 (the leg to Dungeon 9, S to N over the river): E of the river the room's top row of water (tile rows
+  # 8-9, rock above it) is no crossing, but Link pressing Up under it lays the ladder there and can then only go
+  # back down (asm:Ladder_CheckAndDraw: never sideways). The path keeps a row below it (Y $8D and down), where the
+  # ladder crosses the river W.
+  path_costs: [{cols: [14, 31], rows: [9, 9], cost: 8}]
 - level: 0
   location: '0x18'
   specialist: ow-boulder

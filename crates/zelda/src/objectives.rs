@@ -1268,6 +1268,14 @@ impl GameCompletion {
                     .map(|i| self.waypoints[i].location)
             })
             .or_else(|| self.triforce_target(state))
+            .or_else(|| self.end_target())
+    }
+
+    /// The room the route ends the game in (round 29: its `exit: end` step, 9:0x32), the target once no sword,
+    /// waypoint or triforce is left: a step that leaves by stairs (9:0x20 down to the tunnel, with the silver arrow)
+    /// is led by the way to it, as the steps before it were led to the waypoints.
+    fn end_target(&self) -> Option<MapLocation> {
+        self.map.routes[&self.route].iter().find(|s| s.on_way(self.way) && s.exit == END_EXIT).map(RouteStep::location)
     }
 
     fn sword_target(&self, state: &GameView) -> Option<MapLocation> {
@@ -2197,18 +2205,29 @@ pub fn game_ended(state: &GameView) -> bool {
 /// next room behind one: a dungeon wall, by its direction) and, when a next room is the room's cave behind a closed
 /// game.yaml `bomb_secret` rock wall, that rock wall.  Empty when the objective leaves through nothing bombable (a
 /// fight first, or another exit): a `required` family is offered BOMB only in reach of these
-/// (`env::config::ItemsConfig::bomb_targets`).
+/// (`env::config::ItemsConfig::bomb_targets`).  Round 29: the rock wall's cave may be a level's entrance (0:0x05,
+/// Dungeon 9's stairs: the next room is the level's first, which `MapLocation::direction_to` calls S of any
+/// overworld room, so it is asked first; before that fix no BOMB was offered under that wall).
 pub fn route_bomb_targets(map: &GameMap, state: &GameView, objective: &Objective) -> Vec<crate::bombs::BombTarget> {
     use crate::bombs::BombTarget;
     let here = state.full_location();
+    let cave = map.get(here).and_then(|r| r.exits.get("cave")).map(|e| e.destination);
     let mut targets = Vec::new();
     for &next in &objective.next_rooms {
+        if here.level == 0 && !here.in_cave && next.level != 0 && Some(next) == cave {
+            if state.ow_bomb_secret_closed()
+                && let Some(tile) = map.get(here).and_then(|r| r.bomb_secret)
+            {
+                targets.push(BombTarget::rock(tile));
+            }
+            continue;
+        }
         let d = map.exit_direction(here, next, state.peek(MAZE_STEP));
         if d != Direction::None {
             if state.bomb_walls().iter().any(|w| w.wall_direction == d) {
                 targets.push(BombTarget::Wall(d));
             }
-        } else if (next.in_cave || next.level != here.level)
+        } else if next.in_cave
             && state.ow_bomb_secret_closed()
             && let Some(tile) = map.get(here).and_then(|r| r.bomb_secret)
         {
