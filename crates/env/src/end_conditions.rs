@@ -2,7 +2,7 @@
 //!
 //! | ending | default class |
 //! |---|---|
-//! | `exit-correct`, `enter-room:<l>:<r>`, `triforce-collected`, `boss-dead-and-heart` | success if listed |
+//! | `exit-correct`, `enter-room:<l>:<r>`, `triforce-collected`, `boss-dead-and-heart`, `game-completed` | success if listed |
 //! | `exit-wrong`, `max-steps`, `no-room-progress`, `no-damage` | soft failure |
 //! | `death`, `wallmastered`, `stuck`, `no-progress` | hard failure |
 //! | `retreat` (the route step's `retreat` exit: 0x0a S before the white sword) | neutral |
@@ -22,6 +22,9 @@ pub const EXIT_CORRECT: &str = "exit-correct";
 pub const EXIT_WRONG: &str = "exit-wrong";
 pub const TRIFORCE_COLLECTED: &str = "triforce-collected";
 pub const BOSS_DEAD_AND_HEART: &str = "boss-dead-and-heart";
+/// The game ended (round 29): the first frame of game mode `$13`, Link in front of Zelda (`zelda::objectives::
+/// game_ended`): the success of the route's last step (`exit: end`, 9:0x32) for the family that lists it.
+pub const GAME_COMPLETED: &str = "game-completed";
 pub const DEATH: &str = "death";
 pub const WALLMASTERED: &str = "wallmastered";
 pub const STUCK: &str = "stuck";
@@ -32,7 +35,7 @@ pub const NO_DAMAGE: &str = "no-damage";
 pub const RETREAT: &str = "retreat";
 pub const ENTER_ROOM_PREFIX: &str = "enter-room:";
 
-pub const SUCCESS_KINDS: [&str; 3] = [EXIT_CORRECT, TRIFORCE_COLLECTED, BOSS_DEAD_AND_HEART];
+pub const SUCCESS_KINDS: [&str; 4] = [EXIT_CORRECT, TRIFORCE_COLLECTED, BOSS_DEAD_AND_HEART, GAME_COMPLETED];
 
 /// Central table of the other endings; successes come only from each specialist's `success` list.
 pub const DEFAULT_ENDINGS: [(&str, &str); 9] = [
@@ -158,6 +161,8 @@ pub enum EndCondition {
     GainedTriforce,
     /// Collected a heart container (it appears only after the boss dies).
     BossDeadAndHeart,
+    /// The game ended: game mode `$13` (round 29, [`GAME_COMPLETED`]).
+    GameCompleted,
     /// Room transitions: wrong exits, `enter-room` successes, leaving the family (`one_room`: any room); a maze loop
     /// (`zelda::MazeLoop`) is a wrong exit unless it is correct (`MazeLoop::correct`), when the episode goes on.
     RoomExit {
@@ -232,6 +237,7 @@ impl EndCondition {
             EndCondition::BossDeadAndHeart => {
                 (curr.max_health() > prev.max_health()).then(|| BOSS_DEAD_AND_HEART.to_owned())
             }
+            EndCondition::GameCompleted => zelda::objectives::game_ended(curr).then(|| GAME_COMPLETED.to_owned()),
             EndCondition::RoomExit {
                 rooms,
                 enter_rooms,
@@ -337,6 +343,9 @@ impl EndConditions {
         if success.iter().any(|s| s == BOSS_DEAD_AND_HEART) {
             list.push(EndCondition::BossDeadAndHeart);
         }
+        if success.iter().any(|s| s == GAME_COMPLETED) {
+            list.push(EndCondition::GameCompleted);
+        }
         list.push(EndCondition::RoomExit {
             rooms: rooms.iter().copied().collect(),
             enter_rooms,
@@ -436,6 +445,7 @@ mod tests {
                     EndCondition::Wallmastered => "wallmastered",
                     EndCondition::GainedTriforce => "triforce",
                     EndCondition::BossDeadAndHeart => "heart",
+                    EndCondition::GameCompleted => "game-completed",
                     EndCondition::RoomExit { .. } => "exit",
                     EndCondition::Timeout { .. } => "timeout",
                     EndCondition::NoRoomProgress { .. } => "no-room-progress",

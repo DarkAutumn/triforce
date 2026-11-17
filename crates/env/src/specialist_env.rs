@@ -637,7 +637,21 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         };
         let machine = self.store.load(&name)?;
         // A staged start (training only): the kills banked for the start's pending dungeon room, before its entry.
-        let banked_kills = self.draw_banked_kills();
+        // Before them (round 29) the kills the route's earlier visit left in a room it comes back to (routes.yaml
+        // `banked_kills`, by the start state's name): the game keeps those, the fresh-room write would undo them.
+        let mut banked_kills = self.draw_banked_kills();
+        if self.curriculum_tag.is_none()
+            && let Some(named) = crate::start_states::StateName::parse(&name)
+            && let Some(kills) = zelda::objectives::start_banked_kills(
+                &self.data.map,
+                named.location,
+                Some(named.entry),
+                Some(named.visit),
+                self.config.route.as_deref(),
+            )
+        {
+            banked_kills.insert(0, ((named.location.level, named.location.value), kills));
+        }
         let opts = LoadOptions {
             randomize_rng: true,
             fresh_room: self.config.fresh_rooms,
@@ -775,7 +789,11 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         // Round 28: a route step may name its own bomb mode (8:0x6e, crossed by the mask of `required`).
         let step_bombs = self.objectives.as_ref().and_then(|gc| gc.step_bombs(self.session.state()));
         let items = self.config.items.on_step(step_bombs);
-        let kinds = items.disabled_kinds(&self.data.map, self.session.state(), reserve, rupees);
+        let mut kinds = items.disabled_kinds(&self.data.map, self.session.state(), reserve, rupees);
+        // Round 29: a route step may put the sword away (`sword: false`, 9:0x06's old man).
+        if self.objectives.as_ref().is_some_and(|gc| !gc.step_sword(self.session.state())) {
+            kinds.extend([zelda::ActionKind::Sword, zelda::ActionKind::Beams]);
+        }
         self.session.set_disabled_kinds(&kinds);
         let targets = items.bomb_targets(&self.data.map, self.session.state(), Some(objective));
         self.session.set_bomb_targets(targets.as_deref());

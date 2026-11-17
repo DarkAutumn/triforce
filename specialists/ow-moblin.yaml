@@ -6,7 +6,7 @@ reward_profile: default
 reward: {pbrs: true}
 obs: {objective: true, target: true}       # schema 2 pointer, no item targets (round 10 §10, r42)
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chain arrives with partial hearts (round 5)
-items: {bombs: tenth, recorder: true, candle: true}   # the 10th kill's bomb; round 26: the recorder where the route plays it (0x42's pond); round 28: the candle where the route burns a tree (0x6d's, nowhere else on the overworld)
+items: {bombs: tenth, recorder: true, candle: true}   # the 10th kill's bomb; round 26: the recorder where the route plays it (0x42's pond; round 29: 0x6d's whirlwind out of Dungeon 8); round 28: the candle where the route burns a tree (0x6d's, nowhere else on the overworld)
 clips: {enabled: true, off_share: 0.75}  # round 21: the screen wrap (W/E); r72: 0x5b W→E without it at 90% (wrap 100%)
 curriculum: {enabled: true}             # trajectories/ow-moblin (round 6: the row-5 tree mazes)
 one_room: true                          # round 5: per-room episodes
@@ -28,3 +28,6 @@ notes: >-
   CANDLE W (offered only there, while the tree stands and no fire burns), still while the fire burns (walking W at
   once costs half a heart), then W onto the stairs. Walked: by script 30 of 30; this family zero-shot 0x4d 35 of
   40, 0x5d 40 of 40, 0x6d 0 of 40.
+  Round 29, the leg to Dungeon 9 (route `d9`; no start state yet): 0x6d out of Dungeon 8 (`exit: recorder`):
+  RECORDER once from the spot the game sets Link down on, facing down, then wait for the whirlwind: Dungeon 1's
+  entrance 0x37. Walked: 30 of 30 with the four Moblins live, 0 hearts; this family zero-shot 0 of 40.

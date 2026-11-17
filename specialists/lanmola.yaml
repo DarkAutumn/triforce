@@ -1,0 +1,24 @@
+name: lanmola
+rooms: ['(9, 0x55)']
+start_states: []                           # round 29: the stretch's states are the next step (9_55s)
+trainable: false                           # until it has start states
+success: [exit-correct]                    # down its stairs into the tunnel to 0x14
+reward_profile: default
+reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20}}   # as moldorm (round 25): hearts priced by their worth to the run
+obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # as moldorm (round 25)
+items: {bombs: free}                       # as moldorm: a bomb takes 3 segments in the median; only above the route's reserve (3 here: on a run with no drops there is none to spend)
+curriculum: {enabled: true}             # trajectories/lanmola, once explored
+one_room: true
+max_steps: 3000
+warm_start: null
+notes: >-
+  The red Lanmolas (Dungeon 9's 0x55, round 29, route `d9`; docs/routes/d9.md "as built", d9-fights-walks.md §1).
+  Two worms of five segments each come out at ($40, $8D), a segment every 8 frames, 1 pixel a frame (Link walks 1.5);
+  a touch is 2 hearts (half with the red ring, which the route does not hold here), a segment that was just hit is
+  harmless while it flashes, one swing takes up to three segments and the beam kills them too. A hit kills the
+  worm's lowest slot (it turns into a dead dummy, which counts as a kill here though the game's room count moves
+  only with a head); the block moves when both heads are dead: push the ring's W block N from ($60, $9D), up to Y
+  $8D and E onto the stairs. Once a head has died the room stays empty for every later entry. A rule reading
+  positions clears it 20 of 20 at 1.0 hearts (289 frames) and reaches the cellar in 615 frames; six families
+  zero-shot died in 178 of 180 episodes. Settings copied from moldorm (the nearest: a worm of segments).

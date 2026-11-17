@@ -75,8 +75,8 @@ class Route:
             raise RunnerError(f"Unknown route '{name}'")
         if steps[0]['entry'] != 'start':
             raise RunnerError(f"Route '{name}' must begin at the game start (entry: start)")
-        if stop_at is None and stop_step is None and steps[-1]['exit'] != 'triforce':
-            raise RunnerError(f"Route '{name}' doesn't end on a triforce")
+        if stop_at is None and stop_step is None and steps[-1]['exit'] not in ('triforce', 'end'):
+            raise RunnerError(f"Route '{name}' ends on neither a triforce nor the game's end")
         if stop_at is not None and stop_step is not None:
             raise RunnerError("a stop room and a stop step are exclusive")
         if start_from == 'start':

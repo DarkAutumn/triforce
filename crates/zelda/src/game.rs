@@ -771,12 +771,18 @@ impl GameView {
     /// and comes to rest `$20` ahead (asm:Candle_Wield, asm:Link_PlaceWeaponAhead); the tree burns when it rests
     /// within `$10` pixels of the tree. Walked (docs/routes/d8-walks.md §1.3; every X tried, 24 of 24 each): W from
     /// the tree's X + `$18` to + `$2F`, E from its X − `$28` to − `$11`, on its row (Link's Y within 8 pixels of
-    /// the row's; the walk burned it from 13 above to 18 below). From above and below is not walked and not offered.
+    /// the row's; the walk burned it from 13 above to 18 below). From above (round 29, 0x47's tree; walked,
+    /// docs/routes/d9-walks.md §1.3: X `$A8`, `$B0`, `$B8` on Y `$8D` and `$9D` under a tree at X `$B0`, none from
+    /// `$A0` or `$C0`): S from within 8 pixels of the tree's X, one to two squares above its row. From below is not
+    /// walked and not offered.
     pub fn burn_facings(&self) -> u8 {
         let Some((c, r)) = self.secret_burn() else {
             return 0;
         };
         let (dx, dy) = (self.link.position.x - c * 8, self.link.position.y - (r * 8 + 0x3D));
+        if dx.abs() <= 8 && (-0x20..=-0x10).contains(&dy) {
+            return Direction::S.value();
+        }
         if dy.abs() > 8 {
             return 0;
         }
@@ -1027,6 +1033,16 @@ impl GameView {
     /// Link holds the recorder (`InvFlute` $65C; Dungeon 5's cellar 0x04).
     pub fn recorder(&self) -> bool {
         self.byte(Var::Whistle) != 0
+    }
+
+    /// Link holds the red ring (`InvRing` $662 = 2; Dungeon 9's cellar 0x00).
+    pub fn red_ring(&self) -> bool {
+        self.byte(Var::Ring) >= 2
+    }
+
+    /// Link holds the silver arrow (`InvArrow` $659 = 2; Dungeon 9's cellar 0x4F).
+    pub fn silver_arrow(&self) -> bool {
+        self.arrows() == ArrowKind::Silver
     }
 
     pub fn rupees(&self) -> i32 {

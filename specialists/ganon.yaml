@@ -1,0 +1,31 @@
+name: ganon
+rooms: ['(9, 0x42)', '(9, 0x32)']
+start_states: []                           # round 29: the stretch's states are the next step (9_42s, 9_32s)
+trainable: false                           # until it has start states
+success: [exit-correct, game-completed]    # 0x42: N with the Triforce of Power; 0x32: the game ends (the first frame of game mode $13)
+reward_profile: default
+reward: {pbrs: true, item_targets: true}   # as boss-gohma (round 27)
+obs: {objective: true, target: true}       # schema 2; `hidden_positions` stays on the default (`ram`: his true position while he is not drawn) until the owner decides
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # as boss-gohma (round 27)
+items: {bombs: never, arrows: true}        # nothing of his is hurt by a bomb; ARROW is offered only while he is brown, facing him from his row or column, above the route's rupee reserve (0 in his room)
+curriculum: {enabled: true}             # trajectories/ganon, once explored
+one_room: true
+max_steps: 900
+warm_start: null
+notes: >-
+  Ganon and Zelda (Dungeon 9's 0x42 and 0x32, round 29, route `d9`; docs/routes/d9.md "as built",
+  d9-fights-walks.md §4-5). 0x42 from its S shutter: Link is halted 272 frames by the scene, both doors shut. Ganon
+  stands on the room's spawn spot (one of seven), stays there hidden for the fight's first 63 frames, then walks 1
+  pixel a frame and turns toward Link every 64 frames; a fireball every 64 frames (1 heart, a quarter with the red
+  ring), his touch 4 hearts (1 with it). Four magic sword hits while he is hidden (the fight objective's target is
+  the square a stab reaches him from: a 16-pixel monster at his position + 8); each of the first three shows him
+  for 64 frames (nothing hits him then; the targets are the two spots he jumps to, X $30 or $B0 on Y $A0); the
+  fourth turns him brown for 508 frames, still and harmless but for his touch: one silver arrow from his row
+  (Link's Y − his in 0..20) or column (Link's X − his in −3..17) kills him, a rupee a shot (the targets are those
+  tiles two squares clear of him; the mask offers ARROW only then and only facing him; with no rupee Link is topped
+  up to 1 while Ganon lives, cheated and counted). The Triforce of Power shows on his ashes 159 frames later (the
+  objective's target meanwhile), taking it holds Link 192 frames and opens both doors; then N. 0x32: straight up
+  the middle to the row under Zelda (`exit: end`; one stab up from ($78, $AD) puts out both fires of the path,
+  walking through them costs half a heart): the game ends (`game-completed`). A rule with his position from RAM
+  wins 20 of 20 at 1.25 hearts without the ring (0.31 with it) and reaches the end 20 of 20; from the screen alone
+  10-14 of 20 without the ring. Settings copied from boss-gohma (the arrow's rule) without bombs.

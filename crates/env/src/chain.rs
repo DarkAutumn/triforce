@@ -40,7 +40,7 @@ use zelda::objectives::{GameCompletion, Objective, ObjectiveKind, exit_is_correc
 use zelda::power_on;
 use zelda::room::Wavefront;
 use zelda::supply::{DropNote, SupplyStats, SupplyTracker};
-use zelda::{Action, Change, LoadOptions, MapLocation, Nes, Session};
+use zelda::{Action, ActionKind, Change, LoadOptions, MapLocation, Nes, Session};
 
 /// Default run cap.
 pub const DEFAULT_MAX_STEPS: u64 = 50_000;
@@ -96,6 +96,9 @@ pub struct Route {
     /// Taking this level's triforce ends the run (the route's last step exits `triforce`; None with `stop_at`
     /// or a stop step).
     pub final_triforce: Option<u8>,
+    /// The game's end ends the run (round 29: the route's last step exits `end`, 9:0x32; the first frame of game
+    /// mode `$13`; false with `stop_at` or a stop step).
+    pub final_end: bool,
     /// The run-time clips switch a run starts with (round 22; default on): it selects the route's way through
     /// every stretch (routes.yaml `stretch:`) and, with the family's `clips: true`, offers CLIP.
     pub clips: bool,
@@ -136,13 +139,14 @@ impl Route {
                 states_dir.display()
             ));
         }
-        let route = |terminal, final_triforce| Route {
+        let route = |terminal, final_triforce, final_end| Route {
             name: name.to_owned(),
             start_state: start_state.to_owned(),
             start: RunStart::State,
             terminal,
             terminal_step: None,
             final_triforce,
+            final_end,
             clips: true,
             clips_off_from: None,
         };
@@ -158,13 +162,16 @@ impl Route {
                     rooms.join(", ")
                 ));
             }
-            return Ok(route(stop_at, None));
+            return Ok(route(stop_at, None, false));
         }
         let last = &steps[steps.len() - 1];
         if last.exit == "triforce" {
-            return Ok(route(None, Some(last.level)));
+            return Ok(route(None, Some(last.level), false));
         }
-        Err(format!("Route '{name}' doesn't end on a triforce"))
+        if last.exit == zelda::game_map::END_EXIT {
+            return Ok(route(None, None, true));
+        }
+        Err(format!("Route '{name}' ends on neither a triforce nor the game's end"))
     }
 
     /// The route step a run starts on: the checkpoint's, else the start state's on the way the run starts with (0
@@ -262,6 +269,7 @@ impl Route {
         }
         self.terminal_step = Some(step);
         self.final_triforce = None;
+        self.final_end = false;
         Ok(self)
     }
 
@@ -822,9 +830,25 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
     /// route state.
     fn start_from_state(&mut self, rng: &mut ChaCha8Rng) -> Result<GameCompletion, EnvError> {
         let machine = self.store.load(&self.route.start_state)?;
+        // Round 29: a start in a room the route comes back to enters it with the kills its earlier visit left
+        // (routes.yaml `banked_kills`), as a played run finds it.
+        let banked_kills = StateName::parse(&self.route.start_state)
+            .and_then(|named| {
+                let kills = zelda::objectives::start_banked_kills(
+                    &self.data.map,
+                    named.location,
+                    Some(named.entry),
+                    Some(named.visit),
+                    Some(&self.route.name),
+                )?;
+                Some(((named.location.level, named.location.value), kills))
+            })
+            .into_iter()
+            .collect();
         let opts = LoadOptions {
             randomize_rng: true,
             fresh_room: true,
+            banked_kills,
             ..Default::default()
         };
         self.session.load(&machine, &opts, rng)?;
@@ -1144,6 +1168,20 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                 .push(RoomRecord::new(index, location, "-", &state, keys, "milestone", self.clips_allowed));
             return Ok(ChainStatus::Done(result.clone()));
         }
+        if self.route.final_end && zelda::objectives::game_ended(&state) {
+            self.result.as_mut().unwrap().rooms.last_mut().unwrap().outcome = "exit-correct".into();
+            self.finish_record(&state);
+            let keys = (self.cheats.natural(CheatItem::Keys, &state), self.cheats.natural(CheatItem::Bombs, &state));
+            let result = self.result.as_mut().unwrap();
+            result.result = "success".into();
+            result.reason = format!("the game ended in {}", describe(state.full_location()));
+            let index = result.rooms.len();
+            let location = state.full_location();
+            result
+                .rooms
+                .push(RoomRecord::new(index, location, "-", &state, keys, "milestone", self.clips_allowed));
+            return Ok(ChainStatus::Done(result.clone()));
+        }
         Ok(self.advance())
     }
 
@@ -1209,7 +1247,11 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         // Round 28: a route step may name its own bomb mode (8:0x6e, crossed by the mask of `required`).
         let step_bombs = self.objectives.as_ref().and_then(|gc| gc.step_bombs(self.session.state()));
         let items = config.items.on_step(step_bombs);
-        let kinds = items.disabled_kinds(&self.data.map, self.session.state(), reserve, rupees);
+        let mut kinds = items.disabled_kinds(&self.data.map, self.session.state(), reserve, rupees);
+        // Round 29: a route step may put the sword away (`sword: false`, 9:0x06's old man).
+        if self.objectives.as_ref().is_some_and(|gc| !gc.step_sword(self.session.state())) {
+            kinds.extend([ActionKind::Sword, ActionKind::Beams]);
+        }
         self.session.set_disabled_kinds(&kinds);
         let targets = items.bomb_targets(&self.data.map, self.session.state(), self.objective.as_ref());
         self.session.set_bomb_targets(targets.as_deref());

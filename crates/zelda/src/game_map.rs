@@ -16,6 +16,11 @@ pub const DEFAULT_ROUTE: &str = "d2first";
 pub const MAZE_EXIT: &str = "maze";
 /// `MazeStep` ($52F): how many directions of a maze's sequence Link has matched in a row (asm:Maze_CheckStep).
 pub const MAZE_STEP: u16 = 0x52F;
+/// The exit of a route's last step when the game ends in its room (round 29; 9:0x32, Zelda's: the first frame of
+/// game mode [`MODE_END`] is the step's success and the route's end).
+pub const END_EXIT: &str = "end";
+/// Game mode `$13` (asm:Zelda_Update: Link reached Zelda; the ending plays from here on).
+pub const MODE_END: u8 = 0x13;
 
 /// The whirlwind (round 26): a route step `exit: recorder` plays the recorder in its overworld room until the
 /// whirlwind carries Link off; the next step, `entry: recorder`, is the room it sets him down in.
@@ -55,7 +60,9 @@ pub enum Secret {
     /// tiles, tile object `$64`), where the stairs show 92 frames after the candle's B. The fire comes to rest `$20`
     /// pixels ahead of Link and burns the tree when it rests within `$10` pixels of it: facing W from X tree +
     /// `$18`..`$2F`, facing E from X tree − `$28`..`$11`, on the tree's row (walked, docs/routes/d8-walks.md §1.3:
-    /// 24 of 24 X each; [`crate::GameView::burn_facings`]). The room flag keeps the stairs on later visits.
+    /// 24 of 24 X each), and (round 29; 0x47's tree, the heart container's cave) facing S from the tree's column
+    /// (X within 8 pixels of it) one or two squares above it (walked, docs/routes/d9-walks.md §1.3: X `$A8`-`$B8` on
+    /// Y `$8D` and `$9D`; [`crate::GameView::burn_facings`]). The room flag keeps the stairs on later visits.
     Burn(Tile),
 }
 
@@ -192,6 +199,10 @@ pub struct RoomExit {
     /// (`crate::Session::set_vetoed_doorways`). For a key door off the route, where one frame of pressing spends a
     /// key (6:0x29 N), and an open doorway into a room that shuts Link in off the route (6:0x28 N: Gleeok; 6:0x2c S).
     pub keep_out: bool,
+    /// `never_opens: true` (round 29; a dungeon doorway): this side is a shutter with no trigger, so the room is
+    /// entered through it and never left through it (9:0x41 S and 9:0x31 S: 200 frames of pressing from the arrival
+    /// spot, the room full and emptied, docs/routes/d9-walks.md §3.2). No path search goes through it.
+    pub never_opens: bool,
 }
 
 /// A game.yaml room.
@@ -238,6 +249,11 @@ pub struct GameRoom {
     pub path_costs: Vec<PathCost>,
     /// The room's [`Secret`] (game.yaml `entrance: {how: armos | recorder, tile}`; overworld rooms only).
     pub secret: Option<Secret>,
+    /// `requires_pieces: 8` (round 29; 9:0x66): the room's old man opens its shutters only to a Link who holds this
+    /// many Triforce pieces (asm:InvTriforce `$FF`); with fewer the room is a dead end with one way out, the way he
+    /// came (walked, docs/routes/d9-walks.md §2), so the route is `missed` there
+    /// (`crate::objectives::GameCompletion::objectives`).
+    pub requires_pieces: Option<u8>,
 }
 
 /// One game.yaml `path_costs` rectangle: Link's tile columns and rows (inclusive) and the extra cost of a step onto
@@ -331,7 +347,7 @@ fn opt_string(v: &Value, key: &str, what: &str) -> Result<Option<String>, MapErr
 
 /// game.yaml room keys (several are read elsewhere or by nothing yet: `edge_spawn`, `trigger`, `stairs`, `dark`;
 /// of `entrance` only an Armos or pond secret's `how` and `tile`, [`Secret`]).
-const ROOM_KEYS: [&str; 23] = [
+const ROOM_KEYS: [&str; 24] = [
     "level",
     "location",
     "in_cave",
@@ -355,22 +371,24 @@ const ROOM_KEYS: [&str; 23] = [
     "stairs",
     "dark",
     "path_costs",
+    "requires_pieces",
 ];
-const EXIT_KEYS: [&str; 9] =
-    ["level", "location", "in_cave", "locked", "shutter", "span", "wrap", "wrap_in", "keep_out"];
+const EXIT_KEYS: [&str; 10] =
+    ["level", "location", "in_cave", "locked", "shutter", "span", "wrap", "wrap_in", "keep_out", "never_opens"];
 const RAFT_EXIT_KEYS: [&str; 3] = ["level", "location", "dock"];
 const EXIT_NAMES: [&str; 5] = ["N", "S", "E", "W", "cave"];
-const STEP_KEYS: [&str; 13] = [
+const STEP_KEYS: [&str; 15] = [
     "level", "room", "in_cave", "specialist", "entry", "exit", "waypoint", "retreat", "treasure", "bomb_reserve",
-    "rupee_reserve", "bombs", "note",
+    "rupee_reserve", "bombs", "banked_kills", "sword", "note",
 ];
 /// `recorder` ([`RECORDER`]): set down by the whirlwind.
 const STEP_ENTRIES: [&str; 7] = ["start", "N", "S", "E", "W", "cave", RECORDER];
 /// `maze` ([`MAZE_EXIT`]): a maze room left by its sequence, into the maze's destination; `recorder` ([`RECORDER`]):
-/// carried off by the whirlwind.
-const STEP_EXITS: [&str; 9] = ["N", "S", "E", "W", "cave", "triforce", "terminal", MAZE_EXIT, RECORDER];
-const WAYPOINTS: [&str; 10] =
-    ["heart", "rupees", "bow", "raft", "ladder", "recorder", "arrows", "food", "candle", "sword"];
+/// carried off by the whirlwind; `end` ([`END_EXIT`]): the game ends in this room.
+const STEP_EXITS: [&str; 10] = ["N", "S", "E", "W", "cave", "triforce", "terminal", MAZE_EXIT, RECORDER, END_EXIT];
+const WAYPOINTS: [&str; 12] = [
+    "heart", "rupees", "bow", "raft", "ladder", "recorder", "arrows", "food", "candle", "sword", "ring", "silver-arrow",
+];
 /// The ware a purchase waypoint (`waypoint: arrows` / `food`) buys: the game.yaml treasure of its shop's cave room.
 pub const PURCHASES: [(&str, &str); 2] = [("arrows", "wood-arrow"), ("food", "food")];
 /// A step's `bombs:` ([`RouteStep::bombs`], round 28): the bomb modes of a family's `items:` (`env::config::BombUse`).
@@ -503,6 +521,16 @@ pub struct RouteStep {
     /// though it fights its other rooms `free` (8:0x6e: a Manhandla crossed to its N bomb wall with the route's one
     /// bomb; boss-manhandla is `free`). None: the family's own mode.
     pub bombs: Option<String>,
+    /// `banked_kills: N` (round 29; a dungeon room the route comes back to): the kills an earlier visit of the route
+    /// left banked in this room (`LevelKillCounts`), which the game keeps (walked, docs/routes/d9-walks.md §3.4:
+    /// 9:0x07 and 9:0x10 out of their cellars hold their three Bubbles and no Wizzrobe, 9:0x20 from N and 9:0x61 out
+    /// of its tunnel are empty). A start state of this step enters the room with them banked
+    /// (`crate::objectives::start_banked_kills`; a start state's own room is otherwise made fresh), so the room makes
+    /// that many fewer monsters, as on a played run. None: a full room.
+    pub banked_kills: Option<u8>,
+    /// `sword: false` (round 29): SWORD and BEAMS are masked on this step (9:0x06, the old man who answers a fourth
+    /// sword hit with two fireballs that stay while Link is in the room, d9-walks.md §2). Default true.
+    pub sword: bool,
     /// The way of a `stretch:` this step belongs to (None: a step both ways share).
     pub way: Option<Way>,
     /// The name of that stretch.
@@ -644,6 +672,12 @@ fn parse_step(v: &Value) -> Result<RouteStep, MapError> {
         bomb_reserve: get(v, "bomb_reserve").map(|n| as_u8(n, &format!("{what}: bomb_reserve"))).transpose()?,
         rupee_reserve: get(v, "rupee_reserve").map(|n| as_u8(n, &format!("{what}: rupee_reserve"))).transpose()?,
         bombs: one_of("bombs", &STEP_BOMBS, false)?,
+        banked_kills: get(v, "banked_kills").map(|n| as_u8(n, &format!("{what}: banked_kills"))).transpose()?,
+        sword: match get(v, "sword") {
+            None => true,
+            Some(Value::Bool(b)) => *b,
+            Some(other) => return err(format!("{what}: sword must be true or false, got {other:?}")),
+        },
         entry,
         way: None,
         stretch: None,
@@ -915,6 +949,10 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
                 if keep_out && (level == 0 || loc.in_cave || dir == "cave") {
                     return err(format!("{exit_what}: keep_out is a dungeon room's doorway (N, S, E, W)"));
                 }
+                let never_opens = flag(dest, "never_opens", &exit_what)?;
+                if never_opens && (level == 0 || loc.in_cave || dir == "cave") {
+                    return err(format!("{exit_what}: never_opens is a dungeon room's doorway (N, S, E, W)"));
+                }
                 exits.insert(
                     dir.clone(),
                     RoomExit {
@@ -929,6 +967,7 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
                         wrap_in,
                         shutter: flag(dest, "shutter", &exit_what)?,
                         keep_out,
+                        never_opens,
                     },
                 );
             }
@@ -967,6 +1006,7 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
                         wrap_in: None,
                         shutter: false,
                         keep_out: false,
+                        never_opens: false,
                     },
                 );
             }
@@ -1021,6 +1061,7 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
                     wrap_in: None,
                     shutter: false,
                     keep_out: false,
+                    never_opens: false,
                 },
             );
         }
@@ -1069,6 +1110,9 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
             dark: flag(entry, "dark", &what)?,
             path_costs: path_costs(entry, &what)?,
             secret: secret(entry, loc, &what)?,
+            requires_pieces: get(entry, "requires_pieces")
+                .map(|v| as_u8(v, &format!("{loc} requires_pieces")))
+                .transpose()?,
         };
         // Unknown keys last: a missing required block (`maze:`) gets its own message first.
         check_keys(entry, &ROOM_KEYS, &what)?;
@@ -1209,6 +1253,21 @@ impl GameMap {
                 if kind == "candle" && !room.treasure.as_deref().is_some_and(|t| t.ends_with("candle")) {
                     return err(format!("{at}: waypoint candle, but the room's treasure is {:?}", room.treasure));
                 }
+                for (name, treasure) in [("ring", "red-ring"), ("silver-arrow", "silver-arrow")] {
+                    if kind == name && (!step.in_cave || room.treasure.as_deref() != Some(treasure)) {
+                        return err(format!(
+                            "{at}: waypoint {name} takes {treasure} in the cellar whose treasure it is (game.yaml has {:?})",
+                            room.treasure
+                        ));
+                    }
+                }
+            }
+            if step.banked_kills.is_some() && (step.level == 0 || step.in_cave) {
+                return err(format!("{at}: banked_kills is a dungeon room's (LevelKillCounts)"));
+            }
+            // `$0F` is the game's own "all dead" (asm:RoomHistory_SaveKillCountUW).
+            if step.banked_kills.is_some_and(|k| !(1..=15).contains(&k)) {
+                return err(format!("{at}: banked_kills must be 1-15, got {:?}", step.banked_kills));
             }
             // A maze room is left by its free edge or by its sequence (`exit: maze`); its other edges only loop back.
             let maze = room.maze;
@@ -1228,6 +1287,9 @@ impl GameMap {
         }
         for (route, steps) in &routes {
             check_whirlwinds(route, steps)?;
+        }
+        for (route, steps) in &routes {
+            check_ends(route, steps)?;
         }
         let stretches: HashMap<String, Vec<Stretch>> =
             routes.iter().map(|(name, steps)| (name.clone(), stretches_of(steps))).collect();
@@ -1428,6 +1490,10 @@ impl GameMap {
                 if exit.wrap {
                     continue;
                 }
+                // A shutter that never opens from this side (round 29: 9:0x41 S, 9:0x31 S).
+                if exit.never_opens {
+                    continue;
+                }
                 // An intact bomb wall: only where Link may bomb (BOMB is masked elsewhere, review F016).
                 if exit.bomb_wall && !opened && !room.requires_bombs {
                     continue;
@@ -1530,6 +1596,22 @@ impl GameMap {
         }
         ranks
     }
+}
+
+/// Round 29's step rules that read the steps around them: `exit: end` ([`END_EXIT`]) is the route's last step, in a
+/// dungeon room, outside any stretch; a step with `banked_kills` comes back to a room an earlier step of the route
+/// was in.
+fn check_ends(route: &str, steps: &[RouteStep]) -> Result<(), MapError> {
+    for (i, step) in steps.iter().enumerate() {
+        let at = format!("routes.yaml: {route}: step {i} {} from {}", step.location(), step.entry);
+        if step.exit == END_EXIT && (i + 1 != steps.len() || step.level == 0 || step.in_cave || step.way.is_some()) {
+            return err(format!("{at}: exit end is the route's last step, in a dungeon room (the game ends there)"));
+        }
+        if step.banked_kills.is_some() && !steps[..i].iter().any(|s| s.location() == step.location()) {
+            return err(format!("{at}: banked_kills, but no earlier step of the route is in this room"));
+        }
+    }
+    Ok(())
 }
 
 /// The whirlwind steps of a route pair up: a step `exit: recorder` is an overworld room's, outside any stretch, and
@@ -1696,6 +1778,8 @@ mod tests {
         assert_eq!(
             tagged,
             vec![
+                // Round 29: the rock wall over Dungeon 9's stairs.
+                loc(0, 0x05),
                 loc(0, 0x2c),
                 loc(0, 0x67),
                 loc(2, 0x0e),
@@ -1717,6 +1801,16 @@ mod tests {
                 // Round 28: Dungeon 8's two bomb walls on the way (0x6e N, 0x4c N).
                 loc(8, 0x4c),
                 loc(8, 0x6e),
+                // Round 29: Dungeon 9's eight bomb walls on the way (0x04 W, 0x06 W, 0x17 N, 0x20 N, 0x26 E, 0x27 N,
+                // 0x31 W, 0x65 N).
+                loc(9, 0x04),
+                loc(9, 0x06),
+                loc(9, 0x17),
+                loc(9, 0x20),
+                loc(9, 0x26),
+                loc(9, 0x27),
+                loc(9, 0x31),
+                loc(9, 0x65),
             ]
         );
         assert!(!map.requires_bombs(loc(9, 0x7f)));
@@ -1741,13 +1835,18 @@ mod tests {
         let map = GameMap::builtin();
         let tagged: Vec<(L, u8)> =
             map.rooms().values().filter_map(|r| Some((r.location, r.requires_rupees?))).collect();
-        assert_eq!(tagged, [(L::new(0, 0x34, true), 60), (L::new(0, 0x44, true), 80), (L::new(6, 0x1c, false), 2)]);
+        // Round 29: Ganon's room (1: the silver arrow's rupee, while he lives).
+        assert_eq!(
+            tagged,
+            [(L::new(0, 0x34, true), 60), (L::new(0, 0x44, true), 80), (L::new(6, 0x1c, false), 2), (L::new(9, 0x42, false), 1)]
+        );
         assert_eq!(map.requires_rupees(loc(0, 0x2c)), 0);
         assert_eq!(map.requires_rupees(loc(0, 0x44)), 0, "the room outside the shop needs none");
         let tagged = GAME_YAML.replacen("  requires_bombs: true", "  requires_rupees: 80\n  requires_bombs: true", 1);
         assert_ne!(tagged, GAME_YAML);
         let map = GameMap::from_yaml(&tagged, ROUTES_YAML).unwrap();
-        assert_eq!(map.requires_rupees(loc(0, 0x2c)), 80);
+        // The first `requires_bombs` room of the file (round 29: 0:0x05, the rock wall over Dungeon 9's stairs).
+        assert_eq!(map.requires_rupees(loc(0, 0x05)), 80);
         assert_eq!(map.requires_rupees(loc(9, 0x7f)), 0);
         let over = GAME_YAML.replacen("  requires_bombs: true", "  requires_rupees: 300\n  requires_bombs: true", 1);
         let e = GameMap::from_yaml(&over, ROUTES_YAML).unwrap_err().0;
@@ -2065,7 +2164,7 @@ mod tests {
     #[test]
     fn only_route_rooms_are_tagged() {
         let map = GameMap::builtin();
-        assert_eq!(map.routes.keys().collect::<Vec<_>>(), [DEFAULT_ROUTE, "d6", "d8", "clips-gauntlet"]);
+        assert_eq!(map.routes.keys().collect::<Vec<_>>(), [DEFAULT_ROUTE, "d6", "d8", "d9", "clips-gauntlet"]);
         let played = map.routes.values().flatten().filter(|s| s.exit != "terminal");
         let mut route: BTreeSet<L> = played.map(RouteStep::location).collect();
         route.extend(map.alternates.iter().flat_map(|a| a.with.iter().map(RouteStep::location)));
@@ -2090,7 +2189,14 @@ mod tests {
         let d8: BTreeSet<L> = map.routes["d8"][map.routes["d6"].len()..].iter().map(RouteStep::location).collect();
         let new8: BTreeSet<L> = d8.difference(&default).filter(|l| !d6.contains(l)).copied().collect();
         assert_eq!((new8.len(), new8.iter().all(|l| l.level == 8)), (10, true), "{new8:?}");
-        let all: BTreeSet<L> = new.union(&new8).copied().collect();
+        // Round 29's scouting route `d9` (steps 297 on): overworld 0x47 with its heart cave, 0x07, 0x06, 0x05, and
+        // Dungeon 9's 27 rooms and seven cellars on the way (the leg's other rooms were route rooms).
+        let d9: BTreeSet<L> = map.routes["d9"][map.routes["d8"].len()..].iter().map(RouteStep::location).collect();
+        let new9: BTreeSet<L> = d9.difference(&default).filter(|l| !d6.contains(l) && !d8.contains(l)).copied().collect();
+        assert_eq!(new9.len(), 39, "{new9:?}");
+        assert!(new9.iter().all(|l| l.level == 9 || [0x47, 0x07, 0x06, 0x05].contains(&l.value)), "{new9:?}");
+        assert_eq!(new9.iter().filter(|l| l.level == 9 && l.in_cave).count(), 7);
+        let all: BTreeSet<L> = new.union(&new8).chain(&new9).copied().collect();
         assert_eq!(beyond, all.union(&[loc(0, 0x78)].into()).copied().collect());
         // Round 26's steps (209 on) add 24 rooms: the shops and the pond with the shops' caves, and Dungeon 7's way.
         let before: BTreeSet<L> = map.routes[DEFAULT_ROUTE][..209].iter().map(RouteStep::location).collect();
@@ -2568,9 +2674,20 @@ mod tests {
             .values()
             .flat_map(|r| r.exits.values().filter(|e| e.keep_out).map(|e| (r.location, e.direction.as_str())))
             .collect();
+        // Round 29: Dungeon 9's key doors off the route (0x26 S and W, 0x63 N and S).
         assert_eq!(
             kept_out,
-            [(loc(6, 0x28), "N"), (loc(6, 0x29), "N"), (loc(6, 0x2c), "S"), (loc(8, 0x4e), "W"), (loc(8, 0x5e), "E")]
+            [
+                (loc(6, 0x28), "N"),
+                (loc(6, 0x29), "N"),
+                (loc(6, 0x2c), "S"),
+                (loc(8, 0x4e), "W"),
+                (loc(8, 0x5e), "E"),
+                (loc(9, 0x26), "S"),
+                (loc(9, 0x26), "W"),
+                (loc(9, 0x63), "N"),
+                (loc(9, 0x63), "S"),
+            ]
         );
         let load = |game: &str, routes: &str| GameMap::from_yaml(game, routes).map(|_| ()).map_err(|e| e.0);
         let overworld = GAME_YAML.replacen("      location: '0x01'\n", "      location: '0x01'\n      keep_out: true\n", 1);
@@ -2634,6 +2751,120 @@ mod tests {
         let typo = ROUTES_YAML.replacen("bombs: required}", "bombs: always}", 1);
         assert_ne!(typo, ROUTES_YAML);
         assert!(load(GAME_YAML, &typo).unwrap_err().contains("bombs \"always\" is not one of"));
+    }
+
+    /// Round 29's scouting route `d9`: `d8`, then steps 297-354 (one way: no stretch) to the end of the game: the
+    /// whirlwind out of 0x6d, 0x47's tree and heart cave, the rock wall over Dungeon 9's stairs, the ring and the
+    /// silver arrow as waypoints, the kills the game keeps (`banked_kills`), `sword: false`, the last step's `exit:
+    /// end`; the loader refuses each of them where it cannot be.
+    #[test]
+    fn the_d9_route_speaks_the_new_vocabulary() {
+        let map = GameMap::builtin();
+        let (base, steps) = (map.routes["d8"].len(), &map.routes["d9"]);
+        assert_eq!((base, steps.len()), (297, 355));
+        assert_eq!(steps[..base], map.routes["d8"][..]);
+        assert!(steps[base..].iter().all(|s| s.way.is_none() && s.stretch.is_none()), "one way");
+        let at = |i: usize| (steps[i].location(), steps[i].entry.as_str(), steps[i].exit.as_str());
+        assert_eq!(at(297), (loc(0, 0x6d), "cave", RECORDER));
+        assert_eq!(at(298), (loc(0, 0x37), RECORDER, "E"));
+        assert_eq!(at(301), (loc(0, 0x47), "E", "cave"));
+        assert_eq!((at(302), steps[302].waypoint.as_deref()), ((L::new(0, 0x47, true), "S", "S"), Some("heart")));
+        assert_eq!(at(311), (loc(0, 0x05), "E", "cave"));
+        assert_eq!(at(312), (loc(9, 0x76), "S", "N"));
+        assert_eq!((at(324), steps[324].waypoint.as_deref()), ((L::new(9, 0x00, true), "S", "N"), Some("ring")));
+        assert_eq!((at(339), steps[339].waypoint.as_deref()), ((L::new(9, 0x4f, true), "S", "N"), Some("silver-arrow")));
+        assert_eq!(at(353), (loc(9, 0x42), "S", "N"));
+        assert_eq!(at(354), (loc(9, 0x32), "S", END_EXIT));
+        // The two passes of the tunnel 0x75: in right and out left, then in left and out right.
+        let tunnel: Vec<(usize, &str, u32)> = steps
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| s.location() == L::new(9, 0x75, true))
+            .map(|(i, s)| (i, s.exit.as_str(), map.visits["d9"][i]))
+            .collect();
+        assert_eq!(tunnel, [(336, "W", 1), (342, "E", 2)]);
+        let families: BTreeSet<&str> = steps[base..].iter().map(|s| s.specialist.as_deref().unwrap()).collect();
+        let expected = [
+            "equipment-room", "ganon", "lanmola", "like-like", "ow-boulder", "ow-leever", "ow-lynel", "ow-moblin",
+            "ow-octorok", "ow-zora", "patra", "stalfos-keese-gel", "wizzrobe", "zol",
+        ];
+        assert_eq!(families, expected.into_iter().collect());
+        let own_bombs: Vec<(usize, &str)> =
+            steps[base..].iter().enumerate().filter_map(|(i, s)| Some((base + i, s.bombs.as_deref()?))).collect();
+        assert_eq!(own_bombs, [(309, "never"), (311, "required")], "overworld 0x07's cave and 0x05's rock wall");
+        let kept: Vec<(usize, L, u8)> = steps
+            .iter()
+            .enumerate()
+            .filter_map(|(i, s)| Some((i, s.location(), s.banked_kills?)))
+            .collect();
+        assert_eq!(kept, [(325, loc(9, 0x07), 5), (340, loc(9, 0x10), 5), (341, loc(9, 0x20), 15), (343, loc(9, 0x61), 15)]);
+        let unarmed: Vec<usize> = steps.iter().enumerate().filter(|(_, s)| !s.sword).map(|(i, _)| i).collect();
+        assert_eq!(unarmed, [330], "9:0x06, the old man");
+        let rules: Vec<(usize, TreasureRule)> = steps[base..]
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| s.treasure != TreasureRule::Take)
+            .map(|(i, s)| (base + i, s.treasure))
+            .collect();
+        let (skip, clear) = (TreasureRule::Skip, TreasureRule::Clear);
+        assert_eq!(
+            rules,
+            [(317, clear), (318, skip), (319, skip), (320, skip), (321, skip), (327, skip), (328, skip), (334, skip), (337, clear)]
+        );
+        let reserves: Vec<(usize, Option<u8>, Option<u8>)> = steps[base..]
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| s.bomb_reserve.is_some() || s.rupee_reserve.is_some())
+            .map(|(i, s)| (base + i, s.bomb_reserve, s.rupee_reserve))
+            .collect();
+        assert_eq!(
+            reserves,
+            [
+                (297, Some(5), None),
+                (312, Some(4), Some(1)),
+                (315, Some(3), None),
+                (321, Some(2), None),
+                (322, Some(1), None),
+                (323, Some(0), None),
+                (330, Some(4), None),
+                (331, Some(3), None),
+                (338, Some(2), None),
+                (347, Some(1), None),
+                (350, Some(0), None),
+                (353, None, Some(0)),
+            ]
+        );
+        assert_eq!(map.get(loc(0, 0x47)).unwrap().secret, Some(Secret::Burn((22, 14))));
+        assert_eq!(map.get(loc(0, 0x05)).unwrap().bomb_secret, Some((10, 12)));
+        assert_eq!(map.get(loc(0, 0x05)).unwrap().exits["cave"].destination, loc(9, 0x76));
+        assert_eq!(map.get(loc(9, 0x66)).unwrap().requires_pieces, Some(8));
+        let shut: Vec<(L, &str)> = map
+            .rooms()
+            .values()
+            .flat_map(|r| r.exits.values().filter(|e| e.never_opens).map(|e| (r.location, e.direction.as_str())))
+            .collect();
+        assert_eq!(shut, [(loc(9, 0x31), "S"), (loc(9, 0x41), "S")]);
+        // No path search goes back through a shutter that never opens: from 0x41 the way to 0x51 is none.
+        assert_eq!(map.find_path(loc(9, 0x41), loc(9, 0x51)), None);
+        assert!(map.find_path(loc(9, 0x51), loc(9, 0x41)).is_some());
+        let load = |game: &str, routes: &str| GameMap::from_yaml(game, routes).map(|_| ()).map_err(|e| e.0);
+        let swap = |old: &str, new: &str| {
+            assert!(ROUTES_YAML.contains(old), "{old}");
+            load(GAME_YAML, &ROUTES_YAML.replacen(old, new, 1)).unwrap_err()
+        };
+        let e = swap("entry: S, exit: end}", "entry: S, exit: end}\n  - {level: 9, room: '0x42', specialist: ganon, entry: S, exit: N}");
+        assert!(e.contains("exit end is the route's last step"), "{e}");
+        let e = swap("entry: S, exit: cave, bomb_reserve: 3}", "entry: S, exit: cave, bomb_reserve: 3, banked_kills: 2}");
+        assert!(e.contains("no earlier step of the route is in this room"), "{e}");
+        let e = swap("exit: S, banked_kills: 5}", "exit: S, banked_kills: 16}");
+        assert!(e.contains("banked_kills must be 1-15"), "{e}");
+        let e = swap("exit: N, waypoint: ring}", "exit: N, waypoint: silver-arrow}");
+        assert!(e.contains("waypoint silver-arrow takes silver-arrow in the cellar"), "{e}");
+        let e = swap("exit: W, sword: false", "exit: W, sword: no thanks");
+        assert!(e.contains("sword must be true or false"), "{e}");
+        let overworld = GAME_YAML.replacen("      location: '0x01'\n", "      location: '0x01'\n      never_opens: true\n", 1);
+        assert_ne!(overworld, GAME_YAML);
+        assert!(load(&overworld, ROUTES_YAML).unwrap_err().contains("never_opens is a dungeon room's doorway"));
     }
 
     /// The loader refuses whirlwind steps that don't pair up, a whirlwind into a room it never lands in, and a

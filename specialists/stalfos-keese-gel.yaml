@@ -1,5 +1,5 @@
 name: stalfos-keese-gel
-rooms: ['(1, 0x73)', '(1, 0x72)', '(1, 0x74)', '(1, 0x63)', '(1, 0x53)', '(1, 0x52)', '(1, 0x42)', '(1, 0x43)', '(1, 0x36)', '(1, 0x33)', '(4, 0x51)', '(4, 0x21)', '(4, 0x01)', '(6, 0x79)', '(6, 0x58)', '(6, 0x0c)', '(8, 0x7e)', '(8, 0x2c)']
+rooms: ['(1, 0x73)', '(1, 0x72)', '(1, 0x74)', '(1, 0x63)', '(1, 0x53)', '(1, 0x52)', '(1, 0x42)', '(1, 0x43)', '(1, 0x36)', '(1, 0x33)', '(4, 0x51)', '(4, 0x21)', '(4, 0x01)', '(6, 0x79)', '(6, 0x58)', '(6, 0x0c)', '(8, 0x7e)', '(8, 0x2c)', '(9, 0x76)', '(9, 0x66)', '(9, 0x26)', '(9, 0x06)', '(9, 0x62)']
 start_states: ['1_73*_[0-9]', '1_72*_[0-9]', '1_74*_[0-9]', '1_63*_[0-9]', '1_53*_[0-9]', '1_52*_[0-9]', '1_42*_[0-9]', '1_43*_[0-9]', '1_36*_[0-9]', '1_33*_[0-9]', '4_51*_[0-9]', '4_21*_[0-9]', '4_01*_[0-9]']
 success: [exit-correct, triforce-collected]
 reward_profile: default
@@ -25,3 +25,8 @@ notes: >-
   hearts lost) and the triforce room 0x0c.
   Dungeon 8 (round 28, route `d8`; no start states yet): the empty entrance 0x7e (S to N; its statues do not
   shoot) and the triforce room 0x2c; walked zero-shot 40 of 40 each.
+  Dungeon 9 (round 29, route `d9`; no start states yet): the empty entrance 0x76; 0x66 (the old man is gone with
+  eight pieces, S to W along Y $8D under its two fires; with fewer pieces the route is `missed`); 0x26 (eight Gels)
+  N to its E bomb wall and, on the way back from the ring, E to N (its rupees left, its S and W key doors masked);
+  the old man's 0x06 from its S key door to its W bomb wall (Link is halted 134 frames by the text; SWORD and BEAMS
+  are masked: a fourth hit makes two fireballs that stay); 0x62 (eight Keese) E to W. Walked zero-shot 34-40 of 40.

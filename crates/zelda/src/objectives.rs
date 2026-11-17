@@ -12,7 +12,7 @@
 
 use crate::enums::{Direction, MapLocation, Position, SwordKind, Tile};
 use crate::game::{BombWall, GameView};
-use crate::game_map::{GameMap, MAZE_EXIT, MAZE_STEP, RECORDER, RouteStep, Secret, Way, whirlwind_level};
+use crate::game_map::{END_EXIT, GameMap, MAZE_EXIT, MAZE_STEP, MODE_END, RECORDER, RouteStep, Secret, Way, whirlwind_level};
 use crate::room::Target;
 use crate::room_entry::ROOM_FLAGS_OW;
 use crate::room_state::{SecretTrigger, decode_room_state, room_flags};
@@ -59,6 +59,12 @@ pub const WAYPOINT_CANDLE: &str = "candle";
 /// Dungeon 7). With the waypoint the cave is the route's stop in route order (after the pieces before it); a sword
 /// cave step without one (the wood and white swords of `d2first`) stays the target as soon as Link may take it.
 pub const WAYPOINT_SWORD: &str = "sword";
+/// routes.yaml `waypoint: ring` / `waypoint: silver-arrow` (round 29, Dungeon 9's item cellars 0x00 under 0x07 and
+/// 0x4f under 0x10): take the cellar's red ring or silver arrow, as the bow; done once Link holds it
+/// (`StepProgress::ring`, `StepProgress::silver_arrow`: every step after it is matched by a Link who holds it, and
+/// the two passes of the tunnel cellar 0x75, before and after the arrow, are told apart by it).
+pub const WAYPOINT_RING: &str = "ring";
+pub const WAYPOINT_SILVER_ARROW: &str = "silver-arrow";
 /// A cellar's ladders at X >= $80 (tile column 16) lead to the room in its attribute B, the rest to attribute A's
 /// (asm:Warp_CheckSubroomExit): the game.yaml exits `E` and `W` of a tunnel cellar.
 const CELLAR_EAST_COLUMN: i32 = 16;
@@ -125,7 +131,9 @@ pub struct Objective {
 }
 
 /// What Link holds on entering a route step: the triforce pieces earlier steps took (bit `level - 1`), the sword
-/// earlier cave steps handed over and whether earlier cellar steps gave the bow, the raft, the ladder and the recorder.
+/// earlier cave steps handed over and whether earlier cellar steps gave the bow, the raft, the ladder, the recorder,
+/// the red ring and the silver arrow (round 29: a room is silently off the route when the steps before it do not
+/// match what Link holds, docs/routes/d9-walks.md finding 9).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StepProgress {
     pub triforces: u8,
@@ -134,6 +142,8 @@ pub struct StepProgress {
     pub raft: bool,
     pub ladder: bool,
     pub recorder: bool,
+    pub ring: bool,
+    pub silver_arrow: bool,
 }
 
 impl StepProgress {
@@ -148,6 +158,8 @@ impl StepProgress {
             raft: state.raft(),
             ladder: state.ladder(),
             recorder: state.recorder(),
+            ring: state.red_ring(),
+            silver_arrow: state.silver_arrow(),
         }
     }
 
@@ -191,8 +203,16 @@ fn per_step<T: Clone>(ways: [Vec<Option<T>>; 2]) -> Vec<T> {
 }
 
 fn progress_ways(map: &GameMap, steps: &[RouteStep]) -> [Vec<Option<StepProgress>>; 2] {
-    let start =
-        StepProgress { triforces: 0, sword: SwordKind::None, bow: false, raft: false, ladder: false, recorder: false };
+    let start = StepProgress {
+        triforces: 0,
+        sword: SwordKind::None,
+        bow: false,
+        raft: false,
+        ladder: false,
+        recorder: false,
+        ring: false,
+        silver_arrow: false,
+    };
     along_ways(steps, start, |progress, step| {
         if step.exit == "triforce" && (1..=8).contains(&step.level) {
             progress.triforces |= 1 << (step.level - 1);
@@ -215,6 +235,12 @@ fn progress_ways(map: &GameMap, steps: &[RouteStep]) -> [Vec<Option<StepProgress
         }
         if treasure == Some("recorder") {
             progress.recorder = true;
+        }
+        if treasure == Some("red-ring") {
+            progress.ring = true;
+        }
+        if treasure == Some("silver-arrow") {
+            progress.silver_arrow = true;
         }
     })
 }
@@ -340,6 +366,11 @@ fn waypoint_done(map: &GameMap, waypoint: &Waypoint, state: &GameView) -> bool {
     if waypoint.kind == WAYPOINT_SWORD {
         let sword = map.get(waypoint.location).and_then(|r| r.treasure.as_deref()).and_then(sword_treasure);
         return sword.is_some_and(|sword| state.sword() >= sword);
+    }
+    match waypoint.kind.as_str() {
+        WAYPOINT_RING => return state.red_ring(),
+        WAYPOINT_SILVER_ARROW => return state.silver_arrow(),
+        _ => {}
     }
     item_taken(waypoint.location, state)
 }
@@ -800,8 +831,36 @@ impl GameCompletion {
     /// and Link's X − Gohma's X in [−10, +5], none otherwise), and every shot costs a rupee, so the three other
     /// facings only waste them. Which moment to shoot at is left to the model (the eye's state and Gohma's offset
     /// are observation columns; a miss costs its rupee: the lead's working answer 6, docs/decisions.md).
+    ///
+    /// Round 29, Ganon (9:0x42, the room whose game.yaml monster is `Ganon`): never while he is blue (hidden or
+    /// shown: an arrow then is a rupee for nothing, docs/routes/d9-fights-walks.md §4.3) nor while he dies or the
+    /// room is empty; while he is brown only the facing toward him from his row or column
+    /// ([`ganon_arrow_facings`]: one silver arrow from there killed 20 of 20). And never on the route's last step
+    /// (`exit: end`, Zelda's room, which his family plays with ARROW on: nothing there is worth a rupee).
     pub fn arrow_facings(&self, state: &GameView) -> Option<u8> {
-        (state.level() != 0 && gohma(state).is_some()).then_some(Direction::N.value())
+        let here = state.full_location();
+        if here.level == 0 || here.in_cave {
+            return None;
+        }
+        if gohma(state).is_some() {
+            return Some(Direction::N.value());
+        }
+        if self.map.get(here).is_some_and(|r| r.enemies.contains_key(GANON_NAME)) {
+            return Some(ganon(state).map_or(0, |(g, phase)| ganon_arrow_facings(state, g, phase)));
+        }
+        self.current_step(here).is_some_and(|s| s.exit == END_EXIT).then_some(0)
+    }
+
+    /// SWORD and BEAMS are played on the route step Link plays in `state`'s room (routes.yaml `sword: false`, round
+    /// 29: 9:0x06's old man); true off the route and on every other step.
+    pub fn step_sword(&self, state: &GameView) -> bool {
+        self.current_step(state.full_location()).is_none_or(|s| s.sword)
+    }
+
+    /// Link plays the route's last step, which ends the game (`exit: end`), in its room: the first frame of game
+    /// mode `$13` is its success ([`game_ended`]).
+    pub fn ends_game(&self, state: &GameView) -> bool {
+        self.current_step(state.full_location()).is_some_and(|s| s.exit == END_EXIT)
     }
 
     /// The facings ([`Direction::value`] bits) CANDLE is kept to in `state` by the route (round 28; None: no rule,
@@ -946,6 +1005,17 @@ impl GameCompletion {
             self.waypoints.remove(i);
             self.heart_baseline = None;
             self.shop_baseline = None;
+        }
+        // Round 29: a room whose old man asks for the Triforce pieces (9:0x66) is a dead end to a Link with fewer.
+        if self.missed.is_none()
+            && !here.in_cave
+            && let Some(pieces) = self.map.get(here).and_then(|r| r.requires_pieces)
+            && state.triforce_pieces() < u32::from(pieces)
+        {
+            self.missed = Some(format!(
+                "the old man of {here} keeps its shutters shut: {} Triforce pieces of {pieces}",
+                state.triforce_pieces()
+            ));
         }
         if self.missed.is_some() {
             self.last_kind = ObjectiveKind::Move;
@@ -1276,9 +1346,17 @@ impl GameCompletion {
             Secret::Recorder(tile) => pond_shore(&state.room(), tile),
             // The square under the stone: MOVE N from there pushes it (`GameView::is_secret_push_direction`).
             Secret::Push((c, r)) => vec![(c, r + 2)],
-            // The tree's two windows on its row (`GameView::burn_facings`): every X of these tiles burns it, facing
-            // W from the three E of it, E from the three W of it; the path search takes the one Link can reach.
-            Secret::Burn((c, r)) => [3, 4, 5, -5, -4, -3].into_iter().map(|d| (c + d, r)).collect(),
+            // The tree's windows (`GameView::burn_facings`): every X of the six tiles on its row burns it, facing W
+            // from the three E of it, E from the three W of it; and (round 29, 0x47's tree under its strip of
+            // floor) the tiles of its column two to four rows above it, facing S, where Link can stand (in 0x6d
+            // that is rock). The path search takes the one Link can reach.
+            Secret::Burn((c, r)) => {
+                let room = state.room();
+                let above = [-1, 0].into_iter().flat_map(|dc| (2..=4).map(move |dr| (c + dc, r - dr)));
+                let row = [3, 4, 5, -5, -4, -3].into_iter().map(|d| (c + d, r));
+                row.chain(above.filter(|&(tc, tr)| room.is_tile_walkable(tc, tr) && room.is_tile_walkable(tc + 1, tr)))
+                    .collect()
+            }
         }
     }
 
@@ -1487,7 +1565,16 @@ impl GameCompletion {
         (tiles.map(|&t| Target::Tile(t)).collect(), rooms)
     }
 
+    /// The objective of the route's last step (`exit: end`, round 29: 9:0x32) while Link plays it: the tiles in
+    /// front of Zelda ([`zelda_tiles`]), where the game ends; no next room. None on any other step.
+    fn end_objective(&self, state: &GameView) -> Option<(ObjectiveKind, Vec<Target>, Vec<MapLocation>)> {
+        self.ends_game(state).then(|| (ObjectiveKind::Move, zelda_tiles(state).into_iter().map(Target::Tile).collect(), Vec::new()))
+    }
+
     fn dungeon_room_objective(&mut self, state: &GameView) -> (ObjectiveKind, Vec<Target>, Vec<MapLocation>) {
+        if let Some(objective) = self.end_objective(state) {
+            return objective;
+        }
         let loc = state.full_location();
         let Some(mut item) = self.rooms.get(&loc).cloned() else {
             return (ObjectiveKind::None, Vec::new(), Vec::new());
@@ -1523,9 +1610,20 @@ impl GameCompletion {
             kind = ObjectiveKind::Fight;
             let enemy_tiles: Vec<Tile> = if let Some(tile) = gohma_stand(state) {
                 vec![tile]
+            } else if let Some((g, phase)) = ganon(state) {
+                // Round 29: where his phase says (hidden: the square a stab reaches him from; shown: where he
+                // jumps to; brown: his row and column, for the arrow); dying, the square his ashes leave the
+                // Triforce of Power on.
+                if phase == GanonPhase::Dying {
+                    kind = ObjectiveKind::Treasure;
+                }
+                ganon_tiles(state, g, phase)
             } else if state.has_active_enemies() {
+                // A Patra's body takes no hit while a child lives (round 29): the children first.
+                let children = patra_children(state);
                 state
                     .active_enemies()
+                    .filter(|e| !(children && is_patra(e.id)))
                     .flat_map(|e| e.link_overlap_tiles())
                     .collect()
             } else {
@@ -1951,6 +2049,150 @@ pub fn gohma_stand(state: &GameView) -> Option<Tile> {
     gohma(state).map(|g| Position::new(g.position.x - 3, GOHMA_ARROW_Y).tile())
 }
 
+/// Ganon's name in a game.yaml room's `enemies:` (9:0x42).
+const GANON_NAME: &str = "Ganon";
+/// `Ganon_ObjDyingCount` (`$42C` + slot): nonzero from the silver arrow's hit; the Triforce of Power shows on his
+/// ashes at `$A0` (asm:Ganon_UpdateDying).
+const GANON_DYING_COUNT: u16 = 0x42C;
+/// `Ganon_ScenePhase` (`$445`): 0 and 1 while Link holds the piece up, 2 the fight.
+const GANON_SCENE_PHASE: u16 = 0x445;
+/// `ObjTimer` (`$28` + slot): frames Ganon stays shown after a sword hit.
+const OBJ_TIMER: u16 = 0x28;
+/// Where Ganon stands after the 64 frames a sword hit shows him (asm:Ganon_StartXs: X `$B0` when the hit landed on
+/// an even frame, `$30` on an odd one, Y `$A0`; walked, docs/routes/d9-fights-walks.md §4.3: 60 of 60).
+pub const GANON_JUMP_SPOTS: [(i32, i32); 2] = [(0x30, 0xA0), (0xB0, 0xA0)];
+/// Zelda's object type (asm:Zelda_Update).
+const ZELDA: u8 = 0x37;
+
+/// What Ganon is doing (asm:Ganon_ScenePhase2_Fight; the same tests as the observation's `phase`,
+/// `crate::object_rules`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GanonPhase {
+    /// The entry scene: Link holds the Triforce up, halted; nothing is tested.
+    Scene,
+    /// Blue and not drawn: the sword hits him.
+    Hidden,
+    /// Blue and drawn after a sword hit, for 64 frames: nothing hits him; then he jumps to a [`GANON_JUMP_SPOTS`].
+    Shown,
+    /// Brown after the fourth hit, for 508 frames: only the silver arrow, which kills him.
+    Brown,
+    /// Dying: his body, his ashes, then the Triforce of Power on them.
+    Dying,
+}
+
+/// The Ganon of `state`'s room (type `$3E`) and his phase.
+pub fn ganon(state: &GameView) -> Option<(&crate::game::Enemy, GanonPhase)> {
+    let g = state.enemies.iter().find(|e| e.id == crate::enums::enemy::GANON)?;
+    let slot = u16::from(g.index);
+    let phase = if state.peek(GANON_DYING_COUNT + slot) != 0 {
+        GanonPhase::Dying
+    } else if state.peek(GANON_SCENE_PHASE) < 2 {
+        GanonPhase::Scene
+    } else if g.status != 0 {
+        GanonPhase::Brown
+    } else if state.peek(OBJ_TIMER + slot) != 0 {
+        GanonPhase::Shown
+    } else {
+        GanonPhase::Hidden
+    };
+    Some((g, phase))
+}
+
+/// The fight objective's tiles in Ganon's room (round 29; docs/routes/d9-fights-walks.md §4, §7).
+/// - Hidden (and the scene, whose spot he keeps for the fight's first 63 frames): the tiles Link overlaps a
+///   16-pixel monster at his position + 8 from. The sword's box and his touch treat him so
+///   (asm:Ganon_CheckCollisions tests his middle, + 16); his own `ObjX` as a target would pull Link into the touch
+///   box, 4 hearts.
+/// - Shown: the same for both spots he jumps to ([`GANON_JUMP_SPOTS`]); which one is the parity of the hit's frame,
+///   which the state after it does not hold.
+/// - Brown: where one silver arrow kills him from ([`ganon_stand`]).
+/// - Dying: the tiles over his ashes, where the Triforce of Power shows (his position + 8).
+pub fn ganon_tiles(state: &GameView, g: &crate::game::Enemy, phase: GanonPhase) -> Vec<Tile> {
+    let body = |x: i32, y: i32| crate::game::overlap_tiles(Position::new(x + 8, y + 8), (2, 2));
+    match phase {
+        GanonPhase::Shown => GANON_JUMP_SPOTS.iter().flat_map(|&(x, y)| body(x, y)).collect(),
+        GanonPhase::Brown => ganon_stand(state, g),
+        GanonPhase::Scene | GanonPhase::Hidden | GanonPhase::Dying => body(g.position.x, g.position.y),
+    }
+}
+
+/// The band of Link's Y − Ganon's Y from which an arrow shot sideways kills the brown Ganon, and of Link's X − his X
+/// for one shot up or down (walked, d9-fights-walks.md §4.4 for right and down; left and up measured in round 29's
+/// vocabulary step with him written to the middle of the floor: 21 of 21 values each, none outside).
+const GANON_ARROW_ROWS: std::ops::RangeInclusive<i32> = 0..=20;
+const GANON_ARROW_COLS: std::ops::RangeInclusive<i32> = -3..=17;
+/// Link's distance from Ganon's `ObjX`/`ObjY` along the arrow's line at which a stand tile begins: clear of his
+/// 32-pixel body and of his touch on either side.
+const GANON_ARROW_CLEAR: (i32, i32) = (0x20, 0x30);
+
+/// Where Link stands to shoot the brown Ganon (round 29): the tiles of the dungeon floor on his row (every Y of the
+/// tile inside [`GANON_ARROW_ROWS`]) or on his column ([`GANON_ARROW_COLS`]), two squares clear of his body. One
+/// silver arrow from there, facing him, kills ([`ganon_arrow_facings`]).
+pub fn ganon_stand(_state: &GameView, g: &crate::game::Enemy) -> Vec<Tile> {
+    let (gx, gy) = (g.position.x, g.position.y);
+    let clear = |d: i32| d <= -GANON_ARROW_CLEAR.0 || d >= GANON_ARROW_CLEAR.1;
+    let mut tiles = Vec::new();
+    // The dungeon floor in Link's tiles: X `$20`-`$D0`, Y `$5D`-`$BD`.
+    for r in 4..=16 {
+        for c in 4..=26 {
+            let (x, y) = (c * 8, r * 8 + 0x3D);
+            let on_row = GANON_ARROW_ROWS.contains(&(y - gy)) && GANON_ARROW_ROWS.contains(&(y + 7 - gy)) && clear(x - gx);
+            let on_col = GANON_ARROW_COLS.contains(&(x - gx)) && GANON_ARROW_COLS.contains(&(x + 7 - gx)) && clear(y - gy);
+            if on_row || on_col {
+                tiles.push((c, r));
+            }
+        }
+    }
+    tiles
+}
+
+/// The facings ([`Direction::value`] bits) from which an arrow shot where Link stands kills Ganon in `phase` (round
+/// 29; 0 unless he is brown): E or W on his row ([`GANON_ARROW_ROWS`]), N or S on his column
+/// ([`GANON_ARROW_COLS`]), toward him.
+pub fn ganon_arrow_facings(state: &GameView, g: &crate::game::Enemy, phase: GanonPhase) -> u8 {
+    if phase != GanonPhase::Brown {
+        return 0;
+    }
+    let (dx, dy) = (state.link.position.x - g.position.x, state.link.position.y - g.position.y);
+    let mut facings = 0;
+    if GANON_ARROW_ROWS.contains(&dy) {
+        facings |= if dx < 0 { Direction::E.value() } else { Direction::W.value() };
+    }
+    if GANON_ARROW_COLS.contains(&dx) {
+        facings |= if dy < 0 { Direction::S.value() } else { Direction::N.value() };
+    }
+    facings
+}
+
+/// A Patra's body (types `$47`, `$48`).
+fn is_patra(id: u8) -> bool {
+    matches!(id, crate::enums::enemy::PATRA | crate::enums::enemy::PATRA2)
+}
+
+/// One of a Patra's children lives in `state`'s room (types `$25`, `$26`): its body takes no hit until none does
+/// (asm:Patra_Update@LoopChildren; walked, d9-fights-walks.md §2: 40 of 40).
+pub fn patra_children(state: &GameView) -> bool {
+    use crate::enums::enemy::{PATRA_CHILD1, PATRA_CHILD2};
+    state.enemies.iter().any(|e| matches!(e.id, PATRA_CHILD1 | PATRA_CHILD2) && !e.is_dying())
+}
+
+/// Where the game ends in `state`'s room (round 29, the last step's target): Link's tiles in front of Zelda (object
+/// type `$37`), X within 8 pixels of hers on the row 13 pixels under her (asm:Zelda_Update: Link's X `$70`-`$80`,
+/// his Y exactly `$95`, with her at (`$78`, `$88`); the guard fires are not asked). Empty without her.
+pub fn zelda_tiles(state: &GameView) -> Vec<Tile> {
+    (1..=11u16)
+        .find(|&slot| state.peek(0x34F + slot) == ZELDA)
+        .map(|slot| (i32::from(state.peek(0x70 + slot)), i32::from(state.peek(0x84 + slot))))
+        .map_or_else(Vec::new, |(x, y)| vec![Position::new(x - 8, y + 0x0D).tile(), Position::new(x, y + 0x0D).tile()])
+}
+
+/// The game has ended in `state` (round 29): game mode `$13`, the first frame after Link stood in front of Zelda
+/// (asm:Zelda_State1WaitForEnding). The success of a route step `exit: end`, and of a run of a route that ends on
+/// one.
+pub fn game_ended(state: &GameView) -> bool {
+    state.mode() == MODE_END
+}
+
 /// What a bomb should open in `state` (round 22): the intact game.yaml bomb walls the objective leaves through (a
 /// next room behind one: a dungeon wall, by its direction) and, when a next room is the room's cave behind a closed
 /// game.yaml `bomb_secret` rock wall, that rock wall.  Empty when the objective leaves through nothing bombable (a
@@ -1966,7 +2208,7 @@ pub fn route_bomb_targets(map: &GameMap, state: &GameView, objective: &Objective
             if state.bomb_walls().iter().any(|w| w.wall_direction == d) {
                 targets.push(BombTarget::Wall(d));
             }
-        } else if next.in_cave
+        } else if (next.in_cave || next.level != here.level)
             && state.ow_bomb_secret_closed()
             && let Some(tile) = map.get(here).and_then(|r| r.bomb_secret)
         {
@@ -2029,6 +2271,44 @@ pub fn start_clips(
         (false, true) => Some(false),
         _ => None,
     }
+}
+
+/// The kills banked in the room of an episode starting in the dungeon room `location` entered from `entry`, the
+/// `visit` its start state's name spells (round 29): the routes.yaml `banked_kills` of the step that name is (the
+/// steps of `route`, of every route without one, entering the room from `entry`; of those, the visit's when there
+/// are any), when every such step says the same. The game keeps a room's kills on the route's return (9:0x20 from
+/// N is empty, 9:0x07 out of its cellar holds only its Bubbles: docs/routes/d9-walks.md §3.4), where a start
+/// state's own room is made fresh on every load (`crate::LoadOptions::fresh_room`): the env and the chain bank
+/// these before the entry (`crate::LoadOptions::banked_kills`), so the room makes that many fewer monsters, as a
+/// played run finds it. The name alone decides (no progress of Link's): it is read before the state is loaded.
+/// None: a full room.
+pub fn start_banked_kills(
+    map: &GameMap,
+    location: MapLocation,
+    entry: Option<&str>,
+    visit: Option<u32>,
+    route: Option<&str>,
+) -> Option<u8> {
+    let entry = entry?;
+    if location.level == 0 || location.in_cave {
+        return None;
+    }
+    let mut found: Vec<(bool, Option<u8>)> = Vec::new();
+    for (name, steps) in &map.routes {
+        if route.is_some_and(|r| r != name) {
+            continue;
+        }
+        for (i, step) in steps.iter().enumerate() {
+            if step.location() == location && step.entry == entry {
+                found.push((visit.is_none_or(|v| map.visits[name][i] == v), step.banked_kills));
+            }
+        }
+    }
+    if found.iter().any(|f| f.0) {
+        found.retain(|f| f.0);
+    }
+    let kills = found.first()?.1;
+    found.iter().all(|f| f.1 == kills).then_some(kills).flatten()
 }
 
 /// (route, step) for an episode starting in `location` entered from `entry` (`start_route`) with the run-time clips

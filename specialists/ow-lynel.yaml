@@ -1,5 +1,5 @@
 name: ow-lynel
-rooms: ['(0, 0x0a)', '(0, 0x0a, cave)', '(0, 0x50)', '(0, 0x60)', '(0, 0x32)', '(0, 0x22)']
+rooms: ['(0, 0x0a)', '(0, 0x0a, cave)', '(0, 0x50)', '(0, 0x60)', '(0, 0x32)', '(0, 0x22)', '(0, 0x07)', '(0, 0x06)', '(0, 0x05)']
 start_states: ['0_0a*_[0-9]', '0_50*_[0-9]', '0_60*_[0-9]']
 success: [exit-correct]
 endings: {retreat: soft-failure}           # Lee (Nov 8): a retreat counts as a wrong exit for the first baseline
@@ -30,3 +30,10 @@ notes: >-
   (`exit: recorder`): RECORDER twice from the spot the game sets Link down on, facing down (the mask offers it only
   so, while plays remain: the second counts on frames 152-216 after the first), then wait for the whirlwind: Dungeon
   2's entrance 0x3c. Walked: 30 of 30 by buttons, 20 of 20 through the env; this family zero-shot 0 of 40.
+  Round 29, the leg to Dungeon 9 (route `d9`, docs/routes/d9.md "as built"; no start state yet): 0x07 S→W (one Red
+  Lynel; `bombs: never` on the step: a bomb at X $A0 opens a cave that takes 20 rupees on entry; walked zero-shot 40
+  of 40), 0x06 E→W (two Blue and two Red Lynels, two Peahats, along Y $8D: a straight scripted walk loses 2.2
+  hearts; zero-shot 12 of 40, 28 deaths) and 0x05 E→the rock wall over Dungeon 9's stairs (two Blue, two Red Lynels,
+  two Leevers; `bombs: required` on the step: BOMB only in reach of the wall, one bomb facing N from X $48-$58 on Y
+  $AD, open 49 frames later; the script loses 2.9 hearts; zero-shot 0 of 40: no bomb was offered before round 29,
+  the family being `tenth` and the wall's target missing for a level's entrance).

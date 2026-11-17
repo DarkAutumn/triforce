@@ -1,5 +1,5 @@
 name: like-like
-rooms: ['(4, 0x32)', '(6, 0x1d)']
+rooms: ['(4, 0x32)', '(6, 0x1d)', '(9, 0x14)', '(9, 0x51)', '(9, 0x41)', '(9, 0x03)']
 start_states: ['4_32*_[0-9]']
 success: [exit-correct]                    # down the stairs to the ladder cellar; on the way back, W
 reward_profile: default
@@ -19,3 +19,10 @@ notes: >-
   (one-room, curriculum, 2000 steps).
   Dungeon 6 (round 27, route `d6`; no start state yet): 0x1d (two Like-Likes, two Zols, two Bubbles) out of the
   tunnel's stairs, crossed to the S door without a fight.
+  Dungeon 9 (round 29, route `d9`; no start state yet): the spiral 0x14 (five Like-Likes in corridors one square
+  wide: fought, `treasure: clear`; a walk through is held in 20 of 20 and loses 4.4 hearts, the sword from range
+  0.05), 0x51 (six Like-Likes between rows of blocks, S to N) and the dark 0x41 (four Traps, four Like-Likes,
+  straight up; its S shutter never opens again) crossed, and 0x03 (two Zols, two Like-Likes, two Bubbles: the
+  Breakfast Room again) emptied for its block and the stairs inside the ring (a rule clears it 20 of 20 at 0.05
+  hearts with the ring). Walked zero-shot: `stuck` in every one of them under the round 27 rule (50 decisions in
+  one place while held); round 28's rule no longer counts a held Link.

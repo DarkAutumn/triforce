@@ -148,7 +148,10 @@ fn rupee_need(map: &GameMap, state: &GameView) -> i32 {
     let done = if room.level == 0 {
         state.ram()[flags] & FLAG_ITEM_TAKEN != 0
     } else {
-        crate::objectives::gohma(state).is_none()
+        // Round 29: Ganon's room too (9:0x42: one silver arrow at a rupee kills him, and with none the room is sealed
+        // for good), while he has not begun to die.
+        let ganon = crate::objectives::ganon(state).is_some_and(|(_, phase)| phase != crate::objectives::GanonPhase::Dying);
+        crate::objectives::gohma(state).is_none() && !ganon
     };
     if pending || done { 0 } else { i32::from(map.requires_rupees(room)) }
 }

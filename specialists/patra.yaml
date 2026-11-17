@@ -1,0 +1,28 @@
+name: patra
+rooms: ['(9, 0x16)', '(9, 0x27)', '(9, 0x61)', '(9, 0x52)']
+start_states: []                           # round 29: the stretch's states are the next step (9_16w, 9_16s, 9_27w, 9_27n, 9_61e, 9_61c, 9_52c)
+trainable: false                           # until it has start states
+success: [exit-correct]                    # 0x61: down its stairs into the tunnel; 0x52: N into Ganon's room
+reward_profile: default
+reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20}}   # as moldorm (round 25): hearts priced by their worth to the run
+obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # as moldorm (round 25)
+items: {bombs: required}                   # 0x27's N wall only (offered in reach of it), else the 10th damage-free kill's bomb: no bomb, arrow or boomerang touches a Patra (0 of 780 uses)
+curriculum: {enabled: true}             # trajectories/patra, once explored
+one_room: true
+max_steps: 3000
+warm_start: null
+notes: >-
+  Patra rooms (Dungeon 9, round 29, route `d9`; docs/routes/d9.md "as built", d9-fights-walks.md §2). A Patra and
+  its eight children: the children are out and live at frame 66 (type $47: 0x61, 0x52) or 77 ($48: 0x16, 0x27),
+  orbit in 73 or 85 frames, a touch is 2 hearts (half with the red ring); the body takes no hit while a child lives
+  (the fight objective's targets are the children, then the body), a child dies to 2 magic hits, the body to 3;
+  only the sword and its beam hurt them. The second pattern of the $47 kind is eight flat ellipses through the
+  body, of the $48 kind a ring that swells to 85 pixels once an orbit; with the child in slot 3 dead the pattern
+  never changes again. Crossed: 0x16 from W to S (by the bottom lane: 0.7 hearts by script), 0x27 from W to its N
+  bomb wall (the bomb wait beside the Patra costs 4.1 hearts by script) and back N to W. Fought: 0x16 from S for
+  its four bombs (the route's only source: a rule 20 of 20 at 2.33 hearts with the ring, 17 of 20 at 8.65 without)
+  and its N key door; 0x61 for its block (its key in the NE corner first; a rule 20 of 20 at 0.63 with the ring),
+  dead for good on the way back; 0x52 out of the tunnel for the N shutter (20 of 20 at 0.18). Six families
+  zero-shot killed none in 180 episodes. Settings copied from moldorm (the nearest: a body that only the sword
+  hurts, behind parts that must die first) with the bomb mode of the wall families.

@@ -1,5 +1,5 @@
 name: zol
-rooms: ['(3, 0x7c)', '(3, 0x7b)', '(3, 0x6b)', '(3, 0x49)', '(3, 0x4b)', '(3, 0x3d)', '(4, 0x40)', '(5, 0x57)', '(6, 0x68)']
+rooms: ['(3, 0x7c)', '(3, 0x7b)', '(3, 0x6b)', '(3, 0x49)', '(3, 0x4b)', '(3, 0x3d)', '(4, 0x40)', '(5, 0x57)', '(6, 0x68)', '(9, 0x63)']
 start_states: ['3_7c*_[0-9]', '3_7b*_[0-9]', '3_6b*_[0-9]', '3_49*_[0-9]', '3_3d*_[0-9]', '4_40*_[0-9]', '5_57*_[0-9]']
 success: [exit-correct, triforce-collected]   # 0x3d ends on the D3 triforce
 reward_profile: default
@@ -21,3 +21,6 @@ notes: >-
   (five Zols) W to N along row 3 by the ladder, not stopping for the 5 rupees its kills show (`treasure: skip`).
   Dungeon 6 (round 27, route `d6`; no start state yet): 0x68 (five Zols) S to N straight up, its compass left
   (`treasure: skip`; walked zero-shot 20 of 20).
+  Dungeon 9 (round 29, route `d9`; no start state yet): 0x63 (five Zols) out of the tunnel at ($A0, $9D), up to the
+  door row and W through its key door; its N and S key doors are masked (the route's last key), and the stairs at
+  the E end of the door row lead back down (walked zero-shot 20 of 20).

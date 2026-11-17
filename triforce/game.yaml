@@ -91,6 +91,9 @@ rooms:
     wares: [[blue-potion, 40], [red-potion, 68]]  # [item, rupees], left to right
 - level: 0
   location: '0x05'
+  specialist: ow-lynel  # round 29: the leg to Dungeon 9; the rock wall over its stairs (`bombs: required` on the step)
+  requires_bombs: true  # the rock wall: one bomb facing N from X $48-$58 (walked, docs/routes/d9-walks.md §1.4)
+  bomb_secret: [10, 12]
   exits:
     E:
       level: 0
@@ -114,6 +117,7 @@ rooms:
     tile: [10, 12]
 - level: 0
   location: '0x06'
+  specialist: ow-lynel  # round 29: the leg to Dungeon 9 (E → W along Y $8D)
   exits:
     E:
       level: 0
@@ -128,6 +132,7 @@ rooms:
   treasure: null
 - level: 0
   location: '0x07'  # off-route neighbour of 0x17 (d2first, Nov 8): exits and enemies from the emulator
+  specialist: ow-lynel  # round 29: the leg to Dungeon 9 (S → W; `bombs: never` on the step: its cave takes 20 rupees)
   exits:
     E:
       level: 0
@@ -1418,6 +1423,7 @@ rooms:
     wares: [[magic-shield, 90], [food, 100], [heart, 10]]  # [item, rupees], left to right
 - level: 0
   location: '0x47'
+  specialist: ow-zora  # round 29: the leg to Dungeon 9; the burned tree over the heart container's cave
   exits:
     E:
       level: 0
@@ -1425,6 +1431,10 @@ rooms:
     W:
       level: 0
       location: '0x46'
+    cave:  # round 29: the take-any cave under the tree (burned by CANDLE S from the strip above it)
+      level: 0
+      location: '0x47'
+      in_cave: true
   enemies:
     Zora: 1
   treasure: null
@@ -1434,6 +1444,17 @@ rooms:
     how: burn
     tile: [22, 14]
     wares: [red-potion, heart-container]
+- level: 0
+  location: '0x47'
+  in_cave: true
+  specialist: ow-zora
+  exits:
+    S:
+      level: 0
+      location: '0x47'
+  enemies: null
+  treasure: heart-container  # right ware (x=152): the fifteenth container; the left one is a potion, and taking it leaves no container (walked, d9-walks.md §1.3)
+  treasure_tile: [19, 11]
 - level: 0
   location: '0x48'
   specialist: ow-leever  # d2first to Dungeon 3 (Nov 9)
@@ -5665,6 +5686,7 @@ rooms:
   treasure: null
 - level: 9
   location: '0x03'
+  specialist: like-like  # round 29: 2 Zols, 2 Like-Likes, 2 Bubbles (the Breakfast Room again): emptied for its block
   exits:
     E:  # bomb wall
       level: 9
@@ -5683,6 +5705,8 @@ rooms:
   stairs: [16, 10]
 - level: 9
   location: '0x04'
+  specialist: wizzrobe  # round 29: crossed from the tunnel to its W bomb wall among 4 Traps and 4 Wizzrobes
+  requires_bombs: true
   exits:
     W:  # bomb wall
       level: 9
@@ -5700,6 +5724,7 @@ rooms:
   stairs: [16, 10]
 - level: 9
   location: '0x05'
+  specialist: wizzrobe  # round 29: emptied for its block (the stairs to the tunnel 0x70)
   exits:
     E:  # bomb wall
       level: 9
@@ -5718,6 +5743,8 @@ rooms:
   stairs: [26, 4]
 - level: 9
   location: '0x06'
+  specialist: stalfos-keese-gel  # round 29: the old man; the W bomb wall (`sword: false` on the step)
+  requires_bombs: true
   exits:
     S:
       level: 9
@@ -5732,6 +5759,7 @@ rooms:
   bomb_walls: [W]
 - level: 9
   location: '0x07'
+  specialist: wizzrobe  # round 29: the red ring's room, emptied for its block before the ring
   exits:
     S:  # bomb wall
       level: 9
@@ -5750,6 +5778,7 @@ rooms:
   stairs: [16, 10]
 - level: 9
   location: '0x10'
+  specialist: wizzrobe  # round 29: the silver arrow's room, emptied for its block
   exits:
     S:  # bomb wall
       level: 9
@@ -5819,6 +5848,7 @@ rooms:
   dark: true
 - level: 9
   location: '0x14'
+  specialist: like-like  # round 29: the spiral of 5 Like-Likes, fought (`treasure: clear`)
   exits:
     E:
       level: 9
@@ -5837,6 +5867,7 @@ rooms:
   stairs: [18, 8]
 - level: 9
   location: '0x15'
+  specialist: wizzrobe  # round 29: crossed W → E on the ladder (dark, 3 Blue Wizzrobes)
   exits:
     E:
       level: 9
@@ -5856,6 +5887,7 @@ rooms:
   dark: true
 - level: 9
   location: '0x16'
+  specialist: patra  # round 29: crossed W → S, then fought from S for its four bombs
   exits:
     N:
       level: 9
@@ -5873,6 +5905,8 @@ rooms:
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 9
   location: '0x17'
+  specialist: wizzrobe  # round 29: crossed twice (the ring detour); its N bomb wall
+  requires_bombs: true
   exits:
     N:  # bomb wall
       level: 9
@@ -5889,6 +5923,8 @@ rooms:
   bomb_walls: [N, S]
 - level: 9
   location: '0x20'
+  specialist: wizzrobe  # round 29: emptied on the first visit (out of the tunnel), its N bomb wall; empty on the way back
+  requires_bombs: true
   exits:
     N:  # bomb wall
       level: 9
@@ -6002,6 +6038,8 @@ rooms:
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 9
   location: '0x26'
+  specialist: stalfos-keese-gel  # round 29: 8 Gels, crossed twice (the ring detour); its E bomb wall
+  requires_bombs: true
   exits:
     N:
       level: 9
@@ -6013,10 +6051,12 @@ rooms:
       level: 9
       location: '0x36'
       locked: true
+      keep_out: true  # round 29: a key door off the route; one frame of pressing spends a key the route needs
     W:
       level: 9
       location: '0x25'
       locked: true
+      keep_out: true  # round 29: as its S door
   enemies:
     BlueGel: 8
   treasure: 5-rupees
@@ -6024,6 +6064,8 @@ rooms:
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 9
   location: '0x27'
+  specialist: patra  # round 29: a Patra crossed twice (the ring detour); its N bomb wall
+  requires_bombs: true
   exits:
     N:  # bomb wall
       level: 9
@@ -6041,6 +6083,7 @@ rooms:
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 9
   location: '0x30'
+  specialist: wizzrobe  # round 29: emptied for its block among 4 Traps (the stairs to the tunnel 0x67)
   exits:
     E:  # bomb wall
       level: 9
@@ -6063,6 +6106,8 @@ rooms:
   stairs: [26, 4]
 - level: 9
   location: '0x31'
+  specialist: wizzrobe  # round 29: crossed S → W to its bomb wall (Like-Likes and Wizzrobes)
+  requires_bombs: true
   exits:
     N:  # open here; a shutter on 0x21's side
       level: 9
@@ -6071,6 +6116,7 @@ rooms:
       level: 9
       location: '0x41'
       shutter: true
+      never_opens: true  # round 29: 200 frames of pressing from the arrival spot, the room full and emptied (d9-walks.md §3.2)
     W:  # bomb wall
       level: 9
       location: '0x30'
@@ -6083,6 +6129,7 @@ rooms:
   bomb_walls: [W]
 - level: 9
   location: '0x32'
+  specialist: ganon  # round 29: Zelda's room, the route's last step (`exit: end`)
   exits:
     S:  # shutter
       level: 9
@@ -6184,6 +6231,7 @@ rooms:
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 9
   location: '0x41'
+  specialist: like-like  # round 29: crossed S → N in the dark among 4 Traps and 4 Like-Likes
   exits:
     N:  # open here; a shutter on 0x31's side
       level: 9
@@ -6192,12 +6240,15 @@ rooms:
       level: 9
       location: '0x51'
       shutter: true
+      never_opens: true  # round 29: as 0x31's (d9-walks.md §3.2)
   enemies:  # $4A: four blade traps (type $49 on screen), one per corner
     LikeLike: 4
   treasure: null
   dark: true
 - level: 9
   location: '0x42'  # the boss room
+  specialist: ganon  # round 29
+  requires_rupees: 1  # the silver arrow costs a rupee, and with none the room is sealed for good (walked, docs/routes/d9-fights-walks.md §4.4); while Ganon lives
   exits:
     N:  # shutter
       level: 9
@@ -6298,6 +6349,7 @@ rooms:
   dark: true
 - level: 9
   location: '0x51'
+  specialist: like-like  # round 29: crossed S → N between the rows of blocks past 6 Like-Likes
   exits:
     N:  # open here; a shutter on 0x41's side
       level: 9
@@ -6315,6 +6367,7 @@ rooms:
   trigger: kill-all  # attr F & 7 = 1
 - level: 9
   location: '0x52'
+  specialist: patra  # round 29: fought out of the tunnel for its N shutter (Ganon's door)
   exits:
     N:  # shutter
       level: 9
@@ -6365,6 +6418,7 @@ rooms:
   bomb_walls: [E]
 - level: 9
   location: '0x55'
+  specialist: lanmola  # round 29: both red Lanmolas, then the block and the stairs
   exits:
     N:  # bomb wall
       level: 9
@@ -6421,6 +6475,7 @@ rooms:
   dark: true
 - level: 9
   location: '0x61'
+  specialist: patra  # round 29: its key, the fight for its block; the Patra stays dead on the way back
   exits:
     N:
       level: 9
@@ -6442,6 +6497,7 @@ rooms:
   stairs: [16, 10]
 - level: 9
   location: '0x62'
+  specialist: stalfos-keese-gel  # round 29: 8 Keese, crossed E → W
   exits:
     E:
       level: 9
@@ -6456,15 +6512,18 @@ rooms:
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 9
   location: '0x63'
+  specialist: zol  # round 29: 5 Zols, crossed from the tunnel to its W key door
   exits:
     N:
       level: 9
       location: '0x53'
       locked: true
+      keep_out: true  # round 29: takes the route's last key on the first frame of the press (walked, d9-walks.md §3.2)
     S:
       level: 9
       location: '0x73'
       locked: true
+      keep_out: true  # round 29: as its N door
     W:
       level: 9
       location: '0x62'
@@ -6494,6 +6553,8 @@ rooms:
   treasure: null
 - level: 9
   location: '0x65'
+  specialist: wizzrobe  # round 29: crossed E → N in the dark on the ladder to its bomb wall (5 Wizzrobes, 3 Bubbles)
+  requires_bombs: true
   exits:
     N:  # bomb wall
       level: 9
@@ -6513,6 +6574,8 @@ rooms:
   dark: true
 - level: 9
   location: '0x66'
+  specialist: stalfos-keese-gel  # round 29: the old man's room; with all eight pieces he is gone
+  requires_pieces: 8  # he opens the shutters only to a Link with all eight (walked, d9-walks.md §2): with fewer the route is missed
   exits:
     N:  # shutter
       level: 9
@@ -6575,6 +6638,7 @@ rooms:
   stairs: [16, 10]
 - level: 9
   location: '0x76'  # the start room: S leaves to the overworld
+  specialist: stalfos-keese-gel  # round 29: the entrance (nothing in it)
   exits:
     N:
       level: 9
@@ -6584,6 +6648,7 @@ rooms:
 - level: 9
   location: '0x60'
   in_cave: true  # the tunnel between 0x14 and 0x55 (side view)
+  specialist: equipment-room  # round 29: left by the route step's ladder
   exits:
     E:  # up the right ladder (attr B = $55)
       level: 9
@@ -6597,6 +6662,7 @@ rooms:
 - level: 9
   location: '0x70'
   in_cave: true  # the tunnel between 0x63 and 0x05 (side view)
+  specialist: equipment-room  # round 29
   exits:
     E:  # up the right ladder (attr B = $05)
       level: 9
@@ -6623,6 +6689,7 @@ rooms:
 - level: 9
   location: '0x75'
   in_cave: true  # the tunnel between 0x20 and 0x61 (side view)
+  specialist: equipment-room  # round 29: passed twice (in right, out left; then in left, out right)
   exits:
     E:  # up the right ladder (attr B = $61)
       level: 9
@@ -6636,6 +6703,7 @@ rooms:
 - level: 9
   location: '0x67'
   in_cave: true  # the tunnel between 0x30 and 0x04 (side view)
+  specialist: equipment-room  # round 29
   exits:
     E:  # up the right ladder (attr B = $04)
       level: 9
@@ -6649,6 +6717,7 @@ rooms:
 - level: 9
   location: '0x77'
   in_cave: true  # the tunnel between 0x52 and 0x03 (side view)
+  specialist: equipment-room  # round 29
   exits:
     E:  # up the right ladder (attr B = $03)
       level: 9
@@ -6662,6 +6731,7 @@ rooms:
 - level: 9
   location: '0x00'
   in_cave: true  # the item cellar under 0x07 (side view)
+  specialist: equipment-room  # round 29: the red ring (`waypoint: ring`)
   exits:
     N:  # up the ladder (attr A = attr B = $07)
       level: 9
@@ -6672,6 +6742,7 @@ rooms:
 - level: 9
   location: '0x4f'
   in_cave: true  # the item cellar under 0x10 (side view)
+  specialist: equipment-room  # round 29: the silver arrow (`waypoint: silver-arrow`)
   exits:
     N:  # up the ladder (attr A = attr B = $10)
       level: 9
