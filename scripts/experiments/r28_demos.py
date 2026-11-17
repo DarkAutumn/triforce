@@ -605,7 +605,8 @@ def harvest(directory, what, state, seed, point, action, steps, health, ending):
              'played_by': f'scripts/experiments/r28_demos.py {what} (seed {seed})'}
     if source.get('fight_skipped'):
         entry['fight_skipped'] = True
-    entry_states._merge_manifest(str(directory), [entry], ' '.join(['python'] + sys.argv))   # pylint: disable=protected-access
+    command = ' '.join(['python'] + sys.argv)
+    entry_states._merge_manifest(str(directory), [entry], command)      # pylint: disable=protected-access
     return entry
 
 
@@ -690,8 +691,8 @@ def play(args):
     if args.harvest:
         from triforce import entry_states                       # pylint: disable=import-outside-toplevel
         missed = [f'{stem}_{chain}' for chain in chains if chain not in {e['chain'] for e in harvested}]
-        entry_states._write_build_record(str(args.harvest), ' '.join(['python'] + sys.argv), harvested,   # pylint: disable=protected-access
-                                         missed)
+        command = ' '.join(['python'] + sys.argv)
+        entry_states._write_build_record(str(args.harvest), command, harvested, missed)   # pylint: disable=protected-access
     rows = recorder.save(args.out) if args.out and total['won'] else 0
     print(json.dumps({'room': args.what, 'family': family, 'states': len(chains), 'hearts': args.hearts,
                       'runs': total['runs'], 'won': total['won'], 'endings': dict(total['endings']),
