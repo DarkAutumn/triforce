@@ -2,9 +2,19 @@
 (docs/routes/d8-walks.md; `train --demos FILE --demo-coeff C`, `triforce.demos`, as round 25's
 `r25_d5_37_tracks.py --demos` and round 26's `r26_d7_28_food_demos.py`).
 
+    python scripts/experiments/r28_demos.py ROOM [--runs N] [--chains 0,1,2] [--hearts own|family|H]
+                                                 [--out FILE.npz] [--tracks DIR [--per-state N] [--max-loss H]]
     python scripts/experiments/r28_demos.py scaffold OUT [--hearts H] [--boss-hearts H]
     cd OUT && TRIFORCE_STATES_DIR=OUT/triforce/states PYTHONPATH=OUT \
-        python <checkout>/scripts/experiments/r28_demos.py ROOM [--runs N] [--out FILE.npz]
+        python <checkout>/scripts/experiments/r28_demos.py ROOM --chains 0 [--runs N] [--out FILE.npz]
+
+ROOM plays its rule from the stretch's installed start states (`<stem>_<chain>`, every chain that exists), N runs a
+state (seeds 1000..), through the family's own environment: `--hearts own` (the default) with what the state itself
+holds (full hearts, its bombs), `--hearts family` with the yaml's `ram_randomization` draws (what a training reset
+draws: for demonstration rows that cover what a run brings), `--hearts H` with exactly H hearts.  It prints one JSON
+line a state and one for all.  `--out` writes the won runs' decisions as demonstration rows, `--tracks DIR` the
+first `--per-state` won runs of each state (those that lost at most `--max-loss` hearts) as curriculum tracks
+(`DIR/<state>~rule<seed>`, as `r27_d6_rules.py tracks`; DIR is `trajectories/<family>`).
 
 `scaffold` makes a throwaway data root: the checkout's data (the route `d8` as it is in routes.yaml) with staged
 start states of steps 281-296 from the walks' staging (`r28_walks.leg_states`, `d8_state`, `d8_cellar_states`: 13
@@ -41,7 +51,7 @@ decision among hundreds).  Only runs that end as the family's success are kept."
 import argparse
 import collections
 import json
-import os
+import math
 import sys
 from pathlib import Path
 
@@ -311,8 +321,139 @@ def gleeok_heads(ram):
     return [(ram[NECK_X[n] + 4], ram[NECK_Y[n] + 4]) for n in range(4) if not ram[DEAD_MASK] & (1 << n)]
 
 
+LINK_SPEED, SHOT_SPEED, SHOT_WAIT = 1.5, 1.75, 18     # px a frame; a boss fireball's frames in place before it flies
+SWING_FRAMES, SWING_DANGER = 20, 0.05                 # the env's SWORD holds Link 17-20 frames (the scripts': 10)
+SHOT_HORIZON, STAND_HORIZON = 34, 24
+
+
+def grid_gap(value, base):
+    """Signed pixels from `value` to the nearer grid point (points at base + 8k); 0 on one."""
+    off = (value - base) % 8
+    return -off if off < 4 else 8 - off
+
+
+def link_path(x, y, facing, moves, horizon, bounds=FLOOR):
+    """Link's predicted place after each of `horizon` frames: `moves` = [(facing bit or 0, frames)], the last one
+    held to the horizon.  A turn across his heading between two grid points first walks him on to the nearer grid
+    point (zelda-asm/mechanics.md "Between grid points", cases 5 and 6); the floor's edge stops him."""
+    out, heading = [], facing if facing in VEC else 8
+    fx, fy = float(x), float(y)
+    plan = [d for d, n in moves[:-1] for _ in range(n)]
+    for f in range(horizon):
+        d = plan[f] if f < len(plan) else moves[-1][0]
+        if d:
+            step = LINK_SPEED
+            if (d in (1, 2)) != (heading in (1, 2)):            # across the heading: to the grid point first
+                gap = grid_gap(fx, 0) if heading in (1, 2) else grid_gap(fy, 5)
+                go = min(step, abs(gap))
+                if heading in (1, 2):
+                    fx += math.copysign(go, gap)
+                else:
+                    fy += math.copysign(go, gap)
+                step -= go
+            if step > 0:
+                heading = d
+                fx += VEC[d][0] * step
+                fy += VEC[d][1] * step
+            fx, fy = min(max(fx, bounds[0]), bounds[2]), min(max(fy, bounds[1]), bounds[3])
+        out.append((fx, fy))
+    return out
+
+
+class Seer:
+    """`Eyes` for a room with aimed shots, at the env's grain: [(x, y, vx, vy, radius, delay, horizon)] of what can
+    hurt.  A boss fireball waits 18 frames where it is made and then flies straight at where Link stood when it was
+    made.  A rule that looks once per action cannot measure its speed (it starts between two looks: the first
+    difference reads a quarter of it), so a shot is carried along its line at its flying speed: from its first-seen
+    place toward Link's place then until it has flown 4 px, along what it has flown after; a shot that has not moved
+    starts `delay` frames from now.  Link's own way is `link_path` (the grid turn, the floor's edge), and a first
+    action is judged by the best that can follow it (standing, or one of the four moves held), over `SHOT_HORIZON`
+    frames: `Eyes` carried a still shot 14 frames, saw nothing coming, and ran from a fireball along its own line
+    into the wall (round28.md "Gleeok at the env's grain")."""
+
+    def __init__(self, harmless=(), radius=0x13, shot_radius=0x0D, horizon=14):
+        self.harmless, self.radius, self.shot_radius, self.horizon = set(harmless), radius, shot_radius, horizon
+        self.prev, self.frame = {}, None
+
+    def threats(self, ram):
+        frames = ((ram[FRAME] - self.frame) % 256 or 4) if self.frame is not None else 4
+        self.frame = ram[FRAME]
+        out, now = [], {}
+        for s, t, x, y, _d, meta in objects(ram):
+            old = self.prev.get(s)
+            if (old is not None and old['type'] == t and abs(x - old['x']) < 2 * frames + 8
+                    and abs(y - old['y']) < 2 * frames + 8):
+                rec = dict(old, age=old['age'] + frames, vx=(x - old['x']) / frames, vy=(y - old['y']) / frames,
+                           x=x, y=y)
+            else:
+                rec = {'type': t, 'x': x, 'y': y, 'origin': (x, y), 'aim': (ram[OBJ_X], ram[OBJ_Y]), 'age': 0,
+                       'gap': frames, 'vx': 0.0, 'vy': 0.0}
+            now[s] = rec
+            if t in self.harmless or t >= 0x60 or meta >= 0x10:
+                continue
+            if t in SHOTS:
+                flown = math.hypot(x - rec['origin'][0], y - rec['origin'][1])
+                if flown >= 4:
+                    ux, uy, delay = (x - rec['origin'][0]) / flown, (y - rec['origin'][1]) / flown, 0
+                else:
+                    ax, ay = rec['aim'][0] - x, rec['aim'][1] - y
+                    dist = max(1.0, math.hypot(ax, ay))
+                    ux, uy = ax / dist, ay / dist
+                    delay = max(0, SHOT_WAIT - rec['age'] - rec['gap']) if flown == 0 else 0
+                out.append((x, y, ux * SHOT_SPEED, uy * SHOT_SPEED, self.shot_radius, delay, SHOT_HORIZON))
+            else:
+                out.append((x, y, rec['vx'], rec['vy'], self.radius, 0, self.horizon))
+        self.prev = now
+        return out
+
+    @staticmethod
+    def danger(path, threats):
+        total = 0.0
+        for f, (lx, ly) in enumerate(path, 1):
+            for ox, oy, vx, vy, r, delay, horizon in threats:
+                if f <= horizon:
+                    t = max(0, f - delay)
+                    if abs(ox + vx * t - lx) < r and abs(oy + vy * t - ly) < r:
+                        total += 1.0 / (1 + f)
+        return total
+
+    def best(self, ram, first, threats):
+        """The least danger of `first` = [(facing bit or 0, frames)] followed by standing or one of the four moves."""
+        x, y, facing = ram[OBJ_X], ram[OBJ_Y], ram[OBJ_DIR]
+        return min(self.danger(link_path(x, y, facing, first + [(d, 0)], SHOT_HORIZON), threats)
+                   for d in (0, 1, 2, 4, 8))
+
+    def choose(self, ram, ok, goal, threats, bounds=FLOOR):
+        """Of MOVE <d> 4 and WAIT 4 (those the mask offers), the one whose best continuation is the least dangerous;
+        ties by the danger of standing after it for `STAND_HORIZON` frames (off a shot's line early, not at the last
+        moment), then by the distance left to `goal`."""
+        x, y, facing = ram[OBJ_X], ram[OBJ_Y], ram[OBJ_DIR]
+        inside = bounds[0] <= x <= bounds[2] and bounds[1] <= y <= bounds[3]
+        if not inside:
+            d = 4 if y < bounds[1] else 8 if y > bounds[3] else 1 if x < bounds[0] else 2
+            if ok(f'MOVE {NAME[d]} 4'):
+                return f'MOVE {NAME[d]} 4'
+        best = None
+        for d in (1, 2, 4, 8, 0):
+            step = f'MOVE {NAME[d]} 4' if d else 'WAIT 4'
+            if not ok(step):
+                continue
+            if d and inside:
+                ex, ey = x + VEC[d][0] * 6, y + VEC[d][1] * 6
+                if not (bounds[0] <= ex <= bounds[2] and bounds[1] <= ey <= bounds[3]):
+                    ex, ey = min(max(ex, bounds[0]), bounds[2]), min(max(ey, bounds[1]), bounds[3])
+                    if (ex, ey) == (x, y) or (abs(x - 0x78) < 8 if VEC[d][1] else abs(y - 0x8D) < 8):
+                        continue              # at the floor's edge, or on a doorway's line: the move would leave
+            stand = link_path(x, y, facing, [(d, 4), (0, 0)], STAND_HORIZON)
+            left = abs(goal[0] - stand[3][0]) + abs(goal[1] - stand[3][1])
+            cost = (round(self.best(ram, [(d, 4)], threats), 3), round(self.danger(stand, threats), 3), left)
+            if best is None or cost < best[0]:
+                best = (cost, step)
+        return best[1] if best else 'WAIT 4'
+
+
 def gleeok_rule(row=0x9D):
-    eyes = Eyes(harmless=(GLEEOK4,))
+    seer = Seer(harmless=(GLEEOK4,))
     state = {}
 
     def taken(ram):
@@ -323,20 +464,22 @@ def gleeok_rule(row=0x9D):
 
     def rule(ram, ok):
         x, y = ram[OBJ_X], ram[OBJ_Y]
-        seen = eyes.threats(ram)
+        seen = seer.threats(ram)
         heads = gleeok_heads(ram)
         if not heads:
             return leave.step(ram, ok)
-        threats = seen + [(hx, hy, 0, 0, 0x0F) for hx, hy in heads] + [(GLEEOK_BASE[0], GLEEOK_BASE[1], 0, 0, 0x12)]
+        threats = (seen + [(hx, hy, 0, 0, 0x0F, 0, SHOT_HORIZON) for hx, hy in heads]
+                   + [(GLEEOK_BASE[0], GLEEOK_BASE[1], 0, 0, 0x12, 0, SHOT_HORIZON)])
         beam = ok('BEAMS N')
         reach = [h for h in heads if abs(h[0] - x) <= 8 and (10 <= y - h[1] <= 27 or (beam and y - h[1] >= 10))]
-        shots = [t for t in threats if t[4] < 0x0F]
-        if ram[OBJ_INVINC + HEAD_SLOT] == 0 and reach and eyes.danger(x, y, 0, 0, shots) < 0.3:
+        # A swing holds Link for its frames: only when he can still get out of the way of every shot after it.
+        if (ram[OBJ_INVINC + HEAD_SLOT] == 0 and reach
+                and seer.best(ram, [(0, SWING_FRAMES)], seen) < SWING_DANGER):
             step = swing(ok, 8)
             if step:
                 return step
         low = max(heads, key=lambda h: (h[1], -abs(h[0] - x)))
-        return eyes.choose(ram, ok, (low[0] & 0xF8, max(row, 0xAD) if beam else row), threats)
+        return seer.choose(ram, ok, (low[0] & 0xF8, max(row, 0xAD) if beam else row), threats)
     return rule
 
 
@@ -382,7 +525,9 @@ def scaffold(args):
         else:
             hearts = args.boss_hearts if room == 0x3C and args.boss_hearts is not None else args.hearts
             source = d8_state(room, entry, path=out / 'd8-states' / f'8_{room:02x}{entry.lower()}.state', hearts=hearts)
-        (states / f'{stem}_0.state').write_bytes(Path(source).read_bytes())
+        target = states / f'{stem}_0.state'
+        target.unlink(missing_ok=True)        # a link to the checkout's own state once the stretch has them
+        target.write_bytes(Path(source).read_bytes())
         names[step['specialist']].append(stem)
     (out / 'specialists').mkdir()
     for f in (ROOT / 'specialists').glob('*.yaml'):
@@ -398,61 +543,126 @@ def scaffold(args):
     print(f'play with: cd {out} && TRIFORCE_STATES_DIR={states} PYTHONPATH={out} python {Path(__file__).resolve()} ROOM')
 
 
-def play(args):
-    from triforce._native import Env                            # pylint: disable=import-outside-toplevel
-    from triforce.demos import DemoRecorder, action_indices, legal  # pylint: disable=import-outside-toplevel
-    family, index = ROOMS[args.what]
-    state = stems()[index][0] + '_0'
-    env = Env(family, explicit_starts=True, strict_actions=False, seed=0)
-    recorder = DemoRecorder()
-    endings, lost, steps_won, kinds = collections.Counter(), [], [], collections.Counter()
-    kept = 0
-    for seed in range(SEED0, SEED0 + args.runs):
-        obs, _ = env.reset(seed=seed, options={'start_state': state})
-        rule = RULES[args.what]()
-        health, info, n, illegal = env.state.health, {}, 0, 0
-        for n in range(1, args.max_steps + 1):
-            mask = obs['action_mask']
+def rule_env(family, state, hearts):
+    """The family's env for `state` with the hearts a run starts on: `own` (nothing drawn: the state's hearts and
+    bombs), `family` (the yaml's draws) or a number of hearts (of the state's containers)."""
+    from triforce._native import Env, Game                      # pylint: disable=import-outside-toplevel
+    from triforce.paths import STATES_DIR                       # pylint: disable=import-outside-toplevel
+    from triforce.specialist import load_specialist             # pylint: disable=import-outside-toplevel
+    config = load_specialist(family)
+    if hearts == 'own':
+        config = config.replace(ram_randomization={})
+    elif hearts != 'family':
+        containers = Game(seed=0, states_dir=str(STATES_DIR)).load(state, fresh_room=True, seed=0).max_health
+        share = float(hearts) / containers
+        config = config.replace(ram_randomization={'hp': [share, share]})
+    return Env(config, explicit_starts=True, strict_actions=False, seed=0)
 
-            def ok(step, mask=mask):
-                return legal(mask, action_indices(step))
-            step = rule(bytes(env.state.ram), ok)
-            if ok(step):
-                kind = step.split()[0]
-                recorder.add(obs, step, repeat=REPEAT.get(kind, 1), any_duration=kind in ('MOVE', 'WAIT'))
-                kinds[kind] += 1
-            else:
-                illegal += 1
-            obs, _, terminated, truncated, info = env.step(step)
-            if terminated or truncated:
-                break
-        won = info.get('outcome') == 'success'
-        endings[info.get('ending', 'max-steps (the script\'s)')] += 1
-        if won:
-            recorder.keep()
-            kept += 1
-            lost.append(health - env.state.health)
-            steps_won.append(n)
-        else:
-            recorder.drop()
-        if args.verbose:
-            print(f'  seed {seed}: {info.get("ending")} after {n} decisions, hearts {health} -> {env.state.health}, '
-                  f'{illegal} masked')
-    rows = recorder.save(args.out) if args.out and kept else 0
+
+def write_track(directory, state, seed, what, points, actions, health, ending):
+    """One won run as the curriculum reads it (`r27_d6_rules.py tracks`)."""
+    track = directory / f'{state}~rule{seed}'
+    track.mkdir(parents=True, exist_ok=True)
+    for index, point in enumerate(points[:len(actions)]):
+        (track / f'{index:04d}.state').write_bytes(point.state_file())
+    (track / 'trajectory.json').write_text(json.dumps({
+        'start_state': state, 'success': True, 'ending': ending, 'steps': len(actions), 'health': health,
+        'actions': actions,
+        'explore': {'iterations': 0, 'env_steps': len(actions), 'cells': 0, 'seconds': 0.0, 'seed': seed},
+        'crafted': f'round 28: the scripted rule {what} (scripts/experiments/r28_demos.py)'}, indent=1))
+    return track
+
+
+def play(args):
+    from triforce.demos import DemoRecorder, action_indices, legal  # pylint: disable=import-outside-toplevel
+    from triforce.paths import STATES_DIR                       # pylint: disable=import-outside-toplevel
+    family, index = ROOMS[args.what]
+    stem = stems()[index][0]
+    chains = ([int(c) for c in args.chains.split(',')] if args.chains
+              else [c for c in (0, 1, 2) if (Path(STATES_DIR) / f'{stem}_{c}.state').exists()])
+    recorder = DemoRecorder()
     mean = lambda v: sum(v) / len(v) if v else float('nan')     # noqa: E731
-    print(json.dumps({'room': args.what, 'family': family, 'state': state, 'runs': args.runs, 'won': kept,
-                      'endings': dict(endings), 'hearts_lost_in_wins': round(mean(lost), 2),
-                      'hearts_lost_max': max(lost, default=None), 'decisions_in_wins': round(mean(steps_won), 1),
-                      'actions_kept': dict(kinds), 'rows': rows, 'file': str(args.out) if rows else None}))
-    return 0 if kept else 1
+    total = {'won': 0, 'runs': 0, 'endings': collections.Counter(), 'lost': [], 'kinds': collections.Counter(),
+             'tracks': 0}
+    for state in (f'{stem}_{chain}' for chain in chains):
+        env = rule_env(family, state, args.hearts)
+        endings, lost, steps_won, kinds, hearts_in = collections.Counter(), [], [], collections.Counter(), []
+        kept = tracks = 0
+        for seed in range(SEED0, SEED0 + args.runs):
+            obs, _ = env.reset(seed=seed, options={'start_state': state})
+            rule = RULES[args.what]()
+            health, containers, info, n, illegal = env.state.health, env.state.max_health, {}, 0, 0
+            points, actions = [], []
+            for n in range(1, args.max_steps + 1):
+                mask = obs['action_mask']
+
+                def ok(step, mask=mask):
+                    return legal(mask, action_indices(step))
+                step = rule(bytes(env.state.ram), ok)
+                if ok(step):
+                    kind = step.split()[0]
+                    recorder.add(obs, step, repeat=REPEAT.get(kind, 1), any_duration=kind in ('MOVE', 'WAIT'))
+                    kinds[kind] += 1
+                else:
+                    illegal += 1
+                if args.tracks:
+                    points.append(env.snapshot())
+                    actions.append(step)
+                obs, _, terminated, truncated, info = env.step(step)
+                if terminated or truncated:
+                    break
+            won = info.get('outcome') == 'success'
+            endings[info.get('ending', 'max-steps (the script\'s)')] += 1
+            # Hearts lost: a heart container taken on the way (Gleeok's) adds a heart, which is no healing.
+            down = health - env.state.health + (env.state.max_health - containers)
+            hearts_in.append(health)
+            if won:
+                recorder.keep()
+                kept += 1
+                lost.append(down)
+                steps_won.append(n)
+                if args.tracks and tracks < args.per_state and not illegal and (
+                        args.max_loss is None or down <= args.max_loss):
+                    print(f'{write_track(args.tracks, state, seed, args.what, points, actions, health, info["ending"])}'
+                          f': {n} steps, {down} hearts lost', file=sys.stderr)
+                    tracks += 1
+            else:
+                recorder.drop()
+            if args.verbose:
+                print(f'  seed {seed}: {info.get("ending")} after {n} decisions, hearts {health} -> '
+                      f'{env.state.health}, {illegal} masked')
+        print(json.dumps({'room': args.what, 'family': family, 'state': state, 'hearts': args.hearts,
+                          'hearts_in': [min(hearts_in), round(mean(hearts_in), 2), max(hearts_in)],
+                          'runs': args.runs, 'won': kept, 'endings': dict(endings),
+                          'hearts_lost_in_wins': round(mean(lost), 2), 'hearts_lost_max': max(lost, default=None),
+                          'decisions_in_wins': round(mean(steps_won), 1), 'tracks': tracks}), flush=True)
+        total['won'] += kept
+        total['runs'] += args.runs
+        total['endings'].update(endings)
+        total['lost'] += lost
+        total['kinds'].update(kinds)
+        total['tracks'] += tracks
+    rows = recorder.save(args.out) if args.out and total['won'] else 0
+    print(json.dumps({'room': args.what, 'family': family, 'states': len(chains), 'hearts': args.hearts,
+                      'runs': total['runs'], 'won': total['won'], 'endings': dict(total['endings']),
+                      'hearts_lost_in_wins': round(mean(total['lost']), 2),
+                      'hearts_lost_max': max(total['lost'], default=None), 'actions_kept': dict(total['kinds']),
+                      'tracks': total['tracks'], 'rows': rows, 'file': str(args.out) if rows else None}))
+    return 0 if total['won'] else 1
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     parser.add_argument('what', choices=['scaffold'] + list(ROOMS))
     parser.add_argument('out_dir', nargs='?', type=Path, help='scaffold: the throwaway data root')
-    parser.add_argument('--hearts', type=float, default=None, help="scaffold: Dungeon 8 states' hearts (default 13)")
+    parser.add_argument('--hearts', default=None,
+                        help="ROOM: own (default), family or a number of hearts; scaffold: Dungeon 8 states' hearts "
+                             "(default 13)")
     parser.add_argument('--boss-hearts', type=float, default=None, help="scaffold: Gleeok's state's hearts")
+    parser.add_argument('--chains', default=None, help='ROOM: chains to play (default: every chain with a state)')
+    parser.add_argument('--tracks', type=Path, default=None, help='ROOM: write curriculum tracks under this directory')
+    parser.add_argument('--per-state', type=int, default=1, help='--tracks: tracks a state')
+    parser.add_argument('--max-loss', type=float, default=None, help='--tracks: hearts a track\'s run may lose')
     parser.add_argument('--runs', type=int, default=RUNS)
     parser.add_argument('--max-steps', type=int, default=3000, help='decisions a run may take')
     parser.add_argument('--out', type=Path, default=None, help='write the kept runs\' rows here (.npz)')
@@ -462,10 +672,10 @@ def main():
         if args.out_dir is None:
             parser.error('scaffold needs OUT')
         args.out = args.out_dir
+        args.hearts = None if args.hearts is None else float(args.hearts)
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         return scaffold(args) or 0
-    if 'TRIFORCE_STATES_DIR' not in os.environ:
-        parser.error('run inside a scaffold: TRIFORCE_STATES_DIR=OUT/triforce/states PYTHONPATH=OUT (see scaffold)')
+    args.hearts = args.hearts or 'own'
     return play(args)
 
 

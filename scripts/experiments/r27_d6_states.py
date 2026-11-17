@@ -2,7 +2,8 @@
 of Dungeon 6 (route `d6`, steps 248-280; docs/experiments/round27.md "The start states").
 
     python scripts/experiments/r27_d6_states.py write STATE OUT [--bombs N] [--rupees N] [--keys N]
-    python scripts/experiments/r27_d6_states.py table [--dir DIR] [--markdown]
+    python scripts/experiments/r27_d6_states.py table [--dir DIR] [--markdown] [--route d6] [--first-step 248]
+                                                      [--last-step N]
 
 ``write`` writes ``OUT/<STATE's name>``, the pre-entry state STATE (not run: it stays pre-entry) with the given
 counts: what round 26's ``r26_d7_states.py bombs`` does, for any of the three ledgers.  Used where a state after a
@@ -10,7 +11,7 @@ skipped fight (``entry_states build --skip-fights``) would not hold what a run t
 
 ``table`` prints the sword, hearts and containers, bombs, keys, rupees, arrows and triforce pieces of every state of
 steps 248-280 in DIR (default: the states dir), chains 0 / 1 / 2, as each loads (the first playable frame, the room
-fresh), with the manifest's ``fight_skipped`` mark.
+fresh), with the manifest's ``fight_skipped`` mark.  Round 28 reads its stretch with ``--route d8 --first-step 281``.
 """
 
 import argparse
@@ -53,8 +54,9 @@ def inventory(game: Game, path: str) -> dict:
             'rupees': game.read(RUPEES), 'arrows': game.read(ARROWS), 'pieces': bin(game.read(TRIFORCE)).count('1')}
 
 
-def table(directory: str, markdown: bool) -> int:
-    """Prints one row per step; returns the number of states missing."""
+def table(directory: str, markdown: bool, route: str = ROUTE, first: int = FIRST_STEP, last: int | None = None) -> int:
+    """Prints one row per step of ``route`` from ``first`` to ``last`` (the route's end); returns the number of states
+    missing."""
     game = Game(seed=0, states_dir=directory)
     manifest_path = os.path.join(directory, 'entry_states.json')
     manifest = {}
@@ -67,7 +69,7 @@ def table(directory: str, markdown: bool) -> int:
         print('| Step | State | Way | Family | Sword | Hearts / containers | Bombs | Keys | Rupees | Arrows | Pieces '
               '| After a skipped fight |')
         print('|---:|---|---|---|---|---|---|---|---|---|---|---|')
-    for step in route_steps(ROUTE)[FIRST_STEP:]:
+    for step in route_steps(route)[first:None if last is None else last + 1]:
         stem = state_stem(step['level'], step['room'], step['in_cave'], step['entry'], step['visit'])
         rows, skipped = [], []
         for chain in (0, 1, 2):
@@ -104,6 +106,9 @@ def main(argv=None) -> int:
     tab = sub.add_parser('table')
     tab.add_argument('--dir', default=str(STATES_DIR))
     tab.add_argument('--markdown', action='store_true')
+    tab.add_argument('--route', default=ROUTE)
+    tab.add_argument('--first-step', type=int, default=FIRST_STEP)
+    tab.add_argument('--last-step', type=int, default=None)
     args = parser.parse_args(argv)
     if args.command == 'write':
         values = {name: getattr(args, name) for name in FIELDS if getattr(args, name) is not None}
@@ -111,7 +116,7 @@ def main(argv=None) -> int:
             parser.error('write: give at least one of --bombs, --rupees, --keys')
         write(args.state, args.out, values)
         return 0
-    return 1 if table(args.dir, args.markdown) else 0
+    return 1 if table(args.dir, args.markdown, args.route, args.first_step, args.last_step) else 0
 
 
 if __name__ == '__main__':
