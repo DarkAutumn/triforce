@@ -831,7 +831,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
     fn start_from_state(&mut self, rng: &mut ChaCha8Rng) -> Result<GameCompletion, EnvError> {
         let machine = self.store.load(&self.route.start_state)?;
         // Round 29: a start in a room the route comes back to enters it with the kills its earlier visit left
-        // (routes.yaml `banked_kills`), as a played run finds it.
+        // (routes.yaml `banked_kills`, on the way the run's clips switch starts on), as a played run finds it.
         let banked_kills = StateName::parse(&self.route.start_state)
             .and_then(|named| {
                 let kills = zelda::objectives::start_banked_kills(
@@ -840,6 +840,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                     Some(named.entry),
                     Some(named.visit),
                     Some(&self.route.name),
+                    self.route.clips,
                 )?;
                 Some(((named.location.level, named.location.value), kills))
             })

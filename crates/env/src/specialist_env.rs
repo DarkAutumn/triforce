@@ -639,18 +639,25 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         // A staged start (training only): the kills banked for the start's pending dungeon room, before its entry.
         // Before them (round 29) the kills the route's earlier visit left in a room it comes back to (routes.yaml
         // `banked_kills`, by the start state's name): the game keeps those, the fresh-room write would undo them.
+        // Where the stretch's two ways keep different kills there (9:0x07 out of the ring cellar: the clip way left it
+        // full), the switch is decided here, before the load (a curriculum start keeps it on, as below).
         let mut banked_kills = self.draw_banked_kills();
+        let mut early_clips = None;
         if self.curriculum_tag.is_none()
             && let Some(named) = crate::start_states::StateName::parse(&name)
-            && let Some(kills) = zelda::objectives::start_banked_kills(
-                &self.data.map,
-                named.location,
-                Some(named.entry),
-                Some(named.visit),
-                self.config.route.as_deref(),
-            )
         {
-            banked_kills.insert(0, ((named.location.level, named.location.value), kills));
+            let (map, route) = (&self.data.map, self.config.route.as_deref());
+            let (at, entry, visit) = (named.location, Some(named.entry), Some(named.visit));
+            let clips = if zelda::objectives::banked_kills_follow_clips(map, at, entry, visit, route) {
+                let on = self.clips_plan.unwrap_or_else(|| self.config.clips.draw(&mut self.rng));
+                early_clips = Some(on);
+                on
+            } else {
+                true
+            };
+            if let Some(kills) = zelda::objectives::start_banked_kills(map, at, entry, visit, route, clips) {
+                banked_kills.insert(0, ((at.level, at.value), kills));
+            }
         }
         let opts = LoadOptions {
             randomize_rng: true,
@@ -700,7 +707,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         let route = self.config.route.as_deref();
         let fixed = start_clips(&self.data.map, state.full_location(), entry, visit, route, &state);
         self.clips_fixed = fixed;
-        self.clips_allowed = match fixed.or(self.clips_plan) {
+        self.clips_allowed = match fixed.or(self.clips_plan).or(early_clips) {
             Some(on) => on,
             None if self.curriculum_tag.is_some() => true,
             None => self.config.clips.draw(&mut self.rng),

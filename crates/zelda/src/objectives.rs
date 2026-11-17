@@ -2304,41 +2304,60 @@ pub fn start_clips(
 }
 
 /// The kills banked in the room of an episode starting in the dungeon room `location` entered from `entry`, the
-/// `visit` its start state's name spells (round 29): the routes.yaml `banked_kills` of the step that name is (the
-/// steps of `route`, of every route without one, entering the room from `entry`; of those, the visit's when there
-/// are any), when every such step says the same. The game keeps a room's kills on the route's return (9:0x20 from
-/// N is empty, 9:0x07 out of its cellar holds only its Bubbles: docs/routes/d9-walks.md §3.4), where a start
-/// state's own room is made fresh on every load (`crate::LoadOptions::fresh_room`): the env and the chain bank
-/// these before the entry (`crate::LoadOptions::banked_kills`), so the room makes that many fewer monsters, as a
-/// played run finds it. The name alone decides (no progress of Link's): it is read before the state is loaded.
-/// None: a full room.
+/// `visit` its start state's name spells (round 29), with the run-time clips switch `clips`: the routes.yaml
+/// `banked_kills` of the step that name is (the steps of `route`, of every route without one, entering the room from
+/// `entry`; of those, the visit's when there are any; of those, the ones on the way `clips` selects when there are
+/// any), when every such step says the same. The game keeps a room's kills on the route's return (9:0x20 from N is
+/// empty, 9:0x07 out of its cellar holds only its Bubbles: docs/routes/d9-walks.md §3.4), where a start state's own
+/// room is made fresh on every load (`crate::LoadOptions::fresh_room`): the env and the chain bank these before the
+/// entry (`crate::LoadOptions::banked_kills`), so the room makes that many fewer monsters, as a played run finds it.
+/// The name and the switch alone decide (no progress of Link's): it is read before the state is loaded. A room the
+/// route's clip way left full (9:0x07 and 0x20 of `d9`'s stretches `ring-07` and `arrow-20n`: clipped, not emptied)
+/// banks nothing on that way. None: a full room.
 pub fn start_banked_kills(
     map: &GameMap,
     location: MapLocation,
     entry: Option<&str>,
     visit: Option<u32>,
     route: Option<&str>,
+    clips: bool,
 ) -> Option<u8> {
     let entry = entry?;
     if location.level == 0 || location.in_cave {
         return None;
     }
-    let mut found: Vec<(bool, Option<u8>)> = Vec::new();
+    let mut found: Vec<(bool, bool, Option<u8>)> = Vec::new();
     for (name, steps) in &map.routes {
         if route.is_some_and(|r| r != name) {
             continue;
         }
         for (i, step) in steps.iter().enumerate() {
             if step.location() == location && step.entry == entry {
-                found.push((visit.is_none_or(|v| map.visits[name][i] == v), step.banked_kills));
+                found.push((visit.is_none_or(|v| map.visits[name][i] == v), step.on_way(clips), step.banked_kills));
             }
         }
     }
     if found.iter().any(|f| f.0) {
         found.retain(|f| f.0);
     }
-    let kills = found.first()?.1;
-    found.iter().all(|f| f.1 == kills).then_some(kills).flatten()
+    if found.iter().any(|f| f.1) {
+        found.retain(|f| f.1);
+    }
+    let kills = found.first()?.2;
+    found.iter().all(|f| f.2 == kills).then_some(kills).flatten()
+}
+
+/// Whether the kills a start banks ([`start_banked_kills`]) depend on the run-time clips switch: a start state the
+/// route's two ways of a stretch enter with different kills kept (9:0x07 out of the ring cellar). The env then
+/// decides the switch before loading the state.
+pub fn banked_kills_follow_clips(
+    map: &GameMap,
+    location: MapLocation,
+    entry: Option<&str>,
+    visit: Option<u32>,
+    route: Option<&str>,
+) -> bool {
+    start_banked_kills(map, location, entry, visit, route, true) != start_banked_kills(map, location, entry, visit, route, false)
 }
 
 /// (route, step) for an episode starting in `location` entered from `entry` (`start_route`) with the run-time clips

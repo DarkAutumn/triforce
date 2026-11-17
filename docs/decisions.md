@@ -2722,7 +2722,18 @@ cheapest thing to undo that the walks support, and each names what changes if he
    the `target` input and would have to change with the key.
 10. **`keep_out` on 9:0x26 S and W** is the vocabulary step's own addition, beside the walk's 0x63 N and S: 0x26
     is crossed twice with exactly the keys the route needs, and both are key doors off the way.
+11. **The block clips of the ring rooms are the clips way** (the lead's working answer to the owner's question 3,
+    round 29's states step; clips on is the owner's primary way): with the run-time clips switch on 0x55, 0x07, 0x20
+    (from N) and 0x03 are left by `CLIP` to their stairs with their monsters alive; 0x61 is fought (its clip and the
+    return past the live Patra cost 1.40 hearts against 0.63); every fight stays the clips-off way. Built as three
+    one-step stretches of `d9` (`ring-07`, `arrow-20`, `arrow-20n`: the return visits find 0x07 and 0x20 full on the
+    clip way, holding the kills of their fights on the plain way; 0x20's first visit is crossed, not emptied, with
+    clips), a stretch whose two ways leave a room by the same exit as different steps (`routes.yaml` header),
+    `clips: true` for wizzrobe, lanmola and like-like (half their episodes with CLIP masked, the standing rule; not
+    scoped to rooms, the owner's word: on the clip way the objective also takes a skip through 9:0x51's blocks and
+    out of 0x04's ring), and a start's kept kills that follow the switch (`objectives::start_banked_kills`; the env
+    decides the switch before loading such a state). If Lee says no, the stretches and the three `clips:` lines go.
 
 Not answered here, still Lee's (round29.md §8): the survival gap (the best plays seen cost about 23 hearts on the
 route and 26 in the fights with the ring, of 15 containers and no refill; with the block clips of 0x55, 0x07, 0x20
-and 0x03 the fights cost 15), and with it whether the families of the ring rooms get `clips: true`.
+and 0x03 the fights cost 15), and the clips way above.

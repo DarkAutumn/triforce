@@ -8,6 +8,7 @@ reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # as moldorm (round 25)
 items: {bombs: free}                       # as moldorm: a bomb takes 3 segments in the median; only above the route's reserve (3 here: on a run with no drops there is none to spend)
+clips: true                                # round 29: the block clip of 9:0x55 to its stairs (half the episodes without: the fight and the push)
 curriculum: {enabled: true}             # trajectories/lanmola, once explored
 one_room: true
 max_steps: 3000

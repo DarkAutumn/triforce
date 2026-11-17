@@ -82,34 +82,37 @@ def test_the_scouting_route_d8_goes_on_to_the_d8_triforce():
 
 
 def test_the_scouting_route_d9_goes_on_to_the_end_of_the_game():
-    """Round 29: d9 is d8 and steps 297-354, one way (no stretch): the whirlwind out of 0x6d, the leg with 0x47's
-    heart cave, the rock wall of 0x05, Dungeon 9 with the red ring's detour and the silver arrow, Ganon, and Zelda's
-    room, whose exit is the end of the game; the rooms the route comes back to keep their kills; every room is in its
-    step's family."""
+    """Round 29: d9 is d8 and steps 297-357: the whirlwind out of 0x6d, the leg with 0x47's heart cave, the rock wall
+    of 0x05, Dungeon 9 with the red ring's detour and the silver arrow, Ganon, and Zelda's room, whose exit is the end
+    of the game; the rooms the route comes back to keep their kills (on the plain way: the clip way of the stretches
+    `ring-07`, `arrow-20` and `arrow-20n` leaves 0x07 and 0x20 full); every room is in its step's family."""
     base, steps = native.route_steps('d8'), native.route_steps('d9')
-    assert steps[:len(base)] == base and len(steps) == 355
+    assert steps[:len(base)] == base and len(steps) == 358
     own = steps[len(base):]
-    assert all(s['way'] is None and s['stretch'] is None for s in own)
+    assert [(s['index'], s['way'], s['stretch']) for s in own if s['way']] == [
+        (325, 'clips', 'ring-07'), (326, 'plain', 'ring-07'), (338, 'clips', 'arrow-20'), (339, 'plain', 'arrow-20'),
+        (343, 'clips', 'arrow-20n'), (344, 'plain', 'arrow-20n')]
     first, last = own[0], own[-1]
     assert (first['level'], first['room'], first['entry'], first['exit'], first['specialist']) == (
         0, 0x6d, 'cave', 'recorder', 'ow-moblin')
     assert (last['level'], last['room'], last['entry'], last['exit'], last['specialist']) == (9, 0x32, 'S', 'end', 'ganon')
-    assert [s['index'] for s in steps if s['exit'] == 'end'] == [354]
+    assert [s['index'] for s in steps if s['exit'] == 'end'] == [357]
     assert [(s['index'], s['waypoint']) for s in own if s['waypoint']] == [
-        (302, 'heart'), (324, 'ring'), (339, 'silver-arrow')]
+        (302, 'heart'), (324, 'ring'), (341, 'silver-arrow')]
     assert [(s['index'], s['room'], s['banked_kills']) for s in own if s['banked_kills']] == [
-        (325, 0x07, 5), (340, 0x10, 5), (341, 0x20, 15), (343, 0x61, 15)]
+        (326, 0x07, 5), (342, 0x10, 5), (344, 0x20, 15), (346, 0x61, 15)]
     assert [(s['index'], s['bomb_reserve']) for s in own if s['bomb_reserve'] is not None] == [
-        (297, 5), (312, 4), (315, 3), (321, 2), (322, 1), (323, 0), (330, 4), (331, 3), (338, 2), (347, 1), (350, 0)]
-    assert [(s['index'], s['rupee_reserve']) for s in own if s['rupee_reserve'] is not None] == [(312, 1), (353, 0)]
+        (297, 5), (312, 4), (315, 3), (321, 2), (322, 1), (323, 0), (331, 4), (332, 3), (340, 2), (350, 1), (353, 0)]
+    assert [(s['index'], s['rupee_reserve']) for s in own if s['rupee_reserve'] is not None] == [(312, 1), (356, 0)]
     assert [(s['index'], s['bombs']) for s in own if s['bombs']] == [(309, 'never'), (311, 'required')]
     assert [(s['index'], s['treasure']) for s in own if s['treasure']] == [
-        (317, 'clear'), (318, 'skip'), (319, 'skip'), (320, 'skip'), (321, 'skip'), (327, 'skip'), (328, 'skip'),
-        (334, 'skip'), (337, 'clear')]
-    assert [s['index'] for s in steps if not s['sword']] == [330]          # the old man of 9:0x06
-    # Rooms the route enters twice from the same side (with d2first's and d8's earlier visits).
+        (317, 'clear'), (318, 'skip'), (319, 'skip'), (320, 'skip'), (321, 'skip'), (328, 'skip'), (329, 'skip'),
+        (335, 'skip'), (339, 'clear')]
+    assert [s['index'] for s in steps if not s['sword']] == [331]          # the old man of 9:0x06
+    # Rooms the route enters twice from the same side (with d2first's and d8's earlier visits); a stretch's two ways
+    # are one visit.
     assert [(s['index'], s['room'], s['in_cave'], s['visit']) for s in own if s['visit'] > 1] == [
-        (299, 0x38, False, 2), (300, 0x48, False, 2), (342, 0x75, True, 2)]
+        (299, 0x38, False, 2), (300, 0x48, False, 2), (345, 0x75, True, 2)]
     families = native.families()
     for step in own:
         room = (step['level'], step['room'], step['in_cave'])

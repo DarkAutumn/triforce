@@ -741,8 +741,10 @@ struct StretchClaim {
 }
 
 /// The stretch block's own consistency: both ways begin in the `parts` room entered from its side and leave it
-/// differently, and the shared step right after the block is the `rejoins` room entered from its side. (That each
-/// way's steps lead into each other and into the rejoin is checked against game.yaml in `GameMap::from_yaml`.)
+/// differently, or (round 29) by the same exit as steps that carry something else (9:0x07 out of the ring cellar: the
+/// plain way's room holds the kills its first visit banked, the clip way's is full; the clips switch decides in the
+/// room, as in 5:0x64), and the shared step right after the block is the `rejoins` room entered from its side. (That
+/// each way's steps lead into each other and into the rejoin is checked against game.yaml in `GameMap::from_yaml`.)
 fn check_stretch(route: &str, steps: &[RouteStep], claim: &StretchClaim) -> Result<(), MapError> {
     let what = format!("routes.yaml: {route}: stretch {:?}", claim.name);
     let block = &steps[claim.start..claim.end];
@@ -760,8 +762,9 @@ fn check_stretch(route: &str, steps: &[RouteStep], claim: &StretchClaim) -> Resu
             ));
         }
     }
-    if clips.exit == plain.exit {
-        return err(format!("{what}: both ways leave {} by {}: they don't part there", claim.parts.0, clips.exit));
+    let bare = |s: &RouteStep| RouteStep { way: None, stretch: None, ..s.clone() };
+    if bare(clips) == bare(plain) {
+        return err(format!("{what}: both ways leave {} by {} as the same step: they don't part there", claim.parts.0, clips.exit));
     }
     match steps.get(claim.end) {
         Some(rejoin) if rejoin.way.is_none() && (rejoin.location(), &rejoin.entry) == (claim.rejoins.0, &claim.rejoins.1) => {
@@ -2588,6 +2591,13 @@ mod tests {
         assert!(e.contains("the plain way") && e.contains("leaves by"), "{e}");
         let e = broken("  parts: {level: 4", "  part: x\n  parts: {level: 4");
         assert!(e.contains("part"), "{e}");
+        // Round 29: both ways may leave the parts room by the same exit when their steps differ otherwise (`d9`'s
+        // `ring-07`: the plain way's 0x07 keeps the kills of its fight), not when they are the same step.
+        let ring = map.stretches["d9"].iter().find(|s| s.name == "ring-07").expect("d9's ring-07");
+        let d9 = &map.routes["d9"];
+        assert_eq!((d9[ring.clips.start].banked_kills, d9[ring.plain.start].banked_kills), (None, Some(5)));
+        let e = broken("room: '0x07', specialist: wizzrobe, entry: cave, exit: S, banked_kills: 5}", "room: '0x07', specialist: wizzrobe, entry: cave, exit: S}");
+        assert!(e.contains("ring-07") && e.contains("as the same step"), "{e}");
     }
 
     /// `extends` needs a route above it and a `steps` list; a typo is a load error.
@@ -2753,17 +2763,39 @@ mod tests {
         assert!(load(GAME_YAML, &typo).unwrap_err().contains("bombs \"always\" is not one of"));
     }
 
-    /// Round 29's scouting route `d9`: `d8`, then steps 297-354 (one way: no stretch) to the end of the game: the
-    /// whirlwind out of 0x6d, 0x47's tree and heart cave, the rock wall over Dungeon 9's stairs, the ring and the
-    /// silver arrow as waypoints, the kills the game keeps (`banked_kills`), `sword: false`, the last step's `exit:
-    /// end`; the loader refuses each of them where it cannot be.
+    /// Round 29's scouting route `d9`: `d8`, then steps 297-357 to the end of the game: the whirlwind out of 0x6d,
+    /// 0x47's tree and heart cave, the rock wall over Dungeon 9's stairs, the ring and the silver arrow as waypoints,
+    /// the kills the game keeps (`banked_kills`), `sword: false`, the last step's `exit: end`, and (round 29's states
+    /// step) the three one-step stretches of the block clips; the loader refuses each of them where it cannot be.
     #[test]
     fn the_d9_route_speaks_the_new_vocabulary() {
         let map = GameMap::builtin();
         let (base, steps) = (map.routes["d8"].len(), &map.routes["d9"]);
-        assert_eq!((base, steps.len()), (297, 355));
+        assert_eq!((base, steps.len()), (297, 358));
         assert_eq!(steps[..base], map.routes["d8"][..]);
-        assert!(steps[base..].iter().all(|s| s.way.is_none() && s.stretch.is_none()), "one way");
+        let ways: Vec<(usize, Way, &str)> = steps[base..]
+            .iter()
+            .enumerate()
+            .filter_map(|(i, s)| Some((base + i, s.way?, s.stretch.as_deref()?)))
+            .collect();
+        assert_eq!(
+            ways,
+            [
+                (325, Way::Clips, "ring-07"),
+                (326, Way::Plain, "ring-07"),
+                (338, Way::Clips, "arrow-20"),
+                (339, Way::Plain, "arrow-20"),
+                (343, Way::Clips, "arrow-20n"),
+                (344, Way::Plain, "arrow-20n"),
+            ],
+            "three stretches of one step a way"
+        );
+        // The two ways of each leave the room alike and differ in what the first visit left there.
+        for (clip, plain) in [(325, 326), (338, 339), (343, 344)] {
+            let (c, p) = (&steps[clip], &steps[plain]);
+            assert_eq!((c.location(), &c.entry, &c.exit), (p.location(), &p.entry, &p.exit));
+            assert_eq!(map.visits["d9"][clip], map.visits["d9"][plain], "one state name for both ways");
+        }
         let at = |i: usize| (steps[i].location(), steps[i].entry.as_str(), steps[i].exit.as_str());
         assert_eq!(at(297), (loc(0, 0x6d), "cave", RECORDER));
         assert_eq!(at(298), (loc(0, 0x37), RECORDER, "E"));
@@ -2772,9 +2804,9 @@ mod tests {
         assert_eq!(at(311), (loc(0, 0x05), "E", "cave"));
         assert_eq!(at(312), (loc(9, 0x76), "S", "N"));
         assert_eq!((at(324), steps[324].waypoint.as_deref()), ((L::new(9, 0x00, true), "S", "N"), Some("ring")));
-        assert_eq!((at(339), steps[339].waypoint.as_deref()), ((L::new(9, 0x4f, true), "S", "N"), Some("silver-arrow")));
-        assert_eq!(at(353), (loc(9, 0x42), "S", "N"));
-        assert_eq!(at(354), (loc(9, 0x32), "S", END_EXIT));
+        assert_eq!((at(341), steps[341].waypoint.as_deref()), ((L::new(9, 0x4f, true), "S", "N"), Some("silver-arrow")));
+        assert_eq!(at(356), (loc(9, 0x42), "S", "N"));
+        assert_eq!(at(357), (loc(9, 0x32), "S", END_EXIT));
         // The two passes of the tunnel 0x75: in right and out left, then in left and out right.
         let tunnel: Vec<(usize, &str, u32)> = steps
             .iter()
@@ -2782,7 +2814,7 @@ mod tests {
             .filter(|(_, s)| s.location() == L::new(9, 0x75, true))
             .map(|(i, s)| (i, s.exit.as_str(), map.visits["d9"][i]))
             .collect();
-        assert_eq!(tunnel, [(336, "W", 1), (342, "E", 2)]);
+        assert_eq!(tunnel, [(337, "W", 1), (345, "E", 2)]);
         let families: BTreeSet<&str> = steps[base..].iter().map(|s| s.specialist.as_deref().unwrap()).collect();
         let expected = [
             "equipment-room", "ganon", "lanmola", "like-like", "ow-boulder", "ow-leever", "ow-lynel", "ow-moblin",
@@ -2797,9 +2829,13 @@ mod tests {
             .enumerate()
             .filter_map(|(i, s)| Some((i, s.location(), s.banked_kills?)))
             .collect();
-        assert_eq!(kept, [(325, loc(9, 0x07), 5), (340, loc(9, 0x10), 5), (341, loc(9, 0x20), 15), (343, loc(9, 0x61), 15)]);
+        assert_eq!(
+            kept,
+            [(326, loc(9, 0x07), 5), (342, loc(9, 0x10), 5), (344, loc(9, 0x20), 15), (346, loc(9, 0x61), 15)],
+            "the plain way's"
+        );
         let unarmed: Vec<usize> = steps.iter().enumerate().filter(|(_, s)| !s.sword).map(|(i, _)| i).collect();
-        assert_eq!(unarmed, [330], "9:0x06, the old man");
+        assert_eq!(unarmed, [331], "9:0x06, the old man");
         let rules: Vec<(usize, TreasureRule)> = steps[base..]
             .iter()
             .enumerate()
@@ -2809,7 +2845,7 @@ mod tests {
         let (skip, clear) = (TreasureRule::Skip, TreasureRule::Clear);
         assert_eq!(
             rules,
-            [(317, clear), (318, skip), (319, skip), (320, skip), (321, skip), (327, skip), (328, skip), (334, skip), (337, clear)]
+            [(317, clear), (318, skip), (319, skip), (320, skip), (321, skip), (328, skip), (329, skip), (335, skip), (339, clear)]
         );
         let reserves: Vec<(usize, Option<u8>, Option<u8>)> = steps[base..]
             .iter()
@@ -2826,12 +2862,12 @@ mod tests {
                 (321, Some(2), None),
                 (322, Some(1), None),
                 (323, Some(0), None),
-                (330, Some(4), None),
-                (331, Some(3), None),
-                (338, Some(2), None),
-                (347, Some(1), None),
-                (350, Some(0), None),
-                (353, None, Some(0)),
+                (331, Some(4), None),
+                (332, Some(3), None),
+                (340, Some(2), None),
+                (350, Some(1), None),
+                (353, Some(0), None),
+                (356, None, Some(0)),
             ]
         );
         assert_eq!(map.get(loc(0, 0x47)).unwrap().secret, Some(Secret::Burn((22, 14))));

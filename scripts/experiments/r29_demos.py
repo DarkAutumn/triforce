@@ -2,17 +2,20 @@
 (docs/routes/d9-walks.md, docs/routes/d9-fights-walks.md; `train --demos FILE --demo-coeff C`, `triforce.demos`, as
 round 28's `r28_demos.py`).
 
-    python scripts/experiments/r29_demos.py scaffold OUT [--hearts H]
-    cd OUT && TRIFORCE_STATES_DIR=OUT/triforce/states PYTHONPATH=OUT \
-        python <checkout>/scripts/experiments/r29_demos.py ROOM [--runs N] [--out FILE.npz]
+    python scripts/experiments/r29_demos.py ROOM [--runs N] [--chains 0,1,2] [--hearts own|family|H]
+                                                 [--out FILE.npz] [--tracks DIR [--per-state N] [--max-loss H]]
+                                                 [--harvest DIR]
 
-`scaffold` makes a throwaway data root: the checkout's data (the route `d9` as it is in routes.yaml) with staged
-start states of steps 297-354 (`r29_route_walks.route_states`: one game walked from Dungeon 8's piece to Ganon's door,
-every room's pre-entry frame with what the route holds there: the keys, bombs, rupees, the red ring from cellar 0x00
-on, the silver arrow from 0x4F on; Zelda's room from one frame-scripted Ganon fight), named by the route's own visit
-counts, and the families' yamls pointed at them (`route: d9`, no curriculum, no `reward.heart_value`,
-`ram_randomization` empty, or with `--hearts H` only `hp`: every start at H hearts of 15).  It stands in until the
-stretch has start states; nothing in the checkout changes.
+ROOM plays its rule from the stretch's installed start states (`<stem>_<chain>`, every chain that exists), N runs a
+state (seeds 1000..), through the family's own environment: `--hearts own` (the default) with what the state itself
+holds (full hearts, its bombs), `--hearts family` with the yaml's `ram_randomization` draws (what a training reset
+draws: for demonstration rows that cover what a run brings), `--hearts H` with exactly H hearts.  It prints one JSON
+line a state and one for all.  `--out` writes the won runs' decisions as demonstration rows, `--tracks DIR` the
+first `--per-state` won runs of each state (those that lost at most `--max-loss` hearts) as curriculum tracks
+(`DIR/<state>~rule<seed>`; DIR is `trajectories/<family>`), `--harvest DIR` the next route step's entry state of
+each chain from its first such won run (round 28's `--harvest`: a state after a played fight, for `entry_states
+install`).  (Until the stretch had start states, round 29's vocabulary step ran these rules from a scaffold of the
+route walk's staged states; round29.md §6 has those numbers.)
 
 ROOM is one of:
 
@@ -46,7 +49,6 @@ that end as the family's success are kept."""
 import argparse
 import collections
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -61,13 +63,13 @@ ROOM_ALL_DEAD, PARALYZED, POWER_TRIFORCE, BLOCK = 0x34D, 0x512, 0x672, 0x0B
 BIT = {'RIGHT': 1, 'LEFT': 2, 'DOWN': 4, 'UP': 8}
 LETTER = {'RIGHT': 'E', 'LEFT': 'W', 'DOWN': 'S', 'UP': 'N'}
 
-# room -> (family, the route step's index in d9)
+# room -> (family, the route step's index in d9; 0x20's first visit is fought on the plain way, step 339)
 ROOMS = {'whirlwind': ('ow-moblin', 297), 'tree': ('ow-zora', 301), 'rock-wall': ('ow-lynel', 311),
          'like-like-14': ('like-like', 317), 'lanmola': ('lanmola', 315),
-         'patra-61': ('patra', 335), 'patra-52': ('patra', 352), 'patra-16': ('patra', 329),
-         'wizzrobe-07': ('wizzrobe', 323), 'wizzrobe-05': ('wizzrobe', 331), 'wizzrobe-20': ('wizzrobe', 337),
-         'wizzrobe-10': ('wizzrobe', 338), 'wizzrobe-30': ('wizzrobe', 347), 'room-03': ('like-like', 350),
-         'ganon': ('ganon', 353), 'zelda': ('ganon', 354)}
+         'patra-61': ('patra', 336), 'patra-52': ('patra', 355), 'patra-16': ('patra', 330),
+         'wizzrobe-07': ('wizzrobe', 323), 'wizzrobe-05': ('wizzrobe', 332), 'wizzrobe-20': ('wizzrobe', 339),
+         'wizzrobe-10': ('wizzrobe', 340), 'wizzrobe-30': ('wizzrobe', 350), 'room-03': ('like-like', 353),
+         'ganon': ('ganon', 356), 'zelda': ('ganon', 357)}
 
 
 # What a lost heart is booked to: the object nearest to Link at the end of the action that cost it.
@@ -703,174 +705,207 @@ RULES = {
 }
 
 
-# ---- the scaffold ----------------------------------------------------------------------------------------------------
+# ---- playing from the installed states -------------------------------------------------------------------------------
 
 def stems():
-    """{route step index: (the start state's name without its chain, the step)}, steps 297-354 of d9."""
+    """{route step index: (the start state's name without its chain, the step)}, steps 297-357 of d9 (both ways of
+    its stretches: a stretch's two steps share the name)."""
     from triforce import _native                               # pylint: disable=import-outside-toplevel
     from triforce.entry_states import state_stem                # pylint: disable=import-outside-toplevel
     return {s['index']: (state_stem(s['level'], s['room'], s['in_cave'], s['entry'], s['visit']), s)
             for s in _native.route_steps('d9')[FIRST:]}
 
 
-def zelda_state(ganon_state: Path, out: Path) -> Path:
-    """The pre-entry frame of 9:0x32: one frame-scripted Ganon fight (`r29_fight_ganon.fight`, RAM eyes), the
-    Triforce of Power, the walk N; the first seed that gets there."""
-    from r29_fight_ganon import after_death, fight              # pylint: disable=import-outside-toplevel
-    from r29_fight_walks import load                            # pylint: disable=import-outside-toplevel
-    from r27_walks import is_pre_entry                          # pylint: disable=import-outside-toplevel
-    for seed in range(20):
-        w = load(ganon_state, seed)
-        bot, killed, _info = fight(w)
-        if not killed:
-            continue
-        game, snaps = w.game, []
-
-        class Watch:                                             # the last pre-entry frame of the room change
-            def __getattr__(self, name):
-                return getattr(game, name)
-
-            def press(self, buttons, frames=1):
-                for _ in range(frames):
-                    if is_pre_entry(w):
-                        snaps.append(game.snapshot())
-                        del snaps[:-1]
-                    state = game.press(buttons, 1)
-                return state
-        w.game = Watch()
-        facts = after_death(bot)
-        w.game = game
-        if facts.get('in 0x32') and snaps:
-            game.restore(snaps[-1])
-            game.save_state_file(str(out))
-            return out
-    raise RuntimeError("no frame-scripted Ganon fight reached Zelda's room in 20 seeds")
+def rule_env(family, state, hearts):
+    """The family's env for `state` with the hearts a run starts on: `own` (nothing drawn: the state's hearts and
+    bombs), `family` (the yaml's draws) or a number of hearts (of the state's containers)."""
+    from triforce._native import Env, Game                      # pylint: disable=import-outside-toplevel
+    from triforce.paths import STATES_DIR                       # pylint: disable=import-outside-toplevel
+    from triforce.specialist import load_specialist             # pylint: disable=import-outside-toplevel
+    config = load_specialist(family)
+    if hearts == 'own':
+        config = config.replace(ram_randomization={})
+    elif hearts != 'family':
+        containers = Game(seed=0, states_dir=str(STATES_DIR)).load(state, fresh_room=True, seed=0).max_health
+        share = float(hearts) / containers
+        config = config.replace(ram_randomization={'hp': [share, share], 'full_hp': 0.0})
+    return Env(config, explicit_starts=True, strict_actions=False, seed=0)
 
 
-def scaffold(args):
-    import yaml                                                 # pylint: disable=import-outside-toplevel
-    from r26_walks import ROOT                                  # pylint: disable=import-outside-toplevel
-    from r29_route_walks import route_states                    # pylint: disable=import-outside-toplevel
-    out = args.out.resolve()
-    (out / 'triforce').mkdir(parents=True)
-    for f in (ROOT / 'triforce').iterdir():
-        if f.name != 'states':
-            (out / 'triforce' / f.name).symlink_to(f)
-    for name in ('roms', 'models', 'trajectories', 'scripts', 'zelda-asm'):
-        if (ROOT / name).exists():
-            (out / name).symlink_to(ROOT / name)
-    states = out / 'triforce' / 'states'
-    states.mkdir()
-    for f in (ROOT / 'triforce' / 'states').iterdir():
-        (states / f.name).symlink_to(f)
-    paths, rows, cheats = route_states(out / 'route-states')
-    staged = [paths[name] for name, _row in rows]
-    staged.append(zelda_state(staged[-1], out / 'route-states' / '9_32s.state'))
-    steps = stems()
-    if len(staged) != len(steps):
-        raise RuntimeError(f'{len(staged)} staged states for {len(steps)} steps')
-    names = collections.defaultdict(list)
-    for (index, (stem, step)), source, row in zip(sorted(steps.items()), staged, rows + [('9_32s', {'level': 9, 'room': 0x32})]):
-        if (row[1]['level'], row[1]['room']) != (step['level'], step['room']):
-            raise RuntimeError(f'step {index} is {step["level"]}:{step["room"]:#04x}, the staging walk is at {row[0]}')
-        (states / f'{stem}_0.state').write_bytes(Path(source).read_bytes())
-        names[step['specialist']].append(stem)
-    (out / 'specialists').mkdir()
-    for f in (ROOT / 'specialists').glob('*.yaml'):
-        data = yaml.safe_load(f.read_text())
-        if data['name'] in names:
-            data['route'] = 'd9'
-            data.get('reward', {}).pop('heart_value', None)
-            data['ram_randomization'] = {} if args.hearts is None else {'hp': [args.hearts / 15, args.hearts / 15],
-                                                                         'full_hp': 0.0}
-            data['curriculum'] = {'enabled': False}
-            data['trainable'] = True
-            data['start_states'] = [f'{stem}_[0-9]' for stem in names[data['name']]]
-        (out / 'specialists' / f.name).write_text(yaml.safe_dump(data, sort_keys=False))
-    print(f'scaffold in {out}: ' + '; '.join(f'{k}: {v}' for k, v in names.items()))
-    print(f'bombs written on the staging walk (a run with no drops): {cheats}')
-    print(f'play with: cd {out} && TRIFORCE_STATES_DIR={states} PYTHONPATH={out} python {Path(__file__).resolve()} ROOM')
+def write_track(directory, state, seed, what, points, actions, health, ending):
+    """One won run as the curriculum reads it (`r28_demos.py --tracks`)."""
+    track = directory / f'{state}~rule{seed}'
+    track.mkdir(parents=True, exist_ok=True)
+    for index, point in enumerate(points[:len(actions)]):
+        (track / f'{index:04d}.state').write_bytes(point.state_file())
+    (track / 'trajectory.json').write_text(json.dumps({
+        'start_state': state, 'success': True, 'ending': ending, 'steps': len(actions), 'health': health,
+        'actions': actions,
+        'explore': {'iterations': 0, 'env_steps': len(actions), 'cells': 0, 'seconds': 0.0, 'seed': seed},
+        'crafted': f'round 29: the scripted rule {what} (scripts/experiments/r29_demos.py)'}, indent=1))
+    return track
+
+
+def harvest(directory, what, state, seed, point, action, steps, health, ending):
+    """The next route step's entry state out of a won run, as `entry_states build` writes one (staged in
+    `directory`, for `entry_states install`; `r28_demos.py --harvest`): the snapshot before the run's last action
+    is played again in a Game with the pre-entry capture on, the hearts refilled and the room fresh
+    (`write_entry_state`).  It is a state after a played fight: it holds what the run holds (0x16's four bombs,
+    0x61's key, the arrow's rupee).  Returns its manifest entry."""
+    from triforce._native import Game                           # pylint: disable=import-outside-toplevel
+    from triforce import entry_states                           # pylint: disable=import-outside-toplevel
+    from triforce.paths import STATES_DIR                       # pylint: disable=import-outside-toplevel
+    route = entry_states.route_steps('d9')
+    step, goal = route[ROOMS[what][1]], route[ROOMS[what][1] + 1]
+    chain = int(state.rsplit('_', 1)[1])
+    game = Game(seed=chain, states_dir=str(STATES_DIR))
+    now = game.restore(point)
+    game.capture_pre_entry = True
+    for _ in range(30):
+        if now.full_location == goal.location:
+            break
+        now = game.act(action).state
+    if now.full_location != goal.location or game.last_pre_entry is None:
+        raise RuntimeError(f'{state} seed {seed}: the last action {action} does not enter {goal.filename(chain)}')
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / goal.filename(chain)
+    entry_states.write_entry_state(game, game.last_pre_entry, str(path), goal.location)
+    source = entry_states.read_manifest(str(STATES_DIR)).get(f'{state}.state', {})
+    entry = {'file': path.name, 'chain': chain, 'route': 'd9', 'route_step': goal.index, 'from_step': step.index,
+             'specialist': goal.specialist, 'level': goal.level, 'room': f'0x{goal.room:02x}',
+             'in_cave': goal.in_cave, 'entry': goal.entry, 'exit': goal.exit, 'alternate': False, 'steps': steps,
+             'health': health, 'ending': ending, 'env_steps': steps, 'attempts': 1, 'seconds': 0.0,
+             'played_by': f'scripts/experiments/r29_demos.py {what} (seed {seed})'}
+    if source.get('fight_skipped'):
+        entry['fight_skipped'] = True
+    command = ' '.join(['python'] + sys.argv)
+    entry_states._merge_manifest(str(directory), [entry], command)      # pylint: disable=protected-access
+    return entry
 
 
 def play(args):
-    from triforce._native import Env                            # pylint: disable=import-outside-toplevel
     from triforce.demos import DemoRecorder, action_indices, legal  # pylint: disable=import-outside-toplevel
+    from triforce.paths import STATES_DIR                       # pylint: disable=import-outside-toplevel
     family, index = ROOMS[args.what]
-    state = stems()[index][0] + '_0'
-    _GRAPH_STATE['path'] = Path(os.environ['TRIFORCE_STATES_DIR']) / f'{state}.state'
-    env = Env(family, explicit_starts=True, strict_actions=False, seed=0)
+    stem = stems()[index][0]
+    chains = ([int(c) for c in args.chains.split(',')] if args.chains
+              else [c for c in (0, 1, 2) if (Path(STATES_DIR) / f'{stem}_{c}.state').exists()])
+    if not chains:
+        raise SystemExit(f'no installed state {stem}_<chain>')
     recorder = DemoRecorder()
-    endings, lost, steps_won, kinds, masked = collections.Counter(), [], [], collections.Counter(), 0
-    by = collections.Counter()
-    kept, start = 0, None
-    for seed in range(SEED0, SEED0 + args.runs):
-        obs, _ = env.reset(seed=seed, options={'start_state': state})
-        rule = RULES[args.what]()
-        ram = bytes(env.state.ram)
-        health = start = hearts_of(ram)
-        level, room = ram[LEVEL], ram[ROOM]
-        info, n, illegal = {}, 0, 0
-        for n in range(1, args.max_steps + 1):
-            mask = obs['action_mask']
-
-            def ok(step, mask=mask):
-                return legal(mask, action_indices(step))
-            step = rule(ram, ok)
-            if not ok(step):                                     # a rule plays only what the mask offers
-                illegal += 1
-                step = 'WAIT 4'
-            kind = step.split()[0]
-            recorder.add(obs, step, repeat=REPEAT.get(kind, 1), any_duration=kind in ('MOVE', 'WAIT'))
-            kinds[kind] += 1
-            before = hearts_of(ram)
-            obs, _, terminated, truncated, info = env.step(step)
-            ram = bytes(env.state.ram)
-            if hearts_of(ram) < before and ram[LEVEL] == level and ram[ROOM] == room:
-                by[nearest(ram)] += before - hearts_of(ram)
-            if terminated or truncated:
-                break
-        won = info.get('outcome') == 'success'
-        endings[info.get('ending', 'max-steps (the script\'s)')] += 1
-        masked += illegal
-        if won:
-            recorder.keep()
-            kept += 1
-            lost.append(health - hearts_of(ram))
-            steps_won.append(n)
-        else:
-            recorder.drop()
-        if args.verbose:
-            print(f'  seed {seed}: {info.get("ending")} after {n} decisions, hearts {health:.2f} -> {hearts_of(ram):.2f}, '
-                  f'{illegal} masked, at (${ram[OBJ_X]:02X},${ram[OBJ_Y]:02X})', flush=True)
-    rows = recorder.save(args.out) if args.out and kept else 0
     mean = lambda v: sum(v) / len(v) if v else float('nan')     # noqa: E731
-    print(json.dumps({'room': args.what, 'family': family, 'state': state, 'hearts_in': start, 'runs': args.runs,
-                      'won': kept, 'endings': dict(endings), 'hearts_lost_in_wins': round(mean(lost), 2),
-                      'hearts_lost_max': round(max(lost), 2) if lost else None,
-                      'decisions_in_wins': round(mean(steps_won), 1), 'masked_choices': masked,
-                      'hearts_lost_to_all_runs': {k: round(v, 2) for k, v in by.most_common()},
-                      'actions': dict(kinds), 'rows': rows, 'file': str(args.out) if rows else None}))
-    return 0 if kept else 1
+    total = {'won': 0, 'runs': 0, 'endings': collections.Counter(), 'lost': [], 'kinds': collections.Counter(),
+             'tracks': 0, 'by': collections.Counter(), 'masked': 0}
+    harvested = []
+    for state in (f'{stem}_{chain}' for chain in chains):
+        _GRAPH_STATE['path'] = Path(STATES_DIR) / f'{state}.state'
+        env = rule_env(family, state, args.hearts)
+        endings, lost, steps_won, hearts_in = collections.Counter(), [], [], []
+        kept = tracks = 0
+        entry = None
+        for seed in range(SEED0, SEED0 + args.runs):
+            obs, _ = env.reset(seed=seed, options={'start_state': state})
+            rule = RULES[args.what]()
+            ram = bytes(env.state.ram)
+            health, containers = hearts_of(ram), env.state.max_health
+            level, room = ram[LEVEL], ram[ROOM]
+            info, n, illegal = {}, 0, 0
+            points, actions = [], []
+            for n in range(1, args.max_steps + 1):
+                mask = obs['action_mask']
+
+                def ok(step, mask=mask):
+                    return legal(mask, action_indices(step))
+                step = rule(ram, ok)
+                if not ok(step):                                 # a rule plays only what the mask offers
+                    illegal += 1
+                    step = 'WAIT 4'
+                kind = step.split()[0]
+                recorder.add(obs, step, repeat=REPEAT.get(kind, 1), any_duration=kind in ('MOVE', 'WAIT'))
+                total['kinds'][kind] += 1
+                if args.tracks or args.harvest:
+                    points.append(env.snapshot())
+                    actions.append(step)
+                before = hearts_of(ram)
+                obs, _, terminated, truncated, info = env.step(step)
+                ram = bytes(env.state.ram)
+                if hearts_of(ram) < before and ram[LEVEL] == level and ram[ROOM] == room:
+                    total['by'][nearest(ram)] += before - hearts_of(ram)
+                if terminated or truncated:
+                    break
+            won = info.get('outcome') == 'success'
+            endings[info.get('ending', 'max-steps (the script\'s)')] += 1
+            total['masked'] += illegal
+            # Hearts lost: a heart container taken on the way adds a heart, which is no healing.
+            down = health - hearts_of(ram) + (env.state.max_health - containers)
+            hearts_in.append(health)
+            if won:
+                recorder.keep()
+                kept += 1
+                lost.append(down)
+                steps_won.append(n)
+                if args.tracks and tracks < args.per_state and not illegal and (
+                        args.max_loss is None or down <= args.max_loss):
+                    print(f'{write_track(args.tracks, state, seed, args.what, points, actions, health, info["ending"])}'
+                          f': {n} steps, {down:.2f} hearts lost', file=sys.stderr)
+                    tracks += 1
+                if args.harvest and entry is None and not illegal and (
+                        args.max_loss is None or down <= args.max_loss):
+                    entry = harvest(args.harvest, args.what, state, seed, points[-1], actions[-1], n, health,
+                                    info['ending'])
+                    harvested.append(entry)
+                    print(f"{args.harvest / entry['file']}: from seed {seed}, {n} steps, {down:.2f} hearts lost",
+                          file=sys.stderr)
+            else:
+                recorder.drop()
+            if args.verbose:
+                print(f'  seed {seed}: {info.get("ending")} after {n} decisions, hearts {health:.2f} -> '
+                      f'{hearts_of(ram):.2f}, {illegal} masked, at (${ram[OBJ_X]:02X},${ram[OBJ_Y]:02X})', flush=True)
+        print(json.dumps({'room': args.what, 'family': family, 'state': state, 'hearts': args.hearts,
+                          'hearts_in': [round(min(hearts_in), 2), round(mean(hearts_in), 2), round(max(hearts_in), 2)],
+                          'runs': args.runs, 'won': kept, 'endings': dict(endings),
+                          'hearts_lost_in_wins': round(mean(lost), 2),
+                          'hearts_lost_max': round(max(lost), 2) if lost else None,
+                          'decisions_in_wins': round(mean(steps_won), 1), 'tracks': tracks}), flush=True)
+        total['won'] += kept
+        total['runs'] += args.runs
+        total['endings'].update(endings)
+        total['lost'] += lost
+        total['tracks'] += tracks
+    if args.harvest:
+        from triforce import entry_states                       # pylint: disable=import-outside-toplevel
+        missed = [f'{stem}_{chain}' for chain in chains if chain not in {e['chain'] for e in harvested}]
+        command = ' '.join(['python'] + sys.argv)
+        entry_states._write_build_record(str(args.harvest), command, harvested, missed)   # pylint: disable=protected-access
+    rows = recorder.save(args.out) if args.out and total['won'] else 0
+    print(json.dumps({'room': args.what, 'family': family, 'states': len(chains), 'hearts': args.hearts,
+                      'runs': total['runs'], 'won': total['won'], 'endings': dict(total['endings']),
+                      'hearts_lost_in_wins': round(mean(total['lost']), 2),
+                      'hearts_lost_max': round(max(total['lost']), 2) if total['lost'] else None,
+                      'masked_choices': total['masked'],
+                      'hearts_lost_to_all_runs': {k: round(v, 2) for k, v in total['by'].most_common()},
+                      'actions': dict(total['kinds']), 'tracks': total['tracks'], 'rows': rows,
+                      'file': str(args.out) if rows else None}))
+    return 0 if total['won'] else 1
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    parser.add_argument('what', choices=['scaffold'] + list(ROOMS))
-    parser.add_argument('out_dir', nargs='?', type=Path, help='scaffold: the throwaway data root')
-    parser.add_argument('--hearts', type=float, default=None, help='scaffold: every start at this many hearts of 15')
+    parser.add_argument('what', choices=list(ROOMS))
+    parser.add_argument('--hearts', default='own', help="own (default), family or a number of hearts")
+    parser.add_argument('--chains', default=None, help='chains to play (default: every chain with a state)')
+    parser.add_argument('--tracks', type=Path, default=None, help='write curriculum tracks under this directory')
+    parser.add_argument('--per-state', type=int, default=1, help='--tracks: tracks a state')
+    parser.add_argument('--max-loss', type=float, default=None, help='--tracks, --harvest: hearts the run may lose')
+    parser.add_argument('--harvest', type=Path, default=None,
+                        help="stage the next route step's entry state of each chain from its first won run here "
+                             "(for `entry_states install`)")
     parser.add_argument('--runs', type=int, default=RUNS)
     parser.add_argument('--max-steps', type=int, default=3000, help='decisions a run may take')
     parser.add_argument('--out', type=Path, default=None, help='write the kept runs\' rows here (.npz)')
     parser.add_argument('--verbose', action='store_true')
     args = parser.parse_args()
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    if args.what == 'scaffold':
-        if args.out_dir is None:
-            parser.error('scaffold needs OUT')
-        args.out = args.out_dir
-        return scaffold(args) or 0
-    if 'TRIFORCE_STATES_DIR' not in os.environ:
-        parser.error('run inside a scaffold: TRIFORCE_STATES_DIR=OUT/triforce/states PYTHONPATH=OUT (see scaffold)')
     return play(args)
 
 
