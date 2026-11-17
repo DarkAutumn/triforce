@@ -627,3 +627,50 @@ Read by what a first team needs:
   to env code: the CANDLE mask on the overworld, a step's bomb mode, pols-voice's BOMB and ARROW masks, the `stuck`
   rule under a hold; no observation or action change, every model loads). Round 27's branch owes the same bump; one
   bump covers both if they merge together.
+
+## 14. The first team (Nov 17): five families trained, darknut evaluating, chains not yet run
+
+One round per family through `scripts/train_round.py` (`--chain-runs 0 --parallel 8 --eval-parallel 3`, each its
+own round so the job line orders them), every one `--load {name} --seed 78 --stop-success 1.01 --sil-coeff 0.1
+--checkpoint-every 30`, the demonstrations at `--demo-coeff 0.05`. The branch has `r26`'s `6530d0d` merged
+(demonstration rows in host memory; `train_round.py` reads `--iterations` inside `--train-args` for its estimate).
+
+- **Every demonstration file trains.** Two iterations each (scratch models directory): darknut with *both* files
+  (`train --demos` takes several; 196,086 rows), gleeok 106,171, pols 71,721, whirlwind 26,105, tree 15,659. No
+  file needed merging and none ran the GPU out of memory.
+- **Judged** by each round's own `eval.json` (100 episodes a state, seed 0, `temperature:0.5+relax:16`) against the
+  run it continued, evaluated under this branch's code (`triforce eval-batch r78t4-base --families ... 
+  --episodes-per-state 100`; for ow-lynel and ow-moblin, round 27's `r77-b` runs and their `eval.json`).
+
+| Family | Round (load, iterations, demos) | Dungeon 8 / stretch rooms, before → after | The family's old rooms, before → after | Kept |
+|---|---|---|---|---|
+| pols-voice | `r78t4-pols` (`r74-d5new`, 488, pols) | 8:0x4c 0% → **100%** (300/300), -10.22 → **+0.47** hearts | 5:0x25 99.0 → 99.7%, 5:0x27 100 → 100% | yes |
+| boss-gleeok | `r78t4-gleeok` (`r71-d`, 488, gleeok) | 8:0x3c 0% → **100%** (300/300), -11.38 → **-1.25** | 4:0x13 99.0 → 99.3% | yes |
+| boss-manhandla | `r78t4-manhandla` (`r75-mh-fight`, 244, none) | 8:0x6e 90.7% → 100%, -2.98 → -1.10 | 3:0x4d 86.3 → 91.3% (-0.85 → -0.58) | replaced |
+| boss-manhandla | `r78t4-manhandla2` (`r78t4-manhandla`, 488, none) | 8:0x6e 99.7% (1 death in 300), **-0.88** | 3:0x4d 91.0% (-0.59) | yes |
+| ow-lynel | `r78t4-lynel` (`r77-b`, 244, whirlwind) | 0:0x22 from the cave (the whirlwind) **600/600**, 0 hearts | 0x32 94.5 → 97.2%, 0x50 99.8 → 99.9%, 0x60 99.7 → 100%, 0x0a 97.1 → 97.8%, 0x22 (D6) 100% | yes |
+| ow-moblin | `r78t4-moblin` (`r77-b`, 244, tree) | the tree 0x6d **599/600** (1 wrong exit), 0x4d from W 600/600 (-0.14), 0x5d 600/600 | all 14 rooms within noise of `r77-b` (lowest 0x5c 96.9%) | yes |
+| darknut | `r78t4-darknut` (`r75-d537-c5`, 488, darknut-5e + darknut-3e) | trained (4,892 s); its evaluation was running when this was written | (5:0x64, 0x05, 0x06, 0x37, 3:0x5c must hold) | open |
+
+- **Baseline of darknut under this code** (`r75-d537-c5`, 11,400 episodes, clips both): 8:0x5e 8.2%, 0x4e 0.0%
+  (220 of 600 `stuck`), 0x3e 0.3%, 0x3f 77.2% (-4.75 hearts); 5:0x05 91.5%, 5:0x64 91.5%, 5:0x06 100%, 5:0x37
+  99.8%, 3:0x5c 100%.
+- **Why 0x4e ends `stuck`** (10 episodes a state, clips on, replays with decisions): in every `stuck` episode Link
+  stands in the S doorway (X `$78`, Y `$D3`) and plays MOVE W fifty times without moving; the mask offers a MOVE
+  the doorway's walls refuse. The rest die. Whether the trained run still does it is what its evaluation shows.
+- **Manhandla's crossing** came down from 2.98 to 0.88 hearts an episode in two rounds; the walk's script crosses
+  for 0.47.
+- **Gleeok** trains with the yaml's `hp: [0.5, max]` (6.5-13 hearts); a run arrives with 6-7, so its 100% is at
+  the high end of what a chain brings. The chains will say.
+- **Round 27's `r77-b` runs** (stalfos-keese-gel, zol, trap-room, like-like, vire; and the ow-lynel and ow-moblin
+  runs continued here) are copied in. ow-lynel and ow-moblin `r77-b` were the starting points; the other five are
+  promoted only once their evaluation under this code is not worse than the runs they continued (batch
+  `r78t4-d6runs`, the seven `r77-b` runs and the seven runs before them, 100 a state: queued, not run when this was
+  written).
+- **Not done yet**: darknut's judgement and, if 0x5e, 0x4e or 0x3e are not learned, its one more round; the
+  `r78t4-d6runs` comparison; the chains, 1000 runs each of `post-d6` and `d8`, clips on, against `r78-base` (§12):
+
+```bash
+TAG=r78t4-1k RUNS=1000 EPISODES=20 scripts/experiments/r28_d8_baseline.sh run
+TAG=r78t4-1k scripts/experiments/r28_d8_baseline.sh report
+```
