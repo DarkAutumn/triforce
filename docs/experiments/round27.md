@@ -746,3 +746,52 @@ What I would build next (not built here: no reward or observation change in this
 that one step of foresight halves 0x38's hearts. Distilling it, the planner's choices in 0x38 and 0x3a recorded as
 demonstrations (`--demos`, as 0x28's bomb is), would teach the policy the dodges it now finds only by search,
 without changing the reward or the observation; the planner's 0x28 back-and-forth would be left out of the file.
+
+### 13.5 The `r78-1k` chains, paired with `r77a-1k`
+
+The promoted team with `r78-wizz-s78` (`ROUTE=d6 SEGMENTS="post-d7:0_42c_0 d6:6_79s_0" ACT=model TAG=r78-1k
+RUNS=1000 scripts/experiments/r56_chains.sh`, clips on), paired by seed with `r77a-1k` (the same team with
+`r77-wizz`). The batch is marked `failed` by its `report` entry alone, as `r77a-1k`'s was: `scripts/yardstick.py
+report --run promoted` refuses a team whose promoted runs' `eval.json` are not of their current weights in
+`temperature:0.5+relax:16` (here every family the stretch does not play, boss-manhandla to wallmaster). Both
+chains and the room stats (`r78-1k-room-stats.json`) were written; the yardstick is not needed for these numbers.
+
+| segment | `r77a-1k` | `r78-1k` | paired difference |
+|---|---:|---:|---:|
+| `post-d7` (0:0x42 to the D6 triforce) | 3.4% | **8.0%** | +4.6 ± 1.0 |
+| `d6` (6_79s_0 to the D6 triforce) | 8.2% | 21.5% | +13.3 ± 1.6 |
+
+`d6`'s 21.5% is on seeds 0-999, the screen `r78-wizz-s78` was chosen on: biased up; its unbiased number is the
+confirmation's 18.4% (§13.3). `post-d7`'s seeds were not used to choose anything: the stretch from the magic sword
+to the D6 triforce more than doubles, 3.4% to 8.0%.
+
+The hearts ledger (visits, mean hearts on entering, hearts lost a visit with a death losing what it brought,
+deaths):
+
+| room | family | `d6` `r77a-1k` | `d6` `r78-1k` | `post-d7` `r77a-1k` | `post-d7` `r78-1k` |
+|---|---|---|---|---|---|
+| 6:0x58 | stalfos-keese-gel | 1000 · 11.85 · 1.20 · 0 | 1000 · 11.86 · 1.24 · 0 | 989 · 10.15 · 1.32 · 3 | 989 · 10.16 · 1.32 · 5 |
+| **6:0x38** | wizzrobe | 1000 · 10.65 · 6.55 · **268** | 1000 · 10.62 · 5.63 · **178** | 986 · 8.86 · 6.15 · **384** | 984 · 8.89 · 5.41 · **271** |
+| 6:0x28 | wizzrobe | 732 · 5.60 · 0.33 · 15 | 821 · 6.08 · 0.33 · 18 | 602 · 4.45 · 0.38 · 30 | 713 · 4.80 · 0.34 · 27 |
+| 6:0x29 | wizzrobe | 719 · 5.37 · 0.65 · 43 | 805 · 5.87 · 0.62 · 41 | 572 · 4.28 · 0.96 · 75 | 686 · 4.64 · 0.90 · 65 |
+| 6:0x39 | vire | 677 · 5.02 · −0.03 · 33 | 802 · 5.50 · −0.13 · 34 | 498 · 3.81 · 0.08 · 38 | 658 · 4.09 · 0.08 · 44 |
+| **6:0x3a** | wizzrobe | 642 · 5.31 · 4.12 · **426** | 766 · 5.88 · 3.45 · **369** | 460 · 4.04 · 3.39 · **359** | 614 · 4.29 · 3.01 · **384** |
+| 6:0x2c | wizzrobe | 201 · 3.77 · 2.29 · 98 | 338 · 4.87 · 2.27 · 96 | 85 · 3.53 · 2.22 · 42 | 179 · 3.65 · 2.14 · 78 |
+| 6:0x1c | boss-gohma | 103 · 2.89 · −0.98 · 21 | 242 · 3.64 · −1.33 · 27 | 43 · 2.58 · −0.98 · 9 | 101 · 2.68 · −0.96 · 21 |
+| 6:0x0c | stalfos-keese-gel | 82 | 215 | 34 | 80 |
+
+Visits surviving by hearts on entering, `d6` (`r77a-1k` → `r78-1k`):
+
+| hearts in | 0-2 | 2-4 | 4-6 | 6-8 | 8-10 | 10-12 | 12 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 0x38 visits | | | 1 → 1 | 8 → 2 | 133 → 148 | 789 → 779 | 69 → 70 |
+| survived | | | | 25 → 100% | 65 → 70% | 75 → 83% | 80 → 96% |
+| 0x3a visits | 55 → 55 | 146 → 151 | 177 → 181 | 136 → 162 | 82 → 124 | 35 → 70 | 11 → 23 |
+| survived | 2 → 13% | 17 → 23% | 26 → 43% | 45 → 59% | 61 → 77% | 69 → 93% | 82 → 87% |
+
+**The priced wizzrobe kept 0.9 hearts a visit in 0x38 (6.55 → 5.63) and a third of its deaths (268 → 178), and
+0x3a is entered with half a heart more (5.31 → 5.88) and survives better at every heart count** (at 4-8 hearts
+43-59% against 26-45%). The hearts entering 0x3a moved little: 0x38 still takes 5.4-5.6 of 10.6, so 0x3a is
+entered with under 6 hearts and kills 48% of its visits (369 of 766). The rest of the dungeon is unchanged per
+visit (0x58 1.2 hearts, 0x2c 2.3 and a death in 3-4 of its visits). The honest planner's 0x38 costs 3.25 hearts
+(§13.4): the lever is still 0x38's price, then 0x3a at the hearts it gets.
