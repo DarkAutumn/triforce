@@ -18,6 +18,16 @@ The owner's decisions of Nov 16 are in `docs/decisions.md` ("The rest of the gam
 
 round26.md §7-11. Nothing is trained yet; these are open.
 
+- [ ] **darknut under the bomb rule** (round26.md §13, decisions 2026-11-17): Dungeon 3 loses about 5 points
+  (84.7 → 79.3% of 300 paired runs) because the last pass of 3:0x5b had cheated bombs as its weapon when Link came
+  with 0-1 (95 of 294 passes; now 0.61 hearts lost there and Manhandla kills 27 of them, 14 before). One darknut
+  continuation under the rule (round 25's settings), its checkpoint chosen by the D3 and D5 segments.
+- [ ] **goriya under the bomb rule:** `r76-goriya3` (queued); evaluate it by room against `r76-goriya2` under the
+  rule and on a 1000-run Dungeon 7 chain before it replaces `r76-goriya2`.
+- [ ] **Cheated bombs still counted:** 3:0x5b about 0.44 a Dungeon 3 run (F173: the granted bomb is used first at
+  the wall although Link holds the room's four by then; the owner's call whether a pickup repays a grant), Dungeon
+  4's walls 0.56 a run (runs that arrive with none). `cheats::bomb_need` keeps a room's need while any bomb wall is
+  shut, also one the route never opens (7:0x69 W, 4:0x11 E and W): the bomb in hand is unusable and taken back.
 - [ ] **The first team.** The baseline `r76-base` is 0 of 200 on both segments, clips on and off (round26.md §11):
   0x0b's model walks back into Dungeon 5, and every run dies in 7:0x49 at the latest. New skills nobody has: the
   whirlwind (0x0b), both shops, the Armos stairs, the pond, FOOD for the Grumble; fights lost: 7:0x49, 0x19, 0x1a,
