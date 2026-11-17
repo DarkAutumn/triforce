@@ -823,3 +823,48 @@ room is where it was: 258 of 300, 26 captured, 16 `no-damage` (by state 76, 94 a
 decisions), 1:0x45 300 of 300 with no heart lost. The policy knows the rule's answer in the rule's states and does
 not visit them: it plays its own, faster fight, and is caught there (round 25 §5 again). A higher weight would not
 change which states it visits, so round 3 adds DAgger rows instead (`r76-wall-2` plays, the rule labels).
+
+## 15. The first team for Dungeon 7
+
+### The team's starting point: the first chains (`r76t1-1k`)
+
+The team as integrated (r26 at `20c8f69`: the bomb rule, the Wallmaster objective fixes): goriya `r76-goriya3` (§13),
+wallmaster `r76-wall-1` (§14; `r76-wall-2` played the room the same, 258 of 300), ow-leever, ow-zora, ow-moblin,
+boss-digdogger and boss-aquamentus `r76-b`, dodongo-crossing and equipment-room `r76-c` (the first rounds of the
+team), the rest round 25's converted runs. 1000 runs a segment, clips on, `--act model` (`SEGMENTS="post-d5:0_0bc_0
+d7:7_79s_0" RUNS=1000 ACT=model TAG=r76t1-1k scripts/experiments/r56_chains.sh`):
+
+| segment | arrived | the D7 triforce |
+|---|---:|---:|
+| `post-d5` (0:0x0b → 7:0x79) | 924 (92.4%) | 97 (9.7%) |
+| `d7` (7:0x79 → the triforce) | | **263 (26.3%)** |
+
+The step from `r76bombs-1k-d7` (2 of 1000; that chain played wallmaster `r71-e` and dodongo-crossing `r74-d5boss`) is
+two rooms. 7:0x0d no longer sends runs back to the entrance (283 of 327 leave by the cellar, 34 wrong exits, 5
+deaths), and what follows it is played (the cellar 283 of 283, 0x29 269 of 283, Aquamentus 263 of 269, the triforce
+room 263 of 263). 7:0x0c with dodongo-crossing `r76-c` is crossed in 18 steps for 0.03 hearts (3 deaths of 330),
+where `r74-d5boss` took 127 steps and 2.54 hearts (116 deaths of 299, at the same 4.67 hearts on entry). The
+segment's deaths, first visits (`d7`, 1000 runs; hearts on entry in brackets): **7:0x1b 367 of 745 (3.87)**, 0x1a
+from the cellar 89 of 837 (4.52), 0x19 63 of 960 (5.67), 0x1a from W 49 of 897, 0x1c 48 of 378 (4.53), 0x38 29 of
+1012 (7.09), 0x18 23, 0x29 14, the candle cellar 12, 0x59 11. Runs from the leg arrive at 7:0x79 with 7.87 hearts,
+not the start state's 11 (0x34's woken Armos costs 2.04 hearts a visit), and take the triforce at 97 of 924
+(10.5%); they enter 0x1b with 3.00 hearts and lose 307 of 457 there. So goriya decides the segment, then
+boss-digdogger's 0x1c and wallmaster's captures; dodongo-crossing is not continued.
+
+### The arrow shop: 0:0x44 entered at X 128
+
+In the first team's leg chain (`r76a-1k-post-d5`, 1000 runs, clips on) 64 runs end `missed` ("left (0, 0x44) without
+the arrows"), all at step 217 (0x44 from S, objective: the shop's cave) and all after 0x54 crossed by the clips way
+(E → N). The shop itself and the way out are not the problem: every run that goes in buys the arrows (933 of 933)
+and 924 of them leave N. A 150-run diagnostic with replays (`--from 0_0bc_0 --stop-at 0:0x34`) misses on the same
+seeds (55, 110, 111, 142 and 147): Link walks straight up column X 128 and on N into 0x34, past the fork at Y 85
+where the runs that buy turn W to the cave mouth (X 64, Y 77). What decides it is where he enters: the seed states
+`0_44s_0..2` were built on the plain way and start at X 112, 112 and 120, while the clips way enters at X 128 in 70
+of 147 runs. At 112 and 120 none of 72 runs misses; at 128 5 of 75 do. ow-zora never trained from X 128 (it is 99-100%
+on the seed states in single rooms).
+
+The fix is a start of its own: `scripts/experiments/r26_arrow_states.py REPLAY_DIR OUT` cuts the pre-entry state of
+that entry out of chain replays at X 128 (the frame before the room entry, as `eval-chain --harvest` saves a
+handoff, which this entry is not: 0x54 and 0x44 are both ow-zora's), 75 states from the diagnostic's replays, written
+as harvested states (`triforce/states/harvested/ow-zora/0_44s_h<seed>_0.state`, not committed), and ow-zora draws
+them at `harvested_fraction: 0.03` (about the share of its three seed states of 0x44 from S among its 105).
