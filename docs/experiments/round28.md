@@ -705,5 +705,10 @@ TAG=r78t4-1k scripts/experiments/r28_d8_baseline.sh report
   784 entering it on `d8` (73% in single rooms from the state's hearts, 27% on the chain), 0x3f half of what reaches
   it, Gleeok 41% of its visitors (100% in single rooms from 6.5-13 hearts). Next for darknut: 0x5e's and 0x3e's
   fights at fewer hearts lost (the rules lose 2.1-2.5 a win), not their rates alone.
-- **Not done**: the `r78t4-d6runs` comparison (round 27's other `r77-b` runs: stalfos-keese-gel, zol, trap-room,
-  like-like, vire; queued); a second darknut round.
+- **Round 27's `r77-b` runs under this code** (batch `r78t4-d6runs`, 100 a state, each against the run it continued):
+  stalfos-keese-gel 99.7 → 99.9% (6:0x58 95.8 → 98.2%; 8:0x7e and 8:0x2c 100%), zol 99.8 → 100%, trap-room 100 →
+  99.9% (within noise), like-like 99.2 → 99.7% (6:0x1d 98.3 → 100%), vire 99.2 → 99.6% (6:0x2d 96.5 → 99.7%): all
+  five promoted in this checkout, after the chains above (which played stalfos-keese-gel `r75-f-b`). The same batch
+  shows what this round's leg training added: under this code ow-lynel `r77-b` plays 0x22 from the cave 0 of 600
+  (600 wrong exits; `r78t4-lynel` 600 of 600) and ow-moblin `r77-b` the tree 0 of 600 (`r78t4-moblin` 599 of 600).
+- **Not done**: a second darknut round (0x5e's and 0x3e's hearts).
