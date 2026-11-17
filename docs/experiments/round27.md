@@ -665,7 +665,16 @@ round 25's priced darknut did in single rooms; single rooms do not decide a prom
 running**: `triforce select-checkpoint wizzrobe r78-wizz-s<N> --from 6_79s_0 --route d6 --runs 1000 --confirm 1000
 --parallel 10` for each seed (the tool has no `--segment d6`; `--from` with `--route d6` is the segment, scored to the
 route's end, the D6 triforce), then the best confirmed is promoted and the `d6` and `post-d7` chains are measured
-again against `r77a-1k`. stalfos-keese-gel's run (`r78-skg`) was still training when this was written.
+again against `r77a-1k`. stalfos-keese-gel's `r78-skg`: single rooms 99.97%, 0x58 99.8% at −1.07 hearts a visit
+(promoted `r77-b` 98.2%, −1.31); its choice by the `d6` chain is queued, and its Dungeon 1 and 4 rooms are to be
+compared with the promoted run's before any promotion.
+
+**Seed 78 chosen by the chain** (`r78-wizz-s78/selection.json`; the `d6` segment, the rest of the team promoted,
+screen on seeds 0-999, confirmation on 1000-1999): the screen ranks the run's last checkpoint first, 21.5 ± 1.3%
+against the promoted `r77-wizz`'s 8.2% (the `r77a-1k` figure exactly), the checkpoints rising over the run from
+9.5-12% to 17-18%; **confirmed on fresh seeds: last 18.4 ± 1.2%, it000968 18.3%, promoted 10.7 ± 1.0%; last −
+promoted +7.7 ± 1.6 points paired**, hearts on arrival at the triforce 5.64 against 5.18. The tool keeps the last
+checkpoint. Seeds 79 and 80 are still being chosen; the best confirmed of the three is to be promoted.
 
 **The honest planner as a teacher's diagnostic** (batch `r27w-plan`, `r77-wizz`, 100 episodes on each state of 0x38
 and 0x3a, the family's hp draw): the model alone wins 0x38 74.0% (−4.68 hearts) and 0x3a 68.3% (−5.24); with
