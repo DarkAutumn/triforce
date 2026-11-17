@@ -269,11 +269,11 @@ Keys along Dungeon 6 are the walks' 2 → 1 (0x79 W) → 2 (0x58) → 3 (0x2d) �
   an episode from an old state plays on `d2first` and one from a new state on `d6` (checked for every new stem:
   `Env.route` reads `('d6', 248..280)`, and `('d2first', n)` for the old ones), in one family, with nothing to
   undo when the route is merged.
-- **`reward.heart_value`** therefore needs no change either: the fitted table is `d2first`'s and
-  `GameData::heart_values_for` hands it out only for a step played on that route, so the seven table families of
-  the stretch (stalfos-keese-gel, zol, trap-room, like-like, vire, equipment-room, wizzrobe) price hearts in
-  Dungeon 6 by the plain health terms, as round 26's do in Dungeon 7, until chains reach the D6 triforce and a
-  table is fitted for the merged route.
+- **`reward.heart_value`** needed no change for the states step: the fitted table was `d2first`'s and
+  `GameData::heart_values_for` handed it out only for a step played on that route, so the seven table families of
+  the stretch (stalfos-keese-gel, zol, trap-room, like-like, vire, equipment-room, wizzrobe) priced hearts in
+  Dungeon 6 by the plain health terms, as round 26's do in Dungeon 7. Since the first team's chains (§13) the table
+  is fitted on `d6` and prices both routes.
 - **Staging**: wizzrobe `room_kills: {'(6, 0x38)': [1, 6], '(6, 0x3a)': [1, 6]}`, `room_kills_share: 0.5`. The
   rooms' list is a Bubble, three Like-Likes, two Blue and two Red Wizzrobes; the game leaves out the end of the list
   first, so 1-2 banked kills remove the Reds, 3-4 the Blues, 5-6 Like-Likes (7 would leave the Bubble alone and the
@@ -519,3 +519,120 @@ Read by what a first team needs:
 - No `VERSION` change was made. One is due with this merge by the repository's rule: `REV` +1 (a compatible change
   to env code: where a MOVE ends in graveyard rooms and at `keep_out` doorways, two new masks, the sword milestone's
   gating; no observation or action change, every model loads).
+
+## 13. Where Dungeon 6's hearts go, and hearts priced on `d6`
+
+The first team (`r77-b`: ow-moblin, ow-lynel, stalfos-keese-gel, zol, trap-room, like-like, vire; `r77-ghini`,
+`r77-gohma`, `r77-wizz`: wizzrobe from like-like with 0x28's bomb as demonstrations, 488 iterations) measured
+by the chains `r77a-1k` (1000 runs a segment, `--route d6 --act model`, clips on): `post-d7` 99.0% reach Dungeon 6
+and 3.4% its triforce; `d6` 8.2%. Round 25's lesson was that rooms are won one at a time and runs die of the hearts
+they bring into the dangerous rooms; this section asks whether that holds in Dungeon 6 and prices the hearts there.
+
+### 13.1 The ledger
+
+Per route step from the two chains (`r77a-1k-post-d7.jsonl`, `r77a-1k-d6.jsonl`): visits, mean hearts on entering,
+hearts lost a visit (a death loses what it brought) and deaths. 12 containers until Gohma's.
+
+| step | room | family | `post-d7`: visits | hearts in | lost a visit | deaths | `d6`: visits | hearts in | lost a visit | deaths |
+|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 263 | 0:0x32 | ow-lynel | 997 | 11.83 | 1.41 | 7 | | | | |
+| 264 | 0:0x22 | ow-lynel | 990 | 10.49 | 0.19 | 0 | | | | |
+| 265 | 6:0x79 | stalfos-keese-gel | 990 | 10.31 | 0.00 | 0 | 1000 | 12.00 | 0.00 | 0 |
+| 266 | 6:0x78 | wizzrobe | 990 | 10.31 | 0.02 | 0 | 1000 | 12.00 | 0.02 | 0 |
+| 267 | 6:0x68 | zol | 990 | 10.29 | 0.14 | 1 | 1000 | 11.98 | 0.13 | 0 |
+| 268 | 6:0x58 | stalfos-keese-gel | 989 | 10.15 | 1.32 | 3 | 1000 | 11.85 | 1.20 | 0 |
+| 269 | 6:0x48 | trap-room | 986 | 8.86 | 0.00 | 0 | 1000 | 10.65 | 0.00 | 0 |
+| 270 | **6:0x38** | wizzrobe | 986 | 8.86 | 6.15 | **384** | 1000 | 10.65 | 6.55 | **268** |
+| 271 | 6:0x28 | wizzrobe | 602 | 4.45 | 0.38 | 30 | 732 | 5.60 | 0.33 | 15 |
+| 272 | 6:0x29 | wizzrobe | 572 | 4.28 | 0.96 | 75 | 717 | 5.38 | 0.65 | 43 |
+| 273 | 6:0x39 | vire | 497 | 3.82 | 0.08 | 38 | 676 | 5.02 | −0.03 | 33 |
+| 274 | **6:0x3a** | wizzrobe | 460 | 4.04 | 3.39 | **359** | 642 | 5.31 | 4.12 | **426** |
+| 275 | 6:0x08 cave | equipment-room | 100 | 2.97 | 0.15 | 3 | 215 | 3.53 | 0.19 | 3 |
+| 276 | 6:0x1d | like-like | 97 | 2.91 | 0.00 | 0 | 212 | 3.39 | 0.00 | 0 |
+| 277 | 6:0x2d | vire | 97 | 2.91 | −0.19 | 12 | 213 | 3.39 | −0.18 | 11 |
+| 278 | 6:0x2c | wizzrobe | 85 | 3.53 | 2.22 | 42 | 201 | 3.77 | 2.29 | 98 |
+| 279 | 6:0x1c | boss-gohma | 43 | 2.58 | −0.98 | 9 | 103 | 2.89 | −0.98 | 21 |
+| 280 | 6:0x0c | stalfos-keese-gel | 34 | 4.50 | −8.50 | 0 | 82 | 4.85 | −8.15 | 0 |
+
+(0x0c's −8.5 is the heart container and the triforce's refill.) The leg costs 1.7 hearts, 1.4 of them in 0x32;
+the first five rooms of the dungeon 1.4, all but 0.15 in 0x58. Then **0x38 takes 6.2-6.6 hearts a visit and kills
+27-39%; the rest of the way to 0x3a costs about one more heart; 0x3a takes what is left** (entered with 4.0-5.3
+hearts, it kills 66-78%). Of 1000 `d6` runs, 732 leave 0x38 and 215 leave 0x3a; 0x2c and Gohma, entered with under
+4 hearts, then take 119 more.
+
+**What kills Link** (the first 100 runs of the `d6` chain replayed: `triforce eval-chain --route d6 --from 6_79s_0
+--runs 100 --act model --replays DIR`, the same runs as `r77a-1k` seeds 0-99, 11 wins; every frame his hearts drop
+booked to the monster or shot nearest him the frame before, a held Link to the Like-Like; the analysis script is
+`r26_replay_damage.py`'s with Dungeon 6's object types and the ladder and dropped items left out):
+
+| Room | Deaths | Killed by | Hearts lost by source |
+|---|---:|---|---|
+| 0x38 | 21 | Red Wizzrobe shot 8, Blue shot 4, Blue touch 4, Like-Like 3, Red touch 2 | Blue touch 216.5, Red shot 212, Blue shot 169, Like-Like 86, Bubble 12, Red touch 10.5 (Blue Wizzrobes 55%, Red 31%, Like-Likes 12%) |
+| 0x3a | 46 | Blue touch 19, Red shot 12, Blue shot 11, Like-Like 4 | Blue touch 104.5, Blue shot 81, Red shot 53, Like-Like 34, Red touch 1 (Blue 68%, Red 20%, Like-Likes 12%) |
+| 0x58 | 0 | | statue fireballs 70, blue Keese 32.5 |
+| 0x2c | 10 | Blue shot 4, Trap 3, Blue touch 3 | Blue shot 24.5, Trap 13, Blue touch 10 |
+| 0x29 | 5 | Red shot 2, Red touch 2, Blue shot 1 | |
+
+The Blue Wizzrobes (two hearts a touch or a shot, the walks' §5.2) do most of the bleeding in both block rooms, the
+Reds' shots most of 0x38's deaths. **0x58's 1.2 hearts are the statues' fireballs, not its Stalfos or Keese**, and
+they matter more than their size: the magic sword's beam needs full hearts, so a run that loses half a heart in 0x58
+fights 0x38 without beams.
+
+**How much of 0x3a's dying is the hearts it is entered with.** The same model in single rooms (`r77-wizz`, 100
+episodes on each of the three states, `temperature:0.5+relax:16`, batch `r27w-hp`; the family's yaml with `hp`
+fixed): at 12 hearts 0x38 is won 90.3% (−5.1 hearts) and 0x3a 89.3% (−5.1); at 4.8-5.5 hearts 43% and 33%. In the
+`d6` chain, 0x3a's success by hearts on entering:
+
+| hearts in | 0-2 | 2-4 | 4-6 | 6-8 | 8-10 | 10-12 | 12 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 0x3a visits | 55 | 146 | 177 | 136 | 82 | 35 | 11 |
+| won | 2% | 17% | 26% | 44% | 61% | 69% | 82% |
+| 0x38 visits | | | 1 | 8 | 133 | 789 | 69 |
+| won | | | 0% | 25% | 65% | 75% | 80% |
+
+Entered at full hearts, 0x3a would lose 11-18% of its 642 visits (the single room's 10.7%, the chain's 2 of 11), 70
+to 115 deaths where 426 happened: **about three quarters to five sixths of 0x3a's deaths are the hearts it is
+entered with**, which is 0x38's 6.6 hearts a visit (and 0x29's and 0x28's one) arriving late. 0x38's own deaths are
+not: they come with 10.5 hearts on entering. The chain wins 0x38 in 80% of 69 visits at full hearts (beams) and 75%
+at 10-12, both under the single room's 90%.
+
+### 13.2 The heart value of `d6`'s steps
+
+`triforce/heart_value.json` was `d2first`'s (248 steps, Dungeon 7's 209-247 without a curve), and
+`GameData::heart_values_for` handed it out only for an episode on that route, so an episode from a Dungeon 6 state
+(route `d6`, §6) was priced by the plain health terms. The smallest change that keeps one table: **fit it on the
+longest route and let it price every route whose steps are its first ones** (`HeartValues::prices`, set at load;
+`check_heart_values` checks the table against the route it names and refuses a family whose route that neither is
+nor extends; tests in `crates/env/tests/critic.rs` and `game_data.rs`). V at a step depends only on the steps up
+to the next triforce, so `d2first`'s rows are the same on both routes, and when `d6` is merged into `d2first` the
+table is refit under that name with nothing else to undo.
+
+```bash
+M=<main checkout>/target/r56-chains     # the table's own sources: r74-1k (clips on and off, full and segments), r74b-1k d5
+python -m triforce.heart_value $M/r74-1k-{full,d2,post-d2,d1,post-d1,d3,post-d3,d4,post-d4}.jsonl $M/r74b-1k-d5.jsonl \
+    $M/r74-1k-noclips-{full,d2,post-d2,d1,post-d1,d3,post-d3,d4,post-d4}.jsonl $M/r74b-1k-noclips-d5.jsonl \
+    target/r56-chains/r77a-1k-post-d7.jsonl target/r56-chains/r77a-1k-d6.jsonl --route d6
+```
+
+Rows 0-247 came out identical to the shipped table's; steps 248-280 have clip-way curves (the plain way of `woods`,
+252-255, has none: no clips-off chain of the stretch yet, so it keeps the plain terms). V on the clip way, the chance
+to take the D6 triforce alive from entering the step with that many hearts:
+
+| step | room | family | visits | V at 2 | 4 | 6 | 8 | 10 | 11 | 12 hearts |
+|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 248 | 0:0x42 | ow-moblin | 1000 | 0.00 | 0.00 | 0.00 | 0.01 | 0.02 | 0.03 | 0.04 |
+| 268 | 6:0x58 | stalfos-keese-gel | 1989 | 0.00 | 0.00 | 0.00 | 0.01 | 0.03 | 0.05 | 0.07 |
+| 270 | 6:0x38 | wizzrobe | 1986 | 0.00 | 0.00 | 0.01 | 0.02 | 0.05 | 0.08 | 0.13 |
+| 271 | 6:0x28 | wizzrobe | 1334 | 0.01 | 0.03 | 0.08 | 0.16 | 0.28 | 0.36 | 0.42 |
+| 272 | 6:0x29 | wizzrobe | 1289 | 0.01 | 0.04 | 0.09 | 0.18 | 0.31 | 0.38 | 0.44 |
+| 274 | 6:0x3a | wizzrobe | 1102 | 0.01 | 0.04 | 0.10 | 0.22 | 0.39 | 0.39 | 0.53 |
+| 275 | 6:0x08 cave | equipment-room | 315 | 0.15 | 0.51 | 0.70 | 0.78 | 0.83 | 0.83 | 0.83 |
+| 278 | 6:0x2c | wizzrobe | 286 | 0.05 | 0.48 | 0.74 | 0.77 | 0.83 | 0.83 | 0.83 |
+| 279 | 6:0x1c | boss-gohma | 146 | 0.83 | 0.83 | 0.83 | 0.83 | 0.83 | 0.83 | 0.83 |
+
+What it says to the families: past 0x3a a heart is worth little above 8; before it every heart up to 12 is worth
+more than the one below it, and in 0x38 and 0x3a the twelfth (the beam) most. Leaving 0x38 with 6 hearts instead
+of 12 now pays the exit's health part 0.19 of full (V(0x28, 6) / V(0x28, 12)) where the plain term paid 0.5.
+wizzrobe and stalfos-keese-gel already carry round 25's `heart_value: {exit: true, potential: 20}`; with the table
+they price Dungeon 6 by it (checked: an episode from `6_38s_0` pays `penalty-heart-value` beside
+`penalty-lost-health`).
