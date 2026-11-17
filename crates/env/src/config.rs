@@ -396,8 +396,11 @@ pub enum BombUse {
     Tenth,
     /// In the family's game.yaml `requires_bombs` rooms (the 0x2c rock wall, D3's bomb wall), and the 10th kill.
     Required,
-    /// Wherever there is something to bomb: in `requires_bombs` rooms always, elsewhere while Link holds more than
-    /// the route's bomb reserve (routes.yaml `bomb_reserve`); and the 10th kill.
+    /// Wherever there is something to bomb while Link holds more than the route's bomb reserve (routes.yaml
+    /// `bomb_reserve`), and the 10th kill.  In a `requires_bombs` room also at or below the reserve: with a wall
+    /// still to open, only at the wall the objective leaves through (round 26: the reserve is what the walls are
+    /// opened with, [`ItemsConfig::bomb_targets`]); with none (Dodongo's room, Manhandla's once Link is in),
+    /// anywhere: the fight the reserve was kept for.
     Free,
 }
 
@@ -474,21 +477,34 @@ impl ItemsConfig {
     /// - while a granted bomb is outstanding (`granted`, the cheat ledger's `CheatLedger::granted`) and the room's
     ///   bomb is for something it opens (`zelda::cheats::bomb_opens`: not Dodongo's room, where the granted bomb is
     ///   the weapon): a granted bomb opens the wall and does nothing else (round 26), on the 10th kill too;
-    /// - where the mode is `required` (round 22, 4:0x21's bomb waste), but not when the next kill arms a forced drop
-    ///   (any bomb kill pays itself back).
+    /// - where the mode is `required` (round 22, 4:0x21's bomb waste), and where it is `free` while the room still
+    ///   has something to open (`zelda::cheats::bomb_need`) and Link holds no more bombs of his own than the route's
+    ///   `reserve` (round 26: the reserve means the same inside a bomb-wall room as outside); neither when the next
+    ///   kill arms a forced drop (any bomb kill pays itself back).
     pub fn bomb_targets(
         &self,
         map: &zelda::GameMap,
         state: &zelda::GameView,
         objective: Option<&zelda::objectives::Objective>,
+        reserve: u8,
         granted: i32,
     ) -> Option<Vec<zelda::bombs::BombTarget>> {
         let room = state.full_location();
         if self.bombs == BombUse::Never || !map.requires_bombs(room) {
             return None;
         }
-        let grant = granted > 0 && zelda::cheats::bomb_opens(map, room);
-        let limited = grant || (self.bombs == BombUse::Required && !state.next_kill_arms_drop());
+        let opens = zelda::cheats::bomb_opens(map, room);
+        let grant = granted > 0 && opens;
+        let kept = match self.bombs {
+            BombUse::Required => true,
+            BombUse::Free => {
+                opens
+                    && zelda::cheats::bomb_need(map, state) > 0
+                    && state.bombs() - granted <= i32::from(reserve)
+            }
+            BombUse::Tenth | BombUse::Never => false,
+        };
+        let limited = grant || (kept && !state.next_kill_arms_drop());
         limited.then(|| objective.map_or_else(Vec::new, |o| zelda::objectives::route_bomb_targets(map, state, o)))
     }
 

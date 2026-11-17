@@ -776,7 +776,8 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         let kinds = self.config.items.disabled_kinds(&self.data.map, self.session.state(), reserve, rupees);
         self.session.set_disabled_kinds(&kinds);
         let granted = self.cheats.granted(CheatItem::Bombs);
-        let targets = self.config.items.bomb_targets(&self.data.map, self.session.state(), Some(objective), granted);
+        let targets =
+            self.config.items.bomb_targets(&self.data.map, self.session.state(), Some(objective), reserve, granted);
         self.session.set_bomb_targets(targets.as_deref());
         let facings = self.objectives.as_ref().map(|gc| gc.recorder_facings(self.session.state()));
         self.session.set_recorder_facings(facings);

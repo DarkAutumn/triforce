@@ -1210,8 +1210,13 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         let kinds = config.items.disabled_kinds(&self.data.map, self.session.state(), reserve, rupees);
         self.session.set_disabled_kinds(&kinds);
         let granted = self.cheats.granted(CheatItem::Bombs);
-        let targets =
-            config.items.bomb_targets(&self.data.map, self.session.state(), self.objective.as_ref(), granted);
+        let targets = config.items.bomb_targets(
+            &self.data.map,
+            self.session.state(),
+            self.objective.as_ref(),
+            reserve,
+            granted,
+        );
         self.session.set_bomb_targets(targets.as_deref());
         // The facings the route plays the recorder with (round 26: the whirlwind's count, the pond, a Digdogger fought).
         let facings = self.objectives.as_ref().map(|gc| gc.recorder_facings(self.session.state()));
