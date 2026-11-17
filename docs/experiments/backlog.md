@@ -22,8 +22,9 @@ round26.md §7-11. Nothing is trained yet; these are open.
   (84.7 → 79.3% of 300 paired runs) because the last pass of 3:0x5b had cheated bombs as its weapon when Link came
   with 0-1 (95 of 294 passes; now 0.61 hearts lost there and Manhandla kills 27 of them, 14 before). One darknut
   continuation under the rule (round 25's settings), its checkpoint chosen by the D3 and D5 segments.
-- [ ] **goriya under the bomb rule:** `r76-goriya3` (queued); evaluate it by room against `r76-goriya2` under the
-  rule and on a 1000-run Dungeon 7 chain before it replaces `r76-goriya2`.
+- [x] **goriya under the bomb rule:** `r76-goriya3` (one continuation; round26.md §13): no cheated bomb in 1000
+  Dungeon 7 runs, 70.4% of runs reach 7:0x1b (58.0% with `r76-goriya2` under the old rule), 18.3% the Wallmaster
+  room (11.4%). Promote it with the rule's merge. Next in Dungeon 7: 0x1b (362 of 704 visits die), 0x0c (116 of 299).
 - [ ] **Cheated bombs still counted:** 3:0x5b about 0.44 a Dungeon 3 run (F173: the granted bomb is used first at
   the wall although Link holds the room's four by then; the owner's call whether a pickup repays a grant), Dungeon
   4's walls 0.56 a run (runs that arrive with none). `cheats::bomb_need` keeps a room's need while any bomb wall is
