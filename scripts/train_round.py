@@ -138,6 +138,17 @@ def iterations_for(args) -> int:
     return math.ceil(args.steps / args.steps_per_update)
 
 
+def effective_schedule(args) -> tuple[int, int]:
+    """(iterations, steps per update) each training runs: ``--train-args`` comes after the round's own flags in the
+    command, so an ``--iterations``/``--steps-per-update`` there wins (read as triforce.train's parser reads it:
+    ``--steps N`` there is its abbreviation of ``--steps-per-update``)."""
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument('--iterations', type=int, default=iterations_for(args))
+    parser.add_argument('--steps-per-update', type=int, default=args.steps_per_update)
+    known, _ = parser.parse_known_args(shlex.split(args.train_args))
+    return known.iterations, known.steps_per_update
+
+
 def train(name: str, args, models: Path, run_dir: Path, log_dir: Path) -> int:
     """Runs triforce.train as a subprocess with its event stream in log_dir/<name>.jsonl, teeing its output to
     run_dir/train.log and log_dir/<name>.log.  Returns the exit code."""
@@ -385,14 +396,14 @@ def check_names(names: list[str]) -> Optional[str]:
     return '; '.join(problems) + f" (trainable: {', '.join(default_specialists())})"
 
 
-def round_work(args, names: list[str], iterations: int) -> dict:
+def round_work(args, names: list[str], iterations: int, steps_per_update: int) -> dict:
     """The round's work (``triforce.jobs``): every specialist's training steps and evaluation episodes (seed states
     x episodes per state x the clips switch states its evaluation plays: no state is loaded to count them), and the
     chain's route steps."""
     configs = [load_specialist(name) for name in names]
     episodes = sum(len(config.resolve_start_states()) * args.episodes_per_state * len(switches(default_mode(config)))
                    for config in configs)
-    return work(train_steps=len(names) * iterations * args.steps_per_update, eval_episodes=episodes,
+    return work(train_steps=len(names) * iterations * steps_per_update, eval_episodes=episodes,
                 chain_steps=args.chain_runs * steps_played(_native.DEFAULT_ROUTE))
 
 
@@ -412,14 +423,14 @@ def main(argv=None):
 
     log_dir = new_log_dir(args.round, args.logs_dir)
     _CONSOLE['file'] = open(log_dir / 'round.log', 'a', encoding='utf-8')  # pylint: disable=consider-using-with
-    iterations = iterations_for(args)
+    iterations, steps_per_update = effective_schedule(args)
     plan = TrainingPlan(log_dir, args.round, 'round', [     # waits its turn (triforce.jobs)
         {'specialist': name, 'run_id': args.round, 'events': f'{name}.jsonl', 'log': f'{name}.log',
          'run_dir': str(registry.run_dir(name, args.round, models)), 'target_iterations': iterations,
-         'target_steps': iterations * args.steps_per_update} for name in names],
+         'target_steps': iterations * steps_per_update} for name in names],
                         command=[sys.executable, *sys.argv], models_dir=str(models), steps_budget=args.steps,
                         events='round.jsonl', log='round.log', chain_runs=args.chain_runs, nice=args.nice,
-                        work=round_work(args, names, iterations))
+                        work=round_work(args, names, iterations, steps_per_update))
     events = EventLog(log_dir / 'round.jsonl', round=args.round)
     events.emit('start', specialists=names, steps_budget=args.steps, models_dir=str(models), log_dir=str(log_dir),
                 promote=args.promote, train_args=args.train_args, pid=os.getpid(), nice=args.nice)

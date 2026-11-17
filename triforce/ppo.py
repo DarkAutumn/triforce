@@ -468,11 +468,14 @@ class PPO:
         minibatch_size = max(1, batch_size // cfg.minibatches)
         b_searched, b_search_policy = batch.get('search_mask'), batch.get('search_policy')    # None without search
 
+        # The demonstration rows stay where they are (host memory for --demos files: 100k rows are GBs); only a
+        # minibatch-sized sample moves to the device per minibatch.  A batch no larger than a minibatch moves whole.
         demo = None
         if self.demo_batch is not None and cfg.demo_bc_coeff > 0:
-            demo_obs, demo_masks, demo_targets = self.demo_batch
-            demo = ({k: v.to(self.device) for k, v in demo_obs.items()}, demo_masks.to(self.device),
-                    demo_targets.to(self.device))
+            demo = self.demo_batch
+            if demo[2].shape[0] <= minibatch_size:
+                demo = ({k: v.to(self.device) for k, v in demo[0].items()}, demo[1].to(self.device),
+                        demo[2].to(self.device))
         demo_bc_loss = torch.tensor(0.0)
 
         sil = None
@@ -546,10 +549,12 @@ class PPO:
                         loss = loss + cfg.search_coeff * search_ce
                     if demo is not None:
                         rows = demo[2].shape[0]
-                        if rows > minibatch_size:   # a large batch (best-of-N runs): a minibatch-sized sample
-                            pick = torch.randperm(rows, device=self.device)[:minibatch_size]
-                            demo_lp = demo_log_prob(network, {k: v[pick] for k, v in demo[0].items()},
-                                                    demo[1][pick], demo[2][pick])
+                        if rows > minibatch_size:   # a large batch: a minibatch-sized sample
+                            # drawn on the device as before (same draws for a seed), gathered where the rows live
+                            pick = torch.randperm(rows, device=self.device)[:minibatch_size].to(demo[2].device)
+                            demo_lp = demo_log_prob(network,
+                                                    {k: v[pick].to(self.device) for k, v in demo[0].items()},
+                                                    demo[1][pick].to(self.device), demo[2][pick].to(self.device))
                         else:
                             demo_lp = demo_log_prob(network, demo[0], demo[1], demo[2])
                         demo_bc_loss = -demo_lp.mean()
@@ -585,8 +590,10 @@ class PPO:
             head_stats = network.head_entropies(b_obs, b_masks, b_actions)
             demo_accuracy = None
             if demo is not None:
-                demo_accuracy = compute_demo_accuracy(network.get_action(demo[0], demo[1], deterministic=True),
-                                                      demo[2])
+                demo_accuracy = compute_demo_accuracy(torch.cat([
+                    network.get_action({k: v[part].to(self.device) for k, v in demo[0].items()},
+                                       demo[1][part].to(self.device), deterministic=True).to(demo[2].device)
+                    for part in torch.split(torch.arange(demo[2].shape[0]), minibatch_size)]), demo[2])
             search_stats = {}
             if b_searched is not None:
                 # After the update, over every searched row: CE(π', π_θ) and how often their argmaxes agree.
