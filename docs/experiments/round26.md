@@ -706,6 +706,7 @@ RUN_DIR --iterations 244 --seed 76 --stop-success 1.01 --sil-coeff 0.1 ..."`, ju
 | `r76-b` (the first team's) | `r71-e` | old objective | 300 / 300, 0 lost | 11 / 300 (3.7%) | 37 | 251 `no-damage`, 1 `stuck` | −0.02 |
 | `r76-b`, untrained, fixed objective | | | 300 / 300, the same episodes | 55 / 300 (18.3%) | 170 | 55 `no-damage`, 20 `exit-wrong` | −0.24 |
 | **`r76-wall-1`** | `r76-b` | none: PPO alone | 300 / 300, 0 lost | **259 / 300 (86.3%)** | **26 (8.7%)** | 15 `no-damage` | +0.27 |
+| `r76-wall-2` | `r76-wall-1` | `--demos rule.npz --demo-coeff 0.05` | 300 / 300, 0 lost | 258 / 300 (86.0%) | 26 (8.7%) | 16 `no-damage` | +0.23 |
 
 **The objective was the cause: on the fixed one PPO alone takes the room from 4% to 86%** in one continuation of
 244 iterations (1M env steps), with 1:0x45 unchanged (300 of 300, no heart lost, worst linger 4 decisions). By
@@ -722,3 +723,10 @@ rule.npz --demo-coeff 0.05`, the 28,354-row file).
 state too. By kills banked at the start, won of played: none 129 of 156, one 20 of 21, two 49 of 51, three 39 of
 42, four 30 of 30. So what is left of the room is the capture, mostly in the full fight (the unstaged runs fail one
 time in six), and the clock (about one in five that drop is taken).
+
+**Round 2, the rule's rows at 0.05: the clone takes and the play does not change.** The policy's accuracy on the
+rule's rows went from 17% to 94% over the 244 iterations (`charts/demo_bc_accuracy`; loss 3.88 to 0.21), and the
+room is where it was: 258 of 300, 26 captured, 16 `no-damage` (by state 76, 94 and 88 of 100; a winning episode 57
+decisions), 1:0x45 300 of 300 with no heart lost. The policy knows the rule's answer in the rule's states and does
+not visit them: it plays its own, faster fight, and is caught there (round 25 §5 again). A higher weight would not
+change which states it visits, so round 3 adds DAgger rows instead (`r76-wall-2` plays, the rule labels).
