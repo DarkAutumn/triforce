@@ -8,9 +8,14 @@ obs: {objective: true, target: true}       # schema 2 pointer, no item targets (
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chain arrives with partial hearts (round 5)
 items: {bombs: tenth}                      # only the 10th damage-free kill's bomb (arms a forced bomb drop)
 clips: {enabled: true, off_share: 0}      # round 21: the screen wrap (W/E); the owner, Nov 18: no episode with CLIP masked
+curriculum: {enabled: true}             # round 29's second round: 0:0x17 from S (the explorer's and the ladder rule's tracks)
 one_room: true                          # round 5: per-room episodes
 max_steps: 600
 warm_start: null
 notes: >-
   Falling-boulder rooms (Lee, Nov 8: hard to predict, can't be blocked). Not trained yet. 0x19, 0x18, 0x17 from E
   (0x17 leaves S). Each room has a boulder generator ($31) dropping boulders ($32) and a Zora in the river.
+  Round 29 (route `d9`, step 308): 0x17 from S leaves N over the river by the ladder (up X $88 to Y $9D, W along it,
+  up the corridor at X $40). The first round (no curriculum, no demonstrations) learned nothing of it: the model
+  stayed on the S entry row, walking onto the river's S end and back, 0 of 300; the ladder rule
+  (`r29_demos.py ladder-17`) crosses 298 of 300 at 0.38 hearts.

@@ -22,6 +22,8 @@ ROOM is one of:
     whirlwind     0:0x6d (ow-moblin): RECORDER where the mask offers it, else WAIT.
     tree          0:0x47 (ow-zora): to the square over the tree, CANDLE S where offered, three WAIT 32, MOVE S.
     rock-wall     0:0x05 (ow-lynel): the walk's lane to the square under the wall, BOMB N where offered, MOVE N.
+    ladder-17     0:0x17 from S (ow-boulder): N up X $88 to Y $9D, W along it over the river (the game lays the
+                  ladder), N up the corridor at X $40 (round 29's second round: the family has no other rule).
     like-like-14  9:0x14 (like-like): the fighter with Like-Likes as targets, then the E key door.
     lanmola       9:0x55 (lanmola): the worm fighter, the push, the stairs.
     patra-61 / patra-52 / patra-16   (patra): the key (0x61), the Patra fighter (children, then the body), then the
@@ -65,6 +67,7 @@ LETTER = {'RIGHT': 'E', 'LEFT': 'W', 'DOWN': 'S', 'UP': 'N'}
 
 # room -> (family, the route step's index in d9; 0x20's first visit is fought on the plain way, step 339)
 ROOMS = {'whirlwind': ('ow-moblin', 297), 'tree': ('ow-zora', 301), 'rock-wall': ('ow-lynel', 311),
+         'ladder-17': ('ow-boulder', 308),
          'like-like-14': ('like-like', 317), 'lanmola': ('lanmola', 315),
          'patra-61': ('patra', 336), 'patra-52': ('patra', 355), 'patra-16': ('patra', 330),
          'wizzrobe-07': ('wizzrobe', 323), 'wizzrobe-05': ('wizzrobe', 332), 'wizzrobe-20': ('wizzrobe', 339),
@@ -510,6 +513,12 @@ def rock_wall_rule():
     return rule
 
 
+def ladder_17_rule():
+    """0:0x17 from S (d9-walks.md §1.4): up X $88 out of the S pocket to the walked row Y $9D, W along it (MOVE W onto
+    the river lays the ladder; 61 frames from X $90 to $40 by buttons), then up the N corridor at X $40."""
+    return lane([(0x88, 0x9D), (0x40, 0x9D)], 'MOVE N 8')
+
+
 def room_rule(way_of, held_only=False):
     """The Wizzrobe fighter (`r29_fight_rooms.RoomBot`: Wizzrobes, Zols, Like-Likes) until the room is "all dead",
     then `way_of(bot)` (a `Way`)."""
@@ -694,7 +703,7 @@ def zelda_rule():
 
 
 RULES = {
-    'whirlwind': whirlwind_rule, 'tree': tree_rule, 'rock-wall': rock_wall_rule,
+    'whirlwind': whirlwind_rule, 'tree': tree_rule, 'rock-wall': rock_wall_rule, 'ladder-17': ladder_17_rule,
     'like-like-14': lambda: room_rule(door_way((0xD0, 0x8D), 'E')),
     'lanmola': lanmola_rule,
     'patra-61': lambda: patra_rule(0x61), 'patra-52': lambda: patra_rule(0x52), 'patra-16': lambda: patra_rule(0x16),

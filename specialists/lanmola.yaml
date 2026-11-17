@@ -23,3 +23,7 @@ notes: >-
   $8D and E onto the stairs. Once a head has died the room stays empty for every later entry. A rule reading
   positions clears it 20 of 20 at 1.0 hearts (289 frames) and reaches the cellar in 615 frames; six families
   zero-shot died in 178 of 180 episodes. Settings copied from moldorm (the nearest: a worm of segments).
+  Round 29's second round (round29.md §17): the room is clipped, not fought: up X $60 from the S door to Y $9D, CLIP
+  N, onto the stairs (`r29_clip_demos.py clip-55`: 15 decisions, no heart lost). The first run reached a CLIP point
+  after 34 decisions on average, wandering the S rows; its curriculum is the rule's tracks now (the explorer's
+  wandering ones set aside).
