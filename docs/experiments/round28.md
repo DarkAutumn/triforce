@@ -712,3 +712,54 @@ TAG=r78t4-1k scripts/experiments/r28_d8_baseline.sh report
   shows what this round's leg training added: under this code ow-lynel `r77-b` plays 0x22 from the cave 0 of 600
   (600 wrong exits; `r78t4-lynel` 600 of 600) and ow-moblin `r77-b` the tree 0 of 600 (`r78t4-moblin` 599 of 600).
 - **Not done**: a second darknut round (0x5e's and 0x3e's hearts).
+
+## 15. Darknut continued with Dungeon 8's hearts priced (Nov 17-18; chains of choice still queued)
+
+- **The branch** merges `r26` (the bomb rule, Dungeon 7's heart fit; `bomb_targets` now takes the route step's own
+  items, the reserve and the granted bombs), takes round 27's `f35db65` as it is (`HeartValues::prices`: a table
+  prices its own route and the routes it extends) and `r26-fast`'s `8a28cc7` (demonstration rows on the device,
+  the accuracy chart on 8192 rows: an update with darknut's 196k rows went from about 8 s of demo work to 0.1 s).
+- **The heart value of `d8`'s steps**: `python -m triforce.heart_value --route d8` over round 24's 20 chains, round
+  26's `r76t1-1k` and `r76t1-1k-noclips` (post-d5, d7), round 27's `r77a-1k` (post-d7, d6) and round 28's `r78t4-1k`
+  (post-d6, d8). Rows 0-247 are `r26`'s table, 248-280 `f35db65`'s; steps 281-296 get curves. V at 8:0x3e (the
+  chance to reach the D8 triforce alive): 0.09 at 6 hearts, 0.40 at 13; at 0x5e 0.09 at 13. Before this a darknut
+  episode in Dungeon 8 had no table (the plain health terms); now darknut prices hearts in Dungeons 3, 5 and 8.
+- **`r78t4-darknut` costs Dungeon 5.** Segment chains, 1000 runs, seeds 0-999, clips on, this code, darknut swapped
+  (`select-checkpoint ... --only last`):
+
+| Segment | `r75-d537-c5` (round 25) | `r78t4-darknut` (§14) | paired |
+|---|---:|---:|---:|
+| `d5` (`--from 5_76s_0 --stop-at step:209`) | 665 / 1000 | 550 / 1000 | **-11.5 ± 2.1** |
+| `d3` (`--from 3_7cs_0 --stop-at step:134`) | 738 / 1000 | 697 / 1000 | -4.1 ± 2.0 |
+
+  In Dungeon 5 the Olive Garden 0x05 costs 1.63 → 2.12 hearts a visit and 0x37 kills 21 → 56 (its column way gone:
+  0.21 → 0.73 hearts a visit). Cause: `r75-d537-c5` is `r75-f-dk-s75` plus 60 iterations with round 25's 0x37 rule
+  demonstrations (`demos37f.npz`); `r78t4-darknut` was trained from it with the two Dungeon 8 files only, and 488
+  iterations without the 0x37 rows undid it. The single-room evaluation (100 a state) did not show it (5:0x37 100%).
+  In Dungeon 3 the darknut rooms are the same; the loss is Manhandla's 0x4d (deaths 144 → 184) on 0.15 fewer hearts.
+- **Two arms, three seeds each**, all from `r78t4-darknut`, `reward.heart_value` on (the yaml's), `--sil-coeff 0.1
+  --checkpoint-every 30 --iterations 488 --demo-coeff 0.05`, one `train_round.py` round a seed: arm A
+  `r78-dark-s81/82/83` with darknut-5e and darknut-3e; arm B `r78-dark37-s84/85/86` with those and the 0x37 rule's rows
+  regenerated under this code (`scripts/experiments/r25_d5_37_tracks.py --demos`: 24,092 rows from 587 of 600 runs).
+  s81 and s83 trained on the slow demo code (353 and 526 steps a second), the other four on `8a28cc7` (1200-1300);
+  the update's draws are the same. Each round's evaluation (100 a state, clips both as the yaml had it), against
+  `r78t4-darknut`:
+
+| Run | 8:0x5e | 8:0x4e | 8:0x3e | 8:0x3f | 5:0x05 | 5:0x64 | 5:0x37 hearts |
+|---|---|---|---|---|---|---|---:|
+| `r78t4-darknut` | 80.5% -4.26 | 93.3% -3.09 | 68.7% -5.84 | 92.2% -3.09 | 88.7% -1.77 | 89.7% -1.60 | -0.40 |
+| `r78-dark-s81` | 85.2% -3.22 | 93.5% -2.94 | 83.2% -3.50 | 94.5% -2.50 | 88.9% -1.54 | 92.1% -1.41 | -0.36 |
+| `r78-dark-s82` | 87.2% -3.19 | 96.5% -2.82 | 81.8% -3.64 | 92.0% -2.51 | 89.8% -1.45 | 89.5% -1.67 | -0.23 |
+| `r78-dark-s83` | 84.5% -3.40 | 93.5% -2.83 | 83.8% -3.68 | 94.3% -2.63 | 90.1% -1.26 | 91.0% -1.56 | -0.28 |
+| `r78-dark37-s84` | 87.0% -3.32 | 93.3% -3.08 | 82.0% -3.91 | 93.3% -2.53 | 90.7% -1.44 | 89.7% -1.63 | -0.08 |
+| `r78-dark37-s85` | 84.7% -3.42 | 93.3% -2.97 | 81.3% -3.74 | 93.7% -2.51 | 90.5% -1.30 | 91.3% -1.42 | -0.11 |
+| `r78-dark37-s86` | 87.8% -3.07 | 94.5% -2.93 | 82.5% -3.56 | 93.3% -2.59 | 90.5% -1.36 | 91.8% -1.32 | -0.06 |
+
+  Pricing Dungeon 8's hearts moved every seed the same way: 0x3e 68.7% → 81-84% at about 2 hearts less a visit,
+  0x5e 4 points up and 1 heart less. Arm B keeps 0x37's column (0.06-0.11 hearts against 0.23-0.36 in arm A). The
+  Dungeon 3 rooms are unchanged in all six.
+- **Not done when this was written** (the jobs wait in the line): `select-checkpoint` of the six runs on `d8`
+  (`--from 8_7es_0 --route d8 --runs 1000 --first-seed 2000 --confirm 1000`: screen seeds 2000-2999, confirmation
+  3000-3999, so the chains of record on seeds 0-999 stay fresh), the chosen run's `d3` and `d5` segments paired with
+  the two rows above, and the chains `r78-dark-1k` against `r78t4-1k`. Nothing promoted; the bar (the lead): `d5` and
+  `d3` not worse than `r75-d537-c5` beyond noise, `d8` better than `r78t4-darknut`.
