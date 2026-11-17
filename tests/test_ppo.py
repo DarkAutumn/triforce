@@ -217,6 +217,29 @@ def test_demo_regularization_pulls_policy_toward_demo():
     assert stats['charts/demo_bc_accuracy'] == pytest.approx(1.0)
 
 
+def test_the_demo_accuracy_sample_does_not_change_the_update(monkeypatch):
+    """A batch above ``DEMO_ACCURACY_ROWS`` has its accuracy read from a sample drawn by a generator of its own: the
+    weights after three updates are those of the same updates reading every row."""
+    from triforce import ppo as ppo_module
+
+    def train(limit):
+        monkeypatch.setattr(ppo_module, 'DEMO_ACCURACY_ROWS', limit)
+        _seed()
+        network = ZeldaPolicy(synthetic.observation_space(), SMALL)
+        agent = PPO(PPOConfig(learning_rate=1e-3, num_epochs=4, target_kl=None, demo_bc_coeff=1.0),
+                    demo_batch=_demo_batch())
+        buffer = _filled_buffer(network)
+        for _ in range(3):
+            stats = agent.optimize(network, buffer)
+        return torch.cat([p.detach().flatten() for p in network.parameters()]), stats['charts/demo_bc_accuracy']
+
+    rows = _demo_batch()[2].shape[0]
+    every, exact = train(rows)
+    sampled, estimate = train(rows // 4)
+    assert torch.equal(every, sampled)
+    assert exact == pytest.approx(1.0) and 0.0 <= estimate <= 1.0
+
+
 def test_demo_rows_with_any_duration_leave_the_duration_head_alone():
     """A demo duration of -1 (``demos.ANY_DURATION``) clones kind and direction; the duration head gets no gradient
     from those rows, and any predicted duration matches them."""
