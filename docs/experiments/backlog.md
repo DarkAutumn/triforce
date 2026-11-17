@@ -33,8 +33,10 @@ answers `docs/decisions.md` 2026-11-17 ("Round 28's working answers"). Built on 
 - [ ] **Finish the tracks**: `FIGHTS=only SKIP_DONE=1 nice -n 10 scripts/experiments/r28_d8_curricula.sh` (the
   explorer's full fights of 0x5e and 0x3e and their staged starts `~k1`..; 0x4c on chains 1 and 2 failed at 9000
   iterations; Gleeok untried). Every state already has a track, the fights' from the rules (round28.md §9).
-- [ ] **Finish the demonstration files and prove a `--demos` training**: `darknut-5e`, `darknut-3e`, `gleeok` with
-  `--hearts family --out target/r28-demos/ROOM.npz`; then two iterations with each file (round28.md §10).
+- [ ] **The large demonstration files do not train beside other trainings**: `train --demos` takes all rows in one
+  piece; darknut-5e (92,878 rows) and gleeok (106,171) died with `CUDA out of memory` (3.9 and 4.5 GiB asked, about
+  3 free), darknut-3e (103,208) untried; whirlwind, tree and pols (71,721) trained. Batch the demonstration loss in
+  `triforce.train`, or write the files with `--runs 40` (round28.md §10).
 - [ ] **Rebuild the stretch's states when Dungeon 6's skipped fights are replaced** (they descend from `6_0cs`;
   their bombs, 4 / 7 / 3 in 0x5e, are Dungeon 6's luck and not the ledger's 0: chain 1 does not fight 0x3f).
 - [ ] **0x4e: 38 of 120 baseline episodes end `stuck`** (darknut `r75-d537-c5`, 0 successes; the walk's scaffold

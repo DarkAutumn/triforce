@@ -34,8 +34,9 @@ four hearts, and only if every room is played as well as its best script.**
   room's rule played it), family files, chain segments `post-d6` and `d8`, a track for every state, the proof
   round, and the baseline `r78-base`: **0 of 100 on both segments** (no run leaves 0x22; 0x5e is cleared in 4 of
   100 visits).
-- **Not done** (§9-11): the explorer's fight tracks and staged tracks of 0x5e and 0x3e, three of the six
-  demonstration files, any training with `--demos`, any trained model.
+- **Not done** (§9-11): the explorer's fight tracks and staged tracks of 0x5e and 0x3e; a `--demos` training with
+  the three large files (darknut-5e and gleeok ran out of GPU memory beside the day's other trainings, darknut-3e
+  was not tried; the three small ones train); any trained model.
 
 ## 1. The walks: what the running game says
 
@@ -436,10 +437,10 @@ heart too low).
 |---|---|---|
 | whirlwind | 300 of 300; 0, 0 | 13: the same |
 | tree | 300 of 300; 0, 0 | 12 hearts: 300 of 300; 0 |
-| darknut-5e | 295 of 300 (4 deaths, 1 wrong exit); 2.46, 10.5 | 12 hearts: chain 0 97 of 100, 3.10 (chains 1 and 2 were still running when the step ended) |
-| darknut-3e | 299 of 300 (1 death); 1.86, 12.0 | 10 hearts: not finished when the step ended |
+| darknut-5e | 295 of 300 (4 deaths, 1 wrong exit); 2.46, 10.5 | 12 hearts: 292 of 300 (7 deaths, 1 wrong exit); 2.54, 10.5 |
+| darknut-3e | 299 of 300 (1 death); 1.86, 12.0 | 10 hearts: 294 of 300 (6 deaths); 1.68, 8.5 |
 | pols | 296 of 300 (4 `stuck`); 0.43, 4.0; 3.4 arrows a run | 7 hearts: 296 of 300; 0.36, 4.0 |
-| gleeok | 293 of 300 (7 deaths); 1.96, 10.0 | **6 hearts: 267 of 300** (94, 89, 84 a chain; 32 deaths, 1 wrong exit); 2.34, 7.0. 7 hearts: chain 0 94 of 100, 2.06 (chains 1 and 2 still running) |
+| gleeok | 293 of 300 (7 deaths); 1.96, 10.0 | **6 hearts: 267 of 300** (94, 89, 84 a chain; 32 deaths, 1 wrong exit); 2.34, 7.0. 7 hearts: 276 of 300 (24 deaths); 2.45, 7.0 |
 
 - **pols' four `stuck` runs** are the same four seeds at every hearts setting (three on chain 1, one on chain 2):
   the rule stands 50 decisions in one place. Not looked into.
@@ -474,10 +475,19 @@ heart too low).
   | `whirlwind` | 300 of 300 | 26,105 | 0 |
   | `tree` | 300 of 300 | 15,659 | 0 |
   | `pols` | 296 of 300 (hearts 2-13 on entry) | 71,721 | 0.34 |
-  | `darknut-5e`, `darknut-3e`, `gleeok` | **not written when the step ended** (the first two were being written; the command above makes each in 5 to 15 minutes) | | |
+  | `darknut-5e` | 270 of 300 (29 deaths, 1 wrong exit; hearts 2-13) | 92,878 | 2.08 |
+  | `darknut-3e` | 285 of 300 (15 deaths) | 103,208 | 1.58 |
+  | `gleeok` | 290 of 300 (9 deaths, 1 out of steps; hearts 6.5-13) | 106,171 | 2.14 |
 
-  Use: `train --demos target/r28-demos/ROOM.npz --demo-coeff 0.05` (round 25's coefficient). **No training has
-  loaded any of them: the 2-iteration trainings with each file were not run.**
+  Use: `train --demos target/r28-demos/ROOM.npz --demo-coeff 0.05` (round 25's coefficient).
+- **Two iterations with a file each** (round `r78-demos`, as §11's round with `--demos
+  target/r28-demos/by-family/{name}.npz --demo-coeff 0.05`; the links name each file by its family): **ow-lynel
+  (whirlwind, 26,105 rows), ow-moblin (tree, 15,659) and pols-voice (pols, 71,721) trained and evaluated; darknut
+  (darknut-5e, 92,878 rows) and boss-gleeok (gleeok, 106,171) failed with `CUDA out of memory`** (3.9 and 4.5 GiB
+  asked for the demonstration rows in one piece, 3.8 and 2.9 free beside the other trainings of the day).
+  `darknut-3e` (103,208 rows) was not tried and would fail the same way. So the three large files are **not proven
+  to train**: either write them smaller (`--runs 40` a state gives about 40,000 rows) or have `triforce.train` take
+  the demonstration loss in batches; on a free GPU they may fit as they are (not tried).
 
 ## 11. Proof trainings
 
@@ -503,7 +513,7 @@ rule tracks), boss-manhandla 21 (3), darknut 73 (12: the six crossings and the s
 equipment-room 30 (3), pols-voice 10 (4: the three rule tracks and the explorer's `8_4cc_0`), boss-gleeok 6 (3: the
 rule tracks); ow-octorok and stalfos-keese-gel have no `curriculum:` and load none. Two iterations train nothing:
 the round's evaluations (2 episodes a state) only show that the rooms run (worst rooms 8:0x3e, 8:0x4c and 8:0x3c
-at 0%, 0:0x6d 33%, as the baseline). **Not run: a training with `--demos`** (§10).
+at 0%, 0:0x6d 33%, as the baseline). The trainings with `--demos` are in §10.
 
 ## 12. The baseline: today's models on the stretch
 

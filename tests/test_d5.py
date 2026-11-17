@@ -619,8 +619,10 @@ def test_a_staged_olive_garden_holds_6_minus_k_darknuts_and_clears_as_the_room(p
     for _ in range(10):
         plain.reset(options={'start_state': path})
         assert (plain.banked_kills, len(plain.state.enemies)) == (0, 6)
-    # k = 5: one Darknut, killed by the sword from behind (its HP lowered to one hit).
-    while env.banked_kills != 5:
+    # k = 5: one Darknut, killed by the sword from behind (its HP lowered to one hit).  A reset that also drew full
+    # hearts offers BEAMS in SWORD's place: one below full is taken (round 28: two more rooms in `room_kills` moved
+    # which reset draws what).
+    while env.banked_kills != 5 or env.state.health >= env.state.max_health:
         env.reset(options={'start_state': path})
     for _ in range(4):
         env.step('WAIT 16')

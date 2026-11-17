@@ -28,8 +28,8 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   `d8` (`8_7es_0`), a track for every state (`scripts/experiments/r28_d8_curricula.sh`, rule tracks `~rule<seed>`),
   Gleeok's rule rebuilt for the env's grain (267 of 300 from 6 hearts; it was 17 of 30), and the baseline
   `r78-base` (`scripts/experiments/r28_d8_baseline.sh`): 0 of 100 on both segments. Not done: the explorer's
-  fight and staged tracks of 0x5e and 0x3e, three of six demonstration files, a `--demos` training, any trained
-  model.
+  fight and staged tracks of 0x5e and 0x3e, a `--demos` training with the three large demonstration files (two ran
+  out of GPU memory, round28.md §10), any trained model.
 - **Round 27, begun (Nov 16-17, 1.5.1.0; `docs/experiments/round27.md`):** the magic sword and Dungeon 6. Built so
   far, nothing trained: (1) **the walks** (`docs/routes/d6-walks.md`: the leg, the gravestone and the cave, every
   room of level 6, Wizzrobes and Gohma measured; today's models cannot play 0x28, 0x38, 0x3a, Gohma, or ow-lynel's
