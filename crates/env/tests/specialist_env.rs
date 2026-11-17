@@ -2337,20 +2337,19 @@ fn bombs_only_in_requires_bombs_rooms() {
 /// Round 22 (4:0x21's bomb waste): a `required` family in a `requires_bombs` room is offered BOMB only where the bomb
 /// lands in reach of the wall its objective leaves through (trap-room in 4:0x11, entered S, leaving N: BOMB N under
 /// the N wall, nothing in the room's middle, nothing at the E wall), and anywhere once the next kill is the 10th
-/// damage-free one; a `free` family is not limited (boss-manhandla in 3:0x4d).
+/// damage-free one (with bombs of his own: the reset draws 4, so none is granted; round 26: a granted bomb stays at
+/// the wall then too, `a_granted_bomb_only_opens_the_wall`); a `free` family is not limited (boss-manhandla in
+/// 3:0x4d).
 #[test]
 fn required_families_bomb_only_where_the_route_wall_opens() {
     let Some(nes) = open_core() else { return };
     let bomb = |env: &Env| env.session().mask().directions(ActionKind::Bomb);
-    let mut env = make_env(nes, "trap-room", Some("4_11s_0"), |_| {});
+    let mut env = make_env(nes, "trap-room", Some("4_11s_0"), |c| {
+        c.ram_randomization = RamRandomization { bombs: Some((4, 4)), ..Default::default() };
+    });
     env.reset(Some(0), None).unwrap();
     let place = |env: &mut Env, x: u8, y: u8, help: u8| {
-        env.session_mut().apply_ram(&[
-            (Var::LinkX, x),
-            (Var::LinkY, y),
-            (Var::Bombs, 4),
-            (Var::HelpDropCount, help),
-        ]);
+        env.session_mut().apply_ram(&[(Var::LinkX, x), (Var::LinkY, y), (Var::HelpDropCount, help)]);
         act(env, "WAIT 8");
     };
     place(&mut env, 0x78, 0x6D, 0);
@@ -2373,6 +2372,74 @@ fn required_families_bomb_only_where_the_route_wall_opens() {
         act(&mut env, "WAIT 8");
     }
     assert!(!bomb(&env).is_empty(), "Manhandla's room: {}", env.session().mask());
+}
+
+/// Round 26 (the granted bombs a `free` family threw at monsters: 7.7 cheated bombs a Dungeon 7 run): a granted
+/// bomb opens the wall and does nothing else.  goriya (`free`) in 7:0x69 (S → N through its N bomb wall, reserve 3):
+/// with bombs of his own Link bombs in the room's middle; with none he holds the granted one and BOMB is offered
+/// only under the N wall, on the 10th kill too; laid there it is one cheated bomb, and nothing is offered after it
+/// (in its fuse, and with the N wall open and the re-armed bomb in hand: the room's W bomb wall, which the route
+/// never opens, keeps the room's need).  Dodongo's room has no wall: its granted bomb stays the weapon
+/// (`requires_bombs_room_cheats_one_bomb_and_counts_it_when_placed`).
+#[test]
+fn a_granted_bomb_only_opens_the_wall() {
+    let Some(mut nes) = open_core() else { return };
+    const MIDDLE: (u8, u8) = (0x78, 0x9D);
+    const WALL: (u8, u8) = (0x78, 0x6D);
+    let bomb = |env: &Env| env.session().mask().directions(ActionKind::Bomb);
+    let place = |env: &mut Env, (x, y): (u8, u8), help: u8| {
+        env.session_mut().apply_ram(&[(Var::LinkX, x), (Var::LinkY, y), (Var::HelpDropCount, help)]);
+        act(env, "WAIT 8");
+    };
+    let goriya = |nes: ZCore, bombs: i64| {
+        let mut env = make_env(nes, "goriya", Some("7_69s_0"), |c| {
+            c.ram_randomization = RamRandomization { bombs: Some((bombs, bombs)), ..Default::default() };
+        });
+        env.reset(Some(0), None).unwrap();
+        env
+    };
+    // Bombs of his own, above the reserve, at it and below it.
+    for own in [4, 3, 1] {
+        let mut env = goriya(nes, own);
+        assert_eq!((state(&env).bombs(), env.cheats.granted(CheatItem::Bombs)), (own as i32, 0));
+        place(&mut env, MIDDLE, 0);
+        assert!(!bomb(&env).is_empty(), "{own} bombs of his own, the room's middle: {}", env.session().mask());
+        place(&mut env, WALL, 0);
+        assert!(bomb(&env).contains(&Direction::N), "{own} bombs of his own, under the N wall");
+        nes = release(env);
+    }
+    // None: the granted bomb.
+    let mut env = goriya(nes, 0);
+    assert_eq!((state(&env).bombs(), env.cheats.granted(CheatItem::Bombs)), (1, 1));
+    for help in [0, 9] {
+        place(&mut env, MIDDLE, help);
+        assert!(bomb(&env).is_empty(), "the granted bomb, the room's middle, help {help}: {}", env.session().mask());
+        place(&mut env, WALL, help);
+        let offered = bomb(&env);
+        assert!(
+            offered.contains(&Direction::N) && !offered.contains(&Direction::S),
+            "the granted bomb, under the N wall, help {help}: {}",
+            env.session().mask()
+        );
+    }
+    let r = act(&mut env, "BOMB N");
+    assert_eq!((env.cheats.used.bombs, env.cheats.cheated.bombs, r.info.cheated.bombs), (1, 1, 1));
+    assert_eq!((state(&env).bombs(), env.cheats.granted(CheatItem::Bombs)), (1, 1), "re-armed in the fuse");
+    let shut = |env: &Env| state(env).bomb_walls().iter().any(|w| w.wall_direction == Direction::N);
+    for step in 0..40 {
+        assert!(bomb(&env).is_empty(), "step {step}: a second granted bomb offered: {}", env.session().mask());
+        if !shut(&env) {
+            break;
+        }
+        act(&mut env, "WAIT 8");
+    }
+    assert!(!shut(&env), "the one bomb opened the N wall");
+    assert_eq!(env.cheats.granted(CheatItem::Bombs), 1, "the W wall is shut: the room still holds its granted bomb");
+    for spot in [MIDDLE, WALL] {
+        place(&mut env, spot, 9);
+        assert!(bomb(&env).is_empty(), "the wall open, the re-armed bomb in hand: {}", env.session().mask());
+    }
+    assert_eq!((env.cheats.used.bombs, env.cheats.cheated.bombs), (1, 1), "one cheated bomb for the wall");
 }
 
 /// Gleeok's observation: his attached heads are entities (id $42) in slots 2 and 3, killable; his neck base in

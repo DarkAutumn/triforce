@@ -384,7 +384,8 @@ impl Default for CurriculumConfig {
 
 /// `items: {bombs: ...}`: when the specialist may place bombs (Lee, Nov 11).  Every mode but `never` also allows
 /// the 10th damage-free kill's bomb (`$50` = 9: a bomb kill then arms a forced bomb drop), whatever the room and the
-/// reserve: that bomb pays itself back.
+/// reserve: that bomb pays itself back.  In every mode a granted bomb (`zelda::cheats`) only opens the wall
+/// ([`ItemsConfig::bomb_targets`]).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum BombUse {
@@ -465,21 +466,29 @@ impl ItemsConfig {
         self.kinds_off(self.bombs.allows(map, state, bomb_reserve), arrows)
     }
 
-    /// What BOMB is kept to in `state` (round 22, 4:0x21's bomb waste): in a `requires_bombs` room where the mode is
-    /// `required`, only bombs landing in reach of what the objective leaves through (`zelda::objectives::
-    /// route_bomb_targets`: the intact route bomb wall, 0x2c's and 0x67's rock walls; none while it fights first)
-    /// and not yet reached by a live bomb of Link's (round 23, `zelda::bombs::BombTarget::awaits_bomb`, applied by
-    /// the session's mask); not when the next kill arms a forced drop (any bomb kill pays itself back).  None: no
-    /// limit (other modes and rooms; `free` families bomb where they like).
+    /// What BOMB is kept to in `state`: only bombs landing in reach of what the objective leaves through
+    /// (`zelda::objectives::route_bomb_targets`: the intact route bomb wall, 0x2c's and 0x67's rock walls; none
+    /// while it fights first) and not yet reached by a live bomb of Link's (round 23,
+    /// `zelda::bombs::BombTarget::awaits_bomb`, applied by the session's mask).  None: no limit.  In a
+    /// `requires_bombs` room, in every mode but `never`:
+    /// - while a granted bomb is outstanding (`granted`, the cheat ledger's `CheatLedger::granted`) and the room's
+    ///   bomb is for something it opens (`zelda::cheats::bomb_opens`: not Dodongo's room, where the granted bomb is
+    ///   the weapon): a granted bomb opens the wall and does nothing else (round 26), on the 10th kill too;
+    /// - where the mode is `required` (round 22, 4:0x21's bomb waste), but not when the next kill arms a forced drop
+    ///   (any bomb kill pays itself back).
     pub fn bomb_targets(
         &self,
         map: &zelda::GameMap,
         state: &zelda::GameView,
         objective: Option<&zelda::objectives::Objective>,
+        granted: i32,
     ) -> Option<Vec<zelda::bombs::BombTarget>> {
-        let limited = self.bombs == BombUse::Required
-            && map.requires_bombs(state.full_location())
-            && !state.next_kill_arms_drop();
+        let room = state.full_location();
+        if self.bombs == BombUse::Never || !map.requires_bombs(room) {
+            return None;
+        }
+        let grant = granted > 0 && zelda::cheats::bomb_opens(map, room);
+        let limited = grant || (self.bombs == BombUse::Required && !state.next_kill_arms_drop());
         limited.then(|| objective.map_or_else(Vec::new, |o| zelda::objectives::route_bomb_targets(map, state, o)))
     }
 

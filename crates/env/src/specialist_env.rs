@@ -765,16 +765,18 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
 
     /// The session's disabled kinds for Link's state: the config's `items` (bombs by [`crate::config::BombUse`],
     /// with the route's bomb reserve at the step Link plays, arrows above its rupee reserve), and that bomb reserve for
-    /// the observation; the bomb targets a `required` family is kept to (`ItemsConfig::bomb_targets`); the facings the
+    /// the observation; the bomb targets BOMB is kept to (`ItemsConfig::bomb_targets`: a `required` family, any
+    /// family while a granted bomb is outstanding); the facings the
     /// route plays the recorder with (`GameCompletion::recorder_facings`, round 26); its `clips:` switch and the
-    /// run-time one (the CLIP kind), and the wraps `objective` vetoes.  Recomputed every step: the 10th kill and the
-    /// bomb count change within a room.
+    /// run-time one (the CLIP kind), and the wraps `objective` vetoes.  Recomputed every step: the 10th kill, the
+    /// bomb count and the cheat ledger's grant change within a room.
     fn update_disabled_kinds(&mut self, objective: &zelda::objectives::Objective) {
         let reserve = self.objectives.as_ref().map_or(0, GameCompletion::bomb_reserve);
         let rupees = self.objectives.as_ref().map_or(0, GameCompletion::rupee_reserve);
         let kinds = self.config.items.disabled_kinds(&self.data.map, self.session.state(), reserve, rupees);
         self.session.set_disabled_kinds(&kinds);
-        let targets = self.config.items.bomb_targets(&self.data.map, self.session.state(), Some(objective));
+        let granted = self.cheats.granted(CheatItem::Bombs);
+        let targets = self.config.items.bomb_targets(&self.data.map, self.session.state(), Some(objective), granted);
         self.session.set_bomb_targets(targets.as_deref());
         let facings = self.objectives.as_ref().map(|gc| gc.recorder_facings(self.session.state()));
         self.session.set_recorder_facings(facings);
