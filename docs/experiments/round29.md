@@ -813,13 +813,13 @@ of 20, 0.55 below, 14 of 20 above; 0x20 20 of 20, 0.33 from the door; 0x03 20 of
   hearts. Next lanmola (82 of 100 `d9` runs die in 0x55; the rule wins 300 of 300 at 1.68 hearts), then the
   overworld items no model plays (the whirlwind, the tree, the rock wall), patra and ganon.
 
-## 16. The first team for the stretch (rounds `r79t5-*`): ten rounds trained and judged in single rooms, not finished
+## 16. The first team for the stretch (rounds `r79t5-*`): Dungeon 9 to the ending in 5 of 1000 runs; the leg not crossed
 
-**State of this section (Nov 17, 18:10).** All ten rounds have trained and been evaluated in single rooms, and
-the continued runs were evaluated under this code on the same states and seeds (`r79t5-base`, 100 episodes a
-state, clips on). **Not done: any second round (two rooms are not learned, wizzrobe lost in Dungeon 6), the
-chains (the `d9` segment's 1000 runs were queued, the leg's not), a recorded run to the ending.** Nothing here
-says what the stretch does in a chain.
+**State of this section (Nov 17, 18:30).** All ten rounds have trained and been evaluated in single rooms, the
+continued runs were evaluated under this code on the same states and seeds (`r79t5-base`, 100 episodes a state,
+clips on), and the `d9` segment was measured (1000 runs): **5 runs end the game** (`r79-base`: 0 of 100), one of
+them recorded and verified. **Not done: any second round (two rooms are not learned, wizzrobe lost in Dungeon
+6), the `post-d8` segment (no run can cross 0:0x17 from S yet), a run to the ending from Dungeon 8's triforce.**
 
 **The checkout.** The states step's branch with `r26` merged (the bomb rule, 7:0x0d's objective fixes, Dungeon 7's
 heart fit, demonstration rows on the device) and the two heart fits that are not on `r26` picked from the Dungeon
@@ -944,9 +944,53 @@ because nothing else plays level 9's Wizzrobe rooms and the stretch's chains nee
 in place of `r78-wizz-s78` for the route as a whole until the `d6` segment has measured it or a second round has
 Dungeon 6 back (42 of the family's 60 start states are now level 9's).
 
+**The chain, Dungeon 9** (`r79t5-1k`, the `d9` segment: `9_76s_0` to the end, 1000 runs, seeds 0-999, clips on,
+each model in its own act mode, the runs kept above):
+
+```bash
+triforce eval-batch r79t5-1k --chain "d9: --route d9 --from 9_76s_0 --runs 1000 --act model --parallel 10 \
+    --output target/r56-chains/r79t5-1k-d9.jsonl"
+```
+
+- **5 of 1000 runs end the game** (seeds 321, 535, 813, 872, 950); `r79-base` 0 of 100, its furthest run died in
+  0x16 on the way in. Runs still alive on entering: 0x55 999, 0x14 868, 0x17 794, 0x07 664, the ring's cellar 599,
+  0x16 for its fight 553, 0x05 432, 0x61 278, 0x10 222, the silver arrow's cellar 82, 0x30 59, 0x03 20, 0x52 20,
+  Ganon 8, Zelda 5.
+- **Where runs end** (deaths; 995 runs): 0x17 148 (130 on the way in, 18 on the way back), 0x10 139, 0x16 130
+  (120 in its fight), 0x05 117, 0x55 98 and 33 more `stuck` there (back and forth into 0x65: 66 wrong exits),
+  0x07 73 (64 before the ring), 0x27 54, 0x61 46, 0x30 37, **zol's 0x63 35** (the run that was not trained: 100%
+  in single rooms, entered here with 3.75 hearts), 0x52 12, 0x14 8, 0x51, 0x41, 0x31 and 0x20 7 each, 0x15 5,
+  Ganon 3, 17 in other rooms; 9 runs `stuck` in the ring's cellar (equipment-room, 2000 steps), 3 by a family's
+  step limit.
+- **Hearts** (mean on entering, mean lost a visit, of the runs that enter):
+
+  | Room | Enter with | Lost a visit | | Room | Enter with | Lost a visit |
+  |---|---:|---:|---|---|---:|---:|
+  | 0x65 | 15.00 | 1.35 | | 0x16, the fight | 4.58 | 1.21 |
+  | 0x55, the clip | 13.66 | 3.63 | | 0x05 | 4.29 | 1.50 |
+  | 0x14 | 10.83 | 0.37 | | 0x63 | 3.75 | 0.63 |
+  | 0x16, crossed | 10.42 | 0.62 | | 0x61 | 3.47 | 0.48 |
+  | 0x27 to its wall | 9.86 | 2.62 | | 0x10 | 3.53 | 2.57 |
+  | 0x17 to its wall | 7.71 | 2.74 | | 0x30 | 2.27 | 1.34 |
+  | 0x07, the clip, no ring | 5.94 | 1.65 | | 0x52 | 2.20 | 0.80 |
+  | 0x07 to 0x26 on the way back | 4.74 to 4.59 | 0.42 in all | | Ganon | 3.50 | 1.56 |
+
+  (A death counts as the hearts the run had left, so the late rooms' losses are cut short by it.)
+- **Cheated**: 6 bombs in 1000 runs (2 in 0x27, 4 in 0x17), no key, no rupee.
+- **The survival budget.** The mean losses of the route's rooms add up to about 25.7 hearts for 15 containers
+  with no refill (the walks' estimate was about 38; §3's best plays 23 on the route and 15 in the fights with the
+  clips). The five runs that end the game lost 13.6 hearts in rooms (12.5 to 14.5), gained 1.7 back in rooms and
+  ended with 3.1: they are the runs that lost half of the mean. Half of the budget goes before the ring: 0x65,
+  0x55, 0x27, 0x17 and 0x07 cost 12.0 hearts and a run takes the ring with 4.74. So the stretch is decided by the
+  hearts of the rooms before the ring's cellar, 0x55's clip first (3.63 where the rule loses none), then 0x27's
+  and 0x17's bomb walls, and after it by 0x10 and 0x16's fight entered with under five.
+- **The recorded run**: seed 321, played again alone with `--replays` and the same result:
+  `eval-chain --route d9 --from 9_76s_0 --first-seed 321 --runs 1 --act model --replays DIR`; `tf replay info`:
+  27,480 frames from the embedded state `9_76s_0`, ending `win`, "the game ended in (level 9, room 0x32)"; `tf
+  replay verify`: ok, 27,480 frames, 17 edits, 2 states. It is the first recorded run to the ending, from Dungeon
+  9's entrance, not from Dungeon 8's triforce; the file is not committed.
+
 **Left**: the second rounds (ow-boulder's 0:0x17 from S and lanmola's clip, their causes first; wizzrobe with
-Dungeon 6 held); the chains (`TAG=r79t5-1k RUNS=1000 scripts/experiments/r29_d9_baseline.sh`; the leg cannot
-arrive while 0:0x17 is not crossed) against
-`r79-base`, with where runs end, the hearts on entering and lost a visit and the cheated items; a recorded run to
-the ending, verified, if one exists; and what the survival budget looks like in real chains against the walks'
-estimate of about 38 hearts for 15 containers.
+Dungeon 6 held; zol on 9:0x63 at low hearts); then the whole batch (`TAG=r79t5-1k RUNS=1000
+scripts/experiments/r29_d9_baseline.sh run`: the `post-d8` segment and the single rooms; it keeps the `d9` chain
+above) and a run to the ending from Dungeon 8's triforce.
