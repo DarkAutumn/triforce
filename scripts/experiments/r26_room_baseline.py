@@ -17,7 +17,7 @@ import json
 from triforce._native import route_steps
 from triforce.entry_states import state_stem
 
-KNOWN = ('exit-correct', 'triforce-collected', 'death', 'exit-wrong', 'max-steps', 'stuck')
+KNOWN = ('exit-correct', 'triforce-collected', 'game-completed', 'death', 'exit-wrong', 'max-steps', 'stuck')
 
 
 def stems(route: str, first: int, last: int) -> dict:
@@ -57,7 +57,7 @@ def main():
             print(f'| {index} | `{stem}` | {room} | {way} | | not evaluated | | | | | | | |')
             continue
         ends = row['endings']
-        good = ends['exit-correct'] + ends['triforce-collected']
+        good = ends['exit-correct'] + ends['triforce-collected'] + ends['game-completed']    # the end of the game (9:0x32)
         other = ', '.join(f'{name} {count}' for name, count in sorted(ends.items()) if name not in KNOWN)
         print(f"| {index} | `{stem}` | {room} | {way}{' (' + stretch + ')' if stretch else ''} | {row['family']} | "
               f"{row['episodes']} | {good} ({good / row['episodes']:.0%}) | {ends['death']} | {ends['exit-wrong']} | "

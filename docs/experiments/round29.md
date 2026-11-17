@@ -7,7 +7,8 @@ before anything is built, the game walked before a document is trusted, what doe
 1.5.1.0 (observation schema 6) throughout; nothing has been trained. Dungeons 6, 8 and 9 are prepared side by side
 (the owner, Nov 17): this round's vocabulary is built on round 28's branch, which is not merged yet.
 
-This document covers the walks, the route vocabulary, its proof, the block clips and the demonstrations. **The
+This document covers the walks, the route vocabulary, its proof, the block clips, the demonstrations and the states
+step (start states, curricula, the rules from the real states, proof trainings, the baseline). **The
 round's main finding is §3: the stretch cannot be survived as it is walked. The best plays seen lose about 23
 hearts on the route and 26 in the fights, of 15 containers that nothing refills; the block clips of §5 take 11 of
 those 49 away and nothing else found here takes more.**
@@ -31,8 +32,15 @@ those 49 away and nothing else found here takes more.**
   are worth taking and bring the fights from 25.7 hearts to 14.8.
 - **Demonstrations** (§6): the walks' fighters asked once per env action (`scripts/experiments/r29_demos.py`),
   each measured through the env from staged states at 15 and at 8 hearts.
-- **Not built**: start states, curricula, any training or chain of the stretch (§7 names the states); the clips
-  way of the route (§5).
+- **The states step** (§9-14): the clips way of the route (`d9` 297-357, three one-step stretches); **174 start
+  states of steps 297-357 on chains 0-2, no fight skipped** (the explorer's crossings and clips, every fight played
+  by a rule's won run), `audit --route d9` clean; every family file lists them (ganon `trainable: true`);
+  curricula (159 of 159 crossings, 80 of 99 fight and staged explorations, 48 rule tracks); the rules from the real
+  states (300 runs each from own hearts, 8 hearts and the family's draws; **0x07 without the ring 187 of 300, 84
+  from 8 hearts; 0x10 238 and 128**), 16 demonstration files (972,347 rows); 2-iteration proof trainings of 14
+  families and of each file; **the baseline `r79-base`: 0 of 100 on `post-d8` (no whirlwind) and on `d9` (82
+  deaths in Lanmola's 0x55)**.
+- **Not trained**: any model of the stretch.
 
 ## 1. The walks: what the running game says
 
@@ -459,7 +467,7 @@ Left open by the step itself:
   objectives; no observation or action change, every model loads). Rounds 27 and 28 owe the same bump; one covers
   all three if they merge together.
 
-## 9. The states step (in progress): the clips way and the start states of steps 297-357
+## 9. The states step: the clips way and the start states of steps 297-357
 
 Round 28's branch (Dungeon 8's states `8_2cs_0..2`, its tools) and `r26` (demonstration rows in host memory,
 `train_round.py` reads `--iterations` in `--train-args`) were merged first.
@@ -606,3 +614,188 @@ FIGHTS=only SKIP_DONE=1 FIGHT_ITERATIONS=3000 nice -n 10 scripts/experiments/r29
 
   (`~kK`: K of the room's monsters banked before the entry.) The explorer's fight tracks win with whatever hearts
   are left (patra `9_16s_0` with 5.5 of 15). Every fight state also gets a track of its rule (§11, `--tracks`).
+
+## 11. The rules from the real states, and the demonstrations
+
+Every rule of `r29_demos.py` (§6) played from the installed states of its room, chains 0-2, 100 runs a state (seeds
+1000-1099), three ways: from the state's own hearts (15; 14 on the leg's rooms before 0x47's container), from 8
+hearts (`--hearts 8`, no beam), and with the family's own hp and bombs draws (`--hearts family`, the demonstration
+files). The own-hearts runs also wrote one rule track a state (`--tracks trajectories/<family>`: 48 tracks).
+
+```bash
+python scripts/experiments/r29_demos.py ROOM --runs 100 --tracks trajectories/FAMILY       # own hearts
+python scripts/experiments/r29_demos.py ROOM --runs 100 --hearts 8
+python scripts/experiments/r29_demos.py ROOM --runs 100 --hearts family --out target/r29-demos/ROOM.npz
+```
+
+| Rule (family) | State | Own hearts: won of 300 (else); hearts lost in wins (mean, max) | 8 hearts: won of 300 (else); lost (mean, max) | The family's draws: won of 300; rows |
+|---|---|---|---|---|
+| whirlwind (ow-moblin) | `0_6dc` | 300; 0, 0 | 300; 0, 0 | 300; 14,101 |
+| tree (ow-zora) | `0_47e` | 300; 0.26, 0.5 | 300; 0.26, 0.5 | 300; 16,753 |
+| rock-wall (ow-lynel) | `0_05e` | 299 (1 stuck); 3.26, 8.5 | 298 (2 deaths); 3.25, 8.0 | 290 (10 deaths); 23,097 |
+| like-like-14 (like-like) | `9_14c` | 300; 0, 0 | 300; 0, 0 | 300; 55,677 |
+| lanmola, no ring (lanmola) | `9_55s` | 300; 1.68, 12.0 | 290 (10 deaths); 1.57, 8.0 | 285 (12 deaths, 3 stuck); 37,466 |
+| patra-16 (patra) | `9_16s` | 300; 1.54, 6.0 | 300; 1.84, 7.0 | 266 (30 `no-damage`, 4 deaths); 98,748 |
+| wizzrobe-07, no ring (wizzrobe) | `9_07s` | **187** (110 deaths, 3 stuck); 8.50, 14.0 | **84** (215 deaths, 1 stuck); 5.10, 8.0 | 139 (159 deaths, 2 stuck); 43,958 |
+| wizzrobe-05 | `9_05e` | 290 (10 `no-damage`); 2.55, 10.0 | 282 (9 deaths, 9 `no-damage`); 2.29, 7.5 | 277 (12 deaths, 11 `no-damage`); 103,199 |
+| wizzrobe-20, the fight (plain way) | `9_20c` | 300; 3.41, 12.3 | 288 (12 deaths); 3.20, 7.5 | 287 (13 deaths); 104,773 |
+| wizzrobe-10 | `9_10s` | **238** (34 deaths, 23 `no-damage`, 4 stuck, 1 wrong exit); 7.13, 14.8 | **128** (150 deaths, 19 `no-damage`, 2 stuck, 1 wrong exit); 4.44, 7.8 | 188 (88 deaths, 20 `no-damage`, 3 stuck, 1 wrong exit); 119,000 |
+| wizzrobe-30 | `9_30e` | 294 (3 deaths, 3 `no-damage`); 2.57, 14.0 | 278 (18 deaths, 4 `no-damage`); 2.21, 8.0 | 282 (15 deaths, 3 `no-damage`); 77,410 |
+| room-03 (like-like) | `9_03e` | 297 (3 stuck); 0.02, 0.5 | 299 (1 stuck); −0.03, 0.25 | 299 (1 stuck); 49,983 |
+| patra-61 (patra) | `9_61e` | 300; 0.65, 4.5 | 300; 0.84, 4.5 | 300; 85,083 |
+| patra-52 (patra) | `9_52c` | 300; 0.90, 4.5 | 300; 1.12, 5.5 | 299 (1 death); 80,599 |
+| ganon (ganon) | `9_42s` | 300; 0.57, 2.0 | 300; 0.57, 2.0 | 300; 58,300 |
+| zelda (ganon) | `9_32s` | 300 (`game-completed`); 0, 0 | 300; 0, 0 | 300; 4,200 |
+
+The sixteen files hold 972,347 rows (`target/r29-demos/ROOM.npz`, not committed; a family's files are those of its
+rules: wizzrobe five, patra three, like-like two, ganon two, lanmola, ow-lynel, ow-moblin, ow-zora one each).
+
+- **From the real states the rules hold §6's shares** but for the two hard Wizzrobe rooms, and in the hearts they
+  lose. 0x07 without the ring: 62% (17 of 30 staged), 28% from 8 hearts (11 of 30). 0x10: 79% (24 of 30), 43% from
+  8 (12 of 30). Every other rule wins 93% or more from 8 hearts.
+- **What the Wizzrobe rules lose to**, every heart lost in all 300 own-hearts runs booked to the object nearest to
+  Link when the action that cost it ended (as §6; a Bubble as "nearest" is a hit from further off: a Bubble takes
+  the sword, not hearts):
+
+  | Rule | Blue Wizzrobe | Red Wizzrobe | Red shot | Blue shot | Bubble | Trap |
+  |---|---:|---:|---:|---:|---:|---:|
+  | wizzrobe-07, no ring, 15 hearts | 1,641 | 491 | 552 | 48 | 633 | |
+  | wizzrobe-07, no ring, 8 hearts | 1,136 | 289 | 420 | 32 | 346 | |
+  | wizzrobe-10, the ring, 15 hearts | 1,091 | 371 | 257 | 88 | 647 | |
+  | wizzrobe-10, the ring, 8 hearts | 854 | 277 | 228 | 71 | 472 | |
+  | wizzrobe-05 | 373 | 220 | 248 | 15 | | |
+  | wizzrobe-20 | 682 | 150 | 248 | 16 | | |
+  | wizzrobe-30 | 213 | 320 | 153 | 5 | | 187 |
+
+  The Blue Wizzrobes take the most: touches and close shots by one that walks or fades in beside Link while he
+  finishes an action, as §6 found on the staged states (assumed from the booking, not replayed frame by frame). In
+  0x07 a run without the ring dies at 2 and 4 hearts a hit: 110 deaths of 300. In 0x10 the Bubbles' column is the second
+  largest: while a Bubble has taken the sword (160 frames) the rule cannot fight and is hit among five Wizzrobes;
+  23 of its 62 losses from full hearts are `no-damage` (600 actions without a hit given or taken: the rule waiting
+  for a Wizzrobe to line up) and 34 deaths.
+- **The other rules' losses**: rock-wall Blue Lynel 397, the rock wall itself as nearest (Link at the wall, tile
+  object `$63`) 238, Red Lynel 215, Leevers 131; the tree's nearest is the tree (`$64`, Link's own fire beside it)
+  63 and a Zora 15; lanmola the worms 510; the Patras their children (patra-16 446, -61 178, -52 216); Ganon his
+  touch 153 and fireballs 17 (with the ring, never more than 2 hearts a fight, from 8 hearts as from 15).
+- **`no-damage`** (the env's cut at 600 actions in a room without damage dealt or taken) ends some runs of the
+  Wizzrobe rules and 30 of patra-16's with the family's draws: the rules wait for a shot that does not come. Not
+  changed here.
+
+## 12. Proof trainings
+
+Two iterations of every family with new states from its promoted run (§13's models), into a scratch models
+directory of `promoted` files and links:
+
+```bash
+.venv/bin/python scripts/train_round.py --round r79-proof --steps 8192 --steps-per-update 4096 --chain-runs 0 \
+    --parallel 8 --episodes-per-state 2 --models-dir SCRATCH \
+    --specialists ow-moblin,ow-octorok,ow-zora,ow-leever,ow-boulder,ow-lynel,stalfos-keese-gel,wizzrobe,lanmola,equipment-room,like-like,patra,zol,ganon \
+    --train-args "--load {name} --sil-coeff 0.1 --stop-success 1.01"
+# and one round a demonstration file (16): --round r79-demos-ROOM --specialists FAMILY
+#     --train-args "--load {name} --sil-coeff 0.1 --stop-success 1.01 --demos target/r29-demos/ROOM.npz --demo-coeff 0.05"
+```
+
+- **All fourteen families trained and evaluated** (exit 0: states, tracks, masks, staging and the new families'
+  warm starts load; lanmola and patra from moldorm's run, ganon from boss-gohma's). Level 9 tracks in `run.json`
+  `curriculum_tracks`: wizzrobe 107 (15 rule, 41 staged), like-like 36 (6 rule, 12 staged), patra 24 (9 rule),
+  equipment-room 24, ganon 12 (6 rule), lanmola 9 (3 rule), zol 3; the leg's in ow-zora (120 in all), ow-moblin
+  (69), ow-lynel (27), ow-leever (26); ow-octorok, ow-boulder and stalfos-keese-gel have no `curriculum:` and load
+  none. This checkout's `trajectories/` holds no Dungeon 6 tracks, so wizzrobe's are level 9's alone here. Two
+  iterations train nothing; the evaluations (2 episodes a state) show the rooms run.
+- **All sixteen demonstration files trained** (16 rounds, exit 0, each `[train] demonstrations: N rows` as
+  written, 4,200 to 119,000 rows; round 26's host-memory rows: none ran out of GPU memory, as two did in round 28).
+
+## 13. The baseline: today's models on the stretch
+
+One batch job, `r79-base` (`scripts/experiments/r29_d9_baseline.sh`): 100 runs a segment, clips on, route `d9`, each
+model in its own act mode, and 20 episodes from every start state of the stretch (single rooms, the family's draws).
+The models: for each family the newest promoted run of the three team checkouts of Nov 17 (Dungeon 7's, 6's and 8's
+teams; copied into a scratch directory): wizzrobe `r77-wizz`, like-like, ow-lynel, ow-moblin, stalfos-keese-gel,
+zol `r77-b`, ow-zora and ow-leever `r76-b`, equipment-room `r76-c`, ow-octorok `r74-leg2`, ow-boulder `r72-ow`;
+lanmola and patra have no run and play moldorm's `r75-f-b`, ganon boss-gohma's `r77-gohma` (their warm starts).
+
+```bash
+TAG=r79-base MODELS=SCRATCH scripts/experiments/r29_d9_baseline.sh run      # waited 2 hours in line, ran 5 minutes
+TAG=r79-base MODELS=SCRATCH scripts/experiments/r29_d9_baseline.sh report
+```
+
+- **`post-d8` (`0_6dc_0` to the end): 0 of 100 reach Dungeon 9.** No run plays the whirlwind out of 0:0x6d: 348
+  wrong exits into 0x5d and 0x6e, 89 runs end `stuck`, 10 die in 0x6e.
+- **`d9` (`9_76s_0` to the end): 0 of 100 reach the end.** 82 die in Lanmola's 0x55 (11.7 hearts a visit), 5 in
+  0x14 and 9 `stuck` there, 1 dies in 0x16; 3 more `stuck` in 0x66. One run reaches 0x16.
+- **Single rooms** (`r26_room_baseline.py` now counts `game-completed` as the end's success):
+
+| step | state | room | entry → exit | family | episodes | success | deaths | wrong exits | timeouts | stuck | other | hearts a visit |
+|---:|---|---|---|---|---:|---|---:|---:|---:|---:|---|---:|
+| 297 | `0_6dc` | 0:0x6d | cave → recorder | ow-moblin | 120 | 0 (0%) | 0 | 120 | 0 | 0 |  | -0.08 |
+| 298 | `0_37r` | 0:0x37 | recorder → E | ow-octorok | 120 | 120 (100%) | 0 | 0 | 0 | 0 |  | -0.06 |
+| 299 | `0_38w_v2` | 0:0x38 | W → S | ow-zora | 120 | 120 (100%) | 0 | 0 | 0 | 0 |  | -0.18 |
+| 300 | `0_48n_v2` | 0:0x48 | N → W | ow-leever | 120 | 117 (98%) | 0 | 3 | 0 | 0 |  | -0.50 |
+| 301 | `0_47e` | 0:0x47 | E → cave | ow-zora | 120 | 0 (0%) | 94 | 9 | 17 | 0 |  | -10.01 |
+| 302 | `0_47cave` | 0:0x47 cave | S → S | ow-zora | 120 | 120 (100%) | 0 | 0 | 0 | 0 |  | +1.00 |
+| 303 | `0_47c` | 0:0x47 | cave → E | ow-zora | 120 | 118 (98%) | 0 | 2 | 0 | 0 |  | -0.12 |
+| 304 | `0_48w` | 0:0x48 | W → N | ow-leever | 120 | 92 (77%) | 2 | 24 | 2 | 0 |  | -2.03 |
+| 305 | `0_38s` | 0:0x38 | S → N | ow-zora | 120 | 119 (99%) | 1 | 0 | 0 | 0 |  | -0.39 |
+| 306 | `0_28s` | 0:0x28 | S → W | ow-zora | 120 | 120 (100%) | 0 | 0 | 0 | 0 |  | -0.07 |
+| 307 | `0_27e` | 0:0x27 | E → N | ow-zora | 120 | 0 (0%) | 0 | 120 | 0 | 0 |  | +0.00 |
+| 308 | `0_17s` | 0:0x17 | S → N | ow-boulder | 120 | 0 (0%) | 0 | 120 | 0 | 0 |  | -0.02 |
+| 309 | `0_07s` | 0:0x07 | S → W | ow-lynel | 120 | 120 (100%) | 0 | 0 | 0 | 0 |  | -0.41 |
+| 310 | `0_06e` | 0:0x06 | E → W | ow-lynel | 120 | 110 (92%) | 10 | 0 | 0 | 0 |  | -3.30 |
+| 311 | `0_05e` | 0:0x05 | E → cave | ow-lynel | 120 | 0 (0%) | 14 | 106 | 0 | 0 |  | -3.45 |
+| 312 | `9_76s` | 9:0x76 | S → N | stalfos-keese-gel | 120 | 120 (100%) | 0 | 0 | 0 | 0 |  | +0.00 |
+| 313 | `9_66s` | 9:0x66 | S → W | stalfos-keese-gel | 120 | 90 (75%) | 0 | 30 | 0 | 0 |  | -0.01 |
+| 314 | `9_65e` | 9:0x65 | E → N | wizzrobe | 120 | 113 (94%) | 7 | 0 | 0 | 0 |  | -2.52 |
+| 315 | `9_55s` | 9:0x55 | S → cave | lanmola | 120 | 5 (4%) | 102 | 5 | 0 | 1 | no-damage 7 | -10.86 |
+| 316 | `9_60cave` | 9:0x60 cave | S → W | equipment-room | 60 | 60 (100%) | 0 | 0 | 0 | 0 |  | -0.12 |
+| 317 | `9_14c` | 9:0x14 | cave → E | like-like | 120 | 2 (2%) | 3 | 0 | 4 | 0 | no-damage 111 | -1.26 |
+| 318 | `9_15w` | 9:0x15 | W → E | wizzrobe | 120 | 120 (100%) | 0 | 0 | 0 | 0 |  | -0.45 |
+| 319 | `9_16w` | 9:0x16 | W → S | patra | 60 | 18 (30%) | 42 | 0 | 0 | 0 |  | -8.17 |
+| 320 | `9_26n` | 9:0x26 | N → E | stalfos-keese-gel | 120 | 103 (86%) | 0 | 0 | 0 | 0 | no-damage 17 | -1.27 |
+| 321 | `9_27w` | 9:0x27 | W → N | patra | 60 | 19 (32%) | 40 | 0 | 0 | 0 | no-damage 1 | -8.69 |
+| 322 | `9_17s` | 9:0x17 | S → N | wizzrobe | 120 | 18 (15%) | 47 | 0 | 0 | 0 | no-damage 55 | -7.50 |
+| 323 | `9_07s` | 9:0x07 | S → cave | wizzrobe | 120 | 5 (4%) | 101 | 14 | 0 | 0 |  | -10.18 |
+| 324 | `9_00cave` | 9:0x00 cave | S → N | equipment-room | 60 | 60 (100%) | 0 | 0 | 0 | 0 |  | -0.04 |
+| 325 | `9_07c` | 9:0x07 | cave → S (clips) | wizzrobe | 120 | 120 (100%) | 0 | 0 | 0 | 0 |  | -0.19 |
+| 327 | `9_17n` | 9:0x17 | N → S | wizzrobe | 120 | 40 (33%) | 0 | 0 | 0 | 0 | no-damage 80 | -0.68 |
+| 328 | `9_27n` | 9:0x27 | N → W | patra | 60 | 41 (68%) | 15 | 4 | 0 | 0 |  | -1.91 |
+| 329 | `9_26e` | 9:0x26 | E → N | stalfos-keese-gel | 120 | 120 (100%) | 0 | 0 | 0 | 0 |  | -0.00 |
+| 330 | `9_16s` | 9:0x16 | S → N | patra | 60 | 54 (90%) | 2 | 0 | 0 | 0 | no-damage 4 | -4.01 |
+| 331 | `9_06s` | 9:0x06 | S → W | stalfos-keese-gel | 120 | 118 (98%) | 0 | 0 | 0 | 0 | no-damage 2 | +0.00 |
+| 332 | `9_05e` | 9:0x05 | E → cave | wizzrobe | 120 | 90 (75%) | 28 | 1 | 0 | 0 | no-damage 1 | -5.37 |
+| 333 | `9_70cave` | 9:0x70 cave | S → W | equipment-room | 60 | 60 (100%) | 0 | 0 | 0 | 0 |  | +0.00 |
+| 334 | `9_63c` | 9:0x63 | cave → W | zol | 60 | 60 (100%) | 0 | 0 | 0 | 0 |  | -0.74 |
+| 335 | `9_62e` | 9:0x62 | E → W | stalfos-keese-gel | 120 | 120 (100%) | 0 | 0 | 0 | 0 |  | +0.00 |
+| 336 | `9_61e` | 9:0x61 | E → cave | patra | 60 | 0 (0%) | 22 | 25 | 0 | 1 | no-damage 12 | -9.97 |
+| 337 | `9_75cave` | 9:0x75 cave | S → W | equipment-room | 60 | 60 (100%) | 0 | 0 | 0 | 0 |  | +0.00 |
+| 338 | `9_20c` | 9:0x20 | cave → N (clips) | wizzrobe | 120 | 44 (37%) | 22 | 0 | 0 | 0 | no-damage 54 | -3.83 |
+| 340 | `9_10s` | 9:0x10 | S → cave | wizzrobe | 120 | 23 (19%) | 13 | 21 | 0 | 0 | no-damage 63 | -4.14 |
+| 341 | `9_4fcave` | 9:0x4f cave | S → N | equipment-room | 60 | 60 (100%) | 0 | 0 | 0 | 0 |  | +0.00 |
+| 342 | `9_10c` | 9:0x10 | cave → S | wizzrobe | 120 | 0 (0%) | 0 | 0 | 0 | 0 | no-damage 120 | +0.00 |
+| 343 | `9_20n` | 9:0x20 | N → cave (clips) | wizzrobe | 120 | 45 (38%) | 60 | 0 | 0 | 0 | no-damage 15 | -5.88 |
+| 345 | `9_75cave_v2` | 9:0x75 cave | S → E | equipment-room | 60 | 60 (100%) | 0 | 0 | 0 | 0 |  | +0.00 |
+| 346 | `9_61c` | 9:0x61 | cave → N | patra | 60 | 60 (100%) | 0 | 0 | 0 | 0 |  | +0.00 |
+| 347 | `9_51s` | 9:0x51 | S → N | like-like | 120 | 0 (0%) | 0 | 0 | 2 | 0 | no-damage 118 | -0.09 |
+| 348 | `9_41s` | 9:0x41 | S → N | like-like | 120 | 70 (58%) | 1 | 0 | 0 | 0 | no-damage 49 | -0.27 |
+| 349 | `9_31s` | 9:0x31 | S → W | wizzrobe | 120 | 109 (91%) | 4 | 0 | 0 | 0 | no-damage 7 | -1.25 |
+| 350 | `9_30e` | 9:0x30 | E → cave | wizzrobe | 120 | 110 (92%) | 9 | 1 | 0 | 0 |  | -2.81 |
+| 351 | `9_67cave` | 9:0x67 cave | S → E | equipment-room | 60 | 60 (100%) | 0 | 0 | 0 | 0 |  | +0.00 |
+| 352 | `9_04c` | 9:0x04 | cave → W | wizzrobe | 120 | 91 (76%) | 29 | 0 | 0 | 0 |  | -5.72 |
+| 353 | `9_03e` | 9:0x03 | E → cave | like-like | 120 | 78 (65%) | 1 | 0 | 13 | 3 | no-damage 25 | -0.85 |
+| 354 | `9_77cave` | 9:0x77 cave | S → W | equipment-room | 60 | 60 (100%) | 0 | 0 | 0 | 0 |  | +0.00 |
+| 355 | `9_52c` | 9:0x52 | cave → N | patra | 60 | 0 (0%) | 51 | 9 | 0 | 0 |  | -12.10 |
+| 356 | `9_42s` | 9:0x42 | S → N | ganon | 60 | 0 (0%) | 60 | 0 | 0 | 0 |  | -11.57 |
+| 357 | `9_32s` | 9:0x32 | S → end | ganon | 60 | 60 (100%) | 0 | 0 | 0 | 0 |  | +0.00 |
+
+(A stretch's two ways share a state: its row is the clips way's, the way `build` took. 20 episodes a state and
+chain; a clip family's are measured with the switch on and off, 120 a state.) What no model plays: the whirlwind
+(0x6d), the tree (0:0x47), 0:0x27's and 0:0x17's crossings, the rock wall (0:0x05), Lanmola, 0x14's Like-Likes,
+0x61's and 0x52's Patras, 0x10's return (`9_10c`: 120 `no-damage`), 0x51 and Ganon; Zelda's room is walked by boss-gohma's
+run 60 of 60. Wizzrobe's run, trained on Dungeon 6, crosses most of level 9's Wizzrobe rooms (0x65 94%, 0x15 100%,
+0x31 91%, 0x30 92%, 0x05 75%) and loses the hard ones (0x07 4%, 0x17 15%, 0x10 19%).
+
+## 14. The clips, measured again on this build
+
+`python scripts/experiments/r29_clips.py walk` and `returns` (20 seeds a way): every figure of §5's table is the
+same on the clips-way build (0x55 20 of 20, 0; 0x07 20 of 20, 1.30 under the ring, 19 of 20 by the W lane; 0x61 20
+of 20, 0.55 below, 14 of 20 above; 0x20 20 of 20, 0.33 from the door; 0x03 20 of 20, 0 and 0.06; the returns 0.11,
+0.85 and 0.61 after a clip, 0 as the fights leave them).

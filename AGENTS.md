@@ -19,7 +19,13 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   walks' fighters as rules over env actions (`scripts/experiments/r29_demos.py`). The lead's working answers are in
   `docs/decisions.md` 2026-11-17 ("Round 29's working answers"). **The main finding** (round29.md §3): the best
   plays seen cost about 23 hearts on the route and 26 in the fights, of 15 containers with no refill; 37.9 with
-  the clips. Not built: start states (round29.md §7 names the 58), curricula, training, chains.
+  the clips. (4) **The states step** (round29.md §9-14): the clips way (`d9` = steps 297-357, stretches `ring-07`,
+  `arrow-20`, `arrow-20n`; wizzrobe, lanmola, like-like `clips: true`), 174 start states of steps 297-357 on chains
+  0-2 (no fight skipped: a fight's next state is harvested from its rule's won run, `r29_demos.py ROOM --harvest`),
+  ganon `trainable: true`, tracks (`scripts/experiments/r29_d9_curricula.sh`, rule tracks `~rule<seed>`), the rules
+  from the real states and 16 demonstration files (`target/r29-demos/ROOM.npz`, rebuilt by `r29_demos.py ROOM
+  --runs 100 --hearts family --out ...`), the segments `post-d8` (`0_6dc_0`) and `d9` (`9_76s_0`), the baseline
+  `r79-base` (`scripts/experiments/r29_d9_baseline.sh`): 0 of 100 on both. Not done: any training.
 - **Round 28, begun (Nov 17, 1.5.1.0; `docs/experiments/round28.md`):** the leg from Dungeon 6 and Dungeon 8, on
   round 27's branch (Dungeons 6, 8 and 9 are prepared side by side). Built so far, nothing trained: (1) **the
   walks** (`docs/routes/d8-walks.md`: today's models cannot play the whirlwind out of 0x22, the tree of 0x6d, the

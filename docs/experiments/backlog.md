@@ -30,23 +30,33 @@ branch.
 - [x] **The walks' fighters as rules over env actions** (`scripts/experiments/r29_demos.py`; round29.md §6).
 - [ ] **The main risk: the survival budget does not close.** About 23 hearts for the route and 26 for the fights
   with the ring, of 15 containers and no refill; 37.9 with the clips (round29.md §3, §5). The owner's question.
-- [ ] **Start states** of steps 297-354, chains 0-2 (round29.md §7 names the 58), from Dungeon 8's triforce-room
-  states once round 28's exist; every fight by `--skip-fights` until a model clears it.
-- [ ] **The clips way**: a `stretch:` for 0x07 (steps 323-325) and 0x20 (337, 341) whose clips way banks no kills,
-  `clips: true` for wizzrobe, lanmola and like-like, the return states on both ways. Needs a room or step list for
-  `clips:` (round 26's item): CLIP is offered at 27 points of every ring room on every visit.
+- [x] **Start states** of steps 297-357, chains 0-2 (174; round29.md §9): no fight skipped, every fight played by
+  a rule's won run (`r29_demos.py --harvest`); `audit --route d9` clean.
+- [x] **The clips way**: one-step stretches `ring-07`, `arrow-20`, `arrow-20n`; `clips: true` for wizzrobe, lanmola
+  and like-like (round29.md §9).
+- [ ] **`clips:` has no room or step list** (round 26's item): CLIP is offered at 27 points of every ring room on
+  every visit, and the explorer clips 0x51 and 0x04 too.
 - [ ] **Merge `d9` into `d2first`** when the owner fixes the route, after `d6` and `d8`; refit
   `triforce/heart_value.json`.
-- [ ] **Curricula and a first team**: wizzrobe on both dungeons (level 9's rooms have three Blue Wizzrobes, Bubbles
-  and Traps; the three bomb waits 0x65, 0x17, 0x31/0x04), patra, lanmola, ganon, like-like's 0x14, 0x51, 0x41 and
-  0x03, ow-moblin's whirlwind (0 of 40), ow-zora's tree, ow-leever's 0x48 (0 and 12 of 40), ow-boulder's ladder (0
-  of 40), ow-lynel's 0x06 and the rock wall (12 and 0 of 40). The rules of `r29_demos.py` as demonstrations, run
-  again from the real states.
+- [x] **Curricula** (round29.md §10): 159 of 159 crossings; the fights and staged starts at 3000 iterations 80 of
+  99 (not solved: patra 0x16 ×2, 0x61 ×3, 0x52 ×1, wizzrobe 0x10 ×1, 0x30 ×2, 0x07 plain ×3, and 7 staged starts of
+  0x05, 0x10 and 0x07); 48 rule tracks (one a fight state).
+- [x] **The rules from the real states and the demonstrations** (round29.md §11): 16 rules × 300 runs from own
+  hearts, 8 hearts and the family's draws; 16 files in `target/r29-demos/` (972,347 rows), each trained in a
+  2-iteration proof round (§12).
+- [x] **The baseline `r79-base`** (round29.md §13): 0 of 100 on `post-d8` and `d9`.
+- [ ] **A first team**: wizzrobe on both dungeons with its five demonstration files (0x07 and 0x10 are the
+  dearest fights: the rules win 62% and 79% from full hearts, 28% and 43% from 8), then lanmola (82 of 100 `d9`
+  runs die there), patra, ganon, like-like's 0x14 and 0x51, ow-moblin's whirlwind (0 of 120), ow-zora's tree and
+  0x27, ow-boulder's 0x17, ow-lynel's rock wall (0 of 120 each in single rooms).
+- [ ] **`no-damage` cuts rule runs** (600 actions without a hit): wizzrobe-05/-10/-30 and patra-16 with the
+  family's draws (30 of 300) wait for a shot that does not come.
 - [ ] **Ganon's hidden position** is on `ram` until the owner decides; `last_seen` or `zero` needs the fight target
   changed too (it follows his RAM position).
 - [ ] **What the env's grain costs the rules** (round29.md §6): where a rule wins fewer runs or loses more hearts
   through MOVE and WAIT of 4 frames than the frame script did.
-- [ ] **Python tests** of `game-completed` and of a reset's kept kills through `_native.Env`, once states exist.
+- [ ] **Python tests** of `game-completed` and of a reset's kept kills through `_native.Env`: the states exist now
+  (`9_32s`, `9_07c`, `9_10c`, `9_20n`, `9_61c`).
 - [ ] **A crossing family** for the Wizzrobe and Patra rooms that are only crossed (five and two rooms): today they
   are their monsters' families'.
 - [ ] **0x30's stairs on a Trap's home**: the lure of `d9-walks.md` §3.4 is no rule of the objective.

@@ -17,8 +17,8 @@
 # the plain way of the same state (the fight and the push; 0x07 and 0x20 from their return side with the kills the
 # fight left), for every state of those families where a skip shortens the way.
 #
-# ow-octorok and stalfos-keese-gel have no `curriculum:` in their yamls; their tracks are written anyway and are not
-# loaded by a training.
+# ow-octorok, ow-boulder and stalfos-keese-gel have no `curriculum:` in their yamls; their tracks are written anyway
+# and are not loaded by a training.
 #
 # The fights (each reported, none counted): Dungeon 9's rooms emptied for a block, a key, bombs or a shutter, and
 # Ganon and Zelda; then the staged starts of the rooms with five monsters to clear (`--room-kills`, `<state>~k<K>`:
