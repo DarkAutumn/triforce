@@ -941,6 +941,20 @@ Dungeon 7 with 8.14 (7.89).
   clips on, `temperature:0.5+relax:16`): 97.6% of 5400 episodes, −0.42 hearts an episode (`r76-goriya3`, clips both:
   95.0%, −0.53); 7:0x1a 98.7% (79.6% with half its episodes clipless), 0x1b 94.3, 0x49 97.0, 0x19 98.0, 2:0x5e 87.7
   (88.0), 2:0x1e 90.7 (88.3).
+- **ow-zora `r76-zora-arrows` (its last checkpoint) is promoted.** The leg's arrivals at Dungeon 7 rose 7.5 ± 0.8
+  points on fresh seeds (the arrow shop's X 128 entry, §15). ow-zora plays every overworld stretch before it, so
+  the four were checked in one batch (`zora-paired-r76-zora-arrows`: 1000 runs each, seeds 0-999 for both runs,
+  clips on, the candidate by `--checkpoint ow-zora=...`), none worse beyond two standard errors:
+
+  | stretch | arrival | `r76-zora-arrows` | `r76-b` | paired difference | hearts on arriving |
+  |---|---|---:|---:|---:|---:|
+  | after Dungeon 2 (`--from 0_3cc_0`) | 1:0x73 | 95.7% | 94.3% | +1.4 ± 1.0 | 3.22 / 3.22 |
+  | after Dungeon 1 (`--from 0_37c_0`) | 3:0x7c | 100.0% | 100.0% | 0 | 5.17 / 5.13 |
+  | after Dungeon 3 (`--from 0_74c_0`) | 4:0x71 | 100.0% | 100.0% | 0 | 6.77 / 6.60 |
+  | after Dungeon 4, the leg (`--from 0_45c_0`) | 5:0x76 | 99.9% | 100.0% | −0.1 ± 0.1 | 7.75 / 7.62 |
+
+  The harvested states stay out of git (`triforce/states/harvested/ow-zora/`, 75 states); the yaml draws them at
+  `harvested_fraction: 0.03`, and a checkout without them trains ow-zora on its seed states alone.
 - **boss-digdogger stays `r76-b`:** the continuation's last checkpoint led the screen by 1.7 points and lost it on
   fresh seeds (25.2 against 25.4%).
 - **wallmaster stays `r76-wall-1`** (§14).

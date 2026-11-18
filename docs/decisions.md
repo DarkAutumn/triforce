@@ -2689,3 +2689,31 @@ were an interesting spot of comparison, but should be dropped in favor of just c
   the round documents.
 - **What it buys:** half of every clip family's training episodes, half of the chain measurements, and in Dungeon 9
   the worst fight of the stretch (0x07 before the red ring: 9.35 hearts by the rule against 1.3 by the clip).
+
+## 2026-11-18 — goriya `r76-goriya4-s78` at its checkpoint it004511, ow-zora `r76-zora-arrows`; boss-digdogger and wallmaster kept (round 26)
+
+- **What:** three continuations of `r76-goriya3` (seeds 76, 77, 78; 488 iterations, `--sil-coeff 0.1`, the food
+  demos at 0.05, a checkpoint every 30) on the code with the bomb rule and `heart_value.json`'s curves for steps
+  209-247; one of boss-digdogger `r76-b` (`r76-digdogger2`). Each run's checkpoint chosen by the `d7` segment
+  (`select-checkpoint`, 1000 screen seeds, the best and the last again on 1000 fresh ones).
+- **Chosen:** `r76-goriya4-s78` it004511, 40.0% on the fresh seeds against 25.4% for `r76-goriya3` (+14.6 ± 2.0;
+  `s77`'s last 36.2%, `s76`'s it004601 33.4%). The rooms it also plays before Dungeon 7 were checked on 1000 paired
+  runs: Dungeon 1 −0.2 ± 0.4, Dungeon 2 −2.1 ± 1.7, both within two standard errors. The best of three seeds on
+  fresh seeds, not the run with the best old segments (`s77`: +0.6 and +0.9): Dungeon 7 is what the stretch needs,
+  and the 3.8 points between them is more than either old segment moved.
+- **ow-zora `r76-zora-arrows`** (244 iterations from `r76-b` with the 75 harvested starts of 0:0x44 entered at X 128,
+  round26.md §15): the leg's arrivals at Dungeon 7 98.4% against 90.9% on fresh seeds. ow-zora plays every
+  overworld stretch, so a run is promoted only if none of the four earlier stretches is worse beyond two standard
+  errors of the paired difference (1000 runs each, the same seeds for both): after Dungeon 2 +1.4 ± 1.0, after
+  Dungeons 1 and 3 equal (100%), the leg to Dungeon 5 −0.1 ± 0.1. The harvested states are not committed (as every
+  harvested state); the yaml's `harvested_fraction` finds none in a fresh clone and trains on the seed states.
+- **Kept:** boss-digdogger `r76-b` (`r76-digdogger2` led the screen by 1.7 points and lost it on fresh seeds, 25.2
+  against 25.4%); wallmaster `r76-wall-1` (round26.md §14).
+- **Measured:** the chain of record `r76-1k` (round26.md §16).
+
+## 2026-11-18 — 1.6.0.0: six dungeons (round 26)
+
+MINOR +1: the route completes Dungeon 7, from its entrance in 40.0% of 1000 runs with the models alone (`r76-1k-d7`),
+above the working rate the owner set for a first team (about 30%, decisions 2026-11-16). COMPAT 0, REV 0: nothing a
+loaded model reads changed since 1.5.1.0, so the 1.5.1 runs are stamped 1.6.0.0 (`triforce stamp`), not converted.
+The Cargo workspace is 1.6.0.
