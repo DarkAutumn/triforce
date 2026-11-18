@@ -7,7 +7,7 @@ in Markdown (docs/experiments/round26.md "The baseline").
 Each EVAL.json is a `triforce evaluate` output of one family (every start state of the family).  Only the states of
 the route's steps from the first to the last are listed, in route order: episodes, successes, deaths, wrong exits,
 timeouts (`max-steps`), stuck endings, other endings and the mean health change in hearts.  Round 27 reads its
-stretch with ``--route d6 --first-step 248 --last-step 280``.
+stretch with ``--first-step 248 --last-step 280``.
 """
 
 import argparse

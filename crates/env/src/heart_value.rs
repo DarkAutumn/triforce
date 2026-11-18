@@ -6,9 +6,9 @@
 //! to the step's max hearts; between grid points it is interpolated, beyond the top it is the top's value.  The
 //! table names each step's room, entry, exit and visit: a table fitted for another route (the route changed since)
 //! is refused by the families that use it ([`HeartValues::check`]) and ignored by everyone else.  A table prices its
-//! own route and every route whose steps are its first ones ([`HeartValues::prices`]; round 27: fitted on the
-//! scouting route `d6`, it prices `d2first`, which `d6` extends): V at a step depends only on the steps up to the
-//! next triforce, the same on both routes.
+//! own route and every route whose steps are its first ones ([`HeartValues::prices`]; round 27: fitted on a scouting
+//! route that extends `d2first`, as `d6` was before it merged, it prices `d2first` too): V at a step depends only on
+//! the steps up to the next triforce, the same on both routes.
 
 use crate::config::{ConfigError, room_key};
 use serde::Deserialize;

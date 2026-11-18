@@ -359,8 +359,7 @@ fn the_clips_gauntlet_draws_its_targets_and_leaves_the_families_alone() {
                 alone.reset(Some(seed), Some(path)).unwrap();
                 let (a, b) = (with.route(), alone.route());
                 assert_eq!((a.0, a.1), (b.0, b.1), "{name} {path} seed {seed}");
-                // Round 27: the states of steps 248-280 play on the scouting route d6 until it is merged.
-                assert!(a.0 == "d2first" || a.0 == "d6", "{name} {path} seed {seed}: {}", a.0);
+                assert_eq!(a.0, "d2first", "{name} {path} seed {seed}");
                 resets += 1;
             }
         }

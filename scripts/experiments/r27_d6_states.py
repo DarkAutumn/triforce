@@ -1,5 +1,5 @@
 """Round 27: the sources and the inventory table of the start states of the leg from Dungeon 7 to the magic sword and
-of Dungeon 6 (route `d6`, steps 248-280; docs/experiments/round27.md "The start states").
+of Dungeon 6 (`d2first` steps 248-280, scouted as the route `d6`; docs/experiments/round27.md "The start states").
 
     python scripts/experiments/r27_d6_states.py write STATE OUT [--bombs N] [--rupees N] [--keys N]
     python scripts/experiments/r27_d6_states.py table [--dir DIR] [--markdown]
@@ -22,7 +22,7 @@ from triforce._native import Game, Snapshot, route_steps
 from triforce.entry_states import state_stem
 from triforce.paths import STATES_DIR
 
-ROUTE, FIRST_STEP = 'd6', 248
+ROUTE, FIRST_STEP = 'd2first', 248
 # RAM (docs/ram-catalog.md): the sword (2 white, 3 magic), bombs, arrows, rupees, keys, hearts and containers, pieces.
 SWORD, BOMBS, ARROWS, RUPEES, KEYS, HEARTS, TRIFORCE = 0x657, 0x658, 0x659, 0x66D, 0x66E, 0x66F, 0x671
 SWORDS = {0: 'none', 1: 'wood', 2: 'white', 3: 'magic'}

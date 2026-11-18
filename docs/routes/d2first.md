@@ -4,9 +4,10 @@ Lee's route (Nov 8), the only route since the reset the same day (`docs/decision
 milestone1-fairy removed); the Dungeon 1 bow detour joined it on Nov 9, and the same day the route went on from the
 D1 triforce to Dungeon 3 (the raft, Manhandla). On Nov 12 Dungeon 4 joined it (by raft to the island 0x45, the
 ladder, Gleeok; `docs/routes/d4.md`), in round 24 (Nov 14-15) the leg and Dungeon 5 (`docs/routes/d5-leg.md`,
-`d5.md`), and in round 26 (Nov 17) the leg to Dungeon 7 and Dungeon 7 (`docs/routes/d7.md` §11): it now ends on
-the D7 triforce (248 steps; first played to it by trained models in round 26, version 1.6.0.0). Data:
-`triforce/routes.yaml` `d2first`, rooms in `triforce/game.yaml`. View it with
+`d5.md`), in round 26 (Nov 17) the leg to Dungeon 7 and Dungeon 7 (`docs/routes/d7.md` §11), and in round 27 (Nov
+18) the magic sword and Dungeon 6 (`docs/routes/d6.md` §14): it now ends on the D6 triforce (281 steps; first played
+to it by trained models in round 27, version 1.7.0.0). Data: `triforce/routes.yaml` `d2first`, rooms in
+`triforce/game.yaml`. View it with
 
 ```bash
 .venv/bin/python zelda-map.py --route d2first      # rooms outlined, arrows, step numbers; sidebar per step
@@ -17,7 +18,7 @@ below was checked in the emulator (rooms loaded through `Game.load`, mode 5) unl
 
 ## Route
 
-Hearts are heart containers on entering the room; sword W = wood, Wh = white.
+Hearts are heart containers on entering the room; sword W = wood, Wh = white, Ma = magic.
 
 | Steps | Room (level:room) | Entry → exit | Family | Hearts / sword / items |
 |---|---|---|---|---|
@@ -58,7 +59,11 @@ Hearts are heart containers on entering the room; sword W = wood, Wh = white.
 | 208 | 5:14 | S → triforce (out to 0:0b) | gibdo | 11 / Wh |
 | 209–227 | 0:0b 45 55 … 34 … 42 | the leg to Dungeon 7 (`docs/routes/d7.md` §11): the whirlwind (RECORDER at 0x0b, set down at 0x45), 0x44's shop (arrows), 0x34's Armos stairs and shop (food), 0x42's pond (RECORDER, its stairs) | ow-leever, ow-peahat, ow-zora, ow-octorok, ow-moblin | 11 / Wh, arrows, food |
 | 228–246 | 7:79 … 2a | Dungeon 7: the Blue Goriya rooms (bomb walls 0x69, 0x19, 0x1a), the Grumble 0x28 (FOOD), the red candle under 0x4a, 0x1a's block clip, 0x1b, the Digdoggers 0x39 and 0x1c, 0x0c, the Wallmaster room 0x0d and its cellar, 0x29, Aquamentus 0x2a | goriya, boss-digdogger, equipment-room, dodongo-crossing, wallmaster, boss-aquamentus | 11 → 12 / Wh, red candle |
-| 247 | 7:2b | W → triforce: **route ends** | goriya | 12 / Wh |
+| 247 | 7:2b | W → triforce (out to 0:42) | goriya | 12 / Wh |
+| 248–260 | 0:42 52, 51 50 / 51 61 60 50, 40 41 31 21, 21 cave | the leg to the magic sword (`docs/routes/d6.md` §14): 0x42 S, 0x52 W, the stretch `woods` (clip way: 0x51's wrap exit W into 0x50's corridor; plain way: 0x51 S, the Lost Woods 0x61 by its sequence, 0x60, 0x50 from S), the graveyard 0x40, 0x41, 0x31, 0x21's gravestone pushed from below, the cave (`waypoint: sword`, 12 containers) | ow-moblin, ow-lynel, **ow-ghini** | 12 / Wh → Ma |
+| 261–264 | 0:21 31 32 22 | cave→S (by column X `$20`), N→E, W→N, S→cave (Dungeon 6) | ow-ghini, ow-lynel | 12 / Ma |
+| 265–279 | 6:79 … 1c | Dungeon 6: 0x79's key door, 0x78 and 0x68 crossed, 0x58's key, 0x48's traps, 0x38 emptied and its block pushed, 0x28's E wall bombed, 0x29 crossed dark, 0x39's Vires, 0x3a emptied and its block, the tunnel 0x08, 0x1d, 0x2d's key, 0x2c, Gohma 0x1c (ARROW facing N) | stalfos-keese-gel, **wizzrobe**, zol, trap-room, vire, equipment-room, like-like, **boss-gohma** | 12 → 13 / Ma |
+| 280 | 6:0c | S → triforce: **route ends** | stalfos-keese-gel | 13 / Ma |
 
 Choices and findings:
 - **Row 5 to D2:** 0x5d N → 0x4d W → 0x4c N → 0x3c. 0x3c's only exits are S and the stairs

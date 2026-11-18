@@ -6,7 +6,7 @@
 Reads ``TRAJECTORIES/<family>/<state>[~k<K>][~plain]/trajectory.json`` (default: the checkout's ``trajectories``).
 One row per stem: the plain track's steps on chains 0 / 1 / 2 (``-`` where there is none) and, for the staged,
 plain-way or scripted tracks beside it (``~k3``, ``~plain``, ``~k3~plain``, ``~rule<seed>``), their steps the same
-way.  Round 27 reads its stretch with ``--route d6 --first-step 248 --last-step 280``.
+way.  Round 27 reads its stretch with ``--first-step 248 --last-step 280``.
 """
 
 import argparse

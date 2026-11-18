@@ -1249,23 +1249,23 @@ fn heart_value_terms() {
 }
 
 /// The shipped table matches the route it names; an edited route is refused by the families that read it, and the
-/// curve interpolates between half hearts.  Round 27: fitted on the scouting route `d6`, it prices `d2first` too
-/// (the steps `d6` extends), and Dungeon 6's steps have curves.
+/// curve interpolates between half hearts.  Round 27: `d2first` runs to the D6 triforce, and Dungeon 7's and
+/// Dungeon 6's steps have curves (round 26's and round 27's chains).
 #[test]
 fn heart_value_table_checks_the_route() {
     let data = common::game_data();
     let values = data.heart_values.as_deref().unwrap();
-    assert_eq!(values.route, "d6");
-    let steps = &data.map.routes["d6"];
-    let visits = &data.map.visits["d6"];
+    assert_eq!(values.route, "d2first");
+    let steps = &data.map.routes["d2first"];
+    let visits = &data.map.visits["d2first"];
     values.check(steps, visits).unwrap();
     let mut moved = steps.clone();
     moved[64].exit = "N".into();
     let err = values.check(&moved, visits).unwrap_err().0;
     assert!(err.contains("step 64") && err.contains("refit"), "{err}");
     assert!(values.check(&steps[1..], &visits[1..]).is_err());
-    assert!(values.check(&data.map.routes["d2first"], &data.map.visits["d2first"]).is_err(), "fewer steps");
-    assert_eq!(values.routes, ["d2first", "d6"], "its own route and the route it extends");
+    assert!(values.check(&steps[..248], &visits[..248]).is_err(), "fewer steps");
+    assert_eq!(values.routes, ["d2first"]);
     let curve = values.curve(Some(64), true).unwrap();
     assert!(approx(curve.at(0.75), (curve.values[1] + curve.values[2]) / 2.0));
     assert_eq!(curve.at(99.0), curve.top());
@@ -1273,16 +1273,13 @@ fn heart_value_table_checks_the_route() {
     // Steps on one way only have no curve on the other (0x31 E -> N is the clip way's).
     let clip_only = steps.iter().position(|s| s.way == Some(zelda::game_map::Way::Clips)).unwrap();
     assert!(values.curve(Some(clip_only), false).is_none() && values.curve(Some(clip_only), true).is_some());
-    // Dungeon 6's 0x38 (step 270) is priced; Dungeon 7's steps (209-247, no chain played) are not.
-    assert_eq!(values.steps[270].room, "6:0x38");
-    assert!(values.curve(Some(270), true).is_some_and(|c| c.top() > c.at(6.0)));
-    assert!((209..248).all(|k| values.curve(Some(k), true).is_none()));
+    // Dungeon 7's 0x1b (step 240) and Dungeon 6's 0x38 (step 270) are priced.
+    assert_eq!((values.steps[240].room.as_str(), values.steps[270].room.as_str()), ("7:0x1b", "6:0x38"));
+    assert!([240, 270].iter().all(|&k| values.curve(Some(k), true).is_some_and(|c| c.top() > c.at(6.0))));
     let mut config = heart_config(true, 0.0, 0.0);
     data.check_heart_values(&config).unwrap();
-    assert!(data.heart_values_for(&config, "d2first").is_some() && data.heart_values_for(&config, "d6").is_some());
+    assert!(data.heart_values_for(&config, "d2first").is_some());
     assert!(data.heart_values_for(&config, "clips-gauntlet").is_none());
-    config.route = Some("d6".into());
-    data.check_heart_values(&config).unwrap();
     config.route = Some("clips-gauntlet".into());
     assert!(data.check_heart_values(&config).is_err(), "a table for another route");
 }
