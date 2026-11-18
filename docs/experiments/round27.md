@@ -852,3 +852,13 @@ promoted 18.4 ± 1.2%; last − promoted +9.4 ± 1.8 points paired**, hearts on 
 5.64. **Promoted: `r79-wizz-s78`** (`triforce promote wizzrobe r79-wizz-s78`; its `ckpt.pt` is the chosen last
 checkpoint), the base of the joint Dungeon 6 and 9 wizzrobe training. The selections of the other runs were
 still waiting in the job line and compare with it.
+
+**The honest planner with `r79-wizz-s78`** (a diagnostic beside the models; the §13.4 command, 300 runs, seeds
+0-299, `target/r79/r79-plan-d6.jsonl`): **182 of 300, 60.7%**, against 54.0% with `r78-wizz-s78` (+6.7 ± 3.9 paired).
+0x38 costs 2.98 hearts a visit (3.25), 0x3a is entered with 8.56 hearts and kills 41 of 243 visits (53 of 253).
+
+Still in the job line when this was written: the selections of `r79-wizz-s79`, `r79-wizz-s80` and the planner arm
+`r80-wplan-s78`, `-s79`, `-s80b` (all against the promoted `r79-wizz-s78`; `r80-wplan-s80`'s first try ran out of
+GPU memory beside `-s79`: `ppo.py` computes the demonstration accuracy in one forward pass over all 84,041 rows, so
+two trainings with the planner file cannot share the GPU), and the chains `r79-1k`. `chain_hp` and a lower
+`room_kills_share` are not started: both change wizzrobe's yaml, which waits until no job of this checkout runs.
