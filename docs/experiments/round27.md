@@ -831,3 +831,24 @@ them); 0x28's planner play (it walks out and back in) is not recorded.
 
 The planner arm went into the job line first, ahead of `chain_hp`: it changes no yaml, while `chain_hp` changes
 wizzrobe's yaml and ships `triforce/chain_hp.json`, which waits until no job of this checkout runs or waits.
+
+**Training length (`r79-wizz-s7x`)**, `python scripts/train_round.py --round r79-wizz-s78 --specialists wizzrobe
+--chain-runs 0 --parallel 8 --eval-parallel 3 --train-args "--load models/wizzrobe/r78-wizz-s78 --iterations 488
+--seed 81 --stop-success 1.01 --sil-coeff 0.1 --demos target/r27-demos/bomb28.npz --demo-coeff 0.05
+--checkpoint-every 30"` (and `r78-wizz-s79` seed 82, `r78-wizz-s80` seed 83). Canonical single-room evaluations:
+
+| run | success | hearts a visit | 0x38 | 0x3a | 0x2c | 0x29 |
+|---|---:|---:|---:|---:|---:|---:|
+| `r78-wizz-s78` (promoted before) | 91.2% | −1.81 | 78.0% | 72.0% | 97.7% | 99.7% |
+| `r79-wizz-s78` | 92.7% | −1.68 | 82.3% | 75.3% | 99.3% | 99.7% |
+| `r79-wizz-s79` | 92.9% | −1.70 | 79.7% | 79.3% | 99.0% | 99.3% |
+| `r79-wizz-s80` | 92.0% | −1.83 | 77.0% | 77.0% | 98.3% | 99.7% |
+| `r80-wplan-s78` | 91.3% | −1.56 | 75.7% | 73.0% | 99.3% | 99.7% |
+
+**Seed 78 chosen by the chain** (`r79-wizz-s78/selection.json`): the screen (seeds 0-999) rises over the
+continuation from 17-20% (iterations 1006-1216) to 23-25% (1246-1456), the last checkpoint 29.0 ± 1.4% against
+the promoted `r78-wizz-s78`'s 21.5%; **confirmed on fresh seeds 1000-1999: last 27.8 ± 1.4%, it001456 26.6%,
+promoted 18.4 ± 1.2%; last − promoted +9.4 ± 1.8 points paired**, hearts on arrival at the triforce 6.11 against
+5.64. **Promoted: `r79-wizz-s78`** (`triforce promote wizzrobe r79-wizz-s78`; its `ckpt.pt` is the chosen last
+checkpoint), the base of the joint Dungeon 6 and 9 wizzrobe training. The selections of the other runs were
+still waiting in the job line and compare with it.
