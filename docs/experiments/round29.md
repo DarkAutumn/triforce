@@ -1201,7 +1201,8 @@ Not the primary number: the planner tries each action on the emulator before tak
 
 ## 18. The third round for the stretch (rounds `r79c-*`)
 
-**State of this section.** Written as the round goes; the chains are at its end.
+**State of this section.** Complete: the round (§18.1), its chains of record and the planner beside them (§18.2),
+and what a fourth round needs (§18.3).
 
 **What the ledger asked for** (§17.5): wizzrobe ends 611 of `d9`'s 857 lost runs (0x10, 0x30 and 0x05, entered
 with three to six hearts, 496 of them), patra 144 (0x52 and 0x16's fight), like-like 37, Ganon 31. Every room is
@@ -1339,7 +1340,117 @@ wizzrobe `r79c-wj-s85` in the team's checkout, the route's one wizzrobe for Dung
 of §3 is closed: what is left is play (the hearts carried into 0x10, 0x30 and 0x05; the leg's hearts, 1.25 a visit
 at 0:0x05's rock wall), not a route change.
 
-**Left when this section was last written**: the chains of record `r79c-1k` (`post-d8` and `d9`, 1000 runs, the
-third team with wizzrobe `r79c-wj-s85`, paired against `r79b-1k`) and the planner beside (`r79c-plan`, 300 runs a
-segment) were queued; their numbers, the survival ledger, a recorded run from Dungeon 8's triforce if one ends the
-game, and the suites come in §18.2.
+### 18.2 The third team's chains (`r79c-1k`): 310 of 1000 end the game from Dungeon 9, 105 of 1000 from Dungeon 8's triforce
+
+**The team.** wizzrobe `r79c-wj-s85` (the route's one wizzrobe, §18.1), ganon `r79c-ganon`, patra `r79c-patra`,
+like-like `r79c-like`; lanmola `r79b-lanmola`, zol `r79b-zol`, ow-boulder `r79b-boulder` of the second team; ow-leever
+`r79t5-ow`, ow-lynel `r79t5-lynel`, ow-moblin `r79t5-moblin`, ow-zora `r79t5-zora`, stalfos-keese-gel `r79t5-skg` of
+the first; ow-octorok `r74-leg2`, equipment-room `r76-c`. The leg's models are the second team's: `post-d8` arrives
+at Dungeon 9 exactly as before.
+
+```bash
+TAG=r79c-1k RUNS=1000 EPISODES=20 MODELS=$PWD/models scripts/experiments/r29_d9_baseline.sh run
+```
+
+**`d9`** (`9_76s_0`, 15 hearts, 1000 runs): **310 of 1000 end the game (31.0%)**: against the second team's 143
+**+16.7 ± 1.8 points paired by seed**, against the first team's 5 +30.5 ± 1.5.
+
+| Room (step) | Family | Alive on entering, second / third team | Hearts on entering | Lost a visit | Deaths |
+|---|---|---:|---:|---:|---:|
+| 0x65 (314) | wizzrobe | 1000 / 1000 | 15.00 / 15.00 | 1.22 / **0.87** | 0 / 0 |
+| 0x55, the clip (315) | lanmola | 1000 / 1000 | 13.78 / 14.13 | 0.00 / 0.00 | 0 / 0 |
+| 0x16 crossed (319) | patra | 1000 / 1000 | 13.30 / 13.76 | 0.55 / 0.63 | 0 / 0 |
+| 0x27 to its wall (321) | patra | 1000 / 1000 | 12.68 / 13.06 | 2.25 / 2.23 | 2 / 2 |
+| 0x17 to its wall (322) | wizzrobe | 998 / 998 | 10.45 / 10.85 | 2.64 / 2.55 | 31 / 33 |
+| 0x07, the clip, no ring (323) | wizzrobe | 967 / 965 | 8.06 / 8.59 | 0.80 / 0.70 | 25 / 27 |
+| the ring's cellar (324) | equipment-room | 942 / 938 | 7.45 / **8.11** | 0.09 / 0.07 | 1 / 0 |
+| 0x17 on the way back (327) | wizzrobe | 934 / 937 | 7.26 / 7.91 | 0.64 / **0.19** | 15 / 3 |
+| 0x16, the fight (330) | patra | 919 / 933 | 6.66 / 7.69 | 0.88 / 0.93 | 49 / **20** |
+| 0x05 (332) | wizzrobe | 869 / 912 | 6.11 / 6.90 | 1.27 / 1.12 | 108 / **69** |
+| 0x61 (336) | patra | 746 / 834 | 5.59 / 6.32 | 0.39 / 0.21 | 18 / 10 |
+| 0x20 (338) | wizzrobe | 724 / 818 | 5.27 / 6.13 | 0.11 / 0.27 | 3 / 10 |
+| **0x10, fought (340)** | wizzrobe | 721 / 808 | 5.18 / 5.93 | 2.52 / 2.35 | 259 / **210** |
+| the silver arrow's cellar (341) | equipment-room | 462 / 597 | 4.14 / 4.81 | 0.04 / 0.05 | 4 / 2 |
+| 0x51, 0x41, 0x31 (347-349) | like-like, wizzrobe | 456 / 592 | 4.12 / 4.75 | 0.85 / 0.98 | 58 / 57 |
+| **0x30, fought (350)** | wizzrobe | 398 / 535 | 3.79 / 4.21 | 1.43 / 1.27 | 129 / **115** |
+| 0x04 (352) | wizzrobe | 269 / 418 | 3.45 / 3.72 | 0.34 / 0.33 | 17 / 18 |
+| 0x52 (355) | patra | 249 / 399 | 3.31 / 3.52 | 0.89 / **0.47** | 75 / **40** |
+| **Ganon (356)** | ganon | 174 / 359 | 3.46 / 3.38 | 0.75 / 0.67 | 31 / **49** |
+| Zelda (357) | ganon | 143 / 310 | 3.29 / 3.14 | 0.00 | 0 |
+
+- **Where the third team's runs end** (690): 0x10 210, 0x30 115, 0x05 69, Ganon 49, 0x52 40, 0x17 36 (33 on the
+  way in), 0x07 28, 0x31 26, 0x16's fight 20, 0x04 18, 0x51 17, 0x41 14, 0x20 12, 0x61 10, 0x63 6, 13 in other rooms;
+  4 by patra's 3000-step limit, 1 by patra leaving the route into 0x71, 1 by wizzrobe's 2000-step limit; no ring
+  cellar `stuck`. **By family: wizzrobe 514 (0x10, 0x30, 0x05, 0x17, 0x07, 0x31, 0x04, 0x20; the second team 611),
+  patra 73 + 5 (144), ganon 49 (31), like-like 31 (37)**, equipment-room 9, zol 6, stalfos-keese-gel 2.
+- **What the third team moved.** The joint wizzrobe lost less in 0x65 (0.87 a visit) and almost nothing on 0x17's
+  way back (15 → 3 deaths): the ring is taken with 8.11 hearts (7.45). 0x05 108 → 69 deaths, 0x10 259 → 210 with
+  87 more runs entering it, 0x30 129 → 115 with 137 more; patra's 0x16 fight 49 → 20 and 0x52 75 → 40 (0.89 → 0.47
+  a visit, the planner's file and the chain's hearts); Ganon is entered by 359 runs instead of 174 and kills 13.6% of
+  them (17.8%). Not gained: 0x20 (3 → 10 deaths), 0x31 (21 → 26).
+- **Hearts.** The rooms' mean losses add up to 16.7 hearts (the second team 18.6), 7.4 before the ring (8.0). The 310
+  winners lost 13.5 hearts in rooms (5.5 to 18.5), gained 1.6 back from drops and ended with 3.1. The fought rooms are
+  still entered low: 0x10 with 5.9, 0x30 with 4.2, 0x52 with 3.5, Ganon with 3.4.
+- **By hearts on taking the ring** (`d9`, the third team; the second team's in brackets): 14 or more 28 of 29 win,
+  12 to 13.9 57 of 83 (29 of 68), 10 to 11.9 110 of 199 (42 of 138), 8 to 9.9 81 of 232 (38 of 224), 6 to 7.9 25 of 187
+  (13 of 222), 4 to 5.9 8 of 120 (2 of 144), below 4 1 of 88. At equal hearts the third team wins about twice as
+  often as the second: the gain is play after the ring, not only the hearts brought to it.
+- **Cheated**: 5 bombs in 1000 runs (4 in 0x04, 1 in 0x31), no key, no rupee (the second team 9 bombs).
+
+**`post-d8`** (`0_6dc_0`, Dungeon 8's triforce, 14 hearts, 1000 runs): **997 of 1000 reach Dungeon 9 (997 / 997
+paired, the same leg) and 105 end the game (39 → 105: +6.6 ± 1.1 points paired)**. Alive on entering: 0x55 996,
+0x27 994, 0x17 983, 0x07 887, the ring 810, 0x16's fight 791, 0x05 735, 0x61 598, 0x10 560, the silver arrow 321, 0x30
+248, 0x52 150, Ganon 130, Zelda 105. Deaths: 0x10 237, 0x05 117, 0x17 104, 0x30 91, 0x07 81, 0x16 57, 0x31 32, Ganon
+25, 0x61 21, 0x52 20, 0x51 19, 0x41 16, 0x20 15, 0x63 13, 0x27 12; the leg itself 2 (the rock wall) and 1 ow-zora
+`stuck`; 5 ring cellar `stuck`. By family: wizzrobe 686 (the second team 671), patra 110 (214), like-like 35, ganon 25.
+Cheated: 3 bombs (0x04, 0x31).
+
+**The leg's rooms** (the second team's models, unchanged: hearts lost a visit, 1000 runs): 0:0x37 0.07, 0x38 0.16,
+0x48 0.17, 0x47 0.24, 0x47's cellar −1.00 (the container), 0x48 0.12, 0x38 0.10, 0x28 0.01, 0x27 0.08, 0x17 (ow-boulder)
+0.31, 0x07 (ow-lynel) 0.45, **0x05's rock wall (ow-lynel) 1.25** (2 deaths); 2.97 lost, 1.97 net of the container.
+**Hearts on arriving at 9:0x76: 12.06** (as before). By hearts on arrival (wins of arrivals, the second team in
+brackets): 14 to 15 32 of 170 (7), 13 to 13.9 32 of 204 (18), 12 to 12.9 21 of 260 (9), 11 to 11.9 10 of 163 (3),
+below 11 10 of 200 (2): 10.5% of arrivals end the game against 31.0% of `d9`'s runs from 15. The arrivals take
+the ring with 5.60 hearts (`d9` 8.11) and, held at equal hearts there, the two chains agree again (8 to 9.9: 35 of 115
+and 81 of 232; 6 to 7.9: 29 of 206 and 25 of 187; 4 to 5.9: 9 of 205 and 8 of 120). Arrivals lose 1.02 hearts in
+9:0x65 (from full hearts 0.87; the second team 1.79 and 1.22).
+
+**The survival ledger** (the third team, both segments):
+
+| | `d9` (from 15 hearts) | `post-d8` (from 14, arrive 12.06) |
+|---|---:|---:|
+| End the game (second team) | **310** (143) | **105** (39) |
+| Lost runs | 690 | 895 |
+| wizzrobe (0x10 / 0x30 / 0x05) | 514 (210 / 115 / 69) | 686 (237 / 91 / 117) |
+| patra (0x16's fight / 0x52 / 0x61) | 78 (20 / 40 / 10) | 112 (55 / 20 / 21) |
+| ganon | 49 | 25 |
+| like-like | 31 | 35 |
+| the rest (leg, cellars, zol, stalfos-keese-gel, step limits) | 18 | 37 |
+| Hearts on taking the ring | 8.11 (7.45) | 5.60 (4.89) |
+| Rooms' mean losses | 16.7 (18.6) | 18.6 (20.4), the leg 1.97 net |
+
+**The honest planner beside** (`temperature:0.5+relax:16+plan:16:1` for every model, 300 runs a segment, seeds
+0-299, the third team; `eval-batch r79c-plan`): **`d9` 256 of 300 (85.3%; the models 97 of the same 300; the second
+team's planner 220), `post-d8` 226 of 300 (75.3%; the models 29; before 174)**, all 300 reaching Dungeon 9 with 13.26
+hearts (the rock wall 0.76 a visit against the models' 1.30). The rooms cost it 9.4 hearts on `d9` (the models 16.7),
+its winners end with 6.7 (3.1). Its deaths: `d9` wizzrobe 29 (0x10 12, 0x30 8), patra 6, like-like 3, ganon 2; `post-d8`
+wizzrobe 61 (0x10 20, 0x30 14, 0x05 10, 0x17 10). Not the primary number: the planner tries each action on the
+emulator before taking it.
+
+**What the planner does differently in the three rooms that lose the most runs** (`d9`, the planner's chain against
+the models' on the same seeds 0-299; hearts lost a visit, binned by hearts on entering):
+
+| Room | Entered with, models / planner | Lost a visit | 4 to 7.9 hearts in: lost, deaths | Below 4: deaths | Frames a visit |
+|---|---:|---:|---|---|---:|
+| 0x10 | 5.92 / 9.66 | 2.24 / 1.78 | 2.42, 11 of 114 / 1.92, 2 of 66 | 45 of 66 / 10 of 21 | 1555 / 2035 |
+| 0x30 | 4.19 / 7.77 | 1.31 / 0.54 | 1.68, 0 of 61 / 0.48, 0 of 107 | 36 of 87 / 8 of 36 | 777 / 923 |
+| 0x05 | 6.76 / 9.68 | 1.08 / 0.04 | 1.03, 2 of 127 / −0.08, 0 of 69 | 19 of 47 / 1 of 10 | 970 / 1032 |
+
+In 0x05 and 0x30 the planner loses a tenth to a third of the models' hearts **at the same hearts on entering**; in
+0x10 it loses four fifths of theirs (0x10 is hard for it too: 12 of its 44 lost runs) and wins there mostly by
+entering with 3.7 more hearts. It is slower in all three (0x10 161 decisions a visit against 117): it waits for the
+Wizzrobes rather than walking into their line. Elsewhere it loses half or less of the models' hearts a visit at
+0x16's fight (0.21 against 1.00), 0x07 (0.14 against 0.65), 0x52 (0.14 against 0.49), Ganon (0.26 against 0.56),
+0x17 to its wall (1.77 against 2.78) and on `post-d8` at 0x65 from the arrival's hearts (0.54 against 1.04).
+
+
