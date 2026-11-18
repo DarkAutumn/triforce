@@ -54,6 +54,9 @@ from .metrics import EpisodeTracker, RolloutMetrics
 from .plr import PrioritizedReplay
 from .rollout_buffer import RolloutBuffer
 
+DEMO_DEVICE_BYTES = 4 << 30    # demonstration rows above this many bytes stay in host memory (PPO._demo_rows)
+DEMO_ACCURACY_ROWS = 8192      # charts/demo_bc_accuracy reads at most this many rows an update (PPO._demo_accuracy)
+
 
 @dataclass
 class PPOConfig:
@@ -319,11 +322,47 @@ class PPO:
         self.optimizer: Optional[torch.optim.Optimizer] = None
         self._pending_optimizer_state = optimizer_state
         self.demo_batch = demo_batch
+        self._demo_placed = None                   # demo_batch where optimize reads it (see _demo_rows)
+        self._demo_accuracy_draws = 0              # seeds the accuracy sample (its own generator)
         self.total_steps = 0
         self.ent_coeff = self.config.ent_coeff     # this update's entropy bonus (ent_anneal lowers it)
         self.sil: Optional[SilReplay] = None       # created by the first optimize with sil_coeff > 0
         self.ppg: Optional[PPGStore] = None        # created by the first train() with ppg
         self.aux_optimizer: Optional[torch.optim.Optimizer] = None
+
+    def _demo_rows(self, minibatch_size: int):
+        """The demonstration rows where an update reads them, placed once.  On the device when they fit in one
+        minibatch or in memory there (at most ``DEMO_DEVICE_BYTES``, and on CUDA a quarter of what is free), so each
+        minibatch's sample is gathered on the device; else in host memory, each sample moved as it is drawn (round
+        28: a gather from host memory per minibatch cost several seconds an update)."""
+        if self._demo_placed is None:
+            obs, masks, targets = self.demo_batch
+            size = sum(t.numel() * t.element_size() for t in (*obs.values(), masks, targets))
+            room = DEMO_DEVICE_BYTES
+            if self.device.type == 'cuda':
+                room = min(room, torch.cuda.mem_get_info(self.device)[0] // 4)
+            if targets.shape[0] <= minibatch_size or size <= room:
+                obs, masks, targets = ({k: v.to(self.device) for k, v in obs.items()}, masks.to(self.device),
+                                       targets.to(self.device))
+            self._demo_placed = (obs, masks, targets)
+        return self._demo_placed
+
+    def _demo_accuracy(self, network, demo, minibatch_size: int) -> float:
+        """``charts/demo_bc_accuracy``: every row of a batch of at most ``DEMO_ACCURACY_ROWS`` rows; of a larger one
+        a sample of that many, drawn by a generator of its own (the update's random stream is not touched).  Round
+        28: the pass over all 196k rows of darknut's two files was 190 forward passes an update, most of its time."""
+        obs, masks, targets = demo
+        rows = targets.shape[0]
+        if rows > DEMO_ACCURACY_ROWS:
+            generator = torch.Generator().manual_seed(self._demo_accuracy_draws)
+            self._demo_accuracy_draws += 1
+            pick = torch.randperm(rows, generator=generator)[:DEMO_ACCURACY_ROWS].to(targets.device)
+            obs, masks, targets = {k: v[pick] for k, v in obs.items()}, masks[pick], targets[pick]
+        predicted = torch.cat([
+            network.get_action({k: v[part].to(self.device) for k, v in obs.items()}, masks[part].to(self.device),
+                               deterministic=True).to(targets.device)
+            for part in torch.split(torch.arange(targets.shape[0], device=targets.device), minibatch_size)])
+        return compute_demo_accuracy(predicted, targets)
 
     # ------------------------------------------------------------------ optimizer
 
@@ -470,9 +509,7 @@ class PPO:
 
         demo = None
         if self.demo_batch is not None and cfg.demo_bc_coeff > 0:
-            demo_obs, demo_masks, demo_targets = self.demo_batch
-            demo = ({k: v.to(self.device) for k, v in demo_obs.items()}, demo_masks.to(self.device),
-                    demo_targets.to(self.device))
+            demo = self._demo_rows(minibatch_size)
         demo_bc_loss = torch.tensor(0.0)
 
         sil = None
@@ -546,10 +583,12 @@ class PPO:
                         loss = loss + cfg.search_coeff * search_ce
                     if demo is not None:
                         rows = demo[2].shape[0]
-                        if rows > minibatch_size:   # a large batch (best-of-N runs): a minibatch-sized sample
-                            pick = torch.randperm(rows, device=self.device)[:minibatch_size]
-                            demo_lp = demo_log_prob(network, {k: v[pick] for k, v in demo[0].items()},
-                                                    demo[1][pick], demo[2][pick])
+                        if rows > minibatch_size:   # a large batch: a minibatch-sized sample
+                            # drawn on the device as before (same draws for a seed), gathered where the rows live
+                            pick = torch.randperm(rows, device=self.device)[:minibatch_size].to(demo[2].device)
+                            demo_lp = demo_log_prob(network,
+                                                    {k: v[pick].to(self.device) for k, v in demo[0].items()},
+                                                    demo[1][pick].to(self.device), demo[2][pick].to(self.device))
                         else:
                             demo_lp = demo_log_prob(network, demo[0], demo[1], demo[2])
                         demo_bc_loss = -demo_lp.mean()
@@ -585,8 +624,7 @@ class PPO:
             head_stats = network.head_entropies(b_obs, b_masks, b_actions)
             demo_accuracy = None
             if demo is not None:
-                demo_accuracy = compute_demo_accuracy(network.get_action(demo[0], demo[1], deterministic=True),
-                                                      demo[2])
+                demo_accuracy = self._demo_accuracy(network, demo, minibatch_size)
             search_stats = {}
             if b_searched is not None:
                 # After the update, over every searched row: CE(π', π_θ) and how often their argmaxes agree.

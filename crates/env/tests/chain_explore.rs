@@ -132,6 +132,7 @@ chain_runs!(
     back_and_forth_hits_the_bounce_limit,
     mid_route_triforce_is_the_correct_exit,
     harvested_states_hold_no_granted_bomb,
+    a_granted_bomb_only_opens_the_wall_in_a_chain,
     one_room_entries_reset_the_observation,
     target_observation_follows_the_acting_specialist,
     a_stop_step_ends_the_run_and_a_checkpoint_continues_it,
@@ -867,6 +868,37 @@ fn glob_files(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
         }
     }
     out
+}
+
+/// Round 26: the chain runner keeps a granted bomb to the wall as the specialist env does (`ItemsConfig::
+/// bomb_targets` with the run's cheat ledger).  7:0x69 (goriya, `free`; S → N through its N bomb wall) entered with
+/// no bombs: BOMB is offered only under the N wall, and laid there it is the run's one cheated bomb; entered with 4
+/// bombs of his own Link may bomb in the room's middle.
+fn a_granted_bomb_only_opens_the_wall_in_a_chain(mut nes: ZCore, data: &Arc<GameData>) -> ZCore {
+    use zelda::{ActionKind, Direction, Var};
+    let dir = tempfile::tempdir().unwrap();
+    let mut rng = ChaCha8Rng::seed_from_u64(0);
+    for (own, middle) in [(0u8, false), (4, true)] {
+        let mut source = common::read_state_file(&common::state_path("7_69s_0")).unwrap();
+        source.machine.poke(0x658, own);
+        let start = dir.path().join("7_69s_0.state");
+        TfzStore::new().save(&start, &source).unwrap();
+        let route = Route::load(&data.map, &data.states_dir, "d2first", None, Some(start.to_str().unwrap())).unwrap();
+        let mut c = chain(nes, data, route);
+        let ChainStatus::Act { .. } = c.reset(Some(0), &mut rng).unwrap() else { panic!("run ended at reset") };
+        assert_eq!(c.session().state().bombs(), i32::from(own.max(1)), "a granted bomb when he holds none");
+        let offered = |c: &mut ChainEnv<ZCore, TfzStore>, x: u8, y: u8| {
+            c.session_mut().apply_ram(&[(Var::LinkX, x), (Var::LinkY, y)]);
+            let ChainStatus::Act { .. } = c.step(parse("WAIT 8")).unwrap() else { panic!("run ended") };
+            c.session().mask().directions(ActionKind::Bomb)
+        };
+        assert_eq!(!offered(&mut c, 0x78, 0x9D).is_empty(), middle, "{own} bombs, the room's middle");
+        assert!(offered(&mut c, 0x78, 0x6D).contains(&Direction::N), "{own} bombs, under the N wall");
+        let ChainStatus::Act { .. } = c.step(parse("BOMB N")).unwrap() else { panic!("run ended") };
+        assert_eq!(c.cheated().bombs, u32::from(own == 0), "{own} bombs: the wall bomb");
+        nes = c.into_parts().0.into_nes();
+    }
+    nes
 }
 
 /// F040: a one_room specialist entering a room of its own family in a chain sees a reset observation, as at the

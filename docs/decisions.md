@@ -2604,3 +2604,155 @@ a problem. We might even drop it in the future."
   be vetoed with round 27's `keep_out` doorways when that branch is merged).
 - **Clips off:** still built (a plain way for every stretch) and measured in the chains of record, but no work is
   spent on it: no tuning, no scoping of a clip family's switch to single rooms, and its numbers gate nothing.
+
+## 2026-11-17 — A granted bomb opens the wall and does nothing else; the reserve holds inside bomb-wall rooms (round 26)
+
+Lee's standing decision is that bombs a run lacks are cheated and counted, aim zero. The first 1000-run chain of
+Dungeon 7 counted 7.7 cheated bombs a run. They were no need of the route: a `requires_bombs` room tops Link up to
+one bomb whenever he holds none, and the Nov 11 rule let a `free` family bomb anywhere in such a room whatever the
+reserve ("It doesn't apply in `requires_bombs` rooms"). goriya threw the granted bomb at a Goriya and was handed the
+next (3.9 bombs a visit of 7:0x19 with none of its own); darknut did the same in 3:0x5b.
+
+- **Rule A.** While the cheat ledger holds a granted bomb in a room whose bomb is for something it opens
+  (`zelda::cheats::bomb_opens`: every `requires_bombs` room but Dodongo's), BOMB is offered only in reach of what
+  the objective leaves through (`ItemsConfig::bomb_targets` with `CheatLedger::granted`, both envs), in every mode
+  but `never`. So a cheated bomb in such a room is a bomb laid at the route's wall.
+  - *The criterion is the outstanding grant*, not "Link holds none of his own": F173 uses the grant first, so after
+    a pickup the next bomb laid would still be the cheated one wherever it lands.
+  - *The 10th kill* did let a grant be spent as a weapon (BOMB anywhere, a forced drop of four for one cheated bomb):
+    with a granted bomb outstanding it no longer lifts the limit. With bombs of his own it stays as it was.
+  - *Dodongo's room 2:0x0e* is `requires_bombs` without a wall: there the granted bomb is the weapon (Lee, Nov 8),
+    unchanged. Manhandla's room grants none once Link is in (its only bomb wall is his way in).
+- **Rule B (replaces the Nov 11 sentence).** The reserve means the same inside a bomb-wall room as outside: a
+  `free` family at or below it is kept to the route's wall there, the wall open or shut. A fight the bombs are kept
+  for says so on its own route step, as Digdogger, the Olive Garden and Dungeon 7's Aquamentus already did:
+  `bomb_reserve: 0` on 3:0x5b's last pass (Link's own bombs are the fight's; the room's four, taken after it, pay
+  for both walls and Manhandla) and in Manhandla's room; 6 again on 0x5c and from 0x3d on.
+  - *Measured first as "only while a wall is still shut"* (so Manhandla needed no route data): Dungeon 7 kept 0.18
+    cheated bombs a run, because in 7:0x19 Link threw his second bomb at a Goriya once the wall was open (68 of 250
+    visits) and paid for 0x1a's wall with a granted one; and Dungeon 3 lost 16.3 points (3:0x5b's last pass without
+    bombs: deaths 3 → 20 of 294, hearts lost 0.13 → 0.74, Manhandla 35 → 62). Rejected in that form.
+  - *B2* (keep only the last bomb for the room's wall) was not built: it would leave Dungeon 7 two granted bombs a
+    run (0x19, 0x1a) where B leaves none, and the route's reserve already says what 3:0x5b needs.
+  - *The reserve is an observation input* (`bomb_reserve`, `bombs_spare`): darknut on that pass and boss-manhandla
+    read 0 where they read 6. Measured: they play as under rule A alone (below). No COMPAT bump (no layout or
+    meaning changed); a REV bump is due at the merge (the mask and a route's data changed what trained models may
+    do).
+- **Measured** (300 runs a segment, seeds 0-299, models alone, clips on, round 25's models with the first team's
+  goriya `r76-goriya2`; paired differences with their standard error; `scripts/experiments/r26_bomb_table.py`):
+
+  | | out of Dungeon 3 | D3 and D4 (step 134) | cheated bombs, D3+D4 | Dungeon 5 | Dungeon 7 cheated bombs a run | D7 runs reaching 0x1b / 0x0d |
+  |---|---:|---:|---:|---:|---:|---:|
+  | before | 84.7% | 75.0% | 1.79 | 66.0%, 0 cheated | 7.77 | 179 / 33 |
+  | rule A | 79.3% (−5.3 ± 1.8) | 69.0% (−6.0 ± 1.9) | 1.01 | the same 300 runs | 1.57 | 176 / 28 |
+  | A + B, first form | 68.3% (−16.3 ± 3.2) | 58.7% | 0.49 | the same 300 runs | 0.18 | 167 / 36 |
+  | **A + B as built** | 79.3% (−5.3 ± 3.2) | 72.3% (−2.7 ± 3.8) | 1.00 | the same 300 runs | **0.00** | 170 / 37 |
+
+  - *Dungeon 7:* 7.77 → 0.00 cheated bombs a run, and the Blue Goriya wall rooms do not fall apart without the
+    bombs: 0x69 costs 1.07 → 1.66 hearts a visit, 0x19 kills 33 → 36 of 281, 0x1a 49 → 56 of two visits, and as many
+    runs reach 0x1b and the Wallmaster room as before; one of 300 took the triforce.
+  - *Dungeon 5:* untouched (gibdo is `required`; the 300 runs are the same room for room).
+  - *Dungeon 3:* about 5 points lost, all of it rule A: the 95 of 294 last passes of 3:0x5b that arrive with 0-1
+    bombs had used 3.1 cheated bombs each as their weapon; without them they lose 0.61 hearts there (it was −0.09)
+    and Manhandla kills 27 of them (14). The other 199 play as before. Not weakened to save the number: darknut
+    needs a continuation under the rule (the fight by sword at 0-1 bombs).
+  - *What is still counted:* 3:0x5b 131 per 300 runs, F173's accounting (the granted bomb is used first at the wall
+    although Link then holds the room's four); Dungeon 4's walls 169 per 300 (runs that arrive with none: honest).
+- **Left as it is:** F173; `cheats::bomb_need` (a room keeps its need while any of its bomb walls is shut, also one
+  the route never opens: 7:0x69's W, 4:0x11's E and W; the bomb in hand is unusable and taken back on leaving).
+
+## 2026-11-17 — Every completed stretch lands in the main checkout, pushed and playable (Lee)
+
+Lee: "I want to add a directive, that after each completion (like d6 done, d8 -> d9 etc) gets merged back into
+triforce and pushed. I really want to be able to do play-zelda and see the progress as you work."
+
+- **What lands:** each stretch of the rest of the game when its first team takes it at a working rate (decision 2
+  of 2026-11-16): Dungeon 7 with its leg, the magic sword and Dungeon 6, Dungeon 8, Dungeon 9 with Ganon. It sharpens
+  decision 3 ("a report, a tag and a push per dungeon"): the push is of `main`, and the main checkout itself is left
+  able to play the stretch.
+- **How:** the checklist in `AGENTS.md` "Lee's standing rules": `main` merged into the line and the suites green,
+  `main` fast-forwarded, the module rebuilt in the main checkout, the promoted runs copied into its `models/` with
+  their `promoted`, `act`, `version` and `eval.json`, trajectories copied, a short chain from the main checkout as
+  the proof, the tag, the push, the report.
+- **Not held back:** a stretch is landed when it is complete, not together with a later one. The optimisation round
+  after the first complete game lands the same way.
+- **In between:** work in progress is watched from the line's worktree with its own models
+  (`TRIFORCE_MODELS_DIR=$PWD/models .venv/bin/python play-zelda.py`).
+
+## 2026-11-17 — The remaining dungeons are prepared in parallel; training is the serial resource (Lee)
+
+Lee: "You KNOW we are doing d7 d6 d8 d9. Why do it sequentially when you could do it in parallel? Do your best to
+parallelize this, and at the end you can always clean up, refine, like you would have done anyway. I mean look at
+the retraining you would do... that all can be front loaded looking at the dungeons first anyway."
+
+- **Lanes.** Each stretch (Dungeon 7, the magic sword and Dungeon 6, Dungeon 8, Dungeon 9 with Ganon) has its own
+  lane of work that needs no job place: walk the running game, build the route vocabulary (steps, masks, objectives,
+  families), build start states and curricula (fights the explorer cannot clear are skipped or staged; inventories
+  staged from the ledgers, rebuilt from chain runs' harvested states later), write the family files. The lanes run
+  at once, one worktree each; a lane's next step starts when its previous one reports.
+- **The serial resource** is the job line's two places (trainings, evaluations, chains): preparation exists to keep
+  it fed. Order: the next landing's families first (Dungeon 7), then whichever lane has states ready.
+- **A family is trained once on all its rooms.** A family whose monsters are in several of the remaining dungeons
+  (Wizzrobes in 6 and 9, Blue Darknuts in 8 beside Dungeon 5's, Like-Likes, Zols, Gibdos, Pols Voices) waits for
+  those rooms' states and trains on them together, instead of being continued once per dungeon. A scripted rule
+  that wins a room in the walks becomes demonstration rows (`train --demos`) during preparation.
+- **Integration.** The vocabulary branches of Dungeons 8 and 9 start from Dungeon 6's and are merged in route order
+  by one integration step with the suites and a full-route identity chain, as round 26's three branches were.
+- **Landing is unchanged:** each stretch lands on `main` when its team takes its segment (the entry above); the
+  clean-up and tuning round comes after the first complete game.
+- **Given up for it:** the honest planner's 1000-run chains with clips off for round 25 (the clips-on set is in
+  round25.md §13); they are measured when the line is idle.
+- **The CPU is the scarce resource, not the GPU** (Lee, the same day: "the CPU load is the problem not the gpu
+  load... You are constantly overloading the cpu. Optimize for that. But really, just let the cpu queueing handle
+  most of this... Just make sure training and evals go into the queue (as they already do!)"). The job line stays
+  as it is and carries everything that plays models. What agents start outside it is capped: one heavy thing at a
+  time per agent (an explorer, a state build, cargo, pytest or a many-trial walk script), explorers on 4 threads,
+  `CARGO_BUILD_JOBS=4`, all under `nice -n 10`, full suites once at the end of a task, and nothing heavy started
+  while the load average is above 30. The GPU has not been a limit in any round.
+
+## 2026-11-18 — Clips only: the no-clip way is dropped; the Lanmola room is clipped (Lee)
+
+Lee: "The lanmola room should be bypassed with a block clip. From here on, you can drop the no-clip runs. They
+were an interesting spot of comparison, but should be dropped in favor of just clipping through blocks when needed."
+(Nov 17 already: "Clips-off is not a problem. We might even drop it in the future.")
+
+- **Supersedes** the Nov 13 rule (round 22) that clip families train half their episodes with CLIP masked and that
+  every chain and evaluation is measured both ways, and decision 4 of 2026-11-16 ("clips off built and measured,
+  not tuned").
+- **From here on:** chains, checkpoint selection and evaluations with clips on only; no `-noclips` tags; a clip
+  family's new rounds train with `off_share: 0`; no new plain way is built; a room the route clips is not fought,
+  staged or demonstrated (Dungeon 9: 0x55's Lanmolas, 0x07 before the ring, 0x20 from N, 0x03); where a hard room
+  can be passed by a block clip, that is the way (the remaining hard rooms of Dungeons 6-8 are scanned for it).
+- **Kept as it is:** the route's existing plain ways and forks, the run-time switch and `play-zelda.py`'s key `c`
+  (from Dungeon 7 onward a run with clips off plays ways no model is trained on), the clips-off numbers already in
+  the round documents.
+- **What it buys:** half of every clip family's training episodes, half of the chain measurements, and in Dungeon 9
+  the worst fight of the stretch (0x07 before the red ring: 9.35 hearts by the rule against 1.3 by the clip).
+
+## 2026-11-18 — goriya `r76-goriya4-s78` at its checkpoint it004511, ow-zora `r76-zora-arrows`; boss-digdogger and wallmaster kept (round 26)
+
+- **What:** three continuations of `r76-goriya3` (seeds 76, 77, 78; 488 iterations, `--sil-coeff 0.1`, the food
+  demos at 0.05, a checkpoint every 30) on the code with the bomb rule and `heart_value.json`'s curves for steps
+  209-247; one of boss-digdogger `r76-b` (`r76-digdogger2`). Each run's checkpoint chosen by the `d7` segment
+  (`select-checkpoint`, 1000 screen seeds, the best and the last again on 1000 fresh ones).
+- **Chosen:** `r76-goriya4-s78` it004511, 40.0% on the fresh seeds against 25.4% for `r76-goriya3` (+14.6 ± 2.0;
+  `s77`'s last 36.2%, `s76`'s it004601 33.4%). The rooms it also plays before Dungeon 7 were checked on 1000 paired
+  runs: Dungeon 1 −0.2 ± 0.4, Dungeon 2 −2.1 ± 1.7, both within two standard errors. The best of three seeds on
+  fresh seeds, not the run with the best old segments (`s77`: +0.6 and +0.9): Dungeon 7 is what the stretch needs,
+  and the 3.8 points between them is more than either old segment moved.
+- **ow-zora `r76-zora-arrows`** (244 iterations from `r76-b` with the 75 harvested starts of 0:0x44 entered at X 128,
+  round26.md §15): the leg's arrivals at Dungeon 7 98.4% against 90.9% on fresh seeds. ow-zora plays every
+  overworld stretch, so a run is promoted only if none of the four earlier stretches is worse beyond two standard
+  errors of the paired difference (1000 runs each, the same seeds for both): after Dungeon 2 +1.4 ± 1.0, after
+  Dungeons 1 and 3 equal (100%), the leg to Dungeon 5 −0.1 ± 0.1. The harvested states are not committed (as every
+  harvested state); the yaml's `harvested_fraction` finds none in a fresh clone and trains on the seed states.
+- **Kept:** boss-digdogger `r76-b` (`r76-digdogger2` led the screen by 1.7 points and lost it on fresh seeds, 25.2
+  against 25.4%); wallmaster `r76-wall-1` (round26.md §14).
+- **Measured:** the chain of record `r76-1k` (round26.md §16).
+
+## 2026-11-18 — 1.6.0.0: six dungeons (round 26)
+
+MINOR +1: the route completes Dungeon 7, from its entrance in 40.0% of 1000 runs with the models alone (`r76-1k-d7`),
+above the working rate the owner set for a first team (about 30%, decisions 2026-11-16). COMPAT 0, REV 0: nothing a
+loaded model reads changed since 1.5.1.0, so the 1.5.1 runs are stamped 1.6.0.0 (`triforce stamp`), not converted.
+The Cargo workspace is 1.6.0.

@@ -111,6 +111,63 @@ def test_the_command_line_is_checked_before_anything_runs(team, tmp_path, capsys
     assert not (tmp_path / 'logs').exists()
 
 
+def _fake_chain(plan, phase, label, sha1, act, arrived):
+    """A finished chain output of ``phase`` under ``label``, as eval-chain writes it, played by the weights ``sha1``:
+    its first ``arrived`` seeds reach the end (no game is played)."""
+    from triforce.cli import meta_path  # pylint: disable=import-outside-toplevel
+    runs, first_seed = plan.seeds(phase)
+    output = select_checkpoint.chain_output(plan, phase, label)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(''.join(json.dumps({'seed': seed, 'result': 'success' if i < arrived else 'failure', 'rooms': [
+        {'level': 0, 'room': '0x3c', 'in_cave': False, 'health_in': 3.0, 'outcome': 'exit-correct'}]}) + '\n'
+        for i, seed in enumerate(range(first_seed, first_seed + runs))))
+    meta_path(output).write_text(json.dumps({
+        'batches': [{'first_seed': first_seed, 'runs': runs, 'finished': True}],
+        'provenance': {'clips': plan.clips, 'start_from': plan.start,
+                       'models': [{'name': FAMILY, 'checkpoint_sha1': sha1, 'act': act}]}}))
+
+
+def test_a_promotion_during_the_batch_neither_changes_the_reference_nor_stops_the_selection(team, tmp_path):
+    """Dungeon 6 (round 26): selections started while one run was promoted played their ``promoted`` chains after
+    another was, so the chains held other weights than the candidate, and the confirmation of the screen's best
+    failed (``LookupError: the screen has no chain of promoted yet``) with no ``selection.json``."""
+    root, run_dir = team
+    argv = ['--models-dir', str(root), FAMILY, 'r', '--from', str(require_state(SEGMENT_STATE)),
+            '--stop-at', f'step:{SEGMENT_STOP_STEP}', '--runs', '2', '--confirm', '2',
+            '--chains-dir', str(tmp_path / 'chains')]
+    plan, pool = select_checkpoint.build_plan(select_checkpoint.build_parser().parse_args(argv))
+    by_label = {c.label: c for c in pool}
+    south = registry.promoted_checkpoint(FAMILY, root)
+    registry.save_checkpoint(FAMILY, 'north', scripted('MOVE N 16'), root=root)
+    registry.promote(FAMILY, 'north', root=root)
+    # The reference stays the run promoted when the selection was planned: its chains name its weights.
+    assert by_label['promoted'].sha1 == registry.checkpoint_sha1(south)
+    assert select_checkpoint.candidate_args(plan, by_label['promoted'], 'screen')[-2:] == [
+        '--checkpoint', f'{FAMILY}={south}']
+    # Chains left by the old code: every candidate of the run played, ``promoted`` by the other weights.
+    north = registry.checkpoint_sha1(registry.promoted_checkpoint(FAMILY, root))
+    for label, arrived in (('it000001', 0), ('it000002', 2), ('last', 1)):
+        _fake_chain(plan, 'screen', label, by_label[label].sha1, by_label[label].act, arrived)
+    _fake_chain(plan, 'screen', 'promoted', north, by_label['promoted'].act, 2)
+    selection = select_checkpoint.Selection(plan, pool)
+    top1 = next(entry for entry in selection.entries() if entry.name == 'confirm-top1')
+    top1.prepare()                                              # raised LookupError
+    assert top1.fields['candidate'] == 'it000002'
+    # The confirmation of the screen's best and of last played; a third run is promoted (no chain of it: its rows
+    # are empty): --report-only writes the choice.
+    _fake_chain(plan, 'confirm', 'it000002', by_label['it000002'].sha1, by_label['it000002'].act, 2)
+    _fake_chain(plan, 'confirm', 'last', by_label['last'].sha1, by_label['last'].act, 0)
+    registry.save_checkpoint(FAMILY, 'west', scripted('MOVE W 16'), root=root)
+    registry.promote(FAMILY, 'west', root=root)
+    assert select_checkpoint.main([*argv, '--report-only']) == 0
+    report = json.loads((run_dir / 'selection.json').read_text())
+    rows = {row['label']: row for row in report['candidates']}
+    assert report['winner'] == report['chosen'] == 'it000002' and report['reason'].startswith('confirmed')
+    assert rows['promoted']['sha1'] == registry.checkpoint_sha1(registry.promoted_checkpoint(FAMILY, root))
+    assert rows['promoted']['screen'] is None and rows['promoted']['confirm'] is None
+    assert 'screen_vs_promoted' not in rows['it000002']
+
+
 def test_scores_and_paired_differences():
     runs = lambda results: [{'seed': seed, 'result': result, 'rooms': [{'level': 0, 'room': '0x3c', 'in_cave': False,  # noqa: E731
                                                                        'health_in': 3.0, 'outcome': 'exit-correct'},

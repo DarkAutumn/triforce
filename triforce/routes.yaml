@@ -33,8 +33,11 @@
 # `{if_bombs_below: N}` = take it only while Link holds fewer than N bombs, `refuse` = leave it, and taking it costs
 # (the critic's `penalty-refused-treasure`; Dungeon 5's 0x65 westbound).
 # `bomb_reserve: N`: from this step on (until a later step sets another; 0 at the start) Link keeps N bombs for what
-# the route needs them for: outside `requires_bombs` rooms (game.yaml) BOMB is masked while he holds N or fewer, but
-# for the 10th damage-free kill, which arms a forced bomb drop (Lee, Nov 11; docs/decisions.md).
+# the route needs them for: BOMB as a weapon is masked while he holds N or fewer of his own, inside a bomb-wall room
+# as outside (round 26; a `free` family's BOMB at the wall the route leaves through stays), but for the 10th
+# damage-free kill, which arms a forced bomb drop (Lee, Nov 11; docs/decisions.md).  A fight the bombs are kept for
+# sets its own step's reserve (0: Manhandla, Digdogger, the Olive Garden, 3:0x5b's last pass, whose own four bombs
+# pay for what follows).  Bombs a room grants (game.yaml `requires_bombs`, `zelda::cheats`) only open its wall.
 # `rupee_reserve: N` (round 26): the same for rupees, kept for the route's arrows: ARROW is masked while Link holds
 # N or fewer (families have arrows off unless their `items:` turns them on).
 # in_cave rooms follow v1 game.yaml: same (level, location) with in_cave: true.  An underworld item cellar is an
@@ -174,7 +177,10 @@ d2first:
 # at 6 left 5; docs/decisions.md 2026-11-14); 0x69 (8 Darknuts above the raft cellar) leaves its bombs: straight to
 # the stairs.
 # Bomb reserve 6 (round 22): one for each of the two bomb walls (3:0x5b E, 3:0x4c E) and a spare for each, two for
-# Manhandla (docs/decisions.md 2026-11-13).
+# Manhandla (docs/decisions.md 2026-11-13).  Round 26 (the reserve holds inside bomb-wall rooms too): 0 on 0x5b's
+# last pass (Link's own bombs are the fight's there: the room's four bombs, taken after it, pay for both walls and
+# Manhandla) and 0 in Manhandla's room (the two kept for him); 6 again in between and after him (as it was: no
+# family from 0x3d to Dungeon 4's entrance bombs by the reserve, and their inputs stay what they were).
 - {level: 3, room: '0x7c', specialist: zol, entry: S, exit: W, bomb_reserve: 6}
 - {level: 3, room: '0x7b', specialist: zol, entry: E, exit: N}
 - {level: 3, room: '0x6b', specialist: zol, entry: S, exit: N}
@@ -188,11 +194,11 @@ d2first:
 - {level: 3, room: '0x69', specialist: darknut, entry: cave, exit: N, treasure: skip}
 - {level: 3, room: '0x59', specialist: darknut, entry: S, exit: E}
 - {level: 3, room: '0x5a', specialist: trap-room, entry: W, exit: E}
-- {level: 3, room: '0x5b', specialist: darknut, entry: W, exit: E}
-- {level: 3, room: '0x5c', specialist: darknut, entry: W, exit: N}
+- {level: 3, room: '0x5b', specialist: darknut, entry: W, exit: E, bomb_reserve: 0}
+- {level: 3, room: '0x5c', specialist: darknut, entry: W, exit: N, bomb_reserve: 6}
 - {level: 3, room: '0x4c', specialist: trap-room, entry: S, exit: E}
-- {level: 3, room: '0x4d', specialist: boss-manhandla, entry: W, exit: N}
-- {level: 3, room: '0x3d', specialist: zol, entry: S, exit: triforce}
+- {level: 3, room: '0x4d', specialist: boss-manhandla, entry: W, exit: N, bomb_reserve: 0}
+- {level: 3, room: '0x3d', specialist: zol, entry: S, exit: triforce, bomb_reserve: 6}
 # Dungeon 4 (Lee, Nov 11-12; docs/routes/d4.md).  From the D3 triforce's warp (0x74) back the way Link came to 0x65,
 # N to the dock of 0x55 and by raft to the island 0x45.  Dungeon 4, Lee's directions: the keys of 0x51 and 0x40
 # (both in the open from the start), the direct way to the ladder (N N W N N E E: the Breakfast Room 0x32, whose

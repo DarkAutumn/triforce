@@ -120,17 +120,33 @@ the recorder or a blue candle's fire was used, and the family's switch, are visi
 BOMB follows the acting family's `items: {bombs: MODE}` (`env::config::BombUse`, Lee Nov 11; in `SpecialistEnv` and
 chains, recomputed every step): `never`; `tenth`, only for the 10th damage-free kill (`$50` HelpDropCount = 9: a
 bomb kill then arms a forced drop of 4 bombs, `asm:Damage_KillMonster`); `required`, in game.yaml `requires_bombs`
-rooms and the 10th kill; `free`, in `requires_bombs` rooms, elsewhere while Link holds more than the route's bomb
-reserve (routes.yaml `bomb_reserve`, `GameCompletion::bomb_reserve`: 6 from Dungeon 3's entrance, 2 from Dungeon
-4's), and the 10th kill (whatever the reserve). Families: `free` goriya, darknut, moldorm, boss-dodongo,
-boss-manhandla, vire; `required` ow-tektite, ow-octorok, trap-room, stalfos-keese-gel; `never` boss-gleeok; `tenth`
-the rest. In a `requires_bombs` room a `required` family is kept to the bombs that open the wall the objective
-leaves through (`ItemsConfig::bomb_targets`, `Session::set_bomb_targets`; round 22): BOMB only where the bomb lands
-in reach of it (`zelda::bombs::landing`, `BombTarget::in_reach`: a dungeon wall within `$18` px of its hotspot, a
-rock wall within `$10`) and, since round 23, not while one of Link's bombs (slot `$10`/`$11` in state `$11`-`$14`,
+rooms and the 10th kill; `free`, wherever Link holds more bombs of his own than the route's bomb reserve (routes.yaml
+`bomb_reserve`, `GameCompletion::bomb_reserve`: 6 from Dungeon 3's entrance, 2 from Dungeon 4's, 3 from Dungeon
+7's; 0 on the steps of the fights the bombs are kept for: 3:0x5b's last pass, Manhandla, the Olive Garden,
+Digdogger, Dungeon 7's Aquamentus), at the wall of a `requires_bombs` room whatever he holds, in Dodongo's room
+(`requires_bombs`, no wall) always, and the 10th kill (whatever the reserve). Families: `free` goriya, darknut,
+moldorm, boss-dodongo, boss-manhandla, boss-digdogger, vire; `required` ow-tektite, ow-octorok, trap-room,
+stalfos-keese-gel, gibdo, dodongo-crossing; `never` boss-gleeok; `tenth` the rest.
+
+**BOMB kept to the wall** (`ItemsConfig::bomb_targets`, `Session::set_bomb_targets`; round 22): BOMB only where the
+bomb lands in reach of what the objective leaves through (`zelda::objectives::route_bomb_targets`: the intact bomb
+wall of the route's exit, 0x2c's and 0x67's rock walls; nothing while the objective fights first or leaves another
+way; `zelda::bombs::landing`, `BombTarget::in_reach`: a dungeon wall within `$18` px of its hotspot, a rock wall
+within `$10`) and, since round 23, not while one of Link's bombs (slot `$10`/`$11` in state `$11`-`$14`,
 `zelda::bombs::live_bombs`) already lies in reach of that wall: the wall test comes once, when that bomb's blast ends
-(`asm:Bomb_TryOpenWall`), so a second bomb only spends a bomb (`BombTarget::awaits_bomb`). The 10th damage-free kill
-lifts both limits. The game's own rule comes first (bombs held, a free slot, an enemy or a bomb wall) and BOMB stays legal at an
+(`asm:Bomb_TryOpenWall`), so a second bomb only spends a bomb (`BombTarget::awaits_bomb`). It holds in a
+`requires_bombs` room, in every mode but `never`:
+
+- for a `required` family (round 22);
+- for a `free` family while Link holds no more bombs of his own than the reserve, in a room whose bomb is for a wall
+  (`zelda::cheats::bomb_opens`), the wall open or shut (round 26: the reserve means the same inside a bomb-wall room
+  as outside; before, such a room was free ground whatever the reserve);
+- for every family while the cheat ledger holds a granted bomb there (`CheatLedger::granted`; round 26, decisions
+  2026-11-17 "A granted bomb opens the wall and does nothing else"): the granted bomb opens the wall and does
+  nothing else. Not in Dodongo's room (no wall: the granted bomb is the weapon, the owner's Nov 8 rule).
+
+The 10th damage-free kill lifts the first two limits (that bomb pays itself back), not the third: a granted bomb is
+not spent on a monster even for a forced drop. The game's own rule comes first (bombs held, a free slot, an enemy or a bomb wall) and BOMB stays legal at an
 unopened overworld rock wall. MOVE N at the overworld top edge scrolls; a key works only at the
 room bound next to the locked door; a push counts only when Link is aligned with the block and the room is clear;
 an opened bomb wall is passable. Off the grid on a cave or dungeon mouth only MOVE S is legal (any other move walks
@@ -616,6 +632,12 @@ force combat. The shutter rule excludes block/money triggers and non-foe-only ro
 classification covers vertical tiles 0xa8–0xab and horizontal tiles 0xac–0xaf. Routing resumes after clearing.
 A room's treasure counts as taken from the room's item-taken flag, and a fresh-room load reads the room flags
 through the level's room-flag pointer.
+A room whose block the objective needs pushed fights first (the block moves only with the room clear). A fight's
+targets are the active monsters (a Wallmaster only while it is out of its wall), else every monster's position;
+but where every monster is a Wallmaster in its wall they are the spots that bring one out (round 26, 7:0x0d;
+`object_rules::wallmaster_lure_tiles`: Link's tiles against the four walls outside the corners), because a hidden
+hand's RAM position is a spawn spot the game never uses, in the middle of the room, and none comes out while Link
+stands there.
 
 `game.yaml` and `routes.yaml` are validated strictly: unknown keys, YAML 1.1 booleans such as `yes`, unquoted hex
 ids and route steps whose exit isn't an exit of the room are load errors. Dungeon exits follow one convention,
@@ -678,11 +700,16 @@ time that cost health). Drops already on the floor on entry are not followed. Fa
 ### Cheated items (`crates/zelda/src/cheats.rs`)
 
 Bombs ($658), keys ($66E) and rupees ($66D) stay natural (never refilled; `items: {bombs: ...}` only masks the
-action, and BOMB is masked outside `requires_bombs` rooms anyway) except where the room Link is in *needs* some
-(`cheats::needs`), Lee's Nov 8–9 rule:
+action) except where the room Link is in *needs* some (`cheats::needs`), Lee's Nov 8–9 rule:
 
-- **bombs:** 1 in rooms game.yaml tags `requires_bombs: true` (Dodongo 2:0x0e, the 0x2c rock wall, and off the
-  route so far Dungeon 3's bombed wall 3:0x4c and Manhandla's room 3:0x4d);
+- **bombs:** 1 in rooms game.yaml tags `requires_bombs: true` (Dodongo 2:0x0e; the rock walls of 0x2c and 0x67; the
+  bomb-wall rooms 3:0x5b, 3:0x4c, 4:0x21, 4:0x11, 5:0x66, 5:0x65, 7:0x69, 7:0x19, 7:0x1a, 7:0x0c, 7:0x29;
+  Manhandla's 3:0x4d, whose only bomb wall is the one Link comes in through, so it grants none), until what the room
+  is bombed for is open (an overworld rock wall's secret; every bomb wall
+  of a dungeon room, also one the route never opens: 7:0x69's W, 4:0x11's E and W; `cheats::bomb_need`). The
+  granted bomb only opens the wall: while it is outstanding the envs offer BOMB only in reach of what the objective
+  leaves through ("BOMB kept to the wall" above; round 26), so every cheated bomb of such a room was laid at the
+  route's wall. Dodongo's room has no wall (`cheats::bomb_opens` is false): there the granted bomb is the weapon;
 - **keys:** 1 in a dungeon room whose route step leaves through an edge whose door is still locked (the game's door
   tiles, and no opening animation on it: `$54` 6–8 with `$55`'s bit, the game spends the key as it starts), unless
   Link has the magic key or the room's treasure is a key whose item-taken flag isn't set: that key comes first, and
@@ -778,7 +805,10 @@ exits. Multi-source walking distance picks the nearer target; the task, accepted
 not change. This is not the old heart-only objective.
 
 `reward.item_targets` (default false) makes every dropped item (bombs, rupees, clock, heart, fairy; not the room's
-treasure) a PBRS target the same way, hearts and fairies only while Link is below max health (they only heal).
+treasure) a PBRS target the same way, hearts and fairies only while Link is below max health (they only heal). A
+lying clock is none while a Wallmaster lives, and the wavefront goes round the tiles on which Link would touch it,
+so no lure spot under it is a target (`objective::clock_is_a_trap`, round 26: under the clock a hand that comes out
+stays two squares inside its wall, out of the sword's reach, and the room can't be cleared).
 `reward.fixed_pickup_reward` (default false) pays `reward-gained-health` a flat `REWARD_MAXIMUM` for any health
 gained instead of 0.25–0.75 scaled by how hurt Link was. Both are the round 10 §8 heart experiments' controls.
 `reward.drops_first` (round 25, boss-manhandla; default false): once the objective is no fight, the wanted drops
@@ -857,6 +887,13 @@ with demonstration rows a scripted rule recorded through the env (`DemoRecorder`
 `.npz`; a rare decision can be written several times to weigh more). A row whose duration is `demos.ANY_DURATION`
 (-1) leaves the duration head's term out (`ppo.demo_log_prob`, `PolicyOutput.head_log_prob`): kind and direction are
 cloned, the pace stays the policy's. Round 25 §5: `scripts/experiments/r25_d5_37_tracks.py --demos` for 5:0x37.
+The rows go to the device once when they fit there (`ppo.DEMO_DEVICE_BYTES`, 4 GiB, and on CUDA a quarter of the
+free memory), else they stay in host memory and each minibatch's sample moves as it is drawn (drawn on the device
+either way, so a seed's draws are unchanged). `charts/demo_bc_accuracy` reads every row of a batch of at most
+`ppo.DEMO_ACCURACY_ROWS` (8192) rows and a sample of that many of a larger one, drawn by a generator of its own.
+Round 28: `gleeok.npz`'s 106k rows are 0.87 GiB; the accuracy pass over all of them at once asked for 4.5 GiB more
+and died out of memory, and made a minibatch at a time it took most of an update (darknut's 196k rows: 8.7 s an
+update against 1-2 s without demonstrations, 460 steps a second against 1100).
 `--sil-coeff C` (`PPOConfig.sil_coeff`, self-imitation learning, Oh et al. 2018; §3) is the alternative to best-of-N:
 after each rollout `ppo.SilReplay` keeps the rows whose λ = 1 return R (`RolloutBuffer.monte_carlo_returns`:
 frame-aware discount to the episode end, bootstrapped exactly like GAE, against the learner's recomputed values)
@@ -1069,9 +1106,16 @@ every step, so following an enemy that moves away pays again, and knockback rese
   that ends joins that list at its top and nothing below the running ones changes places. Under a "finished"
   heading below the live ones: folders whose
   training ended while shown (its plan is no longer `running`, or its process is gone: `plan_is_live`) and the
-  registry's jobs that ended in the last 24 hours (`RECENT_SECONDS`; one whose process died without ending its plan
-  shows "process gone"); the "Clear finished" button hides those for the rest of the session, and trainings that
-  start later still appear. A batch folder is one group with its name and one row per evaluation: waiting,
+  registry's jobs that ended in the last 60 minutes (`RECENT_SECONDS`; one whose process died without ending its
+  plan shows "process gone"). A finished folder leaves the list by itself 60 minutes after it ended (after the
+  window saw it end, for one that was shown live: `Window._expire_finished`), so the list never piles up; the
+  "Clear finished" button hides them at once for the rest of the session, and trainings that start later still
+  appear. The 30-a-second frame timer steps and repaints only what moves (`Header.animating`, `RunRow.animating`):
+  a running plan's header and its training or evaluating rows every frame, a waiting plan's header once a second,
+  a finished folder not at all once its bars have eased to their fill (`settled`, cleared when the folder's data
+  changes: `FolderView.poll` repaints it then); a header's registry facts are looked up once a second, not in
+  every paint, and a row's sparkline draws a point a pixel. A batch folder is one group with its name and one row
+  per evaluation: waiting,
   running (the bar is the runs or episodes done of the total, from `chain_progress` / `eval_progress`), done (its
   headline: a chain's arrivals and route-end success, an evaluation's success and health change; `resumed` when an
   earlier run had measured it) or failed. Its Eval tab lists every entry's result and, for a selected entry, the
@@ -1106,7 +1150,8 @@ every step, so following an enemy that moves away pays again, and knockback rese
   never wait (`tests/conftest.py`: `$TRIFORCE_MAX_JOBS=0`; the line's own tests set their limit).
 - Work and estimates (`jobs.py`, Nov 15): every job names its `work` when it creates its plan (`TrainingPlan(...,
   work=jobs.work(...))`), in three coarse units: `train_steps` (the training steps asked for: a round's
-  specialists x iterations x steps per update, a training's iterations x steps per iteration), `eval_episodes` (an
+  specialists x iterations x steps per update, those `--train-args` sets winning as they do in the training's command
+  (`train_round.effective_schedule`), a training's iterations x steps per iteration), `eval_episodes` (an
   evaluation's `evaluate.episode_count`; a round's evaluation of each specialist, seed states x episodes per state x
   the clips switch states it plays, counted without loading a state; a batch's evaluation entries) and
   `chain_steps` (runs x the route steps a run plays from its start to its stop, `runner.steps_played`: a full-route
@@ -1288,7 +1333,10 @@ every step, so following an enemy that moves away pays again, and knockback rese
 - `triforce select-checkpoint FAMILY RUN (--segment NAME | --from STATE [--stop-at X] [--target L:0xRR]) [--runs
   1000] [--clips on|off] [--confirm 1000] [--confirm-top K] [--only LABELS] [--apply]` (`select_checkpoint.py`,
   round 25): a run's numbered checkpoints (`it<N>`), its `ckpt.pt` (`last`) and the family's promoted run
-  (`promoted`, the reference) each play the same chain seeds in place of the family's promoted model, the rest of
+  (`promoted`, the reference; the run promoted when the selection starts, played by `--checkpoint` like the others
+  so a promotion while the batch waits or plays changes nothing in it, and not needed for the ranking: round 26's
+  Dungeon 6 selections failed on a mid-batch promotion) each play the same chain seeds in place of the family's
+  promoted model, the rest of
   the team as promoted, as one `eval-batch` job (`run_batch`; entries `screen-<label>`, then `confirm-top<k>`,
   `confirm-last`, `confirm-promoted`, whose candidate is picked from the screen when they start). The screen ranks
   the run's checkpoints by arrivals (a segment's: the next segment's start room, `eval_batch.TARGETS`; the last
@@ -1614,7 +1662,7 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
   route's last (`golden.checkpoints('d2first') == [24, 68]`: outside Dungeon 2 and Dungeon 1). For each segment
   `parallel` games race from the same state to the segment's stop (`golden.race`: a `ChainPool` of the
   segment's seeds with `stop_step`, every run recorded). The first success seen wins (of several in one poll:
-  the fewest frames, then the lowest seed), the other games are dropped, and the winner's end state is the
+  the fewest cheated items, then the fewest frames, then the lowest seed), the other games are dropped, and the winner's end state is the
   checkpoint every game of the next segment starts from (`Route.load(checkpoint=...)`: no frame run, nothing
   written). The winners are joined with `replay_stitch` into one replay from the start to the route's last
   triforce, `OUT/golden-<first seed>-<ending>.tfreplay`. With every model drawing its actions (the default,
@@ -1644,8 +1692,9 @@ A power-on run is shown from the frame the models took over. When a replay ends 
   the route in a chain pool (`--parallel` games, no picture, unpaced, every run recorded) and
   `_native.ReplayFeed` (`theater::Feed`, a Rust thread) takes every finished run off the pool: into its ending's
   queue, a copy of any run into `random`, and into `best`, which keeps the best runs seen and not yet watched (a
-  win, then the furthest route step, then the most hearts at the end, then the fewest frames from the moment the
-  models took over). Each queue holds `--capacity` (32) runs. A cell on `best` takes the top one, which owes
+  win, then the furthest route step, then the fewest cheated items (bombs, keys and rupees together, from the
+  replay's ledger; Nov 17), then the most hearts at the end, then the fewest frames from the moment the models took
+  over). Each queue holds `--capacity` (32) runs. A cell on `best` takes the top one, which owes
   `best` `--parallel` candidate runs per missing entry; `best` hands out runs once it was half full. The feed
   pauses the pool (`Pool::set_paused`) while no queue wants a run and resumes it when a cell takes one. `stuck`
   never asks for a run (stuck runs are rare: it holds those that came by, and its cells wait once they are

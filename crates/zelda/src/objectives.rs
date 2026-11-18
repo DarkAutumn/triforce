@@ -10,7 +10,7 @@
 //! wall targets the spot to bomb it from.  Targets feed the PBRS wavefront; `next_rooms` decides which exits are
 //! correct.  The dead `ReachLocation`, `TreasureObjective`, `RoomWalk` and `OBJECTIVES` are not ported.
 
-use crate::enums::{Direction, MapLocation, Position, SwordKind, Tile};
+use crate::enums::{Direction, MapLocation, Position, SwordKind, Tile, enemy};
 use crate::game::{BombWall, GameView};
 use crate::game_map::{GameMap, MAZE_EXIT, MAZE_STEP, RECORDER, RouteStep, Secret, Way, whirlwind_level};
 use crate::room::Target;
@@ -1503,6 +1503,11 @@ impl GameCompletion {
                     .active_enemies()
                     .flat_map(|e| e.link_overlap_tiles())
                     .collect()
+            } else if state.enemies.iter().all(|e| e.id == enemy::WALLMASTER) {
+                // Every Wallmaster is in its wall (round 26, 7:0x0d): one comes out only while Link stands against
+                // a wall (asm:Wallmaster_Update@CheckLinkAtWall), and a hidden one's position is the spawn spot the
+                // game never uses, in the middle of the room.  The targets are the spots that bring one out.
+                crate::object_rules::wallmaster_lure_tiles()
             } else {
                 state
                     .enemies

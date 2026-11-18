@@ -3,8 +3,10 @@
 Lee's route (Nov 8), the only route since the reset the same day (`docs/decisions.md` 2026-11-08: milestone1 and
 milestone1-fairy removed); the Dungeon 1 bow detour joined it on Nov 9, and the same day the route went on from the
 D1 triforce to Dungeon 3 (the raft, Manhandla). On Nov 12 Dungeon 4 joined it (by raft to the island 0x45, the
-ladder, Gleeok; `docs/routes/d4.md`): it now ends on the D4 triforce. Data: `triforce/routes.yaml` `d2first`, rooms
-in `triforce/game.yaml`. View it with
+ladder, Gleeok; `docs/routes/d4.md`), in round 24 (Nov 14-15) the leg and Dungeon 5 (`docs/routes/d5-leg.md`,
+`d5.md`), and in round 26 (Nov 17) the leg to Dungeon 7 and Dungeon 7 (`docs/routes/d7.md` §11): it now ends on
+the D7 triforce (248 steps; first played to it by trained models in round 26, version 1.6.0.0). Data:
+`triforce/routes.yaml` `d2first`, rooms in `triforce/game.yaml`. View it with
 
 ```bash
 .venv/bin/python zelda-map.py --route d2first      # rooms outlined, arrows, step numbers; sidebar per step
@@ -50,7 +52,13 @@ Hearts are heart containers on entering the room; sword W = wood, Wh = white.
 | 112–121 | 4:71 … 32 | Dungeon 4 to the ladder cellar 0x60 and back to 0x32 | **vire**, stalfos-keese-gel, zol, **like-like**, equipment-room | 7 / Wh, ladder |
 | 122–127 | 4:31 21 / 4:31 30 20 21 | stretch `d4-island`: clip way 0x31 E→N, 0x21 S→N (ladder clip); plain way 0x31 E→W, 0x30 E→N, 0x20 S→E, 0x21 W→N | vire, stalfos-keese-gel | 7 / Wh |
 | 128–132 | 4:11 01 02 12 13 | 0x11 S→N (bomb wall), 0x01 S→E (the key, round 22), 0x02 W→S, 0x12 N→E (push block, shutter), Gleeok | trap-room, stalfos-keese-gel, vire, **boss-gleeok** | 7 → 8 / Wh |
-| 133 | 4:03 | S → triforce: **route ends** | vire | 8 / Wh |
+| 133 | 4:03 | S → triforce (warps to 0:45) | vire | 8 / Wh |
+| 134–185 | 0:45 … 0b | the leg to Dungeon 5 (`docs/routes/d5-leg.md`): the raft back to 0x55, the stretches `coast-heart` (0x5f's heart container), `lake-3e` and `mountain`, 0x2f's take-any cave, 0x0f's 100 rupees | ow-peahat, ow-zora, ow-moblin, ow-lynel, ow-tektite, ow-leever, ow-start | 8 → 10 / Wh |
+| 186–207 | 5:76 … 24 | Dungeon 5 (`docs/routes/d5.md`): 0x64's block clip, the Olive Garden 0x05 and the recorder, the way back, Digdogger 0x24 | gibdo, darknut, pols-voice, dodongo-crossing, zol, equipment-room, **boss-digdogger** | 10 → 11 / Wh, recorder |
+| 208 | 5:14 | S → triforce (out to 0:0b) | gibdo | 11 / Wh |
+| 209–227 | 0:0b 45 55 … 34 … 42 | the leg to Dungeon 7 (`docs/routes/d7.md` §11): the whirlwind (RECORDER at 0x0b, set down at 0x45), 0x44's shop (arrows), 0x34's Armos stairs and shop (food), 0x42's pond (RECORDER, its stairs) | ow-leever, ow-peahat, ow-zora, ow-octorok, ow-moblin | 11 / Wh, arrows, food |
+| 228–246 | 7:79 … 2a | Dungeon 7: the Blue Goriya rooms (bomb walls 0x69, 0x19, 0x1a), the Grumble 0x28 (FOOD), the red candle under 0x4a, 0x1a's block clip, 0x1b, the Digdoggers 0x39 and 0x1c, 0x0c, the Wallmaster room 0x0d and its cellar, 0x29, Aquamentus 0x2a | goriya, boss-digdogger, equipment-room, dodongo-crossing, wallmaster, boss-aquamentus | 11 → 12 / Wh, red candle |
+| 247 | 7:2b | W → triforce: **route ends** | goriya | 12 / Wh |
 
 Choices and findings:
 - **Row 5 to D2:** 0x5d N → 0x4d W → 0x4c N → 0x3c. 0x3c's only exits are S and the stairs

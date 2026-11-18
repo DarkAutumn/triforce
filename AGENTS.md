@@ -4,7 +4,7 @@ Read this first, then `README.md` (setup, commands), `docs/architecture.md` (mod
 `docs/experiments/round*.md` (start with its Summary) plus `docs/experiments/backlog.md` (the experiment backlog,
 called `todo.md` before Nov 8; where the work stands and what to try next, in order).
 
-## Where things stand (Nov 17)
+## Where things stand (Nov 18)
 
 - **Round 27, begun (Nov 16-17, 1.5.1.0; `docs/experiments/round27.md`):** the magic sword and Dungeon 6. Built so
   far, nothing trained: (1) **the walks** (`docs/routes/d6-walks.md`: the leg, the gravestone and the cave, every
@@ -27,32 +27,32 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   `ROUTE=d6 SEGMENTS="post-d7:0_42c_0 d6:6_79s_0" scripts/experiments/r56_chains.sh`), and the baseline `r77-base`:
   **0 of 100 on both segments** (no run passes ow-lynel's 0x50 or 6:0x28). Not done: the demonstration files, the
   proof trainings read, 0x38's and 0x3a's staged tracks confirmed, any training.
-- **Round 26, begun (Nov 16-17, 1.5.1.0; `docs/experiments/round26.md`; the plan for the rest of the game:
-  `docs/routes/rest-of-game.md`):** the leg from Dungeon 5 to Dungeon 7 and Dungeon 7. Built so far, nothing trained:
-  **`d2first` now has 248 steps and ends on the D7 triforce** (steps 209-247; decisions 2026-11-17).
-  (1) **the walks** of the running game (`docs/routes/d7-walks.md`: rupees and bombs at 0x0b, the whirlwind, the
-  shops, the pond, every forced room of level 7 with today's models, which cannot play the Blue Goriya rooms); (2)
-  **the route vocabulary** (`docs/architecture.md` "The leg to Dungeon 7", `docs/routes/d7.md` §11; built as the
-  scouting route `d7`, then merged into `d2first`), `exit`/`entry: recorder` (the whirlwind, state
-  side `r`), `waypoint: arrows|food|candle`, overworld secrets as targets (game.yaml `entrance: {how:
-  armos|recorder}`), `rupee_reserve` (as `bomb_reserve`), shop caves with `requires_rupees`, **ARROW off in every
-  family unless its `items: {arrows: true}`**, RECORDER/FOOD/BOOMERANG masks by the route step, an opened bomb hole
-  a doorway of the room view (`Room::with_open_doorways`, every N or W bomb wall; 300 paired full-route runs: the
-  round 25 models play those rooms the same), the scripted walk `crates/zelda/tests/d7.rs` to the D7 triforce; (3)
-  **observation schema 6** (the one input change for Dungeon 7 to Ganon, `docs/observation-next.md`, decisions
-  2026-11-16): columns added at the end of `entity_features` (33 → 41), `link` (87 → 93) and `room_state` (85 →
-  89), no schema 5 column changed; the 28 promoted 1.5.0 runs converted (`triforce convert-model`), proven identical
-  (38,360 of 38,360 episodes in both act modes); (4) **the start states** of steps 209-247 (114, 38 a chain;
-  round26.md §7 has each state's rupees, bombs, keys and items; only 7:0x1b from W is crossed by `--skip-fights`),
-  the families' rooms (ow-leever, ow-peahat, ow-zora, ow-octorok, ow-moblin, goriya with `clips: true` for 7:0x1a's
-  block clip and `room_kills` staging of 0x49, 0x1a and 0x1b, boss-digdogger, equipment-room, dodongo-crossing,
-  wallmaster, boss-aquamentus) and **their curriculum tracks** (`scripts/experiments/r26_d7_curricula.sh`;
-  round26.md §8 lists the states left without one); (5) **the baseline** `r76-base` (200 runs a segment, round 25's
-  models): `post-d5` 0 of 200 reach Dungeon 7 with clips on or off (0x0b's model walks back into Dungeon 5: 196
-  wrong exits, no recorder played), `d7` 0 of 200 reach the triforce (184 die in 7:0x49, 12 in 0x69, 4 in 0x59),
-  with the single-room numbers of every new state beside it (round26.md §11). `heart_value.json` has no curve for
-  steps 209-247 (hearts priced by the plain health terms there until a team reaches the D7 triforce). Not built
-  yet: any trained model for the stretch.
+- **Round 26, landed (Nov 16-18, 1.6.0.0; `docs/experiments/round26.md`; the plan for the rest of the game:
+  `docs/routes/rest-of-game.md`):** the leg from Dungeon 5 to Dungeon 7 and Dungeon 7. **`d2first` has 248 steps
+  and ends on the D7 triforce** (steps 209-247: 0x0b's recorder and the whirlwind to 0x45, 0x44's arrows, 0x34's
+  Armos and the food, 0x42's pond, Dungeon 7 with the Grumble, the red candle, two Digdoggers, the Wallmaster room
+  and Aquamentus; `docs/routes/d7.md`, decisions 2026-11-17). New in the engine and the route: `exit`/`entry:
+  recorder`, `waypoint: arrows|food|candle`, overworld secrets as targets (`entrance: {how: armos|recorder}`),
+  `rupee_reserve` and shop caves with `requires_rupees`, ARROW off in every family unless its `items: {arrows:
+  true}`, RECORDER/FOOD/BOOMERANG masks by the route step, opened bomb holes as doorways of the room view, the
+  scripted walk `crates/zelda/tests/d7.rs`; **observation schema 6** (the one input change for Dungeon 7 to Ganon,
+  `docs/observation-next.md`; the 1.5.0 runs converted, proven identical); 114 start states for the stretch and
+  their curriculum tracks; the granted-bomb rule (a granted bomb opens the wall and nothing else, round26.md §13);
+  7:0x0d's Wallmaster objective and clock fixes with demonstrations (§14); 75 harvested arrow-shop states for ow-zora
+  (`triforce/states/harvested/ow-zora/`, not in git). **Two teams** (§15-16): the first (goriya `r76-goriya3`,
+  wallmaster `r76-wall-1`, the overworld families, boss-digdogger and boss-aquamentus `r76-b`, dodongo-crossing and
+  equipment-room `r76-c`) took `d7` in 26.3%; the second adds goriya `r76-goriya4-s78` (it004511) and ow-zora
+  `r76-zora-arrows`. Chains of record, 1000 runs a segment, models alone, clips on (`r76-1k`; round 25's `r75-1k` in
+  brackets): D2 81.5 (88.2; −6.7 ± 1.6, goriya's 2:0x5e and 2:0x1e), after D2 95.7 (96.2), D1 99.0 (99.7), after D1
+  100, D3 78.2 (81.0), after D3 100, D4 92.1 (92.3), the leg 99.9, D5 68.7 (68.0), `post-d5` 98.7% arrive at
+  Dungeon 7, **`d7` 40.0%** to its triforce (killers 7:0x1b 324 of 872, 0x1c 79, 0x1a from the cellar 48, 0x19 31);
+  from the start the D5 triforce 22.4% (19.7; +2.7 ± 1.8) and **the D7 triforce 6.7%**. The planner beside (300
+  runs): the full route 85.0%, `d7` 95.3%. The owner's decisions of Nov 17-18 (in the rules below): every completed
+  stretch lands on `main`, pushed and playable; the remaining dungeons are prepared in parallel lanes, training is
+  the serial resource and the CPU the scarce one; clips only from here on (no `-noclips` chains, `off_share: 0`);
+  7:0x1b fought only at 4 bombs or fewer; one line, one rule (no fallback for older code). **Next:** Dungeons 6
+  (with the magic sword), 8 and 9 are prepared and trained in their lanes and land in route order; Dungeon 2's
+  goriya rooms are a backlog item.
 - **Round 25 (Nov 16, 1.5.0.1):** the route is unchanged (`d2first`, game start to the D5 triforce, 209 steps);
   the round was "leave rooms with more hearts" (`docs/experiments/round25.md`, decisions 2026-11-15 and 2026-11-16).
   Chains, 1000 runs per segment, models alone, clips on (`r75-1k`) | off (`r75-1k-noclips`), round 24 → 25: D2 89.9 →
@@ -75,7 +75,8 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   --checkpoint-every N` and `triforce select-checkpoint` choose a checkpoint by a chain segment with fresh-seed
   confirmation. **Jobs** (trainings, evaluations, chains) wait their turn in one line for the machine by themselves:
   two regular places, shortest estimate first with waiting counted, and an express place for jobs under ten
-  minutes; never `--no-wait`, never kill a waiting job. **Next** (the owner, Nov 16): the rest of the game, Dungeons
+  minutes; never `--no-wait`, never kill a job only to get ahead (one nobody needs any more is ended). **Next**
+  (the owner, Nov 16): the rest of the game, Dungeons
   7, 6, 8, 9 with the magic sword after 7, breadth first to Ganon (`docs/routes/rest-of-game.md`: the survival
   budget, everything the engine lacks, the gap list of what must be walked, the order of work; `d7.md`, `d6.md`,
   `d8.md`, `d9.md`, `late-monsters.md`, `late-mechanics.md`). Left open by round 25 (backlog): the Olive Garden (143
@@ -220,7 +221,7 @@ off) (the raft; 0x5b E → 0x5c → 0x4c S, Manhandla), then by raft to Dungeon 
 ladder clip or round by 0x30 and 0x20, 0x01's key, Gleeok) and its triforce, then (round 24) the leg to Dungeon 5
 (by raft to 0x55, the coast's heart containers 0x5f and 0x2f's cave, 0x0f's 100 rupees, the mountain or the Lost
 Hills) and Dungeon 5 (0x64's block clip, the Olive Garden and the recorder, the way back, Digdogger) and its
-triforce, then (round 26, nothing trained yet) the leg to Dungeon 7 (the whirlwind from 0x0b to 0x45, the arrows
+triforce, then (round 26, 1.6.0.0) the leg to Dungeon 7 (the whirlwind from 0x0b to 0x45, the arrows
 of 0x44's shop, the food behind 0x34's Armos, 0x42's pond) and Dungeon 7 (`docs/routes/d7.md`: Blue Goriyas, the
 Grumble, the red candle, two Digdoggers, the Wallmaster room, Aquamentus) and its triforce (the route ends on
 taking it). Lee owns the direction; the standing invitation is to come up with ideas,
@@ -230,6 +231,18 @@ test them, keep what helps, and log everything.
 
 - **Commit after each finished item.** If an experiment makes no forward progress, ask whether to commit the code or
   only update the experiment ledger.
+- **Every completed stretch lands in the main checkout and is pushed, playable** (Lee, Nov 17: "after each
+  completion (like d6 done, d8 -> d9 etc) gets merged back into triforce and pushed. I really want to be able to do
+  play-zelda and see the progress as you work"). A stretch is a dungeon with its leg (the D7 triforce, the magic
+  sword and the D6 triforce, D8, D9 and Ganon), complete when its first team takes it at a working rate. Landing
+  means all of: `main` merged into the line of work and the five suites green there; `main` fast-forwarded; the
+  module rebuilt in the main checkout (`.venv/bin/maturin develop --release`); every promoted run copied into the
+  main checkout's `models/` with its `promoted`, `act`, `version` and `eval.json` (`triforce stamp` when needed),
+  the trajectories copied, the start states as committed; a short chain run from the main checkout as the proof
+  that `play-zelda.py` there plays the new stretch; the tag `v<VERSION>`; `git push` of `main` and the tag; the
+  report. Nothing else waits on the next stretch: a stretch is never held back to be landed together with a later
+  one. Work in progress is watched from its worktree in the meantime (`cd ../triforce-<line> &&
+  TRIFORCE_MODELS_DIR=$PWD/models .venv/bin/python play-zelda.py 3x2`).
 - **Log every experiment** in `docs/experiments/roundN.md` (setup, numbers, what was promoted, what wasn't and why)
   and every idea or problem found along the way in `docs/experiments/backlog.md`.
 - **Families are by enemy, not by dungeon** (`docs/specialists.md`, `docs/decisions.md` 2026-11-03): a Red Goriya
@@ -269,25 +282,41 @@ test them, keep what helps, and log everything.
   harvested states (`eval-chain --harvest`), their hearts refilled as every entry state's (`write_entry_state`).
 - **Training mixes full health (sword beams) and partial health** (`full_hp: 0.5`; partial down to
   `hp: [0.15, max]`; Lee, Nov 12: boss-gleeok `[0.5, max]`). The beam look-ahead must credit the firing step.
-- **Clip families train with clips on and with CLIP masked** (Lee, Nov 13, round 22): "the models need to be
-  trained with clips enabled, and also with the clip action masked so it has to traverse as normal". A family's
-  `clips: true` is `{enabled: true, off_share: 0.5}`: half the episodes start with the run-time clips switch off
-  (the plain way, also through a route `stretch:`; ow-moblin and ow-zora `off_share: 0.75` since the r72 retrain,
-  for their weak plain crossings 0x5b and 0x5a), and the early stop and the evaluation (`--clips both`) take
-  both. Lee can turn clips off at any moment while watching (`play-zelda.py`, key `c`), so the plain way must stay
-  trained; track rooms with and without clips (`by_clips` in `eval.json` and `room-stats`).
-- **Bombs (Lee, Nov 11; supersedes "bombs only where the route needs them")**: a family's `items: {bombs: MODE}`
+- **Clips only: the no-clip way is dropped** (Lee, Nov 18; supersedes "clip families train with clips on and with
+  CLIP masked" of Nov 13, round 22): "From here on, you can drop the no-clip runs. They were an interesting spot of
+  comparison, but should be dropped in favor of just clipping through blocks when needed." From here on: no
+  clips-off chains, tags or evaluations (`CLIPS=off`, `-noclips`, `--clips both`); a clip family's new rounds train
+  with `clips: {enabled: true, off_share: 0}` (no episode with CLIP masked); a room the route clips is not fought
+  and gets no demonstrations or staging for its fight (9:0x55, the Lanmolas: "should be bypassed with a block
+  clip"; 9:0x07's first visit, 0x20 from N, 0x03); no new plain way is built; where a hard room can be passed by a
+  block clip, that is the way. What exists stays: the route's plain ways and `stretch:` forks, the run-time switch
+  and `play-zelda.py`'s key `c` (turning clips off now plays ways no model is trained on from Dungeon 7 onward),
+  the clips-off numbers of rounds 22-26 in their documents.
+- **Bombs (Lee, Nov 11; supersedes "bombs only where the route needs them"; round 26: granted bombs and the reserve
+  inside bomb-wall rooms)**: a family's `items: {bombs: MODE}`
   (`env::config::BombUse`, checked every step in training and chains): `free` (goriya, darknut, moldorm, Dodongo,
-  Manhandla, vire: bombs as a weapon, above the route's `bomb_reserve`; always in `requires_bombs` rooms), `required`
-  (ow-tektite, ow-octorok since round 22, trap-room, stalfos-keese-gel: their `requires_bombs` rooms, the 0x2c and
+  Manhandla, Digdogger, vire: bombs as a weapon while Link holds more of his own than the route's `bomb_reserve`),
+  `required` (ow-tektite, ow-octorok since round 22, trap-room, stalfos-keese-gel, gibdo, dodongo-crossing: their
+  `requires_bombs` rooms, the 0x2c and
   0x67 rock walls, D3's 0x4c wall and D4's 0x21/0x11 walls; 0x21 from S since round 21: `CLIP N` off the island, one
   step down, then `BOMB N`; round 22: BOMB is offered there only where the bomb opens the wall the objective
   leaves through, else only on the 10th kill),
   `never` (boss-gleeok: only the sword hurts him), `tenth` (the rest:
   only the 10th damage-free kill, `$50` = 9, whose bomb kill arms a forced drop of 4 bombs; allowed in every mode
-  but `never`, below any reserve). routes.yaml `bomb_reserve: 6` from Dungeon 3's entrance (round 22: the walls of
-  0x5b and 0x4c, a spare each, 2 for Manhandla), 2 from Dungeon 4's (its two walls); D3's central Darknut room takes
-  its bombs at 5 or fewer on its last pass (W → E through its own bomb wall).
+  but `never`, below any reserve). **A granted bomb opens the wall and does nothing else** (round 26, decisions
+  2026-11-17): while the cheat ledger holds a granted bomb in a bomb-wall room, BOMB is offered only in reach of the
+  wall the objective leaves through, in every mode and on the 10th kill too (before, a `free` family threw it at a
+  monster and was handed the next: 7.8 cheated bombs a Dungeon 7 run, 1.1 a Dungeon 3 run in 3:0x5b); Dodongo's
+  room has no wall, there the granted bomb is the weapon. **The reserve means the same inside a `requires_bombs`
+  room as outside**: a `free` family at or below it bombs only the route's wall there (before, such a room was free
+  ground whatever the reserve). A fight the bombs are kept for says so on its own route step: `bomb_reserve: 0` on
+  3:0x5b's last pass (the room's own four bombs pay for what follows), in Manhandla's room, the Olive Garden, on
+  Digdogger and on Dungeon 7's Aquamentus. routes.yaml `bomb_reserve: 6` from Dungeon 3's entrance (round 22: the
+  walls of 0x5b and 0x4c, a spare each, 2 for Manhandla), 2 from Dungeon 4's (its two walls), 8 in Dungeon 5, 3 from
+  Dungeon 7's (the walls of 0x69, 0x19, 0x1a) and 2 from 7:0x1b (0x0c, 0x29); D3's central Darknut room fights first
+  and takes its bombs on its last pass whatever Link holds (round 23; W → E through its own bomb wall). A model
+  trained before the rule used granted bombs as its weapon where it had none: darknut in 3:0x5b (Dungeon 3 loses
+  about 5 points until it is continued under the rule), goriya in Dungeon 7's wall rooms.
   Every family trains with
   `ram_randomization: {bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}` (`bombs_share`: half the resets keep
   the start state's own bombs, round 19). A Darknut facing opposite to Link's facing when he placed
@@ -303,8 +332,9 @@ test them, keep what helps, and log everything.
 
 ## Versioning (Lee, Nov 11)
 
-- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `1.5.1.0`: five dungeons; round 26's
-  schema 6 observation, the one input change for Dungeon 7 to Ganon, decisions 2026-11-16). It is the single source:
+- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `1.6.0.0`: six dungeons, round 26's Dungeon
+  7; it carries round 26's schema 6 observation of 1.5.1.0, the one input change for Dungeon 7 to Ganon, decisions
+  2026-11-16; the 1.5.1 runs are stamped 1.6.0.0, not converted). It is the single source:
   `triforce.__version__` and `_native.VERSION` read it, `pyproject.toml` repeats it and the Cargo workspace version
   is its first three numbers (`tests/test_version.py` checks all of them).
   - `MAJOR` changes only when Lee says so.
@@ -453,14 +483,30 @@ test them, keep what helps, and log everything.
   update in 5 minutes.`, repeats it every 5 minutes and prints `triforce: NAME starts after waiting N minutes` when
   it starts; the training GUI lists it as waiting in the order the line will drain, with its estimate. **Seeing
   that line, wait** (check back as for any long job; a long job can wait for hours behind short ones, that is by
-  design): don't kill it or the jobs it waits for, don't stagger, split or nice jobs by hand, don't restart it with
-  `--no-wait`. A job that dies, running or waiting, stops counting by itself (liveness comes from `/proc`, nothing
+  design): don't kill it or the jobs it waits for to get ahead, don't stagger, split or nice jobs by hand, don't
+  restart it with `--no-wait`. **A job there is no reason to run any more is ended** (Lee, Nov 18: "kill running
+  jobs if there's no reason to run something. I more meant don't needlessly kill running jobs"): a duplicate, a
+  measurement a decision made pointless (a clips-off chain after Nov 18), an arm already decided. End your own job
+  with one SIGTERM (its plan ends `interrupted`), running or waiting; never another agent's or the owner's without
+  asking. A job that dies, running or waiting, stops counting by itself (liveness comes from `/proc`, nothing
   has to report in). The opt-outs exist for the owner: `--nice N` (0 leaves the priority alone; `$TRIFORCE_NICE`
   changes the default), `--no-wait` (start now; still counts as running for the others; `$TRIFORCE_NO_WAIT=1` for a
   wrapper), `$TRIFORCE_MAX_JOBS` (regular places, default 2, 0 = no limit). A round or batch waits once as one job;
   its own trainings, evaluations and chains don't wait again. Play, replay and build tools (`play-zelda.py`,
   `zelda-headless.py`, `create-video.py`, `zelda-map.py`, `tf replay`, explore, entry_states) keep normal priority
   and never wait: they are interactive, short, or build data that a job waits on. I/O priority is left alone.
+- **The owner's player comes first: an agent's builds, suites and explorers run under `nice -n 10`** (Nov 17).
+  `play-zelda.py` simulates on `--parallel` (8) threads at the priority it was started with, and a `cmd &` from
+  zsh starts at nice 5 (zsh's `BG_NICE`; the nice limit is 0, so the player cannot raise itself). Next to an
+  agent's `cargo test`, two explorers and a chain it got 1.8 cores for its 8 games (load average 60 on 20 threads)
+  and its queues filled slowly. So everything heavy an agent starts that is not a queued job (`cargo`, `maturin`,
+  pytest, `triforce.explore`, `entry_states build`, walk scripts) gets `nice -n 10`: above the jobs' 15, below the
+  player. **The CPU, not the GPU, is what runs out** (Lee, Nov 17): the job line carries everything that plays
+  models; outside it an agent runs one heavy thing at a time, explorers with `--parallel 4`, cargo and maturin with
+  `CARGO_BUILD_JOBS=4`, full suites once at the end of its task, and starts nothing heavy while the load average is
+  above 30. For the fastest start of the player: `.venv/bin/python play-zelda.py 3x3` in the foreground or with `&!`
+  after `setopt nobgnice`; `uv run play-zelda.py` also works but rebuilds the module (40 s or more) the first time
+  after `pyproject.toml` changed, which is every landing.
 - **Compare models fairly:** re-evaluate the old model under the *current* yaml (hp distribution, one_room) before
   comparing, and rank by success **and** `mean_health_change` (per-room numbers are in `eval.json` `by_room`). A model
   that wins 3% more but takes twice the damage loses in a chain. After a COMPAT bump the old model doesn't load:
@@ -476,7 +522,8 @@ test them, keep what helps, and log everything.
   from any worktree or `--logs-dir`) registers itself in `$HOME/.local/state/triforce/jobs/` (`$XDG_STATE_HOME`;
   `$TRIFORCE_JOBS_DIR` overrides; `triforce/jobs.py`) with its folder, checkout, branch and commit, and marks the
   entry when it ends, so `training-gui.py`'s [currently running] lists every job on the machine with its checkout
-  (waiting ones as queued), and those that ended in the last 24 hours under "finished". The registry is also the
+  (waiting ones as queued), and those that ended in the last 60 minutes under "finished" (Lee, Nov 18: then they
+  leave the list by themselves, so it never piles up). The registry is also the
   line jobs wait in. `--events FILE` into a folder without a `training.json` now writes a plan there (a driver's
   folder with a plan keeps owning the stream). Not shown by the GUI (but still waiting its turn and counted): a job
   that writes no folder (`--no-log`). Invisible, and neither waiting nor counted: a job whose `--events` go into a
