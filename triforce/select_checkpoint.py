@@ -9,10 +9,12 @@
 The candidates are the run's numbered checkpoints (``train --checkpoint-every N``: ``<run>/checkpoints/it<N>/``,
 labelled ``it<N>``) and its ``ckpt.pt`` (``last``; a numbered checkpoint with the same weights is left out), and,
 as the reference, the family's promoted run (``promoted``; left out with ``--no-promoted`` or when RUN is the
-promoted run).  ``--only`` keeps the listed labels.  Each candidate plays the same chain seeds (``--runs`` from
-``--first-seed``) of the segment in place of the family's promoted model, the rest of the team as promoted
-(``eval-chain --checkpoint FAMILY=DIR``), all in one ``eval-batch`` job (``triforce.eval_batch.run_batch``: one
-entry in the machine's job line, one group in the training GUI; it waits its turn and lowers its priority).
+promoted run).  ``promoted`` is the run promoted when the selection starts, pinned for the whole batch: a promotion
+while the batch waits or plays changes nothing in it.  ``--only`` keeps the listed labels.  Each candidate plays the
+same chain seeds (``--runs`` from ``--first-seed``) of the segment in place of the family's promoted model, the rest
+of the team as promoted (``eval-chain --checkpoint FAMILY=DIR``), all in one ``eval-batch`` job
+(``triforce.eval_batch.run_batch``: one entry in the machine's job line, one group in the training GUI; it waits its
+turn and lowers its priority).
 
 A segment (``--segment``, ``eval_batch.SEGMENTS``: ``d5`` = ``--from 5_76s_0``) is scored by its arrivals: the runs
 that entered the next segment's start room (``eval_batch.TARGETS``), for the last segment (and a ``--stop-at``
@@ -66,8 +68,8 @@ TRAINING_KEYS = ('success_rate', 'balanced_success_rate', 'health_change', 'hear
 
 @dataclass
 class Candidate:
-    """A checkpoint the selection plays: ``path`` is passed as ``--checkpoint FAMILY=PATH`` (None: the promoted run,
-    no override)."""
+    """A checkpoint the selection plays: ``path`` is passed as ``--checkpoint FAMILY=PATH`` (None: no override, the
+    family's promoted model as the chain finds it)."""
     label: str
     path: Optional[Path]
     checkpoint: str                     # provenance label (``provenance.checkpoint_label``)
@@ -119,7 +121,7 @@ def candidates(family: str, run_dir: Path, models_dir=None, only: Optional[list]
         except FileNotFoundError:
             reference = None
         if reference is not None and reference.parent.resolve() != run_dir.resolve():
-            result.append(load_candidate(PROMOTED, reference, override=False))
+            result.append(load_candidate(PROMOTED, reference, override=True))
     return result
 
 
@@ -301,10 +303,11 @@ class Selection:
                 for candidate in self.pool if played_by(self.plan, candidate, phase)}
 
     def screen(self) -> dict:
-        """The screen's scores; LookupError until every candidate's screen chain exists."""
+        """The screen's scores; LookupError until the screen chain of every candidate of the run exists (the ranking
+        needs them; ``promoted`` is a reference, scored when its chain exists)."""
         if self._screen is None:
             found = self.results('screen')
-            missing = [c.label for c in self.pool if c.label not in found]
+            missing = [c.label for c in self.pool if c.label != PROMOTED and c.label not in found]
             if missing:
                 raise LookupError(f"the screen has no chain of {', '.join(missing)} yet")
             self._screen = found
@@ -331,7 +334,7 @@ class Selection:
         for candidate in self.pool:
             label = candidate.label
             row = {**candidate.record(), 'rank': next((i + 1 for i, c in enumerate(ranked) if c.label == label), None),
-                   'screen': public(screen[label]), 'confirm': public(confirm.get(label))}
+                   'screen': public(screen.get(label)), 'confirm': public(confirm.get(label))}
             for phase, results in (('screen', screen), ('confirm', confirm)):
                 for reference in (LAST, PROMOTED):
                     if label != reference and label in results and reference in results:
