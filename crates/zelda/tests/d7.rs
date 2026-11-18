@@ -653,10 +653,12 @@ fn the_d7_route_is_walked_from_the_d5_triforce_to_the_d7_triforce() {
     assert!(dig[play].recorder && dig[play].types.iter().any(|&x| matches!(x, DIGDOGGER2 | DIGDOGGER3)));
     assert!(dig[play + 1..].iter().any(|k| k.types.contains(&DIGDOGGER_CHILD)), "the small Digdoggers");
 
-    // The route's end (its last step, 7:0x2b's triforce): the last decision is the treasure objective of step 247,
-    // whose pickup sets the level 7 piece (the chain's end) before the warp out; no rupee or key cheated.
+    // 7:0x2b's triforce (step 247; the route runs on to Dungeon 6 since round 27, `d6.rs`): the last decision is the
+    // treasure objective of step 247, whose pickup sets the level 7 piece (the walk's end) before the warp out; no
+    // rupee or key cheated.
     let last = t.last().unwrap();
-    assert_eq!((last.room, last.step, last.kind, route.len()), (uw(0x2b), Some(247), ObjectiveKind::Treasure, 248));
+    assert_eq!((last.room, last.step, last.kind), (uw(0x2b), Some(247), ObjectiveKind::Treasure));
+    assert_eq!(route[248].location(), ow(0x42), "step 248 starts in 0:0x42, out of Dungeon 7");
     assert!(t.iter().all(|k| k.room != ow(0x42) || k.step != Some(247)));
     assert!(w.s.state().has_triforce(7) && visits.iter().any(|v| v.room == uw(0x2b)));
     assert_eq!((w.ledger.cheated.rupees, w.ledger.cheated.keys), (0, 0));
