@@ -1269,22 +1269,64 @@ family).
 **wizzrobe, the joint runs** (single rooms of their own `eval.json`; level 9 at the `chain_hp` draws, so not on
 equal terms with `r79b-wizz-s80`'s; Dungeon 6's rooms have no profile and are):
 
-| Room | `r80-wplan-s78` | `r79c-wj-s84` | `r79c-wj-s85` |
-|---|---:|---:|---:|
-| 6:0x38 | 75.7%, −3.98 | 75.7%, −4.38 | 76.3%, −4.41 |
-| 6:0x3a | 73.0%, −4.09 | 74.3%, −4.08 | 72.7%, −4.13 |
-| 6:0x2c, 0x29 | 99.3%, 99.7% | 99.7%, 99.7% | 99.7%, 98.7% |
-| 9:0x10 | - | 89.3%, −1.08 | 90.5%, −0.98 |
-| 9:0x30 | - | 83.7%, −1.07 | 85.3%, −1.04 |
-| 9:0x05 | - | 88.0%, −1.26 | 89.0%, −1.30 |
-| 9:0x17, 0x65 | - | 94.5%, 99.7% | 94.8%, 98.7% |
+| Room | `r80-wplan-s78` | `r79c-wj-s84` | `r79c-wj-s85` | `r79c-wj-s86` |
+|---|---:|---:|---:|---:|
+| 6:0x38 | 75.7%, −3.98 | 75.7%, −4.38 | 76.3%, −4.41 | 78.0%, −4.72 |
+| 6:0x3a | 73.0%, −4.09 | 74.3%, −4.08 | 72.7%, −4.13 | 76.0%, −4.14 |
+| 6:0x2c, 0x29 | 99.3%, 99.7% | 99.7%, 99.7% | 99.7%, 98.7% | 99.0%, 99.3% |
+| 9:0x10 | - | 89.3%, −1.08 | 90.5%, −0.98 | 89.2%, −1.11 |
+| 9:0x30 | - | 83.7%, −1.07 | 85.3%, −1.04 | 85.3%, −1.16 |
+| 9:0x05 | - | 88.0%, −1.26 | 89.0%, −1.30 | 89.7%, −1.18 |
+| 9:0x17, 0x65 | - | 94.5%, 99.7% | 94.8%, 98.7% | 95.7%, 99.3% |
 
 Dungeon 6's rooms hold in single rooms; level 9 is learned from a run that had never played it. The `d6`
 comparison chain of `r80-wplan-s78` in this checkout (`6_79s_0`, 1000 runs, seeds 0-999): **310 of 1000 (31.0%)**
-(the Dungeon 6 lane's own 31.5%).
+(the Dungeon 6 lane's own 31.5%), with like-like `r79b-like`; measured again with the third team (like-like
+`r79c-like` plays 6:0x1d): **316 of 1000**, the number the joint runs are paired against below.
 
-**Left when this section was last written** (the third seed `r79c-wj-s86` still training): `select-checkpoint` of
-the three seeds on `d9` (screen seeds 2000-2999, confirmation 3000-3999), after picking the selection fix 415e030
-from `r26-fast`; the chosen checkpoints on `d6`, 1000 runs paired against `r80-wplan-s78`'s chain above; the
-wizzrobe decision (the route's wizzrobe, or `r79b-wizz-s80` kept for this stretch); the chains of record `r79c-1k`
-(`post-d8` and `d9`, 1000 runs, paired against `r79b-1k`), the planner beside (300), the suites.
+### 18.1 The joint wizzrobe runs chosen on `d9` and judged on `d6`
+
+**The selection fix first.** `select-checkpoint`'s confirmation failed with `LookupError` when the promoted run
+changed under a selection; commit 415e030 of `r26-fast` (the promoted run is pinned when the selection starts and
+played by `--checkpoint` like the candidates) was picked before any selection was queued
+(`tests/test_select_checkpoint.py` 5 passed).
+
+**On `d9`** (`select-checkpoint wizzrobe r79c-wj-sN --from 9_76s_0 --route d9 --runs 1000 --first-seed 2000
+--confirm 1000 --confirm-first-seed 3000 --parallel 10 --apply`; 17 candidates a seed, every 60 iterations from
+it001524 and the last; the promoted `r79b-wizz-s80` beside in s84's selection, the other two `--no-promoted` and
+paired against s84's chains of it, the same weights on the same seeds). The screen rises with training in all
+three: 0 of 1000 at it001524 (the Dungeon 6 run had not played level 9), 6-12% at it001704, 15-18% at it001944,
+20-29% from it002004. The confirmation (seeds 3000-3999, not used to choose) and its paired difference against
+`r79b-wizz-s80` with the rest of the third team:
+
+| Run | Chosen | Screen | Confirmed | Against the chosen's `last` | Against `r79b-wizz-s80` (155 of 1000) |
+|---|---|---:|---:|---:|---:|
+| `r79c-wj-s84` | it002184 | 21.7% | 19.1% | +0.8 ± 1.7 | +3.6 ± 1.7 |
+| `r79c-wj-s85` | it002424 | 28.7% | **30.2%** | +4.8 ± 2.0 | **+14.7 ± 1.8** |
+| `r79c-wj-s86` | last (2440) | 26.3% | 24.8% | - | +9.3 ± 1.7 |
+
+All three play level 9 better than the run promoted for it. Where s85 gains on `r79b-wizz-s80` (confirmation seeds,
+per room): 9:0x65 1.30 → 0.94 hearts a visit, 0x17 on the way back 0.65 → 0.18 (20 → 1 deaths), the ring taken
+with about 8.0 hearts instead of 7.2, 0x05 96 → 70 deaths, **0x10 286 → 196 deaths** (of 739 and 801 entering,
+with 5.03 and 5.95 hearts; 2.49 → 2.27 a visit), 0x30 1.52 → 1.18 a visit; Ganon is entered by 357 runs instead of
+208. Not gained: 0x20 (2 → 11 deaths), and the deaths move on to patra's 0x52 (31 → 45) and Ganon (53 → 55).
+
+**On `d6`** (`eval-batch r79c-d6-joint`: `6_79s_0`, 1000 runs, seeds 0-999, `--checkpoint
+wizzrobe=<run>` after `--apply`; paired against `r80-wplan-s78` measured in the same batch):
+
+| Run | `d6` ends Dungeon 6 | Paired against `r80-wplan-s78` (316) | 6:0x3a deaths (of entering) | 6:0x38 deaths |
+|---|---:|---:|---:|---:|
+| `r80-wplan-s78` | 316 | - | 377 (792) | 137 |
+| `r79c-wj-s84` it002184 | 198 | −11.8 ± 2.0 | 459 (752) | 147 |
+| `r79c-wj-s85` it002424 | **314** | **−0.2 ± 2.1** | 377 (786) | 137 |
+| `r79c-wj-s86` last | 235 | −8.1 ± 2.0 | 403 (767) | 146 |
+
+s84 and s86 lose Dungeon 6 beyond noise (0x3a, 0x2c and the small rooms 0x28, 0x29 each cost more); s85 plays it
+as `r80-wplan-s78` does, room by room.
+
+**The wizzrobe decision: `r79c-wj-s85` (checkpoint it002424) is the route's one wizzrobe.** It holds `d6` (−0.2 ±
+2.1 points, the bar two standard errors) and is confirmed better than `r79b-wizz-s80` on `d9` (+14.7 ± 1.8).
+The `d6` number was used to accept it (the only run of three to pass), so it is not a fresh measurement of the
+choice; the `d9` number is. Applied (`--apply`: the last weights kept as `checkpoints/it002440`), evaluated again
+and promoted in the team's checkout. One seed of three held Dungeon 6: the joint training does not hold it
+reliably (see 18.3).
