@@ -1095,3 +1095,81 @@ def test_waiting_jobs_drain_shortest_first_and_running_ones_show_lane_and_estima
         for child in children:
             child.kill()
             child.wait()
+
+
+def test_frames_repaint_only_what_animates(qapp, tmp_path, monkeypatch, web_env):
+    """The 30-a-second frame timer steps and repaints a folder only while something in it moves: a finished folder,
+    once its bars have eased to their fill, costs nothing a frame (Nov 18: 153 finished folders repainted every
+    frame took a whole core), and is repainted when its data changes; a running one is repainted every frame."""
+    import json
+    monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
+    now, me = time_now(), gui.process_started(os.getpid())
+    done = web_plan(tmp_path, '261117_001_done', created=now - 7200, status='completed', finished=now - 600, runs=[
+        ({'specialist': 'zol', 'status': 'ok'}, training_events(now - 7200, 10, end=now - 600))])
+    live = web_plan(tmp_path, '261117_002_live', created=me, runs=[
+        ({'specialist': 'vire', 'status': 'running'}, training_events(now - 20, 4))])
+    for folder, animates in ((done, False), (live, True)):
+        window = gui.Window(tmp_path, folder)
+        try:
+            view = window.views[0]
+            assert view.model.status() == ('running' if animates else 'completed')
+            for _ in range(200):                                    # the bars ease to their fill
+                window.frame()
+            painted = []
+            view.header.update = lambda: painted.append('header')
+            view.rows[0].update = lambda: painted.append('row')
+            for _ in range(30):
+                window.frame()
+            assert (painted.count('header'), painted.count('row')) == ((30, 30) if animates else (0, 0))
+            if not animates:
+                with open(done / 'zol.jsonl', 'a') as events:       # new data: the poll repaints it
+                    events.write(json.dumps({'event': 'eval', 'ts': now, 'success_rate': 0.9}) + '\n')
+                window.poll()
+                assert 'header' in painted and 'row' in painted
+                assert not view.header.settled and not view.rows[0].settled
+        finally:
+            window.close()
+            window.deleteLater()
+
+
+def test_finished_folders_leave_currently_running_after_an_hour(qapp, tmp_path, monkeypatch):
+    """A job that ends stays under 'finished' for ``RECENT_SECONDS`` (60 minutes) after the window saw it end, then
+    leaves by itself: the list never piles up."""
+    import subprocess
+    import json
+    monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
+    registry = tmp_path / 'jobs'
+    monkeypatch.setenv(gui.JOBS_DIR_ENV, str(registry))
+    assert gui.RECENT_SECONDS == 3600
+    me = gui.process_started(os.getpid())
+    live = fake_job(registry, tmp_path / 'triforce-a', 'main', '261117_001_live', pid=os.getpid(), pid_start=me)
+    child = subprocess.Popen(['sleep', '600'])
+    window = None
+    try:
+        dies = fake_job(registry, tmp_path / 'triforce-b', 'x', '261117_002_dies', pid=child.pid,
+                        pid_start=gui.process_started(child.pid))
+        (tmp_path / 'gui-root').mkdir()
+        window = gui.Window(tmp_path / 'gui-root', None)
+        assert set(window._shown_dirs()) == {live, dies} and window._heading_at is None
+        child.kill()
+        child.wait()
+        window._scan_and_update()
+        assert window._shown_dirs() == [live, dies] and window._heading_at == 1    # under 'finished'
+        assert window.finished_heading.text() == 'FINISHED · LAST 60 MIN'
+        window.left_live[dies] -= gui.RECENT_SECONDS - 5                           # 59 minutes 55 seconds later
+        window._scan_and_update()
+        assert window._shown_dirs() == [live, dies]
+        window.left_live[dies] -= 10                                               # past the hour: by the window's
+        entry = registry / f'{dies.name}.json'                                     # clock and by the registry's
+        entry.write_text(json.dumps({**json.loads(entry.read_text()),
+                                     'started': iso(time_now() - gui.RECENT_SECONDS - 60)}))
+        window._scan_and_update()
+        assert window._shown_dirs() == [live] and window.finished_heading.isHidden()
+        assert window.kept == [live] and window.left_live == {}
+    finally:
+        if child.poll() is None:
+            child.kill()
+            child.wait()
+        if window is not None:
+            window.close()
+            window.deleteLater()

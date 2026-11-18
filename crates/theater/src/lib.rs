@@ -5,7 +5,7 @@
 //!
 //! - [`queues`]: what is ready to watch.  Four first-in-first-out queues (`success`, `stuck`, `died`, and
 //!   `random`, which takes a copy of any run) and `best`, the top runs seen (furthest along the route, then the
-//!   most hearts, then the fewest frames).  [`Queues::wants_more`] says whether the simulations should run.
+//!   fewest cheated items, then the most hearts, then the fewest frames).  [`Queues::wants_more`] says whether the simulations should run.
 //! - [`feed`]: the background thread between the simulations (a [`Producer`]) and the queues.  It offers every
 //!   finished run to the queues and pauses the simulations while nothing wants a run.
 //! - [`screen`]: cells that play replays on the emulator alone, paced at a frame rate, each publishing its

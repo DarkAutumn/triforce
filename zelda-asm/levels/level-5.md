@@ -22,16 +22,16 @@ Contents (generated; `L` = line in this file):
 
 <!-- toc -->
 - L37 At a glance
-- L76 What Link must bring
-- L88 What Link gets here
-- L131 Map
-- L164 Rooms
-- L198 Floor plans
-- L433 Monsters and boss
-- L461 Route
-- L511 Optional detours
-- L522 Hazards and rules that matter here
-- L541 Second quest
+- L79 What Link must bring
+- L91 What Link gets here
+- L134 Map
+- L167 Rooms
+- L201 Floor plans
+- L436 Monsters and boss
+- L464 Route
+- L514 Optional detours
+- L525 Hazards and rules that matter here
+- L544 Second quest
 <!-- /toc -->
 
 # At a glance
@@ -63,7 +63,10 @@ Room by room data: [`levelblock-uw-1to6-q1.md`](../data/levelblock-uw-1to6-q1.md
 <!-- /generated:facts -->
 
 - **Entrance (Q1).** Overworld room `$0B` leads to level 5: its layout `$0A` has an open cave mouth at X `$70` (column 7, row 4; lower tiles `$24`), so no item and no secret is needed; Link enters by standing at (`$70`, `$7D`). [data/levelblock-ow.md](../data/levelblock-ow.md) (row `$0B`), [data/room-layouts.md](../data/room-layouts.md) (`OW $0A`), [`Warp_HandleOW`](../src/bank5/warps-stairs-caves.asm#L178)
-- The Armos at (`$B0`, `$80`) in `$0B` leaves stairs when it is woken; they lead to the same level, because a room has one destination. [`Armos_SecretRoomIds`](../src/bank4/ghini-armos.asm#L138), [`Armos_SecretXs`](../src/bank4/ghini-armos.asm#L143)
+- **A second way in: the stairs under an Armos.** The statue at (`$B0`, `$80`) in `$0B` (column B, row 4 of layout `$0A`, the outer of the two statues right of the mouth) leaves stairs when it is woken; they lead to the same level and the same start room, because the destination is the room's cave index, not the tile Link stands on. In Q1 the entry is redundant with the open mouth; no code reads it for anything else. Room `$3C` (level 2) uses the same layout and is not in the table: its statues leave floor. [`Armos_SecretRoomIds`](../src/bank4/ghini-armos.asm#L138), [`Armos_SecretXs`](../src/bank4/ghini-armos.asm#L143), [`Warp_HandleOW`](../src/bank5/warps-stairs-caves.asm#L178)
+- What differs between the two ways: on the mouth's tile `$24` Link sinks `$10` pixels at 1 pixel every 4 frames before the level loads, and rises the same way when he comes back out; on stairs the stairs mode ends on its first frame and he reappears standing on the exit spot (`$70`, `$7D`). Against that, the stairs exist only `$3F` frames after the statue was touched, the statue's touch costs one heart also while it fades in, and the stairs are not saved: the statue is back on the next visit. [`Mode10Stairs_Update_Full`](../src/bank5/mode8-continue-mode10-stairs.asm#L176), [`Room_EnterCommon`](../src/bank5/enter-room.asm#L143), [`Armos_InitOrFlyingGhiniFadeIn`](../src/bank4/ghini-armos.asm#L154), [`Armos_DrawAndCheckCollisions`](../src/bank4/ghini-armos.asm#L332)
+- **Timed (trace, 20 random-number seeds each, every seed the same count):** from the first playable frame in `$0B` entered from `$1B` at (`$70`, `$DD`), into the level, straight back out of `$76`'s S door, to the first playable frame on the overworld, with the room's Leever removed. By the mouth: 452 frames, no heart lost (85 to the mouth, 182 until play starts in `$76`, 17 to leave it, 168 until play resumes outside). By the stairs, touched from below (Up held from (`$B0`, `$8D`)): 442 frames, 2 hearts lost: Link walks up to Y `$85`, inside the statue's square, and is hit on the next frame and once more as it wakes (195 to be on the stairs, then 122, 17 and 108). By the stairs, touched from the west: 441 frames, no heart lost, 11 frames less than the mouth. [`Spawn_CheckTouchedArmosOrGravestone`](../src/bank1/armos-ghini-spawn.asm#L54), [`Armos_Update`](../src/bank4/ghini-armos.asm#L304)
+- **The west touch (trace):** up column 7 to Y `$8D`, right along the free row between the statue rows to X `$A0`, up to Y `$7D`; one frame of Right wakes the statue without moving Link into it; stand still (16 pixels away its fade-in does not touch him); press A 13 to 15 frames before it has woken (48 to 50 frames after the touch), then hold Right onto the stairs. With the stab timed so, no run is touched in stepping onto the stairs (weapons can hit the Armos only once its fade-in has ended; what the hit does to it was not traced further). Pressed 16 or more frames early, or not at all, only 9 of 20 runs reach the stairs within 400 frames; pressed 12, 8, 4 frames early the total is 442, 446, 450 frames, and pressed as it wakes 454, slower than the mouth. Touched from the east side, (`$C0`, `$7D`) and one frame of Left, the same play takes 466 frames. Link must not press Left at (`$A0`, `$7D`): the square at X `$90` is a statue too. [`Armos_DrawAndCheckCollisions`](../src/bank4/ghini-armos.asm#L332), [`Armos_InitOrFlyingGhiniFadeIn`](../src/bank4/ghini-armos.asm#L154)
 - Room `$0B` is closed on three sides; it is entered from `$1B` below it, and `$1B` is the Lost Hills: Link must leave it upward four times in a row (the first three bring `$1B` up again), see [mechanics.md](../mechanics.md) "# Lost Woods and Lost Hills (mazes)". `$1B` itself is entered from `$1A` (west) or `$1C` (east). [`Maze_LostHillsDirs`](../src/bank1/mazes-lost-woods-hills.asm#L41), [`Maze_CheckStep`](../src/bank1/mazes-lost-woods-hills.asm#L56)
 - Room `$1B` carries the same destination with a rock at (`$C0`, `$90`), but that secret belongs to Q2: in Q1 the rock ignores Link. [`Secret_IsForOtherQuest`](../src/bank4/rock-wall-tree-secrets.asm#L331)
 - Once Link has this level's Triforce piece, the recorder's whirlwind can set him down in `$0B` at (`$80`, `$AD`). [`Whirlwind_PrevRoomIds`](../src/bank1/whirlwind.asm#L81), [`Whirlwind_DropOffYs`](../src/bank1/whirlwind.asm#L348)
@@ -542,3 +545,4 @@ Link's Y = `$5D` + `$10` x row).
 
 - In Q2 the internal level 5 loads another level block ([data/levelblock-uw-1to6-q2.md](../data/levelblock-uw-1to6-q2.md)) and a patched level info (start room `$7D`, Triforce room `$4F`, boss room `$5F`) and is shown as LEVEL-4; the dungeon shown as LEVEL-5 is internal level 4 ([data/levelinfo.md](../data/levelinfo.md)). [`Level_BlockAddrsQ2`](../src/bank6/level-load-mode2.asm#L89), [`Quest_Q2LevelInfoPatch5`](../src/bank6/quest2-replacements.asm#L131), [`Quest_Q2LevelInfoPatch4`](../src/bank6/quest2-replacements.asm#L119)
 - Nothing in this document (rooms, items, route) applies to either of them. [`Level_BlockUW1to6Q2`](../src/bank6/level-blocks-common-data.asm#L78)
+- Room `$0B` itself changes in Q2: its layout becomes `$7B`, a pond with neither a cave mouth nor a statue square, and its monster list the pond fairy (`$2F`); its cave index stays 5, but nothing in the room leads anywhere, and the Armos table's entry for `$0B` has no statue to act on. The level is entered from `$1B` instead, whose rock at (`$C0`, `$90`) is a Q2-only secret with the same destination. So the stairs under `$0B`'s Armos are redundant in Q1 and cannot be made in Q2. [`Mode2Load_Update_Full`](../src/bank6/level-load-mode2.asm#L297), [`Quest_Q2OverworldPatchOffsets`](../src/bank6/quest2-replacements.asm#L49), [`RoomLayout_RoomOW7B`](../src/bank5/room-layouts-ow.asm#L77), [`Secret_IsForOtherQuest`](../src/bank4/rock-wall-tree-secrets.asm#L331)

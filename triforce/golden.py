@@ -40,13 +40,19 @@ def checkpoints(route_name: str) -> List[int]:
     return [step['index'] + 1 for step in steps[:-1] if step['exit'] == 'triforce']
 
 
+def cheated(result: dict) -> int:
+    """The cheated items (bombs, keys and rupees together) a run's rooms used."""
+    return sum(room.get(f'cheated_{item}') or 0 for room in result['rooms'] for item in _native.CHEAT_ITEMS)
+
+
 def race(route: Route, seeds, policies: Policies, parallel: int, record: dict, *, threads: Optional[int] = None,
          states_dir=None, act: Optional[str] = PLAY_ACT, max_steps: int = DEFAULT_MAX_STEPS,
          cancel: Optional[Callable[[], bool]] = None) -> Tuple[dict, bytes, int]:
     """Plays ``route`` from ``seeds`` on ``parallel`` games until one run succeeds.  Returns (the chosen run's
-    result dict, its recording, the runs that finished).  The winner is the success with the fewest frames, then
-    the lowest seed, among those finished when the first success is seen; the other games are dropped.  Without
-    a success: the failed run with the most rooms, then the most frames, then the lowest seed.  ``RunnerError``
+    result dict, its recording, the runs that finished).  The winner is the success with the fewest cheated items
+    (bombs, keys and rupees together), then the fewest frames, then the lowest seed, among those finished when the
+    first success is seen; the other games are dropped.  Without a success: the failed run with the most rooms,
+    then the fewest cheated items, then the most frames, then the lowest seed.  ``RunnerError``
     when every run ended in an error (e.g. a specialist without a model).  ``cancel()`` is asked between polls:
     True drops every game and raises ``Cancelled``."""
     # pylint: disable=too-many-arguments, too-many-locals
@@ -66,13 +72,13 @@ def race(route: Route, seeds, policies: Policies, parallel: int, record: dict, *
                     recordings[int(event['job'])] = event['data']
             wins = [seed for seed, result in results.items() if result['result'] == 'success' and seed in recordings]
     if wins:
-        seed = min(wins, key=lambda s: (results[s]['frames'], s))
+        seed = min(wins, key=lambda s: (cheated(results[s]), results[s]['frames'], s))
     else:
         played = [seed for seed, result in results.items() if result['result'] != 'error' and seed in recordings]
         if not played:
             reasons = sorted({result['reason'] for result in results.values()})
             raise RunnerError(f"no run of route '{route.name}' played: {'; '.join(reasons) or 'no seeds'}")
-        seed = max(played, key=lambda s: (len(results[s]['rooms']), results[s]['frames'], -s))
+        seed = max(played, key=lambda s: (len(results[s]['rooms']), -cheated(results[s]), results[s]['frames'], -s))
     return results[seed], recordings[seed], len(results)
 
 

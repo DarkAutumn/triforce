@@ -2621,3 +2621,71 @@ next (3.9 bombs a visit of 7:0x19 with none of its own); darknut did the same in
     although Link then holds the room's four); Dungeon 4's walls 169 per 300 (runs that arrive with none: honest).
 - **Left as it is:** F173; `cheats::bomb_need` (a room keeps its need while any of its bomb walls is shut, also one
   the route never opens: 7:0x69's W, 4:0x11's E and W; the bomb in hand is unusable and taken back on leaving).
+
+## 2026-11-17 — Every completed stretch lands in the main checkout, pushed and playable (Lee)
+
+Lee: "I want to add a directive, that after each completion (like d6 done, d8 -> d9 etc) gets merged back into
+triforce and pushed. I really want to be able to do play-zelda and see the progress as you work."
+
+- **What lands:** each stretch of the rest of the game when its first team takes it at a working rate (decision 2
+  of 2026-11-16): Dungeon 7 with its leg, the magic sword and Dungeon 6, Dungeon 8, Dungeon 9 with Ganon. It sharpens
+  decision 3 ("a report, a tag and a push per dungeon"): the push is of `main`, and the main checkout itself is left
+  able to play the stretch.
+- **How:** the checklist in `AGENTS.md` "Lee's standing rules": `main` merged into the line and the suites green,
+  `main` fast-forwarded, the module rebuilt in the main checkout, the promoted runs copied into its `models/` with
+  their `promoted`, `act`, `version` and `eval.json`, trajectories copied, a short chain from the main checkout as
+  the proof, the tag, the push, the report.
+- **Not held back:** a stretch is landed when it is complete, not together with a later one. The optimisation round
+  after the first complete game lands the same way.
+- **In between:** work in progress is watched from the line's worktree with its own models
+  (`TRIFORCE_MODELS_DIR=$PWD/models .venv/bin/python play-zelda.py`).
+
+## 2026-11-17 — The remaining dungeons are prepared in parallel; training is the serial resource (Lee)
+
+Lee: "You KNOW we are doing d7 d6 d8 d9. Why do it sequentially when you could do it in parallel? Do your best to
+parallelize this, and at the end you can always clean up, refine, like you would have done anyway. I mean look at
+the retraining you would do... that all can be front loaded looking at the dungeons first anyway."
+
+- **Lanes.** Each stretch (Dungeon 7, the magic sword and Dungeon 6, Dungeon 8, Dungeon 9 with Ganon) has its own
+  lane of work that needs no job place: walk the running game, build the route vocabulary (steps, masks, objectives,
+  families), build start states and curricula (fights the explorer cannot clear are skipped or staged; inventories
+  staged from the ledgers, rebuilt from chain runs' harvested states later), write the family files. The lanes run
+  at once, one worktree each; a lane's next step starts when its previous one reports.
+- **The serial resource** is the job line's two places (trainings, evaluations, chains): preparation exists to keep
+  it fed. Order: the next landing's families first (Dungeon 7), then whichever lane has states ready.
+- **A family is trained once on all its rooms.** A family whose monsters are in several of the remaining dungeons
+  (Wizzrobes in 6 and 9, Blue Darknuts in 8 beside Dungeon 5's, Like-Likes, Zols, Gibdos, Pols Voices) waits for
+  those rooms' states and trains on them together, instead of being continued once per dungeon. A scripted rule
+  that wins a room in the walks becomes demonstration rows (`train --demos`) during preparation.
+- **Integration.** The vocabulary branches of Dungeons 8 and 9 start from Dungeon 6's and are merged in route order
+  by one integration step with the suites and a full-route identity chain, as round 26's three branches were.
+- **Landing is unchanged:** each stretch lands on `main` when its team takes its segment (the entry above); the
+  clean-up and tuning round comes after the first complete game.
+- **Given up for it:** the honest planner's 1000-run chains with clips off for round 25 (the clips-on set is in
+  round25.md §13); they are measured when the line is idle.
+- **The CPU is the scarce resource, not the GPU** (Lee, the same day: "the CPU load is the problem not the gpu
+  load... You are constantly overloading the cpu. Optimize for that. But really, just let the cpu queueing handle
+  most of this... Just make sure training and evals go into the queue (as they already do!)"). The job line stays
+  as it is and carries everything that plays models. What agents start outside it is capped: one heavy thing at a
+  time per agent (an explorer, a state build, cargo, pytest or a many-trial walk script), explorers on 4 threads,
+  `CARGO_BUILD_JOBS=4`, all under `nice -n 10`, full suites once at the end of a task, and nothing heavy started
+  while the load average is above 30. The GPU has not been a limit in any round.
+
+## 2026-11-18 — Clips only: the no-clip way is dropped; the Lanmola room is clipped (Lee)
+
+Lee: "The lanmola room should be bypassed with a block clip. From here on, you can drop the no-clip runs. They
+were an interesting spot of comparison, but should be dropped in favor of just clipping through blocks when needed."
+(Nov 17 already: "Clips-off is not a problem. We might even drop it in the future.")
+
+- **Supersedes** the Nov 13 rule (round 22) that clip families train half their episodes with CLIP masked and that
+  every chain and evaluation is measured both ways, and decision 4 of 2026-11-16 ("clips off built and measured,
+  not tuned").
+- **From here on:** chains, checkpoint selection and evaluations with clips on only; no `-noclips` tags; a clip
+  family's new rounds train with `off_share: 0`; no new plain way is built; a room the route clips is not fought,
+  staged or demonstrated (Dungeon 9: 0x55's Lanmolas, 0x07 before the ring, 0x20 from N, 0x03); where a hard room
+  can be passed by a block clip, that is the way (the remaining hard rooms of Dungeons 6-8 are scanned for it).
+- **Kept as it is:** the route's existing plain ways and forks, the run-time switch and `play-zelda.py`'s key `c`
+  (from Dungeon 7 onward a run with clips off plays ways no model is trained on), the clips-off numbers already in
+  the round documents.
+- **What it buys:** half of every clip family's training episodes, half of the chain measurements, and in Dungeon 9
+  the worst fight of the stretch (0x07 before the red ring: 9.35 hearts by the rule against 1.3 by the clip).

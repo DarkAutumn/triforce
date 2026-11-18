@@ -71,6 +71,8 @@ pub struct Entry {
     pub ending: u8,
     /// How far along the route the run got: its highest route step + 1 (0: it never was on the route).
     pub progress: u32,
+    /// Cheated items the run used (bombs, keys and rupees together: the replay's cheat ledger).
+    pub cheated: u32,
     /// Link's health at the end, in half hearts.
     pub hearts: u16,
     /// Frames from the moment the models took over to the end (a power-on run's boot and idle don't count).
@@ -84,7 +86,7 @@ pub struct Entry {
 
 impl Entry {
     /// Reads a run's replay: the ending from its header, the route progress and the start of play from its
-    /// events, Link's hearts from its end state.
+    /// events, the cheated items from its ledger, Link's hearts from its end state.
     pub fn read(rom: &Rom, seed: i64, data: Arc<[u8]>) -> Result<Entry, ReplayError> {
         let replay = Replay::parse(data.to_vec())?;
         let (mut progress, mut start) = (0, None);
@@ -96,6 +98,10 @@ impl Entry {
                 _ => {}
             }
         }
+        let mut cheated = 0u32;
+        for cheat in replay.cheats() {
+            cheated = cheated.saturating_add(cheat?.count);
+        }
         let end = state_file::decode(rom, replay.end_state().blob)
             .map_err(|e| ReplayError::Source(format!("the END state: {e}")))?;
         let (hearts, _) = crate::hearts(end.machine.peek(0x66F), end.machine.peek(0x670));
@@ -104,6 +110,7 @@ impl Entry {
             seed,
             ending: replay.ending(),
             progress,
+            cheated,
             hearts,
             frames: replay.frames() - start.min(replay.frames()),
             start,
@@ -112,12 +119,15 @@ impl Entry {
         })
     }
 
-    /// What `best` orders by, greater is better: a win first, then the furthest along the route, then the most
-    /// hearts at the end, then the fewest frames (then the lower seed, so the order is total).
-    pub fn rank(&self) -> (bool, u32, u16, std::cmp::Reverse<u32>, std::cmp::Reverse<i64>) {
+    /// What `best` orders by, greater is better: a win first, then the furthest along the route, then the fewest
+    /// cheated items, then the most hearts at the end, then the fewest frames (then the lower seed, so the order
+    /// is total).
+    #[allow(clippy::type_complexity)]
+    pub fn rank(&self) -> (bool, u32, std::cmp::Reverse<u32>, u16, std::cmp::Reverse<u32>, std::cmp::Reverse<i64>) {
         (
             self.ending == ENDING_WIN,
             self.progress,
+            std::cmp::Reverse(self.cheated),
             self.hearts,
             std::cmp::Reverse(self.frames),
             std::cmp::Reverse(self.seed),
@@ -275,6 +285,7 @@ mod tests {
             seed,
             ending,
             progress,
+            cheated: 0,
             hearts,
             frames,
             start: 0,
@@ -312,7 +323,7 @@ mod tests {
     }
 
     #[test]
-    fn best_keeps_the_furthest_then_the_healthiest_then_the_fastest() {
+    fn best_keeps_the_furthest_then_the_fewest_cheats_then_the_healthiest_then_the_fastest() {
         let mut q = Queues::new(3, 2, 0);
         q.offer(run(1, ENDING_DEATH, 9, 0, 100));
         q.offer(run(2, ENDING_STUCK, 9, 4, 900));
@@ -321,6 +332,15 @@ mod tests {
         q.offer(run(5, ENDING_WIN, 20, 1, 9000)); // a win beats a run that got further and lost
         q.offer(run(6, ENDING_DEATH, 2, 0, 5)); // never kept
         assert_eq!(seeds(&mut q, Queue::Best), [5, 4, 3]);
+
+        // As far as each other: the run that cheated least is first, whatever its hearts and frames; a run that
+        // got further is ahead of both, whatever it cheated.
+        let mut q = Queues::new(3, 2, 0);
+        q.offer(Entry { cheated: 3, ..run(1, ENDING_DEATH, 9, 12, 100) });
+        q.offer(Entry { cheated: 1, ..run(2, ENDING_DEATH, 9, 2, 900) });
+        q.offer(Entry { cheated: 0, ..run(3, ENDING_DEATH, 9, 0, 9000) });
+        q.offer(Entry { cheated: 7, ..run(4, ENDING_DEATH, 10, 0, 9000) });
+        assert_eq!(seeds(&mut q, Queue::Best), [4, 3, 2]);
     }
 
     #[test]

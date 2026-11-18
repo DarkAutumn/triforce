@@ -1049,9 +1049,16 @@ every step, so following an enemy that moves away pays again, and knockback rese
   that ends joins that list at its top and nothing below the running ones changes places. Under a "finished"
   heading below the live ones: folders whose
   training ended while shown (its plan is no longer `running`, or its process is gone: `plan_is_live`) and the
-  registry's jobs that ended in the last 24 hours (`RECENT_SECONDS`; one whose process died without ending its plan
-  shows "process gone"); the "Clear finished" button hides those for the rest of the session, and trainings that
-  start later still appear. A batch folder is one group with its name and one row per evaluation: waiting,
+  registry's jobs that ended in the last 60 minutes (`RECENT_SECONDS`; one whose process died without ending its
+  plan shows "process gone"). A finished folder leaves the list by itself 60 minutes after it ended (after the
+  window saw it end, for one that was shown live: `Window._expire_finished`), so the list never piles up; the
+  "Clear finished" button hides them at once for the rest of the session, and trainings that start later still
+  appear. The 30-a-second frame timer steps and repaints only what moves (`Header.animating`, `RunRow.animating`):
+  a running plan's header and its training or evaluating rows every frame, a waiting plan's header once a second,
+  a finished folder not at all once its bars have eased to their fill (`settled`, cleared when the folder's data
+  changes: `FolderView.poll` repaints it then); a header's registry facts are looked up once a second, not in
+  every paint, and a row's sparkline draws a point a pixel. A batch folder is one group with its name and one row
+  per evaluation: waiting,
   running (the bar is the runs or episodes done of the total, from `chain_progress` / `eval_progress`), done (its
   headline: a chain's arrivals and route-end success, an evaluation's success and health change; `resumed` when an
   earlier run had measured it) or failed. Its Eval tab lists every entry's result and, for a selected entry, the
@@ -1598,7 +1605,7 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
   route's last (`golden.checkpoints('d2first') == [24, 68]`: outside Dungeon 2 and Dungeon 1). For each segment
   `parallel` games race from the same state to the segment's stop (`golden.race`: a `ChainPool` of the
   segment's seeds with `stop_step`, every run recorded). The first success seen wins (of several in one poll:
-  the fewest frames, then the lowest seed), the other games are dropped, and the winner's end state is the
+  the fewest cheated items, then the fewest frames, then the lowest seed), the other games are dropped, and the winner's end state is the
   checkpoint every game of the next segment starts from (`Route.load(checkpoint=...)`: no frame run, nothing
   written). The winners are joined with `replay_stitch` into one replay from the start to the route's last
   triforce, `OUT/golden-<first seed>-<ending>.tfreplay`. With every model drawing its actions (the default,
@@ -1628,8 +1635,9 @@ A power-on run is shown from the frame the models took over. When a replay ends 
   the route in a chain pool (`--parallel` games, no picture, unpaced, every run recorded) and
   `_native.ReplayFeed` (`theater::Feed`, a Rust thread) takes every finished run off the pool: into its ending's
   queue, a copy of any run into `random`, and into `best`, which keeps the best runs seen and not yet watched (a
-  win, then the furthest route step, then the most hearts at the end, then the fewest frames from the moment the
-  models took over). Each queue holds `--capacity` (32) runs. A cell on `best` takes the top one, which owes
+  win, then the furthest route step, then the fewest cheated items (bombs, keys and rupees together, from the
+  replay's ledger; Nov 17), then the most hearts at the end, then the fewest frames from the moment the models took
+  over). Each queue holds `--capacity` (32) runs. A cell on `best` takes the top one, which owes
   `best` `--parallel` candidate runs per missing entry; `best` hands out runs once it was half full. The feed
   pauses the pool (`Pool::set_paused`) while no queue wants a run and resumes it when a cell takes one. `stuck`
   never asks for a run (stuck runs are rare: it holds those that came by, and its cells wait once they are
