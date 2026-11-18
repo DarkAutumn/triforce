@@ -4,34 +4,34 @@ Read this first, then `README.md` (setup, commands), `docs/architecture.md` (mod
 `docs/experiments/round*.md` (start with its Summary) plus `docs/experiments/backlog.md` (the experiment backlog,
 called `todo.md` before Nov 8; where the work stands and what to try next, in order).
 
-## Where things stand (Nov 17)
+## Where things stand (Nov 18)
 
-- **Round 26, begun (Nov 16-17, 1.5.1.0; `docs/experiments/round26.md`; the plan for the rest of the game:
-  `docs/routes/rest-of-game.md`):** the leg from Dungeon 5 to Dungeon 7 and Dungeon 7. Built so far, nothing trained:
-  **`d2first` now has 248 steps and ends on the D7 triforce** (steps 209-247; decisions 2026-11-17).
-  (1) **the walks** of the running game (`docs/routes/d7-walks.md`: rupees and bombs at 0x0b, the whirlwind, the
-  shops, the pond, every forced room of level 7 with today's models, which cannot play the Blue Goriya rooms); (2)
-  **the route vocabulary** (`docs/architecture.md` "The leg to Dungeon 7", `docs/routes/d7.md` §11; built as the
-  scouting route `d7`, then merged into `d2first`), `exit`/`entry: recorder` (the whirlwind, state
-  side `r`), `waypoint: arrows|food|candle`, overworld secrets as targets (game.yaml `entrance: {how:
-  armos|recorder}`), `rupee_reserve` (as `bomb_reserve`), shop caves with `requires_rupees`, **ARROW off in every
-  family unless its `items: {arrows: true}`**, RECORDER/FOOD/BOOMERANG masks by the route step, an opened bomb hole
-  a doorway of the room view (`Room::with_open_doorways`, every N or W bomb wall; 300 paired full-route runs: the
-  round 25 models play those rooms the same), the scripted walk `crates/zelda/tests/d7.rs` to the D7 triforce; (3)
-  **observation schema 6** (the one input change for Dungeon 7 to Ganon, `docs/observation-next.md`, decisions
-  2026-11-16): columns added at the end of `entity_features` (33 → 41), `link` (87 → 93) and `room_state` (85 →
-  89), no schema 5 column changed; the 28 promoted 1.5.0 runs converted (`triforce convert-model`), proven identical
-  (38,360 of 38,360 episodes in both act modes); (4) **the start states** of steps 209-247 (114, 38 a chain;
-  round26.md §7 has each state's rupees, bombs, keys and items; only 7:0x1b from W is crossed by `--skip-fights`),
-  the families' rooms (ow-leever, ow-peahat, ow-zora, ow-octorok, ow-moblin, goriya with `clips: true` for 7:0x1a's
-  block clip and `room_kills` staging of 0x49, 0x1a and 0x1b, boss-digdogger, equipment-room, dodongo-crossing,
-  wallmaster, boss-aquamentus) and **their curriculum tracks** (`scripts/experiments/r26_d7_curricula.sh`;
-  round26.md §8 lists the states left without one); (5) **the baseline** `r76-base` (200 runs a segment, round 25's
-  models): `post-d5` 0 of 200 reach Dungeon 7 with clips on or off (0x0b's model walks back into Dungeon 5: 196
-  wrong exits, no recorder played), `d7` 0 of 200 reach the triforce (184 die in 7:0x49, 12 in 0x69, 4 in 0x59),
-  with the single-room numbers of every new state beside it (round26.md §11). `heart_value.json` has no curve for
-  steps 209-247 (hearts priced by the plain health terms there until a team reaches the D7 triforce). Not built
-  yet: any trained model for the stretch.
+- **Round 26, landed (Nov 16-18, 1.6.0.0; `docs/experiments/round26.md`; the plan for the rest of the game:
+  `docs/routes/rest-of-game.md`):** the leg from Dungeon 5 to Dungeon 7 and Dungeon 7. **`d2first` has 248 steps
+  and ends on the D7 triforce** (steps 209-247: 0x0b's recorder and the whirlwind to 0x45, 0x44's arrows, 0x34's
+  Armos and the food, 0x42's pond, Dungeon 7 with the Grumble, the red candle, two Digdoggers, the Wallmaster room
+  and Aquamentus; `docs/routes/d7.md`, decisions 2026-11-17). New in the engine and the route: `exit`/`entry:
+  recorder`, `waypoint: arrows|food|candle`, overworld secrets as targets (`entrance: {how: armos|recorder}`),
+  `rupee_reserve` and shop caves with `requires_rupees`, ARROW off in every family unless its `items: {arrows:
+  true}`, RECORDER/FOOD/BOOMERANG masks by the route step, opened bomb holes as doorways of the room view, the
+  scripted walk `crates/zelda/tests/d7.rs`; **observation schema 6** (the one input change for Dungeon 7 to Ganon,
+  `docs/observation-next.md`; the 1.5.0 runs converted, proven identical); 114 start states for the stretch and
+  their curriculum tracks; the granted-bomb rule (a granted bomb opens the wall and nothing else, round26.md §13);
+  7:0x0d's Wallmaster objective and clock fixes with demonstrations (§14); 75 harvested arrow-shop states for ow-zora
+  (`triforce/states/harvested/ow-zora/`, not in git). **Two teams** (§15-16): the first (goriya `r76-goriya3`,
+  wallmaster `r76-wall-1`, the overworld families, boss-digdogger and boss-aquamentus `r76-b`, dodongo-crossing and
+  equipment-room `r76-c`) took `d7` in 26.3%; the second adds goriya `r76-goriya4-s78` (it004511) and ow-zora
+  `r76-zora-arrows`. Chains of record, 1000 runs a segment, models alone, clips on (`r76-1k`; round 25's `r75-1k` in
+  brackets): D2 81.5 (88.2; −6.7 ± 1.6, goriya's 2:0x5e and 2:0x1e), after D2 95.7 (96.2), D1 99.0 (99.7), after D1
+  100, D3 78.2 (81.0), after D3 100, D4 92.1 (92.3), the leg 99.9, D5 68.7 (68.0), `post-d5` 98.7% arrive at
+  Dungeon 7, **`d7` 40.0%** to its triforce (killers 7:0x1b 324 of 872, 0x1c 79, 0x1a from the cellar 48, 0x19 31);
+  from the start the D5 triforce 22.4% (19.7; +2.7 ± 1.8) and **the D7 triforce 6.7%**. The planner beside (300
+  runs): the full route 85.0%, `d7` 95.3%. The owner's decisions of Nov 17-18 (in the rules below): every completed
+  stretch lands on `main`, pushed and playable; the remaining dungeons are prepared in parallel lanes, training is
+  the serial resource and the CPU the scarce one; clips only from here on (no `-noclips` chains, `off_share: 0`);
+  7:0x1b fought only at 4 bombs or fewer; one line, one rule (no fallback for older code). **Next:** Dungeons 6
+  (with the magic sword), 8 and 9 are prepared and trained in their lanes and land in route order; Dungeon 2's
+  goriya rooms are a backlog item.
 - **Round 25 (Nov 16, 1.5.0.1):** the route is unchanged (`d2first`, game start to the D5 triforce, 209 steps);
   the round was "leave rooms with more hearts" (`docs/experiments/round25.md`, decisions 2026-11-15 and 2026-11-16).
   Chains, 1000 runs per segment, models alone, clips on (`r75-1k`) | off (`r75-1k-noclips`), round 24 → 25: D2 89.9 →

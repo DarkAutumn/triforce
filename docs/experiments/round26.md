@@ -23,13 +23,17 @@ The route's order is Dungeon 5 (done), 7, the magic sword, 6, 8, 9. Round 26 is 
 (version 1.6 when trained models take its triforce at a working rate). The synthesis the round works from is
 `docs/routes/rest-of-game.md` (with `d7.md`, `late-monsters.md`, `late-mechanics.md`).
 
-This document covers the round's first two tiers. §1-6: what was walked, the route vocabulary, the one observation
-break and their merge. §7-12: the stretch merged into `d2first` (248 steps, to the D7 triforce), its 114 start
-states with what each holds, the curriculum tracks, goriya's clips measured, the proof trainings, the baseline and
-what the first team needs.
-**Nothing has been trained yet, and the baseline is zero**: of 200 runs a segment by round 25's team none reaches
-Dungeon 7 from 0x0b (the model there walks back into Dungeon 5 and never plays the recorder) and none reaches the
-D7 triforce from its entrance (every run dies in 7:0x49 at the latest), with clips on or off (§11).
+This document covers the round. §1-6: what was walked, the route vocabulary, the one observation break and their
+merge. §7-12: the stretch merged into `d2first` (248 steps, to the D7 triforce), its 114 start states with what each
+holds, the curriculum tracks, goriya's clips measured, the proof trainings, the baseline (round 25's team: none of
+200 runs a segment reaches Dungeon 7 or its triforce, §11) and what the first team needs. §13-14: the granted-bomb
+rule and the Wallmaster room. §15-16: the two teams and the chains of record.
+**Round 26 lands as 1.6.0.0.** With the second team (goriya `r76-goriya4-s78`, ow-zora `r76-zora-arrows`) the
+models alone take the D7 triforce from Dungeon 7's entrance in **40.0%** of 1000 runs (`r76-1k-d7`; the first team
+26.3%), reach Dungeon 7 from 0x0b in 98.7% (`post-d5`; the first team 92.4%), and play the whole route, game start
+to the D7 triforce, in **6.7%**; the D5 triforce from the start rose from 19.7 to 22.4% (+2.7 ± 1.8). The honest
+planner beside them: 85.0% the full route (300 runs). Lost: Dungeon 2, 81.5 against round 25's 88.2% (−6.7 ± 1.6,
+goriya's rooms 2:0x5e and 2:0x1e; §16).
 
 ## 1. The walks: what the running game says
 
@@ -958,3 +962,54 @@ Dungeon 7 with 8.14 (7.89).
 - **boss-digdogger stays `r76-b`:** the continuation's last checkpoint led the screen by 1.7 points and lost it on
   fresh seeds (25.2 against 25.4%).
 - **wallmaster stays `r76-wall-1`** (§14).
+
+### The chains of record (`r76-1k`)
+
+The second team (the promoted runs above, the rest as in §15), every segment of `d2first` at 1000 runs, clips on,
+models alone, seeds 0-999 (`PARALLEL=10 RUNS=1000 ACT=model TAG=r76-1k scripts/experiments/r56_chains.sh run`),
+paired with round 25's `r75-1k` on the same seeds:
+
+| segment | arrival | `r76-1k` | `r75-1k` | paired difference |
+|---|---|---:|---:|---:|
+| Dungeon 2 (`--from 2_7ds_0`) | 0:0x3c | 81.5% | 88.2% | **−6.7 ± 1.6** |
+| after Dungeon 2 | 1:0x73 | 95.7% | 96.2% | −0.5 ± 0.9 |
+| Dungeon 1 | 0:0x37 | 99.0% | 99.7% | −0.7 ± 0.3 |
+| after Dungeon 1 | 3:0x7c | 100.0% | 100.0% | 0 |
+| Dungeon 3 | 0:0x74 | 78.2% | 81.0% | −2.8 ± 1.7 |
+| after Dungeon 3 | 4:0x71 | 100.0% | 100.0% | 0 |
+| Dungeon 4 | 0:0x45 | 92.1% | 92.3% | −0.2 ± 1.0 |
+| after Dungeon 4, the leg | 5:0x76 | 99.9% | 99.9% | 0 |
+| Dungeon 5 | the D5 triforce | 68.7% | 68.0% | +0.7 ± 2.0 |
+| `post-d5` (`--from 0_0bc_0`) | 7:0x79 | 98.7% | (the first team 92.4%) | |
+| **`d7`** (`--from 7_79s_0`) | the D7 triforce | **40.0%** | (the first team 26.3%) | |
+| full route | the D5 triforce | 22.4% | 19.7% | **+2.7 ± 1.8** |
+| full route | 7:0x79 | 21.9% | | |
+| **full route** | **the D7 triforce** | **6.7%** | (0 before round 26) | |
+
+The full route's milestones on the way: Dungeon 2 left 79.2% (87.6), Dungeon 1 left 64.6 (73.5), Dungeon 3 left
+49.6 (56.8), Dungeon 4 left 44.0 (51.2); the loss in Dungeon 2 carries to Dungeon 5's entrance and is won back in
+Dungeon 5 and on the leg's 0x0b (round 25's model there walked back into Dungeon 5).
+
+**Where `d7` dies** (first visits; hearts on entering in brackets): **7:0x1b 324 of 872 (4.27)**, 0x1c 79 of 548
+(4.99), 0x1a from the cellar 48 of 922 (5.00), 0x19 31 of 978 (6.44), then 0x29 16, 0x18 15, 0x4a 10, 0x69 9,
+Aquamentus 8, 0x38 7, 0x59 6; 0x0d ends 11 runs stuck on the clock (3 deaths, 34 wrong exits). Every failure is a
+death or a stuck run: 600 of 1000. The successful runs take 13,600 frames from the entrance on average.
+
+**Cheated items.** `d7`: 8 bombs in 1000 runs, all in 7:0x29 (the granted bomb of the wall room, rule A of §13), no
+key, no rupee. The full route cheats 1,641 bombs before Dungeon 7 (round 25's 209 steps: 2,316) and 125 in
+Dungeon 7, every one in a wall room (0x69, 0x19, 0x1a) entered with no bomb of its own, as rule A grants.
+
+**The planner beside** (`--act temperature:0.5+relax:16+plan:16:1`, 300 runs, `TAG=r76-plan`): the full route to
+the D7 triforce **85.0%** (the D5 triforce 91.0%, Dungeon 7 reached 87.0%); `post-d5` 97.0% arrive and 94.0% take
+the D7 triforce; `d7` 95.3% (14 timeouts, 13 of them in 7:0x0d). It cheats 11 bombs in 0x29 and 1 in 0x1a in 300
+`d7` runs.
+
+**Dungeon 2's regression.** The loss is in goriya's rooms of Dungeon 2: 2:0x5e 78 deaths against round 25's 36,
+2:0x1e 73 against 38 (of 900-990 visits each). It came with goriya's Dungeon 7 training: on the same 1000 seeds
+`r76-goriya3` holds Dungeon 2 at 83.6% and `r76-goriya4-s78` at 81.5% (−2.1 ± 1.7, above), round 25's team at
+88.2%. **It lands anyway:** the route's end moved from no run at all to 6.7% to the D7 triforce,
+`d7` passed the owner's working rate (about 30%) at 40.0%, and from the start the D5 triforce itself rose 2.7
+points, so nothing the route had is lost at its end. Getting Dungeon 2 back is a backlog item.
+
+**Landing.** The merged `r26` with main at 1.6.0.0 plays `d7` run for run as the chain of record: 300 runs (seeds
+0-299) with the team stamped 1.6.0.0, 300 identical, 117 successes in both. The five suites are green there.
