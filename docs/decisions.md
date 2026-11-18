@@ -2717,3 +2717,18 @@ MINOR +1: the route completes Dungeon 7, from its entrance in 40.0% of 1000 runs
 above the working rate the owner set for a first team (about 30%, decisions 2026-11-16). COMPAT 0, REV 0: nothing a
 loaded model reads changed since 1.5.1.0, so the 1.5.1 runs are stamped 1.6.0.0 (`triforce stamp`), not converted.
 The Cargo workspace is 1.6.0.
+
+## 2026-11-19 — No potions, no CONTINUE (Lee)
+
+Asked what closes the survival budget of the last stretches (Dungeon 9's rooms cost 18.6 hearts against 15
+containers in the second team's chain, with no refill but drops; arriving with 12 hearts instead of 15 cuts the share
+of runs that end the game from 14.3% to 3.9%), with the potion and the game's CONTINUE as the two route-level
+answers. Lee: "We aren't doing potions or continues, that's the call."
+
+- A run is one life from its start to the ending. A death ends it; CONTINUE is not modelled, measured or trained.
+- No potion is bought or taken: 0x47's take-any stays the heart container, no medicine shop joins the route.
+- The budget is closed by play: hearts carried into the dear rooms (heart value, starts at the hearts runs really
+  bring), block clips where one exists, drops, and the planner as a teacher (it wins 73% of Dungeon 9 and 69% of
+  Dungeon 6 with the same inputs, by losing about half the hearts).
+- The other open items (Dungeon 2's loss with the Dungeon 7 Goriya, Dungeon 8's landing, the leg's hearts, a complete
+  run from power on) are the lead's to schedule.

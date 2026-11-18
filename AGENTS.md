@@ -271,6 +271,12 @@ test them, keep what helps, and log everything.
   block clip, that is the way. What exists stays: the route's plain ways and `stretch:` forks, the run-time switch
   and `play-zelda.py`'s key `c` (turning clips off now plays ways no model is trained on from Dungeon 7 onward),
   the clips-off numbers of rounds 22-26 in their documents.
+- **No potions, no CONTINUE** (Lee, Nov 19: "We aren't doing potions or continues, that's the call"): a run is one
+  life from where it starts to the ending, and it never buys or takes a potion (0x47's take-any gives the heart
+  container; the medicine shops are not on the route). A death ends the run; the game's CONTINUE is not modelled,
+  measured or trained. The survival budget of Dungeons 6, 8 and 9 (more hearts lost by the rooms than the
+  containers hold, no refill but drops) is closed by play: hearts carried into the dear rooms (`reward.heart_value`,
+  starts at the hearts runs bring), block clips, drops, the planner as a teacher.
 - **Bombs (Lee, Nov 11; supersedes "bombs only where the route needs them"; round 26: granted bombs and the reserve
   inside bomb-wall rooms)**: a family's `items: {bombs: MODE}`
   (`env::config::BombUse`, checked every step in training and chains): `free` (goriya, darknut, moldorm, Dodongo,
