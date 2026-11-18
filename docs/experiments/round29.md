@@ -1250,3 +1250,41 @@ with the same models, loses 11.0 hearts in the rooms where they lose 18.6, and e
 | `r79c-like` | like-like | `r79b-like` | 244 | 80 | like-like-14, clip-03 |
 
 All with `--stop-success 1.01 --sil-coeff 0.1`, checkpoints every 30 iterations (wizzrobe 60).
+
+**Single rooms on equal terms** (the run continued and the new one under this code and yaml, `chain_hp` on, 100
+episodes a state, seed 0; `eval-batch r79c-base` for the old runs):
+
+| Room | Family | Before | After |
+|---|---|---|---|
+| 9:0x42, Ganon | ganon `r79t5-ganon` → `r79c-ganon` | 93.0% (21 deaths), −0.40 | **98.0% (6 deaths), −0.18** |
+| 9:0x52 | patra `r79b-patra` → `r79c-patra` | 82.0% (54 deaths), −0.77 | **90.3% (29 deaths), −0.47** |
+| 9:0x61, 0x27, 0x16 | patra | 98.7%, 96.5%, 98.3% | 99.3%, 96.7%, 98.3% |
+| 9:0x14, 0x51, 0x41, 0x03, 4:0x32, 6:0x1d | like-like `r79b-like` → `r79c-like` | 99.0-100% | 99.5-100% (within a point) |
+
+With half the resets at the hearts the chain brings, the old runs show what the chain showed: Ganon and 0x52
+entered low cost deaths; the new runs lose fewer. **Promoted** in the team's checkout: ganon `r79c-ganon`, patra
+`r79c-patra`, like-like `r79c-like` (before any wizzrobe selection was queued: a selection's chains play every
+family).
+
+**wizzrobe, the joint runs** (single rooms of their own `eval.json`; level 9 at the `chain_hp` draws, so not on
+equal terms with `r79b-wizz-s80`'s; Dungeon 6's rooms have no profile and are):
+
+| Room | `r80-wplan-s78` | `r79c-wj-s84` | `r79c-wj-s85` |
+|---|---:|---:|---:|
+| 6:0x38 | 75.7%, −3.98 | 75.7%, −4.38 | 76.3%, −4.41 |
+| 6:0x3a | 73.0%, −4.09 | 74.3%, −4.08 | 72.7%, −4.13 |
+| 6:0x2c, 0x29 | 99.3%, 99.7% | 99.7%, 99.7% | 99.7%, 98.7% |
+| 9:0x10 | - | 89.3%, −1.08 | 90.5%, −0.98 |
+| 9:0x30 | - | 83.7%, −1.07 | 85.3%, −1.04 |
+| 9:0x05 | - | 88.0%, −1.26 | 89.0%, −1.30 |
+| 9:0x17, 0x65 | - | 94.5%, 99.7% | 94.8%, 98.7% |
+
+Dungeon 6's rooms hold in single rooms; level 9 is learned from a run that had never played it. The `d6`
+comparison chain of `r80-wplan-s78` in this checkout (`6_79s_0`, 1000 runs, seeds 0-999): **310 of 1000 (31.0%)**
+(the Dungeon 6 lane's own 31.5%).
+
+**Left when this section was last written** (the third seed `r79c-wj-s86` still training): `select-checkpoint` of
+the three seeds on `d9` (screen seeds 2000-2999, confirmation 3000-3999), after picking the selection fix 415e030
+from `r26-fast`; the chosen checkpoints on `d6`, 1000 runs paired against `r80-wplan-s78`'s chain above; the
+wizzrobe decision (the route's wizzrobe, or `r79b-wizz-s80` kept for this stretch); the chains of record `r79c-1k`
+(`post-d8` and `d9`, 1000 runs, paired against `r79b-1k`), the planner beside (300), the suites.
