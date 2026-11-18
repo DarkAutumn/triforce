@@ -1178,3 +1178,23 @@ leg's 2.97 hearts lost in rooms (1.25 at the rock wall, 0.45 at 0:0x07), of whic
 (0x52 and 0x16's fight entered with three to seven hearts) 144, Ganon 31. Nothing on the route refills but the drops
 (1.9 hearts in a winning run): a run that takes the ring with 8 to 9.9 hearts ends the game 17% of the time (`d9`),
 with 4 to 5.9 1-2%.
+
+**The recorded runs** (each seed played again alone with `--replays` and the same result, frames and rooms as in its
+chain; `tf replay verify` ok; the files are not committed):
+
+- **From Dungeon 8's triforce to the ending**: `post-d8` seed 12, `eval-chain --route d9 --from 0_6dc_0 --first-seed
+  12 --runs 1 --act model --replays DIR` → `target/r79b/replays-postd8/00000012-win.tfreplay` in the team's
+  checkout: 31,966 frames from the embedded state `0_6dc_0`, ending `win` ("the game ended in (level 9, room
+  0x32)"), 16 edits, 2 states; 59 rooms, the last entered with 1.5 hearts. The first recorded run from Dungeon 8's
+  triforce to the end of the game.
+- **From Dungeon 9's entrance, the second team**: `d9` seed 9 → `target/r79b/replays-d9/00000009-win.tfreplay`:
+  23,872 frames from `9_76s_0`, `win`, 19 edits, 2 states; 7 hearts lost, Zelda's room entered with 8.
+
+**The honest planner beside** (`temperature:0.5+relax:16+plan:16:1` for every model, 300 runs a segment, seeds
+0-299, the second team; `eval-batch r79b-plan`): **`d9` 220 of 300 (73.3%; the models 38 of the same 300), `post-d8`
+174 of 300 (58.0%; the models 10)**, all 300 reaching Dungeon 9 with 13.26 hearts. On `d9` the rooms cost it 11.0
+hearts (the models 18.6), it takes the ring with 9.73 (7.45) and ends with 6.0. Where it saves most a visit: 0x05
+0.23 against 1.27, 0x16's fight 0.24 against 0.88, 0x52 0.17 against 0.89, 0x17 to its wall 1.52 against 2.64, Ganon
+0.30 against 0.75, 0x30 0.90 against 1.43, 0x07 0.39 against 0.80, 0x61 0.06 against 0.39, 0x65 0.92 against 1.22;
+0x10 2.01 against 2.52 (entered with 9.1 hearts, not 5.2). Its deaths: 0x10 18, 0x30 15, Ganon 8, 0x17 8, 0x52 7.
+Not the primary number: the planner tries each action on the emulator before taking it.

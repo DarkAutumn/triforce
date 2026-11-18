@@ -11,11 +11,12 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   team (`r79b-*`: lanmola's clip of 9:0x55 by its rule's lane, 300 of 300 at no heart; wizzrobe `r79b-wizz-s80` for
   this stretch only, Dungeon 6 is its own lane's; ow-boulder's 0:0x17 from S by a rule and its curriculum) ends
   the game in **143 of 1000 runs from Dungeon 9's entrance at 15 hearts (`d9`) and 39 of 1000 from Dungeon 8's
-  triforce (`post-d8`, 997 arrive with 12.06 hearts)**; the first team 5 and 0. Every room of the stretch is learned
-  (98.5-100% in single rooms); what loses runs is the hearts: the rooms cost 18.6 of 15 containers, and the fought
-  Wizzrobe rooms after the ring (0x10, 0x30, 0x05, entered with three to six hearts) end 496 of `d9`'s 857 lost
-  runs. The survival budget (drops, the potion, CONTINUE) is the owner's question. Built before the training:
-  (1) **the walks** (`docs/routes/d9-walks.md`,
+  triforce (`post-d8`, 997 arrive with 12.06 hearts)**; the first team 5 and 0; the honest planner beside 73.3% and
+  58.0% of 300. A run from Dungeon 8's triforce to the ending is recorded and verified (round29.md §17.5). Every
+  room of the stretch is learned (98.5-100% in single rooms); what loses runs is the hearts: the rooms cost 18.6 of
+  15 containers, and the fought Wizzrobe rooms after the ring (0x10, 0x30, 0x05, entered with three to six hearts)
+  end 496 of `d9`'s 857 lost runs. The survival budget (drops, the potion, CONTINUE) is the owner's question.
+  Built before the training: (1) **the walks** (`docs/routes/d9-walks.md`,
   `d9-fights-walks.md`: no model clears any fight of level 9; a rule reading positions wins each); (2) **the route
   vocabulary** (`docs/routes/d9.md` §13, `docs/architecture.md` "The leg to Dungeon 9, Dungeon 9 and the end"): the
   scouting route `d9` = `d8` plus steps 297-354 (one way), **`exit: end` (the first frame of game mode `$13`; the
