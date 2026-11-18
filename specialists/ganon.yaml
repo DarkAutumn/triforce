@@ -6,7 +6,9 @@ success: [exit-correct, game-completed]    # 0x42: N with the Triforce of Power;
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # as boss-gohma (round 27)
 obs: {objective: true, target: true}       # schema 2; `hidden_positions` stays on the default (`ram`: his true position while he is not drawn) until the owner decides
-ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # as boss-gohma (round 27)
+# chain_hp (round 29's third round): half the resets take their hearts from triforce/chain_hp.json (the r79b-1k
+# chains: Ganon entered with 3.25 on average).
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, chain_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # as boss-gohma (round 27)
 items: {bombs: never, arrows: true}        # nothing of his is hurt by a bomb; ARROW is offered only while he is brown, facing him from his row or column, above the route's rupee reserve (0 in his room)
 curriculum: {enabled: true}             # trajectories/ganon, once explored
 one_room: true

@@ -6,7 +6,9 @@ success: [exit-correct]                    # 0x61: down its stairs into the tunn
 reward_profile: default
 reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20}}   # as moldorm (round 25): hearts priced by their worth to the run
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
-ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # as moldorm (round 25)
+# chain_hp (round 29's third round): half the resets take their hearts from triforce/chain_hp.json (the r79b-1k
+# chains: 0x52 entered with 3.1 on average, 0x61 4.6, 0x16 8.9).
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, chain_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # as moldorm (round 25)
 items: {bombs: required}                   # 0x27's N wall only (offered in reach of it), else the 10th damage-free kill's bomb: no bomb, arrow or boomerang touches a Patra (0 of 780 uses)
 curriculum: {enabled: true}             # trajectories/patra, once explored
 one_room: true

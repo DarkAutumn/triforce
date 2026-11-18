@@ -7,13 +7,13 @@ use env::GameData;
 use std::path::Path;
 
 /// A copy of the game data (`triforce/game.yaml`, `triforce/routes.yaml`, `triforce/heart_value.json`,
-/// `specialists/`) under a temp dir.
+/// `triforce/chain_hp.json`, `specialists/`) under a temp dir.
 fn copy_data() -> tempfile::TempDir {
     let tmp = tempfile::tempdir().unwrap();
     let repo = common::repo();
     std::fs::create_dir_all(tmp.path().join("triforce")).unwrap();
     std::fs::create_dir_all(tmp.path().join("specialists")).unwrap();
-    for rel in ["triforce/game.yaml", "triforce/routes.yaml", "triforce/heart_value.json"] {
+    for rel in ["triforce/game.yaml", "triforce/routes.yaml", "triforce/heart_value.json", "triforce/chain_hp.json"] {
         std::fs::copy(repo.join(rel), tmp.path().join(rel)).unwrap();
     }
     for entry in std::fs::read_dir(repo.join("specialists")).unwrap() {
@@ -48,7 +48,7 @@ fn load_error(root: &Path) -> String {
 fn an_unmodified_copy_loads() {
     let tmp = copy_data();
     let data = GameData::load(tmp.path()).unwrap();
-    assert!(data.chain_hp.is_empty(), "chain_hp.json is optional");
+    assert!(data.chain_hp.contains_key("9:0x10"), "the shipped profile (round 29's level 9) loads");
     assert_eq!(data.states_dir, tmp.path().join("triforce/states"));
 }
 

@@ -27,7 +27,8 @@ route: a table prices its own route and every route whose steps are its first on
 27: fitted on the scouting route ``d6`` from round 24's chains and Dungeon 6's, it prices ``d2first`` as well, whose
 rows it reproduces, since V at a step depends only on the steps up to the next triforce; round 28: on ``d8``, from
 those, Dungeon 7's and Dungeon 8's chains, pricing ``d2first``, ``d6`` and ``d8``; round 29: on ``d9``, from those
-and the first Dungeon 9 team's ``d9`` chain, rows 0-296 unchanged, pricing all four).
+and the Dungeon 9 team's chains, rows 0-296 unchanged, pricing all four; its third round refitted level 9 from the
+second team's ``post-d8`` and ``d9`` chains, which give the leg's steps their first visits).
 """
 
 import argparse

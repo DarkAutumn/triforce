@@ -1336,7 +1336,8 @@ every step, so following an enemy that moves away pays again, and knockback rese
   resets keep transition/fresh-room handling unchanged.
 - Chain-matched health (`chain_hp.py`): `python -m triforce.chain_hp <chain jsonl ...>` writes
   `triforce/chain_hp.json`, the hearts Link entered each room with in chain runs (a run's start room isn't counted).
-  No profile ships: build one from current-route chains started at the game start. A specialist with
+  The profile shipped is round 29's (the second Dungeon 9 team's `post-d8` and `d9` chains: the leg's and level 9's
+  rooms; wizzrobe, patra, ganon and like-like draw from it at `chain_hp: 0.5`). A specialist with
   `ram_randomization: {chain_hp: p}` draws its reset hp from its start room's list in a share `p` of room-entry
   resets (not curriculum starts); the rest keep the `hp` / `full_hp` draw. A config with `chain_hp` and no room
   with at least 5 arrivals is refused.
