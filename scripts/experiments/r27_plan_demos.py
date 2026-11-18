@@ -1,9 +1,10 @@
 """Round 27 §13 (docs/experiments/round27.md "The planner as a teacher"): the honest planner's decisions in
 Dungeon 6's two block rooms as demonstration rows for ``train --demos``.
 
-    python scripts/experiments/r27_plan_demos.py CHECKPOINT OUT.npz [--runs N] [--states 6_38s 6_3aw]
+    python scripts/experiments/r27_plan_demos.py CHECKPOINT OUT.npz [--family F] [--runs N] [--states 6_38s 6_3aw]
 
-The family (wizzrobe) plays ``--runs`` episodes from every chain of each state stem (``6_38s_0..2``, ``6_3aw_0..2``)
+The family (``--family``, wizzrobe by default; round 29 records level 9's rooms of wizzrobe, patra and ganon too)
+plays ``--runs`` episodes from every chain of each state stem (``6_38s_0..2``, ``6_3aw_0..2``)
 in a native ``EvalTask`` pool, its own hp and bombs draws, full rooms (``room_kills`` is training only), the act mode
 ``registry.PLAN_ACT`` (``temperature:0.5+relax:16+plan:16:1``: before each decision the emulator tries the action on
 redrawn random numbers and takes the policy's next best if Link would be hit; docs/rust-actor.md "Foresight"). The
@@ -33,7 +34,7 @@ from triforce.jobs import add_job_arguments, begin_job, work
 from triforce.model import MASK_KEY
 from triforce.specialist import load_specialist
 
-FAMILY = 'wizzrobe'
+DEFAULT_FAMILY = 'wizzrobe'
 
 
 def replaced_indices(record: dict) -> set[int]:
@@ -47,10 +48,10 @@ def replaced_indices(record: dict) -> set[int]:
     return out
 
 
-def record_demos(checkpoint: Path, out: Path, stems: list[str], runs: int, max_loss: float, repeat: int,
-                 parallel: int, seed: int) -> int:
+def record_demos(family: str, checkpoint: Path, out: Path, stems: list[str], runs: int, max_loss: float,
+                 repeat: int, parallel: int, seed: int) -> int:
     """Plays, filters and writes the rows; returns how many."""
-    config = load_specialist(FAMILY)
+    config = load_specialist(family)
     registry.require_compatible(checkpoint)
     policy = registry.load_model(checkpoint)[0].to_native()
     states = [f'{stem}_{chain}' for stem in stems for chain in (0, 1, 2)]
@@ -102,8 +103,9 @@ def record_demos(checkpoint: Path, out: Path, stems: list[str], runs: int, max_l
 
 def main(argv) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('checkpoint', type=Path, help="the wizzrobe run dir (or ckpt.pt) the planner plays")
+    parser.add_argument('checkpoint', type=Path, help="the family's run dir (or ckpt.pt) the planner plays")
     parser.add_argument('out', type=Path)
+    parser.add_argument('--family', default=DEFAULT_FAMILY)
     parser.add_argument('--states', nargs='+', default=['6_38s', '6_3aw'], help="start state stems (chains 0-2)")
     parser.add_argument('--runs', type=int, default=100, help="episodes a start state")
     parser.add_argument('--max-loss', type=float, default=6.0, help="hearts a kept episode may lose")
@@ -114,11 +116,11 @@ def main(argv) -> int:
     args = parser.parse_args(argv)
     nice = begin_job(args)
     episodes = 3 * len(args.states) * args.runs
-    with logged_job('r27-plan-demos', 'eval', [{'specialist': FAMILY, 'run_id': args.checkpoint.name,
+    with logged_job('r27-plan-demos', 'eval', [{'specialist': args.family, 'run_id': args.checkpoint.name,
                                                  'status': 'evaluating'}], nice=nice,
                     work=work(eval_episodes=2 * episodes)):
-        record_demos(args.checkpoint, args.out, args.states, args.runs, args.max_loss, args.repeat, args.parallel,
-                     args.seed)
+        record_demos(args.family, args.checkpoint, args.out, args.states, args.runs, args.max_loss, args.repeat,
+                     args.parallel, args.seed)
     return 0
 
 
