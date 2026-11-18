@@ -2771,3 +2771,44 @@ answers. Lee: "We aren't doing potions or continues, that's the call."
   Dungeon 6 with the same inputs, by losing about half the hearts).
 - The other open items (Dungeon 2's loss with the Dungeon 7 Goriya, Dungeon 8's landing, the leg's hearts, a complete
   run from power on) are the lead's to schedule.
+
+## 2026-11-19 — The magic sword and Dungeon 6 are `d2first` (round 27)
+
+Round 27 carried the stretch as the scouting route `d6` (`{extends: d2first}`, steps 248-280) while its states,
+families and first team were built; with a team over the working rate on Dungeon 6 it was merged into the trained
+route, as round 26 merged `d7`.
+
+- **`d2first` has 281 steps** and ends on taking the D6 triforce in 6:0x0c (steps 0-247 unchanged: the game start to
+  the D7 triforce; 248-280 the leg to the magic sword and Dungeon 6). The route `d6` is gone; the draft
+  `first-quest` starts at Dungeon 6's exit.
+- **Comparing with round 26:** its full route is `--stop-at step:248` or the yardstick's milestone `full→post-d7`;
+  the segment `d7` arrives at 0:0x42 entered after 7:0x2b. The new segments are `post-d7` (from `0_42c_0`) and `d6`
+  (from `6_79s_0`).
+- **`heart_value.json`** is refit under `d2first` from the same 26 chain files; the table came out byte-identical
+  to the one composed from `d2first`'s rows 0-247 and `d6`'s 248-280 (round27.md §13.2).
+
+## 2026-11-19 — One team from two lanes; the landing held for ow-lynel (round 27)
+
+- **One team:** no family changed on both `main` (round 26) and the Dungeon 6 lane from different bases, so each
+  family takes the side that changed it: wizzrobe `r80-wplan-s78`, ow-ghini `r77-ghini`, boss-gohma `r77-gohma` and
+  `r77-b` for ow-lynel, ow-moblin, like-like, stalfos-keese-gel, trap-room, vire and zol from the lane; goriya
+  `r76-goriya4-s78`, ow-zora `r76-zora-arrows`, wallmaster `r76-wall-1`, dodongo-crossing `r76-c` and
+  equipment-room `r76-c` from `main` (equipment-room also plays the tunnel 6:0x08: 99.9% against the lane's
+  `r75-f-c` 99.5% of 2700 single-room episodes). Round27.md §14.1.
+- **Measured** (`r77-1k`, round27.md §14.2): `d6` 30.0%, `post-d7` 14.4%; every earlier segment within noise of
+  `r76-1k` but after Dungeon 2, 90.1% against 95.7% (−5.6 ± 1.2), lost to ow-lynel `r77-b` in 0:0x0a. On the full
+  route (300 runs, the same seeds) that is the D5 triforce 14.3% against 27.0% (−12.7 ± 3.3).
+- **Held** (the lead, Nov 18): round 26 landed with Dungeon 2's goriya loss, and this stretch was to land the same
+  way, but halving the runs that reach the D5 triforce is not a price for a stretch the full route finishes in 1 of
+  300, and the owner watches runs from the start. `main`'s ow-lynel `r74-lynel` plays 0x0a and cannot play the leg's
+  0x50, the lane's the other way round, so one joint continuation trains both. It lands when the stretches ow-lynel
+  plays are measured again (after Dungeon 2 and the leg to Dungeon 5 paired with `r76-1k`, `post-d7`, the full
+  route at 1000 runs paired with `r76-1k-full`) and the full route's D5 and D7 triforce rates are within noise of
+  `main`'s.
+
+## 2026-11-19 — 1.7.0.0: seven dungeons (round 27)
+
+MINOR +1: the route completes Dungeon 6, from its entrance in 30.0% of 1000 runs with the models alone (`r77-1k-d6`),
+the working rate the owner set for a first team (about 30%, decisions 2026-11-16). COMPAT 0, REV 0: nothing a
+loaded model reads changed since 1.5.1.0, so the 1.6.0 runs are stamped 1.7.0.0 (`triforce stamp`), not converted.
+The Cargo workspace is 1.7.0.

@@ -14,11 +14,29 @@ the gap list of what must be walked in the game first, where the documents disag
 of work) and the documents it indexes (`d7.md`, `d6.md`, `d8.md`, `d9.md`, `late-monsters.md`, `late-mechanics.md`).
 The owner's decisions of Nov 16 are in `docs/decisions.md` ("The rest of the game").
 
-### Round 27 (begun Nov 17): the magic sword and Dungeon 6
+### Round 27 (Nov 17-19): the magic sword and Dungeon 6
 
-round27.md; the walks `docs/routes/d6-walks.md`; the route as built `docs/routes/d6.md` §14; the lead's working
-answers `docs/decisions.md` 2026-11-17.
+round27.md; the walks `docs/routes/d6-walks.md`; the route as built `docs/routes/d6.md` §14, as trained §15; the
+lead's working answers `docs/decisions.md` 2026-11-17. Dungeon 6 is trained to 30.0% from its entrance (`r77-1k-d6`,
+1.7.0.0); **the landing is held for ow-lynel** (round27.md §14.4, decisions 2026-11-19).
 
+- [ ] **ow-lynel, a joint continuation (the landing waits for it)**: the lane's `r77-b` plays the leg's 0x50, 0x60,
+  0x32 and 0x22 and loses 0:0x0a after Dungeon 2 (39 deaths in 1000 runs against `r74-lynel`'s 13; the stretch
+  90.1 against 95.7%, −5.6 ± 1.2; on the full route the D5 triforce 14.3 against 27.0% of 300 paired runs);
+  `main`'s `r74-lynel` plays 0x0a and none of 0x50. One continuation trains both, judged on after Dungeon 2 and
+  `post-d7` together; then after Dungeon 2, the leg to Dungeon 5 (`--from 0_45c_0`), `post-d7` and the full route
+  (1000 runs, paired with `r76-1k-full`) are measured again, and the stretch lands when the full route's D5 and D7
+  triforce rates are within noise of `main`'s.
+- [ ] **What loses Dungeon 6** (`r77-1k-d6`, round27.md §14.3): 6:0x3a kills 376 of 824 visits (entered with 6.1
+  hearts), 0x38 128 of 1000 (10.6), then 0x2c 81, Gohma 32; on `post-d7`, entered with 10.3 hearts instead of 12,
+  0x38 kills 251 and 0x3a 372 of 615. The planner beside wins 67.3% by losing about half the hearts in 0x38: the
+  lever is still 0x38's price, then 0x3a at the hearts it gets (`chain_hp`, a lower `room_kills_share`, more of the
+  planner's demonstrations; §13.6).
+- [ ] **Four wizzrobe selections left unconfirmed**: `select-checkpoint`'s `confirm-top1` failed in `r79-wizz-s79`,
+  `r79-wizz-s80`, `r80-wplan-s79` and `r80-wplan-s80b` (fixed since: the promoted reference is pinned), so only
+  their last checkpoints were confirmed. Their best screened ones (it001426 25.5%, it001456 23.2%, it001306 29.2%,
+  it001456 27.0%; the promoted `r80-wplan-s78` screened 31.5% and confirmed 31.8%) are unlikely to win; confirm
+  them on seeds 1000-1999 only if a wizzrobe choice is reopened.
 - [x] **The walks** (Nov 16): every room of the stretch in the running game.
 - [x] **The route vocabulary** (Nov 17): the scouting route `d6` (steps 248-280), the gravestone, `waypoint: sword`,
   `keep_out` doorways, Gohma's ARROW facing and stand tile, families ow-ghini, wizzrobe, boss-gohma, the scripted
@@ -27,23 +45,23 @@ answers `docs/decisions.md` 2026-11-17.
   holds); the three new families' `start_states` and `warm_start`, patterns for the eight old families (§6).
 - [ ] **States after a skipped fight** (26: `6_28s` on for chains 1 and 2, `6_08cave` on for chain 0): rebuild from
   chain harvests once a model clears 0x38 and 0x3a (`eval-chain --harvest`).
-- [ ] **Merge `d6` into `d2first`** when the owner fixes the route (as round 26 did with `d7`), then refit
-  `triforce/heart_value.json` and move `eval_batch.D6_SEGMENTS`, `MILESTONES`, the `d7` target and the room-stats
-  cuts (round27.md §7). No family yaml names a route, so none has to change.
+- [x] **Merge `d6` into `d2first`** (Nov 18): 281 steps to the D6 triforce, `heart_value.json` refit under
+  `d2first` (byte-identical), segments `post-d7` and `d6`, room-stats scopes, 1.7.0.0 (decisions 2026-11-19).
 - [ ] **Left by the states step** (round27.md §8-10): the proof round `r77-proof` read (`run.json`
-  `curriculum_tracks`) and wizzrobe's proof training, a training with `--demos` (the three files are written by
-  `r27_d6_rules.py demos`, round27.md §9), the staged tracks of 6:0x38 and 6:0x3a (`SKIP_DONE=1
-  scripts/experiments/r27_d6_curricula.sh`), `0_61n_1`'s track, `max_steps` near the track lengths.
+  `curriculum_tracks`), the staged tracks of 6:0x38 and 6:0x3a (`SKIP_DONE=1
+  scripts/experiments/r27_d6_curricula.sh`), `0_61n_1`'s track, `max_steps` near the track lengths. (Training with
+  `--demos` is done: 0x28's bomb and the planner's 0x38 and 0x3a, round27.md §13.6.)
 - [ ] **6:0x28's objective path runs along the Blue Wizzrobes' row**: a rule walking by `target` loses 1.75 hearts
   and 9 of 60 runs there, the walked path (bottom row, then column X `$D0`) 0.95 and none. Give the room
   `path_costs` (and re-pin `crates/zelda/tests/d6.rs`).
 - [ ] **The state build's Gohma spends 5, 1 and 6 arrows** (the explorer shoots at random; the script 1-2): `6_0cs`
   holds 36 / 32 / 26 rupees. Rewrite with `r27_d6_states.py write --rupees` if Dungeon 8's ledger needs it.
-- [ ] **A first team**: baseline `r77-base` is 0 of 100 on both segments (round27.md §11). ow-lynel first (no run
-  passes 0x50), then wizzrobe (0x28 0%, 0x29 3%, 0x38 12%, 0x3a 32%, 0x2c 65%), boss-gohma (28% zero-shot),
-  ow-ghini (0x21 75% at 3.6 hearts).
+- [x] **A first team** (round27.md §13-14): from the baseline's 0 of 100 to `d6` 30.0% and `post-d7` 14.4% of 1000
+  runs (`r77-1k`); ow-lynel plays 0x50 (but see the first item), wizzrobe `r80-wplan-s78`, boss-gohma `r77-gohma`,
+  ow-ghini `r77-ghini`.
 - [ ] **The main risk: the survival budget does not close** (round27.md §3): the best plays seen cost 21 hearts of
-  12 with 0x38 and 0x3a in, 10.3 without them. Nothing built in the vocabulary step changes that.
+  12 with 0x38 and 0x3a in, 10.3 without them. The trained team's winners spend it all: 0x3a is entered with 4.7-6.1
+  hearts. No potions and no CONTINUE (decisions 2026-11-19): it is closed by play or not at all.
 - [ ] **Armos statues are still pressed** by a MOVE that arrives on the grid point before one (0x22: 41 hearts in 40
   ow-lynel runs). The gravestone stop in the executor would cover them, but an Armos room (0x34) is on `d2first`:
   extending it is a behaviour change to measure on the chains.
@@ -52,8 +70,8 @@ answers `docs/decisions.md` 2026-11-17.
   the route step.
 - [ ] **0x29's key** (the ring key) is left; 0x7a's key is never fought for (a run without a key at 0x79 gets a
   cheated one).
-- [ ] **A scripted fight for 0x38 and 0x3a** does not exist (the walks' doorway script fails); a teacher for the
-  wizzrobe family would have to be the planner.
+- [x] **A scripted fight for 0x38 and 0x3a** does not exist (the walks' doorway script fails); the planner was the
+  teacher (`r80-wplan-s78`, +2.4 to +4.0 points on every seed, round27.md §13.6).
 
 ## Round 26 (the leg to Dungeon 7 and Dungeon 7): found while building, training and measuring (Nov 17-18)
 

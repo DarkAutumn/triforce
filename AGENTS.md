@@ -4,29 +4,31 @@ Read this first, then `README.md` (setup, commands), `docs/architecture.md` (mod
 `docs/experiments/round*.md` (start with its Summary) plus `docs/experiments/backlog.md` (the experiment backlog,
 called `todo.md` before Nov 8; where the work stands and what to try next, in order).
 
-## Where things stand (Nov 18)
+## Where things stand (Nov 19)
 
-- **Round 27, begun (Nov 16-17, 1.5.1.0; `docs/experiments/round27.md`):** the magic sword and Dungeon 6. Built so
-  far, nothing trained: (1) **the walks** (`docs/routes/d6-walks.md`: the leg, the gravestone and the cave, every
-  room of level 6, Wizzrobes and Gohma measured; today's models cannot play 0x28, 0x38, 0x3a, Gohma, or ow-lynel's
-  0x50 and 0x32); (2) **the route vocabulary** (`docs/routes/d6.md` §14, `docs/architecture.md` "The magic sword and
-  Dungeon 6"): the scouting route `d6` = `d2first` plus steps 248-280 (`{extends: d2first}`; the stretch `woods`),
-  0x21's gravestone as a pushed secret (game.yaml `entrance: {how: push}`: the square under it is the target, MOVE N
-  pushes it, the MOVE ends on the stairs; **a MOVE ends before any gravestone square**), `waypoint: sword` (the
-  cave's refusal under 12 containers is `missed`), game.yaml exits with `keep_out: true` (6:0x28 N, 6:0x29 N, 6:0x2c
-  S: no MOVE into them unless the step leaves there), Gohma (ARROW only facing N while it lives, the stand tile under
-  it as the fight's target, `requires_rupees` in its room), families ow-ghini, wizzrobe, boss-gohma (`warm_start`
-  ow-moblin, like-like, boss-digdogger), the scripted walk `crates/zelda/tests/d6.rs` to the D6 triforce, and 300 paired
-  full-route runs showing `d2first` plays the same (round27.md §4). The lead's working answers to the walks' nine
-  questions are in `docs/decisions.md` 2026-11-17, the owner's to overrule. **The main risk** (round27.md §3): the
-  best plays seen of the stretch cost 21 hearts of 12; without 0x38 and 0x3a, 10.3. (3) **The states step**
-  (round27.md §5-11): 96 start states of steps 248-280 installed (chains 0-2; 0x38 and 0x3a crossed with their fights
-  skipped but for chain 0's 0x38; no family yaml names `route: d6`, a state's step is found on the route that has
-  it), tracks (`scripts/experiments/r27_d6_curricula.sh`), three scripted rules in the env's own actions
-  (`r27_d6_rules.py`: the gravestone, 0x28's bomb, Gohma), the segments `post-d7` (`0_42c_0`) and `d6` (`6_79s_0`;
-  `ROUTE=d6 SEGMENTS="post-d7:0_42c_0 d6:6_79s_0" scripts/experiments/r56_chains.sh`), and the baseline `r77-base`:
-  **0 of 100 on both segments** (no run passes ow-lynel's 0x50 or 6:0x28). Not done: the demonstration files, the
-  proof trainings read, 0x38's and 0x3a's staged tracks confirmed, any training.
+- **Round 27, trained and merged, held for ow-lynel (Nov 16-19, 1.7.0.0; `docs/experiments/round27.md`, the
+  stretch `docs/routes/d6.md` §14-15):** the magic sword and Dungeon 6. **`d2first` has 281 steps and ends on the
+  D6 triforce** (steps 248-280: out of 0:0x42, the wrap exit of 0x51 or the Lost Woods, 0x50, the graveyard,
+  0x21's gravestone and the magic sword cave, 0x32 and 0x22, Dungeon 6 with 0x38's and 0x3a's blocks, 0x28's bomb
+  wall, the tunnel 0x08 and Gohma; decisions 2026-11-19). New in the engine and the route: the gravestone as a
+  pushed secret (`entrance: {how: push}`; a MOVE ends before any gravestone square), `waypoint: sword`, doorways
+  with `keep_out: true`, Gohma's ARROW facing and stand tile, the scripted walk `crates/zelda/tests/d6.rs`, 96 start
+  states, three scripted rules (`r27_d6_rules.py`), `heart_value.json` refit to step 280, the segments `post-d7`
+  (`0_42c_0`) and `d6` (`6_79s_0`). New families ow-ghini, wizzrobe, boss-gohma (31 in all). **One team from two
+  lanes** (round27.md §14.1): wizzrobe `r80-wplan-s78` (priced by the heart value, trained longer, and taught by the
+  honest planner's play of 0x38 and 0x3a), ow-ghini `r77-ghini`, boss-gohma `r77-gohma`, `r77-b` for ow-lynel,
+  ow-moblin, like-like, stalfos-keese-gel, trap-room, vire and zol; round 26's goriya, ow-zora, wallmaster,
+  dodongo-crossing and equipment-room. Chains of record `r77-1k` (1000 runs a segment, models alone, clips on;
+  `r76-1k` in brackets): after D2 **90.1 (95.7; −5.6 ± 1.2)**, D1 98.7 (99.0), after D1 100, D3 78.6 (78.2), after
+  D3 100, D4 91.1 (92.1), the leg 100 (99.9), D5 69.1 (68.7), `post-d5` 98.7, `post-d7` 99.0% reach Dungeon 6 and
+  14.4% its triforce, **`d6` 30.0%** (killers 6:0x3a 376 of 824 entered with 6.1 hearts, 0x38 128, 0x2c 81, Gohma
+  32); the full route (300) the D5 triforce **14.3% against 27.0%** on the same seeds, the D7 triforce 3.0%, the D6
+  triforce 0.3%. The planner beside: `d6` 67.3%, `post-d7` 43.7%, the full route 37.7%. **Held, not on `main`**:
+  ow-lynel `r77-b` (the only run that plays the leg's 0x50) loses 0:0x0a after Dungeon 2 (39 deaths against 13),
+  which halves the full route's D5 triforce; a joint ow-lynel continuation (0x0a with 0x50, 0x60, 0x32, 0x22) is
+  training, and the stretch lands when the full route's D5 and D7 triforce rates are within noise of `main`'s
+  (decisions 2026-11-19). **Next:** that continuation and the landing, then Dungeon 6's 0x38 and 0x3a at the hearts
+  runs bring, Dungeons 8 and 9 in their lanes.
 - **Round 26, landed (Nov 16-18, 1.6.0.0; `docs/experiments/round26.md`; the plan for the rest of the game:
   `docs/routes/rest-of-game.md`):** the leg from Dungeon 5 to Dungeon 7 and Dungeon 7. **`d2first` has 248 steps
   and ends on the D7 triforce** (steps 209-247: 0x0b's recorder and the whirlwind to 0x45, 0x44's arrows, 0x34's

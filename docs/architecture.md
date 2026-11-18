@@ -194,7 +194,8 @@ route step wants it) and in the objective (targets, outcomes).
 - **States and segments.** The entry side `r` names a state entered by the whirlwind (`0_45r_<chain>`,
   `entry_states.ENTRY_SIDES`, `StateName`). The stretch is part of `d2first` (decisions 2026-11-17: the scouting
   route `d7` was merged before any state was built), so its segments are two more of `eval_batch.SEGMENTS`:
-  `post-d5` from `0_0bc_0` (arrival: 7:0x79) and `d7` from `7_79s_0` (the D7 triforce, the route's end); `d5` arrives
+  `post-d5` from `0_0bc_0` (arrival: 7:0x79) and `d7` from `7_79s_0` (the D7 triforce; arrival 0:0x42 entered after
+  7:0x2b since round 27 runs on); `d5` arrives
   at 0:0x0b entered after 5:0x14, and a run of round 25's full route is `--stop-at step:209`. Room-stats has the
   scopes `to-d7` and `d7`. The start states of steps 209-247 (114: 38 a chain) come from
   `scripts/experiments/r26_d7_states.py sources` (the D5 triforce-room states with the bombs a run brings: 3, 4
@@ -209,13 +210,15 @@ route step wants it) and in the objective (targets, outcomes).
   D7 triforce; beside it a wrong ware is `missed`, the rupee top-up, the whirlwind mask for seven counter and piece
   cases, the Armos from either side.
 
-### The magic sword and Dungeon 6 (round 27; `docs/routes/d6.md` §14, scouting route `d6`)
+### The magic sword and Dungeon 6 (round 27; `docs/routes/d6.md` §14; steps 248-280 of `d2first`)
 
 The same rule as for the leg to Dungeon 7: no macros. The gravestone, the sword, the doorways and Gohma's arrow are
 played by MOVE, BOMB and ARROW; what is new lives in the objective (targets, outcomes), in the mask, and in where a
 MOVE ends.
 
-- **Route** (routes.yaml): `d6` = `{extends: d2first}` plus steps 248-280 (the stretch `woods`: the wrap exit out of
+- **Route** (routes.yaml): steps 248-280 of `d2first`, which ends on the D6 triforce (built as the scouting route
+  `d6` = `{extends: d2first}`, merged in round 27; decisions 2026-11-19; segments `post-d7` from `0_42c_0`, arrival
+  6:0x79, and `d6` from `6_79s_0`, the route's end). The steps (the stretch `woods`: the wrap exit out of
   0x51 into 0x50, or 0x51 S, the Lost Woods by `exit: maze`, 0x60, 0x50 from S; the graveyard; 0x21 and its cave;
   0x31, 0x32, 0x22; Dungeon 6's sixteen steps). `waypoint: sword` on the magic sword's cave step
   (`objectives::WAYPOINT_SWORD`): done once Link holds the cave's sword, `missed` on leaving the overworld room
@@ -857,11 +860,11 @@ visits; backwards from each triforce; made non-decreasing in hearts); refit it a
 or the route. The table names each step's room, entry, exit and visit, and a family that reads it refuses to load
 when they no longer match the route the table names (`GameData::check_heart_values`); a family that doesn't read it
 ignores it. A table prices its own route and every route whose steps are its first ones (`HeartValues::prices`;
-round 27: fitted with `--route d6`, the scouting route that extends `d2first`, it prices both, an episode on
-either reads it, and its rows 0-247 are the `d2first` fit's); on a route it does not price the family is paid the
-plain health reward. The terms: `exit: true` makes the success terminal's health part V(next step, hearts out) /
-V(next step, max hearts) instead of hp/max_hp (still weighted by w); `potential: S` pays S × (V(step, after) −
-V(step, before)) for every
+round 27: a table fitted on a scouting route that extends `d2first` prices both, and its rows 0-247 are the
+`d2first` fit's; since `d6` was merged the table is `d2first`'s, 281 rows); on a route it does not price the family
+is paid the plain health reward. The terms: `exit: true` makes the success terminal's health part V(next step,
+hearts out) / V(next step, max hearts) instead of hp/max_hp (still weighted by w); `potential: S` pays S ×
+(V(step, after) − V(step, before)) for every
 change of hearts in a room (a hit or a pickup; not the triforce's refill or a heart container) at the room's route
 step, as `reward-heart-value` / `penalty-heart-value`, beside the flat `penalty-lost-health` /
 `reward-gained-health`; `low_health: F` adds F × (1 − hearts after / max) × the step's `penalty-lost-health` to the
@@ -1321,7 +1324,7 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `--parallel` envs, chains and the report alone. `--chain` takes everything `eval-chain` does but `--append`
   (its output is written as `<output>.tmp` and moved into place when it succeeded; a segment start without
   `--stop-at` also counts arrivals at the next segment's start room); `--evaluate` everything `evaluate` does.
-  `--chains TAG` is `r56_chains.sh`: the twelve segments into `target/r56-chains/<TAG>-<segment>.jsonl` (+ `.log`),
+  `--chains TAG` is `r56_chains.sh`: the fourteen segments into `target/r56-chains/<TAG>-<segment>.jsonl` (+ `.log`),
   then the report entry (`scripts/yardstick.py report`, `triforce room-stats TAG`); `--families` the evaluation of
   each family's promoted (or `--run-id`) run in each of `--acts` (`model` or act mode spellings; `--clips` for
   every one; `--output-dir DIR` writes `DIR/<family>-<act>[-clips<mode>].json` instead of into the run dir). A

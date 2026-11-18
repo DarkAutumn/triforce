@@ -2,8 +2,9 @@
 
 Triforce trains reinforcement learning agents to play *The Legend of Zelda* on the NES. The agents play from the
 start of the game through Dungeon 2, go get the white sword, clear Dungeons 1, 3 and 4, cross the overworld to the
-mountain (two heart containers, 100 rupees, the Lost Hills), and finish on the triforce piece at the end of Dungeon
-5, with a few detours along the way (heart containers, the bow, the raft, the ladder, the recorder).
+mountain (two heart containers, 100 rupees, the Lost Hills), clear Dungeon 5, take the whirlwind, two shops and a
+pond to Dungeon 7, go get the magic sword under a gravestone, and finish on the triforce piece at the end of Dungeon
+6, with a few detours along the way (heart containers, the bow, the raft, the ladder, the recorder, the red candle).
 
 ![Six runs by the trained models, played back with play-zelda.py](docs/images/play-zelda.png)
 
@@ -11,7 +12,7 @@ mountain (two heart containers, 100 rupees, the Lost Hills), and finish on the t
 
 - **No pixels.** The networks never see the screen. Every observation is built from the game's RAM: Link, the
   enemies, projectiles and items, the room's tiles, and a pointer to the current objective.
-- **One model per kind of room.** There are 28 specialist PPO models, grouped by the enemies they face (Goriyas,
+- **One model per kind of room.** There are 31 specialist PPO models, grouped by the enemies they face (Goriyas,
   Darknuts, the Moldorm, each boss, and so on). A runner follows a fixed route through the game and hands each
   room to its specialist.
 - **Actions that mean something.** Each action is a short move (eight directions), a sword swing, an item, or a
@@ -37,7 +38,7 @@ Out of 1,000 runs from the start of the game with the current team (round 26's m
 | Dungeon 5 | 44% | 51% |
 | The Dungeon 5 triforce | 22% | 20% (the end of round 25's route) |
 | Dungeon 7 | 22% | |
-| The Dungeon 7 triforce (the end of the route) | 6.7% | |
+| The Dungeon 7 triforce (the end of round 26's route) | 6.7% | |
 
 Since round 26 the route runs on from the Dungeon 5 triforce through the whirlwind, two shops and a pond to Dungeon
 7 and its triforce. Of 1,000 runs started at Dungeon 7's entrance, 40% take its triforce; its six Blue Goriyas in
@@ -47,6 +48,10 @@ on (an act mode that tries each action in the emulator before playing it, on ran
 another if Link is hit; `docs/experiments/round25.md` §12), 85% of runs from the start reach the Dungeon 7 triforce;
 the models alone are the number the training is judged by. Clips off (the no-clip way) is no longer measured (the
 owner, Nov 18).
+
+Round 27 runs the route on from the Dungeon 7 triforce to the magic sword and Dungeon 6 (`docs/routes/d6.md` §15):
+of 1,000 runs started at Dungeon 6's entrance, 30% take its triforce, and its two Wizzrobe block rooms (6:0x38 and
+6:0x3a) are what loses most of the rest (`docs/experiments/round27.md` §14).
 
 Every round of training is written up in `docs/experiments/` (start with the newest `round*.md`), and
 `docs/experiments/backlog.md` has what's next.
@@ -117,7 +122,7 @@ triforce eval-chain --runs 20 --parallel 20                     # route d2first;
 triforce eval-chain --from 4_71s_0 --runs 20 --clips off       # every run with clips off (the plain way through every stretch); --clips-off-from 4:0x31 turns them off on the way
 triforce eval-chain --runs 20 --parallel 20 --power-on --stop-at step:24   # from console power on (random idle delay per seed) to the overworld with Dungeon 2's triforce
 triforce eval-chain --runs 20 --parallel 20 --replays runs/replays   # also record every run as runs/replays/<seed>-<ending>.tfreplay (--streams rewards,decisions,keyframes)
-triforce eval-batch r71-1k --chains r71-1k --runs 1000 --act model   # the twelve chain segments (full, d2, post-d2, d1, post-d1, d3, post-d3, d4, post-d4, d5, post-d5, d7) as one batch (one log folder, a GUI bar each) into target/r56-chains/r71-1k-*.jsonl, then yardstick + room-stats
+triforce eval-batch r71-1k --chains r71-1k --runs 1000 --act model   # the fourteen chain segments (full, d2, post-d2, d1, post-d1, d3, post-d3, d4, post-d4, d5, post-d5, d7, post-d7, d6) as one batch (one log folder, a GUI bar each) into target/r56-chains/r71-1k-*.jsonl, then yardstick + room-stats
 triforce eval-batch r71-families --families all --acts sample,argmax --jobs 4   # every family's promoted run in both act modes, 4 side by side
 triforce eval-batch r71-check --chain 'd3: --from 3_7cs_0 --runs 200' --evaluate 'darknut: --specialist darknut --act argmax'   # a mixed batch (rerun: skips what is done)
 triforce room-stats r70-1k                                     # per-room stats by scope (full run, segments, room only) of target/r56-chains/r70-1k-*.jsonl -> r70-1k-room-stats.json
