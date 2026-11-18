@@ -857,6 +857,11 @@ still waiting in the job line and compare with it.
 0-299, `target/r79/r79-plan-d6.jsonl`): **182 of 300, 60.7%**, against 54.0% with `r78-wizz-s78` (+6.7 ± 3.9 paired).
 0x38 costs 2.98 hearts a visit (3.25), 0x3a is entered with 8.56 hearts and kills 41 of 243 visits (53 of 253).
 
+**Seed 79** (against the promoted `r79-wizz-s78`): screen last 25.3%, best it001426 25.5%, the promoted run 29.0%
+first; confirmed last 25.0% against 27.8%: **not better, not promoted**. The tool's batch ended `failed`: when the
+promoted run tops the screen, its `confirm-top1` entry raises `LookupError: the screen has no chain of promoted
+yet` (a `select-checkpoint` bug; the confirmations of the last checkpoint and the promoted run were written).
+
 Still in the job line when this was written: the selections of `r79-wizz-s79`, `r79-wizz-s80` and the planner arm
 `r80-wplan-s78`, `-s79`, `-s80b` (all against the promoted `r79-wizz-s78`; `r80-wplan-s80`'s first try ran out of
 GPU memory beside `-s79`: `ppo.py` computes the demonstration accuracy in one forward pass over all 84,041 rows, so
