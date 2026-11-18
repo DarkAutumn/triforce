@@ -872,6 +872,9 @@ failure ended the batch). 0x38 costs 4.96 hearts a visit instead of 5.42 (132 de
 entered with 6.40 hearts instead of 5.73. It is the first run over the owner's 30% on the segment on seeds not used
 to choose it; it was not promoted yet only because the selection of `r80-wplan-s79` was running in the same
 checkout (a promotion mid-selection changes the run it compares with).
+**Seed 79** (`r80-wplan-s79`): screen last 25.2% (checkpoints 28-29% from iteration 1246 on) against 29.0%;
+confirmed last 27.4% against the promoted 27.8% (−0.4), and against its own length control `r79-wizz-s79`'s 25.0%
+on the same fresh seeds +2.4: the planner's demonstrations add 2-4 points on both seeds measured so far.
 
 **The `r79-1k` chains** (the promoted team with `r79-wizz-s78`, the §13.5 command with `TAG=r79-1k`; the batch
 `failed` by its report entry alone, as before), paired by seed with `r78-1k`:
