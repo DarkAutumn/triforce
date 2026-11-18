@@ -1198,3 +1198,55 @@ hearts (the models 18.6), it takes the ring with 9.73 (7.45) and ends with 6.0. 
 0.30 against 0.75, 0x30 0.90 against 1.43, 0x07 0.39 against 0.80, 0x61 0.06 against 0.39, 0x65 0.92 against 1.22;
 0x10 2.01 against 2.52 (entered with 9.1 hearts, not 5.2). Its deaths: 0x10 18, 0x30 15, Ganon 8, 0x17 8, 0x52 7.
 Not the primary number: the planner tries each action on the emulator before taking it.
+
+## 18. The third round for the stretch (rounds `r79c-*`)
+
+**State of this section.** Written as the round goes; the chains are at its end.
+
+**What the ledger asked for** (§17.5): wizzrobe ends 611 of `d9`'s 857 lost runs (0x10, 0x30 and 0x05, entered
+with three to six hearts, 496 of them), patra 144 (0x52 and 0x16's fight), like-like 37, Ganon 31. Every room is
+learned at the families' own draws; what is missing is play at the hearts the chain brings. The honest planner,
+with the same models, loses 11.0 hearts in the rooms where they lose 18.6, and ends the game in 73.3% of `d9` runs.
+
+**The levers used** (commit 84badc3 and the lead's two changes of Nov 18):
+
+- **Hearts priced by the second team's chains.** `heart_value.json` refitted on `d9` from the `d8` table's 28
+  sources and `r79b-1k-post-d8`, `r79b-1k-d9` (in place of `r79t5-1k-d9`): 0 of the 297 rows before step 297
+  differ; the leg's steps have visits of their own now; V of level 9's steps rises with 14% of runs ending the game
+  instead of 0.5% (9:0x10's step at full hearts about 0.4 → 0.98, 0x05's 0.3 → 0.9), so the `potential` term pays
+  for hearts kept there. Ganon's family reads no table.
+- **Starts at the hearts the runs bring.** `triforce/chain_hp.json` from the same two chains (the leg's and level
+  9's rooms only; 0x10 entered with 4.37 hearts on average, 0x05 5.28, 0x30 3.56, 0x52 3.07, Ganon 3.25) and
+  `chain_hp: 0.5` in wizzrobe, patra, ganon and like-like: half the room-entry resets into a profiled room draw its
+  hearts from the profile, the rest keep the `hp`/`full_hp` draw. Dungeon 6's and 4's rooms have no profile.
+- **The planner as a teacher** (the Dungeon 6 lane's finding, round27.md §13.6: +2.4 to +4.0 points on `d6` on
+  three seeds; `scripts/experiments/r27_plan_demos.py`, picked from that branch and given `--family`). The planner
+  plays the family's run from its rooms' states (100 runs a state, chains 0-2, the family's draws with `chain_hp`,
+  seeds 6000+); every decision of a won run losing at most 6 hearts is a row, one it replaced five rows. The rooms
+  are those where the planner chain of §17.5 loses fewer hearts a visit than the models:
+
+  | File (run played) | State: won of 300, hearts lost in the wins | Rows |
+  |---|---|---:|
+  | `plan9-wizz` (`r79b-wizz-s80`) | 0x65 295, 0.89; 0x17 to its wall 283, 1.34; 0x05 280, 0.45; 0x10 243, 1.57; 0x30 261, 0.46 | 118,237 |
+  | `plan9-patra` (`r79b-patra`) | 0x16's fight 292, 0.17; 0x27 to its wall 291, 2.0; 0x52 275, 0.13; 0x61 293, −0.12 | 72,684 |
+  | `plan9-ganon` (`r79t5-ganon`) | Ganon 292, 0.15 | 16,338 |
+
+  0x07's first visit (the clip) is left out: the owner's rule is no fight rows for a clipped room.
+- **One wizzrobe for the whole route** (the lead): three seeds of a joint training on Dungeon 6's and level 9's
+  rooms from the Dungeon 6 lane's promoted `r80-wplan-s78` (d6 31.8% on fresh seeds; copied into this checkout as
+  the base and the comparison), passing its lineage's `bomb28` and `plan38-3a` with this lane's level 9 files
+  (`wizzrobe-05`, `-10`, `-30`, `clip-07`, `clip-20n`, `plan9-wizz`). Judged on both segments: a run that holds `d6`
+  within noise of `r80-wplan-s78` (1000 runs paired) and plays `d9` at least as well as `r79b-wizz-s80` becomes the
+  route's wizzrobe; if none does, `r79b-wizz-s80` stays for this stretch.
+- No scripted rule's demonstrations were added: every rule of the rooms that lose runs loses more hearts a visit
+  than the model (wizzrobe-10 7.13 against 2.52, -30 2.57 against 1.43, -05 2.55 against 1.27) but patra-52's (0.90,
+  the model 0.89) and Ganon's (0.57 against 0.75), and the planner's files cover those two rooms with less.
+
+| Round | Family | Starts from | Iterations | Seed | Demonstration files (coefficient 0.05) |
+|---|---|---|---:|---:|---|
+| `r79c-wj-s84`, `-s85`, `-s86` | wizzrobe | `r80-wplan-s78` | 976 | 84, 85, 86 | bomb28, plan38-3a, wizzrobe-05, -10, -30, clip-07, clip-20n, plan9-wizz |
+| `r79c-patra` | patra | `r79b-patra` | 488 | 80 | patra-16, -61, -52, plan9-patra |
+| `r79c-ganon` | ganon | `r79t5-ganon` | 488 | 80 | ganon, zelda, plan9-ganon |
+| `r79c-like` | like-like | `r79b-like` | 244 | 80 | like-like-14, clip-03 |
+
+All with `--stop-success 1.01 --sil-coeff 0.1`, checkpoints every 30 iterations (wizzrobe 60).
