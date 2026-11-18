@@ -30,6 +30,9 @@ branch.
 - [x] **The walks' fighters as rules over env actions** (`scripts/experiments/r29_demos.py`; round29.md §6).
 - [ ] **The main risk: the survival budget does not close.** About 23 hearts for the route and 26 for the fights
   with the ring, of 15 containers and no refill; 37.9 with the clips (round29.md §3, §5). The owner's question.
+  Measured by the second team (round29.md §17.5): the rooms' mean losses add to 18.6 hearts on `d9`; a run that
+  takes the ring with 8 to 9.9 hearts ends the game 17% of the time, with 4 to 5.9 1-2%. Drops, the potion,
+  CONTINUE: the owner's.
 - [x] **Start states** of steps 297-357, chains 0-2 (174; round29.md §9): no fight skipped, every fight played by
   a rule's won run (`r29_demos.py --harvest`); `audit --route d9` clean.
 - [x] **The clips way**: one-step stretches `ring-07`, `arrow-20`, `arrow-20n`; `clips: true` for wizzrobe, lanmola
@@ -45,10 +48,25 @@ branch.
   hearts, 8 hearts and the family's draws; 16 files in `target/r29-demos/` (972,347 rows), each trained in a
   2-iteration proof round (§12).
 - [x] **The baseline `r79-base`** (round29.md §13): 0 of 100 on `post-d8` and `d9`.
-- [ ] **A first team**: wizzrobe on both dungeons with its five demonstration files (0x07 and 0x10 are the
-  dearest fights: the rules win 62% and 79% from full hearts, 28% and 43% from 8), then lanmola (82 of 100 `d9`
-  runs die there), patra, ganon, like-like's 0x14 and 0x51, ow-moblin's whirlwind (0 of 120), ow-zora's tree and
-  0x27, ow-boulder's 0x17, ow-lynel's rock wall (0 of 120 each in single rooms).
+- [x] **A first team** (`r79t5-*`, round29.md §16): `d9` 5 of 1000 end the game; 0:0x17 from S and 9:0x55's clip
+  not learned. **A second team** (`r79b-*`, §17): both learned; `d9` 143 of 1000, `post-d8` 39 of 1000 (997 reach
+  Dungeon 9).
+- [ ] **The fought Wizzrobe rooms entered low**: 0x10 (259 deaths of 721 entering with 5.2 hearts), 0x30 (129 of
+  398 with 3.8), 0x05 (108 of 869 with 6.1) end 496 of `d9`'s 857 lost runs; patra's 0x52 (75 of 249 with 3.3) and
+  Ganon (31 of 174 with 3.5) next. Every rule of these rooms loses more hearts a visit than the model (wizzrobe-10
+  7.13 against 2.52, -30 2.57 against 1.43, -05 2.55 against 1.27) but patra-52's (0.90, the model 0.89) and
+  Ganon's (0.57 against 0.75).
+- [ ] **The leg's hearts**: runs reach Dungeon 9 with 12.06 of 15 (the rock wall 0:0x05 1.25, 0:0x07 0.45) and end
+  the game a third as often as from 15 (3.9% against 14.3%; round29.md §17.5); at full hearts the sword's beams
+  also save about 0.4 hearts in 9:0x65.
+- [ ] **`keep_out` misses at the entry square** (round29.md §17.2): with 9:0x55's S doorway in `keep_out`, MOVE S
+  from ($78, $BD), where every start and every arrival stands, walks Link out in two decisions; the executor's veto
+  does not hold there (`at_doorway_mouth` false). Not traced; an engine change. The 0x55 bounces it was for are gone
+  with lanmola `r79b-lanmola`.
+- [ ] **The ring's cellar `stuck`** (equipment-room's 2000 steps: 5 of 942 `d9` runs, 9 of 788 `post-d8`) and
+  patra's 3000-step limit (3 runs): not looked at.
+- [ ] **wizzrobe for the whole route**: `r79b-wizz-s80` is kept for this stretch only (Dungeon 6 0x38 72.0%, 0x3a
+  79.0% against `r78-wizz-s78`'s 78.0/72.0%); one wizzrobe run for Dungeons 6 and 9 is the Dungeon 6 lane's call.
 - [ ] **`no-damage` cuts rule runs** (600 actions without a hit): wizzrobe-05/-10/-30 and patra-16 with the
   family's draws (30 of 300) wait for a shot that does not come.
 - [ ] **Ganon's hidden position** is on `ram` until the owner decides; `last_seen` or `zero` needs the fight target

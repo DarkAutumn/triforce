@@ -2815,3 +2815,28 @@ block clip." As the lead passed it on, and as the first Dungeon 9 team applied i
 
 This supersedes Nov 13's "the models need to be trained with clips enabled, and also with the clip action masked"
 and round 29's working answer 11 in so far as it kept the fights as the clips-off way.
+
+## 2026-11-18 — Round 29's first two teams: what was kept for the stretch and why (round 29)
+
+- **What:** the second team for steps 297-357 (round29.md §16-17): lanmola `r79b-lanmola`, wizzrobe `r79b-wizz-s80`,
+  patra `r79b-patra`, like-like `r79b-like`, zol `r79b-zol`, ow-boulder `r79b-boulder`; ganon, ow-moblin, ow-zora,
+  ow-leever, ow-lynel, stalfos-keese-gel the first team's `r79t5-*`. Chains `r79b-1k`: `d9` 143 of 1000 end the game
+  (the first team 5; +13.8 ± 1.1 paired), `post-d8` 39 of 1000 (997 reach Dungeon 9).
+- **Two heart fits taken from the Dungeon 8 team's branch** (`d6`, `d8`) before the first round: the wizzrobe run
+  continued was trained with Dungeon 6's hearts priced, and without the table its Dungeon 6 episodes would have been
+  priced by the plain health terms. Then **`heart_value.json` fitted on `d9`** (rows 0-296 equal to the `d8` table's
+  field by field), so one table prices `d2first`, `d6`, `d8` and `d9`.
+- **wizzrobe is kept for this stretch only.** Every wizzrobe run trained here learns level 9 and pays in Dungeon 6
+  (`r79t5-wizz` 6:0x38 78.0% → 70.7%, past the three-point bar; `r79b-wizz-s80` 72.0%, 0x3a 79.0% against 72.0%).
+  Nothing else plays level 9's Wizzrobe rooms, so the stretch's chains use it; the run for the whole route is the
+  Dungeon 6 lane's call. Of three seeds, s80 was chosen by the dear rooms before the ring (0x07, 0x65, 0x30).
+- **A room not learned is looked at before a second round**, and the cause decided the fix: 0:0x17 from S had no
+  curriculum (its explorer tracks never loaded) and no demonstrations, so `curriculum: {enabled: true}` and the
+  ladder rule's rows (`r29_demos.py ladder-17`); 9:0x55's clip worked but the lane to it wandered, so the explorer's
+  three wandering tracks were set aside for the clip rule's, the demonstration rows tripled at twice the weight and
+  the round doubled. Both rooms went to 300 of 300.
+- **A mask was tried and not used**: `keep_out` on 9:0x55's S doorway does not hold at the entry square (backlog);
+  reverted rather than changing the executor in the middle of a round.
+- **Unconfirmed starting runs**: `r78-skg` and `r76-zora-arrows` were continued as their families' newest before
+  their own teams' chains confirmed them; `r79t5-base` (the continued runs under this code, same states and seeds)
+  judged every continued run on equal terms.

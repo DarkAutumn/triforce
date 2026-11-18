@@ -6,8 +6,16 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
 
 ## Where things stand (Nov 17)
 
-- **Round 29, begun (Nov 17, 1.5.1.0; `docs/experiments/round29.md`):** the leg to Dungeon 9, Dungeon 9, Ganon and
-  the end of the game, on round 28's branch. Built, nothing trained: (1) **the walks** (`docs/routes/d9-walks.md`,
+- **Round 29 (Nov 17-18, 1.5.1.0; `docs/experiments/round29.md`):** the leg to Dungeon 9, Dungeon 9, Ganon and
+  the end of the game, on round 28's branch. **The game is ended by the models** (round29.md §16-17): the second
+  team (`r79b-*`: lanmola's clip of 9:0x55 by its rule's lane, 300 of 300 at no heart; wizzrobe `r79b-wizz-s80` for
+  this stretch only, Dungeon 6 is its own lane's; ow-boulder's 0:0x17 from S by a rule and its curriculum) ends
+  the game in **143 of 1000 runs from Dungeon 9's entrance at 15 hearts (`d9`) and 39 of 1000 from Dungeon 8's
+  triforce (`post-d8`, 997 arrive with 12.06 hearts)**; the first team 5 and 0. Every room of the stretch is learned
+  (98.5-100% in single rooms); what loses runs is the hearts: the rooms cost 18.6 of 15 containers, and the fought
+  Wizzrobe rooms after the ring (0x10, 0x30, 0x05, entered with three to six hearts) end 496 of `d9`'s 857 lost
+  runs. The survival budget (drops, the potion, CONTINUE) is the owner's question. Built before the training:
+  (1) **the walks** (`docs/routes/d9-walks.md`,
   `d9-fights-walks.md`: no model clears any fight of level 9; a rule reading positions wins each); (2) **the route
   vocabulary** (`docs/routes/d9.md` §13, `docs/architecture.md` "The leg to Dungeon 9, Dungeon 9 and the end"): the
   scouting route `d9` = `d8` plus steps 297-354 (one way), **`exit: end` (the first frame of game mode `$13`; the
@@ -25,7 +33,7 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   ganon `trainable: true`, tracks (`scripts/experiments/r29_d9_curricula.sh`, rule tracks `~rule<seed>`), the rules
   from the real states and 16 demonstration files (`target/r29-demos/ROOM.npz`, rebuilt by `r29_demos.py ROOM
   --runs 100 --hearts family --out ...`), the segments `post-d8` (`0_6dc_0`) and `d9` (`9_76s_0`), the baseline
-  `r79-base` (`scripts/experiments/r29_d9_baseline.sh`): 0 of 100 on both. Not done: any training.
+  `r79-base` (`scripts/experiments/r29_d9_baseline.sh`): 0 of 100 on both.
 - **Round 28, begun (Nov 17, 1.5.1.0; `docs/experiments/round28.md`):** the leg from Dungeon 6 and Dungeon 8, on
   round 27's branch (Dungeons 6, 8 and 9 are prepared side by side). Built so far, nothing trained: (1) **the
   walks** (`docs/routes/d8-walks.md`: today's models cannot play the whirlwind out of 0x22, the tree of 0x6d, the
