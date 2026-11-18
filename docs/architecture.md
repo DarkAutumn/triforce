@@ -1269,7 +1269,10 @@ every step, so following an enemy that moves away pays again, and knockback rese
 - `triforce select-checkpoint FAMILY RUN (--segment NAME | --from STATE [--stop-at X] [--target L:0xRR]) [--runs
   1000] [--clips on|off] [--confirm 1000] [--confirm-top K] [--only LABELS] [--apply]` (`select_checkpoint.py`,
   round 25): a run's numbered checkpoints (`it<N>`), its `ckpt.pt` (`last`) and the family's promoted run
-  (`promoted`, the reference) each play the same chain seeds in place of the family's promoted model, the rest of
+  (`promoted`, the reference; the run promoted when the selection starts, played by `--checkpoint` like the others
+  so a promotion while the batch waits or plays changes nothing in it, and not needed for the ranking: round 26's
+  Dungeon 6 selections failed on a mid-batch promotion) each play the same chain seeds in place of the family's
+  promoted model, the rest of
   the team as promoted, as one `eval-batch` job (`run_batch`; entries `screen-<label>`, then `confirm-top<k>`,
   `confirm-last`, `confirm-promoted`, whose candidate is picked from the screen when they start). The screen ranks
   the run's checkpoints by arrivals (a segment's: the next segment's start room, `eval_batch.TARGETS`; the last
