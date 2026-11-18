@@ -1066,3 +1066,35 @@ the game, V is small early in the level (9:0x55 at 15 hearts 0.0086, 0x16's figh
 `potential` term pays little there; the `exit` term's ratio V(out)/V(max) still prices the hearts carried out
 (out of 0x55 into its tunnel: 9 hearts 0.02 of 15's, 12 hearts 0.23, 13 hearts 0.35). Commit 0b79e4a; `critic.rs`
 pins the table to `d9` and four routes.
+
+### 17.4 ow-boulder's old rooms, and the leg crossed for the first time
+
+**The old rooms** (the `post-d2` segment of `d2first`, `0_3cc_0` to 1:0x73, 300 runs paired by seed, clips on,
+every other model the same; `eval-batch r79b-postd2`, two `--chain` entries with `--checkpoint ow-boulder=...`):
+`r72-ow` 254 arrive, `r79b-boulder` 252 (−0.7 ± 0.8 points). In ow-boulder's own rooms (0x19, 0x18 W, 0x17 E → S,
+269 runs each) no run dies with either; 0x17 costs 0.02 hearts a visit with `r72-ow`, 0.00 with `r79b-boulder`. The
+other deaths are the same rooms' (0x0a 22, 0x1a 9, 0x38 8 and 10, 0x27 6). It holds; promoted.
+
+**`post-d8` with the first team and `r79b-boulder`** (`r79b-leg`: `0_6dc_0` to the end, 1000 runs, clips on, every
+model in its own act mode; the first round's promotions, ow-boulder's new run, darknut `r78-dark37-s85` copied from
+the Dungeon 8 team and promoted, which no room of the stretch plays): **997 of 1000 runs reach Dungeon 9** (9:0x76);
+none ends the game.
+
+| Leg room (step) | Family | Hearts a visit | Deaths |
+|---|---|---:|---:|
+| 0x6d, the whirlwind (297) | ow-moblin | 0.00 | |
+| 0x37, 0x38, 0x48 (298-300) | ow-octorok, ow-zora, ow-leever | 0.07, 0.16, 0.17 | |
+| 0x47, the tree; its cave (301-302) | ow-zora | 0.24; +1.00 (the container) | |
+| 0x47, 0x48, 0x38, 0x28, 0x27 (303-307) | ow-zora, ow-leever | 0.00, 0.12, 0.10, 0.01, 0.08 | (1 `stuck` in 0x27) |
+| **0x17 from S (308)** | ow-boulder | **0.31** | 0 |
+| 0x07, 0x06 (309-310) | ow-lynel | 0.45, 0.00 | |
+| 0x05, the rock wall (311) | ow-lynel | 1.25 | 2 |
+
+**Runs arrive at Dungeon 9 with 12.06 hearts of 15** (15 of 997 with all 15; 155 with 14 to 14.9, 204 with 13 to
+13.9, 260 with 12 to 12.9, 163 with 11 to 11.9, 100 with 10 to 10.9, 100 below 10). The `d9` segment starts every
+run at 15, with the sword's beams. What a missing heart costs
+there shows at once: 0x65 1.35 hearts a visit from 15 (`r79t5-1k`), **2.72 from 12.06**; the Lanmolas' room 3.63 and
+98 deaths from 13.66, **4.22 and 281 deaths from 9.39**; then 0x27 129 deaths, 0x17 163 on the way in. So the leg is
+crossed, but the three hearts it costs (1.25 of them at the rock wall, where ow-lynel's model already loses less
+than the rule's 3.26) are paid in Dungeon 9 several times over; the `d9` segment from full hearts overstates what a
+run from Dungeon 8's triforce does.
