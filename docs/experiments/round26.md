@@ -1004,12 +1004,27 @@ the D7 triforce **85.0%** (the D5 triforce 91.0%, Dungeon 7 reached 87.0%); `pos
 the D7 triforce; `d7` 95.3% (14 timeouts, 13 of them in 7:0x0d). It cheats 11 bombs in 0x29 and 1 in 0x1a in 300
 `d7` runs.
 
-**Dungeon 2's regression.** The loss is in goriya's rooms of Dungeon 2: 2:0x5e 78 deaths against round 25's 36,
-2:0x1e 73 against 38 (of 900-990 visits each). It came with goriya's Dungeon 7 training: on the same 1000 seeds
-`r76-goriya3` holds Dungeon 2 at 83.6% and `r76-goriya4-s78` at 81.5% (−2.1 ± 1.7, above), round 25's team at
-88.2%. **It lands anyway:** the route's end moved from no run at all to 6.7% to the D7 triforce,
+**Dungeon 2's regression.** The loss is in goriya's rooms of Dungeon 2: on the full route 2:0x5e 78 deaths against
+round 25's 36, 2:0x1e 73 against 38 (of 880-1000 visits each). It came with goriya's Dungeon 7 training: on the
+same 1000 seeds `r76-goriya3` holds Dungeon 2 at 83.6% and `r76-goriya4-s78` at 81.5% (−2.1 ± 1.7, above), round
+25's team at 88.2%. **It lands anyway:** the route's end moved from no run at all to 6.7% to the D7 triforce,
 `d7` passed the owner's working rate (about 30%) at 40.0%, and from the start the D5 triforce itself rose 2.7
 points, so nothing the route had is lost at its end. Getting Dungeon 2 back is a backlog item.
 
 **Landing.** The merged `r26` with main at 1.6.0.0 plays `d7` run for run as the chain of record: 300 runs (seeds
 0-299) with the team stamped 1.6.0.0, 300 identical, 117 successes in both. The five suites are green there.
+
+**Dungeon 2 with the other two seeds** (after the landing; `--from 2_7ds_0 --stop-at 0:0x3c`, 1000 runs, seeds
+0-999, clips on, the candidate by `--checkpoint goriya=...`; `s77` from its `select-checkpoint` check, the same
+arguments). The product is the share of runs that would pass both segments if they are independent:
+
+| goriya | Dungeon 2 | vs `s78` (paired) | 2:0x1e / 2:0x5e deaths | `d7` (confirm) | product |
+|---|---:|---:|---|---:|---:|
+| `r76-goriya4-s78` it004511 (promoted) | 81.5% | | 84 of 911 / 40 of 1000 | 40.0% | **32.6%** |
+| `r76-goriya4-s77` last | 84.5% | +3.0 ± 1.7 | 66 of 922 / 41 | 36.2% | 30.6% |
+| `r76-goriya4-s76` it004601 | 86.1% | +4.6 ± 1.6 | 57 of 928 / 32 | 33.4% | 28.8% |
+| `r76-goriya3` (the first team) | 83.6% | | 81 of 923 / 27 | 25.4% | 21.2% |
+| round 25's team (`r75-1k`) | 88.2% | | 52 of 943 / 28 | (none of 200) | |
+
+`s76` holds Dungeon 2 within 2.1 ± 1.5 points of round 25, but `s78`'s 6.6 points on `d7` outweigh its 4.6 on
+Dungeon 2: `s78` stays. Dungeon 2 is won back in goriya's next training, its checkpoint chosen on both segments.
