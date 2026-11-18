@@ -1028,3 +1028,55 @@ arguments). The product is the share of runs that would pass both segments if th
 
 `s76` holds Dungeon 2 within 2.1 ± 1.5 points of round 25, but `s78`'s 6.6 points on `d7` outweigh its 4.6 on
 Dungeon 2: `s78` stays. Dungeon 2 is won back in goriya's next training, its checkpoint chosen on both segments.
+
+## 17. Follow-up: Dungeon 2 back for goriya
+
+Round 26 promoted goriya `r76-goriya4-s78` (it004511) for `d7` (40.0%) at a cost in Dungeon 2: 81.5% of 1000 runs
+against round 25's 88.2% (§16). The owner asked for Dungeon 2 back without giving Dungeon 7 up. Main at 1.6.0.0, a
+worktree of its own, the promoted team otherwise unchanged.
+
+### The cause
+
+The two Goriya rooms of Dungeon 2 in the `d2` chains (`--from 2_7ds_0`, seeds 0-999, clips on; `r75-1k-d2` against
+`r76-1k-d2`; hearts lost a visit counted on the visits Link survives):
+
+| room | team | visits | deaths | hearts on entering | hearts lost a visit | steps | bombs used |
+|---|---|---:|---:|---:|---:|---:|---:|
+| 2:0x5e | round 25 (`r75-f-a`) | 1000 | 28 | 2.94 | 0.42 | 60 | 0.06 |
+| 2:0x5e | `r76-goriya4-s78` | 1000 | 40 | 2.94 | 0.60 | 68 | 0.04 |
+| 2:0x1e | round 25 | 943 | 52 | 2.69 | 0.34 | 82 | 0.73 |
+| 2:0x1e | `r76-goriya4-s78` | 911 | 84 | 2.67 | 0.50 | 88 | 0.78 |
+
+Link enters with the same hearts and leaves with fewer. In 2:0x5e the deaths at full hearts went from 18 to 29 of
+888; in 2:0x1e those entering at 1.5 hearts or fewer died 21 times of 74 against 42 of 81 (round 25's model gained
+hearts there on average: it took the drops). The single-room evaluations showed it as hearts, not as success
+(`eval.json` `by_room`, 300 episodes a room, clips on): 2:0x5e 91.0% and −0.16 hearts (`r75-f-a`) against 87.7% and
+−0.29 (`s78`), 2:0x1e 93.0% and −0.24 against 90.7% and −0.45.
+
+Nothing about the rooms' training changed but their share. `reward.heart_value` prices Dungeon 2's steps exactly as
+in round 25 (`heart_value.json` steps 0-208 identical, §16); both rounds draw `hp: [0.15, max]` with `full_hp:
+0.5`, no `chain_hp` (no profile ships). But goriya went from four rooms (15 seed states, 15 curriculum tracks; 2:0x5e
+and 2:0x1e 6 of them, **40% of the resets**) to sixteen (54 seed states, 90 tracks; Dungeon 2 **11%** of the seed
+draws and 7% of the curriculum's), and 1464 iterations (6M steps: `r76-goriya`, `-goriya2`, `-goriya3`,
+`-goriya4-s78`) trained on that mix. Seed draws are each state's decayed failure rate with a uniform floor
+(`env::start_states::ProbabilisticSelector`); the yaml has no weight per state or room.
+
+**Most likely:** Dungeon 2's rooms got a quarter of their old share of goriya's training while six million steps
+taught Blue Goriyas, and the policy drifted there (half again the hearts lost a visit, the low-heart 2:0x1e deaths
+doubled). Same rewards, same hearts drawn; the rooms were simply trained less than the rest of the family moved.
+
+### The arm: Dungeon 2's share back
+
+The levers without engine work: no per-room weight exists, but `harvested_fraction` draws a share of the resets
+from `triforce/states/harvested/<family>`, and a harvested start keeps the hearts and bombs it was handed (no RAM
+randomization). So the Dungeon 2 handoffs were harvested from a `d2` chain of the promoted team (`eval-chain --from
+2_7ds_0 --stop-at 0:0x3c --runs 300 --first-seed 5000 --harvest DIR`, seeds no measurement uses: 566 states, 300
+into 2:0x5e and 266 into 2:0x1e, at the chain's hearts: 2.93 and 2.68 on average, 23 of 0x1e's at 1.5 or fewer),
+and goriya draws them at `harvested_fraction: 0.33`: 0.33 + 0.67 × 11% ≈ 40% of the resets once the curriculum is
+done (the first 150 iterations or so of a continuation), its old share. The states stay out of git, as ow-zora's.
+Also from this round goriya trains with `clips: {enabled: true, off_share: 0}` (the owner, Nov 18; before, half the
+episodes had CLIP masked).
+
+Three seeds continue `r76-goriya4-s78` as promoted (it004511): `r77-goriya5-s79`, `-s80`, `-s81`, 488 iterations
+(2M steps) each, `--sil-coeff 0.1`, the food demonstrations at `--demo-coeff 0.05` (as `s78`), a checkpoint every
+30, `--parallel 8`.
