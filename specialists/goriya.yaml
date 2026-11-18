@@ -12,8 +12,13 @@ obs: {objective: true, target: true}       # schema 2: direction/distance to the
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9],
                     room_kills: {'(7, 0x49)': [1, 5], '(7, 0x1a)': [1, 5], '(7, 0x1b)': [1, 5]}, room_kills_share: 0.5}
 items: {bombs: free, food: true}           # Lee, Nov 11: bombs as a weapon (enemies with more than 3 hits); above the route's bomb reserve; round 26: the food where a Grumble waits (7:0x28)
-clips: true                                # round 26: 7:0x1a's block clip to the stairs (half the episodes without: the fight and the push)
+clips: {enabled: true, off_share: 0}      # round 26: 7:0x1a's block clip to the stairs; clips only (the owner, Nov 18): no episode with CLIP masked
 curriculum: {enabled: true}             # trajectories/goriya (Go-Explore paths per start state)
+# Round 27 (round26.md §17): Dungeon 2's two rooms had 6 of 15 seed states (40% of the resets) before Dungeon 7 joined
+# and 6 of 54 (11%) after.  A third of the resets start from Dungeon 2's handoffs harvested from a chain
+# (triforce/states/harvested/goriya, not in git: `eval-chain --from 2_7ds_0 --stop-at 0:0x3c --runs 300 --first-seed
+# 5000 --harvest DIR`, its goriya/ files), at the hearts and bombs the chain brings: about 40% again.
+harvested_fraction: 0.33
 one_room: true
 max_steps: 2000
 warm_start: null
