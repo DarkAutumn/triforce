@@ -862,8 +862,8 @@ first; confirmed last 25.0% against 27.8%: **not better, not promoted**. The too
 promoted run tops the screen, its `confirm-top1` entry raises `LookupError: the screen has no chain of promoted
 yet` (a `select-checkpoint` bug; the confirmations of the last checkpoint and the promoted run were written).
 **Seed 80**: screen last 20.0%, best it001456 23.2%; confirmed last 20.6% against 27.8% (the same tool failure):
-not promoted. On the fresh seeds the three continuations stand at 27.8%, 25.0% and 20.6% against the 18.4% of
-the run they started from (seed 78's base): **488 more iterations gain 2-9 points on every seed**, seed 78 most.
+not promoted. On the fresh seeds the three continuations stand at 27.8%, 25.0% and 20.6% against their own bases'
+18.4%, 16.5% and 15.7% (§13.3): **488 more iterations gain 5-9 points on every seed**, seed 78 most.
 
 Still in the job line when this was written: the selections of `r79-wizz-s79`, `r79-wizz-s80` and the planner arm
 `r80-wplan-s78`, `-s79`, `-s80b` (all against the promoted `r79-wizz-s78`; `r80-wplan-s80`'s first try ran out of
