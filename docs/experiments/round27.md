@@ -879,8 +879,9 @@ on the same fresh seeds +2.4: the planner's demonstrations add 2-4 points on bot
 against its control `r79-wizz-s80`'s 20.6%. **The planner as a teacher gains on every seed: +4.0, +2.4, +3.0 points
 over the same training without it.** **Promoted: `r80-wplan-s78`** (`triforce promote wizzrobe r80-wplan-s78`; its
 `ckpt.pt` is the confirmed last checkpoint), `d6` confirmed 31.8% on fresh seeds: over the owner's 30%. It is the
-base of the joint Dungeon 6 and 9 wizzrobe training, which loads both demonstration files. Its chains (`r80-1k`)
-and the planner beside it were queued when this was written.
+base of the joint Dungeon 6 and 9 wizzrobe training, which loads both demonstration files. The honest planner
+beside it (300 runs, seeds 0-299): **208 of 300, 69.3%** (60.7% with `r79-wizz-s78`, 54.0% with `r78-wizz-s78`).
+Its chains (`r80-1k`) were queued when this was written.
 
 **The `r79-1k` chains** (the promoted team with `r79-wizz-s78`, the §13.5 command with `TAG=r79-1k`; the batch
 `failed` by its report entry alone, as before), paired by seed with `r78-1k`:
