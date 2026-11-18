@@ -1329,4 +1329,17 @@ as `r80-wplan-s78` does, room by room.
 The `d6` number was used to accept it (the only run of three to pass), so it is not a fresh measurement of the
 choice; the `d9` number is. Applied (`--apply`: the last weights kept as `checkpoints/it002440`), evaluated again
 and promoted in the team's checkout. One seed of three held Dungeon 6: the joint training does not hold it
-reliably (see 18.3).
+reliably; a next joint round needs more of Dungeon 6's weight in the draws, `plan38-3a`'s coefficient up, or both.
+
+Its evaluation after `--apply` (100 episodes a state, seed 0, its own act mode): 94.3% of 6000 (the last weights
+94.2%), 6:0x38 78.3%, 0x3a 74.3%, 9:0x65 −0.96 hearts a visit, 0x05 90.3%, 0x10 89.2%, 0x30 85.3%. **Promoted**:
+wizzrobe `r79c-wj-s85` in the team's checkout, the route's one wizzrobe for Dungeons 6 and 9.
+
+**The owner's decision on the survival budget** (Nov 19): no potions, no CONTINUE; a run is one life. The question
+of §3 is closed: what is left is play (the hearts carried into 0x10, 0x30 and 0x05; the leg's hearts, 1.25 a visit
+at 0:0x05's rock wall), not a route change.
+
+**Left when this section was last written**: the chains of record `r79c-1k` (`post-d8` and `d9`, 1000 runs, the
+third team with wizzrobe `r79c-wj-s85`, paired against `r79b-1k`) and the planner beside (`r79c-plan`, 300 runs a
+segment) were queued; their numbers, the survival ledger, a recorded run from Dungeon 8's triforce if one ends the
+game, and the suites come in §18.2.

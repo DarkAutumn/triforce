@@ -28,11 +28,11 @@ branch.
   `crates/zelda/tests/d9.rs` to the first frame of mode `$13`.
 - [x] **The block clips of the ring rooms** scanned and walked (`scripts/experiments/r29_clips.py`; round29.md §5).
 - [x] **The walks' fighters as rules over env actions** (`scripts/experiments/r29_demos.py`; round29.md §6).
-- [ ] **The main risk: the survival budget does not close.** About 23 hearts for the route and 26 for the fights
-  with the ring, of 15 containers and no refill; 37.9 with the clips (round29.md §3, §5). The owner's question.
-  Measured by the second team (round29.md §17.5): the rooms' mean losses add to 18.6 hearts on `d9`; a run that
-  takes the ring with 8 to 9.9 hearts ends the game 17% of the time, with 4 to 5.9 1-2%. Drops, the potion,
-  CONTINUE: the owner's.
+- [x] **The survival budget does not close.** About 23 hearts for the route and 26 for the fights with the ring, of
+  15 containers and no refill; 37.9 with the clips (round29.md §3, §5). Measured by the second team (round29.md
+  §17.5): the rooms' mean losses add to 18.6 hearts on `d9`; a run that takes the ring with 8 to 9.9 hearts ends the
+  game 17% of the time, with 4 to 5.9 1-2%. **Closed by the owner (Nov 19): no potions, no CONTINUE; a run is one
+  life.** What is left is play: the hearts carried into 0x10, 0x30, 0x05 and the leg's hearts.
 - [x] **Start states** of steps 297-357, chains 0-2 (174; round29.md §9): no fight skipped, every fight played by
   a rule's won run (`r29_demos.py --harvest`); `audit --route d9` clean.
 - [x] **The clips way**: one-step stretches `ring-07`, `arrow-20`, `arrow-20n`; `clips: true` for wizzrobe, lanmola
@@ -65,8 +65,10 @@ branch.
   with lanmola `r79b-lanmola`.
 - [ ] **The ring's cellar `stuck`** (equipment-room's 2000 steps: 5 of 942 `d9` runs, 9 of 788 `post-d8`) and
   patra's 3000-step limit (3 runs): not looked at.
-- [ ] **wizzrobe for the whole route**: `r79b-wizz-s80` is kept for this stretch only (Dungeon 6 0x38 72.0%, 0x3a
-  79.0% against `r78-wizz-s78`'s 78.0/72.0%); one wizzrobe run for Dungeons 6 and 9 is the Dungeon 6 lane's call.
+- [x] **wizzrobe for the whole route**: `r79c-wj-s85` (checkpoint it002424; a joint training on Dungeon 6's and
+  level 9's rooms from `r80-wplan-s78`) holds `d6` (314 against 316 of 1000, −0.2 ± 2.1 paired) and plays `d9`
+  better than `r79b-wizz-s80` (+14.7 ± 1.8 confirmed); round29.md §18.1. One seed of three held Dungeon 6 (s84
+  −11.8, s86 −8.1): a next joint round needs more of Dungeon 6's weight in the draws, or `plan38-3a`'s coefficient up.
 - [ ] **`no-damage` cuts rule runs** (600 actions without a hit): wizzrobe-05/-10/-30 and patra-16 with the
   family's draws (30 of 300) wait for a shot that does not come.
 - [ ] **Ganon's hidden position** is on `ram` until the owner decides; `last_seen` or `zero` needs the fight target
