@@ -912,3 +912,35 @@ that entry out of chain replays at X 128 (the frame before the room entry, as `e
 handoff, which this entry is not: 0x54 and 0x44 are both ow-zora's), 75 states from the diagnostic's replays, written
 as harvested states (`triforce/states/harvested/ow-zora/0_44s_h<seed>_0.state`, not committed), and ow-zora draws
 them at `harvested_fraction: 0.03` (about the share of its three seed states of 0x44 from S among its 105).
+
+## 16. The second team: goriya, ow-zora, boss-digdogger
+
+Continuations on r26's code from `5db220a` on (the bomb rule, the Wallmaster fixes, and `heart_value.json` refit
+with the first team's chains, so steps 209-247 have their curves: `python -m triforce.heart_value` over round 24's
+sources and `r76t1-1k{,-noclips}-{post-d5,d7}`; steps 0-208 identical). Each run's checkpoint was chosen by its chain
+segment with `triforce select-checkpoint` (1000 screen runs on seeds 0-999, the best and the last again on 1000-1999,
+clips on, each model's act mode), then checked on the earlier segments the family plays (1000 paired runs, seeds
+0-999, the candidate and the promoted run).
+
+| Run | From | Settings | Segment | Chosen | Screen | Confirm | Confirm vs promoted |
+|---|---|---|---|---|---:|---:|---:|
+| goriya `r76-goriya4-s76` | `r76-goriya3` | 488 iterations (2M steps), seed 76, `--sil-coeff 0.1`, the food demos at 0.05, a checkpoint every 30 | `d7` | it004601 | 35.8% | 33.4% | +8.0 ± 1.9 |
+| goriya `r76-goriya4-s77` | `r76-goriya3` | the same, seed 77 | `d7` | last | 36.4% | 36.2% | +10.8 ± 2.0 |
+| **goriya `r76-goriya4-s78`** | `r76-goriya3` | the same, seed 78 | `d7` | **it004511** | **40.0%** | **40.0%** | **+14.6 ± 2.0** |
+| goriya `r76-goriya3` (promoted) | | | `d7` | | 26.3% | 25.4% | |
+| boss-digdogger `r76-digdogger2` | `r76-b` | 244 iterations, seed 77, `--sil-coeff 0.1`, a checkpoint every 15 | `d7` | last | 28.0% | 25.2% | −0.2 ± 1.7 |
+| **ow-zora `r76-zora-arrows`** | `r76-b` | 244 iterations, seed 77, `--sil-coeff 0.1`, the 75 arrow-shop states at `harvested_fraction: 0.03` (§15), a checkpoint every 15 | `post-d5` (arrivals at 7:0x79) | last | 98.7% | 98.4% | +7.5 ± 0.8 (promoted 92.4 / 90.9%) |
+
+Hearts on arriving: goriya `s78` takes the triforce with 5.97 hearts (confirm; promoted 5.62), ow-zora arrives at
+Dungeon 7 with 8.14 (7.89).
+
+- **goriya `r76-goriya4-s78` it004511 is promoted.** It is the best of the three seeds on fresh seeds by 3.8 points
+  over `s77`. On the old segments goriya plays (paired, 1000 runs): Dungeon 1 (`--from 1_73s_0 --stop-at 0:0x37`)
+  99.0 against 99.2% (−0.2 ± 0.4), Dungeon 2 (`--from 2_7ds_0 --stop-at 0:0x3c`) 81.5 against 83.6% (−2.1 ± 1.7);
+  neither worse beyond noise (`s77`: +0.6 ± 0.3 and +0.9 ± 1.6). Its canonical evaluation (100 episodes a state,
+  clips on, `temperature:0.5+relax:16`): 97.6% of 5400 episodes, −0.42 hearts an episode (`r76-goriya3`, clips both:
+  95.0%, −0.53); 7:0x1a 98.7% (79.6% with half its episodes clipless), 0x1b 94.3, 0x49 97.0, 0x19 98.0, 2:0x5e 87.7
+  (88.0), 2:0x1e 90.7 (88.3).
+- **boss-digdogger stays `r76-b`:** the continuation's last checkpoint led the screen by 1.7 points and lost it on
+  fresh seeds (25.2 against 25.4%).
+- **wallmaster stays `r76-wall-1`** (§14).

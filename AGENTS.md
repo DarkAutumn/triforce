@@ -200,7 +200,7 @@ off) (the raft; 0x5b E → 0x5c → 0x4c S, Manhandla), then by raft to Dungeon 
 ladder clip or round by 0x30 and 0x20, 0x01's key, Gleeok) and its triforce, then (round 24) the leg to Dungeon 5
 (by raft to 0x55, the coast's heart containers 0x5f and 0x2f's cave, 0x0f's 100 rupees, the mountain or the Lost
 Hills) and Dungeon 5 (0x64's block clip, the Olive Garden and the recorder, the way back, Digdogger) and its
-triforce, then (round 26, nothing trained yet) the leg to Dungeon 7 (the whirlwind from 0x0b to 0x45, the arrows
+triforce, then (round 26, 1.6.0.0) the leg to Dungeon 7 (the whirlwind from 0x0b to 0x45, the arrows
 of 0x44's shop, the food behind 0x34's Armos, 0x42's pond) and Dungeon 7 (`docs/routes/d7.md`: Blue Goriyas, the
 Grumble, the red candle, two Digdoggers, the Wallmaster room, Aquamentus) and its triforce (the route ends on
 taking it). Lee owns the direction; the standing invitation is to come up with ideas,
@@ -311,8 +311,9 @@ test them, keep what helps, and log everything.
 
 ## Versioning (Lee, Nov 11)
 
-- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `1.5.1.0`: five dungeons; round 26's
-  schema 6 observation, the one input change for Dungeon 7 to Ganon, decisions 2026-11-16). It is the single source:
+- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `1.6.0.0`: six dungeons, round 26's Dungeon
+  7; it carries round 26's schema 6 observation of 1.5.1.0, the one input change for Dungeon 7 to Ganon, decisions
+  2026-11-16; the 1.5.1 runs are stamped 1.6.0.0, not converted). It is the single source:
   `triforce.__version__` and `_native.VERSION` read it, `pyproject.toml` repeats it and the Cargo workspace version
   is its first three numbers (`tests/test_version.py` checks all of them).
   - `MAJOR` changes only when Lee says so.

@@ -14,25 +14,27 @@ the gap list of what must be walked in the game first, where the documents disag
 of work) and the documents it indexes (`d7.md`, `d6.md`, `d8.md`, `d9.md`, `late-monsters.md`, `late-mechanics.md`).
 The owner's decisions of Nov 16 are in `docs/decisions.md` ("The rest of the game").
 
-## Round 26 (the leg to Dungeon 7 and Dungeon 7): found while building states, curricula and the baseline (Nov 17)
+## Round 26 (the leg to Dungeon 7 and Dungeon 7): found while building, training and measuring (Nov 17-18)
 
-round26.md §7-11. Nothing is trained yet; these are open.
+round26.md §7-16. Dungeon 7 landed at 40.0% from its entrance (1.6.0.0, §16); what is open:
 
+- [ ] **Dungeon 7 next, by what the chain of record loses** (`r76-1k-d7`, round26.md §16): 7:0x1b kills 324 of
+  the 872 runs that enter it (Link comes in with 4.27 hearts), 0x1c 79 of 548, 0x1a from the cellar 48, 0x19 31.
+  The planner beside takes 95.3% and loses only by timeouts in the Wallmaster room 0x0d (13 of 300).
 - [ ] **darknut under the bomb rule** (round26.md §13, decisions 2026-11-17): Dungeon 3 loses about 5 points
   (84.7 → 79.3% of 300 paired runs) because the last pass of 3:0x5b had cheated bombs as its weapon when Link came
   with 0-1 (95 of 294 passes; now 0.61 hearts lost there and Manhandla kills 27 of them, 14 before). One darknut
   continuation under the rule (round 25's settings), its checkpoint chosen by the D3 and D5 segments.
 - [x] **goriya under the bomb rule:** `r76-goriya3` (one continuation; round26.md §13): no cheated bomb in 1000
   Dungeon 7 runs, 70.4% of runs reach 7:0x1b (58.0% with `r76-goriya2` under the old rule), 18.3% the Wallmaster
-  room (11.4%). Promote it with the rule's merge. Next in Dungeon 7: 0x1b (362 of 704 visits die), 0x0c (116 of 299).
+  room (11.4%). Promoted with the rule's merge, then replaced by `r76-goriya4-s78` (§16).
 - [ ] **Cheated bombs still counted:** 3:0x5b about 0.44 a Dungeon 3 run (F173: the granted bomb is used first at
   the wall although Link holds the room's four by then; the owner's call whether a pickup repays a grant), Dungeon
   4's walls 0.56 a run (runs that arrive with none). `cheats::bomb_need` keeps a room's need while any bomb wall is
   shut, also one the route never opens (7:0x69 W, 4:0x11 E and W): the bomb in hand is unusable and taken back.
-- [ ] **The first team.** The baseline `r76-base` is 0 of 200 on both segments, clips on and off (round26.md §11):
-  0x0b's model walks back into Dungeon 5, and every run dies in 7:0x49 at the latest. New skills nobody has: the
-  whirlwind (0x0b), both shops, the Armos stairs, the pond, FOOD for the Grumble; fights lost: 7:0x49, 0x19, 0x1a,
-  0x1b, 0x39, 0x1c, 0x0d.
+- [x] **The first team.** The baseline `r76-base` was 0 of 200 on both segments (round26.md §11). The first team
+  (`r76t1-1k`, §15) took Dungeon 7 in 26.3% of 1000 runs; the second (`r76-1k`, §16: goriya `r76-goriya4-s78`) in
+  40.0%.
 - [ ] **7:0x1b has no full-fight track.** The explorer does not clear six Blue Goriyas (9000 iterations, 190k env
   steps a state, twice); the staged starts with kills banked (`--room-kills`) are solved. The family trains the
   full room from `room_kills` staging only. Its 21 states after it are `fight_skipped`: rebuild them from harvested
@@ -46,9 +48,8 @@ round26.md §7-11. Nothing is trained yet; these are open.
   anew, so a bomb granted for a wall and not yet placed is Link's after the next cell restore: chain 2's states
   from `7_4acave_2` on held one bomb too many and were rebuilt by hand (`r26_d7_states.py bombs`). The ledger's
   grants should be part of what a cell saves and restores.
-- [ ] **`heart_value.json` has no curve for steps 209-247** (no chain has reached the D7 triforce). goriya and
-  equipment-room price hearts there by the plain health terms. Refit when a team arrives: `python -m
-  triforce.heart_value <chain jsonl>...`.
+- [x] **`heart_value.json` has no curve for steps 209-247:** refit with the first team's chains (`5db220a`; steps
+  0-208 unchanged); the second team's goriya trained with it.
 - [ ] **0x34 back out of its cave costs 2.5 hearts a visit** with today's ow-leever (the woken Armos walks off its
   square onto the stairs' exit; 15 deaths in 120 episodes).
 - [ ] **7:0x1c's leave-and-return shortcut** (one small Digdogger dead, out W and back in: the room is empty,
