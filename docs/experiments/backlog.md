@@ -21,6 +21,12 @@ round26.md §7-16. Dungeon 7 landed at 40.0% from its entrance (1.6.0.0, §16); 
 - [ ] **Dungeon 7 next, by what the chain of record loses** (`r76-1k-d7`, round26.md §16): 7:0x1b kills 324 of
   the 872 runs that enter it (Link comes in with 4.27 hearts), 0x1c 79 of 548, 0x1a from the cellar 48, 0x19 31.
   The planner beside takes 95.3% and loses only by timeouts in the Wallmaster room 0x0d (13 of 300).
+- [ ] **Dungeon 2's Goriya rooms since round 25** (`r76-1k-full` against `r75-1k-full`, 1000 paired runs): out of
+  Dungeon 2 79.2 against 87.6% (−8.4 ± 1.6), all in goriya's rooms: 2:0x5e 78 deaths against 36, 2:0x1e 73 against
+  38, at the same hearts on entering (single rooms: `r75-f-a` 91.0 / 93.0%, `r76-goriya4-s78` 87.7 / 90.7%). The
+  loss came with goriya's Dungeon 7 continuations (`r76-goriya2` to `-4`); no single paired check showed it
+  beyond noise (`s78` −2.1 ± 1.7 against `r76-goriya3`). Next: a goriya continuation judged on `d7` and `d2` together,
+  or Dungeon 2's rooms weighted up in its training (2 of its 16 rooms, Dungeons 1 and 2 together 4).
 - [ ] **darknut under the bomb rule** (round26.md §13, decisions 2026-11-17): Dungeon 3 loses about 5 points
   (84.7 → 79.3% of 300 paired runs) because the last pass of 3:0x5b had cheated bombs as its weapon when Link came
   with 0-1 (95 of 294 passes; now 0.61 hearts lost there and Manhandla kills 27 of them, 14 before). One darknut

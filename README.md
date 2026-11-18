@@ -25,26 +25,28 @@ mountain (two heart containers, 100 rupees, the Lost Hills), and finish on the t
 
 ## How well it plays
 
-Out of 1,000 runs from the start of the game with the current team (round 25's models, act mode
-`temperature:0.5+relax:16`, `docs/experiments/round25.md` §13), with the speedrunners' clips allowed and with them
-switched off for the whole run:
+Out of 1,000 runs from the start of the game with the current team (round 26's models, act mode
+`temperature:0.5+relax:16`, the speedrunners' clips allowed; `docs/experiments/round26.md` §16):
 
-| Link reaches | Clips on | Clips off |
+| Link reaches | Round 26 | Round 25 |
 |---|---:|---:|
-| Dungeon 1 (after Dungeon 2 and the white sword) | 84% | 68% |
-| Dungeon 3 | 74% | 57% |
-| The Dungeon 3 triforce | 57% | 42% |
-| The Dungeon 4 triforce | 51% | 32% |
-| Dungeon 5 | 51% | 32% |
-| The Dungeon 5 triforce (the end of round 25's route) | 20% | 2.6% |
+| Dungeon 1 (after Dungeon 2 and the white sword) | 75% | 84% |
+| Dungeon 3 | 65% | 74% |
+| The Dungeon 3 triforce | 50% | 57% |
+| The Dungeon 4 triforce | 44% | 51% |
+| Dungeon 5 | 44% | 51% |
+| The Dungeon 5 triforce | 22% | 20% (the end of round 25's route) |
+| Dungeon 7 | 22% | |
+| The Dungeon 7 triforce (the end of the route) | 6.7% | |
 
-Dungeon 5 is still the hard part: of 1,000 runs started at its entrance, 68% reach its triforce with clips on and
-48% without. Round 24's team reached the D5 triforce in 5% and 0.3% of runs from the start. With the planner
-switched on (an act mode that tries each action in the emulator before playing it, on random numbers of its own, and
-takes another if Link is hit; `docs/experiments/round25.md` §12), 83% of runs from the start reach the D5 triforce
-with clips on; the models alone are the number the training is judged by. Since round 26 the route runs on to the
-Dungeon 7 triforce (the leg from Dungeon 5 and Dungeon 7: start states and curricula are built, no model is trained
-there yet, and today's team reaches neither Dungeon 7 nor its triforce: `docs/experiments/round26.md`).
+Since round 26 the route runs on from the Dungeon 5 triforce through the whirlwind, two shops and a pond to Dungeon
+7 and its triforce. Of 1,000 runs started at Dungeon 7's entrance, 40% take its triforce; its six Blue Goriyas in
+one room (7:0x1b) are what loses most of the rest. Dungeon 2 lost eight points since round 25, all in its two Goriya
+rooms (the Goriya model was retrained for Dungeon 7), which is why the early rows fell. With the planner switched
+on (an act mode that tries each action in the emulator before playing it, on random numbers of its own, and takes
+another if Link is hit; `docs/experiments/round25.md` §12), 85% of runs from the start reach the Dungeon 7 triforce;
+the models alone are the number the training is judged by. Clips off (the no-clip way) is no longer measured (the
+owner, Nov 18).
 
 Every round of training is written up in `docs/experiments/` (start with the newest `round*.md`), and
 `docs/experiments/backlog.md` has what's next.
