@@ -1429,6 +1429,19 @@ and 81 of 232; 6 to 7.9: 29 of 206 and 25 of 187; 4 to 5.9: 9 of 205 and 8 of 12
 | Hearts on taking the ring | 8.11 (7.45) | 5.60 (4.89) |
 | Rooms' mean losses | 16.7 (18.6) | 18.6 (20.4), the leg 1.97 net |
 
+**The recorded runs** (each seed played again alone with `--replays`, the same result, frames and rooms, hearts in
+and out of every room, as in its chain; `tf replay verify` ok; the file's frame count is the chain's plus the
+control frames before the first decision; the files are not committed):
+
+- **From Dungeon 8's triforce to the ending, the third team**: `post-d8` seed 25, `eval-chain --route d9 --from
+  0_6dc_0 --first-seed 25 --runs 1 --act model --output DIR/seed25.jsonl --replays DIR` →
+  `target/r79c/replays-postd8/00000025-win.tfreplay` in the team's checkout: 28,238 frames from the embedded state
+  `0_6dc_0`, ending `win` ("the game ended in (level 9, room 0x32)"), 18 edits, 2 states; 59 rooms, Dungeon 9
+  reached with 14 hearts, 13 hearts lost in rooms, Zelda's room entered with 2.
+- **From Dungeon 9's entrance, the third team**: `d9` seed 0 → `target/r79c/replays-d9/00000000-win.tfreplay`:
+  25,856 frames from `9_76s_0`, `win`, 17 edits, 2 states; 44 rooms, 14 hearts lost in rooms, Zelda's room entered
+  with 3.
+
 **The honest planner beside** (`temperature:0.5+relax:16+plan:16:1` for every model, 300 runs a segment, seeds
 0-299, the third team; `eval-batch r79c-plan`): **`d9` 256 of 300 (85.3%; the models 97 of the same 300; the second
 team's planner 220), `post-d8` 226 of 300 (75.3%; the models 29; before 174)**, all 300 reaching Dungeon 9 with 13.26
@@ -1448,9 +1461,40 @@ the models' on the same seeds 0-299; hearts lost a visit, binned by hearts on en
 
 In 0x05 and 0x30 the planner loses a tenth to a third of the models' hearts **at the same hearts on entering**; in
 0x10 it loses four fifths of theirs (0x10 is hard for it too: 12 of its 44 lost runs) and wins there mostly by
-entering with 3.7 more hearts. It is slower in all three (0x10 161 decisions a visit against 117): it waits for the
-Wizzrobes rather than walking into their line. Elsewhere it loses half or less of the models' hearts a visit at
-0x16's fight (0.21 against 1.00), 0x07 (0.14 against 0.65), 0x52 (0.14 against 0.49), Ganon (0.26 against 0.56),
-0x17 to its wall (1.77 against 2.78) and on `post-d8` at 0x65 from the arrival's hearts (0.54 against 1.04).
+entering with 3.7 more hearts. It takes more decisions in all three (0x10 161 a visit against 117, 0x30 70 against
+57). Elsewhere it loses half or less of the models' hearts a visit at 0x16's fight (0.21 against 1.00), 0x07 (0.14
+against 0.65), 0x52 (0.14 against 0.49), Ganon (0.26 against 0.56) and on `post-d8` at 0x65 from the arrival's
+hearts (0.54 against 1.04); at 0x17 to its wall it loses 1.77 against 2.78.
 
+### 18.3 What a fourth round needs
+
+The owner's decision stands: no potions, no CONTINUE, a run is one life. The levers are play, and the ledger of
+§18.2 says where:
+
+1. **The hearts carried into the dear rooms.** The third team takes the ring with 8.11 hearts; a run that takes it
+   with 10 to 11.9 ends the game 55% of the time, with 6 to 7.9 13%. 0x10 is entered with 5.9 hearts (the planner
+   9.7), and its deaths are the runs entered low (below 4 hearts 45 of 66 die on seeds 0-299; from 4 to 7.9 11 of
+   114). The hearts before the ring go in 0x27 to its wall (patra, 2.23 a visit), 0x17 to its wall (wizzrobe,
+   2.55), 0x65 (0.87) and 0x07 (0.70); after it in 0x16's fight (0.93) and 0x05 (1.12) on the way to 0x10, and in
+   0x51-0x31 (0.98) on the way to 0x30. A heart kept in any of them is a heart in 0x10, 0x30, 0x52 or Ganon.
+2. **The leg's hearts.** Arrivals at Dungeon 9 with 12.06 of 15 end the game in 10.5% of runs against 31.0% from
+   full hearts. The leg costs 2.97 hearts, 1.25 of them at 0:0x05's rock wall (ow-lynel; the planner 0.76), 0.45 at
+   0:0x07 (ow-lynel) and 0.31 at 0:0x17 (ow-boulder). ow-lynel, ow-boulder and ow-zora play the other lanes' legs
+   too: a round on them is judged on those lanes' segments as well, as the wizzrobe was on `d6`.
+3. **The planner as a teacher, a second pass.** The `plan9-*` files were played by the second team's runs from the
+   second team's hearts (`chain_hp.json` of `r79b-1k`). A fourth round's files come from the third team's runs with
+   `chain_hp.json` and `heart_value.json` refitted from `r79c-1k` (the hearts moved: 0x10 is entered with 5.93, not
+   5.18), in the rooms where the planner loses half or less of the models' hearts at the same hearts: 0x05, 0x30,
+   0x16's fight, 0x52, 0x07, Ganon, 0x65 from the arrival's hearts, and the leg's rock wall. In 0x10 the planner
+   loses four fifths of the models' hearts a visit: teaching gains less there than the hearts brought into it.
+4. **More of Dungeon 6 in wizzrobe's joint draws.** One seed of three held `d6` (s84 −11.8, s86 −8.1 points): a next
+   joint round puts more of the resets into 6:0x38 and 0x3a, raises `plan38-3a`'s coefficient, or both, and judges
+   every seed on `d6` before the `d9` selection. The bar stays: `d6` within noise of the route's wizzrobe, `d9` at
+   least as good.
+5. **Not needed**: lanmola's clip (0.00 hearts), the cellars, zol, stalfos-keese-gel (18 of `d9`'s 690 lost runs
+   with the step limits). Cheated items stay small (5 bombs in 1000 runs, 0x04 and 0x31).
+
+**Not landed.** The stretch's team lands after Dungeons 6 and 8: wizzrobe `r79c-wj-s85` was judged on `d6`, but
+ow-moblin, ow-zora, ow-leever, ow-lynel, ow-boulder, stalfos-keese-gel, like-like, zol and equipment-room differ
+from the Dungeon 6 or Dungeon 8 lane's promoted runs, and those lanes have not played this team's.
 

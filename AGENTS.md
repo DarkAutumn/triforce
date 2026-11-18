@@ -7,15 +7,21 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
 ## Where things stand (Nov 17)
 
 - **Round 29 (Nov 17-18, 1.5.1.0; `docs/experiments/round29.md`):** the leg to Dungeon 9, Dungeon 9, Ganon and
-  the end of the game, on round 28's branch. **The game is ended by the models** (round29.md §16-17): the second
-  team (`r79b-*`: lanmola's clip of 9:0x55 by its rule's lane, 300 of 300 at no heart; wizzrobe `r79b-wizz-s80` for
-  this stretch only, Dungeon 6 is its own lane's; ow-boulder's 0:0x17 from S by a rule and its curriculum) ends
-  the game in **143 of 1000 runs from Dungeon 9's entrance at 15 hearts (`d9`) and 39 of 1000 from Dungeon 8's
-  triforce (`post-d8`, 997 arrive with 12.06 hearts)**; the first team 5 and 0; the honest planner beside 73.3% and
-  58.0% of 300. A run from Dungeon 8's triforce to the ending is recorded and verified (round29.md §17.5). Every
-  room of the stretch is learned (98.5-100% in single rooms); what loses runs is the hearts: the rooms cost 18.6 of
-  15 containers, and the fought Wizzrobe rooms after the ring (0x10, 0x30, 0x05, entered with three to six hearts)
-  end 496 of `d9`'s 857 lost runs. The survival budget (drops, the potion, CONTINUE) is the owner's question.
+  the end of the game, on round 28's branch. **The game is ended by the models** (round29.md §16-18): the third
+  team (`r79c-*`, §18: wizzrobe `r79c-wj-s85`, the route's one wizzrobe, a joint training on Dungeon 6's and level
+  9's rooms holding `d6` at 314 against 316 of 1000; ganon `r79c-ganon`, patra `r79c-patra`, like-like `r79c-like`
+  with the planner's demonstrations and starts at the chain's hearts; lanmola's clip of 9:0x55 at no heart and
+  ow-boulder's 0:0x17 from S of the second team) ends the game in **310 of 1000 runs from Dungeon 9's entrance at
+  15 hearts (`d9`, +16.7 ± 1.8 paired against the second team's 143; the first team 5) and 105 of 1000 from
+  Dungeon 8's triforce (`post-d8`, 997 arrive with 12.06 hearts; the second team 39)**; the honest planner beside
+  85.3% and 75.3% of 300. Runs from Dungeon 8's triforce and from Dungeon 9's entrance to the ending are recorded
+  and verified (§17.5, §18.2). **Not landed**: the team lands after Dungeons 6 and 8 (ten of its families differ
+  from those lanes' promoted runs; only wizzrobe was judged there). What loses runs is the hearts: the rooms cost
+  16.7 of 15 containers; wizzrobe ends 514 of `d9`'s 690 lost runs, 394 of them in 0x10, 0x30 and 0x05 entered with
+  four to seven hearts; the leg's 2.97 hearts (1.25 at 0:0x05's rock wall) cut `post-d8` to a third of `d9`. No
+  potions, no CONTINUE (the owner):
+  a fourth round is play (§18.3: the hearts into the dear rooms, the leg's hearts, the planner as a teacher again
+  from the third team's hearts, more Dungeon 6 in wizzrobe's joint draws).
   Built before the training: (1) **the walks** (`docs/routes/d9-walks.md`,
   `d9-fights-walks.md`: no model clears any fight of level 9; a rule reading positions wins each); (2) **the route
   vocabulary** (`docs/routes/d9.md` §13, `docs/architecture.md` "The leg to Dungeon 9, Dungeon 9 and the end"): the

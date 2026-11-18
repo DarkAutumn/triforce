@@ -50,21 +50,29 @@ branch.
 - [x] **The baseline `r79-base`** (round29.md §13): 0 of 100 on `post-d8` and `d9`.
 - [x] **A first team** (`r79t5-*`, round29.md §16): `d9` 5 of 1000 end the game; 0:0x17 from S and 9:0x55's clip
   not learned. **A second team** (`r79b-*`, §17): both learned; `d9` 143 of 1000, `post-d8` 39 of 1000 (997 reach
-  Dungeon 9).
-- [ ] **The fought Wizzrobe rooms entered low**: 0x10 (259 deaths of 721 entering with 5.2 hearts), 0x30 (129 of
-  398 with 3.8), 0x05 (108 of 869 with 6.1) end 496 of `d9`'s 857 lost runs; patra's 0x52 (75 of 249 with 3.3) and
-  Ganon (31 of 174 with 3.5) next. Every rule of these rooms loses more hearts a visit than the model (wizzrobe-10
-  7.13 against 2.52, -30 2.57 against 1.43, -05 2.55 against 1.27) but patra-52's (0.90, the model 0.89) and
-  Ganon's (0.57 against 0.75).
-- [ ] **The leg's hearts**: runs reach Dungeon 9 with 12.06 of 15 (the rock wall 0:0x05 1.25, 0:0x07 0.45) and end
-  the game a third as often as from 15 (3.9% against 14.3%; round29.md §17.5); at full hearts the sword's beams
-  also save about 0.4 hearts in 9:0x65.
+  Dungeon 9). **A third team** (`r79c-*`, §18): `d9` 310 of 1000 (+16.7 ± 1.8 paired), `post-d8` 105 of 1000
+  (+6.6 ± 1.1); the planner beside 85.3% and 75.3% of 300; both runs recorded and verified.
+- [ ] **The fought Wizzrobe rooms entered low** (the third team, round29.md §18.2): 0x10 (210 deaths of 808
+  entering with 5.9 hearts), 0x30 (115 of 535 with 4.2), 0x05 (69 of 912 with 6.9) end 394 of `d9`'s 690 lost runs;
+  Ganon (49 of 359 with 3.4) and patra's 0x52 (40 of 399 with 3.5) next. At the same hearts on entering the planner
+  loses a tenth (0x05) to a third (0x30) of the models' hearts a visit; in 0x10 four fifths. The hearts before them:
+  0x27 to its wall 2.23 a visit, 0x17 to its wall 2.55, 0x16's fight 0.93, 0x05 1.12.
+- [ ] **The leg's hearts**: runs reach Dungeon 9 with 12.06 of 15 (the rock wall 0:0x05 1.25 a visit, the planner
+  0.76; 0:0x07 0.45) and end the game a third as often as from 15 (10.5% of arrivals against 31.0%; round29.md
+  §18.2). ow-lynel, ow-boulder and ow-zora play the other lanes' legs: a round on them is judged there too.
+- [ ] **The planner as a teacher, a second pass** (round29.md §18.3): `plan9-*` again from the third team's runs,
+  with `chain_hp.json` and `heart_value.json` refitted from `r79c-1k`, in 0x05, 0x30, 0x16's fight, 0x52, 0x07, Ganon,
+  0x65 from the arrival's hearts and 0:0x05's rock wall.
+- [ ] **The stretch's team lands after Dungeons 6 and 8**: ten of its families differ from the Dungeon 6 and
+  Dungeon 8 lanes' promoted runs (ow-moblin, ow-zora, ow-leever, ow-lynel, ow-boulder, stalfos-keese-gel, like-like,
+  zol, wizzrobe; equipment-room against Dungeon 8's); only wizzrobe was judged on another lane's segment (`d6`).
+  Each needs a joint decision at the landing.
 - [ ] **`keep_out` misses at the entry square** (round29.md §17.2): with 9:0x55's S doorway in `keep_out`, MOVE S
   from ($78, $BD), where every start and every arrival stands, walks Link out in two decisions; the executor's veto
   does not hold there (`at_doorway_mouth` false). Not traced; an engine change. The 0x55 bounces it was for are gone
   with lanmola `r79b-lanmola`.
-- [ ] **The ring's cellar `stuck`** (equipment-room's 2000 steps: 5 of 942 `d9` runs, 9 of 788 `post-d8`) and
-  patra's 3000-step limit (3 runs): not looked at.
+- [ ] **The ring's cellar `stuck`** (equipment-room's 2000 steps: 5 of 942 `d9` runs and 9 of 788 `post-d8` with
+  the second team, 0 of 938 and 5 of 810 with the third) and patra's 3000-step limit (3, then 4 runs): not looked at.
 - [x] **wizzrobe for the whole route**: `r79c-wj-s85` (checkpoint it002424; a joint training on Dungeon 6's and
   level 9's rooms from `r80-wplan-s78`) holds `d6` (314 against 316 of 1000, −0.2 ± 2.1 paired) and plays `d9`
   better than `r79b-wizz-s80` (+14.7 ± 1.8 confirmed); round29.md §18.1. One seed of three held Dungeon 6 (s84
