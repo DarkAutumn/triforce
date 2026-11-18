@@ -1,7 +1,8 @@
 """Round 27 §13 (docs/experiments/round27.md "The planner as a teacher"): the honest planner's decisions in
 Dungeon 6's two block rooms as demonstration rows for ``train --demos``.
 
-    python scripts/experiments/r27_plan_demos.py CHECKPOINT OUT.npz [--family F] [--runs N] [--states 6_38s 6_3aw]
+    python scripts/experiments/r27_plan_demos.py CHECKPOINT OUT.npz [--family F] [--act MODE] [--runs N]
+        [--states 6_38s 6_3aw]
 
 The family (``--family``, wizzrobe by default; round 29 records level 9's rooms of wizzrobe, patra and ganon too)
 plays ``--runs`` episodes from every chain of each state stem (``6_38s_0..2``, ``6_3aw_0..2``)
@@ -9,7 +10,8 @@ in a native ``EvalTask`` pool, its own hp and bombs draws, full rooms (``room_ki
 ``registry.PLAN_ACT`` (``temperature:0.5+relax:16+plan:16:1``: before each decision the emulator tries the action on
 redrawn random numbers and takes the policy's next best if Link would be hit; docs/rust-actor.md "Foresight"). The
 pool records every decision's observation (with the action mask) and the action it executed, the planner's choice
-(``EnvPool.play(record='observations')``, as ``triforce.best_of_n``).
+(``EnvPool.play(record='observations')``, as ``triforce.best_of_n``).  ``--act`` plays another act mode instead
+(round 27's ow-lynel: ``registry.ACT_RULE``, a model's own clean runs as demonstrations; nothing is replaced then).
 
 Rows: every decision of the episodes that succeed with at most ``--max-loss`` hearts lost; a decision the planner
 replaced (``decisions.foresight.replaced`` of the episode's visit: the policy's draw would have been hit) is written
@@ -49,7 +51,7 @@ def replaced_indices(record: dict) -> set[int]:
 
 
 def record_demos(family: str, checkpoint: Path, out: Path, stems: list[str], runs: int, max_loss: float,
-                 repeat: int, parallel: int, seed: int) -> int:
+                 repeat: int, parallel: int, seed: int, act: str = registry.PLAN_ACT) -> int:
     """Plays, filters and writes the rows; returns how many."""
     config = load_specialist(family)
     registry.require_compatible(checkpoint)
@@ -59,7 +61,7 @@ def record_demos(family: str, checkpoint: Path, out: Path, stems: list[str], run
     task = _native.EvalTask(config, jobs)
     records, plays = {}, {}
     with _native.EnvPool(task, num_envs=max(1, min(parallel, len(jobs))), seed=seed) as pool:
-        pool.play([policy], act=registry.PLAN_ACT, record='observations')
+        pool.play([policy], act=act, record='observations')
         while True:
             idle = pool.wait_idle(timeout=0.5)
             for event in pool.poll_events():
@@ -106,6 +108,7 @@ def main(argv) -> int:
     parser.add_argument('checkpoint', type=Path, help="the family's run dir (or ckpt.pt) the planner plays")
     parser.add_argument('out', type=Path)
     parser.add_argument('--family', default=DEFAULT_FAMILY)
+    parser.add_argument('--act', default=registry.PLAN_ACT, help="the act mode played (default the planner's)")
     parser.add_argument('--states', nargs='+', default=['6_38s', '6_3aw'], help="start state stems (chains 0-2)")
     parser.add_argument('--runs', type=int, default=100, help="episodes a start state")
     parser.add_argument('--max-loss', type=float, default=6.0, help="hearts a kept episode may lose")
@@ -120,7 +123,7 @@ def main(argv) -> int:
                                                  'status': 'evaluating'}], nice=nice,
                     work=work(eval_episodes=2 * episodes)):
         record_demos(args.family, args.checkpoint, args.out, args.states, args.runs, args.max_loss, args.repeat,
-                     args.parallel, args.seed)
+                     args.parallel, args.seed, args.act)
     return 0
 
 

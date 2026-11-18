@@ -12,6 +12,7 @@ clips: {enabled: true, off_share: 0}    # round 21: the screen wrap (W/E; none i
 curriculum: {enabled: true}             # round 24: 0x60's wrap exit (CLIP E on Y $85/$8D only), 0x0a's sword cave
 one_room: true                          # round 5: per-room episodes
 max_steps: 600
+harvested_fraction: 0.2                 # round 27 (lynel): 0x0a from S as the chain hands it over (its hearts and bombs), 300 handoffs of a post-d2 chain (eval-chain --harvest) in triforce/states/harvested/ow-lynel; 0x0a's two fought entries were 6 of 42 seed states
 warm_start: null
 notes: >-
   Lynel rooms (Lee, Nov 8: very hard monsters, the main enemy of many later rooms). 0x0a (Blue Lynel and a Zora)
