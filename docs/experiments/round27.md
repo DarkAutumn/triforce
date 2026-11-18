@@ -881,7 +881,20 @@ over the same training without it.** **Promoted: `r80-wplan-s78`** (`triforce pr
 `ckpt.pt` is the confirmed last checkpoint), `d6` confirmed 31.8% on fresh seeds: over the owner's 30%. It is the
 base of the joint Dungeon 6 and 9 wizzrobe training, which loads both demonstration files. The honest planner
 beside it (300 runs, seeds 0-299): **208 of 300, 69.3%** (60.7% with `r79-wizz-s78`, 54.0% with `r78-wizz-s78`).
-Its chains (`r80-1k`) were queued when this was written.
+
+**The chain of record, `r80-1k`** (the promoted team with `r80-wplan-s78`, the §13.5 command with `TAG=r80-1k`; the
+batch `failed` by its report entry alone), paired by seed with `r79-1k`:
+
+| segment | `r77a-1k` | `r78-1k` | `r79-1k` | `r80-1k` | `r80-1k` − `r79-1k` |
+|---|---:|---:|---:|---:|---:|
+| `post-d7` (0:0x42 to the D6 triforce) | 3.4% | 8.0% | 11.1% | **15.0%** | +3.9 ± 1.5 |
+| `d6` (seeds 0-999; `r80-wplan-s78` was screened there) | 8.2% | 21.5% | 29.0% | 31.5% | +2.5 ± 2.0 |
+| `d6` fresh seeds 1000-1999 | | 18.4% | 27.8% | **31.8%** | +4.0 ± 2.0 |
+
+0x38 now costs 4.97-4.99 hearts a visit (5.43-5.69) and kills 251 of 987 `post-d7` runs (309) and 128 of 1000
+`d6` runs (161); 0x3a, entered with 4.7-6.1 hearts, still kills 372-376. **`d6` is over the owner's 30% for a first
+team; the stretch from the magic sword to the D6 triforce is 15.0%**, its next lever the hearts runs bring into
+0x38 (8.8 on `post-d7` against 10.6 on `d6`: the leg's 0x32 and 0x58's statues) and 0x3a.
 
 **The `r79-1k` chains** (the promoted team with `r79-wizz-s78`, the §13.5 command with `TAG=r79-1k`; the batch
 `failed` by its report entry alone, as before), paired by seed with `r78-1k`:
