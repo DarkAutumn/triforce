@@ -873,6 +873,18 @@ entered with 6.40 hearts instead of 5.73. It is the first run over the owner's 3
 to choose it; it was not promoted yet only because the selection of `r80-wplan-s79` was running in the same
 checkout (a promotion mid-selection changes the run it compares with).
 
+**The `r79-1k` chains** (the promoted team with `r79-wizz-s78`, the §13.5 command with `TAG=r79-1k`; the batch
+`failed` by its report entry alone, as before), paired by seed with `r78-1k`:
+
+| segment | `r77a-1k` | `r78-1k` | `r79-1k` | `r79-1k` − `r78-1k` |
+|---|---:|---:|---:|---:|
+| `post-d7` (0:0x42 to the D6 triforce) | 3.4% | 8.0% | **11.1%** | +3.1 ± 1.2 |
+| `d6` (seeds 0-999, the screen seeds: biased) | 8.2% | 21.5% | 29.0% | +7.5 ± 1.9 |
+| `d6` fresh seeds 1000-1999 (confirmations) | | 18.4% | **27.8%** | +9.4 ± 1.8 |
+
+In `post-d7`, entered with 8.9 hearts, 0x38 still kills 309 of 985 runs and 0x3a 347 of 558: the stretch's chain
+of record is 11.1%, its `d6` segment 27.8% (unbiased) with `r79-wizz-s78`, 31.8% with `r80-wplan-s78` once promoted.
+
 Still in the job line when this was written: the selections of `r79-wizz-s79`, `r79-wizz-s80` and the planner arm
 `r80-wplan-s78`, `-s79`, `-s80b` (all against the promoted `r79-wizz-s78`; `r80-wplan-s80`'s first try ran out of
 GPU memory beside `-s79`: `ppo.py` computes the demonstration accuracy in one forward pass over all 84,041 rows, so
