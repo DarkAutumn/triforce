@@ -865,6 +865,14 @@ yet` (a `select-checkpoint` bug; the confirmations of the last checkpoint and th
 not promoted. On the fresh seeds the three continuations stand at 27.8%, 25.0% and 20.6% against their own bases'
 18.4%, 16.5% and 15.7% (§13.3): **488 more iterations gain 5-9 points on every seed**, seed 78 most.
 
+**The planner as a teacher, seed 78** (`r80-wplan-s78`, against the promoted `r79-wizz-s78`, its length control):
+the screen rises from 21% (iterations 1186-1276) to 27-30% (1336-1456), the last checkpoint 31.5% against 29.0%
+(+2.5 ± 2.0); **confirmed on fresh seeds: last 31.8% against 27.8%, +4.0 ± 2.0 points paired** (the same tool
+failure ended the batch). 0x38 costs 4.96 hearts a visit instead of 5.42 (132 deaths instead of 144), and 0x3a is
+entered with 6.40 hearts instead of 5.73. It is the first run over the owner's 30% on the segment on seeds not used
+to choose it; it was not promoted yet only because the selection of `r80-wplan-s79` was running in the same
+checkout (a promotion mid-selection changes the run it compares with).
+
 Still in the job line when this was written: the selections of `r79-wizz-s79`, `r79-wizz-s80` and the planner arm
 `r80-wplan-s78`, `-s79`, `-s80b` (all against the promoted `r79-wizz-s78`; `r80-wplan-s80`'s first try ran out of
 GPU memory beside `-s79`: `ppo.py` computes the demonstration accuracy in one forward pass over all 84,041 rows, so
