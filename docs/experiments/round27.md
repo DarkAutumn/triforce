@@ -875,6 +875,12 @@ checkout (a promotion mid-selection changes the run it compares with).
 **Seed 79** (`r80-wplan-s79`): screen last 25.2% (checkpoints 28-29% from iteration 1246 on) against 29.0%;
 confirmed last 27.4% against the promoted 27.8% (−0.4), and against its own length control `r79-wizz-s79`'s 25.0%
 on the same fresh seeds +2.4: the planner's demonstrations add 2-4 points on both seeds measured so far.
+**Seed 80** (`r80-wplan-s80b`): screen last 25.9%, it001456 27.0%; confirmed last 23.6% against 27.8%, and +3.0
+against its control `r79-wizz-s80`'s 20.6%. **The planner as a teacher gains on every seed: +4.0, +2.4, +3.0 points
+over the same training without it.** **Promoted: `r80-wplan-s78`** (`triforce promote wizzrobe r80-wplan-s78`; its
+`ckpt.pt` is the confirmed last checkpoint), `d6` confirmed 31.8% on fresh seeds: over the owner's 30%. It is the
+base of the joint Dungeon 6 and 9 wizzrobe training, which loads both demonstration files. Its chains (`r80-1k`)
+and the planner beside it were queued when this was written.
 
 **The `r79-1k` chains** (the promoted team with `r79-wizz-s78`, the §13.5 command with `TAG=r79-1k`; the batch
 `failed` by its report entry alone, as before), paired by seed with `r78-1k`:
