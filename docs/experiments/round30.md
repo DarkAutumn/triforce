@@ -113,11 +113,25 @@ boss-manhandla r30-manh-s90 --act temperature:0.5+relax:16`; its `ckpt.pt` is th
 harvested 3:0x4d starts are not in git: `triforce/states/harvested/boss-manhandla` is rebuilt from the Dungeon 3
 harvest chain above (its `boss-manhandla/3_4dw_*` files, all of them).
 
-**Darknut and gibdo: not decided yet.** The selections on Dungeon 5 at the route's hearts (`select-checkpoint FAMILY RUN --from
-0_45c_0 --stop-at step:209 --runs 1000 --first-seed 2000 --confirm 1000 --confirm-first-seed 3000 --confirm-top 1
---only <the last checkpoints>,last`; the promoted team's reference measured once, in `r30-dark-s87`'s batch: the
-other selections play the same team on the same seeds) and boss-manhandla's on Dungeon 3 at the route's hearts
-(`--from 0_37c_0 --stop-at step:105`) were waiting in the job line when this section was written. Nothing is
-promoted. What remains: the choice, then for the chosen darknut `d8` (`--from 8_7es_0 --stop-at step:297`), `d3`
-(`--from 3_7cs_0 --stop-at step:105`) and `d5` (`--from 5_76s_0 --stop-at step:209`), 1000 runs on seeds 0-999 paired
-with `r29land-1k` (the same team but darknut, on the same code).
+**Darknut and gibdo, chosen on Dungeon 5 at the route's hearts** (`select-checkpoint FAMILY RUN --from 0_45c_0
+--stop-at step:209 --runs 1000 --first-seed 2000 --confirm 1000 --confirm-first-seed 3000 --confirm-top 1 --only
+<the last checkpoints>,last`; the promoted team measured once, in `r30-dark-s87`'s batch, and the other selections
+paired with it on the same seeds: each plays the same team with one run swapped). The D5 triforce taken:
+
+| run | candidate | screen (2000-2999) | confirm (3000-3999) | hearts on arriving | confirm vs the promoted team |
+|---|---|---:|---:|---:|---:|
+| promoted team | `r78-dark37-s85`, `r75-f-a` | 48.5% | 49.0% | 5.35 | |
+| darknut `r30-dark-s87` | it011462 | 53.6% | 52.6% | 5.43 | +3.6 ± 2.2 |
+| | last | 49.7% | 49.5% | 5.18 | +0.5 ± 2.2 |
+| darknut `r30-dark-s88` | it011492 | 54.2% | 53.4% | 5.29 | +4.4 ± 2.2 |
+| | last | 49.7% | 50.3% | 5.28 | |
+| darknut **`r30-dark-s89`** | **last (it 11530)** | 53.7% | **54.8%** | 5.38 | **+5.8 ± 2.2** |
+| | it011462 | 49.1% | 48.5% | 5.34 | |
+| gibdo **`r30-gibdo-s91`** | **last (it 1368)** | 52.8% | **54.3%** | 5.60 | **+5.3 ± 2.1** |
+| | it001330 | 55.4% | 53.1% | 5.52 | |
+
+All three darknut seeds gain over the promoted run on the segment it lost (+3.6 to +5.8 on fresh seeds), and gibdo
+as much. The choice: darknut `r30-dark-s89` and gibdo `r30-gibdo-s91`, their last checkpoints (each run's
+`ckpt.pt`). Their other segments (darknut `d8`, `d3`, `d5`; gibdo `d5`; 1000 runs, seeds 0-999) and the segment
+with both swapped together (the gains were measured one family at a time) were queued: `r30dk-check-s89-gibdo`.
+`d3` and `d8` pair with this checkout's team with the new boss-manhandla (the chains of its own check above).
