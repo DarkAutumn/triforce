@@ -29,7 +29,9 @@ rows it reproduced, since V at a step depends only on the steps up to the next t
 into ``d2first`` and the table refit on it from both lines' sources is the two tables' rows, identical; round 28: on
 ``d8``, from those, Dungeon 7's and Dungeon 8's chains, pricing ``d2first`` and ``d8``; round 29: on ``d9``, from
 those and the Dungeon 9 team's chains, rows 0-296 unchanged, pricing all three; its third round refitted level 9
-from the second team's ``post-d8`` and ``d9`` chains, which give the leg's steps their first visits).
+from the second team's ``post-d8`` and ``d9`` chains, which give the leg's steps their first visits; at 1.9.0.0
+``d8`` and ``d9`` merged into ``d2first``, the table names ``d2first``, and the refit on it from the same 30 sources is
+byte-identical).
 """
 
 import argparse
