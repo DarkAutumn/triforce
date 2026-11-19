@@ -27,16 +27,26 @@ per 1000), in order:
   Then 0x64 40, 0x47 28, 0x65 27.
 - [ ] **`d7` (165)**: 7:0x1b's six Goriyas 77, 0x1a 27, 0x19 17.
 - [ ] **Dungeon 3 (140)**: Manhandla 3:0x4d 97.
-- [ ] **Dungeon 2 (121)**: goriya 2:0x1e 41, 0x5e 29; moldorm 0x3e 22.
-- [ ] **Dungeon 1 (92)**: 1:0x44 25, 0x35 15, 0x23 15.
+- [ ] **Dungeon 2 (121)**: goriya 2:0x1e 41, 0x5e 29; moldorm 0x3e 22. Round 30 (round30.md "The first quarter"):
+  moldorm's deaths are all entries below 3 hearts (0.32 hearts a visit, the planner 0.19); three seeds
+  `r30e-moldorm-s87..89` trained with the full route's handoffs (0.33) and the planner's demonstrations, single
+  rooms 93-94% (`r75-f-b` 90.7%); their `d2` selection and the full-route gate to step 68 were waiting in the queue.
+- [ ] **Dungeon 1 (92)**: goriya 1:0x44 25, 0x23 15; stalfos-keese-gel 23 (1:0x33 12); Aquamentus 1:0x35 15; the
+  bow cellar 1:0x7f 12. Every death is an entry below 2 hearts (3.31 of 5 in): the hearts lost after Dungeon 2.
 - [ ] **`d6` (73)**: wizzrobe 6:0x3a 33, 0x38 15.
-- [ ] **After Dungeon 2 (56)**: ow-lynel 0:0x0a 21, ow-zora 0x38 13, ow-tektite 0x1a 13.
+- [ ] **After Dungeon 2 (56)**: ow-lynel 0:0x0a 21 (18 on the second visit, 11 of them entered with 4+ hearts),
+  ow-zora 0x38 13, ow-tektite 0x1a 13 (all entered below 2 hearts). Round 30: `r30e-lynel-s84` (the second
+  visit's 300 states at the route's hearts, `harvested_fraction` 0.35) is within a point of `r27l-lynel-s81` on
+  every single room; its `post-d2` selection was waiting in the queue. ow-tektite's lever is ready, not trained:
+  438 handoffs of 0x1a back S at the full route's hearts (the planner loses 0.14 a visit there, the model 0.30).
 - [ ] **Dungeon 4 (50)**: Gleeok 4:0x13 36.
 - [ ] **The hearts carried in**: from the start Dungeon 5 is entered with 7.74 of 10 hearts, Dungeon 9 with 12.25 of
   15; `d8` (24.8%) and `d9` (31.0%) at full hearts are the last factors, and every heart kept earlier is one in them
   (round29.md §18.3 for Dungeon 9's rooms).
 - [ ] **Cheap**: ow-start `r74-leg2`'s three unfinishable 0x2f take-any cave tracks (`0_2fcave_*`, the item "A
-  take-any cave's curriculum can never finish" below): half its resets idle.
+  take-any cave's curriculum can never finish" below): half its resets idle. Round 30: confirmed (Link holds the
+  10th container from the track's frame 10, the curriculum stands at 15 of 17); take the three tracks out of
+  `trajectories/ow-start` before its next training. Not trained: ow-start loses no run and no heart anywhere.
 
 ### Round 29 (begun Nov 17): the leg to Dungeon 9, Dungeon 9, Ganon and the end
 

@@ -71,3 +71,18 @@ second-visit lever as one seed. ow-start is not trained (below).
   out of the worktree's trajectories. ow-start ends no run and loses no heart on any segment of `r29land-1k`
   (0x77, 0x1c, 0x1b, 0x2f, 0x0f and their caves), so no run of it could pass a gate that asks for a gain; the
   removal waits for its next continuation.
+
+### Where it stands (not finished)
+
+Single rooms (`eval.json`, 300 episodes, clips on): moldorm `r30e-moldorm-s87` 93.7% (19 deaths), −0.16 hearts;
+`s88` 94.3% (17), −0.19; `s89` 93.0% (20), −0.19; `r75-f-b` 90.7% (25), −0.17. ow-lynel `r30e-lynel-s84` 99.5%,
+−0.26 (`r27l-lynel-s81` 99.4%, −0.28): 0x0a 98.8% −0.20 (98.5%, −0.21), the second visit's seed states −0.09 to
+−0.14 (0.00 to −0.21), 0x05 99.3% −1.11 (98.3%, −1.28), 0x32 98.0% −0.78 (97.7%, −0.86); every room within a point.
+
+Nothing is promoted and no run has qualified yet: the choices on fresh seeds were still waiting in the job line
+(behind 12-17 other agents' jobs), first trimmed from 24 chains to 12 to wait less. moldorm: `select-checkpoint
+moldorm RUN --segment d2 --runs 1000 --first-seed 2000 --confirm 1000 --confirm-first-seed 3000 --only
+last,promoted` for s87 (the paired reference), `--only last --no-promoted` for s88 and s89 (paired against s87's
+reference chains, the same seeds). ow-lynel: the same on `--segment post-d2` with `--only last,promoted`. Then each
+chosen run's gate: the full route from the start to step 68, 1000 runs (seeds 0-999), paired with
+`r29land-1k-full`, and for ow-lynel `post-d4`, `post-d7`, `post-d6` and `post-d8` paired with `r29land-1k`.
