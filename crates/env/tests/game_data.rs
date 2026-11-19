@@ -66,6 +66,26 @@ fn a_stale_heart_value_table_stops_only_the_families_that_read_it() {
     data.specialist("ow-start").unwrap();
 }
 
+/// Phase X: a route's start states are built before its chains can fit its tables, so a family holding states in a
+/// route's namespace (here like-like's `d3first_4_32w_0`, with `chain_hp` and `heart_value` but no
+/// `chain_hp.d3first.json` or `heart_value.d3first.json`) still loads and is handed out (the state builder, the
+/// runner, d2first's chains); only an env that draws its start states (`check_draws`) asks for the namespace's tables.
+#[test]
+fn a_routes_states_without_their_tables_stop_only_the_draws() {
+    let tmp = copy_data();
+    let states = tmp.path().join("triforce/states");
+    std::fs::create_dir_all(&states).unwrap();
+    std::fs::copy(common::repo().join("triforce/states/4_32w_0.state"), states.join("d3first_4_32w_0.state")).unwrap();
+    let data = GameData::load(tmp.path()).unwrap();
+    let like_like = data.specialist("like-like").unwrap();
+    data.check_config(&like_like).unwrap();
+    let error = data.check_draws(&like_like).unwrap_err().to_string();
+    assert!(error.contains("chain_hp.d3first.json"), "{error}");
+    std::fs::remove_file(states.join("d3first_4_32w_0.state")).unwrap();
+    let data = GameData::load(tmp.path()).unwrap();
+    data.check_draws(&data.specialist("like-like").unwrap()).unwrap();
+}
+
 /// Round 27: a table prices its own route and the routes it extends (V at a step depends only on the steps up to the
 /// next triforce).  With a scouting route `{extends: d2first, steps: [...]}` beside it (as `d6` was before it merged),
 /// `d2first`'s table prices `d2first` only: a family on the scouting route is refused and an episode there gets no

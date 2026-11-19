@@ -427,6 +427,8 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         let mut session = Session::new(nes, data.map.clone());
         session.look_ahead = if opts.skip_look_ahead { zelda::LookAhead::Bombs } else { zelda::LookAhead::All };
         let pool = if opts.start_state.is_none() && !opts.explicit_starts {
+            // Phase X: the tables of every namespace the pool draws from (a route's once it holds the family's states).
+            data.check_draws(&config)?;
             let mut pool = StartStatePool::new(&config, &data.states_dir)?;
             pool.weights = opts.start_weights;
             Some(pool)

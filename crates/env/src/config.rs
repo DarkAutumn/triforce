@@ -1218,7 +1218,7 @@ impl GameData {
             ));
         }
         for (name, config) in &self.specialists {
-            self.check_chain_hp(config)?;
+            self.chain_hp_in(config, false)?;
             let rooms: BTreeSet<MapLocation> = config.rooms.iter().copied().collect();
             // The rooms any route plays with the tag (a route's own game.yaml rooms included, phase X).
             let tagged: BTreeSet<MapLocation> =
@@ -1266,18 +1266,18 @@ impl GameData {
         GameData::load(&repo_root())
     }
 
-    /// A specialist by name, or a config loaded from a `.yaml` path.
+    /// A specialist by name, or a config loaded from a `.yaml` path ([`Self::check_config`]: the tables of the bare
+    /// names it draws; a route namespace's are checked where its states are drawn, [`Self::check_draws`]).
     pub fn specialist(&self, name_or_path: &str) -> Result<Arc<SpecialistConfig>, ConfigError> {
         if let Some(config) = self.specialists.get(name_or_path) {
-            self.check_heart_values(config)?;
+            self.check_config(config)?;
             return Ok(config.clone());
         }
         if name_or_path.ends_with(".yaml") && Path::new(name_or_path).exists() {
             let text = std::fs::read_to_string(name_or_path)
                 .map_err(|e| ConfigError(format!("{name_or_path}: {e}")))?;
             let config = SpecialistConfig::from_yaml(&text, name_or_path, Some(&self.map))?;
-            self.check_chain_hp(&config)?;
-            self.check_heart_values(&config)?;
+            self.check_config(&config)?;
             return Ok(Arc::new(config));
         }
         let known: Vec<&String> = self.specialists.keys().collect();
@@ -1304,11 +1304,12 @@ impl GameData {
     }
 
     /// The state namespaces the family draws states from that need their tables: bare names when it draws them (as
-    /// before phase X, whether or not states exist), a route's namespace once it holds states of the family.
-    fn drawn_namespaces<'a>(&self, config: &'a SpecialistConfig) -> Vec<Option<&'a str>> {
+    /// before phase X, whether or not states exist), with `spaced` a route's namespace once it holds states of the
+    /// family.
+    fn drawn_namespaces<'a>(&self, config: &'a SpecialistConfig, spaced: bool) -> Vec<Option<&'a str>> {
         let wanted = config.namespaces();
         let mut namespaces: Vec<Option<&str>> = wanted.iter().copied().filter(Option::is_none).collect();
-        let spaced: Vec<&str> = wanted.iter().copied().flatten().collect();
+        let spaced: Vec<&str> = if spaced { wanted.iter().copied().flatten().collect() } else { Vec::new() };
         if !spaced.is_empty() {
             let found: Vec<PathBuf> = config
                 .resolve_start_states(&self.states_dir)
@@ -1324,15 +1325,36 @@ impl GameData {
         namespaces
     }
 
+    /// The checks of a config as it is loaded or built (the data, a family handed out, `SpecialistConfig(...)`): the
+    /// chain profile and heart table of the bare names it draws ([`Self::check_chain_hp`],
+    /// [`Self::check_heart_values`]). A route namespace's tables are the draws' ([`Self::check_draws`]): phase X, a
+    /// route's start states are built, explored and chained before its chains can fit them, and the family keeps
+    /// loading for every other use meanwhile (the state builder, the runner, the chain, d2first's evaluations).
+    pub fn check_config(&self, config: &SpecialistConfig) -> Result<(), ConfigError> {
+        self.chain_hp_in(config, false)?;
+        self.heart_values_in(config, false)
+    }
+
+    /// The checks of an env that draws the family's start states (training, a family evaluation): the tables of
+    /// every namespace it draws from, a route's namespace's included once it holds states of the family.
+    pub fn check_draws(&self, config: &SpecialistConfig) -> Result<(), ConfigError> {
+        self.chain_hp_in(config, true)?;
+        self.heart_values_in(config, true)
+    }
+
     /// A config that draws chain health (`ram_randomization.chain_hp > 0`) needs a chain profile with at least
     /// [`MIN_CHAIN_SAMPLES`] arrivals for one of its rooms, in every state namespace it draws states from
     /// (`triforce/chain_hp.json`, phase X `triforce/chain_hp.<ns>.json`); without one every reset would silently fall
     /// back to the `hp` draw (`start_states::ram_randomization_values`).
     pub fn check_chain_hp(&self, config: &SpecialistConfig) -> Result<(), ConfigError> {
+        self.chain_hp_in(config, true)
+    }
+
+    fn chain_hp_in(&self, config: &SpecialistConfig, spaced: bool) -> Result<(), ConfigError> {
         if !config.ram_randomization.chain_hp.is_some_and(|p| p > 0.0) {
             return Ok(());
         }
-        for ns in self.drawn_namespaces(config) {
+        for ns in self.drawn_namespaces(config, spaced) {
             let profiled = config
                 .rooms
                 .iter()
@@ -1359,10 +1381,14 @@ impl GameData {
     /// states there play ([`Self::state_route`]; bare names: the family's `route:` or the default) or one extending
     /// it ([`HeartValues::prices`]).
     pub fn check_heart_values(&self, config: &SpecialistConfig) -> Result<(), ConfigError> {
+        self.heart_values_in(config, true)
+    }
+
+    fn heart_values_in(&self, config: &SpecialistConfig, spaced: bool) -> Result<(), ConfigError> {
         if !config.reward.heart_value.uses_table() {
             return Ok(());
         }
-        for ns in self.drawn_namespaces(config) {
+        for ns in self.drawn_namespaces(config, spaced) {
             let route = self.state_route(config, ns).unwrap_or(zelda::game_map::DEFAULT_ROUTE);
             let file = namespace_file("heart_value", ns);
             let values = match ns {

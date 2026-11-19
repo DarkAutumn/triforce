@@ -1935,7 +1935,10 @@ is joined at the end. It prints a JSON summary (`out`, `frames`, `seconds`, `wid
   uses them: `reward.heart_value` `triforce/heart_value.<NS>.json` (`python -m triforce.heart_value CHAINS...
   --route d3first` writes it), `ram_randomization.chain_hp` `triforce/chain_hp.<NS>.json` (`python -m
   triforce.chain_hp CHAINS... --route d3first`); without one it is refused with both fixes named (a table, or
-  `state_routes:`). The check counts a namespace only once states of the family exist there.
+  `state_routes:`). The check counts a namespace only once states of the family exist there, and it is the draws'
+  (`GameData::check_draws`, an env that draws the family's start states: training, a family evaluation): loading or
+  handing out the family checks only the bare names' tables (`check_config`), so the data, the state builder, the
+  runner and the chain keep working while a route's states are built, before its chains can fit its tables.
 - **Entry states:** `entry_states build|path --route R` names files in R's namespace; `audit` checks every state by
   its namespace's route (steps, hearts, boss rooms) and lists MISSING of the default route and of every route with
   states; `audit --route R` audits R's states only (and `--states` globs without a namespace in R's).

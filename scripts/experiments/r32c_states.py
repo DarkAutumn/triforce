@@ -1,0 +1,115 @@
+"""Phase X's states step: d3first's start states over a stretch of its route, step by step, in one job.
+
+    python scripts/experiments/r32c_states.py --first 0 --last 31 --rules 3_6bs,3_4bs,... --tag s1
+
+For each step of the clip way from route step --first until the state of route step --last is written: the room's
+crossing gives the next step's entry state, per chain (0-2) that has the step's own state.  A step named in --rules
+(the walks' name of the room's state, `r32_d3first.LEGS`) is crossed by the walks' rule (`r32c_harvest.py`: the
+first won run of each chain gives the next state, hearts refilled, every seed played for the win rate); any other
+step by the explorer (`entry_states.build`, one step), and where the explorer fails for a chain, by the walks'
+actions for the step if the walks have them (the state then says so in its manifest entry's `played_by`).  Each
+step's states are staged under target/entry-states/r32c-<tag>/<step> and installed before the next step; a chain
+with no state for a step stops there.  At the end `entry_states audit --route d3first`.  Never skips a fight."""
+
+import os
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import r32c_harvest  # noqa: E402  pylint: disable=wrong-import-position
+from r32_d3first import LEGS  # noqa: E402  pylint: disable=wrong-import-position
+
+ROUTE = 'd3first'
+WALKED = {name for leg in LEGS.values() for name, _ in leg}
+
+
+def stem(step) -> str:
+    """The walks' name of a route step's state (`d3first_3_6bs_0.state` -> `3_6bs`)."""
+    return step.filename(0)[len(ROUTE) + 1:-len('_0.state')]
+
+
+def harvest(name, chains, out, seeds, log):
+    """`r32c_harvest.py NAME --out OUT --chains CHAINS --seeds SEEDS`, in this process."""
+    args = argparse.Namespace(step=name, out=str(out), chains=chains, seeds=seeds, seed0=1000)
+    argv = sys.argv
+    sys.argv = ['scripts/experiments/r32c_harvest.py', name, '--out', str(out), '--chains', ','.join(map(str, chains)),
+                '--seeds', str(seeds)]
+    try:
+        r32c_harvest.harvest(args)
+    except Exception as e:                                      # pylint: disable=broad-except
+        log(f'  harvest {name} chains {chains}: ERROR {type(e).__name__}: {e}')
+    finally:
+        sys.argv = argv
+
+
+def staged(out, target, chains):
+    return [c for c in chains if (Path(out) / target.filename(c)).exists()]
+
+
+def main():
+    from triforce import entry_states                           # pylint: disable=import-outside-toplevel
+    from triforce.paths import STATES_DIR                       # pylint: disable=import-outside-toplevel
+    parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
+    parser.add_argument('--first', type=int, required=True, help='route step whose state the stretch starts from')
+    parser.add_argument('--last', type=int, required=True, help='route step whose state ends the stretch')
+    parser.add_argument('--rules', default='', help="steps (the walks' names) crossed by the walks' rule")
+    parser.add_argument('--chains', default='0,1,2')
+    parser.add_argument('--tag', required=True)
+    parser.add_argument('--rule-seeds', type=int, default=20)
+    parser.add_argument('--fallback-seeds', type=int, default=10)
+    parser.add_argument('--iterations', type=int, default=3000)
+    parser.add_argument('--attempts', type=int, default=3)
+    args = parser.parse_args()
+    rules = {r for r in args.rules.split(',') if r}
+
+    def log(text):
+        print(f'{time.strftime("%H:%M:%S")} {text}', flush=True)
+
+    way = [s for s in entry_states.route_steps(ROUTE) if s.way in (None, 'clips')]
+    root = Path('target/entry-states') / f'r32c-{args.tag}'
+    chains = [int(c) for c in args.chains.split(',')]
+    at = next(i for i, s in enumerate(way) if s.index >= args.first)
+    for step, target in zip(way[at:], way[at + 1:]):
+        if target.index > args.last:
+            break
+        name = stem(step)
+        if step.index > 0:
+            chains = [c for c in chains if (Path(STATES_DIR) / step.filename(c)).exists()]
+        if not chains:
+            log(f'step {step.index} {name}: no chain has its state: stop')
+            break
+        out = root / f'{step.index:03d}-{name}'
+        started = time.time()
+        if name in rules:
+            log(f'step {step.index} {name} -> {stem(target)}: the rule, chains {chains}')
+            harvest(name, chains, out, args.rule_seeds, log)
+            how = 'rule'
+        else:
+            source = entry_states.START_STATE if step.index == 0 else \
+                os.path.relpath(Path(STATES_DIR) / f'{ROUTE}_{name}_{{chain}}.state')    # no local path in the manifest
+            command = (f'python -m triforce.entry_states build --route {ROUTE} --chains {",".join(map(str, chains))} '
+                       f'--start-step {step.index} --last-step {target.index} --source {source} --out {out}')
+            entry_states.build(chains, str(out), args.iterations, 200, start_step=step.index, source=source,
+                               command=command, route=ROUTE, attempts=args.attempts, last_step=target.index)
+            how = 'explorer'
+            missing = [c for c in chains if c not in staged(out, target, chains)]
+            if missing and name in WALKED:
+                log(f"  explorer failed chains {missing}: the walks' actions for {name}")
+                harvest(name, missing, out, args.fallback_seeds, log)
+                how = f'explorer, walks for {missing}'
+        done = staged(out, target, chains)
+        if done:
+            entry_states.install(str(out), str(STATES_DIR), partial=True)
+        log(f'step {step.index} {name} -> {stem(target)} ({how}): chains {done} of {chains}, '
+            f'{time.time() - started:.0f}s')
+        chains = done
+    log('audit:')
+    subprocess.run([sys.executable, '-m', 'triforce.entry_states', 'audit', '--route', ROUTE], check=False)
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
