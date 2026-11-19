@@ -37,6 +37,16 @@ per 1000), in order:
   (round29.md §18.3 for Dungeon 9's rooms).
 - [ ] **Cheap**: ow-start `r74-leg2`'s three unfinishable 0x2f take-any cave tracks (`0_2fcave_*`, the item "A
   take-any cave's curriculum can never finish" below): half its resets idle.
+- [x] **The golden path to the ending** (round30.md, "The golden path to the ending"): from console power on the
+  models alone win every segment; six golden paths of six ended the game, 27-68 runs each (the D8 and ending
+  segments the longest, 4-17 and 5-26), about a minute on 8 games. The planner ends the game in one plain run
+  from power on (seed 3 of the first 8 runs).
+- [ ] **A golden path in the corpus**: the whole route's golden replay is 143-145 KB (nine states of about 11.4 KB:
+  eight CHECKPOINT states from the stitch), 2.2 times the corpus files; proposed, not committed. The owner's call:
+  accept the size, or a `crates/replay` change (a stitch keeping fewer states). The planner's power-on run (54 KB)
+  fits the corpus as it is.
+- [ ] `play-zelda.py`'s and `play_grid.py`'s docstrings still say golden paths go "to the route's last triforce"
+  (they go to the route's end, the ending).
 
 ### Round 29 (begun Nov 17): the leg to Dungeon 9, Dungeon 9, Ganon and the end
 
