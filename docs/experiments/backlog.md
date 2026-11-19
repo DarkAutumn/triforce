@@ -152,12 +152,13 @@ lead's working answers `docs/decisions.md` 2026-11-17. Dungeon 6 is trained to 3
   0x60, 0x32 and 0x22 and lost 0:0x0a after Dungeon 2 (39 deaths in 1000 runs against `r74-lynel`'s 13; on the
   full route the D5 triforce 14.3 against 27.0% of 300 paired runs). `r27l-lynel-s81` (from `r79t5-lynel`: 0x0a's
   harvested handoffs at `harvested_fraction: 0.2`, `r74-lynel`'s clean 0x0a runs as demonstrations) plays both:
+  after Dungeon 2 94.5% with 3.17 hearts against `r74-lynel`'s 95.3% with 3.20 on the same seeds (−0.8 ± 0.9);
   `r77b-1k` after Dungeon 2 94.0% (−1.7 ± 1.0 against `r76-1k`), the full route of 1000 the D5 triforce 23.3% and
   the D7 triforce 6.1% against 22.4% and 6.7% paired. Its yaml (`harvested_fraction`) and the demos script's
-  `--act` are on the ow-lynel lane's branch, not merged yet (the script conflicts; training only).
+  `--act` are merged at 1.9.0.0 (`r29-land`).
 - [ ] **0x0a's second visit** (out of the white sword's cave): still 0.2 hearts a visit against `r74-lynel`'s 0.14
-  (after Dungeon 2, 0x0a kills 25 of 1000 runs against 13). Next lever, written on the ow-lynel lane's branch and
-  not trained: its starts at the chain's hearts (`scripts/experiments/r27_lynel_states.py`) with
+  (after Dungeon 2, 0x0a kills 25 of 1000 runs against 13), and seeds 82 and 83 confirmed only 92.1-92.8%. Next
+  lever, written and not trained: its starts at the chain's hearts (`scripts/experiments/r27_lynel_states.py`) with
   `harvested_fraction: 0.35`.
 - [ ] **What loses Dungeon 6** (`r77-1k-d6`, round27.md §14.3): 6:0x3a kills 376 of 824 visits (entered with 6.1
   hearts), 0x38 128 of 1000 (10.6), then 0x2c 81, Gohma 32; on `post-d7`, entered with 10.3 hearts instead of 12,
