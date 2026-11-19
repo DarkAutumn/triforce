@@ -23,13 +23,17 @@ The route's order is Dungeon 5 (done), 7, the magic sword, 6, 8, 9. Round 26 is 
 (version 1.6 when trained models take its triforce at a working rate). The synthesis the round works from is
 `docs/routes/rest-of-game.md` (with `d7.md`, `late-monsters.md`, `late-mechanics.md`).
 
-This document covers the round's first two tiers. §1-6: what was walked, the route vocabulary, the one observation
-break and their merge. §7-12: the stretch merged into `d2first` (248 steps, to the D7 triforce), its 114 start
-states with what each holds, the curriculum tracks, goriya's clips measured, the proof trainings, the baseline and
-what the first team needs.
-**Nothing has been trained yet, and the baseline is zero**: of 200 runs a segment by round 25's team none reaches
-Dungeon 7 from 0x0b (the model there walks back into Dungeon 5 and never plays the recorder) and none reaches the
-D7 triforce from its entrance (every run dies in 7:0x49 at the latest), with clips on or off (§11).
+This document covers the round. §1-6: what was walked, the route vocabulary, the one observation break and their
+merge. §7-12: the stretch merged into `d2first` (248 steps, to the D7 triforce), its 114 start states with what each
+holds, the curriculum tracks, goriya's clips measured, the proof trainings, the baseline (round 25's team: none of
+200 runs a segment reaches Dungeon 7 or its triforce, §11) and what the first team needs. §13-14: the granted-bomb
+rule and the Wallmaster room. §15-16: the two teams and the chains of record.
+**Round 26 lands as 1.6.0.0.** With the second team (goriya `r76-goriya4-s78`, ow-zora `r76-zora-arrows`) the
+models alone take the D7 triforce from Dungeon 7's entrance in **40.0%** of 1000 runs (`r76-1k-d7`; the first team
+26.3%), reach Dungeon 7 from 0x0b in 98.7% (`post-d5`; the first team 92.4%), and play the whole route, game start
+to the D7 triforce, in **6.7%**; the D5 triforce from the start rose from 19.7 to 22.4% (+2.7 ± 1.8). The honest
+planner beside them: 85.0% the full route (300 runs). Lost: Dungeon 2, 81.5 against round 25's 88.2% (−6.7 ± 1.6,
+goriya's rooms 2:0x5e and 2:0x1e; §16).
 
 ## 1. The walks: what the running game says
 
@@ -912,3 +916,100 @@ that entry out of chain replays at X 128 (the frame before the room entry, as `e
 handoff, which this entry is not: 0x54 and 0x44 are both ow-zora's), 75 states from the diagnostic's replays, written
 as harvested states (`triforce/states/harvested/ow-zora/0_44s_h<seed>_0.state`, not committed), and ow-zora draws
 them at `harvested_fraction: 0.03` (about the share of its three seed states of 0x44 from S among its 105).
+
+## 16. The second team: goriya, ow-zora, boss-digdogger
+
+Continuations on r26's code from `5db220a` on (the bomb rule, the Wallmaster fixes, and `heart_value.json` refit
+with the first team's chains, so steps 209-247 have their curves: `python -m triforce.heart_value` over round 24's
+sources and `r76t1-1k{,-noclips}-{post-d5,d7}`; steps 0-208 identical). Each run's checkpoint was chosen by its chain
+segment with `triforce select-checkpoint` (1000 screen runs on seeds 0-999, the best and the last again on 1000-1999,
+clips on, each model's act mode), then checked on the earlier segments the family plays (1000 paired runs, seeds
+0-999, the candidate and the promoted run).
+
+| Run | From | Settings | Segment | Chosen | Screen | Confirm | Confirm vs promoted |
+|---|---|---|---|---|---:|---:|---:|
+| goriya `r76-goriya4-s76` | `r76-goriya3` | 488 iterations (2M steps), seed 76, `--sil-coeff 0.1`, the food demos at 0.05, a checkpoint every 30 | `d7` | it004601 | 35.8% | 33.4% | +8.0 ± 1.9 |
+| goriya `r76-goriya4-s77` | `r76-goriya3` | the same, seed 77 | `d7` | last | 36.4% | 36.2% | +10.8 ± 2.0 |
+| **goriya `r76-goriya4-s78`** | `r76-goriya3` | the same, seed 78 | `d7` | **it004511** | **40.0%** | **40.0%** | **+14.6 ± 2.0** |
+| goriya `r76-goriya3` (promoted) | | | `d7` | | 26.3% | 25.4% | |
+| boss-digdogger `r76-digdogger2` | `r76-b` | 244 iterations, seed 77, `--sil-coeff 0.1`, a checkpoint every 15 | `d7` | last | 28.0% | 25.2% | −0.2 ± 1.7 |
+| **ow-zora `r76-zora-arrows`** | `r76-b` | 244 iterations, seed 77, `--sil-coeff 0.1`, the 75 arrow-shop states at `harvested_fraction: 0.03` (§15), a checkpoint every 15 | `post-d5` (arrivals at 7:0x79) | last | 98.7% | 98.4% | +7.5 ± 0.8 (promoted 92.4 / 90.9%) |
+
+Hearts on arriving: goriya `s78` takes the triforce with 5.97 hearts (confirm; promoted 5.62), ow-zora arrives at
+Dungeon 7 with 8.14 (7.89).
+
+- **goriya `r76-goriya4-s78` it004511 is promoted.** It is the best of the three seeds on fresh seeds by 3.8 points
+  over `s77`. On the old segments goriya plays (paired, 1000 runs): Dungeon 1 (`--from 1_73s_0 --stop-at 0:0x37`)
+  99.0 against 99.2% (−0.2 ± 0.4), Dungeon 2 (`--from 2_7ds_0 --stop-at 0:0x3c`) 81.5 against 83.6% (−2.1 ± 1.7);
+  neither worse beyond noise (`s77`: +0.6 ± 0.3 and +0.9 ± 1.6). Its canonical evaluation (100 episodes a state,
+  clips on, `temperature:0.5+relax:16`): 97.6% of 5400 episodes, −0.42 hearts an episode (`r76-goriya3`, clips both:
+  95.0%, −0.53); 7:0x1a 98.7% (79.6% with half its episodes clipless), 0x1b 94.3, 0x49 97.0, 0x19 98.0, 2:0x5e 87.7
+  (88.0), 2:0x1e 90.7 (88.3).
+- **ow-zora `r76-zora-arrows` (its last checkpoint) is promoted.** The leg's arrivals at Dungeon 7 rose 7.5 ± 0.8
+  points on fresh seeds (the arrow shop's X 128 entry, §15). ow-zora plays every overworld stretch before it, so
+  the four were checked in one batch (`zora-paired-r76-zora-arrows`: 1000 runs each, seeds 0-999 for both runs,
+  clips on, the candidate by `--checkpoint ow-zora=...`), none worse beyond two standard errors:
+
+  | stretch | arrival | `r76-zora-arrows` | `r76-b` | paired difference | hearts on arriving |
+  |---|---|---:|---:|---:|---:|
+  | after Dungeon 2 (`--from 0_3cc_0`) | 1:0x73 | 95.7% | 94.3% | +1.4 ± 1.0 | 3.22 / 3.22 |
+  | after Dungeon 1 (`--from 0_37c_0`) | 3:0x7c | 100.0% | 100.0% | 0 | 5.17 / 5.13 |
+  | after Dungeon 3 (`--from 0_74c_0`) | 4:0x71 | 100.0% | 100.0% | 0 | 6.77 / 6.60 |
+  | after Dungeon 4, the leg (`--from 0_45c_0`) | 5:0x76 | 99.9% | 100.0% | −0.1 ± 0.1 | 7.75 / 7.62 |
+
+  The harvested states stay out of git (`triforce/states/harvested/ow-zora/`, 75 states); the yaml draws them at
+  `harvested_fraction: 0.03`, and a checkout without them trains ow-zora on its seed states alone.
+- **boss-digdogger stays `r76-b`:** the continuation's last checkpoint led the screen by 1.7 points and lost it on
+  fresh seeds (25.2 against 25.4%).
+- **wallmaster stays `r76-wall-1`** (§14).
+
+### The chains of record (`r76-1k`)
+
+The second team (the promoted runs above, the rest as in §15), every segment of `d2first` at 1000 runs, clips on,
+models alone, seeds 0-999 (`PARALLEL=10 RUNS=1000 ACT=model TAG=r76-1k scripts/experiments/r56_chains.sh run`),
+paired with round 25's `r75-1k` on the same seeds:
+
+| segment | arrival | `r76-1k` | `r75-1k` | paired difference |
+|---|---|---:|---:|---:|
+| Dungeon 2 (`--from 2_7ds_0`) | 0:0x3c | 81.5% | 88.2% | **−6.7 ± 1.6** |
+| after Dungeon 2 | 1:0x73 | 95.7% | 96.2% | −0.5 ± 0.9 |
+| Dungeon 1 | 0:0x37 | 99.0% | 99.7% | −0.7 ± 0.3 |
+| after Dungeon 1 | 3:0x7c | 100.0% | 100.0% | 0 |
+| Dungeon 3 | 0:0x74 | 78.2% | 81.0% | −2.8 ± 1.7 |
+| after Dungeon 3 | 4:0x71 | 100.0% | 100.0% | 0 |
+| Dungeon 4 | 0:0x45 | 92.1% | 92.3% | −0.2 ± 1.0 |
+| after Dungeon 4, the leg | 5:0x76 | 99.9% | 99.9% | 0 |
+| Dungeon 5 | the D5 triforce | 68.7% | 68.0% | +0.7 ± 2.0 |
+| `post-d5` (`--from 0_0bc_0`) | 7:0x79 | 98.7% | (the first team 92.4%) | |
+| **`d7`** (`--from 7_79s_0`) | the D7 triforce | **40.0%** | (the first team 26.3%) | |
+| full route | the D5 triforce | 22.4% | 19.7% | **+2.7 ± 1.8** |
+| full route | 7:0x79 | 21.9% | | |
+| **full route** | **the D7 triforce** | **6.7%** | (0 before round 26) | |
+
+The full route's milestones on the way: Dungeon 2 left 79.2% (87.6), Dungeon 1 left 64.6 (73.5), Dungeon 3 left
+49.6 (56.8), Dungeon 4 left 44.0 (51.2); the loss in Dungeon 2 carries to Dungeon 5's entrance and is won back in
+Dungeon 5 and on the leg's 0x0b (round 25's model there walked back into Dungeon 5).
+
+**Where `d7` dies** (first visits; hearts on entering in brackets): **7:0x1b 324 of 872 (4.27)**, 0x1c 79 of 548
+(4.99), 0x1a from the cellar 48 of 922 (5.00), 0x19 31 of 978 (6.44), then 0x29 16, 0x18 15, 0x4a 10, 0x69 9,
+Aquamentus 8, 0x38 7, 0x59 6; 0x0d ends 11 runs stuck on the clock (3 deaths, 34 wrong exits). Every failure is a
+death or a stuck run: 600 of 1000. The successful runs take 13,600 frames from the entrance on average.
+
+**Cheated items.** `d7`: 8 bombs in 1000 runs, all in 7:0x29 (the granted bomb of the wall room, rule A of §13), no
+key, no rupee. The full route cheats 1,641 bombs before Dungeon 7 (round 25's 209 steps: 2,316) and 125 in
+Dungeon 7, every one in a wall room (0x69, 0x19, 0x1a) entered with no bomb of its own, as rule A grants.
+
+**The planner beside** (`--act temperature:0.5+relax:16+plan:16:1`, 300 runs, `TAG=r76-plan`): the full route to
+the D7 triforce **85.0%** (the D5 triforce 91.0%, Dungeon 7 reached 87.0%); `post-d5` 97.0% arrive and 94.0% take
+the D7 triforce; `d7` 95.3% (14 timeouts, 13 of them in 7:0x0d). It cheats 11 bombs in 0x29 and 1 in 0x1a in 300
+`d7` runs.
+
+**Dungeon 2's regression.** The loss is in goriya's rooms of Dungeon 2: 2:0x5e 78 deaths against round 25's 36,
+2:0x1e 73 against 38 (of 900-990 visits each). It came with goriya's Dungeon 7 training: on the same 1000 seeds
+`r76-goriya3` holds Dungeon 2 at 83.6% and `r76-goriya4-s78` at 81.5% (−2.1 ± 1.7, above), round 25's team at
+88.2%. **It lands anyway:** the route's end moved from no run at all to 6.7% to the D7 triforce,
+`d7` passed the owner's working rate (about 30%) at 40.0%, and from the start the D5 triforce itself rose 2.7
+points, so nothing the route had is lost at its end. Getting Dungeon 2 back is a backlog item.
+
+**Landing.** The merged `r26` with main at 1.6.0.0 plays `d7` run for run as the chain of record: 300 runs (seeds
+0-299) with the team stamped 1.6.0.0, 300 identical, 117 successes in both. The five suites are green there.

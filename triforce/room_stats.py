@@ -9,20 +9,18 @@ per room visit, ``crates/env/src/chain.rs``) and the single-room evaluations of 
 writes one JSON file, ``<chains-dir>/<TAG>-room-stats.json`` (``FORMAT``), with the same per-room fields in every
 scope (``SCOPES``):
 
-- ``full``: the ``full`` file (runs from the game start to the D7 triforce).  ``death_rate`` = runs that died in the
+- ``full``: the ``full`` file (runs from the game start to the D6 triforce).  ``death_rate`` = runs that died in the
   room / runs started: the chance, on a full run, of dying there.
-- ``to-d2``, ``to-d1``, ``to-d3``, ``to-d4``, ``to-d5``, ``to-d7`` (segments: the route cut at the dungeon exits):
-  game start -> out of Dungeon 2 (0:0x3c), 0:0x3c -> out of Dungeon 1 (0:0x37), 0:0x37 -> out of Dungeon 3 (0:0x74),
-  0:0x74 -> out of Dungeon 4 (0:0x45, the triforce's warp), 0:0x45 -> out of Dungeon 5 (0:0x0b), 0:0x0b -> the D7
-  triforce.  Each from the file whose runs start at the
-  segment's start (``full``, ``post-d2``, ``post-d1``, ``post-d3``, ``post-d4``, ``post-d5``), cut at the first entry
+- ``to-d2``, ``to-d1``, ``to-d3``, ``to-d4``, ``to-d5``, ``to-d7``, ``to-d6`` (segments: the route cut at the dungeon
+  exits): game start -> out of Dungeon 2 (0:0x3c), 0:0x3c -> out of Dungeon 1 (0:0x37), 0:0x37 -> out of Dungeon 3
+  (0:0x74), 0:0x74 -> out of Dungeon 4 (0:0x45, the triforce's warp), 0:0x45 -> out of Dungeon 5 (0:0x0b), 0:0x0b ->
+  out of Dungeon 7 (0:0x42), 0:0x42 -> the D6 triforce.  Each from the file whose runs start at the segment's start
+  (``full``, ``post-d2``, ``post-d1``, ``post-d3``, ``post-d4``, ``post-d5``, ``post-d7``), cut at the first entry
   into the next segment's start step: the runs play on to the route's end, the segment is the stretch before the cut.
   ``death_rate`` = runs that died in the room within the segment / runs started on it.  A room on several segments
   (overworld 0x38) has an entry in each.
-- ``d2``, ``d1``, ``d3``, ``d4``, ``d5``, ``d7``: the dungeon files (from the dungeon's entrance), cut like the
-  segments.
-- ``to-d6``, ``d6`` (round 27, the scouting route ``d6``, whose files are ``post-d7`` and ``d6``): 0:0x42 out of
-  Dungeon 7 -> the D6 triforce, and Dungeon 6 alone.
+- ``d2``, ``d1``, ``d3``, ``d4``, ``d5``, ``d7``, ``d6``: the dungeon files (from the dungeon's entrance), cut like
+  the segments.
 - ``to-d8``, ``d8`` (round 28, the scouting route ``d8``, whose files are ``post-d6`` and ``d8``): 0:0x22 out of
   Dungeon 6 -> the D8 triforce, and Dungeon 8 alone.
 - ``to-d9``, ``d9`` (round 29, the scouting route ``d9``, whose files are ``post-d8`` and ``d9``): 0:0x6d out of
@@ -119,19 +117,19 @@ class Scope:
 
 
 SCOPES = (
-    Scope('full', 'full', 'Full run: start → the D7 triforce', 'full', 'start', None),
+    Scope('full', 'full', 'Full run: start → the D6 triforce', 'full', 'start', None),
     Scope('to-d2', 'segment', 'To D2: start → out of Dungeon 2 (0:0x3c)', 'full', 'start', '0_3cc_0'),
     Scope('to-d1', 'segment', 'To D1: 0:0x3c → out of Dungeon 1 (0:0x37)', 'post-d2', '0_3cc_0', '0_37c_0'),
     Scope('to-d3', 'segment', 'To D3: 0:0x37 → out of Dungeon 3 (0:0x74)', 'post-d1', '0_37c_0', '0_74c_0'),
     Scope('to-d4', 'segment', 'To D4: 0:0x74 → out of Dungeon 4 (0:0x45)', 'post-d3', '0_74c_0', '0_45c_0'),
     Scope('to-d5', 'segment', 'To D5: 0:0x45 → out of Dungeon 5 (0:0x0b)', 'post-d4', '0_45c_0', '0_0bc_0'),
-    Scope('to-d7', 'segment', 'To D7: 0:0x0b → the D7 triforce', 'post-d5', '0_0bc_0', None),
+    Scope('to-d7', 'segment', 'To D7: 0:0x0b → out of Dungeon 7 (0:0x42)', 'post-d5', '0_0bc_0', '0_42c_0'),
     Scope('d2', 'dungeon', 'Dungeon 2: 2:0x7d → out (0:0x3c)', 'd2', '2_7ds_0', '0_3cc_0'),
     Scope('d1', 'dungeon', 'Dungeon 1: 1:0x73 → out (0:0x37)', 'd1', '1_73s_0', '0_37c_0'),
     Scope('d3', 'dungeon', 'Dungeon 3: 3:0x7c → out (0:0x74)', 'd3', '3_7cs_0', '0_74c_0'),
     Scope('d4', 'dungeon', 'Dungeon 4: 4:0x71 → out (0:0x45)', 'd4', '4_71s_0', '0_45c_0'),
     Scope('d5', 'dungeon', 'Dungeon 5: 5:0x76 → out (0:0x0b)', 'd5', '5_76s_0', '0_0bc_0'),
-    Scope('d7', 'dungeon', 'Dungeon 7: 7:0x79 → the D7 triforce', 'd7', '7_79s_0', None),
+    Scope('d7', 'dungeon', 'Dungeon 7: 7:0x79 → out (0:0x42)', 'd7', '7_79s_0', '0_42c_0'),
     Scope('to-d6', 'segment', 'To D6: 0:0x42 → the D6 triforce', 'post-d7', '0_42c_0', None),
     Scope('d6', 'dungeon', 'Dungeon 6: 6:0x79 → the D6 triforce', 'd6', '6_79s_0', None),
     Scope('to-d8', 'segment', 'To D8: 0:0x22 → the D8 triforce', 'post-d6', '0_22c_0', None),

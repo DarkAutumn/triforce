@@ -1619,8 +1619,8 @@ mod tests {
         let map = GameMap::builtin();
         let states = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../triforce/states");
         let r = Route::load(&map, &states, "d2first", None, None).unwrap();
-        // d2first ends on taking the Dungeon 7 triforce (round 26, Nov 16), not an earlier one.
-        assert_eq!((r.terminal, r.final_triforce), (None, Some(7)));
+        // d2first ends on taking the Dungeon 6 triforce (round 27, Nov 18), not an earlier one.
+        assert_eq!((r.terminal, r.final_triforce), (None, Some(6)));
         assert_eq!(r.start_state, "start");
         let stop = MapLocation::new(2, 0x0e, false);
         let r = Route::load(&map, &states, "d2first", Some(stop), Some("2_7ds_0")).unwrap();

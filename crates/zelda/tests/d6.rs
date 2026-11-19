@@ -1,4 +1,5 @@
-//! Round 27: the scouting route `d6` (`d2first`, then steps 248-280) played in the real game by the route's
+//! Round 27: the route's magic sword and Dungeon 6 (steps 248-280 of `d2first`, scouted as the route `d6` and merged)
+//! played in the real game by the route's
 //! objective, from `7_2bw_0` (the D7 triforce step) through the leg (0x42, 0x52, the stretch `woods`, the graveyard),
 //! the gravestone of 0x21 and the magic sword's cave, 0x31, 0x32, 0x22 and Dungeon 6 to its triforce: the agent's own
 //! actions (MOVE, CLIP, BOMB, ARROW) through the session's masks with the env's per-step rules mirrored (family
@@ -40,7 +41,7 @@ use zelda::{Action, ActionKind, Direction, GameMap, GameView, LoadOptions, MapLo
 
 type S = Session<Counted>;
 
-const ROUTE: &str = "d6";
+const ROUTE: &str = zelda::game_map::DEFAULT_ROUTE;
 const OBJ_TYPE: u16 = 0x34F;
 /// `Gohma_ObjEyeState` (`$46B` + slot): 3 while the eye is fully open.
 const GOHMA_EYE: u16 = 0x46B;

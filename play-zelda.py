@@ -18,7 +18,7 @@ in the background, --parallel games at once, without a picture and as fast as th
 replay, filed into queues of --capacity (32) runs each:
 
     best      the best runs seen and not yet watched: a win first, then the furthest along the route, then the
-              most hearts at the end, then the fewest frames.  A cell takes the top one; for each one taken,
+              fewest cheated items, then the most hearts at the end, then the fewest frames.  A cell takes the top one; for each one taken,
               --parallel more runs are simulated and the best of them kept.
     success   runs that finished the route (or reached --stop-at)
     stuck     runs that ran out of steps, stalled (--stall-steps) or left the route too often

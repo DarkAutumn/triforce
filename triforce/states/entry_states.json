@@ -5153,7 +5153,7 @@
  {
   "file": "0_42c_0.state",
   "chain": 0,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 248,
   "from_step": 247,
   "specialist": "ow-moblin",
@@ -5174,7 +5174,7 @@
  {
   "file": "0_52n_0.state",
   "chain": 0,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 249,
   "from_step": 248,
   "specialist": "ow-moblin",
@@ -5195,7 +5195,7 @@
  {
   "file": "0_51e_v2_0.state",
   "chain": 0,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 250,
   "from_step": 249,
   "specialist": "ow-moblin",
@@ -5216,7 +5216,7 @@
  {
   "file": "0_50e_v2_0.state",
   "chain": 0,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 251,
   "from_step": 250,
   "specialist": "ow-lynel",
@@ -5245,7 +5245,7 @@
   "entry": "N",
   "exit": null,
   "alternate": false,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 253,
   "off_route": false,
   "env_steps": 5119,
@@ -5268,7 +5268,7 @@
   "entry": "E",
   "exit": null,
   "alternate": false,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 254,
   "off_route": false,
   "env_steps": 43618,
@@ -5291,7 +5291,7 @@
   "entry": "S",
   "exit": null,
   "alternate": false,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 255,
   "off_route": false,
   "env_steps": 4076,
@@ -5306,7 +5306,7 @@
  {
   "file": "0_40s_0.state",
   "chain": 0,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 256,
   "from_step": 251,
   "specialist": "ow-ghini",
@@ -5327,7 +5327,7 @@
  {
   "file": "0_41w_0.state",
   "chain": 0,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 257,
   "from_step": 256,
   "specialist": "ow-ghini",
@@ -5348,7 +5348,7 @@
  {
   "file": "0_31s_0.state",
   "chain": 0,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 258,
   "from_step": 257,
   "specialist": "ow-ghini",
@@ -5369,7 +5369,7 @@
  {
   "file": "0_21s_0.state",
   "chain": 0,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 259,
   "from_step": 258,
   "specialist": "ow-ghini",
@@ -5390,7 +5390,7 @@
  {
   "file": "0_21cave_0.state",
   "chain": 0,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 260,
   "from_step": 259,
   "specialist": "ow-ghini",
@@ -5411,7 +5411,7 @@
  {
   "file": "0_21c_0.state",
   "chain": 0,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 261,
   "from_step": 260,
   "specialist": "ow-ghini",
@@ -5432,7 +5432,7 @@
  {
   "file": "0_31n_0.state",
   "chain": 0,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 262,
   "from_step": 261,
   "specialist": "ow-ghini",
@@ -5453,7 +5453,7 @@
  {
   "file": "0_32w_0.state",
   "chain": 0,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 263,
   "from_step": 262,
   "specialist": "ow-lynel",
@@ -5474,7 +5474,7 @@
  {
   "file": "0_22s_0.state",
   "chain": 0,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 264,
   "from_step": 263,
   "specialist": "ow-lynel",
@@ -5495,7 +5495,7 @@
  {
   "file": "6_79s_0.state",
   "chain": 0,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 265,
   "from_step": 264,
   "specialist": "stalfos-keese-gel",
@@ -5516,7 +5516,7 @@
  {
   "file": "6_78e_0.state",
   "chain": 0,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 266,
   "from_step": 265,
   "specialist": "wizzrobe",
@@ -5537,7 +5537,7 @@
  {
   "file": "6_68s_0.state",
   "chain": 0,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 267,
   "from_step": 266,
   "specialist": "zol",
@@ -5558,7 +5558,7 @@
  {
   "file": "6_58s_0.state",
   "chain": 0,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 268,
   "from_step": 267,
   "specialist": "stalfos-keese-gel",
@@ -5579,7 +5579,7 @@
  {
   "file": "6_48s_0.state",
   "chain": 0,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 269,
   "from_step": 268,
   "specialist": "trap-room",
@@ -5600,7 +5600,7 @@
  {
   "file": "6_38s_0.state",
   "chain": 0,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 270,
   "from_step": 269,
   "specialist": "wizzrobe",
@@ -5621,7 +5621,7 @@
  {
   "file": "6_28s_0.state",
   "chain": 0,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 271,
   "from_step": 270,
   "specialist": "wizzrobe",
@@ -5642,7 +5642,7 @@
  {
   "file": "6_29w_0.state",
   "chain": 0,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 272,
   "from_step": 271,
   "specialist": "wizzrobe",
@@ -5663,7 +5663,7 @@
  {
   "file": "6_39n_0.state",
   "chain": 0,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 273,
   "from_step": 272,
   "specialist": "vire",
@@ -5684,7 +5684,7 @@
  {
   "file": "6_3aw_0.state",
   "chain": 0,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 274,
   "from_step": 273,
   "specialist": "wizzrobe",
@@ -5705,7 +5705,7 @@
  {
   "file": "6_08cave_0.state",
   "chain": 0,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 275,
   "from_step": 274,
   "specialist": "equipment-room",
@@ -5727,7 +5727,7 @@
  {
   "file": "6_1dc_0.state",
   "chain": 0,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 276,
   "from_step": 275,
   "specialist": "like-like",
@@ -5749,7 +5749,7 @@
  {
   "file": "6_2dn_0.state",
   "chain": 0,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 277,
   "from_step": 276,
   "specialist": "vire",
@@ -5771,7 +5771,7 @@
  {
   "file": "6_2ce_0.state",
   "chain": 0,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 278,
   "from_step": 277,
   "specialist": "wizzrobe",
@@ -5793,7 +5793,7 @@
  {
   "file": "6_1cs_0.state",
   "chain": 0,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 279,
   "from_step": 278,
   "specialist": "boss-gohma",
@@ -5815,7 +5815,7 @@
  {
   "file": "6_0cs_0.state",
   "chain": 0,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 280,
   "from_step": 279,
   "specialist": "stalfos-keese-gel",
@@ -12552,7 +12552,7 @@
  {
   "file": "0_42c_1.state",
   "chain": 1,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 248,
   "from_step": 247,
   "specialist": "ow-moblin",
@@ -12573,7 +12573,7 @@
  {
   "file": "0_52n_1.state",
   "chain": 1,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 249,
   "from_step": 248,
   "specialist": "ow-moblin",
@@ -12594,7 +12594,7 @@
  {
   "file": "0_51e_v2_1.state",
   "chain": 1,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 250,
   "from_step": 249,
   "specialist": "ow-moblin",
@@ -12615,7 +12615,7 @@
  {
   "file": "0_50e_v2_1.state",
   "chain": 1,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 251,
   "from_step": 250,
   "specialist": "ow-lynel",
@@ -12644,7 +12644,7 @@
   "entry": "N",
   "exit": null,
   "alternate": false,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 253,
   "off_route": false,
   "env_steps": 5287,
@@ -12667,7 +12667,7 @@
   "entry": "E",
   "exit": null,
   "alternate": false,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 254,
   "off_route": false,
   "env_steps": 9159,
@@ -12690,7 +12690,7 @@
   "entry": "S",
   "exit": null,
   "alternate": false,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 255,
   "off_route": false,
   "env_steps": 4027,
@@ -12705,7 +12705,7 @@
  {
   "file": "0_40s_1.state",
   "chain": 1,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 256,
   "from_step": 251,
   "specialist": "ow-ghini",
@@ -12726,7 +12726,7 @@
  {
   "file": "0_41w_1.state",
   "chain": 1,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 257,
   "from_step": 256,
   "specialist": "ow-ghini",
@@ -12747,7 +12747,7 @@
  {
   "file": "0_31s_1.state",
   "chain": 1,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 258,
   "from_step": 257,
   "specialist": "ow-ghini",
@@ -12768,7 +12768,7 @@
  {
   "file": "0_21s_1.state",
   "chain": 1,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 259,
   "from_step": 258,
   "specialist": "ow-ghini",
@@ -12789,7 +12789,7 @@
  {
   "file": "0_21cave_1.state",
   "chain": 1,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 260,
   "from_step": 259,
   "specialist": "ow-ghini",
@@ -12810,7 +12810,7 @@
  {
   "file": "0_21c_1.state",
   "chain": 1,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 261,
   "from_step": 260,
   "specialist": "ow-ghini",
@@ -12831,7 +12831,7 @@
  {
   "file": "0_31n_1.state",
   "chain": 1,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 262,
   "from_step": 261,
   "specialist": "ow-ghini",
@@ -12852,7 +12852,7 @@
  {
   "file": "0_32w_1.state",
   "chain": 1,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 263,
   "from_step": 262,
   "specialist": "ow-lynel",
@@ -12873,7 +12873,7 @@
  {
   "file": "0_22s_1.state",
   "chain": 1,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 264,
   "from_step": 263,
   "specialist": "ow-lynel",
@@ -12894,7 +12894,7 @@
  {
   "file": "6_79s_1.state",
   "chain": 1,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 265,
   "from_step": 264,
   "specialist": "stalfos-keese-gel",
@@ -12915,7 +12915,7 @@
  {
   "file": "6_78e_1.state",
   "chain": 1,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 266,
   "from_step": 265,
   "specialist": "wizzrobe",
@@ -12936,7 +12936,7 @@
  {
   "file": "6_68s_1.state",
   "chain": 1,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 267,
   "from_step": 266,
   "specialist": "zol",
@@ -12957,7 +12957,7 @@
  {
   "file": "6_58s_1.state",
   "chain": 1,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 268,
   "from_step": 267,
   "specialist": "stalfos-keese-gel",
@@ -12978,7 +12978,7 @@
  {
   "file": "6_48s_1.state",
   "chain": 1,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 269,
   "from_step": 268,
   "specialist": "trap-room",
@@ -12999,7 +12999,7 @@
  {
   "file": "6_38s_1.state",
   "chain": 1,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 270,
   "from_step": 269,
   "specialist": "wizzrobe",
@@ -13020,7 +13020,7 @@
  {
   "file": "6_28s_1.state",
   "chain": 1,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 271,
   "from_step": 270,
   "specialist": "wizzrobe",
@@ -13042,7 +13042,7 @@
  {
   "file": "6_29w_1.state",
   "chain": 1,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 272,
   "from_step": 271,
   "specialist": "wizzrobe",
@@ -13064,7 +13064,7 @@
  {
   "file": "6_39n_1.state",
   "chain": 1,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 273,
   "from_step": 272,
   "specialist": "vire",
@@ -13086,7 +13086,7 @@
  {
   "file": "6_3aw_1.state",
   "chain": 1,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 274,
   "from_step": 273,
   "specialist": "wizzrobe",
@@ -13108,7 +13108,7 @@
  {
   "file": "6_08cave_1.state",
   "chain": 1,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 275,
   "from_step": 274,
   "specialist": "equipment-room",
@@ -13130,7 +13130,7 @@
  {
   "file": "6_1dc_1.state",
   "chain": 1,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 276,
   "from_step": 275,
   "specialist": "like-like",
@@ -13152,7 +13152,7 @@
  {
   "file": "6_2dn_1.state",
   "chain": 1,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 277,
   "from_step": 276,
   "specialist": "vire",
@@ -13174,7 +13174,7 @@
  {
   "file": "6_2ce_1.state",
   "chain": 1,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 278,
   "from_step": 277,
   "specialist": "wizzrobe",
@@ -13196,7 +13196,7 @@
  {
   "file": "6_1cs_1.state",
   "chain": 1,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 279,
   "from_step": 278,
   "specialist": "boss-gohma",
@@ -13218,7 +13218,7 @@
  {
   "file": "6_0cs_1.state",
   "chain": 1,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 280,
   "from_step": 279,
   "specialist": "stalfos-keese-gel",
@@ -19955,7 +19955,7 @@
  {
   "file": "0_42c_2.state",
   "chain": 2,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 248,
   "from_step": 247,
   "specialist": "ow-moblin",
@@ -19976,7 +19976,7 @@
  {
   "file": "0_52n_2.state",
   "chain": 2,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 249,
   "from_step": 248,
   "specialist": "ow-moblin",
@@ -19997,7 +19997,7 @@
  {
   "file": "0_51e_v2_2.state",
   "chain": 2,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 250,
   "from_step": 249,
   "specialist": "ow-moblin",
@@ -20018,7 +20018,7 @@
  {
   "file": "0_50e_v2_2.state",
   "chain": 2,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 251,
   "from_step": 250,
   "specialist": "ow-lynel",
@@ -20047,7 +20047,7 @@
   "entry": "N",
   "exit": null,
   "alternate": false,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 253,
   "off_route": false,
   "env_steps": 4329,
@@ -20070,7 +20070,7 @@
   "entry": "E",
   "exit": null,
   "alternate": false,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 254,
   "off_route": false,
   "env_steps": 6105,
@@ -20093,7 +20093,7 @@
   "entry": "S",
   "exit": null,
   "alternate": false,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 255,
   "off_route": false,
   "env_steps": 4447,
@@ -20108,7 +20108,7 @@
  {
   "file": "0_40s_2.state",
   "chain": 2,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 256,
   "from_step": 251,
   "specialist": "ow-ghini",
@@ -20129,7 +20129,7 @@
  {
   "file": "0_41w_2.state",
   "chain": 2,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 257,
   "from_step": 256,
   "specialist": "ow-ghini",
@@ -20150,7 +20150,7 @@
  {
   "file": "0_31s_2.state",
   "chain": 2,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 258,
   "from_step": 257,
   "specialist": "ow-ghini",
@@ -20171,7 +20171,7 @@
  {
   "file": "0_21s_2.state",
   "chain": 2,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 259,
   "from_step": 258,
   "specialist": "ow-ghini",
@@ -20192,7 +20192,7 @@
  {
   "file": "0_21cave_2.state",
   "chain": 2,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 260,
   "from_step": 259,
   "specialist": "ow-ghini",
@@ -20213,7 +20213,7 @@
  {
   "file": "0_21c_2.state",
   "chain": 2,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 261,
   "from_step": 260,
   "specialist": "ow-ghini",
@@ -20234,7 +20234,7 @@
  {
   "file": "0_31n_2.state",
   "chain": 2,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 262,
   "from_step": 261,
   "specialist": "ow-ghini",
@@ -20255,7 +20255,7 @@
  {
   "file": "0_32w_2.state",
   "chain": 2,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 263,
   "from_step": 262,
   "specialist": "ow-lynel",
@@ -20276,7 +20276,7 @@
  {
   "file": "0_22s_2.state",
   "chain": 2,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 264,
   "from_step": 263,
   "specialist": "ow-lynel",
@@ -20297,7 +20297,7 @@
  {
   "file": "6_79s_2.state",
   "chain": 2,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 265,
   "from_step": 264,
   "specialist": "stalfos-keese-gel",
@@ -20318,7 +20318,7 @@
  {
   "file": "6_78e_2.state",
   "chain": 2,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 266,
   "from_step": 265,
   "specialist": "wizzrobe",
@@ -20339,7 +20339,7 @@
  {
   "file": "6_68s_2.state",
   "chain": 2,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 267,
   "from_step": 266,
   "specialist": "zol",
@@ -20360,7 +20360,7 @@
  {
   "file": "6_58s_2.state",
   "chain": 2,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 268,
   "from_step": 267,
   "specialist": "stalfos-keese-gel",
@@ -20381,7 +20381,7 @@
  {
   "file": "6_48s_2.state",
   "chain": 2,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 269,
   "from_step": 268,
   "specialist": "trap-room",
@@ -20402,7 +20402,7 @@
  {
   "file": "6_38s_2.state",
   "chain": 2,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 270,
   "from_step": 269,
   "specialist": "wizzrobe",
@@ -20423,7 +20423,7 @@
  {
   "file": "6_28s_2.state",
   "chain": 2,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 271,
   "from_step": 270,
   "specialist": "wizzrobe",
@@ -20445,7 +20445,7 @@
  {
   "file": "6_29w_2.state",
   "chain": 2,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 272,
   "from_step": 271,
   "specialist": "wizzrobe",
@@ -20467,7 +20467,7 @@
  {
   "file": "6_39n_2.state",
   "chain": 2,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 273,
   "from_step": 272,
   "specialist": "vire",
@@ -20489,7 +20489,7 @@
  {
   "file": "6_3aw_2.state",
   "chain": 2,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 274,
   "from_step": 273,
   "specialist": "wizzrobe",
@@ -20511,7 +20511,7 @@
  {
   "file": "6_08cave_2.state",
   "chain": 2,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 275,
   "from_step": 274,
   "specialist": "equipment-room",
@@ -20533,7 +20533,7 @@
  {
   "file": "6_1dc_2.state",
   "chain": 2,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 276,
   "from_step": 275,
   "specialist": "like-like",
@@ -20555,7 +20555,7 @@
  {
   "file": "6_2dn_2.state",
   "chain": 2,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 277,
   "from_step": 276,
   "specialist": "vire",
@@ -20577,7 +20577,7 @@
  {
   "file": "6_2ce_2.state",
   "chain": 2,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 278,
   "from_step": 277,
   "specialist": "wizzrobe",
@@ -20599,7 +20599,7 @@
  {
   "file": "6_1cs_2.state",
   "chain": 2,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 279,
   "from_step": 278,
   "specialist": "boss-gohma",
@@ -20621,7 +20621,7 @@
  {
   "file": "6_0cs_2.state",
   "chain": 2,
-  "route": "d6",
+  "route": "d2first",
   "route_step": 280,
   "from_step": 279,
   "specialist": "stalfos-keese-gel",

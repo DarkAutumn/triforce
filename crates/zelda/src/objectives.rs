@@ -2538,6 +2538,7 @@ mod tests {
                 (WAYPOINT_ARROWS, MapLocation::new(0, 0x44, true), Some(7)),
                 (WAYPOINT_FOOD, MapLocation::new(0, 0x34, true), Some(7)),
                 (WAYPOINT_CANDLE, MapLocation::new(7, 0x4a, true), Some(7)),
+                (WAYPOINT_SWORD, MapLocation::new(0, 0x21, true), Some(6)),
             ]
         );
         assert_eq!(w[0].after, [2].into_iter().collect());
@@ -2546,7 +2547,8 @@ mod tests {
         assert_eq!(w[3].after, [2, 1].into_iter().collect());
         assert_eq!(w[4].after, [2, 1, 3].into_iter().collect());
         assert!(w[5..8].iter().all(|w| w.after == [2, 1, 3, 4].into_iter().collect()));
-        assert!(w[8..].iter().all(|w| w.after == [2, 1, 3, 4, 5].into_iter().collect()));
+        assert!(w[8..11].iter().all(|w| w.after == [2, 1, 3, 4, 5].into_iter().collect()));
+        assert_eq!(w[11].after, [2, 1, 3, 4, 5, 7].into_iter().collect());
     }
 
     /// Dungeon 5 (round 24): the recorder from its cellar 0x04 on (the tunnel cellar's two visits differ by it), a
@@ -2616,7 +2618,8 @@ mod tests {
     fn the_leg_buys_arrows_and_food_and_dungeon_7_holds_the_candle() {
         let map = Arc::new(GameMap::builtin());
         let steps = &map.routes[crate::game_map::DEFAULT_ROUTE];
-        let w: Vec<_> = route_waypoints(steps).into_iter().filter(|w| w.after.contains(&5)).collect();
+        let w: Vec<_> =
+            route_waypoints(steps).into_iter().filter(|w| w.after.contains(&5) && !w.after.contains(&7)).collect();
         let kinds: Vec<_> = w.iter().map(|w| (w.kind.as_str(), w.location, w.before)).collect();
         assert_eq!(
             kinds,

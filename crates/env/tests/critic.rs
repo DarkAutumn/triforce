@@ -1275,10 +1275,10 @@ fn heart_value_terms() {
 }
 
 /// The shipped table matches the route it names; an edited route is refused by the families that read it, and the
-/// curve interpolates between half hearts.  Round 27: fitted on a scouting route, it prices the routes that route
-/// extends too; round 28: fitted on `d8` (`d6` and Dungeon 8), it prices `d2first`, `d6` and `d8`, and Dungeon 7's,
-/// 6's and 8's steps have curves; round 29: fitted on `d9` (`d8` and Dungeon 9 to the ending), it prices all four,
-/// and level 9's steps have curves.
+/// curve interpolates between half hearts.  Round 27: `d2first` runs to the D6 triforce, and Dungeon 7's and
+/// Dungeon 6's steps have curves (round 26's and round 27's chains); a table fitted on a scouting route prices the
+/// routes that route extends too; round 28: fitted on `d8` (`d2first` and Dungeon 8), Dungeon 8's steps have curves;
+/// round 29: fitted on `d9` (`d8` and Dungeon 9 to the ending), it prices all three, and level 9's steps have curves.
 #[test]
 fn heart_value_table_checks_the_route() {
     let data = common::game_data();
@@ -1293,7 +1293,7 @@ fn heart_value_table_checks_the_route() {
     assert!(err.contains("step 64") && err.contains("refit"), "{err}");
     assert!(values.check(&steps[1..], &visits[1..]).is_err());
     assert!(values.check(&data.map.routes["d8"], &data.map.visits["d8"]).is_err(), "fewer steps");
-    assert_eq!(values.routes, ["d2first", "d6", "d8", "d9"], "its own route and the routes it extends");
+    assert_eq!(values.routes, ["d2first", "d8", "d9"], "its own route and the routes it extends");
     let curve = values.curve(Some(64), true).unwrap();
     assert!(approx(curve.at(0.75), (curve.values[1] + curve.values[2]) / 2.0));
     assert_eq!(curve.at(99.0), curve.top());
@@ -1309,7 +1309,7 @@ fn heart_value_table_checks_the_route() {
     }
     let mut config = heart_config(true, 0.0, 0.0);
     data.check_heart_values(&config).unwrap();
-    assert!(["d2first", "d6", "d8", "d9"].iter().all(|route| data.heart_values_for(&config, route).is_some()));
+    assert!(["d2first", "d8", "d9"].iter().all(|route| data.heart_values_for(&config, route).is_some()));
     assert!(data.heart_values_for(&config, "clips-gauntlet").is_none());
     config.route = Some("d9".into());
     data.check_heart_values(&config).unwrap();

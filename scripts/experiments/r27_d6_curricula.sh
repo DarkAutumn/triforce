@@ -1,6 +1,6 @@
 #!/bin/bash
 # Round 27: the curriculum tracks (Go-Explore paths, `python -m triforce.explore`) of the start states of the leg from
-# Dungeon 7 to the magic sword and of Dungeon 6 (route `d6`, steps 248-280), per family, written under the
+# Dungeon 7 to the magic sword and of Dungeon 6 (`d2first` steps 248-280), per family, written under the
 # trajectories root (not committed).
 #
 #   [CHAINS="0 1 2"] [ONLY="wizzrobe boss-gohma"] [SKIP_DONE=1] scripts/experiments/r27_d6_curricula.sh [OUT]

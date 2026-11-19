@@ -2794,6 +2794,102 @@ Not answered here, still Lee's (round29.md §8): the survival gap (the best play
 route and 26 in the fights with the ring, of 15 containers and no refill; with the block clips of 0x55, 0x07, 0x20
 and 0x03 the fights cost 15), and the clips way above.
 
+## 2026-11-17 — Every completed stretch lands in the main checkout, pushed and playable (Lee)
+
+Lee: "I want to add a directive, that after each completion (like d6 done, d8 -> d9 etc) gets merged back into
+triforce and pushed. I really want to be able to do play-zelda and see the progress as you work."
+
+- **What lands:** each stretch of the rest of the game when its first team takes it at a working rate (decision 2
+  of 2026-11-16): Dungeon 7 with its leg, the magic sword and Dungeon 6, Dungeon 8, Dungeon 9 with Ganon. It sharpens
+  decision 3 ("a report, a tag and a push per dungeon"): the push is of `main`, and the main checkout itself is left
+  able to play the stretch.
+- **How:** the checklist in `AGENTS.md` "Lee's standing rules": `main` merged into the line and the suites green,
+  `main` fast-forwarded, the module rebuilt in the main checkout, the promoted runs copied into its `models/` with
+  their `promoted`, `act`, `version` and `eval.json`, trajectories copied, a short chain from the main checkout as
+  the proof, the tag, the push, the report.
+- **Not held back:** a stretch is landed when it is complete, not together with a later one. The optimisation round
+  after the first complete game lands the same way.
+- **In between:** work in progress is watched from the line's worktree with its own models
+  (`TRIFORCE_MODELS_DIR=$PWD/models .venv/bin/python play-zelda.py`).
+
+## 2026-11-17 — The remaining dungeons are prepared in parallel; training is the serial resource (Lee)
+
+Lee: "You KNOW we are doing d7 d6 d8 d9. Why do it sequentially when you could do it in parallel? Do your best to
+parallelize this, and at the end you can always clean up, refine, like you would have done anyway. I mean look at
+the retraining you would do... that all can be front loaded looking at the dungeons first anyway."
+
+- **Lanes.** Each stretch (Dungeon 7, the magic sword and Dungeon 6, Dungeon 8, Dungeon 9 with Ganon) has its own
+  lane of work that needs no job place: walk the running game, build the route vocabulary (steps, masks, objectives,
+  families), build start states and curricula (fights the explorer cannot clear are skipped or staged; inventories
+  staged from the ledgers, rebuilt from chain runs' harvested states later), write the family files. The lanes run
+  at once, one worktree each; a lane's next step starts when its previous one reports.
+- **The serial resource** is the job line's two places (trainings, evaluations, chains): preparation exists to keep
+  it fed. Order: the next landing's families first (Dungeon 7), then whichever lane has states ready.
+- **A family is trained once on all its rooms.** A family whose monsters are in several of the remaining dungeons
+  (Wizzrobes in 6 and 9, Blue Darknuts in 8 beside Dungeon 5's, Like-Likes, Zols, Gibdos, Pols Voices) waits for
+  those rooms' states and trains on them together, instead of being continued once per dungeon. A scripted rule
+  that wins a room in the walks becomes demonstration rows (`train --demos`) during preparation.
+- **Integration.** The vocabulary branches of Dungeons 8 and 9 start from Dungeon 6's and are merged in route order
+  by one integration step with the suites and a full-route identity chain, as round 26's three branches were.
+- **Landing is unchanged:** each stretch lands on `main` when its team takes its segment (the entry above); the
+  clean-up and tuning round comes after the first complete game.
+- **Given up for it:** the honest planner's 1000-run chains with clips off for round 25 (the clips-on set is in
+  round25.md §13); they are measured when the line is idle.
+- **The CPU is the scarce resource, not the GPU** (Lee, the same day: "the CPU load is the problem not the gpu
+  load... You are constantly overloading the cpu. Optimize for that. But really, just let the cpu queueing handle
+  most of this... Just make sure training and evals go into the queue (as they already do!)"). The job line stays
+  as it is and carries everything that plays models. What agents start outside it is capped: one heavy thing at a
+  time per agent (an explorer, a state build, cargo, pytest or a many-trial walk script), explorers on 4 threads,
+  `CARGO_BUILD_JOBS=4`, all under `nice -n 10`, full suites once at the end of a task, and nothing heavy started
+  while the load average is above 30. The GPU has not been a limit in any round.
+
+## 2026-11-18 — Clips only: the no-clip way is dropped; the Lanmola room is clipped (Lee)
+
+Lee: "The lanmola room should be bypassed with a block clip. From here on, you can drop the no-clip runs. They
+were an interesting spot of comparison, but should be dropped in favor of just clipping through blocks when needed."
+(Nov 17 already: "Clips-off is not a problem. We might even drop it in the future.")
+
+- **Supersedes** the Nov 13 rule (round 22) that clip families train half their episodes with CLIP masked and that
+  every chain and evaluation is measured both ways, and decision 4 of 2026-11-16 ("clips off built and measured,
+  not tuned").
+- **From here on:** chains, checkpoint selection and evaluations with clips on only; no `-noclips` tags; a clip
+  family's new rounds train with `off_share: 0`; no new plain way is built; a room the route clips is not fought,
+  staged or demonstrated (Dungeon 9: 0x55's Lanmolas, 0x07 before the ring, 0x20 from N, 0x03); where a hard room
+  can be passed by a block clip, that is the way (the remaining hard rooms of Dungeons 6-8 are scanned for it).
+- **Kept as it is:** the route's existing plain ways and forks, the run-time switch and `play-zelda.py`'s key `c`
+  (from Dungeon 7 onward a run with clips off plays ways no model is trained on), the clips-off numbers already in
+  the round documents.
+- **What it buys:** half of every clip family's training episodes, half of the chain measurements, and in Dungeon 9
+  the worst fight of the stretch (0x07 before the red ring: 9.35 hearts by the rule against 1.3 by the clip).
+
+## 2026-11-18 — goriya `r76-goriya4-s78` at its checkpoint it004511, ow-zora `r76-zora-arrows`; boss-digdogger and wallmaster kept (round 26)
+
+- **What:** three continuations of `r76-goriya3` (seeds 76, 77, 78; 488 iterations, `--sil-coeff 0.1`, the food
+  demos at 0.05, a checkpoint every 30) on the code with the bomb rule and `heart_value.json`'s curves for steps
+  209-247; one of boss-digdogger `r76-b` (`r76-digdogger2`). Each run's checkpoint chosen by the `d7` segment
+  (`select-checkpoint`, 1000 screen seeds, the best and the last again on 1000 fresh ones).
+- **Chosen:** `r76-goriya4-s78` it004511, 40.0% on the fresh seeds against 25.4% for `r76-goriya3` (+14.6 ± 2.0;
+  `s77`'s last 36.2%, `s76`'s it004601 33.4%). The rooms it also plays before Dungeon 7 were checked on 1000 paired
+  runs: Dungeon 1 −0.2 ± 0.4, Dungeon 2 −2.1 ± 1.7, both within two standard errors. The best of three seeds on
+  fresh seeds, not the run with the best old segments (`s77`: +0.6 and +0.9): Dungeon 7 is what the stretch needs,
+  and the 3.8 points between them is more than either old segment moved.
+- **ow-zora `r76-zora-arrows`** (244 iterations from `r76-b` with the 75 harvested starts of 0:0x44 entered at X 128,
+  round26.md §15): the leg's arrivals at Dungeon 7 98.4% against 90.9% on fresh seeds. ow-zora plays every
+  overworld stretch, so a run is promoted only if none of the four earlier stretches is worse beyond two standard
+  errors of the paired difference (1000 runs each, the same seeds for both): after Dungeon 2 +1.4 ± 1.0, after
+  Dungeons 1 and 3 equal (100%), the leg to Dungeon 5 −0.1 ± 0.1. The harvested states are not committed (as every
+  harvested state); the yaml's `harvested_fraction` finds none in a fresh clone and trains on the seed states.
+- **Kept:** boss-digdogger `r76-b` (`r76-digdogger2` led the screen by 1.7 points and lost it on fresh seeds, 25.2
+  against 25.4%); wallmaster `r76-wall-1` (round26.md §14).
+- **Measured:** the chain of record `r76-1k` (round26.md §16).
+
+## 2026-11-18 — 1.6.0.0: six dungeons (round 26)
+
+MINOR +1: the route completes Dungeon 7, from its entrance in 40.0% of 1000 runs with the models alone (`r76-1k-d7`),
+above the working rate the owner set for a first team (about 30%, decisions 2026-11-16). COMPAT 0, REV 0: nothing a
+loaded model reads changed since 1.5.1.0, so the 1.5.1 runs are stamped 1.6.0.0 (`triforce stamp`), not converted.
+The Cargo workspace is 1.6.0.
+
 ## 2026-11-18 — The no-clip runs are dropped; the Lanmola room is bypassed by its block clip (Lee)
 
 Lee, Nov 18: "From here on, you can drop the no-clip runs. They were an interesting spot of comparison, but should
@@ -2840,3 +2936,59 @@ and round 29's working answer 11 in so far as it kept the fights as the clips-of
 - **Unconfirmed starting runs**: `r78-skg` and `r76-zora-arrows` were continued as their families' newest before
   their own teams' chains confirmed them; `r79t5-base` (the continued runs under this code, same states and seeds)
   judged every continued run on equal terms.
+
+## 2026-11-19 — No potions, no CONTINUE (Lee)
+
+Asked what closes the survival budget of the last stretches (Dungeon 9's rooms cost 18.6 hearts against 15
+containers in the second team's chain, with no refill but drops; arriving with 12 hearts instead of 15 cuts the share
+of runs that end the game from 14.3% to 3.9%), with the potion and the game's CONTINUE as the two route-level
+answers. Lee: "We aren't doing potions or continues, that's the call."
+
+- A run is one life from its start to the ending. A death ends it; CONTINUE is not modelled, measured or trained.
+- No potion is bought or taken: 0x47's take-any stays the heart container, no medicine shop joins the route.
+- The budget is closed by play: hearts carried into the dear rooms (heart value, starts at the hearts runs really
+  bring), block clips where one exists, drops, and the planner as a teacher (it wins 73% of Dungeon 9 and 69% of
+  Dungeon 6 with the same inputs, by losing about half the hearts).
+- The other open items (Dungeon 2's loss with the Dungeon 7 Goriya, Dungeon 8's landing, the leg's hearts, a complete
+  run from power on) are the lead's to schedule.
+
+## 2026-11-19 — The magic sword and Dungeon 6 are `d2first` (round 27)
+
+Round 27 carried the stretch as the scouting route `d6` (`{extends: d2first}`, steps 248-280) while its states,
+families and first team were built; with a team over the working rate on Dungeon 6 it was merged into the trained
+route, as round 26 merged `d7`.
+
+- **`d2first` has 281 steps** and ends on taking the D6 triforce in 6:0x0c (steps 0-247 unchanged: the game start to
+  the D7 triforce; 248-280 the leg to the magic sword and Dungeon 6). The route `d6` is gone; the draft
+  `first-quest` starts at Dungeon 6's exit.
+- **Comparing with round 26:** its full route is `--stop-at step:248` or the yardstick's milestone `full→post-d7`;
+  the segment `d7` arrives at 0:0x42 entered after 7:0x2b. The new segments are `post-d7` (from `0_42c_0`) and `d6`
+  (from `6_79s_0`).
+- **`heart_value.json`** is refit under `d2first` from the same 26 chain files; the table came out byte-identical
+  to the one composed from `d2first`'s rows 0-247 and `d6`'s 248-280 (round27.md §13.2).
+
+## 2026-11-19 — One team from two lanes; the landing held for ow-lynel (round 27)
+
+- **One team:** no family changed on both `main` (round 26) and the Dungeon 6 lane from different bases, so each
+  family takes the side that changed it: wizzrobe `r80-wplan-s78`, ow-ghini `r77-ghini`, boss-gohma `r77-gohma` and
+  `r77-b` for ow-lynel, ow-moblin, like-like, stalfos-keese-gel, trap-room, vire and zol from the lane; goriya
+  `r76-goriya4-s78`, ow-zora `r76-zora-arrows`, wallmaster `r76-wall-1`, dodongo-crossing `r76-c` and
+  equipment-room `r76-c` from `main` (equipment-room also plays the tunnel 6:0x08: 99.9% against the lane's
+  `r75-f-c` 99.5% of 2700 single-room episodes). Round27.md §14.1.
+- **Measured** (`r77-1k`, round27.md §14.2): `d6` 30.0%, `post-d7` 14.4%; every earlier segment within noise of
+  `r76-1k` but after Dungeon 2, 90.1% against 95.7% (−5.6 ± 1.2), lost to ow-lynel `r77-b` in 0:0x0a. On the full
+  route (300 runs, the same seeds) that is the D5 triforce 14.3% against 27.0% (−12.7 ± 3.3).
+- **Held** (the lead, Nov 18): round 26 landed with Dungeon 2's goriya loss, and this stretch was to land the same
+  way, but halving the runs that reach the D5 triforce is not a price for a stretch the full route finishes in 1 of
+  300, and the owner watches runs from the start. `main`'s ow-lynel `r74-lynel` plays 0x0a and cannot play the leg's
+  0x50, the lane's the other way round, so one joint continuation trains both. It lands when the stretches ow-lynel
+  plays are measured again (after Dungeon 2 and the leg to Dungeon 5 paired with `r76-1k`, `post-d7`, the full
+  route at 1000 runs paired with `r76-1k-full`) and the full route's D5 and D7 triforce rates are within noise of
+  `main`'s.
+
+## 2026-11-19 — 1.7.0.0: seven dungeons (round 27)
+
+MINOR +1: the route completes Dungeon 6, from its entrance in 30.0% of 1000 runs with the models alone (`r77-1k-d6`),
+the working rate the owner set for a first team (about 30%, decisions 2026-11-16). COMPAT 0, REV 0: nothing a
+loaded model reads changed since 1.5.1.0, so the 1.6.0 runs are stamped 1.7.0.0 (`triforce stamp`), not converted.
+The Cargo workspace is 1.7.0.

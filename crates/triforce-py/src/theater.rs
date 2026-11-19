@@ -54,7 +54,8 @@ fn entry_dict<'py>(py: Python<'py>, entry: &Entry) -> PyResult<Bound<'py, PyDict
 /// (`EnvPool(ChainTask(...), record=...)`, after `play()`).
 ///
 /// Every finished run goes to its ending's queue (`success`, `stuck`, `died`), a copy of any run to `random`,
-/// and the best runs seen (a win, then the furthest route step, then the most hearts, then the fewest frames)
+/// and the best runs seen (a win, then the furthest route step, then the fewest cheated items, then the most hearts, then the fewest
+/// frames)
 /// to `best`; each queue holds `capacity` runs.  Whenever `best` is short, `candidates` runs per missing entry
 /// are played for it (default: the pool's envs), the best of them kept.  The simulations are paused while
 /// nothing wants a run and resume when one is popped; after `patience` finished runs in a row that no queue

@@ -194,7 +194,8 @@ route step wants it) and in the objective (targets, outcomes).
 - **States and segments.** The entry side `r` names a state entered by the whirlwind (`0_45r_<chain>`,
   `entry_states.ENTRY_SIDES`, `StateName`). The stretch is part of `d2first` (decisions 2026-11-17: the scouting
   route `d7` was merged before any state was built), so its segments are two more of `eval_batch.SEGMENTS`:
-  `post-d5` from `0_0bc_0` (arrival: 7:0x79) and `d7` from `7_79s_0` (the D7 triforce, the route's end); `d5` arrives
+  `post-d5` from `0_0bc_0` (arrival: 7:0x79) and `d7` from `7_79s_0` (the D7 triforce; arrival 0:0x42 entered after
+  7:0x2b since round 27 runs on); `d5` arrives
   at 0:0x0b entered after 5:0x14, and a run of round 25's full route is `--stop-at step:209`. Room-stats has the
   scopes `to-d7` and `d7`. The start states of steps 209-247 (114: 38 a chain) come from
   `scripts/experiments/r26_d7_states.py sources` (the D5 triforce-room states with the bombs a run brings: 3, 4
@@ -209,13 +210,15 @@ route step wants it) and in the objective (targets, outcomes).
   D7 triforce; beside it a wrong ware is `missed`, the rupee top-up, the whirlwind mask for seven counter and piece
   cases, the Armos from either side.
 
-### The magic sword and Dungeon 6 (round 27; `docs/routes/d6.md` §14, scouting route `d6`)
+### The magic sword and Dungeon 6 (round 27; `docs/routes/d6.md` §14; steps 248-280 of `d2first`)
 
 The same rule as for the leg to Dungeon 7: no macros. The gravestone, the sword, the doorways and Gohma's arrow are
 played by MOVE, BOMB and ARROW; what is new lives in the objective (targets, outcomes), in the mask, and in where a
 MOVE ends.
 
-- **Route** (routes.yaml): `d6` = `{extends: d2first}` plus steps 248-280 (the stretch `woods`: the wrap exit out of
+- **Route** (routes.yaml): steps 248-280 of `d2first`, which ends on the D6 triforce (built as the scouting route
+  `d6` = `{extends: d2first}`, merged in round 27; decisions 2026-11-19; segments `post-d7` from `0_42c_0`, arrival
+  6:0x79, and `d6` from `6_79s_0`, the route's end). The steps (the stretch `woods`: the wrap exit out of
   0x51 into 0x50, or 0x51 S, the Lost Woods by `exit: maze`, 0x60, 0x50 from S; the graveyard; 0x21 and its cave;
   0x31, 0x32, 0x22; Dungeon 6's sixteen steps). `waypoint: sword` on the magic sword's cave step
   (`objectives::WAYPOINT_SWORD`): done once Link holds the cave's sword, `missed` on leaving the overworld room
@@ -952,14 +955,13 @@ visits; backwards from each triforce; made non-decreasing in hearts); refit it a
 or the route. The table names each step's room, entry, exit and visit, and a family that reads it refuses to load
 when they no longer match the route the table names (`GameData::check_heart_values`); a family that doesn't read it
 ignores it. A table prices its own route and every route whose steps are its first ones (`HeartValues::prices`;
-round 27: fitted with `--route d6`, the scouting route that extends `d2first`, it prices both, an episode on
-either reads it, and its rows 0-247 are the `d2first` fit's; round 28: fitted with `--route d8`, which extends `d6`,
-it prices all three and Dungeons 7, 6 and 8 have curves; round 29: fitted with `--route d9`, rows 0-296 as before, it
-prices all four and level 9's steps have curves, V after the route's last step, the ending, being 1); on a route it
-does not price the family is paid the
-plain health reward. The terms: `exit: true` makes the success terminal's health part V(next step, hearts out) /
-V(next step, max hearts) instead of hp/max_hp (still weighted by w); `potential: S` pays S × (V(step, after) −
-V(step, before)) for every
+round 27: a table fitted on a scouting route that extends `d2first` prices both, and its rows 0-247 are the
+`d2first` fit's; since `d6` was merged the table is `d2first`'s, 281 rows; round 28: fitted with `--route d8`, which
+extends `d2first`, Dungeon 8's steps have curves; round 29: fitted with `--route d9`, rows 0-296 as before, it prices
+all three and level 9's steps have curves, V after the route's last step, the ending, being 1); on a route it does
+not price the family is paid the plain health reward. The terms: `exit: true` makes the success terminal's health
+part V(next step, hearts out) / V(next step, max hearts) instead of hp/max_hp (still weighted by w); `potential: S`
+pays S × (V(step, after) − V(step, before)) for every
 change of hearts in a room (a hit or a pickup; not the triforce's refill or a heart container) at the room's route
 step, as `reward-heart-value` / `penalty-heart-value`, beside the flat `penalty-lost-health` /
 `reward-gained-health`; `low_health: F` adds F × (1 − hearts after / max) × the step's `penalty-lost-health` to the
@@ -1204,9 +1206,16 @@ every step, so following an enemy that moves away pays again, and knockback rese
   that ends joins that list at its top and nothing below the running ones changes places. Under a "finished"
   heading below the live ones: folders whose
   training ended while shown (its plan is no longer `running`, or its process is gone: `plan_is_live`) and the
-  registry's jobs that ended in the last 24 hours (`RECENT_SECONDS`; one whose process died without ending its plan
-  shows "process gone"); the "Clear finished" button hides those for the rest of the session, and trainings that
-  start later still appear. A batch folder is one group with its name and one row per evaluation: waiting,
+  registry's jobs that ended in the last 60 minutes (`RECENT_SECONDS`; one whose process died without ending its
+  plan shows "process gone"). A finished folder leaves the list by itself 60 minutes after it ended (after the
+  window saw it end, for one that was shown live: `Window._expire_finished`), so the list never piles up; the
+  "Clear finished" button hides them at once for the rest of the session, and trainings that start later still
+  appear. The 30-a-second frame timer steps and repaints only what moves (`Header.animating`, `RunRow.animating`):
+  a running plan's header and its training or evaluating rows every frame, a waiting plan's header once a second,
+  a finished folder not at all once its bars have eased to their fill (`settled`, cleared when the folder's data
+  changes: `FolderView.poll` repaints it then); a header's registry facts are looked up once a second, not in
+  every paint, and a row's sparkline draws a point a pixel. A batch folder is one group with its name and one row
+  per evaluation: waiting,
   running (the bar is the runs or episodes done of the total, from `chain_progress` / `eval_progress`), done (its
   headline: a chain's arrivals and route-end success, an evaluation's success and health change; `resumed` when an
   earlier run had measured it) or failed. Its Eval tab lists every entry's result and, for a selected entry, the
@@ -1413,7 +1422,7 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `--parallel` envs, chains and the report alone. `--chain` takes everything `eval-chain` does but `--append`
   (its output is written as `<output>.tmp` and moved into place when it succeeded; a segment start without
   `--stop-at` also counts arrivals at the next segment's start room); `--evaluate` everything `evaluate` does.
-  `--chains TAG` is `r56_chains.sh`: the twelve segments into `target/r56-chains/<TAG>-<segment>.jsonl` (+ `.log`),
+  `--chains TAG` is `r56_chains.sh`: the fourteen segments into `target/r56-chains/<TAG>-<segment>.jsonl` (+ `.log`),
   then the report entry (`scripts/yardstick.py report`, `triforce room-stats TAG`); `--families` the evaluation of
   each family's promoted (or `--run-id`) run in each of `--acts` (`model` or act mode spellings; `--clips` for
   every one; `--output-dir DIR` writes `DIR/<family>-<act>[-clips<mode>].json` instead of into the run dir). A
@@ -1754,7 +1763,7 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
   route's last (`golden.checkpoints('d2first') == [24, 68]`: outside Dungeon 2 and Dungeon 1). For each segment
   `parallel` games race from the same state to the segment's stop (`golden.race`: a `ChainPool` of the
   segment's seeds with `stop_step`, every run recorded). The first success seen wins (of several in one poll:
-  the fewest frames, then the lowest seed), the other games are dropped, and the winner's end state is the
+  the fewest cheated items, then the fewest frames, then the lowest seed), the other games are dropped, and the winner's end state is the
   checkpoint every game of the next segment starts from (`Route.load(checkpoint=...)`: no frame run, nothing
   written). The winners are joined with `replay_stitch` into one replay from the start to the route's last
   triforce, `OUT/golden-<first seed>-<ending>.tfreplay`. With every model drawing its actions (the default,
@@ -1784,8 +1793,9 @@ A power-on run is shown from the frame the models took over. When a replay ends 
   the route in a chain pool (`--parallel` games, no picture, unpaced, every run recorded) and
   `_native.ReplayFeed` (`theater::Feed`, a Rust thread) takes every finished run off the pool: into its ending's
   queue, a copy of any run into `random`, and into `best`, which keeps the best runs seen and not yet watched (a
-  win, then the furthest route step, then the most hearts at the end, then the fewest frames from the moment the
-  models took over). Each queue holds `--capacity` (32) runs. A cell on `best` takes the top one, which owes
+  win, then the furthest route step, then the fewest cheated items (bombs, keys and rupees together, from the
+  replay's ledger; Nov 17), then the most hearts at the end, then the fewest frames from the moment the models took
+  over). Each queue holds `--capacity` (32) runs. A cell on `best` takes the top one, which owes
   `best` `--parallel` candidate runs per missing entry; `best` hands out runs once it was half full. The feed
   pauses the pool (`Pool::set_paused`) while no queue wants a run and resumes it when a cell takes one. `stuck`
   never asks for a run (stuck runs are rare: it holds those that came by, and its cells wait once they are

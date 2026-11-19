@@ -1,6 +1,6 @@
 """What a heart is worth at every route step: V(step, hearts), fitted from chain runs, for the reward's heart terms.
 
-    python -m triforce.heart_value CHAIN.jsonl... [--route d9] [--out triforce/heart_value.json]
+    python -m triforce.heart_value CHAIN.jsonl... [--route ROUTE] [--out triforce/heart_value.json]
 
 V(k, h) is the chance that a run entering route step k's room with h hearts is alive when it takes the next
 triforce (which refills him): 0 at no hearts, non-decreasing in h, flat where nothing downstream can kill him before
@@ -24,11 +24,12 @@ Refit after every round that changes the team or the route (the env refuses a ta
 route, but only for families that turn a term on).  Chains measured from a segment start enter its first room at
 the start state's hearts only: give the fit the full route's runs as well as the segment runs.  Fit on the longest
 route: a table prices its own route and every route whose steps are its first ones (``HeartValues::prices``; round
-27: fitted on the scouting route ``d6`` from round 24's chains and Dungeon 6's, it prices ``d2first`` as well, whose
-rows it reproduces, since V at a step depends only on the steps up to the next triforce; round 28: on ``d8``, from
-those, Dungeon 7's and Dungeon 8's chains, pricing ``d2first``, ``d6`` and ``d8``; round 29: on ``d9``, from those
-and the Dungeon 9 team's chains, rows 0-296 unchanged, pricing all four; its third round refitted level 9 from the
-second team's ``post-d8`` and ``d9`` chains, which give the leg's steps their first visits).
+27: fitted on the scouting route ``d6`` from round 24's chains and Dungeon 6's, it priced ``d2first`` as well, whose
+rows it reproduced, since V at a step depends only on the steps up to the next triforce; at 1.7.0.0 ``d6`` merged
+into ``d2first`` and the table refit on it from both lines' sources is the two tables' rows, identical; round 28: on
+``d8``, from those, Dungeon 7's and Dungeon 8's chains, pricing ``d2first`` and ``d8``; round 29: on ``d9``, from
+those and the Dungeon 9 team's chains, rows 0-296 unchanged, pricing all three; its third round refitted level 9
+from the second team's ``post-d8`` and ``d9`` chains, which give the leg's steps their first visits).
 """
 
 import argparse

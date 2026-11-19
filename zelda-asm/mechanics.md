@@ -24,13 +24,13 @@ Contents (generated; `L` = line in this file):
 - L871 Stairs, cellars and caves
 - L914 Lost Woods and Lost Hills (mazes)
 - L929 Special-cased rooms
-- L969 Ladder and raft
-- L993 Monster spawning, edge spawns and respawn (room history)
-- L1055 Combat: collision boxes, damage, invincibility, knockback, stun
-- L1127 Hearts, rings and death
-- L1164 Room flags and saved state
-- L1193 Level data formats
-- L1206 Second quest differences
+- L970 Ladder and raft
+- L994 Monster spawning, edge spawns and respawn (room history)
+- L1056 Combat: collision boxes, damage, invincibility, knockback, stun
+- L1128 Hearts, rings and death
+- L1165 Room flags and saved state
+- L1194 Level data formats
+- L1207 Second quest differences
 <!-- /toc -->
 
 # Game modes and the frame loop
@@ -935,7 +935,8 @@ Every room id, layout id or level number the code compares by value. Overworld r
 - `$1F`: for Link only, a vertical tile test at X = `$80` with Y < `$56` reports a walkable tile, so he walks through the wall in that column. [`Tile_GetAtObjOffset@SetTile`](src/bank7/tile-collision.asm#L199)
 - `$5F`: the only overworld room item, a heart container (`$1A`) at X `$C0`, Y `$90`, present only in mode 5. [`Room_SetUpItemAndPushBlock`](src/bank5/create-room-objects.asm#L51)
 - `$24`: the Armos at X `$E0`, Y `$80` uncovers the power bracelet (item `$14`) as the room item. [`Armos_SecretRoomIds`](src/bank4/ghini-armos.asm#L138) [`Armos_InitOrFlyingGhiniFadeIn`](src/bank4/ghini-armos.asm#L154)
-- `$0B`, `$1C`, `$22`, `$34`, `$3D`, `$4E`: the Armos at Y `$80` and X `$B0`, `$B0`, `$30`, `$40`, `$90`, `$A0` leaves stairs when it wakes; in both quests. [`Armos_SecretRoomIds`](src/bank4/ghini-armos.asm#L138) [`Armos_SecretXs`](src/bank4/ghini-armos.asm#L143)
+- `$0B`, `$1C`, `$22`, `$34`, `$3D`, `$4E`: the Armos at Y `$80` and X `$B0`, `$B0`, `$30`, `$40`, `$90`, `$A0` leaves stairs when it wakes; the table is not tested against the quest. [`Armos_SecretRoomIds`](src/bank4/ghini-armos.asm#L138) [`Armos_SecretXs`](src/bank4/ghini-armos.asm#L143)
+- Of those, `$0B` and `$22` also have an open cave mouth to the same destination (the stairs are a second way in, see `levels/level-5.md` "At a glance" for the frames either way takes), and in Q2 room `$0B`'s patched layout `$7B` has no statue at all; in `$1C`, `$34`, `$3D` and `$4E` the stairs are the only entrance. [`Warp_HandleOW`](src/bank5/warps-stairs-caves.asm#L178) [`Mode2Load_Update_Full`](src/bank6/level-load-mode2.asm#L297)
 - `$42` (Q1 only) and `$06`, `$29`, `$2B`, `$30`, `$3A`, `$3C`, `$58`, `$60`, `$6E`, `$72` (Q2 only): recorder secret rooms; the recorder drains the pond and reveals stairs at X `$60`, Y `$90` instead of calling the whirlwind. [`Flute_SecretRoomIdsOW`](src/bank7/flute.asm#L36) [`FluteSecret_RevealPondStairs`](src/bank7/flute-secret-pond.asm#L157)
 - `$17`, `$18`, `$19`, `$27`, `$4F`, `$5F`: the only overworld rooms where the ladder can be laid. [`Ladder_RoomIdsOW`](src/bank7/link-animate-ladder.asm#L76)
 - `$22`: the stairs and entrance check accepts X a multiple of 8 instead of `$10`. [`Warp_CheckUnderLink`](src/bank5/warps-stairs-caves.asm#L55)

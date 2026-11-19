@@ -82,8 +82,9 @@
 # (docs/routes/d5-leg.md, d5.md): by raft back to 0x55, the coast heart containers of 0x5f (9 hearts) and 0x2f's cave
 # (10), 0x0f's 100 rupees, the mountain to Dungeon 5 (0x0b), the recorder, Digdogger (11 hearts) and the D5 triforce
 # (warps Link to 0x0b); round 26 (docs/routes/d7.md): the whirlwind to 0x45, the shops 0x44 (arrows) and 0x34 (food),
-# 0x42's pond, Dungeon 7: the red candle, Aquamentus (12 hearts); the route ends on taking the D7 triforce.  Never
-# the fairy.
+# 0x42's pond, Dungeon 7: the red candle, Aquamentus (12 hearts) and the D7 triforce (sets Link down at 0x42); round
+# 27 (docs/routes/d6.md): the magic sword and Dungeon 6, Gohma (13 hearts); the route ends on taking the D6 triforce.
+# Never the fairy.
 d2first:
 - {level: 0, room: '0x77', specialist: ow-start, entry: start, exit: cave}
 - {level: 0, room: '0x77', in_cave: true, specialist: ow-start, entry: S, exit: S}
@@ -438,13 +439,13 @@ d2first:
 - {level: 7, room: '0x29', specialist: goriya, entry: cave, exit: E}
 - {level: 7, room: '0x2a', specialist: boss-aquamentus, entry: W, exit: E, bomb_reserve: 0}
 - {level: 7, room: '0x2b', specialist: goriya, entry: W, exit: triforce}
-# d6 (round 27, scouting; docs/routes/d6.md §14, d6-walks.md): d2first, then from Dungeon 7's triforce (the game sets
-# Link down at its entrance, 0x42) to the magic sword and through Dungeon 6 to its triforce.  The leg: 0x42 S, 0x52
-# W, the stretch `woods` (clips: the wrap exit out of 0x51's W edge into 0x50's corridor; plain: 0x51 S, the Lost
-# Woods 0x61 by `exit: maze` (N, W, S, W), 0x60 N, 0x50 from S), the graveyard 0x40 E, 0x41 N, 0x31 N, 0x21: its
-# gravestone pushed from below (game.yaml `how: push`), the cave's magic sword (`waypoint: sword`, 12 heart
-# containers), out S by column X $20 (path_costs: the room's Ghini is made under the cave's exit), 0x31 E, 0x32 N,
-# 0x22's open entrance.  Dungeon 6 with the two keys Link brings (level-6.md): the key door 0x79 W, 0x78 and 0x68
+# Round 27 (docs/routes/d6.md §14, d6-walks.md; scouted as the route d6, merged into d2first): from Dungeon 7's
+# triforce (the game sets Link down at its entrance, 0x42) to the magic sword and through Dungeon 6 to its triforce.
+# The leg: 0x42 S, 0x52 W, the stretch `woods` (clips: the wrap exit out of 0x51's W edge into 0x50's corridor; plain:
+# 0x51 S, the Lost Woods 0x61 by `exit: maze` (N, W, S, W), 0x60 N, 0x50 from S), the graveyard 0x40 E, 0x41 N, 0x31
+# N, 0x21: its gravestone pushed from below (game.yaml `how: push`), the cave's magic sword (`waypoint: sword`, 12
+# heart containers), out S by column X $20 (path_costs: the room's Ghini is made under the cave's exit), 0x31 E, 0x32
+# N, 0x22's open entrance.  Dungeon 6 with the two keys Link brings (level-6.md): the key door 0x79 W, 0x78 and 0x68
 # crossed, 0x58 fought for its key, the traps of 0x48, 0x38 emptied (but its Bubble) and its block pushed (both
 # shutters), 0x28's E wall bombed from its door spot (requires_bombs; the room's rupees skipped), 0x29 crossed dark
 # (its key left; its N key door and 0x28 N, 0x2c S are `keep_out`), 0x39 fought, the ladder, 0x3a emptied and its
@@ -452,48 +453,45 @@ d2first:
 # fought for its key, 0x2c crossed to its N key door, Gohma 0x1c (ARROW facing N, a rupee a shot; the heart
 # container: 13), the triforce 0x0c.  Bomb reserve 2 from Dungeon 7's exit (0x28's wall and one owed to Dungeon 8), 1
 # after 0x28.  Rupee reserve 2 as before, 1 in Gohma's room and after (Ganon's arrow).
-d6:
-  extends: d2first
-  steps:
-  - {level: 0, room: '0x42', specialist: ow-moblin, entry: cave, exit: S, bomb_reserve: 2}
-  - {level: 0, room: '0x52', specialist: ow-moblin, entry: N, exit: W}
-  - stretch: woods
-    parts: {level: 0, room: '0x51', entry: E}
-    rejoins: {level: 0, room: '0x40', entry: S}
-    clips:
-    - {level: 0, room: '0x51', specialist: ow-moblin, entry: E, exit: W}
-    - {level: 0, room: '0x50', specialist: ow-lynel, entry: E, exit: N}
-    plain:
-    - {level: 0, room: '0x51', specialist: ow-moblin, entry: E, exit: S}
-    - {level: 0, room: '0x61', specialist: ow-moblin, entry: N, exit: maze}
-    - {level: 0, room: '0x60', specialist: ow-lynel, entry: E, exit: N}
-    - {level: 0, room: '0x50', specialist: ow-lynel, entry: S, exit: N}
-  - {level: 0, room: '0x40', specialist: ow-ghini, entry: S, exit: E}
-  - {level: 0, room: '0x41', specialist: ow-ghini, entry: W, exit: N}
-  - {level: 0, room: '0x31', specialist: ow-ghini, entry: S, exit: N}
-  - {level: 0, room: '0x21', specialist: ow-ghini, entry: S, exit: cave}
-  - {level: 0, room: '0x21', in_cave: true, specialist: ow-ghini, entry: S, exit: S, waypoint: sword}
-  - {level: 0, room: '0x21', specialist: ow-ghini, entry: cave, exit: S}
-  - {level: 0, room: '0x31', specialist: ow-ghini, entry: N, exit: E}
-  - {level: 0, room: '0x32', specialist: ow-lynel, entry: W, exit: N}
-  - {level: 0, room: '0x22', specialist: ow-lynel, entry: S, exit: cave}
-  - {level: 6, room: '0x79', specialist: stalfos-keese-gel, entry: S, exit: W}
-  - {level: 6, room: '0x78', specialist: wizzrobe, entry: E, exit: N}
-  - {level: 6, room: '0x68', specialist: zol, entry: S, exit: N, treasure: skip}
-  - {level: 6, room: '0x58', specialist: stalfos-keese-gel, entry: S, exit: N}
-  - {level: 6, room: '0x48', specialist: trap-room, entry: S, exit: N}
-  - {level: 6, room: '0x38', specialist: wizzrobe, entry: S, exit: N}
-  - {level: 6, room: '0x28', specialist: wizzrobe, entry: S, exit: E, treasure: skip}
-  - {level: 6, room: '0x29', specialist: wizzrobe, entry: W, exit: S, treasure: skip, bomb_reserve: 1}
-  - {level: 6, room: '0x39', specialist: vire, entry: N, exit: E}
-  - {level: 6, room: '0x3a', specialist: wizzrobe, entry: W, exit: cave}
-  - {level: 6, room: '0x08', in_cave: true, specialist: equipment-room, entry: S, exit: E}
-  - {level: 6, room: '0x1d', specialist: like-like, entry: cave, exit: S}
-  - {level: 6, room: '0x2d', specialist: vire, entry: N, exit: W}
-  - {level: 6, room: '0x2c', specialist: wizzrobe, entry: E, exit: N}
-  - {level: 6, room: '0x1c', specialist: boss-gohma, entry: S, exit: N, rupee_reserve: 1}
-  - {level: 6, room: '0x0c', specialist: stalfos-keese-gel, entry: S, exit: triforce}
-# d8 (round 28, scouting; docs/routes/d8.md §15, d8-walks.md): d6, then from Dungeon 6's triforce (the game sets Link
+- {level: 0, room: '0x42', specialist: ow-moblin, entry: cave, exit: S, bomb_reserve: 2}
+- {level: 0, room: '0x52', specialist: ow-moblin, entry: N, exit: W}
+- stretch: woods
+  parts: {level: 0, room: '0x51', entry: E}
+  rejoins: {level: 0, room: '0x40', entry: S}
+  clips:
+  - {level: 0, room: '0x51', specialist: ow-moblin, entry: E, exit: W}
+  - {level: 0, room: '0x50', specialist: ow-lynel, entry: E, exit: N}
+  plain:
+  - {level: 0, room: '0x51', specialist: ow-moblin, entry: E, exit: S}
+  - {level: 0, room: '0x61', specialist: ow-moblin, entry: N, exit: maze}
+  - {level: 0, room: '0x60', specialist: ow-lynel, entry: E, exit: N}
+  - {level: 0, room: '0x50', specialist: ow-lynel, entry: S, exit: N}
+- {level: 0, room: '0x40', specialist: ow-ghini, entry: S, exit: E}
+- {level: 0, room: '0x41', specialist: ow-ghini, entry: W, exit: N}
+- {level: 0, room: '0x31', specialist: ow-ghini, entry: S, exit: N}
+- {level: 0, room: '0x21', specialist: ow-ghini, entry: S, exit: cave}
+- {level: 0, room: '0x21', in_cave: true, specialist: ow-ghini, entry: S, exit: S, waypoint: sword}
+- {level: 0, room: '0x21', specialist: ow-ghini, entry: cave, exit: S}
+- {level: 0, room: '0x31', specialist: ow-ghini, entry: N, exit: E}
+- {level: 0, room: '0x32', specialist: ow-lynel, entry: W, exit: N}
+- {level: 0, room: '0x22', specialist: ow-lynel, entry: S, exit: cave}
+- {level: 6, room: '0x79', specialist: stalfos-keese-gel, entry: S, exit: W}
+- {level: 6, room: '0x78', specialist: wizzrobe, entry: E, exit: N}
+- {level: 6, room: '0x68', specialist: zol, entry: S, exit: N, treasure: skip}
+- {level: 6, room: '0x58', specialist: stalfos-keese-gel, entry: S, exit: N}
+- {level: 6, room: '0x48', specialist: trap-room, entry: S, exit: N}
+- {level: 6, room: '0x38', specialist: wizzrobe, entry: S, exit: N}
+- {level: 6, room: '0x28', specialist: wizzrobe, entry: S, exit: E, treasure: skip}
+- {level: 6, room: '0x29', specialist: wizzrobe, entry: W, exit: S, treasure: skip, bomb_reserve: 1}
+- {level: 6, room: '0x39', specialist: vire, entry: N, exit: E}
+- {level: 6, room: '0x3a', specialist: wizzrobe, entry: W, exit: cave}
+- {level: 6, room: '0x08', in_cave: true, specialist: equipment-room, entry: S, exit: E}
+- {level: 6, room: '0x1d', specialist: like-like, entry: cave, exit: S}
+- {level: 6, room: '0x2d', specialist: vire, entry: N, exit: W}
+- {level: 6, room: '0x2c', specialist: wizzrobe, entry: E, exit: N}
+- {level: 6, room: '0x1c', specialist: boss-gohma, entry: S, exit: N, rupee_reserve: 1}
+- {level: 6, room: '0x0c', specialist: stalfos-keese-gel, entry: S, exit: triforce}
+# d8 (round 28, scouting; docs/routes/d8.md §15, d8-walks.md): d2first, then from Dungeon 6's triforce (the game sets Link
 # down at its entrance, 0x22) to Dungeon 8's.  The leg: the recorder twice out of 0x22 (facing down from the index
 # $FB with seven pieces: Dungeon 2's entrance 0x3c), 0x3c S, 0x4c E, 0x4d S, 0x5d S by its right opening, 0x6d: the
 # tree burned by CANDLE W from the window E of it (game.yaml `how: burn`), the stairs.  The leg has no clip and
@@ -508,7 +506,7 @@ d6:
 # on the way to Dungeon 9), 1 after 0x4c's.  Rupee reserve 8 from 8:0x4c: its arrows are paid from what Link holds
 # above 8, and 8 shots stay for Ganon's silver arrow.
 d8:
-  extends: d6
+  extends: d2first
   steps:
   - {level: 0, room: '0x22', specialist: ow-lynel, entry: cave, exit: recorder, bomb_reserve: 1}
   - {level: 0, room: '0x3c', specialist: ow-octorok, entry: recorder, exit: S}
@@ -669,18 +667,18 @@ alternates:
 # the new ow-ghini (the graveyard 0x40, 0x41, 0x31, 0x21 and its sword cave), the new wizzrobe (6:0x78, 0x28, 0x29,
 # 0x2c crossed, 0x38 and 0x3a fought), the new boss-gohma (6:0x1c), stalfos-keese-gel 6:0x58 with the entrance 0x79
 # and the triforce room 0x0c, zol 6:0x68, trap-room 6:0x48, vire 6:0x39 and 0x2d, like-like 6:0x1d, the tunnel 6:0x08
-# equipment-room; none of the stretch's rooms has start states yet.  Round 28 (the leg to Dungeon 8 and Dungeon 8;
+# equipment-room; their start states are round27.md §5's.  Round 28 (the leg to Dungeon 8 and Dungeon 8;
 # docs/decisions.md 2026-11-17 "Round 28's working answers"): the leg's rooms were their families' already (0x22
 # ow-lynel, 0x3c and 0x4c ow-octorok, 0x4d, 0x5d and 0x6d ow-moblin); darknut 8:0x5e and 0x3e (fought) and the mixed
 # rooms 0x4e and 0x3f (Darknuts, Gibdos, Bubbles), boss-manhandla 8:0x6e (crossed), pols-voice 8:0x4c, boss-gleeok
 # 8:0x3c (four heads), stalfos-keese-gel the entrance 8:0x7e and the triforce room 8:0x2c, the tunnel 8:0x2f
-# equipment-room; no start states yet.  Round 29 (the leg to Dungeon 9, Dungeon 9, Ganon, Zelda; docs/decisions.md
+# equipment-room.  Round 29 (the leg to Dungeon 9, Dungeon 9, Ganon, Zelda; docs/decisions.md
 # 2026-11-17 "Round 29's working answers"): the leg's 0x47 and its heart cave ow-zora (its one monster is a Zora),
 # 0x07, 0x06 and 0x05 ow-lynel (0x6d ow-moblin, 0x37 ow-octorok, 0x38, 0x28, 0x27 ow-zora, 0x48 ow-leever, 0x17
 # ow-boulder were theirs); the new lanmola (9:0x55), patra (9:0x16, 0x27, 0x61, 0x52) and ganon (9:0x42 and Zelda's
 # 0x32); wizzrobe 9:0x07, 0x05, 0x20, 0x10, 0x30 (emptied for their blocks) and the crossings 0x65, 0x15, 0x17, 0x31,
 # 0x04; like-like 9:0x14, 0x51, 0x41 and 0x03; zol 9:0x63; stalfos-keese-gel 9:0x76, 0x66, 0x26, 0x06, 0x62; the six
-# tunnels and the two item cellars equipment-room; no start states yet.
+# tunnels and the two item cellars equipment-room.
 families:
   ow-start: ['(0, 0x1b)', '(0, 0x1c)', '(0, 0x77)', '(0, 0x77, cave)', '(0, 0x2f)', '(0, 0x2f, cave)', '(0, 0x0f)', '(0, 0x0f, cave)']
   ow-octorok: ['(0, 0x37)', '(0, 0x3c)', '(0, 0x4c)', '(0, 0x57)', '(0, 0x58)', '(0, 0x64)', '(0, 0x66)', '(0, 0x67)', '(0, 0x67, cave)', '(0, 0x68)', '(0, 0x78)']

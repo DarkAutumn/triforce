@@ -15,51 +15,11 @@
 # full, 9:0x16's Patra; anything short is a cheated bomb for now.  Every step was walked in the emulator (fights
 # skipped; docs/routes/first-quest.md); the plain ways of the overworld legs on Nov 14.  Round 24: the leg from
 # Dungeon 4 and Dungeon 5 moved into routes.yaml; round 26: the leg from Dungeon 5 (the whirlwind, the arrows and
-# the food, 0x42's pond) and Dungeon 7 (d2first ends on the D7 triforce), so this starts at Dungeon 7's exit.
+# the food, 0x42's pond) and Dungeon 7; round 27: the magic sword and Dungeon 6 (d2first ends on the D6 triforce),
+# so this starts at Dungeon 6's exit.
 first-quest:
   extends: d2first
   steps:
-  # Dungeon 7 to the magic sword to Dungeon 6 (Lee)
-  - {leg: 'Dungeon 7 to the magic sword to Dungeon 6', level: 0, room: '0x42', entry: cave, exit: S}
-  - {level: 0, room: '0x52', entry: N, exit: W}
-  - stretch: woods
-    parts: {level: 0, room: '0x51', entry: E}
-    rejoins: {level: 0, room: '0x40', entry: S}
-    clips:
-    - {level: 0, room: '0x51', entry: E, exit: W, wrap: true, note: 'wrap exit: CLIP E, out of the solid W edge (rows Y $75-$9D)'}
-    - {level: 0, room: '0x50', entry: E, exit: N, note: 'N at X $E0, the corridor the wrap arrives in'}
-    plain:
-    - {level: 0, room: '0x51', entry: E, exit: S, note: 'S at X $A0-$B0'}
-    - {level: 0, room: '0x61', entry: N, exit: maze, note: 'the Lost Woods: N (at once, on the arrival row), W, S, W'}
-    - {level: 0, room: '0x60', entry: E, exit: N}
-    - {level: 0, room: '0x50', entry: S, exit: N, note: 'N at X $E0 only, the corridor on the E side'}
-  - {level: 0, room: '0x40', entry: S, exit: E}
-  - {level: 0, room: '0x41', entry: W, exit: N}
-  - {level: 0, room: '0x31', entry: S, exit: N}
-  - {level: 0, room: '0x21', entry: S, exit: S, takes: [magic-sword], note: 'push the gravestone at tile (18, 10) up from below (X $90, Y $9D; round 27: the scouting route d6 in routes.yaml) and stop on the stairs; the magic sword is the middle ware (needs 12 heart containers); out by column X $20'}
-  - {level: 0, room: '0x31', entry: N, exit: E}
-  - {level: 0, room: '0x32', entry: W, exit: N}
-  - {level: 0, room: '0x22', entry: S, exit: cave, note: 'Dungeon 6'}
-  # Dungeon 6: Gohma, without the wand.  Walked in the emulator Nov 13 (docs/routes/first-quest.md): this room
-  # sequence is the only shortest one (15 entries).  2 keys in, 2 spent (0x79 W, 0x1c S), 2 found (0x58's with its
-  # forced fight, 0x2d's for level 9; 0x29's ring key is left), 2 out; 1 bomb, 1 arrow.  Forced fights: 0x58, 0x38,
-  # 0x39, 0x3a, Gohma.
-  - {leg: 'Dungeon 6', level: 6, room: '0x79', entry: S, exit: W, note: 'statues on the door row: along the row below; the W key door (1 key)'}
-  - {level: 6, room: '0x78', entry: E, exit: N, note: '5 Red Wizzrobes, no fight: off the door row at once, round by the row above'}
-  - {level: 6, room: '0x68', entry: S, exit: N, note: '5 Zols, no fight: straight up'}
-  - {level: 6, room: '0x58', entry: S, exit: N, note: 'FIGHT: the 8 Blue Keese (statues shoot): the N shutter opens, a key appears (+1)'}
-  - {level: 6, room: '0x48', entry: S, exit: N, note: 'six blade traps: straight up without stopping'}
-  - {level: 6, room: '0x38', entry: S, exit: N, note: 'FIGHT (shut in): 3 Like-Likes, 2 Blue and 2 Red Wizzrobes; then push the left block: both shutters open'}
-  - {level: 6, room: '0x28', entry: S, exit: E, note: '5 Wizzrobes, no fight: the bottom row to X $D0, bomb the E wall (1 bomb)'}
-  - {level: 6, room: '0x29', entry: W, exit: S, note: 'dark, 5 Wizzrobes, no fight: down the west edge and along the bottom row to the S door (the ring key is left)'}
-  - {level: 6, room: '0x39', entry: N, exit: E, note: 'FIGHT (dark, shut in): the 5 Vires (and any Keese they split into): the E shutter; the ladder over the water column'}
-  - {level: 6, room: '0x3a', entry: W, exit: cave, note: 'FIGHT: 3 Like-Likes, 2 Blue and 2 Red Wizzrobes; then push the block: stairs in the top right corner'}
-  - {level: 6, room: '0x08', in_cave: true, entry: S, exit: E, note: 'the tunnel to 0x1d'}
-  - {level: 6, room: '0x1d', entry: cave, exit: S, note: 'Like-Likes, Zols, Bubbles, no fight'}
-  - {level: 6, room: '0x2d', entry: N, exit: W, note: 'dark; FIGHT for a key level 9 needs (+1): the 3 Vires, one magic sword hit each'}
-  - {level: 6, room: '0x2c', entry: E, exit: N, note: 'corner traps and 4 Wizzrobes, no fight: the door row to the middle, up; the N key door (1 key)'}
-  - {level: 6, room: '0x1c', entry: S, exit: N, note: 'Gohma: one arrow (1 rupee) up into the open eye from X $78 or $80; the heart container (13 hearts); the N shutter opens'}
-  - {level: 6, room: '0x0c', entry: S, exit: triforce, note: 'the triforce piece; out in 0x22'}
   # Dungeon 6 to Dungeon 8 (Lee)
   - {leg: 'Dungeon 6 to Dungeon 8', level: 0, room: '0x22', entry: cave, exit: recorder, note: 'the recorder twice, facing down, the second play before the whirlwind arrives: Dungeon 2''s entrance'}
   - {level: 0, room: '0x3c', entry: recorder, exit: S}

@@ -1860,18 +1860,18 @@ mod tests {
     /// white sword at 0x0a, D1 (the bow cellar) to its triforce, Dungeon 3 (the raft cellar) to its triforce, by raft
     /// to Dungeon 4 (the ladder cellar) to its triforce, then (round 24) the leg (0x2f's heart cave, 0x0f's rupees)
     /// and Dungeon 5 (the recorder cellar) to its triforce, then (round 26) the leg (the arrows, the food) and Dungeon
-    /// 7 (the candle cellar) ending on its triforce.  Every step leaves through an exit game.yaml has (caves,
-    /// triforces and the whirlwind aside), into the next step's room; a triforce warps Link out to its level's
-    /// entrance.
+    /// 7 (the candle cellar) to its triforce, then (round 27) the magic sword and Dungeon 6 ending on its triforce.
+    /// Every step leaves through an exit game.yaml has (caves, triforces and the whirlwind aside), into the next step's
+    /// room; a triforce warps Link out to its level's entrance.
     #[test]
     fn d2first_route_connects() {
         let map = GameMap::builtin();
         let steps = &map.routes["d2first"];
         assert_eq!((steps[0].entry.as_str(), steps[0].location()), ("start", START));
         let last = steps.last().unwrap();
-        assert_eq!((last.location(), last.exit.as_str()), (loc(7, 0x2b), "triforce"));
+        assert_eq!((last.location(), last.exit.as_str()), (loc(6, 0x0c), "triforce"));
         let triforces: Vec<u8> = steps.iter().filter(|s| s.exit == "triforce").map(|s| s.level).collect();
-        assert_eq!(triforces, [2, 1, 3, 4, 5, 7]);
+        assert_eq!(triforces, [2, 1, 3, 4, 5, 7, 6]);
         // Each way is a walk: consecutive steps on the way of the clips switch lead into each other.
         for clips in [true, false] {
             let way: Vec<&RouteStep> = map.way_steps(DEFAULT_ROUTE, clips).map(|(_, s)| s).collect();
@@ -1884,6 +1884,7 @@ mod tests {
                         3 => 0x74,
                         4 => 0x45,
                         5 => 0x0b,
+                        7 => 0x42,
                         level => panic!("no step after the level {level} triforce"),
                     };
                     assert_eq!((next.location(), next.entry.as_str()), (loc(0, entrance), "cave"));
@@ -1914,7 +1915,8 @@ mod tests {
                 (L::new(5, 0x04, true), "recorder"),
                 (L::new(0, 0x44, true), "arrows"),
                 (L::new(0, 0x34, true), "food"),
-                (L::new(7, 0x4a, true), "candle")
+                (L::new(7, 0x4a, true), "candle"),
+                (L::new(0, 0x21, true), "sword")
             ]
         );
         assert!(!steps.iter().any(|s| s.location() == loc(0, 0x39) || s.location() == loc(2, 0x4f)));
@@ -1926,7 +1928,8 @@ mod tests {
         );
         // 0x5b's last pass (W) takes its bombs whatever Link holds (round 23; decisions 2026-11-14); Dungeon 5's
         // crossed rooms skip their items, 0x66 on entry too, and 0x65 refuses its bombs westbound (round 24); Dungeon
-        // 7 leaves 0x69's bombs, 0x38's rupees and 0x0c's item and takes 0x1b's bombs at 4 bombs or fewer (the owner, Nov 17).
+        // 7 leaves 0x69's bombs, 0x38's rupees and 0x0c's item and takes 0x1b's bombs at 4 bombs or fewer (the owner, Nov 17);
+        // Dungeon 6 leaves 0x68's compass, 0x28's rupees and 0x29's key (round 27).
         let rules: Vec<_> = steps
             .iter()
             .filter(|s| s.treasure != TreasureRule::Take)
@@ -1950,6 +1953,9 @@ mod tests {
                 (loc(7, 0x38), "E", TreasureRule::Skip),
                 (loc(7, 0x1b), "W", TreasureRule::IfBombsBelow(5)),
                 (loc(7, 0x0c), "S", TreasureRule::Skip),
+                (loc(6, 0x68), "S", TreasureRule::Skip),
+                (loc(6, 0x28), "S", TreasureRule::Skip),
+                (loc(6, 0x29), "W", TreasureRule::Skip),
             ]
         );
         let reserves: Vec<_> = steps.iter().filter_map(|s| Some((s.location(), s.bomb_reserve?))).collect();
@@ -1970,12 +1976,15 @@ mod tests {
                 (L::new(7, 0x79, false), 3),
                 (L::new(7, 0x1b, false), 2),
                 (L::new(7, 0x2a, false), 0),
+                (L::new(0, 0x42, false), 2),
+                (L::new(6, 0x29, false), 1),
             ],
             "Dungeon 3 keeps 6 bombs from its entrance (round 22: two walls and a spare each, two for Manhandla) but \
              on 0x5b's last pass and on Manhandla (round 26: 0, the fights the bombs are for), \
              Dungeon 4 2 (its two bomb walls), the leg 2 (Dungeon 5's two walls), Dungeon 5 8 but in the Olive \
              Garden's first visit and on Digdogger (round 24); Dungeon 7 3 (the walls before 0x1b's bombs), 2 from \
-             0x1b (two more walls), none on Aquamentus (round 26)"
+             0x1b (two more walls), none on Aquamentus (round 26); 2 from Dungeon 7's exit (0x28's wall and one owed \
+             to Dungeon 8), 1 after 0x28 (round 27)"
         );
     }
 
@@ -2168,11 +2177,11 @@ mod tests {
     /// and 3:0x4b (off the route since round 22, still tagged so a chain that strays into it has a model) have a
     /// specialist; the experiment route `clips-gauntlet` (round 21) crosses rooms of the default route only (round 26
     /// merged the leg to Dungeon 7 and Dungeon 7 into the default route: the shops 0x44 and 0x34 with their caves, the
-    /// pond 0x42 and Dungeon 7's way).
+    /// pond 0x42 and Dungeon 7's way; round 27 the magic sword and Dungeon 6).
     #[test]
     fn only_route_rooms_are_tagged() {
         let map = GameMap::builtin();
-        assert_eq!(map.routes.keys().collect::<Vec<_>>(), [DEFAULT_ROUTE, "d6", "d8", "d9", "clips-gauntlet"]);
+        assert_eq!(map.routes.keys().collect::<Vec<_>>(), [DEFAULT_ROUTE, "d8", "d9", "clips-gauntlet"]);
         let played = map.routes.values().flatten().filter(|s| s.exit != "terminal");
         let mut route: BTreeSet<L> = played.map(RouteStep::location).collect();
         route.extend(map.alternates.iter().flat_map(|a| a.with.iter().map(RouteStep::location)));
@@ -2183,35 +2192,35 @@ mod tests {
         let strays: BTreeSet<L> = [loc(3, 0x4b)].into();
         assert!(route.is_disjoint(&strays));
         assert_eq!(tagged, route.union(&strays).copied().collect());
-        // Beyond the default route's own rooms: the alternate (4:0x20 is on the D4 stretch's plain way since round
-        // 22) and round 27's scouting route `d6` (steps 248 on): the Lost Woods, the graveyard's four rooms with the
-        // sword cave, 0x32, 0x22 and Dungeon 6's sixteen.
+        // Beyond the default route's own rooms: the alternate (4:0x20 is on the D4 stretch's plain way since round 22).
         let default: BTreeSet<L> = map.routes[DEFAULT_ROUTE].iter().map(RouteStep::location).collect();
         let beyond: BTreeSet<L> = route.difference(&default).copied().collect();
-        let d6: BTreeSet<L> =
-            map.routes["d6"][map.routes[DEFAULT_ROUTE].len()..].iter().map(RouteStep::location).collect();
-        let new: BTreeSet<L> = d6.difference(&default).copied().collect();
-        assert_eq!(new.len(), 24, "{new:?}");
-        assert!(new.iter().all(|l| l.level == 6 || [0x61, 0x40, 0x41, 0x31, 0x21, 0x32, 0x22].contains(&l.value)), "{new:?}");
         // Round 28's scouting route `d8` (steps 281 on): Dungeon 8's ten rooms (the leg's six were route rooms).
-        let d8: BTreeSet<L> = map.routes["d8"][map.routes["d6"].len()..].iter().map(RouteStep::location).collect();
-        let new8: BTreeSet<L> = d8.difference(&default).filter(|l| !d6.contains(l)).copied().collect();
+        let d8: BTreeSet<L> = map.routes["d8"][map.routes[DEFAULT_ROUTE].len()..].iter().map(RouteStep::location).collect();
+        let new8: BTreeSet<L> = d8.difference(&default).copied().collect();
         assert_eq!((new8.len(), new8.iter().all(|l| l.level == 8)), (10, true), "{new8:?}");
         // Round 29's scouting route `d9` (steps 297 on): overworld 0x47 with its heart cave, 0x07, 0x06, 0x05, and
         // Dungeon 9's 27 rooms and seven cellars on the way (the leg's other rooms were route rooms).
         let d9: BTreeSet<L> = map.routes["d9"][map.routes["d8"].len()..].iter().map(RouteStep::location).collect();
-        let new9: BTreeSet<L> = d9.difference(&default).filter(|l| !d6.contains(l) && !d8.contains(l)).copied().collect();
+        let new9: BTreeSet<L> = d9.difference(&default).filter(|l| !d8.contains(l)).copied().collect();
         assert_eq!(new9.len(), 39, "{new9:?}");
         assert!(new9.iter().all(|l| l.level == 9 || [0x47, 0x07, 0x06, 0x05].contains(&l.value)), "{new9:?}");
         assert_eq!(new9.iter().filter(|l| l.level == 9 && l.in_cave).count(), 7);
-        let all: BTreeSet<L> = new.union(&new8).chain(&new9).copied().collect();
+        let all: BTreeSet<L> = new8.union(&new9).copied().collect();
         assert_eq!(beyond, all.union(&[loc(0, 0x78)].into()).copied().collect());
-        // Round 26's steps (209 on) add 24 rooms: the shops and the pond with the shops' caves, and Dungeon 7's way.
+        // Round 26's steps (209-247) add 24 rooms: the shops and the pond with the shops' caves, and Dungeon 7's way.
         let before: BTreeSet<L> = map.routes[DEFAULT_ROUTE][..209].iter().map(RouteStep::location).collect();
         let d7: BTreeSet<L> =
-            map.routes[DEFAULT_ROUTE][209..].iter().map(RouteStep::location).filter(|l| !before.contains(l)).collect();
+            map.routes[DEFAULT_ROUTE][209..248].iter().map(RouteStep::location).filter(|l| !before.contains(l)).collect();
         assert_eq!(d7.len(), 24, "{d7:?}");
         assert!(d7.iter().all(|l| l.level == 7 || [0x34, 0x42, 0x44].contains(&l.value)), "{d7:?}");
+        // Round 27's (248 on) add 24 more: the Lost Woods, the graveyard's four rooms with the sword cave, 0x32, 0x22
+        // and Dungeon 6's sixteen.
+        let before: BTreeSet<L> = map.routes[DEFAULT_ROUTE][..248].iter().map(RouteStep::location).collect();
+        let d6: BTreeSet<L> =
+            map.routes[DEFAULT_ROUTE][248..].iter().map(RouteStep::location).filter(|l| !before.contains(l)).collect();
+        assert_eq!(d6.len(), 24, "{d6:?}");
+        assert!(d6.iter().all(|l| l.level == 6 || [0x61, 0x40, 0x41, 0x31, 0x21, 0x32, 0x22].contains(&l.value)), "{d6:?}");
     }
 
     /// The bow detour: 0x22's stairs lead into the cellar (an in_cave room under its own id) and its ladder back;
@@ -2541,7 +2550,7 @@ mod tests {
         }
         let stretches = &map.stretches[DEFAULT_ROUTE];
         let names: Vec<&str> = stretches.iter().map(|s| s.name.as_str()).collect();
-        assert_eq!(names, ["d3-approach", "d4-island", "coast-heart", "lake-3e", "mountain", "dock-44"]);
+        assert_eq!(names, ["d3-approach", "d4-island", "coast-heart", "lake-3e", "mountain", "dock-44", "woods"]);
         let s = &stretches[1];
         let steps = &map.routes[DEFAULT_ROUTE];
         assert_eq!((s.name.as_str(), s.clips.len(), s.plain.len(), s.plain.end), ("d4-island", 2, 4, s.rejoin));
@@ -2627,27 +2636,26 @@ mod tests {
     /// Round 26: the default route goes on from the D5 triforce (step 208) to the D7 triforce (scouted as the route
     /// `d7`, merged Nov 16): the whirlwind out of 0x0b into 0x45 (`exit`/`entry: recorder`), the dock-44 stretch, the
     /// two purchases (`waypoint: arrows` / `food` in the shops' caves), the pond 0x42 into Dungeon 7, its candle
-    /// cellar (`waypoint: candle`) and tunnel, its triforce last; the shops' and the pond's secrets load from
+    /// cellar (`waypoint: candle`) and tunnel, its triforce at step 247; the shops' and the pond's secrets load from
     /// game.yaml `entrance:`.
     #[test]
     fn the_leg_to_dungeon_7_speaks_the_new_vocabulary() {
         let map = GameMap::builtin();
         let (base, steps) = (209, &map.routes[DEFAULT_ROUTE]);
-        assert_eq!(steps.len(), 248);
         assert_eq!((steps[208].location(), steps[208].exit.as_str()), (loc(5, 0x14), "triforce"));
         let at = |i: usize| (steps[i].location(), steps[i].entry.as_str(), steps[i].exit.as_str());
         assert_eq!(at(209), (loc(0, 0x0b), "cave", RECORDER));
         assert_eq!(at(210), (loc(0, 0x45), RECORDER, "S"));
         assert_eq!(whirlwind_level(loc(0, 0x45)), Some(4));
         let waypoints: Vec<(usize, &str)> =
-            steps.iter().enumerate().skip(base).filter_map(|(i, s)| Some((i, s.waypoint.as_deref()?))).collect();
+            steps[..248].iter().enumerate().skip(base).filter_map(|(i, s)| Some((i, s.waypoint.as_deref()?))).collect();
         assert_eq!(waypoints, [(218, "arrows"), (221, "food"), (238, "candle")]);
         assert_eq!(steps[218].rupee_reserve, Some(2));
         assert_eq!(at(227), (loc(0, 0x42), "S", "cave"));
         assert_eq!(at(228), (loc(7, 0x79), "S", "N"));
         assert_eq!(at(244), (L::new(7, 0x7b, true), "S", "W"));
         assert_eq!(at(247), (loc(7, 0x2b), "W", "triforce"));
-        assert_eq!(map.stretches[DEFAULT_ROUTE].last().unwrap().name, "dock-44");
+        assert_eq!(map.stretches[DEFAULT_ROUTE].iter().filter(|s| s.rejoin < 248).last().unwrap().name, "dock-44");
         assert_eq!(map.get(loc(0, 0x34)).unwrap().secret, Some(Secret::Armos((8, 8))));
         assert_eq!(map.get(loc(0, 0x42)).unwrap().secret, Some(Secret::Recorder((12, 10))));
         assert_eq!(map.get(loc(0, 0x44)).unwrap().secret, None, "an open mouth");
@@ -2656,23 +2664,24 @@ mod tests {
         assert_eq!(map.visits[DEFAULT_ROUTE][217], 1);
     }
 
-    /// Round 27's scouting route `d6`: `d2first`, then steps 248-280: the stretch `woods`, the pushed gravestone
-    /// (`Secret::Push`, only in a room with a `cave` exit), `waypoint: sword` on its cave, Dungeon 6's reserves and
-    /// `keep_out` doorways; the loader refuses `keep_out` off a dungeon doorway and `waypoint: sword` off a sword cave.
+    /// Round 27's steps 248-280 of `d2first` (scouted as the route `d6`, merged): the stretch `woods`, the pushed
+    /// gravestone (`Secret::Push`, only in a room with a `cave` exit), `waypoint: sword` on its cave, Dungeon 6's
+    /// reserves and `keep_out` doorways; the loader refuses `keep_out` off a dungeon doorway and `waypoint: sword` off a
+    /// sword cave.
     #[test]
-    fn the_d6_route_speaks_the_new_vocabulary() {
+    fn the_d6_steps_speak_the_new_vocabulary() {
         let map = GameMap::builtin();
-        let (base, steps) = (map.routes[DEFAULT_ROUTE].len(), &map.routes["d6"]);
-        assert_eq!((base, steps.len()), (248, 281));
-        assert_eq!(steps[..base], map.routes[DEFAULT_ROUTE][..]);
+        let (base, steps) = (248, &map.routes[DEFAULT_ROUTE]);
+        assert_eq!(steps.len(), 281);
         let at = |i: usize| (steps[i].location(), steps[i].entry.as_str(), steps[i].exit.as_str());
+        assert_eq!(at(247), (loc(7, 0x2b), "W", "triforce"));
         assert_eq!(at(248), (loc(0, 0x42), "cave", "S"));
         assert_eq!(at(253), (loc(0, 0x61), "N", MAZE_EXIT));
         assert_eq!(at(259), (loc(0, 0x21), "S", "cave"));
         assert_eq!((at(260), steps[260].waypoint.as_deref()), ((L::new(0, 0x21, true), "S", "S"), Some("sword")));
         assert_eq!(at(275), (L::new(6, 0x08, true), "S", "E"));
         assert_eq!(at(280), (loc(6, 0x0c), "S", "triforce"));
-        let woods = map.stretches["d6"].last().unwrap();
+        let woods = map.stretches[DEFAULT_ROUTE].last().unwrap();
         assert_eq!((woods.name.as_str(), woods.clips.clone(), woods.plain.clone(), woods.rejoin), ("woods", 250..252, 252..256, 256));
         let reserves: Vec<(usize, Option<u8>, Option<u8>)> = steps[base..]
             .iter()
@@ -2713,15 +2722,15 @@ mod tests {
         assert!(load(GAME_YAML, &cellar).unwrap_err().contains("waypoint sword takes a sword"));
     }
 
-    /// Round 28's scouting route `d8`: `d6`, then steps 281-296 (one way: no stretch): the two recorder plays out of
+    /// Round 28's scouting route `d8`: `d2first`, then steps 281-296 (one way: no stretch): the two recorder plays out of
     /// 0x22, the burned tree (`Secret::Burn`, only in a room with a `cave` exit), a step's own bomb mode (`bombs:`),
     /// 0x3f's bombs by the owner's rule, the reserves; the loader refuses an unknown bomb mode.
     #[test]
     fn the_d8_route_speaks_the_new_vocabulary() {
         let map = GameMap::builtin();
-        let (base, steps) = (map.routes["d6"].len(), &map.routes["d8"]);
+        let (base, steps) = (map.routes[DEFAULT_ROUTE].len(), &map.routes["d8"]);
         assert_eq!((base, steps.len()), (281, 297));
-        assert_eq!(steps[..base], map.routes["d6"][..]);
+        assert_eq!(steps[..base], map.routes[DEFAULT_ROUTE][..]);
         assert!(steps[base..].iter().all(|s| s.way.is_none() && s.stretch.is_none()), "one way");
         let at = |i: usize| (steps[i].location(), steps[i].entry.as_str(), steps[i].exit.as_str());
         assert_eq!(at(281), (loc(0, 0x22), "cave", RECORDER));
@@ -2988,7 +2997,8 @@ mod tests {
     /// way along row 5 again (0x59-0x5d from W), the lake stretch's clip way N into 0x2d, the plain mountain way
     /// (0x2c from E, 0x1c from S, 0x1b from E) and Dungeon 5's tunnel cellar on the way back, and the leg to Dungeon
     /// 7's (round 26): 0x55 from N again (either way of dock-44), 0x54 from E, the plain 0x64 from E, 0x53 and 0x52
-    /// from E; its stretch `parts` are one visit on two ways.  On every route two steps share a room, entry and visit
+    /// from E, and the leg to the magic sword's (round 27): 0x51 from E on both ways of `woods`, 0x50 from E on its
+    /// clip way; its stretch `parts` are one visit on two ways.  On every route two steps share a room, entry and visit
     /// only as the two ways of one stretch or as consecutive targets.  A second entry from the same side is visit 2,
     /// a step right after it entering the same way another target of visit 2; an alternate standing in for a step is
     /// numbered there.
@@ -3022,6 +3032,9 @@ mod tests {
                 ow(0x64, "E"),
                 ow(0x53, "E"),
                 ow(0x52, "E"),
+                ow(0x51, "E"),
+                ow(0x50, "E"),
+                ow(0x51, "E"),
             ]
         );
         for (route, steps) in &map.routes {

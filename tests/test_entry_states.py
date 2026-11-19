@@ -58,8 +58,8 @@ def test_every_trainable_specialist_has_start_states():
 def test_configured_start_states_are_clean():
     """Every configured state passes the audit: named room and entry side, pre-entry, the full room, the route's max
     hearts at full health, a route step.  A state is audited against the route its manifest entry names: a step of
-    ``d2first``, or (rounds 27 and 28, until they are merged into ``d2first``) of the scouting routes ``d6``, steps
-    248-280, and ``d8``, steps 281-296."""
+    ``d2first``, or (rounds 28 and 29, until they are merged into ``d2first``) of the scouting routes ``d8``, steps
+    281-296, and ``d9``, steps 297-357."""
     require_rom()
     paths = configured_states()
     if not paths:
@@ -72,7 +72,7 @@ def test_configured_start_states_are_clean():
         index = indexes.setdefault(route, entry_states.RouteIndex(route))
         problems[os.path.basename(path)] = audit_problems(audit_state(game, path, loads=2, full=full, index=index))
     assert {name: found for name, found in problems.items() if found} == {}
-    assert set(indexes) == {DEFAULT_ROUTE, 'd6', 'd8', 'd9'}
+    assert set(indexes) == {DEFAULT_ROUTE, 'd8', 'd9'}
 
 
 def test_every_shipped_state_but_start_has_a_manifest_entry():
@@ -334,7 +334,9 @@ def test_later_visit_names_round_trip():
                      (196, '5_07cave_v2_0.state'),
                      # Round 26, the leg to Dungeon 7: 0x55 from N again on either way of dock-44 (one name).
                      (211, '0_55n_v2_0.state'), (212, '0_54e_v2_0.state'), (213, '0_55n_v2_0.state'),
-                     (215, '0_64e_v2_0.state'), (225, '0_53e_v2_0.state'), (226, '0_52e_v2_0.state')]
+                     (215, '0_64e_v2_0.state'), (225, '0_53e_v2_0.state'), (226, '0_52e_v2_0.state'),
+                     # Round 27, the leg to the magic sword: 0x51 from E on both ways of woods, 0x50 from E (clips).
+                     (250, '0_51e_v2_0.state'), (251, '0_50e_v2_0.state'), (252, '0_51e_v2_0.state')]
 
 
 def test_the_audit_follows_later_visits_and_counts_hearts_along_each_way(revisit, tmp_path):
@@ -358,8 +360,8 @@ def test_the_audit_follows_later_visits_and_counts_hearts_along_each_way(revisit
     assert [steps[i].room for i in (coast['clips'][-1], coast['plain'][-1], coast['rejoin'])] == [0x5f, 0x5f, 0x4f]
     assert index.hearts(coast['rejoin']) == 9
     cave = next(s.index for s in steps if (s.level, s.room, s.in_cave) == (0, 0x2f, True))
-    assert (index.hearts(cave), index.hearts(cave + 1), index.max_hearts) == (9, 10, 12)
-    assert {index.hearts(s.index) for s in steps[first:]} == {12}                   # after Dungeon 7's container
+    assert (index.hearts(cave), index.hearts(cave + 1), index.max_hearts) == (9, 10, 13)
+    assert {index.hearts(s.index) for s in steps[first:]} == {13}                   # after Dungeon 6's container
     for name in ('0_5dw_0', '0_5dw_v2_0', '0_5dw_v3_0'):
         shutil.copy(REPO_STATES_DIR / '0_5dw_0.state', tmp_path / f'{name}.state')
     rows = {r['state']: r for r in entry_states.audit(sorted(glob.glob(str(tmp_path / '*.state'))), loads=1,
@@ -368,7 +370,7 @@ def test_the_audit_follows_later_visits_and_counts_hearts_along_each_way(revisit
     assert (first_visit['route_step'], first_visit['expected_hearts'], audit_problems(first_visit)) == \
         (index.by_name['0_5dw'], BASE_HEARTS, [])
     assert (second_visit['route_step'], second_visit['expected_hearts']) == (index.by_name['0_5dw_v2'], 8)
-    assert (third_visit['route_step'], third_visit['expected_hearts']) == (first + 1, 12)
+    assert (third_visit['route_step'], third_visit['expected_hearts']) == (first + 1, 13)
     for row in (second_visit, third_visit):                             # the first visit's 3 hearts, not the route's
         assert audit_problems(row) == ['HEARTS'], row
     missing = entry_states.directory_problems(str(tmp_path), 'revisit')

@@ -226,21 +226,26 @@ def test_split_entry_and_option_helpers():
     assert eval_batch._has_option(['--parallel=3'], '--parallel') and not eval_batch._has_option(['--par'], '--parallel')
 
 
-def test_chains_tag_is_the_twelve_segments_then_the_report(tmp_path):
+def test_chains_tag_is_the_fourteen_segments_then_the_report(tmp_path):
     options = eval_batch.Options('r71', cores=20, eval_parallel=4)
     entries = eval_batch.chains_entries('r71', options, act='sample', runs=120, segments=eval_batch.SEGMENTS,
                                         chains_dir=tmp_path, chain_args=['--first-seed', '0'], report=True,
                                         only_report=False)
     assert [e.name for e in entries] == ['full', 'd2', 'post-d2', 'd1', 'post-d1', 'd3', 'post-d3', 'd4', 'post-d4',
-                                         'd5', 'post-d5', 'd7', 'report']
+                                         'd5', 'post-d5', 'd7', 'post-d7', 'd6', 'report']
     full, d2 = entries[0], entries[1]
     assert full.output == tmp_path / 'r71-full.jsonl' and full.log == tmp_path / 'r71-full.log'
     assert '--from' not in full.commands[0] and d2.commands[0][d2.commands[0].index('--from') + 1] == '2_7ds_0'
-    assert d2.fields['target'] == '0:0x3c' and full.fields['target'] is None and entries[11].fields['target'] is None
+    assert d2.fields['target'] == '0:0x3c' and full.fields['target'] is None and entries[13].fields['target'] is None
     assert [e.fields['target'] for e in entries[7:9]] == ['0:0x45', '5:0x76']      # round 24: the leg, Dungeon 5
     # Round 26: Dungeon 5 arrives out on 0x0b with its triforce (0x0b after 5:0x14), the leg at Dungeon 7's entrance.
     assert [e.fields['target'] for e in entries[9:11]] == ['5:0x14,0:0x0b', '7:0x79']
-    assert all('--first-seed' in e.commands[0] and 'sample' in e.commands[0] for e in entries[:12])
+    # Round 27: Dungeon 7 arrives out on 0x42 with its triforce (0x42, the pond, is entered before it), the leg from
+    # there at Dungeon 6's entrance.
+    assert [e.fields['target'] for e in entries[11:13]] == ['7:0x2b,0:0x42', '6:0x79']
+    assert entries[12].commands[0][entries[12].commands[0].index('--from') + 1] == '0_42c_0'
+    assert eval_batch.segment_starts()['0_42c_0'] == 'post-d7' and eval_batch.segment_starts()['6_79s_0'] == 'd6'
+    assert all('--first-seed' in e.commands[0] and 'sample' in e.commands[0] for e in entries[:14])
     only = eval_batch.chains_entries('r71', options, act='sample', runs=1, segments='d2:2_7ds_0',
                                      chains_dir=tmp_path, chain_args=[], report=False, only_report=True)
     assert [e.name for e in only] == ['report']
@@ -248,24 +253,21 @@ def test_chains_tag_is_the_twelve_segments_then_the_report(tmp_path):
     yardstick, room_stats = eval_batch.report_commands('r71', ['full', 'd2'], tmp_path, None)
     chains = [yardstick[i + 1] for i, arg in enumerate(yardstick) if arg == '--chain']
     assert chains[0] == f"full={tmp_path / 'r71-full.jsonl'}"          # d2 has no output yet: left out
-    assert chains[-1].startswith('full→d7=') and chains[-1].endswith(
-        '@2:0x7d,0:0x3c,1:0x73,0:0x37,3:0x7c,0:0x74,4:0x71,0:0x45,5:0x76,5:0x14,0:0x0b,7:0x79')
+    assert chains[-1].startswith('full→d6=') and chains[-1].endswith(
+        '@2:0x7d,0:0x3c,1:0x73,0:0x37,3:0x7c,0:0x74,4:0x71,0:0x45,5:0x76,5:0x14,0:0x0b,7:0x79,7:0x2b,0:0x42,6:0x79')
     assert room_stats[-4:] == ['room-stats', 'r71', '--chains-dir', str(tmp_path)]
 
 
-def test_the_scouting_route_d6_has_its_two_segments(tmp_path):
-    """Round 27: `post-d7` (from Dungeon 7's triforce exit, arriving at Dungeon 6's entrance) and `d6` (to its
-    triforce) are no part of the default batch until d6 merges into d2first; with `--route d6` they are a batch."""
-    assert 'post-d7' not in eval_batch.SEGMENTS and eval_batch.D6_SEGMENTS in eval_batch.ALL_SEGMENTS
-    assert eval_batch.segment_starts()['0_42c_0'] == 'post-d7' and eval_batch.segment_starts()['6_79s_0'] == 'd6'
+def test_a_scouting_route_plays_its_segments_with_route(tmp_path):
+    """Round 27: a scouting route (`{extends: d2first, ...}`) plays its segments with `--route` (r56_chains.sh
+    `ROUTE=<route> SEGMENTS=...`)."""
     options = eval_batch.Options('r77', cores=20, eval_parallel=4)
-    entries = eval_batch.chains_entries('r77', options, act='model', runs=100, segments=eval_batch.D6_SEGMENTS,
-                                        chains_dir=tmp_path, chain_args=['--route', 'd6'], report=False,
+    entries = eval_batch.chains_entries('r77', options, act='model', runs=100, segments='post-d7:0_42c_0 d6:6_79s_0',
+                                        chains_dir=tmp_path, chain_args=['--route', 'd2first'], report=False,
                                         only_report=False)
     assert [e.name for e in entries] == ['post-d7', 'd6']
     assert [e.fields['target'] for e in entries] == ['6:0x79', None]
-    assert [e.fields['route'] for e in entries] == ['d6', 'd6']
-    assert entries[0].commands[0][entries[0].commands[0].index('--from') + 1] == '0_42c_0'
+    assert [e.fields['route'] for e in entries] == ['d2first', 'd2first']
     script = (ROOT / 'scripts' / 'experiments' / 'r56_chains.sh').read_text()
     assert '[ -n "${ROUTE:-}" ] && chain_args+=("--route $ROUTE")' in script
 

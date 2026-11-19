@@ -3,14 +3,16 @@
 The stretch after Dungeon 7's triforce: the leg through the Lost Woods or round them to the graveyard, the gravestone
 of 0x21 and the magic sword, Dungeon 6 with its Wizzrobes, Gohma and the sixth piece. The owner's frame is round
 26's (`docs/experiments/round26.md`): harder than it looks, the documents read before anything is built, the game
-walked before a document is trusted, what does not work said plainly. Version 1.5.1.0 (observation schema 6)
-throughout this document; nothing has been trained yet.
+walked before a document is trusted, what does not work said plainly. Version 1.5.1.0 (observation schema 6) for the
+steps of §1-13, 1.7.0.0 for the merged team of §14.
 
-This document covers the round's first three steps: the walks, the route vocabulary, and the start states with the
-family files, curricula, scripted rules, chain tooling and the baseline (§5-11). **The round's main risk is in §3:
-the survival budget of the stretch does not close on the best plays seen. The baseline is zero** (§11): of 100 runs
-a segment by today's models none reaches Dungeon 6 from Dungeon 7's exit (ow-lynel loses every run in 0x50) and none
-reaches its triforce from its entrance (0x38 is cleared in 13 of 99 visits and all 13 die in 0x28).
+This document covers the walks, the route vocabulary, the start states with the family files, curricula, scripted
+rules, chain tooling and the baseline (§1-11), the first team and the levers on Dungeon 6 (§13), and the merge with
+`main` into one team and its chains of record (§14). **The round's main risk is in §3: the survival budget of the
+stretch does not close on the best plays seen.** The baseline was zero (§11): of 100 runs a segment by round 26's
+models none reaches Dungeon 6 from Dungeon 7's exit (ow-lynel loses every run in 0x50) and none reaches its
+triforce from its entrance. The trained team takes Dungeon 6 in 30.0% of 1000 runs; **the landing is held for
+ow-lynel** (§14.4).
 
 ## Summary
 
@@ -33,8 +35,17 @@ reaches its triforce from its entrance (0x38 is cleared in 13 of 99 visits and a
 - **Suites** after the merge of `r26` and this step: cargo workspace 991 passed, 1 ignored; pytest 820 passed, 6
   skipped; `tf replay verify` the three corpus replays ok; `entry_states audit` 823 states, no problem; `asm.py check
   --final` ok.
-- **Not done**: the proof trainings' result and a training with `--demos`, the staged tracks of 0x38 and 0x3a
-  (§8, §10 say where each stands); any training.
+- **Trained** (Nov 17-18, §13): the first team (`r77-b`, `r77-ghini`, `r77-gohma`, `r77-wizz`), wizzrobe priced by
+  the heart value of `d6`'s steps, trained longer, and taught by the honest planner's play of 0x38 and 0x3a
+  (`r80-wplan-s78`: `d6` 31.8% on fresh seeds).
+- **Merged** (Nov 18, §14): `d6` into `d2first` (281 steps, to the D6 triforce), 1.7.0.0, one team from this lane
+  and `main`. Chains of record `r77-1k`: `d6` **30.0%**, `post-d7` 14.4% (99.0% reach Dungeon 6), every earlier
+  segment within noise of `main`'s but after Dungeon 2, 90.1% against 95.7% (−5.6 ± 1.2: ow-lynel `r77-b` in 0:0x0a);
+  the full route (300) the D5 triforce 14.3% against 27.0% on the same seeds, the D6 triforce 0.3%. The planner
+  beside: `d6` 67.3%, the full route 37.7%. **Held for ow-lynel**: a joint continuation is training, and the
+  stretch lands when the full route's D5 and D7 triforce rates are within noise of `main`'s.
+- **Not done**: the proof trainings' result, the staged tracks of 0x38 and 0x3a (§8, §10 say where each stands),
+  starts at the hearts runs bring (`chain_hp`) and a lower `room_kills_share` for wizzrobe (§13.6).
 
 ## 1. The walks: what the running game says
 
@@ -269,11 +280,11 @@ Keys along Dungeon 6 are the walks' 2 → 1 (0x79 W) → 2 (0x58) → 3 (0x2d) �
   an episode from an old state plays on `d2first` and one from a new state on `d6` (checked for every new stem:
   `Env.route` reads `('d6', 248..280)`, and `('d2first', n)` for the old ones), in one family, with nothing to
   undo when the route is merged.
-- **`reward.heart_value`** therefore needs no change either: the fitted table is `d2first`'s and
-  `GameData::heart_values_for` hands it out only for a step played on that route, so the seven table families of
-  the stretch (stalfos-keese-gel, zol, trap-room, like-like, vire, equipment-room, wizzrobe) price hearts in
-  Dungeon 6 by the plain health terms, as round 26's do in Dungeon 7, until chains reach the D6 triforce and a
-  table is fitted for the merged route.
+- **`reward.heart_value`** needed no change for the states step: the fitted table was `d2first`'s and
+  `GameData::heart_values_for` handed it out only for a step played on that route, so the seven table families of
+  the stretch (stalfos-keese-gel, zol, trap-room, like-like, vire, equipment-room, wizzrobe) priced hearts in
+  Dungeon 6 by the plain health terms, as round 26's do in Dungeon 7. Since the first team's chains (§13) the table
+  is fitted on `d6` and prices both routes.
 - **Staging**: wizzrobe `room_kills: {'(6, 0x38)': [1, 6], '(6, 0x3a)': [1, 6]}`, `room_kills_share: 0.5`. The
   rooms' list is a Bubble, three Like-Likes, two Blue and two Red Wizzrobes; the game leaves out the end of the list
   first, so 1-2 banked kills remove the Reds, 3-4 the Blues, 5-6 Like-Likes (7 would leave the Bubble alone and the
@@ -511,7 +522,6 @@ Read by what a first team needs:
   60), 0x60 (13 of 60: 43 wrong exits), 0x32 (36 of 120), 0x2c (39 of 60, 6 hearts a visit).
 
 ## 12. Left open by the vocabulary step
-## 6. Left open by the vocabulary step
 
 - Armos statues are still pressed by a MOVE that arrives before one (0x22). The gravestone stop would cover them; an
   Armos room is on `d2first`, so it is a behaviour change to measure, not made here.
@@ -519,3 +529,531 @@ Read by what a first team needs:
 - No `VERSION` change was made. One is due with this merge by the repository's rule: `REV` +1 (a compatible change
   to env code: where a MOVE ends in graveyard rooms and at `keep_out` doorways, two new masks, the sword milestone's
   gating; no observation or action change, every model loads).
+
+## 13. Where Dungeon 6's hearts go, and hearts priced on `d6`
+
+The first team (`r77-b`: ow-moblin, ow-lynel, stalfos-keese-gel, zol, trap-room, like-like, vire; `r77-ghini`,
+`r77-gohma`, `r77-wizz`: wizzrobe from like-like with 0x28's bomb as demonstrations, 488 iterations) measured
+by the chains `r77a-1k` (1000 runs a segment, `--route d6 --act model`, clips on): `post-d7` 99.0% reach Dungeon 6
+and 3.4% its triforce; `d6` 8.2%. Round 25's lesson was that rooms are won one at a time and runs die of the hearts
+they bring into the dangerous rooms; this section asks whether that holds in Dungeon 6 and prices the hearts there.
+
+### 13.1 The ledger
+
+Per route step from the two chains (`r77a-1k-post-d7.jsonl`, `r77a-1k-d6.jsonl`): visits, mean hearts on entering,
+hearts lost a visit (a death loses what it brought) and deaths. 12 containers until Gohma's.
+
+| step | room | family | `post-d7`: visits | hearts in | lost a visit | deaths | `d6`: visits | hearts in | lost a visit | deaths |
+|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 263 | 0:0x32 | ow-lynel | 997 | 11.83 | 1.41 | 7 | | | | |
+| 264 | 0:0x22 | ow-lynel | 990 | 10.49 | 0.19 | 0 | | | | |
+| 265 | 6:0x79 | stalfos-keese-gel | 990 | 10.31 | 0.00 | 0 | 1000 | 12.00 | 0.00 | 0 |
+| 266 | 6:0x78 | wizzrobe | 990 | 10.31 | 0.02 | 0 | 1000 | 12.00 | 0.02 | 0 |
+| 267 | 6:0x68 | zol | 990 | 10.29 | 0.14 | 1 | 1000 | 11.98 | 0.13 | 0 |
+| 268 | 6:0x58 | stalfos-keese-gel | 989 | 10.15 | 1.32 | 3 | 1000 | 11.85 | 1.20 | 0 |
+| 269 | 6:0x48 | trap-room | 986 | 8.86 | 0.00 | 0 | 1000 | 10.65 | 0.00 | 0 |
+| 270 | **6:0x38** | wizzrobe | 986 | 8.86 | 6.15 | **384** | 1000 | 10.65 | 6.55 | **268** |
+| 271 | 6:0x28 | wizzrobe | 602 | 4.45 | 0.38 | 30 | 732 | 5.60 | 0.33 | 15 |
+| 272 | 6:0x29 | wizzrobe | 572 | 4.28 | 0.96 | 75 | 717 | 5.38 | 0.65 | 43 |
+| 273 | 6:0x39 | vire | 497 | 3.82 | 0.08 | 38 | 676 | 5.02 | −0.03 | 33 |
+| 274 | **6:0x3a** | wizzrobe | 460 | 4.04 | 3.39 | **359** | 642 | 5.31 | 4.12 | **426** |
+| 275 | 6:0x08 cave | equipment-room | 100 | 2.97 | 0.15 | 3 | 215 | 3.53 | 0.19 | 3 |
+| 276 | 6:0x1d | like-like | 97 | 2.91 | 0.00 | 0 | 212 | 3.39 | 0.00 | 0 |
+| 277 | 6:0x2d | vire | 97 | 2.91 | −0.19 | 12 | 213 | 3.39 | −0.18 | 11 |
+| 278 | 6:0x2c | wizzrobe | 85 | 3.53 | 2.22 | 42 | 201 | 3.77 | 2.29 | 98 |
+| 279 | 6:0x1c | boss-gohma | 43 | 2.58 | −0.98 | 9 | 103 | 2.89 | −0.98 | 21 |
+| 280 | 6:0x0c | stalfos-keese-gel | 34 | 4.50 | −8.50 | 0 | 82 | 4.85 | −8.15 | 0 |
+
+(0x0c's −8.5 is the heart container and the triforce's refill.) The leg costs 1.7 hearts, 1.4 of them in 0x32;
+the first five rooms of the dungeon 1.4, all but 0.15 in 0x58. Then **0x38 takes 6.2-6.6 hearts a visit and kills
+27-39%; the rest of the way to 0x3a costs about one more heart; 0x3a takes what is left** (entered with 4.0-5.3
+hearts, it kills 66-78%). Of 1000 `d6` runs, 732 leave 0x38 and 215 leave 0x3a; 0x2c and Gohma, entered with under
+4 hearts, then take 119 more.
+
+**What kills Link** (the first 100 runs of the `d6` chain replayed: `triforce eval-chain --route d6 --from 6_79s_0
+--runs 100 --act model --replays DIR`, the same runs as `r77a-1k` seeds 0-99, 11 wins; every frame his hearts drop
+booked to the monster or shot nearest him the frame before, a held Link to the Like-Like; the analysis script is
+`r26_replay_damage.py`'s with Dungeon 6's object types and the ladder and dropped items left out):
+
+| Room | Deaths | Killed by | Hearts lost by source |
+|---|---:|---|---|
+| 0x38 | 21 | Red Wizzrobe shot 8, Blue shot 4, Blue touch 4, Like-Like 3, Red touch 2 | Blue touch 216.5, Red shot 212, Blue shot 169, Like-Like 86, Bubble 12, Red touch 10.5 (Blue Wizzrobes 55%, Red 31%, Like-Likes 12%) |
+| 0x3a | 46 | Blue touch 19, Red shot 12, Blue shot 11, Like-Like 4 | Blue touch 104.5, Blue shot 81, Red shot 53, Like-Like 34, Red touch 1 (Blue 68%, Red 20%, Like-Likes 12%) |
+| 0x58 | 0 | | statue fireballs 70, blue Keese 32.5 |
+| 0x2c | 10 | Blue shot 4, Trap 3, Blue touch 3 | Blue shot 24.5, Trap 13, Blue touch 10 |
+| 0x29 | 5 | Red shot 2, Red touch 2, Blue shot 1 | |
+
+The Blue Wizzrobes (two hearts a touch or a shot, the walks' §5.2) do most of the bleeding in both block rooms, the
+Reds' shots most of 0x38's deaths. **0x58's 1.2 hearts are the statues' fireballs, not its Stalfos or Keese**, and
+they matter more than their size: the magic sword's beam needs full hearts, so a run that loses half a heart in 0x58
+fights 0x38 without beams.
+
+**How much of 0x3a's dying is the hearts it is entered with.** The same model in single rooms (`r77-wizz`, 100
+episodes on each of the three states, `temperature:0.5+relax:16`, batch `r27w-hp`; the family's yaml with `hp`
+fixed): at 12 hearts 0x38 is won 90.3% (−5.1 hearts) and 0x3a 89.3% (−5.1); at 4.8-5.5 hearts 43% and 33%. In the
+`d6` chain, 0x3a's success by hearts on entering:
+
+| hearts in | 0-2 | 2-4 | 4-6 | 6-8 | 8-10 | 10-12 | 12 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 0x3a visits | 55 | 146 | 177 | 136 | 82 | 35 | 11 |
+| won | 2% | 17% | 26% | 44% | 61% | 69% | 82% |
+| 0x38 visits | | | 1 | 8 | 133 | 789 | 69 |
+| won | | | 0% | 25% | 65% | 75% | 80% |
+
+Entered at full hearts, 0x3a would lose 11-18% of its 642 visits (the single room's 10.7%, the chain's 2 of 11), 70
+to 115 deaths where 426 happened: **about three quarters to five sixths of 0x3a's deaths are the hearts it is
+entered with**, which is 0x38's 6.6 hearts a visit (and 0x29's and 0x28's one) arriving late. 0x38's own deaths are
+not: they come with 10.5 hearts on entering. The chain wins 0x38 in 80% of 69 visits at full hearts (beams) and 75%
+at 10-12, both under the single room's 90%.
+
+### 13.2 The heart value of `d6`'s steps
+
+`triforce/heart_value.json` was `d2first`'s (248 steps, Dungeon 7's 209-247 without a curve), and
+`GameData::heart_values_for` handed it out only for an episode on that route, so an episode from a Dungeon 6 state
+(route `d6`, §6) was priced by the plain health terms. The smallest change that keeps one table: **fit it on the
+longest route and let it price every route whose steps are its first ones** (`HeartValues::prices`, set at load;
+`check_heart_values` checks the table against the route it names and refuses a family whose route that neither is
+nor extends; tests in `crates/env/tests/critic.rs` and `game_data.rs`). V at a step depends only on the steps up
+to the next triforce, so `d2first`'s rows are the same on both routes, and when `d6` is merged into `d2first` the
+table is refit under that name with nothing else to undo.
+
+```bash
+M=<main checkout>/target/r56-chains     # the table's own sources: r74-1k (clips on and off, full and segments), r74b-1k d5
+python -m triforce.heart_value $M/r74-1k-{full,d2,post-d2,d1,post-d1,d3,post-d3,d4,post-d4}.jsonl $M/r74b-1k-d5.jsonl \
+    $M/r74-1k-noclips-{full,d2,post-d2,d1,post-d1,d3,post-d3,d4,post-d4}.jsonl $M/r74b-1k-noclips-d5.jsonl \
+    target/r56-chains/r77a-1k-post-d7.jsonl target/r56-chains/r77a-1k-d6.jsonl --route d6
+```
+
+Rows 0-247 came out identical to the shipped table's; steps 248-280 have clip-way curves (the plain way of `woods`,
+252-255, has none: no clips-off chain of the stretch yet, so it keeps the plain terms). V on the clip way, the chance
+to take the D6 triforce alive from entering the step with that many hearts:
+
+| step | room | family | visits | V at 2 | 4 | 6 | 8 | 10 | 11 | 12 hearts |
+|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 248 | 0:0x42 | ow-moblin | 1000 | 0.00 | 0.00 | 0.00 | 0.01 | 0.02 | 0.03 | 0.04 |
+| 268 | 6:0x58 | stalfos-keese-gel | 1989 | 0.00 | 0.00 | 0.00 | 0.01 | 0.03 | 0.05 | 0.07 |
+| 270 | 6:0x38 | wizzrobe | 1986 | 0.00 | 0.00 | 0.01 | 0.02 | 0.05 | 0.08 | 0.13 |
+| 271 | 6:0x28 | wizzrobe | 1334 | 0.01 | 0.03 | 0.08 | 0.16 | 0.28 | 0.36 | 0.42 |
+| 272 | 6:0x29 | wizzrobe | 1289 | 0.01 | 0.04 | 0.09 | 0.18 | 0.31 | 0.38 | 0.44 |
+| 274 | 6:0x3a | wizzrobe | 1102 | 0.01 | 0.04 | 0.10 | 0.22 | 0.39 | 0.39 | 0.53 |
+| 275 | 6:0x08 cave | equipment-room | 315 | 0.15 | 0.51 | 0.70 | 0.78 | 0.83 | 0.83 | 0.83 |
+| 278 | 6:0x2c | wizzrobe | 286 | 0.05 | 0.48 | 0.74 | 0.77 | 0.83 | 0.83 | 0.83 |
+| 279 | 6:0x1c | boss-gohma | 146 | 0.83 | 0.83 | 0.83 | 0.83 | 0.83 | 0.83 | 0.83 |
+
+What it says to the families: past 0x3a a heart is worth little above 8; before it every heart up to 12 is worth
+more than the one below it, and in 0x38 and 0x3a the twelfth (the beam) most. Leaving 0x38 with 6 hearts instead
+of 12 now pays the exit's health part 0.19 of full (V(0x28, 6) / V(0x28, 12)) where the plain term paid 0.5.
+wizzrobe and stalfos-keese-gel already carry round 25's `heart_value: {exit: true, potential: 20}`; with the table
+they price Dungeon 6 by it (checked: an episode from `6_38s_0` pays `penalty-heart-value` beside
+`penalty-lost-health`).
+
+### 13.3 The continuations, and the planner's diagnostic
+
+wizzrobe continued from `r77-wizz` with the table on (three seeds, round 25's rule for an arm), stalfos-keese-gel
+from its promoted `r77-b` (one seed), each 488 iterations, `--sil-coeff 0.1 --checkpoint-every 30 --parallel 8`;
+wizzrobe kept 0x28's bomb demonstrations as `r77-wizz` had them:
+
+```bash
+python scripts/train_round.py --round r78-wizz-s78 --specialists wizzrobe --chain-runs 0 --parallel 8 --eval-parallel 3 \
+    --train-args "--load models/wizzrobe/r77-wizz --iterations 488 --seed 78 --stop-success 1.01 --sil-coeff 0.1 \
+                  --demos target/r27-demos/bomb28.npz --demo-coeff 0.05 --checkpoint-every 30"     # and seeds 79, 80
+python scripts/train_round.py --round r78-skg --specialists stalfos-keese-gel --chain-runs 0 --parallel 8 --eval-parallel 3 \
+    --train-args "--load stalfos-keese-gel --iterations 488 --seed 78 --stop-success 1.01 --sil-coeff 0.1 --checkpoint-every 30"
+```
+
+Canonical single-room evaluations (100 episodes a state, the family's hp draw, its act mode):
+
+| run | success | hearts a visit | 0x38 | 0x3a | 0x2c | 0x29 |
+|---|---:|---:|---:|---:|---:|---:|
+| `r77-wizz` (promoted) | 89.1% | −2.24 | 71.0% | 67.7% | 96.3% | 99.3% |
+| `r78-wizz-s78` | 91.2% | −1.82 | 78.0% | 72.0% | 97.7% | 99.7% |
+| `r78-wizz-s79` | 90.9% | −1.86 | 73.3% | 75.0% | 97.7% | 99.7% |
+| `r78-wizz-s80` | 91.4% | −1.90 | 74.7% | 75.7% | 98.7% | 99.7% |
+
+All three seeds keep about 0.4 hearts a visit more and win both block rooms more often than the promoted run, as
+round 25's priced darknut did in single rooms; single rooms do not decide a promotion. **The choice by the chain is
+running**: `triforce select-checkpoint wizzrobe r78-wizz-s<N> --from 6_79s_0 --route d6 --runs 1000 --confirm 1000
+--parallel 10` for each seed (the tool has no `--segment d6`; `--from` with `--route d6` is the segment, scored to the
+route's end, the D6 triforce), then the best confirmed is promoted and the `d6` and `post-d7` chains are measured
+again against `r77a-1k`. stalfos-keese-gel's `r78-skg`: single rooms 99.97%, 0x58 99.8% at −1.07 hearts a visit
+(promoted `r77-b` 98.2%, −1.31); its choice by the `d6` chain is queued, and its Dungeon 1 and 4 rooms are to be
+compared with the promoted run's before any promotion.
+
+**Seed 78 chosen by the chain** (`r78-wizz-s78/selection.json`; the `d6` segment, the rest of the team promoted,
+screen on seeds 0-999, confirmation on 1000-1999): the screen ranks the run's last checkpoint first, 21.5 ± 1.3%
+against the promoted `r77-wizz`'s 8.2% (the `r77a-1k` figure exactly), the checkpoints rising over the run from
+9.5-12% to 17-18%; **confirmed on fresh seeds: last 18.4 ± 1.2%, it000968 18.3%, promoted 10.7 ± 1.0%; last −
+promoted +7.7 ± 1.6 points paired**, hearts on arrival at the triforce 5.64 against 5.18. The tool keeps the last
+checkpoint. **Seed 79** the same way: the last checkpoint chosen, screen 17.4 ± 1.2%, confirmed 16.5 ± 1.2% against
+the promoted run's 10.7%, **+5.8 ± 1.5 points paired**, hearts on arrival 5.41. **Seed 80**: it000968 chosen
+(screen 18.0%, last 15.6%), confirmed 15.7 ± 1.2% (last 15.0%), **+5.0 ± 1.5 points paired** against the promoted.
+
+| wizzrobe on `d6` (fresh seeds 1000-1999) | confirmed | paired vs `r77-wizz` |
+|---|---:|---:|
+| `r77-wizz` (promoted) | 10.7 ± 1.0% | |
+| `r78-wizz-s78` last | **18.4 ± 1.2%** | +7.7 ± 1.6 |
+| `r78-wizz-s79` last | 16.5 ± 1.2% | +5.8 ± 1.5 |
+| `r78-wizz-s80` it000968 | 15.7 ± 1.2% | +5.0 ± 1.5 |
+
+**The priced arm gains 5-8 points on every seed (mean +6.2, the seeds within 2.7 points of each other)**: the
+segment's rate goes from about 10% to about 17%, still far under the 30% the block rooms were to reach. Every
+run's checkpoints rise through the 488 iterations (seed 78 from 9.5-12% to 17-21% on the screen), so the runs had
+not stopped learning. **Promoted: `r78-wizz-s78`** (`triforce promote wizzrobe r78-wizz-s78`; its `ckpt.pt` is the
+chosen last checkpoint), after stalfos-keese-gel's selection, which played the old wizzrobe, had finished.
+
+**stalfos-keese-gel** (`r78-skg/selection.json`, the same `d6` segment): it001288 chosen (screen 11.3 ± 1.0%),
+confirmed 10.8 ± 1.0% against the promoted `r77-b`'s 10.7%, **+0.1 ± 1.4 points paired**, the last checkpoint
+10.4%. The 0.24 hearts a visit it keeps in 0x58 in single rooms do not show on the segment; **not promoted**
+(stalfos-keese-gel stays `r77-b`).
+
+**The honest planner as a teacher's diagnostic** (batch `r27w-plan`, `r77-wizz`, 100 episodes on each state of 0x38
+and 0x3a, the family's hp draw): the model alone wins 0x38 74.0% (−4.68 hearts) and 0x3a 68.3% (−5.24); with
+`temperature:0.5+relax:16+plan:16:1` 85.3% (−3.09) and 86.3% (−2.99). One action of foresight wins 11-18 points more
+and keeps 1.6-2.3 hearts a visit: **the rooms are winnable at a far lower price, and the policy is the gap**, not the
+rooms. (The planner is never the primary number.)
+
+### 13.4 The planner on the `d6` segment, and the next levers
+
+**The honest planner on the whole segment** (a diagnostic, never the primary number): the promoted team with
+`r78-wizz-s78`, every model in `temperature:0.5+relax:16+plan:16:1`, 300 runs on seeds 0-299 (`triforce eval-chain
+--route d6 --from 6_79s_0 --clips on --runs 300 --first-seed 0 --parallel 10 --act temperature:0.5+relax:16+plan:16:1`):
+**162 of 300, 54.0%**, where `r77a-1k` won 9.0% of the same seeds (the model alone with `r78-wizz-s78` confirmed
+18.4% on 1000-1999, §13.3). The ledger of the 300 runs (hearts on entering, lost a visit, deaths):
+
+| room | `r77a-1k` seeds 0-299: visits | in | lost | deaths | planner: visits | in | lost | deaths |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 6:0x58 | 300 | 11.83 | 1.17 | 0 | 300 | 11.97 | 0.51 | 0 |
+| **6:0x38** | 300 | 10.66 | 6.54 | **72** | 300 | 11.46 | 3.25 | **14** |
+| 6:0x28 | 228 | 5.42 | 0.26 | 4 | 360 | 8.48 | 1.43 | 43 |
+| 6:0x29 | 225 | 5.24 | 0.61 | 17 | 317 | 8.01 | 0.35 | 7 |
+| 6:0x39 | 208 | 5.00 | −0.04 | 9 | 253 | 7.80 | −0.48 | 0 |
+| **6:0x3a** | 198 | 5.29 | 4.05 | **141** | 253 | 8.28 | 2.89 | **53** |
+| 6:0x2c | 56 | 4.33 | 2.39 | 28 | 180 | 7.02 | 1.41 | 16 |
+| 6:0x1c (Gohma) | 28 | 3.88 | −1.14 | 1 | 164 | 6.16 | −1.42 | 2 |
+
+With one action of foresight 0x58 costs half a heart instead of 1.2 (Link reaches 0x38 with his beam), 0x38 half
+its hearts and a fifth of its deaths, and 0x3a, entered with 8.3 hearts instead of 5.3, kills 21% instead of 71%:
+**the segment is winnable well above 30% by this policy plus one step of foresight**, and the hearts carried into
+0x3a are the lever, as §13.1 said. The planner is worse only in 0x28 (360 visits for 300 runs: it walks back out
+and in, 43 deaths), which the model alone does not do.
+
+**The `r78-1k` chains** (`ROUTE=d6 SEGMENTS="post-d7:0_42c_0 d6:6_79s_0" TAG=r78-1k RUNS=1000 ACT=model
+scripts/experiments/r56_chains.sh`, clips on, the paired difference against `r77a-1k` on seeds 0-999) were still
+waiting in the job queue when this was written. `d6`'s seeds 0-999 are the ones `r78-wizz-s78` was screened on, so
+that segment's number is biased up; the unbiased one is the confirmation's 18.4% against 10.7% (§13.3). `post-d7`
+is not.
+
+**Next levers, one at a time, each three seeds and chosen by the `d6` segment:**
+
+1. Training length (queued: `r79-wizz-s78`, `-s79`, `-s80`, each 488 more iterations from its own `r78` run, seeds
+   81-83, the same arguments as §13.3): every `r78` run's checkpoints were still rising on the screen.
+2. Staged starts at the hearts runs bring: `ram_randomization.chain_hp` (the existing mechanism, rounds 6 and 10)
+   with `triforce/chain_hp.json` built from the `d6` chains (`python -m triforce.chain_hp`), so a share of 0x3a's
+   resets start with the 4-8 hearts the runs bring rather than the uniform `hp` draw. No profile ships yet.
+3. A lower `room_kills_share` in 0x38 and 0x3a (more full rooms in training).
+
+What I would build next (not built here: no reward or observation change in this round): the planner's lesson is
+that one step of foresight halves 0x38's hearts. Distilling it, the planner's choices in 0x38 and 0x3a recorded as
+demonstrations (`--demos`, as 0x28's bomb is), would teach the policy the dodges it now finds only by search,
+without changing the reward or the observation; the planner's 0x28 back-and-forth would be left out of the file.
+
+### 13.5 The `r78-1k` chains, paired with `r77a-1k`
+
+The promoted team with `r78-wizz-s78` (`ROUTE=d6 SEGMENTS="post-d7:0_42c_0 d6:6_79s_0" ACT=model TAG=r78-1k
+RUNS=1000 scripts/experiments/r56_chains.sh`, clips on), paired by seed with `r77a-1k` (the same team with
+`r77-wizz`). The batch is marked `failed` by its `report` entry alone, as `r77a-1k`'s was: `scripts/yardstick.py
+report --run promoted` refuses a team whose promoted runs' `eval.json` are not of their current weights in
+`temperature:0.5+relax:16` (here every family the stretch does not play, boss-manhandla to wallmaster). Both
+chains and the room stats (`r78-1k-room-stats.json`) were written; the yardstick is not needed for these numbers.
+
+| segment | `r77a-1k` | `r78-1k` | paired difference |
+|---|---:|---:|---:|
+| `post-d7` (0:0x42 to the D6 triforce) | 3.4% | **8.0%** | +4.6 ± 1.0 |
+| `d6` (6_79s_0 to the D6 triforce) | 8.2% | 21.5% | +13.3 ± 1.6 |
+
+`d6`'s 21.5% is on seeds 0-999, the screen `r78-wizz-s78` was chosen on: biased up; its unbiased number is the
+confirmation's 18.4% (§13.3). `post-d7`'s seeds were not used to choose anything: the stretch from the magic sword
+to the D6 triforce more than doubles, 3.4% to 8.0%.
+
+The hearts ledger (visits, mean hearts on entering, hearts lost a visit with a death losing what it brought,
+deaths):
+
+| room | family | `d6` `r77a-1k` | `d6` `r78-1k` | `post-d7` `r77a-1k` | `post-d7` `r78-1k` |
+|---|---|---|---|---|---|
+| 6:0x58 | stalfos-keese-gel | 1000 · 11.85 · 1.20 · 0 | 1000 · 11.86 · 1.24 · 0 | 989 · 10.15 · 1.32 · 3 | 989 · 10.16 · 1.32 · 5 |
+| **6:0x38** | wizzrobe | 1000 · 10.65 · 6.55 · **268** | 1000 · 10.62 · 5.63 · **178** | 986 · 8.86 · 6.15 · **384** | 984 · 8.89 · 5.41 · **271** |
+| 6:0x28 | wizzrobe | 732 · 5.60 · 0.33 · 15 | 821 · 6.08 · 0.33 · 18 | 602 · 4.45 · 0.38 · 30 | 713 · 4.80 · 0.34 · 27 |
+| 6:0x29 | wizzrobe | 719 · 5.37 · 0.65 · 43 | 805 · 5.87 · 0.62 · 41 | 572 · 4.28 · 0.96 · 75 | 686 · 4.64 · 0.90 · 65 |
+| 6:0x39 | vire | 677 · 5.02 · −0.03 · 33 | 802 · 5.50 · −0.13 · 34 | 498 · 3.81 · 0.08 · 38 | 658 · 4.09 · 0.08 · 44 |
+| **6:0x3a** | wizzrobe | 642 · 5.31 · 4.12 · **426** | 766 · 5.88 · 3.45 · **369** | 460 · 4.04 · 3.39 · **359** | 614 · 4.29 · 3.01 · **384** |
+| 6:0x2c | wizzrobe | 201 · 3.77 · 2.29 · 98 | 338 · 4.87 · 2.27 · 96 | 85 · 3.53 · 2.22 · 42 | 179 · 3.65 · 2.14 · 78 |
+| 6:0x1c | boss-gohma | 103 · 2.89 · −0.98 · 21 | 242 · 3.64 · −1.33 · 27 | 43 · 2.58 · −0.98 · 9 | 101 · 2.68 · −0.96 · 21 |
+| 6:0x0c | stalfos-keese-gel | 82 | 215 | 34 | 80 |
+
+Visits surviving by hearts on entering, `d6` (`r77a-1k` → `r78-1k`):
+
+| hearts in | 0-2 | 2-4 | 4-6 | 6-8 | 8-10 | 10-12 | 12 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 0x38 visits | | | 1 → 1 | 8 → 2 | 133 → 148 | 789 → 779 | 69 → 70 |
+| survived | | | | 25 → 100% | 65 → 70% | 75 → 83% | 80 → 96% |
+| 0x3a visits | 55 → 55 | 146 → 151 | 177 → 181 | 136 → 162 | 82 → 124 | 35 → 70 | 11 → 23 |
+| survived | 2 → 13% | 17 → 23% | 26 → 43% | 45 → 59% | 61 → 77% | 69 → 93% | 82 → 87% |
+
+**The priced wizzrobe kept 0.9 hearts a visit in 0x38 (6.55 → 5.63) and a third of its deaths (268 → 178), and
+0x3a is entered with half a heart more (5.31 → 5.88) and survives better at every heart count** (at 4-8 hearts
+43-59% against 26-45%). The hearts entering 0x3a moved little: 0x38 still takes 5.4-5.6 of 10.6, so 0x3a is
+entered with under 6 hearts and kills 48% of its visits (369 of 766). The rest of the dungeon is unchanged per
+visit (0x58 1.2 hearts, 0x2c 2.3 and a death in 3-4 of its visits). The honest planner's 0x38 costs 3.25 hearts
+(§13.4): the lever is still 0x38's price, then 0x3a at the hearts it gets.
+
+### 13.6 The levers on `d6`: training length, the planner as a teacher, starts at the hearts runs bring
+
+Every arm is three seeds, each continuing its own `r78-wizz-s7x` run for 488 iterations (976 → 1464, the §13.3
+arguments: `--sil-coeff 0.1 --checkpoint-every 30`, bomb28's demonstrations at 0.05, the heart value table on), and
+is judged on `d6` by `triforce select-checkpoint wizzrobe RUN --from 6_79s_0 --route d6 --runs 1000 --confirm 1000
+--parallel 10` against the promoted run. The plain continuation (`r79-wizz-s7x`, seeds 81-83) is the training-length
+arm and the control of the others: each lever arm uses the same base and seed as its `r79` run, so the two differ
+by the lever alone.
+
+**The planner as a teacher (`r80-wplan-s7x`).** Recording the honest planner needs no engine vocabulary: the eval
+pool's `play(act=registry.PLAN_ACT, record='observations')` keeps every decision's observation (with its action
+mask) and the action executed after the foresight, and each eval record's visit names the decisions the planner
+replaced (`decisions.foresight.replaced`). `scripts/experiments/r27_plan_demos.py` plays the family in 0x38 and
+0x3a (`6_38s_0..2`, `6_3aw_0..2`, 100 episodes each, seeds 5000-5599, the family's hp and bombs draws, full rooms)
+with `r78-wizz-s78` under the planner, keeps the episodes won with at most 6 hearts lost and writes every decision
+of them once and each replaced decision five times (a job: it waits its turn like `triforce evaluate`):
+
+```bash
+python scripts/experiments/r27_plan_demos.py models/wizzrobe/r78-wizz-s78 target/r27-demos/plan38-3a.npz --runs 100
+```
+
+| state | 6_38s_0 | 6_38s_1 | 6_38s_2 | 6_3aw_0 | 6_3aw_1 | 6_3aw_2 |
+|---|---:|---:|---:|---:|---:|---:|
+| planner won (of 100) | 86 | 89 | 82 | 86 | 78 | 77 |
+| hearts lost in the wins | 2.53 | 2.40 | 2.59 | 2.23 | 2.47 | 2.40 |
+| kept | 80 | 81 | 75 | 80 | 71 | 73 |
+| replaced decisions in them | 349 | 271 | 237 | 218 | 237 | 229 |
+
+56,368 rows from 460 episodes, 1,541 of their decisions replaced by the planner (7,705 rows). The training loads
+both files at the lineage's coefficient (`--demos target/r27-demos/bomb28.npz target/r27-demos/plan38-3a.npz
+--demo-coeff 0.05`; the cloning term samples the two files' rows together, so 0x28's bomb rows are now a third of
+them); 0x28's planner play (it walks out and back in) is not recorded.
+
+The planner arm went into the job line first, ahead of `chain_hp`: it changes no yaml, while `chain_hp` changes
+wizzrobe's yaml and ships `triforce/chain_hp.json`, which waits until no job of this checkout runs or waits.
+
+**Training length (`r79-wizz-s7x`)**, `python scripts/train_round.py --round r79-wizz-s78 --specialists wizzrobe
+--chain-runs 0 --parallel 8 --eval-parallel 3 --train-args "--load models/wizzrobe/r78-wizz-s78 --iterations 488
+--seed 81 --stop-success 1.01 --sil-coeff 0.1 --demos target/r27-demos/bomb28.npz --demo-coeff 0.05
+--checkpoint-every 30"` (and `r78-wizz-s79` seed 82, `r78-wizz-s80` seed 83). Canonical single-room evaluations:
+
+| run | success | hearts a visit | 0x38 | 0x3a | 0x2c | 0x29 |
+|---|---:|---:|---:|---:|---:|---:|
+| `r78-wizz-s78` (promoted before) | 91.2% | −1.81 | 78.0% | 72.0% | 97.7% | 99.7% |
+| `r79-wizz-s78` | 92.7% | −1.68 | 82.3% | 75.3% | 99.3% | 99.7% |
+| `r79-wizz-s79` | 92.9% | −1.70 | 79.7% | 79.3% | 99.0% | 99.3% |
+| `r79-wizz-s80` | 92.0% | −1.83 | 77.0% | 77.0% | 98.3% | 99.7% |
+| `r80-wplan-s78` | 91.3% | −1.56 | 75.7% | 73.0% | 99.3% | 99.7% |
+
+**Seed 78 chosen by the chain** (`r79-wizz-s78/selection.json`): the screen (seeds 0-999) rises over the
+continuation from 17-20% (iterations 1006-1216) to 23-25% (1246-1456), the last checkpoint 29.0 ± 1.4% against
+the promoted `r78-wizz-s78`'s 21.5%; **confirmed on fresh seeds 1000-1999: last 27.8 ± 1.4%, it001456 26.6%,
+promoted 18.4 ± 1.2%; last − promoted +9.4 ± 1.8 points paired**, hearts on arrival at the triforce 6.11 against
+5.64. **Promoted: `r79-wizz-s78`** (`triforce promote wizzrobe r79-wizz-s78`; its `ckpt.pt` is the chosen last
+checkpoint), the base of the joint Dungeon 6 and 9 wizzrobe training. The selections of the other runs were
+still waiting in the job line and compare with it.
+
+**The honest planner with `r79-wizz-s78`** (a diagnostic beside the models; the §13.4 command, 300 runs, seeds
+0-299, `target/r79/r79-plan-d6.jsonl`): **182 of 300, 60.7%**, against 54.0% with `r78-wizz-s78` (+6.7 ± 3.9 paired).
+0x38 costs 2.98 hearts a visit (3.25), 0x3a is entered with 8.56 hearts and kills 41 of 243 visits (53 of 253).
+
+**Seed 79** (against the promoted `r79-wizz-s78`): screen last 25.3%, best it001426 25.5%, the promoted run 29.0%
+first; confirmed last 25.0% against 27.8%: **not better, not promoted**. The tool's batch ended `failed`: when the
+promoted run tops the screen, its `confirm-top1` entry raises `LookupError: the screen has no chain of promoted
+yet` (a `select-checkpoint` bug; the confirmations of the last checkpoint and the promoted run were written).
+**Seed 80**: screen last 20.0%, best it001456 23.2%; confirmed last 20.6% against 27.8% (the same tool failure):
+not promoted. On the fresh seeds the three continuations stand at 27.8%, 25.0% and 20.6% against their own bases'
+18.4%, 16.5% and 15.7% (§13.3): **488 more iterations gain 5-9 points on every seed**, seed 78 most.
+
+**The planner as a teacher, seed 78** (`r80-wplan-s78`, against the promoted `r79-wizz-s78`, its length control):
+the screen rises from 21% (iterations 1186-1276) to 27-30% (1336-1456), the last checkpoint 31.5% against 29.0%
+(+2.5 ± 2.0); **confirmed on fresh seeds: last 31.8% against 27.8%, +4.0 ± 2.0 points paired** (the same tool
+failure ended the batch). 0x38 costs 4.96 hearts a visit instead of 5.42 (132 deaths instead of 144), and 0x3a is
+entered with 6.40 hearts instead of 5.73. It is the first run over the owner's 30% on the segment on seeds not used
+to choose it; it was not promoted yet only because the selection of `r80-wplan-s79` was running in the same
+checkout (a promotion mid-selection changes the run it compares with).
+**Seed 79** (`r80-wplan-s79`): screen last 25.2% (checkpoints 28-29% from iteration 1246 on) against 29.0%;
+confirmed last 27.4% against the promoted 27.8% (−0.4), and against its own length control `r79-wizz-s79`'s 25.0%
+on the same fresh seeds +2.4: the planner's demonstrations add 2-4 points on both seeds measured so far.
+**Seed 80** (`r80-wplan-s80b`): screen last 25.9%, it001456 27.0%; confirmed last 23.6% against 27.8%, and +3.0
+against its control `r79-wizz-s80`'s 20.6%. **The planner as a teacher gains on every seed: +4.0, +2.4, +3.0 points
+over the same training without it.** **Promoted: `r80-wplan-s78`** (`triforce promote wizzrobe r80-wplan-s78`; its
+`ckpt.pt` is the confirmed last checkpoint), `d6` confirmed 31.8% on fresh seeds: over the owner's 30%. It is the
+base of the joint Dungeon 6 and 9 wizzrobe training, which loads both demonstration files. The honest planner
+beside it (300 runs, seeds 0-299): **208 of 300, 69.3%** (60.7% with `r79-wizz-s78`, 54.0% with `r78-wizz-s78`).
+
+**The chain of record, `r80-1k`** (the promoted team with `r80-wplan-s78`, the §13.5 command with `TAG=r80-1k`; the
+batch `failed` by its report entry alone), paired by seed with `r79-1k`:
+
+| segment | `r77a-1k` | `r78-1k` | `r79-1k` | `r80-1k` | `r80-1k` − `r79-1k` |
+|---|---:|---:|---:|---:|---:|
+| `post-d7` (0:0x42 to the D6 triforce) | 3.4% | 8.0% | 11.1% | **15.0%** | +3.9 ± 1.5 |
+| `d6` (seeds 0-999; `r80-wplan-s78` was screened there) | 8.2% | 21.5% | 29.0% | 31.5% | +2.5 ± 2.0 |
+| `d6` fresh seeds 1000-1999 | | 18.4% | 27.8% | **31.8%** | +4.0 ± 2.0 |
+
+0x38 now costs 4.97-4.99 hearts a visit (5.43-5.69) and kills 251 of 987 `post-d7` runs (309) and 128 of 1000
+`d6` runs (161); 0x3a, entered with 4.7-6.1 hearts, still kills 372-376. **`d6` is over the owner's 30% for a first
+team; the stretch from the magic sword to the D6 triforce is 15.0%**, its next lever the hearts runs bring into
+0x38 (8.8 on `post-d7` against 10.6 on `d6`: the leg's 0x32 and 0x58's statues) and 0x3a.
+
+**The `r79-1k` chains** (the promoted team with `r79-wizz-s78`, the §13.5 command with `TAG=r79-1k`; the batch
+`failed` by its report entry alone, as before), paired by seed with `r78-1k`:
+
+| segment | `r77a-1k` | `r78-1k` | `r79-1k` | `r79-1k` − `r78-1k` |
+|---|---:|---:|---:|---:|
+| `post-d7` (0:0x42 to the D6 triforce) | 3.4% | 8.0% | **11.1%** | +3.1 ± 1.2 |
+| `d6` (seeds 0-999, the screen seeds: biased) | 8.2% | 21.5% | 29.0% | +7.5 ± 1.9 |
+| `d6` fresh seeds 1000-1999 (confirmations) | | 18.4% | **27.8%** | +9.4 ± 1.8 |
+
+In `post-d7`, entered with 8.9 hearts, 0x38 still kills 309 of 985 runs and 0x3a 347 of 558: the stretch's chain
+of record is 11.1%, its `d6` segment 27.8% (unbiased) with `r79-wizz-s78`, 31.8% with `r80-wplan-s78` once promoted.
+
+The selections of `r79-wizz-s79`, `r79-wizz-s80`, `r80-wplan-s79` and `-s80b` ended as above, each confirming only
+its last checkpoint: `confirm-top1` failed in all four (`LookupError: the screen has no chain of promoted yet`;
+fixed on `main` since, the promoted reference pinned when a selection starts), so their best screened checkpoints
+(it001426 25.5%, it001456 23.2%, it001306 29.2%, it001456 27.0% against the promoted run's 29.0%) are unconfirmed.
+`chain_hp` and a lower `room_kills_share` were not started.
+
+## 14. One team from two lanes, and the chains of record (`r77-1k`): held for ow-lynel
+
+**Summary.** `d6` merged into `d2first` (steps 248-280; the scouting route `d6` is gone, `triforce/heart_value.json`
+refit under `d2first` from the same 26 sources came out byte-identical; decisions 2026-11-18), version 1.7.0.0, and
+one team from this lane and `main`'s round 26. Dungeon 6 holds the owner's working rate (`d6` 30.0% of 1000 runs).
+**The landing is held** (the lead, Nov 18): the lane's ow-lynel `r77-b`, the only model that plays 0x50, loses the
+stretch after Dungeon 2 (−5.6 ± 1.2 on its segment), and on the full route that costs half of the runs that reach
+the D5 triforce (14.3% against `main`'s 27.0% on the same 300 seeds). The landing waits for the joint ow-lynel
+continuation (0:0x0a and the leg's 0x50, 0x60, 0x32, 0x22 together), then the stretches ow-lynel plays are measured
+again.
+
+### 14.1 The merged team
+
+Both lanes continued from `main`'s 1.5.1 / 1.6.0 runs and no family changed on both sides from different bases, so
+each family takes the side that changed it (same-id runs are byte-identical on both sides). All 31 runs are stamped
+1.7.0.0 (`triforce stamp`; nothing a loaded model reads changed since 1.5.1.0).
+
+| family | run | from | why |
+|---|---|---|---|
+| wizzrobe (new) | `r80-wplan-s78` | this lane | `d6` 31.8% on fresh seeds (§13.6) |
+| ow-ghini (new) | `r77-ghini` | this lane | the graveyard and the sword cave |
+| boss-gohma (new) | `r77-gohma` | this lane | Gohma |
+| ow-lynel | `r77-b` | this lane | the only run that plays 0x50 (`main`'s `r74-lynel`: 0 of 100 there, §11); loses 0:0x0a (§14.4) |
+| ow-moblin, like-like, stalfos-keese-gel, trap-room, vire, zol | `r77-b` | this lane (ow-moblin from `main`'s `r76-b`) | the stretch's rooms (§13) |
+| goriya | `r76-goriya4-s78` | `main` | Dungeon 7 (round26.md §16) |
+| ow-zora | `r76-zora-arrows` | `main` | the arrow shop (round26.md §16; its 75 harvested states copied, untracked) |
+| wallmaster | `r76-wall-1` | `main` | 7:0x0d |
+| dodongo-crossing | `r76-c` | `main` | 7:0x0c |
+| equipment-room | `r76-c` | `main` | also plays 6:0x08: 99.9% of 2700 single-room episodes (−0.12 hearts) against this lane's `r75-f-c` 99.5% (−0.14), 300 of 300 both in 6:0x08 |
+| the other 14 | unchanged | both | |
+
+### 14.2 The chains of record (`r77-1k`)
+
+1000 runs a segment, seeds 0-999, clips on, models alone (`--act model`), each earlier segment stopped at its
+arrival (`--stop-at`; `d5` at `step:209`), `post-d7` and `d6` to the route's end; the full route 300 runs. The
+earlier segments are paired with `main`'s `r76-1k`, `post-d7` and `d6` with this lane's `r80-1k` (the same team but
+main's equipment-room and the merged code). Dungeons 2 and 7 were not rerun (no family of theirs changed): 300 `d7`
+runs on the merged code (`--stop-at step:248`) match `r76-1k-d7` run for run (300 identical, 117 successes both).
+
+| segment | arrival | `r77-1k` | reference | paired difference | hearts on arriving (ref.) |
+|---|---|---:|---:|---:|---:|
+| **after Dungeon 2** (`--from 0_3cc_0`) | 1:0x73 | **90.1%** | 95.7% | **−5.6 ± 1.2** | 3.00 (3.22) |
+| Dungeon 1 | 0:0x37 | 98.7% | 99.0% | −0.3 ± 0.5 | 4.93 (4.78) |
+| after Dungeon 1 | 3:0x7c | 100.0% | 100.0% | 0 | |
+| Dungeon 3 | 0:0x74 | 78.6% | 78.2% | +0.4 ± 1.8 | 4.05 (4.10) |
+| after Dungeon 3 | 4:0x71 | 100.0% | 100.0% | 0 | |
+| Dungeon 4 | 0:0x45 | 91.1% | 92.1% | −1.0 ± 1.2 | 4.80 (4.98) |
+| after Dungeon 4, the leg | 5:0x76 | 100.0% | 99.9% | +0.1 ± 0.1 | |
+| Dungeon 5 | the D5 triforce | 69.1% | 68.7% | +0.4 ± 1.0 | 5.76 (5.82) |
+| `post-d5` | 7:0x79 | 98.7% | 98.7% | 0 | 8.28 (8.22) |
+| `post-d7` (`--from 0_42c_0`) | 6:0x79 | 99.0% | 99.0% | 0 | 10.31 (10.31) |
+| **`post-d7`** | **the D6 triforce** | **14.4%** | 15.0% | −0.6 ± 0.8 | |
+| **`d6`** (`--from 6_79s_0`) | **the D6 triforce** | **30.0%** | 31.5% | −1.5 ± 0.9 | |
+
+`post-d7` and `d6` play the same as `r80-1k` up to 6:0x08, where equipment-room differs; the random numbers part
+there, and the rest (0x2c 81 deaths against 67 in `d6`, 55 against 48 in `post-d7`) is the runs drawn after it.
+
+**The full route** (300 runs, seeds 0-299), paired with `r76-1k-full` on the same seeds:
+
+| milestone | `r77-1k` | `r76-1k` | paired difference |
+|---|---:|---:|---:|
+| Dungeon 2 entered | 100.0% | 99.0% | +1.0 ± 0.6 |
+| Dungeon 2 left | 77.3% | 79.3% | −2.0 ± 3.3 |
+| Dungeon 1 entered | 70.0% | 76.0% | −6.0 ± 3.5 |
+| Dungeon 1 left, Dungeon 3 entered | 54.7% | 67.0% | **−12.3 ± 3.8** |
+| Dungeon 3 left, Dungeon 4 entered | 39.7% | 52.7% | −13.0 ± 4.0 |
+| Dungeon 4 left, Dungeon 5 entered | 35.3% | 46.0% | −10.7 ± 4.0 |
+| **the D5 triforce** | **14.3%** | **27.0%** | **−12.7 ± 3.3** |
+| Dungeon 7 entered | 14.3% | 25.7% | −11.3 ± 3.2 |
+| the D7 triforce, Dungeon 6 entered | 3.0% | | |
+| **the D6 triforce** | **0.3%** (1 run) | | |
+
+### 14.3 Where `d6` and `post-d7` lose their runs
+
+Deaths per room (visits, mean hearts on entering; 12 containers until Gohma):
+
+| room | family | `d6` visits | hearts in | deaths | `post-d7` visits | hearts in | deaths |
+|---|---|---:|---:|---:|---:|---:|---:|
+| 0:0x32 | ow-lynel | | | | 997 | 11.83 | 7 |
+| 6:0x58 | stalfos-keese-gel | 1000 | 11.85 | 0 | 990 | 10.14 | 3 |
+| **6:0x38** | wizzrobe | 1000 | 10.62 | **128** | 987 | 8.83 | **251** |
+| 6:0x28 | wizzrobe | 871 | 6.46 | 9 | 736 | 5.18 | 30 |
+| 6:0x29 | wizzrobe | 863 | 6.24 | 25 | 706 | 5.04 | 54 |
+| 6:0x39 | vire | 851 | 5.82 | 26 | 656 | 4.51 | 41 |
+| **6:0x3a** | wizzrobe | 824 | 6.14 | **376** | 615 | 4.74 | **372** |
+| 6:0x08 tunnel | equipment-room | 435 | 4.63 | 6 | 239 | 3.65 | 2 |
+| 6:0x2d | vire | 429 | 4.46 | 16 | 239 | 3.51 | 12 |
+| 6:0x2c | wizzrobe | 413 | 4.81 | 81 | 225 | 3.91 | 55 |
+| 6:0x1c Gohma | boss-gohma | 332 | 4.39 | 32 | 170 | 3.12 | 26 |
+
+`d6`: 700 failures, 699 deaths and one wizzrobe timeout; `post-d7`: 856, 853 deaths and 3 runs that left 0x21
+without the sword. **0x3a, entered with 4.7-6.1 hearts, kills 46-60% of its visits; 0x38 takes the rest of the
+hearts.** `post-d7` enters Dungeon 6 with 10.3 hearts (the leg's 0x32 and 0x58's statues), 1.7 fewer than `d6`'s
+start, and 0x38 kills twice as many. Every run that takes the triforce leaves with 13 hearts (Gohma's container
+and the refill); the wins take 9,600 frames from the entrance (`d6`) and 13,000 from Dungeon 7's exit (`post-d7`).
+
+**Cheated items.** `d6`: 5 bombs in 1000 runs, `post-d7` 1, all in 6:0x28 (the bomb-wall room entered with none,
+as rule A grants), no key, no rupee. The full route cheats 438 bombs in 300 runs, every one in a wall room (Dungeon 4
+88, Dungeon 5 177, Dungeon 2 63, Dungeon 3 48, the overworld 41, Dungeon 7 21).
+
+**The planner beside** (`--act temperature:0.5+relax:16+plan:16:1`, 300 runs, `r77-plan`): `post-d7` 99.7% reach
+Dungeon 6 and 43.7% its triforce; `d6` 67.3% (0x38 entered with 11.5 hearts kills 11 of 300, 0x3a with 8.6 kills
+29 of 247; this lane's `r80` planner 69.3%); the full route **37.7%** to the D6 triforce (the D5 triforce 85.7%,
+the D7 triforce 77.0%, Dungeon 6 entered 76.0%; `main`'s `r76-plan` 91.0% and 85.0%). It cheats 9 bombs in 0x28 in
+300 `d6` runs.
+
+### 14.4 After Dungeon 2: ow-lynel, and the landing held
+
+The stretch from Dungeon 2's exit to Dungeon 1 lost 5.6 ± 1.2 points, all on the overworld rooms before Dungeon 1
+(every visit of 1000 runs, 0x0a and 0x1a are crossed twice; `r77-1k` against `r76-1k`):
+
+| room | family | deaths | hearts in |
+|---|---|---:|---:|
+| **0:0x0a** (the white sword cave room) | ow-lynel | **39** against 13 | 4.35 / 4.46 |
+| 0:0x1a | ow-tektite (unchanged) | 25 against 9 | 4.27 / 4.43 |
+| 0:0x27 | ow-zora (unchanged) | 24 against 12 | 3.62 / 3.91 |
+
+The cause is ow-lynel `r77-b`: 0x0a is its own room, and the unchanged families after it are entered with fewer
+hearts. `main`'s ow-lynel (`r74-lynel`) cannot play the leg's 0x50 (0 of 100, §11), so neither run serves both
+stretches. On the full route the loss compounds: Dungeon 1 is entered with 2.88 hearts instead of 3.26 and keeps
+78% of the runs that enter it against 88% (1:0x23 10 deaths against 4, 0x63 6 against 0), and of 300 runs 43 take
+the D5 triforce where `main` takes 81.
+
+**Held for ow-lynel** (the lead, Nov 18). Landing the stretch at this price was the first plan, as round 26 landed
+with Dungeon 2's goriya loss; the paired full route changed it: halving the runs that reach the D5 triforce is not
+a price for a stretch the full route finishes in 1 of 300, and the owner watches runs from the start. A joint
+ow-lynel continuation (0:0x0a with the leg's 0x50, 0x60, 0x32 and 0x22) is training; with it, the stretches
+ow-lynel plays are measured again (after Dungeon 2 and the leg to Dungeon 5 paired with `r76-1k`, `post-d7`, the
+full route at 1000 runs paired with `r76-1k-full`), and the stretch lands when the full route's D5 and D7 triforce
+rates are within noise of `main`'s.
+
+**The merged code** is checked: the five suites green, and 300 `d6` runs (seeds 0-299) on the final code with the
+team stamped 1.7.0.0 identical run for run to `r77-1k-d6`.
