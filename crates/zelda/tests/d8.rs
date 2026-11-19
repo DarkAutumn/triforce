@@ -1,4 +1,4 @@
-//! Round 28: `d2first`'s steps 281-296 (scouted as `d8`) played in the real game by the route's objective,
+//! Round 28: `d2first`'s steps 277-292 since round 31 (scouted as `d8`) played in the real game by its objective,
 //! from Dungeon 6's triforce through the leg (the two recorder plays out of 0x22, 0x3c, 0x4c, 0x4d, 0x5d), the burned
 //! tree of 0x6d and Dungeon 8 to its triforce: the agent's own actions (MOVE, RECORDER, CANDLE, BOMB, SWORD) through
 //! the session's masks with the env's per-step rules mirrored (family `items:`/`clips:`, a step's own bomb mode, the
@@ -12,7 +12,8 @@
 //! SETUP. The start is staged by the route's own walk: `7_2bw_0` (the D7 triforce step; its whirlwind index `$FB` was
 //! left by a chain's two plays at 0x0b) is walked by round 27's rules to Dungeon 6's triforce (`crates/zelda/tests/
 //! d6.rs` asserts that stretch), so Link stands in 6:0x0c with what that walk brings: 13 hearts, the magic sword, 35
-//! rupees, 1 bomb, 2 keys. RAM writes: monsters are removed every action (object slots 1-11) but the kept types
+//! rupees, 1 bomb, 3 keys (2 before round 31: 6:0x29's key is taken since). RAM writes: monsters are removed every
+//! action (object slots 1-11) but the kept types
 //! (`KEEP`: tile objects, the whirlwind, the ladder, Gohma, Gleeok's body); Gleeok's fireballs and flying heads are
 //! removed with the rest (dodging them is the model's work), his four heads are cut by the walk's own SWORD. Nothing
 //! else is written but where a test says so. Walker aids (controller input, a frame at a time): cave mouths, key
@@ -49,8 +50,8 @@ const GLEEOK_HEAD_TIMER: u16 = 0x4F0 + 5;
 const GLEEOK_ROW: i32 = 0x9D;
 /// The first step of the stretch (0x22 out of Dungeon 6) and the step after its triforce (0x6d out of Dungeon 8; the
 /// route runs on to the end of the game, `d9.rs`).
-const FIRST: usize = 281;
-const NEXT: usize = 297;
+const FIRST: usize = 277;
+const NEXT: usize = 293;
 
 fn map() -> Arc<GameMap> {
     Arc::new(GameMap::builtin())
@@ -407,7 +408,7 @@ fn next_action(s: &S, objective: &Objective, nudge: u32) -> Action {
 }
 
 impl Walk {
-    /// `7_2bw_0` (Link entering Dungeon 7's triforce room) with a completion of `d8` on the D7 triforce step (247)
+    /// `7_2bw_0` (Link entering Dungeon 7's triforce room) with a completion of `d8` on the D7 triforce step (243)
     /// and the ledger begun.
     fn start() -> Option<Walk> {
         let core = open_core()?;
@@ -422,7 +423,7 @@ impl Walk {
         Some(w)
     }
 
-    /// The staged start of the stretch: the walk of round 27's steps (248-280, `d6.rs`) until Link holds Dungeon
+    /// The staged start of the stretch: the walk of round 27's steps (244-276, `d6.rs`) until Link holds Dungeon
     /// 6's piece (the action that takes it ends with the game's own warp: he stands at its entrance, 0x22); the
     /// ticks begin anew.
     fn at_the_d6_triforce() -> Option<Walk> {
@@ -689,7 +690,7 @@ fn the_d8_route_is_walked_from_the_d6_triforce_to_the_d8_triforce() {
     let Some(mut w) = Walk::at_the_d6_triforce() else { return };
     let map = w.s.game_map().clone();
     let route = &map.routes[ROUTE];
-    assert_eq!(route[NEXT].location(), ow(0x6d), "step 297 starts in 0:0x6d, out of Dungeon 8");
+    assert_eq!(route[NEXT].location(), ow(0x6d), "step 293 starts in 0:0x6d, out of Dungeon 8");
     let frames_in = w.s.frame();
     let visits = w.run(|s| s.state().has_triforce(8), 60_000);
     let t = &w.ticks;
@@ -708,7 +709,7 @@ fn the_d8_route_is_walked_from_the_d6_triforce_to_the_d8_triforce() {
     assert_eq!(rooms, expected);
     assert!(t.iter().all(|k| k.action.kind != ActionKind::Clip), "no clip on the stretch");
 
-    // 0x22 (step 281, `entry: cave`, `exit: recorder`, ow-lynel with `recorder: true`): the game sets Link down at
+    // 0x22 (step 277, `entry: cave`, `exit: recorder`, ow-lynel with `recorder: true`): the game sets Link down at
     // Dungeon 6's entrance with its piece and 13 full hearts, facing down; RECORDER is offered from the first tick,
     // only while the route's facings hold his, and the walk plays twice; after the second it is not offered again;
     // nothing else is played but waiting; the whirlwind sets him down in 0x3c (a correct exit).
@@ -727,24 +728,24 @@ fn the_d8_route_is_walked_from_the_d6_triforce_to_the_d8_triforce() {
     assert!(out[plays[1] + 1..].iter().all(|k| !k.recorder), "no third play");
     assert_eq!(out.last().unwrap().hearts, 13.0);
     let landed = t.iter().find(|k| k.room == ow(0x3c) && k.action.kind == ActionKind::Move).unwrap();
-    assert_eq!((landed.step, landed.x, landed.y), (Some(282), 0x80, 0xAD), "set down at Dungeon 2's entrance");
+    assert_eq!((landed.step, landed.x, landed.y), (Some(278), 0x80, 0xAD), "set down at Dungeon 2's entrance");
 
-    // The leg (steps 282-285): 0x3c S, 0x4c E, 0x4d S, 0x5d S. ow-moblin has `candle: true` from 0x4d on: CANDLE is
+    // The leg (steps 278-281): 0x3c S, 0x4c E, 0x4d S, 0x5d S. ow-moblin has `candle: true` from 0x4d on: CANDLE is
     // offered in neither 0x4d (its shop tree) nor 0x5d, and RECORDER nowhere after 0x22.
-    for (room, step) in [(0x3c, 282), (0x4c, 283), (0x4d, 284), (0x5d, 285)] {
+    for (room, step) in [(0x3c, 278), (0x4c, 279), (0x4d, 280), (0x5d, 281)] {
         let ticks = at(t, ow(room), step);
         assert!(!ticks.is_empty(), "0x{room:02x} on step {step}");
         assert!(ticks.iter().all(|k| k.candles.is_empty() && !k.recorder), "0x{room:02x}");
         assert!(ticks.iter().all(|k| k.candle_facings == Some(0)), "0x{room:02x}");
     }
 
-    // 0x6d (step 286, `exit: cave` under the tree): while the tree stands the targets are the stand tiles of its row
+    // 0x6d (step 282, `exit: cave` under the tree): while the tree stands the targets are the stand tiles of its row
     // (three E of it, three W); CANDLE is offered only inside the window (X $B8-$CF from the N entry), only facing W,
     // only while no fire of Link's burns, and is played once; the walk waits while the fire burns; then the stairs
     // are the target; no heart is lost.
     let Some(Secret::Burn((c, r))) = map.get(ow(0x6d)).unwrap().secret else { panic!("0x6d's tree") };
     let stand: BTreeSet<Target> = [3, 4, 5, -5, -4, -3].into_iter().map(|d| Target::Tile((c + d, r))).collect();
-    let tree = at(t, ow(0x6d), 286);
+    let tree = at(t, ow(0x6d), 282);
     let standing: Vec<_> = tree.iter().filter(|k| k.stairs.is_empty() && k.mode == 5).collect();
     assert!(!standing.is_empty());
     for k in &standing {
@@ -765,12 +766,12 @@ fn the_d8_route_is_walked_from_the_d6_triforce_to_the_d8_triforce() {
     }
     assert_eq!(tree.last().unwrap().hearts, 13.0);
 
-    // Dungeon 8. Keys: 2 in, 0x5e +1, 0x4e N -1, 0x4c +1; bombs: 1 in, 0x6e's wall, 0x3f's four (fought for at 0),
-    // 0x4c's wall; nothing cheated.
+    // Dungeon 8. Keys: 3 in (round 31: 6:0x29's), 0x5e +1, 0x4e N -1, 0x4c's left (round 31); bombs: 1 in, 0x6e's
+    // wall, 0x3f's four (fought for at 0), 0x4c's wall; nothing cheated.
     let first = |room: u8| t.iter().find(|k| k.room == uw(room)).unwrap_or_else(|| panic!("8:{room:#04x}"));
     let ledger: Vec<(i32, i32)> =
         [0x7e, 0x6e, 0x5e, 0x4e, 0x3e, 0x3f, 0x4c, 0x3c, 0x2c].into_iter().map(|r| (first(r).keys, first(r).bomb_count)).collect();
-    assert_eq!(ledger, [(2, 1), (2, 1), (2, 0), (3, 0), (2, 0), (2, 0), (2, 4), (3, 3), (3, 3)]);
+    assert_eq!(ledger, [(3, 1), (3, 1), (3, 0), (4, 0), (3, 0), (3, 0), (3, 4), (3, 3), (3, 3)]);
     assert_eq!(w.ledger.cheated.bombs + w.ledger.cheated.keys + w.ledger.cheated.rupees, 0);
     // Reserves: bombs 1 to 0x6e's wall, 2 from 0x5e, 1 from Gleeok's room; rupees 1 (Gohma's step), 8 from 0x4c.
     let reserves: Vec<(u8, u8)> = [0x6e, 0x5e, 0x3f, 0x4c, 0x3c].into_iter().map(|r| (first(r).bomb_reserve, first(r).rupee_reserve)).collect();
@@ -781,9 +782,9 @@ fn the_d8_route_is_walked_from_the_d6_triforce_to_the_d8_triforce() {
         assert!(t.iter().filter(|k| k.room == uw(room)).any(|k| k.types.contains(&monster)), "8:{room:#04x}: its monsters");
     }
 
-    // 0x6e (step 288, boss-manhandla `free`, the step `bombs: required`, `treasure: skip`): BOMB is offered only
+    // 0x6e (step 284, boss-manhandla `free`, the step `bombs: required`, `treasure: skip`): BOMB is offered only
     // where the bomb lands in reach of the N wall, played once from its spot facing N, and the one bomb opens it.
-    let wall = at(t, uw(0x6e), 288);
+    let wall = at(t, uw(0x6e), 284);
     assert!(wall.iter().all(|k| k.step_bombs.as_deref() == Some("required")));
     assert_eq!(played(&wall, ActionKind::Bomb), 1);
     let offered: Vec<_> = wall.iter().filter(|k| !k.bombs.is_empty()).map(|k| (k.x, k.y)).collect();
@@ -794,31 +795,32 @@ fn the_d8_route_is_walked_from_the_d6_triforce_to_the_d8_triforce() {
     assert!((bomb.x - 0x78).abs() <= 4 && bomb.y <= 0x6D, "before the N wall: ({:#04x}, {:#04x})", bomb.x, bomb.y);
     assert!(t.iter().filter(|k| k.room != uw(0x6e)).all(|k| k.step_bombs.is_none()), "no other step names a bomb mode");
 
-    // 0x5e (step 289) and 0x4e (step 290): the key doors off the route are kept out of (0x5e E, 0x4e W); 0x4e's N
+    // 0x5e (step 285) and 0x4e (step 286): the key doors off the route are kept out of (0x5e E, 0x4e W); 0x4e's N
     // key door, the route's own, is not; no other room of the stretch keeps a doorway out.
-    assert!(at(t, uw(0x5e), 289).iter().all(|k| k.kept_out == Direction::E.value()));
-    assert!(at(t, uw(0x4e), 290).iter().all(|k| k.kept_out == Direction::W.value()));
+    assert!(at(t, uw(0x5e), 285).iter().all(|k| k.kept_out == Direction::E.value()));
+    assert!(at(t, uw(0x4e), 286).iter().all(|k| k.kept_out == Direction::W.value()));
     assert!(t.iter().filter(|k| ![uw(0x5e), uw(0x4e)].contains(&k.room)).all(|k| k.kept_out == 0));
     // 0x5e's key is the target once its five are gone, before the N exit.
-    assert!(at(t, uw(0x5e), 289).iter().any(|k| k.kind == ObjectiveKind::Treasure && k.keys == 2));
+    assert!(at(t, uw(0x5e), 285).iter().any(|k| k.kind == ObjectiveKind::Treasure && k.keys == 3));
 
-    // 0x3f (step 292, `treasure: {if_bombs_below: 5}`): Link holds no bomb, so the room is fought for its four
+    // 0x3f (step 288, `treasure: {if_bombs_below: 5}`): Link holds no bomb, so the room is fought for its four
     // (the treasure is the target once its six are gone), then the stairs.
-    let oneway = at(t, uw(0x3f), 292);
+    let oneway = at(t, uw(0x3f), 288);
     assert!(oneway.iter().any(|k| k.kind == ObjectiveKind::Treasure && k.bomb_count == 0), "the bombs are a target");
     assert_eq!(oneway.last().unwrap().bomb_count, 4);
     assert_eq!((oneway.last().unwrap().kind, &oneway.last().unwrap().targets), (ObjectiveKind::Move, &[Target::Tile((26, 10))].into()));
 
-    // The tunnel (step 293): in by the right ladder, out by the left one into 0x4c (the room after it: `rooms`).
-    let tunnel = at(t, MapLocation::new(8, 0x2f, true), 293);
+    // The tunnel (step 289): in by the right ladder, out by the left one into 0x4c (the room after it: `rooms`).
+    let tunnel = at(t, MapLocation::new(8, 0x2f, true), 289);
     assert!(tunnel.first().unwrap().x >= 0x80 && tunnel.last().unwrap().x < 0x80);
 
-    // 0x4c (step 294, pols-voice: `required`, `arrows: true`): the corner key is the target before the wall; BOMB is
-    // offered only by the N wall and played once; ARROW is offered nowhere else on the stretch (and not here once
-    // the walk has removed the Pols Voices: `arrows_are_offered_among_the_pols_voices_above_the_rupee_reserve`).
-    let ring = at(t, uw(0x4c), 294);
+    // 0x4c (step 290, pols-voice: `required`, `arrows: true`, `treasure: skip` since round 31): out of the ring
+    // straight to the N wall, its corner key left (the owner, Nov 19); BOMB is offered only by the N wall and played
+    // once; ARROW is offered nowhere else on the stretch (and not here once the walk has removed the Pols Voices:
+    // `arrows_are_offered_among_the_pols_voices_above_the_rupee_reserve`).
+    let ring = at(t, uw(0x4c), 290);
     assert_eq!((ring[0].x, ring[0].y), (0x70, 0x7D), "up the stairs inside the ring");
-    assert!(ring.iter().filter(|k| k.keys == 2 && k.mode == 5).all(|k| k.kind == ObjectiveKind::Treasure), "the key first");
+    assert!(ring.iter().all(|k| k.kind != ObjectiveKind::Treasure && k.keys == 3), "the key is left");
     assert_eq!(played(&ring, ActionKind::Bomb), 1);
     let offered: Vec<_> = ring.iter().filter(|k| !k.bombs.is_empty()).map(|k| (k.x, k.y)).collect();
     assert!(!offered.is_empty() && offered.iter().all(|(_, y)| *y <= 0x7D), "BOMB only by the N wall: {offered:?}");
@@ -826,9 +828,9 @@ fn the_d8_route_is_walked_from_the_d6_triforce_to_the_d8_triforce() {
     assert!(t.iter().all(|k| k.arrows.is_empty() || k.room == uw(0x4c)), "ARROW only in 0x4c");
     assert!(t.iter().filter(|k| k.room.level == 8).all(|k| k.candles.is_empty() && !k.recorder));
 
-    // Gleeok (step 295, boss-gleeok `never`): four heads on entry; the walk's swings from row Y $9D cut them (3 + 2
+    // Gleeok (step 291, boss-gleeok `never`): four heads on entry; the walk's swings from row Y $9D cut them (3 + 2
     // + 2 + 2 hits that land); BOMB is never offered; then the heart container (14) and the N shutter.
-    let boss = at(t, uw(0x3c), 295);
+    let boss = at(t, uw(0x3c), 291);
     assert_eq!(boss.iter().map(|k| k.heads).max(), Some(4));
     let alive: Vec<_> = boss.iter().filter(|k| k.heads > 0).collect();
     assert!(alive.iter().all(|k| k.kind == ObjectiveKind::Fight), "the fight is the objective while a head is left");
@@ -840,7 +842,7 @@ fn the_d8_route_is_walked_from_the_d6_triforce_to_the_d8_triforce() {
     assert!(dead.iter().any(|k| k.kind == ObjectiveKind::Treasure), "the heart container is the target");
     assert_eq!(boss.last().unwrap().max_hearts, 14);
 
-    // 0x2c's triforce on step 296, the walk's end.
+    // 0x2c's triforce on step 292, the walk's end.
     let end = t.last().unwrap();
     assert_eq!((end.room, end.step, end.kind), (uw(0x2c), Some(NEXT - 1), ObjectiveKind::Treasure));
     assert!(w.s.state().has_triforce(8));
@@ -918,7 +920,7 @@ fn the_candle_is_offered_only_where_it_burns_the_routes_tree() {
         assert_eq!((w.gc.candle_facings(w.s.state()), candles(&w)), (Some(0), vec![]), "0x4d at X {x:#04x}");
     }
     let Some(mut w) = walk_to(ow(0x6d)) else { return };
-    assert_eq!(w.gc.step(), Some(286));
+    assert_eq!(w.gc.step(), Some(282));
     let offered = |w: &mut Walk, x: u8, y: u8| {
         place(w, x, y, Direction::S);
         look(w, false);
@@ -957,7 +959,7 @@ fn the_candle_is_offered_only_where_it_burns_the_routes_tree() {
 #[test]
 fn the_one_way_room_is_fought_for_its_bombs_only_at_four_or_fewer() {
     let Some(mut w) = walk_into(uw(0x3f), BLUE_DARKNUT) else { return };
-    assert_eq!(w.gc.step(), Some(292));
+    assert_eq!(w.gc.step(), Some(288));
     assert!((1..=11u16).any(|slot| w.s.state().peek(OBJ_TYPE + slot) == BLUE_DARKNUT), "the room is full");
     w.s.apply_ram(&[(Var::Bombs, 5)]);
     let objective = look(&mut w, true);
@@ -1057,7 +1059,7 @@ fn arrows_are_offered_among_the_pols_voices_above_the_rupee_reserve() {
     assert!(w.s.state().rupees() > 8 && arrows(&w).is_empty(), "{}", w.s.mask());
     let Some(mut w) = walk_into(uw(0x4c), POLS_VOICE) else { return };
     armed(&mut w);
-    assert_eq!((w.gc.step(), w.gc.rupee_reserve()), (Some(294), 8));
+    assert_eq!((w.gc.step(), w.gc.rupee_reserve()), (Some(290), 8));
     let rupees = w.s.state().rupees();
     let offered = arrows(&w);
     assert!(rupees > 8 && !offered.is_empty(), "{} rupees: {}", rupees, w.s.mask());

@@ -98,13 +98,16 @@ def test_steps_follow_the_real_route_through_wrong_exits_and_retreats():
                                         ('0_74c_0', (0, 0x74, 'cave')), ('2_7ds_0', (2, 0x7d, 'S')),
                                         ('start', (0, 0x77, 'start'))):
         assert room_stats.state_step(plan, state) == step_of(level, room, entry)
+    # Round 31: 0:0x37's second visit from its mouth (out of Dungeon 1 after the triforce) is a later step.
+    assert room_stats.state_step(plan, '0_37c_v2_0') == step_of(1, 0x36, 'W') + 1
     with pytest.raises(room_stats.RoomStatsError):
         room_stats.state_step(plan, '9_00s_0')
-    # Dungeon 1: a wrong exit N out of 0x53 skips the route's 0x52 and 0x42; the game's objective goes on from 0x43.
-    start = step_of(1, 0x63, 'S')
-    records = [ok(1, 0x63), visit(1, 0x53, 'exit-wrong'), ok(1, 0x43), ok(1, 0x33)]
-    assert room_stats.assign_steps(plan, records, start) == [start, start + 1, step_of(1, 0x43, 'W'),
-                                                             step_of(1, 0x33, 'S')]
+    # Dungeon 1: a wrong exit N out of 0x73 on the step that leaves S (the trip out, round 31's first check) skips
+    # the trip; the game's objective goes on from 0x63.
+    start = step_of(1, 0x73, 'S')
+    records = [visit(1, 0x73, 'exit-wrong'), ok(1, 0x63), ok(1, 0x53), ok(1, 0x43)]
+    assert room_stats.assign_steps(plan, records, start) == [start, step_of(1, 0x63, 'S'), step_of(1, 0x53, 'S'),
+                                                             step_of(1, 0x43, 'S')]
     # 0x0a S before the white sword is a retreat: back on 0x1a's first step, then N again.
     start = step_of(0, 0x1a, 'E')
     records = [ok(0, 0x1a), visit(0, 0x0a, 'retreat'), ok(0, 0x1a), ok(0, 0x0a)]

@@ -1,4 +1,4 @@
-//! Round 26: the route's leg to Dungeon 7 and Dungeon 7 (steps 209-247 of `d2first`, scouted as the route `d7` and
+//! Round 26: the route's leg to Dungeon 7 and Dungeon 7 (steps 205-243 of `d2first` since round 31, scouted as `d7` and
 //! merged) played in the real game by the route's objective, from `5_14s_0` (the D5
 //! triforce step) to the D7 triforce (the route's end): the agent's own actions (MOVE, BOMB, RECORDER, FOOD) through
 //! the session's masks with the env's per-step rules mirrored (family `items:`/`clips:`, the route's recorder facings,
@@ -388,7 +388,7 @@ fn next_action(s: &S, objective: &Objective, nudge: u32) -> Action {
 }
 
 impl Walk {
-    /// `5_14s_0` with a completion on the D5 triforce step (208) and the ledger begun;
+    /// `5_14s_0` with a completion on the D5 triforce step (204) and the ledger begun;
     /// `rupees` overrides Link's 171 rupees first.
     fn start(rupees: Option<u8>) -> Option<Walk> {
         let core = open_core()?;
@@ -563,10 +563,10 @@ fn the_d7_route_is_walked_from_the_d5_triforce_to_the_d7_triforce() {
     let visits = w.run(|s| s.state().has_triforce(7), 40_000);
     let t = &w.ticks;
 
-    // 0x0b (step 209, `exit: recorder`): Link comes out of Dungeon 5 facing down with the counter at 0; the mask
-    // offers RECORDER only facing down (or left) and the walk plays twice: 0 -> $FC (L5) -> $FB (L4, 0x45).
-    assert_eq!((route[209].location(), route[209].exit.as_str()), (ow(0x0b), "recorder"));
-    let whirl = at(t, ow(0x0b), 209);
+    // 0x0b (step 205 since round 31, `exit: recorder`): Link comes out of Dungeon 5 facing down with the counter at 0;
+    // the mask offers RECORDER only facing down (or left) and the walk plays twice: 0 -> $FC (L5) -> $FB (L4, 0x45).
+    assert_eq!((route[205].location(), route[205].exit.as_str()), (ow(0x0b), "recorder"));
+    let whirl = at(t, ow(0x0b), 205);
     for k in &whirl {
         assert!(!k.recorder || k.recorder_facings & k.facing.value() != 0, "RECORDER offered facing {:?}: {k:?}", k.facing);
     }
@@ -580,11 +580,11 @@ fn the_d7_route_is_walked_from_the_d5_triforce_to_the_d7_triforce() {
     assert!(!waiting.is_empty() && waiting.iter().all(|k| k.summoned && k.recorder_facings == 0 && !k.recorder));
     // Set down in 0x45: the route's `entry: recorder` step, the room's first tick.
     let landing = t.iter().find(|k| k.room == ow(0x45)).unwrap();
-    assert_eq!((landing.step, route[210].entry.as_str()), (Some(210), "recorder"));
+    assert_eq!((landing.step, route[206].entry.as_str()), (Some(206), "recorder"));
 
     // The shops: the route's ware is the target until it is held (the purchase is read from the inventory), then
     // the cave's exit; Link pays its price from his own rupees (171 -> 91 -> 31), nothing cheated.
-    for (room, step, price, rupees) in [(0x44, 218, 80, 91), (0x34, 221, 60, 31)] {
+    for (room, step, price, rupees) in [(0x44, 214, 80, 91), (0x34, 217, 60, 31)] {
         let shop = at(t, cave(0, room), step);
         let ware = map.get(cave(0, room)).unwrap().treasure_tile.unwrap();
         assert_eq!(map.requires_rupees(cave(0, room)), price);
@@ -599,10 +599,10 @@ fn the_d7_route_is_walked_from_the_d5_triforce_to_the_d7_triforce() {
         assert!(held(out) && out.rupees == rupees, "{room:#04x}: {out:?}");
     }
 
-    // 0x34 (step 220, `exit: cave` by the Armos): the targets are the statue's side tiles until the stairs show; a
+    // 0x34 (step 216, `exit: cave` by the Armos): the targets are the statue's side tiles until the stairs show; a
     // MOVE E or W into the statue (offered by the mask: the statue is a wall) wakes it; then the stairs.
     let Some(Secret::Armos((c, r))) = map.get(ow(0x34)).unwrap().secret else { panic!("0x34's Armos") };
-    let armos = at(t, ow(0x34), 220);
+    let armos = at(t, ow(0x34), 216);
     let sides: BTreeSet<Target> = [Target::Tile((c - 2, r)), Target::Tile((c + 2, r))].into();
     let hidden: Vec<_> = armos.iter().filter(|k| k.stairs.is_empty()).collect();
     assert!(!hidden.is_empty() && hidden.iter().all(|k| k.targets == sides));
@@ -612,25 +612,25 @@ fn the_d7_route_is_walked_from_the_d5_triforce_to_the_d7_triforce() {
     assert!(!shown.is_empty() && shown.iter().all(|k| k.stairs == [(c, r)] && k.targets == k.tiles()));
     assert_eq!(hidden[0].hearts, shown[0].hearts, "woken from the side: no heart lost");
 
-    // 0x42 (step 227, `exit: cave` by the recorder): RECORDER offered while the pond is full, played once; the
+    // 0x42 (step 223, `exit: cave` by the recorder): RECORDER offered while the pond is full, played once; the
     // targets are the pond's shore before, its stairs after the drain.
-    let pond = at(t, ow(0x42), 227);
+    let pond = at(t, ow(0x42), 223);
     assert_eq!(played(&pond, ActionKind::Recorder), 1);
     let play = pond.iter().position(|k| k.action.kind == ActionKind::Recorder).unwrap();
     assert!(pond[..=play].iter().all(|k| !k.shore.is_empty() && k.targets == k.shore.iter().map(|&s| Target::Tile(s)).collect()));
     let drained: Vec<_> = pond.iter().filter(|k| !k.stairs.is_empty()).collect();
     assert!(!drained.is_empty() && drained.iter().all(|k| !k.recorder && k.targets == k.tiles()));
 
-    // 7:0x39 (step 232, boss-digdogger, crossed S to W): the game's rule wants the recorder (the big Digdogger), the
+    // 7:0x39 (step 228, boss-digdogger, crossed S to W): the game's rule wants the recorder (the big Digdogger), the
     // route never offers it.
-    let crossed = at(t, uw(0x39), 232);
+    let crossed = at(t, uw(0x39), 228);
     assert!(crossed.iter().any(|k| k.recorder_wanted && k.types.iter().any(|&x| matches!(x, DIGDOGGER2 | DIGDOGGER3))));
     assert!(crossed.iter().all(|k| !k.recorder));
 
-    // 7:0x28 (step 234): FOOD only once the Grumble's text has typed (its state 1), placed once; the Grumble takes it
+    // 7:0x28 (step 230): FOOD only once the Grumble's text has typed (its state 1), placed once; the Grumble takes it
     // within the FOOD action (no decision ever sees it lying) and is gone. BOOMERANG while food lies is withheld: the
     // room's own RAM with a monster poked in offers it with slot $0F empty, not with food lying there.
-    let grumble = at(t, uw(0x28), 234);
+    let grumble = at(t, uw(0x28), 230);
     assert!(grumble.iter().all(|k| !k.food || k.food_wanted));
     let first = grumble.iter().position(|k| k.food).expect("FOOD offered in 7:0x28");
     assert!(grumble[..first].iter().any(|k| k.types.contains(&OBJ_GRUMBLE) && !k.food_wanted), "the text types first");
@@ -640,26 +640,26 @@ fn the_d7_route_is_walked_from_the_d5_triforce_to_the_d7_triforce() {
     assert!(grumble[fed + 1..].iter().all(|k| !k.types.contains(&OBJ_GRUMBLE) && !k.food), "the Grumble is gone");
     assert!(grumble[first..=fed].iter().all(|k| k.boomerang_probe == Some((false, true))), "{:?}", grumble[first..=fed].to_vec());
 
-    // 7:0x4a (step 238, `waypoint: candle`): the red candle taken in the cellar under 0x1a.
-    assert!(at(t, cave(7, 0x4a), 238).iter().any(|k| k.candle == 0));
-    let up = t.iter().find(|k| k.room == uw(0x1a) && k.step == Some(239)).unwrap();
+    // 7:0x4a (step 234, `waypoint: candle`): the red candle taken in the cellar under 0x1a.
+    assert!(at(t, cave(7, 0x4a), 234).iter().any(|k| k.candle == 0));
+    let up = t.iter().find(|k| k.room == uw(0x1a) && k.step == Some(235)).unwrap();
     assert_eq!(up.candle, 2, "the red candle");
 
-    // 7:0x1c (step 241, boss-digdogger fought): RECORDER offered while the big Digdogger hasn't heard it, played
+    // 7:0x1c (step 237, boss-digdogger fought): RECORDER offered while the big Digdogger hasn't heard it, played
     // once; the small Digdoggers after it.
-    let dig = at(t, uw(0x1c), 241);
+    let dig = at(t, uw(0x1c), 237);
     assert_eq!(played(&dig, ActionKind::Recorder), 1);
     let play = dig.iter().position(|k| k.action.kind == ActionKind::Recorder).unwrap();
     assert!(dig[play].recorder && dig[play].types.iter().any(|&x| matches!(x, DIGDOGGER2 | DIGDOGGER3)));
     assert!(dig[play + 1..].iter().any(|k| k.types.contains(&DIGDOGGER_CHILD)), "the small Digdoggers");
 
-    // 7:0x2b's triforce (step 247; the route runs on to Dungeon 6 since round 27, `d6.rs`): the last decision is the
-    // treasure objective of step 247, whose pickup sets the level 7 piece (the walk's end) before the warp out; no
+    // 7:0x2b's triforce (step 243; the route runs on to Dungeon 6 since round 27, `d6.rs`): the last decision is the
+    // treasure objective of step 243, whose pickup sets the level 7 piece (the walk's end) before the warp out; no
     // rupee or key cheated.
     let last = t.last().unwrap();
-    assert_eq!((last.room, last.step, last.kind), (uw(0x2b), Some(247), ObjectiveKind::Treasure));
-    assert_eq!(route[248].location(), ow(0x42), "step 248 starts in 0:0x42, out of Dungeon 7");
-    assert!(t.iter().all(|k| k.room != ow(0x42) || k.step != Some(247)));
+    assert_eq!((last.room, last.step, last.kind), (uw(0x2b), Some(243), ObjectiveKind::Treasure));
+    assert_eq!(route[244].location(), ow(0x42), "step 244 starts in 0:0x42, out of Dungeon 7");
+    assert!(t.iter().all(|k| k.room != ow(0x42) || k.step != Some(243)));
     assert!(w.s.state().has_triforce(7) && visits.iter().any(|v| v.room == uw(0x2b)));
     assert_eq!((w.ledger.cheated.rupees, w.ledger.cheated.keys), (0, 0));
 }

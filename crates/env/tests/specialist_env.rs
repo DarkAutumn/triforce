@@ -339,6 +339,7 @@ fn no_objective() -> Objective {
         retreats: BTreeSet::new(),
         clips: false,
         treasure_refused: false,
+        drops_first: false,
     }
 }
 

@@ -137,6 +137,7 @@ fn objective(next_rooms: &[MapLocation]) -> Objective {
         retreats: BTreeSet::new(),
         clips: false,
         treasure_refused: false,
+        drops_first: false,
     }
 }
 

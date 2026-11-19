@@ -132,6 +132,9 @@ pub struct Objective {
     /// The route step Link plays here refuses the room's treasure (routes.yaml `treasure: refuse`, Dungeon 5's 0x65
     /// westbound): taking it costs (the env critic's `penalty-refused-treasure`).
     pub treasure_refused: bool,
+    /// The route step Link plays here says `drops: first` (round 31, 6:0x78): the env treats it as the family's
+    /// `reward.drops_first` (`env::objective`).
+    pub drops_first: bool,
 }
 
 /// What Link holds on entering a route step: the triforce pieces earlier steps took (bit `level - 1`), the sword
@@ -1060,6 +1063,7 @@ impl GameCompletion {
             treasure_refused: self
                 .current_step(state.full_location())
                 .is_some_and(|s| s.treasure == crate::game_map::TreasureRule::Refuse),
+            drops_first: self.current_step(state.full_location()).is_some_and(|s| s.drops_first),
         }
     }
 
@@ -1073,6 +1077,7 @@ impl GameCompletion {
             retreats: BTreeSet::new(),
             clips: self.clips_effective(),
             treasure_refused: false,
+            drops_first: false,
         }
     }
 
@@ -2430,6 +2435,7 @@ mod tests {
             retreats: BTreeSet::new(),
             clips: false,
             treasure_refused: false,
+            drops_first: false,
         };
         for (row, correct) in [(3, true), (4, true), (15, false), (16, false)] {
             assert_eq!(
@@ -2465,8 +2471,8 @@ mod tests {
         assert_eq!(at(1, 0x36, false, "W"), (0b10, SwordKind::White));
     }
 
-    /// The bow from the cellar step on: 0x43 from W and 0x22 from E without it, 0x22 out of the cellar, 0x43 from N
-    /// and the triforce room with it.
+    /// The bow from the cellar step on: 0x43 from S (round 31; from W before) and 0x22 from E without it, 0x22 out of
+    /// the cellar, 0x43 from N and the triforce room with it.
     #[test]
     fn route_progress_takes_the_bow_in_the_cellar() {
         let map = GameMap::builtin();
@@ -2479,7 +2485,7 @@ mod tests {
                 .unwrap();
             progress[i].bow
         };
-        assert!(!bow(0x43, false, "W") && !bow(0x22, false, "E") && !bow(0x7f, true, "S"));
+        assert!(!bow(0x43, false, "S") && !bow(0x22, false, "E") && !bow(0x7f, true, "S"));
         assert!(bow(0x22, false, "cave") && bow(0x43, false, "N") && bow(0x36, false, "W"));
         assert!(progress[..steps.len() - 1].iter().zip(&progress[1..]).all(|(a, b)| a.bow <= b.bow));
     }
@@ -2650,9 +2656,9 @@ mod tests {
         assert_eq!(purchase_held(WAYPOINT_FOOD, &view), Some(false));
         assert_eq!(purchase_held(WAYPOINT_HEART, &view), None);
         let reserves = per_step(reserve_ways(steps, rupee_reserve_of));
-        assert_eq!((reserves[217], reserves[218], reserves[247]), (0, 2, 2));
+        assert_eq!((reserves[213], reserves[214], reserves[243]), (0, 2, 2));
         let bombs = per_step(reserve_ways(steps, bomb_reserve_of));
-        assert_eq!((bombs[227], bombs[228], bombs[240], bombs[246]), (0, 3, 2, 0));
+        assert_eq!((bombs[223], bombs[224], bombs[236], bombs[242]), (0, 3, 2, 0));
     }
 
     /// Round 26: while 0x42's pond is full its stairs tile lies in water no path reaches, so the objective's target

@@ -1,6 +1,10 @@
 """``triforce.heart_value``: V(step, hearts), the chance to reach the next triforce alive, fitted from chain runs."""
 
 import json
+import subprocess
+from pathlib import Path
+
+import pytest
 
 from triforce import heart_value
 
@@ -87,3 +91,58 @@ def test_records_without_the_clips_switch_are_refused(tmp_path):
         assert 'clips_allowed' in str(e)
     else:
         raise AssertionError("expected a refusal")
+
+
+def test_chains_of_an_older_route_are_read_onto_the_route_as_it_stands(tmp_path):
+    """Round 31: a step that left the route takes its visits with it; the steps after it keep theirs, renumbered."""
+    old = STEPS
+    new = [STEPS[0], _step(1, 0x21, 'N'), STEPS[2], STEPS[3]]           # 0x11 replaced by a room no chain played
+    assert heart_value.step_map(old, new) == {0: 0, 2: 2, 3: 3}
+    chain = tmp_path / 'chain.jsonl'
+    chain.write_text(''.join(json.dumps(r) + '\n' for r in _runs()))
+    before = heart_value.build_table(old, [str(chain)], 'toy')['steps']
+    rows = heart_value.build_table(new, [str(chain)], 'toy', measured_on=old)['steps']
+    assert rows[2:] == before[2:], "the steps after the change, with all their visits"
+    assert rows[1]['clips']['visits'] == 0 and rows[0]['clips']['values'] == rows[1]['clips']['values']
+    assert set(rows[1]['clips']['values'][1:]) == {1.0}, "no visit of the new room: it costs nothing yet"
+    # A step dropped from the middle of a longer route: the later ones shift down by one.
+    shorter = [STEPS[0], STEPS[2], STEPS[3]]
+    assert heart_value.step_map(old, shorter) == {0: 0, 2: 1, 3: 2}
+
+
+def test_the_table_keeps_the_rows_phase_ix_left_alone():
+    """Round 31 (phase IX): `heart_value.json` refitted on `d2first` from 1.9.0.0's sources measured on its route
+    (`--measured-on 536a2422`): every row whose step and the steps after it up to the next triforce (or the end) are
+    1.9.0.0's in the same order is 1.9.0.0's row, its step number shifted."""
+    root = Path(__file__).resolve().parent.parent
+    try:
+        text = subprocess.run(['git', 'show', '536a2422:triforce/heart_value.json'], check=True, capture_output=True,
+                              text=True, cwd=root).stdout
+        old_steps = heart_value.route_at('536a2422', 'd2first')
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pytest.skip("1.9.0.0 (536a2422) is not in this clone's history")
+    old_rows = json.loads(text)['steps']
+    rows = json.loads((root / 'triforce' / 'heart_value.json').read_text())['steps']
+    from triforce import _native
+    new_steps = _native.route_steps('d2first')
+    assert [r['room'] for r in rows] == [heart_value.room_key(s) for s in new_steps]
+    mapped = heart_value.step_map(old_steps, new_steps)
+
+    def ends(steps):
+        return [k for k, s in enumerate(steps) if s['exit'] == 'triforce' or k == len(steps) - 1]
+
+    def end_at(k, steps):
+        return next(e for e in ends(steps) if e >= k)
+
+    same = []
+    for j, k in mapped.items():
+        span = end_at(k, new_steps) - k
+        if end_at(j, old_steps) - j == span and all(mapped.get(j + i) == k + i for i in range(span + 1)):
+            same.append(k)
+            drop = ('step', 'visit')
+            assert {f: v for f, v in rows[k].items() if f not in drop} == \
+                {f: v for f, v in old_rows[j].items() if f not in drop}, f"step {k} (1.9.0.0's {j})"
+    # Dungeon 1 from 0x33 (the bow detour) to its triforce, Dungeon 3 to Dungeon 6's and 8's triforces, and level 9
+    # after 0x55: the steps and their rules that phase IX's rooms and sides do not reach.
+    assert {52, 63, 64, 100, 205, 262, 268, 276, 290, 292, 312, 353} <= set(same)
+    assert not {24, 45, 46, 47, 48, 49, 50, 51, 293, 309, 310, 311} & set(same)

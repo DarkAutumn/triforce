@@ -8,8 +8,9 @@
 #                      post-d3, d4, post-d4, d5, post-d5, d7, post-d7, d6, post-d6, d8, post-d8, d9)
 #   d2       2_7ds_0   0:0x3c (out of Dungeon 2, the post-d2 start)
 #   post-d2  0_3cc_0   1:0x73 (Dungeon 1's entrance)
-#   d1       1_73s_0   0:0x37 (out of Dungeon 1)
-#   post-d1  0_37c_0   3:0x7c (Dungeon 3's entrance)
+#   d1       1_73s_0   0:0x37 out of the D1 triforce, route step 64 (round 31: Dungeon 1 is left and entered again at
+#                      its entrance before; the step's number moves with the route)
+#   post-d1  0_37c_v2_0  3:0x7c (Dungeon 3's entrance; round 31: the second entry into 0:0x37 from its mouth)
 #   d3       3_7cs_0   0:0x74 (out of Dungeon 3)
 #   post-d3  0_74c_0   4:0x71 (Dungeon 4's entrance)
 #   d4       4_71s_0   0:0x45 (out of Dungeon 4: the triforce's warp, the post-d4 start)
@@ -29,13 +30,14 @@
 #
 # The route ended on the D5 triforce until round 26, on the D7 triforce in round 26, on the D6 triforce in round 27:
 # a full run to there is the milestone `full→post-d5` (`full→post-d7`, `full→post-d6`) of the report, or a chain of
-# its own, `triforce eval-chain --stop-at step:209 ...` (0:0x0b out of Dungeon 5; `step:248` is 0:0x42 out of Dungeon
-# 7, `step:281` 0:0x22 out of Dungeon 6, `step:297` 0:0x6d out of Dungeon 8). ROUTE=<route> measures another route
+# its own, `triforce eval-chain --stop-at step:205 ...` (0:0x0b out of Dungeon 5; `step:244` is 0:0x42 out of Dungeon
+# 7, `step:277` 0:0x22 out of Dungeon 6, `step:293` 0:0x6d out of Dungeon 8; round 31's numbers: four steps fewer
+# from Dungeon 1 on). ROUTE=<route> measures another route
 # (phase X: `ROUTE=d3first`; default the main route, `triforce/registry.py` MAIN_ROUTE) with its own segment table
 # (`triforce/eval_batch.py` ROUTE_SEGMENTS) and its promoted runs (a family's `promoted.<route>` over `promoted`);
 # SEGMENTS="NAME:START ..." replaces the table (a scouting route, `{extends: d2first, ...}`, names its own).
 # d3first's table (`eval_batch.D3FIRST_SEGMENTS`, its states in its namespace): full, d3 3_7cs_0, post-d3 0_74c_0,
-# d4 4_71s_0, post-d4 0_45c_0, d1 1_73s_0, post-d1 0_37c_0 (out of Dungeon 1), d5 5_76s_0, post-d5 0_0bc_0, d2
+# d4 4_71s_0, post-d4 0_45c_0, d1 1_73s_0, post-d1 0_37c_v2_0 (out of Dungeon 1), d5 5_76s_0, post-d5 0_0bc_0, d2
 # 2_7ds_0, post-d2 0_3cc_0, then d2first's from d7 on; each arrives at the next one's start room, a dungeon's exit
 # after its triforce room: `ROUTE=d3first TAG=r33-d3 scripts/experiments/r56_chains.sh`.
 #

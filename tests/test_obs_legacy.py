@@ -81,6 +81,38 @@ BOMB_RULE_CHANGES = {
         '5_65e_2.state': '759b1ad911d12582e94319e01e130047850f43514c82c8f782341e133cfac36a',
     },
 }
+# Traces round 31's route data (phase IX, the owner's changes of Nov 19, merged at r31-steps 3c88ad24) changed, with
+# their hashes on that data.  Each was compared key by key and step by step with main's code before phase IX (same
+# states, same seeds, same lengths; every step's columns dumped in each checkout): no column's computation changed,
+# only what the route now asks of the room.  `objective` and `target` (from the reset): ow-octorok `0_37c_0`,
+# `0_37c_1` (0:0x37 entered from its mouth is now Dungeon 1's trip out and back in, `exit: cave`) and
+# stalfos-keese-gel `1_73s_*` (0x73 from S now leaves S), `1_73w_*`, `1_72e_*`, `1_52e_*` (rooms off the route since
+# phase IX: the off-route objective);
+# `link` (its bomb columns, from the reset): `1_53s_1`, `1_53s_2` (0x53's N wall is `requires_bombs`); the mask at
+# step 4 of `1_63s_2` (0x63's S door is `keep_out` until the step that leaves N, and the draw parts there).
+PHASE_IX_CHANGES = {
+    'ow-octorok': {
+        '0_37c_0.state': '1d1d1392713334c8bcf3fe6ddfd286b14bb025888c38d09a03f1c7ad52944ee3',
+        '0_37c_1.state': 'cd7780ad23fd1a3ebffa8588f2a7637df650ce6cf59a039e813523f75f8af5a7',
+    },
+    'stalfos-keese-gel': {
+        '1_52e_0.state': 'fb4877186b50e33b2c1288328864dd69eeb9d47c9f8d6de094e75dcbd246918c',
+        '1_52e_1.state': 'cb3b1ae359fccbcaca4327c8da905e09ef6ff5e1de8982bb57aa57a234c4b091',
+        '1_52e_2.state': '76f92f1f67b5607a4eb7eeaa2853bd91d8e605f8edaa169cf9321408bdcc6d97',
+        '1_53s_1.state': 'a811ed7fd9ed23ffa7dcc3c5c64764c86ebd73392969485455627868f8378cfb',
+        '1_53s_2.state': '96874862dbd5767f3a7aab4e08a49d538273a3c21a26dcd321908e591bce7c03',
+        '1_63s_2.state': '72315660b6df8003b2a0f7c52607ec0abc25d0fc920b69b656ca40d9ac716a1f',
+        '1_72e_0.state': '874aa86f3f14b097cbc48fbe4e7900ac3dc1e3f1917d07f6561d8092a82bf53c',
+        '1_72e_1.state': 'c1bca978f31e88ecf2f74aae746d15407c5957c0ca47221215f46213a1dbad0f',
+        '1_72e_2.state': '91014861c3e18a99abed42ee518451bd780fdeeb7fb423a68f496869e8231851',
+        '1_73s_0.state': '1996d01bd97c97e49bffdbc188270745f4d3cbadf770d90720e2463eec56383a',
+        '1_73s_1.state': '34dfb815bbb52d57c524ba9e385b0a22922d28c853e68e9ba7a2189e9ff0d5e9',
+        '1_73s_2.state': '7529063886df9aae5815d1d6c12116684a4c6ce37fd89fce08e0e30cccd929a6',
+        '1_73w_0.state': 'e073ff99a94ccd1f358d4cf1ab1ce281da20c8f9fe5129de90822b92fa6e8fd7',
+        '1_73w_1.state': 'ef9cbd536e39eb3db0a50157ebbb35724a978740726000675485f56214aa4bf8',
+        '1_73w_2.state': 'a1bb43f9160b57a7982bc76c53eaabc61f81b2805af3ee64caa6e9fee10fd3a6',
+    },
+}
 # A trace's run-time clips switch is drawn at the family's `clips.off_share`, and with it whether CLIP is in the mask
 # its steps are drawn from.  The record was made at the shares of 1.5.0.0; the owner's decision of Nov 18 (no episode
 # with CLIP masked: `off_share: 0` as a family is next trained) changed these yamls, so their traces are played at
@@ -153,7 +185,7 @@ def test_schema5_columns_are_unchanged(name):
     if name not in golden['families']:
         pytest.skip(f"{name}: no schema 5 record (a family added after the record)")
     recorded = golden['families'][name]
-    changed = ROUTE_CHANGES.get(name, {}) | BOMB_RULE_CHANGES.get(name, {})
+    changed = ROUTE_CHANGES.get(name, {}) | BOMB_RULE_CHANGES.get(name, {}) | PHASE_IX_CHANGES.get(name, {})
     assert family_hashes(name, recorded) == recorded | changed
 
 

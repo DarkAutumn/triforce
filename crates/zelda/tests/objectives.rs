@@ -134,6 +134,7 @@ fn exit_spans_bound_targets_and_correct_exits() {
         retreats: Default::default(),
         clips: false,
         treasure_refused: false,
+        drops_first: false,
     };
     assert!(
         !exit_is_correct_at(&map, from, (31, 10), &objective, loc(0, 0x4b)),

@@ -5,7 +5,7 @@ The owner's second route (Nov 19; `docs/decisions.md` 2026-11-19 "Two routes"): 
 ending. The wood sword until the magic sword (no white sword); Dungeons 3, 4, 1, 5, 2, 7, the magic sword, 6, 8, 9.
 Walked in the emulator before it was written: `docs/routes/d3first-walks-a.md` (the start to Level 5's entrance) and
 `d3first-walks-b.md` (Level 5 to the ending), their scripts `scripts/experiments/r32_*.py` and `r32b_*.py`. Data:
-`triforce/routes.yaml` `d3first` (308 steps, phase IX not yet merged: see "Phase IX" below), rooms in
+`triforce/routes.yaml` `d3first` (304 steps since phase IX's merge: see "Phase IX" below), rooms in
 `triforce/game.yaml`; its start states are `d3first_<name>` (`states: d3first`, `docs/architecture.md` "Routes").
 
 ```bash
@@ -28,17 +28,17 @@ sets its own reserves on its own steps before a block, and a block's own reserve
 | `dungeon-3` | 13-23 | 3:0x59 from N to the triforce: 0x69, the raft cellar, back E by 0x5a, 0x5b's last pass, 0x5c, 0x4c, Manhandla, 0x3d |
 | `to-level-4` | 24-30 | 0:0x74 cave → W to 0x45's mouth (the raft from 0x55) |
 | `dungeon-4` | 31-52 | 4:0x71 to 0x03, the stretch `d4-island` |
-| `dungeon-1` | 61-82 | 1:0x73 to 0x36 (d2first's of today; phase IX's after the merge) |
-| `dungeon-5` | 101-123 | 5:0x76 to 0x14 |
-| `dungeon-2` | 149-158 | 2:0x7d to 0x0d |
-| `to-level-7` | 160-177 | 0:0x45 out of the whirlwind to 0x42's pond: the stretch `dock-44`, the arrows, the meat |
-| `dungeon-7` | 178-197 | 7:0x79 to 0x2b |
-| `to-level-6` | 198-214 | 0:0x42 to 0x22: the stretch `woods`, the graveyard, the magic sword (12 containers) |
-| `dungeon-6` | 215-230 | 6:0x79 to 0x0c |
-| `to-level-8` | 231-236 | 0:0x22 (two plays facing down) to 0x6d's burned tree |
-| `dungeon-8` | 237-246 | 8:0x7e to 0x2c |
-| `to-level-9` | 247-261 | 0:0x6d (one play facing down) to 0x05: 0x47's tree and heart (15), the ladder at 0x17 |
-| `dungeon-9` | 262-307 | 9:0x76 to Zelda's room (`exit: end`): the red ring, the silver arrow, Ganon |
+| `dungeon-1` | 61-78 | 1:0x73 out S to 0:0x37 and back in, N by 0x63, 0x53's wall, the bow, to 0x36 (phase IX's) |
+| `dungeon-5` | 97-119 | 5:0x76 to 0x14 |
+| `dungeon-2` | 145-154 | 2:0x7d to 0x0d |
+| `to-level-7` | 156-173 | 0:0x45 out of the whirlwind to 0x42's pond: the stretch `dock-44`, the arrows, the meat |
+| `dungeon-7` | 174-193 | 7:0x79 to 0x2b |
+| `to-level-6` | 194-210 | 0:0x42 to 0x22: the stretch `woods`, the graveyard, the magic sword (12 containers) |
+| `dungeon-6` | 211-226 | 6:0x79 to 0x0c |
+| `to-level-8` | 227-232 | 0:0x22 (two plays facing down) to 0x6d's burned tree |
+| `dungeon-8` | 233-242 | 8:0x7e to 0x2c |
+| `to-level-9` | 243-257 | 0:0x6d (one play facing down) to 0x05: 0x47's tree and heart (15), the ladder at 0x17 |
+| `dungeon-9` | 258-303 | 9:0x76 to Zelda's room (`exit: end`): the red ring, the silver arrow, Ganon |
 
 ## The route
 
@@ -72,37 +72,37 @@ Its own steps in full; the blocks by their rooms.
 | 58 | `0_48w` | 0:0x48 | W → N | ow-leever | | 5 / W |
 | 59 | `0_38s` | 0:0x38 | S → W | ow-zora | | 5 / W |
 | 60 | `0_37e` | 0:0x37 | E → cave | ow-octorok | Level 1 | 5 / W |
-| 61-82 | | `dungeon-1` | | (d2first's) | the bow, the boomerang, Aquamentus's heart, the piece | 5 → 6 / W |
-| 83 | `0_37c` | 0:0x37 | cave → E | ow-octorok | `bomb_reserve: 8` | 6 / W |
-| 84 | `0_38w` | 0:0x38 | W → N | ow-zora | | 6 / W |
-| 85 | `0_28s` | 0:0x28 | S → E | ow-zora | | 6 / W |
-| 86-88 | `0_29w`, `0_2aw`, `0_2bw` | 0:0x29, 0x2a, 0x2b | W → E | ow-leever | new rooms; each scrollable | 6 / W |
-| 89 | `0_2cw` | 0:0x2c | W → cave | ow-tektite | the heart rock's wall (one bomb facing N from (`$90`,`$A5`)) | 6 / W |
-| 90 | `0_2ccave` | 0:0x2c cave | S → S | ow-tektite | `waypoint: heart` (the right ware) | 6 / W |
-| 91 | `0_2cc` | 0:0x2c | cave → E | ow-tektite | | 7 / W |
-| 92 | `0_2dw` | 0:0x2d | W → cave | ow-zora | the rock wall (one bomb facing N from (`$50`,`$5D`); `bombs: required`) | 7 / W |
-| 93 | `0_2dcave` | 0:0x2d cave | S → S | ow-zora | `waypoint: rupees`: 30 | 7 / W |
-| 94 | `0_2dc` | 0:0x2d | cave → W | ow-zora | | 7 / W |
-| 95 | `0_2ce` | 0:0x2c | E → N | ow-tektite | | 7 / W |
-| 96 | `0_1cs` | 0:0x1c | S → N | ow-start | | 7 / W |
-| 97 | `0_0cs` | 0:0x0c | S → cave | ow-tektite | the shop's open mouth | 7 / W |
-| 98 | `0_0ccave` | 0:0x0c cave | S → S | ow-tektite | `waypoint: blue-candle` (60, `requires_rupees`) | 7 / W |
-| 99 | `0_0cc` | 0:0x0c | cave → W | ow-tektite | the wrap exit (CLIP E) onto the mountain top | 7 / W |
-| 100 | `0_0be` | 0:0x0b | E → cave | ow-leever | Level 5 | 7 / W |
-| 101-123 | | `dungeon-5` | | (d2first's) | the Olive Garden, the recorder, Digdogger's heart, the piece | 7 → 8 / W |
-| 124 | `0_0bc` | 0:0x0b | cave → recorder | ow-leever | one play facing right or up (MOVE E first) | 8 / W |
-| 125 | `0_74r` | 0:0x74 | recorder → W | ow-tektite | | 8 / W |
-| 126 | `0_73e_v2` | 0:0x73 | E → N | ow-moblin | | 8 / W |
-| 127 | `0_63s_v2` | 0:0x63 | S → W | ow-moblin | | 8 / W |
-| 128 | `0_62e` | 0:0x62 | E → cave | ow-moblin | the tree burned (the blue candle facing W from (`$A0`,`$5D`)) | 8 / W |
-| 129 | `0_62cave` | 0:0x62 cave | S → S | ow-moblin | `waypoint: rupees`: 100 | 8 / W |
-| 130 | `0_62c` | 0:0x62 | cave → N | ow-moblin | | 8 / W |
-| 131 | `0_52s` | 0:0x52 | S → W | ow-moblin | | 8 / W |
-| 132 | `0_51e` | 0:0x51 | E → W | ow-moblin | the wrap exit into 0x50 | 8 / W |
-| 133 | `0_50e` | 0:0x50 | E → S | ow-lynel | | 8 / W |
-| 134 | `0_60n` | 0:0x60 | N → W | ow-lynel | the wrap exit round the world into 0x5f | 8 / W |
-| 135 | `0_5fe` | 0:0x5f | E → N | ow-zora | the ladder clip, the ladder heart | 8 / W |
-| 136 | `0_4fs` | 0:0x4f | S → N | ow-zora | | 9 / W |
+| 61-78 | | `dungeon-1` | | (d2first's) | out S and back in (0:0x37 cave → cave), 0x53's key and N wall, the bow, Aquamentus's heart, the piece | 5 → 6 / W |
+| 79 | `0_37c_v2` | 0:0x37 | cave → E | ow-octorok | `bomb_reserve: 8` | 6 / W |
+| 80 | `0_38w` | 0:0x38 | W → N | ow-zora | | 6 / W |
+| 81 | `0_28s` | 0:0x28 | S → E | ow-zora | | 6 / W |
+| 82-84 | `0_29w`, `0_2aw`, `0_2bw` | 0:0x29, 0x2a, 0x2b | W → E | ow-leever | new rooms; each scrollable | 6 / W |
+| 85 | `0_2cw` | 0:0x2c | W → cave | ow-tektite | the heart rock's wall (one bomb facing N from (`$90`,`$A5`)) | 6 / W |
+| 86 | `0_2ccave` | 0:0x2c cave | S → S | ow-tektite | `waypoint: heart` (the right ware) | 6 / W |
+| 87 | `0_2cc` | 0:0x2c | cave → E | ow-tektite | | 7 / W |
+| 88 | `0_2dw` | 0:0x2d | W → cave | ow-zora | the rock wall (one bomb facing N from (`$50`,`$5D`); `bombs: required`) | 7 / W |
+| 89 | `0_2dcave` | 0:0x2d cave | S → S | ow-zora | `waypoint: rupees`: 30 | 7 / W |
+| 90 | `0_2dc` | 0:0x2d | cave → W | ow-zora | | 7 / W |
+| 91 | `0_2ce` | 0:0x2c | E → N | ow-tektite | | 7 / W |
+| 92 | `0_1cs` | 0:0x1c | S → N | ow-start | | 7 / W |
+| 93 | `0_0cs` | 0:0x0c | S → cave | ow-tektite | the shop's open mouth | 7 / W |
+| 94 | `0_0ccave` | 0:0x0c cave | S → S | ow-tektite | `waypoint: blue-candle` (60, `requires_rupees`) | 7 / W |
+| 95 | `0_0cc` | 0:0x0c | cave → W | ow-tektite | the wrap exit (CLIP E) onto the mountain top | 7 / W |
+| 96 | `0_0be` | 0:0x0b | E → cave | ow-leever | Level 5 | 7 / W |
+| 97-119 | | `dungeon-5` | | (d2first's) | the Olive Garden, the recorder, Digdogger's heart, the piece | 7 → 8 / W |
+| 120 | `0_0bc` | 0:0x0b | cave → recorder | ow-leever | one play facing right or up (MOVE E first) | 8 / W |
+| 121 | `0_74r` | 0:0x74 | recorder → W | ow-tektite | | 8 / W |
+| 122 | `0_73e_v2` | 0:0x73 | E → N | ow-moblin | | 8 / W |
+| 123 | `0_63s_v2` | 0:0x63 | S → W | ow-moblin | | 8 / W |
+| 124 | `0_62e` | 0:0x62 | E → cave | ow-moblin | the tree burned (the blue candle facing W from (`$A0`,`$5D`)) | 8 / W |
+| 125 | `0_62cave` | 0:0x62 cave | S → S | ow-moblin | `waypoint: rupees`: 100 | 8 / W |
+| 126 | `0_62c` | 0:0x62 | cave → N | ow-moblin | | 8 / W |
+| 127 | `0_52s` | 0:0x52 | S → W | ow-moblin | | 8 / W |
+| 128 | `0_51e` | 0:0x51 | E → W | ow-moblin | the wrap exit into 0x50 | 8 / W |
+| 129 | `0_50e` | 0:0x50 | E → S | ow-lynel | | 8 / W |
+| 130 | `0_60n` | 0:0x60 | N → W | ow-lynel | the wrap exit round the world into 0x5f | 8 / W |
+| 131 | `0_5fe` | 0:0x5f | E → N | ow-zora | the ladder clip, the ladder heart | 8 / W |
+| 132 | `0_4fs` | 0:0x4f | S → N | ow-zora | | 9 / W |
 | 137 | `0_3fs` | 0:0x3f | S → N | ow-zora | the raft | 9 / W |
 | 138 | `0_2fs` | 0:0x2f | S → cave | ow-start | | 9 / W |
 | 139 | `0_2fcave` | 0:0x2f cave | S → S | ow-start | `waypoint: heart` (the raft heart) | 9 / W |

@@ -1,6 +1,6 @@
 """What a heart is worth at every route step: V(step, hearts), fitted from chain runs, for the reward's heart terms.
 
-    python -m triforce.heart_value CHAIN.jsonl... [--route ROUTE] [--out triforce/heart_value.json]
+    python -m triforce.heart_value CHAIN.jsonl... [--route ROUTE] [--out triforce/heart_value.json] [--measured-on REV]
 
 V(k, h) is the chance that a run entering route step k's room with h hearts is alive when it takes the next
 triforce (which refills him): 0 at no hearts, non-decreasing in h, flat where nothing downstream can kill him before
@@ -32,13 +32,22 @@ those and the Dungeon 9 team's chains, rows 0-296 unchanged, pricing all three; 
 from the second team's ``post-d8`` and ``d9`` chains, which give the leg's steps their first visits; at 1.9.0.0
 ``d8`` and ``d9`` merged into ``d2first``, the table names ``d2first``, and the refit on it from the same 30 sources is
 byte-identical).
+
+Chains measured on an older form of the route (``--measured-on REV``: the git revision whose routes.yaml numbered
+their steps) are read onto the route as it stands: the two step lists are aligned on (room, entry, exit, way), and a
+visit of an old step that has no counterpart is left out (round 31, phase IX: Dungeon 1's key rooms and 9:0x65 left
+the route, its new steps have no visits yet; a step whose rules changed but not its room and sides, 6:0x29 now taking
+its key, keeps the visits of its old play until the new team's chains refit it).  A row whose step and every step
+after it up to the next triforce have their old counterparts in the same order comes out as before.
 """
 
 import argparse
 import collections
+import difflib
 import json
 import os
-from typing import Dict, Iterable, List, Optional
+import subprocess
+from typing import Dict, Iterable, List, Optional, Tuple
 
 from .events import write_json_atomic
 
@@ -51,6 +60,42 @@ WAYS = ('clips', 'plain')
 def room_key(step: dict) -> str:
     """'1:0x44', '0:0x77:cave' (``env::config::room_key``)."""
     return f"{step['level']}:0x{step['room']:02x}" + (':cave' if step['in_cave'] else '')
+
+
+def _identity(step: dict) -> Tuple[str, str, str, Optional[str]]:
+    """What aligns a step of an older route with one of the route as it stands."""
+    return room_key(step), step['entry'], step['exit'], step['way']
+
+
+def route_at(revision: str, route: str) -> List[dict]:
+    """The steps of ``route`` as triforce/routes.yaml at git ``revision`` numbered them (each with its ``level``,
+    ``room``, ``in_cave``, ``entry``, ``exit`` and ``way``; a ``stretch:`` block is its clip way's steps, then its
+    plain way's, as ``zelda::game_map`` numbers them)."""
+    import yaml  # pylint: disable=import-outside-toplevel
+    text = subprocess.run(['git', 'show', f'{revision}:triforce/routes.yaml'], check=True, capture_output=True,
+                          text=True, cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))).stdout
+    routes = yaml.safe_load(text)
+
+    def flat(name: str) -> List[dict]:
+        body = routes[name]
+        items = body if isinstance(body, list) else flat(body['extends']) + body['steps']
+        steps = []
+        for item in items:
+            if 'stretch' in item:
+                steps += [dict(s, way=way) for way in ('clips', 'plain') for s in item[way]]
+            else:
+                steps.append(dict(item, way=None))
+        return steps
+
+    return [{'level': s['level'], 'room': int(str(s['room']), 16), 'in_cave': bool(s.get('in_cave')),
+             'entry': s['entry'], 'exit': s['exit'], 'way': s['way']} for s in flat(route)]
+
+
+def step_map(old: List[dict], new: List[dict]) -> Dict[int, int]:
+    """Old step index -> the index of the same step (room, entry, exit, way) on ``new``, by the longest common
+    subsequence of the two lists; an old step with no counterpart is left out."""
+    matcher = difflib.SequenceMatcher(None, [_identity(s) for s in old], [_identity(s) for s in new], autojunk=False)
+    return {a + i: b + i for a, b, size in matcher.get_matching_blocks() for i in range(size)}
 
 
 def _damage_prior(visits: List[dict]):
@@ -144,8 +189,10 @@ def fit_way(steps: List[dict], visits: Dict[int, List[dict]], way: str,
     return table
 
 
-def read_visits(paths: Iterable[str]) -> Dict[str, Dict[int, List[dict]]]:
-    """way -> route step -> room records of the chain jsonl files (by each visit's run-time clips switch)."""
+def read_visits(paths: Iterable[str], steps_of: Optional[Dict[int, int]] = None) -> Dict[str, Dict[int, List[dict]]]:
+    """way -> route step -> room records of the chain jsonl files (by each visit's run-time clips switch).  With
+    ``steps_of`` (``step_map``: the chains' step -> the route's) each record is filed under its step on the route as
+    it stands, and a record of a step that is no longer on it is left out."""
     by_way: Dict[str, Dict[int, List[dict]]] = {way: collections.defaultdict(list) for way in WAYS}
     for path in paths:
         with open(path, encoding='utf-8') as file:
@@ -157,14 +204,18 @@ def read_visits(paths: Iterable[str]) -> Dict[str, Dict[int, List[dict]]]:
                         continue
                     if 'clips_allowed' not in room:
                         raise ValueError(f"{path}: room records without clips_allowed (round 22 on); refit from newer chains")
+                    step = room['step'] if steps_of is None else steps_of.get(room['step'])
+                    if step is None:
+                        continue
                     way = 'clips' if room['clips_allowed'] else 'plain'
-                    by_way[way][room['step']].append(room)
+                    by_way[way][step].append(room)
     return by_way
 
 
-def build_table(steps: List[dict], paths: List[str], route: str) -> dict:
-    """The table ``env::heart_value`` reads: per route step its identity (checked against the route) and V per way."""
-    visits = read_visits(paths)
+def build_table(steps: List[dict], paths: List[str], route: str, measured_on: Optional[List[dict]] = None) -> dict:
+    """The table ``env::heart_value`` reads: per route step its identity (checked against the route) and V per way.
+    ``measured_on``: the steps of the route the chains were measured on, when it is not ``steps`` (``route_at``)."""
+    visits = read_visits(paths, None if measured_on is None else step_map(measured_on, steps))
     seen: Dict[int, int] = {}
     for k in range(len(steps)):
         counts = collections.Counter(v['max_health'] for way in WAYS for v in visits[way].get(k, []))
@@ -193,13 +244,16 @@ def main(argv=None):
     parser.add_argument('--out', default=None,
                         help="default triforce/heart_value.json; a route with a start-state namespace NS (phase X) "
                              "triforce/heart_value.NS.json, the table its states' trainings read")
+    parser.add_argument('--measured-on', metavar='REV',
+                        help="the git revision whose routes.yaml numbered the chains' steps (default: the route as it is)")
     args = parser.parse_args(argv)
     from . import _native
     namespace = _native.route_namespace(args.route)
     if args.out is None:
         args.out = TABLE_PATH if namespace is None else f'{os.path.splitext(TABLE_PATH)[0]}.{namespace}.json'
     steps = _native.route_steps(args.route)
-    table = build_table(steps, args.chains, args.route)
+    measured_on = None if args.measured_on is None else route_at(args.measured_on, args.route)
+    table = build_table(steps, args.chains, args.route, measured_on)
     write_json_atomic(args.out, table, indent=1)
     for row in table['steps']:
         curves = []

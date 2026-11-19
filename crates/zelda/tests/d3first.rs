@@ -59,7 +59,7 @@ fn pieces(levels: &[u8]) -> u8 {
 fn the_route_runs_from_the_start_to_the_end_of_the_game() {
     let map = map();
     let steps = steps(&map);
-    assert_eq!(steps.len(), 308);
+    assert_eq!(steps.len(), 304);
     let (first, last) = (&steps[0], steps.last().unwrap());
     assert_eq!((first.level, first.room, first.entry.as_str(), first.exit.as_str()), (0, 0x77, "start", "cave"));
     assert_eq!((last.level, last.room, last.exit.as_str()), (9, 0x32, "end"));

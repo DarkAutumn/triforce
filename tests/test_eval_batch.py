@@ -260,7 +260,7 @@ def test_chains_tag_is_the_eighteen_segments_then_the_report(tmp_path):
     chains = [yardstick[i + 1] for i, arg in enumerate(yardstick) if arg == '--chain']
     assert chains[0] == f"full={tmp_path / 'r71-full.jsonl'}"          # d2 has no output yet: left out
     assert chains[-1].startswith('full→d9=') and chains[-1].endswith(
-        '@2:0x7d,0:0x3c,1:0x73,0:0x37,3:0x7c,0:0x74,4:0x71,0:0x45,5:0x76,5:0x14,0:0x0b,7:0x79,7:0x2b,0:0x42,6:0x79,'
+        '@2:0x7d,0:0x3c,1:0x73,step:64,3:0x7c,0:0x74,4:0x71,0:0x45,5:0x76,5:0x14,0:0x0b,7:0x79,7:0x2b,0:0x42,6:0x79,'
         '6:0x0c,0:0x22,8:0x7e,8:0x2c,0:0x6d,9:0x76')
     assert room_stats[-4:] == ['room-stats', 'r71', '--chains-dir', str(tmp_path)]
 
@@ -340,6 +340,29 @@ def test_arrival_and_headline_text():
                                      'chain_target': '0:0x74', 'chain_arrived': 388, 'chain_arrival_rate': 0.388,
                                      'wall_seconds': 259})
     assert text == 'arrivals 388/1000 = 38.8% at 0:0x74 · success 220/1000 = 22.0% · 4m 19s'
+
+
+def test_a_step_target_is_the_entry_into_that_route_step():
+    """Round 31: Dungeon 1 is left by its entrance before its triforce, so `d1` arrives at the step out of the
+    triforce (`step:64`), not at the first 0:0x37; a run stopped there (`--stop-at step:64`) ends on a milestone record,
+    which has no step of its own."""
+    def room(level, number, step, outcome='exit-correct'):
+        return {'level': level, 'room': number, 'in_cave': False, 'step': step, 'outcome': outcome}
+    trip = [room(1, '0x73', 46), room(0, '0x37', 47), room(1, '0x73', 48), room(1, '0x36', 63)]
+    played_on = {'result': 'failure', 'rooms': trip + [room(0, '0x37', 64), room(0, '0x38', 65)]}
+    assert eval_batch.arrival(played_on, 'step:64') is played_on['rooms'][4]
+    assert eval_batch.arrival(played_on, '0:0x37') is played_on['rooms'][1], "the trip's own 0:0x37"
+    stopped = {'result': 'success', 'reason': 'reached route step 64 (level 0, room 0x37)',
+               'rooms': trip + [room(0, '0x37', None, 'milestone')]}
+    assert eval_batch.arrival(stopped, 'step:64') is stopped['rooms'][4]
+    assert eval_batch.arrival({**stopped, 'reason': 'reached route step 640 (level 0, room 0x37)'}, 'step:64') is None
+    assert eval_batch.arrival(played_on, '1:0x73,step:64,0:0x38') is played_on['rooms'][5]
+    assert eval_batch.parse_target('1:0x73,step:64') == [(1, 0x73), ('step', 64)]
+    assert eval_batch.TARGETS['d1'] == 'step:64' and dict(eval_batch.MILESTONES)['post-d1'] == 'step:64'
+    from triforce import _native
+    steps = _native.route_steps('d2first')
+    out, before = steps[eval_batch.D1_EXIT_STEP], steps[eval_batch.D1_EXIT_STEP - 1]
+    assert (out['level'], out['room'], out['entry'], before['exit']) == (0, 0x37, 'cave', 'triforce')
 
 
 # ------------------------------------------------------------------------------------------------------ priority
