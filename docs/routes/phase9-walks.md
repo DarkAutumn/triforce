@@ -21,7 +21,7 @@ per route step by `r31_ledger.py`. Step numbers are `d2first`'s at v1.9.0.0.
 |---|---|---|
 | 1.1 | 1:0x73's N door | **Out S to 0:0x37 and straight back in: the N key door is open, 20 of 20, no key spent (0 keys or 3), and from that entry on it is open for good** (its door flag is saved: asm:Door_LayOut). 380 frames from the first Down to playing in 0x73 again, 0 hearts. Link must reach the scroll (the edge alone does nothing); an overworld scroll or a cave before coming back undoes it |
 | 1.2 | 1:0x53's N wall | A bomb wall in the ROM (level-1.md `$53` N "bomb") and in game.yaml (`bomb_walls: [N]`), but **no `requires_bombs`**: the path search does not pass it and no bomb is granted. One bomb opens it 79 frames after B from X `$68`-`$88` on Y `$5D` facing N, from X `$78` Y `$5D`-`$85` facing N, facing E from X `$60`/`$68`, facing W from `$88`/`$90` |
-| 1.3 | 1:0x43 from S | Scripted 20 of 20 at 0.50-0.85 hearts (Gels), 304-316 frames; today's models 0.44 hearts, 380 frames |
+| 1.3 | 1:0x43 from S | Scripted 20 of 20 at 0.50-0.85 hearts (Gels), 304-316 frames; today's models (300 runs) 0.42 hearts, 378 frames |
 | 1.4 | The new Dungeon 1 | **Today's models play it** on a scratch route (no retraining): 99, 97 and 94 of 100 from 4.5, 3.5 and 2.5 hearts (today's Dungeon 1 from such hearts: 98.3, 94.2, 91.8%), every loss in a room the change leaves alone; 0 cheated keys; 0x53 (fight, key, bomb) is the slow room: 1240 frames against 608 to its W door today |
 | 1.5 | Its keys | 3 in, 3 out, as today: the trick and the bomb save the two doors (0x73 N, 0x52 N) the two skipped keys (0x72, 0x74) paid for. Picked up: 0x53, 0x33, 0x23, 0x45; opened with a key: 0x33 N, 0x23 W, 0x43 E, 0x45 N |
 | 2 | The key ledger | **No cheated key anywhere, today or after phase IX.** Dungeon 6 out with 3 (0x29's key), Dungeon 8 out with 3 (0x4c's not taken), level 9 entered with 3 as today. The one zero is 9:0x63 W → 0x62 → 0x61's key, before no key door, as today. Without 0x29's key, skipping 0x4c's would leave 9:0x63 W cheated |
@@ -145,7 +145,7 @@ on Y `$8D`) stands in the column: up to Y `$9D`, round one side, up to `$7D`, ba
 |---|---|---|---|
 | W of the middle block | 20/20 | 0.85 (max 1.5), all Gel | 316 |
 | E of the middle block | 20/20 | 0.50 (max 2.0) | 304 |
-| today's models from S (scratch route, §1.4, chain 0) | 100/100 | 0.44 | 380 |
+| today's models from S (scratch route, §1.4, 300 runs) | 300/300 | 0.42 | 378 |
 | today: 0x43 W → N (step 55, models) | 1000/1000 | 0.04 | 303 |
 
 ### 1.4 The new Dungeon 1 played by today's models (scratch route)
