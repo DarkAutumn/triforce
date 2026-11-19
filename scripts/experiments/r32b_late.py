@@ -7,6 +7,7 @@ rounds 27, 28 and 29 are played again with what `d3first` holds there (`r32b_wal
                                                                 # before the grave; the sword at 12 and 11 containers
     python scripts/experiments/r32b_late.py d8leg [--seeds N]   # r28: the whirlwind out of 0x22 to 0x6d's tree
     python scripts/experiments/r32b_late.py d9leg [--seeds N]   # r29: the whirlwind out of 0x6d to 0x05's wall
+    python scripts/experiments/r32b_late.py ledger              # d2first states: rupees, bombs, keys at boundaries
 
 What differs from d2first there is written over the earlier walks' inventories: before the grave the wood sword
 (round 27's walks hold the white one), and the keys, bombs and rupees of `d3first`'s ledger (§7); the containers,
@@ -53,9 +54,26 @@ def d9leg(args):
     r29_route_leg.rooms(argparse.Namespace(seeds=args.seeds, guard=False))
 
 
+# d2first's start states at the boundaries of its segments (chains 0-2): their purses give each stretch's drops.
+LEDGER_STATES = ['2_7ds', '0_3cc', '1_73s', '0_37c', '3_7cs', '0_74c', '4_71s', '0_45c', '5_76s', '5_14s', '0_0bc',
+                 '7_79s', '7_2bw', '0_42c', '6_79s', '6_0cs', '0_22c', '8_7es', '8_2cs', '0_6dc', '9_76s']
+
+
+def ledger(args):
+    """Rupees, bombs and keys held in d2first's start states (as their chains left them), chains 0-2."""
+    from r26_walks import BOMBS, KEYS, RUPEES, Walk
+    for name in LEDGER_STATES:
+        row = []
+        for chain in range(3):
+            w = Walk()
+            w.game.load(f'{name}_{chain}', randomize_rng=False)
+            row.append((w.r(RUPEES), w.r(BOMBS), w.r(KEYS), w.max_hearts()))
+        print(f'{name}: (rupees, bombs, keys, containers) by chain {row}')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    parser.add_argument('what', choices=['grave', 'd8leg', 'd9leg'])
+    parser.add_argument('what', choices=['grave', 'd8leg', 'd9leg', 'ledger'])
     parser.add_argument('--seeds', type=int, default=20)
     args = parser.parse_args()
     globals()[args.what](args)

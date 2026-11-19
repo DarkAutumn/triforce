@@ -1,5 +1,5 @@
-"""Round 32's walks of Dungeon 5 with the wood sword (`d3first`: 8 containers on entry; docs/routes/d3first-walks-b.md
-§2): what a Blue Darknut takes, the Olive Garden's six by the scripted fight that exists (round 28's
+"""Round 32's walks of Dungeon 5 with the wood sword (`d3first`: 7 containers on entry, the 8th
+Digdogger's; docs/routes/d3first-walks-b.md §2): what a Blue Darknut takes, the Olive Garden's six by the scripted fight that exists (round 28's
 `r28_darknut.Fighter`: stab what stands in reach from the side or behind, step aside from what would touch, else to
 the nearest Darknut's flank) with the wood sword and the bombs the route brings, and Digdogger's small one.
 
@@ -8,7 +8,7 @@ the nearest Darknut's flank) with the wood sword and the bombs the route brings,
     python scripts/experiments/r32b_d5.py digdogger [--seeds N]  # 5:0x24: the recorder, the small one, wood/white
 
 Every trial loads d2first's own pre-entry state of the room (`5_05e_<c>`, `5_24e_<c>`, c = seed mod 3: natural spawns
-and randomness for the seed) and writes what `d3first` holds there: the sword, 8 heart containers (full unless a
+and randomness for the seed) and writes what `d3first` holds there: the sword, 7 heart containers (full unless a
 line says otherwise), the bombs of the line.  The rest of the inventory is d2first's (the recorder, keys)."""
 
 import argparse
@@ -24,7 +24,7 @@ BOMB_SLOT, RECORDER_SLOT = 1, 5
 BLAST = 0x13                                  # a bomb's ObjState while it blasts (asm:Bomb_CheckBombOrFireVsMonster)
 
 
-def room(name: str, seed: int, sword: int, hearts: float = 8.0, containers: int = 8, bombs: int = 0):
+def room(name: str, seed: int, sword: int, hearts: float = 7.0, containers: int = 7, bombs: int = 0):
     w = load(f'{name}_{seed % 3}', seed)
     w.wait_play()
     w.game.write(INV_SWORD, sword)
@@ -138,8 +138,8 @@ class BombFighter(Fighter):
 def garden(args):
     for sword, label in ((1, 'wood'), (2, 'white')):
         for bombs in args.bombs:
-            for hearts in (8.0, 6.0):
-                if sword == 2 and (hearts != 8.0 or bombs not in (0, 8)):
+            for hearts in (7.0, 5.0):
+                if sword == 2 and (hearts != 7.0 or bombs not in (0, 8)):
                     continue
                 rows, ends, laid, frames, left, split = [], collections.Counter(), [], [], [], []
                 for seed in range(args.seeds):
@@ -158,7 +158,7 @@ def garden(args):
                     split.append((f.sword_hp, f.blast_hp))
                 sw = sum(s for s, _ in split)
                 bl = sum(b for _, b in split)
-                print(f'5:0x05, {label} sword, {bombs} bombs, from {hearts} of 8 hearts: {summary(rows)}; ended '
+                print(f'5:0x05, {label} sword, {bombs} bombs, from {hearts} of 7 hearts: {summary(rows)}; ended '
                       f'{dict(ends)}; bombs used mean {statistics.mean(laid):.1f}; Darknut HP nibbles taken by the '
                       f'sword {sw}, by blasts {bl}; hearts left (cleared) mean '
                       f'{statistics.mean(left) if left else 0:.2f}')
@@ -171,7 +171,7 @@ class DigFighter(BombFighter):
 
 def digdogger(args):
     for sword, label, bombs in ((1, 'wood', 0), (1, 'wood', 4), (2, 'white', 0)):
-        for hearts in (8.0, 5.0):
+        for hearts in (7.0, 4.0):
             rows, ends, swings, killed_at = [], collections.Counter(), [], []
             for seed in range(args.seeds):
                 w = room('5_24e', seed, sword, hearts=hearts, bombs=bombs)
@@ -187,7 +187,7 @@ def digdogger(args):
                 ends[end] += 1
                 swings.append(f.swings)
                 killed_at.append(f.bombs_laid)
-            print(f'5:0x24, {label} sword, {bombs} bombs, from {hearts} of 8 hearts: recorder, then the small one: '
+            print(f'5:0x24, {label} sword, {bombs} bombs, from {hearts} of 7 hearts: recorder, then the small one: '
                   f'{summary(rows)}; ended {dict(ends)}; swings mean {statistics.mean(swings):.1f}; bombs used mean '
                   f'{statistics.mean(killed_at):.1f}')
 
