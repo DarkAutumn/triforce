@@ -11,8 +11,9 @@ rules, chain tooling and the baseline (§1-11), the first team and the levers on
 `main` into one team and its chains of record (§14). **The round's main risk is in §3: the survival budget of the
 stretch does not close on the best plays seen.** The baseline was zero (§11): of 100 runs a segment by round 26's
 models none reaches Dungeon 6 from Dungeon 7's exit (ow-lynel loses every run in 0x50) and none reaches its
-triforce from its entrance. The trained team takes Dungeon 6 in 30.0% of 1000 runs; **the landing is held for
-ow-lynel** (§14.4).
+triforce from its entrance. The trained team takes Dungeon 6 in 30.0% of 1000 runs; with ow-lynel's joint
+continuation `r27l-lynel-s81` the full route holds `main`'s rates to the D7 triforce and **the stretch is landed**
+(§14.4).
 
 ## Summary
 
@@ -42,8 +43,10 @@ ow-lynel** (§14.4).
   and `main`. Chains of record `r77-1k`: `d6` **30.0%**, `post-d7` 14.4% (99.0% reach Dungeon 6), every earlier
   segment within noise of `main`'s but after Dungeon 2, 90.1% against 95.7% (−5.6 ± 1.2: ow-lynel `r77-b` in 0:0x0a);
   the full route (300) the D5 triforce 14.3% against 27.0% on the same seeds, the D6 triforce 0.3%. The planner
-  beside: `d6` 67.3%, the full route 37.7%. **Held for ow-lynel**: a joint continuation is training, and the
-  stretch lands when the full route's D5 and D7 triforce rates are within noise of `main`'s.
+  beside: `d6` 67.3%, the full route 37.7%. Held for ow-lynel, then **landed** (Nov 18-19) with its joint
+  continuation `r27l-lynel-s81` (`r77b-1k`): after Dungeon 2 94.0% (−1.7 ± 1.0 against `r76-1k`), and the full
+  route of 1000 runs on `r76-1k-full`'s seeds the D5 triforce **23.3% against 22.4%** (+0.9 ± 1.9), the D7 triforce
+  **6.1% against 6.7%** (−0.6 ± 1.1), the D6 triforce 1.1%.
 - **Not done**: the proof trainings' result, the staged tracks of 0x38 and 0x3a (§8, §10 say where each stands),
   starts at the hearts runs bring (`chain_hp`) and a lower `room_kills_share` for wizzrobe (§13.6).
 
@@ -924,16 +927,17 @@ fixed on `main` since, the promoted reference pinned when a selection starts), s
 (it001426 25.5%, it001456 23.2%, it001306 29.2%, it001456 27.0% against the promoted run's 29.0%) are unconfirmed.
 `chain_hp` and a lower `room_kills_share` were not started.
 
-## 14. One team from two lanes, and the chains of record (`r77-1k`): held for ow-lynel
+## 14. One team from two lanes, and the chains of record (`r77-1k`, `r77b-1k`)
 
 **Summary.** `d6` merged into `d2first` (steps 248-280; the scouting route `d6` is gone, `triforce/heart_value.json`
 refit under `d2first` from the same 26 sources came out byte-identical; decisions 2026-11-18), version 1.7.0.0, and
 one team from this lane and `main`'s round 26. Dungeon 6 holds the owner's working rate (`d6` 30.0% of 1000 runs).
-**The landing is held** (the lead, Nov 18): the lane's ow-lynel `r77-b`, the only model that plays 0x50, loses the
-stretch after Dungeon 2 (−5.6 ± 1.2 on its segment), and on the full route that costs half of the runs that reach
-the D5 triforce (14.3% against `main`'s 27.0% on the same 300 seeds). The landing waits for the joint ow-lynel
-continuation (0:0x0a and the leg's 0x50, 0x60, 0x32, 0x22 together), then the stretches ow-lynel plays are measured
-again.
+The landing was held (the lead, Nov 18): the lane's ow-lynel `r77-b`, the only model that played 0x50, lost the
+stretch after Dungeon 2 (−5.6 ± 1.2 on its segment), and on the full route that cost half of the runs that reach
+the D5 triforce (14.3% against `main`'s 27.0% on the same 300 seeds). The joint ow-lynel continuation
+`r27l-lynel-s81` (0:0x0a with the leg's 0x50, 0x60, 0x32 and 0x22) took its place; with it (`r77b-1k`) every
+stretch ow-lynel plays is within noise of the reference and the full route of 1000 runs takes the D5 triforce in
+23.3% and the D7 triforce in 6.1% against `main`'s 22.4% and 6.7% on the same seeds: **landed** (§14.4).
 
 ### 14.1 The merged team
 
@@ -946,7 +950,7 @@ each family takes the side that changed it (same-id runs are byte-identical on b
 | wizzrobe (new) | `r80-wplan-s78` | this lane | `d6` 31.8% on fresh seeds (§13.6) |
 | ow-ghini (new) | `r77-ghini` | this lane | the graveyard and the sword cave |
 | boss-gohma (new) | `r77-gohma` | this lane | Gohma |
-| ow-lynel | `r77-b` | this lane | the only run that plays 0x50 (`main`'s `r74-lynel`: 0 of 100 there, §11); loses 0:0x0a (§14.4) |
+| ow-lynel | `r27l-lynel-s81` | the joint continuation (§14.4) | plays 0x50 and 0:0x0a (`r77-b`, this lane's first, lost 0x0a; `main`'s `r74-lynel`: 0 of 100 in 0x50, §11) |
 | ow-moblin, like-like, stalfos-keese-gel, trap-room, vire, zol | `r77-b` | this lane (ow-moblin from `main`'s `r76-b`) | the stretch's rooms (§13) |
 | goriya | `r76-goriya4-s78` | `main` | Dungeon 7 (round26.md §16) |
 | ow-zora | `r76-zora-arrows` | `main` | the arrow shop (round26.md §16; its 75 harvested states copied, untracked) |
@@ -955,7 +959,7 @@ each family takes the side that changed it (same-id runs are byte-identical on b
 | equipment-room | `r76-c` | `main` | also plays 6:0x08: 99.9% of 2700 single-room episodes (−0.12 hearts) against this lane's `r75-f-c` 99.5% (−0.14), 300 of 300 both in 6:0x08 |
 | the other 14 | unchanged | both | |
 
-### 14.2 The chains of record (`r77-1k`)
+### 14.2 The chains of record (`r77-1k`, `r77b-1k`)
 
 1000 runs a segment, seeds 0-999, clips on, models alone (`--act model`), each earlier segment stopped at its
 arrival (`--stop-at`; `d5` at `step:209`), `post-d7` and `d6` to the route's end; the full route 300 runs. The
@@ -981,20 +985,41 @@ runs on the merged code (`--stop-at step:248`) match `r76-1k-d7` run for run (30
 `post-d7` and `d6` play the same as `r80-1k` up to 6:0x08, where equipment-room differs; the random numbers part
 there, and the rest (0x2c 81 deaths against 67 in `d6`, 55 against 48 in `post-d7`) is the runs drawn after it.
 
-**The full route** (300 runs, seeds 0-299), paired with `r76-1k-full` on the same seeds:
+With ow-lynel `r27l-lynel-s81` (§14.4) the segments ow-lynel plays were run again (`r77b-1k`, the same seeds and
+settings; nothing else changed, so the other rows stand): after Dungeon 2 and the leg paired with `r76-1k`,
+`post-d7` with `r77-1k`.
 
-| milestone | `r77-1k` | `r76-1k` | paired difference |
-|---|---:|---:|---:|
-| Dungeon 2 entered | 100.0% | 99.0% | +1.0 ± 0.6 |
-| Dungeon 2 left | 77.3% | 79.3% | −2.0 ± 3.3 |
-| Dungeon 1 entered | 70.0% | 76.0% | −6.0 ± 3.5 |
-| Dungeon 1 left, Dungeon 3 entered | 54.7% | 67.0% | **−12.3 ± 3.8** |
-| Dungeon 3 left, Dungeon 4 entered | 39.7% | 52.7% | −13.0 ± 4.0 |
-| Dungeon 4 left, Dungeon 5 entered | 35.3% | 46.0% | −10.7 ± 4.0 |
-| **the D5 triforce** | **14.3%** | **27.0%** | **−12.7 ± 3.3** |
-| Dungeon 7 entered | 14.3% | 25.7% | −11.3 ± 3.2 |
-| the D7 triforce, Dungeon 6 entered | 3.0% | | |
-| **the D6 triforce** | **0.3%** (1 run) | | |
+| segment | arrival | `r77b-1k` | reference | paired difference | hearts on arriving (ref.) |
+|---|---|---:|---:|---:|---:|
+| **after Dungeon 2** (`--from 0_3cc_0`) | 1:0x73 | **94.0%** | 95.7% | **−1.7 ± 1.0** | 3.19 (3.22) |
+| after Dungeon 4, the leg | 5:0x76 | 100.0% | 99.9% | +0.1 ± 0.1 | 7.96 (7.75) |
+| `post-d7` (`--from 0_42c_0`) | 6:0x79 | 99.7% | 99.0% | +0.7 ± 0.3 | 10.72 (10.31) |
+| **`post-d7`** | **the D6 triforce** | **12.9%** | 14.4% | −1.5 ± 1.5 | |
+
+After Dungeon 2, 0:0x0a kills 25 runs (`r74-lynel` 13, `r77-b` 39), 0x1a 15 and 0x27 15 (9 and 12); on `post-d7`
+0x32 kills 1 run against `r77-b`'s 7 and costs 0.89 hearts a visit, and Dungeon 6 is entered with 0.4 hearts more;
+its rooms then lose what they lost before (0x3a 398 deaths, 0x38 224).
+
+**The full route** (1000 runs, seeds 0-999, `r77b-1k`), paired with `r76-1k-full` on the same seeds (`main`'s round
+26 route ended on the D7 triforce); the first team's 300 runs (`r77-1k`, ow-lynel `r77-b`) beside:
+
+| milestone | `r77b-1k` | `r76-1k` | paired difference | `r77-1k` (300) | `r76-1k` (300) |
+|---|---:|---:|---:|---:|---:|
+| Dungeon 2 entered | 99.9% | 99.6% | +0.3 ± 0.2 | 100.0% | 99.0% |
+| Dungeon 2 left | 80.9% | 79.2% | +1.7 ± 1.7 | 77.3% | 79.3% |
+| Dungeon 1 entered | 75.5% | 75.1% | +0.4 ± 1.9 | 70.0% | 76.0% |
+| Dungeon 1 left, Dungeon 3 entered | 64.2% | 64.6% | −0.4 ± 2.1 | 54.7% | 67.0% |
+| Dungeon 3 left, Dungeon 4 entered | 50.1% | 49.6% | +0.5 ± 2.2 | 39.7% | 52.7% |
+| Dungeon 4 left, Dungeon 5 entered | 43.5% | 44.0% | −0.5 ± 2.2 | 35.3% | 46.0% |
+| **the D5 triforce** | **23.3%** | **22.4%** | **+0.9 ± 1.9** | 14.3% | 27.0% |
+| Dungeon 7 entered | 22.8% | 21.9% | +0.9 ± 1.9 | 14.3% | 25.7% |
+| **the D7 triforce** | **6.1%** | **6.7%** | **−0.6 ± 1.1** | 3.0% | 7.3% |
+| Dungeon 6 entered | 6.0% | | | 3.0% | |
+| **the D6 triforce** | **1.1%** (11 runs) | | | 0.3% (1 run) | |
+
+The full route's killers are `main`'s (3:0x4d Manhandla 89 against 96, 5:0x05 80 against 104, 7:0x1b 74 against
+61, Dungeon 2's two Goriya rooms 135 against 151); 0:0x0a kills 15 against 14, and ow-lynel's leg rooms (0x50,
+0x60) none.
 
 ### 14.3 Where `d6` and `post-d7` lose their runs
 
@@ -1030,7 +1055,7 @@ Dungeon 6 and 43.7% its triforce; `d6` 67.3% (0x38 entered with 11.5 hearts kill
 the D7 triforce 77.0%, Dungeon 6 entered 76.0%; `main`'s `r76-plan` 91.0% and 85.0%). It cheats 9 bombs in 0x28 in
 300 `d6` runs.
 
-### 14.4 After Dungeon 2: ow-lynel, and the landing held
+### 14.4 After Dungeon 2: ow-lynel, the landing held, then landed
 
 The stretch from Dungeon 2's exit to Dungeon 1 lost 5.6 ± 1.2 points, all on the overworld rooms before Dungeon 1
 (every visit of 1000 runs, 0x0a and 0x1a are crossed twice; `r77-1k` against `r76-1k`):
@@ -1049,11 +1074,32 @@ the D5 triforce where `main` takes 81.
 
 **Held for ow-lynel** (the lead, Nov 18). Landing the stretch at this price was the first plan, as round 26 landed
 with Dungeon 2's goriya loss; the paired full route changed it: halving the runs that reach the D5 triforce is not
-a price for a stretch the full route finishes in 1 of 300, and the owner watches runs from the start. A joint
-ow-lynel continuation (0:0x0a with the leg's 0x50, 0x60, 0x32 and 0x22) is training; with it, the stretches
-ow-lynel plays are measured again (after Dungeon 2 and the leg to Dungeon 5 paired with `r76-1k`, `post-d7`, the
-full route at 1000 runs paired with `r76-1k-full`), and the stretch lands when the full route's D5 and D7 triforce
-rates are within noise of `main`'s.
+a price for a stretch the full route finishes in 1 of 300, and the owner watches runs from the start. The stretch
+was to land when a joint ow-lynel continuation (0:0x0a with the leg's 0x50, 0x60, 0x32 and 0x22) brought the full
+route's D5 and D7 triforce rates within noise of `main`'s.
+
+**The joint continuation** (the ow-lynel lane, its own round27.md §14 on its branch). The cause: the many-Lynel
+rooms of the later legs (0x50 from 0 to 99.8%) taught ow-lynel to walk through Lynel fire, faster and hit more,
+and 0x0a's two fought entries fell from 6 of 15 start states (`r74-lynel`) to 6 of 42 (`r79t5-lynel`, the lineage
+that also holds the whirlwind and the rock wall of the later lanes), so nothing pulled 0x0a back. Three seeds from
+`r79t5-lynel`, 244 iterations, `--sil-coeff 0.1`, the lineage's demonstrations plus `r74-lynel`'s own clean runs of
+0x0a (11,758 rows, `r27_plan_demos.py --act`), and 300 handoffs into 0x0a from S harvested from a `post-d2` chain
+as starts at `harvested_fraction: 0.2`. Judged after Dungeon 2 in a models directory holding this landing team
+(`select-checkpoint`, screen seeds 2000-2999, confirmation 3000-3999): `r27l-lynel-s81`'s last checkpoint 94.5%
+reach Dungeon 1 with 3.17 hearts against `r74-lynel`'s 95.3% and 3.20 (−0.8 ± 0.9), the two other seeds 92.1-92.8%;
+every later stretch it plays at least as well as `r79t5-lynel` (the leg to Dungeon 5 1000 of 1000, `post-d7` 991
+against 989 to 6:0x79). The harvested share fixed 0x0a's first visit; its second (out of the cave with the white
+sword) is still the weaker (0.21 hearts a visit against 0.13; the next lever, `scripts/experiments/r27_lynel_states.py`,
+is written on that branch and untrained). The run was trained under 1.5.1.0 and stamped 1.7.0.0 here (`triforce
+stamp --force`; nothing a loaded model reads changed). Its training-only changes (`specialists/ow-lynel.yaml`
+`harvested_fraction: 0.2`, the demos script's `--act`) stay on its branch for the later integration: the script
+conflicts with this branch's, and playing the run needs neither. The harvested 0x0a handoffs are not in git.
+
+**Landed** (Nov 19, `r77b-1k`, §14.2): after Dungeon 2 94.0% against `r76-1k`'s 95.7% (−1.7 ± 1.0), the leg to
+Dungeon 5 1000 of 1000, `post-d7` 99.7% to Dungeon 6 and 12.9% to its triforce (`r77-1k` 99.0%, 14.4%); the full
+route of 1000 runs takes the D5 triforce in 23.3% and the D7 triforce in 6.1% against `main`'s 22.4% and 6.7% on
+the same seeds (+0.9 ± 1.9, −0.6 ± 1.1), and the D6 triforce in 1.1%. `d6` was not rerun: ow-lynel plays none of
+its rooms, and `r77-1k-d6` stays its record.
 
 **The merged code** is checked: the five suites green, and 300 `d6` runs (seeds 0-299) on the final code with the
 team stamped 1.7.0.0 identical run for run to `r77-1k-d6`.

@@ -2787,7 +2787,7 @@ route, as round 26 merged `d7`.
 - **`heart_value.json`** is refit under `d2first` from the same 26 chain files; the table came out byte-identical
   to the one composed from `d2first`'s rows 0-247 and `d6`'s 248-280 (round27.md §13.2).
 
-## 2026-11-19 — One team from two lanes; the landing held for ow-lynel (round 27)
+## 2026-11-19 — One team from two lanes; the landing held for ow-lynel, then landed (round 27)
 
 - **One team:** no family changed on both `main` (round 26) and the Dungeon 6 lane from different bases, so each
   family takes the side that changed it: wizzrobe `r80-wplan-s78`, ow-ghini `r77-ghini`, boss-gohma `r77-gohma` and
@@ -2805,6 +2805,13 @@ route, as round 26 merged `d7`.
   plays are measured again (after Dungeon 2 and the leg to Dungeon 5 paired with `r76-1k`, `post-d7`, the full
   route at 1000 runs paired with `r76-1k-full`) and the full route's D5 and D7 triforce rates are within noise of
   `main`'s.
+- **Landed** (Nov 19) with the joint continuation `r27l-lynel-s81` (from `r79t5-lynel`, 0x0a's harvested handoffs at
+  `harvested_fraction: 0.2` and `r74-lynel`'s clean 0x0a runs as demonstrations; round27.md §14.4), stamped 1.7.0.0.
+  `r77b-1k`: after Dungeon 2 94.0% (−1.7 ± 1.0 against `r76-1k`), the leg to Dungeon 5 1000 of 1000, `post-d7` 99.7%
+  to Dungeon 6 and 12.9% to its triforce; the full route of 1000 runs, paired with `r76-1k-full`, the D5 triforce
+  23.3% against 22.4% (+0.9 ± 1.9) and the D7 triforce 6.1% against 6.7% (−0.6 ± 1.1): within noise, so the gate
+  is met. The D6 triforce 1.1% from the start. The run's training-only yaml and script changes stay on the ow-lynel
+  lane's branch for the later integration.
 
 ## 2026-11-19 — 1.7.0.0: seven dungeons (round 27)
 

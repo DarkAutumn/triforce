@@ -6,7 +6,7 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
 
 ## Where things stand (Nov 19)
 
-- **Round 27, trained and merged, held for ow-lynel (Nov 16-19, 1.7.0.0; `docs/experiments/round27.md`, the
+- **Round 27, landed (Nov 16-19, 1.7.0.0; `docs/experiments/round27.md`, the
   stretch `docs/routes/d6.md` §14-15):** the magic sword and Dungeon 6. **`d2first` has 281 steps and ends on the
   D6 triforce** (steps 248-280: out of 0:0x42, the wrap exit of 0x51 or the Lost Woods, 0x50, the graveyard,
   0x21's gravestone and the magic sword cave, 0x32 and 0x22, Dungeon 6 with 0x38's and 0x3a's blocks, 0x28's bomb
@@ -16,19 +16,19 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   states, three scripted rules (`r27_d6_rules.py`), `heart_value.json` refit to step 280, the segments `post-d7`
   (`0_42c_0`) and `d6` (`6_79s_0`). New families ow-ghini, wizzrobe, boss-gohma (31 in all). **One team from two
   lanes** (round27.md §14.1): wizzrobe `r80-wplan-s78` (priced by the heart value, trained longer, and taught by the
-  honest planner's play of 0x38 and 0x3a), ow-ghini `r77-ghini`, boss-gohma `r77-gohma`, `r77-b` for ow-lynel,
-  ow-moblin, like-like, stalfos-keese-gel, trap-room, vire and zol; round 26's goriya, ow-zora, wallmaster,
-  dodongo-crossing and equipment-room. Chains of record `r77-1k` (1000 runs a segment, models alone, clips on;
-  `r76-1k` in brackets): after D2 **90.1 (95.7; −5.6 ± 1.2)**, D1 98.7 (99.0), after D1 100, D3 78.6 (78.2), after
-  D3 100, D4 91.1 (92.1), the leg 100 (99.9), D5 69.1 (68.7), `post-d5` 98.7, `post-d7` 99.0% reach Dungeon 6 and
-  14.4% its triforce, **`d6` 30.0%** (killers 6:0x3a 376 of 824 entered with 6.1 hearts, 0x38 128, 0x2c 81, Gohma
-  32); the full route (300) the D5 triforce **14.3% against 27.0%** on the same seeds, the D7 triforce 3.0%, the D6
-  triforce 0.3%. The planner beside: `d6` 67.3%, `post-d7` 43.7%, the full route 37.7%. **Held, not on `main`**:
-  ow-lynel `r77-b` (the only run that plays the leg's 0x50) loses 0:0x0a after Dungeon 2 (39 deaths against 13),
-  which halves the full route's D5 triforce; a joint ow-lynel continuation (0x0a with 0x50, 0x60, 0x32, 0x22) is
-  training, and the stretch lands when the full route's D5 and D7 triforce rates are within noise of `main`'s
-  (decisions 2026-11-19). **Next:** that continuation and the landing, then Dungeon 6's 0x38 and 0x3a at the hearts
-  runs bring, Dungeons 8 and 9 in their lanes.
+  honest planner's play of 0x38 and 0x3a), ow-ghini `r77-ghini`, boss-gohma `r77-gohma`, ow-lynel `r27l-lynel-s81`
+  (a joint continuation that plays 0:0x0a after Dungeon 2 and the leg's 0x50, 0x60, 0x32, 0x22; round27.md §14.4),
+  `r77-b` for ow-moblin, like-like, stalfos-keese-gel, trap-room, vire and zol; round 26's goriya, ow-zora,
+  wallmaster, dodongo-crossing and equipment-room. Chains of record `r77-1k` and, for the stretches ow-lynel plays,
+  `r77b-1k` (1000 runs a segment, models alone, clips on; `r76-1k` in brackets): after D2 94.0 (95.7; −1.7 ± 1.0),
+  D1 98.7 (99.0), after D1 100, D3 78.6 (78.2), after D3 100, D4 91.1 (92.1), the leg 100 (99.9), D5 69.1 (68.7),
+  `post-d5` 98.7, `post-d7` 99.7% reach Dungeon 6 and 12.9% its triforce, **`d6` 30.0%** (killers 6:0x3a 376 of
+  824 entered with 6.1 hearts, 0x38 128, 0x2c 81, Gohma 32); the full route (1000, paired with `r76-1k-full`) Dungeon
+  1 left 64.2% (64.6), the D5 triforce **23.3% (22.4; +0.9 ± 1.9)**, Dungeon 7 entered 22.8% (21.9), the D7
+  triforce **6.1% (6.7; −0.6 ± 1.1)**, **the D6 triforce 1.1%**. The planner beside: `d6` 67.3%, `post-d7` 43.7%,
+  the full route 37.7%. The landing was first held for ow-lynel (`r77-b` lost 0:0x0a: the full route's D5
+  triforce 14.3% against 27.0% of 300 paired runs; decisions 2026-11-19). **Next:** Dungeon 6's 0x38 and 0x3a at
+  the hearts runs bring, 0x0a's second visit (backlog), Dungeons 8 and 9 in their lanes.
 - **Round 26, landed (Nov 16-18, 1.6.0.0; `docs/experiments/round26.md`; the plan for the rest of the game:
   `docs/routes/rest-of-game.md`):** the leg from Dungeon 5 to Dungeon 7 and Dungeon 7. **`d2first` has 248 steps
   and ends on the D7 triforce** (steps 209-247: 0x0b's recorder and the whirlwind to 0x45, 0x44's arrows, 0x34's
