@@ -36,16 +36,16 @@ fn trap_tiles(state: &GameView) -> Vec<Tile> {
 
 /// Whether the dropped item `id` is a PBRS target under `reward` with Link at `state`'s health:
 /// `nearby_items` takes hearts and clocks; `item_targets` every dropped item, hearts and fairies only below max
-/// health (and with `drops_first`, bombs only below the bomb maximum); `heal_targets` hearts and fairies alone,
-/// below max health. The room's own treasure is never one (it is
+/// health (and with `drops_first`, the family's or the route step's: [`drops_first`], bombs only below the bomb
+/// maximum); `heal_targets` hearts and fairies alone, below max health. The room's own treasure is never one (it is
 /// the objective's business), nor a clock while a Wallmaster lives ([`clock_is_a_trap`]).
-fn is_item_target(reward: &RewardConfig, state: &GameView, id: i16) -> bool {
+fn is_item_target(reward: &RewardConfig, drops_first: bool, state: &GameView, id: i16) -> bool {
     if id < 0 || clock_is_a_trap(state, id) {
         return false;
     }
     let heals = id == item::HEART || id == item::FAIRY;
     if reward.item_targets {
-        if reward.drops_first && id == item::BOMBS {
+        if drops_first && id == item::BOMBS {
             return state.bombs() < state.bomb_max();
         }
         return !heals || !state.is_health_full();
@@ -66,31 +66,36 @@ pub fn wanted_drop(state: &GameView, id: i16) -> bool {
     }
 }
 
-/// Whether `reward.drops_first` puts the dropped item `id` before the room's treasure and exits ([`wanted_drop`]).
-fn is_wanted_drop(reward: &RewardConfig, state: &GameView, id: i16) -> bool {
-    reward.drops_first && wanted_drop(state, id)
+/// Whether the wanted drops come first for `objective`: the family's `reward.drops_first` (round 25) or the route
+/// step's `drops: first` (round 31, 6:0x78: `Objective::drops_first`).
+fn drops_first(reward: &RewardConfig, objective: &Objective) -> bool {
+    reward.drops_first || objective.drops_first
 }
 
 /// The tiles of the dropped items `reward` makes PBRS targets.
-fn item_targets<'a>(reward: &'a RewardConfig, state: &'a GameView) -> impl Iterator<Item = Target> + 'a {
+fn item_targets<'a>(
+    reward: &'a RewardConfig,
+    drops_first: bool,
+    state: &'a GameView,
+) -> impl Iterator<Item = Target> + 'a {
     state
         .items
         .iter()
-        .filter(|it| is_item_target(reward, state, it.id))
+        .filter(move |it| is_item_target(reward, drops_first, state, it.id))
         .flat_map(|it| it.link_overlap_tiles().into_iter().map(Target::Tile))
 }
 
-/// With `reward.drops_first`, once `objective` is no fight (the room's monsters are dead), the tiles of the wanted
-/// drops lying in the room ([`is_wanted_drop`]): they are the only targets until taken or gone (round 25, the
-/// owner: "make it a primary objective to pick them up on win"). None without any.
+/// With [`drops_first`], once `objective` is no fight (the room's monsters are dead, or a room only crossed), the
+/// tiles of the wanted drops lying in the room ([`wanted_drop`]): they are the only targets until taken or gone (round
+/// 25, the owner: "make it a primary objective to pick them up on win"). None without any.
 fn drops_first_targets(reward: &RewardConfig, state: &GameView, objective: &Objective) -> Option<Vec<Target>> {
-    if !reward.drops_first || objective.kind == ObjectiveKind::Fight {
+    if !drops_first(reward, objective) || objective.kind == ObjectiveKind::Fight {
         return None;
     }
     let tiles: Vec<Target> = state
         .items
         .iter()
-        .filter(|it| is_wanted_drop(reward, state, it.id))
+        .filter(|it| wanted_drop(state, it.id))
         .flat_map(|it| it.link_overlap_tiles().into_iter().map(Target::Tile))
         .collect();
     (!tiles.is_empty()).then_some(tiles)
@@ -138,9 +143,10 @@ pub fn attach_objective(
     reward: &RewardConfig,
     wavefront: bool,
 ) -> Attached {
+    let first = drops_first(reward, &objective);
     match drops_first_targets(reward, state, &objective) {
         Some(drops) => objective.pbrs_targets = drops.into_iter().collect(),
-        None => objective.pbrs_targets.extend(item_targets(reward, state)),
+        None => objective.pbrs_targets.extend(item_targets(reward, first, state)),
     }
     let wavefront = (wavefront && !state.game_over()).then(|| {
         let targets: Vec<Target> = objective.pbrs_targets.iter().copied().collect();
@@ -164,7 +170,10 @@ pub fn target_wavefront(
     }
     let mut targets: Vec<Target> = match drops_first_targets(reward, state, objective) {
         Some(drops) => drops,
-        None => objective.pbrs_targets.iter().copied().chain(item_targets(reward, state)).collect(),
+        None => {
+            let first = drops_first(reward, objective);
+            objective.pbrs_targets.iter().copied().chain(item_targets(reward, first, state)).collect()
+        }
     };
     targets.sort_unstable();
     targets.dedup();

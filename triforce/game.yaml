@@ -2845,6 +2845,7 @@ rooms:
     Stalfos: 5
   treasure: key
   bomb_walls: [N]
+  requires_bombs: true    # round 31 (phase IX, the owner, Nov 19): the N wall into 0x43 (zelda::cheats cheats one in)
 - level: 1
   location: '0x54'
   exits:
@@ -2896,6 +2897,11 @@ rooms:
     W:
       level: 1
       location: '0x72'
+    S:  # round 31 (phase IX): out of the level to the overworld, 0:0x37's dungeon mouth (asm:Mode_LeaveLevelToOW);
+        # one way (the way back is 0x37's `cave` exit), the only exit of a level to the overworld: the route leaves
+        # by it once, for the door trick (the scroll out opens the N key door for good, phase9-walks.md §1.1)
+      level: 0
+      location: '0x37'
   enemies: null
   treasure: null
 - level: 1
@@ -2930,7 +2936,8 @@ rooms:
 # Exit conventions (D1-D3, checked against the ROM's attr A/B by crates/zelda game_map tests): every door is an
 # exit on both sides; a key door is `locked: true` on both sides; a bombable wall is an exit marked `# bomb wall`
 # and listed in `bomb_walls` (path searches pass it only in a `requires_bombs` room or once opened); the
-# entrance room's S door back to the overworld is no exit (leaving the dungeon is never a route step).
+# entrance room's S door back to the overworld is no exit (leaving the dungeon is never a route step), but for
+# 1:0x73's (round 31, phase IX: the door trick; one way).
 - level: 2
   location: '0x0d'
   specialist: d2-rope  # d2first: the empty triforce room (like 1:0x36 in stalfos-keese-gel)
@@ -6449,6 +6456,8 @@ rooms:
   stairs: [16, 10]
 - level: 9
   location: '0x56'
+  specialist: like-like  # round 31 (phase IX): crossed S → W by the bottom row to its bomb wall (2 Like-Likes)
+  requires_bombs: true    # the W wall into 0x55 (zelda::cheats cheats one in)
   exits:
     N:
       level: 9

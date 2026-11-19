@@ -1,4 +1,4 @@
-//! Round 26: the route's leg to Dungeon 7 and Dungeon 7 (steps 209-247 of `d2first`, scouted as the route `d7` and
+//! Round 26: the route's leg to Dungeon 7 and Dungeon 7 (steps 205-243 of `d2first` since round 31, scouted as `d7` and
 //! merged) played in the real game by the route's objective, from `5_14s_0` (the D5
 //! triforce step) to the D7 triforce (the route's end): the agent's own actions (MOVE, BOMB, RECORDER, FOOD) through
 //! the session's masks with the env's per-step rules mirrored (family `items:`/`clips:`, the route's recorder facings,
@@ -388,7 +388,7 @@ fn next_action(s: &S, objective: &Objective, nudge: u32) -> Action {
 }
 
 impl Walk {
-    /// `5_14s_0` with a completion on the D5 triforce step (208) and the ledger begun;
+    /// `5_14s_0` with a completion on the D5 triforce step (204) and the ledger begun;
     /// `rupees` overrides Link's 171 rupees first.
     fn start(rupees: Option<u8>) -> Option<Walk> {
         let core = open_core()?;
@@ -580,7 +580,7 @@ fn the_d7_route_is_walked_from_the_d5_triforce_to_the_d7_triforce() {
     assert!(!waiting.is_empty() && waiting.iter().all(|k| k.summoned && k.recorder_facings == 0 && !k.recorder));
     // Set down in 0x45: the route's `entry: recorder` step, the room's first tick.
     let landing = t.iter().find(|k| k.room == ow(0x45)).unwrap();
-    assert_eq!((landing.step, route[210].entry.as_str()), (Some(210), "recorder"));
+    assert_eq!((landing.step, route[206].entry.as_str()), (Some(206), "recorder"));
 
     // The shops: the route's ware is the target until it is held (the purchase is read from the inventory), then
     // the cave's exit; Link pays its price from his own rupees (171 -> 91 -> 31), nothing cheated.
@@ -653,8 +653,8 @@ fn the_d7_route_is_walked_from_the_d5_triforce_to_the_d7_triforce() {
     assert!(dig[play].recorder && dig[play].types.iter().any(|&x| matches!(x, DIGDOGGER2 | DIGDOGGER3)));
     assert!(dig[play + 1..].iter().any(|k| k.types.contains(&DIGDOGGER_CHILD)), "the small Digdoggers");
 
-    // 7:0x2b's triforce (step 247; the route runs on to Dungeon 6 since round 27, `d6.rs`): the last decision is the
-    // treasure objective of step 247, whose pickup sets the level 7 piece (the walk's end) before the warp out; no
+    // 7:0x2b's triforce (step 243; the route runs on to Dungeon 6 since round 27, `d6.rs`): the last decision is the
+    // treasure objective of step 243, whose pickup sets the level 7 piece (the walk's end) before the warp out; no
     // rupee or key cheated.
     let last = t.last().unwrap();
     assert_eq!((last.room, last.step, last.kind), (uw(0x2b), Some(247), ObjectiveKind::Treasure));

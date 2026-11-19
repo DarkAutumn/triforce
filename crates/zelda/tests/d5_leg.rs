@@ -1,5 +1,5 @@
 //! Round 24: the overworld leg from the Dungeon 4 triforce to Dungeon 5 in the real game (`triforce/routes.yaml`
-//! `d2first` steps 134-185, its stretches `coast-heart`, `lake-3e` and `mountain`; `docs/routes/d5-leg.md`,
+//! `d2first` steps 130-181 since round 31, its stretches `coast-heart`, `lake-3e` and `mountain`; `docs/routes/d5-leg.md`,
 //! `zelda-asm/mechanics.md` "Overworld: room `$5F`").
 //!
 //! - The whole clip way played by the route's objective (`GameCompletion`): from `4_03s_0` a walker takes, at every
@@ -37,7 +37,7 @@ const ROUTE: &str = "d2first";
 const OBJ_TYPE: u16 = 0x34F;
 const ROOM_ID: u16 = 0xEB;
 /// The D4 triforce step of `d2first`.
-const TRIFORCE_STEP: usize = 133;
+const TRIFORCE_STEP: usize = 129;
 
 fn ow(room: u8) -> MapLocation {
     MapLocation::new(0, room, false)

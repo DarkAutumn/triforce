@@ -84,20 +84,24 @@ TERMINATE_SECONDS = 60
 # its triforce).  Round 28: `post-d6` (the leg from Dungeon 6's triforce exit: the whirlwind out of 0x22, the walk to
 # 0x6d, the burned tree) and `d8` (Dungeon 8 to its triforce).  Round 29: `post-d8` (the leg from Dungeon 8's triforce
 # exit: the whirlwind out of 0x6d, 0x47's tree and heart container, the ladder over 0x17's river, the rock wall of
-# 0x05) and `d9` (Dungeon 9, Ganon and Zelda: the end of the game, the route's end).
-SEGMENTS = ('full:start d2:2_7ds_0 post-d2:0_3cc_0 d1:1_73s_0 post-d1:0_37c_0 d3:3_7cs_0 post-d3:0_74c_0 '
+# 0x05) and `d9` (Dungeon 9, Ganon and Zelda: the end of the game, the route's end).  Round 31 (phase IX): Dungeon 1
+# leaves by its entrance and comes back in before its triforce, so `post-d1` starts at `0_37c_v2_0` (0:0x37 out of
+# the D1 triforce, the room's second entry from its mouth) and `d1` arrives at route step 64, not at the first 0:0x37.
+SEGMENTS = ('full:start d2:2_7ds_0 post-d2:0_3cc_0 d1:1_73s_0 post-d1:0_37c_v2_0 d3:3_7cs_0 post-d3:0_74c_0 '
             'd4:4_71s_0 post-d4:0_45c_0 d5:5_76s_0 post-d5:0_0bc_0 d7:7_79s_0 post-d7:0_42c_0 d6:6_79s_0 '
             'post-d6:0_22c_0 d8:8_7es_0 post-d8:0_6dc_0 d9:9_76s_0')
 # 0x0b is entered twice (into Dungeon 5 and out of it): Dungeon 5's arrival is the entry after 5:0x14, the triforce
 # room (`arrival`'s ordered list); 0x42 likewise (the pond before Dungeon 7, its exit after 7:0x2b), 0x22 (Dungeon 6's
-# entrance, its exit after 6:0x0c) and 0x6d (Dungeon 8's entrance, its exit after 8:0x2c).
-TARGETS = {'d2': '0:0x3c', 'post-d2': '1:0x73', 'd1': '0:0x37', 'post-d1': '3:0x7c', 'd3': '0:0x74',
+# entrance, its exit after 6:0x0c) and 0x6d (Dungeon 8's entrance, its exit after 8:0x2c).  0x37 (round 31): the
+# step out of the D1 triforce, `step:64` (`d2first`'s step numbers move with the route: `_native.route_steps`).
+D1_EXIT_STEP = 64
+TARGETS = {'d2': '0:0x3c', 'post-d2': '1:0x73', 'd1': f'step:{D1_EXIT_STEP}', 'post-d1': '3:0x7c', 'd3': '0:0x74',
            'post-d3': '4:0x71', 'd4': '0:0x45', 'post-d4': '5:0x76', 'd5': '5:0x14,0:0x0b', 'post-d5': '7:0x79',
            'd7': '7:0x2b,0:0x42', 'post-d7': '6:0x79', 'd6': '6:0x0c,0:0x22', 'post-d6': '8:0x7e',
            'd8': '8:0x2c,0:0x6d', 'post-d8': '9:0x76'}
 # The full run is also reported at each milestone room, in order (yardstick ``@L:0xRR,...``).
-MILESTONES = (('d2', '2:0x7d'), ('post-d2', '0:0x3c'), ('d1', '1:0x73'), ('post-d1', '0:0x37'), ('d3', '3:0x7c'),
-              ('post-d3', '0:0x74'), ('d4', '4:0x71'), ('post-d4', '0:0x45'), ('d5', '5:0x76'),
+MILESTONES = (('d2', '2:0x7d'), ('post-d2', '0:0x3c'), ('d1', '1:0x73'), ('post-d1', f'step:{D1_EXIT_STEP}'),
+              ('d3', '3:0x7c'), ('post-d3', '0:0x74'), ('d4', '4:0x71'), ('post-d4', '0:0x45'), ('d5', '5:0x76'),
               ('post-d5', '5:0x14,0:0x0b'), ('d7', '7:0x79'), ('post-d7', '7:0x2b,0:0x42'), ('d6', '6:0x79'),
               ('post-d6', '6:0x0c,0:0x22'), ('d8', '8:0x7e'), ('post-d8', '8:0x2c,0:0x6d'), ('d9', '9:0x76'))
 CHAIN_RESERVED = ('--append', '--events', '--no-log', '--logs-dir')
@@ -111,31 +115,45 @@ def segment_starts() -> dict:
 
 # ------------------------------------------------------------------------------------------------------ arrivals
 
-def parse_target(target: str) -> list[tuple[int, int]]:
-    """'2:0x7d,0:0x3C' → [(2, 0x7d), (0, 0x3c)]; anything else raises ValueError."""
+def parse_target(target: str) -> list[tuple]:
+    """'2:0x7d,0:0x3C' → [(2, 0x7d), (0, 0x3c)]; 'step:64' → [('step', 64)] (round 31: the entry into a route step);
+    anything else raises ValueError."""
     rooms = []
     for room in target.split(','):
         level, sep, number = room.strip().partition(':')
         try:
+            if level == 'step' and sep:
+                rooms.append(('step', int(number)))
+                continue
             if not sep or not number.lower().startswith('0x'):
                 raise ValueError(room)
             rooms.append((int(level), int(number, 16)))
         except ValueError:
-            raise ValueError(f"arrival target {room!r} is not L:0xRR (in {target!r})") from None
+            raise ValueError(f"arrival target {room!r} is not L:0xRR or step:N (in {target!r})") from None
     return rooms
+
+
+def _enters(run: dict, record: dict, place: tuple) -> bool:
+    """Whether ``record`` is the entry into ``place`` (``parse_target``'s): a room outside caves, or a route step: the
+    record of that step, or the run's closing milestone when the run stopped on reaching it (``--stop-at step:N``)."""
+    if place[0] == 'step':
+        if record.get('outcome') == 'milestone':
+            return run.get('reason', '').startswith(f"reached route step {place[1]} ")
+        return record.get('step') == place[1]
+    return (int(record['level']), int(str(record['room']), 16)) == place and not record['in_cave']
 
 
 def arrival(run: dict, target: Optional[str]):
     """The room record where ``run`` (an eval-chain output line) arrived: the first entry into ``target``
-    ('L:0xRR', outside caves) after its start room, or with no target the last room of a successful run; None if it
-    never got there.  ``target`` may list rooms in order ('2:0x7d,0:0x3c'): the arrival is the entry into the last
-    one after entering the others in turn."""
+    ('L:0xRR', outside caves, or 'step:N') after its start room, or with no target the last room of a successful run;
+    None if it never got there.  ``target`` may list places in order ('2:0x7d,0:0x3c'): the arrival is the entry into
+    the last one after entering the others in turn."""
     if target is None:
         return run['rooms'][-1] if run['result'] == 'success' and run['rooms'] else None
     rooms = parse_target(target)
     at = 0
     for record in run['rooms'][1:]:
-        if (int(record['level']), int(str(record['room']), 16)) == rooms[at] and not record['in_cave']:
+        if _enters(run, record, rooms[at]):
             at += 1
             if at == len(rooms):
                 return record

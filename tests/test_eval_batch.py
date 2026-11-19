@@ -323,6 +323,29 @@ def test_arrival_and_headline_text():
     assert text == 'arrivals 388/1000 = 38.8% at 0:0x74 · success 220/1000 = 22.0% · 4m 19s'
 
 
+def test_a_step_target_is_the_entry_into_that_route_step():
+    """Round 31: Dungeon 1 is left by its entrance before its triforce, so `d1` arrives at the step out of the
+    triforce (`step:64`), not at the first 0:0x37; a run stopped there (`--stop-at step:64`) ends on a milestone record,
+    which has no step of its own."""
+    def room(level, number, step, outcome='exit-correct'):
+        return {'level': level, 'room': number, 'in_cave': False, 'step': step, 'outcome': outcome}
+    trip = [room(1, '0x73', 46), room(0, '0x37', 47), room(1, '0x73', 48), room(1, '0x36', 63)]
+    played_on = {'result': 'failure', 'rooms': trip + [room(0, '0x37', 64), room(0, '0x38', 65)]}
+    assert eval_batch.arrival(played_on, 'step:64') is played_on['rooms'][4]
+    assert eval_batch.arrival(played_on, '0:0x37') is played_on['rooms'][1], "the trip's own 0:0x37"
+    stopped = {'result': 'success', 'reason': 'reached route step 64 (level 0, room 0x37)',
+               'rooms': trip + [room(0, '0x37', None, 'milestone')]}
+    assert eval_batch.arrival(stopped, 'step:64') is stopped['rooms'][4]
+    assert eval_batch.arrival({**stopped, 'reason': 'reached route step 640 (level 0, room 0x37)'}, 'step:64') is None
+    assert eval_batch.arrival(played_on, '1:0x73,step:64,0:0x38') is played_on['rooms'][5]
+    assert eval_batch.parse_target('1:0x73,step:64') == [(1, 0x73), ('step', 64)]
+    assert eval_batch.TARGETS['d1'] == 'step:64' and dict(eval_batch.MILESTONES)['post-d1'] == 'step:64'
+    from triforce import _native
+    steps = _native.route_steps('d2first')
+    out, before = steps[eval_batch.D1_EXIT_STEP], steps[eval_batch.D1_EXIT_STEP - 1]
+    assert (out['level'], out['room'], out['entry'], before['exit']) == (0, 0x37, 'cave', 'triforce')
+
+
 # ------------------------------------------------------------------------------------------------------ priority
 
 NICE_PROBE = r'''

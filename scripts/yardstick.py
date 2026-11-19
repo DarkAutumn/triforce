@@ -98,8 +98,9 @@ def specialist_row(name: str, result: dict, source: str = 'evaluation') -> dict:
     }
 
 
-def parse_target(target: str) -> list[tuple[int, int]]:
-    """'2:0x7d,0:0x3C' → [(2, 0x7d), (0, 0x3c)]; anything else raises (``eval_batch.parse_target``)."""
+def parse_target(target: str) -> list[tuple]:
+    """'2:0x7d,0:0x3C' → [(2, 0x7d), (0, 0x3c)], 'step:64' → [('step', 64)]; anything else raises
+    (``eval_batch.parse_target``)."""
     try:
         return eval_batch.parse_target(target)
     except ValueError as error:
@@ -107,7 +108,8 @@ def parse_target(target: str) -> list[tuple[int, int]]:
 
 
 def arrival(run: dict, target: str | None):
-    """``eval_batch.arrival``: the room record where `run` arrived at `target` ('L:0xRR[,L:0xRR...]'), else None."""
+    """``eval_batch.arrival``: the room record where `run` arrived at `target` ('L:0xRR[,L:0xRR|step:N...]'), else
+    None."""
     if target is not None:
         parse_target(target)
     return eval_batch.arrival(run, target)
@@ -132,11 +134,13 @@ def chain_row(name: str, path: Path, target: str | None = None) -> dict:
     runs = read_chain(path)
     if target is not None:
         route = runs[0]['route']
-        rooms = {(step['level'], step['room']) for step in _native.route_steps(route) if not step['in_cave']}
-        unknown = [room for room in parse_target(target) if room not in rooms]
+        steps = _native.route_steps(route)
+        rooms = {(step['level'], step['room']) for step in steps if not step['in_cave']}
+        unknown = [place for place in parse_target(target)
+                   if (place[1] >= len(steps) if place[0] == 'step' else place not in rooms)]
         if unknown:
-            raise YardstickError(f"{path}: target rooms {[f'{l}:0x{r:02x}' for l, r in unknown]} are not rooms "
-                                 f"of route {route!r}")
+            names = [f'step:{r}' if l == 'step' else f'{l}:0x{r:02x}' for l, r in unknown]
+            raise YardstickError(f"{path}: target places {names} are not rooms or steps of route {route!r}")
     arrived = [(r, room) for r, room in ((r, arrival(r, target)) for r in runs) if room is not None]
     ends = Counter()
     cheated, cheating_runs = Counter(), 0

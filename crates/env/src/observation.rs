@@ -1545,6 +1545,7 @@ mod tests {
             retreats: Default::default(),
             clips: false,
             treasure_refused: false,
+            drops_first: false,
         }
     }
 
