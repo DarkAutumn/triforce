@@ -2,7 +2,7 @@
 Dungeon 6's two block rooms as demonstration rows for ``train --demos``.
 
     python scripts/experiments/r27_plan_demos.py CHECKPOINT OUT.npz [--family F] [--act MODE] [--runs N]
-        [--states 6_38s 6_3aw]
+        [--states 6_38s 6_3aw] [--state-files FILE...]
 
 The family (``--family``, wizzrobe by default; round 29 records level 9's rooms of wizzrobe, patra and ganon too)
 plays ``--runs`` episodes from every chain of each state stem (``6_38s_0..2``, ``6_3aw_0..2``)
@@ -12,6 +12,8 @@ redrawn random numbers and takes the policy's next best if Link would be hit; do
 pool records every decision's observation (with the action mask) and the action it executed, the planner's choice
 (``EnvPool.play(record='observations')``, as ``triforce.best_of_n``).  ``--act`` plays another act mode instead
 (round 27's ow-lynel: ``registry.ACT_RULE``, a model's own clean runs as demonstrations; nothing is replaced then).
+``--state-files`` adds start states played as named, ``--runs`` each (round 29's ow-zora: harvested state files,
+counted under their stem).
 
 Rows: every decision of the episodes that succeed with at most ``--max-loss`` hearts lost; a decision the planner
 replaced (``decisions.foresight.replaced`` of the episode's visit: the policy's draw would have been hit) is written
@@ -51,12 +53,13 @@ def replaced_indices(record: dict) -> set[int]:
 
 
 def record_demos(family: str, checkpoint: Path, out: Path, stems: list[str], runs: int, max_loss: float,
-                 repeat: int, parallel: int, seed: int, act: str = registry.PLAN_ACT) -> int:
+                 repeat: int, parallel: int, seed: int, act: str = registry.PLAN_ACT,
+                 state_files: list[str] | None = None) -> int:
     """Plays, filters and writes the rows; returns how many."""
     config = load_specialist(family)
     registry.require_compatible(checkpoint)
     policy = registry.load_model(checkpoint)[0].to_native()
-    states = [f'{stem}_{chain}' for stem in stems for chain in (0, 1, 2)]
+    states = [f'{stem}_{chain}' for stem in stems for chain in (0, 1, 2)] + list(state_files or [])
     jobs = [(state, seed + index, True) for index, state in enumerate(s for s in states for _ in range(runs))]
     task = _native.EvalTask(config, jobs)
     records, plays = {}, {}
@@ -80,7 +83,9 @@ def record_demos(family: str, checkpoint: Path, out: Path, stems: list[str], run
         if len(replaced) and max(replaced) >= n:
             raise ValueError(f"seed {key}: replaced decision {max(replaced)} past the play's {n} decisions")
         kept = bool(record['success']) and lost <= max_loss
-        stats = by_state.setdefault(record['start_state'], [0, 0, 0, 0, 0.0])
+        # a harvested state file (``--state-files``) counts under its stem (``0_44s_h100_0`` -> ``0_44s``)
+        label = Path(record['start_state']).name.removesuffix('.state').split('_h')[0]
+        stats = by_state.setdefault(label, [0, 0, 0, 0, 0.0])
         stats[0] += 1
         stats[1] += bool(record['success'])
         stats[4] += lost if record['success'] else 0.0
@@ -109,7 +114,9 @@ def main(argv) -> int:
     parser.add_argument('out', type=Path)
     parser.add_argument('--family', default=DEFAULT_FAMILY)
     parser.add_argument('--act', default=registry.PLAN_ACT, help="the act mode played (default the planner's)")
-    parser.add_argument('--states', nargs='+', default=['6_38s', '6_3aw'], help="start state stems (chains 0-2)")
+    parser.add_argument('--states', nargs='*', default=['6_38s', '6_3aw'], help="start state stems (chains 0-2)")
+    parser.add_argument('--state-files', nargs='+', default=[],
+                        help="more start states played as named (e.g. harvested state files), --runs each")
     parser.add_argument('--runs', type=int, default=100, help="episodes a start state")
     parser.add_argument('--max-loss', type=float, default=6.0, help="hearts a kept episode may lose")
     parser.add_argument('--repeat', type=int, default=5, help="rows a replaced decision is written")
@@ -118,12 +125,12 @@ def main(argv) -> int:
     add_job_arguments(parser)
     args = parser.parse_args(argv)
     nice = begin_job(args)
-    episodes = 3 * len(args.states) * args.runs
+    episodes = (3 * len(args.states) + len(args.state_files)) * args.runs
     with logged_job('r27-plan-demos', 'eval', [{'specialist': args.family, 'run_id': args.checkpoint.name,
                                                  'status': 'evaluating'}], nice=nice,
                     work=work(eval_episodes=2 * episodes)):
         record_demos(args.family, args.checkpoint, args.out, args.states, args.runs, args.max_loss, args.repeat,
-                     args.parallel, args.seed, args.act)
+                     args.parallel, args.seed, args.act, args.state_files)
     return 0
 
 
