@@ -250,10 +250,10 @@ def test_one_file_with_mixed_runs_splits_every_room_by_the_switch():
     assert (scope['runs'], scope['arrived'], scope['endings']) == (4, 1, {'death': 3})
     # Runs that played a visit with each switch: the flipping run 2 in both.
     assert scope['by_clips'] == {
-        'on': {'runs': 3, 'arrived': 1, 'arrival_rate': 0.33333, 'endings': {'death': 1}, 'off_route_visits': 0,
-               'risk': {}},
-        'off': {'runs': 2, 'arrived': 0, 'arrival_rate': 0.0, 'endings': {'death': 2}, 'off_route_visits': 0,
-                'risk': {}}}
+        'on': {'runs': 3, 'arrived': 1, 'arrival_rate': 0.33333, 'stopped': 0, 'stop_rate': 0.0,
+               'endings': {'death': 1}, 'off_route_visits': 0, 'risk': {}},
+        'off': {'runs': 2, 'arrived': 0, 'arrival_rate': 0.0, 'stopped': 0, 'stop_rate': 0.0,
+                'endings': {'death': 2}, 'off_route_visits': 0, 'risk': {}}}
     room = scope['rooms']['0:0x11']                     # the combined numbers stay what they were
     assert (room['runs'], room['entered'], room['visits'], room['deaths'], room['death_rate']) == (4, 4, 5, 2, 0.5)
     on_, off_ = room['by_clips']['on'], room['by_clips']['off']
@@ -396,3 +396,30 @@ def test_the_cheat_ledger_is_summed_for_bombs_keys_and_rupees():
     assert (rooms['0:0x11']['cheated_bombs_per_visit'], rooms['0:0x11']['cheated_keys_per_visit']) == (1.0, 0.5)
     assert rooms['0:0x11']['steps']['1']['cheated'] == {'bombs': 2, 'keys': 1, 'rupees': 0}
     assert tuple(f'cheated_{item}' for item in _native.CHEAT_ITEMS) == room_stats.CHEATED
+
+
+def test_a_chain_stopped_at_the_cut_arrives_and_one_stopped_before_it_is_stopped_not_lost():
+    """``--stop-at`` ends a run on a milestone marker that is no visit.  Stopped at the scope's cut the run arrived
+    (round 29's chains stop each dungeon at its exit step: they read "arrived 0%"); stopped before it (a leg measured
+    to the next entrance) it neither arrived nor failed: the scope says where the chain stops and how many got
+    there."""
+    def stopped_run(seed, rooms, step, level, room):
+        marker = visit(level, room, 'milestone')
+        return {**run(seed, [*rooms, marker], 'success'), 'reason': f'reached route step {step} (level {level}, room 0x{room:02x})'}
+    way_in = [visit(0, 0x10, 'exit-correct'), visit(0, 0x11, 'exit-correct'), visit(0, 0x12, 'exit-correct')]
+    dungeon = [visit(1, 0x20, 'exit-correct'), visit(1, 0x10, 'exit-correct')]
+    at_cut = [stopped_run(0, way_in + dungeon, 5, 0, 0x12),             # FIRST's cut: step 5, 0:0x12 from the cave
+              run(1, way_in + [visit(1, 0x20, 'death')])]
+    scope = room_stats.chain_scope(at_cut, PLAN, FIRST)
+    assert (scope['arrived'], scope['arrival_rate'], scope['stopped'], scope['stop']) == (1, 0.5, 0, None)
+    assert scope['endings'] == {'death': 1}
+    short = [stopped_run(0, way_in, 3, 1, 0x20), stopped_run(1, way_in, 3, 1, 0x20),
+             run(2, [visit(0, 0x10, 'exit-correct'), visit(0, 0x11, 'death')])]
+    scope = room_stats.chain_scope(short, PLAN, FIRST)
+    assert (scope['arrived'], scope['stopped'], scope['stop_rate'], scope['stop_step'], scope['stop']) == (
+        0, 2, 0.66667, 3, '1:0x20')
+    assert scope['endings'] == {'death': 1}
+    # the route's own end is not a stop: a scope without a cut still arrives by it, and not by a stop before it
+    ended = {**run(0, way_in, 'success'), 'reason': 'the game ended'}
+    scope = room_stats.chain_scope([ended, stopped_run(1, way_in, 3, 1, 0x20)], PLAN, FULL)
+    assert (scope['arrived'], scope['stopped']) == (1, 1)

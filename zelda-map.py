@@ -2182,7 +2182,10 @@ class MapWindow(QMainWindow):
         totals = clips_entry(data, self.clips)
         if totals is None:
             return f'{scope_label(scope)} · no runs{switch}'
-        end = 'reach the D5 triforce' if data.get('cut') is None else f"reach {data['cut']}"
+        if totals.get('stopped'):       # the chain stops before the scope's end (a leg to the next entrance)
+            return (f"{scope_label(scope)} · {totals['runs']:,} runs{switch} from {data['start']}, "
+                    f"{fmt_rate(totals['stop_rate'])} reach {data['stop']}, where the chain stops")
+        end = 'reach the end of the route' if data.get('cut') is None else f"reach {data['cut']}"
         return (f"{scope_label(scope)} · {totals['runs']:,} runs{switch} from {data['start']}, "
                 f"{fmt_rate(totals['arrival_rate'])} {end}")
 

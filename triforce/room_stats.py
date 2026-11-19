@@ -71,6 +71,7 @@ mode).  ``newest`` finds the newest file in a chains dir (``zelda-map.py``'s def
 
 import argparse
 import json
+import re
 import sys
 import time
 from collections import Counter, defaultdict
@@ -205,20 +206,32 @@ def assign_steps(plan: list[dict], records: list[dict], start: int) -> list[Opti
     return steps
 
 
+STOP_REASON = re.compile(r'reached route step (\d+) ')      # a run ended by --stop-at (crates/env/src/chain.rs)
+
+
+def stop_step(run: dict) -> Optional[int]:
+    """The route step a successful run was stopped at by ``--stop-at`` (its reason names it), None for any other
+    run (a failure, the route's own end)."""
+    match = STOP_REASON.match(run.get('reason') or '') if run.get('result') == 'success' else None
+    return int(match.group(1)) if match else None
+
+
 def cut_run(plan: list[dict], run: dict, start: int, cut: Optional[int]) -> tuple[list[tuple[dict, Optional[int]]],
                                                                                  bool, Optional[str]]:
     """(the run's (visit, step) pairs before the cut, whether it reached the cut (or, without one, the route's end),
     how it ended inside the scope: None if it didn't end there, else the outcome of its last visit (``other`` for a
-    failed run whose last visit left the room))."""
+    failed run whose last visit left the room)).  A chain stopped at the cut itself (``--stop-at`` the cut's step:
+    its runs end on the milestone marker there, which has no visit) reached it; one stopped before the cut did not
+    (``chain_scope`` counts those as ``stopped``: the chain measured a shorter stretch than the scope)."""
     records = run.get('rooms') or []
     steps = assign_steps(plan, records, start)
     for index, step in enumerate(steps):
         if cut is not None and step == cut and index > 0:
             return [(r, s) for r, s in zip(records[:index], steps[:index]) if r['outcome'] != 'milestone'], True, None
     played = [(r, s) for r, s in zip(records, steps) if r['outcome'] != 'milestone']
-    if cut is None and run.get('result') == 'success':
-        return played, True, None
-    if run.get('result') == 'success' or not played:
+    if run.get('result') == 'success':
+        return played, stop_step(run) == cut, None      # None == None: the route's own end, no cut
+    if not played:
         return played, False, None
     outcome = played[-1][0]['outcome']
     return played, False, 'other' if outcome in PLAYING_OUTCOMES else outcome
@@ -330,13 +343,19 @@ def chain_scope(runs: list[dict], plan: list[dict], scope: Scope) -> dict:
     those it has), and so has the scope (``runs``, ``arrived``, ``arrival_rate``, ``endings``, ``off_route_visits``,
     ``risk`` over the visits in that state).  A switch state's ``runs`` are the scope's runs that played a visit in it
     (a run without visits counts in its start switch), so a run that flips (``--clips-off-from``) counts in both; a
-    run's arrival and its ending count in the switch of its last visit."""
+    run's arrival and its ending count in the switch of its last visit.
+
+    A chain stopped before the scope's cut (``--stop-at`` an earlier step: a leg measured to the next dungeon's
+    entrance where the scope runs through that dungeon) cannot arrive: its successful runs are ``stopped`` /
+    ``stop_rate``, and the scope names where (``stop_step``, ``stop``: the step most of them stopped at and its
+    room key), so a reader shows "93.2% reach 1:0x73, where the chain stops" instead of "0% arrive"."""
     start = state_step(plan, scope.start)
     cut = state_step(plan, scope.cut) if scope.cut else None
     # Keyed by group: None (every visit) or a switch state.
     rooms, steps = defaultdict(_Visits), defaultdict(_Visits)
     played = {switch: set() for switch in SWITCHES}
     arrived, endings, off_route = Counter(), defaultdict(Counter), Counter()
+    stopped, stops = Counter(), Counter()
     per_run = {group: [] for group in (None, *SWITCHES)}     # group -> per run, its visits' decisions
     for index, run in enumerate(runs):
         visits, reached, ended = cut_run(plan, run, start, cut)
@@ -355,8 +374,12 @@ def chain_scope(runs: list[dict], plan: list[dict], scope: Scope) -> dict:
                 rooms[group, key].add(index, record)
                 steps[group, key, step].add(index, record)
                 off_route[group] += step is None
+        short = None if reached else stop_step(run)
+        if short is not None:
+            stops[short] += 1
         for group in (None, last):
             arrived[group] += reached
+            stopped[group] += short is not None
             if ended is not None:
                 record, step = visits[-1]
                 key = room_key(*_location(record))
@@ -376,11 +399,15 @@ def chain_scope(runs: list[dict], plan: list[dict], scope: Scope) -> dict:
     def totals(group):
         count = counts[group]
         return {'runs': count, 'arrived': arrived[group], 'arrival_rate': _round(arrived[group] / count) if count
-                else None, 'endings': dict(endings[group]), 'off_route_visits': off_route[group],
+                else None, 'stopped': stopped[group], 'stop_rate': _round(stopped[group] / count) if count else None,
+                'endings': dict(endings[group]), 'off_route_visits': off_route[group],
                 'risk': risk(per_run[group], 'run')}
+    stop = stops.most_common(1)[0][0] if stops else None
+    stop_room = None if stop is None or not 0 <= stop < len(plan) else room_key(
+        plan[stop]['level'], plan[stop]['room'], plan[stop]['in_cave'])
     return {'name': scope.name, 'kind': scope.kind, 'label': scope.label, **totals(None), 'start': scope.start,
-            'start_step': start, 'cut': scope.cut, 'cut_step': cut, 'rooms': entries,
-            'by_clips': {switch: totals(switch) for switch in SWITCHES if counts[switch]}}
+            'start_step': start, 'cut': scope.cut, 'cut_step': cut, 'stop_step': stop, 'stop': stop_room,
+            'rooms': entries, 'by_clips': {switch: totals(switch) for switch in SWITCHES if counts[switch]}}
 
 
 def read_chain(path: Path) -> tuple[list[dict], dict]:
@@ -715,7 +742,10 @@ def summary(data: dict, worst: int = 3) -> str:
                                          f"{totals['arrival_rate'] or 0:.1%}" for switch, totals in split.items())
                         if 'off' in split else '')
             files = ', '.join(source['file'] for source in scope.get('files') or [scope['source']])
-            lines.append(f"  {name:6} {scope['runs']:5} runs ({files}), arrived {scope['arrival_rate']:.1%}"
+            reach = (f"arrived {scope['arrival_rate']:.1%}" if not scope.get('stopped') else
+                     f"{scope['stop_rate']:.1%} reach {scope['stop']} (step {scope['stop_step']}), where the chain "
+                     f"stops short of the scope's end")
+            lines.append(f"  {name:6} {scope['runs']:5} runs ({files}), {reach}"
                          f"{switches}, off-route visits {scope['off_route_visits']}; "
                          f"deaths per run: {deaths or 'none'}")
     return '\n'.join(lines)
