@@ -27,21 +27,24 @@ raft, the ladder, the recorder, the red candle, the red ring, the silver arrow).
 
 ## How well it plays
 
-Out of 1,000 runs from the start of the game with the current team (round 27's models, act mode
-`temperature:0.5+relax:16`, the speedrunners' clips allowed; `docs/experiments/round27.md` §14.2):
+Out of 1,000 runs from the start of the game with the current team (round 29's whole-route team, 1.9.0.0, act mode
+`temperature:0.5+relax:16`, the speedrunners' clips allowed; `docs/experiments/round29.md` §20.3):
 
-| Link reaches | Round 27 | Round 26 | Round 25 |
-|---|---:|---:|---:|
-| Dungeon 1 (after Dungeon 2 and the white sword) | 76% | 75% | 84% |
-| Dungeon 3 | 64% | 65% | 74% |
-| The Dungeon 3 triforce | 50% | 50% | 57% |
-| The Dungeon 4 triforce | 44% | 44% | 51% |
-| Dungeon 5 | 44% | 44% | 51% |
-| The Dungeon 5 triforce | 23% | 22% | 20% (the end of round 25's route) |
-| Dungeon 7 | 23% | 22% | |
-| The Dungeon 7 triforce | 6.1% | 6.7% (the end of round 26's route) | |
-| Dungeon 6 | 6.0% | | |
-| The Dungeon 6 triforce (the end of the route) | 1.1% | | |
+| Link reaches | Round 29 | Round 27 | Round 26 | Round 25 |
+|---|---:|---:|---:|---:|
+| Dungeon 1 (after Dungeon 2 and the white sword) | 82% | 76% | 75% | 84% |
+| Dungeon 3 | 73% | 64% | 65% | 74% |
+| The Dungeon 3 triforce | 59% | 50% | 50% | 57% |
+| The Dungeon 4 triforce | 54% | 44% | 44% | 51% |
+| Dungeon 5 | 54% | 44% | 44% | 51% |
+| The Dungeon 5 triforce | 26% | 23% | 22% | 20% (the end of round 25's route) |
+| Dungeon 7 | 26% | 23% | 22% | |
+| The Dungeon 7 triforce | 9.1% | 6.1% | 6.7% (the end of round 26's route) | |
+| Dungeon 6 | 9.0% | 6.0% | | |
+| The Dungeon 6 triforce | 1.7% | 1.1% (the end of round 27's route) | | |
+| The Dungeon 8 triforce | 0.4% | | | |
+| Dungeon 9 | 0.4% | | | |
+| The end of the game | 0 of 1,000 | | | |
 
 Since round 26 the route runs on from the Dungeon 5 triforce through the whirlwind, two shops and a pond to Dungeon
 7 and its triforce. Of 1,000 runs started at Dungeon 7's entrance, 40% take its triforce; its six Blue Goriyas in
@@ -57,6 +60,14 @@ of 1,000 runs started at Dungeon 6's entrance, 30% take its triforce, and its tw
 6:0x3a) are what loses most of the rest; from the start, 1.1% of runs take all seven pieces. The earlier rows match
 round 26's within noise (the same seeds, paired). With the planner on, 38% of 300 runs from the start reach the
 Dungeon 6 triforce (`docs/experiments/round27.md` §14).
+
+Rounds 28 and 29 run the route on to the end of the game: a burned tree to Dungeon 8, the leg to Dungeon 9, the red
+ring and the silver arrow, Ganon and Zelda's room. Of 1,000 runs started at Dungeon 8's entrance, 25% take its
+triforce; of 1,000 started at Dungeon 9's entrance, 31% end the game. One team now plays the whole route, and every
+earlier row is as good as round 27's or better (the same seeds, paired). From the start the models alone reach
+Dungeon 9 in 4 runs of 1,000 and end the game in none: each dungeon is entered with fewer hearts than its own
+segment starts with, and Dungeon 5's 5:0x05 is the first loss. With the planner on, 89 of 300 runs (30%) play from
+the start of the game to the ending (`docs/experiments/round29.md` §20).
 
 Every round of training is written up in `docs/experiments/` (start with the newest `round*.md`), and
 `docs/experiments/backlog.md` has what's next.

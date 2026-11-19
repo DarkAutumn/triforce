@@ -14,6 +14,30 @@ the gap list of what must be walked in the game first, where the documents disag
 of work) and the documents it indexes (`d7.md`, `d6.md`, `d8.md`, `d9.md`, `late-monsters.md`, `late-mechanics.md`).
 The owner's decisions of Nov 16 are in `docs/decisions.md` ("The rest of the game").
 
+### The whole game (1.9.0.0, Nov 19): the optimisation round over the whole route
+
+round29.md §20. The route ends the game; one team plays it. From the start the models alone end it in 0 of 1000
+runs (Dungeon 9 entered by 4), the planner in 89 of 300. What loses the full route (`r29land-1k-full`, runs ended
+per 1000), in order:
+
+- [ ] **Dungeon 5 (278), 5:0x05 first (141, darknut `r78-dark37-s85`)**: at the route's hearts (6.40 in) it loses
+  1.67 hearts a visit against `main`'s `r75-d537-c5`'s 1.25 at the same hearts (6-7.9 in: 63 deaths of 334 against
+  30 of 244); the `d5` segment from full hearts is +3.5 ± 2.0. Suggested (not tested): darknut continued with
+  Dungeon 5's handoffs at the chain's hearts (the recipe of decisions 2026-11-19, "One team for the whole route").
+  Then 0x64 40, 0x47 28, 0x65 27.
+- [ ] **`d7` (165)**: 7:0x1b's six Goriyas 77, 0x1a 27, 0x19 17.
+- [ ] **Dungeon 3 (140)**: Manhandla 3:0x4d 97.
+- [ ] **Dungeon 2 (121)**: goriya 2:0x1e 41, 0x5e 29; moldorm 0x3e 22.
+- [ ] **Dungeon 1 (92)**: 1:0x44 25, 0x35 15, 0x23 15.
+- [ ] **`d6` (73)**: wizzrobe 6:0x3a 33, 0x38 15.
+- [ ] **After Dungeon 2 (56)**: ow-lynel 0:0x0a 21, ow-zora 0x38 13, ow-tektite 0x1a 13.
+- [ ] **Dungeon 4 (50)**: Gleeok 4:0x13 36.
+- [ ] **The hearts carried in**: from the start Dungeon 5 is entered with 7.74 of 10 hearts, Dungeon 9 with 12.25 of
+  15; `d8` (24.8%) and `d9` (31.0%) at full hearts are the last factors, and every heart kept earlier is one in them
+  (round29.md §18.3 for Dungeon 9's rooms).
+- [ ] **Cheap**: ow-start `r74-leg2`'s three unfinishable 0x2f take-any cave tracks (`0_2fcave_*`, the item "A
+  take-any cave's curriculum can never finish" below): half its resets idle.
+
 ### Round 29 (begun Nov 17): the leg to Dungeon 9, Dungeon 9, Ganon and the end
 
 round29.md; the walks `docs/routes/d9-walks.md` and `d9-fights-walks.md`; the route as built `docs/routes/d9.md`
@@ -89,10 +113,10 @@ branch.
   are their monsters' families'.
 - [ ] **0x30's stairs on a Trap's home**: the lure of `d9-walks.md` §3.4 is no rule of the objective.
 - [ ] **Drops** in the Wizzrobe rooms (hearts and fairies from 24 Wizzrobes) were not measured by any walk.
-- [ ] **One ow-zora for every stretch** (round29.md §19): `r29z-zora-s91` (from `r79t5-zora`: the cave curriculum
+- [x] **One ow-zora for every stretch** (round29.md §19): `r29z-zora-s91` (from `r79t5-zora`: the cave curriculum
   out, the chain's entries harvested, `r76-zora-arrows`' crossings as demos) passes the gate (`post-d5` 98.4% = 98.4%,
-  after Dungeon 2 94.5% = 94.5%, +0.10 hearts). Left: its chains after Dungeons 1, 3, 4, `post-d7`, `post-d6`,
-  `post-d8`, and the promotion.
+  after Dungeon 2 94.5% = 94.5%, +0.10 hearts). Promoted in the landed team; its other stretches are the legs of
+  `r29land-1k` (round29.md §20.2: none worse beyond noise).
 - [ ] **A take-any cave's curriculum can never finish** (round29.md §19.1): the explorer's track of a `waypoint:
   heart` cave goes on past the purchase, so a start from its later states already holds the container and never
   meets the waypoint; the first stage never passes and `curriculum.fraction` (0.5) sends half of all resets there, 600
@@ -223,7 +247,7 @@ round26.md §7-16. Dungeon 7 landed at 40.0% from its entrance (1.6.0.0, §16); 
 - [ ] **Dungeon 7 next, by what the chain of record loses** (`r76-1k-d7`, round26.md §16): 7:0x1b kills 324 of
   the 872 runs that enter it (Link comes in with 4.27 hearts), 0x1c 79 of 548, 0x1a from the cellar 48, 0x19 31.
   The planner beside takes 95.3% and loses only by timeouts in the Wallmaster room 0x0d (13 of 300).
-- [ ] **Dungeon 2's Goriya rooms since round 25** (`r76-1k-full` against `r75-1k-full`, 1000 paired runs): out of
+- [x] **Dungeon 2's Goriya rooms since round 25** (`r76-1k-full` against `r75-1k-full`, 1000 paired runs): out of
   Dungeon 2 79.2 against 87.6% (−8.4 ± 1.6), all in goriya's rooms: 2:0x5e 78 deaths against 36, 2:0x1e 73 against
   38, at the same hearts on entering (single rooms: `r75-f-a` 91.0 / 93.0%, `r76-goriya4-s78` 87.7 / 90.7%). The
   loss came with goriya's Dungeon 7 continuations (`r76-goriya2` to `-4`); no single paired check showed it
@@ -232,8 +256,9 @@ round26.md §7-16. Dungeon 7 landed at 40.0% from its entrance (1.6.0.0, §16); 
   `r77-goriya5-s80` (last; three seeds, all at or above round 25 on Dungeon 2): Dungeon 2 90.6% on fresh seeds
   (`s78` 82.7, +7.9 ± 1.5), `d7` 47.1% confirmed (37.6 on the same seeds, +9.5 ± 2.1), Dungeon 1 99.6 (+0.6 ± 0.3).
   In `r29-land`'s team (round29.md §20): evaluated (97.6%, −0.34 hearts), promoted, and `r29land-1k` Dungeon 2
-  91.6% (+10.1 ± 1.5 against `r76-1k`), Dungeon 1 99.8%, `d7` 46.6% (+6.6 ± 2.1). Left: the full route. A
-  per-room reset weight in the yaml would do this without harvested states outside git.
+  91.6% (+10.1 ± 1.5 against `r76-1k`), Dungeon 1 99.8%, `d7` 46.6% (+6.6 ± 2.1); the full route Dungeon 2 left
+  87.8% (+6.9 ± 1.6 against `r77b-1k-full`). A per-room reset weight in the yaml would do this without harvested
+  states outside git.
 - [ ] **darknut under the bomb rule** (round26.md §13, decisions 2026-11-17): Dungeon 3 loses about 5 points
   (84.7 → 79.3% of 300 paired runs) because the last pass of 3:0x5b had cheated bombs as its weapon when Link came
   with 0-1 (95 of 294 passes; now 0.61 hearts lost there and Manhandla kills 27 of them, 14 before). One darknut

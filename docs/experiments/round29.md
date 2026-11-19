@@ -40,7 +40,13 @@ those 49 away and nothing else found here takes more.**
   from 8 hearts; 0x10 238 and 128**), 16 demonstration files (972,347 rows); 2-iteration proof trainings of 14
   families and of each file; **the baseline `r79-base`: 0 of 100 on `post-d8` (no whirlwind) and on `d9` (82
   deaths in Lanmola's 0x55)**.
-- **Not trained**: any model of the stretch.
+- **Trained** (§16-18): three teams for the stretch; the third (`r79c-*`) ends the game in 310 of 1000 runs from
+  Dungeon 9's entrance (`d9`) and 105 from Dungeon 8's triforce (`post-d8`).
+- **One ow-zora for every stretch** (§19): `r29z-zora-s91`, the 0x47 cave's unfinishable curriculum out and the
+  chain's entries harvested; the leg to Dungeon 7 and the leg after Dungeon 2 as `r76-zora-arrows`.
+- **Landed as 1.9.0.0** (§20): the whole route, 358 steps, one team; every one of the 18 segments within noise of
+  its record or better; from the game start the models alone reach Dungeon 9 in 4 of 1000 runs and end the game in
+  none, the planner ends it in 89 of 300 (`corpus/replays/v0-plan-ending.tfreplay`).
 
 ## 1. The walks: what the running game says
 
@@ -1601,21 +1607,22 @@ other stretches (after Dungeons 1, 3 and 4, `post-d7`, `post-d6`, `post-d8`, 100
 inside s93's selection reproduces the table's reference run for run. **Promoted** in this branch's checkout:
 ow-zora `r29z-zora-s91` (its `ckpt.pt` the last checkpoint, its `eval.json` the round's).
 
-## 20. The whole route: one team (draft)
+## 20. The whole route: one team, landed as 1.9.0.0
 
 `r29-land` is one code line for the whole route (`d2first`, 358 steps, from the game start to the ending; 1.9.0.0):
 the Dungeon 6, Dungeon 8 and Dungeon 9 lanes merged, then `main` at round 27's landing, the goriya follow-up
-(round26.md §17) and the ow-lynel lane (round27.md §15). Its team is one run per family for every room of the
-route, chosen by the census of the Dungeon 9 lane's branch (every segment of the route played by one team, 1000
-runs a segment, paired with the segment's reference; swap tests for the families that lost one), with goriya and
-ow-lynel decided since. Every run is stamped 1.9.0.0.
+(round26.md §17), the ow-lynel lane (round27.md §15) and the ow-zora continuation (§19). Its team is one run per
+family for every room of the route, chosen by the census of the Dungeon 9 lane's branch
+(`docs/experiments/route-team.md`: every segment of the route played by one team, 1000 runs a segment, paired with
+the segment's reference; swap tests for the families that lost one), with goriya, ow-lynel and ow-zora decided
+since (decisions 2026-11-19, "One team for the whole route"). Every run is stamped 1.9.0.0.
 
 | family | run | from |
 |---|---|---|
 | ow-start, ow-tektite, ow-octorok | `r74-leg2` | `main` |
 | ow-peahat | `r75-bow-ow` | `main` |
 | ow-moblin | `r79t5-moblin` | Dungeon 9 lane (the census's swap: `r76-b` cannot play the later legs) |
-| ow-zora | `r76-zora-arrows` | `main`, **a placeholder**: it cannot play the leg to Dungeon 9 (0:0x27 and 0x47 from E), the lineage's `r79t5-zora` loses the arrow shop after Dungeon 5; a joint ow-zora run replaces it |
+| ow-zora | `r29z-zora-s91` | the joint ow-zora run (§19), from the Dungeon 9 lane's `r79t5-zora`; act `temperature:0.5+relax:16` |
 | ow-leever | `r79t5-ow` | Dungeon 9 lane |
 | ow-boulder | `r79b-boulder` | Dungeon 9 lane |
 | ow-lynel | `r27l-lynel-s81` | the joint ow-lynel run (round27.md §15), on `main` since round 27 |
@@ -1663,5 +1670,98 @@ team: Dungeons 3, 4, 5, `d6`, `d8` and `d9` are the census's chains run for run 
 Dungeon 2 is the goriya follow-up's own 1000 runs on `main`'s code run for run. It lifts Dungeon 2 by 10.1 points
 and `d7` by 6.6, as its selection measured on other seeds (90.6% and 47.1%).
 
-The legs between the dungeons and the full route from the start to the ending (1000 runs, the planner beside) are
-left for after ow-zora's run is in the team: no overworld family plays a room of these nine segments.
+### 20.2 The legs between the dungeons (`r29land-1k`)
+
+One batch (`r29land-1k-legs`), 1000 runs a leg (seeds 0-999), clips on, models alone, each from the state out of
+the dungeon before it to the next dungeon's entrance (`--stop-at step:N`), with ow-zora `r29z-zora-s91` in the
+team. These are also the 1000-run chains of the other stretches §19.3 left for `r29z-zora-s91`. Each leg is paired
+with `main`'s record of it (`r77b-1k` where round 27 ran it again with ow-lynel `r27l-lynel-s81`, else `r76-1k`)
+or the lane's.
+
+| leg | arrival | reference | its rate | this team | paired | hearts on arriving (ref.) | where |
+|---|---|---|---:|---:|---:|---|---|
+| after Dungeon 2 (`0_3cc_0`) | 1:0x73 | `main` `r77b-1k` | 94.0% | 93.2% | −0.8 ± 1.0 | 3.35 (3.19), +0.16 ± 0.05 | 0:0x38 (ow-zora) 13 deaths against 3 at 0.11 hearts a visit against 0.17; 0x0a 27 against 25 |
+| after Dungeon 1 (`0_37c_0`) | 3:0x7c | `main` `r76-1k` | 100.0% | 100.0% | 0 | 5.35 (5.17) | |
+| after Dungeon 3 (`0_74c_0`) | 4:0x71 | `main` `r76-1k` | 100.0% | 100.0% | 0 | 6.79 (6.77) | |
+| after Dungeon 4, the leg (`0_45c_0`) | 5:0x76 | `main` `r77b-1k` | 100.0% | 100.0% | 0 | 7.77 (7.96), −0.20 ± 0.05 | 0:0x3f from the cave (ow-zora): 130 wrong exits, no run lost |
+| `post-d5` (`0_0bc_0`) | 7:0x79 | `main` `r76-1k` | 98.7% | 98.0% | −0.7 ± 0.5 | 8.91 (8.21), +0.70 ± 0.06 | ow-leever's bounce limit at 0:0x0b 14 runs against 5 (the census's); no run leaves 0x44 without the arrows |
+| `post-d7` (`0_42c_0`) | 6:0x79 | `main` `r77b-1k` | 99.7% | 99.1% | −0.6 ± 0.3 | 10.71 (10.72) | 0:0x21 left without the sword 8 runs against 2 (ow-ghini, the same weights) |
+| `post-d6` (`0_22c_0`) | 8:0x7e | Dungeon 8 lane `r78-dark-1k` | 100.0% | 100.0% | 0 | 12.34 (12.27) | |
+| `post-d8` (`0_6dc_0`) | 9:0x76 | Dungeon 9 lane `r79c-1k` | 99.7% | 100.0% | +0.3 ± 0.2 | 12.29 (12.06), +0.23 ± 0.07 | |
+
+No leg is worse beyond noise. Against `r76-1k` after Dungeon 2 (95.7%) the leg is −2.5 ± 1.0: `r77b-1k` itself is
+−1.7 ± 1.0 there (ow-lynel `r27l-lynel-s81`, accepted at round 27's landing, round27.md §14.4). `post-d5` arrives
+with 0.70 hearts more than `main`'s.
+
+### 20.3 The full route, from the game start to the ending (`r29land-1k-full`)
+
+1000 runs (seeds 0-999), clips on, models alone, paired by seed with `main`'s `r77b-1k-full` (round 27's route
+ended on the D6 triforce):
+
+| milestone | `r29land-1k` | `r77b-1k` | paired difference | the planner (300) |
+|---|---:|---:|---:|---:|
+| Dungeon 2 entered | 99.9% | 99.9% | +0.0 ± 0.1 | 100.0% |
+| Dungeon 2 left | **87.8%** | 80.9% | **+6.9 ± 1.6** | 99.7% |
+| Dungeon 1 entered | **82.2%** | 75.5% | **+6.7 ± 1.8** | 98.7% |
+| Dungeon 1 left, Dungeon 3 entered | **73.0%** | 64.2% | **+8.8 ± 2.1** | 98.3% |
+| Dungeon 3 left, Dungeon 4 entered | **59.0%** | 50.1% | **+8.9 ± 2.2** | 95.3% |
+| Dungeon 4 left, Dungeon 5 entered | **54.0%** | 43.5% | **+10.5 ± 2.2** | 94.7% |
+| **the D5 triforce** | 26.2% | 23.3% | +2.9 ± 1.9 | 89.7% |
+| Dungeon 7 entered | 25.6% | 22.8% | +2.8 ± 1.9 | 87.0% |
+| **the D7 triforce** | **9.1%** | 6.1% | **+3.0 ± 1.2** | 84.7% |
+| Dungeon 6 entered | 9.0% | 6.0% | +3.0 ± 1.2 | 84.7% |
+| **the D6 triforce** | 1.7% (17 runs) | 1.1% | +0.6 ± 0.5 | 43.0% |
+| Dungeon 8 entered | 1.7% | | | 43.0% |
+| the D8 triforce | 0.4% (4 runs) | | | 42.0% |
+| Dungeon 9 entered | 0.4% | | | 42.0% |
+| the red ring | 0.3% (3 runs) | | | 39.7% |
+| the silver arrow | 0.2% (2 runs) | | | 33.3% |
+| Ganon reached | 0 | | | 30.0% |
+| **the game ended** | **0 of 1000** | | | **29.7% (89 runs)** |
+
+No milestone is worse than `main`'s; from Dungeon 2 to Dungeon 5 the team is 7-10 points better (goriya
+`r77-goriya5-s80` in Dungeon 2 and Dungeon 1, Manhandla and darknut in Dungeon 3), and the D7 triforce +3.0 ± 1.2.
+The models alone do not end the game from the start: the product of the 17 segments' rates is 0.5% (five runs in
+1000) at the segments' own starting hearts, and from the start every dungeon is entered with fewer (below).
+
+**Where the 1000 runs end**: Dungeon 5 278 (5:0x05 141, 0x64 40, 0x47 28, 0x65 27), `d7` 165 (7:0x1b 77, 0x1a 27,
+0x19 17), Dungeon 3 140 (3:0x4d Manhandla 97), Dungeon 2 121 (2:0x1e 41, 0x5e 29, 0x3e 22), Dungeon 1 92, `d6` 73
+(6:0x3a 33, 0x38 15), after Dungeon 2 56 (0:0x0a 21, 0x38 13, 0x1a 13), Dungeon 4 50 (4:0x13 36), `d8` 13 (8:0x3e
+6), post-d5 6, `d9` 4, post-d7 1, before Dungeon 2 1. **Hearts on entering** (of the containers then):
+Dungeon 2 2.59 of 3, Dungeon 1 3.31 of 5, Dungeon 3 5.43 of 6, Dungeon 4 6.83 of 7, Dungeon 5 7.74 of 10, Dungeon 7
+9.33 of 11, Dungeon 6 10.79 of 12, Dungeon 8 12.50 of 13 (17 runs), Dungeon 9 12.25 of 15 (4 runs). **Cheated**:
+2266 bombs in 1000 runs (2.27 a run, the bomb rule's grants: `r77b-1k-full` 1786), no key, no rupee.
+
+**5:0x05 (darknut) is the full route's first loss.** It kills 141 runs against `r77b-1k`'s 80: entered 938 times
+against 788 (more runs arrive) with 6.40 hearts against 6.87, and it loses 1.67 hearts a visit against 1.25 at the
+same hearts (6-7.9 hearts in: 63 deaths of 334 against 30 of 244). The `d5` segment (from 10 of 10 hearts) is
++3.5 ± 2.0 with `r78-dark37-s85`: the continuation for Dungeon 8 kept Dungeon 5 at full hearts, not at the route's.
+Dungeon 5 is entered by 540 runs (435) and its triforce taken by 262 (233).
+
+### 20.4 The planner beside (`r29land-plan-full`)
+
+300 runs from the game start (seeds 0-299), every model in `temperature:0.5+relax:16+plan:16:1`, clips on (the
+table above, last column). **89 of 300 end the game.** Where the 300 end: `d6` 125 (6:0x3a 51, 0x29 25, 0x38 20,
+0x28 15), `d9` 37 (9:0x05 9, 0x10 6, 0x31 6, 0x17 5), Dungeon 5 15, Dungeon 3 9, post-d5 8 (vire off the route at
+4:0x62 6), `d7` 7 (wallmaster's step limit 6), `d8` 3, after Dungeon 2 3, Dungeons 1, 2 and 4 4. Hearts on
+entering: Dungeon 2 2.89 of 3, Dungeon 1 3.94 of 5, Dungeon 3 5.78 of 6, Dungeon 4 6.94 of 7, Dungeon 5 9.33 of 10,
+Dungeon 7 10.64 of 11, Dungeon 6 11.17 of 12, Dungeon 8 12.86 of 13, Dungeon 9 13.39 of 15. Cheated: 1432 bombs
+(4.77 a run), 1 key, no rupee. `main`'s planner (`r77-plan-full`, 300, the route to the D6 triforce) took the D6
+triforce in 37.7%.
+
+### 20.5 The recorded run
+
+No models-alone run ends the game from the start, so the planner's seed 6 was played again alone with `--replays`
+(`eval-chain --first-seed 6 --runs 1 --act temperature:0.5+relax:16+plan:16:1 --clips on --replays DIR`): the same
+result, 7,257 steps and 146,425 frames as in the batch. `tf replay info`: ending `win`, "the game ended in (level 9,
+room 0x32)", 146,427 frames, 45 edits, 8 cheats (bombs), 2 states, act `temperature:0.5+relax:16+plan:16:1` for all
+34 models, triforce 1.9.0.0. `tf replay verify`: ok. It is the first recorded run from the game start to the
+ending, and joins the compatibility corpus as `corpus/replays/v0-plan-ending.tfreplay` (65 KB, the size of the
+others; no local path in its META).
+
+### 20.6 The suites
+
+On the final code (`r29-land` before the landing): pytest 828 passed, 9 skipped; `cargo test --release --workspace
+--features zelda/zcore` 1023 passed, 0 failed, 1 ignored; the zelda-asm tests 5 passed; `asm.py check` ok; `tf
+replay verify corpus/replays/*.tfreplay` 4 ok (with the new replay; the corpus test
+`the_replay_corpus_still_verifies` passes with it).

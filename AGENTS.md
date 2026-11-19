@@ -6,8 +6,8 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
 
 ## Where things stand (Nov 19)
 
-- **Round 29 (Nov 17-18, 1.5.1.0; `docs/experiments/round29.md`):** the leg to Dungeon 9, Dungeon 9, Ganon and
-  the end of the game, on round 28's branch. **The game is ended by the models** (round29.md §16-18): the third
+- **Round 29 (Nov 17-19; landed with round 28 as 1.9.0.0, `docs/experiments/round29.md`):** the leg to Dungeon 9,
+  Dungeon 9, Ganon and the end of the game, on round 28's branch. **The game is ended by the models** (round29.md §16-18): the third
   team (`r79c-*`, §18: wizzrobe `r79c-wj-s85`, the route's one wizzrobe, a joint training on Dungeon 6's and level
   9's rooms holding `d6` at 314 against 316 of 1000; ganon `r79c-ganon`, patra `r79c-patra`, like-like `r79c-like`
   with the planner's demonstrations and starts at the chain's hearts; lanmola's clip of 9:0x55 at no heart and
@@ -15,16 +15,42 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   15 hearts (`d9`, +16.7 ± 1.8 paired against the second team's 143; the first team 5) and 105 of 1000 from
   Dungeon 8's triforce (`post-d8`, 997 arrive with 12.06 hearts; the second team 39)**; the honest planner beside
   85.3% and 75.3% of 300. Runs from Dungeon 8's triforce and from Dungeon 9's entrance to the ending are recorded
-  and verified (§17.5, §18.2). **Not landed**: the team lands after Dungeons 6 and 8 (ten of its families differ
-  from those lanes' promoted runs; only wizzrobe was judged there); `r29-land` merges the three lanes into one route
-  to the end of the game (1.9.0.0, decisions 2026-11-19), and the merged team's chains of record go here:
+  and verified (§17.5, §18.2). **Landed: the whole game** (round29.md §20; decisions 2026-11-19 "One team for the
+  whole route"): `d2first` has 358 steps from the game start to the ending (`exit: end`), the Dungeon 6, 8 and 9
+  lanes merged into one line, and one team plays every room: the census (`docs/experiments/route-team.md`) chose
+  each family's run on every segment, and three joint continuations serve the stretches their lineages split
+  (ow-lynel `r27l-lynel-s81`, goriya `r77-goriya5-s80`, ow-zora `r29z-zora-s91`: harvested handoff states at the
+  chain's hearts give the old rooms back). The chains of record `r29land-1k` (1000 runs a segment, seeds 0-999,
+  clips on, models alone; paired against the record each segment was accepted with, none worse beyond noise):
   <!-- r29 chains of record -->
-  What loses runs is the hearts: the rooms cost
-  16.7 of 15 containers; wizzrobe ends 514 of `d9`'s 690 lost runs, 394 of them in 0x10, 0x30 and 0x05 entered with
-  four to seven hearts; the leg's 2.97 hearts (1.25 at 0:0x05's rock wall) cut `post-d8` to a third of `d9`. No
-  potions, no CONTINUE (the owner):
-  a fourth round is play (§18.3: the hearts into the dear rooms, the leg's hearts, the planner as a teacher again
-  from the third team's hearts, more Dungeon 6 in wizzrobe's joint draws).
+  - Dungeon 2 (`2_7ds_0` → 0:0x3c): 91.6% (+10.1 ± 1.5 against `main`'s `r76-1k`).
+  - after Dungeon 2 (`0_3cc_0` → 1:0x73): 93.2% (−0.8 ± 1.0 against `r77b-1k`), 3.35 hearts.
+  - Dungeon 1 (`1_73s_0` → 0:0x37): 99.8% (+0.8 ± 0.3).
+  - after Dungeon 1 (`0_37c_0` → 3:0x7c): 100.0%.
+  - Dungeon 3 (`3_7cs_0` → 0:0x74): 82.7% (+4.5 ± 1.7).
+  - after Dungeon 3 (`0_74c_0` → 4:0x71): 100.0%.
+  - Dungeon 4 (`4_71s_0` → 0:0x45): 91.7% (−0.4 ± 1.2).
+  - after Dungeon 4, the leg (`0_45c_0` → 5:0x76): 100.0%, 7.77 hearts (−0.20 ± 0.05 against `r77b-1k`).
+  - Dungeon 5 (`5_76s_0` → 0:0x0b): 72.2% (+3.5 ± 2.0).
+  - `post-d5` (`0_0bc_0` → 7:0x79): 98.0% (−0.7 ± 0.5), 8.91 hearts (+0.70).
+  - `d7` (`7_79s_0` → the D7 triforce): 46.6% (+6.6 ± 2.1).
+  - `post-d7` (`0_42c_0` → 6:0x79): 99.1% (−0.6 ± 0.3 against `r77b-1k`).
+  - `d6` (`6_79s_0` → the D6 triforce): 31.4% (+1.4 ± 2.0 against `r77-1k`).
+  - `post-d6` (`0_22c_0` → 8:0x7e): 100.0% (the Dungeon 8 lane's `r78-dark-1k` 100.0%).
+  - `d8` (`8_7es_0` → the D8 triforce): 24.8% (−2.4 ± 1.9 against `r78-dark-1k`).
+  - `post-d8` (`0_6dc_0` → 9:0x76): 100.0% (+0.3 ± 0.2 against the Dungeon 9 lane's `r79c-1k`), 12.29 hearts.
+  - `d9` (`9_76s_0` → the ending): 31.0% (`r79c-1k`'s runs, run for run).
+  - **the full route** (`r29land-1k-full`, from the game start): Dungeon 1 left 73.0% (+8.8 ± 2.1 against
+    `r77b-1k-full`), the D5 triforce 26.2% (+2.9 ± 1.9), the D7 triforce 9.1% (+3.0 ± 1.2), the D6 triforce 1.7%
+    (+0.6 ± 0.5), the D8 triforce 0.4%, Dungeon 9 entered 0.4%, the red ring 0.3%, Ganon reached 0, **the game
+    ended 0 of 1000**; 2.27 cheated bombs a run, no key, no rupee. **The honest planner beside**
+    (`temperature:0.5+relax:16+plan:16:1`, 300 runs): the D6 triforce 43.0%, Dungeon 9 entered 42.0%, the red
+    ring 39.7%, Ganon reached 30.0%, **the game ended 29.7% (89 runs)**; seed 6, played again alone, is
+    `corpus/replays/v0-plan-ending.tfreplay` (146,427 frames, `tf replay verify` ok).
+  What loses the full route is the hearts each dungeon is entered with (Dungeon 5 7.74 of 10, Dungeon 9 12.25 of
+  15): 5:0x05 (darknut, 141 deaths against `main`'s 80 at the route's hearts), 7:0x1b, 3:0x4d, Dungeon 2's Goriya
+  rooms, 6:0x3a; in Dungeon 9 wizzrobe's 0x10, 0x30 and 0x05 entered with four to seven hearts. No potions, no
+  CONTINUE (the owner). **Next: the optimisation round over the whole route** (backlog "The whole game").
   Built before the training: (1) **the walks** (`docs/routes/d9-walks.md`,
   `d9-fights-walks.md`: no model clears any fight of level 9; a rule reading positions wins each); (2) **the route
   vocabulary** (`docs/routes/d9.md` §13, `docs/architecture.md` "The leg to Dungeon 9, Dungeon 9 and the end"): the

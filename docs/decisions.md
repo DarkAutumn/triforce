@@ -3054,4 +3054,6 @@ is one run per family for all 358 steps, chosen this way:
   from chain replays), drawn at `harvested_fraction` 0.2-0.33, restore them. Each continuation is chosen on the
   segments of every stretch the family plays, not only its own.
 - **The bar:** every one of the 18 segments within noise of its reference or better, 1000 runs each
-  (`r29land-1k`, round29.md §20).
+  (`r29land-1k`, round29.md §20). Met: none is worse beyond noise; Dungeon 2 +10.1, Dungeon 3 +4.5, `d7` +6.6 and
+  the full route's milestones to Dungeon 5 +7 to +10 points better. From the start the models alone end the game
+  in 0 of 1000 runs, the planner in 89 of 300.
