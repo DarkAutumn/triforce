@@ -34,9 +34,13 @@ four hearts, and only if every room is played as well as its best script.**
   room's rule played it), family files, chain segments `post-d6` and `d8`, a track for every state, the proof
   round, and the baseline `r78-base`: **0 of 100 on both segments** (no run leaves 0x22; 0x5e is cleared in 4 of
   100 visits).
-- **Not done** (§9-11): the explorer's fight tracks and staged tracks of 0x5e and 0x3e; a `--demos` training with
-  the three large files (darknut-5e and gleeok ran out of GPU memory beside the day's other trainings, darknut-3e
-  was not tried; the three small ones train); any trained model.
+- **Not done at the states step** (§9-11): the explorer's fight tracks and staged tracks of 0x5e and 0x3e; a
+  `--demos` training with the three large files (darknut-5e and gleeok ran out of GPU memory beside the day's other
+  trainings, darknut-3e was not tried; the three small ones train).
+- **Trained** (§14-15): pols-voice `r78t4-pols`, boss-gleeok `r78t4-gleeok`, boss-manhandla `r78t4-manhandla2`,
+  ow-lynel `r78t4-lynel` (the whirlwind) and ow-moblin `r78t4-moblin` (the tree) kept from the first team, and
+  darknut `r78-dark37-s85` continued with Dungeon 8's hearts priced: **the D8 triforce in 272 of 1000 runs from
+  Dungeon 8's entrance and 263 from Dungeon 6's triforce** (`r78-dark-1k`; the first team 63 and 60).
 
 ## 1. The walks: what the running game says
 

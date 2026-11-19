@@ -1115,6 +1115,6 @@ within noise). On seeds not used to choose it: Dungeon 2 on 1000-1999 **90.6%** 
 47.1% on 3000-3999 (+9.5 ± 2.1). Product on fresh seeds 90.6 × 47.1 = 42.7% against `s78`'s 82.7 × 37.6 = 31.1%
 and its record 32.6%.
 
-**Not yet promoted.** What remains: the canonical evaluation of `r77-goriya5-s80` (clips on; its `ckpt.pt` is
-already the last checkpoint), `triforce promote goriya r77-goriya5-s80 --act temperature:0.5+relax:16`, the chains
-`d2`, `d1`, `d7` and the full route to the D7 triforce (1000 runs each) against `r76-1k`.
+**Promoted in `r29-land`'s team** (round29.md §20): its canonical evaluation (clips on, its act mode) 97.6% of 5400
+episodes, −0.34 hearts; `triforce promote goriya r77-goriya5-s80 --act temperature:0.5+relax:16`; the chains `d2`,
+`d1`, `d7` (`r29land-1k`: 91.6%, 99.8%, 46.6%) and the full route to the ending there.
