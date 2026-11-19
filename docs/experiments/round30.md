@@ -93,3 +93,8 @@ paired with `r29land-1k`), the bar the product of Dungeon 2 and `d7` against 91.
 secondaries are judged on one pre-chosen candidate each (the last checkpoint, no choice among checkpoints, so no
 selection bias), paired with `r29land-1k` on seeds 0-999: wallmaster on `d7` and `d1`, boss-gleeok on `d4` and
 `d8`. **Nothing is promoted yet.**
+
+First result: `r30-goriya6-s32`'s last checkpoint takes the D7 triforce in **54.2%** of `d7`'s screen runs (seeds
+2000-2999, 6.36 hearts on arriving) and **53.7%** on the confirmation seeds 3000-3999 (6.35); its it005449 50.2% and
+47.9% (−5.8 ± 2.2 against the last). The promoted `r77-goriya5-s80` measured 46.5% and 47.1% on the same seeds in
+round 27 (round26.md §17); the pairing against it in this team comes with `-s30`'s selection.
