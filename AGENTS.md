@@ -457,7 +457,9 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   `d2first`. "The models should overlap in most cases, but you are allowed to train specific ones if this route
   needs specific training." **`d3first` becomes the main route when it works, "works as defined as 'a golden path
   eventually succeeds'"; `d2first` is then the secondary** ("d3 is the faster route, and it's what is used by
-  speedrunners"). Missing bombs, keys and rupees are cheated and counted on both.
+  speedrunners"). Missing bombs, keys and rupees are cheated and counted on both. Route data:
+  `docs/routes/d3first.md`; the dungeons and shared legs are routes.yaml `blocks:` both routes `include:`, so a
+  change to one is a change to both (decisions 2026-11-19 "`d3first` as route data").
 - **Old worktrees are deleted once their work is on `main`** (Lee, Nov 19: "you can always delete old worktrees.
   Once things are merged into main, delete them and keep stuff tidy"): `git worktree remove` (the branch stays);
   first copy out what is not in git and still wanted: promoted run dirs into `models/`, demonstration files into

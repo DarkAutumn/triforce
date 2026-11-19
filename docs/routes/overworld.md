@@ -236,6 +236,23 @@ here; the route tests are `crates/zelda/tests/route_ways.rs` (monsters removed, 
 - **Clips switched off on the clip way** (decisions 2026-11-13 "The run-time clips switch"): in 0x77 back N; in 0x76
   or 0x75's E part back E and N through 0x76's N edge (X `$C0`-`$D8`) into 0x66 from S, then W on the plain way.
 
+## d3first's overworld (phase X)
+
+`d3first` (`docs/routes/d3first.md`, walked in `d3first-walks-a.md` and `-b.md`) crosses these overworld rooms of
+its own (the rest are d2first's rooms, entered from the same or other sides):
+
+| Steps | Room | Entry → exit | Family | Notes |
+|---|---|---|---|---|
+| 0-5 | 0x77, cave, 0x77, 0x76, 0x75, 0x74 | start → cave → S → W, E → W, E → W (`CLIP E`), E → cave | ow-start, ow-tektite, ow-leever, ow-tektite | the wood sword, d2first's clip way to Level 3 from the game start (0x77 left W) |
+| 53-60 | 0x45, 0x55, 0x56, **0x46**, 0x47, 0x48, 0x38, 0x37 | cave → S, N → E, W → N, S → E, W → E, W → N, S → W, E → cave | ow-peahat, ow-zora, ow-leever, ow-octorok | Level 4 to Level 1; 0x46's one monster is a Zora |
+| 83-100 | 0x37, 0x38, 0x28, **0x29, 0x2a, 0x2b**, 0x2c (cave), **0x2d (cave)**, 0x2c, 0x1c, **0x0c (cave)**, 0x0b | cave → E ... | ow-octorok, ow-zora, ow-leever, ow-tektite, ow-start | the heart rock from W, 0x2d's rock wall (`bomb_secret: [10, 2]`, 30 rupees), the blue candle's shop, 0x0c's wrap exit |
+| 124-148 | 0x0b, 0x74, 0x73, 0x63, **0x62 (cave)**, 0x52, 0x51, 0x50, 0x60, 0x5f, 0x4f, 0x3f, 0x2f (cave), 0x3f, 0x3e, **0x3d (cave)**, 0x4d, 0x4c, 0x3c | cave → recorder ... S → cave | ow-leever, ow-tektite, ow-moblin, ow-lynel, ow-zora, ow-start, ow-octorok | the whirlwind to 0x74, the dead woods' tree (`how: burn`, 100 rupees), the world wrap, the raft heart, the Armos (`how: armos`, 30 rupees) |
+| 159 | 0x3c | cave → recorder | ow-octorok | the whirlwind to 0x45 |
+
+0x2d and 0x3d are crossed by d2first too: their caves are taken only by a step leaving into them (an overworld rock
+wall's bomb is granted only there, `zelda::cheats::needs`; MOVE into a secret Armos is offered only there,
+`GameCompletion::secret_armos`), so d2first's crossings play as before.
+
 ## Open questions
 
 - Ladder crossings inside rooms (water one tile wide): no edge needs the ladder, but 0x17 and 0x27 are each two

@@ -1946,8 +1946,15 @@ is joined at the end. It prints a JSON summary (`out`, `frames`, `seconds`, `wid
   each model's checkpoint (`<family>/<run>/ckpt.pt`), so it records which run played.
 - **Segments and scopes per route:** `eval_batch.ROUTE_SEGMENTS[route]` (segments, arrival targets, milestones;
   start states by bare name) and `room_stats.ROUTE_SCOPES[route]` (the room-stats scopes; `room-stats` takes the
-  route from the chain files). `d2first`'s are the tables of before, unchanged. A route without a table is measured
-  by `--chain` entries or `--segments`; `d3first`'s tables are added with its steps.
+  route from the chain files). `d2first`'s are the tables of before, unchanged; `d3first`'s (`D3FIRST_SEGMENTS`,
+  `D3FIRST_SCOPES`) follow its order. A route without a table is measured by `--chain` entries or `--segments`.
+- **Shared definitions:** what both routes play alike (every dungeon's inside but Dungeon 3's way in, and the legs
+  after Dungeon 3 and after Dungeon 7) is written once in routes.yaml's top-level `blocks:` (name -> a list of steps
+  and stretches) and spliced into a route's list by an element `{include: NAME}` (`zelda::game_map` `parse_element`;
+  a block holds no include, every block is included somewhere). The steps are the route's own once spliced (numbers,
+  visits, stretches, reserves follow the route's list), so a change to a block reaches both routes; `d2first`'s steps
+  are pinned field for field by `tests/fixtures/d2first_steps.json`. A route's own reserves before a block hold in
+  it until a step of the block sets one.
 
 No model input changes: no COMPAT bump for any of this (2.0.0.0 is the owner's MAJOR for `d3first`).
 

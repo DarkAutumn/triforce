@@ -3100,3 +3100,29 @@ After watching the first complete game (`corpus/replays/v1-golden-ending.tfrepla
 - **Segment and room-stats tables keyed by route** (`eval_batch.ROUTE_SEGMENTS`, `room_stats.ROUTE_SCOPES`);
   `d2first`'s unchanged.
 - No model input changed: no COMPAT bump; 2.0.0.0 is the owner's MAJOR for `d3first`.
+
+## 2026-11-19 — `d3first` as route data: shared blocks, its own legs (phase X)
+
+The lead's decisions while Lee is away (`docs/routes/d3first.md`):
+
+- **Dungeon insides are written once:** routes.yaml `blocks:` with `{include: NAME}` in both routes; every dungeon
+  but Dungeon 3's way in, and the legs both routes take (to Level 4 after Dungeon 3, everything from the whirlwind's
+  landing on 0x45 to the end). `d2first` is pinned field for field by a golden list; phase IX's changes go into the
+  blocks and reach both routes. What differs between the routes inside a block (sword, hearts, items, the bag) is
+  their states', not route data.
+- **Where the walks corrected the lead's guesses, the walked way is the route:** Level 4 to Level 1 by 0x55, 0x56,
+  0x46, 0x47, 0x48, 0x38; 0x2d to the candle shop by 0x2c, 0x1c, 0x0c; Level 3's landing to the world wrap by 0x73,
+  0x63, 0x62, 0x52, 0x51's wrap exit, 0x50, 0x60's wrap exit.
+- **Screen scrolls are the families' CLIP**, not route data; the wrap exits of 0x75, 0x0c, 0x51, 0x60, 0x3e are
+  d3first's only ways (no plain way, no stretch).
+- **Dungeon 1 is the shared block** although this route needs neither 0x23's nor 0x53's key (noted for Lee).
+- **Bombs for the Olive Garden with the wood sword: no new cheat.** A reserve of 8 from Level 4's exit to Dungeon 5
+  keeps what Link finds; walls are cheated as before. A reserve of 1 through Dungeon 2 keeps Dodongo's bomb from the
+  goriya and moldorm families.
+- **Rupees:** no reserve of its own (its own steps hold no arrows); the shared reserves from the arrows on are where
+  the ledger says it runs dry; Ganon's and 8:0x4c's arrows have no cheat (noted for Lee).
+- **Rooms both routes cross keep d2first's play:** 0x2d's rock wall grants its bomb only to a step entering its cave;
+  MOVE into 0x3d's Armos is offered only to a step heading for its stairs.
+- **New vocabulary:** `blocks:`/`include:`, `waypoint: blue-candle` (a purchase). The recorder's facings out of
+  Levels 5 and 2 need none (the engine computes them; ow-octorok gets `items: {recorder: true}`). No model input
+  changed: no COMPAT bump.
