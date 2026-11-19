@@ -1425,14 +1425,17 @@ team with `r76-zora-arrows`, every other checkpoint identical, on the same seeds
 
 | run | candidate | screen | hearts | confirm | hearts | confirm vs `r76-zora-arrows` |
 |---|---|---:|---:|---:|---:|---:|
-| `r76-zora-arrows` | (reference) | 93.8% | 3.21 | 94.5% | 3.18 | |
+| `r76-zora-arrows` | (reference) | 93.8% | 3.21 | 94.5% | 3.17 | |
 | `r29z-zora-s91` | **last (it 2022)** | 94.0% | 3.26 | **94.5%** | **3.28** | **+0.0 ± 0.8, +0.10 ± 0.03 hearts** |
 | | it001958 | 92.9% | 3.19 | 95.2% | 3.19 | |
 | `r29z-zora-s92` | last | 93.8% | 3.19 | 93.8% | 3.24 | −0.7 ± 0.9 |
 | | it001958 | 93.5% | 3.13 | 94.0% | 3.16 | −0.5 ± 0.8 |
-| `r29z-zora-s93` | it001958 | 93.1% | | | | |
+| `r29z-zora-s93` | last | 93.6% | 3.15 | 93.5% | 3.17 | −1.0 ± 0.9 |
+| | it001958 | 93.1% | 3.21 | 92.2% | 3.16 | −2.3 ± 0.7 |
 
 On the confirmation seeds `r29z-zora-s91` loses 0.157 hearts an ow-zora visit against 0.175 (16 deaths against 14).
 **`r29z-zora-s91` (its last checkpoint, the run's `ckpt.pt`) passes the gate** on both segments. Its chains of the
 other stretches (after Dungeons 1, 3 and 4, `post-d7`, `post-d6`, `post-d8`, 1000 runs, paired against
-`r76-zora-arrows` and `r79t5-zora`; the references are measured) and its promotion were left for the next step.
+`r76-zora-arrows` and `r79t5-zora`; the references are measured) were left for the next step. The reference measured
+inside s93's selection reproduces the table's reference run for run. **Promoted** in this branch's checkout:
+ow-zora `r29z-zora-s91` (its `ckpt.pt` the last checkpoint, its `eval.json` the round's).
