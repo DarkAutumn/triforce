@@ -2992,3 +2992,33 @@ MINOR +1: the route completes Dungeon 6, from its entrance in 30.0% of 1000 runs
 the working rate the owner set for a first team (about 30%, decisions 2026-11-16). COMPAT 0, REV 0: nothing a
 loaded model reads changed since 1.5.1.0, so the 1.6.0 runs are stamped 1.7.0.0 (`triforce stamp`), not converted.
 The Cargo workspace is 1.7.0.
+
+## 2026-11-19 — Dungeons 8 and 9 are `d2first`; one landing for the last three stretches; 1.9.0.0 (rounds 28-29)
+
+Rounds 28 and 29 carried their stretches as the scouting routes `d8` (`{extends: d6}`, steps 281-296) and `d9`
+(`{extends: d8}`, steps 297-357) while their states, families and teams were built, each lane on the one before it
+(round 28 on round 27's branch, round 29 on round 28's). With each stretch taken by a team at a working rate, the
+lanes are merged (`r29-land`: `r27-land`, round 28's `r26-steps27-walks28-team4` and round 29's line) and both
+routes are folded into the trained route, as rounds 26 and 27 folded `d7` and `d6`.
+
+- **`d2first` has 358 steps and ends with the game**: Zelda's room 9:0x32, `exit: end` (the first frame of game
+  mode `$13`). Steps 0-280 are unchanged (the game start to the D6 triforce), 281-296 the leg to Dungeon 8 and
+  Dungeon 8, 297-357 the leg to Dungeon 9, Dungeon 9, Ganon and Zelda's room. The routes `d8` and `d9` are gone
+  (`_native.routes()` is `d2first` and `clips-gauntlet`); the 222 manifest entries of their states name `d2first`.
+- **The draft `first-quest` is removed**: every step it held is now in the route (`draft_routes.yaml` keeps its
+  header and says so).
+- **Comparing with the lanes:** round 28's segments end on the D8 triforce at `--stop-at step:297`, round 27's full
+  route at `--stop-at step:281` (`full→post-d6`). The new segments are `post-d6` (`0_22c_0`), `d8` (`8_7es_0`),
+  `post-d8` (`0_6dc_0`) and `d9` (`9_76s_0`), eighteen with the earlier ones; `d6` now arrives at 0:0x22 after 6:0x0c
+  and `d8` at 0:0x6d after 8:0x2c.
+- **`heart_value.json`** names `d2first`; refit on it from the same 30 chain files, it is byte-identical.
+- **One landing for the last three stretches** (the lead): Dungeon 6 was held for ow-lynel (2026-11-19 above), and
+  the Dungeon 9 team differs from the Dungeon 6 and Dungeon 8 lanes' promoted runs in ten families, judged in none
+  of those lanes but wizzrobe. So the three stretches land together, with one team for the whole route chosen
+  family by family and its chains measured on the merged line, rather than three landings that would each decide
+  the same families again.
+- **1.9.0.0:** MINOR +2, the route completes Dungeons 8 and 9 and the game: the D8 triforce from Dungeon 8's
+  entrance in 27.2% of 1000 runs (`r78-dark-1k-d8`), the end of the game from Dungeon 9's entrance in 31.0% of 1000
+  (`r79c-1k-d9`), the working rate for a first team (about 30%, 2026-11-16). COMPAT 0, REV 0: nothing a loaded
+  model reads changed since 1.5.1.0, so the earlier runs are stamped 1.9.0.0 (`triforce stamp`), not converted.
+  The Cargo workspace is 1.9.0.

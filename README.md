@@ -3,8 +3,9 @@
 Triforce trains reinforcement learning agents to play *The Legend of Zelda* on the NES. The agents play from the
 start of the game through Dungeon 2, go get the white sword, clear Dungeons 1, 3 and 4, cross the overworld to the
 mountain (two heart containers, 100 rupees, the Lost Hills), clear Dungeon 5, take the whirlwind, two shops and a
-pond to Dungeon 7, go get the magic sword under a gravestone, and finish on the triforce piece at the end of Dungeon
-6, with a few detours along the way (heart containers, the bow, the raft, the ladder, the recorder, the red candle).
+pond to Dungeon 7, go get the magic sword under a gravestone, clear Dungeon 6, burn a tree for Dungeon 8, and play
+Dungeon 9 to Ganon and Zelda, to the end of the game, with a few detours along the way (heart containers, the bow, the
+raft, the ladder, the recorder, the red candle, the red ring, the silver arrow).
 
 ![Six runs by the trained models, played back with play-zelda.py](docs/images/play-zelda.png)
 
@@ -12,7 +13,7 @@ pond to Dungeon 7, go get the magic sword under a gravestone, and finish on the 
 
 - **No pixels.** The networks never see the screen. Every observation is built from the game's RAM: Link, the
   enemies, projectiles and items, the room's tiles, and a pointer to the current objective.
-- **One model per kind of room.** There are 31 specialist PPO models, grouped by the enemies they face (Goriyas,
+- **One model per kind of room.** There are 34 specialist PPO models, grouped by the enemies they face (Goriyas,
   Darknuts, the Moldorm, each boss, and so on). A runner follows a fixed route through the game and hands each
   room to its specialist.
 - **Actions that mean something.** Each action is a short move (eight directions), a sword swing, an item, or a

@@ -216,11 +216,11 @@ The same rule as for the leg to Dungeon 7: no macros. The gravestone, the sword,
 played by MOVE, BOMB and ARROW; what is new lives in the objective (targets, outcomes), in the mask, and in where a
 MOVE ends.
 
-- **Route** (routes.yaml): steps 248-280 of `d2first`, which ends on the D6 triforce (built as the scouting route
-  `d6` = `{extends: d2first}`, merged in round 27; decisions 2026-11-19; segments `post-d7` from `0_42c_0`, arrival
-  6:0x79, and `d6` from `6_79s_0`, the route's end). The steps (the stretch `woods`: the wrap exit out of
-  0x51 into 0x50, or 0x51 S, the Lost Woods by `exit: maze`, 0x60, 0x50 from S; the graveyard; 0x21 and its cave;
-  0x31, 0x32, 0x22; Dungeon 6's sixteen steps). `waypoint: sword` on the magic sword's cave step
+- **Route** (routes.yaml): steps 248-280 of `d2first`, which ended on the D6 triforce until 1.9.0.0 (built as the
+  scouting route `d6` = `{extends: d2first}`, merged in round 27; decisions 2026-11-19; segments `post-d7` from
+  `0_42c_0`, arrival 6:0x79, and `d6` from `6_79s_0`, arrival 0:0x22). The steps (the stretch `woods`: the wrap
+  exit out of 0x51 into 0x50, or 0x51 S, the Lost Woods by `exit: maze`, 0x60, 0x50 from S; the graveyard; 0x21 and
+  its cave; 0x31, 0x32, 0x22; Dungeon 6's sixteen steps). `waypoint: sword` on the magic sword's cave step
   (`objectives::WAYPOINT_SWORD`): done once Link holds the cave's sword, `missed` on leaving the overworld room
   without it or on standing in the cave with fewer heart containers than `SWORD_UPGRADES` asks (the old man refuses
   under 12). `GameCompletion::sword_target` (the sword milestone that leads a Link who may take a better sword to its
@@ -1559,10 +1559,11 @@ every step, so following an enemy that moves away pays again, and knockback rese
   randomization is skipped; the idle is skipped through `triforce/states/power_on/idle_<frames>.state` when the
   files are there); `checkpoint` (`{'state': TFZSTATE bytes, 'step', 'granted'}`: the state another run ended
   in, restored as is on its route step with the cheat ledger's grants, no frame run and nothing redrawn; an
-  entry of a recording's `Replay.states()` is one). It ends on taking its last step's triforce (d2first:
-  Dungeon 3's, since Nov 9); `stop_at` (`L:0xRR[:cave]`) ends it on entering that room instead, `stop_step`
-  (`--stop-at step:N`) on entering route step N's room by the route's own exit from the room before it (a
-  wrong exit that lands there with the step's progress doesn't count; reason `reached route step N (...)`).
+  entry of a recording's `Replay.states()` is one). It ends on taking its last step's triforce, or on the end of
+  the game for a last step `exit: end` (d2first since 1.9.0.0); `stop_at` (`L:0xRR[:cave]`) ends it on entering
+  that room instead, `stop_step` (`--stop-at step:N`) on entering route step N's room by the route's own exit from
+  the room before it (a wrong exit that lands there with the step's progress doesn't count; reason `reached route
+  step N (...)`).
   All are checked up front: `start_from` must exist, the three starts and the two stops are exclusive, and a
   stop must be after the start's route step. A missed `heart` waypoint ends
   the run as a failure (room outcome `missed`); so does a retreat beyond `MAX_RETREATS` (3) per run
