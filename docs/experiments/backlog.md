@@ -89,6 +89,16 @@ branch.
   are their monsters' families'.
 - [ ] **0x30's stairs on a Trap's home**: the lure of `d9-walks.md` §3.4 is no rule of the objective.
 - [ ] **Drops** in the Wizzrobe rooms (hearts and fairies from 24 Wizzrobes) were not measured by any walk.
+- [ ] **One ow-zora for every stretch** (round29.md §19): `r29z-zora-s91` (from `r79t5-zora`: the cave curriculum
+  out, the chain's entries harvested, `r76-zora-arrows`' crossings as demos) passes the gate (`post-d5` 98.4% = 98.4%,
+  after Dungeon 2 94.5% = 94.5%, +0.10 hearts). Left: its chains after Dungeons 1, 3, 4, `post-d7`, `post-d6`,
+  `post-d8`, and the promotion.
+- [ ] **A take-any cave's curriculum can never finish** (round29.md §19.1): the explorer's track of a `waypoint:
+  heart` cave goes on past the purchase, so a start from its later states already holds the container and never
+  meets the waypoint; the first stage never passes and `curriculum.fraction` (0.5) sends half of all resets there, 600
+  idle steps each. Seen in ow-zora `r79t5-zora` (`0_47cave_*`, the second half of its training) and ow-start
+  `r74-leg2` (`0_2fcave_*`). Fix in the curriculum or the explorer (end such a track at the waypoint, or count a start
+  past it as passed); until then leave those tracks out of the family's trajectories.
 
 ### Round 28 (begun Nov 17): the leg from Dungeon 6 and Dungeon 8
 
@@ -221,7 +231,7 @@ round26.md §7-16. Dungeon 7 landed at 40.0% from its entrance (1.6.0.0, §16); 
   fell from 40% to 11% of goriya's resets; `harvested_fraction: 0.33` with Dungeon 2's chain handoffs gives it back.
   `r77-goriya5-s80` (last; three seeds, all at or above round 25 on Dungeon 2): Dungeon 2 90.6% on fresh seeds
   (`s78` 82.7, +7.9 ± 1.5), `d7` 47.1% confirmed (37.6 on the same seeds, +9.5 ± 2.1), Dungeon 1 99.6 (+0.6 ± 0.3).
-  In `r29-land`'s team (round29.md §19): evaluated (97.6%, −0.34 hearts), promoted, and `r29land-1k` Dungeon 2
+  In `r29-land`'s team (round29.md §20): evaluated (97.6%, −0.34 hearts), promoted, and `r29land-1k` Dungeon 2
   91.6% (+10.1 ± 1.5 against `r76-1k`), Dungeon 1 99.8%, `d7` 46.6% (+6.6 ± 2.1). Left: the full route. A
   per-room reset weight in the yaml would do this without harvested states outside git.
 - [ ] **darknut under the bomb rule** (round26.md §13, decisions 2026-11-17): Dungeon 3 loses about 5 points
