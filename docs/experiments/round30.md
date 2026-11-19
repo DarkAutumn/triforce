@@ -101,6 +101,19 @@ round 27 (round26.md §17); the pairing against it in this team comes with `-s30
 `r30-goriya6-s31`'s last checkpoint: **56.5%** on the screen (6.47 hearts) and **56.1%** confirmed (6.38); its
 it005449 53.9% and 51.7% (−4.4 ± 2.2 against the last). Both seeds' last checkpoints lead their runs.
 
+**`d7`, all three seeds against the promoted run** (the promoted `r77-goriya5-s80` measured in `-s30`'s selection,
+46.5% and 47.1%, its round 27 numbers run for run; paired by seed):
+
+| goriya | screen (2000-2999) | vs promoted | confirm (3000-3999) | vs promoted | 7:0x1b deaths (confirm) | hearts into 0x1b |
+|---|---:|---:|---:|---:|---:|---:|
+| `r30-goriya6-s30` last | 58.4% | +11.9 ± 2.2 | 54.9% | +7.8 ± 2.2 | 183 of 949 | 5.20 |
+| `r30-goriya6-s31` last | 56.5% | +10.0 ± 2.2 | **56.1%** | **+9.0 ± 2.1** | 190 of 922 | 4.89 |
+| `r30-goriya6-s32` last | 54.2% | +7.7 ± 2.2 | 53.7% | +6.6 ± 2.2 | 210 of 905 | 4.64 |
+| `r77-goriya5-s80` (promoted) | 46.5% | | 47.1% | | 270 of 913 | 4.45 |
+
+**The arm works on `d7` in every seed**: Link reaches 0x1b with more hearts and dies there a third less often.
+Dungeon 2 and Dungeon 1 for the three (1000 runs, seeds 0-999, paired with `r29land-1k`) are in the job line.
+
 **The secondaries, paired with `r29land-1k` on seeds 0-999** (the last checkpoints, clips on, models alone; arrival
 at the segment's end step):
 
