@@ -137,5 +137,8 @@ team; `r79c-patra` pinned beside):
 | `r79c-patra` | 28.7% | 30.2% | 3.16 | |
 
 **it001944 is better on `d9` beyond noise on seeds not used to choose it** (+6.2 points, three standard errors);
-patra plays no other segment (`post-d8` ends on entering 9:0x76). Applied as the run's `ckpt.pt`; its evaluation
-on equal terms and the promotion wait for the wizzrobe selections, whose chains play patra's promoted run.
+patra plays no other segment (`post-d8` ends on entering 9:0x76). Applied as the run's `ckpt.pt` and evaluated on
+equal terms (100 episodes a state, this branch's yaml): 97.9% of 2100 episodes, −0.53 hearts (`r79c-patra` 97.3%,
+−0.63); 0x52 94.7%, −0.41 (91.0%, −0.54), 0x16 98.8%, −0.53 (98.5%, −0.72), 0x27 97.5%, −1.04 (97.7%, −1.09), 0x61
+99.0%, −0.08 (99.0%, −0.12): every state within a point or better. **`r30w-patra` (it001944) qualifies as the
+route's patra.** Its promotion waits for the wizzrobe selections, whose chains play patra's promoted run.
