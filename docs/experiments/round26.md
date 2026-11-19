@@ -1004,12 +1004,117 @@ the D7 triforce **85.0%** (the D5 triforce 91.0%, Dungeon 7 reached 87.0%); `pos
 the D7 triforce; `d7` 95.3% (14 timeouts, 13 of them in 7:0x0d). It cheats 11 bombs in 0x29 and 1 in 0x1a in 300
 `d7` runs.
 
-**Dungeon 2's regression.** The loss is in goriya's rooms of Dungeon 2: 2:0x5e 78 deaths against round 25's 36,
-2:0x1e 73 against 38 (of 900-990 visits each). It came with goriya's Dungeon 7 training: on the same 1000 seeds
-`r76-goriya3` holds Dungeon 2 at 83.6% and `r76-goriya4-s78` at 81.5% (−2.1 ± 1.7, above), round 25's team at
-88.2%. **It lands anyway:** the route's end moved from no run at all to 6.7% to the D7 triforce,
+**Dungeon 2's regression.** The loss is in goriya's rooms of Dungeon 2: on the full route 2:0x5e 78 deaths against
+round 25's 36, 2:0x1e 73 against 38 (of 880-1000 visits each). It came with goriya's Dungeon 7 training: on the
+same 1000 seeds `r76-goriya3` holds Dungeon 2 at 83.6% and `r76-goriya4-s78` at 81.5% (−2.1 ± 1.7, above), round
+25's team at 88.2%. **It lands anyway:** the route's end moved from no run at all to 6.7% to the D7 triforce,
 `d7` passed the owner's working rate (about 30%) at 40.0%, and from the start the D5 triforce itself rose 2.7
 points, so nothing the route had is lost at its end. Getting Dungeon 2 back is a backlog item.
 
 **Landing.** The merged `r26` with main at 1.6.0.0 plays `d7` run for run as the chain of record: 300 runs (seeds
 0-299) with the team stamped 1.6.0.0, 300 identical, 117 successes in both. The five suites are green there.
+
+**Dungeon 2 with the other two seeds** (after the landing; `--from 2_7ds_0 --stop-at 0:0x3c`, 1000 runs, seeds
+0-999, clips on, the candidate by `--checkpoint goriya=...`; `s77` from its `select-checkpoint` check, the same
+arguments). The product is the share of runs that would pass both segments if they are independent:
+
+| goriya | Dungeon 2 | vs `s78` (paired) | 2:0x1e / 2:0x5e deaths | `d7` (confirm) | product |
+|---|---:|---:|---|---:|---:|
+| `r76-goriya4-s78` it004511 (promoted) | 81.5% | | 84 of 911 / 40 of 1000 | 40.0% | **32.6%** |
+| `r76-goriya4-s77` last | 84.5% | +3.0 ± 1.7 | 66 of 922 / 41 | 36.2% | 30.6% |
+| `r76-goriya4-s76` it004601 | 86.1% | +4.6 ± 1.6 | 57 of 928 / 32 | 33.4% | 28.8% |
+| `r76-goriya3` (the first team) | 83.6% | | 81 of 923 / 27 | 25.4% | 21.2% |
+| round 25's team (`r75-1k`) | 88.2% | | 52 of 943 / 28 | (none of 200) | |
+
+`s76` holds Dungeon 2 within 2.1 ± 1.5 points of round 25, but `s78`'s 6.6 points on `d7` outweigh its 4.6 on
+Dungeon 2: `s78` stays. Dungeon 2 is won back in goriya's next training, its checkpoint chosen on both segments.
+
+## 17. Follow-up: Dungeon 2 back for goriya
+
+Round 26 promoted goriya `r76-goriya4-s78` (it004511) for `d7` (40.0%) at a cost in Dungeon 2: 81.5% of 1000 runs
+against round 25's 88.2% (§16). The owner asked for Dungeon 2 back without giving Dungeon 7 up. Main at 1.6.0.0, a
+worktree of its own, the promoted team otherwise unchanged.
+
+### The cause
+
+The two Goriya rooms of Dungeon 2 in the `d2` chains (`--from 2_7ds_0`, seeds 0-999, clips on; `r75-1k-d2` against
+`r76-1k-d2`; hearts lost a visit counted on the visits Link survives):
+
+| room | team | visits | deaths | hearts on entering | hearts lost a visit | steps | bombs used |
+|---|---|---:|---:|---:|---:|---:|---:|
+| 2:0x5e | round 25 (`r75-f-a`) | 1000 | 28 | 2.94 | 0.42 | 60 | 0.06 |
+| 2:0x5e | `r76-goriya4-s78` | 1000 | 40 | 2.94 | 0.60 | 68 | 0.04 |
+| 2:0x1e | round 25 | 943 | 52 | 2.69 | 0.34 | 82 | 0.73 |
+| 2:0x1e | `r76-goriya4-s78` | 911 | 84 | 2.67 | 0.50 | 88 | 0.78 |
+
+Link enters with the same hearts and leaves with fewer. In 2:0x5e the deaths at full hearts went from 18 to 29 of
+888; in 2:0x1e those entering at 1.5 hearts or fewer died 21 times of 74 against 42 of 81 (round 25's model gained
+hearts there on average: it took the drops). The single-room evaluations showed it as hearts, not as success
+(`eval.json` `by_room`, 300 episodes a room, clips on): 2:0x5e 91.0% and −0.16 hearts (`r75-f-a`) against 87.7% and
+−0.29 (`s78`), 2:0x1e 93.0% and −0.24 against 90.7% and −0.45.
+
+Nothing about the rooms' training changed but their share. `reward.heart_value` prices Dungeon 2's steps exactly as
+in round 25 (`heart_value.json` steps 0-208 identical, §16); both rounds draw `hp: [0.15, max]` with `full_hp:
+0.5`, no `chain_hp` (no profile ships). But goriya went from four rooms (15 seed states, 15 curriculum tracks; 2:0x5e
+and 2:0x1e 6 of them, **40% of the resets**) to sixteen (54 seed states, 90 tracks; Dungeon 2 **11%** of the seed
+draws and 7% of the curriculum's), and 1464 iterations (6M steps: `r76-goriya`, `-goriya2`, `-goriya3`,
+`-goriya4-s78`) trained on that mix. Seed draws are each state's decayed failure rate with a uniform floor
+(`env::start_states::ProbabilisticSelector`); the yaml has no weight per state or room.
+
+**Most likely:** Dungeon 2's rooms got a quarter of their old share of goriya's training while six million steps
+taught Blue Goriyas, and the policy drifted there (half again the hearts lost a visit, the low-heart 2:0x1e deaths
+doubled). Same rewards, same hearts drawn; the rooms were simply trained less than the rest of the family moved.
+
+### The arm: Dungeon 2's share back
+
+The levers without engine work: no per-room weight exists, but `harvested_fraction` draws a share of the resets
+from `triforce/states/harvested/<family>`, and a harvested start keeps the hearts and bombs it was handed (no RAM
+randomization). So the Dungeon 2 handoffs were harvested from a `d2` chain of the promoted team (`eval-chain --from
+2_7ds_0 --stop-at 0:0x3c --runs 300 --first-seed 5000 --harvest DIR`, seeds no measurement uses: 566 states, 300
+into 2:0x5e and 266 into 2:0x1e, at the chain's hearts: 2.93 and 2.68 on average, 23 of 0x1e's at 1.5 or fewer),
+and goriya draws them at `harvested_fraction: 0.33`: 0.33 + 0.67 × 11% ≈ 40% of the resets once the curriculum is
+done (the first 150 iterations or so of a continuation), its old share. The states stay out of git, as ow-zora's.
+Also from this round goriya trains with `clips: {enabled: true, off_share: 0}` (the owner, Nov 18; before, half the
+episodes had CLIP masked).
+
+Three seeds continue `r76-goriya4-s78` as promoted (it004511): `r77-goriya5-s79`, `-s80`, `-s81`, 488 iterations
+(2M steps) each, `--sil-coeff 0.1`, the food demonstrations at `--demo-coeff 0.05` (as `s78`), a checkpoint every
+30, `--parallel 8`.
+
+### Choosing on both segments
+
+Each run: `select-checkpoint goriya RUN --segment d7 --runs 1000 --first-seed 2000 --confirm 1000
+--confirm-first-seed 3000 --confirm-top 3` (the screen on seeds 2000-2999 ranks every checkpoint, the three best,
+the last and the promoted run again on 3000-3999), then the three best of the screen and the last on Dungeon 2
+(`--from 2_7ds_0 --stop-at 0:0x3c`, 1000 runs, seeds 0-999, paired with `r76-1k-d2` = `s78` and `r75-1k-d2` =
+round 25 on the same seeds). The product is Dungeon 2 times the confirmed `d7`; `s78` on the same seeds: 81.5 ×
+37.6 = 30.6% (its record 81.5 × 40.0 = 32.6%, `d7` measured on 1000-1999).
+
+| goriya | `d7` screen | `d7` confirm | Dungeon 2 | vs `s78` | vs round 25 | 2:0x5e / 2:0x1e deaths | product |
+|---|---:|---:|---:|---:|---:|---|---:|
+| **`r77-goriya5-s80` last** | 46.5% | **47.1%** | **91.6%** | +10.1 ± 1.5 | +3.4 ± 1.3 | | **43.1%** |
+| `r77-goriya5-s80` it004991 | 46.3% | 46.9% | 90.4% | +8.9 ± 1.5 | +2.2 ± 1.3 | | 42.4% |
+| `r77-goriya5-s80` it004961 | 47.1% | 43.5% | 91.2% | +9.7 ± 1.5 | +3.0 ± 1.3 | | 39.7% |
+| `r77-goriya5-s81` last | 43.6% | 47.3% | 90.4% | +8.9 ± 1.5 | +2.2 ± 1.3 | 16 / 42 of 951 | 42.8% |
+| `r77-goriya5-s81` it004931 | 45.1% | 46.3% | 89.4% | +7.9 ± 1.6 | +1.2 ± 1.3 | 18 / 31 of 941 | 41.4% |
+| `r77-goriya5-s81` it004661 | 48.1% | 45.6% | 84.6% | +3.1 ± 1.7 | −3.6 ± 1.5 | | 38.6% |
+| `r77-goriya5-s81` it004631 | 44.3% | 44.2% | 83.5% | +2.0 ± 1.6 | −4.7 ± 1.5 | | 36.9% |
+| `r77-goriya5-s79` last | 48.1% | 42.9% | 89.4% | +7.9 ± 1.6 | +1.2 ± 1.4 | 9 / 52 of 960 | 38.4% |
+| `r77-goriya5-s79` it004991 | 45.5% | 40.4% | 90.0% | +8.5 ± 1.5 | +1.8 ± 1.4 | 18 / 31 of 944 | 36.4% |
+| `r77-goriya5-s79` it004721 | 45.4% | 41.0% | 85.9% | +4.4 ± 1.6 | −2.3 ± 1.5 | | 35.2% |
+| `r76-goriya4-s78` (promoted) | 38.8% | 37.6% | 81.5% | | −6.7 ± 1.6 | 40 / 84 of 911 | 30.6% |
+
+The `d7` confirmations against `s78` on the same seeds: `s80` last +9.5 ± 2.1, `s81` last +9.7 ± 2.1, `s79` last
+5.3 ± 2.2. **The arm works on both segments:** Dungeon 2 is back at round 25's rate or above in all three seeds,
+and Dungeon 7 rose rather than fell (the harvested Dungeon 2 starts take a third of the resets, yet `d7` gained 5-10
+points; the off_share 0 clips and 488 more iterations are the other changes).
+
+**The choice: `r77-goriya5-s80`, its last checkpoint** (the highest product, 43.1%; `s81` last at 42.8% is the same
+within noise). On seeds not used to choose it: Dungeon 2 on 1000-1999 **90.6%** against `s78`'s 82.7 (+7.9 ± 1.5;
+`s81` last 90.1), Dungeon 1 (`--from 1_73s_0 --stop-at 0:0x37`, seeds 0-999) 99.6% against 99.0 (+0.6 ± 0.3), `d7`
+47.1% on 3000-3999 (+9.5 ± 2.1). Product on fresh seeds 90.6 × 47.1 = 42.7% against `s78`'s 82.7 × 37.6 = 31.1%
+and its record 32.6%.
+
+**Not yet promoted.** What remains: the canonical evaluation of `r77-goriya5-s80` (clips on; its `ckpt.pt` is
+already the last checkpoint), `triforce promote goriya r77-goriya5-s80 --act temperature:0.5+relax:16`, the chains
+`d2`, `d1`, `d7` and the full route to the D7 triforce (1000 runs each) against `r76-1k`.
