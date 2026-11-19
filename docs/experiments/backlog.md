@@ -139,6 +139,12 @@ answers `docs/decisions.md` 2026-11-17 ("Round 28's working answers"). Built on 
 round27.md; the walks `docs/routes/d6-walks.md`; the route as built `docs/routes/d6.md` §14; the lead's working
 answers `docs/decisions.md` 2026-11-17.
 
+- [x] **One ow-lynel for every stretch** (round27.md §14): `r27l-lynel-s81` (from `r79t5-lynel`: 0x0a's harvested
+  handoffs at `harvested_fraction: 0.2`, `r74-lynel`'s clean 0x0a runs as demonstrations) reaches Dungeon 1 after
+  Dungeon 2 in 94.5% with 3.17 hearts, `r74-lynel` 95.3% with 3.20 on the same seeds (−0.8 ± 0.9).
+- [ ] **0x0a's second visit** (out of the white sword's cave): still 0.2 hearts a visit against `r74-lynel`'s 0.14,
+  and seeds 82 and 83 confirmed only 92.1-92.8%. Next lever, written and not trained: its starts at the chain's
+  hearts (`scripts/experiments/r27_lynel_states.py`) with `harvested_fraction: 0.35`.
 - [x] **The walks** (Nov 16): every room of the stretch in the running game.
 - [x] **The route vocabulary** (Nov 17): the scouting route `d6` (steps 248-280), the gravestone, `waypoint: sword`,
   `keep_out` doorways, Gohma's ARROW facing and stand tile, families ow-ghini, wizzrobe, boss-gohma, the scripted
