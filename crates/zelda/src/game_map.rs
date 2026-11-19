@@ -2946,7 +2946,7 @@ mod tests {
             assert!(ROUTES_YAML.contains(old), "{old}");
             load(GAME_YAML, &ROUTES_YAML.replacen(old, new, 1)).unwrap_err()
         };
-        let e = swap("entry: S, exit: end}", "entry: S, exit: end}\n  - {level: 9, room: '0x42', specialist: ganon, entry: S, exit: N}");
+        let e = swap("entry: S, exit: end}", "entry: S, exit: end}\n- {level: 9, room: '0x42', specialist: ganon, entry: S, exit: N}");
         assert!(e.contains("exit end is the route's last step"), "{e}");
         let e = swap("entry: S, exit: cave, bomb_reserve: 3}", "entry: S, exit: cave, bomb_reserve: 3, banked_kills: 2}");
         assert!(e.contains("no earlier step of the route is in this room"), "{e}");
@@ -3041,8 +3041,10 @@ mod tests {
     /// way along row 5 again (0x59-0x5d from W), the lake stretch's clip way N into 0x2d, the plain mountain way
     /// (0x2c from E, 0x1c from S, 0x1b from E) and Dungeon 5's tunnel cellar on the way back, and the leg to Dungeon
     /// 7's (round 26): 0x55 from N again (either way of dock-44), 0x54 from E, the plain 0x64 from E, 0x53 and 0x52
-    /// from E, and the leg to the magic sword's (round 27): 0x51 from E on both ways of `woods`, 0x50 from E on its
-    /// clip way; its stretch `parts` are one visit on two ways.  On every route two steps share a room, entry and visit
+    /// from E, the leg to the magic sword's (round 27): 0x51 from E on both ways of `woods`, 0x50 from E on its
+    /// clip way, the leg to Dungeon 8's (round 28): 0x4c from N, 0x4d from W, 0x6d from N, and the leg to Dungeon 9's
+    /// (round 29): 0x38 from W, 0x48 from N, and Dungeon 9's tunnel cellar 0x75 from S; its stretch `parts` are one
+    /// visit on two ways.  On every route two steps share a room, entry and visit
     /// only as the two ways of one stretch or as consecutive targets.  A second entry from the same side is visit 2,
     /// a step right after it entering the same way another target of visit 2; an alternate standing in for a step is
     /// numbered there.
@@ -3079,6 +3081,12 @@ mod tests {
                 ow(0x51, "E"),
                 ow(0x50, "E"),
                 ow(0x51, "E"),
+                ow(0x4c, "N"),
+                ow(0x4d, "W"),
+                ow(0x6d, "N"),
+                ow(0x38, "W"),
+                ow(0x48, "N"),
+                (L::new(9, 0x75, true), "S", 2),
             ]
         );
         for (route, steps) in &map.routes {

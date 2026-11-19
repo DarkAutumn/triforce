@@ -384,11 +384,11 @@ def test_the_audit_follows_later_visits_and_counts_hearts_along_each_way(revisit
 
 
 def test_path_names_a_later_visit_after_the_step_it_comes_from(revisit, monkeypatch, tmp_path):
-    """``path`` walks on from its source's step: from the D5 triforce's step 0x5c and 0x5d from W are the test
-    route's third visits (``_v3``), from d2first's coast plain way (0x5b from W, its second visit) the second, from
-    d2first's first 0x5b the first."""
+    """``path`` walks on from its source's step: from the step before the test route's own (Ganon's room, d2first's
+    last step but Zelda's) 0x5c and 0x5d from W are the test route's third visits (``_v3``), from d2first's coast
+    plain way (0x5b from W, its second visit) the second, from d2first's first 0x5b the first."""
     require_rom()
-    first = len(route_steps())
+    first = len(route_steps()) - 1                                      # the test route's first own step
     _fake_crossings(monkeypatch, {})
     rooms = [MapLocation(0, 0x5c, False), MapLocation(0, 0x5d, False)]
     visits = {v: [s.index for s in revisit[:first]

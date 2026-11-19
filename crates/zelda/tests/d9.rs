@@ -1346,7 +1346,7 @@ fn a_start_in_a_room_the_route_comes_back_to_keeps_its_kills() {
     assert!(banked_kills_follow_clips(&map, uw(0x20), Some("N"), Some(1), None));
     assert!(!banked_kills_follow_clips(&map, uw(0x10), Some("cave"), Some(1), None));
     assert_eq!(kills(cellar(0x75), "S", 2, Some(ROUTE), false), None, "a cellar banks nothing");
-    assert_eq!(kills(uw(0x20), "N", 1, Some("d2first"), false), None, "not a step of that route");
+    assert_eq!(kills(uw(0x20), "N", 1, Some("clips-gauntlet"), false), None, "not a step of that route");
     let snapshot = w.entry.clone().expect("the pre-entry frame of 0x20 from N");
     let load = |fresh_room: bool, banked: Option<u8>| {
         let mut s = Session::new(Counted(open_core().unwrap(), 0), map.clone());

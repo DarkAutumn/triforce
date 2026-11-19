@@ -52,7 +52,8 @@ fn the_test_route_numbers_its_visits() {
 }
 
 /// Writes `0_5dw_0` into `dir` as each of `names`; a name `(name, Some(step))` gets the progress of route step
-/// `step` (its visit's: triforce pieces, sword, bow, raft, ladder, recorder), `(name, None)` stays a plain copy.
+/// `step` (its visit's: triforce pieces, sword, bow, raft, ladder, recorder, and the red ring and the silver arrow
+/// once the route has them: the test route follows Dungeon 9), `(name, None)` stays a plain copy.
 fn make_states(map: &GameMap, dir: &Path, names: &[(&str, Option<usize>)]) {
     let progress = route_progress(map, &map.routes[ROUTE]);
     for &(name, step) in names {
@@ -60,14 +61,21 @@ fn make_states(map: &GameMap, dir: &Path, names: &[(&str, Option<usize>)]) {
         if let Some(step) = step {
             let progress = progress[step];
             let triforces = (1..=8u8).filter(|l| progress.triforces & 1 << (l - 1) != 0).map(level_bit).sum::<u32>();
-            for (var, value) in [
+            let mut writes = vec![
                 (Var::Triforce, triforces as u8),
                 (Var::Sword, progress.sword as u8),
                 (Var::Bow, progress.bow as u8),
                 (Var::Raft, progress.raft as u8),
                 (Var::StepLadder, progress.ladder as u8),
                 (Var::Whistle, progress.recorder as u8),
-            ] {
+            ];
+            if progress.ring {
+                writes.push((Var::Ring, 2));
+            }
+            if progress.silver_arrow {
+                writes.push((Var::Arrows, 2));
+            }
+            for (var, value) in writes {
                 <ZCore as Nes>::poke_state(&mut snap.machine, var.addr(), value);
             }
         }

@@ -69,17 +69,21 @@ fn a_stale_heart_value_table_stops_only_the_families_that_read_it() {
 /// Round 27: a table prices its own route and the routes it extends (V at a step depends only on the steps up to the
 /// next triforce).  With a scouting route `{extends: d2first, steps: [...]}` beside it (as `d6` was before it merged),
 /// `d2first`'s table prices `d2first` only: a family on the scouting route is refused and an episode there gets no
-/// table (the plain health terms).  Fitted on the scouting route, it prices both.
+/// table (the plain health terms).  Fitted on the scouting route, it prices both.  Since 1.9.0.0 `d2first` ends the
+/// game (`exit: end`, which nothing may follow), so the scouting route here takes `d2first`'s last step, Zelda's
+/// room, and `d2first`'s table its row.
 #[test]
 fn a_table_prices_the_routes_its_own_extends() {
     let tmp = copy_data();
-    edit(
-        tmp.path(),
-        "triforce/routes.yaml",
-        "\nclips-gauntlet:\n",
-        "\nscout:\n  extends: d2first\n  steps:\n  - {level: 0, room: '0x22', specialist: ow-lynel, entry: cave, exit: S}\
-         \nclips-gauntlet:\n",
-    );
+    let end = "- {level: 9, room: '0x32', specialist: ganon, entry: S, exit: end}\n";
+    edit(tmp.path(), "triforce/routes.yaml", end, "");
+    let scout = format!("\nscout:\n  extends: d2first\n  steps:\n  {end}clips-gauntlet:\n");
+    edit(tmp.path(), "triforce/routes.yaml", "\nclips-gauntlet:\n", &scout);
+    let path = tmp.path().join("triforce/heart_value.json");
+    let mut table: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let last = table["steps"].as_array_mut().unwrap().pop().unwrap();
+    assert_eq!((last["room"].as_str(), last["exit"].as_str()), (Some("9:0x32"), Some("end")));
+    std::fs::write(&path, serde_json::to_string(&table).unwrap()).unwrap();
     let data = GameData::load(tmp.path()).unwrap();
     assert_eq!(data.heart_values.as_deref().unwrap().routes, ["d2first"]);
     let goriya = data.specialist("goriya").unwrap();
@@ -89,14 +93,9 @@ fn a_table_prices_the_routes_its_own_extends() {
     let error = data.check_heart_values(&on_scout).unwrap_err().to_string();
     assert!(error.contains("neither is nor extends"), "{error}");
     // The table fitted on the scouting route: d2first's rows and one more.
-    let path = tmp.path().join("triforce/heart_value.json");
-    let mut table: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-    let base = data.map.routes["d2first"].len();
+    assert_eq!(last["step"], data.map.routes["d2first"].len());
     table["route"] = "scout".into();
-    table["steps"].as_array_mut().unwrap().push(serde_json::json!({
-        "step": base, "room": "0:0x22", "entry": "cave", "exit": "S", "visit": 1, "way": null,
-        "specialist": "ow-lynel", "clips": null, "plain": null
-    }));
+    table["steps"].as_array_mut().unwrap().push(last);
     std::fs::write(&path, serde_json::to_string(&table).unwrap()).unwrap();
     let data = GameData::load(tmp.path()).unwrap();
     assert_eq!(data.heart_values.as_deref().unwrap().routes, ["d2first", "scout"]);
