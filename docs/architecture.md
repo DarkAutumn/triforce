@@ -1761,13 +1761,15 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
   plain way through every stretch); golden paths always play with clips on.
 - **The golden path** (`--golden`; `golden.golden_path(policies, route, parallel, first_seed, record, ...)`):
   the route is cut at its checkpoints, the overworld rooms Link stands in right after a triforce that is not the
-  route's last (`golden.checkpoints('d2first') == [24, 68]`: outside Dungeon 2 and Dungeon 1). For each segment
+  route's last step (`golden.checkpoints('d2first') == [24, 68, 105, 134, 209, 248, 281, 297]`: outside each of
+  the eight dungeons; the ninth segment plays Dungeon 9 to the ending). For each segment
   `parallel` games race from the same state to the segment's stop (`golden.race`: a `ChainPool` of the
   segment's seeds with `stop_step`, every run recorded). The first success seen wins (of several in one poll:
   the fewest cheated items, then the fewest frames, then the lowest seed), the other games are dropped, and the winner's end state is the
   checkpoint every game of the next segment starts from (`Route.load(checkpoint=...)`: no frame run, nothing
-  written). The winners are joined with `replay_stitch` into one replay from the start to the route's last
-  triforce, `OUT/golden-<first seed>-<ending>.tfreplay`. With every model drawing its actions (the default,
+  written). The winners are joined with `replay_stitch` into one replay from the start to the route's end (d2first:
+  the ending), `OUT/golden-<first seed>-<ending>.tfreplay`; it carries one CHECKPOINT state per boundary (about
+  11 KB each: a d2first golden path from power on is about 144 KB). With every model drawing its actions (the default,
   `registry.draws`) the games of a segment differ only by the models' draws (keyed to the run seed). Models that
   act by argmax (or `escape`) could play one game from a checkpoint, so unless all draw (`--act argmax`, `--act
   model`) each game of a later

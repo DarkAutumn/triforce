@@ -25,8 +25,8 @@ screen (0..=32766, or random: drawn from each run's seed).
 
 --golden plays the golden path instead: for each of the route's triforces in turn, --parallel games race to it
 from the same state; the first to stand on the overworld with it becomes the checkpoint every game restarts
-from, until the route's last triforce.  The winners are stitched into one replay,
-OUT/golden-<first seed>-<ending>.tfreplay (COUNT of them, each from its own seeds).
+from, until the route's end (d2first: eight triforces, then Dungeon 9 to the ending).  The winners are stitched
+into one replay, OUT/golden-<first seed>-<ending>.tfreplay (COUNT of them, each from its own seeds).
 
 Nothing is drawn and nothing else is written: one line per saved file (path, ending, frames, seed) and a JSON
 summary on stdout.

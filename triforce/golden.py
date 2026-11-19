@@ -1,7 +1,8 @@
-"""The golden path: one run from the route's start to its last triforce, stitched from races.
+"""The golden path: one run from the route's start to its end (d2first: the ending), stitched from races.
 
 The route is cut at its checkpoints: the overworld rooms Link stands in right after taking a triforce that is not
-the route's last (``checkpoints``; d2first: route steps 24 and 68, back outside Dungeons 2 and 1).  For each segment
+the route's last step (``checkpoints``; d2first: route steps 24, 68, 105, 134, 209, 248, 281 and 297, back outside
+each of the eight dungeons; the ninth segment plays Dungeon 9 to the ending).  For each segment
 in turn, ``parallel`` games race from the same state to the segment's stop (a ``ChainPool`` of the segment's
 seeds, every run recorded): the first run to get there wins, its end state becomes the checkpoint every game of
 the next segment starts from, and the other games are dropped.  The winners' replays, joined
@@ -35,7 +36,8 @@ class Cancelled(Exception):
 
 
 def checkpoints(route_name: str) -> List[int]:
-    """The route steps entered right after a triforce that is not the route's last step (d2first: [24, 68])."""
+    """The route steps entered right after a triforce that is not the route's last step (d2first: [24, 68, 105,
+    134, 209, 248, 281, 297])."""
     steps = _native.route_steps(route_name)
     return [step['index'] + 1 for step in steps[:-1] if step['exit'] == 'triforce']
 
