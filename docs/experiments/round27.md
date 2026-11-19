@@ -519,3 +519,110 @@ Read by what a first team needs:
 - No `VERSION` change was made. One is due with this merge by the repository's rule: `REV` +1 (a compatible change
   to env code: where a MOVE ends in graveyard rooms and at `keep_out` doorways, two new masks, the sword milestone's
   gating; no observation or action change, every model loads).
+
+## 14. One ow-lynel for every stretch: 0x0a after Dungeon 2
+
+ow-lynel plays 0:0x0a before the white sword (and its cave) after Dungeon 2, 0x50 and 0x60 on the leg to Dungeon 5,
+0x50, 0x60, 0x32 and 0x22 on the leg to the magic sword, 0x22's whirlwind out of Dungeon 6 and 0x07, 0x06, 0x05 on
+the leg to Dungeon 9. Its line: `r74-lynel` (round 24, 1954 iterations; cannot play the magic sword's 0x50) →
+`r77-b` (this round's first team: the leg) → `r78t4-lynel` (round 28: the whirlwind) → `r79t5-lynel` (round 29: the
+rock wall). The landing chains `r77-1k` with `r77-b` lost the segment after Dungeon 2: 90.1% reach Dungeon 1 against
+95.7% with `r74-lynel` (`r76-1k`), and the full route paired on 300 seeds leaves Dungeon 1 in 54.7% against 67.0%.
+
+### 14.1 The cause
+
+Per visit, from `r76-1k-post-d2` (`r74-lynel`) and `r77-1k-post-d2` (`r77-b`), 1000 runs each, up to 1:0x73:
+
+| visit | runs | hearts in | lost a visit | deaths | steps | hits taken |
+|---|---:|---:|---:|---:|---:|---:|
+| 0x0a from S (wooden sword, to the cave) | 1000 / 1000 | 4.65 / 4.62 | **0.40 / 0.61** | 9 / 17 | 37.6 / 33.0 | 0.32 / 0.40 |
+| 0x0a out of the cave (white sword, S) | 991 / 983 | 4.28 / 4.08 | **0.10 / 0.27** | 4 / 22 | 18.7 / 19.0 | 0.06 / 0.15 |
+| 0x1a back S (ow-tektite) | 987 / 961 | 4.20 / 3.90 | 0.30 / 0.36 | 9 / 25 | 18.3 / 19.3 | 0.81 / 0.90 |
+| 0x27 (ow-zora) | 978 / 933 | 3.91 / 3.62 | 0.51 / 0.51 | 12 / 24 | 9.5 / 9.4 | 1.02 / 1.02 |
+| 1:0x73, entered | 957 / 901 | 3.23 / 3.00 | | | | |
+
+Entered at 4-4.5 hearts, 0x0a's first visit costs `r74-lynel` 0.50 hearts in 53 steps and `r77-b` 0.88 in 45: the
+newer model walks through faster and is hit more. Neither model takes the `retreat: S` (2 runs and 0). Every 0x27
+death is an entry at half a heart, 14 of `r77-b`'s 25 in 0x1a at under one: the hearts 0x0a lost. In single rooms
+(`eval.json`) 0x0a's hearts change goes −0.21 (`r74-lynel`) → −0.29 (`r77-b`) → −0.27 (`r78t4-lynel`) → −0.37
+(`r79t5-lynel`); the first visit's states from −0.25..−0.40 to −0.48..−0.59. Start states are drawn by the
+badness selector (near uniform among rooms won 97% of the time) once the curricula are done: 0x0a's two fought
+entries (`0_0as`, `0_0ac` on three chains) are 6 of 15 states for `r74-lynel`, 6 of 30 for `r77-b`, 6 of 33 for
+`r78t4-lynel` and 6 of 42 for `r79t5-lynel`. The states are the route's (5 containers, the wooden sword before the
+cave, the white sword after) and the hearts drawn (full in half the resets, else 1-4.5) cover the chain's (4.62
+entering, 55% full): the hearts are not the mismatch. **The cause**: the many-Lynel rooms of the later legs (0x50
+from 0 to 99.8%) taught walking through Lynel fire, faster and hit more, and that carried to 0x0a; 0x0a's share of
+resets fell from 40% to 14%, so nothing pulled it back, and each continuation eroded it further.
+
+### 14.2 The arm
+
+From `r79t5-lynel` (it holds every later room), three seeds (81, 82, 83), 244 iterations, `--sil-coeff 0.1
+--checkpoint-every 30`, clips on (`off_share: 0`), the lineage's demonstrations (`target/r29-demos/rock-wall.npz`,
+`target/r28-demos/whirlwind.npz`) and two levers for 0x0a:
+
+- **its share of resets back, at the chain's hearts**: 300 handoffs into 0x0a from S harvested from a `post-d2`
+  chain (`eval-chain --from 0_3cc_0 --stop-at 1:0x73 --runs 300 --first-seed 7000 --harvest DIR`; their hearts,
+  bombs and kills as the chain brings them) in `triforce/states/harvested/ow-lynel` (not in git) at
+  `harvested_fraction: 0.2` (about 30% of resets in 0x0a's fought entries instead of 14%);
+- **`r74-lynel`'s habit as demonstrations**: its own clean runs (no heart lost) of `0_0as` and `0_0ac`, 100 a state
+  in its act mode, 11,758 rows (`scripts/experiments/r27_plan_demos.py models/ow-lynel/r74-lynel OUT --family
+  ow-lynel --act temperature:0.5+relax:16 --states 0_0as 0_0ac --runs 100 --max-loss 0`; the script's new `--act`),
+  at the lineage's `--demo-coeff 0.05`.
+
+The team the segment is judged on is the landing team (`r27-land`'s promoted runs: ow-zora `r76-zora-arrows`,
+ow-moblin `r77-b`, ow-boulder `r72-ow`), not this branch's: with this branch's own (ow-zora `r79t5-zora`, ow-moblin
+`r79t5-moblin`, ow-boulder `r79b-boulder`) and `r79t5-lynel` the harvest chain reached Dungeon 1 in 237 of 300 runs
+(79.0%, 2.79 hearts in; deaths 0x0a 19, 0x27 14, 0x38 13, 0x1a 13). The selections run in a scratch models
+directory holding the landing team with `r74-lynel` as its promoted ow-lynel (the paired reference).
+
+### 14.3 The choice after Dungeon 2
+
+`select-checkpoint ow-lynel RUN --from 0_3cc_0 --stop-at 1:0x73 --runs 1000 --first-seed 2000 --confirm 1000
+--confirm-first-seed 3000 --confirm-top 1 --only it002906,it002936,last[,promoted]` (the latest checkpoints only,
+for time), in the scratch directory of the landing team whose promoted ow-lynel is `r74-lynel`. Arrivals at 1:0x73
+and the hearts Link enters it with:
+
+| run | candidate | screen (2000-2999) | hearts | confirm (3000-3999) | hearts | confirm vs `r74-lynel` |
+|---|---|---:|---:|---:|---:|---:|
+| `r74-lynel` | (reference) | 94.8% | 3.23 | 95.3% | 3.20 | |
+| `r27l-lynel-s81` | **last (it 2940)** | 93.8% | 3.21 | **94.5%** | **3.17** | **−0.8 ± 0.9** |
+| | it002906 | 93.0% | 3.14 | 92.8% | 3.19 | −2.5 ± 1.1 |
+| | it002936 | 92.3% | 3.14 | | | |
+| `r27l-lynel-s82` | it002906 | 93.7% | 3.14 | 92.1% | 3.15 | |
+| | last | 89.2% | 3.16 | 90.6% | 3.01 | |
+| | it002936 | 85.5% | 3.05 | | | |
+| `r27l-lynel-s83` | it002906 | 92.0% | 3.15 | 92.8% | 3.08 | |
+| | last | 90.4% | 3.08 | 91.4% | 3.08 | |
+| | it002936 | 90.3% | 3.03 | | | |
+
+Main's `r76-1k` (seeds 0-999, main's code): 95.7%, 3.23 hearts. **`r27l-lynel-s81` (its last checkpoint, the run's
+`ckpt.pt`) is within noise of `r74-lynel` on both**. Per visit on the confirmation seeds (s81 last / `r74-lynel`):
+0x0a from S 0.38 / 0.39 hearts lost, 6 / 9 deaths; out of the cave 0.21 / 0.13, 19 / 12; 0x1a back 0.30 / 0.33,
+15 / 9; 0x27 7 / 8 deaths. **The harvested share brought the first visit back; the second visit, which has no
+handoff to harvest and only had the demonstrations, is still the weaker** (and it decides the two other seeds:
+0.21-0.27 hearts, 14-26 deaths there). The next lever is written, not trained: `scripts/experiments/r27_lynel_states.py
+CHAIN.jsonl... --out DIR` writes the second visit's state (`0_0ac_<chain>`, pre-entry, white sword) with the hearts
+and bombs of the chains' second visits, as harvested starts (`0_0ac_h<i>_0.state`).
+
+Single rooms (`eval.json`, 100 episodes a state, clips on; `r79t5-lynel` in brackets): 0x0a 98.5% −0.21 hearts
+(96.8%, −0.37), 0x05 98.3% −1.28 (99.0%, −1.33), 0x06 100%, 0x07 100% −0.49 (−0.53), 0x22 100%, 0x32 97.7% −0.86
+(98.0%, −0.91), 0x50 99.8%, 0x60 100%.
+
+### 14.4 The other stretches, and the promotion
+
+One batch each, 1000 runs a segment (seeds 0-999, clips on, models alone), this branch's promoted team with
+`r79t5-lynel` (`r27l-ref`) and with `--checkpoint ow-lynel=r27l-lynel-s81` (`r27l-s81`): arrivals, hearts entering
+the arrival room, and ow-lynel's own visits (deaths, hearts lost a visit).
+
+| segment | `r79t5-lynel` | `r27l-lynel-s81` |
+|---|---|---|
+| leg to Dungeon 5 (`0_45c_0` → 5:0x76) | 999 / 1000, 7.83 hearts; 0x50, 0x60: 0 deaths, 0.05 | 1000 / 1000, 7.77; 0 deaths, 0.04 |
+| `post-d7` (`d6`, `0_42c_0` → 6:0x79) | 989, 10.52; 4 deaths, 0.45 | 991, 10.71; 1 death, 0.38 |
+| `post-d6` (`d8`, `0_22c_0` → 8:0x7e) | 1000, 12.34; the whirlwind 0 deaths, 0.00 | 1000, 12.34; 0, 0.00 |
+| `post-d8` (`d9`, `0_6dc_0` → 9:0x76) | 997, 12.06; 2 deaths, 0.57 | 999, 12.21; 0 deaths, 0.51 |
+
+**`r27l-lynel-s81` plays every stretch at least as well as `r79t5-lynel` and the segment after Dungeon 2 within
+noise of `r74-lynel`: promoted** (`triforce promote ow-lynel r27l-lynel-s81`, its `ckpt.pt` the last checkpoint,
+its `eval.json` the round's). The harvested 0x0a handoffs it trained on are not in git: they are rebuilt by the
+harvest chain of §14.2 into `triforce/states/harvested/ow-lynel` before a training of ow-lynel at
+`harvested_fraction: 0.2` (without them the family trains on its seed states alone).
