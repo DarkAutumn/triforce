@@ -59,7 +59,7 @@ def test_a_start_state_names_its_visit():
     from triforce.runner import _start_step            # pylint: disable=import-outside-toplevel
     from .test_entry_states import _revisit_steps      # pylint: disable=import-outside-toplevel
     steps = _revisit_steps()
-    first = len(_native.route_steps('d2first'))
+    first = len(_native.route_steps('d2first')) - 1     # the test route's own steps follow d2first but Zelda's room
     early, second = [s['index'] for s in steps[:first] if (s['level'], s['room'], s['entry']) == (0, 0x5d, 'W')]
     assert (steps[early]['visit'], steps[second]['visit'], steps[second]['way']) == (1, 2, 'plain')
     for label, step in (('0_5dw_0', early), ('0_5dw_v2_1', second), ('0_5dw_v2_h7_3', second),
