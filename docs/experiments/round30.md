@@ -60,12 +60,29 @@ From `r78-dark37-s85`, three seeds (`r30-dark-s87`, `-s88`, `-s89`), 488 iterati
   --step 291:8_3es --step 292:8_3fw`). Kept, the first by seed: 0x05 from E 250 (7.27 hearts on entering), 0x64
   from the cellar 120, 0x37 60; 8:0x5e 120, 0x4e 120, 0x3e 250, 0x3f 150; 3:0x59 from N 60, 0x5b from W 60, 0x59 from
   E 30. The harvested selector weighs them by their failures and hearts lost as the seed selector does;
-- **the honest planner's play as demonstrations** beside the lineage's three files (`darknut-5e.npz`,
-  `darknut-3e.npz`: Dungeon 8's scripted rules; `demos37.npz`: 0x37's rule), all at `--demo-coeff 0.05`:
+- **the honest planner's play as demonstrations** beside the lineage's three files (`target/demos/r28-demos/darknut-5e.npz`,
+  `target/demos/r28-demos/darknut-3e.npz`: Dungeon 8's scripted rules; `target/demos/r78dk/demos37.npz`: 0x37's rule;
+  untracked, gathered in `main`'s checkout), all at `--demo-coeff 0.05`:
   `scripts/experiments/r27_plan_demos.py models/darknut/r78-dark37-s85 plan-dk.npz --family darknut --states 5_05e
   5_64c 8_5es 8_4es 8_3es 8_3fw --runs 40 --max-loss 2` (the family's hp and bombs draws, full rooms): 61,067 rows.
   The planner with `r78-dark37-s85` wins 0x05 from E 114 of 120 losing 0.24-0.61 hearts, 0x3e 111 of 120 at −0.31
   to 0.28, 0x5e 112 of 120 at −0.13 to 1.18, 0x3f 118 of 120, 0x4e 118 of 120, 0x64 from the cellar 115 of 120.
+
+**The Olive Garden's damage by bombs and by the sword** (the baseline for a darknut that fights by bombs, as a route
+with the wood sword will need). 5:0x05 from E, per visit, from the room records (`bomb_damage` counts in wood-sword
+hits, `hits_dealt` every hit on a monster, `bomb_hits` the hits credited to bombs); the sword's share is taken as
+two wood-sword hits of damage a white-sword hit (`[INFERENCE]` from the game's sword damage, not measured here):
+
+| chain | visits | bombs carried in | bombs placed | bomb damage | sword hits | bombs' share of the damage | kills |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| full route `r29land-1k-full` | 540 | 1.01 | 0.99 | 3.44 | 19.4 | 8% | 4.77 |
+| leg and Dungeon 5 (harvest, 500) | 499 | 0.75 | 0.75 | 2.81 | 20.4 | 6% | 4.94 |
+| `d5` from full hearts `r29land-1k-d5` | 1000 | 2.64 | 2.63 | 10.02 | 18.7 | 21% | 5.59 |
+| the planner, full route (300) | 284 | 0.93 | 0.93 | 3.73 | 22.1 | 8% | 5.83 |
+
+Every bomb Link carries in is placed (bombs free down to 0 in the room) and almost every one hits (0.92 of 0.99
+placed in the full route), at 3.5-3.8 wood-sword hits of damage a bomb; the route brings about one bomb to the
+room, so the sword deals some nine tenths of the damage. No bomb in the room is cheated.
 
 ### The runs (single rooms), and where the choice stands
 
