@@ -133,5 +133,21 @@ paired with it on the same seeds: each plays the same team with one run swapped)
 All three darknut seeds gain over the promoted run on the segment it lost (+3.6 to +5.8 on fresh seeds), and gibdo
 as much. The choice: darknut `r30-dark-s89` and gibdo `r30-gibdo-s91`, their last checkpoints (each run's
 `ckpt.pt`). Their other segments (darknut `d8`, `d3`, `d5`; gibdo `d5`; 1000 runs, seeds 0-999) and the segment
-with both swapped together (the gains were measured one family at a time) were queued: `r30dk-check-s89-gibdo`.
-`d3` and `d8` pair with this checkout's team with the new boss-manhandla (the chains of its own check above).
+with both swapped together (the gains were measured one family at a time), 1000 runs each, seeds 0-999 (`d3` and
+`d8` paired with this checkout's team with the new boss-manhandla, `d5` with `r29land-1k-d5`):
+
+| segment | reference | with the run | paired | where |
+|---|---:|---:|---:|---|
+| darknut `d8` | 26.2% | **34.3%** | **+8.1 ± 2.0** | 8:0x3e 354 deaths of 922 against 431 of 900, 0.89 hearts a visit against 1.42; 0x5e 6 against 23 |
+| darknut `d5` (full hearts) | 72.2% | 73.9% | +1.7 ± 1.9 | |
+| darknut `d3` | 85.4% | 82.2% | **−3.2 ± 1.6** | 3:0x69 from N 0.76 hearts a visit against 0.55; Manhandla entered with 3.80 hearts against 4.08, 147 deaths against 116 |
+| gibdo `d5` (full hearts) | 72.2% | 73.3% | +1.1 ± 2.0 | |
+| both, Dungeon 5 at the route's hearts (seeds 3000-3999) | 49.0% | **58.3%** | **+9.3 ± 2.2** | 5:0x05 1.45 hearts a visit against 1.70, 206 deaths of 1000 against 239 |
+
+**gibdo `r30-gibdo-s91` qualifies and is promoted** in this branch's checkout (`triforce promote gibdo r30-gibdo-s91
+--act temperature:0.5+relax:16`). **darknut `r30-dark-s89` is not promoted yet**: `d3` lies on the line of two
+standard errors, the hearts 3:0x69 loses on the way to Manhandla (the arm left 0x69 from N's chain entries out of the
+harvested starts: its cut was dropped to start the training sooner). A second 1000 runs of `d3` on seeds 1000-1999
+for both teams decides it (`r30dk-check-s89-d3b`); if `d3` stays worse, the trade is `d8` +8.1 and Dungeon 5 at the
+route's hearts +5.8 against `d3` −3.2, and the next arm adds 0x69 from N's entries (`r29_zora_states.py
+target/r30dk/replays/d3 OUT --step 95:3_69n`).
