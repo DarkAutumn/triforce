@@ -11,6 +11,7 @@ actions for the step if the walks have them (the state then says so in its manif
 step's states are staged under target/entry-states/r32c-<tag>/<step> and installed before the next step; a chain
 with no state for a step stops there.  At the end `entry_states audit --route d3first`.  Never skips a fight."""
 
+import argparse
 import os
 import subprocess
 import sys

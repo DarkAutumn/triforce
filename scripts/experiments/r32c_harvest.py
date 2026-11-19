@@ -11,7 +11,13 @@ seeds S.. (the game's own randomness, `r27_walks.load`), the walks' actions for 
 `ManhandlaFighter`, round 28's Gleeok fight), and of each chain the first won run's pre-entry frame into the route's
 next step is written as that step's entry state (hearts refilled, the room fresh: `entry_states.write_entry_state`),
 staged in DIR with its manifest entry (`played_by` names the rule and the seed).  Every seed is played: the line
-per chain says how often the rule won.  Nothing in the checkout changes until `install`."""
+per chain says how often the rule won.  Nothing in the checkout changes until `install`.
+
+A room the walks fought with a rule of their second half (`FIGHTS`: `r32b_d5.py`'s Olive Garden and Digdogger,
+`r32b_d7.py`'s 0x49, 0x1b, 0x1c and Aquamentus) has
+no scripted way out of the room: the rule fights until the room is clear, and the explorer (`entry_states`'s, the
+step's own task, the room as the fight left it: `fresh_rooms: false`) goes on from there to the step's exit; the
+win rate is the rule's (clears of the seeds played), the state the first cleared run the explorer took out."""
 
 import argparse
 import collections
@@ -40,8 +46,19 @@ class Harvester(Runner):
             self.pre_entry = snapshot
 
 
+# Where the harvest plays a step otherwise than the walks wrote it.  4:0x13: after the fight the fighter's floor graph
+# lacks the room's middle and corners (every won fight failed there: d3first-walks-a.md §8 "a script fault"; here the
+# heart's spot and ($78,$5D) both), so Link goes by buttons alone: down the W side to the bottom row, along it onto
+# the heart container at ($D0,$BD), back along it and up the middle to the N door.  The fight is the walks' (round
+# 28's GleeokFighter).
+OVERRIDES = {'4_13w': [('clear', 'gleeok'), ('straight', ('y', 0xD0, 0xBD)), ('wait', 30), ('straight', (0x78, 0x5D)),
+                       ('go', 'UP', ('x', 0x78))]}
+
+
 def step_actions(stem):
-    """The walks' actions for `stem`, their best variant where they found one."""
+    """The walks' actions for `stem`, their best variant where they found one (`OVERRIDES` first)."""
+    if stem in OVERRIDES:
+        return OVERRIDES[stem]
     actions = dict(step for leg in LEGS.values() for step in leg)[stem]
     return VARIANTS[stem][BEST[stem]] if stem in BEST else actions
 
@@ -54,10 +71,137 @@ def route_goal(stem):
     return way[at], way[at + 1]
 
 
+def _garden(w):
+    import r32b_d5                                              # pylint: disable=import-outside-toplevel
+    return r32b_d5.BombFighter(w).fight(9000)
+
+
+def _digdogger(w):
+    import r32b_d5                                              # pylint: disable=import-outside-toplevel
+    from r26_walks import DIGDOGGER_SMALL                       # pylint: disable=import-outside-toplevel
+    w.select_b(r32b_d5.RECORDER_SLOT)
+    w.press('LEFT', 6)
+    w.press('B', 1)
+    w.until(lambda w: any(o[1] == DIGDOGGER_SMALL for o in w.objects()), 'NONE', 400)
+    return r32b_d5.DigFighter(w).fight(6000)
+
+
+def _d7(targets, recorder=False, kills=None):
+    """r32b_d7.py's fight of a Dungeon 7 room (`Fight`: round 28's fighter at `targets`), the recorder played facing
+    right first where it says so, done at `kills` kills (None: the room clear)."""
+    def fight(w):
+        import r32b_d7                                          # pylint: disable=import-outside-toplevel
+        from r26_walks import DIGDOGGER_SMALL                   # pylint: disable=import-outside-toplevel
+        if recorder:
+            w.select_b(r32b_d7.RECORDER_SLOT)
+            w.press('RIGHT', 6)
+            w.press('B', 1)
+            w.until(lambda w: any(o[1] == DIGDOGGER_SMALL for o in w.objects()), 'NONE', 400)
+        f = r32b_d7.Fight(w, targets)
+        if kills is None:
+            return f.fight(9000)
+        start = len([o for o in w.objects() if o[1] in targets])
+        for _ in range(6000):
+            if w.hearts() <= 0:
+                return 'dead'
+            if start - len([o for o in w.objects() if o[1] in targets and o[5] < 0x10]) >= kills:
+                return 'clear'
+            f.frame()
+        return 'time'
+    return fight
+
+
+def _fights():
+    from r26_walks import AQUAMENTUS, DIGDOGGER_SMALL, GORIYA_BLUE, GORIYA_RED, KEESE_BLUE  # pylint: disable=C0415
+    return {'5_05e': ('r32b_d5.py garden (BombFighter)', _garden),
+            '5_24e': ('r32b_d5.py digdogger (the recorder, DigFighter)', _digdogger),
+            '7_49s': ('r32b_d7.py 0x49 (Fight: Goriyas, Keese)', _d7((GORIYA_BLUE, GORIYA_RED, KEESE_BLUE))),
+            '7_1bw': ('r32b_d7.py 0x1b (Fight: 6 Blue Goriyas)', _d7((GORIYA_BLUE,))),
+            '7_1cw': ('r32b_d7.py 0x1c (the recorder, one small Digdogger)', _d7((DIGDOGGER_SMALL,), True, 1)),
+            '7_2aw': ('r32b_d7.py 0x2a (Fight: Aquamentus)', _d7((AQUAMENTUS,)))}
+
+
+# The walks' second-half fights: {state name: (the rule's name, the fight: returns 'clear' when the room is clear)}.
+FIGHTS = _fights()
+
+
+def explore_out(step, goal, cleared: Path, seed: int):
+    """From the saved mid-room state `cleared` (the room as the fight left it), the explorer to the step's exit:
+    the pre-entry snapshot of `goal`, or None."""
+    from triforce import entry_states                           # pylint: disable=import-outside-toplevel
+    from triforce._native import Explorer                       # pylint: disable=import-outside-toplevel
+    from triforce.paths import STATES_DIR                       # pylint: disable=import-outside-toplevel
+    config = entry_states.step_config(step, str(cleared), ROUTE).replace(fresh_rooms=False)
+    for attempt in range(3):
+        explorer = Explorer(config, seed=seed * 1000 + attempt, states_dir=str(STATES_DIR))
+        result = explorer.explore(str(cleared), 3000, 25, 200, accept=None)
+        if not result.success:
+            continue
+        _, pre_entry = explorer.replay(result, capture_pre_entry=True)
+        if explorer.state.full_location != goal.location:
+            pre_entry, _ = entry_states.follow_to(explorer.snapshot(), goal.location, str(STATES_DIR))
+        if pre_entry is not None:
+            return pre_entry
+    return None
+
+
+def harvest_fight(args, step, goal):
+    from triforce import entry_states                           # pylint: disable=import-outside-toplevel
+    from triforce.paths import STATES_DIR                       # pylint: disable=import-outside-toplevel
+    rule, fight = FIGHTS[args.step]
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    command = ' '.join(['python'] + sys.argv)
+    harvested, missed = [], []
+    for chain in args.chains:
+        source = Path(STATES_DIR) / step.filename(chain)
+        cleared = out / 'cleared' / f'{ROUTE}_{args.step}_{chain}.state'   # the step's name: the env plays its route
+        cleared.parent.mkdir(exist_ok=True)
+        clears, why, lost, entry = 0, collections.Counter(), [], None
+        for seed in range(args.seed0, args.seed0 + args.seeds):
+            w = load(source, seed)
+            w.wait_play()
+            h0 = hp(w)
+            end = fight(w)
+            if end != 'clear' or hp(w) <= 0:
+                why[str(end)[:60]] += 1
+                continue
+            clears += 1
+            lost.append(h0 - hp(w))
+            if entry is not None:
+                continue
+            w.game.save_state_file(str(cleared))
+            pre_entry = explore_out(step, goal, cleared, seed)
+            if pre_entry is None:
+                why['cleared, the explorer found no way out'] += 1
+                continue
+            path = out / goal.filename(chain)
+            entry_states.write_entry_state(w.game, pre_entry, str(path), goal.location)
+            entry = {'file': path.name, 'chain': chain, 'route': ROUTE, 'route_step': goal.index,
+                     'from_step': step.index, 'specialist': goal.specialist, 'level': goal.level,
+                     'room': f'0x{goal.room:02x}', 'in_cave': goal.in_cave, 'entry': goal.entry, 'exit': goal.exit,
+                     'alternate': False, 'steps': 0, 'frames': 0, 'health': h0, 'ending': 'exit-correct',
+                     'env_steps': 0, 'attempts': seed - args.seed0 + 1, 'seconds': 0.0,
+                     'played_by': f'scripts/experiments/r32c_harvest.py: {rule} cleared the room (seed {seed}), '
+                                   'the explorer took it out'}
+            entry_states._merge_manifest(str(out), [entry], command)     # pylint: disable=protected-access
+            harvested.append(entry)
+        cleared.unlink(missing_ok=True)
+        if entry is None:
+            missed.append(step.filename(chain))
+        print(json.dumps({'step': args.step, 'rule': rule, 'chain': chain, 'runs': args.seeds, 'won': clears,
+                          'hearts_lost_in_wins': round(sum(lost) / len(lost), 2) if lost else None,
+                          'failed': dict(why), 'harvested': entry['file'] if entry else None}), flush=True)
+    entry_states._write_build_record(str(out), command, harvested, missed)  # pylint: disable=protected-access
+    return 0 if not missed else 1
+
+
 def harvest(args):
     from triforce import entry_states                           # pylint: disable=import-outside-toplevel
     from triforce.paths import STATES_DIR                       # pylint: disable=import-outside-toplevel
     step, goal = route_goal(args.step)
+    if args.step in FIGHTS:
+        return harvest_fight(args, step, goal)
     actions = step_actions(args.step)
     rule = f"{args.step} {'(' + BEST[args.step] + ')' if args.step in BEST else ''}".strip()
     out = Path(args.out)
