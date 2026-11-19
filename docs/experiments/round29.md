@@ -1406,3 +1406,33 @@ From `r79t5-zora` (it holds the leg to Dungeon 9), three seeds (91, 92, 93), 244
 
 The gate is measured in a models directory that holds the Dungeon 6 landing team (`r27-land`'s promoted runs, with
 ow-lynel `r27l-lynel-s81`) and only ow-zora swapped, `r76-zora-arrows` its promoted run and the paired reference.
+
+### 19.3 The gate
+
+The three runs train as the arm intends: 69-77 thousand episodes each (`r79t5-zora` 11 thousand), harvested starts
+in every iteration. Single rooms (`eval.json`, 100 episodes a state, clips on), all three within a point of the
+better older run on every ow-zora state: `r29z-zora-s91` 99.97% of its states' episodes, −0.032 hearts
+(`r76-zora-arrows` 99.64%, −0.086; `r79t5-zora` 99.38%, −0.073); 0x44 from S 100%, −0.10 (99.8%, −0.12 | 98.7%,
+−0.35); out of 0x44's cave 100% (97.3 | 96.0); 0x55 from N 99.7%, 100% for its second visit (98.8, 99.2 | 96.7,
+94.7); 0x47 from E 100%, −0.21, 0x27 from E 100%, 0x47's cave 100% (as `r79t5-zora`).
+
+`select-checkpoint` on the landing team (screen seeds 2000-2999, confirmation 3000-3999; arrivals, hearts on
+arriving). **`post-d5`** (to 7:0x79): every candidate of the three seeds screens at 99.2-99.4%, `r76-zora-arrows`
+99.4%; confirmed 98.3-98.4% against `r76-zora-arrows`' 98.4% (paired 0.0 ± 0.1). The leg is at its ceiling: no
+run leaves 0x44 without the arrows (137 of 1000 with `r79t5-zora`), 5 wrong exits at 0x55 (47); what remains are
+other families' endings (vire in 4:0x61, one bounce). **After Dungeon 2** (to 1:0x73; the reference is the same
+team with `r76-zora-arrows`, every other checkpoint identical, on the same seeds):
+
+| run | candidate | screen | hearts | confirm | hearts | confirm vs `r76-zora-arrows` |
+|---|---|---:|---:|---:|---:|---:|
+| `r76-zora-arrows` | (reference) | 93.8% | 3.21 | 94.5% | 3.18 | |
+| `r29z-zora-s91` | **last (it 2022)** | 94.0% | 3.26 | **94.5%** | **3.28** | **+0.0 ± 0.8, +0.10 ± 0.03 hearts** |
+| | it001958 | 92.9% | 3.19 | 95.2% | 3.19 | |
+| `r29z-zora-s92` | last | 93.8% | 3.19 | 93.8% | 3.24 | −0.7 ± 0.9 |
+| | it001958 | 93.5% | 3.13 | 94.0% | 3.16 | −0.5 ± 0.8 |
+| `r29z-zora-s93` | it001958 | 93.1% | | | | |
+
+On the confirmation seeds `r29z-zora-s91` loses 0.157 hearts an ow-zora visit against 0.175 (16 deaths against 14).
+**`r29z-zora-s91` (its last checkpoint, the run's `ckpt.pt`) passes the gate** on both segments. Its chains of the
+other stretches (after Dungeons 1, 3 and 4, `post-d7`, `post-d6`, `post-d8`, 1000 runs, paired against
+`r76-zora-arrows` and `r79t5-zora`; the references are measured) and its promotion were left for the next step.

@@ -81,9 +81,10 @@ branch.
   are their monsters' families'.
 - [ ] **0x30's stairs on a Trap's home**: the lure of `d9-walks.md` §3.4 is no rule of the objective.
 - [ ] **Drops** in the Wizzrobe rooms (hearts and fairies from 24 Wizzrobes) were not measured by any walk.
-- [ ] **One ow-zora for every stretch** (round29.md §19): `r79t5-zora` misses 0x44's arrows on `post-d5` (84.0%
-  against 98.7%) and loses 0x38 after Dungeon 2; `r76-zora-arrows` cannot play the leg to Dungeon 9. Arm `r29z-zora-s9N`
-  from `r79t5-zora` (the cave curriculum out, the chain's entries harvested, `r76-zora-arrows`' crossings as demos).
+- [ ] **One ow-zora for every stretch** (round29.md §19): `r29z-zora-s91` (from `r79t5-zora`: the cave curriculum
+  out, the chain's entries harvested, `r76-zora-arrows`' crossings as demos) passes the gate (`post-d5` 98.4% = 98.4%,
+  after Dungeon 2 94.5% = 94.5%, +0.10 hearts). Left: its chains after Dungeons 1, 3, 4, `post-d7`, `post-d6`,
+  `post-d8`, and the promotion.
 - [ ] **A take-any cave's curriculum can never finish** (round29.md §19.1): the explorer's track of a `waypoint:
   heart` cave goes on past the purchase, so a start from its later states already holds the container and never
   meets the waypoint; the first stage never passes and `curriculum.fraction` (0.5) sends half of all resets there, 600
