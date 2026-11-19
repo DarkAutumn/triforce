@@ -136,9 +136,9 @@ def test_a_bad_route_start_is_an_error(scripted_models, tmp_path, capsys):
 
 
 def test_golden_saves_one_stitched_replay_per_count(scripted_models, tmp_path, capsys, short_runs):
-    """From 0x3c (route step 24) the path has eight segments: to step 68 (outside Dungeon 1), step 105 (outside
-    Dungeon 3), step 134 (outside Dungeon 4), step 209 (outside Dungeon 5), step 248 (outside Dungeon 7), step 281
-    (outside Dungeon 6), step 297 (outside Dungeon 8), then the route's end.  Twenty steps don't get there: each path
+    """From 0x3c (route step 24) the path has eight segments: to step 64 (outside Dungeon 1), step 101 (outside
+    Dungeon 3), step 130 (outside Dungeon 4), step 205 (outside Dungeon 5), step 244 (outside Dungeon 7), step 277
+    (outside Dungeon 6), step 293 (outside Dungeon 8), then the route's end.  Twenty steps don't get there: each path
     is its first segment's furthest run, saved under its ending."""
     status, saved, summary, err = run(capsys, tmp_path, 2, '--golden', '--from', require_state(SEGMENT_STATE),
                                       '--attempts', 2, '--parallel', 2, '--models-dir', scripted_models)
@@ -147,8 +147,8 @@ def test_golden_saves_one_stitched_replay_per_count(scripted_models, tmp_path, c
     # Each path owns (segments of the whole route, nine) x attempts seeds: 9 x 2.
     assert [path.name[:15] for path in files] == ['golden-00000000', 'golden-00000018']
     assert [json.loads(line.split(' ', 1)[1])['stop_step'] for line in err.splitlines()
-            if line.startswith('segment ')] == [68, 68]
-    assert err.count('failed in segment 0 (stop 68)') == 2
+            if line.startswith('segment ')] == [64, 64]
+    assert err.count('failed in segment 0 (stop 64)') == 2
     for path, (_, ending, frames, _) in zip(files, sorted(saved)):
         recording = _native.Replay(path.read_bytes())
         assert path.name.endswith(f'-{ending}.tfreplay') and ending == recording.ending != 'win'

@@ -71,9 +71,10 @@ NECK_X, NECK_Y, DEAD_MASK, HEAD_SLOT = (0x438, 0x452, 0x46C, 0x395), (0x445, 0x4
 GLEEOK_BASE = (0x7C, 0x6F)
 FLOOR = (0x20, 0x5D, 0xD0, 0xBD)
 
-# room -> (family, the route step's index in d8, the family's step limit is its yaml's)
-ROOMS = {'whirlwind': ('ow-lynel', 281), 'tree': ('ow-moblin', 286), 'darknut-5e': ('darknut', 289),
-         'darknut-3e': ('darknut', 291), 'pols': ('pols-voice', 294), 'gleeok': ('boss-gleeok', 295)}
+# room -> (family, the route step's index in d2first, the family's step limit is its yaml's); round 31's Dungeon 1
+# (four steps fewer) moved them from 281-296 to 277-292
+ROOMS = {'whirlwind': ('ow-lynel', 277), 'tree': ('ow-moblin', 282), 'darknut-5e': ('darknut', 285),
+         'darknut-3e': ('darknut', 287), 'pols': ('pols-voice', 290), 'gleeok': ('boss-gleeok', 291)}
 
 
 def objects(ram):
@@ -488,11 +489,11 @@ RULES = {'whirlwind': whirlwind_rule, 'tree': tree_rule, 'darknut-5e': lambda: d
 
 
 def stems():
-    """{route step index: the start state's name without its chain}, steps 281-296 of d2first."""
+    """{route step index: the start state's name without its chain}, steps 277-292 of d2first."""
     from triforce import _native                               # pylint: disable=import-outside-toplevel
     from triforce.entry_states import state_stem                # pylint: disable=import-outside-toplevel
     return {s['index']: (state_stem(s['level'], s['room'], s['in_cave'], s['entry'], s['visit']), s)
-            for s in _native.route_steps('d2first')[281:297]}
+            for s in _native.route_steps('d2first')[277:293]}
 
 
 def scaffold(args):

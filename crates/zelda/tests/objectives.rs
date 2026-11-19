@@ -13,8 +13,8 @@ use std::sync::Arc;
 use zelda::enums::SwordKind;
 use zelda::game::GameView;
 use zelda::objectives::{
-    CAVE_TREASURE_TILE, GameCompletion, Objective, ObjectiveKind, bomb_spot, exit_is_correct_at, start_route,
-    tiles_in_span,
+    CAVE_TREASURE_TILE, GameCompletion, Objective, ObjectiveKind, bomb_spot, doorways_kept_out, exit_is_correct_at,
+    start_route, tiles_in_span,
 };
 use zelda::room::Target;
 use zelda::room_entry::{ROOM_FLAGS_OW, ROOM_FLAGS_UW};
@@ -43,6 +43,23 @@ fn images(names: &[&str]) -> Option<Vec<Box<[u8; RAM_SIZE]>>> {
             })
             .collect(),
     )
+}
+
+/// Dungeon 1's key room 0x72 (off the route since round 31, so it has no start state) as the old route entered it:
+/// from 1_73s round the statues and W through the doorway (`MOVE _ 4` each).
+const INTO_1_72: &[(&str, usize)] = &[("MOVE N 4", 9), ("MOVE W 4", 17), ("MOVE N 4", 3), ("MOVE W 4", 7)];
+
+/// The RAM image of a named state after `moves` (an action, how many times), played in the emulator.
+fn walked_image(name: &str, moves: &[(&str, usize)]) -> Option<Box<[u8; RAM_SIZE]>> {
+    let nes = open_core()?;
+    let mut s = Session::new(Counted(nes, 0), Arc::new(GameMap::builtin()));
+    s.load(&load_named_state(name), &LoadOptions::default(), &mut ChaCha8Rng::seed_from_u64(0)).unwrap();
+    for &(action, times) in moves {
+        for _ in 0..times {
+            s.act(Action::parse(action).unwrap()).unwrap();
+        }
+    }
+    Some(Box::new(*s.state().ram()))
 }
 
 fn view(map: &Arc<GameMap>, ram: &[u8; RAM_SIZE], frame: u64) -> GameView {
@@ -151,11 +168,11 @@ fn exit_spans_bound_targets_and_correct_exits() {
 
 #[test]
 fn dungeon_key_rooms_fight_then_treasure_then_leave_and_stay_collected() {
-    let Some(images) = images(&["1_72e_0", "1_73s_0"]) else {
+    let (Some(images), Some(key_room)) = (images(&["1_73s_0"]), walked_image("1_73s_0", INTO_1_72)) else {
         return;
     };
     let map = Arc::new(GameMap::builtin());
-    let (key_room, start) = (&images[0], &images[1]);
+    let (key_room, start) = (&key_room, &images[0]);
     let key_view = view(&map, key_room, 0);
     assert_eq!(key_view.full_location(), loc(1, 0x72));
     assert_eq!(
@@ -163,20 +180,15 @@ fn dungeon_key_rooms_fight_then_treasure_then_leave_and_stay_collected() {
         Some("key")
     );
 
-    // From the D1 entrance without keys, a key room comes next.
+    // From the D1 entrance without keys the route's own exit comes next (round 31, phase IX): no route step enters
+    // a key room any more, so the key rooms the keyless way search finds (0x72, 0x74) meet none of the route's exits
+    // from 0x73, and the route's first is taken: S out to 0:0x37, the door trick that opens the N door without a key.
     let mut no_keys = start.clone();
     set(&mut no_keys, Var::Keys, 0);
     let entrance = view(&map, &no_keys, 0);
     let first = completion(&map).objectives(None, &entrance);
     assert_eq!(first.kind, ObjectiveKind::Move);
-    assert!(
-        first
-            .next_rooms
-            .iter()
-            .all(|r| [loc(1, 0x72), loc(1, 0x74)].contains(r)),
-        "{:?}",
-        first.next_rooms
-    );
+    assert_eq!(first.next_rooms.iter().copied().collect::<Vec<_>>(), [loc(0, 0x37)]);
     assert_targets_are_correct_exits(&map, &entrance, &first);
 
     // In the key room: fight while monsters are up (the key drops when they're dead).
@@ -252,13 +264,13 @@ fn dungeon_key_rooms_fight_then_treasure_then_leave_and_stay_collected() {
 
 #[test]
 fn map_and_compass_treasure_is_not_an_objective() {
-    let Some(images) = images(&["1_72e_0"]) else {
+    let Some(key_room) = walked_image("1_73s_0", INTO_1_72) else {
         return;
     };
     let mut map = GameMap::builtin();
     map.get_mut(loc(1, 0x72)).unwrap().treasure = Some("compass".into());
     let map = Arc::new(map);
-    let mut ram = images[0].clone();
+    let mut ram = key_room.clone();
     clear_objects(&mut ram);
     show_treasure(&mut ram, 0x78, 0x98);
     let state = view(&map, &ram, 0);
@@ -451,12 +463,13 @@ fn in_room(ram: &[u8; RAM_SIZE], room: u8) -> Box<[u8; RAM_SIZE]> {
     ram
 }
 
-/// Dungeon 1 follows the route's steps through the entrance 0x73 (Lee, Nov 8): W to the key room 0x72, back in from
-/// W then E to the key room 0x74, back in from E then N, though Link carries Dungeon 2's keys and the shortest way
-/// to the triforce is N from the start.
+/// Dungeon 1 follows the route's steps through the entrance 0x73 (round 31, the owner's door trick): entered from S
+/// the first visit leaves S, out of the level to 0:0x37's mouth (the scroll opens the N key door for good), back in
+/// from the mouth the second visit leaves N, though Link carries Dungeon 2's keys and the shortest way to the
+/// triforce is N from the start.  The N door is `keep_out` until the step that leaves through it.
 #[test]
 fn dungeon_1_entrance_follows_the_route_steps() {
-    let Some(images) = images(&["1_73s_0", "1_73w_0", "1_73e_0"]) else {
+    let Some(images) = images(&["1_73s_0", "0_37c_0", "1_73s_v2_0"]) else {
         return;
     };
     let map = Arc::new(GameMap::builtin());
@@ -466,34 +479,27 @@ fn dungeon_1_entrance_follows_the_route_steps() {
     // Off the route (no step), the key-aware shortest way: N.
     let shortest = completion(&map).objectives(None, &from_s);
     assert_eq!(shortest.next_rooms.iter().copied().collect::<Vec<_>>(), [loc(1, 0x63)]);
-    // From S (a training reset): the first visit's step, W.
-    let (route, step) = start_route(&map, loc(1, 0x73), Some("S"), None, &mut rng, None, &from_s, true);
-    assert_eq!(route, ROUTE);
+    // From S (a training reset on `1_73s_0`, whose name spells the first visit): the first visit's step, S out of
+    // the level; MOVE keeps out of the N door.
+    let (route, step) = start_route(&map, loc(1, 0x73), Some("S"), Some(1), &mut rng, None, &from_s, true);
+    assert_eq!((route.as_str(), step), (ROUTE, Some(46)));
     let mut gc = GameCompletion::new(map.clone(), &route, step).unwrap();
     let objective = gc.objectives(None, &from_s);
-    assert_eq!(objective.next_rooms.iter().copied().collect::<Vec<_>>(), [loc(1, 0x72)]);
+    assert_eq!(objective.next_rooms.iter().copied().collect::<Vec<_>>(), [loc(0, 0x37)]);
     assert_targets_are_correct_exits(&map, &from_s, &objective);
-    // Back from 0x72 (entered from W): E.  Back from 0x74 (entered from E): N.
-    for (image, came_from, next) in [(&images[1], 0x72, 0x74), (&images[2], 0x74, 0x63)] {
-        let state = view(&map, image, 0);
-        let prev = in_room(image, came_from);
-        let prev = view(&map, &prev, 0);
-        let mut gc = completion(&map);
-        let objective = gc.objectives(Some(&prev), &state);
-        assert_eq!(
-            objective.next_rooms.iter().copied().collect::<Vec<_>>(),
-            [loc(1, next)],
-            "0x73 from 0x{came_from:02x}"
-        );
-        assert_targets_are_correct_exits(&map, &state, &objective);
-        let (_, start) = start_route(&map, loc(1, 0x73), state_entry_of(came_from), None, &mut rng, None, &state, true);
-        assert_eq!(start, gc.step(), "a reset in the same room plays the same step");
-    }
-}
-
-/// The entry of 1:0x73 from its key-room neighbour.
-fn state_entry_of(neighbour: u8) -> Option<&'static str> {
-    Some(if neighbour == 0x72 { "W" } else { "E" })
+    assert_eq!(doorways_kept_out(&map, &from_s, &objective), Direction::N.value());
+    // Out on 0:0x37 (step 47): back into the mouth.  Back in 0x73 (step 48): N, the door no longer kept out.
+    let outside = view(&map, &images[1], 0);
+    let objective = gc.objectives(Some(&from_s), &outside);
+    assert_eq!((gc.step(), objective.next_rooms.iter().copied().collect::<Vec<_>>()), (Some(47), vec![loc(1, 0x73)]));
+    let back = view(&map, &images[2], 0);
+    let objective = gc.objectives(Some(&outside), &back);
+    assert_eq!((gc.step(), objective.next_rooms.iter().copied().collect::<Vec<_>>()), (Some(48), vec![loc(1, 0x63)]));
+    assert_targets_are_correct_exits(&map, &back, &objective);
+    assert_eq!(doorways_kept_out(&map, &back, &objective), 0);
+    // A reset on the second visit's state plays the same step.
+    let (_, start) = start_route(&map, loc(1, 0x73), Some("S"), Some(2), &mut rng, None, &back, true);
+    assert_eq!(start, Some(48), "a reset in the same room plays the same step");
 }
 
 /// 0x0a before the white sword: the cave is the objective and S (back to 0x1a) a retreat.  In 0x1a from N without

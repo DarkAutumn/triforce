@@ -16,7 +16,7 @@ def options(policies, route_name='d2first'):
 
 def test_checkpoints_follow_the_route_triforces():
     steps = _native.route_steps('d2first')
-    assert golden.checkpoints('d2first') == [24, 68, 105, 134, 209, 248, 281, 297]
+    assert golden.checkpoints('d2first') == [24, 64, 101, 130, 205, 244, 277, 293]
     # Back on the overworld outside Dungeons 2, 1, 3, 4, 5, 7, 6 and 8; the route ends on the end of the game (round
     # 29, 1.9.0.0), no triforce.
     assert [(steps[k]['level'], steps[k]['room']) for k in golden.checkpoints('d2first')] == [
@@ -40,11 +40,11 @@ def test_a_scripted_segment_is_won_and_recorded(scripted_models, states_dir):
 
 
 def test_segments_start_from_the_winner_and_a_lost_segment_ends_the_path(scripted_models, states_dir):
-    """Two real segments: the scripted one is won (7 steps); nobody gets from its end to route step 68 in twelve
+    """Two real segments: the scripted one is won (7 steps); nobody gets from its end to route step 64 in twelve
     steps, so the path fails there with the run that got furthest, stitched onto the winner."""
     policies = Policies(scripted_models)
     data, summary = golden.golden_path(policies, 'd2first', 2, 0, options(policies),
-                                       start_from=str(require_state(SEGMENT_STATE)), stops=[SEGMENT_STOP_STEP, 68],
+                                       start_from=str(require_state(SEGMENT_STATE)), stops=[SEGMENT_STOP_STEP, 64],
                                        states_dir=states_dir, attempts=3, max_steps=12)
     first, second = summary['segments']
     assert summary['result'] == 'failure'

@@ -984,13 +984,13 @@ fn open_route_ignores_optional_combat() {
     assert_eq!(next_rooms(&env), rooms(&[(2, 0x5e)]));
 }
 
-/// 0x43 is crossed twice (the bow detour, Lee, Nov 9): from W the route goes N to the Stalfos key room 0x33, back
-/// from N (with the bow) through the locked E door to 0x44; with or without a key the objective offers only that exit.
-/// Without one, the locked route exit grants a cheated key (`zelda::cheats`).
+/// 0x43 is crossed twice (the bow detour, Lee, Nov 9): from S (round 31: through 0x53's bombed wall) the route goes N
+/// to the Stalfos key room 0x33, back from N (with the bow) through the locked E door to 0x44; with or without a key
+/// the objective offers only that exit.  Without one, the locked route exit grants a cheated key (`zelda::cheats`).
 #[test]
 fn route_room_only_offers_its_route_exit() {
     let Some(mut nes) = open_core() else { return };
-    for (start_state, wanted) in [("1_43w_0", 0x33), ("1_43n_0", 0x44)] {
+    for (start_state, wanted) in [("1_43s_0", 0x33), ("1_43n_0", 0x44)] {
         for keys in [0, 1] {
             let mut env = make_env(nes, "stalfos-keese-gel", Some(start_state), |c| {
                 c.ram_randomization = RamRandomization {
@@ -1009,19 +1009,19 @@ fn route_room_only_offers_its_route_exit() {
     }
 }
 
-/// Dungeon 1's entrance 0x73 follows the route's steps (Lee, Nov 8): entered from S (with Dungeon 2's keys: the
-/// shortest way is N) the key room 0x72 W comes first, back from it (from W) the key room 0x74 E, back from that (from
-/// E) N.  Each step has its own start states, so one-room training resets play every one of them.
+/// Dungeon 1's entrance 0x73 follows the route's steps (round 31, the owner's door trick): entered from S (with
+/// Dungeon 2's keys: the shortest way is N) the first visit leaves S, out of the level to 0:0x37; the second visit
+/// (back in from the mouth) leaves N.  Each step has its own start states, so one-room training resets play both.
 #[test]
 fn the_d1_entrance_follows_the_route_steps() {
     let Some(mut nes) = open_core() else { return };
-    for (start_state, step, wanted) in [("1_73s_0", 46, 0x72), ("1_73w_0", 48, 0x74), ("1_73e_0", 50, 0x63)] {
+    for (start_state, step, wanted) in [("1_73s_0", 46, (0, 0x37)), ("1_73s_v2_0", 48, (1, 0x63))] {
         let mut env = make_env(nes, "stalfos-keese-gel", Some(start_state), |_| {});
         let (_, info) = env.reset(Some(0), None).unwrap();
         assert!(state(&env).keys() > 0, "{start_state}: Link carries keys from Dungeon 2");
         assert_eq!(env.route(), ("d2first", Some(step)), "{start_state}");
         assert_eq!(info.route, "d2first");
-        assert_eq!(next_rooms(&env), rooms(&[(1, wanted)]), "{start_state}");
+        assert_eq!(next_rooms(&env), rooms(&[wanted]), "{start_state}");
         nes = release(env);
     }
 }
@@ -1131,13 +1131,13 @@ fn wavefront_has_no_lane_below_the_bottom_tree_line() {
     assert!(wavefront.get((2, 16)).is_none()); // the pocket doesn't
 }
 
-/// 1_73e (2 keys) exits N through the locked door into 0x63, another stalfos-keese-gel room: one_room ends the
-/// episode there as exit-correct, otherwise it continues.
+/// 1_73s_v2 (back in after the trip out S: the N key door is open) exits N into 0x63, another stalfos-keese-gel
+/// room: one_room ends the episode there as exit-correct, otherwise it continues.
 #[test]
 fn one_room_episode_ends_at_the_first_correct_exit() {
     let Some(mut nes) = open_core() else { return };
     for one_room in [true, false] {
-        let mut env = make_env(nes, "stalfos-keese-gel", Some("1_73e_0"), |c| {
+        let mut env = make_env(nes, "stalfos-keese-gel", Some("1_73s_v2_0"), |c| {
             c.one_room = one_room
         });
         env.reset(Some(0), None).unwrap();
@@ -1274,8 +1274,8 @@ fn curriculum_start_takes_the_seed_states_route_step() {
 
 // --- tests/test_nearby_items.py ---
 
-/// stalfos-keese-gel at 1_73e (one room) with Link hurt at (120, y) and `drops` (kind, x, y) placed in slots 3+;
-/// the env restarts from that snapshot.
+/// stalfos-keese-gel at 1_73s_v2 (one empty room) with Link hurt at (120, y) and `drops` (kind, x, y) placed in
+/// slots 3+; the env restarts from that snapshot.
 fn placed_env(
     nes: ZCore,
     drops: &[(i16, u8, u8)],
@@ -1314,7 +1314,7 @@ fn placed_env_configured(
     placed_env_opts(nes, drops, y, hearts_and_containers, EnvOptions::default(), update)
 }
 
-/// [`placed_env_configured`] with env options (start state 1_73e_0 is filled in).
+/// [`placed_env_configured`] with env options (start state 1_73s_v2_0 is filled in).
 fn placed_env_opts(
     nes: ZCore,
     drops: &[(i16, u8, u8)],
@@ -1324,7 +1324,7 @@ fn placed_env_opts(
     update: impl FnOnce(&mut SpecialistConfig),
 ) -> (Env, SessionSnapshot<MachineState>, Observation) {
     let opts = EnvOptions {
-        start_state: Some("1_73e_0".to_owned()),
+        start_state: Some("1_73s_v2_0".to_owned()),
         ..opts
     };
     let mut env = make_env_with(nes, "stalfos-keese-gel", opts, |c| {
@@ -1357,7 +1357,7 @@ fn placed_env_opts(
     }
     s.apply_ram(&[]);
     let snapshot = env.session().snapshot();
-    let (obs, _) = env.restore(&snapshot, "1_73e_0").unwrap();
+    let (obs, _) = env.restore(&snapshot, "1_73s_v2_0").unwrap();
     (env, snapshot, obs)
 }
 
@@ -1402,7 +1402,7 @@ fn nearest_clock_then_heart_then_exit_without_changing_task() {
     assert_eq!(info.health, 3.0);
 
     let (mut legacy, _) = placed_env(release(env), &[], 157, false);
-    legacy.restore(&snapshot, "1_73e_0").unwrap();
+    legacy.restore(&snapshot, "1_73s_v2_0").unwrap();
     let shaped = movement_reward(&mut legacy, "E");
     assert!(shaped < 0.0, "{shaped}");
 }
@@ -1505,7 +1505,7 @@ fn drops_first(left_drop_penalty: f64) -> RewardConfig {
 fn with_bombs(mut env: Env, bombs: u8) -> Env {
     env.session_mut().apply_ram(&[(Var::Bombs, bombs), (Var::BombMax, 8)]);
     let snapshot = env.session().snapshot();
-    env.restore(&snapshot, "1_73e_0").unwrap();
+    env.restore(&snapshot, "1_73s_v2_0").unwrap();
     env
 }
 
@@ -1683,12 +1683,12 @@ fn walk(env: &mut Env, steps: usize) -> Vec<StepInfo> {
     infos
 }
 
-/// 1_73e has 2 keys and the N door is locked: walking to it opens the door, rewarded once, then Link walks through
-/// into 0x63.
+/// 6_79s (Dungeon 6's entrance, an empty stalfos-keese-gel room) has keys and the W door is locked: walking to it
+/// opens the door, rewarded once, then Link walks through into 0x78.
 #[test]
 fn locked_door_reward_fires_once() {
     let Some(nes) = open_core() else { return };
-    let mut env = make_env(nes, "stalfos-keese-gel", Some("1_73e_0"), |_| {});
+    let mut env = make_env(nes, "stalfos-keese-gel", Some("6_79s_0"), |_| {});
     env.reset(Some(0), None).unwrap();
     let infos = walk(&mut env, 40);
     let hits: Vec<usize> = (0..infos.len())
@@ -1699,7 +1699,7 @@ fn locked_door_reward_fires_once() {
         term(&infos[hits[0]], "reward-opened-locked-door"),
         Some(REWARD_MEDIUM)
     );
-    assert!(infos[hits[0]..].iter().any(|i| i.room == (1, 0x63, false)));
+    assert!(infos[hits[0]..].iter().any(|i| i.room == (6, 0x78, false)));
 }
 
 /// Same start, same RNG, same actions: PBRS on adds pbrs-movement outcomes, PBRS off has none, and every other
@@ -2277,12 +2277,12 @@ fn shared_start_weights_pick_the_start_state() {
     }
 }
 
-/// F132: the target block's direction is a move Link can make: at the W doorway entries of 1:0x43 and 1:0x73 (whose
-/// targets lie N/S, which the doorway forbids) and beside 1:0x42's idle push block.
+/// F132: the target block's direction is a move Link can make: at the W doorway entries of 1:0x45 and 1:0x23 (whose
+/// targets lie N/S, which the doorway forbids) and beside 1:0x22's idle push block (W of it: pushing E does nothing).
 #[test]
 fn target_direction_is_a_legal_move() {
     let Some(mut nes) = open_core() else { return };
-    for (name, place) in [("1_43w_0", None), ("1_73w_0", None), ("1_42s_0", Some((120u8, 149u8)))] {
+    for (name, place) in [("1_45w_0", None), ("1_23w_0", None), ("1_22e_0", Some((80u8, 141u8)))] {
         let level = name[..1].parse::<u8>().unwrap();
         let room = u8::from_str_radix(&name[2..4], 16).unwrap();
         let specialist = data().specialist_for(MapLocation::new(level, room, false)).unwrap().to_owned();

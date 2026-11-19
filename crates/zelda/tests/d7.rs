@@ -563,8 +563,8 @@ fn the_d7_route_is_walked_from_the_d5_triforce_to_the_d7_triforce() {
     let visits = w.run(|s| s.state().has_triforce(7), 40_000);
     let t = &w.ticks;
 
-    // 0x0b (step 205 since round 31, `exit: recorder`): Link comes out of Dungeon 5 facing down with the counter at 0;
-    // the mask offers RECORDER only facing down (or left) and the walk plays twice: 0 -> $FC (L5) -> $FB (L4, 0x45).
+    // 0x0b (step 205, `exit: recorder`): Link comes out of Dungeon 5 facing down with the counter at 0; the mask
+    // offers RECORDER only facing down (or left) and the walk plays twice: 0 -> $FC (L5) -> $FB (L4, 0x45).
     assert_eq!((route[205].location(), route[205].exit.as_str()), (ow(0x0b), "recorder"));
     let whirl = at(t, ow(0x0b), 205);
     for k in &whirl {

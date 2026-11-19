@@ -57,7 +57,7 @@ from pathlib import Path
 RUNS = 30
 SEED0 = 1000
 REPEAT = {'RECORDER': 40, 'CANDLE': 40, 'BOMB': 40, 'ARROW': 40, 'SWORD': 4, 'BEAMS': 4}
-FIRST = 297                                                    # the first step of the stretch in d2first
+FIRST = 293                                                    # the first step of the stretch in d2first
 
 OBJ_X, OBJ_Y, OBJ_DIR, OBJ_STATE, OBJ_TYPE, OBJ_META = 0x70, 0x84, 0x98, 0xAC, 0x34F, 0x405
 FRAME, MODE, LEVEL, ROOM, HEARTS, HEART_PARTIAL, KEYS, BOMBS = 0x15, 0x12, 0x10, 0xEB, 0x66F, 0x670, 0x66E, 0x658
@@ -65,14 +65,16 @@ ROOM_ALL_DEAD, PARALYZED, POWER_TRIFORCE, BLOCK = 0x34D, 0x512, 0x672, 0x0B
 BIT = {'RIGHT': 1, 'LEFT': 2, 'DOWN': 4, 'UP': 8}
 LETTER = {'RIGHT': 'E', 'LEFT': 'W', 'DOWN': 'S', 'UP': 'N'}
 
-# room -> (family, the route step's index in d9; 0x20's first visit is fought on the plain way, step 339)
-ROOMS = {'whirlwind': ('ow-moblin', 297), 'tree': ('ow-zora', 301), 'rock-wall': ('ow-lynel', 311),
-         'ladder-17': ('ow-boulder', 308),
-         'like-like-14': ('like-like', 317), 'lanmola': ('lanmola', 315),
-         'patra-61': ('patra', 336), 'patra-52': ('patra', 355), 'patra-16': ('patra', 330),
-         'wizzrobe-07': ('wizzrobe', 323), 'wizzrobe-05': ('wizzrobe', 332), 'wizzrobe-20': ('wizzrobe', 339),
-         'wizzrobe-10': ('wizzrobe', 340), 'wizzrobe-30': ('wizzrobe', 350), 'room-03': ('like-like', 353),
-         'ganon': ('ganon', 356), 'zelda': ('ganon', 357)}
+# room -> (family, the route step's index in d2first; 0x20's first visit is fought on the plain way, step 335).
+# Round 31's Dungeon 1 (four steps fewer) moved them from 297-357 to 293-353; 9:0x55 is entered from E since then
+# (the `lanmola` rule plays it from S, as round 29 had it).
+ROOMS = {'whirlwind': ('ow-moblin', 293), 'tree': ('ow-zora', 297), 'rock-wall': ('ow-lynel', 307),
+         'ladder-17': ('ow-boulder', 304),
+         'like-like-14': ('like-like', 313), 'lanmola': ('lanmola', 311),
+         'patra-61': ('patra', 332), 'patra-52': ('patra', 351), 'patra-16': ('patra', 326),
+         'wizzrobe-07': ('wizzrobe', 319), 'wizzrobe-05': ('wizzrobe', 328), 'wizzrobe-20': ('wizzrobe', 335),
+         'wizzrobe-10': ('wizzrobe', 336), 'wizzrobe-30': ('wizzrobe', 346), 'room-03': ('like-like', 349),
+         'ganon': ('ganon', 352), 'zelda': ('ganon', 353)}
 
 
 # What a lost heart is booked to: the object nearest to Link at the end of the action that cost it.
@@ -717,7 +719,7 @@ RULES = {
 # ---- playing from the installed states -------------------------------------------------------------------------------
 
 def stems():
-    """{route step index: (the start state's name without its chain, the step)}, steps 297-357 of d2first (both
+    """{route step index: (the start state's name without its chain, the step)}, steps 293-353 of d2first (both
     ways of its stretches: a stretch's two steps share the name)."""
     from triforce import _native                               # pylint: disable=import-outside-toplevel
     from triforce.entry_states import state_stem                # pylint: disable=import-outside-toplevel

@@ -54,7 +54,7 @@ def test_arrival_targets_compare_room_numbers_and_reject_bad_text(tmp_path):
     row = yardstick.chain_row('post-d2', path, '0:0x3c')
     assert row['arrived'] == 1 and row['runs'] == 2
     assert yardstick.chain_row('post-d2', path, '1:0x73')['arrived'] == 0     # a route room nobody reached
-    with pytest.raises(yardstick.YardstickError, match='not rooms of route'):
+    with pytest.raises(yardstick.YardstickError, match='not rooms or steps of route'):
         yardstick.chain_row('post-d2', path, '5:0x10')
 
 

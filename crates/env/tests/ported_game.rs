@@ -133,8 +133,8 @@ fn decodes_dungeon_and_overworld_savestates() {
     let state = load(&mut s, "1_44w_0", false, &[]);
     assert_eq!(state.full_location(), MapLocation::new(1, 0x44, false));
     // On d2first Link reaches D1 0x44 with the white sword and what is left of Dungeon 2's bombs (decoded from
-    // $0658): one in chain 0.
-    assert_eq!(state.bombs(), 1);
+    // $0658): none in chain 0 since round 31 (0x53's N wall takes its bomb).
+    assert_eq!(state.bombs(), 0);
     assert_eq!(state.sword(), SwordKind::White);
     let goriyas = state
         .enemies
@@ -337,15 +337,17 @@ fn cleared_boss_room_and_persisted_flags() {
         "CurOpenedDoors only"
     );
     assert!(rs.item_taken && !rs.has_item && rs.kill_state == 3 && rs.all_dead());
-    // Flag bytes ($6FF+room): $53:F0 and $35:F4 match ram-catalog R.1 (the boss room's kill/item bits); the
-    // other rooms on the walk depend on what the chain killed on its way, so only their visited bit is pinned.
-    assert_eq!(room_flags(state.ram(), 0x53), 0xF0);
+    // Flag bytes ($6FF+room): $53:F8 and $35:F4 match ram-catalog R.1 (the boss room's kill/item bits; round 31: 0x53's
+    // N bomb wall opened adds its door bit $08); the other rooms on the walk depend on what the chain killed on its
+    // way, so only their visited bit is pinned: bit 5, $20 (R.1, asm:RoomFlags_MarkVisited; until round 31 the test
+    // read $80, a kill-count bit, which the old route's 0x74 and 0x52 held; 0x63 holds $64).
+    assert_eq!(room_flags(state.ram(), 0x53), 0xF8);
     assert_eq!(room_flags(state.ram(), 0x35), 0xF4);
-    for room in [0x74, 0x52] {
-        assert_ne!(room_flags(state.ram(), room) & 0x80, 0, "room {room:#x} visited");
+    for room in [0x63, 0x43] {
+        assert_ne!(room_flags(state.ram(), room) & 0x20, 0, "room {room:#x} visited");
     }
     // In a dungeon the room flags are the level block at $6FF.
-    for room in [0x74, 0x53, 0x35, 0x52, 0x43] {
+    for room in [0x63, 0x53, 0x35, 0x43, 0x33] {
         assert_eq!(room_flags(state.ram(), room), state.ram()[0x6FF + room as usize]);
     }
     assert_eq!(room_flags(state.ram(), state.location()), rs.flags);
@@ -498,11 +500,11 @@ fn bombs_stay_legal_at_a_closed_overworld_rock_wall() {
     assert!(compute_action_mask(&state).direction[ActionKind::Bomb.index()].iter().any(|&b| b));
 }
 
-/// F183: in a doorway ($53 set) no attack crosses the doorway's axis: S doorway of 1:0x53, E doorway of 1:0x72.
+/// F183: in a doorway ($53 set) no attack crosses the doorway's axis: S doorway of 1:0x53, E doorway of 1:0x22.
 #[test]
 fn no_attack_across_a_doorway() {
     let Some(mut s) = session() else { return };
-    for (name, step, across) in [("1_53s_0", "MOVE N 4", [Direction::W, Direction::E]), ("1_72e_0", "MOVE W 4", [Direction::N, Direction::S])] {
+    for (name, step, across) in [("1_53s_0", "MOVE N 4", [Direction::W, Direction::E]), ("1_22e_0", "MOVE W 4", [Direction::N, Direction::S])] {
         load(&mut s, name, false, &[(Var::Bombs, 4)]);
         act(&mut s, step);
         let state = s.state().clone();
