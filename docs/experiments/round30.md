@@ -42,3 +42,32 @@ Per visit (models | the planner):
   The first visit is back (0.34 | 0.19, 3 deaths; `r74-lynel` 0.40). Round 27 §15.3's open lever.
 - **0:0x1a back S (ow-tektite `r74-leg2`)**: 4.12 in, 0.30 | 0.14 lost; its 13 deaths are entries below 2 hearts
   (8 below 1): the hearts 0x0a lost.
+
+### The arms
+
+The primary family is **moldorm** (22 runs, the most of this quarter's families but goriya's: stalfos-keese-gel's
+25 are spread over six rooms of Dungeon 1, all entries below 2 hearts, and the family plays Dungeons 4, 6, 8 and 9
+too). It plays only 2:0x3e, so its gate is the full route to Dungeon 1's exit and Dungeon 2. Then ow-lynel's
+second-visit lever as one seed. ow-start is not trained (below).
+
+- **moldorm**, three seeds (87, 88, 89) from `r75-f-b`, 244 iterations, `--sil-coeff 0.1 --checkpoint-every 30`:
+  - **the full route's handoffs into 2:0x3e** at `harvested_fraction: 0.33`: 486 of them from one chain from the
+    game start to step 68 (`eval-chain --runs 500 --first-seed 7000 --parallel 10 --act model --clips on --stop-at
+    step:68 --harvest DIR`, the landed team; 383 of 500 leave Dungeon 1), copied into
+    `triforce/states/harvested/moldorm` (not in git). They keep the hearts and bombs the route brings;
+  - **the planner's decisions** in 2:0x3e as demonstrations at `--demo-coeff 0.05` (the lineage had none):
+    `scripts/experiments/r27_plan_demos.py models/moldorm/r75-f-b OUT --family moldorm --states 2_3es
+    --state-files <the 486 handoffs> --runs 3 --max-loss 0 --parallel 10 --seed 5000`: the planner wins 1418 of
+    1458 from the route's hearts (97.3%) and gains 0.06 hearts in the wins; the 1106 clean episodes give 82,277
+    rows (1450 decisions the planner replaced, written five times).
+- **ow-lynel**, one seed (84) from `r27l-lynel-s81`, 244 iterations, the same flags and the lineage's three
+  demonstration files (`rock-wall.npz`, `whirlwind.npz`, `lynel74-0a.npz`) at 0.05: the 300 second-visit states of
+  round 27's lever (`scripts/experiments/r27_lynel_states.py r29land-1k-full.jsonl r29land-1k-post-d2.jsonl --out
+  DIR --count 300`: `0_0ac` with the hearts and bombs of 1866 second visits, mean 4.28 hearts) beside the 300
+  first-visit handoffs `r27l-lynel-s81` trained with, at `harvested_fraction: 0.35` (0.2 before).
+- **ow-start: the tracks out, no training.** `trajectories/ow-start/0_2fcave_0..2` (0x2f's take-any cave) hold the
+  10th container from the track's frame 10 on (`$66F` 0x88 → 0x99) and the curriculum stands at frame 15 of 17: an
+  episode started there can never meet `waypoint: heart` (ow-zora's `0_47cave`, round29.md §19.1). They are moved
+  out of the worktree's trajectories. ow-start ends no run and loses no heart on any segment of `r29land-1k`
+  (0x77, 0x1c, 0x1b, 0x2f, 0x0f and their caves), so no run of it could pass a gate that asks for a gain; the
+  removal waits for its next continuation.
