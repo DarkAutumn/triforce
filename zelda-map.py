@@ -62,7 +62,9 @@ The clips selector beside the scopes (Both, On, Off) picks the visits by the run
 and the plain way): Both is the combined numbers, On and Off each switch state's alone (a room-stats file from before
 the switch, format 1, counts as on).  Off needs switch-off runs: a chain file played ``--clips off`` or turned off on
 the way (``--clips-off-from``), read with its tag (``triforce room-stats TAG --noclips``), and evaluations with
-``by_clips``.
+``by_clips``.  The window starts on On (``--clips``; since Nov 19: the route as it is played, the clip way through
+every stretch, e.g. Dungeon 4's 0x31 N onto 0x21's island and not round by 0x30 and 0x20); the plain ways are no
+longer trained (Nov 18), Off and Both still draw them.
 
 The sidebar's "by scope" table has a row per scope with data for the room, under it a row per switch state the room
 has visits in (``· clips on``, ``· clips off``) and one per route step where the selection visits it on several
@@ -1890,6 +1892,8 @@ class MapWindow(QMainWindow):
         self.scope = 'full'                         # SCOPE_KINDS: full, segment or room
         self.segment = SEGMENTS[0]
         self.clips = clips                          # CLIPS_CHOICES: both, on or off
+        self.wanted_clips = clips                   # what was asked for (the option, a click): kept while it can't
+                                                    # be shown, so a route picked later is drawn that way
         self.level = 0
         self.overlay = 'none'
         self.selected: dict[int, int] = {}          # level -> selected room
@@ -2076,14 +2080,14 @@ class MapWindow(QMainWindow):
 
     def update_clips_choices(self):
         """Enables the switch states with data, and both whenever the route has a stretch (the selector also picks
-        the route's way); a missing one can't be picked and falls back to Both."""
+        the route's way); a missing one can't be picked and shows as Both until it can (``wanted_clips``: a route
+        with a stretch chosen later is drawn the way that was asked for)."""
         switches = set(self.data_switches)
         if any(step.get('way') for step in self.plan):
             switches |= {'on', 'off'}
         for index, (switch, _) in enumerate(CLIPS_CHOICES):
             self.clips_group.button(index).setEnabled(switch in switches)
-        if self.clips not in switches:
-            self.clips = BOTH
+        self.clips = self.wanted_clips if self.wanted_clips in switches else BOTH
         self.clips_group.button([switch for switch, _ in CLIPS_CHOICES].index(self.clips)).setChecked(True)
 
     def cave_key(self, level: int, room: int) -> Key:
@@ -2158,7 +2162,7 @@ class MapWindow(QMainWindow):
     def set_clips(self, clips: str):
         """Both (every visit), On or Off: the visits of one clips switch state, and the route's way through each
         stretch."""
-        self.clips = clips
+        self.clips = self.wanted_clips = clips
         self.clips_group.button([switch for switch, _ in CLIPS_CHOICES].index(clips)).setChecked(True)
         self.show_level(self.level, keep_view=True)
 
@@ -2315,8 +2319,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--stats', type=Path, default=None, metavar='FILE',
                         help="a room-stats file (triforce room-stats; default: the newest *-room-stats.json in "
                              "<repo>/target/r56-chains, re-found on Reload)")
-    parser.add_argument('--clips', default=BOTH, choices=[switch for switch, _ in CLIPS_CHOICES],
-                        help="the clips selector: every visit (both, the default) or one switch state's")
+    parser.add_argument('--clips', default='on', choices=[switch for switch, _ in CLIPS_CHOICES],
+                        help="the clips selector: the visits and the route's way with the clips switch on (the "
+                             "default since Nov 19: the route as it is played, the clip way through every stretch), "
+                             "off (the plain ways, untrained since Nov 18) or both")
     parser.add_argument('--scope', default=None, choices=['full', *SEGMENTS, ROOM_SCOPE],
                         help="the scope shown first (a segment's name picks Segment)")
     parser.add_argument('--level', type=int, default=0, choices=LEVELS, help="the tab shown first (0: overworld)")

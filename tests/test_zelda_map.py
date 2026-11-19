@@ -779,3 +779,14 @@ def test_dungeon_rooms_without_a_savestate_are_probed(tmp_path, monkeypatch, cap
     os.remove(screens[(1, 0x74, False)])
     screens, rendered = zelda_map.render_screens(states, tmp_path / 'screens', states_dir, False, rooms)
     assert not rendered and (1, 0x74, False) not in screens
+
+
+def test_the_map_starts_on_the_clip_way():
+    """The clips selector starts on On: the route as it is played.  Dungeon 4 goes 0x31 N onto 0x21's island, not
+    round by 0x20 (the plain way's own room, which Both and Off still draw; 0x30 is on the way in for both)."""
+    assert zelda_map.build_parser().parse_args([]).clips == 'on'
+    plan = zelda_map.route_plan('d2first')
+    rooms_on = {room for a, b, _, _ in zelda_map.route_segments(plan, 4, 'on') for room in (a, b)}
+    rooms_both = {room for a, b, _, _ in zelda_map.route_segments(plan, 4, zelda_map.BOTH) for room in (a, b)}
+    assert 0x20 not in rooms_on and {0x30, 0x31, 0x21} <= rooms_on
+    assert 0x20 in rooms_both
