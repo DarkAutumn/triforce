@@ -44,3 +44,25 @@ needs: 3:0x4d is entered with 3.58 hearts (the planner 5.42) and 81 of its 97 de
 
 All 73 curriculum tracks of `r78-dark37-s85` are complete: no track idles the resets (the recipe's fourth lever has
 nothing to take out).
+
+### The arm
+
+From `r78-dark37-s85`, three seeds (`r30-dark-s87`, `-s88`, `-s89`), 488 iterations, `--sil-coeff 0.1
+--checkpoint-every 30`, `clips: {enabled: true, off_share: 0}`, and:
+
+- **the chain's entries as harvested starts** at `harvested_fraction: 0.33` (`triforce/states/harvested/darknut`, not
+  in git; 1220 states). One batch harvested the handoffs (`eval-chain --harvest`) and recorded replays on seeds
+  7000-7499 no measurement uses, with the promoted team: the leg after Dungeon 4 and Dungeon 5 (`--from 0_45c_0
+  --stop-at step:209 --runs 500`), Dungeon 8 (`--from 8_7es_0 --stop-at step:297 --runs 500`) and the leg after
+  Dungeon 1 with Dungeon 3 (`--from 0_37c_0 --stop-at step:134 --runs 300`; Dungeon 3 is entered as the full route
+  enters it, 0x5b at 5.45 hearts against 5.42). The rooms entered from another darknut room have no handoff and were
+  cut out of the replays (`scripts/experiments/r29_zora_states.py REPLAYS OUT --step 192:5_05e`, `--step 290:8_4es
+  --step 291:8_3es --step 292:8_3fw`). Kept, the first by seed: 0x05 from E 250 (7.27 hearts on entering), 0x64
+  from the cellar 120, 0x37 60; 8:0x5e 120, 0x4e 120, 0x3e 250, 0x3f 150; 3:0x59 from N 60, 0x5b from W 60, 0x59 from
+  E 30. The harvested selector weighs them by their failures and hearts lost as the seed selector does;
+- **the honest planner's play as demonstrations** beside the lineage's three files (`darknut-5e.npz`,
+  `darknut-3e.npz`: Dungeon 8's scripted rules; `demos37.npz`: 0x37's rule), all at `--demo-coeff 0.05`:
+  `scripts/experiments/r27_plan_demos.py models/darknut/r78-dark37-s85 plan-dk.npz --family darknut --states 5_05e
+  5_64c 8_5es 8_4es 8_3es 8_3fw --runs 40 --max-loss 2` (the family's hp and bombs draws, full rooms): 61,067 rows.
+  The planner with `r78-dark37-s85` wins 0x05 from E 114 of 120 losing 0.24-0.61 hearts, 0x3e 111 of 120 at −0.31
+  to 0.28, 0x5e 112 of 120 at −0.13 to 1.18, 0x3f 118 of 120, 0x4e 118 of 120, 0x64 from the cellar 115 of 120.
