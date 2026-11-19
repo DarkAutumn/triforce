@@ -627,3 +627,193 @@ Read by what a first team needs:
   to env code: the CANDLE mask on the overworld, a step's bomb mode, pols-voice's BOMB and ARROW masks, the `stuck`
   rule under a hold; no observation or action change, every model loads). Round 27's branch owes the same bump; one
   bump covers both if they merge together.
+
+## 14. The first team (Nov 17): six families trained and kept; the D8 triforce in 6% of runs
+
+One round per family through `scripts/train_round.py` (`--chain-runs 0 --parallel 8 --eval-parallel 3`, each its
+own round so the job line orders them), every one `--load {name} --seed 78 --stop-success 1.01 --sil-coeff 0.1
+--checkpoint-every 30`, the demonstrations at `--demo-coeff 0.05`. The branch has `r26`'s `6530d0d` merged
+(demonstration rows in host memory; `train_round.py` reads `--iterations` inside `--train-args` for its estimate).
+
+- **Every demonstration file trains.** Two iterations each (scratch models directory): darknut with *both* files
+  (`train --demos` takes several; 196,086 rows), gleeok 106,171, pols 71,721, whirlwind 26,105, tree 15,659. No
+  file needed merging and none ran the GPU out of memory.
+- **Judged** by each round's own `eval.json` (100 episodes a state, seed 0, `temperature:0.5+relax:16`) against the
+  run it continued, evaluated under this branch's code (`triforce eval-batch r78t4-base --families ... 
+  --episodes-per-state 100`; for ow-lynel and ow-moblin, round 27's `r77-b` runs and their `eval.json`).
+
+| Family | Round (load, iterations, demos) | Dungeon 8 / stretch rooms, before → after | The family's old rooms, before → after | Kept |
+|---|---|---|---|---|
+| pols-voice | `r78t4-pols` (`r74-d5new`, 488, pols) | 8:0x4c 0% → **100%** (300/300), -10.22 → **+0.47** hearts | 5:0x25 99.0 → 99.7%, 5:0x27 100 → 100% | yes |
+| boss-gleeok | `r78t4-gleeok` (`r71-d`, 488, gleeok) | 8:0x3c 0% → **100%** (300/300), -11.38 → **-1.25** | 4:0x13 99.0 → 99.3% | yes |
+| boss-manhandla | `r78t4-manhandla` (`r75-mh-fight`, 244, none) | 8:0x6e 90.7% → 100%, -2.98 → -1.10 | 3:0x4d 86.3 → 91.3% (-0.85 → -0.58) | replaced |
+| boss-manhandla | `r78t4-manhandla2` (`r78t4-manhandla`, 488, none) | 8:0x6e 99.7% (1 death in 300), **-0.88** | 3:0x4d 91.0% (-0.59) | yes |
+| ow-lynel | `r78t4-lynel` (`r77-b`, 244, whirlwind) | 0:0x22 from the cave (the whirlwind) **600/600**, 0 hearts | 0x32 94.5 → 97.2%, 0x50 99.8 → 99.9%, 0x60 99.7 → 100%, 0x0a 97.1 → 97.8%, 0x22 (D6) 100% | yes |
+| ow-moblin | `r78t4-moblin` (`r77-b`, 244, tree) | the tree 0x6d **599/600** (1 wrong exit), 0x4d from W 600/600 (-0.14), 0x5d 600/600 | all 14 rooms within noise of `r77-b` (lowest 0x5c 96.9%) | yes |
+| darknut | `r78t4-darknut` (`r75-d537-c5`, 488, darknut-5e + darknut-3e) | 8:0x5e 8.2 → **80.5%** (-9.59 → -4.26), 0x4e 0.0 → **93.3%** (no `stuck`; -6.83 → -3.09), 0x3e 0.3 → **68.7%** (-10.01 → -5.84), 0x3f 77.2 → 92.2% (-4.75 → -3.09) | 5:0x05 91.5 → 88.7%, 5:0x64 91.5 → 89.8%, 5:0x06 100 → 100%, 5:0x37 99.8 → 100%, 3:0x5c 100 → 100%, 3:0x59 99.2 → 98.7% (within the 3 points of noise) | yes |
+
+- **Baseline of darknut under this code** (`r75-d537-c5`, 11,400 episodes, clips both): 8:0x5e 8.2%, 0x4e 0.0%
+  (220 of 600 `stuck`), 0x3e 0.3%, 0x3f 77.2% (-4.75 hearts); 5:0x05 91.5%, 5:0x64 91.5%, 5:0x06 100%, 5:0x37
+  99.8%, 3:0x5c 100%.
+- **Why 0x4e ends `stuck`** (10 episodes a state, clips on, replays with decisions): in every `stuck` episode Link
+  stands in the S doorway (X `$78`, Y `$D3`) and plays MOVE W fifty times without moving; the mask offers a MOVE
+  the doorway's walls refuse. The rest die. The trained run has no `stuck` ending in 0x4e (600 episodes).
+- **Manhandla's crossing** came down from 2.98 to 0.88 hearts an episode in two rounds; the walk's script crosses
+  for 0.47.
+- **Gleeok** trains with the yaml's `hp: [0.5, max]` (6.5-13 hearts); a run arrives with 6-7, so its 100% is at
+  the high end of what a chain brings. The chains will say.
+- **Round 27's `r77-b` runs** (stalfos-keese-gel, zol, trap-room, like-like, vire; and the ow-lynel and ow-moblin
+  runs continued here) are copied in. ow-lynel and ow-moblin `r77-b` were the starting points; the other five are
+  promoted only once their evaluation under this code is not worse than the runs they continued (batch
+  `r78t4-d6runs`, the seven `r77-b` runs and the seven runs before them, 100 a state: queued, not run when this was
+  written).
+- **Darknut is the stretch's weak point**: 0x3e (68.7%) and 0x5e (80.5%) still cost 4-6 hearts an episode, and the
+  two Dungeon 5 rooms lost 1.7 and 2.8 points (within noise, to be watched on the chains). No second darknut round
+  was run.
+- **The chains** (`r78t4-1k`, one batch, 1000 runs a segment, clips on, `--act model`, the runs kept above;
+  stalfos-keese-gel still `r75-f-b`, equipment-room `r75-f-c`, ow-octorok `r74-leg2`):
+
+```bash
+TAG=r78t4-1k RUNS=1000 EPISODES=20 scripts/experiments/r28_d8_baseline.sh run
+TAG=r78t4-1k scripts/experiments/r28_d8_baseline.sh report
+```
+
+| Segment | `r78-base` (100 runs) | `r78t4-1k` (1000 runs) |
+|---|---:|---:|
+| `post-d6`: arrivals at 8:0x7e | 0 / 100 | **1000 / 1000** |
+| `post-d6`: the D8 triforce | 0 / 100 | **60 / 1000** (940 deaths) |
+| `d8`: the D8 triforce | 0 / 100 | **63 / 1000** (935 deaths, 2 other) |
+
+  Per room on `d8` (visits, correct, deaths, hearts lost a visit; `post-d6` within a few runs of it):
+
+| step | room | family | visits | correct | deaths | hearts lost a visit |
+|---:|---|---|---:|---:|---:|---:|
+| 287 | 8:0x7e | stalfos-keese-gel | 1000 | 1000 | 0 | 0.00 |
+| 288 | 8:0x6e | boss-manhandla | 1000 | 1000 | 0 | 0.82 |
+| 289 | 8:0x5e | darknut | 1002 | 950 | 50 | 5.68 |
+| 290 | 8:0x4e | darknut | 951 | 783 | 167 | 2.91 |
+| 291 | 8:0x3e | darknut | 784 | 210 | **571** | 3.65 |
+| 292 | 8:0x3f | darknut | 210 | 108 | 102 | 2.81 |
+| 293 | 8:0x2f cave | equipment-room | 108 | 107 | 1 | 0.08 |
+| 294 | 8:0x4c | pols-voice | 107 | 107 | 0 | 0.02 |
+| 295 | 8:0x3c | boss-gleeok | 108 | 63 | 44 | 1.48 |
+| 296 | 8:0x2c | stalfos-keese-gel | 64 | 63 | 0 | 0.00 |
+
+  The leg (`post-d6`, steps 281-286) is played without a death: the whirlwind 1000 of 1000, the tree 1000 of 1000,
+  0.74 hearts lost over the six rooms. **Nothing was cheated** (bombs, keys, rupees: 0 on both segments).
+- **Where runs end**: the hearts. 0x5e costs 5.7 hearts a visit, so Link reaches 0x4e and 0x3e low; 0x3e kills 571 of
+  784 entering it on `d8` (73% in single rooms from the state's hearts, 27% on the chain), 0x3f half of what reaches
+  it, Gleeok 41% of its visitors (100% in single rooms from 6.5-13 hearts). Next for darknut: 0x5e's and 0x3e's
+  fights at fewer hearts lost (the rules lose 2.1-2.5 a win), not their rates alone.
+- **Round 27's `r77-b` runs under this code** (batch `r78t4-d6runs`, 100 a state, each against the run it continued):
+  stalfos-keese-gel 99.7 → 99.9% (6:0x58 95.8 → 98.2%; 8:0x7e and 8:0x2c 100%), zol 99.8 → 100%, trap-room 100 →
+  99.9% (within noise), like-like 99.2 → 99.7% (6:0x1d 98.3 → 100%), vire 99.2 → 99.6% (6:0x2d 96.5 → 99.7%): all
+  five promoted in this checkout, after the chains above (which played stalfos-keese-gel `r75-f-b`). The same batch
+  shows what this round's leg training added: under this code ow-lynel `r77-b` plays 0x22 from the cave 0 of 600
+  (600 wrong exits; `r78t4-lynel` 600 of 600) and ow-moblin `r77-b` the tree 0 of 600 (`r78t4-moblin` 599 of 600).
+- **Not done**: a second darknut round (0x5e's and 0x3e's hearts).
+
+## 15. Darknut continued with Dungeon 8's hearts priced (Nov 17-18): `r78-dark37-s85` kept
+
+- **The branch** merges `r26` (the bomb rule, Dungeon 7's heart fit; `bomb_targets` now takes the route step's own
+  items, the reserve and the granted bombs), takes round 27's `f35db65` as it is (`HeartValues::prices`: a table
+  prices its own route and the routes it extends) and `r26-fast`'s `8a28cc7` (demonstration rows on the device,
+  the accuracy chart on 8192 rows: an update with darknut's 196k rows went from about 8 s of demo work to 0.1 s).
+- **The heart value of `d8`'s steps**: `python -m triforce.heart_value --route d8` over round 24's 20 chains, round
+  26's `r76t1-1k` and `r76t1-1k-noclips` (post-d5, d7), round 27's `r77a-1k` (post-d7, d6) and round 28's `r78t4-1k`
+  (post-d6, d8). Rows 0-247 are `r26`'s table, 248-280 `f35db65`'s; steps 281-296 get curves. V at 8:0x3e (the
+  chance to reach the D8 triforce alive): 0.09 at 6 hearts, 0.40 at 13; at 0x5e 0.09 at 13. Before this a darknut
+  episode in Dungeon 8 had no table (the plain health terms); now darknut prices hearts in Dungeons 3, 5 and 8.
+- **`r78t4-darknut` costs Dungeon 5.** Segment chains, 1000 runs, seeds 0-999, clips on, this code, darknut swapped
+  (`select-checkpoint ... --only last`):
+
+| Segment | `r75-d537-c5` (round 25) | `r78t4-darknut` (§14) | paired |
+|---|---:|---:|---:|
+| `d5` (`--from 5_76s_0 --stop-at step:209`) | 665 / 1000 | 550 / 1000 | **-11.5 ± 2.1** |
+| `d3` (`--from 3_7cs_0 --stop-at step:134`) | 738 / 1000 | 697 / 1000 | -4.1 ± 2.0 |
+
+  In Dungeon 5 the Olive Garden 0x05 costs 1.63 → 2.12 hearts a visit and 0x37 kills 21 → 56 (its column way gone:
+  0.21 → 0.73 hearts a visit). Cause: `r75-d537-c5` is `r75-f-dk-s75` plus 60 iterations with round 25's 0x37 rule
+  demonstrations (`demos37f.npz`); `r78t4-darknut` was trained from it with the two Dungeon 8 files only, and 488
+  iterations without the 0x37 rows undid it. The single-room evaluation (100 a state) did not show it (5:0x37 100%).
+  In Dungeon 3 the darknut rooms are the same; the loss is Manhandla's 0x4d (deaths 144 → 184) on 0.15 fewer hearts.
+- **Two arms, three seeds each**, all from `r78t4-darknut`, `reward.heart_value` on (the yaml's), `--sil-coeff 0.1
+  --checkpoint-every 30 --iterations 488 --demo-coeff 0.05`, one `train_round.py` round a seed: arm A
+  `r78-dark-s81/82/83` with darknut-5e and darknut-3e; arm B `r78-dark37-s84/85/86` with those and the 0x37 rule's rows
+  regenerated under this code (`scripts/experiments/r25_d5_37_tracks.py --demos`: 24,092 rows from 587 of 600 runs).
+  s81 and s83 trained on the slow demo code (353 and 526 steps a second), the other four on `8a28cc7` (1200-1300);
+  the update's draws are the same. Each round's evaluation (100 a state, clips both as the yaml had it), against
+  `r78t4-darknut`:
+
+| Run | 8:0x5e | 8:0x4e | 8:0x3e | 8:0x3f | 5:0x05 | 5:0x64 | 5:0x37 hearts |
+|---|---|---|---|---|---|---|---:|
+| `r78t4-darknut` | 80.5% -4.26 | 93.3% -3.09 | 68.7% -5.84 | 92.2% -3.09 | 88.7% -1.77 | 89.7% -1.60 | -0.40 |
+| `r78-dark-s81` | 85.2% -3.22 | 93.5% -2.94 | 83.2% -3.50 | 94.5% -2.50 | 88.9% -1.54 | 92.1% -1.41 | -0.36 |
+| `r78-dark-s82` | 87.2% -3.19 | 96.5% -2.82 | 81.8% -3.64 | 92.0% -2.51 | 89.8% -1.45 | 89.5% -1.67 | -0.23 |
+| `r78-dark-s83` | 84.5% -3.40 | 93.5% -2.83 | 83.8% -3.68 | 94.3% -2.63 | 90.1% -1.26 | 91.0% -1.56 | -0.28 |
+| `r78-dark37-s84` | 87.0% -3.32 | 93.3% -3.08 | 82.0% -3.91 | 93.3% -2.53 | 90.7% -1.44 | 89.7% -1.63 | -0.08 |
+| `r78-dark37-s85` | 84.7% -3.42 | 93.3% -2.97 | 81.3% -3.74 | 93.7% -2.51 | 90.5% -1.30 | 91.3% -1.42 | -0.11 |
+| `r78-dark37-s86` | 87.8% -3.07 | 94.5% -2.93 | 82.5% -3.56 | 93.3% -2.59 | 90.5% -1.36 | 91.8% -1.32 | -0.06 |
+
+  Pricing Dungeon 8's hearts moved every seed the same way: 0x3e 68.7% → 81-84% at about 2 hearts less a visit,
+  0x5e 4 points up and 1 heart less. Arm B keeps 0x37's column (0.06-0.11 hearts against 0.23-0.36 in arm A). The
+  Dungeon 3 rooms are unchanged in all six.
+- **Chosen by chains** (`select-checkpoint darknut RUN --from 8_7es_0 --route d8 --runs 1000 --first-seed 2000
+  --confirm 1000`: every checkpoint screened on seeds 2000-2999, the winner, `last` and the promoted run confirmed on
+  3000-3999). The D8 triforce from Dungeon 8's entrance, confirmation:
+
+| Run | Arm | Chosen | Confirmed | `last` | vs `r78t4-darknut` (6.2%) |
+|---|---|---|---:|---:|---:|
+| `r78-dark-s81` | A | `it010922` | 25.4% | 24.9% | +19.2 ± 1.5 |
+| `r78-dark-s82` | A | `it010982` | 24.8% | 23.0% | +18.6 ± 1.5 |
+| `r78-dark-s83` | A | `last` | 21.6% | 21.6% | +15.4 ± 1.5 |
+| `r78-dark37-s84` | B | `it011012` | 25.1% | 19.8% | +18.9 ± 1.5 |
+| `r78-dark37-s85` | B | `it011042` | **27.8%** | 23.1% | **+21.6 ± 1.6** |
+| `r78-dark37-s86` | B | `last` | 25.4% | 25.4% | +19.2 ± 1.5 |
+
+  Every seed of both arms is about four times `r78t4-darknut`; the checkpoints climb with training (s81: 12.2% at
+  it10592, 23-26% from it10892).
+- **Dungeons 3 and 5** for the best of each arm (`--only LABEL --no-promoted`, seeds 0-999, paired with the two rows
+  of the first table):
+
+| Run | `d5` | vs `r75-d537-c5` | vs `r78t4-darknut` | `d3` | vs `r75-d537-c5` | vs `r78t4-darknut` |
+|---|---:|---:|---:|---:|---:|---:|
+| `r78-dark-s81` `it010922` | 652 | -1.3 ± 2.1 | +10.2 ± 2.1 | 683 | **-5.5 ± 2.0** | -1.4 ± 2.1 |
+| `r78-dark37-s85` `it011042` | **733** | **+6.8 ± 2.0** | +18.3 ± 2.1 | **752** | +1.4 ± 2.0 | +5.5 ± 1.9 |
+
+  With the 0x37 rule's rows the column comes back and better: 0x37 7 deaths in 761 visits at 0.14 hearts (round
+  25's 21 at 0.21, `r78t4-darknut`'s 56 at 0.73); the Olive Garden 1.50 hearts a visit (1.63, 2.12). In Dungeon 3
+  `s85` enters Manhandla's 0x4d with 4.05 hearts (3.87) and loses 134 runs there (144); `s81` loses 170 there on
+  3.71 hearts. Pricing Dungeon 8's hearts alone gave Dungeon 5 back to within noise, not Dungeon 3.
+- **Kept: `r78-dark37-s85`** with `it011042` applied (`select-checkpoint ... --report-only --apply`; its old
+  `ckpt.pt` is `checkpoints/it011050`) and promoted in this checkout. It meets the three bars: `d8` +21.6 ± 1.6 over
+  `r78t4-darknut`, `d5` +6.8 ± 2.0 and `d3` +1.4 ± 2.0 over round 25's `r75-d537-c5`. Its `eval.json` is stale
+  (the weights moved); the chains below are its measurement.
+- **The chains `r78-dark-1k`** (`TAG=r78-dark-1k RUNS=1000 EPISODES=20 scripts/experiments/r28_d8_baseline.sh run`,
+  clips on, `--act model`, the team promoted in this checkout: §14's runs, round 27's five `r77-b` runs promoted
+  after `r78t4-1k`, and darknut `r78-dark37-s85`), paired with `r78t4-1k` on the same seeds 0-999:
+
+| Segment | `r78t4-1k` | `r78-dark-1k` | paired |
+|---|---:|---:|---:|
+| `post-d6`: arrivals at 8:0x7e | 1000 | 1000 | 0 |
+| `post-d6`: the D8 triforce | 60 | **263** | **+20.3 ± 1.6** |
+| `d8`: the D8 triforce | 63 | **272** | **+20.9 ± 1.6** |
+
+  Nothing cheated (bombs, keys, rupees 0 on both segments). The other families' differences are not the cause:
+  the `r77-b` runs play 8:0x7e and 0x2c, where no run dies and no heart is lost on either chain. Per room on `d8`
+  (hearts on entering / lost a visit / deaths, `r78t4-1k` → `r78-dark-1k`; `post-d6` within a few runs of it):
+
+| room | hearts on entering | hearts lost a visit | deaths |
+|---|---|---|---|
+| 8:0x5e | 12.16 → 12.18 | 5.67 → **4.25** | 50 → 22 |
+| 8:0x4e | 6.82 → **8.11** | 2.90 → 2.96 | 167 → 72 |
+| 8:0x3e | 4.76 → **5.56** | 3.55 → **2.54** | 571 of 784 → 429 of 906 |
+| 8:0x3f | 4.46 → 5.74 | 2.75 → 2.20 | 102 of 210 → 138 of 476 |
+| 8:0x3c (Gleeok) | 4.18 → 5.80 | 1.34 → 1.46 | 44 of 109 → 64 of 336 |
+
+- **Gleeok** trains from 6.5-13 hearts and runs arrive with 5.8 on average (4.2 before). Won by whole hearts on
+  entering, `d8`: 0-1 hearts 0 of 9, 2 hearts 8 of 35, 3 hearts 32 of 45, 4 hearts 47 of 58, 5 hearts 31 of 34, 6
+  or more 159 of 160. So Gleeok is not a problem from 4 hearts up; below that the run is lost whoever plays it. 44 of
+  its 64 deaths come with 3 hearts or fewer: the hearts are lost in the darknut rooms, not in Gleeok's.
+- **Where runs end now**: 0x3e still kills 429 of the 906 runs that reach it (47%; 73% before), on 5.6 hearts. The
+  next lever is 0x3e's fight itself (2.5 hearts a visit; the script's fight costs 2.1-2.5 a win) and 0x5e's 4.25.
