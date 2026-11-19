@@ -30,6 +30,17 @@ per 1000), in order:
 - [ ] **Dungeon 2 (121)**: goriya 2:0x1e 41, 0x5e 29; moldorm 0x3e 22.
 - [ ] **Dungeon 1 (92)**: 1:0x44 25, 0x35 15, 0x23 15.
 - [ ] **`d6` (73)**: wizzrobe 6:0x3a 33, 0x38 15.
+  Round 30 (round30.md "Wizzrobe and patra"): at the route's hearts (from 0:0x42, 10.85 of 12 on entering) the D6
+  triforce falls from 31.4% to 15.7% (0x3a kills 237 of 401 entered with 4.9 hearts); Dungeon 6 now has a
+  `chain_hp` profile, wizzrobe draws harvested handoffs at 0.33 and the planner's play at the chain's hearts.
+  Trained `r30w-wj-s87/-s88/-s89`; the `d6`/`d9` selections were left queued.
+- [ ] **Single-room evaluations from harvested files keep the hearts only through a yaml copy** (round 30): an
+  `EvalTask` has no start pool, so a harvested state played by `r27_plan_demos.py --state-files` is given the
+  family's `ram_randomization` again; round 30 used a copy of the yaml with `ram_randomization: {}`. A flag on
+  the eval task would be the clean way (engine vocabulary: not done in round 30).
+- [ ] **Level 9's scripted-rule demonstrations** (`wizzrobe-05`, `-10`, `-30`, 300 thousand rows) lose more hearts
+  a visit than the model and dominated wizzrobe's demonstration rows; round 30 kept them (the recipe keeps the
+  lineage's files) and outweighed them with the planner's rows. Worth an arm without them.
 - [ ] **After Dungeon 2 (56)**: ow-lynel 0:0x0a 21, ow-zora 0x38 13, ow-tektite 0x1a 13.
 - [ ] **Dungeon 4 (50)**: Gleeok 4:0x13 36.
 - [ ] **The hearts carried in**: from the start Dungeon 5 is entered with 7.74 of 10 hearts, Dungeon 9 with 12.25 of

@@ -2,7 +2,9 @@
 
 ## Wizzrobe and patra (Dungeon 6 and level 9)
 
-**State of this section.** Begun: the cause (below); the arm is being built.
+**State of this section.** The cause and the arm are complete; `r30w-patra` and `r30w-wj-s88` are trained and
+evaluated, `r30w-wj-s87` and `-s89` wait to train, the selections on `d9` and `d6` wait to run. Nothing is promoted
+yet: no run has been measured on a chain.
 
 wizzrobe plays Dungeon 6's 0x78, 0x38, 0x28, 0x29, 0x3a, 0x2c and level 9's 0x65, 0x15, 0x17, 0x07, 0x05, 0x20,
 0x10, 0x31, 0x30, 0x04; patra level 9's 0x16, 0x27, 0x61, 0x52. The route's runs are `r79c-wj-s85` (round29.md
@@ -92,3 +94,30 @@ The recipe of decisions 2026-11-19 ("One team for the whole route"), at the rout
   `wizzrobe-05`, `-10`, `-30`, `clip-07`, `clip-20n`, `plan9-wizz`, `plan30-d6-05`, `plan30-10-30`); `r30w-patra`
   (seed 90) from `r79c-patra` (`patra-16`, `-61`, `-52`, `plan9-patra`, `plan30-patra`). No curriculum track is
   unfinished in either family, so none is taken out.
+
+### Single rooms on equal terms
+
+Every run evaluated under this branch's yaml and `chain_hp.json` (100 episodes a state, seed 0, clips on, its act
+mode; the route's runs in `eval-batch r30w-base`). Success and hearts a visit:
+
+| Room | `r79c-wj-s85` | `r30w-wj-s88` (last) |
+|---|---|---|
+| 6:0x38 | 80.3%, −4.44 | 77.3%, −4.90 |
+| 6:0x3a | 60.7%, −3.56 | 60.0%, −3.40 |
+| 6:0x28, 0x29, 0x2c | 99.0, 98.0, 91.3% | 97.7, 96.7, 93.0% |
+| 9:0x05 | 88.3%, −1.29 | 88.7%, −1.14 |
+| 9:0x10 | 88.8%, −1.05 | 90.2%, −0.86 |
+| 9:0x30 | 85.7%, −0.97 | 86.3%, −0.98 |
+| 9:0x17 | 94.8%, −1.65 | 93.2%, −1.84 |
+| all 6000 episodes | 93.1%, −1.02 | 93.0%, −1.02 |
+
+| Room | `r79c-patra` | `r30w-patra` (last) |
+|---|---|---|
+| 9:0x52 | 91.0%, −0.54 | 93.7%, −0.28 |
+| 9:0x16 | 98.5%, −0.72 | 99.2%, −0.54 |
+| 9:0x27 | 97.7%, −1.09 | 97.3%, −1.04 |
+| 9:0x61 | 99.0%, −0.12 | 98.5%, −0.11 |
+
+With Dungeon 6's profile 0x3a is played from 4.9 hearts in half the resets: `r79c-wj-s85` takes it in 60.7% (74.3%
+under round 29's yaml). The chain decides (round 25): the selections on `d9` and `d6` (screen seeds 2000-2999,
+confirmation 3000-3999, `r79c-wj-s85` and `r79c-patra` pinned beside) are queued.
