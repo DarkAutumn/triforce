@@ -33,7 +33,9 @@ per 1000), in order:
   Round 30 (round30.md "Wizzrobe and patra"): at the route's hearts (from 0:0x42, 10.85 of 12 on entering) the D6
   triforce falls from 31.4% to 15.7% (0x3a kills 237 of 401 entered with 4.9 hearts); Dungeon 6 now has a
   `chain_hp` profile, wizzrobe draws harvested handoffs at 0.33 and the planner's play at the chain's hearts.
-  Trained `r30w-wj-s87/-s88/-s89`; the `d6`/`d9` selections were left queued.
+  Promoted `r30w-wj-s89` (`d6` +6.8 ± 2.2, `d9` +2.7 ± 2.1) and patra `r30w-patra` (`d9` +6.2 ± 2.0). Left: 6:0x3a
+  still kills 320 of 850 entering on `d6`; `r30w-wj-s89` loses more in 9:0x31 (48 deaths against 23), 0x04 (26
+  against 14) and 6:0x2c (88 against 50); one seed of three held both stretches again (s88: `d6` +6.7, `d9` −5.2).
 - [ ] **Single-room evaluations from harvested files keep the hearts only through a yaml copy** (round 30): an
   `EvalTask` has no start pool, so a harvested state played by `r27_plan_demos.py --state-files` is given the
   family's `ram_randomization` again; round 30 used a copy of the yaml with `ram_randomization: {}`. A flag on

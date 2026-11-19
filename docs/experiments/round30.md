@@ -2,9 +2,8 @@
 
 ## Wizzrobe and patra (Dungeon 6 and level 9)
 
-**State of this section.** The cause and the arm are complete; `r30w-patra` and `r30w-wj-s88` are trained and
-evaluated, `r30w-wj-s87` and `-s89` wait to train, the selections on `d9` and `d6` wait to run. Nothing is promoted
-yet: no run has been measured on a chain.
+**State of this section.** Complete: the cause, the arm, the selections and the decision. Promoted in this branch's
+checkout: wizzrobe `r30w-wj-s89` and patra `r30w-patra`. Left for the landing: the chains of record with both.
 
 wizzrobe plays Dungeon 6's 0x78, 0x38, 0x28, 0x29, 0x3a, 0x2c and level 9's 0x65, 0x15, 0x17, 0x07, 0x05, 0x20,
 0x10, 0x31, 0x30, 0x04; patra level 9's 0x16, 0x27, 0x61, 0x52. The route's runs are `r79c-wj-s85` (round29.md
@@ -142,3 +141,44 @@ equal terms (100 episodes a state, this branch's yaml): 97.9% of 2100 episodes, 
 −0.63); 0x52 94.7%, −0.41 (91.0%, −0.54), 0x16 98.8%, −0.53 (98.5%, −0.72), 0x27 97.5%, −1.04 (97.7%, −1.09), 0x61
 99.0%, −0.08 (99.0%, −0.12): every state within a point or better. **`r30w-patra` (it001944) qualifies as the
 route's patra.** Its promotion waits for the wizzrobe selections, whose chains play patra's promoted run.
+
+### wizzrobe chosen on `d9` and `d6`
+
+Each seed: `select-checkpoint wizzrobe RUN --segment SEG --runs 1000 --first-seed 2000 --confirm 1000
+--confirm-first-seed 3000 --confirm-top 1 --only it002844,it002874,it002904,last` for SEG `d9` and `d6`; `r79c-wj-s85`
+pinned beside in s88's two selections, s87 and s89 `--no-promoted` and paired against those chains (the same
+weights on the same seeds; the `d9` reference reproduces the patra selection's run for run, 302 of 1000). `d6` counts
+the runs that take the D6 triforce. Confirmation seeds 3000-3999, paired against `r79c-wj-s85` (`d9` 302, `d6` 321
+of 1000):
+
+| run | `d9` chosen | `d9` confirm | vs `r79c-wj-s85` | `d6` chosen | `d6` confirm | vs `r79c-wj-s85` |
+|---|---|---:|---:|---|---:|---:|
+| `r30w-wj-s87` | last | 30.0% | −0.2 ± 2.0 | last | 30.9% | −1.2 ± 2.1 |
+| `r30w-wj-s88` | last | 25.0% | **−5.2 ± 2.0** | it002874 | 38.8% | +6.7 ± 2.1 |
+| **`r30w-wj-s89`** | **it002844** | **32.9%** | +2.7 ± 2.1 | **it002844** | **38.9%** | **+6.8 ± 2.2** |
+
+Screens (2000-2999): s87 `d9` 27.2-30.5%, `d6` 28.1-31.8%; s88 `d9` 21.3-23.8% (`r79c-wj-s85` 28.7%), `d6`
+28.6-37.0% (32.6%); s89 `d9` 32.2-34.0%, `d6` 32.1-38.3%.
+
+**`r30w-wj-s89` at it002844 is the one run that qualifies:** Dungeon 6 better beyond noise (+6.8 points, three
+standard errors, on seeds not used to choose it) and level 9 not worse (+2.7 ± 2.1), the same checkpoint chosen on
+both segments. s88 gains Dungeon 6 as much but loses level 9 beyond noise (the third of three seeds again: one seed
+of three holds both stretches); s87 changes neither. **Promoted in this branch's checkout:** patra `r30w-patra`
+(it001944, after the last wizzrobe selection ended); wizzrobe `r30w-wj-s89` (it002844).
+
+Its evaluation on equal terms (100 episodes a state, this branch's yaml): 93.2% of 6000 episodes, −0.98 hearts
+(`r79c-wj-s85` 93.1%, −1.02). Within a point or better on 12 of 16 rooms (9:0x05 91.3% and −0.94 against 88.3%
+and −1.29, 6:0x2c 94.3% against 91.3%); outside the bar on success: 6:0x38 78.3% against 80.3% (hearts lost
+better, −4.31 against −4.44), 9:0x30 83.7% against 85.7% (hearts equal), 0x31 97.0% against 99.0%, 0x65 98.0%
+against 99.3%. On the confirmation chains, room by room (`r79c-wj-s85` / `r30w-wj-s89`, deaths): 6:0x38 121 / 88
+(5.22 / 4.55 hearts a visit), 0x3a 390 / 320, 9:0x05 70 / 35; worse 9:0x31 23 / 48, 0x04 14 / 26, 6:0x2c 50 / 88
+(396 / 506 entering, 1.08 / 1.41 a visit). The segments decide (round 25: single rooms don't), so the run is
+promoted; the three rooms that lose more are in the backlog.
+
+| family | run (checkpoint) | replaces | segment, seeds 3000-3999, paired |
+|---|---|---|---|
+| wizzrobe | `r30w-wj-s89` (it002844) | `r79c-wj-s85` | `d6` +6.8 ± 2.2, `d9` +2.7 ± 2.1 |
+| patra | `r30w-patra` (it001944) | `r79c-patra` | `d9` +6.2 ± 2.0 |
+
+Not done: the two promotions were judged one at a time (each with the other family's old run); the chains of
+record with both (`d6`, `d9`, `post-d7`, `post-d8`, the full route) are the landing's.
