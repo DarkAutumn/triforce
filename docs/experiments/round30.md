@@ -145,9 +145,18 @@ with both swapped together (the gains were measured one family at a time), 1000 
 | both, Dungeon 5 at the route's hearts (seeds 3000-3999) | 49.0% | **58.3%** | **+9.3 ± 2.2** | 5:0x05 1.45 hearts a visit against 1.70, 206 deaths of 1000 against 239 |
 
 **gibdo `r30-gibdo-s91` qualifies and is promoted** in this branch's checkout (`triforce promote gibdo r30-gibdo-s91
---act temperature:0.5+relax:16`). **darknut `r30-dark-s89` is not promoted yet**: `d3` lies on the line of two
-standard errors, the hearts 3:0x69 loses on the way to Manhandla (the arm left 0x69 from N's chain entries out of the
-harvested starts: its cut was dropped to start the training sooner). A second 1000 runs of `d3` on seeds 1000-1999
-for both teams decides it (`r30dk-check-s89-d3b`); if `d3` stays worse, the trade is `d8` +8.1 and Dungeon 5 at the
-route's hearts +5.8 against `d3` −3.2, and the next arm adds 0x69 from N's entries (`r29_zora_states.py
-target/r30dk/replays/d3 OUT --step 95:3_69n`).
+--act temperature:0.5+relax:16`).
+
+**darknut `r30-dark-s89` does not qualify: it loses Dungeon 3.** A second 1000 runs of `d3` on seeds 1000-1999, both
+teams measured (`r30dk-check-s89-d3b`): 81.6% against 86.7%, −5.1 ± 1.7; the 2000 runs pooled **−4.2 ± 1.2**.
+The cause is the same on both halves: 3:0x69 from N costs 0.74-0.76 hearts a visit against 0.55-0.56, and Manhandla,
+entered with 3.80-3.84 hearts against 4.08-4.12, kills 141-147 runs against 106-116. The run is better where it was
+trained to be (`d8` +8.1 ± 2.0, Dungeon 5 at the route's hearts +5.8 ± 2.2, with gibdo +9.3 ± 2.2) and worse in the
+one room whose chain entries the arm left out (0x69 from N: its replay cut was dropped to start the training sooner,
+while 0x59 and 0x5b, which kept theirs, hold). Not promoted; `r78-dark37-s85` stays.
+
+**Next for darknut** (written, not run): the same arm with 0x69 from N's entries in the harvested starts
+(`scripts/experiments/r29_zora_states.py target/r30dk/replays/d3 OUT --step 95:3_69n`, 60-120 of them), continued
+from `r30-dark-s89` (it holds `d8` and Dungeon 5) for 244 iterations and judged on `d3` first; or the two other
+seeds' chosen checkpoints (`r30-dark-s88` it011492, +4.4 ± 2.2; `r30-dark-s87` it011462, +3.6 ± 2.2 on Dungeon 5)
+measured on `d3` and `d8`.
