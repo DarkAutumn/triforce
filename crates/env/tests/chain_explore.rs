@@ -92,7 +92,7 @@ fn every_route_room_has_a_specialist() {
     for (name, steps) in &data.map.routes {
         let experiment = steps.iter().all(|step| step.specialist.is_none());
         for step in steps {
-            let family = data.specialist_for(step.location());
+            let family = data.route_specialist_for(name, step.location());
             if experiment {
                 assert!(family.is_some(), "{name} {step:?}");
             } else if step.exit != "terminal" {

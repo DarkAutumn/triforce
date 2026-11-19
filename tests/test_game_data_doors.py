@@ -20,8 +20,10 @@ DOOR = {0: 'open', 1: 'wall', 2: 'open', 3: 'open', 4: 'bomb', 5: 'key', 6: 'key
 
 
 def rooms():
+    """The shared rooms (entries without `routes:`; a route's own entries, phase X, add caves, tags and a rock wall,
+    no edge door: `game_map::tests::a_routes_own_rooms_leave_the_shared_map_alone` lists them)."""
     data = yaml.safe_load((PACKAGE_DIR / 'game.yaml').read_text(encoding='utf-8'))
-    return {(r['level'], int(r['location'], 16), bool(r.get('in_cave'))): r for r in data['rooms']}
+    return {(r['level'], int(r['location'], 16), bool(r.get('in_cave'))): r for r in data['rooms'] if 'routes' not in r}
 
 
 def test_every_exit_has_its_way_back():

@@ -499,8 +499,9 @@ fn config_rooms_match_game_yaml_tags_and_routes() {
     for (name, config) in &data.specialists {
         assert_eq!(&config.name, name);
         let rooms: HashSet<MapLocation> = config.rooms.iter().copied().collect();
+        // Tagged on any route's map (phase X: d3first's own game.yaml rooms are its map's only).
         let tagged: HashSet<MapLocation> =
-            data.map.rooms_for_specialist(name).into_iter().collect();
+            data.map.played_maps().flat_map(|m| m.rooms_for_specialist(name)).collect();
         assert_eq!(rooms, tagged, "{name}: rooms must be tagged in game.yaml");
         let formatted: HashSet<String> = config.rooms.iter().map(|r| format_room(*r)).collect();
         let family: HashSet<String> = families[name.as_str()]
@@ -511,10 +512,8 @@ fn config_rooms_match_game_yaml_tags_and_routes() {
             .collect();
         assert_eq!(formatted, family, "{name}");
         for room in &config.rooms {
-            assert_eq!(
-                data.map.get(*room).and_then(|r| r.specialist.as_deref()),
-                Some(name.as_str())
-            );
+            let tagged = data.map.played_maps().any(|m| m.get(*room).and_then(|r| r.specialist.as_deref()) == Some(name));
+            assert!(tagged, "{name} {room:?}");
         }
     }
 }

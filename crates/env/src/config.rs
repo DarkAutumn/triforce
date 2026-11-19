@@ -1686,8 +1686,10 @@ mod tests {
         assert_eq!(data.families.len(), data.specialists.len());
         for (name, config) in &data.specialists {
             assert_eq!(&config.name, name);
+            // A family's room is tagged with it on some route's map (phase X: d3first's own rooms on its map only).
             for room in &config.rooms {
-                assert_eq!(data.specialist_for(*room), Some(name.as_str()));
+                let tags: Vec<_> = data.map.played_maps().map(|m| m.get(*room).and_then(|r| r.specialist.as_deref())).collect();
+                assert!(tags.contains(&Some(name.as_str())), "{name} {room:?}: {tags:?}");
             }
         }
         for step in &data.map.routes[zelda::game_map::DEFAULT_ROUTE] {
