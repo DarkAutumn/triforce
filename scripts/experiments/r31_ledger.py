@@ -111,14 +111,38 @@ def cmd_keys(args):
               f"(n {len(a['frames'])})")
 
 
+def cmd_rooms(args):
+    """Any chain output (the scratch route's walk of the new Dungeon 1): its runs' rooms in order, one row per
+    position of the longest room sequence played."""
+    runs_ = [json.loads(line) for path in args.files for line in open(path)]
+    seqs = collections.Counter(tuple((r['level'], r['room'], r['in_cave']) for r in run['rooms']) for run in runs_)
+    results = collections.Counter(run['result'] for run in runs_)
+    print(f"{len(runs_)} runs: {dict(results)}; room sequences: {len(seqs)} (the most common played by "
+          f"{seqs.most_common(1)[0][1]}); wrong exits {sum(run['wrong_exits'] for run in runs_)}")
+    longest = max(seqs, key=len)
+    print('pos room        n    frames(med)  hearts in  lost(mean) died  keys in->out  bombs in->out  cheated k/b')
+    for i, (level, room, cave) in enumerate(longest):
+        recs = [run['rooms'][i] for run in runs_ if len(run['rooms']) > i
+                and (run['rooms'][i]['level'], run['rooms'][i]['room']) == (level, room)]
+        print(f"{i:3d}  {level}:{room}{'c' if cave else ' '} {len(recs):5d} "
+              f"{statistics.median(r['frames'] for r in recs):8.0f} {statistics.mean(r['health_in'] for r in recs):9.2f} "
+              f"{statistics.mean(r['health_in'] - r['health_out'] for r in recs):9.2f} "
+              f"{sum(r['outcome'] == 'death' for r in recs):5d}  "
+              f"{collections.Counter((r['keys_in'], r['keys_out']) for r in recs).most_common(2)}  "
+              f"{collections.Counter((r['bombs_in'], r['bombs_out']) for r in recs).most_common(2)}  "
+              f"{sum(r.get('cheated_keys', 0) for r in recs)}/{sum(r.get('cheated_bombs', 0) for r in recs)}")
+    print(f"frames per run: median {statistics.median(run['frames'] for run in runs_):.0f}")
+
+
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument('cmd', choices=['steps', 'keys'])
+    p.add_argument('cmd', choices=['steps', 'keys', 'rooms'])
+    p.add_argument('files', nargs='*')
     p.add_argument('--tag', default='r29land-1k')
     p.add_argument('--segments', default='d1')
     p.add_argument('--only')
     args = p.parse_args()
-    {'steps': cmd_steps, 'keys': cmd_keys}[args.cmd](args)
+    {'steps': cmd_steps, 'keys': cmd_keys, 'rooms': cmd_rooms}[args.cmd](args)
 
 
 if __name__ == '__main__':
