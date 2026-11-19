@@ -328,20 +328,23 @@ def test_later_visit_names_round_trip():
     step = entry_states.RouteStep(7, 5, 0x07, True, 'S', 'E', 'equipment-room', visit=2)
     assert step.filename(1) == '5_07cave_v2_1.state'
     later = [(s.index, s.filename(0)) for s in route_steps() if s.visit > 1]   # d2first: the legs and Dungeon 5's
-    assert later == [(147, '0_59w_v2_0.state'), (148, '0_5aw_v2_0.state'), (149, '0_5bw_v2_0.state'),
-                     (150, '0_5cw_v2_0.state'), (151, '0_5dw_v2_0.state'), (164, '0_2ds_v2_0.state'),
-                     (182, '0_2ce_v2_0.state'), (183, '0_1cs_v2_0.state'), (184, '0_1be_v2_0.state'),
-                     (196, '5_07cave_v2_0.state'),
+    # Round 31, Dungeon 1's door: 1:0x73 from S again (the N door open) and 0:0x37 from the cave mouth again (out of
+    # the D1 triforce); every later step four fewer than before (0x72, 0x74, 0x52 and 0x42 left the route).
+    assert later == [(48, '1_73s_v2_0.state'), (64, '0_37c_v2_0.state'),
+                     (143, '0_59w_v2_0.state'), (144, '0_5aw_v2_0.state'), (145, '0_5bw_v2_0.state'),
+                     (146, '0_5cw_v2_0.state'), (147, '0_5dw_v2_0.state'), (160, '0_2ds_v2_0.state'),
+                     (178, '0_2ce_v2_0.state'), (179, '0_1cs_v2_0.state'), (180, '0_1be_v2_0.state'),
+                     (192, '5_07cave_v2_0.state'),
                      # Round 26, the leg to Dungeon 7: 0x55 from N again on either way of dock-44 (one name).
-                     (211, '0_55n_v2_0.state'), (212, '0_54e_v2_0.state'), (213, '0_55n_v2_0.state'),
-                     (215, '0_64e_v2_0.state'), (225, '0_53e_v2_0.state'), (226, '0_52e_v2_0.state'),
+                     (207, '0_55n_v2_0.state'), (208, '0_54e_v2_0.state'), (209, '0_55n_v2_0.state'),
+                     (211, '0_64e_v2_0.state'), (221, '0_53e_v2_0.state'), (222, '0_52e_v2_0.state'),
                      # Round 27, the leg to the magic sword: 0x51 from E on both ways of woods, 0x50 from E (clips).
-                     (250, '0_51e_v2_0.state'), (251, '0_50e_v2_0.state'), (252, '0_51e_v2_0.state'),
+                     (246, '0_51e_v2_0.state'), (247, '0_50e_v2_0.state'), (248, '0_51e_v2_0.state'),
                      # Round 28, the leg to Dungeon 8: 0x4c from N, 0x4d from W and 0x6d from N again (the earlier
                      # legs had the first).  Round 29, the leg to Dungeon 9 (0x38 from W, 0x48 from N, back from
                      # 0x47's heart cave) and Dungeon 9's tunnel 0x75 the second time.
-                     (283, '0_4cn_v2_0.state'), (284, '0_4dw_v2_0.state'), (286, '0_6dn_v2_0.state'),
-                     (299, '0_38w_v2_0.state'), (300, '0_48n_v2_0.state'), (345, '9_75cave_v2_0.state')]
+                     (279, '0_4cn_v2_0.state'), (280, '0_4dw_v2_0.state'), (282, '0_6dn_v2_0.state'),
+                     (295, '0_38w_v2_0.state'), (296, '0_48n_v2_0.state'), (341, '9_75cave_v2_0.state')]
 
 
 def test_the_audit_follows_later_visits_and_counts_hearts_along_each_way(revisit, tmp_path):

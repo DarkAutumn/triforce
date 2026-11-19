@@ -218,7 +218,7 @@ mod tests {
             (ram[OBJ_TYPE + slot], ram[OBJ_STATE + slot], ram[OBJ_X + slot], ram[OBJ_Y + slot]) = (0x60, kind as u8, x, y);
         }
         let targets = |ram: &[u8; RAM_SIZE], reward: &RewardConfig| -> Vec<Target> {
-            item_targets(reward, &GameView::new(ram, 0, false, map.clone())).collect()
+            item_targets(reward, reward.drops_first, &GameView::new(ram, 0, false, map.clone())).collect()
         };
         let all = RewardConfig { item_targets: true, ..Default::default() };
         let near = RewardConfig { nearby_items: true, ..Default::default() };

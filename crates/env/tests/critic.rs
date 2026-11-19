@@ -1178,9 +1178,10 @@ fn heart_config(exit: bool, potential: f64, low_health: f64) -> SpecialistConfig
     config
 }
 
-/// d2first's step 64 is 1:0x44 W -> E (goriya), step 65 1:0x45 W -> N (wallmaster).
+/// d2first's step 60 is 1:0x44 W -> E (goriya), step 61 1:0x45 W -> N (wallmaster) (64 and 65 before round 31's
+/// Dungeon 1).
 fn heart_context(values: &env::heart_value::HeartValues, next: Option<usize>) -> HeartContext<'_> {
-    HeartContext { values: Some(values), step: Some(64), next, clips: true }
+    HeartContext { values: Some(values), step: Some(60), next, clips: true }
 }
 
 fn score(config: &SpecialistConfig, change: &Change, heart: &HeartContext) -> env::rewards::Scored {
@@ -1220,12 +1221,12 @@ fn heart_value_off_is_todays_reward() {
     let exit = step(&hurt, &hurt.room(EAST), "MOVE E 8");
     for change in [&pickup, &hit, &exit] {
         let without = score(&config, change, &HeartContext::default());
-        let with = score(&config, change, &heart_context(values, Some(65)));
+        let with = score(&config, change, &heart_context(values, Some(61)));
         assert_eq!(without.rewards.terms().collect::<Vec<_>>(), with.rewards.terms().collect::<Vec<_>>());
         assert_eq!(without.rewards.value().to_bits(), with.rewards.value().to_bits());
         assert_eq!((without.ending, without.outcome), (with.ending, with.outcome));
     }
-    let scored = score(&config, &exit, &heart_context(values, Some(65)));
+    let scored = score(&config, &exit, &heart_context(values, Some(61)));
     assert_eq!(scored.outcome, Some("success"));
     let terminal = scored.rewards.get("reward-terminal-success").unwrap().value;
     assert!(approx(terminal, env::rewards::success_reward_value(1.5, 3.0, 0.5)), "{terminal}");
@@ -1242,13 +1243,13 @@ fn heart_value_terms() {
     let full = Ram::new();
     let low = full.with(Var::HeartsAndContainers, 0x20).with(Var::PartialHearts, 0x7F); // 0.5 of 3
     let one = full.with(Var::HeartsAndContainers, 0x20).with(Var::PartialHearts, 0xFF); // 1 of 3
-    let heart = heart_context(values, Some(65));
+    let heart = heart_context(values, Some(61));
 
     // A hit from 1 to 0.5 hearts at 1:0x44: the flat −0.25, then 20 × ΔV unclamped.
     let config = heart_config(false, 20.0, 0.0);
     let hit = step(&one, &low, "WAIT 8");
     let r = score(&config, &hit, &heart).rewards;
-    let dv = curve(64).at(0.5) - curve(64).at(1.0);
+    let dv = curve(60).at(0.5) - curve(60).at(1.0);
     assert!(dv < -0.1, "a heart at one heart is worth much: {dv}");
     assert!(approx(value(&r, "penalty-heart-value"), 20.0 * dv));
     assert!(approx(r.value(), -REWARD_SMALL + 20.0 * dv), "the term is outside the clamp: {}", r.value());
@@ -1264,11 +1265,11 @@ fn heart_value_terms() {
     let r = score(&config, &hit, &heart).rewards;
     assert!(approx(value(&r, "penalty-heart-value"), -REWARD_SMALL * 2.0 * (1.0 - 0.5 / 3.0)));
 
-    // exit: 20 × (0.5 + 0.5 × V(65, 1) / V(65, top)) instead of 20 × (0.5 + 0.5 × 1/3).
+    // exit: 20 × (0.5 + 0.5 × V(61, 1) / V(61, top)) instead of 20 × (0.5 + 0.5 × 1/3).
     let config = heart_config(true, 0.0, 0.0);
     let exit = step(&one, &one.room(EAST), "MOVE E 8");
     let r = score(&config, &exit, &heart).rewards;
-    let priced = 20.0 * (0.5 + 0.5 * curve(65).at(1.0) / curve(65).top());
+    let priced = 20.0 * (0.5 + 0.5 * curve(61).at(1.0) / curve(61).top());
     assert!(approx(value(&r, "reward-terminal-success"), priced));
     // No next step (off the route): the linear fraction.
     let r = score(&config, &exit, &HeartContext { next: None, ..heart }).rewards;
@@ -1278,7 +1279,7 @@ fn heart_value_terms() {
 /// The shipped table matches the route it names; an edited route is refused by the families that read it, and the
 /// curve interpolates between half hearts.  Dungeon 7's and Dungeon 6's steps have curves (round 26's and round 27's
 /// chains), Dungeon 8's (round 28's) and level 9's (round 29's); since 1.9.0.0 `d2first` runs to the end of the game
-/// and the table is its own, 358 rows.
+/// and the table is its own, 354 rows since round 31.
 #[test]
 fn heart_value_table_checks_the_route() {
     let data = common::game_data();
@@ -1301,9 +1302,9 @@ fn heart_value_table_checks_the_route() {
     // Steps on one way only have no curve on the other (0x31 E -> N is the clip way's).
     let clip_only = steps.iter().position(|s| s.way == Some(zelda::game_map::Way::Clips)).unwrap();
     assert!(values.curve(Some(clip_only), false).is_none() && values.curve(Some(clip_only), true).is_some());
-    // Dungeon 7's 0x1b from W (step 240), Dungeon 6's 0x38 (step 270), Dungeon 8's 0x3e (step 291) and level 9's
-    // 0x10 (step 340, the silver arrow's Wizzrobes) are priced.
-    for (k, room) in [(240, "7:0x1b"), (270, "6:0x38"), (291, "8:0x3e"), (340, "9:0x10")] {
+    // Dungeon 7's 0x1b from W (step 236), Dungeon 6's 0x38 (step 266), Dungeon 8's 0x3e (step 287) and level 9's
+    // 0x10 (step 336, the silver arrow's Wizzrobes) are priced.
+    for (k, room) in [(236, "7:0x1b"), (266, "6:0x38"), (287, "8:0x3e"), (336, "9:0x10")] {
         assert_eq!(values.steps[k].room, room);
         assert!(values.curve(Some(k), true).is_some_and(|c| c.top() > c.at(6.0)), "{room}");
     }

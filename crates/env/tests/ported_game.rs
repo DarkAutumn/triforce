@@ -133,8 +133,8 @@ fn decodes_dungeon_and_overworld_savestates() {
     let state = load(&mut s, "1_44w_0", false, &[]);
     assert_eq!(state.full_location(), MapLocation::new(1, 0x44, false));
     // On d2first Link reaches D1 0x44 with the white sword and what is left of Dungeon 2's bombs (decoded from
-    // $0658): one in chain 0.
-    assert_eq!(state.bombs(), 1);
+    // $0658): none in chain 0 since round 31 (0x53's N wall takes its bomb).
+    assert_eq!(state.bombs(), 0);
     assert_eq!(state.sword(), SwordKind::White);
     let goriyas = state
         .enemies
@@ -337,15 +337,16 @@ fn cleared_boss_room_and_persisted_flags() {
         "CurOpenedDoors only"
     );
     assert!(rs.item_taken && !rs.has_item && rs.kill_state == 3 && rs.all_dead());
-    // Flag bytes ($6FF+room): $53:F0 and $35:F4 match ram-catalog R.1 (the boss room's kill/item bits); the
-    // other rooms on the walk depend on what the chain killed on its way, so only their visited bit is pinned.
-    assert_eq!(room_flags(state.ram(), 0x53), 0xF0);
+    // Flag bytes ($6FF+room): $53:F8 and $35:F4 match ram-catalog R.1 (the boss room's kill/item bits; round 31: 0x53's
+    // N bomb wall opened adds its door bit $08); the other rooms on the walk depend on what the chain killed on its
+    // way, so only their visited bit is pinned.
+    assert_eq!(room_flags(state.ram(), 0x53), 0xF8);
     assert_eq!(room_flags(state.ram(), 0x35), 0xF4);
-    for room in [0x74, 0x52] {
+    for room in [0x63, 0x43] {
         assert_ne!(room_flags(state.ram(), room) & 0x80, 0, "room {room:#x} visited");
     }
     // In a dungeon the room flags are the level block at $6FF.
-    for room in [0x74, 0x53, 0x35, 0x52, 0x43] {
+    for room in [0x63, 0x53, 0x35, 0x43, 0x33] {
         assert_eq!(room_flags(state.ram(), room), state.ram()[0x6FF + room as usize]);
     }
     assert_eq!(room_flags(state.ram(), state.location()), rs.flags);

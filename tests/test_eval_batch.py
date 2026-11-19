@@ -260,7 +260,7 @@ def test_chains_tag_is_the_eighteen_segments_then_the_report(tmp_path):
     chains = [yardstick[i + 1] for i, arg in enumerate(yardstick) if arg == '--chain']
     assert chains[0] == f"full={tmp_path / 'r71-full.jsonl'}"          # d2 has no output yet: left out
     assert chains[-1].startswith('full→d9=') and chains[-1].endswith(
-        '@2:0x7d,0:0x3c,1:0x73,0:0x37,3:0x7c,0:0x74,4:0x71,0:0x45,5:0x76,5:0x14,0:0x0b,7:0x79,7:0x2b,0:0x42,6:0x79,'
+        '@2:0x7d,0:0x3c,1:0x73,step:64,3:0x7c,0:0x74,4:0x71,0:0x45,5:0x76,5:0x14,0:0x0b,7:0x79,7:0x2b,0:0x42,6:0x79,'
         '6:0x0c,0:0x22,8:0x7e,8:0x2c,0:0x6d,9:0x76')
     assert room_stats[-4:] == ['room-stats', 'r71', '--chains-dir', str(tmp_path)]
 

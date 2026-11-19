@@ -289,8 +289,8 @@ def write_clips_room_stats(path):
     dies in 4:0x21), 4 with it off (the plain way through 4:0x30 and 4:0x20; two die in 4:0x20)."""
     from triforce import room_stats  # pylint: disable=import-outside-toplevel
     plan = list(zelda_map.native_route_steps('d2first'))
-    common = list(range(112, 122))
-    clip_way, plain_way, rest = [122, 123], [124, 125, 126, 127], list(range(128, 135))   # 134: 0x45, out of D4
+    common = list(range(108, 118))
+    clip_way, plain_way, rest = [118, 119], [120, 121, 122, 123], list(range(124, 131))   # 130: 0x45, out of D4
     runs = ([d4_run(plan, common + clip_way + rest, True) for _ in range(3)]
             + [d4_run(plan, common + clip_way, True, death=True)]
             + [d4_run(plan, common + plain_way + rest, False) for _ in range(2)]
@@ -315,8 +315,8 @@ def test_the_clips_selector_splits_rooms_and_the_route(qapp, models, tmp_path):
     assert window.view.badges[0x20][0] == '25%' and window.view.badges[0x21][0] == '12%'      # of 8 runs
     assert 'D4 alone · 8 runs from 4_71s_0, 62% reach 0_45c_0' == window.scope_info.text()
     # Both ways drawn, the clip way's step numbers marked.
-    assert window.view.route_rooms[0x31] == [118, 122, 124] and 0x20 in window.view.route_rooms
-    assert window.view.route_marks and window.view.route_ways[122] == 'clips'
+    assert window.view.route_rooms[0x31] == [114, 118, 120] and 0x20 in window.view.route_rooms
+    assert window.view.route_marks and window.view.route_ways[118] == 'clips'
     assert {(0x31, 0x21, 'clips', 'walk'), (0x31, 0x30, 'plain', 'walk'),
             (0x21, 0x11, None, 'walk')} <= set(window.view.route_segments)
     assert 'clip way dashed' in window.legend.text()
@@ -326,7 +326,7 @@ def test_the_clips_selector_splits_rooms_and_the_route(qapp, models, tmp_path):
     assert window.clips_group.checkedId() == 2
     assert window.view.badges[0x20][0] == '50%' and 0x21 in window.view.badges and window.view.badges[0x21][0] == '0%'
     assert 'D4 alone · 4 runs with clips off from 4_71s_0, 50% reach' in window.scope_info.text()
-    assert window.view.route_rooms[0x31] == [118, 124] and not window.view.route_marks
+    assert window.view.route_rooms[0x31] == [114, 120] and not window.view.route_marks
     assert (0x31, 0x21, 'clips', 'walk') not in window.view.route_segments
     assert (0x31, 0x30, 'plain', 'walk') in window.view.route_segments
     assert window.legend.text().endswith('the plain way')
