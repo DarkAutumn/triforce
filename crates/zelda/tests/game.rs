@@ -330,11 +330,8 @@ fn room_states(s: &mut S) {
 
     load(s, "1_23s_0", &[]);
     let rs = decode_room_state(s.state().ram());
-    assert!(
-        rs.item_id == Some(0x19)
-            && rs.item_position == Some((0xA0, 0xC0))
-            && rs.item_hidden_until_clear
-    );
+    // 0x23's key: hidden until the 3 red Goriyas are dead, at X $80, Y $70 (zelda-asm/levels/level-1.md).
+    assert_eq!((rs.item_id, rs.item_position, rs.item_hidden_until_clear), (Some(0x19), Some((0x80, 0x70)), true));
     assert!(rs.enemies_remaining == 3 && rs.enemies_unspawned == 3);
 
     load(s, "1_33s_0", &[]);

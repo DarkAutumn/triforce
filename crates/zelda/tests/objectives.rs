@@ -180,20 +180,15 @@ fn dungeon_key_rooms_fight_then_treasure_then_leave_and_stay_collected() {
         Some("key")
     );
 
-    // From the D1 entrance without keys, a key room comes next.
+    // From the D1 entrance without keys the route's own exit comes next (round 31, phase IX): no route step enters
+    // a key room any more, so the key rooms the keyless way search finds (0x72, 0x74) meet none of the route's exits
+    // from 0x73, and the route's first is taken: S out to 0:0x37, the door trick that opens the N door without a key.
     let mut no_keys = start.clone();
     set(&mut no_keys, Var::Keys, 0);
     let entrance = view(&map, &no_keys, 0);
     let first = completion(&map).objectives(None, &entrance);
     assert_eq!(first.kind, ObjectiveKind::Move);
-    assert!(
-        first
-            .next_rooms
-            .iter()
-            .all(|r| [loc(1, 0x72), loc(1, 0x74)].contains(r)),
-        "{:?}",
-        first.next_rooms
-    );
+    assert_eq!(first.next_rooms.iter().copied().collect::<Vec<_>>(), [loc(0, 0x37)]);
     assert_targets_are_correct_exits(&map, &entrance, &first);
 
     // In the key room: fight while monsters are up (the key drops when they're dead).
@@ -484,8 +479,9 @@ fn dungeon_1_entrance_follows_the_route_steps() {
     // Off the route (no step), the key-aware shortest way: N.
     let shortest = completion(&map).objectives(None, &from_s);
     assert_eq!(shortest.next_rooms.iter().copied().collect::<Vec<_>>(), [loc(1, 0x63)]);
-    // From S (a training reset): the first visit's step, S out of the level; MOVE keeps out of the N door.
-    let (route, step) = start_route(&map, loc(1, 0x73), Some("S"), None, &mut rng, None, &from_s, true);
+    // From S (a training reset on `1_73s_0`, whose name spells the first visit): the first visit's step, S out of
+    // the level; MOVE keeps out of the N door.
+    let (route, step) = start_route(&map, loc(1, 0x73), Some("S"), Some(1), &mut rng, None, &from_s, true);
     assert_eq!((route.as_str(), step), (ROUTE, Some(46)));
     let mut gc = GameCompletion::new(map.clone(), &route, step).unwrap();
     let objective = gc.objectives(None, &from_s);

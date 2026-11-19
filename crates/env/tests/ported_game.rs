@@ -339,11 +339,12 @@ fn cleared_boss_room_and_persisted_flags() {
     assert!(rs.item_taken && !rs.has_item && rs.kill_state == 3 && rs.all_dead());
     // Flag bytes ($6FF+room): $53:F8 and $35:F4 match ram-catalog R.1 (the boss room's kill/item bits; round 31: 0x53's
     // N bomb wall opened adds its door bit $08); the other rooms on the walk depend on what the chain killed on its
-    // way, so only their visited bit is pinned.
+    // way, so only their visited bit is pinned: bit 5, $20 (R.1, asm:RoomFlags_MarkVisited; until round 31 the test
+    // read $80, a kill-count bit, which the old route's 0x74 and 0x52 held; 0x63 holds $64).
     assert_eq!(room_flags(state.ram(), 0x53), 0xF8);
     assert_eq!(room_flags(state.ram(), 0x35), 0xF4);
     for room in [0x63, 0x43] {
-        assert_ne!(room_flags(state.ram(), room) & 0x80, 0, "room {room:#x} visited");
+        assert_ne!(room_flags(state.ram(), room) & 0x20, 0, "room {room:#x} visited");
     }
     // In a dungeon the room flags are the level block at $6FF.
     for room in [0x63, 0x53, 0x35, 0x43, 0x33] {
