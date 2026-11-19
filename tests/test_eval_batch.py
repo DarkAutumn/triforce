@@ -276,7 +276,26 @@ def test_a_scouting_route_plays_its_segments_with_route(tmp_path):
     assert [e.fields['target'] for e in entries] == ['9:0x76', None]
     assert [e.fields['route'] for e in entries] == ['d2first', 'd2first']
     script = (ROOT / 'scripts' / 'experiments' / 'r56_chains.sh').read_text()
-    assert '[ -n "${ROUTE:-}" ] && chain_args+=("--route $ROUTE")' in script
+    assert '[ -n "${ROUTE:-}" ] && route=(--route "$ROUTE")' in script
+
+
+def test_segments_are_keyed_by_route(tmp_path, monkeypatch):
+    """Phase X: `--route` picks the route's segment table (d2first's by default, the main route's), passes the route
+    to every segment, and a route without a table needs --segments."""
+    options = eval_batch.Options('x', cores=20, eval_parallel=4)
+    assert eval_batch.route_segments() == eval_batch.ROUTE_SEGMENTS['d2first']
+    default = eval_batch.chains_entries('x', options, act='model', runs=10, segments=None, chains_dir=tmp_path,
+                                        chain_args=[], report=False, only_report=False)
+    assert [e.name for e in default] == [item.split(':')[0] for item in eval_batch.SEGMENTS.split()]
+    with pytest.raises(eval_batch.BatchError, match='no segment table'):
+        eval_batch.chains_entries('x', options, act='model', runs=10, segments=None, chains_dir=tmp_path,
+                                  chain_args=[], report=False, only_report=False, route='clips-gauntlet')
+    table = eval_batch.RouteSegments('full:start d2:2_7ds_0', {'d2': '0:0x77'}, ())
+    monkeypatch.setitem(eval_batch.ROUTE_SEGMENTS, 'clips-gauntlet', table)
+    entries = eval_batch.chains_entries('x', options, act='model', runs=10, segments=None, chains_dir=tmp_path,
+                                        chain_args=[], report=False, only_report=False, route='clips-gauntlet')
+    assert [(e.name, e.fields['target'], e.fields['route']) for e in entries] == [
+        ('full', None, 'clips-gauntlet'), ('d2', '0:0x77', 'clips-gauntlet')]
 
 
 def test_room_stats_cuts_the_last_legs_at_the_dungeon_exits():

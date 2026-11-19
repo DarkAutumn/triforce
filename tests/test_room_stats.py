@@ -169,7 +169,7 @@ def eval_room(level, room, visits, deaths, timeouts=0):
 
 def test_build_writes_every_scope_with_its_provenance(tmp_path, monkeypatch):
     monkeypatch.setattr(_native, 'route_steps', lambda name: PLAN)
-    monkeypatch.setattr(room_stats, 'SCOPES', (FULL, FIRST, SECOND))
+    monkeypatch.setattr(room_stats, 'ROUTE_SCOPES', {'test': (FULL, FIRST, SECOND)})
     chains, models = tmp_path / 'chains', tmp_path / 'models'
     chains.mkdir()
     team = {'ow-octorok': ('run-a', 'argmax'), 'goriya': ('run-b', 'sample')}
@@ -212,7 +212,7 @@ def test_build_writes_every_scope_with_its_provenance(tmp_path, monkeypatch):
 
 def test_build_refuses_a_file_that_starts_elsewhere(tmp_path, monkeypatch):
     monkeypatch.setattr(_native, 'route_steps', lambda name: PLAN)
-    monkeypatch.setattr(room_stats, 'SCOPES', (FULL,))
+    monkeypatch.setattr(room_stats, 'ROUTE_SCOPES', {'test': (FULL,)})
     write_chain(tmp_path, 'full', FULL_RUNS, '0_12c_0', {})
     with pytest.raises(room_stats.RoomStatsError, match='starts from 0_12c_0'):
         room_stats.build('tag', tmp_path, tmp_path / 'models')
@@ -320,7 +320,7 @@ NOCLIPS_RUNS = [   # a switch-off tag: neither the runs nor the records name the
 
 def test_two_tags_read_together_split_by_the_switch(tmp_path, monkeypatch):
     monkeypatch.setattr(_native, 'route_steps', lambda name: PLAN)
-    monkeypatch.setattr(room_stats, 'SCOPES', (FULL, FIRST, SECOND))
+    monkeypatch.setattr(room_stats, 'ROUTE_SCOPES', {'test': (FULL, FIRST, SECOND)})
     chains, models = tmp_path / 'chains', tmp_path / 'models'
     chains.mkdir()
     post = [run(0, [ok(0, 0x12), visit(0, 0x11, 'death')])]

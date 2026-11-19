@@ -30,8 +30,10 @@
 # The route ended on the D5 triforce until round 26, on the D7 triforce in round 26, on the D6 triforce in round 27:
 # a full run to there is the milestone `full→post-d5` (`full→post-d7`, `full→post-d6`) of the report, or a chain of
 # its own, `triforce eval-chain --stop-at step:209 ...` (0:0x0b out of Dungeon 5; `step:248` is 0:0x42 out of Dungeon
-# 7, `step:281` 0:0x22 out of Dungeon 6, `step:297` 0:0x6d out of Dungeon 8). ROUTE=<route> plays a scouting route
-# (`{extends: d2first, ...}` in routes.yaml) with SEGMENTS naming its segments.
+# 7, `step:281` 0:0x22 out of Dungeon 6, `step:297` 0:0x6d out of Dungeon 8). ROUTE=<route> measures another route
+# (phase X: `ROUTE=d3first`; default the main route, `triforce/registry.py` MAIN_ROUTE) with its own segment table
+# (`triforce/eval_batch.py` ROUTE_SEGMENTS) and its promoted runs (a family's `promoted.<route>` over `promoted`);
+# SEGMENTS="NAME:START ..." replaces the table (a scouting route, `{extends: d2first, ...}`, names its own).
 #
 #   [ACT=model] TAG=r73-1k RUNS=1000 scripts/experiments/r56_chains.sh [run|report]
 #
@@ -54,13 +56,15 @@ ACT=${ACT:-model}
 TAG=${TAG:-r56-$ACT}
 RUNS=${RUNS:-120}
 OUT=${OUT:-target/r56-chains}
-SEGMENTS=${SEGMENTS:-"full:start d2:2_7ds_0 post-d2:0_3cc_0 d1:1_73s_0 post-d1:0_37c_0 d3:3_7cs_0 post-d3:0_74c_0 d4:4_71s_0 post-d4:0_45c_0 d5:5_76s_0 post-d5:0_0bc_0 d7:7_79s_0 post-d7:0_42c_0 d6:6_79s_0 post-d6:0_22c_0 d8:8_7es_0 post-d8:0_6dc_0 d9:9_76s_0"}
 
 chain_args=()
 [ -n "${CLIPS:-}" ] && chain_args+=("--clips $CLIPS")
-[ -n "${ROUTE:-}" ] && chain_args+=("--route $ROUTE")
 clips=()
 if [ ${#chain_args[@]} -gt 0 ]; then clips=(--chain-args "${chain_args[*]}"); fi
+route=()
+[ -n "${ROUTE:-}" ] && route=(--route "$ROUTE")
+segments=()
+[ -n "${SEGMENTS:-}" ] && segments=(--segments "$SEGMENTS")
 
 case ${1:-all} in
   run) mode=(--no-report) ;;
@@ -69,4 +73,4 @@ case ${1:-all} in
   *) echo "usage: $0 [run|report|all]" >&2; exit 2 ;;
 esac
 exec $PY -m triforce.cli eval-batch "$TAG" --chains "$TAG" --act "$ACT" --runs "$RUNS" --chains-dir "$OUT" \
-  --segments "$SEGMENTS" ${PARALLEL:+--parallel $PARALLEL} ${NICE:+--nice $NICE} "${clips[@]}" "${mode[@]}"
+  "${route[@]}" "${segments[@]}" ${PARALLEL:+--parallel $PARALLEL} ${NICE:+--nice $NICE} "${clips[@]}" "${mode[@]}"

@@ -636,6 +636,23 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             },
         };
         let machine = self.store.load(&name)?;
+        // Phase X: the route a start plays is its state's namespace's (`d3first_3_7cs_0` plays `d3first`; a curriculum
+        // start its track's seed state's), bare names the family's `route:` (None: any route with bare names); the
+        // game start, shared by every route, the family's `route:`.
+        let seed_name = entry_name.as_deref().unwrap_or(&name);
+        let ns = zelda::game_map::state_namespace(seed_name).map(str::to_owned);
+        if let Some(ns) = &ns
+            && self.data.map.namespace_routes(Some(ns)).is_empty()
+        {
+            return Err(EnvError::StartState(format!(
+                "start state {name} is in namespace {ns:?}, which no route of routes.yaml has (`states:`)"
+            )));
+        }
+        let state_route = if state_label(seed_name) == "start" {
+            self.config.route.clone()
+        } else {
+            self.data.state_route(&self.config, ns.as_deref()).map(str::to_owned)
+        };
         // A staged start (training only): the kills banked for the start's pending dungeon room, before its entry.
         // Before them (round 29) the kills the route's earlier visit left in a room it comes back to (routes.yaml
         // `banked_kills`, by the start state's name): the game keeps those, the fresh-room write would undo them.
@@ -646,7 +663,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         if self.curriculum_tag.is_none()
             && let Some(named) = crate::start_states::StateName::parse(&name)
         {
-            let (map, route) = (&self.data.map, self.config.route.as_deref());
+            let (map, route) = (&self.data.map, state_route.as_deref());
             let (at, entry, visit) = (named.location, Some(named.entry), Some(named.visit));
             let clips = if zelda::objectives::banked_kills_follow_clips(map, at, entry, visit, route) {
                 let on = self.clips_plan.unwrap_or_else(|| self.config.clips.draw(&mut self.rng));
@@ -683,7 +700,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             let spec = &self.config.ram_randomization;
             let chain =
                 if spec.chain_hp.is_some_and(|p| p != 0.0) && self.curriculum_tag.is_none() {
-                    self.data.chain_profile(state.full_location())
+                    self.data.chain_profile(ns.as_deref(), state.full_location())
                 } else {
                     None
                 };
@@ -704,7 +721,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         // A start the route enters on one way of a stretch only fixes the switch (4:0x21 from S: the clip way); else
         // `set_clips_allowed`'s, else a draw from the env's generator (`clips: {off_share}`, round 22). A curriculum
         // start keeps it on: its track was explored with the switch on (`explore::explore_config`).
-        let route = self.config.route.as_deref();
+        let route = state_route.as_deref();
         let fixed = start_clips(&self.data.map, state.full_location(), entry, visit, route, &state);
         self.clips_fixed = fixed;
         self.clips_allowed = match fixed.or(self.clips_plan).or(early_clips) {

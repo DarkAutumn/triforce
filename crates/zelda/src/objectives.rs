@@ -2255,8 +2255,9 @@ pub fn route_bomb_targets(map: &GameMap, state: &GameView, objective: &Objective
 
 /// The route steps `start_route` would choose among for an episode starting in `location` entered from `entry`, the
 /// `visit` a start state's name spells (`game_map::route_visits`; None when no name says): the steps of `route`, of
-/// every route without one, entering the room from `entry`; of those, the visit's when there are any; of those, the
-/// ones with exactly Link's progress when there are any. With their way: (route, step, way).
+/// every route with bare state names without one (phase X: a route with a `states:` namespace is only ever named, its
+/// states say so), entering the room from `entry`; of those, the visit's when there are any; of those, the ones with
+/// exactly Link's progress when there are any. With their way: (route, step, way).
 fn start_candidates<'a>(
     map: &'a GameMap,
     location: MapLocation,
@@ -2267,7 +2268,7 @@ fn start_candidates<'a>(
 ) -> Vec<(&'a str, usize, Option<crate::game_map::Way>)> {
     let mut candidates: Vec<(&str, usize, bool, bool)> = Vec::new();
     for (name, steps) in &map.routes {
-        if route.is_some_and(|r| r != name) {
+        if route.map_or(map.namespace(name).is_some(), |r| r != name) {
             continue;
         }
         let progress = route_progress(map, steps);
@@ -2333,7 +2334,7 @@ pub fn start_banked_kills(
     }
     let mut found: Vec<(bool, bool, Option<u8>)> = Vec::new();
     for (name, steps) in &map.routes {
-        if route.is_some_and(|r| r != name) {
+        if route.map_or(map.namespace(name).is_some(), |r| r != name) {
             continue;
         }
         for (i, step) in steps.iter().enumerate() {

@@ -130,7 +130,10 @@ impl Route {
                 "Route '{name}' must begin at the game start (entry: start)"
             ));
         }
-        let start_state = start_from.unwrap_or("start");
+        // Phase X: a bare name on a route with a `states:` namespace is that route's state (`--route d3first --from
+        // 3_7cs_0` plays `d3first_3_7cs_0`); a name in another route's namespace is refused.
+        let start_state = map.route_state(name, start_from.unwrap_or("start"))?;
+        let start_state = start_state.as_str();
         let path = state_file_path(states_dir, start_state);
         if !path.is_file() {
             return Err(format!(
@@ -809,6 +812,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             visit,
             seed,
             n,
+            self.data.map.namespace(&self.route.name),
         ) else {
             return Ok(());
         };

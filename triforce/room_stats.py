@@ -135,8 +135,26 @@ SCOPES = (
     Scope('to-d9', 'segment', 'To the end: 0:0x6d → the end of the game', 'post-d8', '0_6dc_0', None),
     Scope('d9', 'dungeon', 'Dungeon 9: 9:0x76 → the end of the game', 'd9', '9_76s_0', None),
 )
+# Phase X: each route's scopes (start and cut states by bare name: a route with a start-state namespace has them in
+# it).  d3first's comes with its steps, beside its segment table (`eval_batch.ROUTE_SEGMENTS`).
+ROUTE_SCOPES = {'d2first': SCOPES}
 ROOM_SCOPE = 'room'
 ROOM_LABEL = 'Room only: isolated single-room evaluations'
+
+
+def route_scopes(route: str) -> tuple:
+    """``route``'s scopes (``ROUTE_SCOPES``); RoomStatsError for a route without a table."""
+    if route not in ROUTE_SCOPES:
+        raise RoomStatsError(f"route {route!r} has no room-stats scopes (room_stats.ROUTE_SCOPES has "
+                             f"{sorted(ROUTE_SCOPES)})")
+    return ROUTE_SCOPES[route]
+
+
+def _bare(name: str) -> str:
+    """A state name without its route's namespace (phase X: ``d3first_3_7cs_0`` -> ``3_7cs_0``)."""
+    from ._native import state_namespace  # pylint: disable=import-outside-toplevel
+    namespace = state_namespace(name)
+    return name[len(namespace) + 1:] if namespace else name
 
 
 class RoomStatsError(Exception):
@@ -624,12 +642,18 @@ def room_scope(models_dir: Path, team: Optional[dict[str, dict]]) -> dict:
 
 # ---------------------------------------------------------------------------------------------------- the file
 
-def promoted_runs(models_dir: Path) -> dict[str, str]:
-    """Each current family's promoted run (absent: none promoted)."""
+def promoted_runs(models_dir: Path, route: Optional[str] = None) -> dict[str, str]:
+    """Each current family's promoted run (on ``route``: its ``promoted.<route>`` over ``promoted``, phase X;
+    absent: none promoted)."""
     from .specialist import list_specialists  # pylint: disable=import-outside-toplevel
     root = Path(models_dir)
-    return {name: registry.promoted_run(name, root) for name in list_specialists()
-            if (root / name / registry.PROMOTED_NAME).is_file()}
+    found = {}
+    for name in list_specialists():
+        try:
+            found[name] = registry.promoted_run(name, root, route)
+        except FileNotFoundError:
+            continue
+    return found
 
 
 def noclips_tag(tag: str) -> str:
@@ -646,6 +670,25 @@ def _start_switch(runs: list[dict], provenance: dict) -> list[dict]:
     return [run if run.get('clips') is not None else {**run, 'clips': clips} for run in runs]
 
 
+def tag_route(tags: list[str], chains_dir: Path) -> str:
+    """The route a tag's chains played (phase X: it picks the scopes): the first chain file's recorded route (its
+    ``.meta.json``, else its first run's)."""
+    paths = [path for name in tags for path in sorted(Path(chains_dir).glob(f'{name}-*.jsonl'))]
+    if not paths:
+        raise RoomStatsError(f"no chain files {tags[0]}-*.jsonl in {chains_dir}")
+    for path in paths:
+        meta = path.with_name(path.name + '.meta.json')
+        route = json.loads(meta.read_text(encoding='utf-8')).get('provenance', {}).get('route') \
+            if meta.is_file() else None
+        if not route:
+            with open(path, encoding='utf-8') as file:
+                line = next((text for text in file if text.strip()), None)
+            route = json.loads(line).get('route') if line else None
+        if route:
+            return route
+    raise RoomStatsError(f"no chain file {tags[0]}-*.jsonl in {chains_dir} records its route (pass --route)")
+
+
 def build(tag: str, chains_dir: Path = CHAINS_DIR, models_dir=None, route: Optional[str] = None,
           noclips: Optional[str] = None) -> dict:
     """The room-stats file of ``<chains_dir>/<tag>-*.jsonl``: every scope whose chain file exists, and the room
@@ -657,7 +700,8 @@ def build(tag: str, chains_dir: Path = CHAINS_DIR, models_dir=None, route: Optio
     chains_dir, models_dir = Path(chains_dir), registry.models_root(models_dir)
     tags = [tag, *([noclips] if noclips else [])]
     loaded, scopes, team, plans, found = {}, {}, None, {}, set()
-    for scope in SCOPES:
+    table = route_scopes(route or tag_route(tags, chains_dir))
+    for scope in table:
         paths = {}                          # resolved -> the path of the first tag that has it
         for name in tags:
             path = chains_dir / f'{name}-{scope.file}.jsonl'
@@ -672,7 +716,7 @@ def build(tag: str, chains_dir: Path = CHAINS_DIR, models_dir=None, route: Optio
                 loaded[resolved] = read_chain(path)
             file_runs, provenance = loaded[resolved]
             start = provenance.get('start_from') or 'start'
-            if provenance and start.rsplit('/', 1)[-1] != scope.start:
+            if provenance and _bare(start.rsplit('/', 1)[-1]) != scope.start:
                 raise RoomStatsError(f"{path.name} starts from {start}, scope {scope.name} from {scope.start}")
             routes |= {run.get('route') for run in file_runs}
             routes |= {provenance['route']} if provenance.get('route') else set()
@@ -698,9 +742,9 @@ def build(tag: str, chains_dir: Path = CHAINS_DIR, models_dir=None, route: Optio
         'format': FORMAT, 'tag': tag, 'tags': tags, 'noclips': noclips,
         'created': time.strftime('%Y-%m-%dT%H:%M:%S'), 'version': __version__,
         'route': sorted(plans)[0] if len(plans) == 1 else sorted(plans),
-        'team': team, 'promoted': promoted_runs(models_dir),
+        'team': team, 'promoted': promoted_runs(models_dir, sorted(plans)[0] if len(plans) == 1 else None),
         'segments': [{'name': s.name, 'kind': s.kind, 'label': s.label, 'file': s.file, 'start': s.start,
-                      'cut': s.cut} for s in SCOPES],
+                      'cut': s.cut} for s in table],
         'scopes': scopes,
     }
 

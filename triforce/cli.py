@@ -24,7 +24,8 @@ def prepare_chain(route_name: str, parallel: int = 1, models_dir=None, overrides
     route = Route.load(route_name, stop_room, start_from, stop_step=stop_step, power_on=power_on, clips=clips,
                        clips_off_from=off_step if off_step is not None else off_room)
     runner = Runner(models_dir=models_dir, checkpoints=overrides, act=act,
-                    specialist_configs=specialist_configs, parallel=parallel, threads=threads, harvest=harvest)
+                    specialist_configs=specialist_configs, parallel=parallel, threads=threads, harvest=harvest,
+                    route=route_name)
     return route, runner
 
 
@@ -243,29 +244,32 @@ def _cmd_eval_chain(args):
 
 def _cmd_promote(args):
     from .registry import promote  # pylint: disable=import-outside-toplevel
-    print(promote(args.specialist, args.run_id, args.models_dir, args.act))
+    print(promote(args.specialist, args.run_id, args.models_dir, args.act, args.route))
     return 0
 
 
 def _cmd_list(args):
-    from .registry import list_runs, promoted_run  # pylint: disable=import-outside-toplevel
-    from .specialist import list_specialists  # pylint: disable=import-outside-toplevel
+    # pylint: disable=import-outside-toplevel
+    from .registry import list_runs, promoted_run, route_promotions
+    from .specialist import list_specialists
     for name in list_specialists():
         try:
             current = promoted_run(name, args.models_dir)
         except FileNotFoundError:
             current = None
         runs = list_runs(name, args.models_dir)
-        print(f"{name:20} promoted={current or '-':24} runs={len(runs)}")
+        routes = ''.join(f" {route}={run}" for route, run in route_promotions(name, args.models_dir).items())
+        print(f"{name:20} promoted={current or '-':24} runs={len(runs)}{routes}")
     return 0
 
 
 def _cmd_stamp(args):
-    """``triforce stamp``: writes the ``version`` file of the given run, or of every promoted run."""
+    """``triforce stamp``: writes the ``version`` file of the given run, or of every promoted run (a route's own,
+    ``promoted.<route>``, too)."""
     # pylint: disable=import-outside-toplevel
     import re
     from . import __version__
-    from .registry import checkpoint_path, model_version, promoted_run, write_model_version
+    from .registry import checkpoint_path, model_version, promoted_run, route_promotions, write_model_version
     from .specialist import list_specialists
     version = args.version or __version__
     if not re.fullmatch(r'\d+(\.\d+){3}', version):
@@ -277,7 +281,9 @@ def _cmd_stamp(args):
             try:
                 runs.append((name, promoted_run(name, args.models_dir)))
             except FileNotFoundError:
-                continue
+                pass
+            runs += [(name, run) for run in sorted(set(route_promotions(name, args.models_dir).values()))
+                     if (name, run) not in runs]
     else:
         try:
             runs = [(args.specialist, args.run_id or promoted_run(args.specialist, args.models_dir))]
@@ -360,6 +366,9 @@ def main(argv=None):
     promote.add_argument('run_id')
     promote.add_argument('--act', type=act_argument(allow_model=False), default=None,
                          help=f"also set how the run acts ({ACT_HELP})")
+    promote.add_argument('--route', default=None,
+                         help="promote the run for this route only (models/<family>/promoted.<route>, which every "
+                              "tool playing that route takes over promoted)")
 
     stamp = sub.add_parser('stamp', help="stamp runs with the triforce version their models are compatible with "
                                          "(default: every promoted run, this code's version)")
@@ -392,13 +401,14 @@ def add_eval_chain_arguments(chain):
     """``triforce eval-chain``'s options on ``chain`` (an argparse parser; ``triforce.eval_batch`` checks a batch's
     chain entries with them)."""
     # pylint: disable=import-outside-toplevel
-    from ._native import DEFAULT_ROUTE
     from .jobs import add_job_arguments
     from .paths import HARVESTED_DIR
-    from .registry import ACT_HELP, MODEL_ACT, act_argument
+    from .registry import ACT_HELP, MAIN_ROUTE, MODEL_ACT, act_argument
     from .replay import add_arguments as replay_arguments
     from .runner import STOP_AT_HELP, add_power_on_arguments
-    chain.add_argument('--route', default=DEFAULT_ROUTE)
+    chain.add_argument('--route', default=MAIN_ROUTE,
+                       help=f"routes.yaml route (default {MAIN_ROUTE}, registry.MAIN_ROUTE); its promoted runs play "
+                            "(a family's promoted.<route> over its promoted)")
     chain.add_argument('--runs', type=int, default=20)
     chain.add_argument('--parallel', type=int, default=1, help="envs in the chain pool")
     chain.add_argument('--threads', type=int, default=None, help="pool worker threads (default min(parallel, cores))")
@@ -412,7 +422,9 @@ def add_eval_chain_arguments(chain):
     chain.add_argument('--clips-off-from', metavar='ROOM|step:N',
                        help="turn the switch off on first entering this room (1:0x73) or route step (step:N)")
     chain.add_argument('--from', dest='start_from', help="start from this savestate instead of the game start, "
-                                                         "e.g. a route entry state like 2_7ds_0")
+                                                         "e.g. a route entry state like 2_7ds_0 (a bare name on a "
+                                                         "route with a start-state namespace is that route's: "
+                                                         "--route d3first --from 3_7cs_0 is d3first_3_7cs_0)")
     add_power_on_arguments(chain)
     chain.add_argument('--checkpoint', action='append', default=[], metavar='SPECIALIST=PATH')
     chain.add_argument('--specialist-config', action='append', default=[], metavar='YAML',

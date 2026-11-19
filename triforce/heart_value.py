@@ -190,9 +190,14 @@ def main(argv=None):
     parser = argparse.ArgumentParser(prog='python -m triforce.heart_value', description=__doc__.split('\n\n')[0])
     parser.add_argument('chains', nargs='+', help="chain run jsonl files (clips on and off; the full route too)")
     parser.add_argument('--route', default='d2first')
-    parser.add_argument('--out', default=TABLE_PATH)
+    parser.add_argument('--out', default=None,
+                        help="default triforce/heart_value.json; a route with a start-state namespace NS (phase X) "
+                             "triforce/heart_value.NS.json, the table its states' trainings read")
     args = parser.parse_args(argv)
     from . import _native
+    namespace = _native.route_namespace(args.route)
+    if args.out is None:
+        args.out = TABLE_PATH if namespace is None else f'{os.path.splitext(TABLE_PATH)[0]}.{namespace}.json'
     steps = _native.route_steps(args.route)
     table = build_table(steps, args.chains, args.route)
     write_json_atomic(args.out, table, indent=1)

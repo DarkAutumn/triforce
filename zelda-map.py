@@ -655,8 +655,10 @@ def scale_html(overlay: str, kind: str) -> str:
 # --------------------------------------------------------------------------------------------------------- route
 
 def route_names() -> list[str]:
-    """Every route the map can draw: the ``routes.yaml`` routes, then the drafts (``triforce/draft_routes.yaml``)."""
-    return [*routes(), *(name for name in draft_routes.names() if name not in routes())]
+    """Every route the map can draw: the main route (``registry.MAIN_ROUTE``), the other ``routes.yaml`` routes, then
+    the drafts (``triforce/draft_routes.yaml``)."""
+    names = [registry.MAIN_ROUTE, *(name for name in routes() if name != registry.MAIN_ROUTE)]
+    return [*names, *(name for name in draft_routes.names() if name not in names)]
 
 
 def route_plan(route: str, rooms: Optional[dict] = None) -> list[dict]:

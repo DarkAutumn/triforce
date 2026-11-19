@@ -13,7 +13,8 @@
     .venv/bin/python play-zelda.py 3x2 --live          # the top left cell is a live game: c turns its clips off
     .venv/bin/python play-zelda.py --clips off         # every simulated run without clips (c turns them back on)
 
-Every cell plays a replay; only a --live cell is a live game.  Without a path the models play the route (d2first)
+Every cell plays a replay; only a --live cell is a live game.  Without a path the models play the route (--route, the
+main route registry.MAIN_ROUTE by default: d2first until d3first's golden path reaches the ending)
 in the background, --parallel games at once, without a picture and as fast as they run.  Every finished run is a
 replay, filed into queues of --capacity (32) runs each:
 
@@ -151,8 +152,13 @@ def build_parser() -> argparse.ArgumentParser:
                           "model: each model's registered act mode.  Runs that don't draw every action differ by "
                           "the game's random numbers, redrawn from each run's seed when its start state (or a "
                           "golden path's checkpoint) is loaded")
+    sim.add_argument('--route', default=registry.MAIN_ROUTE,
+                     help=f"the route the models play (default {registry.MAIN_ROUTE}, registry.MAIN_ROUTE: the main "
+                          "route; d2first or d3first), by its promoted runs (a family's promoted.<route> over its "
+                          "promoted)")
     sim.add_argument('--from', dest='start_from', metavar='STATE',
-                     help="start every run from this savestate instead of the game start, e.g. 2_7ds_0")
+                     help="start every run from this savestate instead of the game start, e.g. 2_7ds_0 (a bare name "
+                          "is the route's: --route d3first --from 3_7cs_0 is d3first_3_7cs_0)")
     add_power_on_arguments(sim)
     sim.add_argument('--stop-at', metavar='ROOM|step:N', help=STOP_AT_HELP + " (golden paths play the whole route)")
     sim.add_argument('--stall-steps', type=int, default=DEFAULT_STALL_STEPS, metavar='N',
@@ -247,7 +253,7 @@ def main(argv=None) -> int:
     def make_grid(**changes) -> ReplayGrid:
         """The grid for ``settings`` after ``changes`` (the window's menus: the act mode, the live cell)."""
         settings.update(changes)
-        return ReplayGrid(cols * rows, path=args.path, models_dir=args.models_dir,
+        return ReplayGrid(cols * rows, path=args.path, models_dir=args.models_dir, route=args.route,
                           parallel=args.parallel, capacity=args.capacity, patience=args.patience,
                           power_on=args.power_on, start_from=args.start_from, stop_at=args.stop[0],
                           stop_step=args.stop[1], stall_steps=args.stall_steps or None, first_seed=args.first_seed,

@@ -64,7 +64,7 @@ from . import _native, golden, registry, replay
 from .runner import ChainPool, Policies, Route, RunResult, chain_meta
 
 FRAME_SHAPE = _native.FRAME_SHAPE   # rows, columns, RGB
-ROUTE = _native.DEFAULT_ROUTE
+ROUTE = registry.MAIN_ROUTE
 RESULT_PAUSE = 3.0
 POLL_SECONDS = 0.02
 NES_FPS = 60.0988           # frames per second of an NTSC NES
@@ -659,7 +659,7 @@ class ReplayGrid:
             return
         try:
             if self._policies is None:
-                self._policies = Policies(self.models_dir)
+                self._policies = Policies(self.models_dir, route=self.route)
             policies = self._policies
             first = _native.route_steps(self.route)[0]['specialist']
             if first in policies.missing and self.begin['start_from'] is None:

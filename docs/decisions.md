@@ -3082,3 +3082,21 @@ After watching the first complete game (`corpus/replays/v1-golden-ending.tfrepla
 - Lee is away after this; the lead's defaults while he is: where his words and the game disagree, the closest way
   that works is walked and logged in a "For the owner" section; trainings in the shared queue in the order
   optimisation round, the `d2first` changes, `d3first`; finished pieces land and are pushed without asking.
+
+## 2026-11-19 — A second route beside `d2first`: state namespaces, per-route promotion (phase X plumbing)
+
+- **States per route by a name prefix, not a folder:** a route with routes.yaml `states: NS` has its start states
+  as `NS_<name>` in the same states dir and manifest. A folder would have kept the file names alike and made every
+  label (trajectories, `by_state`, curriculum tracks, GUI names) collide between the routes; the prefix keeps them
+  apart with no change for `d2first`, whose bare names, files and manifest stay exactly as they were.
+- **A family draws every route's states by default** (`state_routes:` narrows it): the sword and hearts are inputs,
+  so one model may serve both routes ("the models should overlap in most cases"). A family that prices hearts or
+  draws chain hearts needs its tables per namespace (`heart_value.<NS>.json`, `chain_hp.<NS>.json`) once it has
+  states there; it is refused, not silently mispriced, until one exists or `state_routes:` leaves the route out.
+- **`promoted.<route>` overrides `promoted` on that route**, optional; everything that plays resolves it by the
+  route it plays.
+- **Two constants:** `registry.MAIN_ROUTE` (the route tools play when none is named; flipped to `d3first` when its
+  golden path reaches the ending) and the engine's `DEFAULT_ROUTE` (the route of bare names; `d2first` for good).
+- **Segment and room-stats tables keyed by route** (`eval_batch.ROUTE_SEGMENTS`, `room_stats.ROUTE_SCOPES`);
+  `d2first`'s unchanged.
+- No model input changed: no COMPAT bump; 2.0.0.0 is the owner's MAJOR for `d3first`.

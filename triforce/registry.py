@@ -53,6 +53,7 @@ import torch
 from . import __version__
 from ._native import ACTION_SCHEMA_VERSION, OBS_SCHEMA_VERSION, OBS_SPEC
 from ._native import act_mode as act_mode_spelling
+from ._native import routes as native_routes
 
 MODELS_DIR_ENV = 'TRIFORCE_MODELS_DIR'
 ALLOW_INCOMPATIBLE_ENV = 'TRIFORCE_ALLOW_INCOMPATIBLE_MODELS'
@@ -72,6 +73,13 @@ DEFAULT_ACT = ACT_RULE
 PLAN_ACT = f'{ACT_RULE}+plan:16:1'
 # ``--act model``: each model acts by its own act mode.
 MODEL_ACT = 'model'
+# The main route (phase X, the owner, Nov 19): the route every tool plays and measures when none is named
+# (`play-zelda.py`, `zelda-headless.py` and the golden path, `zelda-map.py`, `triforce eval-chain`, `eval-batch
+# --chains` and the chains script `scripts/experiments/r56_chains.sh`). `d2first` until a golden path on `d3first`
+# reaches the ending ("d3 will be the main run when it works ... d2 will be the secondary"); then 'd3first' here.
+# The engine's `DEFAULT_ROUTE` (`zelda::game_map`) is another thing: the route of bare start-state names, `d2first`
+# for good.
+MAIN_ROUTE = 'd2first'
 
 
 def parse_act(text: str, allow_model: bool = False) -> str:
@@ -391,17 +399,20 @@ def list_runs(specialist: str, root=None) -> list[str]:
     return sorted(p.name for p in base.iterdir() if (p / CHECKPOINT_NAME).is_file())
 
 
-def promote(specialist: str, run_id: str, root=None, act: Optional[str] = None) -> Path:
-    """Marks run_id as the specialist's promoted model (``<models>/<specialist>/promoted`` holds the id); ``act``
-    also sets how the run acts (``set_act_mode``)."""
+def promote(specialist: str, run_id: str, root=None, act: Optional[str] = None, route: Optional[str] = None) -> Path:
+    """Marks run_id as the specialist's promoted model (``<models>/<specialist>/promoted`` holds the id; with ``route``,
+    phase X, ``promoted.<route>``: that route's run, over ``promoted`` there); ``act`` also sets how the run acts
+    (``set_act_mode``)."""
+    if route is not None and route not in native_routes():
+        raise ValueError(f"unknown route {route!r} (routes.yaml has {native_routes()})")
     ckpt = checkpoint_path(specialist, run_id, root)
     if not ckpt.is_file():
         raise FileNotFoundError(f"No checkpoint for {specialist}/{run_id}: {ckpt}")
     load_checkpoint(ckpt)
     if act is not None:
         set_act_mode(ckpt, act)
-    pointer = models_root(root) / specialist / PROMOTED_NAME
-    tmp = pointer.with_suffix('.tmp')
+    pointer = promoted_pointer(specialist, root, route)
+    tmp = pointer.with_name(f'.{pointer.name}.{os.getpid()}.tmp')
     tmp.write_text(run_id + '\n', encoding='utf-8')
     os.replace(tmp, pointer)
     return pointer
@@ -466,17 +477,36 @@ def set_act_mode(checkpoint, mode: str) -> Path:
     return path
 
 
-def promoted_run(specialist: str, root=None) -> str:
-    """The promoted run id.  Raises FileNotFoundError if none is promoted."""
-    pointer = models_root(root) / specialist / PROMOTED_NAME
+def promoted_pointer(specialist: str, root=None, route: Optional[str] = None) -> Path:
+    """The file naming the specialist's promoted run: ``promoted``, or (phase X) for ``route`` its own
+    ``promoted.<route>``, which overrides ``promoted`` on that route where it exists."""
+    return models_root(root) / specialist / (PROMOTED_NAME if route is None else f'{PROMOTED_NAME}.{route}')
+
+
+def promoted_run(specialist: str, root=None, route: Optional[str] = None) -> str:
+    """The promoted run id: on ``route``, its ``promoted.<route>`` when there is one (phase X: a run promoted for one
+    route only), else ``promoted`` (every route's).  Raises FileNotFoundError if none is promoted."""
+    if route is not None and promoted_pointer(specialist, root, route).is_file():
+        return promoted_pointer(specialist, root, route).read_text(encoding='utf-8').strip()
+    pointer = promoted_pointer(specialist, root)
     if not pointer.is_file():
         raise FileNotFoundError(f"No promoted model for specialist '{specialist}' ({pointer})")
     return pointer.read_text(encoding='utf-8').strip()
 
 
-def promoted_checkpoint(specialist: str, root=None) -> Path:
-    """Path of the promoted run's ``ckpt.pt``."""
-    path = checkpoint_path(specialist, promoted_run(specialist, root), root)
+def route_promotions(specialist: str, root=None) -> dict[str, str]:
+    """Route -> run of every ``promoted.<route>`` of the specialist (phase X)."""
+    base = models_root(root) / specialist
+    prefix = f'{PROMOTED_NAME}.'
+    if not base.is_dir():
+        return {}
+    return {p.name[len(prefix):]: p.read_text(encoding='utf-8').strip()
+            for p in sorted(base.iterdir()) if p.name.startswith(prefix) and p.suffix != '.tmp' and p.is_file()}
+
+
+def promoted_checkpoint(specialist: str, root=None, route: Optional[str] = None) -> Path:
+    """Path of the promoted run's ``ckpt.pt`` (on ``route``: ``promoted_run``)."""
+    path = checkpoint_path(specialist, promoted_run(specialist, root, route), root)
     if not path.is_file():
         raise FileNotFoundError(f"Promoted run for '{specialist}' has no checkpoint: {path}")
     return path
@@ -493,6 +523,8 @@ def main(argv=None):
     promote_parser.add_argument('run_id')
     promote_parser.add_argument('--act', type=act_argument(allow_model=False), default=None,
                                 help=f"also set how the run acts ({ACT_HELP})")
+    promote_parser.add_argument('--route', default=None,
+                                help="promote the run for this route only (promoted.<route>, over promoted there)")
     args = parser.parse_args(argv)
 
     if args.command == 'list':
@@ -500,15 +532,18 @@ def main(argv=None):
             current = promoted_run(args.specialist, args.models_dir)
         except FileNotFoundError:
             current = None
+        routes = route_promotions(args.specialist, args.models_dir)
         for run_id in list_runs(args.specialist, args.models_dir):
             path = checkpoint_path(args.specialist, run_id, args.models_dir)
             ckpt = _torch_load(path)
             mark = '*' if run_id == current else ' '
             success = ckpt.get('metrics', {}).get('success_rate')
+            only = [route for route, run in routes.items() if run == run_id]
             print(f"{mark} {run_id}  iterations={ckpt.get('iterations')} steps={ckpt.get('steps')} "
-                  f"success_rate={success} act={act_mode(path)}")
+                  f"success_rate={success} act={act_mode(path)}"
+                  + (f" promoted on {','.join(only)}" if only else ''))
     else:
-        print(promote(args.specialist, args.run_id, args.models_dir, args.act))
+        print(promote(args.specialist, args.run_id, args.models_dir, args.act, args.route))
 
 
 if __name__ == '__main__':

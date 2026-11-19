@@ -380,8 +380,9 @@ pub fn state_visit(name: &str) -> Option<u32> {
     StateName::parse(name).map(|n| n.visit)
 }
 
-/// What an entry-state name says (`docs/architecture.md` "Start states"): `<level>_<room><side>[_v<visit>]_<chain>`,
-/// harvested chain handoffs `<level>_<room><side>[_v<visit>]_h<seed>_<n>`. `side` is the routes.yaml entry: n/s/e/w,
+/// What an entry-state name says (`docs/architecture.md` "Start states"):
+/// `[<ns>_]<level>_<room><side>[_v<visit>]_<chain>`, harvested chain handoffs
+/// `[<ns>_]<level>_<room><side>[_v<visit>]_h<seed>_<n>`. `side` is the routes.yaml entry: n/s/e/w,
 /// `c` = out of a cave or dungeon stairs, `r` = set down by the whirlwind (round 26, `entry: recorder`), `cave` = a
 /// cave or cellar interior (entered from S). `visit` is the route's visit to the room from that side
 /// (`zelda::game_map::route_visits`): the first has no `_v` field, a later one is `_v2`, `_v3`, ... (no leading
@@ -395,9 +396,10 @@ pub struct StateName {
 }
 
 impl StateName {
-    /// Reads a state name or path ('…/0_1be_v2_0.state'); None for a name that isn't an entry state's.
+    /// Reads a state name or path ('…/0_1be_v2_0.state'); None for a name that isn't an entry state's. A route's
+    /// namespace before the name (phase X: `d3first_3_7cs_0`, `zelda::game_map::state_namespace`) is read past.
     pub fn parse(name: &str) -> Option<StateName> {
-        let label = state_label(name);
+        let label = state_label(zelda::game_map::bare_state(name));
         let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
         let (head, chain) = label.rsplit_once('_')?;
         if !digits(chain) {
@@ -542,15 +544,22 @@ pub fn ram_randomization_values<R: Rng + ?Sized>(
     values
 }
 
-/// A chain handoff's harvested start-state file name, `<stem>_h<seed>_<n>.state` (`n`: the run's room index; the stem
-/// [`StateName::stem`] of the routes.yaml entry (`zelda::objectives::route_entry`) and `visit`, the route visit of the
-/// step Link plays there, 1 off the route), so [`StateName::parse`] reads back the entry and the visit.  Keyed by run
-/// seed and room index alone, so a chain writes the same files on any thread count.  None for a jump that isn't one
-/// room's entry (a Wallmaster's drag).
-pub fn harvest_filename(prev: MapLocation, curr: MapLocation, visit: u32, seed: u64, n: usize) -> Option<String> {
+/// A chain handoff's harvested start-state file name, `[<ns>_]<stem>_h<seed>_<n>.state` (`n`: the run's room index;
+/// the stem [`StateName::stem`] of the routes.yaml entry (`zelda::objectives::route_entry`) and `visit`, the route
+/// visit of the step Link plays there, 1 off the route; `ns` the run's route's start-state namespace, phase X), so
+/// [`StateName::parse`] reads back the entry and the visit.  Keyed by run seed and room index alone, so a chain writes
+/// the same files on any thread count.  None for a jump that isn't one room's entry (a Wallmaster's drag).
+pub fn harvest_filename(
+    prev: MapLocation,
+    curr: MapLocation,
+    visit: u32,
+    seed: u64,
+    n: usize,
+    ns: Option<&str>,
+) -> Option<String> {
     let entry = route_entry(prev, curr)?;
     let stem = StateName { location: curr, entry, visit }.stem();
-    Some(format!("{stem}_h{seed}_{n}.state"))
+    Some(zelda::game_map::namespaced_state(ns, &format!("{stem}_h{seed}_{n}.state")))
 }
 
 #[cfg(test)]
@@ -852,12 +861,17 @@ mod tests {
             (m(5, 0x06, false), m(5, 0x07, true), 2, "5_07cave_v2_h42_3.state"),
             (m(0, 0x0b, false), m(0, 0x45, false), 1, "0_45r_h42_3.state"), // round 26: the whirlwind
         ] {
-            let harvested = harvest_filename(prev, curr, visit, 42, 3).unwrap();
+            let harvested = harvest_filename(prev, curr, visit, 42, 3, None).unwrap();
             assert_eq!(harvested, name);
             assert_eq!(state_entry(&harvested), route_entry(prev, curr), "{name}");
             assert_eq!(state_visit(&harvested), Some(visit), "{name}");
+            // Phase X: a route with a `states:` namespace harvests into it, and the name reads back the same.
+            let spaced = harvest_filename(prev, curr, visit, 42, 3, Some("d3first")).unwrap();
+            assert_eq!(spaced, format!("d3first_{name}"));
+            assert_eq!(zelda::game_map::state_namespace(&spaced), Some("d3first"));
+            assert_eq!(StateName::parse(&spaced), StateName::parse(&harvested), "{spaced}");
         }
-        assert_eq!(harvest_filename(m(1, 0x45, false), m(1, 0x73, false), 1, 0, 1), None);
+        assert_eq!(harvest_filename(m(1, 0x45, false), m(1, 0x73, false), 1, 0, 1, None), None);
     }
 
     fn hearts(values: &[(Var, u8)]) -> f64 {

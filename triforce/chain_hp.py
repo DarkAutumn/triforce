@@ -42,8 +42,15 @@ def main(argv=None):
     """Command line."""
     parser = argparse.ArgumentParser(prog='python -m triforce.chain_hp', description=__doc__.split('\n\n')[0])
     parser.add_argument('chains', nargs='+', help="chain run jsonl files")
-    parser.add_argument('--out', default=PROFILE_PATH)
+    parser.add_argument('--route', default=None,
+                        help="the route the chains played (phase X: a route with a start-state namespace NS writes "
+                             "triforce/chain_hp.NS.json, the profile its states' trainings read)")
+    parser.add_argument('--out', default=None, help="default triforce/chain_hp.json (or the route's, --route)")
     args = parser.parse_args(argv)
+    if args.out is None:
+        from ._native import route_namespace  # pylint: disable=import-outside-toplevel
+        namespace = route_namespace(args.route) if args.route else None
+        args.out = PROFILE_PATH if namespace is None else f'{os.path.splitext(PROFILE_PATH)[0]}.{namespace}.json'
     profile = build_profile(args.chains)
     # Atomically: every training, eval and chain process parses this file at startup.
     write_json_atomic(args.out, profile, indent=1)

@@ -608,6 +608,44 @@ pub struct GameMap {
     pub alternates: Vec<Alternate>,
     /// Per (route, clips switch): the ranks of the steps on that way.
     route_ranks: HashMap<(String, bool), RouteRanks>,
+    /// Each route's start-state namespace (routes.yaml `states:`, phase X; inherited through `extends:`): its start
+    /// states are `<namespace>_<name>` ([`namespaced_state`]). A route without one (`d2first`) has bare names.
+    pub namespaces: HashMap<String, String>,
+}
+
+/// A routes.yaml `states:` namespace: a lower-case letter, then lower-case letters, digits and `-` (no `_`: a state
+/// name's namespace ends at its first `_`).
+pub fn valid_namespace(ns: &str) -> bool {
+    ns.as_bytes().first().is_some_and(u8::is_ascii_lowercase)
+        && ns.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+}
+
+/// A start state's name in a namespace: `d3first_3_7cs_0` (`ns` Some), else the bare name. The game start (`start`)
+/// is shared by every route and never takes a namespace.
+pub fn namespaced_state(ns: Option<&str>, name: &str) -> String {
+    match ns {
+        Some(ns) if name != "start" => format!("{ns}_{name}"),
+        _ => name.to_owned(),
+    }
+}
+
+/// The namespace a start state's name or path spells (`…/d3first_3_7cs_0.state` -> `d3first`): the part before
+/// its first `_` when that is a namespace ([`valid_namespace`]) and a state name follows (a level digit, then `_`);
+/// None for a bare name.
+pub fn state_namespace(name: &str) -> Option<&str> {
+    let base = name.rsplit('/').next().unwrap_or(name);
+    let (ns, rest) = base.split_once('_')?;
+    let level = rest.as_bytes();
+    (valid_namespace(ns) && level.len() > 1 && level[0].is_ascii_digit() && level[1] == b'_').then_some(ns)
+}
+
+/// A start state's name without its namespace (`d3first_3_7cs_0` -> `3_7cs_0`; a bare name as is).
+pub fn bare_state(name: &str) -> &str {
+    let base = name.rsplit('/').next().unwrap_or(name);
+    match state_namespace(base) {
+        Some(ns) => &base[ns.len() + 1..],
+        None => base,
+    }
 }
 
 fn get<'a>(v: &'a Value, key: &str) -> Option<&'a Value> {
@@ -777,9 +815,11 @@ fn check_stretch(route: &str, steps: &[RouteStep], claim: &StretchClaim) -> Resu
     }
 }
 
-/// A route is a list of steps, or `{extends: <route above>, steps: [...]}`: that route's steps, then these. Either
-/// list may hold `stretch:` blocks.
-fn parse_route(name: &str, value: &Value, routes: &Routes) -> Result<Vec<RouteStep>, MapError> {
+/// A route is a list of steps, or `{extends: <route above>, steps: [...], states: NS}`: that route's steps (none
+/// without `extends`), then these. Either list may hold `stretch:` blocks. `states:` names the route's start-state
+/// namespace (phase X; [`GameMap::namespaces`]); a route extending another takes its namespace unless it names one.
+fn parse_route(name: &str, value: &Value, routes: &Routes, namespaces: &HashMap<String, String>)
+    -> Result<(Vec<RouteStep>, Option<String>), MapError> {
     let parse = |mut steps: Vec<RouteStep>, list: &[Value]| -> Result<Vec<RouteStep>, MapError> {
         let mut claims = Vec::new();
         for v in list {
@@ -791,22 +831,35 @@ fn parse_route(name: &str, value: &Value, routes: &Routes) -> Result<Vec<RouteSt
         Ok(steps)
     };
     if let Some(list) = value.as_sequence() {
-        return parse(Vec::new(), list);
+        return Ok((parse(Vec::new(), list)?, None));
     }
     let what = format!("routes.yaml: route {name:?}");
     if !value.is_mapping() {
-        return err(format!("{what} is not a list of steps (or `extends:` and `steps:`)"));
+        return err(format!("{what} is not a list of steps (or `extends:`, `states:` and `steps:`)"));
     }
-    check_keys(value, &["extends", "steps"], &what)?;
-    let base = opt_string(value, "extends", &what)?
-        .ok_or_else(|| MapError(format!("{what}: needs `extends:` (the route it continues)")))?;
-    let Some(base_steps) = routes.get(&base) else {
-        return err(format!("{what}: extends {base:?}, which is not a route above it"));
+    check_keys(value, &["extends", "steps", "states"], &what)?;
+    let base = opt_string(value, "extends", &what)?;
+    let states = opt_string(value, "states", &what)?;
+    if base.is_none() && states.is_none() {
+        return err(format!("{what}: needs `extends:` (the route it continues) or `states:` (its own states)"));
+    }
+    if let Some(ns) = &states
+        && !valid_namespace(ns)
+    {
+        return err(format!("{what}: states {ns:?} must be a lower-case letter, then letters, digits or '-'"));
+    }
+    let base_steps = match &base {
+        None => Vec::new(),
+        Some(base) => match routes.get(base) {
+            Some(steps) => steps.clone(),
+            None => return err(format!("{what}: extends {base:?}, which is not a route above it")),
+        },
     };
     let Some(list) = get(value, "steps").and_then(Value::as_sequence) else {
         return err(format!("{what}: needs a `steps:` list"));
     };
-    parse(base_steps.clone(), list)
+    let ns = states.or_else(|| base.and_then(|b| namespaces.get(&b).cloned()));
+    Ok((parse(base_steps, list)?, ns))
 }
 
 /// The stretches of a route's steps (consecutive steps of one stretch name: the clip way's, then the plain way's).
@@ -861,13 +914,16 @@ pub fn visit_at(steps: &[RouteStep], stretches: &[Stretch], index: usize, step: 
     (earlier + usize::from(begins(index))).max(1) as u32
 }
 
-fn parse_routes(text: &str) -> Result<(Routes, Vec<Alternate>), MapError> {
+type Namespaces = HashMap<String, String>;
+
+fn parse_routes(text: &str) -> Result<(Routes, Vec<Alternate>, Namespaces), MapError> {
     let data: Value =
         serde_yaml_ng::from_str(text).map_err(|e| MapError(format!("routes.yaml: {e}")))?;
     let map = data
         .as_mapping()
         .ok_or_else(|| MapError("routes.yaml: not a mapping".into()))?;
     let mut routes = IndexMap::new();
+    let mut namespaces = HashMap::new();
     for (name, value) in map {
         let Some(name) = name.as_str() else {
             return err(format!("routes.yaml: a top-level key that isn't a name: {name:?}"));
@@ -875,8 +931,11 @@ fn parse_routes(text: &str) -> Result<(Routes, Vec<Alternate>), MapError> {
         if name == "alternates" || name == "families" {
             continue;
         }
-        let steps = parse_route(name, value, &routes)?;
+        let (steps, ns) = parse_route(name, value, &routes, &namespaces)?;
         routes.insert(name.to_owned(), steps);
+        if let Some(ns) = ns {
+            namespaces.insert(name.to_owned(), ns);
+        }
     }
     let mut alternates = Vec::new();
     if let Some(list) = get(&data, "alternates") {
@@ -901,7 +960,7 @@ fn parse_routes(text: &str) -> Result<(Routes, Vec<Alternate>), MapError> {
             });
         }
     }
-    Ok((routes, alternates))
+    Ok((routes, alternates, namespaces))
 }
 
 fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> {
@@ -1213,7 +1272,7 @@ impl GameMap {
 
     pub fn from_yaml(game: &str, routes: &str) -> Result<GameMap, MapError> {
         let rooms = parse_rooms(game)?;
-        let (routes, alternates) = parse_routes(routes)?;
+        let (routes, alternates, namespaces) = parse_routes(routes)?;
         let steps = routes.iter().flat_map(|(name, steps)| steps.iter().map(move |s| (name.as_str(), s)));
         let alternate_steps = alternates.iter().flat_map(|a| a.with.iter().map(|s| ("alternates", s)));
         for (route, step) in steps.chain(alternate_steps) {
@@ -1307,6 +1366,7 @@ impl GameMap {
             visits,
             alternates,
             route_ranks: HashMap::new(),
+            namespaces,
         };
         map.route_ranks = map
             .routes
@@ -1317,6 +1377,35 @@ impl GameMap {
             crate::objectives::check_route_ways(&map, route, steps).map_err(MapError)?;
         }
         Ok(map)
+    }
+
+    /// The start-state namespace of `route` (routes.yaml `states:`), None for bare names.
+    pub fn namespace(&self, route: &str) -> Option<&str> {
+        self.namespaces.get(route).map(String::as_str)
+    }
+
+    /// The routes whose start states are in namespace `ns` (None: bare names), in routes.yaml order.
+    pub fn namespace_routes(&self, ns: Option<&str>) -> Vec<&str> {
+        self.routes.keys().map(String::as_str).filter(|r| self.namespace(r) == ns).collect()
+    }
+
+    /// A start state's name on `route`: a bare name (`3_7cs_0`) in the route's namespace (`d3first_3_7cs_0`); a name
+    /// that already has the route's namespace, `start` and paths as given. A name in another namespace is an error.
+    pub fn route_state(&self, route: &str, name: &str) -> Result<String, String> {
+        let base = name.rsplit('/').next().unwrap_or(name);
+        let named = state_namespace(base);
+        let own = self.namespace(route);
+        if named.is_some() && named != own {
+            return Err(format!(
+                "start state '{name}' is in namespace {:?}; route '{route}' has {}",
+                named.unwrap_or_default(),
+                own.map_or("bare names".to_owned(), |ns| format!("namespace {ns:?}"))
+            ));
+        }
+        if name.contains('/') || named.is_some() || own.is_none() {
+            return Ok(name.to_owned());
+        }
+        Ok(namespaced_state(own, name))
     }
 
     /// The steps of `route` on the way the clips switch selects (`clips`), with their indices.

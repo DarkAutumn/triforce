@@ -86,7 +86,11 @@ class Route:
         if len(starts) > 1:
             raise RunnerError(f"{' and '.join(starts)} are exclusive: each replaces the game start")
         start = 0
-        if start_from is not None:
+        if start_from is not None:      # phase X: `--route d3first --from 3_7cs_0` plays d3first_3_7cs_0
+            try:
+                start_from = _native.route_state(name, start_from)
+            except ValueError as err:
+                raise RunnerError(str(err)) from err
             path = _start_state_path(start_from, states_dir)
             if not path.is_file():
                 near = difflib.get_close_matches(path.stem, [p.stem for p in path.parent.glob('*.state')], n=5)
@@ -346,7 +350,8 @@ def write_jsonl(path, results: List[RunResult], append: bool = False):
 class Policies:
     """The specialists' Rust networks for a chain pool, in policy-index order, plus why the others are missing.
 
-    ``checkpoints`` (name -> checkpoint file or run dir) overrides the registry's promoted model; ``networks``
+    ``checkpoints`` (name -> checkpoint file or run dir) overrides the registry's promoted model (on ``route``, phase X:
+    a family's ``promoted.<route>`` over its ``promoted``); ``networks``
     (name -> a ``ZeldaPolicy``) supplies a model directly; ``specialist_configs`` (name -> config) replaces a
     specialist's canonical YAML at runtime.  ``checkpoints`` afterwards maps each loaded name to its file and
     ``acts`` holds, per policy, its model's act mode (the run's, ``registry.act_mode``; a given network acts by
@@ -354,7 +359,8 @@ class Policies:
 
     def __init__(self, models_dir=None, checkpoints: Optional[Dict[str, str]] = None,
                  specialist_configs: Optional[Dict[str, SpecialistConfig]] = None,
-                 networks: Optional[Dict[str, object]] = None, names: Optional[Iterable[str]] = None):
+                 networks: Optional[Dict[str, object]] = None, names: Optional[Iterable[str]] = None,
+                 route: Optional[str] = None):
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         overrides = dict(checkpoints or {})
         configs = dict(specialist_configs or {})
@@ -380,7 +386,7 @@ class Policies:
                     path = overrides[name]
                 else:
                     try:
-                        path = promoted_checkpoint(name, models_dir)
+                        path = promoted_checkpoint(name, models_dir, route)
                     except FileNotFoundError as err:
                         self.missing[name] = str(err)
                         continue
@@ -495,7 +501,7 @@ class Runner:
                  max_steps: int = DEFAULT_MAX_STEPS,
                  specialist_configs: Optional[Dict[str, SpecialistConfig]] = None,
                  networks: Optional[Dict[str, object]] = None, parallel: int = 1, threads: Optional[int] = None,
-                 states_dir=None, harvest=None):
+                 states_dir=None, harvest=None, route: Optional[str] = None):
         """
         checkpoints: specialist name → checkpoint path, overriding the registry's promoted model.
         specialist_configs: specialist name → loaded config, replacing its canonical YAML at runtime.
@@ -503,9 +509,10 @@ class Runner:
         parallel: envs in the chain pool; threads: its worker threads (default min(parallel, cores)).
         act: None = each model's act mode (registry), else this act mode for all.
         harvest: save every handoff's pre-entry state under this directory (``ChainPool``).
+        route: the route whose promoted runs play (phase X: ``promoted.<route>`` over ``promoted``; None: ``promoted``).
         """
         # pylint: disable=too-many-arguments, too-many-positional-arguments
-        self.policies = Policies(models_dir, checkpoints, specialist_configs, networks)
+        self.policies = Policies(models_dir, checkpoints, specialist_configs, networks, route=route)
         self.act = None if act is None else parse_act(act)
         self.max_steps = max_steps
         self.parallel = parallel

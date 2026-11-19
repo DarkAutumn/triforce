@@ -33,7 +33,11 @@ Each chain is seeded differently.  Files are ``<level>_<room><entry>[_v<visit>]_
 entry is the route side n/s/e/w, ``c`` for coming out of a cave or dungeon stairs, ``cave`` for a cave interior;
 ``_v<visit>`` marks the route's second, third, ... entry into the room from that side (``RouteStep.visit``; the
 first visit has none).  The route's alternate rooms are generated from the step they branch off.
-``entry_states.json`` records the route step, specialist and exploration cost of every file.
+``entry_states.json`` records the route step, specialist and exploration cost of every file.  Phase X (two routes): a
+route with a start-state namespace (routes.yaml ``states: NS``, ``d3first``) has its states as ``NS_<name>``
+(``d3first_3_7cs_0.state``) in the same states dir and manifest; ``--route`` names them, a bare ``--source`` is the
+route's (``--route d3first --source 3_7cs_0`` reads ``d3first_3_7cs_0``), and ``audit`` checks each state by its
+namespace's route (``--route R``: R's states only, and R's MISSING ones).  ``d2first`` keeps its bare names.
 
 ``audit`` loads each start state several times the way training does (natural RNG state, spawn draws, fresh room).
 It reports the room each state really loads into, whether it was saved before entry, the monsters spawned versus
@@ -68,10 +72,10 @@ from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional
 
 from ._native import DEFAULT_ROUTE, AcceptSpec, Explorer, Game, Snapshot, game_rooms, power_on_idle_states
-from ._native import route_alternates
+from ._native import route_alternates, route_namespace, route_state
 from ._native import route_steps as native_route_steps
 from ._native import routes as native_routes
-from ._native import specialist_for
+from ._native import specialist_for, state_namespace
 from .events import write_json_atomic
 from .paths import BASE_MOVIE, ROOT, STATES_DIR
 from .specialist import SpecialistConfig, list_specialists, load_specialist
@@ -119,6 +123,7 @@ class RouteStep:
     way: Optional[str] = None  # 'clips' / 'plain': a step of one way of a routes.yaml stretch (None: both ways')
     visit: int = 1             # the route's visit to the room from that side (zelda::game_map::route_visits)
     treasure: Optional[str] = None  # routes.yaml `treasure:` (None: take it; `skip`, `refuse`: leave it)
+    namespace: Optional[str] = None  # the route's start-state namespace (routes.yaml `states:`, phase X; None: bare)
 
     @property
     def location(self) -> MapLocation:
@@ -126,8 +131,9 @@ class RouteStep:
         return MapLocation(self.level, self.room, self.in_cave)
 
     def filename(self, chain: int) -> str:
-        """Entry-state file name for this step."""
-        return f"{state_stem(self.level, self.room, self.in_cave, self.entry, self.visit)}_{chain}.state"
+        """Entry-state file name for this step (in its route's namespace: ``d3first_3_7cs_0.state``)."""
+        return namespaced(self.namespace,
+                          f"{state_stem(self.level, self.room, self.in_cave, self.entry, self.visit)}_{chain}.state")
 
 
 # The file-name side of each routes.yaml entry that isn't a room edge.
@@ -143,19 +149,39 @@ def state_stem(level: int, room: int, in_cave: bool, entry: str, visit: int = 1)
     return f"{level}_{room:02x}{side}" + (f"_v{visit}" if visit > 1 else '')
 
 
-def _step(index: int, raw: dict) -> RouteStep:
+def namespaced(namespace: Optional[str], name: str) -> str:
+    """A state name in a route's start-state namespace (phase X; ``zelda::game_map::namespaced_state``):
+    ``d3first_3_7cs_0`` for namespace ``d3first``, the bare name without one; ``start`` is every route's."""
+    return f"{namespace}_{name}" if namespace and name not in (START_STATE, f'{START_STATE}.state') else name
+
+
+def namespace_route(namespace: Optional[str]) -> str:
+    """The route whose start states a namespace holds (its first in routes.yaml; ``DEFAULT_ROUTE`` for bare names)."""
+    if namespace is None:
+        return DEFAULT_ROUTE
+    for name in native_routes():
+        if route_namespace(name) == namespace:
+            return name
+    raise ValueError(f"no route of routes.yaml has the start-state namespace {namespace!r} (`states:`)")
+
+
+def _step(index: int, raw: dict, namespace: Optional[str] = None) -> RouteStep:
     return RouteStep(index, raw['level'], raw['room'], bool(raw['in_cave']), raw['entry'], raw['exit'],
-                     raw['specialist'], raw.get('way'), raw['visit'], raw.get('treasure'))
+                     raw['specialist'], raw.get('way'), raw['visit'], raw.get('treasure'), namespace)
 
 
 def route_steps(route: str = DEFAULT_ROUTE) -> List[RouteStep]:
-    """The route's room visits in order."""
-    return [_step(i, raw) for i, raw in enumerate(native_route_steps(route))]
+    """The route's room visits in order (in its start-state namespace, phase X)."""
+    namespace = route_namespace(route) if route in native_routes() else None
+    return [_step(i, raw, namespace) for i, raw in enumerate(native_route_steps(route))]
 
 
 def alternate_steps(steps: List[RouteStep]) -> List[tuple]:
     """(index of the step it branches from, RouteStep) for each alternate room: the step before the replaced room.
-    The alternate's own index is the replaced step's (same place on the route)."""
+    The alternate's own index is the replaced step's (same place on the route).  routes.yaml's alternates stand in
+    for steps of the default route: a route with its own start-state namespace (phase X) has none."""
+    if steps and steps[0].namespace is not None:
+        return []
     result = []
     for alt in route_alternates():
         level, room, _ = alt['replaces'][0]
@@ -255,9 +281,10 @@ def step_config(step: RouteStep, source: str, route: str = DEFAULT_ROUTE,
     # The recorder, food, candle and arrows as the family has them (round 24: Digdogger needs the recorder).
     items = {'bombs': bombs,
              **{kind: getattr(family.items, kind) for kind in ('recorder', 'food', 'candle', 'arrows')}}
+    # Phase X: the source is the route's (a bare name is not also looked for in another route's namespace).
     return SpecialistConfig(name=f'entry-step-{step.index}', rooms=[step.location], start_states=[source],
                             success=['exit-correct', 'triforce-collected'], max_steps=3000,
-                            items=items, fresh_rooms=True, route=route, clips=clips)
+                            items=items, fresh_rooms=True, route=route, clips=clips, state_routes=[route])
 
 
 def refill_hearts(game: Game):
@@ -584,7 +611,8 @@ def build_path(source: str, rooms: List[MapLocation], chain: int, out: str, iter
             fields['from_step'] = after
         visit = 1 if fields['off_route'] else route_list[fields['route_step']].visit
         goals.append(RouteStep(-1, target.level, target.value, False, entry, '?',
-                               specialist_for(target.as_tuple()) or 'none', visit=visit))
+                               specialist_for(target.as_tuple()) or 'none', visit=visit,
+                               namespace=route_namespace(route) if route in native_routes() else None))
         route_fields.append(fields)
         after = after if fields['off_route'] else fields['route_step']
     manifest: List[dict] = []
@@ -655,7 +683,7 @@ def install(staged: str, states_dir: str = STATES_DIR, partial: bool = False) ->
 
 # --- audit ---
 
-STATE_NAME = re.compile(r'^(\d)_([0-9a-f]{2})(n|s|e|w|c|r|cave)(?:_v([2-9]|[1-9]\d+))?_([0-2])$')
+STATE_NAME = re.compile(r'^(?:[a-z][a-z0-9-]*_)?(\d)_([0-9a-f]{2})(n|s|e|w|c|r|cave)(?:_v([2-9]|[1-9]\d+))?_([0-2])$')
 HEARTS_NEVER = 16                    # a 16-heart state is never a route state (Lee)
 
 
@@ -674,7 +702,8 @@ def state_label(path: str) -> str:
 
 def parse_state_name(label: str) -> Optional[tuple]:
     """'1_44w_0' -> (1, 0x44, 'w', 0, 1), '0_1be_v2_1' -> (0, 0x1b, 'e', 1, 2): (level, room, side, chain, visit);
-    None unless the name is ``<level>_<room><entry>[_v<visit>]_<chain>`` with chain 0-2 and visit 2 or more."""
+    None unless the name is ``[<namespace>_]<level>_<room><entry>[_v<visit>]_<chain>`` with chain 0-2 and visit 2 or
+    more (phase X: a route's start-state namespace before it, ``d3first_1_44w_0``, which ``state_namespace`` reads)."""
     match = STATE_NAME.match(label)
     if match is None:
         return None
@@ -682,11 +711,18 @@ def parse_state_name(label: str) -> Optional[tuple]:
 
 
 def _named_room(label: str) -> Optional[tuple]:
-    parts = label.split('_')
+    namespace = state_namespace(label)
+    parts = (label[len(namespace) + 1:] if namespace else label).split('_')
     try:
         return int(parts[0]), int(parts[1][:2], 16)
     except (IndexError, ValueError):
         return None
+
+
+def _known_namespace(label: str) -> bool:
+    """A bare name, or one in the start-state namespace of a route of routes.yaml (phase X)."""
+    namespace = state_namespace(label)
+    return namespace is None or any(route_namespace(name) == namespace for name in native_routes())
 
 
 WHIRLWIND_RELEASE_X = 0x80          # the whirlwind sets Link down here, facing E (asm:Whirlwind_Update_Full)
@@ -748,9 +784,18 @@ class RouteIndex:
     def of_state(self, path: str) -> 'RouteIndex':
         """The index a state is audited by: this one, or (round 27) that of the route its manifest entry names when
         that is another route that extends this one (a scouting route's state, built with ``build --route``: on the
-        default route its step does not exist, and a heart container before it would not be counted)."""
+        default route its step does not exist, and a heart container before it would not be counted), or (phase X)
+        that of the route whose start-state namespace the name is in (``d3first_3_7cs_0``: ``d3first``'s steps,
+        hearts and boss rooms)."""
         entry = self.manifest_entry(path)
         name = entry.get('route') if entry else None
+        namespace = state_namespace(state_label(path))
+        own = route_namespace(self.route) if self.route in native_routes() else None
+        if (not name or name not in native_routes()) and namespace != own:
+            try:
+                name = namespace_route(namespace)
+            except ValueError:         # a namespace no route has: NAME (audit_state)
+                return self
         if not name or name == self.route or name not in native_routes():
             return self
         if name not in self._others:
@@ -813,7 +858,7 @@ def audit_state(game: Game, path: str, loads: int = 9, full: Optional[dict] = No
     boss_entry_ok = (tuple(state.full_location) not in index.boss_rooms or parsed is None
                      or label.rsplit('_', 1)[0] in index.by_name)
     return {'state': label, 'path': str(path), 'level': level, 'room': f"0x{room:02x}",
-            'in_cave': in_cave, 'name_ok': label == START_STATE or parsed is not None,
+            'in_cave': in_cave, 'name_ok': label == START_STATE or (parsed is not None and _known_namespace(label)),
             'named_room_matches': _named_room(label) in (None, (level, room)),
             'entry': side, 'entry_matches': parsed is None or parsed[2] == side,
             'pre_entry': pre_entry, 'monsters_min': min(counts), 'monsters_max': max(counts),
@@ -848,16 +893,29 @@ def audit_problems(row: dict) -> List[str]:
                              ('BOSS-ENTRY', not row.get('boss_entry_ok', True))) if bad]
 
 
-def directory_problems(states_dir: str, route: str = DEFAULT_ROUTE) -> List[str]:
-    """Whole-directory problems: ``MISSING <file>`` for a route step or alternate without a state for some chain
-    0-2, ``ORPHAN <file>`` for a state no specialist's ``start_states`` matches."""
-    index = RouteIndex(route)
+def directory_problems(states_dir: str, route=DEFAULT_ROUTE) -> List[str]:
+    """Whole-directory problems: ``MISSING <file>`` for a step of ``route`` (a name or a list of them; or an
+    alternate) without a state for some chain 0-2 (in the route's start-state namespace), ``ORPHAN <file>`` for a
+    state no specialist's ``start_states`` matches."""
+    routes = [route] if isinstance(route, str) else list(route)
     present = {os.path.basename(p) for p in glob.glob(os.path.join(states_dir, '*.state'))}
-    wanted = sorted({step.filename(chain) for step in index.steps[1:] + index.alternates for chain in CHAINS})
+    wanted = []
+    for name in routes:
+        index = RouteIndex(name)
+        wanted += sorted({step.filename(chain) for step in index.steps[1:] + index.alternates for chain in CHAINS})
     configured = {os.path.basename(p) for name in list_specialists()
                   for p in load_specialist(name).resolve_start_states(str(states_dir))}
     return ([f"MISSING {name}" for name in wanted if name not in present]
             + [f"ORPHAN {name}" for name in sorted(present - configured)])
+
+
+def audited_routes(paths: List[str], route: Optional[str]) -> List[str]:
+    """The routes a whole-directory audit lists MISSING states of: ``route`` when given, else the default route and
+    (phase X) every route with a start-state namespace whose states are among ``paths``."""
+    if route is not None:
+        return [route]
+    namespaces = sorted({ns for ns in (state_namespace(state_label(p)) for p in paths) if ns})
+    return [DEFAULT_ROUTE] + [namespace_route(ns) for ns in namespaces]
 
 
 def format_audit(rows: List[dict]) -> str:
@@ -931,7 +989,11 @@ def build_parser() -> argparse.ArgumentParser:
     which.add_argument('--specialist', action='append', default=None, help="audit this specialist's start states")
     which.add_argument('--states', action='append', default=None, help="savestate glob(s)")
     audit_parser.add_argument('--loads', type=int, default=9)
-    audit_parser.add_argument('--route', default=DEFAULT_ROUTE)
+    audit_parser.add_argument('--route', default=None,
+                              help="audit this route's states only (its start-state namespace's; --states globs "
+                                   "without one are looked for in it) and list its MISSING ones (default: every "
+                                   f"state, each by its namespace's route; MISSING of {DEFAULT_ROUTE} and of every "
+                                   "route with states)")
     audit_parser.add_argument('--output', default=None, help="also write the rows as JSON")
     idle_parser = sub.add_parser('idle', help="write the power-on idle states (the file-select screen after 2000, "
                                               "4000, ..., 30000 idle frames)")
@@ -962,6 +1024,9 @@ def main(argv=None):
 
     if args.command in ('path', 'build'):
         out = args.out or default_out()
+        # Phase X: a bare --source on a route with a start-state namespace is that route's state (os.sep: a path).
+        if os.sep not in args.source:
+            args.source = route_state(args.route, args.source)
         if args.command == 'path':
             rooms = [MapLocation(int(level), int(room, 16), False)
                      for level, room in (text.split(':') for text in args.rooms.split(','))]
@@ -981,16 +1046,21 @@ def main(argv=None):
         return 0
 
     whole = None
+    namespace = route_namespace(args.route) if args.route else None
     if args.states:
-        paths = sorted({p for pattern in args.states for p in glob.glob(_state_glob(pattern, states_dir))})
+        patterns = [namespaced(namespace, p) if args.route and os.sep not in p and not state_namespace(p) else p
+                    for p in args.states]
+        paths = sorted({p for pattern in patterns for p in glob.glob(_state_glob(pattern, states_dir))})
     elif args.specialist:
         paths = sorted({p for name in args.specialist for p in load_specialist(name).resolve_start_states(states_dir)})
     else:
         whole = args.dir or states_dir
         paths = sorted(glob.glob(os.path.join(whole, '*.state')))
-    rows = audit(paths, args.loads, states_dir=states_dir, route=args.route)
+    if args.route and not args.states:     # phase X: one route's states (the game start is every route's)
+        paths = [p for p in paths if state_namespace(state_label(p)) == namespace]
+    rows = audit(paths, args.loads, states_dir=states_dir, route=args.route or DEFAULT_ROUTE)
     print(format_audit(rows))
-    extra = directory_problems(whole, args.route) if whole is not None else []
+    extra = directory_problems(whole, audited_routes(paths, args.route)) if whole is not None else []
     for line in extra:
         print(line)
     bad = [r for r in rows if audit_problems(r)]

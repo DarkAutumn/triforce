@@ -220,6 +220,17 @@ def test_promote_round_trip_and_listing(tmp_path, monkeypatch):
     registry.promote('d1-test', '20260102-b')
     assert registry.promoted_run('d1-test') == '20260102-b'
     assert registry.list_runs('d1-test') == ['20260101-a', '20260102-b']     # 'promoted' is not a run
+    # Phase X: a run promoted for one route only (promoted.<route>) plays that route; every other route, and a
+    # caller naming none, keeps promoted.
+    with pytest.raises(ValueError, match='unknown route'):
+        registry.promote('d1-test', '20260101-a', route='no-such-route')
+    pointer = registry.promote('d1-test', '20260101-a', route='clips-gauntlet')
+    assert pointer == tmp_path / 'd1-test' / 'promoted.clips-gauntlet'
+    assert registry.promoted_run('d1-test', route='clips-gauntlet') == '20260101-a'
+    assert registry.promoted_run('d1-test', route='d2first') == '20260102-b'
+    assert registry.promoted_run('d1-test') == '20260102-b'
+    assert registry.route_promotions('d1-test') == {'clips-gauntlet': '20260101-a'}
+    assert registry.list_runs('d1-test') == ['20260101-a', '20260102-b']
 
 
 def test_models_root_prefers_the_argument_then_the_environment(tmp_path, monkeypatch):

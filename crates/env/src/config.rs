@@ -771,6 +771,16 @@ pub struct SpecialistConfig {
     pub no_damage_steps: Option<i64>,
     #[serde(default)]
     pub route: Option<String>,
+    /// `state_routes:` (phase X): the routes whose start states the family draws for its `start_states` globs and
+    /// harvested states, each in its route's namespace (routes.yaml `states:`; `d2first`'s bare names). Absent: every
+    /// route's. A family trained for both routes draws both (the sword and hearts are inputs); `[d3first]` trains on
+    /// one route's states only.
+    #[serde(default)]
+    pub state_routes: Option<Vec<String>>,
+    /// The namespaces of `state_routes` (None: bare names), set by [`Self::validated`] from the routes (bare names
+    /// alone without a map).
+    #[serde(skip)]
+    pub state_namespaces: Vec<Option<String>>,
     #[serde(default)]
     pub warm_start: Option<String>,
     #[serde(default)]
@@ -920,7 +930,33 @@ impl SpecialistConfig {
                 format!("unknown route {route:?} (routes.yaml has {known:?})"),
             ));
         }
+        self.state_namespaces = vec![None];
+        if let Some(map) = map {
+            let all: Vec<String> = map.routes.keys().cloned().collect();
+            let routes = self.state_routes.as_ref().unwrap_or(&all);
+            if routes.is_empty() {
+                return Err(fail("state_routes", "names no route (leave it out for every route's states)".into()));
+            }
+            self.state_namespaces.clear();
+            for route in routes {
+                if !map.routes.contains_key(route) {
+                    return Err(fail("state_routes", format!("unknown route {route:?} (routes.yaml has {all:?})")));
+                }
+                let ns = map.namespace(route).map(str::to_owned);
+                if !self.state_namespaces.contains(&ns) {
+                    self.state_namespaces.push(ns);
+                }
+            }
+        }
         Ok(self)
+    }
+
+    /// The start-state namespaces the family draws from ([`Self::state_namespaces`]; bare names when unset).
+    pub fn namespaces(&self) -> Vec<Option<&str>> {
+        if self.state_namespaces.is_empty() {
+            return vec![None];
+        }
+        self.state_namespaces.iter().map(Option::as_deref).collect()
     }
 
     /// Directory of harvested start states (default `<states dir>/harvested/<name>`).
@@ -931,25 +967,43 @@ impl SpecialistConfig {
         }
     }
 
-    /// The harvested start states on disk ([`Self::harvested_dir`]`/*.state`, sorted).
+    /// The harvested start states on disk ([`Self::harvested_dir`]`/*.state`, sorted) of the family's namespaces
+    /// (phase X: a route's harvested states carry its namespace, [`crate::start_states::harvest_filename`]).
     pub fn resolve_harvested_states(&self, states_dir: &Path) -> Vec<PathBuf> {
+        let namespaces = self.namespaces();
         glob(&self.harvested_dir(states_dir).join("*.state"))
+            .into_iter()
+            .filter(|p| namespaces.contains(&zelda::game_map::state_namespace(&p.to_string_lossy())))
+            .collect()
     }
 
     /// Paths of the seed states matching `start_states` globs (relative globs under `states_dir`; `.state`
-    /// appended), sorted and de-duplicated.
+    /// appended), sorted and de-duplicated.  A relative glob without a namespace is matched in each of the family's
+    /// namespaces (phase X: `3_7c*_[0-9]` finds `3_7cs_0` and `d3first_3_7cs_0`); one with a namespace, and an
+    /// absolute path, as given.
     pub fn resolve_start_states(&self, states_dir: &Path) -> Vec<PathBuf> {
         let mut found = BTreeSet::new();
-        for pattern in &self.start_states {
-            let mut path = if Path::new(pattern).is_absolute() {
-                PathBuf::from(pattern)
+        let with_suffix = |path: PathBuf| {
+            if path.to_string_lossy().ends_with(".state") {
+                path
             } else {
-                states_dir.join(pattern)
-            };
-            if !path.to_string_lossy().ends_with(".state") {
-                path = PathBuf::from(format!("{}.state", path.display()));
+                PathBuf::from(format!("{}.state", path.display()))
             }
-            found.extend(glob(&path));
+        };
+        for pattern in &self.start_states {
+            if Path::new(pattern).is_absolute() {
+                found.extend(glob(&with_suffix(PathBuf::from(pattern))));
+                continue;
+            }
+            let (dir, file) = pattern.rsplit_once('/').map_or(("", pattern.as_str()), |(d, f)| (d, f));
+            let names = if zelda::game_map::state_namespace(file).is_some() {
+                vec![file.to_owned()]
+            } else {
+                self.namespaces().into_iter().map(|ns| zelda::game_map::namespaced_state(ns, file)).collect()
+            };
+            for name in names {
+                found.extend(glob(&with_suffix(states_dir.join(dir).join(name))));
+            }
         }
         found.into_iter().collect()
     }
@@ -1022,10 +1076,15 @@ pub struct GameData {
     pub map: Arc<GameMap>,
     /// routes.yaml `families`: specialist -> rooms, in file order.
     pub families: IndexMap<String, Vec<MapLocation>>,
-    /// Room key ('1:0x44', '0:0x77:cave') -> hearts chain runs entered it with.
+    /// Room key ('1:0x44', '0:0x77:cave') -> hearts chain runs entered it with; phase X: a route namespace's profiles
+    /// (`triforce/chain_hp.<ns>.json`) under `<ns>:<room key>` ([`chain_key`]).
     pub chain_hp: HashMap<String, Vec<f64>>,
-    /// `triforce/heart_value.json` (None without one): what a heart is worth at each route step.
+    /// `triforce/heart_value.json` (None without one): what a heart is worth at each route step of a route with bare
+    /// state names (`d2first`).
     pub heart_values: Option<Arc<HeartValues>>,
+    /// Phase X: the table of each route state namespace (`triforce/heart_value.<ns>.json`, fitted for a route of
+    /// that namespace).
+    pub namespace_heart_values: HashMap<String, Arc<HeartValues>>,
     /// Every specialists/*.yaml by name (sorted).
     pub specialists: IndexMap<String, Arc<SpecialistConfig>>,
     pub states_dir: PathBuf,
@@ -1035,6 +1094,22 @@ pub struct GameData {
 /// The repo root of this checkout (`crates/env/../..`).
 pub fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+/// A chain_hp key in a route state namespace: `d3first:1:0x44` (`ns` Some), else the room key.
+pub fn chain_key(ns: Option<&str>, location: MapLocation) -> String {
+    match ns {
+        Some(ns) => format!("{ns}:{}", room_key(location)),
+        None => room_key(location),
+    }
+}
+
+/// The file of a per-namespace data table: `triforce/<base>.json` for bare names, `triforce/<base>.<ns>.json`.
+pub fn namespace_file(base: &str, ns: Option<&str>) -> String {
+    match ns {
+        Some(ns) => format!("triforce/{base}.{ns}.json"),
+        None => format!("triforce/{base}.json"),
+    }
 }
 
 /// '1:0x44', '0:0x77:cave': the `triforce/chain_hp.json` key format (`triforce.chain_hp.build_profile` writes it).
@@ -1058,21 +1133,44 @@ impl GameData {
         let map = GameMap::from_yaml(&read("triforce/game.yaml")?, &routes_text)
             .map_err(|e| ConfigError(format!("triforce/game.yaml / routes.yaml: {e}")))?;
         let families = parse_families(&routes_text)?;
-        let chain_path = root.join("triforce/chain_hp.json");
-        let chain_hp = if chain_path.exists() {
-            serde_json::from_str(&read("triforce/chain_hp.json")?)
-                .map_err(|e| ConfigError(format!("triforce/chain_hp.json: {e}")))?
-        } else {
-            HashMap::new()
-        };
-        let values_path = root.join("triforce/heart_value.json");
-        let heart_values = if values_path.exists() {
-            let mut values = HeartValues::parse(&read("triforce/heart_value.json")?)?;
+        let mut namespaces: Vec<&str> = map.namespaces.values().map(String::as_str).collect();
+        namespaces.sort_unstable();
+        namespaces.dedup();
+        let mut chain_hp: HashMap<String, Vec<f64>> = HashMap::new();
+        for ns in std::iter::once(None).chain(namespaces.iter().copied().map(Some)) {
+            let rel = namespace_file("chain_hp", ns);
+            if !root.join(&rel).exists() {
+                continue;
+            }
+            let profile: HashMap<String, Vec<f64>> =
+                serde_json::from_str(&read(&rel)?).map_err(|e| ConfigError(format!("{rel}: {e}")))?;
+            chain_hp.extend(profile.into_iter().map(|(k, v)| match ns {
+                Some(ns) => (format!("{ns}:{k}"), v),
+                None => (k, v),
+            }));
+        }
+        let mut heart_values = None;
+        let mut namespace_heart_values = HashMap::new();
+        for ns in std::iter::once(None).chain(namespaces.iter().copied().map(Some)) {
+            let rel = namespace_file("heart_value", ns);
+            if !root.join(&rel).exists() {
+                continue;
+            }
+            let mut values = HeartValues::parse(&read(&rel)?)?;
+            if map.routes.contains_key(&values.route) && map.namespace(&values.route) != ns {
+                return err(format!(
+                    "{rel}: fitted for route {:?}, whose start states are not in this file's namespace",
+                    values.route
+                ));
+            }
             values.routes = values.prices(&map);
-            Some(Arc::new(values))
-        } else {
-            None
-        };
+            match ns {
+                None => heart_values = Some(Arc::new(values)),
+                Some(ns) => {
+                    namespace_heart_values.insert(ns.to_owned(), Arc::new(values));
+                }
+            }
+        }
         let mut names: Vec<String> = std::fs::read_dir(root.join("specialists"))
             .map_err(|e| ConfigError(format!("specialists/: {e}")))?
             .filter_map(Result::ok)
@@ -1097,6 +1195,7 @@ impl GameData {
             families,
             chain_hp,
             heart_values,
+            namespace_heart_values,
             specialists,
             states_dir: root.join(STATES_DIR),
             trajectories_dir: root.join("trajectories"),
@@ -1186,70 +1285,123 @@ impl GameData {
         ))
     }
 
-    /// Hearts chain runs entered `location` with (empty when unknown).
-    pub fn chain_profile(&self, location: MapLocation) -> Option<&[f64]> {
-        self.chain_hp.get(&room_key(location)).map(Vec::as_slice)
+    /// Hearts chain runs entered `location` with on the routes of state namespace `ns` (None: bare names; empty
+    /// when unknown).
+    pub fn chain_profile(&self, ns: Option<&str>, location: MapLocation) -> Option<&[f64]> {
+        self.chain_hp.get(&chain_key(ns, location)).map(Vec::as_slice)
+    }
+
+    /// The route a start state in namespace `ns` plays for `config` (phase X): the family's `route:` when its states
+    /// are in that namespace, else (a namespace) its first route; for bare names the family's `route:` (None: any
+    /// route with bare names, `zelda::objectives::start_route`).
+    pub fn state_route<'a>(&'a self, config: &'a SpecialistConfig, ns: Option<&str>) -> Option<&'a str> {
+        match config.route.as_deref() {
+            Some(route) if self.map.namespace(route) == ns => Some(route),
+            _ if ns.is_none() => None,
+            _ => self.map.namespace_routes(ns).first().copied(),
+        }
+    }
+
+    /// The state namespaces the family draws states from that need their tables: bare names when it draws them (as
+    /// before phase X, whether or not states exist), a route's namespace once it holds states of the family.
+    fn drawn_namespaces<'a>(&self, config: &'a SpecialistConfig) -> Vec<Option<&'a str>> {
+        let wanted = config.namespaces();
+        let mut namespaces: Vec<Option<&str>> = wanted.iter().copied().filter(Option::is_none).collect();
+        let spaced: Vec<&str> = wanted.iter().copied().flatten().collect();
+        if !spaced.is_empty() {
+            let found: Vec<PathBuf> = config
+                .resolve_start_states(&self.states_dir)
+                .into_iter()
+                .chain(config.resolve_harvested_states(&self.states_dir))
+                .collect();
+            for ns in spaced {
+                if found.iter().any(|p| zelda::game_map::state_namespace(&p.to_string_lossy()) == Some(ns)) {
+                    namespaces.push(Some(ns));
+                }
+            }
+        }
+        namespaces
     }
 
     /// A config that draws chain health (`ram_randomization.chain_hp > 0`) needs a chain profile with at least
-    /// [`MIN_CHAIN_SAMPLES`] arrivals for one of its rooms; without one every reset would silently fall back to the
-    /// `hp` draw (`start_states::ram_randomization_values`).
+    /// [`MIN_CHAIN_SAMPLES`] arrivals for one of its rooms, in every state namespace it draws states from
+    /// (`triforce/chain_hp.json`, phase X `triforce/chain_hp.<ns>.json`); without one every reset would silently fall
+    /// back to the `hp` draw (`start_states::ram_randomization_values`).
     pub fn check_chain_hp(&self, config: &SpecialistConfig) -> Result<(), ConfigError> {
         if !config.ram_randomization.chain_hp.is_some_and(|p| p > 0.0) {
             return Ok(());
         }
-        let profiled = config
-            .rooms
-            .iter()
-            .any(|room| self.chain_profile(*room).is_some_and(|s| s.len() >= MIN_CHAIN_SAMPLES));
-        if profiled {
-            return Ok(());
-        }
-        err(format!(
-            "{}: ram_randomization.chain_hp needs triforce/chain_hp.json profiles with at least {MIN_CHAIN_SAMPLES} \
-             arrivals for one of its rooms {} (build them with `python -m triforce.chain_hp <chain jsonl>`)",
-            config.name,
-            fmt_rooms(&config.rooms.iter().copied().collect())
-        ))
-    }
-
-    /// A config whose `reward.heart_value` reads the table needs `triforce/heart_value.json` fitted for the route it
-    /// names as that route stands now ([`HeartValues::check`]), and that route the family's or one extending it
-    /// ([`HeartValues::prices`]).
-    pub fn check_heart_values(&self, config: &SpecialistConfig) -> Result<(), ConfigError> {
-        if !config.reward.heart_value.uses_table() {
-            return Ok(());
-        }
-        let route = config.route.as_deref().unwrap_or(zelda::game_map::DEFAULT_ROUTE);
-        let Some(values) = &self.heart_values else {
-            return err(format!(
-                "{}: reward.heart_value needs triforce/heart_value.json (fit it with `python -m triforce.heart_value \
-                 <chain jsonl>...`)",
-                config.name
-            ));
-        };
-        let Some(fitted) = self.map.routes.get(&values.route) else {
-            return err(format!(
-                "{}: reward.heart_value: triforce/heart_value.json is fitted for route {:?}, which routes.yaml lacks: \
-                 refit it with `python -m triforce.heart_value <chain jsonl>... --route <route>`",
-                config.name, values.route
-            ));
-        };
-        values.check(fitted, &self.map.visits[&values.route])?;
-        if !values.routes.iter().any(|r| r == route) {
-            return err(format!(
-                "{}: reward.heart_value: triforce/heart_value.json is fitted for route {:?}, which neither is nor \
-                 extends the family's {route:?}",
-                config.name, values.route
-            ));
+        for ns in self.drawn_namespaces(config) {
+            let profiled = config
+                .rooms
+                .iter()
+                .any(|room| self.chain_profile(ns, *room).is_some_and(|s| s.len() >= MIN_CHAIN_SAMPLES));
+            if !profiled {
+                return err(format!(
+                    "{}: ram_randomization.chain_hp needs {} profiles with at least {MIN_CHAIN_SAMPLES} arrivals for \
+                     one of its rooms {} (build them with `python -m triforce.chain_hp <chain jsonl>`{}){}",
+                    config.name,
+                    namespace_file("chain_hp", ns),
+                    fmt_rooms(&config.rooms.iter().copied().collect()),
+                    ns.map_or(String::new(), |ns| format!(" of a route of namespace {ns}, `--out {}`",
+                        namespace_file("chain_hp", Some(ns)))),
+                    ns.map_or(String::new(), |_| " or train on the other routes' states only (`state_routes:`)".into())
+                ));
+            }
         }
         Ok(())
     }
 
-    /// The table that prices hearts for `config` on `route` (None when its `reward.heart_value` reads no table or
-    /// the table prices another route: [`HeartValues::prices`]).
+    /// A config whose `reward.heart_value` reads the table needs, for every state namespace it draws states from
+    /// (phase X), that namespace's table (`triforce/heart_value.json`, `triforce/heart_value.<ns>.json`) fitted for
+    /// the route it names as that route stands now ([`HeartValues::check`]), and that route the one the family's
+    /// states there play ([`Self::state_route`]; bare names: the family's `route:` or the default) or one extending
+    /// it ([`HeartValues::prices`]).
+    pub fn check_heart_values(&self, config: &SpecialistConfig) -> Result<(), ConfigError> {
+        if !config.reward.heart_value.uses_table() {
+            return Ok(());
+        }
+        for ns in self.drawn_namespaces(config) {
+            let route = self.state_route(config, ns).unwrap_or(zelda::game_map::DEFAULT_ROUTE);
+            let file = namespace_file("heart_value", ns);
+            let values = match ns {
+                None => self.heart_values.as_ref(),
+                Some(ns) => self.namespace_heart_values.get(ns),
+            };
+            let Some(values) = values else {
+                return err(format!(
+                    "{}: reward.heart_value needs {file} (fit it with `python -m triforce.heart_value <chain jsonl>... \
+                     --route {route}`{})",
+                    config.name,
+                    ns.map_or(String::new(), |_| ", or train on the other routes' states only: `state_routes:`".into())
+                ));
+            };
+            let Some(fitted) = self.map.routes.get(&values.route) else {
+                return err(format!(
+                    "{}: reward.heart_value: {file} is fitted for route {:?}, which routes.yaml lacks: refit it with \
+                     `python -m triforce.heart_value <chain jsonl>... --route <route>`",
+                    config.name, values.route
+                ));
+            };
+            values.check(fitted, &self.map.visits[&values.route])?;
+            if !values.routes.iter().any(|r| r == route) {
+                return err(format!(
+                    "{}: reward.heart_value: {file} is fitted for route {:?}, which neither is nor extends the \
+                     family's {route:?}",
+                    config.name, values.route
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// The table that prices hearts for `config` on `route` (the table of the route's state namespace; None when
+    /// its `reward.heart_value` reads no table or the table prices another route: [`HeartValues::prices`]).
     pub fn heart_values_for(&self, config: &SpecialistConfig, route: &str) -> Option<&HeartValues> {
-        let values = self.heart_values.as_deref()?;
+        let values = match self.map.namespace(route) {
+            None => self.heart_values.as_deref()?,
+            Some(ns) => self.namespace_heart_values.get(ns)?.as_ref(),
+        };
         (config.reward.heart_value.uses_table() && values.routes.iter().any(|r| r == route)).then_some(values)
     }
 

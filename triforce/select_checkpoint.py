@@ -54,8 +54,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
-from .eval_batch import (ROOT, SEGMENTS, TARGETS, BatchError, Entry, Options, arrival, arrival_hearts, chain_entry,
-                         parse_target, read_runs, run_batch, segment_starts)
+from .eval_batch import (ROOT, BatchError, Entry, Options, arrival, arrival_hearts, bare_state, chain_entry,
+                         parse_target, read_runs, route_segments, run_batch, segment_starts)
 from .jobs import add_job_arguments, begin_job
 
 LAST = 'last'
@@ -98,8 +98,9 @@ def load_candidate(label: str, path: Path, override: bool) -> Candidate:
 
 
 def candidates(family: str, run_dir: Path, models_dir=None, only: Optional[list] = None,
-               promoted: bool = True) -> list[Candidate]:
-    """The run's numbered checkpoints (oldest first), ``last`` and ``promoted`` (module doc)."""
+               promoted: bool = True, route: Optional[str] = None) -> list[Candidate]:
+    """The run's numbered checkpoints (oldest first), ``last`` and ``promoted`` (module doc; on ``route`` its
+    ``promoted.<route>`` over ``promoted``, phase X)."""
     # pylint: disable=import-outside-toplevel
     from . import registry
     if not (run_dir / registry.CHECKPOINT_NAME).is_file():
@@ -117,7 +118,7 @@ def candidates(family: str, run_dir: Path, models_dir=None, only: Optional[list]
     result = [load_candidate(label, path, override=True) for label, path in found]
     if promoted and (only is None or PROMOTED in only):
         try:
-            reference = registry.promoted_checkpoint(family, models_dir)
+            reference = registry.promoted_checkpoint(family, models_dir, route)
         except FileNotFoundError:
             reference = None
         if reference is not None and reference.parent.resolve() != run_dir.resolve():
@@ -440,7 +441,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('family', help="the specialist whose model is replaced in the chain")
     parser.add_argument('run', help="the run id (or run dir) whose checkpoints are measured")
     where = parser.add_mutually_exclusive_group(required=True)
-    where.add_argument('--segment', help="a chain segment: " + ', '.join(s.split(':')[0] for s in SEGMENTS.split()))
+    where.add_argument('--segment', help="a chain segment of --route's table (eval_batch.ROUTE_SEGMENTS; the main "
+                                         "route's: " + ', '.join(s.split(':')[0]
+                                                                 for s in route_segments().segments.split()) + ")")
     where.add_argument('--from', dest='start_from', help="a start state (as eval-chain --from)")
     parser.add_argument('--stop-at', default=None, help="as eval-chain --stop-at")
     parser.add_argument('--target', default=None, metavar='L:0xRR[,...]',
@@ -479,8 +482,9 @@ def build_plan(args) -> tuple[Plan, list[Candidate]]:
     # pylint: disable=import-outside-toplevel
     from . import registry
     run_dir = Path(args.run) if os.sep in args.run else registry.run_dir(args.family, args.run, args.models_dir)
+    table = route_segments(args.route)
     if args.segment is not None:
-        segments = dict(item.split(':', 1) for item in SEGMENTS.split())
+        segments = dict(item.split(':', 1) for item in table.segments.split())
         if args.segment not in segments or segments[args.segment] == 'start':
             raise BatchError(f"--segment {args.segment}: one of "
                              + ', '.join(n for n, s in segments.items() if s != 'start') + " (or --from start)")
@@ -489,7 +493,7 @@ def build_plan(args) -> tuple[Plan, list[Candidate]]:
         start, where = args.start_from, args.start_from
     target = args.target
     if target is None and args.stop_at is None:
-        target = TARGETS.get(args.segment or segment_starts().get(start, ''))
+        target = table.targets.get(args.segment or segment_starts(args.route).get(bare_state(start or ''), ''))
     if target is not None:
         parse_target(target)
     if args.runs < 1 or args.confirm < 0 or args.confirm_top < 0 or args.parallel < 1:
@@ -514,7 +518,7 @@ def build_plan(args) -> tuple[Plan, list[Candidate]]:
                 args.runs, args.first_seed, args.confirm, confirm_first, args.confirm_top, Path(chains_dir).resolve(),
                 options)
     only = None if args.only is None else [label for label in args.only.split(',') if label]
-    pool = candidates(args.family, run_dir, args.models_dir, only, promoted=not args.no_promoted)
+    pool = candidates(args.family, run_dir, args.models_dir, only, promoted=not args.no_promoted, route=args.route)
     if not [c for c in pool if c.label != PROMOTED]:
         raise BatchError(f"{run_dir}: no candidate of the run left")
     return plan, pool

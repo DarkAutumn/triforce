@@ -151,6 +151,7 @@ fn untag(data: &Arc<GameData>, location: MapLocation) -> Arc<GameData> {
         families: data.families.clone(),
         chain_hp: data.chain_hp.clone(),
         heart_values: data.heart_values.clone(),
+        namespace_heart_values: data.namespace_heart_values.clone(),
         specialists: data.specialists.clone(),
         states_dir: data.states_dir.clone(),
         trajectories_dir: data.trajectories_dir.clone(),

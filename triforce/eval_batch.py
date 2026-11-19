@@ -104,9 +104,41 @@ CHAIN_RESERVED = ('--append', '--events', '--no-log', '--logs-dir')
 EVAL_RESERVED = ('--events', '--no-log', '--logs-dir')
 
 
-def segment_starts() -> dict:
-    """Segment start state -> segment name (``SEGMENTS``, the game start left out)."""
-    return {start: name for name, start in (item.split(':', 1) for item in SEGMENTS.split()) if start != 'start'}
+@dataclass(frozen=True)
+class RouteSegments:
+    """A route's chain segments (``SEGMENTS``' form; start states by bare name, phase X: a route with a start-state
+    namespace reads them in it), each segment's arrival (``TARGETS``) and the full run's milestones (``MILESTONES``)."""
+    segments: str
+    targets: dict
+    milestones: tuple
+
+
+# Phase X: the segment table of each route (`--chains`, `--chain`'s arrivals, `select-checkpoint --segment`, the
+# report).  A route without one is measured by `--chain` entries or `--segments` (no arrivals then).  d3first's comes
+# with its steps (docs/architecture.md "Routes").
+ROUTE_SEGMENTS = {'d2first': RouteSegments(SEGMENTS, TARGETS, MILESTONES)}
+
+
+def route_segments(route: Optional[str] = None) -> RouteSegments:
+    """``route``'s segment table (None: ``registry.MAIN_ROUTE``'s); a route without one has none (no segments,
+    arrivals or milestones)."""
+    if route is None:
+        from .registry import MAIN_ROUTE  # pylint: disable=import-outside-toplevel
+        route = MAIN_ROUTE
+    return ROUTE_SEGMENTS.get(route, RouteSegments('', {}, ()))
+
+
+def bare_state(name: str) -> str:
+    """A start state's name without its route's namespace (``d3first_3_7cs_0`` -> ``3_7cs_0``; phase X)."""
+    from ._native import state_namespace  # pylint: disable=import-outside-toplevel
+    namespace = state_namespace(name)
+    return name[len(namespace) + 1:] if namespace else name
+
+
+def segment_starts(route: Optional[str] = None) -> dict:
+    """Segment start state (bare) -> segment name (``route``'s ``RouteSegments.segments``, the game start left out)."""
+    segments = route_segments(route).segments
+    return {start: name for name, start in (item.split(':', 1) for item in segments.split()) if start != 'start'}
 
 
 # ------------------------------------------------------------------------------------------------------ arrivals
@@ -321,8 +353,9 @@ def chain_entry(name: Optional[str], args: list[str], options: Options, *, outpu
     if name is None:
         name = 'chain' + (f"-from-{parsed.start_from}" if parsed.start_from else '') + (
             f"-to-{parsed.stop_at}" if parsed.stop_at else '') + ('-power-on' if parsed.power_on else '')
-    if target is None and parsed.stop_at is None and parsed.start_from in segment_starts():
-        target = TARGETS.get(segment_starts()[parsed.start_from])
+    starts = segment_starts(parsed.route)
+    if target is None and parsed.stop_at is None and parsed.start_from and bare_state(parsed.start_from) in starts:
+        target = route_segments(parsed.route).targets.get(starts[bare_state(parsed.start_from)])
     if target is not None:
         parse_target(target)
     output = Path(parsed.output) if parsed.output else (output or Path('runs') / _safe(options.batch)
@@ -438,9 +471,22 @@ def eval_entry(name: Optional[str], args: list[str], options: Options) -> Entry:
                  output=output, fields=fields, complete=complete, resume=resume)
 
 
-def chains_entries(tag: str, options: Options, *, act: str, runs: int, segments: str, chains_dir: Path,
-                   chain_args: list[str], report: bool, only_report: bool) -> list[Entry]:
-    """The chain segments of a tag (``r56_chains.sh``), then its report."""
+def chains_entries(tag: str, options: Options, *, act: str, runs: int, segments: Optional[str], chains_dir: Path,
+                   chain_args: list[str], report: bool, only_report: bool, route: Optional[str] = None
+                   ) -> list[Entry]:
+    """The chain segments of a tag (``r56_chains.sh``) on ``route`` (None: the main route, ``registry.MAIN_ROUTE``;
+    phase X: its segment table, ``ROUTE_SEGMENTS``, unless ``segments`` are given), then its report."""
+    named = next((arg.split('=', 1)[1] if '=' in arg else chain_args[i + 1] for i, arg in enumerate(chain_args)
+                  if arg.split('=', 1)[0] == '--route' and ('=' in arg or i + 1 < len(chain_args))), None)
+    table = route_segments(route or named)
+    if segments is None:
+        segments = table.segments
+        if not segments:
+            raise BatchError(f"route {route} has no segment table (eval_batch.ROUTE_SEGMENTS): give --segments")
+    if route is not None:
+        if _has_option(chain_args, '--route'):
+            raise BatchError("--route and --chain-args '--route ...' both name the route: give one")
+        chain_args = [*chain_args, '--route', route]
     parsed = []
     for item in segments.split():
         name, sep, start = item.partition(':')
@@ -452,25 +498,27 @@ def chains_entries(tag: str, options: Options, *, act: str, runs: int, segments:
         for name, start in parsed:
             args = ['--runs', str(runs), '--act', act, *(['--from', start] if start != 'start' else []), *chain_args]
             entries.append(chain_entry(name, args, options, output=chains_dir / f"{tag}-{name}.jsonl",
-                                       log=chains_dir / f"{tag}-{name}.log", target=TARGETS.get(name)))
+                                       log=chains_dir / f"{tag}-{name}.log", target=table.targets.get(name)))
     if report or only_report:
-        entries.append(report_entry(tag, [name for name, _ in parsed], chains_dir, options))
+        entries.append(report_entry(tag, [name for name, _ in parsed], chains_dir, options, table))
     return entries
 
 
-def report_commands(tag: str, segments: list[str], chains_dir: Path, models_dir: Optional[str]) -> list[list[str]]:
-    """``scripts/yardstick.py report`` over the segment outputs that exist (the full run also at every milestone),
-    then ``triforce room-stats TAG``."""
+def report_commands(tag: str, segments: list[str], chains_dir: Path, models_dir: Optional[str],
+                    table: Optional[RouteSegments] = None) -> list[list[str]]:
+    """``scripts/yardstick.py report`` over the segment outputs that exist (the full run also at every milestone of
+    the route's ``table``, default the main route's), then ``triforce room-stats TAG``."""
+    table = table or route_segments()
     chains = []
     for name in segments:
         out = chains_dir / f"{tag}-{name}.jsonl"
         if not out.is_file() or out.stat().st_size == 0:
             continue
-        target = TARGETS.get(name)
+        target = table.targets.get(name)
         chains += ['--chain', f"{name}={out}" + (f"@{target}" if target else '')]
         if name == 'full':
             sequence = ''
-            for milestone, room in MILESTONES:
+            for milestone, room in table.milestones:
                 sequence = f"{sequence},{room}" if sequence else room
                 chains += ['--chain', f"full→{milestone}={out}@{sequence}"]
     models = ['--models-dir', models_dir] if models_dir else []
@@ -479,10 +527,11 @@ def report_commands(tag: str, segments: list[str], chains_dir: Path, models_dir:
             [sys.executable, '-m', 'triforce.cli', *models, 'room-stats', tag, '--chains-dir', str(chains_dir)]]
 
 
-def report_entry(tag: str, segments: list[str], chains_dir: Path, options: Options) -> Entry:
+def report_entry(tag: str, segments: list[str], chains_dir: Path, options: Options,
+                 table: Optional[RouteSegments] = None) -> Entry:
     """The yardstick report and room statistics of a tag's chains (always run; commands built at launch)."""
     def build():
-        return report_commands(tag, segments, chains_dir, options.models_dir)
+        return report_commands(tag, segments, chains_dir, options.models_dir, table)
     return Entry('report', 'report', build(), parallel=1, cwd=ROOT, events=False,
                  output=chains_dir / f"{tag}-yardstick.json", fields={'tag': tag}, complete=lambda _events: {},
                  builder=build)
@@ -796,7 +845,11 @@ def build_parser() -> argparse.ArgumentParser:
     chains.add_argument('--act', type=registry.act_argument(), default=registry.MODEL_ACT,
                         help="act mode of the segments (model, the default: each model's act file; or an act mode)")
     chains.add_argument('--runs', type=int, default=120, help="runs per segment (seeds 0..N-1)")
-    chains.add_argument('--segments', default=SEGMENTS, help="NAME:START ... (START a state or 'start')")
+    chains.add_argument('--route', default=None,
+                        help=f"the route of the segments (default {registry.MAIN_ROUTE}, registry.MAIN_ROUTE): its "
+                             "segment table and promoted runs")
+    chains.add_argument('--segments', default=None,
+                        help="NAME:START ... (START a state or 'start'; default the route's, ROUTE_SEGMENTS)")
     chains.add_argument('--chains-dir', type=Path, default=None, help="default <repo>/target/r56-chains")
     chains.add_argument('--chain-args', default='', help="more eval-chain arguments for every segment")
     chains.add_argument('--no-report', action='store_true', help="the segments only")
@@ -842,7 +895,7 @@ def build_entries(args) -> list[Entry]:
             entries += chains_entries(value, options, act=args.act, runs=args.runs, segments=args.segments,
                                       chains_dir=Path(args.chains_dir or CHAINS_DIR).resolve(),
                                       chain_args=shlex.split(args.chain_args), report=not args.no_report,
-                                      only_report=args.report_only)
+                                      only_report=args.report_only, route=args.route)
         else:
             try:
                 acts = [registry.parse_act(act, allow_model=True) for act in args.acts.split(',') if act]

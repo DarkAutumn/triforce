@@ -214,12 +214,39 @@ fn specialist_for(py: Python<'_>, location: &Bound<'_, PyAny>) -> PyResult<Optio
 }
 
 /// What a start state's name or path says (`env::start_states::StateName`, docs/architecture.md "Start states"):
-/// `(level, room, in_cave, entry, visit)` of `<level>_<room><side>[_v<visit>]_<chain>` (harvested
+/// `(level, room, in_cave, entry, visit)` of `[<ns>_]<level>_<room><side>[_v<visit>]_<chain>` (harvested
 /// `..._h<seed>_<n>` alike; `entry` the routes.yaml entry N/S/E/W or 'cave', `visit` 1 for the bare name), else None.
+/// A route's state namespace before it (phase X) is read past: `state_namespace` says which.
 #[pyfunction]
 fn state_name(name: &str) -> Option<(u8, u8, bool, &'static str, u32)> {
     env::start_states::StateName::parse(name)
         .map(|n| (n.location.level, n.location.value, n.location.in_cave, n.entry, n.visit))
+}
+
+/// The route state namespace a start state's name or path spells (`d3first_3_7cs_0` -> 'd3first'), None for a bare
+/// name (`zelda::game_map::state_namespace`).
+#[pyfunction]
+fn state_namespace(name: &str) -> Option<&str> {
+    zelda::game_map::state_namespace(name)
+}
+
+/// The start-state namespace of `route` (routes.yaml `states:`, phase X), None for bare names (`d2first`).
+#[pyfunction]
+fn route_namespace(py: Python<'_>, route: &str) -> PyResult<Option<String>> {
+    let data = context::data(py, None)?;
+    if !data.map.routes.contains_key(route) {
+        let known: Vec<&String> = data.map.routes.keys().collect();
+        return Err(errors::ConfigError::new_err(format!("Unknown route '{route}' (routes.yaml has {known:?})")));
+    }
+    Ok(data.map.namespace(route).map(str::to_owned))
+}
+
+/// A start state's name on `route` (`GameMap::route_state`): a bare name in the route's namespace, a name already in
+/// it, `start` and paths as given; ValueError for a name in another route's namespace.
+#[pyfunction]
+fn route_state(py: Python<'_>, route: &str, name: &str) -> PyResult<String> {
+    let data = context::data(py, None)?;
+    data.map.route_state(route, name).map_err(pyo3::exceptions::PyValueError::new_err)
 }
 
 /// The repo root, ROM path and default states directory this module uses.
@@ -242,7 +269,8 @@ mod _native {
 
     #[pymodule_export]
     use super::{
-        families, game_rooms, paths, route_alternates, route_steps, route_stretches, routes, specialist_for, state_name,
+        families, game_rooms, paths, route_alternates, route_namespace, route_state, route_steps, route_stretches,
+        routes, specialist_for, state_name, state_namespace,
     };
     #[pymodule_export]
     use crate::config::PySpecialistConfig;

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Play Zelda without a window and keep the runs as replay files (route d2first, the promoted models).
+"""Play Zelda without a window and keep the runs as replay files (the main route, registry.MAIN_ROUTE, or --route;
+the promoted models, a family's promoted.<route> over its promoted).
 
     .venv/bin/python zelda-headless.py runs/replays 10                  # the first 10 runs, whatever their ending
     .venv/bin/python zelda-headless.py runs/wins 3 --wins-only          # play until 3 runs finished the route
@@ -62,7 +63,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--first-seed', type=int, default=0, help="the first run's seed (default 0)")
     parser.add_argument('--max-runs', type=int, default=None, metavar='M',
                         help=f"with a filter: give up after M runs (default {MAX_RUNS_PER_REPLAY} x COUNT)")
-    parser.add_argument('--route', default=_native.DEFAULT_ROUTE)
+    parser.add_argument('--route', default=registry.MAIN_ROUTE,
+                        help=f"routes.yaml route (default {registry.MAIN_ROUTE}, registry.MAIN_ROUTE); its promoted "
+                             "runs play (a family's promoted.<route> over its promoted)")
     parser.add_argument('--from', dest='start_from', metavar='STATE',
                         help="start from this savestate instead of the game start, e.g. a route entry state like "
                              "2_7ds_0")
@@ -191,7 +194,7 @@ def main(argv=None) -> int:
     registry.set_allow_incompatible(args.allow_incompatible_models)
     try:
         runner = Runner(models_dir=args.models_dir, act=registry.act_override(args.act),
-                        parallel=args.parallel)
+                        parallel=args.parallel, route=args.route)
         folder = replay.ReplayDir(args.out, only=None if args.only is None else [args.only])
         if args.golden:
             runs, errors = play_golden(args, runner, folder), 0

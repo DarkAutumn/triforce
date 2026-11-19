@@ -1901,6 +1901,56 @@ yellow frame. The picture is piped to ffmpeg as it is made; the sound goes to a 
 is joined at the end. It prints a JSON summary (`out`, `frames`, `seconds`, `width`, `height`, `replays`,
 `sound`, `heard`, `took`); exit 1 when a replay can't be played or ffmpeg fails, 2 on a bad command line.
 
+## Routes: two routes, state namespaces, per-route promotion (phase X, 2.0.0.0)
+
+`d2first` and `d3first` go through many of the same rooms with other hearts, swords and items (decisions
+2026-11-19 "Two routes"). What keeps them apart:
+
+- **The main route** is one constant, `triforce/registry.py` `MAIN_ROUTE` (`d2first` until a golden path on
+  `d3first` reaches the ending; then `'d3first'`): the default `--route` of `triforce eval-chain`, `eval-batch
+  --chains` (and `scripts/experiments/r56_chains.sh`, which passes `ROUTE` only when set), `play-zelda.py`,
+  `zelda-headless.py` (and its golden path) and the first route `zelda-map.py` lists. The engine's `DEFAULT_ROUTE`
+  (`zelda::game_map`, `_native.DEFAULT_ROUTE`) is another thing and stays `d2first`: the route of bare start-state
+  names and of a family that names no `route:`.
+- **A route's start-state namespace** (routes.yaml `{states: NS, steps: [...]}`, or with `extends:`; a route
+  extending another keeps its namespace; `GameMap::namespaces`, `_native.route_namespace`): its start states are
+  `NS_<name>` (`d3first_3_7cs_0.state`, harvested `d3first_3_7cs_h4_7.state`) in the same `triforce/states/` (and
+  `harvested/<family>/`) and the same `entry_states.json`. `d2first` has none: its files, names and manifest entries
+  are as they were. `NS` is a lower-case letter, then letters, digits or `-`; a name's namespace ends at its first
+  `_` followed by a level digit and `_` (`zelda::game_map::state_namespace`, `bare_state`, `namespaced_state`).
+  `StateName::parse`, `_native.state_name` and `entry_states.parse_state_name` read past it; the game start
+  `start` is every route's. Labels keep the namespace, so trajectories (`trajectories/<family>/d3first_3_7cs_0`),
+  `by_state` keys and curriculum tracks of the two routes never collide.
+- **Which route a start plays:** its namespace's (`SpecialistEnv::reset`: `GameData::state_route`, the family's
+  `route:` when it is in that namespace, else the namespace's first route; a curriculum start its track's seed
+  state's); a bare name the family's `route:` (None: any route with bare names; a route with a namespace is never
+  chosen for a bare name, `objectives::start_candidates`); the game start the family's `route:`.
+- **A bare name on a namespaced route is that route's state:** `eval-chain --route d3first --from 3_7cs_0` plays
+  `d3first_3_7cs_0` (`GameMap::route_state`, `_native.route_state`; another route's name is refused), as do
+  `entry_states build|path --route d3first --source 3_7cs_0`, `play-zelda.py`/`zelda-headless.py --from`.
+- **Families draw both routes' states:** a relative `start_states` glob without a namespace is matched in each of
+  the family's namespaces (`SpecialistConfig::resolve_start_states`; harvested states filtered alike); yaml
+  `state_routes: [d3first]` trains on that route's states only (default: every route's). The sword and hearts are
+  inputs: one model can serve both. A family drawing a namespace's states needs that namespace's tables where it
+  uses them: `reward.heart_value` `triforce/heart_value.<NS>.json` (`python -m triforce.heart_value CHAINS...
+  --route d3first` writes it), `ram_randomization.chain_hp` `triforce/chain_hp.<NS>.json` (`python -m
+  triforce.chain_hp CHAINS... --route d3first`); without one it is refused with both fixes named (a table, or
+  `state_routes:`). The check counts a namespace only once states of the family exist there.
+- **Entry states:** `entry_states build|path --route R` names files in R's namespace; `audit` checks every state by
+  its namespace's route (steps, hearts, boss rooms) and lists MISSING of the default route and of every route with
+  states; `audit --route R` audits R's states only (and `--states` globs without a namespace in R's).
+- **A promoted run per route, optional:** `models/<family>/promoted` stays every route's; `promoted.<route>`
+  (`triforce promote FAMILY RUN --route R`) overrides it on R (`registry.promoted_run(family, root, route)`).
+  Chains, evaluation batches, select-checkpoint (`--route`), play and the golden path resolve it by the route
+  they play; `triforce list` shows each `route=run`, `triforce stamp` stamps them too. A replay names the route and
+  each model's checkpoint (`<family>/<run>/ckpt.pt`), so it records which run played.
+- **Segments and scopes per route:** `eval_batch.ROUTE_SEGMENTS[route]` (segments, arrival targets, milestones;
+  start states by bare name) and `room_stats.ROUTE_SCOPES[route]` (the room-stats scopes; `room-stats` takes the
+  route from the chain files). `d2first`'s are the tables of before, unchanged. A route without a table is measured
+  by `--chain` entries or `--segments`; `d3first`'s tables are added with its steps.
+
+No model input changes: no COMPAT bump for any of this (2.0.0.0 is the owner's MAJOR for `d3first`).
+
 ## Entry states (`entry_states.py`)
 
 Start states are `TFZSTATE` files in `triforce/states/` (`paths.STATES_DIR`, `$TRIFORCE_STATES_DIR`), listed in
