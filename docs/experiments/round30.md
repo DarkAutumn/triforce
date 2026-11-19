@@ -88,8 +88,13 @@ back's entries: 0x65 and 0x66 from W 150 each, cut out of the leg-and-Dungeon-5 
 **boss-manhandla, chosen on Dungeon 3 at the route's hearts** (`--from 0_37c_0 --stop-at step:105`; the leg after
 Dungeon 1 arrives with the full route's hearts): `r30-manh-s90`'s last checkpoint screens at 84.9% against
 `r78t4-manhandla2`'s 80.9% (+4.0 ± 1.2 paired, seeds 2000-2999) and **confirms at 82.0% against 77.4% (+4.6 ± 1.3,
-seeds 3000-3999)**. Its `d3` and `d8` chains (1000 runs, seeds 0-999, paired with `r29land-1k`) were queued; it is
-promoted only if neither is worse beyond noise.
+seeds 3000-3999)**. On seeds 0-999, paired with `r29land-1k` (the same team but boss-manhandla): **`d3` 85.4% against 82.7%,
++2.7 ± 1.3** (3:0x4d kills 116 of 970 entering runs against 143 of 971, at the same 4.08 hearts in), `d8` 26.2%
+against 24.8%, +1.4 ± 1.9 (8:0x6e crossed by all 1000, 0.84 hearts a visit against 0.82). Single rooms: 3:0x4d
+91.3% against 88.3%, 8:0x6e 100% against 99.7%. **Promoted** in this branch's checkout (`triforce promote
+boss-manhandla r30-manh-s90 --act temperature:0.5+relax:16`; its `ckpt.pt` is the chosen last checkpoint). Its 280
+harvested 3:0x4d starts are not in git: `triforce/states/harvested/boss-manhandla` is rebuilt from the Dungeon 3
+harvest chain above (its `boss-manhandla/3_4dw_*` files, all of them).
 
 **Darknut and gibdo: not decided yet.** The selections on Dungeon 5 at the route's hearts (`select-checkpoint FAMILY RUN --from
 0_45c_0 --stop-at step:209 --runs 1000 --first-seed 2000 --confirm 1000 --confirm-first-seed 3000 --confirm-top 1
