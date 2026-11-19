@@ -31,15 +31,28 @@ def is_pre_entry(ram) -> bool:
     return mode in TRANSITION_MODES or (mode in ENTER_MODES and ram[IS_UPDATING_MODE] == 0)
 
 
-def pre_entry_frame(player, entry_frame: int, level: int, room: int):
-    """The last frame up to the entry event where the game is about to enter (level, room)."""
+def matches(ram, level: int, room: int) -> bool:
+    return int(ram[MODE]) in (0x03, 0x04) and is_pre_entry(ram) and ram[LEVEL] == level and ram[ROOM] == room
+
+
+def cut(player, entry: dict):
+    """(the state of the last frame up to the entry event where the game is about to enter the entry's room, Link's
+    (X, Y) 12 frames after the entry), or None; the player only moves forward (a backward seek replays from the
+    start)."""
+    start = max(0, entry['frame'] - 120)
+    if player.frame < start:
+        player.seek(start)
     found = None
-    for frame in range(max(0, entry_frame - 120), entry_frame + 1):
-        player.seek(frame)
-        ram = player.ram()
-        if int(ram[MODE]) in (0x03, 0x04) and is_pre_entry(ram) and ram[LEVEL] == level and ram[ROOM] == room:
-            found = frame
-    return found
+    while True:
+        if matches(player.ram(), entry['level'], entry['room']):
+            found = player.save_state()
+        if player.frame >= entry['frame'] or not player.step(1):
+            break
+    if found is None:
+        return None
+    player.step(12)
+    ram = player.ram()
+    return found, (int(ram[LINK_X]), int(ram[LINK_Y]))
 
 
 def main():
@@ -59,26 +72,23 @@ def main():
     for path in paths:
         data = open(path, 'rb').read()
         replay = _native.Replay(data)
-        player = None
         seed = int(os.path.basename(path).split('-')[0])
+        entries = []
         for step, stem in steps.items():
-            if args.count and saved[stem] >= args.count:
+            found = [e for e in replay.events() if e.get('type') == 'room' and e.get('step') == step]
+            if found and not (args.count and saved[stem] >= args.count):
+                entries.append((found[0], stem))
+        player = _native.ReplayPlayer(data) if entries else None
+        for entry, stem in sorted(entries, key=lambda item: item[0]['frame']):
+            if player.frame > entry['frame']:
+                continue        # past it already (never seek back)
+            result = cut(player, entry)
+            if result is None:
                 continue
-            entries = [e for e in replay.events() if e.get('type') == 'room' and e.get('step') == step]
-            if not entries:
-                continue
-            entry = entries[0]
-            player = player or _native.ReplayPlayer(data)
-            frame = pre_entry_frame(player, entry['frame'], entry['level'], entry['room'])
-            if frame is None:
-                continue
-            player.seek(entry['frame'] + 12)
-            ram = player.ram()
-            position = (int(ram[LINK_X]), int(ram[LINK_Y]))
-            player.seek(frame)
+            state, position = result
             target = os.path.join(args.out, f"{stem}_h{seed}_0.state")
             with open(target, 'wb') as f:
-                f.write(player.save_state())
+                f.write(state)
             game = _native.Game()
             game.load(target)
             assert game.ram()[ROOM] == entry['room'], target

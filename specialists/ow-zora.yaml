@@ -11,7 +11,7 @@ clips: {enabled: true, off_share: 0}     # round 21: the screen wrap (W/E); the 
 curriculum: {enabled: true}             # trajectories/ow-zora (round 2: 37% -> 97%)
 one_room: true                          # round 5: per-room episodes
 max_steps: 2000
-harvested_fraction: 0.03                  # round 26: 0:0x44 from S as the clips way enters it (X 128; the seed states are at 112-120), scripts/experiments/r26_arrow_states.py into triforce/states/harvested/ow-zora
+harvested_fraction: 0.2                   # round 26: 0:0x44 from S as the clips way enters it (X 128; the seed states are at 112-120), scripts/experiments/r26_arrow_states.py; round 29: + chain entries of 0x44, 0x38, 0x55 (r29_zora_states.py), into triforce/states/harvested/ow-zora
 warm_start: null
 notes: >-
   Overworld route rooms whose main threat is the single Zora and its fireball, alongside Peahats (0x27, 0x28,
