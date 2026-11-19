@@ -5623,13 +5623,13 @@
   "entry": "N",
   "exit": "E",
   "alternate": false,
-  "env_steps": 6941,
+  "env_steps": 4065,
   "attempts": 1,
-  "seconds": 22.482725795,
-  "steps": 76,
-  "health": 2.0,
+  "seconds": 14.936824106,
+  "steps": 62,
+  "health": 6.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d6 --start-step 247 --chains 0 --source target/entry-states/r27-d6/sources/7_2bw_0.state --out target/entry-states/r27-d6/c0"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "6_3aw_0.state",
@@ -5644,13 +5644,13 @@
   "entry": "W",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 12090,
+  "env_steps": 21081,
   "attempts": 1,
-  "seconds": 45.468033156,
-  "steps": 125,
-  "health": 9.0,
+  "seconds": 86.470151952,
+  "steps": 138,
+  "health": 4.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d6 --start-step 247 --chains 0 --source target/entry-states/r27-d6/sources/7_2bw_0.state --out target/entry-states/r27-d6/c0"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "6_08cave_0.state",
@@ -5665,14 +5665,14 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 6417,
+  "env_steps": 6302,
   "attempts": 1,
-  "seconds": 18.715062405,
-  "steps": 19,
+  "seconds": 24.51083201,
+  "steps": 22,
   "health": 12.0,
   "ending": "exit-correct",
   "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d6 --start-step 274 --chains 0 --source target/entry-states/r27-d6/c0/6_3aw_0.state --skip-fights 6:0x3a:W --out target/entry-states/r27-d6/c0b"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "6_1dc_0.state",
@@ -5687,14 +5687,14 @@
   "entry": "cave",
   "exit": "S",
   "alternate": false,
-  "env_steps": 5074,
+  "env_steps": 4440,
   "attempts": 1,
-  "seconds": 14.048653141,
-  "steps": 56,
+  "seconds": 14.771753317,
+  "steps": 70,
   "health": 12.0,
   "ending": "exit-correct",
   "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d6 --start-step 274 --chains 0 --source target/entry-states/r27-d6/c0/6_3aw_0.state --skip-fights 6:0x3a:W --out target/entry-states/r27-d6/c0b"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "6_2dn_0.state",
@@ -5709,14 +5709,14 @@
   "entry": "N",
   "exit": "W",
   "alternate": false,
-  "env_steps": 6924,
+  "env_steps": 6640,
   "attempts": 1,
-  "seconds": 21.566978324,
-  "steps": 57,
+  "seconds": 27.288615319,
+  "steps": 90,
   "health": 11.0,
   "ending": "exit-correct",
   "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d6 --start-step 274 --chains 0 --source target/entry-states/r27-d6/c0/6_3aw_0.state --skip-fights 6:0x3a:W --out target/entry-states/r27-d6/c0b"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "6_2ce_0.state",
@@ -5731,14 +5731,14 @@
   "entry": "E",
   "exit": "N",
   "alternate": false,
-  "env_steps": 11758,
+  "env_steps": 6422,
   "attempts": 1,
-  "seconds": 44.166860888,
-  "steps": 107,
+  "seconds": 28.413455074,
+  "steps": 62,
   "health": 12.0,
   "ending": "exit-correct",
   "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d6 --start-step 274 --chains 0 --source target/entry-states/r27-d6/c0/6_3aw_0.state --skip-fights 6:0x3a:W --out target/entry-states/r27-d6/c0b"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "6_1cs_0.state",
@@ -5753,14 +5753,14 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 15218,
+  "env_steps": 12875,
   "attempts": 1,
-  "seconds": 55.657032048,
-  "steps": 68,
+  "seconds": 53.744034032,
+  "steps": 41,
   "health": 2.0,
   "ending": "exit-correct",
   "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d6 --start-step 274 --chains 0 --source target/entry-states/r27-d6/c0/6_3aw_0.state --skip-fights 6:0x3a:W --out target/entry-states/r27-d6/c0b"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "6_0cs_0.state",
@@ -5775,14 +5775,14 @@
   "entry": "S",
   "exit": "triforce",
   "alternate": false,
-  "env_steps": 6349,
+  "env_steps": 6338,
   "attempts": 1,
-  "seconds": 25.218603212,
-  "steps": 78,
+  "seconds": 23.917345294,
+  "steps": 61,
   "health": 7.0,
   "ending": "exit-correct",
   "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d6 --start-step 274 --chains 0 --source target/entry-states/r27-d6/c0/6_3aw_0.state --skip-fights 6:0x3a:W --out target/entry-states/r27-d6/c0b"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "0_22c_0.state",
@@ -5799,11 +5799,12 @@
   "alternate": false,
   "env_steps": 4467,
   "attempts": 1,
-  "seconds": 20.189740897,
+  "seconds": 18.178014463,
   "steps": 2,
   "health": 13.0,
   "ending": "triforce-collected",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "0_3cr_0.state",
@@ -5818,13 +5819,14 @@
   "entry": "recorder",
   "exit": "S",
   "alternate": false,
-  "env_steps": 5665,
+  "env_steps": 4440,
   "attempts": 1,
-  "seconds": 23.584115023,
-  "steps": 47,
-  "health": 9.0,
+  "seconds": 16.876116662,
+  "steps": 25,
+  "health": 11.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "0_4cn_v2_0.state",
@@ -5839,13 +5841,14 @@
   "entry": "N",
   "exit": "E",
   "alternate": false,
-  "env_steps": 9384,
+  "env_steps": 6686,
   "attempts": 1,
-  "seconds": 29.643428299,
-  "steps": 138,
-  "health": 4.5,
+  "seconds": 19.259868797,
+  "steps": 48,
+  "health": 10.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "0_4dw_v2_0.state",
@@ -5860,13 +5863,14 @@
   "entry": "W",
   "exit": "S",
   "alternate": false,
-  "env_steps": 4968,
+  "env_steps": 5157,
   "attempts": 1,
-  "seconds": 16.568742009,
-  "steps": 143,
-  "health": 12.5,
+  "seconds": 17.208467785,
+  "steps": 78,
+  "health": 12.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "0_5dn_0.state",
@@ -5881,13 +5885,14 @@
   "entry": "N",
   "exit": "S",
   "alternate": false,
-  "env_steps": 3839,
+  "env_steps": 5177,
   "attempts": 1,
-  "seconds": 16.638624435,
-  "steps": 38,
+  "seconds": 19.198910877,
+  "steps": 25,
   "health": 13.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "0_6dn_v2_0.state",
@@ -5902,13 +5907,14 @@
   "entry": "N",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 6849,
+  "env_steps": 6715,
   "attempts": 1,
-  "seconds": 29.232760285,
-  "steps": 84,
-  "health": 13.0,
+  "seconds": 25.837999664,
+  "steps": 117,
+  "health": 10.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "8_7es_0.state",
@@ -5923,13 +5929,14 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 5198,
+  "env_steps": 4208,
   "attempts": 1,
-  "seconds": 21.948564235,
-  "steps": 38,
-  "health": 12.0,
+  "seconds": 15.335192964,
+  "steps": 57,
+  "health": 13.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "8_6es_0.state",
@@ -5946,11 +5953,12 @@
   "alternate": false,
   "env_steps": 5421,
   "attempts": 1,
-  "seconds": 18.053501327,
+  "seconds": 16.192451178,
   "steps": 12,
   "health": 13.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "8_5es_0.state",
@@ -5965,13 +5973,14 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 5486,
+  "env_steps": 8337,
   "attempts": 1,
-  "seconds": 21.432560297,
-  "steps": 71,
-  "health": 6.0,
+  "seconds": 29.362315608,
+  "steps": 82,
+  "health": 8.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "8_4es_0.state",
@@ -5986,13 +5995,14 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 108335,
+  "env_steps": 90774,
   "attempts": 2,
-  "seconds": 465.10668018900003,
-  "steps": 165,
-  "health": 7.5,
+  "seconds": 343.026705406,
+  "steps": 158,
+  "health": 4.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "8_3es_0.state",
@@ -6007,13 +6017,14 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 9011,
+  "env_steps": 6243,
   "attempts": 1,
-  "seconds": 52.406730713,
-  "steps": 139,
-  "health": 5.0,
+  "seconds": 30.333346945,
+  "steps": 122,
+  "health": 6.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "8_3fw_0.state",
@@ -6028,13 +6039,14 @@
   "entry": "W",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 50419,
-  "attempts": 1,
-  "seconds": 222.33048834,
-  "steps": 221,
-  "health": 2.0,
+  "env_steps": 82293,
+  "attempts": 2,
+  "seconds": 338.006374367,
+  "steps": 102,
+  "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "8_2fcave_0.state",
@@ -6049,13 +6061,14 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 19271,
+  "env_steps": 39307,
   "attempts": 1,
-  "seconds": 91.666043038,
-  "steps": 124,
-  "health": 9.0,
+  "seconds": 165.619014038,
+  "steps": 103,
+  "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "8_4cc_0.state",
@@ -6070,13 +6083,14 @@
   "entry": "cave",
   "exit": "N",
   "alternate": false,
-  "env_steps": 4792,
+  "env_steps": 5415,
   "attempts": 1,
-  "seconds": 16.9175487,
-  "steps": 66,
+  "seconds": 18.593952113,
+  "steps": 73,
   "health": 13.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "8_3cs_0.state",
@@ -6091,14 +6105,14 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "steps": 141,
-  "health": 13.0,
-  "ending": "exit-correct",
-  "env_steps": 141,
+  "env_steps": 6874,
   "attempts": 1,
-  "seconds": 0.0,
-  "played_by": "scripts/experiments/r28_demos.py pols (seed 1000)",
-  "command": "python scripts/experiments/r28_demos.py pols --chains 0,1 --runs 100 --harvest target/entry-states/r28-d8/h4c"
+  "seconds": 36.898663402,
+  "steps": 111,
+  "health": 9.0,
+  "ending": "exit-correct",
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "8_2cs_0.state",
@@ -6113,14 +6127,15 @@
   "entry": "S",
   "exit": "triforce",
   "alternate": false,
-  "steps": 195,
+  "steps": 257,
   "health": 13.0,
   "ending": "exit-correct",
-  "env_steps": 195,
+  "env_steps": 257,
   "attempts": 1,
   "seconds": 0.0,
   "played_by": "scripts/experiments/r28_demos.py gleeok (seed 1000)",
-  "command": "python scripts/experiments/r28_demos.py gleeok --chains 0,1 --runs 100 --harvest target/entry-states/r28-d8/h3c"
+  "fight_skipped": true,
+  "command": "python scripts/experiments/r28_demos.py gleeok --chains 0,1 --runs 30 --harvest target/entry-states/r31-d8g"
  },
  {
   "file": "0_6dc_0.state",
@@ -6137,11 +6152,11 @@
   "alternate": false,
   "env_steps": 4467,
   "attempts": 1,
-  "seconds": 13.573088548,
+  "seconds": 17.707358566,
   "steps": 2,
   "health": 14.0,
   "ending": "triforce-collected",
-  "command": "python -m triforce.entry_states build --route d9 --start-step 296 --last-step 317 --chains 0,1,2 --source 'triforce/states/8_2cs_{chain}.state' --out target/entry-states/r29-d9/c1"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 292 --source 'triforce/states/8_2cs_{chain}.state' --last-step 293 --out target/entry-states/r31-d8x"
  },
  {
   "file": "0_37r_0.state",
@@ -12974,14 +12989,13 @@
   "entry": "N",
   "exit": "E",
   "alternate": false,
-  "env_steps": 3533,
+  "env_steps": 7984,
   "attempts": 1,
-  "seconds": 14.520479168,
-  "steps": 47,
-  "health": 6.0,
+  "seconds": 30.243678684,
+  "steps": 119,
+  "health": 1.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d6 --start-step 270 --chains 1,2 --source 'target/entry-states/r27-d6/c{chain}/6_38s_{chain}.state' --skip-fights 6:0x38:S,6:0x3a:W --out target/entry-states/r27-d6/c12"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "6_3aw_1.state",
@@ -12996,14 +13010,13 @@
   "entry": "W",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 14167,
+  "env_steps": 28256,
   "attempts": 1,
-  "seconds": 62.007802929,
-  "steps": 123,
-  "health": 8.0,
+  "seconds": 117.068535797,
+  "steps": 191,
+  "health": 3.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d6 --start-step 270 --chains 1,2 --source 'target/entry-states/r27-d6/c{chain}/6_38s_{chain}.state' --skip-fights 6:0x38:S,6:0x3a:W --out target/entry-states/r27-d6/c12"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "6_08cave_1.state",
@@ -13018,14 +13031,14 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 5569,
+  "env_steps": 5652,
   "attempts": 1,
-  "seconds": 22.844263386,
-  "steps": 55,
+  "seconds": 21.225043603,
+  "steps": 42,
   "health": 12.0,
   "ending": "exit-correct",
   "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d6 --start-step 270 --chains 1,2 --source 'target/entry-states/r27-d6/c{chain}/6_38s_{chain}.state' --skip-fights 6:0x38:S,6:0x3a:W --out target/entry-states/r27-d6/c12"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "6_1dc_1.state",
@@ -13040,14 +13053,14 @@
   "entry": "cave",
   "exit": "S",
   "alternate": false,
-  "env_steps": 5334,
+  "env_steps": 4874,
   "attempts": 1,
-  "seconds": 21.009252,
-  "steps": 69,
-  "health": 11.5,
+  "seconds": 17.008391653,
+  "steps": 67,
+  "health": 11.0,
   "ending": "exit-correct",
   "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d6 --start-step 270 --chains 1,2 --source 'target/entry-states/r27-d6/c{chain}/6_38s_{chain}.state' --skip-fights 6:0x38:S,6:0x3a:W --out target/entry-states/r27-d6/c12"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "6_2dn_1.state",
@@ -13062,14 +13075,14 @@
   "entry": "N",
   "exit": "W",
   "alternate": false,
-  "env_steps": 7269,
+  "env_steps": 4836,
   "attempts": 1,
-  "seconds": 26.028310329,
-  "steps": 114,
-  "health": 9.0,
+  "seconds": 19.16536414,
+  "steps": 39,
+  "health": 12.0,
   "ending": "exit-correct",
   "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d6 --start-step 270 --chains 1,2 --source 'target/entry-states/r27-d6/c{chain}/6_38s_{chain}.state' --skip-fights 6:0x38:S,6:0x3a:W --out target/entry-states/r27-d6/c12"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "6_2ce_1.state",
@@ -13084,14 +13097,14 @@
   "entry": "E",
   "exit": "N",
   "alternate": false,
-  "env_steps": 7164,
+  "env_steps": 19919,
   "attempts": 1,
-  "seconds": 34.465363718,
-  "steps": 83,
+  "seconds": 82.71342788,
+  "steps": 95,
   "health": 8.0,
   "ending": "exit-correct",
   "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d6 --start-step 270 --chains 1,2 --source 'target/entry-states/r27-d6/c{chain}/6_38s_{chain}.state' --skip-fights 6:0x38:S,6:0x3a:W --out target/entry-states/r27-d6/c12"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "6_1cs_1.state",
@@ -13106,14 +13119,14 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 4308,
+  "env_steps": 3796,
   "attempts": 1,
-  "seconds": 15.792320333,
-  "steps": 83,
-  "health": 3.0,
+  "seconds": 14.392398462,
+  "steps": 102,
+  "health": 2.0,
   "ending": "exit-correct",
   "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d6 --start-step 270 --chains 1,2 --source 'target/entry-states/r27-d6/c{chain}/6_38s_{chain}.state' --skip-fights 6:0x38:S,6:0x3a:W --out target/entry-states/r27-d6/c12"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "6_0cs_1.state",
@@ -13128,14 +13141,14 @@
   "entry": "S",
   "exit": "triforce",
   "alternate": false,
-  "env_steps": 6195,
+  "env_steps": 6262,
   "attempts": 1,
-  "seconds": 22.916580115,
-  "steps": 34,
+  "seconds": 25.155471385,
+  "steps": 17,
   "health": 12.0,
   "ending": "exit-correct",
   "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d6 --start-step 270 --chains 1,2 --source 'target/entry-states/r27-d6/c{chain}/6_38s_{chain}.state' --skip-fights 6:0x38:S,6:0x3a:W --out target/entry-states/r27-d6/c12"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "0_22c_1.state",
@@ -13152,11 +13165,12 @@
   "alternate": false,
   "env_steps": 4166,
   "attempts": 1,
-  "seconds": 20.237862131,
+  "seconds": 17.220790868,
   "steps": 6,
   "health": 13.0,
   "ending": "triforce-collected",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "0_3cr_1.state",
@@ -13171,13 +13185,14 @@
   "entry": "recorder",
   "exit": "S",
   "alternate": false,
-  "env_steps": 67321,
+  "env_steps": 69182,
   "attempts": 2,
-  "seconds": 233.501373538,
-  "steps": 10,
+  "seconds": 209.292635759,
+  "steps": 11,
   "health": 13.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "0_4cn_v2_1.state",
@@ -13192,13 +13207,14 @@
   "entry": "N",
   "exit": "E",
   "alternate": false,
-  "env_steps": 6444,
+  "env_steps": 8830,
   "attempts": 1,
-  "seconds": 19.828612932,
-  "steps": 36,
-  "health": 8.0,
+  "seconds": 26.353427096,
+  "steps": 55,
+  "health": 9.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "0_4dw_v2_1.state",
@@ -13213,13 +13229,14 @@
   "entry": "W",
   "exit": "S",
   "alternate": false,
-  "env_steps": 4979,
+  "env_steps": 5460,
   "attempts": 1,
-  "seconds": 16.296614382,
-  "steps": 60,
-  "health": 11.5,
+  "seconds": 16.594572403,
+  "steps": 82,
+  "health": 9.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "0_5dn_1.state",
@@ -13234,13 +13251,14 @@
   "entry": "N",
   "exit": "S",
   "alternate": false,
-  "env_steps": 6326,
+  "env_steps": 6173,
   "attempts": 1,
-  "seconds": 25.632051438,
+  "seconds": 19.616974545,
   "steps": 39,
   "health": 13.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "0_6dn_v2_1.state",
@@ -13255,13 +13273,14 @@
   "entry": "N",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 4094,
+  "env_steps": 3936,
   "attempts": 1,
-  "seconds": 18.427984571,
-  "steps": 77,
+  "seconds": 13.955022433,
+  "steps": 30,
   "health": 12.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "8_7es_1.state",
@@ -13276,13 +13295,14 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 4790,
+  "env_steps": 3044,
   "attempts": 1,
-  "seconds": 24.593233874,
-  "steps": 59,
-  "health": 13.0,
+  "seconds": 13.657571666,
+  "steps": 57,
+  "health": 12.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "8_6es_1.state",
@@ -13299,11 +13319,12 @@
   "alternate": false,
   "env_steps": 5567,
   "attempts": 1,
-  "seconds": 21.782968283,
+  "seconds": 17.695646521,
   "steps": 13,
   "health": 13.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "8_5es_1.state",
@@ -13318,13 +13339,14 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 14309,
-  "attempts": 2,
-  "seconds": 59.772520757,
-  "steps": 58,
+  "env_steps": 7494,
+  "attempts": 1,
+  "seconds": 26.442535955,
+  "steps": 70,
   "health": 10.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "8_4es_1.state",
@@ -13339,13 +13361,14 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 158367,
-  "attempts": 3,
-  "seconds": 663.8639951490001,
-  "steps": 133,
-  "health": 2.0,
+  "env_steps": 79257,
+  "attempts": 2,
+  "seconds": 323.294124455,
+  "steps": 220,
+  "health": 1.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "8_3es_1.state",
@@ -13360,13 +13383,14 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 6865,
+  "env_steps": 8276,
   "attempts": 1,
-  "seconds": 37.044242214,
-  "steps": 96,
-  "health": 5.0,
+  "seconds": 40.199972608,
+  "steps": 83,
+  "health": 7.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "8_3fw_1.state",
@@ -13381,13 +13405,14 @@
   "entry": "W",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 46028,
-  "attempts": 1,
-  "seconds": 212.989759011,
-  "steps": 240,
-  "health": 0.5,
+  "env_steps": 150308,
+  "attempts": 3,
+  "seconds": 609.296835023,
+  "steps": 258,
+  "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "8_2fcave_1.state",
@@ -13402,13 +13427,14 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 4413,
+  "env_steps": 4584,
   "attempts": 1,
-  "seconds": 23.715857229,
-  "steps": 89,
+  "seconds": 21.197095223,
+  "steps": 102,
   "health": 8.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "8_4cc_1.state",
@@ -13423,13 +13449,14 @@
   "entry": "cave",
   "exit": "N",
   "alternate": false,
-  "env_steps": 4930,
+  "env_steps": 4760,
   "attempts": 1,
-  "seconds": 19.284001822,
-  "steps": 57,
+  "seconds": 15.721669824,
+  "steps": 55,
   "health": 13.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "8_3cs_1.state",
@@ -13444,14 +13471,14 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "steps": 142,
-  "health": 13.0,
-  "ending": "exit-correct",
-  "env_steps": 142,
+  "env_steps": 4583,
   "attempts": 1,
-  "seconds": 0.0,
-  "played_by": "scripts/experiments/r28_demos.py pols (seed 1000)",
-  "command": "python scripts/experiments/r28_demos.py pols --chains 0,1 --runs 100 --harvest target/entry-states/r28-d8/h4c"
+  "seconds": 24.419253401,
+  "steps": 67,
+  "health": 3.0,
+  "ending": "exit-correct",
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "8_2cs_1.state",
@@ -13466,14 +13493,15 @@
   "entry": "S",
   "exit": "triforce",
   "alternate": false,
-  "steps": 178,
+  "steps": 118,
   "health": 13.0,
   "ending": "exit-correct",
-  "env_steps": 178,
+  "env_steps": 118,
   "attempts": 1,
   "seconds": 0.0,
   "played_by": "scripts/experiments/r28_demos.py gleeok (seed 1000)",
-  "command": "python scripts/experiments/r28_demos.py gleeok --chains 0,1 --runs 100 --harvest target/entry-states/r28-d8/h3c"
+  "fight_skipped": true,
+  "command": "python scripts/experiments/r28_demos.py gleeok --chains 0,1 --runs 30 --harvest target/entry-states/r31-d8g"
  },
  {
   "file": "0_6dc_1.state",
@@ -13490,11 +13518,11 @@
   "alternate": false,
   "env_steps": 4166,
   "attempts": 1,
-  "seconds": 13.372815206,
+  "seconds": 16.899342767,
   "steps": 6,
   "health": 14.0,
   "ending": "triforce-collected",
-  "command": "python -m triforce.entry_states build --route d9 --start-step 296 --last-step 317 --chains 0,1,2 --source 'triforce/states/8_2cs_{chain}.state' --out target/entry-states/r29-d9/c1"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 292 --source 'triforce/states/8_2cs_{chain}.state' --last-step 293 --out target/entry-states/r31-d8x"
  },
  {
   "file": "0_37r_1.state",
@@ -20327,14 +20355,13 @@
   "entry": "N",
   "exit": "E",
   "alternate": false,
-  "env_steps": 17531,
-  "attempts": 5,
-  "seconds": 50.882339031,
-  "steps": 21,
-  "health": 10.0,
+  "env_steps": 5735,
+  "attempts": 1,
+  "seconds": 20.79810229,
+  "steps": 70,
+  "health": 7.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d6 --start-step 270 --chains 2 --attempts 12 --source target/entry-states/r27-d6/c2/6_38s_2.state --skip-fights 6:0x38:S,6:0x3a:W --out target/entry-states/r27-d6/c2b"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "6_3aw_2.state",
@@ -20349,14 +20376,13 @@
   "entry": "W",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 13492,
+  "env_steps": 6263,
   "attempts": 1,
-  "seconds": 52.51739274,
-  "steps": 119,
-  "health": 10.0,
+  "seconds": 23.912984771,
+  "steps": 99,
+  "health": 9.0,
   "ending": "exit-correct",
-  "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d6 --start-step 270 --chains 2 --attempts 12 --source target/entry-states/r27-d6/c2/6_38s_2.state --skip-fights 6:0x38:S,6:0x3a:W --out target/entry-states/r27-d6/c2b"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "6_08cave_2.state",
@@ -20371,14 +20397,14 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 6297,
+  "env_steps": 6426,
   "attempts": 1,
-  "seconds": 17.537156119,
-  "steps": 24,
+  "seconds": 24.695237503,
+  "steps": 38,
   "health": 12.0,
   "ending": "exit-correct",
   "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d6 --start-step 270 --chains 2 --attempts 12 --source target/entry-states/r27-d6/c2/6_38s_2.state --skip-fights 6:0x38:S,6:0x3a:W --out target/entry-states/r27-d6/c2b"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "6_1dc_2.state",
@@ -20393,14 +20419,14 @@
   "entry": "cave",
   "exit": "S",
   "alternate": false,
-  "env_steps": 4758,
+  "env_steps": 4948,
   "attempts": 1,
-  "seconds": 11.89925294,
-  "steps": 90,
+  "seconds": 17.021145845,
+  "steps": 79,
   "health": 12.0,
   "ending": "exit-correct",
   "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d6 --start-step 270 --chains 2 --attempts 12 --source target/entry-states/r27-d6/c2/6_38s_2.state --skip-fights 6:0x38:S,6:0x3a:W --out target/entry-states/r27-d6/c2b"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "6_2dn_2.state",
@@ -20415,14 +20441,14 @@
   "entry": "N",
   "exit": "W",
   "alternate": false,
-  "env_steps": 5860,
+  "env_steps": 4969,
   "attempts": 1,
-  "seconds": 20.93007613,
-  "steps": 97,
-  "health": 10.0,
+  "seconds": 19.936998827,
+  "steps": 21,
+  "health": 12.0,
   "ending": "exit-correct",
   "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d6 --start-step 270 --chains 2 --attempts 12 --source target/entry-states/r27-d6/c2/6_38s_2.state --skip-fights 6:0x38:S,6:0x3a:W --out target/entry-states/r27-d6/c2b"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "6_2ce_2.state",
@@ -20437,14 +20463,14 @@
   "entry": "E",
   "exit": "N",
   "alternate": false,
-  "env_steps": 14224,
+  "env_steps": 7565,
   "attempts": 1,
-  "seconds": 54.803017066,
-  "steps": 259,
-  "health": 7.0,
+  "seconds": 32.515235685,
+  "steps": 96,
+  "health": 10.0,
   "ending": "exit-correct",
   "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d6 --start-step 270 --chains 2 --attempts 12 --source target/entry-states/r27-d6/c2/6_38s_2.state --skip-fights 6:0x38:S,6:0x3a:W --out target/entry-states/r27-d6/c2b"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "6_1cs_2.state",
@@ -20461,12 +20487,12 @@
   "alternate": false,
   "env_steps": 4187,
   "attempts": 1,
-  "seconds": 15.473929743,
+  "seconds": 17.325525693,
   "steps": 42,
   "health": 7.0,
   "ending": "exit-correct",
   "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d6 --start-step 270 --chains 2 --attempts 12 --source target/entry-states/r27-d6/c2/6_38s_2.state --skip-fights 6:0x38:S,6:0x3a:W --out target/entry-states/r27-d6/c2b"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "6_0cs_2.state",
@@ -20481,14 +20507,14 @@
   "entry": "S",
   "exit": "triforce",
   "alternate": false,
-  "env_steps": 9284,
+  "env_steps": 11150,
   "attempts": 1,
-  "seconds": 40.619948359,
-  "steps": 147,
-  "health": 10.0,
+  "seconds": 46.77185886,
+  "steps": 153,
+  "health": 8.0,
   "ending": "exit-correct",
   "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d6 --start-step 270 --chains 2 --attempts 12 --source target/entry-states/r27-d6/c2/6_38s_2.state --skip-fights 6:0x38:S,6:0x3a:W --out target/entry-states/r27-d6/c2b"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "0_22c_2.state",
@@ -20505,11 +20531,12 @@
   "alternate": false,
   "env_steps": 4241,
   "attempts": 1,
-  "seconds": 18.792713688,
+  "seconds": 16.735425159000002,
   "steps": 6,
   "health": 13.0,
   "ending": "triforce-collected",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "0_3cr_2.state",
@@ -20524,13 +20551,14 @@
   "entry": "recorder",
   "exit": "S",
   "alternate": false,
-  "env_steps": 4876,
+  "env_steps": 4931,
   "attempts": 1,
-  "seconds": 22.329680053,
-  "steps": 39,
+  "seconds": 19.612302535,
+  "steps": 57,
   "health": 12.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "0_4cn_v2_2.state",
@@ -20545,13 +20573,14 @@
   "entry": "N",
   "exit": "E",
   "alternate": false,
-  "env_steps": 5557,
+  "env_steps": 14708,
   "attempts": 1,
-  "seconds": 18.547153575,
-  "steps": 54,
-  "health": 12.0,
+  "seconds": 40.233073833,
+  "steps": 143,
+  "health": 6.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "0_4dw_v2_2.state",
@@ -20566,13 +20595,14 @@
   "entry": "W",
   "exit": "S",
   "alternate": false,
-  "env_steps": 6014,
+  "env_steps": 5288,
   "attempts": 1,
-  "seconds": 19.372486101,
-  "steps": 91,
-  "health": 10.0,
+  "seconds": 16.858166626,
+  "steps": 75,
+  "health": 12.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "0_5dn_2.state",
@@ -20587,13 +20617,14 @@
   "entry": "N",
   "exit": "S",
   "alternate": false,
-  "env_steps": 4773,
+  "env_steps": 4408,
   "attempts": 1,
-  "seconds": 19.962159439,
-  "steps": 65,
+  "seconds": 16.401511854,
+  "steps": 35,
   "health": 13.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "0_6dn_v2_2.state",
@@ -20608,13 +20639,14 @@
   "entry": "N",
   "exit": "cave",
   "alternate": false,
-  "env_steps": 4025,
+  "env_steps": 4892,
   "attempts": 1,
-  "seconds": 18.02339097,
-  "steps": 10,
-  "health": 12.5,
+  "seconds": 18.52419065,
+  "steps": 119,
+  "health": 11.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "8_7es_2.state",
@@ -20629,13 +20661,14 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 3422,
+  "env_steps": 3265,
   "attempts": 1,
-  "seconds": 15.588495918,
-  "steps": 46,
-  "health": 12.0,
+  "seconds": 14.112548346,
+  "steps": 23,
+  "health": 13.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "8_6es_2.state",
@@ -20652,11 +20685,12 @@
   "alternate": false,
   "env_steps": 5337,
   "attempts": 1,
-  "seconds": 18.678341519,
+  "seconds": 18.475145039,
   "steps": 15,
   "health": 13.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "8_5es_2.state",
@@ -20671,13 +20705,14 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 24205,
-  "attempts": 3,
-  "seconds": 99.78192679499999,
-  "steps": 109,
-  "health": 8.0,
+  "env_steps": 12397,
+  "attempts": 1,
+  "seconds": 47.792070993,
+  "steps": 99,
+  "health": 7.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "fight_skipped": true,
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 268 --source 'triforce/states/6_29w_{chain}.state' --skip-fights 6:0x3a:W --last-step 291 --out target/entry-states/r31-d6"
  },
  {
   "file": "8_4es_2.state",
@@ -20692,13 +20727,15 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "env_steps": 58489,
-  "attempts": 1,
-  "seconds": 239.264242357,
-  "steps": 245,
-  "health": 2.0,
+  "steps": 243,
+  "health": 13.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "env_steps": 243,
+  "attempts": 1,
+  "seconds": 0.0,
+  "played_by": "scripts/experiments/r28_demos.py darknut-5e (seed 1000)",
+  "fight_skipped": true,
+  "command": "python scripts/experiments/r28_demos.py darknut-5e --chains 2 --runs 30 --harvest target/entry-states/r31-d8h"
  },
  {
   "file": "8_3es_2.state",
@@ -20713,13 +20750,13 @@
   "entry": "S",
   "exit": "E",
   "alternate": false,
-  "env_steps": 5691,
+  "env_steps": 5998,
   "attempts": 1,
-  "seconds": 30.101532348,
-  "steps": 110,
-  "health": 5.0,
+  "seconds": 27.600489131,
+  "steps": 140,
+  "health": 9.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 280 --chains 0,1,2 --source 'target/entry-states/r28-d8/sources/6_0cs_{chain}.state' --out target/entry-states/r28-d8/c"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 286 --source triforce/states/8_4es_2.state --last-step 291 --attempts 6 --out target/entry-states/r31-d6c2"
  },
  {
   "file": "8_3fw_2.state",
@@ -20734,14 +20771,14 @@
   "entry": "W",
   "exit": "cave",
   "alternate": false,
-  "steps": 278,
+  "steps": 443,
   "health": 13.0,
   "ending": "exit-correct",
-  "env_steps": 278,
+  "env_steps": 443,
   "attempts": 1,
   "seconds": 0.0,
   "played_by": "scripts/experiments/r28_demos.py darknut-3e (seed 1000)",
-  "command": "python scripts/experiments/r28_demos.py darknut-3e --chains 2 --runs 1 --harvest target/entry-states/r28-d8/h3e"
+  "command": "python scripts/experiments/r28_demos.py darknut-3e --chains 2 --runs 30 --harvest target/entry-states/r31-d8h3"
  },
  {
   "file": "8_2fcave_2.state",
@@ -20756,13 +20793,13 @@
   "entry": "S",
   "exit": "W",
   "alternate": false,
-  "env_steps": 50391,
+  "env_steps": 18072,
   "attempts": 1,
-  "seconds": 217.391282368,
-  "steps": 155,
+  "seconds": 83.762023707,
+  "steps": 120,
   "health": 4.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 292 --last-step 294 --chains 2 --attempts 6 --source 'triforce/states/8_3fw_{chain}.state' --out target/entry-states/r28-d8/c2b"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 288 --source triforce/states/8_3fw_2.state --last-step 291 --attempts 6 --out target/entry-states/r31-d6c2b"
  },
  {
   "file": "8_4cc_2.state",
@@ -20777,13 +20814,13 @@
   "entry": "cave",
   "exit": "N",
   "alternate": false,
-  "env_steps": 5450,
+  "env_steps": 5299,
   "attempts": 1,
-  "seconds": 19.62790962,
-  "steps": 66,
-  "health": 13.0,
+  "seconds": 17.827538936,
+  "steps": 49,
+  "health": 12.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d8 --start-step 292 --last-step 294 --chains 2 --attempts 6 --source 'triforce/states/8_3fw_{chain}.state' --out target/entry-states/r28-d8/c2b"
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 288 --source triforce/states/8_3fw_2.state --last-step 291 --attempts 6 --out target/entry-states/r31-d6c2b"
  },
  {
   "file": "8_3cs_2.state",
@@ -20798,14 +20835,13 @@
   "entry": "S",
   "exit": "N",
   "alternate": false,
-  "steps": 141,
-  "health": 13.0,
-  "ending": "exit-correct",
-  "env_steps": 141,
+  "env_steps": 6549,
   "attempts": 1,
-  "seconds": 0.0,
-  "played_by": "scripts/experiments/r28_demos.py pols (seed 1000)",
-  "command": "python scripts/experiments/r28_demos.py pols --chains 2 --runs 100 --harvest target/entry-states/r28-d8/h4c2"
+  "seconds": 35.556100955,
+  "steps": 107,
+  "health": 1.0,
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 288 --source triforce/states/8_3fw_2.state --last-step 291 --attempts 6 --out target/entry-states/r31-d6c2b"
  },
  {
   "file": "8_2cs_2.state",
@@ -20820,14 +20856,14 @@
   "entry": "S",
   "exit": "triforce",
   "alternate": false,
-  "steps": 237,
+  "steps": 239,
   "health": 13.0,
   "ending": "exit-correct",
-  "env_steps": 237,
+  "env_steps": 239,
   "attempts": 1,
   "seconds": 0.0,
   "played_by": "scripts/experiments/r28_demos.py gleeok (seed 1000)",
-  "command": "python scripts/experiments/r28_demos.py gleeok --chains 2 --runs 100 --harvest target/entry-states/r28-d8/h3c2"
+  "command": "python scripts/experiments/r28_demos.py gleeok --chains 2 --runs 30 --harvest target/entry-states/r31-d8g2"
  },
  {
   "file": "0_6dc_2.state",
@@ -20844,11 +20880,11 @@
   "alternate": false,
   "env_steps": 4241,
   "attempts": 1,
-  "seconds": 14.367396812,
+  "seconds": 16.626739611,
   "steps": 6,
   "health": 14.0,
   "ending": "triforce-collected",
-  "command": "python -m triforce.entry_states build --route d9 --start-step 296 --last-step 317 --chains 0,1,2 --source 'triforce/states/8_2cs_{chain}.state' --out target/entry-states/r29-d9/c1"
+  "command": "python -m triforce.entry_states build --chains 0,1,2 --start-step 292 --source 'triforce/states/8_2cs_{chain}.state' --last-step 293 --out target/entry-states/r31-d8x"
  },
  {
   "file": "0_37r_2.state",
