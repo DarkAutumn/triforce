@@ -7,9 +7,9 @@ ladder, Gleeok; `docs/routes/d4.md`), in round 24 (Nov 14-15) the leg and Dungeo
 `d5.md`), in round 26 (Nov 17) the leg to Dungeon 7 and Dungeon 7 (`docs/routes/d7.md` §11), in round 27 (Nov 18)
 the magic sword and Dungeon 6 (`docs/routes/d6.md` §14), and in rounds 28 and 29 (Nov 17-19, built side by side as
 the scouting routes `d8` and `d9`, merged at 1.9.0.0) Dungeon 8 (`docs/routes/d8.md` §15) and Dungeon 9, Ganon and
-Zelda (`docs/routes/d9.md` "as built"): it now runs from the game start to the end of the game (358 steps; the
-last, Zelda's room, ends on the first frame of game mode `$13`). Data: `triforce/routes.yaml` `d2first`, rooms in
-`triforce/game.yaml`. View it with
+Zelda (`docs/routes/d9.md` "as built"): it now runs from the game start to the end of the game (354 steps since round
+31, the owner's phase IX of Nov 19, `docs/routes/phase9-walks.md`; the last, Zelda's room, ends on the first frame of
+game mode `$13`). Data: `triforce/routes.yaml` `d2first`, rooms in `triforce/game.yaml`. View it with
 
 ```bash
 .venv/bin/python zelda-map.py --route d2first      # rooms outlined, arrows, step numbers; sidebar per step
@@ -41,48 +41,50 @@ Hearts are heart containers on entering the room; sword W = wood, Wh = white, Ma
 | 39–41 | 0:19, 18, 17 | E→W, E→W, E→S | ow-boulder | 5 / Wh |
 | 42–44 | 0:27, 28, 38 | N→E, W→S, N→W | ow-zora | 5 / Wh |
 | 45 | 0:37 | E → cave (D1 stairs) | ow-octorok | 5 / Wh |
-| 46–50 | 1:73, 72, 73, 74, 73 | S→W, E→E (key), W→E, W→W (key), E→N | stalfos-keese-gel | 5 / Wh, 3 → 5 keys |
-| 51–55 | 1:63 53 52 42 43 | S→N, S→W, E→N, S→E, W→**N** | stalfos-keese-gel | 5 / Wh, 5 → 4 keys |
-| 56–63 | 1:33 23 22 7f(cellar) 22 23 33 43 | the bow detour (below): S→N (key), S→W (key), E→stairs, S→N (bow), stairs→E, W→S, N→S, N→E | stalfos-keese-gel, goriya, **trap-room**, **equipment-room** | 5 / Wh, bow |
-| 64–66 | 1:44 45 35 | W→E (boomerang), W→N, S→E | goriya, wallmaster, boss-aquamentus | 5 / Wh, bow |
-| 67 | 1:36 | W → triforce (warps to 0:37) | stalfos-keese-gel | 6 / Wh |
-| 68–74 | 0:37 38 48 58 68 67, 67 cave | to 0x67's secret (round 22, `docs/routes/overworld.md`): cave→E, W→S, N→S, N→S, N→W, E→cave (bomb the rock wall), S→S (`waypoint: rupees`) | ow-octorok, ow-zora, **ow-leever** | 6 / Wh, triforce 2+1, +30 rupees |
-| 75–79 | 0:67 77 76 75 74 | stretch `d3-approach`, clip way: cave→S, N→W, E→W, E→W (`CLIP E`, the wrap exit), E→cave | ow-octorok, ow-start, ow-tektite, ow-leever | 6 / Wh |
-| 80–86 | 0:67 66 65 64 63 73 74 | plain way: cave→W, E→W, E→W, E→W, E→S, N→E, W→cave | ow-octorok, ow-zora, ow-moblin, ow-tektite | 6 / Wh |
-| 87–103 | 3:7c … 4d | Dungeon 3 (`docs/routes/d3.md`): the raft cellar 0x0f, 0x5b E (bomb wall), 0x5c, 0x4c S → E (bomb wall) into Manhandla 0x4d | **zol**, **darknut**, trap-room, equipment-room, **boss-manhandla** | 6 → 7 / Wh, raft |
-| 104 | 3:3d | S → triforce (warps to 0:74) | zol | 7 / Wh |
-| 105–111 | 0:74 73 63 64 65 55 45 | back to 0x65, by raft to the island (`docs/routes/d4.md`) | ow-tektite, ow-moblin, ow-octorok, ow-zora, **ow-peahat** | 7 / Wh, triforce 3 |
-| 112–121 | 4:71 … 32 | Dungeon 4 to the ladder cellar 0x60 and back to 0x32 | **vire**, stalfos-keese-gel, zol, **like-like**, equipment-room | 7 / Wh, ladder |
-| 122–127 | 4:31 21 / 4:31 30 20 21 | stretch `d4-island`: clip way 0x31 E→N, 0x21 S→N (ladder clip); plain way 0x31 E→W, 0x30 E→N, 0x20 S→E, 0x21 W→N | vire, stalfos-keese-gel | 7 / Wh |
-| 128–132 | 4:11 01 02 12 13 | 0x11 S→N (bomb wall), 0x01 S→E (the key, round 22), 0x02 W→S, 0x12 N→E (push block, shutter), Gleeok | trap-room, stalfos-keese-gel, vire, **boss-gleeok** | 7 → 8 / Wh |
-| 133 | 4:03 | S → triforce (warps to 0:45) | vire | 8 / Wh |
-| 134–185 | 0:45 … 0b | the leg to Dungeon 5 (`docs/routes/d5-leg.md`): the raft back to 0x55, the stretches `coast-heart` (0x5f's heart container), `lake-3e` and `mountain`, 0x2f's take-any cave, 0x0f's 100 rupees | ow-peahat, ow-zora, ow-moblin, ow-lynel, ow-tektite, ow-leever, ow-start | 8 → 10 / Wh |
-| 186–207 | 5:76 … 24 | Dungeon 5 (`docs/routes/d5.md`): 0x64's block clip, the Olive Garden 0x05 and the recorder, the way back, Digdogger 0x24 | gibdo, darknut, pols-voice, dodongo-crossing, zol, equipment-room, **boss-digdogger** | 10 → 11 / Wh, recorder |
-| 208 | 5:14 | S → triforce (out to 0:0b) | gibdo | 11 / Wh |
-| 209–227 | 0:0b 45 55 … 34 … 42 | the leg to Dungeon 7 (`docs/routes/d7.md` §11): the whirlwind (RECORDER at 0x0b, set down at 0x45), 0x44's shop (arrows), 0x34's Armos stairs and shop (food), 0x42's pond (RECORDER, its stairs) | ow-leever, ow-peahat, ow-zora, ow-octorok, ow-moblin | 11 / Wh, arrows, food |
-| 228–246 | 7:79 … 2a | Dungeon 7: the Blue Goriya rooms (bomb walls 0x69, 0x19, 0x1a), the Grumble 0x28 (FOOD), the red candle under 0x4a, 0x1a's block clip, 0x1b, the Digdoggers 0x39 and 0x1c, 0x0c, the Wallmaster room 0x0d and its cellar, 0x29, Aquamentus 0x2a | goriya, boss-digdogger, equipment-room, dodongo-crossing, wallmaster, boss-aquamentus | 11 → 12 / Wh, red candle |
-| 247 | 7:2b | W → triforce (out to 0:42) | goriya | 12 / Wh |
-| 248–260 | 0:42 52, 51 50 / 51 61 60 50, 40 41 31 21, 21 cave | the leg to the magic sword (`docs/routes/d6.md` §14): 0x42 S, 0x52 W, the stretch `woods` (clip way: 0x51's wrap exit W into 0x50's corridor; plain way: 0x51 S, the Lost Woods 0x61 by its sequence, 0x60, 0x50 from S), the graveyard 0x40, 0x41, 0x31, 0x21's gravestone pushed from below, the cave (`waypoint: sword`, 12 containers) | ow-moblin, ow-lynel, **ow-ghini** | 12 / Wh → Ma |
-| 261–264 | 0:21 31 32 22 | cave→S (by column X `$20`), N→E, W→N, S→cave (Dungeon 6) | ow-ghini, ow-lynel | 12 / Ma |
-| 265–279 | 6:79 … 1c | Dungeon 6: 0x79's key door, 0x78 and 0x68 crossed, 0x58's key, 0x48's traps, 0x38 emptied and its block pushed, 0x28's E wall bombed, 0x29 crossed dark, 0x39's Vires, 0x3a emptied and its block, the tunnel 0x08, 0x1d, 0x2d's key, 0x2c, Gohma 0x1c (ARROW facing N) | stalfos-keese-gel, **wizzrobe**, zol, trap-room, vire, equipment-room, like-like, **boss-gohma** | 12 → 13 / Ma |
-| 280 | 6:0c | S → triforce (out to 0:22) | stalfos-keese-gel | 13 / Ma |
-| 281–286 | 0:22 3c 4c 4d 5d 6d | the leg to Dungeon 8 (`docs/routes/d8.md` §15): RECORDER twice at 0x22 (the whirlwind to Dungeon 2's entrance 0x3c), 0x3c S, 0x4c E, 0x4d S, 0x5d S by its right opening, 0x6d's tree burned (CANDLE W), its stairs | ow-lynel, ow-octorok, ow-moblin | 13 / Ma |
-| 287–295 | 8:7e … 3c | Dungeon 8: 0x7e, the Manhandla of 0x6e crossed to its N bomb wall, 0x5e's Darknuts and key, 0x4e crossed, 0x3e's Darknuts, 0x3f (its bombs at 4 or fewer), the tunnel 0x2f, 0x4c's block ring, key and bomb wall (ARROW), Gleeok with four heads 0x3c | stalfos-keese-gel, boss-manhandla, darknut, equipment-room, pols-voice, boss-gleeok | 13 → 14 / Ma |
-| 296 | 8:2c | S → triforce (out to 0:6d) | stalfos-keese-gel | 14 / Ma |
-| 297–311 | 0:6d 37 38 48 47, 47 cave, 47 48 38 28 27 17 07 06 05 | the leg to Dungeon 9 (`docs/routes/d9.md` "as built"): RECORDER at 0x6d (the whirlwind to Dungeon 1's entrance 0x37), 0x38, 0x48, 0x47's tree burned (CANDLE S) and its take-any cave (`waypoint: heart`, 15 containers), back E and N, 0x28, 0x27, 0x17 by the ladder over its river, 0x07 (`bombs: never`), 0x06, 0x05's rock wall bombed over Dungeon 9's stairs | ow-moblin, ow-octorok, ow-zora, ow-leever, ow-boulder, ow-lynel | 14 → 15 / Ma |
-| 312–355 | 9:76 … 52 | Dungeon 9: 0x76, 0x66, 0x65's N wall, the Lanmolas' 0x55 (left by its block clip), the tunnel to 0x14 (cleared), 0x15, 0x16 passed, the red ring detour (0x26, 0x27, 0x17, 0x07 by its block clip or emptied, the cellar 0x00: `waypoint: ring`, back the same way: stretch `ring-07`), 0x16's Patra for its bombs, 0x06 (no sword), 0x05 emptied, the tunnel to 0x63, 0x62, 0x61's key and Patra, the tunnel to 0x20 (stretch `arrow-20`), 0x10 emptied, the cellar 0x4f (`waypoint: silver-arrow`), back through 0x10 and 0x20 (stretch `arrow-20n`), the tunnel, 0x61, 0x51, 0x41, 0x31, 0x30 emptied, the tunnel to 0x04, 0x03 (block clip or emptied), the tunnel to 0x52, its Patra | stalfos-keese-gel, wizzrobe, **lanmola**, equipment-room, like-like, **patra**, zol | 15 / Ma, red ring, silver arrow |
-| 356 | 9:42 | Ganon: four sword hits while hidden, ARROW while he is brown, the Triforce of Power | **ganon** | 15 / Ma |
-| 357 | 9:32 | S → end (Zelda): **route ends** with the game's ending (game mode `$13`) | ganon | 15 / Ma |
+| 46–48 | 1:73, 0:37, 1:73 | S→S (out of the level), cave→cave (one grid step off the mouth, back in: the N key door is drawn open and saved), S→N (round 31) | stalfos-keese-gel, ow-octorok | 5 / Wh, 3 keys |
+| 49–51 | 1:63 53 43 | S→N, S→N (0x53's key; BOMB its N wall, `requires_bombs`), S→**N** (round 31) | stalfos-keese-gel | 5 / Wh, 3 → 4 keys |
+| 52–59 | 1:33 23 22 7f(cellar) 22 23 33 43 | the bow detour (below): S→N (key), S→W (key), E→stairs, S→N (bow), stairs→E, W→S, N→S, N→E | stalfos-keese-gel, goriya, **trap-room**, **equipment-room** | 5 / Wh, bow |
+| 60–62 | 1:44 45 35 | W→E (boomerang), W→N, S→E | goriya, wallmaster, boss-aquamentus | 5 / Wh, bow |
+| 63 | 1:36 | W → triforce (warps to 0:37) | stalfos-keese-gel | 6 / Wh |
+| 64–70 | 0:37 38 48 58 68 67, 67 cave | to 0x67's secret (round 22, `docs/routes/overworld.md`): cave→E, W→S, N→S, N→S, N→W, E→cave (bomb the rock wall), S→S (`waypoint: rupees`) | ow-octorok, ow-zora, **ow-leever** | 6 / Wh, triforce 2+1, +30 rupees |
+| 71–75 | 0:67 77 76 75 74 | stretch `d3-approach`, clip way: cave→S, N→W, E→W, E→W (`CLIP E`, the wrap exit), E→cave | ow-octorok, ow-start, ow-tektite, ow-leever | 6 / Wh |
+| 76–82 | 0:67 66 65 64 63 73 74 | plain way: cave→W, E→W, E→W, E→W, E→S, N→E, W→cave | ow-octorok, ow-zora, ow-moblin, ow-tektite | 6 / Wh |
+| 83–99 | 3:7c … 4d | Dungeon 3 (`docs/routes/d3.md`): the raft cellar 0x0f, 0x5b E (bomb wall), 0x5c, 0x4c S → E (bomb wall) into Manhandla 0x4d | **zol**, **darknut**, trap-room, equipment-room, **boss-manhandla** | 6 → 7 / Wh, raft |
+| 100 | 3:3d | S → triforce (warps to 0:74) | zol | 7 / Wh |
+| 101–107 | 0:74 73 63 64 65 55 45 | back to 0x65, by raft to the island (`docs/routes/d4.md`) | ow-tektite, ow-moblin, ow-octorok, ow-zora, **ow-peahat** | 7 / Wh, triforce 3 |
+| 108–117 | 4:71 … 32 | Dungeon 4 to the ladder cellar 0x60 and back to 0x32 | **vire**, stalfos-keese-gel, zol, **like-like**, equipment-room | 7 / Wh, ladder |
+| 118–123 | 4:31 21 / 4:31 30 20 21 | stretch `d4-island`: clip way 0x31 E→N, 0x21 S→N (ladder clip); plain way 0x31 E→W, 0x30 E→N, 0x20 S→E, 0x21 W→N | vire, stalfos-keese-gel | 7 / Wh |
+| 124–128 | 4:11 01 02 12 13 | 0x11 S→N (bomb wall), 0x01 S→E (the key, round 22), 0x02 W→S, 0x12 N→E (push block, shutter), Gleeok | trap-room, stalfos-keese-gel, vire, **boss-gleeok** | 7 → 8 / Wh |
+| 129 | 4:03 | S → triforce (warps to 0:45) | vire | 8 / Wh |
+| 130–181 | 0:45 … 0b | the leg to Dungeon 5 (`docs/routes/d5-leg.md`): the raft back to 0x55, the stretches `coast-heart` (0x5f's heart container), `lake-3e` and `mountain`, 0x2f's take-any cave, 0x0f's 100 rupees | ow-peahat, ow-zora, ow-moblin, ow-lynel, ow-tektite, ow-leever, ow-start | 8 → 10 / Wh |
+| 182–203 | 5:76 … 24 | Dungeon 5 (`docs/routes/d5.md`): 0x64's block clip, the Olive Garden 0x05 and the recorder, the way back, Digdogger 0x24 | gibdo, darknut, pols-voice, dodongo-crossing, zol, equipment-room, **boss-digdogger** | 10 → 11 / Wh, recorder |
+| 204 | 5:14 | S → triforce (out to 0:0b) | gibdo | 11 / Wh |
+| 205–223 | 0:0b 45 55 … 34 … 42 | the leg to Dungeon 7 (`docs/routes/d7.md` §11): the whirlwind (RECORDER at 0x0b, set down at 0x45), 0x44's shop (arrows), 0x34's Armos stairs and shop (food), 0x42's pond (RECORDER, its stairs) | ow-leever, ow-peahat, ow-zora, ow-octorok, ow-moblin | 11 / Wh, arrows, food |
+| 224–242 | 7:79 … 2a | Dungeon 7: the Blue Goriya rooms (bomb walls 0x69, 0x19, 0x1a), the Grumble 0x28 (FOOD), the red candle under 0x4a, 0x1a's block clip, 0x1b, the Digdoggers 0x39 and 0x1c, 0x0c, the Wallmaster room 0x0d and its cellar, 0x29, Aquamentus 0x2a | goriya, boss-digdogger, equipment-room, dodongo-crossing, wallmaster, boss-aquamentus | 11 → 12 / Wh, red candle |
+| 243 | 7:2b | W → triforce (out to 0:42) | goriya | 12 / Wh |
+| 244–256 | 0:42 52, 51 50 / 51 61 60 50, 40 41 31 21, 21 cave | the leg to the magic sword (`docs/routes/d6.md` §14): 0x42 S, 0x52 W, the stretch `woods` (clip way: 0x51's wrap exit W into 0x50's corridor; plain way: 0x51 S, the Lost Woods 0x61 by its sequence, 0x60, 0x50 from S), the graveyard 0x40, 0x41, 0x31, 0x21's gravestone pushed from below, the cave (`waypoint: sword`, 12 containers) | ow-moblin, ow-lynel, **ow-ghini** | 12 / Wh → Ma |
+| 257–260 | 0:21 31 32 22 | cave→S (by column X `$20`), N→E, W→N, S→cave (Dungeon 6) | ow-ghini, ow-lynel | 12 / Ma |
+| 261–275 | 6:79 … 1c | Dungeon 6: 0x79's key door, 0x78 crossed (`drops: first`: a drop of its Wizzrobes is taken on the way, round 31) and 0x68 crossed, 0x58's key, 0x48's traps, 0x38 emptied and its block pushed, 0x28's E wall bombed, 0x29 dark with its key taken (round 31), 0x39's Vires (`bombs: tenth`, round 31), 0x3a emptied and its block, the tunnel 0x08, 0x1d, 0x2d's key (`bombs: tenth`), 0x2c, Gohma 0x1c (ARROW facing N) | stalfos-keese-gel, **wizzrobe**, zol, trap-room, vire, equipment-room, like-like, **boss-gohma** | 12 → 13 / Ma |
+| 276 | 6:0c | S → triforce (out to 0:22) | stalfos-keese-gel | 13 / Ma |
+| 277–282 | 0:22 3c 4c 4d 5d 6d | the leg to Dungeon 8 (`docs/routes/d8.md` §15): RECORDER twice at 0x22 (the whirlwind to Dungeon 2's entrance 0x3c), 0x3c S, 0x4c E, 0x4d S, 0x5d S by its right opening, 0x6d's tree burned (CANDLE W), its stairs | ow-lynel, ow-octorok, ow-moblin | 13 / Ma |
+| 283–291 | 8:7e … 3c | Dungeon 8: 0x7e, the Manhandla of 0x6e crossed to its N bomb wall, 0x5e's Darknuts and key, 0x4e crossed, 0x3e's Darknuts, 0x3f (its bombs at 4 or fewer), the tunnel 0x2f, 0x4c's block ring and bomb wall (ARROW; its key left since round 31), Gleeok with four heads 0x3c | stalfos-keese-gel, boss-manhandla, darknut, equipment-room, pols-voice, boss-gleeok | 13 → 14 / Ma |
+| 292 | 8:2c | S → triforce (out to 0:6d) | stalfos-keese-gel | 14 / Ma |
+| 293–307 | 0:6d 37 38 48 47, 47 cave, 47 48 38 28 27 17 07 06 05 | the leg to Dungeon 9 (`docs/routes/d9.md` "as built"): RECORDER at 0x6d (the whirlwind to Dungeon 1's entrance 0x37), 0x38, 0x48, 0x47's tree burned (CANDLE S) and its take-any cave (`waypoint: heart`, 15 containers), back E and N, 0x28, 0x27, 0x17 by the ladder over its river, 0x07 (`bombs: never`), 0x06, 0x05's rock wall bombed over Dungeon 9's stairs | ow-moblin, ow-octorok, ow-zora, ow-leever, ow-boulder, ow-lynel | 14 → 15 / Ma |
+| 308–351 | 9:76 … 52 | Dungeon 9: 0x76, 0x66 N (round 31), 0x56's W wall (like-like; its key left), the Lanmolas' 0x55 from E (left by its block clip), the tunnel to 0x14 (cleared), 0x15, 0x16 passed, the red ring detour (0x26, 0x27, 0x17, 0x07 by its block clip or emptied, the cellar 0x00: `waypoint: ring`, back the same way: stretch `ring-07`), 0x16's Patra for its bombs, 0x06 (no sword), 0x05 emptied, the tunnel to 0x63, 0x62, 0x61's key and Patra, the tunnel to 0x20 (stretch `arrow-20`), 0x10 emptied, the cellar 0x4f (`waypoint: silver-arrow`), back through 0x10 and 0x20 (stretch `arrow-20n`), the tunnel, 0x61, 0x51, 0x41, 0x31, 0x30 emptied, the tunnel to 0x04, 0x03 (block clip or emptied), the tunnel to 0x52, its Patra | stalfos-keese-gel, wizzrobe, **lanmola**, equipment-room, like-like, **patra**, zol | 15 / Ma, red ring, silver arrow |
+| 352 | 9:42 | Ganon: four sword hits while hidden, ARROW while he is brown, the Triforce of Power | **ganon** | 15 / Ma |
+| 353 | 9:32 | S → end (Zelda): **route ends** with the game's ending (game mode `$13`) | ganon | 15 / Ma |
 
 Choices and findings:
 - **Row 5 to D2:** 0x5d N → 0x4d W → 0x4c N → 0x3c. 0x3c's only exits are S and the stairs
   (rows 0–2 are wall; the gap at row 3, cols 25–26 is an alcove), so 0x3d → 0x3c doesn't exist.
 - **After D2:** the triforce puts Link on 0x3c, which has no N exit, so 0x3c → 0x2c goes round: 0x3c S, 0x4c E,
   0x4d N, 0x3d N, 0x2d W, 0x2c (Lee confirmed, Nov 8).
-- **Dungeon 1 (Lee, Nov 8):** Link carries D2's three keys (0x7e, 0x4e, 0x3e) into D1, so the key-aware shortest
-  path would go 0x73 N directly; the route still takes both key rooms like the old D1-first route: 0x73 W, 0x72
-  back E, 0x73 E, 0x74 back W, 0x73 N. The objective follows the route's steps (below), so 0x73 sends Link W,
-  then E, then N. The boomerang pickup at 0x44 stays.
+- **Dungeon 1 (the owner, Nov 19, round 31):** Link carries D2's three keys into D1. In from 0:0x37, out S and
+  straight back in: the scroll out opens 0x73's N key door and the entry's layout saves it (asm:Door_LayOut), so no
+  key is spent; N through 0x63 and 0x53 (its key), one bomb at 0x53's N wall into 0x43 from S. The key rooms 0x72
+  and 0x74 and the way round by 0x52 and 0x42 are left out; the keys come out even (`docs/routes/phase9-walks.md`
+  §1). Until round 31 the route took both key rooms (0x73 W, 0x72, 0x73 E, 0x74, 0x73 N). The boomerang pickup at
+  0x44 stays.
 - **0x1b is the mountain maze** (`asm:Maze_CheckStep`): W is its only normal exit; E and S bring Link back into
   0x1b and N reaches 0x0b only on the fourth N in a row (four Ns from inside 0x1b; walked in the emulator, Nov 9).
   game.yaml lists N/E/S as exits back into 0x1b plus a `maze:` block (`docs/routes/overworld.md`).
