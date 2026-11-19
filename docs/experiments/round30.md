@@ -155,8 +155,10 @@ trained to be (`d8` +8.1 ± 2.0, Dungeon 5 at the route's hearts +5.8 ± 2.2, wi
 one room whose chain entries the arm left out (0x69 from N: its replay cut was dropped to start the training sooner,
 while 0x59 and 0x5b, which kept theirs, hold). Not promoted; `r78-dark37-s85` stays.
 
-**Next for darknut** (written, not run): the same arm with 0x69 from N's entries in the harvested starts
-(`scripts/experiments/r29_zora_states.py target/r30dk/replays/d3 OUT --step 95:3_69n`, 60-120 of them), continued
-from `r30-dark-s89` (it holds `d8` and Dungeon 5) for 244 iterations and judged on `d3` first; or the two other
-seeds' chosen checkpoints (`r30-dark-s88` it011492, +4.4 ± 2.2; `r30-dark-s87` it011462, +3.6 ± 2.2 on Dungeon 5)
-measured on `d3` and `d8`.
+**The continuation with 0x69 from N's entries** (`r30-dark69-s92`, `-s93`, `-s94`): from `r30-dark-s89` (it holds
+`d8` and Dungeon 5), 244 iterations, the same arguments and demonstrations, and the harvested starts above plus 120
+entries of 3:0x69 from N cut out of the Dungeon 3 harvest chain's replays (`scripts/experiments/r29_zora_states.py
+REPLAYS OUT --step 95:3_69n --count 120`; all enter at X 120, Y 93; 1340 states). Chosen on `d3` (`select-checkpoint
+darknut RUN --from 3_7cs_0 --stop-at step:105`, screen seeds 2000-2999, confirm 3000-3999, `r78-dark37-s85` pinned),
+then Dungeon 5 at the route's hearts and `d8`. Beside it, the fallback: the two other seeds' chosen checkpoints
+(`r30-dark-s88` it011492, +4.4 ± 2.2; `r30-dark-s87` it011462, +3.6 ± 2.2 on Dungeon 5) measured on `d3` and `d8`.
