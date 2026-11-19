@@ -121,3 +121,21 @@ mode; the route's runs in `eval-batch r30w-base`). Success and hearts a visit:
 With Dungeon 6's profile 0x3a is played from 4.9 hearts in half the resets: `r79c-wj-s85` takes it in 60.7% (74.3%
 under round 29's yaml). The chain decides (round 25): the selections on `d9` and `d6` (screen seeds 2000-2999,
 confirmation 3000-3999, `r79c-wj-s85` and `r79c-patra` pinned beside) are queued.
+
+### patra chosen on `d9`
+
+`select-checkpoint patra r30w-patra --segment d9 --runs 1000 --first-seed 2000 --confirm 1000 --confirm-first-seed
+3000 --confirm-top 1 --only it001884,it001914,it001944,last,promoted` (the route's wizzrobe `r79c-wj-s85` in the
+team; `r79c-patra` pinned beside):
+
+| candidate | screen (2000-2999) | confirm (3000-3999) | hearts at the end | confirm against `r79c-patra` |
+|---|---:|---:|---:|---:|
+| **it001944** | 36.1% | **36.4%** | 3.54 | **+6.2 ± 2.0** |
+| it001884 | 35.5% | - | - | - |
+| last (it001952) | 35.1% | 33.1% | 3.68 | +2.9 ± 2.0 |
+| it001914 | 33.7% | - | - | - |
+| `r79c-patra` | 28.7% | 30.2% | 3.16 | |
+
+**it001944 is better on `d9` beyond noise on seeds not used to choose it** (+6.2 points, three standard errors);
+patra plays no other segment (`post-d8` ends on entering 9:0x76). Applied as the run's `ckpt.pt`; its evaluation
+on equal terms and the promotion wait for the wizzrobe selections, whose chains play patra's promoted run.
