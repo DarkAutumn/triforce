@@ -89,3 +89,13 @@ last,promoted` for s87 (the paired reference), `--only last --no-promoted` for s
 reference chains, the same seeds). ow-lynel: the same on `--segment post-d2` with `--only last,promoted`. Then each
 chosen run's gate: the full route from the start to step 68, 1000 runs (seeds 0-999), paired with
 `r29land-1k-full`, and for ow-lynel `post-d4`, `post-d7`, `post-d6` and `post-d8` paired with `r29land-1k`.
+
+**First choices back.** moldorm (`d2`, 1000 runs, to Dungeon 2's exit; screen seeds 2000-2999 | confirm 3000-3999):
+`s88` 90.0% | 89.7%, `s89` 89.7% | 90.8% (in 2:0x3e 0.32 | 0.27 hearts a visit, 16 | 13 deaths); the team's
+`r29land-1k-d2` 91.6% on seeds 0-999 (not paired): no gain seen; `s87` with `r75-f-b` beside it on the same seeds was
+still waiting. **ow-lynel `r30e-lynel-s84`** (`post-d2`, to 1:0x73, against `r27l-lynel-s81` on the same seeds):
+93.5% | **94.9%** against 92.6% | 93.6% (+0.9 ± 1.1 | +1.3 ± 1.0), 3.35 | 3.34 hearts entering 1:0x73 (3.32 | 3.33).
+**0x0a's second visit is back to `r74-lynel`'s**: 0.12 hearts a visit and 4 | 7 deaths against 0.25 | 0.22 and
+16 | 14; the first visit costs a little more (0.39 against 0.33-0.35, 3 | 4 deaths against 2 | 4). Within noise on
+arrivals; its gate (the full route to Dungeon 1's exit, paired with `r29land-1k-full`, and the four later legs it
+plays) was not yet run.
