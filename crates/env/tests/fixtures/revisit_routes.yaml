@@ -4,7 +4,8 @@
 # once): 0x5c and 0x5d from W a third time (0x5d left S, as d2first's second visit, not N as its first), then a
 # stretch with the heart container room 0x5f on both ways (the plain way's steps come after the clip way's 0x5f in
 # the list), a room only the plain way enters (0x6f from S) entered again on a shared step, and D1's bow cellar
-# entered from S a second time (as Dungeon 5's tunnel cellar 0x07).
+# entered from S a second time (as Dungeon 5's tunnel cellar 0x07).  Since 1.9.0.0 d2first ends on the end of the
+# game, which nothing may follow: both tests append this to d2first without its last step (Zelda's room).
 revisit:
   extends: d2first
   steps:

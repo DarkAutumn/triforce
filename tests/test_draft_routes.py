@@ -22,9 +22,9 @@ def problems_of(tmp_path, steps: str) -> list[str]:
 
 
 def test_the_shipped_drafts_hold_against_game_yaml():
-    """Every draft step's exit is one of its room's and leads into the next step's room from the side it says."""
+    """Every draft step's exit is one of its room's and leads into the next step's room from the side it says.  Since
+    1.9.0.0 the first quest is all `d2first` and no draft is shipped."""
     from triforce import draft_routes
-    assert draft_routes.names(), 'no draft routes'
     for name in draft_routes.names():
         assert draft_routes.problems(draft_routes.steps(name)) == [], name
 

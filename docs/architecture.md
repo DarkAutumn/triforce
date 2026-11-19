@@ -1986,7 +1986,8 @@ For planning a part of the game before any of it is built (Nov 13; `docs/routes/
   `game.yaml` wrap exit), `takes` (what an overworld cave gives), `exit: recorder` / `entry: recorder` (the
   whirlwind) and `exit: end`. `steps(name)` returns `route_steps`-shaped dicts, `problems(steps)` checks them
   against `game.yaml` (the room exists, the exit is one of its exits and leads into the next step's room from the
-  side that step says). Only `zelda-map.py` reads drafts.
+  side that step says). Only `zelda-map.py` reads drafts. Since 1.9.0.0 none is shipped: `first-quest` moved into
+  `routes.yaml` part by part (rounds 24-29) until `d2first` reached the end of the game.
 - **`zelda-map.py`** draws a draft like a route (`--route NAME`, the Route selector), a wrap step dashed, the
   whirlwind as a dotted curve, a tunnel as a link between its two rooms; door marks on every dungeon level (open,
   key door, bomb wall, shutter on its side, stairs with what the cellar holds or where the tunnel leads); the

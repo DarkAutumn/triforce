@@ -1,4 +1,4 @@
-//! Round 28: the scouting route `d8` (`d6`, then steps 281-296) played in the real game by the route's objective,
+//! Round 28: `d2first`'s steps 281-296 (scouted as `d8`) played in the real game by the route's objective,
 //! from Dungeon 6's triforce through the leg (the two recorder plays out of 0x22, 0x3c, 0x4c, 0x4d, 0x5d), the burned
 //! tree of 0x6d and Dungeon 8 to its triforce: the agent's own actions (MOVE, RECORDER, CANDLE, BOMB, SWORD) through
 //! the session's masks with the env's per-step rules mirrored (family `items:`/`clips:`, a step's own bomb mode, the
@@ -39,7 +39,7 @@ use zelda::{Action, ActionKind, Direction, GameMap, GameView, LoadOptions, MapLo
 
 type S = Session<Counted>;
 
-const ROUTE: &str = "d8";
+const ROUTE: &str = zelda::game_map::DEFAULT_ROUTE;
 const OBJ_TYPE: u16 = 0x34F;
 /// `Gohma_ObjEyeState` (`$46B` + slot): 3 while the eye is fully open.
 const GOHMA_EYE: u16 = 0x46B;
@@ -47,9 +47,10 @@ const GOHMA_EYE: u16 = 0x46B;
 const GLEEOK_HEAD_TIMER: u16 = 0x4F0 + 5;
 /// Link's row under Gleeok (docs/routes/d8-walks.md §6.1: no attached head reaches it, the blade reaches them).
 const GLEEOK_ROW: i32 = 0x9D;
-/// The first step of the stretch (0x22 out of Dungeon 6) and the route's length.
+/// The first step of the stretch (0x22 out of Dungeon 6) and the step after its triforce (0x6d out of Dungeon 8; the
+/// route runs on to the end of the game, `d9.rs`).
 const FIRST: usize = 281;
-const STEPS: usize = 297;
+const NEXT: usize = 297;
 
 fn map() -> Arc<GameMap> {
     Arc::new(GameMap::builtin())
@@ -688,7 +689,7 @@ fn the_d8_route_is_walked_from_the_d6_triforce_to_the_d8_triforce() {
     let Some(mut w) = Walk::at_the_d6_triforce() else { return };
     let map = w.s.game_map().clone();
     let route = &map.routes[ROUTE];
-    assert_eq!(route.len(), STEPS);
+    assert_eq!(route[NEXT].location(), ow(0x6d), "step 297 starts in 0:0x6d, out of Dungeon 8");
     let frames_in = w.s.frame();
     let visits = w.run(|s| s.state().has_triforce(8), 60_000);
     let t = &w.ticks;
@@ -839,9 +840,9 @@ fn the_d8_route_is_walked_from_the_d6_triforce_to_the_d8_triforce() {
     assert!(dead.iter().any(|k| k.kind == ObjectiveKind::Treasure), "the heart container is the target");
     assert_eq!(boss.last().unwrap().max_hearts, 14);
 
-    // The route's end: 0x2c's triforce on step 296.
+    // 0x2c's triforce on step 296, the walk's end.
     let end = t.last().unwrap();
-    assert_eq!((end.room, end.step, end.kind), (uw(0x2c), Some(STEPS - 1), ObjectiveKind::Treasure));
+    assert_eq!((end.room, end.step, end.kind), (uw(0x2c), Some(NEXT - 1), ObjectiveKind::Treasure));
     assert!(w.s.state().has_triforce(8));
     // (`--nocapture`: the walk's numbers for the round document.)
     eprintln!(

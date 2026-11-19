@@ -16,12 +16,12 @@ def options(policies, route_name='d2first'):
 
 def test_checkpoints_follow_the_route_triforces():
     steps = _native.route_steps('d2first')
-    assert golden.checkpoints('d2first') == [24, 68, 105, 134, 209, 248]
-    # Back on the overworld outside Dungeons 2, 1, 3, 4, 5 and 7; the route's last triforce (Dungeon 6's, round 27)
-    # is no checkpoint.
+    assert golden.checkpoints('d2first') == [24, 68, 105, 134, 209, 248, 281, 297]
+    # Back on the overworld outside Dungeons 2, 1, 3, 4, 5, 7, 6 and 8; the route ends on the end of the game (round
+    # 29, 1.9.0.0), no triforce.
     assert [(steps[k]['level'], steps[k]['room']) for k in golden.checkpoints('d2first')] == [
-        (0, 0x3c), (0, 0x37), (0, 0x74), (0, 0x45), (0, 0x0b), (0, 0x42)]
-    assert steps[-1]['exit'] == 'triforce' and steps[-1]['level'] == 6
+        (0, 0x3c), (0, 0x37), (0, 0x74), (0, 0x45), (0, 0x0b), (0, 0x42), (0, 0x22), (0, 0x6d)]
+    assert steps[-1]['exit'] == 'end' and steps[-1]['level'] == 9
 
 
 def test_a_scripted_segment_is_won_and_recorded(scripted_models, states_dir):

@@ -6,7 +6,7 @@
     .venv/bin/python zelda-map.py --rerender              # rebuild every cached room screenshot
     .venv/bin/python zelda-map.py --stats FILE            # this room-stats file, not the newest
     .venv/bin/python zelda-map.py --clips off --level 4 --overlay deaths --screenshot map.png   # a picture, no window
-    .venv/bin/python zelda-map.py --route first-quest --level 5 --overlay labels                # a draft route
+    .venv/bin/python zelda-map.py --route NAME --level 5 --overlay labels                       # a draft route
 
 One tab per level (Overworld, Dungeon 1-9).  Each level's rooms are stitched into one picture: a room with a
 savestate (``triforce/states``) shows its playfield as Link enters it, rendered once and cached as a PNG in

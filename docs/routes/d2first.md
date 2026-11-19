@@ -4,9 +4,11 @@ Lee's route (Nov 8), the only route since the reset the same day (`docs/decision
 milestone1-fairy removed); the Dungeon 1 bow detour joined it on Nov 9, and the same day the route went on from the
 D1 triforce to Dungeon 3 (the raft, Manhandla). On Nov 12 Dungeon 4 joined it (by raft to the island 0x45, the
 ladder, Gleeok; `docs/routes/d4.md`), in round 24 (Nov 14-15) the leg and Dungeon 5 (`docs/routes/d5-leg.md`,
-`d5.md`), in round 26 (Nov 17) the leg to Dungeon 7 and Dungeon 7 (`docs/routes/d7.md` §11), and in round 27 (Nov
-18) the magic sword and Dungeon 6 (`docs/routes/d6.md` §14): it now ends on the D6 triforce (281 steps; first played
-to it by trained models in round 27, version 1.7.0.0). Data: `triforce/routes.yaml` `d2first`, rooms in
+`d5.md`), in round 26 (Nov 17) the leg to Dungeon 7 and Dungeon 7 (`docs/routes/d7.md` §11), in round 27 (Nov 18)
+the magic sword and Dungeon 6 (`docs/routes/d6.md` §14), and in rounds 28 and 29 (Nov 17-19, built side by side as
+the scouting routes `d8` and `d9`, merged at 1.9.0.0) Dungeon 8 (`docs/routes/d8.md` §15) and Dungeon 9, Ganon and
+Zelda (`docs/routes/d9.md` "as built"): it now runs from the game start to the end of the game (358 steps; the
+last, Zelda's room, ends on the first frame of game mode `$13`). Data: `triforce/routes.yaml` `d2first`, rooms in
 `triforce/game.yaml`. View it with
 
 ```bash
@@ -63,7 +65,14 @@ Hearts are heart containers on entering the room; sword W = wood, Wh = white, Ma
 | 248–260 | 0:42 52, 51 50 / 51 61 60 50, 40 41 31 21, 21 cave | the leg to the magic sword (`docs/routes/d6.md` §14): 0x42 S, 0x52 W, the stretch `woods` (clip way: 0x51's wrap exit W into 0x50's corridor; plain way: 0x51 S, the Lost Woods 0x61 by its sequence, 0x60, 0x50 from S), the graveyard 0x40, 0x41, 0x31, 0x21's gravestone pushed from below, the cave (`waypoint: sword`, 12 containers) | ow-moblin, ow-lynel, **ow-ghini** | 12 / Wh → Ma |
 | 261–264 | 0:21 31 32 22 | cave→S (by column X `$20`), N→E, W→N, S→cave (Dungeon 6) | ow-ghini, ow-lynel | 12 / Ma |
 | 265–279 | 6:79 … 1c | Dungeon 6: 0x79's key door, 0x78 and 0x68 crossed, 0x58's key, 0x48's traps, 0x38 emptied and its block pushed, 0x28's E wall bombed, 0x29 crossed dark, 0x39's Vires, 0x3a emptied and its block, the tunnel 0x08, 0x1d, 0x2d's key, 0x2c, Gohma 0x1c (ARROW facing N) | stalfos-keese-gel, **wizzrobe**, zol, trap-room, vire, equipment-room, like-like, **boss-gohma** | 12 → 13 / Ma |
-| 280 | 6:0c | S → triforce: **route ends** | stalfos-keese-gel | 13 / Ma |
+| 280 | 6:0c | S → triforce (out to 0:22) | stalfos-keese-gel | 13 / Ma |
+| 281–286 | 0:22 3c 4c 4d 5d 6d | the leg to Dungeon 8 (`docs/routes/d8.md` §15): RECORDER twice at 0x22 (the whirlwind to Dungeon 2's entrance 0x3c), 0x3c S, 0x4c E, 0x4d S, 0x5d S by its right opening, 0x6d's tree burned (CANDLE W), its stairs | ow-lynel, ow-octorok, ow-moblin | 13 / Ma |
+| 287–295 | 8:7e … 3c | Dungeon 8: 0x7e, the Manhandla of 0x6e crossed to its N bomb wall, 0x5e's Darknuts and key, 0x4e crossed, 0x3e's Darknuts, 0x3f (its bombs at 4 or fewer), the tunnel 0x2f, 0x4c's block ring, key and bomb wall (ARROW), Gleeok with four heads 0x3c | stalfos-keese-gel, boss-manhandla, darknut, equipment-room, pols-voice, boss-gleeok | 13 → 14 / Ma |
+| 296 | 8:2c | S → triforce (out to 0:6d) | stalfos-keese-gel | 14 / Ma |
+| 297–311 | 0:6d 37 38 48 47, 47 cave, 47 48 38 28 27 17 07 06 05 | the leg to Dungeon 9 (`docs/routes/d9.md` "as built"): RECORDER at 0x6d (the whirlwind to Dungeon 1's entrance 0x37), 0x38, 0x48, 0x47's tree burned (CANDLE S) and its take-any cave (`waypoint: heart`, 15 containers), back E and N, 0x28, 0x27, 0x17 by the ladder over its river, 0x07 (`bombs: never`), 0x06, 0x05's rock wall bombed over Dungeon 9's stairs | ow-moblin, ow-octorok, ow-zora, ow-leever, ow-boulder, ow-lynel | 14 → 15 / Ma |
+| 312–355 | 9:76 … 52 | Dungeon 9: 0x76, 0x66, 0x65's N wall, the Lanmolas' 0x55 (left by its block clip), the tunnel to 0x14 (cleared), 0x15, 0x16 passed, the red ring detour (0x26, 0x27, 0x17, 0x07 by its block clip or emptied, the cellar 0x00: `waypoint: ring`, back the same way: stretch `ring-07`), 0x16's Patra for its bombs, 0x06 (no sword), 0x05 emptied, the tunnel to 0x63, 0x62, 0x61's key and Patra, the tunnel to 0x20 (stretch `arrow-20`), 0x10 emptied, the cellar 0x4f (`waypoint: silver-arrow`), back through 0x10 and 0x20 (stretch `arrow-20n`), the tunnel, 0x61, 0x51, 0x41, 0x31, 0x30 emptied, the tunnel to 0x04, 0x03 (block clip or emptied), the tunnel to 0x52, its Patra | stalfos-keese-gel, wizzrobe, **lanmola**, equipment-room, like-like, **patra**, zol | 15 / Ma, red ring, silver arrow |
+| 356 | 9:42 | Ganon: four sword hits while hidden, ARROW while he is brown, the Triforce of Power | **ganon** | 15 / Ma |
+| 357 | 9:32 | S → end (Zelda): **route ends** with the game's ending (game mode `$13`) | ganon | 15 / Ma |
 
 Choices and findings:
 - **Row 5 to D2:** 0x5d N → 0x4d W → 0x4c N → 0x3c. 0x3c's only exits are S and the stairs

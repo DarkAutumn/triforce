@@ -57,9 +57,8 @@ def test_every_trainable_specialist_has_start_states():
 
 def test_configured_start_states_are_clean():
     """Every configured state passes the audit: named room and entry side, pre-entry, the full room, the route's max
-    hearts at full health, a route step.  A state is audited against the route its manifest entry names: a step of
-    ``d2first``, or (rounds 28 and 29, until they are merged into ``d2first``) of the scouting routes ``d8``, steps
-    281-296, and ``d9``, steps 297-357."""
+    hearts at full health, a route step.  A state is audited against the route its manifest entry names (every
+    shipped state is a step of ``d2first``)."""
     require_rom()
     paths = configured_states()
     if not paths:
@@ -72,7 +71,7 @@ def test_configured_start_states_are_clean():
         index = indexes.setdefault(route, entry_states.RouteIndex(route))
         problems[os.path.basename(path)] = audit_problems(audit_state(game, path, loads=2, full=full, index=index))
     assert {name: found for name, found in problems.items() if found} == {}
-    assert set(indexes) == {DEFAULT_ROUTE, 'd8', 'd9'}
+    assert set(indexes) == {DEFAULT_ROUTE}
 
 
 def test_every_shipped_state_but_start_has_a_manifest_entry():
@@ -276,12 +275,13 @@ def test_path_route_fields():
 
 REVISIT_FIXTURE = REPO_STATES_DIR.parent.parent / 'crates' / 'env' / 'tests' / 'fixtures' / 'revisit_routes.yaml'
 # zelda::game_map::route_visits of the route's own steps (crates/env/tests/state_visits.rs asserts the same list).
-REVISIT_VISITS = [3, 3, 2, 2, 2, 2, 2, 1, 1, 2, 2, 2, 2]
+REVISIT_VISITS = [3, 3, 3, 2, 2, 2, 2, 1, 1, 2, 2, 2, 2]
 
 
 def _revisit_steps() -> list:
     """The test route ``revisit`` as ``_native.route_steps`` would list it with the fixture in routes.yaml: d2first's
-    steps, then the fixture's (a stretch's clip way, then its plain way), with their visits."""
+    steps but its last (Zelda's room: `exit: end` ends every route it is in; state_visits.rs drops it too), then the
+    fixture's (a stretch's clip way, then its plain way), with their visits."""
     yaml = pytest.importorskip('yaml')
     with open(REVISIT_FIXTURE, encoding='utf-8') as file:
         route = yaml.safe_load(file)['revisit']
@@ -291,7 +291,7 @@ def _revisit_steps() -> list:
             own.append((element, None, None))
             continue
         own += [(step, way, element['stretch']) for way in ('clips', 'plain') for step in element[way]]
-    steps = list(native.route_steps(route['extends']))
+    steps = list(native.route_steps(route['extends']))[:-1]
     assert len(own) == len(REVISIT_VISITS)
     for (step, way, stretch), visit in zip(own, REVISIT_VISITS):
         steps.append({'index': len(steps), 'level': step['level'], 'room': int(step['room'], 16),
@@ -336,7 +336,12 @@ def test_later_visit_names_round_trip():
                      (211, '0_55n_v2_0.state'), (212, '0_54e_v2_0.state'), (213, '0_55n_v2_0.state'),
                      (215, '0_64e_v2_0.state'), (225, '0_53e_v2_0.state'), (226, '0_52e_v2_0.state'),
                      # Round 27, the leg to the magic sword: 0x51 from E on both ways of woods, 0x50 from E (clips).
-                     (250, '0_51e_v2_0.state'), (251, '0_50e_v2_0.state'), (252, '0_51e_v2_0.state')]
+                     (250, '0_51e_v2_0.state'), (251, '0_50e_v2_0.state'), (252, '0_51e_v2_0.state'),
+                     # Round 28, the leg to Dungeon 8: 0x4c from N, 0x4d from W and 0x6d from N again (the earlier
+                     # legs had the first).  Round 29, the leg to Dungeon 9 (0x38 from W, 0x48 from N, back from
+                     # 0x47's heart cave) and Dungeon 9's tunnel 0x75 the second time.
+                     (283, '0_4cn_v2_0.state'), (284, '0_4dw_v2_0.state'), (286, '0_6dn_v2_0.state'),
+                     (299, '0_38w_v2_0.state'), (300, '0_48n_v2_0.state'), (345, '9_75cave_v2_0.state')]
 
 
 def test_the_audit_follows_later_visits_and_counts_hearts_along_each_way(revisit, tmp_path):
@@ -345,10 +350,10 @@ def test_the_audit_follows_later_visits_and_counts_hearts_along_each_way(revisit
     doesn't count the clip way's heart container room (d2first's coast stretch: 0x5f on both ways): 8 hearts up to
     0x5f on either way, 9 from the rejoin 0x4f, 10 after 0x2f's cave."""
     require_rom()
-    steps, first = revisit, len(route_steps())
+    steps, first = revisit, len(route_steps()) - 1
     index = entry_states.RouteIndex('revisit')
     at = {s.filename(0)[:-len('_0.state')]: s.index for s in steps[first:]}
-    assert list(at) == ['0_5cw_v3', '0_5dw_v3', '0_6dn_v2', '0_6ew_v2', '0_6fw_v2', '0_5fs_v2', '0_7fn', '0_6fs',
+    assert list(at) == ['0_5cw_v3', '0_5dw_v3', '0_6dn_v3', '0_6ew_v2', '0_6fw_v2', '0_5fs_v2', '0_7fn', '0_6fs',
                         '0_4fs_v2', '0_6fs_v2', '1_7fcave_v2']
     assert all(index.by_name[name] == i for name, i in at.items() if name not in ('0_6fw_v2', '0_5fs_v2'))
     assert index.by_name['0_6fw_v2'] == first + 4 and index.by_name['0_5fs_v2'] == first + 5   # the clip way's step
@@ -360,8 +365,8 @@ def test_the_audit_follows_later_visits_and_counts_hearts_along_each_way(revisit
     assert [steps[i].room for i in (coast['clips'][-1], coast['plain'][-1], coast['rejoin'])] == [0x5f, 0x5f, 0x4f]
     assert index.hearts(coast['rejoin']) == 9
     cave = next(s.index for s in steps if (s.level, s.room, s.in_cave) == (0, 0x2f, True))
-    assert (index.hearts(cave), index.hearts(cave + 1), index.max_hearts) == (9, 10, 13)
-    assert {index.hearts(s.index) for s in steps[first:]} == {13}                   # after Dungeon 6's container
+    assert (index.hearts(cave), index.hearts(cave + 1), index.max_hearts) == (9, 10, 15)
+    assert {index.hearts(s.index) for s in steps[first:]} == {15}                   # after 0x47's container
     for name in ('0_5dw_0', '0_5dw_v2_0', '0_5dw_v3_0'):
         shutil.copy(REPO_STATES_DIR / '0_5dw_0.state', tmp_path / f'{name}.state')
     rows = {r['state']: r for r in entry_states.audit(sorted(glob.glob(str(tmp_path / '*.state'))), loads=1,
@@ -370,7 +375,7 @@ def test_the_audit_follows_later_visits_and_counts_hearts_along_each_way(revisit
     assert (first_visit['route_step'], first_visit['expected_hearts'], audit_problems(first_visit)) == \
         (index.by_name['0_5dw'], BASE_HEARTS, [])
     assert (second_visit['route_step'], second_visit['expected_hearts']) == (index.by_name['0_5dw_v2'], 8)
-    assert (third_visit['route_step'], third_visit['expected_hearts']) == (first + 1, 13)
+    assert (third_visit['route_step'], third_visit['expected_hearts']) == (first + 1, 15)
     for row in (second_visit, third_visit):                             # the first visit's 3 hearts, not the route's
         assert audit_problems(row) == ['HEARTS'], row
     missing = entry_states.directory_problems(str(tmp_path), 'revisit')

@@ -14,20 +14,19 @@ from triforce.specialist import list_specialists
 def test_the_route_and_families():
     # d2first is the one route the game is played on (Dungeon 4 merged in, Nov 12; the leg and Dungeon 5, round 24;
     # the leg to Dungeon 7 and Dungeon 7, round 26: scouted as the route d7, merged Nov 16; the magic sword and
-    # Dungeon 6, round 27: scouted as the route d6, merged Nov 18); d8 is round 28's scouting route (d2first, then the
-    # leg to Dungeon 8 and Dungeon 8) and d9 round 29's (d8, then the leg to Dungeon 9, Dungeon 9, Ganon and Zelda);
+    # Dungeon 6, round 27: scouted as the route d6, merged Nov 18; the leg to Dungeon 8 and Dungeon 8, round 28, and the
+    # leg to Dungeon 9, Dungeon 9, Ganon and Zelda, round 29: scouted as the routes d8 and d9, merged at 1.9.0.0);
     # clips-gauntlet is round 21's experiment route (two targets per room and entry, drawn by a specialist naming it).
-    assert native.routes() == [native.DEFAULT_ROUTE, 'd8', 'd9', 'clips-gauntlet']
-    assert native.DEFAULT_ROUTE == 'd2first'
+    assert native.routes() == [native.DEFAULT_ROUTE, 'clips-gauntlet'] and native.DEFAULT_ROUTE == 'd2first'
     assert sorted(native.families()) == list_specialists()
 
 
-def test_the_route_runs_from_the_start_to_the_d6_triforce():
+def test_the_route_runs_from_the_start_to_the_end_of_the_game():
     steps = native.route_steps()
     assert [s['index'] for s in steps] == list(range(len(steps)))
     first, last = steps[0], steps[-1]
     assert (first['level'], first['room'], first['entry'], first['specialist']) == (0, 0x77, 'start', 'ow-start')
-    assert (last['level'], last['room'], last['exit']) == (6, 0x0c, 'triforce') and len(steps) == 281
+    assert (last['level'], last['room'], last['exit']) == (9, 0x32, 'end') and len(steps) == 358
 
 
 def test_the_magic_sword_and_dungeon_6_follow_the_d7_triforce():
@@ -35,26 +34,26 @@ def test_the_magic_sword_and_dungeon_6_follow_the_d7_triforce():
     cave's waypoint, Dungeon 6 with its tunnel and Gohma; every room is in its step's family."""
     steps = native.route_steps()
     assert (steps[247]['level'], steps[247]['room'], steps[247]['exit']) == (7, 0x2b, 'triforce')
-    own = steps[248:]
+    own = steps[248:281]
     assert [(s['room'], s['way']) for s in own if s['stretch'] == 'woods'] == [
         (0x51, 'clips'), (0x50, 'clips'), (0x51, 'plain'), (0x61, 'plain'), (0x60, 'plain'), (0x50, 'plain')]
     assert [(s['index'], s['room'], s['in_cave'], s['waypoint']) for s in own if s['waypoint']] == [
         (260, 0x21, True, 'sword')]
     assert [(s['index'], s['bomb_reserve']) for s in own if s['bomb_reserve'] is not None] == [(248, 2), (272, 1)]
-    last = steps[-1]
+    last = own[-1]
     assert (last['level'], last['room'], last['exit'], last['specialist']) == (6, 0x0c, 'triforce', 'stalfos-keese-gel')
     assert {s['specialist'] for s in own} == {
         'ow-moblin', 'ow-lynel', 'ow-ghini', 'stalfos-keese-gel', 'wizzrobe', 'zol', 'trap-room', 'vire',
         'equipment-room', 'like-like', 'boss-gohma'}
 
 
-def test_the_scouting_route_d8_goes_on_to_the_d8_triforce():
-    """Round 28: d8 is d2first and steps 281-296, one way (no stretch): the whirlwind out of 0x22, the leg, the burned
-    tree's stairs, Dungeon 8 with its tunnel and the four-headed Gleeok; 8:0x6e names its own bomb mode, 0x3f takes its
-    bombs at 4 or fewer; every room is in its step's family."""
-    base, steps = native.route_steps(), native.route_steps('d8')
-    assert steps[:len(base)] == base and len(steps) == 297
-    own = steps[len(base):]
+def test_dungeon_8_follows_the_d6_triforce():
+    """Round 28: steps 281-296 (scouted as the route d8) after the D6 triforce (280), one way (no stretch): the
+    whirlwind out of 0x22, the leg, the burned tree's stairs, Dungeon 8 with its tunnel and the four-headed Gleeok;
+    8:0x6e names its own bomb mode, 0x3f takes its bombs at 4 or fewer; every room is in its step's family."""
+    steps = native.route_steps()
+    assert (steps[280]['level'], steps[280]['room'], steps[280]['exit']) == (6, 0x0c, 'triforce')
+    own = steps[281:297]
     assert all(s['way'] is None and s['stretch'] is None for s in own)
     assert [(s['level'], s['room'], s['in_cave'], s['entry'], s['exit'], s['specialist']) for s in own] == [
         (0, 0x22, False, 'cave', 'recorder', 'ow-lynel'), (0, 0x3c, False, 'recorder', 'S', 'ow-octorok'),
@@ -65,7 +64,7 @@ def test_the_scouting_route_d8_goes_on_to_the_d8_triforce():
         (8, 0x3e, False, 'S', 'E', 'darknut'), (8, 0x3f, False, 'W', 'cave', 'darknut'),
         (8, 0x2f, True, 'S', 'W', 'equipment-room'), (8, 0x4c, False, 'cave', 'N', 'pols-voice'),
         (8, 0x3c, False, 'S', 'N', 'boss-gleeok'), (8, 0x2c, False, 'S', 'triforce', 'stalfos-keese-gel')]
-    assert [(s['index'], s['bombs']) for s in steps if s['bombs']] == [(288, 'required')]
+    assert [(s['index'], s['bombs']) for s in steps[:297] if s['bombs']] == [(288, 'required')]
     assert [(s['index'], s['treasure']) for s in own if s['treasure']] == [
         (288, 'skip'), (290, 'skip'), (292, 'if_bombs_below: 5')]
     assert [(s['index'], s['bomb_reserve']) for s in own if s['bomb_reserve'] is not None] == [
@@ -77,14 +76,15 @@ def test_the_scouting_route_d8_goes_on_to_the_d8_triforce():
         assert native.specialist_for(room) == step['specialist']
 
 
-def test_the_scouting_route_d9_goes_on_to_the_end_of_the_game():
-    """Round 29: d9 is d8 and steps 297-357: the whirlwind out of 0x6d, the leg with 0x47's heart cave, the rock wall
-    of 0x05, Dungeon 9 with the red ring's detour and the silver arrow, Ganon, and Zelda's room, whose exit is the end
-    of the game; the rooms the route comes back to keep their kills (on the plain way: the clip way of the stretches
-    `ring-07`, `arrow-20` and `arrow-20n` leaves 0x07 and 0x20 full); every room is in its step's family."""
-    base, steps = native.route_steps('d8'), native.route_steps('d9')
-    assert steps[:len(base)] == base and len(steps) == 358
-    own = steps[len(base):]
+def test_dungeon_9_follows_the_d8_triforce_to_the_end_of_the_game():
+    """Round 29: steps 297-357 (scouted as the route d9) after the D8 triforce (296): the whirlwind out of 0x6d, the
+    leg with 0x47's heart cave, the rock wall of 0x05, Dungeon 9 with the red ring's detour and the silver arrow, Ganon,
+    and Zelda's room, whose exit is the end of the game; the rooms the route comes back to keep their kills (on the
+    plain way: the clip way of the stretches `ring-07`, `arrow-20` and `arrow-20n` leaves 0x07 and 0x20 full); every
+    room is in its step's family."""
+    steps = native.route_steps()
+    assert (steps[296]['level'], steps[296]['room'], steps[296]['exit']) == (8, 0x2c, 'triforce')
+    own = steps[297:]
     assert [(s['index'], s['way'], s['stretch']) for s in own if s['way']] == [
         (325, 'clips', 'ring-07'), (326, 'plain', 'ring-07'), (338, 'clips', 'arrow-20'), (339, 'plain', 'arrow-20'),
         (343, 'clips', 'arrow-20n'), (344, 'plain', 'arrow-20n')]
@@ -105,8 +105,8 @@ def test_the_scouting_route_d9_goes_on_to_the_end_of_the_game():
         (317, 'clear'), (318, 'skip'), (319, 'skip'), (320, 'skip'), (321, 'skip'), (328, 'skip'), (329, 'skip'),
         (335, 'skip'), (339, 'clear')]
     assert [s['index'] for s in steps if not s['sword']] == [331]          # the old man of 9:0x06
-    # Rooms the route enters twice from the same side (with d2first's and d8's earlier visits); a stretch's two ways
-    # are one visit.
+    # Rooms the route enters twice from the same side (with the earlier legs' visits); a stretch's two ways are one
+    # visit.
     assert [(s['index'], s['room'], s['in_cave'], s['visit']) for s in own if s['visit'] > 1] == [
         (299, 0x38, False, 2), (300, 0x48, False, 2), (345, 0x75, True, 2)]
     families = native.families()
@@ -146,7 +146,7 @@ def test_d2_then_the_heart_and_white_sword_then_the_d1_triforce():
     rooms = [(s['level'], s['room'], s['in_cave']) for s in steps]
     assert [(s['level'], s['room']) for s in steps if s['exit'] == 'triforce'] == [(2, 0x0d), (1, 0x36), (3, 0x3d),
                                                                                    (4, 0x03), (5, 0x14), (7, 0x2b),
-                                                                                   (6, 0x0c)]
+                                                                                   (6, 0x0c), (8, 0x2c)]
     order = [rooms.index(r) for r in [(2, 0x0e, False), (0, 0x2c, True), (0, 0x0a, True), (1, 0x72, False),
                                       (1, 0x74, False), (1, 0x44, False)]]
     assert order == sorted(order)
@@ -195,6 +195,8 @@ def test_dungeon_3_follows_lees_directions_with_the_treasure_rules():
     # (round 24): 0x66 is passed on entry, 0x65's bombs are refused westbound.  Dungeon 7's (round 26): 0x69's bombs,
     # 0x38's rupees and 0x0c's item are left, 0x1b's bombs taken at 4 bombs or fewer (the owner, Nov 17).  Dungeon 6's
     # (round 27): 0x68's, 0x28's rupees and 0x29's key are left; the reserve 2 from Dungeon 7's exit, 1 after 0x28.
+    # Dungeon 8's and 9's (rounds 28-29, steps 281 on) are their own tests'.
+    steps = steps[:281]
     assert [(s['level'], s['room'], s['entry'], s['treasure']) for s in steps if s['treasure']] == [
         (2, 0x5e, 'S', 'clear'), (3, 0x5b, 'S', 'skip'), (3, 0x69, 'N', 'skip'), (3, 0x69, 'cave', 'skip'),
         (5, 0x66, 'S', 'skip'), (5, 0x65, 'E', 'refuse'), (5, 0x56, 'S', 'skip'), (5, 0x57, 'W', 'skip'),

@@ -67,10 +67,10 @@
 # is off its route.  Turned off on the clip way the objective leads back to the plain way; turned on on the plain
 # way the plain way holds to the rejoin (zelda::objectives::GameCompletion::set_clips_allowed).  Both ways must
 # carry the same progress and bomb reserve to the rejoin, and hold no waypoint or triforce.  Round 29: the two ways'
-# first steps may also leave the room by the same exit when they differ in what else they carry (`d9`'s `ring-07`:
-# 9:0x07 out of the ring cellar holds the kills of its fight on the plain way, `banked_kills: 5`, and is full on the
-# clip way, which clipped past them); both are one visit, one state name, and a start state's kept kills follow its
-# switch.
+# first steps may also leave the room by the same exit when they differ in what else they carry (Dungeon 9's
+# `ring-07`: 9:0x07 out of the ring cellar holds the kills of its fight on the plain way, `banked_kills: 5`, and is
+# full on the clip way, which clipped past them); both are one visit, one state name, and a start state's kept kills
+# follow its switch.
 #
 # d2first: wood sword, east along row 5 to Dungeon 2 (3 hearts), Dodongo, his heart container and the D2 triforce
 # (warps Link to 0x3c); round to 0x2c, bomb its rock wall for the take-any cave's heart container (5 hearts), the
@@ -83,8 +83,11 @@
 # (10), 0x0f's 100 rupees, the mountain to Dungeon 5 (0x0b), the recorder, Digdogger (11 hearts) and the D5 triforce
 # (warps Link to 0x0b); round 26 (docs/routes/d7.md): the whirlwind to 0x45, the shops 0x44 (arrows) and 0x34 (food),
 # 0x42's pond, Dungeon 7: the red candle, Aquamentus (12 hearts) and the D7 triforce (sets Link down at 0x42); round
-# 27 (docs/routes/d6.md): the magic sword and Dungeon 6, Gohma (13 hearts); the route ends on taking the D6 triforce.
-# Never the fairy.
+# 27 (docs/routes/d6.md): the magic sword and Dungeon 6, Gohma (13 hearts) and the D6 triforce (sets Link down at
+# 0x22); round 28 (docs/routes/d8.md): the whirlwind to 0x3c, 0x6d's burned tree, Dungeon 8: Gleeok (14 hearts) and
+# the D8 triforce (sets Link down at 0x6d); round 29 (docs/routes/d9.md): the whirlwind to 0x37, 0x47's heart
+# container (15 hearts), 0x05's rock wall, Dungeon 9: the red ring, the silver arrow, Ganon and Zelda's room, whose
+# exit is the end of the game (`exit: end`, game mode $13): the route ends there.  Never the fairy.
 d2first:
 - {level: 0, room: '0x77', specialist: ow-start, entry: start, exit: cave}
 - {level: 0, room: '0x77', in_cave: true, specialist: ow-start, entry: S, exit: S}
@@ -491,149 +494,143 @@ d2first:
 - {level: 6, room: '0x2c', specialist: wizzrobe, entry: E, exit: N}
 - {level: 6, room: '0x1c', specialist: boss-gohma, entry: S, exit: N, rupee_reserve: 1}
 - {level: 6, room: '0x0c', specialist: stalfos-keese-gel, entry: S, exit: triforce}
-# d8 (round 28, scouting; docs/routes/d8.md §15, d8-walks.md): d2first, then from Dungeon 6's triforce (the game sets Link
-# down at its entrance, 0x22) to Dungeon 8's.  The leg: the recorder twice out of 0x22 (facing down from the index
-# $FB with seven pieces: Dungeon 2's entrance 0x3c), 0x3c S, 0x4c E, 0x4d S, 0x5d S by its right opening, 0x6d: the
-# tree burned by CANDLE W from the window E of it (game.yaml `how: burn`), the stairs.  The leg has no clip and
-# Dungeon 8 none on this way: one way, no stretch.  Dungeon 8 with the two keys and the one bomb Link brings
-# (level-8.md, the short route): 0x7e N, the Manhandla of 0x6e crossed to its N bomb wall (requires_bombs; `bombs:
-# required` for boss-manhandla; its rupees skipped), 0x5e fought for its key and the N shutter (its E key door is
-# `keep_out`), 0x4e crossed to its N key door (its rupees skipped; its W key door `keep_out`), 0x3e fought for the E
-# shutter, the one-way 0x3f: fought for its four bombs at 4 bombs or fewer (the owner's rule for 7:0x1b), else
-# crossed to the stairs, the tunnel 0x2f by its left ladder (the right one leads back), 0x4c: out of the block ring,
-# the corner key, the N bomb wall (requires_bombs; ARROW for pols-voice), Gleeok with four heads 0x3c (the heart
-# container: 14), the triforce 0x2c.  Bomb reserve 1 to 0x6e's wall, 2 from 0x5e (0x4c's wall and 0:0x05's rock wall
-# on the way to Dungeon 9), 1 after 0x4c's.  Rupee reserve 8 from 8:0x4c: its arrows are paid from what Link holds
-# above 8, and 8 shots stay for Ganon's silver arrow.
-d8:
-  extends: d2first
-  steps:
-  - {level: 0, room: '0x22', specialist: ow-lynel, entry: cave, exit: recorder, bomb_reserve: 1}
-  - {level: 0, room: '0x3c', specialist: ow-octorok, entry: recorder, exit: S}
-  - {level: 0, room: '0x4c', specialist: ow-octorok, entry: N, exit: E}
-  - {level: 0, room: '0x4d', specialist: ow-moblin, entry: W, exit: S}
-  - {level: 0, room: '0x5d', specialist: ow-moblin, entry: N, exit: S}
-  - {level: 0, room: '0x6d', specialist: ow-moblin, entry: N, exit: cave}
-  - {level: 8, room: '0x7e', specialist: stalfos-keese-gel, entry: S, exit: N}
-  - {level: 8, room: '0x6e', specialist: boss-manhandla, entry: S, exit: N, treasure: skip, bombs: required}
-  - {level: 8, room: '0x5e', specialist: darknut, entry: S, exit: N, bomb_reserve: 2}
-  - {level: 8, room: '0x4e', specialist: darknut, entry: S, exit: N, treasure: skip}
-  - {level: 8, room: '0x3e', specialist: darknut, entry: S, exit: E}
-  - {level: 8, room: '0x3f', specialist: darknut, entry: W, exit: cave, treasure: {if_bombs_below: 5}}
-  - {level: 8, room: '0x2f', in_cave: true, specialist: equipment-room, entry: S, exit: W}
-  - {level: 8, room: '0x4c', specialist: pols-voice, entry: cave, exit: N, rupee_reserve: 8}
-  - {level: 8, room: '0x3c', specialist: boss-gleeok, entry: S, exit: N, bomb_reserve: 1}
-  - {level: 8, room: '0x2c', specialist: stalfos-keese-gel, entry: S, exit: triforce}
-# d9 (round 29, scouting; docs/routes/d9.md "as built", d9-walks.md, d9-fights-walks.md): d8, then from Dungeon 8's
-# triforce (the game sets Link down at its entrance, 0x6d) to the end of the game.  The leg: the recorder once out of
-# 0x6d (facing down from the index $F9 with eight pieces: Dungeon 1's entrance 0x37), 0x38 S, 0x48 W, 0x47: its tree
-# burned by CANDLE S from the strip above it (game.yaml `how: burn`), the take-any cave's heart container
-# (`waypoint: heart`, the right ware: 15 containers; the potion is `missed`), back E, 0x48 N, 0x38 N, 0x28 W, 0x27 N,
-# 0x17 by the ladder over its river, 0x07 W (`bombs: never`: its cave takes 20 rupees), 0x06 W, 0x05: the rock wall
-# over Dungeon 9's stairs (`bomb_secret`, requires_bombs; `bombs: required` for ow-lynel).  No clip is walked on this
-# stretch: one way, no `stretch:`.  Dungeon 9 in the walk's order with the three keys Link brings: 0x66 (its old man
-# gone with eight pieces: `requires_pieces`), 0x65's N wall, the Lanmolas of 0x55 for their block, the tunnel to the
-# spiral 0x14 (its Like-Likes killed: `treasure: clear`), 0x15, the Patra of 0x16 passed, the red ring detour (0x26 E
-# wall, 0x27 N wall past its Patra, 0x17 N wall, 0x07 emptied for its block, the cellar 0x00: `waypoint: ring`, back
-# the same way: 0x07 keeps its kills), 0x16's Patra fought for its four bombs, the N key door, the old man's 0x06
-# (`sword: false`) and its W wall, 0x05 emptied, the tunnel to 0x63 (its N and S key doors `keep_out`), 0x62, 0x61:
-# its key, its Patra for its block, the tunnel to 0x20 (emptied on arrival: `treasure: clear`), its N wall, 0x10
-# emptied, the cellar 0x4f (`waypoint: silver-arrow`), back through 0x10, 0x20 (still empty: `banked_kills`), the
-# tunnel and 0x61 (its Patra stays dead), 0x51, 0x41 and 0x31 (their S shutters never open: no way back), 0x31's W
-# wall, 0x30 emptied, the tunnel to 0x04, its W wall, 0x03 emptied, the tunnel to 0x52, its Patra for the N shutter,
-# Ganon 0x42 (four sword hits while hidden, ARROW only while he is brown, the Triforce of Power) and Zelda's room
-# 0x32 (`exit: end`).  That is the plain way; with clips (the stretches `ring-07`, `arrow-20`, `arrow-20n`) 0x55,
-# 0x07, 0x20 from N and 0x03 are left by the block clip with their monsters alive, 0x20's first visit crosses to its
-# wall without the fight, and the return visits find 0x07 and 0x20 full.  Bomb reserve: the walls ahead before the
-# next bombs (5 from 0x6d, one fewer after each; 4 again from 0x06 with 0x16's four, down to 0 after 0x04's): on a
-# run with no drops the first five walls are cheated and counted.  Rupee reserve 1 through level 9 (Ganon's arrow),
-# 0 in his room.
-d9:
-  extends: d8
-  steps:
-  - {level: 0, room: '0x6d', specialist: ow-moblin, entry: cave, exit: recorder, bomb_reserve: 5}
-  - {level: 0, room: '0x37', specialist: ow-octorok, entry: recorder, exit: E}
-  - {level: 0, room: '0x38', specialist: ow-zora, entry: W, exit: S}
-  - {level: 0, room: '0x48', specialist: ow-leever, entry: N, exit: W}
-  - {level: 0, room: '0x47', specialist: ow-zora, entry: E, exit: cave}
-  - {level: 0, room: '0x47', in_cave: true, specialist: ow-zora, entry: S, exit: S, waypoint: heart}
-  - {level: 0, room: '0x47', specialist: ow-zora, entry: cave, exit: E}
-  - {level: 0, room: '0x48', specialist: ow-leever, entry: W, exit: N}
-  - {level: 0, room: '0x38', specialist: ow-zora, entry: S, exit: N}
-  - {level: 0, room: '0x28', specialist: ow-zora, entry: S, exit: W}
-  - {level: 0, room: '0x27', specialist: ow-zora, entry: E, exit: N}
-  - {level: 0, room: '0x17', specialist: ow-boulder, entry: S, exit: N}
-  - {level: 0, room: '0x07', specialist: ow-lynel, entry: S, exit: W, bombs: never}
-  - {level: 0, room: '0x06', specialist: ow-lynel, entry: E, exit: W}
-  - {level: 0, room: '0x05', specialist: ow-lynel, entry: E, exit: cave, bombs: required}
-  - {level: 9, room: '0x76', specialist: stalfos-keese-gel, entry: S, exit: N, bomb_reserve: 4, rupee_reserve: 1}
-  - {level: 9, room: '0x66', specialist: stalfos-keese-gel, entry: S, exit: W}
-  - {level: 9, room: '0x65', specialist: wizzrobe, entry: E, exit: N}
-  - {level: 9, room: '0x55', specialist: lanmola, entry: S, exit: cave, bomb_reserve: 3}
-  - {level: 9, room: '0x60', in_cave: true, specialist: equipment-room, entry: S, exit: W}
-  - {level: 9, room: '0x14', specialist: like-like, entry: cave, exit: E, treasure: clear}
-  - {level: 9, room: '0x15', specialist: wizzrobe, entry: W, exit: E, treasure: skip}
-  - {level: 9, room: '0x16', specialist: patra, entry: W, exit: S, treasure: skip}
-  - {level: 9, room: '0x26', specialist: stalfos-keese-gel, entry: N, exit: E, treasure: skip}
-  - {level: 9, room: '0x27', specialist: patra, entry: W, exit: N, treasure: skip, bomb_reserve: 2}
-  - {level: 9, room: '0x17', specialist: wizzrobe, entry: S, exit: N, bomb_reserve: 1}
-  - {level: 9, room: '0x07', specialist: wizzrobe, entry: S, exit: cave, bomb_reserve: 0}
-  - {level: 9, room: '0x00', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: ring}
-  # The block clips of the ring rooms (round 29's states step; the lead's working answer to the owner's question 3,
-  # docs/decisions.md 2026-11-17 answer 11): with clips 0x55, 0x07, 0x20 (from N) and 0x03 are left by `CLIP` to
-  # their stairs with the monsters alive, without clips they are emptied and their blocks pushed; the switch decides
-  # in the room (one step each, as 5:0x64).  The rooms the route comes back to differ by what the first visit left:
-  # 0x07 out of the ring cellar is full on the clip way and holds the kills of its fight on the plain way.
-  - stretch: ring-07
-    parts: {level: 9, room: '0x07', entry: cave}
-    rejoins: {level: 9, room: '0x17', entry: N}
-    clips:
-    - {level: 9, room: '0x07', specialist: wizzrobe, entry: cave, exit: S}
-    plain:
-    - {level: 9, room: '0x07', specialist: wizzrobe, entry: cave, exit: S, banked_kills: 5}
-  - {level: 9, room: '0x17', specialist: wizzrobe, entry: N, exit: S}
-  - {level: 9, room: '0x27', specialist: patra, entry: N, exit: W, treasure: skip}
-  - {level: 9, room: '0x26', specialist: stalfos-keese-gel, entry: E, exit: N, treasure: skip}
-  - {level: 9, room: '0x16', specialist: patra, entry: S, exit: N}
-  - {level: 9, room: '0x06', specialist: stalfos-keese-gel, entry: S, exit: W, sword: false, bomb_reserve: 4}
-  - {level: 9, room: '0x05', specialist: wizzrobe, entry: E, exit: cave, bomb_reserve: 3}
-  - {level: 9, room: '0x70', in_cave: true, specialist: equipment-room, entry: S, exit: W}
-  - {level: 9, room: '0x63', specialist: zol, entry: cave, exit: W}
-  - {level: 9, room: '0x62', specialist: stalfos-keese-gel, entry: E, exit: W, treasure: skip}
-  - {level: 9, room: '0x61', specialist: patra, entry: E, exit: cave}
-  - {level: 9, room: '0x75', in_cave: true, specialist: equipment-room, entry: S, exit: W}
-  # 0x20's first visit: crossed to its N wall with its five Wizzrobes alive on the clip way (the second visit clips
-  # to the stairs), emptied on the plain way (the second visit finds it empty and pushes the block).
-  - stretch: arrow-20
-    parts: {level: 9, room: '0x20', entry: cave}
-    rejoins: {level: 9, room: '0x10', entry: S}
-    clips:
-    - {level: 9, room: '0x20', specialist: wizzrobe, entry: cave, exit: N}
-    plain:
-    - {level: 9, room: '0x20', specialist: wizzrobe, entry: cave, exit: N, treasure: clear}
-  - {level: 9, room: '0x10', specialist: wizzrobe, entry: S, exit: cave, bomb_reserve: 2}
-  - {level: 9, room: '0x4f', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: silver-arrow}
-  - {level: 9, room: '0x10', specialist: wizzrobe, entry: cave, exit: S, banked_kills: 5}
-  - stretch: arrow-20n
-    parts: {level: 9, room: '0x20', entry: N}
-    rejoins: {level: 9, room: '0x75', in_cave: true, entry: S}
-    clips:
-    - {level: 9, room: '0x20', specialist: wizzrobe, entry: N, exit: cave}
-    plain:
-    - {level: 9, room: '0x20', specialist: wizzrobe, entry: N, exit: cave, banked_kills: 15}
-  - {level: 9, room: '0x75', in_cave: true, specialist: equipment-room, entry: S, exit: E}
-  - {level: 9, room: '0x61', specialist: patra, entry: cave, exit: N, banked_kills: 15}
-  - {level: 9, room: '0x51', specialist: like-like, entry: S, exit: N}
-  - {level: 9, room: '0x41', specialist: like-like, entry: S, exit: N}
-  - {level: 9, room: '0x31', specialist: wizzrobe, entry: S, exit: W}
-  - {level: 9, room: '0x30', specialist: wizzrobe, entry: E, exit: cave, bomb_reserve: 1}
-  - {level: 9, room: '0x67', in_cave: true, specialist: equipment-room, entry: S, exit: E}
-  - {level: 9, room: '0x04', specialist: wizzrobe, entry: cave, exit: W}
-  - {level: 9, room: '0x03', specialist: like-like, entry: E, exit: cave, bomb_reserve: 0}
-  - {level: 9, room: '0x77', in_cave: true, specialist: equipment-room, entry: S, exit: W}
-  - {level: 9, room: '0x52', specialist: patra, entry: cave, exit: N}
-  - {level: 9, room: '0x42', specialist: ganon, entry: S, exit: N, rupee_reserve: 0}
-  - {level: 9, room: '0x32', specialist: ganon, entry: S, exit: end}
+# Round 28 (docs/routes/d8.md §15, d8-walks.md; scouted as the route d8, merged into d2first): from Dungeon 6's
+# triforce (the game sets Link down at its entrance, 0x22) to Dungeon 8's.  The leg: the recorder twice out of 0x22
+# (facing down from the index $FB with seven pieces: Dungeon 2's entrance 0x3c), 0x3c S, 0x4c E, 0x4d S, 0x5d S by its
+# right opening, 0x6d: the tree burned by CANDLE W from the window E of it (game.yaml `how: burn`), the stairs.  The
+# leg has no clip and Dungeon 8 none on this way: one way, no stretch.  Dungeon 8 with the two keys and the one bomb
+# Link brings (level-8.md, the short route): 0x7e N, the Manhandla of 0x6e crossed to its N bomb wall
+# (requires_bombs; `bombs: required` for boss-manhandla; its rupees skipped), 0x5e fought for its key and the N
+# shutter (its E key door is `keep_out`), 0x4e crossed to its N key door (its rupees skipped; its W key door
+# `keep_out`), 0x3e fought for the E shutter, the one-way 0x3f: fought for its four bombs at 4 bombs or fewer (the
+# owner's rule for 7:0x1b), else crossed to the stairs, the tunnel 0x2f by its left ladder (the right one leads back),
+# 0x4c: out of the block ring, the corner key, the N bomb wall (requires_bombs; ARROW for pols-voice), Gleeok with four
+# heads 0x3c (the heart container: 14), the triforce 0x2c.  Bomb reserve 1 to 0x6e's wall, 2 from 0x5e (0x4c's wall
+# and 0:0x05's rock wall on the way to Dungeon 9), 1 after 0x4c's.  Rupee reserve 8 from 8:0x4c: its arrows are paid
+# from what Link holds above 8, and 8 shots stay for Ganon's silver arrow.
+- {level: 0, room: '0x22', specialist: ow-lynel, entry: cave, exit: recorder, bomb_reserve: 1}
+- {level: 0, room: '0x3c', specialist: ow-octorok, entry: recorder, exit: S}
+- {level: 0, room: '0x4c', specialist: ow-octorok, entry: N, exit: E}
+- {level: 0, room: '0x4d', specialist: ow-moblin, entry: W, exit: S}
+- {level: 0, room: '0x5d', specialist: ow-moblin, entry: N, exit: S}
+- {level: 0, room: '0x6d', specialist: ow-moblin, entry: N, exit: cave}
+- {level: 8, room: '0x7e', specialist: stalfos-keese-gel, entry: S, exit: N}
+- {level: 8, room: '0x6e', specialist: boss-manhandla, entry: S, exit: N, treasure: skip, bombs: required}
+- {level: 8, room: '0x5e', specialist: darknut, entry: S, exit: N, bomb_reserve: 2}
+- {level: 8, room: '0x4e', specialist: darknut, entry: S, exit: N, treasure: skip}
+- {level: 8, room: '0x3e', specialist: darknut, entry: S, exit: E}
+- {level: 8, room: '0x3f', specialist: darknut, entry: W, exit: cave, treasure: {if_bombs_below: 5}}
+- {level: 8, room: '0x2f', in_cave: true, specialist: equipment-room, entry: S, exit: W}
+- {level: 8, room: '0x4c', specialist: pols-voice, entry: cave, exit: N, rupee_reserve: 8}
+- {level: 8, room: '0x3c', specialist: boss-gleeok, entry: S, exit: N, bomb_reserve: 1}
+- {level: 8, room: '0x2c', specialist: stalfos-keese-gel, entry: S, exit: triforce}
+# Round 29 (docs/routes/d9.md "as built", d9-walks.md, d9-fights-walks.md; scouted as the route d9, merged into
+# d2first): from Dungeon 8's triforce (the game sets Link down at its entrance, 0x6d) to the end of the game.  The
+# leg: the recorder once out of 0x6d (facing down from the index $F9 with eight pieces: Dungeon 1's entrance 0x37),
+# 0x38 S, 0x48 W, 0x47: its tree burned by CANDLE S from the strip above it (game.yaml `how: burn`), the take-any
+# cave's heart container (`waypoint: heart`, the right ware: 15 containers; the potion is `missed`), back E, 0x48 N,
+# 0x38 N, 0x28 W, 0x27 N, 0x17 by the ladder over its river, 0x07 W (`bombs: never`: its cave takes 20 rupees), 0x06
+# W, 0x05: the rock wall over Dungeon 9's stairs (`bomb_secret`, requires_bombs; `bombs: required` for ow-lynel).  No
+# clip is walked on this stretch: one way, no `stretch:`.  Dungeon 9 in the walk's order with the three keys Link
+# brings: 0x66 (its old man gone with eight pieces: `requires_pieces`), 0x65's N wall, the Lanmolas of 0x55 for their
+# block, the tunnel to the spiral 0x14 (its Like-Likes killed: `treasure: clear`), 0x15, the Patra of 0x16 passed, the
+# red ring detour (0x26 E wall, 0x27 N wall past its Patra, 0x17 N wall, 0x07 emptied for its block, the cellar 0x00:
+# `waypoint: ring`, back the same way: 0x07 keeps its kills), 0x16's Patra fought for its four bombs, the N key door,
+# the old man's 0x06 (`sword: false`) and its W wall, 0x05 emptied, the tunnel to 0x63 (its N and S key doors
+# `keep_out`), 0x62, 0x61: its key, its Patra for its block, the tunnel to 0x20 (emptied on arrival: `treasure:
+# clear`), its N wall, 0x10 emptied, the cellar 0x4f (`waypoint: silver-arrow`), back through 0x10, 0x20 (still
+# empty: `banked_kills`), the tunnel and 0x61 (its Patra stays dead), 0x51, 0x41 and 0x31 (their S shutters never
+# open: no way back), 0x31's W wall, 0x30 emptied, the tunnel to 0x04, its W wall, 0x03 emptied, the tunnel to 0x52,
+# its Patra for the N shutter, Ganon 0x42 (four sword hits while hidden, ARROW only while he is brown, the Triforce of
+# Power) and Zelda's room 0x32 (`exit: end`).  That is the plain way; with clips (the stretches `ring-07`, `arrow-20`,
+# `arrow-20n`) 0x55, 0x07, 0x20 from N and 0x03 are left by the block clip with their monsters alive, 0x20's first
+# visit crosses to its wall without the fight, and the return visits find 0x07 and 0x20 full.  Bomb reserve: the
+# walls ahead before the next bombs (5 from 0x6d, one fewer after each; 4 again from 0x06 with 0x16's four, down to 0
+# after 0x04's): on a run with no drops the first five walls are cheated and counted.  Rupee reserve 1 through level 9
+# (Ganon's arrow), 0 in his room.
+- {level: 0, room: '0x6d', specialist: ow-moblin, entry: cave, exit: recorder, bomb_reserve: 5}
+- {level: 0, room: '0x37', specialist: ow-octorok, entry: recorder, exit: E}
+- {level: 0, room: '0x38', specialist: ow-zora, entry: W, exit: S}
+- {level: 0, room: '0x48', specialist: ow-leever, entry: N, exit: W}
+- {level: 0, room: '0x47', specialist: ow-zora, entry: E, exit: cave}
+- {level: 0, room: '0x47', in_cave: true, specialist: ow-zora, entry: S, exit: S, waypoint: heart}
+- {level: 0, room: '0x47', specialist: ow-zora, entry: cave, exit: E}
+- {level: 0, room: '0x48', specialist: ow-leever, entry: W, exit: N}
+- {level: 0, room: '0x38', specialist: ow-zora, entry: S, exit: N}
+- {level: 0, room: '0x28', specialist: ow-zora, entry: S, exit: W}
+- {level: 0, room: '0x27', specialist: ow-zora, entry: E, exit: N}
+- {level: 0, room: '0x17', specialist: ow-boulder, entry: S, exit: N}
+- {level: 0, room: '0x07', specialist: ow-lynel, entry: S, exit: W, bombs: never}
+- {level: 0, room: '0x06', specialist: ow-lynel, entry: E, exit: W}
+- {level: 0, room: '0x05', specialist: ow-lynel, entry: E, exit: cave, bombs: required}
+- {level: 9, room: '0x76', specialist: stalfos-keese-gel, entry: S, exit: N, bomb_reserve: 4, rupee_reserve: 1}
+- {level: 9, room: '0x66', specialist: stalfos-keese-gel, entry: S, exit: W}
+- {level: 9, room: '0x65', specialist: wizzrobe, entry: E, exit: N}
+- {level: 9, room: '0x55', specialist: lanmola, entry: S, exit: cave, bomb_reserve: 3}
+- {level: 9, room: '0x60', in_cave: true, specialist: equipment-room, entry: S, exit: W}
+- {level: 9, room: '0x14', specialist: like-like, entry: cave, exit: E, treasure: clear}
+- {level: 9, room: '0x15', specialist: wizzrobe, entry: W, exit: E, treasure: skip}
+- {level: 9, room: '0x16', specialist: patra, entry: W, exit: S, treasure: skip}
+- {level: 9, room: '0x26', specialist: stalfos-keese-gel, entry: N, exit: E, treasure: skip}
+- {level: 9, room: '0x27', specialist: patra, entry: W, exit: N, treasure: skip, bomb_reserve: 2}
+- {level: 9, room: '0x17', specialist: wizzrobe, entry: S, exit: N, bomb_reserve: 1}
+- {level: 9, room: '0x07', specialist: wizzrobe, entry: S, exit: cave, bomb_reserve: 0}
+- {level: 9, room: '0x00', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: ring}
+# The block clips of the ring rooms (round 29's states step; the lead's working answer to the owner's question 3,
+# docs/decisions.md 2026-11-17 answer 11): with clips 0x55, 0x07, 0x20 (from N) and 0x03 are left by `CLIP` to
+# their stairs with the monsters alive, without clips they are emptied and their blocks pushed; the switch decides
+# in the room (one step each, as 5:0x64).  The rooms the route comes back to differ by what the first visit left:
+# 0x07 out of the ring cellar is full on the clip way and holds the kills of its fight on the plain way.
+- stretch: ring-07
+  parts: {level: 9, room: '0x07', entry: cave}
+  rejoins: {level: 9, room: '0x17', entry: N}
+  clips:
+  - {level: 9, room: '0x07', specialist: wizzrobe, entry: cave, exit: S}
+  plain:
+  - {level: 9, room: '0x07', specialist: wizzrobe, entry: cave, exit: S, banked_kills: 5}
+- {level: 9, room: '0x17', specialist: wizzrobe, entry: N, exit: S}
+- {level: 9, room: '0x27', specialist: patra, entry: N, exit: W, treasure: skip}
+- {level: 9, room: '0x26', specialist: stalfos-keese-gel, entry: E, exit: N, treasure: skip}
+- {level: 9, room: '0x16', specialist: patra, entry: S, exit: N}
+- {level: 9, room: '0x06', specialist: stalfos-keese-gel, entry: S, exit: W, sword: false, bomb_reserve: 4}
+- {level: 9, room: '0x05', specialist: wizzrobe, entry: E, exit: cave, bomb_reserve: 3}
+- {level: 9, room: '0x70', in_cave: true, specialist: equipment-room, entry: S, exit: W}
+- {level: 9, room: '0x63', specialist: zol, entry: cave, exit: W}
+- {level: 9, room: '0x62', specialist: stalfos-keese-gel, entry: E, exit: W, treasure: skip}
+- {level: 9, room: '0x61', specialist: patra, entry: E, exit: cave}
+- {level: 9, room: '0x75', in_cave: true, specialist: equipment-room, entry: S, exit: W}
+# 0x20's first visit: crossed to its N wall with its five Wizzrobes alive on the clip way (the second visit clips
+# to the stairs), emptied on the plain way (the second visit finds it empty and pushes the block).
+- stretch: arrow-20
+  parts: {level: 9, room: '0x20', entry: cave}
+  rejoins: {level: 9, room: '0x10', entry: S}
+  clips:
+  - {level: 9, room: '0x20', specialist: wizzrobe, entry: cave, exit: N}
+  plain:
+  - {level: 9, room: '0x20', specialist: wizzrobe, entry: cave, exit: N, treasure: clear}
+- {level: 9, room: '0x10', specialist: wizzrobe, entry: S, exit: cave, bomb_reserve: 2}
+- {level: 9, room: '0x4f', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: silver-arrow}
+- {level: 9, room: '0x10', specialist: wizzrobe, entry: cave, exit: S, banked_kills: 5}
+- stretch: arrow-20n
+  parts: {level: 9, room: '0x20', entry: N}
+  rejoins: {level: 9, room: '0x75', in_cave: true, entry: S}
+  clips:
+  - {level: 9, room: '0x20', specialist: wizzrobe, entry: N, exit: cave}
+  plain:
+  - {level: 9, room: '0x20', specialist: wizzrobe, entry: N, exit: cave, banked_kills: 15}
+- {level: 9, room: '0x75', in_cave: true, specialist: equipment-room, entry: S, exit: E}
+- {level: 9, room: '0x61', specialist: patra, entry: cave, exit: N, banked_kills: 15}
+- {level: 9, room: '0x51', specialist: like-like, entry: S, exit: N}
+- {level: 9, room: '0x41', specialist: like-like, entry: S, exit: N}
+- {level: 9, room: '0x31', specialist: wizzrobe, entry: S, exit: W}
+- {level: 9, room: '0x30', specialist: wizzrobe, entry: E, exit: cave, bomb_reserve: 1}
+- {level: 9, room: '0x67', in_cave: true, specialist: equipment-room, entry: S, exit: E}
+- {level: 9, room: '0x04', specialist: wizzrobe, entry: cave, exit: W}
+- {level: 9, room: '0x03', specialist: like-like, entry: E, exit: cave, bomb_reserve: 0}
+- {level: 9, room: '0x77', in_cave: true, specialist: equipment-room, entry: S, exit: W}
+- {level: 9, room: '0x52', specialist: patra, entry: cave, exit: N}
+- {level: 9, room: '0x42', specialist: ganon, entry: S, exit: N, rupee_reserve: 0}
+- {level: 9, room: '0x32', specialist: ganon, entry: S, exit: end}
 # clips-gauntlet (round 21, docs/experiments/round21-gauntlet.md): an experiment route, not a way through the game.  Two
 # steps per (room, entry): a specialist naming it (`route: clips-gauntlet`) draws one of the two exits at every
 # reset.  Entered from W the target is E or S, entered from E it is W or S.

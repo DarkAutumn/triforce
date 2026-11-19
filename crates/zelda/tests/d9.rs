@@ -1,4 +1,4 @@
-//! Round 29: the scouting route `d9` (`d8`, then steps 297-357) played in the real game by the route's objective,
+//! Round 29: `d2first`'s steps 297-357 (scouted as `d9`) played in the real game by the route's objective,
 //! from Dungeon 8's triforce through the leg (the whirlwind out of 0x6d, 0x47's burned tree and heart container, the
 //! ladder over 0x17's river, the rock wall of 0x05), Dungeon 9 with the red ring and the silver arrow, Ganon, the
 //! Triforce of Power and Zelda's room to the first frame of game mode `$13`, on both ways of the block clips (the
@@ -56,7 +56,7 @@ use zelda::{Action, ActionKind, Direction, GameMap, GameView, LoadOptions, MapLo
 type S = Session<Counted>;
 type Snapshot = SessionSnapshot<zcore::MachineState>;
 
-const ROUTE: &str = "d9";
+const ROUTE: &str = zelda::game_map::DEFAULT_ROUTE;
 const OBJ_TYPE: u16 = 0x34F;
 const OBJ_X: u16 = 0x70;
 const OBJ_Y: u16 = 0x84;

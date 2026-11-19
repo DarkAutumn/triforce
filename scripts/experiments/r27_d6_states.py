@@ -2,7 +2,7 @@
 of Dungeon 6 (`d2first` steps 248-280, scouted as the route `d6`; docs/experiments/round27.md "The start states").
 
     python scripts/experiments/r27_d6_states.py write STATE OUT [--bombs N] [--rupees N] [--keys N]
-    python scripts/experiments/r27_d6_states.py table [--dir DIR] [--markdown] [--route d6] [--first-step 248]
+    python scripts/experiments/r27_d6_states.py table [--dir DIR] [--markdown] [--route d2first] [--first-step 248]
                                                       [--last-step N]
 
 ``write`` writes ``OUT/<STATE's name>``, the pre-entry state STATE (not run: it stays pre-entry) with the given
@@ -11,7 +11,7 @@ skipped fight (``entry_states build --skip-fights``) would not hold what a run t
 
 ``table`` prints the sword, hearts and containers, bombs, keys, rupees, arrows and triforce pieces of every state of
 steps 248-280 in DIR (default: the states dir), chains 0 / 1 / 2, as each loads (the first playable frame, the room
-fresh), with the manifest's ``fight_skipped`` mark.  Round 28 reads its stretch with ``--route d8 --first-step 281``.
+fresh), with the manifest's ``fight_skipped`` mark.  Round 28 reads its stretch with ``--first-step 281``.
 """
 
 import argparse

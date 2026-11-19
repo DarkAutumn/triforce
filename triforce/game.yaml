@@ -1908,8 +1908,8 @@ rooms:
       # Two openings (X $30 and X $C0).  The left one enters 0x6d W of its tree, the right one E of it; the tree
       # burns from both sides (walked Nov 17, docs/routes/d8-walks.md §1.3: the red candle facing W from X $B8-$CF
       # or facing E from X $78-$8F on row Y $5D, stairs 92 frames later, 30 of 30 each).  The route's exit is the
-      # right one: from it the tree is one room's width of walking nearer.  No d2first step leaves 0x5d S: the
-      # scouting route d8 (round 28) does.
+      # right one: from it the tree is one room's width of walking nearer.  d2first leaves 0x5d S since round 28
+      # (step 285).
       span: [24, 25]
     W:
       level: 0

@@ -57,7 +57,7 @@ from pathlib import Path
 RUNS = 30
 SEED0 = 1000
 REPEAT = {'RECORDER': 40, 'CANDLE': 40, 'BOMB': 40, 'ARROW': 40, 'SWORD': 4, 'BEAMS': 4}
-FIRST = 297                                                    # the first step of the stretch in the route d9
+FIRST = 297                                                    # the first step of the stretch in d2first
 
 OBJ_X, OBJ_Y, OBJ_DIR, OBJ_STATE, OBJ_TYPE, OBJ_META = 0x70, 0x84, 0x98, 0xAC, 0x34F, 0x405
 FRAME, MODE, LEVEL, ROOM, HEARTS, HEART_PARTIAL, KEYS, BOMBS = 0x15, 0x12, 0x10, 0xEB, 0x66F, 0x670, 0x66E, 0x658
@@ -717,12 +717,12 @@ RULES = {
 # ---- playing from the installed states -------------------------------------------------------------------------------
 
 def stems():
-    """{route step index: (the start state's name without its chain, the step)}, steps 297-357 of d9 (both ways of
-    its stretches: a stretch's two steps share the name)."""
+    """{route step index: (the start state's name without its chain, the step)}, steps 297-357 of d2first (both
+    ways of its stretches: a stretch's two steps share the name)."""
     from triforce import _native                               # pylint: disable=import-outside-toplevel
     from triforce.entry_states import state_stem                # pylint: disable=import-outside-toplevel
     return {s['index']: (state_stem(s['level'], s['room'], s['in_cave'], s['entry'], s['visit']), s)
-            for s in _native.route_steps('d9')[FIRST:]}
+            for s in _native.route_steps('d2first')[FIRST:]}
 
 
 def rule_env(family, state, hearts):
@@ -764,7 +764,7 @@ def harvest(directory, what, state, seed, point, action, steps, health, ending):
     from triforce._native import Game                           # pylint: disable=import-outside-toplevel
     from triforce import entry_states                           # pylint: disable=import-outside-toplevel
     from triforce.paths import STATES_DIR                       # pylint: disable=import-outside-toplevel
-    route = entry_states.route_steps('d9')
+    route = entry_states.route_steps('d2first')
     step, goal = route[ROOMS[what][1]], route[ROOMS[what][1] + 1]
     chain = int(state.rsplit('_', 1)[1])
     game = Game(seed=chain, states_dir=str(STATES_DIR))
@@ -780,7 +780,7 @@ def harvest(directory, what, state, seed, point, action, steps, health, ending):
     path = directory / goal.filename(chain)
     entry_states.write_entry_state(game, game.last_pre_entry, str(path), goal.location)
     source = entry_states.read_manifest(str(STATES_DIR)).get(f'{state}.state', {})
-    entry = {'file': path.name, 'chain': chain, 'route': 'd9', 'route_step': goal.index, 'from_step': step.index,
+    entry = {'file': path.name, 'chain': chain, 'route': 'd2first', 'route_step': goal.index, 'from_step': step.index,
              'specialist': goal.specialist, 'level': goal.level, 'room': f'0x{goal.room:02x}',
              'in_cave': goal.in_cave, 'entry': goal.entry, 'exit': goal.exit, 'alternate': False, 'steps': steps,
              'health': health, 'ending': ending, 'env_steps': steps, 'attempts': 1, 'seconds': 0.0,

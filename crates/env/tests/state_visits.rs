@@ -23,8 +23,14 @@ use zelda::{GameMap, MapLocation, Nes, Var};
 const FIXTURE: &str = include_str!("fixtures/revisit_routes.yaml");
 const ROUTE: &str = "revisit";
 
+/// The last step of `d2first`, Zelda's room (round 29): `exit: end` is the last step of every route it is in, so the
+/// test route extends `d2first` without it (to Ganon's room, 357 steps).
+const END_STEP: &str = "- {level: 9, room: '0x32', specialist: ganon, entry: S, exit: end}\n";
+
 fn map() -> Arc<GameMap> {
-    Arc::new(GameMap::from_yaml(GAME_YAML, &format!("{ROUTES_YAML}\n{FIXTURE}")).expect("the test route loads"))
+    assert!(ROUTES_YAML.contains(END_STEP), "d2first's last step");
+    let routes = ROUTES_YAML.replacen(END_STEP, "", 1);
+    Arc::new(GameMap::from_yaml(GAME_YAML, &format!("{routes}\n{FIXTURE}")).expect("the test route loads"))
 }
 
 fn ow(room: u8) -> MapLocation {
@@ -32,16 +38,17 @@ fn ow(room: u8) -> MapLocation {
 }
 
 /// The visits of the test route's own steps (`tests/test_entry_states.py` uses the same list): 0x5c and 0x5d from W
-/// a third time, 0x6d from N and 0x6e from W a second (d2first's coast plain way had the first); the stretch's two
-/// 0x6f-from-W parts and two 0x5f-from-S steps are each one visit (the second) on two ways; 0x6f from S, first
-/// entered on the plain way, again on a shared step; 0x4f from S and D1's bow cellar a second time.
+/// a third time, 0x6d from N a third (d2first's coast plain way had the first, the leg to Dungeon 8 the second, round
+/// 28), 0x6e from W a second (the coast plain way had the first); the stretch's two 0x6f-from-W parts and two
+/// 0x5f-from-S steps are each one visit (the second) on two ways; 0x6f from S, first entered on the plain way, again
+/// on a shared step; 0x4f from S and D1's bow cellar a second time.
 #[test]
 fn the_test_route_numbers_its_visits() {
     let map = map();
     let first = map.routes["d2first"].len();
     let visits = &map.visits[ROUTE];
     assert_eq!(visits[..first], map.visits["d2first"][..]);
-    assert_eq!(visits[first..], [3, 3, 2, 2, 2, 2, 2, 1, 1, 2, 2, 2, 2]);
+    assert_eq!(visits[first..], [3, 3, 3, 2, 2, 2, 2, 1, 1, 2, 2, 2, 2]);
 }
 
 /// Writes `0_5dw_0` into `dir` as each of `names`; a name `(name, Some(step))` gets the progress of route step

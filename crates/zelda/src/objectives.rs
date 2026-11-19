@@ -2539,6 +2539,10 @@ mod tests {
                 (WAYPOINT_FOOD, MapLocation::new(0, 0x34, true), Some(7)),
                 (WAYPOINT_CANDLE, MapLocation::new(7, 0x4a, true), Some(7)),
                 (WAYPOINT_SWORD, MapLocation::new(0, 0x21, true), Some(6)),
+                // Round 29: after the last triforce (Dungeon 8's) nothing follows them but the end of the game.
+                (WAYPOINT_HEART, MapLocation::new(0, 0x47, true), None),
+                (WAYPOINT_RING, MapLocation::new(9, 0x00, true), None),
+                (WAYPOINT_SILVER_ARROW, MapLocation::new(9, 0x4f, true), None),
             ]
         );
         assert_eq!(w[0].after, [2].into_iter().collect());
@@ -2549,6 +2553,7 @@ mod tests {
         assert!(w[5..8].iter().all(|w| w.after == [2, 1, 3, 4].into_iter().collect()));
         assert!(w[8..11].iter().all(|w| w.after == [2, 1, 3, 4, 5].into_iter().collect()));
         assert_eq!(w[11].after, [2, 1, 3, 4, 5, 7].into_iter().collect());
+        assert!(w[12..].iter().all(|w| w.after == [2, 1, 3, 4, 5, 7, 6, 8].into_iter().collect()));
     }
 
     /// Dungeon 5 (round 24): the recorder from its cellar 0x04 on (the tunnel cellar's two visits differ by it), a

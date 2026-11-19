@@ -1275,25 +1275,24 @@ fn heart_value_terms() {
 }
 
 /// The shipped table matches the route it names; an edited route is refused by the families that read it, and the
-/// curve interpolates between half hearts.  Round 27: `d2first` runs to the D6 triforce, and Dungeon 7's and
-/// Dungeon 6's steps have curves (round 26's and round 27's chains); a table fitted on a scouting route prices the
-/// routes that route extends too; round 28: fitted on `d8` (`d2first` and Dungeon 8), Dungeon 8's steps have curves;
-/// round 29: fitted on `d9` (`d8` and Dungeon 9 to the ending), it prices all three, and level 9's steps have curves.
+/// curve interpolates between half hearts.  Dungeon 7's and Dungeon 6's steps have curves (round 26's and round 27's
+/// chains), Dungeon 8's (round 28's) and level 9's (round 29's); since 1.9.0.0 `d2first` runs to the end of the game
+/// and the table is its own, 358 rows.
 #[test]
 fn heart_value_table_checks_the_route() {
     let data = common::game_data();
     let values = data.heart_values.as_deref().unwrap();
-    assert_eq!(values.route, "d9");
-    let steps = &data.map.routes["d9"];
-    let visits = &data.map.visits["d9"];
+    assert_eq!(values.route, "d2first");
+    let steps = &data.map.routes["d2first"];
+    let visits = &data.map.visits["d2first"];
     values.check(steps, visits).unwrap();
     let mut moved = steps.clone();
     moved[64].exit = "N".into();
     let err = values.check(&moved, visits).unwrap_err().0;
     assert!(err.contains("step 64") && err.contains("refit"), "{err}");
     assert!(values.check(&steps[1..], &visits[1..]).is_err());
-    assert!(values.check(&data.map.routes["d8"], &data.map.visits["d8"]).is_err(), "fewer steps");
-    assert_eq!(values.routes, ["d2first", "d8", "d9"], "its own route and the routes it extends");
+    assert!(values.check(&steps[..297], &visits[..297]).is_err(), "fewer steps");
+    assert_eq!(values.routes, ["d2first"]);
     let curve = values.curve(Some(64), true).unwrap();
     assert!(approx(curve.at(0.75), (curve.values[1] + curve.values[2]) / 2.0));
     assert_eq!(curve.at(99.0), curve.top());
@@ -1309,10 +1308,8 @@ fn heart_value_table_checks_the_route() {
     }
     let mut config = heart_config(true, 0.0, 0.0);
     data.check_heart_values(&config).unwrap();
-    assert!(["d2first", "d8", "d9"].iter().all(|route| data.heart_values_for(&config, route).is_some()));
+    assert!(data.heart_values_for(&config, "d2first").is_some());
     assert!(data.heart_values_for(&config, "clips-gauntlet").is_none());
-    config.route = Some("d9".into());
-    data.check_heart_values(&config).unwrap();
     config.route = Some("clips-gauntlet".into());
     assert!(data.check_heart_values(&config).is_err(), "a table for another route");
 }

@@ -488,11 +488,11 @@ RULES = {'whirlwind': whirlwind_rule, 'tree': tree_rule, 'darknut-5e': lambda: d
 
 
 def stems():
-    """{route step index: the start state's name without its chain}, steps 281-296 of d8."""
+    """{route step index: the start state's name without its chain}, steps 281-296 of d2first."""
     from triforce import _native                               # pylint: disable=import-outside-toplevel
     from triforce.entry_states import state_stem                # pylint: disable=import-outside-toplevel
     return {s['index']: (state_stem(s['level'], s['room'], s['in_cave'], s['entry'], s['visit']), s)
-            for s in _native.route_steps('d8')[281:]}
+            for s in _native.route_steps('d2first')[281:297]}
 
 
 def scaffold(args):
@@ -533,7 +533,7 @@ def scaffold(args):
     for f in (ROOT / 'specialists').glob('*.yaml'):
         data = yaml.safe_load(f.read_text())
         if data['name'] in names:
-            data['route'] = 'd8'
+            data['route'] = 'd2first'
             data.get('reward', {}).pop('heart_value', None)
             data['ram_randomization'] = {}
             data['curriculum'] = {'enabled': False}
@@ -582,7 +582,7 @@ def harvest(directory, what, state, seed, point, action, steps, health, ending):
     from triforce._native import Game                           # pylint: disable=import-outside-toplevel
     from triforce import entry_states                           # pylint: disable=import-outside-toplevel
     from triforce.paths import STATES_DIR                       # pylint: disable=import-outside-toplevel
-    route = entry_states.route_steps('d8')
+    route = entry_states.route_steps('d2first')
     step, goal = route[ROOMS[what][1]], route[ROOMS[what][1] + 1]
     chain = int(state.rsplit('_', 1)[1])
     game = Game(seed=chain, states_dir=str(STATES_DIR))
@@ -598,7 +598,7 @@ def harvest(directory, what, state, seed, point, action, steps, health, ending):
     path = directory / goal.filename(chain)
     entry_states.write_entry_state(game, game.last_pre_entry, str(path), goal.location)
     source = entry_states.read_manifest(str(STATES_DIR)).get(f'{state}.state', {})
-    entry = {'file': path.name, 'chain': chain, 'route': 'd8', 'route_step': goal.index, 'from_step': step.index,
+    entry = {'file': path.name, 'chain': chain, 'route': 'd2first', 'route_step': goal.index, 'from_step': step.index,
              'specialist': goal.specialist, 'level': goal.level, 'room': f'0x{goal.room:02x}',
              'in_cave': goal.in_cave, 'entry': goal.entry, 'exit': goal.exit, 'alternate': False, 'steps': steps,
              'health': health, 'ending': ending, 'env_steps': steps, 'attempts': 1, 'seconds': 0.0,

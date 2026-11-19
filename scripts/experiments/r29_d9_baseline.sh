@@ -1,5 +1,5 @@
 #!/bin/bash
-# Round 29: the baseline of the leg from Dungeon 8 and of Dungeon 9 to the end of the game (route `d9`, steps 297-357)
+# Round 29: the baseline of the leg from Dungeon 8 and of Dungeon 9 to the end of the game (`d2first` steps 297-357)
 # as ONE batch job (docs/experiments/round29.md "The baseline"), as round 28's r28_d8_baseline.sh: the two chain
 # segments, clips on, and a single-room evaluation of every start state of the stretch, with the promoted runs of the
 # models directory.
@@ -26,7 +26,7 @@ EPISODES=${EPISODES:-20}
 MODELS=${MODELS:-$PWD/models}
 CHAINS=$PWD/target/r56-chains
 ROOMS=$PWD/target/$TAG-rooms
-ROUTE=d9
+ROUTE=d2first
 FIRST=297
 LAST=357
 

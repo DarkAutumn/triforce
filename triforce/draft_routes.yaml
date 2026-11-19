@@ -6,100 +6,10 @@
 # whirlwind), `exit: maze` (out of a maze room by its sequence) and `exit: end`.  A `stretch:` block holds the clip
 # way and the plain way where they differ, as in routes.yaml: the map's Clips selector shows one or both.
 #
-# first-quest (Nov 13-14): d2first, then the rest of the first quest.  The overworld legs are Lee's (Nov 13), their
-# plain ways (clips off) Lee's (Nov 14: the same heart containers, the recorder allowed).  The dungeon paths are the
-# shortest through game.yaml that take what the game needs, with the keys the route finds (Lee, Nov 14: take them;
-# a cheated key ends no run but the aim is a run with no cheats), without level 6's wand and level 8's book and
-# magic key; level 9 takes the red ring.  Order: 5, 7, the magic sword, 6, 8, 9.  Bombs come only from the rooms and
-# drops on the way (Lee, Nov 14: no shop; this is the speedrun route): 5:0x65's Gibdo, 7:0x1b when the bag isn't
-# full, 9:0x16's Patra; anything short is a cheated bomb for now.  Every step was walked in the emulator (fights
-# skipped; docs/routes/first-quest.md); the plain ways of the overworld legs on Nov 14.  Round 24: the leg from
-# Dungeon 4 and Dungeon 5 moved into routes.yaml; round 26: the leg from Dungeon 5 (the whirlwind, the arrows and
-# the food, 0x42's pond) and Dungeon 7; round 27: the magic sword and Dungeon 6 (d2first ends on the D6 triforce),
-# so this starts at Dungeon 6's exit.
-first-quest:
-  extends: d2first
-  steps:
-  # Dungeon 6 to Dungeon 8 (Lee)
-  - {leg: 'Dungeon 6 to Dungeon 8', level: 0, room: '0x22', entry: cave, exit: recorder, note: 'the recorder twice, facing down, the second play before the whirlwind arrives: Dungeon 2''s entrance'}
-  - {level: 0, room: '0x3c', entry: recorder, exit: S}
-  - {level: 0, room: '0x4c', entry: N, exit: E}
-  - {level: 0, room: '0x4d', entry: W, exit: S}
-  - {level: 0, room: '0x5d', entry: N, exit: S, note: 'S at X $C0 (the right opening reaches 0x6d''s E side)'}
-  - {level: 0, room: '0x6d', entry: N, exit: cave, note: 'burn the tree at tile (20, 4): the red candle facing W from X $B8-$CF on row Y $5D (walked Nov 17; round 28: the scouting route d8 in routes.yaml offers CANDLE there only); Dungeon 8'}
-  # Dungeon 8: Gleeok with four heads, without the book and the magic key.  Walked in the emulator Nov 13
-  # (docs/routes/first-quest.md): 9 entries, the fewest; 0x5e's key pays 0x4e's door and 0x4c's key (in the open) is
-  # taken for level 9: 2 keys in, 3 out; 2 bombs.  Forced fights: 0x5e, 0x3e (11 Blue Darknuts), Gleeok.  The magic
-  # key instead would be +8 entries, a Gohma (3 arrows) and 1 bomb.
-  - {leg: 'Dungeon 8', level: 8, room: '0x7e', entry: S, exit: N}
-  - {level: 8, room: '0x6e', entry: S, exit: N, note: 'a Manhandla: need not die; bomb the N wall (bomb 1 of 2)'}
-  - {level: 8, room: '0x5e', entry: S, exit: N, note: 'FIGHT: 5 Blue Darknuts, four statues shoot (kills are kept across a retreat S); the key at the centre (+1); the N shutter'}
-  - {level: 8, room: '0x4e', entry: S, exit: N, note: 'straight N, nothing has to die; the N key door (0x5e''s key)'}
-  - {level: 8, room: '0x3e', entry: S, exit: E, note: 'FIGHT: 6 Blue Darknuts, two statues shoot: the E shutter'}
-  - {level: 8, room: '0x3f', entry: W, exit: cave, note: 'the shutter shuts behind; straight E along the door row to the stairs; Darknuts and Gibdos need not die'}
-  - {level: 8, room: '0x2f', in_cave: true, entry: S, exit: W, note: 'the tunnel to 0x4c'}
-  - {level: 8, room: '0x4c', entry: cave, exit: N, note: 'up inside the block ring: out by its S side; the key in the top right corner (+1, for level 9); 8 Pols Voices need not die; bomb the N wall (bomb 2)'}
-  - {level: 8, room: '0x3c', entry: S, exit: N, note: 'FIGHT: Gleeok, four heads (9 magic sword hits); the heart container (14 hearts); the N shutter opens'}
-  - {level: 8, room: '0x2c', entry: S, exit: triforce, note: 'the triforce piece; out in 0x6d'}
-  # Dungeon 8 to Dungeon 9 (Lee): 0x47's heart container
-  - {leg: 'Dungeon 8 to Dungeon 9', level: 0, room: '0x6d', entry: cave, exit: recorder, note: 'the recorder once, facing down: Dungeon 1''s entrance'}
-  - {level: 0, room: '0x37', entry: recorder, exit: E}
-  - {level: 0, room: '0x38', entry: W, exit: S}
-  - {level: 0, room: '0x48', entry: N, exit: W}
-  - {level: 0, room: '0x47', entry: E, exit: E, takes: [heart-container], note: 'burn the tree at tile (22, 14), facing S from X $A8-$B8: take-any cave, the heart container is the right ware (15 hearts)'}
-  - {level: 0, room: '0x48', entry: W, exit: N}
-  - {level: 0, room: '0x38', entry: S, exit: N}
-  - {level: 0, room: '0x28', entry: S, exit: W}
-  - {level: 0, room: '0x27', entry: E, exit: N}
-  - {level: 0, room: '0x17', entry: S, exit: N, note: 'the ladder W over the river, then N at X $40'}
-  - {level: 0, room: '0x07', entry: S, exit: W}
-  - {level: 0, room: '0x06', entry: E, exit: W}
-  - {level: 0, room: '0x05', entry: E, exit: cave, note: 'bomb the rock wall at tile (10, 12), facing N from X $48-$58 (1 bomb): Dungeon 9'}
-  # Dungeon 9: the red ring, the silver arrow, Ganon, Zelda.  Walked in the emulator Nov 13 to the end of the game
-  # (docs/routes/first-quest.md).  3 keys carried (3 doors, 1 key found after the last: 1 left).  8 bomb walls; the
-  # Patra of 0x16 dies for its 4 bombs (Lee, Nov 14: no more rooms for bombs); what is short is a drop or cheated.
-  # Forced fights: 0x55, 0x07, 0x16 (bombs), 0x05, 0x61, 0x20, 0x10, 0x30, 0x03, 0x52, Ganon: 24 Wizzrobes, 3 Patras,
-  # 2 Lanmolas.
-  - {leg: 'Dungeon 9', level: 9, room: '0x76', entry: S, exit: N}
-  - {level: 9, room: '0x66', entry: S, exit: W, note: 'with all eight pieces the old man is gone and both shutters are open'}
-  - {level: 9, room: '0x65', entry: E, exit: N, note: 'dark, 5 Wizzrobes, no fight; at X $78 the ladder over the water row; bomb the N wall (bomb 1 of 8)'}
-  - {level: 9, room: '0x55', entry: S, exit: cave, note: 'FIGHT: both Red Lanmolas; push the ring''s W block N; the stairs'}
-  - {level: 9, room: '0x60', in_cave: true, entry: S, exit: W, note: 'the tunnel to 0x14'}
-  - {level: 9, room: '0x14', entry: cave, exit: E, note: 'out of the spiral of blocks past 5 Like-Likes; the E key door (key 1 of 3)'}
-  - {level: 9, room: '0x15', entry: W, exit: E, note: 'dark; straight E through the water ring on the ladder'}
-  - {level: 9, room: '0x16', entry: W, exit: S, note: 'a Patra: pass it for now'}
-  - {level: 9, room: '0x26', entry: N, exit: E, note: 'the red ring detour (Lee, Nov 13); bomb the E wall (bomb 2)'}
-  - {level: 9, room: '0x27', entry: W, exit: N, note: 'a Patra (the map if it dies): pass it; bomb the N wall (bomb 3)'}
-  - {level: 9, room: '0x17', entry: S, exit: N, note: 'past Like-Likes and Wizzrobes; bomb the N wall (bomb 4)'}
-  - {level: 9, room: '0x07', entry: S, exit: cave, note: 'FIGHT: the 5 Wizzrobes (3 Bubbles); push the ring''s W block N; the stairs'}
-  - {level: 9, room: '0x00', in_cave: true, entry: S, exit: N, note: 'the red ring (damage quartered from here on)'}
-  - {level: 9, room: '0x07', entry: cave, exit: S, note: 'back the same way: the bombed walls stay open'}
-  - {level: 9, room: '0x17', entry: N, exit: S}
-  - {level: 9, room: '0x27', entry: N, exit: W}
-  - {level: 9, room: '0x26', entry: E, exit: N}
-  - {level: 9, room: '0x16', entry: S, exit: N, note: 'FIGHT: the Patra, for its 4 bombs (3 held, 4 walls to go); the N key door (key 2)'}
-  - {level: 9, room: '0x06', entry: S, exit: W, note: 'the old man talks; bomb the W wall (bomb 5)'}
-  - {level: 9, room: '0x05', entry: E, exit: cave, note: 'FIGHT: the 5 Wizzrobes; push the block: stairs appear in the NE corner'}
-  - {level: 9, room: '0x70', in_cave: true, entry: S, exit: W, note: 'the tunnel to 0x63'}
-  - {level: 9, room: '0x63', entry: cave, exit: W, note: 'past 5 Zols; the W key door (key 3)'}
-  - {level: 9, room: '0x62', entry: E, exit: W, note: 'past 8 Keese'}
-  - {level: 9, room: '0x61', entry: E, exit: cave, note: 'the key in the NE corner (+1); FIGHT: the Patra; push the ring''s W block N; the stairs'}
-  - {level: 9, room: '0x75', in_cave: true, entry: S, exit: W, note: 'the tunnel to 0x20'}
-  - {level: 9, room: '0x20', entry: cave, exit: N, note: 'FIGHT: the 5 Wizzrobes (now, so the block moves on the way back); bomb the N wall (bomb 6)'}
-  - {level: 9, room: '0x10', entry: S, exit: cave, note: 'FIGHT: the 5 Wizzrobes (3 Bubbles); push the block W: stairs appear in the NE corner'}
-  - {level: 9, room: '0x4f', in_cave: true, entry: S, exit: N, note: 'the silver arrow'}
-  - {level: 9, room: '0x10', entry: cave, exit: S, note: 'out of the C of blocks by its W side; the wall is open'}
-  - {level: 9, room: '0x20', entry: N, exit: cave, note: 'still clear: push the ring''s W block N; the stairs'}
-  - {level: 9, room: '0x75', in_cave: true, entry: S, exit: E, note: 'the tunnel back to 0x61'}
-  - {level: 9, room: '0x61', entry: cave, exit: N, note: 'the Patra stays dead; 2 bombs must be held from here on'}
-  - {level: 9, room: '0x51', entry: S, exit: N, note: 'between the rows of blocks past 6 Like-Likes'}
-  - {level: 9, room: '0x41', entry: S, exit: N, note: 'dark; 4 traps and 4 Like-Likes; the S shutter never opens again: no way back'}
-  - {level: 9, room: '0x31', entry: S, exit: W, note: 'bomb the W wall (bomb 7)'}
-  - {level: 9, room: '0x30', entry: E, exit: cave, note: 'traps; FIGHT: the 4 Wizzrobes; push the block: stairs appear in the NE corner'}
-  - {level: 9, room: '0x67', in_cave: true, entry: S, exit: E, note: 'the tunnel to 0x04'}
-  - {level: 9, room: '0x04', entry: cave, exit: W, note: 'traps and 4 Wizzrobes: pass along the top or bottom row; bomb the W wall (bomb 8)'}
-  - {level: 9, room: '0x03', entry: E, exit: cave, note: 'FIGHT: 2 Zols and 2 Like-Likes; push the ring''s W block N; the stairs'}
-  - {level: 9, room: '0x77', in_cave: true, entry: S, exit: W, note: 'the tunnel to 0x52'}
-  - {level: 9, room: '0x52', entry: cave, exit: N, note: 'FIGHT: the Patra: the N shutter opens'}
-  - {level: 9, room: '0x42', entry: S, exit: N, note: 'Ganon: 4 magic sword hits while he is invisible, then a silver arrow (1 rupee); the Triforce of Power opens the N shutter'}
-  - {level: 9, room: '0x32', entry: S, exit: end, note: 'Zelda: up the middle to her; the game ends'}
+# No draft is left.  first-quest (Nov 13-14; docs/routes/first-quest.md) was d2first, then the rest of the first
+# quest: the overworld legs and their plain ways (Lee, Nov 13-14), the dungeon paths with the keys the route finds,
+# without level 6's wand and level 8's book and magic key, level 9 with the red ring; bombs only from the rooms and
+# drops on the way.  Its parts moved into routes.yaml as they were built: round 24 the leg from Dungeon 4 and Dungeon
+# 5, round 26 the leg from Dungeon 5 and Dungeon 7, round 27 the magic sword and Dungeon 6, rounds 28 and 29 (merged at
+# 1.9.0.0) Dungeon 8, Dungeon 9, Ganon and Zelda: d2first runs from the game start to the end of the game.  A draft
+# is `NAME: {extends: <routes.yaml route>, steps: [...]}`.

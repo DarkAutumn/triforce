@@ -45,9 +45,10 @@ const ROUTE: &str = zelda::game_map::DEFAULT_ROUTE;
 const OBJ_TYPE: u16 = 0x34F;
 /// `Gohma_ObjEyeState` (`$46B` + slot): 3 while the eye is fully open.
 const GOHMA_EYE: u16 = 0x46B;
-/// The first step of the stretch (0x42 out of Dungeon 7) and the route's length.
+/// The first step of the stretch (0x42 out of Dungeon 7) and the step after its triforce (0x22 out of Dungeon 6; the
+/// route runs on to Dungeon 8 since 1.9.0.0, `d8.rs`).
 const FIRST: usize = 248;
-const STEPS: usize = 281;
+const NEXT: usize = 281;
 
 fn map() -> Arc<GameMap> {
     Arc::new(GameMap::builtin())
@@ -617,7 +618,7 @@ fn the_d6_route_is_walked_from_the_d7_triforce_to_the_d6_triforce() {
     let Some(mut w) = Walk::start() else { return };
     let map = w.s.game_map().clone();
     let route = &map.routes[ROUTE];
-    assert_eq!(route.len(), STEPS);
+    assert_eq!(route[NEXT].location(), ow(0x22), "step 281 starts in 0:0x22, out of Dungeon 6");
     let visits = w.run(|s| s.state().has_triforce(6), 60_000);
     let t = &w.ticks;
 
@@ -761,9 +762,9 @@ fn the_d6_route_is_walked_from_the_d7_triforce_to_the_d6_triforce() {
     let last = boss.last().unwrap();
     assert_eq!((last.max_hearts, last.rupees), (13, rupees_in - shots as i32));
 
-    // The route's end: 0x0c's triforce on step 280.
+    // 0x0c's triforce on step 280, the walk's end.
     let end = t.last().unwrap();
-    assert_eq!((end.room, end.step, end.kind), (uw(0x0c), Some(STEPS - 1), ObjectiveKind::Treasure));
+    assert_eq!((end.room, end.step, end.kind), (uw(0x0c), Some(NEXT - 1), ObjectiveKind::Treasure));
     assert!(w.s.state().has_triforce(6));
     // (`--nocapture`: the walk's numbers for the round document.)
     eprintln!(

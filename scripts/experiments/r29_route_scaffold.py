@@ -4,7 +4,10 @@ scouting route `d9walk` (the draft's steps from Dungeon 8's exit to Ganon's door
 only the piece's room is in it, so that the route's progress holds eight pieces: a step is matched by exactly what
 Link holds, and without it every room is off the route), the rooms tagged with the families that would take them, the families' yamls pointed at entry states
 made by the walks' staging (`r29_route_walks.route_states`: 15 hearts, the magic sword, the route's keys, bombs and
-doors, the red ring after cellar 0x00; `ram_randomization: {}`).  Nothing in the checkout changes.
+doors, the red ring after cellar 0x00; `ram_randomization: {}`).  Nothing in the checkout changes.  It was written for
+the scouting routes of rounds 27-29: `--extends` names a route that ends on the D6 triforce, which no route of
+routes.yaml does since `d6` merged into `d2first` (1.7.0.0) and `d2first` runs to the end of the game (1.9.0.0); run
+it from a checkout of round 29's lane (before the merge) to make such a scaffold again.
 
     python scripts/experiments/r29_route_scaffold.py OUT [--wizzrobe FAMILY] [--likelike FAMILY] [--trap FAMILY]
         [--peahat FAMILY] [--zol FAMILY] [--whirlwind FAMILY] [--no-ring]
@@ -127,7 +130,8 @@ def main():
     parser.add_argument('--whirlwind', default='ow-moblin', help="plays 0x6d (the recorder must be in its `items`)")
     parser.add_argument('--no-ring', action='store_true', help='the way without the red ring detour')
     parser.add_argument('--hearts', type=float, default=None, help="the states' hearts (default: as staged, full)")
-    parser.add_argument('--extends', default='d6', help='the route d9walk is appended to (d6, d2first)')
+    parser.add_argument('--extends', default='d6', help='the route d9walk is appended to (a route ending on the D6 '
+                        'triforce: round 29\'s lane had d6)')
     args = parser.parse_args()
     out = args.out.resolve()
     sub = {'WIZZROBE': args.wizzrobe, 'LIKELIKE': args.likelike, 'TRAP': args.trap, 'PEAHAT': args.peahat,
