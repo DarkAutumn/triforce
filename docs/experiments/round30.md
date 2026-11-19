@@ -48,3 +48,47 @@ Level 9's deaths are the runs that enter its fights low: 0x30's 115 deaths are a
 sampled uniformly) are 84 thousand of Dungeon 6 (`bomb28`, `plan38-3a`) among 512 thousand, 300 thousand of them
 level 9's scripted rules (`wizzrobe-05`, `-10`, `-30`), which lose more hearts a visit than the model. No
 curriculum track is unfinished (106 of 106 complete; patra 24 of 24).
+
+**At the route's hearts.** The segments start each dungeon at full hearts; the route does not. Played by the landed
+team from the state after Dungeon 7 (`0_42c_0`, 600 runs, seeds 5000-5599) Dungeon 6 is entered with 10.85 of 12
+hearts and its triforce taken in **15.7%** of runs (`d6` from 12 hearts: 31.4%): 0x38 kills 136 of 595 (4.53 hearts
+a visit) and 0x3a 237 of 401 entered with 4.91 hearts (123 of 143 below 4, 99 of 196 at 4 to 7.9). From Dungeon 8's
+triforce (`0_6dc_0`, 1000 runs, seeds 5000-5999; Dungeon 9 entered with 12.29) 127 end the game: 0x10 kills 221
+(entered with 4.64), 0x05 130 (5.07), 0x17 on the way to its wall 102, 0x30 86 (3.54), patra's 0x16 fight 67, 0x52
+29 (3.25).
+
+### The arm
+
+The recipe of decisions 2026-11-19 ("One team for the whole route"), at the route's hearts:
+
+- **Hearts drawn as the route brings them.** `triforce/chain_hp.json` refitted from the two chains above (`python
+  -m triforce.chain_hp h6.jsonl h9.jsonl`): Dungeon 6's rooms are profiled now (0x38 9.64, 0x3a 4.91, 0x28 5.38,
+  0x29 5.19, 0x2c 4.05), level 9's barely move (0x05 5.28 → 5.07, 0x10 4.37 → 4.30, 0x30 3.56 → 3.54, 0x52 3.07 →
+  3.25). wizzrobe and patra keep `chain_hp: 0.5`: half the room-entry resets into a profiled room draw from it.
+- **Handoffs at the route's hearts as starts** (`harvested_fraction`: wizzrobe 0.33, patra 0.25; the states in
+  `triforce/states/harvested/<family>`, not in git). The two chains ran with `--harvest DIR --replays DIR`; 6:0x28,
+  0x29 and 9:0x10, 0x30 follow a wizzrobe room (no handoff) and are cut from the replays
+  (`scripts/experiments/r29_zora_states.py REPLAYS OUT --step 271:6_28s --step 272:6_29w`, `--step 340:9_10s --step
+  350:9_30e`). wizzrobe: 6:0x38 450, 0x3a 401, 0x2c 135, 0x28 100, 0x29 100, 9:0x17 150, 0x05 250, 0x10 250, 0x30
+  200 (Dungeon 6 about 60% of them: with the seed states' 18 of 60, about 40% of the resets go to Dungeon 6 against
+  30% before); patra: 0x16's fight 400, 0x52 174, 0x27 from W 150. Each set is the first N of its stem by seed
+  (`ls | sort -t_ -k3.2n | head -N`).
+- **The planner as a teacher at the route's hearts** (`scripts/experiments/r27_plan_demos.py`, the planner
+  `temperature:0.5+relax:16+plan:16:1` playing the route's run from the harvested states themselves, two episodes a
+  state, with a copy of the family's yaml whose `ram_randomization` is `{}` so that a state keeps the hearts and
+  bombs the chain brought: an evaluation pool has no harvested dir and would draw them again).
+
+  | File (run played) | State: won of episodes, hearts lost in the wins (the models a visit at the route's hearts) | Rows |
+  |---|---|---:|
+  | `plan30-d6-05` (`r79c-wj-s85`) | 6:0x38 1655 of 1800, 2.48 (4.53); 0x3a 975 of 1604, 1.23 (164 of 401 survive); 9:0x05 454 of 500, 0.23 (1.11) | 357,531 |
+  | `plan30-10-30` (`r79c-wj-s85`) | 9:0x10 356 of 500, 1.25 (2.02, 62% survive); 0x30 360 of 472, 0.31 (1.12) | 100,973 |
+  | `plan30-patra` (`r79c-patra`) | 0x16's fight 775 of 800, 0.16 (0.76); 0x27 from W 300 of 300, 2.01 (2.42); 0x52 332 of 348, 0.09 (0.46) | 100,107 |
+
+  Dungeon 6's states were listed twice (four episodes a state), 0x30's twice: the rows of Dungeon 6 are about 40% of
+  wizzrobe's demonstration rows (16% before: the level 9 rules' 300 thousand rows dominated them).
+- **Three seeds and one** from the route's runs, 488 iterations each, `--stop-success 1.01 --sil-coeff 0.1
+  --checkpoint-every 30`, clips `{enabled: true, off_share: 0}` (both yamls already), `--demo-coeff 0.05` over the
+  lineage's files and the new ones: `r30w-wj-s87`, `-s88`, `-s89` from `r79c-wj-s85` (`bomb28`, `plan38-3a`,
+  `wizzrobe-05`, `-10`, `-30`, `clip-07`, `clip-20n`, `plan9-wizz`, `plan30-d6-05`, `plan30-10-30`); `r30w-patra`
+  (seed 90) from `r79c-patra` (`patra-16`, `-61`, `-52`, `plan9-patra`, `plan30-patra`). No curriculum track is
+  unfinished in either family, so none is taken out.
