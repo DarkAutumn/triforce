@@ -3057,3 +3057,28 @@ is one run per family for all 358 steps, chosen this way:
   (`r29land-1k`, round29.md §20). Met: none is worse beyond noise; Dungeon 2 +10.1, Dungeon 3 +4.5, `d7` +6.6 and
   the full route's milestones to Dungeon 5 +7 to +10 points better. From the start the models alone end the game
   in 0 of 1000 runs, the planner in 89 of 300.
+
+## 2026-11-19 — Two routes, version 2.0, old worktrees (Lee)
+
+After watching the first complete game (`corpus/replays/v1-golden-ending.tfreplay`):
+
+- **`d2first` gets eight changes and is then complete.** Dungeon 1: leave and re-enter at the entrance so the locked
+  N door is open; skip the key rooms 0x72 and 0x74; bomb 0x53's N wall into 0x43, skipping 0x52 and 0x42 ("You may
+  check the keys if you want, and they might not add up, but my d1 route is correct"). Dungeon 6: 0x78 is a
+  ringleader room: opportunistic kills for a bomb pack, not a fight; take 0x29's key ("we need that key since we
+  are skipping an extra in d1"); no bombs on Vires in 0x2d once Link has the magic sword. Dungeon 8: do not take
+  0x4c's key. Dungeon 9: from 0x66 N into 0x56 and bomb its W wall into 0x55, skipping 0x65.
+- **`d3first` is built and both routes are kept.** The wood sword until the magic sword; Dungeons 3, 4, 1, 5, 2, 7,
+  the magic sword, 6, 8, 9; the start by 0x76, 0x75 and the forced screen scroll into Level 3; heart rock and its
+  30 secret; the blue candle E of Level 5; recorder warps to Levels 3, 4, 2 and 1; the dead woods' 100 secret; the
+  world wrap to the ladder heart; the raft heart; the Armos 30 secret E of Level 2; meat and arrows by Level 4; the
+  burned-tree heart S of Level 1 before Level 9; the red ring kept. Dungeon 3: 0x7b, 0x4b (key), 0x4a (cleared for
+  its bombs), 0x49, 0x59, 0x69, 0x59, then 0x5a and 0x5b only on the way back, 0x5c, 0x4c, 0x4d, 0x3d. The models
+  are shared where they can be; a family may get a run of its own for this route. When a golden path on `d3first`
+  reaches the ending it becomes the main route and `d2first` the secondary.
+- **Version:** MINOR no longer counts dungeons: a MINOR bump is a big change, MAJOR stays Lee's. `d3first`'s work is
+  2.0.0.0 from the start of its implementation and lands as 2.0.0.0.
+- **Old worktrees** are deleted once their work is on `main`.
+- Lee is away after this; the lead's defaults while he is: where his words and the game disagree, the closest way
+  that works is walked and logged in a "For the owner" section; trainings in the shared queue in the order
+  optimisation round, the `d2first` changes, `d3first`; finished pieces land and are pushed without asking.

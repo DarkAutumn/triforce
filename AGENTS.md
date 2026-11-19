@@ -448,6 +448,20 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 - A damage penalty for rooms Link only has to cross was tried twice (round 6) and dropped: it didn't help the
   chains, and a penalty like that could also discourage required bombing later.
 - Deferred by Lee: mapper (explore / entry_states) JSONL logs with their own GUI view (`backlog.md`, Driver section).
+- **Two routes (Lee, Nov 19).** `d2first` is complete once the owner's changes from watching the first complete
+  game are in (Dungeon 1's entrance door trick, its skipped key rooms and its bombed wall; Dungeon 6's 0x78, 0x29
+  and 0x2d; Dungeon 8's 0x4c; Dungeon 9's 0x56). **`d3first` is built beside it and both are kept**: the wood sword
+  until the magic sword (no white sword), Dungeons 3, 4, 1, 5, 2, 7, the magic sword, 6, 8, 9, by screen scrolls,
+  recorder warps, the blue candle, three secrets and the heart containers of heart rock, the ladder, the raft and
+  0x47; Dungeon 3 by 0x4b, 0x4a and 0x49 on the way in (0x5a only on the way back); the dungeons otherwise as on
+  `d2first`. "The models should overlap in most cases, but you are allowed to train specific ones if this route
+  needs specific training." **`d3first` becomes the main route when it works, "works as defined as 'a golden path
+  eventually succeeds'"; `d2first` is then the secondary** ("d3 is the faster route, and it's what is used by
+  speedrunners"). Missing bombs, keys and rupees are cheated and counted on both.
+- **Old worktrees are deleted once their work is on `main`** (Lee, Nov 19: "you can always delete old worktrees.
+  Once things are merged into main, delete them and keep stuff tidy"): `git worktree remove` (the branch stays);
+  first copy out what is not in git and still wanted: promoted run dirs into `models/`, demonstration files into
+  `target/demos/` (every `--demos` file a lineage used must stay findable there), harvested states, chains of record.
 
 ## Versioning (Lee, Nov 11)
 
@@ -456,8 +470,12 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   change for Dungeon 7 to Ganon, decisions 2026-11-16; earlier runs are stamped 1.9.0.0, not converted). It is the
   single source: `triforce.__version__` and `_native.VERSION` read it, `pyproject.toml` repeats it and the Cargo
   workspace version is its first three numbers (`tests/test_version.py` checks all of them).
-  - `MAJOR` changes only when Lee says so.
-  - `MINOR` is the number of dungeons the route completes (1.3 = three); +1 per dungeon added, up to .9.
+  - `MAJOR` changes only when Lee says so. **2.0 is said (Nov 19): the `d3first` route** (below, "Two routes"):
+    `VERSION` is 2.0.0.0 on that work's branch from its start, and 2.0.0.0 is the version on `main` when all of it
+    is done and landed; until then `main` stays in 1.9.0.x.
+  - `MINOR` +1 for a big change (Lee, Nov 19: "We are going to drop the 'dungeon # is the minor version'. From here
+    on, minor version bumps are big changes"). Through 1.9 it counted the dungeons the route completes (1.3 =
+    three).
   - `COMPAT` +1 on any change that makes previously trained models unusable (observation layout or meaning, action
     space, network architecture, anything a loaded model would misread); it resets `REV` to 0.
   - `REV` +1 for a compatible change to rewards, env or training code, or when the promoted models are replaced.
