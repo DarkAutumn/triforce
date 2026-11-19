@@ -40,6 +40,9 @@
 # A game.yaml room with `requires_pieces: 8` (9:0x66) is `missed` to a Link with fewer Triforce pieces; an exit with
 # `never_opens: true` (9:0x41 S, 9:0x31 S) is never planned through.
 # A route is a list of steps, or `{extends: <a route above>, steps: [...]}`: that route's steps, then these.
+# `{include: NAME}` (phase X, the lead, Nov 19) stands for the steps (and stretches) of the block NAME of the
+# top-level `blocks:`: what two routes play alike is written once there (each dungeon's inside, the legs both take),
+# so a change to it reaches both.  A block holds no include; every block is included somewhere.
 # An exit that is a game.yaml raft crossing (`raft_exits`) sends Link to its dock; the raft does the rest.
 # `retreat: S`: leaving through that exit instead ends a one-room episode as `retreat` (neutral) and lets a chain
 # run go on (the next room's objective sends Link back).
@@ -103,17 +106,7 @@ d2first:
 - {level: 0, room: '0x4d', specialist: ow-moblin, entry: S, exit: W}
 - {level: 0, room: '0x4c', specialist: ow-octorok, entry: E, exit: N}
 - {level: 0, room: '0x3c', specialist: ow-octorok, entry: S, exit: cave}
-- {level: 2, room: '0x7d', specialist: d2-rope, entry: S, exit: E}
-- {level: 2, room: '0x7e', specialist: d2-rope, entry: W, exit: N}
-- {level: 2, room: '0x6e', specialist: d2-rope, entry: S, exit: N}
-# 0x5e is cleared (`treasure: clear`, round 19): its Red Goriyas' bomb drops help against the Moldorm in 0x3e.
-- {level: 2, room: '0x5e', specialist: goriya, entry: S, exit: N, treasure: clear}
-- {level: 2, room: '0x4e', specialist: d2-rope, entry: S, exit: N}
-- {level: 2, room: '0x3e', specialist: moldorm, entry: S, exit: N}
-- {level: 2, room: '0x2e', specialist: d2-rope, entry: S, exit: N}
-- {level: 2, room: '0x1e', specialist: goriya, entry: S, exit: N}
-- {level: 2, room: '0x0e', specialist: boss-dodongo, entry: S, exit: W}
-- {level: 2, room: '0x0d', specialist: d2-rope, entry: E, exit: triforce}
+- include: dungeon-2
 - {level: 0, room: '0x3c', specialist: ow-octorok, entry: cave, exit: S}
 - {level: 0, room: '0x4c', specialist: ow-octorok, entry: N, exit: E}
 - {level: 0, room: '0x4d', specialist: ow-moblin, entry: W, exit: N}
@@ -139,30 +132,7 @@ d2first:
 - {level: 0, room: '0x37', specialist: ow-octorok, entry: E, exit: cave}
 # Dungeon 1 fetches both key rooms' keys although Link carries Dungeon 2's three (Lee, Nov 8): 0x73 W to 0x72 and
 # back, E to 0x74 and back, then N.  The boomerang (0x44) stays.
-- {level: 1, room: '0x73', specialist: stalfos-keese-gel, entry: S, exit: W}
-- {level: 1, room: '0x72', specialist: stalfos-keese-gel, entry: E, exit: E}
-- {level: 1, room: '0x73', specialist: stalfos-keese-gel, entry: W, exit: E}
-- {level: 1, room: '0x74', specialist: stalfos-keese-gel, entry: W, exit: W}
-- {level: 1, room: '0x73', specialist: stalfos-keese-gel, entry: E, exit: N}
-- {level: 1, room: '0x63', specialist: stalfos-keese-gel, entry: S, exit: N}
-- {level: 1, room: '0x53', specialist: stalfos-keese-gel, entry: S, exit: W}
-- {level: 1, room: '0x52', specialist: stalfos-keese-gel, entry: E, exit: N}
-- {level: 1, room: '0x42', specialist: stalfos-keese-gel, entry: S, exit: E}
-# The bow detour (Lee, Nov 9): 0x43 N through both north key rooms to the blade-trap room 0x22, push its west block N
-# or S, down the stairs for the bow, back out and the same way back to 0x43.
-- {level: 1, room: '0x43', specialist: stalfos-keese-gel, entry: W, exit: N}
-- {level: 1, room: '0x33', specialist: stalfos-keese-gel, entry: S, exit: N}
-- {level: 1, room: '0x23', specialist: goriya, entry: S, exit: W}
-- {level: 1, room: '0x22', specialist: trap-room, entry: E, exit: cave}
-- {level: 1, room: '0x7f', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: bow}
-- {level: 1, room: '0x22', specialist: trap-room, entry: cave, exit: E}
-- {level: 1, room: '0x23', specialist: goriya, entry: W, exit: S}
-- {level: 1, room: '0x33', specialist: stalfos-keese-gel, entry: N, exit: S}
-- {level: 1, room: '0x43', specialist: stalfos-keese-gel, entry: N, exit: E}
-- {level: 1, room: '0x44', specialist: goriya, entry: W, exit: E}
-- {level: 1, room: '0x45', specialist: wallmaster, entry: W, exit: N}
-- {level: 1, room: '0x35', specialist: boss-aquamentus, entry: S, exit: E}
-- {level: 1, room: '0x36', specialist: stalfos-keese-gel, entry: W, exit: triforce}
+- include: dungeon-1
 # To Dungeon 3 (round 22, Lee, Nov 13; docs/routes/overworld.md): 0x38 S into the Leever room 0x48 is forced (0x37
 # leads only E, 0x38 only N/S/W); S through 0x58 and 0x68 to 0x67, bomb its rock wall (first quest only) and take
 # the secret cave's 30 rupees (`waypoint: rupees`; the pickup works only walking up at X $78, the cave's middle ware).
@@ -211,17 +181,7 @@ d2first:
 - {level: 3, room: '0x5a', specialist: trap-room, entry: E, exit: W}
 - {level: 3, room: '0x59', specialist: darknut, entry: E, exit: N}
 - {level: 3, room: '0x49', specialist: zol, entry: S, exit: S}
-- {level: 3, room: '0x59', specialist: darknut, entry: N, exit: S}
-- {level: 3, room: '0x69', specialist: darknut, entry: N, exit: cave, treasure: skip}
-- {level: 3, room: '0x0f', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: raft}
-- {level: 3, room: '0x69', specialist: darknut, entry: cave, exit: N, treasure: skip}
-- {level: 3, room: '0x59', specialist: darknut, entry: S, exit: E}
-- {level: 3, room: '0x5a', specialist: trap-room, entry: W, exit: E}
-- {level: 3, room: '0x5b', specialist: darknut, entry: W, exit: E, bomb_reserve: 0}
-- {level: 3, room: '0x5c', specialist: darknut, entry: W, exit: N, bomb_reserve: 6}
-- {level: 3, room: '0x4c', specialist: trap-room, entry: S, exit: E}
-- {level: 3, room: '0x4d', specialist: boss-manhandla, entry: W, exit: N, bomb_reserve: 0}
-- {level: 3, room: '0x3d', specialist: zol, entry: S, exit: triforce, bomb_reserve: 6}
+- include: dungeon-3
 # Dungeon 4 (Lee, Nov 11-12; docs/routes/d4.md).  From the D3 triforce's warp (0x74) back the way Link came to 0x65,
 # N to the dock of 0x55 and by raft to the island 0x45.  Dungeon 4, Lee's directions: the keys of 0x51 and 0x40
 # (both in the open from the start), the direct way to the ladder (N N W N N E E: the Breakfast Room 0x32, whose
@@ -233,42 +193,8 @@ d2first:
 # Vire room 0x12, whose pushed block opens the E shutter to Gleeok, N to the triforce.  Keys: 0x30's E door and (clip
 # way) 0x31's N door; 0x01's key is a spare for later dungeons.
 # Bomb reserve 2 from the entrance (Lee, Nov 12): the walls of 0x21 and 0x11 (both N).
-- {level: 0, room: '0x74', specialist: ow-tektite, entry: cave, exit: W}
-- {level: 0, room: '0x73', specialist: ow-moblin, entry: E, exit: N}
-- {level: 0, room: '0x63', specialist: ow-moblin, entry: S, exit: E}
-- {level: 0, room: '0x64', specialist: ow-octorok, entry: W, exit: E}
-- {level: 0, room: '0x65', specialist: ow-zora, entry: W, exit: N}
-- {level: 0, room: '0x55', specialist: ow-zora, entry: S, exit: N}
-- {level: 0, room: '0x45', specialist: ow-peahat, entry: S, exit: cave}
-- {level: 4, room: '0x71', specialist: vire, entry: S, exit: N, bomb_reserve: 2}
-- {level: 4, room: '0x61', specialist: vire, entry: S, exit: N}
-- {level: 4, room: '0x51', specialist: stalfos-keese-gel, entry: S, exit: W}
-- {level: 4, room: '0x50', specialist: vire, entry: E, exit: N}
-- {level: 4, room: '0x40', specialist: zol, entry: S, exit: N}
-- {level: 4, room: '0x30', specialist: vire, entry: S, exit: E}
-- {level: 4, room: '0x31', specialist: vire, entry: W, exit: E}
-- {level: 4, room: '0x32', specialist: like-like, entry: W, exit: cave}
-- {level: 4, room: '0x60', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: ladder}
-- {level: 4, room: '0x32', specialist: like-like, entry: cave, exit: W}
-# Off 0x21's island by the ladder clip (round 21) or, without clips, round 20's way round through 0x30 and 0x20 (W N
-# E; the ladder crosses 0x30's water), into 0x21 from W and N through its bomb wall (round 22: both).
-- stretch: d4-island
-  parts: {level: 4, room: '0x31', entry: E}
-  rejoins: {level: 4, room: '0x11', entry: S}
-  clips:
-  - {level: 4, room: '0x31', specialist: vire, entry: E, exit: N}
-  - {level: 4, room: '0x21', specialist: stalfos-keese-gel, entry: S, exit: N}
-  plain:
-  - {level: 4, room: '0x31', specialist: vire, entry: E, exit: W}
-  - {level: 4, room: '0x30', specialist: vire, entry: E, exit: N}
-  - {level: 4, room: '0x20', specialist: vire, entry: S, exit: E}
-  - {level: 4, room: '0x21', specialist: stalfos-keese-gel, entry: W, exit: N}
-- {level: 4, room: '0x11', specialist: trap-room, entry: S, exit: N}
-- {level: 4, room: '0x01', specialist: stalfos-keese-gel, entry: S, exit: E}
-- {level: 4, room: '0x02', specialist: trap-room, entry: W, exit: S}
-- {level: 4, room: '0x12', specialist: vire, entry: N, exit: E}
-- {level: 4, room: '0x13', specialist: boss-gleeok, entry: W, exit: N}
-- {level: 4, room: '0x03', specialist: vire, entry: S, exit: triforce}
+- include: to-level-4
+- include: dungeon-4
 # The leg to Dungeon 5 (round 24, the owner, Nov 13-14; docs/routes/d5-leg.md, first-quest.md, overworld.md): from
 # the D4 triforce's warp (0x45) S off the pier, the raft down to 0x55's dock, then three stretches.  `coast-heart`:
 # with clips CLIP E over 0x55's river (the wrap onto its W part, game.yaml `wrap_in`), W along row 5 and out of 0x51
@@ -359,29 +285,7 @@ d2first:
 # its block pushed, the stairs to the recorder; the rooms after 0x66 crossed, their hidden items skipped, 0x27's key
 # taken; Digdogger by the recorder (boss-digdogger `items: {recorder: true}`).  Keys: 6 in, 3 spent (0x06 W, 0x27 W,
 # 0x25 W), 2 taken (0x66, 0x27): 5 out.
-- {level: 5, room: '0x76', specialist: gibdo, entry: S, exit: N, bomb_reserve: 8}
-- {level: 5, room: '0x66', specialist: gibdo, entry: S, exit: W, treasure: skip}
-- {level: 5, room: '0x65', specialist: gibdo, entry: E, exit: W, treasure: refuse}
-- {level: 5, room: '0x64', specialist: darknut, entry: E, exit: cave}
-- {level: 5, room: '0x07', in_cave: true, specialist: equipment-room, entry: S, exit: E}
-- {level: 5, room: '0x06', specialist: darknut, entry: cave, exit: W}
-- {level: 5, room: '0x05', specialist: darknut, entry: E, exit: cave, bomb_reserve: 0}
-- {level: 5, room: '0x04', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: recorder}
-- {level: 5, room: '0x05', specialist: darknut, entry: cave, exit: E, bomb_reserve: 8}
-- {level: 5, room: '0x06', specialist: darknut, entry: W, exit: cave}
-- {level: 5, room: '0x07', in_cave: true, specialist: equipment-room, entry: S, exit: W}
-- {level: 5, room: '0x64', specialist: darknut, entry: cave, exit: E}
-- {level: 5, room: '0x65', specialist: gibdo, entry: W, exit: E}
-- {level: 5, room: '0x66', specialist: gibdo, entry: W, exit: N}
-- {level: 5, room: '0x56', specialist: dodongo-crossing, entry: S, exit: E, treasure: skip}
-- {level: 5, room: '0x57', specialist: zol, entry: W, exit: N, treasure: skip}
-- {level: 5, room: '0x47', specialist: gibdo, entry: S, exit: N, treasure: skip}
-- {level: 5, room: '0x37', specialist: darknut, entry: S, exit: N, treasure: skip}
-- {level: 5, room: '0x27', specialist: pols-voice, entry: S, exit: W}
-- {level: 5, room: '0x26', specialist: gibdo, entry: E, exit: W, treasure: skip}
-- {level: 5, room: '0x25', specialist: pols-voice, entry: E, exit: W}
-- {level: 5, room: '0x24', specialist: boss-digdogger, entry: E, exit: N, bomb_reserve: 0}
-- {level: 5, room: '0x14', specialist: gibdo, entry: S, exit: triforce}
+- include: dungeon-5
 # The leg to Dungeon 7 and Dungeon 7 (round 26, steps 209-247; docs/routes/d7.md; scouted as the route `d7`, merged
 # here Nov 16).  Out of Dungeon 5 at 0x0b the recorder calls the whirlwind (`exit: recorder`: the
 # plays and Link's facing come from the game's index $523, the mask offers RECORDER only so), which sets Link down
@@ -399,49 +303,8 @@ d2first:
 # (Gohma's arrow, Ganon's silver one).  Room bombs: 0x1b only (the owner, Nov 14); 0x69's, 0x38's rupees and 0x0c's
 # skipped.
 - {level: 0, room: '0x0b', specialist: ow-leever, entry: cave, exit: recorder}
-- {level: 0, room: '0x45', specialist: ow-peahat, entry: recorder, exit: S}
-- stretch: dock-44
-  parts: {level: 0, room: '0x55', entry: N}
-  rejoins: {level: 0, room: '0x44', entry: S}
-  clips:
-  - {level: 0, room: '0x55', specialist: ow-zora, entry: N, exit: W}
-  - {level: 0, room: '0x54', specialist: ow-zora, entry: E, exit: N}
-  plain:
-  - {level: 0, room: '0x55', specialist: ow-zora, entry: N, exit: S}
-  - {level: 0, room: '0x65', specialist: ow-zora, entry: N, exit: W}
-  - {level: 0, room: '0x64', specialist: ow-octorok, entry: E, exit: N}
-  - {level: 0, room: '0x54', specialist: ow-zora, entry: S, exit: N}
-- {level: 0, room: '0x44', specialist: ow-zora, entry: S, exit: cave}
-- {level: 0, room: '0x44', in_cave: true, specialist: ow-zora, entry: S, exit: S, waypoint: arrows, rupee_reserve: 2}
-- {level: 0, room: '0x44', specialist: ow-zora, entry: cave, exit: N}
-- {level: 0, room: '0x34', specialist: ow-leever, entry: S, exit: cave}
-- {level: 0, room: '0x34', in_cave: true, specialist: ow-leever, entry: S, exit: S, waypoint: food}
-- {level: 0, room: '0x34', specialist: ow-leever, entry: cave, exit: S}
-- {level: 0, room: '0x44', specialist: ow-zora, entry: N, exit: S}
-- {level: 0, room: '0x54', specialist: ow-zora, entry: N, exit: W}
-- {level: 0, room: '0x53', specialist: ow-moblin, entry: E, exit: W}
-- {level: 0, room: '0x52', specialist: ow-moblin, entry: E, exit: N}
-- {level: 0, room: '0x42', specialist: ow-moblin, entry: S, exit: cave}
-- {level: 7, room: '0x79', specialist: goriya, entry: S, exit: N, bomb_reserve: 3}
-- {level: 7, room: '0x69', specialist: goriya, entry: S, exit: N, treasure: skip}
-- {level: 7, room: '0x59', specialist: goriya, entry: S, exit: N}
-- {level: 7, room: '0x49', specialist: goriya, entry: S, exit: N}
-- {level: 7, room: '0x39', specialist: boss-digdogger, entry: S, exit: W}
-- {level: 7, room: '0x38', specialist: goriya, entry: E, exit: N, treasure: skip}
-- {level: 7, room: '0x28', specialist: goriya, entry: S, exit: N}
-- {level: 7, room: '0x18', specialist: goriya, entry: S, exit: E}
-- {level: 7, room: '0x19', specialist: goriya, entry: W, exit: E}
-- {level: 7, room: '0x1a', specialist: goriya, entry: W, exit: cave}
-- {level: 7, room: '0x4a', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: candle}
-- {level: 7, room: '0x1a', specialist: goriya, entry: cave, exit: E}
-- {level: 7, room: '0x1b', specialist: goriya, entry: W, exit: E, treasure: {if_bombs_below: 5}, bomb_reserve: 2}
-- {level: 7, room: '0x1c', specialist: boss-digdogger, entry: W, exit: N}
-- {level: 7, room: '0x0c', specialist: dodongo-crossing, entry: S, exit: E, treasure: skip}
-- {level: 7, room: '0x0d', specialist: wallmaster, entry: W, exit: cave}
-- {level: 7, room: '0x7b', in_cave: true, specialist: equipment-room, entry: S, exit: W}
-- {level: 7, room: '0x29', specialist: goriya, entry: cave, exit: E}
-- {level: 7, room: '0x2a', specialist: boss-aquamentus, entry: W, exit: E, bomb_reserve: 0}
-- {level: 7, room: '0x2b', specialist: goriya, entry: W, exit: triforce}
+- include: to-level-7
+- include: dungeon-7
 # Round 27 (docs/routes/d6.md §14, d6-walks.md; scouted as the route d6, merged into d2first): from Dungeon 7's
 # triforce (the game sets Link down at its entrance, 0x42) to the magic sword and through Dungeon 6 to its triforce.
 # The leg: 0x42 S, 0x52 W, the stretch `woods` (clips: the wrap exit out of 0x51's W edge into 0x50's corridor; plain:
@@ -456,44 +319,8 @@ d2first:
 # fought for its key, 0x2c crossed to its N key door, Gohma 0x1c (ARROW facing N, a rupee a shot; the heart
 # container: 13), the triforce 0x0c.  Bomb reserve 2 from Dungeon 7's exit (0x28's wall and one owed to Dungeon 8), 1
 # after 0x28.  Rupee reserve 2 as before, 1 in Gohma's room and after (Ganon's arrow).
-- {level: 0, room: '0x42', specialist: ow-moblin, entry: cave, exit: S, bomb_reserve: 2}
-- {level: 0, room: '0x52', specialist: ow-moblin, entry: N, exit: W}
-- stretch: woods
-  parts: {level: 0, room: '0x51', entry: E}
-  rejoins: {level: 0, room: '0x40', entry: S}
-  clips:
-  - {level: 0, room: '0x51', specialist: ow-moblin, entry: E, exit: W}
-  - {level: 0, room: '0x50', specialist: ow-lynel, entry: E, exit: N}
-  plain:
-  - {level: 0, room: '0x51', specialist: ow-moblin, entry: E, exit: S}
-  - {level: 0, room: '0x61', specialist: ow-moblin, entry: N, exit: maze}
-  - {level: 0, room: '0x60', specialist: ow-lynel, entry: E, exit: N}
-  - {level: 0, room: '0x50', specialist: ow-lynel, entry: S, exit: N}
-- {level: 0, room: '0x40', specialist: ow-ghini, entry: S, exit: E}
-- {level: 0, room: '0x41', specialist: ow-ghini, entry: W, exit: N}
-- {level: 0, room: '0x31', specialist: ow-ghini, entry: S, exit: N}
-- {level: 0, room: '0x21', specialist: ow-ghini, entry: S, exit: cave}
-- {level: 0, room: '0x21', in_cave: true, specialist: ow-ghini, entry: S, exit: S, waypoint: sword}
-- {level: 0, room: '0x21', specialist: ow-ghini, entry: cave, exit: S}
-- {level: 0, room: '0x31', specialist: ow-ghini, entry: N, exit: E}
-- {level: 0, room: '0x32', specialist: ow-lynel, entry: W, exit: N}
-- {level: 0, room: '0x22', specialist: ow-lynel, entry: S, exit: cave}
-- {level: 6, room: '0x79', specialist: stalfos-keese-gel, entry: S, exit: W}
-- {level: 6, room: '0x78', specialist: wizzrobe, entry: E, exit: N}
-- {level: 6, room: '0x68', specialist: zol, entry: S, exit: N, treasure: skip}
-- {level: 6, room: '0x58', specialist: stalfos-keese-gel, entry: S, exit: N}
-- {level: 6, room: '0x48', specialist: trap-room, entry: S, exit: N}
-- {level: 6, room: '0x38', specialist: wizzrobe, entry: S, exit: N}
-- {level: 6, room: '0x28', specialist: wizzrobe, entry: S, exit: E, treasure: skip}
-- {level: 6, room: '0x29', specialist: wizzrobe, entry: W, exit: S, treasure: skip, bomb_reserve: 1}
-- {level: 6, room: '0x39', specialist: vire, entry: N, exit: E}
-- {level: 6, room: '0x3a', specialist: wizzrobe, entry: W, exit: cave}
-- {level: 6, room: '0x08', in_cave: true, specialist: equipment-room, entry: S, exit: E}
-- {level: 6, room: '0x1d', specialist: like-like, entry: cave, exit: S}
-- {level: 6, room: '0x2d', specialist: vire, entry: N, exit: W}
-- {level: 6, room: '0x2c', specialist: wizzrobe, entry: E, exit: N}
-- {level: 6, room: '0x1c', specialist: boss-gohma, entry: S, exit: N, rupee_reserve: 1}
-- {level: 6, room: '0x0c', specialist: stalfos-keese-gel, entry: S, exit: triforce}
+- include: to-level-6
+- include: dungeon-6
 # Round 28 (docs/routes/d8.md §15, d8-walks.md; scouted as the route d8, merged into d2first): from Dungeon 6's
 # triforce (the game sets Link down at its entrance, 0x22) to Dungeon 8's.  The leg: the recorder twice out of 0x22
 # (facing down from the index $FB with seven pieces: Dungeon 2's entrance 0x3c), 0x3c S, 0x4c E, 0x4d S, 0x5d S by its
@@ -508,22 +335,8 @@ d2first:
 # heads 0x3c (the heart container: 14), the triforce 0x2c.  Bomb reserve 1 to 0x6e's wall, 2 from 0x5e (0x4c's wall
 # and 0:0x05's rock wall on the way to Dungeon 9), 1 after 0x4c's.  Rupee reserve 8 from 8:0x4c: its arrows are paid
 # from what Link holds above 8, and 8 shots stay for Ganon's silver arrow.
-- {level: 0, room: '0x22', specialist: ow-lynel, entry: cave, exit: recorder, bomb_reserve: 1}
-- {level: 0, room: '0x3c', specialist: ow-octorok, entry: recorder, exit: S}
-- {level: 0, room: '0x4c', specialist: ow-octorok, entry: N, exit: E}
-- {level: 0, room: '0x4d', specialist: ow-moblin, entry: W, exit: S}
-- {level: 0, room: '0x5d', specialist: ow-moblin, entry: N, exit: S}
-- {level: 0, room: '0x6d', specialist: ow-moblin, entry: N, exit: cave}
-- {level: 8, room: '0x7e', specialist: stalfos-keese-gel, entry: S, exit: N}
-- {level: 8, room: '0x6e', specialist: boss-manhandla, entry: S, exit: N, treasure: skip, bombs: required}
-- {level: 8, room: '0x5e', specialist: darknut, entry: S, exit: N, bomb_reserve: 2}
-- {level: 8, room: '0x4e', specialist: darknut, entry: S, exit: N, treasure: skip}
-- {level: 8, room: '0x3e', specialist: darknut, entry: S, exit: E}
-- {level: 8, room: '0x3f', specialist: darknut, entry: W, exit: cave, treasure: {if_bombs_below: 5}}
-- {level: 8, room: '0x2f', in_cave: true, specialist: equipment-room, entry: S, exit: W}
-- {level: 8, room: '0x4c', specialist: pols-voice, entry: cave, exit: N, rupee_reserve: 8}
-- {level: 8, room: '0x3c', specialist: boss-gleeok, entry: S, exit: N, bomb_reserve: 1}
-- {level: 8, room: '0x2c', specialist: stalfos-keese-gel, entry: S, exit: triforce}
+- include: to-level-8
+- include: dungeon-8
 # Round 29 (docs/routes/d9.md "as built", d9-walks.md, d9-fights-walks.md; scouted as the route d9, merged into
 # d2first): from Dungeon 8's triforce (the game sets Link down at its entrance, 0x6d) to the end of the game.  The
 # leg: the recorder once out of 0x6d (facing down from the index $F9 with eight pieces: Dungeon 1's entrance 0x37),
@@ -548,89 +361,8 @@ d2first:
 # walls ahead before the next bombs (5 from 0x6d, one fewer after each; 4 again from 0x06 with 0x16's four, down to 0
 # after 0x04's): on a run with no drops the first five walls are cheated and counted.  Rupee reserve 1 through level 9
 # (Ganon's arrow), 0 in his room.
-- {level: 0, room: '0x6d', specialist: ow-moblin, entry: cave, exit: recorder, bomb_reserve: 5}
-- {level: 0, room: '0x37', specialist: ow-octorok, entry: recorder, exit: E}
-- {level: 0, room: '0x38', specialist: ow-zora, entry: W, exit: S}
-- {level: 0, room: '0x48', specialist: ow-leever, entry: N, exit: W}
-- {level: 0, room: '0x47', specialist: ow-zora, entry: E, exit: cave}
-- {level: 0, room: '0x47', in_cave: true, specialist: ow-zora, entry: S, exit: S, waypoint: heart}
-- {level: 0, room: '0x47', specialist: ow-zora, entry: cave, exit: E}
-- {level: 0, room: '0x48', specialist: ow-leever, entry: W, exit: N}
-- {level: 0, room: '0x38', specialist: ow-zora, entry: S, exit: N}
-- {level: 0, room: '0x28', specialist: ow-zora, entry: S, exit: W}
-- {level: 0, room: '0x27', specialist: ow-zora, entry: E, exit: N}
-- {level: 0, room: '0x17', specialist: ow-boulder, entry: S, exit: N}
-- {level: 0, room: '0x07', specialist: ow-lynel, entry: S, exit: W, bombs: never}
-- {level: 0, room: '0x06', specialist: ow-lynel, entry: E, exit: W}
-- {level: 0, room: '0x05', specialist: ow-lynel, entry: E, exit: cave, bombs: required}
-- {level: 9, room: '0x76', specialist: stalfos-keese-gel, entry: S, exit: N, bomb_reserve: 4, rupee_reserve: 1}
-- {level: 9, room: '0x66', specialist: stalfos-keese-gel, entry: S, exit: W}
-- {level: 9, room: '0x65', specialist: wizzrobe, entry: E, exit: N}
-- {level: 9, room: '0x55', specialist: lanmola, entry: S, exit: cave, bomb_reserve: 3}
-- {level: 9, room: '0x60', in_cave: true, specialist: equipment-room, entry: S, exit: W}
-- {level: 9, room: '0x14', specialist: like-like, entry: cave, exit: E, treasure: clear}
-- {level: 9, room: '0x15', specialist: wizzrobe, entry: W, exit: E, treasure: skip}
-- {level: 9, room: '0x16', specialist: patra, entry: W, exit: S, treasure: skip}
-- {level: 9, room: '0x26', specialist: stalfos-keese-gel, entry: N, exit: E, treasure: skip}
-- {level: 9, room: '0x27', specialist: patra, entry: W, exit: N, treasure: skip, bomb_reserve: 2}
-- {level: 9, room: '0x17', specialist: wizzrobe, entry: S, exit: N, bomb_reserve: 1}
-- {level: 9, room: '0x07', specialist: wizzrobe, entry: S, exit: cave, bomb_reserve: 0}
-- {level: 9, room: '0x00', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: ring}
-# The block clips of the ring rooms (round 29's states step; the lead's working answer to the owner's question 3,
-# docs/decisions.md 2026-11-17 answer 11): with clips 0x55, 0x07, 0x20 (from N) and 0x03 are left by `CLIP` to
-# their stairs with the monsters alive, without clips they are emptied and their blocks pushed; the switch decides
-# in the room (one step each, as 5:0x64).  The rooms the route comes back to differ by what the first visit left:
-# 0x07 out of the ring cellar is full on the clip way and holds the kills of its fight on the plain way.
-- stretch: ring-07
-  parts: {level: 9, room: '0x07', entry: cave}
-  rejoins: {level: 9, room: '0x17', entry: N}
-  clips:
-  - {level: 9, room: '0x07', specialist: wizzrobe, entry: cave, exit: S}
-  plain:
-  - {level: 9, room: '0x07', specialist: wizzrobe, entry: cave, exit: S, banked_kills: 5}
-- {level: 9, room: '0x17', specialist: wizzrobe, entry: N, exit: S}
-- {level: 9, room: '0x27', specialist: patra, entry: N, exit: W, treasure: skip}
-- {level: 9, room: '0x26', specialist: stalfos-keese-gel, entry: E, exit: N, treasure: skip}
-- {level: 9, room: '0x16', specialist: patra, entry: S, exit: N}
-- {level: 9, room: '0x06', specialist: stalfos-keese-gel, entry: S, exit: W, sword: false, bomb_reserve: 4}
-- {level: 9, room: '0x05', specialist: wizzrobe, entry: E, exit: cave, bomb_reserve: 3}
-- {level: 9, room: '0x70', in_cave: true, specialist: equipment-room, entry: S, exit: W}
-- {level: 9, room: '0x63', specialist: zol, entry: cave, exit: W}
-- {level: 9, room: '0x62', specialist: stalfos-keese-gel, entry: E, exit: W, treasure: skip}
-- {level: 9, room: '0x61', specialist: patra, entry: E, exit: cave}
-- {level: 9, room: '0x75', in_cave: true, specialist: equipment-room, entry: S, exit: W}
-# 0x20's first visit: crossed to its N wall with its five Wizzrobes alive on the clip way (the second visit clips
-# to the stairs), emptied on the plain way (the second visit finds it empty and pushes the block).
-- stretch: arrow-20
-  parts: {level: 9, room: '0x20', entry: cave}
-  rejoins: {level: 9, room: '0x10', entry: S}
-  clips:
-  - {level: 9, room: '0x20', specialist: wizzrobe, entry: cave, exit: N}
-  plain:
-  - {level: 9, room: '0x20', specialist: wizzrobe, entry: cave, exit: N, treasure: clear}
-- {level: 9, room: '0x10', specialist: wizzrobe, entry: S, exit: cave, bomb_reserve: 2}
-- {level: 9, room: '0x4f', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: silver-arrow}
-- {level: 9, room: '0x10', specialist: wizzrobe, entry: cave, exit: S, banked_kills: 5}
-- stretch: arrow-20n
-  parts: {level: 9, room: '0x20', entry: N}
-  rejoins: {level: 9, room: '0x75', in_cave: true, entry: S}
-  clips:
-  - {level: 9, room: '0x20', specialist: wizzrobe, entry: N, exit: cave}
-  plain:
-  - {level: 9, room: '0x20', specialist: wizzrobe, entry: N, exit: cave, banked_kills: 15}
-- {level: 9, room: '0x75', in_cave: true, specialist: equipment-room, entry: S, exit: E}
-- {level: 9, room: '0x61', specialist: patra, entry: cave, exit: N, banked_kills: 15}
-- {level: 9, room: '0x51', specialist: like-like, entry: S, exit: N}
-- {level: 9, room: '0x41', specialist: like-like, entry: S, exit: N}
-- {level: 9, room: '0x31', specialist: wizzrobe, entry: S, exit: W}
-- {level: 9, room: '0x30', specialist: wizzrobe, entry: E, exit: cave, bomb_reserve: 1}
-- {level: 9, room: '0x67', in_cave: true, specialist: equipment-room, entry: S, exit: E}
-- {level: 9, room: '0x04', specialist: wizzrobe, entry: cave, exit: W}
-- {level: 9, room: '0x03', specialist: like-like, entry: E, exit: cave, bomb_reserve: 0}
-- {level: 9, room: '0x77', in_cave: true, specialist: equipment-room, entry: S, exit: W}
-- {level: 9, room: '0x52', specialist: patra, entry: cave, exit: N}
-- {level: 9, room: '0x42', specialist: ganon, entry: S, exit: N, rupee_reserve: 0}
-- {level: 9, room: '0x32', specialist: ganon, entry: S, exit: end}
+- include: to-level-9
+- include: dungeon-9
 # clips-gauntlet (round 21, docs/experiments/round21-gauntlet.md): an experiment route, not a way through the game.  Two
 # steps per (room, entry): a specialist naming it (`route: clips-gauntlet`) draws one of the two exits at every
 # reset.  Entered from W the target is E or S, entered from E it is W or S.
@@ -647,6 +379,318 @@ clips-gauntlet:
 - {level: 0, room: '0x5b', entry: W, exit: S}
 - {level: 0, room: '0x5b', entry: E, exit: W}
 - {level: 0, room: '0x5b', entry: E, exit: S}
+# Blocks (phase X, the lead, Nov 19): what d2first and d3first play alike, written once and spliced in by `include:`
+# (each route's comments above say why the steps are what they are).  Every dungeon's inside but Dungeon 3's way in
+# (each route has its own: d2first by 0x5a, d3first by 0x4b and 0x4a), and the legs both routes take between them.
+# What differs between the routes inside a block (sword, heart containers, items, the reserves the route brings) is
+# their states', not route data.
+blocks:
+  dungeon-2:
+  - {level: 2, room: '0x7d', specialist: d2-rope, entry: S, exit: E}
+  - {level: 2, room: '0x7e', specialist: d2-rope, entry: W, exit: N}
+  - {level: 2, room: '0x6e', specialist: d2-rope, entry: S, exit: N}
+  # 0x5e is cleared (`treasure: clear`, round 19): its Red Goriyas' bomb drops help against the Moldorm in 0x3e.
+  - {level: 2, room: '0x5e', specialist: goriya, entry: S, exit: N, treasure: clear}
+  - {level: 2, room: '0x4e', specialist: d2-rope, entry: S, exit: N}
+  - {level: 2, room: '0x3e', specialist: moldorm, entry: S, exit: N}
+  - {level: 2, room: '0x2e', specialist: d2-rope, entry: S, exit: N}
+  - {level: 2, room: '0x1e', specialist: goriya, entry: S, exit: N}
+  - {level: 2, room: '0x0e', specialist: boss-dodongo, entry: S, exit: W}
+  - {level: 2, room: '0x0d', specialist: d2-rope, entry: E, exit: triforce}
+  dungeon-1:
+  - {level: 1, room: '0x73', specialist: stalfos-keese-gel, entry: S, exit: W}
+  - {level: 1, room: '0x72', specialist: stalfos-keese-gel, entry: E, exit: E}
+  - {level: 1, room: '0x73', specialist: stalfos-keese-gel, entry: W, exit: E}
+  - {level: 1, room: '0x74', specialist: stalfos-keese-gel, entry: W, exit: W}
+  - {level: 1, room: '0x73', specialist: stalfos-keese-gel, entry: E, exit: N}
+  - {level: 1, room: '0x63', specialist: stalfos-keese-gel, entry: S, exit: N}
+  - {level: 1, room: '0x53', specialist: stalfos-keese-gel, entry: S, exit: W}
+  - {level: 1, room: '0x52', specialist: stalfos-keese-gel, entry: E, exit: N}
+  - {level: 1, room: '0x42', specialist: stalfos-keese-gel, entry: S, exit: E}
+  # The bow detour (Lee, Nov 9): 0x43 N through both north key rooms to the blade-trap room 0x22, push its west block
+  # N or S, down the stairs for the bow, back out and the same way back to 0x43.
+  - {level: 1, room: '0x43', specialist: stalfos-keese-gel, entry: W, exit: N}
+  - {level: 1, room: '0x33', specialist: stalfos-keese-gel, entry: S, exit: N}
+  - {level: 1, room: '0x23', specialist: goriya, entry: S, exit: W}
+  - {level: 1, room: '0x22', specialist: trap-room, entry: E, exit: cave}
+  - {level: 1, room: '0x7f', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: bow}
+  - {level: 1, room: '0x22', specialist: trap-room, entry: cave, exit: E}
+  - {level: 1, room: '0x23', specialist: goriya, entry: W, exit: S}
+  - {level: 1, room: '0x33', specialist: stalfos-keese-gel, entry: N, exit: S}
+  - {level: 1, room: '0x43', specialist: stalfos-keese-gel, entry: N, exit: E}
+  - {level: 1, room: '0x44', specialist: goriya, entry: W, exit: E}
+  - {level: 1, room: '0x45', specialist: wallmaster, entry: W, exit: N}
+  - {level: 1, room: '0x35', specialist: boss-aquamentus, entry: S, exit: E}
+  - {level: 1, room: '0x36', specialist: stalfos-keese-gel, entry: W, exit: triforce}
+  # Dungeon 3 from 0x59 entered from N (0x49's S door) to the triforce: the raft cellar and the way back E by 0x5a,
+  # 0x5b's last pass and its E wall, 0x4c's E wall, Manhandla.
+  dungeon-3:
+  - {level: 3, room: '0x59', specialist: darknut, entry: N, exit: S}
+  - {level: 3, room: '0x69', specialist: darknut, entry: N, exit: cave, treasure: skip}
+  - {level: 3, room: '0x0f', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: raft}
+  - {level: 3, room: '0x69', specialist: darknut, entry: cave, exit: N, treasure: skip}
+  - {level: 3, room: '0x59', specialist: darknut, entry: S, exit: E}
+  - {level: 3, room: '0x5a', specialist: trap-room, entry: W, exit: E}
+  - {level: 3, room: '0x5b', specialist: darknut, entry: W, exit: E, bomb_reserve: 0}
+  - {level: 3, room: '0x5c', specialist: darknut, entry: W, exit: N, bomb_reserve: 6}
+  - {level: 3, room: '0x4c', specialist: trap-room, entry: S, exit: E}
+  - {level: 3, room: '0x4d', specialist: boss-manhandla, entry: W, exit: N, bomb_reserve: 0}
+  - {level: 3, room: '0x3d', specialist: zol, entry: S, exit: triforce, bomb_reserve: 6}
+  # From the D3 triforce's warp (0x74) back to 0x65, N to the dock of 0x55 and by raft to the island 0x45.
+  to-level-4:
+  - {level: 0, room: '0x74', specialist: ow-tektite, entry: cave, exit: W}
+  - {level: 0, room: '0x73', specialist: ow-moblin, entry: E, exit: N}
+  - {level: 0, room: '0x63', specialist: ow-moblin, entry: S, exit: E}
+  - {level: 0, room: '0x64', specialist: ow-octorok, entry: W, exit: E}
+  - {level: 0, room: '0x65', specialist: ow-zora, entry: W, exit: N}
+  - {level: 0, room: '0x55', specialist: ow-zora, entry: S, exit: N}
+  - {level: 0, room: '0x45', specialist: ow-peahat, entry: S, exit: cave}
+  dungeon-4:
+  - {level: 4, room: '0x71', specialist: vire, entry: S, exit: N, bomb_reserve: 2}
+  - {level: 4, room: '0x61', specialist: vire, entry: S, exit: N}
+  - {level: 4, room: '0x51', specialist: stalfos-keese-gel, entry: S, exit: W}
+  - {level: 4, room: '0x50', specialist: vire, entry: E, exit: N}
+  - {level: 4, room: '0x40', specialist: zol, entry: S, exit: N}
+  - {level: 4, room: '0x30', specialist: vire, entry: S, exit: E}
+  - {level: 4, room: '0x31', specialist: vire, entry: W, exit: E}
+  - {level: 4, room: '0x32', specialist: like-like, entry: W, exit: cave}
+  - {level: 4, room: '0x60', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: ladder}
+  - {level: 4, room: '0x32', specialist: like-like, entry: cave, exit: W}
+  # Off 0x21's island by the ladder clip (round 21) or, without clips, round 20's way round through 0x30 and 0x20 (W
+  # N E; the ladder crosses 0x30's water), into 0x21 from W and N through its bomb wall (round 22: both).
+  - stretch: d4-island
+    parts: {level: 4, room: '0x31', entry: E}
+    rejoins: {level: 4, room: '0x11', entry: S}
+    clips:
+    - {level: 4, room: '0x31', specialist: vire, entry: E, exit: N}
+    - {level: 4, room: '0x21', specialist: stalfos-keese-gel, entry: S, exit: N}
+    plain:
+    - {level: 4, room: '0x31', specialist: vire, entry: E, exit: W}
+    - {level: 4, room: '0x30', specialist: vire, entry: E, exit: N}
+    - {level: 4, room: '0x20', specialist: vire, entry: S, exit: E}
+    - {level: 4, room: '0x21', specialist: stalfos-keese-gel, entry: W, exit: N}
+  - {level: 4, room: '0x11', specialist: trap-room, entry: S, exit: N}
+  - {level: 4, room: '0x01', specialist: stalfos-keese-gel, entry: S, exit: E}
+  - {level: 4, room: '0x02', specialist: trap-room, entry: W, exit: S}
+  - {level: 4, room: '0x12', specialist: vire, entry: N, exit: E}
+  - {level: 4, room: '0x13', specialist: boss-gleeok, entry: W, exit: N}
+  - {level: 4, room: '0x03', specialist: vire, entry: S, exit: triforce}
+  dungeon-5:
+  - {level: 5, room: '0x76', specialist: gibdo, entry: S, exit: N, bomb_reserve: 8}
+  - {level: 5, room: '0x66', specialist: gibdo, entry: S, exit: W, treasure: skip}
+  - {level: 5, room: '0x65', specialist: gibdo, entry: E, exit: W, treasure: refuse}
+  - {level: 5, room: '0x64', specialist: darknut, entry: E, exit: cave}
+  - {level: 5, room: '0x07', in_cave: true, specialist: equipment-room, entry: S, exit: E}
+  - {level: 5, room: '0x06', specialist: darknut, entry: cave, exit: W}
+  - {level: 5, room: '0x05', specialist: darknut, entry: E, exit: cave, bomb_reserve: 0}
+  - {level: 5, room: '0x04', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: recorder}
+  - {level: 5, room: '0x05', specialist: darknut, entry: cave, exit: E, bomb_reserve: 8}
+  - {level: 5, room: '0x06', specialist: darknut, entry: W, exit: cave}
+  - {level: 5, room: '0x07', in_cave: true, specialist: equipment-room, entry: S, exit: W}
+  - {level: 5, room: '0x64', specialist: darknut, entry: cave, exit: E}
+  - {level: 5, room: '0x65', specialist: gibdo, entry: W, exit: E}
+  - {level: 5, room: '0x66', specialist: gibdo, entry: W, exit: N}
+  - {level: 5, room: '0x56', specialist: dodongo-crossing, entry: S, exit: E, treasure: skip}
+  - {level: 5, room: '0x57', specialist: zol, entry: W, exit: N, treasure: skip}
+  - {level: 5, room: '0x47', specialist: gibdo, entry: S, exit: N, treasure: skip}
+  - {level: 5, room: '0x37', specialist: darknut, entry: S, exit: N, treasure: skip}
+  - {level: 5, room: '0x27', specialist: pols-voice, entry: S, exit: W}
+  - {level: 5, room: '0x26', specialist: gibdo, entry: E, exit: W, treasure: skip}
+  - {level: 5, room: '0x25', specialist: pols-voice, entry: E, exit: W}
+  - {level: 5, room: '0x24', specialist: boss-digdogger, entry: E, exit: N, bomb_reserve: 0}
+  - {level: 5, room: '0x14', specialist: gibdo, entry: S, exit: triforce}
+  # From the whirlwind's landing on 0x45's pier (d2first: out of Level 5; d3first: out of Level 2) to Level 7.
+  to-level-7:
+  - {level: 0, room: '0x45', specialist: ow-peahat, entry: recorder, exit: S}
+  - stretch: dock-44
+    parts: {level: 0, room: '0x55', entry: N}
+    rejoins: {level: 0, room: '0x44', entry: S}
+    clips:
+    - {level: 0, room: '0x55', specialist: ow-zora, entry: N, exit: W}
+    - {level: 0, room: '0x54', specialist: ow-zora, entry: E, exit: N}
+    plain:
+    - {level: 0, room: '0x55', specialist: ow-zora, entry: N, exit: S}
+    - {level: 0, room: '0x65', specialist: ow-zora, entry: N, exit: W}
+    - {level: 0, room: '0x64', specialist: ow-octorok, entry: E, exit: N}
+    - {level: 0, room: '0x54', specialist: ow-zora, entry: S, exit: N}
+  - {level: 0, room: '0x44', specialist: ow-zora, entry: S, exit: cave}
+  - {level: 0, room: '0x44', in_cave: true, specialist: ow-zora, entry: S, exit: S, waypoint: arrows, rupee_reserve: 2}
+  - {level: 0, room: '0x44', specialist: ow-zora, entry: cave, exit: N}
+  - {level: 0, room: '0x34', specialist: ow-leever, entry: S, exit: cave}
+  - {level: 0, room: '0x34', in_cave: true, specialist: ow-leever, entry: S, exit: S, waypoint: food}
+  - {level: 0, room: '0x34', specialist: ow-leever, entry: cave, exit: S}
+  - {level: 0, room: '0x44', specialist: ow-zora, entry: N, exit: S}
+  - {level: 0, room: '0x54', specialist: ow-zora, entry: N, exit: W}
+  - {level: 0, room: '0x53', specialist: ow-moblin, entry: E, exit: W}
+  - {level: 0, room: '0x52', specialist: ow-moblin, entry: E, exit: N}
+  - {level: 0, room: '0x42', specialist: ow-moblin, entry: S, exit: cave}
+  dungeon-7:
+  - {level: 7, room: '0x79', specialist: goriya, entry: S, exit: N, bomb_reserve: 3}
+  - {level: 7, room: '0x69', specialist: goriya, entry: S, exit: N, treasure: skip}
+  - {level: 7, room: '0x59', specialist: goriya, entry: S, exit: N}
+  - {level: 7, room: '0x49', specialist: goriya, entry: S, exit: N}
+  - {level: 7, room: '0x39', specialist: boss-digdogger, entry: S, exit: W}
+  - {level: 7, room: '0x38', specialist: goriya, entry: E, exit: N, treasure: skip}
+  - {level: 7, room: '0x28', specialist: goriya, entry: S, exit: N}
+  - {level: 7, room: '0x18', specialist: goriya, entry: S, exit: E}
+  - {level: 7, room: '0x19', specialist: goriya, entry: W, exit: E}
+  - {level: 7, room: '0x1a', specialist: goriya, entry: W, exit: cave}
+  - {level: 7, room: '0x4a', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: candle}
+  - {level: 7, room: '0x1a', specialist: goriya, entry: cave, exit: E}
+  - {level: 7, room: '0x1b', specialist: goriya, entry: W, exit: E, treasure: {if_bombs_below: 5}, bomb_reserve: 2}
+  - {level: 7, room: '0x1c', specialist: boss-digdogger, entry: W, exit: N}
+  - {level: 7, room: '0x0c', specialist: dodongo-crossing, entry: S, exit: E, treasure: skip}
+  - {level: 7, room: '0x0d', specialist: wallmaster, entry: W, exit: cave}
+  - {level: 7, room: '0x7b', in_cave: true, specialist: equipment-room, entry: S, exit: W}
+  - {level: 7, room: '0x29', specialist: goriya, entry: cave, exit: E}
+  - {level: 7, room: '0x2a', specialist: boss-aquamentus, entry: W, exit: E, bomb_reserve: 0}
+  - {level: 7, room: '0x2b', specialist: goriya, entry: W, exit: triforce}
+  # From Level 7's entrance to the magic sword and Level 6's entrance.
+  to-level-6:
+  - {level: 0, room: '0x42', specialist: ow-moblin, entry: cave, exit: S, bomb_reserve: 2}
+  - {level: 0, room: '0x52', specialist: ow-moblin, entry: N, exit: W}
+  - stretch: woods
+    parts: {level: 0, room: '0x51', entry: E}
+    rejoins: {level: 0, room: '0x40', entry: S}
+    clips:
+    - {level: 0, room: '0x51', specialist: ow-moblin, entry: E, exit: W}
+    - {level: 0, room: '0x50', specialist: ow-lynel, entry: E, exit: N}
+    plain:
+    - {level: 0, room: '0x51', specialist: ow-moblin, entry: E, exit: S}
+    - {level: 0, room: '0x61', specialist: ow-moblin, entry: N, exit: maze}
+    - {level: 0, room: '0x60', specialist: ow-lynel, entry: E, exit: N}
+    - {level: 0, room: '0x50', specialist: ow-lynel, entry: S, exit: N}
+  - {level: 0, room: '0x40', specialist: ow-ghini, entry: S, exit: E}
+  - {level: 0, room: '0x41', specialist: ow-ghini, entry: W, exit: N}
+  - {level: 0, room: '0x31', specialist: ow-ghini, entry: S, exit: N}
+  - {level: 0, room: '0x21', specialist: ow-ghini, entry: S, exit: cave}
+  - {level: 0, room: '0x21', in_cave: true, specialist: ow-ghini, entry: S, exit: S, waypoint: sword}
+  - {level: 0, room: '0x21', specialist: ow-ghini, entry: cave, exit: S}
+  - {level: 0, room: '0x31', specialist: ow-ghini, entry: N, exit: E}
+  - {level: 0, room: '0x32', specialist: ow-lynel, entry: W, exit: N}
+  - {level: 0, room: '0x22', specialist: ow-lynel, entry: S, exit: cave}
+  dungeon-6:
+  - {level: 6, room: '0x79', specialist: stalfos-keese-gel, entry: S, exit: W}
+  - {level: 6, room: '0x78', specialist: wizzrobe, entry: E, exit: N}
+  - {level: 6, room: '0x68', specialist: zol, entry: S, exit: N, treasure: skip}
+  - {level: 6, room: '0x58', specialist: stalfos-keese-gel, entry: S, exit: N}
+  - {level: 6, room: '0x48', specialist: trap-room, entry: S, exit: N}
+  - {level: 6, room: '0x38', specialist: wizzrobe, entry: S, exit: N}
+  - {level: 6, room: '0x28', specialist: wizzrobe, entry: S, exit: E, treasure: skip}
+  - {level: 6, room: '0x29', specialist: wizzrobe, entry: W, exit: S, treasure: skip, bomb_reserve: 1}
+  - {level: 6, room: '0x39', specialist: vire, entry: N, exit: E}
+  - {level: 6, room: '0x3a', specialist: wizzrobe, entry: W, exit: cave}
+  - {level: 6, room: '0x08', in_cave: true, specialist: equipment-room, entry: S, exit: E}
+  - {level: 6, room: '0x1d', specialist: like-like, entry: cave, exit: S}
+  - {level: 6, room: '0x2d', specialist: vire, entry: N, exit: W}
+  - {level: 6, room: '0x2c', specialist: wizzrobe, entry: E, exit: N}
+  - {level: 6, room: '0x1c', specialist: boss-gohma, entry: S, exit: N, rupee_reserve: 1}
+  - {level: 6, room: '0x0c', specialist: stalfos-keese-gel, entry: S, exit: triforce}
+  # From Level 6's entrance by the whirlwind (two plays facing down) to Level 2's entrance, then to Level 8's.
+  to-level-8:
+  - {level: 0, room: '0x22', specialist: ow-lynel, entry: cave, exit: recorder, bomb_reserve: 1}
+  - {level: 0, room: '0x3c', specialist: ow-octorok, entry: recorder, exit: S}
+  - {level: 0, room: '0x4c', specialist: ow-octorok, entry: N, exit: E}
+  - {level: 0, room: '0x4d', specialist: ow-moblin, entry: W, exit: S}
+  - {level: 0, room: '0x5d', specialist: ow-moblin, entry: N, exit: S}
+  - {level: 0, room: '0x6d', specialist: ow-moblin, entry: N, exit: cave}
+  dungeon-8:
+  - {level: 8, room: '0x7e', specialist: stalfos-keese-gel, entry: S, exit: N}
+  - {level: 8, room: '0x6e', specialist: boss-manhandla, entry: S, exit: N, treasure: skip, bombs: required}
+  - {level: 8, room: '0x5e', specialist: darknut, entry: S, exit: N, bomb_reserve: 2}
+  - {level: 8, room: '0x4e', specialist: darknut, entry: S, exit: N, treasure: skip}
+  - {level: 8, room: '0x3e', specialist: darknut, entry: S, exit: E}
+  - {level: 8, room: '0x3f', specialist: darknut, entry: W, exit: cave, treasure: {if_bombs_below: 5}}
+  - {level: 8, room: '0x2f', in_cave: true, specialist: equipment-room, entry: S, exit: W}
+  - {level: 8, room: '0x4c', specialist: pols-voice, entry: cave, exit: N, rupee_reserve: 8}
+  - {level: 8, room: '0x3c', specialist: boss-gleeok, entry: S, exit: N, bomb_reserve: 1}
+  - {level: 8, room: '0x2c', specialist: stalfos-keese-gel, entry: S, exit: triforce}
+  # From Level 8's entrance by the whirlwind (one play facing down) to Level 1's entrance, 0x47's heart, Level 9's.
+  to-level-9:
+  - {level: 0, room: '0x6d', specialist: ow-moblin, entry: cave, exit: recorder, bomb_reserve: 5}
+  - {level: 0, room: '0x37', specialist: ow-octorok, entry: recorder, exit: E}
+  - {level: 0, room: '0x38', specialist: ow-zora, entry: W, exit: S}
+  - {level: 0, room: '0x48', specialist: ow-leever, entry: N, exit: W}
+  - {level: 0, room: '0x47', specialist: ow-zora, entry: E, exit: cave}
+  - {level: 0, room: '0x47', in_cave: true, specialist: ow-zora, entry: S, exit: S, waypoint: heart}
+  - {level: 0, room: '0x47', specialist: ow-zora, entry: cave, exit: E}
+  - {level: 0, room: '0x48', specialist: ow-leever, entry: W, exit: N}
+  - {level: 0, room: '0x38', specialist: ow-zora, entry: S, exit: N}
+  - {level: 0, room: '0x28', specialist: ow-zora, entry: S, exit: W}
+  - {level: 0, room: '0x27', specialist: ow-zora, entry: E, exit: N}
+  - {level: 0, room: '0x17', specialist: ow-boulder, entry: S, exit: N}
+  - {level: 0, room: '0x07', specialist: ow-lynel, entry: S, exit: W, bombs: never}
+  - {level: 0, room: '0x06', specialist: ow-lynel, entry: E, exit: W}
+  - {level: 0, room: '0x05', specialist: ow-lynel, entry: E, exit: cave, bombs: required}
+  dungeon-9:
+  - {level: 9, room: '0x76', specialist: stalfos-keese-gel, entry: S, exit: N, bomb_reserve: 4, rupee_reserve: 1}
+  - {level: 9, room: '0x66', specialist: stalfos-keese-gel, entry: S, exit: W}
+  - {level: 9, room: '0x65', specialist: wizzrobe, entry: E, exit: N}
+  - {level: 9, room: '0x55', specialist: lanmola, entry: S, exit: cave, bomb_reserve: 3}
+  - {level: 9, room: '0x60', in_cave: true, specialist: equipment-room, entry: S, exit: W}
+  - {level: 9, room: '0x14', specialist: like-like, entry: cave, exit: E, treasure: clear}
+  - {level: 9, room: '0x15', specialist: wizzrobe, entry: W, exit: E, treasure: skip}
+  - {level: 9, room: '0x16', specialist: patra, entry: W, exit: S, treasure: skip}
+  - {level: 9, room: '0x26', specialist: stalfos-keese-gel, entry: N, exit: E, treasure: skip}
+  - {level: 9, room: '0x27', specialist: patra, entry: W, exit: N, treasure: skip, bomb_reserve: 2}
+  - {level: 9, room: '0x17', specialist: wizzrobe, entry: S, exit: N, bomb_reserve: 1}
+  - {level: 9, room: '0x07', specialist: wizzrobe, entry: S, exit: cave, bomb_reserve: 0}
+  - {level: 9, room: '0x00', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: ring}
+  # The block clips of the ring rooms (round 29's states step; the lead's working answer to the owner's question 3,
+  # docs/decisions.md 2026-11-17 answer 11): with clips 0x55, 0x07, 0x20 (from N) and 0x03 are left by `CLIP` to
+  # their stairs with the monsters alive, without clips they are emptied and their blocks pushed; the switch decides
+  # in the room (one step each, as 5:0x64).  The rooms the route comes back to differ by what the first visit left:
+  # 0x07 out of the ring cellar is full on the clip way and holds the kills of its fight on the plain way.
+  - stretch: ring-07
+    parts: {level: 9, room: '0x07', entry: cave}
+    rejoins: {level: 9, room: '0x17', entry: N}
+    clips:
+    - {level: 9, room: '0x07', specialist: wizzrobe, entry: cave, exit: S}
+    plain:
+    - {level: 9, room: '0x07', specialist: wizzrobe, entry: cave, exit: S, banked_kills: 5}
+  - {level: 9, room: '0x17', specialist: wizzrobe, entry: N, exit: S}
+  - {level: 9, room: '0x27', specialist: patra, entry: N, exit: W, treasure: skip}
+  - {level: 9, room: '0x26', specialist: stalfos-keese-gel, entry: E, exit: N, treasure: skip}
+  - {level: 9, room: '0x16', specialist: patra, entry: S, exit: N}
+  - {level: 9, room: '0x06', specialist: stalfos-keese-gel, entry: S, exit: W, sword: false, bomb_reserve: 4}
+  - {level: 9, room: '0x05', specialist: wizzrobe, entry: E, exit: cave, bomb_reserve: 3}
+  - {level: 9, room: '0x70', in_cave: true, specialist: equipment-room, entry: S, exit: W}
+  - {level: 9, room: '0x63', specialist: zol, entry: cave, exit: W}
+  - {level: 9, room: '0x62', specialist: stalfos-keese-gel, entry: E, exit: W, treasure: skip}
+  - {level: 9, room: '0x61', specialist: patra, entry: E, exit: cave}
+  - {level: 9, room: '0x75', in_cave: true, specialist: equipment-room, entry: S, exit: W}
+  # 0x20's first visit: crossed to its N wall with its five Wizzrobes alive on the clip way (the second visit clips
+  # to the stairs), emptied on the plain way (the second visit finds it empty and pushes the block).
+  - stretch: arrow-20
+    parts: {level: 9, room: '0x20', entry: cave}
+    rejoins: {level: 9, room: '0x10', entry: S}
+    clips:
+    - {level: 9, room: '0x20', specialist: wizzrobe, entry: cave, exit: N}
+    plain:
+    - {level: 9, room: '0x20', specialist: wizzrobe, entry: cave, exit: N, treasure: clear}
+  - {level: 9, room: '0x10', specialist: wizzrobe, entry: S, exit: cave, bomb_reserve: 2}
+  - {level: 9, room: '0x4f', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: silver-arrow}
+  - {level: 9, room: '0x10', specialist: wizzrobe, entry: cave, exit: S, banked_kills: 5}
+  - stretch: arrow-20n
+    parts: {level: 9, room: '0x20', entry: N}
+    rejoins: {level: 9, room: '0x75', in_cave: true, entry: S}
+    clips:
+    - {level: 9, room: '0x20', specialist: wizzrobe, entry: N, exit: cave}
+    plain:
+    - {level: 9, room: '0x20', specialist: wizzrobe, entry: N, exit: cave, banked_kills: 15}
+  - {level: 9, room: '0x75', in_cave: true, specialist: equipment-room, entry: S, exit: E}
+  - {level: 9, room: '0x61', specialist: patra, entry: cave, exit: N, banked_kills: 15}
+  - {level: 9, room: '0x51', specialist: like-like, entry: S, exit: N}
+  - {level: 9, room: '0x41', specialist: like-like, entry: S, exit: N}
+  - {level: 9, room: '0x31', specialist: wizzrobe, entry: S, exit: W}
+  - {level: 9, room: '0x30', specialist: wizzrobe, entry: E, exit: cave, bomb_reserve: 1}
+  - {level: 9, room: '0x67', in_cave: true, specialist: equipment-room, entry: S, exit: E}
+  - {level: 9, room: '0x04', specialist: wizzrobe, entry: cave, exit: W}
+  - {level: 9, room: '0x03', specialist: like-like, entry: E, exit: cave, bomb_reserve: 0}
+  - {level: 9, room: '0x77', in_cave: true, specialist: equipment-room, entry: S, exit: W}
+  - {level: 9, room: '0x52', specialist: patra, entry: cave, exit: N}
+  - {level: 9, room: '0x42', specialist: ganon, entry: S, exit: N, rupee_reserve: 0}
+  - {level: 9, room: '0x32', specialist: ganon, entry: S, exit: end}
 # Equal-length alternates (tagged in game.yaml so the runner never hits an untagged room):
 alternates:
 - {replaces: [{level: 0, room: '0x67'}], with: [{level: 0, room: '0x78', specialist: ow-octorok, entry: W, exit: N}], note: '0x77 E->0x78 N->0x68 instead of 0x77 N->0x67 E->0x68'}

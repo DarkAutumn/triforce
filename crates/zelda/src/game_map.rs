@@ -736,10 +736,29 @@ fn room_entry(v: Option<&Value>, what: &str) -> Result<(MapLocation, String), Ma
     Ok((step_location(v)?, entry))
 }
 
-/// One list element of a route: a step, or a `stretch:` block (round 22) whose `clips:` and `plain:` steps follow
-/// each other in the list, tagged with their way. `claims` collects each stretch's `parts`/`rejoins` for
-/// [`check_stretch`].
-fn parse_element(v: &Value, steps: &mut Vec<RouteStep>, claims: &mut Vec<StretchClaim>) -> Result<(), MapError> {
+/// routes.yaml `blocks:` (phase X): named lists of route elements (steps and `stretch:` blocks), each spliced into a
+/// route where an element `{include: NAME}` stands, so two routes share one definition (a dungeon's inside).
+type Blocks<'a> = HashMap<&'a str, &'a [Value]>;
+
+/// One list element of a route: a step, a `stretch:` block (round 22) whose `clips:` and `plain:` steps follow
+/// each other in the list, tagged with their way, or (phase X) `{include: NAME}`: the elements of the block NAME.
+/// `claims` collects each stretch's `parts`/`rejoins` for [`check_stretch`].
+fn parse_element(v: &Value, steps: &mut Vec<RouteStep>, claims: &mut Vec<StretchClaim>, blocks: &Blocks)
+    -> Result<(), MapError> {
+    if let Some(name) = get(v, "include") {
+        check_keys(v, &["include"], "routes.yaml include")?;
+        let name = name.as_str().ok_or_else(|| MapError(format!("routes.yaml include: a block's name, got {name:?}")))?;
+        let Some(list) = blocks.get(name) else {
+            return err(format!("routes.yaml include: {name:?} is not a block of `blocks:`"));
+        };
+        for element in *list {
+            if get(element, "include").is_some() {
+                return err(format!("routes.yaml block {name:?}: an include inside a block"));
+            }
+            parse_element(element, steps, claims, blocks)?;
+        }
+        return Ok(());
+    }
     let Some(name) = get(v, "stretch") else {
         steps.push(parse_step(v)?);
         return Ok(());
@@ -818,12 +837,12 @@ fn check_stretch(route: &str, steps: &[RouteStep], claim: &StretchClaim) -> Resu
 /// A route is a list of steps, or `{extends: <route above>, steps: [...], states: NS}`: that route's steps (none
 /// without `extends`), then these. Either list may hold `stretch:` blocks. `states:` names the route's start-state
 /// namespace (phase X; [`GameMap::namespaces`]); a route extending another takes its namespace unless it names one.
-fn parse_route(name: &str, value: &Value, routes: &Routes, namespaces: &HashMap<String, String>)
+fn parse_route(name: &str, value: &Value, routes: &Routes, namespaces: &HashMap<String, String>, blocks: &Blocks)
     -> Result<(Vec<RouteStep>, Option<String>), MapError> {
     let parse = |mut steps: Vec<RouteStep>, list: &[Value]| -> Result<Vec<RouteStep>, MapError> {
         let mut claims = Vec::new();
         for v in list {
-            parse_element(v, &mut steps, &mut claims)?;
+            parse_element(v, &mut steps, &mut claims, blocks)?;
         }
         for claim in &claims {
             check_stretch(name, &steps, claim)?;
@@ -922,20 +941,42 @@ fn parse_routes(text: &str) -> Result<(Routes, Vec<Alternate>, Namespaces), MapE
     let map = data
         .as_mapping()
         .ok_or_else(|| MapError("routes.yaml: not a mapping".into()))?;
+    let mut blocks: Blocks = HashMap::new();
+    if let Some(map) = get(&data, "blocks") {
+        let Some(map) = map.as_mapping() else {
+            return err("routes.yaml: blocks is not a mapping of names to lists of steps");
+        };
+        for (name, list) in map {
+            let (Some(name), Some(list)) = (name.as_str(), list.as_sequence().filter(|l| !l.is_empty())) else {
+                return err(format!("routes.yaml: blocks: {name:?} is not a name with a non-empty list of steps"));
+            };
+            blocks.insert(name, list.as_slice());
+        }
+    }
     let mut routes = IndexMap::new();
     let mut namespaces = HashMap::new();
     for (name, value) in map {
         let Some(name) = name.as_str() else {
             return err(format!("routes.yaml: a top-level key that isn't a name: {name:?}"));
         };
-        if name == "alternates" || name == "families" {
+        if matches!(name, "alternates" | "families" | "blocks") {
             continue;
         }
-        let (steps, ns) = parse_route(name, value, &routes, &namespaces)?;
+        let (steps, ns) = parse_route(name, value, &routes, &namespaces, &blocks)?;
         routes.insert(name.to_owned(), steps);
         if let Some(ns) = ns {
             namespaces.insert(name.to_owned(), ns);
         }
+    }
+    let included: std::collections::HashSet<&str> = map
+        .values()
+        .filter_map(Value::as_sequence)
+        .chain(map.values().filter_map(|v| get(v, "steps")).filter_map(Value::as_sequence))
+        .flatten()
+        .filter_map(|v| get(v, "include").and_then(Value::as_str))
+        .collect();
+    if let Some(unused) = blocks.keys().filter(|name| !included.contains(*name)).min() {
+        return err(format!("routes.yaml: block {unused:?} is included by no route"));
     }
     let mut alternates = Vec::new();
     if let Some(list) = get(&data, "alternates") {
@@ -2762,6 +2803,34 @@ mod tests {
         ] {
             let error = load(&bad).unwrap_err().0;
             assert!(error.contains(why), "{error}");
+        }
+    }
+
+    /// Phase X: `{include: NAME}` splices the steps of the block NAME of `blocks:` where it stands (two routes share
+    /// one definition); a block's stretch is checked as the route's own; an unknown block, an include inside a block
+    /// and a block no route includes are load errors.
+    #[test]
+    fn routes_include_blocks() {
+        let load = |text: &str| GameMap::from_yaml(GAME_YAML, text);
+        let start = "{level: 0, room: '0x77', entry: start, exit: N}";
+        let block = "blocks:\n  k:\n  - {level: 0, room: '0x67', entry: S, exit: E}\n  - {level: 0, room: '0x68', entry: W, exit: N}\n";
+        let map = load(&format!("a:\n- {start}\n- include: k\nb:\n  states: bee\n  steps:\n  - {start}\n  - include: k\n{block}")).unwrap();
+        assert_eq!(map.routes["a"], map.routes["b"]);
+        assert_eq!(map.routes["a"].iter().map(|s| s.room).collect::<Vec<_>>(), [0x77, 0x67, 0x68]);
+        assert_eq!(map.routes.keys().collect::<Vec<_>>(), ["a", "b"], "a block is no route");
+        let shipped = GameMap::builtin();
+        let d2 = &shipped.routes[DEFAULT_ROUTE];
+        let island = shipped.stretches[DEFAULT_ROUTE].iter().find(|s| s.name == "d4-island").expect("d4-island, a block's");
+        assert_eq!((d2[island.rejoin].level, d2[island.rejoin].room), (4, 0x11));
+        for (bad, why) in [
+            (format!("a:\n- {start}\n- include: j\n{block}"), "\"j\" is not a block"),
+            (format!("a:\n- {start}\n{block}"), "block \"k\" is included by no route"),
+            (format!("a:\n- {start}\n- include: k\nblocks:\n  k:\n  - include: k\n"), "an include inside a block"),
+            (format!("a:\n- {start}\n- {{include: k, level: 0}}\n{block}"), "unknown key"),
+            (format!("a:\n- {start}\n- include: k\nblocks:\n  k: []\n"), "non-empty list"),
+        ] {
+            let error = load(&bad).unwrap_err().0;
+            assert!(error.contains(why), "{why}: {error}");
         }
     }
 

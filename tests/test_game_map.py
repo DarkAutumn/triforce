@@ -5,10 +5,24 @@ Map loading, pathfinding, key-aware routing, route successors and exit spans are
 (``crates/zelda/src/game_map.rs``, ``objectives.rs``).
 """
 
+import json
+from pathlib import Path
+
 import pytest
 
 from triforce import _native as native
 from triforce.specialist import list_specialists
+
+
+def test_d2first_is_its_golden_list():
+    """Phase X: d2first's steps, every field of every step (the dicts ``route_steps`` serves, with the visit), are
+    the golden list written from ``_native.route_steps('d2first')`` before the shared dungeon blocks (routes.yaml
+    ``blocks:`` / ``include:``) moved its dungeons and legs out of its own list: the blocks change no step."""
+    golden = json.loads((Path(__file__).parent / 'fixtures' / 'd2first_steps.json').read_text())
+    steps = native.route_steps('d2first')
+    assert len(steps) == len(golden)
+    for step, want in zip(steps, golden):
+        assert step == want, step['index']
 
 
 def test_the_route_and_families():
