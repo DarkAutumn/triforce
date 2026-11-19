@@ -148,7 +148,8 @@ d2first:
 # (asm:Door_SetEnteringDoorwayOpened) and the entry's layout draws 0x73's N key door open and saves its flag
 # (asm:Door_LayOut), so no key is spent, then or later; N through 0x63 and 0x53 (its five Stalfos for the key), one
 # bomb at 0x53's N wall (requires_bombs) into 0x43 from S.  0x72, 0x74, 0x52 and 0x42 are left out; the keys come out
-# even (3 in, 3 out).  The boomerang (0x44) stays.
+# even (3 in, 3 out).  The boomerang (0x44) stays.  0x73's N key door is `keep_out` (round 31: MOVE into it only on
+# the step that leaves N, so leaving S never spends a key on it).
 - {level: 1, room: '0x73', specialist: stalfos-keese-gel, entry: S, exit: S}
 - {level: 0, room: '0x37', specialist: ow-octorok, entry: cave, exit: cave}
 - {level: 1, room: '0x73', specialist: stalfos-keese-gel, entry: S, exit: N}

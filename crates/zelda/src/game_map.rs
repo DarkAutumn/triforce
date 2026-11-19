@@ -1370,10 +1370,17 @@ impl GameMap {
     }
 
     /// The edge Link leaves `from` through toward the neighbouring room `to`: a maze's next sequence direction (given
-    /// `MazeStep`, RAM [`MAZE_STEP`]) when `to` is the maze's destination, else the side `to` lies on.
+    /// `MazeStep`, RAM [`MAZE_STEP`]) when `to` is the maze's destination; a dungeon room's game.yaml door out of the
+    /// level (round 31: 1:0x73 S, the door trick) by its side, where [`MapLocation::direction_to`] has a level's way
+    /// out as N (the triforce's warp, no door); else the side `to` lies on.
     pub fn exit_direction(&self, from: MapLocation, to: MapLocation, maze_step: u8) -> Direction {
         match self.maze(from) {
             Some(maze) if to == maze.destination => maze.next_direction(maze_step),
+            _ if from.level != 0 && !from.in_cave && to.level == 0 => self
+                .get(from)
+                .and_then(|r| r.exits.values().find(|e| e.destination == to))
+                .and_then(|e| Direction::from_exit(&e.direction))
+                .unwrap_or_else(|| from.direction_to(to)),
             _ => from.direction_to(to),
         }
     }
@@ -2379,6 +2386,16 @@ mod tests {
         assert_eq!(map.find_path(loc(0, 0x1b), loc(0, 0x0b)), Some(vec![loc(0, 0x1b), loc(0, 0x0b)]));
     }
 
+    /// Round 31: 1:0x73's door out of the level is its S side (the door trick's step aims there, and its
+    /// `next_room_*` bit is S); a triforce room's way out (the warp, no door) stays N.
+    #[test]
+    fn a_level_door_out_is_its_side() {
+        let map = GameMap::builtin();
+        assert_eq!(map.exit_direction(loc(1, 0x73), loc(0, 0x37), 0), Direction::S);
+        assert_eq!(map.exit_direction(loc(1, 0x36), loc(0, 0x37), 0), Direction::N);
+        assert_eq!(map.exit_direction(loc(1, 0x73), loc(1, 0x63), 0), Direction::N);
+    }
+
     /// game.yaml's `maze:` blocks must match the game; a route leaves a maze by `exit: maze` (its sequence) or its
     /// free edge, never by an edge that loops back, and only a maze room has `exit: maze`.
     #[test]
@@ -2804,10 +2821,13 @@ mod tests {
             .values()
             .flat_map(|r| r.exits.values().filter(|e| e.keep_out).map(|e| (r.location, e.direction.as_str())))
             .collect();
-        // Round 29: Dungeon 9's key doors off the route (0x26 S and W, 0x63 N and S).
+        // Round 29: Dungeon 9's key doors off the route (0x26 S and W, 0x63 N and S). Round 31: Dungeon 1's
+        // 0x73 N / 0x63 S key door, left only after the trip out S has opened it.
         assert_eq!(
             kept_out,
             [
+                (loc(1, 0x63), "S"),
+                (loc(1, 0x73), "N"),
                 (loc(6, 0x28), "N"),
                 (loc(6, 0x29), "N"),
                 (loc(6, 0x2c), "S"),

@@ -2870,6 +2870,7 @@ rooms:
       level: 1
       location: '0x73'
       locked: true
+      keep_out: true  # round 31: as 0x73's N side
   enemies:
     Stalfos: 3
   treasure: null
@@ -2891,6 +2892,8 @@ rooms:
       level: 1
       location: '0x63'
       locked: true
+      keep_out: true  # round 31: offered only on the step that leaves N (after the trip out S the door is open); on
+                      # the step that leaves S one frame of pressing would spend a key (the first trip check)
     E:
       level: 1
       location: '0x74'
