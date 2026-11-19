@@ -1,7 +1,7 @@
 //! Game-model and session tests on zcore, from the regenerated start states (`triforce/states`).
 //!
 //! Ports of the emulator tests in tests/test_core.py, tests/test_room_state.py and tests/test_room_entry.py,
-//! on their chain-0 states (`1_44w_0`, `1_72e_0`, `1_74w_0`, `1_73s_0`, `0_77cave_0`, `start`, `1_35s_0`).
+//! on their chain-0 states (`1_44w_0`, `1_23s_0`, `1_33s_0`, `1_73s_0`, `0_77cave_0`, `start`, `1_35s_0`).
 //! Every case runs inside one test on one emulator.
 #![cfg(feature = "zcore")]
 
@@ -328,7 +328,7 @@ fn room_states(s: &mut S) {
     assert!(rs.enemies_remaining == 3 && rs.enemies_unspawned == 0 && !rs.all_dead());
     assert!(rs.has_item && !rs.item_visible && rs.item_hidden_until_clear);
 
-    load(s, "1_72e_0", &[]);
+    load(s, "1_23s_0", &[]);
     let rs = decode_room_state(s.state().ram());
     assert!(
         rs.item_id == Some(0x19)
@@ -337,7 +337,7 @@ fn room_states(s: &mut S) {
     );
     assert!(rs.enemies_remaining == 3 && rs.enemies_unspawned == 3);
 
-    load(s, "1_74w_0", &[]);
+    load(s, "1_33s_0", &[]);
     for _ in 0..4 {
         let st = act(s, "WAIT 8").state;
         let rs = decode_room_state(st.ram());
@@ -403,8 +403,8 @@ fn layout(s: &S) -> Vec<(i32, i32)> {
 }
 
 fn pre_entry_loads(s: &mut S) {
-    // 1_72 is saved before D1 0x72's EnterRoom (3 Keese): the spawn cycle decides their layout.
-    let state = load_named_state("1_72e_0");
+    // 1_23s is saved before D1 0x23's EnterRoom (3 Red Goriya): the spawn cycle decides their layout.
+    let state = load_named_state("1_23s_0");
     let opts = LoadOptions {
         randomize_rng: true,
         ..Default::default()
@@ -427,13 +427,13 @@ fn pre_entry_loads(s: &mut S) {
     // clears its history before entry.
     s.nes_mut().restore(&state);
     assert!(
-        is_pre_entry(|a| s.nes().peek(a)) && pending_room(|a| s.nes().peek(a)) == Some((1, 0x72))
+        is_pre_entry(|a| s.nes().peek(a)) && pending_room(|a| s.nes().peek(a)) == Some((1, 0x23))
     );
     let nes = s.nes_mut();
-    let flags = nes.peek(ROOM_FLAGS_UW + 0x72);
-    nes.poke(ROOM_FLAGS_UW + 0x72, flags | 0xC0);
-    nes.poke(LEVEL_KILL_COUNTS + 0x72, 3);
-    nes.poke(ROOM_HISTORY, 0x72);
+    let flags = nes.peek(ROOM_FLAGS_UW + 0x23);
+    nes.poke(ROOM_FLAGS_UW + 0x23, flags | 0xC0);
+    nes.poke(LEVEL_KILL_COUNTS + 0x23, 3);
+    nes.poke(ROOM_HISTORY, 0x23);
     let cleared = nes.snapshot();
     s.load(&cleared, &LoadOptions::default(), &mut rng())
         .unwrap();
@@ -450,7 +450,7 @@ fn pre_entry_loads(s: &mut S) {
     assert_eq!(s.state().enemies.len(), 3);
     assert_eq!(
         act(s, "WAIT 8").state.full_location(),
-        MapLocation::new(1, 0x72, false)
+        MapLocation::new(1, 0x23, false)
     );
 }
 

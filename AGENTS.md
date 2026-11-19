@@ -668,17 +668,19 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 - **Chain segments** (20–40 runs each; several at once go in one batch: `triforce eval-batch NAME --chain 'd2:
   --from 2_7ds_0 --runs 40' --chain ...`, or all eighteen with `--chains TAG`): full `triforce eval-chain --runs 20
   --parallel 10` (route `d2first`, the default); Dungeon 2 `--from 2_7ds_0`; after Dungeon 2 `--from 0_3cc_0`;
-  Dungeon 1 `--from 1_73s_0`; after Dungeon 1 `--from 0_37c_0`; Dungeon 3 `--from 3_7cs_0`; after Dungeon 3
-  `--from 0_74c_0`; Dungeon 4 `--from 4_71s_0` (round 22: the same names; `3_7cs`, `0_74c` and `4_71s` rebuilt);
+  Dungeon 1 `--from 1_73s_0` (round 31: to its triforce's exit, `step:64`; the door trick leaves by 0:0x37 first);
+  after Dungeon 1 `--from 0_37c_v2_0` (round 31: 0:0x37's second entry from its mouth); Dungeon 3 `--from
+  3_7cs_0`; after Dungeon 3 `--from 0_74c_0`; Dungeon 4 `--from 4_71s_0` (round 22: the same names; `3_7cs`,
+  `0_74c` and `4_71s` rebuilt);
   after Dungeon 4 (the leg) `--from 0_45c_0`; Dungeon 5 `--from 5_76s_0` (round 24); after Dungeon 5 (the leg to
   Dungeon 7) `--from 0_0bc_0`; Dungeon 7 `--from 7_79s_0` (round 26); after Dungeon 7 (the leg to the magic sword,
   `post-d7`) `--from 0_42c_0`; Dungeon 6 `--from 6_79s_0` (round 27); after Dungeon 6 (the leg to Dungeon 8,
   `post-d6`) `--from 0_22c_0`; Dungeon 8 `--from 8_7es_0` (round 28); after Dungeon 8 (the leg to Dungeon 9,
   `post-d8`) `--from 0_6dc_0`; Dungeon 9 to the end of the game `--from 9_76s_0` (round 29). The route ends with the
-  game (Zelda's room, `exit: end`) since 1.9.0.0: round 28's segments end on the D8 triforce at `--stop-at step:297`
-  (`d8`'s arrival 0:0x6d), round 27's full route is `--stop-at step:281` (or the yardstick's milestone
-  `full→post-d6`), round 26's `--stop-at step:248` (`full→post-d7`), round 25's `--stop-at step:209`
-  (`full→post-d5`).
+  game (Zelda's room, `exit: end`) since 1.9.0.0: round 28's segments end on the D8 triforce at `--stop-at step:293`
+  (`d8`'s arrival 0:0x6d), round 27's full route is `--stop-at step:277` (or the yardstick's milestone
+  `full→post-d6`), round 26's `--stop-at step:244` (`full→post-d7`), round 25's `--stop-at step:205`
+  (`full→post-d5`) (round 31's numbers: Dungeon 1 is four steps shorter).
   The ten stretches (`d3-approach` after Dungeon 1, `d4-island` in Dungeon 4, `coast-heart`, `lake-3e`, `mountain`
   on the leg to Dungeon 5, `dock-44` on the leg to Dungeon 7, `woods` on the leg to the magic sword, `ring-07`,
   `arrow-20`, `arrow-20n` in Dungeon 9) follow the

@@ -354,9 +354,11 @@ fn a_loaded_mouth_exit_matches_the_live_one() {
     assert_ne!(loaded.state().link.tile(), tile);
     assert!(!loaded.just_exited_cave());
 
-    // A dungeon mouth (out of Dungeon 1 onto 0x37).
-    loaded.load(&common::load_named_state("0_37c_0"), &opts, &mut ChaCha8Rng::seed_from_u64(0)).unwrap();
-    assert!(loaded.just_exited_cave() && !loaded.mask().is_allowed(&north));
+    // A dungeon mouth (out of Dungeon 1 onto 0x37): after its triforce, and out of 0x73 by S (round 31's trip).
+    for name in ["0_37c_v2_0", "0_37c_0"] {
+        loaded.load(&common::load_named_state(name), &opts, &mut ChaCha8Rng::seed_from_u64(0)).unwrap();
+        assert!(loaded.just_exited_cave() && !loaded.mask().is_allowed(&north), "{name}");
+    }
 }
 
 /// F177: an action whose weapon look-ahead runs (a beam) still leaves its last rendered frame as the screen.
@@ -439,7 +441,7 @@ fn doorway_turns_match_the_game() {
         ("1_33n_0", Direction::N),
         ("1_53s_0", Direction::S),
         ("1_44w_0", Direction::W),
-        ("1_72e_0", Direction::E),
+        ("1_22e_0", Direction::E),
         ("4_11s_0", Direction::S),
     ] {
         s.load(&common::load_named_state(name), &LoadOptions::default(), &mut ChaCha8Rng::seed_from_u64(0)).unwrap();

@@ -498,11 +498,11 @@ fn bombs_stay_legal_at_a_closed_overworld_rock_wall() {
     assert!(compute_action_mask(&state).direction[ActionKind::Bomb.index()].iter().any(|&b| b));
 }
 
-/// F183: in a doorway ($53 set) no attack crosses the doorway's axis: S doorway of 1:0x53, E doorway of 1:0x72.
+/// F183: in a doorway ($53 set) no attack crosses the doorway's axis: S doorway of 1:0x53, E doorway of 1:0x22.
 #[test]
 fn no_attack_across_a_doorway() {
     let Some(mut s) = session() else { return };
-    for (name, step, across) in [("1_53s_0", "MOVE N 4", [Direction::W, Direction::E]), ("1_72e_0", "MOVE W 4", [Direction::N, Direction::S])] {
+    for (name, step, across) in [("1_53s_0", "MOVE N 4", [Direction::W, Direction::E]), ("1_22e_0", "MOVE W 4", [Direction::N, Direction::S])] {
         load(&mut s, name, false, &[(Var::Bombs, 4)]);
         act(&mut s, step);
         let state = s.state().clone();

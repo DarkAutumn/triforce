@@ -350,7 +350,7 @@ fn start_state_link_and_room() {
 #[test]
 fn key_room_treasure() {
     let Some(mut s) = session() else { return };
-    let (_, obs) = reset(&mut s, "1_72e_0");
+    let (_, obs) = reset(&mut s, "1_23s_0");
     assert_eq!(obs.entity_types[TREASURE_SLOT], ITEM_TYPE_BASE + 0x19);
     assert!(obs.room_state[r("item_is_key")] == 1.0 && obs.room_state[r("item_visible")] == 0.0);
     assert!(approx(obs.room_state[r("enemies_unspawned")], 3.0 / 8.0));

@@ -519,13 +519,15 @@ fn a_stop_step_ends_the_run_and_a_checkpoint_continues_it(nes: ZCore, data: &Arc
     let end: Arc<[u8]> = Arc::from(common::encode_state(&c.session().snapshot()).unwrap());
     let (ram, prg_ram) = (*c.session().nes().ram(), *c.session().nes().prg_ram());
 
-    // A wrong exit that lands in the stop step's room is not reaching the step: Dungeon 1's 0x72 (step 47, a key
-    // to take) left at once the way Link came is 0x73 with step 48's progress, and the run goes on.
-    let mut c = chain(c.into_parts().0.into_nes(), data, load(Some("1_72e_0")).with_stop_step(&data.map, 48).unwrap());
+    // A wrong exit that lands in the stop step's room is not reaching the step: Dungeon 6's 0x29 (step 268, its key
+    // to take since round 31) left S without the key is 0x39 from N, step 269's room and side, and the run goes on.
+    let mut c = chain(c.into_parts().0.into_nes(), data, load(Some("6_29w_0")).with_stop_step(&data.map, 269).unwrap());
     assert!(matches!(c.reset(Some(0), &mut ChaCha8Rng::seed_from_u64(0)).unwrap(), ChainStatus::Act { .. }));
-    assert!(matches!(c.step(parse("MOVE E 16")).unwrap(), ChainStatus::Act { new_room: true, .. }));
+    for a in walk_to(&mut c, MapLocation::new(6, 0x39, false)) {
+        assert!(matches!(c.step(a).unwrap(), ChainStatus::Act { .. }));
+    }
     let rooms: Vec<_> = c.result().unwrap().rooms.iter().map(|x| (x.room.as_str(), x.outcome.as_str())).collect();
-    assert_eq!((rooms, c.context().0), (vec![("0x72", "exit-wrong"), ("0x73", "in-progress")], Some(48)));
+    assert_eq!((rooms, c.context().0), (vec![("0x29", "exit-wrong"), ("0x39", "in-progress")], Some(269)));
 
     // What a route refuses: a stop step not after the start step or off the route, two ways to stop, two starts.
     let error = |route: Result<Route, String>| route.expect_err("refused");
