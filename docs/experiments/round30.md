@@ -98,3 +98,5 @@ First result: `r30-goriya6-s32`'s last checkpoint takes the D7 triforce in **54.
 2000-2999, 6.36 hearts on arriving) and **53.7%** on the confirmation seeds 3000-3999 (6.35); its it005449 50.2% and
 47.9% (−5.8 ± 2.2 against the last). The promoted `r77-goriya5-s80` measured 46.5% and 47.1% on the same seeds in
 round 27 (round26.md §17); the pairing against it in this team comes with `-s30`'s selection.
+`r30-goriya6-s31`'s last checkpoint: **56.5%** on the screen (6.47 hearts) and **56.1%** confirmed (6.38); its
+it005449 53.9% and 51.7% (−4.4 ± 2.2 against the last). Both seeds' last checkpoints lead their runs.
