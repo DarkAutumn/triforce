@@ -72,16 +72,17 @@ replay verify` ok (30 edits, 1 state), source `power-on LINK 3550` (control from
 `temperature:0.5+relax:16+plan:16:1 (every model, 34)`, 8 cheated bombs (no key, no rupee), "the game ended in
 (level 9, room 0x32)".
 
-### The corpus: proposed, not committed
+### The corpus: `v1-golden-ending.tfreplay`
 
-The models' golden replay from power on to the ending (seeds from 0, above) is the proposal for
-`corpus/replays/v1-golden-ending.tfreplay`, but at 143,213 bytes it is 2.2 times the largest corpus file (49-65
-KB): its nine states are 102,506 bytes of it (about 11.4 KB each; eight are the stitch's CHECKPOINT states), and
-every golden path of the whole route is 143-145 KB. It is not committed; the owner keeps or drops it. Placed in `corpus/replays/`
-(untracked), `cargo test --release -p triforce-tools --test cli the_replay_corpus_still_verifies` passed with it
-(81 s). A corpus-sized golden path would need the stitch to keep fewer states (`crates/replay`, not changed in
-this round). The planner's single run from power on (53,548 bytes, one state) is in line with the corpus sizes,
-should the owner want a complete game from power on there instead.
+The models' golden replay from power on to the ending (seeds from 0, above) is in the corpus as
+`corpus/replays/v1-golden-ending.tfreplay` (the lead's decision, Nov 19: the first complete game by the models
+alone belongs there). At 143,213 bytes it is 2.2 times the largest of the other corpus files (49-65 KB): its nine
+states are 102,506 bytes of it (about 11.4 KB each; eight are the stitch's CHECKPOINT states), and every golden path
+of the whole route is 143-145 KB. `tf replay verify` in the main checkout: ok, 158300 frames, 14 edits, 9 states;
+`cargo test --release -p triforce-tools --test cli the_replay_corpus_still_verifies` passed with it (81 s). A
+smaller golden path would need the stitch to keep fewer states (`crates/replay`, not changed in this round). The
+planner's single run from power on (53,548 bytes, one state) is not in the corpus: the planner's complete game from
+the start state already is (`v0-plan-ending.tfreplay`).
 
 ### Watching the new route
 
