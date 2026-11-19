@@ -112,7 +112,20 @@ it005449 53.9% and 51.7% (−4.4 ± 2.2 against the last). Both seeds' last chec
 | `r77-goriya5-s80` (promoted) | 46.5% | | 47.1% | | 270 of 913 | 4.45 |
 
 **The arm works on `d7` in every seed**: Link reaches 0x1b with more hearts and dies there a third less often.
-Dungeon 2 and Dungeon 1 for the three (1000 runs, seeds 0-999, paired with `r29land-1k`) are in the job line.
+
+**Dungeon 2 and Dungeon 1 hold** (1000 runs, seeds 0-999, paired with `r29land-1k`, the promoted run on the same
+seeds):
+
+| goriya | Dungeon 2 | paired | Dungeon 1 | paired | product (Dungeon 2 × `d7` confirmed) |
+|---|---:|---:|---:|---:|---:|
+| `r30-goriya6-s31` last | 91.6% | +0.0 ± 1.2 | 99.8% | 0 | **51.4%** |
+| `r30-goriya6-s30` last | 91.1% | −0.5 ± 1.3 | 99.8% | 0 | 50.0% |
+| `r30-goriya6-s32` last | 90.8% | −0.8 ± 1.2 | 99.5% | −0.3 ± 0.3 | 48.8% |
+| `r77-goriya5-s80` (promoted) | 91.6% | | 99.8% | | 43.1% (its record 91.6 × 46.6 = 42.7%) |
+
+**The choice: `r30-goriya6-s31`, its last checkpoint** (the run's `ckpt.pt`): the highest product, `d7` +9.0 ± 2.1
+on seeds not used to choose it, Dungeon 2 and Dungeon 1 unchanged. Its canonical evaluation and Dungeon 2 on fresh
+seeds 1000-1999 (beside the promoted run) were queued before the promotion.
 
 **The secondaries, paired with `r29land-1k` on seeds 0-999** (the last checkpoints, clips on, models alone; arrival
 at the segment's end step):
