@@ -153,17 +153,20 @@ the run-time switch off has no way past them. The shared blocks keep their stret
   holds a candle; game.yaml `PURCHASES`): 0:0x0c's shop cave (`treasure: blue-candle`, `treasure_tile: [19, 11]`,
   `requires_rupees: 60`, the other wares' squares kept off by `path_costs` as 0x44's). Dungeon 7's red candle stays
   `waypoint: candle` (a cellar's item, taken whatever candle Link holds).
-- An overworld rock wall's bomb is granted only where the route's step leaves by the cave behind it
-  (`zelda::cheats::needs`, `GameCompletion::route_step_exit`): 0:0x2d is now `requires_bombs` with `bomb_secret: [10,
-  2]` for d3first's 30 secret, and d2first's three crossings of 0x2d get no bomb (their inputs unchanged; tested in
-  the game from d2first's `0_2ds_0`).
-- MOVE into a secret Armos is offered only while the objective heads for its stairs (`GameCompletion::
-  secret_armos`, `Session::set_secret_armos`, set every step by both envs): 0:0x3d now has its `cave` exit for
-  d3first's Armos 30, and d2first's crossings of 0x3d (S → N, E → N on the lake's clip way) are never offered the
-  MOVE into the statue (tested in the game from d2first's `0_3ds_0`; 0x34's shop Armos as before on both routes).
-- game.yaml: 0x0c's, 0x2d's, 0x62's and 0x3d's caves (the `cave` exits and the in-cave rooms: 30, 100 and 30
-  rupees), the tags 0x29, 0x2a, 0x2b ow-leever, 0x46 ow-zora (its one monster a Zora, as 0x47's), 0x62 ow-moblin,
-  3:0x4a stalfos-keese-gel. Walk A proposed ow-octorok for 0x46; its monsters are one Zora.
+- game.yaml room entries with `routes: [d3first]`: the room as d3first plays it (`zelda::game_map` `parse_rooms`,
+  `GameMap::route_map`): over a shared entry its keys replace the shared ones and its `exits:` are added; without one
+  it is a room only d3first has. The envs, the chain and the state builder play the map of the episode's route
+  (`Session::set_map`; `_native.Game(route=)`, `game_rooms(route)`, `specialist_for(room, route)`). d3first's own:
+  0x0c's, 0x2d's, 0x62's and 0x3d's caves (the `cave` exits and the in-cave rooms: 30, 100 and 30 rupees), 0x2d's
+  rock wall (`requires_bombs`, `bomb_secret: [10, 2]`, the 30 secret), the tags 0x29, 0x2a, 0x2b ow-leever, 0x46
+  ow-zora (its one monster a Zora, as 0x47's), 0x62 ow-moblin, 3:0x4a stalfos-keese-gel. Walk A proposed ow-octorok
+  for 0x46; its monsters are one Zora. d2first plays the shared rooms, the data its models were trained on: in a
+  first form (one map for both) the new tags opened paths for d2first's off-route objective (ow-lynel's wrong exit
+  from 0x60 into 0x50 then pointed S), 0x2d's wall offered BOMB and a granted bomb on d2first's crossings, and the
+  rule written against that (no bomb on a step crossing a rock-wall room) took d2first's granted bomb at 0x67 S -> E
+  (the schema 5 traces of ow-lynel, ow-zora, ow-tektite and ow-octorok, `tests/test_obs_legacy.py`); with the route maps
+  they are what they were (`game_map::tests::a_routes_own_rooms_leave_the_shared_map_alone`, `crates/zelda/tests/
+  d3first.rs` from d2first's `0_2ds_0` and `0_3ds_0`).
 - Families gain rooms (routes.yaml `families`, `specialists/*.yaml` `rooms:`): ow-zora 0x46 and 0x2d's cave;
   ow-leever 0x29, 0x2a, 0x2b; ow-moblin 0x62, its cave and 0x3d's cave; ow-tektite 0x0c's cave; stalfos-keese-gel
   3:0x4a. Their `start_states` globs (`0_46*`, `0_29*`, `0_2a*`, `0_2b*`, `0_62*`, `3_4a*`) come with the first

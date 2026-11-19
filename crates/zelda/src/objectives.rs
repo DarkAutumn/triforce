@@ -884,32 +884,18 @@ impl GameCompletion {
         Some(if burns { state.burn_facings() } else { 0 })
     }
 
-    /// MOVE into the room's secret Armos ([`GameView::is_secret_armos_direction`]) is played by the route in `state`
-    /// (phase X): off the overworld, and on it while the objective heads for the stairs the Armos hides (0x34's on
-    /// both routes, 0x3d's on `d3first`); a step crossing the room by an edge never wakes it (`d2first`'s 0x3d, whose
-    /// statue was a wall to it before `d3first` gave the room its cave). After [`GameCompletion::objectives`].
-    pub fn secret_armos(&self, state: &GameView) -> bool {
-        state.level() != 0 || self.last_kind == ObjectiveKind::Cave
-    }
-
     /// The bomb mode of the route step Link plays in `state`'s room (routes.yaml `bombs:`, round 28), instead of his
     /// family's `items: {bombs:}`; None: the family's own (no such step, or Link is not in its room).
     pub fn step_bombs(&self, state: &GameView) -> Option<&str> {
         self.current_step(state.full_location())?.bombs.as_deref()
     }
 
-    /// The room edge (N/S/E/W) the route step Link plays in `state`'s room leaves through ([`Self::route_step_exit`]).
-    /// None also for steps leaving through a cave, stairs or a triforce.  The cheated-items ledger asks it before the
-    /// objective updates (`crate::cheats`: a route exit behind a locked door needs a key).
+    /// The room edge (N/S/E/W) the route step Link plays in `state`'s room leaves through: the step
+    /// [`GameCompletion::objectives`] picks for `state` coming from `prev` (None, or the same room: the current
+    /// step), without updating anything.  None off the route, in a sub-room, for steps leaving through a cave, stairs
+    /// or a triforce, and once the route is missed.  The cheated-items ledger asks it before the objective updates
+    /// (`crate::cheats`: a route exit behind a locked door needs a key).
     pub fn route_edge_exit(&self, prev: Option<MapLocation>, state: &GameView) -> Option<Direction> {
-        self.route_step_exit(prev, state).and_then(Direction::from_exit)
-    }
-
-    /// The routes.yaml exit of the route step Link plays in `state`'s room: the step [`GameCompletion::objectives`]
-    /// picks for `state` coming from `prev` (None, or the same room: the current step), without updating anything.
-    /// None off the route, in a sub-room and once the route is missed (phase X, `crate::cheats`: an overworld rock
-    /// wall needs its bomb only where the step leaves by the cave behind it).
-    pub fn route_step_exit(&self, prev: Option<MapLocation>, state: &GameView) -> Option<&str> {
         let here = state.full_location();
         if self.missed.is_some() || here.in_cave {
             return None;
@@ -919,7 +905,9 @@ impl GameCompletion {
             _ => self.step,
         }?;
         let step = &self.map.routes[&self.route][step];
-        (step.location() == here).then_some(step.exit.as_str())
+        (step.location() == here)
+            .then(|| Direction::from_exit(&step.exit))
+            .flatten()
     }
 
     /// Link plays a clip-way step past the stretch's `wrap_in` exit (game.yaml: 0x55's W part, cut off by the river;

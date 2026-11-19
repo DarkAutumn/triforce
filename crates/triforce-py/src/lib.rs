@@ -44,12 +44,13 @@ fn route_steps<'py>(
     steps
         .iter()
         .enumerate()
-        .map(|(i, s)| step_dict(py, i, s, visits[i]))
+        .map(|(i, s)| step_dict(py, route, i, s, visits[i]))
         .collect()
 }
 
 fn step_dict<'py>(
     py: Python<'py>,
+    route: &str,
     index: usize,
     s: &zelda::game_map::RouteStep,
     visit: u32,
@@ -63,7 +64,7 @@ fn step_dict<'py>(
     d.set_item("exit", &s.exit)?;
     let specialist = s.specialist.clone().or_else(|| {
         let data = context::data(py, None).ok()?;
-        data.specialist_for(s.location()).map(str::to_owned)
+        data.route_specialist_for(route, s.location()).map(str::to_owned)
     });
     d.set_item("specialist", specialist)?;
     d.set_item("waypoint", s.waypoint.as_deref())?;
@@ -125,7 +126,7 @@ fn route_alternates<'py>(py: Python<'py>) -> PyResult<Vec<Bound<'py, pyo3::types
                 .map(|(i, s)| {
                     let at = at.map(|at| (at + i).min(steps.len()));
                     let visit = at.map_or(1, |at| zelda::game_map::visit_at(steps, stretches, at, s));
-                    step_dict(py, i, s, visit)
+                    step_dict(py, zelda::game_map::DEFAULT_ROUTE, i, s, visit)
                 })
                 .collect::<PyResult<Vec<_>>>()?;
             d.set_item("with", with)?;
@@ -161,12 +162,18 @@ fn families(py: Python<'_>) -> PyResult<Bound<'_, pyo3::types::PyDict>> {
 /// None, 'exits': {key: {'to': (level, room, in_cave), 'locked', 'bomb_wall', 'shutter', 'raft', 'wrap'}},
 /// 'trigger': str or None, 'dark': bool}`.  `cave` is where the room's cave exit leads: the room's own interior on
 /// the overworld, a separate room id for a dungeon cellar (1:0x22 -> 1:0x7f).  `exits` are the room's game.yaml
-/// exits by key ('N', 'S', 'E', 'W', 'cave'; a maze's 'maze') with each door's kind.
+/// exits by key ('N', 'S', 'E', 'W', 'cave'; a maze's 'maze') with each door's kind.  `route`: the rooms as that route
+/// plays them (its own game.yaml rooms over the others, phase X); None: the rooms every route plays alike.
 #[pyfunction]
-fn game_rooms(py: Python<'_>) -> PyResult<Bound<'_, pyo3::types::PyDict>> {
+#[pyo3(signature = (route=None))]
+fn game_rooms<'py>(py: Python<'py>, route: Option<&str>) -> PyResult<Bound<'py, pyo3::types::PyDict>> {
     let data = context::data(py, None)?;
+    let map = match route {
+        Some(route) => known_route(&data, route)?.map.for_route(route),
+        None => &data.map,
+    };
     let d = pyo3::types::PyDict::new(py);
-    for (location, room) in data.map.rooms() {
+    for (location, room) in map.rooms() {
         let info = pyo3::types::PyDict::new(py);
         let enemies = pyo3::types::PyDict::new(py);
         for (name, count) in &room.enemies {
@@ -201,16 +208,30 @@ fn game_rooms(py: Python<'_>) -> PyResult<Bound<'_, pyo3::types::PyDict>> {
     Ok(d)
 }
 
-/// The specialist game.yaml tags on a room (`(level, room[, in_cave])` or `'(1, 0x44)'`), or None.
+/// The specialist game.yaml tags on a room (`(level, room[, in_cave])` or `'(1, 0x44)'`), or None; `route`: as that
+/// route plays the room (its own game.yaml rooms over the others, phase X).
 #[pyfunction]
-fn specialist_for(py: Python<'_>, location: &Bound<'_, PyAny>) -> PyResult<Option<String>> {
+#[pyo3(signature = (location, route=None))]
+fn specialist_for(py: Python<'_>, location: &Bound<'_, PyAny>, route: Option<&str>) -> PyResult<Option<String>> {
     let serde_json::Value::String(text) = config::room_value(location)? else {
         unreachable!("rooms format as strings")
     };
     let location = env::config::parse_room(&text).map_err(|e| errors::ConfigError::new_err(e.0))?;
-    Ok(context::data(py, None)?
-        .specialist_for(location)
-        .map(str::to_owned))
+    let data = context::data(py, None)?;
+    Ok(match route {
+        Some(route) => known_route(&data, route)?.route_specialist_for(route, location),
+        None => data.specialist_for(location),
+    }
+    .map(str::to_owned))
+}
+
+/// `data` if routes.yaml has `route`, else the error naming the routes it has.
+fn known_route<'a>(data: &'a env::config::GameData, route: &str) -> PyResult<&'a env::config::GameData> {
+    if data.map.routes.contains_key(route) {
+        return Ok(data);
+    }
+    let known: Vec<&String> = data.map.routes.keys().collect();
+    Err(errors::ConfigError::new_err(format!("Unknown route '{route}' (routes.yaml has {known:?})")))
 }
 
 /// What a start state's name or path says (`env::start_states::StateName`, docs/architecture.md "Start states"):

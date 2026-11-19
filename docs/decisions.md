@@ -3121,8 +3121,10 @@ The lead's decisions while Lee is away (`docs/routes/d3first.md`):
   goriya and moldorm families.
 - **Rupees:** no reserve of its own (its own steps hold no arrows); the shared reserves from the arrows on are where
   the ledger says it runs dry; Ganon's and 8:0x4c's arrows have no cheat (noted for Lee).
-- **Rooms both routes cross keep d2first's play:** 0x2d's rock wall grants its bomb only to a step entering its cave;
-  MOVE into 0x3d's Armos is offered only to a step heading for its stairs.
+- **Rooms both routes cross keep d2first's play:** what d3first knows of a room that d2first never played (the caves
+  it enters, 0x2d's rock wall, the tags of the rooms only it crosses) is its own game.yaml entry (`routes:
+  [d3first]`) in its own map; d2first plays the shared rooms, its observations and masks bit for bit those of
+  before (one shared map had changed four schema 5 traces: off-route paths through the new tags, 0x2d's bomb).
 - **New vocabulary:** `blocks:`/`include:`, `waypoint: blue-candle` (a purchase). The recorder's facings out of
   Levels 5 and 2 need none (the engine computes them; ow-octorok gets `items: {recorder: true}`). No model input
   changed: no COMPAT bump.

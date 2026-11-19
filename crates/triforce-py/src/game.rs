@@ -712,19 +712,31 @@ pub struct PyGame {
 #[pymethods]
 impl PyGame {
     /// A powered-on machine. `seed` seeds load randomization (a natural RNG state, spawn cycle, edge cell);
-    /// `states_dir` overrides where bare state names resolve.
+    /// `states_dir` overrides where bare state names resolve; `route` plays the rooms as that route does (its own
+    /// game.yaml rooms over the others, phase X; None: the rooms every route plays alike).
     #[new]
-    #[pyo3(signature = (seed=0, render=false, states_dir=None, look_ahead=true))]
+    #[pyo3(signature = (seed=0, render=false, states_dir=None, look_ahead=true, route=None))]
     fn new(
         py: Python<'_>,
         seed: u64,
         render: bool,
         states_dir: Option<PathBuf>,
         look_ahead: bool,
+        route: Option<&str>,
     ) -> PyResult<Self> {
         let rom = context::rom(py)?;
         let data = context::data(py, states_dir.as_deref())?;
-        let mut session = Session::new(ZCore::power_on(rom.clone()), data.map.clone());
+        let map = match route {
+            Some(route) if !data.map.routes.contains_key(route) => {
+                let known: Vec<&String> = data.map.routes.keys().collect();
+                return Err(crate::errors::ConfigError::new_err(format!(
+                    "Unknown route '{route}' (routes.yaml has {known:?})"
+                )));
+            }
+            Some(route) => data.map.route_map(route),
+            None => data.map.clone(),
+        };
+        let mut session = Session::new(ZCore::power_on(rom.clone()), map);
         session.set_render(render);
         session.look_ahead = if look_ahead { zelda::LookAhead::All } else { zelda::LookAhead::Off };
         Ok(PyGame {

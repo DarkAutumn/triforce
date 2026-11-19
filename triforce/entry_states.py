@@ -272,7 +272,7 @@ def step_config(step: RouteStep, source: str, route: str = DEFAULT_ROUTE,
     ``clips:`` switch, as in a chain: 4:0x21 entered from S is left only by the ladder clip.  The run-time switch is
     no draw: on, off on a step of a stretch's plain way (round 22).  The recorder, food and candle follow the family
     (round 24), and the arrows (round 27: Gohma dies to nothing else)."""
-    rooms = game_rooms() if rooms is None else rooms
+    rooms = route_rooms(route) if rooms is None else rooms
     bombs = 'never'
     if rooms.get(step.location.as_tuple(), {}).get('requires_bombs'):
         bombs = 'free' if step.specialist.startswith('boss-') else 'required'
@@ -320,14 +320,15 @@ def cross_room(step: RouteStep, target: RouteStep, source: str, seed: int, itera
     """
     # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     stats = {'env_steps': 0, 'attempts': 0, 'seconds': 0.0}
-    rooms = game_rooms() if rooms is None else rooms
+    rooms = route_rooms(route) if rooms is None else rooms
     source_room = rooms.get((step.level, step.room, step.in_cave))
     # Only dungeon rooms hold keys as room treasure. game.yaml also lists 'key' for overworld 0x5a (its room-item
     # byte), which no exploration can satisfy.
     # A key the step leaves (`treasure: skip`, round 24: Dungeon 5's 0x47, 0x26 and 0x66 on entry) is not required.
     key_required = (step.level != 0 and source_room is not None and source_room['treasure'] == 'key'
                     and step.treasure not in ('skip', 'refuse'))
-    initial = Game(seed=0, states_dir=str(states_dir)).load(source, randomize_rng=False, fresh_room=True)
+    game = Game(seed=0, states_dir=str(states_dir), route=route if route in native_routes() else None)
+    initial = game.load(source, randomize_rng=False, fresh_room=True)
     minimum_keys = initial.keys + int(key_required and not room_flags(initial, step.room) & FLAG_ITEM_TAKEN)
     direction = step.location.get_direction_to(target.location)
     if step.level == target.level and step.in_cave == target.in_cave and direction != Direction.NONE:
@@ -433,7 +434,7 @@ def build_chain(chain: int, out: str, iterations: int, patience: int, log: Calla
     from there on are marked ``fight_skipped`` in the manifest.  ``last_step`` ends the build with that step's state
     (round 28: the rooms after it are played by a scripted rule, whose won run gives the next state)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
-    game, rooms = Game(seed=chain, states_dir=str(states_dir)), game_rooms()
+    game, rooms = Game(seed=chain, states_dir=str(states_dir), route=route), route_rooms(route)
     skipped = False
     steps = route_steps(route)
     alternates = alternate_steps(steps)
@@ -599,7 +600,8 @@ def build_path(source: str, rooms: List[MapLocation], chain: int, out: str, iter
     when a crossing fails, the previous room is crossed again with a new explore seed (up to ``PATH_BACKTRACKS``
     times) before giving up.  Returns (manifest entries, the files not built: empty when every room was entered)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
-    game, room_info = Game(seed=chain, states_dir=str(states_dir)), game_rooms()
+    played = route if route in native_routes() else None
+    game, room_info = Game(seed=chain, states_dir=str(states_dir), route=played), route_rooms(played)
     sources = [source]
     currents = [MapLocation(*game.load(source, fresh_room=True, seed=0).full_location)]
     route_list = route_steps(route) if route else []
@@ -611,7 +613,7 @@ def build_path(source: str, rooms: List[MapLocation], chain: int, out: str, iter
             fields['from_step'] = after
         visit = 1 if fields['off_route'] else route_list[fields['route_step']].visit
         goals.append(RouteStep(-1, target.level, target.value, False, entry, '?',
-                               specialist_for(target.as_tuple()) or 'none', visit=visit,
+                               specialist_for(target.as_tuple(), played) or 'none', visit=visit,
                                namespace=route_namespace(route) if route in native_routes() else None))
         route_fields.append(fields)
         after = after if fields['off_route'] else fields['route_step']
@@ -621,7 +623,7 @@ def build_path(source: str, rooms: List[MapLocation], chain: int, out: str, iter
     i = 0
     while i < len(rooms):
         target, current, goal = rooms[i], currents[i], goals[i]
-        here_tag = specialist_for(current.as_tuple()) or 'none'
+        here_tag = specialist_for(current.as_tuple(), played) or 'none'
         exit_side = current.get_direction_to(target).name
         step = RouteStep(-1, current.level, current.value, False, '?', exit_side, here_tag)
         started = time.time()
@@ -685,6 +687,12 @@ def install(staged: str, states_dir: str = STATES_DIR, partial: bool = False) ->
 
 STATE_NAME = re.compile(r'^(?:[a-z][a-z0-9-]*_)?(\d)_([0-9a-f]{2})(n|s|e|w|c|r|cave)(?:_v([2-9]|[1-9]\d+))?_([0-2])$')
 HEARTS_NEVER = 16                    # a 16-heart state is never a route state (Lee)
+
+
+def route_rooms(route: Optional[str]) -> dict:
+    """game.yaml's rooms as ``route`` plays them (its own rooms over the others, phase X); a route the engine does
+    not have (a test's) or None: the rooms every route plays alike."""
+    return game_rooms(route if route in native_routes() else None)
 
 
 def full_monster_counts() -> dict:
@@ -768,7 +776,7 @@ class RouteIndex:
 
     def __init__(self, route: str = DEFAULT_ROUTE):
         self.route = route
-        rooms = game_rooms()
+        rooms = route_rooms(route)
         self.steps = route_steps(route)
         self.alternates = [alt for _, alt in alternate_steps(self.steps)]
         self.by_name: Dict[str, int] = {}

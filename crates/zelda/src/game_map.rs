@@ -7,8 +7,9 @@ use crate::enums::{Direction, MapLocation, Tile};
 use indexmap::IndexMap;
 use serde_yaml_ng::Value;
 use std::cmp::Reverse;
-use std::collections::{BTreeSet, BinaryHeap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap};
 use std::path::Path;
+use std::sync::Arc;
 
 pub const LOCKED_COST: i32 = 4;
 pub const DEFAULT_ROUTE: &str = "d2first";
@@ -613,7 +614,13 @@ pub struct GameMap {
     /// Each route's start-state namespace (routes.yaml `states:`, phase X; inherited through `extends:`): its start
     /// states are `<namespace>_<name>` ([`namespaced_state`]). A route without one (`d2first`) has bare names.
     pub namespaces: HashMap<String, String>,
+    /// The maps of the routes that play some rooms otherwise (game.yaml entries with `routes:`, phase X): this map's
+    /// rooms with theirs over them ([`GameMap::route_map`]). Empty in a route's own map.
+    route_maps: BTreeMap<String, Arc<GameMap>>,
 }
+
+/// game.yaml's rooms by route, for the routes that play them otherwise ([`GameMap::route_map`]).
+type RouteRooms = BTreeMap<String, IndexMap<MapLocation, GameRoom>>;
 
 /// A routes.yaml `states:` namespace: a lower-case letter, then lower-case letters, digits and `-` (no `_`: a state
 /// name's namespace ends at its first `_`).
@@ -1006,19 +1013,88 @@ fn parse_routes(text: &str) -> Result<(Routes, Vec<Alternate>, Namespaces), MapE
     Ok((routes, alternates, namespaces))
 }
 
-fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> {
+/// game.yaml's rooms as every route plays them (the entries without `routes:`), and per route the rooms it plays
+/// otherwise (phase X): an entry with `routes: [NAME, ...]` is the room as those routes play it. Where a base entry
+/// lists the room, the routes' entry patches it (its keys replace the base's; `exits:` adds or replaces exits by
+/// key); else it is a room only those routes know (a cave only they enter). `d2first` keeps the game data it was
+/// trained on, while `d3first` knows the rooms it plays that `d2first` never did (their caves, their bomb need, their
+/// family tags).
+fn parse_rooms(text: &str) -> Result<(IndexMap<MapLocation, GameRoom>, RouteRooms), MapError> {
     let data: Value =
         serde_yaml_ng::from_str(text).map_err(|e| MapError(format!("game.yaml: {e}")))?;
     let Some(list) = data.get("rooms").and_then(Value::as_sequence) else {
         return err("game.yaml: needs a `rooms:` list");
     };
     let mut rooms = IndexMap::new();
+    let mut bases: HashMap<MapLocation, &Value> = HashMap::new();
+    let mut patches = Vec::new();
     for entry in list {
-        let level = as_u8(&entry["level"], "level")?;
-        let room_id = hex(&entry["location"], &format!("game.yaml room on level {level}: location"))?;
-        let what = format!("game.yaml room {level}:{room_id:#04x}");
-        let loc = MapLocation::new(level, room_id, flag(entry, "in_cave", &what)?);
-        let what = format!("game.yaml room {loc}");
+        if get(entry, "routes").is_some() {
+            patches.push(entry);
+            continue;
+        }
+        let (loc, room) = parse_room(entry)?;
+        if rooms.insert(loc, room).is_some() {
+            return err(format!("game.yaml room {loc}: listed twice"));
+        }
+        bases.insert(loc, entry);
+    }
+    let mut overlays = RouteRooms::new();
+    for entry in patches {
+        let (loc, what) = room_location(entry)?;
+        let names = get(entry, "routes")
+            .and_then(Value::as_sequence)
+            .filter(|names| !names.is_empty())
+            .and_then(|names| names.iter().map(|n| n.as_str().map(str::to_owned)).collect::<Option<Vec<_>>>())
+            .ok_or_else(|| MapError(format!("{what}: routes must be a list of route names")))?;
+        let mut merged = bases.get(&loc).map_or_else(|| entry.clone(), |base| patched(base, entry));
+        if let Some(map) = merged.as_mapping_mut() {
+            map.remove("routes");
+        }
+        let (_, room) = parse_room(&merged)?;
+        for name in names {
+            if overlays.entry(name.clone()).or_default().insert(loc, room.clone()).is_some() {
+                return err(format!("{what}: listed twice for route {name}"));
+            }
+        }
+    }
+    Ok((rooms, overlays))
+}
+
+/// `base` (a game.yaml room entry) with a route's entry `patch` applied: its keys replace the base's, its `exits`
+/// are added to the base's by key.
+fn patched(base: &Value, patch: &Value) -> Value {
+    let mut merged = base.clone();
+    let (Some(into), Some(from)) = (merged.as_mapping_mut(), patch.as_mapping()) else {
+        return merged;
+    };
+    for (key, value) in from {
+        match (key.as_str(), into.get_mut(key).and_then(Value::as_mapping_mut), value.as_mapping()) {
+            (Some("exits"), Some(exits), Some(more)) => {
+                for (name, exit) in more {
+                    exits.insert(name.clone(), exit.clone());
+                }
+            }
+            _ => {
+                into.insert(key.clone(), value.clone());
+            }
+        }
+    }
+    merged
+}
+
+/// A game.yaml room entry's location, and how errors name the room.
+fn room_location(entry: &Value) -> Result<(MapLocation, String), MapError> {
+    let level = as_u8(&entry["level"], "level")?;
+    let room_id = hex(&entry["location"], &format!("game.yaml room on level {level}: location"))?;
+    let what = format!("game.yaml room {level}:{room_id:#04x}");
+    let loc = MapLocation::new(level, room_id, flag(entry, "in_cave", &what)?);
+    Ok((loc, format!("game.yaml room {loc}")))
+}
+
+fn parse_room(entry: &Value) -> Result<(MapLocation, GameRoom), MapError> {
+    {
+        let (loc, what) = room_location(entry)?;
         let mut exits = IndexMap::new();
         if let Some(map) = get(entry, "exits") {
             let Some(map) = map.as_mapping() else {
@@ -1039,23 +1115,23 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
                 let span = get(dest, "span").map(|s| pair(s, &format!("{exit_what}: span"))).transpose()?;
                 let locked = flag(dest, "locked", &exit_what)?;
                 let wrap = flag(dest, "wrap", &exit_what)?;
-                if wrap && (level != 0 || loc.in_cave || dir != "W" || span.is_none()) {
+                if wrap && (loc.level != 0 || loc.in_cave || dir != "W" || span.is_none()) {
                     return err(format!(
                         "{exit_what}: wrap needs an overworld room's W exit with a span (the rows the wrap exit is safe on)"
                     ));
                 }
                 let wrap_in = get(dest, "wrap_in").map(|s| pair(s, &format!("{exit_what}: wrap_in"))).transpose()?;
-                if wrap_in.is_some() && (level != 0 || loc.in_cave || !matches!(dir.as_str(), "W" | "E") || wrap) {
+                if wrap_in.is_some() && (loc.level != 0 || loc.in_cave || !matches!(dir.as_str(), "W" | "E") || wrap) {
                     return err(format!(
                         "{exit_what}: wrap_in needs an overworld room's W or E exit that isn't a wrap exit"
                     ));
                 }
                 let keep_out = flag(dest, "keep_out", &exit_what)?;
-                if keep_out && (level == 0 || loc.in_cave || dir == "cave") {
+                if keep_out && (loc.level == 0 || loc.in_cave || dir == "cave") {
                     return err(format!("{exit_what}: keep_out is a dungeon room's doorway (N, S, E, W)"));
                 }
                 let never_opens = flag(dest, "never_opens", &exit_what)?;
-                if never_opens && (level == 0 || loc.in_cave || dir == "cave") {
+                if never_opens && (loc.level == 0 || loc.in_cave || dir == "cave") {
                     return err(format!("{exit_what}: never_opens is a dungeon room's doorway (N, S, E, W)"));
                 }
                 exits.insert(
@@ -1221,11 +1297,8 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
         };
         // Unknown keys last: a missing required block (`maze:`) gets its own message first.
         check_keys(entry, &ROOM_KEYS, &what)?;
-        if rooms.insert(loc, room).is_some() {
-            return err(format!("{what}: listed twice"));
-        }
+        Ok((loc, room))
     }
-    Ok(rooms)
 }
 
 /// The [`Secret`] of a game.yaml room's `entrance:` block (`how: armos`, `how: recorder` or, in a room with a `cave`
@@ -1314,9 +1387,35 @@ impl GameMap {
     }
 
     pub fn from_yaml(game: &str, routes: &str) -> Result<GameMap, MapError> {
-        let rooms = parse_rooms(game)?;
+        let (rooms, mut overlays) = parse_rooms(game)?;
         let (routes, alternates, namespaces) = parse_routes(routes)?;
-        let steps = routes.iter().flat_map(|(name, steps)| steps.iter().map(move |s| (name.as_str(), s)));
+        // The rooms of a route the routes.yaml lacks (a test's own routes beside the bundled game.yaml) go unused.
+        overlays.retain(|route, _| routes.contains_key(route));
+        let mut route_maps = BTreeMap::new();
+        for (route, own) in overlays {
+            let mut played = rooms.clone();
+            played.extend(own);
+            let map = GameMap::assemble(played, routes.clone(), alternates.clone(), namespaces.clone(), |r| r == route)?;
+            route_maps.insert(route, Arc::new(map));
+        }
+        let mut map = GameMap::assemble(rooms, routes, alternates, namespaces, |r| !route_maps.contains_key(r))?;
+        map.route_maps = route_maps;
+        Ok(map)
+    }
+
+    /// The map of `rooms` with every route's tables; the steps of the routes `checked` selects (and the alternates)
+    /// are checked against these rooms (a route with rooms of its own is checked in its own map).
+    fn assemble(
+        rooms: IndexMap<MapLocation, GameRoom>,
+        routes: Routes,
+        alternates: Vec<Alternate>,
+        namespaces: Namespaces,
+        checked: impl Fn(&str) -> bool,
+    ) -> Result<GameMap, MapError> {
+        let steps = routes
+            .iter()
+            .filter(|(name, _)| checked(name))
+            .flat_map(|(name, steps)| steps.iter().map(move |s| (name.as_str(), s)));
         let alternate_steps = alternates.iter().flat_map(|a| a.with.iter().map(|s| ("alternates", s)));
         for (route, step) in steps.chain(alternate_steps) {
             let at = format!("routes.yaml: {route}: step {} {}", step.location(), step.entry);
@@ -1398,7 +1497,7 @@ impl GameMap {
         }
         let stretches: HashMap<String, Vec<Stretch>> =
             routes.iter().map(|(name, steps)| (name.clone(), stretches_of(steps))).collect();
-        for (route, list) in &stretches {
+        for (route, list) in stretches.iter().filter(|(name, _)| checked(name)) {
             check_stretch_ways(route, &routes[route], list, &rooms)?;
         }
         let visits = routes.iter().map(|(name, steps)| (name.clone(), route_visits(steps))).collect();
@@ -1410,16 +1509,32 @@ impl GameMap {
             alternates,
             route_ranks: HashMap::new(),
             namespaces,
+            route_maps: BTreeMap::new(),
         };
         map.route_ranks = map
             .routes
             .iter()
             .flat_map(|(name, steps)| [true, false].map(|clips| ((name.clone(), clips), map.route_ranks(steps, clips))))
             .collect();
-        for (route, steps) in &map.routes {
+        for (route, steps) in map.routes.iter().filter(|(name, _)| checked(name)) {
             crate::objectives::check_route_ways(&map, route, steps).map_err(MapError)?;
         }
         Ok(map)
+    }
+
+    /// The map `route` plays: its own (game.yaml rooms with `routes: [route]` over the others), else this one.
+    pub fn route_map(self: &Arc<Self>, route: &str) -> Arc<GameMap> {
+        self.route_maps.get(route).cloned().unwrap_or_else(|| self.clone())
+    }
+
+    /// [`GameMap::route_map`] by reference.
+    pub fn for_route(&self, route: &str) -> &GameMap {
+        self.route_maps.get(route).map_or(self, |map| map.as_ref())
+    }
+
+    /// This map and every route's own map ([`GameMap::route_map`]): what any route plays.
+    pub fn played_maps(&self) -> impl Iterator<Item = &GameMap> {
+        std::iter::once(self).chain(self.route_maps.values().map(|map| map.as_ref()))
     }
 
     /// The start-state namespace of `route` (routes.yaml `states:`), None for bare names.
@@ -1916,8 +2031,6 @@ mod tests {
                 // Round 29: the rock wall over Dungeon 9's stairs.
                 loc(0, 0x05),
                 loc(0, 0x2c),
-                // Phase X: 0x2d's rock wall (d3first's 30 secret; its bomb only on a step entering the cave).
-                loc(0, 0x2d),
                 loc(0, 0x67),
                 loc(2, 0x0e),
                 loc(3, 0x4c),
@@ -1951,6 +2064,8 @@ mod tests {
             ]
         );
         assert!(!map.requires_bombs(loc(9, 0x7f)));
+        // Phase X: 0x2d's rock wall is d3first's (its 30 secret); d2first plays the room without it.
+        assert!(!map.requires_bombs(loc(0, 0x2d)) && map.for_route("d3first").requires_bombs(loc(0, 0x2d)));
         let room = map.get(loc(0, 0x2c)).unwrap();
         assert_eq!(room.bomb_secret, Some((18, 12)));
         assert_eq!(room.exits["cave"].destination, L::new(0, 0x2c, true));
@@ -1972,11 +2087,11 @@ mod tests {
         let map = GameMap::builtin();
         let tagged: Vec<(L, u8)> =
             map.rooms().values().filter_map(|r| Some((r.location, r.requires_rupees?))).collect();
-        // Round 29: Ganon's room (1: the silver arrow's rupee, while he lives). Phase X: d3first's candle shop (60).
+        // Round 29: Ganon's room (1: the silver arrow's rupee, while he lives). Phase X: d3first's candle shop (60),
+        // a room of d3first's own.
         assert_eq!(
             tagged,
             [
-                (L::new(0, 0x0c, true), 60),
                 (L::new(0, 0x34, true), 60),
                 (L::new(0, 0x44, true), 80),
                 (L::new(6, 0x1c, false), 2),
@@ -1985,6 +2100,7 @@ mod tests {
         );
         assert_eq!(map.requires_rupees(loc(0, 0x2c)), 0);
         assert_eq!(map.requires_rupees(loc(0, 0x44)), 0, "the room outside the shop needs none");
+        assert_eq!(map.for_route("d3first").requires_rupees(L::new(0, 0x0c, true)), 60);
         let tagged = GAME_YAML.replacen("  requires_bombs: true", "  requires_rupees: 80\n  requires_bombs: true", 1);
         assert_ne!(tagged, GAME_YAML);
         let map = GameMap::from_yaml(&tagged, ROUTES_YAML).unwrap();
@@ -2368,7 +2484,11 @@ mod tests {
         assert!(route.contains(&L::new(1, 0x7f, true)) && route.contains(&loc(1, 0x22)));
         // 0x56 and 0x57 (strays since round 22) are on the coast stretch's plain way since round 24.
         assert!(route.contains(&loc(0, 0x56)) && route.contains(&loc(0, 0x57)));
-        let tagged: BTreeSet<L> = map.rooms().values().filter(|r| r.specialist.is_some()).map(|r| r.location).collect();
+        // Any route's rooms (phase X: d3first's own game.yaml rooms included, `GameMap::played_maps`).
+        let tagged: BTreeSet<L> = map
+            .played_maps()
+            .flat_map(|m| m.rooms().values().filter(|r| r.specialist.is_some()).map(|r| r.location))
+            .collect();
         // Phase X: 3:0x4b, a stray since round 22, is d3first's (its way into Dungeon 3); no stray is left.
         assert_eq!(tagged, route);
         // Beyond the default route's own rooms: the alternate (4:0x20 is on the D4 stretch's plain way since round 22)
@@ -2421,6 +2541,61 @@ mod tests {
         assert_eq!(d9.len(), 39, "{d9:?}");
         assert!(d9.iter().all(|l| l.level == 9 || [0x47, 0x07, 0x06, 0x05].contains(&l.value)), "{d9:?}");
         assert_eq!(d9.iter().filter(|l| l.level == 9 && l.in_cave).count(), 7);
+    }
+
+    /// Phase X: the rooms `d3first` plays otherwise (game.yaml entries with `routes: [d3first]`) are its map's
+    /// only (`GameMap::route_map`): the family tags of the rooms only it crosses, the caves it enters, 0x2d's rock
+    /// wall. `d2first` (and every route without rooms of its own) plays the shared rooms, the game data its models
+    /// were trained on: a tag there opens a path the objective's search takes off the route (ow-lynel's 0x50 from
+    /// 0x60, the schema 5 trace `0_60n_2`), a `requires_bombs` offers BOMB and grants a bomb (ow-zora's 0x2d).
+    #[test]
+    fn a_routes_own_rooms_leave_the_shared_map_alone() {
+        let map = Arc::new(GameMap::builtin());
+        assert!(Arc::ptr_eq(&map.route_map(DEFAULT_ROUTE), &map));
+        assert!(Arc::ptr_eq(&map.route_map("clips-gauntlet"), &map));
+        let d3 = map.route_map("d3first");
+        let cave = |room: u8| L::new(0, room, true);
+        let own: BTreeSet<L> = d3.rooms().iter().filter(|(l, r)| map.get(**l) != Some(r)).map(|(l, _)| *l).collect();
+        assert_eq!(
+            own,
+            [
+                loc(0, 0x0c),
+                cave(0x0c),
+                loc(0, 0x29),
+                loc(0, 0x2a),
+                loc(0, 0x2b),
+                loc(0, 0x2d),
+                cave(0x2d),
+                loc(0, 0x3d),
+                cave(0x3d),
+                loc(0, 0x46),
+                loc(0, 0x62),
+                cave(0x62),
+                loc(3, 0x4a)
+            ]
+            .into()
+        );
+        assert_eq!(d3.rooms().len(), map.rooms().len() + 4, "d3first's four caves");
+        let tags = [(loc(0, 0x29), "ow-leever"), (loc(0, 0x46), "ow-zora"), (loc(0, 0x62), "ow-moblin")];
+        for (room, family) in tags.into_iter().chain([(loc(3, 0x4a), "stalfos-keese-gel")]) {
+            assert_eq!(map.get(room).unwrap().specialist, None, "{room}");
+            assert_eq!(d3.get(room).unwrap().specialist.as_deref(), Some(family), "{room}");
+        }
+        for room in [0x0c, 0x2d, 0x3d, 0x62] {
+            assert!(!map.get(loc(0, room)).unwrap().exits.contains_key("cave") && map.get(cave(room)).is_none());
+            assert_eq!(d3.get(loc(0, room)).unwrap().exits["cave"].destination, cave(room));
+        }
+        // A patch replaces its keys and adds exits; the rest is the shared room's.
+        let (shared, wall) = (map.get(loc(0, 0x2d)).unwrap(), d3.get(loc(0, 0x2d)).unwrap());
+        assert_eq!((shared.requires_bombs, shared.bomb_secret), (false, None));
+        assert_eq!((wall.requires_bombs, wall.bomb_secret), (true, Some((10, 2))));
+        assert_eq!(wall.exits.keys().collect::<Vec<_>>(), ["N", "E", "S", "W", "cave"]);
+        assert_eq!((&wall.enemies, &wall.specialist), (&shared.enemies, &shared.specialist));
+        // d3first's steps are checked against its own map: without its 0x0c entry (a route name routes.yaml lacks is
+        // a test's, its rooms unused) the shop's cave is no exit of 0x0c.
+        let unknown = GAME_YAML.replacen("routes: [d3first]", "routes: [d4first]", 1);
+        let e = GameMap::from_yaml(&unknown, ROUTES_YAML).unwrap_err().0;
+        assert!(e.contains("d3first") && e.contains("0x0c"), "{e}");
     }
 
     /// The bow detour: 0x22's stairs lead into the cellar (an in_cave room under its own id) and its ladder back;

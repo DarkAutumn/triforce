@@ -225,7 +225,7 @@ rooms:
     tile: [14, 8]
 - level: 0
   location: '0x0c'
-  specialist: ow-tektite  # round 24: the clip way to Dungeon 5 leaves W by the wrap exit; phase X: d3first's candle shop
+  specialist: ow-tektite  # round 24: the clip way to Dungeon 5 leaves W by the wrap exit
   exits:
     E:
       level: 0
@@ -241,10 +241,6 @@ rooms:
       # (no run-up: the room changes E).  0x0b's column 29 is open on rows 5-16.  No softlock row.
       wrap: true
       span: [5, 14]
-    cave:  # phase X (d3first, docs/routes/d3first-walks-a.md §5): the shop's open mouth, the blue candle
-      level: 0
-      location: '0x0c'
-      in_cave: true
   enemies:
     RedTektite: 6
   treasure: null
@@ -256,7 +252,16 @@ rooms:
     wares: [[magic-shield, 160], [key, 100], [blue-candle, 60]]  # [item, rupees], left to right
 - level: 0
   location: '0x0c'
+  routes: [d3first]  # phase X: d3first's candle shop (d2first crosses the room by the wrap exit)
+  exits:
+    cave:  # d3first-walks-a.md §5: the shop's open mouth, the blue candle
+      level: 0
+      location: '0x0c'
+      in_cave: true
+- level: 0
+  location: '0x0c'
   in_cave: true
+  routes: [d3first]
   specialist: ow-tektite
   exits:
     S:
@@ -862,7 +867,6 @@ rooms:
     rupees: 30
 - level: 0
   location: '0x29'
-  specialist: ow-leever  # phase X: d3first after Level 1, W -> E (scrollable: the wrap)
   exits:
     E:
       level: 0
@@ -874,8 +878,11 @@ rooms:
     RedLeever: 4
   treasure: null
 - level: 0
-  location: '0x2a'
+  location: '0x29'
+  routes: [d3first]
   specialist: ow-leever  # phase X: d3first after Level 1, W -> E (scrollable: the wrap)
+- level: 0
+  location: '0x2a'
   exits:
     E:
       level: 0
@@ -890,8 +897,11 @@ rooms:
     BlueLeever: 6
   treasure: null
 - level: 0
+  location: '0x2a'
+  routes: [d3first]
+  specialist: ow-leever  # phase X: d3first after Level 1, W -> E (scrollable: the wrap)
+- level: 0
   location: '0x2b'
-  specialist: ow-leever  # phase X: d3first after Level 1, W -> E (scrollable: the wrap; Leevers and Peahats)
   exits:
     E:
       level: 0
@@ -907,6 +917,10 @@ rooms:
     Peahat: 3
     RedLeever: 1
   treasure: null
+- level: 0
+  location: '0x2b'
+  routes: [d3first]
+  specialist: ow-leever  # phase X: d3first after Level 1, W -> E (scrollable: the wrap; Leevers and Peahats)
 - level: 0
   location: '0x2c'
   specialist: ow-tektite
@@ -952,11 +966,6 @@ rooms:
 - level: 0
   location: '0x2d'
   specialist: ow-zora
-  # Secret (phase X, d3first; walked Nov 19, d3first-walks-a.md §5): a rock wall tile object at x=80 y=80, tiles
-  # (10-11, 2-3); one bomb facing N from ($50,$5D) opens it (room flag $80) to the secret-rupee cave $21: 30 rupees.
-  # d2first crosses the room by its edges: no bomb is granted on its steps (zelda::cheats::needs).
-  requires_bombs: true    # d3first's 30 secret (zelda::cheats cheats one in where the step leaves by the cave)
-  bomb_secret: [10, 2]
   exits:
     N:
       level: 0
@@ -970,10 +979,6 @@ rooms:
     W:
       level: 0
       location: '0x2c'
-    cave:
-      level: 0
-      location: '0x2d'
-      in_cave: true
   enemies:
     BlueSlowOctorok: 2
     RedOctorok: 3
@@ -987,7 +992,21 @@ rooms:
     rupees: 30
 - level: 0
   location: '0x2d'
+  routes: [d3first]
+  # Secret (phase X, d3first; walked Nov 19, d3first-walks-a.md §5): a rock wall tile object at x=80 y=80, tiles
+  # (10-11, 2-3); one bomb facing N from ($50,$5D) opens it (room flag $80) to the secret-rupee cave $21: 30 rupees.
+  # d2first crosses the room by its edges and plays it without the secret.
+  requires_bombs: true    # d3first's 30 secret (zelda::cheats cheats one in)
+  bomb_secret: [10, 2]
+  exits:
+    cave:
+      level: 0
+      location: '0x2d'
+      in_cave: true
+- level: 0
+  location: '0x2d'
   in_cave: true
+  routes: [d3first]
   specialist: ow-zora
   exits:
     S:
@@ -1284,11 +1303,6 @@ rooms:
     S:
       level: 0
       location: '0x4d'
-    cave:  # phase X (d3first, docs/routes/d3first-walks-b.md §3): the Armos stairs; MOVE into the statue only on a
-      # step leaving by them (zelda::objectives::GameCompletion::secret_armos: d2first crosses the room S -> N, E -> N)
-      level: 0
-      location: '0x3d'
-      in_cave: true
   enemies:
     BlueMoblin: 4
   treasure: null
@@ -1300,7 +1314,17 @@ rooms:
     rupees: 30
 - level: 0
   location: '0x3d'
+  routes: [d3first]
+  exits:
+    cave:  # phase X (d3first, docs/routes/d3first-walks-b.md §3): the Armos stairs (d2first crosses the room S -> N,
+      # E -> N and plays it without them)
+      level: 0
+      location: '0x3d'
+      in_cave: true
+- level: 0
+  location: '0x3d'
   in_cave: true
+  routes: [d3first]
   specialist: ow-moblin
   exits:
     S:
@@ -1471,7 +1495,6 @@ rooms:
     tile: [16, 8]
 - level: 0
   location: '0x46'
-  specialist: ow-zora  # phase X: d3first from Level 4 to Level 1, S -> E (its one monster is a Zora, as 0x47's)
   exits:
     E:
       level: 0
@@ -1488,6 +1511,10 @@ rooms:
     how: burn
     tile: [18, 14]
     wares: [[magic-shield, 90], [food, 100], [heart, 10]]  # [item, rupees], left to right
+- level: 0
+  location: '0x46'
+  routes: [d3first]
+  specialist: ow-zora  # phase X: d3first from Level 4 to Level 1, S -> E (its one monster is a Zora, as 0x47's)
 - level: 0
   location: '0x47'
   specialist: ow-zora  # round 29: the leg to Dungeon 9; the burned tree over the heart container's cave
@@ -2069,7 +2096,6 @@ rooms:
     free: E
 - level: 0
   location: '0x62'
-  specialist: ow-moblin  # phase X: d3first's dead woods 100 secret (5 Blue Moblins, edge spawns, as 0x61 and 0x63)
   exits:
     N:
       level: 0
@@ -2083,10 +2109,6 @@ rooms:
     W:
       level: 0
       location: '0x61'
-    cave:  # phase X (d3first-walks-b.md §3): the burned tree's stairs (the blue candle facing W from ($A0,$5D))
-      level: 0
-      location: '0x62'
-      in_cave: true
   enemies:
     BlueMoblin: 5
   treasure: null
@@ -2099,7 +2121,17 @@ rooms:
     rupees: 100
 - level: 0
   location: '0x62'
+  routes: [d3first]
+  specialist: ow-moblin  # phase X: d3first's dead woods 100 secret (5 Blue Moblins, edge spawns, as 0x61 and 0x63)
+  exits:
+    cave:  # d3first-walks-b.md §3: the burned tree's stairs (the blue candle facing W from ($A0,$5D))
+      level: 0
+      location: '0x62'
+      in_cave: true
+- level: 0
+  location: '0x62'
   in_cave: true
+  routes: [d3first]
   specialist: ow-moblin
   exits:
     S:
@@ -3356,7 +3388,6 @@ rooms:
   treasure: key
 - level: 3
   location: '0x4a'
-  specialist: stalfos-keese-gel  # phase X: d3first's way in, E -> W, its 5 Blue Keese killed for the bombs
   exits:
     E:
       level: 3
@@ -3372,6 +3403,10 @@ rooms:
     BlueKeese: 5
   treasure: bombs
   trigger: kill-all-item  # attr F & 7 = 7
+- level: 3
+  location: '0x4a'
+  routes: [d3first]
+  specialist: stalfos-keese-gel  # phase X: d3first's way in, E -> W, its 5 Blue Keese killed for the bombs
 - level: 3
   location: '0x4b'
   specialist: zol

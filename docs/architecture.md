@@ -1955,6 +1955,14 @@ is joined at the end. It prints a JSON summary (`out`, `frames`, `seconds`, `wid
   visits, stretches, reserves follow the route's list), so a change to a block reaches both routes; `d2first`'s steps
   are pinned field for field by `tests/fixtures/d2first_steps.json`. A route's own reserves before a block hold in
   it until a step of the block sets one.
+- **A route's own rooms:** a game.yaml room entry with `routes: [NAME, ...]` is the room as those routes play it:
+  over the shared entry of the room its keys replace the shared ones and its `exits:` are added by key; without one
+  it is a room only they have (`zelda::game_map` `parse_rooms`). Each such route plays its own map (the shared rooms
+  with its own over them, `GameMap::route_map`; its steps are checked against it); the others play the shared map,
+  so what one route learns of a room changes nothing another plays. The env sets its session's map for the
+  episode's route (`Session::set_map`, at reset from the start state's route and at every episode's start), the
+  chain for its route; the state builder and the tools by `_native.Game(route=)`, `game_rooms(route)` and
+  `specialist_for(room, route)`. A family's rooms are the rooms any route tags with it (`GameMap::played_maps`).
 
 No model input changes: no COMPAT bump for any of this (2.0.0.0 is the owner's MAJOR for `d3first`).
 

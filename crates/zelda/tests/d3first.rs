@@ -1,10 +1,9 @@
 //! Phase X: the route `d3first` (routes.yaml; docs/routes/d3first.md) as the engine reads it: its length and end,
 //! its triforces in order, what Link holds at each dungeon's entrance (sword, heart containers, items, pieces), the
 //! whirlwind's four warps (plays and facings from the game's index, `zelda::whirlwind::plays`), its stretches (the
-//! shared blocks'), and every step's room, entry and exit a door of game.yaml leading into the next step's room. The
-//! side effects of its game.yaml rooms on `d2first`: no bomb is granted on d2first's crossings of 0:0x2d, whose rock
-//! wall d3first bombs, and d2first's crossings of 0:0x3d are never offered the MOVE into its secret Armos, which
-//! d3first wakes (both in the real game, from d2first's own start states).
+//! shared blocks'), and every step's room, entry and exit a door of game.yaml leading into the next step's room. Its
+//! game.yaml rooms are its own map's (`GameMap::route_map`): `d2first` plays 0:0x2d without the rock wall d3first
+//! bombs and 0:0x3d without the Armos stairs d3first takes (both in the real game, from d2first's own start states).
 #![cfg(feature = "zcore")]
 
 mod common;
@@ -23,8 +22,9 @@ use zelda::{Action, ActionKind, Direction, GameMap, LoadOptions, MapLocation, Se
 
 const ROUTE: &str = "d3first";
 
+/// The map d3first plays (its own game.yaml rooms over the shared ones).
 fn map() -> Arc<GameMap> {
-    Arc::new(GameMap::builtin())
+    Arc::new(GameMap::builtin()).route_map(ROUTE)
 }
 
 fn steps(map: &GameMap) -> &[RouteStep] {
@@ -190,7 +190,7 @@ fn every_step_is_a_door_of_the_game_data() {
 /// d2first's pre-entry state `state`, played on (MOVE N) until Link stands in `room` in play (mode 5).
 fn session(state: &str, room: u8) -> Option<Session<Counted>> {
     let core = open_core()?;
-    let mut s = Session::new(Counted(core, 0), map());
+    let mut s = Session::new(Counted(core, 0), Arc::new(GameMap::builtin()));
     s.load(&load_named_state(state), &LoadOptions::default(), &mut ChaCha8Rng::seed_from_u64(0)).unwrap();
     for _ in 0..100 {
         if s.state().full_location() == MapLocation::new(0, room, false) && s.state().mode() == 5 {
@@ -203,48 +203,44 @@ fn session(state: &str, room: u8) -> Option<Session<Counted>> {
     panic!("{state}: never in 0:{room:#04x}: {}", s.state().full_location());
 }
 
-/// 0:0x2d's rock wall (d3first's 30 secret, game.yaml `requires_bombs`): a Link with no bomb gets one where his
-/// route's step leaves by the cave behind it (d3first), none on d2first's step crossing the room (S -> W, into the
-/// heart rock's room), from d2first's own pre-entry state.
+/// 0:0x2d's rock wall (d3first's 30 secret, its own game.yaml entry for the room): d2first plays the room without it
+/// (no wall to bomb, no bomb granted on its step crossing S -> W into the heart rock's room, from its own pre-entry
+/// state); in d3first's map the wall is shut and a Link with no bomb gets one where the step leaves by the cave.
 #[test]
-fn the_rock_wall_of_0x2d_grants_a_bomb_only_where_the_route_enters_its_cave() {
+fn the_rock_wall_of_0x2d_is_d3firsts_only() {
     let Some(mut s) = session("0_2ds_0", 0x2d) else { return };
     s.apply_ram(&[(Var::Bombs, 0)]);
     let map = s.game_map().clone();
     let state = s.state().clone();
-    assert!(state.ow_bomb_secret_closed());
+    assert!(!state.ow_bomb_secret_closed() && !map.requires_bombs(state.full_location()));
     let d2 = &map.routes["d2first"];
     let crossing = d2.iter().position(|st| (st.level, st.room, st.entry.as_str(), st.exit.as_str()) == (0, 0x2d, "S", "W"));
     let d2first = GameCompletion::new(map.clone(), "d2first", crossing).unwrap();
     assert_eq!(needs(&map, &d2first, None, &state)[CheatItem::Bombs], 0, "d2first crosses 0x2d");
-    let wall = index(steps(&map), 0, 0x2d, "W", "cave");
-    let d3first = GameCompletion::new(map.clone(), ROUTE, Some(wall)).unwrap();
-    assert_eq!(needs(&map, &d3first, None, &state)[CheatItem::Bombs], 1, "d3first bombs the wall");
+    s.set_map(map.route_map(ROUTE));
+    let (own, state) = (s.game_map().clone(), s.state().clone());
+    assert!(state.ow_bomb_secret_closed());
+    let wall = index(steps(&own), 0, 0x2d, "W", "cave");
+    let d3first = GameCompletion::new(own.clone(), ROUTE, Some(wall)).unwrap();
+    assert_eq!(needs(&own, &d3first, None, &state)[CheatItem::Bombs], 1, "d3first bombs the wall");
 }
 
-/// 0:0x3d's secret Armos (the statue at X $90, Y $80; d3first's 30 secret, woken from its E side): with the room's
-/// `cave` exit the game state offers MOVE W into it from (`$A0`, `$7D`), but the route keeps it to a step leaving by
-/// its stairs: d2first's crossing (S -> N, from its own pre-entry state) is never offered it.
+/// 0:0x3d's secret Armos (the statue at X $90, Y $80; d3first's 30 secret, woken from its E side): only d3first's
+/// map gives the room its `cave` exit, so only there the game state offers MOVE W into it from (`$A0`, `$7D`);
+/// d2first's crossing (from its own pre-entry state) meets a statue as before.
 #[test]
-fn d2first_never_walks_into_the_armos_of_0x3d() {
+fn only_d3first_walks_into_the_armos_of_0x3d() {
     let Some(mut s) = session("0_3ds_0", 0x3d) else { return };
-    let map = s.game_map().clone();
     s.apply_ram(&[(Var::LinkX, 0xA0), (Var::LinkY, 0x7D), (Var::LinkDirection, Direction::W.value()), (Var::LinkGridOffset, 0)]);
-    let state = s.state().clone();
     let push = Action::new(ActionKind::Move, Direction::W, 16).unwrap();
-    assert!(state.is_secret_armos_direction(Direction::W), "the statue is the room's secret Armos");
-    let d2 = &map.routes["d2first"];
-    let crossing = d2.iter().position(|st| (st.level, st.room, st.entry.as_str(), st.exit.as_str()) == (0, 0x3d, "S", "N"));
-    let mut d2first = GameCompletion::new(map.clone(), "d2first", crossing).unwrap();
-    let objective = d2first.objectives(None, &state);
-    assert_ne!(objective.kind, ObjectiveKind::Cave);
-    assert!(!d2first.secret_armos(&state));
-    s.set_secret_armos(d2first.secret_armos(&state));
+    assert!(!s.state().is_secret_armos_direction(Direction::W), "d2first: no stairs under the statue");
     assert!(!s.mask().is_allowed(&push), "d2first: {}", s.mask());
-    let stairs = index(steps(&map), 0, 0x3d, "E", "cave");
-    let mut d3first = GameCompletion::new(map.clone(), ROUTE, Some(stairs)).unwrap();
-    let objective = d3first.objectives(None, &state);
-    assert_eq!(objective.kind, ObjectiveKind::Cave, "d3first heads for the Armos's stairs");
-    s.set_secret_armos(d3first.secret_armos(&state));
+    let map = s.game_map().clone();
+    s.set_map(map.route_map(ROUTE));
+    assert!(s.state().is_secret_armos_direction(Direction::W), "the statue is the room's secret Armos");
     assert!(s.mask().is_allowed(&push), "d3first: {}", s.mask());
+    let stairs = index(steps(&map), 0, 0x3d, "E", "cave");
+    let mut d3first = GameCompletion::new(s.game_map().clone(), ROUTE, Some(stairs)).unwrap();
+    let objective = d3first.objectives(None, s.state());
+    assert_eq!(objective.kind, ObjectiveKind::Cave, "d3first heads for the Armos's stairs");
 }

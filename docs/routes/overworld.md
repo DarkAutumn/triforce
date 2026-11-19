@@ -249,9 +249,9 @@ its own (the rest are d2first's rooms, entered from the same or other sides):
 | 124-148 | 0x0b, 0x74, 0x73, 0x63, **0x62 (cave)**, 0x52, 0x51, 0x50, 0x60, 0x5f, 0x4f, 0x3f, 0x2f (cave), 0x3f, 0x3e, **0x3d (cave)**, 0x4d, 0x4c, 0x3c | cave → recorder ... S → cave | ow-leever, ow-tektite, ow-moblin, ow-lynel, ow-zora, ow-start, ow-octorok | the whirlwind to 0x74, the dead woods' tree (`how: burn`, 100 rupees), the world wrap, the raft heart, the Armos (`how: armos`, 30 rupees) |
 | 159 | 0x3c | cave → recorder | ow-octorok | the whirlwind to 0x45 |
 
-0x2d and 0x3d are crossed by d2first too: their caves are taken only by a step leaving into them (an overworld rock
-wall's bomb is granted only there, `zelda::cheats::needs`; MOVE into a secret Armos is offered only there,
-`GameCompletion::secret_armos`), so d2first's crossings play as before.
+The bold rooms' caves, 0x2d's rock wall and the tags of the rooms only d3first crosses are d3first's own game.yaml
+entries (`routes: [d3first]`, its map: `GameMap::route_map`); d2first, which crosses 0x2d and 0x3d too, plays the
+shared rooms (no wall to bomb in 0x2d, a plain statue in 0x3d) as before.
 
 ## Open questions
 

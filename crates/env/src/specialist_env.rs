@@ -653,6 +653,10 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         } else {
             self.data.state_route(&self.config, ns.as_deref()).map(str::to_owned)
         };
+        // The map the start's route plays (game.yaml rooms of its own over the others, `GameMap::route_map`); bare
+        // names without a family route play the shared rooms.
+        let map = state_route.as_deref().map_or_else(|| self.data.map.clone(), |r| self.data.map.route_map(r));
+        self.session.set_map(map.clone());
         // A staged start (training only): the kills banked for the start's pending dungeon room, before its entry.
         // Before them (round 29) the kills the route's earlier visit left in a room it comes back to (routes.yaml
         // `banked_kills`, by the start state's name): the game keeps those, the fresh-room write would undo them.
@@ -663,16 +667,16 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         if self.curriculum_tag.is_none()
             && let Some(named) = crate::start_states::StateName::parse(&name)
         {
-            let (map, route) = (&self.data.map, state_route.as_deref());
+            let route = state_route.as_deref();
             let (at, entry, visit) = (named.location, Some(named.entry), Some(named.visit));
-            let clips = if zelda::objectives::banked_kills_follow_clips(map, at, entry, visit, route) {
+            let clips = if zelda::objectives::banked_kills_follow_clips(&map, at, entry, visit, route) {
                 let on = self.clips_plan.unwrap_or_else(|| self.config.clips.draw(&mut self.rng));
                 early_clips = Some(on);
                 on
             } else {
                 true
             };
-            if let Some(kills) = zelda::objectives::start_banked_kills(map, at, entry, visit, route, clips) {
+            if let Some(kills) = zelda::objectives::start_banked_kills(&map, at, entry, visit, route, clips) {
                 banked_kills.insert(0, ((at.level, at.value), kills));
             }
         }
@@ -722,7 +726,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         // `set_clips_allowed`'s, else a draw from the env's generator (`clips: {off_share}`, round 22). A curriculum
         // start keeps it on: its track was explored with the switch on (`explore::explore_config`).
         let route = state_route.as_deref();
-        let fixed = start_clips(&self.data.map, state.full_location(), entry, visit, route, &state);
+        let fixed = start_clips(&map, state.full_location(), entry, visit, route, &state);
         self.clips_fixed = fixed;
         self.clips_allowed = match fixed.or(self.clips_plan).or(early_clips) {
             Some(on) => on,
@@ -730,7 +734,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             None => self.config.clips.draw(&mut self.rng),
         };
         let (route, step) = start_route(
-            &self.data.map,
+            &map,
             state.full_location(),
             entry,
             visit,
@@ -814,14 +818,15 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         // Round 28: a route step may name its own bomb mode (8:0x6e, crossed by the mask of `required`).
         let step_bombs = self.objectives.as_ref().and_then(|gc| gc.step_bombs(self.session.state()));
         let items = self.config.items.on_step(step_bombs);
-        let mut kinds = items.disabled_kinds(&self.data.map, self.session.state(), reserve, rupees);
+        let mut kinds = items.disabled_kinds(self.session.game_map(), self.session.state(), reserve, rupees);
         // Round 29: a route step may put the sword away (`sword: false`, 9:0x06's old man).
         if self.objectives.as_ref().is_some_and(|gc| !gc.step_sword(self.session.state())) {
             kinds.extend([zelda::ActionKind::Sword, zelda::ActionKind::Beams]);
         }
         self.session.set_disabled_kinds(&kinds);
         let granted = self.cheats.granted(CheatItem::Bombs);
-        let targets = items.bomb_targets(&self.data.map, self.session.state(), Some(objective), reserve, granted);
+        let map = self.session.game_map();
+        let targets = items.bomb_targets(map, self.session.state(), Some(objective), reserve, granted);
         self.session.set_bomb_targets(targets.as_deref());
         let facings = self.objectives.as_ref().map(|gc| gc.recorder_facings(self.session.state()));
         self.session.set_recorder_facings(facings);
@@ -831,17 +836,14 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         // Round 28: CANDLE's facings by the route (on the overworld only at the tree a step burns).
         let candle = self.objectives.as_ref().and_then(|gc| gc.candle_facings(self.session.state()));
         self.session.set_candle_facings(candle);
-        // Phase X: MOVE into a secret Armos only where the step leaves by its stairs (d2first crosses 0x3d).
-        let armos = self.objectives.as_ref().is_none_or(|gc| gc.secret_armos(self.session.state()));
-        self.session.set_secret_armos(armos);
-        let doorways = zelda::objectives::doorways_kept_out(&self.data.map, self.session.state(), objective);
+        let doorways = zelda::objectives::doorways_kept_out(self.session.game_map(), self.session.state(), objective);
         self.session.set_vetoed_doorways(doorways);
         self.session.set_clips(self.config.clips.enabled);
         // The switch in force: a switch off waits while Link stands stranded without the skips (round 24).
         let allowed = self.objectives.as_ref().map_or(self.clips_allowed, GameCompletion::clips_allowed);
         self.session.set_clips_allowed(allowed);
         let vetoed = if self.session.clips_effective() {
-            zelda::objectives::wraps_into_wrong_exits(&self.data.map, self.session.state(), objective)
+            zelda::objectives::wraps_into_wrong_exits(self.session.game_map(), self.session.state(), objective)
         } else {
             Vec::new()
         };
@@ -852,7 +854,8 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
 
     /// Starts an episode from the session's state (loaded or restored).
     fn begin_episode(&mut self, name: String) -> Result<(Observation, StepInfo), EnvError> {
-        let mut gc = GameCompletion::new(self.data.map.clone(), &self.route, self.route_step)
+        self.session.set_map(self.data.map.route_map(&self.route));
+        let mut gc = GameCompletion::new(self.session.game_map().clone(), &self.route, self.route_step)
             .map_err(|e| EnvError::Config(crate::ConfigError(e)))?;
         gc.set_clips(self.config.clips.enabled);
         gc.set_clips_allowed(self.clips_allowed);
@@ -1054,7 +1057,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             &mut self.end_conditions,
             &Critique {
                 change: &change,
-                map: &self.data.map,
+                map: self.session.game_map(),
                 prev_objective: &prev.objective,
                 objective: &curr.objective,
                 prev_wavefront: prev.wavefront.as_deref(),

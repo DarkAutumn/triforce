@@ -1220,8 +1220,9 @@ impl GameData {
         for (name, config) in &self.specialists {
             self.check_chain_hp(config)?;
             let rooms: BTreeSet<MapLocation> = config.rooms.iter().copied().collect();
+            // The rooms any route plays with the tag (a route's own game.yaml rooms included, phase X).
             let tagged: BTreeSet<MapLocation> =
-                self.map.rooms_for_specialist(name).into_iter().collect();
+                self.map.played_maps().flat_map(|map| map.rooms_for_specialist(name)).collect();
             if rooms != tagged {
                 return err(format!(
                     "specialists/{name}.yaml: rooms: {} != game.yaml rooms tagged `specialist: {name}` {}",
@@ -1242,7 +1243,7 @@ impl GameData {
             // A `terminal` step's room is only entered (the run ends there): it needs no family yet.
             for (i, step) in steps.iter().enumerate().filter(|(_, s)| s.exit != "terminal") {
                 let location = step.location();
-                let tag = self.map.get(location).and_then(|r| r.specialist.as_deref());
+                let tag = self.map.for_route(route).get(location).and_then(|r| r.specialist.as_deref());
                 let Some(tag) = tag else {
                     return err(format!(
                         "routes.yaml: {route}[{i}]: room {location} has no specialist: tag in game.yaml"
@@ -1405,9 +1406,14 @@ impl GameData {
         (config.reward.heart_value.uses_table() && values.routes.iter().any(|r| r == route)).then_some(values)
     }
 
-    /// The specialist tagged on a room.
+    /// The specialist tagged on a room (the game.yaml rooms every route plays alike).
     pub fn specialist_for(&self, location: MapLocation) -> Option<&str> {
         self.map.get(location)?.specialist.as_deref()
+    }
+
+    /// The specialist tagged on a room as `route` plays it (its own game.yaml rooms over the others, phase X).
+    pub fn route_specialist_for(&self, route: &str, location: MapLocation) -> Option<&str> {
+        self.map.for_route(route).get(location)?.specialist.as_deref()
     }
 }
 

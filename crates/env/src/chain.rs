@@ -662,7 +662,8 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
     /// The chain runs no critic unless [`ChainEnv::set_rewards`] is on, so its session looks ahead for bombs only
     /// (their hits go into the room records' bomb counts; the rest only credits rewards).
     pub fn new(data: Arc<GameData>, nes: N, store: St, route: Route) -> Self {
-        let mut session = Session::new(nes, data.map.clone());
+        // The map the route plays (game.yaml rooms of its own over the others, `GameMap::route_map`).
+        let mut session = Session::new(nes, data.map.route_map(&route.name));
         session.look_ahead = zelda::LookAhead::Bombs;
         ChainEnv {
             session,
@@ -839,7 +840,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         let banked_kills = StateName::parse(&self.route.start_state)
             .and_then(|named| {
                 let kills = zelda::objectives::start_banked_kills(
-                    &self.data.map,
+                    self.session.game_map(),
                     named.location,
                     Some(named.entry),
                     Some(named.visit),
@@ -864,7 +865,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
     fn game_start_route(&mut self, start_state: &str, rng: &mut ChaCha8Rng) -> Result<GameCompletion, EnvError> {
         let state = self.session.state().clone();
         let (route, step) = start_route(
-            &self.data.map,
+            self.session.game_map(),
             state.full_location(),
             state_entry(start_state),
             state_visit(start_state),
@@ -873,7 +874,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             &state,
             self.route.clips,
         );
-        GameCompletion::new(self.data.map.clone(), &route, step).map_err(EnvError::State)
+        GameCompletion::new(self.session.game_map().clone(), &route, step).map_err(EnvError::State)
     }
 
     /// Console power on to the first controllable frame by inputs alone (`zelda::power_on`): the run's delay
@@ -927,7 +928,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         if redraw_rng {
             self.session.write_rng(zelda::rng::draw_phase(rng));
         }
-        GameCompletion::new(self.data.map.clone(), &self.route.name, Some(step)).map_err(EnvError::State)
+        GameCompletion::new(self.session.game_map().clone(), &self.route.name, Some(step)).map_err(EnvError::State)
     }
 
     /// Starts a run as the route says ([`RunStart`]); `rng` draws what the start leaves to chance (a start
@@ -1101,7 +1102,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                     next: gc.step(),
                     clips: gc.clips_allowed(),
                 };
-                Some(track.step(&self.data.map, &change, &state, &objective, &heart)?)
+                Some(track.step(self.session.game_map(), &change, &state, &objective, &heart)?)
             }
             None => None,
         };
@@ -1253,15 +1254,15 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         // Round 28: a route step may name its own bomb mode (8:0x6e, crossed by the mask of `required`).
         let step_bombs = self.objectives.as_ref().and_then(|gc| gc.step_bombs(self.session.state()));
         let items = config.items.on_step(step_bombs);
-        let mut kinds = items.disabled_kinds(&self.data.map, self.session.state(), reserve, rupees);
+        let mut kinds = items.disabled_kinds(self.session.game_map(), self.session.state(), reserve, rupees);
         // Round 29: a route step may put the sword away (`sword: false`, 9:0x06's old man).
         if self.objectives.as_ref().is_some_and(|gc| !gc.step_sword(self.session.state())) {
             kinds.extend([ActionKind::Sword, ActionKind::Beams]);
         }
         self.session.set_disabled_kinds(&kinds);
         let granted = self.cheats.granted(CheatItem::Bombs);
-        let targets =
-            items.bomb_targets(&self.data.map, self.session.state(), self.objective.as_ref(), reserve, granted);
+        let map = self.session.game_map();
+        let targets = items.bomb_targets(map, self.session.state(), self.objective.as_ref(), reserve, granted);
         self.session.set_bomb_targets(targets.as_deref());
         // The facings the route plays the recorder with (round 26: the whirlwind's count, the pond, a Digdogger fought).
         let facings = self.objectives.as_ref().map(|gc| gc.recorder_facings(self.session.state()));
@@ -1272,11 +1273,8 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         // Round 28: CANDLE's facings by the route (on the overworld only at the tree a step burns).
         let candle = self.objectives.as_ref().and_then(|gc| gc.candle_facings(self.session.state()));
         self.session.set_candle_facings(candle);
-        // Phase X: MOVE into a secret Armos only where the step leaves by its stairs (d2first crosses 0x3d).
-        let armos = self.objectives.as_ref().is_none_or(|gc| gc.secret_armos(self.session.state()));
-        self.session.set_secret_armos(armos);
         let doorways = self.objective.as_ref().map_or(0, |objective| {
-            zelda::objectives::doorways_kept_out(&self.data.map, self.session.state(), objective)
+            zelda::objectives::doorways_kept_out(self.session.game_map(), self.session.state(), objective)
         });
         self.session.set_vetoed_doorways(doorways);
         self.session.set_clips(config.clips.enabled);
@@ -1285,7 +1283,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         self.session.set_clips_allowed(allowed);
         let vetoed = match &self.objective {
             Some(objective) if self.session.clips_effective() => {
-                zelda::objectives::wraps_into_wrong_exits(&self.data.map, self.session.state(), objective)
+                zelda::objectives::wraps_into_wrong_exits(self.session.game_map(), self.session.state(), objective)
             }
             _ => Vec::new(),
         };
@@ -1294,11 +1292,11 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         self.builder.rupee_reserve = rupees;
     }
 
-    /// The `clips:` switch of the family `location` is tagged with in game.yaml (false for an untagged room or a
-    /// family that doesn't load: the acting specialist's errors are reported where it is chosen).
+    /// The `clips:` switch of the family `location` is tagged with in the route's game.yaml rooms (false for an
+    /// untagged room or a family that doesn't load: the acting specialist's errors are reported where it is chosen).
     fn clips_in(&self, location: MapLocation) -> bool {
-        self.data
-            .map
+        self.session
+            .game_map()
             .get(location)
             .and_then(|room| room.specialist.clone())
             .and_then(|name| self.config_for(&name).ok())
@@ -1321,7 +1319,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
     fn room_entry(&mut self) -> Result<ChainStatus, String> {
         let state = self.session.state().clone();
         let location = state.full_location();
-        let map = self.data.map.clone();
+        let map = self.session.game_map().clone();
         let objective = self.objective.clone().expect("objective");
         let record_location = self
             .result
