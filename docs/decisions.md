@@ -3025,7 +3025,33 @@ routes are folded into the trained route, as rounds 26 and 27 folded `d7` and `d
   family by family and its chains measured on the merged line, rather than three landings that would each decide
   the same families again.
 - **1.9.0.0:** MINOR +2, the route completes Dungeons 8 and 9 and the game: the D8 triforce from Dungeon 8's
-  entrance in 27.2% of 1000 runs (`r78-dark-1k-d8`), the end of the game from Dungeon 9's entrance in 31.0% of 1000
-  (`r79c-1k-d9`), the working rate for a first team (about 30%, 2026-11-16). COMPAT 0, REV 0: nothing a loaded
-  model reads changed since 1.5.1.0, so the earlier runs are stamped 1.9.0.0 (`triforce stamp`), not converted.
-  The Cargo workspace is 1.9.0.
+  entrance in 27.2% of 1000 runs (`r78-dark-1k-d8`; the landed team 24.8%, `r29land-1k-d8`, −2.4 ± 1.9 paired), the
+  end of the game from Dungeon 9's entrance in 31.0% of 1000 (`r79c-1k-d9`; `r29land-1k-d9` the same runs), the
+  working rate for a first team (about 30%, 2026-11-16). COMPAT 0, REV 0: nothing a loaded model reads changed
+  since 1.5.1.0, so the earlier runs are stamped 1.9.0.0 (`triforce stamp`), not converted. The Cargo workspace is
+  1.9.0. **There is no 1.8.0.0**: Dungeons 8 and 9 land together (one landing, above), so MINOR goes from 7 to 9.
+
+## 2026-11-19 — One team for the whole route (1.9.0.0)
+
+The lanes trained some families lane after lane, each lane judging them only on its own stretch. The landed team
+is one run per family for all 358 steps, chosen this way:
+
+- **The census** (`docs/experiments/route-team.md`): the newest run of every family's lineage, played as one team
+  on one code line over every segment of the route, 1000 runs a segment, paired by seed with the chain that segment
+  was accepted with (worse or better beyond noise = more than two standard errors of the paired difference). Every
+  family that lost a segment got one swap test (the segment again with only its run swapped back) and a
+  single-room evaluation of the swapped-in run on the later stretches' states. A family whose newest run lost an
+  earlier segment and whose older run could not play the later stretches was owed a joint continuation.
+- **Three joint continuations**, one per family the census (or round 26) found torn between stretches: ow-lynel
+  `r27l-lynel-s81` (round27.md §15: `r79t5-lynel` lost 0:0x0a's second visit after Dungeon 2, −11.8 points),
+  goriya `r77-goriya5-s80` (round26.md §17: `r76-goriya4-s78`, trained for Dungeon 7, lost Dungeon 2's Goriya
+  rooms), ow-zora `r29z-zora-s91` (round29.md §19: `r79t5-zora` lost the arrow shop after Dungeon 5, −14.7 points;
+  `r76-zora-arrows` cannot play 0:0x27 and 0x47 from E on the leg to Dungeon 9).
+- **The recipe they share:** a continuation trained for new rooms dilutes the old ones (goriya: Dungeon 2's rooms
+  fell from 40% to 11% of the resets; ow-zora: an unfinishable cave curriculum took half of them), and the old
+  rooms drift where single-room evaluation does not look (the chain enters them with fewer hearts than the seed
+  states). Handoff states harvested from the chain's own runs at the chain's hearts (`eval-chain --harvest`, or cut
+  from chain replays), drawn at `harvested_fraction` 0.2-0.33, restore them. Each continuation is chosen on the
+  segments of every stretch the family plays, not only its own.
+- **The bar:** every one of the 18 segments within noise of its reference or better, 1000 runs each
+  (`r29land-1k`, round29.md §20).
