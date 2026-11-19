@@ -49,6 +49,7 @@ DARKNUT_RED, DARKNUT_BLUE, ZOL, GEL, PEAHAT, ZORA, LEEVER_BLUE, LEEVER_RED = 0x0
     0x10
 MANHANDLA, GLEEOK2, AQUAMENTUS, WALLMASTER, VIRE, LIKE_LIKE = 0x3C, 0x43, 0x3D, 0x27, 0x12, 0x17
 DROP = 0x60
+RUPEE_STASH = 0x35
 HEART, FAIRY, BOMB_ITEM, RUPEE, RUPEES5, CLOCK = 0x22, 0x23, 0x00, 0x18, 0x0F, 0x21
 SHIELDED = (DARKNUT_RED, DARKNUT_BLUE)
 OPP = {1: 2, 2: 1, 4: 8, 8: 4}
@@ -76,7 +77,8 @@ def walk_graph(w: Walk, key=None) -> dict:
     each grid point reached so far, monsters put away, six frames of each direction, the snapshot put back).
     Cached by (level, room, blocks in slot $0B)."""
     game = w.game
-    key = (w.level, w.room, w.mode, w.r(OBJ_TYPE + 0x0B)) if key is None else key
+    tile_obj = w.r(OBJ_TYPE + 0x0B)
+    key = (w.level, w.room, w.mode, tile_obj if tile_obj >= 0x60 else 0) if key is None else key
     if key in _GRAPHS:
         return _GRAPHS[key]
     (x0, x1), (y0, y1) = UW_RANGE if w.level else OW_RANGE
@@ -96,29 +98,37 @@ def walk_graph(w: Walk, key=None) -> dict:
             break
         game.press(inward, 1)
     clean = game.snapshot()
-    start = (game.read(OBJ_X) & 0xF8, ((game.read(OBJ_Y) - 5) & 0xF8) + 5)
-    start = (min(max(start[0], x0), x1), min(max(start[1], y0), y1))
-    graph, todo = {}, [start]
-    while todo:
-        node = todo.pop()
-        if node in graph:
-            continue
-        graph[node] = {}
-        for button, (dx, dy) in STEP8.items():
-            target = (node[0] + dx, node[1] + dy)
-            if not (x0 <= target[0] <= x1 and y0 <= target[1] <= y1):
+    fx, fy = game.read(OBJ_X) & 0xF8, ((game.read(OBJ_Y) - 5) & 0xF8) + 5
+    best = {}
+    for cx, cy in ((fx, fy), (fx + 8, fy), (fx, fy + 8), (fx + 8, fy + 8)):   # Link off the grid: either side
+        start = (min(max(cx, x0), x1), min(max(cy, y0), y1))
+        graph, todo = {}, [start]
+        while todo:
+            node = todo.pop()
+            if node in graph:
                 continue
-            game.restore(clean)
-            game.apply_ram({'link_x': node[0], 'link_y': node[1]})
-            game.write(fw.GRID_OFFSET, 0)
-            for _ in range(10):                    # slow ground (0x1c's corridor) takes more than six frames
-                game.press(button, 1)
-                moved = (game.read(OBJ_X) - node[0]) * (dx // 8) + (game.read(OBJ_Y) - node[1]) * (dy // 8)
-                if moved >= 8 or game.read(MODE) != mode0:
-                    break
-            if moved >= 8 and game.read(MODE) == mode0 and game.read(ROOM) == w.room:
-                graph[node][button] = target
-                todo.append(target)
+            graph[node] = {}
+            for button, (dx, dy) in STEP8.items():
+                target = (node[0] + dx, node[1] + dy)
+                if not (x0 <= target[0] <= x1 and y0 <= target[1] <= y1):
+                    continue
+                game.restore(clean)
+                game.apply_ram({'link_x': node[0], 'link_y': node[1]})
+                game.write(fw.GRID_OFFSET, 0)
+                moved = 0
+                for _ in range(10):                    # slow ground (0x1c's corridor) takes more than six frames
+                    game.press(button, 1)
+                    moved = (game.read(OBJ_X) - node[0]) * (dx // 8) + (game.read(OBJ_Y) - node[1]) * (dy // 8)
+                    if moved >= 8 or game.read(MODE) != mode0:
+                        break
+                if moved >= 8 and game.read(MODE) == mode0 and game.read(ROOM) == w.room:
+                    graph[node][button] = target
+                    todo.append(target)
+        if len(graph) > len(best):
+            best = graph
+        if len(best) >= 20:
+            break
+    graph = best
     game.restore(snap)
     if len(graph) >= 4:
         _GRAPHS[key] = graph
@@ -153,15 +163,59 @@ class Fighter(fw.Bot):
             self.never = tuple(never)
         super().__init__(w, targets=())
 
+    OPPOSITE = {'UP': 'DOWN', 'DOWN': 'UP', 'LEFT': 'RIGHT', 'RIGHT': 'LEFT'}
+
     def press(self, buttons='NONE', frames: int = 1):
         for _ in range(frames):
-            h = hp(self.w)
-            near = nearest(self.w)
-            self.w.press(buttons, 1)
+            w = self.w
+            if buttons in self.OPPOSITE and self.ladder_out():
+                along = getattr(self, 'ladder_dir', None)
+                if along and buttons not in (along, self.OPPOSITE[along]):
+                    buttons = self.OPPOSITE[along]               # a laid ladder allows no sideways step: back off
+            elif buttons in self.OPPOSITE:
+                self.ladder_dir = buttons
+            h = hp(w)
+            near = nearest(w)
+            w.press(buttons, 1)
             self.frames += 1
-            if hp(self.w) < h:
-                self.by[near] += h - hp(self.w)
+            if hp(w) < h:
+                self.by[near] += h - hp(w)
             self._track()
+
+    def plan(self, goals):
+        """Round 29's plan; with the ladder held a step that ends facing water or a wall costs 6 more (stopping
+        there lays the ladder ahead, and a laid ladder allows no sideways step), unless it ends on a goal."""
+        start = self.node()
+        if start is None or start in goals or not goals:
+            return None
+        ladder = self.w.r(INV_LADDER) and self.w.level
+        seen, heap = {start: 0}, [(0, start, None)]
+        while heap:
+            cost, node, first = heapq.heappop(heap)
+            if cost > seen.get(node, 1e9):
+                continue
+            if node in goals:
+                return first
+            for button, nxt in self.graph[node].items():
+                c = cost + 1 + (40 if self.danger(nxt) else 0)
+                if ladder and nxt not in goals and button not in self.graph.get(nxt, {}):
+                    c += 6
+                if c < seen.get(nxt, 1e9):
+                    seen[nxt] = c
+                    heapq.heappush(heap, (c, nxt, first or button))
+        return None
+
+    def ladder_out(self) -> bool:
+        """The ladder lies (asm:LadderSlot nonzero)."""
+        return self.w.r(0x64) != 0
+
+    def fight_frame(self):
+        w = self.w
+        if w.mode == PLAY and w.r(fw.LINK_PARALYZED):                # held by a Like-Like: stab it (A still works)
+            self.held = getattr(self, 'held', 0) + 1
+            self.press('A' if self.held % 12 == 1 else 'NONE')
+            return
+        super().fight_frame()
 
     def can_act(self) -> bool:
         w = self.w
@@ -176,7 +230,9 @@ class Fighter(fw.Bot):
                 return False
             if (w.x, w.y) == node:
                 return True
-            if not self.can_act():
+            if w.mode == PLAY and w.r(fw.LINK_PARALYZED):
+                Fighter.fight_frame(self)
+            elif not self.can_act():
                 self.press('NONE')
             elif fight and self.try_stab():
                 pass
@@ -190,12 +246,20 @@ class Fighter(fw.Bot):
                 self.press(step)
         return False
 
+    def harms(self, s: int) -> bool:
+        t = self.prev[s][0]
+        if t == RUPEE_STASH or (t == WALLMASTER and not self.w.r(OBJ_STATE + s)):   # a Wallmaster in its wall
+            return False
+        return super().harms(s)
+
     def is_target(self, s: int) -> bool:
         w = self.w
         t = self.prev[s][0]
-        if not counting(t) or t in self.never:
+        if not counting(t) or t in self.never or t == RUPEE_STASH:
             return False
         if t == MANHANDLA and s == 5:                           # the base cannot die
+            return False
+        if t == WALLMASTER and not w.r(OBJ_STATE + s):          # inside the wall: not drawn, not hit
             return False
         return w.r(OBJ_META + s) == 0 and w.r(OBJ_INVINC + s) < 5
 
@@ -628,8 +692,8 @@ class Runner:
         f = self.fighter()
         for _ in range(limit):
             self.check()
-            if not [s for s in f.prev if counting(f.prev[s][0]) and not (f.prev[s][0] == MANHANDLA and s == 5)]\
-                    and f.frames > 40:
+            if not [s for s in f.prev if counting(f.prev[s][0]) and f.prev[s][0] != RUPEE_STASH
+                    and not (f.prev[s][0] == MANHANDLA and s == 5)] and f.frames > 40:
                 break
             f.fight_frame()
         else:
@@ -678,8 +742,12 @@ class Runner:
         (the key + 1 and the room's item-taken flag, as taking it does; listed in `writes`)."""
         w = self.w
         before = WHAT[what](w)
+        if not self.stage and self.step_start.get(what, before) != before:
+            return                                               # taken on the way (in the fight)
         if point is None:
             ix, iy = w.r(OBJ_X + ROOM_ITEM), w.r(OBJ_Y + ROOM_ITEM)
+            if iy >= 0xF0 and not self.stage:                    # taken on the way (or none): nothing to walk to
+                return
             if self.stage:
                 if what != 'key':
                     raise Failed(f'a carried {what} is not staged')
@@ -829,23 +897,33 @@ class Runner:
             else:
                 self._save(save, snapshot)
 
-    def clip_once(self, direction, tries=4):
-        """`CLIP <direction>` inside a room (a block or ladder clip): one completed macro."""
+    def clip_once(self, direction, spot=None, tries=6):
+        """`CLIP <direction>` inside a room (a block or ladder clip, or the plain screen wrap): one completed
+        macro; knocked off the zone (or not offered), Link goes back to `spot` (default: where he stood) and
+        tries again."""
         w = self.w
         w.game.set_clips(True)
+        spot = spot or (w.x, w.y)
         for _ in range(tries):
             self.check()
             if not w.game.is_allowed(f'CLIP {direction}'):
-                raise Failed(f'CLIP {direction} not offered at {w.where()}')
+                self.press('NONE', 8)
+                self.straight(spot)
+                if not w.game.is_allowed(f'CLIP {direction}'):
+                    continue
             change = w.game.act(f'CLIP {direction}')
             self.done_frames += change.frames
+            self.clip_tries = getattr(self, 'clip_tries', 0) + 1
             if change.health_lost:
                 self.done_by['(during the clip)'] += change.health_lost
             if change.interrupt is None:
                 if self.f is not None:
                     self.f._track()
                 return
-        raise Failed(f'CLIP {direction} interrupted {tries} times at {w.where()}')
+            last = change.interrupt
+            self.press('NONE', 30)                               # out of the hit's invincibility, then again
+            self.straight(spot)
+        raise Failed(f'CLIP {direction} not completed in {tries} tries (last: {locals().get("last")}) at {w.where()}')
 
     def stairs(self, point, save: Path = None):
         self.walk(point)
@@ -932,8 +1010,11 @@ class Runner:
         self.press('NONE', frames)
 
     # ---- a step
+    step_start = {}
+
     def play(self, actions, save_next: Path = None):
         """The step's actions; the last one leaves the room (its pre-entry frame saved to `save_next`)."""
+        self.step_start = {k: f(self.w) for k, f in WHAT.items()}
         for i, action in enumerate(actions):
             kind, args = action[0], action[1:]
             last = i == len(actions) - 1
