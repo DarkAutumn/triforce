@@ -15,10 +15,13 @@ items: {bombs: free, food: true}           # Lee, Nov 11: bombs as a weapon (ene
 clips: {enabled: true, off_share: 0}      # round 26: 7:0x1a's block clip to the stairs; clips only (the owner, Nov 18): no episode with CLIP masked
 curriculum: {enabled: true}             # trajectories/goriya (Go-Explore paths per start state)
 # Round 27 (round26.md §17): Dungeon 2's two rooms had 6 of 15 seed states (40% of the resets) before Dungeon 7 joined
-# and 6 of 54 (11%) after.  A third of the resets start from Dungeon 2's handoffs harvested from a chain
-# (triforce/states/harvested/goriya, not in git: `eval-chain --from 2_7ds_0 --stop-at 0:0x3c --runs 300 --first-seed
-# 5000 --harvest DIR`, its goriya/ files), at the hearts and bombs the chain brings: about 40% again.
-harvested_fraction: 0.33
+# and 6 of 54 (11%) after.  Resets start from handoffs harvested from chains (triforce/states/harvested/goriya, not
+# in git), at the hearts and bombs the chain brings.  Round 30 (round30.md): beside Dungeon 2's 566 (`eval-chain
+# --from 2_7ds_0 --stop-at 0:0x3c --runs 300 --first-seed 5000 --harvest DIR`) Dungeon 7's dear rooms at the hearts
+# runs bring (0x1b, 0x1a from the cellar, 0x19, 0x69, 0x59, 0x38; from `--from 0_0bc_0 --stop-at step:248`) and
+# Dungeon 1's 0x23 and 0x44 at the full route's hearts: Dungeon 2 60% of the harvested states, at 0.65 still about
+# 40% of the resets.
+harvested_fraction: 0.65
 one_room: true
 max_steps: 2000
 warm_start: null
