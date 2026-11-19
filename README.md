@@ -27,19 +27,21 @@ raft, the ladder, the recorder, the red candle, the red ring, the silver arrow).
 
 ## How well it plays
 
-Out of 1,000 runs from the start of the game with the current team (round 26's models, act mode
-`temperature:0.5+relax:16`, the speedrunners' clips allowed; `docs/experiments/round26.md` §16):
+Out of 1,000 runs from the start of the game with the current team (round 27's models, act mode
+`temperature:0.5+relax:16`, the speedrunners' clips allowed; `docs/experiments/round27.md` §14.2):
 
-| Link reaches | Round 26 | Round 25 |
-|---|---:|---:|
-| Dungeon 1 (after Dungeon 2 and the white sword) | 75% | 84% |
-| Dungeon 3 | 65% | 74% |
-| The Dungeon 3 triforce | 50% | 57% |
-| The Dungeon 4 triforce | 44% | 51% |
-| Dungeon 5 | 44% | 51% |
-| The Dungeon 5 triforce | 22% | 20% (the end of round 25's route) |
-| Dungeon 7 | 22% | |
-| The Dungeon 7 triforce (the end of round 26's route) | 6.7% | |
+| Link reaches | Round 27 | Round 26 | Round 25 |
+|---|---:|---:|---:|
+| Dungeon 1 (after Dungeon 2 and the white sword) | 76% | 75% | 84% |
+| Dungeon 3 | 64% | 65% | 74% |
+| The Dungeon 3 triforce | 50% | 50% | 57% |
+| The Dungeon 4 triforce | 44% | 44% | 51% |
+| Dungeon 5 | 44% | 44% | 51% |
+| The Dungeon 5 triforce | 23% | 22% | 20% (the end of round 25's route) |
+| Dungeon 7 | 23% | 22% | |
+| The Dungeon 7 triforce | 6.1% | 6.7% (the end of round 26's route) | |
+| Dungeon 6 | 6.0% | | |
+| The Dungeon 6 triforce (the end of the route) | 1.1% | | |
 
 Since round 26 the route runs on from the Dungeon 5 triforce through the whirlwind, two shops and a pond to Dungeon
 7 and its triforce. Of 1,000 runs started at Dungeon 7's entrance, 40% take its triforce; its six Blue Goriyas in
@@ -52,7 +54,9 @@ owner, Nov 18).
 
 Round 27 runs the route on from the Dungeon 7 triforce to the magic sword and Dungeon 6 (`docs/routes/d6.md` §15):
 of 1,000 runs started at Dungeon 6's entrance, 30% take its triforce, and its two Wizzrobe block rooms (6:0x38 and
-6:0x3a) are what loses most of the rest (`docs/experiments/round27.md` §14).
+6:0x3a) are what loses most of the rest; from the start, 1.1% of runs take all seven pieces. The earlier rows match
+round 26's within noise (the same seeds, paired). With the planner on, 38% of 300 runs from the start reach the
+Dungeon 6 triforce (`docs/experiments/round27.md` §14).
 
 Every round of training is written up in `docs/experiments/` (start with the newest `round*.md`), and
 `docs/experiments/backlog.md` has what's next.
