@@ -25,13 +25,22 @@ per 1000), in order:
   30 of 244); the `d5` segment from full hearts is +3.5 ± 2.0. Suggested (not tested): darknut continued with
   Dungeon 5's handoffs at the chain's hearts (the recipe of decisions 2026-11-19, "One team for the whole route").
   Then 0x64 40, 0x47 28, 0x65 27.
-- [ ] **`d7` (165)**: 7:0x1b's six Goriyas 77, 0x1a 27, 0x19 17.
+- [ ] **`d7` (165)**: 7:0x1b's six Goriyas 77, 0x1a 27, 0x19 17. Round 30 (round30.md, goriya): 0x1b kills the runs
+  that arrive low (below 4 hearts 209 of 353 `d7` visits die, from 6 up 3 of 274); goriya's own Dungeon 7 rooms
+  spend some 6.4 hearts before it against the planner's 1.0. Arm: harvested starts at the chain's hearts and the
+  planner's demonstrations from them (`r30-goriya6-s30..s32`), in selection. wallmaster's 7:0x0d captures (64 of
+  574 `d7` visits, 59 of those runs die crossing Dungeon 7 again) and 19 timeouts: `r30-wall-s30`, in measurement.
+- [ ] **Dungeon 1's and 2's goriya rooms at the full route's hearts**: 1:0x23 15 and 0x44 25 deaths in the full
+  route (3.3 hearts in) against 0 and 1 in the `d1` segment from 5 hearts; 2:0x5e 29 against 9. The segments from
+  full hearts hide them: judge goriya on the full route's milestones too (round30.md).
 - [ ] **Dungeon 3 (140)**: Manhandla 3:0x4d 97.
 - [ ] **Dungeon 2 (121)**: goriya 2:0x1e 41, 0x5e 29; moldorm 0x3e 22.
 - [ ] **Dungeon 1 (92)**: 1:0x44 25, 0x35 15, 0x23 15.
 - [ ] **`d6` (73)**: wizzrobe 6:0x3a 33, 0x38 15.
 - [ ] **After Dungeon 2 (56)**: ow-lynel 0:0x0a 21, ow-zora 0x38 13, ow-tektite 0x1a 13.
-- [ ] **Dungeon 4 (50)**: Gleeok 4:0x13 36.
+- [ ] **Dungeon 4 (50)**: Gleeok 4:0x13 36. Round 30: deaths are the fights entered with 3 hearts or fewer (69 of 289
+  `d4` visits; 4 or more 7 of 704); `hp: [0.5, max]` never trains there. 8:0x3c kills 70 of 319 `d8` visits (5.39
+  hearts in). `r30-gleeok-s30` (harvested 4:0x13 and 8:0x3c entries, the planner's demonstrations) in measurement.
 - [ ] **The hearts carried in**: from the start Dungeon 5 is entered with 7.74 of 10 hearts, Dungeon 9 with 12.25 of
   15; `d8` (24.8%) and `d9` (31.0%) at full hearts are the last factors, and every heart kept earlier is one in them
   (round29.md §18.3 for Dungeon 9's rooms).

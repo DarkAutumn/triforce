@@ -78,3 +78,18 @@ hearts anew; the copy keeps each state's own), the promoted run under `temperatu
 0.05`, clips `off_share: 0` (as before). wallmaster `r30-wall-s30` from `r76-wall-1` and boss-gleeok
 `r30-gleeok-s30` from `r78t4-gleeok` (with its rule's `gleeok.npz` beside), one seed each, 244 iterations, the same
 arguments (`scripts/train_round.py --chain-runs 0 --parallel 8 --eval-parallel 3`).
+
+Single rooms (the canonical `eval.json`, 100 episodes a state, clips on): wallmaster `r30-wall-s30` 95.0% of 600
+(7:0x0d 270 of 300: 17 captured, 13 `no-damage`; `r76-wall-1` 259: 26, 15; 1:0x45 300 of 300 for both);
+boss-gleeok `r30-gleeok-s30` 100.0%, −0.47 hearts (`r78t4-gleeok` 99.7%, −0.53). goriya's three runs trained as
+the arm intends (harvested starts drawn on 65% of the resets, 956 states).
+
+### Status: chosen by nothing yet
+
+The choice is still in the job line at this writing: goriya's three selections on `d7` (`select-checkpoint goriya
+RUN --segment d7 --runs 1000 --first-seed 2000 --confirm 1000 --confirm-first-seed 3000 --confirm-top 1 --only
+it005449,last`, the promoted run measured once, in `-s30`'s), then Dungeon 2 and Dungeon 1 (1000 runs, seeds 0-999,
+paired with `r29land-1k`), the bar the product of Dungeon 2 and `d7` against 91.6% × 46.6% beyond noise. The
+secondaries are judged on one pre-chosen candidate each (the last checkpoint, no choice among checkpoints, so no
+selection bias), paired with `r29land-1k` on seeds 0-999: wallmaster on `d7` and `d1`, boss-gleeok on `d4` and
+`d8`. **Nothing is promoted yet.**
