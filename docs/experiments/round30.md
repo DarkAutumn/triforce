@@ -124,8 +124,12 @@ seeds):
 | `r77-goriya5-s80` (promoted) | 91.6% | | 99.8% | | 43.1% (its record 91.6 × 46.6 = 42.7%) |
 
 **The choice: `r30-goriya6-s31`, its last checkpoint** (the run's `ckpt.pt`): the highest product, `d7` +9.0 ± 2.1
-on seeds not used to choose it, Dungeon 2 and Dungeon 1 unchanged. Its canonical evaluation and Dungeon 2 on fresh
-seeds 1000-1999 (beside the promoted run) were queued before the promotion.
+on seeds not used to choose it, Dungeon 2 and Dungeon 1 unchanged. On fresh seeds 1000-1999 Dungeon 2 is 91.9%
+against the promoted run's 90.6% (+1.3 ± 1.2). Its canonical evaluation (clips on, its act mode): 97.8% of 5400
+episodes, −0.34 hearts (`r77-goriya5-s80` 97.6%, −0.34); by room within the 300 episodes' noise (2:0x1e 91.7%
+against 93.7%, 2:0x5e 91.7% against 88.3%, 7:0x1b 93.3% against 94.7%; the chains above decide). **Promoted** in
+this branch's checkout: `triforce promote goriya r30-goriya6-s31 --act temperature:0.5+relax:16`. Not measured
+yet: the full route and `post-d7` with it (it plays no other segment).
 
 **The secondaries, paired with `r29land-1k` on seeds 0-999** (the last checkpoints, clips on, models alone; arrival
 at the segment's end step):
