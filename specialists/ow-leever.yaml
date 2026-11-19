@@ -1,5 +1,5 @@
 name: ow-leever
-rooms: ['(0, 0x48)', '(0, 0x75)', '(0, 0x0b)', '(0, 0x34)', '(0, 0x34, cave)']
+rooms: ['(0, 0x48)', '(0, 0x75)', '(0, 0x0b)', '(0, 0x34)', '(0, 0x34, cave)', '(0, 0x29)', '(0, 0x2a)', '(0, 0x2b)']
 start_states: ['0_48*_[0-9]', '0_75*_[0-9]', '0_0b*_[0-9]', '0_34*_[0-9]']
 success: [exit-correct, enter-room:5:0x76]
 reward_profile: default

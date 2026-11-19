@@ -386,11 +386,13 @@ const STEP_ENTRIES: [&str; 7] = ["start", "N", "S", "E", "W", "cave", RECORDER];
 /// `maze` ([`MAZE_EXIT`]): a maze room left by its sequence, into the maze's destination; `recorder` ([`RECORDER`]):
 /// carried off by the whirlwind; `end` ([`END_EXIT`]): the game ends in this room.
 const STEP_EXITS: [&str; 10] = ["N", "S", "E", "W", "cave", "triforce", "terminal", MAZE_EXIT, RECORDER, END_EXIT];
-const WAYPOINTS: [&str; 12] = [
-    "heart", "rupees", "bow", "raft", "ladder", "recorder", "arrows", "food", "candle", "sword", "ring", "silver-arrow",
+const WAYPOINTS: [&str; 13] = [
+    "heart", "rupees", "bow", "raft", "ladder", "recorder", "arrows", "food", "blue-candle", "candle", "sword", "ring",
+    "silver-arrow",
 ];
-/// The ware a purchase waypoint (`waypoint: arrows` / `food`) buys: the game.yaml treasure of its shop's cave room.
-pub const PURCHASES: [(&str, &str); 2] = [("arrows", "wood-arrow"), ("food", "food")];
+/// The ware a purchase waypoint (`waypoint: arrows` / `food` / `blue-candle`) buys: the game.yaml treasure of its
+/// shop's cave room.
+pub const PURCHASES: [(&str, &str); 3] = [("arrows", "wood-arrow"), ("food", "food"), ("blue-candle", "blue-candle")];
 /// A step's `bombs:` ([`RouteStep::bombs`], round 28): the bomb modes of a family's `items:` (`env::config::BombUse`).
 pub const STEP_BOMBS: [&str; 4] = ["never", "tenth", "required", "free"];
 const DIRECTIONS: [&str; 4] = ["N", "S", "E", "W"];

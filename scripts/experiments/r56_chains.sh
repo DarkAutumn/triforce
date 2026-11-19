@@ -34,6 +34,10 @@
 # (phase X: `ROUTE=d3first`; default the main route, `triforce/registry.py` MAIN_ROUTE) with its own segment table
 # (`triforce/eval_batch.py` ROUTE_SEGMENTS) and its promoted runs (a family's `promoted.<route>` over `promoted`);
 # SEGMENTS="NAME:START ..." replaces the table (a scouting route, `{extends: d2first, ...}`, names its own).
+# d3first's table (`eval_batch.D3FIRST_SEGMENTS`, its states in its namespace): full, d3 3_7cs_0, post-d3 0_74c_0,
+# d4 4_71s_0, post-d4 0_45c_0, d1 1_73s_0, post-d1 0_37c_0 (out of Dungeon 1), d5 5_76s_0, post-d5 0_0bc_0, d2
+# 2_7ds_0, post-d2 0_3cc_0, then d2first's from d7 on; each arrives at the next one's start room, a dungeon's exit
+# after its triforce room: `ROUTE=d3first TAG=r33-d3 scripts/experiments/r56_chains.sh`.
 #
 #   [ACT=model] TAG=r73-1k RUNS=1000 scripts/experiments/r56_chains.sh [run|report]
 #

@@ -135,9 +135,27 @@ SCOPES = (
     Scope('to-d9', 'segment', 'To the end: 0:0x6d → the end of the game', 'post-d8', '0_6dc_0', None),
     Scope('d9', 'dungeon', 'Dungeon 9: 9:0x76 → the end of the game', 'd9', '9_76s_0', None),
 )
+# d3first (phase X; docs/routes/d3first.md): its segments (`eval_batch.ROUTE_SEGMENTS['d3first']`) cut at each
+# dungeon's exit in its own order, Dungeons 3, 4, 1, 5, 2, 7, 6, 8, 9; the legs after Dungeon 7 are d2first's.
+D3FIRST_SCOPES = (
+    Scope('full', 'full', 'Full run: start → the end of the game', 'full', 'start', None),
+    Scope('to-d3', 'segment', 'To D3: start → out of Dungeon 3 (0:0x74)', 'full', 'start', '0_74c_0'),
+    Scope('to-d4', 'segment', 'To D4: 0:0x74 → out of Dungeon 4 (0:0x45)', 'post-d3', '0_74c_0', '0_45c_0'),
+    Scope('to-d1', 'segment', 'To D1: 0:0x45 → out of Dungeon 1 (0:0x37)', 'post-d4', '0_45c_0', '0_37c_0'),
+    Scope('to-d5', 'segment', 'To D5: 0:0x37 → out of Dungeon 5 (0:0x0b)', 'post-d1', '0_37c_0', '0_0bc_0'),
+    Scope('to-d2', 'segment', 'To D2: 0:0x0b → out of Dungeon 2 (0:0x3c)', 'post-d5', '0_0bc_0', '0_3cc_0'),
+    Scope('to-d7', 'segment', 'To D7: 0:0x3c → out of Dungeon 7 (0:0x42)', 'post-d2', '0_3cc_0', '0_42c_0'),
+    Scope('d3', 'dungeon', 'Dungeon 3: 3:0x7c → out (0:0x74)', 'd3', '3_7cs_0', '0_74c_0'),
+    Scope('d4', 'dungeon', 'Dungeon 4: 4:0x71 → out (0:0x45)', 'd4', '4_71s_0', '0_45c_0'),
+    Scope('d1', 'dungeon', 'Dungeon 1: 1:0x73 → out (0:0x37)', 'd1', '1_73s_0', '0_37c_0'),
+    Scope('d5', 'dungeon', 'Dungeon 5: 5:0x76 → out (0:0x0b)', 'd5', '5_76s_0', '0_0bc_0'),
+    Scope('d2', 'dungeon', 'Dungeon 2: 2:0x7d → out (0:0x3c)', 'd2', '2_7ds_0', '0_3cc_0'),
+    Scope('d7', 'dungeon', 'Dungeon 7: 7:0x79 → out (0:0x42)', 'd7', '7_79s_0', '0_42c_0'),
+    *(scope for scope in SCOPES if scope.name in ('to-d6', 'd6', 'to-d8', 'd8', 'to-d9', 'd9')),
+)
 # Phase X: each route's scopes (start and cut states by bare name: a route with a start-state namespace has them in
-# it).  d3first's comes with its steps, beside its segment table (`eval_batch.ROUTE_SEGMENTS`).
-ROUTE_SCOPES = {'d2first': SCOPES}
+# it), beside its segment table (`eval_batch.ROUTE_SEGMENTS`).
+ROUTE_SCOPES = {'d2first': SCOPES, 'd3first': D3FIRST_SCOPES}
 ROOM_SCOPE = 'room'
 ROOM_LABEL = 'Room only: isolated single-room evaluations'
 

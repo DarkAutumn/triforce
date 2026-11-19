@@ -6,7 +6,7 @@ reward_profile: default
 reward: {pbrs: true, heal_targets: true}   # round 25: dropped hearts and fairies are targets while hurt
 obs: {objective: true, target: true}       # schema 2 pointer; no item targets beyond the hearts (round 10 §10, r42)
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chain arrives with partial hearts (round 5)
-items: {bombs: required}                   # round 22: 0x67's rock wall (its requires_bombs room); else the 10th kill
+items: {bombs: required, recorder: true}   # round 22: 0x67's rock wall (its requires_bombs room); else the 10th kill; phase X: the recorder where the route plays it (d3first's whirlwind out of Level 2 at 0x3c, facing E)
 clips: true                               # round 21: the screen wrap (W/E)
 one_room: true                          # round 5: per-room episodes (d1-melee trained 2.5-4x faster with them)
 max_steps: 2000

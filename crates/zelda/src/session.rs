@@ -122,6 +122,10 @@ pub struct Session<N: Nes> {
     /// rule (`crate::objectives::doorways_kept_out`: game.yaml `keep_out` doorways the objective does not leave
     /// through); the executor ends a MOVE there too (`Executor::vetoed_doorways`).  The env sets it every step.
     vetoed_doorways: u8,
+    /// MOVE into a secret Armos ([`GameView::is_secret_armos_direction`]) offered (phase X): the route's rule
+    /// (`crate::objectives::GameCompletion::secret_armos`: only while its step leaves by the stairs the Armos hides);
+    /// true: wherever the game state allows it.  The env sets it every step.
+    secret_armos: bool,
     /// The skip a CLIP of this room left cut short ([`OpenClip`]), until a MOVE finishes it (`Change::
     /// clip_finished_by_move`), Link leaves the room or another CLIP starts.
     open_clip: Option<OpenClip>,
@@ -153,6 +157,7 @@ impl<N: Nes> Session<N> {
             arrow_facings: None,
             candle_facings: None,
             vetoed_doorways: 0,
+            secret_armos: true,
             open_clip: None,
             look_ahead: LookAhead::All,
             stash: None,
@@ -338,6 +343,16 @@ impl<N: Nes> Session<N> {
         }
         self.vetoed_doorways = doorways;
         self.executor.vetoed_doorways = doorways;
+        self.refresh_mask();
+    }
+
+    /// Whether MOVE into a secret Armos is offered (the `secret_armos` field's); the mask is recomputed when it
+    /// changes.
+    pub fn set_secret_armos(&mut self, offered: bool) {
+        if self.secret_armos == offered {
+            return;
+        }
+        self.secret_armos = offered;
         self.refresh_mask();
     }
 
@@ -628,7 +643,8 @@ impl<N: Nes> Session<N> {
             }
         }
         for d in crate::actions::CARDINALS {
-            if self.vetoed_doorways & d.value() != 0 && state.at_doorway_mouth(d) {
+            let armos = !self.secret_armos && state.is_secret_armos_direction(d);
+            if armos || (self.vetoed_doorways & d.value() != 0 && state.at_doorway_mouth(d)) {
                 mask.disallow(ActionKind::Move, d);
             }
         }

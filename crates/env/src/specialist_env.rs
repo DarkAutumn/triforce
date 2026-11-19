@@ -831,6 +831,9 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         // Round 28: CANDLE's facings by the route (on the overworld only at the tree a step burns).
         let candle = self.objectives.as_ref().and_then(|gc| gc.candle_facings(self.session.state()));
         self.session.set_candle_facings(candle);
+        // Phase X: MOVE into a secret Armos only where the step leaves by its stairs (d2first crosses 0x3d).
+        let armos = self.objectives.as_ref().is_none_or(|gc| gc.secret_armos(self.session.state()));
+        self.session.set_secret_armos(armos);
         let doorways = zelda::objectives::doorways_kept_out(&self.data.map, self.session.state(), objective);
         self.session.set_vetoed_doorways(doorways);
         self.session.set_clips(self.config.clips.enabled);

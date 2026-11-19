@@ -21,7 +21,9 @@ fn a_route_names_its_states_namespace_and_extensions_keep_it() {
     assert_eq!(map.namespace("r32scout"), Some("r32test"), "inherited through extends");
     assert_eq!(map.namespace_routes(Some("r32test")), ["r32test", "r32scout"]);
     assert_eq!(map.namespace_routes(None), ["d2first", "clips-gauntlet"]);
-    assert!(GameMap::builtin().namespaces.is_empty(), "the shipped routes.yaml has no namespace yet");
+    let shipped = GameMap::builtin();
+    assert_eq!(shipped.namespaces.len(), 1, "the shipped routes.yaml: d3first's namespace");
+    assert_eq!((shipped.namespace("d3first"), shipped.namespace("d2first")), (Some("d3first"), None));
 }
 
 #[test]

@@ -6,7 +6,9 @@
 //! top-up is *granted* (outstanding).  The needs:
 //! - bombs: 1 in a game.yaml `requires_bombs` room (Dodongo, the 0x2c rock wall), but none once what the room is
 //!   bombed for is open (round 24: an overworld rock wall's secret, every bomb wall of a dungeon room: 0x2c on the
-//!   leg's plain mountain way, 5:0x66 and 5:0x65 on Dungeon 5's way back; [`bomb_need`]);
+//!   leg's plain mountain way, 5:0x66 and 5:0x65 on Dungeon 5's way back; [`bomb_need`]), and (phase X) none in an
+//!   overworld rock-wall room whose route step leaves by an edge (`d2first` crosses 0:0x2d, whose wall `d3first`
+//!   bombs: [`needs`]);
 //! - keys: 1 in a dungeon room whose route step leaves through a door that is still locked (the game's door tiles,
 //!   not being opened), unless Link has the magic key or the room's treasure is a key he hasn't taken yet (that key
 //!   comes first: the cheated one only appears once it is taken, and spent, bringing him back to 0);
@@ -134,8 +136,13 @@ pub fn needs(
     prev: Option<MapLocation>,
     state: &GameView,
 ) -> ItemCounts<i32> {
+    // Phase X: an overworld rock wall is bombed where the route's step leaves by the cave behind it; a step crossing
+    // the room (d2first's through 0:0x2d, whose wall d3first bombs) gets no bomb for it.
+    let passing = state.level() == 0
+        && map.get(state.full_location()).is_some_and(|r| r.bomb_secret.is_some())
+        && completion.route_step_exit(prev, state).is_some_and(|exit| exit != "cave");
     ItemCounts {
-        bombs: bomb_need(map, state),
+        bombs: if passing { 0 } else { bomb_need(map, state) },
         keys: key_need(map, completion, prev, state),
         rupees: rupee_need(map, state),
     }

@@ -30,8 +30,10 @@ def test_the_route_and_families():
     # the leg to Dungeon 7 and Dungeon 7, round 26: scouted as the route d7, merged Nov 16; the magic sword and
     # Dungeon 6, round 27: scouted as the route d6, merged Nov 18; the leg to Dungeon 8 and Dungeon 8, round 28, and the
     # leg to Dungeon 9, Dungeon 9, Ganon and Zelda, round 29: scouted as the routes d8 and d9, merged at 1.9.0.0);
-    # clips-gauntlet is round 21's experiment route (two targets per room and entry, drawn by a specialist naming it).
-    assert native.routes() == [native.DEFAULT_ROUTE, 'clips-gauntlet'] and native.DEFAULT_ROUTE == 'd2first'
+    # d3first (phase X) beside it, its own start states; clips-gauntlet is round 21's experiment route (two targets
+    # per room and entry, drawn by a specialist naming it).
+    assert native.routes() == [native.DEFAULT_ROUTE, 'd3first', 'clips-gauntlet'] and native.DEFAULT_ROUTE == 'd2first'
+    assert native.route_namespace('d3first') == 'd3first' and native.route_namespace('d2first') is None
     assert sorted(native.families()) == list_specialists()
 
 
@@ -41,6 +43,69 @@ def test_the_route_runs_from_the_start_to_the_end_of_the_game():
     first, last = steps[0], steps[-1]
     assert (first['level'], first['room'], first['entry'], first['specialist']) == (0, 0x77, 'start', 'ow-start')
     assert (last['level'], last['room'], last['exit']) == (9, 0x32, 'end') and len(steps) == 358
+
+
+def test_d3first_runs_from_the_start_to_the_end_of_the_game():
+    """Phase X: d3first's steps (Dungeons 3, 4, 1, 5, 2, 7, 6, 8, 9), its heart containers at each dungeon's entrance
+    as the audit counts them (``entry_states.RouteIndex``: 3, then one per heart-container room before it), its
+    purchases and secrets, its four whirlwinds."""
+    from triforce.entry_states import RouteIndex                 # pylint: disable=import-outside-toplevel
+    steps = native.route_steps('d3first')
+    first, last = steps[0], steps[-1]
+    assert (first['level'], first['room'], first['entry'], last['level'], last['room'], last['exit']) == (
+        0, 0x77, 'start', 9, 0x32, 'end') and len(steps) == 308
+    assert [s['level'] for s in steps if s['exit'] == 'triforce'] == [3, 4, 1, 5, 2, 7, 6, 8]
+    index = RouteIndex('d3first')
+    entrances = {}
+    for step in steps:
+        entrances.setdefault(step['level'], step['index'])
+    assert {level: index.hearts(i) for level, i in entrances.items() if level} == {
+        3: 3, 4: 4, 1: 5, 5: 7, 2: 10, 7: 11, 6: 12, 8: 13, 9: 15}
+    assert index.max_hearts == 15
+    assert [(s['room'], s['waypoint']) for s in steps if s['waypoint'] and s['level'] == 0] == [
+        (0x2c, 'heart'), (0x2d, 'rupees'), (0x0c, 'blue-candle'), (0x62, 'rupees'), (0x2f, 'heart'),
+        (0x3d, 'rupees'), (0x44, 'arrows'), (0x34, 'food'), (0x21, 'sword'), (0x47, 'heart')]
+    assert [(s['room'], steps[s['index'] + 1]['room']) for s in steps if s['exit'] == 'recorder'] == [
+        (0x0b, 0x74), (0x3c, 0x45), (0x22, 0x3c), (0x6d, 0x37)]
+    assert [(s['level'], s['room'], s['bomb_reserve']) for s in steps[:149] if s['bomb_reserve'] is not None] == [
+        (3, 0x7c, 6), (3, 0x5b, 0), (3, 0x5c, 6), (3, 0x4d, 0), (3, 0x3d, 6), (4, 0x71, 2), (0, 0x45, 8),
+        (0, 0x37, 8), (5, 0x76, 8), (5, 0x05, 0), (5, 0x05, 8), (5, 0x24, 0), (0, 0x3c, 1)]
+
+
+def test_rooms_visited_more_than_once_have_later_visit_names():
+    """Phase X: a room the route enters from the same side again has its later visit's state name (``_v2``), on each
+    route; d3first's are in its namespace."""
+    from triforce.entry_states import route_steps                # pylint: disable=import-outside-toplevel
+    later = {route: sorted({name for step in route_steps(route) if '_v' in (name := step.filename(0)[:-8])})
+             for route in ('d2first', 'd3first')}
+    assert later['d2first'] == [
+        '0_1be_v2', '0_1cs_v2', '0_2ce_v2', '0_2ds_v2', '0_38w_v2', '0_48n_v2', '0_4cn_v2', '0_4dw_v2', '0_50e_v2',
+        '0_51e_v2', '0_52e_v2', '0_53e_v2', '0_54e_v2', '0_55n_v2', '0_59w_v2', '0_5aw_v2', '0_5bw_v2', '0_5cw_v2',
+        '0_5dw_v2', '0_64e_v2', '0_6dn_v2', '5_07cave_v2', '9_75cave_v2']
+    assert later['d3first'] == [
+        'd3first_0_28s_v2', 'd3first_0_38s_v2', 'd3first_0_38w_v2', 'd3first_0_48w_v2', 'd3first_0_50e_v2',
+        'd3first_0_51e_v2', 'd3first_0_55n_v2', 'd3first_0_63s_v2', 'd3first_0_73e_v2', 'd3first_5_07cave_v2',
+        'd3first_9_75cave_v2']
+
+
+def test_d3first_segments_and_scopes_start_and_cut_at_its_steps():
+    """Phase X: d3first's chain segments (``eval_batch.ROUTE_SEGMENTS``) and room-stats scopes (``room_stats.
+    ROUTE_SCOPES``) start and are cut at states naming its steps, in its order; each segment's arrival is the next
+    one's start room."""
+    from triforce import eval_batch, room_stats                  # pylint: disable=import-outside-toplevel
+    plan = native.route_steps('d3first')
+    table = eval_batch.ROUTE_SEGMENTS['d3first']
+    segments = [item.split(':') for item in table.segments.split()]
+    starts = [room_stats.state_step(plan, start) for _, start in segments]
+    assert starts == sorted(starts) and [name for name, _ in segments] == [
+        'full', 'd3', 'post-d3', 'd4', 'post-d4', 'd1', 'post-d1', 'd5', 'post-d5', 'd2', 'post-d2', 'd7', 'post-d7',
+        'd6', 'post-d6', 'd8', 'post-d8', 'd9']
+    for (name, _), (_, following) in zip(segments[1:], segments[2:]):
+        step = plan[room_stats.state_step(plan, following)]
+        assert table.targets[name].split(',')[-1] == f"{step['level']}:0x{step['room']:02x}", name
+    for scope in room_stats.ROUTE_SCOPES['d3first']:
+        start = room_stats.state_step(plan, scope.start)
+        assert scope.cut is None or room_stats.state_step(plan, scope.cut) > start, scope.name
 
 
 def test_the_magic_sword_and_dungeon_6_follow_the_d7_triforce():
@@ -135,10 +200,11 @@ def test_dungeon_9_follows_the_d8_triforce_to_the_end_of_the_game():
 
 def test_every_route_room_is_in_its_family():
     families = native.families()
-    for step in native.route_steps('d2first'):
-        room = (step['level'], step['room'], step['in_cave'])
-        assert room in [tuple(r) for r in families[step['specialist']]], step
-        assert native.specialist_for(room) == step['specialist']
+    for route in ('d2first', 'd3first'):
+        for step in native.route_steps(route):
+            room = (step['level'], step['room'], step['in_cave'])
+            assert room in [tuple(r) for r in families[step['specialist']]], step
+            assert native.specialist_for(room) == step['specialist']
 
 
 def test_specialist_tags():
@@ -148,8 +214,14 @@ def test_specialist_tags():
     assert native.specialist_for((0, 0x00)) is None
     assert native.specialist_for((0, 0x0c)) == 'ow-tektite'      # the leg (round 24)
     assert native.specialist_for((0, 0x2c)) == native.specialist_for((0, 0x2c, True)) == 'ow-tektite'
-    for room in [(0, 0x29), (0, 0x39), (0, 0x49), (0, 0x6a), (2, 0x6d), (3, 0x4a)]:     # off the route, untagged
+    for room in [(0, 0x39), (0, 0x49), (0, 0x6a), (2, 0x6d)]:     # off both routes, untagged
         assert native.specialist_for(room) is None, room
+    # Phase X: d3first's rooms off d2first (d3first-walks-a.md §9, d3first-walks-b.md §8).
+    assert [native.specialist_for(room) for room in [(0, 0x29), (0, 0x2a), (0, 0x2b), (0, 0x46), (3, 0x4a),
+                                                      (0, 0x62), (0, 0x62, True), (0, 0x3d, True), (0, 0x2d, True),
+                                                      (0, 0x0c, True)]] == [
+        'ow-leever', 'ow-leever', 'ow-leever', 'ow-zora', 'stalfos-keese-gel', 'ow-moblin', 'ow-moblin', 'ow-moblin',
+        'ow-zora', 'ow-tektite']
     d7 = {(7, room, False) for room in (0x79, 0x69, 0x59, 0x49, 0x38, 0x28, 0x18, 0x19, 0x1a, 0x1b, 0x29, 0x2b)}
     assert {tuple(r) for r in native.families()['goriya']} == {(1, 0x44, False), (1, 0x23, False),
                                                                 (2, 0x5e, False), (2, 0x1e, False)} | d7
