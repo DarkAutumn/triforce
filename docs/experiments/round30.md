@@ -55,5 +55,19 @@ path and five more (`OUT 5 --golden ... --first-seed 100000`; every one ended th
 | wall (s) | | 28 | 66 | 67 | 63 | 58 | 47 |
 
 The five later paths ran while the machine's load average rose from 5 to 65 (other agents' chains), hence their
-wall times. The counts follow the segments' single-run rates (`d8` 24.8%, `d9` 31.0%: a winner every 4-5
-runs on average, the hardest segments 11-26 runs here); the default 320 attempts a segment are far from binding.
+wall times. The last two segments take the most runs (4-17 and 5-26): the segment chains from full hearts (`d8`
+24.8%, `d9` 31.0%) would give a winner every 3-4 runs; the race enters them with the hearts its earlier winners
+kept. The default 320 attempts a segment are far from binding.
+
+### The honest planner, one complete run from power on
+
+```
+TRIFORCE_MODELS_DIR=$PWD/models nice -n 10 .venv/bin/python zelda-headless.py OUT 1 --wins-only --max-runs 40 \
+    --power-on --clips on --act temperature:0.5+relax:16+plan:16:1 --parallel 8 --first-seed 0
+```
+
+A plain run does it (no race): of the first 8 runs to finish (8 games from seed 0) 7 died and seed 3 ended the
+game, 5 min 40 s of wall time (load average 30-35). `00000003-win.tfreplay`: 53,548 bytes, 149,596 frames, `tf
+replay verify` ok (30 edits, 1 state), source `power-on LINK 3550` (control from frame 4,214), act
+`temperature:0.5+relax:16+plan:16:1 (every model, 34)`, 8 cheated bombs (no key, no rupee), "the game ended in
+(level 9, room 0x32)".
