@@ -1496,5 +1496,12 @@ The owner's decision stands: no potions, no CONTINUE, a run is one life. The lev
 
 **Not landed.** The stretch's team lands after Dungeons 6 and 8: wizzrobe `r79c-wj-s85` was judged on `d6`, but
 ow-moblin, ow-zora, ow-leever, ow-lynel, ow-boulder, stalfos-keese-gel, like-like, zol and equipment-room differ
-from the Dungeon 6 or Dungeon 8 lane's promoted runs, and those lanes have not played this team's.
+from the Dungeon 6 or Dungeon 8 lane's promoted runs. This checkout's `d6` chains played its own runs of the
+families Dungeon 6 plays (`r80-wplan-s78` with them: 316 of 1000, the Dungeon 6 lane's own chain 31.5%, not
+paired); no `d8` chain has played them.
+
+**The suites** at the end of the round: `cargo test --release --workspace --features zelda/zcore` 1023 passed, 0
+failed; pytest 826 passed, 9 skipped, 1 failed and fixed: `tests/test_eval_batch.py`'s list of the entry points that
+begin a job lacked `scripts/experiments/r27_plan_demos.py` (picked from the Dungeon 6 lane without its test line;
+that lane lists it), 26 of 26 after.
 
