@@ -1092,7 +1092,10 @@ round 25 on the same seeds). The product is Dungeon 2 times the confirmed `d7`; 
 
 | goriya | `d7` screen | `d7` confirm | Dungeon 2 | vs `s78` | vs round 25 | 2:0x5e / 2:0x1e deaths | product |
 |---|---:|---:|---:|---:|---:|---|---:|
-| **`r77-goriya5-s81` last** | 43.6% | **47.3%** | **90.4%** | +8.9 ± 1.5 | +2.2 ± 1.3 | 16 / 42 of 951 | **42.8%** |
+| **`r77-goriya5-s80` last** | 46.5% | **47.1%** | **91.6%** | +10.1 ± 1.5 | +3.4 ± 1.3 | | **43.1%** |
+| `r77-goriya5-s80` it004991 | 46.3% | 46.9% | 90.4% | +8.9 ± 1.5 | +2.2 ± 1.3 | | 42.4% |
+| `r77-goriya5-s80` it004961 | 47.1% | 43.5% | 91.2% | +9.7 ± 1.5 | +3.0 ± 1.3 | | 39.7% |
+| `r77-goriya5-s81` last | 43.6% | 47.3% | 90.4% | +8.9 ± 1.5 | +2.2 ± 1.3 | 16 / 42 of 951 | 42.8% |
 | `r77-goriya5-s81` it004931 | 45.1% | 46.3% | 89.4% | +7.9 ± 1.6 | +1.2 ± 1.3 | 18 / 31 of 941 | 41.4% |
 | `r77-goriya5-s81` it004661 | 48.1% | 45.6% | 84.6% | +3.1 ± 1.7 | −3.6 ± 1.5 | | 38.6% |
 | `r77-goriya5-s81` it004631 | 44.3% | 44.2% | 83.5% | +2.0 ± 1.6 | −4.7 ± 1.5 | | 36.9% |
@@ -1101,17 +1104,17 @@ round 25 on the same seeds). The product is Dungeon 2 times the confirmed `d7`; 
 | `r77-goriya5-s79` it004721 | 45.4% | 41.0% | 85.9% | +4.4 ± 1.6 | −2.3 ± 1.5 | | 35.2% |
 | `r76-goriya4-s78` (promoted) | 38.8% | 37.6% | 81.5% | | −6.7 ± 1.6 | 40 / 84 of 911 | 30.6% |
 
-The `d7` confirmations against `s78` on the same seeds: `s81` last +9.7 ± 2.1, `s79` last +5.3 ± 2.2. **The arm
-works on both segments:** Dungeon 2 is back at round 25's rate or above in both finished seeds, and Dungeon 7 rose
-rather than fell (the harvested Dungeon 2 starts take a third of the resets, yet `d7` gained 5-10 points; the
-off_share 0 clips and 488 more iterations are the other changes). The leader, `s81` last, on seeds not used to
-choose it: Dungeon 2 on 1000-1999 **90.1%** against `s78`'s 82.7 (+7.4 ± 1.5), Dungeon 1 (`--from 1_73s_0
---stop-at 0:0x37`, seeds 0-999) 99.1% against 99.0 (+0.1 ± 0.4). Product on fresh seeds 90.1 × 47.3 = 42.6%
-against `s78`'s 82.7 × 37.6 = 31.1%.
+The `d7` confirmations against `s78` on the same seeds: `s80` last +9.5 ± 2.1, `s81` last +9.7 ± 2.1, `s79` last
+5.3 ± 2.2. **The arm works on both segments:** Dungeon 2 is back at round 25's rate or above in all three seeds,
+and Dungeon 7 rose rather than fell (the harvested Dungeon 2 starts take a third of the resets, yet `d7` gained 5-10
+points; the off_share 0 clips and 488 more iterations are the other changes).
 
-**Not yet promoted.** The third seed's selection (`r77-goriya5-s80`) still waited in the machine's line when this
-was written; a goriya run is not promoted while a goriya selection waits. What remains: `s80`'s screen and its
-Dungeon 2 batch, the choice by the product (`s81` last unless `s80` beats 42.8%), `select-checkpoint ...
---report-only --apply`, the canonical evaluation (clips on), `triforce promote goriya <run> --act
-temperature:0.5+relax:16`, the chains `d2`, `d1`, `d7` and the full route to the D7 triforce (1000 runs each)
-against `r76-1k`.
+**The choice: `r77-goriya5-s80`, its last checkpoint** (the highest product, 43.1%; `s81` last at 42.8% is the same
+within noise). On seeds not used to choose it: Dungeon 2 on 1000-1999 **90.6%** against `s78`'s 82.7 (+7.9 ± 1.5;
+`s81` last 90.1), Dungeon 1 (`--from 1_73s_0 --stop-at 0:0x37`, seeds 0-999) 99.6% against 99.0 (+0.6 ± 0.3), `d7`
+47.1% on 3000-3999 (+9.5 ± 2.1). Product on fresh seeds 90.6 × 47.1 = 42.7% against `s78`'s 82.7 × 37.6 = 31.1%
+and its record 32.6%.
+
+**Not yet promoted.** What remains: the canonical evaluation of `r77-goriya5-s80` (clips on; its `ckpt.pt` is
+already the last checkpoint), `triforce promote goriya r77-goriya5-s80 --act temperature:0.5+relax:16`, the chains
+`d2`, `d1`, `d7` and the full route to the D7 triforce (1000 runs each) against `r76-1k`.

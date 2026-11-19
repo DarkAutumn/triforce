@@ -27,10 +27,10 @@ round26.md §7-16. Dungeon 7 landed at 40.0% from its entrance (1.6.0.0, §16); 
   loss came with goriya's Dungeon 7 continuations (`r76-goriya2` to `-4`); no single paired check showed it
   beyond noise (`s78` −2.1 ± 1.7 against `r76-goriya3`). **Cause and fix (round26.md §17):** Dungeon 2's rooms
   fell from 40% to 11% of goriya's resets; `harvested_fraction: 0.33` with Dungeon 2's chain handoffs gives it back.
-  `r77-goriya5-s81` (last): Dungeon 2 90.1% on fresh seeds (`s78` 82.7, +7.4 ± 1.5), `d7` 47.3% confirmed (37.6 on
-  the same seeds, +9.7 ± 2.1), Dungeon 1 99.1 (+0.1 ± 0.4). Left: the third seed's (`s80`) selection, then apply,
-  evaluate, promote, chains `d2`, `d1`, `d7` and the full route. A per-room reset weight in the yaml would do this
-  without harvested states outside git.
+  `r77-goriya5-s80` (last; three seeds, all at or above round 25 on Dungeon 2): Dungeon 2 90.6% on fresh seeds
+  (`s78` 82.7, +7.9 ± 1.5), `d7` 47.1% confirmed (37.6 on the same seeds, +9.5 ± 2.1), Dungeon 1 99.6 (+0.6 ± 0.3).
+  Left: its canonical evaluation, the promotion, chains `d2`, `d1`, `d7` and the full route. A per-room reset weight
+  in the yaml would do this without harvested states outside git.
 - [ ] **darknut under the bomb rule** (round26.md §13, decisions 2026-11-17): Dungeon 3 loses about 5 points
   (84.7 → 79.3% of 300 paired runs) because the last pass of 3:0x5b had cheated bombs as its weapon when Link came
   with 0-1 (95 of 294 passes; now 0.61 hearts lost there and Manhandla kills 27 of them, 14 before). One darknut
