@@ -66,3 +66,30 @@ From `r78-dark37-s85`, three seeds (`r30-dark-s87`, `-s88`, `-s89`), 488 iterati
   5_64c 8_5es 8_4es 8_3es 8_3fw --runs 40 --max-loss 2` (the family's hp and bombs draws, full rooms): 61,067 rows.
   The planner with `r78-dark37-s85` wins 0x05 from E 114 of 120 losing 0.24-0.61 hearts, 0x3e 111 of 120 at −0.31
   to 0.28, 0x5e 112 of 120 at −0.13 to 1.18, 0x3f 118 of 120, 0x4e 118 of 120, 0x64 from the cellar 115 of 120.
+
+### The runs (single rooms), and where the choice stands
+
+Canonical evaluations on this code (clips on, 100 episodes a state, the run's act mode):
+
+| run | success | hearts | 5:0x05 | 8:0x3e | 8:0x5e | 8:0x4e | 8:0x3f |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `r78-dark37-s85` (promoted) | 96.3% | −0.91 | 92.7% | 81.7% | 84.3% | 92.7% | 95.3% |
+| `r30-dark-s87` | 96.6% | −0.86 | 92.5% | 85.7% | 85.7% | 92.0% | 94.3% |
+| `r30-dark-s88` | 96.4% | −0.89 | 92.0% | 86.0% | 85.7% | 92.7% | 93.7% |
+| `r30-dark-s89` | 96.8% | −0.87 | 93.0% | 87.0% | 87.0% | 93.7% | 94.3% |
+
+The secondaries, one seed each from their promoted runs with harvested starts at the route's hearts
+(`harvested_fraction: 0.33`): boss-manhandla `r30-manh-s90` (280 entries of 3:0x4d from the Dungeon 3 harvest
+chain) 95.7%, −0.62 (`r78t4-manhandla2` 94.0%, −0.75; 3:0x4d 91.3% against 88.3%); gibdo `r30-gibdo-s91` (the way
+back's entries: 0x65 and 0x66 from W 150 each, cut out of the leg-and-Dungeon-5 replays for 0x66, 0x47 150, 0x26
+50; and the planner's play of 0x65, 0x66 from W and 0x47, 13,175 rows at `--demo-coeff 0.05`) 99.5%, +0.02
+(`r75-f-a` 99.3%, +0.01).
+
+**Not decided yet.** The selections on Dungeon 5 at the route's hearts (`select-checkpoint FAMILY RUN --from
+0_45c_0 --stop-at step:209 --runs 1000 --first-seed 2000 --confirm 1000 --confirm-first-seed 3000 --confirm-top 1
+--only <the last checkpoints>,last`; the promoted team's reference measured once, in `r30-dark-s87`'s batch: the
+other selections play the same team on the same seeds) and boss-manhandla's on Dungeon 3 at the route's hearts
+(`--from 0_37c_0 --stop-at step:105`) were waiting in the job line when this section was written. Nothing is
+promoted. What remains: the choice, then for the chosen darknut `d8` (`--from 8_7es_0 --stop-at step:297`), `d3`
+(`--from 3_7cs_0 --stop-at step:105`) and `d5` (`--from 5_76s_0 --stop-at step:209`), 1000 runs on seeds 0-999 paired
+with `r29land-1k` (the same team but darknut, on the same code).
