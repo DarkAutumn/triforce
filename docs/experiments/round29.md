@@ -1343,3 +1343,66 @@ at 0:0x05's rock wall), not a route change.
 third team with wizzrobe `r79c-wj-s85`, paired against `r79b-1k`) and the planner beside (`r79c-plan`, 300 runs a
 segment) were queued; their numbers, the survival ledger, a recorded run from Dungeon 8's triforce if one ends the
 game, and the suites come in §18.2.
+
+## 19. One ow-zora for every stretch: 0x44's arrows and 0x38 after Dungeon 2
+
+ow-zora plays rooms in every overworld stretch of the route: 0x59, 0x5a on the way to Dungeon 2, 0x2d, 0x27, 0x28,
+0x38 after it, 0x38 after Dungeon 1, 0x65, 0x55 after Dungeon 3, 0x55, 0x54, 0x5f, 0x4f, 0x3f, 0x3e, 0x2d on the leg
+to Dungeon 5, 0x55, 0x54, 0x44 (the arrow shop) and its cave on the leg to Dungeon 7 (`post-d5`), and 0x38, 0x28,
+0x27, 0x47 (the burned tree) and its take-any cave on the leg to Dungeon 9 (`post-d8`). Its line: `r74-leg` →
+`r76-b` → `r76-zora-arrows` (round 26: 75 harvested arrow-shop starts at `harvested_fraction: 0.03`; `post-d5`
+98.7% arrive at Dungeon 7) → `r79t5-zora` (§16: the leg to Dungeon 9; 0x47 and 0x27 from E 300 of 300). The
+census of the whole route's team measured `r79t5-zora` at 84.0% on `post-d5` (−14.7 ± 1.2 against `r76-zora-arrows`;
+137 of 1000 runs leave 0x44 without the arrows) and the swap back to `r76-zora-arrows` +2.9 ± 1.1 after Dungeon 2;
+`r76-zora-arrows` plays `0_27e` and `0_47e` 0 of 300 each. Neither serves the whole route.
+
+### 19.1 The cause
+
+**Not the share of 0x44's states.** Both runs trained with the same 75 arrow-shop states at 3% of the resets
+(`run.json` `harvested`); 0x44's four seed entries were 12 of 105 states for `r76-zora-arrows` and 12 of 126 for
+`r79t5-zora`. **The burned tree's cave curriculum took the training.** In `r79t5-zora`'s `curriculum.json` every
+track is complete but `0_47cave_0..2`, stuck at its first stage (start point 20 of 23, 22 attempts, no success).
+From the track's fifth state on Link already holds the 15th container (RAM `$66F` `0xDD` → `0xEE`: the ware is
+bought), so an episode started there can never meet `waypoint: heart`: Link lingers to the stall limit (600 steps)
+and fails. While any track is unfinished, `curriculum.fraction` (0.5) sends half of all resets to the unfinished
+tracks: these three. Episodes per quarter of the run fell 6,717 → 3,892 → 395 → 361 (`r76-zora-arrows`: 9,857,
+16,545, 16,931, 17,783; 11,365 against 61,116 in all); in the second half about 7 episodes an iteration, each a
+600-step idle in 0x47's cave, and the harvested starts were drawn in 95 of 244 iterations (`r76-zora-arrows`: 242).
+The promoted ow-start `r74-leg2` has the same three unfinishable tracks in 0x2f's take-any cave (`0_2fcave_*`).
+
+**What the chain shows.** `post-d5` (census `r79x-1k`, 1000 runs): at 0x44 from S (step 217) 137 of 981 runs leave
+N into 0x34 past the cave in 12.8 steps (successful crossings 21.2 steps; `r76-zora-arrows` 15.0), the X-128 entry
+of the clips way that round 26's arrow-shop states were cut for; 47 wrong exits at 0x55 (step 211). After Dungeon 2
+(the census's swap, the same team with ow-lynel `r27l-lynel-s81`) the difference is 0x38 from N (step 44): 0.29 hearts
+lost a visit against 0.18, 0.61 hits against 0.35, 16 deaths against 5, at every entering heart count (4.5 hearts in:
+0.25 against 0.18; half a heart in: 12 of 18 die against 4 of 23). 0x27 costs both runs exactly half a heart a visit
+(one hit; every half-heart entry dies). After Dungeon 1 0x38 from W loses 0.33 against 0.24 a visit, after Dungeon 3
+0x55 from S 0.21 against 0.09; no run is lost there. **Single rooms do not see it**: the seed states of 0x44 put Link
+at X 112-120, and in `eval.json` 0x38 from N is equal (−0.11..−0.28 against −0.15..−0.28) because half its episodes
+start at full hearts (sword beams), while the chain enters 0x38 with 3.4 of 5. Played from the chain's own entries
+(below), two episodes a state: 0x44 from S 450 of 450 (0.11 hearts lost) for `r76-zora-arrows` against 370 of 450
+(0.35) for `r79t5-zora`; 0x38 from N 0.26 against 0.30, from W 0.22 against 0.29; 0x55 from S 0.09 against 0.24.
+
+### 19.2 The arm
+
+From `r79t5-zora` (it holds the leg to Dungeon 9), three seeds (91, 92, 93), 244 iterations, `--sil-coeff 0.1
+--checkpoint-every 30`, clips on (`off_share: 0`), the lineage's demonstrations (`target/r29-demos/tree.npz`) at
+`--demo-coeff 0.05`, and three levers:
+
+- **the curriculum sink removed**: the three `0_47cave` tracks are left out of the family's trajectories (the cave is
+  won 300 of 300 from its seed states), so no curriculum start remains (every other track is complete);
+- **the chain's entries as harvested starts** (`triforce/states/harvested/ow-zora`, not in git), at
+  `harvested_fraction: 0.2`: the 75 arrow-shop states and 150 entries of 0x44 from S, 150 of 0x38 from N, 75 each
+  of 0x38 from W, 0x55 from S, 0x55 from N on the leg to Dungeon 5 and to Dungeon 7. They are cut out of chain
+  replays (`eval-chain --replays`; `post-d2`, `post-d1`, `post-d3`, `post-d4` to step 137, `post-d5`, 300 runs each,
+  seeds 7000-7299, the landing team with `r79t5-zora`) by `scripts/experiments/r29_zora_states.py REPLAYS OUT --step
+  44:0_38n ...` (the frame before the room entry, as `eval-chain --harvest` saves a handoff: 0x38 after 0x28 is ow-zora
+  on both sides, so it has no handoff), and keep the hearts, bombs and position the chain brought. 0x44 gets about
+  6.7% of the resets, 0x38 from N 4.4%, the others 2.2% each, before the harvested selector's own weighting;
+- **`r76-zora-arrows`' crossings as demonstrations**: its clean runs (no heart lost) from every harvested state, two
+  episodes a state in its act mode, 14,002 rows (`r27_plan_demos.py models/ow-zora/r76-zora-arrows OUT --family
+  ow-zora --act temperature:0.5+relax:16 --states --state-files <the harvested states> --runs 2 --max-loss 0`; the
+  script's new `--state-files`).
+
+The gate is measured in a models directory that holds the Dungeon 6 landing team (`r27-land`'s promoted runs, with
+ow-lynel `r27l-lynel-s81`) and only ow-zora swapped, `r76-zora-arrows` its promoted run and the paired reference.
