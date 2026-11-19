@@ -100,3 +100,17 @@ First result: `r30-goriya6-s32`'s last checkpoint takes the D7 triforce in **54.
 round 27 (round26.md §17); the pairing against it in this team comes with `-s30`'s selection.
 `r30-goriya6-s31`'s last checkpoint: **56.5%** on the screen (6.47 hearts) and **56.1%** confirmed (6.38); its
 it005449 53.9% and 51.7% (−4.4 ± 2.2 against the last). Both seeds' last checkpoints lead their runs.
+
+**The secondaries, paired with `r29land-1k` on seeds 0-999** (the last checkpoints, clips on, models alone; arrival
+at the segment's end step):
+
+| run | segment | `r29land-1k` | this run | paired | where |
+|---|---|---:|---:|---:|---|
+| wallmaster `r30-wall-s30` | `d7` | 46.6% | 48.6% | +2.0 ± 1.1 | 7:0x0d: 43 captured of 576 visits (64 of 574), 13 timeouts (19) |
+| | `d1` | 99.8% | 99.8% | 0 | 1:0x45 999 of 999 both |
+| boss-gleeok `r30-gleeok-s30` | `d4` | 91.7% | 92.4% | +0.7 ± 0.9 | 4:0x13 69 deaths of 993 (76) |
+| | `d8` | 24.8% | 25.2% | +0.4 ± 0.7 | 8:0x3c 66 deaths of 318 (70) |
+
+**Neither is promoted**: no segment is better beyond noise (wallmaster's +2.0 is 1.8 standard errors; a third of
+its captures are gone). Gleeok's harvested low-heart starts and the planner's demonstrations did not move the
+fights' deaths beyond noise in 244 iterations.
