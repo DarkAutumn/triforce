@@ -1505,3 +1505,68 @@ failed; pytest 826 passed, 9 skipped, 1 failed and fixed: `tests/test_eval_batch
 begin a job lacked `scripts/experiments/r27_plan_demos.py` (picked from the Dungeon 6 lane without its test line;
 that lane lists it), 26 of 26 after.
 
+## 19. The whole route: one team (draft)
+
+`r29-land` is one code line for the whole route (`d2first`, 358 steps, from the game start to the ending; 1.9.0.0):
+the Dungeon 6, Dungeon 8 and Dungeon 9 lanes merged, then `main` at round 27's landing, the goriya follow-up
+(round26.md §17) and the ow-lynel lane (round27.md §15). Its team is one run per family for every room of the
+route, chosen by the census of the Dungeon 9 lane's branch (every segment of the route played by one team, 1000
+runs a segment, paired with the segment's reference; swap tests for the families that lost one), with goriya and
+ow-lynel decided since. Every run is stamped 1.9.0.0.
+
+| family | run | from |
+|---|---|---|
+| ow-start, ow-tektite, ow-octorok | `r74-leg2` | `main` |
+| ow-peahat | `r75-bow-ow` | `main` |
+| ow-moblin | `r79t5-moblin` | Dungeon 9 lane (the census's swap: `r76-b` cannot play the later legs) |
+| ow-zora | `r76-zora-arrows` | `main`, **a placeholder**: it cannot play the leg to Dungeon 9 (0:0x27 and 0x47 from E), the lineage's `r79t5-zora` loses the arrow shop after Dungeon 5; a joint ow-zora run replaces it |
+| ow-leever | `r79t5-ow` | Dungeon 9 lane |
+| ow-boulder | `r79b-boulder` | Dungeon 9 lane |
+| ow-lynel | `r27l-lynel-s81` | the joint ow-lynel run (round27.md §15), on `main` since round 27 |
+| ow-ghini | `r77-ghini` | Dungeon 6 lane (`main` since round 27) |
+| stalfos-keese-gel | `r79t5-skg` | Dungeon 9 lane |
+| like-like | `r79c-like` | Dungeon 9 lane |
+| zol | `r79b-zol` | Dungeon 9 lane |
+| trap-room, vire | `r77-b` | Dungeon 6 lane (`main` since round 27) |
+| wizzrobe | `r79c-wj-s85` | Dungeon 9 lane (§18.1: judged on `d6` too) |
+| darknut | `r78-dark37-s85` | Dungeon 8 lane |
+| boss-manhandla, boss-gleeok, pols-voice | `r78t4-manhandla2`, `r78t4-gleeok`, `r78t4-pols` | Dungeon 8 lane |
+| boss-gohma | `r77-gohma` | Dungeon 6 lane (`main` since round 27) |
+| lanmola, patra, ganon | `r79b-lanmola`, `r79c-patra`, `r79c-ganon` | Dungeon 9 lane |
+| goriya | `r77-goriya5-s80` | the goriya follow-up (round26.md §17: Dungeon 2's share of the resets back), from `main`'s `r76-goriya4-s78`; act `temperature:0.5+relax:16` |
+| wallmaster | `r76-wall-1` | `main` |
+| dodongo-crossing, equipment-room | `r76-c` | `main` |
+| boss-digdogger, boss-aquamentus | `r76-b` | `main` |
+| d2-rope, gibdo, moldorm, boss-dodongo | `r75-f-c`, `r75-f-a`, `r75-f-b`, `r71-e` | `main` |
+
+goriya `r77-goriya5-s80`'s canonical evaluation (clips on, its act mode): 97.6% of 5400 episodes, −0.34 hearts
+(`r76-goriya4-s78` 97.6%, −0.42); Dungeon 2's 2:0x1e 93.7% at −0.30 hearts (90.7%, −0.45) and 2:0x5e 88.3% at
+−0.17 (87.7%, −0.29).
+
+### 19.1 The nine dungeon segments of record (`r29land-1k`)
+
+One batch (`r29land-1k`), 1000 runs a segment (seeds 0-999), clips on, models alone, each from its entrance state
+to its triforce (`--stop-at step:N`, the overworld room after the triforce) or, for `d9`, the ending. Each is paired
+by seed with the chain the segment was accepted with; ± is the standard error of the paired difference. The census
+column is the same team with goriya `r76-goriya4-s78`, on the Dungeon 9 lane's code.
+
+| segment | reference | its rate | this team | paired | the census | where |
+|---|---|---:|---:|---:|---:|---|
+| Dungeon 2 | `main` `r76-1k` | 81.5% | **91.6%** | **+10.1 ± 1.5** | 81.5% | goriya: 2:0x5e 9 deaths against 40, 2:0x1e 43 against 84 |
+| Dungeon 1 | `main` `r76-1k` | 99.0% | 99.8% | +0.8 ± 0.3 | 99.3% | goriya: 1:0x44 0.13 hearts a visit against 0.25 |
+| Dungeon 3 | `main` `r76-1k` | 78.2% | **82.7%** | **+4.5 ± 1.7** | the same runs | Manhandla 3:0x4d, darknut's rooms (the census) |
+| Dungeon 4 | `main` `r76-1k` | 92.1% | 91.7% | −0.4 ± 1.2 | the same runs | |
+| Dungeon 5 | `main` `r76-1k` | 68.7% | 72.2% | +3.5 ± 2.0 | the same runs | |
+| `d7` | `main` `r76-1k` | 40.0% | **46.6%** | **+6.6 ± 2.1** | 40.0% | goriya: 7:0x1b 258 deaths against 327, 0.63 hearts a visit against 1.13 |
+| `d6` | `main` `r77-1k` | 30.0% | 31.4% | +1.4 ± 2.0 | the same runs | |
+| `d8` | Dungeon 8 lane `r78-dark-1k` | 27.2% | 24.8% | −2.4 ± 1.9 | the same runs | darknut's rooms (the same weights; stalfos-keese-gel and equipment-room lose no more) |
+| `d9` | Dungeon 9 lane `r79c-1k` | 31.0% | 31.0% | the same runs | the same runs | |
+
+No segment is worse beyond noise. goriya `r77-goriya5-s80` is the one change in these segments from the census's
+team: Dungeons 3, 4, 5, `d6`, `d8` and `d9` are the census's chains run for run (1000 of 1000, room for room), and
+Dungeon 2 is the goriya follow-up's own 1000 runs on `main`'s code run for run. It lifts Dungeon 2 by 10.1 points
+and `d7` by 6.6, as its selection measured on other seeds (90.6% and 47.1%).
+
+The legs between the dungeons and the full route from the start to the ending (1000 runs, the planner beside) are
+left for after ow-zora's run is in the team: no overworld family plays a room of these nine segments.
+
