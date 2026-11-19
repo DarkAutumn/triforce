@@ -40,3 +40,41 @@ The planner: 9 captured and 6 timeouts in 269.
 **Gleeok.** 4:0x13 (`d4`): 76 deaths of 993, entered with 4.56 hearts; deaths entering with 0, 1, 2, 3 hearts 10 of
 10, 24 of 38, 19 of 87, 16 of 154, with 4 or more 7 of 704. The yaml's `hp: [0.5, max]` (the owner, Nov 12) never
 starts a fight below half the containers. 8:0x3c (`d8`): 70 deaths of 319, entered with 5.39 of 13.
+
+### The arm
+
+**Start states at the chains' hearts** (untracked, `triforce/states/harvested/<family>`; the commands re-create them,
+`eval-chain ... --clips on --act model`, the 1.9.0.0 team, seeds 5000-5299):
+
+- Dungeon 7 as runs bring it: `--from 0_0bc_0 --stop-at step:248 --runs 300 --first-seed 5000 --replays DIR
+  --harvest DIR` (the leg from Dungeon 5 first, so Dungeon 7 is entered with 8.85 hearts, the full route's 9.33;
+  0x1b with 3.82, the full route's 4.08). 0x1b, 0x19, 0x69, 0x59 follow goriya's own rooms and have no handoff:
+  they are cut from the replays (`scripts/experiments/r29_zora_states.py DIR OUT --step 229:7_69s --step 230:7_59s
+  --step 236:7_19w --step 240:7_1bw`).
+- Dungeons 2 and 1 as the full route brings them: the full route to Dungeon 1's exit (`--stop-at step:68`).
+- Gleeok: `--from 4_71s_0 --stop-at step:133` (297 entries of 4:0x13) and `--from 8_7es_0 --stop-at step:296` (97
+  of 8:0x3c).
+
+goriya draws `harvested_fraction: 0.65` (0.33 before) from 956 states: Dungeon 2's 566 of round 27 (59%), 1:0x23
+from S 45 and 1:0x44 50, 7:0x1b 130, 0x1a from the cellar 45, 0x19 45, 0x69 25, 0x59 25, 0x38 25 (the first by
+seed); Dungeon 2 keeps about 40% of the resets (0.65 × 0.59 + 0.35 × 0.11). wallmaster draws its 110 handoffs into
+7:0x0d at 0.33, boss-gleeok its 394 at 0.33 (a harvested start keeps its hearts, below the `hp` draw's half when the
+run brings less; the owner's `hp: [0.5, max]` stays for the seed states).
+
+**The planner as a teacher, from the same states.** `scripts/experiments/r27_plan_demos.py RUN OUT --family YAML
+--states --state-files ...` with the family yaml's `ram_randomization` emptied (the evaluation pool would draw the
+hearts anew; the copy keeps each state's own), the promoted run under `temperature:0.5+relax:16+plan:16:1`:
+
+| family | states (episodes) | the planner won | the model alone from them | kept | rows |
+|---|---|---:|---:|---|---:|
+| goriya | 7:0x1b 211 | 196 (−2.24 hearts: the drops) | 124 of 213 (`d7h`) | ≤ 1 heart lost: 193 | |
+| | 0x1a from the cellar 150, 0x19 150, 0x69 100, 0x59 100 | 145, 149, 100, 100 | | 138, 141, 95, 93 | |
+| | 2:0x5e 150, 2:0x1e 150 (full route) | 150, 150 | | 147, 147 | 59,383 |
+| wallmaster | 7:0x0d 110 × 3 | 317 of 330 | 99 of 110 (10 captured) | 317 | 22,451 |
+| boss-gleeok | 4:0x13 297, 8:0x3c 97 | 292, 80 | 8:0x3c 68 of 97 | ≤ 3 hearts lost: 292, 80 | 26,692 |
+
+**Trainings.** goriya: three seeds from `r77-goriya5-s80` (`r30-goriya6-s30`, `-s31`, `-s32`), 488 iterations,
+`--sil-coeff 0.1 --checkpoint-every 30 --stop-success 1.01`, `--demos food-demos.npz plan-goriya.npz --demo-coeff
+0.05`, clips `off_share: 0` (as before). wallmaster `r30-wall-s30` from `r76-wall-1` and boss-gleeok
+`r30-gleeok-s30` from `r78t4-gleeok` (with its rule's `gleeok.npz` beside), one seed each, 244 iterations, the same
+arguments (`scripts/train_round.py --chain-runs 0 --parallel 8 --eval-parallel 3`).
