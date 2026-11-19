@@ -29,7 +29,9 @@ Where the 270 runs end before step 68, by family (the room records of `r29land-1
 **Dungeon 1's 92 are hearts carried in.** It is entered with 3.31 of 5 hearts (the planner 3.94); every one of its
 deaths (goriya 40, stalfos-keese-gel 23, Aquamentus 15, the bow cellar 12) is an entry below 2 hearts. The rooms
 that take those hearts are the overworld after Dungeon 2: 0:0x0a (ow-lynel) and, after it, 0x1a (ow-tektite) and
-0x27 (ow-zora).
+0x27 (ow-zora). The owner's new Dungeon 1 route (after this round: out and back in at 1:0x73, 0x53's N wall bombed
+into 0x43) takes 0x72, 0x74, 0x52 and 0x42 off the route; 0x44, 0x35 (Aquamentus), 0x23 and the hearts carried in
+remain.
 
 Per visit (models | the planner):
 
@@ -61,7 +63,8 @@ second-visit lever as one seed. ow-start is not trained (below).
     1458 from the route's hearts (97.3%) and gains 0.06 hearts in the wins; the 1106 clean episodes give 82,277
     rows (1450 decisions the planner replaced, written five times).
 - **ow-lynel**, one seed (84) from `r27l-lynel-s81`, 244 iterations, the same flags and the lineage's three
-  demonstration files (`rock-wall.npz`, `whirlwind.npz`, `lynel74-0a.npz`) at 0.05: the 300 second-visit states of
+  demonstration files (`target/demos/r29-demos/rock-wall.npz`, `target/demos/r28-demos/whirlwind.npz`,
+  `target/demos/r27l/lynel74-0a.npz`, untracked) at 0.05: the 300 second-visit states of
   round 27's lever (`scripts/experiments/r27_lynel_states.py r29land-1k-full.jsonl r29land-1k-post-d2.jsonl --out
   DIR --count 300`: `0_0ac` with the hearts and bombs of 1866 second visits, mean 4.28 hearts) beside the 300
   first-visit handoffs `r27l-lynel-s81` trained with, at `harvested_fraction: 0.35` (0.2 before).
