@@ -17,10 +17,16 @@ A room the walks fought with a rule of their second half (`FIGHTS`: `r32b_d5.py`
 `r32b_d7.py`'s 0x49, 0x1b, 0x1c and Aquamentus) has
 no scripted way out of the room: the rule fights until the room is clear, and the explorer (`entry_states`'s, the
 step's own task, the room as the fight left it: `fresh_rooms: false`) goes on from there to the step's exit; the
-win rate is the rule's (clears of the seeds played), the state the first cleared run the explorer took out."""
+win rate is the rule's (clears of the seeds played), the state the first cleared run the explorer took out.
+
+The leg after Dungeon 5 (the recorder to Level 3's landing, 0x74 ... 0x3c into Level 2: `tallies()`) has the walks'
+rules of `r32b_leg.py` (one `Tally` function a room, monsters live) and `r32b_recorder.ride`, not `LEGS` steps: the
+rule plays the room and the pre-entry frame of the next room (the scroll's or the cave's, a wrap exit's from the
+engine's macro) is the next step's state."""
 
 import argparse
 import collections
+import functools
 import json
 import sys
 from pathlib import Path
@@ -113,8 +119,10 @@ def _d7(targets, recorder=False, kills=None):
 
 def _fights():
     from r26_walks import AQUAMENTUS, DIGDOGGER_SMALL, GORIYA_BLUE, GORIYA_RED, KEESE_BLUE  # pylint: disable=C0415
+    from r28_demos import GIBDO                                 # pylint: disable=import-outside-toplevel
     return {'5_05e': ('r32b_d5.py garden (BombFighter)', _garden),
             '5_24e': ('r32b_d5.py digdogger (the recorder, DigFighter)', _digdogger),
+            '5_66w': ("r32b_d7.py's Fight (round 28's fighter): 0x66's 3 Gibdos, wood sword", _d7((GIBDO,))),
             '7_49s': ('r32b_d7.py 0x49 (Fight: Goriyas, Keese)', _d7((GORIYA_BLUE, GORIYA_RED, KEESE_BLUE))),
             '7_1bw': ('r32b_d7.py 0x1b (Fight: 6 Blue Goriyas)', _d7((GORIYA_BLUE,))),
             '7_1cw': ('r32b_d7.py 0x1c (the recorder, one small Digdogger)', _d7((DIGDOGGER_SMALL,), True, 1)),
@@ -122,7 +130,27 @@ def _fights():
 
 
 # The walks' second-half fights: {state name: (the rule's name, the fight: returns 'clear' when the room is clear)}.
+# 5:0x66 W -> N (Gibdos for the key and the N shutter): the explorer failed it with the wood sword (3 attempts, both
+# chains; d2first's needed 5 with the white one), so round 28's fighter clears it and the explorer goes on.
 FIGHTS = _fights()
+
+
+# The leg after Dungeon 5 by the walks' rules of r32b_leg.py (`LEG`: state, rule, how the next room is entered), the
+# names of the route's later visits for the leg's own (0x73 and 0x63 were crossed on the way to Level 4 first), and
+# 0x0b's recorder out of Level 5 (r32b_recorder.py: facing right, played once: the whirlwind to Level 3's 0x74).
+LEG_NAMES = {'0_73e': '0_73e_v2', '0_63s': '0_63s_v2'}
+
+
+@functools.cache
+def tallies() -> dict:
+    """{state name: (the rule's name, rule(Tally) -> True when it left the room as the route does, how the next room
+    is entered: 'scroll', 'cave', 'wrap' or 'recorder')}."""
+    import r32b_leg                                             # pylint: disable=import-outside-toplevel
+    from r32b_recorder import ride                              # pylint: disable=import-outside-toplevel
+    rules = {LEG_NAMES.get(name, name): (f'r32b_leg.py {rule.__name__}', rule, how) for name, rule, how in r32b_leg.LEG}
+    rules['0_0bc'] = ('r32b_recorder.py ride (facing right, once)', lambda t: ride(t.w, 'RIGHT', 1)['landed'] == 0x74,
+                      'recorder')
+    return rules
 
 
 def explore_out(step, goal, cleared: Path, seed: int):
@@ -196,12 +224,83 @@ def harvest_fight(args, step, goal):
     return 0 if not missed else 1
 
 
+def harvest_tally(args, step, goal):
+    """`tallies()`'s rule of the room from each seed; the first won run's pre-entry frame of the next room (the last
+    pre-entry frame the rule's presses played, or for a wrap exit the engine macro's) is the next step's state."""
+    from triforce import entry_states                           # pylint: disable=import-outside-toplevel
+    from triforce.paths import STATES_DIR                       # pylint: disable=import-outside-toplevel
+    from r27_walks import Tally, is_pre_entry                   # pylint: disable=import-outside-toplevel
+    rule_name, rule, how = tallies()[args.step]
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    command = ' '.join(['python'] + sys.argv)
+    harvested, missed = [], []
+    here = lambda w: (w.level, w.room, w.mode in (CAVE, CELLAR))                       # noqa: E731
+    for chain in args.chains:
+        source = Path(STATES_DIR) / step.filename(chain)
+        wins, why, lost, entry = 0, collections.Counter(), [], None
+        for seed in range(args.seed0, args.seed0 + args.seeds):
+            w = load(source, seed)
+            w.game.set_clips(True)
+            w.game.capture_pre_entry = True
+            pre = []
+
+            def press(buttons='NONE', frames=1, _press=w.press, _w=w, _pre=pre):
+                state = None
+                for _ in range(frames):
+                    if _w.mode != PLAY and is_pre_entry(_w):
+                        _pre[:] = [_w.game.snapshot()]
+                    state = _press(buttons, 1)
+                return state
+            w.press = press
+            h0 = hp(w)
+            t = Tally(w)
+            ok = rule(t)
+            if how == 'wrap' or not pre:
+                pre[:] = [w.game.last_pre_entry]
+            w.until(lambda w: here(w) == goal.location.as_tuple() and w.mode in (PLAY, CAVE, CELLAR)
+                    and not is_pre_entry(w), 'NONE', 900)
+            if hp(w) <= 0:
+                why['dead'] += 1
+                continue
+            if not ok or here(w) != goal.location.as_tuple():
+                why[f"{'ok' if ok else 'failed'}, in {w.level}:0x{w.room:02x}"] += 1
+                continue
+            if pre[-1] is None:
+                why['no pre-entry frame'] += 1
+                continue
+            wins += 1
+            lost.append(h0 - hp(w))
+            if entry is None:
+                path = out / goal.filename(chain)
+                entry_states.write_entry_state(w.game, pre[-1], str(path), goal.location)
+                entry = {'file': path.name, 'chain': chain, 'route': ROUTE, 'route_step': goal.index,
+                         'from_step': step.index, 'specialist': goal.specialist, 'level': goal.level,
+                         'room': f'0x{goal.room:02x}', 'in_cave': goal.in_cave, 'entry': goal.entry,
+                         'exit': goal.exit, 'alternate': False, 'steps': 0, 'frames': t.frames, 'health': h0,
+                         'ending': 'exit-correct', 'env_steps': 0, 'attempts': seed - args.seed0 + 1,
+                         'seconds': 0.0,
+                         'played_by': f"scripts/experiments/r32c_harvest.py {args.step}: {rule_name} (seed {seed}, "
+                                      "the walks' rule)"}
+                entry_states._merge_manifest(str(out), [entry], command)     # pylint: disable=protected-access
+                harvested.append(entry)
+        if entry is None:
+            missed.append(step.filename(chain))
+        print(json.dumps({'step': args.step, 'rule': rule_name, 'chain': chain, 'runs': args.seeds, 'won': wins,
+                          'hearts_lost_in_wins': round(sum(lost) / len(lost), 2) if lost else None,
+                          'failed': dict(why), 'harvested': entry['file'] if entry else None}), flush=True)
+    entry_states._write_build_record(str(out), command, harvested, missed)  # pylint: disable=protected-access
+    return 0 if not missed else 1
+
+
 def harvest(args):
     from triforce import entry_states                           # pylint: disable=import-outside-toplevel
     from triforce.paths import STATES_DIR                       # pylint: disable=import-outside-toplevel
     step, goal = route_goal(args.step)
     if args.step in FIGHTS:
         return harvest_fight(args, step, goal)
+    if args.step in tallies():
+        return harvest_tally(args, step, goal)
     actions = step_actions(args.step)
     rule = f"{args.step} {'(' + BEST[args.step] + ')' if args.step in BEST else ''}".strip()
     out = Path(args.out)

@@ -57,7 +57,6 @@ from pathlib import Path
 RUNS = 30
 SEED0 = 1000
 REPEAT = {'RECORDER': 40, 'CANDLE': 40, 'BOMB': 40, 'ARROW': 40, 'SWORD': 4, 'BEAMS': 4}
-FIRST = 293                                                    # the first step of the stretch in d2first
 
 OBJ_X, OBJ_Y, OBJ_DIR, OBJ_STATE, OBJ_TYPE, OBJ_META = 0x70, 0x84, 0x98, 0xAC, 0x34F, 0x405
 FRAME, MODE, LEVEL, ROOM, HEARTS, HEART_PARTIAL, KEYS, BOMBS = 0x15, 0x12, 0x10, 0xEB, 0x66F, 0x670, 0x66E, 0x658
@@ -718,14 +717,6 @@ RULES = {
 
 # ---- playing from the installed states -------------------------------------------------------------------------------
 
-def stems():
-    """{route step index: (the start state's name without its chain, the step)}, steps 293-353 of d2first (both
-    ways of its stretches: a stretch's two steps share the name)."""
-    from triforce import _native                               # pylint: disable=import-outside-toplevel
-    from triforce.entry_states import state_stem                # pylint: disable=import-outside-toplevel
-    return {s['index']: (state_stem(s['level'], s['room'], s['in_cave'], s['entry'], s['visit']), s)
-            for s in _native.route_steps('d2first')[FIRST:]}
-
 
 def rule_env(family, state, hearts):
     """The family's env for `state` with the hearts a run starts on: `own` (nothing drawn: the state's hearts and
@@ -757,7 +748,7 @@ def write_track(directory, state, seed, what, points, actions, health, ending):
     return track
 
 
-def harvest(directory, what, state, seed, point, action, steps, health, ending):
+def harvest(directory, what, state, seed, point, action, steps, health, ending, route='d2first'):
     """The next route step's entry state out of a won run, as `entry_states build` writes one (staged in
     `directory`, for `entry_states install`; `r28_demos.py --harvest`): the snapshot before the run's last action
     is played again in a Game with the pre-entry capture on, the hearts refilled and the room fresh
@@ -766,10 +757,10 @@ def harvest(directory, what, state, seed, point, action, steps, health, ending):
     from triforce._native import Game                           # pylint: disable=import-outside-toplevel
     from triforce import entry_states                           # pylint: disable=import-outside-toplevel
     from triforce.paths import STATES_DIR                       # pylint: disable=import-outside-toplevel
-    route = entry_states.route_steps('d2first')
-    step, goal = route[ROOMS[what][1]], route[ROOMS[what][1] + 1]
+    from r28_demos import route_step                            # pylint: disable=import-outside-toplevel
+    step, goal = route_step(ROOMS[what][1], route)
     chain = int(state.rsplit('_', 1)[1])
-    game = Game(seed=chain, states_dir=str(STATES_DIR))
+    game = Game(seed=chain, states_dir=str(STATES_DIR), route=route)
     now = game.restore(point)
     game.capture_pre_entry = True
     for _ in range(30):
@@ -782,7 +773,7 @@ def harvest(directory, what, state, seed, point, action, steps, health, ending):
     path = directory / goal.filename(chain)
     entry_states.write_entry_state(game, game.last_pre_entry, str(path), goal.location)
     source = entry_states.read_manifest(str(STATES_DIR)).get(f'{state}.state', {})
-    entry = {'file': path.name, 'chain': chain, 'route': 'd2first', 'route_step': goal.index, 'from_step': step.index,
+    entry = {'file': path.name, 'chain': chain, 'route': route, 'route_step': goal.index, 'from_step': step.index,
              'specialist': goal.specialist, 'level': goal.level, 'room': f'0x{goal.room:02x}',
              'in_cave': goal.in_cave, 'entry': goal.entry, 'exit': goal.exit, 'alternate': False, 'steps': steps,
              'health': health, 'ending': ending, 'env_steps': steps, 'attempts': 1, 'seconds': 0.0,
@@ -797,8 +788,9 @@ def harvest(directory, what, state, seed, point, action, steps, health, ending):
 def play(args):
     from triforce.demos import DemoRecorder, action_indices, legal  # pylint: disable=import-outside-toplevel
     from triforce.paths import STATES_DIR                       # pylint: disable=import-outside-toplevel
+    from r28_demos import route_step                            # pylint: disable=import-outside-toplevel
     family, index = ROOMS[args.what]
-    stem = stems()[index][0]
+    stem = route_step(index, args.route)[0].filename(0)[:-len('_0.state')]
     chains = ([int(c) for c in args.chains.split(',')] if args.chains
               else [c for c in (0, 1, 2) if (Path(STATES_DIR) / f'{stem}_{c}.state').exists()])
     if not chains:
@@ -863,7 +855,7 @@ def play(args):
                 if args.harvest and entry is None and not illegal and (
                         args.max_loss is None or down <= args.max_loss):
                     entry = harvest(args.harvest, args.what, state, seed, points[-1], actions[-1], n, health,
-                                    info['ending'])
+                                    info['ending'], args.route)
                     harvested.append(entry)
                     print(f"{args.harvest / entry['file']}: from seed {seed}, {n} steps, {down:.2f} hearts lost",
                           file=sys.stderr)
@@ -915,6 +907,8 @@ def main():
     parser.add_argument('--max-steps', type=int, default=3000, help='decisions a run may take')
     parser.add_argument('--out', type=Path, default=None, help='write the kept runs\' rows here (.npz)')
     parser.add_argument('--verbose', action='store_true')
+    parser.add_argument('--route', default='d2first', help="the route whose step and states it plays (`r28_demos.py "
+                                                           "--route`)")
     args = parser.parse_args()
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     return play(args)

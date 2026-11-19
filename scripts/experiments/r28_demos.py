@@ -2,8 +2,9 @@
 (docs/routes/d8-walks.md; `train --demos FILE --demo-coeff C`, `triforce.demos`, as round 25's
 `r25_d5_37_tracks.py --demos` and round 26's `r26_d7_28_food_demos.py`).
 
-    python scripts/experiments/r28_demos.py ROOM [--runs N] [--chains 0,1,2] [--hearts own|family|H]
+    python scripts/experiments/r28_demos.py ROOM [--runs N] [--chains 0,1,2] [--hearts own|family|H] [--route R]
                                                  [--out FILE.npz] [--tracks DIR [--per-state N] [--max-loss H]]
+                                                 [--harvest DIR]
     python scripts/experiments/r28_demos.py scaffold OUT [--hearts H] [--boss-hearts H]
     cd OUT && TRIFORCE_STATES_DIR=OUT/triforce/states PYTHONPATH=OUT \
         python <checkout>/scripts/experiments/r28_demos.py ROOM --chains 0 [--runs N] [--out FILE.npz]
@@ -14,7 +15,9 @@ holds (full hearts, its bombs), `--hearts family` with the yaml's `ram_randomiza
 draws: for demonstration rows that cover what a run brings), `--hearts H` with exactly H hearts.  It prints one JSON
 line a state and one for all.  `--out` writes the won runs' decisions as demonstration rows, `--tracks DIR` the
 first `--per-state` won runs of each state (those that lost at most `--max-loss` hearts) as curriculum tracks
-(`DIR/<state>~rule<seed>`, as `r27_d6_rules.py tracks`; DIR is `trajectories/<family>`).
+(`DIR/<state>~rule<seed>`, as `r27_d6_rules.py tracks`; DIR is `trajectories/<family>`).  `--route d3first` plays
+the room's step on that route (the clip way's step of the same room, entry and exit as d2first's; its states
+`d3first_<stem>_<chain>`).
 
 `scaffold` makes a throwaway data root: the checkout's data (the route `d8` as it is in routes.yaml) with staged
 start states of steps 281-296 from the walks' staging (`r28_walks.leg_states`, `d8_state`, `d8_cellar_states`: 13
@@ -574,7 +577,22 @@ def write_track(directory, state, seed, what, points, actions, health, ending):
     return track
 
 
-def harvest(directory, what, state, seed, point, action, steps, health, ending):
+def route_step(index, route='d2first'):
+    """(d2first's route step `index`, the next step on its way or None) on `route`: on another route the step of the
+    same room, entry, exit and way (`r29_demos.py` plays its rules by it too).  After a step of both ways the clip
+    way goes on, as the state builder's."""
+    from triforce import entry_states                           # pylint: disable=import-outside-toplevel
+    steps = entry_states.route_steps(route)
+    at = index
+    if route != 'd2first':
+        mine = entry_states.route_steps('d2first')[index]
+        at = next(i for i, s in enumerate(steps)
+                  if (s.location, s.entry, s.exit, s.way) == (mine.location, mine.entry, mine.exit, mine.way))
+    way = (None, steps[at].way or 'clips')
+    return steps[at], next((s for s in steps[at + 1:] if s.way in way), None)
+
+
+def harvest(directory, what, state, seed, point, action, steps, health, ending, route='d2first'):
     """The next route step's entry state out of a won run, as `entry_states build` writes one (staged in
     `directory`, for `entry_states install`): the snapshot before the run's last action is played again in a Game
     with the pre-entry capture on, the hearts refilled and the room fresh (`write_entry_state`).  It is a state after
@@ -583,10 +601,9 @@ def harvest(directory, what, state, seed, point, action, steps, health, ending):
     from triforce._native import Game                           # pylint: disable=import-outside-toplevel
     from triforce import entry_states                           # pylint: disable=import-outside-toplevel
     from triforce.paths import STATES_DIR                       # pylint: disable=import-outside-toplevel
-    route = entry_states.route_steps('d2first')
-    step, goal = route[ROOMS[what][1]], route[ROOMS[what][1] + 1]
+    step, goal = route_step(ROOMS[what][1], route)
     chain = int(state.rsplit('_', 1)[1])
-    game = Game(seed=chain, states_dir=str(STATES_DIR))
+    game = Game(seed=chain, states_dir=str(STATES_DIR), route=route)
     now = game.restore(point)
     game.capture_pre_entry = True
     for _ in range(30):
@@ -599,7 +616,7 @@ def harvest(directory, what, state, seed, point, action, steps, health, ending):
     path = directory / goal.filename(chain)
     entry_states.write_entry_state(game, game.last_pre_entry, str(path), goal.location)
     source = entry_states.read_manifest(str(STATES_DIR)).get(f'{state}.state', {})
-    entry = {'file': path.name, 'chain': chain, 'route': 'd2first', 'route_step': goal.index, 'from_step': step.index,
+    entry = {'file': path.name, 'chain': chain, 'route': route, 'route_step': goal.index, 'from_step': step.index,
              'specialist': goal.specialist, 'level': goal.level, 'room': f'0x{goal.room:02x}',
              'in_cave': goal.in_cave, 'entry': goal.entry, 'exit': goal.exit, 'alternate': False, 'steps': steps,
              'health': health, 'ending': ending, 'env_steps': steps, 'attempts': 1, 'seconds': 0.0,
@@ -614,8 +631,8 @@ def harvest(directory, what, state, seed, point, action, steps, health, ending):
 def play(args):
     from triforce.demos import DemoRecorder, action_indices, legal  # pylint: disable=import-outside-toplevel
     from triforce.paths import STATES_DIR                       # pylint: disable=import-outside-toplevel
-    family, index = ROOMS[args.what]
-    stem = stems()[index][0]
+    family = ROOMS[args.what][0]
+    stem = route_step(ROOMS[args.what][1], args.route)[0].filename(0)[:-len('_0.state')]
     chains = ([int(c) for c in args.chains.split(',')] if args.chains
               else [c for c in (0, 1, 2) if (Path(STATES_DIR) / f'{stem}_{c}.state').exists()])
     recorder = DemoRecorder()
@@ -669,7 +686,7 @@ def play(args):
                 if args.harvest and entry is None and not illegal and (
                         args.max_loss is None or down <= args.max_loss):
                     entry = harvest(args.harvest, args.what, state, seed, points[-1], actions[-1], n, health,
-                                    info['ending'])
+                                    info['ending'], args.route)
                     harvested.append(entry)
                     print(f"{args.harvest / entry['file']}: from seed {seed}, {n} steps, {down} hearts lost",
                           file=sys.stderr)
@@ -723,6 +740,7 @@ def main():
     parser.add_argument('--max-steps', type=int, default=3000, help='decisions a run may take')
     parser.add_argument('--out', type=Path, default=None, help='write the kept runs\' rows here (.npz)')
     parser.add_argument('--verbose', action='store_true')
+    parser.add_argument('--route', default='d2first', help="ROOM: the route whose step and states it plays")
     args = parser.parse_args()
     if args.what == 'scaffold':
         if args.out_dir is None:
