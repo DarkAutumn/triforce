@@ -81,6 +81,15 @@ branch.
   are their monsters' families'.
 - [ ] **0x30's stairs on a Trap's home**: the lure of `d9-walks.md` §3.4 is no rule of the objective.
 - [ ] **Drops** in the Wizzrobe rooms (hearts and fairies from 24 Wizzrobes) were not measured by any walk.
+- [ ] **One ow-zora for every stretch** (round29.md §19): `r79t5-zora` misses 0x44's arrows on `post-d5` (84.0%
+  against 98.7%) and loses 0x38 after Dungeon 2; `r76-zora-arrows` cannot play the leg to Dungeon 9. Arm `r29z-zora-s9N`
+  from `r79t5-zora` (the cave curriculum out, the chain's entries harvested, `r76-zora-arrows`' crossings as demos).
+- [ ] **A take-any cave's curriculum can never finish** (round29.md §19.1): the explorer's track of a `waypoint:
+  heart` cave goes on past the purchase, so a start from its later states already holds the container and never
+  meets the waypoint; the first stage never passes and `curriculum.fraction` (0.5) sends half of all resets there, 600
+  idle steps each. Seen in ow-zora `r79t5-zora` (`0_47cave_*`, the second half of its training) and ow-start
+  `r74-leg2` (`0_2fcave_*`). Fix in the curriculum or the explorer (end such a track at the waypoint, or count a start
+  past it as passed); until then leave those tracks out of the family's trajectories.
 
 ### Round 28 (begun Nov 17): the leg from Dungeon 6 and Dungeon 8
 
