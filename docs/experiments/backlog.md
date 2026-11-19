@@ -1920,3 +1920,14 @@ the remaining list is deferred until Lee resumes work.
 
 - **Damage still resets the room-stalling counter** (v1 behaviour, `critics.critique_movement`). In rooms with
   frequent ranged damage (Zora fireballs) this delays the stalling penalty. Not changed in round 2.
+
+## Round 31 (phase IX) owed
+
+- **like-like 9:0x56** (step 310): 616 of 1000 Dungeon 9 runs `stuck` there (`docs/experiments/round31.md`).
+- **wizzrobe 6:0x29** (key taken: 119 runs lost against 27) and **6:0x78** (`drops: first`, but 0 kills in 1000).
+- **vire 6:0x39, 6:0x2d** (`bombs: tenth`: 49 and 19 runs lost against 26 and 6).
+- **lanmola 9:0x55 from E** (16 lost); **pols-voice 8:0x4c** without its key (13 stuck).
+- **ow-octorok `r31-oct-s97`**: the trip 60/60; promote once its paired post-d2, d1, post-d1, post-d3, post-d6 and
+  post-d8 chains (queued in round 31) show nothing worse beyond noise.
+- **eval-batch segment chains run past their segment** on this branch (no stop step; main's `r29land-1k` had one):
+  scored by arrival, but they waste the CPU of the rest of the route.
