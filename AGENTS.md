@@ -465,9 +465,11 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 
 ## Versioning (Lee, Nov 11)
 
-- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `1.9.0.0`: nine dungeons, rounds 28 and
+- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (2.0.0.0 on the `d3first` work's branches from
+  phase X's start, `r32-routes`; `main` is `1.9.0.x` until that work lands: 1.9.0.0 was nine dungeons, rounds 28 and
   29's Dungeons 8 and 9 to the end of the game; it carries round 26's schema 6 observation of 1.5.1.0, the one input
-  change for Dungeon 7 to Ganon, decisions 2026-11-16; earlier runs are stamped 1.9.0.0, not converted). It is the
+  change for Dungeon 7 to Ganon, decisions 2026-11-16; earlier runs are stamped 1.9.0.0, not converted; 2.0.0.0 changes
+  no input, so a 1.9.0.0 run is stamped 2.0.0.0 on a phase X worktree's copies, `triforce stamp --force`). It is the
   single source: `triforce.__version__` and `_native.VERSION` read it, `pyproject.toml` repeats it and the Cargo
   workspace version is its first three numbers (`tests/test_version.py` checks all of them).
   - `MAJOR` changes only when Lee says so. **2.0 is said (Nov 19): the `d3first` route** (below, "Two routes"):
