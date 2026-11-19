@@ -1916,6 +1916,8 @@ mod tests {
                 // Round 29: the rock wall over Dungeon 9's stairs.
                 loc(0, 0x05),
                 loc(0, 0x2c),
+                // Phase X: 0x2d's rock wall (d3first's 30 secret; its bomb only on a step entering the cave).
+                loc(0, 0x2d),
                 loc(0, 0x67),
                 loc(2, 0x0e),
                 loc(3, 0x4c),
@@ -1970,10 +1972,16 @@ mod tests {
         let map = GameMap::builtin();
         let tagged: Vec<(L, u8)> =
             map.rooms().values().filter_map(|r| Some((r.location, r.requires_rupees?))).collect();
-        // Round 29: Ganon's room (1: the silver arrow's rupee, while he lives).
+        // Round 29: Ganon's room (1: the silver arrow's rupee, while he lives). Phase X: d3first's candle shop (60).
         assert_eq!(
             tagged,
-            [(L::new(0, 0x34, true), 60), (L::new(0, 0x44, true), 80), (L::new(6, 0x1c, false), 2), (L::new(9, 0x42, false), 1)]
+            [
+                (L::new(0, 0x0c, true), 60),
+                (L::new(0, 0x34, true), 60),
+                (L::new(0, 0x44, true), 80),
+                (L::new(6, 0x1c, false), 2),
+                (L::new(9, 0x42, false), 1)
+            ]
         );
         assert_eq!(map.requires_rupees(loc(0, 0x2c)), 0);
         assert_eq!(map.requires_rupees(loc(0, 0x44)), 0, "the room outside the shop needs none");
@@ -2353,7 +2361,7 @@ mod tests {
     #[test]
     fn only_route_rooms_are_tagged() {
         let map = GameMap::builtin();
-        assert_eq!(map.routes.keys().collect::<Vec<_>>(), [DEFAULT_ROUTE, "clips-gauntlet"]);
+        assert_eq!(map.routes.keys().collect::<Vec<_>>(), [DEFAULT_ROUTE, "d3first", "clips-gauntlet"]);
         let played = map.routes.values().flatten().filter(|s| s.exit != "terminal");
         let mut route: BTreeSet<L> = played.map(RouteStep::location).collect();
         route.extend(map.alternates.iter().flat_map(|a| a.with.iter().map(RouteStep::location)));
@@ -2361,13 +2369,32 @@ mod tests {
         // 0x56 and 0x57 (strays since round 22) are on the coast stretch's plain way since round 24.
         assert!(route.contains(&loc(0, 0x56)) && route.contains(&loc(0, 0x57)));
         let tagged: BTreeSet<L> = map.rooms().values().filter(|r| r.specialist.is_some()).map(|r| r.location).collect();
-        let strays: BTreeSet<L> = [loc(3, 0x4b)].into();
-        assert!(route.is_disjoint(&strays));
-        assert_eq!(tagged, route.union(&strays).copied().collect());
-        // Beyond the default route's own rooms: the alternate (4:0x20 is on the D4 stretch's plain way since round 22).
+        // Phase X: 3:0x4b, a stray since round 22, is d3first's (its way into Dungeon 3); no stray is left.
+        assert_eq!(tagged, route);
+        // Beyond the default route's own rooms: the alternate (4:0x20 is on the D4 stretch's plain way since round 22)
+        // and d3first's own rooms (phase X: Dungeon 3's way in, the Level 4 -> 1 leg's 0x46, row 2 E of 0x28, the
+        // secrets' and the candle shop's caves, the dead woods).
         let default: BTreeSet<L> = map.routes[DEFAULT_ROUTE].iter().map(RouteStep::location).collect();
         let beyond: BTreeSet<L> = route.difference(&default).copied().collect();
-        assert_eq!(beyond, [loc(0, 0x78)].into());
+        let cave = |room: u8| L::new(0, room, true);
+        assert_eq!(
+            beyond,
+            [
+                loc(0, 0x78),
+                loc(3, 0x4b),
+                loc(3, 0x4a),
+                loc(0, 0x46),
+                loc(0, 0x29),
+                loc(0, 0x2a),
+                loc(0, 0x2b),
+                cave(0x2d),
+                cave(0x0c),
+                loc(0, 0x62),
+                cave(0x62),
+                cave(0x3d)
+            ]
+            .into()
+        );
         // Round 26's steps (209-247) add 24 rooms: the shops and the pond with the shops' caves, and Dungeon 7's way.
         let before: BTreeSet<L> = map.routes[DEFAULT_ROUTE][..209].iter().map(RouteStep::location).collect();
         let d7: BTreeSet<L> =
@@ -2777,9 +2804,9 @@ mod tests {
         assert!(e.contains("parts at") && e.contains("d4-island"), "{e}");
         let e = broken("rejoins: {level: 4, room: '0x11', entry: S}", "rejoins: {level: 4, room: '0x12', entry: W}");
         assert!(e.contains("rejoins at"), "{e}");
-        let e = broken("  - {level: 4, room: '0x20', specialist: vire, entry: S, exit: E}\n", "");
+        let e = broken("    - {level: 4, room: '0x20', specialist: vire, entry: S, exit: E}\n", "");
         assert!(e.contains("the plain way") && e.contains("leaves by"), "{e}");
-        let e = broken("  parts: {level: 4", "  part: x\n  parts: {level: 4");
+        let e = broken("    parts: {level: 4", "    part: x\n    parts: {level: 4");
         assert!(e.contains("part"), "{e}");
         // Round 29: both ways may leave the parts room by the same exit when their steps differ otherwise (Dungeon 9's
         // `ring-07`: the plain way's 0x07 keeps the kills of its fight), not when they are the same step.
@@ -3106,7 +3133,7 @@ mod tests {
             assert!(ROUTES_YAML.contains(old), "{old}");
             load(GAME_YAML, &ROUTES_YAML.replacen(old, new, 1)).unwrap_err()
         };
-        let e = swap("entry: S, exit: end}", "entry: S, exit: end}\n- {level: 9, room: '0x42', specialist: ganon, entry: S, exit: N}");
+        let e = swap("entry: S, exit: end}", "entry: S, exit: end}\n  - {level: 9, room: '0x42', specialist: ganon, entry: S, exit: N}");
         assert!(e.contains("exit end is the route's last step"), "{e}");
         let e = swap("entry: S, exit: cave, bomb_reserve: 3}", "entry: S, exit: cave, bomb_reserve: 3, banked_kills: 2}");
         assert!(e.contains("no earlier step of the route is in this room"), "{e}");

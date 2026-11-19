@@ -336,7 +336,7 @@ fn the_clips_gauntlet_draws_its_targets_and_leaves_the_families_alone() {
     // The same game data without the route.
     let routes = std::fs::read_to_string(root.join("triforce/routes.yaml")).unwrap();
     let (head, tail) = routes.split_once("# clips-gauntlet").expect("the route");
-    let tail = &tail[tail.find("\n# Equal-length alternates").expect("after it")..];
+    let tail = &tail[tail.find("\n# Blocks (phase X").expect("after it")..];
     let game = std::fs::read_to_string(root.join("triforce/game.yaml")).unwrap();
     let map = zelda::GameMap::from_yaml(&game, &format!("{head}{}", &tail[1..])).unwrap();
     assert!(!map.routes.contains_key("clips-gauntlet") && map.routes.len() + 1 == DATA.map.routes.len());

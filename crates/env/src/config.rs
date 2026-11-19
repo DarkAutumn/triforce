@@ -1565,8 +1565,10 @@ mod tests {
         assert!(c.fresh_rooms && c.trainable && !c.one_room);
         assert_eq!(c.harvested_fraction, 0.0); // harvested starts are opt-in (review F069)
         assert_eq!(c.curriculum, CurriculumConfig::default());
-        let again = SpecialistConfig::from_json(c.to_json(), None).unwrap();
+        // With the map, as every caller validates: the namespaces (`d3first`'s since phase X) come from the routes.
+        let again = SpecialistConfig::from_json(c.to_json(), Some(&GameMap::builtin())).unwrap();
         assert_eq!(again, c);
+        assert_eq!(c.namespaces(), [None, Some("d3first")]);
     }
 
     /// Bombs by mode: `never` never; the 10th kill (`$50` = 9) in every other mode; `required` in requires_bombs
