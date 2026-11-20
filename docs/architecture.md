@@ -1985,7 +1985,8 @@ is joined at the end. It prints a JSON summary (`out`, `frames`, `seconds`, `wid
   names the run of a key (`family@R`: `promoted.<R>`; `family`: `promoted` on a route with the key, else
   `promoted_run`). `runner.Policies` loads both runs of such a family as two policies (`family` and `family@route`,
   the same config) and the chain (`ChainEnv::route_parts`, `_native.ChainTask(policies=)`) plays a room by its step's
-  key when that policy is loaded, else by the family's. Every tool that plays goes through them: `eval-chain` (its
+  key (a room off the route by the run's last step: a wrong exit stays in its part) when that policy is loaded, else
+  by the family's. Every tool that plays goes through them: `eval-chain` (its
   `--checkpoint FAMILY=PATH` plays both parts, `FAMILY@ROUTE=PATH` the route's part only, refused on a route without
   the key), `eval-batch`, `play-zelda.py` and the theater's simulations, the golden path, `zelda-headless.py`;
   `select-checkpoint` selects the part its start is in (`Plan.policy`: a start before the cutoff replaces

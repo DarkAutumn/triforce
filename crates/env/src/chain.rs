@@ -751,8 +751,9 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         self.current.as_ref().map(|c| &*c.name)
     }
 
-    /// The policy key that plays `family`'s room on route step `step` (None: no step, the family's own): the step's
-    /// key (`zelda::GameMap::step_policy`) when the caller has a policy for it ([`ChainEnv::route_parts`]).
+    /// The policy key that plays `family`'s room on route step `step` (the room's step, or off the route the run's
+    /// last: a wrong exit stays in its part; None: the family's own): the step's key (`zelda::GameMap::step_policy`)
+    /// when the caller has a policy for it ([`ChainEnv::route_parts`]).
     fn policy_key(&self, map: &zelda::GameMap, step: Option<usize>, family: &str) -> String {
         match step.map(|k| map.step_policy(&self.route.name, k, family)) {
             Some(key) if self.route_parts.contains(&key) => key,
@@ -1477,7 +1478,8 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                 ));
             };
             let index = result.rooms.len();
-            let key = self.policy_key(&map, on_step, &name);
+            let part_step = on_step.or_else(|| result.rooms.iter().rev().find_map(|r| r.step));
+            let key = self.policy_key(&map, part_step, &name);
             let result = self.result.as_mut().unwrap();
             let mut record =
                 RoomRecord::new(index, location, &name, &state, keys, "in-progress", self.clips_allowed);
