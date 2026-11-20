@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SEGMENT_STARTS = ['2_7ds_0', '0_3cc_0', '1_73s_0', '0_37c_0', '3_7cs_0']
+SEGMENT_STARTS = ['2_7ds_0', '0_3cc_0', '1_73s_0', '0_37c_v2_0', '3_7cs_0']
 
 
 def test_port_gate_runs_all_six_segments():

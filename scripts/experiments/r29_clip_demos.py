@@ -57,8 +57,10 @@ def clip_rule(points, letter):
     return make
 
 
-rules.ROOMS.update({'clip-55': ('lanmola', 315), 'clip-07': ('wizzrobe', 323), 'clip-20n': ('wizzrobe', 343),
-                    'clip-03': ('like-like', 353)})
+# d2first's step indices since round 31's Dungeon 1 (four steps fewer; 9:0x55 is entered from E since then, and
+# clip-55's lane starts at the S door as round 29 had it).
+rules.ROOMS.update({'clip-55': ('lanmola', 311), 'clip-07': ('wizzrobe', 319), 'clip-20n': ('wizzrobe', 339),
+                    'clip-03': ('like-like', 349)})
 rules.RULES.update({
     'clip-55': clip_rule([(0x78, 0xBD), (0x60, 0xBD), (0x60, 0x9D)], 'N'),
     'clip-07': clip_rule([(0x78, 0xBD), (0x60, 0xBD), (0x60, 0x9D)], 'N'),

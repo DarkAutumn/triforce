@@ -1178,7 +1178,8 @@ fn heart_config(exit: bool, potential: f64, low_health: f64) -> SpecialistConfig
     config
 }
 
-/// d2first's step 60 (since round 31) is 1:0x44 W -> E (goriya), step 61 1:0x45 W -> N (wallmaster).
+/// d2first's step 60 is 1:0x44 W -> E (goriya), step 61 1:0x45 W -> N (wallmaster) (64 and 65 before round 31's
+/// Dungeon 1).
 fn heart_context(values: &env::heart_value::HeartValues, next: Option<usize>) -> HeartContext<'_> {
     HeartContext { values: Some(values), step: Some(60), next, clips: true }
 }
@@ -1294,15 +1295,15 @@ fn heart_value_table_checks_the_route() {
     assert!(values.check(&steps[1..], &visits[1..]).is_err());
     assert!(values.check(&steps[..297], &visits[..297]).is_err(), "fewer steps");
     assert_eq!(values.routes, ["d2first"]);
-    let curve = values.curve(Some(60), true).unwrap();
+    let curve = values.curve(Some(64), true).unwrap();
     assert!(approx(curve.at(0.75), (curve.values[1] + curve.values[2]) / 2.0));
     assert_eq!(curve.at(99.0), curve.top());
     assert_eq!(curve.at(0.0), 0.0);
     // Steps on one way only have no curve on the other (0x31 E -> N is the clip way's).
     let clip_only = steps.iter().position(|s| s.way == Some(zelda::game_map::Way::Clips)).unwrap();
     assert!(values.curve(Some(clip_only), false).is_none() && values.curve(Some(clip_only), true).is_some());
-    // Dungeon 7's 0x1b from W (step 236 since round 31), Dungeon 6's 0x38 (step 266), Dungeon 8's 0x3e (step 287)
-    // and level 9's 0x10 (step 336, the silver arrow's Wizzrobes) are priced.
+    // Dungeon 7's 0x1b from W (step 236), Dungeon 6's 0x38 (step 266), Dungeon 8's 0x3e (step 287) and level 9's
+    // 0x10 (step 336, the silver arrow's Wizzrobes) are priced.
     for (k, room) in [(236, "7:0x1b"), (266, "6:0x38"), (287, "8:0x3e"), (336, "9:0x10")] {
         assert_eq!(values.steps[k].room, room);
         assert!(values.curve(Some(k), true).is_some_and(|c| c.top() > c.at(6.0)), "{room}");

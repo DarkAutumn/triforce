@@ -35,7 +35,7 @@ chain full
 chain d2 --from 2_7ds_0
 chain post-d2 --from 0_3cc_0
 chain d1 --from 1_73s_0
-chain post-d1 --from 0_37c_0
+chain post-d1 --from 0_37c_v2_0
 chain d3 --from 3_7cs_0
 
 $PY - "$OUT" "$RUNS" <<'EOF'

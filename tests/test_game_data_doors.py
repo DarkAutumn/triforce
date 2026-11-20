@@ -3,7 +3,9 @@
 Doors come from attr A ($687E: N = bits 7-5, S = bits 4-2) and attr B ($68FE: W = bits 7-5, E = bits 4-2) of the
 loaded level (asm:Door_FindTypeByDirBit; 0 open, 1 wall, 4 bomb wall, 5/6 key, 7 shutter).  Convention (game.yaml
 "Exit conventions"): every door is an exit on both sides, a key door is `locked` on both sides, a bomb wall is an
-exit listed in `bomb_walls`, and the entrance room's S door back to the overworld is no exit.
+exit listed in `bomb_walls`, and the entrance room's S door back to the overworld is no exit, except Dungeon 1's
+(round 31, the owner's route: out of 1:0x73's S door to 0:0x37 and back in, its N key door then open), which leads
+one way to 0:0x37 (whose `cave` exit leads back in).
 """
 
 import pytest
@@ -15,6 +17,7 @@ from triforce.paths import PACKAGE_DIR
 from .conftest import REPO_STATES_DIR, require_state
 
 ENTRANCES = {1: ('1_73s_0', 0x73), 2: ('2_7ds_0', 0x7d), 3: ('3_7cs_0', 0x7c), 4: ('4_71s_0', 0x71)}
+OUT_OF_A_LEVEL = {(1, 0x73, 'S'): {'level': 0, 'location': '0x37'}}      # the one door exit to another level
 OPPOSITE = {'N': 'S', 'S': 'N', 'E': 'W', 'W': 'E'}
 DOOR = {0: 'open', 1: 'wall', 2: 'open', 3: 'open', 4: 'bomb', 5: 'key', 6: 'key', 7: 'shutter'}
 
@@ -33,6 +36,11 @@ def test_every_exit_has_its_way_back():
             continue
         for side, exit in (entry['exits'] or {}).items():
             if side not in OPPOSITE or exit.get('wrap'):  # a wrap exit (0x75 W, a skip) is one-way
+                continue
+            out = OUT_OF_A_LEVEL.get((level, room, side))
+            assert (exit['level'] != level) == (out is not None), f"{level}:{room:#04x} {side}: out of the level"
+            if out is not None:
+                assert {'level': exit['level'], 'location': exit['location']} == out, f"{level}:{room:#04x} {side}"
                 continue
             target = (exit['level'], int(exit['location'], 16), bool(exit.get('in_cave')))
             assert target in by_key, f"{level}:{room:#04x} {side} -> {target}: not in game.yaml"
@@ -66,7 +74,8 @@ def test_dungeon_exits_match_the_roms_doors(level):
             where = f"{level}:{room:#04x} {side} (ROM {door})"
             exit = exits.get(side)
             if door == 'wall' or (room == entrance and side == 'S'):
-                assert exit is None, where
+                out = OUT_OF_A_LEVEL.get((level, room, side))
+                assert (exit and {'level': exit['level'], 'location': exit['location']}) == out, where
                 continue
             assert exit is not None, where
             assert bool(exit.get('locked')) == (door == 'key'), where

@@ -26,7 +26,9 @@
 //! - the damage-free kill streak (`HelpDropCount`) is kept at 0: the staged kills would arm the tenth-kill bomb.
 //!
 //! Nothing else is written but where a test says so. Walker aids (controller input, a frame at a time): cave mouths,
-//! key doors' mouths, push spots, Link's place beside the hidden Ganon, and Link's square under Zelda's fires.
+//! key doors' mouths, push spots, Link's place beside the hidden Ganon, Link's square under Zelda's fires, and the
+//! grid point a shorter skip leaves from (where a MOVE stops depends on Link's movement fraction: a MOVE 4 goes 4 or 5
+//! pixels, so 1-3 pixels off the grid point no MOVE lands on it).
 #![cfg(feature = "zcore")]
 
 mod common;
@@ -50,7 +52,7 @@ use zelda::objectives::{
     GANON_JUMP_SPOTS, GameCompletion, GanonPhase, Objective, ObjectiveKind, doorways_kept_out, exit_is_correct,
     banked_kills_follow_clips, game_ended, ganon, gohma, gohma_stand, start_banked_kills, zelda_tiles,
 };
-use zelda::room::Target;
+use zelda::room::{Target, Wavefront};
 use zelda::{Action, ActionKind, Direction, GameMap, GameView, LoadOptions, MapLocation, Session, SessionSnapshot, Var};
 
 type S = Session<Counted>;
@@ -284,6 +286,8 @@ struct Tick {
     silver: bool,
     /// Link holds the Triforce of Power.
     power: bool,
+    /// Where the offered BOMBs land (`zelda::bombs::landing`).
+    landings: Vec<(i32, i32)>,
 }
 
 fn ow(room: u8) -> MapLocation {
@@ -368,6 +372,17 @@ impl Walk {
     }
 }
 
+/// The path search the walk moves by: the objective's targets, and a locked door Link holds a key for as a way
+/// through (as the objective's own path search counts it).
+fn walk_wavefront(state: &GameView, objective: &Objective) -> Wavefront {
+    let targets: Vec<Target> = objective.targets.iter().copied().collect();
+    let locked: Vec<Direction> = CARDINALS
+        .into_iter()
+        .filter(|&d| state.keys() > 0 && !state.full_location().in_cave && state.is_door_locked(d))
+        .collect();
+    state.room().wavefront(&targets, &[], &locked, objective.clips)
+}
+
 fn next_action(s: &S, objective: &Objective, nudge: u32) -> Action {
     let state = s.state();
     let mask = s.mask();
@@ -396,14 +411,8 @@ fn next_action(s: &S, objective: &Objective, nudge: u32) -> Action {
             return bomb;
         }
     }
-    let targets: Vec<Target> = objective.targets.iter().copied().collect();
     let room = state.room();
-    // A locked door Link holds a key for is a way through (as the objective's own path search counts it).
-    let locked: Vec<Direction> = CARDINALS
-        .into_iter()
-        .filter(|&d| state.keys() > 0 && !state.full_location().in_cave && state.is_door_locked(d))
-        .collect();
-    let wavefront = room.wavefront(&targets, &[], &locked, objective.clips);
+    let wavefront = walk_wavefront(state, objective);
     let here = state.link.tile();
     let (x, y) = (state.link.position.x, state.link.position.y);
     let moving = |d: Direction| {
@@ -584,6 +593,10 @@ impl Walk {
             ring: state.red_ring(),
             silver: state.silver_arrow(),
             power: state.triforce_of_power(),
+            landings: offered(&self.s, ActionKind::Bomb)
+                .into_iter()
+                .filter_map(|d| zelda::bombs::landing(state, d).map(|p| (p.x, p.y)))
+                .collect(),
         }
     }
 
@@ -598,6 +611,27 @@ impl Walk {
                 break;
             };
             self.s.press(direction_buttons(d), 1);
+        }
+    }
+
+    /// Walker aid (controller input): Link stands 1-3 pixels off the grid point of a tile a shorter jump leaves from
+    /// (the skip is offered only on the grid point, and no MOVE stops there: the module doc): onto it.
+    fn skip_grid_aid(&mut self, objective: &Objective) {
+        let state = self.s.state();
+        if state.mode() != 5 || state.level() == 0 || !objective.clips {
+            return;
+        }
+        let wavefront = walk_wavefront(state, objective);
+        let here = state.link.tile();
+        let Some(distance) = wavefront.get(here) else { return };
+        if !wavefront.jumps_from(here).any(|jump| wavefront.get(jump.to).is_some_and(|to| to < distance)) {
+            return;
+        }
+        let (x, y) = (state.link.position.x, state.link.position.y);
+        let (gx, gy) = (here.0 * 8, here.1 * 8 + 0x3D);
+        let off = (x - gx).abs() + (y - gy).abs();
+        if (1..4).contains(&off) && (x == gx || y == gy) {
+            self.line_up((gx, gy), x != gx);
         }
     }
 
@@ -829,6 +863,7 @@ impl Walk {
                 // The room's monsters are dying by the walk's staging (`settle_room`): the walk stands and waits.
                 Action::parse("WAIT 4").unwrap()
             } else {
+                self.skip_grid_aid(&objective);
                 let mut action = next_action(&self.s, &objective, still / 3);
                 // Walker aid (controller input), the graveyard only (round 27): before a turn Link is lined up on
                 // the grid point of the tile the walk decided on.
@@ -960,13 +995,21 @@ fn the_d9_route_is_walked_the_plain_way_from_the_d8_triforce_to_the_end_of_the_g
     assert!(at(t, ow(0x07), 305).iter().all(|k| k.step_bombs.as_deref() == Some("never")));
 
     // 0x05 (step 307, ow-lynel `tenth`, the step `bombs: required`): the rock wall's four tiles are the target
-    // while it stands; BOMB is offered only in reach of it (under it, facing N), played once; then its mouth.
+    // while it stands; BOMB is offered only where it lands in the game's reach of the wall's tile object (the blast
+    // within $10 px of (8c, 8r + $40) of its game.yaml tile on both axes: asm:RockWall_Update) - under it facing N,
+    // or (round 31: the walk now comes W along the wall's lower row, Y $A5) beside it facing W -, played once (the
+    // walker plays N, from under it); then its mouth.
     let wall = at(t, ow(0x05), 307);
     let closed: Vec<_> = wall.iter().filter(|k| k.targets.contains(&Target::Tile((10, 12))) && k.mode == 5).collect();
     assert!(!closed.is_empty() && closed.iter().all(|k| k.kind == ObjectiveKind::Cave && k.step_bombs.as_deref() == Some("required")));
+    let rock = (10 * 8, 12 * 8 + 0x40);
     for k in &closed {
-        assert!(k.bombs.is_empty() || ((0x40..=0x60).contains(&k.x) && (0xA5..=0xB5).contains(&k.y)), "BOMB at ({:#04x}, {:#04x})", k.x, k.y);
+        assert_eq!(k.landings.len(), k.bombs.len(), "{k:?}");
+        for &(lx, ly) in &k.landings {
+            assert!((lx - rock.0).abs() < 0x10 && (ly - rock.1).abs() < 0x10, "BOMB at ({:#04x}, {:#04x}) lands at ({lx:#04x}, {ly:#04x})", k.x, k.y);
+        }
     }
+    assert!(closed.iter().any(|k| !k.bombs.is_empty()), "BOMB offered at the wall");
     let bombs: Vec<_> = wall.iter().filter(|k| k.action.kind == ActionKind::Bomb).collect();
     assert_eq!((bombs.len(), bombs[0].action.direction), (1, Direction::N));
     assert!((0x48..=0x58).contains(&bombs[0].x), "from under the wall: X {:#04x}", bombs[0].x);

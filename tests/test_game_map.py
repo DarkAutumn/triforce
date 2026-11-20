@@ -370,7 +370,7 @@ def test_after_d3_the_route_goes_on_by_raft_to_dungeon_4_and_follows_lees_direct
 
 def test_after_d1_the_route_takes_0x67s_rupees_then_either_way_to_dungeon_3():
     steps = native.route_steps('d2first')
-    start = next(i for i, s in enumerate(steps)
+    start = next(i for i, s in enumerate(steps)                    # round 31: 0x37 cave -> cave (D1's door) first
                  if (s['level'], s['room'], s['entry'], s['exit']) == (0, 0x37, 'cave', 'E'))
     walk = [(s['room'], s['in_cave'], s['entry'], s['exit'], s['specialist'], s['way'], s['waypoint'])
             for s in steps[start:start + 20]]
