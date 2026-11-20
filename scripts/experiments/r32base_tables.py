@@ -208,7 +208,7 @@ def eval_by_state(path, clips_on_only=True):
         e = json.load(f)
     out = defaultdict(lambda: [0, 0, 0.0, 0])
     for r in e['records']:
-        if clips_on_only and r.get('clips') is False:
+        if clips_on_only and r.get('clips_allowed') is False:
             continue
         o = out[r['start_state']]
         o[0] += 1
