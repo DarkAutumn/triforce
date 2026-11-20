@@ -103,3 +103,7 @@ Not decided yet: no run of either family is promoted, and nothing about 0x78's s
   not beyond noise.** In its own rooms the gain is plain: 0x2d 8 deaths against 30 (every one entering below 4
   hearts), 0x39 19 against 28, 0x2d's visits a gain of 0.24 hearts again (drops) against a loss of 0.03; the runs it
   saves mostly die later in 0x3a and 0x2c. A further 1000 seeds (4000-4999) are queued to pool with the confirmation.
+- The further 1000 seeds (4000-4999, `--only it002342,promoted --confirm 0`): it002342 31.9% against `r77-b` 28.3%
+  (+3.6 ± 1.7; 0x2d 13 deaths against 30, 0x39 20 against 35). **Pooled with the confirmation, 2000 paired runs on
+  seeds not used to choose it: +2.55 ± 1.23, beyond noise (2.1 standard errors).** Its other segment, `d4`, is queued
+  (1000 paired runs, seeds 3000-3999); the promotion waits on it.
