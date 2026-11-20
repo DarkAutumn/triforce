@@ -196,9 +196,21 @@ The entries did what they were for: 0x69 from N is back to the reference's cost 
 `r30-dark-s89`'s 0.76). `r30-dark69-s94`'s last checkpoint (its `ckpt.pt`) is the best; it enters Manhandla with the
 reference's hearts (4.09 against 4.09, 111 deaths against 113 on the confirmation seeds).
 On seeds 0-999 (paired with this checkout's team): `d3` 85.3% against 85.4%, −0.1 ± 1.5 (0x69 from N 0.58 hearts a
-visit); with the confirmation, **2000 runs +0.4 ± 1.1: Dungeon 3 holds.** Dungeon 5 at the route's hearts (seeds
-3000-3999, gibdo `r75-f-a` as in the selection's reference) and `d8` (seeds 0-999) are queued; it is promoted only if
-both keep gains beyond noise. Until then `r78-dark37-s85` stays. The candidates so far (Dungeon 3 / Dungeon 5 at the
-route's hearts / `d8`, paired): `r30-dark-s89` last −4.2 ± 1.2 / +5.8 ± 2.2 / +8.1 ± 2.0; `r30-dark-s88` it011492
-−0.8 ± 1.1 / +4.4 ± 2.2 / +10.4 ± 2.0; `r30-dark-s87` it011462 −0.3 ± 1.6 (1000) / +3.6 ± 2.2 / +10.2 ± 2.0;
-`r30-dark69-s94` last +0.4 ± 1.1 / pending / pending.
+visit); with the confirmation, **2000 runs +0.4 ± 1.1: Dungeon 3 holds.** But Dungeon 5 at the route's hearts
+(seeds 3000-3999, gibdo `r75-f-a` as in that selection's reference) is 50.4% against 49.0%, **+1.4 ± 2.2** (−4.4 ± 2.2
+against `r30-dark-s89`, which it was continued from), while `d8` is 41.0% against 26.2%, **+14.8 ± 2.1**. The 244
+iterations bought back Dungeon 3 with Dungeon 5's gain.
+
+**No darknut run qualifies; `r78-dark37-s85` stays.** The candidates (paired with the reference; Dungeon 3 over 2000
+runs where marked):
+
+| run | Dungeon 3 | Dungeon 5 at the route's hearts | `d8` | fails on |
+|---|---:|---:|---:|---|
+| `r30-dark-s89` last | −4.2 ± 1.2 (2000) | **+5.8 ± 2.2** | **+8.1 ± 2.0** | Dungeon 3 |
+| `r30-dark-s88` it011492 | −0.8 ± 1.1 (2000) | +4.4 ± 2.2 | **+10.4 ± 2.0** | Dungeon 5 exactly at two standard errors |
+| `r30-dark-s87` it011462 | −0.3 ± 1.6 (1000) | +3.6 ± 2.2 | **+10.2 ± 2.0** | Dungeon 5 |
+| `r30-dark69-s94` last | +0.4 ± 1.1 (2000) | +1.4 ± 2.2 | **+14.8 ± 2.1** | Dungeon 5 |
+
+The best trade is `r30-dark-s88` it011492: it holds Dungeon 3 and gains `d8` by ten points, and its Dungeon 5 gain is
+on the line, not beyond it. Settling it takes a second 1000 runs of Dungeon 5 at the route's hearts on fresh seeds,
+with the reference on the same seeds.
