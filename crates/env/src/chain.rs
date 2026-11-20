@@ -25,7 +25,7 @@ use crate::start_states::{StateName, StateStore, harvest_filename, state_entry, 
 use rand::RngExt;
 use rand_chacha::ChaCha8Rng;
 use serde_json::{Value, json};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use zelda::bombs::BombStats;
@@ -350,6 +350,9 @@ pub struct RoomRecord {
     pub room: String,
     pub in_cave: bool,
     pub specialist: String,
+    /// The policy that played the visit when it is not the family's own (round 32: `family@route`, the route's own
+    /// run before its `own_models_until` step; `ChainEnv::route_parts`). JSON `policy`, absent for None.
+    pub policy: Option<String>,
     pub steps: u64,
     pub frames: u64,
     pub health_in: f64,
@@ -435,6 +438,7 @@ impl RoomRecord {
             room: format!("0x{:02x}", location.value),
             in_cave: location.in_cave,
             specialist: specialist.to_owned(),
+            policy: None,
             steps: 0,
             frames: 0,
             health_in: state.health(),
@@ -504,6 +508,9 @@ impl RoomRecord {
         });
         let o = m.as_object_mut().expect("object");
         o.insert("route_bombs_in".into(), json!(self.route_bombs_in));
+        if let Some(policy) = &self.policy {
+            o.insert("policy".into(), json!(policy));
+        }
         for item in CheatItem::ALL {
             o.insert(format!("cheated_{}", item.name()), json!(self.cheated[item]));
         }
@@ -609,6 +616,10 @@ pub struct ChainEnv<N: Nes, St: StateStore<N::State>> {
     store: St,
     /// Specialist configs replacing the canonical YAML at runtime.
     pub configs: HashMap<String, Arc<SpecialistConfig>>,
+    /// The route-part policy keys the caller has a policy for (`family@route`, round 32;
+    /// `zelda::GameMap::step_policy`): a room on a step before the route's `own_models_until` is played by its
+    /// family's key there when it is one of these, else (and on every other step) by the family's own key.
+    pub route_parts: HashSet<String>,
     pub route: Route,
     /// Run cap (`DEFAULT_MAX_STEPS`).
     pub max_steps: u64,
@@ -675,6 +686,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             data,
             store,
             configs: HashMap::new(),
+            route_parts: HashSet::new(),
             route,
             max_steps: DEFAULT_MAX_STEPS,
             min_room_steps: MIN_ROOM_STEPS,
@@ -734,9 +746,18 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         self.result.as_ref()
     }
 
-    /// The specialist acting now.
+    /// The policy acting now: its family, or `family@route` for a route's own run (round 32, [`ChainEnv::route_parts`]).
     pub fn specialist(&self) -> Option<&str> {
         self.current.as_ref().map(|c| &*c.name)
+    }
+
+    /// The policy key that plays `family`'s room on route step `step` (None: no step, the family's own): the step's
+    /// key (`zelda::GameMap::step_policy`) when the caller has a policy for it ([`ChainEnv::route_parts`]).
+    fn policy_key(&self, map: &zelda::GameMap, step: Option<usize>, family: &str) -> String {
+        match step.map(|k| map.step_policy(&self.route.name, k, family)) {
+            Some(key) if self.route_parts.contains(&key) => key,
+            _ => family.to_owned(),
+        }
     }
 
     /// The objective the last decision was built with (None before the first reset).
@@ -1456,9 +1477,12 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                 ));
             };
             let index = result.rooms.len();
+            let key = self.policy_key(&map, on_step, &name);
+            let result = self.result.as_mut().unwrap();
             let mut record =
                 RoomRecord::new(index, location, &name, &state, keys, "in-progress", self.clips_allowed);
             record.step = on_step;
+            record.policy = (key != name).then(|| key.clone());
             record.clips_flips.extend(self.entry_flip.take().map(|on| (0, on)));
             result.rooms.push(record);
             self.hearts.reset(&HeartView::of(&state));
@@ -1476,12 +1500,15 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                 .unwrap()
                 .linger = Some(summary);
             let config = self.config_for(&name)?;
-            let switch = self.current.as_ref().is_none_or(|c| *c.name != *name);
+            let switch = self.current.as_ref().is_none_or(|c| *c.name != *key);
             // A one_room specialist trains on episodes that start at the room (a reset observation): give it the
             // same on every room entry, also from a room of its own family (F040).
             let fresh = switch || config.one_room;
             if switch {
-                if exit_correct {
+                // A handoff is a change of family (a route's own run handing its family's room to the default
+                // run is none).
+                let handoff = self.current.as_ref().is_none_or(|c| zelda::game_map::split_policy(&c.name).0 != name);
+                if exit_correct && handoff {
                     self.harvest_entry(&name, index)?;
                 }
                 self.builder = ObservationBuilder::new(config.obs.objective, config.obs.target)
@@ -1491,7 +1518,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                     false => None,
                 };
                 self.current = Some(Acting {
-                    name: Arc::from(name.as_str()),
+                    name: Arc::from(key.as_str()),
                     config,
                 });
             }
