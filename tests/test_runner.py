@@ -165,9 +165,13 @@ def test_route_checks_a_stop_step_a_power_on_start_and_a_checkpoint():
     assert Route.load('d2first', power_on={}).power_on == {'name': 'LINK', 'delay': None, 'max_delay': 32766}
     assert Route.load('d2first', power_on={'name': 'bob 2', 'delay': 9}).power_on == {
         'name': 'BOB 2', 'delay': 9, 'max_delay': 32766}
-    checkpoint = {'state': b'a state', 'step': 24, 'granted': [1, 0, 0], 'kind': 'end', 'frame': 7}
+    checkpoint = {'state': b'a state', 'step': 24, 'granted': [1, 0, 0], 'route_granted': [5, 0, 0], 'kind': 'end',
+                  'frame': 7}
     route = Route.load('d2first', checkpoint=checkpoint, stop_step=25)
-    assert route.checkpoint == {'state': b'a state', 'step': 24, 'granted': [1, 0, 0], 'randomize_rng': False}
+    assert route.checkpoint == {'state': b'a state', 'step': 24, 'granted': [1, 0, 0], 'route_granted': [5, 0, 0],
+                                'randomize_rng': False}
+    assert Route.load('d2first', checkpoint={'state': b'a state', 'step': 24}, stop_step=25).checkpoint[
+        'route_granted'] == [0, 0, 0], "a checkpoint without the route's grants holds none"
     from_3c = {'start_from': '0_3cc_0', 'states_dir': REPO_STATES_DIR}
     for kwargs, message in [
             ({'stop_step': 0}, "--stop-at step:0 is not a step of route 'd2first' after the start step 0"),

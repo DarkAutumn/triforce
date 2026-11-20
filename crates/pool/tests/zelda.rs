@@ -1152,11 +1152,9 @@ fn a_run_continued_from_a_checkpoint_stitches_onto_the_run_that_made_it() {
     let end = first.end_state();
     assert_eq!(end.context.step, Some(25));
 
-    let granted = zelda::cheats::ItemCounts {
-        bombs: end.context.granted[0],
-        keys: end.context.granted[1],
-        rupees: end.context.granted[2],
-    };
+    let counts = |[bombs, keys, rupees]: [u8; 3]| zelda::cheats::ItemCounts { bombs, keys, rupees };
+    let granted =
+        zelda::cheats::Grants { room: counts(end.context.granted), route: counts(end.context.route_granted) };
     let route = Route::load(&data.map, &data.states_dir, "d2first", None, None).unwrap();
     let route = route.with_checkpoint(&data.map, Arc::from(end.blob), 25, granted).unwrap();
     let init_b = init();

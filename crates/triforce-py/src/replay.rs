@@ -189,7 +189,8 @@ impl PyReplay {
     }
 
     /// The states in frame order as dicts: `frame`, `kind` ('start', 'end', 'keyframe' or 'checkpoint'), `step`
-    /// (the route step, or None), `granted` (cheat-granted [bombs, keys, rupees] still held), `edits` (the edits
+    /// (the route step, or None), `granted` (cheat-granted [bombs, keys, rupees] still held: a room's grants),
+    /// `route_granted` (a route step's grants still held, `zelda::cheats`), `edits` (the edits
     /// made before it) and `state` (a TFZSTATE file's bytes).  The last is the end state.  A chain can continue
     /// from any of them (`ChainTask(checkpoint=entry)`).
     fn states<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
@@ -200,6 +201,7 @@ impl PyReplay {
             d.set_item("kind", state.kind.name())?;
             d.set_item("step", state.context.step)?;
             d.set_item("granted", state.context.granted.map(u32::from).to_vec())?;
+            d.set_item("route_granted", state.context.route_granted.map(u32::from).to_vec())?;
             d.set_item("edits", state.edits)?;
             d.set_item("state", PyBytes::new(py, state.blob))?;
             out.append(d)?;

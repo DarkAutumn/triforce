@@ -29,7 +29,7 @@ sets its own reserves on its own steps before a block, and a block's own reserve
 | `to-level-4` | 24-30 | 0:0x74 cave → W to 0x45's mouth (the raft from 0x55) |
 | `dungeon-4` | 31-52 | 4:0x71 to 0x03, the stretch `d4-island` |
 | `dungeon-1` | 61-78 | 1:0x73 out S to 0:0x37 and back in, N by 0x63, 0x53's wall, the bow, to 0x36 (phase IX's) |
-| `dungeon-5` | 97-119 | 5:0x76 to 0x14 |
+| `dungeon-5` | 98-119 | 5:0x66 to 0x14 (the entrance, step 97, is each route's own: d3first's grants the bag) |
 | `dungeon-2` | 145-154 | 2:0x7d to 0x0d |
 | `to-level-7` | 156-173 | 0:0x45 out of the whirlwind to 0x42's pond: the stretch `dock-44`, the arrows, the meat |
 | `dungeon-7` | 174-193 | 7:0x79 to 0x2b |
@@ -89,7 +89,8 @@ Its own steps in full; the blocks by their rooms.
 | 94 | `0_0ccave` | 0:0x0c cave | S → S | ow-tektite | `waypoint: blue-candle` (60, `requires_rupees`) | 7 / W |
 | 95 | `0_0cc` | 0:0x0c | cave → W | ow-tektite | the wrap exit (CLIP E) onto the mountain top | 7 / W |
 | 96 | `0_0be` | 0:0x0b | E → cave | ow-leever | Level 5 | 7 / W |
-| 97-119 | | `dungeon-5` | | (d2first's) | the Olive Garden, the recorder, Digdogger's heart, the piece | 7 → 8 / W |
+| 97 | `5_76s` | 5:0x76 | S → N | gibdo | `bomb_reserve: 8`, `grant: {bombs: 8}`: the bag topped up to 8 (round 32) | 7 / W |
+| 98-119 | | `dungeon-5` | | (d2first's) | the Olive Garden, the recorder, Digdogger's heart, the piece | 7 → 8 / W |
 | 120 | `0_0bc` | 0:0x0b | cave → recorder | ow-leever | one play facing right or up (MOVE E first) | 8 / W |
 | 121 | `0_74r` | 0:0x74 | recorder → W | ow-tektite | | 8 / W |
 | 122 | `0_73e_v2` | 0:0x73 | E → N | ow-moblin | | 8 / W |
@@ -181,8 +182,12 @@ the run-time switch off has no way past them. The shared blocks keep their stret
   of 20 with 0x4a's bombs is the price); 0 on 0x5b's last pass and at Manhandla, 6 between (the block's). 2 from
   Dungeon 4's entrance (the block's). **8 from Level 4's exit to Dungeon 5** (d3first's own steps 53 and 83): every
   bomb Link has is kept for the Olive Garden (walks-b §2: the wood sword clears it 9 of 20 without bombs, 18 of 20
-  with eight); the walls on the way (1:0x53 after phase IX, 0x2c, 0x2d, 5:0x66, 5:0x65) are bombed as any wall,
-  cheated where Link has none. The Garden itself is the block's (0 in 0x05, 8 after it, 0 at Digdogger). **1 from
+  with eight); the walls on the way (1:0x53 after phase IX, 0x2c, 0x2d) are bombed as any wall, cheated where Link
+  has none. **Dungeon 5's entrance tops the bag up to 8** (round 32, `grant: {bombs: 8}`, the lead on the owner's
+  "can be ignored since we have the ability to cheat them to the character in game"): a route grant, outstanding
+  until used and cheated where used (`zelda::cheats`); 5:0x66's and 5:0x65's walls grant and take their own bomb
+  while it is outstanding, so the reserve of 8 brings the whole bag to the Garden. The Garden itself is the block's
+  (0 in 0x05: the bag thrown freely, 8 after it, 0 at Digdogger). **1 from
   Level 2's mouth through Dungeon 2** (step 148; walks-b §4: goriya and moldorm are `free` and would throw the bag
   this route brings; Dodongo's room offers BOMB whatever the reserve), **0 out of Level 2** (step 159), as d2first's
   from Dungeon 5 on; the blocks' after that.
@@ -190,7 +195,16 @@ the run-time switch off has no way past them. The shared blocks keep their stret
   only at 0x44 in `to-level-7`), so a reserve there would keep nothing. Where the ledger says the route runs dry
   (0x34's meat, then Gohma, 8:0x4c and Ganon) the shared blocks' reserves already sit: 2 from the arrows (0x44's cave
   step), 1 in Gohma's room, 8 from 8:0x4c, 1 through Level 9, 0 at Ganon. A reserve keeps rupees from ARROW; it
-  cannot keep what was never there (For the owner, 7).
+  cannot keep what was never there, so the arrow rooms' needs top the purse up (cheated, counted): Gohma's (round
+  27), Ganon's (round 29) and, round 32, 8:0x4c's while a Pols Voice lives (`requires_rupees: 9`, the reserve and a
+  shot; on both routes: d2first arrives with 22-38 and is never topped up).
+- **Measured (round 32, r32-base2's team, clips on).** Dungeon 5 (`--from 5_76s_0 --stop-at step:120`, 300 runs):
+  6.0% (1.9% of 1000 before); every run enters the Olive Garden with the bag of 8 (before: 0 in 822 of 1000, 4 in
+  the rest) and throws 7.7 there (5.9 cheated); the Garden loses 151 of 300 (845 of 1000 before); 8.1 cheated bombs
+  a run (the walls' two, the Garden, Digdogger). Dungeon 8 (`--from 8_7es_0 --stop-at step:243`, 300 runs): 24.3%
+  (6.8% before); 8:0x4c loses 5 of 107 entering (268 of 371 before), 8.0 Pols Voices killed a visit (0.88 before),
+  0.93 cheated rupees a visit, 0.33 a run. `d2first`'s Dungeon 8 on seeds 0-99: 20 of 100 before and after, every
+  run's outcome and rooms the same, no rupee cheated.
 
 ## Ledgers (from the walks; staging without drops unless said)
 
@@ -208,8 +222,8 @@ the run-time switch off has no way past them. The shared blocks keep their stret
 | 0x44's arrows (80), 0x34's meat (60) | 11 | | | 0-7 (cheated at 0x34 when short) |
 | Dungeon 7 | 12 | | | 0-11 |
 | the magic sword, Dungeon 6 | 13 | | | 0-8 (Gohma's arrows: topped up while he lives) |
-| Dungeon 8 | 14 | | | 0-7 (8:0x4c's arrows: no cheat) |
-| 0x47's heart, Level 9 | 15 | | | 0-6 (Ganon's silver arrow: no cheat) |
+| Dungeon 8 | 14 | | | 0-7 (8:0x4c's arrows: topped up to 9 while a Pols Voice lives, round 32) |
+| 0x47's heart, Level 9 | 15 | | | 0-6 (Ganon's silver arrow: topped up to 1 while he lives, round 29) |
 
 Rupees in all: 30 (0x2d) + 100 (0x62) + 30 (0x3d) + 10 (4:0x11) and the dungeons' drops, against 60 + 80 + 60 for the
 wares and 3-5 for arrows.
@@ -242,13 +256,14 @@ From the second walk (`d3first-walks-b.md`):
 11. **Hearts into Dungeon 5 are 7** (3, Dungeons 3, 4, 1, the heart rock); the grave sees exactly 12 and gives the
     magic sword (refused at 11).
 12. **The wood sword in the Olive Garden**: 9-10 of 20 clears by the scripted fighter without bombs, 17-18 with
-    eight; this route's bomb reserve 8 from Level 4's exit keeps what Link finds for it; no top-up exists (the lead:
-    no new cheat; the models must learn to arrive with bombs).
+    eight; this route's bomb reserve 8 from Level 4's exit keeps what Link finds for it. Answered by the owner's list
+    ("The 'you need x bombs and rupees' can be ignored since we have the ability to cheat them to the character in
+    game") and the lead (Nov 20): Dungeon 5's entrance tops the bag up to 8, cheated and counted where thrown.
 13. **The wood sword in Dungeon 7**: 0x1c's small Digdoggers (8 wood hits each) kill the scripted fighter 7 of 20
     from full hearts; 0x49, 0x1b and Aquamentus cost 1-2 hearts more each. Nothing to walk instead.
 14. **Rupees**: about even over the route; a run with few drops reaches 0x34 short (cheated), Gohma short (cheated),
-    and 8:0x4c and Ganon with nothing for their arrows (no cheat there: a top-up or a rupee room on the way is your
-    call).
+    and 8:0x4c and Ganon with little for their arrows: both topped up while their monsters live (Ganon's since round
+    29, 8:0x4c's from round 32), cheated and counted.
 
 From building it:
 

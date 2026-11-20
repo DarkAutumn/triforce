@@ -13,7 +13,7 @@ use env::specialist_env::{EnvOptions, SpecialistEnv};
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::sync::Arc;
-use zelda::cheats::ItemCounts;
+use zelda::cheats::Grants;
 use zelda::{Action, GameMap, LoadOptions, MapLocation, Nes, Session, power_on};
 
 fn data() -> Arc<GameData> {
@@ -516,7 +516,7 @@ fn a_stop_step_ends_the_run_and_a_checkpoint_continues_it(nes: ZCore, data: &Arc
     assert_eq!((r.result.as_str(), r.reason.as_str()), ("success", "reached route step 25 (level 0, room 0x4c)"));
     let rooms: Vec<_> = r.rooms.iter().map(|x| (x.room.as_str(), x.specialist.as_str(), x.outcome.as_str())).collect();
     assert_eq!(rooms, [("0x3c", "ow-octorok", "exit-correct"), ("0x4c", "-", "milestone")]);
-    assert_eq!(c.context(), (Some(25), ItemCounts::default()));
+    assert_eq!(c.context(), (Some(25), Grants::default()));
     let end: Arc<[u8]> = Arc::from(common::encode_state(&c.session().snapshot()).unwrap());
     let (ram, prg_ram) = (*c.session().nes().ram(), *c.session().nes().prg_ram());
 
@@ -538,13 +538,13 @@ fn a_stop_step_ends_the_run_and_a_checkpoint_continues_it(nes: ZCore, data: &Arc
     let stop_at = Route::load(&data.map, &data.states_dir, "d2first", Some(MapLocation::new(1, 0x73, false)), None);
     assert!(error(stop_at.unwrap().with_stop_step(&data.map, 3)).contains("exclusive"));
     assert!(error(load(Some("0_3cc_0")).with_power_on("LINK", Some(0), 0)).contains("replaces the game start"));
-    assert!(error(load(Some("0_3cc_0")).with_checkpoint(&data.map, end.clone(), 25, ItemCounts::default()))
+    assert!(error(load(Some("0_3cc_0")).with_checkpoint(&data.map, end.clone(), 25, Grants::default()))
         .contains("replaces the game start"));
-    assert!(error(load(None).with_checkpoint(&data.map, end.clone(), steps, ItemCounts::default()))
+    assert!(error(load(None).with_checkpoint(&data.map, end.clone(), steps, Grants::default()))
         .contains("is not a step"));
     assert!(error(load(None).with_power_on("ZELDA", None, 0)).contains("second quest"));
     assert!(error(load(None).with_power_on("LINK", None, power_on::MAX_DELAY + 1)).contains("at most 32766"));
-    let checkpoint = load(None).with_checkpoint(&data.map, end.clone(), 25, ItemCounts::default()).unwrap();
+    let checkpoint = load(None).with_checkpoint(&data.map, end.clone(), 25, Grants::default()).unwrap();
     assert!(error(checkpoint.clone().with_stop_step(&data.map, 25)).contains("after its start step 25"));
 
     // From the checkpoint: no frame runs and nothing is written, whatever the seed.
@@ -566,7 +566,7 @@ fn a_stop_step_ends_the_run_and_a_checkpoint_continues_it(nes: ZCore, data: &Arc
     // With the RNG redrawn, the checkpoint is another game per seed (models acting by argmax would otherwise
     // play the same one every time): the game's RNG register ($18-$24) is another natural state (one the game
     // holds, `zelda::rng`), and nothing else differs.
-    let redrawn = load(None).with_checkpoint(&data.map, end.clone(), 25, ItemCounts::default()).unwrap();
+    let redrawn = load(None).with_checkpoint(&data.map, end.clone(), 25, Grants::default()).unwrap();
     let mut c = chain(c.into_parts().0.into_nes(), data, redrawn.redrawing_rng(true));
     let mut draw = |seed: u64| {
         assert!(matches!(c.reset(Some(seed), &mut ChaCha8Rng::seed_from_u64(seed)).unwrap(), ChainStatus::Act { .. }));
@@ -585,7 +585,7 @@ fn a_stop_step_ends_the_run_and_a_checkpoint_continues_it(nes: ZCore, data: &Arc
     assert!(differ.iter().all(|at| (0x18..=0x24).contains(at)), "only the RNG bytes are written: {differ:?}");
 
     // Bytes that are no state end the run as an error, like a start state that can't be loaded.
-    let junk = load(None).with_checkpoint(&data.map, Arc::from(&b"not a state"[..]), 25, ItemCounts::default());
+    let junk = load(None).with_checkpoint(&data.map, Arc::from(&b"not a state"[..]), 25, Grants::default());
     let mut c = chain(c.into_parts().0.into_nes(), data, junk.unwrap());
     let ChainStatus::Done(r) = c.reset(Some(0), &mut ChaCha8Rng::seed_from_u64(0)).unwrap() else { panic!() };
     assert_eq!(r.result, "error");
@@ -623,7 +623,7 @@ fn a_power_on_start_boots_the_game_by_inputs_alone(nes: ZCore, data: &Arc<GameDa
     assert_eq!(&*specialist, "ow-start");
     assert_eq!(c.booted(), Some(("LINK", 0)));
     assert_eq!(c.session().state().full_location(), MapLocation::new(0, 0x77, false));
-    assert_eq!(c.context(), (Some(0), ItemCounts::default()));
+    assert_eq!(c.context(), (Some(0), Grants::default()));
     let mut bare = open_core().unwrap();
     power_on::boot(&mut bare, "LINK", 0).unwrap();
     let mut session = Session::new(bare, data.map.clone());
@@ -673,7 +673,7 @@ fn chain_rewards_are_the_training_rewards(nes: ZCore, data: &Arc<GameData>) -> Z
         env.restore(&snapshot, "0_3cc_0").unwrap();
 
         let state: Arc<[u8]> = Arc::from(common::encode_state(&snapshot).unwrap());
-        let route = d2first(data).with_checkpoint(&data.map, state, step, ItemCounts::default()).unwrap();
+        let route = d2first(data).with_checkpoint(&data.map, state, step, Grants::default()).unwrap();
         let mut c = chain(open_core().unwrap(), data, route);
         c.set_rewards(true);
         let status = c.reset(Some(seed), &mut ChaCha8Rng::seed_from_u64(seed)).unwrap();

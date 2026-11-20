@@ -39,7 +39,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use zelda::bombs::BombStats;
 use zelda::clips::ClipStats;
-use zelda::cheats::{CheatItem, CheatLedger, ItemCounts};
+use zelda::cheats::{CheatItem, CheatLedger, Grants, ItemCounts};
 use zelda::executor::Interrupt;
 use zelda::game::GameView;
 use zelda::hearts::{HeartSummary, HeartTracker, HeartView};
@@ -573,8 +573,8 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
     }
 
     /// What a run continuing from the current state needs beyond the machine: the route step Link is
-    /// playing (None off the route) and the cheat-granted items he holds.
-    pub fn context(&self) -> (Option<usize>, ItemCounts<u8>) {
+    /// playing (None off the route) and the cheat-granted items he holds, by kind.
+    pub fn context(&self) -> (Option<usize>, Grants) {
         (self.objectives.as_ref().and_then(GameCompletion::step), self.cheats.grants())
     }
 
@@ -1032,6 +1032,11 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             &self.config.reward,
             needs_wavefront(&self.config),
         );
+        // A route step's grant on reaching it (routes.yaml `grant:`): the state carries on with it.
+        let state = self
+            .cheats
+            .follow_route(&mut self.session, self.objectives.as_ref().expect("episode started"))
+            .unwrap_or(state);
         self.update_disabled_kinds(&curr.objective);
         self.linger.update(
             &LingerState::of(&change.previous, &prev.objective),
