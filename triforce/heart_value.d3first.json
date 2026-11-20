@@ -1,0 +1,5235 @@
+{
+ "route": "d3first",
+ "prior_visits": 20.0,
+ "sources": [
+  "r32base-1k-d1.jsonl",
+  "r32base-1k-d3.jsonl",
+  "r32base-1k-d4.jsonl",
+  "r32base-1k-full.jsonl",
+  "r32base-1k-post-d1.jsonl",
+  "r32base-1k-post-d3.jsonl",
+  "r32base-1k-post-d4.jsonl",
+  "r32base-plan-d3.jsonl",
+  "r32base-plan-d4.jsonl",
+  "r32base-plan-full.jsonl",
+  "r32prep-1k-post-d1-120.jsonl",
+  "r32prep-h-post-d3.jsonl",
+  "r32prep-h-post-d4.jsonl",
+  "r32prep-plan-d1.jsonl",
+  "r32prep-plan-d3.jsonl",
+  "r32prep-plan-d4.jsonl",
+  "r32prep-plan-post-d1.jsonl"
+ ],
+ "steps": [
+  {
+   "step": 0,
+   "room": "0:0x77",
+   "entry": "start",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-start",
+   "clips": {
+    "max_hearts": 3,
+    "visits": 1300,
+    "values": [
+     0.0,
+     0.0002,
+     0.0008,
+     0.0018,
+     0.0079,
+     0.0207,
+     0.0791
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 1,
+   "room": "0:0x77:cave",
+   "entry": "S",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-start",
+   "clips": {
+    "max_hearts": 3,
+    "visits": 1300,
+    "values": [
+     0.0,
+     0.0002,
+     0.0008,
+     0.0018,
+     0.0079,
+     0.0207,
+     0.0791
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 2,
+   "room": "0:0x77",
+   "entry": "cave",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-start",
+   "clips": {
+    "max_hearts": 3,
+    "visits": 1300,
+    "values": [
+     0.0,
+     0.0002,
+     0.0008,
+     0.0018,
+     0.0079,
+     0.0207,
+     0.0791
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 3,
+   "room": "0:0x76",
+   "entry": "E",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-tektite",
+   "clips": {
+    "max_hearts": 3,
+    "visits": 1300,
+    "values": [
+     0.0,
+     0.0002,
+     0.0008,
+     0.0018,
+     0.0079,
+     0.0207,
+     0.0791
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 4,
+   "room": "0:0x75",
+   "entry": "E",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-leever",
+   "clips": {
+    "max_hearts": 3,
+    "visits": 1300,
+    "values": [
+     0.0,
+     0.0002,
+     0.0008,
+     0.0018,
+     0.0079,
+     0.0207,
+     0.0791
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 5,
+   "room": "0:0x74",
+   "entry": "E",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-tektite",
+   "clips": {
+    "max_hearts": 3,
+    "visits": 1300,
+    "values": [
+     0.0,
+     0.0002,
+     0.0008,
+     0.0018,
+     0.0079,
+     0.0207,
+     0.0791
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 6,
+   "room": "3:0x7c",
+   "entry": "S",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "zol",
+   "clips": {
+    "max_hearts": 3,
+    "visits": 2900,
+    "values": [
+     0.0,
+     0.0003,
+     0.0009,
+     0.0019,
+     0.0084,
+     0.0219,
+     0.0842
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 7,
+   "room": "3:0x7b",
+   "entry": "E",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "zol",
+   "clips": {
+    "max_hearts": 3,
+    "visits": 2900,
+    "values": [
+     0.0,
+     0.0003,
+     0.0009,
+     0.0019,
+     0.0084,
+     0.0219,
+     0.0842
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 8,
+   "room": "3:0x6b",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "zol",
+   "clips": {
+    "max_hearts": 3,
+    "visits": 2891,
+    "values": [
+     0.0,
+     0.0004,
+     0.0011,
+     0.0023,
+     0.011,
+     0.0263,
+     0.1108
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 9,
+   "room": "3:0x5b",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "darknut",
+   "clips": {
+    "max_hearts": 3,
+    "visits": 2586,
+    "values": [
+     0.0,
+     0.0015,
+     0.0049,
+     0.0165,
+     0.0569,
+     0.1454,
+     0.2431
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 10,
+   "room": "3:0x4b",
+   "entry": "S",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "zol",
+   "clips": {
+    "max_hearts": 3,
+    "visits": 1719,
+    "values": [
+     0.0,
+     0.0056,
+     0.0186,
+     0.0664,
+     0.1417,
+     0.2329,
+     0.3606
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 11,
+   "room": "3:0x4a",
+   "entry": "E",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "stalfos-keese-gel",
+   "clips": {
+    "max_hearts": 3,
+    "visits": 1179,
+    "values": [
+     0.0,
+     0.0191,
+     0.0454,
+     0.1481,
+     0.2202,
+     0.325,
+     0.4117
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 12,
+   "room": "3:0x49",
+   "entry": "E",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "zol",
+   "clips": {
+    "max_hearts": 3,
+    "visits": 998,
+    "values": [
+     0.0,
+     0.0472,
+     0.0627,
+     0.2075,
+     0.2507,
+     0.365,
+     0.4407
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 13,
+   "room": "3:0x59",
+   "entry": "N",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "darknut",
+   "clips": {
+    "max_hearts": 3,
+    "visits": 933,
+    "values": [
+     0.0,
+     0.0668,
+     0.0732,
+     0.2283,
+     0.2607,
+     0.3803,
+     0.4523
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 14,
+   "room": "3:0x69",
+   "entry": "N",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "darknut",
+   "clips": {
+    "max_hearts": 3,
+    "visits": 538,
+    "values": [
+     0.0,
+     0.1604,
+     0.19,
+     0.3848,
+     0.4395,
+     0.5442,
+     0.6135
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 15,
+   "room": "3:0x0f:cave",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "equipment-room",
+   "clips": {
+    "max_hearts": 3,
+    "visits": 425,
+    "values": [
+     0.0,
+     0.324,
+     0.4138,
+     0.5556,
+     0.6058,
+     0.6531,
+     0.6752
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 16,
+   "room": "3:0x69",
+   "entry": "cave",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "darknut",
+   "clips": {
+    "max_hearts": 3,
+    "visits": 411,
+    "values": [
+     0.0,
+     0.4008,
+     0.423,
+     0.5859,
+     0.6111,
+     0.6607,
+     0.6782
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 17,
+   "room": "3:0x59",
+   "entry": "S",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "darknut",
+   "clips": {
+    "max_hearts": 3,
+    "visits": 411,
+    "values": [
+     0.0,
+     0.4008,
+     0.423,
+     0.5859,
+     0.6111,
+     0.6607,
+     0.6782
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 18,
+   "room": "3:0x5a",
+   "entry": "W",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "trap-room",
+   "clips": {
+    "max_hearts": 3,
+    "visits": 411,
+    "values": [
+     0.0,
+     0.4008,
+     0.423,
+     0.5859,
+     0.6111,
+     0.6607,
+     0.6782
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 19,
+   "room": "3:0x5b",
+   "entry": "W",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "darknut",
+   "clips": {
+    "max_hearts": 3,
+    "visits": 409,
+    "values": [
+     0.0,
+     0.4233,
+     0.4233,
+     0.5889,
+     0.6122,
+     0.6624,
+     0.6786
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 20,
+   "room": "3:0x5c",
+   "entry": "W",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "darknut",
+   "clips": {
+    "max_hearts": 3,
+    "visits": 390,
+    "values": [
+     0.0,
+     0.3657,
+     0.3657,
+     0.5702,
+     0.6076,
+     0.6808,
+     0.6877
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 21,
+   "room": "3:0x4c",
+   "entry": "S",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "trap-room",
+   "clips": {
+    "max_hearts": 3,
+    "visits": 376,
+    "values": [
+     0.0,
+     0.4272,
+     0.4472,
+     0.6084,
+     0.6339,
+     0.69,
+     0.6938
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 22,
+   "room": "3:0x4d",
+   "entry": "W",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "boss-manhandla",
+   "clips": {
+    "max_hearts": 3,
+    "visits": 372,
+    "values": [
+     0.0,
+     0.4554,
+     0.4554,
+     0.6118,
+     0.6345,
+     0.6939,
+     0.6939
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 23,
+   "room": "3:0x3d",
+   "entry": "S",
+   "exit": "triforce",
+   "visit": 1,
+   "way": null,
+   "specialist": "zol",
+   "clips": {
+    "max_hearts": 4,
+    "visits": 226,
+    "values": [
+     0.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 24,
+   "room": "0:0x74",
+   "entry": "cave",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-tektite",
+   "clips": {
+    "max_hearts": 4,
+    "visits": 1269,
+    "values": [
+     0.0,
+     0.0,
+     0.0,
+     0.0002,
+     0.0006,
+     0.0022,
+     0.0073,
+     0.019,
+     0.0652
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 25,
+   "room": "0:0x73",
+   "entry": "E",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-moblin",
+   "clips": {
+    "max_hearts": 4,
+    "visits": 1269,
+    "values": [
+     0.0,
+     0.0,
+     0.0,
+     0.0002,
+     0.0006,
+     0.0023,
+     0.0076,
+     0.0197,
+     0.0679
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 26,
+   "room": "0:0x63",
+   "entry": "S",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-moblin",
+   "clips": {
+    "max_hearts": 4,
+    "visits": 1269,
+    "values": [
+     0.0,
+     0.0,
+     0.0001,
+     0.0002,
+     0.0007,
+     0.0025,
+     0.0083,
+     0.0208,
+     0.0742
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 27,
+   "room": "0:0x64",
+   "entry": "W",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-octorok",
+   "clips": {
+    "max_hearts": 4,
+    "visits": 1269,
+    "values": [
+     0.0,
+     0.0,
+     0.0001,
+     0.0002,
+     0.0007,
+     0.0025,
+     0.0083,
+     0.0208,
+     0.0742
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 28,
+   "room": "0:0x65",
+   "entry": "W",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-zora",
+   "clips": {
+    "max_hearts": 4,
+    "visits": 1269,
+    "values": [
+     0.0,
+     0.0,
+     0.0001,
+     0.0002,
+     0.0007,
+     0.0025,
+     0.0083,
+     0.0208,
+     0.0742
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 29,
+   "room": "0:0x55",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-zora",
+   "clips": {
+    "max_hearts": 4,
+    "visits": 1269,
+    "values": [
+     0.0,
+     0.0,
+     0.0001,
+     0.0002,
+     0.0007,
+     0.0026,
+     0.0087,
+     0.0212,
+     0.0806
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 30,
+   "room": "0:0x45",
+   "entry": "S",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-peahat",
+   "clips": {
+    "max_hearts": 4,
+    "visits": 1268,
+    "values": [
+     0.0,
+     0.0,
+     0.0001,
+     0.0003,
+     0.001,
+     0.0043,
+     0.0122,
+     0.0303,
+     0.121
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 31,
+   "room": "4:0x71",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "vire",
+   "clips": {
+    "max_hearts": 4,
+    "visits": 1668,
+    "values": [
+     0.0,
+     0.0,
+     0.0001,
+     0.0003,
+     0.001,
+     0.0043,
+     0.0122,
+     0.0303,
+     0.121
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 32,
+   "room": "4:0x61",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "vire",
+   "clips": {
+    "max_hearts": 4,
+    "visits": 1668,
+    "values": [
+     0.0,
+     0.0,
+     0.0001,
+     0.0003,
+     0.001,
+     0.0043,
+     0.0122,
+     0.0303,
+     0.121
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 33,
+   "room": "4:0x51",
+   "entry": "S",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "stalfos-keese-gel",
+   "clips": {
+    "max_hearts": 4,
+    "visits": 1668,
+    "values": [
+     0.0,
+     0.0,
+     0.0001,
+     0.0005,
+     0.0013,
+     0.0058,
+     0.0158,
+     0.0375,
+     0.163
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 34,
+   "room": "4:0x50",
+   "entry": "E",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "vire",
+   "clips": {
+    "max_hearts": 4,
+    "visits": 1667,
+    "values": [
+     0.0,
+     0.0,
+     0.0002,
+     0.0007,
+     0.0018,
+     0.0081,
+     0.0216,
+     0.0507,
+     0.1997
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 35,
+   "room": "4:0x40",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "zol",
+   "clips": {
+    "max_hearts": 4,
+    "visits": 1633,
+    "values": [
+     0.0,
+     0.0001,
+     0.0003,
+     0.0014,
+     0.0054,
+     0.0208,
+     0.0571,
+     0.1185,
+     0.267
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 36,
+   "room": "4:0x30",
+   "entry": "S",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "vire",
+   "clips": {
+    "max_hearts": 4,
+    "visits": 1543,
+    "values": [
+     0.0,
+     0.0004,
+     0.001,
+     0.0062,
+     0.0148,
+     0.0625,
+     0.1068,
+     0.2092,
+     0.3837
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 37,
+   "room": "4:0x31",
+   "entry": "W",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "vire",
+   "clips": {
+    "max_hearts": 4,
+    "visits": 1542,
+    "values": [
+     0.0,
+     0.0004,
+     0.001,
+     0.0062,
+     0.0148,
+     0.0635,
+     0.1089,
+     0.2114,
+     0.3866
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 38,
+   "room": "4:0x32",
+   "entry": "W",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "like-like",
+   "clips": {
+    "max_hearts": 4,
+    "visits": 1086,
+    "values": [
+     0.0,
+     0.0031,
+     0.0061,
+     0.0358,
+     0.069,
+     0.1647,
+     0.2734,
+     0.3701,
+     0.5015
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 39,
+   "room": "4:0x60:cave",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "equipment-room",
+   "clips": {
+    "max_hearts": 4,
+    "visits": 691,
+    "values": [
+     0.0,
+     0.0283,
+     0.0517,
+     0.1503,
+     0.2378,
+     0.3625,
+     0.4586,
+     0.5233,
+     0.6105
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 40,
+   "room": "4:0x32",
+   "entry": "cave",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "like-like",
+   "clips": {
+    "max_hearts": 4,
+    "visits": 659,
+    "values": [
+     0.0,
+     0.0392,
+     0.0574,
+     0.1674,
+     0.2491,
+     0.3817,
+     0.4768,
+     0.5322,
+     0.6199
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 41,
+   "room": "4:0x31",
+   "entry": "E",
+   "exit": "N",
+   "visit": 1,
+   "way": "clips",
+   "specialist": "vire",
+   "clips": {
+    "max_hearts": 4,
+    "visits": 631,
+    "values": [
+     0.0,
+     0.0456,
+     0.0659,
+     0.1847,
+     0.2732,
+     0.415,
+     0.5081,
+     0.5565,
+     0.6437
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 42,
+   "room": "4:0x21",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": "clips",
+   "specialist": "stalfos-keese-gel",
+   "clips": {
+    "max_hearts": 4,
+    "visits": 592,
+    "values": [
+     0.0,
+     0.0561,
+     0.086,
+     0.2205,
+     0.322,
+     0.4599,
+     0.5782,
+     0.6224,
+     0.663
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 43,
+   "room": "4:0x31",
+   "entry": "E",
+   "exit": "W",
+   "visit": 1,
+   "way": "plain",
+   "specialist": "vire",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 44,
+   "room": "4:0x30",
+   "entry": "E",
+   "exit": "N",
+   "visit": 1,
+   "way": "plain",
+   "specialist": "vire",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 45,
+   "room": "4:0x20",
+   "entry": "S",
+   "exit": "E",
+   "visit": 1,
+   "way": "plain",
+   "specialist": "vire",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 46,
+   "room": "4:0x21",
+   "entry": "W",
+   "exit": "N",
+   "visit": 1,
+   "way": "plain",
+   "specialist": "stalfos-keese-gel",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 47,
+   "room": "4:0x11",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "trap-room",
+   "clips": {
+    "max_hearts": 4,
+    "visits": 582,
+    "values": [
+     0.0,
+     0.0625,
+     0.0866,
+     0.2275,
+     0.3268,
+     0.468,
+     0.5818,
+     0.6233,
+     0.6658
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 48,
+   "room": "4:0x01",
+   "entry": "S",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "stalfos-keese-gel",
+   "clips": {
+    "max_hearts": 4,
+    "visits": 582,
+    "values": [
+     0.0,
+     0.0625,
+     0.0866,
+     0.2275,
+     0.3268,
+     0.468,
+     0.5818,
+     0.6233,
+     0.6658
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 49,
+   "room": "4:0x02",
+   "entry": "W",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "trap-room",
+   "clips": {
+    "max_hearts": 4,
+    "visits": 575,
+    "values": [
+     0.0,
+     0.0684,
+     0.0894,
+     0.2344,
+     0.3432,
+     0.4866,
+     0.5909,
+     0.6308,
+     0.6702
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 50,
+   "room": "4:0x12",
+   "entry": "N",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "vire",
+   "clips": {
+    "max_hearts": 4,
+    "visits": 563,
+    "values": [
+     0.0,
+     0.0726,
+     0.0976,
+     0.2351,
+     0.3441,
+     0.4878,
+     0.5921,
+     0.6344,
+     0.6707
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 51,
+   "room": "4:0x13",
+   "entry": "W",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "boss-gleeok",
+   "clips": {
+    "max_hearts": 4,
+    "visits": 491,
+    "values": [
+     0.0,
+     0.1439,
+     0.1439,
+     0.3249,
+     0.4762,
+     0.6046,
+     0.6482,
+     0.6847,
+     0.6847
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 52,
+   "room": "4:0x03",
+   "entry": "S",
+   "exit": "triforce",
+   "visit": 1,
+   "way": null,
+   "specialist": "vire",
+   "clips": {
+    "max_hearts": 5,
+    "visits": 207,
+    "values": [
+     0.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 53,
+   "room": "0:0x45",
+   "entry": "cave",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-peahat",
+   "clips": {
+    "max_hearts": 5,
+    "visits": 1216,
+    "values": [
+     0.0,
+     0.0002,
+     0.0014,
+     0.0051,
+     0.0129,
+     0.0268,
+     0.0489,
+     0.0915,
+     0.1268,
+     0.1804,
+     0.3312
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 54,
+   "room": "0:0x55",
+   "entry": "N",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-zora",
+   "clips": {
+    "max_hearts": 5,
+    "visits": 1933,
+    "values": [
+     0.0,
+     0.0002,
+     0.0014,
+     0.0051,
+     0.0129,
+     0.0268,
+     0.0489,
+     0.0915,
+     0.1268,
+     0.1804,
+     0.3312
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 55,
+   "room": "0:0x56",
+   "entry": "W",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-zora",
+   "clips": {
+    "max_hearts": 5,
+    "visits": 1055,
+    "values": [
+     0.0,
+     0.0004,
+     0.0023,
+     0.0077,
+     0.0179,
+     0.0355,
+     0.0622,
+     0.1199,
+     0.1707,
+     0.2645,
+     0.3719
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 56,
+   "room": "0:0x46",
+   "entry": "S",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-zora",
+   "clips": {
+    "max_hearts": 5,
+    "visits": 1055,
+    "values": [
+     0.0,
+     0.001,
+     0.0055,
+     0.015,
+     0.0302,
+     0.0572,
+     0.091,
+     0.1454,
+     0.2424,
+     0.3637,
+     0.5093
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 57,
+   "room": "0:0x47",
+   "entry": "W",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-zora",
+   "clips": {
+    "max_hearts": 5,
+    "visits": 1055,
+    "values": [
+     0.0,
+     0.0012,
+     0.006,
+     0.0162,
+     0.0319,
+     0.0611,
+     0.0949,
+     0.1528,
+     0.2556,
+     0.3821,
+     0.5118
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 58,
+   "room": "0:0x48",
+   "entry": "W",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-leever",
+   "clips": {
+    "max_hearts": 5,
+    "visits": 1055,
+    "values": [
+     0.0,
+     0.0012,
+     0.0063,
+     0.0168,
+     0.0336,
+     0.0647,
+     0.097,
+     0.162,
+     0.2625,
+     0.386,
+     0.513
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 59,
+   "room": "0:0x38",
+   "entry": "S",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-zora",
+   "clips": {
+    "max_hearts": 5,
+    "visits": 1055,
+    "values": [
+     0.0,
+     0.002,
+     0.0096,
+     0.0225,
+     0.0463,
+     0.084,
+     0.1265,
+     0.2141,
+     0.323,
+     0.4387,
+     0.5429
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 60,
+   "room": "0:0x37",
+   "entry": "E",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-octorok",
+   "clips": {
+    "max_hearts": 5,
+    "visits": 1063,
+    "values": [
+     0.0,
+     0.0038,
+     0.0148,
+     0.0299,
+     0.0624,
+     0.1009,
+     0.1708,
+     0.2717,
+     0.3932,
+     0.5026,
+     0.5974
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 61,
+   "room": "1:0x73",
+   "entry": "S",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "stalfos-keese-gel",
+   "clips": {
+    "max_hearts": 5,
+    "visits": 1319,
+    "values": [
+     0.0,
+     0.0033,
+     0.0121,
+     0.0292,
+     0.0584,
+     0.1011,
+     0.1652,
+     0.2697,
+     0.3881,
+     0.499,
+     0.5987
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 62,
+   "room": "0:0x37",
+   "entry": "cave",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-octorok",
+   "clips": {
+    "max_hearts": 5,
+    "visits": 1319,
+    "values": [
+     0.0,
+     0.0033,
+     0.0121,
+     0.0292,
+     0.0584,
+     0.1011,
+     0.1652,
+     0.2697,
+     0.3881,
+     0.499,
+     0.5987
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 63,
+   "room": "1:0x73",
+   "entry": "S",
+   "exit": "N",
+   "visit": 2,
+   "way": null,
+   "specialist": "stalfos-keese-gel",
+   "clips": {
+    "max_hearts": 5,
+    "visits": 836,
+    "values": [
+     0.0,
+     0.0058,
+     0.0197,
+     0.0446,
+     0.0854,
+     0.142,
+     0.2488,
+     0.3558,
+     0.4901,
+     0.5991,
+     0.7202
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 64,
+   "room": "1:0x63",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "stalfos-keese-gel",
+   "clips": {
+    "max_hearts": 5,
+    "visits": 836,
+    "values": [
+     0.0,
+     0.0058,
+     0.0197,
+     0.0446,
+     0.0854,
+     0.142,
+     0.2488,
+     0.3558,
+     0.4901,
+     0.5991,
+     0.7202
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 65,
+   "room": "1:0x53",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "stalfos-keese-gel",
+   "clips": {
+    "max_hearts": 5,
+    "visits": 835,
+    "values": [
+     0.0,
+     0.0089,
+     0.0271,
+     0.0578,
+     0.1044,
+     0.1812,
+     0.3019,
+     0.4224,
+     0.5402,
+     0.6541,
+     0.7632
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 66,
+   "room": "1:0x43",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "stalfos-keese-gel",
+   "clips": {
+    "max_hearts": 5,
+    "visits": 834,
+    "values": [
+     0.0,
+     0.0062,
+     0.0298,
+     0.0704,
+     0.1236,
+     0.2211,
+     0.3418,
+     0.4835,
+     0.5988,
+     0.713,
+     0.825
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 67,
+   "room": "1:0x33",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "stalfos-keese-gel",
+   "clips": {
+    "max_hearts": 5,
+    "visits": 833,
+    "values": [
+     0.0,
+     0.0086,
+     0.0415,
+     0.0921,
+     0.1511,
+     0.2664,
+     0.4295,
+     0.5478,
+     0.6657,
+     0.754,
+     0.8487
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 68,
+   "room": "1:0x23",
+   "entry": "S",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "goriya",
+   "clips": {
+    "max_hearts": 5,
+    "visits": 740,
+    "values": [
+     0.0,
+     0.014,
+     0.0716,
+     0.1225,
+     0.2389,
+     0.3999,
+     0.578,
+     0.6586,
+     0.7715,
+     0.8642,
+     0.9274
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 69,
+   "room": "1:0x22",
+   "entry": "E",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "trap-room",
+   "clips": {
+    "max_hearts": 5,
+    "visits": 640,
+    "values": [
+     0.0,
+     0.0502,
+     0.1513,
+     0.2922,
+     0.4891,
+     0.6838,
+     0.7663,
+     0.8838,
+     0.9428,
+     0.9621,
+     0.9746
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 70,
+   "room": "1:0x7f:cave",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "equipment-room",
+   "clips": {
+    "max_hearts": 5,
+    "visits": 640,
+    "values": [
+     0.0,
+     0.0502,
+     0.1513,
+     0.2922,
+     0.4891,
+     0.6838,
+     0.7663,
+     0.8838,
+     0.9428,
+     0.9621,
+     0.9746
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 71,
+   "room": "1:0x22",
+   "entry": "cave",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "trap-room",
+   "clips": {
+    "max_hearts": 5,
+    "visits": 622,
+    "values": [
+     0.0,
+     0.0935,
+     0.2134,
+     0.3823,
+     0.5944,
+     0.7682,
+     0.8588,
+     0.9201,
+     0.9615,
+     0.97,
+     0.976
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 72,
+   "room": "1:0x23",
+   "entry": "W",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "goriya",
+   "clips": {
+    "max_hearts": 5,
+    "visits": 622,
+    "values": [
+     0.0,
+     0.0936,
+     0.2136,
+     0.3825,
+     0.5984,
+     0.7684,
+     0.8618,
+     0.9202,
+     0.9615,
+     0.97,
+     0.976
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 73,
+   "room": "1:0x33",
+   "entry": "N",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "stalfos-keese-gel",
+   "clips": {
+    "max_hearts": 5,
+    "visits": 622,
+    "values": [
+     0.0,
+     0.0936,
+     0.2136,
+     0.3825,
+     0.5984,
+     0.7684,
+     0.8618,
+     0.9202,
+     0.9615,
+     0.97,
+     0.976
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 74,
+   "room": "1:0x43",
+   "entry": "N",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "stalfos-keese-gel",
+   "clips": {
+    "max_hearts": 5,
+    "visits": 622,
+    "values": [
+     0.0,
+     0.0941,
+     0.216,
+     0.3888,
+     0.6012,
+     0.7722,
+     0.8631,
+     0.9204,
+     0.9617,
+     0.9702,
+     0.976
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 75,
+   "room": "1:0x44",
+   "entry": "W",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "goriya",
+   "clips": {
+    "max_hearts": 5,
+    "visits": 621,
+    "values": [
+     0.0,
+     0.0966,
+     0.2166,
+     0.3957,
+     0.6081,
+     0.7744,
+     0.8654,
+     0.9212,
+     0.9618,
+     0.9703,
+     0.976
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 76,
+   "room": "1:0x45",
+   "entry": "W",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "wallmaster",
+   "clips": {
+    "max_hearts": 5,
+    "visits": 520,
+    "values": [
+     0.0,
+     0.2544,
+     0.4944,
+     0.722,
+     0.8513,
+     0.9503,
+     0.9718,
+     0.9718,
+     0.9719,
+     0.9719,
+     0.9792
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 77,
+   "room": "1:0x35",
+   "entry": "S",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "boss-aquamentus",
+   "clips": {
+    "max_hearts": 5,
+    "visits": 520,
+    "values": [
+     0.0,
+     0.2544,
+     0.4944,
+     0.722,
+     0.8513,
+     0.9503,
+     0.9718,
+     0.9718,
+     0.9719,
+     0.9719,
+     0.9792
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 78,
+   "room": "1:0x36",
+   "entry": "W",
+   "exit": "triforce",
+   "visit": 1,
+   "way": null,
+   "specialist": "stalfos-keese-gel",
+   "clips": {
+    "max_hearts": 6,
+    "visits": 423,
+    "values": [
+     0.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 79,
+   "room": "0:0x37",
+   "entry": "cave",
+   "exit": "E",
+   "visit": 2,
+   "way": null,
+   "specialist": "ow-octorok",
+   "clips": {
+    "max_hearts": 6,
+    "visits": 2303,
+    "values": [
+     0.0,
+     0.0,
+     0.0,
+     0.0001,
+     0.0001,
+     0.0002,
+     0.0004,
+     0.0006,
+     0.001,
+     0.0015,
+     0.0023,
+     0.0036,
+     0.0055
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 80,
+   "room": "0:0x38",
+   "entry": "W",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-zora",
+   "clips": {
+    "max_hearts": 6,
+    "visits": 2303,
+    "values": [
+     0.0,
+     0.0,
+     0.0,
+     0.0001,
+     0.0002,
+     0.0003,
+     0.0005,
+     0.0008,
+     0.0012,
+     0.0017,
+     0.0027,
+     0.0042,
+     0.0065
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 81,
+   "room": "0:0x28",
+   "entry": "S",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-zora",
+   "clips": {
+    "max_hearts": 6,
+    "visits": 2303,
+    "values": [
+     0.0,
+     0.0,
+     0.0,
+     0.0001,
+     0.0002,
+     0.0003,
+     0.0006,
+     0.0009,
+     0.0014,
+     0.002,
+     0.0031,
+     0.0052,
+     0.0071
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 82,
+   "room": "0:0x29",
+   "entry": "W",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-leever",
+   "clips": {
+    "max_hearts": 6,
+    "visits": 2303,
+    "values": [
+     0.0,
+     0.0,
+     0.0,
+     0.0001,
+     0.0002,
+     0.0004,
+     0.0006,
+     0.0009,
+     0.0014,
+     0.002,
+     0.0033,
+     0.0055,
+     0.0074
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 83,
+   "room": "0:0x2a",
+   "entry": "W",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-leever",
+   "clips": {
+    "max_hearts": 6,
+    "visits": 2302,
+    "values": [
+     0.0,
+     0.0,
+     0.0001,
+     0.0002,
+     0.0004,
+     0.0006,
+     0.001,
+     0.0016,
+     0.0021,
+     0.0033,
+     0.005,
+     0.0088,
+     0.012
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 84,
+   "room": "0:0x2b",
+   "entry": "W",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-leever",
+   "clips": {
+    "max_hearts": 6,
+    "visits": 1811,
+    "values": [
+     0.0,
+     0.0002,
+     0.0005,
+     0.0013,
+     0.0022,
+     0.0032,
+     0.0045,
+     0.0059,
+     0.0074,
+     0.0098,
+     0.0142,
+     0.0177,
+     0.0212
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 85,
+   "room": "0:0x2c",
+   "entry": "W",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-tektite",
+   "clips": {
+    "max_hearts": 6,
+    "visits": 1570,
+    "values": [
+     0.0,
+     0.0012,
+     0.002,
+     0.003,
+     0.0043,
+     0.0055,
+     0.0072,
+     0.0087,
+     0.0107,
+     0.0134,
+     0.0174,
+     0.0207,
+     0.0233
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 86,
+   "room": "0:0x2c:cave",
+   "entry": "S",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-tektite",
+   "clips": {
+    "max_hearts": 6,
+    "visits": 1563,
+    "values": [
+     0.0,
+     0.0013,
+     0.0021,
+     0.0032,
+     0.0045,
+     0.0057,
+     0.0076,
+     0.0088,
+     0.0108,
+     0.0134,
+     0.0177,
+     0.0207,
+     0.0235
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 87,
+   "room": "0:0x2c",
+   "entry": "cave",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-tektite",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 1563,
+    "values": [
+     0.0,
+     0.0003,
+     0.0007,
+     0.0013,
+     0.0021,
+     0.0032,
+     0.0045,
+     0.0057,
+     0.0076,
+     0.0088,
+     0.0108,
+     0.0134,
+     0.0177,
+     0.0207,
+     0.0237
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 88,
+   "room": "0:0x2d",
+   "entry": "W",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-zora",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 1550,
+    "values": [
+     0.0,
+     0.0003,
+     0.0007,
+     0.0016,
+     0.0025,
+     0.0034,
+     0.0047,
+     0.006,
+     0.0082,
+     0.0088,
+     0.0112,
+     0.0139,
+     0.0177,
+     0.0207,
+     0.0244
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 89,
+   "room": "0:0x2d:cave",
+   "entry": "S",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-zora",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 1132,
+    "values": [
+     0.0,
+     0.0009,
+     0.0015,
+     0.003,
+     0.0046,
+     0.0058,
+     0.0071,
+     0.0084,
+     0.01,
+     0.0119,
+     0.0148,
+     0.0178,
+     0.0217,
+     0.0254,
+     0.0273
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 90,
+   "room": "0:0x2d",
+   "entry": "cave",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-zora",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 1132,
+    "values": [
+     0.0,
+     0.0009,
+     0.0015,
+     0.003,
+     0.0046,
+     0.0058,
+     0.0071,
+     0.0084,
+     0.01,
+     0.0119,
+     0.0148,
+     0.0178,
+     0.0217,
+     0.0254,
+     0.0273
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 91,
+   "room": "0:0x2c",
+   "entry": "E",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-tektite",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 1129,
+    "values": [
+     0.0,
+     0.001,
+     0.0015,
+     0.0031,
+     0.0047,
+     0.0058,
+     0.0072,
+     0.0084,
+     0.01,
+     0.012,
+     0.015,
+     0.0179,
+     0.022,
+     0.0256,
+     0.0273
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 92,
+   "room": "0:0x1c",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-start",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 1111,
+    "values": [
+     0.0,
+     0.0005,
+     0.0013,
+     0.0029,
+     0.0045,
+     0.0057,
+     0.0071,
+     0.0082,
+     0.01,
+     0.0112,
+     0.0148,
+     0.0173,
+     0.022,
+     0.0258,
+     0.0275
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 93,
+   "room": "0:0x0c",
+   "entry": "S",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-tektite",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 1114,
+    "values": [
+     0.0,
+     0.0005,
+     0.0013,
+     0.0029,
+     0.0045,
+     0.0057,
+     0.0071,
+     0.0082,
+     0.01,
+     0.0112,
+     0.0148,
+     0.0173,
+     0.022,
+     0.0258,
+     0.0275
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 94,
+   "room": "0:0x0c:cave",
+   "entry": "S",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-tektite",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 2058,
+    "values": [
+     0.0,
+     0.0007,
+     0.0017,
+     0.0034,
+     0.0051,
+     0.006,
+     0.0068,
+     0.0077,
+     0.0082,
+     0.0121,
+     0.0148,
+     0.0161,
+     0.023,
+     0.0266,
+     0.0281
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 95,
+   "room": "0:0x0c",
+   "entry": "cave",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-tektite",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 1706,
+    "values": [
+     0.0,
+     0.0007,
+     0.0017,
+     0.0034,
+     0.0051,
+     0.006,
+     0.0068,
+     0.0077,
+     0.0082,
+     0.0121,
+     0.0148,
+     0.0161,
+     0.023,
+     0.0266,
+     0.0281
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 96,
+   "room": "0:0x0b",
+   "entry": "E",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-leever",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 502,
+    "values": [
+     0.0,
+     0.001,
+     0.0017,
+     0.0039,
+     0.0053,
+     0.0058,
+     0.0063,
+     0.0071,
+     0.0077,
+     0.013,
+     0.014,
+     0.0158,
+     0.024,
+     0.0273,
+     0.0285
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 97,
+   "room": "5:0x76",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "gibdo",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 158,
+    "values": [
+     0.0,
+     0.0016,
+     0.002,
+     0.0048,
+     0.0061,
+     0.0061,
+     0.0064,
+     0.0077,
+     0.008,
+     0.0148,
+     0.0159,
+     0.0162,
+     0.0254,
+     0.0285,
+     0.0291
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 98,
+   "room": "5:0x66",
+   "entry": "S",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "gibdo",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 158,
+    "values": [
+     0.0,
+     0.0016,
+     0.002,
+     0.0048,
+     0.0061,
+     0.0061,
+     0.0064,
+     0.0077,
+     0.008,
+     0.0148,
+     0.0159,
+     0.0162,
+     0.0254,
+     0.0285,
+     0.0291
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 99,
+   "room": "5:0x65",
+   "entry": "E",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "gibdo",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 158,
+    "values": [
+     0.0,
+     0.0016,
+     0.002,
+     0.0048,
+     0.0061,
+     0.0061,
+     0.0064,
+     0.0077,
+     0.008,
+     0.0148,
+     0.0159,
+     0.0162,
+     0.0254,
+     0.0285,
+     0.0291
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 100,
+   "room": "5:0x64",
+   "entry": "E",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "darknut",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 150,
+    "values": [
+     0.0,
+     0.0021,
+     0.0027,
+     0.0071,
+     0.008,
+     0.008,
+     0.0081,
+     0.0081,
+     0.0083,
+     0.0173,
+     0.0185,
+     0.0206,
+     0.0327,
+     0.0334,
+     0.0334
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 101,
+   "room": "5:0x07:cave",
+   "entry": "S",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "equipment-room",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 150,
+    "values": [
+     0.0,
+     0.0021,
+     0.0027,
+     0.0071,
+     0.008,
+     0.008,
+     0.0081,
+     0.0081,
+     0.0083,
+     0.0173,
+     0.0185,
+     0.0206,
+     0.0327,
+     0.0334,
+     0.0334
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 102,
+   "room": "5:0x06",
+   "entry": "cave",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "darknut",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 148,
+    "values": [
+     0.0,
+     0.0024,
+     0.0027,
+     0.008,
+     0.008,
+     0.008,
+     0.0081,
+     0.0081,
+     0.0083,
+     0.0185,
+     0.0185,
+     0.021,
+     0.0334,
+     0.0334,
+     0.0334
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 103,
+   "room": "5:0x05",
+   "entry": "E",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "darknut",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 148,
+    "values": [
+     0.0,
+     0.0024,
+     0.0027,
+     0.008,
+     0.008,
+     0.008,
+     0.0081,
+     0.0081,
+     0.0083,
+     0.0185,
+     0.0185,
+     0.021,
+     0.0334,
+     0.0334,
+     0.0334
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 104,
+   "room": "5:0x04:cave",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "equipment-room",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 14,
+    "values": [
+     0.0,
+     0.0154,
+     0.0316,
+     0.0518,
+     0.0682,
+     0.0895,
+     0.1151,
+     0.1338,
+     0.1507,
+     0.1745,
+     0.1962,
+     0.2203,
+     0.2419,
+     0.2636,
+     0.2814
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 105,
+   "room": "5:0x05",
+   "entry": "cave",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "darknut",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 14,
+    "values": [
+     0.0,
+     0.0193,
+     0.0362,
+     0.0555,
+     0.0712,
+     0.0945,
+     0.1207,
+     0.1374,
+     0.1543,
+     0.18,
+     0.2014,
+     0.2251,
+     0.246,
+     0.2681,
+     0.285
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 106,
+   "room": "5:0x06",
+   "entry": "W",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "darknut",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 14,
+    "values": [
+     0.0,
+     0.0193,
+     0.0362,
+     0.0555,
+     0.0712,
+     0.0945,
+     0.1207,
+     0.1374,
+     0.1543,
+     0.18,
+     0.2014,
+     0.2251,
+     0.246,
+     0.2681,
+     0.285
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 107,
+   "room": "5:0x07:cave",
+   "entry": "S",
+   "exit": "W",
+   "visit": 2,
+   "way": null,
+   "specialist": "equipment-room",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 14,
+    "values": [
+     0.0,
+     0.0193,
+     0.0362,
+     0.0555,
+     0.0712,
+     0.0945,
+     0.1207,
+     0.1374,
+     0.1543,
+     0.18,
+     0.2014,
+     0.2251,
+     0.246,
+     0.2681,
+     0.285
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 108,
+   "room": "5:0x64",
+   "entry": "cave",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "darknut",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 14,
+    "values": [
+     0.0,
+     0.0237,
+     0.0425,
+     0.0602,
+     0.0753,
+     0.1012,
+     0.1283,
+     0.1423,
+     0.1588,
+     0.1887,
+     0.2072,
+     0.2313,
+     0.2541,
+     0.2736,
+     0.2899
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 109,
+   "room": "5:0x65",
+   "entry": "W",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "gibdo",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 10,
+    "values": [
+     0.0,
+     0.0424,
+     0.0744,
+     0.1066,
+     0.1333,
+     0.1611,
+     0.1967,
+     0.2091,
+     0.2224,
+     0.2538,
+     0.2734,
+     0.2819,
+     0.3068,
+     0.3192,
+     0.331
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 110,
+   "room": "5:0x66",
+   "entry": "W",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "gibdo",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 8,
+    "values": [
+     0.0,
+     0.0622,
+     0.1116,
+     0.1492,
+     0.1866,
+     0.2302,
+     0.2753,
+     0.2987,
+     0.3114,
+     0.336,
+     0.3428,
+     0.3483,
+     0.3548,
+     0.3548,
+     0.3548
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 111,
+   "room": "5:0x56",
+   "entry": "S",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "dodongo-crossing",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 7,
+    "values": [
+     0.0,
+     0.0653,
+     0.1327,
+     0.1699,
+     0.2291,
+     0.2824,
+     0.3302,
+     0.3639,
+     0.397,
+     0.4003,
+     0.4016,
+     0.4036,
+     0.4044,
+     0.4044,
+     0.4044
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 112,
+   "room": "5:0x57",
+   "entry": "W",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "zol",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 7,
+    "values": [
+     0.0,
+     0.0653,
+     0.1327,
+     0.1699,
+     0.2291,
+     0.2824,
+     0.3302,
+     0.3639,
+     0.397,
+     0.4003,
+     0.4016,
+     0.4036,
+     0.4044,
+     0.4044,
+     0.4044
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 113,
+   "room": "5:0x47",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "gibdo",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 7,
+    "values": [
+     0.0,
+     0.0653,
+     0.1327,
+     0.1699,
+     0.2291,
+     0.2824,
+     0.3302,
+     0.3639,
+     0.397,
+     0.4003,
+     0.4016,
+     0.4036,
+     0.4044,
+     0.4044,
+     0.4044
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 114,
+   "room": "5:0x37",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "darknut",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 5,
+    "values": [
+     0.0,
+     0.12,
+     0.2323,
+     0.3123,
+     0.3871,
+     0.3945,
+     0.3978,
+     0.4026,
+     0.4044,
+     0.4044,
+     0.4044,
+     0.4044,
+     0.4044,
+     0.4044,
+     0.4044
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 115,
+   "room": "5:0x27",
+   "entry": "S",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "pols-voice",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 5,
+    "values": [
+     0.0,
+     0.2,
+     0.3871,
+     0.3871,
+     0.3871,
+     0.4,
+     0.4044,
+     0.4044,
+     0.4044,
+     0.4044,
+     0.4044,
+     0.4044,
+     0.4044,
+     0.4044,
+     0.4044
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 116,
+   "room": "5:0x26",
+   "entry": "E",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "gibdo",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 5,
+    "values": [
+     0.0,
+     0.2,
+     0.3871,
+     0.3871,
+     0.3871,
+     0.4,
+     0.4044,
+     0.4044,
+     0.4044,
+     0.4044,
+     0.4044,
+     0.4044,
+     0.4044,
+     0.4044,
+     0.4044
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 117,
+   "room": "5:0x25",
+   "entry": "E",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "pols-voice",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 5,
+    "values": [
+     0.0,
+     0.2,
+     0.3871,
+     0.3871,
+     0.3871,
+     0.4,
+     0.4044,
+     0.4044,
+     0.4044,
+     0.4044,
+     0.4044,
+     0.4044,
+     0.4044,
+     0.4044,
+     0.4044
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 118,
+   "room": "5:0x24",
+   "entry": "E",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "boss-digdogger",
+   "clips": {
+    "max_hearts": 7,
+    "visits": 5,
+    "values": [
+     0.0,
+     0.2,
+     0.3871,
+     0.3871,
+     0.3871,
+     0.4,
+     0.4044,
+     0.4044,
+     0.4044,
+     0.4044,
+     0.4044,
+     0.4044,
+     0.4044,
+     0.4044,
+     0.4044
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 119,
+   "room": "5:0x14",
+   "entry": "S",
+   "exit": "triforce",
+   "visit": 1,
+   "way": null,
+   "specialist": "gibdo",
+   "clips": {
+    "max_hearts": 8,
+    "visits": 2,
+    "values": [
+     0.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0
+    ]
+   },
+   "plain": null
+  },
+  {
+   "step": 120,
+   "room": "0:0x0b",
+   "entry": "cave",
+   "exit": "recorder",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-leever",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 121,
+   "room": "0:0x74",
+   "entry": "recorder",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-tektite",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 122,
+   "room": "0:0x73",
+   "entry": "E",
+   "exit": "N",
+   "visit": 2,
+   "way": null,
+   "specialist": "ow-moblin",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 123,
+   "room": "0:0x63",
+   "entry": "S",
+   "exit": "W",
+   "visit": 2,
+   "way": null,
+   "specialist": "ow-moblin",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 124,
+   "room": "0:0x62",
+   "entry": "E",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-moblin",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 125,
+   "room": "0:0x62:cave",
+   "entry": "S",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-moblin",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 126,
+   "room": "0:0x62",
+   "entry": "cave",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-moblin",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 127,
+   "room": "0:0x52",
+   "entry": "S",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-moblin",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 128,
+   "room": "0:0x51",
+   "entry": "E",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-moblin",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 129,
+   "room": "0:0x50",
+   "entry": "E",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-lynel",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 130,
+   "room": "0:0x60",
+   "entry": "N",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-lynel",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 131,
+   "room": "0:0x5f",
+   "entry": "E",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-zora",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 132,
+   "room": "0:0x4f",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-zora",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 133,
+   "room": "0:0x3f",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-zora",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 134,
+   "room": "0:0x2f",
+   "entry": "S",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-start",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 135,
+   "room": "0:0x2f:cave",
+   "entry": "S",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-start",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 136,
+   "room": "0:0x2f",
+   "entry": "cave",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-start",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 137,
+   "room": "0:0x3f",
+   "entry": "N",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-zora",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 138,
+   "room": "0:0x3e",
+   "entry": "E",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-zora",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 139,
+   "room": "0:0x3d",
+   "entry": "E",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-moblin",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 140,
+   "room": "0:0x3d:cave",
+   "entry": "S",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-moblin",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 141,
+   "room": "0:0x3d",
+   "entry": "cave",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-moblin",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 142,
+   "room": "0:0x4d",
+   "entry": "N",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-moblin",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 143,
+   "room": "0:0x4c",
+   "entry": "E",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-octorok",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 144,
+   "room": "0:0x3c",
+   "entry": "S",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-octorok",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 145,
+   "room": "2:0x7d",
+   "entry": "S",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "d2-rope",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 146,
+   "room": "2:0x7e",
+   "entry": "W",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "d2-rope",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 147,
+   "room": "2:0x6e",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "d2-rope",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 148,
+   "room": "2:0x5e",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "goriya",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 149,
+   "room": "2:0x4e",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "d2-rope",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 150,
+   "room": "2:0x3e",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "moldorm",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 151,
+   "room": "2:0x2e",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "d2-rope",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 152,
+   "room": "2:0x1e",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "goriya",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 153,
+   "room": "2:0x0e",
+   "entry": "S",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "boss-dodongo",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 154,
+   "room": "2:0x0d",
+   "entry": "E",
+   "exit": "triforce",
+   "visit": 1,
+   "way": null,
+   "specialist": "d2-rope",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 155,
+   "room": "0:0x3c",
+   "entry": "cave",
+   "exit": "recorder",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-octorok",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 156,
+   "room": "0:0x45",
+   "entry": "recorder",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-peahat",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 157,
+   "room": "0:0x55",
+   "entry": "N",
+   "exit": "W",
+   "visit": 2,
+   "way": "clips",
+   "specialist": "ow-zora",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 158,
+   "room": "0:0x54",
+   "entry": "E",
+   "exit": "N",
+   "visit": 1,
+   "way": "clips",
+   "specialist": "ow-zora",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 159,
+   "room": "0:0x55",
+   "entry": "N",
+   "exit": "S",
+   "visit": 2,
+   "way": "plain",
+   "specialist": "ow-zora",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 160,
+   "room": "0:0x65",
+   "entry": "N",
+   "exit": "W",
+   "visit": 1,
+   "way": "plain",
+   "specialist": "ow-zora",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 161,
+   "room": "0:0x64",
+   "entry": "E",
+   "exit": "N",
+   "visit": 1,
+   "way": "plain",
+   "specialist": "ow-octorok",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 162,
+   "room": "0:0x54",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": "plain",
+   "specialist": "ow-zora",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 163,
+   "room": "0:0x44",
+   "entry": "S",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-zora",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 164,
+   "room": "0:0x44:cave",
+   "entry": "S",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-zora",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 165,
+   "room": "0:0x44",
+   "entry": "cave",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-zora",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 166,
+   "room": "0:0x34",
+   "entry": "S",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-leever",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 167,
+   "room": "0:0x34:cave",
+   "entry": "S",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-leever",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 168,
+   "room": "0:0x34",
+   "entry": "cave",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-leever",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 169,
+   "room": "0:0x44",
+   "entry": "N",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-zora",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 170,
+   "room": "0:0x54",
+   "entry": "N",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-zora",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 171,
+   "room": "0:0x53",
+   "entry": "E",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-moblin",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 172,
+   "room": "0:0x52",
+   "entry": "E",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-moblin",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 173,
+   "room": "0:0x42",
+   "entry": "S",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-moblin",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 174,
+   "room": "7:0x79",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "goriya",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 175,
+   "room": "7:0x69",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "goriya",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 176,
+   "room": "7:0x59",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "goriya",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 177,
+   "room": "7:0x49",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "goriya",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 178,
+   "room": "7:0x39",
+   "entry": "S",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "boss-digdogger",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 179,
+   "room": "7:0x38",
+   "entry": "E",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "goriya",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 180,
+   "room": "7:0x28",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "goriya",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 181,
+   "room": "7:0x18",
+   "entry": "S",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "goriya",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 182,
+   "room": "7:0x19",
+   "entry": "W",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "goriya",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 183,
+   "room": "7:0x1a",
+   "entry": "W",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "goriya",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 184,
+   "room": "7:0x4a:cave",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "equipment-room",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 185,
+   "room": "7:0x1a",
+   "entry": "cave",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "goriya",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 186,
+   "room": "7:0x1b",
+   "entry": "W",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "goriya",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 187,
+   "room": "7:0x1c",
+   "entry": "W",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "boss-digdogger",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 188,
+   "room": "7:0x0c",
+   "entry": "S",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "dodongo-crossing",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 189,
+   "room": "7:0x0d",
+   "entry": "W",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "wallmaster",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 190,
+   "room": "7:0x7b:cave",
+   "entry": "S",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "equipment-room",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 191,
+   "room": "7:0x29",
+   "entry": "cave",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "goriya",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 192,
+   "room": "7:0x2a",
+   "entry": "W",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "boss-aquamentus",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 193,
+   "room": "7:0x2b",
+   "entry": "W",
+   "exit": "triforce",
+   "visit": 1,
+   "way": null,
+   "specialist": "goriya",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 194,
+   "room": "0:0x42",
+   "entry": "cave",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-moblin",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 195,
+   "room": "0:0x52",
+   "entry": "N",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-moblin",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 196,
+   "room": "0:0x51",
+   "entry": "E",
+   "exit": "W",
+   "visit": 2,
+   "way": "clips",
+   "specialist": "ow-moblin",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 197,
+   "room": "0:0x50",
+   "entry": "E",
+   "exit": "N",
+   "visit": 2,
+   "way": "clips",
+   "specialist": "ow-lynel",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 198,
+   "room": "0:0x51",
+   "entry": "E",
+   "exit": "S",
+   "visit": 2,
+   "way": "plain",
+   "specialist": "ow-moblin",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 199,
+   "room": "0:0x61",
+   "entry": "N",
+   "exit": "maze",
+   "visit": 1,
+   "way": "plain",
+   "specialist": "ow-moblin",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 200,
+   "room": "0:0x60",
+   "entry": "E",
+   "exit": "N",
+   "visit": 1,
+   "way": "plain",
+   "specialist": "ow-lynel",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 201,
+   "room": "0:0x50",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": "plain",
+   "specialist": "ow-lynel",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 202,
+   "room": "0:0x40",
+   "entry": "S",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-ghini",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 203,
+   "room": "0:0x41",
+   "entry": "W",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-ghini",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 204,
+   "room": "0:0x31",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-ghini",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 205,
+   "room": "0:0x21",
+   "entry": "S",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-ghini",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 206,
+   "room": "0:0x21:cave",
+   "entry": "S",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-ghini",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 207,
+   "room": "0:0x21",
+   "entry": "cave",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-ghini",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 208,
+   "room": "0:0x31",
+   "entry": "N",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-ghini",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 209,
+   "room": "0:0x32",
+   "entry": "W",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-lynel",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 210,
+   "room": "0:0x22",
+   "entry": "S",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-lynel",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 211,
+   "room": "6:0x79",
+   "entry": "S",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "stalfos-keese-gel",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 212,
+   "room": "6:0x78",
+   "entry": "E",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "wizzrobe",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 213,
+   "room": "6:0x68",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "zol",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 214,
+   "room": "6:0x58",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "stalfos-keese-gel",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 215,
+   "room": "6:0x48",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "trap-room",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 216,
+   "room": "6:0x38",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "wizzrobe",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 217,
+   "room": "6:0x28",
+   "entry": "S",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "wizzrobe",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 218,
+   "room": "6:0x29",
+   "entry": "W",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "wizzrobe",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 219,
+   "room": "6:0x39",
+   "entry": "N",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "vire",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 220,
+   "room": "6:0x3a",
+   "entry": "W",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "wizzrobe",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 221,
+   "room": "6:0x08:cave",
+   "entry": "S",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "equipment-room",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 222,
+   "room": "6:0x1d",
+   "entry": "cave",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "like-like",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 223,
+   "room": "6:0x2d",
+   "entry": "N",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "vire",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 224,
+   "room": "6:0x2c",
+   "entry": "E",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "wizzrobe",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 225,
+   "room": "6:0x1c",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "boss-gohma",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 226,
+   "room": "6:0x0c",
+   "entry": "S",
+   "exit": "triforce",
+   "visit": 1,
+   "way": null,
+   "specialist": "stalfos-keese-gel",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 227,
+   "room": "0:0x22",
+   "entry": "cave",
+   "exit": "recorder",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-lynel",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 228,
+   "room": "0:0x3c",
+   "entry": "recorder",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-octorok",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 229,
+   "room": "0:0x4c",
+   "entry": "N",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-octorok",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 230,
+   "room": "0:0x4d",
+   "entry": "W",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-moblin",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 231,
+   "room": "0:0x5d",
+   "entry": "N",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-moblin",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 232,
+   "room": "0:0x6d",
+   "entry": "N",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-moblin",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 233,
+   "room": "8:0x7e",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "stalfos-keese-gel",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 234,
+   "room": "8:0x6e",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "boss-manhandla",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 235,
+   "room": "8:0x5e",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "darknut",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 236,
+   "room": "8:0x4e",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "darknut",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 237,
+   "room": "8:0x3e",
+   "entry": "S",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "darknut",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 238,
+   "room": "8:0x3f",
+   "entry": "W",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "darknut",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 239,
+   "room": "8:0x2f:cave",
+   "entry": "S",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "equipment-room",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 240,
+   "room": "8:0x4c",
+   "entry": "cave",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "pols-voice",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 241,
+   "room": "8:0x3c",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "boss-gleeok",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 242,
+   "room": "8:0x2c",
+   "entry": "S",
+   "exit": "triforce",
+   "visit": 1,
+   "way": null,
+   "specialist": "stalfos-keese-gel",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 243,
+   "room": "0:0x6d",
+   "entry": "cave",
+   "exit": "recorder",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-moblin",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 244,
+   "room": "0:0x37",
+   "entry": "recorder",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-octorok",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 245,
+   "room": "0:0x38",
+   "entry": "W",
+   "exit": "S",
+   "visit": 2,
+   "way": null,
+   "specialist": "ow-zora",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 246,
+   "room": "0:0x48",
+   "entry": "N",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-leever",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 247,
+   "room": "0:0x47",
+   "entry": "E",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-zora",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 248,
+   "room": "0:0x47:cave",
+   "entry": "S",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-zora",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 249,
+   "room": "0:0x47",
+   "entry": "cave",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-zora",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 250,
+   "room": "0:0x48",
+   "entry": "W",
+   "exit": "N",
+   "visit": 2,
+   "way": null,
+   "specialist": "ow-leever",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 251,
+   "room": "0:0x38",
+   "entry": "S",
+   "exit": "N",
+   "visit": 2,
+   "way": null,
+   "specialist": "ow-zora",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 252,
+   "room": "0:0x28",
+   "entry": "S",
+   "exit": "W",
+   "visit": 2,
+   "way": null,
+   "specialist": "ow-zora",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 253,
+   "room": "0:0x27",
+   "entry": "E",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-zora",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 254,
+   "room": "0:0x17",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-boulder",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 255,
+   "room": "0:0x07",
+   "entry": "S",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-lynel",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 256,
+   "room": "0:0x06",
+   "entry": "E",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-lynel",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 257,
+   "room": "0:0x05",
+   "entry": "E",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "ow-lynel",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 258,
+   "room": "9:0x76",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "stalfos-keese-gel",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 259,
+   "room": "9:0x66",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "stalfos-keese-gel",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 260,
+   "room": "9:0x56",
+   "entry": "S",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "like-like",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 261,
+   "room": "9:0x55",
+   "entry": "E",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "lanmola",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 262,
+   "room": "9:0x60:cave",
+   "entry": "S",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "equipment-room",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 263,
+   "room": "9:0x14",
+   "entry": "cave",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "like-like",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 264,
+   "room": "9:0x15",
+   "entry": "W",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "wizzrobe",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 265,
+   "room": "9:0x16",
+   "entry": "W",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "patra",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 266,
+   "room": "9:0x26",
+   "entry": "N",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "stalfos-keese-gel",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 267,
+   "room": "9:0x27",
+   "entry": "W",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "patra",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 268,
+   "room": "9:0x17",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "wizzrobe",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 269,
+   "room": "9:0x07",
+   "entry": "S",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "wizzrobe",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 270,
+   "room": "9:0x00:cave",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "equipment-room",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 271,
+   "room": "9:0x07",
+   "entry": "cave",
+   "exit": "S",
+   "visit": 1,
+   "way": "clips",
+   "specialist": "wizzrobe",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 272,
+   "room": "9:0x07",
+   "entry": "cave",
+   "exit": "S",
+   "visit": 1,
+   "way": "plain",
+   "specialist": "wizzrobe",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 273,
+   "room": "9:0x17",
+   "entry": "N",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "wizzrobe",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 274,
+   "room": "9:0x27",
+   "entry": "N",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "patra",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 275,
+   "room": "9:0x26",
+   "entry": "E",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "stalfos-keese-gel",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 276,
+   "room": "9:0x16",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "patra",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 277,
+   "room": "9:0x06",
+   "entry": "S",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "stalfos-keese-gel",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 278,
+   "room": "9:0x05",
+   "entry": "E",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "wizzrobe",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 279,
+   "room": "9:0x70:cave",
+   "entry": "S",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "equipment-room",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 280,
+   "room": "9:0x63",
+   "entry": "cave",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "zol",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 281,
+   "room": "9:0x62",
+   "entry": "E",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "stalfos-keese-gel",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 282,
+   "room": "9:0x61",
+   "entry": "E",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "patra",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 283,
+   "room": "9:0x75:cave",
+   "entry": "S",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "equipment-room",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 284,
+   "room": "9:0x20",
+   "entry": "cave",
+   "exit": "N",
+   "visit": 1,
+   "way": "clips",
+   "specialist": "wizzrobe",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 285,
+   "room": "9:0x20",
+   "entry": "cave",
+   "exit": "N",
+   "visit": 1,
+   "way": "plain",
+   "specialist": "wizzrobe",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 286,
+   "room": "9:0x10",
+   "entry": "S",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "wizzrobe",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 287,
+   "room": "9:0x4f:cave",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "equipment-room",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 288,
+   "room": "9:0x10",
+   "entry": "cave",
+   "exit": "S",
+   "visit": 1,
+   "way": null,
+   "specialist": "wizzrobe",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 289,
+   "room": "9:0x20",
+   "entry": "N",
+   "exit": "cave",
+   "visit": 1,
+   "way": "clips",
+   "specialist": "wizzrobe",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 290,
+   "room": "9:0x20",
+   "entry": "N",
+   "exit": "cave",
+   "visit": 1,
+   "way": "plain",
+   "specialist": "wizzrobe",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 291,
+   "room": "9:0x75:cave",
+   "entry": "S",
+   "exit": "E",
+   "visit": 2,
+   "way": null,
+   "specialist": "equipment-room",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 292,
+   "room": "9:0x61",
+   "entry": "cave",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "patra",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 293,
+   "room": "9:0x51",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "like-like",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 294,
+   "room": "9:0x41",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "like-like",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 295,
+   "room": "9:0x31",
+   "entry": "S",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "wizzrobe",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 296,
+   "room": "9:0x30",
+   "entry": "E",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "wizzrobe",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 297,
+   "room": "9:0x67:cave",
+   "entry": "S",
+   "exit": "E",
+   "visit": 1,
+   "way": null,
+   "specialist": "equipment-room",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 298,
+   "room": "9:0x04",
+   "entry": "cave",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "wizzrobe",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 299,
+   "room": "9:0x03",
+   "entry": "E",
+   "exit": "cave",
+   "visit": 1,
+   "way": null,
+   "specialist": "like-like",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 300,
+   "room": "9:0x77:cave",
+   "entry": "S",
+   "exit": "W",
+   "visit": 1,
+   "way": null,
+   "specialist": "equipment-room",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 301,
+   "room": "9:0x52",
+   "entry": "cave",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "patra",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 302,
+   "room": "9:0x42",
+   "entry": "S",
+   "exit": "N",
+   "visit": 1,
+   "way": null,
+   "specialist": "ganon",
+   "clips": null,
+   "plain": null
+  },
+  {
+   "step": 303,
+   "room": "9:0x32",
+   "entry": "S",
+   "exit": "end",
+   "visit": 1,
+   "way": null,
+   "specialist": "ganon",
+   "clips": null,
+   "plain": null
+  }
+ ]
+}

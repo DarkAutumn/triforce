@@ -146,3 +146,24 @@ def test_the_table_keeps_the_rows_phase_ix_left_alone():
     # after 0x55: the steps and their rules that phase IX's rooms and sides do not reach.
     assert {52, 63, 64, 100, 205, 262, 268, 276, 290, 292, 312, 353} <= set(same)
     assert not {24, 45, 46, 47, 48, 49, 50, 51, 293, 309, 310, 311} & set(same)
+
+
+def test_the_d3first_table_prices_the_steps_its_chains_played():
+    """Round 32: `heart_value.d3first.json`, fitted on d3first's chains (the models' segments from the game start to
+    Dungeon 5's triforce, step 119, and the planner's Dungeons 3, 4, 1): it names the route as it stands, every
+    clip-way step to Dungeon 5's triforce has a curve and none after it (no chain has played them yet: a family
+    drawing those states prices hearts by the plain health terms there, `env::heart_value`), and V rises with the
+    hearts in the rooms that kill by hearts (3:0x5b S->N, 4:0x31 W->E)."""
+    root = Path(__file__).resolve().parent.parent
+    table = json.loads((root / 'triforce' / 'heart_value.d3first.json').read_text())
+    from triforce import _native
+    steps = _native.route_steps('d3first')
+    assert table['route'] == 'd3first'
+    assert [r['room'] for r in table['steps']] == [heart_value.room_key(s) for s in steps]
+    clip_way = [k for k, s in enumerate(steps) if s['way'] in (None, 'clips')]
+    assert all(table['steps'][k]['clips'] is not None for k in clip_way if k <= 119)
+    assert all(table['steps'][k]['clips'] is None for k in clip_way if k >= 120)
+    for k, room in ((9, '3:0x5b'), (37, '4:0x31')):
+        assert table['steps'][k]['room'] == room
+        values = table['steps'][k]['clips']['values']
+        assert values == sorted(values) and values[2] < values[4] < values[6]
