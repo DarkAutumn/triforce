@@ -625,6 +625,11 @@ pub struct GameMap {
     /// Each route's start-state namespace (routes.yaml `states:`, phase X; inherited through `extends:`): its start
     /// states are `<namespace>_<name>` ([`namespaced_state`]). A route without one (`d2first`) has bare names.
     pub namespaces: HashMap<String, String>,
+    /// Each route's cutoff for its own runs (routes.yaml `own_models_until: {waypoint: NAME}`, round 32; inherited
+    /// through `extends:`): the index of the step marked so. Before it a family plays its run promoted for the route
+    /// (`promoted.<route>`), from it on its default run ([`GameMap::step_policy`]). A route without one plays its
+    /// route runs on every step.
+    pub own_models_until: HashMap<String, usize>,
     /// The maps of the routes that play some rooms otherwise (game.yaml entries with `routes:`, phase X): this map's
     /// rooms with theirs over them ([`GameMap::route_map`]). Empty in a route's own map.
     route_maps: BTreeMap<String, Arc<GameMap>>,
@@ -632,6 +637,22 @@ pub struct GameMap {
 
 /// game.yaml's rooms by route, for the routes that play them otherwise ([`GameMap::route_map`]).
 type RouteRooms = BTreeMap<String, IndexMap<MapLocation, GameRoom>>;
+
+/// What joins a family and a route in a policy key ([`route_policy`]).
+pub const POLICY_ROUTE_SEP: char = '@';
+
+/// The policy key of `family`'s run promoted for `route`'s own part (`darknut@d3first`; [`GameMap::step_policy`]).
+pub fn route_policy(family: &str, route: &str) -> String {
+    format!("{family}{POLICY_ROUTE_SEP}{route}")
+}
+
+/// A policy key's family and, for a route part's key, its route (`darknut@d3first` -> (`darknut`, Some(`d3first`))).
+pub fn split_policy(key: &str) -> (&str, Option<&str>) {
+    match key.split_once(POLICY_ROUTE_SEP) {
+        Some((family, route)) => (family, Some(route)),
+        None => (key, None),
+    }
+}
 
 /// A routes.yaml `states:` namespace: a lower-case letter, then lower-case letters, digits and `-` (no `_`: a state
 /// name's namespace ends at its first `_`).
@@ -877,8 +898,10 @@ fn check_stretch(route: &str, steps: &[RouteStep], claim: &StretchClaim) -> Resu
 /// A route is a list of steps, or `{extends: <route above>, steps: [...], states: NS}`: that route's steps (none
 /// without `extends`), then these. Either list may hold `stretch:` blocks. `states:` names the route's start-state
 /// namespace (phase X; [`GameMap::namespaces`]); a route extending another takes its namespace unless it names one.
-fn parse_route(name: &str, value: &Value, routes: &Routes, namespaces: &HashMap<String, String>, blocks: &Blocks)
-    -> Result<(Vec<RouteStep>, Option<String>), MapError> {
+/// `own_models_until: {waypoint: NAME}` (round 32; [`GameMap::own_models_until`]) marks the step up to which the
+/// route's own runs play: the one step of the route (on no stretch) with that waypoint; inherited as `states:`.
+fn parse_route(name: &str, value: &Value, routes: &Routes, tables: &RouteTables, blocks: &Blocks)
+    -> Result<(Vec<RouteStep>, Option<String>, Option<usize>), MapError> {
     let parse = |mut steps: Vec<RouteStep>, list: &[Value]| -> Result<Vec<RouteStep>, MapError> {
         let mut claims = Vec::new();
         for v in list {
@@ -890,13 +913,13 @@ fn parse_route(name: &str, value: &Value, routes: &Routes, namespaces: &HashMap<
         Ok(steps)
     };
     if let Some(list) = value.as_sequence() {
-        return Ok((parse(Vec::new(), list)?, None));
+        return Ok((parse(Vec::new(), list)?, None, None));
     }
     let what = format!("routes.yaml: route {name:?}");
     if !value.is_mapping() {
         return err(format!("{what} is not a list of steps (or `extends:`, `states:` and `steps:`)"));
     }
-    check_keys(value, &["extends", "steps", "states"], &what)?;
+    check_keys(value, &["extends", "steps", "states", "own_models_until"], &what)?;
     let base = opt_string(value, "extends", &what)?;
     let states = opt_string(value, "states", &what)?;
     if base.is_none() && states.is_none() {
@@ -917,8 +940,31 @@ fn parse_route(name: &str, value: &Value, routes: &Routes, namespaces: &HashMap<
     let Some(list) = get(value, "steps").and_then(Value::as_sequence) else {
         return err(format!("{what}: needs a `steps:` list"));
     };
-    let ns = states.or_else(|| base.and_then(|b| namespaces.get(&b).cloned()));
-    Ok((parse(base_steps, list)?, ns))
+    let ns = states.or_else(|| base.as_ref().and_then(|b| tables.namespaces.get(b).cloned()));
+    let steps = parse(base_steps, list)?;
+    let own = match get(value, "own_models_until") {
+        None => base.and_then(|b| tables.own_models.get(&b).copied()),
+        Some(marker) => Some(own_models_step(&what, marker, &steps)?),
+    };
+    Ok((steps, ns, own))
+}
+
+/// The step a route's `own_models_until: {waypoint: NAME}` marks: the route's one step with that waypoint, on no
+/// stretch (both ways of a stretch must fall on one side of it).
+fn own_models_step(what: &str, marker: &Value, steps: &[RouteStep]) -> Result<usize, MapError> {
+    let what = format!("{what}: own_models_until");
+    check_keys(marker, &["waypoint"], &what)?;
+    let Some(waypoint) = opt_string(marker, "waypoint", &what)? else {
+        return err(format!("{what} needs {{waypoint: NAME}} (the step that waypoint marks)"));
+    };
+    let marked: Vec<usize> = (0..steps.len()).filter(|&i| steps[i].waypoint.as_deref() == Some(&waypoint)).collect();
+    match marked.as_slice() {
+        [i] if steps[*i].way.is_none() => Ok(*i),
+        [i] => err(format!("{what}: the step of waypoint {waypoint:?} is on stretch {:?}", steps[*i].stretch)),
+        [] => err(format!("{what}: no step of the route has waypoint {waypoint:?}")),
+        _ => err(format!("{what}: waypoint {waypoint:?} marks {} steps of the route ({marked:?}), not one",
+                         marked.len())),
+    }
 }
 
 /// The stretches of a route's steps (consecutive steps of one stretch name: the clip way's, then the plain way's).
@@ -973,9 +1019,15 @@ pub fn visit_at(steps: &[RouteStep], stretches: &[Stretch], index: usize, step: 
     (earlier + usize::from(begins(index))).max(1) as u32
 }
 
-type Namespaces = HashMap<String, String>;
+/// Per route: its start-state namespace ([`GameMap::namespaces`]) and its own runs' cutoff
+/// ([`GameMap::own_models_until`]).
+#[derive(Clone, Default)]
+struct RouteTables {
+    namespaces: HashMap<String, String>,
+    own_models: HashMap<String, usize>,
+}
 
-fn parse_routes(text: &str) -> Result<(Routes, Vec<Alternate>, Namespaces), MapError> {
+fn parse_routes(text: &str) -> Result<(Routes, Vec<Alternate>, RouteTables), MapError> {
     let data: Value =
         serde_yaml_ng::from_str(text).map_err(|e| MapError(format!("routes.yaml: {e}")))?;
     let map = data
@@ -994,7 +1046,7 @@ fn parse_routes(text: &str) -> Result<(Routes, Vec<Alternate>, Namespaces), MapE
         }
     }
     let mut routes = IndexMap::new();
-    let mut namespaces = HashMap::new();
+    let mut tables = RouteTables::default();
     for (name, value) in map {
         let Some(name) = name.as_str() else {
             return err(format!("routes.yaml: a top-level key that isn't a name: {name:?}"));
@@ -1002,10 +1054,13 @@ fn parse_routes(text: &str) -> Result<(Routes, Vec<Alternate>, Namespaces), MapE
         if matches!(name, "alternates" | "families" | "blocks") {
             continue;
         }
-        let (steps, ns) = parse_route(name, value, &routes, &namespaces, &blocks)?;
+        let (steps, ns, own) = parse_route(name, value, &routes, &tables, &blocks)?;
         routes.insert(name.to_owned(), steps);
         if let Some(ns) = ns {
-            namespaces.insert(name.to_owned(), ns);
+            tables.namespaces.insert(name.to_owned(), ns);
+        }
+        if let Some(own) = own {
+            tables.own_models.insert(name.to_owned(), own);
         }
     }
     let included: std::collections::HashSet<&str> = map
@@ -1041,7 +1096,7 @@ fn parse_routes(text: &str) -> Result<(Routes, Vec<Alternate>, Namespaces), MapE
             });
         }
     }
-    Ok((routes, alternates, namespaces))
+    Ok((routes, alternates, tables))
 }
 
 /// game.yaml's rooms as every route plays them (the entries without `routes:`), and per route the rooms it plays
@@ -1419,17 +1474,17 @@ impl GameMap {
 
     pub fn from_yaml(game: &str, routes: &str) -> Result<GameMap, MapError> {
         let (rooms, mut overlays) = parse_rooms(game)?;
-        let (routes, alternates, namespaces) = parse_routes(routes)?;
+        let (routes, alternates, tables) = parse_routes(routes)?;
         // The rooms of a route the routes.yaml lacks (a test's own routes beside the bundled game.yaml) go unused.
         overlays.retain(|route, _| routes.contains_key(route));
         let mut route_maps = BTreeMap::new();
         for (route, own) in overlays {
             let mut played = rooms.clone();
             played.extend(own);
-            let map = GameMap::assemble(played, routes.clone(), alternates.clone(), namespaces.clone(), |r| r == route)?;
+            let map = GameMap::assemble(played, routes.clone(), alternates.clone(), tables.clone(), |r| r == route)?;
             route_maps.insert(route, Arc::new(map));
         }
-        let mut map = GameMap::assemble(rooms, routes, alternates, namespaces, |r| !route_maps.contains_key(r))?;
+        let mut map = GameMap::assemble(rooms, routes, alternates, tables, |r| !route_maps.contains_key(r))?;
         map.route_maps = route_maps;
         Ok(map)
     }
@@ -1440,7 +1495,7 @@ impl GameMap {
         rooms: IndexMap<MapLocation, GameRoom>,
         routes: Routes,
         alternates: Vec<Alternate>,
-        namespaces: Namespaces,
+        tables: RouteTables,
         checked: impl Fn(&str) -> bool,
     ) -> Result<GameMap, MapError> {
         let steps = routes
@@ -1539,7 +1594,8 @@ impl GameMap {
             visits,
             alternates,
             route_ranks: HashMap::new(),
-            namespaces,
+            namespaces: tables.namespaces,
+            own_models_until: tables.own_models,
             route_maps: BTreeMap::new(),
         };
         map.route_ranks = map
@@ -1571,6 +1627,17 @@ impl GameMap {
     /// The start-state namespace of `route` (routes.yaml `states:`), None for bare names.
     pub fn namespace(&self, route: &str) -> Option<&str> {
         self.namespaces.get(route).map(String::as_str)
+    }
+
+    /// The policy key of route step `step` played by `family` (round 32): `family@route` ([`route_policy`]) before
+    /// the route's `own_models_until` step, where the route's own run plays; else `family`, its default run. On a
+    /// route without the key every step is `family` (the route's run, where it has one, plays everywhere). The one
+    /// place a step's part is decided: the chain, and through `_native.step_policy` every tool that plays.
+    pub fn step_policy(&self, route: &str, step: usize, family: &str) -> String {
+        match self.own_models_until.get(route) {
+            Some(&until) if step < until => route_policy(family, route),
+            _ => family.to_owned(),
+        }
     }
 
     /// The routes whose start states are in namespace `ns` (None: bare names), in routes.yaml order.
@@ -3231,7 +3298,11 @@ mod tests {
         let overworld = GAME_YAML.replacen("      location: '0x01'\n", "      location: '0x01'\n      keep_out: true\n", 1);
         assert_ne!(overworld, GAME_YAML);
         assert!(load(&overworld, ROUTES_YAML).unwrap_err().contains("keep_out is a dungeon room's doorway"));
-        let cellar = ROUTES_YAML.replacen("exit: N, waypoint: bow", "exit: N, waypoint: sword", 1);
+        // (d3first shares the bow's cellar: a second sword step there would be refused by its own_models_until
+        // marker first, so the marker goes for this check.)
+        let cellar = ROUTES_YAML
+            .replacen("exit: N, waypoint: bow", "exit: N, waypoint: sword", 1)
+            .replacen("  own_models_until: {waypoint: sword}\n", "", 1);
         assert_ne!(cellar, ROUTES_YAML);
         assert!(load(GAME_YAML, &cellar).unwrap_err().contains("waypoint sword takes a sword"));
     }

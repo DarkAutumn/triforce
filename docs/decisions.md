@@ -3150,3 +3150,26 @@ and 8:0x4c's arrows have no cheat"):
   `d2first` arrives with 22-38 rupees: never topped up.
 - **A state's context carries both kinds** (replay STATES, chain checkpoints `route_granted`): `REPLAY_VERSION` 1
   (version 0 still reads), so a golden path's next segment continues the bag. No model input changed: no COMPAT bump.
+
+## 2026-11-20 — A route's own runs play up to its cutoff (round 32)
+
+A run trained for `d3first`'s wood-sword rooms (darknut `r32d3-dark-s32`, boss-manhandla `r32d3-manh`, promoted for
+`d3first`) lost the magic-sword rooms of the same families later on the route: Dungeon 8 5.3% against 26.2% with
+the route's default darknut and manhandla.  The lead's design, built as given:
+
+- **The route says where its own runs stop** (routes.yaml `own_models_until: {waypoint: NAME}`): before that step a
+  family plays its `promoted.<route>` run if it has one, from it on its default `promoted` run.  `d3first`'s marker
+  is the magic sword's step (`waypoint: sword`, 0:0x21's cave), by its waypoint rather than a step number, which
+  moves whenever the route changes; the waypoint must mark exactly one step of the route, on no stretch.  A route
+  without the key plays its route runs everywhere (phase X's rule, unchanged).
+- **One place resolves which run plays a step**: the engine's policy key per step (`GameMap::step_policy`:
+  `family@route` before the cutoff, `family` after) and the registry's run of a key (`registry.policy_run`).
+  Every tool that plays loads its policies through `runner.Policies` and its chain picks the key by the step, so
+  `eval-chain`, `eval-batch`, `select-checkpoint`, `play-zelda.py`, the golden path and `zelda-headless.py` agree.
+- **Overrides name the part:** `--checkpoint FAMILY=PATH` plays both parts (it is the family's model for the
+  chain), `FAMILY@ROUTE=PATH` the route's part only; a selection whose start is before the cutoff is a selection of
+  the route's run (its candidates replace `FAMILY@ROUTE`, its reference is the route's promoted run).
+- **Records name what played:** a room record carries `policy` only where a route's run played it, so `d2first`'s
+  chain files are as before; provenance and replay headers list both runs of a family.
+- **A change of part is no handoff:** harvesting (`--harvest`) still saves states only where the family changes.
+- **Training is not touched:** a round trains one run; which states it draws is the family yaml's `state_routes`.

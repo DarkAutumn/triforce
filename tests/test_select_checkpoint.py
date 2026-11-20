@@ -124,7 +124,7 @@ def _fake_chain(plan, phase, label, sha1, act, arrived, start=None):
     meta_path(output).write_text(json.dumps({
         'batches': [{'first_seed': first_seed, 'runs': runs, 'finished': True}],
         'provenance': {'clips': plan.clips, 'start_from': plan.start if start is None else start,
-                       'models': [{'name': FAMILY, 'checkpoint_sha1': sha1, 'act': act}]}}))
+                       'models': [{'name': plan.policy, 'checkpoint_sha1': sha1, 'act': act}]}}))
 
 
 def test_a_promotion_during_the_batch_neither_changes_the_reference_nor_stops_the_selection(team, tmp_path):
@@ -189,6 +189,35 @@ def test_a_route_with_a_namespace_finds_the_chains_it_played(team, tmp_path, cap
     assert not select_checkpoint.played_by(plan, last, 'screen')
     assert select_checkpoint.main([*common[:4], '--from', 'd3first_3_7cs_0', *common[6:], '--report-only']) == 2
     assert 'namespace' in capsys.readouterr().err
+
+
+def test_a_selection_on_a_route_with_its_own_runs_replaces_the_part_it_starts_in(team, tmp_path):
+    """Round 32: on d3first (``own_models_until``: the magic sword's step) a selection starting before that step is
+    of the route's own run: its candidates replace ``FAMILY@d3first`` only, and its reference is the run promoted
+    for the route (the default run where there is none); from that step on it is of the family's default run."""
+    root, _ = team
+    common = ['--models-dir', str(root), FAMILY, 'r', '--route', 'd3first', '--runs', '2', '--confirm', '0',
+              '--chains-dir', str(tmp_path / 'chains')]
+
+    def plan_of(*where):
+        return select_checkpoint.build_plan(select_checkpoint.build_parser().parse_args([*common, *where]))
+
+    south = registry.promoted_checkpoint(FAMILY, root)
+    plan, pool = plan_of('--segment', 'd3')
+    promoted = next(candidate for candidate in pool if candidate.label == 'promoted')
+    assert plan.policy == f'{FAMILY}@d3first' and promoted.sha1 == registry.checkpoint_sha1(south)
+    assert select_checkpoint.candidate_args(plan, promoted, 'screen')[-2:] == ['--checkpoint',
+                                                                                f'{FAMILY}@d3first={south}']
+    registry.save_checkpoint(FAMILY, 'west', scripted('MOVE W 16'), root=root)
+    registry.promote(FAMILY, 'west', root=root, route='d3first')
+    plan, pool = plan_of('--segment', 'd3')
+    promoted = next(candidate for candidate in pool if candidate.label == 'promoted')
+    assert promoted.sha1 == registry.checkpoint_sha1(registry.run_dir(FAMILY, 'west', root))
+    # From the magic sword's cave on, the default run is selected and the reference is the default promoted run.
+    plan, pool = plan_of('--from', '0_21cave_0')
+    promoted = next(candidate for candidate in pool if candidate.label == 'promoted')
+    assert plan.policy == FAMILY and promoted.sha1 == registry.checkpoint_sha1(south)
+    assert select_checkpoint.candidate_args(plan, promoted, 'screen')[-2:] == ['--checkpoint', f'{FAMILY}={south}']
 
 
 def test_scores_and_paired_differences():

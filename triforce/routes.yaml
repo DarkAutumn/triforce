@@ -48,6 +48,9 @@
 # `{include: NAME}` (phase X, the lead, Nov 19) stands for the steps (and stretches) of the block NAME of the
 # top-level `blocks:`: what two routes play alike is written once there (each dungeon's inside, the legs both take),
 # so a change to it reaches both.  A block holds no include; every block is included somewhere.
+# A route's `own_models_until: {waypoint: NAME}` (round 32, the lead): the route's own runs (`promoted.<route>`) play
+# its steps before the one step NAME marks, every family's default run (`promoted`) that step and the rest; a route
+# without it plays its own runs on every step (zelda::GameMap::step_policy).  Kept by a route extending it.
 # An exit that is a game.yaml raft crossing (`raft_exits`) sends Link to its dock; the raft does the rest.
 # `retreat: S`: leaving through that exit instead ends a one-room episode as `retreat` (neutral) and lets a chain
 # run go on (the next room's objective sends Link back).
@@ -401,6 +404,10 @@ d2first:
 # owner, Nov 18).
 d3first:
   states: d3first
+  # The route's own runs (`promoted.d3first`) play up to the magic sword (round 32, the lead): a run trained for the
+  # wood-sword rooms lost the magic-sword rooms of its family (Dungeon 8 5.3% against 26.2% with the default darknut
+  # and manhandla).  From the grave's cave step on every family plays its default run (`promoted`).
+  own_models_until: {waypoint: sword}
   steps:
   # The start (d3first-walks-a.md §1): the wood sword, W through 0x76 (walked or scrolled) and 0x75's wrap exit
   # (CLIP E) into 0x74, Level 3's mouth.
