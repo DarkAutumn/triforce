@@ -1,5 +1,6 @@
 """Round 32: Dungeon 4's per-room ledger on d3first (route steps 31-52) for d4 chains side by side: entered, lost
-(per 1000 entering), hearts in, hearts lost a visit, bombs used, cheated bombs; the segment's arrivals and Gleeok.
+(per 1000 entering), hearts in, hearts lost a visit, bombs used, cheated bombs; the segment's arrivals and Gleeok;
+then Gleeok (4:0x13, step 51) won (the run reaches step 52) by the hearts Link enters with.
 
     .venv/bin/python scripts/experiments/r32d4_ledger.py LABEL=CHAIN.jsonl ...    (markdown on stdout)"""
 import sys
@@ -36,3 +37,19 @@ for step in range(31, 53):
         cells.append(f"{int(n)}, {1000 * x.get('ended', 0) / n:.0f}, {x['hin'] / n:.2f}/{x['max'] / n:.0f}, "
                      f"{x['lost'] / x['visits']:.2f}, {x['bombs'] / x['visits']:.2f}, {int(x['cheated_bombs'])}")
     print(f"| {step} | {room} | {way} | {family} | {' | '.join(cells)} |")
+print()
+gleeok = []
+for _, _, runs in stats:
+    arm = []
+    for run in runs:
+        visits = t.on_route(run['rooms'])
+        into = next((r['health_in'] for r in visits if r['step'] == 51), None)
+        if into is not None:
+            arm.append((into, any(r['step'] == 52 for r in visits)))
+    gleeok.append(arm)
+print('| Hearts into 4:0x13 | ' + ' | '.join(f'{label}: won/entered' for label, _, _ in stats) + ' |')
+print('|---|' + '---|' * len(stats))
+for h in sorted({h for arm in gleeok for h, _ in arm}):
+    cells = [f'{sum(w for x, w in arm if x == h)}/{sum(x == h for x, _ in arm)}' if any(x == h for x, _ in arm)
+             else '-' for arm in gleeok]
+    print(f"| {h:.1f} | {' | '.join(cells)} |")
