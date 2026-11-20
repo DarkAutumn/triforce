@@ -411,7 +411,8 @@ than the route's reserve of 6; boss-manhandla 3_4dw 70% each (baseline 45/67/45%
 **boss-manhandla, chosen and promoted for `d3first`** (`r32d3-manh`, its last weights): from Manhandla's door at 1
 heart to 0:0x74, confirmation **58.0% ± 1.6** against the promoted run's 47.2% (paired +10.8 ± 1.9; hearts on
 arriving 3.44 against 3.44). Screen: it003596 60.1%, last 58.6%, promoted 49.2%; the screen's winner did not confirm
-(-1.3 ± 1.8 against last). `d2first` keeps `r78t4-manhandla2`.
+(-1.3 ± 1.8 against last). `d2first` keeps `r78t4-manhandla2`. Round 2 (`r32d3-manh2`, from it, with the planner's
+demonstrations added) brought no gain: confirmation 55.9% against `r32d3-manh`'s 58.0% (-2.1 ± 1.8); not promoted.
 
 **zol, chosen and promoted for `d3first`** (`r32d3-zol`, its last weights): from Level 3's entrance to 3:0x59's
 door (0x7b, 0x6b, darknut's 0x5b, 0x4b, 0x4a, 0x49), confirmation **59.0% ± 1.6** against the promoted run's 8.7%
