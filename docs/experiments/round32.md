@@ -378,3 +378,47 @@ them before the triforce; the planner, which keeps them, finishes 26% and 34%. A
 planner's level or better on `d3`/`d4`, the models' Dungeon 1 at its 637 runs past 0x37 above 41%, and every
 `d2first` segment within noise. Data questions for the lead (route data, not this round's): the start states of
 Dungeons 4 and 1 hold no bombs (the walls are cheated every run).
+
+## 5. Dungeon 4's training (vire, like-like, boss-gleeok; in progress)
+
+**Cause.** Dungeon 4 starts at 4 of 4 hearts and nothing refills them before the triforce. The models lose 449 of
+876 runs entering 4:0x31 (Vires, entered at 1.99 hearts) and 339 of 427 in 4:0x32 (Like-Likes, 1.35); the 13 runs
+that reach Gleeok (4:0x13) enter at 0.62 and all die. The planner keeps the hearts (3.36 into 0x31, 2.05 into
+Gleeok) and is left with Gleeok: 117 of 219 lost there. Gleeok won by the planner's chains, by hearts on entering
+(r32base-plan-d4 and r32prep-plan-d4): 0.5: 8 of 53; 1.0: 3 of 57; 1.5: 27 of 83; 2.0: 32 of 69; 2.5: 41 of 62;
+3.0: 37 of 53; 3.5: 18 of 21; 4.0: 25 of 32. The fight is won at the hearts the dungeon leaves, so the hearts
+saved in 0x50, 0x40, 0x31, 0x32 and 0x12 are the larger lever.
+
+**The arm.** One `d3first`-only continuation per family (`state_routes: [d3first]`, harvested handoffs at the
+chain's hearts), from its promoted run, curriculum tracks of its `d3first` states, demonstrations at
+`--demo-coeff 0.05`: the planner's won episodes from the seed states (20 a chain) and up to 30 harvested handoffs
+a stem, plus the rules at the chains' hearts (`r32p_rules.py ROOM --hearts chain --runs 30`):
+
+| Family | Base run | Harvested (fraction) | Rule rows (won of 90) | Planner rows | Seeds |
+|---|---|---|---|---|---|
+| vire | r77-b | 1,173 (0.25) | vire-31 19,122 (86), vire-12 18,351 (86) | 24,999 | 3 |
+| like-like | r79c-like | 553 (0.25) | like-like-32 28,863 (79) | 20,263 | 1 |
+| boss-gleeok | r78t4-gleeok | 211 (0.33) | gleeok-13 16,148 (24) | 5,582 | 3 (one ended at 226 of 489 iterations) |
+
+Gleeok trained with hp drawn from 0.6 to 4 hearts (the family's own draw is 2-4), the hearts the chains bring.
+Vire's harvest has no 4:0x31 handoffs (the chains change family at 0x50 and 0x30, not at 0x31): 0x31 trains from
+its seed states at the family's hp draw.
+
+**Training.** Vire: success 92% → 95% a room and hearts lost an episode 0.41 → 0.2 (all three seeds early-stopped
+at 95%). Like-like: 77% → 88%, 1.03 → 0.74 hearts. Gleeok: training success fell from 14-18% to 3-10% after about
+100 iterations in both full seeds. At the chains' hearts (single room, 3 states × 100, seed 3000) the base run wins
+7.7%, the checkpoints of iterations 2502 and 2532 (60-90 into training) 16.0-17.0% in all four (deaths otherwise),
+and the last checkpoints 4.3-4.7%: they learned to stall (no-damage and max-steps endings in 160-180 of 300).
+
+**Not yet measured, so nothing is promoted.** The `d4` measures (seeds 3000-3999, arrivals at Gleeok's room
+4:0x13 and hearts there, paired against the promoted team) of vire's and like-like's last checkpoints are queued.
+Gleeok's early checkpoint is chosen on `d4` once vire and like-like are promoted for the route; then the 1000-run
+`d4` chain with the route's runs and the planner beside (300), and the per-room ledger
+(`scripts/experiments/r32d4_ledger.py`).
+
+**What the segment's start states should carry.** The planner's runs that left Dungeon 3 carry 0 to 8 bombs (into
+4:0x71 in the full chain, 69 runs: 0: 9, 1: 7, 2: 2, 3: 4, 4: 11, 5: 13, 6: 7, 7: 6, 8: 9; median 5) and 4.0 of 4
+hearts in 58 of 68 (3.5 in 9). Dungeon 4 needs two bombs (the walls of 4:0x21 and 4:0x11, cheated 250 and 249
+times in the planner's 300 runs because `4_71s_*` hold none). A harvested entrance state from the chain would
+hold the bombs Dungeon 3 left (about 5) and full hearts; the installed ones should hold at least the 2 the walls
+take.
