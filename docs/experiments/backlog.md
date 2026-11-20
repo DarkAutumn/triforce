@@ -25,8 +25,19 @@ per 1000), in order:
   30 of 244); the `d5` segment from full hearts is +3.5 ± 2.0. Suggested (not tested): darknut continued with
   Dungeon 5's handoffs at the chain's hearts (the recipe of decisions 2026-11-19, "One team for the whole route").
   Then 0x64 40, 0x47 28, 0x65 27.
+  Round 30 (round30.md "Darknut"): Dungeon 5 at the route's hearts is measured by `--from 0_45c_0 --stop-at
+  step:209` (the leg after Dungeon 4 has no darknut room and arrives with the full route's hearts: 49.4% of 500, the
+  full route 48.5% of its entrants, the `d5` segment 72.2%); gibdo `r30-gibdo-s91` (promoted on the round's branch) +5.3
+  ± 2.1 there; darknut `r30-dark-s89` +5.8 ± 2.2 there (both +9.3 ± 2.2) and `d8` +8.1 ± 2.0, but `d3` −4.2 ± 1.2
+  (3:0x69 from N, left out of its harvested starts, costs Manhandla's hearts): not promoted. Next: 0x69 from N's
+  entries added (round30.md "Next for darknut"). The planner loses 0.73 hearts a visit in 0x05 and none in 8:0x3e: a second pass of
+  its demonstrations from the harvested states themselves needs `r27_plan_demos.py --state-files` to keep the
+  states' hearts (an eval env draws the family's hp on every explicit start, harvested or not).
 - [ ] **`d7` (165)**: 7:0x1b's six Goriyas 77, 0x1a 27, 0x19 17.
 - [ ] **Dungeon 3 (140)**: Manhandla 3:0x4d 97.
+  81 of the 97 enter below 4 hearts (the planner enters with 5.42): the hearts darknut's 3:0x59 and 0x69 lose before
+  it. boss-manhandla `r30-manh-s90` (round 30, promoted on the round's branch), trained on 3:0x4d's entries at the
+  route's hearts: Dungeon 3 at the route's hearts +4.6 ± 1.3, `d3` +2.7 ± 1.3.
 - [ ] **Dungeon 2 (121)**: goriya 2:0x1e 41, 0x5e 29; moldorm 0x3e 22.
 - [ ] **Dungeon 1 (92)**: 1:0x44 25, 0x35 15, 0x23 15.
 - [ ] **`d6` (73)**: wizzrobe 6:0x3a 33, 0x38 15.
