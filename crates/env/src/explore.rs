@@ -1,16 +1,19 @@
-//! Go-Explore phase A (CLI `triforce/explore.py`): find one successful path per start state by restoring snapshots.
+//! Go-Explore phase A (CLI `triforce/explore.py`): find one successful path per start state by loading checkpoints.
 //!
-//! The archive holds *cells* (coarse state summaries, [`cell_key`]), each with the exact session snapshot of the
-//! shortest path found to it.  Each iteration picks a cell (weight `(1 + progress)(1 + closeness) /
-//! sqrt(1 + chosen)`), restores it and takes up to `explore_steps` random legal actions; new cells, or known cells
-//! reached in fewer steps, are archived.  Endings come from the specialist's own env without RAM randomization,
+//! The archive holds *cells* (coarse state summaries, [`cell_key`]), each with the env's exact checkpoint
+//! ([`SpecialistEnv::save`]) of the shortest path found to it.  Each iteration picks a cell (weight `(1 +
+//! progress)(1 + closeness) / sqrt(1 + chosen)`), loads it and takes up to `explore_steps` random legal actions; new
+//! cells, or known cells reached in fewer steps, are archived.  A cell continues the episode its path played, as the
+//! replay from the start does: the cheat ledger's grants, the route step, the critic and the end conditions' counts
+//! go on (restarting an episode at a cell made a granted bomb Link's own, so the search bombed where the replay's
+//! mask keeps BOMB to the route's wall).  Endings come from the specialist's own env without RAM randomization,
 //! so "success" is what training rewards, unless an [`AcceptSpec`] decides instead (entry-state builds for rooms
 //! off the route).  The search stops `patience` iterations after the first success.
 
 use crate::config::{GameData, RamRandomization, SpecialistConfig};
 use crate::error::EnvError;
 use crate::rewards::SUCCESS;
-use crate::specialist_env::{EnvOptions, SpecialistEnv, StepInfo};
+use crate::specialist_env::{EnvOptions, EnvSnapshot, SpecialistEnv, StepInfo};
 use crate::start_states::{StateStore, weighted_index};
 use indexmap::IndexMap;
 use rand::{Rng, RngExt, SeedableRng};
@@ -189,7 +192,7 @@ type Candidate = (f64, i64, Vec<[usize; 3]>, Option<String>);
 pub type Replay<S> = (Option<StepInfo>, Option<SessionSnapshot<S>>);
 
 struct Cell<S> {
-    snapshot: SessionSnapshot<S>,
+    snapshot: EnvSnapshot<S>,
     actions: Vec<[usize; 3]>,
     progress: u32,
     closeness: f64,
@@ -221,7 +224,7 @@ pub struct Explorer<N: Nes, St: StateStore<N::State>> {
     pub env: SpecialistEnv<N, St>,
     pub seed: u64,
     rng: ChaCha8Rng,
-    root: Option<SessionSnapshot<N::State>>,
+    root: Option<EnvSnapshot<N::State>>,
     /// Set from another thread (Ctrl-C on the caller's): `explore` stops at its next iteration.
     stop: Option<Arc<AtomicBool>>,
 }
@@ -281,7 +284,7 @@ impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
     ) -> Result<ExploreResult, EnvError> {
         let started = Instant::now();
         self.env.reset(Some(self.seed), Some(start_state))?;
-        let root = self.env.session().snapshot();
+        let root = self.env.save();
         let mut archive: IndexMap<CellKey, Cell<N::State>> = IndexMap::new();
         {
             let state = self.env.session().state();
@@ -313,9 +316,8 @@ impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
             let index = weighted_index(&mut self.rng, &weights);
             let cell = &mut archive[index];
             cell.chosen += 1;
-            let (snapshot, mut actions, mut progress) =
-                (cell.snapshot.clone(), cell.actions.clone(), cell.progress);
-            self.env.restore(&snapshot, start_state)?;
+            self.env.load(&cell.snapshot);
+            let (mut actions, mut progress) = (cell.actions.clone(), cell.progress);
             let mut previous = None;
             for _ in 0..explore_steps {
                 let action = random_action(self.env.session().mask(), &mut self.rng, previous);
@@ -353,7 +355,7 @@ impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
                     archive.insert(
                         key,
                         Cell {
-                            snapshot: self.env.session().snapshot(),
+                            snapshot: self.env.save(),
                             actions: actions.clone(),
                             progress,
                             closeness: closeness(&state, wf.as_deref()),
@@ -381,10 +383,11 @@ impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
         Ok(result)
     }
 
-    fn root(&self) -> Result<SessionSnapshot<N::State>, EnvError> {
-        self.root
-            .clone()
-            .ok_or_else(|| EnvError::State("replay before explore()".into()))
+    /// Back to the start of the last `explore` (its episode just after the reset, exactly).
+    fn rewind(&mut self) -> Result<(), EnvError> {
+        let root = self.root.as_ref().ok_or_else(|| EnvError::State("replay before explore()".into()))?;
+        self.env.load(root);
+        Ok(())
     }
 
     /// Replays a successful result from its start, saving the state before every step as `NNNN.state` plus
@@ -398,8 +401,7 @@ impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
                 std::fs::remove_file(&path)?;
             }
         }
-        let root = self.root()?;
-        self.env.restore(&root, &result.start_state)?;
+        self.rewind()?;
         let mut info: Option<StepInfo> = None;
         for (index, indices) in result.actions.iter().enumerate() {
             let snapshot = self.env.session().snapshot();
@@ -446,8 +448,7 @@ impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
         result: &ExploreResult,
         capture_pre_entry: bool,
     ) -> Result<Replay<N::State>, EnvError> {
-        let root = self.root()?;
-        self.env.restore(&root, &result.start_state)?;
+        self.rewind()?;
         self.env
             .session_mut()
             .set_capture_pre_entry(capture_pre_entry);

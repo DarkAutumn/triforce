@@ -1326,8 +1326,11 @@ every step, so following an enemy that moves away pays again, and knockback rese
   (failures), so it is not used for stopping.
 - `python -m triforce.explore --specialist NAME` (Go-Explore phase A; `crates/env/src/explore.rs`, CLI `explore.py`): per seed start state, an
   archive of cells (level, room, in_cave, tile // 2, whole hearts, living enemies, their total health, keys,
-  boomerang, the room's push block still unpushed) with exact `Session`
-  snapshots; random legal actions from cells chosen by progress/closeness/novelty; the best success is replayed
+  boomerang, the room's push block still unpushed) with the env's exact checkpoints (`SpecialistEnv::save`/`load`:
+  a cell continues the episode its path played, as the replay from the start does: the cheat ledger's grants, the
+  route step, the critic's and the end conditions' counts; round 32: restarting an episode at a cell made a granted
+  bomb Link's own, and d3first's 3:0x5b W -> E, entered with no bombs, got tracks the replay refused); random legal
+  actions from cells chosen by progress/closeness/novelty; the best success is replayed
   and written as `trajectories/<specialist>/<state>/NNNN.state` + `trajectory.json`. `SpecialistEnv::restore(snapshot)`
   starts an episode from an exact snapshot.
 - Backward curriculum (`crates/env/src/curriculum.rs`): on when the specialist's config has `curriculum: {enabled: on}`
