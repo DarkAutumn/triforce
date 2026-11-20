@@ -173,3 +173,25 @@ loss there is that seed's drift, not the arm's:
 | `r30-dark-s88` (it011492) | 86.0% | +0.6 ± 1.5 | 0.55 | 3.99, 112 | **36.6%** | **+10.4 ± 2.0** |
 | `r30-dark-s87` (it011462) | 85.1% | −0.3 ± 1.6 | 0.62 | 3.94, 110 | **36.4%** | **+10.2 ± 2.0** |
 | `r30-dark-s89` (last) | 82.2% | −3.2 ± 1.6 | 0.76 | 3.80, 147 | 34.3% | +8.1 ± 2.0 |
+
+`r30-dark-s88` it011492 on `d3` again on seeds 1000-1999 (paired with the reference measured on them): 84.6% against
+86.7%, −2.1 ± 1.5; the 2000 runs pooled −0.8 ± 1.1.
+
+**The continuations, chosen on `d3`** (`select-checkpoint darknut RUN --from 3_7cs_0 --stop-at step:105 --runs 1000
+--first-seed 2000 --confirm 1000 --confirm-first-seed 3000 --confirm-top 1 --only it011710,it011740,it011770,last`;
+`r78-dark37-s85` measured in `r30-dark69-s92`'s batch, the others paired with it on the same seeds). Single rooms
+(canonical evaluation): 96.7%, 96.5%, 96.5% (−0.88, −0.85, −0.85 hearts).
+
+| run | candidate | screen (2000-2999) | confirm (3000-3999) | hearts on arriving | confirm vs the reference | 3:0x69 from N, hearts a visit |
+|---|---|---:|---:|---:|---:|---:|
+| reference | `r78-dark37-s85` | 86.5% | 85.2% | 4.47 | | 0.58 |
+| `r30-dark69-s92` | it011710 | 84.6% | 85.1% | 4.41 | −0.1 ± 1.6 | 0.61 |
+| | last | 82.6% | 84.3% | 4.39 | | |
+| `r30-dark69-s93` | last | 83.8% | 83.5% | 4.45 | −1.7 ± 1.6 | 0.61 |
+| | it011770 | 82.1% | 84.4% | 4.45 | | |
+| **`r30-dark69-s94`** | **last (it 11774)** | 85.9% | **86.2%** | 4.48 | **+1.0 ± 1.5** | 0.52 |
+| | it011770 | 85.2% | 85.7% | 4.43 | | |
+
+The entries did what they were for: 0x69 from N is back to the reference's cost on every seed (0.52-0.61 against
+`r30-dark-s89`'s 0.76). `r30-dark69-s94`'s last checkpoint (its `ckpt.pt`) is the best; it enters Manhandla with the
+reference's hearts (4.09 against 4.09, 111 deaths against 113 on the confirmation seeds).
