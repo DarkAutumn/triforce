@@ -10,6 +10,7 @@ items: {bombs: free}                       # Lee, Nov 11: bombs as a weapon (ene
 curriculum: {enabled: true}              # trajectories/moldorm: the three 2_3es entry paths
 one_room: true
 max_steps: 3000
+harvested_fraction: 0.33                  # round 30: 2:0x3e from S as the full route hands it over (2.63 of 3 hearts, its bombs), 486 handoffs of a full-route chain to step 68 (eval-chain --harvest) in triforce/states/harvested/moldorm
 warm_start: null
 notes: >-
   The Moldorm room in Dungeon 2 (one Moldorm, key treasure; entered from 0x4e in the S, left N into 0x2e). Split out
