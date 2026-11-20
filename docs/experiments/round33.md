@@ -46,3 +46,43 @@ and `h6b` from `6_79s_0` (400 runs, seeds 6000-6399; 33.8%).
   chains); 0x3a is still the dungeon's killer.
 
 ### The arm
+
+The recipe of decisions 2026-11-19 ("One team for the whole route"), as round 30 applied it:
+
+- **Starts at the chain's hearts.** wizzrobe's harvested set (2601 states, `harvested_fraction` 0.33, two thirds
+  of them Dungeon 6's): level 9's from round 30 (0x05 250, 0x10 250, 0x17 150, 0x30 200); Dungeon 6's taken again
+  on the new route from `h6` and `h6b`: 0x78 200, 0x38 400, 0x3a 400, 0x2c 351 (handoffs), 0x28 100 and 0x29 300
+  (cut from the two chains' replays, `scripts/experiments/r29_zora_states.py`: they follow a wizzrobe room). vire's
+  first harvested set (822: 0x39 450, 0x2d 372), `harvested_fraction` 0.2 (with its seed states Dungeon 6 is about
+  a third of the resets, Dungeon 4 the rest), `chain_hp: 0.5` (Dungeon 6's rooms are profiled) and, as every family
+  since the owner's Nov 18 rule, `clips: {enabled: true, off_share: 0}`.
+- **0x78 by the walk's rule** (`scripts/experiments/r33_d6_demos.py ring-78`, over wizzrobe's own actions): W onto
+  the doorstep; with full hearts (BEAMS offered) Link waits there facing W for 44 frames or two swings, swinging at
+  a Red that fades in or stands on the row ahead; below full hearts a swing only at a Red within 24 px ahead in
+  passing; then today's path, a bomb drop within 64 px of (`$D0`,`$7D`) or (`$78`,`$7D`) waited out there and
+  taken. 150 runs from `6_78e_0-2`:
+
+  | play | through | hearts lost | frames (median) | runs with a kill | leader (all five) | bomb drop | bombs gained (runs) |
+  |---|---:|---:|---:|---:|---:|---:|---:|
+  | today's path (no swing) | 150 | 0.00 | 301 | 0 | 0 | 0 | 0 |
+  | the rule, full hearts | 150 | 0.44 | 337 | 144 | 27 | 34 | 27 (23) |
+  | the rule, drops left, full hearts | 150 | 0.10 | 337 | 144 | 27 | 34 | 0 |
+  | the rule, 10 hearts | 150 | 0.00 | 302 | 57 | 12 | 16 | 15 (5) |
+
+  Taking a drop costs: it falls on the door row the Reds shoot along. The demonstration rows (`ring78.npz`, 1200
+  runs at the family's hearts draws, every one through, 0.09 hearts, 32,933 rows) are listed three times beside
+  the others (about 8% of the pooled rows). `drops: first` then makes a fallen pack the objective.
+- **The planner at the route's hearts** (`scripts/experiments/r27_plan_demos.py`, `temperature:0.5+relax:16+plan:16:1`,
+  two episodes a harvested state, the family yaml with `ram_randomization: {}` so a state keeps its hearts):
+
+  | file (run played) | state: won of episodes, hearts lost in the wins | rows |
+  |---|---|---:|
+  | `plan33-d6` (`r30w-wj-s89`) | 6:0x29 519 of 600, 0.74 (the models at the route's hearts lose 6% of their visits, 0.85-1.6 hearts a visit); 0x2c 647 of 702, 0.44 (the models 80-84% through, 1.3); 0x38 92 of 100, 2.33; 0x3a 273 of 400, 1.09 | 75,472 |
+  | `plan33-vire` (`r77-b`) | 6:0x39 894 of 900, −0.57 (a gain: drops); 0x2d 725 of 744, −0.44 | 82,346 |
+
+- **Three seeds and one**, `--sil-coeff 0.1 --checkpoint-every 30 --stop-success 1.01`, `--demo-coeff 0.05` over the
+  lineage's files and the new ones: `r33w-s91`, `-s92`, `-s93` from `r30w-wj-s89`, 488 iterations (`bomb28`,
+  `plan38-3a`, `wizzrobe-05`, `-10`, `-30`, `clip-07`, `clip-20n`, `plan9-wizz`, `plan30-d6-05`, `plan30-10-30`,
+  `plan33-d6`, `ring78` ×3); `r33-vire-s95` from `r77-b`, 244 iterations (`plan33-vire`; the lineage had none). No
+  curriculum track of either family is unfinished (wizzrobe's Dungeon 6 tracks, the rebuilt 0x29's included, all
+  succeed; vire's 0x39 and 0x2d too), so none is taken out.
