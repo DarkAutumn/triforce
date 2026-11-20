@@ -63,6 +63,11 @@
 # pay for what follows).  Bombs a room grants (game.yaml `requires_bombs`, `zelda::cheats`) only open its wall.
 # `rupee_reserve: N` (round 26): the same for rupees, kept for the route's arrows: ARROW is masked while Link holds
 # N or fewer (families have arrows off unless their `items:` turns them on).
+# `grant: {bombs: N}` (round 32; items `bombs`, `keys`, `rupees`): the first time a run reaches this step Link's count
+# of the item (without a room's grant) is topped up to N; the units added are granted by the route, outstanding until
+# used whichever room that is (cheated and counted there; leaving a room never takes them back) and bound to no wall;
+# while they are outstanding a room's need is met by the room's own grant (`zelda::cheats`).  d3first's Dungeon 5
+# entrance: the bag for the Olive Garden.
 # in_cave rooms follow v1 game.yaml: same (level, location) with in_cave: true.  An underworld item cellar is an
 # in_cave room too, under its own room id (Dungeon 1's bow cellar 0x7f under 0x22, Dungeon 3's raft cellar 0x0f
 # under 0x69), left N up its ladder.  A tunnel cellar (Dungeon 5's 0x07) has two ladders, game.yaml exits W (X < $80)
@@ -295,7 +300,8 @@ d2first:
 # (clips on) or by the fight and the push (off), one step whose objective the clips switch decides; 0x05 cleared,
 # its block pushed, the stairs to the recorder; the rooms after 0x66 crossed, their hidden items skipped, 0x27's key
 # taken; Digdogger by the recorder (boss-digdogger `items: {recorder: true}`).  Keys: 6 in, 3 spent (0x06 W, 0x27 W,
-# 0x25 W), 2 taken (0x66, 0x27): 5 out.
+# 0x25 W), 2 taken (0x66, 0x27): 5 out.  Its entrance step is each route's own (d3first's grants the bag).
+- {level: 5, room: '0x76', specialist: gibdo, entry: S, exit: N, bomb_reserve: 8}
 - include: dungeon-5
 # The leg to Dungeon 7 and Dungeon 7 (round 26, steps 209-247; docs/routes/d7.md; scouted as the route `d7`, merged
 # here Nov 16).  Out of Dungeon 5 at 0x0b the recorder calls the whirlwind (`exit: recorder`: the
@@ -455,6 +461,11 @@ d3first:
   - {level: 0, room: '0x0c', in_cave: true, specialist: ow-tektite, entry: S, exit: S, waypoint: blue-candle}
   - {level: 0, room: '0x0c', specialist: ow-tektite, entry: cave, exit: W}
   - {level: 0, room: '0x0b', specialist: ow-leever, entry: E, exit: cave}
+  # Dungeon 5's entrance tops the bag up to eight bombs (the lead, Nov 20, on the owner's "can be ignored since we
+  # have the ability to cheat them to the character in game"): a route grant (`grant:`), outstanding until used, so
+  # what the bag lacks is cheated and counted where it is thrown, the Olive Garden's six Blue Darknuts first.  The
+  # reserve of 8 keeps it whole to there; the walls of 0x66 and 0x65 grant their own bomb as before (`zelda::cheats`).
+  - {level: 5, room: '0x76', specialist: gibdo, entry: S, exit: N, bomb_reserve: 8, grant: {bombs: 8}}
   - include: dungeon-5
   # Level 5 to Level 2 (walks-b §1, §3): the whirlwind to Level 3 (Link comes out facing down; the index $523 is 0
   # and one play facing right or up lands in 0x74: the objective computes it, zelda::whirlwind::plays, and RECORDER is
@@ -615,7 +626,7 @@ blocks:
   - {level: 4, room: '0x13', specialist: boss-gleeok, entry: W, exit: N}
   - {level: 4, room: '0x03', specialist: vire, entry: S, exit: triforce}
   dungeon-5:
-  - {level: 5, room: '0x76', specialist: gibdo, entry: S, exit: N, bomb_reserve: 8}
+  # From Dungeon 5's entrance on (each route writes the entrance step: d3first's grants the bag).
   - {level: 5, room: '0x66', specialist: gibdo, entry: S, exit: W, treasure: skip}
   - {level: 5, room: '0x65', specialist: gibdo, entry: E, exit: W, treasure: refuse}
   - {level: 5, room: '0x64', specialist: darknut, entry: E, exit: cave}

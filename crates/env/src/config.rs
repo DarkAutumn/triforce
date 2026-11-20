@@ -1366,8 +1366,12 @@ impl GameData {
                     config.name,
                     namespace_file("chain_hp", ns),
                     fmt_rooms(&config.rooms.iter().copied().collect()),
-                    ns.map_or(String::new(), |ns| format!(" of a route of namespace {ns}, `--out {}`",
-                        namespace_file("chain_hp", Some(ns)))),
+                    ns.map_or(String::new(), |ns| format!(
+                        " of a route of namespace {ns} that run through these rooms, `--out {}`: a route's table must \
+                         cover the rooms of the states a family draws there, and one fitted from chains that end \
+                         earlier on the route has none of them",
+                        namespace_file("chain_hp", Some(ns))
+                    )),
                     ns.map_or(String::new(), |_| " or train on the other routes' states only (`state_routes:`)".into())
                 ));
             }
@@ -1724,12 +1728,18 @@ mod tests {
         }
     }
 
-    /// F042/F133: a config drawing chain health needs a profile for one of its rooms (MIN_CHAIN_SAMPLES arrivals).
+    /// F042/F133: a config drawing chain health needs a profile for one of its rooms (MIN_CHAIN_SAMPLES arrivals),
+    /// in every state namespace it draws (phase X: goriya holds `d3first_*` states beside its bare ones).
     #[test]
     fn chain_hp_needs_a_profile_for_one_of_its_rooms() {
         let data = GameData::load_default().expect("repo data");
-        let mut config = (*data.specialists["goriya"]).clone();
-        config.ram_randomization.chain_hp = Some(0.5);
+        let mut both = (*data.specialists["goriya"]).clone();
+        both.ram_randomization.chain_hp = Some(0.5);
+        // d2first's states only (bare names): `triforce/chain_hp.json`'s profile.
+        let mut config = SpecialistConfig { state_routes: Some(vec!["d2first".into()]), ..both.clone() }
+            .validated("goriya", Some(data.map.as_ref()))
+            .unwrap();
+        assert_eq!(config.namespaces(), [None]);
         let mut empty = (*data).clone();
         empty.chain_hp.clear();
         let e = empty.check_chain_hp(&config).unwrap_err().0;
@@ -1741,6 +1751,13 @@ mod tests {
         let mut enough = empty.clone();
         enough.chain_hp.insert(room, vec![1.0; MIN_CHAIN_SAMPLES]);
         assert!(enough.check_chain_hp(&config).is_ok());
+        // Every route's states: d3first's need a profile of their own namespace (`triforce/chain_hp.d3first.json`).
+        assert!(both.namespaces().contains(&Some("d3first")), "{:?}", both.namespaces());
+        let e = enough.check_chain_hp(&both).unwrap_err().0;
+        assert!(e.contains("triforce/chain_hp.d3first.json") && e.contains("state_routes"), "{e}");
+        let mut spaced = enough.clone();
+        spaced.chain_hp.insert(chain_key(Some("d3first"), both.rooms[0]), vec![1.0; MIN_CHAIN_SAMPLES]);
+        assert!(spaced.check_chain_hp(&both).is_ok());
         config.ram_randomization.chain_hp = Some(0.0);
         assert!(empty.check_chain_hp(&config).is_ok(), "chain_hp 0 needs nothing");
     }

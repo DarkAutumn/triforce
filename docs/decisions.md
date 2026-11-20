@@ -3128,3 +3128,25 @@ The lead's decisions while Lee is away (`docs/routes/d3first.md`):
 - **New vocabulary:** `blocks:`/`include:`, `waypoint: blue-candle` (a purchase). The recorder's facings out of
   Levels 5 and 2 need none (the engine computes them; ow-octorok gets `items: {recorder: true}`). No model input
   changed: no COMPAT bump.
+
+## 2026-11-20 — `d3first`'s bag and the arrow rooms' rupees are cheated (round 32)
+
+Lee's list for `d3first` says Link needs "at or around 30 rupees leaving Level 1 and 5-8 bombs" and then: "The 'you
+need x bombs and rupees' can be ignored since we have the ability to cheat them to the character in game". The
+lead's decisions (supersede 2026-11-19's "Bombs for the Olive Garden with the wood sword: no new cheat" and "Ganon's
+and 8:0x4c's arrows have no cheat"):
+
+- **A route grant** (routes.yaml `grant: {bombs: N}`, `zelda::cheats`): the first time a run reaches the step the
+  bag is topped up to N; the units added stay granted until used, in whichever room, cheated and counted there;
+  what is still granted when a run ends counts nothing. `d3first` only: Dungeon 5's entrance (step 97) grants 8
+  bombs; the entrance step moved out of the shared `dungeon-5` block into each route (`d2first`'s steps unchanged).
+- **The two kinds are two tallies of the ledger**: a room's grant (`granted`: taken back on leaving, the only one
+  that keeps BOMB to the wall) and the route's (`route`: never taken back, bound to no wall, the Olive Garden's
+  weapon, kept there by the reserve of 8 from Level 4's exit; 0 in the Garden). A use takes the room's first, then
+  the route's, then Link's own. While a route grant is outstanding a room's need is met by the room's own grant
+  alone, so 5:0x66's and 5:0x65's walls grant and take their own bomb and the bag reaches the Garden whole.
+- **8:0x4c needs the reserve and a shot** (`requires_rupees: 9`) while a Pols Voice lives, on both routes, as
+  Gohma's room; Ganon's room has needed its rupee while he lives since round 29 (ARROW only in his brown phase).
+  `d2first` arrives with 22-38 rupees: never topped up.
+- **A state's context carries both kinds** (replay STATES, chain checkpoints `route_granted`): `REPLAY_VERSION` 1
+  (version 0 still reads), so a golden path's next segment continues the bag. No model input changed: no COMPAT bump.

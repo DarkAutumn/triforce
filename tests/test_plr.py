@@ -86,7 +86,7 @@ def test_train_with_plr_logs_start_weights(tmp_path):
     config = tmp_path / 'zora.yaml'
     config.write_text("name: ow-zora\nrooms: ['(0, 0x38)', '(0, 0x28)', '(0, 0x2d)', '(0, 0x59)', '(0, 0x5a)', "
                       "'(0, 0x27)', '(0, 0x56)', '(0, 0x55)', '(0, 0x65)']\n"
-                      "start_states: ['0_38*_[0-9]', '0_59*_[0-9]']\n"
+                      "start_states: ['0_38*_[0-9]', '0_59*_[0-9]']\nstate_routes: [d2first]\n"
                       "success: [exit-correct]\none_room: true\nmax_steps: 4\n")
     run = train.main(['--specialist', str(config), '--states-dir', str(REPO_STATES_DIR), '--models-dir', str(tmp_path),
                       '--parallel', '2', '--steps-per-update', '32', '--iterations', '3', '--seed', '1',

@@ -5567,6 +5567,7 @@ rooms:
   treasure: key  # in the open from the first frame, at (X $D0, Y $60) in the NE corner behind the long way round (walked Nov 17: with arrows 30 of 30 at 0.40 hearts)
   bomb_walls: [N]
   requires_bombs: true  # round 28: the route's only way on is the N wall (one bomb from (X $78, Y $5D) facing up); BOMB for the `required` pols-voice family only in reach of it
+  requires_rupees: 9  # round 32: a Pols Voice dies to an arrow (a rupee a shot); topped up (cheated, counted) while one lives: the route's reserve of 8 and a shot
   trigger: kill-all  # attr F & 7 = 1
   stairs: [18, 8]
 - level: 8

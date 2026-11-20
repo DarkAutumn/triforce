@@ -19,8 +19,9 @@ RAM = {'hp': None, 'full_hp': 1.0, 'chain_hp': None, 'bombs': [8, 8], 'bombs_sha
 
 
 def config():
+    # d2first's state only: darknut's heart_value has no d3first table, and its env now holds d3first states too.
     return native.SpecialistConfig.load('darknut').replace(start_states=[STATE], max_steps=STEPS,
-                                                           ram_randomization=RAM)
+                                                           ram_randomization=RAM, state_routes=['d2first'])
 
 
 def bomber():

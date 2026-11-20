@@ -12,24 +12,37 @@
 //!   comes first: the cheated one only appears once it is taken, and spent, bringing him back to 0);
 //! - rupees: the game.yaml `requires_rupees` amount (round 26: the shops the route buys from, 0x44's and 0x34's
 //!   caves) until a ware is bought there, not while a rupee change is pending ($67D/$67E: the game adds and takes
-//!   rupees one per frame; [`rupee_need`]); in a dungeon room (round 27: Gohma's 6:0x1c, an arrow a shot) while its
-//!   Gohma lives.
+//!   rupees one per frame; [`rupee_need`]); in a dungeon room while the monster its arrows are for lives (an arrow a
+//!   rupee a shot): Gohma's 6:0x1c (round 27), Ganon's 9:0x42 until he begins to die (round 29), 8:0x4c's Pols
+//!   Voices (round 32: the reserve of 8 and a shot).
+//!
+//! A route step may grant too (routes.yaml `grant:`, round 32: d3first's bag of 8 bombs at Dungeon 5's entrance, the
+//! owner's "we have the ability to cheat them to the character in game"): on entering the step the count is topped
+//! up to the grant ([`CheatLedger::route_grant`]) and the units added are *route-granted*.  The two kinds are two
+//! tallies of the ledger, never mixed: a room's grant (`granted`, [`CheatLedger::granted`]) and the route's
+//! (`route`, [`CheatLedger::route_granted`]).  A route grant outlives the room: leaving takes back only a room's.
+//! While a route grant of an item is outstanding, Link's count of it (his own and the route's) is the bag the route
+//! set aside, and a room's need is met by the room's own grant alone (5:0x66's and 5:0x65's walls grant their bomb
+//! as before, so the bag reaches the Olive Garden whole).
 //!
 //! One rule for every item, in [`CheatLedger::settle`] order:
-//! - every fall of the count is a use (`used`); a fall while some of the count is granted uses the grant first:
-//!   those units are *cheated* uses (`cheated`; a grant merely given never counts);
-//! - a natural rise (a pickup) leaves the grant alone (F173): the grant is still used first;
-//! - leaving the room takes back what is still granted (never natural units);
-//! - in the room Link is in now, a count below the need is topped up to it (the new top-up is granted).
+//! - every fall of the count is a use (`used`); a fall uses a room's grant first, then a route's, then Link's own:
+//!   granted units used are *cheated* uses (`cheated`), counted in the room where they are used (a grant merely
+//!   given never counts; a route grant still outstanding when the run ends is not counted);
+//! - a natural rise (a pickup) leaves both grants alone (F173): the grants are still used first;
+//! - leaving the room takes back what is still granted by the room (never a route's units, never natural units);
+//! - in the room Link is in now, a count below the need (while a route grant is outstanding: the room's grant below
+//!   it) is topped up to it (the new top-up is granted by the room).
 //!
 //! The env writes the new counts with `Session::apply_ram` and carries the rebuilt state on (mask, observation);
 //! the action's `Change` keeps what the action itself did, so a grant is never a pickup to the critic.
 //!
 //! A granted bomb opens the wall and does nothing else (round 26): where the bomb is for something it opens
 //! ([`bomb_opens`]: every `requires_bombs` room but Dodongo's, whose bomb is the weapon), the envs offer BOMB only
-//! in reach of what the objective leaves through while a grant is outstanding ([`CheatLedger::granted`];
-//! `env::config::ItemsConfig::bomb_targets`), in every bomb mode and on the 10th kill too.  So a cheated bomb in
-//! such a room is always a bomb laid at the route's wall.
+//! in reach of what the objective leaves through while a room's grant is outstanding ([`CheatLedger::granted`];
+//! `env::config::ItemsConfig::bomb_targets`), in every bomb mode and on the 10th kill too.  So a cheated bomb of a
+//! room's grant in such a room is always a bomb laid at the route's wall.  A route grant is not bound so: it is the
+//! weapon the route gives (the Olive Garden's), kept by the route's `bomb_reserve` until the fight it is for.
 
 use std::ops::{AddAssign, Index, IndexMut};
 use std::sync::Arc;
@@ -144,9 +157,12 @@ pub fn needs(
 /// The game.yaml `requires_rupees` of Link's room (a shop's cave the route buys in, round 26: 0x44's arrows 80,
 /// 0x34's food 60) until a ware is bought there (the overworld room's item flag `$10`, set by any purchase,
 /// asm:Cave_State2TalkOrShopOrDoorCharge), and not while a rupee change is pending ($67D/$67E: the game adds and
-/// takes rupees one per frame, so the price is still being taken). In a dungeon room (round 27: Gohma's, whose only
-/// weakness is an arrow at a rupee a shot, asm:Arrow_Wield) the need lasts while its Gohma lives: a Link who comes
-/// with no more rupees than the route's reserve could never shoot.
+/// takes rupees one per frame, so the price is still being taken). In a dungeon room the need lasts while the monster
+/// its arrows are for lives (an arrow at a rupee a shot, asm:Arrow_Wield): a Link who comes with no more rupees than
+/// the route's reserve could never shoot. Round 27: Gohma (6:0x1c, an arrow is its only weakness); round 29: Ganon
+/// (9:0x42: one silver arrow kills him, and with none the room is sealed for good) until he begins to die; round 32:
+/// a Pols Voice (8:0x4c: one arrow kills every one on its line; the route's reserve there is 8, which the purse
+/// d3first brings, 1-10 rupees, seldom passes).
 fn rupee_need(map: &GameMap, state: &GameView) -> i32 {
     let room = state.full_location();
     let pending = state.var(Var::RupeesToAdd) != 0 || state.var(Var::RupeesToSubtract) != 0;
@@ -154,10 +170,9 @@ fn rupee_need(map: &GameMap, state: &GameView) -> i32 {
     let done = if room.level == 0 {
         state.ram()[flags] & FLAG_ITEM_TAKEN != 0
     } else {
-        // Round 29: Ganon's room too (9:0x42: one silver arrow at a rupee kills him, and with none the room is sealed
-        // for good), while he has not begun to die.
         let ganon = crate::objectives::ganon(state).is_some_and(|(_, phase)| phase != crate::objectives::GanonPhase::Dying);
-        crate::objectives::gohma(state).is_none() && !ganon
+        let pols = state.enemies.iter().any(|e| e.id == crate::enums::enemy::POLS_VOICE && !e.is_dying());
+        crate::objectives::gohma(state).is_none() && !ganon && !pols
     };
     if pending || done { 0 } else { i32::from(map.requires_rupees(room)) }
 }
@@ -234,11 +249,23 @@ pub struct CheatStep {
     pub left_with: ItemCounts<Option<u8>>,
 }
 
-/// One item's count after the last settle (the ledger's own write included) and how much of it is granted.
+/// One item's count after the last settle (the ledger's own write included) and how much of it is granted, by a
+/// room (`granted`) and by the route (`route`; module doc).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct Held {
     count: i32,
     granted: i32,
+    route: i32,
+}
+
+/// A ledger's outstanding grants, by kind: what a run continued from its state must know is not Link's own (a
+/// replay state's context, a chain checkpoint).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Grants {
+    /// Granted by the room Link is in (taken back on leaving it).
+    pub room: ItemCounts<u8>,
+    /// Granted by a route step (`grant:`), outstanding until used.
+    pub route: ItemCounts<u8>,
 }
 
 /// An episode's or run's cheated-items bookkeeping (module doc).
@@ -250,15 +277,18 @@ pub struct CheatLedger {
     pub cheated: ItemCounts,
     held: ItemCounts<Held>,
     room: Option<MapLocation>,
+    /// The furthest route step the run has reached ([`CheatLedger::follow_route`]: a step's grant is given the first
+    /// time the run reaches it, never again on coming back).
+    route_step: Option<usize>,
 }
 
 impl CheatLedger {
-    /// Starts counting in `room` with `count` of each item (nothing used yet).
+    /// Starts counting in `room` with `count` of each item (nothing used or granted yet).
     pub fn reset(&mut self, room: MapLocation, need: ItemCounts<i32>, count: ItemCounts<i32>) -> CheatStep {
         *self = CheatLedger {
             held: ItemCounts::from_fn(|item| Held {
                 count: count[item],
-                granted: 0,
+                ..Held::default()
             }),
             room: Some(room),
             ..CheatLedger::default()
@@ -275,12 +305,15 @@ impl CheatLedger {
             let now = count[item];
             if now < held.count {
                 let fall = held.count - now;
-                let cheated = fall.min(held.granted);
-                held.granted -= cheated;
+                let room_part = fall.min(held.granted);
+                let route_part = (fall - room_part).min(held.route);
+                held.granted -= room_part;
+                held.route -= route_part;
                 step.used[item] = fall as u32;
-                step.cheated[item] = cheated as u32;
+                step.cheated[item] = (room_part + route_part) as u32;
             }
-            // A natural pickup leaves the grant alone (Lee, F173): the grant is used first, and leaving takes it back.
+            // A natural pickup leaves the grants alone (Lee, F173): they are used first, and leaving takes the room's
+            // back.
             let mut target = now;
             if left {
                 if held.granted > 0 {
@@ -289,9 +322,11 @@ impl CheatLedger {
                 target -= held.granted;
                 held.granted = 0;
             }
-            if target < need[item] {
-                held.granted += need[item] - target;
-                target = need[item];
+            // A route grant outstanding sets the bag aside: the room's need is met by the room's own grant alone.
+            let have = if held.route > 0 { held.granted } else { target };
+            if have < need[item] {
+                held.granted += need[item] - have;
+                target += need[item] - have;
             }
             held.count = target;
             step.set[item] = (target != now).then_some(target as u8);
@@ -302,46 +337,71 @@ impl CheatLedger {
         step
     }
 
-    /// The granted (outstanding, unused) part of `item`'s count.
+    /// A route step's grant (`grant:`, [`crate::game_map::RouteStep::grant`]): each item's bag (its count without a
+    /// room's grant) topped up to `grant`; the units added are route-granted (module doc).
+    pub fn route_grant(&mut self, grant: ItemCounts<u8>) -> CheatStep {
+        let mut step = CheatStep::default();
+        for item in CheatItem::ALL {
+            let held = &mut self.held[item];
+            let add = i32::from(grant[item]) - (held.count - held.granted);
+            if add > 0 {
+                held.route += add;
+                held.count += add;
+                step.set[item] = Some(held.count.clamp(0, 255) as u8);
+            }
+        }
+        step
+    }
+
+    /// The part of `item`'s count a room granted (outstanding, unused).
     pub fn granted(&self, item: CheatItem) -> i32 {
         self.held[item].granted
     }
 
-    /// The granted (outstanding) part of every item's count: what a run continued from this state must
-    /// know is not Link's own.
-    pub fn grants(&self) -> ItemCounts<u8> {
-        ItemCounts::from_fn(|item| self.held[item].granted.clamp(0, 255) as u8)
+    /// The part of `item`'s count a route step granted (outstanding, unused).
+    pub fn route_granted(&self, item: CheatItem) -> i32 {
+        self.held[item].route
     }
 
-    /// `state`'s count of `item` without the granted part.
+    /// Both kinds of outstanding grant of every item.
+    pub fn grants(&self) -> Grants {
+        let of = |part: fn(&Held) -> i32| ItemCounts::from_fn(|item| part(&self.held[item]).clamp(0, 255) as u8);
+        Grants { room: of(|h| h.granted), route: of(|h| h.route) }
+    }
+
+    /// `state`'s count of `item` without the granted parts (Link's own).
     pub fn natural(&self, item: CheatItem, state: &GameView) -> i32 {
-        state.var(item.var()) - self.granted(item)
+        state.var(item.var()) - self.granted(item) - self.route_granted(item)
     }
 
-    /// [`CheatLedger::reset`] on the session's state, writing the grants; returns the state to carry on.
-    /// `completion` is the episode's route state (its start step).
+    /// [`CheatLedger::reset`] on the session's state, writing the room's grants, then the start step's route grant
+    /// ([`CheatLedger::follow_route`]); returns the state to carry on.  `completion` is the episode's route state
+    /// (its start step).
     pub fn begin<N: Nes>(&mut self, session: &mut Session<N>, completion: &GameCompletion) -> Arc<GameView> {
+        let state = self.start(session, completion);
+        self.follow_route(session, completion).unwrap_or(state)
+    }
+
+    /// [`CheatLedger::reset`] on a state a run is continued from, where `grants` of each item's count were granted
+    /// (and not used) when the state was taken: those units stay granted, each by its kind (using them counts as
+    /// cheated; leaving the room takes back the room's).  No route grant is given again: the run has reached its
+    /// step already.
+    pub fn resume<N: Nes>(&mut self, session: &mut Session<N>, completion: &GameCompletion, grants: Grants) -> Arc<GameView> {
+        let state = self.start(session, completion);
+        self.route_step = completion.step();
+        for item in CheatItem::ALL {
+            let held = &mut self.held[item];
+            held.granted = (held.granted + i32::from(grants.room[item])).min(held.count);
+            held.route = i32::from(grants.route[item]).min(held.count - held.granted);
+        }
+        state
+    }
+
+    fn start<N: Nes>(&mut self, session: &mut Session<N>, completion: &GameCompletion) -> Arc<GameView> {
         let state = session.state().clone();
         let need = needs(session.game_map(), completion, None, &state);
         let step = self.reset(state.full_location(), need, Self::counts(&state));
         Self::write(session, step)
-    }
-
-    /// [`CheatLedger::begin`] on a state a run is continued from, where `granted` of each item's count was
-    /// granted (and not used) when the state was taken: those units stay granted, so using them counts as
-    /// cheated and leaving the room takes them back.
-    pub fn resume<N: Nes>(
-        &mut self,
-        session: &mut Session<N>,
-        completion: &GameCompletion,
-        granted: ItemCounts<u8>,
-    ) -> Arc<GameView> {
-        let state = self.begin(session, completion);
-        for item in CheatItem::ALL {
-            let held = &mut self.held[item];
-            held.granted = (held.granted + i32::from(granted[item])).min(held.count);
-        }
-        state
     }
 
     /// [`CheatLedger::settle`] on the session's state after an action from room `prev`, writing the counts the rule
@@ -357,6 +417,20 @@ impl CheatLedger {
         let need = needs(session.game_map(), completion, Some(prev), &state);
         let step = self.settle(state.full_location(), need, Self::counts(&state));
         (step, Self::write(session, step))
+    }
+
+    /// After `completion` has followed an action (or at a run's start): the first time the run reaches a route step
+    /// with a `grant:`, [`CheatLedger::route_grant`] written; returns the state to carry on, None when nothing was
+    /// granted (the grant is no pickup: the action's `Change` keeps what the action itself did).
+    pub fn follow_route<N: Nes>(&mut self, session: &mut Session<N>, completion: &GameCompletion) -> Option<Arc<GameView>> {
+        let step = completion.step()?;
+        if self.route_step.is_some_and(|reached| reached >= step) {
+            return None;
+        }
+        self.route_step = Some(step);
+        let grant = completion.step_grant()?;
+        let step = self.route_grant(grant);
+        CheatItem::ALL.iter().any(|&item| step.set[item].is_some()).then(|| Self::write(session, step))
     }
 
     fn counts(state: &GameView) -> ItemCounts<i32> {
@@ -567,6 +641,92 @@ mod tests {
         let mut l = CheatLedger::default();
         assert_eq!(l.reset(WALL, NONE, of(0, 5, 0)), CheatStep::default());
         assert_eq!(l.granted(CheatItem::Bombs), 0);
+    }
+
+    /// Round 32, d3first's bag: Dungeon 5's entrance tops the bag up to 8 (Link's 2 and 6 granted by the route).
+    /// Leaving takes none back; the bag is used where it is thrown, the route's units first (cheated there) and then
+    /// Link's own; a pickup leaves them alone; what is still granted when the run ends was never used, never counted.
+    #[test]
+    fn a_route_grant_outlives_the_room_and_counts_where_it_is_used() {
+        const ENTRANCE: MapLocation = MapLocation::new(5, 0x76, false);
+        const GARDEN: MapLocation = MapLocation::new(5, 0x05, false);
+        let mut l = CheatLedger::default();
+        assert_eq!(l.reset(ENTRANCE, NONE, of(2, 6, 3)), CheatStep::default());
+        let s = l.route_grant(ItemCounts { bombs: 8, keys: 0, rupees: 0 });
+        assert_eq!((s.set, s.used, s.cheated), (set(Some(8), None, None), cheats(0, 0, 0), cheats(0, 0, 0)), "given");
+        assert_eq!((l.granted(CheatItem::Bombs), l.route_granted(CheatItem::Bombs)), (0, 6));
+        assert_eq!(l.grants(), Grants { room: ItemCounts::default(), route: ItemCounts { bombs: 6, keys: 0, rupees: 0 } });
+        // Rooms change: nothing is taken back.
+        assert_eq!(l.settle(SOUTH, NONE, of(8, 6, 3)), CheatStep::default());
+        assert_eq!(l.settle(GARDEN, NONE, of(8, 6, 3)), CheatStep::default());
+        // Three thrown in the garden: the route's, cheated there; a 4-bomb pickup leaves the grant as it is.
+        let s = l.settle(GARDEN, NONE, of(5, 6, 3));
+        assert_eq!((s.used, s.cheated), (cheats(3, 0, 0), cheats(3, 0, 0)));
+        assert_eq!(l.settle(GARDEN, NONE, of(8, 6, 3)), CheatStep::default());
+        assert_eq!(l.route_granted(CheatItem::Bombs), 3);
+        // Five more: the route's last three, then two of Link's own.
+        let s = l.settle(GARDEN, NONE, of(3, 6, 3));
+        assert_eq!((s.used.bombs, s.cheated.bombs, l.route_granted(CheatItem::Bombs)), (5, 3, 0));
+        assert_eq!((l.used.bombs, l.cheated.bombs), (8, 6));
+        // A second grant tops up only what the bag lacks; unused at the end, it counts nothing.
+        let s = l.route_grant(ItemCounts { bombs: 4, keys: 0, rupees: 0 });
+        assert_eq!((s.set.bombs, l.route_granted(CheatItem::Bombs)), (Some(4), 1));
+        assert_eq!(l.cheated.bombs, 6);
+        // A bag already full is granted nothing.
+        let mut l = CheatLedger::default();
+        l.reset(ENTRANCE, NONE, of(8, 0, 0));
+        assert_eq!(l.route_grant(ItemCounts { bombs: 8, keys: 0, rupees: 0 }), CheatStep::default());
+        assert_eq!(l.route_granted(CheatItem::Bombs), 0);
+    }
+
+    /// The two kinds of grant apart, in a bomb-wall room crossed with the bag (5:0x66, its W wall shut): while the
+    /// route's grant is outstanding the room's need is met by the room's own grant alone, so the wall gets its bomb
+    /// as on a run without a bag (granted on entry, a 9th; laid; re-armed while the fuse burns; taken back on
+    /// leaving) and the bag, Link's 2 and the route's 6, leaves the room whole.  Only the room's grant is what
+    /// [`CheatLedger::granted`] reports (BOMB kept to the wall, `env::config::ItemsConfig::bomb_targets`).
+    #[test]
+    fn a_rooms_need_is_its_own_grant_while_the_route_sets_the_bag_aside() {
+        const ENTRANCE: MapLocation = MapLocation::new(5, 0x76, false);
+        const WALL: MapLocation = MapLocation::new(5, 0x66, false);
+        const NEXT: MapLocation = MapLocation::new(5, 0x65, false);
+        let mut l = CheatLedger::default();
+        l.reset(ENTRANCE, NONE, of(2, 0, 0));
+        l.route_grant(ItemCounts { bombs: 8, keys: 0, rupees: 0 });
+        let s = l.settle(WALL, BOMB, of(8, 0, 0));
+        assert_eq!(s.set.bombs, Some(9), "the wall's own bomb on top of the bag");
+        assert_eq!((l.granted(CheatItem::Bombs), l.route_granted(CheatItem::Bombs)), (1, 6));
+        let s = l.settle(WALL, BOMB, of(8, 0, 0));
+        assert_eq!((s.used.bombs, s.cheated.bombs, s.set.bombs), (1, 1, Some(9)), "laid: the room's; re-armed");
+        assert_eq!(l.settle(WALL, NONE, of(9, 0, 0)), CheatStep::default(), "the wall is open");
+        let s = l.settle(NEXT, NONE, of(9, 0, 0));
+        assert_eq!((s.set.bombs, s.left_with.bombs), (Some(8), Some(8)), "the room's taken back, the bag kept");
+        assert_eq!((l.granted(CheatItem::Bombs), l.route_granted(CheatItem::Bombs)), (0, 6));
+        assert_eq!((l.used.bombs, l.cheated.bombs), (1, 1));
+        // Without a route grant a room's need is met by what Link holds, as ever.
+        let mut l = CheatLedger::default();
+        assert_eq!(l.reset(WALL, BOMB, of(2, 0, 0)), CheatStep::default());
+        assert_eq!(l.settle(WALL, BOMB, of(1, 0, 0)).cheated.bombs, 0, "his own bomb at the wall");
+    }
+
+    /// A run continued from a state keeps each kind as it was ([`CheatLedger::grants`] round trip): leaving takes
+    /// back the room's units only, the route's stay until used.
+    #[test]
+    fn grants_round_trip_by_kind() {
+        const ROOM: MapLocation = MapLocation::new(5, 0x66, false);
+        let mut l = CheatLedger::default();
+        l.reset(ROOM, NONE, of(0, 0, 0));
+        l.route_grant(ItemCounts { bombs: 8, keys: 0, rupees: 0 });
+        l.settle(ROOM, BOMB, of(8, 0, 0));
+        let grants = l.grants();
+        assert_eq!((grants.room.bombs, grants.route.bombs), (1, 8));
+        let mut m = CheatLedger::default();
+        m.reset(ROOM, NONE, of(9, 0, 0));
+        for item in CheatItem::ALL {
+            m.held[item].granted = i32::from(grants.room[item]);
+            m.held[item].route = i32::from(grants.route[item]);
+        }
+        assert_eq!(m.settle(SOUTH, NONE, of(9, 0, 0)).set.bombs, Some(8));
+        assert_eq!(m.settle(SOUTH, NONE, of(6, 0, 0)).cheated.bombs, 2, "the route's");
     }
 
     /// [`bomb_opens`] on game.yaml: every `requires_bombs` room is bombed for something it opens (a dungeon bomb

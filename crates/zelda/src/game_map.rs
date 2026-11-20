@@ -378,9 +378,9 @@ const EXIT_KEYS: [&str; 10] =
     ["level", "location", "in_cave", "locked", "shutter", "span", "wrap", "wrap_in", "keep_out", "never_opens"];
 const RAFT_EXIT_KEYS: [&str; 3] = ["level", "location", "dock"];
 const EXIT_NAMES: [&str; 5] = ["N", "S", "E", "W", "cave"];
-const STEP_KEYS: [&str; 16] = [
+const STEP_KEYS: [&str; 17] = [
     "level", "room", "in_cave", "specialist", "entry", "exit", "waypoint", "retreat", "treasure", "bomb_reserve",
-    "rupee_reserve", "bombs", "drops", "banked_kills", "sword", "note",
+    "rupee_reserve", "bombs", "drops", "banked_kills", "sword", "grant", "note",
 ];
 /// `recorder` ([`RECORDER`]): set down by the whirlwind.
 const STEP_ENTRIES: [&str; 7] = ["start", "N", "S", "E", "W", "cave", RECORDER];
@@ -538,6 +538,10 @@ pub struct RouteStep {
     /// (`crate::objectives::start_banked_kills`; a start state's own room is otherwise made fresh), so the room makes
     /// that many fewer monsters, as on a played run. None: a full room.
     pub banked_kills: Option<u8>,
+    /// `grant: {bombs: N}` (phase X; items `bombs`, `keys`, `rupees`): on entering this step Link's count of the item
+    /// is topped up to N, and the units added stay granted until used, whichever room that is (a route grant,
+    /// `crate::cheats`: d3first's bag for the Olive Garden, given at Dungeon 5's entrance). Zero: none.
+    pub grant: crate::cheats::ItemCounts<u8>,
     /// `sword: false` (round 29): SWORD and BEAMS are masked on this step (9:0x06, the old man who answers a fourth
     /// sword hit with two fireballs that stay while Link is in the room, d9-walks.md §2). Default true.
     pub sword: bool,
@@ -728,6 +732,7 @@ fn parse_step(v: &Value) -> Result<RouteStep, MapError> {
         bombs: one_of("bombs", &STEP_BOMBS, false)?,
         drops_first: one_of("drops", &STEP_DROPS, false)?.is_some(),
         banked_kills: get(v, "banked_kills").map(|n| as_u8(n, &format!("{what}: banked_kills"))).transpose()?,
+        grant: step_grant(get(v, "grant"), &what)?,
         sword: match get(v, "sword") {
             None => true,
             Some(Value::Bool(b)) => *b,
@@ -737,6 +742,24 @@ fn parse_step(v: &Value) -> Result<RouteStep, MapError> {
         way: None,
         stretch: None,
     })
+}
+
+/// A step's `grant:` ([`RouteStep::grant`]): a mapping of item names (`crate::cheats::CheatItem::name`) to counts.
+fn step_grant(v: Option<&Value>, what: &str) -> Result<crate::cheats::ItemCounts<u8>, MapError> {
+    use crate::cheats::{CheatItem, ItemCounts};
+    let mut grant = ItemCounts::default();
+    let Some(v) = v else { return Ok(grant) };
+    let what = format!("{what}: grant");
+    check_keys(v, &CheatItem::ALL.map(CheatItem::name), &what)?;
+    for item in CheatItem::ALL {
+        if let Some(n) = get(v, item.name()) {
+            grant[item] = as_u8(n, &format!("{what}: {}", item.name()))?;
+        }
+    }
+    if !CheatItem::ALL.iter().any(|&item| grant[item] > 0) {
+        return err(format!("{what}: grants nothing"));
+    }
+    Ok(grant)
 }
 
 type Routes = IndexMap<String, Vec<RouteStep>>;
@@ -2108,13 +2131,14 @@ mod tests {
         let tagged: Vec<(L, u8)> =
             map.rooms().values().filter_map(|r| Some((r.location, r.requires_rupees?))).collect();
         // Round 29: Ganon's room (1: the silver arrow's rupee, while he lives). Phase X: d3first's candle shop (60),
-        // a room of d3first's own.
+        // a room of d3first's own. Round 32: 8:0x4c (9: the reserve of 8 and a shot, while a Pols Voice lives).
         assert_eq!(
             tagged,
             [
                 (L::new(0, 0x34, true), 60),
                 (L::new(0, 0x44, true), 80),
                 (L::new(6, 0x1c, false), 2),
+                (L::new(8, 0x4c, false), 9),
                 (L::new(9, 0x42, false), 1)
             ]
         );
@@ -3428,6 +3452,34 @@ mod tests {
         let overworld = GAME_YAML.replacen("      location: '0x01'\n", "      location: '0x01'\n      never_opens: true\n", 1);
         assert_ne!(overworld, GAME_YAML);
         assert!(load(&overworld, ROUTES_YAML).unwrap_err().contains("never_opens is a dungeon room's doorway"));
+    }
+
+    /// Round 32, `grant:` (a route grant, `crate::cheats`): d3first's Dungeon 5 entrance is the one step that grants
+    /// (8 bombs), on no other step of any route; an item the ledger doesn't cheat, a count that isn't a byte or a
+    /// grant of nothing is refused.
+    #[test]
+    fn a_step_grant_names_cheated_items() {
+        use crate::cheats::ItemCounts;
+        let map = GameMap::builtin();
+        let grants: Vec<(&str, MapLocation, ItemCounts<u8>)> = map
+            .routes
+            .iter()
+            .flat_map(|(name, steps)| steps.iter().map(move |s| (name.as_str(), s)))
+            .filter(|(_, s)| s.grant != ItemCounts::default())
+            .map(|(name, s)| (name, s.location(), s.grant))
+            .collect();
+        assert_eq!(grants, [("d3first", loc(5, 0x76), ItemCounts { bombs: 8, keys: 0, rupees: 0 })]);
+        let entrance = "exit: N, bomb_reserve: 8, grant: {bombs: 8}}";
+        let swap = |new: &str| {
+            assert!(ROUTES_YAML.contains(entrance));
+            GameMap::from_yaml(GAME_YAML, &ROUTES_YAML.replacen(entrance, new, 1)).unwrap_err().0
+        };
+        let e = swap("exit: N, bomb_reserve: 8, grant: {arrows: 8}}");
+        assert!(e.contains("grant: unknown key"), "{e}");
+        let e = swap("exit: N, bomb_reserve: 8, grant: {bombs: 300}}");
+        assert!(e.contains("grant: bombs"), "{e}");
+        let e = swap("exit: N, bomb_reserve: 8, grant: {bombs: 0}}");
+        assert!(e.contains("grants nothing"), "{e}");
     }
 
     /// The loader refuses whirlwind steps that don't pair up, a whirlwind into a room it never lands in, and a

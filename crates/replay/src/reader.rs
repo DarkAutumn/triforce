@@ -347,15 +347,21 @@ impl Replay {
     }
 
     fn state_records(&self) -> Records<'_, State<'_>> {
-        self.records(section::STATES, 0, |c, frame, _| {
+        // The record's width is the route's grants' bytes: none before version 1.
+        let route_bytes = if self.version >= 1 { 3 } else { 0 };
+        self.records(section::STATES, route_bytes, |c, frame, route_bytes| {
             let Some(kind) = StateKind::from_byte(c.u8()?) else {
                 return c.error("an unknown state kind");
             };
             let step = c.u16()?;
             let granted = [c.u8()?, c.u8()?, c.u8()?];
+            let mut route_granted = [0; 3];
+            for byte in route_granted.iter_mut().take(route_bytes) {
+                *byte = c.u8()?;
+            }
             let edits = c.varint()?;
             let len = c.u32()? as usize;
-            let context = Context { step: (step != NO_STEP).then_some(step), granted };
+            let context = Context { step: (step != NO_STEP).then_some(step), granted, route_granted };
             Ok(State { frame, kind, context, edits, blob: c.take(len)? })
         })
     }

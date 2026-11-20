@@ -1078,3 +1078,58 @@ fn arrows_are_offered_among_the_pols_voices_above_the_rupee_reserve() {
     look(&mut w, true);
     assert!(arrows(&w).is_empty(), "back at the reserve: {}", w.s.mask());
 }
+
+/// Round 32: 0x4c needs the route's reserve and a shot (game.yaml `requires_rupees: 9`) while a Pols Voice lives
+/// (`zelda::cheats`, as Gohma's room): a purse of 3 (d3first's runs bring 1-10) is topped up to 9, six granted;
+/// ARROW is offered (one above the reserve), the shot is one cheated rupee and the purse is topped up again; with
+/// the Pols Voices gone the room needs none and grants nothing more.  A purse above 9 (d2first's walk) is untouched.
+#[test]
+fn the_pols_voices_arrows_are_topped_up_to_the_reserve_and_a_shot() {
+    use zelda::cheats::{CheatItem, needs};
+    let Some(mut w) = walk_into(uw(0x4c), POLS_VOICE) else { return };
+    // Frames with no input until the Pols Voices are out of their clouds (the mask offers the sword).
+    for _ in 0..200 {
+        look(&mut w, true);
+        let sword = [ActionKind::Sword, ActionKind::Beams].into_iter().any(|kind| {
+            [Direction::N, Direction::S, Direction::W, Direction::E]
+                .into_iter()
+                .any(|d| w.s.mask().is_allowed(&Action::new(kind, d, 0).unwrap()))
+        });
+        if sword {
+            break;
+        }
+        w.s.press(0, 1);
+    }
+    let here = uw(0x4c);
+    let need = |w: &Walk| needs(w.s.game_map(), &w.gc, Some(here), w.s.state())[CheatItem::Rupees];
+    assert_eq!(need(&w), 9, "a Pols Voice lives");
+    let (rupees, cheated) = (w.s.state().rupees(), w.ledger.cheated.rupees);
+    assert!(rupees > 9, "{rupees}");
+    w.ledger.after_action(&mut w.s, &w.gc, here);
+    assert_eq!((w.s.state().rupees(), w.ledger.granted(CheatItem::Rupees)), (rupees, 0), "d2first's purse: untouched");
+    w.s.apply_ram(&[(Var::Rupees, 3)]);
+    w.ledger.after_action(&mut w.s, &w.gc, here);
+    assert_eq!((w.s.state().rupees(), w.ledger.granted(CheatItem::Rupees)), (9, 6), "topped up to 9");
+    look(&mut w, true);
+    let arrow = [Direction::N, Direction::S, Direction::W, Direction::E]
+        .into_iter()
+        .map(|d| Action::new(ActionKind::Arrow, d, 0).unwrap())
+        .find(|a| w.s.mask().is_allowed(a))
+        .expect("ARROW offered one above the reserve");
+    w.s.act(arrow).unwrap();
+    w.ledger.after_action(&mut w.s, &w.gc, here);
+    for _ in 0..4 {
+        w.s.act(Action::parse("WAIT 4").unwrap()).unwrap();
+        w.ledger.after_action(&mut w.s, &w.gc, here);
+    }
+    let alive = (1..=11u16).any(|slot| w.s.state().peek(OBJ_TYPE + slot) == POLS_VOICE);
+    assert_eq!(w.ledger.cheated.rupees - cheated, 1, "the shot's rupee was granted");
+    if alive {
+        assert_eq!((w.s.state().rupees(), w.ledger.granted(CheatItem::Rupees)), (9, 6), "topped up again");
+    }
+    clear_room(&mut w.s);
+    assert_eq!(need(&w), 0, "no Pols Voice: no need");
+    let granted = w.ledger.granted(CheatItem::Rupees);
+    w.ledger.after_action(&mut w.s, &w.gc, here);
+    assert_eq!(w.ledger.granted(CheatItem::Rupees), granted, "nothing more granted; leaving takes it back");
+}
