@@ -31,7 +31,7 @@ use std::sync::Arc;
 use zelda::bombs::BombStats;
 use zelda::clips::ClipStats;
 use zelda::decisions::{DecisionNote, DecisionStats};
-use zelda::cheats::{CheatItem, CheatLedger, ItemCounts};
+use zelda::cheats::{CheatItem, CheatLedger, Grants, ItemCounts};
 use zelda::game::GameView;
 use zelda::game_map::{GameMap, Way};
 use zelda::hearts::{HeartTracker, HeartView};
@@ -68,9 +68,9 @@ pub enum RunStart {
     /// file-select screen (None: drawn per run from `0..=max_delay`).  No memory is written.
     PowerOn { name: String, delay: Option<u32>, max_delay: u32 },
     /// From a state another run reached (a state file's bytes: a replay's end state or keyframe), exactly as
-    /// it is: Link is on route step `step` and holds `granted` cheat-granted items.  With `redraw_rng` a
-    /// natural RNG state is drawn per run after the state is restored ([`Route::redrawing_rng`]).
-    Checkpoint { state: Arc<[u8]>, step: usize, granted: ItemCounts<u8>, redraw_rng: bool },
+    /// it is: Link is on route step `step` and holds `granted` cheat-granted items (a room's and the route's).  With
+    /// `redraw_rng` a natural RNG state is drawn per run after the state is restored ([`Route::redrawing_rng`]).
+    Checkpoint { state: Arc<[u8]>, step: usize, granted: Grants, redraw_rng: bool },
 }
 
 /// Where a run turns the clips switch off ([`Route::with_clips`]; `eval-chain --clips-off-from`).
@@ -220,7 +220,7 @@ impl Route {
         map: &GameMap,
         state: Arc<[u8]>,
         step: usize,
-        granted: ItemCounts<u8>,
+        granted: Grants,
     ) -> Result<Route, String> {
         self.from_game_start("a checkpoint")?;
         let steps = &map.routes[&self.name];
@@ -362,6 +362,9 @@ pub struct RoomRecord {
     /// Bombs Link carried on entering the room, and on leaving it, without cheated ones (round 25).
     pub bombs_in: i32,
     pub bombs_out: i32,
+    /// Bombs of a route grant (routes.yaml `grant:`, `zelda::cheats`) Link held on entering the room, outstanding
+    /// (round 32: d3first's bag; `bombs_in` + this is the bag).
+    pub route_bombs_in: i32,
     /// in-progress, exit-correct, exit-wrong, retreat (the route step's `retreat` exit), retreat-limit (one retreat
     /// more than `MAX_RETREATS`: the run ends), missed (a route `heart` waypoint missed), death, stuck, milestone,
     /// error.
@@ -414,18 +417,18 @@ pub struct RoomRecord {
 }
 
 impl RoomRecord {
-    /// `carried`: Link's natural keys and bombs (`CheatLedger::natural`); `clips_allowed`: the run-time clips switch
-    /// now (the milestone record's too: the switch the run ended with).
+    /// `carried`: Link's natural keys and bombs and the route's granted bombs ([`ChainEnv::carried`]);
+    /// `clips_allowed`: the run-time clips switch now (the milestone record's too: the switch the run ended with).
     fn new(
         index: usize,
         location: MapLocation,
         specialist: &str,
         state: &GameView,
-        carried: (i32, i32),
+        carried: (i32, i32, i32),
         outcome: &str,
         clips_allowed: bool,
     ) -> Self {
-        let (keys, bombs) = carried;
+        let (keys, bombs, route_bombs) = carried;
         RoomRecord {
             index,
             level: location.level,
@@ -441,6 +444,7 @@ impl RoomRecord {
             keys_out: keys,
             bombs_in: bombs,
             bombs_out: bombs,
+            route_bombs_in: route_bombs,
             outcome: outcome.to_owned(),
             hearts_dropped: 0,
             hearts_taken: 0,
@@ -499,6 +503,7 @@ impl RoomRecord {
             "drops": self.drops.iter().map(drop_json).collect::<Vec<_>>(),
         });
         let o = m.as_object_mut().expect("object");
+        o.insert("route_bombs_in".into(), json!(self.route_bombs_in));
         for item in CheatItem::ALL {
             o.insert(format!("cheated_{}", item.name()), json!(self.cheated[item]));
         }
@@ -759,9 +764,16 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         self.cheats.cheated
     }
 
+    /// What Link carries into a room record in `state`: his natural keys and bombs (`CheatLedger::natural`) and the
+    /// route's granted bombs still outstanding (`CheatLedger::route_granted`).
+    fn carried(&self, state: &GameView) -> (i32, i32, i32) {
+        let natural = |item| self.cheats.natural(item, state);
+        (natural(CheatItem::Keys), natural(CheatItem::Bombs), self.cheats.route_granted(CheatItem::Bombs))
+    }
+
     /// What a run continuing from the current state needs beyond the machine: the route step Link is
-    /// playing (None off the route or before the first reset) and the cheat-granted items he holds.
-    pub fn context(&self) -> (Option<usize>, ItemCounts<u8>) {
+    /// playing (None off the route or before the first reset) and the cheat-granted items he holds, by kind.
+    pub fn context(&self) -> (Option<usize>, Grants) {
         (self.objectives.as_ref().and_then(GameCompletion::step), self.cheats.grants())
     }
 
@@ -1084,6 +1096,9 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             gc.set_clips_allowed(false);
             objective = gc.objectives(None, &state);
         }
+        // A route step's grant on reaching it (routes.yaml `grant:`): the state carries on with it.
+        let gc = self.objectives.as_ref().expect("run started");
+        let state = self.cheats.follow_route(&mut self.session, gc).unwrap_or(state);
         self.supply.update(&change, &state, &objective);
         self.linger.update(
             &LingerState::of(&change.previous, &prev_objective),
@@ -1163,7 +1178,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         {
             self.result.as_mut().unwrap().rooms.last_mut().unwrap().outcome = "exit-correct".into();
             self.finish_record(&state);
-            let keys = (self.cheats.natural(CheatItem::Keys, &state), self.cheats.natural(CheatItem::Bombs, &state));
+            let keys = self.carried(&state);
             let result = self.result.as_mut().unwrap();
             result.result = "success".into();
             result.reason = format!("took the level {level} triforce");
@@ -1177,7 +1192,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         if self.route.final_end && zelda::objectives::game_ended(&state) {
             self.result.as_mut().unwrap().rooms.last_mut().unwrap().outcome = "exit-correct".into();
             self.finish_record(&state);
-            let keys = (self.cheats.natural(CheatItem::Keys, &state), self.cheats.natural(CheatItem::Bombs, &state));
+            let keys = self.carried(&state);
             let result = self.result.as_mut().unwrap();
             result.result = "success".into();
             result.reason = format!("the game ended in {}", describe(state.full_location()));
@@ -1375,7 +1390,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                     return Ok(ChainStatus::Done(result.clone()));
                 }
             }
-            let keys = (self.cheats.natural(CheatItem::Keys, &state), self.cheats.natural(CheatItem::Bombs, &state));
+            let keys = self.carried(&state);
             let on_step = self.objectives.as_ref().and_then(GameCompletion::step);
             let result = self.result.as_mut().unwrap();
             // The stop room, or the stop step's room entered by the route's own exit from the room before it

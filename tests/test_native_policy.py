@@ -50,7 +50,9 @@ def observations(native):
     rows = []
     for state in STATES:
         require_state(state)
-        env = _native.Env(SPECIALISTS[state], states_dir=str(REPO_STATES_DIR), seed=3)
+        # d2first's states only (a heart_value family has no d3first table; test_obs_legacy's `family_hashes`)
+        config = _native.SpecialistConfig.load(SPECIALISTS[state]).replace(state_routes=['d2first'])
+        env = _native.Env(config, states_dir=str(REPO_STATES_DIR), seed=3)
         obs, _ = env.reset(seed=3, options={'start_state': state})
         for step in range(STEPS_PER_STATE):
             rows.append(obs)

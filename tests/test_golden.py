@@ -164,7 +164,7 @@ def test_the_fastest_winner_of_a_poll_becomes_the_next_checkpoint(stitchable, mo
     assert (route_a.stop_step, route_a.checkpoint, route_b.stop_step) == (SEGMENT_STOP_STEP, None, None)
     end = _native.Replay(first).states()[-1]
     assert route_b.checkpoint == {'state': end['state'], 'step': SEGMENT_STOP_STEP, 'granted': end['granted'],
-                                  'randomize_rng': False}
+                                  'route_granted': end['route_granted'], 'randomize_rng': False}
     assert (kwargs_a['num_envs'], kwargs_a['threads'], kwargs_a['act'], kwargs_a['record']) == (
         4, 3, registry.PLAY_ACT, {'record': True})
 

@@ -42,8 +42,9 @@ class RunnerError(RuntimeError):
 class Route:
     """Where a route starts and what ends it.  The start: ``start_state`` (``'start'``: the game start state), or
     ``power_on`` (``{'name', 'delay', 'max_delay'}``: console power on, ``delay`` None = drawn per run seed from
-    ``0..=max_delay``), or ``checkpoint`` (``{'state': bytes, 'step': int, 'granted': [bombs, keys, rupees]}``:
-    the state another run ended in, e.g. ``Replay.states()[-1]``).  The end: ``terminal`` (a room), or
+    ``0..=max_delay``), or ``checkpoint`` (``{'state': bytes, 'step': int, 'granted': [bombs, keys, rupees],
+    'route_granted': [bombs, keys, rupees]}``: the state another run ended in, e.g. ``Replay.states()[-1]``, and the
+    items a room and a route step granted that Link still holds there).  The end: ``terminal`` (a room), or
     ``stop_step`` (a route step, reached by the route's own exit), or neither: the route's last triforce.
     ``start_step``: the route step the start is on."""
     name: str
@@ -106,6 +107,7 @@ class Route:
                                   f"(0..={len(steps) - 1})")
             checkpoint = {'state': bytes(checkpoint['state']), 'step': start,
                           'granted': list(checkpoint.get('granted') or (0, 0, 0)),
+                          'route_granted': list(checkpoint.get('route_granted') or (0, 0, 0)),
                           'randomize_rng': bool(checkpoint.get('randomize_rng', False))}
         if stop_at is not None:
             later = [(s['level'], s['room'], s['in_cave']) for s in steps[start + 1:]]
@@ -213,6 +215,9 @@ class RoomRecord:
     keys_out: Optional[int] = None
     bombs_in: Optional[int] = None  # natural bombs carried on entering / leaving the room (None before round 25)
     bombs_out: Optional[int] = None
+    # Bombs of a route grant (routes.yaml `grant:`, crates/zelda/src/cheats.rs) held on entering the room (round 32:
+    # d3first's bag from Dungeon 5's entrance; bombs_in + route_bombs_in is the bag).  0 in older records.
+    route_bombs_in: int = 0
     outcome: str = 'in-progress'    # exit-correct, exit-wrong, retreat, retreat-limit, missed (heart waypoint), death,
     #                                 stuck (room or run budgets, wrong-exit or bounce limit), milestone, error
     # Dropped hearts during the visit: healed = real hearts gained, wasted = taken - healed, left = still on the
@@ -544,6 +549,7 @@ class Runner:
             model['checkpoint_sha1'] = None if checkpoint is None else checkpoint_sha1(checkpoint)
             model['config_sha256'] = hashlib.sha256(config.to_json().encode()).hexdigest()
         checkpoint = route.checkpoint and {'step': route.checkpoint['step'], 'granted': route.checkpoint['granted'],
+                                           'route_granted': route.checkpoint['route_granted'],
                                            'randomize_rng': route.checkpoint['randomize_rng'],
                                            'state_sha1': hashlib.sha1(route.checkpoint['state']).hexdigest()}
         return {'route': route.name, 'start_from': None if route.start_state == 'start' else route.start_state,

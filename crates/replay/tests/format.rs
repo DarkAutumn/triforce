@@ -34,7 +34,7 @@ fn dist(frame: u32) -> Vec<f32> {
 }
 
 fn context(frame: u32) -> Context {
-    Context { step: Some(frame as u16 / 10), granted: [frame as u8, 1, 2] }
+    Context { step: Some(frame as u16 / 10), granted: [frame as u8, 1, 2], route_granted: [3, 0, frame as u8 / 2] }
 }
 
 fn ending(kind: u8) -> Ending {
@@ -141,7 +141,7 @@ fn streams(replay: &Replay, shift: u32) -> Streams {
 #[test]
 fn a_recording_reads_back_every_stream() {
     let replay = recorded(100, &[40, 80], true, true, 9);
-    assert_eq!((replay.version(), replay.frames(), replay.ending_name()), (0, 100, "win"));
+    assert_eq!((replay.version(), replay.frames(), replay.ending_name()), (1, 100, "win"));
     assert_eq!(replay.rom_sha1(), [0xAB; 20]);
     assert_eq!(
         replay.source().unwrap(),
@@ -418,17 +418,17 @@ fn newer_and_damaged_files_are_refused_without_a_panic() {
 
     assert_eq!(Replay::parse(b"TFMOVIE\0 not one of ours, but long enough to hold a header".to_vec()).unwrap_err().to_string(), "not a TFREPLAY file");
     let mut newer = bytes.clone();
-    newer[8] = 1;
+    newer[8] = 2;
     let error = Replay::parse(newer.clone()).unwrap_err();
-    assert_eq!(error, ReplayError::Version { found: 1, recorded_by: Some("1.3.1.0".into()) });
+    assert_eq!(error, ReplayError::Version { found: 2, recorded_by: Some("1.3.1.0".into()) });
     assert_eq!(
         error.to_string(),
-        "TFREPLAY version 1 is newer than this build reads (0); it was recorded by triforce 1.3.1.0"
+        "TFREPLAY version 2 is newer than this build reads (1); it was recorded by triforce 1.3.1.0"
     );
     newer.truncate(60);
     assert_eq!(
         Replay::parse(newer).unwrap_err().to_string(),
-        "TFREPLAY version 1 is newer than this build reads (0)"
+        "TFREPLAY version 2 is newer than this build reads (1)"
     );
 
     for cut in (0..bytes.len()).step_by(97) {
@@ -446,7 +446,7 @@ fn newer_and_damaged_files_are_refused_without_a_panic() {
     let mut no_end = bytes.clone();
     let states = entry(section::STATES);
     let offset = u64::from_le_bytes(no_end[states + 16..states + 24].try_into().unwrap()) as usize;
-    let end = offset + 1 + 1 + 2 + 3 + 1 + 4 + blob(0).len();       // the keyframe record at frame 40
+    let end = offset + 1 + 1 + 2 + 3 + 3 + 1 + 4 + blob(0).len();   // the keyframe record at frame 40
     assert_eq!(no_end[end + 1], StateKind::End as u8);
     no_end[end + 1] = StateKind::Keyframe as u8;
     assert!(Replay::parse(no_end).unwrap_err().to_string().contains("no END state"));

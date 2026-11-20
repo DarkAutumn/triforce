@@ -817,7 +817,29 @@ action) except where the room Link is in *needs* some (`cheats::needs`), Lee's N
 - **rupees:** the game.yaml `requires_rupees: N` amount of a shop's cave the route buys from (round 26: 0x44's cave
   80 for the wood arrow, 0x34's cave 60 for the food), until a ware is bought there (the overworld room's item flag
   `$10`, set by any purchase) and not while a rupee change is pending (`$67D`/`$67E`: the game adds and takes rupees
-  one per frame). Walked (`crates/zelda/tests/d7.rs`): from 30 rupees the two shops cheat 50 and 60.
+  one per frame). Walked (`crates/zelda/tests/d7.rs`): from 30 rupees the two shops cheat 50 and 60. In a dungeon
+  room, while the monster its arrows are for lives (a rupee a shot): Gohma's 6:0x1c (round 27, 2: the reserve of 1
+  and a shot), Ganon's 9:0x42 until he begins to die (round 29, 1; ARROW is offered only in his brown phase), the
+  Pols Voices of 8:0x4c (round 32, 9: the reserve of 8 and a shot; `d3first` arrives with 1-10 rupees, `d2first`
+  with 22-38).
+
+**Route grants** (round 32, routes.yaml `grant: {bombs: N}`, `RouteStep::grant`; the owner on `d3first`'s bombs and
+rupees: "can be ignored since we have the ability to cheat them to the character in game"): the first time a run
+reaches a step with a grant (`CheatLedger::follow_route`, after the objective has followed the action; at a run's or
+episode's start for its start step) the item's *bag* (its count without a room's grant) is topped up to N and the
+units added are *route-granted*. The ledger keeps the two kinds as two tallies per item, never mixed: `granted` (a
+room's need: taken back on leaving the room, reported by `CheatLedger::granted`, the one `ItemsConfig::bomb_targets`
+reads, so a room's bomb still only opens the wall) and `route` (`CheatLedger::route_granted`: outlives the room,
+outstanding until used, not bound to a wall: it is the weapon the route gives, kept by the route's `bomb_reserve`
+until the fight it is for). A fall uses a room's grant first, then the route's, then Link's own; every granted unit
+used is cheated in the room where it is used, and what is still route-granted when a run ends counts nothing. While
+a route grant of an item is outstanding, a room's need for it is met by the room's own grant alone (the bag is set
+aside): `d3first`'s one grant, 8 bombs at Dungeon 5's entrance (step 97), reaches the Olive Garden whole while
+5:0x66's and 5:0x65's walls grant and take their own bomb (9 in hand there; `crates/env/tests/d3first_bag.rs`).
+Chain records carry `route_bombs_in` (the route's bombs on entering; `bombs_in` + it is the bag), and a state's
+context carries both kinds (`cheats::Grants`: `ChainEnv::context`, a replay STATES record, a chain checkpoint's
+`granted` and `route_granted`), so a golden path's next segment continues the bag. A state saved from a run (a
+harvest's pre-entry, `CheatStep::left_with`) holds the route's units as Link's own.
 
 `CheatLedger`, shared by `SpecialistEnv` and `ChainEnv` (one per episode or run), runs at episode/run start and after
 every action with one rule for every item, writes any change with `Session::apply_ram` and carries the rebuilt state
@@ -826,7 +848,8 @@ Below the need, the count is topped up to it and the top-up is *granted* (outsta
 use (`used`; bombs placed); a fall uses the grant first, and those units are *cheated* uses (`cheated`; a grant
 merely given never counts); while the need holds the floor re-arms. A natural rise (a pickup) leaves the grant alone:
 the granted units are used first, so a pickup over a cheated bomb still counts that bomb as cheated when it is placed
-(0x2c: Link leaves with exactly the 4 bombs he picked up, 1 cheated). Leaving the room takes back what is still granted, never natural units; elsewhere counts go up and down
+(0x2c: Link leaves with exactly the 4 bombs he picked up, 1 cheated). Leaving the room takes back what the room still
+grants, never natural units nor a route's (above); elsewhere counts go up and down
 naturally. Visits count `keys_gained` on natural keys (`CheatLedger::natural`), so a cheated key is no gain.
 Reports (`_native.CHEAT_ITEMS` = bombs, keys, rupees): terminal `info['bombs'] = {used}` and
 `info['cheated'] = {bombs, keys, rupees}` → training `bombs/used` and `cheated/bombs`, `cheated/keys`,
@@ -845,7 +868,8 @@ hits: an enemy's HP lost, a kill's remaining HP), `tenth_kills` (`$50` 9 → 10,
 (gone with lifetime left, or with Link's count up), `drop_left` (on the floor when Link left the room),
 `drop_expired`. Terminal `info['bombs']` holds them next to `used` → training `bombs/<stat>` per episode
 (progress events too); eval `mean_bomb_<stat>` and per-visit `bomb_<stat>` / `bomb_<stat>_per_visit`; chain
-`RoomRecord.bomb_<stat>`. Chain records also carry `bombs_in` / `bombs_out` (natural bombs on entering and leaving).
+`RoomRecord.bomb_<stat>`. Chain records also carry `bombs_in` / `bombs_out` (natural bombs on entering and leaving)
+and `route_bombs_in` (a route grant's bombs on entering).
 
 Boss fights (`crates/env/src/critic.rs` `BossTransitions`): a Dodongo whose ObjState ($AC+slot) enters 2 was
 *stunned* by a bomb's smoke (the sword can kill him then; a stun timer that goes up is a new stun); a rise in
@@ -1326,8 +1350,11 @@ every step, so following an enemy that moves away pays again, and knockback rese
   (failures), so it is not used for stopping.
 - `python -m triforce.explore --specialist NAME` (Go-Explore phase A; `crates/env/src/explore.rs`, CLI `explore.py`): per seed start state, an
   archive of cells (level, room, in_cave, tile // 2, whole hearts, living enemies, their total health, keys,
-  boomerang, the room's push block still unpushed) with exact `Session`
-  snapshots; random legal actions from cells chosen by progress/closeness/novelty; the best success is replayed
+  boomerang, the room's push block still unpushed) with the env's exact checkpoints (`SpecialistEnv::save`/`load`:
+  a cell continues the episode its path played, as the replay from the start does: the cheat ledger's grants, the
+  route step, the critic's and the end conditions' counts; round 32: restarting an episode at a cell made a granted
+  bomb Link's own, and d3first's 3:0x5b W -> E, entered with no bombs, got tracks the replay refused); random legal
+  actions from cells chosen by progress/closeness/novelty; the best success is replayed
   and written as `trajectories/<specialist>/<state>/NNNN.state` + `trajectory.json`. `SpecialistEnv::restore(snapshot)`
   starts an episode from an exact snapshot.
 - Backward curriculum (`crates/env/src/curriculum.rs`): on when the specialist's config has `curriculum: {enabled: on}`
@@ -1694,7 +1721,7 @@ every step, so following an enemy that moves away pays again, and knockback rese
 
 ## Replays (`crates/replay`, `crates/pool/src/zelda`, `replay.py`)
 
-A replay (`.tfreplay`, `TFREPLAY`, `REPLAY_VERSION` 0) is one run or episode, exact enough to play back bit for
+A replay (`.tfreplay`, `TFREPLAY`, `REPLAY_VERSION` 1; version 0 files still read) is one run or episode, exact enough to play back bit for
 bit on the emulator alone: no env, reward or model code is needed, so a replay outlives changes to all three.
 The file layout is in `crates/replay/src/lib.rs`. It holds:
 
@@ -1705,7 +1732,7 @@ The file layout is in `crates/replay/src/lib.rs`. It holds:
 | INPUTS | the controller byte of every frame, run-length encoded |
 | EDITS | every memory write that was not the game's: `(frame, address, previous byte, new byte)` (load randomization, hp draws, cheat grants, anything poked) |
 | CHEATS | cheated items spent: `(frame, item, count)` |
-| STATES | `TFZSTATE` blobs: START (embedded source), END (always), KEYFRAME (optional, every N frames), CHECKPOINT (a stitch boundary); each with its route step and the cheat grants still held, so a chain can continue from it |
+| STATES | `TFZSTATE` blobs: START (embedded source), END (always), KEYFRAME (optional, every N frames), CHECKPOINT (a stitch boundary); each with its route step and the cheat grants still held, a room's and (version 1, round 32) a route step's, so a chain can continue from it |
 | EVENTS | CONTROL (the models take over), ROOM (level, room, route step, acting policy), OUTCOME (a room visit's), EPISODE (a training-style episode's ending), SEGMENT (a stitch boundary) |
 | REWARDS (optional) | every reward term of every step, scored by the code training uses (`rewards::score_step`, `env::RewardTrack`; chains are cut into the acting specialist's episodes) |
 | DECISIONS (optional) | every model decision: policy, action, value and the whole factored distribution (143 log-probabilities: kind[11], direction[kind][8], duration[kind][4]; META `actions` describes the space, so replays recorded with 7 kinds and 91, or 8 kinds and 104, still read) |

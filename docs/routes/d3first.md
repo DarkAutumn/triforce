@@ -29,7 +29,7 @@ sets its own reserves on its own steps before a block, and a block's own reserve
 | `to-level-4` | 24-30 | 0:0x74 cave → W to 0x45's mouth (the raft from 0x55) |
 | `dungeon-4` | 31-52 | 4:0x71 to 0x03, the stretch `d4-island` |
 | `dungeon-1` | 61-78 | 1:0x73 out S to 0:0x37 and back in, N by 0x63, 0x53's wall, the bow, to 0x36 (phase IX's) |
-| `dungeon-5` | 97-119 | 5:0x76 to 0x14 |
+| `dungeon-5` | 98-119 | 5:0x66 to 0x14 (the entrance, step 97, is each route's own: d3first's grants the bag) |
 | `dungeon-2` | 145-154 | 2:0x7d to 0x0d |
 | `to-level-7` | 156-173 | 0:0x45 out of the whirlwind to 0x42's pond: the stretch `dock-44`, the arrows, the meat |
 | `dungeon-7` | 174-193 | 7:0x79 to 0x2b |
@@ -89,7 +89,8 @@ Its own steps in full; the blocks by their rooms.
 | 94 | `0_0ccave` | 0:0x0c cave | S → S | ow-tektite | `waypoint: blue-candle` (60, `requires_rupees`) | 7 / W |
 | 95 | `0_0cc` | 0:0x0c | cave → W | ow-tektite | the wrap exit (CLIP E) onto the mountain top | 7 / W |
 | 96 | `0_0be` | 0:0x0b | E → cave | ow-leever | Level 5 | 7 / W |
-| 97-119 | | `dungeon-5` | | (d2first's) | the Olive Garden, the recorder, Digdogger's heart, the piece | 7 → 8 / W |
+| 97 | `5_76s` | 5:0x76 | S → N | gibdo | `bomb_reserve: 8`, `grant: {bombs: 8}`: the bag topped up to 8 (round 32) | 7 / W |
+| 98-119 | | `dungeon-5` | | (d2first's) | the Olive Garden, the recorder, Digdogger's heart, the piece | 7 → 8 / W |
 | 120 | `0_0bc` | 0:0x0b | cave → recorder | ow-leever | one play facing right or up (MOVE E first) | 8 / W |
 | 121 | `0_74r` | 0:0x74 | recorder → W | ow-tektite | | 8 / W |
 | 122 | `0_73e_v2` | 0:0x73 | E → N | ow-moblin | | 8 / W |
@@ -181,8 +182,12 @@ the run-time switch off has no way past them. The shared blocks keep their stret
   of 20 with 0x4a's bombs is the price); 0 on 0x5b's last pass and at Manhandla, 6 between (the block's). 2 from
   Dungeon 4's entrance (the block's). **8 from Level 4's exit to Dungeon 5** (d3first's own steps 53 and 83): every
   bomb Link has is kept for the Olive Garden (walks-b §2: the wood sword clears it 9 of 20 without bombs, 18 of 20
-  with eight); the walls on the way (1:0x53 after phase IX, 0x2c, 0x2d, 5:0x66, 5:0x65) are bombed as any wall,
-  cheated where Link has none. The Garden itself is the block's (0 in 0x05, 8 after it, 0 at Digdogger). **1 from
+  with eight); the walls on the way (1:0x53 after phase IX, 0x2c, 0x2d) are bombed as any wall, cheated where Link
+  has none. **Dungeon 5's entrance tops the bag up to 8** (round 32, `grant: {bombs: 8}`, the lead on the owner's
+  "can be ignored since we have the ability to cheat them to the character in game"): a route grant, outstanding
+  until used and cheated where used (`zelda::cheats`); 5:0x66's and 5:0x65's walls grant and take their own bomb
+  while it is outstanding, so the reserve of 8 brings the whole bag to the Garden. The Garden itself is the block's
+  (0 in 0x05: the bag thrown freely, 8 after it, 0 at Digdogger). **1 from
   Level 2's mouth through Dungeon 2** (step 148; walks-b §4: goriya and moldorm are `free` and would throw the bag
   this route brings; Dodongo's room offers BOMB whatever the reserve), **0 out of Level 2** (step 159), as d2first's
   from Dungeon 5 on; the blocks' after that.
@@ -190,7 +195,16 @@ the run-time switch off has no way past them. The shared blocks keep their stret
   only at 0x44 in `to-level-7`), so a reserve there would keep nothing. Where the ledger says the route runs dry
   (0x34's meat, then Gohma, 8:0x4c and Ganon) the shared blocks' reserves already sit: 2 from the arrows (0x44's cave
   step), 1 in Gohma's room, 8 from 8:0x4c, 1 through Level 9, 0 at Ganon. A reserve keeps rupees from ARROW; it
-  cannot keep what was never there (For the owner, 7).
+  cannot keep what was never there, so the arrow rooms' needs top the purse up (cheated, counted): Gohma's (round
+  27), Ganon's (round 29) and, round 32, 8:0x4c's while a Pols Voice lives (`requires_rupees: 9`, the reserve and a
+  shot; on both routes: d2first arrives with 22-38 and is never topped up).
+- **Measured (round 32, r32-base2's team, clips on).** Dungeon 5 (`--from 5_76s_0 --stop-at step:120`, 300 runs):
+  6.0% (1.9% of 1000 before); every run enters the Olive Garden with the bag of 8 (before: 0 in 822 of 1000, 4 in
+  the rest) and throws 7.7 there (5.9 cheated); the Garden loses 151 of 300 (845 of 1000 before); 8.1 cheated bombs
+  a run (the walls' two, the Garden, Digdogger). Dungeon 8 (`--from 8_7es_0 --stop-at step:243`, 300 runs): 24.3%
+  (6.8% before); 8:0x4c loses 5 of 107 entering (268 of 371 before), 8.0 Pols Voices killed a visit (0.88 before),
+  0.93 cheated rupees a visit, 0.33 a run. `d2first`'s Dungeon 8 on seeds 0-99: 20 of 100 before and after, every
+  run's outcome and rooms the same, no rupee cheated.
 
 ## Ledgers (from the walks; staging without drops unless said)
 
@@ -208,8 +222,8 @@ the run-time switch off has no way past them. The shared blocks keep their stret
 | 0x44's arrows (80), 0x34's meat (60) | 11 | | | 0-7 (cheated at 0x34 when short) |
 | Dungeon 7 | 12 | | | 0-11 |
 | the magic sword, Dungeon 6 | 13 | | | 0-8 (Gohma's arrows: topped up while he lives) |
-| Dungeon 8 | 14 | | | 0-7 (8:0x4c's arrows: no cheat) |
-| 0x47's heart, Level 9 | 15 | | | 0-6 (Ganon's silver arrow: no cheat) |
+| Dungeon 8 | 14 | | | 0-7 (8:0x4c's arrows: topped up to 9 while a Pols Voice lives, round 32) |
+| 0x47's heart, Level 9 | 15 | | | 0-6 (Ganon's silver arrow: topped up to 1 while he lives, round 29) |
 
 Rupees in all: 30 (0x2d) + 100 (0x62) + 30 (0x3d) + 10 (4:0x11) and the dungeons' drops, against 60 + 80 + 60 for the
 wares and 3-5 for arrows.
@@ -242,13 +256,14 @@ From the second walk (`d3first-walks-b.md`):
 11. **Hearts into Dungeon 5 are 7** (3, Dungeons 3, 4, 1, the heart rock); the grave sees exactly 12 and gives the
     magic sword (refused at 11).
 12. **The wood sword in the Olive Garden**: 9-10 of 20 clears by the scripted fighter without bombs, 17-18 with
-    eight; this route's bomb reserve 8 from Level 4's exit keeps what Link finds for it; no top-up exists (the lead:
-    no new cheat; the models must learn to arrive with bombs).
+    eight; this route's bomb reserve 8 from Level 4's exit keeps what Link finds for it. Answered by the owner's list
+    ("The 'you need x bombs and rupees' can be ignored since we have the ability to cheat them to the character in
+    game") and the lead (Nov 20): Dungeon 5's entrance tops the bag up to 8, cheated and counted where thrown.
 13. **The wood sword in Dungeon 7**: 0x1c's small Digdoggers (8 wood hits each) kill the scripted fighter 7 of 20
     from full hearts; 0x49, 0x1b and Aquamentus cost 1-2 hearts more each. Nothing to walk instead.
 14. **Rupees**: about even over the route; a run with few drops reaches 0x34 short (cheated), Gohma short (cheated),
-    and 8:0x4c and Ganon with nothing for their arrows (no cheat there: a top-up or a rupee room on the way is your
-    call).
+    and 8:0x4c and Ganon with little for their arrows: both topped up while their monsters live (Ganon's since round
+    29, 8:0x4c's from round 32), cheated and counted.
 
 From building it:
 
@@ -289,6 +304,60 @@ from a rule-won run (the walks' scripts: `r32_d3first.py` `BEST`, `ManhandlaFigh
 
 The rest (the legs, Dungeon 2 at ten containers, and Dungeons 6, 8, 9 with the magic sword: d2first's inventory
 there but the purse) the walks crossed by walking or d2first's own rules.
+
+## The states as built
+
+`d3first_*` (`triforce/states/`, chains 0-2, steps 0-303, the game start to Ganon's room) were built stretch by
+stretch by `scripts/experiments/r32c_states.py --first N --last M --rules ... --tag T` (one job a stretch): each step
+of the clip way crossed per chain by the explorer (`entry_states build`, one step), a step named in `--rules` by the
+walks' rule (`r32c_harvest.py`: the first won seed of a chain gives the next state, every seed played for the rate)
+or by round 28's/29's rule (`STEM=ROOM`, `r28_demos.py`/`r29_demos.py ROOM --route d3first --harvest`); where the
+explorer fails, the walks' actions or fight for the step (`r32_d3first.LEGS`, `r32c_harvest.FIGHTS`/`tallies()`),
+round 28's/29's rule of the room, and with `--models` the promoted models (`r32c_models.py`: `eval-chain --route
+d3first --from STEM_<chain> --stop-at step:<next> --replays`, the won replays' pre-entry frame of the next room cut
+out). Every harvested state is written by `write_entry_state` (hearts refilled, the room fresh); its manifest entry's
+`played_by` names the rule. No fight is skipped. Wins over runs, per chain (0, 1, 2):
+
+| Stretch (steps) | Room (step) | How | Won |
+|---|---|---|---|
+| 1 (0-31) | 3:0x6b (8) -> `3_5bs` | the walks' rule | 56/60 |
+| | 3:0x4b (10) -> `3_4ae` | the walks' rule | 60/60 |
+| | 3:0x4a (11) -> `3_49e` | the walks' rule | 60/60 |
+| | 3:0x59 (13) -> `3_69n` | `BombFighter` (BEST 'bombs') | 60/60 |
+| | 3:0x5b (19) -> `3_5cw` | the sword | 56/60 |
+| | 3:0x4d Manhandla (22) -> `3_3ds` | `ManhandlaFighter` by bombs | 37/60 |
+| 2 (31-97) | 4:0x32 (38) -> `4_60cave` | the walks' rule | 59/60 |
+| | 4:0x13 Gleeok (51) -> `4_03s` | `GleeokFighter` at 4 hearts, the heart and N door by `straight` moves | 10/90 (4, 3, 3) |
+| | 1:0x35 Aquamentus (81) -> `1_36w` | the walks' rule | 90/90 |
+| | 4:0x31 W->E (chains 0, 2), 4:0x12 N->E | the walks' actions (explorer failed) | 10/10 each |
+| 3 (97-155) | 5:0x05 Olive Garden (107) -> `5_04cave` | `r32b_d5` BombFighter, then the explorer out | 9, 10, 12 /20 |
+| | 5:0x66 W->N (110) -> `5_56s` | `r32b_d7.Fight` on the Gibdos, then the explorer | 17, 18, 17 /20 |
+| | 5:0x24 Digdogger (122) -> `5_14s` | the recorder + `DigFighter` | 19, 20, 19 /20 |
+| 4 (152-211) | 7:0x49 (181) -> `7_39s` | `r32b_d7` fight + explorer | 9, 12, 10 /20 |
+| | 7:0x1b (190) -> `7_1cw` | `r32b_d7` fight + explorer | 20, 20, 20 /20 |
+| | 7:0x1c (191) -> `7_0cs` | `r32b_d7` fight (the small Digdogger) | 15, 15, 12 /20 |
+| | 7:0x2a Aquamentus (196) -> `7_2bw` | `r32b_d7` fight | 20, 19, 20 /20 |
+| 5-7 (211-303) | 8:0x3c Gleeok (241) -> `8_2cs` | `r28_demos.py gleeok --route d3first` | 20, 19, 20 /20 |
+| | 9:0x14 (263) -> `9_15w` | `r29_demos.py like-like-14` | 20, 20, 20 /20 |
+| | 9:0x16 (276) -> `9_06s` | `r29_demos.py patra-16` | 20, 20, 20 /20 |
+| | 9:0x05 (278) -> `9_70cave` | `r29_demos.py wizzrobe-05` (losses: exit-wrong) | 10, 9, 10 /20 |
+| | 9:0x61 (282) -> `9_75cave` | `r29_demos.py patra-61` | 20, 20, 20 /20 |
+| | 9:0x10 (286) -> `9_4fcave` | `r29_demos.py wizzrobe-10` (losses: deaths; 6.4-7.6 hearts lost in wins) | 17, 14, 19 /20 |
+| | 9:0x30 (296) -> `9_67cave` | `r29_demos.py wizzrobe-30` (losses: exit-wrong) | 13, 12, 13 /20 |
+| | 9:0x52 (301) -> `9_42s` | `r29_demos.py patra-52` | 20, 20, 20 /20 |
+| | 9:0x42 Ganon (302) -> `9_32s` | `r29_demos.py ganon` | 20, 20, 20 /20 |
+
+Rooms the explorer did not solve at its default settings (3 attempts of 3000 iterations, patience 200): 5:0x65 E->W
+chain 2 (passed with 8 attempts), 2:0x1e S->N chain 0, and Dungeon 6's two fights: 6:0x38 S->N chains 0 and 2 and
+6:0x3a W->stairs chain 1 (chain 1 crossed 0x38 at the defaults, 151k env steps; chains 0 and 2 met 0x3a only at the
+new settings). At 8000 iterations, patience 400, 6 attempts the explorer crossed all of them: 0x38 in 380k and 674k
+env steps (1421 s, 2415 s), 0x3a in 552k, 546k and 229k (chains 0-2). Everything else, Gohma and the triforce of
+Dungeon 6, the recorder warps, 0x6d's tree by the blue candle, Dungeon 8's Darknut rooms (8:0x3e 927 s), 0x47's
+heart, the ladder at 0x17 and the rock wall at 0x05, Dungeon 9's crossings (0x66 N, 0x56, the bomb, 0x55 from E and
+its clip, the ring), the explorer crossed. The promoted models (copied into the worktree, stamped 2.0.0.0; wizzrobe
+`r30w-wj-s89`) won 6:0x38 28/30 and 27/30 (chains 0, 2) and 6:0x3a 27/30 (chain 1) with `r32c_models.py`, run beside
+the explorer as a fallback; the explorer's states were kept, so no shipped state is model-won. The stretch forks'
+plain ways (4:0x30-0x21, 0:0x65-0x54, 0:0x61-0x50) were walked by `entry_states path --route d3first`, as d2first's.
 
 ## Phase IX
 

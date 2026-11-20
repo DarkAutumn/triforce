@@ -4,9 +4,11 @@ use std::fmt;
 
 /// File magic.
 pub const MAGIC: &[u8; 8] = b"TFREPLAY";
-/// The newest format this build writes and reads.  Bumped only when an existing replay can no longer be
-/// replayed bit-exactly (AGENTS.md "Versioning"); the reader keeps reading every earlier version it can.
-pub const REPLAY_VERSION: u32 = 0;
+/// The newest format this build writes and reads.  Bumped when an existing replay can no longer be replayed
+/// bit-exactly, or when what this build writes can't be read by an older one (AGENTS.md "Versioning"); the reader
+/// keeps reading every earlier version it can.  Version 1 (round 32): a STATES record's context holds the route's
+/// grants after the room's ([`Context::route_granted`]; a version 0 record has none).
+pub const REPLAY_VERSION: u32 = 1;
 
 pub(crate) const HEADER_LEN: usize = 48;
 pub(crate) const ENTRY_LEN: usize = 32;
@@ -176,11 +178,13 @@ impl StateKind {
 }
 
 /// What a state needs beyond the machine to continue a run from it: the route step and the items granted
-/// by the cheat ledger (bombs, keys, rupees) that Link still holds.
+/// by the cheat ledger (bombs, keys, rupees) that Link still holds, by a room and by the route (`zelda::cheats`).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Context {
     pub step: Option<u16>,
     pub granted: [u8; 3],
+    /// A route step's grant still outstanding (routes.yaml `grant:`, version 1; zero in a version 0 replay).
+    pub route_granted: [u8; 3],
 }
 
 /// An EVENTS record.
@@ -298,6 +302,7 @@ impl Stream {
         out.push(kind as u8);
         out.extend_from_slice(&context.step.unwrap_or(NO_STEP).to_le_bytes());
         out.extend_from_slice(&context.granted);
+        out.extend_from_slice(&context.route_granted);
         put_varint(out, edits);
         out.extend_from_slice(&u32::try_from(blob.len()).expect("state under 4 GiB").to_le_bytes());
         out.extend_from_slice(blob);
