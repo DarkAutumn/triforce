@@ -99,3 +99,18 @@ still waiting. **ow-lynel `r30e-lynel-s84`** (`post-d2`, to 1:0x73, against `r27
 16 | 14; the first visit costs a little more (0.39 against 0.33-0.35, 3 | 4 deaths against 2 | 4). Within noise on
 arrivals; its gate (the full route to Dungeon 1's exit, paired with `r29land-1k-full`, and the four later legs it
 plays) was not yet run.
+
+**moldorm, paired** (`r75-f-b` on the same seeds in `s87`'s selection; arrivals at Dungeon 2's exit | hearts lost a
+visit in 2:0x3e | deaths there):
+
+| run | screen (2000-2999) | paired | confirm (3000-3999) | paired |
+|---|---|---:|---|---:|
+| `r75-f-b` (promoted) | 91.1% · 0.345 · 21 | | 88.9% · 0.339 · 22 | |
+| `r30e-moldorm-s87` | 90.6% · 0.287 · 18 | −0.5 ± 1.1 | 90.6% · 0.293 · 12 | +1.7 ± 1.1 |
+| `r30e-moldorm-s88` | 90.0% · 0.323 · 18 | −1.1 ± 1.1 | 89.7% · 0.291 · 12 | +0.8 ± 1.1 |
+| `r30e-moldorm-s89` | 89.7% · 0.319 · 16 | −1.4 ± 1.1 | 90.8% · 0.270 · 13 | +1.9 ± 1.2 |
+
+Over both halves (2000 seeds) the three seeds lose 29-30 runs in 2:0x3e against 43 and 0.03-0.06 hearts a visit
+less, but Dungeon 2's arrivals are +0.6, −0.2 and +0.3 points: within noise. **Not promoted**: no moldorm run
+raises the segment beyond noise; `r75-f-b` stays. The room's gain is about a point of runs, below what 1000-run
+chains resolve; `s87` is the candidate if a full-route gate (2000+ runs) is wanted.
