@@ -3298,7 +3298,11 @@ mod tests {
         let overworld = GAME_YAML.replacen("      location: '0x01'\n", "      location: '0x01'\n      keep_out: true\n", 1);
         assert_ne!(overworld, GAME_YAML);
         assert!(load(&overworld, ROUTES_YAML).unwrap_err().contains("keep_out is a dungeon room's doorway"));
-        let cellar = ROUTES_YAML.replacen("exit: N, waypoint: bow", "exit: N, waypoint: sword", 1);
+        // (d3first shares the bow's cellar: a second sword step there would be refused by its own_models_until
+        // marker first, so the marker goes for this check.)
+        let cellar = ROUTES_YAML
+            .replacen("exit: N, waypoint: bow", "exit: N, waypoint: sword", 1)
+            .replacen("  own_models_until: {waypoint: sword}\n", "", 1);
         assert_ne!(cellar, ROUTES_YAML);
         assert!(load(GAME_YAML, &cellar).unwrap_err().contains("waypoint sword takes a sword"));
     }
