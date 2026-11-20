@@ -113,3 +113,10 @@ Not decided yet: no run of either family is promoted, and nothing about 0x78's s
   runs (432 kills), 49 bomb drops, 26 picked up, 0.06 hearts and 335 frames a visit (the record: no kill, 0.01 hearts,
   304 frames); hearts on entering 0x38 10.87, 0x3a 6.34** (the record on seeds 0-999: 10.81 and 5.78); **0x29 29
   deaths of 893 visits** (the record 74 of 901), 0.34-0.63 hearts a visit.
+- `r33w-s91` on `d6` (`r30w-wj-s89` pinned): screen it003324 34.8%, last 31.4%, `r30w-wj-s89` 31.5%; confirmation
+  it003324 32.7% (chosen), `r30w-wj-s89` 31.7%. **Paired on seeds 3000-3999 against `r30w-wj-s89`: s91 +1.0 ± 2.1,
+  s92 +1.8 ± 2.1; neither beyond noise yet.** On the same seeds (`r30w-wj-s89` / s92 / s91): 0x29 61 / 29 / - deaths;
+  0x78 kills in 0 / 334 / 237 runs; hearts on entering 0x38 10.81 / 10.87 / 10.64, 0x3a 5.70 / 6.34 / 6.17; 0x3a
+  330 / 368 deaths. **The 0x29 key's cost is won back (32 fewer deaths) and 0x78 is swung at with no measurable cost
+  in the hearts 0x38 is entered with; the runs saved die in 0x3a**, whose fight is unchanged. 1000 more seeds of s92
+  (4000-4999) are queued to pool, as for vire.
