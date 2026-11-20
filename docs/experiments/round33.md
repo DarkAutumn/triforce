@@ -53,7 +53,7 @@ From the chains of record (`r31land-1k-d9`, 1000 runs from `9_76s_0`, seeds 0-99
 | run | it003295 | it003325 | it003355 | last | confirm (3000-3999) |
 |---|---:|---:|---:|---:|---|
 | `r33-like-s81` | 45.2% | 46.1% | **47.0%** | 45.2% | it003355 **48.6%** (3.77 hearts at the end), last 47.6% |
-| `r33-like-s82` | 47.3% | 44.9% | (running) | | |
+| `r33-like-s82` | **47.3%** | 44.9% | 46.7% | 47.3% | it003295 **47.8%** (3.76 hearts), last 45.5% |
 | `r33-like-s83` | (waiting in the line) | | | | |
 
 9:0x56 is crossed in every visit of these chains (s81 it003295: 1004 of 1004 visits leave W; main's record:
