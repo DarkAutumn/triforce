@@ -157,8 +157,8 @@ ROUTE31_CHANGES = {
 # its steps are drawn from.  The record was made at the shares of 1.5.0.0; the owner's decision of Nov 18 (no episode
 # with CLIP masked: `off_share: 0` as a family is next trained) changed these yamls, so their traces are played at
 # the recorded share.  No column's computation is involved.
-RECORDED_OFF_SHARE = {'ow-boulder': 0.5, 'ow-leever': 0.5, 'ow-lynel': 0.5, 'ow-moblin': 0.75, 'ow-zora': 0.75,
-                      'stalfos-keese-gel': 0.5}
+RECORDED_OFF_SHARE = {'darknut': 0.5, 'ow-boulder': 0.5, 'ow-leever': 0.5, 'ow-lynel': 0.5, 'ow-moblin': 0.75,
+                      'ow-zora': 0.75, 'stalfos-keese-gel': 0.5}
 
 
 def _old_columns(obs: dict) -> dict:
