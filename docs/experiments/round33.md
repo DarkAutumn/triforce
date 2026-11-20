@@ -86,3 +86,14 @@ The recipe of decisions 2026-11-19 ("One team for the whole route"), as round 30
   `plan33-d6`, `ring78` ×3); `r33-vire-s95` from `r77-b`, 244 iterations (`plan33-vire`; the lineage had none). No
   curriculum track of either family is unfinished (wizzrobe's Dungeon 6 tracks, the rebuilt 0x29's included, all
   succeed; vire's 0x39 and 0x2d too), so none is taken out.
+
+### The runs (in progress)
+
+- `r33-vire-s95` (last), single rooms on equal terms (100 episodes a state, this branch's yaml; `r77-b` in
+  brackets): 99.5% of 3000 episodes, +0.10 hearts (98.7%, +0.04); 6:0x2d 98.3% (94.0%), 0x39 99.0% (97.0%); Dungeon
+  4's seven rooms within a point or better. Its choice on `d6` (screen 2000-2999, confirmation 3000-3999, `r77-b`
+  pinned) and the pairing on `d4` are queued; single rooms do not decide.
+- `r33w-s91`, `-s92`, `-s93`: queued (the machine's line). `r30w-wj-s89` under this yaml: 92.8% of 5700, 6:0x29
+  92.7%, 0x2c 94.0%, 0x38 78.3%, 0x3a 63.0%, 0x78 100%.
+
+Not decided yet: no run of either family is promoted, and nothing about 0x78's swing is measured on a chain.
