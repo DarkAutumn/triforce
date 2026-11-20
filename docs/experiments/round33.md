@@ -129,3 +129,9 @@ Not decided yet: no run of either family is promoted, and nothing about 0x78's s
   10.80 against 10.75, 0x3a 6.34 against 5.89). **Pooled over 3000 paired runs on seeds not used to choose it:
   +3.03 ± 1.19 (2.5 standard errors): `r33w-s92` is better on `d6` beyond noise.** Its `d9` and `post-d7` pairings
   decide the promotion.
+- `r33w-s93` on `d6` (`--no-promoted`): screen it003264 35.7%, it003294 33.8%, it003324 29.3%, last 28.5%;
+  confirmation it003264 36.5% (chosen), last 29.5%. **Paired on 3000-3999 against `r30w-wj-s89`: +4.8 ± 2.1**
+  (against s92 +3.0 ± 2.1). It gains elsewhere than s92: 0x3a 302 deaths (`r30w-wj-s89` 330, s92 368), 0x2c 50 (88,
+  78), but 0x29 95 (61, 29); 0x78 kills in 263 runs, 0x38 entered with 10.75 hearts. The same two further blocks
+  (4000-4999, 7000-7999, paired against `r30w-wj-s89`'s chains there) and its `d9` are queued; the choice between s92
+  and s93 is made on the 3000 pooled seeds of each.
