@@ -33,7 +33,14 @@ per 1000), in order:
   entries added (round30.md "Next for darknut"). The planner loses 0.73 hearts a visit in 0x05 and none in 8:0x3e: a second pass of
   its demonstrations from the harvested states themselves needs `r27_plan_demos.py --state-files` to keep the
   states' hearts (an eval env draws the family's hp on every explicit start, harvested or not).
-- [ ] **`d7` (165)**: 7:0x1b's six Goriyas 77, 0x1a 27, 0x19 17.
+- [ ] **`d7` (165)**: 7:0x1b's six Goriyas 77, 0x1a 27, 0x19 17. Round 30 (round30.md, goriya): 0x1b kills the runs
+  that arrive low (below 4 hearts 209 of 353 `d7` visits die, from 6 up 3 of 274); goriya's own Dungeon 7 rooms
+  spend some 6.4 hearts before it against the planner's 1.0. Arm: harvested starts at the chain's hearts and the
+  planner's demonstrations from them (`r30-goriya6-s30..s32`), in selection. wallmaster's 7:0x0d captures (64 of
+  574 `d7` visits, 59 of those runs die crossing Dungeon 7 again) and 19 timeouts: `r30-wall-s30`, in measurement.
+- [ ] **Dungeon 1's and 2's goriya rooms at the full route's hearts**: 1:0x23 15 and 0x44 25 deaths in the full
+  route (3.3 hearts in) against 0 and 1 in the `d1` segment from 5 hearts; 2:0x5e 29 against 9. The segments from
+  full hearts hide them: judge goriya on the full route's milestones too (round30.md).
 - [ ] **Dungeon 3 (140)**: Manhandla 3:0x4d 97.
   81 of the 97 enter below 4 hearts (the planner enters with 5.42): the hearts darknut's 3:0x59 and 0x69 lose before
   it. boss-manhandla `r30-manh-s90` (round 30, promoted on the round's branch), trained on 3:0x4d's entries at the
@@ -55,7 +62,9 @@ per 1000), in order:
   a visit than the model and dominated wizzrobe's demonstration rows; round 30 kept them (the recipe keeps the
   lineage's files) and outweighed them with the planner's rows. Worth an arm without them.
 - [ ] **After Dungeon 2 (56)**: ow-lynel 0:0x0a 21, ow-zora 0x38 13, ow-tektite 0x1a 13.
-- [ ] **Dungeon 4 (50)**: Gleeok 4:0x13 36.
+- [ ] **Dungeon 4 (50)**: Gleeok 4:0x13 36. Round 30: deaths are the fights entered with 3 hearts or fewer (69 of 289
+  `d4` visits; 4 or more 7 of 704); `hp: [0.5, max]` never trains there. 8:0x3c kills 70 of 319 `d8` visits (5.39
+  hearts in). `r30-gleeok-s30` (harvested 4:0x13 and 8:0x3c entries, the planner's demonstrations) in measurement.
 - [ ] **The hearts carried in**: from the start Dungeon 5 is entered with 7.74 of 10 hearts, Dungeon 9 with 12.25 of
   15; `d8` (24.8%) and `d9` (31.0%) at full hearts are the last factors, and every heart kept earlier is one in them
   (round29.md §18.3 for Dungeon 9's rooms).
