@@ -248,6 +248,20 @@ def _cmd_promote(args):
     return 0
 
 
+def route_part_text(route: str) -> str:
+    """Where ``route``'s own runs play (round 32): ``steps 0-261, before 0:0x21:cave`` on a route with
+    ``own_models_until``, else ``every step``."""
+    # pylint: disable=import-outside-toplevel
+    from . import _native
+    from .registry import own_models_until
+    until = own_models_until(route)
+    if until is None:
+        return 'every step'
+    step = _native.route_steps(route)[until]
+    where = f"{step['level']}:0x{step['room']:02x}" + (':cave' if step['in_cave'] else '')
+    return f"steps 0-{until - 1}, before {where}"
+
+
 def _cmd_list(args):
     # pylint: disable=import-outside-toplevel
     from .registry import list_runs, promoted_run, route_promotions
@@ -258,7 +272,8 @@ def _cmd_list(args):
         except FileNotFoundError:
             current = None
         runs = list_runs(name, args.models_dir)
-        routes = ''.join(f" {route}={run}" for route, run in route_promotions(name, args.models_dir).items())
+        routes = ''.join(f" {route}={run} ({route_part_text(route)})"
+                         for route, run in route_promotions(name, args.models_dir).items())
         print(f"{name:20} promoted={current or '-':24} runs={len(runs)}{routes}")
     return 0
 
@@ -426,7 +441,10 @@ def add_eval_chain_arguments(chain):
                                                          "route with a start-state namespace is that route's: "
                                                          "--route d3first --from 3_7cs_0 is d3first_3_7cs_0)")
     add_power_on_arguments(chain)
-    chain.add_argument('--checkpoint', action='append', default=[], metavar='SPECIALIST=PATH')
+    chain.add_argument('--checkpoint', action='append', default=[], metavar='SPECIALIST[@ROUTE]=PATH',
+                       help="play this checkpoint file or run dir for the family: on a route with own_models_until "
+                            "(d3first) for both parts, or with @ROUTE (darknut@d3first=DIR) for the route's own part "
+                            "only, the steps before that one")
     chain.add_argument('--specialist-config', action='append', default=[], metavar='YAML',
                        help="override specialist config, selected by config.name (repeatable YAML paths)")
     chain.add_argument('--output', default=None,

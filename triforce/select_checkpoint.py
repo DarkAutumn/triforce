@@ -98,9 +98,10 @@ def load_candidate(label: str, path: Path, override: bool) -> Candidate:
 
 
 def candidates(family: str, run_dir: Path, models_dir=None, only: Optional[list] = None,
-               promoted: bool = True, route: Optional[str] = None) -> list[Candidate]:
-    """The run's numbered checkpoints (oldest first), ``last`` and ``promoted`` (module doc; on ``route`` its
-    ``promoted.<route>`` over ``promoted``, phase X)."""
+               promoted: bool = True, route: Optional[str] = None, key: Optional[str] = None) -> list[Candidate]:
+    """The run's numbered checkpoints (oldest first), ``last`` and ``promoted`` (module doc): the run that plays
+    policy ``key`` (default the family's) on ``route`` (``registry.policy_run``; a route part without a run of its
+    own plays the family's)."""
     # pylint: disable=import-outside-toplevel
     from . import registry
     if not (run_dir / registry.CHECKPOINT_NAME).is_file():
@@ -118,9 +119,12 @@ def candidates(family: str, run_dir: Path, models_dir=None, only: Optional[list]
     result = [load_candidate(label, path, override=True) for label, path in found]
     if promoted and (only is None or PROMOTED in only):
         try:
-            reference = registry.promoted_checkpoint(family, models_dir, route)
+            reference = registry.policy_checkpoint(key or family, models_dir, route)
         except FileNotFoundError:
-            reference = None
+            try:
+                reference = registry.policy_checkpoint(family, models_dir, route)
+            except FileNotFoundError:
+                reference = None
         if reference is not None and reference.parent.resolve() != run_dir.resolve():
             result.append(load_candidate(PROMOTED, reference, override=True))
     return result
@@ -197,6 +201,14 @@ class Plan:
     confirm_top: int
     chains_dir: Path
     options: Options
+    # The policy the candidates replace (round 32): ``family@route`` when the start is a step before the route's
+    # ``own_models_until`` (a selection of the route's own run), else the family (``_native.step_policy``).
+    key: Optional[str] = None
+
+    @property
+    def policy(self) -> str:
+        """``key``, or the family."""
+        return self.key or self.family
 
     def seeds(self, phase: str) -> tuple[int, int]:
         """(runs, first seed) of the screen or the confirmation."""
@@ -211,7 +223,7 @@ def chain_output(plan: Plan, phase: str, label: str) -> Path:
 def candidate_args(plan: Plan, candidate: Candidate, phase: str) -> list[str]:
     """``eval-chain`` arguments of one candidate's chain in ``phase``."""
     runs, first_seed = plan.seeds(phase)
-    override = [] if candidate.path is None else ['--checkpoint', f'{plan.family}={candidate.path}']
+    override = [] if candidate.path is None else ['--checkpoint', f'{plan.policy}={candidate.path}']
     return [*plan.chain_args, '--runs', str(runs), '--first-seed', str(first_seed), *override]
 
 
@@ -229,9 +241,10 @@ def played_by(plan: Plan, candidate: Candidate, phase: str) -> bool:
     runs, first_seed = plan.seeds(phase)
     provenance = meta.get('provenance') or {}
     batches = [(b.get('first_seed'), b.get('runs'), b.get('finished')) for b in meta.get('batches') or []]
-    model = {m.get('name'): m for m in provenance.get('models') or []}.get(plan.family) or {}
+    model = {m.get('name'): m for m in provenance.get('models') or []}.get(plan.policy) or {}
     return (batches == [(first_seed, runs, True)] and provenance.get('clips') == plan.clips
-            and str(provenance.get('start_from')) == plan.start and model.get('checkpoint_sha1') == candidate.sha1
+            and str(provenance.get('start_from') or 'start') == plan.start
+            and model.get('checkpoint_sha1') == candidate.sha1
             and model.get('act') == candidate.act)
 
 
@@ -353,7 +366,8 @@ class Selection:
             else:
                 reason = (f"not confirmed: {versus['rate']:+.1%} ± {versus['rate_se']:.1%} arrivals against last on "
                           f"{versus['seeds']} fresh seeds")
-        return {'family': plan.family, 'run': plan.run_dir.name, 'chain_args': plan.chain_args, 'target': plan.target,
+        return {'family': plan.family, 'policy': plan.policy, 'run': plan.run_dir.name, 'chain_args': plan.chain_args,
+                'target': plan.target,
                 'screen': {'first_seed': plan.first_seed, 'runs': plan.runs},
                 'confirm': {'first_seed': plan.confirm_first_seed, 'runs': plan.confirm, 'top': plan.confirm_top},
                 'chains_dir': str(plan.chains_dir), 'candidates': rows, 'ranking': [c.label for c in ranked],
@@ -481,6 +495,8 @@ def build_plan(args) -> tuple[Plan, list[Candidate]]:
     """The plan and the candidates; raises BatchError when the command line can't run."""
     # pylint: disable=import-outside-toplevel
     from . import registry
+    from ._native import route_state, route_steps, step_policy
+    from .runner import _start_step
     run_dir = Path(args.run) if os.sep in args.run else registry.run_dir(args.family, args.run, args.models_dir)
     table = route_segments(args.route)
     if args.segment is not None:
@@ -496,6 +512,11 @@ def build_plan(args) -> tuple[Plan, list[Candidate]]:
         target = table.targets.get(args.segment or segment_starts(args.route).get(bare_state(start or ''), ''))
     if target is not None:
         parse_target(target)
+    if start != 'start':        # the name eval-chain plays and records (--route d3first --from 3_7cs_0: d3first_3_7cs_0)
+        try:
+            start = route_state(args.route or registry.MAIN_ROUTE, start)
+        except ValueError as error:
+            raise BatchError(f"--from {start}: {error}") from error
     if args.runs < 1 or args.confirm < 0 or args.confirm_top < 0 or args.parallel < 1:
         raise BatchError("--runs and --parallel must be >= 1, --confirm and --confirm-top >= 0")
     chain_args = ['--from', start, '--clips', args.clips, '--act', args.act]
@@ -514,11 +535,15 @@ def build_plan(args) -> tuple[Plan, list[Candidate]]:
         c if c.isalnum() or c in '-_.' else '-' for c in tag)
     options = Options(args.name or f'select-{args.family}-{run_dir.name}-{where}', args.parallel, 1, args.models_dir,
                       args.redo)
+    # The part the candidates play (round 32): a start before the route's own_models_until selects its own run.
+    route = args.route or registry.MAIN_ROUTE
+    key = step_policy(route, _start_step(route_steps(route), start), args.family)
     plan = Plan(args.family, run_dir, start, args.clips == 'on', args.route, args.stop_at, chain_args, target,
                 args.runs, args.first_seed, args.confirm, confirm_first, args.confirm_top, Path(chains_dir).resolve(),
-                options)
+                options, key=key)
     only = None if args.only is None else [label for label in args.only.split(',') if label]
-    pool = candidates(args.family, run_dir, args.models_dir, only, promoted=not args.no_promoted, route=args.route)
+    pool = candidates(args.family, run_dir, args.models_dir, only, promoted=not args.no_promoted, route=args.route,
+                      key=key)
     if not [c for c in pool if c.label != PROMOTED]:
         raise BatchError(f"{run_dir}: no candidate of the run left")
     return plan, pool

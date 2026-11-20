@@ -256,11 +256,23 @@ fn state_namespace(name: &str) -> Option<&str> {
 #[pyfunction]
 fn route_namespace(py: Python<'_>, route: &str) -> PyResult<Option<String>> {
     let data = context::data(py, None)?;
-    if !data.map.routes.contains_key(route) {
-        let known: Vec<&String> = data.map.routes.keys().collect();
-        return Err(errors::ConfigError::new_err(format!("Unknown route '{route}' (routes.yaml has {known:?})")));
-    }
-    Ok(data.map.namespace(route).map(str::to_owned))
+    Ok(known_route(&data, route)?.map.namespace(route).map(str::to_owned))
+}
+
+/// The index of the step up to which `route`'s own runs play (routes.yaml `own_models_until`, round 32), None for
+/// a route whose own runs play everywhere (`GameMap::own_models_until`).
+#[pyfunction]
+fn own_models_until(py: Python<'_>, route: &str) -> PyResult<Option<usize>> {
+    let data = context::data(py, None)?;
+    Ok(known_route(&data, route)?.map.own_models_until.get(route).copied())
+}
+
+/// The policy key of `route`'s step `step` played by `family` (`GameMap::step_policy`, round 32): `family@route`
+/// before the route's `own_models_until`, else `family`.
+#[pyfunction]
+fn step_policy(py: Python<'_>, route: &str, step: usize, family: &str) -> PyResult<String> {
+    let data = context::data(py, None)?;
+    Ok(known_route(&data, route)?.map.step_policy(route, step, family))
 }
 
 /// A start state's name on `route` (`GameMap::route_state`): a bare name in the route's namespace, a name already in
@@ -291,8 +303,8 @@ mod _native {
 
     #[pymodule_export]
     use super::{
-        families, game_rooms, paths, route_alternates, route_namespace, route_state, route_steps, route_stretches,
-        routes, specialist_for, state_name, state_namespace,
+        families, game_rooms, own_models_until, paths, route_alternates, route_namespace, route_state, route_steps,
+        route_stretches, routes, specialist_for, state_name, state_namespace, step_policy,
     };
     #[pymodule_export]
     use crate::config::PySpecialistConfig;

@@ -48,6 +48,9 @@
 # `{include: NAME}` (phase X, the lead, Nov 19) stands for the steps (and stretches) of the block NAME of the
 # top-level `blocks:`: what two routes play alike is written once there (each dungeon's inside, the legs both take),
 # so a change to it reaches both.  A block holds no include; every block is included somewhere.
+# A route's `own_models_until: {waypoint: NAME}` (round 32, the lead): the route's own runs (`promoted.<route>`) play
+# its steps before the one step NAME marks, every family's default run (`promoted`) that step and the rest; a route
+# without it plays its own runs on every step (zelda::GameMap::step_policy).  Kept by a route extending it.
 # An exit that is a game.yaml raft crossing (`raft_exits`) sends Link to its dock; the raft does the rest.
 # `retreat: S`: leaving through that exit instead ends a one-room episode as `retreat` (neutral) and lets a chain
 # run go on (the next room's objective sends Link back).
@@ -197,6 +200,7 @@ d2first:
 - {level: 3, room: '0x5a', specialist: trap-room, entry: E, exit: W}
 - {level: 3, room: '0x59', specialist: darknut, entry: E, exit: N}
 - {level: 3, room: '0x49', specialist: zol, entry: S, exit: S}
+- {level: 3, room: '0x59', specialist: darknut, entry: N, exit: S}
 - include: dungeon-3
 # Dungeon 4 (Lee, Nov 11-12; docs/routes/d4.md).  From the D3 triforce's warp (0x74) back the way Link came to 0x65,
 # N to the dock of 0x55 and by raft to the island 0x45.  Dungeon 4, Lee's directions: the keys of 0x51 and 0x40
@@ -400,6 +404,10 @@ d2first:
 # owner, Nov 18).
 d3first:
   states: d3first
+  # The route's own runs (`promoted.d3first`) play up to the magic sword (round 32, the lead): a run trained for the
+  # wood-sword rooms lost the magic-sword rooms of its family (Dungeon 8 5.3% against 26.2% with the default darknut
+  # and manhandla).  From the grave's cave step on every family plays its default run (`promoted`).
+  own_models_until: {waypoint: sword}
   steps:
   # The start (d3first-walks-a.md §1): the wood sword, W through 0x76 (walked or scrolled) and 0x75's wrap exit
   # (CLIP E) into 0x74, Level 3's mouth.
@@ -411,9 +419,11 @@ d3first:
   - {level: 0, room: '0x74', specialist: ow-tektite, entry: E, exit: cave}
   # Dungeon 3, the owner's way in (Nov 19: "5a is skipped on the way in, used on the way back"; walks-a §2): 0x5b's
   # Darknuts crossed N (its bombs left), 0x4b's three Zols killed for its key, its W key door, 0x4a's five Keese
-  # killed for its four bombs, 0x49's key, S into 0x59: then the block `dungeon-3` (0x59 emptied, the raft, back E by
+  # killed for its four bombs, 0x49's key, S into 0x59 (emptied), then the block `dungeon-3` (the raft, back E by
   # 0x5a, 0x5b's last pass with its four bombs and its E wall, 0x4c's E wall, Manhandla by bombs).  Bomb reserve 6
-  # as d2first's: 0x4a's bombs are kept for the walls and Manhandla (0x59's Darknuts by the sword).
+  # as d2first's to 0x59; then 0 (the lead, Nov 20) from 0x59's fight step through 0x5b's last pass: 0x4a's four
+  # bombs are 0x59's (five Red Darknuts, all to die: the BombFighter rule wins 60 of 60 with them), and 0x5b's four,
+  # taken on its last pass, pay for the two walls and Manhandla (0x5c 6, Manhandla 0, as d2first's).
   - {level: 3, room: '0x7c', specialist: zol, entry: S, exit: W, bomb_reserve: 6}
   - {level: 3, room: '0x7b', specialist: zol, entry: E, exit: N}
   - {level: 3, room: '0x6b', specialist: zol, entry: S, exit: N}
@@ -421,6 +431,7 @@ d3first:
   - {level: 3, room: '0x4b', specialist: zol, entry: S, exit: W}
   - {level: 3, room: '0x4a', specialist: stalfos-keese-gel, entry: E, exit: W}
   - {level: 3, room: '0x49', specialist: zol, entry: E, exit: S}
+  - {level: 3, room: '0x59', specialist: darknut, entry: N, exit: S, bomb_reserve: 0}
   - include: dungeon-3
   - include: to-level-4
   - include: dungeon-4
@@ -573,9 +584,9 @@ blocks:
   - {level: 1, room: '0x35', specialist: boss-aquamentus, entry: S, exit: E}
   - {level: 1, room: '0x36', specialist: stalfos-keese-gel, entry: W, exit: triforce}
   # Dungeon 3 from 0x59 entered from N (0x49's S door) to the triforce: the raft cellar and the way back E by 0x5a,
-  # 0x5b's last pass and its E wall, 0x4c's E wall, Manhandla.
+  # 0x5b's last pass and its E wall, 0x4c's E wall, Manhandla.  0x59's first visit (the fight) is each route's own
+  # step before the block (d3first's sets the reserve 0 for it).
   dungeon-3:
-  - {level: 3, room: '0x59', specialist: darknut, entry: N, exit: S}
   - {level: 3, room: '0x69', specialist: darknut, entry: N, exit: cave, treasure: skip}
   - {level: 3, room: '0x0f', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: raft}
   - {level: 3, room: '0x69', specialist: darknut, entry: cave, exit: N, treasure: skip}

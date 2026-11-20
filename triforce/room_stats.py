@@ -566,7 +566,7 @@ def load_evals_by_clips(models_dir: Path, run_id: Optional[str] = None, team: Op
             if directory.name in current and (directory / registry.PROMOTED_NAME).is_file():
                 chosen.append((directory.name, registry.promoted_run(directory.name, root), None))
     for name, run, mode in chosen:
-        directory = root / name
+        directory = root / registry.split_policy(name)[0]      # a route part's key (round 32) is its family's run
         read = None
         if run_id and (directory / run_id / registry.CHECKPOINT_NAME).is_file():
             read = read_eval(directory / run_id)
@@ -661,16 +661,19 @@ def room_scope(models_dir: Path, team: Optional[dict[str, dict]]) -> dict:
 # ---------------------------------------------------------------------------------------------------- the file
 
 def promoted_runs(models_dir: Path, route: Optional[str] = None) -> dict[str, str]:
-    """Each current family's promoted run (on ``route``: its ``promoted.<route>`` over ``promoted``, phase X;
-    absent: none promoted)."""
+    """Each current family's promoted run by policy key (``registry.policy_run`` on ``route``: its ``promoted.<route>``
+    over ``promoted``, phase X; on a route with ``own_models_until`` its ``promoted`` and, as ``family@route``, its
+    route's run, round 32; absent: none promoted)."""
     from .specialist import list_specialists  # pylint: disable=import-outside-toplevel
     root = Path(models_dir)
     found = {}
     for name in list_specialists():
-        try:
-            found[name] = registry.promoted_run(name, root, route)
-        except FileNotFoundError:
-            continue
+        for key in (name, registry.route_part_key(name, root, route)):
+            try:
+                if key is not None:
+                    found[key] = registry.policy_run(key, root, route)
+            except FileNotFoundError:
+                continue
     return found
 
 

@@ -512,6 +512,61 @@ def promoted_checkpoint(specialist: str, root=None, route: Optional[str] = None)
     return path
 
 
+# Round 32: which run plays a route step.  The step's policy key is the engine's (``zelda::GameMap::step_policy``,
+# ``_native.step_policy``): ``family@route`` before the route's ``own_models_until`` step (routes.yaml), else
+# ``family``.  ``policy_run`` turns a key into the run that plays it; every tool that plays goes through the two.
+POLICY_ROUTE_SEP = '@'      # zelda::game_map::POLICY_ROUTE_SEP
+
+
+def route_policy(family: str, route: str) -> str:
+    """The policy key of ``family``'s run for ``route``'s own part (``darknut@d3first``)."""
+    return f'{family}{POLICY_ROUTE_SEP}{route}'
+
+
+def split_policy(key: str) -> tuple[str, Optional[str]]:
+    """A policy key's family and, for a route part's key, its route."""
+    family, sep, route = key.partition(POLICY_ROUTE_SEP)
+    return family, (route if sep else None)
+
+
+def own_models_until(route: Optional[str]) -> Optional[int]:
+    """The index of the step up to which ``route``'s own runs play (routes.yaml ``own_models_until``); None: a route
+    whose own runs (``promoted.<route>``) play every step, no route, or a name routes.yaml lacks (a chain file's route
+    read back by a tool that plays nothing)."""
+    from ._native import own_models_until as native_until  # pylint: disable=import-outside-toplevel
+    return None if route is None or route not in native_routes() else native_until(route)
+
+
+def policy_run(key: str, root=None, route: Optional[str] = None) -> str:
+    """The run that plays policy ``key`` on ``route``: for ``family@R`` the family's ``promoted.<R>``; for a family
+    its ``promoted`` on a route with ``own_models_until`` (its own runs play only before that step), else
+    ``promoted_run(family, root, route)`` (``promoted.<route>`` over ``promoted``).  FileNotFoundError without one."""
+    family, part = split_policy(key)
+    if part is not None:
+        pointer = promoted_pointer(family, root, part)
+        if not pointer.is_file():
+            raise FileNotFoundError(f"No run of '{family}' promoted for route {part} ({pointer})")
+        return pointer.read_text(encoding='utf-8').strip()
+    return promoted_run(family, root, None if own_models_until(route) is not None else route)
+
+
+def policy_checkpoint(key: str, root=None, route: Optional[str] = None) -> Path:
+    """Path of the ``ckpt.pt`` of the run that plays policy ``key`` on ``route`` (``policy_run``)."""
+    family, _ = split_policy(key)
+    path = checkpoint_path(family, policy_run(key, root, route), root)
+    if not path.is_file():
+        raise FileNotFoundError(f"The run of '{key}' has no checkpoint: {path}")
+    return path
+
+
+def route_part_key(family: str, root=None, route: Optional[str] = None) -> Optional[str]:
+    """``family@route`` when ``route`` has ``own_models_until`` and the family a run promoted for it (a second policy
+    plays the family's rooms before that step), else None."""
+    if own_models_until(route) is None or not promoted_pointer(family, root, route).is_file():
+        return None
+    return route_policy(family, route)
+
+
 def main(argv=None):
     """``list`` / ``promote`` subcommands."""
     parser = argparse.ArgumentParser(prog='python -m triforce.registry')

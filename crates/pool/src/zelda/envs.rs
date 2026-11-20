@@ -940,7 +940,8 @@ where
                 entered.push(Event::Outcome(rooms[index - 1].outcome.clone()));
             }
             let location = record.location();
-            let policy = self.policies.iter().position(|p| **p == *record.specialist);
+            let played = record.policy.as_deref().unwrap_or(&record.specialist);
+            let policy = self.policies.iter().position(|p| **p == *played);
             entered.push(Event::Room {
                 level: location.level,
                 room: location.value,
