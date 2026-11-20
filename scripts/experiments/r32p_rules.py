@@ -19,7 +19,13 @@ ROOM is one of (the walks' rule each ports, `r32_d3first.LEGS`/`VARIANTS`):
     darknut-59    3:0x59 N->S (darknut, step 13): `BombFighter` (round 29's sword fighter with the Darknut's
                   shield; a bomb when a Darknut, moved on at its speed, will be within 10 px of the bomb's square
                   during the blast and the bomb does not meet its shield) until the room is all dead, then the S
-                  shutter.  A bomb is the env's `BOMB <d>` (Link turns and lays it), not a turn and B.
+                  shutter.  A bomb is the env's `BOMB <d>` (Link turns and lays it), not a turn and B.  The room's
+                  reserve is 0 since the lead's Nov 20 decision (route data 8ce37bd7): the bombs are the state's own
+                  (0x4a's four; the family's bombs draw off, `DRAWS`).
+    garden-05     5:0x05 E->stairs (darknut, step 103, the Olive Garden): the same `BombFighter` on the six Blue
+                  Darknuts (the state builder's rule, `r32c_harvest.py`'s `5_05e`), the bag of 8 (d3first's grant
+                  at Dungeon 5's entrance; `DRAWS`) and no banked kills; then the block pushed W from ($80,$8D) and
+                  the stairs the push shows at ($D0,$5D) (`r29_demos.corner_way`).
     dash-69       3:0x69 N->cave (darknut, step 14): past the eight Darknuts without a stab (the fighter's floor
                   walk, keeping off what will touch Link) to ($C8,$8D), then E onto the stairs.
     manhandla-4d  3:0x4d W->N (boss-manhandla, step 22): `ManhandlaFighter` (a bomb where the base will be during
@@ -62,11 +68,17 @@ RUPEES, INV_CANDLE, HEARTS, KEYS = 0x66D, 0x65B, 0x66F, 0x66E
 GLEEOK2 = 0x43                                                    # level 4's two-headed Gleeok (r32_walks.GLEEOK2)
 
 # room -> (family, d3first's route step)
-ROOMS = {'darknut-59': ('darknut', 13), 'dash-69': ('darknut', 14), 'manhandla-4d': ('boss-manhandla', 22),
+ROOMS = {'darknut-59': ('darknut', 13), 'dash-69': ('darknut', 14), 'garden-05': ('darknut', 103),
+         'manhandla-4d': ('boss-manhandla', 22),
          'gleeok-13': ('boss-gleeok', 51), 'mouth-37': ('ow-octorok', 62), 'wall-2d': ('ow-zora', 88),
          'rupees-2d': ('ow-zora', 89), 'candle-0c': ('ow-tektite', 94), 'wrap-0c': ('ow-tektite', 95),
          'zol-6b': ('zol', 8), 'zol-4b': ('zol', 10), 'like-like-32': ('like-like', 38), 'vire-31': ('vire', 37),
          'vire-12': ('vire', 50)}
+
+# room -> the family's ram_randomization over-ridden for it (every --hearts but own): what the route brings there.
+DRAWS = {'darknut-59': {'bombs_share': 0.0},
+         'garden-05': {'bombs': [8, 8], 'bombs_share': 1.0, 'room_kills_share': 0.0}}
+ROOM = None                                                       # the room played (main)
 
 
 def route_step(index, route=ROUTE):
@@ -82,22 +94,25 @@ def rule_env(family, state, hearts):
     """`r29_demos.rule_env` with the run-time clips switch on in every episode (d3first's steps 0-97 are the clip
     way, as the chains play them; a clip family's training draw would turn it off in half of them, and 0:0x0c's way
     out W is the E wrap), and `--hearts chain`: the family's draws with every reset's hearts from the route's chain
-    arrivals in the room (`chain_hp: 1.0`), drawing d3first's states only."""
+    arrivals in the room (`chain_hp: 1.0`), drawing d3first's states only; the room's `DRAWS` over the family's."""
     from triforce._native import Env, Game                      # pylint: disable=import-outside-toplevel
     from triforce.paths import STATES_DIR                       # pylint: disable=import-outside-toplevel
     from triforce.specialist import load_specialist             # pylint: disable=import-outside-toplevel
     config = load_specialist(family)
     if config.to_dict()['clips']['enabled']:
         config = config.replace(clips={'enabled': True, 'off_share': 0.0})
+    draws = DRAWS.get(ROOM, {})
     if hearts == 'own':
-        config = config.replace(ram_randomization={})
+        config = config.replace(ram_randomization=dict(draws))
     elif hearts == 'chain':
-        spec = dict(config.to_dict()['ram_randomization'], chain_hp=1.0)
+        spec = dict(config.to_dict()['ram_randomization'], chain_hp=1.0, **draws)
         config = config.replace(ram_randomization=spec, state_routes=[ROUTE])
     elif hearts != 'family':
         containers = Game(seed=0, states_dir=str(STATES_DIR)).load(state, fresh_room=True, seed=0).max_health
         share = float(hearts) / containers
-        config = config.replace(ram_randomization={'hp': [share, share], 'full_hp': 0.0})
+        config = config.replace(ram_randomization={'hp': [share, share], 'full_hp': 0.0, **draws})
+    else:
+        config = config.replace(ram_randomization=dict(config.to_dict()['ram_randomization'], **draws))
     return Env(config, explicit_starts=True, strict_actions=False, seed=0)
 
 
@@ -346,10 +361,13 @@ RULES = {
     'like-like-32': lambda: fight_rule(lambda: r32_walks.Fighter, push_way((0x50, 0x8D), (0xC8, 0x5D), 'E')),
     'vire-31': lambda: fight_rule(lambda: r32_walks.Fighter, lambda bot: Way(go(bot, (0xD0, 0x8D), 'E'), out('E'))),
     'vire-12': lambda: fight_rule(lambda: r32_walks.Fighter, push_way((0x50, 0x8D), (0xD0, 0x8D), 'E')),
+    'garden-05': lambda: fight_rule(bomb_fighter, r29_demos.corner_way((0x80, 0x8D), 'W')),
 }
 
 
 def main():
+    global ROOM                                                   # pylint: disable=global-statement
+    ROOM = next((a for a in sys.argv[1:] if a in ROOMS), None)
     r29_demos.ROOMS = ROOMS
     r29_demos.RULES = RULES
     r29_demos.rule_env = rule_env

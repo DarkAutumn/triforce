@@ -1,8 +1,8 @@
 """Round 32's Dungeon 3 ledger on d3first (docs/experiments/round32.md): per route step of one or more `d3` chains
 (models and planner side by side), the runs that entered, the runs lost there (death, stuck, ...), hearts on
 entering (mean of the first visit / max) and lost a visit, bombs held on entering and used a visit; then, for the
-runs that left the dungeon, the hearts and bombs they carry into the next segment (Dungeon 4's states should
-hold them).
+runs that left the dungeon, the hearts, bombs and keys they carry into the next segment, with their spread
+(Dungeon 4's states should hold them).
 
     .venv/bin/python scripts/experiments/r32d3_ledger.py LABEL=CHAIN.jsonl [LABEL=CHAIN.jsonl ...] [--first 6]
         [--last 24]
@@ -84,8 +84,10 @@ def main():
     args = parser.parse_args()
     chains = [(c.split('=', 1)[0], load(c.split('=', 1)[1])) for c in args.chains]
 
-    print('| Chain | Runs | Arrived | Deaths | Stuck | Other ends | Hearts on arriving (of max) | Bombs on arriving |')
-    print('|---|---|---|---|---|---|---|---|')
+    print('| Chain | Runs | Arrived | Deaths | Stuck | Other ends | Hearts on arriving (of max) | Bombs on arriving '
+          '| Keys on arriving |')
+    print('|---|---|---|---|---|---|---|---|---|')
+    carried = []
     for label, runs in chains:
         n = len(runs)
         ok = [r for r in runs if r['result'] == 'success']
@@ -95,9 +97,20 @@ def main():
         hearts = (f"{sum(x['health_out'] for x in last) / len(last):.2f} of "
                   f"{sum(x['max_health'] for x in last) / len(last):.1f}") if last else '-'
         bombs = f"{sum(x['bombs_out'] for x in last) / len(last):.2f}" if last else '-'
+        keys = f"{sum(x['keys_out'] for x in last) / len(last):.2f}" if last else '-'
         other = ', '.join(f'{k} {v}' for k, v in how.items())
         print(f"| {label} | {n} | **{100 * len(ok) / n:.1f}%** ± {ci(len(ok), n):.1f} | {deaths} | {stuck} | "
-              f"{other or 0} | {hearts} | {bombs} |")
+              f"{other or 0} | {hearts} | {bombs} | {keys} |")
+        if last:
+            carried.append((label, {what: Counter(x[field] for x in last) for what, field in
+                                    (('hearts', 'health_out'), ('bombs', 'bombs_out'), ('keys', 'keys_out'))}))
+
+    print()
+    print('| Chain | Carried out: value (runs) |')
+    print('|---|---|')
+    for label, spread in carried:
+        print(f"| {label} | " + '; '.join(f"{what} " + ', '.join(f"{v:g} ({c})" for v, c in sorted(counter.items()))
+                                          for what, counter in spread.items()) + ' |')
 
     print()
     stats = [(label, ledger(runs)) for label, runs in chains]
