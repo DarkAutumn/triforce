@@ -1,4 +1,4 @@
-# Round 32: the `d3first` baseline (steps 0-97) and the training it owes
+# Round 32: the `d3first` baseline (steps 0-97, then Level 5 to the ending) and the training it owes
 
 The second route (`docs/routes/d3first.md`; the owner, Nov 19, "Two routes"): the wood sword until the magic sword,
 Dungeons 3, 4, 1, 5, 2, 7, 6, 8, 9. Its start states exist for steps 0-97 (the game start to Level 5's entrance;
@@ -378,3 +378,450 @@ them before the triforce; the planner, which keeps them, finishes 26% and 34%. A
 planner's level or better on `d3`/`d4`, the models' Dungeon 1 at its 637 runs past 0x37 above 41%, and every
 `d2first` segment within noise. Data questions for the lead (route data, not this round's): the start states of
 Dungeons 4 and 1 hold no bombs (the walls are cheated every run).
+
+## 5. The baseline from Level 5 to the ending
+
+With every step's start states built (branch `r32-steps` 749680b1: 891 `d3first` states, audit clean) the rest of
+the route is measured the same way: from Level 5's entrance (step 97) to the ending, each segment from its own
+entrance state, so each is measured though nothing reaches it from the start yet. Nothing trained. Branch `r32-base2`
+(from `r32-steps` 749680b1, `r32-base` merged), version 2.0.0.0. The team is main's promoted run of every family
+(main 570da82d) with **round 30's five newer runs** as promoted (wizzrobe `r30w-wj-s89`, patra `r30w-patra`,
+boss-manhandla `r30-manh-s90`, gibdo `r30-gibdo-s91`, goriya `r30-goriya6-s31`), copies stamped 2.0.0.0. (Sections
+1-4 were measured without those five; of their rooms only goriya's Dungeon 1 and Manhandla's 3:0x4d are theirs.)
+
+### 5.1 What was run
+
+- **Chains, models alone** (one batch, `eval-batch r32base2-chains`, `--route d3first --parallel 10 --clips on
+  --runs 1000`, act `model`): `d5` (`5_76s_0` → step 120, 0:0x0b out of Level 5), `post-d5` (`0_0bc_0` → step 145,
+  Level 2's first room: the recorder warp, the dead woods' 100, the world wrap, the ladder heart, the raft heart, the
+  Armos 30), `d2` (`2_7ds_0` → step 155), `post-d2` (`0_3cc_0` → step 174: the warp to 0x45, the arrows, the meat,
+  Level 7), `d7` (`7_79s_0` → step 194), `post-d7` (`0_42c_0` → step 211: the grave, the magic sword), `d6`
+  (`6_79s_0` → step 227), `post-d6` (`0_22c_0` → step 233), `d8` (`8_7es_0` → step 243), `post-d8` (`0_6dc_0` →
+  step 258: 0x47's heart), `d9` (`9_76s_0` → the ending). Outputs `target/r56-chains/r32base2-1k-*.jsonl`; the
+  batch's yardstick report failed as the first one did (copied run dirs), room statistics were written.
+- **The honest planner** (`eval-batch r32base2-plan`, the same arguments with `--runs 300 --act
+  temperature:0.5+relax:16+plan:16:1`): `d5`, `d2`, `d7`, `d6`, `d8`, `d9`. Outputs `r32base2-plan-*.jsonl`.
+- **Tables**: `scripts/experiments/r32base_tables.py --part rest` (segments, every room against `d2first`'s
+  `r29land-1k` and, for Dungeons 6, 8 and 9, round 31's `d2first` chains after phase IX: the `r31-1k` chains of
+  `r31-steps`, v1.9.0.0 team, the same blocks `d3first` plays, cut where each run leaves its dungeon) and `--golden`
+  (below). The start states' purses read from RAM (`$66D` rupees, `$658` bombs, `$66E` keys).
+
+### 5.2 The results
+
+**Segments (models alone / planner) against `d2first`:**
+
+| Segment | d3first models (1000) | d3first planner (300) | Containers, sword at its start | d2first `r29land-1k` | d2first after phase IX (`r31-1k`) |
+|---|---|---|---|---|---|
+| Dungeon 5 | **1.9%** ± 0.8 | 46.3% ± 5.6 | 7, wood | 72.2% (10, white) | |
+| to Level 2 | 34.7% ± 3.0 | | 8, wood | (another way) | |
+| Dungeon 2 | 99.9% ± 0.2 | 100.0% | 10, wood | 91.6% (3, wood) | |
+| to Level 7 | **0.1%** ± 0.2 | | 11, wood | (another way) | |
+| Dungeon 7 | **4.7%** ± 1.3 | 89.0% ± 3.5 | 11, wood | 46.6% (11, white) | |
+| to Level 6 | 99.9% ± 0.2 | | 12, wood → magic | 99.1% | |
+| Dungeon 6 | 32.3% ± 2.9 | 72.0% ± 5.1 | 12, magic | 31.4% | 21.1% |
+| to Level 8 | 100.0% | | 13, magic | 100.0% | |
+| Dungeon 8 | **6.8%** ± 1.6 | 76.7% ± 4.8 | 13, magic | 24.8% | 24.8% |
+| to Level 9 | 100.0% | | 14, magic | 100.0% | |
+| Dungeon 9 to the ending | 12.0% ± 2.0 | 27.3% ± 5.0 | 15, magic | 31.0% | 10.9% |
+
+**The rooms that lose the runs** (models: runs lost per 1000 entering, hearts on entering; the planner's lost of
+its entering runs; the rule: the state builder's rule from the real states, won of runs, `docs/routes/d3first.md`
+"The states as built"; `d2first`: `r29land-1k` per 1000 entering, after phase IX where it differs):
+
+| Family | Room (step) | Models: lost/1000 (hearts in) | Planner | Rule from real states | d2first | Cause |
+|---|---|---|---|---|---|---|
+| darknut | 5:0x05 the Olive Garden (103) | **845** (6.41 of 7) | 114/300 | `r32b_d5` BombFighter 31/60 (walks: 9/20 without bombs, 18/20 with 8) | 78 (9.3 of 10) | **wood sword, no bombs**: 822 of 1000 enter with none (5:0x66's and 0x65's walls take `5_76s_0`'s two); 13% pass with 0, 28% with 4 (planner 57% / 84%) |
+| darknut | 5:0x64 cave→E (108) | 323 (3.08) | 7/186 | | 43 (6.9) | hearts |
+| gibdo | 5:0x66 W→N (110) | 375 (2.98) | 14/177 | `r32b_d7` Fight 52/60 | 62 (5.5) | hearts |
+| boss-digdogger | 5:0x24 (118) | 548 (2.46) | 18/157 | DigFighter 58/60 (walks 14/20 from 4 hearts) | 19 (4.9) | hearts, 8 wood hits |
+| ow-leever | 0:0x0b cave→recorder (120) | **413** (8 of 8) | | walks-b: MOVE E, RECORDER, 20/20 | 13 | **new**: turn E before the recorder (157 walk S into 0x1b and bounce, 129 back into Level 5 and die there, 112 die in 0x0b; 486 wrong exits) |
+| ow-moblin | 0:0x62 E→cave (124) | **329** (6.00 of 8) | | walks-b: the blue candle facing W from (`$A0`,`$5D`), 20/20 | new | **new**: 170 leave without burning the tree (the 100 missed), 22 die |
+| ow-octorok | 0:0x3c cave→recorder (155) | **999** (11 of 11) | | walks-b: MOVE E, RECORDER, 20/20 | room 0 | **new**: the same turn; 544 walk S into 0x4c and bounce, 356 die in 0x3c, 86 time out (1771 wrong exits) |
+| goriya | 7:0x1b W→E (186) | **676** (4.03 of 11; 2.60 hearts a visit, 2.3 of 6 killed) | 1/300 | `r32b_d7` 60/60 (walks 20/20 from 7 hearts) | 288 (4.5; 0.63 a visit, 4.4 killed) | **wood sword** (5 hits a Blue Goriya), hearts |
+| goriya | 7:0x69-0x1a (175-185, 8 rooms) | 20-85 each, 318 runs in all; 11 → 4.0 hearts by 0x1b | 1 | 0x49 31/60 | 1-61 each | **wood sword** attrition (0x49 1.46 hearts a visit against 0.69) |
+| boss-digdogger | 7:0x1c (187) | 277 (4.16) | 3/299 | 42/60 from full | 114 (5.5) | wood sword, hearts |
+| boss-aquamentus | 7:0x2a (192) | 175 (3.63) | 3/270 | 59/60 | 11 (5.2) | hearts |
+| wallmaster | 7:0x0d (189) | 82, 113 wrong exits | 25/296 stuck | | 35 | as d2first |
+| wizzrobe | 6:0x38 (216), 6:0x29 (218), 6:0x3a (220), 6:0x2c (224) | 112, 82, 386, 210 | 8, 15, 30, 10 | (explorer) | 137, 142 (IX), 528 (IX), 214 (IX) | as d2first, better than phase IX's measure (round 30's run) |
+| pols-voice | 8:0x4c cave→N (240) | **721** (4.78 of 13; 0.88 killed a visit, 3.48 hearts lost) | 50/290 | | 0 (4.5; 7.97 killed, +0.91 hearts) / 40 (IX) | **the purse**: arrows cost a rupee; `d3first_8_4cc_*` hold 1-10 rupees, d2first's 27-35 |
+| darknut | 8:0x3e (237), 8:0x3f (238) | 417, 306 | 4, 6 | | 466/474, 328/303 | as d2first |
+| boss-gleeok | 8:0x3c (241) | 340 (4.58; 103 entered) | 10/240 | `r28_demos gleeok` 59/60 | 220/197 (5.4-5.6) | hearts (few runs) |
+| like-like | 9:0x56 S→W (260) | **651 stuck** (15 of 15; 1665 wrong exits) | 217/300 stuck | (explorer) | new / **616 (IX)** | **phase IX's new step** (the W bomb wall): back S into 0x66 until the bounce limit; d2first's too |
+| wizzrobe | 9:0x10 (286), 9:0x30 (296) | 203, 263 | 0, 0 | 50/60, 38/60 | 261/269, 215/200 | as d2first |
+| ganon | 9:0x42 (302) | 155 (3.65) | 0/82 | 60/60 | 136/168 | as d2first |
+
+**Dungeons 6, 8 and 9 against d2first's.** The inputs are d2first's but for the purse (the candle is red on both
+routes by then; `d3first`'s Dungeon 6/8/9 starts hold the magic sword, 12/13/15 containers, d2first's keys, 3-8
+bombs, and **1-10 rupees against d2first's 22-38**):
+
+- **Dungeon 6: 32.3% ± 2.9, within noise of `r29land-1k`'s 31.4%** and 11 points above round 31's phase IX measure
+  (21.1%, main's wizzrobe `r79c-wj-s85`): round 30's wizzrobe `r30w-wj-s89` makes it (6:0x29 82 against 142 per
+  1000, 0x3a 386 against 528). Gohma's arrows cost rupees too: 69 against 85/87 per 1000, so the purse (4-9 in
+  `d3first_6_1cs_*`) does not show there.
+- **Dungeon 8: 6.8% ± 1.6, not within noise of 24.8%.** Up to 8:0x4c `d3first` is ahead (369 of 1000 reach its
+  step, about 320 on d2first); the whole difference is 8:0x4c, where d2first's Pols Voices fall to arrows (7.97
+  kills a visit, no hit taken) and `d3first`'s Link has 1-10 rupees: 0.88 kills a visit, 721 of 1000 lost. The
+  ledger saw it coming (`docs/routes/d3first.md` "Ledgers", "For the owner" 14: "8:0x4c and Ganon with nothing for
+  their arrows").
+- **Dungeon 9: 12.0% ± 2.0, within noise of d2first after phase IX (10.9%)**, not of `r29land-1k`'s 31.0%: phase
+  IX's 9:0x56 S→W sticks 651 runs (616 on d2first). Past it 120 of 349 runs finish (34.4%; d2first IX 109 of 384,
+  28.4%: round 30's patra and wizzrobe). Ganon's silver arrow needs a rupee: `d3first_9_42s_*` hold 6-13, and
+  Ganon's room loses 155 per 1000 against d2first's 136/168, so not in these chains; a golden path arrives with
+  whatever the leg and the dungeon dropped.
+
+**Cheats** (segment totals): bombs 156 at Dodongo (2:0x0e; goriya and moldorm throw 2.5 and 4.5 bombs a visit in
+0x5e and 0x3e despite the reserve of 1), 6 at 9:0x17 and 7 at 9:0x04; no key and no rupee anywhere (0x34's meat,
+where the ledger expected a rupee cheat, was reached by one run).
+
+**The planner** passes everything but the Olive Garden (D5 46.3%, 0x05 114 of 300) and phase IX's 9:0x56 (D9
+27.3%: 217 stuck, then 82 of 83 finish): Dungeon 7 89% with the wood sword, 0x1b 1 of 300 lost.
+
+### 5.3 The golden path: each segment between triforces
+
+The owner's condition is a golden path: each segment from one triforce to the next retried on new seeds until a
+run wins it, models alone. A segment's chance is its leg's arrivals times the dungeon's rate at the hearts the leg
+leaves; the dungeon's chain starts at full hearts, so its rate is scaled per arrival by V(entrance, hearts) /
+V(entrance, full) of a `heart_value` fit on the two chains (deaths only; a damage prior where no run entered at those
+hearts). `r32base_tables.py --golden`; the first three rows from sections 1-4's chains (main's team without round
+30's five). The race (`zelda-headless.py --golden`) tries a segment at most 320 times.
+
+| Segment | Leg arrives | Hearts there (of max) | Dungeon (full hearts) | V there / at full | One run wins it | Runs per win | A win in 320 tries |
+|---|---|---|---|---|---|---|---|
+| the start → Dungeon 3 | 100.0% | 2.94 of 3 | 0.0% | 0.00 / 0.00 | **0** | - | 0 |
+| Dungeon 3 → Dungeon 4 | 100.0% | 3.58 of 4 | 0.0% | 0.00 / 0.00 | **0** | - | 0 |
+| Dungeon 4 → Dungeon 1 | 86.2% | 3.64 of 5 | 26.3% | 0.19 / 0.46 | 11.3% | 9 | 1.00 |
+| Dungeon 1 → Dungeon 5 | 16.8% | 3.37 of 7 | 1.9% | 0.00 / 0.02 | **0.08%** | 1,300 | 0.22 |
+| Dungeon 5 → Dungeon 2 | 34.7% | 4.12 of 10 | 99.9% | 0.98 / 1.00 | 31.4% | 3 | 1.00 |
+| Dungeon 2 → Dungeon 7 | 0.1% | 5.50 of 11 | 4.7% | 0.01 / 0.12 | **0.0003%** | 350,000 | 0.00 |
+| Dungeon 7 → Dungeon 6 | 99.9% | 10.81 of 12 | 32.3% | 0.27 / 0.32 | 26.4% | 4 | 1.00 |
+| Dungeon 6 → Dungeon 8 | 100.0% | 12.45 of 13 | 6.8% | 0.06 / 0.07 | 5.9% | 17 | 1.00 |
+| Dungeon 8 → the ending | 100.0% | 12.27 of 15 | 12.0% | 0.23 / 0.44 | 6.3% | 16 | 1.00 |
+
+**What blocks it, after Dungeons 3 and 4:**
+
+1. **Dungeon 1 → Dungeon 5 (0.08%)**: the leg (16.8%: the first third's ow-octorok at 0x37's re-entry, ow-zora,
+   ow-leever, ow-tektite) leaves Link 3.4 of 7 hearts, and the Olive Garden kills 845 of 1000 from full hearts with
+   the wood sword and, in 82% of runs, no bomb.
+2. **Dungeon 2 → Dungeon 7 (about 0)**: ow-octorok cannot leave Level 2 by the recorder (999 of 1000: it must face E
+   first and never learned to), and Dungeon 7 with the wood sword is 4.7% (goriya's 0x1b).
+3. Near zero but within a race's tries: **Dungeon 6 → Dungeon 8** (5.9%: 8:0x4c's Pols Voices with an empty purse)
+   and **Dungeon 8 → the ending** (6.3%: phase IX's 9:0x56, d2first's own debt). Dungeon 5 → Dungeon 2 (ow-leever's
+   recorder turn, ow-moblin's tree) and Dungeon 7 → Dungeon 6 are not blocking.
+
+So with Dungeons 3 and 4 passed, a golden path still needs two fixes to exist at all (the Olive Garden, ow-octorok's
+recorder turn out of Level 2) and Dungeon 7 above a few percent; the last three segments would then be won in tens
+of tries, as d2first's race wins its last two (4-26 runs, round 30).
+
+### 5.4 The training plan for Level 5 to the ending (nothing trained)
+
+The recipe of section 4 holds (one run for both routes where it can serve both; `promoted.d3first` only for a family
+torn between them; harvested handoffs at the chains' hearts). In the order the golden path needs them:
+
+| # | Family | Rooms | Teachers that exist | One run or the route's own |
+|---|---|---|---|---|
+| 1 | darknut | 5:0x05 the Olive Garden, 5:0x64 cave→E, 5:0x37 (wood sword) | `r32b_d5.py garden` BombFighter (31/60 from the real states, the explorer takes the cleared room out); the planner (62% through 0x05, 57% with no bomb); harvested `5_05e` | one run: section 4's #1 (3:0x59, 3:0x69, 3:0x5b); its Dungeon 8 rooms are at d2first's level |
+| 2 | ow-octorok | 0:0x3c cave→recorder (MOVE E, then RECORDER), 0:0x4c E→N (69/1000) | walks-b's rule (20/20); the explorer crossed it for every chain (tracks: `explore --specialist ow-octorok --states 'd3first_0_3cc_*'`) | one run: section 4's #6 (0x37 cave→cave); d2first never plays the step, the turn is new to both |
+| 3 | goriya | Dungeon 7 with the wood sword (0x1b, 0x69-0x1a, 0x29) | `r32b_d7.py` (0x1b 60/60, 0x49 31/60 from the real states); the planner (89%, 0x1b 1/300): `r27_plan_demos.py --route d3first` | one run if `d2first`'s `d7` (r30-goriya6-s31) holds within noise; else `promoted.d3first` (the same rooms, the sword the only difference) |
+| 4 | boss-digdogger | 5:0x24, 7:0x1c (8 wood hits a small one) | DigFighter 58/60, `r32b_d7` 0x1c 42/60; planner 18/157, 3/299 | one run (d2first's 5:0x24 and 7:0x1c in the bar) |
+| 5 | gibdo | 5:0x66 W→N, 5:0x65, 5:0x47 | `r32b_d7.Fight` 52/60; planner 14/177 | one run (r30-gibdo-s91) |
+| 6 | ow-leever | 0:0x0b cave→recorder (MOVE E, then RECORDER) | walks-b 20/20; explorer tracks | one run: section 4's #7 |
+| 7 | ow-moblin | 0:0x62 the tree (the blue candle facing W), 0:0x3d cave→S | walks-b 20/20 (`r32b_leg.py` tallies); explorer tracks | one run |
+| 8 | pols-voice | 8:0x4c with 1-10 rupees | none; the planner loses 50 of 290 there | **first a data decision** (the lead / the owner): a rupee top-up or reserve before 8:0x4c, as the ledger asked; else train the sword fight with an empty purse (`ram_randomization` of rupees) — one run, phase IX owes pols-voice 8:0x4c on d2first too |
+| 9 | like-like | 9:0x56 S→W (phase IX) | the explorer's tracks (the states' builder) | **d2first's run**: its phase IX training serves both (same inputs) |
+| 10 | boss-aquamentus, wallmaster | 7:0x2a (hearts), 7:0x0d (as d2first) | Aquamentus 59/60 | one run; Aquamentus gains with goriya's hearts |
+
+**Families that simply use `d2first`'s run (no `promoted.d3first`)**: every room after the grave is played with the
+magic sword and d2first's inventory but the purse, and the chains show them at `d2first`'s level or better: wizzrobe,
+patra, lanmola, ganon, boss-gohma, vire, trap-room, zol, stalfos-keese-gel, like-like, boss-manhandla (8:0x6e),
+darknut's Dungeon 8 rooms, ow-boulder and the legs' ow-zora, ow-lynel, ow-ghini, ow-peahat, ow-tektite (0x74). The
+Dungeon 2 families (d2-rope, moldorm, boss-dodongo; goriya's 0x5e, 0x1e) need nothing: 99.9% at 10 hearts. Two
+caveats: a `promoted.d3first` boss-gleeok (section 4's #4, for 4:0x13) plays 8:0x3c on this route too, so its
+selection needs `d8` (340 per 1000 entering here, the rule 59/60); and Dungeon 2's 156 cheated bombs (goriya and
+moldorm throwing the bag past the reserve) are a data question, not a training one.
+
+**The per-route tables.** `heart_value.d3first.json` has curves on steps 0-119 only. A trial refit (to a scratch
+file, nothing written) from the 34 chain files now at hand (`r32base-1k-*`, `r32base-plan-*`, Prep32's `r32prep-*`,
+`r32base2-1k-*`, `r32base2-plan-*`; `python -m triforce.heart_value <files> --route d3first`) gives a curve on every
+clip-way step 0-303 but the stretches' plain ways (43-46, 159-162, 198-201: no chain plays clips off) and three
+second visits that never get their own record (272, 285, 290). What it still lacks: steps 156-173 (the leg to Level
+7) rest on **one** run (the only one past 0:0x3c), so V there is the prior's; Dungeon 5's rows price the models'
+1.9% and the planner's 46% (V at 5:0x76 0.13 at 7 hearts); the dungeons' chains all enter at full hearts, so the
+low-heart arrivals the legs deliver (4.1 of 10 into Level 2, 3.4 of 7 into Level 5) are the prior's too. For a
+refit worth training on: a `post-d2` chain that passes 0x3c (the planner's, 300 runs `0_3cc_0` → step 174, or the
+models' after #2), `post-d1` and `post-d5` chains run on through the next dungeon (`--stop-at step:120` and
+`step:155`: chains need no states past their start) so the dungeons are entered at the legs' hearts, and a refit
+after every training round. `chain_hp.d3first.json` (rooms of steps 0-119 only; of them only like-like's 4:0x32 is
+a chain_hp family's room): the same trial gives every
+chain_hp room of the route hundreds of visits (6:0x1d 703, 9:0x56 3519, 9:0x14 420, ...), but at the hearts of
+dungeon chains entered full; a `post-d8` chain run to the ending (the leg is 100%) gives Dungeon 9's rooms the
+hearts a race brings (12.3 of 15). Families that need the refit before training on rooms after step 119: goriya,
+boss-digdogger, equipment-room (heart_value), and like-like/patra/wizzrobe/ganon only if they ever train on
+`d3first` states (by the plan above they do not).
+
+### 5.5 Tables
+
+#### Segments, models alone (act `model`, clips on, 1000 runs)
+
+| Segment | From → stop | Runs | Arrived | Deaths | Stuck | Other ends | Hearts at the stop (of max) |
+|---|---|---|---|---|---|---|---|
+| d5 | 5_76s_0 (step 97) → step 120 | 1000 | **1.9%** ± 0.8 | 980 | 1 | 0 | 8.00 of 8.0 |
+| post-d5 | 0_0bc_0 (step 120) → step 145 | 1000 | **34.7%** ± 3.0 | 309 | 167 | 177 (missed 171, exit-wrong 3, retreat-limit 3) | 4.12 of 10.0 |
+| d2 | 2_7ds_0 (step 145) → step 155 | 1000 | **99.9%** ± 0.2 | 0 | 0 | 1 (exit-wrong 1) | 11.00 of 11.0 |
+| post-d2 | 0_3cc_0 (step 155) → step 174 | 1000 | **0.1%** ± 0.2 | 369 | 630 | 0 | 5.50 of 11.0 |
+| d7 | 7_79s_0 (step 174) → step 194 | 1000 | **4.7%** ± 1.3 | 947 | 6 | 0 | 12.00 of 12.0 |
+| post-d7 | 0_42c_0 (step 194) → step 211 | 1000 | **99.9%** ± 0.2 | 0 | 1 | 0 | 10.81 of 12.0 |
+| d6 | 6_79s_0 (step 211) → step 227 | 1000 | **32.3%** ± 2.9 | 675 | 2 | 0 | 13.00 of 13.0 |
+| post-d6 | 0_22c_0 (step 227) → step 233 | 1000 | **100.0%** ± 0.0 | 0 | 0 | 0 | 12.45 of 13.0 |
+| d8 | 8_7es_0 (step 233) → step 243 | 1000 | **6.8%** ± 1.6 | 927 | 1 | 4 (exit-wrong 4) | 14.00 of 14.0 |
+| post-d8 | 0_6dc_0 (step 243) → step 258 | 1000 | **100.0%** ± 0.0 | 0 | 0 | 0 | 12.27 of 15.0 |
+| d9 | 9_76s_0 (step 258) → the ending | 1000 | **12.0%** ± 2.0 | 220 | 660 | 0 | 3.60 of 15.0 |
+
+#### Segments, the planner (`temperature:0.5+relax:16+plan:16:1`, 300 runs)
+
+| Segment | From → stop | Runs | Arrived | Deaths | Stuck | Other ends | Hearts at the stop (of max) |
+|---|---|---|---|---|---|---|---|
+| d5 | 5_76s_0 (step 97) → step 120 | 300 | **46.3%** ± 5.6 | 161 | 0 | 0 | 8.00 of 8.0 |
+| d2 | 2_7ds_0 (step 145) → step 155 | 300 | **100.0%** ± 0.0 | 0 | 0 | 0 | 11.00 of 11.0 |
+| d7 | 7_79s_0 (step 174) → step 194 | 300 | **89.0%** ± 3.5 | 8 | 25 | 0 | 12.00 of 12.0 |
+| d6 | 6_79s_0 (step 211) → step 227 | 300 | **72.0%** ± 5.1 | 84 | 0 | 0 | 13.00 of 13.0 |
+| d8 | 8_7es_0 (step 233) → step 243 | 300 | **76.7%** ± 4.8 | 64 | 3 | 3 (exit-wrong 3) | 14.00 of 14.0 |
+| d9 | 9_76s_0 (step 258) → the ending | 300 | **27.3%** ± 5.0 | 1 | 217 | 0 | 7.71 of 15.0 |
+
+#### The segments' start states (chains 0-2; RAM)
+
+| Segment start | d3first: containers, sword, bombs, keys, rupees | d2first's state of the same name |
+|---|---|---|
+| `5_76s` | 7, wood, 2/4/0, 3, 0-1 | 10, white, 4/0/0, 6, 168-170 |
+| `0_0bc` | 8, wood, 2/2/0, 1-2, 0-2 | 11, white, 3/4/0, 5, 170-171 |
+| `2_7ds` | 10, wood, 6/2/0, 1-2, 131-135 | 3, wood, 0, 0, 0-1 (the game's first dungeon) |
+| `0_3cc` | 11, wood, 8/4/0, 4-5, 136-141 | 4, wood, 5/0/0, 3, 8-17 (another way) |
+| `7_79s` | 11, wood, 8/4/0, 4-5, 1-2 | 11, white, 3/4/0, 5, 30-33 |
+| `0_42c` | 12, wood, 6/3/6, 1-2, 2-7 | 12, white, 2/7/5, 2, 30-37 |
+| `6_79s` | 12, magic, 6/3/8, 1-2, 3-7 | 12, magic, 2/7/5, 2, 30-38 |
+| `0_22c` | 13, magic, 8, 2-3, 1-8 | 13, magic, 5/8/4, 3, 25-34 |
+| `8_7es` | 13, magic, 8, 2-3, 1-9 | 13, magic, 5/8/4, 3, 25-35 |
+| `0_6dc` | 14, magic, 6/7/6, 2-3, 1-10 | 14, magic, 7/6/6, 3, 22-31 |
+| `9_76s` | 15, magic, 5/6/5, 2-3, 5-10 | 15, magic, 6/5/5, 3, 33-37 |
+
+(Bombs per chain 0/1/2; the chains above start from chain 0. Both routes hold the red candle, the bow and arrows
+from Level 7 on.)
+
+#### Every room of steps 97-303 (models alone: its segment's 1000 runs; d2first's)
+
+Segment columns from the segment that holds the step (its start state's hearts). Hearts in: mean on entering / max.
+Lost: mean hearts lost a visit (a death loses all). Ends: runs lost in the room (death, stuck; `offroute-` after a
+wrong exit). Cheats: totals over the segment's runs (bombs/keys/rupees). d2first: `r29land-1k`'s segments in the same
+room by the same entry and exit (`room` = the room by another entry; `new` = d2first never plays it): lost per 1000
+entering, hearts in, lost a visit; IX: the same from round 31's d2first chains of Dungeons 6, 8, 9 after phase IX
+(`r31-1k`, v1.9.0.0 team, each cut where it leaves the dungeon). Planner: runs lost there of the planner's
+d5/d2/d7/d6/d8/d9 runs that entered.
+
+| Step | Room | In→out | Family | Entered | Lost (per 1000) | Ends | Hearts in | Lost a visit | Steps | Bombs | Wrong exits | Cheats b/k/r | d2first: lost/1000, hearts in, lost a visit | d2first IX | Planner: lost/entered |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 97 | 5:0x76 | S→N | gibdo | 1000 | 0 (0) |  | 7.00/7 | 0.00 | 4 | 0.00 | 0 | 0/0/0 | 0, 10.0/10, 0.00 |  | 0/300 |
+| 98 | 5:0x66 | S→W | gibdo | 1000 | 0 (0) |  | 7.00/7 | 0.04 | 19 | 1.00 | 0 | 0/0/0 | 0, 10.0/10, 0.06 |  | 0/300 |
+| 99 | 5:0x65 | E→W | gibdo | 1000 | 0 (0) |  | 6.96/7 | 0.51 | 18 | 1.00 | 0 | 0/0/0 | 0, 9.9/10, 0.55 |  | 0/300 |
+| 100 | 5:0x64 | E→cave | darknut | 1000 | 0 (0) |  | 6.45/7 | 0.00 | 8 | 0.00 | 0 | 0/0/0 | 0, 9.4/10, 0.00 |  | 0/300 |
+| 101 | 5:0x07 cave | S→E | equipment-room | 1000 | 0 (0) |  | 6.45/7 | 0.04 | 18 | 0.00 | 0 | 0/0/0 | 0, 9.4/10, 0.04 |  | 0/300 |
+| 102 | 5:0x06 | cave→W | darknut | 1000 | 0 (0) |  | 6.41/7 | 0.00 | 10 | 0.00 | 0 | 0/0/0 | 0, 9.3/10, 0.00 |  | 0/300 |
+| 103 | 5:0x05 | E→cave | darknut | 1000 | 845 (845) | death 845 | 6.41/7 | 5.90 | 138 | 0.70 | 0 | 0/0/0 | 78, 9.3/10, 2.84 |  | 114/300 |
+| 104 | 5:0x04 cave | S→N | equipment-room | 155 | 0 (0) |  | 3.28/7 | 0.14 | 44 | 0.00 | 0 | 0/0/0 | 1, 7.1/10, 0.12 |  | 0/186 |
+| 105 | 5:0x05 | cave→E | darknut | 155 | 0 (0) |  | 3.14/7 | 0.00 | 3 | 0.00 | 0 | 0/0/0 | 0, 6.9/10, 0.00 |  | 0/186 |
+| 106 | 5:0x06 | W→cave | darknut | 155 | 0 (0) |  | 3.14/7 | 0.00 | 13 | 0.00 | 0 | 0/0/0 | 0, 6.9/10, 0.00 |  | 0/186 |
+| 107 | 5:0x07 cave | S→W | equipment-room | 155 | 0 (0) |  | 3.14/7 | 0.06 | 17 | 0.00 | 0 | 0/0/0 | 1, 6.9/10, 0.07 |  | 0/186 |
+| 108 | 5:0x64 | cave→E | darknut | 155 | 50 (323) | death 50 | 3.08/7 | 1.09 | 12 | 0.00 | 0 | 0/0/0 | 43, 6.9/10, 1.36 |  | 7/186 |
+| 109 | 5:0x65 | W→E | gibdo | 105 | 17 (162) | death 17 | 2.93/7 | 0.43 | 20 | 0.00 | 0 | 0/0/0 | 25, 5.8/10, 0.37 |  | 2/179 |
+| 110 | 5:0x66 | W→N | gibdo | 88 | 33 (375) | death 32, stuck 1 | 2.98/7 | 1.12 | 92 | 0.11 | 1 | 0/0/0 | 62, 5.5/10, 0.48 |  | 14/177 |
+| 111 | 5:0x56 | S→E | dodongo-crossing | 55 | 0 (0) |  | 2.90/7 | 0.00 | 5 | 0.00 | 0 | 0/0/0 | 0, 5.4/10, 0.00 |  | 0/163 |
+| 112 | 5:0x57 | W→N | zol | 55 | 2 (36) | death 2 | 2.90/7 | 0.07 | 11 | 0.00 | 0 | 0/0/0 | 0, 5.4/10, 0.01 |  | 0/163 |
+| 113 | 5:0x47 | S→N | gibdo | 53 | 3 (57) | death 3 | 2.93/7 | 0.50 | 11 | 0.02 | 0 | 0/0/0 | 51, 5.4/10, 0.62 |  | 3/163 |
+| 114 | 5:0x37 | S→N | darknut | 50 | 5 (100) | death 5 | 2.58/7 | 0.32 | 18 | 0.00 | 0 | 0/0/0 | 13, 5.0/10, 0.14 |  | 2/160 |
+| 115 | 5:0x27 | S→W | pols-voice | 45 | 1 (22) | death 1 | 2.51/7 | 0.02 | 15 | 0.00 | 0 | 0/0/0 | 0, 4.9/10, 0.00 |  | 0/158 |
+| 116 | 5:0x26 | E→W | gibdo | 44 | 0 (0) |  | 2.55/7 | 0.09 | 13 | 0.05 | 0 | 0/0/0 | 7, 4.9/10, 0.03 |  | 0/158 |
+| 117 | 5:0x25 | E→W | pols-voice | 44 | 2 (45) | death 2 | 2.45/7 | 0.10 | 18 | 0.00 | 0 | 0/0/0 | 17, 4.9/10, 0.14 |  | 1/158 |
+| 118 | 5:0x24 | E→N | boss-digdogger | 42 | 23 (548) | death 23 | 2.46/7 | 1.11 | 41 | 1.19 | 0 | 0/0/0 | 19, 4.9/10, -0.98 |  | 18/157 |
+| 119 | 5:0x14 | S→triforce | gibdo | 19 | 0 (0) |  | 3.00/8 | -5.00 | 2 | 0.00 | 0 | 0/0/0 | 0, 6.0/11, -5.03 |  | 0/139 |
+| 120 | 0:0x0b | cave→recorder | ow-leever | 1000 | 413 (413) | death 112, offroute-death 129, offroute-exit-wrong 3, offroute-stuck 157, retreat-limit 3, stuck 9 | 8.00/8 | 1.73 | 46 | 0.00 | 486 | 0/0/0 | 13, 11.0/11, 0.02 |  | - |
+| 121 | 0:0x74 | recorder→W | ow-tektite | 587 | 0 (0) |  | 6.58/8 | 0.04 | 6 | 0.00 | 0 | 0/0/0 | room 0, 6.2/6, 0.01 |  | - |
+| 122 | 0:0x73 | E→N | ow-moblin | 587 | 0 (0) |  | 6.53/8 | 0.03 | 10 | 0.00 | 0 | 0/0/0 | 0, 7.0/7, 0.03 |  | - |
+| 123 | 0:0x63 | S→W | ow-moblin | 587 | 4 (7) | death 4 | 6.51/8 | 0.55 | 38 | 0.00 | 0 | 0/0/0 | room 0, 6.9/7, 0.00 |  | - |
+| 124 | 0:0x62 | E→cave | ow-moblin | 583 | 192 (329) | death 22, missed 170 | 6.00/8 | 1.38 | 52 | 0.00 | 0 | 0/0/0 | new |  | - |
+| 125 | 0:0x62 cave | S→S | ow-moblin | 391 | 0 (0) |  | 4.51/8 | 0.00 | 68 | 0.00 | 0 | 0/0/0 | new |  | - |
+| 126 | 0:0x62 | cave→N | ow-moblin | 391 | 0 (0) |  | 4.51/8 | 0.18 | 46 | 0.00 | 0 | 0/0/0 | new |  | - |
+| 127 | 0:0x52 | S→W | ow-moblin | 391 | 1 (3) | death 1 | 4.33/8 | 0.11 | 11 | 0.00 | 0 | 0/0/0 | room 0, 9.6/10, 0.14 |  | - |
+| 128 | 0:0x51 | E→W | ow-moblin | 390 | 0 (0) |  | 4.23/8 | 0.00 | 1 | 0.00 | 0 | 0/0/0 | 0, 9.7/10, 0.00 |  | - |
+| 129 | 0:0x50 | E→S | ow-lynel | 390 | 0 (0) |  | 4.23/8 | 0.02 | 6 | 0.00 | 0 | 0/0/0 | 0, 7.5/8, 0.03 |  | - |
+| 130 | 0:0x60 | N→W | ow-lynel | 390 | 0 (0) |  | 4.21/8 | 0.01 | 7 | 0.00 | 0 | 0/0/0 | 0, 7.4/8, 0.00 |  | - |
+| 131 | 0:0x5f | E→N | ow-zora | 390 | 0 (0) |  | 4.20/8 | -0.86 | 9 | 0.00 | 0 | 0/0/0 | 0, 7.4/8, -0.80 |  | - |
+| 132 | 0:0x4f | S→N | ow-zora | 390 | 0 (0) |  | 5.06/9 | 0.06 | 15 | 0.00 | 0 | 0/0/0 | 0, 8.2/9, 0.08 |  | - |
+| 133 | 0:0x3f | S→N | ow-zora | 390 | 0 (0) |  | 5.00/9 | 0.21 | 16 | 0.00 | 0 | 0/0/0 | 0, 8.1/9, 0.16 |  | - |
+| 134 | 0:0x2f | S→cave | ow-start | 390 | 0 (0) |  | 4.79/9 | 0.00 | 3 | 0.00 | 0 | 0/0/0 | 0, 8.0/9, 0.00 |  | - |
+| 135 | 0:0x2f cave | S→S | ow-start | 390 | 1 (3) | missed 1 | 4.79/9 | -1.00 | 10 | 0.00 | 0 | 0/0/0 | 0, 8.0/9, -0.88 |  | - |
+| 136 | 0:0x2f | cave→S | ow-start | 389 | 0 (0) |  | 5.79/10 | 0.00 | 3 | 0.00 | 0 | 0/0/0 | 0, 9.0/10, 0.00 |  | - |
+| 137 | 0:0x3f | N→W | ow-zora | 389 | 0 (0) |  | 5.79/10 | 0.06 | 8 | 0.00 | 0 | 0/0/0 | 0, 9.0/10, 0.04 |  | - |
+| 138 | 0:0x3e | E→W | ow-zora | 389 | 0 (0) |  | 5.73/10 | 0.00 | 1 | 0.00 | 0 | 0/0/0 | 0, 8.9/10, 0.00 |  | - |
+| 139 | 0:0x3d | E→cave | ow-moblin | 389 | 2 (5) | death 2 | 5.73/10 | 0.70 | 27 | 0.00 | 0 | 0/0/0 | room 0, 6.4/7, 0.15 |  | - |
+| 140 | 0:0x3d cave | S→S | ow-moblin | 387 | 0 (0) |  | 5.06/10 | 0.00 | 51 | 0.00 | 0 | 0/0/0 | new |  | - |
+| 141 | 0:0x3d | cave→S | ow-moblin | 387 | 10 (26) | death 10 | 5.06/10 | 0.89 | 27 | 0.00 | 1 | 0/0/0 | room 0, 6.4/7, 0.15 |  | - |
+| 142 | 0:0x4d | N→W | ow-moblin | 377 | 2 (5) | death 2 | 4.28/10 | 0.10 | 13 | 0.00 | 0 | 0/0/0 | room 0, 8.3/8, 0.07 |  | - |
+| 143 | 0:0x4c | E→N | ow-octorok | 375 | 26 (69) | death 25, stuck 1 | 4.21/10 | 0.35 | 33 | 0.00 | 6 | 0/0/0 | new |  | - |
+| 144 | 0:0x3c | S→cave | ow-octorok | 349 | 2 (6) | death 2 | 4.13/10 | 0.03 | 4 | 0.00 | 0 | 0/0/0 | new |  | - |
+| 145 | 2:0x7d | S→E | d2-rope | 1000 | 0 (0) |  | 10.00/10 | 0.00 | 8 | 0.00 | 0 | 0/0/0 | 0, 3.0/3, 0.00 |  | 0/300 |
+| 146 | 2:0x7e | W→N | d2-rope | 1000 | 0 (0) |  | 10.00/10 | 0.02 | 36 | 0.00 | 0 | 0/0/0 | 0, 3.0/3, 0.09 |  | 0/300 |
+| 147 | 2:0x6e | S→N | d2-rope | 1000 | 0 (0) |  | 9.98/10 | 0.05 | 15 | 0.00 | 0 | 0/0/0 | 0, 2.9/3, -0.03 |  | 0/300 |
+| 148 | 2:0x5e | S→N | goriya | 1000 | 0 (0) |  | 9.93/10 | 0.18 | 46 | 2.52 | 0 | 0/0/0 | 9, 2.9/3, 0.38 |  | 0/300 |
+| 149 | 2:0x4e | S→N | d2-rope | 1000 | 0 (0) |  | 9.75/10 | -0.04 | 45 | 0.00 | 6 | 0/0/0 | 5, 2.6/3, -0.08 |  | 0/300 |
+| 150 | 2:0x3e | S→N | moldorm | 1000 | 0 (0) |  | 9.79/10 | 0.40 | 59 | 4.52 | 0 | 0/0/0 | 18, 2.7/3, 0.34 |  | 0/300 |
+| 151 | 2:0x2e | S→N | d2-rope | 1000 | 0 (0) |  | 9.39/10 | -0.30 | 63 | 0.01 | 0 | 0/0/0 | 3, 2.4/3, -0.32 |  | 0/300 |
+| 152 | 2:0x1e | S→N | goriya | 1000 | 1 (1) | exit-wrong 1 | 9.70/10 | 0.30 | 86 | 2.29 | 1 | 0/0/0 | 47, 2.7/3, 0.38 |  | 0/300 |
+| 153 | 2:0x0e | S→W | boss-dodongo | 999 | 0 (0) |  | 9.40/10 | -0.68 | 47 | 2.52 | 0 | 156/0/0 | 4, 2.4/3, -0.93 |  | 0/300 |
+| 154 | 2:0x0d | E→triforce | d2-rope | 999 | 0 (0) |  | 10.08/11 | -0.92 | 5 | 0.00 | 0 | 0/0/0 | 0, 3.4/4, -0.63 |  | 0/300 |
+| 155 | 0:0x3c | cave→recorder | ow-octorok | 1000 | 999 (999) | death 356, offroute-death 13, offroute-stuck 544, stuck 86 | 11.00/11 | 2.39 | 155 | 0.00 | 1771 | 0/0/0 | room 0, 8.5/8, 0.02 |  | - |
+| 156 | 0:0x45 | recorder→S | ow-peahat | 1 | 0 (0) |  | 8.00/11 | 0.00 | 6 | 0.00 | 0 | 0/0/0 | 6, 11.0/11, 0.07 |  | - |
+| 157 | 0:0x55 | N→W | ow-zora | 1 | 0 (0) |  | 8.00/11 | 0.00 | 11 | 0.00 | 0 | 0/0/0 | 1, 9.4/9, 0.07 |  | - |
+| 158 | 0:0x54 | E→N | ow-zora | 1 | 0 (0) |  | 8.00/11 | 0.00 | 18 | 0.00 | 0 | 0/0/0 | 0, 10.8/11, 0.23 |  | - |
+| 159 | 0:0x55 | N→S | ow-zora | - | | | | | | | | | new |  | - |
+| 160 | 0:0x65 | N→W | ow-zora | - | | | | | | | | | new |  | - |
+| 161 | 0:0x64 | E→N | ow-octorok | - | | | | | | | | | new |  | - |
+| 162 | 0:0x54 | S→N | ow-zora | - | | | | | | | | | new |  | - |
+| 163 | 0:0x44 | S→cave | ow-zora | 1 | 0 (0) |  | 8.00/11 | 0.50 | 22 | 0.00 | 0 | 0/0/0 | 0, 10.6/11, 0.12 |  | - |
+| 164 | 0:0x44 cave | S→S | ow-zora | 1 | 0 (0) |  | 7.50/11 | 0.00 | 29 | 0.00 | 0 | 0/0/0 | 0, 10.5/11, 0.00 |  | - |
+| 165 | 0:0x44 | cave→N | ow-zora | 1 | 0 (0) |  | 7.50/11 | 0.00 | 9 | 0.00 | 0 | 0/0/0 | 0, 10.5/11, 0.00 |  | - |
+| 166 | 0:0x34 | S→cave | ow-leever | 1 | 0 (0) |  | 7.50/11 | 2.00 | 32 | 0.00 | 0 | 0/0/0 | 0, 10.5/11, 1.25 |  | - |
+| 167 | 0:0x34 cave | S→S | ow-leever | 1 | 0 (0) |  | 5.50/11 | 0.00 | 17 | 0.00 | 0 | 0/0/0 | 0, 9.2/11, 0.00 |  | - |
+| 168 | 0:0x34 | cave→S | ow-leever | 1 | 0 (0) |  | 5.50/11 | 0.00 | 10 | 0.00 | 0 | 0/0/0 | 0, 9.2/11, 0.03 |  | - |
+| 169 | 0:0x44 | N→S | ow-zora | 1 | 0 (0) |  | 5.50/11 | 0.00 | 8 | 0.00 | 0 | 0/0/0 | 0, 9.2/11, 0.03 |  | - |
+| 170 | 0:0x54 | N→W | ow-zora | 1 | 0 (0) |  | 5.50/11 | 0.00 | 11 | 0.00 | 0 | 0/0/0 | 0, 9.2/11, 0.01 |  | - |
+| 171 | 0:0x53 | E→W | ow-moblin | 1 | 0 (0) |  | 5.50/11 | 0.00 | 18 | 0.00 | 0 | 0/0/0 | 0, 8.5/9, 0.21 |  | - |
+| 172 | 0:0x52 | E→N | ow-moblin | 1 | 0 (0) |  | 5.50/11 | 0.00 | 14 | 0.00 | 0 | 0/0/0 | 0, 9.0/11, 0.11 |  | - |
+| 173 | 0:0x42 | S→cave | ow-moblin | 1 | 0 (0) |  | 5.50/11 | 0.00 | 19 | 0.00 | 0 | 0/0/0 | 0, 8.9/11, 0.00 |  | - |
+| 174 | 7:0x79 | S→N | goriya | 1000 | 0 (0) |  | 11.00/11 | 0.00 | 4 | 0.00 | 0 | 0/0/0 | 0, 11.0/11, 0.00 |  | 0/300 |
+| 175 | 7:0x69 | S→N | goriya | 1000 | 20 (20) | death 20 | 11.00/11 | 1.23 | 38 | 3.42 | 0 | 0/0/0 | 9, 11.0/11, 1.14 |  | 0/300 |
+| 176 | 7:0x59 | S→N | goriya | 1000 | 18 (18) | death 18 | 9.77/11 | 1.21 | 17 | 0.49 | 0 | 0/0/0 | 18, 9.9/11, 1.13 |  | 0/300 |
+| 177 | 7:0x49 | S→N | goriya | 999 | 23 (23) | death 23 | 8.56/11 | 1.46 | 137 | 0.88 | 1 | 0/0/0 | 1, 8.8/11, 0.69 |  | 0/300 |
+| 178 | 7:0x39 | S→W | boss-digdogger | 976 | 8 (8) | death 8 | 7.15/11 | 0.32 | 20 | 0.00 | 0 | 0/0/0 | 6, 8.1/11, 0.42 |  | 0/300 |
+| 179 | 7:0x38 | E→N | goriya | 971 | 20 (21) | death 20 | 6.85/11 | 0.37 | 23 | 0.00 | 0 | 0/0/0 | 4, 7.6/11, 0.38 |  | 0/300 |
+| 180 | 7:0x28 | S→N | goriya | 963 | 0 (0) |  | 6.54/11 | 0.00 | 6 | 0.00 | 0 | 0/0/0 | 0, 7.3/11, 0.00 |  | 0/300 |
+| 181 | 7:0x18 | S→E | goriya | 963 | 41 (43) | death 41 | 6.54/11 | 0.47 | 22 | 0.00 | 0 | 0/0/0 | 13, 7.3/11, 0.63 |  | 0/300 |
+| 182 | 7:0x19 | W→E | goriya | 956 | 70 (73) | death 70 | 6.19/11 | 1.24 | 32 | 0.93 | 0 | 0/0/0 | 27, 6.7/11, 1.13 |  | 1/300 |
+| 183 | 7:0x1a | W→cave | goriya | 894 | 55 (62) | death 55 | 5.28/11 | 0.79 | 18 | 0.00 | 2 | 0/0/0 | 17, 5.7/11, 0.42 |  | 0/300 |
+| 184 | 7:0x4a cave | S→N | equipment-room | 845 | 9 (11) | death 9 | 4.76/11 | 0.15 | 39 | 0.00 | 0 | 0/0/0 | 5, 5.3/11, 0.15 |  | 0/300 |
+| 185 | 7:0x1a | cave→E | goriya | 836 | 71 (85) | death 71 | 4.66/11 | 0.96 | 29 | 0.96 | 0 | 0/0/0 | 61, 5.2/11, 0.96 |  | 0/300 |
+| 186 | 7:0x1b | W→E | goriya | 766 | 518 (676) | death 518 | 4.03/11 | 2.60 | 87 | 0.02 | 4 | 0/0/0 | 288, 4.5/11, 0.63 |  | 1/300 |
+| 187 | 7:0x1c | W→N | boss-digdogger | 256 | 71 (277) | death 71 | 4.16/11 | 1.09 | 53 | 2.45 | 0 | 0/0/0 | 114, 5.5/11, 0.57 |  | 3/299 |
+| 188 | 7:0x0c | S→E | dodongo-crossing | 185 | 1 (5) | death 1 | 4.23/11 | 0.03 | 19 | 0.98 | 0 | 0/0/0 | 0, 5.5/11, 0.01 |  | 0/296 |
+| 189 | 7:0x0d | W→cave | wallmaster | 184 | 15 (82) | death 9, stuck 6 | 4.22/11 | 0.14 | 113 | 0.02 | 113 | 0/0/0 | 35, 5.5/11, -0.42 |  | 25/296 |
+| 190 | 7:0x7b cave | S→W | equipment-room | 60 | 1 (17) | death 1 | 4.57/11 | 0.10 | 18 | 0.00 | 0 | 0/0/0 | 2, 6.0/11, 0.06 |  | 0/270 |
+| 191 | 7:0x29 | cave→E | goriya | 59 | 2 (34) | death 2 | 4.54/11 | 1.03 | 32 | 1.00 | 0 | 0/0/0 | 39, 6.0/11, 0.96 |  | 0/270 |
+| 192 | 7:0x2a | W→E | boss-aquamentus | 57 | 10 (175) | death 10 | 3.63/11 | -0.37 | 34 | 0.00 | 0 | 0/0/0 | 11, 5.2/11, -1.08 |  | 3/270 |
+| 193 | 7:0x2b | W→triforce | goriya | 47 | 0 (0) |  | 4.85/12 | -7.15 | 9 | 0.00 | 0 | 0/0/0 | 0, 6.4/12, -5.63 |  | 0/267 |
+| 194 | 0:0x42 | cave→S | ow-moblin | 1000 | 0 (0) |  | 12.00/12 | 0.05 | 12 | 0.00 | 0 | 0/0/0 | 0, 12.0/12, 0.03 |  | - |
+| 195 | 0:0x52 | N→W | ow-moblin | 1000 | 1 (1) | stuck 1 | 11.95/12 | 0.11 | 15 | 0.00 | 0 | 0/0/0 | 0, 12.0/12, 0.12 |  | - |
+| 196 | 0:0x51 | E→W | ow-moblin | 999 | 0 (0) |  | 11.84/12 | 0.00 | 1 | 0.00 | 0 | 0/0/0 | 0, 9.7/10, 0.00 |  | - |
+| 197 | 0:0x50 | E→N | ow-lynel | 999 | 0 (0) |  | 11.84/12 | 0.00 | 7 | 0.00 | 0 | 0/0/0 | 0, 11.9/12, 0.00 |  | - |
+| 198 | 0:0x51 | E→S | ow-moblin | - | | | | | | | | | new |  | - |
+| 199 | 0:0x61 | N→maze | ow-moblin | - | | | | | | | | | new |  | - |
+| 200 | 0:0x60 | E→N | ow-lynel | - | | | | | | | | | new |  | - |
+| 201 | 0:0x50 | S→N | ow-lynel | - | | | | | | | | | new |  | - |
+| 202 | 0:0x40 | S→E | ow-ghini | 999 | 0 (0) |  | 11.84/12 | 0.00 | 3 | 0.00 | 0 | 0/0/0 | 0, 11.9/12, 0.00 |  | - |
+| 203 | 0:0x41 | W→N | ow-ghini | 999 | 0 (0) |  | 11.84/12 | 0.00 | 4 | 0.00 | 0 | 0/0/0 | 0, 11.9/12, 0.00 |  | - |
+| 204 | 0:0x31 | S→N | ow-ghini | 999 | 0 (0) |  | 11.84/12 | 0.00 | 4 | 0.00 | 0 | 0/0/0 | 0, 11.9/12, 0.00 |  | - |
+| 205 | 0:0x21 | S→cave | ow-ghini | 999 | 0 (0) |  | 11.84/12 | 0.01 | 18 | 0.00 | 0 | 0/0/0 | 8, 11.9/12, 0.01 |  | - |
+| 206 | 0:0x21 cave | S→S | ow-ghini | 999 | 0 (0) |  | 11.83/12 | 0.00 | 5 | 0.00 | 0 | 0/0/0 | 0, 11.8/12, 0.00 |  | - |
+| 207 | 0:0x21 | cave→S | ow-ghini | 999 | 0 (0) |  | 11.83/12 | 0.00 | 4 | 0.00 | 0 | 0/0/0 | 0, 11.8/12, 0.00 |  | - |
+| 208 | 0:0x31 | N→E | ow-ghini | 999 | 0 (0) |  | 11.83/12 | 0.01 | 7 | 0.00 | 0 | 0/0/0 | 0, 11.8/12, 0.01 |  | - |
+| 209 | 0:0x32 | W→N | ow-lynel | 999 | 0 (0) |  | 11.82/12 | 0.82 | 26 | 0.00 | 0 | 0/0/0 | 0, 11.8/12, 0.88 |  | - |
+| 210 | 0:0x22 | S→cave | ow-lynel | 999 | 0 (0) |  | 11.01/12 | 0.20 | 4 | 0.00 | 0 | 0/0/0 | 1, 11.0/12, 0.26 |  | - |
+| 211 | 6:0x79 | S→W | stalfos-keese-gel | 1000 | 0 (0) |  | 12.00/12 | 0.00 | 11 | 0.00 | 0 | 0/0/0 | 0, 12.0/12, 0.00 | 0, 12.0/12, 0.00 | 0/300 |
+| 212 | 6:0x78 | E→N | wizzrobe | 1000 | 0 (0) |  | 12.00/12 | 0.02 | 13 | 0.00 | 0 | 0/0/0 | 0, 12.0/12, 0.00 | 0, 12.0/12, 0.00 | 0/300 |
+| 213 | 6:0x68 | S→N | zol | 1000 | 0 (0) |  | 11.98/12 | 0.07 | 11 | 0.00 | 0 | 0/0/0 | 0, 12.0/12, 0.14 | 0, 12.0/12, 0.14 | 0/300 |
+| 214 | 6:0x58 | S→N | stalfos-keese-gel | 1000 | 0 (0) |  | 11.91/12 | 1.00 | 49 | 0.14 | 0 | 0/0/0 | 0, 11.9/12, 1.02 | 0, 11.9/12, 1.02 | 0/300 |
+| 215 | 6:0x48 | S→N | trap-room | 1000 | 0 (0) |  | 10.91/12 | 0.00 | 5 | 0.00 | 0 | 0/0/0 | 0, 10.8/12, 0.00 | 0, 10.8/12, 0.00 | 0/300 |
+| 216 | 6:0x38 | S→N | wizzrobe | 1000 | 112 (112) | death 112 | 10.91/12 | 4.71 | 114 | 0.05 | 0 | 0/0/0 | 137, 10.8/12, 5.31 | 137, 10.8/12, 5.31 | 8/300 |
+| 217 | 6:0x28 | S→E | wizzrobe | 888 | 15 (17) | death 15 | 6.98/12 | 0.36 | 20 | 0.99 | 0 | 0/0/0 | 28, 6.4/12, 0.34 | 28, 6.4/12, 0.34 | 17/292 |
+| 218 | 6:0x29 | W→S | wizzrobe | 873 | 72 (82) | death 72 | 6.74/12 | 1.46 | 15 | 0.00 | 0 | 0/0/0 | 32, 6.2/12, 0.56 | 142, 6.2/12, 1.83 | 15/275 |
+| 219 | 6:0x39 | N→E | vire | 801 | 34 (42) | death 33, stuck 1 | 5.75/12 | -0.17 | 48 | 0.02 | 2 | 0/0/0 | 32, 5.9/12, -0.13 | 68, 5.1/12, -0.05 | 0/260 |
+| 220 | 6:0x3a | W→cave | wizzrobe | 767 | 296 (386) | death 296 | 6.17/12 | 3.20 | 93 | 0.19 | 5 | 0/0/0 | 481, 6.2/12, 3.69 | 528, 5.6/12, 3.42 | 30/260 |
+| 221 | 6:0x08 cave | S→E | equipment-room | 471 | 4 (8) | death 4 | 4.80/12 | 0.25 | 20 | 0.00 | 0 | 0/0/0 | 7, 4.7/12, 0.22 | 13, 4.2/12, 0.23 | 0/230 |
+| 222 | 6:0x1d | cave→S | like-like | 467 | 0 (0) |  | 4.58/12 | 0.00 | 5 | 0.00 | 0 | 0/0/0 | 0, 4.5/12, 0.00 | 0, 4.1/12, 0.00 | 0/230 |
+| 223 | 6:0x2d | N→W | vire | 467 | 28 (60) | death 27, stuck 1 | 4.58/12 | 0.18 | 36 | 0.06 | 2 | 0/0/0 | 15, 4.5/12, -0.23 | 61, 4.1/12, 0.08 | 1/230 |
+| 224 | 6:0x2c | E→N | wizzrobe | 439 | 92 (210) | death 92 | 4.68/12 | 1.42 | 22 | 0.01 | 0 | 0/0/0 | 140, 4.8/12, 1.20 | 214, 4.2/12, 1.23 | 10/229 |
+| 225 | 6:0x1c | S→N | boss-gohma | 347 | 24 (69) | death 24 | 4.12/12 | -1.31 | 17 | 0.00 | 0 | 0/0/0 | 85, 4.2/12, -1.36 | 87, 3.8/12, -1.38 | 3/219 |
+| 226 | 6:0x0c | S→triforce | stalfos-keese-gel | 323 | 0 (0) |  | 5.83/13 | -7.17 | 2 | 0.00 | 0 | 0/0/0 | 0, 6.0/13, -6.97 | 0, 5.7/13, -7.29 | 0/216 |
+| 227 | 0:0x22 | cave→recorder | ow-lynel | 1000 | 0 (0) |  | 13.00/13 | 0.00 | 4 | 0.00 | 0 | 0/0/0 | 0, 13.0/13, 0.00 |  | - |
+| 228 | 0:0x3c | recorder→S | ow-octorok | 1000 | 0 (0) |  | 13.00/13 | 0.03 | 11 | 0.00 | 0 | 0/0/0 | 0, 13.0/13, 0.04 |  | - |
+| 229 | 0:0x4c | N→E | ow-octorok | 1000 | 0 (0) |  | 12.97/13 | 0.08 | 15 | 0.00 | 0 | 0/0/0 | 0, 8.5/8, 0.13 |  | - |
+| 230 | 0:0x4d | W→S | ow-moblin | 1000 | 0 (0) |  | 12.89/13 | 0.13 | 9 | 0.00 | 0 | 0/0/0 | 0, 12.8/13, 0.12 |  | - |
+| 231 | 0:0x5d | N→S | ow-moblin | 1000 | 0 (0) |  | 12.77/13 | 0.32 | 24 | 0.00 | 1 | 0/0/0 | 0, 12.7/13, 0.32 |  | - |
+| 232 | 0:0x6d | N→cave | ow-moblin | 1000 | 0 (0) |  | 12.45/13 | 0.00 | 14 | 0.00 | 0 | 0/0/0 | 0, 12.3/13, 0.00 |  | - |
+| 233 | 8:0x7e | S→N | stalfos-keese-gel | 1000 | 0 (0) |  | 13.00/13 | 0.00 | 4 | 0.00 | 0 | 0/0/0 | 0, 13.0/13, 0.00 | 0, 13.0/13, 0.00 | 0/300 |
+| 234 | 8:0x6e | S→N | boss-manhandla | 1000 | 0 (0) |  | 13.00/13 | 0.91 | 25 | 1.05 | 0 | 0/0/0 | 0, 13.0/13, 0.82 | 0, 13.0/13, 0.81 | 0/300 |
+| 235 | 8:0x5e | S→N | darknut | 1000 | 10 (10) | death 10 | 12.09/13 | 3.48 | 82 | 4.88 | 2 | 0/0/0 | 21, 12.2/13, 4.19 | 21, 12.2/13, 4.32 | 0/300 |
+| 236 | 8:0x4e | S→N | darknut | 990 | 61 (62) | death 61 | 8.69/13 | 2.94 | 18 | 0.01 | 0 | 0/0/0 | 90, 8.2/13, 2.98 | 91, 8.0/13, 2.98 | 0/300 |
+| 237 | 8:0x3e | S→E | darknut | 929 | 387 (417) | death 383, exit-wrong 4 | 6.12/13 | 3.03 | 80 | 0.16 | 4 | 0/0/0 | 466, 5.7/13, 2.74 | 474, 5.6/13, 2.57 | 4/300 |
+| 238 | 8:0x3f | W→cave | darknut | 542 | 166 (306) | death 166 | 5.25/13 | 1.90 | 90 | 0.04 | 2 | 0/0/0 | 328, 5.5/13, 2.40 | 303, 5.7/13, 2.33 | 6/296 |
+| 239 | 8:0x2f cave | S→W | equipment-room | 376 | 7 (19) | death 7 | 4.83/13 | 0.14 | 19 | 0.00 | 0 | 0/0/0 | 6, 4.6/13, 0.11 | 12, 4.8/13, 0.10 | 0/290 |
+| 240 | 8:0x4c | cave→N | pols-voice | 369 | 266 (721) | death 265, stuck 1 | 4.78/13 | 3.48 | 71 | 0.32 | 0 | 0/0/0 | 0, 4.5/13, -0.91 | 40, 4.8/13, -0.84 | 50/290 |
+| 241 | 8:0x3c | S→N | boss-gleeok | 103 | 35 (340) | death 33, offroute-death 2 | 4.58/13 | 1.13 | 47 | 0.00 | 2 | 0/0/0 | 220, 5.4/13, 1.26 | 197, 5.6/13, 1.28 | 10/240 |
+| 242 | 8:0x2c | S→triforce | stalfos-keese-gel | 68 | 0 (0) |  | 5.21/14 | -8.79 | 2 | 0.00 | 0 | 0/0/0 | 0, 5.3/14, -8.69 | 0, 5.4/14, -8.63 | 0/230 |
+| 243 | 0:0x6d | cave→recorder | ow-moblin | 1000 | 0 (0) |  | 14.00/14 | 0.00 | 4 | 0.00 | 0 | 0/0/0 | 0, 14.0/14, 0.00 |  | - |
+| 244 | 0:0x37 | recorder→E | ow-octorok | 1000 | 0 (0) |  | 14.00/14 | 0.07 | 8 | 0.00 | 0 | 0/0/0 | 0, 14.0/14, 0.07 |  | - |
+| 245 | 0:0x38 | W→S | ow-zora | 1000 | 0 (0) |  | 13.93/14 | 0.17 | 12 | 0.00 | 0 | 0/0/0 | 0, 9.9/10, 0.13 |  | - |
+| 246 | 0:0x48 | N→W | ow-leever | 1000 | 0 (0) |  | 13.76/14 | 0.18 | 12 | 0.00 | 0 | 0/0/0 | 0, 13.8/14, 0.18 |  | - |
+| 247 | 0:0x47 | E→cave | ow-zora | 1000 | 0 (0) |  | 13.58/14 | 0.23 | 24 | 0.00 | 0 | 0/0/0 | 0, 13.6/14, 0.21 |  | - |
+| 248 | 0:0x47 cave | S→S | ow-zora | 1000 | 0 (0) |  | 13.35/14 | -1.00 | 10 | 0.00 | 0 | 0/0/0 | 0, 13.4/14, -1.00 |  | - |
+| 249 | 0:0x47 | cave→E | ow-zora | 1000 | 0 (0) |  | 14.35/15 | 0.00 | 3 | 0.00 | 0 | 0/0/0 | 0, 14.4/15, 0.00 |  | - |
+| 250 | 0:0x48 | W→N | ow-leever | 1000 | 0 (0) |  | 14.35/15 | 0.15 | 15 | 0.00 | 0 | 0/0/0 | 0, 14.4/15, 0.12 |  | - |
+| 251 | 0:0x38 | S→N | ow-zora | 1000 | 0 (0) |  | 14.20/15 | 0.09 | 9 | 0.00 | 0 | 0/0/0 | 0, 14.3/15, 0.13 |  | - |
+| 252 | 0:0x28 | S→W | ow-zora | 1000 | 0 (0) |  | 14.11/15 | 0.00 | 9 | 0.00 | 0 | 0/0/0 | 0, 14.1/15, 0.01 |  | - |
+| 253 | 0:0x27 | E→N | ow-zora | 1000 | 0 (0) |  | 14.11/15 | 0.07 | 10 | 0.00 | 0 | 0/0/0 | 0, 14.1/15, 0.08 |  | - |
+| 254 | 0:0x17 | S→N | ow-boulder | 1000 | 0 (0) |  | 14.03/15 | 0.29 | 19 | 0.00 | 0 | 0/0/0 | 0, 14.0/15, 0.27 |  | - |
+| 255 | 0:0x07 | S→W | ow-lynel | 1000 | 0 (0) |  | 13.74/15 | 0.44 | 13 | 0.00 | 0 | 0/0/0 | 0, 13.8/15, 0.45 |  | - |
+| 256 | 0:0x06 | E→W | ow-lynel | 1000 | 0 (0) |  | 13.30/15 | 0.00 | 2 | 0.00 | 0 | 0/0/0 | 0, 13.3/15, 0.00 |  | - |
+| 257 | 0:0x05 | E→cave | ow-lynel | 1000 | 0 (0) |  | 13.30/15 | 1.04 | 27 | 1.00 | 0 | 0/0/0 | 0, 13.3/15, 1.03 |  | - |
+| 258 | 9:0x76 | S→N | stalfos-keese-gel | 1000 | 0 (0) |  | 15.00/15 | 0.00 | 6 | 0.00 | 0 | 0/0/0 | 0, 15.0/15, 0.00 | 0, 15.0/15, 0.00 | 0/300 |
+| 259 | 9:0x66 | S→N | stalfos-keese-gel | 1000 | 0 (0) |  | 15.00/15 | 0.00 | 6 | 0.00 | 0 | 0/0/0 | room 0, 15.0/15, 0.00 | 0, 15.0/15, 0.00 | 0/300 |
+| 260 | 9:0x56 | S→W | like-like | 1000 | 651 (651) | stuck 651 | 15.00/15 | 0.13 | 19 | 0.13 | 1665 | 0/0/0 | new | 616, 15.0/15, 0.13 | 217/300 |
+| 261 | 9:0x55 | E→cave | lanmola | 349 | 12 (34) | death 5, stuck 7 | 14.07/15 | 0.24 | 32 | 0.00 | 33 | 0/0/0 | room 0, 14.1/15, 0.00 | 42, 14.2/15, 0.43 | 0/83 |
+| 262 | 9:0x60 cave | S→W | equipment-room | 337 | 0 (0) |  | 14.09/15 | 0.11 | 18 | 0.00 | 0 | 0/0/0 | 0, 14.1/15, 0.09 | 0, 14.0/15, 0.10 | 0/83 |
+| 263 | 9:0x14 | cave→E | like-like | 337 | 0 (0) |  | 13.98/15 | 0.24 | 55 | 0.01 | 0 | 0/0/0 | 0, 14.0/15, 0.20 | 0, 13.9/15, 0.20 | 0/83 |
+| 264 | 9:0x15 | W→E | wizzrobe | 337 | 0 (0) |  | 13.74/15 | 0.00 | 8 | 0.00 | 0 | 0/0/0 | 0, 13.8/15, 0.09 | 0, 13.7/15, 0.11 | 0/83 |
+| 265 | 9:0x16 | W→S | patra | 337 | 0 (0) |  | 13.74/15 | 0.62 | 17 | 0.00 | 0 | 0/0/0 | 0, 13.8/15, 0.63 | 0, 13.6/15, 0.62 | 0/83 |
+| 266 | 9:0x26 | N→E | stalfos-keese-gel | 337 | 0 (0) |  | 13.11/15 | 0.07 | 22 | 1.09 | 0 | 0/0/0 | 0, 13.1/15, 0.06 | 0, 13.0/15, 0.07 | 0/83 |
+| 267 | 9:0x27 | W→N | patra | 337 | 0 (0) |  | 13.04/15 | 2.19 | 28 | 1.00 | 0 | 0/0/0 | 2, 13.1/15, 2.23 | 3, 12.9/15, 2.36 | 0/83 |
+| 268 | 9:0x17 | S→N | wizzrobe | 337 | 5 (15) | death 5 | 10.85/15 | 2.96 | 38 | 1.01 | 0 | 6/0/0 | 33, 10.9/15, 2.55 | 14, 10.6/15, 2.43 | 0/83 |
+| 269 | 9:0x07 | S→cave | wizzrobe | 332 | 1 (3) | death 1 | 8.01/15 | 0.33 | 12 | 0.00 | 0 | 0/0/0 | 28, 8.6/15, 0.70 | 33, 8.3/15, 0.78 | 0/83 |
+| 270 | 9:0x00 cave | S→N | equipment-room | 331 | 2 (6) | stuck 2 | 7.71/15 | 0.10 | 151 | 0.00 | 0 | 0/0/0 | 0, 8.1/15, 0.07 | 0, 7.8/15, 0.10 | 0/83 |
+| 271 | 9:0x07 | cave→S | wizzrobe | 329 | 2 (6) | death 2 | 7.65/15 | 0.14 | 10 | 0.00 | 0 | 0/0/0 | 1, 8.0/15, 0.13 | 0, 7.7/15, 0.14 | 0/83 |
+| 272 | 9:0x07 | cave→S | wizzrobe | - | | | | | | | | | 1, 8.0/15, 0.13 | 0, 7.7/15, 0.14 | - |
+| 273 | 9:0x17 | N→S | wizzrobe | 327 | 0 (0) |  | 7.55/15 | 0.11 | 20 | 0.00 | 0 | 0/0/0 | 3, 7.9/15, 0.19 | 3, 7.5/15, 0.15 | 0/83 |
+| 274 | 9:0x27 | N→W | patra | 327 | 0 (0) |  | 7.45/15 | 0.02 | 13 | 0.00 | 0 | 0/0/0 | 1, 7.7/15, 0.02 | 0, 7.4/15, 0.02 | 0/83 |
+| 275 | 9:0x26 | E→N | stalfos-keese-gel | 327 | 0 (0) |  | 7.42/15 | 0.04 | 12 | 0.00 | 0 | 0/0/0 | 0, 7.7/15, 0.05 | 0, 7.4/15, 0.04 | 0/83 |
+| 276 | 9:0x16 | S→N | patra | 327 | 3 (9) | death 3 | 7.38/15 | 0.54 | 59 | 0.00 | 1 | 0/0/0 | 21, 7.7/15, 0.93 | 26, 7.3/15, 0.91 | 0/83 |
+| 277 | 9:0x06 | S→W | stalfos-keese-gel | 324 | 0 (0) |  | 6.90/15 | 0.01 | 28 | 1.14 | 0 | 0/0/0 | 1, 6.9/15, 0.01 | 0, 6.6/15, 0.00 | 0/83 |
+| 278 | 9:0x05 | E→cave | wizzrobe | 324 | 8 (25) | death 8 | 6.88/15 | 0.76 | 72 | 0.04 | 6 | 0/0/0 | 76, 6.9/15, 1.12 | 82, 6.6/15, 0.90 | 0/83 |
+| 279 | 9:0x70 cave | S→W | equipment-room | 316 | 0 (0) |  | 6.26/15 | 0.02 | 47 | 0.00 | 0 | 0/0/0 | 2, 6.2/15, 0.04 | 6, 6.2/15, 0.03 | 0/83 |
+| 280 | 9:0x63 | cave→W | zol | 316 | 1 (3) | death 1 | 6.24/15 | -0.10 | 21 | 0.00 | 0 | 0/0/0 | 7, 6.2/15, -0.12 | 3, 6.2/15, -0.08 | 0/83 |
+| 281 | 9:0x62 | E→W | stalfos-keese-gel | 315 | 0 (0) |  | 6.36/15 | 0.08 | 15 | 0.01 | 0 | 0/0/0 | 1, 6.4/15, 0.08 | 0, 6.3/15, 0.06 | 0/83 |
+| 282 | 9:0x61 | E→cave | patra | 315 | 3 (10) | death 3 | 6.28/15 | 0.36 | 69 | 0.00 | 0 | 0/0/0 | 18, 6.3/15, 0.21 | 10, 6.2/15, 0.14 | 0/83 |
+| 283 | 9:0x75 cave | S→W | equipment-room | 312 | 0 (0) |  | 5.98/15 | 0.05 | 25 | 0.01 | 0 | 0/0/0 | 1, 6.2/15, 0.06 | 0, 6.1/15, 0.07 | 0/83 |
+| 284 | 9:0x20 | cave→N | wizzrobe | 312 | 2 (6) | death 2 | 5.93/15 | 0.09 | 22 | 1.03 | 0 | 0/0/0 | 12, 6.1/15, 0.27 | 16, 6.0/15, 0.26 | 0/83 |
+| 285 | 9:0x20 | cave→N | wizzrobe | - | | | | | | | | | 12, 6.1/15, 0.27 | 16, 6.0/15, 0.26 | - |
+| 286 | 9:0x10 | S→cave | wizzrobe | 310 | 63 (203) | death 63 | 5.88/15 | 2.17 | 131 | 0.04 | 1 | 0/0/0 | 261, 5.9/15, 2.35 | 269, 5.8/15, 2.52 | 0/83 |
+| 287 | 9:0x4f cave | S→N | equipment-room | 247 | 3 (12) | death 3 | 4.66/15 | 0.05 | 74 | 0.00 | 0 | 0/0/0 | 3, 4.8/15, 0.05 | 5, 4.5/15, 0.04 | 0/83 |
+| 288 | 9:0x10 | cave→S | wizzrobe | 244 | 0 (0) |  | 4.67/15 | 0.00 | 12 | 0.00 | 0 | 0/0/0 | 0, 4.8/15, 0.00 | 0, 4.5/15, 0.00 | 0/83 |
+| 289 | 9:0x20 | N→cave | wizzrobe | 244 | 1 (4) | death 1 | 4.67/15 | 0.01 | 7 | 0.00 | 0 | 0/0/0 | 3, 4.8/15, 0.03 | 0, 4.5/15, 0.04 | 0/83 |
+| 290 | 9:0x20 | N→cave | wizzrobe | - | | | | | | | | | 3, 4.8/15, 0.03 | 0, 4.5/15, 0.04 | - |
+| 291 | 9:0x75 cave | S→E | equipment-room | 243 | 0 (0) |  | 4.67/15 | 0.03 | 29 | 0.00 | 0 | 0/0/0 | 2, 4.8/15, 0.02 | 5, 4.4/15, 0.02 | 0/83 |
+| 292 | 9:0x61 | cave→N | patra | 243 | 0 (0) |  | 4.64/15 | 0.00 | 11 | 0.00 | 0 | 0/0/0 | 0, 4.7/15, 0.00 | 0, 4.4/15, 0.00 | 0/83 |
+| 293 | 9:0x51 | S→N | like-like | 243 | 8 (33) | death 8 | 4.64/15 | 0.21 | 25 | 0.02 | 0 | 0/0/0 | 29, 4.7/15, 0.25 | 23, 4.4/15, 0.22 | 0/83 |
+| 294 | 9:0x41 | S→N | like-like | 235 | 6 (26) | death 6 | 4.58/15 | 0.28 | 15 | 0.00 | 0 | 0/0/0 | 24, 4.6/15, 0.28 | 38, 4.3/15, 0.26 | 0/83 |
+| 295 | 9:0x31 | S→W | wizzrobe | 229 | 16 (70) | death 16 | 4.41/15 | 0.50 | 33 | 0.97 | 0 | 0/0/0 | 46, 4.5/15, 0.45 | 73, 4.2/15, 0.44 | 0/83 |
+| 296 | 9:0x30 | E→cave | wizzrobe | 213 | 56 (263) | death 56 | 4.21/15 | 1.28 | 62 | 0.00 | 4 | 0/0/0 | 215, 4.2/15, 1.27 | 200, 4.1/15, 1.16 | 0/83 |
+| 297 | 9:0x67 cave | S→E | equipment-room | 157 | 0 (0) |  | 3.94/15 | 0.04 | 36 | 0.00 | 0 | 0/0/0 | 5, 3.7/15, 0.04 | 0, 3.6/15, 0.05 | 0/83 |
+| 298 | 9:0x04 | cave→W | wizzrobe | 157 | 5 (32) | death 5 | 3.90/15 | 0.29 | 26 | 0.97 | 0 | 7/0/0 | 43, 3.7/15, 0.33 | 53, 3.6/15, 0.35 | 1/83 |
+| 299 | 9:0x03 | E→cave | like-like | 152 | 0 (0) |  | 3.73/15 | 0.00 | 7 | 0.00 | 0 | 0/0/0 | 0, 3.5/15, 0.00 | 0, 3.4/15, 0.00 | 0/82 |
+| 300 | 9:0x77 cave | S→W | equipment-room | 152 | 2 (13) | death 2 | 3.73/15 | 0.06 | 21 | 0.00 | 0 | 0/0/0 | 2, 3.5/15, 0.03 | 0, 3.4/15, 0.05 | 0/82 |
+| 301 | 9:0x52 | cave→N | patra | 150 | 8 (53) | death 8 | 3.73/15 | 0.27 | 67 | 0.00 | 1 | 0/0/0 | 100, 3.5/15, 0.47 | 90, 3.4/15, 0.49 | 0/82 |
+| 302 | 9:0x42 | S→N | ganon | 142 | 22 (155) | death 22 | 3.65/15 | 0.61 | 52 | 0.00 | 0 | 0/0/0 | 136, 3.4/15, 0.67 | 168, 3.2/15, 0.76 | 0/82 |
+| 303 | 9:0x32 | S→end | ganon | 120 | 0 (0) |  | 3.60/15 | 0.00 | 5 | 0.00 | 0 | 0/0/0 | 0, 3.1/15, 0.00 | 0, 2.9/15, 0.00 | 0/82 |
