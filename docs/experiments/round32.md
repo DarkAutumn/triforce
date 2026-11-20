@@ -378,3 +378,29 @@ them before the triforce; the planner, which keeps them, finishes 26% and 34%. A
 planner's level or better on `d3`/`d4`, the models' Dungeon 1 at its 637 runs past 0x37 above 41%, and every
 `d2first` segment within noise. Data questions for the lead (route data, not this round's): the start states of
 Dungeons 4 and 1 hold no bombs (the walls are cheated every run).
+
+## 5. Training: Dungeon 1 and the legs (goriya, stalfos-keese-gel, ow-octorok, ow-zora, ow-leever, ow-tektite)
+
+Branch `r32-t-d1` (from `r32-base`). Segments: `post-d4` (0:0x45 → Level 1, 86.2%), `d1` (26.3%), `post-d1` (0:0x37
+→ Level 5's entrance, 16.8%). Every family here gets a run of its own for `d3first` (`promoted.d3first`), continued
+from its promoted run on `d3first`'s states only (`state_routes: [d3first]`), `harvested_fraction` 0.25 (the
+handoffs the route's chains harvested at their hearts), its `d3first` curriculum tracks, demonstrations at
+`--demo-coeff 0.05`, `--sil-coeff 0.1`, 2M steps (`--stop-success 1.01`: the full budget; the checkpoint is
+chosen by the segment), `--parallel 8`, checkpoints every 30 iterations.
+
+**The arms, by cause:**
+
+| Family | Rooms (runs lost of 1000) | Cause | Teacher |
+|---|---|---|---|
+| goriya | 1:0x23 (94), 1:0x44 (99) | wood sword (3 hits a Goriya), hearts | the planner from `1_23s`, `1_44w` and their harvested handoffs (30 runs a state): 22,410 rows |
+| stalfos-keese-gel | 1:0x33 (69: 50 stuck with the carried key), 3:0x4a (101, in `d3`) | wood sword, the key | the planner from `1_33s`, `1_53s`, `3_4ae` (+ `3_4ae` handoffs): 30,347 rows |
+| ow-octorok | 0:0x37 cave→cave (363 stuck) | new step (phase IX's out-and-back-in) | first the `d2first` run trained on it (`r31-oct-s97`, the mouth rule's demonstrations) measured here |
+| ow-zora | 0:0x55 N→E (136), 0:0x2d W→cave (179: 109 without the 30 rupees) | new exit, new room/cave | the rules `wall-2d`, `rupees-2d`; the planner from `0_55n` (+ handoffs), `0_56w`: 16,075 rows |
+| ow-leever | 0:0x2a (220), 0:0x2b (124) | new rooms; the scroll taken in 48% / 3% of visits | the walks' scroll as a rule (new: `r32p_rules.py scroll-29/2a/2b`, `CLIP W` on arrival then E: 90/90 each, 0 hearts): 540 rows; no planner rows (it walks the Leevers) |
+| ow-tektite | 0:0x0c's shop (150 stuck), its wrap exit (98), S→cave (36) | new: the blue candle, the wrap exit | the rules `candle-0c`, `wrap-0c`; the planner from `0_0cs`, `0_2cw`, `0_2ce` (+ handoffs): 17,721 rows |
+
+Selection on the segment each family loses most (goriya, stalfos-keese-gel, ow-octorok: `d1`; ow-zora, ow-leever,
+ow-tektite: `post-d1`): `triforce select-checkpoint F RUN --route d3first --from d3first_<start> --first-seed 2000
+--runs 1000 --confirm 1000` (screen seeds 2000-2999, confirmation 3000-3999). `--segment X` with `--route d3first`
+plays its chains and then fails at its report (the chains' provenance names the namespaced start state): `--from
+d3first_1_73s_0` (the target still from the route's table) works.
