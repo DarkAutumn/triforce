@@ -410,10 +410,13 @@ at 95%). Like-like: 77% → 88%, 1.03 → 0.74 hearts. Gleeok: training success 
 7.7%, the checkpoints of iterations 2502 and 2532 (60-90 into training) 16.0-17.0% in all four (deaths otherwise),
 and the last checkpoints 4.3-4.7%: they learned to stall (no-damage and max-steps endings in 160-180 of 300).
 
-**Not yet measured, so nothing is promoted.** The `d4` measures (seeds 3000-3999, arrivals at Gleeok's room
-4:0x13 and hearts there, paired against the promoted team) of vire's and like-like's last checkpoints are queued.
-Gleeok's early checkpoint is chosen on `d4` once vire and like-like are promoted for the route; then the 1000-run
-`d4` chain with the route's runs and the planner beside (300), and the per-room ledger
+**Measured on `d4`** (seeds 3000-3999, the rest of the team as promoted; arrivals at Gleeok's room 4:0x13, the
+segment's only gate the old Gleeok lets through): the promoted team 6 of 1000 (0.6% ± 0.2, 0.67 hearts there);
+vire `r32d4-vire-s2` 7.9% ± 0.9 (0.94 hearts), paired +7.3 ± 0.9 points; like-like `r32d4-like` 2.5% ± 0.5 (0.76
+hearts), paired +1.9 ± 0.5. Both are better beyond noise and are promoted for `d3first` (`promoted.d3first`).
+Gleeok is not yet promoted: its early checkpoint is chosen on the full `d4` segment now that vire and like-like
+are promoted, and a Gleeok route run also plays 8:0x3c (Dungeon 8 after the magic sword), so it is judged there
+against 24.3% too. Then the 1000-run `d4` chain with the planner beside it (300) and the per-room ledger
 (`scripts/experiments/r32d4_ledger.py`).
 
 **What the segment's start states should carry.** The planner's runs that left Dungeon 3 carry 0 to 8 bombs (into
