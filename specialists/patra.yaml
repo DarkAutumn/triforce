@@ -6,14 +6,15 @@ success: [exit-correct]                    # 0x61: down its stairs into the tunn
 reward_profile: default
 reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20}}   # as moldorm (round 25): hearts priced by their worth to the run
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
-# chain_hp (round 29's third round): half the resets take their hearts from triforce/chain_hp.json (the r79b-1k
-# chains: 0x52 entered with 3.1 on average, 0x61 4.6, 0x16 8.9).
+# chain_hp (round 29's third round; round 30 refitted at the route's hearts): half the resets take their hearts from
+# triforce/chain_hp.json (0x52 entered with 3.3 on average, 0x61 4.4, 0x16 8.4).
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, chain_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # as moldorm (round 25)
 items: {bombs: required}                   # 0x27's N wall only (offered in reach of it), else the 10th damage-free kill's bomb: no bomb, arrow or boomerang touches a Patra (0 of 780 uses)
 curriculum: {enabled: true}             # trajectories/patra, once explored
 one_room: true
 max_steps: 3000
 warm_start: moldorm                        # round 29: a first training starts from moldorm's promoted run (the nearest: a body only the sword hurts, behind parts that must die first)
+harvested_fraction: 0.25                  # round 30: chain handoffs at the route's hearts (0x16's fight from S, 0x52, 0x27 from W), triforce/states/harvested/patra, not in git (docs/experiments/round30.md)
 notes: >-
   Patra rooms (Dungeon 9, round 29, route `d9`; docs/routes/d9.md "as built", d9-fights-walks.md §2). A Patra and
   its eight children: the children are out and live at frame 66 (type $47: 0x61, 0x52) or 77 ($48: 0x16, 0x27),

@@ -9,8 +9,9 @@ specialist with ``ram_randomization.chain_hp: p`` draws its reset health from it
 ``p`` of resets (the native ``env::start_states::ram_randomization_values``, which loads ``triforce/chain_hp.json``;
 a config with ``chain_hp`` and no room profiled with ``MIN_CHAIN_SAMPLES`` arrivals is refused); the other resets
 keep the ``hp`` / ``full_hp`` draw, so training still sees full health (sword beams) and the whole range.  The
-profile shipped is round 29's (the second Dungeon 9 team's ``post-d8`` and ``d9`` chains, ``r79b-1k``: the leg's and
-level 9's rooms only); rebuild it from current-route chains before turning ``chain_hp`` on for other rooms.
+profile shipped is round 30's (the landed team's chains at the route's hearts: from 0:0x42 after Dungeon 7 to the D6
+triforce, 600 runs, and from Dungeon 8's triforce to the ending, 1000 runs, seeds 5000+: the legs', Dungeon 6's and
+level 9's rooms); rebuild it from current-route chains before turning ``chain_hp`` on for other rooms.
 """
 
 import argparse
