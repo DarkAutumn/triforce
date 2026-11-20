@@ -459,7 +459,17 @@ early stop after 128 iterations; hearts lost a room 0.25 → 0.21 in its own eva
 3000-3999, Gleeok 2502) its last checkpoint reaches Gleeok in 40.6% ± 1.6 of runs at 1.31 hearts and passes 2.8% ±
 0.5; its iteration-3694 checkpoint 35.5% at 1.38 and 3.3%. Vire (three seeds, early stops after 64-67
 iterations; hearts lost a room in their evaluations 0.086-0.113 against the first round's 0.111) is measured the
-same way. The verdicts pair each against the same team with the first round's runs (queued).
+same way, paired against the same team with the first round's runs.
+
+**Verdicts** (seeds 3000-3999, paired; the first round's vire and like-like, zol's route run; the team reaches
+Gleeok in 31.9% with 1.43 hearts). Gleeok on `d4`: the promoted base 1.4% ± 0.4, the 2502 checkpoint 2.5% (+1.1 ±
+0.6), the second round's seed-1 iteration 2517 3.1% (+1.7 ± 0.6), seed 2's 2532 2.4%. Iteration 2517 is promoted
+for `d3first` (`r32d4-gleeok2-s1-it2517`, the checkpoint as a run); against 2502 it is +0.6 ± 0.6, so its number is
+the 2502 line's, chosen among three on these seeds (the final chain on fresh seeds gives the unbiased one).
+Like-like `r32d4-like2` against `r32d4-like`: Gleeok reached in 40.6% instead of 31.9% (+8.7 ± 1.7), with 1.31
+hearts instead of 1.43 (the extra arrivals are the marginal ones), hearts delivered to Gleeok a run +0.075 ± 0.030,
+`d4` +0.3 ± 0.7: better beyond noise on the lead's pair, promoted once vire's queued choice (which plays the
+promoted like-like) has run.
 
 **What the segment's start states should carry.** The planner's runs that left Dungeon 3 carry 0 to 8 bombs (into
 4:0x71 in the full chain, 69 runs: 0: 9, 1: 7, 2: 2, 3: 4, 4: 11, 5: 13, 6: 7, 7: 6, 8: 9; median 5) and 4.0 of 4
