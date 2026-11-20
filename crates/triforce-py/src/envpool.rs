@@ -148,8 +148,11 @@ fn check_seeds(seeds: impl IntoIterator<Item = u64>) -> PyResult<()> {
 }
 
 /// Chain runs of `route`, one per seed. `configs` are the specialists that have policies (names or configs; a
-/// config replaces the canonical YAML), in policy-index order: each row's `policy` is the acting specialist's
-/// index here. A specialist in `missing` (name -> reason, e.g. no promoted model) ends a run that needs it as
+/// config replaces the canonical YAML), in policy-index order: each row's `policy` is the acting policy's index
+/// here. `policies` (round 32; default the configs' names) names each policy by its key: the family, or
+/// `family@route` for the run of the route's own part (`zelda::GameMap::step_policy`; only on a route with
+/// `own_models_until`), whose config is the family's. A specialist in `missing` (name -> reason, e.g. no promoted
+/// model) ends a run that needs it as
 /// `error`; any other unlisted specialist does too. `stall_steps` (the watch player's stall budget, off by
 /// default): room events carry `stalled` once a room has gone that many actions without damage dealt or taken,
 /// and the run ends `stuck` at twice as many; room events also carry `cheated` (`{bombs, keys, rupees}`), the run's
@@ -172,6 +175,8 @@ fn check_seeds(seeds: impl IntoIterator<Item = u64>) -> PyResult<()> {
 #[pyclass(module = "triforce._native", name = "ChainTask", frozen)]
 pub struct PyChainTask {
     configs: Vec<Arc<SpecialistConfig>>,
+    /// The policy key of each config ([`PyChainTask::new`]'s `policies`).
+    names: Vec<String>,
     route: Route,
     seeds: Vec<u64>,
     max_steps: u64,
@@ -236,7 +241,7 @@ impl PyChainTask {
     #[pyo3(signature = (configs, route, seeds, stop_at=None, start_from=None, max_steps=50000, missing=None,
                         states_dir=None, stall_steps=None, hold_finished_frame=false, harvest=None,
                         stop_step=None, power_on=None, checkpoint=None, clips=true, clips_off_from=None,
-                        clips_live=false))]
+                        clips_live=false, policies=None))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         py: Python<'_>,
@@ -257,6 +262,7 @@ impl PyChainTask {
         clips: bool,
         clips_off_from: Option<&Bound<'_, PyAny>>,
         clips_live: bool,
+        policies: Option<Vec<String>>,
     ) -> PyResult<Self> {
         check_seeds(seeds.iter().copied())?;
         let configs = configs
@@ -300,8 +306,28 @@ impl PyChainTask {
             }
         };
         route = route.with_clips(&data.map, clips, off_from).map_err(config_err)?;
+        let names = match policies {
+            None => configs.iter().map(|c| c.name.clone()).collect(),
+            Some(names) => names,
+        };
+        if names.len() != configs.len() {
+            return Err(config_err(format!("{} policy names for {} configs", names.len(), configs.len())));
+        }
+        for (key, config) in names.iter().zip(&configs) {
+            let (family, part) = zelda::game_map::split_policy(key);
+            let own = data.map.own_models_until.contains_key(&route.name);
+            if family != config.name || part.is_some_and(|r| r != route.name || !own) {
+                return Err(config_err(format!(
+                    "policy {key:?} plays {}: a policy is its family or, on a route with own_models_until, \
+                     family@route ({:?})",
+                    config.name,
+                    zelda::game_map::route_policy(&config.name, &route.name)
+                )));
+            }
+        }
         Ok(PyChainTask {
             configs,
+            names,
             route,
             seeds,
             max_steps,
@@ -317,7 +343,7 @@ impl PyChainTask {
     /// The policy names, in policy-index order.
     #[getter]
     fn policies(&self) -> Vec<String> {
-        self.configs.iter().map(|c| c.name.clone()).collect()
+        self.names.clone()
     }
 }
 
@@ -443,11 +469,9 @@ fn build(py: Python<'_>, task: &Bound<'_, PyAny>, opts: PoolOptions) -> PyResult
         let store = TfzStore::new(&data, rom.clone());
         let route = t.route.clone();
         let seeds = Jobs::new(t.seeds.iter().copied());
-        let policies: Vec<Arc<str>> = t
-            .configs
-            .iter()
-            .map(|c| Arc::from(c.name.as_str()))
-            .collect();
+        let policies: Vec<Arc<str>> = t.names.iter().map(|n| Arc::from(n.as_str())).collect();
+        let route_parts: std::collections::HashSet<String> =
+            t.names.iter().filter(|n| zelda::game_map::split_policy(n).1.is_some()).cloned().collect();
         let configs: HashMap<String, Arc<SpecialistConfig>> = t
             .configs
             .iter()
@@ -467,6 +491,7 @@ fn build(py: Python<'_>, task: &Bound<'_, PyAny>, opts: PoolOptions) -> PyResult
             );
             let chain = env.chain_mut();
             chain.configs = configs.clone();
+            chain.route_parts = route_parts.clone();
             chain.max_steps = t.max_steps;
             chain.stall_steps = t.stall_steps;
             chain.set_harvest(t.harvest.clone());
@@ -479,7 +504,7 @@ fn build(py: Python<'_>, task: &Bound<'_, PyAny>, opts: PoolOptions) -> PyResult
         return Ok(PyEnvPool {
             pool,
             curriculum: None,
-            policies: t.configs.iter().map(|c| c.name.clone()).collect(),
+            policies: t.names.clone(),
             kind: Kind::Chain,
             shaping: None,
             start_weights: None,
