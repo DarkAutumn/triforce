@@ -107,3 +107,9 @@ Not decided yet: no run of either family is promoted, and nothing about 0x78's s
   (+3.6 ± 1.7; 0x2d 13 deaths against 30, 0x39 20 against 35). **Pooled with the confirmation, 2000 paired runs on
   seeds not used to choose it: +2.55 ± 1.23, beyond noise (2.1 standard errors).** Its other segment, `d4`, is queued
   (1000 paired runs, seeds 3000-3999); the promotion waits on it.
+- `r33w-s92` on `d6` (screen 2000-2999, `--no-promoted`): it003294 33.7%, last 32.3%, it003264 31.1%, it003324 29.1%;
+  confirmation (3000-3999) it003294 32.9%, **last 33.5%, chosen**. The pairing against `r30w-wj-s89` on the same
+  seeds waits for s91's selection, which measures it. In its 1000 confirmation runs: **0x78 swung at: a kill in 334
+  runs (432 kills), 49 bomb drops, 26 picked up, 0.06 hearts and 335 frames a visit (the record: no kill, 0.01 hearts,
+  304 frames); hearts on entering 0x38 10.87, 0x3a 6.34** (the record on seeds 0-999: 10.81 and 5.78); **0x29 29
+  deaths of 893 visits** (the record 74 of 901), 0.34-0.63 hearts a visit.
