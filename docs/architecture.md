@@ -1972,8 +1972,28 @@ is joined at the end. It prints a JSON summary (`out`, `frames`, `seconds`, `wid
 - **A promoted run per route, optional:** `models/<family>/promoted` stays every route's; `promoted.<route>`
   (`triforce promote FAMILY RUN --route R`) overrides it on R (`registry.promoted_run(family, root, route)`).
   Chains, evaluation batches, select-checkpoint (`--route`), play and the golden path resolve it by the route
-  they play; `triforce list` shows each `route=run`, `triforce stamp` stamps them too. A replay names the route and
-  each model's checkpoint (`<family>/<run>/ckpt.pt`), so it records which run played.
+  they play; `triforce list` shows each `route=run` and where it plays, `triforce stamp` stamps them too. A replay
+  names the route and each model's checkpoint (`<family>/<run>/ckpt.pt`), so it records which run played.
+- **A route's own runs play its part only** (round 32; decisions 2026-11-20 "A route's own runs play up to its
+  cutoff"): routes.yaml `own_models_until: {waypoint: NAME}` on a route (kept by a route extending it) marks the one
+  step (on no stretch) from which every family plays its default `promoted` run; before it a family with a
+  `promoted.<route>` plays that one. `d3first`'s is `{waypoint: sword}`, the magic sword's cave (0:0x21, step 206:
+  its run trained for the wood-sword rooms lost the magic-sword rooms of its family). A route without the key
+  (`d2first`) plays its route runs everywhere, as before. **One place decides a step's run**: the engine names each
+  step's policy (`zelda::GameMap::step_policy`, `_native.step_policy`: `family@route` before the cutoff, else
+  `family`; `GameMap::own_models_until`, `_native.own_models_until`), and `registry.policy_run(key, root, route)`
+  names the run of a key (`family@R`: `promoted.<R>`; `family`: `promoted` on a route with the key, else
+  `promoted_run`). `runner.Policies` loads both runs of such a family as two policies (`family` and `family@route`,
+  the same config) and the chain (`ChainEnv::route_parts`, `_native.ChainTask(policies=)`) plays a room by its step's
+  key when that policy is loaded, else by the family's. Every tool that plays goes through them: `eval-chain` (its
+  `--checkpoint FAMILY=PATH` plays both parts, `FAMILY@ROUTE=PATH` the route's part only, refused on a route without
+  the key), `eval-batch`, `play-zelda.py` and the theater's simulations, the golden path, `zelda-headless.py`;
+  `select-checkpoint` selects the part its start is in (`Plan.policy`: a start before the cutoff replaces
+  `FAMILY@ROUTE` only, its reference the route's run, else the default; `selection.json` `policy`). A room record
+  played by a route's run says so (`policy: darknut@d3first`; absent for the family's own, so `d2first`'s records
+  are as before); the chain's provenance and a replay's header list each policy with its checkpoint, and a replay's
+  room events name the policy that played (a run of both parts names both runs). Training is not touched: a round
+  trains one run, and which states a route's run draws is its yaml's `state_routes`.
 - **Segments and scopes per route:** `eval_batch.ROUTE_SEGMENTS[route]` (segments, arrival targets, milestones;
   start states by bare name) and `room_stats.ROUTE_SCOPES[route]` (the room-stats scopes; `room-stats` takes the
   route from the chain files). `d2first`'s are the tables of before, unchanged; `d3first`'s (`D3FIRST_SEGMENTS`,
