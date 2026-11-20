@@ -411,6 +411,17 @@ in training), goriya `r32d1-goriya` 98%, ow-tektite `r32d1-tektite` 97% (worst 0
 `r32d1-skg` 99% (worst 3:0x4a 93%), ow-zora `r32d1-zora` 98% (its `d3first` states 100%; `d2first`'s 0x28 W→S fell
 to 0-57%: the run is for `d3first` only and `d2first` keeps its promoted run). Single rooms decide nothing here.
 
-**Not yet measured:** the selections on the segments (and ow-octorok's `r31-oct-s97` on `d1`) were queued and had
-not started when this agent stopped; nothing is promoted for `d3first` yet. Then one batch of the three segments
-with every promoted route run, 1000 runs each on seeds 0-999 (paired with `r32base-1k`).
+**Measured** (arrivals at the segment's end, 1000 runs; screen seeds 2000-2999, confirmation 3000-3999, paired
+against the family's run before; the rest of the team as promoted then):
+
+| Family | Run | Segment | Screen | Confirmation | Paired (confirmation) | Hearts on arrival | Decision |
+|---|---|---|---|---|---|---|---|
+| ow-octorok | `r31-oct-s97` (the `d2first` run trained on 0:0x37's mouth) | `d1` | 51.1% vs 24.2% | 51.3% vs 25.6% | **+25.7 ± 2.1** | 3.20 / 3.20 | the family's default run (as main v1.9.0.1); no route run |
+| ow-leever | `r32d1-leever` (last) | `post-d1` | 63.0% vs 15.7% | 61.4% vs 15.5% | **+45.9 ± 1.9** | 5.08 / 3.16 | `promoted.d3first` |
+| ow-zora | `r32d1-zora` (last) | `post-d1` | 33.3% vs 15.7% | 36.5% vs 15.5% | **+21.0 ± 1.9** | 3.77 / 3.16 | `promoted.d3first` |
+
+ow-leever's scrolls clear 0x2a and 0x2b without a fight: the leg to Level 5 passes the 30% bar with it alone.
+ow-zora's confirmation of its screen winner (it002502, 85.1%) is void: that chain started in the minute ow-leever's
+route run was promoted and played with it; its screen lead over `last` (+2.3 ± 2.1) is noise, so `last` stands.
+Still waiting in the queue: ow-tektite on `post-d1` (now with both route runs in the team), goriya and
+stalfos-keese-gel on `d1`; then one batch of the three segments with every route run.
