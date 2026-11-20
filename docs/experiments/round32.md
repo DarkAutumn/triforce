@@ -473,3 +473,22 @@ Manhandla's door with 1.43 (2.18); 0x4a's Keese (stalfos-keese-gel, not a family
 hearts a visit against the planner's 0.14) and 0x49 (95) take the hearts 0x59 needs. 0x59 now spends 0x4a's bombs
 (4.8 a visit, the planner the same) and loses 21% of its entrants; 0x69's dash 28%; 0x5b's last pass 44% (at 1.24
 hearts); Manhandla 55%.
+
+### The route runs on their families' other `d3first` segments (1000 runs each, seeds 5000-, paired)
+
+Each segment twice on the same seeds: with the route's team (`promoted.d3first`) and with today's team (the three
+families' default runs by `--checkpoint`), the rest of the team the same.
+
+| Segment | Route's team | Today's team | Paired difference | Where the families differ |
+|---|---|---|---|---|
+| d4 (`4_71s_0` → step 53) | 0.1% | 0.0% | +0.1 ± 0.1 | zol's 4:0x40: 15 deaths against 106 |
+| d5 (`5_76s_0` → step 120) | 7.6% ± 0.8 | 7.8% ± 0.8 | -0.2 ± 1.2 | the Olive Garden 525 deaths against 527; 0x64 83 against 102 |
+| d8 (`8_7es_0` → step 243) | 5.3% ± 0.7 | 26.2% ± 1.4 | **-20.9 ± 1.6** | 8:0x6e (boss-manhandla) 15 deaths against 1, 1.83 hearts lost a visit against 0.86; 8:0x5e (darknut) 74 against 11, 0x4e 136 against 72, 0x3e 477 against 355 |
+
+zol's route run is better in Dungeon 4 and level in Dungeon 5. darknut's and boss-manhandla's are far worse in
+Dungeon 8: their rounds 1-2 trained before `d3first` had any state past step 119, so their `state_routes:
+[d3first]` drew no Dungeon 8 state (round 1's evaluation lists only `d2first`'s); the magic-sword rooms drifted.
+The lead's answer (Nov 20): a route run trained for the wood sword is not to hold the magic-sword rooms;
+`promoted.d3first` will play only the route's steps before the magic sword is taken (the grave), the families'
+default runs the steps after it (Dungeons 6, 8, 9 and their legs). The two promotions stay (they were removed for
+an hour and restored); Dungeon 8 is no gate for darknut's round 2.
