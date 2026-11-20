@@ -43,3 +43,29 @@ From the chains of record (`r31land-1k-d9`, 1000 runs from `9_76s_0`, seeds 0-99
   from `r79b-lanmola`); 244 iterations, `--stop-success 1.01 --sil-coeff 0.1 --checkpoint-every 30`, clips
   `{enabled: true, off_share: 0}` (both yamls already), `--demo-coeff 0.05` over the lineage's files and the new one
   (like-like: `like-like-14`, `clip-03`, `wall-56`; lanmola: `clip-55`, `clip-55-300`, `clip-55e`).
+
+### The selections on `d9` (in progress)
+
+`select-checkpoint like-like r33-like-sNN --segment d9 --runs 1000 --first-seed 2000 --confirm 1000
+--confirm-first-seed 3000 --confirm-top 1 --only it003295,it003325,it003355,last[,promoted] --parallel 10`
+(`r79c-like` pinned in s83's batch, `--no-promoted` in s81's and s82's), the rest of the team main's:
+
+| run | it003295 | it003325 | it003355 | last | confirm (3000-3999) |
+|---|---:|---:|---:|---:|---|
+| `r33-like-s81` | 45.2% | 46.1% | **47.0%** | 45.2% | it003355 **48.6%** (3.77 hearts at the end), last 47.6% |
+| `r33-like-s82` | 47.3% | 44.9% | (running) | | |
+| `r33-like-s83` | (waiting in the line) | | | | |
+
+9:0x56 is crossed in every visit of these chains (s81 it003295: 1004 of 1004 visits leave W; main's record:
+438 of 2689). Main's record of the same segment is 13.7% on seeds 0-999 (`r31land-1k-d9`); the paired reference on
+these seeds (`r79c-like`, s83's batch) is not measured yet, so no verdict: nothing is promoted.
+
+Still to do: s82 and s83's selections; the winner paired with `r79c-like` on `d4` and `d6` (`--only CHOSEN,promoted
+--runs 1000 --confirm 0`, seeds 0-999); then lanmola `r33-lanmola-s80` on `d9` with that like-like promoted.
+
+### Backlog
+
+- like-like: the explorer's 9_56s tracks wander (a `BOMB S` in each) beside the rule's; set them aside if a later
+  round sees the model lay bombs off the wall.
+- like-like is trained on two lines now (this one for `d2first`'s 9:0x56, `r32d4-like2` for `d3first`'s Dungeon 4):
+  the one team needs a joint continuation or a choice on both routes' segments.
