@@ -34,6 +34,8 @@ ROOM is one of (the walks' rule each ports, `r32_d3first.LEGS`/`VARIANTS`):
     candle-0c     0:0x0c's shop S->S (ow-tektite, step 94): up to the blue candle at X $98, back, S out.
     wrap-0c       0:0x0c cave->W (ow-tektite, step 95): to ($D8,$8D) by the floor walk (inside the wrap's zone, off
                   the E edge a Tektite's knock-back would push Link across), CLIP E (the world wrap W).
+    scroll-29     0:0x29 W->E (ow-leever, step 82), scroll-2a 0:0x2a (83), scroll-2b 0:0x2b (84): the walks' screen
+                  scroll (`CLIP W` on arrival at X 0: Link wraps to the room's E edge), then E out: 0 hearts.
 
 The rooms the explorer does not solve from the route's states (rule tracks, `--tracks`), the walks' `clear` (the
 sword fighter, `r32_walks.Fighter`, until the room is all dead) and then their way out:
@@ -66,7 +68,8 @@ ROOMS = {'darknut-59': ('darknut', 13), 'dash-69': ('darknut', 14), 'manhandla-4
          'gleeok-13': ('boss-gleeok', 51), 'mouth-37': ('ow-octorok', 62), 'wall-2d': ('ow-zora', 88),
          'rupees-2d': ('ow-zora', 89), 'candle-0c': ('ow-tektite', 94), 'wrap-0c': ('ow-tektite', 95),
          'zol-6b': ('zol', 8), 'zol-4b': ('zol', 10), 'like-like-32': ('like-like', 38), 'vire-31': ('vire', 37),
-         'vire-12': ('vire', 50)}
+         'vire-12': ('vire', 50), 'scroll-29': ('ow-leever', 82), 'scroll-2a': ('ow-leever', 83),
+         'scroll-2b': ('ow-leever', 84)}
 
 
 def route_step(index, route=ROUTE):
@@ -330,6 +333,19 @@ def mouth_rule():
     return r31_mouth_demos.mouth_rule()
 
 
+def scroll_rule():
+    """The walks' screen scroll W -> E: `CLIP W` while Link stands on the W edge (the engine offers it there), once;
+    then E out."""
+    state = {}
+
+    def rule(_ram, ok):
+        if not state.get('clipped') and ok('CLIP W'):
+            state['clipped'] = True
+            return 'CLIP W'
+        return out('E')(_ram, ok)
+    return rule
+
+
 RULES = {
     'darknut-59': lambda: fight_rule(bomb_fighter, lambda bot: Way(go(bot, (0x78, 0xBD), 'S'), out('S'))),
     'dash-69': lambda: walk_rule(lambda bot: Way(go(bot, (0xC8, 0x8D), 'E'), out('E'))),
@@ -346,6 +362,9 @@ RULES = {
     'like-like-32': lambda: fight_rule(lambda: r32_walks.Fighter, push_way((0x50, 0x8D), (0xC8, 0x5D), 'E')),
     'vire-31': lambda: fight_rule(lambda: r32_walks.Fighter, lambda bot: Way(go(bot, (0xD0, 0x8D), 'E'), out('E'))),
     'vire-12': lambda: fight_rule(lambda: r32_walks.Fighter, push_way((0x50, 0x8D), (0xD0, 0x8D), 'E')),
+    'scroll-29': scroll_rule,
+    'scroll-2a': scroll_rule,
+    'scroll-2b': scroll_rule,
 }
 
 
