@@ -23,8 +23,8 @@ import torch
 from . import __version__, _native, replay
 from .paths import STATES_DIR
 from .provenance import code_version, data_hash, location_text, models_header
-from .registry import (CHECKPOINT_NAME, DEFAULT_ACT, act_mode, checkpoint_sha1, load_model, parse_act,
-                       promoted_checkpoint, require_compatible)
+from .registry import (CHECKPOINT_NAME, DEFAULT_ACT, act_mode, checkpoint_sha1, load_model, own_models_until,
+                       parse_act, policy_checkpoint, require_compatible, route_part_key, route_policy, split_policy)
 from .replay import ReplayDir
 from .specialist import SpecialistConfig, list_specialists, load_specialist
 from .zelda_enums import MapLocation
@@ -206,6 +206,9 @@ class RoomRecord:
     room: str
     in_cave: bool
     specialist: str
+    # The policy that played the visit when it is not the family's own (round 32: ``family@route``, the route's own
+    # run before its ``own_models_until`` step; the run is the chain's provenance ``models``).  Absent: the family's.
+    policy: Optional[str] = None
     steps: int = 0
     frames: int = 0
     health_in: float = 0.0
@@ -322,8 +325,12 @@ class RunResult:
         return {item: sum(getattr(room, f'cheated_{item}') for room in self.rooms) for item in _native.CHEAT_ITEMS}
 
     def to_dict(self) -> dict:
-        """JSON-friendly dict."""
-        return asdict(self)
+        """JSON-friendly dict (a room's ``policy`` only where it is not the family's)."""
+        data = asdict(self)
+        for room in data['rooms']:
+            if room['policy'] is None:
+                del room['policy']
+        return data
 
     @staticmethod
     def from_dict(data: dict) -> 'RunResult':
@@ -355,25 +362,37 @@ def write_jsonl(path, results: List[RunResult], append: bool = False):
 class Policies:
     """The specialists' Rust networks for a chain pool, in policy-index order, plus why the others are missing.
 
-    ``checkpoints`` (name -> checkpoint file or run dir) overrides the registry's promoted model (on ``route``, phase X:
-    a family's ``promoted.<route>`` over its ``promoted``); ``networks``
-    (name -> a ``ZeldaPolicy``) supplies a model directly; ``specialist_configs`` (name -> config) replaces a
-    specialist's canonical YAML at runtime.  ``checkpoints`` afterwards maps each loaded name to its file and
-    ``acts`` holds, per policy, its model's act mode (the run's, ``registry.act_mode``; a given network acts by
-    ``registry.DEFAULT_ACT``)."""
+    A policy is named by its key (round 32, ``registry.policy_run``): the family, and on a route with
+    ``own_models_until`` also ``family@route`` for a family with a run promoted for the route, which plays the
+    family's rooms before that step (the engine picks a step's key, ``zelda::GameMap::step_policy``); the family's
+    key plays its default run there.  On a route without the key a family's ``promoted.<route>`` plays every step
+    under the family's key (phase X).
+
+    ``checkpoints`` (key -> checkpoint file or run dir) overrides the registry's run: a family's key both parts, a
+    ``family@route`` key the route's part only; ``networks`` (key -> a ``ZeldaPolicy``) supplies a model directly
+    (a family's for both parts); ``specialist_configs`` (family -> config) replaces a specialist's canonical YAML at
+    runtime.  ``checkpoints`` afterwards maps each loaded key to its file and ``acts`` holds, per policy, its model's
+    act mode (the run's, ``registry.act_mode``; a given network acts by ``registry.DEFAULT_ACT``)."""
 
     def __init__(self, models_dir=None, checkpoints: Optional[Dict[str, str]] = None,
                  specialist_configs: Optional[Dict[str, SpecialistConfig]] = None,
                  networks: Optional[Dict[str, object]] = None, names: Optional[Iterable[str]] = None,
                  route: Optional[str] = None):
-        # pylint: disable=too-many-arguments, too-many-positional-arguments
+        # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
         overrides = dict(checkpoints or {})
         configs = dict(specialist_configs or {})
         given = dict(networks or {})
-        known = set(names if names is not None else list_specialists()) | set(given) | set(configs)
-        unknown = sorted(set(overrides) - known)
+        known = (set(names if names is not None else list_specialists())
+                 | {split_policy(key)[0] for key in given} | set(configs))
+        unknown = sorted(key for key in overrides if split_policy(key)[0] not in known)
         if unknown:
             raise RunnerError(f"--checkpoint for unknown specialist(s) {unknown}; known: {sorted(known)}")
+        parts = own_models_until(route) is not None
+        for key in [*overrides, *given]:
+            part = split_policy(key)[1]
+            if part is not None and (part != route or not parts):
+                raise RunnerError(f"{key}: a route's part is played only on a route with own_models_until, "
+                                  f"the route it names (this chain plays {route})")
         for name, path in overrides.items():
             if not Path(path).is_file() and not (Path(path) / CHECKPOINT_NAME).is_file():
                 raise RunnerError(f"--checkpoint {name}={path}: no checkpoint file there")
@@ -384,26 +403,34 @@ class Policies:
         self.acts: List[str] = []
         self.missing: Dict[str, str] = {}
         for name in sorted(known):
-            network = given.get(name)
-            act = DEFAULT_ACT
-            if network is None:
-                if name in overrides:
-                    path = overrides[name]
-                else:
-                    try:
-                        path = promoted_checkpoint(name, models_dir, route)
-                    except FileNotFoundError as err:
-                        self.missing[name] = str(err)
-                        continue
-                require_compatible(path)
-                with torch.random.fork_rng():   # building the network draws init weights; keep seeds intact
-                    network, _ = load_model(path)
-                self.checkpoints[name] = str(path)
-                act = act_mode(path)
-            self.names.append(name)
-            self.configs.append(configs.get(name) or load_specialist(name))
-            self.policies.append(network.to_native())
-            self.acts.append(act)
+            keys = [name]
+            if parts:
+                part = route_policy(name, route)
+                # A family's override or network plays both parts; else the route's own run, where it has one.
+                if part in overrides or part in given or (
+                        name not in overrides and name not in given and route_part_key(name, models_dir, route)):
+                    keys.append(part)
+            for key in keys:
+                network = given.get(key)
+                act = DEFAULT_ACT
+                if network is None:
+                    if key in overrides:
+                        path = overrides[key]
+                    else:
+                        try:
+                            path = policy_checkpoint(key, models_dir, route)
+                        except FileNotFoundError as err:
+                            self.missing[key] = str(err)
+                            continue
+                    require_compatible(path)
+                    with torch.random.fork_rng():   # building the network draws init weights; keep seeds intact
+                        network, _ = load_model(path)
+                    self.checkpoints[key] = str(path)
+                    act = act_mode(path)
+                self.names.append(key)
+                self.configs.append(configs.get(name) or load_specialist(name))
+                self.policies.append(network.to_native())
+                self.acts.append(act)
 
     def modes(self, act: Optional[str] = None) -> List[str]:
         """Per policy the act mode it plays by: its own (``acts``) for None, else ``act`` for every policy."""
@@ -448,7 +475,8 @@ class ChainPool:
                                  harvest=None if harvest is None else str(harvest),
                                  stop_step=route.stop_step, power_on=route.power_on, checkpoint=route.checkpoint,
                                  clips=route.clips, clips_off_from=route.clips_off_from,
-                                 hold_finished_frame=hold_finished_frame, clips_live=clips_live)
+                                 hold_finished_frame=hold_finished_frame, clips_live=clips_live,
+                                 policies=policies.names)
         num_envs = max(1, min(num_envs, len(seeds)))
         self.pool = _native.EnvPool(task, num_envs=num_envs, threads=threads, seed=seed, fps=fps, record=record)
 
