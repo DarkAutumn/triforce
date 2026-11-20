@@ -508,16 +508,30 @@ with the bag of 8 (`target/`-only script; a harvested start keeps its health and
 
 Seed 44 (its own evaluation, 20 episodes a state): 3_59n 90-93% at -0.04 to -0.26 hearts using about five bombs
 (round 1: 47-80% at -0.8 to -1.3); 5_05e 20-25% at -4.2 hearts with the family's bombs draw (round 1 17-23%).
-Its selections are queued on both targets (to Manhandla's door from Level 3's entrance, and Dungeon 5 from
-`d3first_5_76s_0` to 0:0x0b; screen seeds 7000-, confirmation 8000-, `promoted` = `r32d3-dark-s32`); seeds 42 and 43
-were still training at this writing. A run is promoted when one target is better beyond noise and the other is not
-worse (Dungeon 8 is no gate since the grave split); then `d3` and Dungeon 5 again with the final team.
+Selections (confirmation seeds 8000-, 1000 runs, each paired with `r32d3-dark-s32` on the same seeds and team):
+
+| Seed (`last`) | To Manhandla's door | vs round 1 (15.0%) | Dungeon 5 to 0:0x0b | vs round 1 (8.1%) |
+|---|---|---|---|---|
+| **s44** | 20.4% | +5.4 ± 1.7 | 8.2% | +0.1 ± 1.2 |
+| s42 | 21.0% | +6.0 ± 1.7 | 6.9% | -1.2 ± 1.2 |
+| s43 | 20.3% | +5.3 ± 1.6 | 7.6% | -0.5 ± 1.2 |
+
+All three gain on `d3` beyond noise and none is worse on Dungeon 5 beyond noise; `r32d3-dark2-s44` is promoted for
+`d3first` (the same gain, level on Dungeon 5). Since `r32-steps` 71441669 (merged) a `promoted.d3first` plays
+steps 0-205 only, so the route runs no longer play Dungeon 8.
+
+With the final team (zol `r32d3-zol`, darknut `r32d3-dark2-s44`, boss-manhandla `r32d3-manh`), seeds 9000-:
+`d3` **8.0%** (80 of 1000; 920 deaths), the planner 58.3% (300); Dungeon 5 7.3% (73 of 1000). Against round 1's team
+(6.7% on seeds 4000-, unpaired): 0x59 now loses 69 of 728 entrants (149 of 718 before), with -0.02 hearts a visit;
+the losses moved on to 0x69's dash (159 of 659), 0x5b's last pass (168 of 395, entered at 1.36 hearts) and Manhandla
+(109 of 189 at 1.40). Carried out: 4 hearts, 2 keys, bombs 0-8 (mean 4.6).
 
 ### Promoted for `d3first` and what is next
 
-zol `r32d3-zol`, darknut `r32d3-dark-s32`, boss-manhandla `r32d3-manh`: `d3` **6.7%** (0.0% with today's team),
-the planner 54.3% (26.0%). Next lever for `d3`, from the ledger: the hearts on the way. Link reaches 0x59 with 1.49
-of 3 hearts (the planner 2.53) and Manhandla's door with 1.43 (2.18); before 0x59 the most is lost in 3:0x4a's Keese
-(stalfos-keese-gel: 124 deaths, 0.74 hearts a visit against the planner's 0.14), whose `d3first` run is Dungeon 1's
-trainer's (`r32d1-skg`, trained with `3_4ae`), and in 3:0x49 (zol, 95 deaths). Dungeon 4's start states should
-hold what a run carries out: 4 hearts, 2 keys and 0-8 bombs (mean 4.25); they hold 0 bombs.
+zol `r32d3-zol`, darknut `r32d3-dark2-s44`, boss-manhandla `r32d3-manh`: `d3` **8.0%** (0.0% with today's team),
+the planner 58.3% (26.0%). Next lever for `d3`, from the ledger: the hearts on the way. Link reaches 0x59 with 1.50
+of 3 hearts (the planner 2.55) and Manhandla's door with 1.40 (2.21); before 0x59 the most is lost in 3:0x4a's Keese
+(stalfos-keese-gel: 114 deaths, 0.68 hearts a visit against the planner's 0.15), whose `d3first` run is Dungeon 1's
+trainer's (`r32d1-skg`, trained with `3_4ae`), and in 3:0x49 (zol, 82 deaths); then 0x69's dash, 0x5b's last pass
+and Manhandla at 1.4 hearts. Dungeon 4's start states should hold what a run carries out: 4 hearts, 2 keys and 0-8
+bombs (mean 4.6); they hold 0 bombs.
