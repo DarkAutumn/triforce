@@ -458,6 +458,47 @@ loss there is that seed's drift, not the arm's:
 | `r30-dark-s87` (it011462) | 85.1% | −0.3 ± 1.6 | 0.62 | 3.94, 110 | **36.4%** | **+10.2 ± 2.0** |
 | `r30-dark-s89` (last) | 82.2% | −3.2 ± 1.6 | 0.76 | 3.80, 147 | 34.3% | +8.1 ± 2.0 |
 
+`r30-dark-s88` it011492 on `d3` again on seeds 1000-1999 (paired with the reference measured on them): 84.6% against
+86.7%, −2.1 ± 1.5; the 2000 runs pooled −0.8 ± 1.1.
+
+**The continuations, chosen on `d3`** (`select-checkpoint darknut RUN --from 3_7cs_0 --stop-at step:105 --runs 1000
+--first-seed 2000 --confirm 1000 --confirm-first-seed 3000 --confirm-top 1 --only it011710,it011740,it011770,last`;
+`r78-dark37-s85` measured in `r30-dark69-s92`'s batch, the others paired with it on the same seeds). Single rooms
+(canonical evaluation): 96.7%, 96.5%, 96.5% (−0.88, −0.85, −0.85 hearts).
+
+| run | candidate | screen (2000-2999) | confirm (3000-3999) | hearts on arriving | confirm vs the reference | 3:0x69 from N, hearts a visit |
+|---|---|---:|---:|---:|---:|---:|
+| reference | `r78-dark37-s85` | 86.5% | 85.2% | 4.47 | | 0.58 |
+| `r30-dark69-s92` | it011710 | 84.6% | 85.1% | 4.41 | −0.1 ± 1.6 | 0.61 |
+| | last | 82.6% | 84.3% | 4.39 | | |
+| `r30-dark69-s93` | last | 83.8% | 83.5% | 4.45 | −1.7 ± 1.6 | 0.61 |
+| | it011770 | 82.1% | 84.4% | 4.45 | | |
+| **`r30-dark69-s94`** | **last (it 11774)** | 85.9% | **86.2%** | 4.48 | **+1.0 ± 1.5** | 0.52 |
+| | it011770 | 85.2% | 85.7% | 4.43 | | |
+
+The entries did what they were for: 0x69 from N is back to the reference's cost on every seed (0.52-0.61 against
+`r30-dark-s89`'s 0.76). `r30-dark69-s94`'s last checkpoint (its `ckpt.pt`) is the best; it enters Manhandla with the
+reference's hearts (4.09 against 4.09, 111 deaths against 113 on the confirmation seeds).
+On seeds 0-999 (paired with this checkout's team): `d3` 85.3% against 85.4%, −0.1 ± 1.5 (0x69 from N 0.58 hearts a
+visit); with the confirmation, **2000 runs +0.4 ± 1.1: Dungeon 3 holds.** But Dungeon 5 at the route's hearts
+(seeds 3000-3999, gibdo `r75-f-a` as in that selection's reference) is 50.4% against 49.0%, **+1.4 ± 2.2** (−4.4 ± 2.2
+against `r30-dark-s89`, which it was continued from), while `d8` is 41.0% against 26.2%, **+14.8 ± 2.1**. The 244
+iterations bought back Dungeon 3 with Dungeon 5's gain.
+
+**No darknut run qualifies; `r78-dark37-s85` stays.** The candidates (paired with the reference; Dungeon 3 over 2000
+runs where marked):
+
+| run | Dungeon 3 | Dungeon 5 at the route's hearts | `d8` | fails on |
+|---|---:|---:|---:|---|
+| `r30-dark-s89` last | −4.2 ± 1.2 (2000) | **+5.8 ± 2.2** | **+8.1 ± 2.0** | Dungeon 3 |
+| `r30-dark-s88` it011492 | −0.8 ± 1.1 (2000) | +4.4 ± 2.2 | **+10.4 ± 2.0** | Dungeon 5 exactly at two standard errors |
+| `r30-dark-s87` it011462 | −0.3 ± 1.6 (1000) | +3.6 ± 2.2 | **+10.2 ± 2.0** | Dungeon 5 |
+| `r30-dark69-s94` last | +0.4 ± 1.1 (2000) | +1.4 ± 2.2 | **+14.8 ± 2.1** | Dungeon 5 |
+
+The best trade is `r30-dark-s88` it011492: it holds Dungeon 3 and gains `d8` by ten points, and its Dungeon 5 gain is
+on the line, not beyond it. Settling it takes a second 1000 runs of Dungeon 5 at the route's hearts on fresh seeds,
+with the reference on the same seeds.
+
 ## goriya, wallmaster, boss-gleeok
 
 The families of Dungeon 7's losses and Gleeok's two rooms, by the recipe of decisions 2026-11-19 ("One team for
