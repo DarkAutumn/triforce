@@ -404,3 +404,13 @@ ow-tektite: `post-d1`): `triforce select-checkpoint F RUN --route d3first --from
 --runs 1000 --confirm 1000` (screen seeds 2000-2999, confirmation 3000-3999). `--segment X` with `--route d3first`
 plays its chains and then fails at its report (the chains' provenance names the namespaced start state): `--from
 d3first_1_73s_0` (the target still from the route's table) works.
+
+**Trained** (one seed each, 488 iterations; the round's evaluation, 30 episodes a state, reads each family's yaml
+with both routes): ow-leever `r32d1-leever` 100% (worst 0:0x0b 98%; it scrolls: about 0.09 hearts lost an episode
+in training), goriya `r32d1-goriya` 98%, ow-tektite `r32d1-tektite` 97% (worst 0:0x0c 78%), stalfos-keese-gel
+`r32d1-skg` 99% (worst 3:0x4a 93%), ow-zora `r32d1-zora` 98% (its `d3first` states 100%; `d2first`'s 0x28 W→S fell
+to 0-57%: the run is for `d3first` only and `d2first` keeps its promoted run). Single rooms decide nothing here.
+
+**Not yet measured:** the selections on the segments (and ow-octorok's `r31-oct-s97` on `d1`) were queued and had
+not started when this agent stopped; nothing is promoted for `d3first` yet. Then one batch of the three segments
+with every promoted route run, 1000 runs each on seeds 0-999 (paired with `r32base-1k`).
