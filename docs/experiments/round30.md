@@ -162,3 +162,14 @@ REPLAYS OUT --step 95:3_69n --count 120`; all enter at X 120, Y 93; 1340 states)
 darknut RUN --from 3_7cs_0 --stop-at step:105`, screen seeds 2000-2999, confirm 3000-3999, `r78-dark37-s85` pinned),
 then Dungeon 5 at the route's hearts and `d8`. Beside it, the fallback: the two other seeds' chosen checkpoints
 (`r30-dark-s88` it011492, +4.4 ± 2.2; `r30-dark-s87` it011462, +3.6 ± 2.2 on Dungeon 5) measured on `d3` and `d8`.
+
+The fallback (`r30dk-check-s88s87`, seeds 0-999, paired with this checkout's team as for `r30-dark-s89`): both other
+seeds hold Dungeon 3 and gain more on `d8`. 0x69 from N costs them what it costs the promoted run, so `r30-dark-s89`'s
+loss there is that seed's drift, not the arm's:
+
+| run (checkpoint) | `d3` | paired | 3:0x69 from N, hearts a visit | Manhandla: hearts in, deaths | `d8` | paired |
+|---|---:|---:|---:|---:|---:|---:|
+| reference (`r78-dark37-s85`) | 85.4% | | 0.55 | 4.08, 116 | 26.2% | |
+| `r30-dark-s88` (it011492) | 86.0% | +0.6 ± 1.5 | 0.55 | 3.99, 112 | **36.6%** | **+10.4 ± 2.0** |
+| `r30-dark-s87` (it011462) | 85.1% | −0.3 ± 1.6 | 0.62 | 3.94, 110 | **36.4%** | **+10.2 ± 2.0** |
+| `r30-dark-s89` (last) | 82.2% | −3.2 ± 1.6 | 0.76 | 3.80, 147 | 34.3% | +8.1 ± 2.0 |
