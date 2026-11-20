@@ -531,9 +531,10 @@ def split_policy(key: str) -> tuple[str, Optional[str]]:
 
 def own_models_until(route: Optional[str]) -> Optional[int]:
     """The index of the step up to which ``route``'s own runs play (routes.yaml ``own_models_until``); None: a route
-    whose own runs (``promoted.<route>``) play every step, or no route."""
+    whose own runs (``promoted.<route>``) play every step, no route, or a name routes.yaml lacks (a chain file's route
+    read back by a tool that plays nothing)."""
     from ._native import own_models_until as native_until  # pylint: disable=import-outside-toplevel
-    return None if route is None else native_until(route)
+    return None if route is None or route not in native_routes() else native_until(route)
 
 
 def policy_run(key: str, root=None, route: Optional[str] = None) -> str:
