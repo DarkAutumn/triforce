@@ -856,3 +856,55 @@ at full): 5:0x66 W→N 0.31 at 2 hearts, 0.75 at 4, 0.90 at 7; 5:0x24 0.76 / 0.8
 
 Every chain of the fit predates the route's grants (`r32-steps` ef726772: Dungeon 5's entrance tops the bag up to 8
 bombs; 8:0x4c's rupees): Dungeon 5's and Dungeon 8's rows price the old bag and purse until the next refit.
+
+### 6.2 The three trainings and the code they are judged on
+
+One seed each (32), 489 iterations, on `d3first`'s states only (`state_routes: [d3first]`, a quarter of the episodes
+from harvested handoffs at the chains' hearts, the whole-route tables of §6.1, `chain_hp` 1.0, clips on), each with
+demonstrations of the planner (`temperature:0.5+relax:16+plan:16:1`, 20 a state at the handoffs' hearts) and, where
+a rule wins more than the planner, the rule's rows (`r32p_rules.py`):
+
+| Family | Run (from) | Rooms | Demonstrations | Training's own measure |
+|---|---|---|---|---|
+| boss-digdogger | `r32late-dig` (`r76-b`) | 5:0x24, 7:0x1c, 7:0x39 | planner 15636 rows (7:0x1c 19-20 of 20 a state); rule `digdogger-24` 18287 rows (64/90 at the chains' hearts) | 95% over 180 episodes, worst 5:0x24 92%; -0.9 hearts an episode |
+| gibdo | `r32late-gibdo` (`r30-gibdo-s91`) | 5:0x65, 5:0x66 W→N, 5:0x47, 5:0x26, 5:0x14 | planner 13409 rows (5:0x66 60/60) | 100% over 480, worst 5:0x66 99%; -0.08 hearts |
+| ow-moblin | `r32late-moblin` (`r79t5-moblin`) | 0:0x73, 0x63, the tree 0:0x62, 0x52, 0x51, 0:0x3d | rule `tree-62` 6421 rows (85/90: the blue candle facing W); planner 20744 rows (0:0x62 34/60) | 100% over 1350 (both routes' states), worst 0:0x5c 93% (a d2first room) |
+
+The trainings ran on the code before the route's grants (`r32-steps` 44fe335c with `r32-base2` and the tables).
+Everything below was measured after `r32-steps` was merged: the selections on its a711de21 (the bag of 8 bombs
+granted at Dungeon 5's entrance, 8:0x4c's rupees, the whole-route tables), the paired batch of §6.5 on its 71441669
+(the same plus the cutoff: a family's `promoted.d3first` plays steps 0-205, its default run from the magic sword's
+cave on; every room of these three families judged here is before step 205, so the cutoff changes none of them).
+
+### 6.3 The selections: each family's sub-segment
+
+`select-checkpoint FAMILY RUN --route d3first --from d3first_<state> --stop-at step:N`, the run's last three numbered
+checkpoints and `last` against today's promoted run, screened on seeds 2000-2999 and confirmed on 3000-3999 (1000
+runs each, models alone, clips on). The numbers are the confirmation's; paired differences with their standard
+error.
+
+| Family | Sub-segment (why) | Chosen | Confirmed | Today's run | Paired difference |
+|---|---|---|---|---|---|
+| boss-digdogger | `5_65w_0` → step 120 (Dungeon 5 past the Olive Garden: from Level 5's start ~40 runs reach 5:0x24) | `last` (it001447 won the screen, -2.6 ± 0.8 against `last` confirmed) | **81.6%** ± 1.2 | 67.2% (`r76-b`) | **+14.4 ± 1.2** |
+| boss-digdogger | `7_1cw_0` → step 194 (Dungeon 7 from 0x1c: goriya's 0x1b kills 68% before it) | `last` kept (it001387 confirmed +0.2 ± 2.2 against it: noise) | **49.1%** ± 1.6 | 45.6% | +3.5 ± 2.2 |
+| gibdo | `5_65w_0` → step 120 | `last` (it001848 won the screen, -0.5 ± 1.8 confirmed) | **78.0%** ± 1.3 | 67.2% (`r30-gibdo-s91`) | **+10.8 ± 2.0** |
+| ow-moblin | `0_73e_v2_0` → step 145 (the leg to Level 2 past ow-leever's 0x0b turn) | it006341 (+0.5 ± 0.6 against `last`; applied) | **98.6%** ± 0.4 | 64.1% (`r79t5-moblin`) | **+34.5 ± 1.6** |
+
+The families' rooms in the confirmations (runs lost per 1000 entering; hearts lost a visit):
+
+- **boss-digdogger, 5:0x24**: 237 → **74** (0.88 → -0.38 hearts a visit: the new run picks up more than it loses),
+  bombs 2.15 → 2.48 a visit, none cheated. 7:0x1c (Link enters it with 9.3 hearts from this start): 10 → 3 (1.44 →
+  1.02 hearts a visit, bombs 2.96 → 2.46). The sub-segment is not Digdogger's to win: wallmaster's 7:0x0d grabs Link
+  on 702 of 1260 visits (713 of 1227 with today's run) and sends him to Level 7's entrance, and 505 of the 509 runs
+  lost are lost on that second pass through goriya's wood-sword rooms (7:0x1b 292 per 1000 entering, 0x1a 191, 0x18
+  138); what the new run adds is the hearts it leaves for that pass.
+- **gibdo, Dungeon 5 past 0x65**: 5:0x66 W→N 25 → 17 (1.51 → 0.95 hearts a visit), 0x47 31 → 13, 0x37 37 → 9,
+  0x27 9 → 5; Link reaches 5:0x24 with 4.69 hearts against 3.88, and Digdogger (today's run in this selection) loses
+  165 there against 237.
+- **ow-moblin, the tree**: 0:0x62 E→cave 334 → **12** (1.26 → 0.86 hearts a visit), 0:0x3d cave→S 9 → 0, 0:0x4c 21
+  → 1, and Link arrives at Level 2 with 7.45 hearts against 4.91.
+
+**Promoted for `d3first`** (`triforce promote FAMILY RUN --route d3first`): `boss-digdogger/r32late-dig`,
+`gibdo/r32late-gibdo`, `ow-moblin/r32late-moblin` (it006341). Each beats today's run beyond noise on its
+sub-segment; boss-digdogger's second sub-segment is ahead within noise (+1.6 standard errors), not worse. `d2first`
+keeps its runs.
