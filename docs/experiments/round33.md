@@ -135,3 +135,9 @@ Not decided yet: no run of either family is promoted, and nothing about 0x78's s
   78), but 0x29 95 (61, 29); 0x78 kills in 263 runs, 0x38 entered with 10.75 hearts. The same two further blocks
   (4000-4999, 7000-7999, paired against `r30w-wj-s89`'s chains there) and its `d9` are queued; the choice between s92
   and s93 is made on the 3000 pooled seeds of each.
+- `r33-vire-s95` it002342 on `d4` (1000 paired runs, seeds 3000-3999): 94.2% against `r77-b`'s 90.8% (5.34 hearts
+  out against 5.10), **+3.4 ± 1.2: better beyond noise there too.** **vire qualifies**: `d6` +2.55 ± 1.23 (2000
+  runs), `d4` +3.4 ± 1.2; it002342 applied as the run's `ckpt.pt`, its evaluation queued, the promotion after the
+  wizzrobe selections that play vire's promoted run.
+- `r33w-s93` (it003264) on 4000-4999: 35.1% against `r30w-wj-s89`'s 28.3% (+6.8 ± 2.1; against s92 +2.9 ± 2.1).
+  **Pooled over 3000-4999: +5.80 ± 1.46** (s92 +2.85 ± 1.46 on the same seeds).
