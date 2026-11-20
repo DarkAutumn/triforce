@@ -125,3 +125,7 @@ Not decided yet: no run of either family is promoted, and nothing about 0x78's s
   standard errors: just short of the bar.** A third block (7000-7999; 6000-6399 were `h6b`'s, whose states trained it)
   and s92's `d9` and `post-d7` pairings are queued; the verdict is read on the 3000 pooled runs, which after a near
   miss carries a small optional-stopping bias.
+- The third block (7000-7999): s92 32.8% against 29.4% (+3.4 ± 2.1; 0x78 kills in 317 runs; hearts on entering 0x38
+  10.80 against 10.75, 0x3a 6.34 against 5.89). **Pooled over 3000 paired runs on seeds not used to choose it:
+  +3.03 ± 1.19 (2.5 standard errors): `r33w-s92` is better on `d6` beyond noise.** Its `d9` and `post-d7` pairings
+  decide the promotion.
