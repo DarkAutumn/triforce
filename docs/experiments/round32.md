@@ -468,8 +468,11 @@ for `d3first` (`r32d4-gleeok2-s1-it2517`, the checkpoint as a run); against 2502
 the 2502 line's, chosen among three on these seeds (the final chain on fresh seeds gives the unbiased one).
 Like-like `r32d4-like2` against `r32d4-like`: Gleeok reached in 40.6% instead of 31.9% (+8.7 ± 1.7), with 1.31
 hearts instead of 1.43 (the extra arrivals are the marginal ones), hearts delivered to Gleeok a run +0.075 ± 0.030,
-`d4` +0.3 ± 0.7: better beyond noise on the lead's pair, promoted once vire's queued choice (which plays the
-promoted like-like) has run.
+`d4` +0.3 ± 0.7: better beyond noise on the lead's pair; promoted for `d3first`. Vire against `r32d4-vire-s2`:
+the three seeds reach Gleeok in 42.0%, 41.7% and 40.9% (+10.1 ± 2.1, +9.8 ± 2.1, +9.0 ± 2.2) with the same 1.40-1.41
+hearts there, hearts delivered +0.14, `d4` 3.5%, 2.8%, 3.3% (+1.0 ± 0.8 at most); seed 1 (`r32d4-vire2-s1`) is
+promoted for `d3first`. Each family was measured with the other's first-round run, so the new team's `d4` is the
+final chain's to say (fresh seeds, after the cutoff merge: route runs play only the steps before the magic sword).
 
 **What the segment's start states should carry.** The planner's runs that left Dungeon 3 carry 0 to 8 bombs (into
 4:0x71 in the full chain, 69 runs: 0: 9, 1: 7, 2: 2, 3: 4, 4: 11, 5: 13, 6: 7, 7: 6, 8: 9; median 5) and 4.0 of 4
