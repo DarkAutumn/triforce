@@ -449,6 +449,18 @@ stalls run 400-950, so a stall costs about what a death does). Arm B (the family
 the same way: its 2502 and 2562 checkpoints win 17.0% and 16.3% of 4:0x13 at the chains' hearts (300 each) and
 99.0% and 97.3% of 8:0x3c, its last 5.0% (stalls in 202 of 300) and 59.7%.
 
+**Round 2's results so far.** Gleeok: the penalty did not hold the stall off. At the chains' hearts (4:0x13, 300
+episodes a checkpoint) the three seeds' checkpoints at 15 and 30 iterations win 12.7-19.0% (the 2502 start:
+17.0%), and from 45 iterations on 9.3-18.7% with 16-86 stalls of 300 (none at 2502); 8:0x3c stays at 97-100% in
+all 18. No checkpoint is better than 2502 beyond noise in the single room; the choice is made on `d4` (seeds
+3000-3999: the promoted base, 2502 and the two best new ones), which decides alone: by the lead's later decision a
+route run plays only the route's steps before the magic sword, so Dungeon 8 is not his. Like-like (`r32d4-like2`,
+early stop after 128 iterations; hearts lost a room 0.25 → 0.21 in its own evaluation): on `d4` (seeds
+3000-3999, Gleeok 2502) its last checkpoint reaches Gleeok in 40.6% ± 1.6 of runs at 1.31 hearts and passes 2.8% ±
+0.5; its iteration-3694 checkpoint 35.5% at 1.38 and 3.3%. Vire (three seeds, early stops after 64-67
+iterations; hearts lost a room in their evaluations 0.086-0.113 against the first round's 0.111) is measured the
+same way. The verdicts pair each against the same team with the first round's runs (queued).
+
 **What the segment's start states should carry.** The planner's runs that left Dungeon 3 carry 0 to 8 bombs (into
 4:0x71 in the full chain, 69 runs: 0: 9, 1: 7, 2: 2, 3: 4, 4: 11, 5: 13, 6: 7, 7: 6, 8: 9; median 5) and 4.0 of 4
 hearts in 58 of 68 (3.5 in 9). Dungeon 4 needs two bombs (the walls of 4:0x21 and 4:0x11, cheated 250 and 249
