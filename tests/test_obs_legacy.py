@@ -158,7 +158,7 @@ ROUTE31_CHANGES = {
 # with CLIP masked: `off_share: 0` as a family is next trained) changed these yamls, so their traces are played at
 # the recorded share.  No column's computation is involved.
 RECORDED_OFF_SHARE = {'darknut': 0.5, 'ow-boulder': 0.5, 'ow-leever': 0.5, 'ow-lynel': 0.5, 'ow-moblin': 0.75,
-                      'ow-zora': 0.75, 'stalfos-keese-gel': 0.5}
+                      'ow-zora': 0.75, 'stalfos-keese-gel': 0.5, 'vire': 0.5}
 
 
 def _old_columns(obs: dict) -> dict:
