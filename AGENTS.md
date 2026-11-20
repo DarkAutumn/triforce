@@ -426,7 +426,10 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   2026-11-17): while the cheat ledger holds a granted bomb in a bomb-wall room, BOMB is offered only in reach of the
   wall the objective leaves through, in every mode and on the 10th kill too (before, a `free` family threw it at a
   monster and was handed the next: 7.8 cheated bombs a Dungeon 7 run, 1.1 a Dungeon 3 run in 3:0x5b); Dodongo's
-  room has no wall, there the granted bomb is the weapon. **The reserve means the same inside a `requires_bombs`
+  room has no wall, there the granted bomb is the weapon. **A route's grant is not a room's** (round 32, routes.yaml
+  `grant:`, decisions 2026-11-20): `d3first`'s Dungeon 5 entrance tops the bag up to 8 bombs, outstanding until used
+  (cheated where thrown) and bound to no wall; while it is outstanding a wall room grants its own bomb on top, so the
+  bag reaches the Olive Garden whole. **The reserve means the same inside a `requires_bombs`
   room as outside**: a `free` family at or below it bombs only the route's wall there (before, such a room was free
   ground whatever the reserve). A fight the bombs are kept for says so on its own route step: `bomb_reserve: 0` on
   3:0x5b's last pass (the room's own four bombs pay for what follows), in Manhandla's room, the Olive Garden, on
@@ -493,8 +496,9 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   converted models act bit for bit as their sources (round 26's proof, decisions 2026-11-16).
 - Tag releases `vX.Y.Z.R` on `main`. **Models are not checked in** (too large; Lee will pick a backup strategy).
 - **Replays are `TFREPLAY` files** (`crates/replay`, `triforce/replay.py`) with their own integer `REPLAY_VERSION`,
-  independent of the repo version. It is bumped only when an existing replay can no longer be replayed bit-exactly
-  (a container change the reader does not handle, a zcore behaviour change, a dropped state decoder); the reader
+  independent of the repo version. It is bumped when an existing replay can no longer be replayed bit-exactly
+  (a container change the reader does not handle, a zcore behaviour change, a dropped state decoder), or when an older
+  reader could not read what is written (version 1, round 32: a state's route grants); the reader
   keeps reading every earlier version it can. `corpus/replays/` must keep verifying (`tf replay verify`, a cargo
   test): a deliberate break moves those files to `corpus/replays/retired/`, bumps `REPLAY_VERSION` and records new
   ones. From 1.3.1.0 a `MachineState` layout change adds a decoder for the previous `TFZSTATE` version instead of

@@ -22,7 +22,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use zelda::actions::{NUM_DIRECTIONS, NUM_DURATIONS};
-use zelda::cheats::{CheatItem, ItemCounts};
+use zelda::cheats::{CheatItem, Grants, ItemCounts};
 use zelda::decisions::{DecisionNote, ForesightNote};
 use zelda::{Action, Nes, Session};
 
@@ -242,11 +242,13 @@ fn finish_recording<N: Nes, St: StateStore<N::State>>(
     Ok(())
 }
 
-/// A recorded state's context from an env's `context()`: the route step and the granted items.
-fn context((step, granted): (Option<usize>, ItemCounts<u8>)) -> Context {
+/// A recorded state's context from an env's `context()`: the route step and the granted items, by kind.
+fn context((step, grants): (Option<usize>, Grants)) -> Context {
+    let bytes = |c: ItemCounts<u8>| [c.bombs, c.keys, c.rupees];
     Context {
         step: step.and_then(|s| u16::try_from(s).ok()),
-        granted: [granted.bombs, granted.keys, granted.rupees],
+        granted: bytes(grants.room),
+        route_granted: bytes(grants.route),
     }
 }
 

@@ -4,7 +4,7 @@
 //! builds and parses the bytes; callers read and write the files.  Replays can be joined ([`stitch`]) and
 //! cut at a keyframe ([`truncate`]) so a run continues from there.
 //!
-//! # File layout, version 0
+//! # File layout, version 1
 //!
 //! All integers are little-endian; `varint` is unsigned LEB128.
 //!
@@ -33,7 +33,7 @@
 //! | 3 | INPUTS | runs `(buttons: u8, varint count >= 1)`; `count` in the table is the number of runs; the run lengths sum to `frames` |
 //! | 4 | EDITS | `(varint dframe, addr: u16, prev: u8, value: u8)` |
 //! | 5 | CHEATS | `(varint dframe, item: u8 (0 bombs, 1 keys, 2 rupees), varint count)` |
-//! | 6 | STATES | `(varint dframe, kind: u8, step: u16 (0xFFFF none), granted: [u8; 3] (bombs, keys, rupees), varint edits, len: u32, blob)`; kind 0 START, 1 END, 2 KEYFRAME, 3 CHECKPOINT; `edits` is the number of EDITS records that precede the state; `blob` is a `TFZSTATE` file |
+//! | 6 | STATES | `(varint dframe, kind: u8, step: u16 (0xFFFF none), granted: [u8; 3] (bombs, keys, rupees: a room's grants), route_granted: [u8; 3] (a route step's grants; version 1, absent in version 0), varint edits, len: u32, blob)`; kind 0 START, 1 END, 2 KEYFRAME, 3 CHECKPOINT; `edits` is the number of EDITS records that precede the state; `blob` is a `TFZSTATE` file |
 //! | 7 | EVENTS | `(varint dframe, code: u8, payload)`: 1 CONTROL (no payload); 2 ROOM `(level: u8, room: u8, flags: u8 (bit 0 in cave), step: u16 (0xFFFF none), policy: u8 (0xFF none))`; 3 OUTCOME `(varint len, text)`; 4 EPISODE `(varint len, ending text, class: u8, flags: u8 (bit 0 terminated, bit 1 truncated))`; 5 SEGMENT (no payload) |
 //! | 8 | REWARDS | `(varint dframe, term: u8, value: f32)`; `term` indexes META `reward_terms` |
 //! | 9 | DECISIONS | `(varint dframe, policy: u8, kind: u8, direction: u8, duration: u8, value: f32, dist: [f32; N])`, `N` = META `actions.distribution` |

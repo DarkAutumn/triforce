@@ -161,9 +161,10 @@ fn check_seeds(seeds: impl IntoIterator<Item = u64>) -> PyResult<()> {
 /// A run starts from the game start state, or from one of: `start_from` (a state name or path); `power_on`
 /// (`{'name': 'LINK', 'delay': None, 'max_delay': 32766}`: console power on, the name registered after `delay`
 /// idle frames on the file-select screen, None = drawn per run seed from `0..=max_delay`; no memory is
-/// written); `checkpoint` (`{'state': bytes, 'step': int, 'granted': [bombs, keys, rupees], 'randomize_rng':
-/// False}`: a state another run reached, as is, or with `randomize_rng` a natural RNG state drawn per run
-/// seed, so that runs acting by argmax differ; an entry of `Replay.states()` is one). It ends at the route's
+/// written); `checkpoint` (`{'state': bytes, 'step': int, 'granted': [bombs, keys, rupees], 'route_granted':
+/// [bombs, keys, rupees], 'randomize_rng': False}`: a state another run reached, as is (Link holds `granted` of a
+/// room's grant and `route_granted` of a route step's, `zelda::cheats`), or with `randomize_rng` a natural RNG state
+/// drawn per run seed, so that runs acting by argmax differ; an entry of `Replay.states()` is one). It ends at the route's
 /// end, or on entering `stop_at` (a room) or route step `stop_step`'s room (on the route). `clips` / `clips_off_from`:
 /// the run-time clips switch every run starts with and where it turns off (round 22); `EnvPool.set_clips_allowed`
 /// changes it while the pool plays: for the runs started from then on, and with `clips_live` also for the runs in
@@ -212,17 +213,15 @@ fn with_checkpoint(route: Route, map: &zelda::GameMap, checkpoint: &Bound<'_, Py
     };
     let state: Vec<u8> = field("state")?.extract().map_err(|_| config_err("checkpoint['state'] must be bytes"))?;
     let step: usize = field("step")?.extract().map_err(|_| config_err("checkpoint['step'] must be a route step"))?;
-    let granted: [u8; 3] = match checkpoint.get_item("granted")? {
-        Some(granted) => granted
-            .extract()
-            .map_err(|_| config_err("checkpoint['granted'] must be [bombs, keys, rupees]"))?,
-        None => [0; 3],
+    let counts = |key: &str| -> PyResult<zelda::cheats::ItemCounts<u8>> {
+        let bad = || config_err(format!("checkpoint['{key}'] must be [bombs, keys, rupees]"));
+        let [bombs, keys, rupees]: [u8; 3] = match checkpoint.get_item(key)?.filter(|value| !value.is_none()) {
+            Some(value) => value.extract().map_err(|_| bad())?,
+            None => [0; 3],
+        };
+        Ok(zelda::cheats::ItemCounts { bombs, keys, rupees })
     };
-    let granted = zelda::cheats::ItemCounts {
-        bombs: granted[0],
-        keys: granted[1],
-        rupees: granted[2],
-    };
+    let granted = zelda::cheats::Grants { room: counts("granted")?, route: counts("route_granted")? };
     let redraw = match checkpoint.get_item("randomize_rng")? {
         Some(value) => value.extract().map_err(|_| config_err("checkpoint['randomize_rng'] must be a bool"))?,
         None => false,

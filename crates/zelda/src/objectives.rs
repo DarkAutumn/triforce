@@ -887,6 +887,13 @@ impl GameCompletion {
         Some(if burns { state.burn_facings() } else { 0 })
     }
 
+    /// The routes.yaml `grant:` of the route step Link is playing (round 32, `crate::cheats::CheatLedger::follow_route`);
+    /// None off the route or on a step without one.
+    pub fn step_grant(&self) -> Option<crate::cheats::ItemCounts<u8>> {
+        let grant = self.map.routes.get(&self.route)?.get(self.step?)?.grant;
+        crate::cheats::CheatItem::ALL.iter().any(|&item| grant[item] > 0).then_some(grant)
+    }
+
     /// The bomb mode of the route step Link plays in `state`'s room (routes.yaml `bombs:`, round 28), instead of his
     /// family's `items: {bombs:}`; None: the family's own (no such step, or Link is not in its room).
     pub fn step_bombs(&self, state: &GameView) -> Option<&str> {

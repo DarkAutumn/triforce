@@ -36,7 +36,7 @@ fn a_track_through_a_bomb_wall_room_with_an_empty_bag_replays() {
     env.reset(Some(0), Some(STATE)).unwrap();
     assert_eq!(env.route().0, "d3first");
     assert_eq!(env.session().state().bombs(), 1, "the wall's bomb");
-    assert_eq!(env.context().1.bombs, 1, "an empty bag: the bomb is granted");
+    assert_eq!(env.context().1.room.bombs, 1, "an empty bag: the bomb is granted (by the room)");
 
     let mut explorer = Explorer::new(&config, data.clone(), nes, TfzStore::new(), 0).unwrap();
     explorer.set_banked_kills(Some(vec![KILLS]));
