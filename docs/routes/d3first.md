@@ -198,6 +198,13 @@ the run-time switch off has no way past them. The shared blocks keep their stret
   cannot keep what was never there, so the arrow rooms' needs top the purse up (cheated, counted): Gohma's (round
   27), Ganon's (round 29) and, round 32, 8:0x4c's while a Pols Voice lives (`requires_rupees: 9`, the reserve and a
   shot; on both routes: d2first arrives with 22-38 and is never topped up).
+- **Measured (round 32, r32-base2's team, clips on).** Dungeon 5 (`--from 5_76s_0 --stop-at step:120`, 300 runs):
+  6.0% (1.9% of 1000 before); every run enters the Olive Garden with the bag of 8 (before: 0 in 822 of 1000, 4 in
+  the rest) and throws 7.7 there (5.9 cheated); the Garden loses 151 of 300 (845 of 1000 before); 8.1 cheated bombs
+  a run (the walls' two, the Garden, Digdogger). Dungeon 8 (`--from 8_7es_0 --stop-at step:243`, 300 runs): 24.3%
+  (6.8% before); 8:0x4c loses 5 of 107 entering (268 of 371 before), 8.0 Pols Voices killed a visit (0.88 before),
+  0.93 cheated rupees a visit, 0.33 a run. `d2first`'s Dungeon 8 on seeds 0-99: 20 of 100 before and after, every
+  run's outcome and rooms the same, no rupee cheated.
 
 ## Ledgers (from the walks; staging without drops unless said)
 
