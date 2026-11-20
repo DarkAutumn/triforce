@@ -65,7 +65,7 @@ def test_every_run_is_one_replay_file_that_replays_on_the_emulator_alone(chain_r
         assert (meta['ending']['result'], meta['ending']['reason']) == (result.result, result.reason)
         assert meta['ending']['outcome'] == result.rooms[-1].outcome
         assert [model['name'] for model in meta['models']] == sorted(model['name'] for model in meta['models'])
-        assert (recording.version, recording.source) == (0, {'kind': 'state', 'name': 'start'})
+        assert (recording.version, recording.source) == (1, {'kind': 'state', 'name': 'start'})
         # The start state is embedded: the file replays without the states dir, to the state it recorded.
         report = _native.replay_verify(recording.data)
         assert (report['frames'], report['states']) == (recording.frames, len(recording.states()))
