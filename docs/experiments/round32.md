@@ -417,7 +417,9 @@ demonstrations added) brought no gain: confirmation 55.9% against `r32d3-manh`'s
 **zol, chosen and promoted for `d3first`** (`r32d3-zol`, its last weights): from Level 3's entrance to 3:0x59's
 door (0x7b, 0x6b, darknut's 0x5b, 0x4b, 0x4a, 0x49), confirmation **59.0% ± 1.6** against the promoted run's 8.7%
 (paired +50.3 ± 1.7), Link arriving with 1.45 hearts against 1.07. Screen: last 57.2%, it001422 55.3%, it001452
-54.6%, it001482 49.8%, promoted 9.6%. `d2first` keeps `r79b-zol`.
+54.6%, it001482 49.8%, promoted 9.6%. `d2first` keeps `r79b-zol`. Round 2 (`r32d3-zol2`, from it, the planner's
+demonstrations) brought no gain: 74.5% against `r32d3-zol`'s 73.1% (+1.4 ± 1.9), both with darknut's route run in the
+team (hence the higher rates); not promoted.
 
 **darknut, chosen and promoted for `d3first`** (`r32d3-dark-s32`, its last weights): from Level 3's entrance to
 Manhandla's door 3:0x4d with zol's route run in the team, confirmation **13.3% ± 1.1** against the old run's 0.8%
