@@ -190,8 +190,34 @@ def merge(stats, steps):
     return out
 
 
-def rooms_table(seg_stats, full_stats, d2_stats, d2steps, plan_stats):
-    exact, by_room = d2first_index(d2steps)
+def d2_cell(stats, index, key):
+    """A d2first column's cell for the step ``key`` (level, room, in_cave, entry, exit): lost per 1000 entering, hearts
+    in, lost a visit over d2first's steps of that room and sides (`room` = by another entry; `new` = never played)."""
+    exact, by_room = index
+    steps, kind = exact.get(key), ''
+    if not steps:
+        steps = by_room.get(key[:3])
+        kind = 'room ' if steps else ''
+    s = merge(stats, steps) if steps else None
+    if s and s['runs']:
+        return (f"{kind}{1000 * s['ended'] / s['runs']:.0f}, {s['hin'] / s['runs']:.1f}/"
+                f"{s['max'] / s['runs']:.0f}, {s['lost'] / s['visits']:.2f}")
+    return 'new'
+
+
+def trim_to_dungeon(run):
+    """A run of a chain with no stop, cut where it first leaves the dungeon it started in (scored a success there)."""
+    level = run['rooms'][0]['level'] if run['rooms'] else 0
+    for i, r in enumerate(run['rooms']):
+        if level and r['level'] == 0 and r['outcome'] != 'milestone':
+            return dict(run, rooms=run['rooms'][:i], result='success')
+    return run
+
+
+def rooms_table(seg_stats, full_stats, d2_stats, d2steps, plan_stats, ix=None):
+    """``ix``: (stats, steps) of d2first's phase IX chains (Dungeons 6, 8, 9 as d3first plays them), or None."""
+    d2index = d2first_index(d2steps)
+    ixindex = d2first_index(ix[1]) if ix else None
     first, last = PART['rooms']
     with_full = bool(PART['milestones'])
     print(f"\n### Every room of steps {first}-{last - 1} (models alone: its segment's 1000 runs; "
@@ -201,28 +227,22 @@ def rooms_table(seg_stats, full_stats, d2_stats, d2steps, plan_stats):
           "Lost: mean hearts lost a visit (a death loses all). Ends: runs lost in the room (death, stuck; `offroute-` "
           "after a wrong exit). Cheats: totals over the segment's runs (bombs/keys/rupees). d2first: r29land-1k's "
           "segments in the same room by the same entry and exit (`room` = the room by another entry; `new` = d2first "
-          "never plays it): lost per 1000 entering, hearts in, lost a visit. Planner: runs lost there of the "
-          f"planner's {'/'.join(PART['planned'])} runs that entered.\n")
+          "never plays it): lost per 1000 entering, hearts in, lost a visit"
+          f"{'; IX: the same from round 31' + chr(39) + 's d2first chains of Dungeons 6, 8, 9 after phase IX (r31-1k, v1.9.0.0 team, each cut where it leaves the dungeon)' if ix else ''}. "
+          f"Planner: runs lost there of the planner's {'/'.join(PART['planned'])} runs that entered.\n")
     print('| Step | Room | In→out | Family | Entered | Lost (per 1000) | Ends | Hearts in | Lost a visit | Steps '
           '| Bombs | Wrong exits | Cheats b/k/r |' + (' Full: entered, lost (per 1000), hearts in |' if with_full else '')
-          + ' d2first: lost/1000, hearts in, lost a visit | Planner: lost/entered |')
-    print('|' + '---|' * (16 if with_full else 15))
+          + ' d2first: lost/1000, hearts in, lost a visit |' + (' d2first IX |' if ix else '')
+          + ' Planner: lost/entered |')
+    print('|' + '---|' * (15 + with_full + bool(ix)))
     for step in range(first, last):
         s = seg_stats.get(step)
         room, io, fam = step_name(step)
         st = STEPS[step]
         key = (st['level'], st['room'], st['in_cave'], st['entry'], st['exit'])
-        d2 = exact.get(key)
-        kind = ''
-        if not d2:
-            d2 = by_room.get(key[:3])
-            kind = 'room ' if d2 else ''
-        d2s = merge(d2_stats, d2) if d2 else None
-        if d2s and d2s['runs']:
-            d2txt = (f"{kind}{1000 * d2s['ended'] / d2s['runs']:.0f}, {d2s['hin'] / d2s['runs']:.1f}/"
-                     f"{d2s['max'] / d2s['runs']:.0f}, {d2s['lost'] / d2s['visits']:.2f}")
-        else:
-            d2txt = 'new'
+        d2txt = d2_cell(d2_stats, d2index, key)
+        if ix:
+            d2txt += f" | {d2_cell(ix[0], ixindex, key) if st['level'] in (6, 8, 9) else ''}"
         f = full_stats.get(step)
         ftxt = (f"{int(f['runs'])}, {int(f['ended'])} ({1000 * f['ended'] / f['runs']:.0f}), "
                 f"{f['hin'] / f['runs']:.1f}" if f and f['runs'] else '-')
@@ -365,6 +385,11 @@ def main():
     parser.add_argument('--rooms', default='target/r32-base/rooms', help="single-room results (part first only)")
     parser.add_argument('--models', default='models')
     parser.add_argument('--golden', action='store_true', help="only the golden path's segments")
+    parser.add_argument('--d2first-ix-chains',
+                        default='/home/leculver/git/triforce-r31-steps/target/r31-chains/r31-1k',
+                        help="d2first's Dungeon 6, 8, 9 chains after phase IX (part rest; PREFIX-d6.jsonl ...)")
+    parser.add_argument('--d2first-ix-steps', default='tests/fixtures/d2first_steps.json',
+                        help="d2first's steps as the phase IX chains numbered them")
     args = parser.parse_args()
     global STEPS, PART, SEGMENTS  # pylint: disable=global-statement
     STEPS = _native.route_steps(ROUTE)
@@ -389,8 +414,16 @@ def main():
     d2runs = [r for name in D2_SEGMENT_FILES if os.path.isfile(f"{args.d2first_chains}-{name}.jsonl")
               for r in load(f"{args.d2first_chains}-{name}.jsonl")]
     plan_runs = [r for runs in plan.values() for r in runs]
+    ix = None
+    if args.part == 'rest' and os.path.isfile(f"{args.d2first_ix_chains}-d6.jsonl"):
+        with open(args.d2first_ix_steps, encoding='utf-8') as f:
+            ixsteps = json.load(f)
+        ixruns = [trim_to_dungeon(r) for name in ('d6', 'd8', 'd9')
+                  if os.path.isfile(f"{args.d2first_ix_chains}-{name}.jsonl")
+                  for r in load(f"{args.d2first_ix_chains}-{name}.jsonl")]
+        ix = (room_stats(ixruns), ixsteps)
     rooms_table(room_stats(seg_runs), room_stats(model.get('full', [])), room_stats(d2runs), d2steps,
-                room_stats(plan_runs))
+                room_stats(plan_runs), ix)
     if args.part == 'first' and os.path.isdir(args.rooms):
         singles_table(args.rooms, args.models)
 
