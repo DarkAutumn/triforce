@@ -32,8 +32,18 @@ ROOM is one of (the walks' rule each ports, `r32_d3first.LEGS`/`VARIANTS`):
                   into the cave.
     rupees-2d     0:0x2d's cave S->S (ow-zora, step 89): up to the 30 rupees at X $78, back, S out.
     candle-0c     0:0x0c's shop S->S (ow-tektite, step 94): up to the blue candle at X $98, back, S out.
-    wrap-0c       0:0x0c cave->W (ow-tektite, step 95): to ($F0,$8D) by the floor walk, CLIP E (the world wrap
-                  W)."""
+    wrap-0c       0:0x0c cave->W (ow-tektite, step 95): to ($D8,$8D) by the floor walk (inside the wrap's zone, off
+                  the E edge a Tektite's knock-back would push Link across), CLIP E (the world wrap W).
+
+The rooms the explorer does not solve from the route's states (rule tracks, `--tracks`), the walks' `clear` (the
+sword fighter, `r32_walks.Fighter`, until the room is all dead) and then their way out:
+
+    zol-6b        3:0x6b S->N (zol, step 8): ten Gels; the key at ($78,$8D), the N door.
+    zol-4b        3:0x4b S->W (zol, step 10): three Zols; the key at ($78,$8D), the W door.
+    like-like-32  4:0x32 W->cave (like-like, step 38): the Like-Likes; the block pushed E from ($50,$8D), the
+                  stairs E of ($C8,$5D).
+    vire-31       4:0x31 W->E (vire, step 37): the Vires; the E shutter.
+    vire-12       4:0x12 N->E (vire, step 50): the Vire; the block pushed E from ($50,$8D), the E door."""
 
 import sys
 from pathlib import Path
@@ -48,13 +58,15 @@ from r29_demos import (BOMBS, LETTER, OBJ_TYPE, OBJ_X, OBJ_Y, PARALYZED, ROOM_AL
                        make_bot)                                  # noqa: E402
 
 ROUTE = 'd3first'
-RUPEES, INV_CANDLE, HEARTS = 0x66D, 0x65B, 0x66F
+RUPEES, INV_CANDLE, HEARTS, KEYS = 0x66D, 0x65B, 0x66F, 0x66E
 GLEEOK2 = 0x43                                                    # level 4's two-headed Gleeok (r32_walks.GLEEOK2)
 
 # room -> (family, d3first's route step)
 ROOMS = {'darknut-59': ('darknut', 13), 'dash-69': ('darknut', 14), 'manhandla-4d': ('boss-manhandla', 22),
          'gleeok-13': ('boss-gleeok', 51), 'mouth-37': ('ow-octorok', 62), 'wall-2d': ('ow-zora', 88),
-         'rupees-2d': ('ow-zora', 89), 'candle-0c': ('ow-tektite', 94), 'wrap-0c': ('ow-tektite', 95)}
+         'rupees-2d': ('ow-zora', 89), 'candle-0c': ('ow-tektite', 94), 'wrap-0c': ('ow-tektite', 95),
+         'zol-6b': ('zol', 8), 'zol-4b': ('zol', 10), 'like-like-32': ('like-like', 38), 'vire-31': ('vire', 37),
+         'vire-12': ('vire', 50)}
 
 
 def route_step(index, route=ROUTE):
@@ -207,7 +219,8 @@ def fight_rule(fighter, way_of):
     def rule(ram, ok):
         if 'bot' not in state:
             bot = state['bot'] = make_bot(fighter(), ram)
-            bot.fill = bot.fill_frames               # `env_bot`'s own `fill` (a no-op) would shadow a base's
+            if hasattr(bot, 'fill_frames'):        # `env_bot`'s own `fill` (a no-op) would shadow a base's
+                bot.fill = bot.fill_frames
             state['way'] = way_of(state['bot'])
         bot = state['bot']
         bot.ok = ok
@@ -264,6 +277,22 @@ def heart_way(node, door):
     return way
 
 
+def key_way(door, letter):
+    """A key room's end: the key at ($78,$8D), then the door at `door` toward `letter`."""
+    def way(bot):
+        got = taken(KEYS, lambda before, now: now > before)
+        return Way(take_stage(bot, (0x78, 0x8D), got), go(bot, door, letter), out(letter))
+    return way
+
+
+def push_way(stand, door, letter):
+    """A block room's end: the block pushed E from `stand` (`r29_demos.push`), then the door or stairs at `door`
+    toward `letter`."""
+    def way(bot):
+        return Way(r29_demos.push(bot, stand, 'E'), go(bot, door, letter), out(letter))
+    return way
+
+
 def cave_item_rule(x, done):
     """In a cave: up to the ware at X `x` until `done(ram)`, back to the entrance column, S out (the walks'
     `cave_item`)."""
@@ -312,6 +341,11 @@ RULES = {
     'candle-0c': lambda: cave_item_rule(0x98, taken(INV_CANDLE, lambda _before, now: now != 0)),
     'wrap-0c': lambda: walk_rule(lambda bot: Way(go(bot, (0xD8, 0x8D)),
                                                  lambda _ram, ok: 'CLIP E' if ok('CLIP E') else 'WAIT 4')),
+    'zol-6b': lambda: fight_rule(lambda: r32_walks.Fighter, key_way((0x78, 0x5D), 'N')),
+    'zol-4b': lambda: fight_rule(lambda: r32_walks.Fighter, key_way((0x20, 0x8D), 'W')),
+    'like-like-32': lambda: fight_rule(lambda: r32_walks.Fighter, push_way((0x50, 0x8D), (0xC8, 0x5D), 'E')),
+    'vire-31': lambda: fight_rule(lambda: r32_walks.Fighter, lambda bot: Way(go(bot, (0xD0, 0x8D), 'E'), out('E'))),
+    'vire-12': lambda: fight_rule(lambda: r32_walks.Fighter, push_way((0x50, 0x8D), (0xD0, 0x8D), 'E')),
 }
 
 
