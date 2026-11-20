@@ -81,8 +81,26 @@ def test_d3first_runs_from_the_start_to_the_end_of_the_game():
     assert [(s['room'], steps[s['index'] + 1]['room']) for s in steps if s['exit'] == 'recorder'] == [
         (0x0b, 0x74), (0x3c, 0x45), (0x22, 0x3c), (0x6d, 0x37)]
     assert [(s['level'], s['room'], s['bomb_reserve']) for s in steps[:149] if s['bomb_reserve'] is not None] == [
-        (3, 0x7c, 6), (3, 0x5b, 0), (3, 0x5c, 6), (3, 0x4d, 0), (3, 0x3d, 6), (4, 0x71, 2), (0, 0x45, 8),
+        (3, 0x7c, 6), (3, 0x59, 0), (3, 0x5b, 0), (3, 0x5c, 6), (3, 0x4d, 0), (3, 0x3d, 6), (4, 0x71, 2), (0, 0x45, 8),
         (0, 0x37, 8), (5, 0x76, 8), (5, 0x05, 0), (5, 0x05, 8), (5, 0x24, 0), (0, 0x3c, 1)]
+
+
+def test_d3first_the_bomb_reserve_through_dungeon_3():
+    """The lead, Nov 20: d3first keeps 6 bombs from 0x7c to 0x49 (0x4a's four are taken on the way), then 0 from
+    0x59's fight step (its first visit, entered from N: five Red Darknuts, all to die, by 0x4a's bombs) through
+    0x5b's last pass (its own four pay for what follows), 6 from 0x5c, 0 for Manhandla, 6 again to the triforce.
+    d2first's reserve stays 6 in 0x59 (its golden list above)."""
+    held, along = 0, []
+    for step in native.route_steps('d3first'):
+        held = step['bomb_reserve'] if step['bomb_reserve'] is not None else held
+        if step['level'] == 3:
+            along.append((step['room'], step['in_cave'], step['entry'], held))
+    assert along == [
+        (0x7c, False, 'S', 6), (0x7b, False, 'E', 6), (0x6b, False, 'S', 6), (0x5b, False, 'S', 6),
+        (0x4b, False, 'S', 6), (0x4a, False, 'E', 6), (0x49, False, 'E', 6), (0x59, False, 'N', 0),
+        (0x69, False, 'N', 0), (0x0f, True, 'S', 0), (0x69, False, 'cave', 0), (0x59, False, 'S', 0),
+        (0x5a, False, 'W', 0), (0x5b, False, 'W', 0), (0x5c, False, 'W', 6), (0x4c, False, 'S', 6),
+        (0x4d, False, 'W', 0), (0x3d, False, 'S', 6)]
 
 
 def test_rooms_visited_more_than_once_have_later_visit_names():

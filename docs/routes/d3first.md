@@ -25,7 +25,7 @@ sets its own reserves on its own steps before a block, and a block's own reserve
 
 | Block | Steps on d3first | Rooms |
 |---|---|---|
-| `dungeon-3` | 13-23 | 3:0x59 from N to the triforce: 0x69, the raft cellar, back E by 0x5a, 0x5b's last pass, 0x5c, 0x4c, Manhandla, 0x3d |
+| `dungeon-3` | 14-23 | 3:0x69 from 0x59 (whose fight from N, step 13, is each route's own: d3first's reserve is 0 there) to the triforce: the raft cellar, back E by 0x59 and 0x5a, 0x5b's last pass, 0x5c, 0x4c, Manhandla, 0x3d |
 | `to-level-4` | 24-30 | 0:0x74 cave → W to 0x45's mouth (the raft from 0x55) |
 | `dungeon-4` | 31-52 | 4:0x71 to 0x03, the stretch `d4-island` |
 | `dungeon-1` | 61-78 | 1:0x73 out S to 0:0x37 and back in, N by 0x63, 0x53's wall, the bow, to 0x36 (phase IX's) |
@@ -61,7 +61,8 @@ Its own steps in full; the blocks by their rooms.
 | 10 | `3_4bs` | 3:0x4b | S → W | zol | kill all, the key, the W key door | 3 / W |
 | 11 | `3_4ae` | 3:0x4a | E → W | stalfos-keese-gel | kill all (5 Keese), 4 bombs | 3 / W |
 | 12 | `3_49e` | 3:0x49 | E → S | zol | the key | 3 / W |
-| 13-23 | | `dungeon-3` | | darknut, equipment-room, trap-room, boss-manhandla, zol | 0x59 emptied, the raft, 0x5b's 4 bombs and E wall, 0x4c's E wall, Manhandla's heart, the piece | 3 → 4 / W |
+| 13 | `3_59n` | 3:0x59 | N → S | darknut | emptied (five Red Darknuts); `bomb_reserve: 0` (round 32: 0x4a's bombs are the fight's) | 3 / W |
+| 14-23 | | `dungeon-3` | | darknut, equipment-room, trap-room, boss-manhandla, zol | the raft, 0x5b's 4 bombs and E wall, 0x4c's E wall, Manhandla's heart, the piece | 3 → 4 / W |
 | 24-30 | | `to-level-4` | | ow-tektite, ow-moblin, ow-octorok, ow-zora, ow-peahat | 0x64 scrollable; the raft from 0x55 | 4 / W |
 | 31-52 | | `dungeon-4` | | (d2first's) | the ladder, 0x01's key, Gleeok's heart, the piece | 4 → 5 / W |
 | 53 | `0_45c` | 0:0x45 | cave → S | ow-peahat | `bomb_reserve: 8` (the Olive Garden) | 5 / W |
@@ -177,9 +178,10 @@ the run-time switch off has no way past them. The shared blocks keep their stret
 
 ## Reserves
 
-- **Bombs.** 6 from Dungeon 3's entrance as d2first's (0x4a's four are kept for the two walls and Manhandla, whom
-  the wood sword never beat at 3 hearts; 0x59's Darknuts by the sword: the rule's 11 of 20 by the sword against 17
-  of 20 with 0x4a's bombs is the price); 0 on 0x5b's last pass and at Manhandla, 6 between (the block's). 2 from
+- **Bombs.** 6 from Dungeon 3's entrance to 0x49 as d2first's; **0 from 0x59's fight (step 13, d3first's own; the
+  lead, Nov 20) through 0x5b's last pass**: 0x4a's four bombs are 0x59's (five Red Darknuts, all to die: the
+  BombFighter rule wins 60 of 60 with them, the sword alone 11 of 20), and 0x5b's four, taken on its last pass, pay
+  for the two walls and Manhandla; 6 at 0x5c and 0x4c, 0 at Manhandla, 6 after him (the block's). 2 from
   Dungeon 4's entrance (the block's). **8 from Level 4's exit to Dungeon 5** (d3first's own steps 53 and 83): every
   bomb Link has is kept for the Olive Garden (walks-b §2: the wood sword clears it 9 of 20 without bombs, 18 of 20
   with eight); the walls on the way (1:0x53 after phase IX, 0x2c, 0x2d) are bombed as any wall, cheated where Link
