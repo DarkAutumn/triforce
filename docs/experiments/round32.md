@@ -378,3 +378,46 @@ them before the triforce; the planner, which keeps them, finishes 26% and 34%. A
 planner's level or better on `d3`/`d4`, the models' Dungeon 1 at its 637 runs past 0x37 above 41%, and every
 `d2first` segment within noise. Data questions for the lead (route data, not this round's): the start states of
 Dungeons 4 and 1 hold no bombs (the walls are cheated every run).
+
+## 5. Dungeon 3's families on `d3first`: darknut, zol, boss-manhandla (in progress)
+
+**Cause** (§2): every wood-sword fight is longer, so Dungeon 3's three containers run out (0x6b loses 1.31 hearts a
+visit, 0x4b 0.91), and the fights the models never saw with the wood sword kill at full hearts (3:0x59's five Red
+Darknuts 35%, Manhandla 53%).
+
+**Arm** (round 1): one route-specific continuation per family on `d3first`'s states only (`state_routes:
+[d3first]`), from its promoted run, 488 iterations (2M steps), `--sil-coeff 0.1`, checkpoints every 30; start states
+at the chains' hearts by the harvested handoffs at `harvested_fraction` 0.25; curriculum tracks from the explorer
+and, where it fails, the rule-won tracks; demonstrations at `--demo-coeff 0.05`: the rule files only (darknut:
+`darknut-59` and `dash-69`; boss-manhandla: `manhandla-4d`; zol: none). darknut three seeds (32-34), the others
+one. The planner's demonstrations (`temperature:0.5+relax:16+plan:16:1`, won episodes, 20 runs a seed state and up
+to 30 harvested handoffs a stem) were recorded beside them for round 2: darknut 22,938 rows (3:0x59 N→S 39 of 60
+won from the seed states), zol 27,933, boss-manhandla 2,385 (36 of 60). darknut's 3_5bw_0 and 3_5bw_2 had no track
+in round 1 (an explorer fault, since fixed); later rounds have them.
+
+**Choosing.** A single family swapped into the `d3` chain leaves it at 0% (the other two still kill every run), so
+each is chosen on the stretch of `d3` it plays, on the chain's own hearts: zol from Level 3's entrance to 3:0x59's
+door (arrivals and hearts there), darknut from the entrance to Manhandla's door 3:0x4d with zol's route run in the
+team, boss-manhandla from Manhandla's door (`3_4dw_0`, 1 heart of 3, as the chains arrive) to 0:0x74. Screen seeds
+2000-2999, confirmation 3000-3999 (`select-checkpoint ... --route d3first`; the start must be given by its
+namespaced name, `--from d3first_3_7cs_0`: with `--segment d3` the report does not find its own chains, because
+the chains' provenance holds the namespaced name).
+
+**Results so far (single rooms, the round's evaluation, 20 episodes a state):** zol 3_4bs 90-100% at -0.1 to -0.2
+hearts (baseline 61-69%, -1.0), 3_6bs 85-90% at -0.4 to -0.6 (70-76%, -1.1 to -1.35); darknut 3_59n 65-80%, 70-78%,
+47-78% for the three seeds (baseline 24-34%) at -0.8 to -1.3 hearts, with about one bomb a visit when Link holds more
+than the route's reserve of 6; boss-manhandla 3_4dw 70% each (baseline 45/67/45%).
+
+**boss-manhandla, chosen and promoted for `d3first`** (`r32d3-manh`, its last weights): from Manhandla's door at 1
+heart to 0:0x74, confirmation **58.0% ± 1.6** against the promoted run's 47.2% (paired +10.8 ± 1.9; hearts on
+arriving 3.44 against 3.44). Screen: it003596 60.1%, last 58.6%, promoted 49.2%; the screen's winner did not confirm
+(-1.3 ± 1.8 against last). `d2first` keeps `r78t4-manhandla2`.
+
+**Not yet measured:** zol's and darknut's selections, the round-2 continuations with the planner's demonstrations
+(boss-manhandla and zol queued), and the `d3` team chain of 1000 runs with the planner's 300 beside and its per-room
+ledger (`scripts/experiments/r32d3_ledger.py`: deaths, hearts on entering and lost a visit, bombs held and used, and
+the hearts and bombs carried out of the dungeon). Nothing of zol or darknut is promoted.
+
+**For the lead (route data, not changed):** `d3first` keeps a bomb reserve of 6 from 3:0x7c through 3:0x59, so
+darknut's BOMB is masked in 0x59 unless Link holds 7 or 8 bombs. The walks' `BombFighter` (60 of 60 from real
+states, with 0x4a's bombs) is therefore closed to the model on most runs.
