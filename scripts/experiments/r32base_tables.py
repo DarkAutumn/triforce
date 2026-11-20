@@ -1,12 +1,15 @@
-"""Round 32's d3first baseline tables (docs/experiments/round32.md): the chain segments and the full run to Level 5's
-entrance, every route step's room in the chains, the d2first chains of the same rooms (the white sword), and the
-single-room evaluations against the same states on d2first.
+"""Round 32's d3first baseline tables (docs/experiments/round32.md): the chain segments (and the full run to Level 5's
+entrance), every route step's room in the chains, the d2first chains of the same rooms (the white sword), the
+single-room evaluations against the same states on d2first, and the golden path's segments.
 
-    .venv/bin/python scripts/experiments/r32base_tables.py [--tag r32base] [--chains-dir target/r56-chains]
-        [--d2first-chains <main>/target/r56-chains/r29land-1k] [--d2first-steps FILE] [--rooms DIR] [--models DIR]
+    .venv/bin/python scripts/experiments/r32base_tables.py [--part first|rest] [--tag TAG]
+        [--chains-dir target/r56-chains] [--d2first-chains <main>/target/r56-chains/r29land-1k]
+        [--d2first-steps FILE] [--rooms DIR] [--models DIR] [--golden]
 
+`--part first`: steps 0-97 (tag r32base); `rest`: Level 5's entrance to the ending (tag r32base2).
 `--d2first-steps`: d2first's route steps as the d2first chains numbered them (a JSON list of
-`_native.route_steps('d2first')` from the checkout that ran them: their `step` fields index it).  Prints markdown.
+`_native.route_steps('d2first')` from the checkout that ran them: their `step` fields index it).  `--golden`: only
+the golden path's table (every triforce-to-triforce segment, both parts' chains in `--chains-dir`).  Prints markdown.
 """
 
 import argparse
@@ -20,15 +23,43 @@ from pathlib import Path
 from triforce import _native
 
 ROUTE = 'd3first'
-SEGMENTS = (('full', 'start', 0, 97), ('d3', '3_7cs_0', 6, 24), ('post-d3', '0_74c_0', 24, 31),
-            ('d4', '4_71s_0', 31, 53), ('post-d4', '0_45c_0', 53, 61), ('d1', '1_73s_0', 61, 79),
-            ('post-d1', '0_37c_v2_0', 79, 97))
-PLANNED = ('d3', 'd4', 'full')
-MILESTONES = ((6, "Level 3's entrance (3:0x7c)"), (23, "Dungeon 3's triforce room (3:0x3d)"),
-              (24, 'out of Dungeon 3 (0:0x74)'), (31, "Level 4's entrance (4:0x71)"),
-              (52, "Dungeon 4's triforce room (4:0x03)"), (53, 'out of Dungeon 4 (0:0x45)'),
-              (61, "Level 1's entrance (1:0x73)"), (78, "Dungeon 1's triforce room (1:0x36)"),
-              (79, 'out of Dungeon 1 (0:0x37)'), (97, "Level 5's entrance (5:0x76)"))
+PARTS = {
+    'first': {
+        'tag': 'r32base',
+        'segments': (('full', 'start', 0, 97), ('d3', '3_7cs_0', 6, 24), ('post-d3', '0_74c_0', 24, 31),
+                     ('d4', '4_71s_0', 31, 53), ('post-d4', '0_45c_0', 53, 61), ('d1', '1_73s_0', 61, 79),
+                     ('post-d1', '0_37c_v2_0', 79, 97)),
+        'planned': ('d3', 'd4', 'full'),
+        'milestones': ((6, "Level 3's entrance (3:0x7c)"), (23, "Dungeon 3's triforce room (3:0x3d)"),
+                       (24, 'out of Dungeon 3 (0:0x74)'), (31, "Level 4's entrance (4:0x71)"),
+                       (52, "Dungeon 4's triforce room (4:0x03)"), (53, 'out of Dungeon 4 (0:0x45)'),
+                       (61, "Level 1's entrance (1:0x73)"), (78, "Dungeon 1's triforce room (1:0x36)"),
+                       (79, 'out of Dungeon 1 (0:0x37)'), (97, "Level 5's entrance (5:0x76)")),
+        'rooms': (0, 97),
+    },
+    'rest': {
+        'tag': 'r32base2',
+        'segments': (('d5', '5_76s_0', 97, 120), ('post-d5', '0_0bc_0', 120, 145), ('d2', '2_7ds_0', 145, 155),
+                     ('post-d2', '0_3cc_0', 155, 174), ('d7', '7_79s_0', 174, 194), ('post-d7', '0_42c_0', 194, 211),
+                     ('d6', '6_79s_0', 211, 227), ('post-d6', '0_22c_0', 227, 233), ('d8', '8_7es_0', 233, 243),
+                     ('post-d8', '0_6dc_0', 243, 258), ('d9', '9_76s_0', 258, None)),
+        'planned': ('d5', 'd2', 'd7', 'd6', 'd8', 'd9'),
+        'milestones': (),
+        'rooms': (97, 304),
+    },
+}
+# The golden path's unit: from one triforce to the next, legs included (tag, leg segment, tag, dungeon segment).
+# The first: the full run's steps 0-5 are its leg (Level 3's entrance at step 6).
+GOLDEN = (("the start → Dungeon 3", 'r32base', 'full', 'r32base', 'd3'),
+          ('Dungeon 3 → Dungeon 4', 'r32base', 'post-d3', 'r32base', 'd4'),
+          ('Dungeon 4 → Dungeon 1', 'r32base', 'post-d4', 'r32base', 'd1'),
+          ('Dungeon 1 → Dungeon 5', 'r32base', 'post-d1', 'r32base2', 'd5'),
+          ('Dungeon 5 → Dungeon 2', 'r32base2', 'post-d5', 'r32base2', 'd2'),
+          ('Dungeon 2 → Dungeon 7', 'r32base2', 'post-d2', 'r32base2', 'd7'),
+          ('Dungeon 7 → Dungeon 6', 'r32base2', 'post-d7', 'r32base2', 'd6'),
+          ('Dungeon 6 → Dungeon 8', 'r32base2', 'post-d6', 'r32base2', 'd8'),
+          ('Dungeon 8 → the ending', 'r32base2', 'post-d8', 'r32base2', 'd9'))
+SEGMENTS = PARTS['first']['segments']
 D2_SEGMENT_FILES = ('d2', 'post-d2', 'd1', 'post-d1', 'd3', 'post-d3', 'd4', 'post-d4', 'd5', 'post-d5', 'd7',
                     'post-d7', 'd6', 'post-d6', 'd8', 'post-d8', 'd9')
 
@@ -89,7 +120,8 @@ def segment_table(runs_by_seg, label):
         hearts = [r['rooms'][-1]['health_out'] for r in ok if r['rooms']]
         mx = [r['rooms'][-1]['max_health'] for r in ok if r['rooms']]
         h = f"{sum(hearts) / len(hearts):.2f} of {sum(mx) / len(mx):.1f}" if hearts else '-'
-        print(f"| {name} | {start} (step {first}) → step {stop} | {n} | **{100 * len(ok) / n:.1f}%** "
+        print(f"| {name} | {start} (step {first}) → {'the ending' if stop is None else f'step {stop}'} | {n} | "
+              f"**{100 * len(ok) / n:.1f}%** "
               f"± {ci(len(ok), n):.1f} | {deaths} | {stuck} | {other}"
               f"{' (' + ', '.join(f'{k} {v}' for k, v in ends.items()) + ')' if ends else ''} | {h} |")
 
@@ -98,7 +130,7 @@ def milestones_table(full_runs, plan_runs):
     print("\n### The full run from the game start: its milestones\n")
     print('| Reached | Models alone (1000) | Planner (300) |')
     print('|---|---|---|')
-    for step, label in MILESTONES:
+    for step, label in PART['milestones']:
         cells = []
         for runs in (full_runs, plan_runs):
             if not runs:
@@ -158,48 +190,133 @@ def merge(stats, steps):
     return out
 
 
-def rooms_table(seg_stats, full_stats, d2_stats, d2steps, plan_stats):
-    exact, by_room = d2first_index(d2steps)
-    print("\n### Every room of steps 0-96 (models alone: its segment's 1000 runs; the full run's; d2first's)\n")
-    print("Segment columns from the segment that holds the step (its start state's hearts); `full` from the game "
-          "start (hearts carried). Hearts in: mean on entering / max. Lost: mean hearts lost a visit (a death loses "
-          "all). Ends: runs lost in the room (death, stuck; `offroute-` after a wrong exit). Cheats: totals over the "
-          "segment's runs (bombs/keys/rupees). d2first: r29land-1k's segments in the same room by the same entry and "
-          "exit (`room` = the room by another entry; `new` = d2first never plays it): lost per 1000 entering, hearts "
-          "in, lost a visit. Planner: runs lost there of the planner's d3/d4/full runs that entered.\n")
+def d2_cell(stats, index, key):
+    """A d2first column's cell for the step ``key`` (level, room, in_cave, entry, exit): lost per 1000 entering, hearts
+    in, lost a visit over d2first's steps of that room and sides (`room` = by another entry; `new` = never played)."""
+    exact, by_room = index
+    steps, kind = exact.get(key), ''
+    if not steps:
+        steps = by_room.get(key[:3])
+        kind = 'room ' if steps else ''
+    s = merge(stats, steps) if steps else None
+    if s and s['runs']:
+        return (f"{kind}{1000 * s['ended'] / s['runs']:.0f}, {s['hin'] / s['runs']:.1f}/"
+                f"{s['max'] / s['runs']:.0f}, {s['lost'] / s['visits']:.2f}")
+    return 'new'
+
+
+def trim_to_dungeon(run):
+    """A run of a chain with no stop, cut where it first leaves the dungeon it started in (scored a success there)."""
+    level = run['rooms'][0]['level'] if run['rooms'] else 0
+    for i, r in enumerate(run['rooms']):
+        if level and r['level'] == 0 and r['outcome'] != 'milestone':
+            return dict(run, rooms=run['rooms'][:i], result='success')
+    return run
+
+
+def rooms_table(seg_stats, full_stats, d2_stats, d2steps, plan_stats, ix=None):
+    """``ix``: (stats, steps) of d2first's phase IX chains (Dungeons 6, 8, 9 as d3first plays them), or None."""
+    d2index = d2first_index(d2steps)
+    ixindex = d2first_index(ix[1]) if ix else None
+    first, last = PART['rooms']
+    with_full = bool(PART['milestones'])
+    print(f"\n### Every room of steps {first}-{last - 1} (models alone: its segment's 1000 runs; "
+          f"{'the full run' + chr(39) + 's; ' if with_full else ''}d2first's)\n")
+    print("Segment columns from the segment that holds the step (its start state's hearts)"
+          f"{'; `full` from the game start (hearts carried)' if with_full else ''}. Hearts in: mean on entering / max. "
+          "Lost: mean hearts lost a visit (a death loses all). Ends: runs lost in the room (death, stuck; `offroute-` "
+          "after a wrong exit). Cheats: totals over the segment's runs (bombs/keys/rupees). d2first: r29land-1k's "
+          "segments in the same room by the same entry and exit (`room` = the room by another entry; `new` = d2first "
+          "never plays it): lost per 1000 entering, hearts in, lost a visit"
+          f"{'; IX: the same from round 31' + chr(39) + 's d2first chains of Dungeons 6, 8, 9 after phase IX (r31-1k, v1.9.0.0 team, each cut where it leaves the dungeon)' if ix else ''}. "
+          f"Planner: runs lost there of the planner's {'/'.join(PART['planned'])} runs that entered.\n")
     print('| Step | Room | In→out | Family | Entered | Lost (per 1000) | Ends | Hearts in | Lost a visit | Steps '
-          '| Bombs | Wrong exits | Cheats b/k/r | Full: entered, lost (per 1000), hearts in | d2first: lost/1000, '
-          'hearts in, lost a visit | Planner: lost/entered |')
-    print('|' + '---|' * 16)
-    for step in range(0, 97):
+          '| Bombs | Wrong exits | Cheats b/k/r |' + (' Full: entered, lost (per 1000), hearts in |' if with_full else '')
+          + ' d2first: lost/1000, hearts in, lost a visit |' + (' d2first IX |' if ix else '')
+          + ' Planner: lost/entered |')
+    print('|' + '---|' * (15 + with_full + bool(ix)))
+    for step in range(first, last):
         s = seg_stats.get(step)
         room, io, fam = step_name(step)
         st = STEPS[step]
         key = (st['level'], st['room'], st['in_cave'], st['entry'], st['exit'])
-        d2 = exact.get(key)
-        kind = ''
-        if not d2:
-            d2 = by_room.get(key[:3])
-            kind = 'room ' if d2 else ''
-        d2s = merge(d2_stats, d2) if d2 else None
-        if d2s and d2s['runs']:
-            d2txt = (f"{kind}{1000 * d2s['ended'] / d2s['runs']:.0f}, {d2s['hin'] / d2s['runs']:.1f}/"
-                     f"{d2s['max'] / d2s['runs']:.0f}, {d2s['lost'] / d2s['visits']:.2f}")
-        else:
-            d2txt = 'new'
+        d2txt = d2_cell(d2_stats, d2index, key)
+        if ix:
+            d2txt += f" | {d2_cell(ix[0], ixindex, key) if st['level'] in (6, 8, 9) else ''}"
         f = full_stats.get(step)
         ftxt = (f"{int(f['runs'])}, {int(f['ended'])} ({1000 * f['ended'] / f['runs']:.0f}), "
                 f"{f['hin'] / f['runs']:.1f}" if f and f['runs'] else '-')
+        fcell = f" {ftxt} |" if with_full else ''
         p = plan_stats.get(step)
         ptxt = f"{int(p['ended'])}/{int(p['runs'])}" if p and p['runs'] else '-'
         if not s or not s['runs']:
-            print(f"| {step} | {room} | {io} | {fam} | - | | | | | | | | | {ftxt} | {d2txt} | {ptxt} |")
+            print(f"| {step} | {room} | {io} | {fam} | - | | | | | | | | |{fcell} {d2txt} | {ptxt} |")
             continue
         n, v = s['runs'], s['visits']
         print(f"| {step} | {room} | {io} | {fam} | {int(n)} | {int(s['ended'])} ({1000 * s['ended'] / n:.0f}) | "
               f"{ends_text(s)} | {s['hin'] / n:.2f}/{s['max'] / n:.0f} | {s['lost'] / v:.2f} | {s['steps'] / v:.0f} | "
               f"{s['bombs'] / v:.2f} | {int(s['wrong'])} | {int(s['cheated_bombs'])}/{int(s['cheated_keys'])}/"
-              f"{int(s['cheated_rupees'])} | {ftxt} | {d2txt} | {ptxt} |")
+              f"{int(s['cheated_rupees'])} |{fcell} {d2txt} | {ptxt} |")
+
+
+def segment_bounds(tag, name):
+    """(first step, stop step or None) of the segment ``name`` of the part whose tag is ``tag``."""
+    part = next(p for p in PARTS.values() if p['tag'] == tag)
+    return next((first, stop) for n, _, first, stop in part['segments'] if n == name)
+
+
+def arrival_at(run, step):
+    """Link's hearts on reaching route step ``step`` (a run stopped there: its last room's hearts out; else the first
+    record of that step: its hearts in), or None if he never got there."""
+    if run['result'] == 'success' and run['rooms'] and max_step(run) < step:
+        return run['rooms'][-1]['health_out']
+    for r in on_route(run['rooms']):
+        if r['step'] == step:
+            return r['health_in']
+    return None
+
+
+def golden_table(chains_dir):
+    """Every triforce-to-triforce segment: the leg's arrivals at the dungeon's entrance (rate, hearts), the dungeon's
+    rate from its start state (full hearts), and the chance one run wins both: the dungeon's rate scaled per arrival
+    by V(entrance, hearts) / V(entrance, full) of a heart_value fit (deaths only) on the two chains."""
+    from triforce.heart_value import build_table  # pylint: disable=import-outside-toplevel
+    print("\n### The golden path's segments (triforce to triforce, legs included; models alone)\n")
+    print("Leg: runs reaching the dungeon's entrance (of 1000) and their hearts there. Dungeon: its segment from its "
+          "start state at full hearts. V: a heart_value fit on the leg's and the dungeon's chains (death only, a "
+          "damage prior where no run entered at those hearts): the chance of living to the triforce from the "
+          "entrance at the leg's mean hearts against at full. One run wins it: the mean over the leg's runs of "
+          "the dungeon's rate × V(their hearts) / V(full) (0 for a leg run that never arrived); leg × dungeon: the "
+          "same at full hearts.\n")
+    print("| Segment | Leg arrives | Hearts there (of max) | Dungeon (full hearts) | V at those hearts / at full | "
+          "One run wins it | Leg × dungeon |")
+    print('|---|---|---|---|---|---|---|')
+    d = Path(chains_dir)
+    for title, ltag, leg, dtag, dun in GOLDEN:
+        lpath, dpath = d / f"{ltag}-1k-{leg}.jsonl", d / f"{dtag}-1k-{dun}.jsonl"
+        if not (lpath.is_file() and dpath.is_file()):
+            print(f"| {title} | - | - | - | - | - | - |")
+            continue
+        legs, duns = load(lpath), load(dpath)
+        entrance, _ = segment_bounds(dtag, dun)
+        hearts = [h for h in (arrival_at(r, entrance) for r in legs) if h is not None]
+        rate = sum(r['result'] == 'success' for r in duns) / len(duns)
+        table = build_table(STEPS, [str(lpath), str(dpath)], ROUTE)
+        row = table['steps'][entrance]['clips']
+        if not hearts or row is None:
+            print(f"| {title} | {len(hearts)} | - | {100 * rate:.1f}% | - | 0.0% | 0.0% |")
+            continue
+        values, top = row['values'], 2 * row['max_hearts']
+        full = values[top]
+
+        def v(h, values=values, top=top):
+            return values[min(max(int(round(2 * h)), 0), top)]
+        mean_h = sum(hearts) / len(hearts)
+        ratio = (lambda h: v(h) / full) if full > 0 else (lambda h: 0.0)
+        wins = sum(rate * ratio(h) for h in hearts) / len(legs)
+        print(f"| {title} | {100 * len(hearts) / len(legs):.1f}% | {mean_h:.2f} of {row['max_hearts']} | "
+              f"{100 * rate:.1f}% | {v(mean_h):.2f} / {full:.2f} | **{100 * wins:.1f}%** | "
+              f"{100 * len(hearts) / len(legs) * rate:.1f}% |")
 
 
 def eval_by_state(path, clips_on_only=True):
@@ -260,36 +377,59 @@ def singles_table(rooms_dir, models_dir):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--tag', default='r32base')
+    parser.add_argument('--part', choices=sorted(PARTS), default='first')
+    parser.add_argument('--tag', default=None, help="the chains' tag (default the part's: r32base, r32base2)")
     parser.add_argument('--chains-dir', default='target/r56-chains')
     parser.add_argument('--d2first-chains', default='/home/leculver/git/triforce/target/r56-chains/r29land-1k')
     parser.add_argument('--d2first-steps', default='target/r32-base/d2first-main-steps.json')
-    parser.add_argument('--rooms', default='target/r32-base/rooms')
+    parser.add_argument('--rooms', default='target/r32-base/rooms', help="single-room results (part first only)")
     parser.add_argument('--models', default='models')
+    parser.add_argument('--golden', action='store_true', help="only the golden path's segments")
+    parser.add_argument('--d2first-ix-chains',
+                        default='/home/leculver/git/triforce-r31-steps/target/r31-chains/r31-1k',
+                        help="d2first's Dungeon 6, 8, 9 chains after phase IX (part rest; PREFIX-d6.jsonl ...)")
+    parser.add_argument('--d2first-ix-steps', default='tests/fixtures/d2first_steps.json',
+                        help="d2first's steps as the phase IX chains numbered them")
     args = parser.parse_args()
-    global STEPS  # pylint: disable=global-statement
+    global STEPS, PART, SEGMENTS  # pylint: disable=global-statement
     STEPS = _native.route_steps(ROUTE)
+    if args.golden:
+        golden_table(args.chains_dir)
+        return
+    PART = PARTS[args.part]
+    SEGMENTS = PART['segments']
+    tag = args.tag or PART['tag']
     d = Path(args.chains_dir)
-    model = {name: load(d / f"{args.tag}-1k-{name}.jsonl") for name, *_ in SEGMENTS
-             if (d / f"{args.tag}-1k-{name}.jsonl").is_file()}
-    plan = {name: load(d / f"{args.tag}-plan-{name}.jsonl") for name in PLANNED
-            if (d / f"{args.tag}-plan-{name}.jsonl").is_file()}
+    model = {name: load(d / f"{tag}-1k-{name}.jsonl") for name, *_ in SEGMENTS
+             if (d / f"{tag}-1k-{name}.jsonl").is_file()}
+    plan = {name: load(d / f"{tag}-plan-{name}.jsonl") for name in PART['planned']
+            if (d / f"{tag}-plan-{name}.jsonl").is_file()}
     segment_table(model, 'Segments, models alone (today\'s team, act `model`, clips on, 1000 runs)')
     segment_table(plan, 'Segments, the planner (`temperature:0.5+relax:16+plan:16:1`, 300 runs)')
-    milestones_table(model.get('full'), plan.get('full'))
+    if PART['milestones']:
+        milestones_table(model.get('full'), plan.get('full'))
     seg_runs = [r for name, runs in model.items() if name != 'full' for r in runs]
     with open(args.d2first_steps, encoding='utf-8') as f:
         d2steps = json.load(f)
     d2runs = [r for name in D2_SEGMENT_FILES if os.path.isfile(f"{args.d2first_chains}-{name}.jsonl")
               for r in load(f"{args.d2first_chains}-{name}.jsonl")]
     plan_runs = [r for runs in plan.values() for r in runs]
+    ix = None
+    if args.part == 'rest' and os.path.isfile(f"{args.d2first_ix_chains}-d6.jsonl"):
+        with open(args.d2first_ix_steps, encoding='utf-8') as f:
+            ixsteps = json.load(f)
+        ixruns = [trim_to_dungeon(r) for name in ('d6', 'd8', 'd9')
+                  if os.path.isfile(f"{args.d2first_ix_chains}-{name}.jsonl")
+                  for r in load(f"{args.d2first_ix_chains}-{name}.jsonl")]
+        ix = (room_stats(ixruns), ixsteps)
     rooms_table(room_stats(seg_runs), room_stats(model.get('full', [])), room_stats(d2runs), d2steps,
-                room_stats(plan_runs))
-    if os.path.isdir(args.rooms):
+                room_stats(plan_runs), ix)
+    if args.part == 'first' and os.path.isdir(args.rooms):
         singles_table(args.rooms, args.models)
 
 
 STEPS = []
+PART = PARTS['first']
 
 if __name__ == '__main__':
     main()
