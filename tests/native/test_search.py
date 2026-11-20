@@ -172,7 +172,8 @@ def test_search_settings_reach_the_search(states_dir, tmp_path):
     # RNG redraws matter where enemies move: Dungeon 1's 0x44 (goriya), with a network whose futures don't all end
     # in the same death (seed 0's do since round 24 widened the heads; its Qs then match with or without redraws).
     require_state('1_44w_0')
-    config = native.SpecialistConfig.load('goriya').replace(start_states=['1_44w_0'], max_steps=50)
+    config = native.SpecialistConfig.load('goriya').replace(start_states=['1_44w_0'], max_steps=50,
+                                                            state_routes=['d2first'])   # no d3first heart_value table
     redraws, goriya = {}, network(1).to_native()
     for name, perturb in (('same', False), ('redrawn', True)):
         task = native.TrainTask(config, str(tmp_path / f'goriya-{name}'), states_dir=str(REPO_STATES_DIR))
