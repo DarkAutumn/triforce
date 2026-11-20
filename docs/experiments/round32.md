@@ -399,9 +399,10 @@ in round 1 (an explorer fault, since fixed); later rounds have them.
 each is chosen on the stretch of `d3` it plays, on the chain's own hearts: zol from Level 3's entrance to 3:0x59's
 door (arrivals and hearts there), darknut from the entrance to Manhandla's door 3:0x4d with zol's route run in the
 team, boss-manhandla from Manhandla's door (`3_4dw_0`, 1 heart of 3, as the chains arrive) to 0:0x74. Screen seeds
-2000-2999, confirmation 3000-3999 (`select-checkpoint ... --route d3first`; the start must be given by its
-namespaced name, `--from d3first_3_7cs_0`: with `--segment d3` the report does not find its own chains, because
-the chains' provenance holds the namespaced name).
+2000-2999, confirmation 3000-3999 (`select-checkpoint ... --route d3first`; round 1 gave the start by its
+namespaced name, `--from d3first_3_7cs_0`, because with `--segment d3` the report did not find its own chains: the
+chains' provenance holds the namespaced name. Fixed since: the plan names the start as eval-chain records it, so
+`--segment d3` and a bare `--from 3_7cs_0` work on a namespaced route).
 
 **Results so far (single rooms, the round's evaluation, 20 episodes a state):** zol 3_4bs 90-100% at -0.1 to -0.2
 hearts (baseline 61-69%, -1.0), 3_6bs 85-90% at -0.4 to -0.6 (70-76%, -1.1 to -1.35); darknut 3_59n 65-80%, 70-78%,
@@ -426,10 +427,49 @@ Manhandla's door 3:0x4d with zol's route run in the team, confirmation **13.3% �
 (the old run is measured in seed 34's selection on the same seeds 3000-3999 and team; about +12.5 points); seeds 34
 and 33 confirm 11.9% and 9.2%. Not yet checked on darknut's other `d3first` segments (Dungeons 5 and 8).
 
-**Not yet measured:** the round-2 continuations of zol (selection queued) and darknut, and the `d3` team chain of
-1000 runs with the planner's 300 beside and its per-room ledger (`scripts/experiments/r32d3_ledger.py`: deaths,
-hearts on entering and lost a visit, bombs held and used, and the hearts and bombs carried out of the dungeon).
+**The bomb reserve in 3:0x59 (route data, the lead, Nov 20).** `d3first` kept a reserve of 6 from 3:0x7c through
+3:0x59, so darknut's BOMB was masked in 0x59 unless Link held 7 or 8, and the walks' `BombFighter` (60 of 60 from
+real states, with 0x4a's four bombs) was closed to the model. Now 0x59's fight step (its first visit, from N) is each
+route's own step before the block `dungeon-3` (as Dungeon 5's entrance for the grant): `d3first`'s sets the reserve
+to 0 from there through 0x5b's last pass, whose four bombs pay for the two walls and Manhandla (0x5c 6, Manhandla 0,
+0x3d 6 as before); `d2first`'s step is unchanged and its golden list holds (`tests/test_game_map.py`).
 
-**For the lead (route data, not changed):** `d3first` keeps a bomb reserve of 6 from 3:0x7c through 3:0x59, so
-darknut's BOMB is masked in 0x59 unless Link holds 7 or 8 bombs. The walks' `BombFighter` (60 of 60 from real
-states, with 0x4a's bombs) is therefore closed to the model on most runs.
+### The `d3` segment with the three route runs (models alone, 1000 runs; the planner 300; seeds 4000-)
+
+zol `r32d3-zol`, darknut `r32d3-dark-s32`, boss-manhandla `r32d3-manh` (`promoted.d3first`), the reserve above,
+`--route d3first --from d3first_3_7cs_0 --stop-at step:24`:
+
+| Chain | Runs | Arrived (0:0x74) | Deaths | Stuck | Hearts out (of max) | Bombs out | Keys out |
+|---|---|---|---|---|---|---|---|
+| today's team (§3) | 1000 | 0.0% | 998 | 2 | - | - | - |
+| **the route's team** | 1000 | **6.7%** ± 0.8 | 931 | 2 | 4.00 of 4 | 4.25 | 2.00 |
+| planner, today's team (§3) | 300 | 26.0% | 207 | 15 | 4.00 of 4 | | |
+| planner, the route's team | 300 | 54.3% ± 2.9 | 137 | 0 | 4.00 of 4 | 4.10 | 2.00 |
+
+(± here is one standard error.) What a run carries into Dungeon 4 (`post-d3` and Dungeon 4's states should hold
+it): 4 of 4 hearts (the container refills them), 2 keys, and bombs spread from 0 to 8 (models: 0 ×6, 1 ×6, 2 ×9,
+3 ×1, 4 ×10, 5 ×18, 6 ×3, 7 ×2, 8 ×12 of 67; the planner's 163 alike, mean 4.1). The installed `4_71s_*` hold 0.
+
+Per room (`scripts/experiments/r32d3_ledger.py`; entered, lost there, hearts on entering of 3, hearts lost a visit,
+bombs on entering, bombs used a visit):
+
+| Step | Room | Family | Models | Planner |
+|---|---|---|---|---|
+| 8 | 3:0x6b S→N | zol | 1000, 11, 2.89, 0.39, 0, 0 | 300, 0, 2.99, 0.11 |
+| 9 | 3:0x5b S→N | darknut | 989, 36, 2.53, 0.38, 0, 0 | 300, 0, 2.88, 0.10 |
+| 10 | 3:0x4b S→W | zol | 953, 16, 2.23, 0.15 | 300, 0, 2.78, 0.07 |
+| 11 | 3:0x4a E→W | stalfos-keese-gel | 937, **124**, 2.11, 0.74 | 300, 1, 2.71, 0.14 |
+| 12 | 3:0x49 E→S | zol | 813, **95**, 1.59, 0.27, 3.98 | 299, 0, 2.57, 0.04 |
+| 13 | 3:0x59 N→S | darknut | 718, **149**, 1.49, 0.25, 3.97, 4.79 | 299, 2, 2.53, 0.03, 3.94, 4.74 |
+| 14 | 3:0x69 N→cave | darknut | 569, **158**, 1.56, 0.57, 0.45, 0.11 | 297, 21, 2.52, 0.52 |
+| 15 | 3:0x0f cellar | equipment-room | 411, 48, 1.37, 0.26 | 276, 4, 2.15, 0.09 |
+| 17-18 | 3:0x59 S→E, 0x5a | darknut, trap-room | 363, 8 + 34 | 272, 4 + 4 |
+| 19 | 3:0x5b W→E | darknut | 321, **142**, 1.24, 0.42, 0.22, 0.83 (wall bomb cheated 173) | 264, 12, 2.09, -0.02 |
+| 20-21 | 3:0x5c, 0x4c | darknut, trap-room | 179, 19 + 12 | 252, 1 + 1 |
+| 22 | 3:0x4d W→N | boss-manhandla | 148, **81** (55%), 1.43, 0.19, 4.06, 2.09 | 250, 87 (35%), 2.18, 0.24 |
+
+Where the runs die: the hearts run out on the way. Link enters 0x59 with 1.49 of 3 hearts (the planner 2.53) and
+Manhandla's door with 1.43 (2.18); 0x4a's Keese (stalfos-keese-gel, not a family of this work: 124 deaths, 0.74
+hearts a visit against the planner's 0.14) and 0x49 (95) take the hearts 0x59 needs. 0x59 now spends 0x4a's bombs
+(4.8 a visit, the planner the same) and loses 21% of its entrants; 0x69's dash 28%; 0x5b's last pass 44% (at 1.24
+hearts); Manhandla 55%.
