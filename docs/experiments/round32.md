@@ -413,10 +413,15 @@ heart to 0:0x74, confirmation **58.0% ± 1.6** against the promoted run's 47.2% 
 arriving 3.44 against 3.44). Screen: it003596 60.1%, last 58.6%, promoted 49.2%; the screen's winner did not confirm
 (-1.3 ± 1.8 against last). `d2first` keeps `r78t4-manhandla2`.
 
-**Not yet measured:** zol's and darknut's selections, the round-2 continuations with the planner's demonstrations
+**zol, chosen and promoted for `d3first`** (`r32d3-zol`, its last weights): from Level 3's entrance to 3:0x59's
+door (0x7b, 0x6b, darknut's 0x5b, 0x4b, 0x4a, 0x49), confirmation **59.0% ± 1.6** against the promoted run's 8.7%
+(paired +50.3 ± 1.7), Link arriving with 1.45 hearts against 1.07. Screen: last 57.2%, it001422 55.3%, it001452
+54.6%, it001482 49.8%, promoted 9.6%. `d2first` keeps `r79b-zol`.
+
+**Not yet measured:** darknut's selections, the round-2 continuations with the planner's demonstrations
 (boss-manhandla and zol queued), and the `d3` team chain of 1000 runs with the planner's 300 beside and its per-room
 ledger (`scripts/experiments/r32d3_ledger.py`: deaths, hearts on entering and lost a visit, bombs held and used, and
-the hearts and bombs carried out of the dungeon). Nothing of zol or darknut is promoted.
+the hearts and bombs carried out of the dungeon). Nothing of darknut is promoted.
 
 **For the lead (route data, not changed):** `d3first` keeps a bomb reserve of 6 from 3:0x7c through 3:0x59, so
 darknut's BOMB is masked in 0x59 unless Link holds 7 or 8 bombs. The walks' `BombFighter` (60 of 60 from real
