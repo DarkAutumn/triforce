@@ -149,11 +149,12 @@ def test_the_table_keeps_the_rows_phase_ix_left_alone():
 
 
 def test_the_d3first_table_prices_the_steps_its_chains_played():
-    """Round 32: `heart_value.d3first.json`, fitted on d3first's chains (the models' segments from the game start to
-    Dungeon 5's triforce, step 119, and the planner's Dungeons 3, 4, 1): it names the route as it stands, every
-    clip-way step to Dungeon 5's triforce has a curve and none after it (no chain has played them yet: a family
-    drawing those states prices hearts by the plain health terms there, `env::heart_value`), and V rises with the
-    hearts in the rooms that kill by hearts (3:0x5b S->N, 4:0x31 W->E)."""
+    """Round 32: `heart_value.d3first.json`, fitted on every d3first chain of today's team (the models' segments and
+    the planner's, the game start to the ending; the leg to Level 7, steps 156-173, from the models' runs out of the
+    recorder's landing, since nearly no run gets past 0:0x3c): it names the route as it stands, every clip-way step
+    has a curve from at least 20 visits, and no plain-way step has one (every chain ran with clips on: a family
+    drawing those states prices hearts by the plain health terms there, `env::heart_value`); V rises with the hearts
+    in the rooms that kill by hearts (3:0x5b S->N, 4:0x31 W->E, Digdogger's 5:0x24 and 7:0x1c)."""
     root = Path(__file__).resolve().parent.parent
     table = json.loads((root / 'triforce' / 'heart_value.d3first.json').read_text())
     from triforce import _native
@@ -161,9 +162,11 @@ def test_the_d3first_table_prices_the_steps_its_chains_played():
     assert table['route'] == 'd3first'
     assert [r['room'] for r in table['steps']] == [heart_value.room_key(s) for s in steps]
     clip_way = [k for k, s in enumerate(steps) if s['way'] in (None, 'clips')]
-    assert all(table['steps'][k]['clips'] is not None for k in clip_way if k <= 119)
-    assert all(table['steps'][k]['clips'] is None for k in clip_way if k >= 120)
-    for k, room in ((9, '3:0x5b'), (37, '4:0x31')):
+    assert all(table['steps'][k]['clips'] is not None and table['steps'][k]['clips']['visits'] >= 20
+               for k in clip_way)
+    assert all(row['plain'] is None for row in table['steps'])
+    assert all(table['steps'][k]['clips'] is None for k, s in enumerate(steps) if s['way'] == 'plain')
+    for k, room in ((9, '3:0x5b'), (37, '4:0x31'), (118, '5:0x24'), (187, '7:0x1c')):
         assert table['steps'][k]['room'] == room
         values = table['steps'][k]['clips']['values']
         assert values == sorted(values) and values[2] < values[4] < values[6]
