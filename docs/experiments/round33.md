@@ -120,3 +120,8 @@ Not decided yet: no run of either family is promoted, and nothing about 0x78's s
   330 / 368 deaths. **The 0x29 key's cost is won back (32 fewer deaths) and 0x78 is swung at with no measurable cost
   in the hearts 0x38 is entered with; the runs saved die in 0x3a**, whose fight is unchanged. 1000 more seeds of s92
   (4000-4999) are queued to pool, as for vire.
+- s92 (last) and `r30w-wj-s89` on 1000 further seeds (4000-4999): 32.2% against 28.3% (+3.9 ± 2.0; 0x78 kills in 319
+  runs, hearts on entering 0x38 10.80 against 10.82). **Pooled over 3000-4999 (2000 paired runs): +2.85 ± 1.46, 1.95
+  standard errors: just short of the bar.** A third block (7000-7999; 6000-6399 were `h6b`'s, whose states trained it)
+  and s92's `d9` and `post-d7` pairings are queued; the verdict is read on the 3000 pooled runs, which after a near
+  miss carries a small optional-stopping bias.
