@@ -141,3 +141,14 @@ Not decided yet: no run of either family is promoted, and nothing about 0x78's s
   wizzrobe selections that play vire's promoted run.
 - `r33w-s93` (it003264) on 4000-4999: 35.1% against `r30w-wj-s89`'s 28.3% (+6.8 ± 2.1; against s92 +2.9 ± 2.1).
   **Pooled over 3000-4999: +5.80 ± 1.46** (s92 +2.85 ± 1.46 on the same seeds).
+- `r33w-s93` (it003264) on 7000-7999: 36.1% against 29.4% (+6.7 ± 2.1). **Over the 3000 pooled seeds: +6.10 ± 1.19
+  against `r30w-wj-s89`, +3.07 ± 1.21 against s92: s93 is the wizzrobe run chosen** (applied as its `ckpt.pt`, its
+  evaluation and `d9` pairing pending). Deaths over the 3000 runs, `r30w-wj-s89` / s92 / s93:
+
+  | room | 0x38 | 0x28 | 0x29 | 0x39 | 0x3a | 0x2d | 0x2c | 0x1c (Gohma) |
+  |---|---:|---:|---:|---:|---:|---:|---:|---:|
+  | deaths | 338 / 309 / 289 | 52 / 48 / 42 | 188 / 105 / **241** | 93 / 63 / 82 | 1001 / 1099 / **949** | 86 / 73 / 78 | 243 / 217 / **180** | 84 / 86 / **36** |
+
+  s93 wins in the dungeon's back half (0x3a, 0x2c, and runs reach Gohma with more hearts) and loses more in 0x29
+  than either; s92 has the 0x29 lesson. Both swing at 0x78 (s93 a kill in 233-263 runs of 1000) without changing the
+  hearts 0x38 is entered with (10.75-10.81 against 10.75-10.82).
