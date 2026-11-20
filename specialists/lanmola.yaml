@@ -13,6 +13,7 @@ curriculum: {enabled: true}             # trajectories/lanmola, once explored
 one_room: true
 max_steps: 3000
 warm_start: moldorm                        # round 29: a first training starts from moldorm's promoted run (a worm of segments; settings copied from it)
+harvested_fraction: 0.25                  # round 33: chain handoffs at the route's hearts (9:0x55 from E, 300, from 0_6dc_0), triforce/states/harvested/lanmola, not in git (docs/experiments/round33.md)
 notes: >-
   The red Lanmolas (Dungeon 9's 0x55, round 29, route `d9`; docs/routes/d9.md "as built", d9-fights-walks.md §1).
   Two worms of five segments each come out at ($40, $8D), a segment every 8 frames, 1 pixel a frame (Link walks 1.5);
