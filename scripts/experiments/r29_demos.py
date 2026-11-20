@@ -852,7 +852,9 @@ def play(args):
                     print(f'{write_track(args.tracks, state, seed, args.what, points, actions, health, info["ending"])}'
                           f': {n} steps, {down:.2f} hearts lost', file=sys.stderr)
                     tracks += 1
-                if args.harvest and entry is None and not illegal and (
+                # A harvest takes a won run with masked choices too: the WAIT played instead is the run (d3first's
+                # 9:0x16 chain 2: MOVE N masked twice at the N doorway in every run, 20/20 won, none harvested).
+                if args.harvest and entry is None and (
                         args.max_loss is None or down <= args.max_loss):
                     entry = harvest(args.harvest, args.what, state, seed, points[-1], actions[-1], n, health,
                                     info['ending'], args.route)

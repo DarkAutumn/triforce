@@ -290,6 +290,60 @@ from a rule-won run (the walks' scripts: `r32_d3first.py` `BEST`, `ManhandlaFigh
 The rest (the legs, Dungeon 2 at ten containers, and Dungeons 6, 8, 9 with the magic sword: d2first's inventory
 there but the purse) the walks crossed by walking or d2first's own rules.
 
+## The states as built
+
+`d3first_*` (`triforce/states/`, chains 0-2, steps 0-303, the game start to Ganon's room) were built stretch by
+stretch by `scripts/experiments/r32c_states.py --first N --last M --rules ... --tag T` (one job a stretch): each step
+of the clip way crossed per chain by the explorer (`entry_states build`, one step), a step named in `--rules` by the
+walks' rule (`r32c_harvest.py`: the first won seed of a chain gives the next state, every seed played for the rate)
+or by round 28's/29's rule (`STEM=ROOM`, `r28_demos.py`/`r29_demos.py ROOM --route d3first --harvest`); where the
+explorer fails, the walks' actions or fight for the step (`r32_d3first.LEGS`, `r32c_harvest.FIGHTS`/`tallies()`),
+round 28's/29's rule of the room, and with `--models` the promoted models (`r32c_models.py`: `eval-chain --route
+d3first --from STEM_<chain> --stop-at step:<next> --replays`, the won replays' pre-entry frame of the next room cut
+out). Every harvested state is written by `write_entry_state` (hearts refilled, the room fresh); its manifest entry's
+`played_by` names the rule. No fight is skipped. Wins over runs, per chain (0, 1, 2):
+
+| Stretch (steps) | Room (step) | How | Won |
+|---|---|---|---|
+| 1 (0-31) | 3:0x6b (8) -> `3_5bs` | the walks' rule | 56/60 |
+| | 3:0x4b (10) -> `3_4ae` | the walks' rule | 60/60 |
+| | 3:0x4a (11) -> `3_49e` | the walks' rule | 60/60 |
+| | 3:0x59 (13) -> `3_69n` | `BombFighter` (BEST 'bombs') | 60/60 |
+| | 3:0x5b (19) -> `3_5cw` | the sword | 56/60 |
+| | 3:0x4d Manhandla (22) -> `3_3ds` | `ManhandlaFighter` by bombs | 37/60 |
+| 2 (31-97) | 4:0x32 (38) -> `4_60cave` | the walks' rule | 59/60 |
+| | 4:0x13 Gleeok (51) -> `4_03s` | `GleeokFighter` at 4 hearts, the heart and N door by `straight` moves | 10/90 (4, 3, 3) |
+| | 1:0x35 Aquamentus (81) -> `1_36w` | the walks' rule | 90/90 |
+| | 4:0x31 W->E (chains 0, 2), 4:0x12 N->E | the walks' actions (explorer failed) | 10/10 each |
+| 3 (97-155) | 5:0x05 Olive Garden (107) -> `5_04cave` | `r32b_d5` BombFighter, then the explorer out | 9, 10, 12 /20 |
+| | 5:0x66 W->N (110) -> `5_56s` | `r32b_d7.Fight` on the Gibdos, then the explorer | 17, 18, 17 /20 |
+| | 5:0x24 Digdogger (122) -> `5_14s` | the recorder + `DigFighter` | 19, 20, 19 /20 |
+| 4 (152-211) | 7:0x49 (181) -> `7_39s` | `r32b_d7` fight + explorer | 9, 12, 10 /20 |
+| | 7:0x1b (190) -> `7_1cw` | `r32b_d7` fight + explorer | 20, 20, 20 /20 |
+| | 7:0x1c (191) -> `7_0cs` | `r32b_d7` fight (the small Digdogger) | 15, 15, 12 /20 |
+| | 7:0x2a Aquamentus (196) -> `7_2bw` | `r32b_d7` fight | 20, 19, 20 /20 |
+| 5-7 (211-303) | 8:0x3c Gleeok (241) -> `8_2cs` | `r28_demos.py gleeok --route d3first` | 20, 19, 20 /20 |
+| | 9:0x14 (263) -> `9_15w` | `r29_demos.py like-like-14` | 20, 20, 20 /20 |
+| | 9:0x16 (276) -> `9_06s` | `r29_demos.py patra-16` | 20, 20, 20 /20 |
+| | 9:0x05 (278) -> `9_70cave` | `r29_demos.py wizzrobe-05` (losses: exit-wrong) | 10, 9, 10 /20 |
+| | 9:0x61 (282) -> `9_75cave` | `r29_demos.py patra-61` | 20, 20, 20 /20 |
+| | 9:0x10 (286) -> `9_4fcave` | `r29_demos.py wizzrobe-10` (losses: deaths; 6.4-7.6 hearts lost in wins) | 17, 14, 19 /20 |
+| | 9:0x30 (296) -> `9_67cave` | `r29_demos.py wizzrobe-30` (losses: exit-wrong) | 13, 12, 13 /20 |
+| | 9:0x52 (301) -> `9_42s` | `r29_demos.py patra-52` | 20, 20, 20 /20 |
+| | 9:0x42 Ganon (302) -> `9_32s` | `r29_demos.py ganon` | 20, 20, 20 /20 |
+
+Rooms the explorer did not solve at its default settings (3 attempts of 3000 iterations, patience 200): 5:0x65 E->W
+chain 2 (passed with 8 attempts), 2:0x1e S->N chain 0, and Dungeon 6's two fights: 6:0x38 S->N chains 0 and 2 and
+6:0x3a W->stairs chain 1 (chain 1 crossed 0x38 at the defaults, 151k env steps; chains 0 and 2 met 0x3a only at the
+new settings). At 8000 iterations, patience 400, 6 attempts the explorer crossed all of them: 0x38 in 380k and 674k
+env steps (1421 s, 2415 s), 0x3a in 552k, 546k and 229k (chains 0-2). Everything else, Gohma and the triforce of
+Dungeon 6, the recorder warps, 0x6d's tree by the blue candle, Dungeon 8's Darknut rooms (8:0x3e 927 s), 0x47's
+heart, the ladder at 0x17 and the rock wall at 0x05, Dungeon 9's crossings (0x66 N, 0x56, the bomb, 0x55 from E and
+its clip, the ring), the explorer crossed. The promoted models (copied into the worktree, stamped 2.0.0.0; wizzrobe
+`r30w-wj-s89`) won 6:0x38 28/30 and 27/30 (chains 0, 2) and 6:0x3a 27/30 (chain 1) with `r32c_models.py`, run beside
+the explorer as a fallback; the explorer's states were kept, so no shipped state is model-won. The stretch forks'
+plain ways (4:0x30-0x21, 0:0x65-0x54, 0:0x61-0x50) were walked by `entry_states path --route d3first`, as d2first's.
+
 ## Phase IX
 
 `d3first`'s Dungeons 1, 6, 8 and 9 are d2first's after phase IX (round 31, branch `r31-steps`): the blocks

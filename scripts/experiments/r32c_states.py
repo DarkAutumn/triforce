@@ -11,7 +11,8 @@ actions for the step if the walks have them (`r32_d3first.LEGS`, or the leg afte
 `r32b_leg.py`: `r32c_harvest.tallies()`), else by round 28's or 29's rule of the room if there is one
 (`r28_demos.py`, `r29_demos.py`, `r29_clip_demos.py` ROOM `--route d3first --harvest`: `demo_rooms()`); the state
 then says so in its manifest entry's `played_by`.  `--rules` names those rooms as `STEM=ROOM` (`8_5es=darknut-5e`;
-a bare STEM: its first room).  Each
+a bare STEM: its first room).  With --models a chain still without the next state gets it from a chain run the promoted
+models won (`r32c_models.py`: eval-chain replays, the next room's pre-entry frame cut out).  Each
 step's states are staged under target/entry-states/r32c-<tag>/<step> and installed before the next step; a chain
 with no state for a step stops there.  At the end `entry_states audit --route d3first`.  Never skips a fight."""
 
@@ -85,6 +86,20 @@ def play_demo(module, room, chains, out, runs, log):
         sys.argv = argv
 
 
+def models(name, chains, out, runs, log):
+    """`r32c_models.py NAME --out OUT --chains CHAINS --runs RUNS`, in this process."""
+    import r32c_models                                          # pylint: disable=import-outside-toplevel
+    argv = sys.argv
+    sys.argv = ['scripts/experiments/r32c_models.py', name, '--out', str(out), '--chains', ','.join(map(str, chains)),
+                '--runs', str(runs)]
+    try:
+        r32c_models.harvest(argparse.Namespace(stem=name, out=str(out), chains=chains, runs=runs, seed0=1000))
+    except Exception as e:                                      # pylint: disable=broad-except
+        log(f'  r32c_models.py {name} chains {chains}: ERROR {type(e).__name__}: {e}')
+    finally:
+        sys.argv = argv
+
+
 def staged(out, target, chains):
     return [c for c in chains if (Path(out) / target.filename(c)).exists()]
 
@@ -104,6 +119,9 @@ def main():
     parser.add_argument('--iterations', type=int, default=3000)
     parser.add_argument('--patience', type=int, default=200)
     parser.add_argument('--attempts', type=int, default=3)
+    parser.add_argument('--models', action='store_true',
+                        help='where a chain still lacks the next state, the promoted models (r32c_models.py)')
+    parser.add_argument('--model-runs', type=int, default=30)
     args = parser.parse_args()
     rules = dict((r.split('=') + [None])[:2] for r in args.rules.split(',') if r)
     demos = demo_rooms()
@@ -156,6 +174,11 @@ def main():
                 log(f"  explorer failed chains {missing}: {module.__name__} {room}")
                 play_demo(module, room, missing, out, args.fallback_seeds, log)
                 how = f'explorer, {module.__name__} {room} for {missing}'
+        missing = [c for c in chains if c not in staged(out, target, chains)]
+        if missing and args.models:
+            log(f'  chains {missing} without {stem(target)}: the promoted models (r32c_models.py {name})')
+            models(name, missing, out, args.model_runs, log)
+            how += f', models for {missing}'
         done = staged(out, target, chains)
         if done:
             entry_states.install(str(out), str(STATES_DIR), partial=True)
