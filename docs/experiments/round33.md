@@ -44,7 +44,7 @@ From the chains of record (`r31land-1k-d9`, 1000 runs from `9_76s_0`, seeds 0-99
   `{enabled: true, off_share: 0}` (both yamls already), `--demo-coeff 0.05` over the lineage's files and the new one
   (like-like: `like-like-14`, `clip-03`, `wall-56`; lanmola: `clip-55`, `clip-55-300`, `clip-55e`).
 
-### The selections on `d9` (in progress)
+### The selections on `d9`
 
 `select-checkpoint like-like r33-like-sNN --segment d9 --runs 1000 --first-seed 2000 --confirm 1000
 --confirm-first-seed 3000 --confirm-top 1 --only it003295,it003325,it003355,last[,promoted] --parallel 10`
@@ -52,16 +52,20 @@ From the chains of record (`r31land-1k-d9`, 1000 runs from `9_76s_0`, seeds 0-99
 
 | run | it003295 | it003325 | it003355 | last | confirm (3000-3999) |
 |---|---:|---:|---:|---:|---|
-| `r33-like-s81` | 45.2% | 46.1% | **47.0%** | 45.2% | it003355 **48.6%** (3.77 hearts at the end), last 47.6% |
-| `r33-like-s82` | **47.3%** | 44.9% | 46.7% | 47.3% | it003295 **47.8%** (3.76 hearts), last 45.5% |
-| `r33-like-s83` | (waiting in the line) | | | | |
+| `r33-like-s81` | 45.2% | 46.1% | **47.0%** | 45.2% | it003355 48.6% (3.77 hearts at the end), last 47.6% |
+| `r33-like-s82` | **47.3%** | 44.9% | 46.7% | 47.3% | it003295 47.8% (3.76 hearts), last 45.5% |
+| `r33-like-s83` | 45.1% | 44.9% | **47.7%** | 44.6% | **it003355 49.4% (3.80 hearts)**, last 43.7% |
+| `r79c-like` (promoted) | | | | 13.0% | 13.6% (3.45 hearts) |
 
-9:0x56 is crossed in every visit of these chains (s81 it003295: 1004 of 1004 visits leave W; main's record:
-438 of 2689). Main's record of the same segment is 13.7% on seeds 0-999 (`r31land-1k-d9`); the paired reference on
-these seeds (`r79c-like`, s83's batch) is not measured yet, so no verdict: nothing is promoted.
+**On seeds not used to choose it, `r33-like-s83` at it003355 takes `d9` in 49.4% against 13.6%: +35.8 ± 1.9
+points paired** (s81's choice 48.6%, s82's 47.8%: the three seeds agree within noise). 9:0x56 is crossed in every
+visit (s81 it003295: 1004 of 1004 visits leave W; main's record: 438 of 2689). Main's record of the segment,
+13.7% on seeds 0-999, matches the reference here.
 
-Still to do: s82 and s83's selections; the winner paired with `r79c-like` on `d4` and `d6` (`--only CHOSEN,promoted
---runs 1000 --confirm 0`, seeds 0-999); then lanmola `r33-lanmola-s80` on `d9` with that like-like promoted.
+**Not yet decided:** the other segments like-like plays, `d4` (4:0x32) and `d6` (6:0x1d), paired with `r79c-like`
+on seeds 0-999 (`select-checkpoint like-like r33-like-s83 --segment SEG --runs 1000 --confirm 0 --only
+it003355,promoted`), are queued. It is promoted if neither is worse beyond noise; then lanmola `r33-lanmola-s80` is
+chosen on `d9` with it.
 
 ### Backlog
 
