@@ -97,3 +97,9 @@ The recipe of decisions 2026-11-19 ("One team for the whole route"), as round 30
   92.7%, 0x2c 94.0%, 0x38 78.3%, 0x3a 63.0%, 0x78 100%.
 
 Not decided yet: no run of either family is promoted, and nothing about 0x78's swing is measured on a chain.
+- `r33-vire-s95` chosen on `d6` (`select-checkpoint vire r33-vire-s95 --segment d6 --stop-at step:277 --runs 1000
+  --first-seed 2000 --confirm 1000 --confirm-first-seed 3000 --confirm-top 1 --only it002312,it002342,it002372,last,promoted`):
+  screen it002342 33.7%, `r77-b` 31.5%; **confirmation (3000-3999) it002342 33.2% against 31.7%, +1.5 ± 1.8 paired:
+  not beyond noise.** In its own rooms the gain is plain: 0x2d 8 deaths against 30 (every one entering below 4
+  hearts), 0x39 19 against 28, 0x2d's visits a gain of 0.24 hearts again (drops) against a loss of 0.03; the runs it
+  saves mostly die later in 0x3a and 0x2c. A further 1000 seeds (4000-4999) are queued to pool with the confirmation.
