@@ -306,8 +306,8 @@ fn exit_of(env: &Env) -> String {
 /// The experiment route `clips-gauntlet` (round 21) after Dungeon 4 joined `d2first` (round 20): a specialist naming
 /// it draws both of its targets for every start state of the gauntlet (from W: E or S, from E: W or S), and it
 /// leaves every registered family's resets as they are without it: the start states of ow-zora and ow-moblin (whose
-/// rooms 0x59-0x5b it shares) and of every family with a Dungeon 4 room reset to the same `d2first` step with and
-/// without the route in routes.yaml.
+/// rooms 0x59-0x5b it shares) and of every family with a Dungeon 4 room reset to the same step of their own route
+/// with and without the route in routes.yaml (`d2first`'s bare names `d2first`, phase X's `d3first_*` `d3first`).
 #[test]
 fn the_clips_gauntlet_draws_its_targets_and_leaves_the_families_alone() {
     let (Some(nes), Some(nes2)) = (open_core(), open_core()) else { return };
@@ -359,7 +359,12 @@ fn the_clips_gauntlet_draws_its_targets_and_leaves_the_families_alone() {
                 alone.reset(Some(seed), Some(path)).unwrap();
                 let (a, b) = (with.route(), alone.route());
                 assert_eq!((a.0, a.1), (b.0, b.1), "{name} {path} seed {seed}");
-                assert_eq!(a.0, "d2first", "{name} {path} seed {seed}");
+                let own = match zelda::game_map::state_namespace(path) {
+                    None => "d2first",
+                    Some("d3first") => "d3first",
+                    Some(ns) => panic!("{path}: a state of namespace {ns}"),
+                };
+                assert_eq!(a.0, own, "{name} {path} seed {seed}");
                 resets += 1;
             }
         }
