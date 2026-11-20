@@ -758,3 +758,90 @@ Over both halves (2000 seeds) the three seeds lose 29-30 runs in 2:0x3e against 
 less, but Dungeon 2's arrivals are +0.6, −0.2 and +0.3 points: within noise. **Not promoted**: no moldorm run
 raises the segment beyond noise; `r75-f-b` stays. The room's gain is about a point of runs, below what 1000-run
 chains resolve; `s87` is the candidate if a full-route gate (2000+ runs) is wanted.
+
+## The landing (1.9.0.1, with round 31)
+
+One team on the route as round 31 changed it (the owner's phase IX, round31.md; `d2first` 354 steps), measured once:
+the chains of record `r31land-1k` (1000 runs a segment, seeds 0-999, clips on, models alone, every segment stopped
+at the next one's start), paired by seed with main's record `r29land-1k` (1.9.0.0's team on the old route) and, on
+the segments phase IX changed, with `r31-1k` (1.9.0.0's team on the new route), so the team's and the route's effects
+are told apart. A candidate in the team was kept only if its own gate passed; one that failed was swapped back and
+only the segments it plays were measured again.
+
+### The team, family by family
+
+| family | run | verdict | why |
+|---|---|---|---|
+| wizzrobe | `r30w-wj-s89` (it002844) | qualified | `d6` +6.8 ± 2.2, `d9` +2.7 ± 2.1 (seeds 3000-3999) |
+| patra | `r30w-patra` (it001944) | qualified | `d9` +6.2 ± 2.0 |
+| boss-manhandla | `r30-manh-s90` | qualified | `d3` +2.7 ± 1.3, Dungeon 3 at the route's hearts +4.6 ± 1.3, `d8` +1.4 ± 1.9 |
+| gibdo | `r30-gibdo-s91` | qualified | Dungeon 5 at the route's hearts +5.3 ± 2.1, `d5` +1.1 ± 2.0 |
+| goriya | `r30-goriya6-s31` | qualified | `d7` +9.0 ± 2.1 (fresh seeds), `d2` +0.0 ± 1.2 and +1.3 ± 1.2, `d1` 0 |
+| darknut | `r30-dark69-s94` (last) | qualified (the lead, Nov 20) | Dungeon 3 +0.4 ± 1.1 (2000 runs), Dungeon 5 at the route's hearts +1.4 ± 2.2, `d8` +14.8 ± 2.1: the round's rule (the target better beyond noise, no other segment worse beyond noise); the repair round's own bar (Dungeon 5's gain kept) was stricter |
+| ow-lynel | `r30e-lynel-s84` | candidate, **kept** | its legs in the landed team, against `r29land-1k`: after Dungeon 2 +1.7 ± 1.1, after Dungeon 4 100% both (7.69 hearts against 7.77), `post-d7` +0.3 ± 0.3, `post-d6` 100% both, `post-d8` 99.8% against 100.0% (−0.2 ± 0.1): none worse beyond noise |
+| wallmaster | `r30-wall-s30` | candidate, **swapped back** (`r76-wall-1` stays) | `d7` on 1000 further seeds (1000-1999, the new route): 46.6% against 47.2%, −0.6 ± 1.1; with the first 1000 (+2.0 ± 1.1) +0.7 ± 0.8 over 2000: not better beyond noise (7:0x0d: 495 right exits of 560 both, 51 against 53 captured) |
+| ow-octorok | `r31-oct-s97` | qualified (round 31) | the trip; `d1` +32.6 ± 1.5, its other five segments within noise (round31.md) |
+| moldorm, boss-gleeok | `r75-f-b`, `r78t4-gleeok` | not changed | no change beyond noise (moldorm `d2` −0.2 to +0.6 over 2000 seeds; gleeok `d4` +0.7 ± 0.9, `d8` +0.4 ± 0.7) |
+| every other family | main's | | |
+
+The wallmaster swap left `d1` and `d7` to be measured with `r76-wall-1` (their record below); darknut's run joined
+after the legs had run (it plays none of them), so the dungeons, the full route and the planner were measured with it.
+
+### The chains of record (`r31land-1k`)
+
+| segment (start → stop) | `r31land-1k` | `r29land-1k` | paired | against `r31-1k` (the new route) | where |
+|---|---:|---:|---:|---:|---|
+| Dungeon 2 (`2_7ds_0` → step 24) | 91.6% | 91.6% | +0.0 ± 1.2 | | |
+| after Dungeon 2 (`0_3cc_0` → step 46) | 94.9% | 93.2% | +1.7 ± 1.1 | 92.3%: +2.6 ± 1.1 | 3.25 hearts arriving (3.33) |
+| Dungeon 1 (`1_73s_0` → step 64) | 99.3% | 99.8% | −0.5 ± 0.3 | 99.1%: +0.2 ± 0.3 | the trip 1000 of 1000 |
+| after Dungeon 1 (`0_37c_v2_0` → step 83) | 100.0% | 100.0% | 0 | | 5.48 hearts (5.35) |
+| Dungeon 3 (`3_7cs_0` → step 101) | 85.3% | 82.7% | +2.6 ± 1.7 | | 3:0x4d |
+| after Dungeon 3 (`0_74c_0` → step 108) | 100.0% | 100.0% | 0 | | |
+| Dungeon 4 (`4_71s_0` → step 130) | 91.7% | 91.7% | run for run | | |
+| after Dungeon 4 (`0_45c_0` → step 182) | 100.0% | 100.0% | 0 | | 7.69 hearts (7.77) |
+| Dungeon 5 (`5_76s_0` → step 205) | 76.3% | 72.2% | **+4.1 ± 2.0** | | darknut, gibdo |
+| after Dungeon 5 (`0_0bc_0` → step 224) | 98.0% | 98.0% | run for run | | |
+| `d7` (`7_79s_0` → step 244) | 56.9% | 46.6% | **+10.3 ± 2.2** | | goriya: 7:0x1b |
+| after Dungeon 7 (`0_42c_0` → step 261) | 99.4% | 99.1% | +0.3 ± 0.3 | | |
+| `d6` (`6_79s_0` → step 277) | 28.5% | 31.4% | −2.9 ± 2.0 | 21.1%: **+7.4 ± 1.9** | the route's 6:0x29, 0x2d, 0x39 |
+| after Dungeon 6 (`0_22c_0` → step 283) | 100.0% | 100.0% | 0 | | |
+| `d8` (`8_7es_0` → step 293) | 36.3% | 24.8% | **+11.5 ± 2.0** | 24.8%: **+11.5 ± 2.1** | darknut: 8:0x3e, 0x3f |
+| after Dungeon 8 (`0_6dc_0` → step 308) | 99.8% | 100.0% | −0.2 ± 0.1 | | 11.87 hearts (12.30): ow-lynel's 0:0x05 1.41 a visit (1.03) |
+| `d9` (`9_76s_0` → the ending) | 13.7% | 31.0% | −17.3 ± 1.8 | 10.9%: **+2.8 ± 1.2** | the route's 9:0x56: 616 runs `stuck` (like-like) |
+
+No segment is worse than main's record beyond noise except `d9`, and that is the route's: today's team on the new
+route loses 20.1 points there (`r31-1k-d9`), all in 9:0x56 (a room new to like-like, whose run is main's), and the
+landed team is 2.8 points better than it. No key is cheated in any segment or leg.
+
+**The full route** (`r31land-1k-full`, 1000 runs from the game start; `r29land-1k-full`): Dungeon 1 left 74.4%
+(73.0%, +1.4 ± 2.0), Dungeon 3 left 62.1% (59.0%), Dungeon 4 left 55.6% (54.0%), **the D5 triforce 30.4% (26.2%,
++4.2 ± 2.0)**, **the D7 triforce 12.5% (9.1%, +3.4 ± 1.4)**, the D6 triforce 3.0% (1.7%, +1.3 ± 0.7), **the D8
+triforce and Dungeon 9 entered 1.3% (0.4%, +0.9 ± 0.4)**, the red ring 0.2% (0.3%), Ganon reached 0, the game ended
+0 of 1000; no milestone worse. 2.36 cheated bombs a run (2.27), no rupee, 2 cheated keys at 6:0x79 (round31.md:
+5:0x66's key left and 7:0x1b's two keys spent, both as often as with main's gibdo and goriya; more runs reach
+Dungeon 6). Where runs end: 5:0x05 135 (141), 3:0x4d 86 (97), 7:0x1b 64 (77), 4:0x13 46 (36), 1:0x44 44 (25),
+5:0x64 39 (40), 6:0x3a 36 (33), 2:0x5e 31 (29), 2:0x1e 29 (41).
+
+**The honest planner beside** (`temperature:0.5+relax:16+plan:16:1`, 300 runs, `r31land-plan-full`): the D7
+triforce 87.7% (84.7%), the D6 triforce 47.0% (43.0%), Dungeon 9 entered 42.3% (42.0%), the game ended 9.0% (29.7%):
+9:0x56 holds 90 of its 127 Dungeon 9 runs.
+
+### What is next
+
+What loses the full route now, in order: 5:0x05 (darknut, 135), 3:0x4d (Manhandla, 86), 7:0x1b (goriya, 64),
+4:0x13 (Gleeok, 46), 1:0x44 (goriya, 44: 20 with main's goriya on the new route), Dungeon 5's 0x64, Dungeon 6's
+0x3a; past Dungeon 8, 9:0x56. The families owed by the new route are in round31.md "Owed"; the backlog has them.
+
+```sh
+M=$PWD/models; T="--checkpoint wizzrobe=$M/wizzrobe/r30w-wj-s89 ... --checkpoint darknut=$M/darknut/r30-dark69-s94/ckpt.pt"
+A="--runs 1000 --act model --clips on --parallel 10 $T"
+triforce eval-batch r31land-1k-dk --chain "d2: --from 2_7ds_0 --stop-at step:24 $A --output $C/r31land-1k-d2.jsonl" ...
+    # d3 3_7cs_0 step:101, d4 4_71s_0 step:130, d5 5_76s_0 step:205, d6 6_79s_0 step:277, d8 8_7es_0 step:293, d9 9_76s_0
+triforce eval-batch r31land-1k-w76 --chain "d1: --from 1_73s_0 --stop-at step:64 $A ..." --chain "d7: --from 7_79s_0 --stop-at step:244 $A ..."
+triforce eval-batch r31land-1k-legs --chain "post-d2: --from 0_3cc_0 --stop-at step:46 $A ..." ...
+    # post-d1 0_37c_v2_0 step:83, post-d3 0_74c_0 step:108, post-d4 0_45c_0 step:182, post-d5 0_0bc_0 step:224,
+    # post-d7 0_42c_0 step:261, post-d6 0_22c_0 step:283, post-d8 0_6dc_0 step:308
+triforce eval-batch r31land-1k-full3 --chain "full: $A --output $C/r31land-1k-full.jsonl"
+triforce eval-batch r31land-plan-full3 --chain "full: --runs 300 --act temperature:0.5+relax:16+plan:16:1 --clips on $T ..."
+triforce room-stats r31land-1k
+```

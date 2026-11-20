@@ -75,49 +75,94 @@ the model stepped S 4 (Y `$83`, `UndergroundExitType` still 2) and N back onto i
 ow-octorok, three seeds continued from `r74-leg2` (244 iterations, `--sil-coeff 0.1 --checkpoint-every 30`, the
 mouth demonstrations `target/demos/r31/mouth-37.npz` at `--demo-coeff 0.05`: 1800 rows of the rule that wins 900 of
 900). Every checkpoint of s97 arrives at step 51 in 100 of 100 runs from `1_73s_0` against 75 of 100 for r74-leg2
-(paired +25.0 ± 4.4). Chosen: `r31-oct-s97`. **Not promoted yet**: its paired 1000-run comparisons on the other
-segments it plays (post-d2, d1, post-d1, post-d3, post-d6, post-d8) were queued and had not run when this was
-written (the commands are below); promote when none is worse beyond noise.
+(paired +25.0 ± 4.4). Chosen: `r31-oct-s97`, then paired with `r74-leg2` on 1000 runs of every segment ow-octorok
+plays (seeds 0-999, the rest of the team main's, `select-checkpoint ow-octorok r31-oct-s97 --segment SEG --only
+last,promoted`): `post-d2` 92.3% against 93.2% (−0.9 ± 1.2), **`d1` 99.1% against 66.5% (+32.6 ± 1.5**: `r74-leg2`
+stalls on 0:0x37's mouth), `post-d1`, `post-d3`, `post-d6` 100% both, `post-d8` 99.9% against 100.0% (−0.1 ± 0.1).
+None worse beyond noise: **promoted** in the landing (1.9.0.1, below).
 
-## The team on the new route (clips on, 1000 runs a segment)
+## The team on the new route (clips on, 1000 runs a segment, seeds 0-999)
 
-Arrivals (the runs that entered the next segment's start) against main's `r29land-1k` on the same seeds. This
-branch's chains have no stop step and ran on past their segment; they are scored at the arrival and their records
-cut there.
+Arrivals (the runs that reached the next segment's start). Three chains of each segment, paired by seed: main's
+record `r29land-1k` (1.9.0.0's team on the old route), `r31-1k` (today's team, i.e. 1.9.0.0's with `r31-oct-s97`, on
+the new route: the route's effect) and the landed team `r31land-1k` (round 30's runs, `r31-oct-s97` and darknut
+`r30-dark69-s94`, on the new route; round30.md "The landing"). `r31-1k`'s Dungeon 6, 8 and 9 chains had no stop step
+and ran on; they are scored at the arrival and cut there.
 
-| Segment | new | main | paired | where runs are lost that were not |
-|---|---:|---:|---:|---|
-| d6 | 21.1% | 31.4% | −10.3 ± 1.7 | 6:0x29 119 (main 27), 0x39 49 (26), 0x2d 19 (6) |
-| d8 | 24.8% | 24.8% | +0.0 ± 1.9 | 8:0x4c 13 stuck (0) |
-| d9 | 10.9% | 31.0% | −20.1 ± 1.7 | 9:0x56 616 stuck (0), 0x55 from E 16 (0) |
-| post-d2, d1, full | queued | | | |
+| Segment | `r29land-1k` | `r31-1k` (route) | `r31land-1k` (landed) | landed − main | landed − `r31-1k` | where runs are lost that were not |
+|---|---:|---:|---:|---:|---:|---|
+| after Dungeon 2 (→ step 46) | 93.2% | 92.3% | 94.9% | +1.7 ± 1.1 | +2.6 ± 1.1 | |
+| Dungeon 1 (→ step 64) | 99.8% | 99.1% | 99.3% | −0.5 ± 0.3 | +0.2 ± 0.3 | 1:0x53 2 (0), 0x44 3 (1) |
+| after Dungeon 1 (→ step 83) | 100.0% | | 100.0% | 0 | | |
+| `d6` (→ step 277) | 31.4% | 21.1% | 28.5% | −2.9 ± 2.0 | +7.4 ± 1.9 | 6:0x29 74 (27), 0x2c 89 (56), 0x2d 29 (6), 0x39 36 (26) |
+| `d8` (→ step 293) | 24.8% | 24.8% | 36.3% | +11.5 ± 2.0 | +11.5 ± 2.1 | 8:0x4c 19 stuck (0) |
+| `d9` (→ the ending) | 31.0% | 10.9% | 13.7% | −17.3 ± 1.8 | +2.8 ± 1.2 | 9:0x56 616 stuck (0), 0x55 from E 16 (0) |
 
-- Dungeon 6: 6:0x39 720 visits, 14 bombs (12 runs); 6:0x2d 316 visits, 20 bombs (19 runs); no bomb cheated there.
-  6:0x78 gives nothing: 0 kills in 1000 visits (as main: the wizzrobe model crosses without a swing), so no leader
-  kill, no bomb pack, 0 hearts, 305 frames. Hearts into 6:0x3a 5.52 (696 runs) against 6.16 (801). Cheated: 0 keys,
-  12 bombs (6:0x28, as main).
-- Dungeon 8: 0 keys and 0 bombs cheated; the key 0x4c leaves costs nothing on the doors.
-- Dungeon 9: hearts into 9:0x55 13.98 (438 runs, main 14.13); 3 bombs cheated (0x04, 0x31), 0 keys.
+The route's own cost is the `r31-1k` column: Dungeon 6 −10.3 ± 1.7 (0x29's key, 0x39 and 0x2d without bombs),
+Dungeon 9 −20.1 ± 1.7 (9:0x56, a room new to like-like: 616 of 1000 runs end `stuck` there), Dungeon 1 −0.7 ± 0.3.
+The landed team wins back most of Dungeon 6 (wizzrobe `r30w-wj-s89`) and adds 11.5 points on `d8` (darknut); like-like
+has no new run, so Dungeon 9 stays the route's.
+
+**The full route** (`full`, from the game start, 1000 runs; milestones on the new step numbers):
+
+| reaches | `r29land-1k-full` | `r31-1k-full` | `r31land-1k-full` | landed − main |
+|---|---:|---:|---:|---:|
+| Dungeon 2 left | 87.8% | 85.6% | 89.4% | +1.6 ± 1.4 |
+| Dungeon 1 entered (step 46) | 82.2% | 79.6% | 84.9% | +2.7 ± 1.6 |
+| Dungeon 1 left (step 64) | 73.0% | 71.1% | 74.4% | +1.4 ± 2.0 |
+| Dungeon 3 left | 59.0% | 56.4% | 62.1% | +3.1 ± 2.1 |
+| Dungeon 4 left | 54.0% | 50.9% | 55.6% | +1.6 ± 2.2 |
+| the D5 triforce | 26.2% | 23.5% | 30.4% | **+4.2 ± 2.0** |
+| the D7 triforce | 9.1% | 8.2% | 12.5% | **+3.4 ± 1.4** |
+| the D6 triforce | 1.7% | 1.7% | 3.0% | +1.3 ± 0.7 |
+| the D8 triforce, Dungeon 9 entered | 0.4% | 0.5% | 1.3% | **+0.9 ± 0.4** |
+| the red ring | 0.3% | 0.2% | 0.2% | −0.1 ± 0.2 |
+| the game ended | 0 | 0 | 0 | |
+
+**The honest planner beside** (`temperature:0.5+relax:16+plan:16:1`, 300 runs, the landed team; main's
+`r29land-plan-full`): the D6 triforce 47.0% (43.0%), the D8 triforce 42.3% (42.0%), Dungeon 9 entered 42.3%
+(42.0%), the red ring 10.3% (39.7%), Ganon reached 9.0% (30.0%), **the game ended 9.0% (27 runs; 1.9.0.0 29.7%)**:
+90 of the 127 planner runs in Dungeon 9 end `stuck` in 9:0x56. The planner plays the models' own actions, so a room
+the model cannot leave stops it too.
+
+- **The trip** is played by every run that reaches it: 1000 of 1000 in `d1`, 849 of 849 in the full route; 0 keys
+  spent in 1:0x73, 0 cheated.
+- **6:0x78 with `drops: first`, untrained:** 0 kills in 1000 visits on `d6` (and 0 in 81 visits in `r31-1k-full`): no leader
+  kill, no bomb pack, 0.01 hearts, 304 frames: the wizzrobe model walks through without a swing. `drops: first`
+  only marks what to take; it gives nothing until a model is trained to make the drop. wizzrobe is owed it.
+- 6:0x39 829 visits, 13 bombs; 6:0x2d 437 visits, 27 bombs (`bombs: tenth`); no bomb cheated there.
+- Cheated items: no key in any segment or leg. The full route has 2 cheated keys, at 6:0x79 (seeds 463, 492; main's
+  record 0): both runs left 5:0x66 (step 195) without its key, as main's gibdo does in 6 of 313 full-route exits
+  (the landed one 7 of 342), and spent two keys in 7:0x1b, as goriya does in 2% of `d7` visits on both teams; more
+  runs now reach Dungeon 6 (125 against 90). `r31-1k-full`'s one cheated key was 9:0x63 (seed 547: 6:0x29 left by a
+  wrong exit without its key, so Dungeon 9's ledger, which has no spare key on either route, ran short). The
+  planner: 6 cheated keys, all 9:0x63, for the same three causes (0x29 wrong exits, 5:0x66's key left, one 8:0x5e
+  key left). No route-data fault.
 
 ## Owed (not trained here)
 
-- **like-like, 9:0x56** (step 310): 616 of 1000 Dungeon 9 runs end `stuck` there (the room is new to the family).
-- **wizzrobe, 6:0x29** (step 268, the key now taken: 119 runs lost against 27) and **6:0x78** (`drops: first` has
-  nothing to take: the model never swings there).
-- **vire, 6:0x39 and 6:0x2d** (`bombs: tenth`: 49 and 19 runs lost against 26 and 6).
+- **like-like, 9:0x56** (step 310): 616 of 1000 Dungeon 9 runs end `stuck` there (the room is new to the family);
+  the planner too (90 of 127).
+- **wizzrobe, 6:0x29** (step 268, the key now taken: 74 runs lost against 27 even with `r30w-wj-s89`) and **6:0x78**
+  (`drops: first` has nothing to take: the model never swings there).
+- **vire, 6:0x39 and 6:0x2d** (`bombs: tenth`: 36 and 29 runs lost against 26 and 6).
 - **lanmola, 9:0x55 from E** (16 runs lost).
-- **pols-voice, 8:0x4c** without its key (13 stuck).
-- stalfos-keese-gel 1:0x53/0x43 from S: to be read from the queued d1 and full chains.
+- **pols-voice, 8:0x4c** without its key (19 stuck).
+- stalfos-keese-gel 1:0x53 and 0x43 from S: 1 and 10 deaths in the full route (main's 1:0x53 1, 0x43 4): small.
 
 ## For the owner
 
 1. Your Dungeon 1 works as you said: out and back in, the N door is open for good, no key spent, the keys come out
    even. The overworld model needed a lesson for the step off the entrance (it used to step back onto it); after
-   one round of training it does the trip in every run, in a third of a second on the overworld.
-2. Dungeon 6 and Dungeon 9 lose runs for now: the rooms whose job changed (0x29's key, the Vires without bombs,
-   Dungeon 9's new 0x56) are new to their models; they are listed above for the next training round. 0x78's bomb
-   pack does not happen yet: the model walks through without swinging.
-3. Dungeon 8 is unchanged by leaving 0x4c's key.
+   one round of training it does the trip in every run, in a third of a second on the overworld. It is promoted.
+2. Landed as 1.9.0.1 together with the optimisation round (round 30): from the start the models now take the D5
+   triforce in 30% of runs (26%), the D7 triforce in 12.5% (9.1%), and reach Dungeon 9 in 13 of 1000 (4).
+3. Dungeon 6 and Dungeon 9 lose runs to the route for now: the rooms whose job changed (0x29's key, the Vires without
+   bombs, Dungeon 9's new 0x56) are new to their models. Dungeon 9's 0x56 is the big one: two runs in three that
+   reach it from Dungeon 9's entrance stay there, so the models end the game from Dungeon 9's entrance in 14% (31%
+   before) and the planner from the start in 9% (30%). like-like is the first family to train on the new route.
+4. 0x78's bomb pack does not happen yet: the model walks through without swinging. Dungeon 8 is unchanged by
+   leaving 0x4c's key (19 runs of 1000 stick in 0x4c, pols-voice's to learn).
 
 ## Commands
 
@@ -128,9 +173,10 @@ TRIFORCE_MODELS_DIR=$PWD/models triforce train --specialist ow-octorok --load mo
 triforce select-checkpoint ow-octorok r31-oct-s97 --from 1_73s_0 --stop-at step:51 --runs 100 --confirm 0
 triforce eval-batch r31-trip4 --chain "s97-c0: --route d2first --from 1_73s_0 --runs 20 --first-seed 1000 \
   --act model --stop-at step:51 --checkpoint ow-octorok=... --output ..."     # c0-c2, each seed and r74-leg2
-triforce select-checkpoint ow-octorok r31-oct-s97 --segment SEG --only last --runs 1000 --confirm 0 --parallel 10
+triforce select-checkpoint ow-octorok r31-oct-s97 --segment SEG --only last,promoted --runs 1000 --confirm 0 --parallel 10
 triforce eval-batch r31-1k-dungeons --chains r31-1k --runs 1000 --act model --chains-dir target/r31-chains \
   --segments "d6:6_79s_0 d8:8_7es_0 d9:9_76s_0" --parallel 10
 triforce eval-batch r31-1k-full --chains r31-1k --runs 1000 --act model --chains-dir target/r31-chains \
   --segments full:start --chain-args "--checkpoint ow-octorok=models/ow-octorok/r31-oct-s97/ckpt.pt" --parallel 10
+# the landed team's chains of record: round30.md "The landing"
 ```

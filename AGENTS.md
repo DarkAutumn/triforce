@@ -4,7 +4,49 @@ Read this first, then `README.md` (setup, commands), `docs/architecture.md` (mod
 `docs/experiments/round*.md` (start with its Summary) plus `docs/experiments/backlog.md` (the experiment backlog,
 called `todo.md` before Nov 8; where the work stands and what to try next, in order).
 
-## Where things stand (Nov 19)
+## Where things stand (Nov 20)
+
+- **Rounds 30 and 31 (Nov 19-20; landed together as 1.9.0.1, `docs/experiments/round30.md` "The landing",
+  `round31.md`):** the owner's eight phase IX changes to `d2first` (now **354 steps**): Dungeon 1 out of 1:0x73 by
+  its S door and back in (steps 46-48, the trip; 0:0x37 `cave → cave`), 0x72, 0x74, 0x52, 0x42 left out, 0x53's N
+  wall bombed into 0x43 (steps 49-51), the D1 triforce step 63, 0:0x37 after it step 64 (`0_37c_v2`); every later
+  step is 4 lower (the D7 triforce 243, Dungeon 6 261-276, Dungeon 8 283-292, Dungeon 9 308-351); Dungeon 6's 0x78
+  `drops: first`, 0x29's key taken, 0x39 and 0x2d `bombs: tenth`; Dungeon 8's 0x4c key left; Dungeon 9 0x66 N into
+  0x56 and its W wall into 0x55 from E. **The team** (round 30, one family at a time, each by its own gate):
+  wizzrobe `r30w-wj-s89`, patra `r30w-patra`, boss-manhandla `r30-manh-s90`, gibdo `r30-gibdo-s91`, goriya
+  `r30-goriya6-s31`, darknut `r30-dark69-s94`, ow-lynel `r30e-lynel-s84`, ow-octorok `r31-oct-s97` (the trip: `d1`
+  +32.6 ± 1.5 against `r74-leg2`); wallmaster `r30-wall-s30` failed its gate (+0.7 ± 0.8 over 2000 `d7` runs) and
+  `r76-wall-1` stays; moldorm and boss-gleeok unchanged. The chains of record `r31land-1k` (1000 runs a segment,
+  seeds 0-999, clips on, models alone; paired with `r29land-1k`, in brackets with `r31-1k`, 1.9.0.0's team on the
+  new route):
+  <!-- r31 chains of record -->
+  - Dungeon 2 (`2_7ds_0` → step 24): 91.6% (+0.0 ± 1.2).
+  - after Dungeon 2 (`0_3cc_0` → step 46): 94.9% (+1.7 ± 1.1; [+2.6 ± 1.1]), 3.25 hearts.
+  - Dungeon 1 (`1_73s_0` → step 64): 99.3% (−0.5 ± 0.3; [+0.2 ± 0.3]); the trip in 1000 of 1000.
+  - after Dungeon 1 (`0_37c_v2_0` → step 83): 100.0%.
+  - Dungeon 3 (`3_7cs_0` → step 101): 85.3% (+2.6 ± 1.7).
+  - after Dungeon 3 (`0_74c_0` → step 108): 100.0%.
+  - Dungeon 4 (`4_71s_0` → step 130): 91.7% (run for run).
+  - after Dungeon 4 (`0_45c_0` → step 182): 100.0%, 7.69 hearts.
+  - Dungeon 5 (`5_76s_0` → step 205): 76.3% (+4.1 ± 2.0).
+  - `post-d5` (`0_0bc_0` → step 224): 98.0% (run for run).
+  - `d7` (`7_79s_0` → step 244): 56.9% (+10.3 ± 2.2).
+  - `post-d7` (`0_42c_0` → step 261): 99.4% (+0.3 ± 0.3).
+  - `d6` (`6_79s_0` → step 277): 28.5% (−2.9 ± 2.0; [+7.4 ± 1.9]: the route costs 10.3).
+  - `post-d6` (`0_22c_0` → step 283): 100.0%.
+  - `d8` (`8_7es_0` → step 293): 36.3% (+11.5 ± 2.0).
+  - `post-d8` (`0_6dc_0` → step 308): 99.8% (−0.2 ± 0.1), 11.87 hearts (−0.42: ow-lynel's 0:0x05).
+  - `d9` (`9_76s_0` → the ending): 13.7% (−17.3 ± 1.8; [+2.8 ± 1.2]): the route's 9:0x56, a room new to like-like,
+    holds 616 runs `stuck`.
+  - **the full route** (`r31land-1k-full`): Dungeon 1 left 74.4% (+1.4 ± 2.0), **the D5 triforce 30.4% (+4.2 ± 2.0)**,
+    **the D7 triforce 12.5% (+3.4 ± 1.4)**, the D6 triforce 3.0% (+1.3 ± 0.7), the D8 triforce and Dungeon 9 entered
+    1.3% (+0.9 ± 0.4), the red ring 0.2%, **the game ended 0 of 1000**; no milestone worse; 2.36 cheated bombs a run,
+    2 cheated keys (6:0x79: 5:0x66's key left and 7:0x1b's two keys spent, as often as with main's families).
+    **The honest planner beside** (300): the D6 triforce 47.0%, Dungeon 9 entered 42.3%, **the game ended 9.0%**
+    (1.9.0.0 29.7%): 9:0x56 again.
+  Owed by the new route (round31.md "Owed"): like-like 9:0x56, wizzrobe 6:0x29's key and 6:0x78 (0 kills in 1000
+  visits: `drops: first` gives nothing untrained), vire 6:0x39/0x2d, lanmola 9:0x55 from E, pols-voice 8:0x4c.
+  **Next: `d3first`** (2.0.0.0, "Two routes" below; its walks are on `main`).
 
 - **Round 29 (Nov 17-19; landed with round 28 as 1.9.0.0, `docs/experiments/round29.md`):** the leg to Dungeon 9,
   Dungeon 9, Ganon and the end of the game, on round 28's branch. **The game is ended by the models** (round29.md §16-18): the third
@@ -465,9 +507,10 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 
 ## Versioning (Lee, Nov 11)
 
-- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `1.9.0.0`: nine dungeons, rounds 28 and
-  29's Dungeons 8 and 9 to the end of the game; it carries round 26's schema 6 observation of 1.5.1.0, the one input
-  change for Dungeon 7 to Ganon, decisions 2026-11-16; earlier runs are stamped 1.9.0.0, not converted). It is the
+- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `1.9.0.1`: rounds 30 and 31, the
+  optimisation round's team on `d2first` as the owner's phase IX changed it; 1.9.0.0 was nine dungeons, rounds 28
+  and 29's Dungeons 8 and 9 to the end of the game; it carries round 26's schema 6 observation of 1.5.1.0, the one
+  input change for Dungeon 7 to Ganon, decisions 2026-11-16; earlier runs are stamped 1.9.0.0, not converted). It is the
   single source: `triforce.__version__` and `_native.VERSION` read it, `pyproject.toml` repeats it and the Cargo
   workspace version is its first three numbers (`tests/test_version.py` checks all of them).
   - `MAJOR` changes only when Lee says so. **2.0 is said (Nov 19): the `d3first` route** (below, "Two routes"):

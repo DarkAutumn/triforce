@@ -14,6 +14,43 @@ the gap list of what must be walked in the game first, where the documents disag
 of work) and the documents it indexes (`d7.md`, `d6.md`, `d8.md`, `d9.md`, `late-monsters.md`, `late-mechanics.md`).
 The owner's decisions of Nov 16 are in `docs/decisions.md` ("The rest of the game").
 
+### The whole game on the changed route (1.9.0.1, Nov 20): what loses it now
+
+round30.md "The landing", round31.md. Rounds 30 and 31 landed together: the optimisation round's team on `d2first`
+as the owner's phase IX changed it (354 steps). From the start the models alone end the game in 0 of 1000 runs
+(Dungeon 9 entered by 13), the planner in 27 of 300 (9:0x56 holds most of the rest). What loses the full route
+(`r31land-1k-full`, runs ended per 1000; 1.9.0.0's `r29land-1k-full` in brackets), in order:
+
+- [ ] **5:0x05 (darknut, 135 (141))**: entered with 6.48 hearts; `r30-dark69-s94` gained `d8` (+11.5) and Dungeon 5
+  (+4.1) but not this room at the route's hearts. Then 5:0x64 39, 0x65 20, 0x66 20.
+- [ ] **3:0x4d (Manhandla, 86 (97))**: entered with 3.66 hearts.
+- [ ] **7:0x1b (goriya, 64 (77))**: entered with 4.20 hearts; `d7` is 56.9% now (46.6%).
+- [ ] **4:0x13 (Gleeok, 46 (36))**: `r30-gleeok-s30` was not better beyond noise; the fights entered at 3 hearts or
+  fewer are the deaths (round30.md).
+- [ ] **1:0x44 (goriya, 44 (25); 1.9.0.0's goriya on the new route 20)**: entered with 2.93 hearts; `r30-goriya6-s31`
+  loses more here at the full route's hearts (the `d1` segment from full hearts shows 3 against 1). The first item
+  for goriya's next run.
+- [ ] **6:0x3a (wizzrobe, 36 (33))**, 6:0x38 25; Dungeon 2's 2:0x5e 31 (29), 0x1e 29 (41), 0x3e 23 (22).
+- [ ] **ow-lynel `r30e-lynel-s84` at 0:0x05 after Dungeon 8**: 1.41 hearts a visit against `r27l-lynel-s81`'s 1.03:
+  Dungeon 9 is entered with 11.87 hearts on `post-d8` (12.30). Its second visit of 0x0a is fixed (round30.md).
+
+**Owed by the new route (round31.md "Owed")**, the families in the order they cost runs:
+
+- [ ] **like-like 9:0x56** (step 310): 616 of 1000 `d9` runs end `stuck` there; the planner too (90 of 127). The
+  first training on the new route: `d9` 13.7% against 31.0% before.
+- [ ] **wizzrobe**: **6:0x29's key detour** (step 268: 74 runs lost on `d6` against 27 before, and its wrong exits
+  leave the key behind, which costs a cheated key at 9:0x63 later) and **6:0x78** (`drops: first`: 0 kills in 1000
+  visits; the owner's bomb pack needs a model that swings there).
+- [ ] **vire 6:0x39, 6:0x2d** (`bombs: tenth`: 36 and 29 runs lost against 26 and 6).
+- [ ] **pols-voice 8:0x4c** without its key (19 stuck); **lanmola 9:0x55 from E** (16 lost).
+- [ ] **The key ledger names two leaks** (no route-data fault; every key cheated in 1.9.0.1's chains is one of them):
+  gibdo leaves 5:0x66 (step 195, W → N) without its key in 2-3% of exits (main's gibdo as often), and goriya spends
+  a second key in 7:0x1b in 2% of visits; either leaves Dungeon 6's 0x79 door (2 cheated keys in the full route) or
+  Dungeon 9's 0x63 (the planner: 6) short, as do 6:0x29's wrong exits. A step objective that makes 5:0x66's key a
+  must (`treasure` on the step) would close the first.
+- [ ] **eval-batch `--chains` segment chains run past their segment** (no stop step; the chains of record are
+  `--chain` entries with `--stop-at`): scored by arrival, but they waste the CPU of the rest of the route.
+
 ### The whole game (1.9.0.0, Nov 19): the optimisation round over the whole route
 
 round29.md §20. The route ends the game; one team plays it. From the start the models alone end it in 0 of 1000
@@ -1964,13 +2001,3 @@ the remaining list is deferred until Lee resumes work.
 - **Damage still resets the room-stalling counter** (v1 behaviour, `critics.critique_movement`). In rooms with
   frequent ranged damage (Zora fireballs) this delays the stalling penalty. Not changed in round 2.
 
-## Round 31 (phase IX) owed
-
-- **like-like 9:0x56** (step 310): 616 of 1000 Dungeon 9 runs `stuck` there (`docs/experiments/round31.md`).
-- **wizzrobe 6:0x29** (key taken: 119 runs lost against 27) and **6:0x78** (`drops: first`, but 0 kills in 1000).
-- **vire 6:0x39, 6:0x2d** (`bombs: tenth`: 49 and 19 runs lost against 26 and 6).
-- **lanmola 9:0x55 from E** (16 lost); **pols-voice 8:0x4c** without its key (13 stuck).
-- **ow-octorok `r31-oct-s97`**: the trip 60/60; promote once its paired post-d2, d1, post-d1, post-d3, post-d6 and
-  post-d8 chains (queued in round 31) show nothing worse beyond noise.
-- **eval-batch segment chains run past their segment** on this branch (no stop step; main's `r29land-1k` had one):
-  scored by arrival, but they waste the CPU of the rest of the route.
