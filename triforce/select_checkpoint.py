@@ -231,7 +231,8 @@ def played_by(plan: Plan, candidate: Candidate, phase: str) -> bool:
     batches = [(b.get('first_seed'), b.get('runs'), b.get('finished')) for b in meta.get('batches') or []]
     model = {m.get('name'): m for m in provenance.get('models') or []}.get(plan.family) or {}
     return (batches == [(first_seed, runs, True)] and provenance.get('clips') == plan.clips
-            and str(provenance.get('start_from')) == plan.start and model.get('checkpoint_sha1') == candidate.sha1
+            and str(provenance.get('start_from') or 'start') == plan.start
+            and model.get('checkpoint_sha1') == candidate.sha1
             and model.get('act') == candidate.act)
 
 
@@ -481,6 +482,7 @@ def build_plan(args) -> tuple[Plan, list[Candidate]]:
     """The plan and the candidates; raises BatchError when the command line can't run."""
     # pylint: disable=import-outside-toplevel
     from . import registry
+    from ._native import route_state
     run_dir = Path(args.run) if os.sep in args.run else registry.run_dir(args.family, args.run, args.models_dir)
     table = route_segments(args.route)
     if args.segment is not None:
@@ -496,6 +498,11 @@ def build_plan(args) -> tuple[Plan, list[Candidate]]:
         target = table.targets.get(args.segment or segment_starts(args.route).get(bare_state(start or ''), ''))
     if target is not None:
         parse_target(target)
+    if start != 'start':        # the name eval-chain plays and records (--route d3first --from 3_7cs_0: d3first_3_7cs_0)
+        try:
+            start = route_state(args.route or registry.MAIN_ROUTE, start)
+        except ValueError as error:
+            raise BatchError(f"--from {start}: {error}") from error
     if args.runs < 1 or args.confirm < 0 or args.confirm_top < 0 or args.parallel < 1:
         raise BatchError("--runs and --parallel must be >= 1, --confirm and --confirm-top >= 0")
     chain_args = ['--from', start, '--clips', args.clips, '--act', args.act]
