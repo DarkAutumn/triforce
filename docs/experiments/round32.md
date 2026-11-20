@@ -825,3 +825,34 @@ d5/d2/d7/d6/d8/d9 runs that entered.
 | 301 | 9:0x52 | cave→N | patra | 150 | 8 (53) | death 8 | 3.73/15 | 0.27 | 67 | 0.00 | 1 | 0/0/0 | 100, 3.5/15, 0.47 | 90, 3.4/15, 0.49 | 0/82 |
 | 302 | 9:0x42 | S→N | ganon | 142 | 22 (155) | death 22 | 3.65/15 | 0.61 | 52 | 0.00 | 0 | 0/0/0 | 136, 3.4/15, 0.67 | 168, 3.2/15, 0.76 | 0/82 |
 | 303 | 9:0x32 | S→end | ganon | 120 | 0 (0) |  | 3.60/15 | 0.00 | 5 | 0.00 | 0 | 0/0/0 | 0, 3.1/15, 0.00 | 0, 2.9/15, 0.00 | 0/82 |
+
+## 6. The per-route tables for the whole route, and the late families (boss-digdogger, gibdo, ow-moblin)
+
+Branch `r32-t-late` (from `r32-steps` 44fe335c, `r32-base2` merged), version 2.0.0.0, today's team as in §5 (main's
+promoted runs and round 30's five, stamped).
+
+### 6.1 The tables' refit
+
+`triforce/heart_value.d3first.json` and `triforce/chain_hp.d3first.json` refitted from 37 `d3first` chains of
+today's team: the first baseline's (`r32base-1k-*`, `r32base-plan-*`), the prep's (`r32prep-*`), the second
+baseline's (`r32base2-1k-*`, `r32base2-plan-*`) and three new ones (`python -m triforce.heart_value <files> --route
+d3first`, the same for `chain_hp`):
+
+- **the leg to Level 7** (steps 156-173 rested on one run, the only one past 0:0x3c): the planner from Level 2's exit
+  (`0_3cc_0` → step 174, 300 runs) passes 0:0x3c in **6** runs (it plays the models' choices, and the models do not
+  turn E before the recorder), so the leg's data is the models' from the recorder's landing (`0_45r_0`, step 156 →
+  step 174, 1000 runs: 997 reach Level 7). Each step of the leg now has about 1000 visits.
+- the leg to Level 2 again on new seeds (`0_0bc_0` → step 145, 1000 runs, seeds 5000-5999).
+
+Coverage: **every clip-way step 0-303 has a curve from at least 20 visits**. The plain ways have none: no chain
+plays clips off, so `fit_way` gives no curve to a way none of whose steps up to the next triforce has a visit, and
+`env::heart_value` prices hearts there by the plain health terms (the fit's design since round 26). Those are the
+stretches' plain ways 43-46, 159-162, 198-201 and **272, 285, 290**, which §5.4 read as second visits without their
+own record: they are Dungeon 9's one-room plain twins (9:0x07 cave→S, 9:0x20 cave→N, 9:0x20 N→cave on the plain
+way). `chain_hp.d3first.json` holds 223 rooms (93 before). The test
+(`test_the_d3first_table_prices_the_steps_its_chains_played`) checks the coverage. A few values (V at hearts in /
+at full): 5:0x66 W→N 0.31 at 2 hearts, 0.75 at 4, 0.90 at 7; 5:0x24 0.76 / 0.87 / 0.95; 0:0x62 E→cave 0.17 / 0.59 /
+0.97 (of 8); 0:0x3c cave→recorder 0.13 at full (Level 7's 4.7% behind it).
+
+Every chain of the fit predates the route's grants (`r32-steps` ef726772: Dungeon 5's entrance tops the bag up to 8
+bombs; 8:0x4c's rupees): Dungeon 5's and Dungeon 8's rows price the old bag and purse until the next refit.
