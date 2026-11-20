@@ -111,9 +111,9 @@ def test_the_command_line_is_checked_before_anything_runs(team, tmp_path, capsys
     assert not (tmp_path / 'logs').exists()
 
 
-def _fake_chain(plan, phase, label, sha1, act, arrived):
-    """A finished chain output of ``phase`` under ``label``, as eval-chain writes it, played by the weights ``sha1``:
-    its first ``arrived`` seeds reach the end (no game is played)."""
+def _fake_chain(plan, phase, label, sha1, act, arrived, start=None):
+    """A finished chain output of ``phase`` under ``label``, as eval-chain writes it, played by the weights ``sha1``
+    from ``start`` (default the plan's): its first ``arrived`` seeds reach the end (no game is played)."""
     from triforce.cli import meta_path  # pylint: disable=import-outside-toplevel
     runs, first_seed = plan.seeds(phase)
     output = select_checkpoint.chain_output(plan, phase, label)
@@ -123,7 +123,7 @@ def _fake_chain(plan, phase, label, sha1, act, arrived):
         for i, seed in enumerate(range(first_seed, first_seed + runs))))
     meta_path(output).write_text(json.dumps({
         'batches': [{'first_seed': first_seed, 'runs': runs, 'finished': True}],
-        'provenance': {'clips': plan.clips, 'start_from': plan.start,
+        'provenance': {'clips': plan.clips, 'start_from': plan.start if start is None else start,
                        'models': [{'name': FAMILY, 'checkpoint_sha1': sha1, 'act': act}]}}))
 
 
@@ -166,6 +166,29 @@ def test_a_promotion_during_the_batch_neither_changes_the_reference_nor_stops_th
     assert rows['promoted']['sha1'] == registry.checkpoint_sha1(registry.promoted_checkpoint(FAMILY, root))
     assert rows['promoted']['screen'] is None and rows['promoted']['confirm'] is None
     assert 'screen_vs_promoted' not in rows['it000002']
+
+
+def test_a_route_with_a_namespace_finds_the_chains_it_played(team, tmp_path, capsys):
+    """Round 32: ``--route d3first --segment d3`` played its chains, then its report found none ("the screen has no
+    chain of ...") because eval-chain records the start in the route's namespace (``d3first_3_7cs_0``) and the plan
+    held the table's bare name: the plan now plays and compares the namespaced name, however it is given."""
+    root, run_dir = team
+    common = ['--models-dir', str(root), FAMILY, 'r', '--route', 'd3first', '--stop-at', 'step:24', '--runs', '2',
+              '--confirm', '0', '--chains-dir', str(tmp_path / 'chains')]
+    for where in (['--segment', 'd3'], ['--from', '3_7cs_0'], ['--from', 'd3first_3_7cs_0']):
+        plan, pool = select_checkpoint.build_plan(select_checkpoint.build_parser().parse_args([*common, *where]))
+        assert plan.start == 'd3first_3_7cs_0' and plan.chain_args[:2] == ['--from', 'd3first_3_7cs_0']
+    for candidate in pool:      # as eval-chain --route d3first --from d3first_3_7cs_0 records them
+        _fake_chain(plan, 'screen', candidate.label, candidate.sha1, candidate.act, 1, start='d3first_3_7cs_0')
+    assert select_checkpoint.main([*common, '--segment', 'd3', '--report-only']) == 0
+    rows = {row['label']: row for row in json.loads((run_dir / 'selection.json').read_text())['candidates']}
+    assert all(rows[candidate.label]['screen']['arrived'] == 1 for candidate in pool)
+    # A chain from the bare state is not the plan's; a state of another namespace than the route's is refused.
+    last = next(candidate for candidate in pool if candidate.label == 'last')
+    _fake_chain(plan, 'screen', 'last', last.sha1, last.act, 1, start='3_7cs_0')
+    assert not select_checkpoint.played_by(plan, last, 'screen')
+    assert select_checkpoint.main([*common[:4], '--from', 'd3first_3_7cs_0', *common[6:], '--report-only']) == 2
+    assert 'namespace' in capsys.readouterr().err
 
 
 def test_scores_and_paired_differences():
