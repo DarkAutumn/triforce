@@ -401,10 +401,14 @@ before the magic sword's cave; the default from there on), each the run its trai
 | boss-digdogger | `r32late-dig` | "The per-route tables ... and the late families": 5:0x24, 7:0x1c |
 | gibdo | `r32late-gibdo` | the same: Dungeon 5 |
 | ow-moblin | `r32late-moblin` (it006341) | the same: 0:0x62's tree |
+| ow-leever | `r32d1-leever` (added later, below) | "Training: Dungeon 1 and the legs": 0:0x29-0x2b |
+| ow-zora | `r32d1-zora` (added later) | the same: 0:0x2d, 0:0x55 |
 
-Not in the team (no route run when it was assembled): goriya, stalfos-keese-gel, ow-zora, ow-tektite, ow-leever
-(the Dungeon 1 trainer's selections still waited in the line) and ow-octorok (the recorder turns' trainer's runs
-still training). They play main's runs.
+The first nine were the route runs when the team was assembled; the Dungeon 1 trainer promoted ow-leever and
+ow-zora for the route three hours later, before the batch below had started, and they were added (the "first team"
+below is the nine, the "team" the eleven; the batch measures the eleven). Not in it: goriya, stalfos-keese-gel,
+ow-tektite (the Dungeon 1 trainer's selections still in the line) and ow-octorok (the recorder turns' trainer's
+runs still training). They play main's runs.
 
 ### The golden race, models alone, from console power on
 
@@ -416,45 +420,54 @@ tf replay verify OUT/golden-00000000-stuck.tfreplay
 
 The tool takes the route as it is: `golden.checkpoints('d3first')` is derived from the route's steps (a step whose
 exit is `triforce`, not the last), `[24, 53, 79, 120, 155, 194, 227, 243]`, outside Dungeons 3, 4, 1, 5, 2, 7, 6
-and 8 in the route's order, and the ninth segment plays Dungeon 9 to the ending; no code changed. Four paths (8
-games at once, at most 320 runs a segment; runs played until a segment's winner came in):
+and 8 in the route's order, and the ninth segment plays Dungeon 9 to the ending; no code changed. Six paths (8 games
+at once, at most 320 runs a segment; runs played until a segment's winner came in), four with the first team, two
+with the team:
 
-| Segment (stop) | From - to | seeds 0 | 100000 | 102880 | 105760 |
-|---|---|---|---|---|---|
-| 0 (step 24) | power on - D3 triforce | 10 | 17 | 21 | 11 |
-| 1 (53) | - D4 triforce | 80 | 17 | 72 | 10 |
-| 2 (79) | - D1 triforce | 3 | 2 | 6 | 3 |
-| 3 (120) | - D5 triforce | 27 | 66 | 18 | 22 |
-| 4 (155) | - D2 triforce | 4 | 5 | 4 | 8 |
-| 5 (194) | - D7 triforce | **320, none** | **320, none** | **320, none** | **320, none** |
+| Segment (stop) | From - to | seeds 0 | 100000 | 102880 | 105760 | team: 300000 | 302880 |
+|---|---|---|---|---|---|---|---|
+| 0 (step 24) | power on - D3 triforce | 10 | 17 | 21 | 11 | 17 | 24 |
+| 1 (53) | - D4 triforce | 80 | 17 | 72 | 10 | 13 | 8 |
+| 2 (79) | - D1 triforce | 3 | 2 | 6 | 3 | 4 | 3 |
+| 3 (120) | - D5 triforce | 27 | 66 | 18 | 22 | 9 | 12 |
+| 4 (155) | - D2 triforce | 4 | 5 | 4 | 8 | 1 | 1 |
+| 5 (194) | - D7 triforce | **320, none** | **320, none** | **320, none** | **320, none** | **320, none** | **320, none** |
 
 **Every path stops at the same place: out of Level 2, 0:0x3c, ow-octorok's recorder turn.** The race keeps the
-failed run with the most rooms, and in all four that run never left 0x3c: `bounce-limit` (ow-octorok back into
-0:0x3c a fifth time in a row) after 615-619 frames of the segment. Dungeons 3 and 4, which the first baseline's
-team passed in 0 of 1000 runs, now fall in 10-21 and 10-80 runs; Dungeon 5 in 18-66. The furthest path (seeds
-from 0) is 111,649 frames, `tf replay verify` ok (17 edits, 6 states: 1 END, 5 CHECKPOINT), source `power-on LINK
-32342`, act `temperature:0.5+relax:16 (every model, 43)`, ending `stuck`; its file is kept in the worktree's
-`target/r32-team/golden1/` (not committed).
+failed run with the most rooms, and in all six that run never left 0x3c: `bounce-limit` (ow-octorok back into
+0:0x3c a fifth time in a row) after 615-682 frames of the segment. Dungeons 3 and 4, which the first baseline's
+team passed in 0 of 1000 runs, now fall in 10-24 and 8-80 runs; Dungeon 5 with its leg in 18-66, and with the
+route's ow-leever and ow-zora in 9 and 12. The first path (seeds from 0) is 111,649 frames, `tf replay verify` ok
+(17 edits, 6 states: 1 END, 5 CHECKPOINT), source `power-on LINK 32342`, act `temperature:0.5+relax:16 (every
+model, 43)`, ending `stuck`; the team's two are 105,876 and 86,646 frames, both verified. The files are kept in the
+worktree's `target/r32-team/golden1/` and `golden4/` (not committed).
 
-Link's purse on entering each dungeon on the four paths (`scripts/experiments/r32team_purse.py REPLAY`; hearts of
+Link's purse on entering each dungeon on the six paths (`scripts/experiments/r32team_purse.py REPLAY`; hearts of
 containers, bombs, keys):
 
-| Entering | seeds 0 | 100000 | 102880 | 105760 |
-|---|---|---|---|---|
-| Level 3 (step 6) | 3 of 3, 0, 0 | 3 of 3, 0, 0 | 3 of 3, 0, 0 | 3 of 3, 0, 0 |
-| Level 4 (31) | 3.0 of 4, 2, 2 | 3.5 of 4, 4, 2 | 4 of 4, 6, 2 | 4 of 4, 4, 2 |
-| Level 1 (61) | 4.0 of 5, 0, 3 | 2.5 of 5, 0, 3 | 3.5 of 5, 0, 3 | 3.5 of 5, 2, 3 |
-| Level 5 (97) | 4.0 of 7, 2, 3 | 5.5 of 7, 0, 3 | 6.5 of 7, 0, 3 | 4.0 of 7, 0, 3 |
-| Level 2 (145) | 7.5 of 10, 0, 2 | 7.0 of 10, 1, 2 | 6.5 of 10, 1, 2 | 4.5 of 10, 1, 2 |
+| Entering | seeds 0 | 100000 | 102880 | 105760 | team: 300000 | 302880 |
+|---|---|---|---|---|---|---|
+| Level 3 (step 6) | 3 of 3, 0, 0 | 3 of 3, 0, 0 | 3 of 3, 0, 0 | 3 of 3, 0, 0 | 3 of 3, 0, 0 | 3 of 3, 0, 0 |
+| Level 4 (31) | 3.0 of 4, 2, 2 | 3.5 of 4, 4, 2 | 4 of 4, 6, 2 | 4 of 4, 4, 2 | 4 of 4, 8, 2 | 4 of 4, 4, 2 |
+| Level 1 (61) | 4.0 of 5, 0, 3 | 2.5 of 5, 0, 3 | 3.5 of 5, 0, 3 | 3.5 of 5, 2, 3 | 4.5 of 5, 0, 3 | 4.5 of 5, 0, 3 |
+| Level 5 (97) | 4.0 of 7, 2, 3 | 5.5 of 7, 0, 3 | 6.5 of 7, 0, 3 | 4.0 of 7, 0, 3 | 4.5 of 7, 0, 3 | 7 of 7, 0, 3 |
+| Level 2 (145) | 7.5 of 10, 0, 2 | 7.0 of 10, 1, 2 | 6.5 of 10, 1, 2 | 4.5 of 10, 1, 2 | 6.0 of 10, 0, 2 | 3.5 of 10, 0, 2 |
 
-Cheated, a path: 12-17 items, no key: one bomb in Dungeon 3; one at 1:0x53's wall when Level 1 is entered without
-a bomb (three paths); on the leg after Dungeon 1 one at 0:0x2d's wall (three paths) and one at heart rock 0:0x2c
-(two); 8-17 rupees at the candle shop; 9-10 bombs in Dungeon 5 (the bag of 8 granted at its entrance is counted as
+Cheated, a path: 12-17 items, no key: one bomb in Dungeon 3 (five paths); one at 1:0x53's wall when Level 1 is
+entered without a bomb (five paths); on the leg after Dungeon 1 one at 0:0x2d's wall and at times one at heart rock
+0:0x2c; 8-17 rupees at the candle shop; 9-10 bombs in Dungeon 5 (the bag of 8 granted at its entrance is counted as
 cheated); 2 at Dodongo (2:0x0e) once.
 
 **Past the recorder turn the race reaches the ending.** The same race from the recorder's landing
-(`--from d3first_0_45r_0`, step 156, 11 of 11 hearts, two paths, seeds 200000 and 202880): the leg and Dungeon 7
-in 9 and 48 runs, Dungeon 6 in 7 and 7, Dungeon 8 in 7 and 4, Dungeon 9 and Ganon in 84 and 32; **both end the
-game** (74,757 and 75,234 frames, `tf replay verify` ok, ending `win`, "the game ended in (level 9, room 0x32)").
-So with today's team the golden path is one fix short: ow-octorok's turn out of Level 2 (MOVE S, MOVE E,
-RECORDER), which another agent of this round trains.
+(`--from d3first_0_45r_0`, step 156, 11 of 11 hearts), two paths with each team:
+
+| Segment (stop) | first team: 200000 | 202880 | team: 400000 | 402880 |
+|---|---|---|---|---|
+| the leg and Dungeon 7 (194) | 9 | 48 | 20 | 68 |
+| Dungeon 6 (227) | 7 | 7 | 5 | 7 |
+| Dungeon 8 (243) | 7 | 4 | 8 | 10 |
+| Dungeon 9 and Ganon (the ending) | 84 | 32 | 14 | 20 |
+
+**All four end the game** (74,501-75,234 frames, `tf replay verify` ok, ending `win`, "the game ended in (level 9,
+room 0x32)"). So with today's team the golden path is one fix short: ow-octorok's turn out of Level 2 (MOVE S,
+MOVE E, RECORDER), which another agent of this round trains.
