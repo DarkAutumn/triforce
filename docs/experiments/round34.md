@@ -971,6 +971,12 @@ Where single runs end: Manhandla 226 (454 entering, 1.61 hearts), the last pass 
 0.13 of the bag, 0.27 rupees, no key (2.0.0.0: 0.37, 0.01, 0.04, 0). For the first time single runs from the start
 pass Dungeon 5 (3), and one reaches the magic sword and Dungeon 6.
 
+**The planner beside** (300 runs from the start, seeds 0-299, `temperature:0.5+relax:16+plan:16:1`, the 2.0.0.1
+team; paired with `r32land-plan-full`): **the ending 25.0%** (75 of 300; 2.0.0.0 17.7%, +7.3 ± 3.2); the D3
+triforce 70.7% (67.7%), D4's 67.7% (59.0%), D1's 67.3%, D5's 59.0% (43.3%, +15.7 ± 4.0), D7's and the magic sword
+53.0% (38.3%), D6's 31.7%, D8's 30.0%. Its runs end at Manhandla 66 (2.50 hearts in) and in Dungeon 6's Wizzrobe
+rooms (6:0x3a 31, 0x29 11, 0x38 11); it cheats 4.44 bag and 5.07 wall bombs, 4.27 rupees and 0.01 keys a run.
+
 ## The landing (2.0.0.1)
 
 - **Taken back: darknut `r34d3-dlp-s353`.** With it the joint chains failed the `d5` hold: 19.2% against the

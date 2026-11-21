@@ -21,6 +21,7 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   (`d5` -4.8 ± 1.8: the Olive Garden); darknut `r34d5-dg-s362` and boss-digdogger `r34d7b-dig-s1` qualified after the
   chains had played and wait for the next release. Still open: the Olive Garden (360 runs lost per 1000 entering),
   Manhandla (553 at 1.56 hearts), Gleeok (736, reached 1.45 hearts poorer than the planner), Digdogger's 7:0x1c.
+  The planner beside ends the game in 25.0% of 300 runs from the start (2.0.0.0: 17.7%).
 
 - **2.0.0.0 (Nov 20; rounds 32 and 33, `docs/experiments/round32.md`, `round33.md`; decisions 2026-11-20 "2.0.0.0:
   `d3first` is the main route"): two routes, `d3first` the main one.** `d3first` (304 steps, `docs/routes/d3first.md`)

@@ -47,8 +47,8 @@ race retries through them. Of 1,000 runs started at each dungeon's entrance with
 | Its triforce taken | 18.0% | 18.5% | 92.7% | 27.4% | 100% | 38.7% | 35.2% | 37.8% | 48.9% |
 
 The legs between them are 98.7-100%. From the start, 22.7% of single runs take the Dungeon 3 triforce, 2.8% Dungeon
-4's, and 3 of 1000 get through Dungeon 5 (one to the magic sword); with the planner on, 2.0.0.0's team ended the
-game in 17.7% of 300 runs.
+4's, and 3 of 1000 get through Dungeon 5 (one to the magic sword); with the planner on, 25.0% of 300 runs end the
+game (2.0.0.0: 17.7%).
 
 **`d2first`**: out of 1,000 runs from the start of the game with the 2.0.0.0 team (round 33's Wizzrobe, Vire and
 Like-Like models on 1.9.0.1's team; act mode `temperature:0.5+relax:16`, the speedrunners' clips allowed;
