@@ -102,3 +102,18 @@ model at the same hearts, so the full `d3` cannot see this family): screen seeds
 triforce select-checkpoint boss-manhandla r34d3-manh-s341 --route d3first --from d3first_3_4dw_0 --stop-at step:24 \
     --first-seed 2000 --runs 1000 --confirm 1000 --parallel 10
 ```
+
+### zol `r34d3-zol-s341`: better to 0x59's door (holds and the joint check owed)
+
+From `r32d3-zol`, 244 iterations (seed 341), demonstrations: the planner from `3_6bs`, `3_49e`, `3_4bs`, `3_7be` (20
+a state) and 120 of today's handoffs into 0x49 and 0x4b (2 each): 21,810 rows. Chosen from Level 3's entrance to
+0x59's door (`d3first_3_7cs_0` → step 13; zol's 0x7c, 0x7b, 0x6b, 0x4b, 0x49 and stalfos-keese-gel's 0x4a): screen
+seeds 2000-2999, it001700 87.3%, the promoted run 81.6% (+5.7 ± 1.6); confirmation 3000-3999: it001700 **86.7%** ±
+1.1 against **80.6%** (**+6.1 ± 1.6**; `last` 84.1%, +3.5 ± 1.6), hearts on entering 0x59 2.02 against 1.99. Better
+beyond noise on its stretch: 61 more runs per 1000 reach 0x59, at the same hearts. Not yet promoted: `d4` (4:0x40)
+and the joint `d3` decide.
+
+```sh
+triforce select-checkpoint zol r34d3-zol-s341 --route d3first --from d3first_3_7cs_0 --stop-at step:13 \
+    --first-seed 2000 --runs 1000 --confirm 1000 --only it001670,it001700,it001730,last,promoted --parallel 10
+```
