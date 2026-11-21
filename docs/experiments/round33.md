@@ -62,10 +62,10 @@ points paired** (s81's choice 48.6%, s82's 47.8%: the three seeds agree within n
 visit (s81 it003295: 1004 of 1004 visits leave W; main's record: 438 of 2689). Main's record of the segment,
 13.7% on seeds 0-999, matches the reference here.
 
-**Not yet decided:** the other segments like-like plays, `d4` (4:0x32) and `d6` (6:0x1d), paired with `r79c-like`
-on seeds 0-999 (`select-checkpoint like-like r33-like-s83 --segment SEG --runs 1000 --confirm 0 --only
-it003355,promoted`), are queued. It is promoted if neither is worse beyond noise; then lanmola `r33-lanmola-s80` is
-chosen on `d9` with it.
+**The other segments** like-like plays, paired with `r79c-like` on seeds 0-999 (`select-checkpoint like-like
+r33-like-s83 --segment SEG --runs 1000 --confirm 0 --only it003355,promoted --output ...`): **`d6` (6:0x1d) 29.5%
+against 28.5%, +1.0 ± 0.7** (hearts at the end 5.97 against 6.07): not worse. `d4` (4:0x32) is queued. The run is
+promoted if `d4` is not worse beyond noise; then lanmola `r33-lanmola-s80` is chosen on `d9` with it.
 
 ### Backlog
 
