@@ -30,7 +30,7 @@ from r29_demos import BOMBS, FRAME, OBJ_DIR, OBJ_META, OBJ_STATE, OBJ_TYPE, OBJ_
 STEPS = {'ring-78': 262, 'key-29': 268}                           # d2first (1.9.0.1)
 WIZZROBE_RED, DROPPED, BOMB_ITEM = 0x24, 0x60, 0x00
 LIFETIME = 0x3A8                                                  # asm:Item_ObjItemLifetime: >= $F0 flashing
-BOMB_MAX = 0x67C                                                  # asm:BombMax (ram-catalog)
+BOMB_MAX = 0x67C                                                  # asm:InvMaxBombs
 LANE = {2: (-1, 0), 1: (1, 0), 8: (0, -1), 4: (0, 1)}             # facing bit -> (dx, dy)
 DOORSTEP, DOORSTEP_FRAMES, SWINGS, GAP = (0xD0, 0x8D), 44, 2, 12
 

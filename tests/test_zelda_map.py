@@ -688,7 +688,9 @@ def test_window_draws_a_draft(qapp, models, monkeypatch, capsys):
     window.resize(1200, 800)
     window.show()
     qapp.processEvents()
-    assert window.route_choices == [None, *zelda_map.routes(), 'sketch'] and 'route sketch' in window.windowTitle()
+    main = zelda_map.registry.MAIN_ROUTE                       # listed first, then routes.yaml's others
+    assert window.route_choices == [None, main, *(r for r in zelda_map.routes() if r != main), 'sketch']
+    assert 'route sketch' in window.windowTitle()
     assert window.route_group.checkedId() == window.route_choices.index('sketch')
     # The sketch doesn't hold against game.yaml (its rooms aren't joined as it walks): said, and counted.
     assert window.problems and f'route sketch: {len(window.problems)} problem' in window.status.text()
