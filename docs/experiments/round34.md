@@ -223,3 +223,38 @@ decisions five times: 28,550 rows) at `--demo-coeff 0.05`, `--sil-coeff 0.1`, 24
 
 On `d7` the runs it saves at 0x1c die later (the second pass after a wallmaster grab, Aquamentus): within noise. On
 `d5` it is better beyond noise. The final batch confirms it on fresh seeds.
+
+### 10. The chosen runs together (`r34d7b-final`, seeds 5000-5999)
+
+The route data stays 9295f8d0 (§7: no arm); goriya stays `r32d1-goriya` (§8); boss-digdogger `r34d7b-dig-s1` beside
+§5's team (wallmaster `r34d7-wall-s3`, boss-aquamentus `r34d7-aqua-s1`).
+
+| Segment | §5's team (34.4% on seeds 4000-4999) | + boss-digdogger `r34d7b-dig-s1` | Paired |
+|---|---|---|---|
+| `d7` | 37.8% | 39.6% | +1.8 ± 1.9 |
+| `d5` | 19.3% (5:0x24 49 deaths of 242) | 21.0% (32 of 242) | **+1.7 ± 0.6** |
+| `d1` | | 92.8% (boss-digdogger plays no Dungeon 1 room: the team's by construction) | |
+| `d7`, the planner (300, the new team) | | 96.3% | |
+
+Hearts on entering 0x1b / 0x1c: 4.40 / 3.52 with §5's team, 4.49 / 3.43 with the new one (the planner 9.21 / 8.50).
+0x1c's deaths a visit 168 of 731 → 141 of 777 (23.0 → 18.1%; the screen 20.0 → 16.1%), but on `d7` the runs saved
+there die later (0x18, 0x29 and 0x69 on the second pass after a wallmaster grab), so `d7` gains +1.8 ± 1.9 and the
+screen -0.2 ± 1.9: within noise twice. Cheated units a run in Level 7: bombs 0.002 → 0.000, keys 0 and 0; every arm
+plays the same route data, so the cheats are the route's own (0x29's wall when the bag is empty).
+
+`d7` is not better beyond noise than §5's team. The measured reason: the hearts goriya loses before 0x1b (about 6
+of 11 against the planner's 1.8) are lost on crossings the route cannot shorten (§6-7; only 0x49's shutter is a fight)
+by a policy that is hit three times as often as the planner over the same time and parries a third as often; two
+rounds of training on the planner's rows of those rooms (six runs, §3 and §8) did not take the planner's parry, and
+Digdogger's 0x1c, the first loss behind them, dies of the hearts it is handed (3.5; 95% at 0 hearts, 2% at 6 or
+more). What would move `d7`: goriya's hearts on the crossings, which the planner keeps with foresight the observation
+does not give the policy.
+
+### Verdicts (second pass)
+
+| Family / change | Verdict |
+|---|---|
+| route data | no arm: the route already crosses every goriya room but 0x49 (the game's shutter); the cellar is the red candle the later segments use. The base stays 9295f8d0 |
+| goriya | not chosen: `r34d7b-gor-s1..s3` +0.3, -1.8, -0.9 ± 2.2 on `d7` (0x49 better, the crossings unchanged) |
+| boss-digdogger | **`r34d7b-dig-s1` promoted for `d3first`** (worktree): `d5` +3.4 ± 0.6 (screen) and +1.7 ± 0.6 (final), `d7` -0.2 and +1.8 ± 1.9; 0x1c's deaths a visit 20-23% → 16-18% |
+| `d7` | 37.8% → 39.6% on seeds 5000-5999 (+1.8 ± 1.9), within noise of §5's team; the planner 96.3% |
