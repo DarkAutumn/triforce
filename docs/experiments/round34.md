@@ -2,8 +2,9 @@
 
 ## Dungeon 4 with the wood sword (`d4`: vire, like-like, boss-gleeok)
 
-**State of this section.** In progress: the entrance states, the stall ending and the baseline are done; the
-trainings are measured below as they land.
+**State of this section.** In progress: the entrance states, the stall ending, the baseline and the first round's
+choice are done (vire, like-like and Gleeok's arm B confirmed and promoted for `d3first`); Gleeok's second round is
+being chosen.
 
 **Cause (the chains of record, `r32land-1k-d4`).** 6.2% ± 0.8 of 1000 `d4` runs take the triforce; the planner
 beside 81.7%. 461 runs per 1000 die at Gleeok (4:0x13: 523 enter with 1.62 of 4 hearts; he needs 16 wood-sword
@@ -60,7 +61,7 @@ new states hold (0x50 2.03 a run, 0x31 1.45; `bombs: free`).
 Gleeok won of entered by hearts in (team; planner): 0.5: 1/112; 0/1 · 1.0: 0/137; 0/5 · 1.5: 10/117; 1/6 · 2.0:
 14/83; 5/13 · 2.5: 6/48; 32/38 · 3.0: 12/47; 51/60 · 3.5: 9/22; 48/54 · 4.0: 20/36; 113/122.
 
-### 4. The trainings (done; the choice on `d4` is queued)
+### 4. The trainings and their choice
 
 Every run continues its family's route run with `state_routes: [d3first]`, the Dungeon 4 rooms only, harvested
 handoffs from the baseline's two chains (the team's and the planner's, so later hearts pay off), the planner's
@@ -83,3 +84,65 @@ won episodes as demonstrations at `--demo-coeff 0.05`, `--sil-coeff 0.1`, about 
 The choice: Gleeok's checkpoints first in its room at the route's hearts (300 fights each), the best on `d4`;
 vire's and like-like's last checkpoints on `d4` (seeds 2000-2999, paired against today's team), the best confirmed
 on 3000-3999, then the chosen runs together on 4000-4999 with the planner beside.
+
+An arm with the stall window at 120 steps (`r34d4-gleeok-b1`, `no_damage_steps: 120`, one seed, otherwise the same)
+kept training success at 15-20% to the end (seed 1 fell to 6%), deaths 36-52%, `no-damage` endings 30-44%.
+
+**Gleeok in his room** (3 entry states x 100 fights at the route's hearts, seed 2000; 54 checkpoints): the promoted
+`it2517` 15.0%; arm B's it002697 25.3%, it002757 24.3%, it002637 22.3%; the best of the 300-step seeds 21.7% (s1
+it002607), 21.0% (s3 it002727, s2 it002757). Arm B's it002697 goes to `d4`.
+
+**`d4` screen** (seeds 2000-2999, each arm paired against today's team on the same seeds; Gleeok reached, the
+hearts he is reached with, and the hearts delivered to him a run):
+
+| Arm | `d4` | paired | Gleeok reached | paired | hearts there | delivered | paired |
+|---|---|---|---|---|---|---|---|
+| today's team | 7.7 ± 0.8 | | 59.6 ± 1.6 | | 1.72 | 1.022 | |
+| vire s1 | 9.7 ± 0.9 | +2.0 ± 1.2 | 65.2 ± 1.5 | +5.6 ± 2.1 | 1.81 | 1.181 | +0.159 ± 0.050 |
+| vire s2 | 8.3 ± 0.9 | +0.6 ± 1.2 | 63.1 ± 1.5 | +3.5 ± 2.2 | 1.76 | 1.111 | +0.089 ± 0.052 |
+| vire s3 | 10.2 ± 1.0 | +2.5 ± 1.3 | 62.5 ± 1.5 | +2.9 ± 2.2 | 1.84 | 1.151 | +0.129 ± 0.053 |
+| like-like | 8.3 ± 0.9 | +0.6 ± 1.1 | 63.3 ± 1.5 | +3.7 ± 1.7 | 1.79 | 1.131 | +0.108 ± 0.038 |
+
+**Confirmation** (seeds 3000-3999, one batch, the same pairing; `scripts/experiments/r34d4_pair.py`):
+
+| Arm | `d4` | paired | Gleeok reached | paired | hearts there | delivered | paired |
+|---|---|---|---|---|---|---|---|
+| today's team | 6.9 ± 0.8 | | 60.6 ± 1.5 | | 1.71 | 1.034 | |
+| vire `r34d4-vire-s1` | 10.2 ± 1.0 | **+3.3 ± 1.2** | 62.6 ± 1.5 | +2.0 ± 2.1 | 1.78 | 1.113 | +0.079 ± 0.051 |
+| like-like `r34d4-like` | 10.1 ± 1.0 | **+3.2 ± 1.2** | 65.7 ± 1.5 | **+5.1 ± 1.8** | 1.77 | 1.165 | **+0.131 ± 0.040** |
+| Gleeok arm B it002697 | 11.5 ± 1.0 | **+4.6 ± 1.0** | 60.6 | = | 1.71 | 1.034 | = |
+| the three together | **17.3** ± 1.2 | **+10.4 ± 1.5** | 69.0 ± 1.5 | **+8.4 ± 2.1** | 1.89 | 1.306 | **+0.271 ± 0.054** |
+
+Gleeok won of entered by hearts in, today's team / arm B / the three together: 0.5: 1/130, 2/130, 0/99 · 1.0:
+2/125, 4/125, 2/116 · 1.5: 5/88, 8/88, 15/129 · 2.0: 9/85, 9/85, 25/115 · 2.5: 9/64, 24/64, 30/80 · 3.0: 16/59,
+31/59, 41/69 · 3.5: 14/29, 18/29, 19/37 · 4.0: 13/26, 19/26, 41/45. Arm B wins more from 2.5 hearts up; below,
+the hearts decide.
+
+Verdicts: every arm's `d4` is better beyond two paired standard errors on seeds not used to choose, and nothing it
+holds is worse (vire and like-like play nothing else before the magic sword on this route; Gleeok only 4:0x13).
+Vire's hearts delivered and runs reaching Gleeok, beyond noise on the screen, are within noise on the
+confirmation; its `d4` gain is not. Promoted `--route d3first`: vire `r34d4-vire-s1`, like-like `r34d4-like`
+(like-like's default run untouched), Gleeok `r34d4-gleeok-b1-it2697` (the checkpoint made a run dir with its
+training's `run.json`).
+
+### 4.1 What the planner does against Gleeok that the model does not
+
+Recorded fights in 4:0x13 at the route's hearts (3 entry states x 10, seed 2100, replays with the decisions
+stream): the planner (`temperature:0.5+relax:16+plan:16:1` on the promoted `it2517`), the promoted model and arm
+B's it002697, measured frame by frame on the emulator (`scripts/experiments/r34d4_gleeok_fight.py`: where Link
+stands, his swings and whether a head's health drops within 12 frames, the flying heads, every hit by its nearest
+source).
+
+| | won | hits taken (attached heads / flying head) | heads cut | swings landed | bottom third of the floor | swing distance to the head |
+|---|---|---|---|---|---|---|
+| the planner | 20/30 | 35 (24 / 10) | 47 | 411 of 987 | 62% | 23 px |
+| promoted it2517 | 8/30 | 65 (41 / 20) | 33 | 344 of 879 | 65% | 24 px |
+| arm B it002697 | 8/30 | 62 (40 / 21) | 28 | 327 of 779 | 67% | 24 px |
+
+The planner does not stand elsewhere, swing from closer or swing more: all three keep the lower two thirds of the
+room, swing at 22-24 px from the nearest head about every 2 s and land 39-42% of the swings. It takes half the hits
+for the same exposure: half the flying head's (its foresight refuses the moves a hit follows) and
+fewer of the attached heads'. At a heart or less all three back into the bottom third and wait (the longest stretch
+with no hit either way 40-65 s); the planner wins 3 of 8 such fights by outlasting, the models none. Nothing here is
+a reward or a window paying the wrong thing: the gap is reactive dodging, which the planner's fights teach as
+demonstrations; the round below changes what the entries look like, not the yaml's terms.
