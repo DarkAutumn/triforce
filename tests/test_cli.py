@@ -117,7 +117,7 @@ def test_eval_chain_rejects_an_unknown_route(tmp_path, capsys):
 ])
 def test_eval_chain_checks_its_inputs_before_anything_runs(tmp_path, capsys, args, message):
     output = tmp_path / 'c.jsonl'
-    assert cli.main(['--models-dir', str(tmp_path / 'models'), 'eval-chain', '--runs', '2', '--no-log', *args,
+    assert cli.main(['--models-dir', str(tmp_path / 'models'), 'eval-chain', '--route', 'd2first', '--runs', '2', '--no-log', *args,
                      '--output', str(output)]) == 2
     assert message in capsys.readouterr().err
     assert not list(tmp_path.iterdir())
@@ -133,7 +133,8 @@ def test_eval_chain_exits_non_zero_when_a_run_ends_in_an_error(tmp_path, capsys)
 
 def test_eval_chain_writes_provenance_and_appends_only_the_same_team(models_dir, tmp_path, capsys):
     output = tmp_path / 'nested' / 'chain.jsonl'
-    chain = ['--models-dir', str(models_dir), 'eval-chain', '--stop-at', '0:0x77', '--output', str(output)]
+    chain = ['--models-dir', str(models_dir), 'eval-chain', '--route', 'd2first', '--stop-at', '0:0x77', '--output',
+             str(output)]
     assert cli.main([*chain, '--runs', '2']) == 0
     assert 'route d2first: 2/2 = 100%' in capsys.readouterr().out
     runs = [json.loads(line) for line in output.read_text().splitlines()]
@@ -165,7 +166,8 @@ def test_eval_chain_in_an_act_mode_with_the_switch_off(scripted_models, states_d
     every run and room record plays with the switch off and counts its decisions, the provenance and the
     recordings name both, and the recordings replay bit for bit."""
     output, folder = tmp_path / 'chain.jsonl', tmp_path / 'replays'
-    assert cli.main(['--models-dir', str(scripted_models), 'eval-chain', '--from', str(require_state(SEGMENT_STATE)),
+    assert cli.main(['--models-dir', str(scripted_models), 'eval-chain', '--route', 'd2first',
+                     '--from', str(require_state(SEGMENT_STATE)),
                      '--stop-at', f'step:{SEGMENT_STOP_STEP}', '--act', 'temperature:0.75', '--clips', 'off',
                      '--runs', '2', '--parallel', '2', '--no-log', '--output', str(output),
                      '--replays', str(folder)]) == 0

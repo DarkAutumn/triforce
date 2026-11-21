@@ -88,7 +88,7 @@ def test_evaluate_the_promoted_network_through_the_cli(states_dir, tmp_path, cap
 
 def test_eval_chain_to_an_early_room_writes_runs_that_round_trip(models_dir, tmp_path, capsys):
     output = tmp_path / 'chain.jsonl'
-    assert cli.main(['--models-dir', str(models_dir), 'eval-chain', '--runs', '3', '--parallel', '3',
+    assert cli.main(['--models-dir', str(models_dir), 'eval-chain', '--route', 'd2first', '--runs', '3', '--parallel', '3',
                      '--stop-at', '0:0x67', '--output', str(output)]) == 0
     printed = capsys.readouterr().out
     lines = [json.loads(line) for line in output.read_text().splitlines()]
