@@ -20,7 +20,7 @@ from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import torch
 
-from . import __version__, _native, replay
+from . import __version__, _native, guard, replay
 from .paths import STATES_DIR
 from .provenance import code_version, data_hash, location_text, models_header
 from .registry import (CHECKPOINT_NAME, DEFAULT_ACT, act_mode, checkpoint_sha1, load_model, own_models_until,
@@ -429,7 +429,11 @@ class Policies:
                     act = act_mode(path)
                 self.names.append(key)
                 self.configs.append(configs.get(name) or load_specialist(name))
-                self.policies.append(network.to_native())
+                native = network.to_native()
+                if key in self.checkpoints:
+                    with torch.random.fork_rng():
+                        native = guard.attach(native, self.checkpoints[key])   # round 35: veto:K:P reads it
+                self.policies.append(native)
                 self.acts.append(act)
 
     def modes(self, act: Optional[str] = None) -> List[str]:

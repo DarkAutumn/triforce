@@ -53,11 +53,18 @@ def checkpoint_label(checkpoint) -> str:
 def models_header(names: Iterable[str], policies: Iterable, checkpoints: dict, acts: Iterable[str]) -> list:
     """The ``models`` entry: per policy index, its name, checkpoint (``checkpoint_label``), Rust network hash,
     the act mode it played by (``act``, canonical spelling) and the triforce version its run dir is stamped with
-    (None without a checkpoint or a stamp)."""
-    return [{'name': name, 'checkpoint': None if checkpoints.get(name) is None else checkpoint_label(checkpoints[name]),
-             'hash': f'{policy.hash:016x}', 'act': act,
-             'version': None if checkpoints.get(name) is None else model_version(checkpoints[name])}
-            for name, policy, act in zip(names, policies, acts)]
+    (None without a checkpoint or a stamp); a policy with a learned guard (round 35, ``triforce.guard``) also its
+    ``guard`` hash."""
+    out = []
+    for name, policy, act in zip(names, policies, acts):
+        entry = {'name': name,
+                 'checkpoint': None if checkpoints.get(name) is None else checkpoint_label(checkpoints[name]),
+                 'hash': f'{policy.hash:016x}', 'act': act,
+                 'version': None if checkpoints.get(name) is None else model_version(checkpoints[name])}
+        if getattr(policy, 'guard_hash', None) is not None:
+            entry['guard'] = f'{policy.guard_hash:016x}'
+        out.append(entry)
+    return out
 
 
 def state_hash(name: str, states_dir=None) -> Optional[str]:
