@@ -862,3 +862,8 @@ does not give the policy.
 | goriya | not chosen: `r34d7b-gor-s1..s3` +0.3, -1.8, -0.9 ± 2.2 on `d7` (0x49 better, the crossings unchanged) |
 | boss-digdogger | **`r34d7b-dig-s1` promoted for `d3first`** (worktree): `d5` +3.4 ± 0.6 (screen) and +1.7 ± 0.6 (final), `d7` -0.2 and +1.8 ± 1.9; 0x1c's deaths a visit 20-23% → 16-18% |
 | `d7` | 37.8% → 39.6% on seeds 5000-5999 (+1.8 ± 1.9), within noise of §5's team; the planner 96.3% |
+
+**Not in 2.0.0.1.** `r34d7b-dig-s1` qualified after the landing's chains of record had played `d7` with the
+team: taking it in would have meant playing that chain twice, so it waits for the next release (it is not on
+`main`'s `promoted.d3first`; boss-digdogger stays `r32late-dig`), where the next chains of record are its joint
+check.
