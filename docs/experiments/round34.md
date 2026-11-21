@@ -125,3 +125,13 @@ of today's handoffs into 0x4a (2 each): 12,966 rows, with round 32's `stalfos-ke
 the same stretch as zol: screen it002269 82.7% against the promoted run's 81.6% (+1.1 ± 1.1); confirmation **82.9%**
 against **80.6%** (+2.3 ± 1.1; `last` 80.7%), hearts on entering 0x59 2.02 against 1.99. About two standard errors on
 the confirmation and not seen on the screen: borderline. `d1` (89.6%) and `d4` hold it or not.
+
+### darknut: seeds 342 and 343 (seed 341's selection, which measures the promoted run, still waits)
+
+From `r32d3-dark2-s44`, 244 iterations each, demonstrations: the planner from `3_5bw`, `3_59n`, `3_69n`, `3_5bs` (20 a
+state) and 210 of today's handoffs into 0x5b from W and S and 0x59 from N (2 each): 41,846 rows (0x5b W→E 173 of 180
+won), with round 32's darknut files (`darknut-59r0`, `darknut-plan59r0`, `garden-05`, `darknut-plangarden`,
+`dash-69`, `darknut-plan`). Chosen on the whole `d3` (`d3first_3_7cs_0` → step 24), the last three checkpoints and
+`last`: s342 it012258 screen 15.5%, confirmation **15.7%** ± 1.2 (`last` 14.9%); s343 it012198 screen 18.4%,
+confirmation **15.5%** ± 1.1 (`last` 15.0%). Against the record's 12.6% (seeds 0-999, unpaired) about +3 points; the
+paired difference with the promoted run comes from seed 341's selection on the same seeds.
