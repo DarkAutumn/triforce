@@ -297,3 +297,63 @@ triforce eval-batch r34d3-final --parallel 10 --chain "$(c old-d3 '--from 3_7cs_
 # likewise new-*/s351-*/s341-* (the run as --checkpoint darknut@d3first=..., or promoted), full24 (--stop-at step:24, no --from), d5,
 # and the planner: --runs 300 --act temperature:0.5+relax:16+plan:16:1
 ```
+
+### darknut: the Olive Garden (5:0x05 from E) with `r34d3-dlp-s353`, what the planner does there
+
+The chosen team's `d5` (seeds 4000-4999) loses 423 runs per 1000 entering the Garden (hits 2.92 a visit; the planner
+on seeds 0-299 33, 1.15). No chain handoff exists there (darknut plays 0x06 before it), so the entries are made as round 32 made them
+(`scripts/experiments/r34d5_garden_states.py`): the route's seed state `d3first_5_05e_<seed % 3>` with the game's
+randomness for its seed, Link's hearts one chain arrival's (evenly through the 999 arrivals of that `d5` chain) and
+the bag the arrivals held (every one 8: two held and the route's six, the reserve 0 there). 64 entries, 4 episodes
+each, the run (`temperature:0.5+relax:16`, as the chain plays it) and the planner over it, every episode recorded
+with its decisions and played frame by frame (`scripts/experiments/r34d5_garden.py`):
+
+| 256 visits (hearts in 6.40) | won | hits a visit | kills: sword / bomb | bombs placed (before the first kill / between kills) / landed | fight frames within 16 px | hits a 1000 fight frames | hits with all six alive |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `r34d3-dlp-s353` | 57.0% | 2.93 | 2.25 / 2.09 | 7.75 (4.21 / 3.54) / 6.38 | 25.0% | 1.34 | 259 |
+| planner | 92.6% | 1.20 | 3.49 / 2.21 | 7.93 (4.27 / 3.67) / 6.55 | 25.9% | 0.48 | 83 |
+
+The entries reproduce the chain (57.0% won against its 57.7%). Hits a 100 decisions of each kind, during the
+fight: MOVE 0.94 against 0.31, SWORD 4.64 against 1.80, BOMB 2.62 against 0.44 (a Darknut walking into Link while he
+stands to place one), BEAMS 1.75 against 0.80; a sword decision is executing at 42% of the run's hits and 45% of the
+planner's. Both stand where the other does (the N row 41% / 38% of the fight, the corners 26% / 26%, the E door 1%),
+as close for as long, bomb the same (the whole bag, half of it before the first kill, the same landed, the same bomb
+kills), and both lose nothing after the last kill (0 of 146 and 0 of 237 won fights: the push and the stairs take a
+median 325 frames, no hit). Every death comes in the fight, at 2.1 kills and 7.4 bombs spent (the planner's 19 at 1.9
+and 7.2). **What the planner does that the model does not**: it avoids the touch at every kind of decision, three
+times less often hit a decision whatever it does, most of all in the opening while it bombs the six (1.01 hits a
+visit with all six alive against 0.32); its veto replaces about four of a visit's 215 decisions (1,717 in its 426
+won demonstration visits). Not a swing habit as in the last pass (the sword's share of the hits is the planner's),
+not a bomb thrown where it cannot land (6.38 of 7.75 land against 6.55 of 7.93), not the route (no reserve, the
+objective is the fight, the push and stairs cost nothing): no reward term pays a habit wrongly (a hit already costs
+its hearts' potential), so the yaml is the last pass's. The model's to fix: the continuation below.
+
+```sh
+G=$PWD/target/r34/garden
+python scripts/experiments/r34d5_garden_states.py target/r34/final-s353-d5.jsonl $G/entries 64 --seed0 8000
+export TRIFORCE_STATES_DIR=$G/states   # the seed states and the 64 entries (evaluate resolves stems)
+ev() { echo "$1: --specialist $G/spec.yaml --checkpoint $2 --episodes-per-state 4 --seed 0 --clips on --act $3 --output $G/$1.json --replays $G/rep-$1 --streams decisions --parallel 4"; }
+triforce eval-batch r34d5-garden --parallel 10 --evaluate "$(ev s353 models/darknut/r34d3-dlp-s353/ckpt.pt temperature:0.5+relax:16)" \
+    --evaluate "$(ev plan models/darknut/r34d3-dlp-s353/ckpt.pt temperature:0.5+relax:16+plan:16:1)"
+python scripts/experiments/r34d5_garden.py "s353=$G/rep-s353:$G/s353.json" "plan=$G/rep-plan:$G/plan.json"
+```
+(`spec.yaml`: the last pass's evaluation spec with room 5:0x05 and the entries `d3first_5_05e_h80*_0`.)
+
+The continuation (three seeds from `r34d3-dlp-s353`, 244 iterations), with the lesson of s352: harvested starts into
+every darknut room of the route at the chains' hearts, `harvested_fraction` 0.33 of the resets: the round's `d3` and
+`d5` handoffs (4,296; the last pass's 528 three times, 1,584) and 2,700 Garden entries made as above from the joint
+check's `d5` arrivals (seeds 0-999): the Garden a third (8,580 in all). Demonstrations of the Garden only: the
+planner over `r34d3-dlp-s353` from 225 of those entries, two episodes each (every chain brings the bag of 8, so every
+demonstration starts with it): 426 of 450 won, 110,120 rows. `--demo-coeff 0.05 --sil-coeff 0.1 --checkpoint-every 30`.
+
+```sh
+python scripts/experiments/r34d5_garden_states.py target/r34/joint-d5.jsonl $G/harvested 2700 --seed0 20000
+# + symlinks of every triforce/states/harvested/darknut/d3first_* but 5_05e, the 3_5bw ones thrice
+python scripts/experiments/r27_plan_demos.py models/darknut/r34d3-dlp-s353 $G/darknut-garden.npz \
+    --family $G/darknut-garden-demos.yaml --route d3first --states --state-files <225 entries> --file-runs 2 --parallel 10
+triforce train --specialist $G/darknut-garden.yaml --load models/darknut/r34d3-dlp-s353 --parallel 8 --iterations 244 \
+    --checkpoint-every 30 --demos $G/darknut-garden.npz --demo-coeff 0.05 --sil-coeff 0.1 --stop-success 1.01 \
+    --seed 361 --run-id r34d5-dg-s361   # and 362, 363
+```
+(`darknut-garden.yaml`: the last pass's yaml with `harvested_states` that dir; `darknut-garden-demos.yaml` the same
+without `ram_randomization` and curriculum, so the entries keep their hearts and bag.)
