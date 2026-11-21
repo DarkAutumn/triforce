@@ -1299,3 +1299,55 @@ hearts in 58 of 68 (3.5 in 9). Dungeon 4 needs two bombs (the walls of 4:0x21 an
 times in the planner's 300 runs because `4_71s_*` hold none). A harvested entrance state from the chain would
 hold the bombs Dungeon 3 left (about 5) and full hearts; the installed ones should hold at least the 2 the walls
 take.
+
+## 5. Training: Dungeon 1 and the legs (goriya, stalfos-keese-gel, ow-octorok, ow-zora, ow-leever, ow-tektite)
+
+Branch `r32-t-d1` (from `r32-base`). Segments: `post-d4` (0:0x45 → Level 1, 86.2%), `d1` (26.3%), `post-d1` (0:0x37
+→ Level 5's entrance, 16.8%). Every family here gets a run of its own for `d3first` (`promoted.d3first`), continued
+from its promoted run on `d3first`'s states only (`state_routes: [d3first]`), `harvested_fraction` 0.25 (the
+handoffs the route's chains harvested at their hearts), its `d3first` curriculum tracks, demonstrations at
+`--demo-coeff 0.05`, `--sil-coeff 0.1`, 2M steps (`--stop-success 1.01`: the full budget; the checkpoint is
+chosen by the segment), `--parallel 8`, checkpoints every 30 iterations.
+
+**The arms, by cause:**
+
+| Family | Rooms (runs lost of 1000) | Cause | Teacher |
+|---|---|---|---|
+| goriya | 1:0x23 (94), 1:0x44 (99) | wood sword (3 hits a Goriya), hearts | the planner from `1_23s`, `1_44w` and their harvested handoffs (30 runs a state): 22,410 rows |
+| stalfos-keese-gel | 1:0x33 (69: 50 stuck with the carried key), 3:0x4a (101, in `d3`) | wood sword, the key | the planner from `1_33s`, `1_53s`, `3_4ae` (+ `3_4ae` handoffs): 30,347 rows |
+| ow-octorok | 0:0x37 cave→cave (363 stuck) | new step (phase IX's out-and-back-in) | first the `d2first` run trained on it (`r31-oct-s97`, the mouth rule's demonstrations) measured here |
+| ow-zora | 0:0x55 N→E (136), 0:0x2d W→cave (179: 109 without the 30 rupees) | new exit, new room/cave | the rules `wall-2d`, `rupees-2d`; the planner from `0_55n` (+ handoffs), `0_56w`: 16,075 rows |
+| ow-leever | 0:0x2a (220), 0:0x2b (124) | new rooms; the scroll taken in 48% / 3% of visits | the walks' scroll as a rule (new: `r32p_rules.py scroll-29/2a/2b`, `CLIP W` on arrival then E: 90/90 each, 0 hearts): 540 rows; no planner rows (it walks the Leevers) |
+| ow-tektite | 0:0x0c's shop (150 stuck), its wrap exit (98), S→cave (36) | new: the blue candle, the wrap exit | the rules `candle-0c`, `wrap-0c`; the planner from `0_0cs`, `0_2cw`, `0_2ce` (+ handoffs): 17,721 rows |
+
+Selection on the segment each family loses most (goriya, stalfos-keese-gel, ow-octorok: `d1`; ow-zora, ow-leever,
+ow-tektite: `post-d1`): `triforce select-checkpoint F RUN --route d3first --from d3first_<start> --first-seed 2000
+--runs 1000 --confirm 1000` (screen seeds 2000-2999, confirmation 3000-3999). `--segment X` with `--route d3first`
+plays its chains and then fails at its report (the chains' provenance names the namespaced start state): `--from
+d3first_1_73s_0` (the target still from the route's table) works.
+
+**Trained** (one seed each, 488 iterations; the round's evaluation, 30 episodes a state, reads each family's yaml
+with both routes): ow-leever `r32d1-leever` 100% (worst 0:0x0b 98%; it scrolls: about 0.09 hearts lost an episode
+in training), goriya `r32d1-goriya` 98%, ow-tektite `r32d1-tektite` 97% (worst 0:0x0c 78%), stalfos-keese-gel
+`r32d1-skg` 99% (worst 3:0x4a 93%), ow-zora `r32d1-zora` 98% (its `d3first` states 100%; `d2first`'s 0x28 W→S fell
+to 0-57%: the run is for `d3first` only and `d2first` keeps its promoted run). Single rooms decide nothing here.
+
+**Measured** (arrivals at the segment's end, 1000 runs; screen seeds 2000-2999, confirmation 3000-3999, paired
+against the family's run before; the rest of the team as promoted then):
+
+| Family | Run | Segment | Screen | Confirmation | Paired (confirmation) | Hearts on arrival | Decision |
+|---|---|---|---|---|---|---|---|
+| ow-octorok | `r31-oct-s97` (the `d2first` run trained on 0:0x37's mouth) | `d1` | 51.1% vs 24.2% | 51.3% vs 25.6% | **+25.7 ± 2.1** | 3.20 / 3.20 | the family's default run (as main v1.9.0.1); no route run |
+| ow-leever | `r32d1-leever` (last) | `post-d1` | 63.0% vs 15.7% | 61.4% vs 15.5% | **+45.9 ± 1.9** | 5.08 / 3.16 | `promoted.d3first` |
+| ow-zora | `r32d1-zora` (last) | `post-d1` | 33.3% vs 15.7% | 36.5% vs 15.5% | **+21.0 ± 1.9** | 3.77 / 3.16 | `promoted.d3first` |
+| ow-tektite | `r32d1-tektite` (last), with the two runs above in the team | `post-d1` | 99.8% vs 86.3% | 100.0% vs 85.0% | **+15.0 ± 1.1** | 5.17 / 5.70 | `promoted.d3first` |
+| goriya | `r32d1-goriya` (last), with `r31-oct-s97` | `d1` | 72.3% vs 51.1% | 69.0% vs 51.3% | **+17.7 ± 1.7** | 3.62 / 3.20 | `promoted.d3first` (Dungeon 2 and 7 gates pending) |
+| stalfos-keese-gel | `r32d1-skg` (last), with `r31-oct-s97` | `d1` | 69.5% vs 51.1% | 72.3% vs 51.3% | **+21.0 ± 2.1** | 3.50 / 3.20 | `promoted.d3first` (Dungeon 3 rooms pending) |
+
+ow-leever's scrolls clear 0x2a and 0x2b without a fight: the leg to Level 5 passes the 30% bar with it alone.
+ow-zora's confirmation of its screen winner (it002502, 85.1%) is void: that chain started in the minute ow-leever's
+route run was promoted and played with it; its screen lead over `last` (+2.3 ± 2.1) is noise, so `last` stands.
+With the three route runs the leg from Dungeon 1 to Level 5 arrives in 1000 of 1000 runs (16.8% in the baseline).
+goriya and stalfos-keese-gel were measured each alone against the same team; together they are in the final batch
+(`r32d1-final`: `d3`, `post-d4`, `d1`, `post-d1`, `d2`, `d7`, 1000 runs each), queued: it also checks goriya's
+Dungeon 2 (must stay near 99.9%) and Dungeon 7, and stalfos-keese-gel's 3:0x4a.
