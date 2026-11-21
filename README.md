@@ -35,20 +35,20 @@ needed it, a family has a second run for that route's part (before the magic swo
 
 ## How well it plays
 
-**`d3first`** (2.0.0.1, `docs/experiments/round34.md`; 2.0.0.0's `round32.md`): a golden path (games race from
+**`d3first`** (2.0.0.2, `docs/experiments/round34.md`; 2.0.0.0's `round32.md`): a golden path (games race from
 triforce to triforce, each segment's first winner continuing, stitched into one replay) from console power on, the
-models alone, reaches the ending; three of three races did, in 51, 71 and 60 runs (177,838 frames for the first:
+models alone, reaches the ending; three of three races did, in 50, 105 and 53 runs (176,495 frames for the first:
 about 49 minutes of game). Single runs are the hard part: the wood sword makes Dungeons 3, 4, 5 and 7 hard, and the
-race retries through them. Of 1,000 runs started at each dungeon's entrance with the 2.0.0.1 team, models alone
-(`round34.md` "The chains of record"; Dungeons 2, 6, 8 and 9 as 2.0.0.0's, `round32.md` §12):
+race retries through them. Of 1,000 runs started at each dungeon's entrance with the 2.0.0.2 team, models alone
+(`round34.md` "2.0.0.2" and "The chains of record"; Dungeons 2, 6, 8 and 9 as 2.0.0.0's, `round32.md` §12):
 
 | Dungeon (route order) | 3 | 4 | 1 | 5 | 2 | 7 | 6 | 8 | 9 (to the ending) |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Its triforce taken | 18.0% | 18.5% | 92.7% | 27.4% | 100% | 38.7% | 35.2% | 37.8% | 48.9% |
+| Its triforce taken | 23.2% | 18.5% | 92.7% | 33.0% | 100% | 42.3% | 35.2% | 37.8% | 48.9% |
 
-The legs between them are 98.7-100%. From the start, 22.7% of single runs take the Dungeon 3 triforce, 2.8% Dungeon
-4's, and 3 of 1000 get through Dungeon 5 (one to the magic sword); with the planner on, 25.0% of 300 runs end the
-game (2.0.0.0: 17.7%).
+The legs between them are 98.7-100%. From the start, 23.5% of single runs take the Dungeon 3 triforce, 4.5% Dungeon
+4's, and 12 of 1000 get through Dungeon 5 (two to the magic sword, one through Dungeon 6); with the planner on, 20.3%
+of 300 runs end the game (2.0.0.1: 25.0%, within noise).
 
 **`d2first`**: out of 1,000 runs from the start of the game with the 2.0.0.0 team (round 33's Wizzrobe, Vire and
 Like-Like models on 1.9.0.1's team; act mode `temperature:0.5+relax:16`, the speedrunners' clips allowed;

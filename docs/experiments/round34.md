@@ -43,10 +43,10 @@ is a matter of the hearts Link brings); lanmola is round 33's (`r79b-lanmola` st
 the models are hit at every decision kind, a matter of foresight, not bombs), and with it the last pass: one darknut
 run that keeps both (`r34d3-dlp-s353` takes the last pass, 115 lost per 1000 entering against 255, and gives the
 Garden back, 445 against 360; `r34d5-dg-s362`, trained on the Garden after it, is better than the landed darknut on
-`d5` by +3.3 to +6.7 and on `d3` by +2.2 to +5.2 on three seed sets and waits for the next release, Dungeon 3's
-Olive Garden section); goriya's hearts in Dungeon 7 (0x69, 0x59, 0x49, 0x19); Digdogger's 0x1c (`d7`'s
-first loss now, 212 per 1000 entering, 3.48 hearts in; `r34d7b-dig-s1` qualified after the landing's `d7` had
-played and waits for the next release, second pass §9-10); Gleeok is reached 1.45 hearts poorer than the planner
+`d5` by +3.3 to +6.7 and on `d3` by +2.2 to +5.2 on three seed sets and landed in **2.0.0.2**, Dungeon 3's
+Olive Garden section and "2.0.0.2" at the end); goriya's hearts in Dungeon 7 (0x69, 0x59, 0x49, 0x19); Digdogger's
+0x1c (`d7`'s first loss, 212 per 1000 entering, 3.48 hearts in; `r34d7b-dig-s1` qualified after the landing's `d7`
+had played and landed in 2.0.0.2, second pass §9-10: 154 there); Gleeok is reached 1.45 hearts poorer than the planner
 brings him (the chosen team 1.96, the planner 3.41) and takes twice its hits from the same places (§4.1 of
 Dungeon 4).
 
@@ -1058,8 +1058,22 @@ Manhandla (490 reach him against 454, with 1.67 hearts against 1.61) and in 0x59
 entrance state (2.0.0.1's full route was 4.7 points above its `d3`, this one 0.3). Dungeon 5 is passed by four times
 as many single runs, and for the first time one takes Dungeon 6's triforce.
 
-**The planner beside** PLANNER
+**The planner beside** (300 runs from the start, seeds 0-299, `temperature:0.5+relax:16+plan:16:1`, the 2.0.0.2
+team; paired with `r34land-plan-full`): the ending **20.3%** (61 of 300; 2.0.0.1 25.0%, -4.7 ± 3.5, within noise);
+the D3 triforce 69.0% (70.7%), D4's 63.3% (67.7%), D1's 63.0%, **D5's 47.7% (59.0%, -11.3 ± 4.1)**, D7's 44.3%
+(53.0%), D6's 28.0% (31.7%), D8's 25.7% (30.0%). The D5 loss is darknut's 5:0x37: 21 of 171 runs entering end there
+(14 die, 7 stall past the room's 2000 steps) against 7 of 186 with s341, where the models alone lose fewer there
+(91 per 1000 entering against 151) and the Garden loses 9 of 189 (11 of 202). The planner over the new darknut
+fights 0x37 worse than over the old one; the models' gate does not see it (the planner is reported beside, never
+the result). Its runs end at Manhandla 78 (285 entering, 2.55 hearts), Dungeon 6's Wizzrobe rooms (6:0x3a 23,
+0x29 10) and 0x37; it cheats 4.13 bag and 4.88 wall bombs and 4.78 rupees a run.
 
-- The golden path from console power on, models alone, three paths: GOLDEN
-- The suites on the landing code: SUITES
+- The golden path from console power on, models alone, the default route, three paths: three of three end the game,
+  in **50, 105 and 53 runs** (2.0.0.1: 51, 71, 60), by segment (D3, D4, D1, D5, D2, D7, D6, D8, D9 to the end):
+  seed 0 7, 5, 1, 14, 1, 3, 7, 8, 4 (2.0.0.1: 6, 6, 2, 7, 1, 5, 8, 9, 7); seed 700000 5, 25, 1, 14, 1, 5, 41, 7, 6
+  (8, 9, 3, 13, 1, 10, 15, 3, 9); seed 800000 9, 3, 1, 9, 1, 5, 5, 8, 12 (22, 2, 2, 10, 1, 8, 7, 2, 6). The race
+  retries each segment until a run wins it, so its counts are single draws: 700000's 41 are Dungeon 6's, which
+  neither run plays. Each replay verifies (176,495, 149,874 and 155,603 frames).
+- The suites on the landing code: pytest 856 passed, 9 skipped; `cargo test --release --workspace --features
+  zelda/zcore` 1048 passed, 1 ignored; zelda-asm 5 passed; `asm.py check` ok; the six corpus replays verify.
 - Run stamps: both runs carry 2.0.0.0 and load as they are under 2.0.0.2 (the first three numbers agree).

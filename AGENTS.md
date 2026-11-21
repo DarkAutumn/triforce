@@ -6,6 +6,18 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
 
 ## Where things stand (Nov 21)
 
+- **2.0.0.2 (Nov 21; round34.md "2.0.0.2"; decisions 2026-11-21): the two late round-34 runs.** darknut
+  `r34d5-dg-s362` (the Olive Garden) and boss-digdogger `r34d7b-dig-s1` (Digdogger at the route's hearts) promoted
+  `--route d3first` on the 2.0.0.1 team; no code or route data changed. The chains of record `r35land-1k` (seeds
+  0-999, paired with 2.0.0.1's): Dungeon 3 18.0% → 23.2% (+5.2 ± 1.8; the last pass 3:0x5b 255 → 117 per 1000
+  entering), 5 27.4% → 33.0% (+5.6 ± 2.0; the Garden 360 → 343, 5:0x24 170 → 101), 7 38.7% → 42.3% (+3.6 ± 2.0;
+  7:0x1c 212 → 154). From the start, single runs take Dungeon 3's triforce in 23.5% (22.7%, within noise: Manhandla
+  takes the runs the last pass saves), Dungeon 4's in 4.5% (2.8%), Dungeon 1's 3.8% (2.3%), Dungeon 5's 12 of 1000
+  (3), one Dungeon 6's; none ends the game. The golden path from power on ends the game three of three in 50, 105,
+  53 runs (51, 71, 60). The planner beside ends it in 20.3% of 300 (25.0%, -4.7 ± 3.5, within noise), its Dungeon 5
+  worse (59.0% → 47.7%, -11.3 ± 4.1: 5:0x37 stalls and deaths over the new darknut). Still open: Manhandla (527 per
+  1000 entering at 1.62 hearts), the Garden (343; the planner 33-50), Gleeok (736), 7:0x1b and 0x1c (148, 154).
+
 - **2.0.0.1 (Nov 21; round 34, `docs/experiments/round34.md`; decisions 2026-11-21): `d3first`'s wood-sword
   dungeons, segment by segment.** Eight new route runs (`promoted.d3first`): zol `r34d3-zol-s341`, stalfos-keese-gel
   `r34d3-skg-s341`, darknut `r34d3-dark-s341` (Dungeon 3), vire `r34d4-vire-s1`, like-like `r34d4-like`, boss-gleeok

@@ -36,6 +36,9 @@ rest; segment rates from each entrance):
 - [ ] **The Olive Garden (5:0x05, darknut `@d3first`), Dungeon 5 33.0%** (2.0.0.1 27.4%): 343 of 1000 `d5` runs die
   there (6.49 hearts in; the planner 33-50: the touches fewer, not gone); then 0x64 159 per 1000 entering, gibdo's
   0x66 157, Digdogger 5:0x24 101, 0x37 91.
+- [ ] **The planner over darknut `r34d5-dg-s362` fights 5:0x37 worse** (2.0.0.2's `r35land-plan-full`: 21 of 171
+  entering end there, 7 of them stalls past darknut's 2000 steps, against 7 of 186 over s341; its D5 triforce 59.0%
+  → 47.7%, -11.3 ± 4.1; the ending 25.0% → 20.3%, within noise). The models alone lose fewer there (151 → 91).
 - [x] **boss-digdogger `r34d7b-dig-s1` (Digdogger at the route's hearts) landed in 2.0.0.2**: 5:0x24 170 → 101
   per 1000 entering, 7:0x1c 212 → 154; `d7` +3.6 ± 2.0.
 - [x] **Dungeon 7 with the wood sword, 42.3%** (2.0.0.1 38.7%, 2.0.0.0 9.4%): the bag kept for 7:0x1b (route data),
