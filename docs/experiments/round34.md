@@ -178,3 +178,28 @@ cellar 0x4a, the red candle, which the route uses after Dungeon 7 (Dungeon 6's d
 0:0x47 with a free retry; the blue candle burns once a room visit); dropping it would save about 0.5 hearts a run
 (0x1a's first visit 0.36 and the cellar 0.16; 0x1a's E wall stays) at the cost of every later segment's candle, so
 it is not taken. No `ROUTE DATA` commit; the base stays 9295f8d0.
+
+### 8. goriya again: the crossings only, the planner's rows of them (not chosen)
+
+What differs from §3's three runs: the rooms (§3 trained sixteen, Dungeon 1's and 2's at about 40% of the resets;
+here the seven Dungeon 7 rooms that lose the hearts, 0x69, 0x59, 0x49, 0x18, 0x19, 0x1a both ways, 0x1b, beside
+Dungeon 1's two and Dungeon 2's two for the holds; `room_kills` only on 0x49; no curriculum, so every reset is a room
+entry), and the demonstrations (§3: 66k rows, of them 22k Dungeon 1 rows and 18.6k of the old 0x1b fight; here only
+the planner on these rooms on today's route data, 40 runs a start state at the route's hearts, the episodes that lost
+at most one heart, each replaced decision five times: 51,434 rows, at `--demo-coeff 0.15` against 0.05). The rest is
+the recipe (`--load r32d1-goriya`, `--sil-coeff 0.1`, 244 iterations, checkpoints every 30, handoffs at 0.2: Dungeon
+1's, 2's and 0x1a from the cellar, the only one of these rooms a chain hands over).
+
+| Run | `d7` screen (seeds 2000-2999) | Paired with the team (41.4%) | Hearts into 0x1b / 0x1c | 0x49 lost a visit |
+|---|---|---|---|---|
+| team (`r32d1-goriya`) | 41.4% | | 4.49 / 3.49 | 1.06 |
+| `r34d7b-gor-s1` | 41.7% | +0.3 ± 2.2 | 4.73 / 3.71 | 0.92 |
+| `r34d7b-gor-s2` | 39.6% | -1.8 ± 2.1 | 4.86 / 3.71 | 0.66 |
+| `r34d7b-gor-s3` | 40.5% | -0.9 ± 2.2 | 4.78 / 3.56 | 0.80 |
+
+The training took the fight's share (0x49 1.06 → 0.66-0.92, 0x1a from the cellar 0.85 → 0.71-0.73) but not the
+crossings': 0x69 1.01-1.03, 0x59 1.12-1.16, 0x18 0.69-0.80, 0x19 1.04-1.12, 0x1b 1.59-1.66, as the team. Into 0x1b
++0.24 to +0.37 hearts, and the deaths it saves there go to Digdogger's 0x1c. No seed is better beyond noise; none is
+confirmed. Six runs over two rounds have not learned the crossings' parry from the planner's rows: the planner's
+replaced decisions are the ones its foresight (the action tried on redrawn random numbers) finds would be hit, which
+the observation alone does not show the policy.
