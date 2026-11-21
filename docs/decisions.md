@@ -3218,11 +3218,13 @@ the game (176, 135 and 91 runs; round32.md §11). The lead's decisions for the l
   `r32turn-oct-s34`: its confirmation on fresh seeds and its other segments): **not checked**; the golden path is
   the gate, and the chains of record measure the team as landed. There is no rate bar for `d3first`'s segments:
   they are reported (round32.md §12).
-- **`d2first` must not be worse:** the segments whose default runs changed (round 33's wizzrobe `r33w-s93` and vire
-  `r33-vire-s95`: Dungeon 6, Dungeon 4 for vire, Dungeon 9, `post-d7`) paired with 1.9.0.1's chains of record, the
-  full route's milestones (1000 runs) not worse beyond noise, and two unchanged segments run for run against them
-  (300 runs each) to show that the landing's code plays `d2first` as 1.9.0.1 did.
-- **Like-like for 9:0x56** (round 33's second lane) was not ready when the landing was assembled: it follows in a
-  later release; `r79c-like` stays the default.
+- **`d2first` must not be worse:** the segments whose default runs changed (round 33's wizzrobe `r33w-s93`, vire
+  `r33-vire-s95` and like-like `r33-like-s83`: Dungeon 6, Dungeon 4 for vire and like-like, Dungeon 9, `post-d7`)
+  paired with 1.9.0.1's chains of record, the full route's milestones (1000 runs) not worse beyond noise, and two
+  unchanged segments run for run against them (300 runs each) to show that the landing's code plays `d2first` as
+  1.9.0.1 did.
+- **Like-like for 9:0x56** (round 33's second lane): its line came in minutes after the landing was assembled and
+  before any chain of record had started with the team; taken (`r33-like-s83`, `d9` +35.8 ± 1.9 on fresh seeds,
+  `d4` and `d6` not worse) and the one `d2first` chain already measured without it played again.
 - **The corpus** gains `d3first`'s golden path from power on to the ending (`corpus/replays/v2-golden-ending.tfreplay`,
   `REPLAY_VERSION` 1, 149,758 bytes).

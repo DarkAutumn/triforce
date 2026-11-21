@@ -28,8 +28,8 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   the golden race, the route's chains of record (`r32land-1k`, round32.md §12: every segment, the full route, the
   planner beside), no rate bar for its segments. **Not measured:** the route runs goriya, stalfos-keese-gel (their
   other dungeons) and ow-octorok (fresh seeds, its other segments) were landed before their trainers' checks
-  ended. `d2first` (round 33): wizzrobe `r33w-s93` and vire `r33-vire-s95` are the defaults (Dungeon 6 +7.7 ± 2.1
-  together on fresh seeds); like-like's 9:0x56 follows in a later release.
+  ended. `d2first` (round 33): wizzrobe `r33w-s93`, vire `r33-vire-s95` (Dungeon 6 +7.7 ± 2.1 together on fresh
+  seeds) and like-like `r33-like-s83` (9:0x56: `d9` +35.8 ± 1.9) are the defaults.
 
 - **Rounds 30 and 31 (Nov 19-20; landed together as 1.9.0.1, `docs/experiments/round30.md` "The landing",
   `round31.md`):** the owner's eight phase IX changes to `d2first` (now **354 steps**): Dungeon 1 out of 1:0x73 by
