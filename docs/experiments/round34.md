@@ -203,3 +203,23 @@ crossings': 0x69 1.01-1.03, 0x59 1.12-1.16, 0x18 0.69-0.80, 0x19 1.04-1.12, 0x1b
 confirmed. Six runs over two rounds have not learned the crossings' parry from the planner's rows: the planner's
 replaced decisions are the ones its foresight (the action tried on redrawn random numbers) finds would be hit, which
 the observation alone does not show the policy.
+
+### 9. boss-digdogger: 0x1c at the hearts the route brings (`r34d7b-dig-s1`)
+
+After §7-8 Link still brings 3.5 hearts into 0x1c (3.49 on the screen's seeds), and it is still the first loss (152
+of 1000). Its deaths are the hearts: by hearts on entering (§5's chain) 0: 59 of 62, 1: 71 of 127, 2: 34 of 142, 3: 28
+of 131, 4: 10 of 109, 5: 4 of 86, 6 and more: 1 of 91; the bag is 5 bombs at every level. The planner on 100 of
+0x1c's handoffs (the arm's chain, three runs each): 278 of 300 won, where the model wins about 72% at those hearts.
+
+One continuation of `r32late-dig`: `specialists/boss-digdogger.yaml` with `state_routes: [d3first]`,
+`chain_hp: 1.0`, the 770 0x1c handoffs at 0.5 of the resets, no curriculum (no tracks in this worktree); the planner's
+rows (the 300 handoff runs and 90 from the three `7_1cw` states, the wins that lost at most 2 hearts, replaced
+decisions five times: 28,550 rows) at `--demo-coeff 0.05`, `--sil-coeff 0.1`, 244 iterations.
+
+| Chain (seeds 2000-2999) | Team | `r34d7b-dig-s1` | Paired |
+|---|---|---|---|
+| `d7` | 41.4% (0x1c 152 of 759) | 41.2% (0x1c 123 of 765) | -0.2 ± 1.9 |
+| `d5` (`5_76s_0` → step 120) | 20.3% (5:0x24 56 deaths of 259) | 23.7% (22 of 259) | **+3.4 ± 0.6** |
+
+On `d7` the runs it saves at 0x1c die later (the second pass after a wallmaster grab, Aquamentus): within noise. On
+`d5` it is better beyond noise. The final batch confirms it on fresh seeds.
