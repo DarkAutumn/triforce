@@ -3231,3 +3231,36 @@ the game (176, 135 and 91 runs; round32.md §11). The lead's decisions for the l
   `d4` and `d6` not worse) and the one `d2first` chain already measured without it played again.
 - **The corpus** gains `d3first`'s golden path from power on to the ending (`corpus/replays/v2-golden-ending.tfreplay`,
   `REPLAY_VERSION` 1, 149,758 bytes).
+
+## 2026-11-21 — `d3first`'s Dungeon 4 entrance states hold what runs bring (round 34)
+
+2.0.0.0 left one thing unmeasured: `d3first_4_71s_*` held fewer bombs than chains bring to Level 4, so the `d4`
+segment cheated 1.27 wall bombs a run. Round 34 rebuilt the three from chain arrivals (1000 runs from Dungeon 3's
+entrance to step 31 on seeds 10000-10999, 134 arrive; bombs 0-8, mean 4.2; two keys in all): state 0 the median
+arrival (5 bombs), 1 the low tenth (1), 2 the high tenth (7), full hearts as runs arrive
+(`scripts/experiments/r32c_models.py --goal-step 31 --bombs-quantiles 0.5,0.1,0.9`; `python -m
+triforce.entry_states install`; the audit finds no problem). The cheated wall bombs fall to 0.22 a run on today's
+team; `d4` on the new states 7.2% (the record's 6.2% was on the old ones). `d2first`'s `4_71s_*` are untouched (100
+of 100 runs identical).
+
+## 2026-11-21 — A training config may end a stall as a failure (round 34)
+
+Gleeok's model stalled: runs that neither hit nor were hit until the room's budget, which a truncation
+(`no-damage`, `max-steps`, `no-room-progress`) bootstraps as survival. A family yaml's `endings:` may now name a
+truncation as a failure (`hard-failure` and the like): the episode terminates as that failure, terminal penalty, no
+bootstrap (`crates/env/src/config.rs`, `rewards.rs`, `specialist_env.rs`; `crates/env/tests/critic.rs`). Training only:
+no specialist yaml on `main` names one, so play and every chain are unchanged. The window matters: at 300 steps the
+failure is 0.99^300 = 0.05 of its weight away and the stall stayed (15-36% of episodes); at 120 (0.3) it went, and
+that run (`r34d4-gleeok-b1-it2697`, then its continuation `r34d4-gleeok4-s1-it2877`) is Gleeok's route run.
+
+## 2026-11-21 — `d3first` keeps the bag for Dungeon 7's 0x1b (round 34, the lead)
+
+The owner's rule for 7:0x1b (Nov 17: fought only for its bombs, at 4 or fewer, `treasure: {if_bombs_below: 5}`)
+met a route that threw the bag down to the reserve of 3 before it: `d3first`'s runs entered 0x1b with 1 bomb, so its
+six Blue Goriyas were a wood-sword fight (460 of 874 died; the 31 that kept 5 crossed, 5 died). The lead, the owner
+being away, approved the arm measured before any training (Nov 21): on `d3first` only, a reserve of **8 from Level
+7's entrance** (the three walls before 0x1b take theirs) and 0x1b fought **only below 2 bombs** (the 2 that 0x0c's
+and 0x29's walls need), so a run with 2 or more crosses to the key door. routes.yaml writes Dungeon 7's entrance and
+0x1b in each route around the blocks `dungeon-7` and `dungeon-7-east`; `d2first` keeps 3 and `if_bombs_below: 5` (its
+354 steps identical). On today's team `d7` 9.4% → 18.4% (+9.0 ± 1.5, seeds 0-999); it also closes goriya's key leak
+(the fight's 2-key visits). A route data change on `d3first`: the corpus replays replay inputs and still verify.

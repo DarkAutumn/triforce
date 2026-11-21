@@ -33,7 +33,7 @@ sets its own reserves on its own steps before a block, and a block's own reserve
 | `dungeon-5` | 98-119 | 5:0x66 to 0x14 (the entrance, step 97, is each route's own: d3first's grants the bag) |
 | `dungeon-2` | 145-154 | 2:0x7d to 0x0d |
 | `to-level-7` | 156-173 | 0:0x45 out of the whirlwind to 0x42's pond: the stretch `dock-44`, the arrows, the meat |
-| `dungeon-7` | 174-193 | 7:0x79 to 0x2b |
+| `dungeon-7`, `dungeon-7-east` | 174-193 | 7:0x79 to 0x2b; the entrance (174) and 0x1b (186) are each route's own (round 34): d3first keeps the bag for 0x1b |
 | `to-level-6` | 194-210 | 0:0x42 to 0x22: the stretch `woods`, the graveyard, the magic sword (12 containers) |
 | `dungeon-6` | 211-226 | 6:0x79 to 0x0c |
 | `to-level-8` | 227-232 | 0:0x22 (two plays facing down) to 0x6d's burned tree |
@@ -193,7 +193,12 @@ the run-time switch off has no way past them. The shared blocks keep their stret
   (0 in 0x05: the bag thrown freely, 8 after it, 0 at Digdogger). **1 from
   Level 2's mouth through Dungeon 2** (step 148; walks-b §4: goriya and moldorm are `free` and would throw the bag
   this route brings; Dodongo's room offers BOMB whatever the reserve), **0 out of Level 2** (step 159), as d2first's
-  from Dungeon 5 on; the blocks' after that.
+  from Dungeon 5 on. **8 from Level 7's entrance to 0x1b** (step 174, round 34, the lead): d2first's 3 threw the
+  bag at 0x69 and 0x49 and brought 1 bomb into 0x1b, whose treasure (then `if_bombs_below: 5`) made its six Blue
+  Goriyas a wood-sword fight (460 of 874 died; the 31 that kept 5 crossed, 5 died). The reserve keeps the bag for
+  the walls (0x69, 0x19, 0x1a); **0x1b wants its bombs only below 2** (`treasure: {if_bombs_below: 2}`, step 186,
+  the 2 of 0x0c's and 0x29's walls), so a run that enters with 2 or more crosses to the key door (`d7` 9.4% →
+  18.4% on the old team, +9.0 ± 1.5); 2 from 0x1b as d2first's; the blocks' after that.
 - **Rupees.** No rupee reserve of d3first's own: its own steps hold no arrows (the bow from Dungeon 1, the arrows
   only at 0x44 in `to-level-7`), so a reserve there would keep nothing. Where the ledger says the route runs dry
   (0x34's meat, then Gohma, 8:0x4c and Ganon) the shared blocks' reserves already sit: 2 from the arrows (0x44's cave

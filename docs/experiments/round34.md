@@ -1,8 +1,53 @@
 # Round 34: the wood-sword dungeons on `d3first`, segment by segment
 
+## Summary
+
+**What the round was.** `d3first`'s wood-sword dungeons, the ones 2.0.0.0's chains of record named as the route's
+losses (`r32land-1k`: Dungeon 3 12.6%, 4 6.2%, 7 9.4%; single runs from the game start took Dungeon 3's triforce in
+13.6% and none passed Dungeon 5), worked segment by segment in three worktrees, each segment's own ledger first
+(where the hearts go, room by room, against the planner on the same start), then route data or training for the
+cause it found. Every new run is a route run (`promoted.d3first`, steps 0-205); `d2first` keeps every default. It
+landed as **2.0.0.1** (a `REV`: route data, three entrance states, a training-only ending, eight route runs).
+
+**The three causes.**
+- **Dungeon 3: the last pass is swings into a walking Darknut.** The ledger's first room is 3:0x5b from W to E
+  (414 runs lost per 1000 entering against the planner's 26); at the same hearts, proximity and bombs the models are
+  hit 0.62 times a visit against 0.14, 78 of 127 hits right after a SWORD decision (the planner 8 of 29). A
+  continuation of darknut from that room's handoffs and the planner's rows of it (`r34d3-dlp-s353`), with zol and
+  stalfos-keese-gel trained on their rooms to 0x59's door: `d3` 12.3% → 23.8% on fresh seeds (+11.5 ± 1.7).
+- **Dungeon 4: hearts before a Gleeok that needs 16 hits, and a stall.** Gleeok (4:0x13) is won by the hearts Link
+  brings (a heart or less 1 of 230; 3 or more 34 of 79); vire's and like-like's rooms take them. Gleeok's model also
+  stalled (neither hits nor is hit until the room's budget), which a truncation pays as survival: a training config
+  may now name `no-damage`, `max-steps` or `no-room-progress` as a failure ending, and only the 120-step no-damage
+  window (the failure 0.99^120 = 0.3 of its weight away, against 0.05 at 300) ended the stall. The entrance states
+  `d3first_4_71s_*` were rebuilt from chain arrivals (bombs 5, 1, 7; two keys). `d4` 7.9% → 20.9% on fresh seeds
+  (+13.0 ± 1.5).
+- **Dungeon 7 was route data.** `d3first` threw the bag down to a reserve of 3 before 7:0x1b, the six Blue Goriyas'
+  room, where the treasure (`if_bombs_below: 5`) made it a fight with 1 bomb (468 deaths of 920 entering); then
+  wallmaster's grab (0x0d, 374 of 1000) sent the survivors back through the dungeon. The reserve is now 8 from Level
+  7's entrance and 0x1b is fought only below 2 bombs (`d7` +9.0 ± 1.5 on the old team); wallmaster `r34d7-wall-s3`
+  then cut the grabs (`d7` +21.4 ± 1.6), boss-aquamentus `r34d7-aqua-s1` took Dungeon 1's boss (`d1` +3.2 ± 0.7).
+  `d7` 9.4% → 34.4%, `d1` 90.4% → 93.6% (seeds 4000-4999).
+
+**Together** (the chains of record `r34land-1k`, "The chains of record" below): the three teams were measured
+together only at the landing (zol and stalfos-keese-gel also play Dungeon 4 and 1 rooms, darknut Dungeon 5's).
+
+**What was not chosen.** goriya, twice (§3 of Dungeon 7: three seeds within noise on `d7`; the second pass §8: three
+seeds trained on the crossings with the planner's rows, none better: the hearts it loses before 0x1b stay about 6.4
+against the planner's 1.8); boss-manhandla (`r34d3-manh-s341` 58.6% against 58.0% from Manhandla's door: Manhandla
+is a matter of the hearts Link brings); lanmola is round 33's (`r79b-lanmola` stays).
+
+**Still open.** The Olive Garden (5:0x05 from E: the chosen team loses 423 runs per 1000 entering, the planner 33;
+the models are hit at every decision kind, a matter of foresight, not bombs); goriya's hearts in Dungeon 7 (0x69,
+0x59, 0x49, 0x19); Digdogger's 0x1c (`d7`'s first loss now, 207 of 1000, entered with 3.33 hearts); Gleeok is
+reached 1.45 hearts poorer than the planner brings him (the chosen team 1.96, the planner 3.41) and takes twice its
+hits from the same places (§4.1 of Dungeon 4).
+
 ## Dungeon 3 at three hearts (zol, stalfos-keese-gel, darknut, boss-manhandla)
 
-**State of this section.** Handed off: the ledger (§1), the trainings (six runs), boss-manhandla's verdict and the Garden analysis (§4) are done; the selections of darknut (three seeds), zol and stalfos-keese-gel wait in the job line, then the joint check.
+**State of this section.** Done in the round's worktree and landed in 2.0.0.1: the ledger (§1), the trainings,
+the selections, the joint check, the last pass's continuation (`r34d3-dlp-s353`) and the chosen team on fresh seeds;
+the Olive Garden's analysis with `r34d3-dlp-s353` is the next round's start (its trainings run after the landing).
 
 The route runs (`promoted.d3first`, steps 0-205): zol `r32d3-zol`, stalfos-keese-gel `r32d1-skg`, darknut
 `r32d3-dark2-s44`, boss-manhandla `r32d3-manh`. Today's `d3` (`3_7cs_0` → step 24, models alone, 1000 runs, seeds
@@ -103,7 +148,7 @@ triforce select-checkpoint boss-manhandla r34d3-manh-s341 --route d3first --from
     --first-seed 2000 --runs 1000 --confirm 1000 --parallel 10
 ```
 
-### zol `r34d3-zol-s341`: better to 0x59's door (holds and the joint check owed)
+### zol `r34d3-zol-s341`: better to 0x59's door (then held in the joint check)
 
 From `r32d3-zol`, 244 iterations (seed 341), demonstrations: the planner from `3_6bs`, `3_49e`, `3_4bs`, `3_7be` (20
 a state) and 120 of today's handoffs into 0x49 and 0x4b (2 each): 21,810 rows. Chosen from Level 3's entrance to
@@ -126,7 +171,7 @@ the same stretch as zol: screen it002269 82.7% against the promoted run's 81.6% 
 against **80.6%** (+2.3 ± 1.1; `last` 80.7%), hearts on entering 0x59 2.02 against 1.99. About two standard errors on
 the confirmation and not seen on the screen: borderline. `d1` (89.6%) and `d4` hold it or not.
 
-### darknut: seeds 342 and 343 (seed 341's selection, which measures the promoted run, still waits)
+### darknut: seeds 342 and 343 (seed 341's selection, which measured the promoted run, below)
 
 From `r32d3-dark2-s44`, 244 iterations each, demonstrations: the planner from `3_5bw`, `3_59n`, `3_69n`, `3_5bs` (20 a
 state) and 210 of today's handoffs into 0x5b from W and S and 0x59 from N (2 each): 41,846 rows (0x5b W→E 173 of 180
@@ -360,7 +405,7 @@ without `ram_randomization` and curriculum, so the entries keep their hearts and
 
 ## Dungeon 4 with the wood sword (`d4`: vire, like-like, boss-gleeok)
 
-**State of this section.** Done in the round's worktree (not landed): the entrance states, the stall ending, the
+**State of this section.** Done in the round's worktree and landed in 2.0.0.1: the entrance states, the stall ending, the
 baseline, two rounds and their choice; vire `r34d4-vire-s1`, like-like `r34d4-like` and Gleeok
 `r34d4-gleeok4-s1-it2877` promoted for `d3first`; `d4` 7.9% → 20.9% on fresh seeds (§5).
 
