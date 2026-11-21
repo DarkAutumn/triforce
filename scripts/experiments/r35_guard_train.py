@@ -30,7 +30,7 @@ import torch.nn.functional as F
 
 from triforce import registry
 from triforce.events import logged_job
-from triforce.guard import hit_logits, make_guard, save_guard
+from triforce.guard import hit_logits, load_guard, make_guard, save_guard
 from triforce.jobs import add_job_arguments, begin_job, work
 from triforce.model import MASK_KEY
 
@@ -177,9 +177,20 @@ def main(argv) -> int:
     parser.add_argument('--batch', type=int, default=512)
     parser.add_argument('--threads', type=int, default=8)
     parser.add_argument('--seed', type=int, default=35)
+    parser.add_argument('--evaluate', type=Path, default=None,
+                        help="measure this guard.pt on every episode of DATA (no training; OUT_DIR gets report.json)")
     add_job_arguments(parser)
     args = parser.parse_args(argv)
     nice = begin_job(args)
+    if args.evaluate is not None:
+        torch.set_num_threads(args.threads)
+        d, obs = load(args.data)
+        everything = np.ones(len(d['mask']), dtype=bool)
+        result = report(load_guard(args.evaluate), d, obs, everything, d['ep_mode'][d['row_episode']])
+        args.out_dir.mkdir(parents=True, exist_ok=True)
+        (args.out_dir / 'report.json').write_text(json.dumps(result, indent=1))
+        print(json.dumps(result))
+        return 0
     with np.load(args.data) as data:
         samples = int((data['tried_future'] == 0).sum())
     with logged_job('r35-guard-train', 'train', [{'specialist': 'goriya', 'run_id': args.out_dir.name,
