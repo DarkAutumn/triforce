@@ -73,8 +73,15 @@ r33-like-s83 --segment SEG --runs 1000 --confirm 0 --only it003355,promoted --ou
 
 **Verdict: `r33-like-s83` (it003355, ckpt sha1 6db044a4) qualifies** (the target better beyond noise, no other
 segment worse beyond noise) and is promoted in this branch's checkout (applied by `select-checkpoint --apply`; its
-canonical `eval.json` is not written yet). lanmola `r33-lanmola-s80` is being chosen on `d9` with it (queued:
-`select-checkpoint lanmola r33-lanmola-s80 --segment d9`, the same seeds, `r79b-lanmola` pinned).
+canonical `eval.json` is not written yet).
+
+**lanmola on `d9`** (`select-checkpoint lanmola r33-lanmola-s80 --segment d9 --runs 1000 --first-seed 2000 --confirm
+1000 --confirm-first-seed 3000 --confirm-top 1 --only it001644,it001674,it001704,last,promoted`, like-like
+`r33-like-s83` promoted in the team): screen 47.0-48.0% against `r79b-lanmola` 47.7%; confirm it001704 46.6%, last
+46.7% against **49.4%: −2.8 ± 2.3** (hearts at the end 3.61 against 3.80). The room itself is learned: on the
+confirmation seeds `r33-lanmola-s80` leaves 0x55 from E by the clip in 1000 of 1000 visits, `r79b-lanmola` in 984
+(12 deaths, 16 wrong exits, 4 stuck; 12 runs end there). The runs it saves there are lost later in the dungeon at the
+same rate, so the segment does not move beyond noise. **Verdict: not better on its segment; `r79b-lanmola` stays.**
 
 ### Backlog
 
@@ -82,3 +89,6 @@ canonical `eval.json` is not written yet). lanmola `r33-lanmola-s80` is being ch
   round sees the model lay bombs off the wall.
 - like-like is trained on two lines now (this one for `d2first`'s 9:0x56, `r32d4-like2` for `d3first`'s Dungeon 4):
   the one team needs a joint continuation or a choice on both routes' segments.
+- lanmola `r33-lanmola-s80` crosses 9:0x55 from E in 1000 of 1000 visits (`r79b-lanmola` loses 1.2% of runs
+  there) without moving `d9` beyond noise (−2.8 ± 2.3); a second seed or 2000 more paired runs would tell whether
+  the room's gain shows in the segment.
