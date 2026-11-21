@@ -2,7 +2,7 @@
 
 ## Wizzrobe and vire: Dungeon 6's 0x78, 0x29, 0x39 and 0x2d
 
-**State of this section.** The cause and the arm; the runs and the choice follow.
+**State of this section.** Complete but for the joint `d6` check (queued). Promoted in this branch's checkout: wizzrobe `r33w-s93` (it003264), vire `r33-vire-s95` (it002342).
 
 wizzrobe plays Dungeon 6's 0x78, 0x38, 0x28, 0x29, 0x3a, 0x2c and level 9's 0x15, 0x17, 0x07, 0x05, 0x20, 0x10, 0x31,
 0x30, 0x04 (0x65 has left the route); vire plays Dungeon 4's eight rooms and Dungeon 6's 0x39 and 0x2d. The
@@ -87,7 +87,7 @@ The recipe of decisions 2026-11-19 ("One team for the whole route"), as round 30
   curriculum track of either family is unfinished (wizzrobe's Dungeon 6 tracks, the rebuilt 0x29's included, all
   succeed; vire's 0x39 and 0x2d too), so none is taken out.
 
-### The runs (in progress)
+### The runs
 
 - `r33-vire-s95` (last), single rooms on equal terms (100 episodes a state, this branch's yaml; `r77-b` in
   brackets): 99.5% of 3000 episodes, +0.10 hearts (98.7%, +0.04); 6:0x2d 98.3% (94.0%), 0x39 99.0% (97.0%); Dungeon
@@ -96,7 +96,6 @@ The recipe of decisions 2026-11-19 ("One team for the whole route"), as round 30
 - `r33w-s91`, `-s92`, `-s93`: queued (the machine's line). `r30w-wj-s89` under this yaml: 92.8% of 5700, 6:0x29
   92.7%, 0x2c 94.0%, 0x38 78.3%, 0x3a 63.0%, 0x78 100%.
 
-Not decided yet: no run of either family is promoted, and nothing about 0x78's swing is measured on a chain.
 - `r33-vire-s95` chosen on `d6` (`select-checkpoint vire r33-vire-s95 --segment d6 --stop-at step:277 --runs 1000
   --first-seed 2000 --confirm 1000 --confirm-first-seed 3000 --confirm-top 1 --only it002312,it002342,it002372,last,promoted`):
   screen it002342 33.7%, `r77-b` 31.5%; **confirmation (3000-3999) it002342 33.2% against 31.7%, +1.5 ± 1.8 paired:
@@ -152,3 +151,42 @@ Not decided yet: no run of either family is promoted, and nothing about 0x78's s
   s93 wins in the dungeon's back half (0x3a, 0x2c, and runs reach Gohma with more hearts) and loses more in 0x29
   than either; s92 has the 0x29 lesson. Both swing at 0x78 (s93 a kill in 233-263 runs of 1000) without changing the
   hearts 0x38 is entered with (10.75-10.81 against 10.75-10.82).
+- `r33w-s93` (it003264) on `d9` (1000 paired runs, seeds 3000-3999): 15.5% against `r30w-wj-s89`'s 13.6%, **+1.9 ±
+  1.3: not worse** (s92 +0.9 ± 1.2). `post-d7` is run for run (wizzrobe plays no room before 6:0x79: s92 and
+  `r30w-wj-s89` 99.5% both, 10.67 hearts). Single rooms (100 episodes a state): 93.4% of 5700, −0.95 hearts
+  (`r30w-wj-s89` 92.8%, −1.02); every state within a point or better but 9:0x17 (94.0% against 95.3%).
+
+### The verdict
+
+| family | run (checkpoint) | replaces | target, fresh seeds, paired | other segments |
+|---|---|---|---|---|
+| wizzrobe | `r33w-s93` (it003264) | `r30w-wj-s89` | `d6` **+6.10 ± 1.19** (3000 runs) | `d9` +1.9 ± 1.3, `post-d7` equal |
+| vire | `r33-vire-s95` (it002342) | `r77-b` | `d6` **+2.55 ± 1.23** (2000 runs) | `d4` **+3.4 ± 1.2** |
+
+Both qualify and are promoted in this branch's checkout. Each was judged with the other family's old run; a `d6`
+chain with both new against both old (1000 runs, seeds 8000-8999) is queued.
+
+**0x78, plainly (for the owner).** A model can be made to swing there without paying for it in 0x38: every trained
+seed swings, a kill in 23-33% of the visits, the leader and its pack sometimes; 0.06-0.2 hearts a visit, and 0x38 is
+entered with the same hearts as before (10.75-10.87 against 10.75-10.82 on the same seeds). What it brings is small:
+about 0.1 bombs a run carried out of the room (a pack falls in about 5% of the visits and is taken in half of
+those; the rule at full hearts gets one in about 16% of the runs, at 0.4 hearts). The swing is cheap and the gain is
+nearly nil: Dungeon 6's runs are won and lost elsewhere (0x3a).
+
+**0x29.** The key's cost is the model's, not the room's: s92 learned it (105 deaths in 3000 runs against 188), s93,
+the run promoted for the rest of the dungeon, did not (241). From the segment's start the room costs more than at the
+route's hearts (the observed rupees differ); a run that has both lessons is the next step.
+
+```sh
+# the harvest (W = this worktree, R = W/target/r33d6)
+triforce eval-batch r33d6-harvest --chain "h6: --from 0_42c_0 --stop-at step:277 --runs 600 --first-seed 5000 --act model --clips on --harvest R/harvest-d6 --replays R/replays-d6 --output R/chains/h6.jsonl"
+triforce eval-batch r33d6-harvest-b --chain "h6b: --from 6_79s_0 --stop-at step:277 --runs 400 --first-seed 6000 ... --harvest R/harvest-d6b --replays R/replays-d6b"
+python scripts/experiments/r29_zora_states.py R/replays-d6b R/cut-d6b --step 267:6_28s --step 268:6_29w --count 160
+python scripts/experiments/r33_d6_demos.py ring-78 --runs 400 --hearts family --out R/demos/ring78.npz
+python scripts/experiments/r27_plan_demos.py models/wizzrobe/r30w-wj-s89 R/demos/plan33-d6.npz --family R/wizzrobe-keep.yaml --states --state-files <6_29w, 6_2ce, 6_38s, 6_3aw harvested> --runs 2 --seed 7400
+python scripts/experiments/r27_plan_demos.py models/vire/r77-b R/demos/plan33-vire.npz --family R/vire-keep.yaml --states --state-files <vire harvested> --runs 2 --seed 7300
+scripts/train_round.py --round r33w-sN --specialists wizzrobe --parallel 8 --checkpoint-every 30 --train-args "--load models/wizzrobe/r30w-wj-s89 --iterations 488 --seed N --stop-success 1.01 --sil-coeff 0.1 --demos <lineage files> plan33-d6.npz ring78.npz ring78.npz ring78.npz --demo-coeff 0.05"   # N = 91, 92, 93
+scripts/train_round.py --round r33-vire-s95 --specialists vire ... --train-args "--load models/vire/r77-b --iterations 244 --seed 95 ... --demos plan33-vire.npz --demo-coeff 0.05"
+triforce select-checkpoint wizzrobe r33w-sN --segment d6 --stop-at step:277 --runs 1000 --first-seed 2000 --confirm 1000 --confirm-first-seed 3000 --confirm-top 1 --only <last three>,last[,promoted]
+triforce select-checkpoint wizzrobe r33w-s93 --segment d6 --stop-at step:277 --first-seed 4000|7000 --confirm 0 --only it003264 --no-promoted   # and d9
+```
