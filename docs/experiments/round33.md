@@ -63,9 +63,18 @@ visit (s81 it003295: 1004 of 1004 visits leave W; main's record: 438 of 2689). M
 13.7% on seeds 0-999, matches the reference here.
 
 **The other segments** like-like plays, paired with `r79c-like` on seeds 0-999 (`select-checkpoint like-like
-r33-like-s83 --segment SEG --runs 1000 --confirm 0 --only it003355,promoted --output ...`): **`d6` (6:0x1d) 29.5%
-against 28.5%, +1.0 ± 0.7** (hearts at the end 5.97 against 6.07): not worse. `d4` (4:0x32) is queued. The run is
-promoted if `d4` is not worse beyond noise; then lanmola `r33-lanmola-s80` is chosen on `d9` with it.
+r33-like-s83 --segment SEG --runs 1000 --confirm 0 --only it003355,promoted --output ...`):
+
+| segment | `r33-like-s83` it003355 | `r79c-like` | paired |
+|---|---:|---:|---:|
+| `d9` (seeds 3000-3999, not used to choose it) | **49.4%** (3.80 hearts) | 13.6% (3.45) | **+35.8 ± 1.9** |
+| `d6` (6:0x1d) | 29.5% (5.97) | 28.5% (6.07) | +1.0 ± 0.7 |
+| `d4` (4:0x32) | 91.3% (4.91) | 91.7% (5.01) | −0.4 ± 1.1 |
+
+**Verdict: `r33-like-s83` (it003355, ckpt sha1 6db044a4) qualifies** (the target better beyond noise, no other
+segment worse beyond noise) and is promoted in this branch's checkout (applied by `select-checkpoint --apply`; its
+canonical `eval.json` is not written yet). lanmola `r33-lanmola-s80` is being chosen on `d9` with it (queued:
+`select-checkpoint lanmola r33-lanmola-s80 --segment d9`, the same seeds, `r79b-lanmola` pinned).
 
 ### Backlog
 
