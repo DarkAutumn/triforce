@@ -409,3 +409,23 @@ offers, played from `d3first_0_3cc_*` and `d3first_0_0bc_*`:
 
 **No engine change**: the action space and the mask give the play (two MOVEs and RECORDER); masking RECORDER while
 it would warp elsewhere is already what the mask does. What the models lack is the step itself.
+
+### 7.2 The arm (trained; not yet chosen)
+
+Route runs on `d3first`'s states only (`state_routes: [d3first]`, a quarter of the episodes from the chains'
+harvested handoffs, clips on), `--sil-coeff 0.1 --demo-coeff 0.05 --checkpoint-every 30`, the default budget, no early
+stop; curriculum: the explorer's tracks for every `d3first` state of the family (ow-octorok 19 of 21 after step 97: the
+explorer fails 0x3c's `cave → recorder` on chains 0 and 2) and three rule tracks a chain of the recorder step
+(`r32t_recorder_demos.py ... --tracks`). Demonstrations (the rule's won runs at the chains' hearts, 30 a chain):
+
+| Family | Runs (from) | Demonstrations | Training's own measure (10 episodes a state, both routes) |
+|---|---|---|---|
+| ow-octorok | `r32turn-oct-s32`, `-s33`, `-s34` (`r31-oct-s97`) | `recorder-3c` 5040 rows (90/90) + round 31's mouth rule on `d3first`'s 0:0x37 `cave → cave` (`r32p_rules.py mouth-37`, 180) | 99% each; every `d3first` state 100% (one 0x64 W→E state 95%), `d3first_0_3cc_*` 30/30 on each seed |
+| ow-leever | `r32turn-leever` (`r79t5-ow`; no `d3first` ow-leever route run existed when it was queued) | `recorder-0b` 5040 rows (90/90) + the Dungeon 1 trainer's scrolls of 0x29-0x2b (540) | 97%; every `d3first` state 100%, `d3first_0_0bc_*` 30/30 |
+
+Both runs are for `promoted.d3first` only: `d2first`'s own 0x0b and 0x3c steps are never theirs (ow-leever's
+`d2first` 0:0x0b, which plays facing down, fell to 3-4 of 10 in its training's evaluation, as a `d3first`-only run
+may). The legs (Level 2 to Level 7, `0_3cc_0` → step 174, today 0.1%; Level 5 to Level 2, `0_0bc_0` → step 145, today
+55.7% with ow-moblin's route run) are measured on fresh seeds next: the three ow-octorok seeds against today on seeds
+2000-2999, the best confirmed on 3000-3999 with its other segments before the cutoff; ow-leever by `select-checkpoint
+--segment post-d5` (screen 2000-2999, confirm 3000-3999).
