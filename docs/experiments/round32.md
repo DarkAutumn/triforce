@@ -404,12 +404,18 @@ before the magic sword's cave; the default from there on), each the run its trai
 | ow-leever | `r32d1-leever` (added later, below) | "Training: Dungeon 1 and the legs": 0:0x29-0x2b |
 | ow-zora | `r32d1-zora` (added later) | the same: 0:0x2d, 0:0x55 |
 | ow-tektite | `r32d1-tektite` (added later) | the same: 0:0x0c's shop |
+| goriya | `r32d1-goriya` (added for the last race) | the same: Dungeon 1 (1:0x44, 0x23) |
+| stalfos-keese-gel | `r32d1-skg` (added for the last race) | the same: Dungeon 1 (1:0x33's carried key) |
+| ow-octorok | `r32turn-oct-s34` (added for the last race; its last checkpoint) | "The recorder's turns out of Levels 2 and 5": 0:0x3c out of Level 2 |
 
 The first nine were the route runs when the team was assembled; the Dungeon 1 trainer promoted ow-leever and
 ow-zora for the route three hours later and ow-tektite five hours later, each before the batch below had started,
 and they were added (the "first team" below is the nine, the "team" the eleven without ow-tektite; the batch
-measures all twelve). Not in it: goriya, stalfos-keese-gel (the Dungeon 1 trainer's selections still in the line)
-and ow-octorok (the recorder turns' trainer's runs still training). They play main's runs.
+measures all twelve). goriya, stalfos-keese-gel (the Dungeon 1 trainer's selections, promoted on `d1` alone: their
+gates on Dungeons 2, 3, 4, 5 and 7 are that trainer's final batch, still in the line) and ow-octorok (the recorder
+turns' trainer's run: its screen gave the leg from Level 2 to Level 7 99.1% against 0%; its confirmation on other
+seeds and its other segments still in the line) were added for the last race below, so it plays fifteen route runs.
+The ow-leever route run the recorder turns' trainer selects (no `ROUTE3` line yet) is not in it: `r32d1-leever` is.
 
 ### The golden race, models alone, from console power on
 
@@ -472,6 +478,80 @@ cheated); 2 at Dodongo (2:0x0e) once.
 **All four end the game** (74,501-75,234 frames, `tf replay verify` ok, ending `win`, "the game ended in (level 9,
 room 0x32)"). So with today's team the golden path is one fix short: ow-octorok's turn out of Level 2 (MOVE S,
 MOVE E, RECORDER), which another agent of this round trains.
+
+### The golden path reaches the ending (the team with ow-octorok's turn)
+
+The same race from power on with the fifteen route runs (ow-octorok `r32turn-oct-s34`, goriya, stalfos-keese-gel
+added), three paths, one invocation each, one after the other (load average 23-29):
+
+```
+TRIFORCE_MODELS_DIR=$PWD/models nice -n 10 .venv/bin/python zelda-headless.py OUT 1 --golden --route d3first \
+    --power-on --clips on --act model --parallel 8 --first-seed S          # S = 0, 500000, 600000
+tf replay verify OUT/golden-0000000S-win.tfreplay
+scripts/experiments/r32team_golden.py OUT/golden-0000000S-win.tfreplay   # triforces, sword, end RAM, cheats by room
+```
+
+| Segment (stop) | From - to | seeds 0 | 500000 | 600000 |
+|---|---|---|---|---|
+| 0 (step 24) | power on - D3 triforce | 8 | 8 | 5 |
+| 1 (53) | - D4 triforce | 41 | 48 | 22 |
+| 2 (79) | - D1 triforce | 2 | 3 | 2 |
+| 3 (120) | - D5 triforce | 10 | 10 | 16 |
+| 4 (155) | - D2 triforce | 1 | 1 | 1 |
+| 5 (194) | - D7 triforce (the recorder turn at 0:0x3c) | 22 | 34 | 14 |
+| 6 (227) | - D6 triforce (the magic sword on the way) | 7 | 7 | 4 |
+| 7 (243) | - D8 triforce | 9 | 2 | 3 |
+| 8 (end) | - the ending (Dungeon 9, Ganon) | 76 | 22 | 24 |
+| all | | 176 | 135 | 91 |
+| frames | | 153,308 | 152,211 | 177,259 |
+| wall (s) | | 299 | 278 | 79 |
+
+**All three reach the ending.** The segment that 320 tries of every earlier path failed now falls in 14-34 runs;
+Dungeon 4 (22-48) and Dungeon 9 with Ganon (22-76) take the most, none comes near the 320. The third path's 177,259
+frames include a power-on delay of 30,249 (the models take over at frame 30,913).
+
+The first path, `golden-00000000-win.tfreplay` (149,758 bytes): `tf replay verify` ok, 153,308 frames, 19 edits, 9
+states (1 END, 8 CHECKPOINT). `tf replay info`: version 1, triforce 2.0.0.0, source `power-on LINK 3550` (seed 3,
+the first segment's winner; control at frame 4,214, 0 edits before it), act `temperature:0.5+relax:16 (every model,
+49)`: the 34 defaults and the 15 `name@d3first` route runs, each named with its checkpoint in META (`ow-octorok`
+`r31-oct-s97` and `ow-octorok@d3first` `r32turn-oct-s34`, ...); 9 segments; ending `win`, "the game ended in (level
+9, room 0x32)". The other two: `tf replay verify` ok, 152,211 frames, 27 edits, 9 states (`power-on LINK 8485`) and
+177,259 frames, 32 edits, 9 states (`power-on LINK 30249`), the same act line, both `win`.
+
+From each replay's events and RAM (`r32team_golden.py`), all three the same: Link's triforce byte `$671` gains
+Level 3 at step 24 (0:0x74), 4 at 53 (0:0x45), 1 at 79 (0:0x37), 5 at 120 (0:0x0b), 2 at 155 (0:0x3c), 7 at 194
+(0:0x42), 6 at 227 (0:0x22) and 8 at 243 (0:0x6d) to `0xff`: the route's order; the sword `$657` goes 1 → 3 (the
+magic sword) at the grave's cave, 0:0x21, step 207, between Dungeons 7 and 6; Level 9 ends 9:0x52 (patra), 9:0x42
+(ganon, step 302), 9:0x32 (ganon, step 303); `end_ram`: game mode `$12` = `$13` (the ending), level 9, room 0x32.
+
+Cheated (the CHEATS stream: a granted unit is cheated where it is used; keys never):
+
+| | seeds 0 | 500000 | 600000 |
+|---|---|---|---|
+| Dungeon 5's grant (step 97: the bag topped to 8) | 3 → 8: 5 units, all 5 used in 5:0x05 | 0 → 8: all 8 used in 5:0x05 | 0 → 8: all 8 used in 5:0x05 |
+| rooms' bombs used | 3:0x5b; 5:0x66, 0x65; 9:0x31, 0x04 | 3:0x5b; 0:0x2d; 5:0x66, 0x65; 6:0x28; 9:0x04 | 3:0x5b; 4:0x11; 1:0x53; 0:0x2c, 0x2d; 5:0x66, 0x65 (2); 6:0x28; 9:0x17 |
+| bombs cheated | 10 | 14 | 18 |
+| rupees | 13 at the candle shop, 0:0x0c (47 → 60) | none | 10 at 0:0x0c (50 → 60) |
+
+5:0x05 is the Olive Garden (six Blue Darknuts, `darknut@d3first`): every path throws the whole granted bag there.
+8:0x4c asked for no rupees on any path (Link came in with 26, 37 and 37).
+
+### The honest planner, one complete run from power on
+
+```
+TRIFORCE_MODELS_DIR=$PWD/models nice -n 10 .venv/bin/python zelda-headless.py OUT 1 --wins-only --max-runs 16 \
+    --route d3first --power-on --clips on --act temperature:0.5+relax:16+plan:16:1 --parallel 8 --first-seed 0
+```
+
+Plain runs (no race), the same team: 14 runs finished before the first win (8 died, 4 stuck, 1 other), seed 3
+ended the game, 166 s of wall time. `00000003-win.tfreplay`: 57,852 bytes, 150,224 frames, `tf replay verify` ok
+(25 edits, 1 state), source `power-on LINK 3550` (control at 4,214), act `temperature:0.5+relax:16+plan:16:1
+(every model, 49)`, "the game ended in (level 9, room 0x32)"; the triforces in the route's order at the same steps,
+the magic sword at 0:0x21 (step 207), `end_ram` game mode `$13`. Cheated: 13 bombs (3:0x5b, 1:0x53, 5:0x66, 5:0x65
+twice, the Olive Garden 6 of the grant's 6: 2 → 8, 9:0x27, 9:0x17), 3 rupees at 0:0x0c, no key.
+
+So the owner's condition for `d3first` is met: a golden path, models alone, from console power on, reaches the
+ending, three of three. What landing it needs is the lead's (the worktree's status file, "LANDING NEEDS").
 
 ### What the entrance states should hold
 
