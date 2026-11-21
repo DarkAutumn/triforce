@@ -187,6 +187,20 @@ def main():
         rows.append((rate - base, step, rate))
     for gain, step, rate in sorted(rows, reverse=True):
         print(f"| {step} | {step_label(step)} | {100 * rate:.1f}% | {100 * gain:+.1f} |")
+    print()
+    print('| Family | Its steps here | Arrived with all of them played as the planner | Gain (points) |')
+    print('|---|---|---|---|')
+    families = defaultdict(list)
+    for _, step, _ in rows:
+        families[STEPS[step]['specialist']].append(step)
+    out = []
+    for family, steps in families.items():
+        mixed = dict(kern['models'])
+        mixed.update({step: kern['planner'][step] for step in steps})
+        rate = arrive(start, mixed, first, last, args.pool)
+        out.append((rate - base, family, sorted(steps), rate))
+    for gain, family, steps, rate in sorted(out, reverse=True):
+        print(f"| {family} | {', '.join(map(str, steps))} | {100 * rate:.1f}% | {100 * gain:+.1f} |")
 
 
 if __name__ == '__main__':
