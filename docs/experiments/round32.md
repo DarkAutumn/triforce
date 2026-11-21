@@ -1493,3 +1493,63 @@ With the route's team: **Dungeon 5 23.0%** (today 8.6%), **Dungeon 7 5.8%** (3.7
 grab), the Olive Garden (5:0x05, 459 per 1000: darknut with the wood sword, even with the bag), ow-leever's turn at
 0:0x0b (267 of 1000 runs of the leg) and, outside this section, ow-octorok's recorder turn out of Level 2 and
 Dungeons 3 and 4 (§5.3).
+
+## 7. The recorder's turns out of Levels 2 and 5 (ow-octorok 0:0x3c, ow-leever 0:0x0b)
+
+Branch `r32-turn` (from `r32-steps` 71441669), version 2.0.0.0; today's team is main's promoted runs of 1.9.0.1
+(stamped) with ow-moblin's route run `r32late-moblin` (§6).
+
+### 7.1 The cause
+
+Out of Level 2 (step 155, 0:0x3c `cave → recorder`, the whirlwind to Level 4) and out of Level 5 (step 120, 0:0x0b,
+the whirlwind to Level 3) one play of the recorder facing right or up takes Link where the route goes; facing down or
+left takes three or four (`d3first-walks-b.md` §1). The engine computes this from the game's own index and pieces
+(`zelda::whirlwind::plays`: `$523` 2 → 3 out of Level 2, 0 → 2 out of Level 5 past the missing Level 2) and the
+session already offers RECORDER only facing E or N there (`objectives::recorder_facings`, round 26). What the env
+offers, played from `d3first_0_3cc_*` and `d3first_0_0bc_*`:
+
+- Link comes out on the mouth's foot ($70,$7D) facing S. The first decision offers **only `MOVE S` and `WAIT`**: the
+  mouth's walls are E and W of him and the level N, so there is no turn in place (the walk's 2 frames of Right at
+  the mouth are not a MOVE the mask offers), and RECORDER is masked (facing S).
+- `MOVE S 4` walks him 6 pixels (Y $83) and every MOVE is offered; `MOVE E 4` takes him to ($73,$85) facing E, and
+  RECORDER is offered; after the play he must stand on the row until the whirlwind takes him (a MOVE off the row
+  lets it pass, and no second whirlwind comes before the room is entered again). Three decisions, then WAIT: the rule
+  (`scripts/experiments/r32t_recorder_demos.py recorder-3c|recorder-0b`) wins 90 of 90 in each room at the chains'
+  hearts, no heart lost, 17 decisions.
+- Today's runs: ow-octorok `r31-oct-s97` plays `MOVE S` at the mouth with probability 1.00 and again after the first
+  step (0.99; `MOVE E` 0.006); turned E it still walks S (0.84) and RECORDER is below 0.003: on `d2first` the same
+  room from the same cave is left S, and the family never trained on this step. ow-leever `r79t5-ow` steps S (0.80) and
+  then waits (0.64; `MOVE E` 0.02); turned E it plays (0.25), and then walks off the row (`MOVE S 32` 0.79, `MOVE N 32`
+  0.20, back into Level 5): the 174 bounces into 0:0x1b, the runs that die back in Level 5 (§6.4).
+
+**No engine change**: the action space and the mask give the play (two MOVEs and RECORDER); masking RECORDER while
+it would warp elsewhere is already what the mask does. What the models lack is the step itself.
+
+### 7.2 The arm (trained; not yet chosen)
+
+Route runs on `d3first`'s states only (`state_routes: [d3first]`, a quarter of the episodes from the chains'
+harvested handoffs, clips on), `--sil-coeff 0.1 --demo-coeff 0.05 --checkpoint-every 30`, the default budget, no early
+stop; curriculum: the explorer's tracks for every `d3first` state of the family (ow-octorok 19 of 21 after step 97: the
+explorer fails 0x3c's `cave → recorder` on chains 0 and 2) and three rule tracks a chain of the recorder step
+(`r32t_recorder_demos.py ... --tracks`). Demonstrations (the rule's won runs at the chains' hearts, 30 a chain):
+
+| Family | Runs (from) | Demonstrations | Training's own measure (10 episodes a state, both routes) |
+|---|---|---|---|
+| ow-octorok | `r32turn-oct-s32`, `-s33`, `-s34` (`r31-oct-s97`) | `recorder-3c` 5040 rows (90/90) + round 31's mouth rule on `d3first`'s 0:0x37 `cave → cave` (`r32p_rules.py mouth-37`, 180) | 99% each; every `d3first` state 100% (one 0x64 W→E state 95%), `d3first_0_3cc_*` 30/30 on each seed |
+| ow-leever | `r32turn-leever` (`r79t5-ow`; no `d3first` ow-leever route run existed when it was queued) | `recorder-0b` 5040 rows (90/90) + the Dungeon 1 trainer's scrolls of 0x29-0x2b (540) | 97%; every `d3first` state 100%, `d3first_0_0bc_*` 30/30 |
+
+Both runs are for `promoted.d3first` only: `d2first`'s own 0x0b and 0x3c steps are never theirs (ow-leever's
+`d2first` 0:0x0b, which plays facing down, fell to 3-4 of 10 in its training's evaluation, as a `d3first`-only run
+may). The legs (Level 2 to Level 7, `0_3cc_0` → step 174, today 0.1%; Level 5 to Level 2, `0_0bc_0` → step 145, today
+55.7% with ow-moblin's route run) are measured on fresh seeds next: the three ow-octorok seeds against today on seeds
+2000-2999, the best confirmed on 3000-3999 with its other segments before the cutoff; ow-leever by `select-checkpoint
+--segment post-d5` (screen 2000-2999, confirm 3000-3999).
+
+### 7.3 The leg from Level 2 to Level 7: the screen
+
+`target/r32-turn/screen.sh` (eval-batch `r32turn-oct-screen`, post-d2 `0_3cc_0` → step 174, seeds 2000-2999, 1000
+runs each, models alone, clips on; each seed's `last` pinned for the route's part): **today (`r31-oct-s97`) 0 of
+1000; `r32turn-oct-s32` 98.9%, `-s33` 98.9%, `-s34` 99.1%** (s34 against today, paired: +99.1 ± 0.3). Every run of
+s34 leaves 0:0x3c by the whirlwind; 5 of its 9 losses are in ow-zora's 0:0x55. These seeds chose the seed; the
+confirmation on 3000-3999, with ow-octorok's other segments before the cutoff (Dungeon 1's 0:0x37 trip among them),
+and the promotion for the route are next.
