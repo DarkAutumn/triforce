@@ -485,7 +485,31 @@ step), and a new `4_71s` moves every Dungeon 4 baseline; the lead decides.
 
 ### The segments with the team
 
-The batch (`eval-batch r32team-1k`, seeds 20000-20999, models alone, clips on, 1000 runs; the planner 300 on
-Dungeon 4): Dungeon 4, the start to Level 3, the leg to Level 1, Dungeon 1, the leg to Level 5 and the full route
-from the game start. It waited in the machine's line for five hours and had not started when this was written; its
-numbers go here when it has run (`scripts/experiments/r32team_chains.py`).
+One batch (`eval-batch r32team-1k`, seeds 20000-20999: no selection used them), models alone, clips on, 1000 runs,
+the twelve route runs; the planner (`temperature:0.5+relax:16+plan:16:1`) 300 runs on Dungeon 4. Read with
+`scripts/experiments/r32team_chains.py` (runs lost per 1000 entering a room, hearts on entering):
+
+| Segment | From → stop | Arrived | Where the runs are lost | Cheated a run |
+|---|---|---|---|---|
+| the start to Level 3 | start → step 6 | **100.0%** | - | 0 |
+| Dungeon 4 | `4_71s_0` → step 53 | **4.9%** ± 0.7 | Gleeok 4:0x13 415 runs (894 of 1000 entering, at 1.49 hearts), 4:0x32 144 + 56, 4:0x12 69, 4:0x60 60, 4:0x31 51 + 39, 4:0x01 46 | 1.21 bombs (0x21's and 0x11's walls: the state holds none) |
+| Dungeon 4, the planner | the same, 300 | **81.7%** ± 2.2 | Gleeok 49 (167 of 1000 entering, at 3.22 hearts) | 1.98 bombs |
+| the leg to Level 1 | `0_45c_0` → step 61 | **99.8%** ± 0.1 | 0:0x37 2 (ow-octorok) | 0 |
+| Dungeon 1 | `1_73s_0` → step 79 | **63.9%** ± 1.5 | Aquamentus 1:0x35 121 (2.61 hearts in), 1:0x33 89 (72 stuck: stalfos-keese-gel's carried key), 1:0x44 89 (goriya), 1:0x23 46 | 1.0 bomb (1:0x53's wall) |
+| the leg to Level 5 | `0_37c_v2_0` → step 97 | **99.9%** ± 0.1 | 0:0x0c 1 | 27.8 rupees (the candle shop) |
+
+Against the baselines (other seeds, main's runs): Dungeon 4 0.0% → 4.9%, the leg to Level 1 86.2% → 99.8% (ow-octorok
+`r31-oct-s97` at 0:0x37, main's default since v1.9.0.1), Dungeon 1 26.3% → 63.9% (the same), the leg to Level 5
+16.8% → 99.9% (the route's ow-leever, ow-zora, ow-tektite).
+
+**The full route from the game start** (1000 runs, no stop): Level 3 entered 100.0% (2.95 of 3 hearts, no bomb);
+**the D3 triforce 10.4%** ± 1.0; Level 4 entered 10.4% with 3.71 of 4 hearts, **4.65 bombs** (5 of 104 with none)
+and 2 keys; **the D4 triforce 0.6%** (6 runs); Level 1 entered by 6 with 4.25 of 5 hearts, 2.33 bombs, 3 keys; the
+D1 triforce 0.1% (1 run), Level 5 entered by that run (7 of 7 hearts, no bomb), the D5 triforce 0. Where the runs
+end: Dungeon 3 (3:0x4a 142, 0x5b's last pass 130, Manhandla 116 of 220 entering, 0x49 91, 0x59 85, 0x5b from S 84,
+0x69 79, 0x0f 48), then Gleeok (30 of 36). Cheated a run: 0.27 bombs (3:0x5b's wall), no key.
+
+So the full route and the race read the same: Dungeons 3 and 4 are about 10% and 5% a run, which a race retries
+through in tens of runs, Dungeon 1 and both legs are now well above half, and what no number of tries passes is
+0:0x3c. The full chain also says what `d3first_4_71s_0` should hold: about 4-5 bombs and 2 keys at 3.7 of 4 hearts
+(the segment chain starts it with none and cheats 1.21 bombs a run at the walls).
