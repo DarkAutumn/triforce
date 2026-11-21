@@ -121,6 +121,17 @@ pub trait Actor<A>: Send + Sync {
         Ok(None)
     }
 
+    /// A learned veto (`veto:K:P`): scores the decision on `obs` with policy `policy`'s guard into `scratch`;
+    /// false when the policy has none (the decision has no foresight then).
+    fn guard(&self, _obs: &ObsData, _policy: i64, _scratch: &mut Self::Scratch) -> Result<bool, String> {
+        Ok(false)
+    }
+
+    /// The hit probability the guard's last [`Actor::guard`] gave `action`.
+    fn guard_score(&self, _action: &A, _scratch: &Self::Scratch) -> f32 {
+        0.0
+    }
+
     /// The value estimate of `obs` for policy `policy` (bootstrapping a truncation).
     fn value(&self, obs: &ObsData, policy: i64, scratch: &mut Self::Scratch) -> Result<f32, String>;
 }
@@ -231,9 +242,23 @@ pub enum Record {
     Observations,
 }
 
+/// One candidate a decision's foresight judged (round 35, the learned guard's data and its play): decision
+/// `decision` of the play, the candidate `action`, the future it was tried on (`plan`'s index; `guard:K` 0; an audit
+/// future, judged but never deciding, from the plan's S on; -1: the learned guard's verdict, no trial) and whether
+/// it lost health there (the guard: whether it vetoed), with `score` the guard's hit probability (trials: 0 or 1).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Tried<A> {
+    pub decision: u32,
+    pub action: A,
+    pub future: i32,
+    pub lost: bool,
+    pub score: f32,
+}
+
 /// One episode as played: decision `t` acted on `obs` row `t` with policy `policy[t]`, chose `actions[t]` and
 /// the actor reported `decisions[t]`. `job` is the episode's key ([`crate::Start::job`]): with the task's job
-/// list it identifies the episode, and replaying `actions` reproduces it.
+/// list it identifies the episode, and replaying `actions` reproduces it. `tried`: every candidate its foresight
+/// judged, in order.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Play<A> {
     pub job: i64,
@@ -241,6 +266,7 @@ pub struct Play<A> {
     pub actions: Vec<A>,
     pub decisions: Vec<Decision>,
     pub obs: Option<ObsColumns>,
+    pub tried: Vec<Tried<A>>,
 }
 
 impl<A> Play<A> {
@@ -251,6 +277,7 @@ impl<A> Play<A> {
             actions: Vec::new(),
             decisions: Vec::new(),
             obs: layout.map(|l| ObsColumns::new(l, 0)),
+            tried: Vec::new(),
         }
     }
 

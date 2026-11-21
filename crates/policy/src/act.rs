@@ -200,11 +200,17 @@ pub enum Threshold {
 ///   the game, not peeking at its future.
 ///
 /// K = 1 tries only the decision's own action: play is unchanged, the trials are only counted.
+///
+/// - `veto:K:P` (round 35, an experiment; `veto` > 0): no trial in the env. A learned guard of the policy (a network
+///   on the same observation, one hit logit per joint action, loaded beside the checkpoint as `guard.pt`) refuses a
+///   candidate whose hit probability is above P; a policy without a guard plays without foresight.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Foresight {
     pub candidates: u32,
     pub futures: u32,
     pub share: f32,
+    /// The learned guard's refusal threshold (`veto:K:P`); 0: the env's trials decide.
+    pub veto: f32,
 }
 
 impl Foresight {
@@ -358,7 +364,9 @@ impl fmt::Display for Threshold {
 impl fmt::Display for Foresight {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (k, s, r) = (self.candidates, self.futures, self.share);
-        if s == 0 {
+        if self.veto > 0.0 {
+            write!(f, "veto:{k}:{}", self.veto)
+        } else if s == 0 {
             write!(f, "guard:{k}")
         } else if r == 0.0 {
             write!(f, "plan:{k}:{s}")
@@ -428,7 +436,7 @@ fn parse_foresight(text: &str, part: &str) -> Result<(Style, Option<Foresight>),
     let mut rest = Vec::new();
     for item in part.split('+') {
         let (name, args) = match item.split_once(':') {
-            Some((name @ ("guard" | "plan"), args)) => (name, args),
+            Some((name @ ("guard" | "plan" | "veto"), args)) => (name, args),
             _ => {
                 rest.push(item);
                 continue;
@@ -449,6 +457,17 @@ fn parse_foresight(text: &str, part: &str) -> Result<(Style, Option<Foresight>),
                 candidates: whole("candidates", k)?,
                 futures: 0,
                 share: 0.0,
+                veto: 0.0,
+            },
+            ("veto", [k, p]) => Foresight {
+                candidates: whole("candidates", k)?,
+                futures: 0,
+                share: 0.0,
+                veto: p
+                    .parse::<f32>()
+                    .ok()
+                    .filter(|p| *p > 0.0 && *p < 1.0)
+                    .ok_or_else(|| format!("act mode {text:?}: veto's threshold must be in (0, 1), got {p:?}"))?,
             },
             ("plan", [k, s, r @ ..]) if r.len() <= 1 => {
                 let share = match r {
@@ -464,6 +483,7 @@ fn parse_foresight(text: &str, part: &str) -> Result<(Style, Option<Foresight>),
                     candidates: whole("candidates", k)?,
                     futures: whole("futures", s)?,
                     share,
+                    veto: 0.0,
                 }
             }
             _ => return Err(format!("act mode {text:?}: {item:?} is not guard:K or plan:K:S[:R]")),
@@ -754,13 +774,13 @@ mod tests {
     #[test]
     fn foresight_follows_the_health_part_and_refuses_by_its_share() {
         let mode: ActMode = "temperature:0.5+relax:16+low:2:temperature:0.5+relax:16+guard:8".parse().unwrap();
-        let guard = Foresight { candidates: 8, futures: 0, share: 0.0 };
+        let guard = Foresight { candidates: 8, futures: 0, share: 0.0, veto: 0.0 };
         assert_eq!(mode.foresight(Some((2.5, 5.0))), None);
         assert_eq!(mode.foresight(Some((2.0, 5.0))), Some(guard));
         assert_eq!(mode.foresight(None), None);
         assert_eq!(mode.choose(0, Some((2.0, 5.0))), mode.choose(0, Some((3.0, 5.0))));
         let plan = "argmax+plan:3:4:0.5".parse::<ActMode>().unwrap().foresight(None).unwrap();
-        assert_eq!(plan, Foresight { candidates: 3, futures: 4, share: 0.5 });
+        assert_eq!(plan, Foresight { candidates: 3, futures: 4, share: 0.5, veto: 0.0 });
         // The game's own future: one trial, refused on a loss.
         assert_eq!(guard.trials(), 1);
         assert!(!guard.refuses(0) && guard.refuses(1));

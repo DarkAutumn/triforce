@@ -35,6 +35,8 @@ pub struct PolicyActor {
     distributions: bool,
     /// Report the acting distribution's log-prob and entropy (`Decision::act_log_prob`/`act_entropy`; plays).
     acting: bool,
+    /// Per policy: its learned guard (`veto:K:P`, round 35) and the layout index of each of the guard's vector keys.
+    guards: Vec<Option<(Arc<Policy>, Vec<usize>)>>,
 }
 
 pub struct ActorScratch {
@@ -50,6 +52,10 @@ pub struct ActorScratch {
     g: Vec<f32>,
     score: Vec<f64>,
     order: Vec<usize>,
+    /// The decision's guard (`Actor::guard`): its policy, hit logits per joint action and working memory.
+    guard_policy: usize,
+    guard_logits: Vec<f32>,
+    guard_scratches: Vec<Option<policy::Scratch>>,
 }
 
 impl PolicyActor {
@@ -86,6 +92,7 @@ impl PolicyActor {
             replay: None,
             distributions: false,
             acting: false,
+            guards: Vec::new(),
         })
     }
 
@@ -102,6 +109,39 @@ impl PolicyActor {
     pub fn with_acting(mut self, on: bool) -> Self {
         self.acting = on;
         self
+    }
+
+    /// Learned guards (round 35, `veto:K:P`): `guards[p]` judges policy `p`'s candidates (None: that policy has no
+    /// guard and plays a veto mode without foresight). A guard is a policy network whose value head has one hit
+    /// logit per joint action (`Policy::values`), reading the pool's observation like a policy.
+    pub fn with_guards(mut self, layout: &ObsLayout, guards: Vec<Option<Arc<Policy>>>) -> Result<Self, String> {
+        if guards.len() != self.policies.len() {
+            return Err(format!("{} guards for {} policies", guards.len(), self.policies.len()));
+        }
+        self.guards = Vec::with_capacity(guards.len());
+        for (i, guard) in guards.into_iter().enumerate() {
+            let Some(g) = guard else {
+                self.guards.push(None);
+                continue;
+            };
+            if g.value_outputs() != self.policies[i].joint_size() {
+                return Err(format!(
+                    "guard {i} has {} outputs for {} joint actions",
+                    g.value_outputs(),
+                    self.policies[i].joint_size()
+                ));
+            }
+            let key = |name: &str| layout.key(name).ok_or_else(|| format!("the pool's observations have no '{name}'"));
+            for (name, want) in g.input_sizes() {
+                let have = layout.keys()[key(name)?].len();
+                if have != want {
+                    return Err(format!("guard {i} reads {name} as {want} values, the pool's has {have}"));
+                }
+            }
+            let keys = g.vector_keys().iter().map(|k| key(k)).collect::<Result<Vec<_>, _>>()?;
+            self.guards.push(Some((g, keys)));
+        }
+        Ok(self)
     }
 
     /// Replays recorded episodes: decision `t` of the episode keyed `job` takes `actions[job][t]` (and reports
@@ -134,7 +174,16 @@ pub(super) fn input<'a>(
     obs: &'a ObsData,
     vectors: &'a mut [&'a [f32]; MAX_VECTORS],
 ) -> Input<'a> {
-    let keys = &a.vectors[p];
+    input_of(a, &a.vectors[p], obs, vectors)
+}
+
+/// The observation as the input of a network reading the vector keys at layout indices `keys`.
+fn input_of<'a>(
+    a: &PolicyActor,
+    keys: &[usize],
+    obs: &'a ObsData,
+    vectors: &'a mut [&'a [f32]; MAX_VECTORS],
+) -> Input<'a> {
     for (slot, &k) in vectors.iter_mut().zip(keys) {
         *slot = obs.f32(k);
     }
@@ -164,6 +213,9 @@ impl Actor<ZeldaAction> for PolicyActor {
             g: Vec::new(),
             score: Vec::new(),
             order: Vec::new(),
+            guard_policy: 0,
+            guard_logits: Vec::new(),
+            guard_scratches: self.guards.iter().map(|g| g.as_ref().map(|(g, _)| g.scratch())).collect(),
         }
     }
 
@@ -253,9 +305,33 @@ impl Actor<ZeldaAction> for PolicyActor {
 
     fn foresight(&self, policy: i64, situation: Situation) -> Option<Foresight> {
         match (&self.replay, self.policy(policy)) {
-            (None, Ok(p)) => self.modes[p].foresight(situation.health),
+            // A learned veto belongs to the policies with a guard; the rest play it without foresight.
+            (None, Ok(p)) => self.modes[p]
+                .foresight(situation.health)
+                .filter(|f| f.veto == 0.0 || self.guards.get(p).is_some_and(|g| g.is_some())),
             _ => None,
         }
+    }
+
+    fn guard(&self, obs: &ObsData, policy: i64, s: &mut ActorScratch) -> Result<bool, String> {
+        let p = self.policy(policy)?;
+        let Some(Some((guard, keys))) = self.guards.get(p) else {
+            return Ok(false);
+        };
+        let mut vectors: [&[f32]; MAX_VECTORS] = [&[]; MAX_VECTORS];
+        let input = input_of(self, keys, obs, &mut vectors);
+        s.guard_logits.resize(guard.value_outputs(), 0.0);
+        let scratch = s.guard_scratches[p].as_mut().ok_or("a guard without working memory")?;
+        guard.values(&input, scratch, &mut s.guard_logits).map_err(|e| e.0)?;
+        s.guard_policy = p;
+        Ok(true)
+    }
+
+    fn guard_score(&self, action: &ZeldaAction, s: &ActorScratch) -> f32 {
+        let net = &self.policies[s.guard_policy];
+        let head = |i: i64| usize::try_from(i).unwrap_or(0);
+        let logit = s.guard_logits[net.joint_index([head(action[0]), head(action[1]), head(action[2])])];
+        1.0 / (1.0 + (-logit).exp())
     }
 
     /// Ranked as the decision's own rule ranks: argmax by the policy's joint log-prob, a draw by ln q + the Gumbel

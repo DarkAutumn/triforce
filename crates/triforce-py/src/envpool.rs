@@ -939,6 +939,17 @@ fn play_dict<'py>(py: Python<'py>, env: usize, play: &Play<ZeldaAction>) -> PyRe
     d.set_item("value", PyArray::from_vec(py, column(|d| d.value)))?;
     d.set_item("act_log_prob", PyArray::from_vec(py, column(|d| d.act_log_prob)))?;
     d.set_item("act_entropy", PyArray::from_vec(py, column(|d| d.act_entropy)))?;
+    // Every candidate the foresight judged (round 35): decision, joint action, future (-1: the learned guard),
+    // whether it lost health (the guard: vetoed) and the guard's hit probability.
+    let m = play.tried.len();
+    let tried = PyDict::new(py);
+    tried.set_item("decision", PyArray::from_vec(py, play.tried.iter().map(|t| t.decision).collect()))?;
+    let tried_actions: Vec<i64> = play.tried.iter().flat_map(|t| t.action).collect();
+    tried.set_item("action", PyArray::from_vec(py, tried_actions).reshape([m, 3])?)?;
+    tried.set_item("future", PyArray::from_vec(py, play.tried.iter().map(|t| t.future).collect()))?;
+    tried.set_item("lost", PyArray::from_vec(py, play.tried.iter().map(|t| t.lost).collect()))?;
+    tried.set_item("score", PyArray::from_vec(py, play.tried.iter().map(|t| t.score).collect()))?;
+    d.set_item("tried", tried)?;
     if let Some(obs) = &play.obs {
         let o = PyDict::new(py);
         for (key, column) in LAYOUT.keys().iter().zip(&obs.columns) {
@@ -1189,6 +1200,7 @@ impl PyEnvPool {
         };
         self.check_policies(policies.len())?;
         let nets: Vec<_> = policies.iter().map(|p| p.inner.clone()).collect();
+        let guards: Vec<_> = policies.iter().map(|p| p.guard.clone()).collect();
         let modes: Vec<ActMode> = match act {
             None => vec![ActMode::SAMPLE; nets.len()],
             Some(a) => match a.extract::<String>() {
@@ -1226,7 +1238,9 @@ impl PyEnvPool {
         }
         .map_err(PyValueError::new_err)?
         .with_acting(true)
-        .with_distributions(distributions);
+        .with_distributions(distributions)
+        .with_guards(&LAYOUT, guards)
+        .map_err(PyValueError::new_err)?;
         py.detach(|| self.pool.play(Arc::new(actor), record))
             .map_err(pool_err)
     }

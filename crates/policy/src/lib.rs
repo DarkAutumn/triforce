@@ -633,7 +633,9 @@ impl Policy {
         };
         let direction_head = w.linear("direction_head", directions, hidden)?;
         let duration_head = w.linear("duration_head", durations, hidden)?;
-        let value_head = w.linear("value_head", 1, hidden)?;
+        // One output for a policy; a learned guard's head has one per joint action ([`Policy::values`]).
+        let value_outputs = w.0.get("value_head.weight").and_then(|t| t.shape.first().copied()).unwrap_or(1);
+        let value_head = w.linear("value_head", value_outputs, hidden)?;
         if let Some(extra) = w.0.keys().next() {
             return err(format!("unused weight '{extra}' (architecture mismatch)"));
         }
@@ -951,6 +953,26 @@ impl Policy {
         let mut v = [0f32];
         self.value_head.apply(&s.value_a, &mut v);
         finite_output(v[0], 0.0)
+    }
+
+    /// Outputs of the value head: 1 for a policy; a learned guard (round 35, `triforce/guard.py`: the policy's
+    /// network with a value head of one logit per joint action, "this action gets Link hit") has
+    /// [`Policy::joint_size`].
+    pub fn value_outputs(&self) -> usize {
+        self.value_head.out
+    }
+
+    /// Every value head output (`out`: [`Policy::value_outputs`] values): a guard's hit logits per joint action.
+    pub fn values(&self, input: &Input, s: &mut Scratch, out: &mut [f32]) -> Result<(), PolicyError> {
+        self.check(input)?;
+        if out.len() != self.value_head.out {
+            return err(format!("{} value outputs asked of a head of {}", out.len(), self.value_head.out));
+        }
+        self.features(input, s);
+        let x = if self.live.is_some() { &s.live } else { &s.features };
+        self.value_tower.apply(x, &mut s.value_a, &mut s.value_b);
+        self.value_head.apply(&s.value_a, out);
+        Ok(())
     }
 
     /// Evaluates one observation and picks an action (`model.py` `ZeldaPolicy.evaluate`).

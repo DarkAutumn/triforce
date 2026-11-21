@@ -12,6 +12,8 @@ use std::sync::Arc;
 #[pyclass(name = "Policy", module = "triforce._native", frozen)]
 pub struct PyPolicy {
     pub inner: Arc<Policy>,
+    /// The learned guard (`with_guard`; `veto:K:P`).
+    pub guard: Option<Arc<Policy>>,
 }
 
 fn policy_err(e: policy::PolicyError) -> PyErr {
@@ -142,7 +144,32 @@ impl PyPolicy {
             );
         }
         let inner = py.detach(|| Policy::new(config, tensors)).map_err(policy_err)?;
-        Ok(PyPolicy { inner: Arc::new(inner) })
+        Ok(PyPolicy {
+            inner: Arc::new(inner),
+            guard: None,
+        })
+    }
+
+    /// This policy with `guard` as its learned guard (round 35, act mode `veto:K:P`; `triforce/guard.py`): a
+    /// network of the same observation whose value head has one hit logit per joint action.
+    fn with_guard(&self, guard: PyRef<'_, PyPolicy>) -> PyResult<PyPolicy> {
+        if guard.inner.value_outputs() != self.inner.joint_size() {
+            return Err(PyValueError::new_err(format!(
+                "a guard needs {} outputs (one per joint action), this one has {}",
+                self.inner.joint_size(),
+                guard.inner.value_outputs()
+            )));
+        }
+        Ok(PyPolicy {
+            inner: self.inner.clone(),
+            guard: Some(guard.inner.clone()),
+        })
+    }
+
+    /// The guard's hash (None: no guard).
+    #[getter]
+    fn guard_hash(&self) -> Option<u64> {
+        self.guard.as_ref().map(|g| g.hash())
     }
 
     /// Identifies the model (config and every weight's bits).
@@ -229,6 +256,20 @@ impl PyPolicy {
             values.push(self.inner.value(&input, &mut scratch).map_err(policy_err)?);
         }
         Ok(PyArray1::from_vec(py, values))
+    }
+
+    /// Every value head output `[B, value_outputs]` (a guard: hit logits per joint action).
+    fn values<'py>(&self, py: Python<'py>, obs: &Bound<'py, PyDict>) -> PyResult<Bound<'py, PyArray2<f32>>> {
+        let batch = Batch::new(py, &self.inner, obs)?;
+        let n = self.inner.value_outputs();
+        let mut scratch = self.inner.scratch();
+        let mut out = vec![0f32; batch.rows * n];
+        for (i, row) in out.chunks_exact_mut(n).enumerate() {
+            let mut vectors = Vec::new();
+            let input = batch.row(i, &mut vectors)?;
+            self.inner.values(&input, &mut scratch, row).map_err(policy_err)?;
+        }
+        Ok(PyArray1::from_vec(py, out).reshape([batch.rows, n])?)
     }
 
     /// Joint log-probs `[B, J]` (J = kinds × directions × durations = 352; entry `kind * 32 + direction * 4 +

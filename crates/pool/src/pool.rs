@@ -3,7 +3,7 @@
 use crate::control::EnvControl;
 use crate::layout::{ObsData, ObsLayout, ObsRow, Staged};
 use crate::rollout::{
-    Actor, Decision, EnvRollout, Foresee, Foreseen, Play, PlanError, Planner, Record, SearchRow, Situation, Trial,
+    Actor, Decision, EnvRollout, Foresee, Foreseen, Play, PlanError, Planner, Record, SearchRow, Situation, Trial, Tried,
 };
 use parking_lot::{Condvar, Mutex};
 use rand_chacha::ChaCha8Rng;
@@ -553,6 +553,8 @@ impl<E: PoolEnv> Pool<E> {
                 record,
                 play: None,
                 alternatives: Vec::new(),
+                tried: Vec::new(),
+                audit: plan_audit(),
             };
             self.dispatch(Cmd::Run(id, Box::new(job)), id);
         }
@@ -924,16 +926,28 @@ struct PlayWork<E: PoolEnv, Ac: Actor<E::Action>> {
     play: Option<Play<E::Action>>,
     /// A foreseen decision's alternatives (kept for its allocation).
     alternatives: Vec<(E::Action, Decision)>,
+    /// The decision's judged candidates (action, future, lost, score), for the recorded play's `tried`.
+    tried: Vec<(E::Action, i32, bool, f32)>,
+    /// Audit futures a plan's candidate is also tried on, recorded and never deciding (`TRIFORCE_PLAN_AUDIT`; 0).
+    audit: u32,
+}
+
+/// `TRIFORCE_PLAN_AUDIT` (round 35, the learned guard's ceiling): a plan's every judged candidate is also tried on
+/// that many more redrawn futures, recorded in the play's `tried` and never deciding. 0 when unset.
+fn plan_audit() -> u32 {
+    std::env::var("TRIFORCE_PLAN_AUDIT").ok().and_then(|v| v.parse().ok()).unwrap_or(0)
 }
 
 /// Key tag of a plan's redrawn futures (`plan:K:S`).
 const TAG_FUTURE: u64 = 0x504C_414E_4655_5452;
 
 impl<E: PoolEnv, Ac: Actor<E::Action>> PlayWork<E, Ac> {
-    /// Whether `action` is refused by `foresight` (its trials in the env), counting the trials and their frames into
-    /// `foresee`; None: the env can't try actions. Future `f` of decision `step` of job `job` is keyed by the three
-    /// alone, so every candidate of a decision meets the same futures.
+    /// Whether `action` is refused by `foresight`, counting the trials and their frames into `foresee`; None: the
+    /// env can't try actions. Future `f` of decision `step` of job `job` is keyed by the three alone, so every
+    /// candidate of a decision meets the same futures. A learned veto (`veto:K:P`) reads the guard's score of the
+    /// decision ([`Actor::guard`]) instead of trying anything. A recording play keeps every verdict (`tried`).
     fn refused(
+        &mut self,
         env: &mut E,
         id: usize,
         slot: &Staged,
@@ -941,19 +955,45 @@ impl<E: PoolEnv, Ac: Actor<E::Action>> PlayWork<E, Ac> {
         action: &E::Action,
         foresee: &mut Foresee,
     ) -> Res<Option<bool>, E> {
+        let keep = self.record != Record::Off;
+        if foresight.veto > 0.0 {
+            let score = self.actor.guard_score(action, &self.scratch);
+            let vetoed = score > foresight.veto;
+            foresee.trials += 1;
+            if keep {
+                self.tried.push((action.clone(), -1, vetoed, score));
+            }
+            return Ok(Some(vetoed));
+        }
+        let key = |f: u32| {
+            (foresight.futures > 0)
+                .then(|| policy::noise::key_of(&[TAG_FUTURE, slot.job as u64, slot.step as u64, f as u64]))
+        };
         let mut losses = 0;
         for f in 0..foresight.trials() {
-            let future = (foresight.futures > 0)
-                .then(|| policy::noise::key_of(&[TAG_FUTURE, slot.job as u64, slot.step as u64, f as u64]));
-            let Some(Trial { lost, frames }) = env.trial(action, future).map_err(|error| PoolError::Env { env: id, error })?
+            let Some(Trial { lost, frames }) =
+                env.trial(action, key(f)).map_err(|error| PoolError::Env { env: id, error })?
             else {
                 return Ok(None);
             };
             foresee.trials += 1;
             foresee.frames += frames;
             losses += lost as u32;
+            if keep {
+                self.tried.push((action.clone(), f as i32, lost, lost as u8 as f32));
+            }
             if foresight.decided(losses, f + 1) {
                 break;
+            }
+        }
+        if keep && foresight.futures > 0 {
+            for a in 0..self.audit {
+                let f = foresight.trials() + a;
+                if let Some(Trial { lost, .. }) =
+                    env.trial(action, key(f)).map_err(|error| PoolError::Env { env: id, error })?
+                {
+                    self.tried.push((action.clone(), f as i32, lost, lost as u8 as f32));
+                }
             }
         }
         Ok(Some(foresight.refuses(losses)))
@@ -961,7 +1001,7 @@ impl<E: PoolEnv, Ac: Actor<E::Action>> PlayWork<E, Ac> {
 
     /// The foresight of the decision (`action`, `decision`) of `slot`: keeps it when its trials don't refuse it, else
     /// takes the first of the actor's alternatives they don't refuse (none: keeps it). None: the env can't try
-    /// actions (the decision stands as taken).
+    /// actions, or a learned veto's policy has no guard (the decision stands as taken).
     #[allow(clippy::too_many_arguments)]
     fn foresee(
         &mut self,
@@ -979,7 +1019,15 @@ impl<E: PoolEnv, Ac: Actor<E::Action>> PlayWork<E, Ac> {
             frames: 0,
             refused: None,
         };
-        match Self::refused(env, id, slot, foresight, action, &mut foresee)? {
+        if foresight.veto > 0.0
+            && !self
+                .actor
+                .guard(&slot.obs, slot.policy, &mut self.scratch)
+                .map_err(|e| PoolError::Usage(format!("env {id}: {e}")))?
+        {
+            return Ok(None);
+        }
+        match self.refused(env, id, slot, foresight, action, &mut foresee)? {
             None => return Ok(None),
             Some(false) => return Ok(Some(foresee)),
             Some(true) => foresee.outcome = Foreseen::Unsafe,
@@ -1005,7 +1053,7 @@ impl<E: PoolEnv, Ac: Actor<E::Action>> PlayWork<E, Ac> {
             Ok(first) => {
                 let mut result = Ok(());
                 for (a, d) in alternatives.drain(..) {
-                    match Self::refused(env, id, slot, foresight, &a, &mut foresee) {
+                    match self.refused(env, id, slot, foresight, &a, &mut foresee) {
                         Ok(Some(true)) => continue,
                         Ok(_) => {
                             (*action, *decision) = (a, d);
@@ -1034,12 +1082,21 @@ impl<E: PoolEnv, Ac: Actor<E::Action>> Work<E> for PlayWork<E, Ac> {
             .actor
             .act(&slot.obs, slot.policy, slot.job, slot.step, situation, &mut self.scratch)
             .map_err(|e| PoolError::Usage(format!("env {id}: {e}")))?;
+        self.tried.clear();
         if let Some(foresight) = self.actor.foresight(slot.policy, situation) {
             decision.foresee = self.foresee(env, id, slot, situation, &foresight, &mut action, &mut decision)?;
         }
         if self.record != Record::Off {
             let layout = (self.record == Record::Observations).then(|| slot.obs.layout());
             let play = self.play.get_or_insert_with(|| Play::new(slot.job, layout));
+            let at = play.actions.len() as u32;
+            play.tried.extend(self.tried.drain(..).map(|(action, future, lost, score)| Tried {
+                decision: at,
+                action,
+                future,
+                lost,
+                score,
+            }));
             play.policy.push(slot.policy);
             play.actions.push(action.clone());
             play.decisions.push(decision);
