@@ -146,3 +146,30 @@ fewer of the attached heads'. At a heart or less all three back into the bottom 
 with no hit either way 40-65 s); the planner wins 3 of 8 such fights by outlasting, the models none. Nothing here is
 a reward or a window paying the wrong thing: the gap is reactive dodging, which the planner's fights teach as
 demonstrations; the round below changes what the entries look like, not the yaml's terms.
+
+### 4.2 Gleeok's second round
+
+Three seeds (`r34d4-gleeok4-s1..3`) from arm B's it002697 with the 120-step `no-damage` failure, about 244
+iterations, checkpoints every 15, `--demo-coeff 0.05`, `--sil-coeff 0.1`. Every reset is a harvested handoff,
+half the team's and half the planner's: the baseline's 602 team entries (1.69 hearts) and its 299 planner entries
+(3.32 hearts) twice each, so the hearts that vire and like-like now deliver are trained on. Demonstrations: the
+planner's fights split by hearts in, 413 won at 3-4 hearts and 258 at 1.2-2.8 (671 winning fights). Training
+success 25-36% over the last iterations (round 1: 6-20%).
+
+**In his room** (the same 300 fights as round 1's screen; 51 checkpoints): s1 it002877 35.3%, s1 it002862 33.7%, s3
+it002907 33.0%, s2's last 32.0% (it002697 25.3%, it2517 15.0%). The best of each seed goes to `d4`.
+
+**On `d4`** with step 1's vire and like-like (and it002697 as today's Gleeok), paired:
+
+| Arm | seeds 2000-2999 | paired | seeds 3000-3999 | paired |
+|---|---|---|---|---|
+| step 1's team | 15.6 ± 1.1 | | 17.3 ± 1.2 | |
+| s1 it002877 | 22.2 ± 1.3 | **+6.6 ± 1.5** | 20.6 ± 1.3 | **+3.3 ± 1.5** |
+| s2 last | 19.9 ± 1.3 | +4.3 ± 1.3 | | |
+| s3 it002907 | 18.3 ± 1.2 | +2.7 ± 1.4 | | |
+
+(Step 1's team on 3000-3999 plays exactly the three-together arm of the confirmation, run for run.) Gleeok won of
+entered on 3000-3999 by hearts in, it002697 / it002877: 0.5: 0/99, 3/99 · 1.0: 2/116, 9/116 · 1.5: 15/129, 29/129 ·
+2.0: 25/115, 33/115 · 2.5: 30/80, 34/80 · 3.0: 41/69, 38/69 · 3.5: 19/37, 27/37 · 4.0: 41/45, 33/45: the round
+pays below 2.5 hearts, where most runs arrive. Promoted `--route d3first`: `r34d4-gleeok4-s1-it2877` (a run dir of
+the checkpoint with its training's `run.json`).
