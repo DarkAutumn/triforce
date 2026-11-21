@@ -438,3 +438,11 @@ runs each, models alone, clips on; each seed's `last` pinned for the route's par
 s34 leaves 0:0x3c by the whirlwind; 5 of its 9 losses are in ow-zora's 0:0x55. These seeds chose the seed; the
 confirmation on 3000-3999, with ow-octorok's other segments before the cutoff (Dungeon 1's 0:0x37 trip among them),
 and the promotion for the route are next.
+
+### 7.4 The leg from Level 5 to Level 2: the selection
+
+`select-checkpoint ow-leever r32turn-leever --route d3first --segment post-d5` (`0_0bc_0` → Level 2, with ow-moblin's
+route run; screen 2000-2999, confirm 3000-3999, 1000 runs each): the run's checkpoints arrive in 97.1-97.3% of the
+screen against today's `r79t5-ow` 57.1%; **confirmed: `last` 97.8% ± 0.5 against 55.5% ± 1.6, +42.3 ± 1.6 paired**,
+6.46 hearts at Level 2 against 5.47. Promoted for `d3first` (`last`). Its 0x29-0x2b and 0:0x34 are still to be
+measured on their segments against today (its training's own check: every `d3first` state 100%).
