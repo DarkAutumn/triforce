@@ -231,7 +231,17 @@ def menu_acts(act: str, fixed_delay: bool) -> list:
         modes = [mode for mode in modes if mode != registry.MODEL_ACT and registry.draws(mode)]
     labels = {registry.PLAY_ACT: f"{registry.PLAY_ACT} (default)", registry.PLAN_ACT: "honest planner (plan:16:1)",
               registry.MODEL_ACT: "each model's own"}
-    return [(mode, labels.get(mode, mode)) for mode in modes]
+
+    def label(mode: str) -> str:
+        # Round 35: the emulator's look-ahead (plan, guard) and the learned guard (veto) are never confused.
+        if mode in labels:
+            return labels[mode]
+        if '+veto:' in mode:
+            return f"{mode} (learned guard: no look-ahead)"
+        if '+plan:' in mode or '+guard:' in mode:
+            return f"{mode} (planner: the emulator's look-ahead)"
+        return mode
+    return [(mode, label(mode)) for mode in modes]
 
 
 def main(argv=None) -> int:

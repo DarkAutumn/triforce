@@ -425,6 +425,14 @@ impl FromStr for ActMode {
                 })
             }
         };
+        // A learned guard's veto (no look-ahead) and the emulator's look-ahead (`guard:K`, `plan:K:S`) never share a
+        // mode: a run in a `veto` mode plays without any trial in the emulator, whatever Link's health.
+        let parts = [foresight, low.and_then(|l| l.foresight)];
+        if parts.iter().flatten().any(|f| f.veto > 0.0) && parts.iter().flatten().any(|f| f.veto == 0.0) {
+            return Err(format!(
+                "act mode {text:?}: veto (the learned guard) and guard/plan (the emulator's look-ahead) can't be combined"
+            ));
+        }
         Ok(ActMode { style, foresight, low })
     }
 }
@@ -734,6 +742,10 @@ mod tests {
             ("temperature:0.5+relax:16+plan:8:4:0.50", "temperature:0.5+relax:16+plan:8:4:0.5"),
             ("temperature:0.5+relax:16+low:2:temperature:0.5+relax:16+plan:8:1",
              "temperature:0.5+relax:16+low:2:temperature:0.5+relax:16+plan:8:1"),
+            // Round 35: the learned guard's veto, its own name beside the emulator's guard and plan.
+            ("veto:16:0.50+temperature:0.5+relax:16", "temperature:0.5+relax:16+veto:16:0.5"),
+            ("temperature:0.5+relax:16+veto:16:0.3+low:2:argmax+veto:4:0.2",
+             "temperature:0.5+relax:16+veto:16:0.3+low:2:argmax+veto:4:0.2"),
         ] {
             let mode: ActMode = text.parse().unwrap();
             assert_eq!(mode.to_string(), canonical, "{text}");
@@ -752,6 +764,11 @@ mod tests {
             "argmax+low:2:guard:4", "argmax+guard:4+plan:4:2", "argmax+plan:4", "argmax+plan:4:0",
             "argmax+plan:0:4", "argmax+plan:4:2:1", "argmax+plan:4:2:-0.1", "argmax+plan:4:2:0.5:1", "plan:4:2",
             "argmax+plan:4:2:x",
+            "veto:16:0.5", "argmax+veto:16", "argmax+veto:0:0.5", "argmax+veto:16:0", "argmax+veto:16:1",
+            "argmax+veto:16:x", "argmax+veto:16:0.5:1", "argmax+veto:16:0.5+plan:16:1", "argmax+veto:4:0.5+guard:4",
+            // the learned veto and the emulator's look-ahead never share one mode, in either health part
+            "argmax+veto:16:0.5+low:2:argmax+plan:16:1", "argmax+plan:16:1+low:2:argmax+veto:16:0.5",
+            "argmax+guard:4+low:2:argmax+veto:16:0.5",
         ] {
             assert!(bad.parse::<ActMode>().is_err(), "{bad:?} parsed");
         }

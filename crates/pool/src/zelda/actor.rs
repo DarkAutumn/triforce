@@ -131,6 +131,15 @@ impl PolicyActor {
                     self.policies[i].joint_size()
                 ));
             }
+            // The guard reads exactly what its policy reads (the same keys and sizes, the action mask among them):
+            // nothing of the emulator the observation doesn't hold.
+            if g.input_sizes() != self.policies[i].input_sizes() {
+                return Err(format!(
+                    "guard {i} reads {:?}, its policy {:?}: a guard reads exactly the policy's observation",
+                    g.input_sizes(),
+                    self.policies[i].input_sizes()
+                ));
+            }
             let key = |name: &str| layout.key(name).ok_or_else(|| format!("the pool's observations have no '{name}'"));
             for (name, want) in g.input_sizes() {
                 let have = layout.keys()[key(name)?].len();

@@ -1,7 +1,8 @@
 //! The pool on a fake env whose rows depend only on its seeded generator and its actions, acting with a test
 //! actor whose actions depend only on the observation.
 
-use pool::rollout::{Actor, Decision, EnvRollout, Play, Record, Situation};
+use policy::ActMode;
+use pool::rollout::{Actor, Decision, EnvRollout, Foreseen, Play, Record, Refused, Situation, Trial};
 use pool::{
     Dtype, EnvControl, EnvInit, KeySpec, ObsData, ObsLayout, ObsRow, Outcome, Pool, PoolEnv, PoolError,
     PoolOptions, Start,
@@ -9,6 +10,7 @@ use pool::{
 use rand::RngExt;
 use rand_chacha::ChaCha8Rng;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 const ID: usize = 0;
@@ -29,6 +31,8 @@ struct Config {
     error_at: Option<(usize, u64)>,
     /// Hold the env's frame at the end of every episode (the watch player's result pause).
     hold_after_episode: bool,
+    /// Every [`PoolEnv::trial`] of every env of the pool (the emulator's look-ahead: `guard:K`, `plan:K:S`).
+    trials: Arc<AtomicU64>,
 }
 
 impl Default for Config {
@@ -42,6 +46,7 @@ impl Default for Config {
             panic_at: None,
             error_at: None,
             hold_after_episode: false,
+            trials: Arc::new(AtomicU64::new(0)),
         }
     }
 }
@@ -200,6 +205,15 @@ impl PoolEnv for Fake {
         }
         self.write(obs);
         Ok(outcome)
+    }
+
+    /// A trial counts and touches nothing: action 0 would lose health.
+    fn trial(&mut self, action: &i64, _future: Option<u64>) -> Result<Option<Trial>, String> {
+        self.cfg.trials.fetch_add(1, Ordering::SeqCst);
+        Ok(Some(Trial {
+            lost: *action == 0,
+            frames: self.cfg.frames_per_step,
+        }))
     }
 }
 
@@ -639,4 +653,114 @@ fn finished_envs_leave_the_pool() {
     assert!(pool.wait_idle(None).unwrap());
     assert_eq!(pool.active(), 0, "no env had an episode");
     assert!(matches!(pool.rollout(4, actor()), Err(PoolError::Usage(_))), "no env to roll out is an error");
+}
+
+/// [`TestActor`]'s actions with an act mode's foresight and a learned guard (round 35, `veto:K:P`) that scores
+/// action 0 at `score` and every other at 0. Its scratch keeps the observation the decision acted on, and the guard
+/// fails the env unless it is handed exactly that observation (every key, the mask included).
+struct Foreseeing {
+    mode: ActMode,
+    score: f32,
+}
+
+impl Actor<i64> for Foreseeing {
+    type Scratch = Vec<u8>;
+
+    fn scratch(&self) -> Vec<u8> {
+        Vec::new()
+    }
+
+    fn act(&self, obs: &ObsData, policy: i64, job: i64, step: i64, s: Situation, seen: &mut Vec<u8>)
+        -> Result<(i64, Decision), String> {
+        *seen = observed(obs);
+        TestActor.act(obs, policy, job, step, s, &mut ())
+    }
+
+    fn value(&self, obs: &ObsData, policy: i64, _: &mut Vec<u8>) -> Result<f32, String> {
+        TestActor.value(obs, policy, &mut ())
+    }
+
+    fn foresight(&self, _: i64, situation: Situation) -> Option<policy::act::Foresight> {
+        self.mode.foresight(situation.health)
+    }
+
+    fn alternatives(&self, _: &ObsData, _: i64, _: i64, _: i64, _: Situation, first: &i64, k: usize, _: &mut Vec<u8>,
+                    out: &mut Vec<(i64, Decision)>) -> Result<Option<Refused>, String> {
+        out.extend((1..k as i64).map(|i| ((first + i) % 5, Decision::default())));
+        Ok(None)
+    }
+
+    fn guard(&self, obs: &ObsData, _: i64, seen: &mut Vec<u8>) -> Result<bool, String> {
+        if observed(obs) != *seen {
+            return Err("the guard was handed another observation than the decision's".into());
+        }
+        Ok(true)
+    }
+
+    fn guard_score(&self, action: &i64, _: &Vec<u8>) -> f32 {
+        if *action == 0 { self.score } else { 0.0 }
+    }
+}
+
+/// Every key of the observation row (ids, noise, mask) as bytes.
+fn observed(obs: &ObsData) -> Vec<u8> {
+    let mut out: Vec<u8> = obs.i64(ID).iter().flat_map(|v| v.to_le_bytes()).collect();
+    out.extend(obs.f32(NOISE).iter().flat_map(|v| v.to_le_bytes()));
+    out.extend(obs.bool(MASK).iter().map(|&b| b as u8));
+    out
+}
+
+/// Plays of 4 envs, 3 episodes each, in `mode` with the guard scoring action 0 at `score`: the plays, the env
+/// trials of the whole pool and the frames each env emulated.
+fn foreseen(mode: &str, score: f32) -> (Vec<Play<i64>>, u64, Vec<u64>) {
+    let cfg = Config {
+        max_episodes: Some(3),
+        episode_len: Some(6),
+        frames_per_step: 5,
+        ..Config::default()
+    };
+    let trials = cfg.trials.clone();
+    let pool = pool(4, 2, 11, cfg);
+    let actor = Foreseeing {
+        mode: mode.parse().unwrap(),
+        score,
+    };
+    pool.play(Arc::new(actor), Record::Observations).unwrap();
+    assert!(pool.wait_idle(None).unwrap());
+    let frames = (0..4).map(|e| pool.control(e).unwrap().emulated_frames()).collect();
+    let mut plays: Vec<Play<i64>> = pool.poll_plays().into_iter().map(|(_, p)| p).collect();
+    plays.sort_by_key(|p| p.job);
+    (plays, trials.load(Ordering::SeqCst), frames)
+}
+
+/// Round 35, the owner's condition for a learned guard: the emulator's look-ahead makes its training labels and is
+/// never used at play. A run in `veto:K:P` performs no trial in the env (no state saved and restored, no step tried,
+/// no random numbers redrawn: every one of those happens only inside `PoolEnv::trial`, which `plan:K:S` calls); its
+/// guard is handed exactly the decision's observation and mask; with the guard's refusals off it plays frame for
+/// frame as the plain mode; with them on it replaces decisions on the guard's word alone.
+#[test]
+fn a_learned_veto_plays_without_the_emulators_look_ahead() {
+    let (plain, plain_trials, plain_frames) = foreseen("argmax", 0.9);
+    let (quiet, quiet_trials, quiet_frames) = foreseen("argmax+veto:4:0.5", 0.0);
+    let (vetoed, vetoed_trials, vetoed_frames) = foreseen("argmax+veto:4:0.5", 0.9);
+    let (planned, planned_trials, _) = foreseen("argmax+plan:4:1", 0.0);
+    assert!(planned_trials > 0, "the counter sees the planner's trials");
+    assert!(planned.iter().flat_map(|p| &p.tried).all(|t| t.future >= 0));
+    assert_eq!((plain_trials, quiet_trials, vetoed_trials), (0, 0, 0), "a veto never tries an action in the env");
+    // Refusals off: the same actions, the same frames, every decision judged safe on the guard's word.
+    assert_eq!(quiet_frames, plain_frames);
+    for (q, p) in quiet.iter().zip(&plain) {
+        assert_eq!((q.job, &q.actions, &q.obs), (p.job, &p.actions, &p.obs));
+        assert!(q.decisions.iter().all(|d| d.foresee.is_some_and(|f| f.outcome == Foreseen::Safe && f.frames == 0)));
+        assert!(p.decisions.iter().all(|d| d.foresee.is_none()));
+        assert_eq!(q.tried.len(), q.steps());
+    }
+    // Refusals on: action 0 is replaced by the next candidate; no trial frame anywhere, every verdict the guard's.
+    let replaced = vetoed.iter().flat_map(|p| &p.decisions).filter(|d| d.foresee.unwrap().outcome == Foreseen::Replaced);
+    assert!(replaced.count() > 0, "the guard replaced decisions");
+    assert!(vetoed.iter().all(|p| !p.actions.contains(&0)), "no vetoed action was taken");
+    assert!(vetoed.iter().flat_map(|p| &p.decisions).all(|d| d.foresee.unwrap().frames == 0));
+    assert!(vetoed.iter().flat_map(|p| &p.tried).all(|t| t.future == -1));
+    assert_eq!(vetoed_frames.iter().sum::<u64>(), vetoed.iter().map(|p| 5 * p.steps() as u64).sum::<u64>(),
+               "the envs emulated the played decisions' frames and nothing else");
 }
