@@ -51,7 +51,20 @@ sword fighter, `r32_walks.Fighter`, until the room is all dead) and then their w
     like-like-32  4:0x32 W->cave (like-like, step 38): the Like-Likes; the block pushed E from ($50,$8D), the
                   stairs E of ($C8,$5D).
     vire-31       4:0x31 W->E (vire, step 37): the Vires; the E shutter.
-    vire-12       4:0x12 N->E (vire, step 50): the Vire; the block pushed E from ($50,$8D), the E door."""
+    vire-12       4:0x12 N->E (vire, step 50): the Vire; the block pushed E from ($50,$8D), the E door.
+
+Later rooms (round 32's training of Level 5 to the ending; the walks: docs/routes/d3first-walks-b.md):
+
+    tree-62       0:0x62 E->cave (ow-moblin, step 124): the floor walk to ($A0,$5D), CANDLE W where the mask offers it
+                  (the dead woods' tree, `r32b_leg.r62`), the fire waited out (three WAIT 32), W onto the stairs.
+    digdogger-24  5:0x24 E->N (boss-digdogger, step 118): RECORDER where the mask offers it, then the bomb fighter on
+                  the small one (`r32b_d5.DigFighter`'s: bombs only on it, no shield), the heart container where it
+                  lies (the room item), the N door.
+    digdogger-1c  7:0x1c W->N (boss-digdogger, step 187): RECORDER, the bomb fighter on the three small ones, the N
+                  shutter.
+
+Not ported: 5:0x66 W->N (gibdo, `r32b_d7.Fight` 52/60 in the walks): the env fighter's floor graph has no water, so
+it waits on the near shore while the last Gibdo walks the far one (0 of 12); gibdo's teacher there is the planner."""
 
 import sys
 from pathlib import Path
@@ -68,6 +81,7 @@ from r29_demos import (BOMBS, LETTER, OBJ_TYPE, OBJ_X, OBJ_Y, PARALYZED, ROOM_AL
 ROUTE = 'd3first'
 RUPEES, INV_CANDLE, HEARTS, KEYS = 0x66D, 0x65B, 0x66F, 0x66E
 GLEEOK2 = 0x43                                                    # level 4's two-headed Gleeok (r32_walks.GLEEOK2)
+DIGDOGGER_SMALL = 0x18                                            # r26_walks.DIGDOGGER_SMALL
 
 # room -> (family, d3first's route step)
 ROOMS = {'darknut-59': ('darknut', 13), 'dash-69': ('darknut', 14), 'garden-05': ('darknut', 103),
@@ -76,7 +90,8 @@ ROOMS = {'darknut-59': ('darknut', 13), 'dash-69': ('darknut', 14), 'garden-05':
          'rupees-2d': ('ow-zora', 89), 'candle-0c': ('ow-tektite', 94), 'wrap-0c': ('ow-tektite', 95),
          'zol-6b': ('zol', 8), 'zol-4b': ('zol', 10), 'like-like-32': ('like-like', 38), 'vire-31': ('vire', 37),
          'vire-12': ('vire', 50), 'scroll-29': ('ow-leever', 82), 'scroll-2a': ('ow-leever', 83),
-         'scroll-2b': ('ow-leever', 84)}
+         'scroll-2b': ('ow-leever', 84), 'tree-62': ('ow-moblin', 124), 'digdogger-24': ('boss-digdogger', 118),
+         'digdogger-1c': ('boss-digdogger', 187)}
 
 # room -> the family's ram_randomization over-ridden for it (every --hearts but own): what the route brings there.
 DRAWS = {'darknut-59': {'bombs_share': 0.0},
@@ -361,6 +376,71 @@ def scroll_rule():
     return rule
 
 
+def burn(letter, waits=3):
+    """CANDLE toward `letter` where the mask offers it (the route's tree, from its stand), then `waits` WAIT 32
+    while the fire burns (walking into it costs half a heart)."""
+    seen = {'waits': 0}
+
+    def stage(_ram, ok):
+        if not seen.get('fired'):
+            if ok(f'CANDLE {letter}'):
+                seen['fired'] = True
+                return f'CANDLE {letter}'
+            return 'WAIT 4'
+        if seen['waits'] < waits:
+            seen['waits'] += 1
+            return 'WAIT 32'
+        return None
+    return stage
+
+
+def room_item(bot, done):
+    """To the room item (object slot $13) where it lies now (a key a monster carried drops where it died; a boss's
+    heart container), until `done(ram)`; done at once when there is none or it lies off the floor."""
+    def stage(ram, ok):
+        if done(ram):
+            return None
+        ix, iy = ram[OBJ_X + r32_walks.ROOM_ITEM], ram[OBJ_Y + r32_walks.ROOM_ITEM]
+        spots = [n for n in bot.graph if abs(n[0] - ix) < 9 and abs(n[1] + 3 - iy) < 9] if iy < 0xF0 else []
+        if not spots:
+            return None
+        node = min(spots, key=lambda n: abs(n[0] - ram[OBJ_X]) + abs(n[1] - ram[OBJ_Y]))
+        if (ram[OBJ_X], ram[OBJ_Y]) == node:
+            return 'WAIT 4'
+        return action(bot, lambda: bot.toward({node}), ok)
+    return stage
+
+
+def dig_fighter():
+    """The env bomb fighter (`bomb_fighter`) whose bombs go to the small Digdoggers (`r32b_d5.DigFighter`: no
+    shield)."""
+    class EnvDig(bomb_fighter()):
+        bomb_types = (DIGDOGGER_SMALL,)
+    return EnvDig
+
+
+def digdogger_rule(way_of):
+    """RECORDER where the mask offers it (offered while the big one has not heard it: he splits), then the bomb
+    fighter until the room is all dead, then `way_of(bot)`."""
+    state = {}
+    fight = fight_rule(dig_fighter, way_of)
+
+    def rule(ram, ok):
+        if not state.get('played') and ok('RECORDER'):
+            state['played'] = True
+            return 'RECORDER'
+        return fight(ram, ok)
+    return rule
+
+
+def heart_item_way(door):
+    """A boss room's end where the heart container lies wherever it appeared: the room item, then the N door."""
+    def way(bot):
+        got = taken(HEARTS, lambda before, now: (now >> 4) > (before >> 4))
+        return Way(room_item(bot, got), go(bot, door, 'N'), out('N'))
+    return way
+
+
 RULES = {
     'darknut-59': lambda: fight_rule(bomb_fighter, lambda bot: Way(go(bot, (0x78, 0xBD), 'S'), out('S'))),
     'dash-69': lambda: walk_rule(lambda bot: Way(go(bot, (0xC8, 0x8D), 'E'), out('E'))),
@@ -381,6 +461,9 @@ RULES = {
     'scroll-29': scroll_rule,
     'scroll-2a': scroll_rule,
     'scroll-2b': scroll_rule,
+    'tree-62': lambda: walk_rule(lambda bot: Way(go(bot, (0xA0, 0x5D), 'W'), burn('W'), out('W'))),
+    'digdogger-24': lambda: digdogger_rule(heart_item_way((0x78, 0x5D))),
+    'digdogger-1c': lambda: digdogger_rule(lambda bot: Way(go(bot, (0x78, 0x5D), 'N'), out('N'))),
 }
 
 

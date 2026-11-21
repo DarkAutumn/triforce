@@ -1351,3 +1351,145 @@ With the three route runs the leg from Dungeon 1 to Level 5 arrives in 1000 of 1
 goriya and stalfos-keese-gel were measured each alone against the same team; together they are in the final batch
 (`r32d1-final`: `d3`, `post-d4`, `d1`, `post-d1`, `d2`, `d7`, 1000 runs each), queued: it also checks goriya's
 Dungeon 2 (must stay near 99.9%) and Dungeon 7, and stalfos-keese-gel's 3:0x4a.
+
+## 6. The per-route tables for the whole route, and the late families (boss-digdogger, gibdo, ow-moblin)
+
+Branch `r32-t-late` (from `r32-steps` 44fe335c, `r32-base2` merged), version 2.0.0.0, today's team as in §5 (main's
+promoted runs and round 30's five, stamped).
+
+### 6.1 The tables' refit
+
+`triforce/heart_value.d3first.json` and `triforce/chain_hp.d3first.json` refitted from 37 `d3first` chains of
+today's team: the first baseline's (`r32base-1k-*`, `r32base-plan-*`), the prep's (`r32prep-*`), the second
+baseline's (`r32base2-1k-*`, `r32base2-plan-*`) and three new ones (`python -m triforce.heart_value <files> --route
+d3first`, the same for `chain_hp`):
+
+- **the leg to Level 7** (steps 156-173 rested on one run, the only one past 0:0x3c): the planner from Level 2's exit
+  (`0_3cc_0` → step 174, 300 runs) passes 0:0x3c in **6** runs (it plays the models' choices, and the models do not
+  turn E before the recorder), so the leg's data is the models' from the recorder's landing (`0_45r_0`, step 156 →
+  step 174, 1000 runs: 997 reach Level 7). Each step of the leg now has about 1000 visits.
+- the leg to Level 2 again on new seeds (`0_0bc_0` → step 145, 1000 runs, seeds 5000-5999).
+
+Coverage: **every clip-way step 0-303 has a curve from at least 20 visits**. The plain ways have none: no chain
+plays clips off, so `fit_way` gives no curve to a way none of whose steps up to the next triforce has a visit, and
+`env::heart_value` prices hearts there by the plain health terms (the fit's design since round 26). Those are the
+stretches' plain ways 43-46, 159-162, 198-201 and **272, 285, 290**, which §5.4 read as second visits without their
+own record: they are Dungeon 9's one-room plain twins (9:0x07 cave→S, 9:0x20 cave→N, 9:0x20 N→cave on the plain
+way). `chain_hp.d3first.json` holds 223 rooms (93 before). The test
+(`test_the_d3first_table_prices_the_steps_its_chains_played`) checks the coverage. A few values (V at hearts in /
+at full): 5:0x66 W→N 0.31 at 2 hearts, 0.75 at 4, 0.90 at 7; 5:0x24 0.76 / 0.87 / 0.95; 0:0x62 E→cave 0.17 / 0.59 /
+0.97 (of 8); 0:0x3c cave→recorder 0.13 at full (Level 7's 4.7% behind it).
+
+Every chain of the fit predates the route's grants (`r32-steps` ef726772: Dungeon 5's entrance tops the bag up to 8
+bombs; 8:0x4c's rupees): Dungeon 5's and Dungeon 8's rows price the old bag and purse until the next refit.
+
+### 6.2 The three trainings and the code they are judged on
+
+One seed each (32), 489 iterations, on `d3first`'s states only (`state_routes: [d3first]`, a quarter of the episodes
+from harvested handoffs at the chains' hearts, the whole-route tables of §6.1, `chain_hp` 1.0, clips on), each with
+demonstrations of the planner (`temperature:0.5+relax:16+plan:16:1`, 20 a state at the handoffs' hearts) and, where
+a rule wins more than the planner, the rule's rows (`r32p_rules.py`):
+
+| Family | Run (from) | Rooms | Demonstrations | Training's own measure |
+|---|---|---|---|---|
+| boss-digdogger | `r32late-dig` (`r76-b`) | 5:0x24, 7:0x1c, 7:0x39 | planner 15636 rows (7:0x1c 19-20 of 20 a state); rule `digdogger-24` 18287 rows (64/90 at the chains' hearts) | 95% over 180 episodes, worst 5:0x24 92%; -0.9 hearts an episode |
+| gibdo | `r32late-gibdo` (`r30-gibdo-s91`) | 5:0x65, 5:0x66 W→N, 5:0x47, 5:0x26, 5:0x14 | planner 13409 rows (5:0x66 60/60) | 100% over 480, worst 5:0x66 99%; -0.08 hearts |
+| ow-moblin | `r32late-moblin` (`r79t5-moblin`) | 0:0x73, 0x63, the tree 0:0x62, 0x52, 0x51, 0:0x3d | rule `tree-62` 6421 rows (85/90: the blue candle facing W); planner 20744 rows (0:0x62 34/60) | 100% over 1350 (both routes' states), worst 0:0x5c 93% (a d2first room) |
+
+The trainings ran on the code before the route's grants (`r32-steps` 44fe335c with `r32-base2` and the tables).
+Everything below was measured after `r32-steps` was merged: the selections on its a711de21 (the bag of 8 bombs
+granted at Dungeon 5's entrance, 8:0x4c's rupees, the whole-route tables), the paired batch of §6.5 on its 71441669
+(the same plus the cutoff: a family's `promoted.d3first` plays steps 0-205, its default run from the magic sword's
+cave on; every room of these three families judged here is before step 205, so the cutoff changes none of them).
+
+### 6.3 The selections: each family's sub-segment
+
+`select-checkpoint FAMILY RUN --route d3first --from d3first_<state> --stop-at step:N`, the run's last three numbered
+checkpoints and `last` against today's promoted run, screened on seeds 2000-2999 and confirmed on 3000-3999 (1000
+runs each, models alone, clips on). The numbers are the confirmation's; paired differences with their standard
+error.
+
+| Family | Sub-segment (why) | Chosen | Confirmed | Today's run | Paired difference |
+|---|---|---|---|---|---|
+| boss-digdogger | `5_65w_0` → step 120 (Dungeon 5 past the Olive Garden: from Level 5's start ~40 runs reach 5:0x24) | `last` (it001447 won the screen, -2.6 ± 0.8 against `last` confirmed) | **81.6%** ± 1.2 | 67.2% (`r76-b`) | **+14.4 ± 1.2** |
+| boss-digdogger | `7_1cw_0` → step 194 (Dungeon 7 from 0x1c: goriya's 0x1b kills 68% before it) | `last` kept (it001387 confirmed +0.2 ± 2.2 against it: noise) | **49.1%** ± 1.6 | 45.6% | +3.5 ± 2.2 |
+| gibdo | `5_65w_0` → step 120 | `last` (it001848 won the screen, -0.5 ± 1.8 confirmed) | **78.0%** ± 1.3 | 67.2% (`r30-gibdo-s91`) | **+10.8 ± 2.0** |
+| ow-moblin | `0_73e_v2_0` → step 145 (the leg to Level 2 past ow-leever's 0x0b turn) | it006341 (+0.5 ± 0.6 against `last`; applied) | **98.6%** ± 0.4 | 64.1% (`r79t5-moblin`) | **+34.5 ± 1.6** |
+
+The families' rooms in the confirmations (runs lost per 1000 entering; hearts lost a visit):
+
+- **boss-digdogger, 5:0x24**: 237 → **74** (0.88 → -0.38 hearts a visit: the new run picks up more than it loses),
+  bombs 2.15 → 2.48 a visit, none cheated. 7:0x1c (Link enters it with 9.3 hearts from this start): 10 → 3 (1.44 →
+  1.02 hearts a visit, bombs 2.96 → 2.46). The sub-segment is not Digdogger's to win: wallmaster's 7:0x0d grabs Link
+  on 702 of 1260 visits (713 of 1227 with today's run) and sends him to Level 7's entrance, and 505 of the 509 runs
+  lost are lost on that second pass through goriya's wood-sword rooms (7:0x1b 292 per 1000 entering, 0x1a 191, 0x18
+  138); what the new run adds is the hearts it leaves for that pass.
+- **gibdo, Dungeon 5 past 0x65**: 5:0x66 W→N 25 → 17 (1.51 → 0.95 hearts a visit), 0x47 31 → 13, 0x37 37 → 9,
+  0x27 9 → 5; Link reaches 5:0x24 with 4.69 hearts against 3.88, and Digdogger (today's run in this selection) loses
+  165 there against 237.
+- **ow-moblin, the tree**: 0:0x62 E→cave 334 → **12** (1.26 → 0.86 hearts a visit), 0:0x3d cave→S 9 → 0, 0:0x4c 21
+  → 1, and Link arrives at Level 2 with 7.45 hearts against 4.91.
+
+**Promoted for `d3first`** (`triforce promote FAMILY RUN --route d3first`): `boss-digdogger/r32late-dig`,
+`gibdo/r32late-gibdo`, `ow-moblin/r32late-moblin` (it006341). Each beats today's run beyond noise on its
+sub-segment; boss-digdogger's second sub-segment is ahead within noise (+1.6 standard errors), not worse. `d2first`
+keeps its runs.
+
+### 6.4 The full segments: the route's team against today's, paired
+
+One `eval-batch` (code: `r32-steps` 71441669 merged), seeds 4000-4999 (no selection or table used them), 1000 runs
+a chain, models alone, clips on; "today" pins the three families to their `promoted` runs (`--checkpoint
+FAMILY=PATH`: both parts), "route" plays `d3first`'s team (the three `promoted.d3first` up to the magic sword).
+
+| Segment | Today | Route's team | Paired difference | The families' rooms (lost per 1000 entering, today → route) |
+|---|---|---|---|---|
+| Dungeon 5 (`5_76s_0` → step 120) | 8.6% ± 0.9 | **23.0%** ± 1.3 | **+14.4 ± 1.6** | 5:0x24 479 → **164**; 5:0x66 W→N 336 → **157**; 0x47 167 → 64; 0x37 125 → 59 |
+| Dungeon 7 (`7_79s_0` → step 194) | 3.7% ± 0.6 | **5.8%** ± 0.7 | **+2.1 ± 0.9** | 7:0x1c 353 → **156** (1.04 → 0.17 hearts a visit); 7:0x39 4 → 5 |
+| the leg to Level 2 (`0_0bc_0` → step 145) | 35.0% ± 1.5 | **55.7%** ± 1.6 | **+20.7 ± 1.3** | 0:0x62 E→cave 339 → **28**; 0:0x3d cave→S 19 → 0; 0:0x4c 42 → 5 |
+| ow-moblin's other legs before the cutoff: post-d3 (`0_74c_0` → step 31), Level 2 → Level 7 from the recorder's landing (`0_45r_0` → step 174), post-d7 (`0_42c_0` → step 211) | 100.0%, 99.8%, 99.5% | 100.0%, 99.8%, 99.8% | 0, 0, +0.3 ± 0.3 | 0:0x73/0x63 (25-26), 0:0x53/0x52/0x42 (171-173), 0:0x42/0x52/0x51 (194-196): nothing lost on either |
+
+Today's Dungeon 5 is 8.6% on these seeds against the 6.0% the grant's own measure gave on other seeds (2.6 points,
+about two standard errors of an unpaired difference). **Bombs in Dungeon 5 with the granted bag** (a visit, used /
+cheated): the Olive Garden 7.73 / 5.92 → 7.77 / 5.94 (darknut's, not these families'), 5:0x66 S→W and 0x65 the
+walls' 1.0 / 1.0 and 1.2 / 1.2 on both, **5:0x24 1.64 / 0.00 → 2.13 / 0.01**: the new Digdogger throws half a bomb
+more a visit, from the bag it carries, and loses a third as many runs.
+
+**Nothing else got worse beyond noise.** The rooms the three families do not play move within their noise on the
+same seeds: the Olive Garden 489 → 459 per 1000 (Link enters it the same: gibdo's first three rooms play the same),
+5:0x64 215 → 207, 7:0x1b 682 → 668, 7:0x0d 86 → 88, 7:0x2a 196 → 183; the largest move against the route's team,
+7:0x38 10 → 24 runs (and 7:0x18 34 → 43), is one of some forty rooms compared and 14 runs, about two of its standard
+errors. The leg's other losses are the same runs on both: ow-leever's turn at 0:0x0b (174 bounce into 0:0x1b, 93
+die in 0x0b) and runs that walk back into Level 5 from 0x0b and die there (about 130 on both).
+
+### 6.5 boss-aquamentus (7:0x2a) and wallmaster (7:0x0d): not trained here
+
+No `d3first` goriya run exists yet (no route run promoted for goriya; its Dungeon 7 training is still owed), so
+Dungeon 7 was measured only with the route's team above. What the two rooms cost:
+
+- **wallmaster's 7:0x0d grabs Link and sends him to Level 7's entrance**, and with the wood sword a second pass
+  through goriya's rooms is fatal: in the full Dungeon 7 the grab takes 133 of 228 visits (123 runs) and 1 of those
+  123 runs wins; from `7_1cw_0` (Link at 0x1c with 9.3 hearts, goriya's 0x1b behind him) it takes 702 of 1260 visits
+  and 505 of the 509 runs lost there are lost on the second pass (§6.3). The room's own deaths are few (88 per 1000
+  entering), so the chains' per-room ledger understates it; its "wrong exits" are the grabs.
+- **boss-aquamentus's 7:0x2a** loses 183 per 1000 entering (13 of 71) with the route's team, 54 per 1000 from
+  `7_1cw_0`'s fuller hearts: hearts, as §5.2 read.
+
+Today both are small in runs because goriya's 7:0x1b (668 per 1000 entering) lets only about 270 runs of 1000 reach
+0x1c. Once a route goriya passes 0x1b, **wallmaster is worth a round** (the next one after goriya's, `d3first`
+states only: more than half of the runs that reach 0x0d are grabbed and none of them survive the walk back with the
+wood sword); boss-aquamentus is not yet (a fifth of the few that reach it; it gains from the hearts a better goriya
+leaves, as §5.4 expected). The tracks (3/3 each), handoffs (7:0x2a 318, 7:0x0d 466) and states are ready.
+
+### 6.6 Verdicts
+
+| Family | Before (today's run) | After (`promoted.d3first`) | Verdict |
+|---|---|---|---|
+| boss-digdogger `r32late-dig` | 5:0x24 479 per 1000 entering, 7:0x1c 353 (full segments) | **164**, **156** | promoted: Dungeon 5 sub-segment +14.4 ± 1.2, Dungeon 7 sub-segment +3.5 ± 2.2 |
+| gibdo `r32late-gibdo` | 5:0x66 W→N 336, 0x47 167, 0x37 125 | **157**, 64, 59 | promoted: sub-segment +10.8 ± 2.0 |
+| ow-moblin `r32late-moblin` (it006341) | 0:0x62 E→cave 339 | **28** | promoted: sub-segment +34.5 ± 1.6; its other legs unchanged |
+
+With the route's team: **Dungeon 5 23.0%** (today 8.6%), **Dungeon 7 5.8%** (3.7%), **the leg to Level 2 55.7%**
+(35.0%). Still at or near zero, and whose: Dungeon 7 (goriya's 7:0x1b, 668 per 1000 entering, then wallmaster's
+grab), the Olive Garden (5:0x05, 459 per 1000: darknut with the wood sword, even with the bag), ow-leever's turn at
+0:0x0b (267 of 1000 runs of the leg) and, outside this section, ow-octorok's recorder turn out of Level 2 and
+Dungeons 3 and 4 (§5.3).
