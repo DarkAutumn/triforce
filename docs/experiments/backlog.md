@@ -14,29 +14,34 @@ the gap list of what must be walked in the game first, where the documents disag
 of work) and the documents it indexes (`d7.md`, `d6.md`, `d8.md`, `d9.md`, `late-monsters.md`, `late-mechanics.md`).
 The owner's decisions of Nov 16 are in `docs/decisions.md` ("The rest of the game").
 
-### `d3first`, the main route (2.0.0.1, Nov 21): what loses it
+### `d3first`, the main route (2.0.0.2, Nov 21): what loses it
 
-round34.md (Summary, "The chains of record", "The landing"); 2.0.0.0's round32.md §11-§13. The golden path from power
-on ends the game (three of three, 51-71 runs); single runs from the start are lost in the wood-sword dungeons: of
-1000 (`r34land-1k-full`), 227 take Dungeon 3's triforce, 28 Dungeon 4's, 3 Dungeon 5's, 1 the magic sword. In the
-order they cost the route (the chains of record `r34land-1k`, segment rates from each entrance):
+round34.md (Summary, "The chains of record", "The landing", "2.0.0.2"); 2.0.0.0's round32.md §11-§13. The golden
+path from power on ends the game; single runs from the start are lost in the wood-sword dungeons: of 1000
+(`r35land-1k-full`), 235 take Dungeon 3's triforce, 45 Dungeon 4's, 12 Dungeon 5's, 2 the magic sword, 1 Dungeon 6's.
+In the order they cost the route (the chains of record `r35land-1k` for `d3`, `d5`, `d7`, `r34land-1k` for the
+rest; segment rates from each entrance):
 
-- [ ] **Dungeon 3, 18.0%** (was 12.6%; zol `r34d3-zol-s341`, stalfos-keese-gel `r34d3-skg-s341`, darknut
-  `r34d3-dark-s341` `@d3first`): Manhandla 553 per 1000 entering (1.56 hearts in: the hearts Link brings), the last
-  pass 3:0x5b 255 (1.58), 0x69 142. `r34d3-dlp-s353` takes the last pass (115) but loses the Garden; darknut
-  `r34d5-dg-s362` (`d3` +2.2 to +5.2, `d5` +3.3 to +6.7 against s341 on three seed sets) is the next release's.
+- [ ] **Dungeon 3, 23.2%** (2.0.0.1 18.0%; zol `r34d3-zol-s341`, stalfos-keese-gel `r34d3-skg-s341`, darknut
+  `r34d5-dg-s362` `@d3first`): Manhandla 527 per 1000 entering (1.62 hearts in: the hearts Link brings), 0x69 126,
+  the last pass 3:0x5b 117 (1.60). From the start the D3 triforce is 23.5%, within noise of 2.0.0.1's 22.7%: the
+  runs the last pass saves die at Manhandla.
+- [x] **darknut `r34d5-dg-s362` (the Olive Garden) landed in 2.0.0.2**: `d3` +5.2 ± 1.8, `d5` +5.6 ± 2.0 with
+  boss-digdogger below (against `r34land-1k`).
 - [ ] **Dungeon 4's Gleeok, 18.5%** (was 6.2%; vire `r34d4-vire-s1`, like-like `r34d4-like`, boss-gleeok
   `r34d4-gleeok4-s1-it2877`): 736 per 1000 entering 4:0x13 die (700 reach him with 1.81 hearts; the planner brings
   3.41 and takes half the hits from the same places, round34.md Dungeon 4 §4.1).
 - [x] **`d3first_4_71s_*` hold fewer bombs than runs bring**: rebuilt from chain arrivals (bombs 5/1/7, 2 keys;
   `r32c_models.py --goal-step`); the `d4` segment's cheated wall bombs 1.27 → 0.30 a run.
-- [ ] **The Olive Garden (5:0x05, darknut `@d3first`), Dungeon 5 27.4%** (was 24.0%): 360 of 1000 `d5` runs die
-  there (6.49 hearts in; the planner 33); then 0x64 156 per 1000 entering, Digdogger 5:0x24 170, 0x37 151.
-  `r34d5-dg-s362` waits for the next release (above).
-- [x] **Dungeon 7 with the wood sword, 38.7%** (was 9.4%): the bag kept for 7:0x1b (route data) and wallmaster
-  `r34d7-wall-s3` for 0x0d's grab. Left: Digdogger's 7:0x1c 212 per 1000 entering (3.48 hearts in; boss-digdogger
-  `r34d7b-dig-s1` waits for the next release), 0x1b 153 (4.49), goriya's hearts on the crossings before it (about 6
-  of 11 against the planner's 1.8: two rounds of training on the planner's rows did not take them).
+- [ ] **The Olive Garden (5:0x05, darknut `@d3first`), Dungeon 5 33.0%** (2.0.0.1 27.4%): 343 of 1000 `d5` runs die
+  there (6.49 hearts in; the planner 33-50: the touches fewer, not gone); then 0x64 159 per 1000 entering, gibdo's
+  0x66 157, Digdogger 5:0x24 101, 0x37 91.
+- [x] **boss-digdogger `r34d7b-dig-s1` (Digdogger at the route's hearts) landed in 2.0.0.2**: 5:0x24 170 → 101
+  per 1000 entering, 7:0x1c 212 → 154; `d7` +3.6 ± 2.0.
+- [x] **Dungeon 7 with the wood sword, 42.3%** (2.0.0.1 38.7%, 2.0.0.0 9.4%): the bag kept for 7:0x1b (route data),
+  wallmaster `r34d7-wall-s3` for 0x0d's grab, boss-digdogger above. Left: 7:0x1b 148 per 1000 entering (4.57
+  hearts in), Digdogger's 0x1c 154 (3.46), goriya's hearts on the crossings before them (about 6 of 11 against the
+  planner's 1.8: two rounds of training on the planner's rows did not take them).
 - [x] **Dungeon 1's Aquamentus** (`r34d7-aqua-s1`): `d1` 89.6% → 92.7%; 1:0x35 33 per 1000 entering, goriya's 1:0x44 35.
 - [ ] **like-like has two lines** (`r33-like-s83` the default for `d2first`'s 9:0x56 and every route's late rooms,
   `r34d4-like` the route run for `d3first`'s Dungeon 4): one like-like run for both routes, a joint continuation

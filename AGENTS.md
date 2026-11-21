@@ -570,9 +570,10 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 
 ## Versioning (Lee, Nov 11)
 
-- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `2.0.0.1`: round 34's `d3first` route runs,
-  Dungeon 4's entrance states, Dungeon 7's bag reserve and the training-only stall ending; runs stamped 2.0.0.0 load
-  as they are, the first three numbers being equal; 2.0.0.0 was the `d3first` route, the main
+- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `2.0.0.2`: round 34's two late `d3first`
+  route runs, darknut `r34d5-dg-s362` and boss-digdogger `r34d7b-dig-s1`; 2.0.0.1 was round 34's other `d3first`
+  route runs, Dungeon 4's entrance states, Dungeon 7's bag reserve and the training-only stall ending; runs stamped
+  2.0.0.0 load as they are, the first three numbers being equal; 2.0.0.0 was the `d3first` route, the main
   route since its golden path reached the ending, with round 33's `d2first` runs; 1.9.0.1 was rounds 30 and 31 on
   `d2first` as phase IX changed it; 1.9.0.0 nine dungeons, rounds 28 and 29's Dungeons 8 and 9 to the end of the
   game; it carries round 26's schema 6 observation of 1.5.1.0, the one input change for Dungeon 7 to Ganon,

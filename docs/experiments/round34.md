@@ -1001,3 +1001,65 @@ rooms (6:0x3a 31, 0x29 11, 0x38 11); it cheats 4.44 bag and 5.07 wall bombs, 4.2
   153,308 frames).
 - Run stamps: the eight runs carry 2.0.0.0; the code is 2.0.0.1 and loads them as they are (the first three numbers
   agree), so none was restamped.
+
+## 2.0.0.2: the two runs that qualified after the landing
+
+The two route runs that qualified after 2.0.0.1's chains of record had played their segments, promoted `--route
+d3first` beside the 2.0.0.1 team, nothing else changed (no code, no route data, no entrance state: `VERSION` and
+`pyproject.toml` only, so no identity check is owed; `d2first` takes no `promoted.d3first` pointer):
+
+- **darknut `r34d5-dg-s362`** (checkpoint it012716; Dungeon 3's "darknut: the Olive Garden" above). The cause:
+  in the Olive Garden (5:0x05 from E) the model stands, bombs and swings where the planner does and is hit about
+  three times as often at every kind of decision, most of all while it bombs the six; the planner's foresight
+  replaces about four decisions a visit. The run continues `r34d3-dlp-s353` on harvested starts into every darknut
+  room (the Garden a third, from chain arrivals) with the planner's rows of the Garden (`--demo-coeff 0.05`): the
+  touches fewer, not gone. Against the s341 team: `d5` +3.3 ± 2.0, +6.7 ± 2.0, +5.1 ± 1.9 and `d3` +5.2 ± 1.8,
+  +4.8 ± 1.7, +2.2 ± 1.7 on seeds 0-999, 3000-3999, 4000-4999.
+- **boss-digdogger `r34d7b-dig-s1`** (Dungeon 7's second pass §9-10). The cause: Digdogger's 0x1c dies of the
+  hearts the route hands it (3.5; 59 of 62 at none, 1 of 91 at six or more), which the crossings before it lose by
+  play the observation does not show the policy (§6-8). The run continues `r32late-dig` on 0x1c's handoffs at
+  the route's hearts (half the resets) with the planner's rows from them: `d5` +3.4 ± 0.6 and +1.7 ± 0.6 (Dungeon
+  5's Digdogger, 5:0x24), `d7` -0.2 and +1.8 ± 1.9.
+
+**The chains of record `r35land-1k`** (seeds 0-999, models alone, clips on, each segment from its entrance to its stop
+as `r34land-1k`, paired by seed with it):
+
+| Segment | 2.0.0.1 (`r34land-1k`) | 2.0.0.2 (`r35land-1k`) | Paired | Where it is lost now (runs per 1000 entering, hearts in; 2.0.0.1's) |
+|---|---:|---:|---:|---|
+| `d3` (`3_7cs_0` → 24) | 18.0% | **23.2%** | **+5.2 ± 1.8** | Manhandla 527 (1.62; 553), the last pass 3:0x5b 117 (1.60; 255), 0x69 126 (142) |
+| `d5` (`5_76s_0` → 120) | 27.4% | **33.0%** | **+5.6 ± 2.0** | the Olive Garden 343 (6.49; 360), 0x64 159, gibdo's 0x66 157, 0x37 91 (151), Digdogger 5:0x24 101 (170) |
+| `d7` (`7_79s_0` → 194) | 38.7% | 42.3% | +3.6 ± 2.0 | Digdogger 7:0x1c 154 (3.46; 212), 0x1b 148 (4.57; 153), Aquamentus 7:0x2a 86 |
+
+`d3` is run for run the D3 trainer's confirmation of s362 on these seeds (boss-digdogger plays no Dungeon 3 room).
+`d5` splits as the two runs' rooms say: s362 alone (the D3 trainer's chain, the same seeds) 30.7%, 634 runs of 1000
+identical to it (633 never reach 5:0x24), and boss-digdogger adds +2.3 ± 0.7 there (5:0x24's deaths 163 → 101 per
+1000 entering).
+`d7` gains at 0x1c (212 → 154) and is not worse; its 2000-step wallmaster stalls are 6 (8). No segment is worse;
+`d3` and `d5` are better beyond noise. `d4`, `d1`, `post-d1` and `d8` play neither run's rooms: their chains stand.
+
+**The full route from the game start** (1000 single runs, seeds 0-999, paired with `r34land-1k-full`):
+
+| Milestone | 2.0.0.1 | 2.0.0.2 | Paired | Entering the dungeon (hearts, bombs) |
+|---|---:|---:|---:|---|
+| D3 triforce | 22.7% | 23.5% | +0.8 ± 1.9 | Level 3: 2.94 of 3, 0 bombs |
+| D4 triforce | 2.8% | 4.5% | +1.7 ± 0.8 | Level 4 (235 runs): 3.77 of 4, 4.28 bombs, 2 keys |
+| D1 triforce | 2.3% | 3.8% | +1.5 ± 0.8 | Level 1 (45): 4.58 of 5, 0.56 bombs |
+| D5 triforce | 0.3% (3) | **1.2% (12)** | **+0.9 ± 0.4** | Level 5 (38): 5.42 of 7, 2.03 bombs + the bag's 5.97 |
+| D2 triforce | 0.3% (3) | 1.2% (12) | +0.9 ± 0.4 | Level 2 (12): 7.21 of 10 |
+| D7 triforce, the magic sword | 0.1% (1) | 0.2% (2) | +0.1 ± 0.2 | Level 7 (12): 9.92 of 11, 7.08 bombs |
+| D6 triforce | 0 | 0.1% (1) | | Level 6 (2): 11.75 of 12 |
+| D8 triforce, the ending | 0 | 0 | | Level 8 (1): 12 of 13 |
+
+Where single runs end: Manhandla 255 (490 entering, 1.67 hearts; 2.0.0.1 226 of 454), Gleeok 83 (128 entering,
+1.77), the last pass 79 (129), 3:0x59 77, 0x49 68, 0x69 57, the equipment room 41. Cheated a run: 0.74 wall bombs
+(3:0x5b 0.51), 0.20 of the bag, 0.48 rupees, no key (2.0.0.1: 0.65, 0.13, 0.27, 0). From the start the D3 triforce is
+within noise of 2.0.0.1's: the last pass loses 122 per 1000 entering against 197, and the runs it saves die at
+Manhandla (490 reach him against 454, with 1.67 hearts against 1.61) and in 0x59 and 0x49; `d3`'s +5.2 is from its
+entrance state (2.0.0.1's full route was 4.7 points above its `d3`, this one 0.3). Dungeon 5 is passed by four times
+as many single runs, and for the first time one takes Dungeon 6's triforce.
+
+**The planner beside** PLANNER
+
+- The golden path from console power on, models alone, three paths: GOLDEN
+- The suites on the landing code: SUITES
+- Run stamps: both runs carry 2.0.0.0 and load as they are under 2.0.0.2 (the first three numbers agree).

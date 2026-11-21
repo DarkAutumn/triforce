@@ -3278,3 +3278,14 @@ and 0x29's walls need), so a run with 2 or more crosses to the key door. routes.
 - **Late runs wait:** a run that qualifies after the chains of record have played its segments goes into the next
   release, so no chain is played twice: darknut `r34d5-dg-s362` and boss-digdogger `r34d7b-dig-s1`.
 - The numbers: round34.md "The chains of record" and "The landing".
+
+## 2026-11-21 — 2.0.0.2: the two late runs land (the lead, the owner being away)
+
+- **A `REV`**: two route runs (`promoted.d3first`), darknut `r34d5-dg-s362` (it012716, the Olive Garden) and
+  boss-digdogger `r34d7b-dig-s1` (Digdogger at the route's hearts), the two that qualified after 2.0.0.1's chains
+  had played. No code, route data or state changed (`VERSION` and `pyproject.toml` only), so no identity check;
+  both runs carry 2.0.0.0 and load as they are.
+- **The gate:** the two runs together beside the 2.0.0.1 team on the record's seeds (0-999), each segment they play
+  paired with `r34land-1k`: `d3` and `d5` not worse beyond noise and one better, `d7` not worse. Passed: `d3` +5.2 ±
+  1.8, `d5` +5.6 ± 2.0, `d7` +3.6 ± 2.0.
+- The numbers: round34.md "2.0.0.2".
