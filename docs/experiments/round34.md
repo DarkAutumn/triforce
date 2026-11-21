@@ -71,3 +71,20 @@ triforce eval-batch r34d3-ledger --parallel 10 \
   --chain "harvest-d3: --route d3first --clips on --from 3_7cs_0 --stop-at step:24 --runs 1000 --first-seed 10000 --act model --harvest --output target/r34/harvest-d3.jsonl"
 python scripts/experiments/r34d3_ledger.py target/r56-chains/r32land-1k-d3.jsonl target/r34/plan300-d3.jsonl --last 23
 ```
+
+### 4. The Olive Garden (5:0x05 from E, darknut): what the planner does with the bag
+
+`d5` (`5_76s_0` → step 120): the record's models (`r32land-1k-d5`, seeds 0-999) against the planner on the same start
+and seeds 0-299 (`target/r34/plan300-d5.jsonl`, the same team): **82.0%** ± 2.2 against 24.0%. In the Garden
+(the route grants the bag of 8 at Level 5's entrance; a visit's means):
+
+| | Visits | Lost (per 1000) | Hearts in | Hearts lost | Bombs placed | Bomb hits | Kills | Bombs a kill | Hits taken | Sword hits dealt | Decisions |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| models | 1000 | 435 | 6.49 | 4.17 | 7.75 | 6.71 | 4.38 | 1.77 | 2.97 | 24.4 | 183 |
+| planner | 300 | 10 (33) | 6.89 | 1.21 | 7.94 | 7.04 | 5.85 | 1.36 | 1.15 | 30.8 | 215 |
+
+Both throw the whole bag and land about seven bombs; the difference is the sword and the touches: the planner takes
+1.15 hits a visit against 2.97 and finishes the Darknuts with the sword (30.8 hits dealt against 24.4: 5.85 kills
+against 4.38). Entering at full hearts (7) the models lose 39% of their runs there, the planner 2%. A lost model
+run has placed 7.5 bombs and killed 2.4 Darknuts when it dies. So the Garden is no question of bombs: it is the
+foresight (the planner's replaced decisions: it steps out of a touch) that the model lacks, as in 0x5b's last pass.
