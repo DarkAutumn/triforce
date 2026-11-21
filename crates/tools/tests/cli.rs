@@ -412,7 +412,8 @@ fn movie_import_writes_a_movie_that_plays_to_the_recorded_end() {
 /// build still plays on this one to the states it recorded.  It holds a power-on start with every optional
 /// stream, a state-file start, a golden path from power on to the Dungeon 3 triforce, and the two routes' golden
 /// paths from power on to the ending (`v1-golden-ending`: `d2first`, 1.9.0.0; `v2-golden-ending`: `d3first`,
-/// 2.0.0.0, `REPLAY_VERSION` 1).  A failure here means replays people kept no longer replay: read the AGENTS.md
+/// 2.0.0.3, the route granting no bombs, `REPLAY_VERSION` 1).  A failure here means replays people kept no longer
+/// replay: read the AGENTS.md
 /// rule before touching the files.
 #[test]
 fn the_replay_corpus_still_verifies() {
@@ -454,7 +455,7 @@ fn the_replay_corpus_still_verifies() {
         assert!(state.contains(line), "{line}: {state}");
     }
     let ending = info("v2-golden-ending");
-    for line in ["version:  1", "ending:   win", "segments: 9", "states:   1 END, 8 CHECKPOINT", "triforce: 2.0.0.0",
+    for line in ["version:  1", "ending:   win", "segments: 9", "states:   1 END, 8 CHECKPOINT", "triforce: 2.0.0.3",
                  "the game ended in (level 9, room 0x32)"] {
         assert!(ending.contains(line), "{line}: {ending}");
     }

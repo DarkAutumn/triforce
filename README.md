@@ -35,20 +35,23 @@ needed it, a family has a second run for that route's part (before the magic swo
 
 ## How well it plays
 
-**`d3first`** (2.0.0.2, `docs/experiments/round34.md`; 2.0.0.0's `round32.md`): a golden path (games race from
-triforce to triforce, each segment's first winner continuing, stitched into one replay) from console power on, the
-models alone, reaches the ending; three of three races did, in 50, 105 and 53 runs (176,495 frames for the first:
-about 49 minutes of game). Single runs are the hard part: the wood sword makes Dungeons 3, 4, 5 and 7 hard, and the
-race retries through them. Of 1,000 runs started at each dungeon's entrance with the 2.0.0.2 team, models alone
-(`round34.md` "2.0.0.2" and "The chains of record"; Dungeons 2, 6, 8 and 9 as 2.0.0.0's, `round32.md` §12):
+**`d3first`** (2.0.0.3, `docs/experiments/round35.md` "The checkpoint"; `round34.md`; 2.0.0.0's `round32.md`): a
+golden path (games race from triforce to triforce, each segment's first winner continuing, stitched into one replay)
+from console power on, the models alone, reaches the ending; three of three races did, in 161 runs together
+(172,188 frames for the corpus's: about 48 minutes of game). No bombs are handed over: a wall the route must bomb
+when Link has none is still given one and counted (6-11 a golden path). Single runs are the hard part: the wood
+sword makes Dungeons 3, 4, 5 and 7 hard, and the race retries through them. Of 1,000 runs started at each
+dungeon's entrance, models alone (`round35.md`, `round34.md`; Dungeons 2, 6, 8 and 9 as 2.0.0.0's, `round32.md` §12):
 
 | Dungeon (route order) | 3 | 4 | 1 | 5 | 2 | 7 | 6 | 8 | 9 (to the ending) |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Its triforce taken | 23.2% | 18.5% | 92.7% | 33.0% | 100% | 42.3% | 35.2% | 37.8% | 48.9% |
+| Its triforce taken | 23.2% | 18.5% | 92.7% | 7.0% | 100% | 42.3% | 35.2% | 37.8% | 48.9% |
 
-The legs between them are 98.7-100%. From the start, 23.5% of single runs take the Dungeon 3 triforce, 4.5% Dungeon
-4's, and 12 of 1000 get through Dungeon 5 (two to the magic sword, one through Dungeon 6); with the planner on, 20.3%
-of 300 runs end the game (2.0.0.1: 25.0%, within noise).
+Dungeon 5 was 33.0% while the route handed Link a bag of 8 bombs at its entrance (removed in 2.0.0.3: the Olive
+Garden's six Blue Darknuts are now fought with the wood sword and the bombs he brings, usually none). The legs
+between the dungeons are 98.7-100%. From the start, 23.5% of single runs take the Dungeon 3 triforce, 4.5% Dungeon
+4's, 6 of 1000 get through Dungeon 5, and **one of 1000 ends the game**, the route's first single run to do so
+(`corpus/replays/v2-single-ending.tfreplay`).
 
 **`d2first`**: out of 1,000 runs from the start of the game with the 2.0.0.0 team (round 33's Wizzrobe, Vire and
 Like-Like models on 1.9.0.1's team; act mode `temperature:0.5+relax:16`, the speedrunners' clips allowed;
@@ -158,7 +161,7 @@ uv run training-gui.py --web-only                               # only the web v
 .venv/bin/python play-zelda.py 4x3 --route d2first               # the same on the first route
 .venv/bin/python play-zelda.py 3x2 --live                        # the top left cell is a live game: c turns clips off (and on) for the rest of that run, the route re-plans from where Link stands
 .venv/bin/python play-zelda.py 2x3 runs/replays                  # or a folder of replay files, round and round (one FILE.tfreplay: on loop)
-.venv/bin/python play-zelda.py 1x1 corpus/replays/v2-golden-ending.tfreplay   # d3first's golden path from power on to the ending (v1-golden-ending: d2first's)
+.venv/bin/python play-zelda.py 1x1 corpus/replays/v2-golden-ending.tfreplay   # d3first's golden path from power on to the ending (v1-golden-ending: d2first's; v2-single-ending: one unbroken run from the start to the ending)
 .venv/bin/python create-video.py wins.mp4 2x3 runs/wins --sound  # film replays on a grid into a video (needs ffmpeg; 1x1 by default; --sound: the middle cell's, else the top left one's; --controller)
 .venv/bin/python zelda-headless.py runs/wins 3 --wins-only       # no window: play until 3 runs won, keep them as replays (--deaths-only, --stuck-only, --power-on, --stop-at step:N, --clips off, --route d2first)
 .venv/bin/python zelda-headless.py runs/golden 1 --golden --power-on   # the golden path on d3first: games race triforce to triforce from each winner's state, stitched into one replay (--route d2first for the other)

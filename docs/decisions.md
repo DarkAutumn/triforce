@@ -3289,3 +3289,23 @@ and 0x29's walls need), so a run with 2 or more crosses to the key door. routes.
   paired with `r34land-1k`: `d3` and `d5` not worse beyond noise and one better, `d7` not worse. Passed: `d3` +5.2 ±
   1.8, `d5` +5.6 ± 2.0, `d7` +3.6 ± 2.0.
 - The numbers: round34.md "2.0.0.2".
+
+## 2026-11-21 — 2.0.0.3: no bag of bombs; the guard waits; a checkpoint and a stop (Lee)
+
+- **Lee:** "Don't blindly add 8 bombs. The goal is a win without a cheated bomb. Not to just blindly add them."
+  Round 32's route grant at `d3first`'s Dungeon 5 entrance (`grant: {bombs: 8}`, the lead's reading of "can be
+  ignored since we have the ability to cheat them") is removed; no route grants anything. A `REV` (route data
+  changes play). The mechanism stays unused, because recorded replays carry its fields; whether it goes is open.
+  The wall-bomb rule (a required wall, no bomb in hand: one bomb, counted) stands, and is what a cheat-free win now
+  has to get rid of: six walls are cheated in every golden path (round35.md "The checkpoint").
+- **Lee on the learned guard:** "I like that idea of a neural network that predicts if link will get hit. I want to
+  make sure that look-ahead is only done in training (which is fine) but not in inference time (meaning when we
+  PLAY the game). If that's the case, it could be used for the whole game." Then: "I think the guard is a good
+  idea, but I want to dig into a bigger picture thought about model construction." The experiment was stopped
+  before its first chain; the condition is built and tested on branch `r35-guard`; nothing of it is on `main`
+  (backlog "The learned guard").
+- **The corpus's `d3first` golden path is one without the bag** (`v2-golden-ending.tfreplay` replaced: the earlier
+  file still verified, but it showed a run the route no longer allows; no `REPLAY_VERSION` change). A single run
+  from the start to the ending joins it (`v2-single-ending.tfreplay`).
+- **A stop:** every training, selection and experiment was ended, every worktree removed (their data under
+  `target/worktrees/`), and the work waits for Lee's direction.

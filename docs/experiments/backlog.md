@@ -14,13 +14,71 @@ the gap list of what must be walked in the game first, where the documents disag
 of work) and the documents it indexes (`d7.md`, `d6.md`, `d8.md`, `d9.md`, `late-monsters.md`, `late-mechanics.md`).
 The owner's decisions of Nov 16 are in `docs/decisions.md` ("The rest of the game").
 
-### `d3first`, the main route (2.0.0.2, Nov 21): what loses it
+### Where the work stopped (the owner, Nov 21; 2.0.0.3): for the owner to direct
 
-round34.md (Summary, "The chains of record", "The landing", "2.0.0.2"); 2.0.0.0's round32.md §11-§13. The golden
-path from power on ends the game; single runs from the start are lost in the wood-sword dungeons: of 1000
-(`r35land-1k-full`), 235 take Dungeon 3's triforce, 45 Dungeon 4's, 12 Dungeon 5's, 2 the magic sword, 1 Dungeon 6's.
-In the order they cost the route (the chains of record `r35land-1k` for `d3`, `d5`, `d7`, `r34land-1k` for the
-rest; segment rates from each entrance):
+The owner called a checkpoint and a stop on Nov 21: "I want a solid checkpoint and stop for me to direct more
+work." Everything that ran was ended; nothing below is in progress. round35.md has each item's numbers.
+
+- [ ] **The learned guard** (the owner, Nov 21: "I like that idea of a neural network that predicts if link will
+  get hit"; "I think the guard is a good idea, but I want to dig into a bigger picture thought about model
+  construction" first). **What it is:** a second network beside a family's policy that reads only the policy's
+  observation and mask and gives, for every action, the chance that it gets Link hit; at play the model draws its
+  action as always and the guard refuses a draw above a threshold, the next action in the model's own ranking being
+  taken (act mode `veto:K:P`). **The owner's condition, built and tested:** the emulator's look-ahead is used only in
+  training, to make the labels (the planner `plan:16:1` over the model, every candidate it tried logged with its
+  verdict), and never when the game is played: a run in `veto` mode makes no emulator trial (the counter the
+  planner's trials use reads zero), the guard is handed exactly the decision's observation, a `veto` replay
+  verifies with the emulator alone, and a mode that mixes `veto` with the planner's look-ahead is refused. **Why:**
+  round 34 found the planner's whole edge in every wood-sword dungeon is a handful of replaced decisions a room at
+  the moments a hit is coming (the planner ends the game in 20-25% of single runs, the models in none), and
+  imitation of its rows did not transfer it (six goriya runs). **What the prototype showed** (goriya `r32d1-goriya`
+  on Dungeon 7's rooms, 513,014 decisions, 618,908 judged candidates, 18.8% hit): the look-ahead's verdict is not
+  luck (two redraws of the same decision agree 99.85%), and the guard reads it from the observation with AUC 0.95
+  on the model's own draws (precision = recall 0.48-0.60 when vetoing as often as the planner; 0.92-0.94 AUC on
+  another goriya checkpoint's play, so a retrained policy wants its guard fine-tuned). Cost: one more forward pass
+  a decision (411 µs beside the policy's 453 µs), no emulated frames; 27 minutes of label collection and 38 of
+  training a family. **What is not known:** whether it moves a segment. The experiment was stopped before its first
+  chain: `d7` three ways (the model alone 42.3%, with the guard, the planner about 96%) was never measured.
+  **Where it is:** branch `r35-guard` (head 3f177167; the Rust act mode and `Policy::values`, `triforce/guard.py`,
+  `tests/test_guard.py`, `scripts/experiments/r35_guard_data.py` and `r35_guard_train.py`; its targeted tests pass,
+  the full suites were not run on it); nothing of it is on `main`. The label data and the trained guard are under
+  `target/worktrees/r35-guard/r35/` (untracked). **To resume:** the screen the status notes name: three thresholds
+  on `d7`, seeds 7000-7499, then the chosen one on seeds 0-999 against the record and on a fresh set, beside the
+  plain model and the planner; only then other families (the order by what the planner gains over the model:
+  boss-gleeok, boss-manhandla, darknut, boss-digdogger, like-like, boss-aquamentus, goriya, gibdo). Not written:
+  how `select-checkpoint`, `promote`, `triforce list`, the version stamp and the act files would carry a guard.
+  **The owner's bigger question first:** whether hit prediction belongs in a second network, in the policy's own
+  network (a head trained beside the value), or in how models are built altogether.
+- [ ] **A win without a cheated bomb** (the owner, Nov 21: "Don't blindly add 8 bombs. The goal is a win without a
+  cheated bomb."). Round 32's bag of 8 at `d3first`'s Dungeon 5 entrance is removed (2.0.0.3); no route grants
+  anything. What is still cheated is the older rule: a wall the route must bomb when Link holds no bomb gets one
+  bomb (counted). In 2.0.0.3's three golden paths that is 6, 8 and 11 bombs, and **six walls are cheated in all
+  three**: 3:0x5b's last pass, 1:0x53, 0:0x2c, 0:0x2d, 5:0x66, 5:0x65 (the others: 2:0x0e, 7:0x69, 0x19, 0x1a,
+  6:0x28, 9:0x17 in one or two paths); and 2-15 rupees at the candle shop 0:0x0c in every path. So no golden path
+  is cheat-free yet, and it is the route's bomb economy, not luck: single runs enter Level 4 with 4.4 bombs on
+  average, Level 1 mostly with none (1:0x53's wall is cheated in 999 of 1000 `d1` runs) and Level 5 with 1.6, and
+  the route's own pickups are Dungeon 3's two of four, then 5:0x65's four after the Olive Garden.
+  What a cheat-free win needs is the owner's to choose: reserves that keep Dungeon 3's bombs for the walls (and
+  what Manhandla, who dies only to bombs, costs then), a bomb purchase on the way (and the rupees for it), drops
+  fought for, or walls left out of the route; and a golden race that accepts only a segment win with no cheated
+  bomb (`triforce/golden.py` today only prefers the fewest among the wins it has).
+- [ ] **The `grant:` vocabulary is unused** (routes.yaml, `CheatLedger::route_grant`, the chain context's and the
+  replay's `route_granted`): kept because recorded replays carry the fields; remove the route key and the ledger's
+  side if the owner wants no way to hand items over.
+- [ ] **Round 35's Dungeon 3 trainings were stopped before any chain** (round35.md "Dungeon 3"): finished and
+  unmeasured are zol `r35d3-zol-s351`, stalfos-keese-gel `r35d3-skg-s351` and the hit-price arm `r35d3-zolhp-s351`
+  (zol's `reward.heart_value.potential` 20 → 40, nothing else); boss-manhandla `r35d3-manh-s351` and `-s353` were
+  stopped at iterations 58 and 72 of 244. The ledger says where Dungeon 3 is lost (Manhandla 527 per 1000 entering
+  at 1.62 hearts against the planner's 317 at 2.40; if every room before him were played as the planner plays it,
+  `d3` would be 53.6% with his own room still the models'). The run dirs are in `models/` (not promoted).
+
+### `d3first`, the main route (2.0.0.3, Nov 21): what loses it
+
+round35.md "The checkpoint"; round34.md (Summary, "The chains of record", "The landing", "2.0.0.2"); 2.0.0.0's
+round32.md §11-§13. The golden path from power on ends the game; single runs from the start are lost in the
+wood-sword dungeons: of 1000 (`r35nobag-1k-full`, 2.0.0.3, no bag), 235 take Dungeon 3's triforce, 45 Dungeon 4's,
+6 Dungeon 5's, 3 the magic sword, 1 ends the game. In the order they cost the route (the chains of record
+`r35land-1k` for `d3` and `d7`, `r35nobag-1k` for `d5`, `r34land-1k` for the rest; segment rates from each entrance):
 
 - [ ] **Dungeon 3, 23.2%** (2.0.0.1 18.0%; zol `r34d3-zol-s341`, stalfos-keese-gel `r34d3-skg-s341`, darknut
   `r34d5-dg-s362` `@d3first`): Manhandla 527 per 1000 entering (1.62 hearts in: the hearts Link brings), 0x69 126,
@@ -33,9 +91,12 @@ rest; segment rates from each entrance):
   3.41 and takes half the hits from the same places, round34.md Dungeon 4 §4.1).
 - [x] **`d3first_4_71s_*` hold fewer bombs than runs bring**: rebuilt from chain arrivals (bombs 5/1/7, 2 keys;
   `r32c_models.py --goal-step`); the `d4` segment's cheated wall bombs 1.27 → 0.30 a run.
-- [ ] **The Olive Garden (5:0x05, darknut `@d3first`), Dungeon 5 33.0%** (2.0.0.1 27.4%): 343 of 1000 `d5` runs die
-  there (6.49 hearts in; the planner 33-50: the touches fewer, not gone); then 0x64 159 per 1000 entering, gibdo's
-  0x66 157, Digdogger 5:0x24 101, 0x37 91.
+- [ ] **The Olive Garden (5:0x05, darknut `@d3first`) without the bag, Dungeon 5 7.0%** (2.0.0.3; 33.0% while the
+  route handed over 8 bombs): 810 of 1000 `d5` runs die there (811 per 1000 entering, 6.57 hearts in, no bombs: the
+  segment state's two go to the walls of 0x66 and 0x65); the planner beside 58.0% of 300 (287 per 1000 there). The
+  run was trained for the Garden with the bag (its harvested entries and demonstrations hold 8 bombs); a
+  continuation on entries with the bombs runs bring (0-2) and the planner's bombless wins is the plain next step,
+  if the owner keeps this room a wood-sword fight (the walks' rule cleared it 9 of 20 without bombs).
 - [ ] **The planner over darknut `r34d5-dg-s362` fights 5:0x37 worse** (2.0.0.2's `r35land-plan-full`: 21 of 171
   entering end there, 7 of them stalls past darknut's 2000 steps, against 7 of 186 over s341; its D5 triforce 59.0%
   → 47.7%, -11.3 ± 4.1; the ending 25.0% → 20.3%, within noise). The models alone lose fewer there (151 → 91).
@@ -49,8 +110,9 @@ rest; segment rates from each entrance):
 - [ ] **like-like has two lines** (`r33-like-s83` the default for `d2first`'s 9:0x56 and every route's late rooms,
   `r34d4-like` the route run for `d3first`'s Dungeon 4): one like-like run for both routes, a joint continuation
   judged on `d2first`'s `d9`, `d4`, `d6` and `d3first`'s `d4`.
-- [ ] **The route's tables predate the grants** (`heart_value.d3first.json`, `chain_hp.d3first.json`): Dungeon 5's
-  and 8's rows price the old bag and purse until refitted from the chains of record.
+- [ ] **The route's tables were fitted before the bag and never refitted** (`heart_value.d3first.json`,
+  `chain_hp.d3first.json`): with the bag gone (2.0.0.3) Dungeon 5's rows are again what they describe; Dungeon 8's
+  price the purse before `requires_rupees` at 8:0x4c. Refit from 2.0.0.3's chains before the next training round.
 - [ ] **`select-checkpoint --segment X --route d3first`** plays its chains and then fails at its report (the
   provenance names the namespaced start state); `--from d3first_<state>` works.
 - [x] **ow-leever's recorder turn out of Level 5 (0:0x0b)**: `r32turn-leever` on `post-d5` +0.5 ± 0.5 against the

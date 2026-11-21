@@ -6,6 +6,23 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
 
 ## Where things stand (Nov 21)
 
+- **2.0.0.3 (Nov 21; round35.md "The checkpoint"; decisions 2026-11-21 "2.0.0.3"): the owner's checkpoint. Nothing
+  runs; the work waits for his direction** (backlog "Where the work stopped"). Two calls of his: **no bag of bombs**
+  ("Don't blindly add 8 bombs. The goal is a win without a cheated bomb."): `d3first`'s Dungeon 5 entrance grants
+  nothing any more and no route grants anything (the wall-bomb rule stands: a required wall with no bomb in hand is
+  given one, counted); and **the learned guard waits** (a second network that predicts from the observation
+  whether an action gets Link hit and vetoes it at play, with no look-ahead when the game is played: "a good idea,
+  but I want to dig into a bigger picture thought about model construction"; branch `r35-guard`, stopped before
+  its first chain, nothing on `main`). Without the bag (`r35nobag-1k`, seeds 0-999): Dungeon 5 from its entrance
+  33.0% → **7.0%** (-26.0 ± 1.7; the Olive Garden 811 per 1000 entering, fought with no bombs; the planner beside
+  58.0%); from the start the route is run for run 2.0.0.2's to Level 5, 6 runs take Dungeon 5's triforce (12), and
+  **one single run of 1000 ends the game**, the route's first (`corpus/replays/v2-single-ending.tfreplay`). The
+  golden path from power on still ends the game, three of three, 161 runs together (Dungeon 5's segment in 7, 11,
+  13 runs); `corpus/replays/v2-golden-ending.tfreplay` is now one of them (172,188 frames; 6 cheated wall bombs, 2
+  rupees, nothing from a bag). No golden path is free of cheated bombs: six walls are cheated in every one (3:0x5b's
+  last pass, 1:0x53, 0:0x2c, 0:0x2d, 5:0x66, 5:0x65). Round 35's Dungeon 3 trainings were stopped unmeasured (run
+  dirs in `models/`, not promoted). Every worktree is removed (data under `target/worktrees/`).
+
 - **2.0.0.2 (Nov 21; round34.md "2.0.0.2"; decisions 2026-11-21): the two late round-34 runs.** darknut
   `r34d5-dg-s362` (the Olive Garden) and boss-digdogger `r34d7b-dig-s1` (Digdogger at the route's hearts) promoted
   `--route d3first` on the 2.0.0.1 team; no code or route data changed. The chains of record `r35land-1k` (seeds
@@ -53,7 +70,7 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   gibdo `r32late-gibdo`, ow-moblin `r32late-moblin`, ow-leever `r32d1-leever`, ow-zora `r32d1-zora`, ow-tektite
   `r32d1-tektite`, goriya `r32d1-goriya`, stalfos-keese-gel `r32d1-skg`, ow-octorok `r32turn-oct-s34` (the
   recorder's turn out of Level 2). **Cheated and counted** (no key ever): bomb walls (a room's grant, BOMB only toward
-  the wall), the bag topped up to 8 at Dungeon 5's entrance (`grant: {bombs: 8}`, step 97: the Olive Garden's
+  the wall), until 2.0.0.3 the bag topped up to 8 at Dungeon 5's entrance (`grant: {bombs: 8}`, step 97: the Olive Garden's
   weapon), rupees at the candle shop and for the arrows while 8:0x4c's Pols Voice or Ganon lives. **Measured** (the
   chains of record `r32land-1k`, round32.md §12, seeds 0-999, models alone; no rate bar): the legs 98.7-100%,
   Dungeon 3 12.6%, 4 6.2% (Gleeok), 1 89.6%, 5 24.0% (the Olive Garden), 2 100%, 7 9.4% (7:0x1b), 6 35.2%, 8 37.8%,
@@ -535,10 +552,11 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   2026-11-17): while the cheat ledger holds a granted bomb in a bomb-wall room, BOMB is offered only in reach of the
   wall the objective leaves through, in every mode and on the 10th kill too (before, a `free` family threw it at a
   monster and was handed the next: 7.8 cheated bombs a Dungeon 7 run, 1.1 a Dungeon 3 run in 3:0x5b); Dodongo's
-  room has no wall, there the granted bomb is the weapon. **A route's grant is not a room's** (round 32, routes.yaml
-  `grant:`, decisions 2026-11-20): `d3first`'s Dungeon 5 entrance tops the bag up to 8 bombs, outstanding until used
-  (cheated where thrown) and bound to no wall; while it is outstanding a wall room grants its own bomb on top, so the
-  bag reaches the Olive Garden whole. **The reserve means the same inside a `requires_bombs`
+  room has no wall, there the granted bomb is the weapon. **No route hands items over** (Lee, Nov 21: "Don't
+  blindly add 8 bombs. The goal is a win without a cheated bomb."): round 32's route grant (routes.yaml `grant:`,
+  8 bombs at `d3first`'s Dungeon 5 entrance) is removed in 2.0.0.3 and must not come back in another form; what a
+  route lacks is a problem of its bomb economy to solve, and the wall bombs still cheated are counted and
+  reported in every result until they are gone. **The reserve means the same inside a `requires_bombs`
   room as outside**: a `free` family at or below it bombs only the route's wall there (before, such a room was free
   ground whatever the reserve). A fight the bombs are kept for says so on its own route step: `bomb_reserve: 0` on
   3:0x5b's last pass (the room's own four bombs pay for what follows), in Manhandla's room, the Olive Garden, on
@@ -582,7 +600,8 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 
 ## Versioning (Lee, Nov 11)
 
-- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `2.0.0.2`: round 34's two late `d3first`
+- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `2.0.0.3`: `d3first`'s bag of 8 bombs at
+  Dungeon 5 removed, the owner's checkpoint; 2.0.0.2 was round 34's two late `d3first`
   route runs, darknut `r34d5-dg-s362` and boss-digdogger `r34d7b-dig-s1`; 2.0.0.1 was round 34's other `d3first`
   route runs, Dungeon 4's entrance states, Dungeon 7's bag reserve and the training-only stall ending; runs stamped
   2.0.0.0 load as they are, the first three numbers being equal; 2.0.0.0 was the `d3first` route, the main
