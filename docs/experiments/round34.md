@@ -252,3 +252,48 @@ triforce select-checkpoint darknut r34d3-dlp-s353 --route d3first --from d3first
     --first-seed 2000 --runs 1000 --confirm 1000 --only it012442,it012472,it012502,last,promoted --parallel 10
 # s351, s352: the same without promoted
 ```
+
+**The `d5` hold and fresh seeds (4000-4999, paired by seed).** s352 it012502, the screen's choice, broke `d5`: 19.0%
+against `r34d3-dark-s341`'s 24.4% (**-5.4 ± 1.8**), the Olive Garden losing 526 runs per 1000 entering against 416.
+The cause is the recipe's harvested starts: the round's darknut runs drew 30% of their resets from every darknut
+handoff (Dungeon 5's 1,800 among them, the Garden's 150), the continuation drew its 33% from the last pass's 528
+only, so the Garden lost its practice at the chains' hearts. The other two seeds held it:
+
+| On 4000-4999 | `d3` | vs the s341 team | `d5` | vs the s341 team |
+|---|---:|---:|---:|---:|
+| today's team (`r32d3-zol`, `r32d1-skg`, `r32d3-dark2-s44`) | 12.3% | | 21.4% | |
+| zol + stalfos-keese-gel + `r34d3-dark-s341` | 19.5% | | 24.4% | |
+| ... with s352 it012502 | 25.8% | +6.3 ± 1.8 | 19.0% | **-5.4 ± 1.8** |
+| ... with s351 `last` | 18.9% | -0.6 ± 1.8 | 23.4% | -1.0 ± 1.9 |
+| ... with s353 `last` | **23.8%** | **+4.3 ± 1.8** | 22.3% | -2.1 ± 1.9 |
+
+**Verdict: `r34d3-dlp-s353` (`last`) qualifies** and replaces `r34d3-dark-s341` (`ROUTE3`): the best screen among
+the seeds that hold `d5`, better on `d3` beyond noise on its confirmation (+4.6 ± 1.7) and on fresh seeds (+4.3 ±
+1.8), `d5` within noise (-2.1 ± 1.9; +0.9 ± 1.8 against today's team). The last pass on 4000-4999: 142 runs lost per
+1000 entering (hits 0.42 a visit) against the s341 team's 259 (0.67) and today's 363 (0.84). s351, as good on its
+confirmation (+5.1), shows nothing on 4000-4999: the seeds' spread is wider than one confirmation says.
+
+**The chosen team against today's promoted team** (zol `r34d3-zol-s341`, stalfos-keese-gel `r34d3-skg-s341`, darknut
+`r34d3-dlp-s353`, boss-manhandla `r32d3-manh`; seeds 4000-4999, no selection used them):
+
+| | Today's team | Chosen team | Paired difference |
+|---|---:|---:|---:|
+| `d3` (`3_7cs_0` → step 24) | 12.3% | **23.8%** | **+11.5 ± 1.7** |
+| The game start to the D3 triforce (step 24) | 13.9% | **24.1%** | **+10.2 ± 1.7** |
+| `d5` (held) | 21.4% | 22.3% | +0.9 ± 1.8 |
+| Planner beside on `d3` (300, `temperature:0.5+relax:16+plan:16:1`) | 59.0% (seeds 0-299) | 70.0% | |
+
+(the s341 team: `d3` 19.5%, the D3 triforce 21.7%, the planner 57.7%; the s353 team's milestone +2.4 ± 1.9 over it.)
+Next for the Olive Garden: the same recipe with the Garden's handoffs as the harvested starts and the other darknut
+handoffs kept beside them (the lesson of s352), planner demonstrations of the Garden only, chosen on `d5` with `d3`
+held.
+
+```sh
+M=$PWD/models; c() { echo "$1: --route d3first --clips on $2 --runs ${3:-1000} --first-seed 4000 --act ${4:-model} $5 --output $PWD/target/r34/final-$1.jsonl"; }
+OLD="--checkpoint zol@d3first=$M/zol/r32d3-zol --checkpoint stalfos-keese-gel@d3first=$M/stalfos-keese-gel/r32d1-skg --checkpoint darknut@d3first=$M/darknut/r32d3-dark2-s44"
+triforce eval-batch r34d3-final --parallel 10 --chain "$(c old-d3 '--from 3_7cs_0 --stop-at step:24' 1000 model "$OLD")" \
+    --chain "$(c old-full24 '--stop-at step:24' 1000 model "$OLD")" --chain "$(c old-d5 '--from 5_76s_0 --stop-at step:120' 1000 model "$OLD")" \
+    --chain "$(c s353-d3 '--from 3_7cs_0 --stop-at step:24' 1000 model "--checkpoint darknut@d3first=$M/darknut/r34d3-dlp-s353")" ...
+# likewise new-*/s351-*/s341-* (the run as --checkpoint darknut@d3first=..., or promoted), full24 (--stop-at step:24, no --from), d5,
+# and the planner: --runs 300 --act temperature:0.5+relax:16+plan:16:1
+```
