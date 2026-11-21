@@ -68,6 +68,65 @@ after (63/100); test `test_d3first_keeps_the_bag_through_dungeon_7_to_0x1b`.
 The leak was the fight's: crossing, no visit spends a second key. Wallmaster's grab is now the segment's first loss
 (374 runs), then Digdogger 162 and the second pass through goriya's rooms.
 
-### 3. Trainings
+### 3. The trainings (all on `d3first`'s states only)
 
-(in progress)
+Each a continuation by the recipe: `state_routes: [d3first]`, `ram_randomization.chain_hp: 1.0` (the hearts the
+route's chains bring), harvested handoffs at `harvested_fraction` 0.3, demonstrations at `--demo-coeff 0.05`,
+`--sil-coeff 0.1`, 244 iterations (1M steps), `--parallel 8`, checkpoints every 30, `--stop-success 1.01`:
+
+```sh
+triforce train --specialist <family yaml> --load <run> --parallel 8 --iterations 244 --checkpoint-every 30 \
+    --sil-coeff 0.1 --demos <files> --demo-coeff 0.05 --stop-success 1.01 --seed N --run-id <run>
+```
+
+| Family (from) | Runs | Handoffs | Demonstrations |
+|---|---|---|---|
+| goriya (`r32d1-goriya`) | `r34d7-gor-s1..s3` | Dungeon 1's 495 (round 32), Dungeon 2's 240 and Dungeon 7's 955 (0x38, 0x1a from the cellar, 0x29, 0x2b; half from chains on the old route data, half from the arm's) | round 32's Dungeon 1 planner rows (22,410); the planner on 12 Dungeon 7 stems, 15 runs a state at the chains' hearts (538 of 540 won; 0x1b 41 of 45, 0x49 45 of 45, 0x18 45 of 45): 25,072 rows; the walks' rule on 0x1b (`r32p_rules.py goriya-1b`, new: 66 of 90 at the chains' hearts with 1 bomb, 1.29 hearts lost in the wins): 18,593 rows |
+| wallmaster (`r76-wall-1`) | `r34d7-wall-s1..s3` | 1:0x45 161, 7:0x0d 606 (the arm's) | the planner from 7:0x0d and 1:0x45 and 40 handoffs (7:0x0d 82 of 90 won): 21,104 rows |
+| boss-aquamentus (`r76-b`) | `r34d7-aqua-s1` | 1:0x35 161, 7:0x2a 204 (the arm's) | the planner (1:0x35 74 of 90, 7:0x2a 120 of 122): 13,057 rows |
+
+The explorer's `d3first` tracks for goriya: 42 of 45 states (Dungeon 7's and Dungeon 2's); 7:0x49 (a forced fight)
+is unsolved, so it trains without a track, on the planner's rows.
+
+### 4. The choice (each run's `last`; `--checkpoint FAMILY@d3first=RUN`; the route data in every chain)
+
+Screen: `d7`, seeds 2000-2999, one batch (`r34d7-screen`); confirmation: seeds 3000-3999 (`r34d7-confirm`); paired
+with the base (today's team on the route data). Only each run's last weights were measured (one batch for all six
+runs, not a `select-checkpoint` per run: the CPU queue).
+
+| Candidate | Screen | Paired | Confirmation | Paired | Rooms |
+|---|---|---|---|---|---|
+| base | 16.3% | | 16.4% | | |
+| wallmaster s1 / s2 / **s3** | 37.7 / 38.5 / **39.3%** | +21.4 / +22.2 / **+23.0 ± 1.6** | **37.8%** | **+21.4 ± 1.6** | 0x0d grabs 387 → 120 of 605 runs (confirmation 397 → 139); the second pass's deaths 0x69 100 → 30, 0x18 128 → 33 |
+| goriya s1 / s2 / s3 | 17.6 / 16.8 / 16.3% | +1.3 / +0.5 / 0.0 ± 1.7 | s1 with wallmaster s3: 36.0% | **-1.8 ± 2.1** against wallmaster s3 alone | 0x1b entered with 4.45-4.77 hearts (4.49), deaths 119-149 (146); 0x69, 0x59, 0x49, 0x19 lose 1.0-1.2 hearts a visit as before (the planner 0.4-0.6) |
+| boss-aquamentus s1 (screen `r34d7-screen-aqua`) | `d1` 94.2% vs 89.2%; `d7` 17.1% | **+5.0 ± 0.7**; +0.8 ± 0.3 | (the final batch) | | 1:0x35 deaths 79 → 29 of 971 (3.29 hearts in); 7:0x2a 19 → 11 of 182 |
+
+`d1` holds for wallmaster (it plays 1:0x45, step 76): 89.1% against 89.7%, -0.6 ± 0.7; 1:0x45 loses nothing with
+either run. Wallmaster and boss-aquamentus play no Dungeon 2 room, and the route data changes only Level 7, so `d2`
+is untouched by construction (goriya, the only family here that plays Dungeon 2, is not chosen).
+
+### 5. The chosen runs together (`r34d7-final`, seeds 4000-4999; every chain pins both families by `--checkpoint`)
+
+| Segment | Today (route data, `r76-wall-1`, `r76-b`) | wallmaster `r34d7-wall-s3` | + boss-aquamentus `r34d7-aqua-s1` | Paired |
+|---|---|---|---|---|
+| `d7` | 12.9% | 32.8% | **34.4%** | team − today **+21.5 ± 1.6**; aquamentus's share +1.6 ± 0.4 |
+| `d1` | 90.4% | | **93.6%** | **+3.2 ± 0.7** (1:0x35 deaths 65 → 33 of 969; 1:0x45 0 and 0) |
+| `d7`, the planner (300, the team) | | | **98.3%** | |
+
+Against the record (main's data and team, 9.4% on seeds 0-999) `d7` is 34.4%. Where the team still loses `d7` (of
+1000): Digdogger 0x1c 207 (entered with 3.33 hearts), goriya's 0x1b 164 (4.32 hearts in, crossing), the second pass
+after a grab 106 (grabs 361 → 132 of 540 runs), 0x1a 51, Aquamentus 0x2a 30 of 372, 0x29 24, 0x19 21. Cheated in
+Level 7: bombs 0 → 2, keys 0 → 0; Dungeon 1's 0x53 wall bomb in 999 runs as before. The key ledger at 0x1b's E door:
+no model visit spends two keys (the planner 1 of 300).
+
+### Verdicts
+
+| Family | Verdict |
+|---|---|
+| route data (Level 7's bag) | `ROUTE DATA` 9295f8d0: `d7` +9.0 ± 1.5 on today's team; closes goriya's key leak |
+| wallmaster | **`r34d7-wall-s3` promoted for `d3first`**: `d7` +21.4 ± 1.6 confirmed, `d1` -0.6 ± 0.7 |
+| boss-aquamentus | **`r34d7-aqua-s1` promoted for `d3first`**: `d1` +3.2 ± 0.7, `d7` +1.6 ± 0.4 |
+| goriya | not chosen: no seed better beyond noise on `d7` (+1.3, +0.5, 0.0 ± 1.7; s1 -1.8 ± 2.1 beside wallmaster's run). Training at the chains' hearts with the planner's rows did not reduce the hearts goriya loses before 0x1b (about 6.4, against the planner's 1.8). Its next arm is the hearts it loses in 0x69, 0x59, 0x49 and 0x19, judged on `d7` with the team above |
+| boss-digdogger | held (`r32late-dig`); now `d7`'s first loss (0x1c 207 of 1000, entered with 3.33 hearts) |
+
+`d2first` keeps every run (`wallmaster` and `boss-aquamentus` promoted only with `--route d3first`).
