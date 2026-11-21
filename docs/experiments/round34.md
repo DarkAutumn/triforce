@@ -807,3 +807,58 @@ crossings': 0x69 1.01-1.03, 0x59 1.12-1.16, 0x18 0.69-0.80, 0x19 1.04-1.12, 0x1b
 confirmed. Six runs over two rounds have not learned the crossings' parry from the planner's rows: the planner's
 replaced decisions are the ones its foresight (the action tried on redrawn random numbers) finds would be hit, which
 the observation alone does not show the policy.
+
+### 9. boss-digdogger: 0x1c at the hearts the route brings (`r34d7b-dig-s1`)
+
+After §7-8 Link still brings 3.5 hearts into 0x1c (3.49 on the screen's seeds), and it is still the first loss (152
+of 1000). Its deaths are the hearts: by hearts on entering (§5's chain) 0: 59 of 62, 1: 71 of 127, 2: 34 of 142, 3: 28
+of 131, 4: 10 of 109, 5: 4 of 86, 6 and more: 1 of 91; the bag is 5 bombs at every level. The planner on 100 of
+0x1c's handoffs (the arm's chain, three runs each): 278 of 300 won, where the model wins about 72% at those hearts.
+
+One continuation of `r32late-dig`: `specialists/boss-digdogger.yaml` with `state_routes: [d3first]`,
+`chain_hp: 1.0`, the 770 0x1c handoffs at 0.5 of the resets, no curriculum (no tracks in this worktree); the planner's
+rows (the 300 handoff runs and 90 from the three `7_1cw` states, the wins that lost at most 2 hearts, replaced
+decisions five times: 28,550 rows) at `--demo-coeff 0.05`, `--sil-coeff 0.1`, 244 iterations.
+
+| Chain (seeds 2000-2999) | Team | `r34d7b-dig-s1` | Paired |
+|---|---|---|---|
+| `d7` | 41.4% (0x1c 152 of 759) | 41.2% (0x1c 123 of 765) | -0.2 ± 1.9 |
+| `d5` (`5_76s_0` → step 120) | 20.3% (5:0x24 56 deaths of 259) | 23.7% (22 of 259) | **+3.4 ± 0.6** |
+
+On `d7` the runs it saves at 0x1c die later (the second pass after a wallmaster grab, Aquamentus): within noise. On
+`d5` it is better beyond noise. The final batch confirms it on fresh seeds.
+
+### 10. The chosen runs together (`r34d7b-final`, seeds 5000-5999)
+
+The route data stays 9295f8d0 (§7: no arm); goriya stays `r32d1-goriya` (§8); boss-digdogger `r34d7b-dig-s1` beside
+§5's team (wallmaster `r34d7-wall-s3`, boss-aquamentus `r34d7-aqua-s1`).
+
+| Segment | §5's team (34.4% on seeds 4000-4999) | + boss-digdogger `r34d7b-dig-s1` | Paired |
+|---|---|---|---|
+| `d7` | 37.8% | 39.6% | +1.8 ± 1.9 |
+| `d5` | 19.3% (5:0x24 49 deaths of 242) | 21.0% (32 of 242) | **+1.7 ± 0.6** |
+| `d1` | | 92.8% (boss-digdogger plays no Dungeon 1 room: the team's by construction) | |
+| `d7`, the planner (300, the new team) | | 96.3% | |
+
+Hearts on entering 0x1b / 0x1c: 4.40 / 3.52 with §5's team, 4.49 / 3.43 with the new one (the planner 9.21 / 8.50).
+0x1c's deaths a visit 168 of 731 → 141 of 777 (23.0 → 18.1%; the screen 20.0 → 16.1%), but on `d7` the runs saved
+there die later (0x18, 0x29 and 0x69 on the second pass after a wallmaster grab), so `d7` gains +1.8 ± 1.9 and the
+screen -0.2 ± 1.9: within noise twice. Cheated units a run in Level 7: bombs 0.002 → 0.000, keys 0 and 0; every arm
+plays the same route data, so the cheats are the route's own (0x29's wall when the bag is empty).
+
+`d7` is not better beyond noise than §5's team. The measured reason: the hearts goriya loses before 0x1b (about 6
+of 11 against the planner's 1.8) are lost on crossings the route cannot shorten (§6-7; only 0x49's shutter is a fight)
+by a policy that is hit three times as often as the planner over the same time and parries a third as often; two
+rounds of training on the planner's rows of those rooms (six runs, §3 and §8) did not take the planner's parry, and
+Digdogger's 0x1c, the first loss behind them, dies of the hearts it is handed (3.5; 95% at 0 hearts, 2% at 6 or
+more). What would move `d7`: goriya's hearts on the crossings, which the planner keeps with foresight the observation
+does not give the policy.
+
+### Verdicts (second pass)
+
+| Family / change | Verdict |
+|---|---|
+| route data | no arm: the route already crosses every goriya room but 0x49 (the game's shutter); the cellar is the red candle the later segments use. The base stays 9295f8d0 |
+| goriya | not chosen: `r34d7b-gor-s1..s3` +0.3, -1.8, -0.9 ± 2.2 on `d7` (0x49 better, the crossings unchanged) |
+| boss-digdogger | **`r34d7b-dig-s1` promoted for `d3first`** (worktree): `d5` +3.4 ± 0.6 (screen) and +1.7 ± 0.6 (final), `d7` -0.2 and +1.8 ± 1.9; 0x1c's deaths a visit 20-23% → 16-18% |
+| `d7` | 37.8% → 39.6% on seeds 5000-5999 (+1.8 ± 1.9), within noise of §5's team; the planner 96.3% |
