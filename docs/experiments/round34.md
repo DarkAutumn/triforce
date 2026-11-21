@@ -130,3 +130,51 @@ no model visit spends two keys (the planner 1 of 300).
 | boss-digdogger | held (`r32late-dig`); now `d7`'s first loss (0x1c 207 of 1000, entered with 3.33 hearts) |
 
 `d2first` keeps every run (`wallmaster` and `boss-aquamentus` promoted only with `--route d3first`).
+
+## Dungeon 7, second pass: goriya's hearts before 0x1b, Digdogger's 0x1c (goriya, boss-digdogger)
+
+Branch `r34-d7`, on the route data of 9295f8d0 and the team of §5 (wallmaster `r34d7-wall-s3`, boss-aquamentus
+`r34d7-aqua-s1`; goriya `r32d1-goriya`, boss-digdogger `r32late-dig`).
+
+### 6. The cause, room by room
+
+What the route asks of each goriya room before 0x1b, what the game demands (`zelda-asm/levels/level-7.md`), and how
+the team (`r34d7-final-d7-team`, seeds 4000-4999) and the planner (`r34d7-final-d7-plan`, 300) play it. First
+visits: hearts lost a visit, decisions on which Link is hit, boomerangs parried (`blocks`), kills.
+
+| Step | Room, way | The route's demand | The game's | Team: lost / hit / parried / kills | Planner |
+|---|---|---|---|---|---|
+| 175 | 0x69 S→N | bomb the N wall (`treasure: skip`) | the wall only; the room bomb is optional | 0.97 / 5.2 / 0.16 / 0.6 | 0.33 / 1.8 / 0.51 / 0.8 |
+| 176 | 0x59 S→N | cross (no item) | nothing | 1.12 / 5.6 / 0.13 / 0 | 0.38 / 1.9 / 0.40 / 0 |
+| 177 | 0x49 S→N | the N shutter | **clear** 3 Blue Goriyas and 3 Keese (Bubbles do not count) | 1.11 / 8.5 / 0.95 / 5.2 | -0.12 / 1.7 / 1.67 / 5.6 |
+| 181 | 0x18 S→E | the E key door (dark) | a key | 0.61 / 4.3 / 0.17 / 0 | 0.28 / 1.6 / 0.34 / 0.1 |
+| 182 | 0x19 W→E | bomb the E wall | the wall; the six need not die | 1.11 / 4.4 / 0.05 / 0 | 0.33 / 1.35 / 0.50 / 0.2 |
+| 183-185 | 0x1a W→stairs, cellar 0x4a, 0x1a→E | the red candle, then the E wall | with clips the block clip to the stairs, no kill; the wall | 0.36 + 0.16 + 0.94 | 0.12 + 0.04 + 0.21 |
+| 186 | 0x1b W→E | the E key door (`if_bombs_below: 2`, 5 bombs in) | a key | 1.60 / 6.5 / 0.29 / 0 | 0.76 / 3.0 / 1.19 / 0.2 |
+
+On the same start states and seeds (the room's three chains, 40 runs each, at the hearts the chains bring;
+`r27_plan_demos.py --route d3first`, the model at its chain act `temperature:0.5+relax:16`), hearts lost in the
+wins, model against planner: 0x69 1.00-1.34 / 0.19-0.38, 0x59 0.95-1.37 / 0.67-0.69, 0x49 0.67-0.95 / -0.44 to -0.76,
+0x18 0.57-0.72 / 0.14-0.39, 0x19 1.21-1.38 / 0.33-0.72, 0x1a to the stairs 0.42-0.58 / 0.08-0.15, 0x1a from the
+cellar 0.58-1.11 / 0.10-0.26, 0x1b 1.52-1.77 / 0.42-0.56 (wins 104 / 114 of 120).
+
+**The route already crosses every goriya room but 0x49, and 0x49 is the game's shutter.** No step fights for a drop
+(0x69's room bomb is skipped since round 26; 0x1b's bombs are wanted only below 2 since 9295f8d0), and no kill
+opens anything else on the way: the model kills nothing in 0x59, 0x18, 0x19 and 0x1a (with clips the block clip
+takes Link to 0x1a's stairs), as the planner. Both stay about as long in each room. The difference is play: in the
+same rooms over the same time the model is hit about three times as often and parries a boomerang a third to a
+quarter as often; the planner's foresight (`plan:16:1`) replaces exactly the decisions that would be hit.
+
+The ledger on this route: Link brings **5 keys** into Level 7 and spends 3 (0x38 N, 0x18 E, 0x1b E), 2 left, none
+cheated; **8 bombs**, 3 walls before 0x1b (0x69 N, 0x19 E, 0x1a E) so 5 at 0x1b, about 2.2 on Digdogger's small ones,
+then 0x0c's and 0x29's walls (0x29's cheated in 2 runs of 1000).
+
+### 7. The route data: no arm
+
+The arms the round set out to measure (a fight the route does not need turned into a crossing, an optional detour
+dropped) do not exist on these rooms: 0x69 is `treasure: skip`, 0x59, 0x18, 0x19 and 0x1a have no fight on the
+route's way, 0x1b is crossed with the bag 9295f8d0 keeps, and 0x49's shutter is the game's. The one detour is the
+cellar 0x4a, the red candle, which the route uses after Dungeon 7 (Dungeon 6's dark rooms, the trees of 0:0x6d and
+0:0x47 with a free retry; the blue candle burns once a room visit); dropping it would save about 0.5 hearts a run
+(0x1a's first visit 0.36 and the cellar 0.16; 0x1a's E wall stays) at the cost of every later segment's candle, so
+it is not taken. No `ROUTE DATA` commit; the base stays 9295f8d0.
