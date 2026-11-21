@@ -306,6 +306,15 @@ def test_one_act_mode_for_the_project(tmp_path):
     assert registry.act_mode(run) == registry.act_mode(run / 'ckpt.pt') == registry.ACT_RULE
 
 
+def test_the_main_route_is_d3first_and_bare_names_stay_d2first():
+    """2.0.0.0 (the owner, Nov 19: d3first becomes the main route when a golden path on it reaches the ending): the
+    tools play d3first when no route is named; the engine's route of bare start-state names stays d2first."""
+    from triforce import _native, eval_batch
+    assert registry.MAIN_ROUTE == 'd3first'
+    assert _native.DEFAULT_ROUTE == 'd2first'
+    assert eval_batch.route_segments() == eval_batch.ROUTE_SEGMENTS['d3first']
+
+
 def test_set_act_mode_moves_an_evaluation_of_the_other_mode_aside(tmp_path):
     """F027: after ``promote --act argmax`` no reader takes a sampled eval.json for the model's evaluation."""
     registry.save_checkpoint('d1-test', 'a', _trained()[0], root=tmp_path)

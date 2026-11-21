@@ -6,6 +6,31 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
 
 ## Where things stand (Nov 20)
 
+- **2.0.0.0 (Nov 20; rounds 32 and 33, `docs/experiments/round32.md`, `round33.md`; decisions 2026-11-20 "2.0.0.0:
+  `d3first` is the main route"): two routes, `d3first` the main one.** `d3first` (304 steps, `docs/routes/d3first.md`)
+  is the speedrunners' order: the wood sword until the magic sword (no white sword), Dungeons 3, 4, 1, 5, 2, 7, the
+  magic sword (0:0x21's cave, step 206), 6, 8, 9, by screen scrolls, recorder warps, the blue candle, three
+  secrets, heart rock's containers, the ladder, the raft and 0x47; the dungeons are `d2first`'s (routes.yaml
+  `blocks:`). **The owner's condition is met: a golden path from console power on, the models alone, reaches the
+  ending** (three races of three, 176, 135 and 91 runs; the first is `corpus/replays/v2-golden-ending.tfreplay`,
+  153,308 frames). `registry.MAIN_ROUTE = 'd3first'`: `play-zelda.py`, `zelda-headless.py`, the golden path,
+  `eval-chain`, `eval-batch --chains` and `r56_chains.sh` play it when no route is named; `d2first` by `--route
+  d2first` (the engine's `DEFAULT_ROUTE`, the route of bare state names, stays `d2first`). **The team:** every
+  family's default `promoted` run plays both routes; fifteen families have a route run, `promoted.d3first`, that
+  plays only `d3first`'s steps 0-205 (the wood sword's half, routes.yaml `own_models_until: {waypoint: sword}`;
+  `triforce list` shows them): zol `r32d3-zol`, darknut `r32d3-dark2-s44`, boss-manhandla `r32d3-manh`, vire
+  `r32d4-vire2-s1`, like-like `r32d4-like2`, boss-gleeok `r32d4-gleeok2-s1-it2517`, boss-digdogger `r32late-dig`,
+  gibdo `r32late-gibdo`, ow-moblin `r32late-moblin`, ow-leever `r32d1-leever`, ow-zora `r32d1-zora`, ow-tektite
+  `r32d1-tektite`, goriya `r32d1-goriya`, stalfos-keese-gel `r32d1-skg`, ow-octorok `r32turn-oct-s34` (the
+  recorder's turn out of Level 2). **Cheated and counted** (no key ever): bomb walls (a room's grant, BOMB only toward
+  the wall), the bag topped up to 8 at Dungeon 5's entrance (`grant: {bombs: 8}`, step 97: the Olive Garden's
+  weapon), rupees at the candle shop and for the arrows while 8:0x4c's Pols Voice or Ganon lives. **Measured:**
+  the golden race, the route's chains of record (`r32land-1k`, round32.md §12: every segment, the full route, the
+  planner beside), no rate bar for its segments. **Not measured:** the route runs goriya, stalfos-keese-gel (their
+  other dungeons) and ow-octorok (fresh seeds, its other segments) were landed before their trainers' checks
+  ended. `d2first` (round 33): wizzrobe `r33w-s93` and vire `r33-vire-s95` are the defaults (Dungeon 6 +7.7 ± 2.1
+  together on fresh seeds); like-like's 9:0x56 follows in a later release.
+
 - **Rounds 30 and 31 (Nov 19-20; landed together as 1.9.0.1, `docs/experiments/round30.md` "The landing",
   `round31.md`):** the owner's eight phase IX changes to `d2first` (now **354 steps**): Dungeon 1 out of 1:0x73 by
   its S door and back in (steps 46-48, the trip; 0:0x37 `cave → cave`), 0x72, 0x74, 0x52, 0x42 left out, 0x53's N
@@ -351,7 +376,12 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
 
 ## Goal
 
-Specialist PPO models (one per room family) that carry the `d2first` chain (`triforce/routes.yaml`) from the game
+Specialist PPO models (one per room family) that carry the two routes of `triforce/routes.yaml` from the game start
+(console power on) to the end of the game: **`d3first`, the main route since 2.0.0.0** (`docs/routes/d3first.md`:
+the wood sword through Dungeons 3, 4, 1, 5, 2 and 7, Dungeon 3 by its W rooms 0x4b, 0x4a, 0x49, the raft and the
+ladder for Dungeon 4, heart rock, 0x2d's secret and the candle shop, the recorder's warps out of Levels 5 and 2, the
+dead woods' tree and the world wrap to the magic sword, then Dungeons 6, 8 and 9 as on `d2first`; its golden path
+ends the game), and **`d2first`**: the chain from the game
 start through Dungeon 2, the 0x2c heart cave, the white sword and Dungeon 1 (the bow), then S to 0x67's secret
 cave (bomb its wall, 30 rupees) and on to Dungeon 3 by the wrap exit through 0x75 (clips on) or along row 6 (clips
 off) (the raft; 0x5b E → 0x5c → 0x4c S, Manhandla), then by raft to Dungeon 4 (the ladder, 0x21's island by the
@@ -419,6 +449,10 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   0x20, 0x10, 0x31, 0x30, 0x04), stalfos-keese-gel (0x76, 0x66, 0x26, 0x06, 0x62), like-like (0x14, 0x51, 0x41,
   0x03), zol (0x63), equipment-room (the cellars 0x60, 0x00, 0x70, 0x75, 0x4f, 0x67, 0x77). 3:0x4b left the route in
   round 22 but stays tagged (no start states); 0:0x56 and 0:0x57 are back on the route (the coast stretch's plain way).
+  Round 32 (`d3first`) adds the rooms only that route crosses: zol 3:0x4b, stalfos-keese-gel 3:0x4a, ow-zora 0:0x46
+  and 0x2d's secret cave, ow-leever 0:0x29, 0x2a, 0x2b (screen scrolls), ow-tektite 0x0c's cave (the blue candle),
+  ow-moblin 0:0x62 and its cave, 0x3d's cave; the families keep their rooms on both routes, and fifteen have a
+  route run for `d3first`'s wood-sword half (Where things stand).
 - Rejected ideas stay rejected (marked in `backlog.md`), e.g. skipping the optional D1 boomerang *pickup*. (Lee
   also had the boomerang usable vs masked after D1 tested: round 10 §2, no effect; the boomerang stays.)
 - **Start states** (`triforce/states/`, `TFZSTATE` files) must be clean pre-entry states: delete bad ones
@@ -502,9 +536,12 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   `d2first`. "The models should overlap in most cases, but you are allowed to train specific ones if this route
   needs specific training." **`d3first` becomes the main route when it works, "works as defined as 'a golden path
   eventually succeeds'"; `d2first` is then the secondary** ("d3 is the faster route, and it's what is used by
-  speedrunners"). Missing bombs, keys and rupees are cheated and counted on both. Route data:
+  speedrunners"): **met and landed in 2.0.0.0** (Nov 20: `registry.MAIN_ROUTE = 'd3first'`; `--route d2first` plays
+  the other). Missing bombs, keys and rupees are cheated and counted on both. Route data:
   `docs/routes/d3first.md`; the dungeons and shared legs are routes.yaml `blocks:` both routes `include:`, so a
-  change to one is a change to both (decisions 2026-11-19 "`d3first` as route data").
+  change to one is a change to both (decisions 2026-11-19 "`d3first` as route data"). A route run
+  (`triforce promote FAMILY RUN --route d3first`) plays only `d3first`'s steps before the magic sword; a change to a
+  family's default run changes both routes and is measured on both.
 - **Old worktrees are deleted once their work is on `main`** (Lee, Nov 19: "you can always delete old worktrees.
   Once things are merged into main, delete them and keep stuff tidy"): `git worktree remove` (the branch stays);
   first copy out what is not in git and still wanted: promoted run dirs into `models/`, demonstration files into
@@ -512,16 +549,16 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 
 ## Versioning (Lee, Nov 11)
 
-- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (2.0.0.0 on the `d3first` work's branches from
-  phase X's start, `r32-routes`; `main` is `1.9.0.x` until that work lands: 1.9.0.0 was nine dungeons, rounds 28 and
-  29's Dungeons 8 and 9 to the end of the game; it carries round 26's schema 6 observation of 1.5.1.0, the one input
-  change for Dungeon 7 to Ganon, decisions 2026-11-16; earlier runs are stamped 1.9.0.0, not converted; 2.0.0.0 changes
-  no input, so a 1.9.0.0 run is stamped 2.0.0.0 on a phase X worktree's copies, `triforce stamp --force`). It is the
+- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `2.0.0.0`: the `d3first` route, the main
+  route since its golden path reached the ending, with round 33's `d2first` runs; 1.9.0.1 was rounds 30 and 31 on
+  `d2first` as phase IX changed it; 1.9.0.0 nine dungeons, rounds 28 and 29's Dungeons 8 and 9 to the end of the
+  game; it carries round 26's schema 6 observation of 1.5.1.0, the one input change for Dungeon 7 to Ganon,
+  decisions 2026-11-16; earlier runs are stamped 1.9.0.0, not converted; 2.0.0.0 changes no input, so a 1.9 run is
+  stamped 2.0.0.0, `triforce stamp --force`). It is the
   single source: `triforce.__version__` and `_native.VERSION` read it, `pyproject.toml` repeats it and the Cargo
   workspace version is its first three numbers (`tests/test_version.py` checks all of them).
-  - `MAJOR` changes only when Lee says so. **2.0 is said (Nov 19): the `d3first` route** (below, "Two routes"):
-    `VERSION` is 2.0.0.0 on that work's branch from its start, and 2.0.0.0 is the version on `main` when all of it
-    is done and landed; until then `main` stays in 1.9.0.x.
+  - `MAJOR` changes only when Lee says so. **2.0 is said (Nov 19): the `d3first` route** (above, "Two routes"),
+    landed Nov 20 as 2.0.0.0.
   - `MINOR` +1 for a big change (Lee, Nov 19: "We are going to drop the 'dungeon # is the minor version'. From here
     on, minor version bumps are big changes"). Through 1.9 it counted the dungeons the route completes (1.3 =
     three).
@@ -715,9 +752,19 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   folder with a plan keeps owning the stream). Not shown by the GUI (but still waiting its turn and counted): a job
   that writes no folder (`--no-log`). Invisible, and neither waiting nor counted: a job whose `--events` go into a
   folder whose plan is someone else's (it is taken for that plan's child, as a round's trainings are).
-- **Chain segments** (20–40 runs each; several at once go in one batch: `triforce eval-batch NAME --chain 'd2:
-  --from 2_7ds_0 --runs 40' --chain ...`, or all eighteen with `--chains TAG`): full `triforce eval-chain --runs 20
-  --parallel 10` (route `d2first`, the default); Dungeon 2 `--from 2_7ds_0`; after Dungeon 2 `--from 0_3cc_0`;
+- **Chain segments** (20–40 runs each; several at once go in one batch: `triforce eval-batch NAME --chain 'd3:
+  --from 3_7cs_0 --runs 40' --chain ...`, or every segment of a route with `--chains TAG [--route R]`). **`d3first`
+  (the main route, no `--route` needed; `eval_batch.D3FIRST_SEGMENTS`, its states `d3first_*` named bare):** full
+  `triforce eval-chain --runs 20 --parallel 10`; Dungeon 3 `--from 3_7cs_0` (to `step:24`); after Dungeon 3 `--from
+  0_74c_0` (`step:31`); Dungeon 4 `--from 4_71s_0` (`step:53`); after Dungeon 4 `--from 0_45c_0` (`step:61`); Dungeon
+  1 `--from 1_73s_0` (`step:79`); after Dungeon 1 `--from 0_37c_v2_0` (`step:97`); Dungeon 5 `--from 5_76s_0`
+  (`step:120`); after Dungeon 5 `--from 0_0bc_0` (`step:145`, the recorder's warp to Level 3's landing); Dungeon 2
+  `--from 2_7ds_0` (`step:155`); after Dungeon 2 `--from 0_3cc_0` (`step:174`, the warp to 0x45, Level 7); Dungeon 7
+  `--from 7_79s_0` (`step:194`); after Dungeon 7 `--from 0_42c_0` (`step:211`, the magic sword on the way); Dungeon 6
+  `--from 6_79s_0` (`step:227`); after Dungeon 6 `--from 0_22c_0` (`step:233`); Dungeon 8 `--from 8_7es_0`
+  (`step:243`); after Dungeon 8 `--from 0_6dc_0` (`step:258`); Dungeon 9 `--from 9_76s_0` (to the ending).
+  **`d2first` (`--route d2first`):** full `triforce eval-chain --route d2first --runs 20
+  --parallel 10`; Dungeon 2 `--from 2_7ds_0`; after Dungeon 2 `--from 0_3cc_0`;
   Dungeon 1 `--from 1_73s_0` (round 31: to its triforce's exit, `step:64`; the door trick leaves by 0:0x37 first);
   after Dungeon 1 `--from 0_37c_v2_0` (round 31: 0:0x37's second entry from its mouth); Dungeon 3 `--from
   3_7cs_0`; after Dungeon 3 `--from 0_74c_0`; Dungeon 4 `--from 4_71s_0` (round 22: the same names; `3_7cs`,

@@ -410,8 +410,10 @@ fn movie_import_writes_a_movie_that_plays_to_the_recorded_end() {
 
 /// The compatibility corpus (`corpus/replays/`; AGENTS.md "Versioning"): every replay recorded by an earlier
 /// build still plays on this one to the states it recorded.  It holds a power-on start with every optional
-/// stream, a state-file start, and a golden path from power on to the Dungeon 3 triforce.  A failure here
-/// means replays people kept no longer replay: read the AGENTS.md rule before touching the files.
+/// stream, a state-file start, a golden path from power on to the Dungeon 3 triforce, and the two routes' golden
+/// paths from power on to the ending (`v1-golden-ending`: `d2first`, 1.9.0.0; `v2-golden-ending`: `d3first`,
+/// 2.0.0.0, `REPLAY_VERSION` 1).  A failure here means replays people kept no longer replay: read the AGENTS.md
+/// rule before touching the files.
 #[test]
 fn the_replay_corpus_still_verifies() {
     if !have_rom() {
@@ -423,7 +425,7 @@ fn the_replay_corpus_still_verifies() {
         .map(|name| format!("corpus/replays/{name}"))
         .collect();
     files.sort();
-    for needed in ["v0-golden", "v0-power-on", "v0-state"] {
+    for needed in ["v0-golden", "v0-power-on", "v0-state", "v1-golden-ending", "v2-golden-ending"] {
         assert!(files.contains(&format!("corpus/replays/{needed}.tfreplay")), "{needed} is missing: {files:?}");
     }
     let mut args = vec!["replay", "verify"];
@@ -450,6 +452,11 @@ fn the_replay_corpus_still_verifies() {
     let state = info("v0-state");
     for line in ["source:   embedded state 0_3cc_0", "1 START, 1 END", " REWARDS ", " DECISIONS "] {
         assert!(state.contains(line), "{line}: {state}");
+    }
+    let ending = info("v2-golden-ending");
+    for line in ["version:  1", "ending:   win", "segments: 9", "states:   1 END, 8 CHECKPOINT", "triforce: 2.0.0.0",
+                 "the game ended in (level 9, room 0x32)"] {
+        assert!(ending.contains(line), "{line}: {ending}");
     }
 }
 

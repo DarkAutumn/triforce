@@ -1,11 +1,19 @@
 # Triforce: a deep learning agent for The Legend of Zelda (NES)
 
-Triforce trains reinforcement learning agents to play *The Legend of Zelda* on the NES. The agents play from the
-start of the game through Dungeon 2, go get the white sword, clear Dungeons 1, 3 and 4, cross the overworld to the
-mountain (two heart containers, 100 rupees, the Lost Hills), clear Dungeon 5, take the whirlwind, two shops and a
-pond to Dungeon 7, go get the magic sword under a gravestone, clear Dungeon 6, burn a tree for Dungeon 8, and play
-Dungeon 9 to Ganon and Zelda, to the end of the game, with a few detours along the way (heart containers, the bow, the
-raft, the ladder, the recorder, the red candle, the red ring, the silver arrow).
+Triforce trains reinforcement learning agents to play *The Legend of Zelda* on the NES, from the start of the game to
+Ganon and Zelda, on two routes through the first quest:
+
+- **`d3first`, the main route (2.0.0.0)**, the speedrunners' order: the wood sword until the magic sword, Dungeons
+  3, 4, 1, 5, 2, 7, the magic sword under a gravestone, Dungeons 6, 8 and 9, by screen scrolls, recorder warps, the
+  blue candle, three secrets, the heart containers of heart rock, the ladder and the raft
+  (`docs/routes/d3first.md`). The models play it from console power on to the end of the game.
+- **`d2first`**, the first route: Dungeon 2, the white sword, Dungeons 1, 3 and 4, the mountain (two heart
+  containers, 100 rupees, the Lost Hills), Dungeon 5, the whirlwind, two shops and a pond to Dungeon 7, the magic
+  sword, Dungeons 6, 8 and 9 (`docs/routes/d2first.md`), with a few detours (the bow, the red candle, the red ring,
+  the silver arrow).
+
+Most rooms are on both routes and are played by the same models; where `d3first`'s wood sword or a room of its own
+needed it, a family has a second run for that route's part (before the magic sword).
 
 ![Six runs by the trained models, played back with play-zelda.py](docs/images/play-zelda.png)
 
@@ -27,8 +35,14 @@ raft, the ladder, the recorder, the red candle, the red ring, the silver arrow).
 
 ## How well it plays
 
-Out of 1,000 runs from the start of the game with the current team (rounds 30 and 31, 1.9.0.1: the optimisation
-round's team on the route as the owner changed it in round 31; act mode `temperature:0.5+relax:16`, the
+**`d3first`** (2.0.0.0, `docs/experiments/round32.md`): a golden path (games race from triforce to triforce, each
+segment's first winner continuing, stitched into one replay) from console power on, the models alone, reaches the
+ending; three of three races did, in 176, 135 and 91 runs (153,308 frames for the first: about 42 minutes of game).
+Out of 1,000 single runs from the start the models alone take the Dungeon 3 triforce in about one in ten: the wood
+sword makes Dungeons 3 and 4 the hard part, and the race retries through them.
+
+**`d2first`**: out of 1,000 runs from the start of the game with the team of rounds 30 and 31 (1.9.0.1: the
+optimisation round's team on the route as the owner changed it in round 31; act mode `temperature:0.5+relax:16`, the
 speedrunners' clips allowed; `docs/experiments/round30.md` "The landing"):
 
 | Link reaches | Rounds 30-31 | Round 29 | Round 27 | Round 26 | Round 25 |
@@ -108,7 +122,8 @@ Trained models aren't checked in either (they're too big), so watching the agent
   the design), `docs/progress.md` (Phase 0–2 status, historical), `docs/performance.md` (training throughput: benchmarks,
   profiles, `scripts/train_bench.sh` / `scripts/profile_train.sh`), `docs/rust-actor.md` (the agent acting in
   Rust: rollouts, plays, replay files).
-- Game knowledge: `docs/ram-catalog.md` (RAM features), `docs/routes/d2first.md` (the route; `docs/route.md` is the old milestone1 route),
+- Game knowledge: `docs/ram-catalog.md` (RAM features), `docs/routes/d3first.md` and `docs/routes/d2first.md` (the
+  two routes; `docs/route.md` is the old milestone1 route),
   `docs/specialists.md` (room families), `triforce/game.yaml` (room graph with `specialist:` tags),
   `triforce/routes.yaml` (route data).
 - Data: start states in `triforce/states/` (`TFZSTATE` files, `$TRIFORCE_STATES_DIR` overrides), curriculum
@@ -130,12 +145,14 @@ cargo test --release --workspace --features zelda/zcore        # Rust tests (~1 
 .venv/bin/python scripts/train_round.py --round round1          # train + evaluate every specialist (promotes only with --promote)
 uv run training-gui.py                                          # live monitor: every running training/evaluation on the machine, any worktree (job registry, $TRIFORCE_JOBS_DIR), else the newest logs/ folder; also serves http://<host>:22222/
 uv run training-gui.py --web-only                               # only the web view, no window (no display needed, e.g. over SSH)
-.venv/bin/python play-zelda.py 4x3                               # watch replays of the promoted models' runs as they are simulated: the best so far (keys b w k d r g: best/success/stuck/died/random/golden; n next; s sound, click a cell to hear it; u/+/-/p; c clips off/on; --controller, --act argmax|sample|model, --power-on, --stop-at, --clips on|off)
+.venv/bin/python play-zelda.py 4x3                               # watch replays of the promoted models' runs on the main route (d3first) as they are simulated: the best so far (keys b w k d r g: best/success/stuck/died/random/golden; n next; s sound, click a cell to hear it; u/+/-/p; c clips off/on; --controller, --act argmax|sample|model, --power-on, --stop-at, --clips on|off)
+.venv/bin/python play-zelda.py 4x3 --route d2first               # the same on the first route
 .venv/bin/python play-zelda.py 3x2 --live                        # the top left cell is a live game: c turns clips off (and on) for the rest of that run, the route re-plans from where Link stands
 .venv/bin/python play-zelda.py 2x3 runs/replays                  # or a folder of replay files, round and round (one FILE.tfreplay: on loop)
+.venv/bin/python play-zelda.py 1x1 corpus/replays/v2-golden-ending.tfreplay   # d3first's golden path from power on to the ending (v1-golden-ending: d2first's)
 .venv/bin/python create-video.py wins.mp4 2x3 runs/wins --sound  # film replays on a grid into a video (needs ffmpeg; 1x1 by default; --sound: the middle cell's, else the top left one's; --controller)
-.venv/bin/python zelda-headless.py runs/wins 3 --wins-only       # no window: play until 3 runs won, keep them as replays (--deaths-only, --stuck-only, --power-on, --stop-at step:N, --clips off)
-.venv/bin/python zelda-headless.py runs/golden 1 --golden --power-on   # the golden path: games race triforce to triforce from each winner's state, stitched into one replay
+.venv/bin/python zelda-headless.py runs/wins 3 --wins-only       # no window: play until 3 runs won, keep them as replays (--deaths-only, --stuck-only, --power-on, --stop-at step:N, --clips off, --route d2first)
+.venv/bin/python zelda-headless.py runs/golden 1 --golden --power-on   # the golden path on d3first: games race triforce to triforce from each winner's state, stitched into one replay (--route d2first for the other)
 .venv/bin/python zelda-map.py                                   # room map + per-room stats by scope: full run, segment, room only; clips both/on/off (--stats FILE, --route d2first, --rerender)
 .venv/bin/python -m triforce.run --seed 1                      # --render (window) or --video out.mp4 (ffmpeg)
 .venv/bin/python -m triforce.entry_states build --chains 0,1,2  # regenerate start states into target/entry-states/<ts> (start/build/path/install/audit)
@@ -143,9 +160,9 @@ uv run training-gui.py --web-only                               # only the web v
 .venv/bin/python -m triforce.entry_states idle                  # regenerate the power-on idle states (triforce/states/power_on) after a state-format or emulator change
 triforce promote <specialist> <run-id>
 triforce --models-dir models convert-model --promoted --out target/converted-models   # widen 1.5.0 runs to schema 6's observation (copies; RUN_DIR... for single runs)
-triforce eval-chain --runs 20 --parallel 20                     # route d2first; writes runs/eval-chain-<yymmdd-HHMMSS>.jsonl + .meta.json
+triforce eval-chain --runs 20 --parallel 20                     # route d3first (the main route; --route d2first for the other); writes runs/eval-chain-<yymmdd-HHMMSS>.jsonl + .meta.json
 triforce eval-chain --from 4_71s_0 --runs 20 --clips off       # every run with clips off (the plain way through every stretch); --clips-off-from 4:0x31 turns them off on the way
-triforce eval-chain --runs 20 --parallel 20 --power-on --stop-at step:24   # from console power on (random idle delay per seed) to the overworld with Dungeon 2's triforce
+triforce eval-chain --runs 20 --parallel 20 --power-on --stop-at step:24   # from console power on (random idle delay per seed) to the overworld with Dungeon 3's triforce (d2first's step 24: Dungeon 2's)
 triforce eval-chain --runs 20 --parallel 20 --replays runs/replays   # also record every run as runs/replays/<seed>-<ending>.tfreplay (--streams rewards,decisions,keyframes)
 triforce eval-batch r71-1k --chains r71-1k --runs 1000 --act model   # the fourteen chain segments (full, d2, post-d2, d1, post-d1, d3, post-d3, d4, post-d4, d5, post-d5, d7, post-d7, d6) as one batch (one log folder, a GUI bar each) into target/r56-chains/r71-1k-*.jsonl, then yardstick + room-stats
 triforce eval-batch r71-families --families all --acts sample,argmax --jobs 4   # every family's promoted run in both act modes, 4 side by side

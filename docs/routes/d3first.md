@@ -1,8 +1,9 @@
 # d3first: Dungeon 3 first, the wood sword to the grave — the route as built
 
 The owner's second route (Nov 19; `docs/decisions.md` 2026-11-19 "Two routes"): the speedrunners' route, kept beside
-`d2first` and to become the main route (`triforce/registry.py` `MAIN_ROUTE`) once a golden path on it reaches the
-ending. The wood sword until the magic sword (no white sword); Dungeons 3, 4, 1, 5, 2, 7, the magic sword, 6, 8, 9.
+`d2first`, and the main route since 2.0.0.0 (`triforce/registry.py` `MAIN_ROUTE`): a golden path on it from console
+power on reached the ending (round32.md §11; decisions 2026-11-20 "2.0.0.0: `d3first` is the main route"). The
+wood sword until the magic sword (no white sword); Dungeons 3, 4, 1, 5, 2, 7, the magic sword, 6, 8, 9.
 Walked in the emulator before it was written: `docs/routes/d3first-walks-a.md` (the start to Level 5's entrance) and
 `d3first-walks-b.md` (Level 5 to the ending), their scripts `scripts/experiments/r32_*.py` and `r32b_*.py`. Data:
 `triforce/routes.yaml` `d3first` (304 steps since phase IX's merge: see "Phase IX" below), rooms in

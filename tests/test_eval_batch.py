@@ -280,13 +280,16 @@ def test_a_scouting_route_plays_its_segments_with_route(tmp_path):
 
 
 def test_segments_are_keyed_by_route(tmp_path, monkeypatch):
-    """Phase X: `--route` picks the route's segment table (d2first's by default, the main route's), passes the route
-    to every segment, and a route without a table needs --segments."""
+    """Phase X: `--route` picks the route's segment table (the main route's by default: d3first's since 2.0.0.0),
+    passes the route to every segment, and a route without a table needs --segments."""
     options = eval_batch.Options('x', cores=20, eval_parallel=4)
-    assert eval_batch.route_segments() == eval_batch.ROUTE_SEGMENTS['d2first']
+    assert eval_batch.route_segments() == eval_batch.ROUTE_SEGMENTS['d3first']
     default = eval_batch.chains_entries('x', options, act='model', runs=10, segments=None, chains_dir=tmp_path,
                                         chain_args=[], report=False, only_report=False)
-    assert [e.name for e in default] == [item.split(':')[0] for item in eval_batch.SEGMENTS.split()]
+    assert [e.name for e in default] == [item.split(':')[0] for item in eval_batch.D3FIRST_SEGMENTS.split()]
+    d2first = eval_batch.chains_entries('x', options, act='model', runs=10, segments=None, chains_dir=tmp_path,
+                                        chain_args=[], report=False, only_report=False, route='d2first')
+    assert [e.name for e in d2first] == [item.split(':')[0] for item in eval_batch.SEGMENTS.split()]
     with pytest.raises(eval_batch.BatchError, match='no segment table'):
         eval_batch.chains_entries('x', options, act='model', runs=10, segments=None, chains_dir=tmp_path,
                                   chain_args=[], report=False, only_report=False, route='clips-gauntlet')

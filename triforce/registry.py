@@ -75,11 +75,11 @@ PLAN_ACT = f'{ACT_RULE}+plan:16:1'
 MODEL_ACT = 'model'
 # The main route (phase X, the owner, Nov 19): the route every tool plays and measures when none is named
 # (`play-zelda.py`, `zelda-headless.py` and the golden path, `zelda-map.py`, `triforce eval-chain`, `eval-batch
-# --chains` and the chains script `scripts/experiments/r56_chains.sh`). `d2first` until a golden path on `d3first`
-# reaches the ending ("d3 will be the main run when it works ... d2 will be the secondary"); then 'd3first' here.
-# The engine's `DEFAULT_ROUTE` (`zelda::game_map`) is another thing: the route of bare start-state names, `d2first`
-# for good.
-MAIN_ROUTE = 'd2first'
+# --chains` and the chains script `scripts/experiments/r56_chains.sh`). `d3first` since 2.0.0.0: its golden path
+# reached the ending ("d3 will be the main run when it works ... d2 will be the secondary"); `d2first` by `--route
+# d2first`. The engine's `DEFAULT_ROUTE` (`zelda::game_map`) is another thing: the route of bare start-state names,
+# `d2first` for good.
+MAIN_ROUTE = 'd3first'
 
 
 def parse_act(text: str, allow_model: bool = False) -> str:

@@ -14,7 +14,7 @@
     .venv/bin/python play-zelda.py --clips off         # every simulated run without clips (c turns them back on)
 
 Every cell plays a replay; only a --live cell is a live game.  Without a path the models play the route (--route, the
-main route registry.MAIN_ROUTE by default: d2first until d3first's golden path reaches the ending)
+main route registry.MAIN_ROUTE by default: d3first since 2.0.0.0; --route d2first for the first route)
 in the background, --parallel games at once, without a picture and as fast as they run.  Every finished run is a
 replay, filed into queues of --capacity (32) runs each:
 

@@ -1,4 +1,86 @@
-# Round 32: the `d3first` baseline (steps 0-97, then Level 5 to the ending) and the training it owes
+# Round 32: `d3first`, the second route, from its baseline to a golden path that ends the game (2.0.0.0)
+
+## Summary
+
+The owner's second route (Nov 19, AGENTS.md "Two routes"; `docs/routes/d3first.md`): the wood sword until the magic
+sword (no white sword), Dungeons 3, 4, 1, 5, 2, 7, the magic sword, 6, 8, 9, by screen scrolls, recorder warps, the
+blue candle, three secrets, the heart containers of heart rock, the ladder, the raft and 0x47. It was walked in the
+emulator (`docs/routes/d3first-walks-a.md`, `-walks-b.md`), written as route data beside `d2first` (304 steps; the
+dungeon insides shared with `d2first` as routes.yaml blocks), given its own start states (`d3first_*`, every step,
+audit clean) and the plumbing for two routes (state namespaces, `promoted.<route>`, segment tables per route,
+`registry.MAIN_ROUTE`); then measured with `d2first`'s team (the baseline: Dungeons 3 and 4 0 of 1000, the full
+route 0), trained where the wood sword or a new room lost the runs (one route-only run per family, five trainers,
+fifteen route runs), and raced. **The owner's condition is met: "works as defined as 'a golden path eventually
+succeeds'"**: with the route's team three golden paths from console power on, models alone, ended the game in 176,
+135 and 91 runs (§11). `d3first` is the main route from 2.0.0.0 (`registry.MAIN_ROUTE`); `d2first` is played with
+`--route d2first`.
+
+- **The route's runs play only the route's part** (`own_models_until: {waypoint: sword}`): steps 0-205, the wood
+  sword's half; from the magic sword's cave (step 206) on every family plays its default run, the same run as on
+  `d2first` (decisions 2026-11-20 "A route's own runs play up to its cutoff").
+- **What is cheated** (decisions 2026-11-20 "`d3first`'s bag and the arrow rooms' rupees are cheated"): Dungeon 5's
+  entrance tops the bag up to 8 bombs (the Olive Garden's weapon with the wood sword); the rooms' bomb walls as on
+  `d2first`; the candle shop's and the arrow rooms' rupees; never a key.
+- **What is weak** (For the owner): Dungeon 4's Gleeok with the wood sword, Dungeon 3 at three hearts, Dungeon 7's
+  0x1b (six Blue Goriyas with the wood sword), the Olive Garden.
+
+## For the owner
+
+**The corrections to his list** (`docs/routes/d3first.md` "For the owner" 1-17 has each with its numbers):
+
+- The walked ways where the list's guess did not fit the map: Level 4 → Level 1 by 0x55, 0x56, 0x46, 0x47, 0x48,
+  0x38 (0x57 has no N edge); 0x2d → the candle shop back by 0x2c, 0x1c, 0x0c; 0x3d has no W edge (0x3d S, 0x4d W,
+  0x4c N to Level 2); the dead woods are 0x62's tree, then 0x51's and 0x60's wrap exits.
+- "About 30 rupees and 5-8 bombs leaving Level 1": the rooms give neither (1-3 bombs, 40 rupees with 0x2d's 30);
+  answered by his own "can be ignored since we have the ability to cheat them": cheated and counted (below).
+- The recorder's warps out of Levels 5 and 2 need Link to face right or up; the engine works out the warp and
+  offers RECORDER only then, and ow-leever and ow-octorok had to learn the turn (§10: the one step no earlier model
+  could take).
+- Dungeon 1 is the shared block although this route needs neither 0x23's nor 0x53's key; five rooms (0x75, 0x0c,
+  0x51, 0x60, 0x3e) have only the clip way (no plain way on this route).
+- Hearts into Dungeon 5 are 7; the grave gives the magic sword at 12 (refused at 11).
+
+**What is cheated on this route, and how much a run.** Bombs at the walls (a room's grant, BOMB offered only toward
+the wall), the route's bag topped up to 8 at Dungeon 5's entrance (cheated where each unit is thrown: in practice
+all of it in the Olive Garden), rupees at the candle shop (0:0x0c, `requires_rupees: 60`) and for the arrows while
+8:0x4c's Pols Voice or Ganon lives; never a key. The golden paths: 10, 14 and 18 bombs (5-8 of them the bag) and 13,
+0 and 10 rupees (§11). The chains of record count it a run (§12).
+
+**What is still weak** (the chains of record, §12, have each room's losses): Dungeon 4's Gleeok (16 wood hits at the
+hearts the dungeon leaves; the planner wins it four times as often), Dungeon 3 at three hearts (its Keese, Zols and
+Darknuts take the hearts before 0x59 and Manhandla), Dungeon 7's 0x1b (goriya's six Blue Goriyas; past it
+wallmaster's grab sends Link back through them), the Olive Garden (darknut's six Blue Darknuts, even with the bag).
+
+**Not checked:** the route runs whose trainer had not finished its other-segment checks when the team was landed
+stay in it (the golden path is the gate): goriya `r32d1-goriya` and stalfos-keese-gel `r32d1-skg` (their Dungeon
+2, 3, 4, 5 and 7 gates: the Dungeon 1 trainer's `r32d1-final`), ow-octorok `r32turn-oct-s34` (its confirmation on
+other seeds and its other segments before the cutoff); the entrance states `d3first_4_71s_*` hold fewer bombs than
+runs bring (§11 "What the entrance states should hold"); the chains of record measure the team as it is.
+
+## The walks, the route data, the plumbing
+
+- **Walks** (`docs/routes/d3first-walks-a.md`: the start to Level 5's entrance; `-walks-b.md`: Level 5 to the
+  ending; scripts `scripts/experiments/r32_*.py`, `r32b_*.py`): every step crossed in the emulator by a rule before
+  it was written.
+- **Route data** (`triforce/routes.yaml` `d3first`, `docs/routes/d3first.md`; decisions 2026-11-19 "`d3first` as
+  route data"): dungeon insides and shared legs written once as `blocks:` and `{include: NAME}` in both routes;
+  `d2first` pinned field for field (`tests/fixtures/d2first_steps.json`); the rooms only `d3first` knows are its own
+  game.yaml entries, so `d2first`'s observations and masks stay bit for bit.
+- **Plumbing** (decisions 2026-11-19 "A second route beside `d2first`"; `docs/architecture.md` "Routes"): start
+  states per route by a name prefix (`d3first_3_7cs_0`; harvested `d3first_*` too), `promoted.<route>` beside
+  `promoted`, segment and room-stats tables keyed by route (`eval_batch.ROUTE_SEGMENTS`, `room_stats.ROUTE_SCOPES`),
+  `--route` on every tool, `heart_value.d3first.json` and `chain_hp.d3first.json`, `registry.MAIN_ROUTE` (the route
+  tools play when none is named) apart from the engine's `DEFAULT_ROUTE` (the route of bare state names: `d2first`).
+- **The grants** (decisions 2026-11-20 "`d3first`'s bag and the arrow rooms' rupees are cheated"): routes.yaml
+  `grant: {bombs: 8}` at Dungeon 5's entrance (step 97); the ledger keeps a room's grant (bound to its wall) and the
+  route's (the bag) apart; 8:0x4c's `requires_rupees: 9` on both routes; a replay's states carry both
+  (`REPLAY_VERSION` 1, version 0 still read).
+- **The cutoff** (decisions 2026-11-20 "A route's own runs play up to its cutoff"): a route run for the wood sword
+  lost the same family's magic-sword rooms (Dungeon 8 5.3% against 26.2%), so `own_models_until: {waypoint: sword}`
+  makes `promoted.d3first` play steps 0-205 and the default run the rest; records name `family@d3first` where a
+  route run played.
+
+## The baseline, steps 0-97 (§1-4) and from Level 5 (§5): today's team, nothing trained
 
 The second route (`docs/routes/d3first.md`; the owner, Nov 19, "Two routes"): the wood sword until the magic sword,
 Dungeons 3, 4, 1, 5, 2, 7, 6, 8, 9. Its start states exist for steps 0-97 (the game start to Level 5's entrance;
@@ -826,7 +908,520 @@ d5/d2/d7/d6/d8/d9 runs that entered.
 | 302 | 9:0x42 | S→N | ganon | 142 | 22 (155) | death 22 | 3.65/15 | 0.61 | 52 | 0.00 | 0 | 0/0/0 | 136, 3.4/15, 0.67 | 168, 3.2/15, 0.76 | 0/82 |
 | 303 | 9:0x32 | S→end | ganon | 120 | 0 (0) |  | 3.60/15 | 0.00 | 5 | 0.00 | 0 | 0/0/0 | 0, 3.1/15, 0.00 | 0, 2.9/15, 0.00 | 0/82 |
 
-## The route's team and the golden path
+## 6. Dungeon 3's families on `d3first`: darknut, zol, boss-manhandla
+
+**Cause** (§2): every wood-sword fight is longer, so Dungeon 3's three containers run out (0x6b loses 1.31 hearts a
+visit, 0x4b 0.91), and the fights the models never saw with the wood sword kill at full hearts (3:0x59's five Red
+Darknuts 35%, Manhandla 53%).
+
+**Arm** (round 1): one route-specific continuation per family on `d3first`'s states only (`state_routes:
+[d3first]`), from its promoted run, 488 iterations (2M steps), `--sil-coeff 0.1`, checkpoints every 30; start states
+at the chains' hearts by the harvested handoffs at `harvested_fraction` 0.25; curriculum tracks from the explorer
+and, where it fails, the rule-won tracks; demonstrations at `--demo-coeff 0.05`: the rule files only (darknut:
+`darknut-59` and `dash-69`; boss-manhandla: `manhandla-4d`; zol: none). darknut three seeds (32-34), the others
+one. The planner's demonstrations (`temperature:0.5+relax:16+plan:16:1`, won episodes, 20 runs a seed state and up
+to 30 harvested handoffs a stem) were recorded beside them for round 2: darknut 22,938 rows (3:0x59 N→S 39 of 60
+won from the seed states), zol 27,933, boss-manhandla 2,385 (36 of 60). darknut's 3_5bw_0 and 3_5bw_2 had no track
+in round 1 (an explorer fault, since fixed); later rounds have them.
+
+**Choosing.** A single family swapped into the `d3` chain leaves it at 0% (the other two still kill every run), so
+each is chosen on the stretch of `d3` it plays, on the chain's own hearts: zol from Level 3's entrance to 3:0x59's
+door (arrivals and hearts there), darknut from the entrance to Manhandla's door 3:0x4d with zol's route run in the
+team, boss-manhandla from Manhandla's door (`3_4dw_0`, 1 heart of 3, as the chains arrive) to 0:0x74. Screen seeds
+2000-2999, confirmation 3000-3999 (`select-checkpoint ... --route d3first`; round 1 gave the start by its
+namespaced name, `--from d3first_3_7cs_0`, because with `--segment d3` the report did not find its own chains: the
+chains' provenance holds the namespaced name. Fixed since: the plan names the start as eval-chain records it, so
+`--segment d3` and a bare `--from 3_7cs_0` work on a namespaced route).
+
+**Results so far (single rooms, the round's evaluation, 20 episodes a state):** zol 3_4bs 90-100% at -0.1 to -0.2
+hearts (baseline 61-69%, -1.0), 3_6bs 85-90% at -0.4 to -0.6 (70-76%, -1.1 to -1.35); darknut 3_59n 65-80%, 70-78%,
+47-78% for the three seeds (baseline 24-34%) at -0.8 to -1.3 hearts, with about one bomb a visit when Link holds more
+than the route's reserve of 6; boss-manhandla 3_4dw 70% each (baseline 45/67/45%).
+
+**boss-manhandla, chosen and promoted for `d3first`** (`r32d3-manh`, its last weights): from Manhandla's door at 1
+heart to 0:0x74, confirmation **58.0% ± 1.6** against the promoted run's 47.2% (paired +10.8 ± 1.9; hearts on
+arriving 3.44 against 3.44). Screen: it003596 60.1%, last 58.6%, promoted 49.2%; the screen's winner did not confirm
+(-1.3 ± 1.8 against last). `d2first` keeps `r78t4-manhandla2`. Round 2 (`r32d3-manh2`, from it, with the planner's
+demonstrations added) brought no gain: confirmation 55.9% against `r32d3-manh`'s 58.0% (-2.1 ± 1.8); not promoted.
+
+**zol, chosen and promoted for `d3first`** (`r32d3-zol`, its last weights): from Level 3's entrance to 3:0x59's
+door (0x7b, 0x6b, darknut's 0x5b, 0x4b, 0x4a, 0x49), confirmation **59.0% ± 1.6** against the promoted run's 8.7%
+(paired +50.3 ± 1.7), Link arriving with 1.45 hearts against 1.07. Screen: last 57.2%, it001422 55.3%, it001452
+54.6%, it001482 49.8%, promoted 9.6%. `d2first` keeps `r79b-zol`. Round 2 (`r32d3-zol2`, from it, the planner's
+demonstrations) brought no gain: 74.5% against `r32d3-zol`'s 73.1% (+1.4 ± 1.9), both with darknut's route run in the
+team (hence the higher rates); not promoted.
+
+**darknut, chosen and promoted for `d3first`** (`r32d3-dark-s32`, its last weights): from Level 3's entrance to
+Manhandla's door 3:0x4d with zol's route run in the team, confirmation **13.3% ± 1.1** against the old run's 0.8%
+(the old run is measured in seed 34's selection on the same seeds 3000-3999 and team; about +12.5 points); seeds 34
+and 33 confirm 11.9% and 9.2%. Not yet checked on darknut's other `d3first` segments (Dungeons 5 and 8).
+
+**The bomb reserve in 3:0x59 (route data, the lead, Nov 20).** `d3first` kept a reserve of 6 from 3:0x7c through
+3:0x59, so darknut's BOMB was masked in 0x59 unless Link held 7 or 8, and the walks' `BombFighter` (60 of 60 from
+real states, with 0x4a's four bombs) was closed to the model. Now 0x59's fight step (its first visit, from N) is each
+route's own step before the block `dungeon-3` (as Dungeon 5's entrance for the grant): `d3first`'s sets the reserve
+to 0 from there through 0x5b's last pass, whose four bombs pay for the two walls and Manhandla (0x5c 6, Manhandla 0,
+0x3d 6 as before); `d2first`'s step is unchanged and its golden list holds (`tests/test_game_map.py`).
+
+### The `d3` segment with the three route runs (models alone, 1000 runs; the planner 300; seeds 4000-)
+
+zol `r32d3-zol`, darknut `r32d3-dark-s32`, boss-manhandla `r32d3-manh` (`promoted.d3first`), the reserve above,
+`--route d3first --from d3first_3_7cs_0 --stop-at step:24`:
+
+| Chain | Runs | Arrived (0:0x74) | Deaths | Stuck | Hearts out (of max) | Bombs out | Keys out |
+|---|---|---|---|---|---|---|---|
+| today's team (§3) | 1000 | 0.0% | 998 | 2 | - | - | - |
+| **the route's team** | 1000 | **6.7%** ± 0.8 | 931 | 2 | 4.00 of 4 | 4.25 | 2.00 |
+| planner, today's team (§3) | 300 | 26.0% | 207 | 15 | 4.00 of 4 | | |
+| planner, the route's team | 300 | 54.3% ± 2.9 | 137 | 0 | 4.00 of 4 | 4.10 | 2.00 |
+
+(± here is one standard error.) What a run carries into Dungeon 4 (`post-d3` and Dungeon 4's states should hold
+it): 4 of 4 hearts (the container refills them), 2 keys, and bombs spread from 0 to 8 (models: 0 ×6, 1 ×6, 2 ×9,
+3 ×1, 4 ×10, 5 ×18, 6 ×3, 7 ×2, 8 ×12 of 67; the planner's 163 alike, mean 4.1). The installed `4_71s_*` hold 0.
+
+Per room (`scripts/experiments/r32d3_ledger.py`; entered, lost there, hearts on entering of 3, hearts lost a visit,
+bombs on entering, bombs used a visit):
+
+| Step | Room | Family | Models | Planner |
+|---|---|---|---|---|
+| 8 | 3:0x6b S→N | zol | 1000, 11, 2.89, 0.39, 0, 0 | 300, 0, 2.99, 0.11 |
+| 9 | 3:0x5b S→N | darknut | 989, 36, 2.53, 0.38, 0, 0 | 300, 0, 2.88, 0.10 |
+| 10 | 3:0x4b S→W | zol | 953, 16, 2.23, 0.15 | 300, 0, 2.78, 0.07 |
+| 11 | 3:0x4a E→W | stalfos-keese-gel | 937, **124**, 2.11, 0.74 | 300, 1, 2.71, 0.14 |
+| 12 | 3:0x49 E→S | zol | 813, **95**, 1.59, 0.27, 3.98 | 299, 0, 2.57, 0.04 |
+| 13 | 3:0x59 N→S | darknut | 718, **149**, 1.49, 0.25, 3.97, 4.79 | 299, 2, 2.53, 0.03, 3.94, 4.74 |
+| 14 | 3:0x69 N→cave | darknut | 569, **158**, 1.56, 0.57, 0.45, 0.11 | 297, 21, 2.52, 0.52 |
+| 15 | 3:0x0f cellar | equipment-room | 411, 48, 1.37, 0.26 | 276, 4, 2.15, 0.09 |
+| 17-18 | 3:0x59 S→E, 0x5a | darknut, trap-room | 363, 8 + 34 | 272, 4 + 4 |
+| 19 | 3:0x5b W→E | darknut | 321, **142**, 1.24, 0.42, 0.22, 0.83 (wall bomb cheated 173) | 264, 12, 2.09, -0.02 |
+| 20-21 | 3:0x5c, 0x4c | darknut, trap-room | 179, 19 + 12 | 252, 1 + 1 |
+| 22 | 3:0x4d W→N | boss-manhandla | 148, **81** (55%), 1.43, 0.19, 4.06, 2.09 | 250, 87 (35%), 2.18, 0.24 |
+
+Where the runs die: the hearts run out on the way. Link enters 0x59 with 1.49 of 3 hearts (the planner 2.53) and
+Manhandla's door with 1.43 (2.18); 0x4a's Keese (stalfos-keese-gel, not a family of this work: 124 deaths, 0.74
+hearts a visit against the planner's 0.14) and 0x49 (95) take the hearts 0x59 needs. 0x59 now spends 0x4a's bombs
+(4.8 a visit, the planner the same) and loses 21% of its entrants; 0x69's dash 28%; 0x5b's last pass 44% (at 1.24
+hearts); Manhandla 55%.
+
+### The route runs on their families' other `d3first` segments (1000 runs each, seeds 5000-, paired)
+
+Each segment twice on the same seeds: with the route's team (`promoted.d3first`) and with today's team (the three
+families' default runs by `--checkpoint`), the rest of the team the same.
+
+| Segment | Route's team | Today's team | Paired difference | Where the families differ |
+|---|---|---|---|---|
+| d4 (`4_71s_0` → step 53) | 0.1% | 0.0% | +0.1 ± 0.1 | zol's 4:0x40: 15 deaths against 106 |
+| d5 (`5_76s_0` → step 120) | 7.6% ± 0.8 | 7.8% ± 0.8 | -0.2 ± 1.2 | the Olive Garden 525 deaths against 527; 0x64 83 against 102 |
+| d8 (`8_7es_0` → step 243) | 5.3% ± 0.7 | 26.2% ± 1.4 | **-20.9 ± 1.6** | 8:0x6e (boss-manhandla) 15 deaths against 1, 1.83 hearts lost a visit against 0.86; 8:0x5e (darknut) 74 against 11, 0x4e 136 against 72, 0x3e 477 against 355 |
+
+zol's route run is better in Dungeon 4 and level in Dungeon 5. darknut's and boss-manhandla's are far worse in
+Dungeon 8: their rounds 1-2 trained before `d3first` had any state past step 119, so their `state_routes:
+[d3first]` drew no Dungeon 8 state (round 1's evaluation lists only `d2first`'s); the magic-sword rooms drifted.
+The lead's answer (Nov 20): a route run trained for the wood sword is not to hold the magic-sword rooms;
+`promoted.d3first` will play only the route's steps before the magic sword is taken (the grave), the families'
+default runs the steps after it (Dungeons 6, 8, 9 and their legs). The two promotions stay (they were removed for
+an hour and restored); Dungeon 8 is no gate for darknut's round 2.
+
+### darknut's round 2 (`r32d3-dark2-s42/s43/s44`, from `r32d3-dark-s32`)
+
+Three seeds, 488 iterations each, with the reserve of 0 in 0x59, the 21 tracks (3_5bw_0 and _2 rebuilt by the
+explorer fix), and the states since the merge (Dungeon 8's too). Demonstrations (`--demo-coeff 0.05`): the
+`BombFighter` rule in 0x59 at the chains' hearts with the state's own bombs (`r32p_rules.py darknut-59`, 65 of 90
+won, 21,427 rows, 406 of them BOMB) and the planner there (86 of 90, 10,417 rows); the Olive Garden with the bag of
+8 at the chains' hearts, the same rule (`garden-05`, new: 71 of 300 won, 45,315 rows) and the planner (`5_05e` 81
+of 120, `5_05c` all, 21,625 rows); `dash-69` and round 1's planner file. Harvested handoffs from the new code's
+chains (500 runs each of `d3` and `d5` with the route's team, `--harvest`): Dungeon 3's beside the old ones, Dungeon
+5's in place of the handoffs from before the grant (which held 0 bombs in 822 of 1000 runs), and 150 Garden entries
+(no chain hands over there: darknut plays 0x06 before it) written from the seed states at the chains' 5:0x05 hearts
+with the bag of 8 (`target/`-only script; a harvested start keeps its health and items).
+
+Seed 44 (its own evaluation, 20 episodes a state): 3_59n 90-93% at -0.04 to -0.26 hearts using about five bombs
+(round 1: 47-80% at -0.8 to -1.3); 5_05e 20-25% at -4.2 hearts with the family's bombs draw (round 1 17-23%).
+Selections (confirmation seeds 8000-, 1000 runs, each paired with `r32d3-dark-s32` on the same seeds and team):
+
+| Seed (`last`) | To Manhandla's door | vs round 1 (15.0%) | Dungeon 5 to 0:0x0b | vs round 1 (8.1%) |
+|---|---|---|---|---|
+| **s44** | 20.4% | +5.4 ± 1.7 | 8.2% | +0.1 ± 1.2 |
+| s42 | 21.0% | +6.0 ± 1.7 | 6.9% | -1.2 ± 1.2 |
+| s43 | 20.3% | +5.3 ± 1.6 | 7.6% | -0.5 ± 1.2 |
+
+All three gain on `d3` beyond noise and none is worse on Dungeon 5 beyond noise; `r32d3-dark2-s44` is promoted for
+`d3first` (the same gain, level on Dungeon 5). Since `r32-steps` 71441669 (merged) a `promoted.d3first` plays
+steps 0-205 only, so the route runs no longer play Dungeon 8.
+
+With the final team (zol `r32d3-zol`, darknut `r32d3-dark2-s44`, boss-manhandla `r32d3-manh`), seeds 9000-:
+`d3` **8.0%** (80 of 1000; 920 deaths), the planner 58.3% (300); Dungeon 5 7.3% (73 of 1000). Against round 1's team
+(6.7% on seeds 4000-, unpaired): 0x59 now loses 69 of 728 entrants (149 of 718 before), with -0.02 hearts a visit;
+the losses moved on to 0x69's dash (159 of 659), 0x5b's last pass (168 of 395, entered at 1.36 hearts) and Manhandla
+(109 of 189 at 1.40). Carried out: 4 hearts, 2 keys, bombs 0-8 (mean 4.6).
+
+### Promoted for `d3first` and what is next
+
+zol `r32d3-zol`, darknut `r32d3-dark2-s44`, boss-manhandla `r32d3-manh`: `d3` **8.0%** (0.0% with today's team),
+the planner 58.3% (26.0%). Next lever for `d3`, from the ledger: the hearts on the way. Link reaches 0x59 with 1.50
+of 3 hearts (the planner 2.55) and Manhandla's door with 1.40 (2.21); before 0x59 the most is lost in 3:0x4a's Keese
+(stalfos-keese-gel: 114 deaths, 0.68 hearts a visit against the planner's 0.15), whose `d3first` run is Dungeon 1's
+trainer's (`r32d1-skg`, trained with `3_4ae`), and in 3:0x49 (zol, 82 deaths); then 0x69's dash, 0x5b's last pass
+and Manhandla at 1.4 hearts. Dungeon 4's start states should hold what a run carries out: 4 hearts, 2 keys and 0-8
+bombs (mean 4.6); they hold 0 bombs.
+
+## 7. Dungeon 4's training (vire, like-like, boss-gleeok)
+
+**Cause.** Dungeon 4 starts at 4 of 4 hearts and nothing refills them before the triforce. The models lose 449 of
+876 runs entering 4:0x31 (Vires, entered at 1.99 hearts) and 339 of 427 in 4:0x32 (Like-Likes, 1.35); the 13 runs
+that reach Gleeok (4:0x13) enter at 0.62 and all die. The planner keeps the hearts (3.36 into 0x31, 2.05 into
+Gleeok) and is left with Gleeok: 117 of 219 lost there. Gleeok won by the planner's chains, by hearts on entering
+(r32base-plan-d4 and r32prep-plan-d4): 0.5: 8 of 53; 1.0: 3 of 57; 1.5: 27 of 83; 2.0: 32 of 69; 2.5: 41 of 62;
+3.0: 37 of 53; 3.5: 18 of 21; 4.0: 25 of 32. The fight is won at the hearts the dungeon leaves, so the hearts
+saved in 0x50, 0x40, 0x31, 0x32 and 0x12 are the larger lever.
+
+**The arm.** One `d3first`-only continuation per family (`state_routes: [d3first]`, harvested handoffs at the
+chain's hearts), from its promoted run, curriculum tracks of its `d3first` states, demonstrations at
+`--demo-coeff 0.05`: the planner's won episodes from the seed states (20 a chain) and up to 30 harvested handoffs
+a stem, plus the rules at the chains' hearts (`r32p_rules.py ROOM --hearts chain --runs 30`):
+
+| Family | Base run | Harvested (fraction) | Rule rows (won of 90) | Planner rows | Seeds |
+|---|---|---|---|---|---|
+| vire | r77-b | 1,173 (0.25) | vire-31 19,122 (86), vire-12 18,351 (86) | 24,999 | 3 |
+| like-like | r79c-like | 553 (0.25) | like-like-32 28,863 (79) | 20,263 | 1 |
+| boss-gleeok | r78t4-gleeok | 211 (0.33) | gleeok-13 16,148 (24) | 5,582 | 3 (one ended at 226 of 489 iterations) |
+
+Gleeok trained with hp drawn from 0.6 to 4 hearts (the family's own draw is 2-4), the hearts the chains bring.
+Vire's harvest has no 4:0x31 handoffs (the chains change family at 0x50 and 0x30, not at 0x31): 0x31 trains from
+its seed states at the family's hp draw.
+
+**Training.** Vire: success 92% → 95% a room and hearts lost an episode 0.41 → 0.2 (all three seeds early-stopped
+at 95%). Like-like: 77% → 88%, 1.03 → 0.74 hearts. Gleeok: training success fell from 14-18% to 3-10% after about
+100 iterations in both full seeds. At the chains' hearts (single room, 3 states × 100, seed 3000) the base run wins
+7.7%, the checkpoints of iterations 2502 and 2532 (60-90 into training) 16.0-17.0% in all four (deaths otherwise),
+and the last checkpoints 4.3-4.7%: they learned to stall (no-damage and max-steps endings in 160-180 of 300).
+
+**Measured on `d4`** (seeds 3000-3999, the rest of the team as promoted; arrivals at Gleeok's room 4:0x13, the
+segment's only gate the old Gleeok lets through): the promoted team 6 of 1000 (0.6% ± 0.2, 0.67 hearts there);
+vire `r32d4-vire-s2` 7.9% ± 0.9 (0.94 hearts), paired +7.3 ± 0.9 points; like-like `r32d4-like` 2.5% ± 0.5 (0.76
+hearts), paired +1.9 ± 0.5. Both are better beyond noise and are promoted for `d3first` (`promoted.d3first`).
+Gleeok is judged on the full `d4` segment with the route's team, and on 8:0x3c (Dungeon 8 after the magic sword,
+which a Gleeok route run also plays) against 24.3%.
+
+**With zol's route run** (`r32d3-zol`, Dungeon 3's training; 4:0x40 is zol's) the route's team (vire
+`r32d4-vire-s2`, like-like `r32d4-like`, zol `r32d3-zol`, Gleeok's iteration-2502 checkpoint by `--checkpoint`)
+passes `d4` in 22 of 1000 runs (2.2% ± 0.5; seeds 0-999, this branch after the `r32-steps` merge): the first
+wins. 4:0x40 loses 10 of 1000 entering instead of 92 (0.13 hearts a visit, 0.80 before), and 343 runs reach Gleeok
+(13 at the baseline), with 1.36 hearts of 4. The planner on the same code and team (300 runs, the base Gleeok)
+passes in 228 (76.0% ± 2.5; 34.0% at the baseline): it reaches Gleeok in 296 with 3.09 hearts and wins 228 of
+them. Hearts lost a visit, models against the planner: 0x61 0.31 / 0.09, 0x51 0.32 / 0.04, 0x50 0.44 / 0.10,
+0x31 0.66 / 0.10, 0x32 0.92 / 0.29, the cellar 0.26 / 0.07, 0x32 back 0.18 / 0.04, 0x31 E→N 0.19 / 0.07, 0x01
+0.24 / 0.02, 0x12 0.49 / 0.08. Vire's five visits lose 2.09 hearts (the planner 0.44), like-like's two 1.10
+(0.33). Gleeok won by hearts on entering (models; the planner): 0.5: 0 of 89; 1 of 3 · 1.0: 1 of 106; 2 of 12 ·
+1.5: 5 of 59; 5 of 19 · 2.0: 4 of 40; 13 of 22 · 2.5: 1 of 19; 28 of 39 · 3.0: 4 of 18; 41 of 50 · 3.5: 3 of 7;
+41 of 47 · 4.0: 4 of 5; 97 of 104. 195 of the 343 enter with a heart or less, where he is all but never won: the
+segment is lost on hearts first. The target for vire and like-like is the planner's: Gleeok at about 3 hearts.
+
+**Round 2** (the lead's decisions after the first round). The new team's chain (seeds 0-999) harvested the
+handoffs at its own hearts (vire 3,032 in 4:0x50, 0x30, 0x31 E, 0x12, 0x03; like-like 1,559; Gleeok 343). The
+planner's demonstrations from them (one run a handoff, up to 80 / 200 / 400 a stem, plus the seed states; vire and
+like-like episodes kept when won with at most a heart lost): vire 20,654 rows (0.03-0.08 hearts lost in the
+wins), like-like 56,568 (4_32w 186 of 200 won, 0.24 hearts lost), Gleeok 50,687 (the planner with the 2502
+checkpoint wins 189 of the 343 harvested fights, at 1.36 hearts). The rule's Gleeok fights at the chains' hearts
+(`r32p_rules.py gleeok-13 --hearts chain --runs 150`): 156 of 450 won, 109,576 rows. Each family's file adds the
+rule rows of its rooms. Vire (three seeds) and like-like (one) continue from their route runs with 40% of resets
+on the harvested handoffs and `reward.heart_value` on (`d3first`'s table). Gleeok (three seeds) continues from the
+2502 checkpoint for 90 iterations (a checkpoint every 15), half its resets on the harvested handoffs and the rest
+at hp 0.6-4 hearts with half full. The lead's `endings: {no-damage: hard-failure, max-steps: hard-failure}` is
+refused by the config (a truncation's label cannot change its reward); the stall is priced instead by
+`reward.quiet_enemy_penalty: 0.04` (round 7's cost a step after 150 steps without progress while an enemy lives:
+at the chain's hearts the 2502 checkpoint, which does not stall, never passes 228 such steps, the last checkpoints'
+stalls run 400-950, so a stall costs about what a death does). Arm B (the family's own hearts draw, hp 2-4) fell
+the same way: its 2502 and 2562 checkpoints win 17.0% and 16.3% of 4:0x13 at the chains' hearts (300 each) and
+99.0% and 97.3% of 8:0x3c, its last 5.0% (stalls in 202 of 300) and 59.7%.
+
+**Round 2's results so far.** Gleeok: the penalty did not hold the stall off. At the chains' hearts (4:0x13, 300
+episodes a checkpoint) the three seeds' checkpoints at 15 and 30 iterations win 12.7-19.0% (the 2502 start:
+17.0%), and from 45 iterations on 9.3-18.7% with 16-86 stalls of 300 (none at 2502); 8:0x3c stays at 97-100% in
+all 18. No checkpoint is better than 2502 beyond noise in the single room; the choice is made on `d4` (seeds
+3000-3999: the promoted base, 2502 and the two best new ones), which decides alone: by the lead's later decision a
+route run plays only the route's steps before the magic sword, so Dungeon 8 is not his. Like-like (`r32d4-like2`,
+early stop after 128 iterations; hearts lost a room 0.25 → 0.21 in its own evaluation): on `d4` (seeds
+3000-3999, Gleeok 2502) its last checkpoint reaches Gleeok in 40.6% ± 1.6 of runs at 1.31 hearts and passes 2.8% ±
+0.5; its iteration-3694 checkpoint 35.5% at 1.38 and 3.3%. Vire (three seeds, early stops after 64-67
+iterations; hearts lost a room in their evaluations 0.086-0.113 against the first round's 0.111) is measured the
+same way, paired against the same team with the first round's runs.
+
+**Verdicts** (seeds 3000-3999, paired; the first round's vire and like-like, zol's route run; the team reaches
+Gleeok in 31.9% with 1.43 hearts). Gleeok on `d4`: the promoted base 1.4% ± 0.4, the 2502 checkpoint 2.5% (+1.1 ±
+0.6), the second round's seed-1 iteration 2517 3.1% (+1.7 ± 0.6), seed 2's 2532 2.4%. Iteration 2517 is promoted
+for `d3first` (`r32d4-gleeok2-s1-it2517`, the checkpoint as a run); against 2502 it is +0.6 ± 0.6, so its number is
+the 2502 line's, chosen among three on these seeds (the final chain on fresh seeds gives the unbiased one).
+Like-like `r32d4-like2` against `r32d4-like`: Gleeok reached in 40.6% instead of 31.9% (+8.7 ± 1.7), with 1.31
+hearts instead of 1.43 (the extra arrivals are the marginal ones), hearts delivered to Gleeok a run +0.075 ± 0.030,
+`d4` +0.3 ± 0.7: better beyond noise on the lead's pair; promoted for `d3first`. Vire against `r32d4-vire-s2`:
+the three seeds reach Gleeok in 42.0%, 41.7% and 40.9% (+10.1 ± 2.1, +9.8 ± 2.1, +9.0 ± 2.2) with the same 1.40-1.41
+hearts there, hearts delivered +0.14, `d4` 3.5%, 2.8%, 3.3% (+1.0 ± 0.8 at most); seed 1 (`r32d4-vire2-s1`) is
+promoted for `d3first`. Each family was measured with the other's first-round run, so the new team's `d4` is the
+final chain's to say (fresh seeds, after the cutoff merge: route runs play only the steps before the magic sword).
+
+**What the segment's start states should carry.** The planner's runs that left Dungeon 3 carry 0 to 8 bombs (into
+4:0x71 in the full chain, 69 runs: 0: 9, 1: 7, 2: 2, 3: 4, 4: 11, 5: 13, 6: 7, 7: 6, 8: 9; median 5) and 4.0 of 4
+hearts in 58 of 68 (3.5 in 9). Dungeon 4 needs two bombs (the walls of 4:0x21 and 4:0x11, cheated 250 and 249
+times in the planner's 300 runs because `4_71s_*` hold none). A harvested entrance state from the chain would
+hold the bombs Dungeon 3 left (about 5) and full hearts; the installed ones should hold at least the 2 the walls
+take.
+
+## 8. Training: Dungeon 1 and the legs (goriya, stalfos-keese-gel, ow-octorok, ow-zora, ow-leever, ow-tektite)
+
+Branch `r32-t-d1` (from `r32-base`). Segments: `post-d4` (0:0x45 → Level 1, 86.2%), `d1` (26.3%), `post-d1` (0:0x37
+→ Level 5's entrance, 16.8%). Every family here gets a run of its own for `d3first` (`promoted.d3first`), continued
+from its promoted run on `d3first`'s states only (`state_routes: [d3first]`), `harvested_fraction` 0.25 (the
+handoffs the route's chains harvested at their hearts), its `d3first` curriculum tracks, demonstrations at
+`--demo-coeff 0.05`, `--sil-coeff 0.1`, 2M steps (`--stop-success 1.01`: the full budget; the checkpoint is
+chosen by the segment), `--parallel 8`, checkpoints every 30 iterations.
+
+**The arms, by cause:**
+
+| Family | Rooms (runs lost of 1000) | Cause | Teacher |
+|---|---|---|---|
+| goriya | 1:0x23 (94), 1:0x44 (99) | wood sword (3 hits a Goriya), hearts | the planner from `1_23s`, `1_44w` and their harvested handoffs (30 runs a state): 22,410 rows |
+| stalfos-keese-gel | 1:0x33 (69: 50 stuck with the carried key), 3:0x4a (101, in `d3`) | wood sword, the key | the planner from `1_33s`, `1_53s`, `3_4ae` (+ `3_4ae` handoffs): 30,347 rows |
+| ow-octorok | 0:0x37 cave→cave (363 stuck) | new step (phase IX's out-and-back-in) | first the `d2first` run trained on it (`r31-oct-s97`, the mouth rule's demonstrations) measured here |
+| ow-zora | 0:0x55 N→E (136), 0:0x2d W→cave (179: 109 without the 30 rupees) | new exit, new room/cave | the rules `wall-2d`, `rupees-2d`; the planner from `0_55n` (+ handoffs), `0_56w`: 16,075 rows |
+| ow-leever | 0:0x2a (220), 0:0x2b (124) | new rooms; the scroll taken in 48% / 3% of visits | the walks' scroll as a rule (new: `r32p_rules.py scroll-29/2a/2b`, `CLIP W` on arrival then E: 90/90 each, 0 hearts): 540 rows; no planner rows (it walks the Leevers) |
+| ow-tektite | 0:0x0c's shop (150 stuck), its wrap exit (98), S→cave (36) | new: the blue candle, the wrap exit | the rules `candle-0c`, `wrap-0c`; the planner from `0_0cs`, `0_2cw`, `0_2ce` (+ handoffs): 17,721 rows |
+
+Selection on the segment each family loses most (goriya, stalfos-keese-gel, ow-octorok: `d1`; ow-zora, ow-leever,
+ow-tektite: `post-d1`): `triforce select-checkpoint F RUN --route d3first --from d3first_<start> --first-seed 2000
+--runs 1000 --confirm 1000` (screen seeds 2000-2999, confirmation 3000-3999). `--segment X` with `--route d3first`
+plays its chains and then fails at its report (the chains' provenance names the namespaced start state): `--from
+d3first_1_73s_0` (the target still from the route's table) works.
+
+**Trained** (one seed each, 488 iterations; the round's evaluation, 30 episodes a state, reads each family's yaml
+with both routes): ow-leever `r32d1-leever` 100% (worst 0:0x0b 98%; it scrolls: about 0.09 hearts lost an episode
+in training), goriya `r32d1-goriya` 98%, ow-tektite `r32d1-tektite` 97% (worst 0:0x0c 78%), stalfos-keese-gel
+`r32d1-skg` 99% (worst 3:0x4a 93%), ow-zora `r32d1-zora` 98% (its `d3first` states 100%; `d2first`'s 0x28 W→S fell
+to 0-57%: the run is for `d3first` only and `d2first` keeps its promoted run). Single rooms decide nothing here.
+
+**Measured** (arrivals at the segment's end, 1000 runs; screen seeds 2000-2999, confirmation 3000-3999, paired
+against the family's run before; the rest of the team as promoted then):
+
+| Family | Run | Segment | Screen | Confirmation | Paired (confirmation) | Hearts on arrival | Decision |
+|---|---|---|---|---|---|---|---|
+| ow-octorok | `r31-oct-s97` (the `d2first` run trained on 0:0x37's mouth) | `d1` | 51.1% vs 24.2% | 51.3% vs 25.6% | **+25.7 ± 2.1** | 3.20 / 3.20 | the family's default run (as main v1.9.0.1); no route run |
+| ow-leever | `r32d1-leever` (last) | `post-d1` | 63.0% vs 15.7% | 61.4% vs 15.5% | **+45.9 ± 1.9** | 5.08 / 3.16 | `promoted.d3first` |
+| ow-zora | `r32d1-zora` (last) | `post-d1` | 33.3% vs 15.7% | 36.5% vs 15.5% | **+21.0 ± 1.9** | 3.77 / 3.16 | `promoted.d3first` |
+| ow-tektite | `r32d1-tektite` (last), with the two runs above in the team | `post-d1` | 99.8% vs 86.3% | 100.0% vs 85.0% | **+15.0 ± 1.1** | 5.17 / 5.70 | `promoted.d3first` |
+| goriya | `r32d1-goriya` (last), with `r31-oct-s97` | `d1` | 72.3% vs 51.1% | 69.0% vs 51.3% | **+17.7 ± 1.7** | 3.62 / 3.20 | `promoted.d3first` (Dungeon 2 and 7 gates pending) |
+| stalfos-keese-gel | `r32d1-skg` (last), with `r31-oct-s97` | `d1` | 69.5% vs 51.1% | 72.3% vs 51.3% | **+21.0 ± 2.1** | 3.50 / 3.20 | `promoted.d3first` (Dungeon 3 rooms pending) |
+
+ow-leever's scrolls clear 0x2a and 0x2b without a fight: the leg to Level 5 passes the 30% bar with it alone.
+ow-zora's confirmation of its screen winner (it002502, 85.1%) is void: that chain started in the minute ow-leever's
+route run was promoted and played with it; its screen lead over `last` (+2.3 ± 2.1) is noise, so `last` stands.
+With the three route runs the leg from Dungeon 1 to Level 5 arrives in 1000 of 1000 runs (16.8% in the baseline).
+goriya and stalfos-keese-gel were measured each alone against the same team; together they are in the final batch
+(`r32d1-final`: `d3`, `post-d4`, `d1`, `post-d1`, `d2`, `d7`, 1000 runs each), queued: it also checks goriya's
+Dungeon 2 (must stay near 99.9%) and Dungeon 7, and stalfos-keese-gel's 3:0x4a.
+
+## 9. The per-route tables for the whole route, and the late families (boss-digdogger, gibdo, ow-moblin)
+
+Branch `r32-t-late` (from `r32-steps` 44fe335c, `r32-base2` merged), version 2.0.0.0, today's team as in §5 (main's
+promoted runs and round 30's five, stamped).
+
+### 9.1 The tables' refit
+
+`triforce/heart_value.d3first.json` and `triforce/chain_hp.d3first.json` refitted from 37 `d3first` chains of
+today's team: the first baseline's (`r32base-1k-*`, `r32base-plan-*`), the prep's (`r32prep-*`), the second
+baseline's (`r32base2-1k-*`, `r32base2-plan-*`) and three new ones (`python -m triforce.heart_value <files> --route
+d3first`, the same for `chain_hp`):
+
+- **the leg to Level 7** (steps 156-173 rested on one run, the only one past 0:0x3c): the planner from Level 2's exit
+  (`0_3cc_0` → step 174, 300 runs) passes 0:0x3c in **6** runs (it plays the models' choices, and the models do not
+  turn E before the recorder), so the leg's data is the models' from the recorder's landing (`0_45r_0`, step 156 →
+  step 174, 1000 runs: 997 reach Level 7). Each step of the leg now has about 1000 visits.
+- the leg to Level 2 again on new seeds (`0_0bc_0` → step 145, 1000 runs, seeds 5000-5999).
+
+Coverage: **every clip-way step 0-303 has a curve from at least 20 visits**. The plain ways have none: no chain
+plays clips off, so `fit_way` gives no curve to a way none of whose steps up to the next triforce has a visit, and
+`env::heart_value` prices hearts there by the plain health terms (the fit's design since round 26). Those are the
+stretches' plain ways 43-46, 159-162, 198-201 and **272, 285, 290**, which §5.4 read as second visits without their
+own record: they are Dungeon 9's one-room plain twins (9:0x07 cave→S, 9:0x20 cave→N, 9:0x20 N→cave on the plain
+way). `chain_hp.d3first.json` holds 223 rooms (93 before). The test
+(`test_the_d3first_table_prices_the_steps_its_chains_played`) checks the coverage. A few values (V at hearts in /
+at full): 5:0x66 W→N 0.31 at 2 hearts, 0.75 at 4, 0.90 at 7; 5:0x24 0.76 / 0.87 / 0.95; 0:0x62 E→cave 0.17 / 0.59 /
+0.97 (of 8); 0:0x3c cave→recorder 0.13 at full (Level 7's 4.7% behind it).
+
+Every chain of the fit predates the route's grants (`r32-steps` ef726772: Dungeon 5's entrance tops the bag up to 8
+bombs; 8:0x4c's rupees): Dungeon 5's and Dungeon 8's rows price the old bag and purse until the next refit.
+
+### 9.2 The three trainings and the code they are judged on
+
+One seed each (32), 489 iterations, on `d3first`'s states only (`state_routes: [d3first]`, a quarter of the episodes
+from harvested handoffs at the chains' hearts, the whole-route tables of §9.1, `chain_hp` 1.0, clips on), each with
+demonstrations of the planner (`temperature:0.5+relax:16+plan:16:1`, 20 a state at the handoffs' hearts) and, where
+a rule wins more than the planner, the rule's rows (`r32p_rules.py`):
+
+| Family | Run (from) | Rooms | Demonstrations | Training's own measure |
+|---|---|---|---|---|
+| boss-digdogger | `r32late-dig` (`r76-b`) | 5:0x24, 7:0x1c, 7:0x39 | planner 15636 rows (7:0x1c 19-20 of 20 a state); rule `digdogger-24` 18287 rows (64/90 at the chains' hearts) | 95% over 180 episodes, worst 5:0x24 92%; -0.9 hearts an episode |
+| gibdo | `r32late-gibdo` (`r30-gibdo-s91`) | 5:0x65, 5:0x66 W→N, 5:0x47, 5:0x26, 5:0x14 | planner 13409 rows (5:0x66 60/60) | 100% over 480, worst 5:0x66 99%; -0.08 hearts |
+| ow-moblin | `r32late-moblin` (`r79t5-moblin`) | 0:0x73, 0x63, the tree 0:0x62, 0x52, 0x51, 0:0x3d | rule `tree-62` 6421 rows (85/90: the blue candle facing W); planner 20744 rows (0:0x62 34/60) | 100% over 1350 (both routes' states), worst 0:0x5c 93% (a d2first room) |
+
+The trainings ran on the code before the route's grants (`r32-steps` 44fe335c with `r32-base2` and the tables).
+Everything below was measured after `r32-steps` was merged: the selections on its a711de21 (the bag of 8 bombs
+granted at Dungeon 5's entrance, 8:0x4c's rupees, the whole-route tables), the paired batch of §9.5 on its 71441669
+(the same plus the cutoff: a family's `promoted.d3first` plays steps 0-205, its default run from the magic sword's
+cave on; every room of these three families judged here is before step 205, so the cutoff changes none of them).
+
+### 9.3 The selections: each family's sub-segment
+
+`select-checkpoint FAMILY RUN --route d3first --from d3first_<state> --stop-at step:N`, the run's last three numbered
+checkpoints and `last` against today's promoted run, screened on seeds 2000-2999 and confirmed on 3000-3999 (1000
+runs each, models alone, clips on). The numbers are the confirmation's; paired differences with their standard
+error.
+
+| Family | Sub-segment (why) | Chosen | Confirmed | Today's run | Paired difference |
+|---|---|---|---|---|---|
+| boss-digdogger | `5_65w_0` → step 120 (Dungeon 5 past the Olive Garden: from Level 5's start ~40 runs reach 5:0x24) | `last` (it001447 won the screen, -2.6 ± 0.8 against `last` confirmed) | **81.6%** ± 1.2 | 67.2% (`r76-b`) | **+14.4 ± 1.2** |
+| boss-digdogger | `7_1cw_0` → step 194 (Dungeon 7 from 0x1c: goriya's 0x1b kills 68% before it) | `last` kept (it001387 confirmed +0.2 ± 2.2 against it: noise) | **49.1%** ± 1.6 | 45.6% | +3.5 ± 2.2 |
+| gibdo | `5_65w_0` → step 120 | `last` (it001848 won the screen, -0.5 ± 1.8 confirmed) | **78.0%** ± 1.3 | 67.2% (`r30-gibdo-s91`) | **+10.8 ± 2.0** |
+| ow-moblin | `0_73e_v2_0` → step 145 (the leg to Level 2 past ow-leever's 0x0b turn) | it006341 (+0.5 ± 0.6 against `last`; applied) | **98.6%** ± 0.4 | 64.1% (`r79t5-moblin`) | **+34.5 ± 1.6** |
+
+The families' rooms in the confirmations (runs lost per 1000 entering; hearts lost a visit):
+
+- **boss-digdogger, 5:0x24**: 237 → **74** (0.88 → -0.38 hearts a visit: the new run picks up more than it loses),
+  bombs 2.15 → 2.48 a visit, none cheated. 7:0x1c (Link enters it with 9.3 hearts from this start): 10 → 3 (1.44 →
+  1.02 hearts a visit, bombs 2.96 → 2.46). The sub-segment is not Digdogger's to win: wallmaster's 7:0x0d grabs Link
+  on 702 of 1260 visits (713 of 1227 with today's run) and sends him to Level 7's entrance, and 505 of the 509 runs
+  lost are lost on that second pass through goriya's wood-sword rooms (7:0x1b 292 per 1000 entering, 0x1a 191, 0x18
+  138); what the new run adds is the hearts it leaves for that pass.
+- **gibdo, Dungeon 5 past 0x65**: 5:0x66 W→N 25 → 17 (1.51 → 0.95 hearts a visit), 0x47 31 → 13, 0x37 37 → 9,
+  0x27 9 → 5; Link reaches 5:0x24 with 4.69 hearts against 3.88, and Digdogger (today's run in this selection) loses
+  165 there against 237.
+- **ow-moblin, the tree**: 0:0x62 E→cave 334 → **12** (1.26 → 0.86 hearts a visit), 0:0x3d cave→S 9 → 0, 0:0x4c 21
+  → 1, and Link arrives at Level 2 with 7.45 hearts against 4.91.
+
+**Promoted for `d3first`** (`triforce promote FAMILY RUN --route d3first`): `boss-digdogger/r32late-dig`,
+`gibdo/r32late-gibdo`, `ow-moblin/r32late-moblin` (it006341). Each beats today's run beyond noise on its
+sub-segment; boss-digdogger's second sub-segment is ahead within noise (+1.6 standard errors), not worse. `d2first`
+keeps its runs.
+
+### 9.4 The full segments: the route's team against today's, paired
+
+One `eval-batch` (code: `r32-steps` 71441669 merged), seeds 4000-4999 (no selection or table used them), 1000 runs
+a chain, models alone, clips on; "today" pins the three families to their `promoted` runs (`--checkpoint
+FAMILY=PATH`: both parts), "route" plays `d3first`'s team (the three `promoted.d3first` up to the magic sword).
+
+| Segment | Today | Route's team | Paired difference | The families' rooms (lost per 1000 entering, today → route) |
+|---|---|---|---|---|
+| Dungeon 5 (`5_76s_0` → step 120) | 8.6% ± 0.9 | **23.0%** ± 1.3 | **+14.4 ± 1.6** | 5:0x24 479 → **164**; 5:0x66 W→N 336 → **157**; 0x47 167 → 64; 0x37 125 → 59 |
+| Dungeon 7 (`7_79s_0` → step 194) | 3.7% ± 0.6 | **5.8%** ± 0.7 | **+2.1 ± 0.9** | 7:0x1c 353 → **156** (1.04 → 0.17 hearts a visit); 7:0x39 4 → 5 |
+| the leg to Level 2 (`0_0bc_0` → step 145) | 35.0% ± 1.5 | **55.7%** ± 1.6 | **+20.7 ± 1.3** | 0:0x62 E→cave 339 → **28**; 0:0x3d cave→S 19 → 0; 0:0x4c 42 → 5 |
+| ow-moblin's other legs before the cutoff: post-d3 (`0_74c_0` → step 31), Level 2 → Level 7 from the recorder's landing (`0_45r_0` → step 174), post-d7 (`0_42c_0` → step 211) | 100.0%, 99.8%, 99.5% | 100.0%, 99.8%, 99.8% | 0, 0, +0.3 ± 0.3 | 0:0x73/0x63 (25-26), 0:0x53/0x52/0x42 (171-173), 0:0x42/0x52/0x51 (194-196): nothing lost on either |
+
+Today's Dungeon 5 is 8.6% on these seeds against the 6.0% the grant's own measure gave on other seeds (2.6 points,
+about two standard errors of an unpaired difference). **Bombs in Dungeon 5 with the granted bag** (a visit, used /
+cheated): the Olive Garden 7.73 / 5.92 → 7.77 / 5.94 (darknut's, not these families'), 5:0x66 S→W and 0x65 the
+walls' 1.0 / 1.0 and 1.2 / 1.2 on both, **5:0x24 1.64 / 0.00 → 2.13 / 0.01**: the new Digdogger throws half a bomb
+more a visit, from the bag it carries, and loses a third as many runs.
+
+**Nothing else got worse beyond noise.** The rooms the three families do not play move within their noise on the
+same seeds: the Olive Garden 489 → 459 per 1000 (Link enters it the same: gibdo's first three rooms play the same),
+5:0x64 215 → 207, 7:0x1b 682 → 668, 7:0x0d 86 → 88, 7:0x2a 196 → 183; the largest move against the route's team,
+7:0x38 10 → 24 runs (and 7:0x18 34 → 43), is one of some forty rooms compared and 14 runs, about two of its standard
+errors. The leg's other losses are the same runs on both: ow-leever's turn at 0:0x0b (174 bounce into 0:0x1b, 93
+die in 0x0b) and runs that walk back into Level 5 from 0x0b and die there (about 130 on both).
+
+### 9.5 boss-aquamentus (7:0x2a) and wallmaster (7:0x0d): not trained here
+
+No `d3first` goriya run exists yet (no route run promoted for goriya; its Dungeon 7 training is still owed), so
+Dungeon 7 was measured only with the route's team above. What the two rooms cost:
+
+- **wallmaster's 7:0x0d grabs Link and sends him to Level 7's entrance**, and with the wood sword a second pass
+  through goriya's rooms is fatal: in the full Dungeon 7 the grab takes 133 of 228 visits (123 runs) and 1 of those
+  123 runs wins; from `7_1cw_0` (Link at 0x1c with 9.3 hearts, goriya's 0x1b behind him) it takes 702 of 1260 visits
+  and 505 of the 509 runs lost there are lost on the second pass (§9.3). The room's own deaths are few (88 per 1000
+  entering), so the chains' per-room ledger understates it; its "wrong exits" are the grabs.
+- **boss-aquamentus's 7:0x2a** loses 183 per 1000 entering (13 of 71) with the route's team, 54 per 1000 from
+  `7_1cw_0`'s fuller hearts: hearts, as §5.2 read.
+
+Today both are small in runs because goriya's 7:0x1b (668 per 1000 entering) lets only about 270 runs of 1000 reach
+0x1c. Once a route goriya passes 0x1b, **wallmaster is worth a round** (the next one after goriya's, `d3first`
+states only: more than half of the runs that reach 0x0d are grabbed and none of them survive the walk back with the
+wood sword); boss-aquamentus is not yet (a fifth of the few that reach it; it gains from the hearts a better goriya
+leaves, as §5.4 expected). The tracks (3/3 each), handoffs (7:0x2a 318, 7:0x0d 466) and states are ready.
+
+### 9.6 Verdicts
+
+| Family | Before (today's run) | After (`promoted.d3first`) | Verdict |
+|---|---|---|---|
+| boss-digdogger `r32late-dig` | 5:0x24 479 per 1000 entering, 7:0x1c 353 (full segments) | **164**, **156** | promoted: Dungeon 5 sub-segment +14.4 ± 1.2, Dungeon 7 sub-segment +3.5 ± 2.2 |
+| gibdo `r32late-gibdo` | 5:0x66 W→N 336, 0x47 167, 0x37 125 | **157**, 64, 59 | promoted: sub-segment +10.8 ± 2.0 |
+| ow-moblin `r32late-moblin` (it006341) | 0:0x62 E→cave 339 | **28** | promoted: sub-segment +34.5 ± 1.6; its other legs unchanged |
+
+With the route's team: **Dungeon 5 23.0%** (today 8.6%), **Dungeon 7 5.8%** (3.7%), **the leg to Level 2 55.7%**
+(35.0%). Still at or near zero, and whose: Dungeon 7 (goriya's 7:0x1b, 668 per 1000 entering, then wallmaster's
+grab), the Olive Garden (5:0x05, 459 per 1000: darknut with the wood sword, even with the bag), ow-leever's turn at
+0:0x0b (267 of 1000 runs of the leg) and, outside this section, ow-octorok's recorder turn out of Level 2 and
+Dungeons 3 and 4 (§5.3).
+
+## 10. The recorder's turns out of Levels 2 and 5 (ow-octorok 0:0x3c, ow-leever 0:0x0b)
+
+Branch `r32-turn` (from `r32-steps` 71441669), version 2.0.0.0; today's team is main's promoted runs of 1.9.0.1
+(stamped) with ow-moblin's route run `r32late-moblin` (§9).
+
+### 10.1 The cause
+
+Out of Level 2 (step 155, 0:0x3c `cave → recorder`, the whirlwind to Level 4) and out of Level 5 (step 120, 0:0x0b,
+the whirlwind to Level 3) one play of the recorder facing right or up takes Link where the route goes; facing down or
+left takes three or four (`d3first-walks-b.md` §1). The engine computes this from the game's own index and pieces
+(`zelda::whirlwind::plays`: `$523` 2 → 3 out of Level 2, 0 → 2 out of Level 5 past the missing Level 2) and the
+session already offers RECORDER only facing E or N there (`objectives::recorder_facings`, round 26). What the env
+offers, played from `d3first_0_3cc_*` and `d3first_0_0bc_*`:
+
+- Link comes out on the mouth's foot ($70,$7D) facing S. The first decision offers **only `MOVE S` and `WAIT`**: the
+  mouth's walls are E and W of him and the level N, so there is no turn in place (the walk's 2 frames of Right at
+  the mouth are not a MOVE the mask offers), and RECORDER is masked (facing S).
+- `MOVE S 4` walks him 6 pixels (Y $83) and every MOVE is offered; `MOVE E 4` takes him to ($73,$85) facing E, and
+  RECORDER is offered; after the play he must stand on the row until the whirlwind takes him (a MOVE off the row
+  lets it pass, and no second whirlwind comes before the room is entered again). Three decisions, then WAIT: the rule
+  (`scripts/experiments/r32t_recorder_demos.py recorder-3c|recorder-0b`) wins 90 of 90 in each room at the chains'
+  hearts, no heart lost, 17 decisions.
+- Today's runs: ow-octorok `r31-oct-s97` plays `MOVE S` at the mouth with probability 1.00 and again after the first
+  step (0.99; `MOVE E` 0.006); turned E it still walks S (0.84) and RECORDER is below 0.003: on `d2first` the same
+  room from the same cave is left S, and the family never trained on this step. ow-leever `r79t5-ow` steps S (0.80) and
+  then waits (0.64; `MOVE E` 0.02); turned E it plays (0.25), and then walks off the row (`MOVE S 32` 0.79, `MOVE N 32`
+  0.20, back into Level 5): the 174 bounces into 0:0x1b, the runs that die back in Level 5 (§9.4).
+
+**No engine change**: the action space and the mask give the play (two MOVEs and RECORDER); masking RECORDER while
+it would warp elsewhere is already what the mask does. What the models lack is the step itself.
+
+### 10.2 The arm (trained; not yet chosen)
+
+Route runs on `d3first`'s states only (`state_routes: [d3first]`, a quarter of the episodes from the chains'
+harvested handoffs, clips on), `--sil-coeff 0.1 --demo-coeff 0.05 --checkpoint-every 30`, the default budget, no early
+stop; curriculum: the explorer's tracks for every `d3first` state of the family (ow-octorok 19 of 21 after step 97: the
+explorer fails 0x3c's `cave → recorder` on chains 0 and 2) and three rule tracks a chain of the recorder step
+(`r32t_recorder_demos.py ... --tracks`). Demonstrations (the rule's won runs at the chains' hearts, 30 a chain):
+
+| Family | Runs (from) | Demonstrations | Training's own measure (10 episodes a state, both routes) |
+|---|---|---|---|
+| ow-octorok | `r32turn-oct-s32`, `-s33`, `-s34` (`r31-oct-s97`) | `recorder-3c` 5040 rows (90/90) + round 31's mouth rule on `d3first`'s 0:0x37 `cave → cave` (`r32p_rules.py mouth-37`, 180) | 99% each; every `d3first` state 100% (one 0x64 W→E state 95%), `d3first_0_3cc_*` 30/30 on each seed |
+| ow-leever | `r32turn-leever` (`r79t5-ow`; no `d3first` ow-leever route run existed when it was queued) | `recorder-0b` 5040 rows (90/90) + the Dungeon 1 trainer's scrolls of 0x29-0x2b (540) | 97%; every `d3first` state 100%, `d3first_0_0bc_*` 30/30 |
+
+Both runs are for `promoted.d3first` only: `d2first`'s own 0x0b and 0x3c steps are never theirs (ow-leever's
+`d2first` 0:0x0b, which plays facing down, fell to 3-4 of 10 in its training's evaluation, as a `d3first`-only run
+may). The legs (Level 2 to Level 7, `0_3cc_0` → step 174, today 0.1%; Level 5 to Level 2, `0_0bc_0` → step 145, today
+55.7% with ow-moblin's route run) are measured on fresh seeds next: the three ow-octorok seeds against today on seeds
+2000-2999, the best confirmed on 3000-3999 with its other segments before the cutoff; ow-leever by `select-checkpoint
+--segment post-d5` (screen 2000-2999, confirm 3000-3999).
+
+### 10.3 The leg from Level 2 to Level 7: the screen
+
+`target/r32-turn/screen.sh` (eval-batch `r32turn-oct-screen`, post-d2 `0_3cc_0` → step 174, seeds 2000-2999, 1000
+runs each, models alone, clips on; each seed's `last` pinned for the route's part): **today (`r31-oct-s97`) 0 of
+1000; `r32turn-oct-s32` 98.9%, `-s33` 98.9%, `-s34` 99.1%** (s34 against today, paired: +99.1 ± 0.3). Every run of
+s34 leaves 0:0x3c by the whirlwind; 5 of its 9 losses are in ow-zora's 0:0x55. These seeds chose the seed; the
+confirmation on 3000-3999, with ow-octorok's other segments before the cutoff (Dungeon 1's 0:0x37 trip among them),
+and the promotion for the route are next.
+
+## 11. The route's team and the golden path
 
 Branch `r32-team` (from `r32-steps` 71441669: every `d3first` state, the whole-route tables, the grants, the cutoff),
 version 2.0.0.0. Nothing trained: the route runs that exist put into one team, measured together, and the golden
@@ -998,7 +1593,7 @@ the magic sword at 0:0x21 (step 207), `end_ram` game mode `$13`. Cheated: 13 bom
 twice, the Olive Garden 6 of the grant's 6: 2 → 8, 9:0x27, 9:0x17), 3 rupees at 0:0x0c, no key.
 
 So the owner's condition for `d3first` is met: a golden path, models alone, from console power on, reaches the
-ending, three of three. What landing it needs is the lead's (the worktree's status file, "LANDING NEEDS").
+ending, three of three. It landed as 2.0.0.0 (§13).
 
 ### What the entrance states should hold
 
@@ -1040,516 +1635,3 @@ So the full route and the race read the same: Dungeons 3 and 4 are about 10% and
 through in tens of runs, Dungeon 1 and both legs are now well above half, and what no number of tries passes is
 0:0x3c. The full chain also says what `d3first_4_71s_0` should hold: about 4-5 bombs and 2 keys at 3.7 of 4 hearts
 (the segment chain starts it with none and cheats 1.21 bombs a run at the walls).
-
-## 5. Dungeon 3's families on `d3first`: darknut, zol, boss-manhandla
-
-**Cause** (§2): every wood-sword fight is longer, so Dungeon 3's three containers run out (0x6b loses 1.31 hearts a
-visit, 0x4b 0.91), and the fights the models never saw with the wood sword kill at full hearts (3:0x59's five Red
-Darknuts 35%, Manhandla 53%).
-
-**Arm** (round 1): one route-specific continuation per family on `d3first`'s states only (`state_routes:
-[d3first]`), from its promoted run, 488 iterations (2M steps), `--sil-coeff 0.1`, checkpoints every 30; start states
-at the chains' hearts by the harvested handoffs at `harvested_fraction` 0.25; curriculum tracks from the explorer
-and, where it fails, the rule-won tracks; demonstrations at `--demo-coeff 0.05`: the rule files only (darknut:
-`darknut-59` and `dash-69`; boss-manhandla: `manhandla-4d`; zol: none). darknut three seeds (32-34), the others
-one. The planner's demonstrations (`temperature:0.5+relax:16+plan:16:1`, won episodes, 20 runs a seed state and up
-to 30 harvested handoffs a stem) were recorded beside them for round 2: darknut 22,938 rows (3:0x59 N→S 39 of 60
-won from the seed states), zol 27,933, boss-manhandla 2,385 (36 of 60). darknut's 3_5bw_0 and 3_5bw_2 had no track
-in round 1 (an explorer fault, since fixed); later rounds have them.
-
-**Choosing.** A single family swapped into the `d3` chain leaves it at 0% (the other two still kill every run), so
-each is chosen on the stretch of `d3` it plays, on the chain's own hearts: zol from Level 3's entrance to 3:0x59's
-door (arrivals and hearts there), darknut from the entrance to Manhandla's door 3:0x4d with zol's route run in the
-team, boss-manhandla from Manhandla's door (`3_4dw_0`, 1 heart of 3, as the chains arrive) to 0:0x74. Screen seeds
-2000-2999, confirmation 3000-3999 (`select-checkpoint ... --route d3first`; round 1 gave the start by its
-namespaced name, `--from d3first_3_7cs_0`, because with `--segment d3` the report did not find its own chains: the
-chains' provenance holds the namespaced name. Fixed since: the plan names the start as eval-chain records it, so
-`--segment d3` and a bare `--from 3_7cs_0` work on a namespaced route).
-
-**Results so far (single rooms, the round's evaluation, 20 episodes a state):** zol 3_4bs 90-100% at -0.1 to -0.2
-hearts (baseline 61-69%, -1.0), 3_6bs 85-90% at -0.4 to -0.6 (70-76%, -1.1 to -1.35); darknut 3_59n 65-80%, 70-78%,
-47-78% for the three seeds (baseline 24-34%) at -0.8 to -1.3 hearts, with about one bomb a visit when Link holds more
-than the route's reserve of 6; boss-manhandla 3_4dw 70% each (baseline 45/67/45%).
-
-**boss-manhandla, chosen and promoted for `d3first`** (`r32d3-manh`, its last weights): from Manhandla's door at 1
-heart to 0:0x74, confirmation **58.0% ± 1.6** against the promoted run's 47.2% (paired +10.8 ± 1.9; hearts on
-arriving 3.44 against 3.44). Screen: it003596 60.1%, last 58.6%, promoted 49.2%; the screen's winner did not confirm
-(-1.3 ± 1.8 against last). `d2first` keeps `r78t4-manhandla2`. Round 2 (`r32d3-manh2`, from it, with the planner's
-demonstrations added) brought no gain: confirmation 55.9% against `r32d3-manh`'s 58.0% (-2.1 ± 1.8); not promoted.
-
-**zol, chosen and promoted for `d3first`** (`r32d3-zol`, its last weights): from Level 3's entrance to 3:0x59's
-door (0x7b, 0x6b, darknut's 0x5b, 0x4b, 0x4a, 0x49), confirmation **59.0% ± 1.6** against the promoted run's 8.7%
-(paired +50.3 ± 1.7), Link arriving with 1.45 hearts against 1.07. Screen: last 57.2%, it001422 55.3%, it001452
-54.6%, it001482 49.8%, promoted 9.6%. `d2first` keeps `r79b-zol`. Round 2 (`r32d3-zol2`, from it, the planner's
-demonstrations) brought no gain: 74.5% against `r32d3-zol`'s 73.1% (+1.4 ± 1.9), both with darknut's route run in the
-team (hence the higher rates); not promoted.
-
-**darknut, chosen and promoted for `d3first`** (`r32d3-dark-s32`, its last weights): from Level 3's entrance to
-Manhandla's door 3:0x4d with zol's route run in the team, confirmation **13.3% ± 1.1** against the old run's 0.8%
-(the old run is measured in seed 34's selection on the same seeds 3000-3999 and team; about +12.5 points); seeds 34
-and 33 confirm 11.9% and 9.2%. Not yet checked on darknut's other `d3first` segments (Dungeons 5 and 8).
-
-**The bomb reserve in 3:0x59 (route data, the lead, Nov 20).** `d3first` kept a reserve of 6 from 3:0x7c through
-3:0x59, so darknut's BOMB was masked in 0x59 unless Link held 7 or 8, and the walks' `BombFighter` (60 of 60 from
-real states, with 0x4a's four bombs) was closed to the model. Now 0x59's fight step (its first visit, from N) is each
-route's own step before the block `dungeon-3` (as Dungeon 5's entrance for the grant): `d3first`'s sets the reserve
-to 0 from there through 0x5b's last pass, whose four bombs pay for the two walls and Manhandla (0x5c 6, Manhandla 0,
-0x3d 6 as before); `d2first`'s step is unchanged and its golden list holds (`tests/test_game_map.py`).
-
-### The `d3` segment with the three route runs (models alone, 1000 runs; the planner 300; seeds 4000-)
-
-zol `r32d3-zol`, darknut `r32d3-dark-s32`, boss-manhandla `r32d3-manh` (`promoted.d3first`), the reserve above,
-`--route d3first --from d3first_3_7cs_0 --stop-at step:24`:
-
-| Chain | Runs | Arrived (0:0x74) | Deaths | Stuck | Hearts out (of max) | Bombs out | Keys out |
-|---|---|---|---|---|---|---|---|
-| today's team (§3) | 1000 | 0.0% | 998 | 2 | - | - | - |
-| **the route's team** | 1000 | **6.7%** ± 0.8 | 931 | 2 | 4.00 of 4 | 4.25 | 2.00 |
-| planner, today's team (§3) | 300 | 26.0% | 207 | 15 | 4.00 of 4 | | |
-| planner, the route's team | 300 | 54.3% ± 2.9 | 137 | 0 | 4.00 of 4 | 4.10 | 2.00 |
-
-(± here is one standard error.) What a run carries into Dungeon 4 (`post-d3` and Dungeon 4's states should hold
-it): 4 of 4 hearts (the container refills them), 2 keys, and bombs spread from 0 to 8 (models: 0 ×6, 1 ×6, 2 ×9,
-3 ×1, 4 ×10, 5 ×18, 6 ×3, 7 ×2, 8 ×12 of 67; the planner's 163 alike, mean 4.1). The installed `4_71s_*` hold 0.
-
-Per room (`scripts/experiments/r32d3_ledger.py`; entered, lost there, hearts on entering of 3, hearts lost a visit,
-bombs on entering, bombs used a visit):
-
-| Step | Room | Family | Models | Planner |
-|---|---|---|---|---|
-| 8 | 3:0x6b S→N | zol | 1000, 11, 2.89, 0.39, 0, 0 | 300, 0, 2.99, 0.11 |
-| 9 | 3:0x5b S→N | darknut | 989, 36, 2.53, 0.38, 0, 0 | 300, 0, 2.88, 0.10 |
-| 10 | 3:0x4b S→W | zol | 953, 16, 2.23, 0.15 | 300, 0, 2.78, 0.07 |
-| 11 | 3:0x4a E→W | stalfos-keese-gel | 937, **124**, 2.11, 0.74 | 300, 1, 2.71, 0.14 |
-| 12 | 3:0x49 E→S | zol | 813, **95**, 1.59, 0.27, 3.98 | 299, 0, 2.57, 0.04 |
-| 13 | 3:0x59 N→S | darknut | 718, **149**, 1.49, 0.25, 3.97, 4.79 | 299, 2, 2.53, 0.03, 3.94, 4.74 |
-| 14 | 3:0x69 N→cave | darknut | 569, **158**, 1.56, 0.57, 0.45, 0.11 | 297, 21, 2.52, 0.52 |
-| 15 | 3:0x0f cellar | equipment-room | 411, 48, 1.37, 0.26 | 276, 4, 2.15, 0.09 |
-| 17-18 | 3:0x59 S→E, 0x5a | darknut, trap-room | 363, 8 + 34 | 272, 4 + 4 |
-| 19 | 3:0x5b W→E | darknut | 321, **142**, 1.24, 0.42, 0.22, 0.83 (wall bomb cheated 173) | 264, 12, 2.09, -0.02 |
-| 20-21 | 3:0x5c, 0x4c | darknut, trap-room | 179, 19 + 12 | 252, 1 + 1 |
-| 22 | 3:0x4d W→N | boss-manhandla | 148, **81** (55%), 1.43, 0.19, 4.06, 2.09 | 250, 87 (35%), 2.18, 0.24 |
-
-Where the runs die: the hearts run out on the way. Link enters 0x59 with 1.49 of 3 hearts (the planner 2.53) and
-Manhandla's door with 1.43 (2.18); 0x4a's Keese (stalfos-keese-gel, not a family of this work: 124 deaths, 0.74
-hearts a visit against the planner's 0.14) and 0x49 (95) take the hearts 0x59 needs. 0x59 now spends 0x4a's bombs
-(4.8 a visit, the planner the same) and loses 21% of its entrants; 0x69's dash 28%; 0x5b's last pass 44% (at 1.24
-hearts); Manhandla 55%.
-
-### The route runs on their families' other `d3first` segments (1000 runs each, seeds 5000-, paired)
-
-Each segment twice on the same seeds: with the route's team (`promoted.d3first`) and with today's team (the three
-families' default runs by `--checkpoint`), the rest of the team the same.
-
-| Segment | Route's team | Today's team | Paired difference | Where the families differ |
-|---|---|---|---|---|
-| d4 (`4_71s_0` → step 53) | 0.1% | 0.0% | +0.1 ± 0.1 | zol's 4:0x40: 15 deaths against 106 |
-| d5 (`5_76s_0` → step 120) | 7.6% ± 0.8 | 7.8% ± 0.8 | -0.2 ± 1.2 | the Olive Garden 525 deaths against 527; 0x64 83 against 102 |
-| d8 (`8_7es_0` → step 243) | 5.3% ± 0.7 | 26.2% ± 1.4 | **-20.9 ± 1.6** | 8:0x6e (boss-manhandla) 15 deaths against 1, 1.83 hearts lost a visit against 0.86; 8:0x5e (darknut) 74 against 11, 0x4e 136 against 72, 0x3e 477 against 355 |
-
-zol's route run is better in Dungeon 4 and level in Dungeon 5. darknut's and boss-manhandla's are far worse in
-Dungeon 8: their rounds 1-2 trained before `d3first` had any state past step 119, so their `state_routes:
-[d3first]` drew no Dungeon 8 state (round 1's evaluation lists only `d2first`'s); the magic-sword rooms drifted.
-The lead's answer (Nov 20): a route run trained for the wood sword is not to hold the magic-sword rooms;
-`promoted.d3first` will play only the route's steps before the magic sword is taken (the grave), the families'
-default runs the steps after it (Dungeons 6, 8, 9 and their legs). The two promotions stay (they were removed for
-an hour and restored); Dungeon 8 is no gate for darknut's round 2.
-
-### darknut's round 2 (`r32d3-dark2-s42/s43/s44`, from `r32d3-dark-s32`)
-
-Three seeds, 488 iterations each, with the reserve of 0 in 0x59, the 21 tracks (3_5bw_0 and _2 rebuilt by the
-explorer fix), and the states since the merge (Dungeon 8's too). Demonstrations (`--demo-coeff 0.05`): the
-`BombFighter` rule in 0x59 at the chains' hearts with the state's own bombs (`r32p_rules.py darknut-59`, 65 of 90
-won, 21,427 rows, 406 of them BOMB) and the planner there (86 of 90, 10,417 rows); the Olive Garden with the bag of
-8 at the chains' hearts, the same rule (`garden-05`, new: 71 of 300 won, 45,315 rows) and the planner (`5_05e` 81
-of 120, `5_05c` all, 21,625 rows); `dash-69` and round 1's planner file. Harvested handoffs from the new code's
-chains (500 runs each of `d3` and `d5` with the route's team, `--harvest`): Dungeon 3's beside the old ones, Dungeon
-5's in place of the handoffs from before the grant (which held 0 bombs in 822 of 1000 runs), and 150 Garden entries
-(no chain hands over there: darknut plays 0x06 before it) written from the seed states at the chains' 5:0x05 hearts
-with the bag of 8 (`target/`-only script; a harvested start keeps its health and items).
-
-Seed 44 (its own evaluation, 20 episodes a state): 3_59n 90-93% at -0.04 to -0.26 hearts using about five bombs
-(round 1: 47-80% at -0.8 to -1.3); 5_05e 20-25% at -4.2 hearts with the family's bombs draw (round 1 17-23%).
-Selections (confirmation seeds 8000-, 1000 runs, each paired with `r32d3-dark-s32` on the same seeds and team):
-
-| Seed (`last`) | To Manhandla's door | vs round 1 (15.0%) | Dungeon 5 to 0:0x0b | vs round 1 (8.1%) |
-|---|---|---|---|---|
-| **s44** | 20.4% | +5.4 ± 1.7 | 8.2% | +0.1 ± 1.2 |
-| s42 | 21.0% | +6.0 ± 1.7 | 6.9% | -1.2 ± 1.2 |
-| s43 | 20.3% | +5.3 ± 1.6 | 7.6% | -0.5 ± 1.2 |
-
-All three gain on `d3` beyond noise and none is worse on Dungeon 5 beyond noise; `r32d3-dark2-s44` is promoted for
-`d3first` (the same gain, level on Dungeon 5). Since `r32-steps` 71441669 (merged) a `promoted.d3first` plays
-steps 0-205 only, so the route runs no longer play Dungeon 8.
-
-With the final team (zol `r32d3-zol`, darknut `r32d3-dark2-s44`, boss-manhandla `r32d3-manh`), seeds 9000-:
-`d3` **8.0%** (80 of 1000; 920 deaths), the planner 58.3% (300); Dungeon 5 7.3% (73 of 1000). Against round 1's team
-(6.7% on seeds 4000-, unpaired): 0x59 now loses 69 of 728 entrants (149 of 718 before), with -0.02 hearts a visit;
-the losses moved on to 0x69's dash (159 of 659), 0x5b's last pass (168 of 395, entered at 1.36 hearts) and Manhandla
-(109 of 189 at 1.40). Carried out: 4 hearts, 2 keys, bombs 0-8 (mean 4.6).
-
-### Promoted for `d3first` and what is next
-
-zol `r32d3-zol`, darknut `r32d3-dark2-s44`, boss-manhandla `r32d3-manh`: `d3` **8.0%** (0.0% with today's team),
-the planner 58.3% (26.0%). Next lever for `d3`, from the ledger: the hearts on the way. Link reaches 0x59 with 1.50
-of 3 hearts (the planner 2.55) and Manhandla's door with 1.40 (2.21); before 0x59 the most is lost in 3:0x4a's Keese
-(stalfos-keese-gel: 114 deaths, 0.68 hearts a visit against the planner's 0.15), whose `d3first` run is Dungeon 1's
-trainer's (`r32d1-skg`, trained with `3_4ae`), and in 3:0x49 (zol, 82 deaths); then 0x69's dash, 0x5b's last pass
-and Manhandla at 1.4 hearts. Dungeon 4's start states should hold what a run carries out: 4 hearts, 2 keys and 0-8
-bombs (mean 4.6); they hold 0 bombs.
-
-## 5. Dungeon 4's training (vire, like-like, boss-gleeok; in progress)
-
-**Cause.** Dungeon 4 starts at 4 of 4 hearts and nothing refills them before the triforce. The models lose 449 of
-876 runs entering 4:0x31 (Vires, entered at 1.99 hearts) and 339 of 427 in 4:0x32 (Like-Likes, 1.35); the 13 runs
-that reach Gleeok (4:0x13) enter at 0.62 and all die. The planner keeps the hearts (3.36 into 0x31, 2.05 into
-Gleeok) and is left with Gleeok: 117 of 219 lost there. Gleeok won by the planner's chains, by hearts on entering
-(r32base-plan-d4 and r32prep-plan-d4): 0.5: 8 of 53; 1.0: 3 of 57; 1.5: 27 of 83; 2.0: 32 of 69; 2.5: 41 of 62;
-3.0: 37 of 53; 3.5: 18 of 21; 4.0: 25 of 32. The fight is won at the hearts the dungeon leaves, so the hearts
-saved in 0x50, 0x40, 0x31, 0x32 and 0x12 are the larger lever.
-
-**The arm.** One `d3first`-only continuation per family (`state_routes: [d3first]`, harvested handoffs at the
-chain's hearts), from its promoted run, curriculum tracks of its `d3first` states, demonstrations at
-`--demo-coeff 0.05`: the planner's won episodes from the seed states (20 a chain) and up to 30 harvested handoffs
-a stem, plus the rules at the chains' hearts (`r32p_rules.py ROOM --hearts chain --runs 30`):
-
-| Family | Base run | Harvested (fraction) | Rule rows (won of 90) | Planner rows | Seeds |
-|---|---|---|---|---|---|
-| vire | r77-b | 1,173 (0.25) | vire-31 19,122 (86), vire-12 18,351 (86) | 24,999 | 3 |
-| like-like | r79c-like | 553 (0.25) | like-like-32 28,863 (79) | 20,263 | 1 |
-| boss-gleeok | r78t4-gleeok | 211 (0.33) | gleeok-13 16,148 (24) | 5,582 | 3 (one ended at 226 of 489 iterations) |
-
-Gleeok trained with hp drawn from 0.6 to 4 hearts (the family's own draw is 2-4), the hearts the chains bring.
-Vire's harvest has no 4:0x31 handoffs (the chains change family at 0x50 and 0x30, not at 0x31): 0x31 trains from
-its seed states at the family's hp draw.
-
-**Training.** Vire: success 92% → 95% a room and hearts lost an episode 0.41 → 0.2 (all three seeds early-stopped
-at 95%). Like-like: 77% → 88%, 1.03 → 0.74 hearts. Gleeok: training success fell from 14-18% to 3-10% after about
-100 iterations in both full seeds. At the chains' hearts (single room, 3 states × 100, seed 3000) the base run wins
-7.7%, the checkpoints of iterations 2502 and 2532 (60-90 into training) 16.0-17.0% in all four (deaths otherwise),
-and the last checkpoints 4.3-4.7%: they learned to stall (no-damage and max-steps endings in 160-180 of 300).
-
-**Measured on `d4`** (seeds 3000-3999, the rest of the team as promoted; arrivals at Gleeok's room 4:0x13, the
-segment's only gate the old Gleeok lets through): the promoted team 6 of 1000 (0.6% ± 0.2, 0.67 hearts there);
-vire `r32d4-vire-s2` 7.9% ± 0.9 (0.94 hearts), paired +7.3 ± 0.9 points; like-like `r32d4-like` 2.5% ± 0.5 (0.76
-hearts), paired +1.9 ± 0.5. Both are better beyond noise and are promoted for `d3first` (`promoted.d3first`).
-Gleeok is judged on the full `d4` segment with the route's team, and on 8:0x3c (Dungeon 8 after the magic sword,
-which a Gleeok route run also plays) against 24.3%.
-
-**With zol's route run** (`r32d3-zol`, Dungeon 3's training; 4:0x40 is zol's) the route's team (vire
-`r32d4-vire-s2`, like-like `r32d4-like`, zol `r32d3-zol`, Gleeok's iteration-2502 checkpoint by `--checkpoint`)
-passes `d4` in 22 of 1000 runs (2.2% ± 0.5; seeds 0-999, this branch after the `r32-steps` merge): the first
-wins. 4:0x40 loses 10 of 1000 entering instead of 92 (0.13 hearts a visit, 0.80 before), and 343 runs reach Gleeok
-(13 at the baseline), with 1.36 hearts of 4. The planner on the same code and team (300 runs, the base Gleeok)
-passes in 228 (76.0% ± 2.5; 34.0% at the baseline): it reaches Gleeok in 296 with 3.09 hearts and wins 228 of
-them. Hearts lost a visit, models against the planner: 0x61 0.31 / 0.09, 0x51 0.32 / 0.04, 0x50 0.44 / 0.10,
-0x31 0.66 / 0.10, 0x32 0.92 / 0.29, the cellar 0.26 / 0.07, 0x32 back 0.18 / 0.04, 0x31 E→N 0.19 / 0.07, 0x01
-0.24 / 0.02, 0x12 0.49 / 0.08. Vire's five visits lose 2.09 hearts (the planner 0.44), like-like's two 1.10
-(0.33). Gleeok won by hearts on entering (models; the planner): 0.5: 0 of 89; 1 of 3 · 1.0: 1 of 106; 2 of 12 ·
-1.5: 5 of 59; 5 of 19 · 2.0: 4 of 40; 13 of 22 · 2.5: 1 of 19; 28 of 39 · 3.0: 4 of 18; 41 of 50 · 3.5: 3 of 7;
-41 of 47 · 4.0: 4 of 5; 97 of 104. 195 of the 343 enter with a heart or less, where he is all but never won: the
-segment is lost on hearts first. The target for vire and like-like is the planner's: Gleeok at about 3 hearts.
-
-**Round 2** (the lead's decisions after the first round). The new team's chain (seeds 0-999) harvested the
-handoffs at its own hearts (vire 3,032 in 4:0x50, 0x30, 0x31 E, 0x12, 0x03; like-like 1,559; Gleeok 343). The
-planner's demonstrations from them (one run a handoff, up to 80 / 200 / 400 a stem, plus the seed states; vire and
-like-like episodes kept when won with at most a heart lost): vire 20,654 rows (0.03-0.08 hearts lost in the
-wins), like-like 56,568 (4_32w 186 of 200 won, 0.24 hearts lost), Gleeok 50,687 (the planner with the 2502
-checkpoint wins 189 of the 343 harvested fights, at 1.36 hearts). The rule's Gleeok fights at the chains' hearts
-(`r32p_rules.py gleeok-13 --hearts chain --runs 150`): 156 of 450 won, 109,576 rows. Each family's file adds the
-rule rows of its rooms. Vire (three seeds) and like-like (one) continue from their route runs with 40% of resets
-on the harvested handoffs and `reward.heart_value` on (`d3first`'s table). Gleeok (three seeds) continues from the
-2502 checkpoint for 90 iterations (a checkpoint every 15), half its resets on the harvested handoffs and the rest
-at hp 0.6-4 hearts with half full. The lead's `endings: {no-damage: hard-failure, max-steps: hard-failure}` is
-refused by the config (a truncation's label cannot change its reward); the stall is priced instead by
-`reward.quiet_enemy_penalty: 0.04` (round 7's cost a step after 150 steps without progress while an enemy lives:
-at the chain's hearts the 2502 checkpoint, which does not stall, never passes 228 such steps, the last checkpoints'
-stalls run 400-950, so a stall costs about what a death does). Arm B (the family's own hearts draw, hp 2-4) fell
-the same way: its 2502 and 2562 checkpoints win 17.0% and 16.3% of 4:0x13 at the chains' hearts (300 each) and
-99.0% and 97.3% of 8:0x3c, its last 5.0% (stalls in 202 of 300) and 59.7%.
-
-**Round 2's results so far.** Gleeok: the penalty did not hold the stall off. At the chains' hearts (4:0x13, 300
-episodes a checkpoint) the three seeds' checkpoints at 15 and 30 iterations win 12.7-19.0% (the 2502 start:
-17.0%), and from 45 iterations on 9.3-18.7% with 16-86 stalls of 300 (none at 2502); 8:0x3c stays at 97-100% in
-all 18. No checkpoint is better than 2502 beyond noise in the single room; the choice is made on `d4` (seeds
-3000-3999: the promoted base, 2502 and the two best new ones), which decides alone: by the lead's later decision a
-route run plays only the route's steps before the magic sword, so Dungeon 8 is not his. Like-like (`r32d4-like2`,
-early stop after 128 iterations; hearts lost a room 0.25 → 0.21 in its own evaluation): on `d4` (seeds
-3000-3999, Gleeok 2502) its last checkpoint reaches Gleeok in 40.6% ± 1.6 of runs at 1.31 hearts and passes 2.8% ±
-0.5; its iteration-3694 checkpoint 35.5% at 1.38 and 3.3%. Vire (three seeds, early stops after 64-67
-iterations; hearts lost a room in their evaluations 0.086-0.113 against the first round's 0.111) is measured the
-same way, paired against the same team with the first round's runs.
-
-**Verdicts** (seeds 3000-3999, paired; the first round's vire and like-like, zol's route run; the team reaches
-Gleeok in 31.9% with 1.43 hearts). Gleeok on `d4`: the promoted base 1.4% ± 0.4, the 2502 checkpoint 2.5% (+1.1 ±
-0.6), the second round's seed-1 iteration 2517 3.1% (+1.7 ± 0.6), seed 2's 2532 2.4%. Iteration 2517 is promoted
-for `d3first` (`r32d4-gleeok2-s1-it2517`, the checkpoint as a run); against 2502 it is +0.6 ± 0.6, so its number is
-the 2502 line's, chosen among three on these seeds (the final chain on fresh seeds gives the unbiased one).
-Like-like `r32d4-like2` against `r32d4-like`: Gleeok reached in 40.6% instead of 31.9% (+8.7 ± 1.7), with 1.31
-hearts instead of 1.43 (the extra arrivals are the marginal ones), hearts delivered to Gleeok a run +0.075 ± 0.030,
-`d4` +0.3 ± 0.7: better beyond noise on the lead's pair; promoted for `d3first`. Vire against `r32d4-vire-s2`:
-the three seeds reach Gleeok in 42.0%, 41.7% and 40.9% (+10.1 ± 2.1, +9.8 ± 2.1, +9.0 ± 2.2) with the same 1.40-1.41
-hearts there, hearts delivered +0.14, `d4` 3.5%, 2.8%, 3.3% (+1.0 ± 0.8 at most); seed 1 (`r32d4-vire2-s1`) is
-promoted for `d3first`. Each family was measured with the other's first-round run, so the new team's `d4` is the
-final chain's to say (fresh seeds, after the cutoff merge: route runs play only the steps before the magic sword).
-
-**What the segment's start states should carry.** The planner's runs that left Dungeon 3 carry 0 to 8 bombs (into
-4:0x71 in the full chain, 69 runs: 0: 9, 1: 7, 2: 2, 3: 4, 4: 11, 5: 13, 6: 7, 7: 6, 8: 9; median 5) and 4.0 of 4
-hearts in 58 of 68 (3.5 in 9). Dungeon 4 needs two bombs (the walls of 4:0x21 and 4:0x11, cheated 250 and 249
-times in the planner's 300 runs because `4_71s_*` hold none). A harvested entrance state from the chain would
-hold the bombs Dungeon 3 left (about 5) and full hearts; the installed ones should hold at least the 2 the walls
-take.
-
-## 5. Training: Dungeon 1 and the legs (goriya, stalfos-keese-gel, ow-octorok, ow-zora, ow-leever, ow-tektite)
-
-Branch `r32-t-d1` (from `r32-base`). Segments: `post-d4` (0:0x45 → Level 1, 86.2%), `d1` (26.3%), `post-d1` (0:0x37
-→ Level 5's entrance, 16.8%). Every family here gets a run of its own for `d3first` (`promoted.d3first`), continued
-from its promoted run on `d3first`'s states only (`state_routes: [d3first]`), `harvested_fraction` 0.25 (the
-handoffs the route's chains harvested at their hearts), its `d3first` curriculum tracks, demonstrations at
-`--demo-coeff 0.05`, `--sil-coeff 0.1`, 2M steps (`--stop-success 1.01`: the full budget; the checkpoint is
-chosen by the segment), `--parallel 8`, checkpoints every 30 iterations.
-
-**The arms, by cause:**
-
-| Family | Rooms (runs lost of 1000) | Cause | Teacher |
-|---|---|---|---|
-| goriya | 1:0x23 (94), 1:0x44 (99) | wood sword (3 hits a Goriya), hearts | the planner from `1_23s`, `1_44w` and their harvested handoffs (30 runs a state): 22,410 rows |
-| stalfos-keese-gel | 1:0x33 (69: 50 stuck with the carried key), 3:0x4a (101, in `d3`) | wood sword, the key | the planner from `1_33s`, `1_53s`, `3_4ae` (+ `3_4ae` handoffs): 30,347 rows |
-| ow-octorok | 0:0x37 cave→cave (363 stuck) | new step (phase IX's out-and-back-in) | first the `d2first` run trained on it (`r31-oct-s97`, the mouth rule's demonstrations) measured here |
-| ow-zora | 0:0x55 N→E (136), 0:0x2d W→cave (179: 109 without the 30 rupees) | new exit, new room/cave | the rules `wall-2d`, `rupees-2d`; the planner from `0_55n` (+ handoffs), `0_56w`: 16,075 rows |
-| ow-leever | 0:0x2a (220), 0:0x2b (124) | new rooms; the scroll taken in 48% / 3% of visits | the walks' scroll as a rule (new: `r32p_rules.py scroll-29/2a/2b`, `CLIP W` on arrival then E: 90/90 each, 0 hearts): 540 rows; no planner rows (it walks the Leevers) |
-| ow-tektite | 0:0x0c's shop (150 stuck), its wrap exit (98), S→cave (36) | new: the blue candle, the wrap exit | the rules `candle-0c`, `wrap-0c`; the planner from `0_0cs`, `0_2cw`, `0_2ce` (+ handoffs): 17,721 rows |
-
-Selection on the segment each family loses most (goriya, stalfos-keese-gel, ow-octorok: `d1`; ow-zora, ow-leever,
-ow-tektite: `post-d1`): `triforce select-checkpoint F RUN --route d3first --from d3first_<start> --first-seed 2000
---runs 1000 --confirm 1000` (screen seeds 2000-2999, confirmation 3000-3999). `--segment X` with `--route d3first`
-plays its chains and then fails at its report (the chains' provenance names the namespaced start state): `--from
-d3first_1_73s_0` (the target still from the route's table) works.
-
-**Trained** (one seed each, 488 iterations; the round's evaluation, 30 episodes a state, reads each family's yaml
-with both routes): ow-leever `r32d1-leever` 100% (worst 0:0x0b 98%; it scrolls: about 0.09 hearts lost an episode
-in training), goriya `r32d1-goriya` 98%, ow-tektite `r32d1-tektite` 97% (worst 0:0x0c 78%), stalfos-keese-gel
-`r32d1-skg` 99% (worst 3:0x4a 93%), ow-zora `r32d1-zora` 98% (its `d3first` states 100%; `d2first`'s 0x28 W→S fell
-to 0-57%: the run is for `d3first` only and `d2first` keeps its promoted run). Single rooms decide nothing here.
-
-**Measured** (arrivals at the segment's end, 1000 runs; screen seeds 2000-2999, confirmation 3000-3999, paired
-against the family's run before; the rest of the team as promoted then):
-
-| Family | Run | Segment | Screen | Confirmation | Paired (confirmation) | Hearts on arrival | Decision |
-|---|---|---|---|---|---|---|---|
-| ow-octorok | `r31-oct-s97` (the `d2first` run trained on 0:0x37's mouth) | `d1` | 51.1% vs 24.2% | 51.3% vs 25.6% | **+25.7 ± 2.1** | 3.20 / 3.20 | the family's default run (as main v1.9.0.1); no route run |
-| ow-leever | `r32d1-leever` (last) | `post-d1` | 63.0% vs 15.7% | 61.4% vs 15.5% | **+45.9 ± 1.9** | 5.08 / 3.16 | `promoted.d3first` |
-| ow-zora | `r32d1-zora` (last) | `post-d1` | 33.3% vs 15.7% | 36.5% vs 15.5% | **+21.0 ± 1.9** | 3.77 / 3.16 | `promoted.d3first` |
-| ow-tektite | `r32d1-tektite` (last), with the two runs above in the team | `post-d1` | 99.8% vs 86.3% | 100.0% vs 85.0% | **+15.0 ± 1.1** | 5.17 / 5.70 | `promoted.d3first` |
-| goriya | `r32d1-goriya` (last), with `r31-oct-s97` | `d1` | 72.3% vs 51.1% | 69.0% vs 51.3% | **+17.7 ± 1.7** | 3.62 / 3.20 | `promoted.d3first` (Dungeon 2 and 7 gates pending) |
-| stalfos-keese-gel | `r32d1-skg` (last), with `r31-oct-s97` | `d1` | 69.5% vs 51.1% | 72.3% vs 51.3% | **+21.0 ± 2.1** | 3.50 / 3.20 | `promoted.d3first` (Dungeon 3 rooms pending) |
-
-ow-leever's scrolls clear 0x2a and 0x2b without a fight: the leg to Level 5 passes the 30% bar with it alone.
-ow-zora's confirmation of its screen winner (it002502, 85.1%) is void: that chain started in the minute ow-leever's
-route run was promoted and played with it; its screen lead over `last` (+2.3 ± 2.1) is noise, so `last` stands.
-With the three route runs the leg from Dungeon 1 to Level 5 arrives in 1000 of 1000 runs (16.8% in the baseline).
-goriya and stalfos-keese-gel were measured each alone against the same team; together they are in the final batch
-(`r32d1-final`: `d3`, `post-d4`, `d1`, `post-d1`, `d2`, `d7`, 1000 runs each), queued: it also checks goriya's
-Dungeon 2 (must stay near 99.9%) and Dungeon 7, and stalfos-keese-gel's 3:0x4a.
-
-## 6. The per-route tables for the whole route, and the late families (boss-digdogger, gibdo, ow-moblin)
-
-Branch `r32-t-late` (from `r32-steps` 44fe335c, `r32-base2` merged), version 2.0.0.0, today's team as in §5 (main's
-promoted runs and round 30's five, stamped).
-
-### 6.1 The tables' refit
-
-`triforce/heart_value.d3first.json` and `triforce/chain_hp.d3first.json` refitted from 37 `d3first` chains of
-today's team: the first baseline's (`r32base-1k-*`, `r32base-plan-*`), the prep's (`r32prep-*`), the second
-baseline's (`r32base2-1k-*`, `r32base2-plan-*`) and three new ones (`python -m triforce.heart_value <files> --route
-d3first`, the same for `chain_hp`):
-
-- **the leg to Level 7** (steps 156-173 rested on one run, the only one past 0:0x3c): the planner from Level 2's exit
-  (`0_3cc_0` → step 174, 300 runs) passes 0:0x3c in **6** runs (it plays the models' choices, and the models do not
-  turn E before the recorder), so the leg's data is the models' from the recorder's landing (`0_45r_0`, step 156 →
-  step 174, 1000 runs: 997 reach Level 7). Each step of the leg now has about 1000 visits.
-- the leg to Level 2 again on new seeds (`0_0bc_0` → step 145, 1000 runs, seeds 5000-5999).
-
-Coverage: **every clip-way step 0-303 has a curve from at least 20 visits**. The plain ways have none: no chain
-plays clips off, so `fit_way` gives no curve to a way none of whose steps up to the next triforce has a visit, and
-`env::heart_value` prices hearts there by the plain health terms (the fit's design since round 26). Those are the
-stretches' plain ways 43-46, 159-162, 198-201 and **272, 285, 290**, which §5.4 read as second visits without their
-own record: they are Dungeon 9's one-room plain twins (9:0x07 cave→S, 9:0x20 cave→N, 9:0x20 N→cave on the plain
-way). `chain_hp.d3first.json` holds 223 rooms (93 before). The test
-(`test_the_d3first_table_prices_the_steps_its_chains_played`) checks the coverage. A few values (V at hearts in /
-at full): 5:0x66 W→N 0.31 at 2 hearts, 0.75 at 4, 0.90 at 7; 5:0x24 0.76 / 0.87 / 0.95; 0:0x62 E→cave 0.17 / 0.59 /
-0.97 (of 8); 0:0x3c cave→recorder 0.13 at full (Level 7's 4.7% behind it).
-
-Every chain of the fit predates the route's grants (`r32-steps` ef726772: Dungeon 5's entrance tops the bag up to 8
-bombs; 8:0x4c's rupees): Dungeon 5's and Dungeon 8's rows price the old bag and purse until the next refit.
-
-### 6.2 The three trainings and the code they are judged on
-
-One seed each (32), 489 iterations, on `d3first`'s states only (`state_routes: [d3first]`, a quarter of the episodes
-from harvested handoffs at the chains' hearts, the whole-route tables of §6.1, `chain_hp` 1.0, clips on), each with
-demonstrations of the planner (`temperature:0.5+relax:16+plan:16:1`, 20 a state at the handoffs' hearts) and, where
-a rule wins more than the planner, the rule's rows (`r32p_rules.py`):
-
-| Family | Run (from) | Rooms | Demonstrations | Training's own measure |
-|---|---|---|---|---|
-| boss-digdogger | `r32late-dig` (`r76-b`) | 5:0x24, 7:0x1c, 7:0x39 | planner 15636 rows (7:0x1c 19-20 of 20 a state); rule `digdogger-24` 18287 rows (64/90 at the chains' hearts) | 95% over 180 episodes, worst 5:0x24 92%; -0.9 hearts an episode |
-| gibdo | `r32late-gibdo` (`r30-gibdo-s91`) | 5:0x65, 5:0x66 W→N, 5:0x47, 5:0x26, 5:0x14 | planner 13409 rows (5:0x66 60/60) | 100% over 480, worst 5:0x66 99%; -0.08 hearts |
-| ow-moblin | `r32late-moblin` (`r79t5-moblin`) | 0:0x73, 0x63, the tree 0:0x62, 0x52, 0x51, 0:0x3d | rule `tree-62` 6421 rows (85/90: the blue candle facing W); planner 20744 rows (0:0x62 34/60) | 100% over 1350 (both routes' states), worst 0:0x5c 93% (a d2first room) |
-
-The trainings ran on the code before the route's grants (`r32-steps` 44fe335c with `r32-base2` and the tables).
-Everything below was measured after `r32-steps` was merged: the selections on its a711de21 (the bag of 8 bombs
-granted at Dungeon 5's entrance, 8:0x4c's rupees, the whole-route tables), the paired batch of §6.5 on its 71441669
-(the same plus the cutoff: a family's `promoted.d3first` plays steps 0-205, its default run from the magic sword's
-cave on; every room of these three families judged here is before step 205, so the cutoff changes none of them).
-
-### 6.3 The selections: each family's sub-segment
-
-`select-checkpoint FAMILY RUN --route d3first --from d3first_<state> --stop-at step:N`, the run's last three numbered
-checkpoints and `last` against today's promoted run, screened on seeds 2000-2999 and confirmed on 3000-3999 (1000
-runs each, models alone, clips on). The numbers are the confirmation's; paired differences with their standard
-error.
-
-| Family | Sub-segment (why) | Chosen | Confirmed | Today's run | Paired difference |
-|---|---|---|---|---|---|
-| boss-digdogger | `5_65w_0` → step 120 (Dungeon 5 past the Olive Garden: from Level 5's start ~40 runs reach 5:0x24) | `last` (it001447 won the screen, -2.6 ± 0.8 against `last` confirmed) | **81.6%** ± 1.2 | 67.2% (`r76-b`) | **+14.4 ± 1.2** |
-| boss-digdogger | `7_1cw_0` → step 194 (Dungeon 7 from 0x1c: goriya's 0x1b kills 68% before it) | `last` kept (it001387 confirmed +0.2 ± 2.2 against it: noise) | **49.1%** ± 1.6 | 45.6% | +3.5 ± 2.2 |
-| gibdo | `5_65w_0` → step 120 | `last` (it001848 won the screen, -0.5 ± 1.8 confirmed) | **78.0%** ± 1.3 | 67.2% (`r30-gibdo-s91`) | **+10.8 ± 2.0** |
-| ow-moblin | `0_73e_v2_0` → step 145 (the leg to Level 2 past ow-leever's 0x0b turn) | it006341 (+0.5 ± 0.6 against `last`; applied) | **98.6%** ± 0.4 | 64.1% (`r79t5-moblin`) | **+34.5 ± 1.6** |
-
-The families' rooms in the confirmations (runs lost per 1000 entering; hearts lost a visit):
-
-- **boss-digdogger, 5:0x24**: 237 → **74** (0.88 → -0.38 hearts a visit: the new run picks up more than it loses),
-  bombs 2.15 → 2.48 a visit, none cheated. 7:0x1c (Link enters it with 9.3 hearts from this start): 10 → 3 (1.44 →
-  1.02 hearts a visit, bombs 2.96 → 2.46). The sub-segment is not Digdogger's to win: wallmaster's 7:0x0d grabs Link
-  on 702 of 1260 visits (713 of 1227 with today's run) and sends him to Level 7's entrance, and 505 of the 509 runs
-  lost are lost on that second pass through goriya's wood-sword rooms (7:0x1b 292 per 1000 entering, 0x1a 191, 0x18
-  138); what the new run adds is the hearts it leaves for that pass.
-- **gibdo, Dungeon 5 past 0x65**: 5:0x66 W→N 25 → 17 (1.51 → 0.95 hearts a visit), 0x47 31 → 13, 0x37 37 → 9,
-  0x27 9 → 5; Link reaches 5:0x24 with 4.69 hearts against 3.88, and Digdogger (today's run in this selection) loses
-  165 there against 237.
-- **ow-moblin, the tree**: 0:0x62 E→cave 334 → **12** (1.26 → 0.86 hearts a visit), 0:0x3d cave→S 9 → 0, 0:0x4c 21
-  → 1, and Link arrives at Level 2 with 7.45 hearts against 4.91.
-
-**Promoted for `d3first`** (`triforce promote FAMILY RUN --route d3first`): `boss-digdogger/r32late-dig`,
-`gibdo/r32late-gibdo`, `ow-moblin/r32late-moblin` (it006341). Each beats today's run beyond noise on its
-sub-segment; boss-digdogger's second sub-segment is ahead within noise (+1.6 standard errors), not worse. `d2first`
-keeps its runs.
-
-### 6.4 The full segments: the route's team against today's, paired
-
-One `eval-batch` (code: `r32-steps` 71441669 merged), seeds 4000-4999 (no selection or table used them), 1000 runs
-a chain, models alone, clips on; "today" pins the three families to their `promoted` runs (`--checkpoint
-FAMILY=PATH`: both parts), "route" plays `d3first`'s team (the three `promoted.d3first` up to the magic sword).
-
-| Segment | Today | Route's team | Paired difference | The families' rooms (lost per 1000 entering, today → route) |
-|---|---|---|---|---|
-| Dungeon 5 (`5_76s_0` → step 120) | 8.6% ± 0.9 | **23.0%** ± 1.3 | **+14.4 ± 1.6** | 5:0x24 479 → **164**; 5:0x66 W→N 336 → **157**; 0x47 167 → 64; 0x37 125 → 59 |
-| Dungeon 7 (`7_79s_0` → step 194) | 3.7% ± 0.6 | **5.8%** ± 0.7 | **+2.1 ± 0.9** | 7:0x1c 353 → **156** (1.04 → 0.17 hearts a visit); 7:0x39 4 → 5 |
-| the leg to Level 2 (`0_0bc_0` → step 145) | 35.0% ± 1.5 | **55.7%** ± 1.6 | **+20.7 ± 1.3** | 0:0x62 E→cave 339 → **28**; 0:0x3d cave→S 19 → 0; 0:0x4c 42 → 5 |
-| ow-moblin's other legs before the cutoff: post-d3 (`0_74c_0` → step 31), Level 2 → Level 7 from the recorder's landing (`0_45r_0` → step 174), post-d7 (`0_42c_0` → step 211) | 100.0%, 99.8%, 99.5% | 100.0%, 99.8%, 99.8% | 0, 0, +0.3 ± 0.3 | 0:0x73/0x63 (25-26), 0:0x53/0x52/0x42 (171-173), 0:0x42/0x52/0x51 (194-196): nothing lost on either |
-
-Today's Dungeon 5 is 8.6% on these seeds against the 6.0% the grant's own measure gave on other seeds (2.6 points,
-about two standard errors of an unpaired difference). **Bombs in Dungeon 5 with the granted bag** (a visit, used /
-cheated): the Olive Garden 7.73 / 5.92 → 7.77 / 5.94 (darknut's, not these families'), 5:0x66 S→W and 0x65 the
-walls' 1.0 / 1.0 and 1.2 / 1.2 on both, **5:0x24 1.64 / 0.00 → 2.13 / 0.01**: the new Digdogger throws half a bomb
-more a visit, from the bag it carries, and loses a third as many runs.
-
-**Nothing else got worse beyond noise.** The rooms the three families do not play move within their noise on the
-same seeds: the Olive Garden 489 → 459 per 1000 (Link enters it the same: gibdo's first three rooms play the same),
-5:0x64 215 → 207, 7:0x1b 682 → 668, 7:0x0d 86 → 88, 7:0x2a 196 → 183; the largest move against the route's team,
-7:0x38 10 → 24 runs (and 7:0x18 34 → 43), is one of some forty rooms compared and 14 runs, about two of its standard
-errors. The leg's other losses are the same runs on both: ow-leever's turn at 0:0x0b (174 bounce into 0:0x1b, 93
-die in 0x0b) and runs that walk back into Level 5 from 0x0b and die there (about 130 on both).
-
-### 6.5 boss-aquamentus (7:0x2a) and wallmaster (7:0x0d): not trained here
-
-No `d3first` goriya run exists yet (no route run promoted for goriya; its Dungeon 7 training is still owed), so
-Dungeon 7 was measured only with the route's team above. What the two rooms cost:
-
-- **wallmaster's 7:0x0d grabs Link and sends him to Level 7's entrance**, and with the wood sword a second pass
-  through goriya's rooms is fatal: in the full Dungeon 7 the grab takes 133 of 228 visits (123 runs) and 1 of those
-  123 runs wins; from `7_1cw_0` (Link at 0x1c with 9.3 hearts, goriya's 0x1b behind him) it takes 702 of 1260 visits
-  and 505 of the 509 runs lost there are lost on the second pass (§6.3). The room's own deaths are few (88 per 1000
-  entering), so the chains' per-room ledger understates it; its "wrong exits" are the grabs.
-- **boss-aquamentus's 7:0x2a** loses 183 per 1000 entering (13 of 71) with the route's team, 54 per 1000 from
-  `7_1cw_0`'s fuller hearts: hearts, as §5.2 read.
-
-Today both are small in runs because goriya's 7:0x1b (668 per 1000 entering) lets only about 270 runs of 1000 reach
-0x1c. Once a route goriya passes 0x1b, **wallmaster is worth a round** (the next one after goriya's, `d3first`
-states only: more than half of the runs that reach 0x0d are grabbed and none of them survive the walk back with the
-wood sword); boss-aquamentus is not yet (a fifth of the few that reach it; it gains from the hearts a better goriya
-leaves, as §5.4 expected). The tracks (3/3 each), handoffs (7:0x2a 318, 7:0x0d 466) and states are ready.
-
-### 6.6 Verdicts
-
-| Family | Before (today's run) | After (`promoted.d3first`) | Verdict |
-|---|---|---|---|
-| boss-digdogger `r32late-dig` | 5:0x24 479 per 1000 entering, 7:0x1c 353 (full segments) | **164**, **156** | promoted: Dungeon 5 sub-segment +14.4 ± 1.2, Dungeon 7 sub-segment +3.5 ± 2.2 |
-| gibdo `r32late-gibdo` | 5:0x66 W→N 336, 0x47 167, 0x37 125 | **157**, 64, 59 | promoted: sub-segment +10.8 ± 2.0 |
-| ow-moblin `r32late-moblin` (it006341) | 0:0x62 E→cave 339 | **28** | promoted: sub-segment +34.5 ± 1.6; its other legs unchanged |
-
-With the route's team: **Dungeon 5 23.0%** (today 8.6%), **Dungeon 7 5.8%** (3.7%), **the leg to Level 2 55.7%**
-(35.0%). Still at or near zero, and whose: Dungeon 7 (goriya's 7:0x1b, 668 per 1000 entering, then wallmaster's
-grab), the Olive Garden (5:0x05, 459 per 1000: darknut with the wood sword, even with the bag), ow-leever's turn at
-0:0x0b (267 of 1000 runs of the leg) and, outside this section, ow-octorok's recorder turn out of Level 2 and
-Dungeons 3 and 4 (§5.3).
-
-## 7. The recorder's turns out of Levels 2 and 5 (ow-octorok 0:0x3c, ow-leever 0:0x0b)
-
-Branch `r32-turn` (from `r32-steps` 71441669), version 2.0.0.0; today's team is main's promoted runs of 1.9.0.1
-(stamped) with ow-moblin's route run `r32late-moblin` (§6).
-
-### 7.1 The cause
-
-Out of Level 2 (step 155, 0:0x3c `cave → recorder`, the whirlwind to Level 4) and out of Level 5 (step 120, 0:0x0b,
-the whirlwind to Level 3) one play of the recorder facing right or up takes Link where the route goes; facing down or
-left takes three or four (`d3first-walks-b.md` §1). The engine computes this from the game's own index and pieces
-(`zelda::whirlwind::plays`: `$523` 2 → 3 out of Level 2, 0 → 2 out of Level 5 past the missing Level 2) and the
-session already offers RECORDER only facing E or N there (`objectives::recorder_facings`, round 26). What the env
-offers, played from `d3first_0_3cc_*` and `d3first_0_0bc_*`:
-
-- Link comes out on the mouth's foot ($70,$7D) facing S. The first decision offers **only `MOVE S` and `WAIT`**: the
-  mouth's walls are E and W of him and the level N, so there is no turn in place (the walk's 2 frames of Right at
-  the mouth are not a MOVE the mask offers), and RECORDER is masked (facing S).
-- `MOVE S 4` walks him 6 pixels (Y $83) and every MOVE is offered; `MOVE E 4` takes him to ($73,$85) facing E, and
-  RECORDER is offered; after the play he must stand on the row until the whirlwind takes him (a MOVE off the row
-  lets it pass, and no second whirlwind comes before the room is entered again). Three decisions, then WAIT: the rule
-  (`scripts/experiments/r32t_recorder_demos.py recorder-3c|recorder-0b`) wins 90 of 90 in each room at the chains'
-  hearts, no heart lost, 17 decisions.
-- Today's runs: ow-octorok `r31-oct-s97` plays `MOVE S` at the mouth with probability 1.00 and again after the first
-  step (0.99; `MOVE E` 0.006); turned E it still walks S (0.84) and RECORDER is below 0.003: on `d2first` the same
-  room from the same cave is left S, and the family never trained on this step. ow-leever `r79t5-ow` steps S (0.80) and
-  then waits (0.64; `MOVE E` 0.02); turned E it plays (0.25), and then walks off the row (`MOVE S 32` 0.79, `MOVE N 32`
-  0.20, back into Level 5): the 174 bounces into 0:0x1b, the runs that die back in Level 5 (§6.4).
-
-**No engine change**: the action space and the mask give the play (two MOVEs and RECORDER); masking RECORDER while
-it would warp elsewhere is already what the mask does. What the models lack is the step itself.
-
-### 7.2 The arm (trained; not yet chosen)
-
-Route runs on `d3first`'s states only (`state_routes: [d3first]`, a quarter of the episodes from the chains'
-harvested handoffs, clips on), `--sil-coeff 0.1 --demo-coeff 0.05 --checkpoint-every 30`, the default budget, no early
-stop; curriculum: the explorer's tracks for every `d3first` state of the family (ow-octorok 19 of 21 after step 97: the
-explorer fails 0x3c's `cave → recorder` on chains 0 and 2) and three rule tracks a chain of the recorder step
-(`r32t_recorder_demos.py ... --tracks`). Demonstrations (the rule's won runs at the chains' hearts, 30 a chain):
-
-| Family | Runs (from) | Demonstrations | Training's own measure (10 episodes a state, both routes) |
-|---|---|---|---|
-| ow-octorok | `r32turn-oct-s32`, `-s33`, `-s34` (`r31-oct-s97`) | `recorder-3c` 5040 rows (90/90) + round 31's mouth rule on `d3first`'s 0:0x37 `cave → cave` (`r32p_rules.py mouth-37`, 180) | 99% each; every `d3first` state 100% (one 0x64 W→E state 95%), `d3first_0_3cc_*` 30/30 on each seed |
-| ow-leever | `r32turn-leever` (`r79t5-ow`; no `d3first` ow-leever route run existed when it was queued) | `recorder-0b` 5040 rows (90/90) + the Dungeon 1 trainer's scrolls of 0x29-0x2b (540) | 97%; every `d3first` state 100%, `d3first_0_0bc_*` 30/30 |
-
-Both runs are for `promoted.d3first` only: `d2first`'s own 0x0b and 0x3c steps are never theirs (ow-leever's
-`d2first` 0:0x0b, which plays facing down, fell to 3-4 of 10 in its training's evaluation, as a `d3first`-only run
-may). The legs (Level 2 to Level 7, `0_3cc_0` → step 174, today 0.1%; Level 5 to Level 2, `0_0bc_0` → step 145, today
-55.7% with ow-moblin's route run) are measured on fresh seeds next: the three ow-octorok seeds against today on seeds
-2000-2999, the best confirmed on 3000-3999 with its other segments before the cutoff; ow-leever by `select-checkpoint
---segment post-d5` (screen 2000-2999, confirm 3000-3999).
-
-### 7.3 The leg from Level 2 to Level 7: the screen
-
-`target/r32-turn/screen.sh` (eval-batch `r32turn-oct-screen`, post-d2 `0_3cc_0` → step 174, seeds 2000-2999, 1000
-runs each, models alone, clips on; each seed's `last` pinned for the route's part): **today (`r31-oct-s97`) 0 of
-1000; `r32turn-oct-s32` 98.9%, `-s33` 98.9%, `-s34` 99.1%** (s34 against today, paired: +99.1 ± 0.3). Every run of
-s34 leaves 0:0x3c by the whirlwind; 5 of its 9 losses are in ow-zora's 0:0x55. These seeds chose the seed; the
-confirmation on 3000-3999, with ow-octorok's other segments before the cutoff (Dungeon 1's 0:0x37 trip among them),
-and the promotion for the route are next.

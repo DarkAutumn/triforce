@@ -1933,8 +1933,8 @@ is joined at the end. It prints a JSON summary (`out`, `frames`, `seconds`, `wid
 `d2first` and `d3first` go through many of the same rooms with other hearts, swords and items (decisions
 2026-11-19 "Two routes"). What keeps them apart:
 
-- **The main route** is one constant, `triforce/registry.py` `MAIN_ROUTE` (`d2first` until a golden path on
-  `d3first` reaches the ending; then `'d3first'`): the default `--route` of `triforce eval-chain`, `eval-batch
+- **The main route** is one constant, `triforce/registry.py` `MAIN_ROUTE` (`'d3first'` since 2.0.0.0, when a golden
+  path on `d3first` reached the ending; `d2first` before): the default `--route` of `triforce eval-chain`, `eval-batch
   --chains` (and `scripts/experiments/r56_chains.sh`, which passes `ROUTE` only when set), `play-zelda.py`,
   `zelda-headless.py` (and its golden path) and the first route `zelda-map.py` lists. The engine's `DEFAULT_ROUTE`
   (`zelda::game_map`, `_native.DEFAULT_ROUTE`) is another thing and stays `d2first`: the route of bare start-state
