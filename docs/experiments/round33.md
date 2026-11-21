@@ -2,7 +2,7 @@
 
 ## Wizzrobe and vire: Dungeon 6's 0x78, 0x29, 0x39 and 0x2d
 
-**State of this section.** Complete but for the joint `d6` check (queued). Promoted in this branch's checkout: wizzrobe `r33w-s93` (it003264), vire `r33-vire-s95` (it002342).
+**State of this section.** Complete (the joint `d6` check: +7.7 ± 2.1). Promoted in this branch's checkout: wizzrobe `r33w-s93` (it003264), vire `r33-vire-s95` (it002342).
 
 wizzrobe plays Dungeon 6's 0x78, 0x38, 0x28, 0x29, 0x3a, 0x2c and level 9's 0x15, 0x17, 0x07, 0x05, 0x20, 0x10, 0x31,
 0x30, 0x04 (0x65 has left the route); vire plays Dungeon 4's eight rooms and Dungeon 6's 0x39 and 0x2d. The
@@ -163,8 +163,8 @@ The recipe of decisions 2026-11-19 ("One team for the whole route"), as round 30
 | wizzrobe | `r33w-s93` (it003264) | `r30w-wj-s89` | `d6` **+6.10 ± 1.19** (3000 runs) | `d9` +1.9 ± 1.3, `post-d7` equal |
 | vire | `r33-vire-s95` (it002342) | `r77-b` | `d6` **+2.55 ± 1.23** (2000 runs) | `d4` **+3.4 ± 1.2** |
 
-Both qualify and are promoted in this branch's checkout. Each was judged with the other family's old run; a `d6`
-chain with both new against both old (1000 runs, seeds 8000-8999) is queued.
+Both qualify and are promoted in this branch's checkout. Each was judged with the other family's old run; together on
+`d6` (seeds 8000-8999) +7.7 ± 2.1 against both old.
 
 **0x78, plainly (for the owner).** A model can be made to swing there without paying for it in 0x38: every trained
 seed swings, a kill in 23-33% of the visits, the leader and its pack sometimes; 0.06-0.2 hearts a visit, and 0x38 is
@@ -190,3 +190,8 @@ scripts/train_round.py --round r33-vire-s95 --specialists vire ... --train-args 
 triforce select-checkpoint wizzrobe r33w-sN --segment d6 --stop-at step:277 --runs 1000 --first-seed 2000 --confirm 1000 --confirm-first-seed 3000 --confirm-top 1 --only <last three>,last[,promoted]
 triforce select-checkpoint wizzrobe r33w-s93 --segment d6 --stop-at step:277 --first-seed 4000|7000 --confirm 0 --only it003264 --no-promoted   # and d9
 ```
+
+**The pair together** (`eval-batch r33d6-joint`: `d6`, 1000 runs, seeds 8000-8999, both new against both old):
+37.7% against 30.0%, **+7.7 ± 2.1**. Deaths, new / old: 0x38 91 / 104, 0x29 76 / 59, 0x39 10 / 56, 0x3a 329 / 327,
+0x2d 10 / 37, 0x2c 66 / 72, Gohma 16 / 23; 0x78 a kill in 214 runs, 0x38 entered with 10.74 hearts (10.81), 0x3a with
+6.30 (5.82). The two gains add up.
