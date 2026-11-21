@@ -427,6 +427,22 @@ ow-leever's scrolls clear 0x2a and 0x2b without a fight: the leg to Level 5 pass
 ow-zora's confirmation of its screen winner (it002502, 85.1%) is void: that chain started in the minute ow-leever's
 route run was promoted and played with it; its screen lead over `last` (+2.3 ± 2.1) is noise, so `last` stands.
 With the three route runs the leg from Dungeon 1 to Level 5 arrives in 1000 of 1000 runs (16.8% in the baseline).
-goriya and stalfos-keese-gel were measured each alone against the same team; together they are in the final batch
-(`r32d1-final`: `d3`, `post-d4`, `d1`, `post-d1`, `d2`, `d7`, 1000 runs each), queued: it also checks goriya's
-Dungeon 2 (must stay near 99.9%) and Dungeon 7, and stalfos-keese-gel's 3:0x4a.
+**The final batch** (`r32d1-final`, every route run above promoted, `r31-oct-s97` ow-octorok's default; 1000 runs a
+segment, seeds 0-999 = the baseline's; clips on; the chains of this batch ran on past their arrival room, so the
+arrivals are read at the segment's target and the rooms below only up to it):
+
+| Segment | Baseline (`r32base-1k`) | Route runs | Where the rest are lost now |
+|---|---|---|---|
+| `post-d4` (0:0x45 → Level 1) | 86.2% | **99.9%** | 0:0x55's dock: 0 of 1001 visits lost (130 before: 120 stuck bouncing into 0x45) |
+| `d1` | 26.3% | **89.4%** | Aquamentus 1:0x35 74 of 968 entering (enters at 3.33 of 5 hearts; 92 of 355 before), 1:0x44 22 of 991 (0.32 hearts a visit, 0.59 before), 1:0x23 7, 0:0x37's trip 0 (363 stuck before) |
+| `post-d1` (0:0x37 → Level 5) | 16.8% | **99.7%** | 0x2a 0 of 1000 (220 before; 0.00 hearts a visit against 2.36), 0x2b 0 (125), 0x2d 0 (181: 109 had left without the 30 rupees) |
+| `d2` (gate for goriya) | 99.9% (r32-base2) | **100.0%** | |
+| `d7` (goriya's Dungeon 7, not yet trained there) | 4.7-5.8% (r32-base2, other code) | 8.2% | 7:0x1b 473 of 929 entering (2.52 hearts a visit) |
+| `d3` (stalfos-keese-gel's 3:0x4a only) | 0.0% | 0.2% | 3:0x4a 47 of 247 entering, 0.21 hearts a visit (101 and 0.49 with `r79t5-skg`; same 247 runs enter at 1.07 hearts) |
+
+Three segments pass the 30% bar: the leg to Level 1, Dungeon 1 and the leg to Level 5. **Cheats:** the candle shop:
+every one of the 1000 `post-d1` runs arrives short of the 60 rupees, by 27.8 on average (27,828 cheated; the route
+brings 30 from 0x2d and the state's own); bombs 27 on `post-d1`; 1:0x53's wall is bombed with a granted bomb in
+every Dungeon 1 run, as before (the start state holds none). **Not done:** boss-aquamentus (Dungeon 1's largest
+loss now: 74 of 1000, a hearts problem); goriya's Dungeon 7 round (7:0x1b; planner demonstrations for 0x1b and
+0x49); the merge of `r32-steps`. The `d7` and `d2` references are from another code version, not paired.
