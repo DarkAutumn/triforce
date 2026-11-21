@@ -429,3 +429,12 @@ may). The legs (Level 2 to Level 7, `0_3cc_0` → step 174, today 0.1%; Level 5 
 55.7% with ow-moblin's route run) are measured on fresh seeds next: the three ow-octorok seeds against today on seeds
 2000-2999, the best confirmed on 3000-3999 with its other segments before the cutoff; ow-leever by `select-checkpoint
 --segment post-d5` (screen 2000-2999, confirm 3000-3999).
+
+### 7.3 The leg from Level 2 to Level 7: the screen
+
+`target/r32-turn/screen.sh` (eval-batch `r32turn-oct-screen`, post-d2 `0_3cc_0` → step 174, seeds 2000-2999, 1000
+runs each, models alone, clips on; each seed's `last` pinned for the route's part): **today (`r31-oct-s97`) 0 of
+1000; `r32turn-oct-s32` 98.9%, `-s33` 98.9%, `-s34` 99.1%** (s34 against today, paired: +99.1 ± 0.3). Every run of
+s34 leaves 0:0x3c by the whirlwind; 5 of its 9 losses are in ow-zora's 0:0x55. These seeds chose the seed; the
+confirmation on 3000-3999, with ow-octorok's other segments before the cutoff (Dungeon 1's 0:0x37 trip among them),
+and the promotion for the route are next.
