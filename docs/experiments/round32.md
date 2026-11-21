@@ -1437,6 +1437,14 @@ s34 leaves 0:0x3c by the whirlwind; 5 of its 9 losses are in ow-zora's 0:0x55. T
 confirmation on 3000-3999, with ow-octorok's other segments before the cutoff (Dungeon 1's 0:0x37 trip among them),
 and the promotion for the route are next.
 
+### 10.4 The leg from Level 5 to Level 2: the selection
+
+`select-checkpoint ow-leever r32turn-leever --route d3first --segment post-d5` (`0_0bc_0` → Level 2, with ow-moblin's
+route run; screen 2000-2999, confirm 3000-3999, 1000 runs each): the run's checkpoints arrive in 97.1-97.3% of the
+screen against today's `r79t5-ow` 57.1%; **confirmed: `last` 97.8% ± 0.5 against 55.5% ± 1.6, +42.3 ± 1.6 paired**,
+6.46 hearts at Level 2 against 5.47. Its branch promoted it for `d3first`; the landing measured it against the team's
+own ow-leever run (`r32d1-leever`, §8), which already makes the leg, and kept `r32d1-leever` (§12).
+
 ## 11. The route's team and the golden path
 
 Branch `r32-team` (from `r32-steps` 71441669: every `d3first` state, the whole-route tables, the grants, the cutoff),
