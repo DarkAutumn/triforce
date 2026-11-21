@@ -103,6 +103,25 @@ def test_d3first_the_bomb_reserve_through_dungeon_3():
         (0x4d, False, 'W', 0), (0x3d, False, 'S', 6)]
 
 
+def test_d3first_keeps_the_bag_through_dungeon_7_to_0x1b():
+    """The lead, Nov 21 (round 34): d3first holds 8 bombs from Dungeon 7's entrance to 0x1b (the walls of 0x69, 0x19
+    and 0x1a are its only bombs), so Link enters 0x1b with 5 and crosses it to the key door; 0x1b wants its four only
+    below 2 (0x0c's and 0x29's walls); 2 from 0x1b, 0 on Aquamentus.  d2first keeps 3 and `if_bombs_below: 5` (its
+    golden lists above); both routes' step counts are unchanged."""
+    for route, entrance, wanted in (('d3first', 8, 'if_bombs_below: 2'), ('d2first', 3, 'if_bombs_below: 5')):
+        held, along = 0, []
+        for step in native.route_steps(route):
+            held = step['bomb_reserve'] if step['bomb_reserve'] is not None else held
+            if step['level'] == 7 and not step['in_cave']:
+                along.append((step['room'], held))
+        assert along == [(0x79, entrance), (0x69, entrance), (0x59, entrance), (0x49, entrance), (0x39, entrance),
+                         (0x38, entrance), (0x28, entrance), (0x18, entrance), (0x19, entrance), (0x1a, entrance),
+                         (0x1a, entrance), (0x1b, 2), (0x1c, 2), (0x0c, 2), (0x0d, 2), (0x29, 2), (0x2a, 0),
+                         (0x2b, 0)], route
+        assert [s['treasure'] for s in native.route_steps(route) if (s['level'], s['room']) == (7, 0x1b)] == [wanted]
+    assert [len(native.route_steps(r)) for r in ('d2first', 'd3first')] == [354, 304]
+
+
 def test_rooms_visited_more_than_once_have_later_visit_names():
     """Phase X: a room the route enters from the same side again has its later visit's state name (``_v2``), on each
     route; d3first's are in its namespace."""
