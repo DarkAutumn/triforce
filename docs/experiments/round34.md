@@ -230,3 +230,25 @@ triforce train --specialist target/r34/train/darknut-lastpass.yaml --load models
     --iterations 244 --checkpoint-every 30 --demos target/r34/demos/darknut-lastpass.npz --demo-coeff 0.05 \
     --sil-coeff 0.1 --stop-success 1.01 --seed 351 --run-id r34d3-dlp-s351   # and 352, 353
 ```
+
+**Chosen on `d3`** (`--from d3first_3_7cs_0 --stop-at step:24`, the last three numbered checkpoints and `last`, screen
+2000-2999, confirmation 3000-3999), each paired with `r34d3-dark-s341` measured in seed 353's selection on the same
+seeds with the new zol and stalfos-keese-gel (screen 17.6%, confirmation 17.7%):
+
+| Run, chosen | Screen, paired | Confirmation, paired | 0x5b W→E lost per 1000 entering (confirmation) |
+|---|---|---|---:|
+| `r34d3-dark-s341` (promoted) | 17.6% | 17.7% | 224 (hits 0.60 a visit) |
+| s351 `last` (it012442 won the screen, not confirmed against `last`) | 21.5%, +3.9 ± 1.7 | **22.8%, +5.1 ± 1.8** | 130 (0.38) |
+| s352 it012502 | 24.2%, +6.6 ± 1.8 | **23.0%, +5.3 ± 1.8** | 133 (0.46) |
+| s353 `last` | 22.8%, +5.2 ± 1.8 | **22.3%, +4.6 ± 1.7** | 140 (0.42) |
+
+Every seed better beyond noise on fresh seeds, by the same amount, and in the room it was trained for (the last
+pass loses 130-140 runs per 1000 against 224, the planner 26; 0x69 and 0x59 unchanged within noise). Chosen: s352
+it012502, the best screen of the three choices (`select-checkpoint ... --only it012502 --report-only --apply`); the
+`d5` hold and the fresh-seed numbers below decide.
+
+```sh
+triforce select-checkpoint darknut r34d3-dlp-s353 --route d3first --from d3first_3_7cs_0 --stop-at step:24 \
+    --first-seed 2000 --runs 1000 --confirm 1000 --only it012442,it012472,it012502,last,promoted --parallel 10
+# s351, s352: the same without promoted
+```
