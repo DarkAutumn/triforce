@@ -42,7 +42,9 @@ is a matter of the hearts Link brings); lanmola is round 33's (`r79b-lanmola` st
 **Still open.** The Olive Garden (5:0x05 from E: the landed team loses 360 runs per 1000 entering, the planner 33;
 the models are hit at every decision kind, a matter of foresight, not bombs), and with it the last pass: one darknut
 run that keeps both (`r34d3-dlp-s353` takes the last pass, 115 lost per 1000 entering against 255, and gives the
-Garden back, 445 against 360); goriya's hearts in Dungeon 7 (0x69, 0x59, 0x49, 0x19); Digdogger's 0x1c (`d7`'s
+Garden back, 445 against 360; `r34d5-dg-s362`, trained on the Garden after it, is better than the landed darknut on
+`d5` by +3.3 to +6.7 and on `d3` by +2.2 to +5.2 on three seed sets and waits for the next release, Dungeon 3's
+Olive Garden section); goriya's hearts in Dungeon 7 (0x69, 0x59, 0x49, 0x19); Digdogger's 0x1c (`d7`'s
 first loss now, 212 per 1000 entering, 3.48 hearts in; `r34d7b-dig-s1` qualified after the landing's `d7` had
 played and waits for the next release, second pass §9-10); Gleeok is reached 1.45 hearts poorer than the planner
 brings him (the chosen team 1.96, the planner 3.41) and takes twice its hits from the same places (§4.1 of
@@ -409,6 +411,58 @@ triforce train --specialist $G/darknut-garden.yaml --load models/darknut/r34d3-d
 ```
 (`darknut-garden.yaml`: the last pass's yaml with `harvested_states` that dir; `darknut-garden-demos.yaml` the same
 without `ram_randomization` and curriculum, so the entries keep their hearts and bag.)
+
+
+**The reference.** The landing's joint check on the record's seeds (0-999) found `r34d3-dlp-s353` failing the `d5`
+hold (19.2% against the record's 24.0%, against `r34d3-dark-s341`'s 27.4% −8.2 ± 1.9), so `r34d3-dark-s341` is the
+route run the landing takes and the reference below: a candidate qualifies when better than the s341 team on `d5`
+beyond noise on two fresh seed sets with `d3` not worse, or better on `d3` with `d5` not worse, seeds 0-999 one of
+the sets. Every chain below is the worktree's team (zol `r34d3-zol-s341`, stalfos-keese-gel `r34d3-skg-s341`)
+with the darknut run as `--checkpoint darknut@d3first=...`, paired by seed.
+
+**Screen** (`d5`, `--from 5_76s_0 --stop-at step:120`, seeds 2000-2999; s341 22.2%, the Garden losing 428 per 1000
+entering): s353 +2.6 ± 1.9; s361 it012686 / it012716 / `last` +2.9 / +6.0 / +4.5; s362 +5.2 / **+9.2** / +9.1;
+s363 **+8.6** / +7.5 / +7.8 (each ± 2.0); the Garden 314-372 lost per 1000 against 428, hits 2.61-2.76 a visit
+against 2.97. Confirmed: the best of each of two seeds (s362 `last` is it012716 within 0.1).
+
+| Paired with the s341 team | `d5` 3000-3999 | `d5` 0-999 (the record's) | `d3` 3000-3999 | `d3` 0-999 |
+|---|---:|---:|---:|---:|
+| s341 team | 23.3% (Garden 454) | 27.4% (Garden 360) | 17.7% | 18.0% |
+| s362 it012716 | 30.0%, **+6.7 ± 2.0** (367) | 30.7%, +3.3 ± 2.0 (343) | 22.5%, **+4.8 ± 1.7** | 23.2%, **+5.2 ± 1.8** |
+| s363 it012686 | 28.7%, +5.4 ± 2.0 (323) | 29.8%, +2.4 ± 2.0 (332) | 24.1%, **+6.4 ± 1.8** | 24.5%, **+6.5 ± 1.8** |
+
+Chosen: s362 it012716 (the larger `d5` gain on both sets; s363 the larger `d3`). On the last fresh set, 4000-4999:
+
+| Seeds 4000-4999 | `d5` | `d3` | Garden lost per 1000 entering | Garden hits a visit |
+|---|---:|---:|---:|---:|
+| today's team (`r32d3-zol`, `r32d1-skg`, `r32d3-dark2-s44`) | 21.4% | 12.3% | | |
+| s341 team (`r34d3-dark-s341`) | 24.4% | 19.5% | 417 | 2.93 |
+| s353 team (`r34d3-dlp-s353`) | 22.3% | 23.8% | 423 | 2.92 |
+| **s362 it012716** | **29.5%** | **21.7%** | **341** | 2.70 |
+| ... paired with s341 | **+5.1 ± 1.9** | +2.2 ± 1.7 | | |
+| ... paired with s353 | +7.2 ± 1.9 | −2.1 ± 1.9 | | |
+| planner over it (300 runs) | 82.0% | | 50 | 1.05 |
+
+**Verdict: `r34d5-dg-s362` (it012716) qualifies** against the s341 team: `d5` better beyond noise on 3000-3999
+(+6.7 ± 2.0) and 4000-4999 (+5.1 ± 1.9), +3.3 ± 2.0 on the record's 0-999; `d3` better beyond noise on 0-999 (+5.2 ±
+1.8) and 3000-3999 (+4.8 ± 1.7), +2.2 ± 1.7 on 4000-4999; nothing worse on any set. Against s353 it gives back
+nothing on `d3` beyond noise (−2.1 ± 1.9). The `d5` gain is the Garden's (87 and 76 runs fewer lost per 1000
+entering on 3000-3999 and 4000-4999, 17 on 0-999, where s341's Garden lost only 360; 0.2-0.3 fewer hits a visit) and
+5:0x37's (88 / 91 / 84 against 102 / 151 / 116); the planner still loses 50 there with 1.05 hits: the touches are
+fewer, not gone. Made the run's `ckpt.pt` (`select_checkpoint.apply_choice`) and promoted `--route
+d3first` in the worktree.
+
+```sh
+M=$PWD/models/darknut; c() { echo "$1: --route d3first --clips on $2 --runs ${3:-1000} --first-seed $4 --act ${5:-model} --checkpoint darknut@d3first=$6 --output $PWD/target/r34/garden/$1.jsonl"; }
+triforce eval-batch r34d5-screen --parallel 10 --chain "$(c scr-s361-last '--from 5_76s_0 --stop-at step:120' 1000 2000 model $M/r34d5-dg-s361)" ...
+# each seed's last, it012686, it012716 and r34d3-dark-s341; confirmation the same on 3000 and 0 with --from 3_7cs_0
+# --stop-at step:24 beside; the final on 4000 with the planner: --runs 300 --act temperature:0.5+relax:16+plan:16:1
+```
+
+**Not in 2.0.0.1.** `r34d5-dg-s362` qualified after the landing's `d3`, `d5` and full-route chains of record had
+played with `r34d3-dark-s341`: taking it in would have meant playing them twice, so it waits for the next release
+with boss-digdogger's `r34d7b-dig-s1` (Dungeon 7's second pass §10); `main`'s darknut route run is
+`r34d3-dark-s341`, and the next chains of record are the two runs' joint check.
 
 ## Dungeon 4 with the wood sword (`d4`: vire, like-like, boss-gleeok)
 
