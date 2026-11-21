@@ -151,6 +151,34 @@ best-of-four bias), but none alone by two standard errors. The candidate for the
 `last` (positive on both seed sets, no checkpoint picked). The joint `d3` with zol's run, paired with the record on
 seeds 0-999, and the `d5` hold decide.
 
+### The joint check: zol, stalfos-keese-gel and darknut together (all three stay)
+
+zol's it001700 and stalfos-keese-gel's it002269 made their runs' `ckpt.pt` (`select-checkpoint ... --report-only
+--apply`), darknut's `r34d3-dark-s341` as trained (`last`); the three promoted `--route d3first`, boss-manhandla
+kept. One batch, paired by seed with the record (`r32land-1k-*`, today's team, seeds 0-999, which no selection used):
+
+| Segment (who is held there) | New team | Record | Paired difference |
+|---|---:|---:|---:|
+| `d3` (the target) | **18.0%** | 12.6% | **+5.4 ± 1.6** |
+| `d5` (darknut: the Garden, 0x64, 0x37; zol 5:0x57) | 27.4% | 24.0% | +3.4 ± 1.9 |
+| `d4` (zol 4:0x40; stalfos-keese-gel 4:0x01/0x21/0x51) | 5.1% | 6.2% | -1.1 ± 1.0 |
+| `d1` (stalfos-keese-gel) | 88.8% | 89.6% | -0.8 ± 1.4 |
+| The game start to the D3 triforce (step 24) | **22.7%** | 13.6% | **+9.1 ± 1.7** |
+
+Better on `d3` beyond noise; no hold worse beyond noise (`d4` and `d1` within their standard errors; their rooms
+against the record, runs lost per 1000 entering and hearts lost a visit: 4:0x40 9 / 9, 0.18 / 0.16; 4:0x01 30 / 28;
+4:0x21 23 / 38; Dungeon 1's stalfos-keese-gel rooms 0-1 / 0 lost each, hearts within 0.08). `d5` gains: the Garden
+(5:0x05 from E) loses 360 runs per 1000 against 435. All three runs stay: `ROUTE3` for zol `r34d3-zol-s341`,
+stalfos-keese-gel `r34d3-skg-s341`, darknut `r34d3-dark-s341`.
+
+```sh
+seg() { echo "$1: --route d3first --clips on --from $2 --stop-at step:$3 --runs 1000 --first-seed 0 --act model --output $PWD/target/r34/joint-$1.jsonl"; }
+triforce eval-batch r34d3-joint --parallel 10 --chain "$(seg d3 3_7cs_0 24)" --chain "$(seg d5 5_76s_0 120)" \
+    --chain "$(seg d4 4_71s_0 53)" --chain "$(seg d1 1_73s_0 79)" \
+    --chain "full24: --route d3first --clips on --stop-at step:24 --runs 1000 --first-seed 0 --act model --output $PWD/target/r34/joint-full24.jsonl"
+```
+(the record's whole-game chain counts a run at the D3 triforce when it enters step 24).
+
 ### darknut: the last pass (3:0x5b W→E), what the planner does there
 
 The ledger's first room: 414 runs lost per 1000 entering against the planner's 26, worth +8.5 points of `d3`. The
