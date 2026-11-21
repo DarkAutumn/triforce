@@ -42,9 +42,9 @@ def run(capsys, *argv):
 
 def test_wins_only_plays_until_enough_runs_won(scripted_models, tmp_path, capsys):
     out = tmp_path / 'new' / 'wins'
-    status, saved, summary, _ = run(capsys, out, 3, '--wins-only', '--from', require_state(SEGMENT_STATE),
-                                    '--stop-at', f'step:{SEGMENT_STOP_STEP}', '--parallel', 2, '--models-dir',
-                                    scripted_models, '--streams', 'decisions')
+    status, saved, summary, _ = run(capsys, out, 3, '--wins-only', '--route', 'd2first', '--from',
+                                    require_state(SEGMENT_STATE), '--stop-at', f'step:{SEGMENT_STOP_STEP}',
+                                    '--parallel', 2, '--models-dir', scripted_models, '--streams', 'decisions')
     files = sorted(out.iterdir())
     assert status == 0 and len(files) == 3 and all(path.name.endswith('-win.tfreplay') for path in files)
     assert sorted(line[0] for line in saved) == [str(path) for path in files]
@@ -131,7 +131,8 @@ def test_the_command_line_is_checked_before_anything_plays(tmp_path, capsys, arg
 
 
 def test_a_bad_route_start_is_an_error(scripted_models, tmp_path, capsys):
-    status, _, summary, err = run(capsys, tmp_path / 'out', '--from', 'nope_0', '--models-dir', scripted_models)
+    status, _, summary, err = run(capsys, tmp_path / 'out', '--route', 'd2first', '--from', 'nope_0', '--models-dir',
+                                  scripted_models)
     assert status == 2 and summary is None and "Unknown start state 'nope_0'" in err
 
 
@@ -140,8 +141,9 @@ def test_golden_saves_one_stitched_replay_per_count(scripted_models, tmp_path, c
     Dungeon 3), step 130 (outside Dungeon 4), step 205 (outside Dungeon 5), step 244 (outside Dungeon 7), step 277
     (outside Dungeon 6), step 293 (outside Dungeon 8), then the route's end.  Twenty steps don't get there: each path
     is its first segment's furthest run, saved under its ending."""
-    status, saved, summary, err = run(capsys, tmp_path, 2, '--golden', '--from', require_state(SEGMENT_STATE),
-                                      '--attempts', 2, '--parallel', 2, '--models-dir', scripted_models)
+    status, saved, summary, err = run(capsys, tmp_path, 2, '--golden', '--route', 'd2first', '--from',
+                                      require_state(SEGMENT_STATE), '--attempts', 2, '--parallel', 2, '--models-dir',
+                                      scripted_models)
     files = sorted(tmp_path.iterdir())
     assert status == 0 and summary['saved'] == 2 and summary['runs'] == 4
     # Each path owns (segments of the whole route, nine) x attempts seeds: 9 x 2.

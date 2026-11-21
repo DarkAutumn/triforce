@@ -399,9 +399,9 @@ def commands(tmp_path, states_dir, scripted_models):
                 '--parallel', '1']
     return {
         'evaluate': ['triforce.evaluate', *evaluate, '--output', str(tmp_path / 'eval.json')],
-        'eval-chain': ['triforce.cli', '--models-dir', str(scripted_models), 'eval-chain', '--from',
-                       str(require_state(SEGMENT_STATE)), '--stop-at', f'step:{SEGMENT_STOP_STEP}', '--runs', '1',
-                       '--parallel', '1', '--output', str(tmp_path / 'chain.jsonl')],
+        'eval-chain': ['triforce.cli', '--models-dir', str(scripted_models), 'eval-chain', '--route', 'd2first',
+                       '--from', str(require_state(SEGMENT_STATE)), '--stop-at', f'step:{SEGMENT_STOP_STEP}',
+                       '--runs', '1', '--parallel', '1', '--output', str(tmp_path / 'chain.jsonl')],
         'eval-batch': ['triforce.eval_batch', 'qbatch', '--parallel', '1', '--evaluate',
                        ' '.join(['e:', *evaluate, '--output', str(tmp_path / 'batch-eval.json')])],
         'train': ['triforce.train', '--specialist', 'ow-start', '--states-dir', str(states_dir), '--models-dir',

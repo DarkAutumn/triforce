@@ -724,9 +724,9 @@ def test_a_folder_of_replays_goes_round_and_new_files_join(recordings, tmp_path,
 
 
 def _segment_grid(models, states_dir, cells=2, **kwargs):
-    """A grid whose simulations play the scripted segment: every run wins in seven steps."""
-    return ReplayGrid(cells, 0, models_dir=models, states_dir=states_dir, parallel=2, capacity=3, patience=4,
-                      start_from=str(require_state(SEGMENT_STATE)), stop_step=SEGMENT_STOP_STEP, **kwargs)
+    """A grid whose simulations play the scripted segment of ``d2first``: every run wins in seven steps."""
+    return ReplayGrid(cells, 0, models_dir=models, states_dir=states_dir, route='d2first', parallel=2, capacity=3,
+                      patience=4, start_from=str(require_state(SEGMENT_STATE)), stop_step=SEGMENT_STOP_STEP, **kwargs)
 
 
 def test_cells_play_the_queues_the_simulations_fill(scripted_models, states_dir, tmp_path, monkeypatch):

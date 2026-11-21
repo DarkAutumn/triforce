@@ -126,8 +126,8 @@ def test_a_replay_that_names_its_state_needs_that_state_file(scripted_models, st
 
 def test_eval_chain_records_the_scripted_segment_as_wins(scripted_models, tmp_path, capsys):
     folder, output = tmp_path / 'replays', tmp_path / 'chain.jsonl'
-    chain = ['--models-dir', str(scripted_models), 'eval-chain', '--no-log', '--from', str(require_state(SEGMENT_STATE)),
-             '--stop-at', f'step:{SEGMENT_STOP_STEP}']
+    chain = ['--models-dir', str(scripted_models), 'eval-chain', '--no-log', '--route', 'd2first', '--from',
+             str(require_state(SEGMENT_STATE)), '--stop-at', f'step:{SEGMENT_STOP_STEP}']
     assert cli.main([*chain, '--runs', '2', '--parallel', '2', '--replays', str(folder), '--streams',
                      'decisions,rewards', '--output', str(output)]) == 0
     assert f'replays in {folder}' in capsys.readouterr().out

@@ -30,7 +30,7 @@ def fixture_team(tmp_path):
 
 def _select(root, tmp_path, *extra):
     return select_checkpoint.main(
-        ['--models-dir', str(root), FAMILY, 'r', '--from', str(require_state(SEGMENT_STATE)),
+        ['--models-dir', str(root), FAMILY, 'r', '--route', 'd2first', '--from', str(require_state(SEGMENT_STATE)),
          '--stop-at', f'step:{SEGMENT_STOP_STEP}', '--runs', '2', '--confirm', '2', '--parallel', '2',
          '--chains-dir', str(tmp_path / 'chains'), '--logs-dir', str(tmp_path / 'logs'), *extra])
 
@@ -132,8 +132,9 @@ def test_a_promotion_during_the_batch_neither_changes_the_reference_nor_stops_th
     another was, so the chains held other weights than the candidate, and the confirmation of the screen's best
     failed (``LookupError: the screen has no chain of promoted yet``) with no ``selection.json``."""
     root, run_dir = team
-    argv = ['--models-dir', str(root), FAMILY, 'r', '--from', str(require_state(SEGMENT_STATE)),
-            '--stop-at', f'step:{SEGMENT_STOP_STEP}', '--runs', '2', '--confirm', '2',
+    argv = ['--models-dir', str(root), FAMILY, 'r', '--route', 'd2first',
+            '--from', str(require_state(SEGMENT_STATE)), '--stop-at', f'step:{SEGMENT_STOP_STEP}', '--runs', '2',
+            '--confirm', '2',
             '--chains-dir', str(tmp_path / 'chains')]
     plan, pool = select_checkpoint.build_plan(select_checkpoint.build_parser().parse_args(argv))
     by_label = {c.label: c for c in pool}
@@ -187,7 +188,8 @@ def test_a_route_with_a_namespace_finds_the_chains_it_played(team, tmp_path, cap
     last = next(candidate for candidate in pool if candidate.label == 'last')
     _fake_chain(plan, 'screen', 'last', last.sha1, last.act, 1, start='3_7cs_0')
     assert not select_checkpoint.played_by(plan, last, 'screen')
-    assert select_checkpoint.main([*common[:4], '--from', 'd3first_3_7cs_0', *common[6:], '--report-only']) == 2
+    assert select_checkpoint.main([*common[:4], '--route', 'd2first', '--from', 'd3first_3_7cs_0', *common[6:],
+                                   '--report-only']) == 2
     assert 'namespace' in capsys.readouterr().err
 
 

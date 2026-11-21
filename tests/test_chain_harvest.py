@@ -72,7 +72,8 @@ def test_eval_chain_command_harvests_into_the_default_harvested_dir(states_dir, 
     walker = registry.save_checkpoint('ow-zora', 'walk-east', scripted('MOVE E 16'), root=tmp_path / 'models')
     output = tmp_path / 'chain.jsonl'
     subprocess.run([sys.executable, '-m', 'triforce.cli', '--models-dir', str(models_dir), 'eval-chain',
-                    '--runs', '2', '--parallel', '2', '--from', str(require_state('0_5aw_0')), '--no-log',
+                    '--route', 'd2first', '--runs', '2', '--parallel', '2', '--from', str(require_state('0_5aw_0')),
+                    '--no-log',
                     '--checkpoint', f'ow-zora={walker}', '--harvest', '--output', str(output)],
                    check=True, capture_output=True, text=True, env={**os.environ, 'TRIFORCE_STATES_DIR': str(states)})
     files = sorted(p.name for p in (states / 'harvested' / 'ow-moblin').iterdir())

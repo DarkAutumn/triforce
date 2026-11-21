@@ -560,7 +560,8 @@ def sketch():
 def test_a_drafts_moves_tunnels_and_cellars(monkeypatch):
     monkeypatch.setattr(zelda_map.draft_routes, 'names', lambda: ['sketch'])
     monkeypatch.setattr(zelda_map.draft_routes, 'steps', lambda name: sketch())
-    assert zelda_map.route_names() == [*zelda_map.routes(), 'sketch']
+    main = zelda_map.registry.MAIN_ROUTE                       # listed first, then routes.yaml's others
+    assert zelda_map.route_names() == [main, *(r for r in zelda_map.routes() if r != main), 'sketch']
     plan = zelda_map.route_plan('sketch')
     assert 'wand' not in plan[5]['items'] and plan[6]['items'][-1] == 'wand'      # taken by the step in its cellar
     # What a step takes in its overworld cave counts from the step after: a heart, the sword, an item once.

@@ -188,7 +188,8 @@ def test_a_chain_whose_output_exists_is_done_and_the_rest_runs(tmp_path):
 def test_a_finished_chain_moves_its_output_into_place_and_counts_arrivals(tmp_path):
     options = eval_batch.Options('b', cores=4, eval_parallel=2)
     out = tmp_path / 'seg.jsonl'
-    entry = eval_batch.chain_entry('d3', ['--from', '3_7cs_0', '--runs', '2'], options, output=out)
+    entry = eval_batch.chain_entry('d3', ['--route', 'd2first', '--from', '3_7cs_0', '--runs', '2'], options,
+                                   output=out)
     assert entry.fields['target'] == '0:0x74'                     # the next segment's start room
     assert entry.commands[0][-2:] == ['--output', f'{out}.tmp'] and '--parallel' in entry.commands[0]
     tmp = Path(f'{out}.tmp')
@@ -230,7 +231,7 @@ def test_chains_tag_is_the_eighteen_segments_then_the_report(tmp_path):
     options = eval_batch.Options('r71', cores=20, eval_parallel=4)
     entries = eval_batch.chains_entries('r71', options, act='sample', runs=120, segments=eval_batch.SEGMENTS,
                                         chains_dir=tmp_path, chain_args=['--first-seed', '0'], report=True,
-                                        only_report=False)
+                                        only_report=False, route='d2first')
     assert [e.name for e in entries] == ['full', 'd2', 'post-d2', 'd1', 'post-d1', 'd3', 'post-d3', 'd4', 'post-d4',
                                          'd5', 'post-d5', 'd7', 'post-d7', 'd6', 'post-d6', 'd8', 'post-d8', 'd9',
                                          'report']
@@ -256,7 +257,8 @@ def test_chains_tag_is_the_eighteen_segments_then_the_report(tmp_path):
                                      chains_dir=tmp_path, chain_args=[], report=False, only_report=True)
     assert [e.name for e in only] == ['report']
     _chain_output(tmp_path / 'r71-full.jsonl', ['success'])
-    yardstick, room_stats = eval_batch.report_commands('r71', ['full', 'd2'], tmp_path, None)
+    yardstick, room_stats = eval_batch.report_commands('r71', ['full', 'd2'], tmp_path, None,
+                                                       eval_batch.route_segments('d2first'))
     chains = [yardstick[i + 1] for i, arg in enumerate(yardstick) if arg == '--chain']
     assert chains[0] == f"full={tmp_path / 'r71-full.jsonl'}"          # d2 has no output yet: left out
     assert chains[-1].startswith('full→d9=') and chains[-1].endswith(

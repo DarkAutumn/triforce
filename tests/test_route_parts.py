@@ -98,8 +98,8 @@ def test_eval_chain_plays_the_route_run_before_the_grave_and_the_default_after(t
 
 def test_eval_chain_refuses_a_part_the_route_does_not_have(two_runs, tmp_path, capsys):
     west = registry.run_dir(FAMILY, 'west', two_runs)
-    assert cli.main(['--models-dir', str(two_runs), 'eval-chain', '--no-log', '--runs', '1', '--checkpoint',
-                     f'{FAMILY}@d3first={west}', '--output', str(tmp_path / 'c.jsonl')]) == 2
+    assert cli.main(['--models-dir', str(two_runs), 'eval-chain', '--no-log', '--route', 'd2first', '--runs', '1',
+                     '--checkpoint', f'{FAMILY}@d3first={west}', '--output', str(tmp_path / 'c.jsonl')]) == 2
     assert 'own_models_until' in capsys.readouterr().err
 
 
