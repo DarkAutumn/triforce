@@ -135,3 +135,18 @@ won), with round 32's darknut files (`darknut-59r0`, `darknut-plan59r0`, `garden
 `last`: s342 it012258 screen 15.5%, confirmation **15.7%** ± 1.2 (`last` 14.9%); s343 it012198 screen 18.4%,
 confirmation **15.5%** ± 1.1 (`last` 15.0%). Against the record's 12.6% (seeds 0-999, unpaired) about +3 points; the
 paired difference with the promoted run comes from seed 341's selection on the same seeds.
+
+**darknut, the three seeds paired with the promoted run** (seed 341's selection measured `r32d3-dark2-s44` on the
+same seeds: screen 11.3%, confirmation 12.8%):
+
+| Run, candidate | Screen (2000-2999), paired | Confirmation (3000-3999), paired |
+|---|---|---|
+| s341 `last` (its winner) | 17.1%, +5.8 ± 1.5 | **15.6%, +2.8 ± 1.6** |
+| s342 it012258 | 15.5%, +4.2 ± 1.5 | 15.7%, +2.9 ± 1.5 |
+| s343 it012198 | 18.4%, +7.1 ± 1.6 | 15.5%, +2.7 ± 1.5 |
+| s342 `last` / s343 `last` | 13.6% / 14.0% | 14.9% (+2.1 ± 1.5) / 15.0% (+2.2 ± 1.5) |
+
+Every seed gains on fresh seeds and by the same amount (about +2.8 points, against a screen that promised 4-7: the
+best-of-four bias), but none alone by two standard errors. The candidate for the joint check is `r34d3-dark-s341`'s
+`last` (positive on both seed sets, no checkpoint picked). The joint `d3` with zol's run, paired with the record on
+seeds 0-999, and the `d5` hold decide.
