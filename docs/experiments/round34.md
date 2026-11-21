@@ -2,9 +2,9 @@
 
 ## Dungeon 4 with the wood sword (`d4`: vire, like-like, boss-gleeok)
 
-**State of this section.** In progress: the entrance states, the stall ending, the baseline and the first round's
-choice are done (vire, like-like and Gleeok's arm B confirmed and promoted for `d3first`); Gleeok's second round is
-being chosen.
+**State of this section.** Done in the round's worktree (not landed): the entrance states, the stall ending, the
+baseline, two rounds and their choice; vire `r34d4-vire-s1`, like-like `r34d4-like` and Gleeok
+`r34d4-gleeok4-s1-it2877` promoted for `d3first`; `d4` 7.9% → 20.9% on fresh seeds (§5).
 
 **Cause (the chains of record, `r32land-1k-d4`).** 6.2% ± 0.8 of 1000 `d4` runs take the triforce; the planner
 beside 81.7%. 461 runs per 1000 die at Gleeok (4:0x13: 523 enter with 1.62 of 4 hearts; he needs 16 wood-sword
@@ -173,3 +173,30 @@ entered on 3000-3999 by hearts in, it002697 / it002877: 0.5: 0/99, 3/99 · 1.0: 
 2.0: 25/115, 33/115 · 2.5: 30/80, 34/80 · 3.0: 41/69, 38/69 · 3.5: 19/37, 27/37 · 4.0: 41/45, 33/45: the round
 pays below 2.5 hearts, where most runs arrive. Promoted `--route d3first`: `r34d4-gleeok4-s1-it2877` (a run dir of
 the checkpoint with its training's `run.json`).
+
+### 5. The final: the chosen three together (seeds 4000-4999)
+
+The three promoted `d3first` runs (vire `r34d4-vire-s1`, like-like `r34d4-like`, Gleeok `r34d4-gleeok4-s1-it2877`)
+against today's team (`r32d4-vire2-s1`, `r32d4-like2`, `r32d4-gleeok2-s1-it2517`, by `--checkpoint`) on the same
+states and seeds, 1000 runs each; the planner beside with the chosen team, 300 runs (`target/r34-d4/final.sh`
+form: `--route d3first --from d3first_4_71s_0 --stop-at step:53 --first-seed 4000`).
+
+| | `d4` | paired | Gleeok reached | hearts there | hearts delivered a run | Gleeok won | cheated wall bombs a run |
+|---|---|---|---|---|---|---|---|
+| today's team | 7.9% ± 0.9 | | 60.6% | 1.71 | 1.035 | 79 of 606 | 0.24 |
+| the chosen three | **20.9%** ± 1.3 | **+13.0 ± 1.5** | 68.4% (+7.8 ± 2.0) | 1.96 | 1.343 (+0.307 ± 0.052) | 209 of 684 | 0.28 |
+| the planner (chosen team) | 92.0% ± 1.6 | | 99.7% | 3.41 | | 276 of 299 | 0.38 |
+
+Gleeok won of entered by hearts in, before → after (the planner):
+
+| hearts in | today's team | the chosen three | the planner |
+|---|---|---|---|
+| 1 or less | 1 / 234 (0.4%) | 10 / 206 (4.9%) | 1 / 2 |
+| 1.5-2.5 | 29 / 272 (10.7%) | 89 / 313 (28.4%) | 41 / 52 |
+| 3 or more | 49 / 100 (49%) | 110 / 165 (66.7%) | 234 / 245 |
+
+`d4` nearly triples. Both halves count: vire and like-like bring Gleeok 8 more runs in 100 with a quarter heart more
+(1.71 → 1.96), and the new Gleeok wins more at every band, most where runs arrive (1.5-2.5 hearts: 11 → 28%). What is
+left is still Gleeok: 475 of the 791 failed runs per 1000 end there, nine in ten of them arriving with 2.5 hearts
+or less; the planner arrives with 3.4 and wins 92% of its fights. The next step is fewer hits on the way (the chosen
+team still reaches Gleeok 1.45 hearts poorer than the planner) and the dodging of §4.1.
