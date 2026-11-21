@@ -59,3 +59,27 @@ new states hold (0x50 2.03 a run, 0x31 1.45; `bombs: free`).
 
 Gleeok won of entered by hearts in (team; planner): 0.5: 1/112; 0/1 · 1.0: 0/137; 0/5 · 1.5: 10/117; 1/6 · 2.0:
 14/83; 5/13 · 2.5: 6/48; 32/38 · 3.0: 12/47; 51/60 · 3.5: 9/22; 48/54 · 4.0: 20/36; 113/122.
+
+### 4. The trainings (done; the choice on `d4` is queued)
+
+Every run continues its family's route run with `state_routes: [d3first]`, the Dungeon 4 rooms only, harvested
+handoffs from the baseline's two chains (the team's and the planner's, so later hearts pay off), the planner's
+won episodes as demonstrations at `--demo-coeff 0.05`, `--sil-coeff 0.1`, about 244 iterations.
+
+- **boss-gleeok**, three seeds from `r32d4-gleeok2-s1-it2517` (checkpoints every 15): 4:0x13 only, half the resets
+  on 901 handoffs (602 the team's at 1.69 hearts, 299 the planner's at 3.32), the rest hp 0.6-4 hearts (30% full)
+  or the route's profile; demonstrations: the planner's fights at 3-4 hearts (413 of 450 won, 74,185 rows) and at
+  1.2-2.8 (258 of 450, 70,944 rows); the stall ending of §2 with a 300-step window. Training success stayed 14-20%
+  (seed 1 by 30 iterations: 14, 14, 19, 14, 15, 20, 15, 18, 6%), and the `no-damage` ending, now a failure, still
+  ended 15-36% of the episodes: a failure 300 decisions away is worth 0.99^300 = 0.05 of a death now, so waiting
+  still looks cheaper than fighting at low hearts. An arm with a 120-step window (0.3 of a death) trains beside.
+- **vire**, three seeds from `r32d4-vire2-s1` (the ledger names vire first: 1.34 hearts and 182 runs per 1000 in its
+  six visits): 4,948 handoffs at 40% of resets, the planner's 22,401 rows (97-100% won, 0.0-0.3 hearts lost) and
+  round 32's rule rows for 0x31 and 0x12. All three early-stopped at 95-98% in their own evaluation.
+- **like-like**, one seed from `r32d4-like2`: 2,386 handoffs at 40%, the planner's 56,192 rows (4:0x32 from W 189 of
+  200 harvested won with 0.21 hearts lost, from the cave 198 of 200) and the rule rows of 0x32. 91% in its own
+  evaluation.
+
+The choice: Gleeok's checkpoints first in its room at the route's hearts (300 fights each), the best on `d4`;
+vire's and like-like's last checkpoints on `d4` (seeds 2000-2999, paired against today's team), the best confirmed
+on 3000-3999, then the chosen runs together on 4000-4999 with the planner beside.
