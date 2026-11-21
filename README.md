@@ -38,28 +38,35 @@ needed it, a family has a second run for that route's part (before the magic swo
 **`d3first`** (2.0.0.0, `docs/experiments/round32.md`): a golden path (games race from triforce to triforce, each
 segment's first winner continuing, stitched into one replay) from console power on, the models alone, reaches the
 ending; three of three races did, in 176, 135 and 91 runs (153,308 frames for the first: about 42 minutes of game).
-Out of 1,000 single runs from the start the models alone take the Dungeon 3 triforce in about one in ten: the wood
-sword makes Dungeons 3 and 4 the hard part, and the race retries through them.
+Single runs are the hard part: the wood sword makes Dungeons 3, 4, 5 and 7 hard, and the race retries through them.
+Of 1,000 runs started at each dungeon's entrance with the 2.0.0.0 team, models alone (`round32.md` §12):
 
-**`d2first`**: out of 1,000 runs from the start of the game with the team of rounds 30 and 31 (1.9.0.1: the
-optimisation round's team on the route as the owner changed it in round 31; act mode `temperature:0.5+relax:16`, the
-speedrunners' clips allowed; `docs/experiments/round30.md` "The landing"):
+| Dungeon (route order) | 3 | 4 | 1 | 5 | 2 | 7 | 6 | 8 | 9 (to the ending) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Its triforce taken | 12.6% | 6.2% | 89.6% | 24.0% | 100% | 9.4% | 35.2% | 37.8% | 48.9% |
 
-| Link reaches | Rounds 30-31 | Round 29 | Round 27 | Round 26 | Round 25 |
-|---|---:|---:|---:|---:|---:|
-| Dungeon 1 (after Dungeon 2 and the white sword) | 85% | 82% | 76% | 75% | 84% |
-| Dungeon 3 | 74% | 73% | 64% | 65% | 74% |
-| The Dungeon 3 triforce | 62% | 59% | 50% | 50% | 57% |
-| The Dungeon 4 triforce | 56% | 54% | 44% | 44% | 51% |
-| Dungeon 5 | 56% | 54% | 44% | 44% | 51% |
-| The Dungeon 5 triforce | 30% | 26% | 23% | 22% | 20% (the end of round 25's route) |
-| Dungeon 7 | 30% | 26% | 23% | 22% | |
-| The Dungeon 7 triforce | 12.5% | 9.1% | 6.1% | 6.7% (the end of round 26's route) | |
-| Dungeon 6 | 12.5% | 9.0% | 6.0% | | |
-| The Dungeon 6 triforce | 3.0% | 1.7% | 1.1% (the end of round 27's route) | | |
-| The Dungeon 8 triforce | 1.3% | 0.4% | | | |
-| Dungeon 9 | 1.3% | 0.4% | | | |
-| The end of the game | 0 of 1,000 | 0 of 1,000 | | | |
+The legs between them are 98.7-100%. From the start, 13.6% of single runs take the Dungeon 3 triforce and none yet
+gets through Dungeon 5; with the planner on, 17.7% of 300 runs end the game.
+
+**`d2first`**: out of 1,000 runs from the start of the game with the 2.0.0.0 team (round 33's Wizzrobe, Vire and
+Like-Like models on 1.9.0.1's team; act mode `temperature:0.5+relax:16`, the speedrunners' clips allowed;
+`docs/experiments/round33.md` "The landing"):
+
+| Link reaches | 2.0.0.0 | Rounds 30-31 | Round 29 | Round 27 | Round 26 | Round 25 |
+|---|---:|---:|---:|---:|---:|---:|
+| Dungeon 1 (after Dungeon 2 and the white sword) | 85% | 85% | 82% | 76% | 75% | 84% |
+| Dungeon 3 | 74% | 74% | 73% | 64% | 65% | 74% |
+| The Dungeon 3 triforce | 62% | 62% | 59% | 50% | 50% | 57% |
+| The Dungeon 4 triforce | 60% | 56% | 54% | 44% | 44% | 51% |
+| Dungeon 5 | 60% | 56% | 54% | 44% | 44% | 51% |
+| The Dungeon 5 triforce | 35% | 30% | 26% | 23% | 22% | 20% (the end of round 25's route) |
+| Dungeon 7 | 34% | 30% | 26% | 23% | 22% | |
+| The Dungeon 7 triforce | 13.1% | 12.5% | 9.1% | 6.1% | 6.7% (the end of round 26's route) | |
+| Dungeon 6 | 13.1% | 12.5% | 9.0% | 6.0% | | |
+| The Dungeon 6 triforce | 4.0% | 3.0% | 1.7% | 1.1% (the end of round 27's route) | | |
+| The Dungeon 8 triforce | 1.2% | 1.3% | 0.4% | | | |
+| Dungeon 9 | 1.2% | 1.3% | 0.4% | | | |
+| The end of the game | **4 of 1,000** | 0 of 1,000 | 0 of 1,000 | | | |
 
 Since round 26 the route runs on from the Dungeon 5 triforce through the whirlwind, two shops and a pond to Dungeon
 7 and its triforce. Of 1,000 runs started at Dungeon 7's entrance, 40% take its triforce; its six Blue Goriyas in

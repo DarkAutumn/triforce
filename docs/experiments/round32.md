@@ -21,8 +21,13 @@ succeeds'"**: with the route's team three golden paths from console power on, mo
 - **What is cheated** (decisions 2026-11-20 "`d3first`'s bag and the arrow rooms' rupees are cheated"): Dungeon 5's
   entrance tops the bag up to 8 bombs (the Olive Garden's weapon with the wood sword); the rooms' bomb walls as on
   `d2first`; the candle shop's and the arrow rooms' rupees; never a key.
-- **What is weak** (For the owner): Dungeon 4's Gleeok with the wood sword, Dungeon 3 at three hearts, Dungeon 7's
-  0x1b (six Blue Goriyas with the wood sword), the Olive Garden.
+- **What is weak** (For the owner; the chains of record `r32land-1k`, §12, seeds 0-999, models alone): Dungeon 4
+  6.2% (Gleeok with the wood sword), Dungeon 3 12.6% (three hearts), Dungeon 7 9.4% (7:0x1b's six Blue Goriyas),
+  Dungeon 5 24.0% (the Olive Garden); every leg 98.7-100%, Dungeon 1 89.6%, 2 100%, 6 35.2%, 8 37.8%, 9 48.9%.
+  Single runs from the start do not pass Dungeon 5 (0 of 1000; Dungeon 3's triforce 13.6%); the planner ends the
+  game in 17.7% of 300. The race retries a segment until one run passes, so it ends the game.
+- **The landing** (§13): `d3first` the main route; round 33's wizzrobe, vire and like-like the defaults (`d2first`
+  Dungeon 6 +8.2 ± 2.0, Dungeon 9 +40.6 ± 2.0; the full route ends the game in 4 of 1000 runs, its first).
 
 ## For the owner
 
@@ -40,22 +45,33 @@ succeeds'"**: with the route's team three golden paths from console power on, mo
   0x51, 0x60, 0x3e) have only the clip way (no plain way on this route).
 - Hearts into Dungeon 5 are 7; the grave gives the magic sword at 12 (refused at 11).
 
-**What is cheated on this route, and how much a run.** Bombs at the walls (a room's grant, BOMB offered only toward
-the wall), the route's bag topped up to 8 at Dungeon 5's entrance (cheated where each unit is thrown: in practice
-all of it in the Olive Garden), rupees at the candle shop (0:0x0c, `requires_rupees: 60`) and for the arrows while
-8:0x4c's Pols Voice or Ganon lives; never a key. The golden paths: 10, 14 and 18 bombs (5-8 of them the bag) and 13,
-0 and 10 rupees (§11). The chains of record count it a run (§12).
+**What is cheated on this route, and how much a run** (decisions 2026-11-20 "`d3first`'s bag and the arrow rooms'
+rupees are cheated"; never a key on the route's own runs). By kind, the chains of record summed over the
+segments (§12), a run that plays every segment from its start state:
 
-**What is still weak** (the chains of record, §12, have each room's losses): Dungeon 4's Gleeok (16 wood hits at the
-hearts the dungeon leaves; the planner wins it four times as often), Dungeon 3 at three hearts (its Keese, Zols and
-Darknuts take the hearts before 0x59 and Manhandla), Dungeon 7's 0x1b (goriya's six Blue Goriyas; past it
-wallmaster's grab sends Link back through them), the Olive Garden (darknut's six Blue Darknuts, even with the bag).
+- **The bag** (Dungeon 5's entrance tops it up to 8, step 97; cheated where each unit is thrown): 5.94 bombs, all in
+  the Olive Garden (5:0x05).
+- **Bomb walls** (a room's grant, BOMB offered only toward the wall): 4.96 bombs: Dungeon 3's 0x5b 0.30, Dungeon
+  4's 0x21 and 0x11 1.27 (its start state holds no bomb), Dungeon 1's 0x53 1.00, Dungeon 5's 0x65 and 0x66 2.17,
+  Dodongo's 2:0x0e 0.16, Dungeon 9 0.06.
+- **Rupees**: 27.82 at the candle shop (0:0x0c, `requires_rupees: 60`), 0.45 for the arrows at 8:0x4c.
+- **Keys**: 0 in every segment and in the full route; the planner 0.01 a run (9:0x63, `d2first`'s known leaks,
+  round33.md "The landing").
 
-**Not checked:** the route runs whose trainer had not finished its other-segment checks when the team was landed
-stay in it (the golden path is the gate): goriya `r32d1-goriya` and stalfos-keese-gel `r32d1-skg` (their Dungeon
-2, 3, 4, 5 and 7 gates: the Dungeon 1 trainer's `r32d1-final`), ow-octorok `r32turn-oct-s34` (its confirmation on
-other seeds and its other segments before the cutoff); the entrance states `d3first_4_71s_*` hold fewer bombs than
-runs bring (§11 "What the entrance states should hold"); the chains of record measure the team as it is.
+The golden paths: 10, 14 and 18 bombs (5-8 of them the bag) and 13, 0 and 10 rupees (§11).
+
+**What is still weak** (§12 has each room's losses): **Dungeon 4's Gleeok, 6.2%** of the segment (461 of 1000 runs
+die at 4:0x13, entered with 1.62 hearts: 16 wood hits at the hearts the dungeon leaves; the planner passes the
+dungeon in 81.7%, §11); **Dungeon 3, 12.6%** at three hearts (0x5b's Darknuts 272, 0x69 132, Manhandla 130 of
+256 entering at 1.50 hearts); **Dungeon 7, 9.4%** (goriya's six Blue Goriyas at 7:0x1b: 479 deaths of 939 entering;
+past it wallmaster's grab sends Link back through them); **Dungeon 5, 24.0%** (the Olive Garden, 5:0x05: 435 of
+1000 die there, even with the bag). **Single runs from the start do not pass Dungeon 5**: of 1000, 136 take Dungeon
+3's triforce, 4 Dungeon 4's, 3 Dungeon 1's, none Dungeon 5's; **the planner ends the game in 17.7%** (53 of 300).
+
+**Not checked:** every route run is measured by the chains of record (goriya and stalfos-keese-gel also by the
+Dungeon 1 trainer's final batch, §8; ow-octorok confirmed there, §12). What stays: `d3first_4_71s_*` hold fewer bombs
+than runs bring (4.3 on average), so the `d4` segment cheats 1.27 wall bombs a run (§11 "What the entrance states
+should hold").
 
 ## The walks, the route data, the plumbing
 
@@ -1659,3 +1675,102 @@ So the full route and the race read the same: Dungeons 3 and 4 are about 10% and
 through in tens of runs, Dungeon 1 and both legs are now well above half, and what no number of tries passes is
 0:0x3c. The full chain also says what `d3first_4_71s_0` should hold: about 4-5 bombs and 2 keys at 3.7 of 4 hearts
 (the segment chain starts it with none and cheats 1.21 bombs a run at the walls).
+
+## 12. The chains of record (`r32land-1k`): the landed team on `d3first`
+
+Branch `r32-land` (2.0.0.0; the fifteen route runs of §11, every default main's v1.9.0.1 run but round 33's
+wizzrobe `r33w-s93`, vire `r33-vire-s95` and like-like `r33-like-s83`), one batch, `eval-batch r32land-1k
+--parallel 10`: every segment from its chain-0 start state to its stop, 1000 runs, seeds 0-999, models alone (each
+model's act file), clips on; the full route 1000 runs from the start; the planner
+(`temperature:0.5+relax:16+plan:16:1`) 300 runs of the full route. Rates are runs arriving at the stop (± one
+standard error); the losses are runs per 1000 of the segment; "cheated" is a run's average.
+
+```sh
+seg() { echo "$1: --route d3first --clips on --from $2 ${3:+--stop-at step:$3} --runs 1000 --act model --output target/r56-chains/r32land-1k-$1.jsonl"; }
+triforce eval-batch r32land-1k --parallel 10 --chain "$(seg d3 3_7cs_0 24)" ... --chain "$(seg d9 9_76s_0)" \
+    --chain "full: --route d3first --clips on --runs 1000 --act model --output .../r32land-1k-full.jsonl" \
+    --chain "plan-full: --route d3first --clips on --runs 300 --act temperature:0.5+relax:16+plan:16:1 --output .../r32land-plan-full.jsonl"
+triforce room-stats r32land-1k      # target/r56-chains/r32land-1k-room-stats.json, the map's scopes
+```
+
+### The segments, models alone
+
+| Segment | From → stop | Arrived | Where the runs are lost (of 1000) | Hearts at the stop | Cheated a run |
+|---|---|---|---|---|---|
+| `d3` | `3_7cs_0` → 24 | **12.6%** ± 1.0 | 3:0x5b 272 (two visits), 0x69 132, Manhandla 0x4d 130 (256 entering, 1.50 hearts), 0x49 64, 0x59 64, 0x5a 50, 0x0f 46 | 4.00 | 0.30 wall bombs (0x5b) |
+| `post-d3` | `0_74c_0` → 31 | 100.0% | - | 3.69 | 0 |
+| `d4` | `4_71s_0` → 53 | **6.2%** ± 0.8 | Gleeok 4:0x13 461 (523 entering, 1.62 hearts), 0x32 175 (two visits), 0x31 81, 0x12 70, 0x60 61 | 4.98 | 1.27 wall bombs (0x21, 0x11) |
+| `post-d4` | `0_45c_0` → 61 | 100.0% | - | 4.47 | 0 |
+| `d1` | `1_73s_0` → 79 | **89.6%** ± 1.0 | Aquamentus 1:0x35 73, 0x44 22, 0x23 7 | 6.00 | 1.00 wall bomb (0x53) |
+| `post-d1` | `0_37c_v2_0` → 97 | 99.8% ± 0.1 | 0:0x0c 2 | 5.17 | 27.82 rupees (the candle shop) |
+| `d5` | `5_76s_0` → 120 | **24.0%** ± 1.4 | the Olive Garden 5:0x05 435 (6.49 hearts in), 0x64 98, 0x66 71, Digdogger 0x24 48, 0x37 39 | 8.00 | 5.94 bag + 2.17 wall bombs (0x65, 0x66) |
+| `post-d5` | `0_0bc_0` → 145 | 98.7% ± 0.4 | 0:0x62 12 (10 leave without the rupees) | 7.28 | 0 |
+| `d2` | `2_7ds_0` → 155 | 100.0% | - | 11.00 | 0.16 wall bombs (0x0e) |
+| `post-d2` | `0_3cc_0` → 174 | 99.9% ± 0.1 | 1 | 9.59 | 0 |
+| `d7` | `7_79s_0` → 194 | **9.4%** ± 0.9 | 7:0x1b 479 (939 entering, 4.58 hearts), 0x18 110, Digdogger 0x1c 81, 0x1a 64, 0x59 41, wallmaster 0x0d 19 timeouts | 12.00 | 0 |
+| `post-d7` | `0_42c_0` → 211 | 100.0% | - | 10.83 | 0 |
+| `d6` | `6_79s_0` → 227 | **35.2%** ± 1.5 | 6:0x3a 308, 0x38 125, 0x29 98, 0x2c 64 | 13.00 | 0 |
+| `post-d6` | `0_22c_0` → 233 | 100.0% | - | 12.46 | 0 |
+| `d8` | `8_7es_0` → 243 | **37.8%** ± 1.5 | 8:0x3e 262, 0x3f 165, Gleeok 0x3c 96, 0x4e 60, pols-voice 0x4c 32 stuck | 14.00 | 0.45 rupees (0x4c) |
+| `post-d8` | `0_6dc_0` → 258 | 99.9% ± 0.1 | 1 (lanmola's bounce limit) | 11.97 | 0 |
+| `d9` | `9_76s_0` → the ending | **48.9%** ± 1.6 | 9:0x30 148, 0x10 130, Ganon 0x42 56, patra 0x52 37 | 3.67 | 0.06 wall bombs |
+
+No segment cheats a key. Every leg arrives in 98.7% or more; the wood-sword dungeons (3, 4, 7, 5) are the route's
+weight. From step 206 every family plays its default run, so `d6`, `d8` and `d9` are the `d2first` team's play of
+those dungeons at this route's hearts (its own `d6` 36.7%, `d9` 54.3%, round33.md "The landing").
+
+**ow-leever: kept `r32d1-leever`.** The recorder turns' run `r32turn-leever` (§10.4) on the same seeds, paired with
+the record (`eval-batch r32land-leever`): `post-d5` 99.2% against 98.7%, +0.5 ± 0.5 (not better beyond noise; its 7
+losses are 0:0x62's rupees, ow-moblin's); `post-d1` 99.8% = 99.8%. The lead's rule (better on `post-d5` beyond noise,
+`post-d1` not worse) keeps the team's run.
+
+**ow-octorok `r32turn-oct-s34`: confirmed.** Chosen on seeds 2000-2999 (§10.3), never confirmed before the
+landing; these seeds confirm it: `post-d2` (`0_3cc_0` → 174, the recorder's turn out of Level 2) 99.9%; in `d1`
+its 0:0x37 trip (out of 1:0x73 by the S door, step 62, `cave → cave`, back in at 63) is played in 1000 of 1000 runs,
+none lost there.
+
+### The full route from the start
+
+| Milestone (step) | models alone (1000) | entering: hearts, bombs, keys | the planner (300) | entering |
+|---|---|---|---|---|
+| Level 3 entered (6) | 100.0% | 2.94 of 3, 0, 0 | 100.0% | 2.99 of 3, 0, 0 |
+| D3 triforce (24) | **13.6%** ± 1.1 | | 67.7% ± 2.7 | |
+| Level 4 entered (31) | 13.6% | 3.75 of 4, 4.28 (5 with none), 2 | 67.7% | 3.97 of 4, 4.11, 2 |
+| D4 triforce (53) | **0.4%** (4) | | 59.0% ± 2.8 | |
+| Level 1 entered (61) | 0.4% | 4.50 of 5, 1.50, 3 | 59.0% | 4.74 of 5, 0.39, 3 |
+| D1 triforce (79) | 0.3% (3) | | 58.7% ± 2.8 | |
+| Level 5 entered (97) | 0.3% | 5.83 of 7, 3.33 + bag 4.67, 3 | 58.7% | 6.62 of 7, 1.16 + bag 6.84, 3 |
+| D5 triforce (120) | **0** | | 43.3% ± 2.9 | |
+| D2 triforce (155) | 0 | | 42.3% ± 2.9 | 9.29 of 10 at Level 2 |
+| D7 triforce (194) | 0 | | 38.7% ± 2.8 | |
+| the magic sword (206) | 0 | | 38.3% ± 2.8 | |
+| D6 triforce (227) | 0 | | 25.0% ± 2.5 | |
+| D8 triforce (243) | 0 | | 22.3% ± 2.4 | |
+| **the ending** (304) | **0** | | **17.7%** ± 2.2 (53) | |
+
+Where the full runs end (models alone, of 1000): 3:0x5b's last pass 186, Manhandla 149 (of 285 entering, 1.54
+hearts), 3:0x49 85, 0x59 78, 0x69 75, 0x5b from S 72, Gleeok 60 (of 64 entering, 1.46 hearts), 3:0x0f 45, 0x4a 44.
+Cheated a run: 0.37 wall bombs, 0.01 bag bombs, 0.04 rupees, no key. The planner's runs end at Manhandla 72,
+Gleeok 25, 5:0x37 18 stuck (darknut), 6:0x3a and 0x29 11 each, the Olive Garden 11; cheated a run 3.99 bag + 4.38
+wall bombs, 4.79 rupees, 0.01 keys (9:0x63).
+
+So the route reads as §11's race did: models alone a single run is lost in Dungeon 3 (86%) and almost all the rest
+in Dungeon 4; the planner keeps the hearts the wood sword needs and ends the game in about one run of six; the race,
+which retries each segment, ends it every time.
+
+## 13. The landing (2.0.0.0)
+
+Branch `r32-land` (from `r32-team`): main 1.9.0.1, every branch of rounds 32 and 33 merged (`r32-base2`, `r32-t-d3`,
+`r32-t-d4`, `r32-t-d1`, `r32-t-late`, `r32-turn`, `main-r33-d6`, `main-r33-d9`: documents, scripts and
+training-only yaml lines; the play is `r32-team`'s code), the flip (`registry.MAIN_ROUTE = 'd3first'`; every tool
+and test that is about `d2first`'s data names `--route d2first`), the corpus replay. Decisions 2026-11-20 "2.0.0.0:
+`d3first` is the main route".
+
+- **The team:** the fifteen route runs of §11 (ow-leever `r32d1-leever` kept, ow-octorok confirmed, §12); every
+  default main's v1.9.0.1 run but wizzrobe `r33w-s93`, vire `r33-vire-s95` and like-like `r33-like-s83`
+  (round33.md; like-like's canonical evaluation: 97.4% of 4800 episodes, −0.19 hearts an episode); lanmola stays
+  `r79b-lanmola` (`r33-lanmola-s80` not better on `d9`).
+- **`d2first`'s gates** (round33.md "The landing"): Dungeon 6 +8.2 ± 2.0, Dungeon 4 +2.2 ± 1.2, Dungeon 9 +40.6 ±
+  2.0, `post-d7` run for run; `d3` and `d7` 300 of 300 runs identical to 1.9.0.1's record; the full route not worse
+  at any milestone, and **4 of 1000 runs end the game**, the first single runs of `d2first` to do it.
+- **`d3first`'s chains of record** (§12): reported, no rate bar.

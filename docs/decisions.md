@@ -3213,16 +3213,19 @@ the game (176, 135 and 91 runs; round32.md §11). The lead's decisions for the l
   `--route d2first`. The engine's `DEFAULT_ROUTE` (the route of bare start-state names) stays `d2first`, so every
   state name, harvested file and chain record of `d2first` keeps its meaning.
 - **The route's team is what the race ended the game with:** fifteen `promoted.d3first` runs (steps 0-205) beside
-  every family's default. Three of them were landed before their trainers finished their other-segment checks
-  (goriya `r32d1-goriya`, stalfos-keese-gel `r32d1-skg`: their Dungeon 2, 3, 4, 5 and 7 gates; ow-octorok
-  `r32turn-oct-s34`: its confirmation on fresh seeds and its other segments): **not checked**; the golden path is
-  the gate, and the chains of record measure the team as landed. There is no rate bar for `d3first`'s segments:
-  they are reported (round32.md §12).
+  every family's default. Three were landed before their trainers' other-segment checks ended (goriya
+  `r32d1-goriya`, stalfos-keese-gel `r32d1-skg`, ow-octorok `r32turn-oct-s34`); those checks and the chains of record
+  have measured them since (the Dungeon 1 trainer's final batch; ow-octorok confirmed on seeds 0-999: `post-d2`
+  99.9%, 0:0x37's trip in 1000 of 1000 runs). ow-leever stays `r32d1-leever`: `r32turn-leever` was +0.5 ± 0.5 on
+  `post-d5`, not better beyond noise. There is no rate bar for `d3first`'s segments: they are reported (round32.md
+  §12). Not checked: only that `d3first_4_71s_*` hold fewer bombs than runs bring (4.3), so the `d4` segment cheats
+  1.27 wall bombs a run.
 - **`d2first` must not be worse:** the segments whose default runs changed (round 33's wizzrobe `r33w-s93`, vire
   `r33-vire-s95` and like-like `r33-like-s83`: Dungeon 6, Dungeon 4 for vire and like-like, Dungeon 9, `post-d7`)
   paired with 1.9.0.1's chains of record, the full route's milestones (1000 runs) not worse beyond noise, and two
   unchanged segments run for run against them (300 runs each) to show that the landing's code plays `d2first` as
-  1.9.0.1 did.
+  1.9.0.1 did. All passed (round33.md "The landing": `d6` +8.2 ± 2.0, `d4` +2.2 ± 1.2, `d9` +40.6 ± 2.0, `post-d7`
+  and the two unchanged segments run for run; the full route ends the game in 4 of 1000): no run swapped back.
 - **Like-like for 9:0x56** (round 33's second lane): its line came in minutes after the landing was assembled and
   before any chain of record had started with the team; taken (`r33-like-s83`, `d9` +35.8 ± 1.9 on fresh seeds,
   `d4` and `d6` not worse) and the one `d2first` chain already measured without it played again.

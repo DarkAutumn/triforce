@@ -24,12 +24,15 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   `r32d1-tektite`, goriya `r32d1-goriya`, stalfos-keese-gel `r32d1-skg`, ow-octorok `r32turn-oct-s34` (the
   recorder's turn out of Level 2). **Cheated and counted** (no key ever): bomb walls (a room's grant, BOMB only toward
   the wall), the bag topped up to 8 at Dungeon 5's entrance (`grant: {bombs: 8}`, step 97: the Olive Garden's
-  weapon), rupees at the candle shop and for the arrows while 8:0x4c's Pols Voice or Ganon lives. **Measured:**
-  the golden race, the route's chains of record (`r32land-1k`, round32.md §12: every segment, the full route, the
-  planner beside), no rate bar for its segments. **Not measured:** the route runs goriya, stalfos-keese-gel (their
-  other dungeons) and ow-octorok (fresh seeds, its other segments) were landed before their trainers' checks
-  ended. `d2first` (round 33): wizzrobe `r33w-s93`, vire `r33-vire-s95` (Dungeon 6 +7.7 ± 2.1 together on fresh
-  seeds) and like-like `r33-like-s83` (9:0x56: `d9` +35.8 ± 1.9) are the defaults.
+  weapon), rupees at the candle shop and for the arrows while 8:0x4c's Pols Voice or Ganon lives. **Measured** (the
+  chains of record `r32land-1k`, round32.md §12, seeds 0-999, models alone; no rate bar): the legs 98.7-100%,
+  Dungeon 3 12.6%, 4 6.2% (Gleeok), 1 89.6%, 5 24.0% (the Olive Garden), 2 100%, 7 9.4% (7:0x1b), 6 35.2%, 8 37.8%,
+  9 48.9%; single runs from the start take Dungeon 3's triforce in 13.6% and none passes Dungeon 5; the planner ends
+  the game in 17.7% of 300. A run of every segment cheats 5.94 bag bombs, 4.96 wall bombs, 28.3 rupees, no key.
+  **Not measured:** only that `d3first_4_71s_*` hold fewer bombs than runs bring (4.3), so the `d4` segment cheats
+  1.27 wall bombs a run. `d2first` (round 33): wizzrobe `r33w-s93`, vire `r33-vire-s95` and like-like `r33-like-s83`
+  are the defaults (Dungeon 6 +8.2 ± 2.0, Dungeon 9 +40.6 ± 2.0 against 1.9.0.1; the full route ends the game in 4
+  of 1000 runs, its first; lanmola `r33-lanmola-s80` not better, `r79b-lanmola` stays).
 
 - **Rounds 30 and 31 (Nov 19-20; landed together as 1.9.0.1, `docs/experiments/round30.md` "The landing",
   `round31.md`):** the owner's eight phase IX changes to `d2first` (now **354 steps**): Dungeon 1 out of 1:0x73 by

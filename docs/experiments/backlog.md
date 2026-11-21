@@ -16,53 +16,55 @@ The owner's decisions of Nov 16 are in `docs/decisions.md` ("The rest of the gam
 
 ### `d3first`, the main route (2.0.0.0, Nov 20): what loses it
 
-round32.md (Summary, "For the owner", §11-§12). The golden path from power on ends the game (three races of three,
-91-176 runs); single runs from the start are lost in the wood-sword dungeons. In the order they cost the route
-(the chains of record `r32land-1k`, round32.md §12):
+round32.md (Summary, "For the owner", §11-§13). The golden path from power on ends the game (three races of three,
+91-176 runs); single runs from the start are lost in the wood-sword dungeons: of 1000 (`r32land-1k-full`), 136 take
+Dungeon 3's triforce, 4 Dungeon 4's, none Dungeon 5's; the planner ends the game in 17.7% of 300. In the order they
+cost the route (the chains of record `r32land-1k`, round32.md §12, segment rates from each entrance):
 
-- [ ] **Dungeon 3 at three hearts** (zol, stalfos-keese-gel, darknut, boss-manhandla `@d3first`): the hearts go in
-  3:0x4a's Keese, 3:0x49's and 0x6b's Zols before 0x59's Red Darknuts, 0x5b's last pass and Manhandla (entered with
-  about 1.4-1.5 hearts). The planner keeps them (round32.md §6); the next lever is the hearts on the way, a joint
-  continuation of the four route runs on the chain's handoffs.
-- [ ] **Dungeon 4's Gleeok with the wood sword** (boss-gleeok `r32d4-gleeok2-s1-it2517`): 16 wood hits at the
-  hearts the dungeon leaves; the planner wins it four times as often (round32.md §7, §11).
-- [ ] **`d3first_4_71s_*` hold fewer bombs than runs bring** (0/5/0 against about 4.7, 2 keys): the `d4` segment
-  cheats both walls' bombs. No command turns a harvested pre-entry into a seed state with its manifest entry
-  (`r32c_models.py` cuts only the next step's): a `--goal-step` there would make it one command; a new `4_71s` moves
-  every Dungeon 4 baseline.
-- [ ] **Dungeon 7 with the wood sword**: goriya's 7:0x1b (six Blue Goriyas) is the first loss; past it wallmaster's
-  7:0x0d grab sends Link back through goriya's rooms (round32.md §9.5: worth a round once a route goriya passes
-  0x1b); boss-aquamentus 7:0x2a gains from the hearts.
-- [ ] **The Olive Garden (5:0x05, darknut `@d3first`)**: even with the granted bag of 8 (all thrown there).
-- [ ] **ow-leever's recorder turn out of Level 5 (0:0x0b)**: `r32turn-leever`'s selection on `post-d5` was not done
-  when the route landed; `r32d1-leever` is the route's run.
-- [ ] **Not checked at the landing**: goriya `r32d1-goriya` and stalfos-keese-gel `r32d1-skg` on Dungeons 2, 3, 4,
-  5, 7 (the Dungeon 1 trainer's `r32d1-final`); ow-octorok `r32turn-oct-s34` on fresh seeds and its other segments
-  before the cutoff. A failure there is a swap of that route run, measured on the segments it plays.
-- [ ] **like-like has two lines** (`r33-like-s83` the default for `d2first`'s 9:0x56, `r32d4-like2` the route run
-  for `d3first`'s Dungeon 4): a joint continuation would make one.
+- [ ] **Dungeon 3 at three hearts, 12.6%** (zol, stalfos-keese-gel, darknut, boss-manhandla `@d3first`): 864 of
+  1000 full runs end here. The hearts go in 3:0x4a's Keese, 3:0x49's and 0x6b's Zols before 0x59's Red Darknuts,
+  0x5b's last pass and Manhandla (entered with about 1.5 hearts). The planner keeps them (67.7% from the start); the
+  next lever is the hearts on the way, a joint continuation of the four route runs on the chain's handoffs.
+- [ ] **Dungeon 4's Gleeok with the wood sword, 6.2%** (boss-gleeok `r32d4-gleeok2-s1-it2517`): 461 of 1000 `d4`
+  runs die at 4:0x13 (1.62 hearts in), then like-like's 0x32 175: 16 wood hits at the hearts the dungeon leaves.
+- [ ] **`d3first_4_71s_*` hold fewer bombs than runs bring** (0/5/0 against 4.3 on average, 2 keys): the `d4`
+  segment cheats 1.27 wall bombs a run (0x21, 0x11). No command turns a harvested pre-entry into a seed state with
+  its manifest entry (`r32c_models.py` cuts only the next step's): a `--goal-step` there would make it one command;
+  a new `4_71s` moves every Dungeon 4 baseline. The lead's or the owner's call.
+- [ ] **The Olive Garden (5:0x05, darknut `@d3first`), Dungeon 5 24.0%**: 435 of 1000 `d5` runs die there (6.49
+  hearts in) even with the granted bag of 8 (5.94 thrown a run); then 0x64 98, gibdo's 0x66 71.
+- [ ] **Dungeon 7 with the wood sword, 9.4%**: goriya's 7:0x1b (six Blue Goriyas) 479 of 1000 (4.58 hearts in),
+  0x18 110, Digdogger 81; past 0x1b wallmaster's 7:0x0d grab sends Link back through goriya's rooms (round32.md
+  §9.5: worth a round once a route goriya passes 0x1b).
+- [ ] **like-like has two lines** (`r33-like-s83` the default for `d2first`'s 9:0x56 and every route's late rooms,
+  `r32d4-like2` the route run for `d3first`'s Dungeon 4): one like-like run for both routes, a joint continuation
+  judged on `d2first`'s `d9`, `d4`, `d6` and `d3first`'s `d4`.
 - [ ] **The route's tables predate the grants** (`heart_value.d3first.json`, `chain_hp.d3first.json`): Dungeon 5's
   and 8's rows price the old bag and purse until refitted from the chains of record.
 - [ ] **`select-checkpoint --segment X --route d3first`** plays its chains and then fails at its report (the
   provenance names the namespaced start state); `--from d3first_<state>` works.
+- [x] **ow-leever's recorder turn out of Level 5 (0:0x0b)**: `r32turn-leever` on `post-d5` +0.5 ± 0.5 against the
+  team's `r32d1-leever` (98.7%): not better beyond noise, `r32d1-leever` stays (round32.md §12).
+- [x] **The route runs landed before their checks ended** (goriya, stalfos-keese-gel, ow-octorok): measured by the
+  Dungeon 1 trainer's final batch and the chains of record; ow-octorok confirmed (`post-d2` 99.9%).
 
-### The whole game on the changed route (1.9.0.1, Nov 20): what loses it now
+### The whole game on `d2first` (2.0.0.0, Nov 21): what loses it now
 
-round30.md "The landing", round31.md. Rounds 30 and 31 landed together: the optimisation round's team on `d2first`
-as the owner's phase IX changed it (354 steps). From the start the models alone end the game in 0 of 1000 runs
-(Dungeon 9 entered by 13), the planner in 27 of 300 (9:0x56 holds most of the rest). What loses the full route
-(`r31land-1k-full`, runs ended per 1000; 1.9.0.0's `r29land-1k-full` in brackets), in order:
+round33.md "The landing" (1.9.0.1: round30.md "The landing", round31.md). `d2first` (354 steps, `--route d2first`)
+with 1.9.0.1's team and round 33's wizzrobe, vire and like-like: from the start the models alone end the game in 4
+of 1000 runs (Dungeon 9 entered by 12), the first that do; 1.9.0.1's planner ended it in 27 of 300. What loses the
+full route (`r32land-d2first-1k-full`, runs ended per 1000; 1.9.0.1's `r31land-1k-full` in brackets), in order:
 
-- [ ] **5:0x05 (darknut, 135 (141))**: entered with 6.48 hearts; `r30-dark69-s94` gained `d8` (+11.5) and Dungeon 5
-  (+4.1) but not this room at the route's hearts. Then 5:0x64 39, 0x65 20, 0x66 20.
-- [ ] **3:0x4d (Manhandla, 86 (97))**: entered with 3.66 hearts.
-- [ ] **7:0x1b (goriya, 64 (77))**: entered with 4.20 hearts; `d7` is 56.9% now (46.6%).
-- [ ] **4:0x13 (Gleeok, 46 (36))**: `r30-gleeok-s30` was not better beyond noise; the fights entered at 3 hearts or
-  fewer are the deaths (round30.md).
-- [ ] **1:0x44 (goriya, 44 (25); 1.9.0.0's goriya on the new route 20)**: entered with 2.93 hearts; `r30-goriya6-s31`
+- [ ] **5:0x05 (darknut, 120 (135))**: entered with 7.12 hearts; `r30-dark69-s94` gained `d8` (+11.5) and Dungeon 5
+  (+4.1) but not this room at the route's hearts. Then 5:0x64 38, 0x66 25.
+- [ ] **3:0x4d (Manhandla, 86 (86))**: entered with 3.66 hearts.
+- [ ] **7:0x1b (goriya, 81 (64))**: entered with 3.91 hearts (more runs reach it); 0x1a 30, 0x19 23.
+- [ ] **1:0x44 (goriya, 44 (44); 1.9.0.0's goriya on the new route 20)**: entered with 2.93 hearts; `r30-goriya6-s31`
   loses more here at the full route's hearts (the `d1` segment from full hearts shows 3 against 1). The first item
   for goriya's next run.
-- [ ] **6:0x3a (wizzrobe, 36 (33))**, 6:0x38 25; Dungeon 2's 2:0x5e 31 (29), 0x1e 29 (41), 0x3e 23 (22).
+- [ ] **4:0x13 (Gleeok, 24 (46))**: `r30-gleeok-s30` was not better beyond noise; the fights entered at 3 hearts or
+  fewer are the deaths (round30.md).
+- [ ] **6:0x3a (wizzrobe, 28 (36))**, 6:0x38 24, 0x29 22; Dungeon 2's 2:0x5e 31, 0x1e 29, 0x3e 23 (as 1.9.0.1).
 - [ ] **ow-lynel `r30e-lynel-s84` at 0:0x05 after Dungeon 8**: 1.41 hearts a visit against `r27l-lynel-s81`'s 1.03:
   Dungeon 9 is entered with 11.87 hearts on `post-d8` (12.30). Its second visit of 0x0a is fixed (round30.md).
 

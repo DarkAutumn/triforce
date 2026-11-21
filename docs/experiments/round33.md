@@ -288,3 +288,42 @@ same rate, so the segment does not move beyond noise. **Verdict: not better on i
 - lanmola `r33-lanmola-s80` crosses 9:0x55 from E in 1000 of 1000 visits (`r79b-lanmola` loses 1.2% of runs
   there) without moving `d9` beyond noise (−2.8 ± 2.3); a second seed or 2000 more paired runs would tell whether
   the room's gain shows in the segment.
+
+## The landing (2.0.0.0, with round 32)
+
+The three runs that qualified are `d2first`'s defaults from 2.0.0.0 (round32.md §13; decisions 2026-11-20 "2.0.0.0:
+`d3first` is the main route"): **wizzrobe `r33w-s93`** (it003264, replaces `r30w-wj-s89`), **vire `r33-vire-s95`**
+(it002342, replaces `r77-b`) and **like-like `r33-like-s83`** (it003355, replaces `r79c-like`; its canonical
+`eval.json`: 97.4% of 4800 episodes, −0.19 hearts an episode, act `temperature:0.5+relax:16`, clips on). **lanmola
+did not qualify** (`d9` −2.8 ± 2.3): `r79b-lanmola` stays. Each stamped 2.0.0.0; on `d3first` they play from step 206
+on (the route's runs play before it; like-like's `promoted.d3first` stays `r32d4-like2`).
+
+**The `d2first` gates** (`eval-batch r32land-d2first`, the landing's code and team, models alone, clips on, seeds
+0-999, each paired run for run with 1.9.0.1's chains of record `r31land-1k-*`):
+
+| Segment | 2.0.0.0 | 1.9.0.1 | paired |
+|---|---:|---:|---:|
+| `d6` (`6_79s_0` → 277) | 36.7% | 28.5% | **+8.2 ± 2.0** |
+| `d4` (`4_71s_0` → 130) | 93.9% | 91.7% | +2.2 ± 1.2 |
+| `d9` (`9_76s_0` → the ending) | 54.3% (3.85 hearts at the end) | 13.7% (3.40) | **+40.6 ± 2.0** |
+| `post-d7` (`0_42c_0` → 261) | 99.4% (10.74 hearts) | 99.4% | run for run |
+| `d3`, `d7` (300 runs, seeds 0-299; no changed run plays them) | | | 300 of 300 identical (result, reason, steps, frames, every room) |
+
+The identity rows show the landing's code plays `d2first` as 1.9.0.1 did. **The full route** (1000 runs from the
+start): Dungeon 2's triforce 89.4%, Dungeon 1's 74.4%, Dungeon 3's 62.1% (all equal), Dungeon 4's 59.5% against
+55.6% (+3.9 ± 0.9), Dungeon 5's 35.1% against 30.4% (+4.7 ± 1.8), Level 7 entered 34.1% against 30.0%, Dungeon 7's
+triforce 13.1% against 12.5%, Dungeon 6's 4.0% against 3.0%, Level 9 entered 1.2% against 1.3% (−0.1 ± 0.5); **the
+ending 4 of 1000 against 0**: the first `d2first` runs from the start that end the game, models alone. No milestone
+worse. Where the runs end: 5:0x05 120, 3:0x4d 86, 7:0x1b 81, 1:0x44 44, 5:0x64 38. Cheated a run: 2.45 wall bombs,
+no rupee, keys under 0.01 (9:0x63). The room-stats of these chains: `triforce room-stats r32land-d2first-1k --route
+d2first`.
+
+**Still owed** on `d2first` (backlog "The whole game on the changed route"):
+
+- **wizzrobe 6:0x29**: `r33w-s93` dies there more than `r33w-s92`, which learned the key path (98 of 1000 `d6` runs
+  on `d3first`'s chain, 74 on `d2first`'s); a continuation of s93 with s92's 0x29.
+- **wizzrobe 6:0x3a**: the dungeon's killer (308-313 of 1000 `d6` runs on either route).
+- **pols-voice 8:0x4c** without its key (32 runs of 1000 stuck on `d3first`'s `d8`).
+- **The key leaks**: gibdo leaving 5:0x66's key and goriya spending a second key in 7:0x1b (the cheated keys at
+  6:0x79 and 9:0x63; the planner's 0.01 a run on `d3first`).
+- **One like-like run for both routes** (`r33-like-s83` here, `r32d4-like2` for `d3first`'s Dungeon 4).
