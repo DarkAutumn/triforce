@@ -150,3 +150,55 @@ Every seed gains on fresh seeds and by the same amount (about +2.8 points, again
 best-of-four bias), but none alone by two standard errors. The candidate for the joint check is `r34d3-dark-s341`'s
 `last` (positive on both seed sets, no checkpoint picked). The joint `d3` with zol's run, paired with the record on
 seeds 0-999, and the `d5` hold decide.
+
+### darknut: the last pass (3:0x5b W→E), what the planner does there
+
+The ledger's first room: 414 runs lost per 1000 entering against the planner's 26, worth +8.5 points of `d3`. The
+record's visits (seeds 0-999, models; planner seeds 0-299): the models enter with 1.43 hearts (planner 2.35); at one
+heart or less 160 of 260 die (planner 2 of 35), and the deaths come early (median 43 steps; 113 of 217 before the
+first kill, 185 of 217 with no bomb placed). Bombs are not the difference: both place about one (0.89 / 1.21 a visit,
+the room is `requires_bombs`, so the wall's bomb is free) and hit a Darknut with one as rarely (0.17 / 0.15).
+
+The same entry states, both ways: 51 of the round's `d3` handoffs into the last pass (`d3first_3_5bw_h100*_13`, their
+own hearts and bombs, no RAM randomization), 4 episodes each, played by the new run `r34d3-dark-s341`, the promoted
+`r32d3-dark2-s44` and the planner over `r34d3-dark-s341`, every episode recorded with its decisions and played frame by
+frame (`scripts/experiments/r34d3_lastpass.py`):
+
+| 204 visits | won | hits a visit | Darknuts killed | all three dead | bombs (before the last kill) | fight frames within 16 / 24 px | hits after a sword decision |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `r32d3-dark2-s44` | 68.6% | 0.78 | 2.25 | 144 | 1.09 (0.38) | 25% / 59% | 89 of 159 |
+| `r34d3-dark-s341` | 72.5% | 0.62 | 2.34 | 150 | 1.13 (0.38) | 26% / 58% | 78 of 127 |
+| planner (`temperature:0.5+relax:16+plan:16:1`) | 91.7% | 0.14 | 2.83 | 191 | 1.33 (0.38) | 26% / 58% | 8 of 29 |
+
+At one heart or less (84 visits each): won 49% (s341) and 46% (s44) against 81%. Every hit is a Darknut's touch
+(type $0B, within 8 px), most in the west half near the door Link enters by. The planner stands as close to the
+Darknuts as the models do, for as long, swings as often (22% of its decisions SWORD, the models 23%), bombs the same
+and fights the same fight (the step's objective is to kill all three, then the wall: there is nothing to walk past).
+What differs is which swings: 61% of the models' hits follow a sword decision (Link standing to swing while a Darknut
+walks into him), 28% of the planner's; the planner's veto falls on those few swings and moves (its kind differs from
+the model's most likely in 5% of decisions, as the models' own sampling does). Hits per 1000 fight frames 0.75 against
+0.15. Not the route's: no reserve (0 on this route, the wall's bomb free), no path cost, the objective's line is
+the fight itself, the mask is the same network's. The model's to fix: the continuation below.
+
+```sh
+L=$PWD/target/r34/lastpass; export TRIFORCE_STATES_DIR=$L/states   # the handoffs beside the seed states (evaluate resolves stems)
+ev() { echo "$1: --specialist $L/spec.yaml --checkpoint $2 --episodes-per-state 4 --seed 0 --clips on --act $3 --output $L/$1.json --replays $L/rep-$1 --streams decisions"; }
+triforce eval-batch r34d3-lastpass --parallel 10 --evaluate "$(ev s341 models/darknut/r34d3-dark-s341/ckpt.pt temperature:0.5+relax:16)" \
+    --evaluate "$(ev s44 models/darknut/r32d3-dark2-s44/ckpt.pt temperature:0.5+relax:16)" \
+    --evaluate "$(ev plan models/darknut/r34d3-dark-s341/ckpt.pt temperature:0.5+relax:16+plan:16:1)"
+python scripts/experiments/r34d3_lastpass.py s341=$L/rep-s341 s44=$L/rep-s44 plan=$L/rep-plan
+```
+
+The continuation (three seeds from `r34d3-dark-s341`, 244 iterations): the round's darknut yaml with its harvested
+starts only into the last pass (528 handoffs of the `d3` harvest, their hearts and bombs, `harvested_fraction` 0.33);
+demonstrations of that room only: the planner over `r34d3-dark-s341` from `3_5bw_0..2` (20 each) and 200 other
+handoffs (2 each), 447 of 460 visits won, 37,599 rows; `--demo-coeff 0.05 --sil-coeff 0.1 --checkpoint-every 30`.
+
+```sh
+python scripts/experiments/r27_plan_demos.py models/darknut/r34d3-dark-s341 target/r34/demos/darknut-lastpass.npz \
+    --family target/r34/train/darknut-lastpass.yaml --route d3first --states 3_5bw --runs 20 \
+    --state-files <200 handoffs> --file-runs 2 --parallel 10
+triforce train --specialist target/r34/train/darknut-lastpass.yaml --load models/darknut/r34d3-dark-s341 --parallel 8 \
+    --iterations 244 --checkpoint-every 30 --demos target/r34/demos/darknut-lastpass.npz --demo-coeff 0.05 \
+    --sil-coeff 0.1 --stop-success 1.01 --seed 351 --run-id r34d3-dlp-s351   # and 352, 353
+```
