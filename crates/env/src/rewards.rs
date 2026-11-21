@@ -337,10 +337,14 @@ pub fn score_step(
         map: c.map,
         linger_tail_steps: c.quiet_steps,
     });
-    let mut truncated = matches!(ending.as_deref(), Some(NO_ROOM_PROGRESS | NO_DAMAGE));
+    // A truncation the config's `endings` names (as a failure only: `SpecialistConfig::validated`) ends the episode
+    // as that failure: terminated, with the terminal penalty and no bootstrap.
+    let overridden = |e: &str| config.endings.contains_key(e);
+    let mut truncated =
+        matches!(ending.as_deref(), Some(e @ (NO_ROOM_PROGRESS | NO_DAMAGE)) if !overridden(e));
     if ending.is_none() && steps >= config.max_steps as u64 {
         ending = Some(MAX_STEPS.to_owned());
-        truncated = true;
+        truncated = !overridden(MAX_STEPS);
     }
     let terminated = ending.is_some() && !truncated;
     let mut outcome = None;

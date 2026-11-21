@@ -1091,6 +1091,11 @@ It is checked after the other conditions and coexists with the legacy timeout (5
 player's `--stall-steps`, default 300) sets `stalled` on the room event after N actions and ends the run `stuck`
 at 2N. `eval-chain` leaves it off.
 
+A training config may name a truncation (`max-steps`, `no-damage`, `no-room-progress`) in `endings:`, and only as a
+failure (`hard-failure` or `soft-failure`; anything else is refused): the episode then *terminates* as that failure,
+with the terminal failure penalty and no bootstrap (round 34: a boss that waits out the budget is not paid for
+surviving). No shipped family yaml does; chains and evaluation classify as before.
+
 Endings, linger, the chain's stall counter and the visit metrics read `Change.observed` (hits, stuns and pickups
 seen in the step itself); only the critic and the bomb counts (`zelda::bombs::BombStats`) read the credited fields,
 where the weapon look-ahead credits a beam, bomb, arrow or boomerang hit on its firing step and the ledger keeps the

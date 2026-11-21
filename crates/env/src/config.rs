@@ -14,7 +14,7 @@ use crate::end_conditions::{
     validate_success_kind,
 };
 use crate::heart_value::HeartValues;
-use crate::rewards::OUTCOMES;
+use crate::rewards::{HARD_FAILURE, OUTCOMES, SOFT_FAILURE};
 use crate::start_states::MIN_CHAIN_SAMPLES;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
@@ -737,6 +737,10 @@ pub struct SpecialistConfig {
     pub start_states: Vec<String>,
     #[serde(deserialize_with = "de_success")]
     pub success: Vec<String>,
+    /// Ending -> outcome overrides of `DEFAULT_ENDINGS`'s classes. A truncation (`max-steps`, `no-damage`,
+    /// `no-room-progress`) may be named only as a failure, and then ends the episode as one (round 34: a stall that
+    /// reaches the budget is not paid for surviving): terminated, the terminal failure penalty, no bootstrap
+    /// (`rewards::score_step`).
     #[serde(default)]
     pub endings: IndexMap<String, String>,
     #[serde(default = "default_profile")]
@@ -860,11 +864,14 @@ impl SpecialistConfig {
                     format!("ending {ending:?} is also in success (success wins; the override does nothing)"),
                 ));
             }
-            if [MAX_STEPS, NO_DAMAGE, NO_ROOM_PROGRESS].contains(&ending.as_str()) {
+            if [MAX_STEPS, NO_DAMAGE, NO_ROOM_PROGRESS].contains(&ending.as_str())
+                && ![HARD_FAILURE, SOFT_FAILURE].contains(&outcome.as_str())
+            {
                 return Err(fail(
                     "endings",
                     format!(
-                        "ending {ending:?} is a truncation: an override would relabel it without changing its reward"
+                        "ending {ending:?} is a truncation: it can only be made a failure (which ends the episode \
+                         as one), got {outcome:?}"
                     ),
                 ));
             }
@@ -1557,7 +1564,7 @@ mod tests {
             "reward_profile: nonsense",
             "endings: {exit-wrnog: hard-failure}",
             "endings: {exit-correct: hard-failure}",
-            "endings: {max-steps: hard-failure}",
+            "endings: {max-steps: neutral}",
             "endings: {no-damage: success}",
             "endings: {no-room-progress: neutral}",
             "endings: {'enter-room:1:0x7A': hard-failure}",
@@ -1572,6 +1579,7 @@ mod tests {
             "endings: {exit-wrong: hard-failure, retreat: soft-failure, death: neutral}",
             "endings: {'enter-room:1:0x72': hard-failure, triforce-collected: soft-failure}",
             "max_steps: 4294967295",
+            "endings: {max-steps: hard-failure, no-damage: hard-failure, no-room-progress: soft-failure}",
         ] {
             assert!(minimal(ok).is_ok(), "{ok} should load: {:?}", minimal(ok).err());
         }

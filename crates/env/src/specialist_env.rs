@@ -1103,7 +1103,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             };
             self.done = true;
             terminal = Some(TerminalInfo {
-                bootstrap_truncation: matches!(ending.as_str(), NO_ROOM_PROGRESS | NO_DAMAGE),
+                bootstrap_truncation: truncated && matches!(ending.as_str(), NO_ROOM_PROGRESS | NO_DAMAGE),
                 ending,
                 outcome,
                 start_state: state_label(&self.episode_state).to_owned(),

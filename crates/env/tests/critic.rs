@@ -1315,3 +1315,52 @@ fn heart_value_table_checks_the_route() {
     config.route = Some("clips-gauntlet".into());
     assert!(data.check_heart_values(&config).is_err(), "a table for another route");
 }
+
+// --- round 34: a truncation the config names a failure in `endings` ends the episode as that failure ---
+
+fn wait_scored(config: &SpecialistConfig, no_damage: Option<u32>, steps: u64) -> env::rewards::Scored {
+    let full = Ram::new();
+    let change = step(&full, &full, "WAIT 8");
+    let objective = objective(&[EAST]);
+    let mut critic = GameplayCritic::for_config(config).unwrap();
+    let mut ends = EndConditions::new(&config.rooms, &config.success, config.one_room, None, no_damage, 2000);
+    let c = Critique {
+        change: &change,
+        map: &MAP,
+        prev_objective: &objective,
+        objective: &objective,
+        prev_wavefront: None,
+        quiet_steps: 0,
+    };
+    score_step(config, &mut critic, &mut ends, &c, 1.0, steps, &change.state, &HeartContext::default()).unwrap()
+}
+
+/// By default `max-steps` and `no-damage` truncate (no terminal reward, a soft failure); named `hard-failure` in
+/// `endings` they terminate with the terminal failure penalty, as a death does.
+#[test]
+fn a_truncation_named_a_failure_ends_as_one() {
+    use env::rewards::{PENALTY_TERMINAL_FAILURE, SOFT_FAILURE, TERMINAL_FAILURE_PENALTY_VALUE};
+    let mut config = (*common::game_data().specialist("goriya").unwrap()).clone();
+    config.max_steps = 5;
+    let cases = [(None, 5, MAX_STEPS), (Some(1), 1, NO_DAMAGE)];
+    for (no_damage, steps, ending) in cases {
+        let s = wait_scored(&config, no_damage, steps);
+        assert_eq!(s.ending.as_deref(), Some(ending));
+        assert!(s.truncated && !s.terminated, "{ending}");
+        assert_eq!(s.outcome, Some(SOFT_FAILURE));
+        assert!(s.rewards.get(PENALTY_TERMINAL_FAILURE).is_none());
+    }
+    config.endings = IndexMap::from([
+        (MAX_STEPS.to_owned(), HARD_FAILURE.to_owned()),
+        (NO_DAMAGE.to_owned(), HARD_FAILURE.to_owned()),
+    ]);
+    for (no_damage, steps, ending) in cases {
+        let s = wait_scored(&config, no_damage, steps);
+        assert_eq!(s.ending.as_deref(), Some(ending));
+        assert!(s.terminated && !s.truncated, "{ending}");
+        assert_eq!(s.outcome, Some(HARD_FAILURE));
+        let penalty = s.rewards.get(PENALTY_TERMINAL_FAILURE).unwrap().value;
+        assert!(approx(penalty, -TERMINAL_FAILURE_PENALTY_VALUE), "{penalty}");
+    }
+    assert!(wait_scored(&config, None, 1).ending.is_none(), "before the budget nothing ends");
+}
