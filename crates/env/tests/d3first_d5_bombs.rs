@@ -1,8 +1,7 @@
-//! Round 32, d3first's bag in a chain run (routes.yaml `grant: {bombs: 8}` on Dungeon 5's entrance, the cheat
-//! ledger's route grant, `zelda::cheats`): from `d3first_5_76s_0` (Link brings 2 bombs) to the Olive Garden's door.
-//! The entrance tops the bag up to 8 (6 granted by the route); 5:0x66's and 5:0x65's walls each grant and take their
-//! own bomb while the bag is set aside (9 in hand, BOMB kept to the wall); leaving a room takes back only a room's
-//! grant; Link enters 5:0x05 with the whole bag, his 2 and the route's 6.  Skipped without the ROM.
+//! d3first's bombs in a chain run through Dungeon 5 (the owner, Nov 21: no bag handed over at the entrance): from
+//! `d3first_5_76s_0` (Link brings 2 bombs) to the Olive Garden's door.  The route grants nothing; 5:0x66's and
+//! 5:0x65's walls are opened with his own bombs, so he enters 5:0x05 with none and nothing cheated.  Skipped without
+//! the ROM.
 //!
 //! SETUP (RAM writes, the walk is about the items): the rooms' monsters are removed and Link's hearts refilled before
 //! every decision; a key door is lined up a frame at a time (walker aid, controller input).
@@ -190,27 +189,24 @@ fn walk(c: &mut C, mut status: ChainStatus, limit: usize) -> RunResult {
     panic!("the walk didn't end: {}", c.session().state().full_location());
 }
 
-/// Dungeon 5's way in from its entrance to the Olive Garden's door: the bag is whole there.
+/// Dungeon 5's way in from its entrance to the Olive Garden's door: Link's own bombs, no route grant.
 #[test]
-fn the_bag_reaches_the_olive_garden_whole() {
+fn no_bag_is_handed_over_at_dungeon_5() {
     let Some(nes) = open_core() else { return };
     let data = common::game_data();
     let route = Route::load(&data.map, &data.states_dir, "d3first", Some(uw(0x05)), Some("5_76s_0")).unwrap();
     let mut c = ChainEnv::new(data.clone(), nes, TfzStore::new(), route);
     let status = c.reset(Some(0), &mut ChaCha8Rng::seed_from_u64(0)).unwrap();
     let (_, grants) = c.context();
-    assert_eq!((c.session().state().bombs(), grants.route.bombs, grants.room.bombs), (8, 6, 0), "the entrance's bag");
+    assert_eq!((c.session().state().bombs(), grants.route.bombs, grants.room.bombs), (2, 0, 0), "his own two");
     let run = walk(&mut c, status, 20_000);
     assert_eq!(run.result, "success", "{run:?}");
     let rooms: Vec<_> = run.rooms.iter().map(|r| (r.location(), r.bombs_in, r.route_bombs_in, r.cheated.bombs)).collect();
     let wall = |room: u8| rooms.iter().find(|r| r.0 == uw(room)).copied().unwrap();
-    // Each wall room: entered with the bag (2 + 6), its own bomb laid at the wall, one cheated bomb there.
-    assert_eq!(wall(0x66), (uw(0x66), 2, 6, 1), "{rooms:?}");
-    assert_eq!(wall(0x65), (uw(0x65), 2, 6, 1), "{rooms:?}");
-    // The Olive Garden's door: the whole bag, nothing of it used on the way.
+    // The two wall rooms take his two bombs; nothing is granted by the route anywhere.
+    assert!(rooms.iter().all(|r| r.2 == 0), "{rooms:?}");
+    assert_eq!((wall(0x66).1, wall(0x65).1), (2, 1), "{rooms:?}");
     assert_eq!(rooms.last().unwrap().0, uw(0x05), "{rooms:?}");
-    assert_eq!((rooms.last().unwrap().1, rooms.last().unwrap().2), (2, 6), "{rooms:?}");
-    assert_eq!(c.session().state().bombs(), 8);
-    assert_eq!(c.context().1.route.bombs, 6);
-    assert_eq!(c.cheated().bombs, 2, "the walls' two");
+    assert_eq!(c.context().1.route.bombs, 0);
+    assert_eq!((c.session().state().bombs(), c.cheated().bombs), (0, 0), "both walls with his own bombs");
 }

@@ -823,8 +823,9 @@ action) except where the room Link is in *needs* some (`cheats::needs`), Lee's N
   Pols Voices of 8:0x4c (round 32, 9: the reserve of 8 and a shot; `d3first` arrives with 1-10 rupees, `d2first`
   with 22-38).
 
-**Route grants** (round 32, routes.yaml `grant: {bombs: N}`, `RouteStep::grant`; the owner on `d3first`'s bombs and
-rupees: "can be ignored since we have the ability to cheat them to the character in game"): the first time a run
+**Route grants** (round 32, routes.yaml `grant: {bombs: N}`, `RouteStep::grant`; **no route has one since 2.0.0.3**:
+the owner, Nov 21, "don't blindly add 8 bombs: the goal is a win without a cheated bomb"; the mechanism and the
+replay fields stay, since recorded replays carry them): the first time a run
 reaches a step with a grant (`CheatLedger::follow_route`, after the objective has followed the action; at a run's or
 episode's start for its start step) the item's *bag* (its count without a room's grant) is topped up to N and the
 units added are *route-granted*. The ledger keeps the two kinds as two tallies per item, never mixed: `granted` (a
@@ -834,8 +835,9 @@ outstanding until used, not bound to a wall: it is the weapon the route gives, k
 until the fight it is for). A fall uses a room's grant first, then the route's, then Link's own; every granted unit
 used is cheated in the room where it is used, and what is still route-granted when a run ends counts nothing. While
 a route grant of an item is outstanding, a room's need for it is met by the room's own grant alone (the bag is set
-aside): `d3first`'s one grant, 8 bombs at Dungeon 5's entrance (step 97), reaches the Olive Garden whole while
-5:0x66's and 5:0x65's walls grant and take their own bomb (9 in hand there; `crates/env/tests/d3first_bag.rs`).
+aside): round 32's one grant, 8 bombs at `d3first`'s Dungeon 5 entrance (step 97), reached the Olive Garden whole
+while 5:0x66's and 5:0x65's walls granted and took their own bomb. Without it Link opens those two walls with the
+bombs he brings and enters the Garden with what is left (`crates/env/tests/d3first_d5_bombs.rs`).
 Chain records carry `route_bombs_in` (the route's bombs on entering; `bombs_in` + it is the bag), and a state's
 context carries both kinds (`cheats::Grants`: `ChainEnv::context`, a replay STATES record, a chain checkpoint's
 `granted` and `route_granted`), so a golden path's next segment continues the bag. A state saved from a run (a

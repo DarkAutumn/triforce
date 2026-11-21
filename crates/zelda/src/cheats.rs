@@ -16,8 +16,8 @@
 //!   rupee a shot): Gohma's 6:0x1c (round 27), Ganon's 9:0x42 until he begins to die (round 29), 8:0x4c's Pols
 //!   Voices (round 32: the reserve of 8 and a shot).
 //!
-//! A route step may grant too (routes.yaml `grant:`, round 32: d3first's bag of 8 bombs at Dungeon 5's entrance, the
-//! owner's "we have the ability to cheat them to the character in game"): on entering the step the count is topped
+//! A route step may grant too (routes.yaml `grant:`, round 32; no route has one since 2.0.0.3: d3first's bag of 8
+//! bombs at Dungeon 5's entrance was removed on the owner's word, Nov 21): on entering the step the count is topped
 //! up to the grant ([`CheatLedger::route_grant`]) and the units added are *route-granted*.  The two kinds are two
 //! tallies of the ledger, never mixed: a room's grant (`granted`, [`CheatLedger::granted`]) and the route's
 //! (`route`, [`CheatLedger::route_granted`]).  A route grant outlives the room: leaving takes back only a room's.

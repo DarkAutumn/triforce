@@ -3525,9 +3525,9 @@ mod tests {
         assert!(load(&overworld, ROUTES_YAML).unwrap_err().contains("never_opens is a dungeon room's doorway"));
     }
 
-    /// Round 32, `grant:` (a route grant, `crate::cheats`): d3first's Dungeon 5 entrance is the one step that grants
-    /// (8 bombs), on no other step of any route; an item the ledger doesn't cheat, a count that isn't a byte or a
-    /// grant of nothing is refused.
+    /// Round 32, `grant:` (a route grant, `crate::cheats`): no step of any route grants (the owner, Nov 21: d3first's
+    /// bag of 8 bombs at Dungeon 5's entrance is gone); the key still parses, and an item the ledger doesn't cheat, a
+    /// count that isn't a byte or a grant of nothing is refused.
     #[test]
     fn a_step_grant_names_cheated_items() {
         use crate::cheats::ItemCounts;
@@ -3539,11 +3539,16 @@ mod tests {
             .filter(|(_, s)| s.grant != ItemCounts::default())
             .map(|(name, s)| (name, s.location(), s.grant))
             .collect();
-        assert_eq!(grants, [("d3first", loc(5, 0x76), ItemCounts { bombs: 8, keys: 0, rupees: 0 })]);
-        let entrance = "exit: N, bomb_reserve: 8, grant: {bombs: 8}}";
+        assert_eq!(grants, []);
+        let entrance = "specialist: gibdo, entry: S, exit: N, bomb_reserve: 8}";
+        assert!(ROUTES_YAML.contains(entrance));
+        let granting = entrance.replace("8}", "8, grant: {bombs: 8}}");
+        let map = GameMap::from_yaml(GAME_YAML, &ROUTES_YAML.replacen(entrance, &granting, 1)).unwrap();
+        let granted: Vec<u8> = map.routes.values().flatten().map(|s| s.grant.bombs).filter(|&n| n > 0).collect();
+        assert_eq!(granted, [8]);
         let swap = |new: &str| {
-            assert!(ROUTES_YAML.contains(entrance));
-            GameMap::from_yaml(GAME_YAML, &ROUTES_YAML.replacen(entrance, new, 1)).unwrap_err().0
+            let new = format!("specialist: gibdo, entry: S, {new}");
+            GameMap::from_yaml(GAME_YAML, &ROUTES_YAML.replacen(entrance, &new, 1)).unwrap_err().0
         };
         let e = swap("exit: N, bomb_reserve: 8, grant: {arrows: 8}}");
         assert!(e.contains("grant: unknown key"), "{e}");

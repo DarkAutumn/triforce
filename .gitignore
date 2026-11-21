@@ -16,6 +16,7 @@ target/
 triforce/_native*.so
 /roms
 triforce/states/**/*.lock
+/triforce/states/harvested/
 crates/zcore/test_results/
 .coverage
 htmlcov/

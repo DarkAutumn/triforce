@@ -30,7 +30,7 @@ sets its own reserves on its own steps before a block, and a block's own reserve
 | `to-level-4` | 24-30 | 0:0x74 cave → W to 0x45's mouth (the raft from 0x55) |
 | `dungeon-4` | 31-52 | 4:0x71 to 0x03, the stretch `d4-island` |
 | `dungeon-1` | 61-78 | 1:0x73 out S to 0:0x37 and back in, N by 0x63, 0x53's wall, the bow, to 0x36 (phase IX's) |
-| `dungeon-5` | 98-119 | 5:0x66 to 0x14 (the entrance, step 97, is each route's own: d3first's grants the bag) |
+| `dungeon-5` | 98-119 | 5:0x66 to 0x14 (the entrance, step 97, is each route's own) |
 | `dungeon-2` | 145-154 | 2:0x7d to 0x0d |
 | `to-level-7` | 156-173 | 0:0x45 out of the whirlwind to 0x42's pond: the stretch `dock-44`, the arrows, the meat |
 | `dungeon-7`, `dungeon-7-east` | 174-193 | 7:0x79 to 0x2b; the entrance (174) and 0x1b (186) are each route's own (round 34): d3first keeps the bag for 0x1b |
@@ -91,7 +91,7 @@ Its own steps in full; the blocks by their rooms.
 | 94 | `0_0ccave` | 0:0x0c cave | S → S | ow-tektite | `waypoint: blue-candle` (60, `requires_rupees`) | 7 / W |
 | 95 | `0_0cc` | 0:0x0c | cave → W | ow-tektite | the wrap exit (CLIP E) onto the mountain top | 7 / W |
 | 96 | `0_0be` | 0:0x0b | E → cave | ow-leever | Level 5 | 7 / W |
-| 97 | `5_76s` | 5:0x76 | S → N | gibdo | `bomb_reserve: 8`, `grant: {bombs: 8}`: the bag topped up to 8 (round 32) | 7 / W |
+| 97 | `5_76s` | 5:0x76 | S → N | gibdo | `bomb_reserve: 8` (round 32's `grant: {bombs: 8}` removed in 2.0.0.3) | 7 / W |
 | 98-119 | | `dungeon-5` | | (d2first's) | the Olive Garden, the recorder, Digdogger's heart, the piece | 7 → 8 / W |
 | 120 | `0_0bc` | 0:0x0b | cave → recorder | ow-leever | one play facing right or up (MOVE E first) | 8 / W |
 | 121 | `0_74r` | 0:0x74 | recorder → W | ow-tektite | | 8 / W |
@@ -186,11 +186,10 @@ the run-time switch off has no way past them. The shared blocks keep their stret
   Dungeon 4's entrance (the block's). **8 from Level 4's exit to Dungeon 5** (d3first's own steps 53 and 83): every
   bomb Link has is kept for the Olive Garden (walks-b §2: the wood sword clears it 9 of 20 without bombs, 18 of 20
   with eight); the walls on the way (1:0x53 after phase IX, 0x2c, 0x2d) are bombed as any wall, cheated where Link
-  has none. **Dungeon 5's entrance tops the bag up to 8** (round 32, `grant: {bombs: 8}`, the lead on the owner's
-  "can be ignored since we have the ability to cheat them to the character in game"): a route grant, outstanding
-  until used and cheated where used (`zelda::cheats`); 5:0x66's and 5:0x65's walls grant and take their own bomb
-  while it is outstanding, so the reserve of 8 brings the whole bag to the Garden. The Garden itself is the block's
-  (0 in 0x05: the bag thrown freely, 8 after it, 0 at Digdogger). **1 from
+  has none. **Dungeon 5's entrance grants nothing** (2.0.0.3; the owner, Nov 21: "don't blindly add 8 bombs: the
+  goal is a win without a cheated bomb"; round 32's `grant: {bombs: 8}` there is gone): Link opens 5:0x66's and
+  5:0x65's walls with the bombs he brings (the segment's start state: 2) and fights the Garden with what is left
+  (0 in 0x05: thrown freely, 8 after it, 0 at Digdogger). **1 from
   Level 2's mouth through Dungeon 2** (step 148; walks-b §4: goriya and moldorm are `free` and would throw the bag
   this route brings; Dodongo's room offers BOMB whatever the reserve), **0 out of Level 2** (step 159), as d2first's
   from Dungeon 5 on. **8 from Level 7's entrance to 0x1b** (step 174, round 34, the lead): d2first's 3 threw the
@@ -206,7 +205,8 @@ the run-time switch off has no way past them. The shared blocks keep their stret
   cannot keep what was never there, so the arrow rooms' needs top the purse up (cheated, counted): Gohma's (round
   27), Ganon's (round 29) and, round 32, 8:0x4c's while a Pols Voice lives (`requires_rupees: 9`, the reserve and a
   shot; on both routes: d2first arrives with 22-38 and is never topped up).
-- **Measured (round 32, r32-base2's team, clips on).** Dungeon 5 (`--from 5_76s_0 --stop-at step:120`, 300 runs):
+- **Measured with round 32's bag (r32-base2's team, clips on; history: the bag is gone since 2.0.0.3, round35.md).**
+  Dungeon 5 (`--from 5_76s_0 --stop-at step:120`, 300 runs):
   6.0% (1.9% of 1000 before); every run enters the Olive Garden with the bag of 8 (before: 0 in 822 of 1000, 4 in
   the rest) and throws 7.7 there (5.9 cheated); the Garden loses 151 of 300 (845 of 1000 before); 8.1 cheated bombs
   a run (the walls' two, the Garden, Digdogger). Dungeon 8 (`--from 8_7es_0 --stop-at step:243`, 300 runs): 24.3%
