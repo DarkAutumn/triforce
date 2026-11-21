@@ -14,6 +14,38 @@ the gap list of what must be walked in the game first, where the documents disag
 of work) and the documents it indexes (`d7.md`, `d6.md`, `d8.md`, `d9.md`, `late-monsters.md`, `late-mechanics.md`).
 The owner's decisions of Nov 16 are in `docs/decisions.md` ("The rest of the game").
 
+### `d3first`, the main route (2.0.0.0, Nov 20): what loses it
+
+round32.md (Summary, "For the owner", §11-§12). The golden path from power on ends the game (three races of three,
+91-176 runs); single runs from the start are lost in the wood-sword dungeons. In the order they cost the route
+(the chains of record `r32land-1k`, round32.md §12):
+
+- [ ] **Dungeon 3 at three hearts** (zol, stalfos-keese-gel, darknut, boss-manhandla `@d3first`): the hearts go in
+  3:0x4a's Keese, 3:0x49's and 0x6b's Zols before 0x59's Red Darknuts, 0x5b's last pass and Manhandla (entered with
+  about 1.4-1.5 hearts). The planner keeps them (round32.md §6); the next lever is the hearts on the way, a joint
+  continuation of the four route runs on the chain's handoffs.
+- [ ] **Dungeon 4's Gleeok with the wood sword** (boss-gleeok `r32d4-gleeok2-s1-it2517`): 16 wood hits at the
+  hearts the dungeon leaves; the planner wins it four times as often (round32.md §7, §11).
+- [ ] **`d3first_4_71s_*` hold fewer bombs than runs bring** (0/5/0 against about 4.7, 2 keys): the `d4` segment
+  cheats both walls' bombs. No command turns a harvested pre-entry into a seed state with its manifest entry
+  (`r32c_models.py` cuts only the next step's): a `--goal-step` there would make it one command; a new `4_71s` moves
+  every Dungeon 4 baseline.
+- [ ] **Dungeon 7 with the wood sword**: goriya's 7:0x1b (six Blue Goriyas) is the first loss; past it wallmaster's
+  7:0x0d grab sends Link back through goriya's rooms (round32.md §9.5: worth a round once a route goriya passes
+  0x1b); boss-aquamentus 7:0x2a gains from the hearts.
+- [ ] **The Olive Garden (5:0x05, darknut `@d3first`)**: even with the granted bag of 8 (all thrown there).
+- [ ] **ow-leever's recorder turn out of Level 5 (0:0x0b)**: `r32turn-leever`'s selection on `post-d5` was not done
+  when the route landed; `r32d1-leever` is the route's run.
+- [ ] **Not checked at the landing**: goriya `r32d1-goriya` and stalfos-keese-gel `r32d1-skg` on Dungeons 2, 3, 4,
+  5, 7 (the Dungeon 1 trainer's `r32d1-final`); ow-octorok `r32turn-oct-s34` on fresh seeds and its other segments
+  before the cutoff. A failure there is a swap of that route run, measured on the segments it plays.
+- [ ] **like-like has two lines** (`r33-like-s83` the default for `d2first`'s 9:0x56, `r32d4-like2` the route run
+  for `d3first`'s Dungeon 4): a joint continuation would make one.
+- [ ] **The route's tables predate the grants** (`heart_value.d3first.json`, `chain_hp.d3first.json`): Dungeon 5's
+  and 8's rows price the old bag and purse until refitted from the chains of record.
+- [ ] **`select-checkpoint --segment X --route d3first`** plays its chains and then fails at its report (the
+  provenance names the namespaced start state); `--from d3first_<state>` works.
+
 ### The whole game on the changed route (1.9.0.1, Nov 20): what loses it now
 
 round30.md "The landing", round31.md. Rounds 30 and 31 landed together: the optimisation round's team on `d2first`
@@ -36,8 +68,8 @@ as the owner's phase IX changed it (354 steps). From the start the models alone 
 
 **Owed by the new route (round31.md "Owed")**, the families in the order they cost runs:
 
-- [ ] **like-like 9:0x56** (step 310): 616 of 1000 `d9` runs end `stuck` there; the planner too (90 of 127). The
-  first training on the new route: `d9` 13.7% against 31.0% before.
+- [x] **like-like 9:0x56** (step 310; round33.md): `r33-like-s83` crosses it in every visit, `d9` 49.4% against
+  13.6% on fresh seeds (+35.8 ± 1.9), `d4` and `d6` not worse; the default from 2.0.0.0.
 - [x] **wizzrobe**: 6:0x29's key detour and 6:0x78 (round33.md): `r33w-s93` `d6` +6.10 ± 1.19 over 3000 fresh
   seeds, `d9` +1.9 ± 1.3; every trained seed swings at 0x78 (a kill in 23-33% of the visits) at no cost to the hearts
   0x38 is entered with, for about 0.1 bombs a run: cheap, and nearly nil. No wrong exit out of 0x29 in any chain.
