@@ -325,7 +325,10 @@ d2first:
 # skipped.
 - {level: 0, room: '0x0b', specialist: ow-leever, entry: cave, exit: recorder}
 - include: to-level-7
+- {level: 7, room: '0x79', specialist: goriya, entry: S, exit: N, bomb_reserve: 3}
 - include: dungeon-7
+- {level: 7, room: '0x1b', specialist: goriya, entry: W, exit: E, treasure: {if_bombs_below: 5}, bomb_reserve: 2}
+- include: dungeon-7-east
 # Round 27 (docs/routes/d6.md §14, d6-walks.md; scouted as the route d6, merged into d2first): from Dungeon 7's
 # triforce (the game sets Link down at its entrance, 0x42) to the magic sword and through Dungeon 6 to its triforce.
 # The leg: 0x42 S, 0x52 W, the stretch `woods` (clips: the wrap exit out of 0x51's W edge into 0x50's corridor; plain:
@@ -520,7 +523,16 @@ d3first:
   # Level 9.
   - {level: 0, room: '0x3c', specialist: ow-octorok, entry: cave, exit: recorder, bomb_reserve: 0}
   - include: to-level-7
+  # Round 34 (the lead, Nov 21): Dungeon 7's entrance and 0x1b are this route's own.  The record's runs threw the bag
+  # down to the reserve of 3 before 0x1b (0x69, 0x49) and entered it with 1 bomb, so its four were wanted and its six
+  # Blue Goriyas a wood-sword fight (460 of 874 died); the 31 that kept 5 crossed to the key door (5 died).  A reserve
+  # of 8 to 0x1b keeps the bag for the three walls before it (0x69, 0x19, 0x1a); 0x1b wants its bombs only below 2
+  # (0x0c's and 0x29's walls), so a run that enters with 2 or more crosses, and those above the reserve of 2 go to
+  # Digdogger's 0x1c and on.
+  - {level: 7, room: '0x79', specialist: goriya, entry: S, exit: N, bomb_reserve: 8}
   - include: dungeon-7
+  - {level: 7, room: '0x1b', specialist: goriya, entry: W, exit: E, treasure: {if_bombs_below: 2}, bomb_reserve: 2}
+  - include: dungeon-7-east
   - include: to-level-6
   - include: dungeon-6
   - include: to-level-8
@@ -685,8 +697,8 @@ blocks:
   - {level: 0, room: '0x53', specialist: ow-moblin, entry: E, exit: W}
   - {level: 0, room: '0x52', specialist: ow-moblin, entry: E, exit: N}
   - {level: 0, room: '0x42', specialist: ow-moblin, entry: S, exit: cave}
+  # Past the entrance to 0x1a's way E (each route writes the entrance and 0x1b: d3first keeps the bag for 0x1b).
   dungeon-7:
-  - {level: 7, room: '0x79', specialist: goriya, entry: S, exit: N, bomb_reserve: 3}
   - {level: 7, room: '0x69', specialist: goriya, entry: S, exit: N, treasure: skip}
   - {level: 7, room: '0x59', specialist: goriya, entry: S, exit: N}
   - {level: 7, room: '0x49', specialist: goriya, entry: S, exit: N}
@@ -698,7 +710,8 @@ blocks:
   - {level: 7, room: '0x1a', specialist: goriya, entry: W, exit: cave}
   - {level: 7, room: '0x4a', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: candle}
   - {level: 7, room: '0x1a', specialist: goriya, entry: cave, exit: E}
-  - {level: 7, room: '0x1b', specialist: goriya, entry: W, exit: E, treasure: {if_bombs_below: 5}, bomb_reserve: 2}
+  # From Digdogger's 0x1c to the triforce.
+  dungeon-7-east:
   - {level: 7, room: '0x1c', specialist: boss-digdogger, entry: W, exit: N}
   - {level: 7, room: '0x0c', specialist: dodongo-crossing, entry: S, exit: E, treasure: skip}
   - {level: 7, room: '0x0d', specialist: wallmaster, entry: W, exit: cave}

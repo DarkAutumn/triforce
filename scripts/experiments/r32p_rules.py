@@ -62,6 +62,10 @@ Later rooms (round 32's training of Level 5 to the ending; the walks: docs/route
                   lies (the room item), the N door.
     digdogger-1c  7:0x1c W->N (boss-digdogger, step 187): RECORDER, the bomb fighter on the three small ones, the N
                   shutter.
+    goriya-1b     7:0x1b W->E (goriya, step 186; round 34): the walks' sword fighter (`r32_walks.Fighter`, the wood
+                  sword) on the six Blue Goriyas until the room is all dead, the room's 4 bombs where they lie, the
+                  E key door.  `--hearts chain` draws 1 bomb (`DRAWS`: the route's arrivals spend the bag down to
+                  the reserve before 0x1b, so the bombs are wanted).
 
 Not ported: 5:0x66 W->N (gibdo, `r32b_d7.Fight` 52/60 in the walks): the env fighter's floor graph has no water, so
 it waits on the near shore while the last Gibdo walks the far one (0 of 12); gibdo's teacher there is the planner."""
@@ -91,11 +95,12 @@ ROOMS = {'darknut-59': ('darknut', 13), 'dash-69': ('darknut', 14), 'garden-05':
          'zol-6b': ('zol', 8), 'zol-4b': ('zol', 10), 'like-like-32': ('like-like', 38), 'vire-31': ('vire', 37),
          'vire-12': ('vire', 50), 'scroll-29': ('ow-leever', 82), 'scroll-2a': ('ow-leever', 83),
          'scroll-2b': ('ow-leever', 84), 'tree-62': ('ow-moblin', 124), 'digdogger-24': ('boss-digdogger', 118),
-         'digdogger-1c': ('boss-digdogger', 187)}
+         'digdogger-1c': ('boss-digdogger', 187), 'goriya-1b': ('goriya', 186)}
 
 # room -> the family's ram_randomization over-ridden for it (every --hearts but own): what the route brings there.
 DRAWS = {'darknut-59': {'bombs_share': 0.0},
-         'garden-05': {'bombs': [8, 8], 'bombs_share': 1.0, 'room_kills_share': 0.0}}
+         'garden-05': {'bombs': [8, 8], 'bombs_share': 1.0, 'room_kills_share': 0.0},
+         'goriya-1b': {'bombs': [1, 1], 'bombs_share': 1.0, 'room_kills_share': 0.0}}
 ROOM = None                                                       # the room played (main)
 
 
@@ -464,6 +469,9 @@ RULES = {
     'tree-62': lambda: walk_rule(lambda bot: Way(go(bot, (0xA0, 0x5D), 'W'), burn('W'), out('W'))),
     'digdogger-24': lambda: digdogger_rule(heart_item_way((0x78, 0x5D))),
     'digdogger-1c': lambda: digdogger_rule(lambda bot: Way(go(bot, (0x78, 0x5D), 'N'), out('N'))),
+    'goriya-1b': lambda: fight_rule(lambda: r32_walks.Fighter,
+                                    lambda bot: Way(room_item(bot, taken(BOMBS, lambda before, now: now > before)),
+                                                    go(bot, (0xD0, 0x8D), 'E'), out('E'))),
 }
 
 
