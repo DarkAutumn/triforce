@@ -419,9 +419,11 @@ against the family's run before; the rest of the team as promoted then):
 | ow-octorok | `r31-oct-s97` (the `d2first` run trained on 0:0x37's mouth) | `d1` | 51.1% vs 24.2% | 51.3% vs 25.6% | **+25.7 ± 2.1** | 3.20 / 3.20 | the family's default run (as main v1.9.0.1); no route run |
 | ow-leever | `r32d1-leever` (last) | `post-d1` | 63.0% vs 15.7% | 61.4% vs 15.5% | **+45.9 ± 1.9** | 5.08 / 3.16 | `promoted.d3first` |
 | ow-zora | `r32d1-zora` (last) | `post-d1` | 33.3% vs 15.7% | 36.5% vs 15.5% | **+21.0 ± 1.9** | 3.77 / 3.16 | `promoted.d3first` |
+| ow-tektite | `r32d1-tektite` (last), with the two runs above in the team | `post-d1` | 99.8% vs 86.3% | 100.0% vs 85.0% | **+15.0 ± 1.1** | 5.17 / 5.70 | `promoted.d3first` |
 
 ow-leever's scrolls clear 0x2a and 0x2b without a fight: the leg to Level 5 passes the 30% bar with it alone.
 ow-zora's confirmation of its screen winner (it002502, 85.1%) is void: that chain started in the minute ow-leever's
 route run was promoted and played with it; its screen lead over `last` (+2.3 ± 2.1) is noise, so `last` stands.
-Still waiting in the queue: ow-tektite on `post-d1` (now with both route runs in the team), goriya and
-stalfos-keese-gel on `d1`; then one batch of the three segments with every route run.
+With the three route runs the leg from Dungeon 1 to Level 5 arrives in 1000 of 1000 runs (16.8% in the baseline).
+Still waiting in the queue: goriya and stalfos-keese-gel on `d1`; then one batch of the three segments with every
+route run.
