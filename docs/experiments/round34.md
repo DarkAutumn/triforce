@@ -117,3 +117,11 @@ and the joint `d3` decide.
 triforce select-checkpoint zol r34d3-zol-s341 --route d3first --from d3first_3_7cs_0 --stop-at step:13 \
     --first-seed 2000 --runs 1000 --confirm 1000 --only it001670,it001700,it001730,last,promoted --parallel 10
 ```
+
+### stalfos-keese-gel `r34d3-skg-s341`: borderline to 0x59's door
+
+From `r32d1-skg`, 244 iterations (seed 341), demonstrations: the planner from `3_4ae` (30 a state, 89 of 90 won) and 90
+of today's handoffs into 0x4a (2 each): 12,966 rows, with round 32's `stalfos-keese-gel.npz` (Dungeon 1). Chosen on
+the same stretch as zol: screen it002269 82.7% against the promoted run's 81.6% (+1.1 ± 1.1); confirmation **82.9%**
+against **80.6%** (+2.3 ± 1.1; `last` 80.7%), hearts on entering 0x59 2.02 against 1.99. About two standard errors on
+the confirmation and not seen on the screen: borderline. `d1` (89.6%) and `d4` hold it or not.
