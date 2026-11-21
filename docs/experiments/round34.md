@@ -12,9 +12,11 @@ landed as **2.0.0.1** (a `REV`: route data, three entrance states, a training-on
 **The three causes.**
 - **Dungeon 3: the last pass is swings into a walking Darknut.** The ledger's first room is 3:0x5b from W to E
   (414 runs lost per 1000 entering against the planner's 26); at the same hearts, proximity and bombs the models are
-  hit 0.62 times a visit against 0.14, 78 of 127 hits right after a SWORD decision (the planner 8 of 29). A
-  continuation of darknut from that room's handoffs and the planner's rows of it (`r34d3-dlp-s353`), with zol and
-  stalfos-keese-gel trained on their rooms to 0x59's door: `d3` 12.3% → 23.8% on fresh seeds (+11.5 ± 1.7).
+  hit 0.62 times a visit against 0.14, 78 of 127 hits right after a SWORD decision (the planner 8 of 29). zol and
+  stalfos-keese-gel trained on their rooms to 0x59's door and darknut on Dungeon 3's rooms (`r34d3-dark-s341`):
+  `d3` 12.6% → 18.0% on the record's seeds (+5.4 ± 1.6); darknut's continuation on the last pass's handoffs and
+  the planner's rows of it (`r34d3-dlp-s353`) made it 23.8% on fresh seeds (+11.5 ± 1.7 against the old team) but
+  lost the Olive Garden at the landing (below), so `r34d3-dark-s341` is the route run that landed.
 - **Dungeon 4: hearts before a Gleeok that needs 16 hits, and a stall.** Gleeok (4:0x13) is won by the hearts Link
   brings (a heart or less 1 of 230; 3 or more 34 of 79); vire's and like-like's rooms take them. Gleeok's model also
   stalled (neither hits nor is hit until the room's budget), which a truncation pays as survival: a training config
@@ -37,17 +39,22 @@ seeds trained on the crossings with the planner's rows, none better: the hearts 
 against the planner's 1.8); boss-manhandla (`r34d3-manh-s341` 58.6% against 58.0% from Manhandla's door: Manhandla
 is a matter of the hearts Link brings); lanmola is round 33's (`r79b-lanmola` stays).
 
-**Still open.** The Olive Garden (5:0x05 from E: the chosen team loses 423 runs per 1000 entering, the planner 33;
-the models are hit at every decision kind, a matter of foresight, not bombs); goriya's hearts in Dungeon 7 (0x69,
-0x59, 0x49, 0x19); Digdogger's 0x1c (`d7`'s first loss now, 207 of 1000, entered with 3.33 hearts); Gleeok is
-reached 1.45 hearts poorer than the planner brings him (the chosen team 1.96, the planner 3.41) and takes twice its
-hits from the same places (§4.1 of Dungeon 4).
+**Still open.** The Olive Garden (5:0x05 from E: the landed team loses 360 runs per 1000 entering, the planner 33;
+the models are hit at every decision kind, a matter of foresight, not bombs), and with it the last pass: one darknut
+run that keeps both (`r34d3-dlp-s353` takes the last pass, 115 lost per 1000 entering against 255, and gives the
+Garden back, 445 against 360); goriya's hearts in Dungeon 7 (0x69, 0x59, 0x49, 0x19); Digdogger's 0x1c (`d7`'s
+first loss now, 212 per 1000 entering, 3.48 hearts in; `r34d7b-dig-s1` qualified after the landing's `d7` had
+played and waits for the next release, second pass §9-10); Gleeok is reached 1.45 hearts poorer than the planner
+brings him (the chosen team 1.96, the planner 3.41) and takes twice its hits from the same places (§4.1 of
+Dungeon 4).
 
 ## Dungeon 3 at three hearts (zol, stalfos-keese-gel, darknut, boss-manhandla)
 
-**State of this section.** Done in the round's worktree and landed in 2.0.0.1: the ledger (§1), the trainings,
-the selections, the joint check, the last pass's continuation (`r34d3-dlp-s353`) and the chosen team on fresh seeds;
-the Olive Garden's analysis with `r34d3-dlp-s353` is the next round's start (its trainings run after the landing).
+**State of this section.** Done in the round's worktree: the ledger (§1), the trainings, the selections, the joint
+check, the last pass's continuation (`r34d3-dlp-s353`) and the chosen team on fresh seeds. Landed in 2.0.0.1: zol
+`r34d3-zol-s341`, stalfos-keese-gel `r34d3-skg-s341` and darknut `r34d3-dark-s341` (the joint check's team);
+`r34d3-dlp-s353` was taken back at the landing (`d5` -4.8 ± 1.8 against the record, "The landing" below). The
+Olive Garden's analysis with `r34d3-dlp-s353` is the next round's start.
 
 The route runs (`promoted.d3first`, steps 0-205): zol `r32d3-zol`, stalfos-keese-gel `r32d1-skg`, darknut
 `r32d3-dark2-s44`, boss-manhandla `r32d3-manh`. Today's `d3` (`3_7cs_0` → step 24, models alone, 1000 runs, seeds
