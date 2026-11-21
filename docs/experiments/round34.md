@@ -928,3 +928,70 @@ does not give the policy.
 team: taking it in would have meant playing that chain twice, so it waits for the next release (it is not on
 `main`'s `promoted.d3first`; boss-digdogger stays `r32late-dig`), where the next chains of record are its joint
 check.
+
+## The chains of record (2.0.0.1, `r34land-1k`)
+
+The three teams together for the first time: the eight route runs promoted `--route d3first` (zol `r34d3-zol-s341`,
+stalfos-keese-gel `r34d3-skg-s341`, darknut `r34d3-dark-s341`, vire `r34d4-vire-s1`, like-like `r34d4-like`,
+boss-gleeok `r34d4-gleeok4-s1-it2877`, wallmaster `r34d7-wall-s3`, boss-aquamentus `r34d7-aqua-s1`), every other
+family's run as 2.0.0.0's, the route data of 9295f8d0 and the entrance states of b92570bb. Seeds 0-999 (the record's,
+which no selection used), models alone, clips on, each segment from its entrance to its stop as 2.0.0.0's chains of
+record (round32.md §12), paired by seed with them (`r32land-1k-*`):
+
+| Segment | 2.0.0.0 (`r32land-1k`) | 2.0.0.1 (`r34land-1k`) | Paired | Where it is lost now (runs per 1000 entering, hearts in) |
+|---|---:|---:|---:|---|
+| `d3` (`3_7cs_0` → 24) | 12.6% | **18.0%** | **+5.4 ± 1.6** | Manhandla 553 (1.56), the last pass 3:0x5b 255 (1.58), 0x69 142 |
+| `d4` (`4_71s_0` → 53) | 6.2% | **18.5%** | **+12.3 ± 1.4** | Gleeok 736 (1.81 hearts; 700 reach him against 523), like-like's 0x32 75 and 58 |
+| `d1` (`1_73s_0` → 79) | 89.6% | **92.7%** | **+3.1 ± 1.3** | goriya's 1:0x44 35, Aquamentus 1:0x35 33 (3.30) |
+| `post-d1` (`0_37c_v2_0` → 97) | 99.8% | 99.8% | identical, run for run (1000 of 1000) | 0:0x0c 2 |
+| `d5` (`5_76s_0` → 120) | 24.0% | **27.4%** | +3.4 ± 1.9 | the Olive Garden 360 (435), 0x64 156, Digdogger 5:0x24 170 |
+| `d7` (`7_79s_0` → 194) | 9.4% | **38.7%** | **+29.3 ± 1.8** | Digdogger 7:0x1c 212 (3.48), 0x1b 153 (4.49; 479 of 1000 runs before), Aquamentus 7:0x2a 72 |
+| `d8` (`8_7es_0` → 243) | 37.8% | 37.8% | identical, run for run (1000 of 1000) | |
+
+`d4` on the new entrance states against the Dungeon 4 trainer's baseline there (today's team, the same seeds, 7.2%):
++11.3 ± 1.5; its cheated wall bombs 0.30 a run (1.27 on the old states). `d2first` (300 runs, seeds 0-299) plays as
+2.0.0.0 did: `d7` (`7_79s_0` → 244) and `d4` (`4_71s_0` → 130) identical run for run to `r32land-d2first-*`. No
+segment is worse than the record; `d3`, `d4` and `d7` are better beyond noise.
+
+**The full route from the game start** (1000 single runs, seeds 0-999, paired with `r32land-1k-full`):
+
+| Milestone | 2.0.0.0 | 2.0.0.1 | Paired | Entering the dungeon (hearts, bombs) |
+|---|---:|---:|---:|---|
+| D3 triforce | 13.6% | **22.7%** | **+9.1 ± 1.7** | Level 3: 2.94 of 3, 0 bombs |
+| D4 triforce | 0.4% | **2.8%** | **+2.4 ± 0.5** | Level 4 (227 runs): 3.80 of 4, 4.38 bombs, 2 keys |
+| D1 triforce | 0.3% | 2.3% | +2.0 ± 0.5 | Level 1 (28): 4.52 of 5, 0.14 bombs |
+| D5 triforce | 0 | 0.3% (3) | +0.3 ± 0.2 | Level 5 (23): 5.30 of 7, 1.57 bombs + the bag's 6.43 |
+| D2 triforce | 0 | 0.3% (3) | | Level 2 (3): 7.83 of 10 |
+| D7 triforce | 0 | 0.1% (1) | | Level 7 (3): 9.67 of 11, 8 bombs |
+| The magic sword | 0 | 0.1% (1) | | |
+| D6 triforce, the ending | 0 | 0 | | Level 6 (1): 12 of 12 |
+
+Where single runs end: Manhandla 226 (454 entering, 1.61 hearts), the last pass 129, Gleeok 81 (109 entering, 1.71),
+3:0x69 66, 0x49 57, 0x59 55, the equipment room 3:0x0f 50, 0x5c 47. Cheated a run: 0.65 wall bombs (3:0x5b 0.47),
+0.13 of the bag, 0.27 rupees, no key (2.0.0.0: 0.37, 0.01, 0.04, 0). For the first time single runs from the start
+pass Dungeon 5 (3), and one reaches the magic sword and Dungeon 6.
+
+## The landing (2.0.0.1)
+
+- **Taken back: darknut `r34d3-dlp-s353`.** With it the joint chains failed the `d5` hold: 19.2% against the
+  record's 24.0% (**-4.8 ± 1.8**), against `r34d3-dark-s341` on the same seeds -8.2 ± 1.9; by rooms (runs lost per
+  1000 entering against the record), the Olive Garden 445 (435; 360 with s341) and 5:0x37 180 (111), darknut's both.
+  Its `d3` was 22.6% (+10.0 ± 1.7; the last pass 115 lost per 1000 entering against s341's 255). The lead's rule
+  is to take the family back to main's run; `r34d3-dark-s341` (the joint check's darknut) was measured beside it and
+  landed with the lead's agreement: `d3` +5.4 ± 1.6 and `d5` +3.4 ± 1.9 against the record, against main's
+  `r32d3-dark2-s44` with the new zol and stalfos-keese-gel (`d3` 15.5%, +2.9 ± 1.6; `d5` 23.1%, -0.9 ± 0.9).
+  `d4`, `d1` and `d7` play no darknut room: their chains stand.
+- **Waiting for the next release** (they qualified after the chains of record had played the segments they play):
+  darknut `r34d5-dg-s362` (the Olive Garden, Dungeon 3's last section) and boss-digdogger `r34d7b-dig-s1` (Dungeon
+  7's second pass §9-10).
+- The golden path from console power on, models alone, the default route, three paths: three of three end the game,
+  in **51, 71 and 60 runs** (2.0.0.0: 88, 95, 64), by segment (D3, D4, D1, D5, D2, D7, D6, D8, D9 to the end):
+  seed 0 6, 6, 2, 7, 1, 5, 8, 9, 7 (2.0.0.0: 8, 41, 2, 10, 1, 8, 7, 5, 6); seed 700000 8, 9, 3, 13, 1, 10, 15, 3, 9
+  (8, 4, 1, 6, 2, 52, 9, 5, 8); seed 800000 22, 2, 2, 10, 1, 8, 7, 2, 6 (5, 11, 3, 13, 2, 9, 6, 7, 8). Each replay
+  verifies (177,838, 176,032 and 170,013 frames).
+- The suites on the landing code: pytest 856 passed, 9 skipped; `cargo test --release --workspace --features
+  zelda/zcore` 1048 passed, 1 ignored; zelda-asm 5 passed; `asm.py check` ok; the six corpus replays verify
+  (`v2-golden-ending.tfreplay`, a `d3first` run made before Dungeon 7's route data changed, replays its inputs: ok,
+  153,308 frames).
+- Run stamps: the eight runs carry 2.0.0.0; the code is 2.0.0.1 and loads them as they are (the first three numbers
+  agree), so none was restamped.

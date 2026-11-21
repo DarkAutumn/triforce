@@ -3264,3 +3264,17 @@ and 0x29's walls need), so a run with 2 or more crosses to the key door. routes.
 0x1b in each route around the blocks `dungeon-7` and `dungeon-7-east`; `d2first` keeps 3 and `if_bombs_below: 5` (its
 354 steps identical). On today's team `d7` 9.4% → 18.4% (+9.0 ± 1.5, seeds 0-999); it also closes goriya's key leak
 (the fight's 2-key visits). A route data change on `d3first`: the corpus replays replay inputs and still verify.
+
+## 2026-11-21 — 2.0.0.1: round 34 lands (the lead, the owner being away)
+
+- **A `REV`**: route data (Dungeon 7's bag on `d3first`), three entrance states, a training-only ending and eight
+  route runs; no input changed, so runs stamped 2.0.0.0 load as they are and none is restamped.
+- **The gate:** the three worktrees' teams measured together on 2.0.0.0's seeds (0-999), each segment paired with
+  its chain of record: none worse beyond noise, `d3`, `d4` and `d7` better beyond it; unchanged segments (`post-d1`,
+  `d8`, `d2first`'s `d7` and `d4`) identical run for run. The first assembly failed it: darknut's last-pass run
+  `r34d3-dlp-s353` lost `d5` (-4.8 ± 1.8, the Olive Garden). The rule was to take the family back to `main`'s run;
+  the joint check's darknut `r34d3-dark-s341` was measured beside main's `r32d3-dark2-s44` and taken instead (`d3`
+  +5.4 ± 1.6 and `d5` +3.4 ± 1.9 against the record; main's with the new zol and stalfos-keese-gel +2.9 and -0.9).
+- **Late runs wait:** a run that qualifies after the chains of record have played its segments goes into the next
+  release, so no chain is played twice: darknut `r34d5-dg-s362` and boss-digdogger `r34d7b-dig-s1`.
+- The numbers: round34.md "The chains of record" and "The landing".

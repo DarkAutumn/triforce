@@ -4,7 +4,23 @@ Read this first, then `README.md` (setup, commands), `docs/architecture.md` (mod
 `docs/experiments/round*.md` (start with its Summary) plus `docs/experiments/backlog.md` (the experiment backlog,
 called `todo.md` before Nov 8; where the work stands and what to try next, in order).
 
-## Where things stand (Nov 20)
+## Where things stand (Nov 21)
+
+- **2.0.0.1 (Nov 21; round 34, `docs/experiments/round34.md`; decisions 2026-11-21): `d3first`'s wood-sword
+  dungeons, segment by segment.** Eight new route runs (`promoted.d3first`): zol `r34d3-zol-s341`, stalfos-keese-gel
+  `r34d3-skg-s341`, darknut `r34d3-dark-s341` (Dungeon 3), vire `r34d4-vire-s1`, like-like `r34d4-like`, boss-gleeok
+  `r34d4-gleeok4-s1-it2877` (Dungeon 4), wallmaster `r34d7-wall-s3`, boss-aquamentus `r34d7-aqua-s1` (Dungeon 7 and
+  Dungeon 1's boss); `d3first_4_71s_*` rebuilt from chain arrivals (bombs 5/1/7, 2 keys); Dungeon 7 keeps the bag
+  (`d3first`: reserve 8 from its entrance, 7:0x1b fought only below 2 bombs); a training config may end a
+  truncation (`no-damage`, `max-steps`, `no-room-progress`) as a failure (training only). The chains of record
+  `r34land-1k` (seeds 0-999, paired with 2.0.0.0's): Dungeon 3 12.6% → 18.0% (+5.4 ± 1.6), 4 6.2% → 18.5% (+12.3 ±
+  1.4), 1 89.6% → 92.7% (+3.1 ± 1.3), 5 24.0% → 27.4% (+3.4 ± 1.9), 7 9.4% → 38.7% (+29.3 ± 1.8); `post-d1`, `d8`
+  and `d2first`'s `d7`/`d4` run for run as 2.0.0.0. From the start, single runs take Dungeon 3's triforce in 22.7%
+  (13.6%), Dungeon 4's in 2.8% (0.4%), and three pass Dungeon 5. The golden path from power on ends the game three
+  of three in 51, 71, 60 runs (88, 95, 64). Darknut's last-pass run `r34d3-dlp-s353` was taken back at the landing
+  (`d5` -4.8 ± 1.8: the Olive Garden); darknut `r34d5-dg-s362` and boss-digdogger `r34d7b-dig-s1` qualified after the
+  chains had played and wait for the next release. Still open: the Olive Garden (360 runs lost per 1000 entering),
+  Manhandla (553 at 1.56 hearts), Gleeok (736, reached 1.45 hearts poorer than the planner), Digdogger's 7:0x1c.
 
 - **2.0.0.0 (Nov 20; rounds 32 and 33, `docs/experiments/round32.md`, `round33.md`; decisions 2026-11-20 "2.0.0.0:
   `d3first` is the main route"): two routes, `d3first` the main one.** `d3first` (304 steps, `docs/routes/d3first.md`)
