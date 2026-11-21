@@ -403,12 +403,13 @@ before the magic sword's cave; the default from there on), each the run its trai
 | ow-moblin | `r32late-moblin` (it006341) | the same: 0:0x62's tree |
 | ow-leever | `r32d1-leever` (added later, below) | "Training: Dungeon 1 and the legs": 0:0x29-0x2b |
 | ow-zora | `r32d1-zora` (added later) | the same: 0:0x2d, 0:0x55 |
+| ow-tektite | `r32d1-tektite` (added later) | the same: 0:0x0c's shop |
 
 The first nine were the route runs when the team was assembled; the Dungeon 1 trainer promoted ow-leever and
-ow-zora for the route three hours later, before the batch below had started, and they were added (the "first team"
-below is the nine, the "team" the eleven; the batch measures the eleven). Not in it: goriya, stalfos-keese-gel,
-ow-tektite (the Dungeon 1 trainer's selections still in the line) and ow-octorok (the recorder turns' trainer's
-runs still training). They play main's runs.
+ow-zora for the route three hours later and ow-tektite five hours later, each before the batch below had started,
+and they were added (the "first team" below is the nine, the "team" the eleven without ow-tektite; the batch
+measures all twelve). Not in it: goriya, stalfos-keese-gel (the Dungeon 1 trainer's selections still in the line)
+and ow-octorok (the recorder turns' trainer's runs still training). They play main's runs.
 
 ### The golden race, models alone, from console power on
 
@@ -471,3 +472,20 @@ cheated); 2 at Dodongo (2:0x0e) once.
 **All four end the game** (74,501-75,234 frames, `tf replay verify` ok, ending `win`, "the game ended in (level 9,
 room 0x32)"). So with today's team the golden path is one fix short: ow-octorok's turn out of Level 2 (MOVE S,
 MOVE E, RECORDER), which another agent of this round trains.
+
+### What the entrance states should hold
+
+The six paths enter Level 4 with 2-8 bombs (4.7 on average) and 2 keys, Level 1 with none in five of six (Dungeon
+4's two walls take them) and 3 keys, Level 5 and Level 2 with 0-2. The start states hold (chains 0/1/2) `4_71s`
+0/5/0 bombs, `1_73s` 0/3/0, `5_76s` 2/4/0 (the grant fills the bag to 8 there), `2_7ds` 6/2/0: only Dungeon 4's
+entrance is poorer than what runs bring, and its chain-0 state is the one segment chains start from. Not rebuilt
+here: no command turns a harvested pre-entry (`eval-chain --harvest` from `3_7cs_*` to step 32) into a seed state
+with its hearts refilled and its manifest entry (`scripts/experiments/r32c_models.py` does it only for the next
+step), and a new `4_71s` moves every Dungeon 4 baseline; the lead decides.
+
+### The segments with the team
+
+The batch (`eval-batch r32team-1k`, seeds 20000-20999, models alone, clips on, 1000 runs; the planner 300 on
+Dungeon 4): Dungeon 4, the start to Level 3, the leg to Level 1, Dungeon 1, the leg to Level 5 and the full route
+from the game start. It waited in the machine's line for five hours and had not started when this was written; its
+numbers go here when it has run (`scripts/experiments/r32team_chains.py`).
