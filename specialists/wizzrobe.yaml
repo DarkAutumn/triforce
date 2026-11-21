@@ -25,7 +25,7 @@ curriculum: {enabled: true}             # trajectories/wizzrobe (Go-Explore path
 one_room: true
 max_steps: 2000
 warm_start: like-like                      # round 27: a first training starts from like-like's promoted run (it knows the block and the Like-Like's hold)
-harvested_fraction: 0.33                  # round 30: chain handoffs at the route's hearts (Dungeon 6's 0x38, 0x3a, 0x28, 0x29, 0x2c; level 9's 0x17, 0x05, 0x10, 0x30), triforce/states/harvested/wizzrobe, not in git (docs/experiments/round30.md); Dungeon 6 about 58% of them
+harvested_fraction: 0.33                  # round 30: chain handoffs at the route's hearts (Dungeon 6's 0x38, 0x3a, 0x28, 0x29, 0x2c; level 9's 0x17, 0x05, 0x10, 0x30), triforce/states/harvested/wizzrobe, not in git (docs/experiments/round30.md); round 33: Dungeon 6's taken again on the new route (0x78, 0x38, 0x28, 0x29, 0x3a, 0x2c, from 0:0x42 and from 6:0x79), about two thirds of them
 notes: >-
   Wizzrobe rooms (Dungeon 6, round 27, route `d6`; docs/routes/d6.md §14, d6-walks.md §4-5). Red Wizzrobes appear on
   Link's row or column 32-80 px away, shoot 79 frames later (4 hearts; a shot ends at the room's bound, so a doorway

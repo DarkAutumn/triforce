@@ -38,10 +38,18 @@ as the owner's phase IX changed it (354 steps). From the start the models alone 
 
 - [ ] **like-like 9:0x56** (step 310): 616 of 1000 `d9` runs end `stuck` there; the planner too (90 of 127). The
   first training on the new route: `d9` 13.7% against 31.0% before.
-- [ ] **wizzrobe**: **6:0x29's key detour** (step 268: 74 runs lost on `d6` against 27 before, and its wrong exits
-  leave the key behind, which costs a cheated key at 9:0x63 later) and **6:0x78** (`drops: first`: 0 kills in 1000
-  visits; the owner's bomb pack needs a model that swings there).
-- [ ] **vire 6:0x39, 6:0x2d** (`bombs: tenth`: 36 and 29 runs lost against 26 and 6).
+- [x] **wizzrobe**: 6:0x29's key detour and 6:0x78 (round33.md): `r33w-s93` `d6` +6.10 ± 1.19 over 3000 fresh
+  seeds, `d9` +1.9 ± 1.3; every trained seed swings at 0x78 (a kill in 23-33% of the visits) at no cost to the hearts
+  0x38 is entered with, for about 0.1 bombs a run: cheap, and nearly nil. No wrong exit out of 0x29 in any chain.
+- [ ] **wizzrobe 6:0x29 in the promoted run**: `r33w-s93` dies there more (241 of 3000 `d6` runs) than
+  `r30w-wj-s89` (188) and `r33w-s92` (105), which learned the key path; s93 won the dungeon's back half (0x3a, 0x2c).
+  Next: a continuation of s93 with s92's 0x29 (s92 as the planner's model for `plan33-d6`'s 0x29 rows, or rows from
+  s92's own clean runs). The room costs the models more from `6_79s_0` (1.6 hearts) than at the route's hearts (0.85)
+  though the scripted way costs the same from both states: the states differ in the rupees the model observes.
+- [ ] **6:0x3a (wizzrobe)** is the dungeon's killer more than ever: about a third of `d6` runs die there (949-1099 of
+  3000); the runs the new 0x29/0x2d play saves die there.
+- [x] **vire 6:0x39, 6:0x2d** (round33.md): `r33-vire-s95` `d6` +2.55 ± 1.23 (2000 runs; 0x2d deaths 8-13 against
+  30), `d4` +3.4 ± 1.2.
 - [ ] **pols-voice 8:0x4c** without its key (19 stuck); **lanmola 9:0x55 from E** (16 lost).
 - [ ] **The key ledger names two leaks** (no route-data fault; every key cheated in 1.9.0.1's chains is one of them):
   gibdo leaves 5:0x66 (step 195, W → N) without its key in 2-3% of exits (main's gibdo as often), and goriya spends
