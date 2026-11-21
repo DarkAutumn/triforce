@@ -1774,3 +1774,43 @@ and test that is about `d2first`'s data names `--route d2first`), the corpus rep
   2.0, `post-d7` run for run; `d3` and `d7` 300 of 300 runs identical to 1.9.0.1's record; the full route not worse
   at any milestone, and **4 of 1000 runs end the game**, the first single runs of `d2first` to do it.
 - **`d3first`'s chains of record** (§12): reported, no rate bar.
+- **The suites** on the landing's code (module rebuilt): pytest 851 passed, 9 skipped; `cargo test --release
+  --workspace --features zelda/zcore` 1047 passed, 1 ignored; zelda-asm's tests 5 passed; `asm.py check` ok; `tf
+  replay verify corpus/replays/*.tfreplay` 6 of 6 ok.
+
+### The last gate: the golden race on the landed code and team
+
+Three paths, one invocation each, from console power on, models alone, the main route by default (no `--route`):
+
+```
+TRIFORCE_MODELS_DIR=$PWD/models nice -n 10 .venv/bin/python zelda-headless.py OUT 1 --golden --power-on --clips on \
+    --act model --parallel 8 --first-seed S          # S = 0, 700000, 800000
+tf replay verify OUT/golden-*-win.tfreplay
+scripts/experiments/r32team_golden.py OUT/golden-*-win.tfreplay
+```
+
+| Segment (stop) | From - to | seeds 0 | 700000 | 800000 |
+|---|---|---|---|---|
+| 0 (step 24) | power on - D3 triforce | 8 | 8 | 5 |
+| 1 (53) | - D4 triforce | 41 | 4 | 11 |
+| 2 (79) | - D1 triforce | 2 | 1 | 3 |
+| 3 (120) | - D5 triforce | 10 | 6 | 13 |
+| 4 (155) | - D2 triforce | 1 | 2 | 2 |
+| 5 (194) | - D7 triforce | 8 | 52 | 9 |
+| 6 (227) | - D6 triforce | 7 | 9 | 6 |
+| 7 (243) | - D8 triforce | 5 | 5 | 7 |
+| 8 (end) | - the ending | 6 | 8 | 8 |
+| all | | **88** | **95** | **64** |
+| frames | | 148,158 | 150,768 | 163,745 |
+| wall (s) | | 40 | 56 | 48 |
+
+**All three reach the ending** ("the game ended in (level 9, room 0x32)"; `tf replay verify` ok: 20, 30 and 26
+edits, 9 states each; triforce 2.0.0.0, act `temperature:0.5+relax:16 (every model, 49)`; `end_ram` game mode
+`$13`, triforce `$671` = `0xff`, sword 3). The first path's first five segments fall in the same runs as §11's first
+path (8, 41, 2, 10, 1; the same seeds and route runs). Cheated, a path, no key: 9, 18 and 14 bombs (the bag's 5, 8
+and 6 in the Olive Garden; the walls 3:0x5b, 5:0x65 and 5:0x66 on all three, 4:0x21, 4:0x11, 1:0x53, 9:0x17 and
+6:0x28 on two, 0:0x2c, 0:0x2d and 8:0x6e on one), 13, 14 and 8 rupees at the candle shop.
+
+**The corpus** keeps §11's first path as `corpus/replays/v2-golden-ending.tfreplay` (153,308 frames): it verifies on
+the landed code, and `cargo test -p triforce-tools --test cli corpus` passes with it (4 tests, among them
+`the_replay_corpus_still_verifies`).

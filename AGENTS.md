@@ -12,7 +12,8 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   magic sword (0:0x21's cave, step 206), 6, 8, 9, by screen scrolls, recorder warps, the blue candle, three
   secrets, heart rock's containers, the ladder, the raft and 0x47; the dungeons are `d2first`'s (routes.yaml
   `blocks:`). **The owner's condition is met: a golden path from console power on, the models alone, reaches the
-  ending** (three races of three, 176, 135 and 91 runs; the first is `corpus/replays/v2-golden-ending.tfreplay`,
+  ending** (three races of three, 176, 135 and 91 runs; on the landed code and team, no `--route`, three of three
+  again, 88, 95 and 64 runs, round32.md §13; the first of §11 is `corpus/replays/v2-golden-ending.tfreplay`,
   153,308 frames). `registry.MAIN_ROUTE = 'd3first'`: `play-zelda.py`, `zelda-headless.py`, the golden path,
   `eval-chain`, `eval-batch --chains` and `r56_chains.sh` play it when no route is named; `d2first` by `--route
   d2first` (the engine's `DEFAULT_ROUTE`, the route of bare state names, stays `d2first`). **The team:** every
