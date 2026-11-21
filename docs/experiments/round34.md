@@ -2,7 +2,7 @@
 
 ## Dungeon 3 at three hearts (zol, stalfos-keese-gel, darknut, boss-manhandla)
 
-**State of this section.** In progress: the ledger (§1) is done; the round's trainings are being prepared.
+**State of this section.** Handed off: the ledger (§1), the trainings (six runs), boss-manhandla's verdict and the Garden analysis (§4) are done; the selections of darknut (three seeds), zol and stalfos-keese-gel wait in the job line, then the joint check.
 
 The route runs (`promoted.d3first`, steps 0-205): zol `r32d3-zol`, stalfos-keese-gel `r32d1-skg`, darknut
 `r32d3-dark2-s44`, boss-manhandla `r32d3-manh`. Today's `d3` (`3_7cs_0` → step 24, models alone, 1000 runs, seeds
