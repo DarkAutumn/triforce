@@ -27,24 +27,25 @@ raft, the ladder, the recorder, the red candle, the red ring, the silver arrow).
 
 ## How well it plays
 
-Out of 1,000 runs from the start of the game with the current team (round 29's whole-route team, 1.9.0.0, act mode
-`temperature:0.5+relax:16`, the speedrunners' clips allowed; `docs/experiments/round29.md` §20.3):
+Out of 1,000 runs from the start of the game with the current team (rounds 30 and 31, 1.9.0.1: the optimisation
+round's team on the route as the owner changed it in round 31; act mode `temperature:0.5+relax:16`, the
+speedrunners' clips allowed; `docs/experiments/round30.md` "The landing"):
 
-| Link reaches | Round 29 | Round 27 | Round 26 | Round 25 |
-|---|---:|---:|---:|---:|
-| Dungeon 1 (after Dungeon 2 and the white sword) | 82% | 76% | 75% | 84% |
-| Dungeon 3 | 73% | 64% | 65% | 74% |
-| The Dungeon 3 triforce | 59% | 50% | 50% | 57% |
-| The Dungeon 4 triforce | 54% | 44% | 44% | 51% |
-| Dungeon 5 | 54% | 44% | 44% | 51% |
-| The Dungeon 5 triforce | 26% | 23% | 22% | 20% (the end of round 25's route) |
-| Dungeon 7 | 26% | 23% | 22% | |
-| The Dungeon 7 triforce | 9.1% | 6.1% | 6.7% (the end of round 26's route) | |
-| Dungeon 6 | 9.0% | 6.0% | | |
-| The Dungeon 6 triforce | 1.7% | 1.1% (the end of round 27's route) | | |
-| The Dungeon 8 triforce | 0.4% | | | |
-| Dungeon 9 | 0.4% | | | |
-| The end of the game | 0 of 1,000 | | | |
+| Link reaches | Rounds 30-31 | Round 29 | Round 27 | Round 26 | Round 25 |
+|---|---:|---:|---:|---:|---:|
+| Dungeon 1 (after Dungeon 2 and the white sword) | 85% | 82% | 76% | 75% | 84% |
+| Dungeon 3 | 74% | 73% | 64% | 65% | 74% |
+| The Dungeon 3 triforce | 62% | 59% | 50% | 50% | 57% |
+| The Dungeon 4 triforce | 56% | 54% | 44% | 44% | 51% |
+| Dungeon 5 | 56% | 54% | 44% | 44% | 51% |
+| The Dungeon 5 triforce | 30% | 26% | 23% | 22% | 20% (the end of round 25's route) |
+| Dungeon 7 | 30% | 26% | 23% | 22% | |
+| The Dungeon 7 triforce | 12.5% | 9.1% | 6.1% | 6.7% (the end of round 26's route) | |
+| Dungeon 6 | 12.5% | 9.0% | 6.0% | | |
+| The Dungeon 6 triforce | 3.0% | 1.7% | 1.1% (the end of round 27's route) | | |
+| The Dungeon 8 triforce | 1.3% | 0.4% | | | |
+| Dungeon 9 | 1.3% | 0.4% | | | |
+| The end of the game | 0 of 1,000 | 0 of 1,000 | | | |
 
 Since round 26 the route runs on from the Dungeon 5 triforce through the whirlwind, two shops and a pond to Dungeon
 7 and its triforce. Of 1,000 runs started at Dungeon 7's entrance, 40% take its triforce; its six Blue Goriyas in
@@ -68,6 +69,14 @@ earlier row is as good as round 27's or better (the same seeds, paired). From th
 Dungeon 9 in 4 runs of 1,000 and end the game in none: each dungeon is entered with fewer hearts than its own
 segment starts with, and Dungeon 5's 5:0x05 is the first loss. With the planner on, 89 of 300 runs (30%) play from
 the start of the game to the ending (`docs/experiments/round29.md` §20).
+
+Rounds 30 and 31 (1.9.0.1) retrain the families that lose the most runs at the hearts the route brings (Dungeon 5's
+and Dungeon 8's Darknuts, Manhandla, the Gibdos, Dungeon 7's Goriyas, the Wizzrobes, Patra, a Lynel) and play the
+owner's eight changes to the route (Dungeon 1 entered twice so its locked door is open, a bombed wall instead of two
+key rooms; a key taken in Dungeon 6 and one left in Dungeon 8; a new way through Dungeon 9). Every row from the start
+is as good or better; from their entrances Dungeon 7's triforce is taken in 57% of runs (47%) and Dungeon 8's in 36%
+(25%). Dungeon 9's new room 9:0x56 is not yet learned (two runs in three stop there): from Dungeon 9's entrance 14%
+end the game (31% before), and with the planner on 27 of 300 runs from the start (9%).
 
 Every round of training is written up in `docs/experiments/` (start with the newest `round*.md`), and
 `docs/experiments/backlog.md` has what's next.

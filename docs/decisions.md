@@ -3173,3 +3173,29 @@ the route's default darknut and manhandla.  The lead's design, built as given:
   chain files are as before; provenance and replay headers list both runs of a family.
 - **A change of part is no handoff:** harvesting (`--harvest`) still saves states only where the family changes.
 - **Training is not touched:** a round trains one run; which states it draws is the family yaml's `state_routes`.
+
+## 2026-11-20 — Rounds 30 and 31 land as one (1.9.0.1)
+
+The optimisation round (round 30: five lanes, one family at a time, each run confirmed on fresh seeds in its own
+worktree) and the owner's eight changes to `d2first` (round 31, phase IX) land together: one team on the changed
+route, measured once (`r31land-1k`, round30.md "The landing"), rather than measuring the team on the old route and
+then again on the new one.
+
+- **The team.** Qualified in round 30: wizzrobe `r30w-wj-s89`, patra `r30w-patra`, boss-manhandla `r30-manh-s90`,
+  gibdo `r30-gibdo-s91`, goriya `r30-goriya6-s31`; ow-octorok `r31-oct-s97` (round 31, the trip). darknut
+  `r30-dark69-s94` by the lead's decision on the round's rule (the target better beyond noise, no other segment the
+  family plays worse beyond noise: `d8` +14.8 ± 2.1, Dungeon 3 +0.4 ± 1.1 over 2000 runs, Dungeon 5 at the route's
+  hearts +1.4 ± 2.2); the repair round's own bar (Dungeon 5's gain kept) was stricter; it joined after the chains
+  were queued, and the chains it plays were measured with it.
+- **The candidates, each in the measured team and kept only if its own gate passed:** ow-lynel `r30e-lynel-s84`
+  (gate: the legs it plays not worse beyond noise): **kept** (after Dungeon 2 +1.7 ± 1.1, `post-d8` −0.2 ± 0.1, the
+  rest equal); wallmaster `r30-wall-s30` (gate: `d7` on 1000 more seeds, pooled over 2000 better beyond noise):
+  **failed** (−0.6 ± 1.1 on the new seeds, +0.7 ± 0.8 pooled), `r76-wall-1` stays. moldorm and boss-gleeok's round 30
+  runs changed nothing beyond noise and were not measured.
+- **The gates of the whole team:** no segment, leg or full-route milestone worse than main's record beyond noise,
+  except `d9` (−17.3 ± 1.8), which is the route's: 1.9.0.0's team on the new route loses 20.1 there, all in 9:0x56
+  (a room new to like-like); the landed team is +2.8 ± 1.2 against it. The full route's two cheated keys (6:0x79)
+  come from 5:0x66's key left and 7:0x1b's second key spent, both as often with main's gibdo and goriya; no family
+  to swap back for either.
+- **1.9.0.1:** REV +1 (promoted models replaced; a route and reward-vocabulary change the models play; no input
+  change). The models are stamped 1.9.0.0 and load as they are.

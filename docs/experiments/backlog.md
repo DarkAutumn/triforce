@@ -14,6 +14,43 @@ the gap list of what must be walked in the game first, where the documents disag
 of work) and the documents it indexes (`d7.md`, `d6.md`, `d8.md`, `d9.md`, `late-monsters.md`, `late-mechanics.md`).
 The owner's decisions of Nov 16 are in `docs/decisions.md` ("The rest of the game").
 
+### The whole game on the changed route (1.9.0.1, Nov 20): what loses it now
+
+round30.md "The landing", round31.md. Rounds 30 and 31 landed together: the optimisation round's team on `d2first`
+as the owner's phase IX changed it (354 steps). From the start the models alone end the game in 0 of 1000 runs
+(Dungeon 9 entered by 13), the planner in 27 of 300 (9:0x56 holds most of the rest). What loses the full route
+(`r31land-1k-full`, runs ended per 1000; 1.9.0.0's `r29land-1k-full` in brackets), in order:
+
+- [ ] **5:0x05 (darknut, 135 (141))**: entered with 6.48 hearts; `r30-dark69-s94` gained `d8` (+11.5) and Dungeon 5
+  (+4.1) but not this room at the route's hearts. Then 5:0x64 39, 0x65 20, 0x66 20.
+- [ ] **3:0x4d (Manhandla, 86 (97))**: entered with 3.66 hearts.
+- [ ] **7:0x1b (goriya, 64 (77))**: entered with 4.20 hearts; `d7` is 56.9% now (46.6%).
+- [ ] **4:0x13 (Gleeok, 46 (36))**: `r30-gleeok-s30` was not better beyond noise; the fights entered at 3 hearts or
+  fewer are the deaths (round30.md).
+- [ ] **1:0x44 (goriya, 44 (25); 1.9.0.0's goriya on the new route 20)**: entered with 2.93 hearts; `r30-goriya6-s31`
+  loses more here at the full route's hearts (the `d1` segment from full hearts shows 3 against 1). The first item
+  for goriya's next run.
+- [ ] **6:0x3a (wizzrobe, 36 (33))**, 6:0x38 25; Dungeon 2's 2:0x5e 31 (29), 0x1e 29 (41), 0x3e 23 (22).
+- [ ] **ow-lynel `r30e-lynel-s84` at 0:0x05 after Dungeon 8**: 1.41 hearts a visit against `r27l-lynel-s81`'s 1.03:
+  Dungeon 9 is entered with 11.87 hearts on `post-d8` (12.30). Its second visit of 0x0a is fixed (round30.md).
+
+**Owed by the new route (round31.md "Owed")**, the families in the order they cost runs:
+
+- [ ] **like-like 9:0x56** (step 310): 616 of 1000 `d9` runs end `stuck` there; the planner too (90 of 127). The
+  first training on the new route: `d9` 13.7% against 31.0% before.
+- [ ] **wizzrobe**: **6:0x29's key detour** (step 268: 74 runs lost on `d6` against 27 before, and its wrong exits
+  leave the key behind, which costs a cheated key at 9:0x63 later) and **6:0x78** (`drops: first`: 0 kills in 1000
+  visits; the owner's bomb pack needs a model that swings there).
+- [ ] **vire 6:0x39, 6:0x2d** (`bombs: tenth`: 36 and 29 runs lost against 26 and 6).
+- [ ] **pols-voice 8:0x4c** without its key (19 stuck); **lanmola 9:0x55 from E** (16 lost).
+- [ ] **The key ledger names two leaks** (no route-data fault; every key cheated in 1.9.0.1's chains is one of them):
+  gibdo leaves 5:0x66 (step 195, W → N) without its key in 2-3% of exits (main's gibdo as often), and goriya spends
+  a second key in 7:0x1b in 2% of visits; either leaves Dungeon 6's 0x79 door (2 cheated keys in the full route) or
+  Dungeon 9's 0x63 (the planner: 6) short, as do 6:0x29's wrong exits. A step objective that makes 5:0x66's key a
+  must (`treasure` on the step) would close the first.
+- [ ] **eval-batch `--chains` segment chains run past their segment** (no stop step; the chains of record are
+  `--chain` entries with `--stop-at`): scored by arrival, but they waste the CPU of the rest of the route.
+
 ### The whole game (1.9.0.0, Nov 19): the optimisation round over the whole route
 
 round29.md §20. The route ends the game; one team plays it. From the start the models alone end it in 0 of 1000
@@ -25,18 +62,61 @@ per 1000), in order:
   30 of 244); the `d5` segment from full hearts is +3.5 ± 2.0. Suggested (not tested): darknut continued with
   Dungeon 5's handoffs at the chain's hearts (the recipe of decisions 2026-11-19, "One team for the whole route").
   Then 0x64 40, 0x47 28, 0x65 27.
-- [ ] **`d7` (165)**: 7:0x1b's six Goriyas 77, 0x1a 27, 0x19 17.
+  Round 30 (round30.md "Darknut"): Dungeon 5 at the route's hearts is measured by `--from 0_45c_0 --stop-at
+  step:209` (the leg after Dungeon 4 has no darknut room and arrives with the full route's hearts: 49.4% of 500, the
+  full route 48.5% of its entrants, the `d5` segment 72.2%); gibdo `r30-gibdo-s91` (promoted on the round's branch) +5.3
+  ± 2.1 there; darknut `r30-dark-s89` +5.8 ± 2.2 there (both +9.3 ± 2.2) and `d8` +8.1 ± 2.0, but `d3` −4.2 ± 1.2
+  (3:0x69 from N, left out of its harvested starts, costs Manhandla's hearts): not promoted. Next: 0x69 from N's
+  entries added (round30.md "Next for darknut"). The planner loses 0.73 hearts a visit in 0x05 and none in 8:0x3e: a second pass of
+  its demonstrations from the harvested states themselves needs `r27_plan_demos.py --state-files` to keep the
+  states' hearts (an eval env draws the family's hp on every explicit start, harvested or not).
+- [ ] **`d7` (165)**: 7:0x1b's six Goriyas 77, 0x1a 27, 0x19 17. Round 30 (round30.md, goriya): 0x1b kills the runs
+  that arrive low (below 4 hearts 209 of 353 `d7` visits die, from 6 up 3 of 274); goriya's own Dungeon 7 rooms
+  spend some 6.4 hearts before it against the planner's 1.0. Arm: harvested starts at the chain's hearts and the
+  planner's demonstrations from them (`r30-goriya6-s30..s32`), in selection. wallmaster's 7:0x0d captures (64 of
+  574 `d7` visits, 59 of those runs die crossing Dungeon 7 again) and 19 timeouts: `r30-wall-s30`, in measurement.
+- [ ] **Dungeon 1's and 2's goriya rooms at the full route's hearts**: 1:0x23 15 and 0x44 25 deaths in the full
+  route (3.3 hearts in) against 0 and 1 in the `d1` segment from 5 hearts; 2:0x5e 29 against 9. The segments from
+  full hearts hide them: judge goriya on the full route's milestones too (round30.md).
 - [ ] **Dungeon 3 (140)**: Manhandla 3:0x4d 97.
-- [ ] **Dungeon 2 (121)**: goriya 2:0x1e 41, 0x5e 29; moldorm 0x3e 22.
-- [ ] **Dungeon 1 (92)**: 1:0x44 25, 0x35 15, 0x23 15.
+  81 of the 97 enter below 4 hearts (the planner enters with 5.42): the hearts darknut's 3:0x59 and 0x69 lose before
+  it. boss-manhandla `r30-manh-s90` (round 30, promoted on the round's branch), trained on 3:0x4d's entries at the
+  route's hearts: Dungeon 3 at the route's hearts +4.6 ± 1.3, `d3` +2.7 ± 1.3.
+- [ ] **Dungeon 2 (121)**: goriya 2:0x1e 41, 0x5e 29; moldorm 0x3e 22. Round 30 (round30.md "The first quarter"):
+  moldorm's deaths are all entries below 3 hearts (0.32 hearts a visit, the planner 0.19); three seeds
+  `r30e-moldorm-s87..89` trained with the full route's handoffs (0.33) and the planner's demonstrations, single
+  rooms 93-94% (`r75-f-b` 90.7%); their `d2` selection and the full-route gate to step 68 were waiting in the queue.
+- [ ] **Dungeon 1 (92)**: goriya 1:0x44 25, 0x23 15; stalfos-keese-gel 23 (1:0x33 12); Aquamentus 1:0x35 15; the
+  bow cellar 1:0x7f 12. Every death is an entry below 2 hearts (3.31 of 5 in): the hearts lost after Dungeon 2.
 - [ ] **`d6` (73)**: wizzrobe 6:0x3a 33, 0x38 15.
-- [ ] **After Dungeon 2 (56)**: ow-lynel 0:0x0a 21, ow-zora 0x38 13, ow-tektite 0x1a 13.
-- [ ] **Dungeon 4 (50)**: Gleeok 4:0x13 36.
+  Round 30 (round30.md "Wizzrobe and patra"): at the route's hearts (from 0:0x42, 10.85 of 12 on entering) the D6
+  triforce falls from 31.4% to 15.7% (0x3a kills 237 of 401 entered with 4.9 hearts); Dungeon 6 now has a
+  `chain_hp` profile, wizzrobe draws harvested handoffs at 0.33 and the planner's play at the chain's hearts.
+  Promoted `r30w-wj-s89` (`d6` +6.8 ± 2.2, `d9` +2.7 ± 2.1) and patra `r30w-patra` (`d9` +6.2 ± 2.0). Left: 6:0x3a
+  still kills 320 of 850 entering on `d6`; `r30w-wj-s89` loses more in 9:0x31 (48 deaths against 23), 0x04 (26
+  against 14) and 6:0x2c (88 against 50); one seed of three held both stretches again (s88: `d6` +6.7, `d9` −5.2).
+- [ ] **Single-room evaluations from harvested files keep the hearts only through a yaml copy** (round 30): an
+  `EvalTask` has no start pool, so a harvested state played by `r27_plan_demos.py --state-files` is given the
+  family's `ram_randomization` again; round 30 used a copy of the yaml with `ram_randomization: {}`. A flag on
+  the eval task would be the clean way (engine vocabulary: not done in round 30).
+- [ ] **Level 9's scripted-rule demonstrations** (`wizzrobe-05`, `-10`, `-30`, 300 thousand rows) lose more hearts
+  a visit than the model and dominated wizzrobe's demonstration rows; round 30 kept them (the recipe keeps the
+  lineage's files) and outweighed them with the planner's rows. Worth an arm without them.
+- [ ] **After Dungeon 2 (56)**: ow-lynel 0:0x0a 21 (18 on the second visit, 11 of them entered with 4+ hearts),
+  ow-zora 0x38 13, ow-tektite 0x1a 13 (all entered below 2 hearts). Round 30: `r30e-lynel-s84` (the second
+  visit's 300 states at the route's hearts, `harvested_fraction` 0.35) is within a point of `r27l-lynel-s81` on
+  every single room; its `post-d2` selection was waiting in the queue. ow-tektite's lever is ready, not trained:
+  438 handoffs of 0x1a back S at the full route's hearts (the planner loses 0.14 a visit there, the model 0.30).
+- [ ] **Dungeon 4 (50)**: Gleeok 4:0x13 36. Round 30: deaths are the fights entered with 3 hearts or fewer (69 of 289
+  `d4` visits; 4 or more 7 of 704); `hp: [0.5, max]` never trains there. 8:0x3c kills 70 of 319 `d8` visits (5.39
+  hearts in). `r30-gleeok-s30` (harvested 4:0x13 and 8:0x3c entries, the planner's demonstrations) in measurement.
 - [ ] **The hearts carried in**: from the start Dungeon 5 is entered with 7.74 of 10 hearts, Dungeon 9 with 12.25 of
   15; `d8` (24.8%) and `d9` (31.0%) at full hearts are the last factors, and every heart kept earlier is one in them
   (round29.md §18.3 for Dungeon 9's rooms).
 - [ ] **Cheap**: ow-start `r74-leg2`'s three unfinishable 0x2f take-any cave tracks (`0_2fcave_*`, the item "A
-  take-any cave's curriculum can never finish" below): half its resets idle.
+  take-any cave's curriculum can never finish" below): half its resets idle. Round 30: confirmed (Link holds the
+  10th container from the track's frame 10, the curriculum stands at 15 of 17); take the three tracks out of
+  `trajectories/ow-start` before its next training. Not trained: ow-start loses no run and no heart anywhere.
 - [x] **The golden path to the ending** (round30.md, "The golden path to the ending"): from console power on the
   models alone win every segment; six golden paths of six ended the game, 27-68 runs each (the D8 and ending
   segments the longest, 4-17 and 5-26), about a minute on 8 games. The planner ends the game in one plain run
@@ -1920,3 +2000,4 @@ the remaining list is deferred until Lee resumes work.
 
 - **Damage still resets the room-stalling counter** (v1 behaviour, `critics.critique_movement`). In rooms with
   frequent ranged damage (Zora fireballs) this delays the stalling penalty. Not changed in round 2.
+

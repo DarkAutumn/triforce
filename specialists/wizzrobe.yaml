@@ -13,9 +13,9 @@ obs: {objective: true, target: true}       # schema 2: direction/distance to the
 # route fights, 0x10 (three Bubbles, three Blue, two Red) and 0x05 (three Blue, two Red), bank 1-4 (the Reds first;
 # one Blue at least is left).  0x07 and 0x20 are not staged (the owner, Nov 18: the rooms the route clips are not
 # fought).  A start the route itself enters with kills kept keeps those, whatever the draw.  chain_hp (round 29's
-# third round): half the resets into a level 9 room take their hearts from triforce/chain_hp.json (the second team's
-# r79b-1k chains: 0x10 entered with 4.4 on average, 0x05 5.3, 0x30 3.6); Dungeon 6's rooms have no profile and keep
-# the hp draw.
+# third round; round 30 refitted at the route's hearts): half the resets into a profiled room take their hearts from
+# triforce/chain_hp.json (0x10 entered with 4.3 on average, 0x05 5.1, 0x30 3.5; round 30: Dungeon 6 too, 0x38 9.6,
+# 0x3a 4.9).
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, chain_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9],
                     room_kills: {'(6, 0x38)': [1, 6], '(6, 0x3a)': [1, 6], '(9, 0x05)': [1, 4], '(9, 0x10)': [1, 4]},
                     room_kills_share: 0.5}
@@ -25,6 +25,7 @@ curriculum: {enabled: true}             # trajectories/wizzrobe (Go-Explore path
 one_room: true
 max_steps: 2000
 warm_start: like-like                      # round 27: a first training starts from like-like's promoted run (it knows the block and the Like-Like's hold)
+harvested_fraction: 0.33                  # round 30: chain handoffs at the route's hearts (Dungeon 6's 0x38, 0x3a, 0x28, 0x29, 0x2c; level 9's 0x17, 0x05, 0x10, 0x30), triforce/states/harvested/wizzrobe, not in git (docs/experiments/round30.md); Dungeon 6 about 58% of them
 notes: >-
   Wizzrobe rooms (Dungeon 6, round 27, route `d6`; docs/routes/d6.md §14, d6-walks.md §4-5). Red Wizzrobes appear on
   Link's row or column 32-80 px away, shoot 79 frames later (4 hearts; a shot ends at the room's bound, so a doorway
