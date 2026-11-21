@@ -88,3 +88,17 @@ Both throw the whole bag and land about seven bombs; the difference is the sword
 against 4.38). Entering at full hearts (7) the models lose 39% of their runs there, the planner 2%. A lost model
 run has placed 7.5 bombs and killed 2.4 Darknuts when it dies. So the Garden is no question of bombs: it is the
 foresight (the planner's replaced decisions: it steps out of a touch) that the model lacks, as in 0x5b's last pass.
+
+### boss-manhandla `r34d3-manh-s341`: not better (kept `r32d3-manh`)
+
+From `r32d3-manh`, 244 iterations (seed 341), demonstrations: the planner from `3_4dw_0..2` (30 a state) and 90 of
+today's handoffs into 0x4d (2 each): 9,388 rows (57 of 90 won from the seed states), with round 32's
+`manhandla-4d` rule. Chosen from Manhandla's door (`d3first_3_4dw_0` → step 24; the planner loses as many as the
+model at the same hearts, so the full `d3` cannot see this family): screen seeds 2000-2999, it003694 58.6%, `last`
+55.7%, the promoted run 58.6%; confirmation 3000-3999: it003694 **58.6%** ± 1.6, `last` 56.3%, promoted 58.0%
+(+0.6 ± 1.7). Not better beyond noise: `r32d3-manh` stays.
+
+```sh
+triforce select-checkpoint boss-manhandla r34d3-manh-s341 --route d3first --from d3first_3_4dw_0 --stop-at step:24 \
+    --first-seed 2000 --runs 1000 --confirm 1000 --parallel 10
+```
