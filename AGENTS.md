@@ -52,8 +52,9 @@ there).
   triforces as before (23.5%, 4.5%, 3.8%), 30 take Dungeon 2's, 6 Dungeon 5's, none ends the game. **The golden
   race from power on wins three of three** (411 runs together; tries per segment D3 6/9/4, D4 4/38/7, D1 1/3/4, D2
   1/2/2, D5 12/3/7, D7 with the 0x55 warp 29/64/42, D6 with the 0x3f warp and the sword 39/15/38, D8 16/13/16, D9
-  25/6/5); the shortest (152,051 frames) is `corpus/replays/golden-d3first-51-networks.tfreplay` (`single-run-d3first-old-order-51-networks` stays:
-  a single run on 2.0.0.3's order). The lab's yardstick was re-made on the corrected route's states and harvested
+  25/6/5); the shortest (152,051 frames) was the corpus's `golden-d3first-51-networks` until 2.0.0.6 replaced it
+  (180,118 frames, under the bomb rules; `single-run-d3first-old-order-51-networks` stays: a single run on
+  2.0.0.3's order). The lab's yardstick was re-made on the corrected route's states and harvested
   entries (`docs/lab.md` "The yardstick"). What the baseline leaves open, in the order it costs the route:
   backlog Track R.
 
@@ -732,7 +733,10 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   reader could not read what is written (version 1, round 32: a state's route grants); the reader
   keeps reading every earlier version it can. `corpus/replays/` must keep verifying (`tf replay verify`, a cargo
   test): a deliberate break moves those files to `corpus/replays/retired/`, bumps `REPLAY_VERSION` and records new
-  ones. From 1.3.1.0 a `MachineState` layout change adds a decoder for the previous `TFZSTATE` version instead of
+  ones. Replacing a corpus file pins new facts: `crates/tools/tests/cli.rs` `the_replay_corpus_still_verifies`
+  checks each named file's frames and version, so update it and run `cargo test --release -p triforce-tools
+  --features zelda/zcore --test cli` with the swap (Nov 22: a swap without it failed the suite; the core was
+  sound). From 1.3.1.0 a `MachineState` layout change adds a decoder for the previous `TFZSTATE` version instead of
   refusing it (replays embed states). Play (play-zelda with its live cell, zelda-headless, the golden path) is
   stochastic by default (one constant, `registry.PLAY_ACT`, since round 23 `temperature:0.5+relax:16`, the same
   rule as every `act` file); `--act model` or any act mode
