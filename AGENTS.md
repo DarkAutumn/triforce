@@ -83,7 +83,7 @@ there).
   `r34d3-skg-s341`, darknut `r34d3-dark-s341` (Dungeon 3), vire `r34d4-vire-s1`, like-like `r34d4-like`, boss-gleeok
   `r34d4-gleeok4-s1-it2877` (Dungeon 4), wallmaster `r34d7-wall-s3`, boss-aquamentus `r34d7-aqua-s1` (Dungeon 7 and
   Dungeon 1's boss); `d3first_4_71s_*` rebuilt from chain arrivals (bombs 5/1/7, 2 keys); Dungeon 7 keeps the bag
-  (`d3first`: reserve 8 from its entrance, 7:0x1b fought only below 2 bombs); a training config may end a
+  (`d3first`: reserve 8 from its entrance; 7:0x1b's floor 2 then, 8 since round 37); a training config may end a
   truncation (`no-damage`, `max-steps`, `no-room-progress`) as a failure (training only). The chains of record
   `r34land-1k` (seeds 0-999, paired with 2.0.0.0's): Dungeon 3 12.6% → 18.0% (+5.4 ± 1.6), 4 6.2% → 18.5% (+12.3 ±
   1.4), 1 89.6% → 92.7% (+3.1 ± 1.3), 5 24.0% → 27.4% (+3.4 ± 1.9), 7 9.4% → 38.7% (+29.3 ± 1.8); `post-d1`, `d8`
@@ -617,6 +617,27 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   the start state's own bombs, round 19). A Darknut facing opposite to Link's facing when he placed
   a bomb takes no damage from it (ASM and measured, round 19). Overworld families don't bomb but for the 10th kill
   and the rock walls of 0x2c (ow-tektite) and 0x67 (ow-octorok).
+- **The owner's three bomb rules (Nov 22, round 37, 2.0.0.6; routes.yaml's top-level `bomb_rules:`, on `d3first`
+  only: `d2first` is in scope "when we go back and work on that single-model", one entry under its name; its
+  table and the reading in docs/routes/d3first.md "Bombs")**:
+  1. "In dungeons, link should only use bombs in rooms it somehow needs to clear. For example, it's fine to use
+     bombs in 0x59 because we have to clear the room to open the south door, in 0x69 it needs to slide past the
+     darknuts to get the raft, then out of the room (I use sword-hit an enemy to make them pass-through in this room,
+     not kills with bombs)." `fights_only: true`: in a dungeon room the objective does not fight (a crossing, or a
+     fight that is over) a `free` family's mode is capped at `required` (the wall the step leaves through, the 10th
+     kill); in a fight the family's mode and the reserve stand; the overworld is untouched.
+  2. "0x5b is a great example, the point of fighting the darknuts in that room is to get the bomb drop, wasting the
+     bombs to kill them is not the right play. BUT link still needs to bomb the wall to get through there. So no
+     bombs except the 1 to blow up the wall." `wall_only: [3:0x5b]`: no weapon bomb there, a fight or not.
+  3. "I want to raise the 'get bombs from this room' floor, so in 0x5b he should fight the darknuts if he has 7 or
+     less bombs, up from whatever it was. This is a blanket rule not for this room." `treasure_below: 8`: every
+     step taking a room's bombs fights for them when Link comes in with 7 or fewer (a step's own `if_bombs_below`
+     gives way; a room's own floor is `treasure_below_rooms`, the override the owner allows for 7:0x1b: "you have
+     the ability to skip that fight for bombs if it kills too many runs").
+  Over all three: "we must ALWAYS allow bombs and deeply encourage them if we are on the 10th kill force drop, no
+  matter the room or enemies, that remains true." Every mode but `never` (boss-gleeok's) offers BOMB on the 10th
+  damage-free kill in every room (a granted bomb still opens only its wall); the bomb kill pays
+  `reward-armed-bomb-drop`, the drop's pickup `reward-gained-bombs`, in every family.
 - **0x0a before the white sword:** leaving S is a `retreat` (routes.yaml `retreat: S`; neutral by default, ow-lynel
   ships `endings: {retreat: soft-failure}` for the baseline), and a chain run goes on (0x1a sends Link back N).
   Whether a model learns to use it is open.

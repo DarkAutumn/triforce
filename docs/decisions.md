@@ -3397,3 +3397,28 @@ and 0x29's walls need), so a run with 2 or more crosses to the key door. routes.
   `golden-d2first-to-dungeon3-triforce` (`v0-golden`), `single-run-d3first-old-order-51-networks`
   (`v2-single-ending`), `planner-d2first` (`v0-plan-ending`); the two format fixtures keep `v0-power-on` and
   `v0-state`. Older documents name the old files.
+
+## 2026-11-22 — 2.0.0.6: Lee's three bomb rules on `d3first` (the lead builds them, Lee being away)
+
+- **What:** routes.yaml's top-level `bomb_rules:` (by route; `d3first` only) with three keys, each Lee's words
+  (AGENTS.md "The owner's three bomb rules", docs/routes/d3first.md "Bombs"): `fights_only: true` (bombs as a weapon
+  in a dungeon only while the objective fights the room: 3:0x59 yes, 3:0x69 no), `wall_only: [3:0x5b]` (no weapon
+  bomb there at all, the wall's one bomb only), `treasure_below: 8` (every room the route takes the bombs of is a
+  fight when Link comes in with 7 or fewer). Over all three, Lee: "we must ALWAYS allow bombs and deeply encourage
+  them if we are on the 10th kill force drop, no matter the room or enemies, that remains true": the 10th
+  damage-free kill's bomb stays offered in every mode but `never`, in every room.
+- **How (the lead's choices):** the rules cap a `free` family's mode at `required` where they take the weapon away
+  (no new mode: `required` is already "the wall the step leaves through and the 10th kill", which is what Lee asked
+  for 3:0x5b; a second name for it would be a second convention). Rule 1 reads the objective's own kind every
+  step, so a room stops offering BOMB the step its fight ends. Rule 3 is a floor over the steps' own
+  `{if_bombs_below: M}` (8:0x3f's 5 is a shared block's, for `d2first`) with a per-room override
+  (`treasure_below_rooms`) for the room Lee allows to be skipped (7:0x1b); it is judged on entering the room, so a
+  bomb Link spends there (3:0x5b's wall with a full bag) does not turn the crossing into a fight (round 23's trouble
+  with a live floor). The keys are route-level so the shared blocks stay `d2first`'s: `d2first` unchanged until its
+  own work ("Don't waste time on d2 first until we've completed this work on d3-first, entirely"; one entry under its
+  name then).
+- **Reward:** what pays for the 10th kill's bomb was already there in every family (`reward-armed-bomb-drop` 0.75 on
+  the bomb kill that arms the drop, `reward-gained-bombs` 0.5 on the pickup); not using it costs nothing. No term
+  was added.
+- **Evidence:** docs/experiments/round37.md "The bomb rules" (today's 51 networks under the rules, paired with
+  `r36base-1k`).

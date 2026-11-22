@@ -28,7 +28,9 @@
 # 28: 0x6d) sends Link to a stand tile on the tree's row (three tiles E of it, facing W; three W of it, facing E);
 # CANDLE is offered there only, toward the tree, while it stands and no fire of Link's burns; then its stairs.
 # `bombs: never|tenth|required|free` (round 28): on this step the family's `items: {bombs:}` mode is this one
-# (8:0x6e: boss-manhandla, `free`, crosses to the bomb wall by the BOMB mask of `required`).
+# (8:0x6e: boss-manhandla, `free`, crosses to the bomb wall by the BOMB mask of `required`).  Round 37: a route's
+# own bomb rules (the owner's: `fights_only`, `wall_only`, `treasure_below`, `treasure_below_rooms`) are the
+# top-level `bomb_rules:` below the routes, by route name.
 # `drops: first` (round 31): on this step the family's `reward.drops_first` is on: once the objective is no fight, a
 # wanted drop lying in the room (bombs below Link's maximum, a heart or fairy below full health) replaces the exit as
 # the target until taken or gone (6:0x78, the ringleader room: a bomb pack its Wizzrobes drop is taken on the way).

@@ -109,10 +109,11 @@ def test_d3first_the_bomb_reserve_through_dungeon_3():
 
 def test_d3first_keeps_the_bag_through_dungeon_7_to_0x1b():
     """The lead, Nov 21 (round 34): d3first holds 8 bombs from Dungeon 7's entrance to 0x1b (the walls of 0x69, 0x19
-    and 0x1a are its only bombs), so Link enters 0x1b with 5 and crosses it to the key door; 0x1b wants its four only
-    below 2 (0x0c's and 0x29's walls); 2 from 0x1b, 0 on Aquamentus.  d2first keeps 3 and `if_bombs_below: 5` (its
-    golden lists above); both routes' step counts are unchanged."""
-    for route, entrance, wanted in (('d3first', 8, 'if_bombs_below: 2'), ('d2first', 3, 'if_bombs_below: 5')):
+    and 0x1a are its only bombs); 2 from 0x1b, 0 on Aquamentus.  0x1b's own step names no treasure rule since round
+    37: the route's `bomb_rules` floor (8, the owner's blanket rule; `zelda::game_map::BombRules`) wants its four
+    (round 34's `if_bombs_below: 2` would be the room's override, `treasure_below_rooms`).  d2first keeps 3 and
+    `if_bombs_below: 5` (its golden lists above); both routes' step counts are unchanged."""
+    for route, entrance, wanted in (('d3first', 8, None), ('d2first', 3, 'if_bombs_below: 5')):
         held, along = 0, []
         for step in native.route_steps(route):
             held = step['bomb_reserve'] if step['bomb_reserve'] is not None else held
