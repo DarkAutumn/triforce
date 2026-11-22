@@ -18,7 +18,7 @@ fn policy_err(e: policy::PolicyError) -> PyErr {
     PyValueError::new_err(e.0)
 }
 
-fn contiguous<'py, T: numpy::Element>(
+pub(crate) fn contiguous<'py, T: numpy::Element>(
     py: Python<'py>,
     obj: &Bound<'py, PyAny>,
     dtype: &str,

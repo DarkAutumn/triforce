@@ -58,7 +58,18 @@ ENTITY_TYPES_KEY = 'entity_types'
 ENTITY_FEATURES_KEY = 'entity_features'
 GRID_KEY = 'grid'
 MASK_KEY = 'action_mask'
-_SPECIAL_KEYS = (ROOM_KEY, ENTITY_TYPES_KEY, ENTITY_FEATURES_KEY, GRID_KEY, MASK_KEY)
+# Schema 7's per-entity token blocks (round36.md "Observation v7 and the hit network"): read by the token networks
+# (``nets/hitnet.py``), never by ``ZeldaPolicy`` (nor the Rust actor), whose layout leaves them out.
+ENTITY_REL_KEY = 'entity_rel'
+ENTITY_CONTACT_KEY = 'entity_contact'
+TOKEN_KEYS = (ENTITY_REL_KEY, ENTITY_CONTACT_KEY)
+_SPECIAL_KEYS = (ROOM_KEY, ENTITY_TYPES_KEY, ENTITY_FEATURES_KEY, GRID_KEY, MASK_KEY) + TOKEN_KEYS
+
+
+def policy_spec(obs_spec: dict) -> dict:
+    """``obs_spec`` without the keys a ``ZeldaPolicy`` never reads (``TOKEN_KEYS``): its layout, so a network built
+    on schema 7 has the same ``obs_spec`` (and plays the same in Rust) as one built on schema 6."""
+    return {k: v for k, v in obs_spec.items() if k not in TOKEN_KEYS}
 
 
 @dataclass
@@ -262,6 +273,7 @@ class ZeldaPolicy(nn.Module):
             config.obs_spec = obs_spec_from_space(observation_space)
         if not config.obs_spec:
             raise ValueError("ZeldaPolicy needs an observation space or a config with obs_spec")
+        config.obs_spec = policy_spec(config.obs_spec)
         self.config = config
         spec = config.obs_spec
 
@@ -488,6 +500,7 @@ def widen_policy(network: ZeldaPolicy, obs_spec: dict) -> ZeldaPolicy:
     shape changed (features added to ``entity_features``, ``link``, ``room_state``) is refused: that is a new
     observation schema, widened by name by ``triforce convert-model``."""
     old_spec = network.config.obs_spec
+    obs_spec = policy_spec(obs_spec)
     for key, entry in old_spec.items():
         if obs_spec.get(key) != entry:
             raise ValueError(f"Can't widen: observation key '{key}' is {entry}, the new layout has "

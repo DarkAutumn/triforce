@@ -203,6 +203,14 @@ pub fn obs_values(o: &Observation) -> Vec<(&'static str, Vec<f64>)> {
             "action_mask",
             o.action_mask.iter().map(|&x| x as u8 as f64).collect(),
         ),
+        (
+            "entity_rel",
+            o.entity_rel.iter().flat_map(|r| f(r)).collect(),
+        ),
+        (
+            "entity_contact",
+            o.entity_contact.iter().flat_map(|r| f(r)).collect(),
+        ),
     ]
 }
 

@@ -696,6 +696,55 @@ pub fn observe<'py>(py: Python<'py>, state: &PyGameState, rupee_reserve: u8) -> 
     crate::convert::obs_to_dict(py, &obs)
 }
 
+/// Schema 7's `entity_rel` `[N, 12, 10]` and `entity_contact` `[N, 12, 23]` (`env::observation::danger_blocks`) of
+/// `N` rows given as the 2 KB RAM `[N, 2048]`, the tile grid `[N, 22, 32]` and the entity features `[N, 12, 41]` the
+/// observation holds: what the engine puts in those keys, for parity tests and datasets recorded with the RAM.
+#[pyfunction]
+pub fn danger_blocks<'py>(
+    py: Python<'py>,
+    ram: &Bound<'py, PyAny>,
+    grid: &Bound<'py, PyAny>,
+    entity_features: &Bound<'py, PyAny>,
+) -> PyResult<(Bound<'py, PyAny>, Bound<'py, PyAny>)> {
+    use env::observation::{
+        ENTITY_CONTACT_SIZE, ENTITY_FEATURE_SIZE, ENTITY_REL_SIZE, GRID_COLS, GRID_ROWS, NUM_ENTITY_SLOTS,
+    };
+    use numpy::PyUntypedArrayMethods;
+    const RAM: usize = 0x800; // the NES's 2 KB work RAM, as datasets keep it
+    let ram = crate::policy::contiguous::<u8>(py, ram, "uint8", "ram")?;
+    let grid = crate::policy::contiguous::<u8>(py, grid, "uint8", "grid")?;
+    let feats = crate::policy::contiguous::<f32>(py, entity_features, "float32", "entity_features")?;
+    let n = ram.shape().first().copied().unwrap_or(0);
+    if ram.shape() != [n, RAM]
+        || grid.shape() != [n, GRID_ROWS, GRID_COLS]
+        || feats.shape() != [n, NUM_ENTITY_SLOTS, ENTITY_FEATURE_SIZE]
+    {
+        return Err(PyValueError::new_err(format!(
+            "want ram [N, 2048], grid [N, 22, 32], entity_features [N, 12, 41]; got {:?}, {:?}, {:?}",
+            ram.shape(),
+            grid.shape(),
+            feats.shape()
+        )));
+    }
+    let (ram, grid, feats) = (ram.as_slice()?, grid.as_slice()?, feats.as_slice()?);
+    let mut rel = Vec::with_capacity(n * NUM_ENTITY_SLOTS * ENTITY_REL_SIZE);
+    let mut con = Vec::with_capacity(n * NUM_ENTITY_SLOTS * ENTITY_CONTACT_SIZE);
+    let (ram_n, grid_n, feat_n) = (RAM, GRID_ROWS * GRID_COLS, NUM_ENTITY_SLOTS * ENTITY_FEATURE_SIZE);
+    for i in 0..n {
+        let mut g = [[0u8; GRID_COLS]; GRID_ROWS];
+        g.as_flattened_mut().copy_from_slice(&grid[i * grid_n..(i + 1) * grid_n]);
+        let mut f = [[0f32; ENTITY_FEATURE_SIZE]; NUM_ENTITY_SLOTS];
+        f.as_flattened_mut().copy_from_slice(&feats[i * feat_n..(i + 1) * feat_n]);
+        let (r, c) = env::observation::danger_blocks(&ram[i * ram_n..(i + 1) * ram_n], &g, &f);
+        rel.extend_from_slice(r.as_flattened());
+        con.extend_from_slice(c.as_flattened());
+    }
+    Ok((
+        PyArray::from_vec(py, rel).reshape([n, NUM_ENTITY_SLOTS, ENTITY_REL_SIZE])?.into_any(),
+        PyArray::from_vec(py, con).reshape([n, NUM_ENTITY_SLOTS, ENTITY_CONTACT_SIZE])?.into_any(),
+    ))
+}
+
 /// The name a power-on start registers for `name`: upper-cased.  ValueError if it can't be registered (1 to 8
 /// of A-Z, 0-9 and space, not all spaces) or starts the second quest (ZELDA).
 #[pyfunction]

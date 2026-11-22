@@ -651,6 +651,8 @@ Python sees the layout as
 | `objective` | float32 [10] | all zeros when `objective` is off |
 | `target` | float32 [8] | all zeros when `obs.target` is off |
 | `action_mask` | bool [143] | flat `ActionMask` |
+| `entity_rel` | float32 [12, 10] | schema 7: Link-relative geometry per entity slot (below) |
+| `entity_contact` | float32 [12, 23] | schema 7: velocity, the touch rule and its extrapolation per entity slot (below) |
 
 When the objective block is on, the env attaches the objective (`crates/env/src/objective.rs`) before calling
 the builder.
@@ -735,6 +737,33 @@ its last observation with a nonzero `visible` in this room (0 if never) with `dx
 nothing; in both, its velocity is 0 while hidden and on its first visible observation after. Every other type and
 column is the same in every mode. The owner chooses the mode when round 27 (Wizzrobes) starts; no promoted family
 meets these types.
+
+**Schema 7 (round 36, `docs/experiments/round36.md` "Observation v7 and the hit network").** Two NEW keys, after
+`action_mask`; no schema 6 key or column changes (`tests/test_obs_legacy.py` still hashes every schema 5 column, the
+new keys left out). A `ZeldaPolicy` and the Rust actor never read them (`model.TOKEN_KEYS`, `model.policy_spec`:
+its `obs_spec` leaves them out, so a network built on schema 7 has the layout of one built on schema 6 and today's
+checkpoints load and play bit for bit); the token networks (`triforce/nets/hitnet.py`) do. Both are
+`env::observation::danger_blocks` (`_native.danger_blocks(ram [N, 2048], grid [N, 22, 32], entity_features [N, 12,
+41])` computes them for recorded RAM) with the touch rule's pieces in `zelda::contact`: **arithmetic on the current
+state only** (the RAM, the tile grid, the entity block), no emulator step and nothing looked ahead; experiment 2
+chose them as the game's own touch test put in Link's terms (whether the owner counts the straight-line
+extrapolation as a "small calculation" is asked in round36.md). Observation slot `i` is RAM object slot `i + 1`;
+positions are the entity block's (`x`, `y` back in pixels), so the treasure slot and Gleeok's heads have their
+observation positions; an empty slot is all 0. `tests/test_obs_v7.py` checks every column against the numpy of
+experiment 2's bench (`scripts/experiments/r36_hit_bench.py` `token_features`) on 20,000 recorded decisions of each
+of goriya, Gleeok and darknut, bit for bit.
+
+| Key, columns | Names | Value |
+|---|---|---|
+| `entity_rel` 0, 1 | `dx`, `dy` | middle-to-middle offset / 8, clipped to ±12: the object's middle is asm:Obj_GetMiddle's (x + 8, or + 4 with ObjAttr `$4BF` bit `$40`; y + 8), Link's his corner (`$70`, `$84`) + 8 |
+| `entity_rel` 2-4 | `gap_x`, `gap_y`, `gap` | max(\|d\| − 8, 0) / 8 per axis (pixels before the 9-pixel touch test passes on it) and the larger, clipped to 0-12 |
+| `entity_rel` 5-7 | `touching`, `in_row`, `in_column` | both \|d\| under 9; \|dy\| under 9; \|dx\| under 9 |
+| `entity_rel` 8, 9 | `dx_coarse`, `dy_coarse` | the offset / 64 |
+| `entity_contact` 0, 1 | `vx`, `vy` | pixels a frame from ObjDir `$98` (1 right, 2 left, 4 down, 8 up) and ObjQSpeedFrac `$3BC` / 64 (0 for the treasure slot) |
+| `entity_contact` 2 | `harms` | asm:Link_CheckMonsterTouch_NoReset's condition: ObjType `$34F` ≠ 0, ObjMetastate `$405` 0, ObjStunTimer `$3D` 0, a shot (`$53` up) only in ObjState `$10-$1F`; the treasure slot and Gleeok's heads their `touch_harms` |
+| `entity_contact` 3-7 | `contact_{stand,N,S,W,E}` | Link standing or walking that way at 1.5 px a frame, the object moving straight on at its velocity: how soon both middles come within 9 px on both axes in frames 0-32, (33 − t) / 33, 0 never; 0 when it does not harm |
+| `entity_contact` 8-12 | `closest_{stand,N,S,W,E}` | the smallest gap (max(\|dx\|, \|dy\|) − 9) over those frames, clipped to 0-64, / 32; 2 when it does not harm |
+| `entity_contact` 13-22 | `wall_contact_*`, `wall_closest_*` | the same with both stopped at walls: Link where his lower half (rows 8-15 of his 16 × 16 box) meets a tile class he cannot cross (all but walkable, the door corridors, stairs) or the play area's edge, searched up to 48 px; a walking monster likewise along its velocity; shots and fliers (Keese, Gleeok, Peahat) never |
 
 Checkpoints saved before r56 carry `model_config.grid_encoder: 'conv'`; the conv encoder is the only one left, so
 `ModelConfig.from_dict` drops that key and refuses any other encoder.

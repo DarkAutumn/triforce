@@ -21,6 +21,7 @@ use zelda::room_state::{
     DOOR_DIRECTIONS, DOOR_KINDS, ITEM_COMPASS, ITEM_HEART_CONTAINER, ITEM_KEY, ITEM_MAP,
     ITEM_TRIFORCE, NUM_ITEM_IDS, PUSH_BLOCK_STATES, RoomState, SecretTrigger, decode_room_state,
 };
+use zelda::contact;
 use zelda::tiles::{Grid, NUM_TILE_CLASSES, build_grid};
 use zelda::{Action, Change};
 
@@ -30,7 +31,10 @@ use zelda::{Action, Change};
 /// game): 8 entity features after the 33 (`touch_harms` .. `ringleader`), 6 at `link`'s end (`sword_blocked` ..
 /// `rupees_few`), 4 at `room_state`'s end (`frame_phase_32` .. `wallmaster_lure`); no existing column changes
 /// meaning. A schema 5 checkpoint is widened by `triforce convert-model` (zero weights on the new columns).
-pub const OBS_SCHEMA_VERSION: u32 = 6;
+/// 7 (round 36, "Observation v7 and the hit network"): two NEW keys, `entity_rel` and `entity_contact` (per entity
+/// slot, Link-relative pixels on the touch test's scale and the touch rule extrapolated: `danger_blocks`); every
+/// schema 6 key is unchanged, and a network that does not read the new keys plays exactly as before.
+pub const OBS_SCHEMA_VERSION: u32 = 7;
 
 /// NES object slots 1-$B, then the room item ("treasure").
 pub const NUM_ENTITY_SLOTS: usize = 12;
@@ -51,6 +55,10 @@ pub const OBJECTIVE_SIZE: usize = 10;
 pub const TARGET_SIZE: usize = 8;
 pub const GRID_ROWS: usize = 22;
 pub const GRID_COLS: usize = 32;
+/// Schema 7: `entity_rel` columns a slot (`danger_blocks`).
+pub const ENTITY_REL_SIZE: usize = 10;
+/// Schema 7: `entity_contact` columns a slot (`danger_blocks`).
+pub const ENTITY_CONTACT_SIZE: usize = 23;
 
 const PLAY_Y0: f64 = 64.0;
 const PLAY_H: f64 = 176.0;
@@ -312,6 +320,9 @@ pub struct FeatureNames {
     pub entity: Vec<String>,
     pub history: Vec<String>,
     pub objective: Vec<String>,
+    /// Schema 7: `entity_rel` and `entity_contact` columns.
+    pub entity_rel: Vec<String>,
+    pub entity_contact: Vec<String>,
     pub target: Vec<String>,
 }
 
@@ -534,6 +545,14 @@ fn build_feature_names() -> FeatureNames {
         "target_is_item",
     ]));
 
+    let entity_rel = s(&[
+        "dx", "dy", "gap_x", "gap_y", "gap", "touching", "in_row", "in_column", "dx_coarse", "dy_coarse",
+    ]);
+    let mut entity_contact = s(&["vx", "vy", "harms"]);
+    for group in ["contact", "closest", "wall_contact", "wall_closest"] {
+        entity_contact.extend(["stand", "N", "S", "W", "E"].iter().map(|m| format!("{group}_{m}")));
+    }
+
     FeatureNames {
         room_state: rs,
         link,
@@ -541,6 +560,8 @@ fn build_feature_names() -> FeatureNames {
         history,
         objective,
         target,
+        entity_rel,
+        entity_contact,
     }
 }
 
@@ -558,7 +579,7 @@ pub struct ObsKeySpec {
 }
 
 /// Every observation key, in `observation_space` order.
-pub const OBS_SPEC: [ObsKeySpec; 10] = [
+pub const OBS_SPEC: [ObsKeySpec; 12] = [
     ObsKeySpec {
         key: "room_id",
         shape: &[1],
@@ -639,6 +660,22 @@ pub const OBS_SPEC: [ObsKeySpec; 10] = [
         low: 0.0,
         high: 1.0,
     },
+    ObsKeySpec {
+        key: "entity_rel",
+        shape: &[NUM_ENTITY_SLOTS, ENTITY_REL_SIZE],
+        vocab: None,
+        dtype: "float32",
+        low: -12.0,
+        high: 12.0,
+    },
+    ObsKeySpec {
+        key: "entity_contact",
+        shape: &[NUM_ENTITY_SLOTS, ENTITY_CONTACT_SIZE],
+        vocab: None,
+        dtype: "float32",
+        low: -4.0,
+        high: 4.0,
+    },
 ];
 
 /// One observation (every key of `OBS_SPEC`).
@@ -656,6 +693,10 @@ pub struct Observation {
     /// The walk to the nearest PBRS wavefront target (all zero with `obs.target` off).
     pub target: [f32; TARGET_SIZE],
     pub action_mask: [bool; MASK_SIZE],
+    /// Schema 7: per entity slot, Link-relative geometry on the touch test's scale (`danger_blocks`).
+    pub entity_rel: [[f32; ENTITY_REL_SIZE]; NUM_ENTITY_SLOTS],
+    /// Schema 7: per entity slot, velocity, the touch rule and its extrapolation (`danger_blocks`).
+    pub entity_contact: [[f32; ENTITY_CONTACT_SIZE]; NUM_ENTITY_SLOTS],
 }
 
 /// `room_id` embedding index for (level, in_cave, room).
@@ -715,6 +756,97 @@ fn entry_side_from_position(level: u8, x: i32, y: i32) -> Option<Direction> {
     } else {
         None
     }
+}
+
+/// Schema 7's two per-entity blocks (`entity_rel` `[12, 10]`, `entity_contact` `[12, 23]`) from the RAM, the tile
+/// grid and the entity features already built (round36.md "Observation v7 and the hit network"). Arithmetic on the
+/// current state only: no emulator step, nothing looked ahead. Observation slot `i` is RAM object slot `i + 1`
+/// (`backed` when that slot holds an object); the treasure slot and Gleeok's heads have only the observation's
+/// position and `touch_harms`. Positions are the observation's (`x`, `y` back in pixels), Link's his RAM corner.
+///
+/// `entity_rel`: the middle-to-middle offset (asm:Obj_GetMiddle: x + 8, or + 4 for ObjAttr bit $40; y + 8) / 8 on
+/// each axis, clipped to ±12 (the 9-pixel touch test is about one step); the gap on each axis before the test passes,
+/// max(|d| - 8, 0) / 8, and the larger of the two (clipped to 0-12); touching (both under 9), in his row (|dy| under
+/// 9), in his column (|dx| under 9); the offset / 64.
+///
+/// `entity_contact`: the velocity in pixels a frame (ObjDir, ObjQSpeedFrac / 64); whether it harms on touch now
+/// (asm:Link_CheckMonsterTouch_NoReset: live, ObjMetastate 0, ObjStunTimer 0, a shot only in ObjState $10-$1F); then
+/// for Link standing or walking N, S, W, E at 1.5 px a frame with the object moving straight on: how soon they touch
+/// within 32 frames ((33 - t) / 33, 0 never) and how close they come (the gap / 32), once in straight lines and once
+/// with both stopped at walls (Link where his lower half meets a tile he cannot cross; a walking monster likewise;
+/// shots and fliers never). A slot that does not harm reads 0 and 2 (no contact, far); an empty slot all 0.
+/// Every value equals `scripts/experiments/r36_hit_bench.py`'s `rel`, `ramvel`, `contact`, `wall` (harms once).
+pub fn danger_blocks(
+    ram: &[u8],
+    grid: &Grid,
+    feats: &[[f32; ENTITY_FEATURE_SIZE]; NUM_ENTITY_SLOTS],
+) -> (
+    [[f32; ENTITY_REL_SIZE]; NUM_ENTITY_SLOTS],
+    [[f32; ENTITY_CONTACT_SIZE]; NUM_ENTITY_SLOTS],
+) {
+    let mut rel = [[0f32; ENTITY_REL_SIZE]; NUM_ENTITY_SLOTS];
+    let mut con = [[0f32; ENTITY_CONTACT_SIZE]; NUM_ENTITY_SLOTS];
+    let (lx, ly) = (ram[OBJ_X] as f32, ram[OBJ_Y] as f32);
+    let link_travel = TARGET_STEPS.map(|(ux, uy)| contact::travel(lx, ly, ux as f32, uy as f32, grid));
+    for i in 0..NUM_ENTITY_SLOTS {
+        let f = &feats[i];
+        if f[e::PRESENCE] <= 0.0 {
+            continue;
+        }
+        let slot = (i < TREASURE_SLOT).then_some(i + 1);
+        let (obj_type, attr) = slot.map_or((0, 0), |s| contact::slot_type(ram, s));
+        let backed = obj_type != 0;
+        let x = (f[e::X] * 255.0).round_ties_even();
+        let y = (f[e::Y] * 176.0).round_ties_even() + 64.0;
+        let dx = x + if backed { contact::middle_x(attr) } else { 8.0 } - (lx + 8.0);
+        let dy = y + 8.0 - (ly + 8.0);
+        let (gx, gy) = ((dx.abs() - 8.0).max(0.0), (dy.abs() - 8.0).max(0.0));
+        let near = |d: f32| b(d.abs() < contact::TOUCH);
+        rel[i] = [
+            (dx / 8.0).clamp(-12.0, 12.0),
+            (dy / 8.0).clamp(-12.0, 12.0),
+            (gx / 8.0).clamp(0.0, 12.0),
+            (gy / 8.0).clamp(0.0, 12.0),
+            (gx.max(gy) / 8.0).clamp(0.0, 12.0),
+            near(dx) * near(dy),
+            near(dy),
+            near(dx),
+            dx / 64.0,
+            dy / 64.0,
+        ];
+
+        let (vx, vy) = slot.map_or((0.0, 0.0), |s| contact::velocity(ram, s));
+        let harms = match slot {
+            Some(s) if backed => contact::harms_on_touch(ram, s),
+            _ => f[e::TOUCH_HARMS] > 0.0,
+        };
+        let c = &mut con[i];
+        (c[0], c[1], c[2]) = (vx, vy, b(harms));
+        let speed = vx.hypot(vy);
+        let walker = harms && backed && (vx != 0.0 || vy != 0.0) && slot.is_some_and(|s| contact::walks(ram, s));
+        let mob_travel = if walker {
+            contact::travel(x, y, vx / speed, vy / speed, grid)
+        } else {
+            contact::UNSTOPPED
+        };
+        let (ux, uy) = if speed > 0.0 { (vx / speed.max(1e-6), vy / speed.max(1e-6)) } else { (0.0, 0.0) };
+        for (m, &(mx, my)) in contact::MOTIONS.iter().enumerate() {
+            let (straight, walled) = if harms {
+                let (svx, svy) = (vx - mx * contact::LINK_SPEED, vy - my * contact::LINK_SPEED);
+                let straight = contact::approach(|t| (dx + svx * t, dy + svy * t));
+                let walled = contact::approach(|t| {
+                    let link = if m == 0 { 0.0 } else { (contact::LINK_SPEED * t).min(link_travel[m - 1]) };
+                    let mob = (speed * t).min(mob_travel);
+                    ((dx + ux * mob) - mx * link, (dy + uy * mob) - my * link)
+                });
+                (straight, walled)
+            } else {
+                ((0.0, 2.0), (0.0, 2.0))
+            };
+            (c[3 + m], c[8 + m], c[13 + m], c[18 + m]) = (straight.0, straight.1, walled.0, walled.1);
+        }
+    }
+    (rel, con)
 }
 
 /// Builds observations, keeping the memory velocities and history need: one per environment, `reset` at every
@@ -829,13 +961,15 @@ impl ObservationBuilder {
         let same_room = !looped && self.prev_room == Some(key);
         let (entity_types, entity_features) = self.entities(state, &rs, frames, same_room);
         self.prev_room = Some(key);
+        let grid = build_grid(state, &rs);
+        let (entity_rel, entity_contact) = danger_blocks(state.ram(), &grid, &entity_features);
         Observation {
             room_id: room_index(rs.level, rs.in_cave, rs.room),
             room_state: room_state(&rs, state),
             link: link(state, mask, self.bomb_reserve, self.rupee_reserve),
             entity_types,
             entity_features,
-            grid: build_grid(state, &rs),
+            grid,
             history: self.history(action, frames, interrupt, room_changed),
             objective: self.objective_features(state, objective),
             target: if self.target {
@@ -844,6 +978,8 @@ impl ObservationBuilder {
                 [0.0; TARGET_SIZE]
             },
             action_mask: mask.to_flat(),
+            entity_rel,
+            entity_contact,
         }
     }
 

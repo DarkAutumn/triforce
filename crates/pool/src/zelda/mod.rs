@@ -54,6 +54,9 @@ pub const HISTORY: usize = 6;
 pub const OBJECTIVE: usize = 7;
 pub const TARGET: usize = 8;
 pub const ACTION_MASK: usize = 9;
+/// Schema 7's per-entity keys, after the action mask so no earlier column moves.
+pub const ENTITY_REL: usize = 10;
+pub const ENTITY_CONTACT: usize = 11;
 
 /// The observation layout of `env::OBS_SPEC` (schema v2).
 pub fn obs_layout() -> ObsLayout {
@@ -86,6 +89,8 @@ pub fn write_observation(obs: &Observation, row: &mut ObsRow<'_>) {
     row.f32(OBJECTIVE).copy_from_slice(&obs.objective);
     row.f32(TARGET).copy_from_slice(&obs.target);
     row.bool(ACTION_MASK).copy_from_slice(&obs.action_mask);
+    row.f32(ENTITY_REL).copy_from_slice(obs.entity_rel.as_flattened());
+    row.f32(ENTITY_CONTACT).copy_from_slice(obs.entity_contact.as_flattened());
 }
 
 /// Names of the interrupt codes: index 0 is no interrupt, `1 + i` is `Interrupt::ALL[i]`.
@@ -238,8 +243,8 @@ mod tests {
     use super::*;
     use crate::layout::ObsData;
     use env::observation::{
-        ENTITY_FEATURE_SIZE, GRID_ROWS, HISTORY_SIZE, LINK_SIZE, NUM_ENTITY_SLOTS, OBJECTIVE_SIZE,
-        ROOM_STATE_SIZE, TARGET_SIZE,
+        ENTITY_CONTACT_SIZE, ENTITY_FEATURE_SIZE, ENTITY_REL_SIZE, GRID_ROWS, HISTORY_SIZE, LINK_SIZE,
+        NUM_ENTITY_SLOTS, OBJECTIVE_SIZE, ROOM_STATE_SIZE, TARGET_SIZE,
     };
     use zelda::MASK_SIZE;
 
@@ -256,6 +261,8 @@ mod tests {
             (OBJECTIVE, "objective"),
             (TARGET, "target"),
             (ACTION_MASK, "action_mask"),
+            (ENTITY_REL, "entity_rel"),
+            (ENTITY_CONTACT, "entity_contact"),
         ];
         assert_eq!(names.len(), OBS_SPEC.len());
         let layout = obs_layout();
@@ -290,6 +297,8 @@ mod tests {
             objective: [0.0; OBJECTIVE_SIZE],
             target: [0.0; TARGET_SIZE],
             action_mask: [false; MASK_SIZE],
+            entity_rel: [[0.0; ENTITY_REL_SIZE]; NUM_ENTITY_SLOTS],
+            entity_contact: [[0.0; ENTITY_CONTACT_SIZE]; NUM_ENTITY_SLOTS],
         };
         obs.room_state.iter_mut().for_each(|v| *v = next());
         obs.link.iter_mut().for_each(|v| *v = next());
@@ -300,6 +309,8 @@ mod tests {
         obs.history.iter_mut().for_each(|v| *v = next());
         obs.objective.iter_mut().for_each(|v| *v = next());
         obs.target.iter_mut().for_each(|v| *v = next());
+        obs.entity_rel.iter_mut().flatten().for_each(|v| *v = next());
+        obs.entity_contact.iter_mut().flatten().for_each(|v| *v = next());
         for (i, t) in obs.entity_types.iter_mut().enumerate() {
             *t = 100 + i as i64;
         }
@@ -327,5 +338,7 @@ mod tests {
         assert_eq!(data.f32(OBJECTIVE), obs.objective);
         assert_eq!(data.f32(TARGET), obs.target);
         assert_eq!(data.bool(ACTION_MASK), obs.action_mask);
+        assert_eq!(data.f32(ENTITY_REL), obs.entity_rel.as_flattened());
+        assert_eq!(data.f32(ENTITY_CONTACT), obs.entity_contact.as_flattened());
     }
 }

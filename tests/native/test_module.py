@@ -5,11 +5,13 @@ from triforce import _native as native
 
 def test_constants():
     assert native.FRAME_SHAPE == (240, 256, 3)
-    assert native.OBS_SCHEMA_VERSION == 6
+    assert native.OBS_SCHEMA_VERSION == 7
     assert native.ACTION_SCHEMA_VERSION == 3
     spec = native.OBS_SPEC
     assert list(spec) == ['room_id', 'room_state', 'link', 'entity_types', 'entity_features', 'grid', 'history',
-                          'objective', 'target', 'action_mask']
+                          'objective', 'target', 'action_mask', 'entity_rel', 'entity_contact']
+    assert spec['entity_rel']['shape'] == (12, len(native.ENTITY_REL_FEATURES))
+    assert spec['entity_contact']['shape'] == (12, len(native.ENTITY_CONTACT_FEATURES))
     assert spec['room_state']['shape'] == (len(native.ROOM_STATE_FEATURES),)
     assert spec['link']['shape'] == (len(native.LINK_FEATURES),)
     assert spec['entity_features']['shape'] == (native.NUM_ENTITY_SLOTS, len(native.ENTITY_FEATURES))
