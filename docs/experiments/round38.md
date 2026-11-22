@@ -337,3 +337,65 @@ rooms (the labels are cheap: `lab.record --try-others 8:1.0` adds no network pas
 combined network reaches (§3), kept out of the policy's gradient; the shift applied at play with one weight (w = 4-8
 fitted goriya, darknut and Gleeok alike); branch `r38-one`'s `h768` shape (a hitnet with a dormant joint head) is
 the body to put it on.
+
+## The combination as goriya's run (branch `r38-hit` after main's merge)
+
+**Code base from here:** main 76832c54 merged (the Bubble's touch, harvested start states by namespace, the
+queue's niceness), plus one commit that only this measurement needs and the lead drops when 2.0.0.6's bomb rules
+land: d3first's 7:0x1b `treasure: {if_bombs_below: 8}` (the fight below 8 bombs, what 2.0.0.6's floor gives it).
+The merged code plays as before: §2's bench, played again on it, gives the same numbers to the last digit (teacher
+0.808, w = 4 0.519, w = 8 0.529 hits a visit; 7:0x1b 3.833 / 2.320 / 2.083).
+
+### 8. A run like any other
+
+`r38_hit.py combine --name goriya --run r38shift-pre --weights 8` writes `models/goriya/r38shift-pre-w8`: `ckpt.pt`
+(arch `hitshift`, its `specialist` goriya), `version`, `act` (`temperature:0.5+relax:16` bound to the weights) and,
+from the canonical evaluation (`triforce evaluate --specialist specialists/d3first/goriya.yaml`, 100 episodes a
+state), `eval.json`; `triforce list` counts it among goriya's runs and `triforce promote goriya r38shift-pre-w8
+--route d3first` makes it the route's goriya. `tests/test_hitshift.py`: the shifted heads have the marginals of
+p · exp(−w · softplus(h)) over (kind), (kind, direction), (kind, duration); w = 0 returns the policy's logits
+exactly; the policy's losses never reach the hit body; a combination promoted in a models directory is played by a
+chain with replays, the golden race, `zelda-headless.py` and `play-zelda.py`'s two simulation sources, and by an
+evaluation, all from the observation alone (an act mode with the planner's look-ahead is refused for it). One
+limit, the lab's for every served network: the optional replay stream `decisions` (each decision's distribution)
+needs the Rust actor.
+
+### 9. Round 1's head at play
+
+The head retrained once on the corrected route's states (§3, `hit-r1`) in the same combination, on §2's bench
+(played on the merged code, same states and seeds):
+
+| arm | goriya@d3first hits a visit | hearts lost | success | 7:0x1b hits a visit | hearts lost | won |
+|---|---:|---:|---:|---:|---:|---:|
+| teacher | 0.808 | 0.151 | 98.3% | 3.833 | 1.942 | 83.3% |
+| first head, w = 4 | 0.519 | −0.084 | 99.0% | 2.320 | 0.588 | 92.7% |
+| first head, w = 8 | 0.529 | −0.095 | 99.0% | 2.083 | 0.385 | 94.3% |
+| round 1's head, w = 4 | 0.402 | −0.159 | 99.2% | 2.220 | 0.435 | 93.3% |
+| **round 1's head, w = 8** | **0.340** | **−0.191** | 99.2% | **1.973** | **0.217** | **96.0%** |
+| planner beside | 0.248 | −0.227 | 99.4% | 1.013 | −0.247 | 98.3% |
+
+Round 1 against the first head at w = 8, paired: goriya's rooms −0.190 ± 0.034 hits an episode (−36% a visit),
+hearts −0.096 ± 0.025; 7:0x1b −0.110 ± 0.085 hits, hearts −0.168 ± 0.104, won +1.7 ± 1.1 points. Against the
+teacher it now takes 58% fewer hits a visit in goriya's rooms (0.808 → 0.340): **84% of the planner's edge** there
+(the first head 50%), 66% in 7:0x1b. A head that has seen the combination's own states reads the hits the
+combination meets; w = 8 is now better than w = 4 in goriya's rooms too.
+
+### 10. Does the goriya head carry to Digdogger and the Wallmaster?
+
+The same construction with each family's `@d3first` network and the goriya head (the first one, w = 4 and 8), on
+their yardstick entries (the harvested `d3first` entries, 120 episodes, paired):
+
+| | hits a visit | hearts lost | success | hits − teacher (an episode) |
+|---|---:|---:|---:|---:|
+| boss-digdogger@d3first teacher (r34d7b-dig-s1) | 2.008 | 0.425 | 95.0% | |
+| goriya head, w = 4 | 1.908 | 0.317 | 96.7% | −0.100 ± 0.121 |
+| goriya head, w = 8 | 2.008 | 0.300 | 95.8% | +0.000 ± 0.116 |
+| planner | 1.358 | −0.117 | 96.7% | −0.650 ± 0.175 |
+| wallmaster@d3first teacher (r34d7-wall-s3) | 0.117 | −0.037 | 90.8% | |
+| goriya head, w = 4 and 8 | 0.117 | −0.037 | 90.8% | +0.000 ± 0.012 |
+| planner | 0.025 | −0.096 | 95.0% | −0.092 ± 0.029 |
+
+**It does not carry**: on Digdogger the goriya head moves nothing measurable while the planner takes a third fewer
+hits; Digdogger needs its own head (branch `r38-head` records boss-digdogger's look-ahead labels for that). The
+Wallmaster's entries are not lost to hits (0.12 a visit for every arm and the teacher), so a hit head has nothing
+to act on there.
