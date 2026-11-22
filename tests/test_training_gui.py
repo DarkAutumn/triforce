@@ -238,10 +238,11 @@ def test_eval_chain_throughput_reads_episodes_per_second_or_seconds_per_episode(
 
 
 def test_window_title_names_a_few_running_plans_and_counts_the_rest():
-    """Finished plans stay out of the title and many running ones are counted, so it stays short."""
+    """Finished plans stay out of the title and many running ones are counted, so it stays short; a job without a log
+    folder is named without a share done."""
     class Plan:
-        def __init__(self, name, status, done):
-            self.name, self._status, self._done = name, status, done
+        def __init__(self, name, status, done, registry_only=False):
+            self.name, self._status, self._done, self.registry_only = name, status, done, registry_only
 
         def status(self):
             return self._status
@@ -252,6 +253,7 @@ def test_window_title_names_a_few_running_plans_and_counts_the_rest():
     finished = [Plan(f'old-{index}', 'completed', 1.0) for index in range(40)]
     assert gui.window_title(finished, 0.0) == 'Triforce training'
     assert gui.window_title(finished + [Plan('r72-ow', 'running', 0.5)], 0.0) == '50% r72-ow — Triforce training'
+    assert gui.window_title([Plan('lab-r37', 'running', 0.0, True)], 0.0) == 'lab-r37 — Triforce training'
     many = [Plan(f'r23-pilot-{index}', 'running', 0.25) for index in range(30)]
     assert gui.window_title(finished + many, 0.0) == (
         '25% r23-pilot-0 · 25% r23-pilot-1 · 25% r23-pilot-2 · +27 more — Triforce training')
@@ -1173,3 +1175,230 @@ def test_finished_folders_leave_currently_running_after_an_hour(qapp, tmp_path, 
         if window is not None:
             window.close()
             window.deleteLater()
+
+
+# --------------------------------------------------------------------- a job the registry knows is never invisible
+
+# Every way into the job queue (``triforce.jobs``) as it registers: (entry point, kind, with a plan in a log folder).
+# A job without a folder has only its registry entry.  The owner watches the GUI to see what the machine is doing:
+# a job missing from it is a broken GUI (Nov 22: two lab trainings ran, the GUI showed one queued batch).
+ENTRY_POINTS = [
+    ('triforce train', 'train', True),
+    ('triforce evaluate', 'eval', True),
+    ('triforce evaluate --no-log', 'eval', False),
+    ('triforce eval-chain', 'chain', True),
+    ('triforce eval-chain --no-log', 'chain', False),
+    ('triforce eval-batch', 'eval-batch', True),
+    ('triforce select-checkpoint', 'eval-batch', True),
+    ('scripts/train_round.py', 'round', True),
+    ('triforce.lab.train', 'train', False),
+    ('triforce.lab.bench', 'eval', False),
+    ('triforce.lab.record', 'eval', False),
+    ('jobs.register', 'experiment', False),
+]
+
+
+@pytest.fixture
+def queue_env(tmp_path, monkeypatch):
+    """A registry and a logs root of the test's own; jobs start at once (``$TRIFORCE_NO_WAIT``); the window's own
+    logs root is empty, so whatever it shows it found through the registry."""
+    from triforce import jobs
+    registry, logs, root = tmp_path / 'jobs', tmp_path / 'logs', tmp_path / 'gui-root'
+    logs.mkdir()
+    root.mkdir()
+    monkeypatch.setenv(jobs.JOBS_DIR_ENV, str(registry))
+    assert gui.JOBS_DIR_ENV == jobs.JOBS_DIR_ENV
+    monkeypatch.setenv(jobs.NO_WAIT_ENV, '1')
+    monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
+    return registry, logs, root
+
+
+def enter_queue(stack, registry, logs, entry, kind, folder, waiting):
+    """A job of this process registered as ``entry`` registers (the real ``triforce.events`` and ``triforce.jobs``),
+    running (its turn came) or waiting (registered, not admitted yet); its plan (if any) ends with ``stack``.
+    Returns (its name, the path the GUI shows it by: its log folder, else its registry file)."""
+    import json
+    import re
+    from triforce import events, jobs
+    name = 'job-' + re.sub('[^a-z0-9]+', '-', entry.lower()).strip('-')
+    before = set(registry.glob('*.json'))
+    if waiting:
+        directory = events.new_log_dir(name, logs) if folder else None
+        record = jobs.register(directory, None if directory is None else directory / events.PLAN_FILE, name, kind,
+                               amounts=jobs.work(train_steps=1000))
+        if folder:                           # as TrainingPlan writes it while it waits its turn
+            (directory / events.PLAN_FILE).write_text(json.dumps({
+                'name': name, 'kind': kind, 'status': 'queued', 'created': iso(time_now()), 'host': record.data['host'],
+                'pid': os.getpid(), **jobs.checkout(), 'queue': {'queued': record.data['queued']},
+                'runs': [{'index': 0, 'specialist': 'a', 'status': 'pending'}]}))
+        return name, directory or record.path
+    if folder:
+        plan = events.TrainingPlan(events.new_log_dir(name, logs), name, kind, [{'specialist': 'a'}],
+                                   work=jobs.work(train_steps=1000))
+        stack.callback(plan.finish, 'completed')
+        return name, plan.directory
+    stack.enter_context(events.logged_job(name, kind, [], log=False, work=jobs.work(train_steps=1000)))
+    path, = set(registry.glob('*.json')) - before
+    return name, path
+
+
+@pytest.mark.parametrize('waiting', [False, True], ids=['running', 'waiting'])
+@pytest.mark.parametrize('entry,kind,folder', ENTRY_POINTS, ids=[entry for entry, _, _ in ENTRY_POINTS])
+def test_a_job_the_registry_knows_is_never_invisible(qapp, queue_env, entry, kind, folder, waiting):
+    """A job the registry knows is never invisible: whichever way a job entered the queue, with a log folder or
+    without one, running or waiting its turn, [currently running] and the web view list it by its name, kind and
+    status; one without a folder says it has no progress data."""
+    from contextlib import ExitStack
+    registry, logs, root = queue_env
+    status = 'queued' if waiting else 'running'
+    with ExitStack() as stack:
+        name, key = enter_queue(stack, registry, logs, entry, kind, folder, waiting)
+        live, _ = gui.registry_folders(gui.read_registry(registry), time_now())
+        assert live == [key]
+        window = gui.Window(root, None)
+        try:
+            assert window.live_mode and window._shown_dirs() == [key]
+            view, = window.views
+            assert view.model.name == name and view.model.status() == status
+            assert view.model.plan.get('kind') == kind
+            assert gui.registry_only(key) is not folder
+            assert gui.checkout_label(view.model.plan)                   # its checkout and branch
+            counts = gui.plan_counts(view.model, view.model.statuses())
+            assert (counts == [gui.NO_PROGRESS]) is not folder
+            if waiting:
+                assert view.header.waiting(time_now()).startswith('waiting · 1st in line')
+            view.header.grab()
+            labels = [window.combo.itemText(i) for i in range(window.combo.count())]
+            assert any(label.startswith(name if not folder else key.name) for label in labels)
+        finally:
+            window.close()
+            window.deleteLater()
+        snapshot = gui.WebState(root, machine=lambda: '', scan_every=0).refresh()
+        lines = snapshot['waiting'] if waiting else snapshot['plans']
+        assert [(line['plan'], line['plan_kind'], line['status'], line['no_progress']) for line in lines] == [
+            (name, kind, status, not folder)]
+        if not folder and not waiting:
+            card, = snapshot['cards']
+            assert card['name'] == name and card['active'] and card['phase'] == gui.NO_PROGRESS
+
+
+NEW_MODULE = """
+import sys, time
+from triforce import jobs
+record = jobs.register(None, None, 'brand-new', 'mystery', amounts=jobs.work(train_steps=10_000))
+record.wait_turn()
+print('admitted', flush=True)
+time.sleep(600)
+"""
+
+
+def test_a_new_module_that_enters_the_queue_without_a_plan_is_listed(qapp, queue_env):
+    """A job the registry knows is never invisible: a module nobody taught the GUI about, that registers itself in
+    the queue without a log folder (another process), is listed running with its name, kind, checkout and branch,
+    estimate and time run, its command, and 'no progress data'; its process gone, it is 'process gone' under the
+    finished heading.  The web view shows it too."""
+    import subprocess
+    import sys
+    from triforce import jobs
+    registry, _, root = queue_env
+    child = subprocess.Popen([sys.executable, '-c', NEW_MODULE], stdout=subprocess.PIPE, text=True,
+                             env={**os.environ, 'PYTHONPATH': str(ROOT)})
+    window = None
+    try:
+        assert child.stdout.readline().strip() == 'admitted'
+        entry, = registry.glob('*.json')
+        window = gui.Window(root, None)
+        assert window._shown_dirs() == [entry]
+        view, = window.views
+        model, now = view.model, time_now()
+        assert model.registry_only and model.name == 'brand-new' and model.status() == 'running'
+        assert model.plan['kind'] == 'mystery' and model.plan['pid'] == child.pid
+        here = jobs.checkout()
+        assert gui.checkout_label(model.plan) == f"{Path(here['checkout']).name} · {here['branch']}"
+        assert gui.plan_counts(model, model.statuses()) == [gui.NO_PROGRESS]
+        assert view.header.facts(now)['est'].startswith('est ') and ' · ran ' in view.header.facts(now)['est']
+        assert any('-c' in line for line in gui.registry_lines(model.plan))      # its command
+        assert 'brand-new' in window.windowTitle()
+        view.header.grab()
+        window.select(view, 'round')                                             # its detail: what the registry knows
+        assert 'brand-new' in window.detail.title.text()
+
+        state = gui.WebState(root, machine=lambda: '', scan_every=0)
+        snapshot = state.refresh()
+        card, = snapshot['cards']
+        assert (card['name'], card['kind'], card['status'], card['active'], card['no_progress']) == (
+            'brand-new', 'mystery', 'running', True, True)
+        assert card['bar_label'] == gui.NO_PROGRESS and card['est'].startswith('est ')
+        plan, = snapshot['plans']
+        assert plan['plan'] == 'brand-new' and plan['counts'] == [gui.NO_PROGRESS]
+
+        child.kill()
+        child.wait()
+        window._scan_and_update()
+        window.poll(force=True)
+        assert window._shown_dirs() == [entry] and window._heading_at == 0      # under 'finished'
+        assert view.model.status() == 'lost'
+        snapshot = state.refresh()
+        card, = snapshot['cards']
+        assert card['status'] == 'lost' and not card['active'] and snapshot['plans'] == []
+    finally:
+        if child.poll() is None:
+            child.kill()
+            child.wait()
+        if window is not None:
+            window.close()
+            window.deleteLater()
+
+
+def test_a_folder_less_job_is_replaced_by_its_folder_once_its_plan_is_written(qapp, queue_env):
+    """A plan is written a moment after its job registered: until then the job is shown by its registry file, then
+    by its folder, never both and never as finished."""
+    import json
+    from triforce import events, jobs
+    registry, logs, root = queue_env
+    directory = events.new_log_dir('soon', logs)
+    record = jobs.register(directory, directory / events.PLAN_FILE, 'soon', 'round')
+    window = gui.Window(root, None)
+    try:
+        assert window._shown_dirs() == [Path(record.path)]
+        (directory / events.PLAN_FILE).write_text(json.dumps({
+            'name': 'soon', 'kind': 'round', 'status': 'queued', 'created': iso(time_now()),
+            'host': record.data['host'], 'pid': os.getpid(), 'runs': []}))
+        window._scan_and_update()
+        assert window._shown_dirs() == [directory] and window._heading_at is None
+        state = gui.WebState(root, machine=lambda: '', scan_every=0)
+        assert [line['id'] for line in state.refresh()['waiting']] == [str(directory)]
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_the_web_pages_list_folder_less_jobs(queue_env):
+    """A job the registry knows is never invisible on the web view either: the snapshot (``/api/state``) and the
+    page's first paint (``/``) carry a running job without a folder (a card and a plan line, no progress data) and a
+    waiting one (a waiting line), beside a job with a folder."""
+    import json
+    from contextlib import ExitStack
+    registry, logs, root = queue_env
+    with ExitStack() as stack:
+        lab, _ = enter_queue(stack, registry, logs, 'triforce.lab.train', 'train', False, False)
+        batch, _ = enter_queue(stack, registry, logs, 'triforce eval-batch', 'eval-batch', True, False)
+        later, _ = enter_queue(stack, registry, logs, 'jobs.register', 'experiment', False, True)
+        state = gui.WebState(root, machine=lambda: '', scan_every=0)
+        server = gui.WebServer(state, '127.0.0.1', 0)
+        server.start(poll=False)
+        try:
+            snapshot = state.refresh()
+            status, kind, body = fetch(f"http://127.0.0.1:{server.port}/api/state")
+            assert status == 200 and json.loads(body) == snapshot
+            assert sorted((plan['plan'], plan['no_progress']) for plan in snapshot['plans']) == [
+                (batch, False), (lab, True)]
+            assert [(line['plan'], line['no_progress']) for line in snapshot['waiting']] == [(later, True)]
+            assert [card['name'] for card in snapshot['cards'] if card['no_progress']] == [lab]
+            status, kind, body = fetch(f"http://127.0.0.1:{server.port}/")
+            assert status == 200 and kind.startswith('text/html')
+            for name in (lab, batch, later):
+                assert f'"plan":"{name}"'.encode() in body
+            assert b'no progress data' in body
+        finally:
+            server.stop()
