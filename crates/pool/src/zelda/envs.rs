@@ -417,6 +417,9 @@ fn specialist_outcome(r: &StepResult) -> Outcome {
         health_lost: r.info.health_lost as f32,
         hits: r.info.hits,
         blocked: r.info.blocked,
+        calm: r.info.aimless.calm,
+        progress: r.info.aimless.progress_frames,
+        waste: r.info.aimless.waste_frames,
     }
 }
 

@@ -23,9 +23,9 @@ use crate::end_conditions::{
 };
 use crate::error::EnvError;
 use crate::heart_value::HeartContext;
-use crate::objective::{Attached, attach, needs_wavefront};
+use crate::objective::{Attached, attach, needs_wavefront, pulled};
 use crate::observation::{Observation, ObservationBuilder};
-use crate::rewards::{SUCCESS, Scored, score_step};
+use crate::rewards::{Outcome, SUCCESS, Scored, score_step};
 use std::sync::atomic::{AtomicU64, Ordering};
 use crate::start_states::{
     StartStatePool, StartWeights, StateStore, ram_randomization_values,
@@ -44,6 +44,7 @@ use zelda::executor::Interrupt;
 use zelda::game::GameView;
 use zelda::hearts::{HeartSummary, HeartTracker, HeartView};
 use zelda::decisions::{DecisionNote, DecisionStats};
+use zelda::aimless::{AimlessDecision, AimlessState, AimlessStep, AimlessTracker};
 use zelda::linger::{LingerState, LingerStep, LingerSummary, LingerTracker, linger_wavefront};
 use zelda::objectives::{GameCompletion, start_clips, start_route};
 use zelda::visits::{
@@ -102,6 +103,9 @@ pub struct StepInfo {
     pub hits: u32,
     /// A Bubble's touch landed in the step (`zelda::Change::bubble_touched`; not in the info dict).
     pub blocked: bool,
+    /// The decision was calm, and the frames of progress it made toward the goal (`zelda::aimless`, round 38; not
+    /// in the info dict; never on a simulated step).
+    pub aimless: AimlessDecision,
     pub action: Option<Action>,
     /// This step's reward terms (`rewards`).
     pub rewards: Vec<(&'static str, f64)>,
@@ -316,6 +320,10 @@ pub struct SpecialistEnv<N: Nes, St: StateStore<N::State>> {
     pub strict_actions: bool,
     pub rng: ChaCha8Rng,
     pub linger: LingerTracker,
+    /// The room visit's calm stretches (`zelda::aimless`), reset on every room change, and the state the next
+    /// decision is taken in. Simulated steps (`step_sim`) leave both alone.
+    aimless: AimlessTracker,
+    aimless_at: Option<AimlessState>,
     pub hearts: HeartTracker,
     /// Cheated bombs, keys and rupees (`zelda::cheats`).
     pub cheats: CheatLedger,
@@ -469,6 +477,8 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             shaping: opts.shaping,
             rng: ChaCha8Rng::seed_from_u64(opts.seed),
             linger: LingerTracker::default(),
+            aimless: AimlessTracker::default(),
+            aimless_at: None,
             hearts: HeartTracker::default(),
             cheats: CheatLedger::default(),
             left_with: ItemCounts::default(),
@@ -593,6 +603,11 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
 
     pub fn is_done(&self) -> bool {
         self.done
+    }
+
+    /// The room visit's aimless tracker (`zelda::aimless`, round 38).
+    pub fn aimless(&self) -> &AimlessTracker {
+        &self.aimless
     }
 
     /// The room visits of the episode that just ended (empty without `EnvOptions::track_visits`).
@@ -901,6 +916,9 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             .reset(&LingerState::of(state, &attached.objective), || {
                 linger_wavefront(state, &attached.objective, attached.wavefront.clone())
             });
+        let at = AimlessState::of(state, &attached.objective, pulled(&self.config.reward, &attached.objective, state));
+        self.aimless.reset(&at, || linger_wavefront(state, &attached.objective, None));
+        self.aimless_at = Some(at);
         self.blocks = 0;
         self.boss = BossTransitions::default();
         self.bomb_stats = BombStats::default();
@@ -1056,6 +1074,17 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             self.hearts.taken - taken,
             || linger_wavefront(&state, &curr.objective, curr.wavefront.clone()),
         );
+        // The aimless score (round 38) follows real steps only: a simulated one is undone by `load`.
+        let mut aimless = AimlessDecision::default();
+        if !sim {
+            let at = AimlessState::of(&state, &curr.objective, pulled(&self.config.reward, &curr.objective, &state));
+            if let Some(prev_at) = self.aimless_at.replace(at) {
+                let at = self.aimless_at.as_ref().expect("just set");
+                aimless = self.aimless.update(&prev_at, at, &AimlessStep::of(&change), false, || {
+                    linger_wavefront(&state, &curr.objective, None)
+                });
+            }
+        }
         self.blocks += change.blocks() as u32;
         let boss = BossTransitions::of(&change);
         self.boss += boss;
@@ -1069,7 +1098,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             next: gc.step(),
             clips: gc.clips_allowed(),
         };
-        let Scored { rewards, ending, outcome, terminated, truncated } = score_step(
+        let Scored { mut rewards, ending, outcome, terminated, truncated } = score_step(
             &self.config,
             &mut self.critic,
             &mut self.end_conditions,
@@ -1086,6 +1115,12 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             &state,
             &heart,
         )?;
+        // `penalty-aimless` (round 38, default off): a calm decision's rise of its stretch's waste
+        // (`zelda::aimless::AimlessDecision::waste_frames`), per frame, scaled like the other shaping terms.
+        if self.config.reward.aimless_penalty > 0.0 && aimless.waste_frames > 0.0 {
+            let value = self.config.reward.aimless_penalty * f64::from(aimless.waste_frames) * scale;
+            rewards.add(Outcome::penalty("penalty-aimless", -value));
+        }
 
         self.episode_steps += 1;
         self.episode_frames += (change.frames + change.menu_frames) as u64;
@@ -1137,6 +1172,9 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
                 episode_rewards: IndexMap::new(),
             });
         }
+        if !sim && terminal.is_some() {
+            self.aimless.close();
+        }
         if !sim && let Some(visits) = &mut self.visits {
             let end = terminal.as_ref().map_or(VisitEnd::Continue, |t| visit_end(&t.ending, t.outcome));
             let mut step = VisitStep::of(&change);
@@ -1146,7 +1184,14 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             step.boss_stuns = boss.stuns;
             step.boss_eats = boss.eats;
             step.decision = self.decision.take();
+            step.aimless = self.aimless.summary();
             visits.update(&natural_visit_view(&self.cheats, &state), &step, end);
+        }
+        // A new room is a new visit of the aimless score (a maze loop goes on, as the visit does).
+        if !sim && terminal.is_none() && state.full_location() != change.previous.full_location() {
+            let at = self.aimless_at.take().expect("set by this step");
+            self.aimless.reset(&at, || linger_wavefront(&state, &curr.objective, None));
+            self.aimless_at = Some(at);
         }
         let reward = rewards.value();
         self.reward_total += reward;
@@ -1174,6 +1219,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         info.health_lost = change.health_lost;
         info.hits = change.observed.hits() as u32;
         info.blocked = change.bubble_touched();
+        info.aimless = aimless;
         info.interrupt = change.interrupt;
         info.action = Some(action);
         info.rewards = rewards.terms().collect();
@@ -1197,6 +1243,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             health_lost: 0.0,
             hits: 0,
             blocked: false,
+            aimless: AimlessDecision::default(),
             // full_location: an underworld cellar is a sub-room like a cave (`1:0x7f:cave`), as in the visits.
             room: {
                 let l = state.full_location();

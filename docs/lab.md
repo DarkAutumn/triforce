@@ -52,6 +52,32 @@ more a decision on either path at these sizes: emulation, observation and the re
 never pays** (equal or slower: autocast's casts cost more than float16 saves on batches this small) and changes
 some decisions (4,400 against 4,126 on the same seeds): leave `TRIFORCE_SERVE_HALF` off.
 
+**CUDA graphs (Nov 22, on by default on the GPU; `TRIFORCE_SERVE_GRAPHS=0` turns them off).** The eager forward of
+a served network costs about 4.5 ms whatever the batch (1 to 32 rows): Python and kernel launches, not arithmetic.
+A chain that served four `hitshift` networks in Dungeon 3 kept its server thread busy 99.5% of the time and its
+emulators waiting, at 3-4 of its 10 cores. The server now captures each network's forward once per batch-size
+bucket (1, 2, 4, ..., 64; rows padded by repeating the last) and replays it: 0.67 ms at batch 1, 0.96 at 10, 1.36
+at 32 (a `hitshift` of 2.4M parameters). The answers agree with the eager forward within 2e-5 (3,000 real batches
+of four networks, no top-action change); a 20-run chain logging every decision matched the eager chain decision
+for decision. A graph's first three replays are checked against the eager forward; a capture that fails or a
+replay that disagrees serves that network eagerly from then on, with a warning. Recurrent networks stay eager.
+With graphs the batch window drops from 5 ms to 1 ms (`GRAPH_GATHER`; `TRIFORCE_SERVE_GATHER` overrides): a
+forward is cheap, so answering sooner beats a fuller batch. The 200-run `d3first` chain from `3_7cs_0` with four
+`hitshift` networks (106,936 decisions, every run identical across the three):
+
+| Serving | Wall | CPU (cores) | Decisions a second |
+|---|---:|---:|---:|
+| eager, 5 ms window (before) | 537 s | 20.7 (idle threads spinning) | 199 |
+| graphs, 5 ms window | 134 s | 4.2 | 798 |
+| graphs, 1 ms window (default) | 100 s | 11.0 | 1,068 |
+
+**One index a served network (Nov 22).** `load_model(path)[0].to_native()` in a loop (`runner.Policies`) served
+each copy under the id of a temporary that died at once; the next network often had the same id and replaced the
+earlier one at its index, so a chain serving two or more torch networks could play one family's rooms with
+another's network (2 processes of 3 when loading four; which family, random per process). A dead network's key is
+now forgotten and indices are never reused (`tests/test_lab_nets.py`). Unaffected: one served network per process
+(also loaded one after another, each arm replacing the last), networks the Rust actor plays.
+
 **Chosen: (c) with (a) as the generic path.** A network the Rust actor knows (`ZeldaPolicy`) plays as before, bit
 for bit (100 chain runs of `d3first` from `3_7cs_0`, seeds 0-99, today's networks: every run's record identical,
 field for field, between main and this branch; again at 2.0.0.5 on the corrected route, between the route's branch

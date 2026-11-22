@@ -3,6 +3,7 @@
 //! Ported from the old Python game stack (removed; history in docs/decisions.md 2026-11-05).
 
 pub mod actions;
+pub mod aimless;
 pub mod attack;
 pub mod blocks;
 pub mod bombs;

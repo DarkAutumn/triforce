@@ -111,7 +111,8 @@ been retrained on the corrected order):
   measured: what the networks do before the step stays theirs).
 - [ ] **Cheated wall bombs, 0.76 a run in Dungeon 7** (7:0x1a 0.75), the largest count on a dungeon the reorder
   changed (`d1`'s 1.00 at 1:0x53 is in a segment it did not change).
-- [ ] **Bombs as a weapon only in dungeon rooms the route must clear** (the owner, Nov 22: "The agent wastes bombs
+- [x] **Bombs as a weapon only in dungeon rooms the route must clear** (landed 2.0.0.6, round37.md "The owner's
+  bomb rules": weapon bombs in crossings 1.94 a run to 0, cheated wall bombs 0.66 to 0.30) (the owner, Nov 22: "The agent wastes bombs
   in rooms I wish it didn't. For example d3 0x69. In dungeons, link should only use bombs in rooms it somehow needs
   to clear. [...] it's fine to use bombs in 0x59 because we have to clear the room to open the south door, in 0x69
   it needs to slide past the darknuts to get the raft, then out of the room (I use sword-hit an enemy to make them
@@ -122,12 +123,13 @@ been retrained on the corrected order):
   on branch `r37-rules` (no training is interrupted for it); it also saves bombs for the walls that are
   cheated today. The rooms where the golden replay's network threw bombs that this rule forbids: scouted Nov 22,
   the list is in round37.md "Bombs thrown where the route needs no clear".
-- [ ] **Rooms where the owner forbids bombs but for the wall** (Nov 22: "some rooms I want to explicitly say 'don't
+- [x] **Rooms where the owner forbids bombs but for the wall** (landed 2.0.0.6: `wall_only`, 3:0x5b the first) (Nov 22: "some rooms I want to explicitly say 'don't
   use bombs in this room just because the owner says so' [...] 0x5b is a great example, the point of fighting the
   darknuts in that room is to get the bomb drop, wasting the bombs to kill them is not the right play. BUT link
   still needs to bomb the wall to get through there. So no bombs except the 1 to blow up the wall."): a step mode
   in routes.yaml; 3:0x5b is the first, more will come from the owner's watching.
-- [ ] **The floor for fighting a room for its bombs is the bag** (the owner, Nov 22, a blanket rule): the route
+- [x] **The floor for fighting a room for its bombs is the bag** (landed 2.0.0.6: `treasure_below: 8`;
+  7:0x1b is a fight under either floor, runs arrive with 0.21 bombs: 12.6% against 12.7%) (the owner, Nov 22, a blanket rule): the route
   fights a room for its bomb treasure while Link holds 7 or fewer (it was 5 at 8:0x3f, 2 at 7:0x1b on `d3first`,
   the last pass of 3:0x5b by its own rule). **7:0x1b's six Blue Goriyas** are then a wood-sword fight again whenever
   the bag is not full (round 34 had made it a crossing because the fight killed half the runs). The owner: "that's
@@ -143,8 +145,8 @@ been retrained on the corrected order):
 - **`d2first` gets the same bomb rules later** (the owner: "d2-first is also in-scope for bomb rules for when we go
   back and work on that single-model. Don't waste time on d2 first until we've completed this work on d3-first,
   entirely."): the rules are route-level switches, off for `d2first` until then.
-- [x] **Two route changes from the owner's watching (Nov 22)** (done: 2:0x5e crossed in 2.0.0.6, branch `r37-rules`;
-  0:0x2d's cave dropped in 2.0.0.7, branch `r38-2d`, round38.md "0x2d dropped"): "Drop the fight with the
+- [x] **Two route changes from the owner's watching (Nov 22)** (done: 2:0x5e crossed, landed with 2.0.0.6;
+  0:0x2d's cave dropped in 2.0.0.7, round38.md "0x2d dropped"): "Drop the fight with the
   goriyas in d2 0x5e, that's only for d2 first. (It's high bomb chances on start of a d2 run, but needless
   heart/time wasting in the d3 first route). Overworld: drop the bomb for rupees in 0xd2, keep the armos rupees in
   3d (losing too many hearts in that d2 fight, and it's redundant with 0x3d)... we may have to cheat rupees more,
@@ -165,7 +167,8 @@ been retrained on the corrected order):
   he get penalized for that directly?"): it does no damage, so neither the health penalty, the yardstick's hits nor
   the hit head's labels see it. Branch `r38-bubble`: what a touch costs, a penalty a touch, touches counted where
   hits are.
-- [ ] **A room's bombs left on the floor** (the owner, Nov 22, 8:0x3f: a drop lifted Link from 2 to 6 and he
+- [x] **A room's bombs left on the floor** (landed 2.0.0.6: the objective re-read the floor live; fixed with a
+  test of the owner's case) (the owner, Nov 22, 8:0x3f: a drop lifted Link from 2 to 6 and he
   ignored the room's bombs): the objective and the shaping must want bombs on the floor whenever he holds fewer
   than 8, and the decision to fight a room for its bombs holds for the visit. On branch `r37-rules`.
 - [ ] **Aimless walking** (the owner, Nov 22: "the opening room link walks back and forth a while before grabbing
@@ -173,10 +176,13 @@ been retrained on the corrected order):
   before going north. While these aren't run killers or anything, they are unaesthetic to watch [...] you could
   create an 'aimless walk' score, where there are no enemies and all link has to do is go to the cave, door,
   heart, triforce, etc (and isn't being actively pushed to an item... walking towards a heart that disappears
-  shouldn't count). Some amount of missed steps is totally fine"). A score first: in a room with no monster that
-  can hurt him and a fixed goal, the frames Link takes beyond the shortest walk to it (the objective's own path),
-  a room visit and a run, in the yardstick and the chain records; then training against it (less important than
-  combat: the owner). The opening screen and 8:0x4c are the two cases to tone down.
+  shouldn't count). Some amount of missed steps is totally fine"). **The score is built and measured** (round38.md
+  "Aimless walking": `aimless_frames` and its companions in every chain room record, visit, rollout, bench and
+  room-stats; `penalty-aimless`, default off). Both rooms are confident loops that only sampling breaks (golden
+  replay: 457 and 1,282 aimless frames; today's medians 493 and 3,723 a visit, 0x4c 7% stuck). Act mode alone:
+  `relax:4` trims the opening about 14%, nothing helps 0x4c. Next: the first training experiment written there
+  (`ow-start` and `pols-voice` fine-tuned with `penalty-aimless` 0.002 and 0.005 a frame against 0); below combat
+  (the owner).
 - [ ] **Later, the owner's stated goal:** a win without a cheated bomb. Drops only; the walls' shortfall is counted
   until the bomb economy closes it (old backlog "A win without a cheated bomb").
 

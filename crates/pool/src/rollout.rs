@@ -220,6 +220,11 @@ pub struct EnvRollout<A> {
     pub health_lost: Vec<f32>,
     pub hits: Vec<u32>,
     pub blocked: Vec<bool>,
+    /// Per decision: calm, the frames of progress toward the goal and the frames added to the stretch's waste
+    /// (`zelda::aimless`, round 38; [`crate::Outcome`]).
+    pub calm: Vec<bool>,
+    pub progress: Vec<f32>,
+    pub waste: Vec<f32>,
     /// With [`TryOthers`] only (empty otherwise): `candidates` entries a decision, the candidate tried, whether
     /// it lost health and whether a Bubble's touch landed in it (None: not tried, the decision wasn't chosen or had
     /// fewer legal actions), and per decision the frames its trials emulated.
@@ -248,6 +253,9 @@ impl<A> EnvRollout<A> {
             health_lost: Vec::with_capacity(steps),
             hits: Vec::with_capacity(steps),
             blocked: Vec::with_capacity(steps),
+            calm: Vec::with_capacity(steps),
+            progress: Vec::with_capacity(steps),
+            waste: Vec::with_capacity(steps),
             tried: Vec::new(),
             tried_frames: Vec::new(),
             search: Vec::new(),

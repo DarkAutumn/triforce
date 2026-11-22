@@ -213,6 +213,9 @@ pub fn visit_json(v: &RoomVisit) -> Value {
     for item in CheatItem::ALL {
         o.insert(format!("cheated_{}", item.name()), json!(v.cheated[item]));
     }
+    for (name, value) in v.aimless.fields() {
+        o.insert(name.into(), json!(value));
+    }
     for (name, value) in v.bombs.fields() {
         o.insert(format!("bomb_{name}"), json!(value));
     }
