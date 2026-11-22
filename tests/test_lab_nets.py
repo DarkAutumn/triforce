@@ -175,6 +175,36 @@ def test_the_server_keeps_a_recurrent_state_per_env_and_restarts_it_per_episode(
     assert ask([3, 1], [1, 3]) == [3, 1]
 
 
+@pytest.mark.parametrize('half', [False, True])
+def test_a_served_batch_comes_back_in_one_copy_and_half_precision_only_on_the_gpu(observations, half):
+    """The server's answer (logits and value, one copy back) is the network's; ``half`` runs it in float16 on the GPU
+    (within the half's precision) and is ignored on the CPU."""
+    device = 'cuda' if half and torch.cuda.is_available() else 'cpu'
+    server = Server(device=device, half=half)
+    assert server.half == (device == 'cuda')
+    torch.manual_seed(3)
+    network = nets.create('wide', native_spec(), hidden_dim=64, depth=2)
+    server.models[0] = network.to(server.device)
+    answered = []
+
+    class Queue:
+        logits_size = 11 * 13
+
+        @staticmethod
+        def answer(slots, logits, values):
+            answered.append((logits.copy(), values.copy()))
+
+    server.queue = Queue()
+    n = observations['action_mask'].shape[0]
+    server.answer({'obs': observations, 'slot': np.arange(n), 'model': np.zeros(n, dtype=np.int64),
+                   'job': np.arange(n), 'step': np.zeros(n, dtype=np.int64), 'bootstrap': np.zeros(n, dtype=bool)})
+    (logits, values), = answered
+    heads, _ = network.cpu().heads({k: torch.as_tensor(v) for k, v in observations.items()})
+    tolerance = 5e-2 if server.half else 1e-5
+    assert np.allclose(logits, heads.flat().detach().numpy(), atol=tolerance)
+    assert np.allclose(values, heads.value.detach().numpy(), atol=tolerance)
+
+
 def test_architectures_side_by_side_save_load_and_play(states_dir, tmp_path):
     assert nets.names()[0] == 'zelda' and {'wide', 'gru', 'hithead'} <= set(nets.names())
     wide = nets.create('wide', native_spec(), hidden_dim=64, depth=2)

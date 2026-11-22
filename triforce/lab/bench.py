@@ -230,11 +230,13 @@ def format_compare(result: dict) -> str:
     return '\n'.join(lines)
 
 
-def speed(key: str, manifest: dict, parallel: int, devices: list[str], states_dir=None, root=None) -> dict:
-    """Decisions per second of one key's entry played by its network through each acting path: the Rust actor
-    (``rust``) and the same network served by torch (``cpu``, ``cuda``; ``nets.serve``)."""
+def speed(key: str, manifest: dict, parallel: int, devices: list[str], states_dir=None, root=None,
+          checkpoint=None) -> dict:
+    """Decisions per second of one key's entry played by its network (or ``checkpoint``) through each acting path:
+    the Rust actor (``rust``) and the same network served by torch (``cpu``, ``cuda``, ``cuda-half``: autocast
+    float16; ``nets.serve``)."""
     from ..nets import serve  # pylint: disable=import-outside-toplevel
-    checkpoint = registry.policy_checkpoint(key, root)
+    checkpoint = checkpoint or registry.policy_checkpoint(key, root)
     entry = next(e for e in manifest['entries'] if e['key'] == key)
     config, directory = entry_task(entry, states_dir)
     out = {}
@@ -243,14 +245,15 @@ def speed(key: str, manifest: dict, parallel: int, devices: list[str], states_di
         if path == 'rust':
             policy = network.to_native()
         else:
-            policy = serve.Server(device=path).policy(network)
+            device, _, half = path.partition('-')
+            policy = serve.Server(device=device, half=half == 'half').policy(network)
         began = time.time()
         result = _play_policy(config, policy, manifest, parallel, directory)
         seconds = time.time() - began
         decisions = sum(r['steps'] for r in result)
         out[path] = {'decisions': decisions, 'seconds': round(seconds, 2), 'decisions_per_second': decisions / seconds,
                      'success': sum(r['success'] for r in result) / len(result)}
-    return {'key': key, 'parallel': parallel, 'paths': out}
+    return {'key': key, 'checkpoint': str(checkpoint), 'parallel': parallel, 'paths': out}
 
 
 def _play_policy(config, policy, manifest: dict, parallel: int, states_dir) -> list[dict]:
@@ -282,7 +285,9 @@ def main(argv=None) -> int:
     r.add_argument('--out', required=True)
     s = sub.add_parser('speed')
     s.add_argument('--key', default='zol')
-    s.add_argument('--paths', nargs='+', default=['rust', 'cpu', 'cuda'])
+    s.add_argument('--paths', nargs='+', default=['rust', 'cpu', 'cuda'],
+                   choices=['rust', 'cpu', 'cuda', 'cuda-half'])
+    s.add_argument('--network', default=None, help="a checkpoint to time instead of the key's network")
     s.add_argument('--out', required=True)
     for p in (m, r, s):
         p.add_argument('--models-dir', default=None)
@@ -311,7 +316,8 @@ def main(argv=None) -> int:
     manifest = load_manifest(args.manifest)
     if args.command == 'speed':
         with logged_job('lab-speed', 'eval', [], log=False, work=work(eval_episodes=100)):
-            result = speed(args.key, manifest, args.parallel, args.paths, args.states_dir, args.models_dir)
+            result = speed(args.key, manifest, args.parallel, args.paths, args.states_dir, args.models_dir,
+                           args.network)
         write_json_atomic(args.out, result)
         print(json.dumps(result, indent=2))
         return 0
