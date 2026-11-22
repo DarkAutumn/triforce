@@ -152,10 +152,29 @@ been retrained on the corrected order):
   10 + 30 + 100 and drops against the meat and the arrows, with the shortfall cheated and counted.
 - **An input to try, the owner's idea (Nov 22): a shooter's threat lane.** "maybe a projectile-using enemy with no
   current projectile always has a 'danger zone' in front of them unless their projectile is in air... at which
-  point we use that projectile." Per shooter, the lane ahead along its facing for its shot's range, live only while
-  it can shoot, and for Link's five motions the frames until he enters it; off while its shot flies (the shot's
-  own contact columns carry the danger then). Schema 6's `in_line` is the bare form; to be ranked on the hit bench
-  and carried into an arm if it helps.
+  point we use that projectile." And: "only maybe 3 tiles (ish, you measure) in front of the enemies with
+  projectiles. IE there's no reason to be scared of the tile in front of an octorok all the way across the screen
+  [...] Perhaps based on the speed of the projectile." Per shooter that can fire, along its facing: the frames a
+  shot fired now would take to reach Link at that shot's speed, cut off where he could still leave the lane, and
+  for his five motions whether he walks into or out of it; off while its shot flies (the shot's own contact inputs
+  carry the danger then). Schema 6's `in_line` is the bare form; to be ranked on the hit bench (hits by shots fired
+  after the decision as their own slice) and carried into an arm if it helps.
+- [ ] **A Bubble's touch is not penalised** (the owner, Nov 22: "link does get hit by the blue bubble often, does
+  he get penalized for that directly?"): it does no damage, so neither the health penalty, the yardstick's hits nor
+  the hit head's labels see it. Branch `r38-bubble`: what a touch costs, a penalty a touch, touches counted where
+  hits are.
+- [ ] **A room's bombs left on the floor** (the owner, Nov 22, 8:0x3f: a drop lifted Link from 2 to 6 and he
+  ignored the room's bombs): the objective and the shaping must want bombs on the floor whenever he holds fewer
+  than 8, and the decision to fight a room for its bombs holds for the visit. On branch `r37-rules`.
+- [ ] **Aimless walking** (the owner, Nov 22: "the opening room link walks back and forth a while before grabbing
+  the sword. In 0x4c [Dungeon 8] in the golden replay, he walks back and forth after the bombed wall is opened
+  before going north. While these aren't run killers or anything, they are unaesthetic to watch [...] you could
+  create an 'aimless walk' score, where there are no enemies and all link has to do is go to the cave, door,
+  heart, triforce, etc (and isn't being actively pushed to an item... walking towards a heart that disappears
+  shouldn't count). Some amount of missed steps is totally fine"). A score first: in a room with no monster that
+  can hurt him and a fixed goal, the frames Link takes beyond the shortest walk to it (the objective's own path),
+  a room visit and a run, in the yardstick and the chain records; then training against it (less important than
+  combat: the owner). The opening screen and 8:0x4c are the two cases to tone down.
 - [ ] **Later, the owner's stated goal:** a win without a cheated bomb. Drops only; the walls' shortfall is counted
   until the bomb economy closes it (old backlog "A win without a cheated bomb").
 
