@@ -446,11 +446,14 @@ there).
 ## Goal
 
 Specialist PPO models (one per room family) that carry the two routes of `triforce/routes.yaml` from the game start
-(console power on) to the end of the game: **`d3first`, the main route since 2.0.0.0** (`docs/routes/d3first.md`:
-the wood sword through Dungeons 3, 4, 1, 5, 2 and 7, Dungeon 3 by its W rooms 0x4b, 0x4a, 0x49, the raft and the
-ladder for Dungeon 4, heart rock, 0x2d's secret and the candle shop, the recorder's warps out of Levels 5 and 2, the
-dead woods' tree and the world wrap to the magic sword, then Dungeons 6, 8 and 9 as on `d2first`; its golden path
-ends the game), and **`d2first`**: the chain from the game
+(console power on) to the end of the game: **`d3first`, the main route since 2.0.0.0, in the owner's corrected
+order since round 36** (`docs/routes/d3first.md`, walks `d3first-walks-c.md`: the wood sword through Dungeons 3, 4,
+1, 2, 5 and 7, Dungeon 3 by its W rooms 0x4b, 0x4a, 0x49, the raft and the ladder for Dungeon 4, heart rock, 0x2d's
+and 0x0f's rupees, the recorder's warp out of Level 5 to 0x45, the raft to 0x55 and **two dock warps** (a block clip
+north into the water beside a raft dock and the recorder: the whirlwind carries Link over the dock and the game sets
+him down one row above the level's stand-in room; 0x55 to the meat's screen 0x34 on the way to Dungeon 7, 0x3f
+into the graveyard 0x31) to the magic sword, then Dungeons 6, 8 and 9 as on `d2first`), and **`d2first`**: the
+chain from the game
 start through Dungeon 2, the 0x2c heart cave, the white sword and Dungeon 1 (the bow), then S to 0x67's secret
 cave (bomb its wall, 30 rupees) and on to Dungeon 3 by the wrap exit through 0x75 (clips on) or along row 6 (clips
 off) (the raft; 0x5b E → 0x5c → 0x4c S, Manhandla), then by raft to Dungeon 4 (the ladder, 0x21's island by the
