@@ -260,7 +260,7 @@ they want the merged code (branch `r38-hit-m`).
 The room's row of §2: with the six Blue Goriyas and 0-7 bombs the teacher wins 83.3% at 3.83 hits a visit and 1.94
 hearts; the fixed combination (w = 8) 94.3% at 2.08 and 0.39; the planner 98.3% at 1.01. The `d7` chains (1000 runs,
 `--checkpoint goriya@d3first=models/r38shift/pre-w8`, and today's team on the same seeds and code; the planner on
-300) were queued; the planner's finished, the two 1000-run chains had not when this was written.
+300) were queued. Today's team with 7:0x1b a fight (this branch's code, seeds 0-999, from `d3first_7_79s_0` to step 180, out of Dungeon 7 with its triforce): **12.5% of runs finish Dungeon 7**; 517 of the 875 losses are in 7:0x1b (3.51 hits a visit over 737 visits), then 7:0x1a 136, 7:0x19 67, Digdogger's 7:0x1c 31. The planner beside (300 runs, every network with the look-ahead): 96.7%, 1.12 hits a visit in 7:0x1b, 2 runs lost there. The chain with the fixed combination (w = 8) for goriya had not finished when this was written (`target/r38/d7-pre-w8.jsonl` in the first worktree). Against round 34's crossing (`d7` 86.9% at 2 bombs, the backlog's baseline) a fight with today's goriya network costs about three quarters of the runs: it must not be a fight with today's network; whether it can be with the combination is that chain's answer.
 
 ### 6. The threat lane
 
