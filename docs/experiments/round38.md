@@ -396,3 +396,38 @@ touches (the necks and heads) 0.69, fireballs in the air 0.61, fired after the d
 phase would carry it), and the fireballs are aimed shots that the threat lane's arithmetic would cover (Gleeok's
 heads as shooters). The inputs' own "shot in the air" flag cannot slice Gleeok or Digdogger (it is up on 94-99% of
 their hits).
+
+### The bench and the chains
+
+Bench (2.0.0.6, 240 episodes a family: 24 of its `d3first` harvested entries × 10 seeds, paired), hits a visit,
+teacher → w2 / w4 / w8 / planner beside:
+
+| family | teacher | w2 | w4 | w8 | planner | best w − teacher (hits, hearts an episode; success) |
+|---|---:|---:|---:|---:|---:|---|
+| darknut | 0.746 | 0.658 | 0.592 | **0.525** | 0.396 | −0.221 ± 0.063, −0.260 ± 0.064; +3.3 ± 1.4 |
+| boss-manhandla | 1.438 | 1.296 | **1.196** | 1.288 | 1.033 | −0.242 ± 0.064, −0.254 ± 0.070; +2.9 ± 2.0 |
+| zol | 0.092 | 0.071 | 0.046 | **0.042** | 0.033 | −0.050 ± 0.020, −0.037 ± 0.016 |
+| gibdo | 0.096 | 0.083 | 0.071 | **0.067** | 0.050 | −0.029 ± 0.015, −0.056 ± 0.029 |
+| boss-gleeok | 4.358 | 3.450 | 3.188 | **2.971** | 2.154 | −1.387 ± 0.247, −1.406 ± 0.247; won 45.8% → 59.2% |
+| like-like | 0.329 | 0.246 | 0.221 | **0.171** | 0.092 | −0.158 ± 0.033, −0.144 ± 0.030 |
+| vire | 0.233 | 0.188 | 0.133 | **0.108** | 0.050 | −0.125 ± 0.031, −0.106 ± 0.027 |
+| stalfos-keese-gel | 0.171 | 0.129 | 0.104 | **0.092** | 0.046 | −0.079 ± 0.025, −0.040 ± 0.012 |
+| boss-digdogger | 2.312 | 2.242 | 2.171 | 2.104 | 1.575 | −0.208 ± 0.131 (not shown); success −1.3 |
+| pols-voice | 0.100 | 0.100 | 0.100 | 0.096 | 0.037 | none (0.16% of its decisions are hit) |
+
+The best weight takes 56-86% of the planner's saving on the eight families that gain, more than goriya's 52%; no
+stall (darknut 33.5 → 39.5 decisions, Gleeok 179 → 212, the others within +5). Digdogger and Pols Voice do not gain.
+
+**One head for every family:** the head trained on all the recordings at once (`r38_hit.py retrain --by-row --batch
+256 --epochs 8 --init fresh:models/goriya/r32d1-goriya --data <the three d3first recordings, the two goriya ones,
+r36:darknut, r36:boss-gleeok> --save r38head-hit/all`) reads every family as well as or better than its own head
+(judged +0.017 to +0.038; taken better on all but Gleeok, 0.734 against 0.749): darknut 0.858 / 0.851, Gleeok 0.738 /
+0.734, Manhandla 0.795 / 0.781, like-like 0.856 / 0.747, vire 0.751 / 0.712, zol 0.825 / 0.750, gibdo 0.853 / 0.809,
+stalfos-keese-gel 0.839 / 0.788, Digdogger 0.841 / 0.852. It is the head the one-network work wants; it has not
+played yet.
+
+**Chains: UNRELIABLE, to be measured again.** A chain that serves two or more torch networks could, until main's fix
+(Nov 22), play one family's rooms with another family's network. Both combination chains served four: Dungeon 4
+21.1% → 54.7% (+33.6 ± 1.9, 1000 paired seeds against main's 2.0.0.6 record) and Dungeon 3 21.7% → 40.1% (+18.4 ±
+2.0) are not results. Reliable beside them: the team on this branch plays the record's runs identically (100 of 100);
+the planner reaches 93.7% on Dungeon 4 and 57.0% on Dungeon 3 (300 seeds).
