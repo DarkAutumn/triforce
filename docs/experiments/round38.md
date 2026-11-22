@@ -283,7 +283,7 @@ The lane catches a third more of the hits it is for (0.26 → 0.34 recall) and l
 nothing. On goriya the slice is under 1% of the hits, so the lane cannot move goriya's totals. The shooter family it
 is meant for (Octoroks: a 48-frame stand still before the rock, 3 px a frame) had no collection: one was queued with
 the probe logger of branch `r36-hit` (ow-octorok's `d3first` rooms 0x37, 0x3c, 0x4c, 0x64; 100 planner and 100
-model-alone runs from each of 30 states; queue cost: behind about 2 hours of other jobs when this was written).
+model-alone runs from each of 30 states; queue cost: 83 minutes from queueing to the file, most of it waiting). It does not rank the lane: the model and the planner on those rooms were hit by a rock fired after the decision only 24 times in the whole collection (2 held out), and the three inputs read the rest of its hits alike (P = R 0.65-0.73 / 0.57-0.61, within the seeds' spread on a small set). The shot speed checks out (3 px a frame from RAM). An Octorok ranking needs a collection aimed at the slice: states where Link walks into a standing Octorok's lane.
 **The engine fields, if the Octorok ranking agrees**: per entity, 11 inputs: can fire (Goriya: `ObjState` bit 7
 clear; Octorok, Moblin, Lynel: shoot timer `$451` zero or above `$10`; not stunned `$3D`, metastate `$405` 0), the
 delay to the shot (Goriya `ObjTimer` `$28`; the others' timer − `$10`, or 32 when it has not started) / 64, in the
