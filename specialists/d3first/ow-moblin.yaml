@@ -32,8 +32,6 @@ start_states:
 - 0_51*_[0-9]
 - 0_6d*_[0-9]
 - 0_42*_[0-9]
-- 0_61*_[0-9]
-- 0_62*_[0-9]
 success:
 - exit-correct
 - enter-room:7:0x79
