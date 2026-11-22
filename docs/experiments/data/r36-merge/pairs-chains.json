@@ -1,0 +1,174 @@
+{
+ "merged-d3-vs-team": {
+  "pairs": 1000,
+  "base": {
+   "runs": 1000,
+   "success": 0.232,
+   "rooms": 14.161,
+   "failures": [
+    [
+     "died in (level 3, room 0x4d)",
+     258
+    ],
+    [
+     "died in (level 3, room 0x69)",
+     107
+    ],
+    [
+     "died in (level 3, room 0x5b)",
+     104
+    ],
+    [
+     "died in (level 3, room 0x59)",
+     62
+    ],
+    [
+     "died in (level 3, room 0x5c)",
+     50
+    ],
+    [
+     "died in (level 3, room 0x0f)",
+     50
+    ],
+    [
+     "died in (level 3, room 0x5a)",
+     43
+    ],
+    [
+     "died in (level 3, room 0x49)",
+     41
+    ]
+   ]
+  },
+  "new": {
+   "runs": 1000,
+   "success": 0.185,
+   "rooms": 13.11,
+   "failures": [
+    [
+     "died in (level 3, room 0x5b)",
+     198
+    ],
+    [
+     "died in (level 3, room 0x4d)",
+     197
+    ],
+    [
+     "died in (level 3, room 0x69)",
+     104
+    ],
+    [
+     "died in (level 3, room 0x49)",
+     71
+    ],
+    [
+     "died in (level 3, room 0x59)",
+     51
+    ],
+    [
+     "died in (level 3, room 0x0f)",
+     47
+    ],
+    [
+     "died in (level 3, room 0x5a)",
+     37
+    ],
+    [
+     "died in (level 3, room 0x4a)",
+     31
+    ]
+   ]
+  },
+  "diff": -0.047,
+  "se": 0.017975375214835266,
+  "gained": 139,
+  "lost": 186,
+  "identical": 0
+ },
+ "merged-d6-vs-team": {
+  "pairs": 1000,
+  "base": {
+   "runs": 1000,
+   "success": 0.352,
+   "rooms": 12.074,
+   "failures": [
+    [
+     "died in (level 6, room 0x3a)",
+     308
+    ],
+    [
+     "died in (level 6, room 0x38)",
+     125
+    ],
+    [
+     "died in (level 6, room 0x29)",
+     98
+    ],
+    [
+     "died in (level 6, room 0x2c)",
+     64
+    ],
+    [
+     "died in (level 6, room 0x28)",
+     15
+    ],
+    [
+     "died in (level 6, room 0x1c)",
+     14
+    ],
+    [
+     "died in (level 6, room 0x39)",
+     9
+    ],
+    [
+     "died in (level 6, room 0x2d)",
+     9
+    ]
+   ]
+  },
+  "new": {
+   "runs": 1000,
+   "success": 0.368,
+   "rooms": 12.246,
+   "failures": [
+    [
+     "died in (level 6, room 0x3a)",
+     294
+    ],
+    [
+     "died in (level 6, room 0x38)",
+     119
+    ],
+    [
+     "died in (level 6, room 0x29)",
+     90
+    ],
+    [
+     "died in (level 6, room 0x2c)",
+     66
+    ],
+    [
+     "died in (level 6, room 0x1c)",
+     20
+    ],
+    [
+     "died in (level 6, room 0x28)",
+     19
+    ],
+    [
+     "died in (level 6, room 0x2d)",
+     9
+    ],
+    [
+     "died in (level 6, room 0x39)",
+     7
+    ]
+   ]
+  },
+  "diff": 0.016,
+  "se": 0.01860349671674898,
+  "gained": 181,
+  "lost": 165,
+  "identical": 2
+ }
+}

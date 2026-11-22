@@ -1,0 +1,873 @@
+{
+ "d3": {
+  "runs": 1000,
+  "team": 0.232,
+  "one": 0.037,
+  "diff": -0.195,
+  "se": 0.014737441846948612,
+  "gained": 30,
+  "lost": 225,
+  "rooms": [
+   {
+    "step": 22,
+    "room": "3:0x4d",
+    "key": "boss-manhandla@d3first",
+    "team": {
+     "entering": 490,
+     "lost": 258,
+     "per_1000": 527,
+     "reasons": {
+      "died": 258
+     }
+    },
+    "one": {
+     "entering": 113,
+     "lost": 76,
+     "per_1000": 673,
+     "reasons": {
+      "died": 76
+     }
+    }
+   },
+   {
+    "step": 13,
+    "room": "3:0x59",
+    "key": "darknut@d3first",
+    "team": {
+     "entering": 910,
+     "lost": 62,
+     "per_1000": 68,
+     "reasons": {
+      "died": 62
+     }
+    },
+    "one": {
+     "entering": 788,
+     "lost": 226,
+     "per_1000": 287,
+     "reasons": {
+      "died": 226
+     }
+    }
+   }
+  ],
+  "files": {
+   "team": "target/merge/chains/team-d3.jsonl",
+   "one": "target/merge/chains/one1x-1k-d3.jsonl"
+  }
+ },
+ "post-d3": {
+  "runs": 1000,
+  "team": 1.0,
+  "one": 0.999,
+  "diff": -0.001,
+  "se": 0.001,
+  "gained": 0,
+  "lost": 1,
+  "rooms": [
+   {
+    "step": 30,
+    "room": "0:0x45",
+    "key": "ow-peahat",
+    "team": {
+     "entering": 1000,
+     "lost": 0,
+     "per_1000": 0,
+     "reasons": {}
+    },
+    "one": {
+     "entering": 1000,
+     "lost": 1,
+     "per_1000": 1,
+     "reasons": {
+      "died": 1
+     }
+    }
+   }
+  ],
+  "files": {
+   "team": "target/merge/chains/team-1k-post-d3.jsonl",
+   "one": "target/merge/chains/one1x-1k-post-d3.jsonl"
+  }
+ },
+ "d4": {
+  "runs": 1000,
+  "team": 0.185,
+  "one": 0.028,
+  "diff": -0.157,
+  "se": 0.013210810933683273,
+  "gained": 21,
+  "lost": 178,
+  "rooms": [
+   {
+    "step": 51,
+    "room": "4:0x13",
+    "key": "boss-gleeok@d3first",
+    "team": {
+     "entering": 700,
+     "lost": 515,
+     "per_1000": 736,
+     "reasons": {
+      "died": 515
+     }
+    },
+    "one": {
+     "entering": 389,
+     "lost": 361,
+     "per_1000": 928,
+     "reasons": {
+      "died": 361
+     }
+    }
+   },
+   {
+    "step": 38,
+    "room": "4:0x32",
+    "key": "like-like@d3first",
+    "team": {
+     "entering": 981,
+     "lost": 57,
+     "per_1000": 58,
+     "reasons": {
+      "died": 57
+     }
+    },
+    "one": {
+     "entering": 938,
+     "lost": 197,
+     "per_1000": 210,
+     "reasons": {
+      "died": 196,
+      "bounce-limit:": 1
+     }
+    }
+   }
+  ],
+  "files": {
+   "team": "target/merge/chains/team-1k-d4.jsonl",
+   "one": "target/merge/chains/one1x-1k-d4.jsonl"
+  }
+ },
+ "post-d4": {
+  "runs": 1000,
+  "team": 1.0,
+  "one": 0.998,
+  "diff": -0.002,
+  "se": 0.0014135055705578234,
+  "gained": 0,
+  "lost": 2,
+  "rooms": [
+   {
+    "step": 54,
+    "room": "0:0x55",
+    "key": "ow-zora@d3first",
+    "team": {
+     "entering": 1001,
+     "lost": 0,
+     "per_1000": 0,
+     "reasons": {}
+    },
+    "one": {
+     "entering": 1027,
+     "lost": 2,
+     "per_1000": 2,
+     "reasons": {
+      "bounce-limit:": 2
+     }
+    }
+   }
+  ],
+  "files": {
+   "team": "target/merge/chains/team-1k-post-d4.jsonl",
+   "one": "target/merge/chains/one1x-1k-post-d4.jsonl"
+  }
+ },
+ "d1": {
+  "runs": 1000,
+  "team": 0.927,
+  "one": 0.804,
+  "diff": -0.123,
+  "se": 0.015102950013129855,
+  "gained": 60,
+  "lost": 183,
+  "rooms": [
+   {
+    "step": 77,
+    "room": "1:0x35",
+    "key": "boss-aquamentus@d3first",
+    "team": {
+     "entering": 960,
+     "lost": 33,
+     "per_1000": 34,
+     "reasons": {
+      "died": 32,
+      "boss-aquamentus@d3first": 1
+     }
+    },
+    "one": {
+     "entering": 870,
+     "lost": 66,
+     "per_1000": 76,
+     "reasons": {
+      "died": 66
+     }
+    }
+   },
+   {
+    "step": 75,
+    "room": "1:0x44",
+    "key": "goriya@d3first",
+    "team": {
+     "entering": 995,
+     "lost": 35,
+     "per_1000": 35,
+     "reasons": {
+      "died": 35
+     }
+    },
+    "one": {
+     "entering": 930,
+     "lost": 60,
+     "per_1000": 65,
+     "reasons": {
+      "died": 60
+     }
+    }
+   }
+  ],
+  "files": {
+   "team": "target/merge/chains/team-1k-d1.jsonl",
+   "one": "target/merge/chains/one1x-1k-d1.jsonl"
+  }
+ },
+ "post-d1": {
+  "runs": 1000,
+  "team": 0.998,
+  "one": 0.978,
+  "diff": -0.02,
+  "se": 0.004860413935419865,
+  "gained": 2,
+  "lost": 22,
+  "rooms": [
+   {
+    "step": 95,
+    "room": "0:0x0c",
+    "key": "ow-tektite@d3first",
+    "team": {
+     "entering": 1009,
+     "lost": 2,
+     "per_1000": 2,
+     "reasons": {
+      "died": 2
+     }
+    },
+    "one": {
+     "entering": 1158,
+     "lost": 9,
+     "per_1000": 8,
+     "reasons": {
+      "ow-tektite@d3first": 4,
+      "died": 5
+     }
+    }
+   },
+   {
+    "step": 83,
+    "room": "0:0x2a",
+    "key": "ow-leever@d3first",
+    "team": {
+     "entering": 1000,
+     "lost": 0,
+     "per_1000": 0,
+     "reasons": {}
+    },
+    "one": {
+     "entering": 1000,
+     "lost": 5,
+     "per_1000": 5,
+     "reasons": {
+      "died": 5
+     }
+    }
+   }
+  ],
+  "files": {
+   "team": "target/merge/chains/team-1k-post-d1.jsonl",
+   "one": "target/merge/chains/one1x-1k-post-d1.jsonl"
+  }
+ },
+ "d5": {
+  "runs": 1000,
+  "team": 0.07,
+  "one": 0.003,
+  "diff": -0.067,
+  "se": 0.008281278861358286,
+  "gained": 3,
+  "lost": 70,
+  "rooms": [
+   {
+    "step": 103,
+    "room": "5:0x05",
+    "key": "darknut@d3first",
+    "team": {
+     "entering": 999,
+     "lost": 810,
+     "per_1000": 811,
+     "reasons": {
+      "died": 810
+     }
+    },
+    "one": {
+     "entering": 999,
+     "lost": 991,
+     "per_1000": 992,
+     "reasons": {
+      "died": 991
+     }
+    }
+   },
+   {
+    "step": 108,
+    "room": "5:0x64",
+    "key": "darknut@d3first",
+    "team": {
+     "entering": 189,
+     "lost": 31,
+     "per_1000": 164,
+     "reasons": {
+      "died": 31
+     }
+    },
+    "one": {
+     "entering": 8,
+     "lost": 0,
+     "per_1000": 0,
+     "reasons": {}
+    }
+   }
+  ],
+  "files": {
+   "team": "/home/leculver/git/triforce/target/r56-chains/r35nobag-1k-d5.jsonl",
+   "one": "target/merge/chains/one1x-1k-d5.jsonl"
+  }
+ },
+ "post-d5": {
+  "runs": 1000,
+  "team": 0.987,
+  "one": 0.812,
+  "diff": -0.175,
+  "se": 0.012827296657501125,
+  "gained": 10,
+  "lost": 185,
+  "rooms": [
+   {
+    "step": null,
+    "room": "0:0x1b",
+    "key": "ow-start",
+    "team": {
+     "entering": 0,
+     "lost": 0,
+     "per_1000": null,
+     "reasons": {}
+    },
+    "one": {
+     "entering": 280,
+     "lost": 88,
+     "per_1000": 314,
+     "reasons": {
+      "bounce-limit:": 88
+     }
+    }
+   },
+   {
+    "step": 124,
+    "room": "0:0x62",
+    "key": "ow-moblin@d3first",
+    "team": {
+     "entering": 1000,
+     "lost": 12,
+     "per_1000": 12,
+     "reasons": {
+      "died": 2,
+      "left": 10
+     }
+    },
+    "one": {
+     "entering": 887,
+     "lost": 75,
+     "per_1000": 85,
+     "reasons": {
+      "left": 75
+     }
+    }
+   }
+  ],
+  "files": {
+   "team": "target/merge/chains/team-1k-post-d5.jsonl",
+   "one": "target/merge/chains/one1x-1k-post-d5.jsonl"
+  }
+ },
+ "d2": {
+  "runs": 1000,
+  "team": 1.0,
+  "one": 0.999,
+  "diff": -0.001,
+  "se": 0.001,
+  "gained": 0,
+  "lost": 1,
+  "rooms": [
+   {
+    "step": 153,
+    "room": "2:0x0e",
+    "key": "boss-dodongo",
+    "team": {
+     "entering": 1000,
+     "lost": 0,
+     "per_1000": 0,
+     "reasons": {}
+    },
+    "one": {
+     "entering": 1000,
+     "lost": 1,
+     "per_1000": 1,
+     "reasons": {
+      "died": 1
+     }
+    }
+   }
+  ],
+  "files": {
+   "team": "target/merge/chains/team-1k-d2.jsonl",
+   "one": "target/merge/chains/one1x-1k-d2.jsonl"
+  }
+ },
+ "post-d2": {
+  "runs": 1000,
+  "team": 0.999,
+  "one": 0.974,
+  "diff": -0.025,
+  "se": 0.004939574819698493,
+  "gained": 0,
+  "lost": 25,
+  "rooms": [
+   {
+    "step": null,
+    "room": "0:0x4c",
+    "key": "ow-octorok@d3first",
+    "team": {
+     "entering": 0,
+     "lost": 0,
+     "per_1000": null,
+     "reasons": {}
+    },
+    "one": {
+     "entering": 57,
+     "lost": 19,
+     "per_1000": 333,
+     "reasons": {
+      "bounce-limit:": 19
+     }
+    }
+   },
+   {
+    "step": 157,
+    "room": "0:0x55",
+    "key": "ow-zora@d3first",
+    "team": {
+     "entering": 999,
+     "lost": 0,
+     "per_1000": 0,
+     "reasons": {}
+    },
+    "one": {
+     "entering": 1023,
+     "lost": 4,
+     "per_1000": 4,
+     "reasons": {
+      "bounce-limit:": 4
+     }
+    }
+   }
+  ],
+  "files": {
+   "team": "target/merge/chains/team-1k-post-d2.jsonl",
+   "one": "target/merge/chains/one1x-1k-post-d2.jsonl"
+  }
+ },
+ "d7": {
+  "runs": 1000,
+  "team": 0.423,
+  "one": 0.289,
+  "diff": -0.134,
+  "se": 0.020602632561604075,
+  "gained": 154,
+  "lost": 288,
+  "rooms": [
+   {
+    "step": 187,
+    "room": "7:0x1c",
+    "key": "boss-digdogger@d3first",
+    "team": {
+     "entering": 779,
+     "lost": 120,
+     "per_1000": 154,
+     "reasons": {
+      "died": 120
+     }
+    },
+    "one": {
+     "entering": 700,
+     "lost": 171,
+     "per_1000": 244,
+     "reasons": {
+      "died": 171
+     }
+    }
+   },
+   {
+    "step": 186,
+    "room": "7:0x1b",
+    "key": "goriya@d3first",
+    "team": {
+     "entering": 914,
+     "lost": 135,
+     "per_1000": 148,
+     "reasons": {
+      "died": 135
+     }
+    },
+    "one": {
+     "entering": 883,
+     "lost": 181,
+     "per_1000": 205,
+     "reasons": {
+      "died": 181
+     }
+    }
+   }
+  ],
+  "files": {
+   "team": "target/merge/chains/team-1k-d7.jsonl",
+   "one": "target/merge/chains/one1x-1k-d7.jsonl"
+  }
+ },
+ "post-d7": {
+  "runs": 1000,
+  "team": 1.0,
+  "one": 0.994,
+  "diff": -0.006,
+  "se": 0.0024433521993298406,
+  "gained": 0,
+  "lost": 6,
+  "rooms": [
+   {
+    "step": 205,
+    "room": "0:0x21",
+    "key": "ow-ghini",
+    "team": {
+     "entering": 1000,
+     "lost": 0,
+     "per_1000": 0,
+     "reasons": {}
+    },
+    "one": {
+     "entering": 1000,
+     "lost": 3,
+     "per_1000": 3,
+     "reasons": {
+      "left": 3
+     }
+    }
+   },
+   {
+    "step": 209,
+    "room": "0:0x32",
+    "key": "ow-lynel",
+    "team": {
+     "entering": 1000,
+     "lost": 0,
+     "per_1000": 0,
+     "reasons": {}
+    },
+    "one": {
+     "entering": 997,
+     "lost": 2,
+     "per_1000": 2,
+     "reasons": {
+      "died": 2
+     }
+    }
+   }
+  ],
+  "files": {
+   "team": "target/merge/chains/team-1k-post-d7.jsonl",
+   "one": "target/merge/chains/one1x-1k-post-d7.jsonl"
+  }
+ },
+ "d6": {
+  "runs": 1000,
+  "team": 0.352,
+  "one": 0.197,
+  "diff": -0.155,
+  "se": 0.01993420107183562,
+  "gained": 133,
+  "lost": 288,
+  "rooms": [
+   {
+    "step": 220,
+    "room": "6:0x3a",
+    "key": "wizzrobe",
+    "team": {
+     "entering": 759,
+     "lost": 308,
+     "per_1000": 406,
+     "reasons": {
+      "died": 308
+     }
+    },
+    "one": {
+     "entering": 726,
+     "lost": 433,
+     "per_1000": 596,
+     "reasons": {
+      "died": 433
+     }
+    }
+   },
+   {
+    "step": 216,
+    "room": "6:0x38",
+    "key": "wizzrobe",
+    "team": {
+     "entering": 998,
+     "lost": 126,
+     "per_1000": 126,
+     "reasons": {
+      "died": 125,
+      "wizzrobe": 1
+     }
+    },
+    "one": {
+     "entering": 1000,
+     "lost": 157,
+     "per_1000": 157,
+     "reasons": {
+      "died": 156,
+      "wizzrobe": 1
+     }
+    }
+   }
+  ],
+  "files": {
+   "team": "target/merge/chains/team-d6.jsonl",
+   "one": "target/merge/chains/one1x-1k-d6.jsonl"
+  }
+ },
+ "post-d6": {
+  "runs": 1000,
+  "team": 1.0,
+  "one": 0.998,
+  "diff": -0.002,
+  "se": 0.0014135055705578234,
+  "gained": 0,
+  "lost": 2,
+  "rooms": [
+   {
+    "step": 231,
+    "room": "0:0x5d",
+    "key": "ow-moblin",
+    "team": {
+     "entering": 1000,
+     "lost": 0,
+     "per_1000": 0,
+     "reasons": {}
+    },
+    "one": {
+     "entering": 1000,
+     "lost": 2,
+     "per_1000": 2,
+     "reasons": {
+      "ow-moblin": 2
+     }
+    }
+   }
+  ],
+  "files": {
+   "team": "target/merge/chains/team-1k-post-d6.jsonl",
+   "one": "target/merge/chains/one1x-1k-post-d6.jsonl"
+  }
+ },
+ "d8": {
+  "runs": 1000,
+  "team": 0.378,
+  "one": 0.029,
+  "diff": -0.349,
+  "se": 0.016169739035014154,
+  "gained": 17,
+  "lost": 366,
+  "rooms": [
+   {
+    "step": 237,
+    "room": "8:0x3e",
+    "key": "darknut",
+    "team": {
+     "entering": 937,
+     "lost": 262,
+     "per_1000": 280,
+     "reasons": {
+      "died": 257,
+      "darknut": 5
+     }
+    },
+    "one": {
+     "entering": 729,
+     "lost": 570,
+     "per_1000": 782,
+     "reasons": {
+      "died": 569,
+      "darknut": 1
+     }
+    }
+   },
+   {
+    "step": 235,
+    "room": "8:0x5e",
+    "key": "darknut",
+    "team": {
+     "entering": 1001,
+     "lost": 3,
+     "per_1000": 3,
+     "reasons": {
+      "died": 3
+     }
+    },
+    "one": {
+     "entering": 997,
+     "lost": 127,
+     "per_1000": 127,
+     "reasons": {
+      "died": 127
+     }
+    }
+   }
+  ],
+  "files": {
+   "team": "target/merge/chains/team-1k-d8.jsonl",
+   "one": "target/merge/chains/one1x-1k-d8.jsonl"
+  }
+ },
+ "d9": {
+  "runs": 1000,
+  "team": 0.489,
+  "one": 0.243,
+  "diff": -0.246,
+  "se": 0.020974363492700415,
+  "gained": 127,
+  "lost": 373,
+  "rooms": [
+   {
+    "step": 286,
+    "room": "9:0x10",
+    "key": "wizzrobe",
+    "team": {
+     "entering": 938,
+     "lost": 130,
+     "per_1000": 139,
+     "reasons": {
+      "died": 130
+     }
+    },
+    "one": {
+     "entering": 883,
+     "lost": 256,
+     "per_1000": 290,
+     "reasons": {
+      "died": 256
+     }
+    }
+   },
+   {
+    "step": 278,
+    "room": "9:0x05",
+    "key": "wizzrobe",
+    "team": {
+     "entering": 974,
+     "lost": 24,
+     "per_1000": 25,
+     "reasons": {
+      "died": 24
+     }
+    },
+    "one": {
+     "entering": 1004,
+     "lost": 56,
+     "per_1000": 56,
+     "reasons": {
+      "died": 56
+     }
+    }
+   }
+  ],
+  "files": {
+   "team": "target/merge/chains/team-1k-d9.jsonl",
+   "one": "target/merge/chains/one1x-1k-d9.jsonl"
+  }
+ },
+ "full": {
+  "runs": 1000,
+  "team": 0.001,
+  "one": 0.0,
+  "diff": -0.001,
+  "se": 0.001,
+  "gained": 0,
+  "lost": 1,
+  "rooms": [
+   {
+    "step": 22,
+    "room": "3:0x4d",
+    "key": "boss-manhandla@d3first",
+    "team": {
+     "entering": 490,
+     "lost": 255,
+     "per_1000": 520,
+     "reasons": {
+      "died": 255
+     }
+    },
+    "one": {
+     "entering": 129,
+     "lost": 76,
+     "per_1000": 589,
+     "reasons": {
+      "died": 76
+     }
+    }
+   },
+   {
+    "step": 13,
+    "room": "3:0x59",
+    "key": "darknut@d3first",
+    "team": {
+     "entering": 858,
+     "lost": 77,
+     "per_1000": 90,
+     "reasons": {
+      "died": 77
+     }
+    },
+    "one": {
+     "entering": 733,
+     "lost": 240,
+     "per_1000": 327,
+     "reasons": {
+      "died": 240
+     }
+    }
+   }
+  ],
+  "files": {
+   "team": "/home/leculver/git/triforce/target/r56-chains/r35nobag-1k-full.jsonl",
+   "one": "target/merge/chains/one1x-1k-full.jsonl"
+  }
+ }
+}

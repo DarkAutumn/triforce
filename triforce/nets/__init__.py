@@ -60,7 +60,7 @@ def is_native(network: nn.Module) -> bool:
 
 # The architectures register on import.
 from . import wide  # noqa: E402,F401  pylint: disable=wrong-import-position,cyclic-import
-from . import gru, hithead  # noqa: E402,F401  pylint: disable=wrong-import-position,cyclic-import
+from . import gru, hithead, roomheads  # noqa: E402,F401  pylint: disable=wrong-import-position,cyclic-import
 
 __all__ = ['ARCHS', 'Heads', 'LabNet', 'ZELDA', 'arch_of', 'build', 'create', 'factored_evaluate', 'factored_joint',
            'is_native', 'names', 'register']
