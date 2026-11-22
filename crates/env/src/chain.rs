@@ -10,7 +10,8 @@
 //! room, the per-room budget (`no_progress_steps` quiet actions, else `max(max_steps, 2000)` steps), the opt-in
 //! stall budget (`stall_steps`: twice that many actions without damage dealt or taken) or the run cap; error on
 //! an unknown/untagged room the route needed, a masked action, a missing state or [`ChainEnv::fail`] (e.g. no
-//! promoted model).  [`ChainEnv::set_harvest`] saves every handoff's pre-entry state as a harvested start state.
+//! promoted model).  [`ChainEnv::set_harvest`] saves every handoff's (or every room entry's) pre-entry state as a
+//! harvested start state.
 
 use crate::config::{GameData, SpecialistConfig};
 use crate::critic::BossTransitions;
@@ -637,6 +638,8 @@ pub struct ChainEnv<N: Nes, St: StateStore<N::State>> {
     pub stall_steps: Option<u64>,
     /// Handoff harvesting ([`ChainEnv::set_harvest`]): the root the pre-entry states go under.
     harvest: Option<PathBuf>,
+    /// Harvest every correct room entry, not only handoffs ([`ChainEnv::set_harvest`]'s `every_room`).
+    harvest_every_room: bool,
     /// Actions since entering the room or the last damage dealt or taken.
     no_damage: u64,
     result: Option<RunResult>,
@@ -695,6 +698,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             max_bounces: MAX_BOUNCES,
             stall_steps: None,
             harvest: None,
+            harvest_every_room: false,
             no_damage: 0,
             result: None,
             objectives: None,
@@ -822,14 +826,17 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
     /// saves its pre-entry savestate as `dir/<new specialist>/<level>_<room><side>[_v<visit>]_h<seed>_<n>.state`
     /// ([`harvest_filename`]; `n` = the room's index in the run, a run without a seed counts as seed 0), the true
     /// health, position and items the upstream specialist handed over. The run's first room (the route's start
-    /// state) is not a handoff.
-    pub fn set_harvest(&mut self, dir: Option<PathBuf>) {
+    /// state) is not a handoff. `every_room`: every correct room entry, also one from a room of the same family (the
+    /// rooms a handoff harvest never sees: Dungeon 8's 0x4e-0x3e-0x3f, the Olive Garden's fight from 0x06), filed
+    /// under the specialist that plays the room.
+    pub fn set_harvest(&mut self, dir: Option<PathBuf>, every_room: bool) {
         self.session.set_capture_pre_entry(dir.is_some());
         self.harvest = dir;
+        self.harvest_every_room = every_room;
     }
 
-    /// Saves the pre-entry state of the room entry just made (a handoff to `name`, room index `n`), named for the
-    /// route visit of the step Link plays there.
+    /// Saves the pre-entry state of the room entry just made (a handoff to `name`, or any entry with
+    /// `harvest_every_room`; room index `n`), named for the route visit of the step Link plays there.
     fn harvest_entry(&self, name: &str, n: usize) -> Result<(), String> {
         let (Some(dir), Some(change), Some(pre_entry)) = (
             &self.harvest,
@@ -1530,13 +1537,13 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             // A one_room specialist trains on episodes that start at the room (a reset observation): give it the
             // same on every room entry, also from a room of its own family (F040).
             let fresh = switch || config.one_room;
+            // A handoff is a change of family (a route's own run handing its family's room to the default run is
+            // none); it is always a switch.
+            let handoff = self.current.as_ref().is_none_or(|c| zelda::game_map::split_policy(&c.name).0 != name);
+            if exit_correct && (handoff || self.harvest_every_room) {
+                self.harvest_entry(&name, index)?;
+            }
             if switch {
-                // A handoff is a change of family (a route's own run handing its family's room to the default
-                // run is none).
-                let handoff = self.current.as_ref().is_none_or(|c| zelda::game_map::split_policy(&c.name).0 != name);
-                if exit_correct && handoff {
-                    self.harvest_entry(&name, index)?;
-                }
                 self.builder = ObservationBuilder::new(config.obs.objective, config.obs.target)
                     .with_hidden_positions(config.obs.hidden_positions);
                 self.track = match self.rewards {

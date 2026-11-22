@@ -6,6 +6,7 @@ under an hour of the queue, and the manifest of the full tier.
     python -m triforce.lab.bench run --network CKPT --keys zol stalfos-keese-gel --out student.json
     python -m triforce.lab.bench compare team.json student.json
     python -m triforce.lab.bench speed --key zol --out speed.json                    # decisions/s per acting path
+    python -m triforce.lab.bench rooms --harvest DIR --chains H-d3.jsonl ... --out triforce/lab/bench-rooms.json
 
 The cheap tier (``bench.json`` beside this file, committed): per policy key of today's team (a family, or
 ``family@route`` for a route's own run), room entries as the chains bring them (the harvested pre-entry states
@@ -14,7 +15,17 @@ fixed hash order), else the family's seed start states (``source: seed``: no har
 Every state is played ``episodes`` times on fixed seeds in the project's act mode, clips on.  Per key: success,
 hearts lost per episode, hits taken per room visit, decisions per episode, bombs used per episode; one JSON per
 network, every episode kept (state, seed) so ``compare`` pairs them: per key and in total, the paired difference
-and its standard error.
+and its standard error.  The cheap tier plays a harvested entry with the family's ``ram_randomization`` (hearts,
+bombs and help drawn at reset, as training does), and its entries are handoffs only (a chain harvests a room entry
+where the family changes): it never sees a room entered from a room of the same family, and a key's 120 episodes
+weigh as much in the total as any other key's.  Round 38 found a student 1.2 points above the team on it whose
+chains lost 17-40 points a dungeon, in exactly those rooms.
+
+The rooms tier (``bench-rooms.json``, ``rooms``): every room entry of the route where the team takes damage, as the
+team's chains bring it (an every-room harvest, ``eval-chain --harvest DIR --harvest-every-room``), played as it
+arrived (``arrived``: no ``ram_randomization``, the hearts and bombs of the chain), one row per room entry
+(``name``: the key, the room, the entry side); ``compare`` lists the rows a network loses on (``losing``).  Its
+states live under ``<states>/harvested-rooms/<family>/`` (untracked, like ``harvested``: copy them from main).
 
 The full tier (``bench.json`` ``full``): the segment chains of the route as the landings run them
 (``triforce eval-batch TAG --chains TAG --route ROUTE --runs 1000 --act model``, a candidate's networks given with
@@ -26,6 +37,7 @@ import hashlib
 import json
 import math
 import re
+import shutil
 import sys
 import time
 from collections import defaultdict
@@ -44,6 +56,8 @@ FORMAT = 1
 ACT = registry.DEFAULT_ACT
 ROUTE = 'd3first'
 HARVESTED = 'harvested'
+ROOMS = 'harvested-rooms'
+ROOMS_MANIFEST = Path(__file__).with_name('bench-rooms.json')
 _ENTRY = re.compile(r'^(.*)_h\d+_\d+$')
 
 
@@ -140,24 +154,30 @@ def summarize(episodes: list[dict]) -> dict:
 
 
 def entry_task(entry: dict, states_dir=None):
-    """(config, states dir) that play a manifest entry's states: a harvested entry's from its family's harvested
-    folder (start states resolve by bare name in one folder), seed states from the states dir."""
+    """(config, states dir) that play a manifest entry's states: a harvested entry's from its family's folder under
+    the entry's source (``harvested``, ``harvested-rooms``; start states resolve by bare name in one folder), seed
+    states from the states dir; an ``arrived`` entry with the family's ``ram_randomization`` off."""
     base = Path(states_dir or _native.paths()['states_dir'])
     names = [Path(state).name for state in entry['states']]
-    if entry['source'] == HARVESTED:
-        base = base / HARVESTED / entry['family']
-    return load_specialist(entry['family']).replace(start_states=names), str(base)
+    if entry['source'] != 'seed':
+        base = base / entry['source'] / entry['family']
+    config = load_specialist(entry['family']).replace(start_states=names)
+    if entry.get('arrived'):
+        config = config.replace(ram_randomization={})
+    return config, str(base)
 
 
 def run_bench(networks: dict[str, str], manifest: dict, parallel: int, states_dir=None, act: Optional[str] = None,
               log=print, progress=None) -> dict:
-    """Plays every manifest entry whose key ``networks`` names (key -> checkpoint); ``progress`` (an
-    ``events.JobProgress``) hears the episodes played and their success after each entry."""
+    """Plays every manifest entry whose key ``networks`` names (key -> checkpoint), one row per entry (its
+    ``name``, else its key); ``progress`` (an ``events.JobProgress``) hears the episodes played and their success
+    after each entry."""
     rows, total_seconds, decisions = {}, 0.0, 0
     for entry in manifest['entries']:
         key = entry['key']
         if key not in networks:
             continue
+        label = entry.get('name', key)
         config, directory = entry_task(entry, states_dir)
         began = time.time()
         result = evaluate_specialist(config, networks[key], episodes_per_state=manifest['episodes'],
@@ -165,16 +185,16 @@ def run_bench(networks: dict[str, str], manifest: dict, parallel: int, states_di
                                      states_dir=directory, clips=manifest['clips'])
         seconds = time.time() - began
         episodes = [_episode(r) for r in result['records']]
-        rows[key] = {**summarize(episodes), 'checkpoint': str(networks[key]), 'model_hash': result['model_hash'],
-                     'seconds': round(seconds, 1), 'source': entry['source'], 'records': episodes}
+        rows[label] = {**summarize(episodes), 'checkpoint': str(networks[key]), 'model_hash': result['model_hash'],
+                       'seconds': round(seconds, 1), 'source': entry['source'], 'records': episodes}
         total_seconds += seconds
         decisions += sum(e['decisions'] for e in episodes)
-        log(f"[bench] {key}: success {rows[key]['success']:.3f} hearts lost {rows[key]['hearts_lost']:.2f} "
-            f"hits/visit {rows[key]['hits_per_visit']:.3f} decisions {rows[key]['decisions']:.0f} "
-            f"({seconds:.0f}s)")
+        row = rows[label]
+        log(f"[bench] {label}: success {row['success']:.3f} hearts lost {row['hearts_lost']:.2f} "
+            f"hits/visit {row['hits_per_visit']:.3f} decisions {row['decisions']:.0f} ({seconds:.0f}s)")
         if progress is not None:
-            played = [e for row in rows.values() for e in row['records']]
-            progress.update(len(played), summarize(played)['success'], key=key)
+            played = [e for r in rows.values() for e in r['records']]
+            progress.update(len(played), summarize(played)['success'], key=label)
     every = [e for row in rows.values() for e in row['records']]
     return {'format': FORMAT, 'version': __version__, 'act': act or manifest['act'], 'manifest': _manifest_hash(manifest),
             'parallel': parallel, 'seconds': round(total_seconds, 1),
@@ -218,12 +238,20 @@ def paired(a: list[dict], b: list[dict]) -> dict:
     return out
 
 
+LOSING_POINTS = 0.05       # a row losing this much success, beyond two standard errors, is listed under the table
+
+
 def compare(base: dict, new: dict) -> dict:
+    """Per row and in total, ``new - base`` paired by episode; ``losing``: the rows whose success falls by
+    ``LOSING_POINTS`` or more and by more than two standard errors, worst first (a total averages them away)."""
     keys = [k for k in base['keys'] if k in new['keys']]
     rows = {k: paired(records(base['keys'][k]), records(new['keys'][k])) for k in keys}
     every_a = [dict(e, state=f"{k}/{e['state']}") for k in keys for e in records(base['keys'][k])]
     every_b = [dict(e, state=f"{k}/{e['state']}") for k in keys for e in records(new['keys'][k])]
-    return {'keys': rows, 'total': paired(every_a, every_b)}
+    losing = sorted((k for k, r in rows.items()
+                     if r['success'][0] <= -LOSING_POINTS and r['success'][0] < -2 * r['success'][1]),
+                    key=lambda k: rows[k]['success'][0])
+    return {'keys': rows, 'total': paired(every_a, every_b), 'losing': losing}
 
 
 def format_compare(result: dict) -> str:
@@ -231,7 +259,70 @@ def format_compare(result: dict) -> str:
     for key, row in [*result['keys'].items(), ('**total**', result['total'])]:
         cells = [f"{row[m][0]:+.3f} ± {row[m][1]:.3f}" for m in METRICS]
         lines.append(f"| {key} | {row['pairs']} | " + ' | '.join(cells) + ' |')
+    losing = result.get('losing', [])
+    lines.append('')
+    lines.append(f"**Losing** ({len(losing)} rows, success down {LOSING_POINTS:.0%} or more beyond 2 SE): "
+                 + ('; '.join(f"{k} {result['keys'][k]['success'][0]:+.3f} ± {result['keys'][k]['success'][1]:.3f}"
+                              for k in losing) or 'none'))
     return '\n'.join(lines)
+
+
+def _harvest_runs(chains: list[str]) -> dict:
+    """(seed, room index) -> that room's record, from the JSON-lines outputs of the harvesting chains."""
+    out = {}
+    for path in chains:
+        with open(path, encoding='utf-8') as lines:
+            for line in lines:
+                run = json.loads(line)
+                for room in run['rooms']:
+                    out[(int(run['seed']), int(room['index']))] = room
+    return out
+
+
+def make_rooms_manifest(harvest: Path, chains: list[str], states_per_room: int, episodes: int, seed: int,
+                        min_hearts: float, states_dir=None, route: str = ROUTE) -> dict:
+    """The rooms tier from an every-room harvest of the team (``harvest``: ``<family>/<stem>_h<seed>_<n>.state``)
+    and the chains that harvested it (their records tell what each harvested visit cost the team): one entry per
+    room entry (stem) whose visits lost ``min_hearts`` or more a visit or any run, keyed by the policy that plays
+    its route step, ``states_per_room`` states by the fixed hash order.  The chosen states are copied under
+    ``<states>/harvested-rooms/<family>/``."""
+    states_dir = Path(states_dir or _native.paths()['states_dir'])
+    visits = _harvest_runs(chains)
+    steps: dict = {}
+    for step in _native.route_steps(route):
+        steps.setdefault((step['level'], step['room'], bool(step['in_cave']), step['entry'], step['visit']),
+                         step['index'])
+    entries = []
+    for folder in sorted(p for p in harvest.iterdir() if p.is_dir()):
+        family = folder.name
+        groups = defaultdict(list)
+        for path in folder.glob(f'{route}_*.state'):
+            match = _ENTRY.match(path.stem)
+            if match:
+                groups[match.group(1)].append(path)
+        for stem, paths in sorted(groups.items()):
+            rooms = [visits.get(tuple(int(x) for x in re.findall(r'_h(\d+)_(\d+)$', p.stem)[0])) for p in paths]
+            rooms = [r for r in rooms if r is not None]
+            if not rooms:
+                continue
+            lost = sum(max(0.0, r['health_in'] - r['health_out']) for r in rooms) / len(rooms)
+            deaths = sum(r['outcome'] == 'death' for r in rooms)
+            if lost < min_hearts and not deaths:
+                continue
+            parsed = _native.state_name(paths[0].stem)
+            step = steps.get(tuple(parsed)) if parsed is not None else None
+            key = _native.step_policy(route, step, family) if step is not None else family
+            chosen = sorted(paths, key=lambda p: _order(p.stem))[:states_per_room]
+            target = states_dir / ROOMS / family
+            target.mkdir(parents=True, exist_ok=True)
+            for path in chosen:
+                shutil.copyfile(path, target / path.name)
+            entries.append({'key': key, 'family': family, 'source': ROOMS, 'arrived': True,
+                            'name': f"{key} {stem.removeprefix(f'{route}_')}",
+                            'team_visits': len(rooms), 'team_hearts_lost': round(lost, 3), 'team_deaths': deaths,
+                            'states': sorted(f'{ROOMS}/{family}/{p.stem}' for p in chosen)})
+    return {'format': FORMAT, 'act': ACT, 'episodes': episodes, 'seed': seed, 'clips': 'on', 'route': route,
+            'states_per_room': states_per_room, 'min_hearts': min_hearts, 'entries': entries}
 
 
 def speed(key: str, manifest: dict, parallel: int, devices: list[str], states_dir=None, root=None,
@@ -307,6 +398,16 @@ def main(argv=None) -> int:
     c = sub.add_parser('compare')
     c.add_argument('base')
     c.add_argument('new')
+    o = sub.add_parser('rooms', help="the rooms tier's manifest from an every-room harvest of the team")
+    o.add_argument('--harvest', required=True, help="eval-chain --harvest DIR --harvest-every-room's DIR")
+    o.add_argument('--chains', nargs='+', required=True, help="the JSON-lines outputs of those harvesting chains")
+    o.add_argument('--states-per-room', type=int, default=12)
+    o.add_argument('--episodes', type=int, default=5)
+    o.add_argument('--seed', type=int, default=380000)
+    o.add_argument('--min-hearts', type=float, default=0.1,
+                   help="a room entry joins when the team lost this many hearts a visit there (or a run)")
+    o.add_argument('--states-dir', default=None)
+    o.add_argument('--out', default=str(ROOMS_MANIFEST))
     args = parser.parse_args(argv)
     if args.command == 'manifest':
         manifest = make_manifest(args.states_per_family, args.episodes, args.seed, args.models_dir, args.states_dir,
@@ -315,6 +416,13 @@ def main(argv=None) -> int:
         print(f"[bench] {len(manifest['entries'])} keys, "
               f"{sum(len(e['states']) for e in manifest['entries']) * manifest['episodes']} episodes; "
               f"no harvested entries: {manifest['missing_coverage']}")
+        return 0
+    if args.command == 'rooms':
+        manifest = make_rooms_manifest(Path(args.harvest), args.chains, args.states_per_room, args.episodes,
+                                       args.seed, args.min_hearts, args.states_dir)
+        write_json_atomic(args.out, manifest)
+        print(f"[bench] rooms: {len(manifest['entries'])} room entries, "
+              f"{sum(len(e['states']) for e in manifest['entries']) * manifest['episodes']} episodes")
         return 0
     if args.command == 'compare':
         result = compare(json.loads(Path(args.base).read_text()), json.loads(Path(args.new).read_text()))

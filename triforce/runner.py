@@ -455,8 +455,10 @@ class ChainPool:
     directory; None = off): every correct room entry where the acting specialist changes (a handoff) saves its
     pre-entry state as
     ``harvest/<specialist>/<level>_<room><side>_h<seed>_<n>.state`` (``n``: the room's index in the run), a start
-    state for that specialist's ``harvested_dir``.  ``hold_finished_frame``: each finished run holds the env's
-    picture on its last screen until ``pool.set_hold(env, False)`` (a watched cell's result pause).  ``clips_live``:
+    state for that specialist's ``harvested_dir``; ``harvest_every_room``: every correct room entry does, also one
+    from a room of the same family (the rooms a handoff harvest never sees).  ``hold_finished_frame``: each finished
+    run holds the env's picture on its last screen until ``pool.set_hold(env, False)`` (a watched cell's result
+    pause).  ``clips_live``:
     ``pool.set_clips_allowed`` also flips the runs in progress, from their next decision (the route re-plans);
     without it the switch reaches only the runs started afterwards."""
 
@@ -465,7 +467,7 @@ class ChainPool:
                  act: Optional[str] = None,
                  max_steps: int = DEFAULT_MAX_STEPS, states_dir=None, record: Optional[dict] = None,
                  stall_steps: Optional[int] = None, replays: Optional[ReplayDir] = None, harvest=None,
-                 hold_finished_frame: bool = False, clips_live: bool = False):
+                 hold_finished_frame: bool = False, clips_live: bool = False, harvest_every_room: bool = False):
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         if replays is not None and record is None:
             raise ValueError("a replay folder needs record options (replay.record_options)")
@@ -483,7 +485,7 @@ class ChainPool:
                                  stop_step=route.stop_step, power_on=route.power_on, checkpoint=route.checkpoint,
                                  clips=route.clips, clips_off_from=route.clips_off_from,
                                  hold_finished_frame=hold_finished_frame, clips_live=clips_live,
-                                 policies=policies.names)
+                                 policies=policies.names, harvest_every_room=harvest_every_room)
         num_envs = max(1, min(num_envs, len(seeds)))
         self.pool = _native.EnvPool(task, num_envs=num_envs, threads=threads, seed=seed, fps=fps, record=record)
 
@@ -541,14 +543,15 @@ class Runner:
                  max_steps: int = DEFAULT_MAX_STEPS,
                  specialist_configs: Optional[Dict[str, SpecialistConfig]] = None,
                  networks: Optional[Dict[str, object]] = None, parallel: int = 1, threads: Optional[int] = None,
-                 states_dir=None, harvest=None, route: Optional[str] = None):
+                 states_dir=None, harvest=None, route: Optional[str] = None, harvest_every_room: bool = False):
         """
         checkpoints: specialist name → checkpoint path, overriding the registry's promoted model.
         specialist_configs: specialist name → loaded config, replacing its canonical YAML at runtime.
         networks: specialist name → a ``ZeldaPolicy`` to act with instead of a checkpoint.
         parallel: envs in the chain pool; threads: its worker threads (default min(parallel, cores)).
         act: None = each model's act mode (registry), else this act mode for all.
-        harvest: save every handoff's pre-entry state under this directory (``ChainPool``).
+        harvest: save every handoff's pre-entry state under this directory (``ChainPool``); harvest_every_room: every
+        correct room entry's.
         route: the route whose promoted runs play (phase X: ``promoted.<route>`` over ``promoted``; None: ``promoted``).
         """
         # pylint: disable=too-many-arguments, too-many-positional-arguments
@@ -559,6 +562,7 @@ class Runner:
         self.threads = threads
         self.states_dir = states_dir
         self.harvest = harvest
+        self.harvest_every_room = harvest_every_room
 
     def pool(self, route: Route, seeds: Sequence[int], **kwargs) -> ChainPool:
         """A chain pool over this runner's policies (``kwargs``: ``num_envs``, ``threads``, ``fps``, ``seed``,
@@ -566,7 +570,8 @@ class Runner:
         kwargs.setdefault('num_envs', self.parallel)
         kwargs.setdefault('threads', self.threads)
         return ChainPool(route, seeds, self.policies, act=self.act, max_steps=self.max_steps,
-                         states_dir=self.states_dir, harvest=self.harvest, **kwargs)
+                         states_dir=self.states_dir, harvest=self.harvest,
+                         harvest_every_room=self.harvest_every_room, **kwargs)
 
     def record_meta(self, route: Route, **extra) -> dict:
         """The META object of recordings of ``route`` played by this runner (``chain_meta``)."""

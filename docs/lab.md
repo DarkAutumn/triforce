@@ -348,6 +348,19 @@ once per rollout over its family's rows in batches of 4096 (`lab.collect.Teacher
 - **Full tier** (`bench.json` `full`): the route's segment chains as the landings run them, `triforce eval-batch
   TAG --chains TAG --route d3first --runs 1000 --act model`, a candidate's networks given with `--checkpoint`; the
   `full` segment is the route from the start. It is what decides; the cheap tier only shortlists.
+- **Rooms tier** (round 38, `bench-rooms.json`; `rooms --harvest DIR --chains ...` builds it): the cheap tier was
+  blind to what killed a student's chains. Its entries are chain handoffs only (a room entry where the family
+  changes), so a room entered from a room of the same family is never on it: Dungeon 8's Darknut rooms
+  0x4e-0x3e-0x3f, the Olive Garden's fight (5:0x05 from 0x06; the cheap tier's two 5:0x05 entries are the cleared
+  revisit from 0x04, 3 decisions), Dungeon 7's Goriya rooms (0x1b, 0x19, 0x18, 0x49), 4:0x31 from 0x30. On the
+  51's own 1,000-run chains 69% (D5), 78% (D7) and 82% (D8) of the deaths are in such entries. It plays its entries
+  with the family's `ram_randomization` (hearts and bombs drawn at reset), not what the chain brings. And its total
+  weighs every key alike: a round-1 student 17.5 ± 3.5 points down on `darknut@d3first` (3:0x59: 13% against the
+  team's 80%) still read +1.2 in total. The rooms tier takes every room entry where the team loses hearts, from an
+  every-room harvest of the team's chains (`eval-chain --harvest DIR --harvest-every-room`), 12 states each, played
+  as they arrived (`arrived`: no randomization), one row per room entry; `compare` lists the **losing** rows (down
+  5 points or more beyond two standard errors) under the table, on both tiers. A candidate reaches the chains only
+  with no losing row.
 
 **The reference** (`triforce/lab/reference.json`: today's team, 2.0.0.3's 51 networks, on `bench.json`; played
 Nov 22 on 10 envs on the corrected `d3first`'s entries): 6,120 episodes, success **92.9%**, hearts lost **0.249** an
