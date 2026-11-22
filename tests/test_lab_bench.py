@@ -37,7 +37,8 @@ def test_a_bench_run_and_its_paired_comparison(states_dir, tmp_path):
     want = results[1]['keys']['ow-start']['decisions'] - row['decisions']
     assert abs(other['keys']['ow-start']['decisions'][0] - want) < 1e-9
     assert '**total**' in bench.format_compare(other)
-    json.dumps(results[0])
+    stored = json.loads(json.dumps(bench.compact(results[1])))
+    assert bench.compare(results[0], stored) == other
 
 
 def test_the_committed_manifest_covers_the_team():

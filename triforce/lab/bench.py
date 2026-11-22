@@ -179,6 +179,21 @@ def _manifest_hash(manifest: dict) -> str:
 
 
 METRICS = ('success', 'hearts_lost', 'hits', 'decisions', 'bombs')
+FIELDS = ('state', 'seed', 'success', 'hearts_lost', 'hits', 'visits', 'decisions', 'bombs')
+
+
+def compact(result: dict) -> dict:
+    """``result`` with every key's episodes as one table (``fields``, ``rows``): what ``run`` writes."""
+    keys = {key: {**row, 'records': {'fields': list(FIELDS),
+                                     'rows': [[e[f] for f in FIELDS] for e in records(row)]}}
+            for key, row in result['keys'].items()}
+    return {**result, 'keys': keys}
+
+
+def records(row: dict) -> list[dict]:
+    """A key's episodes as dicts, from either form (``compact``)."""
+    kept = row['records']
+    return kept if isinstance(kept, list) else [dict(zip(kept['fields'], values)) for values in kept['rows']]
 
 
 def paired(a: list[dict], b: list[dict]) -> dict:
@@ -197,9 +212,9 @@ def paired(a: list[dict], b: list[dict]) -> dict:
 
 def compare(base: dict, new: dict) -> dict:
     keys = [k for k in base['keys'] if k in new['keys']]
-    rows = {k: paired(base['keys'][k]['records'], new['keys'][k]['records']) for k in keys}
-    every_a = [dict(e, state=f"{k}/{e['state']}") for k in keys for e in base['keys'][k]['records']]
-    every_b = [dict(e, state=f"{k}/{e['state']}") for k in keys for e in new['keys'][k]['records']]
+    rows = {k: paired(records(base['keys'][k]), records(new['keys'][k])) for k in keys}
+    every_a = [dict(e, state=f"{k}/{e['state']}") for k in keys for e in records(base['keys'][k])]
+    every_b = [dict(e, state=f"{k}/{e['state']}") for k in keys for e in records(new['keys'][k])]
     return {'keys': rows, 'total': paired(every_a, every_b)}
 
 
@@ -304,7 +319,7 @@ def main(argv=None) -> int:
     episodes = sum(len(e['states']) * manifest['episodes'] for e in manifest['entries'] if e['key'] in networks)
     with logged_job('lab-bench', 'eval', [], log=False, work=work(eval_episodes=episodes)):
         result = run_bench(networks, manifest, args.parallel, args.states_dir)
-    write_json_atomic(args.out, result)
+    write_json_atomic(args.out, compact(result))
     print(json.dumps(result['total'], indent=2))
     return 0
 
