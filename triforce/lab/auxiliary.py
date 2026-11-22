@@ -1,7 +1,8 @@
 """Auxiliary targets: losses on a network's named auxiliary outputs (docs/lab.md "Auxiliary targets").
 
 The rollout carries, per decision, what the action taken did (``RolloutBuffer``: ``health_lost``, ``hits``,
-``blocked``, ``frames``) and, with ``tried`` (``EnvPool.rollout``; ``--try-others K:P``), the look-ahead's verdict on
+``blocked``, ``frames``, the aimless score's ``calm``, ``progress``, ``waste``) and, with ``tried``
+(``EnvPool.rollout``; ``--try-others K:P``), the look-ahead's verdict on
 K candidates NOT taken on a share P of the decisions (``tried_actions``, ``tried_lost``, ``tried_blocked``; training
 only). A ``LabNet`` returns named auxiliary outputs in ``Heads.aux``; a run names a loss per output: ``--aux
 OUTPUT=TARGET:COEFF``.
@@ -16,6 +17,12 @@ Targets (per decision):
 - ``damaged``: the action dealt a monster a hit (``hits > 0``); binary.
 - ``hearts_lost``: hearts the action lost (net, clamped at 0); regression, ½ squared error.
 - ``frames``: the frames the action took, / 16; regression.
+- ``calm``: the decision was calm (round 38, ``zelda::aimless``: nothing in the room can hurt Link, the goal does not
+  go away, no dropped item pulls him); binary.
+- ``progress``: the frames of progress the action made toward the goal at walking speed (negative: ground lost; 0
+  when not calm), / 16; regression.
+- ``waste``: the frames the action added to its calm stretch's waste (``penalty-aimless``'s measure), / 16;
+  regression.
 
 An output ``[B]`` is the taken action's prediction; ``[B, 352]`` is one per joint action (``kind * 32 + direction *
 4 + duration``), read at the taken action (and the tried ones for ``hit`` and ``hit_or_blocked``).
@@ -28,8 +35,8 @@ import torch.nn.functional as F
 
 from ..actions import NUM_DIRECTIONS, NUM_DURATIONS
 
-TARGETS = ('hit', 'hit_or_blocked', 'damaged', 'hearts_lost', 'frames')
-BINARY = ('hit', 'hit_or_blocked', 'damaged')
+TARGETS = ('hit', 'hit_or_blocked', 'damaged', 'hearts_lost', 'frames', 'calm', 'progress', 'waste')
+BINARY = ('hit', 'hit_or_blocked', 'damaged', 'calm')
 # The targets the look-ahead's trials label too (a tried candidate's verdict), and held_out reads.
 JUDGED = ('hit', 'hit_or_blocked')
 FRAME_SCALE = 16.0
@@ -67,6 +74,10 @@ def target_values(target: str, batch: dict, rows) -> torch.Tensor:
         return (batch['hits'][rows] > 0).float()
     if target == 'hearts_lost':
         return batch['health_lost'][rows].clamp(min=0.0)
+    if target == 'calm':
+        return batch['calm'][rows].float()
+    if target in ('progress', 'waste'):
+        return batch[target][rows] / FRAME_SCALE
     return batch['frames'][rows] / FRAME_SCALE
 
 

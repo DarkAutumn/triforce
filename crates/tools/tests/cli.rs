@@ -458,8 +458,8 @@ fn the_replay_corpus_still_verifies() {
         assert!(state.contains(line), "{line}: {state}");
     }
     let ending = info("golden-d3first-51-networks");
-    for line in ["version:  1", "frames:   152051", "ending:   win", "segments: 9", "states:   1 END, 8 CHECKPOINT",
-                 "triforce: 2.0.0.3", "the game ended in (level 9, room 0x32)"] {
+    for line in ["version:  1", "frames:   180118", "ending:   win", "segments: 9", "states:   1 END, 8 CHECKPOINT",
+                 "triforce: 2.0.0.6", "the game ended in (level 9, room 0x32)"] {
         assert!(ending.contains(line), "{line}: {ending}");
     }
     // One network in all 51 model slots (round 37): a golden path of the corrected route from power on.

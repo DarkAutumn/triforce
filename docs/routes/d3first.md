@@ -207,6 +207,82 @@ rule): a run with the run-time switch off has no way past them. The shared block
 - Segments and scopes: `eval_batch.ROUTE_SEGMENTS['d3first']` (`D3FIRST_SEGMENTS`, `_TARGETS`, `_MILESTONES`),
   `room_stats.ROUTE_SCOPES['d3first']`; `ROUTE=d3first TAG=... scripts/experiments/r56_chains.sh`.
 
+## Bombs: the owner's three rules (round 37, 2.0.0.6)
+
+The owner watched a golden replay (Nov 22). His words:
+
+1. "In dungeons, link should only use bombs in rooms it somehow needs to clear. For example, it's fine to use bombs
+   in 0x59 because we have to clear the room to open the south door, in 0x69 it needs to slide past the darknuts to
+   get the raft, then out of the room (I use sword-hit an enemy to make them pass-through in this room, not kills
+   with bombs)."
+2. "Some rooms I want to explicitly say 'don't use bombs in this room' [...] 0x5b is a great example, the point of
+   fighting the darknuts in that room is to get the bomb drop, wasting the bombs to kill them is not the right play.
+   BUT link still needs to bomb the wall to get through there. So no bombs except the 1 to blow up the wall."
+3. "I want to raise the 'get bombs from this room' floor, so in 0x5b he should fight the darknuts if he has 7 or
+   less bombs, up from whatever it was. This is a blanket rule not for this room."
+
+And over all three: "we must ALWAYS allow bombs and deeply encourage them if we are on the 10th kill force drop, no
+matter the room or enemies, that remains true."
+
+They are routes.yaml's top-level `bomb_rules:` under `d3first` (`zelda::game_map::BombRules`; `d2first` names none
+and is unchanged: the owner puts it in scope "when we go back and work on that single-model", and the same entry
+under its name switches them on there):
+
+- `fights_only: true` (rule 1). In a dungeon room BOMB is a weapon only while the objective fights the room
+  (`zelda::objectives::GameCompletion::weapon_bombs_off`, from the objective's own kind every step: a shutter the
+  monsters hold on the step's exit, a treasure or a block that waits on the kills and the step takes, a boss). Where
+  the route only crosses, or once the fight is over, a `free` family's mode is capped at `required`: BOMB only at
+  the intact wall the step leaves through, and the 10th damage-free kill's bomb. `tenth`, `required` and `never`
+  place no weapon bomb already; in a fight the family's mode and the reserve stand as before. The overworld is
+  untouched. 3:0x59 (from N: five Red Darknuts, the S shutter) is a fight; 3:0x69 both ways is a crossing.
+- `wall_only: [3:0x5b]` (rule 2). "Rooms where the owner forbids bombs but for the wall": in these BOMB is never a
+  weapon, a fight or not (the cap at `required` whatever the family's mode or the step's). 3:0x5b's first pass (S
+  to N, its bombs `skip`, no wall on the step) places no bomb at all; its last pass (W to E) fights its Darknuts by
+  the sword for the room's four bombs and then bombs its E wall. The step's `bomb_reserve: 0` (the shared block's,
+  for `d2first`) bites no more there. The list: **3:0x5b**; more will come.
+- `treasure_below: 8` (rule 3). Every step that takes a room's game.yaml bombs (no `treasure:`, or a step's own
+  `{if_bombs_below: M}`, which gives way) fights for them when Link comes in with 7 or fewer and crosses with 8 (the
+  bag); judged on entering (`GameCompletion::step_treasure`), so the wall bomb Link spends in 3:0x5b with a full bag
+  turns no crossing into a fight beside the opened wall (round 23's trouble), and the decision holds for the visit:
+  the treasure is taken while Link holds fewer than the bag's maximum (the owner on 8:0x3f: in with 2, a drop to 6,
+  the room's bombs left on the floor by the shared step's live `{if_bombs_below: 5}`); a treasure lying in the room
+  is wanted below the maximum whatever he came in with. Under the floor, dropped bombs below the maximum are targets
+  in every family and, once the fight is over, the only targets while Link can reach them (`Objective::bag_drops`;
+  none at 8). On `d3first`: 3:0x4a, 3:0x5b's last pass, 2:0x1e, 5:0x65 eastbound (its four lie in the open: a
+  pickup, no fight), 7:0x1b (round 34's floor of 2 gone), 8:0x3f (the shared step's 5 gives way), 9:0x16
+  northbound. A room's own floor is `treasure_below_rooms: [{level, room, below: N}]`: 7:0x1b's crossing is
+  `{level: 7, room: '0x1b', below: 2}` (the owner: "you have the ability to skip that fight for bombs if it kills
+  too many runs"); measured both ways in round37.md (`d7` 12.6% with the floor, 12.7% crossing: the runs bring 0.21
+  bombs, so nearly every visit fights either way) and left commented under `bomb_rules` for the lead.
+- The 10th kill: every mode but `never` offers BOMB when the next kill is the 10th damage-free one (`$50` = 9; its
+  bomb kill arms a forced drop of four), in a crossing, in 3:0x5b and on the overworld, below any reserve, as before
+  (`never` is boss-gleeok's: only the sword hurts Gleeok; the `never` steps 0:0x07 and the state builders'). A
+  granted (cheated) bomb still opens only its wall, the 10th kill too (round 26). The bomb kill is paid
+  `reward-armed-bomb-drop` (0.75) and the drop's pickup `reward-gained-bombs` (0.5), in every family; not using
+  the bomb costs nothing.
+
+The dungeon steps of `d3first` by what the rules make of them (step numbers of 2.0.0.6; the engine's objective as
+the scout read it every 30 frames of the golden replay, round37.md; cellars left out). **Clear**: BOMB by the
+family's mode above the reserve while the fight lasts. **Clear < 8**: a fight only when Link comes in with 7 or
+fewer. **Wall**: a crossing whose exit is a bomb wall (one bomb). **Owner's**: no weapon bomb, the wall's and the
+10th kill's only. **Cross**: no bomb but the 10th kill's.
+
+| Level | Clear | Clear < 8 | Clear + wall | Wall | Owner's | Cross |
+|---|---|---|---|---|---|---|
+| 3 | 0x6b S→N (8); 0x4b S→W (10); 0x59 N→S (13); 0x4d W→N (22) | 0x4a E→W (11) | — | 0x4c S→E (21) | 0x5b S→N (9); 0x5b W→E (19, < 8, wall) | 0x7c S→W (6); 0x7b E→N (7); 0x49 E→S (12); 0x69 N→cave (14); 0x69 cave→N (16); 0x59 S→E (17); 0x5a W→E (18); 0x5c W→N (20); 0x3d S→triforce (23) |
+| 4 | 0x31 W→E (37); 0x32 W→cave (38); 0x12 N→E (50); 0x13 W→N (51) | — | — | 0x21 S→N (42); 0x21 W→N (46); 0x11 S→N (47) | — | 0x71 S→N (31); 0x61 S→N (32); 0x51 S→W (33); 0x50 E→N (34); 0x40 S→N (35); 0x30 S→E (36); 0x32 cave→W (40); 0x31 E→N (41); 0x31 E→W (43); 0x30 E→N (44); 0x20 S→E (45); 0x01 S→E (48); 0x02 W→S (49); 0x03 S→triforce (52) |
+| 1 | 0x23 S→W (68); 0x44 W→E (75); 0x35 S→E (77) | — | 0x53 S→N (65) | — | — | 0x73 S→S (61); 0x73 S→N (63); 0x63 S→N (64); 0x43 S→N (66); 0x33 S→N (67); 0x22 E→cave (69); 0x22 cave→E (71); 0x23 W→S (72); 0x33 N→S (73); 0x43 N→E (74); 0x45 W→N (76); 0x36 W→triforce (78) |
+| 2 | 0x7e W→N (98); 0x4e S→N (101); 0x3e S→N (102); 0x2e S→N (103); 0x0e S→W (105) | 0x1e S→N (104) | — | — | — | 0x7d S→E (97); 0x6e S→N (99); 0x5e S→N (100: crossed since round 37, the owner); 0x0d E→triforce (106) |
+| 5 | 0x05 E→cave (130); 0x66 W→N (137); 0x24 E→N (145) | — | — | 0x66 S→W (125); 0x65 E→W (126) | — | 0x76 S→N (124); 0x64 E→cave (127); 0x06 cave→W (129); 0x05 cave→E (132); 0x06 W→cave (133); 0x64 cave→E (135); 0x65 W→E (136, its bombs a pickup < 8); 0x56 S→E (138); 0x57 W→N (139); 0x47 S→N (140); 0x37 S→N (141); 0x27 S→W (142); 0x26 E→W (143); 0x25 E→W (144); 0x14 S→triforce (146) |
+| 7 | 0x49 S→N (163); 0x1c W→N (173); 0x0d W→cave (175); 0x2a W→E (178) | 0x1b W→E (172) | — | 0x69 S→N (161); 0x19 W→E (168); 0x1a cave→E (171); 0x0c S→E (174); 0x29 cave→E (177) | — | 0x79 S→N (160); 0x59 S→N (162); 0x39 S→W (164); 0x38 E→N (165); 0x28 S→N (166); 0x18 S→E (167); 0x1a W→cave (169); 0x2b W→triforce (179) |
+| 6 | 0x58 S→N (202); 0x38 S→N (204); 0x39 N→E (207); 0x3a W→cave (208); 0x2d N→W (211); 0x1c S→N (213) | — | — | 0x28 S→E (205) | — | 0x79 S→W (199); 0x78 E→N (200); 0x68 S→N (201); 0x48 S→N (203); 0x29 W→S (206); 0x1d cave→S (210); 0x2c E→N (212); 0x0c S→triforce (214) |
+| 8 | 0x5e S→N (223); 0x3e S→E (225); 0x3c S→N (229) | 0x3f W→cave (226) | — | 0x6e S→N (222); 0x4c cave→N (228) | — | 0x7e S→N (221); 0x4e S→N (224); 0x2c S→triforce (230) |
+| 9 | 0x14 cave→E (251); 0x05 E→cave (266); 0x61 E→cave (270); 0x10 S→cave (274); 0x30 E→cave (284); 0x52 cave→N (289); 0x42 S→N (290) | 0x16 S→N (264) | 0x20 cave→N (273, plain way) | 0x56 S→W (248); 0x26 N→E (254); 0x27 W→N (255); 0x17 S→N (256); 0x06 S→W (265); 0x20 cave→N (272); 0x31 S→W (283); 0x04 cave→W (286) | — | 0x76 S→N (246); 0x66 S→N (247); 0x55 E→cave (249); 0x15 W→E (252); 0x16 W→S (253); 0x07 S→cave (257); 0x07 cave→S (259, 260); 0x17 N→S (261); 0x27 N→W (262); 0x26 E→N (263); 0x63 cave→W (268); 0x62 E→W (269); 0x10 cave→S (276); 0x20 N→cave (277, 278); 0x61 cave→N (280); 0x51 S→N (281); 0x41 S→N (282); 0x03 E→cave (287); 0x32 S→end (291) |
+
+A clear room becomes a crossing once its fight is over (3:0x59's Darknuts dead, a treasure taken, a shutter open):
+the mask follows the objective every step. 8:0x6e's step `bombs: required` (the shared block's, for `d2first`) is
+what `fights_only` gives it on `d3first` anyway; 9:0x56's `required` is like-like's only way to bomb its wall.
+
 ## Reserves
 
 - **Bombs** (routes.yaml; a step's `bomb_reserve` holds until the next one names another). 6 from Dungeon 3's
@@ -223,7 +299,7 @@ rule): a run with the run-time switch off has no way past them. The shared block
   order Dungeon 2 comes first and fills the bag: runs from Dungeon 2's entrance with 2 bombs reach Level 5 with 8 in
   231 of 296 arrivals (round 36's harvest of the `5_76s` states, round36.md "States"). **8 from Level 7's entrance to 0x1b**
   (step 160, round 34, the lead): the reserve keeps the bag for the walls (0x69, 0x19, 0x1a); **0x1b wants its bombs
-  only below 2** (`treasure: {if_bombs_below: 2}`, step 172); 2 from 0x1b as d2first's, 0 at Aquamentus. **8 from
+  below 8** (round 37, the owner's floor; round 34's `{if_bombs_below: 2}` is gone, step 172); 2 from 0x1b as d2first's, 0 at Aquamentus. **8 from
   Level 7's exit (0x42, step 180) to Dungeon 6** (round 36): every bomb for 6:0x28's wall; then the blocks' (1 from
   6:0x29, 1 out of Level 6, 2 into Dungeon 8, 5 out of it, Dungeon 9's).
 - **Rupees.** The route's own: 0x2d's 30, 0x3d's 30, 0x0f's 100 (Dungeon 2 and its drops between) against the meat

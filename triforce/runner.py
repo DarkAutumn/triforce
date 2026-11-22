@@ -283,6 +283,16 @@ class RoomRecord:
     # and the frames of the steps begun with the sword blocked.
     bubble_touches: Optional[int] = None
     sword_blocked_frames: Optional[int] = None
+    # Round 38 (None/absent in older records; ``_native.AIMLESS_FIELDS``, docs/architecture.md "Aimless walking"):
+    # the visit's calm stretches: frames beyond the walk their ground needed, calm frames, the walk's frames,
+    # stretches, calm decisions, those that ended farther from the goal, MOVEs opposite the stretch's previous one.
+    aimless_frames: Optional[int] = None
+    calm_frames: Optional[int] = None
+    calm_needed_frames: Optional[int] = None
+    calm_stretches: Optional[int] = None
+    calm_decisions: Optional[int] = None
+    calm_away: Optional[int] = None
+    calm_reversals: Optional[int] = None
     # Decisions taken in the visit (crates/zelda/src/decisions.rs, triforce/variety.py): n, low1/low5 (chosen with
     # probability under 1%/5% under the policy), low1_hit/low5_hit/low1_death/low5_death (followed by a hit or death
     # within 4 decisions), surprisal, act_entropy, actions (hex, two digits per decision), health ([decisions,

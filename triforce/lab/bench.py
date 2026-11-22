@@ -13,9 +13,11 @@ under ``<states>/harvested/<family>/``: a family's rooms by entry, the same numb
 fixed hash order), else the family's seed start states (``source: seed``: no harvested entries; coverage missing).
 Every state is played ``episodes`` times on fixed seeds in the project's act mode, clips on.  Per key: success,
 hearts lost per episode, hits taken per room visit, Bubble touches per room visit (round 38: a touch blocks the sword
-and costs no health, so ``hits`` never sees it), decisions per episode, bombs used per episode; one JSON per
+and costs no health, so ``hits`` never sees it), aimless frames per room visit (round 38, ``zelda::aimless``: calm
+frames beyond the walk the ground gained needed), decisions per episode, bombs used per episode; one JSON per
 network, every episode kept (state, seed) so ``compare`` pairs them: per key and in total, the paired difference
-and its standard error (a metric an older JSON lacks, ``bubble_touches`` before round 38, is missing there: no pair).
+and its standard error (a metric an older JSON lacks, ``bubble_touches`` and ``aimless_frames`` before round 38, is
+missing there: no pair).
 
 The full tier (``bench.json`` ``full``): the segment chains of the route as the landings run them
 (``triforce eval-batch TAG --chains TAG --route ROUTE --runs 1000 --act model``, a candidate's networks given with
@@ -127,6 +129,7 @@ def _episode(record: dict) -> dict:
             'hearts_lost': float(record['start_health']) - float(record['health']),
             'hits': sum(int(v.get('hits', 0)) for v in visits), 'visits': len(visits),
             'bubble_touches': sum(int(v.get('bubble_touches', 0)) for v in visits),
+            'aimless_frames': sum(int(v.get('aimless_frames', 0)) for v in visits),
             'decisions': int(record['steps']), 'bombs': int((record.get('bombs') or {}).get('used', 0))}
 
 
@@ -138,6 +141,8 @@ def summarize(episodes: list[dict]) -> dict:
             'hearts_lost': sum(e['hearts_lost'] for e in episodes) / n if n else 0.0,
             'hits_per_visit': sum(e['hits'] for e in episodes) / visits if visits else 0.0,
             'bubble_touches_per_visit': sum(e['bubble_touches'] for e in episodes) / visits if visits else 0.0,
+            'aimless_frames_per_visit': (sum(e.get('aimless_frames', 0) for e in episodes) / visits
+                                         if visits else 0.0),
             'decisions': sum(e['decisions'] for e in episodes) / n if n else 0.0,
             'bombs': sum(e['bombs'] for e in episodes) / n if n else 0.0}
 
@@ -174,7 +179,8 @@ def run_bench(networks: dict[str, str], manifest: dict, parallel: int, states_di
         decisions += sum(e['decisions'] for e in episodes)
         log(f"[bench] {key}: success {rows[key]['success']:.3f} hearts lost {rows[key]['hearts_lost']:.2f} "
             f"hits/visit {rows[key]['hits_per_visit']:.3f} "
-            f"bubble touches/visit {rows[key]['bubble_touches_per_visit']:.3f} decisions {rows[key]['decisions']:.0f} "
+            f"bubble touches/visit {rows[key]['bubble_touches_per_visit']:.3f} "
+            f"aimless frames/visit {rows[key]['aimless_frames_per_visit']:.1f} decisions {rows[key]['decisions']:.0f} "
             f"({seconds:.0f}s)")
         if progress is not None:
             played = [e for row in rows.values() for e in row['records']]
@@ -190,8 +196,9 @@ def _manifest_hash(manifest: dict) -> str:
     return hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest()[:16]
 
 
-METRICS = ('success', 'hearts_lost', 'hits', 'bubble_touches', 'decisions', 'bombs')
-FIELDS = ('state', 'seed', 'success', 'hearts_lost', 'hits', 'bubble_touches', 'visits', 'decisions', 'bombs')
+METRICS = ('success', 'hearts_lost', 'hits', 'bubble_touches', 'aimless_frames', 'decisions', 'bombs')
+FIELDS = ('state', 'seed', 'success', 'hearts_lost', 'hits', 'bubble_touches', 'aimless_frames', 'visits', 'decisions',
+          'bombs')
 
 
 def compact(result: dict) -> dict:
@@ -235,8 +242,8 @@ def compare(base: dict, new: dict) -> dict:
 
 
 def format_compare(result: dict) -> str:
-    lines = ['| key | pairs | success | hearts lost | hits | bubble touches | decisions | bombs |',
-             '|---|---:|---:|---:|---:|---:|---:|---:|']
+    lines = ['| key | pairs | success | hearts lost | hits | bubble touches | aimless frames | decisions | bombs |',
+             '|---|---:|---:|---:|---:|---:|---:|---:|---:|']
     for key, row in [*result['keys'].items(), ('**total**', result['total'])]:
         cells = ['missing' if row[m] is None else f"{row[m][0]:+.3f} ± {row[m][1]:.3f}" for m in METRICS]
         lines.append(f"| {key} | {row['pairs']} | " + ' | '.join(cells) + ' |')

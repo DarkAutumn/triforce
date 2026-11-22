@@ -123,6 +123,11 @@ class RolloutBuffer:
         self.health_lost = torch.zeros(n_envs, memory_length, dtype=torch.float32)
         self.hits = torch.zeros(n_envs, memory_length, dtype=torch.int64)
         self.blocked = torch.zeros(n_envs, memory_length, dtype=torch.bool)
+        # The aimless score's per-decision targets (round 38, zelda::aimless): calm, frames of progress toward the
+        # goal, frames added to the calm stretch's waste.
+        self.calm = torch.zeros(n_envs, memory_length, dtype=torch.bool)
+        self.progress = torch.zeros(n_envs, memory_length, dtype=torch.float32)
+        self.waste = torch.zeros(n_envs, memory_length, dtype=torch.float32)
         self.tried = tried
         self.tried_actions = torch.full((n_envs, memory_length, tried, 3), -1, dtype=torch.int64) if tried else None
         self.tried_lost = torch.full((n_envs, memory_length, tried), -1, dtype=torch.int64) if tried else None
@@ -147,7 +152,8 @@ class RolloutBuffer:
                  'logp_ent_val': self.logp_ent_val.numpy(), 'rewards': self.rewards.numpy(),
                  'frames': self.frames.numpy(), 'bootstrap_value': self.bootstrap_value.numpy(),
                  'interrupts': self.interrupts.numpy(), 'job': self.jobs.numpy(), 'step': self.steps.numpy(),
-                 'health_lost': self.health_lost.numpy(), 'hits': self.hits.numpy(), 'blocked': self.blocked.numpy()}
+                 'health_lost': self.health_lost.numpy(), 'hits': self.hits.numpy(), 'blocked': self.blocked.numpy(),
+                 'calm': self.calm.numpy(), 'progress': self.progress.numpy(), 'waste': self.waste.numpy()}
         if self.tried:
             views.update(tried_actions=self.tried_actions.numpy(), tried_lost=self.tried_lost.numpy(),
                          tried_blocked=self.tried_blocked.numpy(), tried_frames=self.tried_frames.numpy())
@@ -255,6 +261,9 @@ class RolloutBuffer:
         batch['health_lost'] = self.health_lost.reshape(-1).to(device)
         batch['hits'] = self.hits.reshape(-1).to(device)
         batch['blocked'] = self.blocked.reshape(-1).to(device)
+        batch['calm'] = self.calm.reshape(-1).to(device)
+        batch['progress'] = self.progress.reshape(-1).to(device)
+        batch['waste'] = self.waste.reshape(-1).to(device)
         if self.tried:
             batch['tried_actions'] = self.tried_actions.reshape(-1, self.tried, 3).to(device)
             batch['tried_lost'] = self.tried_lost.reshape(-1, self.tried).to(device)
