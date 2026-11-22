@@ -150,11 +150,15 @@ def test_the_table_keeps_the_rows_phase_ix_left_alone():
 
 def test_the_d3first_table_prices_the_steps_its_chains_played():
     """Round 32: `heart_value.d3first.json`, fitted on every d3first chain of today's team (the models' segments and
-    the planner's, the game start to the ending; the leg to Level 7, steps 156-173, from the models' runs out of the
-    recorder's landing, since nearly no run gets past 0:0x3c): it names the route as it stands, every clip-way step
-    has a curve from at least 20 visits, and no plain-way step has one (every chain ran with clips on: a family
-    drawing those states prices hearts by the plain health terms there, `env::heart_value`); V rises with the hearts
-    in the rooms that kill by hearts (3:0x5b S->N, 4:0x31 W->E, Digdogger's 5:0x24 and 7:0x1c)."""
+    the planner's, the game start to the ending): it names the route as it stands and no plain-way step has a curve
+    (every chain ran with clips on: a family drawing those states prices hearts by the plain health terms there,
+    `env::heart_value`); V rises with the hearts in the rooms that kill by hearts (3:0x5b S->N, 4:0x31 W->E,
+    Digdogger's 5:0x24 and 7:0x1c).  Round 36 refit it onto the corrected order from the same chains (`--measured-on
+    9e2c73d5`): every clip-way step the old order played in the same sequence keeps a curve from at least 20 visits;
+    the steps the corrected order added or moved (0x2d's cave to 0x0c with Dungeon 2, which the alignment's longest
+    common subsequence leaves to the old order's other side; the dock warp out of 0x55, 0x34's landing, 0x44 from the
+    north and its cave; 0x51 to the dock warp out of 0x3f and the graveyard's landing) have no visits yet: the damage
+    prior alone, over the next steps' curves, until the new order's chains refit them."""
     root = Path(__file__).resolve().parent.parent
     table = json.loads((root / 'triforce' / 'heart_value.d3first.json').read_text())
     from triforce import _native
@@ -162,11 +166,17 @@ def test_the_d3first_table_prices_the_steps_its_chains_played():
     assert table['route'] == 'd3first'
     assert [r['room'] for r in table['steps']] == [heart_value.room_key(s) for s in steps]
     clip_way = [k for k, s in enumerate(steps) if s['way'] in (None, 'clips')]
-    assert all(table['steps'][k]['clips'] is not None and table['steps'][k]['clips']['visits'] >= 20
-               for k in clip_way)
+    unvisited = set(range(90, 123)) | {149, 150, 153, 154, 155} | set(range(182, 193))
+    assert all(table['steps'][k]['clips'] is not None for k in clip_way)
+    assert {k for k in clip_way if table['steps'][k]['clips']['visits'] < 20} == unvisited
+    for k in unvisited:
+        clips = table['steps'][k]['clips']
+        assert clips['visits'] == 0 and clips['values'][0] == 0.0 and clips['values'] == sorted(clips['values'])
+    assert [table['steps'][k]['room'] for k in (90, 106, 122, 149, 150, 191, 192)] == \
+        ['0:0x2d', '2:0x0d', '0:0x0c', '0:0x55', '0:0x34', '0:0x3f', '0:0x31']
     assert all(row['plain'] is None for row in table['steps'])
     assert all(table['steps'][k]['clips'] is None for k, s in enumerate(steps) if s['way'] == 'plain')
-    for k, room in ((9, '3:0x5b'), (37, '4:0x31'), (118, '5:0x24'), (187, '7:0x1c')):
+    for k, room in ((9, '3:0x5b'), (37, '4:0x31'), (145, '5:0x24'), (173, '7:0x1c')):
         assert table['steps'][k]['room'] == room
         values = table['steps'][k]['clips']['values']
         assert values == sorted(values) and values[2] < values[4] < values[6]

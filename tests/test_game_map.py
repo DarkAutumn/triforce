@@ -280,12 +280,13 @@ def test_specialist_tags():
     for room in [(0, 0x39), (0, 0x49), (0, 0x6a), (2, 0x6d)]:     # off both routes, untagged
         assert native.specialist_for(room) is None, room
     # Phase X: d3first's rooms off d2first (d3first-walks-a.md §9, d3first-walks-b.md §8): tagged in d3first's own
-    # game.yaml entries (`routes: [d3first]`), untagged in the rooms d2first plays.
-    own = [(0, 0x29), (0, 0x2a), (0, 0x2b), (0, 0x46), (3, 0x4a), (0, 0x62), (0, 0x62, True), (0, 0x3d, True),
-           (0, 0x2d, True), (0, 0x0c, True)]
+    # game.yaml entries (`routes: [d3first]`), untagged in the rooms d2first plays.  Round 36's corrected order plays
+    # neither 0x0c's candle shop nor 0x62's tree: their entries are gone.
+    own = [(0, 0x29), (0, 0x2a), (0, 0x2b), (0, 0x46), (3, 0x4a), (0, 0x3d, True), (0, 0x2d, True)]
     assert [native.specialist_for(room, 'd3first') for room in own] == [
-        'ow-leever', 'ow-leever', 'ow-leever', 'ow-zora', 'stalfos-keese-gel', 'ow-moblin', 'ow-moblin', 'ow-moblin',
-        'ow-zora', 'ow-tektite']
+        'ow-leever', 'ow-leever', 'ow-leever', 'ow-zora', 'stalfos-keese-gel', 'ow-moblin', 'ow-zora']
+    assert [native.specialist_for(room, 'd3first') for room in [(0, 0x62), (0, 0x62, True), (0, 0x0c, True)]] == \
+        [None] * 3
     assert [native.specialist_for(room) for room in own] == [None] * len(own)
     assert [native.specialist_for(room, 'd2first') for room in own] == [None] * len(own)
     d7 = {(7, room, False) for room in (0x79, 0x69, 0x59, 0x49, 0x38, 0x28, 0x18, 0x19, 0x1a, 0x1b, 0x29, 0x2b)}
