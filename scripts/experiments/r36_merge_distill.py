@@ -180,6 +180,7 @@ def train(args):
     shards = int(data.shard.max()) + 1
     keep = data.shard < max(1, math.ceil(shards * args.fraction))
     train_rows = np.flatnonzero(~held & chosen & keep)
+    held = held & (data.shard < args.val_shards)
     val_rows = np.flatnonzero(held & (data.data == data.meta['data'].index(args.val_data))
                               if args.val_data else held)
     if args.init:
@@ -254,6 +255,8 @@ def main(argv=None):
     t.add_argument('--fraction', type=float, default=1.0, help="the first share of each part's rollouts")
     t.add_argument('--sources', nargs='*', default=None)
     t.add_argument('--val-data', default=None, help="hold out only this data dir's rows (its name)")
+    t.add_argument('--val-shards', type=int, default=4,
+                   help="held-out rows from the first N rollouts of a source only (the same set at every --fraction)")
     t.add_argument('--seed', type=int, default=36)
     t.add_argument('--device', default='cuda')
     args = parser.parse_args(argv)
