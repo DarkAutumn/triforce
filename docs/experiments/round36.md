@@ -50,6 +50,33 @@ are training one after another on the GPU (`target/merge/gpu-a.sh`); DAgger roun
 wood-sword rooms) keep 96.8% of the 51 slots' mean success (-3.1 ± 0.2 points): a single student has to beat that to
 say more than "drop the route parts".
 
+## One network on the route
+
+**Question.** Does ONE network, the 1x student (`r36merge/s1x`, 866,084 parameters, 14 minutes of copying), play
+the whole of `d3first` in every slot of today's 51 (promoted for all 34 families and as `promoted.d3first` for the
+17 route parts; a models root of its own, the teachers' untouched; its act mode the project's default,
+`temperature:0.5+relax:16`, which is every teacher's)?
+
+**The golden race from power on** (`zelda-headless.py OUT 3 --golden --power-on --clips on --act model
+--parallel 8`; replays `tf replay verify` ok, read with `scripts/experiments/r32team_golden.py`; every one of the
+51 model slots in the replay's header has the same weights): **one network beats the game.** At the default 320
+attempts a segment the first two paths stop in segment 3 (Dungeon 1's triforce to Dungeon 5's: the overworld after
+Dungeon 1 and Dungeon 5), 320 of 320 tries failing; the third wins (1,018 runs in all, 174,345 frames). With
+`--attempts 2000`, all three paths win (2,332 runs):
+
+| path (first seed) | D3 | D4 | D1 | post-D1 + D5 | D2 | D7 | D6 | D8 | D9 + Ganon | runs | frames |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0 | 13 | 34 | 2 | 1,314 | 3 | 21 | 8 | 75 | 56 | 1,526 | 152,305 |
+| 18,000 | 11 | 69 | 1 | 275 | 1 | 5 | 12 | 118 | 10 | 502 | 160,041 |
+| 36,000 | 6 | 29 | 2 | 134 | 3 | 7 | 16 | 53 | 54 | 304 | 152,766 |
+| 5,760 (320 attempts) | 8 | 55 | 1 | 112 | 3 | 10 | 8 | 109 | 12 | 318 | 174,345 |
+| today's 51 networks (round 35's landing, 320 attempts; three paths) | 7 / 5 / 9 | 5 / 25 / 3 | 1 / 1 / 1 | 14 / 14 / 9 | 1 / 1 / 1 | 3 / 5 / 5 | 7 / 41 / 5 | 8 / 7 / 8 | 4 / 6 / 12 | 50 / 105 / 53 | |
+
+Cheats in the winning replays (the route's rules): a wall bomb at 3:0x5b, 1:0x53 and a few of Dungeons 2, 6-9
+(1-5 a path), the 0x0c cave's rupees (8-16). Outside segment 3 the one network needs the tries of today's team,
+give or take a factor of two (Dungeon 8 and Level 9 about 5-10x); segment 3 costs 10-100x: that segment is where
+copying loses (the chains below say which rooms).
+
 ## The wood-sword pairs
 
 **Question.** Can one network of today's architecture play both of a family's runs (the default run and its
