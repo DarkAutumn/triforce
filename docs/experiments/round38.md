@@ -316,3 +316,83 @@ rooms (the labels are cheap: `lab.record --try-others 8:1.0` adds no network pas
 combined network reaches (§3), kept out of the policy's gradient; the shift applied at play with one weight (w = 4-8
 fitted goriya, darknut and Gleeok alike); branch `r38-one`'s `h768` shape (a hitnet with a dormant joint head) is
 the body to put it on.
+
+## The hit head across families (branch `r38-head`)
+
+**The question:** does §2's recipe (a supervised hit head on look-ahead labels, a fixed shift of the policy's joint
+action by `-w * softplus(hit logit)`, nothing else trained) carry to the families that cost Dungeons 4, 3, 5 and 8,
+and does one head across families read as well as one a family. Scripts: `scripts/experiments/r38_head.py` (cost,
+manifests, combine, bench, sliced precision, paired chains), `r38_hit.py retrain --by-row` (the trunk run once a
+decision for its nine candidates: a family's head in 3-10 minutes on the GPU). `lab.record` gained `--state-route`
+(a route's states alone, as lab training's) and `--teacher KEY=CKPT` (another actor a family).
+
+**Code.** Recordings and heads: 2.0.0.5 (the teacher's states; 2.0.0.6 changes only the bomb masks of crossing
+rooms). Every bench and chain number: 2.0.0.6 (main cbc1dfa9 merged, routes and crates identical to main), today's
+team from main's record `r37fix-1k-*` (same seeds), scored by the segment's arrival.
+
+### What the families cost
+
+Per 1000 runs of each segment (today's 51 networks, the 1000-run record `r36base` on the corrected route; 2.0.0.5),
+runs lost in the family's rooms (the run's last room) / hearts lost there:
+
+| family | Dungeon 4 | Dungeon 3 | Dungeon 5 | Dungeon 8 | runs lost | hits a visit |
+|---|---:|---:|---:|---:|---:|---:|
+| darknut | | 323 / 1444 | 521 / 6644 | 483 / 11840 | 1327 | 1.24 |
+| boss-gleeok | 515 / 874 | | | 97 / 827 | 612 | 2.26 |
+| boss-manhandla | | 258 / 366 | | 0 / 870 | 258 | 0.96 |
+| like-like | 123 / 985 | | | | 123 | 0.63 |
+| gibdo | | | 122 / 1183 | | 122 | 0.12 |
+| vire | 86 / 1098 | | | | 86 | 0.24 |
+| zol | 4 / 168 | 53 / 740 | 0 / 7 | | 57 | 0.21 |
+| boss-digdogger | | | 37 / 86 | | 37 | 1.18 |
+| stalfos-keese-gel | 27 / 347 | 9 / 164 | | 0 / 0 | 36 | 0.21 |
+| pols-voice | | | 8 / 45 | 17 / 0 | 25 | 0.02 |
+| segment rate | 0.185 | 0.232 | 0.312 | 0.400 | | |
+
+(equipment-room 97 and trap-room 91 are played by the engine, not a network: out of reach of a head.) Wizzrobe and
+wallmaster cost Dungeons 6, 9 and 7, not these four.
+
+### Labels and how much of them
+
+`python -m triforce.lab.record --families KEY... --state-route d3first --actor teacher --try-others 8:1.0
+--rollouts 100 --parallel 8` in three jobs (Dungeon 4's four families, two envs each; Dungeon 3 and 5's four; Pols
+Voice and Digdogger, 50 rollouts, four envs each): 102,400 decisions a family, eight look-ahead candidates each, every
+7th shard held out. A 100-rollout job runs 65 minutes at 100 decisions a second (Hit38's rate), plus the line (5 to
+25 minutes today; 2 h for the Dungeon 3 job behind others).
+
+**The data curve** (goriya, a fresh head on the two goriya recordings' training shards, P = R on rec-teacher's
+held-out judged candidates / rec-w4's): 15k decisions 0.662 / 0.562, 31k 0.708 / 0.600, 61k 0.743 / 0.641, 122k
+0.769 / 0.687, 245k 0.794 / 0.719 (taken 0.669 → 0.813). Each doubling buys +0.046, +0.035, +0.026, +0.025: still
+rising, flattening; the 2 million old-order decisions plus both recordings (hit-r1) read 0.806 / 0.738. 100k a
+family is on the curve's knee; a second 100k (the combination's own states) is worth about +0.025.
+
+### The heads
+
+P = R on the held-out shards of each family's teacher recording, every judged candidate / the actions taken:
+
+| family | own head (100k decisions) | round 36's head on these states |
+|---|---|---|
+| darknut (+ r36 darknut) | 0.840 / 0.829 | 0.522 / 0.485 |
+| boss-gleeok (+ r36 Gleeok) | 0.721 / 0.749 | 0.554 / 0.599 |
+| boss-manhandla | 0.774 / 0.757 | |
+| like-like | 0.818 / 0.684 | |
+| vire | 0.731 / 0.691 | |
+| zol | 0.806 / 0.717 | |
+| gibdo | 0.829 / 0.765 | |
+| stalfos-keese-gel | 0.803 / 0.739 | |
+| boss-digdogger | 0.822 / 0.820 | |
+| pols-voice | 0.880 / 0.706 (17 taken hits) | |
+
+**Why Darknut's and Gleeok's heads read 0.52-0.57:** the states. Round 36's heads were trained on the old order's
+rooms (two Darknut rooms, one Gleeok fight at other hearts and swords); on the corrected route's own rooms they read
+0.52 / 0.55, and the same construction trained with the route's states reads 0.84 / 0.72. What is left, from round
+36's collections where the hitter is known (`r38_head.py slices36`; recall at P = R on the model's own draws):
+Darknut's touches are read 0.98 in an action's first 4 frames, 0.87 at 4-8, **0.53 at 8-16 and 0.18 after**
+(goriya's head on 2M decisions: 0.95 / 0.87 / 0.71 / 0.69): the misses are late hits in long actions, the Darknut
+turning into Link mid-walk; a Darknut's facing and sword reach are in the inputs, its next turn is not (random). More
+data reads late hits better (goriya), and a shorter action (the duration) is the cheap way round them. Gleeok:
+touches (the necks and heads) 0.69, fireballs in the air 0.61, fired after the decision 0.43 (7 hits); frames 0.81 /
+0.64 / 0.47 / 0.06: the necks' swing is a timed motion the observation shows only as positions (memory or the heads'
+phase would carry it), and the fireballs are aimed shots that the threat lane's arithmetic would cover (Gleeok's
+heads as shooters). The inputs' own "shot in the air" flag cannot slice Gleeok or Digdogger (it is up on 94-99% of
+their hits).
