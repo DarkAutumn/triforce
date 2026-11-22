@@ -12,6 +12,22 @@ where the project starts and may end; one is still what to try for. "You should 
 expectations": the merged models are not gated on matching today's specialists segment by segment (they are still
 compared with them).
 
+**The target, and the only stopping point (the owner, Nov 22):** **one run in 10,000 tries that completes the game
+without restarting**, one network, the corrected route. A golden path does not count ("No, it doesn't count"); it
+is wanted first all the same, to watch (one network won one on the corrected route on Nov 22:
+`corpus/replays/golden-d3first-single-network.tfreplay`). The lead does not stop short of that target unless the
+owner says so.
+
+**Stronger combat is the goal, and it must look it:** "your goal should be stronger combat. it's ok if combat is
+weaker compared to the old model, but the gameplay should be 'fun' to watch, and look like skilled combat, not just
+completing a run because it accidentally got lucky." Hits taken a room visit is the number that says it.
+
+**`d2first` is out of this program:** "Once d3 is completely, completely done, I MAY want a single (separate) model
+that does d2 first. The d3 first winning model shouldn't be trained on d2 routes." It stays as it is, 34 networks.
+
+**Contact features are allowed** (monsters' and shots' paths extended a few frames by arithmetic on the current
+state, no emulator step): "This is fine, hopefully you do this with projectiles too."
+
 **It is an experiment, in many rounds, not one attempt.** The owner: "You may change the observation drastically,
 you may try multiple neural network architectures, you could try many different techniques (lstm, rnn, graph
 networks, etc), or not try those things if you don't think they would help. You have full access to the game's ram,
@@ -95,6 +111,51 @@ been retrained on the corrected order):
   measured: what the networks do before the step stays theirs).
 - [ ] **Cheated wall bombs, 0.76 a run in Dungeon 7** (7:0x1a 0.75), the largest count on a dungeon the reorder
   changed (`d1`'s 1.00 at 1:0x53 is in a segment it did not change).
+- [ ] **Bombs as a weapon only in dungeon rooms the route must clear** (the owner, Nov 22: "The agent wastes bombs
+  in rooms I wish it didn't. For example d3 0x69. In dungeons, link should only use bombs in rooms it somehow needs
+  to clear. [...] it's fine to use bombs in 0x59 because we have to clear the room to open the south door, in 0x69
+  it needs to slide past the darknuts to get the raft, then out of the room (I use sword-hit an enemy to make them
+  pass-through in this room, not kills with bombs)."). Today the rule is by family (`items: {bombs: free | required
+  | tenth | never}`) and the route's `bomb_reserve`; the owner's rule is by room: BOMB as a weapon is offered in a
+  dungeon room only while the step's objective is to clear it (a shutter the monsters hold, a treasure or block
+  that appears on the clear, a boss), and at a wall the route leaves through; nowhere else in a dungeon. To build
+  on branch `r37-rules` (no training is interrupted for it); it also saves bombs for the walls that are
+  cheated today. The rooms where the golden replay's network threw bombs that this rule forbids: scouted Nov 22,
+  the list is in round37.md "Bombs thrown where the route needs no clear".
+- [ ] **Rooms where the owner forbids bombs but for the wall** (Nov 22: "some rooms I want to explicitly say 'don't
+  use bombs in this room just because the owner says so' [...] 0x5b is a great example, the point of fighting the
+  darknuts in that room is to get the bomb drop, wasting the bombs to kill them is not the right play. BUT link
+  still needs to bomb the wall to get through there. So no bombs except the 1 to blow up the wall."): a step mode
+  in routes.yaml; 3:0x5b is the first, more will come from the owner's watching.
+- [ ] **The floor for fighting a room for its bombs is the bag** (the owner, Nov 22, a blanket rule): the route
+  fights a room for its bomb treasure while Link holds 7 or fewer (it was 5 at 8:0x3f, 2 at 7:0x1b on `d3first`,
+  the last pass of 3:0x5b by its own rule). **7:0x1b's six Blue Goriyas** are then a wood-sword fight again whenever
+  the bag is not full (round 34 had made it a crossing because the fight killed half the runs). The owner: "that's
+  tough. I want you to measure the impact, and you have the ability to skip that fight for bombs if it kills too
+  many runs [...] Speedrunners skip that fight, but speedrunners are better at 'forcing' bombs than our model [...]
+  Feel free to decide this room either way, but I want you to try to improve the model's combat before calling it
+  'skip'." So: measured both ways with the rules; combat first (the contact inputs with Goriyas and their
+  boomerangs, the threat lane below, the hit head); the lead then decides, tells the owner with the numbers, and a
+  skip is recorded as an option to revisit if too many bombs are cheated later.
+- **Over all three: the 10th kill's bomb is always allowed and encouraged** (the owner, Nov 22: "we must ALWAYS
+  allow bombs and deeply encourage them if we are on the 10th kill force drop, no matter the room or enemies, that
+  remains true"): the forced drop of four is the route's bomb supply.
+- **`d2first` gets the same bomb rules later** (the owner: "d2-first is also in-scope for bomb rules for when we go
+  back and work on that single-model. Don't waste time on d2 first until we've completed this work on d3-first,
+  entirely."): the rules are route-level switches, off for `d2first` until then.
+- [ ] **Two route changes from the owner's watching (Nov 22), on branch `r37-rules`:** "Drop the fight with the
+  goriyas in d2 0x5e, that's only for d2 first. (It's high bomb chances on start of a d2 run, but needless
+  heart/time wasting in the d3 first route). Overworld: drop the bomb for rupees in 0xd2, keep the armos rupees in
+  3d (losing too many hearts in that d2 fight, and it's redundant with 0x3d)... we may have to cheat rupees more,
+  but that 1 30 secret + the 100 secret + drops is the intended route." So on `d3first` 2:0x5e is crossed, and the
+  bomb-wall cave of 0:0x2d (the lead's reading of "0xd2": to confirm with the owner) is left out; the purse is then
+  10 + 30 + 100 and drops against the meat and the arrows, with the shortfall cheated and counted.
+- **An input to try, the owner's idea (Nov 22): a shooter's threat lane.** "maybe a projectile-using enemy with no
+  current projectile always has a 'danger zone' in front of them unless their projectile is in air... at which
+  point we use that projectile." Per shooter, the lane ahead along its facing for its shot's range, live only while
+  it can shoot, and for Link's five motions the frames until he enters it; off while its shot flies (the shot's
+  own contact columns carry the danger then). Schema 6's `in_line` is the bare form; to be ranked on the hit bench
+  and carried into an arm if it helps.
 - [ ] **Later, the owner's stated goal:** a win without a cheated bomb. Drops only; the walls' shortfall is counted
   until the bomb economy closes it (old backlog "A win without a cheated bomb").
 

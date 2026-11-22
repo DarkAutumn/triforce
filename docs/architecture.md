@@ -1231,7 +1231,12 @@ every step, so following an enemy that moves away pays again, and knockback rese
   folder's `NNN` may have any width; it is allocated under `<logs>/.lock`. `round.jsonl` / `round.log` cover the round (chain,
   `chain_progress`, errors, `end`). SIGTERM is turned into an interrupt, so a killed run still saves and writes
   `end`. Standalone `triforce.evaluate` and `eval-chain` log a folder of their own (`events.logged_job`: plan kind
-  `eval` / `chain`; `--no-log` skips the folder, not the turn) and end it `interrupted` on SIGTERM. `--events FILE`
+  `eval` / `chain`; `--no-log` skips the folder, not the turn) and end it `interrupted` on SIGTERM. A lab training
+  (`triforce.lab.train`) writes `<yymmdd>_<NNN>_lab-<name>`, plan kind `lab-train`, a run entry and a
+  `<family>.jsonl` stream a family, all trained at once (docs/lab.md "What a lab job writes"); the lab's bench and
+  recorder, and an experiment script that enters the queue itself, use `events.progress_job`: a folder whose one
+  run's `progress.jsonl` has `eval_start` / `eval_progress` (done of the total in its `unit`, the success so far) /
+  `end`, drawn as an evaluation's row. `--events FILE`
   (train, evaluate, eval-chain) writes into a given stream: in a folder with a `training.json` its driver
   (train_round, eval-batch) owns the plan, the stream and its `end`; in a folder without one the job writes its plan
   there
@@ -1244,8 +1249,16 @@ every step, so following an enemy that moves away pays again, and knockback rese
   / `chain_progress` / `chain` or `eval_start` / `eval_progress` / `eval`, then the batch's `error` and `end`), and
   `round.jsonl` (`start`, `entry_start`, `entry_end`, `end`). Plans record the niceness the job runs at (`nice`).
   `training-gui.py`'s [currently running] shows every live job on the machine, wherever it writes: the registry's
-  running and queued jobs (pid alive with the recorded start time) and its own logs root's. Folders from another checkout
-  are labelled with its directory and branch. Order (window and web view, Nov 17): what runs now is on top, the job
+  running and queued jobs (pid alive with the recorded start time) and its own logs root's. A job the registry knows
+  is never invisible (Nov 22, after the lab's trainings ran unseen): one without a log folder holding its plan (a
+  `--no-log` evaluation, a job of a checkout whose lab writes no plan, a script that registers itself) is shown from
+  its registry file (`job_key`, `entry_plan`: the file stands in for the folder, `registry_only`), in the same
+  order as the others, with its name, kind, checkout and branch, status, time run or waited, estimate and command,
+  marked "no progress data" (a header without segments, a web card and plan line without a bar); once its folder
+  has a plan it is shown from the folder instead (`superseded`). `tests/test_training_gui.py` checks every entry
+  point into the queue, and a new module's folder-less job, in the window and the web view. Folders from another
+  checkout are labelled with its directory and branch. Order (window and web view, Nov 17): what runs now is on top,
+  the job
   that began to run last first (`run_start`: when it was admitted, else its plan's creation; never the folder's
   name, each checkout numbers its own), so a job that starts is added at the top and pushes the others down; then
   the waiting ones in the order they will start; then what ended, the last to end first (`plan_ended`), so a job

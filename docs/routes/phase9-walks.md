@@ -1,6 +1,6 @@
 # Phase IX walks: the owner's changes to `d2first` (Nov 19)
 
-The owner watched the first complete game by the models (`corpus/replays/v1-golden-ending.tfreplay`) and asked for
+The owner watched the first complete game by the models (`corpus/replays/golden-d2first-34-networks.tfreplay`) and asked for
 six changes to `d2first` (the owner's notes of Nov 19, messages 1-6): Dungeon 1 (leave and re-enter at the entrance
 so its locked N door is open; skip the key rooms 1:0x72 and 1:0x74; bomb 1:0x53's N wall into 0x43, skipping 0x52 and
 0x42), Dungeon 6 (0x78 a ringleader room: opportunistic kills for a bomb pack; take 0x29's key; no bombs on Vires in

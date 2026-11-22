@@ -24,7 +24,7 @@ from pathlib import Path
 import numpy as np
 
 from triforce import _native, registry
-from triforce.events import logged_job
+from triforce.events import progress_job
 from triforce.jobs import add_job_arguments, begin_job, work
 from triforce.lab.bench import HARVESTED, ROUTE, load_manifest, team_keys
 from triforce.lab.collect import Family, MultiCollector, Teachers, route_only, task_yaml
@@ -144,21 +144,23 @@ def main(argv=None):
     if args.dry_run:
         return 0
     out = Path(args.out)
-    total = len(plan) * rollouts * STEPS_PER_ENV * args.parallel
-    with logged_job('r36-merge-record', 'eval', [], log=False, work=work(train_steps=total)):
+    per_item = rollouts * STEPS_PER_ENV * args.parallel
+    total = len(plan) * per_item
+    with progress_job('r36-merge-record', 'eval', total, unit='decisions',
+                      work=work(train_steps=total)) as progress:
         student = None
         if args.student:
             student = registry.load_model(args.student)[0].to(args.device).eval()
-        for key, source, config, sdir, seed in plan:
+        for done, (key, source, config, sdir, seed) in enumerate(plan, 1):
             target = out / key / source
-            if (target / 'meta.json').is_file():
-                continue
-            teachers = Teachers([key], args.device)
-            meta = record(key, config, sdir, target, rollouts, seed, teachers, args.parallel, student)
-            meta.update(source=source, states=len(config.start_states))
-            (target / 'meta.json').write_text(json.dumps(meta, indent=2), encoding='utf-8')
-            print(f"[record] {key} {source}: {meta['rows']} rows in {meta['seconds']}s", flush=True)
-            del teachers
+            if not (target / 'meta.json').is_file():
+                teachers = Teachers([key], args.device)
+                meta = record(key, config, sdir, target, rollouts, seed, teachers, args.parallel, student)
+                meta.update(source=source, states=len(config.start_states))
+                (target / 'meta.json').write_text(json.dumps(meta, indent=2), encoding='utf-8')
+                print(f"[record] {key} {source}: {meta['rows']} rows in {meta['seconds']}s", flush=True)
+                del teachers
+            progress.update(done * per_item, key=f"{key} {source}")
     return 0
 
 

@@ -12,7 +12,9 @@ Modes: ``ppo`` (default; the teacher term KL(teacher ‖ student) beside PPO wit
 ``--teacher-hold`` iterations, then fading linearly to 0 over ``--teacher-fade``) and ``imitate`` (no PPO: the
 student minimises the KL alone; ``--actor student`` collects on the student's own states, DAgger-style, the
 distribution it will play; ``--actor teacher`` on the teachers', a fixed distribution for capacity tests).
-Metrics are logged per family (``family/<key>/...``) beside the merged ones.
+Metrics are logged per family (``family/<key>/...``) beside the merged ones.  The job's log folder (``--logs-dir``)
+holds a plan of kind ``lab-train`` and a stream a family (``RunLog``), so the training GUI draws the run: one group,
+a row a family.
 
 Also (docs/lab.md): auxiliary targets (``--aux OUTPUT=TARGET:COEFF``) and look-ahead labels for candidates not taken
 (``--try-others K:P``, training only); a recurrent network (``LabNet.initial_state``) trains on sequences of
@@ -36,7 +38,7 @@ import torch
 from .. import nets, registry
 from ..best_of_n import success_by_state
 from ..demos import load_demos
-from ..events import logged_job
+from ..events import EventLog, logged_job
 from ..jobs import add_job_arguments, begin_job, work
 from ..metrics import MetricsLogger, format_summary
 from ..model import obs_spec_from_space
@@ -48,6 +50,11 @@ from .collect import MultiCollector, NeedSampler, Teachers, parse_families
 from .rehearse import Rehearsal
 
 REFERENCE = Path(__file__).with_name('reference.json')
+KIND = 'lab-train'          # the plan kind of a lab run's log folder
+# The run's numbers (besides the family's own) every family's progress event carries: the teacher term and the
+# auxiliary losses are the one network's.
+SHARED_METRICS = ('losses/teacher_kl', 'charts/teacher_agreement', 'losses/approx_kl', 'losses/policy_loss',
+                  'losses/value_loss', 'losses/entropy')
 
 
 def parse_args(argv=None):
@@ -119,6 +126,8 @@ def parse_args(argv=None):
                         help="stop once every family's start-state-balanced training success >= this for "
                              "--stop-patience iterations and an evaluation of each confirms it")
     parser.add_argument('--stop-patience', type=int, default=5)
+    parser.add_argument('--logs-dir', default=None,
+                        help="the root of the run's log folder (default logs/, $TRIFORCE_LOGS_DIR)")
     add_job_arguments(parser)
     return parser.parse_args(argv)
 
@@ -207,6 +216,57 @@ def parse_try_others(text: Optional[str]) -> Optional[dict]:
     return tried
 
 
+class RunLog:
+    """The run's log folder (``logs/<yymmdd>_<NNN>_lab-<name>``, docs/lab.md "What a lab job writes"): the plan
+    ``training.json`` (kind ``KIND``, one run entry a family) and one stream a family, ``<family>.jsonl``, in
+    ``triforce train``'s events (``start``, a ``progress`` an iteration, ``train_end``, ``end``): the iteration
+    of N for every family alike, and in ``metrics`` the family's own numbers (``family/<key>/...`` without the
+    prefix: success, balanced success, hearts, ``rows_share``, ``hits_taken_per_episode``, need) with the run's
+    teacher coefficient (``teacher_coeff``) and losses (``SHARED_METRICS``, ``losses/aux_*``).  The training GUI
+    draws the run as one group with a row a family."""
+
+    def __init__(self, plan, keys: list[str], run_id: str):
+        self.plan = plan
+        self.keys = keys
+        self.streams = [EventLog(plan.directory / f'{key}.jsonl', specialist=key, run_id=run_id) for key in keys]
+        self.began = time.time()
+
+    @staticmethod
+    def runs(keys: list[str], run_id: str, out_dir: Path, total: int, iterations: int) -> list[dict]:
+        """The plan's run entries."""
+        return [{'specialist': key, 'run_id': run_id, 'run_dir': str(out_dir), 'events': f'{key}.jsonl',
+                 'target_steps': total, 'target_iterations': iterations} for key in keys]
+
+    def start(self, **fields):
+        self.began = time.time()
+        for index, stream in enumerate(self.streams):
+            stream.emit('start', **fields)
+            self.plan.update_run(index, status='running')
+
+    def progress(self, iteration: int, iterations: int, steps: int, target_steps: int, metrics: dict,
+                 teacher: float):
+        elapsed = time.time() - self.began
+        sps = steps / elapsed if elapsed > 0 else 0.0
+        eta = (target_steps - steps) / sps if sps else None
+        shared = {key: value for key, value in metrics.items()
+                  if key in SHARED_METRICS or key.startswith('losses/aux_')}
+        for key, stream in zip(self.keys, self.streams):
+            prefix = f'family/{key}/'
+            own = {name[len(prefix):]: value for name, value in metrics.items() if name.startswith(prefix)}
+            stream.emit('progress', iteration=iteration, iterations=iterations, steps=steps,
+                        target_steps=target_steps, fraction=steps / target_steps if target_steps else None,
+                        elapsed=round(elapsed, 1), sps=round(sps, 1), eta=None if eta is None else round(eta, 1),
+                        metrics={**own, **shared, 'teacher_coeff': teacher})
+
+    def end(self, status: str, **fields):
+        """Every family's ``train_end`` and ``end`` (``status``: completed | early_stop | interrupted | error)."""
+        for index, stream in enumerate(self.streams):
+            if status != 'error':
+                stream.emit('train_end', status=status, **fields)
+            stream.emit('end', status=status, **fields)
+            self.plan.update_run(index, status=status)
+
+
 class FamilyStop:
     """``triforce train``'s early stop (``train.EarlyStop``) for a set of families: each family's own, fed with its
     cohorts; proposed once every family's holds (its balanced success >= the threshold for ``patience``
@@ -268,7 +328,10 @@ def main(argv=None) -> Path:
     keys = [f.key for f in families]
     steps_per_env = max(1, args.steps_per_update // args.parallel)
     total = args.iterations * steps_per_env * args.parallel
-    with logged_job(f'lab-{args.name}', 'train', [], log=False, work=work(train_steps=total)):
+    with logged_job(f'lab-{args.name}', KIND, RunLog.runs(keys, run_id, out_dir, total, args.iterations),
+                    args.logs_dir, work=work(train_steps=total), families=keys, run_dir=str(out_dir),
+                    mode=args.mode) as plan:
+        log = RunLog(plan, keys, run_id)
         out_dir.mkdir(parents=True, exist_ok=True)
         network, source = initial_network(args)
         aux_losses = [AuxLoss.parse(text) for text in args.aux]
@@ -353,6 +416,7 @@ def main(argv=None) -> Path:
             stop = stopper is not None and stopper.update(network, result.iteration, metrics)
             state['metrics'] = metrics
             logger.log(result.iteration, result.total_steps, metrics)
+            log.progress(result.iteration, args.iterations, result.total_steps, total, metrics, ppo.teacher_coeff)
             per_family = ' '.join(f"{k}={metrics.get(f'family/{k}/success_rate', float('nan')):.2f}" for k in keys)
             print(f"[lab] iter={result.iteration} steps={result.total_steps} {per_family} "
                   + format_summary(metrics), flush=True)
@@ -370,6 +434,10 @@ def main(argv=None) -> Path:
 
         began = time.time()
         status = 'completed'
+        log.start(target_steps=total, target_iterations=args.iterations, steps_per_update=cfg.target_steps,
+                  start_iteration=0, start_steps=0, parallel=args.parallel, device=args.device,
+                  run_dir=str(out_dir), stop_success=args.stop_success, families=keys, mode=args.mode,
+                  arch=run['arch'], parameters=run['parameters'], envs=collector.shares)
         try:
             ppo.teacher_coeff = teacher_coeff(args, 1)
             ppo.teacher_value_coeff = args.teacher_value_coeff
@@ -389,6 +457,10 @@ def main(argv=None) -> Path:
                         break
         except KeyboardInterrupt:
             status = 'interrupted'
+        except BaseException as error:
+            log.end('error', message=f"{type(error).__name__}: {error}", iterations=state['iteration'],
+                    steps=state['steps'])
+            raise
         finally:
             collector.close()
             logger.close()
@@ -397,6 +469,7 @@ def main(argv=None) -> Path:
         status = 'early_stop' if state['stopped_early'] else status
         summary = {'status': status, 'iterations': state['iteration'], 'steps': state['steps'],
                    'wall_seconds': round(time.time() - began, 1)}
+        log.end(status, iterations=state['iteration'], steps=state['steps'], wall_seconds=summary['wall_seconds'])
         (out_dir / 'train_summary.json').write_text(json.dumps(summary, indent=2), encoding='utf-8')
         print(f"[lab] {status}: {summary}", flush=True)
     return out_dir

@@ -44,7 +44,7 @@ there).
   triforces as before (23.5%, 4.5%, 3.8%), 30 take Dungeon 2's, 6 Dungeon 5's, none ends the game. **The golden
   race from power on wins three of three** (411 runs together; tries per segment D3 6/9/4, D4 4/38/7, D1 1/3/4, D2
   1/2/2, D5 12/3/7, D7 with the 0x55 warp 29/64/42, D6 with the 0x3f warp and the sword 39/15/38, D8 16/13/16, D9
-  25/6/5); the shortest (152,051 frames) is `corpus/replays/v2-golden-ending.tfreplay` (`v2-single-ending` stays:
+  25/6/5); the shortest (152,051 frames) is `corpus/replays/golden-d3first-51-networks.tfreplay` (`single-run-d3first-old-order-51-networks` stays:
   a single run on 2.0.0.3's order). The lab's yardstick was re-made on the corrected route's states and harvested
   entries (`docs/lab.md` "The yardstick"). What the baseline leaves open, in the order it costs the route:
   backlog Track R.
@@ -59,9 +59,9 @@ there).
   its first chain, nothing on `main`). Without the bag (`r35nobag-1k`, seeds 0-999): Dungeon 5 from its entrance
   33.0% → **7.0%** (-26.0 ± 1.7; the Olive Garden 811 per 1000 entering, fought with no bombs; the planner beside
   58.0%); from the start the route is run for run 2.0.0.2's to Level 5, 6 runs take Dungeon 5's triforce (12), and
-  **one single run of 1000 ends the game**, the route's first (`corpus/replays/v2-single-ending.tfreplay`). The
+  **one single run of 1000 ends the game**, the route's first (`corpus/replays/single-run-d3first-old-order-51-networks.tfreplay`). The
   golden path from power on still ends the game, three of three, 161 runs together (Dungeon 5's segment in 7, 11,
-  13 runs); `corpus/replays/v2-golden-ending.tfreplay` is now one of them (172,188 frames; 6 cheated wall bombs, 2
+  13 runs); the corpus's `d3first` golden replay was then one of them (172,188 frames; 6 cheated wall bombs, 2
   rupees, nothing from a bag). No golden path is free of cheated bombs: six walls are cheated in every one (3:0x5b's
   last pass, 1:0x53, 0:0x2c, 0:0x2d, 5:0x66, 5:0x65). Round 35's Dungeon 3 trainings were stopped unmeasured (run
   dirs in `models/`, not promoted). Every worktree is removed (data under `target/worktrees/`).
@@ -102,7 +102,7 @@ there).
   secrets, heart rock's containers, the ladder, the raft and 0x47; the dungeons are `d2first`'s (routes.yaml
   `blocks:`). **The owner's condition is met: a golden path from console power on, the models alone, reaches the
   ending** (three races of three, 176, 135 and 91 runs; on the landed code and team, no `--route`, three of three
-  again, 88, 95 and 64 runs, round32.md §13; the first of §11 is `corpus/replays/v2-golden-ending.tfreplay`,
+  again, 88, 95 and 64 runs, round32.md §13; the first of §11 was the corpus's `d3first` golden replay then,
   153,308 frames). `registry.MAIN_ROUTE = 'd3first'`: `play-zelda.py`, `zelda-headless.py`, the golden path,
   `eval-chain`, `eval-batch --chains` and `r56_chains.sh` play it when no route is named; `d2first` by `--route
   d2first` (the engine's `DEFAULT_ROUTE`, the route of bare state names, stays `d2first`). **The team:** every
@@ -206,7 +206,7 @@ there).
     ended 0 of 1000**; 2.27 cheated bombs a run, no key, no rupee. **The honest planner beside**
     (`temperature:0.5+relax:16+plan:16:1`, 300 runs): the D6 triforce 43.0%, Dungeon 9 entered 42.0%, the red
     ring 39.7%, Ganon reached 30.0%, **the game ended 29.7% (89 runs)**; seed 6, played again alone, is
-    `corpus/replays/v0-plan-ending.tfreplay` (146,427 frames, `tf replay verify` ok).
+    `corpus/replays/planner-d2first.tfreplay` (146,427 frames, `tf replay verify` ok).
   What loses the full route is the hearts each dungeon is entered with (Dungeon 5 7.74 of 10, Dungeon 9 12.25 of
   15): 5:0x05 (darknut, 141 deaths against `main`'s 80 at the route's hearts), 7:0x1b, 3:0x4d, Dungeon 2's Goriya
   rooms, 6:0x3a; in Dungeon 9 wizzrobe's 0x10, 0x30 and 0x05 entered with four to seven hearts. No potions, no
@@ -437,7 +437,7 @@ there).
   `TFREPLAY` replays (`--replays DIR`; they replaced `--plays` and the `movie` event), `zelda-headless.py` and
   the golden path (`--golden`), and `play-zelda.py` playing replays from queues (`crates/theater`). With the
   r61–r63 team the golden path from power on to the D3 triforce took 15–19 runs and 22 s on 8 games
-  (`corpus/replays/v0-golden.tfreplay`, 61,551 frames).
+  (`corpus/replays/golden-d2first-to-dungeon3-triforce.tfreplay`, 61,551 frames).
 - **Dungeon 4 (scouted Nov 11, trained Nov 12, the shortcut Nov 12, the key detour Nov 13; `docs/routes/d4.md`):**
   all 20 rooms and the ladder cellar are in `game.yaml`; `d2first` goes by raft from 0x55 to the island 0x45, takes
   the keys of 0x51 and 0x40, the ladder under the Breakfast Room 4:0x32, back W to 0x31, then (round 22: the stretch
@@ -853,9 +853,13 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   (waiting ones as queued), and those that ended in the last 60 minutes under "finished" (Lee, Nov 18: then they
   leave the list by themselves, so it never piles up). The registry is also the
   line jobs wait in. `--events FILE` into a folder without a `training.json` now writes a plan there (a driver's
-  folder with a plan keeps owning the stream). Not shown by the GUI (but still waiting its turn and counted): a job
-  that writes no folder (`--no-log`). Invisible, and neither waiting nor counted: a job whose `--events` go into a
-  folder whose plan is someone else's (it is taken for that plan's child, as a round's trainings are).
+  folder with a plan keeps owning the stream). **A job the registry knows is never invisible** (the owner, Nov 22,
+  after two lab trainings ran while the GUI showed one queued batch): a job that writes no folder (`--no-log`, a
+  script that calls `triforce.jobs` itself, a checkout whose lab writes no plan) is listed from its registry entry
+  (name, kind, checkout, branch, time run or waited, estimate) and marked "no progress data"; a new kind of job
+  should still write a plan, so it shows its progress (`tests/test_training_gui.py` lists every entry point).
+  Invisible, and neither waiting nor counted: a job whose `--events` go into a folder whose plan is someone else's
+  (it is taken for that plan's child, as a round's trainings are).
 - **Chain segments** (20–40 runs each; several at once go in one batch: `triforce eval-batch NAME --chain 'd3:
   --from 3_7cs_0 --runs 40' --chain ...`, or every segment of a route with `--chains TAG [--route R]`). **`d3first`
   (the main route, no `--route` needed; `eval_batch.D3FIRST_SEGMENTS`, its states `d3first_*` named bare):** full

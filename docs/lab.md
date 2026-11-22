@@ -141,8 +141,9 @@ python -m triforce.lab.train --name zol+skg --families zol stalfos-keese-gel --p
   harvested starts (`harvested_fraction`: drawn as in `triforce train`, `tests/test_lab_memory.py`).
 - Every family has its own `EnvPool` and collector; `--parallel` envs are split by `--shares KEY=W` (default
   equal), at least one a family, fixed for the run. The learner trains on all rows at once (`lab.collect.BufferSet`).
-- Metrics: the merged ones plus `family/<key>/<metric>` for every rollout metric and `family/<key>/rows_share`
-  (`metrics.jsonl`; the log line prints each family's success).
+- Metrics: the merged ones plus `family/<key>/<metric>` for every rollout metric, `family/<key>/rows_share` and
+  `family/<key>/hits_taken_per_episode` (the decisions on which Link lost health over the episodes the rollout
+  ended: the bench's hits a visit, in training) (`metrics.jsonl`; the log line prints each family's success).
 - `--arch NAME --arch-config JSON` for a fresh network of another class; `--load CKPT` to start from a checkpoint.
 - The run is `<models>/<name>/<run-id>`; every member family gets a link `<models>/<family>/<run-id>` to it. So
   `triforce promote zol <run>` (and `--route d3first` for a route part), `triforce evaluate` per family,
@@ -154,6 +155,32 @@ python -m triforce.lab.train --name zol+skg --families zol stalfos-keese-gel --p
   hold, then an evaluation of each family, `CONFIRM_EPISODES` episodes a seed state, must reach X; logged
   `family/<key>/balanced_success_rate`; without `triforce train`'s hearts and bombs plateau rules).
 - Not supported in a lab run (absent): PLR, search, best-of-N, SIL, PPG.
+
+### What a lab job writes (and the training GUI)
+
+**A job the registry knows is never invisible** (the owner watches `training-gui.py` to see what the machine
+does; Nov 22 two lab trainings ran while it showed one queued batch). Every lab job enters the job queue
+(`triforce.jobs`) with a log folder and a plan, like `triforce train` and the evaluations, so the GUI draws its
+progress; a job without one is still listed, from its registry entry alone, as "no progress data" (lab jobs of
+checkouts older than this, `--no-log` evaluations, a script that registers itself).
+
+- `triforce.lab.train`: `logs/<yymmdd>_<NNN>_lab-<name>/` (`--logs-dir`, `$TRIFORCE_LOGS_DIR`): `training.json`,
+  kind `lab-train`, with the families, the run dir and the mode, and one run entry a family (`specialist`,
+  `events`, `target_steps`, `target_iterations`; status pending, `running`, then `completed`, `early_stop`,
+  `interrupted` or `error`); one stream a family, `<family>.jsonl`, in `triforce train`'s events (`lab.train.RunLog`):
+  `start` (targets, steps an update, envs, arch), a `progress` an iteration (the run's iteration of N and steps,
+  the same for every family, `sps`, `eta`, and in `metrics` the family's own `family/<key>/...` numbers without
+  the prefix, success, balanced success, hearts, `rows_share`, `hits_taken_per_episode`, `need`, with the run's
+  `teacher_coeff` (the weight the iteration trained with), `losses/teacher_kl`, `losses/aux_*` and PPO's losses),
+  then `train_end` and `end`. The GUI shows the run as one group with a row a family: the iteration of N, the
+  family's success and hearts, "rows 31% · hits 0.70/ep · teacher 0.80 · aux hit 0.120"; the group's time left
+  is the families' (they train together).
+- `triforce.lab.bench run` / `speed` and `triforce.lab.record`: `logs/<yymmdd>_<NNN>_lab-bench` (`-speed`,
+  `-record`; `--logs-dir`), kind `eval`, one row (`events.progress_job`): the bench's episodes played of its total
+  with the success so far after each key, the recorder's decisions recorded of its total.
+- A script that enters the queue itself (an experiment) uses `events.progress_job(what, kind, total, unit=...)`
+  and calls `update(done, success_rate)` as it goes: a folder and a one-line progress
+  (`scripts/experiments/r36_merge_record.py`: decisions recorded).
 
 ### Sampling across families by need
 

@@ -3377,3 +3377,43 @@ and 0x29's walls need), so a run with 2 or more crosses to the key door. routes.
   the corrected route's entries (the first order's after Dungeon 1 left out, the new legs and Dungeons 2, 5, 7 at
   their new hearts harvested from its chains): 6,120 episodes, success 92.9%, hearts lost 0.249, hits 0.677 a visit.
   Experiments compare with the reference of the manifest they were played on (`docs/lab.md` "The yardstick").
+
+## 2026-11-22 — The target is one unbroken run in 10,000; combat that looks skilled; the corpus's names (Lee)
+
+- **A golden path with one network does not count as the goal** (it was reached on Nov 22: one network of 4.01
+  million parameters, copied from the 51, in every slot; three of three from power on in 966 runs). Lee: "No, it
+  doesn't count. I want to hit 1 run in 10,000 tries completes the game without restarting, this is a fine target."
+  That is the only stopping point; the lead does not stop without Lee naming one.
+- **Combat:** "I do want to prioritize getting the golden replay so I can see, but also your goal should be
+  stronger combat. it's ok if combat is weaker compared to the old model, but the gameplay should be 'fun' to watch,
+  and look like skilled combat, not just completing a run because it accidentally got lucky."
+- **Contact features** (arithmetic on the current state, no emulator step): "This is fine, hopefully you do this
+  with projectiles too."
+- **`d2first`:** "Once d3 is completely, completely done, I MAY want a single (separate) model that does d2 first.
+  The d3 first winning model shouldn't be trained on d2 routes."
+- **The corpus's replays are named for what they are** ("Rename the golden replays to be more meaningful than v3.
+  this one is golden-d3-first-single-network, or some such"): `golden-d3first-single-network`,
+  `golden-d3first-51-networks` (was `v2-golden-ending`), `golden-d2first-34-networks` (`v1-golden-ending`),
+  `golden-d2first-to-dungeon3-triforce` (`v0-golden`), `single-run-d3first-old-order-51-networks`
+  (`v2-single-ending`), `planner-d2first` (`v0-plan-ending`); the two format fixtures keep `v0-power-on` and
+  `v0-state`. Older documents name the old files.
+
+## 2026-11-22 — Bombs: where they are a weapon (Lee, from watching the one-network golden replay)
+
+- **Only in dungeon rooms the route must clear:** "The agent wastes bombs in rooms I wish it didn't. For example d3
+  0x69. In dungeons, link should only use bombs in rooms it somehow needs to clear. For example, it's fine to use
+  bombs in 0x59 because we have to clear the room to open the south door, in 0x69 it needs to slide past the
+  darknuts to get the raft, then out of the room (I use sword-hit an enemy to make them pass-through in this room,
+  not kills with bombs)."
+- **Rooms Lee names: no bomb but the wall's:** "some rooms I want to explicitly say 'don't use bombs in this room
+  just because the owner says so' (well there's good reasons). 0x5b is a great example, the point of fighting the
+  darknuts in that room is to get the bomb drop, wasting the bombs to kill them is not the right play. BUT link
+  still needs to bomb the wall to get through there. So no bombs except the 1 to blow up the wall. [...] I may have
+  other rooms I see that I want to throw into this category."
+- **The floor for fighting a room for its bombs is 7 or fewer in hand, everywhere:** "I want to raise the 'get
+  bombs from this room' floor, so in 0x5b he should fight the darknuts if he has 7 or less bombs, up from whatever
+  it was. This is a blanket rule not for this room."
+- **The 10th kill's bomb, always:** "we must ALWAYS allow bombs and deeply encourage them if we are on the 10th
+  kill force drop, no matter the room or enemies, that remains true."
+- The lead applies them to `d3first` (`d2first` stays as it is, by Lee's word of the same day); built on branch
+  `r37-rules` with their cost to today's networks measured before they land.
