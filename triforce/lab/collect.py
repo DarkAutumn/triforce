@@ -4,12 +4,14 @@
 task (the family's yaml: rooms, start states, hp and item randomisation, masks, rewards, max_steps) and its share of
 the envs.  ``MultiCollector`` gives every family its own ``EnvPool`` (``TrainTask``) and ``ppo.Collector`` and rolls
 them out together; the PPO learner sees one ``BufferSet``, whose rows carry their family and, with ``Teachers``,
-the teacher's joint log-probs and value.  ``shares``: envs per family; the place where prioritised sampling across
-families plugs in later (``MultiCollector.shares``).
+the teacher's joint log-probs and value.  ``shares``: envs per family (fixed for a run); ``NeedSampler`` turns the
+rows each family's rollout takes (decisions an env) by its need, from the run's own episodes, between iterations.
 """
 
+import json
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -105,10 +107,8 @@ class BufferSet:
         self.keys = keys
         self.buffers = buffers
         self.labels = labels
-        self.memory_length = buffers[0].memory_length
-        self.n_envs = sum(b.n_envs for b in buffers)
-        self.family = torch.cat([torch.full((b.memory_length * b.n_envs,), i, dtype=torch.int64)
-                                 for i, b in enumerate(buffers)])
+        self.rows = sum(b.rows for b in buffers)
+        self.family = torch.cat([torch.full((b.rows,), i, dtype=torch.int64) for i, b in enumerate(buffers)])
 
     @staticmethod
     def rows(buffer) -> tuple[dict, torch.Tensor]:
@@ -136,7 +136,8 @@ class MultiCollector:
 
     def __init__(self, families: list[Family], run_dir: Path, steps_per_env: int, gamma: float, lam: float, *,
                  seed: int, states_dir=None, curricula: Optional[dict] = None,
-                 teachers: Optional[Teachers] = None, actor: str = 'student'):
+                 teachers: Optional[Teachers] = None, actor: str = 'student', tried: Optional[dict] = None,
+                 chunk_length: int = 16, sampler: Optional['NeedSampler'] = None):
         # pylint: disable=too-many-arguments
         if actor not in ('student', 'teacher') or (actor == 'teacher' and teachers is None):
             raise ValueError(f"actor {actor!r}: 'student', or 'teacher' with teachers")
@@ -153,7 +154,12 @@ class MultiCollector:
                                      states_dir=None if states_dir is None else str(states_dir))
             pool = _native.EnvPool(task, num_envs=family.envs, threads=family.envs, seed=seed + 7919 * i)
             self.pools.append(pool)
-            self.collectors.append(Collector(pool, steps_per_env, gamma, lam, budget=family.config.max_steps))
+            self.collectors.append(Collector(pool, steps_per_env, gamma, lam, budget=family.config.max_steps,
+                                             tried=tried, chunk_length=chunk_length))
+        self.steps_per_env = steps_per_env
+        self.tried = tried
+        self.chunk_length = chunk_length
+        self.sampler = sampler
         self.num_envs = sum(f.envs for f in families)
         self.buffer: Optional[BufferSet] = None
         self.episodes: list = []
@@ -165,19 +171,30 @@ class MultiCollector:
 
     @property
     def shares(self) -> dict[str, int]:
-        """Envs per family (fixed for a run: the hook for prioritised sampling across families)."""
+        """Envs per family (fixed for a run; ``NeedSampler`` changes the decisions an env instead)."""
         return {f.key: f.envs for f in self.families}
+
+    def steps_for(self, network) -> dict[str, int]:
+        """Decisions an env of each family in the next rollout: ``steps_per_env`` each, or by ``sampler``'s shares
+        of the same total rows (a recurrent network's in whole sequences)."""
+        if self.sampler is None:
+            return {f.key: self.steps_per_env for f in self.families}
+        unit = self.chunk_length if getattr(network, 'recurrent', False) else 1
+        return self.sampler.steps({f.key: f.envs for f in self.families}, self.steps_per_env * self.num_envs, unit)
 
     def start(self, network):
         """Starts every family's rollout (each pool on its own thread, the GIL released while it steps)."""
         student = network.to_native() if self.actor == 'student' else None
+        for collector, steps in zip(self.collectors, self.steps_for(network).values()):
+            collector.resize(steps)
         self._errors = []
         self._began = time.time()
+        extra = {} if self.tried is None else {'tried': self.tried}
 
         def run(collector, index, policy):
             try:
                 collector.pool.rollout([policy], collector._buffers[index].memory_length,  # pylint: disable=protected-access
-                                       collector._views[index])  # pylint: disable=protected-access
+                                       collector._views[index], **extra)  # pylint: disable=protected-access
             except BaseException as err:  # pylint: disable=broad-exception-caught
                 self._errors.append(err)
 
@@ -204,6 +221,8 @@ class MultiCollector:
             collector._result = {'seconds': self.rollout_seconds}  # pylint: disable=protected-access
             collector.take()
             self.episodes += [{**e, 'family': self.keys[i]} for e in collector.episodes]
+            if self.sampler is not None:
+                self.sampler.observe(self.keys[i], collector.episodes)
 
     def ready(self, network, device) -> RolloutMetrics:
         began = time.time()
@@ -228,10 +247,69 @@ class MultiCollector:
         return merged
 
     def family_metrics(self) -> dict:
-        """The last rollout's summary metrics per family, as ``family/<key>/<metric>``."""
-        return {f'family/{key}/{name}': value for key, metrics in self.by_family.items()
-                for name, value in metrics.summary().items() if isinstance(value, (int, float))}
+        """The last rollout's summary metrics per family, as ``family/<key>/<metric>``, with each family's share of
+        the rows (``rows_share``) and, with a sampler, its ``need`` and ``recent_success``."""
+        result = {f'family/{key}/{name}': value for key, metrics in self.by_family.items()
+                  for name, value in metrics.summary().items() if isinstance(value, (int, float))}
+        if self.buffer is not None:
+            for key, buffer in zip(self.keys, self.buffer.buffers):
+                result[f'family/{key}/rows_share'] = buffer.rows / self.buffer.rows
+        if self.sampler is not None:
+            for key in self.keys:
+                result[f'family/{key}/need'] = self.sampler.need(key)
+                recent = self.sampler.success(key)
+                if recent is not None:
+                    result[f'family/{key}/recent_success'] = recent
+        return result
 
     def close(self):
         for pool in self.pools:
             pool.close()
+
+
+class NeedSampler:
+    """Rows per family by need (docs/lab.md "Sampling across families"): a family's need is how far its success over
+    its last ``window`` episodes of the run is below its target (``targets``; a family with no episode yet needs
+    its whole target); its share of the rows is ``(floor + need) / Σ (floor + need)``.  With every family at its
+    target the shares are equal; ``floor`` keeps every family in the rollout."""
+
+    def __init__(self, targets: dict[str, float], floor: float = 0.05, window: int = 100):
+        if floor <= 0:
+            raise ValueError("the need floor must be above 0 (every family keeps some rows)")
+        self.targets = dict(targets)
+        self.floor = floor
+        self.recent = {key: deque(maxlen=window) for key in targets}
+
+    @staticmethod
+    def teacher_targets(keys, reference: Path) -> dict[str, float]:
+        """Each key's success on the yardstick in ``reference`` (``lab/reference.json``: today's networks), the
+        student's target: "below its teacher"."""
+        data = json.loads(Path(reference).read_text(encoding='utf-8'))['keys']
+        missing = [k for k in keys if k not in data]
+        if missing:
+            raise SystemExit(f"{reference} has no {missing}")
+        return {k: float(data[k]['success']) for k in keys}
+
+    def observe(self, key: str, episodes: list):
+        """Adds a rollout's finished episodes of ``key`` (``episode`` events)."""
+        for event in episodes:
+            self.recent[key].append(event['info'].get('outcome') == 'success')
+
+    def success(self, key: str) -> Optional[float]:
+        recent = self.recent[key]
+        return sum(recent) / len(recent) if recent else None
+
+    def need(self, key: str) -> float:
+        success = self.success(key)
+        return self.targets[key] if success is None else max(0.0, self.targets[key] - success)
+
+    def shares(self) -> dict[str, float]:
+        weights = {key: self.floor + self.need(key) for key in self.targets}
+        total = sum(weights.values())
+        return {key: w / total for key, w in weights.items()}
+
+    def steps(self, envs: dict[str, int], rows: int, unit: int = 1) -> dict[str, int]:
+        """Decisions an env per family (``envs``: envs per family) so each takes about its share of ``rows``, in
+        multiples of ``unit`` (at least one)."""
+        shares = self.shares()
+        return {key: max(unit, round(shares[key] * rows / envs[key] / unit) * unit) for key in envs}

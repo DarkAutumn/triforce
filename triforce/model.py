@@ -246,6 +246,7 @@ class PolicyOutput:
     head_entropy: dict             # name → [B] entropy (0 where the head doesn't apply)
     head_applies: dict             # name → [B] bool
     head_log_prob: dict            # name → [B] log-prob of that head's choice (0 where the head doesn't apply)
+    aux: Optional[dict] = None     # a lab network's auxiliary outputs (``nets.Heads.aux``); None for ZeldaPolicy
 
 
 class ZeldaPolicy(nn.Module):

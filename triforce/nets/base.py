@@ -169,10 +169,47 @@ class LabNet(nn.Module):
         state = self.initial_state(batch)
         return self.heads(obs, None if state is None else state.to(self.device))[0]
 
-    def evaluate(self, obs, mask=None, actions=None, deterministic=False, noise=None) -> PolicyOutput:
-        """``ZeldaPolicy.evaluate`` (a recurrent network's rows from its initial state: ``_heads``)."""
+    @property
+    def recurrent(self) -> bool:
+        """Whether the network has memory (``initial_state`` gives a state): the learner then trains it on
+        sequences (``unroll``; ``ppo`` "recurrent networks")."""
+        return self.initial_state(1) is not None
+
+    def unroll(self, obs: dict, starts: torch.Tensor, state: torch.Tensor) -> tuple[Heads, torch.Tensor]:
+        """The heads of ``C`` sequences of ``L`` decisions, row ``c * L + t`` the ``t``-th of sequence ``c``
+        (``obs``: key -> ``[C * L, ...]``; ``starts`` ``[C * L]`` bool: the row starts an episode, its state is the
+        initial one), each sequence from ``state[c]`` (``[C, ...]``). Returns (the heads of every row, the state
+        after the last row). Truncated back-propagation through time: the gradient flows within a sequence and
+        stops at its stored start state."""
         obs = self._batch(obs)
-        return factored_evaluate(self._heads(obs), self._mask(obs, mask), actions, deterministic, noise)
+        count = state.shape[0]
+        length = starts.shape[0] // count
+        steps = {k: v.view(count, length, *v.shape[1:]) for k, v in obs.items()}
+        starts = starts.view(count, length).to(state.device)
+        fresh = self.initial_state(count).to(state.device)
+        parts = []
+        for t in range(length):
+            keep = (~starts[:, t]).view(-1, *([1] * (state.dim() - 1)))
+            state = torch.where(keep, state, fresh)
+            heads, state = self.heads({k: v[:, t] for k, v in steps.items()}, state)
+            parts.append(heads)
+
+        def joined(values: list) -> torch.Tensor:    # [C, L, ...] -> [C * L, ...] in row order
+            stacked = torch.stack(values, dim=1)
+            return stacked.reshape(count * length, *stacked.shape[2:])
+
+        return Heads(joined([h.kind for h in parts]), joined([h.direction for h in parts]),
+                     joined([h.duration for h in parts]), joined([h.value for h in parts]),
+                     {k: joined([h.aux[k] for h in parts]) for k in parts[0].aux}), state
+
+    def evaluate(self, obs, mask=None, actions=None, deterministic=False, noise=None) -> PolicyOutput:
+        """``ZeldaPolicy.evaluate`` (a recurrent network's rows from its initial state: ``_heads``); the output's
+        ``aux`` holds the heads' auxiliary outputs."""
+        obs = self._batch(obs)
+        heads = self._heads(obs)
+        out = factored_evaluate(heads, self._mask(obs, mask), actions, deterministic, noise)
+        out.aux = heads.aux
+        return out
 
     def joint_log_probs(self, obs, mask=None) -> torch.Tensor:
         obs = self._batch(obs)

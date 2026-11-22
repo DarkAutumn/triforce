@@ -176,7 +176,7 @@ def test_the_server_keeps_a_recurrent_state_per_env_and_restarts_it_per_episode(
 
 
 def test_architectures_side_by_side_save_load_and_play(states_dir, tmp_path):
-    assert nets.names()[:2] == ['zelda', 'wide']
+    assert nets.names()[0] == 'zelda' and {'wide', 'gru', 'hithead'} <= set(nets.names())
     wide = nets.create('wide', native_spec(), hidden_dim=64, depth=2)
     zelda = nets.create('zelda', native_spec())
     assert nets.arch_of(wide.config.to_dict()) == 'wide' and 'arch' not in zelda.config.to_dict()
