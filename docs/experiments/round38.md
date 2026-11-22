@@ -237,13 +237,14 @@ route (0.857 → 0.736) with nothing trained in between; four epochs with those 
 number on the actions taken is biased there: the combination plays the actions its head passed, so the hits left
 among them are the head's blind spots by construction (its taken-lost rate is 1.59% against the teacher's 2.36%).
 The fair number is the judged one (the untaken candidates the policy ranked next): 0.598 → 0.722 with the teacher's
-states added, 0.738 after round 1 (its own states in the training mix), with no loss on the old data or the teacher's states. Round 36's in-run head (0.46-0.56) was below even this: an in-run
-head sees 0.25 trials a decision against 8 here and starts from nothing; the pretrained arm P started at 0.65 and
-fell back with the trunk shared under policy losses.
+states added, 0.738 after round 1 (its own states in the training mix), with no loss on the old data or the
+teacher's states. Round 36's in-run head (0.46-0.56) was below even this: an in-run head sees 0.25 trials a decision
+against 8 here and starts from nothing; the pretrained arm P started at 0.65 and fell back with the trunk shared
+under policy losses.
 
-Not finished (the round's budget): round 1's head (`models/r38hit/hit-r1`) combined and benched, round 2 (record the r1 combination's states on main's fixed start states, retrain on
-everything), and the `hit_or_blocked` label (main's Bubble touches; `r38_hit.py` reads it as `DIR+blocked` from a
-recording made on the merged code).
+Round 1's head in the combination, round 2 (the r1 combination's own states on main's fixed start states) and the
+`hit_or_blocked` label (main's Bubble touches; `r38_hit.py` reads it as `DIR+blocked`): "The retrained head at
+play" below.
 
 ### 4. Reinforcement with the head protected: not run
 
@@ -257,9 +258,24 @@ they want the merged code (branch `r38-hit-m`).
 ### 5. 7:0x1b as a fight
 
 The room's row of §2: with the six Blue Goriyas and 0-7 bombs the teacher wins 83.3% at 3.83 hits a visit and 1.94
-hearts; the fixed combination (w = 8) 94.3% at 2.08 and 0.39; the planner 98.3% at 1.01. The `d7` chains (1000 runs,
-`--checkpoint goriya@d3first=models/r38shift/pre-w8`, and today's team on the same seeds and code; the planner on
-300) were queued. Today's team with 7:0x1b a fight (this branch's code, seeds 0-999, from `d3first_7_79s_0` to step 180, out of Dungeon 7 with its triforce): **12.5% of runs finish Dungeon 7**; 517 of the 875 losses are in 7:0x1b (3.51 hits a visit over 737 visits), then 7:0x1a 136, 7:0x19 67, Digdogger's 7:0x1c 31. The planner beside (300 runs, every network with the look-ahead): 96.7%, 1.12 hits a visit in 7:0x1b, 2 runs lost there. With goriya played by the fixed combination (w = 8, the rest of the team today's, the same seeds and code): **67.8% finish Dungeon 7, +55.3 ± 1.8 points paired on the 1000 seeds**; in 7:0x1b 2.45 hits a visit against 3.51 and 0.96 hearts lost a visit against 2.47 (1,087 visits against 737: more runs get there), and 105 runs lost there against 517. The losses left: 7:0x1b 105, 7:0x18 66, Digdogger's 7:0x1c 57, 7:0x1a 21. It is still below round 34's crossing (`d7` 86.9% at 2 bombs, the backlog's baseline) and the planner (96.7%). **The decision for the lead:** with today's goriya network 7:0x1b must stay a crossing (a fight keeps 12.5%); with the head connected as a shift the fight keeps 68%: worth keeping as the fight the owner wants only once the head is stronger (round 1's head, §3, is not yet benched) and the remaining 0x1b and 0x18 losses are worked on; until then the crossing costs 19 fewer runs in 100.
+hearts; the fixed combination (w = 8) 94.3% at 2.08 and 0.39; the planner 98.3% at 1.01.
+
+**The `d7` chains** (1000 runs, seeds 0-999, from `d3first_7_79s_0` to step 180, 0:0x42 out of Dungeon 7 with its
+triforce; 7:0x1b a fight below 8 bombs; the code before main's merge, which plays identically):
+
+| `d7` (1000 runs) | finish Dungeon 7 | 7:0x1b visits | hits a visit there | hearts lost a visit there | runs lost there | then |
+|---|---:|---:|---:|---:|---:|---|
+| today's team | 12.5% | 737 | 3.51 | 2.47 | 517 | 7:0x1a 136, 7:0x19 67, 7:0x1c 31 |
+| goriya by the fixed combination (w = 8), the rest today's | **67.8%** | 1,087 | 2.45 | 0.96 | 105 | 7:0x18 66, 7:0x1c 57, 7:0x1a 21 |
+| the planner beside (300 runs, every network with the look-ahead) | 96.7% | | 1.12 | | 2 of 300 | |
+
+**+55.3 ± 1.8 points** paired on the 1000 seeds; more runs reach 7:0x1b with the combination (1,087 visits against
+737), and fewer are lost there. It is still below round 34's crossing (`d7` 86.9% on the first order, at 2 bombs)
+and the planner (96.7%).
+
+**The decision for the lead:** with today's goriya network 7:0x1b must stay a crossing (a fight keeps 12.5%); with
+the head connected as a shift the fight keeps 68%: worth keeping as the fight the owner wants once the remaining
+0x1b and 0x18 losses are worked on. Both ways on one code and one set of seeds: below, "7:0x1b both ways".
 
 ### 6. The threat lane
 
@@ -282,7 +298,12 @@ The lane catches a third more of the hits it is for (0.26 → 0.34 recall) and l
 nothing. On goriya the slice is under 1% of the hits, so the lane cannot move goriya's totals. The shooter family it
 is meant for (Octoroks: a 48-frame stand still before the rock, 3 px a frame) had no collection: one was queued with
 the probe logger of branch `r36-hit` (ow-octorok's `d3first` rooms 0x37, 0x3c, 0x4c, 0x64; 100 planner and 100
-model-alone runs from each of 30 states; queue cost: 83 minutes from queueing to the file, most of it waiting). It does not rank the lane: the model and the planner on those rooms were hit by a rock fired after the decision only 24 times in the whole collection (2 held out), and the three inputs read the rest of its hits alike (P = R 0.65-0.73 / 0.57-0.61, within the seeds' spread on a small set). The shot speed checks out (3 px a frame from RAM). An Octorok ranking needs a collection aimed at the slice: states where Link walks into a standing Octorok's lane.
+model-alone runs from each of 30 states; queue cost: 83 minutes from queueing to the file, most of it waiting). It
+does not rank the lane: the model and the planner on those rooms were hit by a rock fired after the decision only 24
+times in the whole collection (2 held out), and the three inputs read the rest of its hits alike (P = R 0.65-0.73 /
+0.57-0.61, within the seeds' spread on a small set). The shot speed checks out (3 px a frame from RAM). An Octorok
+ranking needs a collection aimed at the slice: states where Link walks into a standing Octorok's lane.
+
 **The engine fields, if the Octorok ranking agrees**: per entity, 11 inputs: can fire (Goriya: `ObjState` bit 7
 clear; Octorok, Moblin, Lynel: shoot timer `$451` zero or above `$10`; not stunned `$3D`, metastate `$405` 0), the
 delay to the shot (Goriya `ObjTimer` `$28`; the others' timer − `$10`, or 32 when it has not started) / 64, in the
