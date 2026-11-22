@@ -3397,3 +3397,23 @@ and 0x29's walls need), so a run with 2 or more crosses to the key door. routes.
   `golden-d2first-to-dungeon3-triforce` (`v0-golden`), `single-run-d3first-old-order-51-networks`
   (`v2-single-ending`), `planner-d2first` (`v0-plan-ending`); the two format fixtures keep `v0-power-on` and
   `v0-state`. Older documents name the old files.
+
+## 2026-11-22 — Bombs: where they are a weapon (Lee, from watching the one-network golden replay)
+
+- **Only in dungeon rooms the route must clear:** "The agent wastes bombs in rooms I wish it didn't. For example d3
+  0x69. In dungeons, link should only use bombs in rooms it somehow needs to clear. For example, it's fine to use
+  bombs in 0x59 because we have to clear the room to open the south door, in 0x69 it needs to slide past the
+  darknuts to get the raft, then out of the room (I use sword-hit an enemy to make them pass-through in this room,
+  not kills with bombs)."
+- **Rooms Lee names: no bomb but the wall's:** "some rooms I want to explicitly say 'don't use bombs in this room
+  just because the owner says so' (well there's good reasons). 0x5b is a great example, the point of fighting the
+  darknuts in that room is to get the bomb drop, wasting the bombs to kill them is not the right play. BUT link
+  still needs to bomb the wall to get through there. So no bombs except the 1 to blow up the wall. [...] I may have
+  other rooms I see that I want to throw into this category."
+- **The floor for fighting a room for its bombs is 7 or fewer in hand, everywhere:** "I want to raise the 'get
+  bombs from this room' floor, so in 0x5b he should fight the darknuts if he has 7 or less bombs, up from whatever
+  it was. This is a blanket rule not for this room."
+- **The 10th kill's bomb, always:** "we must ALWAYS allow bombs and deeply encourage them if we are on the 10th
+  kill force drop, no matter the room or enemies, that remains true."
+- The lead applies them to `d3first` (`d2first` stays as it is, by Lee's word of the same day); built on branch
+  `r37-rules` with their cost to today's networks measured before they land.

@@ -119,9 +119,22 @@ been retrained on the corrected order):
   | tenth | never}`) and the route's `bomb_reserve`; the owner's rule is by room: BOMB as a weapon is offered in a
   dungeon room only while the step's objective is to clear it (a shutter the monsters hold, a treasure or block
   that appears on the clear, a boss), and at a wall the route leaves through; nowhere else in a dungeon. To build
-  with the next change to the mask (no training is interrupted for it); it also saves bombs for the walls that are
+  on branch `r37-rules` (no training is interrupted for it); it also saves bombs for the walls that are
   cheated today. The rooms where the golden replay's network threw bombs that this rule forbids: scouted Nov 22,
   the list is in round37.md "Bombs thrown where the route needs no clear".
+- [ ] **Rooms where the owner forbids bombs but for the wall** (Nov 22: "some rooms I want to explicitly say 'don't
+  use bombs in this room just because the owner says so' [...] 0x5b is a great example, the point of fighting the
+  darknuts in that room is to get the bomb drop, wasting the bombs to kill them is not the right play. BUT link
+  still needs to bomb the wall to get through there. So no bombs except the 1 to blow up the wall."): a step mode
+  in routes.yaml; 3:0x5b is the first, more will come from the owner's watching.
+- [ ] **The floor for fighting a room for its bombs is the bag** (the owner, Nov 22, a blanket rule): the route
+  fights a room for its bomb treasure while Link holds 7 or fewer (it was 5 at 8:0x3f, 2 at 7:0x1b on `d3first`,
+  the last pass of 3:0x5b by its own rule). 7:0x1b's six Blue Goriyas are then a wood-sword fight again whenever
+  the bag is not full (round 34 had made it a crossing because the fight killed half the runs): its cost is
+  measured with the rule and reported, not softened.
+- **Over all three: the 10th kill's bomb is always allowed and encouraged** (the owner, Nov 22: "we must ALWAYS
+  allow bombs and deeply encourage them if we are on the 10th kill force drop, no matter the room or enemies, that
+  remains true"): the forced drop of four is the route's bomb supply.
 - [ ] **Later, the owner's stated goal:** a win without a cheated bomb. Drops only; the walls' shortfall is counted
   until the bomb economy closes it (old backlog "A win without a cheated bomb").
 
