@@ -39,7 +39,7 @@ from triforce.jobs import add_job_arguments, begin_job, work  # noqa: E402
 from triforce.lab import bench as yardstick  # noqa: E402
 from triforce.lab.auxiliary import matched_precision  # noqa: E402
 from triforce.model import MASK_KEY  # noqa: E402
-from triforce.nets.hitshift import shift_heads  # noqa: E402
+from triforce.nets.hitshift import HitShift, shift_heads  # noqa: E402
 
 R38 = ROOT / 'target' / 'r38'
 ACT = 'temperature:0.5+relax:16'
@@ -157,17 +157,17 @@ def load(path):
 
 
 def combine(policy_path: str, hit_path: str, weights: list[float], name: str, run: str, form: str,
-            models_dir=None) -> list[Path]:
+            freeze_hit: bool = False, models_dir=None) -> list[Path]:
+    """One ``hitshift`` run dir a weight, ``<models>/<name>/<run>-w<weight>``: ``ckpt.pt`` (its ``specialist`` is
+    ``name``: a family's name makes it that family's run, promotable), ``version`` and ``act`` (the default act
+    mode, bound to the weights), so every tool loads it as it loads any run."""
     policy, hitnet = load(policy_path), load(hit_path)
     out = []
     for weight in weights:
-        network = nets.build({'arch': 'hitshift', 'obs_spec': hitnet.config.obs_spec,
-                              'policy': policy.config.to_dict(), 'hitnet': hitnet.config.to_dict(),
-                              'weight': float(weight), 'form': form})
-        network.policy.load_state_dict(policy.state_dict())
-        network.hit.load_state_dict(hitnet.state_dict())
+        network = HitShift.of(policy, hitnet, weight, form, freeze_hit)
         path = registry.save_checkpoint(name, f'{run}-w{weight:g}', network, root=models_dir,
                                         extra={'policy': str(policy_path), 'hit': str(hit_path)})
+        registry.set_act_mode(path, registry.DEFAULT_ACT)
         out.append(path.parent)
         print(f'[combine] {path}', flush=True)
     return out
@@ -383,6 +383,7 @@ def main(argv=None) -> int:
     c.add_argument('--form', default='softplus', choices=['softplus', 'logit'])
     c.add_argument('--name', default='r38shift')
     c.add_argument('--run', required=True)
+    c.add_argument('--freeze-hit', action='store_true', help="the hit body out of training (a reinforcement arm)")
     m = sub.add_parser('manifests')
     m.add_argument('--goriya-states', type=int, default=48)
     m.add_argument('--goriya-episodes', type=int, default=10)
@@ -423,7 +424,7 @@ def main(argv=None) -> int:
         q.add_argument('--device', default='cuda')
     args = parser.parse_args(argv)
     if args.command == 'combine':
-        combine(args.policy, args.hit, args.weights, args.name, args.run, args.form)
+        combine(args.policy, args.hit, args.weights, args.name, args.run, args.form, args.freeze_hit)
     elif args.command == 'manifests':
         write_manifests(args.out, args.goriya_states, args.goriya_episodes, args.episodes_0x1b)
     elif args.command == 'calibrate':
