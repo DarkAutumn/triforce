@@ -121,16 +121,18 @@ paired (`r36_merge_report.py`; reports in `docs/experiments/data/r36-merge/stude
 | 256x2 | 733k | 0.171 | 0.829 | not benched | |
 | 256x2, no room embedding | 684k | 0.172 | 0.828 | not benched | |
 | **1x (today's)** | 866k | 0.160 | 0.836 | 98.1% (-1.8 ± 0.3) | 88.4% |
-| 512x3 | 2.09M | 0.130 | 0.857 | queued | |
+| 512x3 | 2.09M | 0.130 | 0.857 | 98.5% (-1.4 ± 0.3) | 90.6% |
 | 768x3 | 3.97M | 0.119 | 0.866 | 98.7% (-1.3 ± 0.3) | 92.7% |
 | 768x3, two entity layers | 4.01M | 0.116 | 0.869 | 99.0% (-1.0 ± 0.3) | 92.9% |
 | 1024x3 | 6.51M | 0.113 | 0.873 | 98.6% (-1.4 ± 0.3) | 90.9% |
 | 1x on 1/4 of the data | 866k | 0.230 | 0.808 | queued | |
 | 1x on 1/2 of the data | 866k | 0.179 | 0.827 | 97.8% (-2.1 ± 0.3) | 87.2% |
 
-Data matters more than size: halving the data costs as much KL (+0.019) as shrinking the towers, and doubling
-it (1/2 -> all) gains more than 7.5x the parameters. The room embedding does nothing to held-out agreement
-(0.171 / 0.172); where the two differ on the route is not measured.
+On held-out agreement, data matters more than size: halving the data costs as much KL (+0.019) as shrinking the
+towers. On the bench the effects are small for both: every wider student keeps 98.5-99.0% (worst ten 90.6-92.9%)
+against the 1x student's 98.1% (88.4%), with no trend from 2.1M to 6.5M parameters; half the data costs only
+0.3 points (97.8%, worst ten 87.2%). None of the wider students is chained yet. The room embedding does nothing
+to held-out agreement (0.171 / 0.172); where the two differ on the route is not measured.
 
 ## The fights
 
