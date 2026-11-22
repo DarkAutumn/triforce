@@ -35,3 +35,81 @@ path 18,000 at 1:0x53, 6:0x28, 9:0x17; path 36,000 at 4:0x11, 1:0x53, 7:0x19, 7:
 Against the 51, one network costs about the same tries everywhere but two segments: the leg out of Dungeon 5 with
 Dungeon 7 (104-276 tries against 29-64) and Dungeon 8 (18-100 against 13-16). On the old order round 36's 1x
 student needed up to 1,314 tries for its worst segment; this one's worst is 276.
+
+**The 1x student too.** Round 36's `r36merge/s1x-d2` (today's architecture at today's size, 866k parameters, after
+two rounds of correction; never chained), the same race: **three of three win, 833 runs** (4.8 minutes); replays
+verify, one hash (8952f87c643033c2) in all 51 slots, the same order of triforces and swords, the 0x3f warp to
+0x31. Runs a segment (D3, D4, D1, D2, D5, D7, D6, D8, D9): path 0: 44 16 1 13 30 144 26 17 7 (153,417 frames);
+18,000: 9 13 4 16 70 78 24 25 9 (147,898, shorter than the 51's shortest, 152,051); 36,000: 8 14 3 20 106 34 9 76 17
+(160,978). Its worst segment is again the leg out of Dungeon 5 with Dungeon 7, or Dungeon 5 itself.
+
+**The bench on the corrected route's entries** (`lab/bench.json` of 2.0.0.5; `bench run --network`, every key's
+entries played by the one network; `bench compare` against `lab/reference.json`, 6,120 pairs on the same states and
+seeds; `target/r37/bench/r36w768e2-vs-ref.md`): the wide student **+1.4 ± 0.3 points** (94.3% against 92.9%),
+hearts lost -0.067 ± 0.015 an episode, hits -0.078 ± 0.014 a visit. Most of the gain is where the bench gives a key
+rooms its own network does not play on the route: boss-gleeok@d3first +27.5 ± 6.9 (the wood-sword run on 8:0x3c's
+entries too, which the chains give to the magic-sword run), boss-gleeok +15.0 ± 3.7; and ow-lynel +17.5 ± 4.0 on
+the corrected route's 0x50 / 0x60 / 0x22, where its teacher is weak (the student copied ow-lynel only on the old
+order's states). Losses: wallmaster@d3first -6.7 ± 3.9, boss-digdogger@d3first -5.8 ± 3.0, darknut@d3first -5.0 ±
+2.9, wizzrobe -4.2 ± 2.5. On this manifest the bench says the one network is as good as the team; only chains decide.
+
+## The chains: one network against the 51 on the corrected route
+
+Round 36's `w768e2-z` as the one network (models root of its own), 1,000 runs a segment (seeds 0-999, `--act model`,
+clips on, the record's stops; `target/r37/one-chains.sh`), paired with the 51's chains of record (`r36base-*`;
+`post-d5` and `post-d7` from the dock guard's `r36guard-1k` batch). `scripts/experiments/r37_one_table.py`; hits
+taken and hearts lost are per room visit (health in minus out where positive). Cut with 13 of 18 segments done
+(`post-d6`, `d8`, `post-d8`, `d9` and the route from the start were still running):
+
+| segment | 51 networks | one network | paired (points) | hits a visit (51 / one) | hearts lost a visit | where (lost per 1,000 entering: 51 -> one) |
+|---|---:|---:|---:|---:|---:|---|
+| D3 | 23.2% | 9.5% | -13.7 ± 1.6 | 0.300 / 0.375 | 0.208 / 0.259 | Darknuts 3:0x5b 104 -> 267, 0x59 68 -> 172; Manhandla 527 -> 545 |
+| post-D3 | 100% | 100% | 0.0 | 0.085 / 0.081 | 0.042 / 0.041 | |
+| D4 | 18.5% | 8.3% | -10.2 ± 1.5 | 0.354 / 0.440 | 0.236 / 0.290 | Gleeok 4:0x13 736 -> 819; like-like 0x32 126 -> 249 |
+| post-D4 | 100% | 100% | 0.0 | 0.132 / 0.172 | 0.065 / 0.084 | |
+| D1 | 93.3% | 83.4% | -9.7 ± 2.6 | 0.292 / 0.352 | 0.115 / 0.142 | 1:0x33 0 -> 43, Aquamentus 0x35 14 -> 53 |
+| post-D1 | 99.1% | 89.9% | -9.2 ± 1.0 | 0.294 / 0.410 | 0.150 / 0.218 | 0:0x3d 5 -> 52, 0x4c 2 -> 29 |
+| D2 | 99.8% | 99.8% | 0.0 ± 0.2 | 0.586 / 0.542 | 0.201 / 0.179 | |
+| post-D2 | 100% | 99.8% | -0.2 ± 0.1 | 0.138 / 0.154 | 0.066 / 0.076 | |
+| D5 | 31.2% | 12.1% | -19.1 ± 1.8 | 0.350 / 0.454 | 0.485 / 0.701 | the Olive Garden 5:0x05 416 -> 632 |
+| post-D5 | 78.9% | 61.4% | -17.5 ± 2.0 | 0.341 / 0.358 | 0.228 / 0.226 | 0:0x1b (the bounce out of 0x0b's whirlwind), 0x55 65 -> 95 |
+| D7 | 13.1% | 8.9% | -4.2 ± 1.4 | 0.945 / 0.984 | 0.672 / 0.705 | goriya 7:0x1b 689 -> 743, Digdogger 0x1c 161 -> 253 |
+| post-D7 | 22.1% | **98.5%** | **+76.4 ± 1.4** | 0.107 / 0.175 | 0.071 / 0.110 | ow-lynel's bounce at 0x50/0x40 933 -> 0 |
+| D6 | 36.4% | 32.7% | -3.7 ± 2.1 | 0.648 / 0.651 | 0.878 / 0.920 | Wizzrobes 6:0x3a 410 -> 467 |
+
+The bench said +1.4 points for this network; the chains say it loses 4-19 points in every dungeon, takes more hits a
+room visit nearly everywhere (fights: Darknuts, Gleeok, the Olive Garden), and wins one leg outright: the leg from
+Level 7 to Level 6, where ow-lynel's own network bounces between 0x50 and 0x40 (its `d2first` way) and the one
+network, which never learned that habit as strongly, walks the corrected route (98.5% against 22.1%).
+
+**What it predicts for one run** (`scripts/experiments/r37_single_run.py`: the product of the segment rates against
+the 1e-4 the owner's one-in-10,000 needs; ln 10,000 = 9.21): the 51 multiply to 6.7e-6 (one in 149,000; -ln p
+summed 11.91; the largest: D7 2.03, D4 1.69, post-D7 1.51, D3 1.46, D5 1.16, post-D6 1.14, D6 1.01, D8 0.92, D9 0.67);
+from the start 1,000 runs of the 51 reach D3's triforce 238, D4's 45, D1's 38, D2's 30, D5's 6, D7's 1, the magic
+sword 1, nothing further. The one network's 13 segments so far multiply to 1.25e-5 (11.29 of the 9.21): already
+better than the 51's same 13 (post-D7 pays for every dungeon loss), with D8, D9 and post-D6 still to multiply in.
+
+**Bombs.** Every D3, D5 and D7 number here is under today's bomb offers; the owner's new bomb rules (branch
+`r37-rules`) change what BOMB is offered in the Darknut and Goriya rooms of Dungeons 3 and 7.
+
+**Not done in this session** (the status names the commands): the copy on the corrected route's states only (the
+owner, Nov 22: the single network is never trained on `d2first`'s states; `--state-route d3first` was built for the
+recorder and the lab, `r37-rl`); reinforcement on top (a first run from round 36's student was stopped at iteration
+54 under that rule).
+
+**The rest of the batch** (finished after the cut above):
+
+| segment | 51 networks | one network | paired (points) | hits a visit (51 / one) | hearts lost a visit | where (lost per 1,000 entering: 51 -> one) |
+|---|---:|---:|---:|---:|---:|---|
+| post-D6 | 32.0% (300) | 23.0% | -10.7 ± 3.7 | 1.214 / 0.930 | 2.011 / 1.477 | 0:0x32 750 -> 978; back into Level 6 (6:0x58 entered, 1000 lost there) |
+| D8 | 40.0% (300) | 19.5% | -18.0 ± 3.7 | 1.846 / 2.172 | 1.435 / 1.801 | Blue Darknuts 8:0x3e 254 -> 378, 0x3f 265 -> 427 |
+| post-D8 | 99.7% (300) | 97.5% | -2.7 ± 1.0 | 0.241 / 0.277 | 0.203 / 0.209 | 0:0x47 0 -> 30 |
+| D9 | 51.3% (300) | 42.4% | -7.0 ± 4.0 | 0.579 / 0.597 | 0.374 / 0.392 | Wizzrobes 9:0x10 140 -> 196 |
+| from the start | 0 of 1000 | 0 of 1000 | | | | D3's triforce 238 -> 109, D4's 45 -> 5, D1's 38 -> 2, D2's 30 -> 2, D5's 6 -> 1, D7's 1 -> 0 |
+
+**All 18 segments multiplied:** the one network 2.3e-7 (one run in 4.3 million; -ln p summed 15.27 against the
+9.21 one in 10,000 allows) against the 51's 6.7e-6 (one in 149,000; 11.91). Ordered by what each costs the one
+network: D4 2.49, D7 2.42, D3 2.35, D5 2.11, D8 1.63, post-D6 1.47, D6 1.12, D9 0.86, post-D5 0.49; the rest under
+0.2. Four dungeons (D4, D7, D3, D5), each about a quarter of the whole budget, are where the reinforcement must go
+first; all four are fights (Gleeok and the like-likes; Goriyas and Digdogger; Darknuts and Manhandla; the Olive
+Garden's Darknuts), and three of them (D3, D5, D7) are the rooms the owner's new bomb rules change.
