@@ -413,7 +413,7 @@ fn movie_import_writes_a_movie_that_plays_to_the_recorded_end() {
 /// stream (`v0-power-on`), a state-file start (`v0-state`), and the complete runs under names that say what they
 /// are: `golden-d2first-to-dungeon3-triforce` (Nov 11's golden path to the Dungeon 3 triforce),
 /// `golden-d2first-34-networks` (1.9.0.0), `golden-d3first-51-networks` (the owner's corrected order with its two
-/// dock warps, landed in 2.0.0.5 and recorded on the route's branch, whose build was stamped 2.0.0.3),
+/// dock warps, his bomb rules and without 0:0x2d's cave: 2.0.0.7's route, recorded on 2.0.0.7),
 /// `golden-d3first-single-network` (one network in every slot, 2.0.0.5), `single-run-d3first-old-order-51-networks`
 /// and `planner-d2first`.  A failure here means replays people kept no longer replay: read the AGENTS.md rule
 /// before touching the files.
@@ -458,8 +458,8 @@ fn the_replay_corpus_still_verifies() {
         assert!(state.contains(line), "{line}: {state}");
     }
     let ending = info("golden-d3first-51-networks");
-    for line in ["version:  1", "frames:   180118", "ending:   win", "segments: 9", "states:   1 END, 8 CHECKPOINT",
-                 "triforce: 2.0.0.6", "the game ended in (level 9, room 0x32)"] {
+    for line in ["version:  1", "frames:   160248", "ending:   win", "segments: 9", "states:   1 END, 8 CHECKPOINT",
+                 "triforce: 2.0.0.7", "the game ended in (level 9, room 0x32)"] {
         assert!(ending.contains(line), "{line}: {ending}");
     }
     // One network in all 51 model slots (round 37): a golden path of the corrected route from power on.
