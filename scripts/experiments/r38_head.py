@@ -248,28 +248,52 @@ def slices36(head: str, family: str, device) -> dict:
 
 # ---------------------------------------------------------------------------------------------- chains
 
-def chain_compare(base: str, new: str) -> dict:
-    """Paired on seeds: the success rate of each, the difference with its standard error, and per room the runs
-    lost and hits a visit of each."""
+def arrival(run: dict, target: str) -> int:
+    """Rooms of ``run`` up to its arrival (the target rooms ``L:0xRR,...`` entered in order: ``eval_batch``'s
+    segment arrivals, as the record of a segment start without ``--stop-at`` is scored), or -1 (never arrived)."""
+    want = [(int(level), int(room, 16)) for level, room in (t.split(':') for t in target.split(','))]
+    k = 0
+    for i, room in enumerate(run['rooms']):
+        if (room['level'], int(room['room'], 16)) == want[k]:
+            k += 1
+            if k == len(want):
+                return i
+    return -1
+
+
+def _trace(run: dict, target: str) -> list:
+    end = arrival(run, target)
+    return [(r['level'], r['room'], r['hits'], r['steps']) for r in (run['rooms'] if end < 0 else run['rooms'][:end])]
+
+
+def chain_compare(base: str, new: str, target: str) -> dict:
+    """Paired on seeds: the arrival rate of each (a chain stopped at the target's last room, ``--stop-at``, and a
+    record that played on score alike), the difference with its standard error, and per room up to the arrival the
+    runs lost (the last room of a run that never arrived) and hits a visit of each."""
     a = {r['seed']: r for r in map(json.loads, open(base, encoding='utf-8'))}
     b = {r['seed']: r for r in map(json.loads, open(new, encoding='utf-8'))}
     seeds = sorted(set(a) & set(b))
-    sa = np.array([a[s]['result'] == 'success' for s in seeds], float)
-    sb = np.array([b[s]['result'] == 'success' for s in seeds], float)
+    sa = np.array([arrival(a[s], target) >= 0 for s in seeds], float)
+    sb = np.array([arrival(b[s], target) >= 0 for s in seeds], float)
     diff = sb - sa
     out = {'runs': len(seeds), 'base': float(sa.mean()), 'new': float(sb.mean()), 'diff': float(diff.mean()),
-           'se': float(diff.std(ddof=1) / math.sqrt(len(seeds)))}
+           'se': float(diff.std(ddof=1) / math.sqrt(len(seeds))),
+           'identical_runs': int(sum(_trace(a[s], target) == _trace(b[s], target) for s in seeds))}
     rooms = {}
     for tag, runs in (('base', a), ('new', b)):
         for s in seeds:
             run = runs[s]
-            for room in run['rooms']:
+            end = arrival(run, target)
+            played = run['rooms'] if end < 0 else run['rooms'][:end]
+            for room in played:
                 cell = rooms.setdefault(f"{room['level']}:{room['room']} {room['specialist']}", defaultdict(float))
                 cell[f'{tag}_visits'] += 1
                 cell[f'{tag}_hits'] += room['hits']
-            if run['result'] != 'success' and run['rooms']:
+                cell[f'{tag}_hearts'] += max(0.0, room['health_in'] + room['hearts_healed'] - room['health_out'])
+            if end < 0 and run['rooms']:
                 last = run['rooms'][-1]
-                rooms[f"{last['level']}:{last['room']} {last['specialist']}"][f'{tag}_lost'] += 1
+                rooms.setdefault(f"{last['level']}:{last['room']} {last['specialist']}",
+                                 defaultdict(float))[f'{tag}_lost'] += 1
     out['rooms'] = {k: dict(v) for k, v in sorted(rooms.items(), key=lambda kv: -kv[1].get('base_lost', 0))}
     return out
 
@@ -314,6 +338,8 @@ def main(argv=None) -> int:
     h = sub.add_parser('chains')
     h.add_argument('base')
     h.add_argument('new', nargs='+')
+    h.add_argument('--target', required=True, help="the segment's arrival, eval_batch's D3FIRST_TARGETS (d4: "
+                   "'4:0x03,0:0x45')")
     for q in (p, s):
         q.add_argument('--device', default='cuda')
     args = parser.parse_args(argv)
@@ -342,7 +368,7 @@ def main(argv=None) -> int:
             write_json_atomic(args.out, results)
     elif args.command == 'chains':
         for new in args.new:
-            result = chain_compare(args.base, new)
+            result = chain_compare(args.base, new, args.target)
             rooms = result.pop('rooms')
             print(new, json.dumps(result))
             for room, cell in list(rooms.items())[:8]:
