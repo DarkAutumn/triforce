@@ -169,11 +169,11 @@ fn no_dock_clip_without_the_dock_warp() {
     }
 }
 
-/// The dock warp waits out a hit (round 36): on the dock, WAIT only while a monster stands on the land the step off
-/// it ends on (a red Octorok's touch there knocks Link back onto the dock and the raft takes him up); at the clip's
-/// column and on the water spot, WAIT only while a shot is in the air.
+/// The dock warp gives way to a hit coming (round 36): on the dock, SWORD S only while a monster stands on the land
+/// the step off it ends on (a red Octorok's touch there knocks Link back onto the dock and the raft takes him up); on
+/// the water spot, WAIT only while a shot is in the air; the clip is never held back.
 #[test]
-fn the_dock_warp_waits_while_a_hit_is_coming() {
+fn the_dock_warp_gives_way_to_a_hit_coming() {
     const OBJ_X: u16 = 0x70;
     const OBJ_Y: u16 = 0x84;
     let Some(mut s) = off_the_raft("d3first_0_55n_v2_0", 0x1F, 3) else { return };
@@ -186,9 +186,9 @@ fn the_dock_warp_waits_while_a_hit_is_coming() {
         s.apply_ram(&[]);
     };
     place(&mut s, 0x07, 0x7E, 0x8D);
-    assert!(allowed(&s, "WAIT 4") && !allowed(&s, "MOVE S 8"), "a red Octorok below the dock: {:?}", at(&s));
+    assert!(allowed(&s, "SWORD S") && !allowed(&s, "MOVE S 8"), "a red Octorok below the dock: {:?}", at(&s));
     place(&mut s, 0, 0, 0);
-    assert!(allowed(&s, "MOVE S 8") && !allowed(&s, "WAIT 4"), "the land clear");
+    assert!(allowed(&s, "MOVE S 8") && !allowed(&s, "SWORD S"), "the land clear");
     act(&mut s, "MOVE S 8");
     for _ in 0..8 {
         if allowed(&s, "CLIP N") {
@@ -197,9 +197,8 @@ fn the_dock_warp_waits_while_a_hit_is_coming() {
         act(&mut s, "MOVE W 8");
     }
     place(&mut s, 0x55, 0xC0, 0x7D);
-    assert!(allowed(&s, "WAIT 4") && !allowed(&s, "CLIP N"), "a Zora's fireball in the air: {:?}", at(&s));
+    assert!(allowed(&s, "CLIP N") && !allowed(&s, "WAIT 4"), "a shot in the air does not hold the clip: {:?}", at(&s));
     place(&mut s, 0, 0, 0);
-    assert!(allowed(&s, "CLIP N"));
     act(&mut s, "CLIP N");
     place(&mut s, 0x55, 0xC0, 0x7D);
     assert!(allowed(&s, "WAIT 4") && !allowed(&s, "RECORDER"), "on the water spot: {:?}", at(&s));

@@ -42,6 +42,8 @@ def dock_rule():
             return 'WAIT 4'
         if ok('MOVE S 4') and not ok('MOVE W 4'):
             return 'MOVE S 4'
+        if ok('SWORD S') and not ok('MOVE W 4') and not ok('WAIT 4'):
+            return 'SWORD S'
         for step in ('MOVE W 4', 'MOVE S 4'):
             if ok(step):
                 return step
