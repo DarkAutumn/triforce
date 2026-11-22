@@ -20,7 +20,11 @@ Picking a folder in the dropdown stops the automatic switching; picking [current
 [currently running] covers every live training and evaluation on this machine, whatever checkout or logs root it
 writes to: every job registers its plan in the machine's job registry (``triforce/jobs.py``; ``jobs_dir``:
 ``$TRIFORCE_JOBS_DIR``, else ``$XDG_STATE_HOME/triforce/jobs``, else ``$HOME/.local/state/triforce/jobs``).  Folders
-from elsewhere are listed with their checkout and branch.  A job waiting its turn (``$TRIFORCE_MAX_JOBS`` run at
+from elsewhere are listed with their checkout and branch.  A job the registry knows is never invisible: a job without
+a log folder (a ``--no-log`` evaluation, a lab job of a checkout that writes no plan, a script that registers itself
+in the queue) is listed like the others, running, waiting or finished, from what the registry knows (its name, kind,
+checkout and branch, how long it has run or waited, its estimate, its command), marked 'no progress data'.  A job
+waiting its turn (``$TRIFORCE_MAX_JOBS`` run at
 once, plus an express place for a short one) is listed below the running ones as 'queued', in the order the jobs
 will start: shortest estimate first, older ones moving up as they wait.  Each shows its place in line, the jobs it
 waits for, its estimate and how long it
@@ -246,6 +250,25 @@ def fmt_clips(metrics: dict) -> str:
     clips = [f"{state} {fmt_pct(metrics[f'clips/{state}/success_rate'])}" for state in CLIP_SWITCHES
              if f'clips/{state}/success_rate' in metrics]
     return f"clips {' / '.join(clips)}" if clips else ''
+
+
+LAB_KIND = 'lab-train'      # a lab run's plan (``triforce.lab.train``): every family a run, all trained at once
+
+
+def lab_facts(metrics: dict) -> list[str]:
+    """A lab run's numbers of a family beside its success and hearts (``triforce.lab.train``'s progress): its share
+    of the rows, the hits Link took an episode, the teacher term's weight, the auxiliary losses (none of them for
+    any other run)."""
+    parts = []
+    if metrics.get('rows_share') is not None:
+        parts.append(f"rows {fmt_pct(metrics['rows_share'])}")
+    if metrics.get('hits_taken_per_episode') is not None:
+        parts.append(f"hits {metrics['hits_taken_per_episode']:.2f}/ep")
+    if metrics.get('teacher_coeff') is not None:
+        parts.append(f"teacher {metrics['teacher_coeff']:.2f}")
+    parts += [f"aux {name[len('losses/aux_'):]} {value:.3f}" for name, value in sorted(metrics.items())
+              if name.startswith('losses/aux_') and isinstance(value, (int, float))]
+    return parts
 
 
 def clips_sections(ev: dict) -> list:
@@ -710,6 +733,14 @@ class Run:
             return self.chain_start, self.chain_progress, 'runs'
         return self.eval_start, self.eval_progress, 'episodes'
 
+    @property
+    def unit(self) -> str:
+        """What an evaluation's done / total count: 'runs' (a chain), else its stream's ``unit`` (a job's one-line
+        progress, ``events.progress_job``: decisions, ...), else 'episodes'."""
+        if self.chain_start is not None or self.kind == 'chain':
+            return 'runs'
+        return (self.eval_start or {}).get('unit') or self.entry.get('unit') or 'episodes'
+
     def eval_done(self) -> tuple[int, int]:
         """(episodes finished, episodes total) of the evaluation so far (a chain's runs)."""
         start, progress, key = self._eval_events()
@@ -811,6 +842,22 @@ def plan_alive(plan: dict) -> bool | None:
     return True
 
 
+def process_nice(pid: int, proc: Path = Path('/proc')) -> int | None:
+    """The process's niceness, from ``/proc/<pid>/stat`` field 19; None without /proc or when it is gone."""
+    try:
+        return int((proc / str(pid) / 'stat').read_text().rsplit(')', 1)[1].split()[16])
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def plan_nice(plan: dict) -> int | None:
+    """The niceness a plan's job runs at: what the plan recorded, else (a plan written without it, e.g. by an older
+    checkout's script) what its live process has now; None when neither is known."""
+    if plan.get('nice') is not None:
+        return plan['nice']
+    return process_nice(plan['pid']) if plan_alive(plan) else None
+
+
 def plan_is_live(plan: dict) -> bool:
     """A training is going on or waits its turn: the plan says running (or queued) and its process isn't known to be
     dead (another host's plan can't be checked, so it counts)."""
@@ -818,7 +865,8 @@ def plan_is_live(plan: dict) -> bool:
 
 
 class Training:
-    """A log folder: training.json + round.jsonl + one Run per specialist."""
+    """A log folder: training.json + round.jsonl + one Run per specialist.  A registered job without a log folder
+    (``registry_only``: ``dir`` is its registry file) has the plan ``entry_plan`` makes of its entry and no runs."""
 
     def __init__(self, log_dir: Path):
         self.dir = log_dir
@@ -833,6 +881,11 @@ class Training:
     @property
     def name(self) -> str:
         return self.plan.get('name') or self.dir.name
+
+    @property
+    def registry_only(self) -> bool:
+        """A registered job without a log folder: no progress data, only what the registry knows."""
+        return registry_only(self.dir)
 
     def poll(self) -> bool:
         """Reloads the plan if it changed and reads new events; True if anything changed."""
@@ -853,7 +906,7 @@ class Training:
         return changed
 
     def _load_plan(self) -> bool:
-        path = self.dir / PLAN_FILE
+        path = plan_file(self.dir)
         try:
             stat = path.stat()
         except OSError:
@@ -861,9 +914,8 @@ class Training:
         signature = (stat.st_mtime_ns, stat.st_size, stat.st_ino)
         if signature == self._plan_signature:
             return False
-        try:
-            plan = json.loads(path.read_text(encoding='utf-8'))
-        except (OSError, ValueError):
+        plan = read_plan(self.dir)
+        if plan is None:
             return False
         self._plan_signature = signature
         self.plan = plan
@@ -941,11 +993,15 @@ class Training:
         return done / total if total else 0.0
 
     def eta(self, now: float):
-        """Rough seconds left: the current run's estimate, then the finished runs' pace for the rest."""
+        """Rough seconds left: the current run's estimate, then the finished runs' pace for the rest; a lab run's
+        families train together, so its time left is theirs (the longest)."""
         if self.plan.get('status') != 'running':
             return None
         if self.is_batch:
             return self.batch_eta(now)
+        if self.plan.get('kind') == LAB_KIND:
+            etas = [run.eta(now) for run, status in zip(self.runs, self.statuses()) if status == 'training']
+            return max(etas) if etas and None not in etas else None
         statuses = self.statuses()
         finished = [run for run, status in zip(self.runs, statuses) if status in ('ok', 'early')
                     and run.started_ts and run.finished_ts and run.steps]
@@ -1074,6 +1130,7 @@ def describe(event: dict) -> str:
             parts.append(clips)
         if 'reward/total' in metrics:
             parts.append(f"reward {metrics['reward/total']:.1f}")
+        parts += lab_facts(metrics)
         parts.append(f"{get('sps', 0):.0f} sps")
         return ' · '.join(parts)
     if kind == 'start':
@@ -1094,9 +1151,10 @@ def describe(event: dict) -> str:
     if kind == 'partial_set_aside':
         return f"unfinished run kept as {get('run_dir')} ({get('train_status') or 'no summary'}); training fresh"
     if kind == 'eval_start':
-        return f"{get('episodes')} episodes"
+        return f"{get('episodes')} {get('unit') or 'episodes'}"
     if kind == 'eval_progress':
-        return f"{get('done')}/{get('episodes')} episodes · success {fmt_pct(get('success_rate'))}"
+        text = f"{get('done')}/{get('episodes')} {get('unit') or 'episodes'}"
+        return text + (f" · success {fmt_pct(get('success_rate'))}" if get('success_rate') is not None else '')
     if kind == 'eval':
         text = (f"success {fmt_pct(get('success_rate'))} over {get('episodes')} episodes · "
                 f"health {fmt_hearts_pair(get('health_change'), get('health_change_total'))}")
@@ -1182,8 +1240,8 @@ def jobs_dir() -> Path:
 
 
 def read_registry(directory: Path | None = None) -> list[dict]:
-    """Every readable job of the registry, each with ``path`` (its file).  A job without a log folder (``--no-log``)
-    is among them: it is never shown, but it holds its place in the queue."""
+    """Every readable job of the registry, each with ``path`` (its file).  A job without a log folder (``--no-log``,
+    a lab job) is among them: it is shown from what the registry knows (``job_key``)."""
     directory = jobs_dir() if directory is None else directory
     jobs = []
     try:
@@ -1214,26 +1272,78 @@ def job_alive(job: dict, proc: Path = Path('/proc')) -> bool | None:
     return recorded is None or abs(started - recorded) <= PID_START_SLACK
 
 
+# A job the registry knows is never invisible.  One with a log folder holding its plan is shown from the folder; one
+# without (a ``--no-log`` evaluation, a lab job of a checkout that writes no plan, a script that registers itself) is
+# shown from its registry file, which stands in for the folder everywhere a folder goes ([currently running], the
+# dropdown, the web view): its name, kind, checkout and branch, status, timing and estimate, 'no progress data'.
+REGISTRY_SUFFIX = '.json'      # a shown path ending so is a registry file (log folders never do)
+NO_PROGRESS = 'no progress data'
+
+
+def registry_only(key: Path) -> bool:
+    """Is this shown path a registered job without a log folder (its registry file)?"""
+    return key.suffix == REGISTRY_SUFFIX
+
+
+def job_key(job: dict) -> Path:
+    """Where a registered job is shown from: its log folder when the folder holds its plan, else its registry
+    file."""
+    if job.get('log_dir') and (Path(job['log_dir']) / PLAN_FILE).is_file():
+        return Path(job['log_dir'])
+    return Path(job['path'])
+
+
+def plan_file(key: Path) -> Path:
+    """The file a shown path's plan is read from: a folder's ``training.json``, or the registry file itself."""
+    return key if registry_only(key) else key / PLAN_FILE
+
+
+def entry_plan(job: dict) -> dict:
+    """The plan of a registered job without a log folder: what the registry knows, in a plan's fields (no runs, no
+    events; ``registry_only`` set)."""
+    return {'name': job.get('name') or f"pid {job.get('pid')}", 'kind': job.get('kind'), 'status': job.get('status'),
+            'created': job.get('started'), 'updated': None, 'finished': job.get('finished'), 'host': job.get('host'),
+            'pid': job.get('pid'), 'checkout': job.get('checkout'), 'branch': job.get('branch'),
+            'commit': job.get('commit'), 'command': job.get('command'), 'cwd': job.get('cwd'),
+            'estimate': job.get('estimate'), 'lane': job.get('lane'), 'nice': job.get('nice'),
+            'queue': {'queued': job.get('queued'), 'admitted': job.get('admitted'), 'estimate': job.get('estimate'),
+                      'lane': job.get('lane')},
+            'runs': [], 'registry_only': True}
+
+
+def read_plan(key: Path) -> dict | None:
+    """A shown path's plan (``plan_file``; a registry file as ``entry_plan``), None when it can't be read."""
+    try:
+        data = json.loads(plan_file(key).read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return {}
+    return entry_plan(data) if registry_only(key) else data
+
+
 def registry_folders(jobs: list[dict], now: float, proc: Path = Path('/proc')) -> tuple[list[Path], list[Path]]:
-    """(log folders of live jobs (running or queued), of jobs that ended in the last ``RECENT_SECONDS``: finished, or
-    their process gone without a final status), each with its plan, newest first.  Jobs without a folder are left
-    out."""
+    """(shown paths (``job_key``) of live jobs (running or queued), of jobs that ended in the last
+    ``RECENT_SECONDS``: finished, or their process gone without a final status), newest first.  Every job is
+    there: one without a folder by its registry file."""
     live, recent = [], []
     for job in jobs:
-        if not job.get('log_dir'):
-            continue
-        folder = Path(job['log_dir'])
-        if not (folder / PLAN_FILE).is_file():
-            continue
+        key = job_key(job)
         alive = job_alive(job, proc)
         if alive is not False:
-            live.append(folder)
+            live.append(key)
             continue
         ended = parse_time(job.get('finished')) or parse_time(job.get('started'))
         if ended is not None and now - ended <= RECENT_SECONDS:
-            recent.append(folder)
+            recent.append(key)
     order = lambda paths: sorted(dict.fromkeys(paths), key=log_dir_key, reverse=True)  # noqa: E731
     return order(live), order(recent)
+
+
+def superseded(jobs: list[dict]) -> set[Path]:
+    """Registry files of jobs whose log folder holds their plan by now (shown from the folder instead: a plan is
+    written a moment after its job registered)."""
+    return {Path(job['path']) for job in jobs if job_key(job) != Path(job['path'])}
 
 
 def job_label(job: dict) -> str:
@@ -1244,8 +1354,13 @@ def job_label(job: dict) -> str:
 
 
 def job_entry(log_dir: Path, jobs: list[dict], status: str) -> dict | None:
-    """The registry entry of this host with ``status`` whose log folder is ``log_dir``, None if there is none."""
-    host, target = socket.gethostname(), log_dir.resolve()
+    """The registry entry of this host with ``status`` whose log folder is ``log_dir`` (or whose registry file it is,
+    for a job without a folder), None if there is none."""
+    host = socket.gethostname()
+    if registry_only(log_dir):
+        return next((job for job in jobs if job.get('status') == status and job.get('host') == host
+                     and job.get('path') == str(log_dir)), None)
+    target = log_dir.resolve()
     return next((job for job in jobs if job.get('status') == status and job.get('host') == host
                  and job.get('log_dir') and Path(job['log_dir']).resolve() == target), None)
 
@@ -1367,7 +1482,8 @@ def checkout_label(plan: dict) -> str:
 
 
 class LiveScanner:
-    """Which log folders have a live training; re-reads only the training.json files that changed."""
+    """Which log folders (and registered jobs without one, ``registry_only``) have a live training; re-reads only the
+    plans that changed."""
 
     def __init__(self):
         self._plans: dict[Path, tuple[tuple, dict]] = {}
@@ -1376,19 +1492,17 @@ class LiveScanner:
         """The live ones among ``dirs``, in the same order.  An unreadable plan counts as not live."""
         result = []
         for log_dir in dirs:
-            path = log_dir / PLAN_FILE
             try:
-                stat = path.stat()
+                stat = plan_file(log_dir).stat()
             except OSError:
                 continue
             signature = (stat.st_mtime_ns, stat.st_size, stat.st_ino)
             cached = self._plans.get(log_dir)
             if cached is None or cached[0] != signature:
-                try:
-                    plan = json.loads(path.read_text(encoding='utf-8'))
-                except (OSError, ValueError):
+                plan = read_plan(log_dir)
+                if plan is None:
                     continue
-                cached = self._plans[log_dir] = (signature, plan if isinstance(plan, dict) else {})
+                cached = self._plans[log_dir] = (signature, plan)
             if plan_is_live(cached[1]):
                 result.append(log_dir)
         return result
@@ -1416,13 +1530,17 @@ def plan_meta(model: Training, now: float) -> list[str]:
         meta.append(f"{fmt_steps(model.plan['steps_budget'])} steps each")
     if model.is_batch:
         meta.append(f"{len(model.runs)} evaluations")
-    if model.plan.get('nice') is not None:
-        meta.append(f"nice {model.plan['nice']}")
+    nice = plan_nice(model.plan)
+    if nice is not None:
+        meta.append(f"nice {nice}")
     return meta
 
 
 def plan_counts(model: Training, statuses: list[str]) -> list[str]:
-    """A plan's run counts: '3 / 10 done', the unhappy endings, the run going on now."""
+    """A plan's run counts: '3 / 10 done', the unhappy endings, the run going on now; 'no progress data' for a job
+    without a log folder."""
+    if model.registry_only:
+        return [NO_PROGRESS]
     counts = {}
     for status in statuses:
         counts[status] = counts.get(status, 0) + 1
@@ -1435,6 +1553,22 @@ def plan_counts(model: Training, statuses: list[str]) -> list[str]:
     if active is not None:
         summary.append(f"now: {model.runs[active].name}")
     return summary
+
+
+def registry_lines(plan: dict) -> list[str]:
+    """What the registry knows of a job without a log folder, a line each: that it has no progress data, its command,
+    its working directory, its checkout's commit."""
+    command = [str(part) for part in plan.get('command') or []]
+    if command:
+        command[0] = Path(command[0]).name          # the interpreter, without its virtualenv's path
+    lines = [f"{NO_PROGRESS}: the job writes no log folder (only its registry entry)"]
+    if command:
+        lines.append(' '.join(command))
+    if plan.get('cwd'):
+        lines.append(f"in {plan['cwd']}")
+    if plan.get('commit'):
+        lines.append(f"commit {plan['commit']}")
+    return lines
 
 
 def row_fraction(run: Run, status: str, now: float) -> float:
@@ -1451,8 +1585,8 @@ def row_bar_label(run: Run, status: str, shown: float) -> str:
         done, total = run.eval_done()
         if run.kind == 'report':
             return 'report'
-        noun = 'runs' if run.kind == 'chain' else 'eval'
-        return f'{noun} {done}/{total}' if total else 'evaluating'
+        noun = {'runs': 'runs', 'episodes': 'eval'}.get(run.unit, '')
+        return f'{noun} {done}/{total}'.strip() if total else 'evaluating'
     if status == 'starting':
         return 'starting'
     return f'{shown:.0%}' if status != 'pending' else ''
@@ -1465,7 +1599,7 @@ def row_numbers(run: Run, status: str) -> str:
         return f"{fmt_steps(run.steps)} / {fmt_steps(run.target_steps)}"
     if run.kind == 'report':
         return 'report'
-    unit = 'runs' if run.kind == 'chain' else 'episodes'
+    unit = run.unit
     done, total = run.eval_done()
     if status == 'evaluating':
         return f"{done} / {total} {unit}"
@@ -1485,13 +1619,15 @@ def row_phase(run: Run, status: str, now: float) -> str:
     if status == 'starting':
         return f"starting · {fmt_duration(duration)}"
     if status == 'training':
-        return f"training · {iters}"
+        facts = lab_facts(run.progress[-1].get('metrics') or {}) if run.progress else []
+        return ' · '.join(['training', iters, *facts])
     if status == 'evaluating':
         done, total = run.eval_done()
         since = now - run.eval_start['ts'] if run.eval_start else None
         if not total:
             return 'eval starting'
-        return f"eval {done}/{total} episodes · {fmt_duration(since)}"
+        noun = 'eval ' if run.unit == 'episodes' else ''
+        return f"{noun}{done}/{total} {run.unit} · {fmt_duration(since)}"
     if status == 'ok':
         return f"done · {iters} · {fmt_duration(duration)}"
     if status == 'early':
@@ -1529,7 +1665,7 @@ def batch_phase(run: Run, status: str, duration) -> str:
             return f"report · {fmt_duration(duration)}"
         if not total or (run.chain_start is None and run.eval_start is None):
             return f"starting · {fmt_duration(duration)}"
-        unit = 'runs' if run.kind == 'chain' else 'episodes'
+        unit = run.unit
         return f"{'chain' if run.kind == 'chain' else 'eval'} {done}/{total} {unit} · {fmt_duration(duration)}"
     wall = (run.end or {}).get('wall_seconds') or run.entry.get('wall_seconds') or duration
     if status == 'ok':
@@ -2029,17 +2165,18 @@ class Header(Clickable):
     def animating(self) -> bool:
         """Is the header due a step and a repaint this frame?  Every frame while its plan runs (the shimmer and
         stripes of its segments) or a segment still eases toward its fill; once a second while its plan waits in
-        line (only its clocks move); never once a finished folder has settled.  [currently running] keeps a day of
-        finished folders (Nov 18: 153 of them stepped and repainted 30 times a second took a whole core)."""
+        line or a job without a log folder runs (only its clocks move); never once a finished folder has settled.
+        [currently running] keeps a day of finished folders (Nov 18: 153 of them stepped and repainted 30 times a
+        second took a whole core)."""
         model = self.view.model
         if model is None or self.settled:
             return False
         status = model.status()
-        if status == 'running':
+        if status == 'running' and not model.registry_only:
             return True
         if any(abs(self.shown.get(index, 0.0) - target) > 0.001 for index, target in self.targets().items()):
             return True
-        if status == 'queued':
+        if status in LIVE_STATUSES:
             second = int(time.time())
             due, self._second = second != self._second, second
             return due
@@ -2103,7 +2240,7 @@ class Header(Clickable):
                 p.fillRect(QRectF(x - 1, bar.top(), 2, bar.height()), C.bg)
         p.restore()
         fraction = model.fraction(now)
-        paint_bar_label(p, bar, f'{fraction:.0%}', 9.5)
+        paint_bar_label(p, bar, NO_PROGRESS if model.registry_only else f'{fraction:.0%}', 9.5)
 
         x, y = left, bar.bottom() + 22
         waiting = self.waiting(now)
@@ -2172,7 +2309,7 @@ def entry_summary(run: Run, status: str) -> list:
              rate_color(value) if value is not None else C.idle)]
     done, total = run.eval_done()
     if run.kind != 'report':
-        unit = 'runs' if run.kind == 'chain' else 'episodes'
+        unit = run.unit
         finished = run.eval_episodes() if status in FINISHED else None
         rows.append((unit, 1.0 if finished else (done / total if total else 0.0),
                      f"{finished}" if finished else f"{done}/{total}", C.eval))
@@ -2196,7 +2333,8 @@ def window_title(models: list, now: float) -> str:
     running = [model for model in models if model.status() == 'running']
     if not running:
         return 'Triforce training'
-    parts = [f"{model.fraction(now):.0%} {model.name}" for model in running[:TITLE_PLANS]]
+    parts = [model.name if model.registry_only else f"{model.fraction(now):.0%} {model.name}"
+             for model in running[:TITLE_PLANS]]
     if len(running) > TITLE_PLANS:
         parts.append(f"+{len(running) - TITLE_PLANS} more")
     return ' · '.join(parts) + ' — Triforce training'
@@ -2815,6 +2953,12 @@ class DetailPane(QWidget):
                            f"&nbsp;&nbsp;<span style='color:{color.name()}; font-weight:700'>{label}</span>"
                            f"<br><span style='color:{C.faint.name()}'>{model.dir}</span>")
         self.chart_stack.setCurrentIndex(1)
+        if model.registry_only:
+            self.summary.set_sections([('text', 'Job registry', [(line, C.muted)
+                                                                 for line in registry_lines(model.plan)])])
+            self.evaluation.set_sections([], NO_PROGRESS)
+            self._set_events([])
+            return
         evals, train, sps, wall, linger = [], [], [], [], []
         speeds = [run.sps() or 0 for run in model.runs]
         walls = [((run.finished_ts or time.time()) - run.started_ts) if run.started_ts else 0 for run in model.runs]
@@ -3200,18 +3344,20 @@ class Window(QMainWindow):
 
     def _scan(self):
         """Lists the log folders (dropdown) and finds the live ones; [currently running] can always be picked.
-        Besides the root's folders: the folders of the jobs in the machine's job registry (every checkout's: the
-        live ones and those that ended in the last ``RECENT_SECONDS``).  A live folder whose plan is queued gets its
-        place in the job queue (``queues``)."""
+        Besides the root's folders: the jobs in the machine's job registry (every checkout's: the live ones and
+        those that ended in the last ``RECENT_SECONDS``; one without a log folder by its registry file, until its
+        folder has a plan).  A live folder whose plan is queued gets its place in the job queue (``queues``)."""
         dirs = find_log_dirs(self.root)
         root = self.root.resolve()
         jobs, now = read_registry(), time.time()
         registered, recent = registry_folders(jobs, now)
+        gone = superseded(jobs)
+        self.kept = [path for path in self.kept if path not in gone]
         dirs += [path for path in self.scanner.live(registered) if path not in dirs]
         self.recent = [path for path in recent if path not in self.cleared]
         dirs += [path for path in self.recent if path not in dirs]
         if not self.live_mode:
-            dirs += [shown for shown in self._shown_dirs() if shown not in dirs]   # a folder outside root
+            dirs += [shown for shown in self._shown_dirs() if shown not in dirs and shown not in gone]
         self.live_dirs = self.scanner.live(dirs)
         self.jobs = jobs
         self.queues = {path: queue_state(path, self.scanner.plan(path), jobs, now=now) for path in self.live_dirs
@@ -3222,9 +3368,15 @@ class Window(QMainWindow):
             self.combo.clear()
             self.combo.addItem(LIVE_LABEL, LIVE_KEY)
             for path in dirs:
-                where = '' if path.parent.resolve() == root else (checkout_label(self.scanner.plan(path))
-                                                                  or str(path.parent))
-                self.combo.addItem(f"{path.name}  ({where})" if where else path.name, str(path))
+                if registry_only(path):       # a job without a log folder: its name, not its registry file's
+                    plan = self.scanner.plan(path)
+                    name = plan.get('name') or path.name
+                    where = ' · '.join(filter(None, (checkout_label(plan), 'no log folder')))
+                else:
+                    name = path.name
+                    where = '' if path.parent.resolve() == root else (checkout_label(self.scanner.plan(path))
+                                                                      or str(path.parent))
+                self.combo.addItem(f"{name}  ({where})" if where else name, str(path))
             self.combo.blockSignals(False)
         self.combo.model().item(0).setEnabled(True)
         self._sync_clear()
@@ -3571,8 +3723,23 @@ def bar_style(status: str) -> str:
 
 
 def plan_fields(model: Training) -> dict:
-    """What every card of a plan says about it."""
-    return {'plan': model.name, 'plan_kind': str(model.plan.get('kind') or ''), 'checkout': checkout_label(model.plan)}
+    """What every card of a plan says about it (``no_progress``: a job without a log folder)."""
+    return {'plan': model.name, 'plan_kind': str(model.plan.get('kind') or ''), 'checkout': checkout_label(model.plan),
+            'no_progress': model.registry_only}
+
+
+def job_card(model: Training, started, now: float) -> dict:
+    """A registered job without a log folder: one card with what the registry knows (its name, kind, checkout,
+    command, time run) and no progress."""
+    elapsed = ((model.finished_ts or now) - started) if started else None
+    return {
+        **plan_fields(model), 'kind': str(model.plan.get('kind') or ''), 'name': model.name, 'family': '',
+        'where': '', 'fraction': 0.0, 'bar_label': NO_PROGRESS, 'bar': '', 'blocks': None, 'numbers': '',
+        'phase': NO_PROGRESS, 'outcome': '', 'speed': '', 'elapsed': fmt_duration(elapsed) if elapsed is not None
+        else '', 'eta': '', 'badge': web_badge(None), 'clips': '', 'act': '',
+        'lines': [[line, C.muted.name()] for line in registry_lines(model.plan)[1:]], 'charts': [], 'summary': [],
+        'eval': [], 'log': [], 'log_name': '',
+    }
 
 
 def run_card(model: Training, run: Run, status: str, now: float) -> dict:
@@ -3710,10 +3877,13 @@ class WebState:
         return ended is not None and now - ended < self.expire
 
     def scan(self, now: float):
-        """Finds the folders to read: every live plan (running or queued), and plans that ended within ``expire``
-        seconds; keeps the registry for the queued plans' places in line."""
+        """Finds the folders to read: every live plan (running or queued; a registered job without a log folder by
+        its registry file), and plans that ended within ``expire`` seconds; keeps the registry for the queued plans'
+        places in line."""
         dirs = find_log_dirs(self.root)
         self.jobs = read_registry()
+        for path in superseded(self.jobs):
+            self.models.pop(path, None)
         registered, recent = registry_folders(self.jobs, now)
         candidates = list(dict.fromkeys(dirs + registered + recent))
         live = set(self.scanner.live(candidates))
@@ -3758,6 +3928,13 @@ class WebState:
                 started = (chain['start'] or {}).get('ts') or self.first_seen.setdefault(key, now)
                 cards.append({'id': key, 'started_ts': started, 'ended_ts': ended, 'status': chain['status'],
                               'expires_in': left, **chain_card(model, chain, now)})
+        if model.registry_only and model.status() != 'queued':
+            key, status = str(model.dir), model.status()
+            shown, left, ended = self._visible(key, status in ACTIVE, model.finished_ts, now)
+            if shown:
+                started = run_start(model.dir, model.plan, self.jobs) or self.first_seen.setdefault(key, now)
+                cards.append({'id': key, 'started_ts': started, 'ended_ts': ended, 'status': status,
+                              'expires_in': left, **job_card(model, started, now)})
         facts = self._facts(model, now)
         for card in cards:
             color, label = STATUS.get(card['status'], (C.muted, card['status']))
@@ -4141,7 +4318,8 @@ function update(el, card) {
   }
   $('.d-summary', el).hidden = !card.summary.length;
   setHTML($('.summary', el), sectionsHtml(card.summary, ''));
-  setHTML($('.eval', el), sectionsHtml(card.eval, card.kind === 'eval-chain' ? 'no chain results yet' :
+  setHTML($('.eval', el), sectionsHtml(card.eval, card.no_progress ? 'no progress data' :
+                                                  card.kind === 'eval-chain' ? 'no chain results yet' :
                                                   'not evaluated yet'));
   const log = $('.log', el), details = $('.d-log', el);
   details.hidden = !card.log_name;
@@ -4170,8 +4348,9 @@ function render(state) {
       `${esc(plan.plan)}</span><span class="pill" style="color:var(--muted)">${esc(plan.plan_kind)}</span>` +
       (plan.express ? '<span class="pill express">express</span>' : '') +
       (plan.checkout ? `<span class="pill" style="color:var(--faint)">${esc(plan.checkout)}</span>` : '') +
-      `<span class="mini"><span style="width:${pct(plan.fraction)}%"></span></span><b>` +
-      `${Math.floor(pct(plan.fraction))}%</b>` + (plan.eta ? `<span>≈ ${esc(plan.eta)} left</span>` : '') +
+      (plan.no_progress ? '' : `<span class="mini"><span style="width:${pct(plan.fraction)}%"></span></span><b>` +
+                               `${Math.floor(pct(plan.fraction))}%</b>`) +
+      (plan.eta ? `<span>≈ ${esc(plan.eta)} left</span>` : '') +
       (plan.est ? `<span>${esc(plan.est)}</span>` : '') +
       `<span class="muted">${esc(plan.counts.join('  ·  '))}</span>` +
       `<span class="faint">${esc(plan.meta.join('  ·  '))}</span>${queued}</div>`;
@@ -4184,7 +4363,8 @@ function render(state) {
     (job.checkout ? `<span class="pill" style="color:var(--faint)">${esc(job.checkout)}</span>` : '') +
     (job.waits ? `<span class="muted">${esc(job.waits)}</span>` : '') +
     (job.estimate ? `<span>${esc(job.estimate)}</span>` : '') +
-    (job.waited ? `<span>${esc(job.waited)}</span>` : '') + '</div>').join(''));
+    (job.waited ? `<span>${esc(job.waited)}</span>` : '') +
+    (job.no_progress ? '<span class="muted">no progress data</span>' : '') + '</div>').join(''));
   const container = $('#cards'), seen = new Set();
   let previous = null;
   for (const card of state.cards || []) {

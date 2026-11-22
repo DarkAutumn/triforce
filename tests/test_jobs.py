@@ -20,6 +20,8 @@ from triforce.events import TrainingPlan, logged_job
 def registry(tmp_path, monkeypatch):
     directory = tmp_path / 'jobs'
     monkeypatch.setenv(jobs.JOBS_DIR_ENV, str(directory))
+    # An earlier test's begin_job(--no-wait) in this process (tests/test_hitnet.py) must not reach these.
+    monkeypatch.setitem(jobs._START, 'no_wait', False)  # pylint: disable=protected-access
     return directory
 
 
@@ -48,6 +50,7 @@ def test_a_plan_registers_and_its_finish_marks_the_entry(registry, tmp_path):
     assert jobs.job_alive(job) is True
     assert Path(job['path']).name.startswith(f"{job['host']}-{os.getpid()}-") and job['pid_start'] is not None
     assert plan.data['checkout'] == job['checkout']                    # the plan names its checkout too
+    assert plan.data['nice'] == os.nice(0) == job['nice']              # ... and the niceness it runs at, unasked
     plan.finish('completed')
     (job,) = jobs.read_jobs()
     assert job['status'] == 'completed' and job['finished'] and jobs.job_alive(job) is False

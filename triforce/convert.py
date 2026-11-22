@@ -45,9 +45,14 @@ from pathlib import Path
 import torch
 
 from . import __version__, registry
-from ._native import ACTION_KINDS, ACTION_SCHEMA_VERSION, OBS_SCHEMA_VERSION, OBS_SPEC
+from ._native import ACTION_KINDS, ACTION_SCHEMA_VERSION, OBS_SCHEMA_VERSION
+from ._native import OBS_SPEC as _OBS_SPEC
+from .model import policy_spec
 from .observation import (ENTITY_FEATURES, HISTORY_FEATURES, LINK_FEATURES, OBJECTIVE_FEATURES, ROOM_STATE_FEATURES,
                           TARGET_FEATURES)
+
+# The layout a ``ZeldaPolicy`` reads (schema 7's token keys are not its).
+OBS_SPEC = policy_spec(_OBS_SPEC)
 
 # What the convertible checkpoints were saved with.
 SOURCE_VERSION = registry.CONVERTIBLE_VERSION

@@ -279,6 +279,10 @@ class RoomRecord:
     step: Optional[int] = None
     clips_allowed: Optional[bool] = None
     clips_flips: List[dict] = field(default_factory=list)
+    # Round 38 (None/absent in older records): steps a Bubble's touch landed in (the sword blocked, no health lost)
+    # and the frames of the steps begun with the sword blocked.
+    bubble_touches: Optional[int] = None
+    sword_blocked_frames: Optional[int] = None
     # Decisions taken in the visit (crates/zelda/src/decisions.rs, triforce/variety.py): n, low1/low5 (chosen with
     # probability under 1%/5% under the policy), low1_hit/low5_hit/low1_death/low5_death (followed by a hit or death
     # within 4 decisions), surprisal, act_entropy, actions (hex, two digits per decision), health ([decisions,

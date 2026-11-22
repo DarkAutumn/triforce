@@ -8,6 +8,7 @@ pub mod blocks;
 pub mod bombs;
 pub mod cheats;
 pub mod clips;
+pub mod contact;
 pub mod change;
 pub mod decisions;
 pub mod enums;

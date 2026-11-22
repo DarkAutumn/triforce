@@ -3398,6 +3398,26 @@ and 0x29's walls need), so a run with 2 or more crosses to the key door. routes.
   (`v2-single-ending`), `planner-d2first` (`v0-plan-ending`); the two format fixtures keep `v0-power-on` and
   `v0-state`. Older documents name the old files.
 
+## 2026-11-22 — Bombs: where they are a weapon (Lee, from watching the one-network golden replay)
+
+- **Only in dungeon rooms the route must clear:** "The agent wastes bombs in rooms I wish it didn't. For example d3
+  0x69. In dungeons, link should only use bombs in rooms it somehow needs to clear. For example, it's fine to use
+  bombs in 0x59 because we have to clear the room to open the south door, in 0x69 it needs to slide past the
+  darknuts to get the raft, then out of the room (I use sword-hit an enemy to make them pass-through in this room,
+  not kills with bombs)."
+- **Rooms Lee names: no bomb but the wall's:** "some rooms I want to explicitly say 'don't use bombs in this room
+  just because the owner says so' (well there's good reasons). 0x5b is a great example, the point of fighting the
+  darknuts in that room is to get the bomb drop, wasting the bombs to kill them is not the right play. BUT link
+  still needs to bomb the wall to get through there. So no bombs except the 1 to blow up the wall. [...] I may have
+  other rooms I see that I want to throw into this category."
+- **The floor for fighting a room for its bombs is 7 or fewer in hand, everywhere:** "I want to raise the 'get
+  bombs from this room' floor, so in 0x5b he should fight the darknuts if he has 7 or less bombs, up from whatever
+  it was. This is a blanket rule not for this room."
+- **The 10th kill's bomb, always:** "we must ALWAYS allow bombs and deeply encourage them if we are on the 10th
+  kill force drop, no matter the room or enemies, that remains true."
+- The lead applies them to `d3first` (`d2first` stays as it is, by Lee's word of the same day); built on branch
+  `r37-rules` with their cost to today's networks measured before they land.
+
 ## 2026-11-22 — 2.0.0.6: Lee's three bomb rules on `d3first` (the lead builds them, Lee being away)
 
 - **What:** routes.yaml's top-level `bomb_rules:` (by route; `d3first` only) with three keys, each Lee's words
@@ -3420,5 +3440,17 @@ and 0x29's walls need), so a run with 2 or more crosses to the key door. routes.
 - **Reward:** what pays for the 10th kill's bomb was already there in every family (`reward-armed-bomb-drop` 0.75 on
   the bomb kill that arms the drop, `reward-gained-bombs` 0.5 on the pickup); not using it costs nothing. No term
   was added.
-- **Evidence:** docs/experiments/round37.md "The bomb rules" (today's 51 networks under the rules, paired with
-  `r36base-1k`).
+- **8:0x3f (Lee, the same day, from the golden replay: in with 2, a drop to 6, the room's bombs ignored):** the
+  shared step's `{if_bombs_below: 5}` read live made the stairs the objective at 6; under the floor the decision
+  made on entering now holds for the visit (taken below the bag's maximum), a treasure lying in the room is wanted
+  below the maximum whatever Link came in with, and dropped bombs below the maximum are the targets once the fight
+  is over (every family on `d3first`, reachable ones only; none at 8). Rare in the record: 2 of 211 visits of
+  8:0x3f left its bombs (300 runs, `r36base-300-d8`), none since; packs left on the floor under 8: 2 of 1651 visits
+  of 3:0x5b, none elsewhere.
+- **Evidence:** docs/experiments/round37.md "The owner's bomb rules" (today's 51 networks, `r37fix-1k` against
+  `r36base-1k`, paired by seed, arrivals): d3 23.2% → 21.7% (−1.5 ± 1.2), d4 18.5% → 21.1% (+2.6 ± 1.7), d2 99.8%
+  → 98.4% (−1.4 ± 0.4, 0x5e crossed), d7 13.1% → 12.6% (−0.5 ± 0.4), post-d1, d5, d6, d8, d9 unchanged within
+  noise; weapon bombs in crossings 1.94 → 0 a run from the start; cheated wall bombs 0.66 → 0.30 a run (3:0x5b
+  0.51 → 0.20). 7:0x1b both ways (d7): the floor 12.6%, the crossing override 12.7% (runs bring 0.21 bombs, so
+  nearly every visit fights either way); the floor lands, the override commented beside it.
+

@@ -383,7 +383,7 @@ def load_model(path, check_schema: bool = True, obs_spec: Optional[dict] = None)
     a ``ZeldaPolicy`` checkpoint built for a smaller layout comes back widened to it (``model.widen_policy``: new
     inputs start at zero); compare ``network.config.obs_spec`` with the checkpoint's to tell.  Other architectures
     are not widened (a different layout raises)."""
-    from .model import ZeldaPolicy, widen_policy  # pylint: disable=import-outside-toplevel
+    from .model import ZeldaPolicy, policy_spec, widen_policy  # pylint: disable=import-outside-toplevel
     from . import nets  # pylint: disable=import-outside-toplevel
     checkpoint = load_checkpoint(path, check_schema)
     if nets.arch_of(checkpoint['model_config']) != nets.ZELDA:
@@ -395,7 +395,7 @@ def load_model(path, check_schema: bool = True, obs_spec: Optional[dict] = None)
         return network, checkpoint
     network = ZeldaPolicy(config=checkpoint['model_config'])
     network.load_state_dict(checkpoint['state_dict'])
-    if obs_spec is not None and obs_spec != network.config.obs_spec:
+    if obs_spec is not None and policy_spec(obs_spec) != network.config.obs_spec:
         network = widen_policy(network, obs_spec)
     return network, checkpoint
 

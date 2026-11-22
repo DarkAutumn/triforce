@@ -12,13 +12,16 @@ Modes: ``ppo`` (default; the teacher term KL(teacher ‖ student) beside PPO wit
 ``--teacher-hold`` iterations, then fading linearly to 0 over ``--teacher-fade``) and ``imitate`` (no PPO: the
 student minimises the KL alone; ``--actor student`` collects on the student's own states, DAgger-style, the
 distribution it will play; ``--actor teacher`` on the teachers', a fixed distribution for capacity tests).
-Metrics are logged per family (``family/<key>/...``) beside the merged ones.
+Metrics are logged per family (``family/<key>/...``) beside the merged ones.  The job's log folder (``--logs-dir``)
+holds a plan of kind ``lab-train`` and a stream a family (``RunLog``), so the training GUI draws the run: one group,
+a row a family.
 
 Also (docs/lab.md): auxiliary targets (``--aux OUTPUT=TARGET:COEFF``) and look-ahead labels for candidates not taken
 (``--try-others K:P``, training only); a recurrent network (``LabNet.initial_state``) trains on sequences of
-``--bptt`` decisions from stored states; ``--sampling need`` shares the rows by each family's need; demonstrations
-(``--demos``), the early stop (``--stop-success``) and numbered checkpoints (``--checkpoint-every``) as in
-``triforce train``.
+``--bptt`` decisions from stored states; ``--sampling need`` shares the rows by each family's need (``--need-target-for``
+a family's own target); ``--teacher-weight`` scales or removes a family's teacher term; ``--rehearse`` keeps tasks
+outside the rollout in the loss by their stored teacher rows; demonstrations (``--demos``), the early stop
+(``--stop-success``) and numbered checkpoints (``--checkpoint-every``) as in ``triforce train``.
 """
 
 import argparse
@@ -35,17 +38,23 @@ import torch
 from .. import nets, registry
 from ..best_of_n import success_by_state
 from ..demos import load_demos
-from ..events import logged_job
+from ..events import EventLog, logged_job
 from ..jobs import add_job_arguments, begin_job, work
 from ..metrics import MetricsLogger, format_summary
 from ..model import obs_spec_from_space
 from ..observation import observation_space
 from ..ppo import PPO, IterationResult, PPOConfig, joint_kl, minibatch_forward
 from ..train import CONFIRM_EPISODES, EarlyStop, curriculum_spec
-from .auxiliary import AuxLoss, aux_loss
+from .auxiliary import AuxLoss, aux_loss, held_out
 from .collect import MultiCollector, NeedSampler, Teachers, parse_families
+from .rehearse import Rehearsal
 
 REFERENCE = Path(__file__).with_name('reference.json')
+KIND = 'lab-train'          # the plan kind of a lab run's log folder
+# The run's numbers (besides the family's own) every family's progress event carries: the teacher term and the
+# auxiliary losses are the one network's.
+SHARED_METRICS = ('losses/teacher_kl', 'charts/teacher_agreement', 'losses/approx_kl', 'losses/policy_loss',
+                  'losses/value_loss', 'losses/entropy')
 
 
 def parse_args(argv=None):
@@ -80,13 +89,17 @@ def parse_args(argv=None):
                         help="also keep a numbered checkpoint every N iterations (select-checkpoint reads them)")
     parser.add_argument('--checkpoint-keep', type=int, default=0, help="numbered checkpoints kept (0: all)")
     parser.add_argument('--no-curriculum', action='store_true')
+    parser.add_argument('--state-route', default=None, metavar='ROUTE',
+                        help="every family on this route's states alone (lab.collect.route_only: state_routes, the "
+                             "start-state globs the route has, the curriculum tracks explored from its states)")
     parser.add_argument('--seed', type=int, default=None)
     parser.add_argument('--aux', nargs='*', default=[], metavar='OUTPUT=TARGET:COEFF',
-                        help="a loss on the network's auxiliary output OUTPUT against TARGET (hit, damaged, "
-                             "hearts_lost, frames; lab/auxiliary.py) weighted COEFF")
+                        help="a loss on the network's auxiliary output OUTPUT against TARGET (hit, hit_or_blocked, "
+                             "damaged, hearts_lost, frames; lab/auxiliary.py) weighted COEFF")
     parser.add_argument('--try-others', default=None, metavar='K:P',
                         help="on a share P of the decisions, try the policy's next K candidates in the env and keep "
-                             "whether each lost health (training only; the 'hit' target's extra labels)")
+                             "whether each lost health and whether a Bubble touched Link (training only; the 'hit' "
+                             "and 'hit_or_blocked' targets' extra labels)")
     parser.add_argument('--bptt', type=int, default=16,
                         help="a recurrent network's sequence length (truncated back-propagation through time)")
     parser.add_argument('--sampling', default='fixed', choices=['fixed', 'need'],
@@ -96,6 +109,17 @@ def parse_args(argv=None):
                              "number for every family")
     parser.add_argument('--need-floor', type=float, default=0.05, help="a family's weight beside its need")
     parser.add_argument('--need-window', type=int, default=100, help="recent episodes a family's success reads")
+    parser.add_argument('--need-target-for', nargs='*', default=[], metavar='KEY=X',
+                        help="a family's own need target (overrides --need-target for it)")
+    parser.add_argument('--teacher-weight', nargs='*', default=[], metavar='KEY=W',
+                        help="weight of a family's rows in the teacher term (default 1; 0: no teacher for it)")
+    parser.add_argument('--rehearse', default=None, metavar='CACHE',
+                        help="a distillation cache (r36_merge_distill.py cache): KL to its teacher rows of the keys "
+                             "not rolled out, every minibatch (lab.rehearse)")
+    parser.add_argument('--rehearse-keys', nargs='*', default=None,
+                        help="the keys rehearsed (default: every key of the cache not in --families)")
+    parser.add_argument('--rehearse-rows', type=int, default=300_000, help="rows held, equal a key")
+    parser.add_argument('--rehearse-coeff', type=float, default=1.0)
     parser.add_argument('--demos', nargs='+', default=None, metavar='FILE',
                         help="demonstration files (triforce.demos) behavior-cloned during PPO (--demo-coeff)")
     parser.add_argument('--demo-coeff', type=float, default=0.2)
@@ -103,6 +127,8 @@ def parse_args(argv=None):
                         help="stop once every family's start-state-balanced training success >= this for "
                              "--stop-patience iterations and an evaluation of each confirms it")
     parser.add_argument('--stop-patience', type=int, default=5)
+    parser.add_argument('--logs-dir', default=None,
+                        help="the root of the run's log folder (default logs/, $TRIFORCE_LOGS_DIR)")
     add_job_arguments(parser)
     return parser.parse_args(argv)
 
@@ -152,7 +178,7 @@ def imitate(network, optimizer, batch: dict, cfg: PPOConfig, value_coeff: float,
 
     network.train()
     kl = torch.tensor(0.0)
-    stats: dict = {}
+    stats: dict = held_out(list(aux_losses), network, batch) if aux_losses and sequence is None else {}
     for _ in range(cfg.num_epochs):
         for part in torch.tensor_split(torch.randperm(units, device=device), cfg.minibatches):
             mb, out, joint_of = forward(part)
@@ -161,7 +187,8 @@ def imitate(network, optimizer, batch: dict, cfg: PPOConfig, value_coeff: float,
             if value_coeff > 0:
                 loss = loss + value_coeff * 0.5 * (out.value - batch['teacher_value'][mb]).pow(2).mean()
             if aux_losses:
-                term, stats = aux_loss(list(aux_losses), out.aux, batch, mb)
+                term, aux_stats = aux_loss(list(aux_losses), out.aux, batch, mb)
+                stats.update(aux_stats)
                 loss = loss + term
             optimizer.zero_grad()
             loss.backward()
@@ -189,6 +216,57 @@ def parse_try_others(text: Optional[str]) -> Optional[dict]:
     if tried['candidates'] < 1 or not 0 < tried['share'] <= 1:
         raise SystemExit(f"--try-others {text!r}: K >= 1 and P in (0, 1]")
     return tried
+
+
+class RunLog:
+    """The run's log folder (``logs/<yymmdd>_<NNN>_lab-<name>``, docs/lab.md "What a lab job writes"): the plan
+    ``training.json`` (kind ``KIND``, one run entry a family) and one stream a family, ``<family>.jsonl``, in
+    ``triforce train``'s events (``start``, a ``progress`` an iteration, ``train_end``, ``end``): the iteration
+    of N for every family alike, and in ``metrics`` the family's own numbers (``family/<key>/...`` without the
+    prefix: success, balanced success, hearts, ``rows_share``, ``hits_taken_per_episode``, need) with the run's
+    teacher coefficient (``teacher_coeff``) and losses (``SHARED_METRICS``, ``losses/aux_*``).  The training GUI
+    draws the run as one group with a row a family."""
+
+    def __init__(self, plan, keys: list[str], run_id: str):
+        self.plan = plan
+        self.keys = keys
+        self.streams = [EventLog(plan.directory / f'{key}.jsonl', specialist=key, run_id=run_id) for key in keys]
+        self.began = time.time()
+
+    @staticmethod
+    def runs(keys: list[str], run_id: str, out_dir: Path, total: int, iterations: int) -> list[dict]:
+        """The plan's run entries."""
+        return [{'specialist': key, 'run_id': run_id, 'run_dir': str(out_dir), 'events': f'{key}.jsonl',
+                 'target_steps': total, 'target_iterations': iterations} for key in keys]
+
+    def start(self, **fields):
+        self.began = time.time()
+        for index, stream in enumerate(self.streams):
+            stream.emit('start', **fields)
+            self.plan.update_run(index, status='running')
+
+    def progress(self, iteration: int, iterations: int, steps: int, target_steps: int, metrics: dict,
+                 teacher: float):
+        elapsed = time.time() - self.began
+        sps = steps / elapsed if elapsed > 0 else 0.0
+        eta = (target_steps - steps) / sps if sps else None
+        shared = {key: value for key, value in metrics.items()
+                  if key in SHARED_METRICS or key.startswith('losses/aux_')}
+        for key, stream in zip(self.keys, self.streams):
+            prefix = f'family/{key}/'
+            own = {name[len(prefix):]: value for name, value in metrics.items() if name.startswith(prefix)}
+            stream.emit('progress', iteration=iteration, iterations=iterations, steps=steps,
+                        target_steps=target_steps, fraction=steps / target_steps if target_steps else None,
+                        elapsed=round(elapsed, 1), sps=round(sps, 1), eta=None if eta is None else round(eta, 1),
+                        metrics={**own, **shared, 'teacher_coeff': teacher})
+
+    def end(self, status: str, **fields):
+        """Every family's ``train_end`` and ``end`` (``status``: completed | early_stop | interrupted | error)."""
+        for index, stream in enumerate(self.streams):
+            if status != 'error':
+                stream.emit('train_end', status=status, **fields)
+            stream.emit('end', status=status, **fields)
+            self.plan.update_run(index, status=status)
 
 
 class FamilyStop:
@@ -248,11 +326,14 @@ def main(argv=None) -> Path:
     run_id = args.run_id or registry.new_run_id()
     out_dir = registry.run_dir(args.name, run_id, root)
     shares = {k: float(w) for k, _, w in (s.partition('=') for s in args.shares)}
-    families = parse_families(args.families, args.parallel, shares)
+    families = parse_families(args.families, args.parallel, shares, args.state_route)
     keys = [f.key for f in families]
     steps_per_env = max(1, args.steps_per_update // args.parallel)
     total = args.iterations * steps_per_env * args.parallel
-    with logged_job(f'lab-{args.name}', 'train', [], log=False, work=work(train_steps=total)):
+    with logged_job(f'lab-{args.name}', KIND, RunLog.runs(keys, run_id, out_dir, total, args.iterations),
+                    args.logs_dir, work=work(train_steps=total), families=keys, run_dir=str(out_dir),
+                    mode=args.mode) as plan:
+        log = RunLog(plan, keys, run_id)
         out_dir.mkdir(parents=True, exist_ok=True)
         network, source = initial_network(args)
         aux_losses = [AuxLoss.parse(text) for text in args.aux]
@@ -267,11 +348,27 @@ def main(argv=None) -> Path:
         if args.sampling == 'need':
             targets = (NeedSampler.teacher_targets(keys, REFERENCE) if args.need_target == 'teacher'
                        else {key: float(args.need_target) for key in keys})
+            for key, _, value in (item.partition('=') for item in args.need_target_for):
+                if key not in targets:
+                    raise SystemExit(f"--need-target-for {key}: not in --families")
+                targets[key] = float(value)
             sampler = NeedSampler(targets, args.need_floor, args.need_window)
         teachers = None
         if args.teacher_coeff > 0 or args.mode == 'imitate':
             overrides = dict(item.split('=', 1) for item in args.teacher)
-            teachers = Teachers(keys, args.device, root, overrides)
+            weights = {k: float(w) for k, _, w in (item.partition('=') for item in args.teacher_weight)}
+            unknown = sorted(set(weights) - set(keys))
+            if unknown:
+                raise SystemExit(f"--teacher-weight {unknown}: not in --families")
+            teachers = Teachers(keys, args.device, root, overrides, weights)
+        rehearsal = None
+        if args.rehearse:
+            names = json.loads((Path(args.rehearse) / 'cache.json').read_text(encoding='utf-8'))['keys']
+            rehearsed = args.rehearse_keys if args.rehearse_keys is not None else [k for k in names
+                                                                                   if k not in keys]
+            rehearsal = Rehearsal(Path(args.rehearse), rehearsed, args.rehearse_rows, seed=args.seed or 0)
+            print(f"[lab] rehearsal: {rehearsal.rows:,} rows of {len(rehearsed)} keys from {args.rehearse} "
+                  f"(weight {args.rehearse_coeff})", flush=True)
         curricula = {}
         for family in families:
             spec, _ = curriculum_spec(argparse.Namespace(no_curriculum=args.no_curriculum, curriculum=None,
@@ -286,6 +383,8 @@ def main(argv=None) -> Path:
                         demo_bc_coeff=args.demo_coeff if args.demos else 0.0)
         ppo = PPO(cfg, device=args.device)
         ppo.aux_losses = aux_losses
+        ppo.rehearsal = rehearsal
+        ppo.rehearsal_coeff = args.rehearse_coeff
         if args.demos:
             ppo.demo_batch = load_demos(args.demos)
             print(f"[lab] demonstrations: {ppo.demo_batch[2].shape[0]} rows from {', '.join(args.demos)} "
@@ -319,6 +418,7 @@ def main(argv=None) -> Path:
             stop = stopper is not None and stopper.update(network, result.iteration, metrics)
             state['metrics'] = metrics
             logger.log(result.iteration, result.total_steps, metrics)
+            log.progress(result.iteration, args.iterations, result.total_steps, total, metrics, ppo.teacher_coeff)
             per_family = ' '.join(f"{k}={metrics.get(f'family/{k}/success_rate', float('nan')):.2f}" for k in keys)
             print(f"[lab] iter={result.iteration} steps={result.total_steps} {per_family} "
                   + format_summary(metrics), flush=True)
@@ -336,6 +436,10 @@ def main(argv=None) -> Path:
 
         began = time.time()
         status = 'completed'
+        log.start(target_steps=total, target_iterations=args.iterations, steps_per_update=cfg.target_steps,
+                  start_iteration=0, start_steps=0, parallel=args.parallel, device=args.device,
+                  run_dir=str(out_dir), stop_success=args.stop_success, families=keys, mode=args.mode,
+                  arch=run['arch'], parameters=run['parameters'], envs=collector.shares)
         try:
             ppo.teacher_coeff = teacher_coeff(args, 1)
             ppo.teacher_value_coeff = args.teacher_value_coeff
@@ -355,6 +459,10 @@ def main(argv=None) -> Path:
                         break
         except KeyboardInterrupt:
             status = 'interrupted'
+        except BaseException as error:
+            log.end('error', message=f"{type(error).__name__}: {error}", iterations=state['iteration'],
+                    steps=state['steps'])
+            raise
         finally:
             collector.close()
             logger.close()
@@ -363,6 +471,7 @@ def main(argv=None) -> Path:
         status = 'early_stop' if state['stopped_early'] else status
         summary = {'status': status, 'iterations': state['iteration'], 'steps': state['steps'],
                    'wall_seconds': round(time.time() - began, 1)}
+        log.end(status, iterations=state['iteration'], steps=state['steps'], wall_seconds=summary['wall_seconds'])
         (out_dir / 'train_summary.json').write_text(json.dumps(summary, indent=2), encoding='utf-8')
         print(f"[lab] {status}: {summary}", flush=True)
     return out_dir

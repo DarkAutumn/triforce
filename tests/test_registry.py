@@ -11,7 +11,7 @@ import torch
 import triforce
 from triforce import _native, registry
 from triforce.evaluate import evaluate_specialist
-from triforce.model import NOISE_SIZE, ModelConfig, ZeldaPolicy, obs_spec_from_space, widen_policy
+from triforce.model import NOISE_SIZE, ModelConfig, ZeldaPolicy, obs_spec_from_space, policy_spec, widen_policy
 from triforce.observation import observation_space
 from triforce.ppo import PPO, Collector, PPOConfig
 
@@ -95,7 +95,7 @@ def test_a_pre_r56_checkpoint_loads_and_another_grid_encoder_does_not(tmp_path):
 
 
 def test_older_schema_subset_checkpoint_reads_only_its_own_keys(tmp_path, states_dir):
-    assert registry.obs_schema_version() == 6
+    assert registry.obs_schema_version() == 7
     network, checkpoint = registry.load_model(_schema1_checkpoint(tmp_path))
     assert checkpoint['obs_schema_version'] == 1 and 'target' not in network.config.obs_spec
     # Eagerly on current observations: the target block is ignored.
@@ -149,7 +149,7 @@ def test_widened_policy_acts_exactly_like_the_original_for_any_target(tmp_path):
     full = obs_spec_from_space(observation_space())
     old, _ = registry.load_model(_schema1_checkpoint(tmp_path))
     wide, checkpoint = registry.load_model(tmp_path / 'ow-start' / 'schema1', obs_spec=full)
-    assert 'target' not in checkpoint['model_config']['obs_spec'] and wide.config.obs_spec == full
+    assert 'target' not in checkpoint['model_config']['obs_spec'] and wide.config.obs_spec == policy_spec(full)
     obs = _random_observations(observation_space(), 16, 1)
     obs['target'] = np.random.default_rng(2).uniform(-1, 1, obs['target'].shape).astype(np.float32)
     noise = torch.as_tensor(np.random.default_rng(4).gumbel(size=(16, NOISE_SIZE)), dtype=torch.float32)

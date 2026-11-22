@@ -57,6 +57,13 @@ and on the last run) and ``chain`` (the summary)).  ``--no-log`` turns it off.  
 eval-chain) writes the events into FILE: in a folder with a plan its driver owns the plan, the stream and its
 ``end``; in a folder without one the job writes its plan there (``has_plan``), so every job has a plan.
 
+A lab training (``python -m triforce.lab.train``) writes ``<yymmdd>_<NNN>_lab-<name>``: plan kind ``lab-train``,
+a run entry and a ``<family>.jsonl`` stream a family (``lab.train.RunLog``: the training events above, every
+family at the run's iteration, its own numbers in ``metrics``).  A job with one line of progress (the lab's bench
+and recorder, an experiment script that enters the queue itself: ``progress_job``) writes a plan with one run whose
+``progress.jsonl`` has ``eval_start`` (``episodes``: the total, ``unit``), ``eval_progress`` (``done``, the running
+``success_rate`` when it measures one) and ``end``.
+
 An evaluation batch (``triforce eval-batch NAME``, ``triforce/eval_batch.py``) writes ``<yymmdd>_<NNN>_<NAME>``: plan
 kind ``eval-batch`` with every evaluation listed up front (``name``, ``kind`` chain / eval / report, ``total``,
 ``output``, ``command``; pending, ``evaluating``, then ``ok`` / ``failed`` / ``interrupted`` with its headline),
@@ -224,6 +231,8 @@ class TrainingPlan:
                      'work': dict(work or {}), 'estimate': None, 'lane': None,
                      'runs': [{'index': i, 'status': 'pending', 'started': None, 'finished': None, **run}
                               for i, run in enumerate(runs)]}
+        if self.data.get('nice') is None:       # every plan says the niceness its job runs at, whoever wrote it
+            self.data['nice'] = os.nice(0)
         self._lock = threading.RLock()
         self.job = jobs.register(self.directory, self.path, name, kind, amounts=work)
         self.data['estimate'] = (self.job.data['estimate'] if self.job is not None
@@ -339,3 +348,59 @@ def logged_job(what: str, kind: str, runs: list[dict], root=None, *, directory=N
         if installed:
             signal.signal(signal.SIGTERM, previous)
     finish('completed')
+
+
+PROGRESS_FILE = 'progress.jsonl'    # progress_job's stream
+PROGRESS_SECONDS = 1.0              # at most one eval_progress a second (and always the last one)
+
+
+class JobProgress:
+    """A job's one-line progress (``progress_job``): its plan's one run entry and that entry's stream,
+    ``progress.jsonl``: ``eval_start`` (``episodes``: the total, ``unit``: what is counted), ``eval_progress``
+    (``done``, ``episodes``, ``unit``, the running ``success_rate`` when the job measures one, and ``update``'s other
+    fields; at most once a second and always the last one), then ``end`` (``status``, ``done``).  The training GUI
+    draws it as an evaluation's row: a bar over done / total with the success so far."""
+
+    def __init__(self, plan: TrainingPlan, total: int, unit: str):
+        self.plan = plan
+        self.total, self.unit = int(total), unit
+        self.done = 0
+        self.events = EventLog(plan.directory / PROGRESS_FILE, specialist=plan.data['name'])
+        self._shown: Optional[float] = None
+        self.events.emit('eval_start', episodes=self.total, unit=unit)
+
+    def update(self, done: int, success_rate: Optional[float] = None, **fields):
+        """``done`` of the total so far (and the success over them, when the job measures one)."""
+        self.done = int(done)
+        now = time.monotonic()
+        if self.done < self.total and self._shown is not None and now - self._shown < PROGRESS_SECONDS:
+            return
+        self._shown = now
+        self.events.emit('eval_progress', done=self.done, episodes=self.total, unit=self.unit,
+                         **({} if success_rate is None else {'success_rate': success_rate}), **fields)
+
+    def end(self, status: str, **fields):
+        self.events.emit('end', status=status, done=self.done, **fields)
+        self.plan.update_run(0, status=status)
+
+
+@contextmanager
+def progress_job(what: str, kind: str, total: int, *, unit: str = 'episodes', root=None,
+                 work: Optional[dict] = None, **extra):
+    """A job with a log folder and a one-line progress, for a script that enters the job queue itself (an
+    experiment script, a lab tool): ``logged_job(what, kind, ...)`` with one run entry (``what``, ``total``,
+    ``unit``) whose stream ``JobProgress`` writes.  Yields the ``JobProgress`` once the job's turn has come; call
+    its ``update(done, success_rate)`` as the work goes.  Its stream ends ``completed``, ``interrupted`` or
+    ``failed`` with the block, as the plan does."""
+    runs = [{'name': what, 'events': PROGRESS_FILE, 'status': 'evaluating', 'total': int(total), 'unit': unit}]
+    with logged_job(what, kind, runs, root, work=work, **extra) as plan:
+        progress = JobProgress(plan, total, unit)
+        try:
+            yield progress
+        except KeyboardInterrupt:
+            progress.end('interrupted')
+            raise
+        except BaseException as error:
+            progress.end('failed', message=f"{type(error).__name__}: {error}")
+            raise
+        progress.end('completed')

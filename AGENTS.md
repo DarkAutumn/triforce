@@ -664,6 +664,20 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   Once things are merged into main, delete them and keep stuff tidy"): `git worktree remove` (the branch stays);
   first copy out what is not in git and still wanted: promoted run dirs into `models/`, demonstration files into
   `target/demos/` (every `--demos` file a lineage used must stay findable there), harvested states, chains of record.
+- **Experiment data is cleaned up as it stops being needed** (Lee, Nov 22: "Yes please clean up experiment data
+  occasionally. When we don't need it remove it, but you can run all the way down to 30gb free and we are ok... I
+  still want it cleaned up before then"): recorded datasets and their caches, finished rounds' worktree data under
+  `target/worktrees/`, candidate run dirs nothing names; never the promoted runs, the demonstration files a lineage
+  used, the chains of record of the last two landings, the owner's `trajectories.prev-*` and videos.
+- **The job queue is the machine's capacity, not a fault** (Lee, Nov 22: "We have only one computer and we are at
+  full capacity [...] The queue is working as intended, and we can't go any faster unless we further optimize the
+  runs"). **Watch the speed instead:** "You should occasionally check steps per second, episodes per second, etc to
+  make sure they haven't greatly dropped. If they have check why and perhaps fix the perf problem." Reference
+  numbers on this machine, busy (Nov 22): the Rust actor about 830 decisions a second on 10 envs (`python -m
+  triforce.lab.bench speed`), a lab training about 690 decisions a second with 8 parts, the generic torch path 1.6
+  to 2.9 times slower, one step about 17.5 frames, a full-route chain of 1000 runs about 6 minutes at today's run
+  lengths; `docs/performance.md` has the quiet machine's. Every agent that trains or chains reports its decisions a
+  second; a drop of a third or more against these is looked into before more work is queued.
 
 ## Versioning (Lee, Nov 11)
 
@@ -874,9 +888,13 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   (waiting ones as queued), and those that ended in the last 60 minutes under "finished" (Lee, Nov 18: then they
   leave the list by themselves, so it never piles up). The registry is also the
   line jobs wait in. `--events FILE` into a folder without a `training.json` now writes a plan there (a driver's
-  folder with a plan keeps owning the stream). Not shown by the GUI (but still waiting its turn and counted): a job
-  that writes no folder (`--no-log`). Invisible, and neither waiting nor counted: a job whose `--events` go into a
-  folder whose plan is someone else's (it is taken for that plan's child, as a round's trainings are).
+  folder with a plan keeps owning the stream). **A job the registry knows is never invisible** (the owner, Nov 22,
+  after two lab trainings ran while the GUI showed one queued batch): a job that writes no folder (`--no-log`, a
+  script that calls `triforce.jobs` itself, a checkout whose lab writes no plan) is listed from its registry entry
+  (name, kind, checkout, branch, time run or waited, estimate) and marked "no progress data"; a new kind of job
+  should still write a plan, so it shows its progress (`tests/test_training_gui.py` lists every entry point).
+  Invisible, and neither waiting nor counted: a job whose `--events` go into a folder whose plan is someone else's
+  (it is taken for that plan's child, as a round's trainings are).
 - **Chain segments** (20–40 runs each; several at once go in one batch: `triforce eval-batch NAME --chain 'd3:
   --from 3_7cs_0 --runs 40' --chain ...`, or every segment of a route with `--chains TAG [--route R]`). **`d3first`
   (the main route, no `--route` needed; `eval_batch.D3FIRST_SEGMENTS`, its states `d3first_*` named bare):** full

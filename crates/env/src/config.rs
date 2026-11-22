@@ -215,6 +215,15 @@ fn half() -> f64 {
     0.5
 }
 
+/// `reward.sword_blocked_penalty`'s default (round 38): a Bubble's touch, priced flat at `REWARD_TINY`. Measured on
+/// `d3first`'s Bubble rooms (round38.md "A Bubble's touch"): a touch costs 0.07-0.08 hearts (0.04 at
+/// `penalty-lost-health`'s 0.25 a half heart) and about 90 frames of the visit; `REWARD_TINY` is the nearest step.
+pub const SWORD_BLOCKED_PENALTY: f64 = crate::rewards::REWARD_TINY;
+
+fn sword_blocked_penalty() -> f64 {
+    SWORD_BLOCKED_PENALTY
+}
+
 /// `reward:` block.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -251,6 +260,11 @@ pub struct RewardConfig {
     /// `penalty-boss-ate-bomb` per bomb a Dodongo swallows (round 12; the stun-and-sword kill wants none).
     #[serde(default = "half")]
     pub boss_ate_bomb_penalty: f64,
+    /// `penalty-sword-blocked` per step in which a Bubble's touch blocked the sword (`zelda::Change::bubble_touched`;
+    /// round 38: a touch costs no health, so `penalty-lost-health` never saw it). Flat, like `penalty-lost-health`
+    /// (positive magnitude; 0 = off).
+    #[serde(default = "sword_blocked_penalty")]
+    pub sword_blocked_penalty: f64,
     /// Multiplies every non-terminal reward and penalty (outcome fine-tuning, in [0, 1]); training's
     /// `--shaping-anneal` lowers it between rollouts.
     #[serde(default = "one")]
@@ -280,6 +294,7 @@ impl Default for RewardConfig {
             left_drop_penalty: 0.0,
             heal_targets: false,
             boss_ate_bomb_penalty: 0.5,
+            sword_blocked_penalty: SWORD_BLOCKED_PENALTY,
             shaping_scale: 1.0,
             frame_penalty: 0.0,
             exit_health_weight: 0.5,
@@ -898,6 +913,7 @@ impl SpecialistConfig {
             ("reward.block_reward", self.reward.block_reward),
             ("reward.quiet_enemy_penalty", self.reward.quiet_enemy_penalty),
             ("reward.boss_ate_bomb_penalty", self.reward.boss_ate_bomb_penalty),
+            ("reward.sword_blocked_penalty", self.reward.sword_blocked_penalty),
             ("reward.frame_penalty", self.reward.frame_penalty),
         ] {
             if !(value >= 0.0 && value.is_finite()) {
@@ -1571,6 +1587,8 @@ mod tests {
             "reward: {block_reward: .nan}",
             "reward: {quiet_enemy_penalty: .nan}",
             "reward: {boss_ate_bomb_penalty: .nan}",
+            "reward: {sword_blocked_penalty: -0.25}",
+            "reward: {sword_blocked_penalty: .nan}",
             "reward: {frame_penalty: .inf}",
             "reward: {block_reward: .inf}",
             "reward_profile: nonsense",
@@ -1592,9 +1610,13 @@ mod tests {
             "endings: {'enter-room:1:0x72': hard-failure, triforce-collected: soft-failure}",
             "max_steps: 4294967295",
             "endings: {max-steps: hard-failure, no-damage: hard-failure, no-room-progress: soft-failure}",
+            "reward: {sword_blocked_penalty: 0}",
         ] {
             assert!(minimal(ok).is_ok(), "{ok} should load: {:?}", minimal(ok).err());
         }
+        // Round 38: every family pays a Bubble's touch unless its yaml says otherwise.
+        assert_eq!(minimal("").unwrap().reward.sword_blocked_penalty, SWORD_BLOCKED_PENALTY);
+        assert_eq!(minimal("reward: {sword_blocked_penalty: 0}").unwrap().reward.sword_blocked_penalty, 0.0);
         let bad = |text: &str| SpecialistConfig::from_yaml(text, "t.yaml", None).is_err();
         assert!(bad(
             "name: t\nrooms: ['(1, 0x73)']\nsuccess: [exit-sideways]\n"

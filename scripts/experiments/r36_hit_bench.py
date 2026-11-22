@@ -44,6 +44,12 @@ their hazards say), ``noframe`` the frame (the hit counted in the last bin the a
 ``trees``: XGBoost (600 rounds, depth 8) on the flat observation (``r36_hit_trees.features``), ``trees+rel+...``
 with the token inputs flattened beside it. ``guard35``: round 35's guard scored as it is (goriya only).
 
+``hitnet``: the lab's network (``triforce/nets/hitnet.py``: Link's token over the entity tokens, the hit head on its
+own tower; only the trunk and the hit tower train here) on the ENGINE's schema 7 columns, ``entity_rel`` and
+``entity_contact`` as ``_native.danger_blocks`` computes them from each decision's RAM, grid and entity features
+(not this script's numpy); ``hitkd`` its head with one logit per kind and direction slot (88; the durations share it);
+``norel``, ``nocontact``, ``nofeatures`` leave a token group out.
+
 GPU work: no job queue, one process at a time.
 """
 
@@ -76,7 +82,8 @@ FAMILIES = {
 GUARD35 = ROOT / 'target' / 'worktrees' / 'r35-guard' / 'r35' / 'guard-a' / 'guard.pt'   # round 35's guard (untracked)
 TOKEN_GROUPS = ['rel', 'ramvel', 'contact', 'wall', 'prev1', 'prev2']
 INPUT_PARTS = set(TOKEN_GROUPS) | {'patch', 'patchonly', 'nogrid', 'linkx', 'cflat'}
-SHAPE_PARTS = {'base', 'policy', 'linktok2', 'linktok3', 'relnet', 'w2x', 'w4x', 'deep', 'critic', 'ehead'}
+SHAPE_PARTS = {'base', 'policy', 'linktok2', 'linktok3', 'relnet', 'w2x', 'w4x', 'deep', 'critic', 'ehead', 'hitnet',
+               'hitkd', 'norel', 'nocontact', 'nofeatures'}
 VECTOR_KEYS = ['history', 'link', 'objective', 'room_state', 'target']
 KINDS, DIRS, DURS = 11, 8, 4
 JOINT = KINDS * DIRS * DURS
@@ -467,6 +474,46 @@ class BenchNet(nn.Module):
         return torch.cat([ent, other], dim=1)
 
 
+def engine_columns(data: Data) -> dict[str, np.ndarray]:
+    """Schema 7's ``entity_rel`` / ``entity_contact`` of every row, from the engine (``_native.danger_blocks``)."""
+    from triforce import _native  # pylint: disable=import-outside-toplevel
+    t0 = time.time()
+    n = len(data.d['mask'])
+    parts: dict[str, list] = {'entity_rel': [], 'entity_contact': []}
+    for lo in range(0, n, 50000):
+        hi = min(n, lo + 50000)
+        rel, contact = _native.danger_blocks(data.d['ram'][lo:hi], data.obs['grid'][lo:hi],
+                                             data.obs['entity_features'][lo:hi])
+        parts['entity_rel'].append(rel)
+        parts['entity_contact'].append(contact)
+    print(f'engine columns: {n} rows in {time.time() - t0:.0f}s', flush=True)
+    return {k: np.concatenate(v) for k, v in parts.items()}
+
+
+class HitNetBench(nn.Module):
+    """``nets.hitnet.HitNet``'s trunk and hit tower as a bench candidate: the logit of each candidate's action."""
+
+    def __init__(self, spec: dict, obs_spec: dict, base_rate: float):
+        super().__init__()
+        from triforce import nets  # pylint: disable=import-outside-toplevel
+        from triforce._native import OBS_SPEC  # pylint: disable=import-outside-toplevel
+        full = {**obs_spec, **{k: {'shape': list(OBS_SPEC[k]['shape']), 'vocab': None}
+                               for k in ('entity_rel', 'entity_contact')}}
+        self.net = nets.create('hitnet', full, tokens=spec['hitnet_tokens'], hit=spec['hitnet_head'],
+                               hit_prior=base_rate)
+        self.per_duration = spec['hitnet_head'] == 'joint'
+
+    def parameter_count(self) -> int:
+        """The trunk's and the hit tower's (the policy and value towers are not trained here)."""
+        skip = ('policy_tower.', 'value_tower.', 'kind_', 'direction_head.', 'duration_head.', 'value_head.')
+        return sum(p.numel() for name, p in self.net.named_parameters() if not name.startswith(skip))
+
+    def forward(self, batch: dict, joint: torch.Tensor):
+        logits = self.net.hit_logits(self.net.trunk(batch))
+        index = joint if self.per_duration else joint // DURS
+        return logits.gather(1, index.unsqueeze(-1)).squeeze(-1)
+
+
 def hazard_scores(hazards: torch.Tensor, joint: torch.Tensor) -> torch.Tensor:
     """P(hit) of the candidate: 1 - exp(-the hazards over the bins its duration covers)."""
     covered = (torch.arange(4, device=joint.device) <= (joint % 4).unsqueeze(-1)).float()
@@ -498,7 +545,8 @@ def parse(name: str) -> dict:
     parts = name.split('+')
     spec = {'name': name, 'trees': parts[0] in ('trees', 'guard35'), 'tokens': [], 'grid': True, 'patch': False,
             'linkx': False, 'cflat': False, 'entity': 'mean', 'layers': 1, 'hidden': 256, 'depth': 3,
-            'head': 'joint', 'init': 'random', 'slot': True, 'frame': True}
+            'head': 'joint', 'init': 'random', 'slot': True, 'frame': True, 'hitnet': False,
+            'hitnet_tokens': ['type', 'features', 'rel', 'contact'], 'hitnet_head': 'joint'}
     for p in parts:
         if p in TOKEN_GROUPS:
             spec['tokens'].append(p)
@@ -526,6 +574,12 @@ def parse(name: str) -> dict:
             spec[p[2:]] = False
         elif p in ('critic', 'ehead'):
             spec['head'] = p
+        elif p == 'hitnet':
+            spec['hitnet'] = True
+        elif p == 'hitkd':
+            spec['hitnet_head'] = 'kind_direction'
+        elif p in ('norel', 'nocontact', 'nofeatures'):
+            spec['hitnet_tokens'] = [g for g in spec['hitnet_tokens'] if g != p[2:]]
         elif p not in ('base', 'trees', 'guard35'):
             raise SystemExit(f'unknown candidate part {p!r} (inputs {sorted(INPUT_PARTS)}, shapes {sorted(SHAPE_PARTS)})')
     return spec
@@ -623,6 +677,8 @@ def main(argv) -> int:
         half = {'entity_features'} | (set(VECTOR_KEYS) if len(data.d['mask']) > 1_000_000 else set())
         dev = {k: torch.as_tensor(data.obs[k].astype(np.float16) if k in half else data.obs[k]).to(device)
                for k in keys}
+        if spec['hitnet']:
+            dev.update({k: torch.as_tensor(v).to(device) for k, v in engine_columns(data).items()})
         if spec['tokens']:
             dev['tokens'] = torch.as_tensor(np.concatenate([feats[g] for g in spec['tokens']], axis=-1)).to(device)
         if spec['patch']:
@@ -634,10 +690,14 @@ def main(argv) -> int:
         sizes = {'tokens': dev['tokens'].shape[-1] if 'tokens' in dev else 0,
                  'linkx': dev['linkx'].shape[-1] if 'linkx' in dev else 0,
                  'cflat': dev['cflat'].shape[-1] if 'cflat' in dev else 0}
-        net = BenchNet(spec, obs_spec, sizes, rate).to(device)
-        if spec['init'] == 'policy':
-            policy_init(net, checkpoint)
-        params = sum(p.numel() for p in net.parameters())
+        if spec['hitnet']:
+            net = HitNetBench(spec, obs_spec, rate).to(device)
+            params = net.parameter_count()
+        else:
+            net = BenchNet(spec, obs_spec, sizes, rate).to(device)
+            if spec['init'] == 'policy':
+                policy_init(net, checkpoint)
+            params = sum(p.numel() for p in net.parameters())
         rows_dev = torch.as_tensor(data.c_row).to(device)
         joint_dev = torch.as_tensor(data.c_joint).to(device)
         y_dev = torch.as_tensor(data.c_lost.astype(np.float32)).to(device)

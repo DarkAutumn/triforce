@@ -162,6 +162,8 @@ fn space_matches_contract() {
         "objective",
         "target",
         "action_mask",
+        "entity_rel",
+        "entity_contact",
     ]
     .into_iter()
     .collect();

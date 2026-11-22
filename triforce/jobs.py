@@ -33,7 +33,7 @@ it (``JobRecord.finish``); a job killed before that keeps its status with its pr
 Each ``register`` deletes the entries that ended (or whose process is
 gone) more than ``PRUNE_SECONDS`` ago.  A registry that can't be written is warned about once and otherwise ignored
 (no coordination: the job starts).  ``training-gui.py`` reads it (its own copy of ``jobs_dir``, ``job_alive`` and
-the line's order).
+the line's order) and lists every entry, one without a log folder from the entry itself ('no progress data').
 
 Estimates.  A job's estimate is its work at the rates the registry's history gives (``rates``: per unit the median
 over the ``RATE_HISTORY`` latest completed jobs that did some of it, their other work taken off at the other units'
@@ -523,7 +523,7 @@ def register(log_dir, plan, name: str, kind: str, directory: Optional[Path] = No
             'log_dir': None if log_dir is None else str(log_dir),
             'plan': None if plan is None else str(Path(plan).resolve()), 'name': name, 'kind': kind,
             'status': 'queued', 'queued': None, 'queued_ts': None, 'admitted': None, 'admitted_ts': None,
-            'lane': None, 'no_wait': False, 'work': amounts,
+            'lane': None, 'no_wait': False, 'work': amounts, 'nice': os.nice(0),
             'estimate': round(estimate(amounts, rates(read_jobs(directory))), 1), 'finished': None, 'ran': None}
     path = directory / f"{data['host']}-{pid}-{int(started or now)}-{safe}.json"
     try:

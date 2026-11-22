@@ -51,7 +51,7 @@ import torch
 from torch import nn
 
 from .metrics import EpisodeTracker, RolloutMetrics
-from .lab.auxiliary import aux_loss
+from .lab.auxiliary import aux_loss, held_out
 from .plr import PrioritizedReplay
 from .rollout_buffer import RolloutBuffer
 
@@ -359,6 +359,10 @@ class PPO:
         # ``teacher_joint`` (and of ½(V − V_teacher)² with ``teacher_value``); the lab's schedule sets it per update.
         self.teacher_coeff = 0.0
         self.teacher_value_coeff = 0.0
+        # Rehearsal (triforce.lab.rehearse): KL(teacher ‖ π_θ) on stored teacher-labelled rows of tasks that are not
+        # in the rollout, ``rehearsal_coeff`` per minibatch, so they are not forgotten.
+        self.rehearsal = None
+        self.rehearsal_coeff = 0.0
         # Auxiliary targets (triforce.lab.auxiliary): losses on a lab network's named auxiliary outputs; and
         # what readies them (None: off).
         self.aux_losses: list = []
@@ -543,7 +547,9 @@ class PPO:
         minibatch_size = max(1, batch_size // cfg.minibatches)
         b_searched, b_search_policy = batch.get('search_mask'), batch.get('search_policy')    # None without search
         b_teacher, b_teacher_value = batch.get('teacher_joint'), batch.get('teacher_value')   # None without teachers
+        b_teacher_weight = batch.get('teacher_weight')        # per row (lab: --teacher-weight); None: 1 everywhere
         teacher_kl = torch.tensor(0.0)
+        rehearse_kl = torch.tensor(0.0)
 
         demo = None
         if self.demo_batch is not None and cfg.demo_bc_coeff > 0:
@@ -557,6 +563,9 @@ class PPO:
             sil = self.sil
         sil_positive_share = sil.add(buffer) if sil is not None else 0.0
         sil_policy_loss = sil_value_loss = torch.tensor(0.0)
+        # The hit head on this rollout before it trains on it (held out from every earlier update).
+        held_stats = held_out(self.aux_losses, network, batch) if self.aux_losses and not getattr(
+            network, 'recurrent', False) else {}
 
         # The update is all-or-nothing: an exception (an interrupt included) restores this snapshot, as does the KL
         # rollback.
@@ -640,11 +649,17 @@ class PPO:
                         demo_bc_loss = -demo_lp.mean()
                         loss = loss + cfg.demo_bc_coeff * demo_bc_loss
                     if b_teacher is not None and self.teacher_coeff > 0:
-                        teacher_kl = joint_kl(b_teacher[mb], joint_of())
+                        weight = None if b_teacher_weight is None else b_teacher_weight[mb]
+                        teacher_kl = joint_kl(b_teacher[mb], joint_of(), weight)
                         loss = loss + self.teacher_coeff * teacher_kl
                         if b_teacher_value is not None and self.teacher_value_coeff > 0:
+                            value_se = (new_value - b_teacher_value[mb]).pow(2)
                             loss = loss + self.teacher_value_coeff * 0.5 * (
-                                new_value - b_teacher_value[mb]).pow(2).mean()
+                                value_se if weight is None else value_se * weight).mean()
+                    if self.rehearsal is not None and self.rehearsal_coeff > 0:
+                        r_obs, r_masks, r_joint = self.rehearsal.sample(minibatch_size, self.device)
+                        rehearse_kl = joint_kl(r_joint, network.joint_log_probs(r_obs, r_masks))
+                        loss = loss + self.rehearsal_coeff * rehearse_kl
                     if self.aux_losses:
                         aux_term, aux_stats = aux_loss(self.aux_losses, out.aux, batch, mb)
                         loss = loss + aux_term
@@ -725,9 +740,12 @@ class PPO:
         stats.update(search_stats)
         if self.aux_losses:
             stats.update(aux_stats)
+            stats.update(held_stats)
         if b_teacher is not None:
             stats['losses/teacher_kl'] = teacher_kl.item()
             stats['charts/teacher_coeff'] = self.teacher_coeff
+        if self.rehearsal is not None:
+            stats['losses/rehearse_kl'] = rehearse_kl.item()
         return stats
 
     def auxiliary_phase(self, network: nn.Module) -> dict:
@@ -809,13 +827,16 @@ def search_cross_entropy(target: torch.Tensor, joint_log_probs: torch.Tensor) ->
     return -(target * torch.where(target > 0, joint_log_probs, 0.0)).sum(dim=-1).mean()
 
 
-def joint_kl(old_log_probs: torch.Tensor, new_log_probs: torch.Tensor) -> torch.Tensor:
+def joint_kl(old_log_probs: torch.Tensor, new_log_probs: torch.Tensor,
+             weight: Optional[torch.Tensor] = None) -> torch.Tensor:
     """Mean over rows of KL(π_old ‖ π_θ) = Σ_j π_old(j) (log π_old(j) − log π_θ(j)) over the legal joint actions
-    (``ZeldaPolicy.joint_log_probs`` ``[B, J]``, −inf where illegal; both under the same mask)."""
+    (``ZeldaPolicy.joint_log_probs`` ``[B, J]``, −inf where illegal; both under the same mask); with ``weight``
+    (``[B]``) each row's KL is weighted (0: the row has no teacher term), still divided by the rows."""
     legal = torch.isfinite(old_log_probs)
     old = torch.where(legal, old_log_probs, 0.0)
     new = torch.where(legal, new_log_probs, 0.0)
-    return (old.exp() * (old - new)).sum(dim=-1).mean()
+    rows = (old.exp() * (old - new)).sum(dim=-1)
+    return (rows if weight is None else rows * weight).mean()
 
 
 def demo_log_prob(network, obs, masks, targets: torch.Tensor) -> torch.Tensor:

@@ -24,6 +24,8 @@ fn feature_names_and_spaces_match_python() {
     assert_eq!(n.history, names("HISTORY_FEATURES"));
     assert_eq!(n.objective, names("OBJECTIVE_FEATURES"));
     assert_eq!(n.target, names("TARGET_FEATURES"));
+    assert_eq!(n.entity_rel, names("ENTITY_REL_FEATURES"));
+    assert_eq!(n.entity_contact, names("ENTITY_CONTACT_FEATURES"));
     assert_eq!(spec["ROOM_VOCAB"], ROOM_VOCAB);
     assert_eq!(spec["ENTITY_VOCAB"], ENTITY_VOCAB);
     let spaces = spec["spaces"].as_object().unwrap();

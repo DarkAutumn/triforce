@@ -323,7 +323,9 @@ mod _native {
     #[pymodule_export]
     use crate::external::{PyExternalPolicy, PyExternalQueue};
     #[pymodule_export]
-    use crate::game::{PyChange, PyGame, PyGameState, PySnapshot, observe, power_on_idle_states, power_on_name};
+    use crate::game::{
+        PyChange, PyGame, PyGameState, PySnapshot, danger_blocks, observe, power_on_idle_states, power_on_name,
+    };
     #[pymodule_export]
     use crate::policy::{PyPolicy, act_mode, act_probabilities, keyed_noise};
     #[pymodule_export]
@@ -366,6 +368,14 @@ mod _native {
         m.add(
             "ENTITY_FEATURES",
             pyo3::types::PyTuple::new(py, &names.entity)?,
+        )?;
+        m.add(
+            "ENTITY_REL_FEATURES",
+            pyo3::types::PyTuple::new(py, &names.entity_rel)?,
+        )?;
+        m.add(
+            "ENTITY_CONTACT_FEATURES",
+            pyo3::types::PyTuple::new(py, &names.entity_contact)?,
         )?;
         m.add(
             "HISTORY_FEATURES",

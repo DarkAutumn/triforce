@@ -116,7 +116,8 @@ and `from . import mynet` at the end of `triforce/nets/__init__.py`. That is all
 log-probs, entropies, the joint distribution, `evaluate`, `get_value`, `joint_log_probs`, checkpoints
 (`registry.save_checkpoint` / `load_model`), evaluation, chains, training and the bench come from `LabNet` and
 the logits. Heads whose direction and duration don't depend on the kind repeat one row 11 times. The observation is
-`observation.py`'s (schema 6) for now; a network that wants another one waits for the observation round.
+`observation.py`'s (schema 7: schema 6's keys plus the per-entity `entity_rel` and `entity_contact`, which only the
+networks that ask for them read; `docs/architecture.md` "Observation").
 `triforce/nets/wide.py` is the worked example (today's encoders, wider towers). Test it like
 `tests/test_lab_nets.py` `test_architectures_side_by_side_save_load_and_play`.
 
@@ -141,8 +142,9 @@ python -m triforce.lab.train --name zol+skg --families zol stalfos-keese-gel --p
   harvested starts (`harvested_fraction`: drawn as in `triforce train`, `tests/test_lab_memory.py`).
 - Every family has its own `EnvPool` and collector; `--parallel` envs are split by `--shares KEY=W` (default
   equal), at least one a family, fixed for the run. The learner trains on all rows at once (`lab.collect.BufferSet`).
-- Metrics: the merged ones plus `family/<key>/<metric>` for every rollout metric and `family/<key>/rows_share`
-  (`metrics.jsonl`; the log line prints each family's success).
+- Metrics: the merged ones plus `family/<key>/<metric>` for every rollout metric, `family/<key>/rows_share` and
+  `family/<key>/hits_taken_per_episode` (the decisions on which Link lost health over the episodes the rollout
+  ended: the bench's hits a visit, in training) (`metrics.jsonl`; the log line prints each family's success).
 - `--arch NAME --arch-config JSON` for a fresh network of another class; `--load CKPT` to start from a checkpoint.
 - The run is `<models>/<name>/<run-id>`; every member family gets a link `<models>/<family>/<run-id>` to it. So
   `triforce promote zol <run>` (and `--route d3first` for a route part), `triforce evaluate` per family,
@@ -155,6 +157,32 @@ python -m triforce.lab.train --name zol+skg --families zol stalfos-keese-gel --p
   `family/<key>/balanced_success_rate`; without `triforce train`'s hearts and bombs plateau rules).
 - Not supported in a lab run (absent): PLR, search, best-of-N, SIL, PPG.
 
+### What a lab job writes (and the training GUI)
+
+**A job the registry knows is never invisible** (the owner watches `training-gui.py` to see what the machine
+does; Nov 22 two lab trainings ran while it showed one queued batch). Every lab job enters the job queue
+(`triforce.jobs`) with a log folder and a plan, like `triforce train` and the evaluations, so the GUI draws its
+progress; a job without one is still listed, from its registry entry alone, as "no progress data" (lab jobs of
+checkouts older than this, `--no-log` evaluations, a script that registers itself).
+
+- `triforce.lab.train`: `logs/<yymmdd>_<NNN>_lab-<name>/` (`--logs-dir`, `$TRIFORCE_LOGS_DIR`): `training.json`,
+  kind `lab-train`, with the families, the run dir and the mode, and one run entry a family (`specialist`,
+  `events`, `target_steps`, `target_iterations`; status pending, `running`, then `completed`, `early_stop`,
+  `interrupted` or `error`); one stream a family, `<family>.jsonl`, in `triforce train`'s events (`lab.train.RunLog`):
+  `start` (targets, steps an update, envs, arch), a `progress` an iteration (the run's iteration of N and steps,
+  the same for every family, `sps`, `eta`, and in `metrics` the family's own `family/<key>/...` numbers without
+  the prefix, success, balanced success, hearts, `rows_share`, `hits_taken_per_episode`, `need`, with the run's
+  `teacher_coeff` (the weight the iteration trained with), `losses/teacher_kl`, `losses/aux_*` and PPO's losses),
+  then `train_end` and `end`. The GUI shows the run as one group with a row a family: the iteration of N, the
+  family's success and hearts, "rows 31% · hits 0.70/ep · teacher 0.80 · aux hit 0.120"; the group's time left
+  is the families' (they train together).
+- `triforce.lab.bench run` / `speed` and `triforce.lab.record`: `logs/<yymmdd>_<NNN>_lab-bench` (`-speed`,
+  `-record`; `--logs-dir`), kind `eval`, one row (`events.progress_job`): the bench's episodes played of its total
+  with the success so far after each key, the recorder's decisions recorded of its total.
+- A script that enters the queue itself (an experiment) uses `events.progress_job(what, kind, total, unit=...)`
+  and calls `update(done, success_rate)` as it goes: a folder and a one-line progress
+  (`scripts/experiments/r36_merge_record.py`: decisions recorded).
+
 ### Sampling across families by need
 
 `--sampling need` (`lab.collect.NeedSampler`): before each rollout, a family's **need** is how far its success over
@@ -165,6 +193,26 @@ stay fixed (each family's pool runs on its own threads); its **decisions an env*
 rollout stay `--steps-per-update`. A family with a large share takes longer to roll out than the others, which
 then idle: the CPU time is the same, the wall time follows the largest share. Logged per iteration:
 `family/<key>/need`, `family/<key>/recent_success`, `family/<key>/rows_share`.
+`--need-target-for KEY=X` gives one family its own target (a part whose teacher is weak: a target above the
+teacher's yardstick success).
+
+### A family's teacher term, and rehearsal of the parts not rolled out
+
+`--teacher-weight KEY=W` scales that family's rows in the teacher term (`ppo.joint_kl` weighted per row, divided by
+all rows as before; default 1): `0` takes the teacher out for a part whose teacher is weak while the others keep it.
+
+A lab run rolls out at least one env a family, so a run of `--parallel 8` rolls out at most 8 parts. `--rehearse
+CACHE` keeps the others in the loss: a distillation cache (`scripts/experiments/r36_merge_distill.py cache`: the
+teachers' rows of every key, `r36_merge_record.py`) is read once (`--rehearse-rows`, 300,000 by default, the same
+number a key; `--rehearse-keys`, by default every key of the cache not in `--families`), and every PPO minibatch adds
+`--rehearse-coeff` (1.0) × KL(teacher ‖ student) on as many of its rows as the minibatch has (`lab/rehearse.py`;
+logged `losses/rehearse_kl`). The rehearsal does not fade.
+
+`--state-route ROUTE` puts every family on one route's states alone (`lab.collect.route_only`: `state_routes:
+[ROUTE]` for its start-state globs and harvested starts, the globs the route has no state for dropped, the curriculum
+on the tracks explored from the route's states, linked under `target/route-tracks/`, or off when there are none).
+The one network of the corrected route is trained with `--state-route d3first` (the owner, Nov 22: never on
+`d2first`'s states); `r36_merge_record.py --state-route d3first` records its teachers' rows the same way.
 
 ## Memory: training a recurrent network
 
@@ -191,15 +239,19 @@ python -m triforce.lab.train --name mem --families zol stalfos-keese-gel --paral
 ## Auxiliary targets
 
 **What the rollout carries.** Per decision, besides the reward and the frames: `health_lost` (hearts the action's
-step lost, net of what it gained) and `hits` (monster hits it dealt, as the game showed them, no look-ahead)
-(`RolloutBuffer`, written by the pool from `StepInfo`). With `--try-others K:P` (training only), on a share P of
+step lost, net of what it gained), `hits` (monster hits it dealt, as the game showed them, no look-ahead) and
+`blocked` (round 38: a Bubble's touch landed during the action, `zelda::Change::bubble_touched`: the sword blocked
+for 151-160 frames, Link shoved, no health lost) (`RolloutBuffer`, written by the pool from `StepInfo`). With
+`--try-others K:P` (training only), on a share P of
 the decisions (drawn by the decision's key) the policy's next K candidates after the action taken (the Rust actor's
 ranking, `Actor::alternatives`; a served network's from its logits, `policy::logits::Heads::ranked`: a sample
 without replacement from the policy) are each tried in the env (`PoolEnv::trial`, the game's own future, back to
 exactly where it stood: the play is unchanged, decision for decision, `tests/test_lab_aux.py`); `tried_actions`,
-`tried_lost` (1 lost health, 0 not, -1 untried) and `tried_frames` keep them. Cost: each trial emulates its action
+`tried_lost` (1 lost health, 0 not, -1 untried), `tried_blocked` (1 a Bubble's touch landed, read from the trial's
+RAM at its end; -1 untried) and `tried_frames` keep them. Cost: each trial emulates its action
 from a checkpoint and back (no observation, no network), K·P trials a decision. Logged per family:
-`family/<key>/frames_per_decision`, `family/<key>/tried_frames_per_decision`. Measured (Nov 22) on goriya's
+`family/<key>/frames_per_decision`, `family/<key>/tried_frames_per_decision`, `family/<key>/hits_taken_per_episode`
+and `family/<key>/bubble_touches_per_episode`. Measured (Nov 22) on goriya's
 `d3first` rooms (`goriya@d3first`, its route run `r32d1-goriya` training, 8 envs, 10 iterations of 4,096 decisions,
 iterations 2-10; the machine at load 40-45, so the rates are noisy):
 
@@ -218,13 +270,19 @@ and on the Rust actor a network pass a candidate to rank them) makes the rollout
 | target | label (per decision) | loss |
 |---|---|---|
 | `hit` | the action lost health | BCE on logits; a per-action output also on every tried candidate's verdict |
+| `hit_or_blocked` | the action lost health, or a Bubble's touch landed (round 38: a head that learns to avoid Bubbles as it avoids damage) | as `hit`, the tried verdicts `tried_lost` or `tried_blocked` |
 | `damaged` | the action dealt a monster a hit | BCE on logits |
 | `hearts_lost` | hearts lost (net, ≥ 0) | ½ squared error |
 | `frames` | the action's frames / 16 | ½ squared error |
 
 An output `[B]` predicts for the action taken; `[B, 352]` one value per joint action (`kind * 32 + direction * 4 +
 duration`), read at the action taken (and the tried ones). Logged: `losses/aux_<output>`,
-`charts/aux_<output>_labels` (labels a row).
+`charts/aux_<output>_labels` (labels a row); for a per-action `hit` or `hit_or_blocked` output (against its own
+labels), before each update trains on the rollout
+(so held out, on the policy's own states; `lab.auxiliary.held_out`): `charts/aux_<output>_pr_taken` (precision =
+recall on the actions taken, their real outcome: experiment 2's "model's own draws"), `charts/aux_<output>_pr_judged`
+(with the tried candidates) and `charts/aux_<output>_lost_taken` / `_lost_judged` (the positive labels behind each,
+to pool iterations by; the precision is NaN, so not logged, in a rollout without one).
 
 **A hit head feeding the action choice** (`nets/hithead.py`, `hithead`): today's body plus a hit tower and a
 per-action hit head (`aux['hit']`, 352 logits) trained only by its own loss; its probabilities, gradient stopped, are
@@ -235,6 +293,19 @@ trial, and an act mode with foresight is refused for it as for any served networ
 ```
 python -m triforce.lab.train --name hit --families darknut --parallel 8 --iterations 200 --arch hithead \
     --aux hit=hit:0.5 --try-others 4:0.25 --seed 36
+```
+
+**The hit network** (`nets/hitnet.py`, `hitnet`; round36.md "Observation v7 and the hit network"): experiment 2's
+shape on observation schema 7. Link's `link` block is a token attending to the entity tokens (the type embedding,
+`entity_features`, `entity_rel`, `entity_contact`; `tokens` picks the groups), 2 layers of width 128, his final token
+joining the room embedding, the grid convs and the float vectors; today's towers and heads; the hit head on its own
+tower (`hit`: `joint` 352 logits, `kind_direction` 88 shared by the durations, `none`), `feed` its stopped
+probabilities into the policy tower, `detach_body`, `room` (the room embedding on or off).
+
+```
+python -m triforce.lab.train --name hitnet --families goriya@d3first --parallel 8 --iterations 400 --arch hitnet \
+    --arch-config '{"feed": true}' --aux hit=hit:0.5 --try-others 4:0.25 --teacher-coeff 1.0 --teacher-hold 100 \
+    --teacher-fade 200 --seed 36
 ```
 
 
@@ -273,11 +344,15 @@ once per rollout over its family's rows in batches of 4096 (`lab.collect.Teacher
   later one is from chains of the corrected route (100 runs a segment from `post-d1` to `d9`, seeds 370000 on,
   `--harvest`); the first order's later entries (3 pieces or more: its legs, and Dungeons 5, 2 and 7 at its
   hearts) are left out. Every key now has harvested entries (no seed start states stand in).
-- Per key and in total: success, hearts lost per episode, hits taken per room visit, decisions per episode, bombs
-  used per episode. Every episode is kept (state, seed), so `compare` pairs two networks episode by episode and gives
-  each difference with its standard error.
+- Per key and in total: success, hearts lost per episode, hits taken per room visit, Bubble touches per room visit
+  (`bubble_touches`, round 38: a touch blocks the sword and costs no health, so a hit never counts it), decisions
+  per episode, bombs used per episode. Every episode is kept (state, seed), so `compare` pairs two networks episode
+  by episode and gives each difference with its standard error; a metric one side lacks (a result written before
+  round 38, as `reference.json`, has no `bubble_touches`) is `missing`, the rest pair as before.
 - `run --team --out team.json` (today's networks), `run --network CKPT --keys zol stalfos-keese-gel --out
-  student.json` (one network for some keys), `run --checkpoint KEY=CKPT ...`, `compare team.json student.json`.
+  student.json` (one network for some keys), `run --checkpoint KEY=CKPT ...`, `compare team.json student.json`;
+  `run --act MODE` plays another act mode than the manifest's (the planner beside a result:
+  `temperature:0.5+relax:16+plan:16:1`, for networks the Rust actor plays).
 - **Full tier** (`bench.json` `full`): the route's segment chains as the landings run them, `triforce eval-batch
   TAG --chains TAG --route d3first --runs 1000 --act model`, a candidate's networks given with `--checkpoint`; the
   `full` segment is the route from the start. It is what decides; the cheap tier only shortlists.

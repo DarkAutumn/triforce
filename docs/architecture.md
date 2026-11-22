@@ -651,6 +651,8 @@ Python sees the layout as
 | `objective` | float32 [10] | all zeros when `objective` is off |
 | `target` | float32 [8] | all zeros when `obs.target` is off |
 | `action_mask` | bool [143] | flat `ActionMask` |
+| `entity_rel` | float32 [12, 10] | schema 7: Link-relative geometry per entity slot (below) |
+| `entity_contact` | float32 [12, 23] | schema 7: velocity, the touch rule and its extrapolation per entity slot (below) |
 
 When the objective block is on, the env attaches the objective (`crates/env/src/objective.rs`) before calling
 the builder.
@@ -735,6 +737,33 @@ its last observation with a nonzero `visible` in this room (0 if never) with `dx
 nothing; in both, its velocity is 0 while hidden and on its first visible observation after. Every other type and
 column is the same in every mode. The owner chooses the mode when round 27 (Wizzrobes) starts; no promoted family
 meets these types.
+
+**Schema 7 (round 36, `docs/experiments/round36.md` "Observation v7 and the hit network").** Two NEW keys, after
+`action_mask`; no schema 6 key or column changes (`tests/test_obs_legacy.py` still hashes every schema 5 column, the
+new keys left out). A `ZeldaPolicy` and the Rust actor never read them (`model.TOKEN_KEYS`, `model.policy_spec`:
+its `obs_spec` leaves them out, so a network built on schema 7 has the layout of one built on schema 6 and today's
+checkpoints load and play bit for bit); the token networks (`triforce/nets/hitnet.py`) do. Both are
+`env::observation::danger_blocks` (`_native.danger_blocks(ram [N, 2048], grid [N, 22, 32], entity_features [N, 12,
+41])` computes them for recorded RAM) with the touch rule's pieces in `zelda::contact`: **arithmetic on the current
+state only** (the RAM, the tile grid, the entity block), no emulator step and nothing looked ahead; experiment 2
+chose them as the game's own touch test put in Link's terms (whether the owner counts the straight-line
+extrapolation as a "small calculation" is asked in round36.md). Observation slot `i` is RAM object slot `i + 1`;
+positions are the entity block's (`x`, `y` back in pixels), so the treasure slot and Gleeok's heads have their
+observation positions; an empty slot is all 0. `tests/test_obs_v7.py` checks every column against the numpy of
+experiment 2's bench (`scripts/experiments/r36_hit_bench.py` `token_features`) on 20,000 recorded decisions of each
+of goriya, Gleeok and darknut, bit for bit.
+
+| Key, columns | Names | Value |
+|---|---|---|
+| `entity_rel` 0, 1 | `dx`, `dy` | middle-to-middle offset / 8, clipped to ±12: the object's middle is asm:Obj_GetMiddle's (x + 8, or + 4 with ObjAttr `$4BF` bit `$40`; y + 8), Link's his corner (`$70`, `$84`) + 8 |
+| `entity_rel` 2-4 | `gap_x`, `gap_y`, `gap` | max(\|d\| − 8, 0) / 8 per axis (pixels before the 9-pixel touch test passes on it) and the larger, clipped to 0-12 |
+| `entity_rel` 5-7 | `touching`, `in_row`, `in_column` | both \|d\| under 9; \|dy\| under 9; \|dx\| under 9 |
+| `entity_rel` 8, 9 | `dx_coarse`, `dy_coarse` | the offset / 64 |
+| `entity_contact` 0, 1 | `vx`, `vy` | pixels a frame from ObjDir `$98` (1 right, 2 left, 4 down, 8 up) and ObjQSpeedFrac `$3BC` / 64 (0 for the treasure slot) |
+| `entity_contact` 2 | `harms` | asm:Link_CheckMonsterTouch_NoReset's condition: ObjType `$34F` ≠ 0, ObjMetastate `$405` 0, ObjStunTimer `$3D` 0, a shot (`$53` up) only in ObjState `$10-$1F`; the treasure slot and Gleeok's heads their `touch_harms` |
+| `entity_contact` 3-7 | `contact_{stand,N,S,W,E}` | Link standing or walking that way at 1.5 px a frame, the object moving straight on at its velocity: how soon both middles come within 9 px on both axes in frames 0-32, (33 − t) / 33, 0 never; 0 when it does not harm |
+| `entity_contact` 8-12 | `closest_{stand,N,S,W,E}` | the smallest gap (max(\|dx\|, \|dy\|) − 9) over those frames, clipped to 0-64, / 32; 2 when it does not harm |
+| `entity_contact` 13-22 | `wall_contact_*`, `wall_closest_*` | the same with both stopped at walls: Link where his lower half (rows 8-15 of his 16 × 16 box) meets a tile class he cannot cross (all but walkable, the door corridors, stairs) or the play area's edge, searched up to 48 px; a walking monster likewise along its velocity; shots and fliers (Keese, Gleeok, Peahat) never |
 
 Checkpoints saved before r56 carry `model_config.grid_encoder: 'conv'`; the conv encoder is the only one left, so
 `ModelConfig.from_dict` drops that key and refuses any other encoder.
@@ -961,6 +990,16 @@ below max health (`item_targets` includes them): for the overworld families, who
 would chase.
 `reward.boss_ate_bomb_penalty` (default 0.5, ≥ 0; 0 drops the term) is `penalty-boss-ate-bomb` per step in which a
 Dodongo swallowed a bomb (round 12).
+`reward.sword_blocked_penalty` (round 38; default `REWARD_TINY` = 0.05 in every family, ≥ 0; 0 drops the term) is
+`penalty-sword-blocked` per step in which a Bubble's touch landed (`zelda::Change::bubble_touched`: the flashing
+Bubble's `SwordBlockedLongTimer` `$4C` rose, 0 → `$10` or reloaded to `$10` while it ran down, or the red one's
+`IsSwordBlocked` `$52E` was set). A touch costs no health, so `penalty-lost-health` never saw it; it blocks the sword
+151-160 frames, shoves Link and makes him invincible `$18` frames (asm:Bubble_Update, asm:Link_HarmByObjType), so
+two touches are at least 24 frames apart: one payment a touch, a second touch while blocked pays again (it restarts
+the block), two inside one step pay once. Flat, not priced by the heart value: the touch changes no hearts, the
+hits it leads to are priced when they land. Counted beside the hits: the visits' and chain records'
+`bubble_touches` and `sword_blocked_frames` (frames of the steps begun with the sword blocked), the evaluation's
+`bubble_touches_per_visit`, the pool's `Outcome.blocked` (the lab's `blocked`, `tried_blocked`).
 `clips: true|false` (round 21; default false; "Grid-point skip" above; the removed designs' `{action: ...,
 shaping: ...}` block is refused): the CLIP kind where a skip is available, the observation's `clip_usable_*` and the
 skips as path-search jumps (PBRS pays the whole wavefront difference of a skip step, as for any position change,
@@ -1231,7 +1270,12 @@ every step, so following an enemy that moves away pays again, and knockback rese
   folder's `NNN` may have any width; it is allocated under `<logs>/.lock`. `round.jsonl` / `round.log` cover the round (chain,
   `chain_progress`, errors, `end`). SIGTERM is turned into an interrupt, so a killed run still saves and writes
   `end`. Standalone `triforce.evaluate` and `eval-chain` log a folder of their own (`events.logged_job`: plan kind
-  `eval` / `chain`; `--no-log` skips the folder, not the turn) and end it `interrupted` on SIGTERM. `--events FILE`
+  `eval` / `chain`; `--no-log` skips the folder, not the turn) and end it `interrupted` on SIGTERM. A lab training
+  (`triforce.lab.train`) writes `<yymmdd>_<NNN>_lab-<name>`, plan kind `lab-train`, a run entry and a
+  `<family>.jsonl` stream a family, all trained at once (docs/lab.md "What a lab job writes"); the lab's bench and
+  recorder, and an experiment script that enters the queue itself, use `events.progress_job`: a folder whose one
+  run's `progress.jsonl` has `eval_start` / `eval_progress` (done of the total in its `unit`, the success so far) /
+  `end`, drawn as an evaluation's row. `--events FILE`
   (train, evaluate, eval-chain) writes into a given stream: in a folder with a `training.json` its driver
   (train_round, eval-batch) owns the plan, the stream and its `end`; in a folder without one the job writes its plan
   there
@@ -1244,8 +1288,16 @@ every step, so following an enemy that moves away pays again, and knockback rese
   / `chain_progress` / `chain` or `eval_start` / `eval_progress` / `eval`, then the batch's `error` and `end`), and
   `round.jsonl` (`start`, `entry_start`, `entry_end`, `end`). Plans record the niceness the job runs at (`nice`).
   `training-gui.py`'s [currently running] shows every live job on the machine, wherever it writes: the registry's
-  running and queued jobs (pid alive with the recorded start time) and its own logs root's. Folders from another checkout
-  are labelled with its directory and branch. Order (window and web view, Nov 17): what runs now is on top, the job
+  running and queued jobs (pid alive with the recorded start time) and its own logs root's. A job the registry knows
+  is never invisible (Nov 22, after the lab's trainings ran unseen): one without a log folder holding its plan (a
+  `--no-log` evaluation, a job of a checkout whose lab writes no plan, a script that registers itself) is shown from
+  its registry file (`job_key`, `entry_plan`: the file stands in for the folder, `registry_only`), in the same
+  order as the others, with its name, kind, checkout and branch, status, time run or waited, estimate and command,
+  marked "no progress data" (a header without segments, a web card and plan line without a bar); once its folder
+  has a plan it is shown from the folder instead (`superseded`). `tests/test_training_gui.py` checks every entry
+  point into the queue, and a new module's folder-less job, in the window and the web view. Folders from another
+  checkout are labelled with its directory and branch. Order (window and web view, Nov 17): what runs now is on top,
+  the job
   that began to run last first (`run_start`: when it was admitted, else its plan's creation; never the folder's
   name, each checkout numbers its own), so a job that starts is added at the top and pushes the others down; then
   the waiting ones in the order they will start; then what ended, the last to end first (`plan_ended`), so a job

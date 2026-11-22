@@ -162,8 +162,8 @@ RECORDED_OFF_SHARE = {'darknut': 0.5, 'ow-boulder': 0.5, 'ow-leever': 0.5, 'ow-l
 
 
 def _old_columns(obs: dict) -> dict:
-    """``obs`` with only the schema 5 columns (by name) of the widened keys."""
-    old = dict(obs)
+    """``obs`` with only the schema 5 keys (schema 7's new keys left out) and columns (by name) of the widened keys."""
+    old = {key: value for key, value in obs.items() if key in convert.OBS_SPEC}
     for key in ('entity_features', 'link', 'room_state'):
         names = convert.FEATURE_NAMES[key]
         old[key] = np.asarray(obs[key])[..., [names.index(n) for n in convert.old_names(key)]]

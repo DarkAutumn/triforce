@@ -290,6 +290,12 @@
   "target_dy",
   "target_is_item"
  ],
+ "ENTITY_REL_FEATURES": ["dx", "dy", "gap_x", "gap_y", "gap", "touching", "in_row", "in_column", "dx_coarse",
+  "dy_coarse"],
+ "ENTITY_CONTACT_FEATURES": ["vx", "vy", "harms", "contact_stand", "contact_N", "contact_S", "contact_W",
+  "contact_E", "closest_stand", "closest_N", "closest_S", "closest_W", "closest_E", "wall_contact_stand",
+  "wall_contact_N", "wall_contact_S", "wall_contact_W", "wall_contact_E", "wall_closest_stand", "wall_closest_N",
+  "wall_closest_S", "wall_closest_W", "wall_closest_E"],
  "spaces": {
   "action_mask": {
    "shape": [
@@ -299,6 +305,15 @@
    "low": 0.0,
    "high": 1.0
   },
+  "entity_contact": {
+   "shape": [
+    12,
+    23
+   ],
+   "dtype": "float32",
+   "low": -4.0,
+   "high": 4.0
+  },
   "entity_features": {
    "shape": [
     12,
@@ -307,6 +322,15 @@
    "dtype": "float32",
    "low": -1.0,
    "high": 1.0
+  },
+  "entity_rel": {
+   "shape": [
+    12,
+    10
+   ],
+   "dtype": "float32",
+   "low": -12.0,
+   "high": 12.0
   },
   "entity_types": {
    "shape": [
