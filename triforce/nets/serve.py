@@ -26,7 +26,8 @@ import torch
 
 from .. import _native
 
-DEFAULT_GATHER = 0.005      # at most this many seconds a batch waits for the other active envs' rows
+DEFAULT_GATHER = 0.005      # at most this many seconds a batch waits for the other active envs' rows (eager forwards)
+GRAPH_GATHER = 0.001        # ... with CUDA graphs (a forward is cheap: answering sooner beats a fuller batch)
 ACTIVE_SECONDS = 1.0        # an env that asked this recently is waited for (``Server._loop``)
 CPU_THREADS = 4             # torch threads when serving on the CPU
 GRAPH_BUCKETS = (1, 2, 4, 8, 16, 32, 64)    # batch sizes a CUDA graph is captured for; larger batches run eagerly
@@ -108,11 +109,12 @@ class Server:
     def __init__(self, device=None, gather: Optional[float] = None, threads: int = CPU_THREADS,
                  half: Optional[bool] = None, graphs: Optional[bool] = None):
         self.device = torch.device(device) if device is not None else serve_device()
-        self.gather = float(os.environ.get('TRIFORCE_SERVE_GATHER', DEFAULT_GATHER)) if gather is None else gather
         self.half = (serve_half() if half is None else half) and self.device.type == 'cuda'
         # CUDA graphs (``_Graph``) for networks without recurrent state, per batch size bucket; a network whose
         # capture fails or whose replay disagrees with its eager forward is served eagerly from then on.
         self.graphs = (serve_graphs() if graphs is None else graphs) and self.device.type == 'cuda'
+        default = GRAPH_GATHER if self.graphs else DEFAULT_GATHER
+        self.gather = float(os.environ.get('TRIFORCE_SERVE_GATHER', default)) if gather is None else gather
         self._graphs: dict[tuple[int, int], _Graph] = {}
         self._eager: set[int] = set()
         if self.device.type == 'cpu':
