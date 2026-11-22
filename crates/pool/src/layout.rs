@@ -195,6 +195,18 @@ impl ObsColumns {
         ObsColumns { columns, rows: 0 }
     }
 
+    /// Drops every row, keeping the capacity.
+    pub fn clear(&mut self) {
+        for column in &mut self.columns {
+            match column {
+                Column::I64(c) => c.clear(),
+                Column::F32(c) => c.clear(),
+                Column::Bool(c) => c.clear(),
+            }
+        }
+        self.rows = 0;
+    }
+
     pub fn push(&mut self, obs: &ObsData) {
         for (key, column) in self.columns.iter_mut().enumerate() {
             match column {

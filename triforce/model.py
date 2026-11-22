@@ -245,6 +245,7 @@ class PolicyOutput:
 
 class ZeldaPolicy(nn.Module):
     """Actor-critic for one specialist.  Same architecture for every specialist; only weights differ."""
+    arch = 'zelda'      # triforce.nets: a checkpoint without model_config['arch'] is this network
 
     def __init__(self, observation_space: Optional[spaces.Dict] = None, config: ModelConfig | dict | None = None):
         super().__init__()
@@ -321,6 +322,17 @@ class ZeldaPolicy(nn.Module):
         obs = self._batch(obs)
         _, value_features = self.mlp_extractor(self._features(obs))
         return self.value_head(value_features).view(-1)
+
+    def heads(self, obs, state=None):
+        """(``nets.Heads``, None): the raw logits of every kind's heads and the value, the lab's interface
+        (``triforce.nets``), so the network can also be served (``nets.serve``) like an experimental one."""
+        from .nets.base import Heads  # pylint: disable=import-outside-toplevel,cyclic-import
+        del state
+        obs = self._batch(obs)
+        policy_features, value_features = self.mlp_extractor(self._features(obs))
+        conditioned = torch.relu(self.kind_condition(policy_features).unsqueeze(1) + self.kind_embedding.weight)
+        return Heads(self.kind_head(policy_features), self.direction_head(conditioned),
+                     self.duration_head(conditioned), self.value_head(value_features).view(-1)), None
 
     # ------------------------------------------------------------------ policy
 

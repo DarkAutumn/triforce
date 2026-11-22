@@ -426,6 +426,42 @@ fn act_modes_follow_evaluate_and_their_rules() {
     }
 }
 
+/// `Heads::act` on `Policy::logits` is `Policy::act`, bit for bit, in every act mode, with masks that remove kinds,
+/// directions and a whole duration row (the generic acting path of docs/lab.md).
+#[test]
+fn acting_from_logits_is_acting_with_the_policy() {
+    use policy::{ActMode, Choose};
+    let p = policy();
+    let heads = p.logit_heads();
+    let mut ls = heads.scratch();
+    for seed in 0..6u64 {
+        let mut o = obs(seed);
+        o.mask[(seed % KINDS as u64) as usize] = seed % 2 == 0;
+        o.mask[KINDS + 2 * DIRS + 1] = false;
+        for u in 0..DURS {
+            o.mask[KINDS + KINDS * DIRS + DURS + u] = false;
+        }
+        let v = [&o.history[..], &o.link[..]];
+        let inp = input(&o, &v);
+        let mut s = p.scratch();
+        let mut logits = vec![0f32; heads.size()];
+        let value = p.logits(&inp, &mut s, &mut logits).unwrap();
+        for mode in ["argmax", "sample", "temperature:0.5+relax:16", "floor:0.05", "topp:0.6"] {
+            let mode: ActMode = mode.parse().unwrap();
+            for step in 0..40 {
+                let choose: Choose = mode.choose(step as u32 % 20, None);
+                let want = p.act(&inp, choose, 7, step, None, &mut s, None).unwrap();
+                let got = heads.act(&logits, value, &o.mask, choose, 7, step, None, &mut ls).unwrap();
+                assert_eq!(bits(&got.0), bits(&want.0), "{mode} seed {seed} step {step}");
+                assert_eq!(got, want, "{mode} seed {seed} step {step}");
+                let given = Some(want.0.action);
+                let scored = heads.act(&logits, value, &o.mask, choose, 7, step, given, &mut ls).unwrap();
+                assert_eq!(scored, p.act(&inp, choose, 7, step, given, &mut s, None).unwrap());
+            }
+        }
+    }
+}
+
 /// The bits of everything an evaluation reports.
 fn bits(o: &policy::Output) -> Vec<u32> {
     let mut v = vec![o.value.to_bits(), o.log_prob.to_bits(), o.entropy.to_bits()];
