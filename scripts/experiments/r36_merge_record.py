@@ -27,7 +27,7 @@ from triforce import _native, registry
 from triforce.events import logged_job
 from triforce.jobs import add_job_arguments, begin_job, work
 from triforce.lab.bench import HARVESTED, ROUTE, load_manifest, team_keys
-from triforce.lab.collect import Family, MultiCollector, Teachers
+from triforce.lab.collect import Family, MultiCollector, Teachers, task_yaml
 from triforce.specialist import load_specialist
 
 STEPS_PER_ENV = 512
@@ -102,7 +102,9 @@ def main(argv=None):
     parser.add_argument('--out', required=True)
     parser.add_argument('--keys', nargs='*', default=None)
     parser.add_argument('--sources', nargs='*', default=['resets', 'entries'])
-    parser.add_argument('--part-yaml', default='target/merge/yaml', help="dir of <family>@d3first.yaml")
+    parser.add_argument('--part-yaml', default=None,
+                        help="dir of <family>@d3first.yaml (round 36's old runs' tasks); default: the lab's task "
+                             "of the key (specialists/<route>/<family>.yaml, the corrected route's)")
     parser.add_argument('--decisions', type=int, default=20480)
     parser.add_argument('--parallel', type=int, default=10)
     parser.add_argument('--seed', type=int, default=36_100_000)
@@ -123,7 +125,10 @@ def main(argv=None):
         if key not in keys:
             continue
         family, part = registry.split_policy(key)
-        base = load_specialist(str(Path(args.part_yaml) / f'{key}.yaml') if part else family)
+        if part and args.part_yaml:
+            base = load_specialist(str(Path(args.part_yaml) / f'{key}.yaml'))
+        else:
+            base = load_specialist(task_yaml(key))
         if 'resets' in args.sources:
             plan.append((key, 'resets', base, None, args.seed + 1000 * i))
         if 'entries' in args.sources and entries[key]:
