@@ -33,6 +33,25 @@ choices within float tolerance.) **The cost of the generic path is about 3.5× t
 a 10-minute chain batch becomes 35 minutes, a 1,000-run segment chain a few hours; fine for the cheap tier and
 training, a reason to port a winner before its full tier. Serve on the GPU; the CPU path is a fallback for tests.
 
+**By envs, precision and size** (Nov 22, `bench speed --paths rust cuda cuda-half --parallel N`, the zol entry of the
+bench; the machine shared, load average 40-45 on 20 threads, so the figures are noisy and wall time includes the
+pool's start-up; decisions a second):
+
+| Network | Path | 10 envs | 32 envs | 64 envs |
+|---|---|---:|---:|---:|
+| today's (zol's run, 866k parameters; 4,126 decisions) | Rust actor | 580 | 1,191 | 732 |
+| | served, GPU, float32 | 217 | 419 | 469 |
+| | served, GPU, float16 (`cuda-half`) | 200 | 307 | 275 |
+| 4× (`ZeldaPolicy` hidden 704, 3.44M parameters, random weights; 15,091 decisions) | Rust actor | 764 | 1,045 | 1,096 |
+| | served, GPU, float32 | 265 | 434 | 467 |
+| | served, GPU, float16 | 246 | 317 | 474 |
+
+More envs help the served path most (bigger batches: 217 → 469 a second); it takes 1.6-2.8× the Rust actor's time
+at 32-64 envs and 2.7-2.9× at 10 (the Rust figures move with the load). A network four times the size costs no
+more a decision on either path at these sizes: emulation, observation and the rendezvous dominate. **Half precision
+never pays** (equal or slower: autocast's casts cost more than float16 saves on batches this small) and changes
+some decisions (4,400 against 4,126 on the same seeds): leave `TRIFORCE_SERVE_HALF` off.
+
 **Chosen: (c) with (a) as the generic path.** A network the Rust actor knows (`ZeldaPolicy`) plays as before, bit
 for bit (100 chain runs of `d3first` from `3_7cs_0`, seeds 0-99, today's networks: every run's record identical,
 field for field, between main and this branch); any other `torch.nn.Module` with the interface below is served by torch from the Python process that owns
@@ -58,9 +77,7 @@ distributions and action replays (refused when the pool starts).
 
 **Recurrent state, per env.** Each env's actor scratch has a slot; the server keeps a recurrent network's state per
 (network, slot), starts it over at a job's decision 0 or a new job, and a bootstrap value request (a truncation)
-reads it without advancing it (`tests/test_lab_nets.py`). Training a recurrent network is not built: the learner
-recomputes rows independently from the initial state (`LabNet._heads`); sequences need the rollout's order (the
-buffer keeps `jobs` and `steps`) and a burn-in.
+reads it without advancing it (`tests/test_lab_nets.py`). Training it: "Memory" below.
 
 Devices: `$TRIFORCE_SERVE_DEVICE` (`cpu` | `cuda`; default cuda when present). During training the served copy
 shares the learner's GPU.
@@ -114,19 +131,111 @@ python -m triforce.lab.train --name zol+skg --families zol stalfos-keese-gel --p
 ```
 
 - `--families KEY[=YAML]`: a family (`zol`) or a route's own run (`zol@d3first`, the wood-sword half) with its task
-  yaml when it isn't the family's (`zol@d3first=path/zol.yaml`). Each yaml stays its task: rooms, start states,
-  hp and item randomisation, masks, rewards, `max_steps`, curriculum (its progress in `<run>/tasks/<key>/`).
+  yaml when it isn't the family's (`zol@d3first=path/zol.yaml`). Without one, a route part reads
+  `specialists/<route>/<family>.yaml` when it exists (`lab.collect.task_yaml`): the seventeen `specialists/d3first/`
+  files are the wood-sword runs' tasks rebuilt from round 34's recipe (the family's yaml with `state_routes:
+  [d3first]`, `ram_randomization.chain_hp: 1.0`, `harvested_fraction: 0.3`; the files each run trained on lived in
+  worktrees that are gone, and some runs also narrowed the rooms). Each yaml stays its task: rooms, start states,
+  hp and item randomisation, masks, rewards, `max_steps`, curriculum (its progress in `<run>/tasks/<key>/`),
+  harvested starts (`harvested_fraction`: drawn as in `triforce train`, `tests/test_lab_memory.py`).
 - Every family has its own `EnvPool` and collector; `--parallel` envs are split by `--shares KEY=W` (default
-  equal), at least one a family. The learner trains on all rows at once (`lab.collect.BufferSet`).
-  `MultiCollector.shares` is the place prioritised sampling across families goes (`plr.py`'s scores per family).
-- Metrics: the merged ones plus `family/<key>/<metric>` for every rollout metric (`metrics.jsonl`; the log line
-  prints each family's success).
+  equal), at least one a family, fixed for the run. The learner trains on all rows at once (`lab.collect.BufferSet`).
+- Metrics: the merged ones plus `family/<key>/<metric>` for every rollout metric and `family/<key>/rows_share`
+  (`metrics.jsonl`; the log line prints each family's success).
 - `--arch NAME --arch-config JSON` for a fresh network of another class; `--load CKPT` to start from a checkpoint.
 - The run is `<models>/<name>/<run-id>`; every member family gets a link `<models>/<family>/<run-id>` to it. So
   `triforce promote zol <run>` (and `--route d3first` for a route part), `triforce evaluate` per family,
   `eval-chain`, `select-checkpoint`, `triforce list` and the version stamp work unchanged, and `runner.Policies`
   loads a run that several keys name once.
-- Not supported in a lab run (refused or absent): PLR, search, best-of-N, demonstrations, SIL, PPG, the early stop.
+- As in `triforce train`: `--checkpoint-every N [--checkpoint-keep K]` (numbered checkpoints `<run>/checkpoints/
+  it<N>/`, `select-checkpoint FAMILY RUN` reads them through the family's link), `--demos FILE... --demo-coeff C`
+  (PPO with a network without memory), `--stop-success X --stop-patience N` (every family's own `EarlyStop` must
+  hold, then an evaluation of each family, `CONFIRM_EPISODES` episodes a seed state, must reach X; logged
+  `family/<key>/balanced_success_rate`; without `triforce train`'s hearts and bombs plateau rules).
+- Not supported in a lab run (absent): PLR, search, best-of-N, SIL, PPG.
+
+### Sampling across families by need
+
+`--sampling need` (`lab.collect.NeedSampler`): before each rollout, a family's **need** is how far its success over
+its last `--need-window` (100) episodes of this run is below its target (`--need-target teacher`: its key's success
+on the yardstick in `lab/reference.json`, "below its teacher"; or a number for every family; no episode yet: the
+whole target), and its share of the rows is `(floor + need) / Σ (floor + need)` (`--need-floor` 0.05). Envs a family
+stay fixed (each family's pool runs on its own threads); its **decisions an env** change instead, so the rows per
+rollout stay `--steps-per-update`. A family with a large share takes longer to roll out than the others, which
+then idle: the CPU time is the same, the wall time follows the largest share. Logged per iteration:
+`family/<key>/need`, `family/<key>/recent_success`, `family/<key>/rows_share`.
+
+## Memory: training a recurrent network
+
+A `LabNet` with memory returns a state from `initial_state(batch)` (`[batch, ...]`) and takes and returns it in
+`heads(obs, state)`; `LabNet.recurrent` is then true and the lab trains it on sequences:
+
+- **Acting** keeps the state per env in the server (above).
+- **Readying a rollout** (`RolloutBuffer.recompute_sequence`, from `ppo.Collector.ready`): the learner's network runs
+  over the rollout in order, every env at once, from the state the env's last rollout ended with (`Collector.carry`),
+  the state starting over where a row starts an episode; it replaces the acting log-probs and values as for any
+  network, and keeps the state at the start of every `--bptt` decisions (`chunk_states`, default 16).
+- **The update** (`ppo.PPO.optimize`, and the imitation update): minibatches of whole sequences; each is unrolled from
+  its stored start state (`LabNet.unroll`, resets at episode starts inside it), the gradient flowing within the
+  sequence (truncated back-propagation through time). Steps per env must be a multiple of `--bptt`.
+- The reference class is `nets/gru.py` (`gru`: today's encoders, a projection, a GRU cell, towers, today's heads;
+  state `[B, core_dim]`). The head entropies logged after an update are computed row by row from the initial state
+  (diagnostics only). Not with `--demos` (demonstration rows are no sequences).
+
+```
+python -m triforce.lab.train --name mem --families zol stalfos-keese-gel --parallel 8 --iterations 200 \
+    --arch gru --arch-config '{"hidden_dim": 256, "core_dim": 256}' --bptt 16 --seed 36
+```
+
+## Auxiliary targets
+
+**What the rollout carries.** Per decision, besides the reward and the frames: `health_lost` (hearts the action's
+step lost, net of what it gained) and `hits` (monster hits it dealt, as the game showed them, no look-ahead)
+(`RolloutBuffer`, written by the pool from `StepInfo`). With `--try-others K:P` (training only), on a share P of
+the decisions (drawn by the decision's key) the policy's next K candidates after the action taken (the Rust actor's
+ranking, `Actor::alternatives`; a served network's from its logits, `policy::logits::Heads::ranked`: a sample
+without replacement from the policy) are each tried in the env (`PoolEnv::trial`, the game's own future, back to
+exactly where it stood: the play is unchanged, decision for decision, `tests/test_lab_aux.py`); `tried_actions`,
+`tried_lost` (1 lost health, 0 not, -1 untried) and `tried_frames` keep them. Cost: each trial emulates its action
+from a checkpoint and back (no observation, no network), K·P trials a decision. Logged per family:
+`family/<key>/frames_per_decision`, `family/<key>/tried_frames_per_decision`. Measured (Nov 22) on goriya's
+`d3first` rooms (`goriya@d3first`, its route run `r32d1-goriya` training, 8 envs, 10 iterations of 4,096 decisions,
+iterations 2-10; the machine at load 40-45, so the rates are noisy):
+
+| `--try-others` | rollout decisions a second | frames a decision played | trial frames a decision | frames emulated a decision |
+|---|---:|---:|---:|---:|
+| none | 399 | 17.7 | 0 | 17.7 |
+| `4:0.25` | 425 | 17.7 | 14.7 | 32.4 (1.8×) |
+| `8:1.0` | 114 | 17.9 | 117.0 | 134.9 (7.6×) |
+
+`4:0.25` costs nothing measurable at this load (one trial a decision on average); `8:1.0` (eight trials a decision,
+and on the Rust actor a network pass a candidate to rank them) makes the rollout 3.5× slower.
+
+**The losses.** A network returns named auxiliary outputs in `Heads.aux`; `--aux OUTPUT=TARGET:COEFF` adds
+`COEFF` × a loss on that output (`lab/auxiliary.py`), in PPO and in imitation:
+
+| target | label (per decision) | loss |
+|---|---|---|
+| `hit` | the action lost health | BCE on logits; a per-action output also on every tried candidate's verdict |
+| `damaged` | the action dealt a monster a hit | BCE on logits |
+| `hearts_lost` | hearts lost (net, ≥ 0) | ½ squared error |
+| `frames` | the action's frames / 16 | ½ squared error |
+
+An output `[B]` predicts for the action taken; `[B, 352]` one value per joint action (`kind * 32 + direction * 4 +
+duration`), read at the action taken (and the tried ones). Logged: `losses/aux_<output>`,
+`charts/aux_<output>_labels` (labels a row).
+
+**A hit head feeding the action choice** (`nets/hithead.py`, `hithead`): today's body plus a hit tower and a
+per-action hit head (`aux['hit']`, 352 logits) trained only by its own loss; its probabilities, gradient stopped, are
+an extra input to the policy tower (`hit_input`; off: an auxiliary target only; `detach_body`: the hit loss leaves
+the encoders alone too). At play it is served like any network: it plays from the observation alone, with no
+trial, and an act mode with foresight is refused for it as for any served network (`tests/test_lab_aux.py`).
+
+```
+python -m triforce.lab.train --name hit --families darknut --parallel 8 --iterations 200 --arch hithead \
+    --aux hit=hit:0.5 --try-others 4:0.25 --seed 36
+```
+
 
 ## Teachers
 
