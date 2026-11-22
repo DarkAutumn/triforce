@@ -1,6 +1,6 @@
 """Round 36, "One network by imitation": a student's bench results against the 51 teachers, slot by slot.
 
-    python scripts/experiments/r36_merge_report.py --student-early S.json --student-late L.json --out R.json
+    python scripts/experiments/r36_merge_report.py --student S.json --out R.json [--table]
 
 A *slot* is one of the 51 teachers on the rooms it plays on the route:
 
@@ -36,17 +36,17 @@ def slots(reference: dict, late_team: dict) -> list[tuple[str, str, str, dict]]:
         if part in keys:
             out.append((part, family, 'early', keys[part]))
             if family in late_team['keys']:
-                out.append((family, family, 'late', late_team['keys'][family]))
+                out.append((family, f'{family}~late', 'late', late_team['keys'][family]))
         else:
             out.append((family, family, 'early', keys[family]))
     return out
 
 
-def report(reference: dict, late_team: dict, early: dict, late: dict) -> dict:
+def report(reference: dict, late_team: dict, student_run: dict) -> dict:
     rows = {}
     pooled_teacher, pooled_student = [], []
     for slot, key, which, teacher in slots(reference, late_team):
-        student = (early if which == 'early' else late)['keys'].get(key)
+        student = student_run['keys'].get(key)
         if student is None:
             continue
         a, b = records(teacher), records(student)
@@ -99,13 +99,13 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     parser.add_argument('--reference', default='triforce/lab/reference.json')
     parser.add_argument('--late-team', default='target/merge/bench/late17-team.json')
-    parser.add_argument('--student-early', required=True)
-    parser.add_argument('--student-late', required=True)
+    parser.add_argument('--student', required=True,
+                        help="bench run on r36_merge_pairs.py --combined's manifest (late rooms as '<family>~late')")
     parser.add_argument('--out', default=None)
     parser.add_argument('--table', action='store_true')
     args = parser.parse_args(argv)
     load = lambda p: json.loads(Path(p).read_text())  # noqa: E731
-    result = report(load(args.reference), load(args.late_team), load(args.student_early), load(args.student_late))
+    result = report(load(args.reference), load(args.late_team), load(args.student))
     summary = {k: v for k, v in result.items() if k != 'rows'}
     print(json.dumps(summary, indent=1))
     if args.table:

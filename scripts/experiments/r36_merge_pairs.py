@@ -38,19 +38,29 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     parser.add_argument('families', nargs='+')
     parser.add_argument('--episodes', type=int, default=10, help="episodes a state (the bench: 5)")
+    parser.add_argument('--combined', action='store_true',
+                        help="one network's manifest: the bench's entries of these families under the family keys "
+                             "and their default runs' rooms under '<family>~late' (bench episodes)")
     parser.add_argument('--out', required=True)
     args = parser.parse_args(argv)
     states_dir = Path(_native.paths()['states_dir'])
     base = load_manifest()
     entries = []
+    if args.combined:
+        entries = [e for e in base['entries'] if e['key'] in args.families]
     for family in args.families:
         states, source = late_states(family, states_dir)
+        if args.combined:
+            if any(e['key'] == f'{family}@{ROUTE}' for e in base['entries']):
+                entries.append({'key': f'{family}~late', 'family': family, 'source': 'seed', 'origin': source,
+                                'states': states})
+            continue
         for key in (family, f'{family}@{ROUTE}'):
             entries.append({'key': key, 'family': family, 'source': 'seed', 'origin': source, 'states': states})
         print(f"{family}: {len(states)} states ({source}): {states}")
     manifest = {k: v for k, v in base.items() if k not in ('entries', 'missing_coverage', 'full')}
     manifest['entries'] = entries
-    manifest['episodes'] = args.episodes
+    manifest['episodes'] = base['episodes'] if args.combined else args.episodes
     Path(args.out).write_text(json.dumps(manifest, indent=1), encoding='utf-8')
     return 0
 
