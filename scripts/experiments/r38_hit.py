@@ -66,16 +66,23 @@ class Rows:
 
 
 def load_rows(source: str) -> Rows:
-    """``source``: ``r36:FAMILY``, a recording ``DIR``, or ``DIR+blocked`` (the label ``hit_or_blocked``: lost
-    health, or a Bubble's touch landed, the sword blocked: main's round 38 targets)."""
+    """``source``: ``r36:FAMILY``, a recording ``DIR``, ``DIR+blocked`` (the label ``hit_or_blocked``: lost
+    health, or a Bubble's touch landed, the sword blocked: main's round 38 targets), either with ``#KEY`` for one
+    family's rows of a recording of several (``KEY`` as in its ``dataset.json``)."""
     if source.startswith('r36:'):
         return _load_r36(source[4:])
+    source, _, family = source.partition('#')
     directory, _, label = source.partition('+')
     shards = sorted(Path(directory).glob('shard-*.npz'))
     parts = [dict(np.load(p)) for p in shards]
     held = np.concatenate([np.full(len(p['action']), i % SHARD_HOLDOUT == SHARD_HOLDOUT - 1)
                            for i, p in enumerate(parts)])
     d = {k: np.concatenate([p[k] for p in parts]) for k in parts[0]}
+    if family:
+        families = json.loads((Path(directory) / 'dataset.json').read_text())['families']
+        keep = d['family'] == families.index(family)
+        d = {k: v[keep] for k, v in d.items()}
+        held = held[keep]
     obs = {k[len('obs/'):]: v for k, v in d.items() if k.startswith('obs/')}
     obs[MASK_KEY] = d['action_mask']
     n = len(d['action'])
@@ -97,7 +104,7 @@ def load_rows(source: str) -> Rows:
         lost.append(tried_lost)
         own.append(np.zeros(len(r), bool))
     return Rows(obs, np.concatenate(rows), np.concatenate(joints), np.concatenate(lost), np.concatenate(own), held,
-                np.ones(n, np.int8), source)
+                np.ones(n, np.int8), source + (f'#{family}' if family else ''))
 
 
 def _load_r36(family: str) -> Rows:
@@ -301,11 +308,12 @@ def table(directory: Path, base: str) -> str:
 # ---------------------------------------------------------------------------------------------- retraining
 
 def retrain(init: str, sources: list[str], save: str, epochs: int, lr: float, batch: int, device, seed: int,
-            weights: list[float]) -> None:
+             weights: list[float], fraction: float = 1.0) -> None:
     """The hit network's trunk and hit tower trained on every source's training candidates (BCE, AdamW one-cycle,
     as experiment 2's bench), from ``init`` (a ``hitnet`` or ``hitshift`` checkpoint, or ``fresh:POLICY``: a new
     ``hitnet`` on that policy's observation plus schema 7's fields, as experiment 2's bench builds it); P = R on each
-    source's held-out decisions after every epoch."""
+    source's held-out decisions after every epoch. ``fraction``: the share of each source's training decisions kept
+    (drawn by decision, the same draw for a given seed: the data curve)."""
     torch.manual_seed(seed)
     data = [load_rows(s) for s in sources]
     if init.startswith('fresh:'):
@@ -324,6 +332,12 @@ def retrain(init: str, sources: list[str], save: str, epochs: int, lr: float, ba
     train = []
     for i, rows in enumerate(data):
         m = ~rows.held[rows.c_row]
+        if fraction < 1.0:
+            train_rows = np.flatnonzero(~rows.held)
+            kept = np.zeros(rows.rows, bool)
+            kept[np.random.default_rng(seed).choice(train_rows, int(round(fraction * len(train_rows))),
+                                                    replace=False)] = True
+            m &= kept[rows.c_row]
         reps = max(1, int(round(weights[i]))) if weights else 1
         train += [np.stack([np.full(m.sum(), i), np.flatnonzero(m)], 1)] * reps
     train = np.concatenate(train)
@@ -416,6 +430,7 @@ def main(argv=None) -> int:
     r.add_argument('--lr', type=float, default=4e-4)
     r.add_argument('--batch', type=int, default=1024)
     r.add_argument('--seed', type=int, default=0)
+    r.add_argument('--fraction', type=float, default=1.0, help="share of each source's training decisions kept")
     t = sub.add_parser('table')
     t.add_argument('directory', type=Path)
     t.add_argument('--base', default='teacher')
@@ -450,7 +465,7 @@ def main(argv=None) -> int:
             write_json_atomic(args.out, results)
     elif args.command == 'retrain':
         retrain(args.init, args.data, args.save, args.epochs, args.lr, args.batch, torch.device(args.device),
-                args.seed, args.repeat)
+                args.seed, args.repeat, args.fraction)
     elif args.command == 'table':
         print(table(args.directory, args.base))
     return 0

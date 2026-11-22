@@ -1,0 +1,353 @@
+"""Round 38: the hit head carried to the families that cost the most runs on `d3first` (docs/experiments/round38.md
+"The hit head across families").
+
+    python scripts/experiments/r38_head.py cost [--records GLOB...]          # runs and hearts lost a family
+    python scripts/experiments/r38_head.py manifests --families KEY...        # target/r38h/manifest-<family>.json
+    python scripts/experiments/r38_head.py combine --head NAME=CKPT --families KEY... --weights 2 4 8
+    python scripts/experiments/r38_head.py bench --families KEY... --arm NAME=SPEC... --out DIR
+    python scripts/experiments/r38_head.py pr --hit NAME=CKPT... --data DIR... --families KEY... --out JSON
+    python scripts/experiments/r38_head.py slices36 --hit CKPT --family darknut|boss-gleeok|goriya-all
+    python scripts/experiments/r38_head.py chains A.jsonl B.jsonl [--from-room ...]  # paired chain comparison
+
+``cost``: from the 1000-run segment chains of today's 51 networks on the corrected route (``r36base``: every room
+record has its family, hits and health in and out), per family and segment the runs lost in its rooms (the run's
+last room, for every way a run ends short) and the hearts lost there (health in + hearts picked up - health out),
+per 1000 runs of the segment (the 300-run segments scaled).
+
+``combine``: per family, its ``d3first`` policy (``registry.policy_checkpoint``) and the head side by side
+(``hitshift``, nothing trained), ``models/r38head/<family>-<NAME>-w<w>``.
+
+``bench``: one queued job; per family its manifest (24 of its ``d3first`` harvested entries x 10 seeds, the
+yardstick's choice) and every arm, ``DIR/<family>/bench-<arm>.json`` (``r38_hit.py table DIR/<family>``). An arm
+``SPEC``: ``teacher`` (today's network), ``planner`` (today's network with the look-ahead, beside), or a combination
+name ``NAME-w<w>`` (``models/r38head/<family>-NAME-w<w>``).
+
+``pr``: per family, each head on the held-out shards of the recordings (``DIR#KEY``): precision = recall on the
+actions taken and on every judged candidate (``r38_hit.pr_report``), and the judged hits split by what was in the
+air at the decision (from the inputs: an enemy shot present, ``projectile`` and ``hurts_on_touch`` set): recall at
+the P = R threshold of the hits with a shot in the air and of those without one (touches, and shots fired after
+the decision; the recordings do not name the hitter). ``slices36``: the same on round 36's collections, where the
+hitter is known (touch / a shot in the air / a shot fired after the decision), and by the hit's frame in the action.
+"""
+
+import argparse
+import glob
+import json
+import math
+import os
+import sys
+from collections import defaultdict
+from pathlib import Path
+
+import numpy as np
+import torch
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / 'scripts' / 'experiments'))
+
+import r38_hit as rh  # noqa: E402
+from triforce import _native, registry  # noqa: E402
+from triforce.events import progress_job, write_json_atomic  # noqa: E402
+from triforce.jobs import add_job_arguments, begin_job, work  # noqa: E402
+from triforce.lab import bench as yardstick  # noqa: E402
+
+R38H = ROOT / 'target' / 'r38h'
+CHAINS = '/home/leculver/git/triforce/target/r56-chains'
+PLANNER = 'temperature:0.5+relax:16+plan:16:1'
+FEATURES = list(_native.ENTITY_FEATURES)
+PRESENCE, PROJECTILE, HURTS = (FEATURES.index(k) for k in ('presence', 'projectile', 'hurts_on_touch'))
+
+
+# ---------------------------------------------------------------------------------------------- the cost table
+
+def cost(paths: list[str]) -> dict:
+    """family -> segment -> {runs, lost, hearts, hits, visits} per 1000 runs of the segment (module docstring)."""
+    out: dict = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
+    rates = {}
+    for path in paths:
+        segment = Path(path).stem.split('-', 2)[2]
+        runs = [json.loads(line) for line in open(path, encoding='utf-8')]
+        scale = 1000 / len(runs)
+        rates[segment] = sum(r['result'] == 'success' for r in runs) / len(runs)
+        for run in runs:
+            for room in run['rooms']:
+                cell = out[room['specialist']][segment]
+                cell['visits'] += scale
+                cell['hits'] += scale * room['hits']
+                cell['hearts'] += scale * max(0.0, room['health_in'] + room['hearts_healed'] - room['health_out'])
+            if run['result'] != 'success' and run['rooms']:
+                out[run['rooms'][-1]['specialist']][segment]['lost'] += scale
+    return {'rates': rates, 'families': {f: {s: dict(c) for s, c in segs.items()} for f, segs in out.items()}}
+
+
+def cost_table(result: dict, segments: list[str]) -> str:
+    lines = ['| family | ' + ' | '.join(f'{s} lost / hearts' for s in segments) + ' | runs lost | hearts lost | '
+             'hits a visit |', '|---|' + '---:|' * (len(segments) + 3)]
+    rows = []
+    for family, segs in result['families'].items():
+        cells = [segs.get(s, {}) for s in segments]
+        lost = sum(c.get('lost', 0) for c in cells)
+        hearts = sum(c.get('hearts', 0) for c in cells)
+        visits = sum(c.get('visits', 0) for c in cells)
+        if visits:
+            rows.append((lost, family, cells, hearts, sum(c.get('hits', 0) for c in cells) / visits))
+    for lost, family, cells, hearts, hpv in sorted(rows, reverse=True):
+        lines.append(f'| {family} | ' + ' | '.join(f"{c.get('lost', 0):.0f} / {c.get('hearts', 0):.0f}" if c else ''
+                                                  for c in cells) + f' | {lost:.0f} | {hearts:.0f} | {hpv:.2f} |')
+    lines.append('| segment rate | ' + ' | '.join(f"{result['rates'][s]:.3f}" for s in segments) + ' | | | |')
+    return '\n'.join(lines)
+
+
+# ---------------------------------------------------------------------------------------------- networks, bench
+
+def family_of(key: str) -> str:
+    return registry.split_policy(key)[0]
+
+
+def write_manifests(keys: list[str], states: int, episodes: int, out: Path) -> None:
+    base = yardstick.load_manifest()
+    states_dir = Path(_native.paths()['states_dir'])
+    out.mkdir(parents=True, exist_ok=True)
+    for key in keys:
+        names, source = yardstick.choose_states(family_of(key), states, states_dir, 'd3first')
+        manifest = {**base, 'episodes': episodes, 'states_per_family': states,
+                    'entries': [{'key': key, 'family': family_of(key), 'source': source, 'states': names}]}
+        write_json_atomic(out / f'manifest-{family_of(key)}.json', manifest)
+        print(f'[manifests] {key}: {len(names)} states ({source}) x {episodes}', flush=True)
+
+
+def combination(key: str, name: str) -> str:
+    return str(ROOT / 'models' / 'r38head' / f'{family_of(key)}-{name}')
+
+
+def combine(keys: list[str], heads: list[str], weights: list[float]) -> None:
+    for key in keys:
+        policy = str(registry.policy_checkpoint(key, ROOT / 'models'))
+        for head in heads:
+            name, checkpoint = head.split('=', 1)
+            checkpoint = checkpoint.replace('{family}', family_of(key))
+            rh.combine(policy, checkpoint, weights, 'r38head', f'{family_of(key)}-{name}', 'softplus')
+            print(f'[combine] {key}: {policy} + {checkpoint} -> r38head/{family_of(key)}-{name}-w*', flush=True)
+
+
+def bench(keys: list[str], arms: list[str], out: Path, manifests: Path, parallel: int, logs_dir=None) -> None:
+    plan = []
+    for key in keys:
+        manifest = yardstick.load_manifest(manifests / f'manifest-{family_of(key)}.json')
+        teacher = str(registry.policy_checkpoint(key, ROOT / 'models'))
+        for arm in arms:
+            if arm == 'teacher':
+                plan.append((key, manifest, arm, teacher, None))
+            elif arm == 'planner':
+                plan.append((key, manifest, arm, teacher, PLANNER))
+            else:
+                plan.append((key, manifest, arm, combination(key, arm), None))
+    total = sum(len(m['entries'][0]['states']) * m['episodes'] for _, m, *_ in plan)
+    with progress_job('lab-bench', 'eval', total, root=logs_dir, work=work(eval_episodes=total)) as progress:
+        done = 0
+        for key, manifest, arm, checkpoint, act in plan:
+            path = out / family_of(key) / f'bench-{arm}.json'
+            episodes = len(manifest['entries'][0]['states']) * manifest['episodes']
+            if path.exists():
+                print(f'[bench] {key} {arm}: kept {path}', flush=True)
+            else:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                result = yardstick.run_bench({key: checkpoint}, manifest, parallel, act=act)
+                result['arm'] = {'name': arm, 'checkpoint': checkpoint, 'act': act}
+                write_json_atomic(path, yardstick.compact(result))
+                row = result['keys'][key]
+                print(f"[bench] {key} {arm}: hits/visit {row['hits_per_visit']:.3f} hearts {row['hearts_lost']:.3f} "
+                      f"success {row['success']:.3f} decisions {row['decisions']:.1f} "
+                      f"({result['decisions_per_second']:.0f} decisions/s)", flush=True)
+            done += episodes
+            progress.update(done, 0.0, key=f'{key} {arm}')
+
+
+# ---------------------------------------------------------------------------------------------- precision
+
+def shot_in_air(obs: dict, rows: np.ndarray) -> np.ndarray:
+    f = obs['entity_features'][rows]
+    return ((f[..., PRESENCE] > 0) & (f[..., PROJECTILE] > 0) & (f[..., HURTS] > 0)).any(-1)
+
+
+def pr_sliced(rows: rh.Rows, logits: torch.Tensor, index: np.ndarray) -> dict:
+    out = rh.pr_report(rows, logits, index)
+    where = np.full(rows.rows, -1)
+    where[index] = np.arange(len(index))
+    keep = where[rows.c_row] >= 0
+    c_rows, joints, lost = rows.c_row[keep], rows.c_joint[keep], rows.c_lost[keep]
+    scores = logits[torch.as_tensor(where[c_rows]), torch.as_tensor(joints)].cpu().numpy()
+    k = int(lost.sum())
+    if k == 0:
+        return out
+    threshold = np.sort(scores)[-k]
+    shot = shot_in_air(rows.obs, c_rows)
+    for name, m in (('shot_in_air', shot), ('no_shot', ~shot)):
+        hit = lost & m
+        out[f'recall_{name}'] = float((scores[hit] >= threshold).mean()) if hit.any() else float('nan')
+        out[f'lost_{name}'] = int(hit.sum())
+    out['decisions'] = int(len(index))
+    out['taken_lost_rate'] = float(rows.c_lost[rows.c_taken].mean())
+    return out
+
+
+def pr(heads: list[str], sources: list[str], device, everything: bool = False) -> dict:
+    results = {}
+    loaded = {}
+    for source in sources:
+        rows = rh.load_rows(source)
+        index = np.arange(rows.rows) if everything else np.flatnonzero(rows.held)
+        for head in heads:
+            name, checkpoint = head.split('=', 1)
+            family = source.partition('#')[2]
+            checkpoint = checkpoint.replace('{family}', family_of(family) if family else '')
+            if checkpoint not in loaded:
+                loaded[checkpoint] = rh.load(checkpoint).to(device).eval()
+            report = pr_sliced(rows, rh.hit_logits(loaded[checkpoint], rows.obs, index, device), index)
+            results[f'{name} on {source}'] = report
+            print(name, source, json.dumps({k: round(v, 3) if isinstance(v, float) else v
+                                            for k, v in report.items()}), flush=True)
+    return results
+
+
+def slices36(head: str, family: str, device) -> dict:
+    """The head on round 36's held-out collection of ``family``, the hitter known: recall at the P = R threshold of
+    touches, of shots in the air at the decision, of shots fired after it, and by the hit's frame in the action."""
+    import r36_hit_bench as hb  # pylint: disable=import-outside-toplevel
+    import r38_lane  # pylint: disable=import-outside-toplevel
+    data, _ = hb.load_family(family)
+    rows = rh.load_rows(f'r36:{family}')
+    network = rh.load(head).to(device).eval()
+    index = np.flatnonzero(rows.held)
+    logits = rh.hit_logits(network, rows.obs, index, device)
+    out = rh.pr_report(rows, logits, index)
+    where = np.full(rows.rows, -1)
+    where[index] = np.arange(len(index))
+    keep = where[data.c_row] >= 0
+    scores = logits[torch.as_tensor(where[data.c_row[keep]]), torch.as_tensor(data.c_joint[keep])].cpu().numpy()
+    lost = data.c_lost[keep].astype(bool)
+    threshold = np.sort(scores)[-int(lost.sum())]
+    d = data.d
+    typ = d['tried_hit_type'][data.c_index][keep].astype(np.int64)
+    frame = d['tried_hit_frame'][data.c_index][keep].astype(np.int64)
+    post = r38_lane.post_decision_shots(data)[keep]
+    shot = lost & (typ >= 0x53)
+    groups = {'touch': lost & (typ < 0x53), 'shot_in_air': shot & ~post, 'shot_after': post}
+    for lo, hi in ((0, 4), (4, 8), (8, 16), (16, 999)):
+        groups[f'frame_{lo}_{hi}'] = lost & (frame >= lo) & (frame < hi)
+    for name, m in groups.items():
+        out[f'recall_{name}'] = float((scores[m] >= threshold).mean()) if m.any() else float('nan')
+        out[f'lost_{name}'] = int(m.sum())
+    print(family, json.dumps({k: round(v, 3) if isinstance(v, float) else v for k, v in out.items()}), flush=True)
+    return out
+
+
+# ---------------------------------------------------------------------------------------------- chains
+
+def chain_compare(base: str, new: str) -> dict:
+    """Paired on seeds: the success rate of each, the difference with its standard error, and per room the runs
+    lost and hits a visit of each."""
+    a = {r['seed']: r for r in map(json.loads, open(base, encoding='utf-8'))}
+    b = {r['seed']: r for r in map(json.loads, open(new, encoding='utf-8'))}
+    seeds = sorted(set(a) & set(b))
+    sa = np.array([a[s]['result'] == 'success' for s in seeds], float)
+    sb = np.array([b[s]['result'] == 'success' for s in seeds], float)
+    diff = sb - sa
+    out = {'runs': len(seeds), 'base': float(sa.mean()), 'new': float(sb.mean()), 'diff': float(diff.mean()),
+           'se': float(diff.std(ddof=1) / math.sqrt(len(seeds)))}
+    rooms = {}
+    for tag, runs in (('base', a), ('new', b)):
+        for s in seeds:
+            run = runs[s]
+            for room in run['rooms']:
+                cell = rooms.setdefault(f"{room['level']}:{room['room']} {room['specialist']}", defaultdict(float))
+                cell[f'{tag}_visits'] += 1
+                cell[f'{tag}_hits'] += room['hits']
+            if run['result'] != 'success' and run['rooms']:
+                last = run['rooms'][-1]
+                rooms[f"{last['level']}:{last['room']} {last['specialist']}"][f'{tag}_lost'] += 1
+    out['rooms'] = {k: dict(v) for k, v in sorted(rooms.items(), key=lambda kv: -kv[1].get('base_lost', 0))}
+    return out
+
+
+# ---------------------------------------------------------------------------------------------- main
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = parser.add_subparsers(dest='command', required=True)
+    c = sub.add_parser('cost')
+    c.add_argument('--records', nargs='+', default=sorted(glob.glob(f'{CHAINS}/r36base-1k-*.jsonl')) + [
+        f'{CHAINS}/r36base-300-{s}.jsonl' for s in ('d1', 'd8', 'd9', 'post-d3', 'post-d4', 'post-d6', 'post-d8')])
+    c.add_argument('--segments', nargs='+', default=['d4', 'd3', 'd5', 'd8'])
+    c.add_argument('--out', type=Path, default=R38H / 'cost.json')
+    m = sub.add_parser('manifests')
+    m.add_argument('--families', nargs='+', required=True)
+    m.add_argument('--states', type=int, default=24)
+    m.add_argument('--episodes', type=int, default=10)
+    m.add_argument('--out', type=Path, default=R38H)
+    k = sub.add_parser('combine')
+    k.add_argument('--families', nargs='+', required=True)
+    k.add_argument('--head', nargs='+', required=True, metavar='NAME=CKPT', help='CKPT may hold {family}')
+    k.add_argument('--weights', type=float, nargs='+', default=[2, 4, 8])
+    b = sub.add_parser('bench')
+    b.add_argument('--families', nargs='+', required=True)
+    b.add_argument('--arm', nargs='+', required=True)
+    b.add_argument('--out', type=Path, required=True)
+    b.add_argument('--manifests', type=Path, default=R38H)
+    b.add_argument('--parallel', type=int, default=10)
+    b.add_argument('--logs-dir', default=None)
+    add_job_arguments(b)
+    p = sub.add_parser('pr')
+    p.add_argument('--hit', nargs='+', required=True, metavar='NAME=CKPT', help='CKPT may hold {family}')
+    p.add_argument('--data', nargs='+', required=True, help='recording DIRs (each read per family)')
+    p.add_argument('--families', nargs='+', required=True)
+    p.add_argument('--all', action='store_true')
+    p.add_argument('--out', type=Path, default=None)
+    s = sub.add_parser('slices36')
+    s.add_argument('--hit', required=True)
+    s.add_argument('--family', nargs='+', required=True)
+    s.add_argument('--out', type=Path, default=None)
+    h = sub.add_parser('chains')
+    h.add_argument('base')
+    h.add_argument('new', nargs='+')
+    for q in (p, s):
+        q.add_argument('--device', default='cuda')
+    args = parser.parse_args(argv)
+    if args.command == 'cost':
+        result = cost(args.records)
+        write_json_atomic(args.out, result)
+        print(cost_table(result, args.segments))
+    elif args.command == 'manifests':
+        write_manifests(args.families, args.states, args.episodes, args.out)
+    elif args.command == 'combine':
+        combine(args.families, args.head, args.weights)
+    elif args.command == 'bench':
+        begin_job(args)
+        bench(args.families, args.arm, args.out, args.manifests, args.parallel, args.logs_dir)
+    elif args.command == 'pr':
+        sources = []
+        for directory in args.data:
+            keys = json.loads((Path(directory) / 'dataset.json').read_text())['families']
+            sources += [f'{directory}#{key}' for key in keys if key in args.families]
+        results = pr(args.hit, sources, torch.device(args.device), args.all)
+        if args.out:
+            write_json_atomic(args.out, results)
+    elif args.command == 'slices36':
+        results = {f: slices36(args.hit.replace('{family}', f), f, torch.device(args.device)) for f in args.family}
+        if args.out:
+            write_json_atomic(args.out, results)
+    elif args.command == 'chains':
+        for new in args.new:
+            result = chain_compare(args.base, new)
+            rooms = result.pop('rooms')
+            print(new, json.dumps(result))
+            for room, cell in list(rooms.items())[:8]:
+                print(f"  {room}: lost {cell.get('base_lost', 0):.0f} -> {cell.get('new_lost', 0):.0f}; hits a visit "
+                      f"{cell.get('base_hits', 0) / max(cell.get('base_visits', 1), 1):.2f} -> "
+                      f"{cell.get('new_hits', 0) / max(cell.get('new_visits', 1), 1):.2f}")
+    return 0
+
+
+if __name__ == '__main__':
+    os.environ.setdefault('PYTHONUNBUFFERED', '1')
+    sys.exit(main())
