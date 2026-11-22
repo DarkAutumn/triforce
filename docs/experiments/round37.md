@@ -240,6 +240,22 @@ The runs reach 0x1b with 0.21 bombs, so nearly every visit is a fight under eith
 Goriya combat, not by the floor. The branch lands with the floor (the owner's rule as stated); the override sits
 commented under `bomb_rules` with these numbers.
 
+### The route is still beaten (the golden race under the rules)
+
+`zelda-headless.py OUT 3 --golden --power-on --clips on --act model --parallel 8 --attempts 2000`, today's 51
+networks on the branch's engine after `main` was merged: **three of three paths reach the ending**, 320 runs in all.
+All three replays verify (`tf replay verify`). Runs a segment (D3, D4, D1, D2, D5, D7, D6, D8, D9 + Ganon) and the
+cheated items (`scripts/experiments/r32team_golden.py`; no rupee or key cheated on any path):
+
+| path (first seed) | runs a segment | runs | frames | cheated bombs (rooms) |
+|---|---|---:|---:|---|
+| 0 | 6 / 2 / 5 / 5 / 10 / 15 / 23 / 19 / 7 | 92 | 166,771 | 4 (3:0x5b, 7:0x1a, 6:0x28, 8:0x6e) |
+| 18,000 | 18 / 8 / 2 / 1 / 12 / 32 / 19 / 9 / 11 | 112 | 180,118 | 2 (7:0x1a, 6:0x28) |
+| 36,000 | 8 / 16 / 1 / 3 / 7 / 26 / 26 / 21 / 8 | 116 | 159,950 | 11 (3:0x5b, 4:0x21, 4:0x11, 1:0x53, 0:0x2c, 0:0x2d, 7:0x1a, 6:0x28, 8:0x6e, 9:0x27, 9:0x17) |
+
+Path 18,000 is proposed for `corpus/replays/golden-d3first-51-networks.tfreplay`: the fewest cheated bombs (two;
+7:0x1a's is the one every `d7` run cheats, coming in with 0.2 bombs).
+
 ## Two route changes (the owner, Nov 22)
 
 - **2:0x5e crossed on `d3first`** (routes.yaml: the shared `dungeon-2` block split into `dungeon-2` and
