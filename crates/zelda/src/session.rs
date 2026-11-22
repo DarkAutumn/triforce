@@ -684,7 +684,11 @@ impl<N: Nes> Session<N> {
 /// [`clips::dock_clip_target`]); in the water on the row, RECORDER only (the executor plays every play the
 /// whirlwind's index needs and waits for the pickup: `Executor::run_dock_warp`); on the dock below its trigger after
 /// the raft's ride down, MOVE S only (any other first step puts Link on the trigger, and the raft takes him back up:
-/// asm:Dock_Update).
+/// asm:Dock_Update). Each of the three is WAIT only while it would walk into a hit (round 36, the dock warps with
+/// the monsters live, docs/routes/d3first-walks-c.md §2): the step off the dock while a monster stands on the land
+/// below it (its touch knocks Link back onto the dock, and the raft takes him up), the clip and the plays while a
+/// shot is in the air (a Zora's fireball or an Octorok's rock aimed at him: hit during the plays, he is knocked off
+/// the whirlwind's row and it goes by, `Plan::Missed`, none again until the room is entered again).
 fn dock_warp_mask(state: &GameView, level: u8, clips_on: bool) -> Option<ActionMask> {
     use crate::whirlwind::{Plan, plan};
     if state.level() != 0 || !matches!(plan(state, level), Plan::Play { .. }) {
@@ -692,16 +696,36 @@ fn dock_warp_mask(state: &GameView, level: u8, clips_on: bool) -> Option<ActionM
     }
     let (dock_x, row) = state.room().dock()?;
     let (x, y) = (state.link.position.x, state.link.position.y);
+    let shot_out = !state.projectiles.is_empty();
     let mut only = ActionMask::default();
     if clips::on_dock_spot(state) {
         if !crate::actions::recorder_playable(state) {
             return None;
         }
-        only.allow(ActionKind::Recorder, None);
+        if shot_out {
+            only.allow(ActionKind::Wait, None);
+        } else {
+            only.allow(ActionKind::Recorder, None);
+        }
     } else if clips_on && clips::dock_clip_target(state).is_some() {
-        only.allow(ActionKind::Clip, Some(Direction::N));
+        if shot_out {
+            only.allow(ActionKind::Wait, None);
+        } else {
+            only.allow(ActionKind::Clip, Some(Direction::N));
+        }
     } else if x == dock_x && (row + 1..row + 8).contains(&y) {
-        only.allow(ActionKind::Move, Some(Direction::S));
+        // The land tile the step off the dock ends on: a monster within a tile and a half of it touches Link there.
+        let below = (dock_x, row + 16);
+        let blocked = state.enemies.iter().any(|e| {
+            e.id != crate::enums::enemy::ZORA
+                && (e.position.x - below.0).abs() < 24
+                && (e.position.y - below.1).abs() < 24
+        });
+        if blocked {
+            only.allow(ActionKind::Wait, None);
+        } else {
+            only.allow(ActionKind::Move, Some(Direction::S));
+        }
     } else {
         return None;
     }

@@ -168,3 +168,41 @@ fn no_dock_clip_without_the_dock_warp() {
         assert!(!allowed(&s, "CLIP N"), "{:?}", at(&s));
     }
 }
+
+/// The dock warp waits out a hit (round 36): on the dock, WAIT only while a monster stands on the land the step off
+/// it ends on (a red Octorok's touch there knocks Link back onto the dock and the raft takes him up); at the clip's
+/// column and on the water spot, WAIT only while a shot is in the air.
+#[test]
+fn the_dock_warp_waits_while_a_hit_is_coming() {
+    const OBJ_X: u16 = 0x70;
+    const OBJ_Y: u16 = 0x84;
+    let Some(mut s) = off_the_raft("d3first_0_55n_v2_0", 0x1F, 3) else { return };
+    tidy(&mut s);
+    s.set_dock_warp(Some(4));
+    let place = |s: &mut S, kind: u8, x: u8, y: u8| {
+        for (address, value) in [(OBJ_TYPE + 1, kind), (OBJ_X + 1, x), (OBJ_Y + 1, y)] {
+            zelda::Nes::poke(s.nes_mut(), address, value);
+        }
+        s.apply_ram(&[]);
+    };
+    place(&mut s, 0x07, 0x7E, 0x8D);
+    assert!(allowed(&s, "WAIT 4") && !allowed(&s, "MOVE S 8"), "a red Octorok below the dock: {:?}", at(&s));
+    place(&mut s, 0, 0, 0);
+    assert!(allowed(&s, "MOVE S 8") && !allowed(&s, "WAIT 4"), "the land clear");
+    act(&mut s, "MOVE S 8");
+    for _ in 0..8 {
+        if allowed(&s, "CLIP N") {
+            break;
+        }
+        act(&mut s, "MOVE W 8");
+    }
+    place(&mut s, 0x55, 0xC0, 0x7D);
+    assert!(allowed(&s, "WAIT 4") && !allowed(&s, "CLIP N"), "a Zora's fireball in the air: {:?}", at(&s));
+    place(&mut s, 0, 0, 0);
+    assert!(allowed(&s, "CLIP N"));
+    act(&mut s, "CLIP N");
+    place(&mut s, 0x55, 0xC0, 0x7D);
+    assert!(allowed(&s, "WAIT 4") && !allowed(&s, "RECORDER"), "on the water spot: {:?}", at(&s));
+    place(&mut s, 0, 0, 0);
+    assert!(allowed(&s, "RECORDER"));
+}
