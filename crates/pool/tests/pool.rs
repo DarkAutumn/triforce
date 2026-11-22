@@ -188,6 +188,7 @@ impl PoolEnv for Fake {
             truncated,
             bootstrap: truncated && self.acc % 2 == 0,
             policy: (self.index % 2) as i64,
+            ..Outcome::default()
         };
         if done {
             events.push(Event::Ended {

@@ -4,6 +4,7 @@ use crate::control::EnvControl;
 use crate::layout::{ObsData, ObsLayout, ObsRow, Staged};
 use crate::rollout::{
     Actor, Decision, EnvRollout, Foresee, Foreseen, Play, PlanError, Planner, Record, SearchRow, Situation, Trial,
+    TryOthers,
 };
 use parking_lot::{Condvar, Mutex};
 use rand_chacha::ChaCha8Rng;
@@ -122,6 +123,9 @@ pub struct Outcome {
     pub bootstrap: bool,
     /// The policy that acts on the observation (ignored after a terminal step: `reset` decides).
     pub policy: i64,
+    /// Hearts the step lost (net of what it gained) and the monster hits it dealt (0 for an env that doesn't say).
+    pub health_lost: f32,
+    pub hits: u32,
 }
 
 /// What an env factory gets.
@@ -448,7 +452,18 @@ impl<E: PoolEnv> Pool<E> {
         steps: usize,
         actor: Arc<Ac>,
     ) -> Res<Rollouts<E::Action>, E> {
-        self.rollout_with(steps, actor, None::<Arc<NoPlanner>>)
+        self.rollout_with(steps, actor, None::<Arc<NoPlanner>>, None)
+    }
+
+    /// [`Pool::rollout`] that also tries each chosen decision's next candidates in the env ([`TryOthers`]: look-ahead
+    /// labels for actions not taken, training only).
+    pub fn rollout_trying<Ac: Actor<E::Action> + 'static>(
+        &self,
+        steps: usize,
+        actor: Arc<Ac>,
+        others: TryOthers,
+    ) -> Res<Rollouts<E::Action>, E> {
+        self.rollout_with(steps, actor, None::<Arc<NoPlanner>>, Some(others))
     }
 
     /// [`Pool::rollout`] with `planner` deciding first ([`Planner`]: search): each decision it takes acts with its
@@ -459,7 +474,18 @@ impl<E: PoolEnv> Pool<E> {
         actor: Arc<Ac>,
         planner: Arc<P>,
     ) -> Res<Rollouts<E::Action>, E> {
-        self.rollout_with(steps, actor, Some(planner))
+        self.rollout_with(steps, actor, Some(planner), None)
+    }
+
+    /// [`Pool::rollout_planned`] with [`TryOthers`] (see [`Pool::rollout_trying`]).
+    pub fn rollout_planned_trying<Ac: Actor<E::Action> + 'static, P: Planner<E> + 'static>(
+        &self,
+        steps: usize,
+        actor: Arc<Ac>,
+        planner: Arc<P>,
+        others: TryOthers,
+    ) -> Res<Rollouts<E::Action>, E> {
+        self.rollout_with(steps, actor, Some(planner), Some(others))
     }
 
     /// Ends the running rollouts before their next step or search simulation: they return a usage error and their
@@ -473,6 +499,7 @@ impl<E: PoolEnv> Pool<E> {
         steps: usize,
         actor: Arc<Ac>,
         planner: Option<Arc<P>>,
+        others: Option<TryOthers>,
     ) -> Res<Rollouts<E::Action>, E> {
         let n = self.num_envs();
         let results: Results<E::Action> = Arc::new(Mutex::new((0..n).map(|_| None).collect()));
@@ -487,6 +514,7 @@ impl<E: PoolEnv> Pool<E> {
                 steps,
                 actor: actor.clone(),
                 planner: planner.clone(),
+                others,
                 results: results.clone(),
                 stop: self.stop.clone(),
                 halt: self.halt.clone(),
@@ -787,6 +815,7 @@ struct RolloutWork<E: PoolEnv, Ac, P> {
     steps: usize,
     actor: Arc<Ac>,
     planner: Option<Arc<P>>,
+    others: Option<TryOthers>,
     results: Results<E::Action>,
     /// The pool's stop flag (`close`) and halt flag (`close`, `cancel_rollouts`): checked before every step.
     stop: Arc<AtomicBool>,
@@ -803,6 +832,7 @@ impl<E: PoolEnv, Ac: Actor<E::Action>, P: Planner<E>> Work<E> for RolloutWork<E,
             self.steps,
             &*self.actor,
             self.planner.as_deref(),
+            self.others,
             (&self.stop, &self.halt),
         )?;
         self.results.lock()[id] = Some(rollout);
@@ -835,6 +865,7 @@ impl<E: PoolEnv> Planner<E> for NoPlanner {
 /// One env's rollout on its worker: `steps` decisions by `planner` (if any, when it plans) or `actor` (a terminal
 /// step resets the env at once). Once `halt` is set it ends before the next step (and the planner before its next
 /// simulation): [`PoolError::Closed`] when the pool closes (`stop`), else a usage error (cancelled; the env stays).
+/// With `others`, a chosen decision's next candidates are tried in the env before it executes ([`TryOthers`]).
 #[allow(clippy::too_many_arguments)]
 fn run_rollout<E: PoolEnv, Ac: Actor<E::Action>, P: Planner<E>>(
     env: &mut E,
@@ -844,6 +875,7 @@ fn run_rollout<E: PoolEnv, Ac: Actor<E::Action>, P: Planner<E>>(
     steps: usize,
     actor: &Ac,
     planner: Option<&P>,
+    others: Option<TryOthers>,
     (stop, halt): (&AtomicBool, &AtomicBool),
 ) -> Res<EnvRollout<E::Action>, E> {
     let usage = |e: String| PoolError::Usage(format!("env {id}: {e}"));
@@ -857,6 +889,7 @@ fn run_rollout<E: PoolEnv, Ac: Actor<E::Action>, P: Planner<E>>(
     let mut scratch = actor.scratch();
     let mut plan_scratch = planner.map(P::scratch);
     let mut out = EnvRollout::new(slot.obs.layout(), steps);
+    let mut alternatives = Vec::new();
     for _ in 0..steps {
         if halt.load(Ordering::Relaxed) || stop.load(Ordering::Relaxed) {
             return Err(halted());
@@ -866,6 +899,7 @@ fn run_rollout<E: PoolEnv, Ac: Actor<E::Action>, P: Planner<E>>(
         }
         out.obs.push(&slot.obs);
         out.starts.push(slot.step == 0);
+        let situation = env.situation();
         let planned = match (planner, plan_scratch.as_mut()) {
             (Some(p), Some(s)) => p
                 .plan(env, &slot.obs, slot.policy, slot.job, slot.step, s, halt)
@@ -886,7 +920,7 @@ fn run_rollout<E: PoolEnv, Ac: Actor<E::Action>, P: Planner<E>>(
                     out.search.push(None);
                 }
                 actor
-                    .act(&slot.obs, slot.policy, slot.job, slot.step, env.situation(), &mut scratch)
+                    .act(&slot.obs, slot.policy, slot.job, slot.step, situation, &mut scratch)
                     .map_err(usage)?
             }
         };
@@ -894,12 +928,37 @@ fn run_rollout<E: PoolEnv, Ac: Actor<E::Action>, P: Planner<E>>(
         out.step.push(slot.step);
         out.actions.push(action.clone());
         out.decisions.push(decision);
+        if let Some(others) = others {
+            let k = others.candidates as usize;
+            let begin = out.tried.len();
+            let mut frames = 0;
+            if others.chosen(slot.job, slot.step) {
+                alternatives.clear();
+                actor
+                    .alternatives(&slot.obs, slot.policy, slot.job, slot.step, situation, &action, k + 1, &mut scratch,
+                                  &mut alternatives)
+                    .map_err(usage)?;
+                for (candidate, _) in alternatives.drain(..).take(k) {
+                    let Some(Trial { lost, frames: f }) =
+                        env.trial(&candidate, None).map_err(|error| PoolError::Env { env: id, error })?
+                    else {
+                        return Err(usage("the env can't try actions (TryOthers needs a TrainTask)".into()));
+                    };
+                    frames += f;
+                    out.tried.push(Some((candidate, lost)));
+                }
+            }
+            out.tried.resize(begin + k, None);
+            out.tried_frames.push(frames);
+        }
         let acting_policy = slot.policy;
         Worker::<E>::execute(env, id, Some(action), slot, events)?;
         let o = slot.outcome;
         out.reward.push(o.reward);
         out.frames.push(o.frames);
         out.interrupt.push(o.interrupt);
+        out.health_lost.push(o.health_lost);
+        out.hits.push(o.hits);
         out.terminated.push(o.terminated);
         out.truncated.push(o.truncated);
         let bootstrap_value = if o.bootstrap && slot.final_valid {
