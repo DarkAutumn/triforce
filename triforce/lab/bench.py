@@ -135,6 +135,16 @@ def summarize(episodes: list[dict]) -> dict:
             'bombs': sum(e['bombs'] for e in episodes) / n if n else 0.0}
 
 
+def entry_task(entry: dict, states_dir=None):
+    """(config, states dir) that play a manifest entry's states: a harvested entry's from its family's harvested
+    folder (start states resolve by bare name in one folder), seed states from the states dir."""
+    base = Path(states_dir or _native.paths()['states_dir'])
+    names = [Path(state).name for state in entry['states']]
+    if entry['source'] == HARVESTED:
+        base = base / HARVESTED / entry['family']
+    return load_specialist(entry['family']).replace(start_states=names), str(base)
+
+
 def run_bench(networks: dict[str, str], manifest: dict, parallel: int, states_dir=None, act: Optional[str] = None,
               log=print) -> dict:
     """Plays every manifest entry whose key ``networks`` names (key -> checkpoint)."""
@@ -143,11 +153,11 @@ def run_bench(networks: dict[str, str], manifest: dict, parallel: int, states_di
         key = entry['key']
         if key not in networks:
             continue
-        config = load_specialist(entry['family']).replace(start_states=entry['states'])
+        config, directory = entry_task(entry, states_dir)
         began = time.time()
         result = evaluate_specialist(config, networks[key], episodes_per_state=manifest['episodes'],
                                      parallel=parallel, seed=manifest['seed'], act=act or manifest['act'],
-                                     states_dir=states_dir, clips=manifest['clips'])
+                                     states_dir=directory, clips=manifest['clips'])
         seconds = time.time() - began
         episodes = [_episode(r) for r in result['records']]
         rows[key] = {**summarize(episodes), 'checkpoint': str(networks[key]), 'model_hash': result['model_hash'],
@@ -207,7 +217,7 @@ def speed(key: str, manifest: dict, parallel: int, devices: list[str], states_di
     from ..nets import serve  # pylint: disable=import-outside-toplevel
     checkpoint = registry.policy_checkpoint(key, root)
     entry = next(e for e in manifest['entries'] if e['key'] == key)
-    config = load_specialist(entry['family']).replace(start_states=entry['states'])
+    config, directory = entry_task(entry, states_dir)
     out = {}
     for path in devices:
         network = registry.load_model(checkpoint)[0]
@@ -216,7 +226,7 @@ def speed(key: str, manifest: dict, parallel: int, devices: list[str], states_di
         else:
             policy = serve.Server(device=path).policy(network)
         began = time.time()
-        result = _play_policy(config, policy, manifest, parallel, states_dir)
+        result = _play_policy(config, policy, manifest, parallel, directory)
         seconds = time.time() - began
         decisions = sum(r['steps'] for r in result)
         out[path] = {'decisions': decisions, 'seconds': round(seconds, 2), 'decisions_per_second': decisions / seconds,
