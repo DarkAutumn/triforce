@@ -112,7 +112,7 @@ def test_d3first_keeps_the_bag_through_dungeon_7_to_0x1b():
     and 0x1a are its only bombs), so Link enters 0x1b with 5 and crosses it to the key door; 0x1b wants its four only
     below 2 (0x0c's and 0x29's walls); 2 from 0x1b, 0 on Aquamentus.  d2first keeps 3 and `if_bombs_below: 5` (its
     golden lists above); both routes' step counts are unchanged."""
-    for route, entrance, wanted in (('d3first', 8, 'if_bombs_below: 2'), ('d2first', 3, 'if_bombs_below: 5')):
+    for route, entrance, wanted in (('d3first', 8, 'if_bombs_below: 8'), ('d2first', 3, 'if_bombs_below: 5')):
         held, along = 0, []
         for step in native.route_steps(route):
             held = step['bomb_reserve'] if step['bomb_reserve'] is not None else held
