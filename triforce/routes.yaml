@@ -600,6 +600,11 @@ bomb_rules:
     fights_only: true
     wall_only: [{level: 3, room: '0x5b'}]
     treasure_below: 8
+    # 7:0x1b both ways (round 37, d7 from 7_79s_0, 1000 runs, seeds 0-999; runs bring 0.21 bombs, so nearly every
+    # visit is a fight either way): the blanket floor (as landed) 12.6% to the triforce, 701 of 733 entering 0x1b
+    # lost per 1000, hearts 3.59 in, 1.30 out, 4.16 bombs out of it; with the line below 12.7%, 685, 3.59 / 1.29, 3.99;
+    # walls cheated later a run 7:0x1a 0.754 both, 6:0x28 0.024 / 0.027.  Uncomment to cross it with 2 or more:
+    # treasure_below_rooms: [{level: 7, room: '0x1b', below: 2}]
 # clips-gauntlet (round 21, docs/experiments/round21-gauntlet.md): an experiment route, not a way through the game.  Two
 # steps per (room, entry): a specialist naming it (`route: clips-gauntlet`) draws one of the two exits at every
 # reset.  Entered from W the target is E or S, entered from E it is W or S.
