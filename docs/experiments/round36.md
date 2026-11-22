@@ -144,8 +144,22 @@ its teacher about 0.68), Manhandla 0.642 -> 0.692 (+5.0 ± 4.7). The heads do no
 
 **The correction copying needs (DAgger).** Round 1: the 1x student acts, the teachers label (51 keys, 20,480
 decisions a source, seeds 36,200,000 on), trained from the student on old + new rows (5 epochs, lr 3e-4):
-`r36merge/s1x-d1`, held-out KL 0.156 (from 0.160). Its chains (D3, D4, D5, D8, D1, D7) and round 2 were in the
-queue when this session ended (the status file has the commands).
+`r36merge/s1x-d1`, held-out KL 0.156 (from 0.160). Chains (1,000 runs, the same seeds and stops as above, paired
+with the 1x student; `dagger1-chains.json`):
+
+| segment | 51 networks | 1x student | after one round | paired (round 1 - 1x) | where |
+|---|---:|---:|---:|---:|---|
+| D3 | 23.2% | 3.7% | 5.8% | +2.1 ± 0.9 | Darknut 0x5b 580 -> 484 lost / 1,000 entering |
+| D4 | 18.5% | 2.8% | 4.6% | +1.8 ± 0.8 | vire, like-like a little |
+| D1 | 92.7% | 80.4% | 84.7% | +4.3 ± 1.7 | goriya 0x44 65 -> 45 |
+| D5 | 7.0% | 0.3% | 0.2% | -0.1 ± 0.2 | darknut 5:0x05 still 990 |
+| D7 | 42.3% | 28.9% | 34.5% | +5.6 ± 2.0 | Digdogger 244 -> 197 |
+| D8 | 37.8% | 2.9% | 2.9% | 0.0 ± 0.7 | Blue Darknuts unchanged |
+
+One round of correction is real but small: it recovers 10-40% of the gap where the fights are ordinary (D1, D7,
+D3's Darknuts), nothing where the student almost never survives (D5's 0x05, D8's Blue Darknuts: too few of its
+own states reach the late part of the fight to be labelled). Round 2 (student `s1x-d1`) was recording when this
+session ended.
 
 
 ## The wood-sword pairs
