@@ -2,15 +2,16 @@
 
 The owner's second route (Nov 19; `docs/decisions.md` 2026-11-19 "Two routes"), the main route since 2.0.0.0
 (`triforce/registry.py` `MAIN_ROUTE`), **corrected by the owner on Nov 21** (decisions 2026-11-21 "The program";
-round 36): Dungeons 3, 4, 1, 0x2c's heart, 0x2d's 30 rupees, Dungeon 2, 0x0f's 100 rupees, Dungeon 5, the whirlwind
+round 36): Dungeons 3, 4, 1, 0x2c's heart, Dungeon 2, 0x0f's 100 rupees, Dungeon 5, the whirlwind
 to Level 4's screen, the raft to 0x55, **a dock warp there** to the meat under the Armos (0x34), the arrows (0x44),
 Dungeon 7 (wood sword, 9 containers), the world wrap at 0x60, the hearts at 0x5f and 0x2f, **a dock warp at 0x3f**
 into the graveyard (0x31), the magic sword (12), Dungeons 6, 8, 9 (0x47's heart and the red ring kept; no blue
 candle: the red one from Dungeon 7). The wood sword until the magic sword (no white sword). The first walks
 (`docs/routes/d3first-walks-a.md`, `d3first-walks-b.md`, scripts `scripts/experiments/r32_*.py`, `r32b_*.py`) were of
-the first order; the corrected middle is walked in `d3first-walks-c.md`. Data: `triforce/routes.yaml` `d3first` (292
-steps), rooms in `triforce/game.yaml`; its start states are `d3first_<name>` (`states: d3first`,
-`docs/architecture.md` "Routes").
+the first order; the corrected middle is walked in `d3first-walks-c.md`. **Round 38 (2.0.0.7, the owner): 0x2d's
+bomb-wall rupee cave left the route** (0x2d crossed W → S; 0x3d's Armos cave stays; round38.md "0x2d dropped").
+Data: `triforce/routes.yaml` `d3first` (290 steps), rooms in `triforce/game.yaml`; its start states are
+`d3first_<name>` (`states: d3first`, `docs/architecture.md` "Routes").
 
 ```bash
 .venv/bin/python zelda-map.py --route d3first
@@ -33,16 +34,16 @@ sets its own reserves on its own steps before a block, and a block's own reserve
 | `to-level-4` | 24-30 | 0:0x74 cave → W to 0x45's mouth (the raft from 0x55) |
 | `dungeon-4` | 31-52 | 4:0x71 to 0x03, the stretch `d4-island` |
 | `dungeon-1` | 61-78 | 1:0x73 out S to 0:0x37 and back in, N by 0x63, 0x53's wall, the bow, to 0x36 (phase IX's) |
-| `dungeon-2` | 97-106 | 2:0x7d to 0x0d |
-| `dungeon-5` | 125-146 | 5:0x66 to 0x14 (the entrance, step 124, is each route's own) |
-| `pond-42` | 156-159 | 0:0x54 to 0x42's pond (round 36: split from `to-level-7`, whose head d2first alone plays) |
-| `dungeon-7`, `dungeon-7-east` | 161-179 | 7:0x79 to 0x2b; the entrance (160) and 0x1b (172) are each route's own (round 34): d3first keeps the bag for 0x1b |
-| `graveyard` | 193-198 | 0:0x21's gravestone, the magic sword (12 containers), 0x31, 0x32, 0x22 (round 36: split from `to-level-6`) |
-| `dungeon-6` | 199-214 | 6:0x79 to 0x0c |
-| `to-level-8` | 215-220 | 0:0x22 (two plays facing up: Link turns first) to 0x6d's burned tree |
-| `dungeon-8` | 221-230 | 8:0x7e to 0x2c |
-| `to-level-9` | 231-245 | 0:0x6d (one play facing down) to 0x05: 0x47's tree and heart (15), the ladder at 0x17 |
-| `dungeon-9` | 246-291 | 9:0x76 to Zelda's room (`exit: end`): the red ring, the silver arrow, Ganon |
+| `dungeon-2` | 95-104 | 2:0x7d to 0x0d |
+| `dungeon-5` | 123-144 | 5:0x66 to 0x14 (the entrance, step 122, is each route's own) |
+| `pond-42` | 154-157 | 0:0x54 to 0x42's pond (round 36: split from `to-level-7`, whose head d2first alone plays) |
+| `dungeon-7`, `dungeon-7-east` | 159-177 | 7:0x79 to 0x2b; the entrance (158) and 0x1b (170) are each route's own (round 34): d3first keeps the bag for 0x1b |
+| `graveyard` | 191-196 | 0:0x21's gravestone, the magic sword (12 containers), 0x31, 0x32, 0x22 (round 36: split from `to-level-6`) |
+| `dungeon-6` | 197-212 | 6:0x79 to 0x0c |
+| `to-level-8` | 213-218 | 0:0x22 (two plays facing up: Link turns first) to 0x6d's burned tree |
+| `dungeon-8` | 219-228 | 8:0x7e to 0x2c |
+| `to-level-9` | 229-243 | 0:0x6d (one play facing down) to 0x05: 0x47's tree and heart (15), the ladder at 0x17 |
+| `dungeon-9` | 244-289 | 9:0x76 to Zelda's room (`exit: end`): the red ring, the silver arrow, Ganon |
 
 ## The route
 
@@ -85,57 +86,55 @@ Its own steps in full; the blocks by their rooms.
 | 85 | `0_2cw` | 0:0x2c | W → cave | ow-tektite | the heart rock's wall (one bomb facing N from (`$90`,`$A5`)) | 6 / W |
 | 86 | `0_2ccave` | 0:0x2c cave | S → S | ow-tektite | `waypoint: heart` (the right ware) | 6 / W |
 | 87 | `0_2cc` | 0:0x2c | cave → E | ow-tektite | | 7 / W |
-| 88 | `0_2dw` | 0:0x2d | W → cave | ow-zora | the rock wall (one bomb facing N from (`$50`,`$5D`); `bombs: required`) | 7 / W |
-| 89 | `0_2dcave` | 0:0x2d cave | S → S | ow-zora | `waypoint: rupees`: 30 | 7 / W |
-| 90 | `0_2dc` | 0:0x2d | cave → S | ow-zora | round 36: S, not W | 7 / W |
-| 91 | `0_3dn` | 0:0x3d | N → cave | ow-moblin | the Armos woken (`how: armos`) | 7 / W |
-| 92 | `0_3dcave` | 0:0x3d cave | S → S | ow-moblin | `waypoint: rupees`: 30 | 7 / W |
-| 93 | `0_3dc` | 0:0x3d | cave → S | ow-moblin | | 7 / W |
-| 94 | `0_4dn` | 0:0x4d | N → W | ow-moblin | | 7 / W |
-| 95 | `0_4ce` | 0:0x4c | E → N | ow-octorok | | 7 / W |
-| 96 | `0_3cs` | 0:0x3c | S → cave | ow-octorok | Level 2 (the reserve of 8 holds: D5's walls) | 7 / W |
-| 97-106 | | `dungeon-2` | | (d2first's) | 0x1e's 4 bombs, Dodongo's heart, the piece | 7 → 8 / W |
-| 107 | `0_3cc` | 0:0x3c | cave → S | ow-octorok | | 8 / W |
-| 108 | `0_4cn` | 0:0x4c | N → E | ow-octorok | | 8 / W |
-| 109 | `0_4dw` | 0:0x4d | W → N | ow-moblin | | 8 / W |
-| 110 | `0_3ds` | 0:0x3d | S → N | ow-moblin | | 8 / W |
-| 111 | `0_2ds` | 0:0x2d | S → N | ow-zora | | 8 / W |
-| 112-114 | `0_1ds`, `0_1ew`, `0_1fw` | 0:0x1d, 0x1e, 0x1f | S → E, W → E, W → N | ow-peahat, ow-tektite, ow-peahat | 0x1f's wall gap at X `$80` | 8 / W |
-| 115-117 | `0_0fs`, `0_0fcave`, `0_0fc` | 0:0x0f | S → cave → S | ow-start | `waypoint: rupees`: 100 (open cave) | 8 / W |
-| 118-120 | `0_1fn`, `0_1ee`, `0_1de` | 0:0x1f, 0x1e, 0x1d | N → W, E → W, E → N | ow-peahat, ow-tektite, ow-peahat | | 8 / W |
-| 121 | `0_0ds` | 0:0x0d | S → W | ow-tektite | | 8 / W |
-| 122 | `0_0ce` | 0:0x0c | E → W | ow-tektite | the wrap exit (CLIP E) onto the mountain top | 8 / W |
-| 123 | `0_0be` | 0:0x0b | E → cave | ow-leever | Level 5 | 8 / W |
-| 124 | `5_76s` | 5:0x76 | S → N | gibdo | `bomb_reserve: 8` | 8 / W |
-| 125-146 | | `dungeon-5` | | (d2first's) | the Olive Garden, the recorder, Digdogger's heart, the piece | 8 → 9 / W |
-| 147 | `0_0bc` | 0:0x0b | cave → recorder | ow-leever | two plays facing down, as he comes out | 9 / W |
-| 148 | `0_45r` | 0:0x45 | recorder → S | ow-peahat | the raft S | 9 / W |
-| 149 | `0_55n_v2` | 0:0x55 | N → recorder | ow-zora | **the dock warp** (the engine's): MOVE S, CLIP N into the water at X `$78`, RECORDER: N, a turn W, again | 9 / W |
-| 150 | `0_34r` | 0:0x34 | recorder → cave | ow-leever | set down at (`$80`,`$8D`); the Armos | 9 / W |
-| 151 | `0_34cave` | 0:0x34 cave | S → S | ow-leever | `waypoint: food` (60) | 9 / W |
-| 152 | `0_34c` | 0:0x34 | cave → S | ow-leever | | 9 / W |
-| 153 | `0_44n` | 0:0x44 | N → cave | ow-zora | | 9 / W |
-| 154 | `0_44cave` | 0:0x44 cave | S → S | ow-zora | `waypoint: arrows` (80), `rupee_reserve: 2` | 9 / W |
-| 155 | `0_44c` | 0:0x44 | cave → S | ow-zora | | 9 / W |
-| 156-159 | | `pond-42` | | ow-zora, ow-moblin | the pond (the recorder, no index step) | 9 / W |
-| 160-179 | | 7:0x79, `dungeon-7`, 7:0x1b, `dungeon-7-east` | | (d2first's, the entrance and 0x1b own) | the red candle, the meat given, Aquamentus's heart, the piece | 9 → 10 / W |
-| 180 | `0_42c` | 0:0x42 | cave → S | ow-moblin | `bomb_reserve: 8` (every bomb for the walls) | 10 / W |
-| 181 | `0_52n` | 0:0x52 | N → W | ow-moblin | | 10 / W |
-| 182 | `0_51e` | 0:0x51 | E → W | ow-moblin | the wrap exit into 0x50 | 10 / W |
-| 183 | `0_50e` | 0:0x50 | E → S | ow-lynel | | 10 / W |
-| 184 | `0_60n` | 0:0x60 | N → W | ow-lynel | the wrap exit round the world into 0x5f | 10 / W |
-| 185 | `0_5fe` | 0:0x5f | E → N | ow-zora | the ladder clip, the ladder heart | 10 / W |
-| 186 | `0_4fs` | 0:0x4f | S → N | ow-zora | | 11 / W |
-| 187 | `0_3fs` | 0:0x3f | S → N | ow-zora | the raft | 11 / W |
-| 188-190 | `0_2fs`, `0_2fcave`, `0_2fc` | 0:0x2f | S → cave → S | ow-start | `waypoint: heart`; the raft back | 11 → 12 / W |
-| 191 | `0_3fn` | 0:0x3f | N → recorder | ow-zora | **the dock warp** (the engine's): MOVE S, CLIP N into the water at X `$58`, RECORDER: N twice | 12 / W |
-| 192 | `0_31r` | 0:0x31 | recorder → N | ow-ghini | set down at (`$80`,`$AD`) | 12 / W |
-| 193-198 | | `graveyard` | | ow-ghini, ow-lynel | the magic sword (12) | 12 / W → Ma |
-| 199-214 | | `dungeon-6` | | (d2first's) | Gohma's heart, the piece | 12 → 13 / Ma |
-| 215-220 | | `to-level-8` | | (d2first's) | two plays facing up (index on Level 7: Link turns first): 0x3c; 0x6d's tree | 13 / Ma |
-| 221-230 | | `dungeon-8` | | (d2first's) | Gleeok's heart, the piece | 13 → 14 / Ma |
-| 231-245 | | `to-level-9` | | (d2first's) | one play facing down: 0x37; 0x47's heart (15); 0x05's wall | 14 → 15 / Ma |
-| 246-291 | | `dungeon-9` | | (d2first's) | the red ring, the silver arrow, Ganon, Zelda (`exit: end`) | 15 / Ma |
+| 88 | `0_2dw` | 0:0x2d | W → S | ow-zora | crossed (round 38: its rock wall's rupee cave dropped) | 7 / W |
+| 89 | `0_3dn` | 0:0x3d | N → cave | ow-moblin | the Armos woken (`how: armos`) | 7 / W |
+| 90 | `0_3dcave` | 0:0x3d cave | S → S | ow-moblin | `waypoint: rupees`: 30 | 7 / W |
+| 91 | `0_3dc` | 0:0x3d | cave → S | ow-moblin | | 7 / W |
+| 92 | `0_4dn` | 0:0x4d | N → W | ow-moblin | | 7 / W |
+| 93 | `0_4ce` | 0:0x4c | E → N | ow-octorok | | 7 / W |
+| 94 | `0_3cs` | 0:0x3c | S → cave | ow-octorok | Level 2 (the reserve of 8 holds: D5's walls) | 7 / W |
+| 95-104 | | `dungeon-2` | | (d2first's) | 0x1e's 4 bombs, Dodongo's heart, the piece | 7 → 8 / W |
+| 105 | `0_3cc` | 0:0x3c | cave → S | ow-octorok | | 8 / W |
+| 106 | `0_4cn` | 0:0x4c | N → E | ow-octorok | | 8 / W |
+| 107 | `0_4dw` | 0:0x4d | W → N | ow-moblin | | 8 / W |
+| 108 | `0_3ds` | 0:0x3d | S → N | ow-moblin | | 8 / W |
+| 109 | `0_2ds` | 0:0x2d | S → N | ow-zora | | 8 / W |
+| 110-112 | `0_1ds`, `0_1ew`, `0_1fw` | 0:0x1d, 0x1e, 0x1f | S → E, W → E, W → N | ow-peahat, ow-tektite, ow-peahat | 0x1f's wall gap at X `$80` | 8 / W |
+| 113-115 | `0_0fs`, `0_0fcave`, `0_0fc` | 0:0x0f | S → cave → S | ow-start | `waypoint: rupees`: 100 (open cave) | 8 / W |
+| 116-118 | `0_1fn`, `0_1ee`, `0_1de` | 0:0x1f, 0x1e, 0x1d | N → W, E → W, E → N | ow-peahat, ow-tektite, ow-peahat | | 8 / W |
+| 119 | `0_0ds` | 0:0x0d | S → W | ow-tektite | | 8 / W |
+| 120 | `0_0ce` | 0:0x0c | E → W | ow-tektite | the wrap exit (CLIP E) onto the mountain top | 8 / W |
+| 121 | `0_0be` | 0:0x0b | E → cave | ow-leever | Level 5 | 8 / W |
+| 122 | `5_76s` | 5:0x76 | S → N | gibdo | `bomb_reserve: 8` | 8 / W |
+| 123-144 | | `dungeon-5` | | (d2first's) | the Olive Garden, the recorder, Digdogger's heart, the piece | 8 → 9 / W |
+| 145 | `0_0bc` | 0:0x0b | cave → recorder | ow-leever | two plays facing down, as he comes out | 9 / W |
+| 146 | `0_45r` | 0:0x45 | recorder → S | ow-peahat | the raft S | 9 / W |
+| 147 | `0_55n_v2` | 0:0x55 | N → recorder | ow-zora | **the dock warp** (the engine's): MOVE S, CLIP N into the water at X `$78`, RECORDER: N, a turn W, again | 9 / W |
+| 148 | `0_34r` | 0:0x34 | recorder → cave | ow-leever | set down at (`$80`,`$8D`); the Armos | 9 / W |
+| 149 | `0_34cave` | 0:0x34 cave | S → S | ow-leever | `waypoint: food` (60) | 9 / W |
+| 150 | `0_34c` | 0:0x34 | cave → S | ow-leever | | 9 / W |
+| 151 | `0_44n` | 0:0x44 | N → cave | ow-zora | | 9 / W |
+| 152 | `0_44cave` | 0:0x44 cave | S → S | ow-zora | `waypoint: arrows` (80), `rupee_reserve: 2` | 9 / W |
+| 153 | `0_44c` | 0:0x44 | cave → S | ow-zora | | 9 / W |
+| 154-157 | | `pond-42` | | ow-zora, ow-moblin | the pond (the recorder, no index step) | 9 / W |
+| 158-177 | | 7:0x79, `dungeon-7`, 7:0x1b, `dungeon-7-east` | | (d2first's, the entrance and 0x1b own) | the red candle, the meat given, Aquamentus's heart, the piece | 9 → 10 / W |
+| 178 | `0_42c` | 0:0x42 | cave → S | ow-moblin | `bomb_reserve: 8` (every bomb for the walls) | 10 / W |
+| 179 | `0_52n` | 0:0x52 | N → W | ow-moblin | | 10 / W |
+| 180 | `0_51e` | 0:0x51 | E → W | ow-moblin | the wrap exit into 0x50 | 10 / W |
+| 181 | `0_50e` | 0:0x50 | E → S | ow-lynel | | 10 / W |
+| 182 | `0_60n` | 0:0x60 | N → W | ow-lynel | the wrap exit round the world into 0x5f | 10 / W |
+| 183 | `0_5fe` | 0:0x5f | E → N | ow-zora | the ladder clip, the ladder heart | 10 / W |
+| 184 | `0_4fs` | 0:0x4f | S → N | ow-zora | | 11 / W |
+| 185 | `0_3fs` | 0:0x3f | S → N | ow-zora | the raft | 11 / W |
+| 186-188 | `0_2fs`, `0_2fcave`, `0_2fc` | 0:0x2f | S → cave → S | ow-start | `waypoint: heart`; the raft back | 11 → 12 / W |
+| 189 | `0_3fn` | 0:0x3f | N → recorder | ow-zora | **the dock warp** (the engine's): MOVE S, CLIP N into the water at X `$58`, RECORDER: N twice | 12 / W |
+| 190 | `0_31r` | 0:0x31 | recorder → N | ow-ghini | set down at (`$80`,`$AD`) | 12 / W |
+| 191-196 | | `graveyard` | | ow-ghini, ow-lynel | the magic sword (12) | 12 / W → Ma |
+| 197-212 | | `dungeon-6` | | (d2first's) | Gohma's heart, the piece | 12 → 13 / Ma |
+| 213-218 | | `to-level-8` | | (d2first's) | two plays facing up (index on Level 7: Link turns first): 0x3c; 0x6d's tree | 13 / Ma |
+| 219-228 | | `dungeon-8` | | (d2first's) | Gleeok's heart, the piece | 13 → 14 / Ma |
+| 229-243 | | `to-level-9` | | (d2first's) | one play facing down: 0x37; 0x47's heart (15); 0x05's wall | 14 → 15 / Ma |
+| 244-289 | | `dungeon-9` | | (d2first's) | the red ring, the silver arrow, Ganon, Zelda (`exit: end`) | 15 / Ma |
 
 Dungeon entrances (`crates/zelda/tests/d3first.rs`, `tests/test_game_map.py`): Level 3 with 3 containers and no
 piece; Level 4 with 4, the raft, piece 3; Level 1 with 5, the raft and the ladder, pieces 3 and 4; Level 2 with 7,
@@ -191,7 +190,7 @@ rule): a run with the run-time switch off has no way past them. The shared block
   it is a room only d3first has. The envs, the chain and the state builder play the map of the episode's route
   (`Session::set_map`; `_native.Game(route=)`, `game_rooms(route)`, `specialist_for(room, route)`). d3first's own:
   0x0c's, 0x2d's, 0x62's and 0x3d's caves (the `cave` exits and the in-cave rooms: 30, 100 and 30 rupees), 0x2d's
-  rock wall (`requires_bombs`, `bomb_secret: [10, 2]`, the 30 secret), the tags 0x29, 0x2a, 0x2b ow-leever, 0x46
+  rock wall (`requires_bombs`, `bomb_secret: [10, 2]`, the 30 secret; round 38 dropped 0x2d's wall and cave), the tags 0x29, 0x2a, 0x2b ow-leever, 0x46
   ow-zora (its one monster a Zora, as 0x47's), 0x62 ow-moblin, 3:0x4a stalfos-keese-gel. Walk A proposed ow-octorok
   for 0x46; its monsters are one Zora. d2first plays the shared rooms, the data its models were trained on: in a
   first form (one map for both) the new tags opened paths for d2first's off-route objective (ow-lynel's wrong exit
@@ -200,7 +199,7 @@ rule): a run with the run-time switch off has no way past them. The shared block
   (the schema 5 traces of ow-lynel, ow-zora, ow-tektite and ow-octorok, `tests/test_obs_legacy.py`); with the route maps
   they are what they were (`game_map::tests::a_routes_own_rooms_leave_the_shared_map_alone`, `crates/zelda/tests/
   d3first.rs` from d2first's `0_2ds_0` and `0_3ds_0`).
-- Families gain rooms (routes.yaml `families`, `specialists/*.yaml` `rooms:`): ow-zora 0x46 and 0x2d's cave;
+- Families gain rooms (routes.yaml `families`, `specialists/*.yaml` `rooms:`): ow-zora 0x46 and 0x2d's cave (gone in round 38);
   ow-leever 0x29, 0x2a, 0x2b; ow-moblin 0x62, its cave and 0x3d's cave; ow-tektite 0x0c's cave; stalfos-keese-gel
   3:0x4a. Their `start_states` globs (`0_46*`, `0_29*`, `0_2a*`, `0_2b*`, `0_62*`, `3_4a*`) come with the first
   states (a glob matching no state is refused: `tests/test_entry_states.py`).
@@ -261,7 +260,7 @@ under its name switches them on there):
   `reward-armed-bomb-drop` (0.75) and the drop's pickup `reward-gained-bombs` (0.5), in every family; not using
   the bomb costs nothing.
 
-The dungeon steps of `d3first` by what the rules make of them (step numbers of 2.0.0.6; the engine's objective as
+The dungeon steps of `d3first` by what the rules make of them (step numbers of 2.0.0.7; the engine's objective as
 the scout read it every 30 frames of the golden replay, round37.md; cellars left out). **Clear**: BOMB by the
 family's mode above the reserve while the fight lasts. **Clear < 8**: a fight only when Link comes in with 7 or
 fewer. **Wall**: a crossing whose exit is a bomb wall (one bomb). **Owner's**: no weapon bomb, the wall's and the
@@ -272,12 +271,12 @@ fewer. **Wall**: a crossing whose exit is a bomb wall (one bomb). **Owner's**: n
 | 3 | 0x6b S→N (8); 0x4b S→W (10); 0x59 N→S (13); 0x4d W→N (22) | 0x4a E→W (11) | — | 0x4c S→E (21) | 0x5b S→N (9); 0x5b W→E (19, < 8, wall) | 0x7c S→W (6); 0x7b E→N (7); 0x49 E→S (12); 0x69 N→cave (14); 0x69 cave→N (16); 0x59 S→E (17); 0x5a W→E (18); 0x5c W→N (20); 0x3d S→triforce (23) |
 | 4 | 0x31 W→E (37); 0x32 W→cave (38); 0x12 N→E (50); 0x13 W→N (51) | — | — | 0x21 S→N (42); 0x21 W→N (46); 0x11 S→N (47) | — | 0x71 S→N (31); 0x61 S→N (32); 0x51 S→W (33); 0x50 E→N (34); 0x40 S→N (35); 0x30 S→E (36); 0x32 cave→W (40); 0x31 E→N (41); 0x31 E→W (43); 0x30 E→N (44); 0x20 S→E (45); 0x01 S→E (48); 0x02 W→S (49); 0x03 S→triforce (52) |
 | 1 | 0x23 S→W (68); 0x44 W→E (75); 0x35 S→E (77) | — | 0x53 S→N (65) | — | — | 0x73 S→S (61); 0x73 S→N (63); 0x63 S→N (64); 0x43 S→N (66); 0x33 S→N (67); 0x22 E→cave (69); 0x22 cave→E (71); 0x23 W→S (72); 0x33 N→S (73); 0x43 N→E (74); 0x45 W→N (76); 0x36 W→triforce (78) |
-| 2 | 0x7e W→N (98); 0x4e S→N (101); 0x3e S→N (102); 0x2e S→N (103); 0x0e S→W (105) | 0x1e S→N (104) | — | — | — | 0x7d S→E (97); 0x6e S→N (99); 0x5e S→N (100: crossed since round 37, the owner); 0x0d E→triforce (106) |
-| 5 | 0x05 E→cave (130); 0x66 W→N (137); 0x24 E→N (145) | — | — | 0x66 S→W (125); 0x65 E→W (126) | — | 0x76 S→N (124); 0x64 E→cave (127); 0x06 cave→W (129); 0x05 cave→E (132); 0x06 W→cave (133); 0x64 cave→E (135); 0x65 W→E (136, its bombs a pickup < 8); 0x56 S→E (138); 0x57 W→N (139); 0x47 S→N (140); 0x37 S→N (141); 0x27 S→W (142); 0x26 E→W (143); 0x25 E→W (144); 0x14 S→triforce (146) |
-| 7 | 0x49 S→N (163); 0x1c W→N (173); 0x0d W→cave (175); 0x2a W→E (178) | 0x1b W→E (172) | — | 0x69 S→N (161); 0x19 W→E (168); 0x1a cave→E (171); 0x0c S→E (174); 0x29 cave→E (177) | — | 0x79 S→N (160); 0x59 S→N (162); 0x39 S→W (164); 0x38 E→N (165); 0x28 S→N (166); 0x18 S→E (167); 0x1a W→cave (169); 0x2b W→triforce (179) |
-| 6 | 0x58 S→N (202); 0x38 S→N (204); 0x39 N→E (207); 0x3a W→cave (208); 0x2d N→W (211); 0x1c S→N (213) | — | — | 0x28 S→E (205) | — | 0x79 S→W (199); 0x78 E→N (200); 0x68 S→N (201); 0x48 S→N (203); 0x29 W→S (206); 0x1d cave→S (210); 0x2c E→N (212); 0x0c S→triforce (214) |
-| 8 | 0x5e S→N (223); 0x3e S→E (225); 0x3c S→N (229) | 0x3f W→cave (226) | — | 0x6e S→N (222); 0x4c cave→N (228) | — | 0x7e S→N (221); 0x4e S→N (224); 0x2c S→triforce (230) |
-| 9 | 0x14 cave→E (251); 0x05 E→cave (266); 0x61 E→cave (270); 0x10 S→cave (274); 0x30 E→cave (284); 0x52 cave→N (289); 0x42 S→N (290) | 0x16 S→N (264) | 0x20 cave→N (273, plain way) | 0x56 S→W (248); 0x26 N→E (254); 0x27 W→N (255); 0x17 S→N (256); 0x06 S→W (265); 0x20 cave→N (272); 0x31 S→W (283); 0x04 cave→W (286) | — | 0x76 S→N (246); 0x66 S→N (247); 0x55 E→cave (249); 0x15 W→E (252); 0x16 W→S (253); 0x07 S→cave (257); 0x07 cave→S (259, 260); 0x17 N→S (261); 0x27 N→W (262); 0x26 E→N (263); 0x63 cave→W (268); 0x62 E→W (269); 0x10 cave→S (276); 0x20 N→cave (277, 278); 0x61 cave→N (280); 0x51 S→N (281); 0x41 S→N (282); 0x03 E→cave (287); 0x32 S→end (291) |
+| 2 | 0x7e W→N (96); 0x4e S→N (99); 0x3e S→N (100); 0x2e S→N (101); 0x0e S→W (103) | 0x1e S→N (102) | — | — | — | 0x7d S→E (95); 0x6e S→N (97); 0x5e S→N (98: crossed since round 37, the owner); 0x0d E→triforce (104) |
+| 5 | 0x05 E→cave (128); 0x66 W→N (135); 0x24 E→N (143) | — | — | 0x66 S→W (123); 0x65 E→W (124) | — | 0x76 S→N (122); 0x64 E→cave (125); 0x06 cave→W (127); 0x05 cave→E (130); 0x06 W→cave (131); 0x64 cave→E (133); 0x65 W→E (134, its bombs a pickup < 8); 0x56 S→E (136); 0x57 W→N (137); 0x47 S→N (138); 0x37 S→N (139); 0x27 S→W (140); 0x26 E→W (141); 0x25 E→W (142); 0x14 S→triforce (144) |
+| 7 | 0x49 S→N (161); 0x1c W→N (171); 0x0d W→cave (173); 0x2a W→E (176) | 0x1b W→E (170) | — | 0x69 S→N (159); 0x19 W→E (166); 0x1a cave→E (169); 0x0c S→E (172); 0x29 cave→E (175) | — | 0x79 S→N (158); 0x59 S→N (160); 0x39 S→W (162); 0x38 E→N (163); 0x28 S→N (164); 0x18 S→E (165); 0x1a W→cave (167); 0x2b W→triforce (177) |
+| 6 | 0x58 S→N (200); 0x38 S→N (202); 0x39 N→E (205); 0x3a W→cave (206); 0x2d N→W (209); 0x1c S→N (211) | — | — | 0x28 S→E (203) | — | 0x79 S→W (197); 0x78 E→N (198); 0x68 S→N (199); 0x48 S→N (201); 0x29 W→S (204); 0x1d cave→S (208); 0x2c E→N (210); 0x0c S→triforce (212) |
+| 8 | 0x5e S→N (221); 0x3e S→E (223); 0x3c S→N (227) | 0x3f W→cave (224) | — | 0x6e S→N (220); 0x4c cave→N (226) | — | 0x7e S→N (219); 0x4e S→N (222); 0x2c S→triforce (228) |
+| 9 | 0x14 cave→E (249); 0x05 E→cave (264); 0x61 E→cave (268); 0x10 S→cave (272); 0x30 E→cave (282); 0x52 cave→N (287); 0x42 S→N (288) | 0x16 S→N (262) | 0x20 cave→N (271, plain way) | 0x56 S→W (246); 0x26 N→E (252); 0x27 W→N (253); 0x17 S→N (254); 0x06 S→W (263); 0x20 cave→N (270); 0x31 S→W (281); 0x04 cave→W (284) | — | 0x76 S→N (244); 0x66 S→N (245); 0x55 E→cave (247); 0x15 W→E (250); 0x16 W→S (251); 0x07 S→cave (255); 0x07 cave→S (257, 258); 0x17 N→S (259); 0x27 N→W (260); 0x26 E→N (261); 0x63 cave→W (266); 0x62 E→W (267); 0x10 cave→S (274); 0x20 N→cave (275, 276); 0x61 cave→N (278); 0x51 S→N (279); 0x41 S→N (280); 0x03 E→cave (285); 0x32 S→end (289) |
 
 A clear room becomes a crossing once its fight is over (3:0x59's Darknuts dead, a treasure taken, a shutter open):
 the mask follows the objective every step. 8:0x6e's step `bombs: required` (the shared block's, for `d2first`) is
@@ -292,18 +291,19 @@ what `fights_only` gives it on `d3first` anyway; 9:0x56's `required` is like-lik
   0x5c and 0x4c, 0 at Manhandla, 6 after him (the block's). 2 from Dungeon 4's entrance (the block's). **8 from Level
   4's exit (step 53) and again from Level 1's (79) through Dungeon 2 to Dungeon 5** (round 36: the first order's 1
   through Dungeon 2 is gone): every bomb Link has is kept for Dungeon 5's walls and the Olive Garden; the walls on
-  the way (1:0x53, 0x2c, 0x2d) are bombed as any wall, cheated where Link has none, and Dodongo's room offers BOMB
+  the way (1:0x53, 0x2c; 0x2d's until round 38) are bombed as any wall, cheated where Link has none, and Dodongo's room offers BOMB
   whatever the reserve. **Dungeon 5's entrance grants nothing** (2.0.0.3; the owner, Nov 21: "don't blindly add 8
   bombs: the goal is a win without a cheated bomb"): Link opens 5:0x66's and 5:0x65's walls with the bombs he brings
   and fights the Garden with what is left (0 in 0x05: thrown freely, 8 after it, 0 at Digdogger). In the corrected
   order Dungeon 2 comes first and fills the bag: runs from Dungeon 2's entrance with 2 bombs reach Level 5 with 8 in
   231 of 296 arrivals (round 36's harvest of the `5_76s` states, round36.md "States"). **8 from Level 7's entrance to 0x1b**
-  (step 160, round 34, the lead): the reserve keeps the bag for the walls (0x69, 0x19, 0x1a); **0x1b wants its bombs
-  below 8** (round 37, the owner's floor; round 34's `{if_bombs_below: 2}` is gone, step 172); 2 from 0x1b as d2first's, 0 at Aquamentus. **8 from
-  Level 7's exit (0x42, step 180) to Dungeon 6** (round 36): every bomb for 6:0x28's wall; then the blocks' (1 from
+  (step 158, round 34, the lead): the reserve keeps the bag for the walls (0x69, 0x19, 0x1a); **0x1b wants its bombs
+  below 8** (round 37, the owner's floor; round 34's `{if_bombs_below: 2}` is gone, step 170); 2 from 0x1b as d2first's, 0 at Aquamentus. **8 from
+  Level 7's exit (0x42, step 178) to Dungeon 6** (round 36): every bomb for 6:0x28's wall; then the blocks' (1 from
   6:0x29, 1 out of Level 6, 2 into Dungeon 8, 5 out of it, Dungeon 9's).
-- **Rupees.** The route's own: 0x2d's 30, 0x3d's 30, 0x0f's 100 (Dungeon 2 and its drops between) against the meat
-  (60, 0x34's cave) and the arrows (80, 0x44's cave, `rupee_reserve: 2` from there); 4:0x11's 10. The blocks'
+- **Rupees.** The route's own: 0x3d's 30, 0x0f's 100 (Dungeon 2 and its drops between; 0x2d's 30 dropped in round
+  38, the owner: 10 + 30 + 100 against 140, the shortfall cheated and counted) against the meat (60, 0x34's cave)
+  and the arrows (80, 0x44's cave, `rupee_reserve: 2` from there); 4:0x11's 10. The blocks'
   reserves after: 1 in Gohma's room, 8 from 8:0x4c, 1 through Level 9, 0 at Ganon. A reserve keeps rupees from
   ARROW; it cannot keep what was never there, so the arrow rooms' needs top the purse up (cheated, counted): Gohma's
   (round 27), Ganon's (round 29), 8:0x4c's while a Pols Voice lives (round 32).
@@ -323,8 +323,9 @@ in `d3first-walks-a.md` §7 and `-b.md`):
 | Level 7 | 5 | 9 | 7.30 | 0.80 (3) | 5 |
 | Level 6 | 1 | 12 | 11.50 | 0 | 2 |
 
-Rupees in all: 30 (0x2d) + 30 (0x3d) + 100 (0x0f) + 10 (4:0x11) and the dungeons' drops, against 60 + 80 for the
-wares and 3-5 for arrows: the corrected order buys both wares with the 100 already in hand (Dungeon 2 before them).
+Rupees in all (2.0.0.7): 30 (0x3d) + 100 (0x0f) + 10 (4:0x11) and the dungeons' drops, against 60 + 80 for the
+wares and 3-5 for arrows: the corrected order buys both wares with the 100 already in hand (Dungeon 2 before them);
+round 38 dropped 0x2d's 30, the purse's cushion (round38.md "0x2d dropped" for the rupees cheated at the shops).
 
 ## For the owner
 
@@ -339,8 +340,8 @@ From the corrected order (round 36, `d3first-walks-c.md`, round36.md "The correc
    a Zora's hit (walks-c §2).
 3. **Bombs.** Dungeon 2 before Dungeon 5 fills the bag: runs reach Level 5 with 8 bombs in most runs (7.07 on
    average from the game start), where the first order brought 2.03.
-4. **0x3d's 30 rupees are taken** (the lead's choice: the route crosses the screen anyway; the one cushion over the
-   meat and the arrows), and 0x2d to Level 2 goes by 0x3d, 0x4d and 0x4c (0x3d has no W edge).
+4. **0x3d's 30 rupees are taken** (the lead's choice: the route crosses the screen anyway), and 0x2d to Level 2 goes
+   by 0x3d, 0x4d and 0x4c (0x3d has no W edge). Round 38 (the owner): 0x2d's bomb-wall cave is dropped.
 
 From the first walks (`d3first-walks-a.md`, `-b.md`), still standing:
 
@@ -356,8 +357,8 @@ From the first walks (`d3first-walks-a.md`, `-b.md`), still standing:
 10. **The wood sword in the Olive Garden** (9-10 of 20 by the scripted fighter without bombs, 17-18 with eight) and
     **in Dungeon 7** (0x1c's small Digdoggers kill the fighter 7 of 20 from full hearts).
 11. **Rupees**: the arrow rooms (Gohma, 8:0x4c, Ganon) are topped up while their monsters live, cheated and counted.
-12. **0x2d's and 0x3d's secrets live in rooms d2first crosses**; two engine rules keep d2first's crossings what they
-    were (no granted bomb in 0x2d, no MOVE into the Armos in 0x3d).
+12. **0x3d's secret lives in a room d2first crosses**; an engine rule keeps d2first's crossing what it was (no MOVE
+    into the Armos in 0x3d). 0x2d's wall (round 38) is in neither route.
 13. **Clips only** at 0x75, 0x0c, 0x51, 0x60, 0x3e and both docks: `CLIPS=off` chains cannot pass them.
 
 ## For the agents that build its states

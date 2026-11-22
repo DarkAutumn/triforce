@@ -913,14 +913,14 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   (the main route, no `--route` needed; `eval_batch.D3FIRST_SEGMENTS`, its states `d3first_*` named bare):** full
   `triforce eval-chain --runs 20 --parallel 10`; Dungeon 3 `--from 3_7cs_0` (to `step:24`); after Dungeon 3 `--from
   0_74c_0` (`step:31`); Dungeon 4 `--from 4_71s_0` (`step:53`); after Dungeon 4 `--from 0_45c_0` (`step:61`); Dungeon
-  1 `--from 1_73s_0` (`step:79`); after Dungeon 1 `--from 0_37c_v2_0` (`step:97`: 0x2c's heart, 0x2d's rupees, to
-  Level 2); Dungeon 2 `--from 2_7ds_0` (`step:107`); after Dungeon 2 `--from 0_3cc_0` (`step:124`: 0x0f's rupees, to
-  Level 5); Dungeon 5 `--from 5_76s_0` (`step:147`); after Dungeon 5 `--from 0_0bc_0` (`step:160`: the recorder to
-  0x45, the raft, the dock warp at 0x55, the meat, the arrows); Dungeon 7 `--from 7_79s_0` (`step:180`); after
-  Dungeon 7 `--from 0_42c_0` (`step:199`: the wrap at 0x60, 0x5f's and 0x2f's hearts, the dock warp at 0x3f, the
-  magic sword); Dungeon 6 `--from 6_79s_0` (`step:215`); after Dungeon 6 `--from 0_22c_0` (`step:221`); Dungeon 8
-  `--from 8_7es_0` (`step:231`); after Dungeon 8 `--from 0_6dc_0` (`step:246`); Dungeon 9 `--from 9_76s_0` (to the
-  ending).
+  1 `--from 1_73s_0` (`step:79`); after Dungeon 1 `--from 0_37c_v2_0` (`step:95`: 0x2c's heart, 0x3d's rupees, to
+  Level 2); Dungeon 2 `--from 2_7ds_0` (`step:105`); after Dungeon 2 `--from 0_3cc_0` (`step:122`: 0x0f's rupees, to
+  Level 5); Dungeon 5 `--from 5_76s_0` (`step:145`); after Dungeon 5 `--from 0_0bc_0` (`step:158`: the recorder to
+  0x45, the raft, the dock warp at 0x55, the meat, the arrows); Dungeon 7 `--from 7_79s_0` (`step:178`); after
+  Dungeon 7 `--from 0_42c_0` (`step:197`: the wrap at 0x60, 0x5f's and 0x2f's hearts, the dock warp at 0x3f, the
+  magic sword); Dungeon 6 `--from 6_79s_0` (`step:213`); after Dungeon 6 `--from 0_22c_0` (`step:219`); Dungeon 8
+  `--from 8_7es_0` (`step:229`); after Dungeon 8 `--from 0_6dc_0` (`step:244`); Dungeon 9 `--from 9_76s_0` (to the
+  ending). (2.0.0.7's numbers: 0x2d's cave left the route, every step after 90 two lower than 2.0.0.6's.)
   **`d2first` (`--route d2first`):** full `triforce eval-chain --route d2first --runs 20
   --parallel 10`; Dungeon 2 `--from 2_7ds_0`; after Dungeon 2 `--from 0_3cc_0`;
   Dungeon 1 `--from 1_73s_0` (round 31: to its triforce's exit, `step:64`; the door trick leaves by 0:0x37 first);

@@ -1983,18 +1983,18 @@
     "visits": 2303,
     "values": [
      0.0,
-     0.0018,
-     0.0067,
-     0.0198,
-     0.0435,
-     0.076,
-     0.1198,
-     0.1785,
-     0.2526,
-     0.3387,
-     0.4378,
-     0.5414,
-     0.6458
+     0.0029,
+     0.0104,
+     0.0294,
+     0.0614,
+     0.103,
+     0.156,
+     0.225,
+     0.3097,
+     0.4047,
+     0.5073,
+     0.6073,
+     0.7029
     ]
    },
    "plain": null
@@ -2012,18 +2012,18 @@
     "visits": 2303,
     "values": [
      0.0,
-     0.0032,
-     0.0095,
-     0.0279,
-     0.0557,
-     0.0919,
-     0.1416,
-     0.2072,
-     0.288,
-     0.3783,
-     0.4843,
-     0.5859,
-     0.6925
+     0.0052,
+     0.0145,
+     0.041,
+     0.0774,
+     0.1229,
+     0.1819,
+     0.2587,
+     0.3495,
+     0.4476,
+     0.5538,
+     0.649,
+     0.7449
     ]
    },
    "plain": null
@@ -2041,18 +2041,18 @@
     "visits": 2303,
     "values": [
      0.0,
-     0.0048,
-     0.0123,
-     0.0366,
-     0.0679,
-     0.1074,
-     0.1633,
-     0.2357,
-     0.3225,
-     0.4162,
-     0.5294,
-     0.644,
-     0.7198
+     0.0079,
+     0.0186,
+     0.0536,
+     0.093,
+     0.1425,
+     0.2073,
+     0.2919,
+     0.3881,
+     0.4886,
+     0.5983,
+     0.7029,
+     0.769
     ]
    },
    "plain": null
@@ -2070,18 +2070,18 @@
     "visits": 2303,
     "values": [
      0.0,
-     0.0056,
-     0.0135,
-     0.0404,
-     0.0727,
-     0.1135,
-     0.1719,
-     0.2456,
-     0.3331,
-     0.4231,
-     0.546,
-     0.664,
-     0.7305
+     0.0091,
+     0.0202,
+     0.0591,
+     0.099,
+     0.1501,
+     0.2173,
+     0.3036,
+     0.3998,
+     0.496,
+     0.6145,
+     0.7211,
+     0.7783
     ]
    },
    "plain": null
@@ -2099,18 +2099,18 @@
     "visits": 2302,
     "values": [
      0.0,
-     0.0168,
-     0.0261,
-     0.0911,
-     0.1225,
-     0.1797,
-     0.2656,
-     0.3985,
-     0.4443,
-     0.5903,
-     0.6858,
-     0.8233,
-     0.878
+     0.0275,
+     0.037,
+     0.1328,
+     0.1569,
+     0.2343,
+     0.3213,
+     0.4866,
+     0.516,
+     0.6704,
+     0.7414,
+     0.8644,
+     0.9017
     ]
    },
    "plain": null
@@ -2128,18 +2128,18 @@
     "visits": 1811,
     "values": [
      0.0,
-     0.0998,
-     0.1786,
-     0.472,
-     0.6499,
-     0.7976,
-     0.8848,
-     0.9511,
-     0.972,
-     0.9921,
-     0.9974,
-     0.9987,
-     0.9998
+     0.1638,
+     0.2534,
+     0.6653,
+     0.8082,
+     0.9231,
+     0.964,
+     0.9924,
+     0.9931,
+     0.9999,
+     1.0,
+     1.0,
+     1.0
     ]
    },
    "plain": null
@@ -2157,15 +2157,15 @@
     "visits": 1570,
     "values": [
      0.0,
-     0.5268,
-     0.748,
-     0.8595,
-     0.934,
-     0.9781,
-     0.9902,
-     0.9964,
-     0.9992,
+     0.8647,
+     0.9817,
      0.9999,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
      1.0,
      1.0,
      1.0
@@ -2186,14 +2186,14 @@
     "visits": 1563,
     "values": [
      0.0,
-     0.6001,
-     0.787,
-     0.8705,
-     0.9451,
-     0.9853,
-     0.9925,
-     0.9972,
-     0.9996,
+     0.9929,
+     0.9999,
+     0.9999,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
      1.0,
      1.0,
      1.0,
@@ -2215,16 +2215,16 @@
     "visits": 1563,
     "values": [
      0.0,
-     0.1716,
-     0.3687,
-     0.6006,
-     0.7897,
-     0.8742,
-     0.9466,
+     0.6993,
      0.986,
-     0.9931,
-     0.9973,
-     0.9996,
+     0.9933,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
      1.0,
      1.0,
      1.0,
@@ -2237,68 +2237,6 @@
    "step": 88,
    "room": "0:0x2d",
    "entry": "W",
-   "exit": "cave",
-   "visit": 1,
-   "way": null,
-   "specialist": "ow-zora",
-   "clips": {
-    "max_hearts": 7,
-    "visits": 1550,
-    "values": [
-     0.0,
-     0.2164,
-     0.4219,
-     0.6977,
-     0.8548,
-     0.8868,
-     0.9776,
-     0.9929,
-     0.9929,
-     0.999,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0
-    ]
-   },
-   "plain": null
-  },
-  {
-   "step": 89,
-   "room": "0:0x2d:cave",
-   "entry": "S",
-   "exit": "S",
-   "visit": 1,
-   "way": null,
-   "specialist": "ow-zora",
-   "clips": {
-    "max_hearts": 7,
-    "visits": 1132,
-    "values": [
-     0.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0
-    ]
-   },
-   "plain": null
-  },
-  {
-   "step": 90,
-   "room": "0:0x2d",
-   "entry": "cave",
    "exit": "S",
    "visit": 1,
    "way": null,
@@ -2327,7 +2265,7 @@
    "plain": null
   },
   {
-   "step": 91,
+   "step": 89,
    "room": "0:0x3d",
    "entry": "N",
    "exit": "cave",
@@ -2358,7 +2296,7 @@
    "plain": null
   },
   {
-   "step": 92,
+   "step": 90,
    "room": "0:0x3d:cave",
    "entry": "S",
    "exit": "S",
@@ -2389,7 +2327,7 @@
    "plain": null
   },
   {
-   "step": 93,
+   "step": 91,
    "room": "0:0x3d",
    "entry": "cave",
    "exit": "S",
@@ -2420,7 +2358,7 @@
    "plain": null
   },
   {
-   "step": 94,
+   "step": 92,
    "room": "0:0x4d",
    "entry": "N",
    "exit": "W",
@@ -2451,7 +2389,7 @@
    "plain": null
   },
   {
-   "step": 95,
+   "step": 93,
    "room": "0:0x4c",
    "entry": "E",
    "exit": "N",
@@ -2482,7 +2420,7 @@
    "plain": null
   },
   {
-   "step": 96,
+   "step": 94,
    "room": "0:0x3c",
    "entry": "S",
    "exit": "cave",
@@ -2513,7 +2451,7 @@
    "plain": null
   },
   {
-   "step": 97,
+   "step": 95,
    "room": "2:0x7d",
    "entry": "S",
    "exit": "E",
@@ -2544,7 +2482,7 @@
    "plain": null
   },
   {
-   "step": 98,
+   "step": 96,
    "room": "2:0x7e",
    "entry": "W",
    "exit": "N",
@@ -2575,7 +2513,7 @@
    "plain": null
   },
   {
-   "step": 99,
+   "step": 97,
    "room": "2:0x6e",
    "entry": "S",
    "exit": "N",
@@ -2606,7 +2544,7 @@
    "plain": null
   },
   {
-   "step": 100,
+   "step": 98,
    "room": "2:0x5e",
    "entry": "S",
    "exit": "N",
@@ -2637,7 +2575,7 @@
    "plain": null
   },
   {
-   "step": 101,
+   "step": 99,
    "room": "2:0x4e",
    "entry": "S",
    "exit": "N",
@@ -2668,7 +2606,7 @@
    "plain": null
   },
   {
-   "step": 102,
+   "step": 100,
    "room": "2:0x3e",
    "entry": "S",
    "exit": "N",
@@ -2699,7 +2637,7 @@
    "plain": null
   },
   {
-   "step": 103,
+   "step": 101,
    "room": "2:0x2e",
    "entry": "S",
    "exit": "N",
@@ -2730,7 +2668,7 @@
    "plain": null
   },
   {
-   "step": 104,
+   "step": 102,
    "room": "2:0x1e",
    "entry": "S",
    "exit": "N",
@@ -2761,7 +2699,7 @@
    "plain": null
   },
   {
-   "step": 105,
+   "step": 103,
    "room": "2:0x0e",
    "entry": "S",
    "exit": "W",
@@ -2792,7 +2730,7 @@
    "plain": null
   },
   {
-   "step": 106,
+   "step": 104,
    "room": "2:0x0d",
    "entry": "E",
    "exit": "triforce",
@@ -2823,7 +2761,7 @@
    "plain": null
   },
   {
-   "step": 107,
+   "step": 105,
    "room": "0:0x3c",
    "entry": "cave",
    "exit": "S",
@@ -2854,7 +2792,7 @@
    "plain": null
   },
   {
-   "step": 108,
+   "step": 106,
    "room": "0:0x4c",
    "entry": "N",
    "exit": "E",
@@ -2885,7 +2823,7 @@
    "plain": null
   },
   {
-   "step": 109,
+   "step": 107,
    "room": "0:0x4d",
    "entry": "W",
    "exit": "N",
@@ -2916,7 +2854,7 @@
    "plain": null
   },
   {
-   "step": 110,
+   "step": 108,
    "room": "0:0x3d",
    "entry": "S",
    "exit": "N",
@@ -2947,7 +2885,7 @@
    "plain": null
   },
   {
-   "step": 111,
+   "step": 109,
    "room": "0:0x2d",
    "entry": "S",
    "exit": "N",
@@ -2978,7 +2916,7 @@
    "plain": null
   },
   {
-   "step": 112,
+   "step": 110,
    "room": "0:0x1d",
    "entry": "S",
    "exit": "E",
@@ -3009,7 +2947,7 @@
    "plain": null
   },
   {
-   "step": 113,
+   "step": 111,
    "room": "0:0x1e",
    "entry": "W",
    "exit": "E",
@@ -3040,7 +2978,7 @@
    "plain": null
   },
   {
-   "step": 114,
+   "step": 112,
    "room": "0:0x1f",
    "entry": "W",
    "exit": "N",
@@ -3071,7 +3009,7 @@
    "plain": null
   },
   {
-   "step": 115,
+   "step": 113,
    "room": "0:0x0f",
    "entry": "S",
    "exit": "cave",
@@ -3102,7 +3040,7 @@
    "plain": null
   },
   {
-   "step": 116,
+   "step": 114,
    "room": "0:0x0f:cave",
    "entry": "S",
    "exit": "S",
@@ -3133,7 +3071,7 @@
    "plain": null
   },
   {
-   "step": 117,
+   "step": 115,
    "room": "0:0x0f",
    "entry": "cave",
    "exit": "S",
@@ -3164,7 +3102,7 @@
    "plain": null
   },
   {
-   "step": 118,
+   "step": 116,
    "room": "0:0x1f",
    "entry": "N",
    "exit": "W",
@@ -3195,7 +3133,7 @@
    "plain": null
   },
   {
-   "step": 119,
+   "step": 117,
    "room": "0:0x1e",
    "entry": "E",
    "exit": "W",
@@ -3226,7 +3164,7 @@
    "plain": null
   },
   {
-   "step": 120,
+   "step": 118,
    "room": "0:0x1d",
    "entry": "E",
    "exit": "N",
@@ -3257,7 +3195,7 @@
    "plain": null
   },
   {
-   "step": 121,
+   "step": 119,
    "room": "0:0x0d",
    "entry": "S",
    "exit": "W",
@@ -3288,7 +3226,7 @@
    "plain": null
   },
   {
-   "step": 122,
+   "step": 120,
    "room": "0:0x0c",
    "entry": "E",
    "exit": "W",
@@ -3319,7 +3257,7 @@
    "plain": null
   },
   {
-   "step": 123,
+   "step": 121,
    "room": "0:0x0b",
    "entry": "E",
    "exit": "cave",
@@ -3350,7 +3288,7 @@
    "plain": null
   },
   {
-   "step": 124,
+   "step": 122,
    "room": "5:0x76",
    "entry": "S",
    "exit": "N",
@@ -3381,7 +3319,7 @@
    "plain": null
   },
   {
-   "step": 125,
+   "step": 123,
    "room": "5:0x66",
    "entry": "S",
    "exit": "W",
@@ -3412,7 +3350,7 @@
    "plain": null
   },
   {
-   "step": 126,
+   "step": 124,
    "room": "5:0x65",
    "entry": "E",
    "exit": "W",
@@ -3443,7 +3381,7 @@
    "plain": null
   },
   {
-   "step": 127,
+   "step": 125,
    "room": "5:0x64",
    "entry": "E",
    "exit": "cave",
@@ -3474,7 +3412,7 @@
    "plain": null
   },
   {
-   "step": 128,
+   "step": 126,
    "room": "5:0x07:cave",
    "entry": "S",
    "exit": "E",
@@ -3505,7 +3443,7 @@
    "plain": null
   },
   {
-   "step": 129,
+   "step": 127,
    "room": "5:0x06",
    "entry": "cave",
    "exit": "W",
@@ -3536,7 +3474,7 @@
    "plain": null
   },
   {
-   "step": 130,
+   "step": 128,
    "room": "5:0x05",
    "entry": "E",
    "exit": "cave",
@@ -3567,7 +3505,7 @@
    "plain": null
   },
   {
-   "step": 131,
+   "step": 129,
    "room": "5:0x04:cave",
    "entry": "S",
    "exit": "N",
@@ -3598,7 +3536,7 @@
    "plain": null
   },
   {
-   "step": 132,
+   "step": 130,
    "room": "5:0x05",
    "entry": "cave",
    "exit": "E",
@@ -3629,7 +3567,7 @@
    "plain": null
   },
   {
-   "step": 133,
+   "step": 131,
    "room": "5:0x06",
    "entry": "W",
    "exit": "cave",
@@ -3660,7 +3598,7 @@
    "plain": null
   },
   {
-   "step": 134,
+   "step": 132,
    "room": "5:0x07:cave",
    "entry": "S",
    "exit": "W",
@@ -3691,7 +3629,7 @@
    "plain": null
   },
   {
-   "step": 135,
+   "step": 133,
    "room": "5:0x64",
    "entry": "cave",
    "exit": "E",
@@ -3722,7 +3660,7 @@
    "plain": null
   },
   {
-   "step": 136,
+   "step": 134,
    "room": "5:0x65",
    "entry": "W",
    "exit": "E",
@@ -3753,7 +3691,7 @@
    "plain": null
   },
   {
-   "step": 137,
+   "step": 135,
    "room": "5:0x66",
    "entry": "W",
    "exit": "N",
@@ -3784,7 +3722,7 @@
    "plain": null
   },
   {
-   "step": 138,
+   "step": 136,
    "room": "5:0x56",
    "entry": "S",
    "exit": "E",
@@ -3815,7 +3753,7 @@
    "plain": null
   },
   {
-   "step": 139,
+   "step": 137,
    "room": "5:0x57",
    "entry": "W",
    "exit": "N",
@@ -3846,7 +3784,7 @@
    "plain": null
   },
   {
-   "step": 140,
+   "step": 138,
    "room": "5:0x47",
    "entry": "S",
    "exit": "N",
@@ -3877,7 +3815,7 @@
    "plain": null
   },
   {
-   "step": 141,
+   "step": 139,
    "room": "5:0x37",
    "entry": "S",
    "exit": "N",
@@ -3908,7 +3846,7 @@
    "plain": null
   },
   {
-   "step": 142,
+   "step": 140,
    "room": "5:0x27",
    "entry": "S",
    "exit": "W",
@@ -3939,7 +3877,7 @@
    "plain": null
   },
   {
-   "step": 143,
+   "step": 141,
    "room": "5:0x26",
    "entry": "E",
    "exit": "W",
@@ -3970,7 +3908,7 @@
    "plain": null
   },
   {
-   "step": 144,
+   "step": 142,
    "room": "5:0x25",
    "entry": "E",
    "exit": "W",
@@ -4001,7 +3939,7 @@
    "plain": null
   },
   {
-   "step": 145,
+   "step": 143,
    "room": "5:0x24",
    "entry": "E",
    "exit": "N",
@@ -4032,7 +3970,7 @@
    "plain": null
   },
   {
-   "step": 146,
+   "step": 144,
    "room": "5:0x14",
    "entry": "S",
    "exit": "triforce",
@@ -4065,7 +4003,7 @@
    "plain": null
   },
   {
-   "step": 147,
+   "step": 145,
    "room": "0:0x0b",
    "entry": "cave",
    "exit": "recorder",
@@ -4098,7 +4036,7 @@
    "plain": null
   },
   {
-   "step": 148,
+   "step": 146,
    "room": "0:0x45",
    "entry": "recorder",
    "exit": "S",
@@ -4137,7 +4075,7 @@
    "plain": null
   },
   {
-   "step": 149,
+   "step": 147,
    "room": "0:0x55",
    "entry": "N",
    "exit": "recorder",
@@ -4176,7 +4114,7 @@
    "plain": null
   },
   {
-   "step": 150,
+   "step": 148,
    "room": "0:0x34",
    "entry": "recorder",
    "exit": "cave",
@@ -4215,7 +4153,7 @@
    "plain": null
   },
   {
-   "step": 151,
+   "step": 149,
    "room": "0:0x34:cave",
    "entry": "S",
    "exit": "S",
@@ -4254,7 +4192,7 @@
    "plain": null
   },
   {
-   "step": 152,
+   "step": 150,
    "room": "0:0x34",
    "entry": "cave",
    "exit": "S",
@@ -4293,7 +4231,7 @@
    "plain": null
   },
   {
-   "step": 153,
+   "step": 151,
    "room": "0:0x44",
    "entry": "N",
    "exit": "cave",
@@ -4332,7 +4270,7 @@
    "plain": null
   },
   {
-   "step": 154,
+   "step": 152,
    "room": "0:0x44:cave",
    "entry": "S",
    "exit": "S",
@@ -4371,7 +4309,7 @@
    "plain": null
   },
   {
-   "step": 155,
+   "step": 153,
    "room": "0:0x44",
    "entry": "cave",
    "exit": "S",
@@ -4410,7 +4348,7 @@
    "plain": null
   },
   {
-   "step": 156,
+   "step": 154,
    "room": "0:0x54",
    "entry": "N",
    "exit": "W",
@@ -4449,7 +4387,7 @@
    "plain": null
   },
   {
-   "step": 157,
+   "step": 155,
    "room": "0:0x53",
    "entry": "E",
    "exit": "W",
@@ -4488,7 +4426,7 @@
    "plain": null
   },
   {
-   "step": 158,
+   "step": 156,
    "room": "0:0x52",
    "entry": "E",
    "exit": "N",
@@ -4527,7 +4465,7 @@
    "plain": null
   },
   {
-   "step": 159,
+   "step": 157,
    "room": "0:0x42",
    "entry": "S",
    "exit": "cave",
@@ -4566,7 +4504,7 @@
    "plain": null
   },
   {
-   "step": 160,
+   "step": 158,
    "room": "7:0x79",
    "entry": "S",
    "exit": "N",
@@ -4605,7 +4543,7 @@
    "plain": null
   },
   {
-   "step": 161,
+   "step": 159,
    "room": "7:0x69",
    "entry": "S",
    "exit": "N",
@@ -4644,7 +4582,7 @@
    "plain": null
   },
   {
-   "step": 162,
+   "step": 160,
    "room": "7:0x59",
    "entry": "S",
    "exit": "N",
@@ -4683,7 +4621,7 @@
    "plain": null
   },
   {
-   "step": 163,
+   "step": 161,
    "room": "7:0x49",
    "entry": "S",
    "exit": "N",
@@ -4722,7 +4660,7 @@
    "plain": null
   },
   {
-   "step": 164,
+   "step": 162,
    "room": "7:0x39",
    "entry": "S",
    "exit": "W",
@@ -4761,7 +4699,7 @@
    "plain": null
   },
   {
-   "step": 165,
+   "step": 163,
    "room": "7:0x38",
    "entry": "E",
    "exit": "N",
@@ -4800,7 +4738,7 @@
    "plain": null
   },
   {
-   "step": 166,
+   "step": 164,
    "room": "7:0x28",
    "entry": "S",
    "exit": "N",
@@ -4839,7 +4777,7 @@
    "plain": null
   },
   {
-   "step": 167,
+   "step": 165,
    "room": "7:0x18",
    "entry": "S",
    "exit": "E",
@@ -4878,7 +4816,7 @@
    "plain": null
   },
   {
-   "step": 168,
+   "step": 166,
    "room": "7:0x19",
    "entry": "W",
    "exit": "E",
@@ -4917,7 +4855,7 @@
    "plain": null
   },
   {
-   "step": 169,
+   "step": 167,
    "room": "7:0x1a",
    "entry": "W",
    "exit": "cave",
@@ -4956,7 +4894,7 @@
    "plain": null
   },
   {
-   "step": 170,
+   "step": 168,
    "room": "7:0x4a:cave",
    "entry": "S",
    "exit": "N",
@@ -4995,7 +4933,7 @@
    "plain": null
   },
   {
-   "step": 171,
+   "step": 169,
    "room": "7:0x1a",
    "entry": "cave",
    "exit": "E",
@@ -5034,7 +4972,7 @@
    "plain": null
   },
   {
-   "step": 172,
+   "step": 170,
    "room": "7:0x1b",
    "entry": "W",
    "exit": "E",
@@ -5073,7 +5011,7 @@
    "plain": null
   },
   {
-   "step": 173,
+   "step": 171,
    "room": "7:0x1c",
    "entry": "W",
    "exit": "N",
@@ -5112,7 +5050,7 @@
    "plain": null
   },
   {
-   "step": 174,
+   "step": 172,
    "room": "7:0x0c",
    "entry": "S",
    "exit": "E",
@@ -5151,7 +5089,7 @@
    "plain": null
   },
   {
-   "step": 175,
+   "step": 173,
    "room": "7:0x0d",
    "entry": "W",
    "exit": "cave",
@@ -5190,7 +5128,7 @@
    "plain": null
   },
   {
-   "step": 176,
+   "step": 174,
    "room": "7:0x7b:cave",
    "entry": "S",
    "exit": "W",
@@ -5229,7 +5167,7 @@
    "plain": null
   },
   {
-   "step": 177,
+   "step": 175,
    "room": "7:0x29",
    "entry": "cave",
    "exit": "E",
@@ -5268,7 +5206,7 @@
    "plain": null
   },
   {
-   "step": 178,
+   "step": 176,
    "room": "7:0x2a",
    "entry": "W",
    "exit": "E",
@@ -5307,7 +5245,7 @@
    "plain": null
   },
   {
-   "step": 179,
+   "step": 177,
    "room": "7:0x2b",
    "entry": "W",
    "exit": "triforce",
@@ -5348,7 +5286,7 @@
    "plain": null
   },
   {
-   "step": 180,
+   "step": 178,
    "room": "0:0x42",
    "entry": "cave",
    "exit": "S",
@@ -5389,7 +5327,7 @@
    "plain": null
   },
   {
-   "step": 181,
+   "step": 179,
    "room": "0:0x52",
    "entry": "N",
    "exit": "W",
@@ -5430,7 +5368,7 @@
    "plain": null
   },
   {
-   "step": 182,
+   "step": 180,
    "room": "0:0x51",
    "entry": "E",
    "exit": "W",
@@ -5471,7 +5409,7 @@
    "plain": null
   },
   {
-   "step": 183,
+   "step": 181,
    "room": "0:0x50",
    "entry": "E",
    "exit": "S",
@@ -5512,7 +5450,7 @@
    "plain": null
   },
   {
-   "step": 184,
+   "step": 182,
    "room": "0:0x60",
    "entry": "N",
    "exit": "W",
@@ -5553,7 +5491,7 @@
    "plain": null
   },
   {
-   "step": 185,
+   "step": 183,
    "room": "0:0x5f",
    "entry": "E",
    "exit": "N",
@@ -5594,7 +5532,7 @@
    "plain": null
   },
   {
-   "step": 186,
+   "step": 184,
    "room": "0:0x4f",
    "entry": "S",
    "exit": "N",
@@ -5635,7 +5573,7 @@
    "plain": null
   },
   {
-   "step": 187,
+   "step": 185,
    "room": "0:0x3f",
    "entry": "S",
    "exit": "N",
@@ -5676,7 +5614,7 @@
    "plain": null
   },
   {
-   "step": 188,
+   "step": 186,
    "room": "0:0x2f",
    "entry": "S",
    "exit": "cave",
@@ -5717,7 +5655,7 @@
    "plain": null
   },
   {
-   "step": 189,
+   "step": 187,
    "room": "0:0x2f:cave",
    "entry": "S",
    "exit": "S",
@@ -5758,7 +5696,7 @@
    "plain": null
   },
   {
-   "step": 190,
+   "step": 188,
    "room": "0:0x2f",
    "entry": "cave",
    "exit": "S",
@@ -5799,7 +5737,7 @@
    "plain": null
   },
   {
-   "step": 191,
+   "step": 189,
    "room": "0:0x3f",
    "entry": "N",
    "exit": "recorder",
@@ -5840,7 +5778,7 @@
    "plain": null
   },
   {
-   "step": 192,
+   "step": 190,
    "room": "0:0x31",
    "entry": "recorder",
    "exit": "N",
@@ -5881,7 +5819,7 @@
    "plain": null
   },
   {
-   "step": 193,
+   "step": 191,
    "room": "0:0x21",
    "entry": "S",
    "exit": "cave",
@@ -5922,7 +5860,7 @@
    "plain": null
   },
   {
-   "step": 194,
+   "step": 192,
    "room": "0:0x21:cave",
    "entry": "S",
    "exit": "S",
@@ -5963,7 +5901,7 @@
    "plain": null
   },
   {
-   "step": 195,
+   "step": 193,
    "room": "0:0x21",
    "entry": "cave",
    "exit": "S",
@@ -6004,7 +5942,7 @@
    "plain": null
   },
   {
-   "step": 196,
+   "step": 194,
    "room": "0:0x31",
    "entry": "N",
    "exit": "E",
@@ -6045,7 +5983,7 @@
    "plain": null
   },
   {
-   "step": 197,
+   "step": 195,
    "room": "0:0x32",
    "entry": "W",
    "exit": "N",
@@ -6086,7 +6024,7 @@
    "plain": null
   },
   {
-   "step": 198,
+   "step": 196,
    "room": "0:0x22",
    "entry": "S",
    "exit": "cave",
@@ -6127,7 +6065,7 @@
    "plain": null
   },
   {
-   "step": 199,
+   "step": 197,
    "room": "6:0x79",
    "entry": "S",
    "exit": "W",
@@ -6168,7 +6106,7 @@
    "plain": null
   },
   {
-   "step": 200,
+   "step": 198,
    "room": "6:0x78",
    "entry": "E",
    "exit": "N",
@@ -6209,7 +6147,7 @@
    "plain": null
   },
   {
-   "step": 201,
+   "step": 199,
    "room": "6:0x68",
    "entry": "S",
    "exit": "N",
@@ -6250,7 +6188,7 @@
    "plain": null
   },
   {
-   "step": 202,
+   "step": 200,
    "room": "6:0x58",
    "entry": "S",
    "exit": "N",
@@ -6291,7 +6229,7 @@
    "plain": null
   },
   {
-   "step": 203,
+   "step": 201,
    "room": "6:0x48",
    "entry": "S",
    "exit": "N",
@@ -6332,7 +6270,7 @@
    "plain": null
   },
   {
-   "step": 204,
+   "step": 202,
    "room": "6:0x38",
    "entry": "S",
    "exit": "N",
@@ -6373,7 +6311,7 @@
    "plain": null
   },
   {
-   "step": 205,
+   "step": 203,
    "room": "6:0x28",
    "entry": "S",
    "exit": "E",
@@ -6414,7 +6352,7 @@
    "plain": null
   },
   {
-   "step": 206,
+   "step": 204,
    "room": "6:0x29",
    "entry": "W",
    "exit": "S",
@@ -6455,7 +6393,7 @@
    "plain": null
   },
   {
-   "step": 207,
+   "step": 205,
    "room": "6:0x39",
    "entry": "N",
    "exit": "E",
@@ -6496,7 +6434,7 @@
    "plain": null
   },
   {
-   "step": 208,
+   "step": 206,
    "room": "6:0x3a",
    "entry": "W",
    "exit": "cave",
@@ -6537,7 +6475,7 @@
    "plain": null
   },
   {
-   "step": 209,
+   "step": 207,
    "room": "6:0x08:cave",
    "entry": "S",
    "exit": "E",
@@ -6578,7 +6516,7 @@
    "plain": null
   },
   {
-   "step": 210,
+   "step": 208,
    "room": "6:0x1d",
    "entry": "cave",
    "exit": "S",
@@ -6619,7 +6557,7 @@
    "plain": null
   },
   {
-   "step": 211,
+   "step": 209,
    "room": "6:0x2d",
    "entry": "N",
    "exit": "W",
@@ -6660,7 +6598,7 @@
    "plain": null
   },
   {
-   "step": 212,
+   "step": 210,
    "room": "6:0x2c",
    "entry": "E",
    "exit": "N",
@@ -6701,7 +6639,7 @@
    "plain": null
   },
   {
-   "step": 213,
+   "step": 211,
    "room": "6:0x1c",
    "entry": "S",
    "exit": "N",
@@ -6742,7 +6680,7 @@
    "plain": null
   },
   {
-   "step": 214,
+   "step": 212,
    "room": "6:0x0c",
    "entry": "S",
    "exit": "triforce",
@@ -6785,7 +6723,7 @@
    "plain": null
   },
   {
-   "step": 215,
+   "step": 213,
    "room": "0:0x22",
    "entry": "cave",
    "exit": "recorder",
@@ -6828,7 +6766,7 @@
    "plain": null
   },
   {
-   "step": 216,
+   "step": 214,
    "room": "0:0x3c",
    "entry": "recorder",
    "exit": "S",
@@ -6871,7 +6809,7 @@
    "plain": null
   },
   {
-   "step": 217,
+   "step": 215,
    "room": "0:0x4c",
    "entry": "N",
    "exit": "E",
@@ -6914,7 +6852,7 @@
    "plain": null
   },
   {
-   "step": 218,
+   "step": 216,
    "room": "0:0x4d",
    "entry": "W",
    "exit": "S",
@@ -6957,7 +6895,7 @@
    "plain": null
   },
   {
-   "step": 219,
+   "step": 217,
    "room": "0:0x5d",
    "entry": "N",
    "exit": "S",
@@ -7000,7 +6938,7 @@
    "plain": null
   },
   {
-   "step": 220,
+   "step": 218,
    "room": "0:0x6d",
    "entry": "N",
    "exit": "cave",
@@ -7043,7 +6981,7 @@
    "plain": null
   },
   {
-   "step": 221,
+   "step": 219,
    "room": "8:0x7e",
    "entry": "S",
    "exit": "N",
@@ -7086,7 +7024,7 @@
    "plain": null
   },
   {
-   "step": 222,
+   "step": 220,
    "room": "8:0x6e",
    "entry": "S",
    "exit": "N",
@@ -7129,7 +7067,7 @@
    "plain": null
   },
   {
-   "step": 223,
+   "step": 221,
    "room": "8:0x5e",
    "entry": "S",
    "exit": "N",
@@ -7172,7 +7110,7 @@
    "plain": null
   },
   {
-   "step": 224,
+   "step": 222,
    "room": "8:0x4e",
    "entry": "S",
    "exit": "N",
@@ -7215,7 +7153,7 @@
    "plain": null
   },
   {
-   "step": 225,
+   "step": 223,
    "room": "8:0x3e",
    "entry": "S",
    "exit": "E",
@@ -7258,7 +7196,7 @@
    "plain": null
   },
   {
-   "step": 226,
+   "step": 224,
    "room": "8:0x3f",
    "entry": "W",
    "exit": "cave",
@@ -7301,7 +7239,7 @@
    "plain": null
   },
   {
-   "step": 227,
+   "step": 225,
    "room": "8:0x2f:cave",
    "entry": "S",
    "exit": "W",
@@ -7344,7 +7282,7 @@
    "plain": null
   },
   {
-   "step": 228,
+   "step": 226,
    "room": "8:0x4c",
    "entry": "cave",
    "exit": "N",
@@ -7387,7 +7325,7 @@
    "plain": null
   },
   {
-   "step": 229,
+   "step": 227,
    "room": "8:0x3c",
    "entry": "S",
    "exit": "N",
@@ -7430,7 +7368,7 @@
    "plain": null
   },
   {
-   "step": 230,
+   "step": 228,
    "room": "8:0x2c",
    "entry": "S",
    "exit": "triforce",
@@ -7475,7 +7413,7 @@
    "plain": null
   },
   {
-   "step": 231,
+   "step": 229,
    "room": "0:0x6d",
    "entry": "cave",
    "exit": "recorder",
@@ -7520,7 +7458,7 @@
    "plain": null
   },
   {
-   "step": 232,
+   "step": 230,
    "room": "0:0x37",
    "entry": "recorder",
    "exit": "E",
@@ -7565,7 +7503,7 @@
    "plain": null
   },
   {
-   "step": 233,
+   "step": 231,
    "room": "0:0x38",
    "entry": "W",
    "exit": "S",
@@ -7610,7 +7548,7 @@
    "plain": null
   },
   {
-   "step": 234,
+   "step": 232,
    "room": "0:0x48",
    "entry": "N",
    "exit": "W",
@@ -7655,7 +7593,7 @@
    "plain": null
   },
   {
-   "step": 235,
+   "step": 233,
    "room": "0:0x47",
    "entry": "E",
    "exit": "cave",
@@ -7700,7 +7638,7 @@
    "plain": null
   },
   {
-   "step": 236,
+   "step": 234,
    "room": "0:0x47:cave",
    "entry": "S",
    "exit": "S",
@@ -7745,7 +7683,7 @@
    "plain": null
   },
   {
-   "step": 237,
+   "step": 235,
    "room": "0:0x47",
    "entry": "cave",
    "exit": "E",
@@ -7792,7 +7730,7 @@
    "plain": null
   },
   {
-   "step": 238,
+   "step": 236,
    "room": "0:0x48",
    "entry": "W",
    "exit": "N",
@@ -7839,7 +7777,7 @@
    "plain": null
   },
   {
-   "step": 239,
+   "step": 237,
    "room": "0:0x38",
    "entry": "S",
    "exit": "N",
@@ -7886,7 +7824,7 @@
    "plain": null
   },
   {
-   "step": 240,
+   "step": 238,
    "room": "0:0x28",
    "entry": "S",
    "exit": "W",
@@ -7933,7 +7871,7 @@
    "plain": null
   },
   {
-   "step": 241,
+   "step": 239,
    "room": "0:0x27",
    "entry": "E",
    "exit": "N",
@@ -7980,7 +7918,7 @@
    "plain": null
   },
   {
-   "step": 242,
+   "step": 240,
    "room": "0:0x17",
    "entry": "S",
    "exit": "N",
@@ -8027,7 +7965,7 @@
    "plain": null
   },
   {
-   "step": 243,
+   "step": 241,
    "room": "0:0x07",
    "entry": "S",
    "exit": "W",
@@ -8074,7 +8012,7 @@
    "plain": null
   },
   {
-   "step": 244,
+   "step": 242,
    "room": "0:0x06",
    "entry": "E",
    "exit": "W",
@@ -8121,7 +8059,7 @@
    "plain": null
   },
   {
-   "step": 245,
+   "step": 243,
    "room": "0:0x05",
    "entry": "E",
    "exit": "cave",
@@ -8168,7 +8106,7 @@
    "plain": null
   },
   {
-   "step": 246,
+   "step": 244,
    "room": "9:0x76",
    "entry": "S",
    "exit": "N",
@@ -8215,7 +8153,7 @@
    "plain": null
   },
   {
-   "step": 247,
+   "step": 245,
    "room": "9:0x66",
    "entry": "S",
    "exit": "N",
@@ -8262,7 +8200,7 @@
    "plain": null
   },
   {
-   "step": 248,
+   "step": 246,
    "room": "9:0x56",
    "entry": "S",
    "exit": "W",
@@ -8309,7 +8247,7 @@
    "plain": null
   },
   {
-   "step": 249,
+   "step": 247,
    "room": "9:0x55",
    "entry": "E",
    "exit": "cave",
@@ -8356,7 +8294,7 @@
    "plain": null
   },
   {
-   "step": 250,
+   "step": 248,
    "room": "9:0x60:cave",
    "entry": "S",
    "exit": "W",
@@ -8403,7 +8341,7 @@
    "plain": null
   },
   {
-   "step": 251,
+   "step": 249,
    "room": "9:0x14",
    "entry": "cave",
    "exit": "E",
@@ -8450,7 +8388,7 @@
    "plain": null
   },
   {
-   "step": 252,
+   "step": 250,
    "room": "9:0x15",
    "entry": "W",
    "exit": "E",
@@ -8497,7 +8435,7 @@
    "plain": null
   },
   {
-   "step": 253,
+   "step": 251,
    "room": "9:0x16",
    "entry": "W",
    "exit": "S",
@@ -8544,7 +8482,7 @@
    "plain": null
   },
   {
-   "step": 254,
+   "step": 252,
    "room": "9:0x26",
    "entry": "N",
    "exit": "E",
@@ -8591,7 +8529,7 @@
    "plain": null
   },
   {
-   "step": 255,
+   "step": 253,
    "room": "9:0x27",
    "entry": "W",
    "exit": "N",
@@ -8638,7 +8576,7 @@
    "plain": null
   },
   {
-   "step": 256,
+   "step": 254,
    "room": "9:0x17",
    "entry": "S",
    "exit": "N",
@@ -8685,7 +8623,7 @@
    "plain": null
   },
   {
-   "step": 257,
+   "step": 255,
    "room": "9:0x07",
    "entry": "S",
    "exit": "cave",
@@ -8732,7 +8670,7 @@
    "plain": null
   },
   {
-   "step": 258,
+   "step": 256,
    "room": "9:0x00:cave",
    "entry": "S",
    "exit": "N",
@@ -8779,7 +8717,7 @@
    "plain": null
   },
   {
-   "step": 259,
+   "step": 257,
    "room": "9:0x07",
    "entry": "cave",
    "exit": "S",
@@ -8826,7 +8764,7 @@
    "plain": null
   },
   {
-   "step": 260,
+   "step": 258,
    "room": "9:0x07",
    "entry": "cave",
    "exit": "S",
@@ -8837,7 +8775,7 @@
    "plain": null
   },
   {
-   "step": 261,
+   "step": 259,
    "room": "9:0x17",
    "entry": "N",
    "exit": "S",
@@ -8884,7 +8822,7 @@
    "plain": null
   },
   {
-   "step": 262,
+   "step": 260,
    "room": "9:0x27",
    "entry": "N",
    "exit": "W",
@@ -8931,7 +8869,7 @@
    "plain": null
   },
   {
-   "step": 263,
+   "step": 261,
    "room": "9:0x26",
    "entry": "E",
    "exit": "N",
@@ -8978,7 +8916,7 @@
    "plain": null
   },
   {
-   "step": 264,
+   "step": 262,
    "room": "9:0x16",
    "entry": "S",
    "exit": "N",
@@ -9025,7 +8963,7 @@
    "plain": null
   },
   {
-   "step": 265,
+   "step": 263,
    "room": "9:0x06",
    "entry": "S",
    "exit": "W",
@@ -9072,7 +9010,7 @@
    "plain": null
   },
   {
-   "step": 266,
+   "step": 264,
    "room": "9:0x05",
    "entry": "E",
    "exit": "cave",
@@ -9119,7 +9057,7 @@
    "plain": null
   },
   {
-   "step": 267,
+   "step": 265,
    "room": "9:0x70:cave",
    "entry": "S",
    "exit": "W",
@@ -9166,7 +9104,7 @@
    "plain": null
   },
   {
-   "step": 268,
+   "step": 266,
    "room": "9:0x63",
    "entry": "cave",
    "exit": "W",
@@ -9213,7 +9151,7 @@
    "plain": null
   },
   {
-   "step": 269,
+   "step": 267,
    "room": "9:0x62",
    "entry": "E",
    "exit": "W",
@@ -9260,7 +9198,7 @@
    "plain": null
   },
   {
-   "step": 270,
+   "step": 268,
    "room": "9:0x61",
    "entry": "E",
    "exit": "cave",
@@ -9307,7 +9245,7 @@
    "plain": null
   },
   {
-   "step": 271,
+   "step": 269,
    "room": "9:0x75:cave",
    "entry": "S",
    "exit": "W",
@@ -9354,7 +9292,7 @@
    "plain": null
   },
   {
-   "step": 272,
+   "step": 270,
    "room": "9:0x20",
    "entry": "cave",
    "exit": "N",
@@ -9401,7 +9339,7 @@
    "plain": null
   },
   {
-   "step": 273,
+   "step": 271,
    "room": "9:0x20",
    "entry": "cave",
    "exit": "N",
@@ -9412,7 +9350,7 @@
    "plain": null
   },
   {
-   "step": 274,
+   "step": 272,
    "room": "9:0x10",
    "entry": "S",
    "exit": "cave",
@@ -9459,7 +9397,7 @@
    "plain": null
   },
   {
-   "step": 275,
+   "step": 273,
    "room": "9:0x4f:cave",
    "entry": "S",
    "exit": "N",
@@ -9506,7 +9444,7 @@
    "plain": null
   },
   {
-   "step": 276,
+   "step": 274,
    "room": "9:0x10",
    "entry": "cave",
    "exit": "S",
@@ -9553,7 +9491,7 @@
    "plain": null
   },
   {
-   "step": 277,
+   "step": 275,
    "room": "9:0x20",
    "entry": "N",
    "exit": "cave",
@@ -9600,7 +9538,7 @@
    "plain": null
   },
   {
-   "step": 278,
+   "step": 276,
    "room": "9:0x20",
    "entry": "N",
    "exit": "cave",
@@ -9611,7 +9549,7 @@
    "plain": null
   },
   {
-   "step": 279,
+   "step": 277,
    "room": "9:0x75:cave",
    "entry": "S",
    "exit": "E",
@@ -9658,7 +9596,7 @@
    "plain": null
   },
   {
-   "step": 280,
+   "step": 278,
    "room": "9:0x61",
    "entry": "cave",
    "exit": "N",
@@ -9705,7 +9643,7 @@
    "plain": null
   },
   {
-   "step": 281,
+   "step": 279,
    "room": "9:0x51",
    "entry": "S",
    "exit": "N",
@@ -9752,7 +9690,7 @@
    "plain": null
   },
   {
-   "step": 282,
+   "step": 280,
    "room": "9:0x41",
    "entry": "S",
    "exit": "N",
@@ -9799,7 +9737,7 @@
    "plain": null
   },
   {
-   "step": 283,
+   "step": 281,
    "room": "9:0x31",
    "entry": "S",
    "exit": "W",
@@ -9846,7 +9784,7 @@
    "plain": null
   },
   {
-   "step": 284,
+   "step": 282,
    "room": "9:0x30",
    "entry": "E",
    "exit": "cave",
@@ -9893,7 +9831,7 @@
    "plain": null
   },
   {
-   "step": 285,
+   "step": 283,
    "room": "9:0x67:cave",
    "entry": "S",
    "exit": "E",
@@ -9940,7 +9878,7 @@
    "plain": null
   },
   {
-   "step": 286,
+   "step": 284,
    "room": "9:0x04",
    "entry": "cave",
    "exit": "W",
@@ -9987,7 +9925,7 @@
    "plain": null
   },
   {
-   "step": 287,
+   "step": 285,
    "room": "9:0x03",
    "entry": "E",
    "exit": "cave",
@@ -10034,7 +9972,7 @@
    "plain": null
   },
   {
-   "step": 288,
+   "step": 286,
    "room": "9:0x77:cave",
    "entry": "S",
    "exit": "W",
@@ -10081,7 +10019,7 @@
    "plain": null
   },
   {
-   "step": 289,
+   "step": 287,
    "room": "9:0x52",
    "entry": "cave",
    "exit": "N",
@@ -10128,7 +10066,7 @@
    "plain": null
   },
   {
-   "step": 290,
+   "step": 288,
    "room": "9:0x42",
    "entry": "S",
    "exit": "N",
@@ -10175,7 +10113,7 @@
    "plain": null
   },
   {
-   "step": 291,
+   "step": 289,
    "room": "9:0x32",
    "entry": "S",
    "exit": "end",
