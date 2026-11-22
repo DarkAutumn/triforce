@@ -79,9 +79,11 @@ def main(argv=None) -> Path:
                 arrays.update(action_mask=batch['masks'].numpy(), action=batch['actions'].numpy(),
                               teacher_joint=batch['teacher_joint'].numpy(),
                               teacher_value=batch['teacher_value'].numpy(), family=batch['family'].numpy(),
-                              health_lost=batch['health_lost'].numpy(), hits=batch['hits'].numpy())
+                              health_lost=batch['health_lost'].numpy(), hits=batch['hits'].numpy(),
+                              blocked=batch['blocked'].numpy())
                 if 'tried_lost' in batch:
-                    arrays.update(tried_actions=batch['tried_actions'].numpy(), tried_lost=batch['tried_lost'].numpy())
+                    arrays.update(tried_actions=batch['tried_actions'].numpy(), tried_lost=batch['tried_lost'].numpy(),
+                                  tried_blocked=batch['tried_blocked'].numpy())
                 np.savez_compressed(out / f'shard-{shard:04d}.npz', **arrays)
                 print(f"[record] shard {shard}: {batch['masks'].shape[0]} rows", flush=True)
                 progress.update(progress.done + batch['masks'].shape[0])

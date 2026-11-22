@@ -66,9 +66,12 @@ class Rows:
 
 
 def load_rows(source: str) -> Rows:
+    """``source``: ``r36:FAMILY``, a recording ``DIR``, or ``DIR+blocked`` (the label ``hit_or_blocked``: lost
+    health, or a Bubble's touch landed, the sword blocked: main's round 38 targets)."""
     if source.startswith('r36:'):
         return _load_r36(source[4:])
-    shards = sorted(Path(source).glob('shard-*.npz'))
+    directory, _, label = source.partition('+')
+    shards = sorted(Path(directory).glob('shard-*.npz'))
     parts = [dict(np.load(p)) for p in shards]
     held = np.concatenate([np.full(len(p['action']), i % SHARD_HOLDOUT == SHARD_HOLDOUT - 1)
                            for i, p in enumerate(parts)])
@@ -78,14 +81,20 @@ def load_rows(source: str) -> Rows:
     n = len(d['action'])
     a = d['action'].astype(np.int64)
     taken = (a[:, 0] * 8 + a[:, 1]) * NUM_DURATIONS + a[:, 2]
-    rows, joints, lost, own = [np.arange(n)], [taken], [d['health_lost'] > 0], [np.ones(n, bool)]
+    taken_lost = d['health_lost'] > 0
+    if label == 'blocked':
+        taken_lost = taken_lost | d['blocked'].astype(bool)
+    rows, joints, lost, own = [np.arange(n)], [taken], [taken_lost], [np.ones(n, bool)]
     if 'tried_lost' in d:
         tried = d['tried_lost'] >= 0
         r, k = np.nonzero(tried)
         t = d['tried_actions'][r, k].astype(np.int64)
         rows.append(r)
         joints.append((t[:, 0] * 8 + t[:, 1]) * NUM_DURATIONS + t[:, 2])
-        lost.append(d['tried_lost'][r, k] > 0)
+        tried_lost = d['tried_lost'][r, k] > 0
+        if label == 'blocked':
+            tried_lost = tried_lost | (d['tried_blocked'][r, k] > 0)
+        lost.append(tried_lost)
         own.append(np.zeros(len(r), bool))
     return Rows(obs, np.concatenate(rows), np.concatenate(joints), np.concatenate(lost), np.concatenate(own), held,
                 np.ones(n, np.int8), source)
@@ -268,15 +277,17 @@ def table(directory: Path, base: str) -> str:
     keys = sorted({k for r in results.values() for k in r['keys']})
     lines = []
     for key in keys:
-        lines += [f'\n**{key}**\n', '| arm | episodes | hits a visit | hearts lost | success | decisions | bombs | '
+        lines += [f'\n**{key}**\n', '| arm | episodes | hits a visit | Bubble touches a visit | hearts lost | success | '
+                  'decisions | bombs | '
                   f'hits − {base} (per episode) | hearts − {base} | success − {base} | decisions − {base} |',
-                  '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|']
+                  '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|']
         ref = results.get(base, {}).get('keys', {}).get(key)
         for name, result in results.items():
             row = result['keys'].get(key)
             if row is None:
                 continue
-            cells = [f"{row['hits_per_visit']:.3f}", f"{row['hearts_lost']:.3f}", f"{row['success']:.3f}",
+            cells = [f"{row['hits_per_visit']:.3f}", f"{row.get('bubble_touches_per_visit', float('nan')):.3f}",
+                     f"{row['hearts_lost']:.3f}", f"{row['success']:.3f}",
                      f"{row['decisions']:.1f}", f"{row['bombs']:.2f}"]
             if ref is not None and name != base:
                 p = yardstick.paired(yardstick.records(ref), yardstick.records(row))
