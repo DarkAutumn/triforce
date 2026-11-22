@@ -143,6 +143,13 @@ been retrained on the corrected order):
 - **`d2first` gets the same bomb rules later** (the owner: "d2-first is also in-scope for bomb rules for when we go
   back and work on that single-model. Don't waste time on d2 first until we've completed this work on d3-first,
   entirely."): the rules are route-level switches, off for `d2first` until then.
+- [ ] **Two route changes from the owner's watching (Nov 22), on branch `r37-rules`:** "Drop the fight with the
+  goriyas in d2 0x5e, that's only for d2 first. (It's high bomb chances on start of a d2 run, but needless
+  heart/time wasting in the d3 first route). Overworld: drop the bomb for rupees in 0xd2, keep the armos rupees in
+  3d (losing too many hearts in that d2 fight, and it's redundant with 0x3d)... we may have to cheat rupees more,
+  but that 1 30 secret + the 100 secret + drops is the intended route." So on `d3first` 2:0x5e is crossed, and the
+  bomb-wall cave of 0:0x2d (the lead's reading of "0xd2": to confirm with the owner) is left out; the purse is then
+  10 + 30 + 100 and drops against the meat and the arrows, with the shortfall cheated and counted.
 - **An input to try, the owner's idea (Nov 22): a shooter's threat lane.** "maybe a projectile-using enemy with no
   current projectile always has a 'danger zone' in front of them unless their projectile is in air... at which
   point we use that projectile." Per shooter, the lane ahead along its facing for its shot's range, live only while
