@@ -8,6 +8,7 @@ the teacher's joint log-probs and value.  ``shares``: envs per family (fixed for
 rows each family's rollout takes (decisions an env) by its need, from the run's own episodes, between iterations.
 """
 
+import fnmatch
 import json
 import threading
 import time
@@ -19,7 +20,7 @@ from typing import Optional
 import torch
 
 from .. import _native, registry
-from ..paths import SPECIALISTS_DIR
+from ..paths import SPECIALISTS_DIR, TRAJECTORIES_DIR
 from ..metrics import RolloutMetrics
 from ..ppo import Collector
 from ..specialist import SpecialistConfig, load_specialist
@@ -48,13 +49,45 @@ def task_yaml(key: str) -> str:
     return family
 
 
-def parse_families(items, parallel: int, shares: Optional[dict] = None) -> list[Family]:
+def route_only(config: SpecialistConfig, route: str, states_dir=None, tracks_dir=None) -> SpecialistConfig:
+    """``config`` on ``route``'s states alone (``state_routes: [route]``: its start-state globs and its harvested
+    starts in the route's namespace, ``<route>_<name>``): the globs no state of the route matches (rooms the route
+    never plays) are dropped, and the curriculum keeps the tracks explored from the route's states (a folder of links,
+    ``<tracks_dir>/<route>/<family>``, default ``target/route-tracks``; none: no curriculum)."""
+    folder = Path(states_dir or _native.paths()['states_dir'])
+    prefix = f'{route}_'
+    names = [p.stem[len(prefix):] for p in folder.glob(f'{prefix}*.state')]
+    kept = [g for g in config.start_states if fnmatch.filter(names, g)]
+    if not kept:
+        raise SystemExit(f"{config.name}: no start state of route {route} matches {config.start_states}")
+    config = config.replace(state_routes=[route], start_states=kept)
+    if not config.curriculum.enabled:
+        return config
+    source = Path(config.curriculum.trajectories or TRAJECTORIES_DIR / config.name)
+    tracks = sorted(p.parent for p in source.glob('*/trajectory.json')
+                    if json.loads(p.read_text(encoding='utf-8')).get('start_state', '').startswith(prefix))
+    if not tracks:
+        return config.replace(curriculum={'enabled': False})
+    out = Path(tracks_dir or 'target/route-tracks').resolve() / route / config.name
+    out.mkdir(parents=True, exist_ok=True)
+    for track in tracks:
+        link = out / track.name
+        if not link.is_symlink():
+            link.symlink_to(track.resolve())
+    return config.replace(curriculum={'enabled': True, 'trajectories': str(out)})
+
+
+def parse_families(items, parallel: int, shares: Optional[dict] = None,
+                   state_route: Optional[str] = None) -> list[Family]:
     """``key[=yaml]`` items (a key's task: the given yaml, else ``task_yaml``) with ``parallel`` envs split by
-    ``shares`` (key -> weight; default equal), every family at least one."""
+    ``shares`` (key -> weight; default equal), every family at least one; with ``state_route``, each task on that
+    route's states alone (``route_only``)."""
     families = []
     for item in items:
         key, _, path = item.partition('=')
         config = load_specialist(path or task_yaml(key))
+        if state_route:
+            config = route_only(config, state_route)
         families.append(Family(key, config))
     keys = [f.key for f in families]
     if len(set(keys)) != len(keys):
@@ -75,10 +108,13 @@ def parse_families(items, parallel: int, shares: Optional[dict] = None) -> list[
 
 class Teachers:
     """Each family's teacher (the network that plays its rooms today: ``registry.policy_checkpoint(key)``, or the
-    given checkpoints), on ``device``, labelling rows in batches: joint log-probs ``[n, 352]`` and values."""
+    given checkpoints), on ``device``, labelling rows in batches: joint log-probs ``[n, 352]`` and values.
+    ``weights``: key -> the weight of its rows' teacher term (default 1; 0: no teacher term for that key)."""
 
-    def __init__(self, keys, device, root=None, checkpoints: Optional[dict] = None):
+    def __init__(self, keys, device, root=None, checkpoints: Optional[dict] = None,
+                 weights: Optional[dict] = None):
         self.device = torch.device(device)
+        self.weights = {key: float((weights or {}).get(key, 1.0)) for key in keys}
         self.networks: dict[str, torch.nn.Module] = {}
         self.paths: dict[str, str] = {}
         loaded: dict[str, torch.nn.Module] = {}
@@ -113,12 +149,16 @@ class Teachers:
 class BufferSet:
     """The families' readied rollout buffers as one batch (``PPO.optimize`` reads ``flatten``)."""
 
-    def __init__(self, keys: list[str], buffers: list, labels: Optional[list] = None):
+    def __init__(self, keys: list[str], buffers: list, labels: Optional[list] = None,
+                 weights: Optional[list] = None):
         self.keys = keys
         self.buffers = buffers
         self.labels = labels
         self.rows = sum(b.rows for b in buffers)
         self.family = torch.cat([torch.full((b.rows,), i, dtype=torch.int64) for i, b in enumerate(buffers)])
+        self.weight = None      # teacher term weight per row; None: 1 everywhere
+        if weights is not None and any(w != 1.0 for w in weights):
+            self.weight = torch.tensor(weights, dtype=torch.float32)[self.family]
 
     @staticmethod
     def rows(buffer) -> tuple[dict, torch.Tensor]:
@@ -137,6 +177,8 @@ class BufferSet:
         if self.labels is not None:
             batch['teacher_joint'] = torch.cat([joint for joint, _ in self.labels]).to(device)
             batch['teacher_value'] = torch.cat([value for _, value in self.labels]).to(device)
+            if self.weight is not None:
+                batch['teacher_weight'] = self.weight.to(device)
         return batch
 
 
@@ -243,7 +285,8 @@ class MultiCollector:
             for key, collector in zip(self.keys, self.collectors):
                 obs, masks = BufferSet.rows(collector.buffer)
                 labels.append(self.teachers.label(key, obs, masks))
-        self.buffer = BufferSet(self.keys, [c.buffer for c in self.collectors], labels)
+        self.buffer = BufferSet(self.keys, [c.buffer for c in self.collectors], labels,
+                                None if self.teachers is None else [self.teachers.weights[k] for k in self.keys])
         self.recompute_seconds = time.time() - began
         merged = RolloutMetrics()
         for collector in self.collectors:

@@ -18,9 +18,10 @@ a row a family.
 
 Also (docs/lab.md): auxiliary targets (``--aux OUTPUT=TARGET:COEFF``) and look-ahead labels for candidates not taken
 (``--try-others K:P``, training only); a recurrent network (``LabNet.initial_state``) trains on sequences of
-``--bptt`` decisions from stored states; ``--sampling need`` shares the rows by each family's need; demonstrations
-(``--demos``), the early stop (``--stop-success``) and numbered checkpoints (``--checkpoint-every``) as in
-``triforce train``.
+``--bptt`` decisions from stored states; ``--sampling need`` shares the rows by each family's need (``--need-target-for``
+a family's own target); ``--teacher-weight`` scales or removes a family's teacher term; ``--rehearse`` keeps tasks
+outside the rollout in the loss by their stored teacher rows; demonstrations (``--demos``), the early stop
+(``--stop-success``) and numbered checkpoints (``--checkpoint-every``) as in ``triforce train``.
 """
 
 import argparse
@@ -46,6 +47,7 @@ from ..ppo import PPO, IterationResult, PPOConfig, joint_kl, minibatch_forward
 from ..train import CONFIRM_EPISODES, EarlyStop, curriculum_spec
 from .auxiliary import AuxLoss, aux_loss, held_out
 from .collect import MultiCollector, NeedSampler, Teachers, parse_families
+from .rehearse import Rehearsal
 
 REFERENCE = Path(__file__).with_name('reference.json')
 KIND = 'lab-train'          # the plan kind of a lab run's log folder
@@ -87,6 +89,9 @@ def parse_args(argv=None):
                         help="also keep a numbered checkpoint every N iterations (select-checkpoint reads them)")
     parser.add_argument('--checkpoint-keep', type=int, default=0, help="numbered checkpoints kept (0: all)")
     parser.add_argument('--no-curriculum', action='store_true')
+    parser.add_argument('--state-route', default=None, metavar='ROUTE',
+                        help="every family on this route's states alone (lab.collect.route_only: state_routes, the "
+                             "start-state globs the route has, the curriculum tracks explored from its states)")
     parser.add_argument('--seed', type=int, default=None)
     parser.add_argument('--aux', nargs='*', default=[], metavar='OUTPUT=TARGET:COEFF',
                         help="a loss on the network's auxiliary output OUTPUT against TARGET (hit, damaged, "
@@ -103,6 +108,17 @@ def parse_args(argv=None):
                              "number for every family")
     parser.add_argument('--need-floor', type=float, default=0.05, help="a family's weight beside its need")
     parser.add_argument('--need-window', type=int, default=100, help="recent episodes a family's success reads")
+    parser.add_argument('--need-target-for', nargs='*', default=[], metavar='KEY=X',
+                        help="a family's own need target (overrides --need-target for it)")
+    parser.add_argument('--teacher-weight', nargs='*', default=[], metavar='KEY=W',
+                        help="weight of a family's rows in the teacher term (default 1; 0: no teacher for it)")
+    parser.add_argument('--rehearse', default=None, metavar='CACHE',
+                        help="a distillation cache (r36_merge_distill.py cache): KL to its teacher rows of the keys "
+                             "not rolled out, every minibatch (lab.rehearse)")
+    parser.add_argument('--rehearse-keys', nargs='*', default=None,
+                        help="the keys rehearsed (default: every key of the cache not in --families)")
+    parser.add_argument('--rehearse-rows', type=int, default=300_000, help="rows held, equal a key")
+    parser.add_argument('--rehearse-coeff', type=float, default=1.0)
     parser.add_argument('--demos', nargs='+', default=None, metavar='FILE',
                         help="demonstration files (triforce.demos) behavior-cloned during PPO (--demo-coeff)")
     parser.add_argument('--demo-coeff', type=float, default=0.2)
@@ -309,7 +325,7 @@ def main(argv=None) -> Path:
     run_id = args.run_id or registry.new_run_id()
     out_dir = registry.run_dir(args.name, run_id, root)
     shares = {k: float(w) for k, _, w in (s.partition('=') for s in args.shares)}
-    families = parse_families(args.families, args.parallel, shares)
+    families = parse_families(args.families, args.parallel, shares, args.state_route)
     keys = [f.key for f in families]
     steps_per_env = max(1, args.steps_per_update // args.parallel)
     total = args.iterations * steps_per_env * args.parallel
@@ -331,11 +347,27 @@ def main(argv=None) -> Path:
         if args.sampling == 'need':
             targets = (NeedSampler.teacher_targets(keys, REFERENCE) if args.need_target == 'teacher'
                        else {key: float(args.need_target) for key in keys})
+            for key, _, value in (item.partition('=') for item in args.need_target_for):
+                if key not in targets:
+                    raise SystemExit(f"--need-target-for {key}: not in --families")
+                targets[key] = float(value)
             sampler = NeedSampler(targets, args.need_floor, args.need_window)
         teachers = None
         if args.teacher_coeff > 0 or args.mode == 'imitate':
             overrides = dict(item.split('=', 1) for item in args.teacher)
-            teachers = Teachers(keys, args.device, root, overrides)
+            weights = {k: float(w) for k, _, w in (item.partition('=') for item in args.teacher_weight)}
+            unknown = sorted(set(weights) - set(keys))
+            if unknown:
+                raise SystemExit(f"--teacher-weight {unknown}: not in --families")
+            teachers = Teachers(keys, args.device, root, overrides, weights)
+        rehearsal = None
+        if args.rehearse:
+            names = json.loads((Path(args.rehearse) / 'cache.json').read_text(encoding='utf-8'))['keys']
+            rehearsed = args.rehearse_keys if args.rehearse_keys is not None else [k for k in names
+                                                                                   if k not in keys]
+            rehearsal = Rehearsal(Path(args.rehearse), rehearsed, args.rehearse_rows, seed=args.seed or 0)
+            print(f"[lab] rehearsal: {rehearsal.rows:,} rows of {len(rehearsed)} keys from {args.rehearse} "
+                  f"(weight {args.rehearse_coeff})", flush=True)
         curricula = {}
         for family in families:
             spec, _ = curriculum_spec(argparse.Namespace(no_curriculum=args.no_curriculum, curriculum=None,
@@ -350,6 +382,8 @@ def main(argv=None) -> Path:
                         demo_bc_coeff=args.demo_coeff if args.demos else 0.0)
         ppo = PPO(cfg, device=args.device)
         ppo.aux_losses = aux_losses
+        ppo.rehearsal = rehearsal
+        ppo.rehearsal_coeff = args.rehearse_coeff
         if args.demos:
             ppo.demo_batch = load_demos(args.demos)
             print(f"[lab] demonstrations: {ppo.demo_batch[2].shape[0]} rows from {', '.join(args.demos)} "

@@ -27,7 +27,7 @@ from triforce import _native, registry
 from triforce.events import progress_job
 from triforce.jobs import add_job_arguments, begin_job, work
 from triforce.lab.bench import HARVESTED, ROUTE, load_manifest, team_keys
-from triforce.lab.collect import Family, MultiCollector, Teachers
+from triforce.lab.collect import Family, MultiCollector, Teachers, route_only, task_yaml
 from triforce.specialist import load_specialist
 
 STEPS_PER_ENV = 512
@@ -43,8 +43,9 @@ def step_index() -> dict:
     return index
 
 
-def entry_states(keys: list[str], states_dir: Path) -> dict:
-    """key -> harvested state names (bare) it plays, less the bench's."""
+def entry_states(keys: list[str], states_dir: Path, route_only_entries: bool = False) -> dict:
+    """key -> harvested state names (bare) it plays, less the bench's; ``route_only_entries``: only the route's own
+    (``d3first_*``), never another route's harvest in their place."""
     bench = {Path(s).name for e in load_manifest()['entries'] for s in e['states']}
     steps = step_index()
     result: dict = {k: [] for k in keys}
@@ -52,7 +53,7 @@ def entry_states(keys: list[str], states_dir: Path) -> dict:
         folder = states_dir / HARVESTED / family
         names = sorted(p.stem for p in folder.glob('*.state')) if folder.is_dir() else []
         routed = [n for n in names if n.startswith(f'{ROUTE}_')]
-        for name in routed or names:
+        for name in routed if route_only_entries else (routed or names):
             if name in bench:
                 continue
             key = family
@@ -102,13 +103,17 @@ def main(argv=None):
     parser.add_argument('--out', required=True)
     parser.add_argument('--keys', nargs='*', default=None)
     parser.add_argument('--sources', nargs='*', default=['resets', 'entries'])
-    parser.add_argument('--part-yaml', default='target/merge/yaml', help="dir of <family>@d3first.yaml")
+    parser.add_argument('--part-yaml', default=None,
+                        help="dir of <family>@d3first.yaml (round 36's old runs' tasks); default: the lab's task "
+                             "of the key (specialists/<route>/<family>.yaml, the corrected route's)")
     parser.add_argument('--decisions', type=int, default=20480)
     parser.add_argument('--parallel', type=int, default=10)
     parser.add_argument('--seed', type=int, default=36_100_000)
     parser.add_argument('--device', default='cuda')
     parser.add_argument('--student', default=None,
                         help="a checkpoint that acts instead of the teachers (DAgger: the teachers label its states)")
+    parser.add_argument('--state-route', default=None, metavar='ROUTE',
+                        help="resets on this route's states alone (lab.collect.route_only), entries only its harvest")
     parser.add_argument('--dry-run', action='store_true')
     add_job_arguments(parser)
     args = parser.parse_args(argv)
@@ -116,14 +121,19 @@ def main(argv=None):
     states_dir = Path(_native.paths()['states_dir'])
     every = team_keys()
     keys = args.keys or every
-    entries = entry_states(every, states_dir)
+    entries = entry_states(every, states_dir, args.state_route is not None)
     rollouts = max(1, round(args.decisions / (STEPS_PER_ENV * args.parallel)))
     plan = []
     for i, key in enumerate(every):
         if key not in keys:
             continue
         family, part = registry.split_policy(key)
-        base = load_specialist(str(Path(args.part_yaml) / f'{key}.yaml') if part else family)
+        if part and args.part_yaml:
+            base = load_specialist(str(Path(args.part_yaml) / f'{key}.yaml'))
+        else:
+            base = load_specialist(task_yaml(key))
+        if args.state_route:
+            base = route_only(base, args.state_route)
         if 'resets' in args.sources:
             plan.append((key, 'resets', base, None, args.seed + 1000 * i))
         if 'entries' in args.sources and entries[key]:

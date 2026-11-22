@@ -193,6 +193,26 @@ stay fixed (each family's pool runs on its own threads); its **decisions an env*
 rollout stay `--steps-per-update`. A family with a large share takes longer to roll out than the others, which
 then idle: the CPU time is the same, the wall time follows the largest share. Logged per iteration:
 `family/<key>/need`, `family/<key>/recent_success`, `family/<key>/rows_share`.
+`--need-target-for KEY=X` gives one family its own target (a part whose teacher is weak: a target above the
+teacher's yardstick success).
+
+### A family's teacher term, and rehearsal of the parts not rolled out
+
+`--teacher-weight KEY=W` scales that family's rows in the teacher term (`ppo.joint_kl` weighted per row, divided by
+all rows as before; default 1): `0` takes the teacher out for a part whose teacher is weak while the others keep it.
+
+A lab run rolls out at least one env a family, so a run of `--parallel 8` rolls out at most 8 parts. `--rehearse
+CACHE` keeps the others in the loss: a distillation cache (`scripts/experiments/r36_merge_distill.py cache`: the
+teachers' rows of every key, `r36_merge_record.py`) is read once (`--rehearse-rows`, 300,000 by default, the same
+number a key; `--rehearse-keys`, by default every key of the cache not in `--families`), and every PPO minibatch adds
+`--rehearse-coeff` (1.0) × KL(teacher ‖ student) on as many of its rows as the minibatch has (`lab/rehearse.py`;
+logged `losses/rehearse_kl`). The rehearsal does not fade.
+
+`--state-route ROUTE` puts every family on one route's states alone (`lab.collect.route_only`: `state_routes:
+[ROUTE]` for its start-state globs and harvested starts, the globs the route has no state for dropped, the curriculum
+on the tracks explored from the route's states, linked under `target/route-tracks/`, or off when there are none).
+The one network of the corrected route is trained with `--state-route d3first` (the owner, Nov 22: never on
+`d2first`'s states); `r36_merge_record.py --state-route d3first` records its teachers' rows the same way.
 
 ## Memory: training a recurrent network
 
