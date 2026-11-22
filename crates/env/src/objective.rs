@@ -201,7 +201,7 @@ pub fn pulled(reward: &RewardConfig, objective: &Objective, state: &GameView) ->
     state
         .items
         .iter()
-        .any(|it| wanted_drop(state, it.id) || is_item_target(reward, first, state, it.id))
+        .any(|it| wanted_drop(state, it.id) || is_item_target(reward, first, objective.bag_drops, state, it.id))
 }
 
 /// Direction bits (E 1, W 2, S 4, N 8) of the sides `objective`'s next rooms lie on from `state`'s room (a maze
@@ -280,6 +280,7 @@ mod tests {
             clips: false,
             treasure_refused: false,
             drops_first: false,
+            bag_drops: false,
         };
         let plain = RewardConfig::default();
         let view = |ram: &[u8; RAM_SIZE]| GameView::new(ram, 0, false, map.clone());
