@@ -413,6 +413,8 @@ fn specialist_outcome(r: &StepResult) -> Outcome {
                 .as_ref()
                 .is_some_and(|t| t.bootstrap_truncation),
         policy: 0,
+        health_lost: r.info.health_lost as f32,
+        hits: r.info.hits,
     }
 }
 
@@ -513,6 +515,11 @@ where
             stall: self.env.linger.tail_steps(),
             health: link_health(self.env.session()),
         }
+    }
+
+    /// Training's look-ahead labels for actions not taken (`TryOthers`): the same trial as an evaluation's.
+    fn trial(&mut self, action: &ZeldaAction, future: Option<u64>) -> Result<Option<Trial>, EnvError> {
+        trial(self.env.session_mut(), action, future)
     }
 
     fn decided(&mut self, policy: i64, action: &ZeldaAction, decision: &Decision, distribution: Option<&[f32]>) {
@@ -1156,7 +1163,7 @@ where
 
     fn trial(&mut self, action: &ZeldaAction, future: Option<u64>) -> Result<Option<Trial>, EnvError> {
         match self {
-            TaskEnv::Train(_) => Ok(None),
+            TaskEnv::Train(e) => e.trial(action, future),
             TaskEnv::Eval(e) => e.trial(action, future),
             TaskEnv::Chain(e) => e.trial(action, future),
         }

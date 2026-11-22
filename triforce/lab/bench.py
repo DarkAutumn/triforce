@@ -67,9 +67,9 @@ def _order(name: str) -> str:
     return hashlib.sha256(name.encode()).hexdigest()
 
 
-def choose_states(family: str, count: int, states_dir: Path) -> tuple[list[str], str]:
+def choose_states(family: str, count: int, states_dir: Path, route: str = ROUTE) -> tuple[list[str], str]:
     """(state names relative to ``states_dir``, source) of ``family``: harvested entries spread evenly over its
-    room entries (the route's own, ``d3first_*``, where it has them), else its seed start states."""
+    room entries (the route's own, ``<route>_*``, where it has them), else its seed start states."""
     directory = states_dir / HARVESTED / family
     files = sorted(p.stem for p in directory.glob('*.state')) if directory.is_dir() else []
     source = HARVESTED
@@ -77,7 +77,7 @@ def choose_states(family: str, count: int, states_dir: Path) -> tuple[list[str],
         config = load_specialist(family)
         files = sorted(Path(p).stem for p in config.resolve_start_states(str(states_dir)))
         source = 'seed'
-    routed = [name for name in files if name.startswith(f'{ROUTE}_')]
+    routed = [name for name in files if name.startswith(f'{route}_')]
     files = routed or files     # the route's own states where it has them (the others are older routes')
     groups = defaultdict(list)
     for name in files:
@@ -95,19 +95,23 @@ def choose_states(family: str, count: int, states_dir: Path) -> tuple[list[str],
     return sorted(prefix + name for name in chosen), source
 
 
-def make_manifest(states_per_family: int, episodes: int, seed: int, root=None, states_dir=None) -> dict:
+def make_manifest(states_per_family: int, episodes: int, seed: int, root=None, states_dir=None,
+                  route: str = ROUTE) -> dict:
+    """The cheap tier's manifest from the team in ``root`` and the states (with their harvests) in ``states_dir``,
+    preferring ``route``'s own entries; regenerate it when a route's states or harvests change (``manifest --route R
+    --states-dir DIR --models-dir DIR``)."""
     states_dir = Path(states_dir or _native.paths()['states_dir'])
     entries = []
     for key in team_keys(root):
         family = registry.split_policy(key)[0]
-        states, source = choose_states(family, states_per_family, states_dir)
+        states, source = choose_states(family, states_per_family, states_dir, route)
         entries.append({'key': key, 'family': family, 'source': source, 'states': states})
-    segments = route_segments(ROUTE).segments.split()
+    segments = route_segments(route).segments.split()
     return {'format': FORMAT, 'act': ACT, 'episodes': episodes, 'seed': seed, 'clips': 'on',
             'states_per_family': states_per_family, 'entries': entries,
             'missing_coverage': sorted({e['family'] for e in entries if e['source'] != HARVESTED}),
-            'full': {'route': ROUTE, 'runs': 1000, 'act': 'model', 'segments': segments,
-                     'command': f'triforce eval-batch TAG --chains TAG --route {ROUTE} --runs 1000 --act model '
+            'full': {'route': route, 'runs': 1000, 'act': 'model', 'segments': segments,
+                     'command': f'triforce eval-batch TAG --chains TAG --route {route} --runs 1000 --act model '
                                 '[--checkpoint KEY=CKPT ...]'}}
 
 
@@ -226,11 +230,13 @@ def format_compare(result: dict) -> str:
     return '\n'.join(lines)
 
 
-def speed(key: str, manifest: dict, parallel: int, devices: list[str], states_dir=None, root=None) -> dict:
-    """Decisions per second of one key's entry played by its network through each acting path: the Rust actor
-    (``rust``) and the same network served by torch (``cpu``, ``cuda``; ``nets.serve``)."""
+def speed(key: str, manifest: dict, parallel: int, devices: list[str], states_dir=None, root=None,
+          checkpoint=None) -> dict:
+    """Decisions per second of one key's entry played by its network (or ``checkpoint``) through each acting path:
+    the Rust actor (``rust``) and the same network served by torch (``cpu``, ``cuda``, ``cuda-half``: autocast
+    float16; ``nets.serve``)."""
     from ..nets import serve  # pylint: disable=import-outside-toplevel
-    checkpoint = registry.policy_checkpoint(key, root)
+    checkpoint = checkpoint or registry.policy_checkpoint(key, root)
     entry = next(e for e in manifest['entries'] if e['key'] == key)
     config, directory = entry_task(entry, states_dir)
     out = {}
@@ -239,14 +245,15 @@ def speed(key: str, manifest: dict, parallel: int, devices: list[str], states_di
         if path == 'rust':
             policy = network.to_native()
         else:
-            policy = serve.Server(device=path).policy(network)
+            device, _, half = path.partition('-')
+            policy = serve.Server(device=device, half=half == 'half').policy(network)
         began = time.time()
         result = _play_policy(config, policy, manifest, parallel, directory)
         seconds = time.time() - began
         decisions = sum(r['steps'] for r in result)
         out[path] = {'decisions': decisions, 'seconds': round(seconds, 2), 'decisions_per_second': decisions / seconds,
                      'success': sum(r['success'] for r in result) / len(result)}
-    return {'key': key, 'parallel': parallel, 'paths': out}
+    return {'key': key, 'checkpoint': str(checkpoint), 'parallel': parallel, 'paths': out}
 
 
 def _play_policy(config, policy, manifest: dict, parallel: int, states_dir) -> list[dict]:
@@ -268,6 +275,8 @@ def main(argv=None) -> int:
     m.add_argument('--episodes', type=int, default=5)
     m.add_argument('--seed', type=int, default=360000)
     m.add_argument('--out', default=str(MANIFEST))
+    m.add_argument('--route', default=ROUTE, help="the route whose own room entries (<route>_*) are preferred and "
+                                                  "whose segments make the full tier")
     r = sub.add_parser('run')
     r.add_argument('--team', action='store_true', help="every key's network of today (policy_checkpoint)")
     r.add_argument('--network', default=None, help="one checkpoint for every key in --keys")
@@ -276,7 +285,9 @@ def main(argv=None) -> int:
     r.add_argument('--out', required=True)
     s = sub.add_parser('speed')
     s.add_argument('--key', default='zol')
-    s.add_argument('--paths', nargs='+', default=['rust', 'cpu', 'cuda'])
+    s.add_argument('--paths', nargs='+', default=['rust', 'cpu', 'cuda'],
+                   choices=['rust', 'cpu', 'cuda', 'cuda-half'])
+    s.add_argument('--network', default=None, help="a checkpoint to time instead of the key's network")
     s.add_argument('--out', required=True)
     for p in (m, r, s):
         p.add_argument('--models-dir', default=None)
@@ -290,7 +301,8 @@ def main(argv=None) -> int:
     c.add_argument('new')
     args = parser.parse_args(argv)
     if args.command == 'manifest':
-        manifest = make_manifest(args.states_per_family, args.episodes, args.seed, args.models_dir, args.states_dir)
+        manifest = make_manifest(args.states_per_family, args.episodes, args.seed, args.models_dir, args.states_dir,
+                                 args.route)
         write_json_atomic(args.out, manifest)
         print(f"[bench] {len(manifest['entries'])} keys, "
               f"{sum(len(e['states']) for e in manifest['entries']) * manifest['episodes']} episodes; "
@@ -304,7 +316,8 @@ def main(argv=None) -> int:
     manifest = load_manifest(args.manifest)
     if args.command == 'speed':
         with logged_job('lab-speed', 'eval', [], log=False, work=work(eval_episodes=100)):
-            result = speed(args.key, manifest, args.parallel, args.paths, args.states_dir, args.models_dir)
+            result = speed(args.key, manifest, args.parallel, args.paths, args.states_dir, args.models_dir,
+                           args.network)
         write_json_atomic(args.out, result)
         print(json.dumps(result, indent=2))
         return 0

@@ -228,6 +228,8 @@ pub struct HybridScratch {
     slot: usize,
     logits: Vec<f32>,
     acting: LogitScratch,
+    /// A served decision's ranked alternatives ([`Heads::ranked`]).
+    ranked: Vec<([usize; 3], f32)>,
 }
 
 impl HybridActor {
@@ -277,6 +279,7 @@ impl Actor<ZeldaAction> for HybridActor {
             slot: self.queue.slot(),
             logits: vec![0.0; self.queue.heads().size()],
             acting: self.queue.heads().scratch(),
+            ranked: Vec::new(),
         }
     }
 
@@ -366,7 +369,19 @@ impl Actor<ZeldaAction> for HybridActor {
                 self.native
                     .alternatives(obs, i as i64, job, step, situation, first, k, &mut s.native, out)
             }
-            (_, Net::External(_)) => Ok(None),
+            (p, Net::External(_)) => {
+                // The logits of this decision are still in the scratch (`act` just ran on them).
+                let choose = self.modes[p].choose(situation.stall, situation.health);
+                let bad = || format!("bad first action {first:?}");
+                let head = |i: i64| usize::try_from(i).map_err(|_| bad());
+                let first = [head(first[0])?, head(first[1])?, head(first[2])?];
+                s.ranked.clear();
+                self.queue.heads().ranked(choose, job, step, first, k.saturating_sub(1), &mut s.acting, &mut s.ranked);
+                out.extend(s.ranked.drain(..).map(|([a, b, c], log_prob)| {
+                    ([a as i64, b as i64, c as i64], Decision { log_prob, ..Decision::default() })
+                }));
+                Ok(None)
+            }
         }
     }
 }

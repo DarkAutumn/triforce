@@ -171,10 +171,33 @@ pub struct SearchRow<A> {
     pub value: f32,
 }
 
+/// Look-ahead labels for candidates the rollout did NOT take (training only; the lab's hit head, docs/lab.md): on a
+/// share `share` of the decisions (drawn by the decision's key, the same wherever it runs) the actor's next
+/// `candidates` actions after the one taken ([`Actor::alternatives`], best first) are each tried in the env
+/// ([`crate::PoolEnv::trial`], the game's own future) and whether each lost health is kept
+/// ([`EnvRollout::tried`]). The decision itself is unchanged.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TryOthers {
+    pub candidates: u32,
+    pub share: f32,
+}
+
+impl TryOthers {
+    /// Whether decision `step` of the episode keyed `job` tries its candidates.
+    pub fn chosen(&self, job: i64, step: i64) -> bool {
+        let key = policy::noise::key_of(&[TAG_TRY, job as u64, step as u64]);
+        self.share >= 1.0 || (self.share > 0.0 && policy::noise::uniform(key) < self.share as f64)
+    }
+}
+
+/// Key tag of [`TryOthers::chosen`]'s draws.
+const TAG_TRY: u64 = 0x5452_594F_5448_4552;
+
 /// One env's rollout of `steps` decisions. Row `t` of `obs` is the observation decision `t` acted on; row
 /// `steps` is the one the next rollout resumes from. `starts[t]`: row `t` is the first observation of an episode.
 /// Per decision: the action and the actor's [`Decision`], and what the step did (reward, frames, interrupt,
-/// whether it ended the episode, and for a bootstrapped truncation the actor's value of the final observation).
+/// whether it ended the episode, and for a bootstrapped truncation the actor's value of the final observation), the
+/// hearts it lost and the monster hits it dealt.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnvRollout<A> {
     pub obs: ObsColumns,
@@ -190,6 +213,14 @@ pub struct EnvRollout<A> {
     /// The episode key and decision index of each decision.
     pub job: Vec<i64>,
     pub step: Vec<i64>,
+    /// Hearts each decision's step lost (net) and the monster hits it dealt ([`crate::Outcome`]).
+    pub health_lost: Vec<f32>,
+    pub hits: Vec<u32>,
+    /// With [`TryOthers`] only (empty otherwise): `candidates` entries a decision, the candidate tried and whether
+    /// it lost health (None: not tried, the decision wasn't chosen or had fewer legal actions), and per decision the
+    /// frames its trials emulated.
+    pub tried: Vec<Option<(A, bool)>>,
+    pub tried_frames: Vec<u32>,
     /// [`crate::Pool::rollout_planned`] only (empty otherwise): each decision's [`SearchRow`], None where the
     /// planner passed it on to the actor.
     pub search: Vec<Option<SearchRow<A>>>,
@@ -210,6 +241,10 @@ impl<A> EnvRollout<A> {
             bootstrap_value: Vec::with_capacity(steps),
             job: Vec::with_capacity(steps),
             step: Vec::with_capacity(steps),
+            health_lost: Vec::with_capacity(steps),
+            hits: Vec::with_capacity(steps),
+            tried: Vec::new(),
+            tried_frames: Vec::new(),
             search: Vec::new(),
         }
     }

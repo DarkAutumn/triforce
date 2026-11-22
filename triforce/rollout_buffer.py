@@ -15,6 +15,13 @@ Layout (``n`` envs, ``T`` steps per env; index ``T`` holds the observation to re
   searched) and ``search_policy`` ``[n, T, JOINT_SIZE]`` (the search's improved policy π' over the joint actions).
 - ``jobs`` and ``steps``: int64 ``[n, T]``, each row's episode ``job`` key and its decision index in that episode
   (0 = the episode's first decision): ``ppo.Collector`` follows episodes across rollouts with them.
+- ``health_lost`` float32 and ``hits`` int64 ``[n, T]``: what each decision's action did (hearts lost, net; monster
+  hits dealt), the lab's auxiliary targets (``lab.auxiliary``).
+- With ``tried = K`` (the lab's ``--try-others``): ``tried_actions`` int64 ``[n, T, K, 3]`` and ``tried_lost`` int64
+  ``[n, T, K]`` (candidates not taken, tried by the look-ahead: 1 lost health, 0 not, -1 untried) and
+  ``tried_frames`` int64 ``[n, T]`` (what the trials emulated).
+- A recurrent network's sequences (``recompute_sequence``): ``chunk_states`` ``[n, T / L, *state]``, the learner's
+  state at the start of every ``L`` decisions (``chunk_length``), for truncated back-propagation through time.
 
 Frame-aware GAE (design §5.4).  Steps take different numbers of frames, so step ``t`` that lasted ``f_t``
 frames uses ``gamma_t = gamma ** (f_t / FRAMES_PER_DISCOUNT)`` and ``lambda_t = lambda ** (f_t /
@@ -24,6 +31,8 @@ should not keep 4× more of the trace than four 8-frame ones). Legacy time limit
 Opted-in ``bootstrap`` transitions add the discounted final-observation value to the learning reward before
 reset (the collector does that); done flags still stop the trace from crossing into the next episode.
 """
+
+from typing import Optional
 
 import numpy as np
 import torch
@@ -79,9 +88,10 @@ class RolloutBuffer:
     # pylint: disable=too-many-instance-attributes
 
     def __init__(self, memory_length: int, n_envs: int, observation_space, gamma: float, lam: float,
-                 search: bool = False):
+                 search: bool = False, tried: int = 0):
         """``observation_space``: a ``spaces.Dict``, or a pool's ``obs_spec`` (key → ``{'shape', 'dtype'}``).
-        ``search``: also keep the search's ``search_mask`` and ``search_policy``."""
+        ``search``: also keep the search's ``search_mask`` and ``search_policy``; ``tried``: candidates a decision
+        of ``EnvPool.rollout(tried=...)``."""
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         self.memory_length = memory_length
         self.n_envs = n_envs
@@ -109,6 +119,19 @@ class RolloutBuffer:
         self.search_policy = torch.zeros(n_envs, memory_length, JOINT_SIZE, dtype=torch.float32) if search else None
         self.jobs = torch.zeros(n_envs, memory_length, dtype=torch.int64)
         self.steps = torch.zeros(n_envs, memory_length, dtype=torch.int64)
+        self.health_lost = torch.zeros(n_envs, memory_length, dtype=torch.float32)
+        self.hits = torch.zeros(n_envs, memory_length, dtype=torch.int64)
+        self.tried = tried
+        self.tried_actions = torch.full((n_envs, memory_length, tried, 3), -1, dtype=torch.int64) if tried else None
+        self.tried_lost = torch.full((n_envs, memory_length, tried), -1, dtype=torch.int64) if tried else None
+        self.tried_frames = torch.zeros(n_envs, memory_length, dtype=torch.int64) if tried else None
+        self.chunk_states: Optional[torch.Tensor] = None
+        self.chunk_length = 0
+
+    @property
+    def rows(self) -> int:
+        """Decisions stored (``n * T``)."""
+        return self.n_envs * self.memory_length
 
     def rollout_buffers(self) -> dict:
         """numpy views of this buffer's memory in the layout ``EnvPool.rollout`` writes: ``obs`` (every key, the
@@ -120,7 +143,11 @@ class RolloutBuffer:
         views = {'obs': obs, 'starts': self.dones.numpy(), 'actions': self.actions.numpy(),
                  'logp_ent_val': self.logp_ent_val.numpy(), 'rewards': self.rewards.numpy(),
                  'frames': self.frames.numpy(), 'bootstrap_value': self.bootstrap_value.numpy(),
-                 'interrupts': self.interrupts.numpy(), 'job': self.jobs.numpy(), 'step': self.steps.numpy()}
+                 'interrupts': self.interrupts.numpy(), 'job': self.jobs.numpy(), 'step': self.steps.numpy(),
+                 'health_lost': self.health_lost.numpy(), 'hits': self.hits.numpy()}
+        if self.tried:
+            views.update(tried_actions=self.tried_actions.numpy(), tried_lost=self.tried_lost.numpy(),
+                         tried_frames=self.tried_frames.numpy())
         if self.search_mask is not None:
             views['search_mask'] = self.search_mask.numpy()
             views['search_policy'] = self.search_policy.numpy()
@@ -149,6 +176,43 @@ class RolloutBuffer:
         self.logp_ent_val.copy_(out.view(self.n_envs, length, 3))
         last = {key: value[:, length].to(device) for key, value in self.observation.items()}
         return network.get_value(last).cpu()
+
+    @torch.no_grad()
+    def recompute_sequence(self, network, device, state, chunk_length: int):
+        """``recompute`` for a recurrent network (``LabNet.recurrent``): runs it over the rollout in order, every
+        env at once, from ``state`` (``[n, ...]``, the state the last rollout ended with; None: the initial one),
+        the state starting over where a row starts an episode; keeps the state at the start of every
+        ``chunk_length`` decisions (``chunk_states``). Returns (the values of the observations at index ``T``, the
+        state after the last decision: the next rollout's ``state``)."""
+        # pylint: disable=too-many-locals
+        from .nets.base import factored_evaluate  # pylint: disable=import-outside-toplevel,cyclic-import
+        length = self.memory_length
+        if length % chunk_length:
+            raise ValueError(f"steps per env ({length}) must be a multiple of the sequence length ({chunk_length})")
+        network.to(device)
+        network.eval()
+        fresh = network.initial_state(self.n_envs).to(device)
+        state = fresh.clone() if state is None else state.to(device)
+        starts = self.dones.to(device).bool()
+        shape = (-1, *([1] * (state.dim() - 1)))
+        chunks, out = [], torch.empty(self.n_envs, length, 3, device=device)
+        for t in range(length + 1):
+            obs = network._batch({k: v[:, t].to(device) for k, v in self.observation.items()})  # pylint: disable=protected-access
+            if t == length:
+                carry = state
+                state = torch.where(starts[:, t].view(shape), fresh, state)
+                last = network.heads(obs, state)[0].value
+                break
+            state = torch.where(starts[:, t].view(shape), fresh, state)
+            if t % chunk_length == 0:
+                chunks.append(state)
+            heads, state = network.heads(obs, state)
+            result = factored_evaluate(heads, self.masks[:, t].to(device), self.actions[:, t].to(device))
+            out[:, t] = torch.stack([result.log_prob, result.entropy, result.value], dim=-1)
+        self.logp_ent_val.copy_(out.cpu())
+        self.chunk_states = torch.stack(chunks, dim=1).cpu()
+        self.chunk_length = chunk_length
+        return last.cpu(), carry
 
     def add_bootstrap(self):
         """Adds each bootstrapped truncation's discounted final-observation value to its step's reward (design
@@ -184,4 +248,13 @@ class RolloutBuffer:
         if self.search_mask is not None:
             batch['search_mask'] = self.search_mask.reshape(-1).to(device)
             batch['search_policy'] = self.search_policy.reshape(-1, JOINT_SIZE).to(device)
+        batch['frames'] = self.frames.reshape(-1).to(device)
+        batch['health_lost'] = self.health_lost.reshape(-1).to(device)
+        batch['hits'] = self.hits.reshape(-1).to(device)
+        if self.tried:
+            batch['tried_actions'] = self.tried_actions.reshape(-1, self.tried, 3).to(device)
+            batch['tried_lost'] = self.tried_lost.reshape(-1, self.tried).to(device)
+        if self.chunk_states is not None:
+            batch['chunk_states'] = self.chunk_states.reshape(-1, *self.chunk_states.shape[2:]).to(device)
+            batch['starts'] = self.dones[:, :length].reshape(-1).bool().to(device)
         return batch

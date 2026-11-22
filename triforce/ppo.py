@@ -51,6 +51,7 @@ import torch
 from torch import nn
 
 from .metrics import EpisodeTracker, RolloutMetrics
+from .lab.auxiliary import aux_loss
 from .plr import PrioritizedReplay
 from .rollout_buffer import RolloutBuffer
 
@@ -133,17 +134,23 @@ class Collector:
     (``EnvPool.rollout(search=...)``); the buffers then keep ``search_mask`` and ``search_policy``.  ``episodes``:
     the finished rollout's ``episode`` events.  ``tracker`` (``metrics.EpisodeTracker``, step budget ``budget``)
     follows the episodes across rollouts by their job keys: ``finish`` adds the in-flight and released-cohort
-    metrics to the rollout's ``RolloutMetrics`` (``extra``, ``cohorts``).
+    metrics to the rollout's ``RolloutMetrics`` (``extra``, ``cohorts``).  ``tried``: ``EnvPool.rollout``'s
+    ``tried`` settings (the lab's look-ahead labels for candidates not taken; the buffers keep them).  A recurrent
+    network (``LabNet.recurrent``) is readied in sequence order (``RolloutBuffer.recompute_sequence``, sequences of
+    ``chunk_length``) from the state the last rollout ended with (``carry``, per env).
     """
 
     def __init__(self, pool, memory_length: int, gamma: float, lam: float, search: Optional[dict] = None,
-                 budget: Optional[int] = None):
+                 budget: Optional[int] = None, tried: Optional[dict] = None, chunk_length: int = 16):
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         self.pool = pool
         self.n_envs = pool.num_envs
         self.search = search
-        self._buffers = [RolloutBuffer(memory_length, self.n_envs, pool.obs_spec, gamma, lam,
-                                       search=search is not None) for _ in range(2)]
+        self.tried = tried
+        self.gamma, self.lam = gamma, lam
+        self.chunk_length = chunk_length
+        self.carry = None
+        self._buffers = [self._new_buffer(memory_length) for _ in range(2)]
         self.tracker = EpisodeTracker(budget)
         self._views = [buffer.rollout_buffers() for buffer in self._buffers]
         self._next = 0
@@ -153,6 +160,20 @@ class Collector:
         self._result: dict = {}
         self.rollout_seconds = 0.0
         self.recompute_seconds = 0.0
+
+    def _new_buffer(self, memory_length: int) -> RolloutBuffer:
+        return RolloutBuffer(memory_length, self.n_envs, self.pool.obs_spec, self.gamma, self.lam,
+                             search=self.search is not None,
+                             tried=0 if self.tried is None else int(self.tried['candidates']))
+
+    def resize(self, memory_length: int):
+        """The next rollout (``start``) takes ``memory_length`` decisions an env (the lab's sampling across
+        families); the buffer an update may still read (``buffer``) is left alone."""
+        if self._thread is not None:
+            raise RuntimeError("a rollout is running")
+        if self._buffers[self._next].memory_length != memory_length:
+            self._buffers[self._next] = self._new_buffer(memory_length)
+            self._views[self._next] = self._buffers[self._next].rollout_buffers()
 
     def start(self, network: nn.Module):
         """Starts the next rollout with ``network``'s current weights."""
@@ -164,6 +185,8 @@ class Collector:
         def run():
             began = time.time()
             search = {} if self.search is None else {'search': self.search}
+            if self.tried is not None:
+                search['tried'] = self.tried
             try:
                 self.pool.rollout([policy], self._buffers[index].memory_length, self._views[index], **search)
             except BaseException as err:  # pylint: disable=broad-exception-caught
@@ -204,7 +227,10 @@ class Collector:
         metrics."""
         buffer, events = self.buffer, self.episodes
         began = time.time()
-        last_values = buffer.recompute(network, device)
+        if getattr(network, 'recurrent', False):
+            last_values, self.carry = buffer.recompute_sequence(network, device, self.carry, self.chunk_length)
+        else:
+            last_values = buffer.recompute(network, device)
         self.recompute_seconds = time.time() - began
         buffer.add_bootstrap()
         buffer.compute_returns(last_values)
@@ -333,6 +359,9 @@ class PPO:
         # ``teacher_joint`` (and of ½(V − V_teacher)² with ``teacher_value``); the lab's schedule sets it per update.
         self.teacher_coeff = 0.0
         self.teacher_value_coeff = 0.0
+        # Auxiliary targets (triforce.lab.auxiliary): losses on a lab network's named auxiliary outputs; and
+        # what readies them (None: off).
+        self.aux_losses: list = []
 
     def _demo_rows(self, minibatch_size: int):
         """The demonstration rows where an update reads them, placed once.  On the device when they fit in one
@@ -458,7 +487,7 @@ class PPO:
                     shaping = shaping_for(iteration + 1)
                     collector.start(network)
 
-                batch_steps = buffer.memory_length * buffer.n_envs
+                batch_steps = buffer.rows
                 steps_this_run += batch_steps
                 self.total_steps += batch_steps
 
@@ -542,15 +571,23 @@ class PPO:
         epochs_run = 0
         updates = 0
         try:
+            # A recurrent network trains on sequences of `chunk_length` rows from their stored start states (truncated
+            # back-propagation through time): minibatches of whole sequences.
+            sequence = batch.get('chunk_states')
+            length = batch_size // sequence.shape[0] if sequence is not None else 1
+            units = batch_size // length
             for _ in range(cfg.num_epochs):
                 if kl_exceeded:
                     break
                 epochs_run += 1
-                indices = torch.randperm(batch_size, device=self.device)
+                order = torch.randperm(units, device=self.device)
                 # Exactly `minibatches` near-equal parts (sizes differ by at most 1): no tiny tail minibatch.
-                for mb in torch.tensor_split(indices, min(cfg.minibatches, batch_size)):
+                for part in torch.tensor_split(order, min(cfg.minibatches, units)):
+                    mb = (part[:, None] * length + torch.arange(length, device=self.device)).reshape(-1)
                     mb_obs = {k: v[mb] for k, v in b_obs.items()}
-                    out = network.evaluate(mb_obs, b_masks[mb], b_actions[mb])
+                    out, joint_of = minibatch_forward(network, mb_obs, b_masks[mb], b_actions[mb],
+                                                      None if sequence is None else (batch['starts'][mb],
+                                                                                     sequence[part]))
 
                     # The PPO term covers the rows the policy sampled; searched rows executed the search's choice.
                     pg_rows, searched = slice(None), None
@@ -603,11 +640,14 @@ class PPO:
                         demo_bc_loss = -demo_lp.mean()
                         loss = loss + cfg.demo_bc_coeff * demo_bc_loss
                     if b_teacher is not None and self.teacher_coeff > 0:
-                        teacher_kl = joint_kl(b_teacher[mb], network.joint_log_probs(mb_obs, b_masks[mb]))
+                        teacher_kl = joint_kl(b_teacher[mb], joint_of())
                         loss = loss + self.teacher_coeff * teacher_kl
                         if b_teacher_value is not None and self.teacher_value_coeff > 0:
                             loss = loss + self.teacher_value_coeff * 0.5 * (
                                 new_value - b_teacher_value[mb]).pow(2).mean()
+                    if self.aux_losses:
+                        aux_term, aux_stats = aux_loss(self.aux_losses, out.aux, batch, mb)
+                        loss = loss + aux_term
                     if sil is not None and len(sil) > 0:
                         sil_obs, sil_masks, sil_actions, sil_returns = sil.sample(minibatch_size, self.device)
                         sil_out = network.evaluate(sil_obs, sil_masks, sil_actions)
@@ -683,6 +723,8 @@ class PPO:
             stats['charts/sil_rows'] = float(len(sil))
             stats['charts/sil_positive_share'] = sil_positive_share
         stats.update(search_stats)
+        if self.aux_losses:
+            stats.update(aux_stats)
         if b_teacher is not None:
             stats['losses/teacher_kl'] = teacher_kl.item()
             stats['charts/teacher_coeff'] = self.teacher_coeff
@@ -744,6 +786,21 @@ class PPO:
         return {'ppg/value_loss': value_loss, 'ppg/value_loss_start': value_loss_start, 'ppg/kl': kl,
                 'ppg/explained_variance': explained, 'ppg/explained_variance_start': explained_start,
                 'ppg/rows': float(rows), 'ppg/seconds': time.time() - began}
+
+
+def minibatch_forward(network, obs: dict, masks, actions, sequence=None):
+    """(``PolicyOutput`` of the minibatch's rows scoring ``actions``, a function giving their joint log-probs).
+    ``sequence`` (a recurrent network; ``RolloutBuffer.recompute_sequence``): (``starts`` of the rows, the stored
+    states the minibatch's sequences start from): the rows are unrolled as sequences (``LabNet.unroll``) and both
+    come from the same heads."""
+    if sequence is None:
+        return (network.evaluate(obs, masks, actions),
+                lambda: network.joint_log_probs(obs, masks))
+    from .nets.base import factored_evaluate, factored_joint  # pylint: disable=import-outside-toplevel,cyclic-import
+    heads, _ = network.unroll(obs, sequence[0], sequence[1])
+    out = factored_evaluate(heads, masks.bool(), actions)
+    out.aux = heads.aux
+    return out, lambda: factored_joint(heads, masks.bool())
 
 
 def search_cross_entropy(target: torch.Tensor, joint_log_probs: torch.Tensor) -> torch.Tensor:

@@ -62,6 +62,22 @@ def test_rust_logits_match_torch_heads(observations):
     assert np.allclose(values, heads.value.detach().numpy(), atol=2e-5)
 
 
+@pytest.mark.parametrize('settings', [{'hidden_dim': 512, 'entity_layers': 2},
+                                      {'hidden_dim': 1024, 'tower_depth': 6, 'entity_layers': 2},
+                                      {'tower_depth': 4, 'entity_d_model': 128, 'entity_ff_dim': 256,
+                                       'grid_channels': [32, 64, 64, 64], 'grid_out_dim': 256}])
+def test_the_rust_actor_plays_the_capacity_shapes(observations, settings):
+    """Wider and deeper ``ZeldaPolicy``s (a capacity test's sizes) run on the Rust path: same logits and values as
+    torch. A depth of 3 isn't written into ``model_config`` (older code reads the checkpoint as before)."""
+    torch.manual_seed(5)
+    network = nets.create('zelda', native_spec(), **settings)
+    assert ('tower_depth' in network.config.to_dict()) == ('tower_depth' in settings)
+    logits, values = network.to_native().logits(observations)
+    heads, _ = network.heads(observations)
+    assert np.allclose(logits, heads.flat().detach().numpy(), atol=5e-5)
+    assert np.allclose(values, heads.value.detach().numpy(), atol=5e-5)
+
+
 class RustLogits(torch.nn.Module):
     """Serves a Rust ``Policy``'s own logits: acting from them is the Rust actor bit for bit
     (``policy::logits``), so a served play must match the Rust play run for run."""
@@ -159,8 +175,38 @@ def test_the_server_keeps_a_recurrent_state_per_env_and_restarts_it_per_episode(
     assert ask([3, 1], [1, 3]) == [3, 1]
 
 
+@pytest.mark.parametrize('half', [False, True])
+def test_a_served_batch_comes_back_in_one_copy_and_half_precision_only_on_the_gpu(observations, half):
+    """The server's answer (logits and value, one copy back) is the network's; ``half`` runs it in float16 on the GPU
+    (within the half's precision) and is ignored on the CPU."""
+    device = 'cuda' if half and torch.cuda.is_available() else 'cpu'
+    server = Server(device=device, half=half)
+    assert server.half == (device == 'cuda')
+    torch.manual_seed(3)
+    network = nets.create('wide', native_spec(), hidden_dim=64, depth=2)
+    server.models[0] = network.to(server.device)
+    answered = []
+
+    class Queue:
+        logits_size = 11 * 13
+
+        @staticmethod
+        def answer(slots, logits, values):
+            answered.append((logits.copy(), values.copy()))
+
+    server.queue = Queue()
+    n = observations['action_mask'].shape[0]
+    server.answer({'obs': observations, 'slot': np.arange(n), 'model': np.zeros(n, dtype=np.int64),
+                   'job': np.arange(n), 'step': np.zeros(n, dtype=np.int64), 'bootstrap': np.zeros(n, dtype=bool)})
+    (logits, values), = answered
+    heads, _ = network.cpu().heads({k: torch.as_tensor(v) for k, v in observations.items()})
+    tolerance = 5e-2 if server.half else 1e-5
+    assert np.allclose(logits, heads.flat().detach().numpy(), atol=tolerance)
+    assert np.allclose(values, heads.value.detach().numpy(), atol=tolerance)
+
+
 def test_architectures_side_by_side_save_load_and_play(states_dir, tmp_path):
-    assert nets.names()[:2] == ['zelda', 'wide']
+    assert nets.names()[0] == 'zelda' and {'wide', 'gru', 'hithead'} <= set(nets.names())
     wide = nets.create('wide', native_spec(), hidden_dim=64, depth=2)
     zelda = nets.create('zelda', native_spec())
     assert nets.arch_of(wide.config.to_dict()) == 'wide' and 'arch' not in zelda.config.to_dict()

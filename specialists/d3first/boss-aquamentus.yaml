@@ -1,0 +1,45 @@
+# boss-aquamentus@d3first: the task of the family's run for d3first's wood-sword half (promoted.d3first is
+# r34d7-aqua-s1), rebuilt (the yaml it trained on lived in its round's worktree, gone): the family's yaml with
+# state_routes [d3first] and the run's own terms as its run.json and docs/experiments/round34.md ("Dungeon 7", "The
+# trainings") record them: chain_hp 1.0, harvested handoffs at 0.3. The lab reads this file for the key
+# f"{family}@d3first" (lab.collect.task_yaml).
+name: boss-aquamentus
+rooms:
+- (1, 0x35)
+- (7, 0x2a)
+start_states:
+- 1_35*_[0-9]
+- 7_2a*_[0-9]
+success:
+- exit-correct
+reward_profile: default
+reward:
+  pbrs: true
+  item_targets: true
+obs:
+  objective: true
+  target: true
+ram_randomization:
+  hp:
+  - 0.15
+  - max
+  full_hp: 0.5
+  bombs:
+  - 0
+  - 8
+  bombs_share: 0.5
+  help_count:
+  - 0
+  - 9
+  chain_hp: 1.0
+items:
+  bombs: tenth
+curriculum:
+  enabled: true
+max_steps: 400
+warm_start: null
+notes: Kill Aquamentus, collect the heart container, then leave east into the triforce room (0x36). The objective permits
+  no correct exit before the heart is collected.
+state_routes:
+- d3first
+harvested_fraction: 0.3
