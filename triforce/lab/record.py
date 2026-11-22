@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 
 from .. import registry
-from ..events import logged_job
+from ..events import progress_job
 from ..jobs import add_job_arguments, begin_job, work
 from .collect import MultiCollector, Teachers, parse_families
 
@@ -35,6 +35,7 @@ def parse_args(argv=None):
     parser.add_argument('--states-dir', default=None)
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--out', required=True)
+    parser.add_argument('--logs-dir', default=None, help="the log folder's root (default logs/, $TRIFORCE_LOGS_DIR)")
     add_job_arguments(parser)
     return parser.parse_args(argv)
 
@@ -49,7 +50,8 @@ def main(argv=None) -> Path:
     keys = [f.key for f in families]
     root = registry.models_root(args.models_dir)
     total = args.rollouts * args.steps_per_env * args.parallel
-    with logged_job('lab-record', 'eval', [], log=False, work=work(train_steps=total)):
+    with progress_job('lab-record', 'eval', total, unit='decisions', root=args.logs_dir,
+                      work=work(train_steps=total)) as progress:
         out.mkdir(parents=True, exist_ok=True)
         teachers = Teachers(keys, args.device, root)
         student = registry.load_model(args.student)[0] if args.student else teachers.networks[keys[0]]
@@ -71,6 +73,7 @@ def main(argv=None) -> Path:
                               teacher_value=batch['teacher_value'].numpy(), family=batch['family'].numpy())
                 np.savez_compressed(out / f'shard-{shard:04d}.npz', **arrays)
                 print(f"[record] shard {shard}: {batch['masks'].shape[0]} rows", flush=True)
+                progress.update(progress.done + batch['masks'].shape[0])
         finally:
             collector.close()
     return out

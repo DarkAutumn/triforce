@@ -50,7 +50,7 @@ def test_teachers_label_with_each_familys_network(tmp_path):
     assert torch.allclose(joint, want, atol=1e-5)
 
 
-def test_a_two_family_run_with_teachers_trains_links_and_loads_once(tmp_path):
+def test_a_two_family_run_with_teachers_trains_links_and_loads_once(tmp_path, logs_dir):
     _teachers(tmp_path)
     common = ['--families', 'ow-start', f'ow-start@d3first={YAML}', '--parallel', '2', '--steps-per-update', '64',
               '--device', 'cpu', '--models-dir', str(tmp_path), '--seed', '3', '--no-wait', '--save-every', '1']
@@ -73,13 +73,29 @@ def test_a_two_family_run_with_teachers_trains_links_and_loads_once(tmp_path):
     policies = Policies(tmp_path, names=['ow-start'], route='d3first')
     assert policies.policies[0] is policies.policies[-1]
     assert run_summary(run)['status'] == 'completed'
+    # its log folder: a lab-train plan with a run a family, and a stream a family the training GUI draws
+    folder, = logs_dir.glob('*_lab-set')
+    plan = json.loads((folder / 'training.json').read_text())
+    keys = ['ow-start', 'ow-start@d3first']
+    assert plan['kind'] == train.KIND == 'lab-train' and plan['status'] == 'completed' and plan['families'] == keys
+    assert [(r['specialist'], r['status'], r['target_steps']) for r in plan['runs']] == [
+        (key, 'completed', 128) for key in keys]
+    for key in keys:
+        events = [json.loads(line) for line in (folder / f'{key}.jsonl').read_text().splitlines()]
+        assert [e['event'] for e in events] == ['start', 'progress', 'progress', 'train_end', 'end']
+        assert events[0]['target_iterations'] == 2 and events[0]['specialist'] == key
+        last = events[2]
+        assert (last['iteration'], last['iterations'], last['steps'], last['target_steps']) == (2, 2, 128, 128)
+        assert last['metrics']['rows_share'] == metrics[f'family/{key}/rows_share']
+        assert last['metrics']['teacher_coeff'] == 0.0 and 'losses/teacher_kl' in last['metrics']
+        assert events[-1]['status'] == 'completed'
 
 
 def run_summary(run):
     return json.loads((run / 'train_summary.json').read_text())
 
 
-def test_imitation_alone_with_the_teachers_acting_and_the_recorder(tmp_path):
+def test_imitation_alone_with_the_teachers_acting_and_the_recorder(tmp_path, logs_dir):
     _teachers(tmp_path)
     run = train.main(['--name', 'imit', '--run-id', 'r2', '--families', 'ow-start', '--parallel', '2',
                       '--steps-per-update', '64', '--device', 'cpu', '--models-dir', str(tmp_path), '--seed', '4',
@@ -95,3 +111,9 @@ def test_imitation_alone_with_the_teachers_acting_and_the_recorder(tmp_path):
     assert set(np.unique(data['family'])) == {0} and data['obs/grid'].shape[0] == 64
     legal = np.isfinite(data['teacher_joint'])
     assert np.allclose(np.exp(np.where(legal, data['teacher_joint'], -np.inf)).sum(-1), 1.0, atol=1e-4)
+    # the recorder's job: a log folder whose one line counts the decisions recorded
+    folder, = logs_dir.glob('*_lab-record')
+    events = [json.loads(line) for line in (folder / 'progress.jsonl').read_text().splitlines()]
+    assert events[0]['event'] == 'eval_start' and (events[0]['episodes'], events[0]['unit']) == (64, 'decisions')
+    assert [e['done'] for e in events if e['event'] == 'eval_progress'] == [32, 64]
+    assert events[-1]['event'] == 'end' and events[-1]['status'] == 'completed'

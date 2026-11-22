@@ -1191,10 +1191,12 @@ ENTRY_POINTS = [
     ('triforce eval-batch', 'eval-batch', True),
     ('triforce select-checkpoint', 'eval-batch', True),
     ('scripts/train_round.py', 'round', True),
-    ('triforce.lab.train', 'train', False),
-    ('triforce.lab.bench', 'eval', False),
-    ('triforce.lab.record', 'eval', False),
-    ('jobs.register', 'experiment', False),
+    ('triforce.lab.train', 'lab-train', True),
+    ('triforce.lab.bench', 'eval', True),
+    ('triforce.lab.record', 'eval', True),
+    ('events.progress_job', 'eval', True),               # an experiment script's job (r36_merge_record.py)
+    ('jobs.register', 'experiment', False),              # a script that calls the queue without a plan
+    ('lab of an older checkout', 'train', False),        # before lab jobs wrote a plan (Nov 22)
 ]
 
 
@@ -1402,3 +1404,86 @@ def test_the_web_pages_list_folder_less_jobs(queue_env):
             assert b'no progress data' in body
         finally:
             server.stop()
+
+
+def test_a_lab_run_is_one_group_with_a_row_a_family(qapp, queue_env):
+    """A lab training (``triforce.lab.train``, as its ``RunLog`` writes it): one group, a row a family at the
+    run's iteration of N, each with its own success and hearts, its share of the rows, the hits Link took an
+    episode, the teacher term's weight and the auxiliary losses; the plan's time left is the families' (they train
+    together), and the web view has a card a family."""
+    from triforce import events
+    from triforce.lab.train import KIND, RunLog
+    registry, logs, root = queue_env
+    keys = ['zol', 'zol@d3first']
+    plan = events.TrainingPlan(events.new_log_dir('lab-pair', logs), 'lab-pair', KIND,
+                               RunLog.runs(keys, 'r1', logs / 'run', 1000, 10))
+    try:
+        log = RunLog(plan, keys, 'r1')
+        log.start(target_steps=1000, target_iterations=10, steps_per_update=100, start_iteration=0, start_steps=0)
+        for iteration in (1, 2, 3):
+            log.progress(iteration, 10, 100 * iteration, 1000, {
+                'family/zol/success_rate': 0.5, 'family/zol/health_change': -0.2, 'family/zol/rows_share': 0.75,
+                'family/zol/hits_taken_per_episode': 0.7, 'family/zol@d3first/success_rate': 0.9,
+                'family/zol@d3first/health_change': -0.1, 'family/zol@d3first/rows_share': 0.25,
+                'family/zol@d3first/hits_taken_per_episode': 0.3, 'losses/aux_hit': 0.12, 'losses/teacher_kl': 0.4,
+                'success_rate': 0.6}, teacher=0.8)
+        window = gui.Window(root, None)
+        try:
+            view, = window.views
+            model, now = view.model, time_now()
+            assert model.dir == plan.directory and model.plan['kind'] == gui.LAB_KIND
+            assert [run.name for run in model.runs] == keys and model.statuses() == ['training', 'training']
+            phases = [gui.row_phase(run, 'training', now) for run in model.runs]
+            assert phases == ['training · it 3/10 · rows 75% · hits 0.70/ep · teacher 0.80 · aux hit 0.120',
+                              'training · it 3/10 · rows 25% · hits 0.30/ep · teacher 0.80 · aux hit 0.120']
+            badges = [gui.row_badge(run, 'training')[1] for run in model.runs]
+            assert [parts[0][0] for parts in badges] == ['50%', '90%']                      # its own success
+            assert [parts[1][0] for parts in badges] == ['-0.2♥', '-0.1♥']                  # its own hearts
+            assert 0.3 <= model.fraction(now) <= 0.4          # iteration 3 of 10, moving toward the next update
+            eta = model.eta(now)
+            assert eta is not None and eta == max(run.eta(now) for run in model.runs)       # together, not summed
+            assert gui.row_numbers(model.runs[0], 'training') == '300 / 1.0k'
+            view.header.grab()
+            for row in view.rows:
+                row.grab()
+        finally:
+            window.close()
+            window.deleteLater()
+        snapshot = gui.WebState(root, machine=lambda: '', scan_every=0).refresh()
+        assert [(card['name'], card['plan'], card['plan_kind']) for card in snapshot['cards']] == [
+            (key, 'lab-pair', 'lab-train') for key in keys]
+        assert 'rows 75%' in snapshot['cards'][0]['phase']
+        log.end('completed', iterations=3, steps=300)
+    finally:
+        plan.finish('completed')
+
+
+def test_a_scripts_job_shows_one_line_of_progress(qapp, queue_env):
+    """A script that enters the queue through ``events.progress_job`` has a folder and one row: done of the total
+    in its unit, the success so far when it measures one."""
+    from triforce import events
+    registry, logs, root = queue_env
+    with events.progress_job('r36-merge-record', 'eval', 4096, unit='decisions', root=logs) as progress:
+        progress.update(1024, key='zol resets')
+        window = gui.Window(root, None)
+        try:
+            view, = window.views
+            run, = view.model.runs
+            assert view.model.name == 'r36-merge-record' and view.model.status() == 'running'
+            assert view.model.statuses() == ['evaluating'] and run.unit == 'decisions'
+            assert gui.row_numbers(run, 'evaluating') == '1024 / 4096 decisions'
+            assert gui.row_bar_label(run, 'evaluating', 0.25) == '1024/4096'
+            assert gui.row_phase(run, 'evaluating', time_now()).startswith('1024/4096 decisions · ')
+            assert gui.row_fraction(run, 'evaluating', time_now()) == 0.25
+        finally:
+            window.close()
+            window.deleteLater()
+    with events.progress_job('lab-bench', 'eval', 10, root=logs) as progress:
+        progress.update(4, 0.75)
+        model = gui.Training(progress.plan.directory)
+        model.poll()
+        run, = model.runs
+        assert gui.row_rate(run, 'evaluating', time_now()).startswith('success 75%')
+        assert gui.row_bar_label(run, 'evaluating', 0.4) == 'eval 4/10'
+    model.poll()
+    assert model.status() == 'completed' and model.statuses() == ['ok']

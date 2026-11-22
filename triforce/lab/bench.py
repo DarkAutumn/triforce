@@ -35,7 +35,7 @@ from typing import Optional
 from .. import __version__, _native, registry
 from ..eval_batch import route_segments
 from ..evaluate import evaluate_specialist
-from ..events import logged_job, write_json_atomic
+from ..events import progress_job, write_json_atomic
 from ..jobs import add_job_arguments, begin_job, work
 from ..specialist import load_specialist
 
@@ -150,8 +150,9 @@ def entry_task(entry: dict, states_dir=None):
 
 
 def run_bench(networks: dict[str, str], manifest: dict, parallel: int, states_dir=None, act: Optional[str] = None,
-              log=print) -> dict:
-    """Plays every manifest entry whose key ``networks`` names (key -> checkpoint)."""
+              log=print, progress=None) -> dict:
+    """Plays every manifest entry whose key ``networks`` names (key -> checkpoint); ``progress`` (an
+    ``events.JobProgress``) hears the episodes played and their success after each entry."""
     rows, total_seconds, decisions = {}, 0.0, 0
     for entry in manifest['entries']:
         key = entry['key']
@@ -171,6 +172,9 @@ def run_bench(networks: dict[str, str], manifest: dict, parallel: int, states_di
         log(f"[bench] {key}: success {rows[key]['success']:.3f} hearts lost {rows[key]['hearts_lost']:.2f} "
             f"hits/visit {rows[key]['hits_per_visit']:.3f} decisions {rows[key]['decisions']:.0f} "
             f"({seconds:.0f}s)")
+        if progress is not None:
+            played = [e for row in rows.values() for e in row['records']]
+            progress.update(len(played), summarize(played)['success'], key=key)
     every = [e for row in rows.values() for e in row['records']]
     return {'format': FORMAT, 'version': __version__, 'act': act or manifest['act'], 'manifest': _manifest_hash(manifest),
             'parallel': parallel, 'seconds': round(total_seconds, 1),
@@ -295,6 +299,7 @@ def main(argv=None) -> int:
     for p in (r, s):
         p.add_argument('--parallel', type=int, default=10)
         p.add_argument('--manifest', default=str(MANIFEST))
+        p.add_argument('--logs-dir', default=None, help="the log folder's root (default logs/, $TRIFORCE_LOGS_DIR)")
         add_job_arguments(p)
     c = sub.add_parser('compare')
     c.add_argument('base')
@@ -315,9 +320,11 @@ def main(argv=None) -> int:
     begin_job(args)
     manifest = load_manifest(args.manifest)
     if args.command == 'speed':
-        with logged_job('lab-speed', 'eval', [], log=False, work=work(eval_episodes=100)):
+        with progress_job('lab-speed', 'eval', len(args.paths), unit='acting paths', root=args.logs_dir,
+                          work=work(eval_episodes=100)) as progress:
             result = speed(args.key, manifest, args.parallel, args.paths, args.states_dir, args.models_dir,
                            args.network)
+            progress.update(len(args.paths))
         write_json_atomic(args.out, result)
         print(json.dumps(result, indent=2))
         return 0
@@ -330,8 +337,9 @@ def main(argv=None) -> int:
             networks[key] = args.network
     networks.update(item.split('=', 1) for item in args.checkpoint)
     episodes = sum(len(e['states']) * manifest['episodes'] for e in manifest['entries'] if e['key'] in networks)
-    with logged_job('lab-bench', 'eval', [], log=False, work=work(eval_episodes=episodes)):
-        result = run_bench(networks, manifest, args.parallel, args.states_dir)
+    with progress_job('lab-bench', 'eval', episodes, root=args.logs_dir,
+                      work=work(eval_episodes=episodes)) as progress:
+        result = run_bench(networks, manifest, args.parallel, args.states_dir, progress=progress)
     write_json_atomic(args.out, compact(result))
     print(json.dumps(result['total'], indent=2))
     return 0

@@ -252,6 +252,25 @@ def fmt_clips(metrics: dict) -> str:
     return f"clips {' / '.join(clips)}" if clips else ''
 
 
+LAB_KIND = 'lab-train'      # a lab run's plan (``triforce.lab.train``): every family a run, all trained at once
+
+
+def lab_facts(metrics: dict) -> list[str]:
+    """A lab run's numbers of a family beside its success and hearts (``triforce.lab.train``'s progress): its share
+    of the rows, the hits Link took an episode, the teacher term's weight, the auxiliary losses (none of them for
+    any other run)."""
+    parts = []
+    if metrics.get('rows_share') is not None:
+        parts.append(f"rows {fmt_pct(metrics['rows_share'])}")
+    if metrics.get('hits_taken_per_episode') is not None:
+        parts.append(f"hits {metrics['hits_taken_per_episode']:.2f}/ep")
+    if metrics.get('teacher_coeff') is not None:
+        parts.append(f"teacher {metrics['teacher_coeff']:.2f}")
+    parts += [f"aux {name[len('losses/aux_'):]} {value:.3f}" for name, value in sorted(metrics.items())
+              if name.startswith('losses/aux_') and isinstance(value, (int, float))]
+    return parts
+
+
 def clips_sections(ev: dict) -> list:
     """A clip family's evaluation per run-time clips switch state (round 22; the ``eval`` event's ``by_clips``):
     success and heart change of the episodes played with clips on and with clips off, then each start room's
@@ -714,6 +733,14 @@ class Run:
             return self.chain_start, self.chain_progress, 'runs'
         return self.eval_start, self.eval_progress, 'episodes'
 
+    @property
+    def unit(self) -> str:
+        """What an evaluation's done / total count: 'runs' (a chain), else its stream's ``unit`` (a job's one-line
+        progress, ``events.progress_job``: decisions, ...), else 'episodes'."""
+        if self.chain_start is not None or self.kind == 'chain':
+            return 'runs'
+        return (self.eval_start or {}).get('unit') or self.entry.get('unit') or 'episodes'
+
     def eval_done(self) -> tuple[int, int]:
         """(episodes finished, episodes total) of the evaluation so far (a chain's runs)."""
         start, progress, key = self._eval_events()
@@ -950,11 +977,15 @@ class Training:
         return done / total if total else 0.0
 
     def eta(self, now: float):
-        """Rough seconds left: the current run's estimate, then the finished runs' pace for the rest."""
+        """Rough seconds left: the current run's estimate, then the finished runs' pace for the rest; a lab run's
+        families train together, so its time left is theirs (the longest)."""
         if self.plan.get('status') != 'running':
             return None
         if self.is_batch:
             return self.batch_eta(now)
+        if self.plan.get('kind') == LAB_KIND:
+            etas = [run.eta(now) for run, status in zip(self.runs, self.statuses()) if status == 'training']
+            return max(etas) if etas and None not in etas else None
         statuses = self.statuses()
         finished = [run for run, status in zip(self.runs, statuses) if status in ('ok', 'early')
                     and run.started_ts and run.finished_ts and run.steps]
@@ -1083,6 +1114,7 @@ def describe(event: dict) -> str:
             parts.append(clips)
         if 'reward/total' in metrics:
             parts.append(f"reward {metrics['reward/total']:.1f}")
+        parts += lab_facts(metrics)
         parts.append(f"{get('sps', 0):.0f} sps")
         return ' · '.join(parts)
     if kind == 'start':
@@ -1103,9 +1135,10 @@ def describe(event: dict) -> str:
     if kind == 'partial_set_aside':
         return f"unfinished run kept as {get('run_dir')} ({get('train_status') or 'no summary'}); training fresh"
     if kind == 'eval_start':
-        return f"{get('episodes')} episodes"
+        return f"{get('episodes')} {get('unit') or 'episodes'}"
     if kind == 'eval_progress':
-        return f"{get('done')}/{get('episodes')} episodes · success {fmt_pct(get('success_rate'))}"
+        text = f"{get('done')}/{get('episodes')} {get('unit') or 'episodes'}"
+        return text + (f" · success {fmt_pct(get('success_rate'))}" if get('success_rate') is not None else '')
     if kind == 'eval':
         text = (f"success {fmt_pct(get('success_rate'))} over {get('episodes')} episodes · "
                 f"health {fmt_hearts_pair(get('health_change'), get('health_change_total'))}")
@@ -1535,8 +1568,8 @@ def row_bar_label(run: Run, status: str, shown: float) -> str:
         done, total = run.eval_done()
         if run.kind == 'report':
             return 'report'
-        noun = 'runs' if run.kind == 'chain' else 'eval'
-        return f'{noun} {done}/{total}' if total else 'evaluating'
+        noun = {'runs': 'runs', 'episodes': 'eval'}.get(run.unit, '')
+        return f'{noun} {done}/{total}'.strip() if total else 'evaluating'
     if status == 'starting':
         return 'starting'
     return f'{shown:.0%}' if status != 'pending' else ''
@@ -1549,7 +1582,7 @@ def row_numbers(run: Run, status: str) -> str:
         return f"{fmt_steps(run.steps)} / {fmt_steps(run.target_steps)}"
     if run.kind == 'report':
         return 'report'
-    unit = 'runs' if run.kind == 'chain' else 'episodes'
+    unit = run.unit
     done, total = run.eval_done()
     if status == 'evaluating':
         return f"{done} / {total} {unit}"
@@ -1569,13 +1602,15 @@ def row_phase(run: Run, status: str, now: float) -> str:
     if status == 'starting':
         return f"starting · {fmt_duration(duration)}"
     if status == 'training':
-        return f"training · {iters}"
+        facts = lab_facts(run.progress[-1].get('metrics') or {}) if run.progress else []
+        return ' · '.join(['training', iters, *facts])
     if status == 'evaluating':
         done, total = run.eval_done()
         since = now - run.eval_start['ts'] if run.eval_start else None
         if not total:
             return 'eval starting'
-        return f"eval {done}/{total} episodes · {fmt_duration(since)}"
+        noun = 'eval ' if run.unit == 'episodes' else ''
+        return f"{noun}{done}/{total} {run.unit} · {fmt_duration(since)}"
     if status == 'ok':
         return f"done · {iters} · {fmt_duration(duration)}"
     if status == 'early':
@@ -1613,7 +1648,7 @@ def batch_phase(run: Run, status: str, duration) -> str:
             return f"report · {fmt_duration(duration)}"
         if not total or (run.chain_start is None and run.eval_start is None):
             return f"starting · {fmt_duration(duration)}"
-        unit = 'runs' if run.kind == 'chain' else 'episodes'
+        unit = run.unit
         return f"{'chain' if run.kind == 'chain' else 'eval'} {done}/{total} {unit} · {fmt_duration(duration)}"
     wall = (run.end or {}).get('wall_seconds') or run.entry.get('wall_seconds') or duration
     if status == 'ok':
@@ -2257,7 +2292,7 @@ def entry_summary(run: Run, status: str) -> list:
              rate_color(value) if value is not None else C.idle)]
     done, total = run.eval_done()
     if run.kind != 'report':
-        unit = 'runs' if run.kind == 'chain' else 'episodes'
+        unit = run.unit
         finished = run.eval_episodes() if status in FINISHED else None
         rows.append((unit, 1.0 if finished else (done / total if total else 0.0),
                      f"{finished}" if finished else f"{done}/{total}", C.eval))
