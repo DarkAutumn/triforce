@@ -842,6 +842,22 @@ def plan_alive(plan: dict) -> bool | None:
     return True
 
 
+def process_nice(pid: int, proc: Path = Path('/proc')) -> int | None:
+    """The process's niceness, from ``/proc/<pid>/stat`` field 19; None without /proc or when it is gone."""
+    try:
+        return int((proc / str(pid) / 'stat').read_text().rsplit(')', 1)[1].split()[16])
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def plan_nice(plan: dict) -> int | None:
+    """The niceness a plan's job runs at: what the plan recorded, else (a plan written without it, e.g. by an older
+    checkout's script) what its live process has now; None when neither is known."""
+    if plan.get('nice') is not None:
+        return plan['nice']
+    return process_nice(plan['pid']) if plan_alive(plan) else None
+
+
 def plan_is_live(plan: dict) -> bool:
     """A training is going on or waits its turn: the plan says running (or queued) and its process isn't known to be
     dead (another host's plan can't be checked, so it counts)."""
@@ -1289,7 +1305,7 @@ def entry_plan(job: dict) -> dict:
             'created': job.get('started'), 'updated': None, 'finished': job.get('finished'), 'host': job.get('host'),
             'pid': job.get('pid'), 'checkout': job.get('checkout'), 'branch': job.get('branch'),
             'commit': job.get('commit'), 'command': job.get('command'), 'cwd': job.get('cwd'),
-            'estimate': job.get('estimate'), 'lane': job.get('lane'),
+            'estimate': job.get('estimate'), 'lane': job.get('lane'), 'nice': job.get('nice'),
             'queue': {'queued': job.get('queued'), 'admitted': job.get('admitted'), 'estimate': job.get('estimate'),
                       'lane': job.get('lane')},
             'runs': [], 'registry_only': True}
@@ -1514,8 +1530,9 @@ def plan_meta(model: Training, now: float) -> list[str]:
         meta.append(f"{fmt_steps(model.plan['steps_budget'])} steps each")
     if model.is_batch:
         meta.append(f"{len(model.runs)} evaluations")
-    if model.plan.get('nice') is not None:
-        meta.append(f"nice {model.plan['nice']}")
+    nice = plan_nice(model.plan)
+    if nice is not None:
+        meta.append(f"nice {nice}")
     return meta
 
 

@@ -523,7 +523,7 @@ def register(log_dir, plan, name: str, kind: str, directory: Optional[Path] = No
             'log_dir': None if log_dir is None else str(log_dir),
             'plan': None if plan is None else str(Path(plan).resolve()), 'name': name, 'kind': kind,
             'status': 'queued', 'queued': None, 'queued_ts': None, 'admitted': None, 'admitted_ts': None,
-            'lane': None, 'no_wait': False, 'work': amounts,
+            'lane': None, 'no_wait': False, 'work': amounts, 'nice': os.nice(0),
             'estimate': round(estimate(amounts, rates(read_jobs(directory))), 1), 'finished': None, 'ran': None}
     path = directory / f"{data['host']}-{pid}-{int(started or now)}-{safe}.json"
     try:
