@@ -4,6 +4,10 @@
 //! it from the dock after the raft's ride down: MOVE S off the trigger, the block clip N into the water
 //! (`zelda::clips::dock_clip_at`), RECORDER with every play the index needs (`Executor::run_dock_warp`), offered only
 //! while the session has a dock warp (`Session::set_dock_warp`).
+//!
+//! SETUP (RAM writes, the tests are about the warp's mechanics): the room's monsters and their shots are removed
+//! before every action (a Zora's fireball interrupts the clip or the plays; the live-monster tries are
+//! docs/routes/d3first-walks-c.md §2).
 #![cfg(feature = "zcore")]
 
 mod common;
@@ -28,7 +32,24 @@ fn allowed(s: &S, text: &str) -> bool {
     s.mask().is_allowed(&Action::parse(text).unwrap())
 }
 
+/// Object types kept by [`tidy`] (as `zelda/tests/d8.rs`): the dock, the ladder, the rock wall, the whirlwind, a push
+/// block, the pushed gravestone, the burned tree, the flute secret.
+const KEEP: [u8; 9] = [0x61, 0x5F, 0x63, 0x2E, 0x68, 0x65, 0x64, 0x5E, 0x33];
+const OBJ_TYPE: u16 = 0x34F;
+
+/// Removes the room's monsters and shots (SETUP).
+fn tidy(s: &mut S) {
+    let types: Vec<(u16, u8)> =
+        (1..=11u16).map(|slot| (OBJ_TYPE + slot, s.state().ram()[(OBJ_TYPE + slot) as usize])).collect();
+    for (address, t) in types {
+        if t != 0 && !KEEP.contains(&t) {
+            zelda::Nes::poke(s.nes_mut(), address, 0);
+        }
+    }
+}
+
 fn act(s: &mut S, text: &str) {
+    tidy(s);
     s.act(Action::parse(text).unwrap()).unwrap();
 }
 
