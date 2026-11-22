@@ -62,6 +62,22 @@ def test_rust_logits_match_torch_heads(observations):
     assert np.allclose(values, heads.value.detach().numpy(), atol=2e-5)
 
 
+@pytest.mark.parametrize('settings', [{'hidden_dim': 512, 'entity_layers': 2},
+                                      {'hidden_dim': 1024, 'tower_depth': 6, 'entity_layers': 2},
+                                      {'tower_depth': 4, 'entity_d_model': 128, 'entity_ff_dim': 256,
+                                       'grid_channels': [32, 64, 64, 64], 'grid_out_dim': 256}])
+def test_the_rust_actor_plays_the_capacity_shapes(observations, settings):
+    """Wider and deeper ``ZeldaPolicy``s (a capacity test's sizes) run on the Rust path: same logits and values as
+    torch. A depth of 3 isn't written into ``model_config`` (older code reads the checkpoint as before)."""
+    torch.manual_seed(5)
+    network = nets.create('zelda', native_spec(), **settings)
+    assert ('tower_depth' in network.config.to_dict()) == ('tower_depth' in settings)
+    logits, values = network.to_native().logits(observations)
+    heads, _ = network.heads(observations)
+    assert np.allclose(logits, heads.flat().detach().numpy(), atol=5e-5)
+    assert np.allclose(values, heads.value.detach().numpy(), atol=5e-5)
+
+
 class RustLogits(torch.nn.Module):
     """Serves a Rust ``Policy``'s own logits: acting from them is the Rust actor bit for bit
     (``policy::logits``), so a served play must match the Rust play run for run."""

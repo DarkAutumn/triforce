@@ -76,7 +76,14 @@ pub struct ModelConfig {
     pub grid_channels: Vec<usize>,
     pub grid_out_dim: usize,
     pub hidden_dim: usize,
+    /// Layers of each tower (`model.py` `MlpExtractor`; absent in a checkpoint: 3).
+    #[serde(default = "default_tower_depth")]
+    pub tower_depth: usize,
     pub obs_spec: BTreeMap<String, KeySpec>,
+}
+
+fn default_tower_depth() -> usize {
+    3
 }
 
 impl ModelConfig {
@@ -309,26 +316,41 @@ impl Conv {
     }
 }
 
+/// `tower_depth` × (linear, LayerNorm, activation): ReLU, and the last Tanh (policy) or ReLU (value).
 struct Tower {
-    layers: [Linear; 3],
-    norms: [Norm; 3],
+    layers: Vec<Linear>,
+    norms: Vec<Norm>,
     last_tanh: bool,
 }
 
 impl Tower {
+    /// The tower on `x`, its output in `a` (`b`: working memory, both `hidden_dim` long).
     fn apply(&self, x: &[f32], a: &mut [f32], b: &mut [f32]) {
-        self.layers[0].apply(x, a);
-        layer_norm(a, &self.norms[0].gamma, &self.norms[0].beta);
-        relu(a);
-        self.layers[1].apply(a, b);
-        layer_norm(b, &self.norms[1].gamma, &self.norms[1].beta);
-        relu(b);
-        self.layers[2].apply(b, a);
-        layer_norm(a, &self.norms[2].gamma, &self.norms[2].beta);
-        if self.last_tanh {
-            tanh(a);
-        } else {
-            relu(a);
+        let depth = self.layers.len();
+        for (i, (layer, norm)) in self.layers.iter().zip(&self.norms).enumerate() {
+            let out: &mut [f32] = match i {
+                0 => {
+                    layer.apply(x, a);
+                    &mut *a
+                }
+                _ if i % 2 == 1 => {
+                    layer.apply(a, b);
+                    &mut *b
+                }
+                _ => {
+                    layer.apply(b, a);
+                    &mut *a
+                }
+            };
+            layer_norm(out, &norm.gamma, &norm.beta);
+            if i + 1 < depth || !self.last_tanh {
+                relu(out);
+            } else {
+                tanh(out);
+            }
+        }
+        if depth % 2 == 0 {
+            a.copy_from_slice(b);
         }
     }
 }
@@ -588,21 +610,18 @@ impl Policy {
             + config.grid_out_dim
             + vector_sizes.iter().sum::<usize>();
         let hidden = config.hidden_dim;
+        let depth = config.tower_depth;
+        if depth == 0 {
+            return err("tower_depth must be at least 1");
+        }
         let tower = |w: &mut Weights, name: &str, last_tanh: bool| -> Result<Tower, PolicyError> {
             let p = format!("mlp_extractor.{name}");
-            Ok(Tower {
-                layers: [
-                    w.linear(&format!("{p}.0"), hidden, features)?,
-                    w.linear(&format!("{p}.3"), hidden, hidden)?,
-                    w.linear(&format!("{p}.6"), hidden, hidden)?,
-                ],
-                norms: [
-                    w.norm(&format!("{p}.1"), hidden)?,
-                    w.norm(&format!("{p}.4"), hidden)?,
-                    w.norm(&format!("{p}.7"), hidden)?,
-                ],
-                last_tanh,
-            })
+            let (mut layers, mut norms) = (Vec::with_capacity(depth), Vec::with_capacity(depth));
+            for i in 0..depth {
+                layers.push(w.linear(&format!("{p}.{}", 3 * i), hidden, if i == 0 { features } else { hidden })?);
+                norms.push(w.norm(&format!("{p}.{}", 3 * i + 1), hidden)?);
+            }
+            Ok(Tower { layers, norms, last_tanh })
         };
         let mut policy_tower = tower(&mut w, "policy_net", true)?;
         let mut value_tower = tower(&mut w, "value_net", false)?;

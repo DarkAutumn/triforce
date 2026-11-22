@@ -79,12 +79,16 @@ class ModelConfig:
     grid_channels: tuple = (16, 32, 32)
     grid_out_dim: int = 128
     hidden_dim: int = 256
+    # Layers of each tower (MlpExtractor); a checkpoint without it has 3, and 3 isn't written (older code reads it).
+    tower_depth: int = 3
     obs_spec: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         """Plain-data form for checkpoints."""
         result = asdict(self)
         result['grid_channels'] = list(self.grid_channels)
+        if self.tower_depth == 3:
+            del result['tower_depth']
         return result
 
     @staticmethod
@@ -160,20 +164,21 @@ def _masked_head(logits, mask, given, deterministic, noise=None):
 
 
 class MlpExtractor(nn.Module):
-    """Separate policy and value towers (ported from v1)."""
-    def __init__(self, input_size: int, hidden: int):
+    """Separate policy and value towers (ported from v1) of ``depth`` layers each (linear, LayerNorm, ReLU; the policy
+    tower's last activation Tanh)."""
+    def __init__(self, input_size: int, hidden: int, depth: int = 3):
         super().__init__()
         self.output_dim = hidden
-        self.policy_net = nn.Sequential(
-            layer_init(nn.Linear(input_size, hidden)), nn.LayerNorm(hidden), nn.ReLU(),
-            layer_init(nn.Linear(hidden, hidden)), nn.LayerNorm(hidden), nn.ReLU(),
-            layer_init(nn.Linear(hidden, hidden)), nn.LayerNorm(hidden), nn.Tanh(),
-        )
-        self.value_net = nn.Sequential(
-            layer_init(nn.Linear(input_size, hidden)), nn.LayerNorm(hidden), nn.ReLU(),
-            layer_init(nn.Linear(hidden, hidden)), nn.LayerNorm(hidden), nn.ReLU(),
-            layer_init(nn.Linear(hidden, hidden)), nn.LayerNorm(hidden), nn.ReLU(),
-        )
+
+        def tower(last) -> nn.Sequential:
+            layers: list[nn.Module] = []
+            for i in range(depth):
+                layers += [layer_init(nn.Linear(input_size if i == 0 else hidden, hidden)), nn.LayerNorm(hidden),
+                           last() if i == depth - 1 else nn.ReLU()]
+            return nn.Sequential(*layers)
+
+        self.policy_net = tower(nn.Tanh)
+        self.value_net = tower(nn.ReLU)
 
     def forward(self, features):
         """(policy_features, value_features)."""
@@ -277,7 +282,7 @@ class ZeldaPolicy(nn.Module):
         features = config.room_embed_dim + self.entity_encoder.output_dim + self.grid_encoder.output_dim + vector_size
         self.feature_dim = features
         hidden = config.hidden_dim
-        self.mlp_extractor = MlpExtractor(features, hidden)
+        self.mlp_extractor = MlpExtractor(features, hidden, config.tower_depth)
 
         self.kind_head = layer_init(nn.Linear(hidden, NUM_KINDS), std=0.01)
         self.kind_condition = layer_init(nn.Linear(hidden, hidden))
