@@ -215,3 +215,105 @@ longer while Link refuses the hits). The planner, which tries each action in the
 gains in 7:0x1b. Round 36's arms, the same head trained inside a reinforcement run or fed to the policy tower,
 took no fewer hits than the teacher (§1): the head is worth this much only when it is connected to the action
 choice directly, as a shift of the action's probability by its own prediction.
+
+### 3. The head on the states it will meet
+
+Labels on the actor's own states, no update (`python -m triforce.lab.record --families goriya@d3first --actor
+teacher|student [--student models/r38shift/pre-w4] --try-others 8:1.0 --rollouts 35`: the look-ahead tries the
+actor's next 8 ranked candidates at every decision, in collection only; 143,360 decisions each, every 7th shard held
+out). Both recordings ran before main's fix of harvested start states by namespace, so they also drew d2first's
+goriya harvest (the old order's Dungeon 7 at its hearts and bombs): a broader distribution, not the route's alone.
+Precision = recall on the actions taken (their real outcome) / on every judged candidate:
+
+| head | r36's held-out (planner / model draws) | teacher's states (rec-teacher) | the w = 4 combination's own states (rec-w4) |
+|---|---|---|---|
+| supervised (r36, 2 million decisions) | 0.886 / 0.857 | 0.736 / 0.679 (all) | 0.507 / 0.598 (all) |
+| + 4 epochs on rec-teacher (`hit-r0t`) | 0.888 / 0.861 | 0.813 / 0.792 (held out) | 0.619 / 0.722 (all, unseen) |
+| + rec-teacher + rec-w4, round 1 (`hit-r1`), 1 of 4 epochs | 0.882 / 0.845 | 0.807 / 0.786 | 0.563 / 0.706 (held out) |
+
+**It is the states, not the training.** The supervised head loses 0.12 on the teacher's states of the corrected
+route (0.857 → 0.736) with nothing trained in between; four epochs with those states in the mix win back most of it
+(0.813) and lose nothing on the old data. On the combination's own states the drop looks larger (0.507), but the
+number on the actions taken is biased there: the combination plays the actions its head passed, so the hits left
+among them are the head's blind spots by construction (its taken-lost rate is 1.59% against the teacher's 2.36%).
+The fair number is the judged one (the untaken candidates the policy ranked next): 0.598 → 0.722 with the teacher's
+states added, 0.706 after one epoch of round 1. Round 36's in-run head (0.46-0.56) was below even this: an in-run
+head sees 0.25 trials a decision against 8 here and starts from nothing; the pretrained arm P started at 0.65 and
+fell back with the trunk shared under policy losses.
+
+Not finished (the round's budget): round 1's last epochs (running when this was written, `models/r38hit/hit-r1`),
+its combination benched, round 2 (record the r1 combination's states on main's fixed start states, retrain on
+everything), and the `hit_or_blocked` label (main's Bubble touches; `r38_hit.py` reads it as `DIR+blocked` from a
+recording made on the merged code).
+
+### 4. Reinforcement with the head protected: not run
+
+Two arms were queued and cancelled before they started, when main's start-state fix showed that a lab run with a
+route's states drew d2first's harvest too: (frozen) the combination with its hit body frozen
+(`models/r38shift/pre-w8-frozen`), (own loss) the hit body trained only by its own loss on fresh look-ahead labels
+(`--aux hit=hit:0.5 --try-others 4:0.25`); both with the fixed combination as the fading teacher, so the teacher
+term does not pull the policy to undo the shift (KL to the unshifted teacher would). Commands in the status notes;
+they want the merged code (branch `r38-hit-m`).
+
+### 5. 7:0x1b as a fight
+
+The room's row of §2: with the six Blue Goriyas and 0-7 bombs the teacher wins 83.3% at 3.83 hits a visit and 1.94
+hearts; the fixed combination (w = 8) 94.3% at 2.08 and 0.39; the planner 98.3% at 1.01. The `d7` chains (1000 runs,
+`--checkpoint goriya@d3first=models/r38shift/pre-w8`, and today's team on the same seeds and code; the planner on
+300) were queued; the planner's finished, the two 1000-run chains had not when this was written.
+
+### 6. The threat lane
+
+`scripts/experiments/r38_lane.py` (inputs computed in Python from the recorded RAM; module docstring for the exact
+definition). Measured on goriya's collection: the boomerang flies at q-speed `$A0` = 2.5 px a frame (RAM, every
+flying one); of 116,082 lost candidates only 888 were hit by a shot fired after the decision (722 boomerangs), most of
+them 4-9 frames into the action; 59% of those stood in a ready Goriya's lane at the decision, **12 / 21 / 32 pixels
+ahead (10th / 50th / 90th percentile): on goriya the lane's reach is within 2 tiles**, inside the owner's guess of
+about 3. Ranked on experiment 2's bench (the hitnet candidate, 10 epochs, two seeds; 136 held-out post-decision
+hits):
+
+| inputs | P = R planner / model draws | post-decision shot hits: AUC | their recall at the P = R threshold |
+|---|---|---|---|
+| no lane (`in_line` zeroed) | 0.868 / 0.820, 0.869 / 0.816 | 0.950, 0.946 | 0.272, 0.243 |
+| `in_line` (schema 6, today) | 0.868 / 0.818, 0.867 / 0.821 | 0.949, 0.948 | 0.257, 0.265 |
+| **the threat lane** | 0.865 / 0.824, 0.864 / 0.811 | **0.959, 0.960** | **0.338, 0.346** |
+| the lane, `in_line` zeroed | 0.863 / 0.818, 0.866 / 0.821 | 0.958, 0.960 | 0.331, 0.331 |
+
+The lane catches a third more of the hits it is for (0.26 → 0.34 recall) and leaves the rest level; `in_line` adds
+nothing. On goriya the slice is under 1% of the hits, so the lane cannot move goriya's totals. The shooter family it
+is meant for (Octoroks: a 48-frame stand still before the rock, 3 px a frame) had no collection: one was queued with
+the probe logger of branch `r36-hit` (ow-octorok's `d3first` rooms 0x37, 0x3c, 0x4c, 0x64; 100 planner and 100
+model-alone runs from each of 30 states; queue cost: behind about 2 hours of other jobs when this was written).
+**The engine fields, if the Octorok ranking agrees**: per entity, 11 inputs: can fire (Goriya: `ObjState` bit 7
+clear; Octorok, Moblin, Lynel: shoot timer `$451` zero or above `$10`; not stunned `$3D`, metastate `$405` 0), the
+delay to the shot (Goriya `ObjTimer` `$28`; the others' timer − `$10`, or 32 when it has not started) / 64, in the
+lane now (ahead along `ObjDir`, middle-to-middle across under 9 px, within the boomerang's `$51` px), the distance
+along / 64, across / 16, and danger = in lane × max(0, 1 − frames to arrive / 32) now and after Link stands or walks
+N, S, W, E for 8 frames; shot speeds 2.5 (boomerang), 3 (rock, sword shot), 2 (arrow) px a frame.
+
+### 7. Darknut and Gleeok
+
+The same construction with each family's own supervised head (`r38_hit.py retrain --init fresh:POLICY --data
+r36:darknut|r36:boss-gleeok`: 0.845 / 0.775 and 0.774 / 0.676, as round 36), weights at the planner's refusal rate
+(darknut 1.31%, Gleeok 1.56%: w = 4) and twice, on their yardstick entries × 10 seeds:
+
+| | hits a visit | hearts lost | success | hits − teacher (an episode) |
+|---|---:|---:|---:|---:|
+| darknut@d3first teacher | 0.779 | 0.602 | 94.2% | |
+| w = 4 | 0.671 | 0.490 | 95.4% | −0.108 ± 0.030 |
+| w = 8 | 0.671 | 0.471 | 95.8% | −0.108 ± 0.039 |
+| planner | 0.354 | 0.144 | 97.9% | −0.425 ± 0.063 |
+| boss-gleeok@d3first teacher | 4.358 | 3.340 | 45.8% | |
+| w = 4 | 4.025 | 2.940 | 52.1% | −0.333 ± 0.173 |
+| w = 8 | 4.100 | 2.996 | 57.1% | −0.258 ± 0.188 |
+| planner | 2.154 | 1.244 | 59.2% | −2.204 ± 0.226 |
+
+Darknut −14% hits a visit (a quarter of the planner's edge), Gleeok −8% with +6 to +11 points of wins: smaller than
+goriya's −36%, as the heads are weaker (round 36: darknut's misses are late in long actions, Gleeok's fireballs) and
+were trained on two rooms (darknut) or one (Gleeok) of the entries benched.
+
+**What one all-families network of this kind needs**: a hit body trained on look-ahead labels from every family's
+rooms (the labels are cheap: `lab.record --try-others 8:1.0` adds no network pass), refreshed on the states the
+combined network reaches (§3), kept out of the policy's gradient; the shift applied at play with one weight (w = 4-8
+fitted goriya, darknut and Gleeok alike); branch `r38-one`'s `h768` shape (a hitnet with a dormant joint head) is
+the body to put it on.
