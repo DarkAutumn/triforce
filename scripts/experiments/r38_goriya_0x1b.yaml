@@ -1,0 +1,19 @@
+# Round 38: Dungeon 7's six-Goriya room 7:0x1b as a fight, for the yardstick's own row (round38.md "7:0x1b").
+# goriya's task narrowed to the room's d3first entries (7_1bw: from W, at the corrected route's 9 containers), with
+# 0-7 bombs on every reset (the owner's floor: the room's bombs are fought for while the bag is not full; this
+# worktree's routes.yaml sets d3first's 0x1b to `if_bombs_below: 8`, what 2.0.0.6's `bomb_rules` gives it) and all
+# six Blue Goriyas (no banked kills). Hearts drawn as the family trains (15% to full, half the resets full).
+name: goriya
+rooms: ['(7, 0x1b)']
+start_states: ['7_1bw_[0-9]']
+success: [exit-correct]
+reward_profile: default
+reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20}}
+obs: {objective: true, target: true}
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 7], bombs_share: 1.0, help_count: [0, 9]}
+items: {bombs: free, food: true}
+clips: {enabled: true, off_share: 0}
+curriculum: {enabled: false}
+one_room: true
+max_steps: 2000
+warm_start: null

@@ -6,7 +6,10 @@ Plays rollouts like lab training (``collect.MultiCollector``: each family's pool
 the teachers acting (``--actor teacher``) or a given student (``--actor student --student CKPT``), and writes one
 ``DIR/shard-<n>.npz`` per rollout: every observation key, ``action_mask``, ``action`` (the one taken),
 ``teacher_joint`` (the family teacher's joint log-probs, ``[n, 352]``, ``-inf`` illegal), ``teacher_value``,
-``family`` (index into ``families`` in ``DIR/dataset.json``)."""
+``family`` (index into ``families`` in ``DIR/dataset.json``), ``health_lost`` and ``hits`` (the action taken's).
+With ``--try-others K:P`` (as lab training's: the look-ahead tries K other candidates on a share P of the decisions,
+the play unchanged) also ``tried_actions`` ``[n, K, 3]`` and ``tried_lost`` ``[n, K]`` (1 lost health, 0 not, -1
+untried): hit labels on the actor's own states, recorded with no update."""
 
 import argparse
 import json
@@ -35,7 +38,8 @@ def parse_args(argv=None):
     parser.add_argument('--states-dir', default=None)
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--out', required=True)
-    parser.add_argument('--logs-dir', default=None, help="the log folder's root (default logs/, $TRIFORCE_LOGS_DIR)")
+    parser.add_argument('--try-others', default=None, metavar='K:P',
+                        help="the look-ahead's verdict on K other candidates on a share P of the decisions")
     add_job_arguments(parser)
     return parser.parse_args(argv)
 
@@ -55,10 +59,13 @@ def main(argv=None) -> Path:
         out.mkdir(parents=True, exist_ok=True)
         teachers = Teachers(keys, args.device, root)
         student = registry.load_model(args.student)[0] if args.student else teachers.networks[keys[0]]
+        from .train import parse_try_others  # pylint: disable=import-outside-toplevel
         collector = MultiCollector(families, out / 'run', args.steps_per_env, 0.99, 0.95, seed=args.seed,
-                                   states_dir=args.states_dir, teachers=teachers, actor=args.actor)
+                                   states_dir=args.states_dir, teachers=teachers, actor=args.actor,
+                                   tried=parse_try_others(args.try_others))
         (out / 'dataset.json').write_text(json.dumps({
             'families': keys, 'actor': args.actor, 'student': args.student, 'teachers': teachers.paths,
+            'try_others': args.try_others,
             'envs': collector.shares, 'steps_per_env': args.steps_per_env, 'seed': args.seed}, indent=2),
             encoding='utf-8')
         try:
@@ -70,7 +77,10 @@ def main(argv=None) -> Path:
                 arrays = {f'obs/{k}': v.numpy() for k, v in batch['obs'].items()}
                 arrays.update(action_mask=batch['masks'].numpy(), action=batch['actions'].numpy(),
                               teacher_joint=batch['teacher_joint'].numpy(),
-                              teacher_value=batch['teacher_value'].numpy(), family=batch['family'].numpy())
+                              teacher_value=batch['teacher_value'].numpy(), family=batch['family'].numpy(),
+                              health_lost=batch['health_lost'].numpy(), hits=batch['hits'].numpy())
+                if 'tried_lost' in batch:
+                    arrays.update(tried_actions=batch['tried_actions'].numpy(), tried_lost=batch['tried_lost'].numpy())
                 np.savez_compressed(out / f'shard-{shard:04d}.npz', **arrays)
                 print(f"[record] shard {shard}: {batch['masks'].shape[0]} rows", flush=True)
                 progress.update(progress.done + batch['masks'].shape[0])

@@ -530,7 +530,9 @@ d3first:
   # Digdogger's 0x1c and on.
   - {level: 7, room: '0x79', specialist: goriya, entry: S, exit: N, bomb_reserve: 8}
   - include: dungeon-7
-  - {level: 7, room: '0x1b', specialist: goriya, entry: W, exit: E, treasure: {if_bombs_below: 2}, bomb_reserve: 2}
+  # Round 38 (r38-hit): the fight the owner's floor makes it (2.0.0.6's `bomb_rules: treasure_below 8`), for the
+  # combat measurements; round 34's crossing was `if_bombs_below: 2`.
+  - {level: 7, room: '0x1b', specialist: goriya, entry: W, exit: E, treasure: {if_bombs_below: 8}, bomb_reserve: 2}
   - include: dungeon-7-east
   # Level 7 to the magic sword (round 36; r36-warp3f): 0x42 S, 0x52 W, 0x51's wrap exit (CLIP E: clips only) into
   # 0x50, S 0x60 and its wrap exit round the world onto 0x5f's water, the ladder clip to the heart container (11);
