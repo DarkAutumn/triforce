@@ -165,7 +165,8 @@ def cmd_check(a):
 
 
 def _mean_se(values: list[float], clusters: list[str]) -> tuple[float, float]:
-    """Mean and its standard error with episodes clustered by start state (episodes of one state share it)."""
+    """Mean and its standard error: the larger of the error with episodes clustered by start state (episodes of
+    one state share it; few states make it erratic) and the independent-episode one."""
     n = len(values)
     if n == 0:
         return float('nan'), float('nan')
@@ -174,8 +175,9 @@ def _mean_se(values: list[float], clusters: list[str]) -> tuple[float, float]:
     for value, cluster in zip(values, clusters):
         groups[cluster] += value - mean
     g = len(groups)
-    var = sum(s * s for s in groups.values()) / (n * n) * (g / (g - 1) if g > 1 else 1.0)
-    return mean, math.sqrt(var)
+    clustered = sum(s * s for s in groups.values()) / (n * n) * (g / (g - 1) if g > 1 else 1.0)
+    iid = sum((v - mean) ** 2 for v in values) / (n - 1) / n if n > 1 else 0.0
+    return mean, math.sqrt(max(clustered, iid))
 
 
 def cmd_report(a):
@@ -237,6 +239,38 @@ def failure_kind(record: dict) -> str:
     return ending
 
 
+def cmd_rooms(a):
+    """Per task room (start state without its chain): the task's own network's success and every other network's,
+    with the failure kinds of the others; rooms the others play worst first."""
+    rooms = defaultdict(lambda: defaultdict(list))   # (task, room) -> network -> records
+    for path in Path(a.evals).rglob('*__*.json'):
+        data = json.loads(path.read_text())
+        for record in data['records']:
+            rooms[(data['task'], record['state'].rsplit('_', 1)[0])][data['network']].append(record)
+    rows = []
+    for (task, room), nets in rooms.items():
+        own = nets.get(task)
+        if not own:
+            continue
+        rate = lambda rs: sum(r['success'] for r in rs) / len(rs)  # noqa: E731
+        others = {net: rate(rs) for net, rs in nets.items() if net != task}
+        kinds = defaultdict(int)
+        for net, rs in nets.items():
+            for r in rs:
+                if net != task and not r['success']:
+                    kinds[failure_kind(r)] += 1
+        rows.append({'task': task, 'room': room, 'own': round(rate(own), 3), 'episodes': len(own),
+                     'others': {k: round(v, 3) for k, v in sorted(others.items())},
+                     'others_mean': round(sum(others.values()) / len(others), 3) if others else None,
+                     'failures': dict(kinds)})
+    rows.sort(key=lambda r: (r['others_mean'] if r['others_mean'] is not None else 2) - r['own'])
+    Path(a.output).write_text(json.dumps(rows, indent=0))
+    for r in rows:
+        best = max(r['others'].items(), key=lambda kv: kv[1], default=('-', 0))
+        print(f"{r['task']:18} {r['room']:22} own {r['own']:.2f}  others {r['others_mean'] or 0:.2f} "
+              f"(best {best[0]} {best[1]:.2f}, n={len(r['others'])})  {r['failures']}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest='cmd', required=True)
@@ -263,8 +297,11 @@ def main():
     report = sub.add_parser('report')
     report.add_argument('evals')
     report.add_argument('output')
+    room_report = sub.add_parser('rooms')
+    room_report.add_argument('evals')
+    room_report.add_argument('output')
     args = parser.parse_args()
-    {'specs': cmd_specs, 'run': cmd_run, 'check': cmd_check, 'report': cmd_report}[args.cmd](args)
+    {'specs': cmd_specs, 'run': cmd_run, 'check': cmd_check, 'report': cmd_report, 'rooms': cmd_rooms}[args.cmd](args)
 
 
 if __name__ == '__main__':
