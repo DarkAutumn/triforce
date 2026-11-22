@@ -209,118 +209,90 @@ rule): a run with the run-time switch off has no way past them. The shared block
 
 ## Reserves
 
-- **Bombs.** 6 from Dungeon 3's entrance to 0x49 as d2first's; **0 from 0x59's fight (step 13, d3first's own; the
-  lead, Nov 20) through 0x5b's last pass**: 0x4a's four bombs are 0x59's (five Red Darknuts, all to die: the
-  BombFighter rule wins 60 of 60 with them, the sword alone 11 of 20), and 0x5b's four, taken on its last pass, pay
-  for the two walls and Manhandla; 6 at 0x5c and 0x4c, 0 at Manhandla, 6 after him (the block's). 2 from
-  Dungeon 4's entrance (the block's). **8 from Level 4's exit to Dungeon 5** (d3first's own steps 53 and 83): every
-  bomb Link has is kept for the Olive Garden (walks-b §2: the wood sword clears it 9 of 20 without bombs, 18 of 20
-  with eight); the walls on the way (1:0x53 after phase IX, 0x2c, 0x2d) are bombed as any wall, cheated where Link
-  has none. **Dungeon 5's entrance grants nothing** (2.0.0.3; the owner, Nov 21: "don't blindly add 8 bombs: the
-  goal is a win without a cheated bomb"; round 32's `grant: {bombs: 8}` there is gone): Link opens 5:0x66's and
-  5:0x65's walls with the bombs he brings (the segment's start state: 2) and fights the Garden with what is left
-  (0 in 0x05: thrown freely, 8 after it, 0 at Digdogger). **1 from
-  Level 2's mouth through Dungeon 2** (step 148; walks-b §4: goriya and moldorm are `free` and would throw the bag
-  this route brings; Dodongo's room offers BOMB whatever the reserve), **0 out of Level 2** (step 159), as d2first's
-  from Dungeon 5 on. **8 from Level 7's entrance to 0x1b** (step 174, round 34, the lead): d2first's 3 threw the
-  bag at 0x69 and 0x49 and brought 1 bomb into 0x1b, whose treasure (then `if_bombs_below: 5`) made its six Blue
-  Goriyas a wood-sword fight (460 of 874 died; the 31 that kept 5 crossed, 5 died). The reserve keeps the bag for
-  the walls (0x69, 0x19, 0x1a); **0x1b wants its bombs only below 2** (`treasure: {if_bombs_below: 2}`, step 186,
-  the 2 of 0x0c's and 0x29's walls), so a run that enters with 2 or more crosses to the key door (`d7` 9.4% →
-  18.4% on the old team, +9.0 ± 1.5); 2 from 0x1b as d2first's; the blocks' after that.
-- **Rupees.** No rupee reserve of d3first's own: its own steps hold no arrows (the bow from Dungeon 1, the arrows
-  only at 0x44 in `to-level-7`), so a reserve there would keep nothing. Where the ledger says the route runs dry
-  (0x34's meat, then Gohma, 8:0x4c and Ganon) the shared blocks' reserves already sit: 2 from the arrows (0x44's cave
-  step), 1 in Gohma's room, 8 from 8:0x4c, 1 through Level 9, 0 at Ganon. A reserve keeps rupees from ARROW; it
-  cannot keep what was never there, so the arrow rooms' needs top the purse up (cheated, counted): Gohma's (round
-  27), Ganon's (round 29) and, round 32, 8:0x4c's while a Pols Voice lives (`requires_rupees: 9`, the reserve and a
-  shot; on both routes: d2first arrives with 22-38 and is never topped up).
-- **Measured with round 32's bag (r32-base2's team, clips on; history: the bag is gone since 2.0.0.3, round35.md).**
-  Dungeon 5 (`--from 5_76s_0 --stop-at step:120`, 300 runs):
-  6.0% (1.9% of 1000 before); every run enters the Olive Garden with the bag of 8 (before: 0 in 822 of 1000, 4 in
-  the rest) and throws 7.7 there (5.9 cheated); the Garden loses 151 of 300 (845 of 1000 before); 8.1 cheated bombs
-  a run (the walls' two, the Garden, Digdogger). Dungeon 8 (`--from 8_7es_0 --stop-at step:243`, 300 runs): 24.3%
-  (6.8% before); 8:0x4c loses 5 of 107 entering (268 of 371 before), 8.0 Pols Voices killed a visit (0.88 before),
-  0.93 cheated rupees a visit, 0.33 a run. `d2first`'s Dungeon 8 on seeds 0-99: 20 of 100 before and after, every
-  run's outcome and rooms the same, no rupee cheated.
+- **Bombs** (routes.yaml; a step's `bomb_reserve` holds until the next one names another). 6 from Dungeon 3's
+  entrance to 0x49 as d2first's; **0 from 0x59's fight (step 13, d3first's own; the lead, Nov 20) through 0x5b's
+  last pass**: 0x4a's four bombs are 0x59's (five Red Darknuts, all to die: the BombFighter rule wins 60 of 60 with
+  them, the sword alone 11 of 20), and 0x5b's four, taken on its last pass, pay for the two walls and Manhandla; 6 at
+  0x5c and 0x4c, 0 at Manhandla, 6 after him (the block's). 2 from Dungeon 4's entrance (the block's). **8 from Level
+  4's exit (step 53) and again from Level 1's (79) through Dungeon 2 to Dungeon 5** (round 36: the first order's 1
+  through Dungeon 2 is gone): every bomb Link has is kept for Dungeon 5's walls and the Olive Garden; the walls on
+  the way (1:0x53, 0x2c, 0x2d) are bombed as any wall, cheated where Link has none, and Dodongo's room offers BOMB
+  whatever the reserve. **Dungeon 5's entrance grants nothing** (2.0.0.3; the owner, Nov 21: "don't blindly add 8
+  bombs: the goal is a win without a cheated bomb"): Link opens 5:0x66's and 5:0x65's walls with the bombs he brings
+  and fights the Garden with what is left (0 in 0x05: thrown freely, 8 after it, 0 at Digdogger). In the corrected
+  order Dungeon 2 comes first and fills the bag: runs from Dungeon 2's entrance with 2 bombs reach Level 5 with 8 in
+  231 of 296 arrivals (round 36's harvest of the `5_76s` states, round36.md "States"). **8 from Level 7's entrance to 0x1b**
+  (step 160, round 34, the lead): the reserve keeps the bag for the walls (0x69, 0x19, 0x1a); **0x1b wants its bombs
+  only below 2** (`treasure: {if_bombs_below: 2}`, step 172); 2 from 0x1b as d2first's, 0 at Aquamentus. **8 from
+  Level 7's exit (0x42, step 180) to Dungeon 6** (round 36): every bomb for 6:0x28's wall; then the blocks' (1 from
+  6:0x29, 1 out of Level 6, 2 into Dungeon 8, 5 out of it, Dungeon 9's).
+- **Rupees.** The route's own: 0x2d's 30, 0x3d's 30, 0x0f's 100 (Dungeon 2 and its drops between) against the meat
+  (60, 0x34's cave) and the arrows (80, 0x44's cave, `rupee_reserve: 2` from there); 4:0x11's 10. The blocks'
+  reserves after: 1 in Gohma's room, 8 from 8:0x4c, 1 through Level 9, 0 at Ganon. A reserve keeps rupees from
+  ARROW; it cannot keep what was never there, so the arrow rooms' needs top the purse up (cheated, counted): Gohma's
+  (round 27), Ganon's (round 29), 8:0x4c's while a Pols Voice lives (round 32).
 
-## Ledgers (from the walks; staging without drops unless said)
+## Ledgers (round 36: today's networks from the game start, `r36base-1k-full`, 1000 runs)
 
-| After | Containers | Keys | Bombs | Rupees |
-|---|---|---|---|---|
-| the sword | 3 | 0 | 0 | 0 |
-| Dungeon 3 | 4 | 2 | 6 (the rule's Manhandla: about 4) | 0 |
-| Dungeon 4 | 5 | 3 | 4 (about 2) | 10 (4:0x11's stash) |
-| Dungeon 1 | 6 | 3 (1 skipping 0x23's and 0x53's keys) | 3 (about 1) | 10 |
-| 0x2c's heart, 0x2d's 30 | 7 | 3 | 1 (about 0: cheated) | 40 |
-| the blue candle, Level 5's mouth | 7 | 3 | 1 | 0 (20 cheated of 60) |
-| Dungeon 5 | 8 | (d2first's ledger: 3 spent, 2 taken) | what the Garden left, 0x65's four eastbound | 0-1 |
-| 0x62's 100, 0x5f, 0x2f, 0x3d's 30 | 10 | | | 130-131 |
-| Dungeon 2 | 11 | | | 138-147 (d2first's drops there) |
-| 0x44's arrows (80), 0x34's meat (60) | 11 | | | 0-7 (cheated at 0x34 when short) |
-| Dungeon 7 | 12 | | | 0-11 |
-| the magic sword, Dungeon 6 | 13 | | | 0-8 (Gohma's arrows: topped up while he lives) |
-| Dungeon 8 | 14 | | | 0-7 (8:0x4c's arrows: topped up to 9 while a Pols Voice lives, round 32) |
-| 0x47's heart, Level 9 | 15 | | | 0-6 (Ganon's silver arrow: topped up to 1 while he lives, round 29) |
+What the runs that get there hold on entering (means over the runs; the walks' staged ledgers of the first order are
+in `d3first-walks-a.md` §7 and `-b.md`):
 
-Rupees in all: 30 (0x2d) + 100 (0x62) + 30 (0x3d) + 10 (4:0x11) and the dungeons' drops, against 60 + 80 + 60 for the
-wares and 3-5 for arrows.
+| Entering | Runs | Containers | Hearts | Bombs (none) | Keys |
+|---|---:|---:|---:|---|---:|
+| Level 3 | 1000 | 3 | 2.94 | 0.00 (1000) | 0 |
+| Level 4 | 235 | 4 | 3.77 | 4.28 (22) | 2 |
+| Level 1 | 45 | 5 | 4.58 | 0.56 (34) | 3 |
+| Level 2 | 36 | 7 | 3.49 | 2.11 (14) | 3 |
+| Level 5 | 30 | 8 | 6.97 | 7.07 (0) | 6 |
+| Level 7 | 5 | 9 | 7.30 | 0.80 (3) | 5 |
+| Level 6 | 1 | 12 | 11.50 | 0 | 2 |
+
+Rupees in all: 30 (0x2d) + 30 (0x3d) + 100 (0x0f) + 10 (4:0x11) and the dungeons' drops, against 60 + 80 for the
+wares and 3-5 for arrows: the corrected order buys both wares with the 100 already in hand (Dungeon 2 before them).
 
 ## For the owner
 
-From the first walk (`d3first-walks-a.md`):
+From the corrected order (round 36, `d3first-walks-c.md`, round36.md "The corrected route"):
 
-1. **Level 4 → Level 1.** 0x57 has no N edge and 0x47 none to 0x37; built as walked: 0x55 E, 0x56 N, 0x46 E, 0x47 E,
+1. **The counts of the wrong warps.** "Twice north" at 0x55 and "once" at 0x3f land where the route needs only
+   from indices this order never gives (above, "The recorder chain"): the route plays N, a one-frame turn W, and N
+   again at 0x55, and N twice at 0x3f, both found by search in the emulator.
+2. **The warps are an engine macro** after the block clip, as the recorder warps are: on the dock the mask leaves
+   MOVE S, then CLIP N on the column, then RECORDER, which plays every play. Today's ow-zora crosses both from the
+   route's states; with the monsters live the scripted rule lands 6 of 20 at 0x55 and 13 of 20 at 0x3f, every miss
+   a Zora's hit (walks-c §2).
+3. **Bombs.** Dungeon 2 before Dungeon 5 fills the bag: runs reach Level 5 with 8 bombs in most runs (7.07 on
+   average from the game start), where the first order brought 2.03.
+4. **0x3d's 30 rupees are taken** (the lead's choice: the route crosses the screen anyway; the one cushion over the
+   meat and the arrows), and 0x2d to Level 2 goes by 0x3d, 0x4d and 0x4c (0x3d has no W edge).
+
+From the first walks (`d3first-walks-a.md`, `-b.md`), still standing:
+
+5. **Level 4 → Level 1.** 0x57 has no N edge and 0x47 none to 0x37; built as walked: 0x55 E, 0x56 N, 0x46 E, 0x47 E,
    0x48 N, 0x38 W, 0x37 (0x46 new; about 0.8 hearts by the rule).
-2. **0x2d → the candle shop.** 0x1d's S part leads only E; built as walked: back W into 0x2c, N 0x1c, N 0x0c.
-3. **"5-8 bombs leaving Level 1"** is not met by the rooms (1-3 after Dungeon 1, none after 0x2c's and 0x2d's walls):
-   walls are cheated and counted; the Garden's bombs are what the route brings (see 5).
-4. **"About 30 rupees leaving Level 1".** The route's own are 4:0x11's 10; with 0x2d's 30 Link has 40 at the candle:
-   20 cheated (the shop's `requires_rupees: 60`).
-5. **Dungeon 3 at 3 hearts with the wood sword** is the hardest stretch of the first half for a scripted rule (0x59's
+6. **Dungeon 3 at 3 hearts with the wood sword** is the hardest stretch of the first half for a scripted rule (0x59's
    five Darknuts, Manhandla by bombs only); nothing was changed in the route for it.
-6. **Dungeon 1's key rooms.** With phase IX's door trick 0x23's Goriya key and 0x53's key are not needed on this
-   route (one key left at Level 1's exit). Built as the shared block (the lead: "the rest is mostly the same"); a
-   d3first-only Dungeon 1 that skips 0x23's fight would need its own block.
-7. **0x76**: both walked; the scroll costs nothing and saves 246 frames (a CLIP the family may choose).
-
-From the second walk (`d3first-walks-b.md`):
-
-8. **The warps out of Levels 5 and 2** need Link to face right or up first (down takes three and four plays). The
-   engine computes it and masks RECORDER while he faces down; ow-leever and ow-octorok must learn the turn.
-9. **The dead woods and the world wrap** are 0x62's tree, then 0x51's wrap exit into 0x50 and 0x60's round the world
-   (404 frames shorter than the Lost Woods' sequence).
-10. **0x3d has no W edge**: "scroll over to Level 2" is 0x3d S, 0x4d W, 0x4c N.
-11. **Hearts into Dungeon 5 are 7** (3, Dungeons 3, 4, 1, the heart rock); the grave sees exactly 12 and gives the
-    magic sword (refused at 11).
-12. **The wood sword in the Olive Garden**: 9-10 of 20 clears by the scripted fighter without bombs, 17-18 with
-    eight; this route's bomb reserve 8 from Level 4's exit keeps what Link finds for it. Answered by the owner's list
-    ("The 'you need x bombs and rupees' can be ignored since we have the ability to cheat them to the character in
-    game") and the lead (Nov 20): Dungeon 5's entrance tops the bag up to 8, cheated and counted where thrown.
-13. **The wood sword in Dungeon 7**: 0x1c's small Digdoggers (8 wood hits each) kill the scripted fighter 7 of 20
-    from full hearts; 0x49, 0x1b and Aquamentus cost 1-2 hearts more each. Nothing to walk instead.
-14. **Rupees**: about even over the route; a run with few drops reaches 0x34 short (cheated), Gohma short (cheated),
-    and 8:0x4c and Ganon with little for their arrows: both topped up while their monsters live (Ganon's since round
-    29, 8:0x4c's from round 32), cheated and counted.
-
-From building it:
-
-15. **Dungeon 2's bomb.** Walk B asked a reserve of one "until 0x0e, 0 at Dodongo": d2first's Dungeon 2 sets no
-    reserve, and the shared block must stay d2first's step for step, so the reserve is 1 from Level 2's mouth through
-    Dodongo's room too. It changes nothing there: Dodongo's room (`requires_bombs`, no wall) offers BOMB to his
-    family whatever the reserve.
-16. **0x2d's and 0x3d's secrets live in rooms d2first crosses.** Giving them their caves changed two engine rules so
-    d2first's crossings stay what they were (no granted bomb in 0x2d, no MOVE into the Armos in 0x3d); both are
-    tested in the game from d2first's own states.
-17. **Clips only** at five rooms (0x75, 0x0c, 0x51, 0x60, 0x3e): d3first has no plain way; `CLIPS=off` chains cannot
-    pass them.
+7. **Dungeon 1's key rooms.** With phase IX's door trick 0x23's Goriya key and 0x53's key are not needed on this
+   route (one key left at Level 1's exit). Built as the shared block.
+8. **0x76**: both walked; the scroll costs nothing and saves 246 frames (a CLIP the family may choose).
+9. **The warps out of Levels 5, 6 and 8** need the facings of the recorder chain; the engine computes them and masks
+   RECORDER until Link faces a way that works; out of Level 6 Link turns up first.
+10. **The wood sword in the Olive Garden** (9-10 of 20 by the scripted fighter without bombs, 17-18 with eight) and
+    **in Dungeon 7** (0x1c's small Digdoggers kill the fighter 7 of 20 from full hearts).
+11. **Rupees**: the arrow rooms (Gohma, 8:0x4c, Ganon) are topped up while their monsters live, cheated and counted.
+12. **0x2d's and 0x3d's secrets live in rooms d2first crosses**; two engine rules keep d2first's crossings what they
+    were (no granted bomb in 0x2d, no MOVE into the Armos in 0x3d).
+13. **Clips only** at 0x75, 0x0c, 0x51, 0x60, 0x3e and both docks: `CLIPS=off` chains cannot pass them.
 
 ## For the agents that build its states
 
-The list of steps whose room the walks crossed only by a rule the explorer may not find (a fight to the end with the
-wood sword, a bomb fight) is in the round's status notes and repeated here: the start state after such a room comes
-from a rule-won run (the walks' scripts: `r32_d3first.py` `BEST`, `ManhandlaFighter`, `BombFighter`;
-`r28_gleeok.GleeokFighter`; `r32b_d5.py garden`/`digdogger`; `r32b_d7.py`), not from the explorer.
+Steps 0-89 and 217-291 are the first order's states (round 32, below; the to-level-8 visits of 0x4c from N and 0x4d
+from W renamed `_v2`, the corrected order visiting both first on the way to Level 2). Steps 90-216 were rebuilt in
+round 36 by the explorer from `d3first_0_2dc_<chain>` with the fights it cannot clear skipped (`entry_states build
+--skip-fights`; their states are marked `fight_skipped`), and Dungeon 5's and Dungeon 7's entrances (`5_76s`,
+`7_79s`) were then cut from the promoted models' chain arrivals by their bombs (`scripts/experiments/r32c_models.py
+--bombs-quantiles 0.5,0.1,0.9`: chain 0 the median, 1 the low tenth, 2 the high tenth), so the segments start with
+what runs bring. The fights the walks crossed only by a rule (a fight to the end with the wood sword, a bomb fight):
 
 | Stretch | Room (step) | The rule that crossed it | Its state after |
 |---|---|---|---|
@@ -332,29 +304,39 @@ from a rule-won run (the walks' scripts: `r32_d3first.py` `BEST`, `ManhandlaFigh
 | Dungeon 3 | 3:0x4d (22): Manhandla | `ManhandlaFighter` (bombs), 11/20; the sword 0/20 | `3_3ds` |
 | Dungeon 4 | 4:0x13 (51): Gleeok, 16 wood hits | `r28_gleeok.GleeokFighter`, 6/20 at 4 containers | `4_03s` |
 | Dungeon 4 | 4:0x32 (38): 2 Like-Likes (9 wood hits each), 2 Zols, the push | 20/20 | `4_60cave` |
-| Dungeon 1 | 1:0x35 (81): Aquamentus, 6 wood hits | 19/20 | `1_36w` |
-| Dungeon 5 | 5:0x05 (107): the Olive Garden, six Blue Darknuts | `r32b_d5.py garden` (`BombFighter`), 9-18/20 by bombs held | `5_04cave` |
-| Dungeon 5 | 5:0x24 (122): Digdogger, the small one 8 wood hits | `r32b_d5.py digdogger`, 20/20 from 7 hearts | `5_14s` |
-| Dungeon 7 | 7:0x49 (181): 3 Blue Goriyas for the N shutter | `r32b_d7.py`, 13/20 from 11 | `7_39s` |
-| Dungeon 7 | 7:0x1b (190): 6 Blue Goriyas | 20/20 | `7_1cw` |
-| Dungeon 7 | 7:0x1c (191): the small Digdogger by the recorder | 13/20 from 11 (7 dead) | `7_0cs` |
-| Dungeon 7 | 7:0x2a (196): Aquamentus | 18/20 | `7_2bw` |
+| Dungeon 1 | 1:0x35 (77): Aquamentus, 6 wood hits | 19/20 | `1_36w` |
+| Dungeon 5 | 5:0x05 (130): the Olive Garden, six Blue Darknuts | skipped (round 36) | `5_04cave` |
+| Dungeon 5 | 5:0x24 (145): Digdogger, the small one 8 wood hits | skipped (round 36) | `5_14s` |
+| Dungeon 7 | 7:0x49 (163): 3 Blue Goriyas for the N shutter | skipped (round 36) | `7_39s` |
+| Dungeon 7 | 7:0x1b (172): 6 Blue Goriyas | skipped (round 36) | `7_1cw` |
+| Dungeon 7 | 7:0x1c (173): the small Digdogger by the recorder | skipped (round 36) | `7_0cs` |
+| Dungeon 7 | 7:0x2a (178): Aquamentus | skipped (round 36) | `7_2bw` |
 
-The rest (the legs, Dungeon 2 at ten containers, and Dungeons 6, 8, 9 with the magic sword: d2first's inventory
-there but the purse) the walks crossed by walking or d2first's own rules.
+Also skipped in round 36: 2:0x1e (104), Dodongo 2:0x0e (105), 5:0x66 from W (137), 6:0x38 (204), 6:0x3a (208) and
+Gohma 6:0x1c (213). The explorer needed 8 attempts at 5:0x65 from E (chains 0, 2) and 2:0x3e (chain 1).
 
 ## The states as built
 
-`d3first_*` (`triforce/states/`, chains 0-2, steps 0-303, the game start to Ganon's room) were built stretch by
-stretch by `scripts/experiments/r32c_states.py --first N --last M --rules ... --tag T` (one job a stretch): each step
-of the clip way crossed per chain by the explorer (`entry_states build`, one step), a step named in `--rules` by the
-walks' rule (`r32c_harvest.py`: the first won seed of a chain gives the next state, every seed played for the rate)
-or by round 28's/29's rule (`STEM=ROOM`, `r28_demos.py`/`r29_demos.py ROOM --route d3first --harvest`); where the
-explorer fails, the walks' actions or fight for the step (`r32_d3first.LEGS`, `r32c_harvest.FIGHTS`/`tallies()`),
-round 28's/29's rule of the room, and with `--models` the promoted models (`r32c_models.py`: `eval-chain --route
-d3first --from STEM_<chain> --stop-at step:<next> --replays`, the won replays' pre-entry frame of the next room cut
-out). Every harvested state is written by `write_entry_state` (hearts refilled, the room fresh); its manifest entry's
-`played_by` names the rule. No fight is skipped. Wins over runs, per chain (0, 1, 2):
+**Round 36** (the corrected order): steps 90-216 (`0_3dn` to `0_3cr`, 126 a chain) rebuilt by `python -m
+triforce.entry_states build --route d3first --start-step 90 --source 'd3first_0_2dc_{chain}' --last-step 216
+--skip-fights 2:0x1e:S,2:0x0e:S,5:0x05:E,5:0x66:W,5:0x24:E,7:0x49:S,7:0x1b:W,7:0x1c:W,7:0x2a:W,6:0x38:S,6:0x3a:W,6:0x1c:S`
+(resumed with `--attempts 8` at 5:0x65 for chains 0 and 2 and at 2:0x3e for chain 1); `5_76s` and `7_79s` cut from
+chain arrivals by `r32c_models.py` (above); the first order's 84 states off the corrected route removed (0x0c's
+shop and wrap, 0x62's tree, 0x1c, 0x2c E, 0x74's warp landing, the leg to Level 7 by 0x73, 0x63, 0x52, 0x51, 0x50,
+0x40, 0x41, 0x31 from S, 0x34 and 0x44 from S, 0x54, 0x64, 0x65, 0x3d and 0x3e from E). What follows is round 32's
+build of the first order, whose states 0-89 and 217-291 are kept.
+
+`d3first_*` (`triforce/states/`, chains 0-2, steps 0-303 of the first order, the game start to Ganon's room) were
+built stretch by stretch by `scripts/experiments/r32c_states.py --first N --last M --rules ... --tag T` (one job a
+stretch): each step of the clip way crossed per chain by the explorer (`entry_states build`, one step), a step named
+in `--rules` by the walks' rule (`r32c_harvest.py`: the first won seed of a chain gives the next state, every seed
+played for the rate) or by round 28's/29's rule (`STEM=ROOM`, `r28_demos.py`/`r29_demos.py ROOM --route d3first
+--harvest`); where the explorer fails, the walks' actions or fight for the step (`r32_d3first.LEGS`,
+`r32c_harvest.FIGHTS`/`tallies()`), round 28's/29's rule of the room, and with `--models` the promoted models
+(`r32c_models.py`: `eval-chain --route d3first --from STEM_<chain> --stop-at step:<next> --replays`, the won replays'
+pre-entry frame of the next room cut out). Every harvested state is written by `write_entry_state` (hearts
+refilled, the room fresh); its manifest entry's `played_by` names the rule. No fight is skipped. Wins over runs,
+per chain (0, 1, 2; the first order's step numbers):
 
 | Stretch (steps) | Room (step) | How | Won |
 |---|---|---|---|
