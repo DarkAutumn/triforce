@@ -39,9 +39,9 @@ Recipe as round 36 (`r36_merge_distill.py train`, 20 epochs, value weight 0.02),
 |---|---|---:|---:|---:|---:|---:|---:|
 | s1x | today's (`ZeldaPolicy`), 1x | 866k | 0.125 | 0.869 | 0.0 ± 0.3 points (92.9%) | -0.001 ± 0.015 | 0.662 |
 | w768e2 | today's, 768x3, two entity layers (converted, Rust path) | 4.01M | 0.088 | 0.898 | **+1.2 ± 0.3** (94.1%) | **-0.057 ± 0.015** | 0.623 |
-| h768 | `hitnet`: Link's token over the monster tokens (type, features, `entity_rel`, `entity_contact`), 768x3 towers, a dormant hit head | 4.69M | 0.089 | 0.895 | (queued) | | |
+| h768 | `hitnet`: Link's token over the monster tokens (type, features, `entity_rel`, `entity_contact`), 768x3 towers, a dormant hit head (served torch path) | 4.69M | 0.089 | 0.895 | **+1.4 ± 0.3** (94.3%) | **-0.083 ± 0.015** | **0.591** |
 
-The two large shapes copy equally well (held-out KL 0.088 / 0.089); the clean data copies better than round 36's
+The two large shapes copy equally well (held-out KL 0.088 / 0.089), but the shape that sees contact plays the bench's fights with fewer hits: h768 against w768e2, paired, success +0.2 ± 0.3 points, hearts lost -0.025 ± 0.011 an episode, hits -0.032 ± 0.010 a visit (Darknuts -0.37 ± 0.10, Gleeok -0.31 ± 0.15; Goriyas' success -4.2 ± 1.8). Its bench took 48 minutes on the served path against 14 for w768e2 on the Rust actor (both with queue waits on a busy machine). The bench shortlists; the chains decide; the clean data copies better than round 36's
 (its 768x3 two-entity-layer student: 0.116). No correction round was run: each is a 2-million-decision record,
 hours in the shared queue; the reinforcement's teacher term on the student's own states does its work. The chains
 on Dungeons 4, 7, 3, 5 and 8 (1,000 runs each, paired with the 51's chains of record) for w768e2 and h768 are queued.
