@@ -158,8 +158,9 @@ with the 1x student; `dagger1-chains.json`):
 
 One round of correction is real but small: it recovers 10-40% of the gap where the fights are ordinary (D1, D7,
 D3's Darknuts), nothing where the student almost never survives (D5's 0x05, D8's Blue Darknuts: too few of its
-own states reach the late part of the fight to be labelled). Round 2 (student `s1x-d1`) was recording when this
-session ended.
+own states reach the late part of the fight to be labelled). Round 2 (the round-1 student acts, seeds 36,300,000
+on; old + both rounds' rows, 5 epochs from round 1) is trained, `r36merge/s1x-d2`, held-out KL 0.150, not yet
+chained.
 
 
 ## The wood-sword pairs
