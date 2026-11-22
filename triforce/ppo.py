@@ -329,6 +329,10 @@ class PPO:
         self.sil: Optional[SilReplay] = None       # created by the first optimize with sil_coeff > 0
         self.ppg: Optional[PPGStore] = None        # created by the first train() with ppg
         self.aux_optimizer: Optional[torch.optim.Optimizer] = None
+        # Imitation of teachers (triforce.lab): weight of KL(teacher ‖ π_θ) on rows whose batch carries
+        # ``teacher_joint`` (and of ½(V − V_teacher)² with ``teacher_value``); the lab's schedule sets it per update.
+        self.teacher_coeff = 0.0
+        self.teacher_value_coeff = 0.0
 
     def _demo_rows(self, minibatch_size: int):
         """The demonstration rows where an update reads them, placed once.  On the device when they fit in one
@@ -386,7 +390,8 @@ class PPO:
     # ------------------------------------------------------------------ training loop
 
     def train(self, network: nn.Module, pool, iterations: int, callback: Optional[Callable] = None,
-              start_steps: int = 0, seed: Optional[int] = None, episode_budget: Optional[int] = None) -> nn.Module:
+              start_steps: int = 0, seed: Optional[int] = None, episode_budget: Optional[int] = None,
+              collector=None) -> nn.Module:
         """Runs ``iterations`` rounds of (collect ``target_steps`` env steps across ``pool``'s envs, optimize).
 
         Args:
@@ -394,6 +399,8 @@ class PPO:
             callback: called with an ``IterationResult`` after each iteration; return False to stop.
             seed: seeds the training RNGs (action sampling, minibatch order); the pool has its own seed.
             episode_budget: the env's step limit (``max_steps``), for ``in_flight/over_half_budget``.
+            collector: what rolls out instead of a ``Collector`` over ``pool`` (``lab.MultiCollector``: several
+                families' pools; same interface); ``pool`` is then only asked for ``num_envs``.
         """
         # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
         cfg = self.config
@@ -419,7 +426,7 @@ class PPO:
 
         plr = PrioritizedReplay(pool.start_states, beta=cfg.plr_beta, rho=cfg.plr_rho,
                                 uniform=cfg.plr_uniform) if cfg.plr else None
-        collector = Collector(pool, steps_per_env, cfg.gamma, cfg.lam, cfg.search, budget=episode_budget)
+        collector = collector or Collector(pool, steps_per_env, cfg.gamma, cfg.lam, cfg.search, budget=episode_budget)
         start = time.time()
         steps_this_run = 0
         shaping = shaping_for(1)
@@ -506,6 +513,8 @@ class PPO:
         batch_size = b_actions.shape[0]
         minibatch_size = max(1, batch_size // cfg.minibatches)
         b_searched, b_search_policy = batch.get('search_mask'), batch.get('search_policy')    # None without search
+        b_teacher, b_teacher_value = batch.get('teacher_joint'), batch.get('teacher_value')   # None without teachers
+        teacher_kl = torch.tensor(0.0)
 
         demo = None
         if self.demo_batch is not None and cfg.demo_bc_coeff > 0:
@@ -593,6 +602,12 @@ class PPO:
                             demo_lp = demo_log_prob(network, demo[0], demo[1], demo[2])
                         demo_bc_loss = -demo_lp.mean()
                         loss = loss + cfg.demo_bc_coeff * demo_bc_loss
+                    if b_teacher is not None and self.teacher_coeff > 0:
+                        teacher_kl = joint_kl(b_teacher[mb], network.joint_log_probs(mb_obs, b_masks[mb]))
+                        loss = loss + self.teacher_coeff * teacher_kl
+                        if b_teacher_value is not None and self.teacher_value_coeff > 0:
+                            loss = loss + self.teacher_value_coeff * 0.5 * (
+                                new_value - b_teacher_value[mb]).pow(2).mean()
                     if sil is not None and len(sil) > 0:
                         sil_obs, sil_masks, sil_actions, sil_returns = sil.sample(minibatch_size, self.device)
                         sil_out = network.evaluate(sil_obs, sil_masks, sil_actions)
@@ -668,6 +683,9 @@ class PPO:
             stats['charts/sil_rows'] = float(len(sil))
             stats['charts/sil_positive_share'] = sil_positive_share
         stats.update(search_stats)
+        if b_teacher is not None:
+            stats['losses/teacher_kl'] = teacher_kl.item()
+            stats['charts/teacher_coeff'] = self.teacher_coeff
         return stats
 
     def auxiliary_phase(self, network: nn.Module) -> dict:

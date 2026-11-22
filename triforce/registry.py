@@ -378,12 +378,21 @@ def load_checkpoint(path, check_schema: bool = True) -> dict:
 
 
 def load_model(path, check_schema: bool = True, obs_spec: Optional[dict] = None):
-    """Rebuilds the ``ZeldaPolicy`` stored in a checkpoint.  Returns (network, checkpoint).  With ``obs_spec`` (the
-    layout the caller wants) a checkpoint built for a smaller layout comes back widened to it
-    (``model.widen_policy``: new inputs start at zero); compare ``network.config.obs_spec`` with the checkpoint's
-    to tell."""
+    """Rebuilds the network stored in a checkpoint: a ``ZeldaPolicy``, or the ``triforce.nets`` architecture its
+    ``model_config['arch']`` names.  Returns (network, checkpoint).  With ``obs_spec`` (the layout the caller wants)
+    a ``ZeldaPolicy`` checkpoint built for a smaller layout comes back widened to it (``model.widen_policy``: new
+    inputs start at zero); compare ``network.config.obs_spec`` with the checkpoint's to tell.  Other architectures
+    are not widened (a different layout raises)."""
     from .model import ZeldaPolicy, widen_policy  # pylint: disable=import-outside-toplevel
+    from . import nets  # pylint: disable=import-outside-toplevel
     checkpoint = load_checkpoint(path, check_schema)
+    if nets.arch_of(checkpoint['model_config']) != nets.ZELDA:
+        network = nets.build(checkpoint['model_config'])
+        network.load_state_dict(checkpoint['state_dict'])
+        if obs_spec is not None and obs_spec != network.config.obs_spec:
+            raise SchemaMismatchError(f"{path}: a {nets.arch_of(checkpoint['model_config'])} network can't be "
+                                      "widened to another observation layout")
+        return network, checkpoint
     network = ZeldaPolicy(config=checkpoint['model_config'])
     network.load_state_dict(checkpoint['state_dict'])
     if obs_spec is not None and obs_spec != network.config.obs_spec:

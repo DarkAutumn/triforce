@@ -17,12 +17,13 @@ use numpy::{
     PyArray, PyArrayDyn, PyArrayMethods, PyReadonlyArrayDyn, PyReadwriteArrayDyn,
     PyUntypedArrayMethods,
 };
+use crate::external::PyExternalPolicy;
 use crate::policy::{PyPolicy, parse_act_mode};
 use policy::ActMode;
 use pool::rollout::{EnvRollout, Play, Record};
 use pool::zelda::{
-    ChainRunEnv, ClipsSwitch, EvalEnv, EvalJob, GumbelSearch, PolicyActor, RgbFn, SearchConfig, TaskEnv, TrainEnv,
-    ZeldaAction,
+    ChainRunEnv, ClipsSwitch, EvalEnv, EvalJob, ExternalQueue, GumbelSearch, HybridActor, Net, PolicyActor, RgbFn,
+    SearchConfig, TaskEnv, TrainEnv, ZeldaAction,
     ZeldaEvent,
 };
 use pool::{Column, Dtype, EnvInit, Jobs, Pool, PoolOptions};
@@ -1114,16 +1115,29 @@ impl PyEnvPool {
     fn rollout(
         &self,
         py: Python<'_>,
-        policies: Vec<PyRef<'_, PyPolicy>>,
+        policies: Vec<Bound<'_, PyAny>>,
         steps: usize,
         out: &Bound<'_, PyDict>,
         deterministic: bool,
         search: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<usize> {
         self.check_policies(policies.len())?;
-        let nets: Vec<_> = policies.iter().map(|p| p.inner.clone()).collect();
+        let (nets, external) = split_policies(&policies)?;
         // Training samples from the unmodified policy (PPO needs it); act modes are for plays.
         let mode = if deterministic { ActMode::ARGMAX } else { ActMode::SAMPLE };
+        if let Some((queue, which)) = external {
+            if search.is_some() {
+                return Err(PyValueError::new_err("search needs Rust networks (an ExternalPolicy has no search)"));
+            }
+            let native = PolicyActor::new(&LAYOUT, nets.clone(), vec![mode; nets.len()]).map_err(PyValueError::new_err)?;
+            let modes = vec![mode; which.len()];
+            let actor = Arc::new(HybridActor::new(native, queue, which, modes).map_err(PyValueError::new_err)?);
+            let mut buffers = RolloutOut::borrow(out, self.pool.num_envs(), steps, None)?;
+            let rollouts = interruptible(py, || self.pool.rollout(steps, actor), || self.pool.cancel_rollouts())?
+                .map_err(pool_err)?;
+            buffers.write(&rollouts)?;
+            return Ok(rollouts.len());
+        }
         let modes = vec![mode; nets.len()];
         let actor = Arc::new(PolicyActor::new(&LAYOUT, nets, modes).map_err(PyValueError::new_err)?);
         let search = search.map(search_config).transpose()?;
@@ -1171,7 +1185,7 @@ impl PyEnvPool {
     fn play(
         &self,
         py: Python<'_>,
-        policies: Vec<PyRef<'_, PyPolicy>>,
+        policies: Vec<Bound<'_, PyAny>>,
         act: Option<&Bound<'_, PyAny>>,
         record: Option<&str>,
         replay: Option<HashMap<i64, Bound<'_, PyAny>>>,
@@ -1188,24 +1202,43 @@ impl PyEnvPool {
             }
         };
         self.check_policies(policies.len())?;
-        let nets: Vec<_> = policies.iter().map(|p| p.inner.clone()).collect();
+        let (nets, external) = split_policies(&policies)?;
+        let count = policies.len();
         let modes: Vec<ActMode> = match act {
-            None => vec![ActMode::SAMPLE; nets.len()],
+            None => vec![ActMode::SAMPLE; count],
             Some(a) => match a.extract::<String>() {
-                Ok(all) => vec![parse_act_mode(&all)?; nets.len()],
+                Ok(all) => vec![parse_act_mode(&all)?; count],
                 Err(_) => {
                     let each: Vec<String> = a.extract()?;
-                    if each.len() != nets.len() {
+                    if each.len() != count {
                         return Err(PyValueError::new_err(format!(
                             "{} act modes for {} policies",
                             each.len(),
-                            nets.len()
+                            count
                         )));
                     }
                     each.iter().map(|m| parse_act_mode(m)).collect::<PyResult<_>>()?
                 }
             },
         };
+        if let Some((queue, which)) = external {
+            if replay.is_some() || distributions {
+                return Err(PyValueError::new_err(
+                    "replays and recorded distributions need Rust networks (an ExternalPolicy has neither)",
+                ));
+            }
+            let native_modes = which
+                .iter()
+                .zip(&modes)
+                .filter(|(n, _)| matches!(n, Net::Native(_)))
+                .map(|(_, m)| *m)
+                .collect();
+            let native = PolicyActor::new(&LAYOUT, nets, native_modes)
+                .map_err(PyValueError::new_err)?
+                .with_acting(true);
+            let actor = HybridActor::new(native, queue, which, modes).map_err(PyValueError::new_err)?;
+            return py.detach(|| self.pool.play(Arc::new(actor), record)).map_err(pool_err);
+        }
         let actor = match replay {
             None => PolicyActor::new(&LAYOUT, nets, modes),
             Some(plays) => {
@@ -1400,6 +1433,34 @@ impl PyEnvPool {
         self.close(py);
         false
     }
+}
+
+/// The Rust networks of `policies` (each a `_native.Policy` or `_native.ExternalPolicy`) and, when some are
+/// external, their queue and which network acts for each policy index (one queue per call).
+#[allow(clippy::type_complexity)]
+fn split_policies(
+    policies: &[Bound<'_, PyAny>],
+) -> PyResult<(Vec<Arc<policy::Policy>>, Option<(Arc<ExternalQueue>, Vec<Net>)>)> {
+    let mut native = Vec::new();
+    let mut which = Vec::new();
+    let mut queue: Option<Arc<ExternalQueue>> = None;
+    for p in policies {
+        if let Ok(p) = p.cast::<PyPolicy>() {
+            which.push(Net::Native(native.len()));
+            native.push(p.get().inner.clone());
+        } else if let Ok(e) = p.cast::<PyExternalPolicy>() {
+            let e = e.get();
+            match &queue {
+                None => queue = Some(e.queue.clone()),
+                Some(q) if Arc::ptr_eq(q, &e.queue) => {}
+                Some(_) => return Err(PyValueError::new_err("every ExternalPolicy of a pool call needs the same queue")),
+            }
+            which.push(Net::External(e.model));
+        } else {
+            return Err(PyTypeError::new_err("a policy must be a _native.Policy or a _native.ExternalPolicy"));
+        }
+    }
+    Ok((native, queue.map(|q| (q, which))))
 }
 
 /// (level, room, in_cave) tuples, for Python.

@@ -13,6 +13,7 @@ mod envpool;
 mod envs;
 mod errors;
 mod explore;
+mod external;
 mod game;
 mod policy;
 mod replay;
@@ -319,6 +320,8 @@ mod _native {
     };
     #[pymodule_export]
     use crate::explore::{PyAcceptSpec, PyExploreResult, PyExplorer, explore_states};
+    #[pymodule_export]
+    use crate::external::{PyExternalPolicy, PyExternalQueue};
     #[pymodule_export]
     use crate::game::{PyChange, PyGame, PyGameState, PySnapshot, observe, power_on_idle_states, power_on_name};
     #[pymodule_export]

@@ -252,6 +252,23 @@ impl PyPolicy {
         let out = PyArray1::from_vec(py, out).reshape([batch.rows, joint])?;
         Ok((out, PyArray1::from_vec(py, values)))
     }
+
+    /// The raw head logits `[B, kinds * (1 + directions + durations)]` (the kind head, every kind's direction row,
+    /// every kind's duration row: `ExternalQueue.answer`'s layout) and values `[B]` (`policy::Policy::logits`).
+    fn logits<'py>(&self, py: Python<'py>, obs: &Bound<'py, PyDict>) -> PyResult<JointOut<'py>> {
+        let batch = Batch::new(py, &self.inner, obs)?;
+        let size = self.inner.logit_heads().size();
+        let mut scratch = self.inner.scratch();
+        let mut out = vec![0f32; batch.rows * size];
+        let mut values = Vec::with_capacity(batch.rows);
+        for (i, row) in out.chunks_exact_mut(size).enumerate() {
+            let mut vectors = Vec::new();
+            let input = batch.row(i, &mut vectors)?;
+            values.push(self.inner.logits(&input, &mut scratch, row).map_err(policy_err)?);
+        }
+        let out = PyArray1::from_vec(py, out).reshape([batch.rows, size])?;
+        Ok((out, PyArray1::from_vec(py, values)))
+    }
 }
 
 /// `Policy.joint_log_probs`: (`[B, J]` log-probs, `[B]` values).

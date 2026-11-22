@@ -402,6 +402,8 @@ class Policies:
         self.checkpoints: Dict[str, str] = {}
         self.acts: List[str] = []
         self.missing: Dict[str, str] = {}
+        # A run several keys name (a multi-family run promoted for several families, triforce.lab) loads once.
+        loaded: Dict[str, object] = {}
         for name in sorted(known):
             keys = [name]
             if parts:
@@ -423,13 +425,18 @@ class Policies:
                             self.missing[key] = str(err)
                             continue
                     require_compatible(path)
-                    with torch.random.fork_rng():   # building the network draws init weights; keep seeds intact
-                        network, _ = load_model(path)
+                    real = str(Path(path).resolve() / CHECKPOINT_NAME if Path(path).is_dir() else Path(path).resolve())
+                    if real not in loaded:
+                        with torch.random.fork_rng():   # building the network draws init weights; keep seeds intact
+                            loaded[real] = load_model(path)[0].to_native()
+                    native = loaded[real]
                     self.checkpoints[key] = str(path)
                     act = act_mode(path)
+                else:
+                    native = loaded.setdefault(f'network:{id(network)}', network.to_native())
                 self.names.append(key)
                 self.configs.append(configs.get(name) or load_specialist(name))
-                self.policies.append(network.to_native())
+                self.policies.append(native)
                 self.acts.append(act)
 
     def modes(self, act: Optional[str] = None) -> List[str]:

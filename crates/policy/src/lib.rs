@@ -11,6 +11,7 @@
 
 pub mod act;
 pub mod kernels;
+pub mod logits;
 pub mod noise;
 
 pub use act::{ActMode, Choose, Low, Rule, Style, Threshold};
@@ -1137,6 +1138,45 @@ impl Policy {
         let value = self.towers(input, s);
         self.joint(input, legal_kinds, s, out)?;
         finite_output(value, 0.0)
+    }
+
+    /// The raw head logits of every kind in [`logits::Heads`]' layout (the kind head, then every kind's direction
+    /// row, then every kind's duration row; unmasked) into `out`; returns the value. [`logits::Heads::act`] on them
+    /// is [`Policy::act`] bit for bit (the generic acting path's reference, docs/lab.md).
+    pub fn logits(&self, input: &Input, s: &mut Scratch, out: &mut [f32]) -> Result<f32, PolicyError> {
+        self.check(input)?;
+        let (kinds, dirs, durs) = (self.kinds, self.directions, self.durations);
+        if out.len() != kinds * (1 + dirs + durs) {
+            return err(format!("logits need {} values, got {}", kinds * (1 + dirs + durs), out.len()));
+        }
+        let value = self.towers(input, s);
+        self.kind_head.apply(&s.tower_a, &mut s.logits);
+        out[..kinds].copy_from_slice(&s.logits[..kinds]);
+        self.kind_condition.apply(&s.tower_a, &mut s.condition_base);
+        let dur_base = kinds + kinds * dirs;
+        for kind in 0..kinds {
+            for (c, (b, e)) in s
+                .conditioned
+                .iter_mut()
+                .zip(s.condition_base.iter().zip(self.kind_embedding.row(kind as i64)))
+            {
+                *c = (*b + e).max(0.0);
+            }
+            self.direction_head.apply(&s.conditioned, &mut s.logits);
+            out[kinds + kind * dirs..kinds + (kind + 1) * dirs].copy_from_slice(&s.logits[..dirs]);
+            self.duration_head.apply(&s.conditioned, &mut s.logits);
+            out[dur_base + kind * durs..dur_base + (kind + 1) * durs].copy_from_slice(&s.logits[..durs]);
+        }
+        finite_output(value, 0.0)
+    }
+
+    /// The heads' sizes as [`logits::Heads`].
+    pub fn logit_heads(&self) -> logits::Heads {
+        logits::Heads {
+            kinds: self.kinds,
+            directions: self.directions,
+            durations: self.durations,
+        }
     }
 
     /// The joint log-probs (`joint_log_probs`) from `s.tower_a`.
