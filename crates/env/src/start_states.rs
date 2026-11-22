@@ -5,7 +5,8 @@
 //!   by each state's decayed mean badness (recency decay 0.9, failures ×2, damage ×1.5) over a 15% uniform floor.
 //! - [`StartWeights`]: a training pool's shared seed-state weights (prioritized level replay); while set, seed draws
 //!   follow them instead of the selector's own weights.
-//! - Harvested states (`<harvested dir>/*.state`) mix with seed states at `harvested_fraction`.
+//! - Harvested states (`<harvested dir>/*.state` of the family's start-state namespaces, `state_routes:`) mix with
+//!   seed states at `harvested_fraction`.
 //! - [`ram_randomization_values`]: reset-time hp/bombs/keys.
 //!
 //! States are opaque here: a [`StateStore`] turns names into emulator states and writes captures.  Python's
@@ -251,6 +252,8 @@ impl StartWeights {
 #[derive(Clone, Debug)]
 pub struct StartStatePool {
     harvested_dir: PathBuf,
+    /// The family's start-state namespaces ([`SpecialistConfig::namespaces`]): only harvested files of these are drawn.
+    namespaces: Vec<Option<String>>,
     harvested_fraction: f64,
     pub seed: Option<ProbabilisticSelector>,
     pub harvested: Option<ProbabilisticSelector>,
@@ -273,6 +276,7 @@ impl StartStatePool {
         let seeds = path_strings(config.resolve_start_states(states_dir));
         let mut pool = StartStatePool {
             harvested_dir: config.harvested_dir(states_dir),
+            namespaces: config.namespaces().into_iter().map(|ns| ns.map(str::to_owned)).collect(),
             harvested_fraction: config.harvested_fraction,
             seed: if seeds.is_empty() {
                 None
@@ -303,10 +307,17 @@ impl StartStatePool {
         self.harvested_fraction > 0.0 || self.seed.is_none()
     }
 
-    /// Re-reads the harvested dir.  An empty dir drops the harvested states (resets go back to the seed states); a
-    /// pool without seed states keeps its list, so its next load fails loudly.
+    /// Re-reads the harvested dir (the files of the family's namespaces; phase X: another route's harvest is never
+    /// drawn).  An empty dir drops the harvested states (resets go back to the seed states); a pool without seed
+    /// states keeps its list, so its next load fails loudly.
     fn scan_harvested(&mut self) {
-        let paths = path_strings(glob(&self.harvested_dir.join("*.state")));
+        let paths: Vec<String> = path_strings(glob(&self.harvested_dir.join("*.state")))
+            .into_iter()
+            .filter(|p| {
+                let ns = zelda::game_map::state_namespace(p);
+                self.namespaces.iter().any(|n| n.as_deref() == ns)
+            })
+            .collect();
         if paths.is_empty() {
             if self.seed.is_some() {
                 self.harvested = None;
@@ -753,6 +764,35 @@ mod tests {
             StartStatePool::new(&none, &seeds),
             Err(EnvError::StartState(_))
         ));
+    }
+
+    /// A family on one route's states (`state_routes:`) draws only that route's harvested files, never another
+    /// route's (bare names) in the same folder.
+    #[test]
+    fn pool_draws_only_its_namespaces_harvested_states() {
+        let dir = tempfile::tempdir().unwrap();
+        let seeds = dir.path().join("seeds");
+        let harvested = dir.path().join("harvested");
+        std::fs::create_dir_all(&seeds).unwrap();
+        std::fs::create_dir_all(&harvested).unwrap();
+        std::fs::write(seeds.join("d3first_1_73s_0.state"), b"x").unwrap();
+        std::fs::write(harvested.join("d3first_1_73s_h1_0.state"), b"x").unwrap();
+        std::fs::write(harvested.join("1_73s_h1_0.state"), b"x").unwrap();
+        let text = format!(
+            "name: t\nrooms: ['(1, 0x73)']\nsuccess: exit-correct\nstart_states: ['d3first_1_73*_[0-9]']\n\
+             harvested_states: {}\nharvested_fraction: 1.0\n",
+            harvested.display()
+        );
+        let mut config = SpecialistConfig::from_yaml(&text, "t.yaml", None).unwrap();
+        config.state_namespaces = vec![Some("d3first".into())];
+        let mut pool = StartStatePool::new(&config, &seeds).unwrap();
+        let mut r = rng();
+        assert!((0..50).all(|_| pool.next(&mut r).ends_with("/d3first_1_73s_h1_0.state")));
+        config.state_namespaces = vec![None, Some("d3first".into())];
+        let mut pool = StartStatePool::new(&config, &seeds).unwrap();
+        let picks: Vec<String> = (0..100).map(|_| pool.next(&mut r)).collect();
+        assert!(picks.iter().any(|p| p.ends_with("/1_73s_h1_0.state")));
+        assert!(picks.iter().any(|p| p.ends_with("/d3first_1_73s_h1_0.state")));
     }
 
     /// Unset shared weights draw exactly what the selector draws (same RNG, same sequence); set weights decide every

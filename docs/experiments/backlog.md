@@ -159,7 +159,8 @@ been retrained on the corrected order):
   for his five motions whether he walks into or out of it; off while its shot flies (the shot's own contact inputs
   carry the danger then). Schema 6's `in_line` is the bare form; to be ranked on the hit bench (hits by shots fired
   after the decision as their own slice) and carried into an arm if it helps.
-- [ ] **A Bubble's touch is not penalised** (the owner, Nov 22: "link does get hit by the blue bubble often, does
+- [x] **A Bubble's touch is not penalised** (done Nov 22, round38.md "A Bubble's touch": 1.4 touches a visit
+  to its rooms, about 0.075 hearts and 90 frames a touch; `penalty-sword-blocked` 0.05; counted beside hits) (the owner, Nov 22: "link does get hit by the blue bubble often, does
   he get penalized for that directly?"): it does no damage, so neither the health penalty, the yardstick's hits nor
   the hit head's labels see it. Branch `r38-bubble`: what a touch costs, a penalty a touch, touches counted where
   hits are.
