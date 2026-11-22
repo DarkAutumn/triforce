@@ -78,11 +78,15 @@ def record(key: str, config, states_dir, out: Path, rollouts: int, seed: int, te
                                states_dir=states_dir, teachers=teachers,
                                actor='teacher' if student is None else 'student')
     rows = 0
+    used: dict = {}
     try:
         network = teachers.networks[key] if student is None else student
         for shard in range(rollouts):
             collector.start(network)
             collector.take()
+            for event in collector.episodes:
+                name = str(event['info'].get('start_state', '?'))
+                used[name] = used.get(name, 0) + 1
             collector.ready(network, teachers.device)
             batch = collector.buffer.flatten('cpu')
             arrays = {f'obs/{k}': v.numpy() for k, v in batch['obs'].items()}
@@ -95,7 +99,7 @@ def record(key: str, config, states_dir, out: Path, rollouts: int, seed: int, te
     finally:
         collector.close()
     return {'key': key, 'rows': rows, 'seconds': round(time.time() - began, 1), 'last_rollout_episodes': episodes,
-            'teacher': teachers.paths[key], 'seed': seed}
+            'teacher': teachers.paths[key], 'seed': seed, 'start_states_used': dict(sorted(used.items()))}
 
 
 def main(argv=None):
