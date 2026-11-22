@@ -258,12 +258,17 @@ class MultiCollector:
 
     def family_metrics(self) -> dict:
         """The last rollout's summary metrics per family, as ``family/<key>/<metric>``, with each family's share of
-        the rows (``rows_share``) and, with a sampler, its ``need`` and ``recent_success``."""
+        the rows (``rows_share``), the frames its decisions played (``frames_per_decision``) and, with ``tried``,
+        the frames the look-ahead's trials emulated (``tried_frames_per_decision``); with a sampler, its ``need`` and
+        ``recent_success``."""
         result = {f'family/{key}/{name}': value for key, metrics in self.by_family.items()
                   for name, value in metrics.summary().items() if isinstance(value, (int, float))}
         if self.buffer is not None:
             for key, buffer in zip(self.keys, self.buffer.buffers):
                 result[f'family/{key}/rows_share'] = buffer.rows / self.buffer.rows
+                result[f'family/{key}/frames_per_decision'] = float(buffer.frames.float().mean())
+                if buffer.tried_frames is not None:
+                    result[f'family/{key}/tried_frames_per_decision'] = float(buffer.tried_frames.float().mean())
         if self.sampler is not None:
             for key in self.keys:
                 result[f'family/{key}/need'] = self.sampler.need(key)

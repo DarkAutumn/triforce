@@ -107,6 +107,7 @@ def test_a_hit_head_run_trains_on_its_labels_and_plays_without_trials(states_dir
     lines = [json.loads(line) for line in (run / 'metrics.jsonl').read_text().splitlines()]
     metrics = lines[-1].get('metrics', lines[-1])
     assert 'losses/aux_hit' in metrics and metrics['charts/aux_hit_labels'] > 1.0     # tried candidates add labels
+    assert metrics['family/ow-start/frames_per_decision'] > 0 and metrics['family/ow-start/tried_frames_per_decision'] > 0
     # At play the network is served from the observation alone: it plays with no trial, and foresight (which tries
     # actions in the emulator) is refused for it.
     config = _native.SpecialistConfig.load('ow-start').replace(start_states=['start'], max_steps=12)
