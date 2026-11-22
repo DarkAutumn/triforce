@@ -28,7 +28,9 @@
 # 28: 0x6d) sends Link to a stand tile on the tree's row (three tiles E of it, facing W; three W of it, facing E);
 # CANDLE is offered there only, toward the tree, while it stands and no fire of Link's burns; then its stairs.
 # `bombs: never|tenth|required|free` (round 28): on this step the family's `items: {bombs:}` mode is this one
-# (8:0x6e: boss-manhandla, `free`, crosses to the bomb wall by the BOMB mask of `required`).
+# (8:0x6e: boss-manhandla, `free`, crosses to the bomb wall by the BOMB mask of `required`).  Round 37: a route's
+# own bomb rules (the owner's: `fights_only`, `wall_only`, `treasure_below`, `treasure_below_rooms`) are the
+# top-level `bomb_rules:` below the routes, by route name.
 # `drops: first` (round 31): on this step the family's `reward.drops_first` is on: once the objective is no fight, a
 # wanted drop lying in the room (bombs below Link's maximum, a heart or fairy below full health) replaces the exit as
 # the target until taken or gone (6:0x78, the ringleader room: a bomb pack its Wizzrobes drop is taken on the way).
@@ -122,6 +124,9 @@ d2first:
 - {level: 0, room: '0x4c', specialist: ow-octorok, entry: E, exit: N}
 - {level: 0, room: '0x3c', specialist: ow-octorok, entry: S, exit: cave}
 - include: dungeon-2
+# 0x5e is cleared (`treasure: clear`, round 19): its Red Goriyas' bomb drops help against the Moldorm in 0x3e.
+- {level: 2, room: '0x5e', specialist: goriya, entry: S, exit: N, treasure: clear}
+- include: dungeon-2-north
 - {level: 0, room: '0x3c', specialist: ow-octorok, entry: cave, exit: S}
 - {level: 0, room: '0x4c', specialist: ow-octorok, entry: N, exit: E}
 - {level: 0, room: '0x4d', specialist: ow-moblin, entry: W, exit: N}
@@ -481,6 +486,11 @@ d3first:
   - {level: 0, room: '0x4c', specialist: ow-octorok, entry: E, exit: N}
   - {level: 0, room: '0x3c', specialist: ow-octorok, entry: S, exit: cave}
   - include: dungeon-2
+  # 0x5e is crossed (round 37, the owner: "Drop the fight with the goriyas in d2 0x5e, that's only for d2 first. (It's
+  # high bomb chances on start of a d2 run, but needless heart/time wasting in the d3 first route)"): no treasure, no
+  # key, its N door open; under `fights_only` no weapon bomb there but the 10th kill's.
+  - {level: 2, room: '0x5e', specialist: goriya, entry: S, exit: N}
+  - include: dungeon-2-north
   # Level 2 to Level 5 (d2first's rooms, entries and exits; its clip ways): back S, E and N to 0x2d, N 0x1d, E along
   # row 1 to 0x1f, N through its wall gap at X $80 into 0x0f's open secret cave (100 rupees), back S and W, 0x1d N,
   # 0x0d W, out of 0x0c by its wrap exit (CLIP E) onto the mountain top, 0x0b's mouth.
@@ -525,14 +535,14 @@ d3first:
   # Round 34 (the lead, Nov 21): Dungeon 7's entrance and 0x1b are this route's own.  The record's runs threw the bag
   # down to the reserve of 3 before 0x1b (0x69, 0x49) and entered it with 1 bomb, so its four were wanted and its six
   # Blue Goriyas a wood-sword fight (460 of 874 died); the 31 that kept 5 crossed to the key door (5 died).  A reserve
-  # of 8 to 0x1b keeps the bag for the three walls before it (0x69, 0x19, 0x1a); 0x1b wants its bombs only below 2
-  # (0x0c's and 0x29's walls), so a run that enters with 2 or more crosses, and those above the reserve of 2 go to
-  # Digdogger's 0x1c and on.
+  # of 8 to 0x1b keeps the bag for the three walls before it (0x69, 0x19, 0x1a).  Round 37: 0x1b's bombs are wanted
+  # by the route's floor (`bomb_rules`, below: a fight whenever Link comes in with 7 or fewer, the owner's blanket
+  # rule); round 34's crossing (`{if_bombs_below: 2}`) is the room's override there if the fight costs too much (the
+  # owner: "you have the ability to skip that fight for bombs if it kills too many runs"), measured in round37.md.
+  # Those above the reserve of 2 go to Digdogger's 0x1c and on.
   - {level: 7, room: '0x79', specialist: goriya, entry: S, exit: N, bomb_reserve: 8}
   - include: dungeon-7
-  # Round 38 (r38-hit): the fight the owner's floor makes it (2.0.0.6's `bomb_rules: treasure_below 8`), for the
-  # combat measurements; round 34's crossing was `if_bombs_below: 2`.
-  - {level: 7, room: '0x1b', specialist: goriya, entry: W, exit: E, treasure: {if_bombs_below: 8}, bomb_reserve: 2}
+  - {level: 7, room: '0x1b', specialist: goriya, entry: W, exit: E, bomb_reserve: 2}
   - include: dungeon-7-east
   # Level 7 to the magic sword (round 36; r36-warp3f): 0x42 S, 0x52 W, 0x51's wrap exit (CLIP E: clips only) into
   # 0x50, S 0x60 and its wrap exit round the world onto 0x5f's water, the ladder clip to the heart container (11);
@@ -559,6 +569,42 @@ d3first:
   - include: dungeon-8
   - include: to-level-9
   - include: dungeon-9
+# The owner's bomb rules (round 37, Nov 22; docs/routes/d3first.md "Bombs"), by route.  A route not named here plays
+# none (every room by the family's `items: {bombs:}` mode and its step's `bombs:`).  `d2first` is in scope for them
+# when its own work comes (the owner: "not until we've completed this work on d3-first, entirely"): the same entry
+# under its name switches them on there.
+# `wall_only: [{level, room}, ...]`: the rooms where the owner forbids bombs but to progress ("no bomb usage except
+# to progress, not to fight"): BOMB is no weapon there, a fight or not, whatever the family's mode or the step's
+# (capped at `required`); the bomb that opens the wall the step leaves through and the 10th damage-free kill's (its
+# bomb kill arms a forced drop of four: always allowed, the owner) are the only ones.  3:0x5b: crossed S to N with
+# no bomb at all (its first pass leaves by no wall); on its last pass (W to E) its Darknuts are fought by the sword
+# for the room's bombs, then its E wall is bombed (the step's `bomb_reserve: 0`, d2first's, bites no more there:
+# `required` keeps no reserve).
+# `treasure_below: N`: the floor under which the route fights for a room's bombs (the owner's blanket rule: "he
+# should fight the darknuts if he has 7 or less bombs [...] This is a blanket rule not for this room"): every step
+# whose room's game.yaml treasure is bombs and that takes it (no `treasure:`, or `{if_bombs_below: M}`, whose M gives
+# way) fights for it when Link comes in holding fewer than N (then while he holds fewer), and crosses with N or more
+# (a bomb spent in the room turns no crossing into a fight).  `skip`, `refuse` and `clear` stay the step's.  On
+# d3first, 8 (the bag): 3:0x4a, 3:0x5b's last pass, 2:0x1e, 5:0x65 eastbound, 7:0x1b, 8:0x3f, 9:0x16 northbound.
+# `treasure_below_rooms: [{level, room, below: N}, ...]`: a room's own floor instead (the override for a room where
+# the fight costs too much; 7:0x1b's crossing would be `{level: 7, room: '0x1b', below: 2}`).
+# `fights_only: true`: in a dungeon BOMB is a weapon only while the objective fights the room (the owner: "In
+# dungeons, link should only use bombs in rooms it somehow needs to clear"): a shutter the monsters hold on the step's
+# exit, a treasure or a block that waits on the kills and the step takes, a boss.  Where the route only crosses
+# (3:0x69: "slide past the darknuts to get the raft"), or once the fight is over, the family's mode is capped at
+# `required` (a `free` family: the wall the step leaves through and the 10th kill's bomb; `tenth`, `required` and
+# `never` place no weapon bomb already).  In a fight the family's mode and the reserve stand as before, but in a
+# `wall_only` room.  The overworld is untouched.
+bomb_rules:
+  d3first:
+    fights_only: true
+    wall_only: [{level: 3, room: '0x5b'}]
+    treasure_below: 8
+    # 7:0x1b both ways (round 37, d7 from 7_79s_0, 1000 runs, seeds 0-999; runs bring 0.21 bombs, so nearly every
+    # visit is a fight either way): the blanket floor (as landed) 12.6% to the triforce, 701 of 733 entering 0x1b
+    # lost per 1000, hearts 3.59 in, 1.30 out, 4.16 bombs out of it; with the line below 12.7%, 685, 3.59 / 1.29, 3.99;
+    # walls cheated later a run 7:0x1a 0.754 both, 6:0x28 0.024 / 0.027.  Uncomment to cross it with 2 or more:
+    # treasure_below_rooms: [{level: 7, room: '0x1b', below: 2}]
 # clips-gauntlet (round 21, docs/experiments/round21-gauntlet.md): an experiment route, not a way through the game.  Two
 # steps per (room, entry): a specialist naming it (`route: clips-gauntlet`) draws one of the two exits at every
 # reset.  Entered from W the target is E or S, entered from E it is W or S.
@@ -581,12 +627,12 @@ clips-gauntlet:
 # What differs between the routes inside a block (sword, heart containers, items, the reserves the route brings) is
 # their states', not route data.
 blocks:
+  # Dungeon 2 to 0x6e, and from 0x4e (each route writes 0x5e between: d2first fights it, d3first crosses it).
   dungeon-2:
   - {level: 2, room: '0x7d', specialist: d2-rope, entry: S, exit: E}
   - {level: 2, room: '0x7e', specialist: d2-rope, entry: W, exit: N}
   - {level: 2, room: '0x6e', specialist: d2-rope, entry: S, exit: N}
-  # 0x5e is cleared (`treasure: clear`, round 19): its Red Goriyas' bomb drops help against the Moldorm in 0x3e.
-  - {level: 2, room: '0x5e', specialist: goriya, entry: S, exit: N, treasure: clear}
+  dungeon-2-north:
   - {level: 2, room: '0x4e', specialist: d2-rope, entry: S, exit: N}
   - {level: 2, room: '0x3e', specialist: moldorm, entry: S, exit: N}
   - {level: 2, room: '0x2e', specialist: d2-rope, entry: S, exit: N}

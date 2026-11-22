@@ -3417,3 +3417,40 @@ and 0x29's walls need), so a run with 2 or more crosses to the key door. routes.
   kill force drop, no matter the room or enemies, that remains true."
 - The lead applies them to `d3first` (`d2first` stays as it is, by Lee's word of the same day); built on branch
   `r37-rules` with their cost to today's networks measured before they land.
+
+## 2026-11-22 — 2.0.0.6: Lee's three bomb rules on `d3first` (the lead builds them, Lee being away)
+
+- **What:** routes.yaml's top-level `bomb_rules:` (by route; `d3first` only) with three keys, each Lee's words
+  (AGENTS.md "The owner's three bomb rules", docs/routes/d3first.md "Bombs"): `fights_only: true` (bombs as a weapon
+  in a dungeon only while the objective fights the room: 3:0x59 yes, 3:0x69 no), `wall_only: [3:0x5b]` (no weapon
+  bomb there at all, the wall's one bomb only), `treasure_below: 8` (every room the route takes the bombs of is a
+  fight when Link comes in with 7 or fewer). Over all three, Lee: "we must ALWAYS allow bombs and deeply encourage
+  them if we are on the 10th kill force drop, no matter the room or enemies, that remains true": the 10th
+  damage-free kill's bomb stays offered in every mode but `never`, in every room.
+- **How (the lead's choices):** the rules cap a `free` family's mode at `required` where they take the weapon away
+  (no new mode: `required` is already "the wall the step leaves through and the 10th kill", which is what Lee asked
+  for 3:0x5b; a second name for it would be a second convention). Rule 1 reads the objective's own kind every
+  step, so a room stops offering BOMB the step its fight ends. Rule 3 is a floor over the steps' own
+  `{if_bombs_below: M}` (8:0x3f's 5 is a shared block's, for `d2first`) with a per-room override
+  (`treasure_below_rooms`) for the room Lee allows to be skipped (7:0x1b); it is judged on entering the room, so a
+  bomb Link spends there (3:0x5b's wall with a full bag) does not turn the crossing into a fight (round 23's trouble
+  with a live floor). The keys are route-level so the shared blocks stay `d2first`'s: `d2first` unchanged until its
+  own work ("Don't waste time on d2 first until we've completed this work on d3-first, entirely"; one entry under its
+  name then).
+- **Reward:** what pays for the 10th kill's bomb was already there in every family (`reward-armed-bomb-drop` 0.75 on
+  the bomb kill that arms the drop, `reward-gained-bombs` 0.5 on the pickup); not using it costs nothing. No term
+  was added.
+- **8:0x3f (Lee, the same day, from the golden replay: in with 2, a drop to 6, the room's bombs ignored):** the
+  shared step's `{if_bombs_below: 5}` read live made the stairs the objective at 6; under the floor the decision
+  made on entering now holds for the visit (taken below the bag's maximum), a treasure lying in the room is wanted
+  below the maximum whatever Link came in with, and dropped bombs below the maximum are the targets once the fight
+  is over (every family on `d3first`, reachable ones only; none at 8). Rare in the record: 2 of 211 visits of
+  8:0x3f left its bombs (300 runs, `r36base-300-d8`), none since; packs left on the floor under 8: 2 of 1651 visits
+  of 3:0x5b, none elsewhere.
+- **Evidence:** docs/experiments/round37.md "The owner's bomb rules" (today's 51 networks, `r37fix-1k` against
+  `r36base-1k`, paired by seed, arrivals): d3 23.2% → 21.7% (−1.5 ± 1.2), d4 18.5% → 21.1% (+2.6 ± 1.7), d2 99.8%
+  → 98.4% (−1.4 ± 0.4, 0x5e crossed), d7 13.1% → 12.6% (−0.5 ± 0.4), post-d1, d5, d6, d8, d9 unchanged within
+  noise; weapon bombs in crossings 1.94 → 0 a run from the start; cheated wall bombs 0.66 → 0.30 a run (3:0x5b
+  0.51 → 0.20). 7:0x1b both ways (d7): the floor 12.6%, the crossing override 12.7% (runs bring 0.21 bombs, so
+  nearly every visit fights either way); the floor lands, the override commented beside it.
+

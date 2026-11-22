@@ -1300,9 +1300,11 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         let reserve = self.objectives.as_ref().map_or(0, GameCompletion::bomb_reserve);
         let rupees = self.objectives.as_ref().map_or(0, GameCompletion::rupee_reserve);
         let config = &self.current.as_ref().expect("acting specialist").config;
-        // Round 28: a route step may name its own bomb mode (8:0x6e, crossed by the mask of `required`).
+        // Round 28: a route step may name its own bomb mode (8:0x6e, crossed by the mask of `required`); round 37: the
+        // route's bomb rules may take BOMB as a weapon off (the mode capped at `required`).
         let step_bombs = self.objectives.as_ref().and_then(|gc| gc.step_bombs(self.session.state()));
-        let items = config.items.on_step(step_bombs);
+        let weapon = self.objectives.as_ref().is_none_or(|gc| !gc.weapon_bombs_off(self.session.state()));
+        let items = config.items.on_step(step_bombs, weapon);
         let mut kinds = items.disabled_kinds(self.session.game_map(), self.session.state(), reserve, rupees);
         // Round 29: a route step may put the sword away (`sword: false`, 9:0x06's old man).
         if self.objectives.as_ref().is_some_and(|gc| !gc.step_sword(self.session.state())) {
