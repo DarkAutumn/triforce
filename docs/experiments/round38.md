@@ -201,7 +201,7 @@ family's 2,000-step cap.
 
 | arm | team: 0:0x77 aimless (mean / med / p90) | reversals | team: 8:0x4c aimless | success (stuck) | one: 0:0x77 | one: 8:0x4c | success |
 |---|---|---:|---|---|---|---|---|
-| `temperature:0.5+relax:16` (today's) | (the route from the start: to come) | | **5,239 / 3,723 / 14,483** | 93.0% (21) | | | |
+| `temperature:0.5+relax:16` (today's) | **668 / 493 / 1,454** (the route from the start) | 40.2 | **5,239 / 3,723 / 14,483** | 93.0% (21) | | | |
 | `temperature:0.25+relax:16` | 710 / 515 / 1,516 | 42.5 | 5,475 / 3,857 / 14,098 | 91.7% | 664 / 503 / 1,345 | 5,918 / 4,443 / 15,079 | 92.3% |
 | `temperature:0.1+relax:16` | 707 / 521 / 1,485 | 42.3 | 5,710 / 4,186 / 15,291 | 89.7% | 683 / 503 / 1,345 | 6,365 / 5,093 / 15,632 | 89.7% |
 | `escape:16` | 708 / 512 / 1,474 | 42.1 | 6,149 / 4,163 / 15,705 | 88.3% | 659 / 503 / 1,305 | 5,987 / 4,624 / 14,820 | 92.7% |
@@ -214,19 +214,28 @@ far: a median of 3,723 aimless frames (a minute) a visit, 5,416 calm frames, 7% 
 walking it; the golden run's 1,282 was a lucky one. The opening succeeds in every arm (the run reaches 0:0x76);
 no arm lost health in 0x4c.
 
-**Act mode alone.** A lower temperature and `escape:16` change nothing in the opening (707-710 against each other;
-the loop's moves are already near 1, so sharpening them keeps the loop and the stall rule's switch at 16 decides
-when it breaks) and make 0x4c worse (5,475-6,149 against today's 5,239, success down 1.3-4.7 points). **`relax:4`**
-(plain sampling after 4 decisions without progress instead of 16) **trims the opening by about 20%** (574 against
-710 for the team, 537 against 664-683 for the one network; reversals 34 against 42; the visit 150 frames shorter),
-and **does nothing for 0x4c** (team 5,647 against 5,239, success 89.3% against 93.0%, 31 stuck runs against 21;
-the one network 5,101 against its other arms' 5,918-6,365). Its cost elsewhere is not measured here: it switches
-every room to plain sampling after 4 stalled decisions, fights included, where today's `relax:16` keeps the
-temperature's sharper play for 16; a fight that stalls 4 decisions (waiting out a Darknut, a boss's pattern) would
-draw from the raw policy four times as soon. Making it the default needs the route's record under it (300 runs from
-the start); a calm-only form (sooner plain sampling on calm decisions only) would leave fights alone, but the 20%
-is the ceiling it could reach in the opening and 0x4c shows no gain to keep. So: nothing in act mode tones 0x4c
-down, and the opening only by a fifth; both need training.
+**Act mode alone.** A lower temperature and `escape:16` make the opening a little worse (707-710 against today's
+668: the loop's moves are already near 1, so sharpening them keeps the loop and the stall rule's switch at 16 decides
+when it breaks) and 0x4c worse (5,475-6,149 against today's 5,239, success down 1.3-4.7 points). **`relax:4`**
+(plain sampling after 4 decisions without progress instead of 16) **trims the opening by about 14%** (574 against
+today's 668 for the team, median 396 against 493; 537 against 664-683 for the one network's other arms; reversals 34
+against 40; the visit about 100 frames shorter), and **does nothing for 0x4c** (team 5,647 against 5,239, success
+89.3% against 93.0%, 31 stuck runs against 21; the one network 5,101 against its other arms' 5,918-6,365). Its
+cost elsewhere is not measured here: it switches every room to plain sampling after 4 stalled decisions, fights
+included, where today's `relax:16` keeps the temperature's sharper play for 16; a fight that stalls 4 decisions
+(waiting out a Darknut, a boss's pattern) would draw from the raw policy four times as soon. Making it the default
+needs the route's record under it; a calm-only form (sooner plain sampling on calm decisions only) would leave
+fights alone, but 14% is the ceiling it could reach in the opening and 0x4c shows no gain to keep. So: nothing in
+act mode tones 0x4c down, and the opening only by a seventh; both need training.
+
+**The route from the start and Dungeon 8, the team** (2.0.0.5 code, like every number in this section; 300 runs
+each). From the game start (`--act model`, no stop; no run reached the end of the game): 841 aimless frames a run
+(median 647, p90 1,686), 5.9% of the runs' frames, 185 calm decisions a run of which 12.5% moved away, 45.6
+reversals a run; the opening holds 668 of the 841. The `d8` segment (from `8_7es_0` to 0:0x6d, 40.0% success):
+1,473 aimless frames a run, 20% of its frames; **8:0x4c at step 228 holds 440,306 of the segment's 441,817** (154
+visits, 2,859 a visit, median 809, p90 9,723). Over the 600 runs of `d3` and `d8`, the rooms that waste most:
+8:0x4c (228) 90%, 3:0x59 (17) 8.7%, 3:0x5b (19) 0.7%, then 8:0x2c (230) and 3:0x3d (23) at 8 frames a visit; 28
+room-steps hold all of it.
 
 **Dungeon 3, the team** (the identity check's entry, 300 runs from `3_7cs_0` to 0:0x74, 21.3% success): 156
 aimless frames a run (median 24, p90 495), 1.9% of its frames; 3:0x59 at route step 17 holds 91% of them (203 a

@@ -175,8 +175,8 @@ been retrained on the corrected order):
   shouldn't count). Some amount of missed steps is totally fine"). **The score is built and measured** (round38.md
   "Aimless walking": `aimless_frames` and its companions in every chain room record, visit, rollout, bench and
   room-stats; `penalty-aimless`, default off). Both rooms are confident loops that only sampling breaks (golden
-  replay: 457 and 1,282 aimless frames; today's medians 515 and 3,723 a visit, 0x4c 7% stuck). Act mode alone:
-  `relax:4` trims the opening about 20%, nothing helps 0x4c. Next: the first training experiment written there
+  replay: 457 and 1,282 aimless frames; today's medians 493 and 3,723 a visit, 0x4c 7% stuck). Act mode alone:
+  `relax:4` trims the opening about 14%, nothing helps 0x4c. Next: the first training experiment written there
   (`ow-start` and `pols-voice` fine-tuned with `penalty-aimless` 0.002 and 0.005 a frame against 0); below combat
   (the owner).
 - [ ] **Later, the owner's stated goal:** a win without a cheated bomb. Drops only; the walls' shortfall is counted
