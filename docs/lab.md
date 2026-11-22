@@ -180,6 +180,12 @@ number a key; `--rehearse-keys`, by default every key of the cache not in `--fam
 `--rehearse-coeff` (1.0) × KL(teacher ‖ student) on as many of its rows as the minibatch has (`lab/rehearse.py`;
 logged `losses/rehearse_kl`). The rehearsal does not fade.
 
+`--state-route ROUTE` puts every family on one route's states alone (`lab.collect.route_only`: `state_routes:
+[ROUTE]` for its start-state globs and harvested starts, the globs the route has no state for dropped, the curriculum
+on the tracks explored from the route's states, linked under `target/route-tracks/`, or off when there are none).
+The one network of the corrected route is trained with `--state-route d3first` (the owner, Nov 22: never on
+`d2first`'s states); `r36_merge_record.py --state-route d3first` records its teachers' rows the same way.
+
 ## Memory: training a recurrent network
 
 A `LabNet` with memory returns a state from `initial_state(batch)` (`[batch, ...]`) and takes and returns it in

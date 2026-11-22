@@ -138,3 +138,16 @@ def test_weighted_joint_kl():
     weight = torch.tensor([1.0, 0.0, 2.0, 0.5])
     assert torch.allclose(joint_kl(old, new, weight), (rows * weight).mean())
     assert torch.allclose(joint_kl(old, new), rows.mean())
+
+
+def test_route_only_keeps_the_routes_states_and_tracks(tmp_path):
+    """``route_only``: ``state_routes`` set, the globs the route has no state for dropped, the curriculum on the
+    tracks explored from the route's states (none: off)."""
+    from triforce.lab.collect import route_only
+    config = route_only(load_specialist('ow-lynel'), 'd3first', states_dir=ROOT / 'triforce' / 'states',
+                        tracks_dir=tmp_path)
+    assert list(config.state_routes) == ['d3first'] and '0_0a*_[0-9]' not in config.start_states
+    if config.curriculum.enabled:
+        tracks = list((tmp_path / 'd3first' / 'ow-lynel').iterdir())
+        assert tracks and all(json.loads((t / 'trajectory.json').read_text())['start_state'].startswith('d3first_')
+                              for t in tracks)

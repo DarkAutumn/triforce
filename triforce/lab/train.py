@@ -82,6 +82,9 @@ def parse_args(argv=None):
                         help="also keep a numbered checkpoint every N iterations (select-checkpoint reads them)")
     parser.add_argument('--checkpoint-keep', type=int, default=0, help="numbered checkpoints kept (0: all)")
     parser.add_argument('--no-curriculum', action='store_true')
+    parser.add_argument('--state-route', default=None, metavar='ROUTE',
+                        help="every family on this route's states alone (lab.collect.route_only: state_routes, the "
+                             "start-state globs the route has, the curriculum tracks explored from its states)")
     parser.add_argument('--seed', type=int, default=None)
     parser.add_argument('--aux', nargs='*', default=[], metavar='OUTPUT=TARGET:COEFF',
                         help="a loss on the network's auxiliary output OUTPUT against TARGET (hit, damaged, "
@@ -261,7 +264,7 @@ def main(argv=None) -> Path:
     run_id = args.run_id or registry.new_run_id()
     out_dir = registry.run_dir(args.name, run_id, root)
     shares = {k: float(w) for k, _, w in (s.partition('=') for s in args.shares)}
-    families = parse_families(args.families, args.parallel, shares)
+    families = parse_families(args.families, args.parallel, shares, args.state_route)
     keys = [f.key for f in families]
     steps_per_env = max(1, args.steps_per_update // args.parallel)
     total = args.iterations * steps_per_env * args.parallel
