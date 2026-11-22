@@ -268,14 +268,15 @@ def format_compare(result: dict) -> str:
 
 
 def _harvest_runs(chains: list[str]) -> dict:
-    """(seed, room index) -> that room's record, from the JSON-lines outputs of the harvesting chains."""
+    """(seed, room index, level, room) -> that room's record, from the JSON-lines outputs of the harvesting chains
+    (several segments may share seeds: the room tells their visits apart)."""
     out = {}
     for path in chains:
         with open(path, encoding='utf-8') as lines:
             for line in lines:
                 run = json.loads(line)
                 for room in run['rooms']:
-                    out[(int(run['seed']), int(room['index']))] = room
+                    out[(int(run['seed']), int(room['index']), int(room['level']), int(room['room'], 16))] = room
     return out
 
 
@@ -301,7 +302,11 @@ def make_rooms_manifest(harvest: Path, chains: list[str], states_per_room: int, 
             if match:
                 groups[match.group(1)].append(path)
         for stem, paths in sorted(groups.items()):
-            rooms = [visits.get(tuple(int(x) for x in re.findall(r'_h(\d+)_(\d+)$', p.stem)[0])) for p in paths]
+            parsed = _native.state_name(paths[0].stem)
+            if parsed is None:
+                continue
+            rooms = [visits.get((*(int(x) for x in re.findall(r'_h(\d+)_(\d+)$', p.stem)[0]), parsed[0], parsed[1]))
+                     for p in paths]
             rooms = [r for r in rooms if r is not None]
             if not rooms:
                 continue
@@ -309,8 +314,7 @@ def make_rooms_manifest(harvest: Path, chains: list[str], states_per_room: int, 
             deaths = sum(r['outcome'] == 'death' for r in rooms)
             if lost < min_hearts and not deaths:
                 continue
-            parsed = _native.state_name(paths[0].stem)
-            step = steps.get(tuple(parsed)) if parsed is not None else None
+            step = steps.get(tuple(parsed))
             key = _native.step_policy(route, step, family) if step is not None else family
             chosen = sorted(paths, key=lambda p: _order(p.stem))[:states_per_room]
             target = states_dir / ROOMS / family
