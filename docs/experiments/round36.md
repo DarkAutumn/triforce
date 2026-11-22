@@ -126,7 +126,7 @@ paired (`r36_merge_report.py`; reports in `docs/experiments/data/r36-merge/stude
 | 768x3, two entity layers | 4.01M | 0.116 | 0.869 | 99.0% (-1.0 ± 0.3) | 92.9% |
 | 1024x3 | 6.51M | 0.113 | 0.873 | 98.6% (-1.4 ± 0.3) | 90.9% |
 | 1x on 1/4 of the data | 866k | 0.230 | 0.808 | queued | |
-| 1x on 1/2 of the data | 866k | 0.179 | 0.827 | queued | |
+| 1x on 1/2 of the data | 866k | 0.179 | 0.827 | 97.8% (-2.1 ± 0.3) | 87.2% |
 
 Data matters more than size: halving the data costs as much KL (+0.019) as shrinking the towers, and doubling
 it (1/2 -> all) gains more than 7.5x the parameters. The room embedding does nothing to held-out agreement
