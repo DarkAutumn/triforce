@@ -9,7 +9,9 @@ the teachers acting (``--actor teacher``) or a given student (``--actor student 
 ``family`` (index into ``families`` in ``DIR/dataset.json``), ``health_lost`` and ``hits`` (the action taken's).
 With ``--try-others K:P`` (as lab training's: the look-ahead tries K other candidates on a share P of the decisions,
 the play unchanged) also ``tried_actions`` ``[n, K, 3]`` and ``tried_lost`` ``[n, K]`` (1 lost health, 0 not, -1
-untried): hit labels on the actor's own states, recorded with no update."""
+untried): hit labels on the actor's own states, recorded with no update. ``--state-route ROUTE`` keeps every family
+to that route's states (as lab training's); ``--teacher KEY=CKPT`` has another network play a family's rooms (with
+``--actor teacher``: one actor a family, e.g. each family's own combination)."""
 
 import argparse
 import json
@@ -37,6 +39,10 @@ def parse_args(argv=None):
     parser.add_argument('--models-dir', default=None)
     parser.add_argument('--states-dir', default=None)
     parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--state-route', default=None, metavar='ROUTE',
+                        help="every family on this route's states alone (lab.collect.route_only), as lab training's")
+    parser.add_argument('--teacher', nargs='*', default=[], metavar='KEY=CKPT',
+                        help="a family's teacher (the actor with --actor teacher) other than the one playing it today")
     parser.add_argument('--out', required=True)
     parser.add_argument('--logs-dir', default=None, help="the log folder's root (default logs/, $TRIFORCE_LOGS_DIR)")
     parser.add_argument('--try-others', default=None, metavar='K:P',
@@ -51,14 +57,14 @@ def main(argv=None) -> Path:
     if args.actor == 'student' and not args.student:
         raise SystemExit("--actor student needs --student CKPT")
     out = Path(args.out)
-    families = parse_families(args.families, args.parallel)
+    families = parse_families(args.families, args.parallel, state_route=args.state_route)
     keys = [f.key for f in families]
     root = registry.models_root(args.models_dir)
     total = args.rollouts * args.steps_per_env * args.parallel
     with progress_job('lab-record', 'eval', total, unit='decisions', root=args.logs_dir,
                       work=work(train_steps=total)) as progress:
         out.mkdir(parents=True, exist_ok=True)
-        teachers = Teachers(keys, args.device, root)
+        teachers = Teachers(keys, args.device, root, checkpoints=dict(t.split('=', 1) for t in args.teacher))
         student = registry.load_model(args.student)[0] if args.student else teachers.networks[keys[0]]
         from .train import parse_try_others  # pylint: disable=import-outside-toplevel
         collector = MultiCollector(families, out / 'run', args.steps_per_env, 0.99, 0.95, seed=args.seed,
@@ -66,7 +72,7 @@ def main(argv=None) -> Path:
                                    tried=parse_try_others(args.try_others))
         (out / 'dataset.json').write_text(json.dumps({
             'families': keys, 'actor': args.actor, 'student': args.student, 'teachers': teachers.paths,
-            'try_others': args.try_others,
+            'try_others': args.try_others, 'state_route': args.state_route,
             'envs': collector.shares, 'steps_per_env': args.steps_per_env, 'seed': args.seed}, indent=2),
             encoding='utf-8')
         try:
