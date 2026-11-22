@@ -58,7 +58,9 @@ room and start-state aggregates report mean longest/tail steps and frames plus t
 episode's visits in order (``level``, ``room``, ``in_cave``, ``steps``, ``frames``, ``health_in``/``health_out``,
 ``max_health``, ``health_lost``/``health_gained`` summed over the visit, ``hits`` = steps that lost health,
 ``hits_dealt``, ``bubble_touches`` = steps a Bubble's touch landed in (it blocks the sword: no health lost, no hit;
-round 38), ``sword_blocked_frames`` (the frames of the steps begun with the sword blocked), ``drops``/``pickups``
+round 38), ``sword_blocked_frames`` (the frames of the steps begun with the sword blocked), the aimless score's
+``_native.AIMLESS_FIELDS`` (``aimless_frames``, ``calm_frames``, ``calm_needed_frames``, ``calm_stretches``,
+``calm_decisions``, ``calm_away``, ``calm_reversals``: ``zelda::aimless``, round 38), ``drops``/``pickups``
 per item kind (bombs, rupee, blue_rupee, heart, fairy, clock; zeros
 omitted), ``keys_gained`` (natural keys: a cheated key is no gain), ``bombs_used`` (bombs placed),
 ``bomb_<stat>`` (``_native.BOMB_STATS``), ``cheated_bombs``/``cheated_keys``/``cheated_rupees`` (cheated items used),
@@ -68,7 +70,7 @@ omitted), ``keys_gained`` (natural keys: a cheated key is no gain), ``bombs_used
 room entered (keyed like ``by_room``, which only knows start rooms): ``visits``, ``episodes``, ``deaths``,
 ``death_rate``, ``exits`` and per-visit means (``steps_per_visit``, ``health_lost/gained/change_per_visit``,
 ``hits_per_visit``, ``no_hit_rate``, ``hits_dealt_per_visit``, ``bubble_touches_per_visit``,
-``sword_blocked_frames_per_visit``, ``keys_per_visit``, ``bombs_used_per_visit``,
+``sword_blocked_frames_per_visit``, ``<aimless field>_per_visit``, ``keys_per_visit``, ``bombs_used_per_visit``,
 ``bomb_<stat>_per_visit``,
 ``cheated_bombs_per_visit``, ``cheated_keys_per_visit``, ``cheated_rupees_per_visit``, ``boss_stuns_per_visit``,
 ``boss_eats_per_visit``, ``clip_<stat>_per_visit``, ``drops_per_visit``,
@@ -247,6 +249,7 @@ def _room_visit_stats(visits: list[dict]) -> dict:
         'hits_dealt_per_visit': mean(lambda v: v['hits_dealt']),
         'bubble_touches_per_visit': mean(lambda v: v.get('bubble_touches', 0)),
         'sword_blocked_frames_per_visit': mean(lambda v: v.get('sword_blocked_frames', 0)),
+        **{f'{name}_per_visit': mean(lambda v, name=name: v.get(name, 0)) for name in _native.AIMLESS_FIELDS},
         'keys_per_visit': mean(lambda v: v['keys_gained']),
         'bombs_used_per_visit': mean(lambda v: v.get('bombs_used', 0)),
         **{f'bomb_{stat}_per_visit': mean(lambda v, stat=stat: v.get(f'bomb_{stat}', 0))

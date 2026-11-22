@@ -13,6 +13,7 @@
 //! The exit is the direction Link left in (`n`/`s`/`e`/`w`, `cave` for stairs, caves and dungeon entrances), or how
 //! the episode ended in the room ([`VisitEnd`]).
 
+use crate::aimless::AimlessSummary;
 use crate::bombs::BombStats;
 use crate::decisions::{DecisionNote, DecisionStats};
 use crate::clips::ClipStats;
@@ -75,6 +76,8 @@ pub struct RoomVisit {
     /// began with the sword blocked (the decisions taken without it).
     pub bubble_touches: u32,
     pub sword_blocked_frames: u64,
+    /// The visit's calm stretches ([`crate::aimless`]; round 38): the env's tracker, reset on each room change.
+    pub aimless: AimlessSummary,
     /// Items dropped, per [`ITEM_KINDS`] index.
     pub drops: [u32; 6],
     /// Items picked up, per [`ITEM_KINDS`] index.
@@ -133,6 +136,8 @@ pub struct VisitStep<'a> {
     /// A Bubble's touch landed in the step ([`Change::bubble_touched`]), and the step began with the sword blocked.
     pub bubble_touched: bool,
     pub began_blocked: bool,
+    /// The env's aimless tracker for the visit after the step (set by the env; empty from [`VisitStep::of`]).
+    pub aimless: AimlessSummary,
     pub items_gained: &'a [i16],
     /// Bombs placed this step, its [`BombStats`] and cheated items used (set by the env; 0 from
     /// [`VisitStep::of`]).
@@ -162,6 +167,7 @@ impl VisitStep<'_> {
             hits_dealt: change.observed.hits() as u32,
             bubble_touched: change.bubble_touched(),
             began_blocked: change.previous.is_sword_blocked(),
+            aimless: AimlessSummary::default(),
             items_gained: &change.observed.items_gained,
             bombs_used: 0,
             bombs: BombStats::default(),
@@ -239,6 +245,7 @@ impl VisitTracker {
         if step.began_blocked {
             visit.sword_blocked_frames += step.frames as u64;
         }
+        visit.aimless = step.aimless;
         visit.bombs_used += step.bombs_used;
         visit.bombs += step.bombs;
         visit.cheated += step.cheated;
@@ -296,6 +303,7 @@ impl VisitTracker {
             hits_dealt: 0,
             bubble_touches: 0,
             sword_blocked_frames: 0,
+            aimless: AimlessSummary::default(),
             drops,
             pickups: [0; 6],
             keys_gained: 0,
@@ -362,6 +370,7 @@ mod tests {
             hits_dealt,
             bubble_touched: false,
             began_blocked: false,
+            aimless: AimlessSummary::default(),
             items_gained,
             bombs_used: 0,
             bombs: BombStats::default(),

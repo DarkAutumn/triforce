@@ -124,7 +124,7 @@ impl PyEnv {
     #[new]
     #[pyo3(signature = (config, start_state=None, strict_actions=true, curriculum=None,
                         seed=0, states_dir=None, render=false, explicit_starts=false,
-                        staged_kills=false, forced_drops=false))]
+                        staged_kills=false, forced_drops=false, track_visits=false))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         py: Python<'_>,
@@ -138,6 +138,7 @@ impl PyEnv {
         explicit_starts: bool,
         staged_kills: bool,
         forced_drops: bool,
+        track_visits: bool,
     ) -> PyResult<Self> {
         let config = extract_config(py, config)?;
         let rom = context::rom(py)?;
@@ -149,7 +150,7 @@ impl PyEnv {
             lenient_actions: !strict_actions,
             curriculum,
             seed,
-            track_visits: false,
+            track_visits,
             skip_look_ahead: false,
             shaping: None,
             start_weights: None,
@@ -251,6 +252,26 @@ impl PyEnv {
     #[getter]
     fn done(&self) -> bool {
         self.inner.lock().env.is_done()
+    }
+
+    /// The aimless score of the room visit so far (`zelda::aimless`, round 38): `_native.AIMLESS_FIELDS` and `calm`
+    /// (a calm stretch is open: the next decision is calm).
+    #[getter]
+    fn aimless<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let inner = self.inner.lock();
+        let tracker = inner.env.aimless();
+        let d = PyDict::new(py);
+        for (name, value) in tracker.summary().fields() {
+            d.set_item(name, value)?;
+        }
+        d.set_item("calm", tracker.calm())?;
+        Ok(d)
+    }
+
+    /// The room visits finished so far (`track_visits=True`; the evaluation's `records[i]['visits']` entries), taken.
+    fn take_visits<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let visits = self.inner.lock().env.take_visits();
+        json_to_py(py, &serde_json::Value::Array(visits.iter().map(pool::zelda::visit_json).collect()))
     }
 
     /// (route, step) the episode's objectives follow.

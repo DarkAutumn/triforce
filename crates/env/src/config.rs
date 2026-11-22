@@ -265,6 +265,12 @@ pub struct RewardConfig {
     /// (positive magnitude; 0 = off).
     #[serde(default = "sword_blocked_penalty")]
     pub sword_blocked_penalty: f64,
+    /// `penalty-aimless` per frame a calm decision adds to its stretch's waste (`zelda::aimless`, round 38: lasted
+    /// beyond the walk the ground it gained needed, with nothing in the room that can hurt Link and a goal that does
+    /// not go away), scaled by `shaping_scale` (positive magnitude; 0 = off, the default; never charged while a
+    /// monster or shot is in the room).
+    #[serde(default)]
+    pub aimless_penalty: f64,
     /// Multiplies every non-terminal reward and penalty (outcome fine-tuning, in [0, 1]); training's
     /// `--shaping-anneal` lowers it between rollouts.
     #[serde(default = "one")]
@@ -295,6 +301,7 @@ impl Default for RewardConfig {
             heal_targets: false,
             boss_ate_bomb_penalty: 0.5,
             sword_blocked_penalty: SWORD_BLOCKED_PENALTY,
+            aimless_penalty: 0.0,
             shaping_scale: 1.0,
             frame_penalty: 0.0,
             exit_health_weight: 0.5,
@@ -901,6 +908,7 @@ impl SpecialistConfig {
             ("reward.block_reward", self.reward.block_reward),
             ("reward.quiet_enemy_penalty", self.reward.quiet_enemy_penalty),
             ("reward.boss_ate_bomb_penalty", self.reward.boss_ate_bomb_penalty),
+            ("reward.aimless_penalty", self.reward.aimless_penalty),
             ("reward.sword_blocked_penalty", self.reward.sword_blocked_penalty),
             ("reward.frame_penalty", self.reward.frame_penalty),
         ] {
@@ -1575,6 +1583,8 @@ mod tests {
             "reward: {block_reward: .nan}",
             "reward: {quiet_enemy_penalty: .nan}",
             "reward: {boss_ate_bomb_penalty: .nan}",
+            "reward: {aimless_penalty: -0.001}",
+            "reward: {aimless_penalty: .nan}",
             "reward: {sword_blocked_penalty: -0.25}",
             "reward: {sword_blocked_penalty: .nan}",
             "reward: {frame_penalty: .inf}",
@@ -1599,6 +1609,7 @@ mod tests {
             "max_steps: 4294967295",
             "endings: {max-steps: hard-failure, no-damage: hard-failure, no-room-progress: soft-failure}",
             "reward: {sword_blocked_penalty: 0}",
+            "reward: {aimless_penalty: 0.001}",
         ] {
             assert!(minimal(ok).is_ok(), "{ok} should load: {:?}", minimal(ok).err());
         }

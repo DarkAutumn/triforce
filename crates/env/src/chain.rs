@@ -35,6 +35,7 @@ use zelda::cheats::{CheatItem, CheatLedger, Grants, ItemCounts};
 use zelda::game::GameView;
 use zelda::game_map::{GameMap, Way};
 use zelda::hearts::{HeartTracker, HeartView};
+use zelda::aimless::{AimlessState, AimlessStep, AimlessSummary, AimlessTracker};
 use zelda::linger::{LingerState, LingerStep, LingerSummary, LingerTracker, linger_wavefront};
 use zelda::objectives::{GameCompletion, Objective, ObjectiveKind, exit_is_correct, start_route};
 use zelda::power_on;
@@ -405,6 +406,9 @@ pub struct RoomRecord {
     /// the frames of the steps begun with the sword blocked (as an evaluation's visit).
     pub bubble_touches: u32,
     pub sword_blocked_frames: u64,
+    /// The visit's calm stretches (`zelda::aimless`, round 38: JSON `aimless_frames`, `calm_frames`,
+    /// `calm_needed_frames`, `calm_stretches`, `calm_decisions`, `calm_away`, `calm_reversals`).
+    pub aimless: AimlessSummary,
     /// The route step Link played on entering the room (`GameCompletion::step`; None off the route; round 22).
     pub step: Option<usize>,
     /// The run-time clips switch when the visit began (round 22; [`ChainEnv::set_clips_allowed`]), and every flip
@@ -474,6 +478,7 @@ impl RoomRecord {
             hits_dealt: 0,
             bubble_touches: 0,
             sword_blocked_frames: 0,
+            aimless: AimlessSummary::default(),
             step: None,
             clips_allowed,
             clips_flips: Vec::new(),
@@ -515,6 +520,9 @@ impl RoomRecord {
         let o = m.as_object_mut().expect("object");
         o.insert("bubble_touches".into(), json!(self.bubble_touches));
         o.insert("sword_blocked_frames".into(), json!(self.sword_blocked_frames));
+        for (name, value) in self.aimless.fields() {
+            o.insert(name.into(), json!(value));
+        }
         o.insert("route_bombs_in".into(), json!(self.route_bombs_in));
         if let Some(policy) = &self.policy {
             o.insert("policy".into(), json!(policy));
@@ -656,6 +664,9 @@ pub struct ChainEnv<N: Nes, St: StateStore<N::State>> {
     hearts: HeartTracker,
     supply: SupplyTracker,
     linger: LingerTracker,
+    /// The acting room's calm stretches (`zelda::aimless`) and the state the next decision is taken in.
+    aimless: AimlessTracker,
+    aimless_at: Option<AimlessState>,
     /// The run's cheated bombs, keys and rupees (`zelda::cheats`).
     cheats: CheatLedger,
     /// The counts the last action's room was left with, without the grants taken back (`CheatStep::left_with`):
@@ -713,6 +724,8 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             hearts: HeartTracker::default(),
             supply: SupplyTracker::default(),
             linger: LingerTracker::default(),
+            aimless: AimlessTracker::default(),
+            aimless_at: None,
             cheats: CheatLedger::default(),
             left_with: ItemCounts::default(),
             builder: ObservationBuilder::new(true, false),
@@ -1137,6 +1150,13 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             self.hearts.taken - taken,
             || linger_wavefront(&state, &objective, None),
         );
+        let at = self.aimless_state(&state, &objective);
+        if let Some(prev_at) = self.aimless_at.replace(at) {
+            let at = self.aimless_at.as_ref().expect("just set");
+            self.aimless.update(&prev_at, at, &AimlessStep::of(&change), false, || {
+                linger_wavefront(&state, &objective, None)
+            });
+        }
         self.scored = match &mut self.track {
             Some(track) => {
                 let gc = self.objectives.as_ref().expect("run started");
@@ -1155,6 +1175,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         let result = self.result.as_mut().unwrap();
         let record = result.rooms.last_mut().expect("room record");
         record.linger = Some(summary);
+        record.aimless = self.aimless.summary();
         record.blocks += change.blocks() as u32;
         record.bombs_used += cheats.used.bombs;
         record.bombs.update(&change);
@@ -1265,6 +1286,8 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         self.hearts.finish(Some(&HeartView::of(state)));
         let h = self.hearts.summary();
         let supply = self.supply.finish(state.game_over());
+        self.aimless.close();
+        let aimless = self.aimless.summary();
         let record = self
             .result
             .as_mut()
@@ -1289,6 +1312,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             record.supply = stats;
             record.drops = drops;
         }
+        record.aimless = aimless;
     }
 
     /// The session's disabled kinds for the acting specialist's `items` in Link's state, with the route's bomb
@@ -1353,6 +1377,13 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             .and_then(|room| room.specialist.clone())
             .and_then(|name| self.config_for(&name).ok())
             .is_some_and(|config| config.clips.enabled)
+    }
+
+    /// The aimless score's view of `state` (`zelda::aimless`): the acting family's shaping says which dropped items
+    /// pull Link.
+    fn aimless_state(&self, state: &GameView, objective: &Objective) -> AimlessState {
+        let reward = &self.current.as_ref().expect("acting specialist").config.reward;
+        AimlessState::of(state, objective, objective::pulled(reward, objective, state))
     }
 
     fn config_for(&self, name: &str) -> Result<Arc<SpecialistConfig>, String> {
@@ -1561,6 +1592,9 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                 });
             }
             self.update_disabled_kinds();
+            let at = self.aimless_state(&state, &objective);
+            self.aimless.reset(&at, || linger_wavefront(&state, &objective, None));
+            self.aimless_at = Some(at);
             if fresh {
                 let wavefront = self.target_wavefront(&objective);
                 obs = self.builder.reset(

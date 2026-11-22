@@ -34,10 +34,14 @@ runs: survival out of it), per visit ``hearts_lost`` (``max(0, health_in - healt
 ``hearts_change``, ``hearts_healed``, ``hits`` (actions that lost health: the records' ``hits``, round 22; None in
 files from before it), ``steps``, ``frames``, ``clips`` (``clip_done``; None in files from before clips), ``bombs``
 (placed) and ``cheated_bombs``, ``cheated_keys``, ``cheated_rupees`` (the cheat ledger's items the visit was handed:
-each per visit and, ``cheated``, summed), then ``wrong_exits`` (visits that left by a wrong exit), ``outcomes`` (visits by
+each per visit and, ``cheated``, summed), the aimless score (round 38, ``zelda::aimless``: each of
+``_native.AIMLESS_FIELDS`` per visit, ``aimless_frames_per_visit`` ... ``calm_reversals_per_visit``, and
+``aimless_frames`` summed over the visits; None in files from before it), then ``wrong_exits`` (visits that left by a
+wrong exit), ``outcomes`` (visits by
 outcome), ``specialists`` (visits by specialist), ``risk`` (the visits' decision statistics, round 23:
 ``variety.risk`` per visit) and ``variety`` (the visits' action sequences) and ``steps`` (the same fields per route
-step through the room: ``"44"``, or ``"off"`` for visits off the route).  A chain scope also has ``risk`` per run.
+step through the room: ``"44"``, or ``"off"`` for visits off the route).  A chain scope also has ``risk`` per run
+and ``aimless_frames_per_run``.
 A visit's route step is the record's ``step`` (round 22: the step
 Link played on entering the room); for older records it is inferred (``assign_steps``: the route's steps matched
 along the run).  The route is this code's (``--route``, default the chains'); visits the route doesn't explain (a
@@ -79,7 +83,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from . import __version__, registry
+from . import __version__, _native, registry
 from .events import write_json_atomic
 from .paths import ROOT
 from .variety import VISIT_RISK_KEYS, decisions_of, risk, variety
@@ -291,6 +295,7 @@ class _Visits:
         self.decisions: list[Optional[dict]] = []
         self.frame_list: list[int] = []
         self.hit_visits = 0                 # visits whose record counts hits (round 22)
+        self.aimless_visits = 0             # visits whose record has the aimless score (round 38)
 
     def add(self, run: int, record: dict):
         self.visits += 1
@@ -315,6 +320,10 @@ class _Visits:
         if record.get('hits') is not None:
             self.hit_visits += 1
             self.sums['hits'] += record['hits']
+        if 'aimless_frames' in record:
+            self.aimless_visits += 1
+            for name in _native.AIMLESS_FIELDS:
+                self.sums[name] += record[name]
 
     def entry(self, runs: int) -> dict:
         entered, ended = len(self.entered), sum(self.endings.values())
@@ -338,6 +347,9 @@ class _Visits:
             'steps_per_visit': per_visit('steps'),
             'frames_per_visit': per_visit('frames'),
             'clips_per_visit': per_visit('clips') if self.clips else None,
+            **{f'{name}_per_visit': (_round(self.sums[name] / self.aimless_visits) if self.aimless_visits else None)
+               for name in _native.AIMLESS_FIELDS},
+            'aimless_frames': int(self.sums['aimless_frames']) if self.aimless_visits else None,
             'bombs_per_visit': per_visit('bombs'),
             **{f'{item}_per_visit': per_visit(item) for item in CHEATED},
             'cheated': {item.removeprefix('cheated_'): int(self.sums[item]) for item in CHEATED},
@@ -392,7 +404,7 @@ def chain_scope(runs: list[dict], plan: list[dict], scope: Scope) -> dict:
     # Keyed by group: None (every visit) or a switch state.
     rooms, steps = defaultdict(_Visits), defaultdict(_Visits)
     played = {switch: set() for switch in SWITCHES}
-    arrived, endings, off_route = Counter(), defaultdict(Counter), Counter()
+    arrived, endings, off_route, aimless = Counter(), defaultdict(Counter), Counter(), Counter()
     stopped, stops = Counter(), Counter()
     per_run = {group: [] for group in (None, *SWITCHES)}     # group -> per run, its visits' decisions
     for index, run in enumerate(runs):
@@ -412,6 +424,7 @@ def chain_scope(runs: list[dict], plan: list[dict], scope: Scope) -> dict:
                 rooms[group, key].add(index, record)
                 steps[group, key, step].add(index, record)
                 off_route[group] += step is None
+                aimless[group] += record.get('aimless_frames') or 0
         short = None if reached else stop_step(run)
         if short is not None:
             stops[short] += 1
@@ -439,6 +452,7 @@ def chain_scope(runs: list[dict], plan: list[dict], scope: Scope) -> dict:
         return {'runs': count, 'arrived': arrived[group], 'arrival_rate': _round(arrived[group] / count) if count
                 else None, 'stopped': stopped[group], 'stop_rate': _round(stopped[group] / count) if count else None,
                 'endings': dict(endings[group]), 'off_route_visits': off_route[group],
+                'aimless_frames_per_run': _round(aimless[group] / count) if count else None,
                 'risk': risk(per_run[group], 'run')}
     stop = stops.most_common(1)[0][0] if stops else None
     stop_room = None if stop is None or not 0 <= stop < len(plan) else room_key(
@@ -793,7 +807,8 @@ def read(path: Path) -> dict:
 
 
 def summary(data: dict, worst: int = 3) -> str:
-    """One line per scope: runs, arrivals, the rooms with the highest death rate."""
+    """One line per scope: runs, arrivals, the rooms with the highest death rate; for a chain scope a second line,
+    the aimless frames a run and the rooms that waste most (aimless frames summed over their visits)."""
     tags = ' + '.join(data.get('tags') or [data['tag']])
     lines = [f"room stats {tags} (format {data['format']}, route {data['route']})"]
     for name, scope in data['scopes'].items():
@@ -815,6 +830,13 @@ def summary(data: dict, worst: int = 3) -> str:
             lines.append(f"  {name:6} {scope['runs']:5} runs ({files}), {reach}"
                          f"{switches}, off-route visits {scope['off_route_visits']}; "
                          f"deaths per run: {deaths or 'none'}")
+            wasters = sorted(((key, entry) for key, entry in scope['rooms'].items() if entry.get('aimless_frames')),
+                             key=lambda item: -item[1]['aimless_frames'])[:worst]
+            if scope.get('aimless_frames_per_run') is not None:
+                wasted = ', '.join(f"{key} {entry['aimless_frames'] / scope['runs']:.0f} a run "
+                                   f"({entry['aimless_frames_per_visit']:.0f} a visit)" for key, entry in wasters)
+                lines.append(f"         aimless frames a run {scope['aimless_frames_per_run']:.0f}; most: "
+                             f"{wasted or 'none'}")
     return '\n'.join(lines)
 
 
