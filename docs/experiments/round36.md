@@ -399,8 +399,10 @@ room set Link down in a wrong room, in batch B or in 120 scripted tries (walks-c
 landing was not built. **Done without any network learning** (`zelda::session::dock_warp_mask`): on the dock,
 SWORD S instead of the step off while a monster stands on the land below; on the water spot, WAIT instead of the
 plays while a shot is in the air. Scripted rule, 60 tries a dock: 0x55 17 → 33 landings, 0x3f 38 → 47 (waiting on
-the dock or at the clip's column was worse: the Octorok reaches him there; dropped). The legs with the networks and
-the change (`r36guard-1k-post-d5`, `-post-d7`, 1000 each) were queued and not yet read. Listed, not built: 0x0b's
+the dock or at the clip's column was worse: the Octorok reaches him there; dropped). **With the networks** (1000
+runs a leg, the same seeds as batch B): the leg with the 0x55 warp rises from **31.7% to 78.9%** (0x55 loses 85 per
+1000 entering instead of 633; 58 still rafted back to the bounce limit), the leg with the 0x3f warp is 22.1%
+against 22.4% (0x3f loses 3 of 225 instead of 1; its losses are ow-lynel's at 0x50 and 0x60). Listed, not built: 0x0b's
 and 0x22's whirlwinds as engine-played macros like the docks (ow-leever 86, ow-lynel 680 lost per 1000); ow-lynel at
 0x50 and 0x60 needs training on the corrected order (explorer tracks made).
 
