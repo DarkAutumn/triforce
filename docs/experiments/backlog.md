@@ -172,10 +172,13 @@ been retrained on the corrected order):
   before going north. While these aren't run killers or anything, they are unaesthetic to watch [...] you could
   create an 'aimless walk' score, where there are no enemies and all link has to do is go to the cave, door,
   heart, triforce, etc (and isn't being actively pushed to an item... walking towards a heart that disappears
-  shouldn't count). Some amount of missed steps is totally fine"). A score first: in a room with no monster that
-  can hurt him and a fixed goal, the frames Link takes beyond the shortest walk to it (the objective's own path),
-  a room visit and a run, in the yardstick and the chain records; then training against it (less important than
-  combat: the owner). The opening screen and 8:0x4c are the two cases to tone down.
+  shouldn't count). Some amount of missed steps is totally fine"). **The score is built and measured** (round38.md
+  "Aimless walking": `aimless_frames` and its companions in every chain room record, visit, rollout, bench and
+  room-stats; `penalty-aimless`, default off). Both rooms are confident loops that only sampling breaks (golden
+  replay: 457 and 1,282 aimless frames; today's medians 515 and 3,723 a visit, 0x4c 7% stuck). Act mode alone:
+  `relax:4` trims the opening about 20%, nothing helps 0x4c. Next: the first training experiment written there
+  (`ow-start` and `pols-voice` fine-tuned with `penalty-aimless` 0.002 and 0.005 a frame against 0); below combat
+  (the owner).
 - [ ] **Later, the owner's stated goal:** a win without a cheated bomb. Drops only; the walls' shortfall is counted
   until the bomb economy closes it (old backlog "A win without a cheated bomb").
 

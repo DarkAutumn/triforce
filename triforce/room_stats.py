@@ -526,7 +526,8 @@ def mean_keys() -> tuple[str, ...]:
     return ('steps_per_visit', 'health_lost_per_visit', 'health_gained_per_visit', 'health_change_per_visit',
             'hits_per_visit', 'no_hit_rate', 'hits_dealt_per_visit', 'keys_per_visit', 'bombs_used_per_visit',
             *(f'cheated_{item}_per_visit' for item in CHEAT_ITEMS), 'boss_stuns_per_visit', 'boss_eats_per_visit',
-            *(f'clip_{stat}_per_visit' for stat in CLIP_STATS), *VISIT_RISK_KEYS)
+            *(f'clip_{stat}_per_visit' for stat in CLIP_STATS), *(f'{name}_per_visit' for name in _native.AIMLESS_FIELDS),
+            *VISIT_RISK_KEYS)
 
 
 def merge_room_stats(entries: list[tuple[str, dict]]) -> dict:
@@ -637,6 +638,10 @@ def eval_entry(merged: dict) -> dict:
         'steps_per_visit': _round(merged.get('steps_per_visit')),
         'frames_per_visit': None,
         'clips_per_visit': _round(merged.get('clip_done_per_visit')),
+        # Round 38: the evaluation's visits carry the aimless score's means (absent in older evaluations: None).
+        **{f'{name}_per_visit': _round(merged.get(f'{name}_per_visit')) for name in _native.AIMLESS_FIELDS},
+        'aimless_frames': (None if merged.get('aimless_frames_per_visit') is None
+                           else round(merged['aimless_frames_per_visit'] * merged['visits'])),
         'bombs_per_visit': _round(merged.get('bombs_used_per_visit')),
         **{f'{item}_per_visit': _round(merged.get(f'{item}_per_visit')) for item in CHEATED},
         'cheated': None,

@@ -254,9 +254,9 @@ def test_one_file_with_mixed_runs_splits_every_room_by_the_switch():
     # Runs that played a visit with each switch: the flipping run 2 in both.
     assert scope['by_clips'] == {
         'on': {'runs': 3, 'arrived': 1, 'arrival_rate': 0.33333, 'stopped': 0, 'stop_rate': 0.0,
-               'endings': {'death': 1}, 'off_route_visits': 0, 'risk': {}},
+               'endings': {'death': 1}, 'off_route_visits': 0, 'aimless_frames_per_run': 0.0, 'risk': {}},
         'off': {'runs': 2, 'arrived': 0, 'arrival_rate': 0.0, 'stopped': 0, 'stop_rate': 0.0,
-                'endings': {'death': 2}, 'off_route_visits': 0, 'risk': {}}}
+                'endings': {'death': 2}, 'off_route_visits': 0, 'aimless_frames_per_run': 0.0, 'risk': {}}}
     room = scope['rooms']['0:0x11']                     # the combined numbers stay what they were
     assert (room['runs'], room['entered'], room['visits'], room['deaths'], room['death_rate']) == (4, 4, 5, 2, 0.5)
     on_, off_ = room['by_clips']['on'], room['by_clips']['off']
