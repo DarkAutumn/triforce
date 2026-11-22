@@ -1,0 +1,107 @@
+# darknut@d3first: the task of the family's run for d3first's wood-sword half (promoted.d3first is r34d5-dg-s362),
+# rebuilt (the yaml it trained on lived in its round's worktree, gone): the family's yaml with state_routes
+# [d3first] and the run's own terms as its run.json and docs/experiments/round34.md ("The Olive Garden") record
+# them: harvested handoffs at 0.33 (the run's dir of 8,580 handoffs, the Garden a third, was not kept), no chain_hp.
+# The lab reads this file for the key f"{family}@d3first" (lab.collect.task_yaml).
+name: darknut
+rooms:
+- (3, 0x5b)
+- (3, 0x59)
+- (3, 0x69)
+- (3, 0x5c)
+- (5, 0x64)
+- (5, 0x06)
+- (5, 0x05)
+- (5, 0x37)
+- (8, 0x5e)
+- (8, 0x4e)
+- (8, 0x3e)
+- (8, 0x3f)
+start_states:
+- 3_5b*_[0-9]
+- 3_59*_[0-9]
+- 3_69*_[0-9]
+- 3_5c*_[0-9]
+- 5_64*_[0-9]
+- 5_06*_[0-9]
+- 5_05*_[0-9]
+- 5_37*_[0-9]
+- 8_5e*_[0-9]
+- 8_4e*_[0-9]
+- 8_3e*_[0-9]
+- 8_3f*_[0-9]
+success:
+- exit-correct
+reward_profile: default
+reward:
+  pbrs: true
+  item_targets: true
+  heart_value:
+    exit: true
+    potential: 20
+obs:
+  objective: true
+  target: true
+ram_randomization:
+  hp:
+  - 0.15
+  - max
+  full_hp: 0.5
+  bombs:
+  - 0
+  - 8
+  bombs_share: 0.5
+  help_count:
+  - 0
+  - 9
+  room_kills:
+    (5, 0x05):
+    - 1
+    - 5
+    (5, 0x64):
+    - 1
+    - 5
+    (8, 0x5e):
+    - 1
+    - 4
+    (8, 0x3e):
+    - 1
+    - 5
+  room_kills_share: 0.5
+items:
+  bombs: free
+clips:
+  enabled: true
+  off_share: 0
+curriculum:
+  enabled: true
+harvested_fraction: 0.33
+one_room: true
+max_steps: 2000
+warm_start: null
+notes: 'Darknut rooms (Nov 9): shielded in front, hit only from the side or back. Dungeon 3 (docs/routes/d3.md): the central
+  room 0x5b (3 Darknuts, bombs when all are dead) S to W (treasure skipped) and later W to E through its bomb wall (round
+  22; a `requires_bombs` room, so bombs are free there: the Darknuts killed and their bombs taken whatever Link holds, round
+  23, then the wall); 0x5c (3 Darknuts, round 22) W to N through its open doorway; 0x59 (5 Darknuts, kill-all S shutter)
+  E to N, N to S (kill them all: the shutter) and S to E; 0x69 (8 Darknuts, bombs) N to the stairs down to the raft cellar
+  and back up N, never fighting for its treasure (Lee: `treasure: skip`). Copied from goriya. Dungeon 5 (round 24; docs/routes/d5.md):
+  Blue Darknuts join the Red (the owner). 0x64 (5 Blue Darknuts) E to the stairs inside its block diamond, with clips by
+  the block clip N from ($A0,$9D) and no fight, without clips by killing them and pushing the W block N or S (one route
+  step; the clips switch picks the objective); back out of the tunnel cellar E, running for the opened wall among them.
+  The Olive Garden 0x05 (6 Blue Darknuts, one of the hardest rooms of the game): E to the stairs (kill them all, push the
+  block: the stairs appear top right; bombs free down to 0), back up out E. 0x06 (no monsters): out of the tunnel W, back
+  E to its stairs (push the W block N). 0x37 (3 Red Darknuts, dark) S to N at X $70 over the water by the ladder, swinging
+  at a Darknut that comes from the side (its compass skipped). Dungeon 8 (round 28, route `d8`; docs/routes/d8.md §15, d8-walks.md
+  §2-3; states `8_5es`, `8_4es`, `8_3es`, `8_3fw`; half the resets into 0x5e and 0x3e bank 1-4 and 1-5 kills, `room_kills`).
+  Fought: 0x5e (five Blue Darknuts on an open floor, four corner statues that shoot from the first frame: all dead for the
+  key at the centre and the N shutter; its E key door is masked) and 0x3e (six, two statues on the door row: all dead for
+  the E shutter, reached round the statue by row Y $9D). Crossed: 0x4e (two Bubbles, a Blue and two Red Darknuts, three
+  Gibdos: S to the N key door; its rupees left, its W key door masked) and the one-way 0x3f (the same eight: W to the stairs
+  at the end of a corridor one square wide; fought for its four bombs only at 4 bombs or fewer, `treasure: {if_bombs_below:
+  5}`, the owner''s rule for 7:0x1b). A Blue Darknut takes two magic sword hits from the side or behind and parries from
+  the front; a touch is 2 hearts. Walked with the round 25 run: 0x5e 1 of 40, 0x3e 0 of 40 (517 of 530 hearts lost to Darknut
+  touches), 0x4e 15 of 40, 0x3f 40 of 40 at 2.9 hearts; a script reading positions and facings wins both fights 30 of 30
+  (scripts/experiments/r28_demos.py darknut-5e|darknut-3e: its rule through the env''s actions, as demonstrations). `clips:
+  true` has no room list: CLIP is offered here wherever a skip exists.'
+state_routes:
+- d3first

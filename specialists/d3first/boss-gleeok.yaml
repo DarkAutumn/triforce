@@ -1,0 +1,58 @@
+# boss-gleeok@d3first: the task of the family's run for d3first's wood-sword half (promoted.d3first is
+# r34d4-gleeok4-s1-it2877), rebuilt (the yaml it trained on lived in its round's worktree, gone): the family's yaml
+# with state_routes [d3first] and the run's own terms as its run.json and docs/experiments/round34.md ("Dungeon 4",
+# §2 and §4.2) record them: 4:0x13 only, every reset a harvested handoff (1.0), the no-damage and max-steps endings
+# as failures with a 120-step no-damage window. The lab reads this file for the key f"{family}@d3first"
+# (lab.collect.task_yaml).
+name: boss-gleeok
+rooms:
+- (4, 0x13)
+start_states:
+- 4_13*_[0-9]
+success:
+- exit-correct
+reward_profile: default
+reward:
+  pbrs: false
+  item_targets: true
+obs:
+  objective: true
+  target: true
+ram_randomization:
+  hp:
+  - 0.5
+  - max
+  full_hp: 0.5
+  bombs:
+  - 0
+  - 8
+  bombs_share: 0.5
+  help_count:
+  - 0
+  - 9
+items:
+  bombs: never
+curriculum:
+  enabled: true
+harvested_fraction: 1.0
+one_room: true
+max_steps: 1000
+endings:
+  no-damage: hard-failure
+  max-steps: hard-failure
+no_damage_steps: 120
+warm_start: null
+notes: 'Gleeok (Dungeon 4, Nov 11-12): the two-headed one (object $43), a body at the top of the room with two necks; only
+  the heads take damage (they share one HP byte, slot 5''s), a head that is cut off flies around the room and can''t be
+  hurt, and both spit fireballs. The env observes the attached heads as synthetic enemies (id $42 in slots 2+n) and treats
+  the body and the flying heads as hazards: only head damage pays. Entered from W through 0x12''s shutter (opened by its
+  push block); the N and W shutters open and the heart container appears when he dies; success is the N exit to the triforce
+  room (the heart first). Copied from boss-manhandla without the bombs. Dungeon 8 (round 28, route `d8`; docs/routes/d8.md
+  §15, d8-walks.md §6; state `8_3cs`): Gleeok with four heads in 0x3c, entered through the bombed S wall. 3 + 2 + 2 + 2
+  magic sword hits, 36 frames apart at best; up to three flying heads (1 heart, cannot be hurt); one fireball at a time
+  (1 heart). The attached heads never reach row Y $9D or lower, where the blade still reaches them. A retreat S resets the
+  fight. Then the heart container (14) and the N shutter. Walked zero-shot: 0 of 20; a script on row Y $9D wins 30 of 30
+  from 13 hearts, 26 of 30 from 6 (its rule through the env''s actions: scripts/experiments/r28_demos.py gleeok, 29 of 30
+  from 13, 17 of 30 from 6).'
+state_routes:
+- d3first

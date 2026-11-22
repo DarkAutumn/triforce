@@ -19,6 +19,7 @@ from typing import Optional
 import torch
 
 from .. import _native, registry
+from ..paths import SPECIALISTS_DIR
 from ..metrics import RolloutMetrics
 from ..ppo import Collector
 from ..specialist import SpecialistConfig, load_specialist
@@ -38,13 +39,22 @@ class Family:
         return registry.split_policy(self.key)[0]
 
 
+def task_yaml(key: str) -> str:
+    """The task of policy ``key``: a route part's own yaml (``specialists/<route>/<family>.yaml``, the wood-sword
+    runs' recipe) when there is one, else the family's."""
+    family, route = registry.split_policy(key)
+    if route is not None and (SPECIALISTS_DIR / route / f'{family}.yaml').is_file():
+        return str(SPECIALISTS_DIR / route / f'{family}.yaml')
+    return family
+
+
 def parse_families(items, parallel: int, shares: Optional[dict] = None) -> list[Family]:
-    """``key[=yaml]`` items (a key's task: its family's yaml, or the given one) with ``parallel`` envs split by
+    """``key[=yaml]`` items (a key's task: the given yaml, else ``task_yaml``) with ``parallel`` envs split by
     ``shares`` (key -> weight; default equal), every family at least one."""
     families = []
     for item in items:
         key, _, path = item.partition('=')
-        config = load_specialist(path or registry.split_policy(key)[0])
+        config = load_specialist(path or task_yaml(key))
         families.append(Family(key, config))
     keys = [f.key for f in families]
     if len(set(keys)) != len(keys):

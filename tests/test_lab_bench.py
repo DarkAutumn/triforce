@@ -19,6 +19,25 @@ def test_states_spread_over_room_entries_prefer_the_route_and_fall_back_to_seed_
     assert all(s.startswith('harvested/zol/d3first_') for s in states)
     assert sum('4_40s' in s for s in states) == 1        # each entry gets its turn before any gets a second
     assert bench.choose_states('zol', 3, tmp_path) == (states, source)
+    # Another route's states (the manifest regenerated with --route): its own entries first.
+    (directory / 'd2first_3_7cs_h1_2.state').write_bytes(b'')
+    assert bench.choose_states('zol', 3, tmp_path, route='d2first') == (['harvested/zol/d2first_3_7cs_h1_2'],
+                                                                        'harvested')
+
+
+def test_the_manifest_is_regenerated_for_a_routes_states_and_team(tmp_path):
+    models = tmp_path / 'models'
+    registry.save_checkpoint('zol', 'a', random_network(1), root=models)
+    registry.promote('zol', 'a', models)
+    (tmp_path / 'states' / 'harvested' / 'zol').mkdir(parents=True)
+    (tmp_path / 'states' / 'harvested' / 'zol' / 'd2first_3_7cs_h1_2.state').write_bytes(b'')
+    out = tmp_path / 'bench.json'
+    assert bench.main(['manifest', '--route', 'd2first', '--models-dir', str(models), '--states-dir',
+                       str(tmp_path / 'states'), '--out', str(out), '--states-per-family', '2']) == 0
+    manifest = json.loads(out.read_text())
+    assert manifest['full']['route'] == 'd2first' and '--route d2first' in manifest['full']['command']
+    assert manifest['entries'] == [{'key': 'zol', 'family': 'zol', 'source': 'harvested',
+                                    'states': ['harvested/zol/d2first_3_7cs_h1_2']}]
 
 
 def test_a_bench_run_and_its_paired_comparison(states_dir, tmp_path):
