@@ -139,6 +139,45 @@ impl Heads {
         Ok(out)
     }
 
+    /// The decision's next candidates after `first`, best first, at most `k`, each with its joint log-prob, appended
+    /// to `out`: ranked as the Rust actor ranks its alternatives (`PolicyActor::alternatives`: argmax by the joint
+    /// log-prob; a draw by ln q + the Gumbel noise of the decision's key). Reads the joint log-probs [`Heads::act`]
+    /// left in `s`: call it right after `act` for the same decision.
+    #[allow(clippy::too_many_arguments)]
+    pub fn ranked(
+        &self,
+        choose: Choose,
+        job: i64,
+        step: i64,
+        first: [usize; 3],
+        k: usize,
+        s: &mut LogitScratch,
+        out: &mut Vec<([usize; 3], f32)>,
+    ) {
+        let n = self.joint_size();
+        match choose {
+            Choose::Argmax => {
+                for (score, &lp) in s.acting.iter_mut().zip(&s.joint) {
+                    *score = lp as f64;
+                }
+            }
+            Choose::Draw(rule) => {
+                rule.probabilities(&s.joint, &mut s.acting, &mut s.order);
+                noise::gumbel(act::joint_noise_key(job, step), &mut s.joint_noise);
+                for (score, &g) in s.acting.iter_mut().zip(&s.joint_noise) {
+                    *score = if *score > 0.0 { score.ln() + g as f64 } else { f64::NEG_INFINITY };
+                }
+            }
+        }
+        let skip = self.joint_index(first);
+        let score = &s.acting;
+        s.order.clear();
+        s.order.extend((0..n).filter(|&i| i != skip && score[i].is_finite()));
+        s.order.sort_by(|&a, &b| score[b].total_cmp(&score[a]).then(a.cmp(&b)));
+        out.extend(s.order.iter().take(k).map(|&i| (self.joint_action(i), s.joint[i])));
+        s.order.resize(n, 0);
+    }
+
     /// `Policy::heads` on given logits.
     fn heads(&self, logits: &[f32], value: f32, mask: &[bool], pick: Pick) -> Result<Output, PolicyError> {
         let (kinds, dirs, durs) = (self.kinds, self.directions, self.durations);

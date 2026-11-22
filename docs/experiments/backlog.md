@@ -116,25 +116,44 @@ to the action taken; look-ahead for the others), never looking ahead at play.
    at one exit) and boss fights. **Decided from it:** merging means training with every family's rooms in the mix,
    never picking a best network; the first groups are the overworld (10 families and the item cellars), the
    dungeon rooms (15), the bosses as one body with a head each, then overworld and dungeon rooms in one body.
-2. [x] **What the observation lacks for seeing a hit coming** (round36.md "What the observation lacks" on
+2. [x] **What the observation lacks for seeing a hit coming** (round36.md "What the observation lacks",
    `r36-hit`, Nov 22). Not information: trees on the flat observation read the look-ahead's verdict better (0.76 /
    0.68 precision = recall) than a policy-shaped network does (0.66 / 0.54 at 10 epochs, 0.73 / 0.66 at 60); raw
    RAM bytes hurt. It is representation, then data and training time: contact geometry per entity (the touch rule
    extrapolated along straight lines) adds 0.04-0.10, more data helps steeply, hits land in an action's first
    frames. **Feeds:** observation v7's contact block and Link-relative pixel scale (its §4), a per-entity hit head
-   (§5), and the supervised hit bench as the cheap screen for representations and shapes (in progress).
-3. [ ] **Capacity by imitation alone:** one student copying a group of teachers at several sizes, judged on the
-   yardstick. Feeds: how big the body must be.
-4. [ ] **The wood-sword pairs first** (51 to 34): one network a family for both swords. The same problem in
-   miniature.
+   (§5), and the supervised hit bench as the cheap screen for representations and shapes. **The screen's answer
+   (§7-§8, Nov 22):** on that bench (precision = recall on the planner's / the model's own draws; today's shape
+   0.66 / 0.56, trees 0.76 / 0.68) each monster's position relative to Link in pixels on the touch test's scale
+   (`rel`, ten columns a monster) with **Link as a token attending to the monster tokens** (no mean pool) reads the
+   hit at 0.86 / 0.81, 0.87 / 0.81 with the contact columns, 0.89 / 0.85 on 2 million decisions; the Link token
+   alone on today's observation 0.85 / 0.78; it holds on Gleeok (0.77 / 0.68) and now moves Darknuts (0.85 / 0.78).
+   No gain from wider or deeper towers, a tile patch round Link, past observations, the action as an input. A
+   learned veto with it would catch 26 of 32 hits per 1000 decisions for 6 wrong refusals (round 35's guard: 15
+   for 17). Labels: the look-ahead's verdicts on untaken actions are needed (the taken action's outcome alone:
+   0.51). Nothing from it has played yet.
+3. [ ] **Capacity by imitation alone** (round36.md "One network by imitation" on `r36-merge`; in progress): ONE
+   network of today's size, copying the 51 on 1.49 million of their decisions, keeps 98.1% of their success on the
+   yardstick (−1.6 ± 0.3 points; the worst ten slots 88%); what it does not copy are fights (Gleeok with the wood
+   sword −32, Dungeon 8's Darknuts −23, the wallmaster −12.5). Open: the larger sizes, the room identity, the data
+   curve, and that network on the route's chains and in a golden race.
+4. [ ] **The wood-sword pairs first** (51 to 34; round36.md "The wood-sword pairs" on `r36-merge`): on the
+   yardstick darknut, goriya, zol and ow-octorok hold, wallmaster is not shown to, boss-gleeok fails (−24); but
+   Dungeon 3's chain loses 4.7 ± 1.8 with the merged darknut and zol (the rooms that already kill most): **the
+   yardstick shortlists, only chains decide.** Open: teachers kept on until both parts match, rows toward the
+   hard part, judged on the chain.
 5. [ ] **Groups** (34 to a handful: overworld, dungeon rooms, bosses, utility rooms, or what cross-play says), then
    the groups into one body.
 6. [ ] **The hit head in the network:** as an auxiliary target only; as an input to the action choice (its own
-   labels only, so it stays an honest predictor); against the planner on the same rooms.
-7. [ ] **Observation v7 candidates** (from 2, and from the game's RAM): time to contact and closing speed per
-   monster and shot, lane occupancy, sub-pixel positions and the timers that decide a monster's next turn, Link's
-   own state machine; values normalised or embedded so the network need not learn the arithmetic; the room identity
-   kept and also tried without.
+   labels only, so it stays an honest predictor); against the planner on the same rooms. The lab can train it
+   (`--aux`, `--try-others`: four other actions tried on a quarter of the decisions cost no measurable time); a
+   first smoke on today's shape was too short to read (0.10 at the veto rate). Next with the shape and inputs
+   experiment 2 chose (below).
+7. [ ] **Observation v7** (specified by experiment 2: round36.md §4, §8): per monster ten `rel` columns and 23
+   contact columns from the RAM (the game's touch rule extrapolated straight and stopped at walls: arithmetic on
+   the current state, no emulator step; for the owner to confirm it counts as a "small calculation" and not
+   look-ahead), as a NEW observation key so today's networks play unchanged; the room identity kept and also
+   tried without.
 8. [ ] **Architectures:** a wider and deeper body; Link as a token attending to monsters and to tile patches; a
    graph over entities; memory (GRU/LSTM) where something is hidden or timed (Wizzrobes, Ganon, a Like-Like's
    hold); a head a boss against one head for all.

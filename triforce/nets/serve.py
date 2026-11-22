@@ -36,6 +36,12 @@ def serve_device() -> torch.device:
     return torch.device(name)
 
 
+def serve_half() -> bool:
+    """``$TRIFORCE_SERVE_HALF=1``: run served networks in half precision on the GPU (autocast float16; measured in
+    docs/lab.md "Acting speed"; the logits differ from float32 within the half's precision)."""
+    return os.environ.get('TRIFORCE_SERVE_HALF', '') not in ('', '0')
+
+
 def weights_hash(network: torch.nn.Module) -> int:
     """64 bits identifying the architecture and the weights (records' model hash for a served network)."""
     digest = hashlib.blake2b(digest_size=8)
@@ -49,9 +55,11 @@ def weights_hash(network: torch.nn.Module) -> int:
 class Server:
     """Serves networks to pools through one queue (the module docstring)."""
 
-    def __init__(self, device=None, gather: float = DEFAULT_GATHER, threads: int = CPU_THREADS):
+    def __init__(self, device=None, gather: float = DEFAULT_GATHER, threads: int = CPU_THREADS,
+                 half: Optional[bool] = None):
         self.device = torch.device(device) if device is not None else serve_device()
         self.gather = gather
+        self.half = (serve_half() if half is None else half) and self.device.type == 'cuda'
         if self.device.type == 'cpu':
             # torch's default (every core) contends with the pool's workers: measured 4 decisions/s on 10 envs.
             torch.set_num_threads(threads)
@@ -119,9 +127,12 @@ class Server:
             obs = {key: torch.from_numpy(value[rows]).to(self.device, non_blocking=True)
                    for key, value in batch['obs'].items()}
             state = self._state_rows(network, int(model), batch, rows)
-            heads, new_state = network.heads(obs, state)
-            logits[rows] = heads.flat().float().cpu().numpy()
-            values[rows] = heads.value.float().cpu().numpy()
+            with torch.autocast('cuda', dtype=torch.float16, enabled=self.half):
+                heads, new_state = network.heads(obs, state)
+            # One copy back: the logits and the value side by side.
+            out = torch.cat([heads.flat().float(), heads.value.float().unsqueeze(-1)], dim=-1).cpu().numpy()
+            logits[rows] = out[:, :-1]
+            values[rows] = out[:, -1]
             if new_state is not None:
                 self._keep_states(int(model), batch, rows, new_state)
         self.queue.answer(batch['slot'], logits, values)

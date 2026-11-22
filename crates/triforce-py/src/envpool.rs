@@ -20,7 +20,7 @@ use numpy::{
 use crate::external::PyExternalPolicy;
 use crate::policy::{PyPolicy, parse_act_mode};
 use policy::ActMode;
-use pool::rollout::{EnvRollout, Play, Record};
+use pool::rollout::{EnvRollout, Play, Record, TryOthers};
 use pool::zelda::{
     ChainRunEnv, ClipsSwitch, EvalEnv, EvalJob, ExternalQueue, GumbelSearch, HybridActor, Net, PolicyActor, RgbFn,
     SearchConfig, TaskEnv, TrainEnv, ZeldaAction,
@@ -569,7 +569,7 @@ fn rollout_array<'py, T: numpy::Element>(
 }
 
 /// The `EnvPool.rollout` buffer keys (`obs` holds one per observation key).
-const ROLLOUT_KEYS: [&str; 17] = [
+const ROLLOUT_KEYS: [&str; 22] = [
     "obs",
     "starts",
     "actions",
@@ -587,6 +587,11 @@ const ROLLOUT_KEYS: [&str; 17] = [
     "search_q",
     "search_actions",
     "search_value",
+    "health_lost",
+    "hits",
+    "tried_actions",
+    "tried_lost",
+    "tried_frames",
 ];
 
 /// `EnvPool.rollout`'s `search` dict as a [`SearchConfig`] (missing keys keep their defaults).
@@ -609,6 +614,26 @@ fn search_config(d: &Bound<'_, PyDict>) -> PyResult<SearchConfig> {
     }
     c.validate().map_err(PyValueError::new_err)?;
     Ok(c)
+}
+
+/// `EnvPool.rollout`'s `tried` dict as [`TryOthers`]: `candidates` (K ≥ 1) and `share` (in (0, 1]).
+fn try_others(d: &Bound<'_, PyDict>) -> PyResult<TryOthers> {
+    let mut t = TryOthers { candidates: 0, share: 1.0 };
+    for (key, value) in d.iter() {
+        let key: String = key.extract()?;
+        match key.as_str() {
+            "candidates" => t.candidates = value.extract()?,
+            "share" => t.share = value.extract()?,
+            other => return Err(PyValueError::new_err(format!("unknown tried setting {other:?}"))),
+        }
+    }
+    if t.candidates == 0 || !(t.share > 0.0 && t.share <= 1.0) {
+        return Err(PyValueError::new_err(format!(
+            "tried needs candidates >= 1 and a share in (0, 1], got {} and {}",
+            t.candidates, t.share
+        )));
+    }
+    Ok(t)
 }
 
 fn required<T>(v: Option<T>, key: &str) -> PyResult<T> {
@@ -638,6 +663,14 @@ struct RolloutOut<'py> {
     terminated: Option<PyReadwriteArrayDyn<'py, bool>>,
     truncated: Option<PyReadwriteArrayDyn<'py, bool>>,
     search: SearchOut<'py>,
+    /// What each decision's step did: hearts lost (net) and monster hits.
+    health_lost: Option<PyReadwriteArrayDyn<'py, f32>>,
+    hits: Option<PyReadwriteArrayDyn<'py, i64>>,
+    /// [`TryOthers`]'s labels: `tried_k` candidates a row (-1 / -1 where none was tried), per row the trials' frames.
+    tried_k: usize,
+    tried_actions: Option<PyReadwriteArrayDyn<'py, i64>>,
+    tried_lost: Option<PyReadwriteArrayDyn<'py, i64>>,
+    tried_frames: Option<PyReadwriteArrayDyn<'py, i64>>,
 }
 
 /// Joint actions of the search's improved policy: `kind * 32 + direction * 4 + duration` (11 kinds × 8 directions
@@ -742,7 +775,13 @@ impl<'py> SearchOut<'py> {
 }
 
 impl<'py> RolloutOut<'py> {
-    fn borrow(out: &Bound<'py, PyDict>, n: usize, steps: usize, search_k: Option<usize>) -> PyResult<RolloutOut<'py>> {
+    fn borrow(
+        out: &Bound<'py, PyDict>,
+        n: usize,
+        steps: usize,
+        search_k: Option<usize>,
+        tried_k: usize,
+    ) -> PyResult<RolloutOut<'py>> {
         let obs = out
             .get_item("obs")?
             .ok_or_else(|| PyKeyError::new_err("rollout buffers need 'obs'"))?
@@ -788,6 +827,12 @@ impl<'py> RolloutOut<'py> {
             terminated: rollout_array(out, "terminated", &[n, steps])?,
             truncated: rollout_array(out, "truncated", &[n, steps])?,
             search: SearchOut::borrow(out, n, steps, search_k)?,
+            health_lost: rollout_array(out, "health_lost", &[n, steps])?,
+            hits: rollout_array(out, "hits", &[n, steps])?,
+            tried_k,
+            tried_actions: rollout_array(out, "tried_actions", &[n, steps, tried_k, 3])?,
+            tried_lost: rollout_array(out, "tried_lost", &[n, steps, tried_k])?,
+            tried_frames: rollout_array(out, "tried_frames", &[n, steps])?,
         })
     }
 
@@ -835,6 +880,30 @@ impl<'py> RolloutOut<'py> {
                 rows(a.as_slice_mut()?, *env, steps, &r.truncated);
             }
             self.search.write(*env, steps, r)?;
+            if let Some(a) = self.health_lost.as_mut() {
+                rows(a.as_slice_mut()?, *env, steps, &r.health_lost);
+            }
+            if let Some(a) = self.hits.as_mut() {
+                let hits: Vec<i64> = r.hits.iter().map(|&h| h as i64).collect();
+                rows(a.as_slice_mut()?, *env, steps, &hits);
+            }
+            let k = self.tried_k;
+            let tried = |t: usize, j: usize| r.tried.get(t * k + j).and_then(Option::as_ref);
+            if let Some(a) = self.tried_actions.as_mut() {
+                let flat: Vec<i64> = (0..steps * k)
+                    .flat_map(|i| tried(i / k, i % k).map_or([-1; 3], |(action, _)| *action))
+                    .collect();
+                rows(a.as_slice_mut()?, *env, steps * k * 3, &flat);
+            }
+            if let Some(a) = self.tried_lost.as_mut() {
+                let flat: Vec<i64> =
+                    (0..steps * k).map(|i| tried(i / k, i % k).map_or(-1, |&(_, lost)| lost as i64)).collect();
+                rows(a.as_slice_mut()?, *env, steps * k, &flat);
+            }
+            if let Some(a) = self.tried_frames.as_mut() {
+                let frames: Vec<i64> = (0..steps).map(|t| r.tried_frames.get(t).map_or(0, |&f| f as i64)).collect();
+                rows(a.as_slice_mut()?, *env, steps, &frames);
+            }
         }
         Ok(())
     }
@@ -1111,7 +1180,15 @@ impl PyEnvPool {
     /// `search_q` `[n, steps, k]` float32 (each candidate's mean return, NaN if never evaluated),
     /// `search_actions` `[n, steps, k, 3]` int64 (the candidates), `search_value` `[n, steps]` float32 (the
     /// search's root value).
-    #[pyo3(signature = (policies, steps, out, deterministic=false, search=None))]
+    ///
+    /// Per decision, written when present: `health_lost` `[n, steps]` float32 (hearts its step lost, net) and `hits`
+    /// `[n, steps]` int64 (monster hits it dealt). `tried` (train pools only; docs/lab.md "Auxiliary targets"): None,
+    /// or `{'candidates': K, 'share': P}`: on a share P of the decisions (drawn by the decision's key) the policy's
+    /// next K candidates after the action taken are tried in the env (the game's own future; the decision is
+    /// unchanged), written to `tried_actions` `[n, steps, K, 3]` int64 and `tried_lost` `[n, steps, K]` int64 (1:
+    /// it lost health, 0: it didn't; -1 / -1 where nothing was tried) and `tried_frames` `[n, steps]` int64 (the
+    /// frames the decision's trials emulated).
+    #[pyo3(signature = (policies, steps, out, deterministic=false, search=None, tried=None))]
     fn rollout(
         &self,
         py: Python<'_>,
@@ -1120,8 +1197,14 @@ impl PyEnvPool {
         out: &Bound<'_, PyDict>,
         deterministic: bool,
         search: Option<&Bound<'_, PyDict>>,
+        tried: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<usize> {
         self.check_policies(policies.len())?;
+        let others = tried.map(try_others).transpose()?;
+        if others.is_some() && !matches!(self.kind, Kind::Train) {
+            return Err(PyValueError::new_err("tried needs a TrainTask pool"));
+        }
+        let tried_k = others.map_or(0, |o| o.candidates as usize);
         let (nets, external) = split_policies(&policies)?;
         // Training samples from the unmodified policy (PPO needs it); act modes are for plays.
         let mode = if deterministic { ActMode::ARGMAX } else { ActMode::SAMPLE };
@@ -1132,9 +1215,16 @@ impl PyEnvPool {
             let native = PolicyActor::new(&LAYOUT, nets.clone(), vec![mode; nets.len()]).map_err(PyValueError::new_err)?;
             let modes = vec![mode; which.len()];
             let actor = Arc::new(HybridActor::new(native, queue, which, modes).map_err(PyValueError::new_err)?);
-            let mut buffers = RolloutOut::borrow(out, self.pool.num_envs(), steps, None)?;
-            let rollouts = interruptible(py, || self.pool.rollout(steps, actor), || self.pool.cancel_rollouts())?
-                .map_err(pool_err)?;
+            let mut buffers = RolloutOut::borrow(out, self.pool.num_envs(), steps, None, tried_k)?;
+            let rollouts = interruptible(
+                py,
+                || match others {
+                    None => self.pool.rollout(steps, actor),
+                    Some(others) => self.pool.rollout_trying(steps, actor, others),
+                },
+                || self.pool.cancel_rollouts(),
+            )?
+            .map_err(pool_err)?;
             buffers.write(&rollouts)?;
             return Ok(rollouts.len());
         }
@@ -1144,7 +1234,8 @@ impl PyEnvPool {
         if search.is_some() && !matches!(self.kind, Kind::Train) {
             return Err(PyValueError::new_err("search needs a TrainTask pool"));
         }
-        let mut buffers = RolloutOut::borrow(out, self.pool.num_envs(), steps, search.as_ref().map(|s| s.candidates))?;
+        let mut buffers =
+            RolloutOut::borrow(out, self.pool.num_envs(), steps, search.as_ref().map(|s| s.candidates), tried_k)?;
         // Ctrl-C (on the main thread) cancels the rollout before its next step or search simulation and raises
         // KeyboardInterrupt; the envs stay ready.
         let planner = match search {
@@ -1155,9 +1246,11 @@ impl PyEnvPool {
         };
         let rollouts = interruptible(
             py,
-            || match planner {
-                None => self.pool.rollout(steps, actor),
-                Some(planner) => self.pool.rollout_planned(steps, actor, planner),
+            || match (planner, others) {
+                (None, None) => self.pool.rollout(steps, actor),
+                (None, Some(others)) => self.pool.rollout_trying(steps, actor, others),
+                (Some(planner), None) => self.pool.rollout_planned(steps, actor, planner),
+                (Some(planner), Some(others)) => self.pool.rollout_planned_trying(steps, actor, planner, others),
             },
             || self.pool.cancel_rollouts(),
         )?

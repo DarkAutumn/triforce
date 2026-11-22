@@ -1,0 +1,75 @@
+# zol@d3first: the task of the family's run for d3first's wood-sword half (promoted.d3first is r34d3-zol-s341),
+# rebuilt (the yaml it trained on lived in its round's worktree, gone): the family's yaml with state_routes
+# [d3first] and the run's own terms as its run.json and docs/experiments/round34.md ("Dungeon 3") record them:
+# harvested handoffs at 0.25, no chain_hp. The lab reads this file for the key f"{family}@d3first"
+# (lab.collect.task_yaml).
+name: zol
+rooms:
+- (3, 0x7c)
+- (3, 0x7b)
+- (3, 0x6b)
+- (3, 0x49)
+- (3, 0x4b)
+- (3, 0x3d)
+- (4, 0x40)
+- (5, 0x57)
+- (6, 0x68)
+- (9, 0x63)
+start_states:
+- 3_7c*_[0-9]
+- 3_7b*_[0-9]
+- 3_6b*_[0-9]
+- 3_4b*_[0-9]
+- 3_49*_[0-9]
+- 3_3d*_[0-9]
+- 4_40*_[0-9]
+- 5_57*_[0-9]
+- 6_68*_[0-9]
+- 9_63*_[0-9]
+success:
+- exit-correct
+- triforce-collected
+reward_profile: default
+reward:
+  pbrs: true
+  item_targets: true
+  heart_value:
+    exit: true
+    potential: 20
+obs:
+  objective: true
+  target: true
+ram_randomization:
+  hp:
+  - 0.15
+  - max
+  full_hp: 0.5
+  bombs:
+  - 0
+  - 8
+  bombs_share: 0.5
+  help_count:
+  - 0
+  - 9
+items:
+  bombs: tenth
+curriculum:
+  enabled: true
+one_room: true
+max_steps: 2000
+warm_start: null
+notes: 'Zol rooms (Nov 9; Zols split into Gels when hit, hop like them): Dungeon 3''s empty entrance hall 0x7c (S to W),
+  the Zol key rooms 0x7b (key visible; E to N), 0x6b (key when all are dead; S to N), 0x4b (key when all are dead; S to
+  E through the locked door into the trap room 0x4c; off d2first''s route since round 22: tagged; phase X: d3first''s way
+  in, S to W, state `d3first_3_4bs`), 0x49 (Bubbles, Zols and Blue Keese, key visible; S and back S), and the empty triforce
+  room 0x3d (ends on pickup), as stalfos-keese-gel holds D1''s hall and triforce room. Copied from stalfos-keese-gel/goriya
+  (one-room, curriculum, 2000 steps). Dungeon 4 (Nov 11-12): its dark Zol room 0x40 (five Zols, the key in the open from
+  the start: take it, S to N). Dungeon 5 (round 24): the dark 0x57 (five Zols) W to N along row 3 by the ladder, not stopping
+  for the 5 rupees its kills show (`treasure: skip`). Dungeon 6 (round 27, route `d6`; state `6_68s`): 0x68 (five Zols)
+  S to N straight up, its compass left (`treasure: skip`; walked zero-shot 20 of 20). Dungeon 9 (round 29, route `d9`; state
+  `9_63c` on chains 0-2): 0x63 (five Zols) out of the tunnel at ($A0, $9D), up to the door row and W through its key door;
+  its N and S key doors are masked (the route''s last key), and the stairs at the E end of the door row lead back down (walked
+  zero-shot 20 of 20).'
+state_routes:
+- d3first
+harvested_fraction: 0.25

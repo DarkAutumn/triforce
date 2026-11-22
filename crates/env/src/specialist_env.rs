@@ -95,6 +95,11 @@ pub struct StepInfo {
     /// The step's frames on the item sub-screen (paused; `zelda::Change::menu_frames`).
     pub menu_frames: u32,
     pub interrupt: Option<Interrupt>,
+    /// Hearts the step's action lost, net of what it gained (`zelda::Change::health_lost`; not in the info dict).
+    pub health_lost: f64,
+    /// Monster hits the step saw (`zelda::Observed::hits`: damage dealt, observed, no look-ahead; not in the info
+    /// dict).
+    pub hits: u32,
     pub action: Option<Action>,
     /// This step's reward terms (`rewards`).
     pub rewards: Vec<(&'static str, f64)>,
@@ -1162,6 +1167,8 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         let mut info = self.info(&state);
         info.frames = change.frames;
         info.menu_frames = change.menu_frames;
+        info.health_lost = change.health_lost;
+        info.hits = change.observed.hits() as u32;
         info.interrupt = change.interrupt;
         info.action = Some(action);
         info.rewards = rewards.terms().collect();
@@ -1182,6 +1189,8 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             interrupt: None,
             action: None,
             rewards: Vec::new(),
+            health_lost: 0.0,
+            hits: 0,
             // full_location: an underworld cellar is a sub-room like a cave (`1:0x7f:cave`), as in the visits.
             room: {
                 let l = state.full_location();

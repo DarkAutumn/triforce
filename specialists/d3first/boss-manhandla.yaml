@@ -1,0 +1,63 @@
+# boss-manhandla@d3first: the task of the family's run for d3first's wood-sword half (promoted.d3first is
+# r32d3-manh), rebuilt (the yaml it trained on lived in its round's worktree, gone): the family's yaml with
+# state_routes [d3first] and the run's own terms as its run.json and docs/experiments/round32.md ("Arm") record
+# them: harvested handoffs at 0.25, no chain_hp (round 32's only d3first chain_hp family was like-like). The lab
+# reads this file for the key f"{family}@d3first" (lab.collect.task_yaml).
+name: boss-manhandla
+rooms:
+- (3, 0x4d)
+- (8, 0x6e)
+start_states:
+- 3_4d*_[0-9]
+- 8_6e*_[0-9]
+success:
+- exit-correct
+reward_profile: default
+reward:
+  pbrs: true
+  item_targets: true
+  drops_first: true
+  left_drop_penalty: 3.0
+obs:
+  objective: true
+  target: true
+ram_randomization:
+  hp:
+  - 0.15
+  - max
+  full_hp: 0.5
+  bombs:
+  - 2
+  - 8
+  bombs_share: 0.5
+  help_count:
+  - 0
+  - 9
+  drop_bombs: 0.75
+items:
+  bombs: free
+curriculum:
+  enabled: true
+harvested_fraction: 0.25
+one_room: true
+max_steps: 1000
+warm_start: null
+notes: 'Manhandla (Dungeon 3, Nov 9): one $3C object, a base and four hands, which speeds up as hands die. Lee: kill him
+  with bombs dropped into his path (a bomb does $40 to the base, enough to kill it, and each hand dies to one; a well-placed
+  one kills him outright). Entered from W through 0x4c''s bombed wall; the N and S shutters open and the heart container
+  appears when he dies; success is the N exit to the triforce room (the heart first). Backlog (kill streaks): once the base''s
+  HP is 0 every damaging hit counts as a kill (up to 24 per bomb), so watch hit/kill rewards here. Copied from boss-dodongo
+  (max_steps 1000: a bomb kill needs him to walk into the blast). Round 25 (the owner: "the agent often leaves without taking
+  bombs if dropped"): his one drop is the last hand''s, group 3 (heart, fairy, rupee; no bombs) unless the help drop is
+  armed: HelpDropCount $0A with IsHelpDropBomb set (a bomb blast on the base counts every frame, so a bomb kill usually
+  arms it) gives 4 bombs. Training arms it in 3 of 4 resets (`drop_bombs`, training envs only); `drops_first` makes the
+  dropped bombs (below the maximum) and a heart (hurt) the only target after the kill, before the heart container and the
+  N exit, and leaving one on the floor costs `penalty-left-drop` 3.0 each. Bombs drawn 2-8 (the route arrives with 2-8;
+  at 0-1 the old model never won). r75-mh-drop (r71-e + 1M) then r75-mh-fight (+1M with bombs 2-8): docs/routes/d3.md "Manhandla''s
+  drop". Dungeon 8 (round 28, route `d8`; docs/routes/d8.md §15; state `8_6es`): 0x6e''s Manhandla is not fought. Link crosses
+  S to the N bomb wall with the route''s one bomb (the step''s `treasure: skip` and `bombs: required`: on that step BOMB
+  is offered only where it lands in reach of the wall, whatever `items.bombs` says here). Families are by enemy, so the
+  room is this family''s; walked zero-shot with this family `free` it fought with 4.3 bombs a run, 3.15 of them cheated,
+  and trap-room and gibdo (`required`) crossed 60 of 60 with exactly one bomb.'
+state_routes:
+- d3first

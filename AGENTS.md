@@ -622,7 +622,9 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 
 ## Versioning (Lee, Nov 11)
 
-- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `2.0.0.3`: `d3first`'s bag of 8 bombs at
+- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `2.0.0.4`: the lab, `docs/lab.md`: runs
+  over several families, teachers, networks of any shape beside today's, the yardstick; no network's play
+  changed; 2.0.0.3 was `d3first`'s bag of 8 bombs at
   Dungeon 5 removed, the owner's checkpoint; 2.0.0.2 was round 34's two late `d3first`
   route runs, darknut `r34d5-dg-s362` and boss-digdogger `r34d7b-dig-s1`; 2.0.0.1 was round 34's other `d3first`
   route runs, Dungeon 4's entrance states, Dungeon 7's bag reserve and the training-only stall ending; runs stamped

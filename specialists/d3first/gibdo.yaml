@@ -1,0 +1,63 @@
+# gibdo@d3first: the task of the family's run for d3first's wood-sword half (promoted.d3first is r32late-gibdo),
+# rebuilt (the yaml it trained on lived in its round's worktree, gone): the family's yaml with state_routes
+# [d3first] and the run's own terms as its run.json and docs/experiments/round32.md ("Arm") record them: harvested
+# handoffs at 0.25, no chain_hp. The lab reads this file for the key f"{family}@d3first" (lab.collect.task_yaml).
+name: gibdo
+rooms:
+- (5, 0x76)
+- (5, 0x66)
+- (5, 0x65)
+- (5, 0x47)
+- (5, 0x26)
+- (5, 0x14)
+start_states:
+- 5_76*_[0-9]
+- 5_66*_[0-9]
+- 5_65*_[0-9]
+- 5_47*_[0-9]
+- 5_26*_[0-9]
+- 5_14*_[0-9]
+success:
+- exit-correct
+- triforce-collected
+reward_profile: default
+reward:
+  pbrs: true
+  item_targets: true
+  heart_value:
+    exit: true
+    potential: 20
+obs:
+  objective: true
+  target: true
+ram_randomization:
+  hp:
+  - 0.15
+  - max
+  full_hp: 0.5
+  bombs:
+  - 0
+  - 8
+  bombs_share: 0.5
+  help_count:
+  - 0
+  - 9
+items:
+  bombs: required
+curriculum:
+  enabled: true
+harvested_fraction: 0.25
+one_room: true
+max_steps: 600
+warm_start: null
+notes: 'Gibdo rooms (Dungeon 5, round 24; docs/routes/d5.md): Gibdos are slow mummies, 2 hearts a touch, four white-sword
+  hits; a hit one flashes about 32 frames, and Link walks through a flashing monster unhurt (the owner''s sword-through,
+  measured for Gibdos, side-on Darknuts and Pols Voices). A Gibdo in slot 1 carries the room item (0x66''s key, 0x65''s
+  bombs), taken by touching it, whatever its flash. The empty entrance 0x76 (S to N); the dark 0x66 S to W (don''t fight:
+  its key is not wanted, `treasure: skip`; bomb the W wall) and on the way back W to N (kill the three: the N shutter; the
+  key; N over the water by the ladder); 0x65 E to W (its four bombs refused, `treasure: refuse`: taking them costs; bomb
+  the W wall) and back W to E (the bombs taken); 0x47 S to N (straight up at X $78, the ladder over the middle water, swinging
+  at Gibdos in the way; its key skipped); 0x26 E to W (round the water ring by row 0 or 6; its key skipped); the empty triforce
+  room 0x14 (ends on the pickup). Copied from stalfos-keese-gel (bombs `required`, one-room, curriculum).'
+state_routes:
+- d3first

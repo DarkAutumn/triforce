@@ -281,6 +281,563 @@ network on a boss 0.17-0.42 (Gohma 0.83 by Ganon's arrows; Manhandla, Ganon 0.62
 **Cost:** 1.55 hours of queue run time for the matrix (504 cells, 110,490 episodes), 1.0 hour for the chains (0.6
 for the three that count, 0.4 for a first batch killed for want of `--stop-at`), 2.5 hours in all.
 
+## The lab
+
+The machinery the round's experiments run on (`docs/lab.md`): any torch network playable by the same evaluations
+and chains, runs over several families at once with today's networks as fading teachers, and a fixed yardstick
+(`python -m triforce.lab.bench`). Today's networks play as before: 100 chain runs of `d3first` from `3_7cs_0`
+(seeds 0-99) give every run's record identical, field for field, between main's module and the lab's (1,847 room
+records, 62,586 decisions).
+
+**What the lab now has.** Each decision's hearts lost and monster hits in the rollout and losses on a network's
+named outputs (`--aux OUTPUT=TARGET:COEFF`); the policy's next K candidates tried in the emulator on a share P of
+the training decisions (`--try-others K:P`, labels for actions not taken; training only: a network trained with it
+plays from the observation alone); a hit head inside the network (`--arch hithead`); networks with memory
+(`--arch gru`, `--bptt`); rows per family by need (`--sampling need`); towers of any depth on the Rust actor
+(`tower_depth`); `--demos`, `--stop-success`, `--checkpoint-every/--checkpoint-keep` in lab runs; each wood-sword
+run's own task (`specialists/d3first/<family>.yaml`, rebuilt and checked against each run's `run.json`: the
+original yamls were lost with their worktrees); `bench manifest --route`; `bench speed` for any checkpoint and half
+precision.
+
+**Speed** (`docs/lab.md` "How an experimental network acts"; the machine at load 40-45). A served network takes
+1.6-2.9× the Rust actor's time a decision (217-469 decisions a second on the GPU against 580-1,191), more envs
+helping it most; a network four times today's size costs no more a decision; half precision never pays.
+
+**The look-ahead's cost** (`docs/lab.md` "Auxiliary targets"; goriya's `d3first` rooms, 8 envs). `--try-others
+4:0.25` emulates 14.7 more frames a decision (1.8× the frames) with no measurable slow-down; `8:1.0` 117 more
+(7.6×), the rollout 3.5× slower.
+
+**Smoke of the hit head** (backlog Track M, experiment 6; one run, one seed). A `hithead` network from scratch on
+goriya's `d3first` rooms, `--aux hit=hit:0.5 --try-others 4:0.25`, goriya's route run (`r32d1-goriya`) as the
+teacher (KL weight 1.0 for 30 iterations, fading to 0 over 50), 80 iterations on 8 envs (327,680 decisions, 18
+minutes):
+
+```
+python -m triforce.lab.train --name hit --run-id r36hit-smoke --families goriya@d3first --parallel 8 \
+    --iterations 80 --arch hithead --aux hit=hit:0.5 --try-others 4:0.25 --teacher-coeff 1.0 --teacher-hold 30 \
+    --teacher-fade 50 --seed 36
+```
+
+- The hit loss falls: 0.44 a label over iterations 1-10, 0.15 over 36-45, 0.13 over 71-80 (about two labels a
+  decision: the action taken and one tried candidate). Training success 6% → 48% → 90% over the same windows.
+- Held out (fresh rollouts of the trained network on the same rooms, seed 777, 4,096 decisions, the action taken
+  and the network's next 4 candidates each tried: 20,480 labels, 4.1% of them hits): **precision = recall 0.10**,
+  AUC 0.65 (the action taken: 0.09 and 0.66; the tried candidates: 0.11 and 0.65). Weak: the head ranks hits a
+  little above chance; the guard prototype read the planner's verdicts at AUC 0.95 (backlog experiment 2).
+- On the yardstick against goriya's route run (120 paired episodes): success **−5.0 ± 2.0** points, hearts lost
+  **+0.70 ± 0.10** an episode, hits **+1.19 ± 0.14**, decisions +16.2 ± 2.7. Eighty iterations from scratch are
+  not enough to match a teacher trained for thousands; the smoke shows the pieces train, play and report.
+
+**Smoke of a network with memory** (one run, one seed). A `gru` network from scratch on zol's and
+stalfos-keese-gel's `d3first` rooms, their route runs as teachers (KL weight 1.0 for 20 iterations, fading to 0
+over 40), sequences of 16, 60 iterations on 8 envs (245,760 decisions, 47 minutes):
+
+```
+python -m triforce.lab.train --name mem --run-id r36gru-smoke --families zol@d3first stalfos-keese-gel@d3first \
+    --parallel 8 --iterations 60 --arch gru --arch-config '{"hidden_dim": 256, "core_dim": 256}' --bptt 16 \
+    --teacher-coeff 1.0 --teacher-hold 20 --teacher-fade 40 --seed 36
+```
+
+It trains (training success over iterations 1-10, 26-35, 51-60: zol 24% → 41% → 70%, stalfos-keese-gel 17% → 50%
+→ 89%; the teacher KL 1.92 → 1.39 → 0.90), plays served with its state kept per env, and reports: on the yardstick
+against the teachers (240 paired episodes) success **−5.8 ± 1.5** points (zol −8.3 ± 2.5, stalfos-keese-gel
+−3.3 ± 1.6), hearts lost **+0.33 ± 0.05** an episode, hits +0.51 ± 0.07. Like the hit head, too short to judge
+memory itself.
+
+## What the observation lacks (experiment 2 of the program; branch `r36-hit`)
+
+**The question** (backlog, Track M, queue 2). Round 35's guard (a network of the policy's shape reading the policy's
+observation, one hit logit per joint action) predicted the look-ahead's verdict "this action gets Link hit" with AUC
+0.95 but only 0.48-0.60 precision = recall at the planner's veto rate, although the verdict is not luck (two redrawn
+futures agree on 99.85%). Is the missing piece **information** (something that decides a hit is not in the
+observation), **representation** (it is there, in a form the network does not use), **horizon** (decided after the
+decision) or **data**?
+
+**The answer, measured on three families: representation first, data and training second; not information, not
+horizon. Darknut is the exception: nothing tried moves it.**
+- Gradient-boosted trees on the observation alone (no tile grid) reach precision = recall 0.761 / 0.684 on goriya
+  (planner's / model's draws), as high as trees on the raw RAM with per-slot offsets (0.749 / 0.659): what decides a
+  goriya hit is in the observation. The network given the RAM bytes beside the observation gains little and overfits
+  (0.673 / 0.589); the RAM alone is worse than the observation (0.522 / 0.435).
+- The network given the observation plus **contact features** (the game's own touch rule, both middles within 9
+  pixels on both axes, asm:Link_CheckMonsterTouch_NoReset with asm:Obj_GetMiddle, extrapolated per monster for 32
+  frames with Link standing or walking each way) gains +0.10 / +0.15 on goriya and +0.04 / +0.06 on Gleeok; the same
+  features computed **from the observation alone** give +0.075 / +0.11 and +0.04 / +0.04. Nothing the network was not
+  already shown, only put in the game's terms.
+- A shorter label horizon is not easier (hits within the action's first 4 frames: 0.595 / 0.456 against 0.658 / 0.541
+  for the whole action): the network misses hits that are already touching. Hits land early: half on frame 0-2 of
+  the action, three quarters by frame 3-4, in all three families.
+- Data and training matter too: goriya's observation network at 10% / 30% / 100% of the training episodes 0.459 /
+  0.550 / 0.658 (planner's draws), and 30 epochs instead of 10 0.717 / 0.628. Contact features at 30% of the data
+  match the observation at 100%.
+
+### 1. The data: the label logger with the RAM beside it
+
+`TRIFORCE_PLAN_PROBE=1` (`r35_guard_data.py --probe`; no observation code changed): a recording play keeps the 2 KB RAM
+at every decision (`PoolEnv::probe`, `Play.ram`) and every trial reports where Link's health first dropped
+(`Session::probe_trials`, `TrialHit`: the frame of the action, the occupied monster slot nearest Link at that frame,
+its ObjType, `IsShotCollidingWithLink`). Written as `ram` [N, 2048] and `tried_frames`, `tried_hit_frame`,
+`tried_hit_slot`, `tried_hit_type`, `tried_hit_shot`. Goriya's collection is round 35's exact command plus `--probe`
+and reproduces round 35's data exactly (513,014 decisions; every action, verdict and entity feature equal): the probe
+changes no play.
+
+| Family (today's `promoted.d3first`) | States | Episodes (planner + model) | Decisions | Candidates' base rate | Redraw ceiling (precision / recall) |
+|---|---|---:|---:|---:|---|
+| goriya `r32d1-goriya` | Dungeon 7's 13 goriya stems (round 35) | 7,800 + 7,800 | 513,014 | 18.8% | 0.997 / 0.994 |
+| boss-gleeok `r34d4-gleeok4-s1-it2877` | `4_13w` | 1,350 + 1,350 | 444,068 | 8.2% | 0.992 / 0.990 |
+| darknut `r34d5-dg-s362` | `3_5bw` (the last pass), `5_05e` (the Olive Garden) | 1,500 + 1,500 | 454,191 | 6.9% | 0.994 / 0.994 |
+
+Gleeok and darknut use their family yaml with curriculum off and the family's own hp draw (no `chain_hp` profile
+exists for their rooms); goriya round 35's copy (`chain_hp: 1.0`). Each collection ran in the job queue (26-54
+minutes). Held out: every 7th episode, as round 35.
+
+**How much the action matters.** Where the planner's draw was lost and it tried others, every tried candidate was
+lost in only 11% (goriya), 21% (Gleeok), 23% (darknut) of decisions; even with the hit on frame 0 of the action,
+29% / 52% / 56%: most hits are avoidable by another action (the shield's facing, the sword, a step), so the label
+is per action, not only per state.
+
+### 2. Where round 35's guard is wrong (goriya, held-out draws, `r36_hit_errors.py`)
+
+At the matched rate the guard (`guard-a`, 5 epochs) catches 2,295 of 4,073 hits (P = R 0.563 pooled). The misses:
+- **By when the hit lands:** frame 0 of the action 35% missed (675 hits), frames 1-3 43% (1,743), 4-7 41% (937),
+  8-15 66% (441), 16+ 44% (268). The guard misses many hits that are all but touching.
+- **By what hits:** a blue Goriya's body 47% (1,581), its boomerang `$5C` 31% (1,316), a red Goriya 42% (541), a blue
+  Keese 60% (318), type `$5F` 70% (248).
+- **By action:** MOVE 4 frames misses 65% of its hits, MOVE 8 27%, MOVE 32 40%, BEAMS 44%, SWORD 65% (few hits).
+- **Link's own state:** hits when he is still invincible at the decision (the timer runs out during the action) are
+  missed 71% (235); swinging (`ObjState` `$21`/`$31`) 68%.
+- **Geometry:** every hit has a live object within 47 px (|dx| + |dy|); 86% of all errors are with one in his row or
+  column.
+- **Concentration:** diffuse. 418 cells (room × hitter × action × hit frame) hold the misses; the largest 5 hold 17%,
+  the largest 50 52%. No handful of situations to special-case.
+
+With contact features (from the observation; 10 epochs) the misses fall where the hit is imminent: frame 0 31% →
+17%, frames 1-3 34% → 25%; a Keese 47% → 25%, a blue Goriya's body 41% → 31%; the boomerang barely (27% → 25%), hits
+8-15 frames later stay hard (60% → 52%). Pooled P = R 0.625 → 0.710.
+
+### 3. The oracle test (`r36_hit_oracle.py`, `r36_hit_trees.py`; GPU, one process)
+
+The classifier is round 35's (the policy's network with a 352-wide hit head, initialised from the family's
+checkpoint, BCE on every judged candidate on future 0, AdamW 4e-4 one-cycle, batch 1024), 10 epochs unless stated.
+`obs+ram`: an MLP of the kept RAM bytes (567 for goriya: stack, sprite buffer, sound and constant bytes left out;
+each byte as value, signed value and 8 bits) added to the network's features through a zero-initialised projection.
+`obs+contact`: the same with the contact features. Trees: XGBoost, 600 rounds of depth 8, on the candidate's action
+plus the RAM bytes and per-slot offsets from Link, or the observation's vector blocks. P = R: precision = recall at
+the look-ahead's veto rate (± one standard error by resampling held-out episodes); a second training seed moved
+every number by at most 0.02.
+
+| goriya | train loss | held-out log loss | planner draws: AUC, P = R | model draws: AUC, P = R |
+|---|---:|---:|---|---|
+| round 35's guard (5 epochs) | | | 0.948, 0.60 | 0.951, 0.48 |
+| obs | 0.128 | 0.160 | 0.960, **0.658** ± 0.008 | 0.962, **0.541** ± 0.013 |
+| obs, seed 1 | 0.127 | 0.158 | 0.960, 0.661 | 0.962, 0.545 |
+| obs + RAM bytes | 0.077 | 0.212 | 0.959, 0.673 ± 0.009 | 0.962, 0.589 ± 0.012 |
+| obs + RAM, smooth encoding (no bits) | 0.081 | 0.215 | 0.955, 0.661 | 0.960, 0.554 |
+| RAM alone | 0.077 | 0.314 | 0.907, 0.522 | 0.913, 0.435 |
+| obs + contact geometry (from RAM) | 0.055 | 0.154 | 0.973, **0.755** ± 0.008 | 0.975, **0.691** ± 0.011 |
+| obs + contact geometry, seed 1 | 0.054 | 0.157 | 0.974, 0.760 | 0.974, 0.689 |
+| obs + contact timing (from RAM) | 0.090 | 0.186 | 0.962, 0.675 | 0.963, 0.558 |
+| obs + contact, all | 0.052 | 0.159 | 0.973, 0.756 | 0.975, 0.689 |
+| obs + contact from the observation | 0.059 | 0.181 | 0.968, **0.733** ± 0.008 | 0.970, **0.650** ± 0.011 |
+| contact alone (no observation) | 0.051 | 0.165 | 0.970, 0.743 | 0.969, 0.663 |
+| obs, 30 epochs | 0.077 | 0.154 | 0.969, 0.717 ± 0.008 | 0.972, 0.628 ± 0.012 |
+| obs, 60 epochs | 0.035 | 0.189 | 0.970, **0.729** ± 0.007 | 0.973, **0.663** ± 0.012 |
+| obs + contact geometry (RAM), 30 epochs | 0.007 | 0.251 | 0.968, **0.765** ± 0.008 | 0.972, **0.718** ± 0.011 |
+| obs + contact from the observation, 30 epochs | 0.007 | 0.303 | 0.960, 0.743 ± 0.009 | 0.962, 0.671 ± 0.012 |
+| obs, a lost candidate weighted 4 | 0.276 | 0.202 | 0.955, 0.611 ± 0.010 | 0.959, 0.513 ± 0.013 |
+| obs, 30% of the episodes, 30 epochs | 0.099 | 0.222 | 0.944, 0.613 ± 0.010 | 0.946, 0.495 ± 0.014 |
+| obs, a fresh network (not the policy's weights) | 0.115 | 0.153 | 0.959, 0.658 | 0.961, 0.547 |
+| obs, 10% / 30% of the training episodes | 0.208 / 0.162 | 0.266 / 0.207 | 0.459 / 0.550 | 0.292 / 0.422 |
+| obs + contact, 30% of the episodes | 0.070 | 0.256 | 0.935, 0.655 | 0.939, 0.575 |
+| obs, label: hit within 4 / 8 frames | 0.107 / 0.116 | 0.156 / 0.151 | 0.595 / 0.639 | 0.456 / 0.527 |
+| trees on RAM + per-slot offsets | | 0.136 | 0.977, **0.749** ± 0.009 | 0.976, 0.659 |
+| trees on the observation (no grid) | | 0.132 | 0.978, **0.761** ± 0.008 | 0.978, **0.684** ± 0.011 |
+| trees on the observation + RAM + offsets | | 0.117 | 0.982, **0.787** ± 0.008 | 0.983, **0.706** ± 0.010 |
+
+Trained longer, the observation network closes half its gap to the trees (60 epochs 0.729 / 0.663) and the contact
+features' gain shrinks to +0.04 / +0.06 against it (contact geometry at 30 epochs 0.765 / 0.718, the best network
+number); both long runs overfit (training loss 0.007-0.035, held-out log loss rising from 0.154 to 0.19-0.30) while
+the matched precision still rises: the ranking improves as the calibration degrades. Weighting the lost candidates
+(the class balance) costs 0.05 / 0.03; 30% of the data for three times the epochs does not make up for the data
+(0.613 / 0.495 against 0.658 / 0.541). The trees on the observation, the RAM and the offsets together are the best
+of all (0.787 / 0.706); their gain is 27% the per-slot offsets, 21% the entity features, 8% Link's own RAM bytes.
+
+**By RAM group** (obs + one group's bytes; groups `r36_hit_common.RAM_GROUPS`): Link's own bytes (slot 0 of every
+object array, `$56`, `$57`, `$512`, `$34B`) 0.692 / 0.598; the ungrouped rest (zero-page scratch, room bytes) 0.690
+/ 0.576; object state, HP, type, attributes 0.669 / 0.561; the frame counter `$15` 0.665 / 0.568; positions 0.643 /
+0.564, sub-pixel and q-speeds 0.641 / 0.547, directions 0.631 / 0.552, timers 0.636 / 0.525, per-type scratch 0.646
+/ 0.563, the random numbers `$18-$24` 0.610 / 0.500. Every group but Link's own and the frame counter lowers the
+planner's number and raises the training fit: the extra bytes are memorised (training loss 0.07-0.09 against 0.128),
+not used. The trees' attribution on RAM agrees: 43% of the gain in the per-slot offsets from Link, then
+`ObjInvincibilityTimer[0]` `$4F0` (5.8%, the top byte), `ObjTimer[0]` `$28`, Link's position; the random numbers 1.7%,
+the frame counter 0.2%. On the observation: entity features 49% (`in_line`, `dx`, `hurts_on_touch`), then Link's
+`invincibility`, `history.frames`, the target block (a stand-in for where Link is in the room).
+
+**The other two families** (the decisive comparison):
+
+| | goriya planner / model | boss-gleeok planner / model | darknut planner / model |
+|---|---|---|---|
+| obs | 0.658 / 0.541 | 0.653 / 0.553 (seed 1: 0.645 / 0.557) | 0.727 / 0.664 (seed 1: 0.732 / 0.661) |
+| obs + RAM bytes | 0.673 / 0.589 | 0.658 / 0.579 | 0.737 / 0.673 |
+| obs + Link's own RAM bytes | 0.692 / 0.598 | 0.650 / 0.557 | 0.737 / 0.693 |
+| obs + contact geometry (RAM) | **0.755 / 0.691** | **0.688 / 0.624** (seed 1: 0.692 / 0.606) | 0.738 / 0.646 |
+| obs + contact timing (RAM) | 0.675 / 0.558 | 0.664 / 0.571 | 0.737 / 0.664 |
+| obs + contact, all (RAM) | 0.756 / 0.689 | **0.707 / 0.628** | 0.725 / 0.637 |
+| obs + contact from the observation | 0.733 / 0.650 | 0.688 / 0.596 | 0.728 / 0.655 |
+| trees on RAM + offsets | 0.749 / 0.659 | 0.643 / 0.555 | 0.684 / 0.567 |
+| trees on the observation | 0.761 / 0.684 | 0.661 / 0.561 | 0.643 / 0.550 |
+| standard error (episodes) | 0.008 / 0.012 | 0.013 / 0.017 | 0.014 / 0.022 |
+
+Gleeok's trees rank the fireball's slot (`$0B`, the one slot Gleeok's fireballs take) first: its distance to Link is
+22% of the gain, then the flying heads' slots, Link's invincibility timer. Darknut is the exception: its observation
+network is already the best of everything tried (trees are worse, nothing added moves it beyond ±0.02); its
+remaining gap to the ceiling is not explained here (the darknut walks into Link and turns at grid points by
+`Random+1,X`; the data per state is a tenth of goriya's: more data is the untested candidate).
+
+### 4. The proposal: observation v7's danger-relevant part
+
+Every input below is computable from RAM by the env each step; each is per entity unless marked, normalised as
+given. Measured gains are the classifier's P = R (planner's / model's draws) over the observation at the same
+training; "from obs" means the network could in principle compute it itself.
+
+**Contact block (per entity; the largest gain: goriya +0.10 / +0.15, Gleeok +0.04 / +0.06, darknut 0).**
+- `harmful_now`: the object can harm Link on touch this frame: occupied, ObjMetastate 0 (`$405`), ObjStunTimer 0
+  (`$3D`), and a shot (`ObjType` ≥ `$53`) only in `ObjState` `$10-$1F` (asm:Link_CheckMonsterTouch_NoReset). The
+  existing `touch_harms` is close; keep one of the two.
+- `ddx`, `ddy`: the middle-to-middle offset in pixels / 32 (asm:Obj_GetMiddle: ObjX + 8, or + 4 with ObjAttr bit
+  `$40`; Y + 8; Link X + 8, Y + 8), signed 8-bit. Replaces today's corner offsets / 255.
+- `gap_x`, `gap_y`: max(|ddx| − 8, 0) / 32 and the same for Y: pixels before the 9-pixel touch test passes on that
+  axis (both 0 = touching now).
+- `vx`, `vy`: the object's velocity from ObjDir (`$98`) and q-speed (`$3BC`) / 64 pixels per frame (a boomerang
+  `$A0` = 2.5; Goriyas and Keese `$20`), not the measured position change (which is stale across a turn; the RAM
+  velocity gave goriya +0.02 / +0.04 over the measured one).
+- `contact_{stand,N,S,W,E}`: with both moving in straight lines (Link still, or walking at 1.5 px per frame), how
+  soon they touch within 32 frames, (33 − t) / 33, 0 never; `closest_{stand,N,S,W,E}`: the smallest gap / 32. The
+  "time to contact along each axis" and "a shot's lane crosses Link's box within k frames" of the backlog, answered by
+  the game's own rule; `aligned` (in his row or column within 8 px) is subsumed.
+
+**Link (global).**
+- `invincibility_frames`: `ObjInvincibilityTimer[0]` `$4F0` / 32 is there; the trees rank it first in goriya and
+  high in all three: keep it, and add it to the contact rule (no touch is reported while it runs), so
+  `contact_*` read 0 until it ends: hits are missed most (71%) exactly when the timer runs out during the action.
+- `ObjTimer[0]` `$28` (Link's own lockout: the swing, the item use) and `ObjState[0]` `$AC` (swing phase): in the
+  "Link's own bytes" group (+0.03 / +0.06 goriya, darknut model's draws +0.03, Gleeok 0).
+
+**Timing (per entity; small: goriya +0.02 / +0.02, Gleeok +0.01 / +0.02, darknut 0).** Frames to the next grid point
+at the object's speed (`ObjGridOffset` `$394`, where a walker turns), `ObjTimer` `$28` (a Goriya's next throw,
+asm:Walker_SetInputDirAndTryThrowBoomerang), `Shooter_ObjWantsToShoot` `$412`, a Goriya waiting for its boomerang
+(state bit 7), `Wanderer_ObjTurnTimer` `$478`, the object's invincibility timer `$4F0`. Worth carrying only for the
+types whose next move they decide (Goriya, Darknut, Lynel, Moblin); the gain is within twice the error.
+
+**Remove or re-express.**
+- Raw positions as `x / 255`, `dx / 255`: keep `x`, `y` for the map, but the touch geometry wants pixels on a scale
+  where 9 px is a large step (above); the network does not resolve it from 1/255 units.
+- The random numbers `$18-$24` and the frame counter: never add (redraws agree 99.85%; added, they are memorised:
+  −0.05 / −0.04). `frame_phase_32/64` stay for the shot beats they were added for.
+- Raw RAM bytes in general: every byte group but Link's own lowers the held-out number; the RAM is not the place to
+  feed a network from.
+- The trees put `target_distance`, `target_dx/dy` and `room_state.door_*` high: stand-ins for where Link stands in
+  the room. Not a removal: evidence that position in the room matters (walls stop Link's move; the contact block
+  extrapolates through walls and is still the largest gain).
+
+### 5. The hit head
+
+**Per entity, with the action composed on top, plus a small per-joint residual.** The numbers say:
+- Hits land early (median frame 1-2 of the action in all three families; 75% by frame 3-4), so the duration rarely
+  decides whether an action is hit: the 352-way head spends three quarters of its outputs on durations that share
+  one outcome. Per kind × direction (44) loses little; MOVE's duration matters only for the 10-25% of hits after
+  frame 8, which are the hardest anyway.
+- The largest gain came from per-entity features evaluated under each of Link's five motions (stand, N, S, W, E):
+  the natural head is "will entity i touch Link within k frames if he stands / walks d" (12 × 5 × a few time bins),
+  the action's hit probability composed as 1 − Π(1 − p_i(motion(action), frames(action))), SWORD/BEAMS/items as
+  "stand" plus their own effect, and a per-(kind, direction) residual logit for what composition misses (the
+  shield's parry by facing, the sword knocking a monster back).
+- Which label buys what: the taken action's real outcome is free in training and, with the probe, comes with the hit
+  frame and the hitting slot, which is exactly the per-entity label (who touched, when); but it labels one action a
+  decision and few of them are hits (3.2% of the model's own draws against 18.8% of the planner's candidates). The
+  look-ahead labels for untaken actions are what a veto needs (most hits are avoidable by another action: only
+  11-23% of refused draws had every alternative lost) and cost about one action's frames each.
+- **Measured** (goriya, obs, 10 epochs, the same held-out candidates; `--train-on`): every judged candidate (530,429
+  training rows, 18.7% lost) 0.658 / 0.541; each decision's own draw only, both modes (439,898, 5.5%) 0.659 /
+  **0.563**; the model-alone episodes' draws only, the real outcome of the action taken (211,324, 3.2%) 0.506 /
+  0.499, and with contact features from the observation 0.601 / 0.596. The look-ahead's verdicts on the candidates
+  not taken add nothing to the draws' numbers at 10 epochs (they are what a veto's second and third choices are
+  judged on, which the matched P = R does not measure); the action taken alone is worth about 40% of the data
+  (between the 30% and the 100% points of the learning curve) and the contact features help it most (+0.10 / +0.10).
+  A hit head trained in reinforcement on the actions taken alone starts near 0.50 on the model's draws; with the
+  look-ahead's candidates beside them it reaches the numbers of §3.
+
+### 6. Not measured
+
+- 90 epochs and beyond; the label comparison at 30 epochs.
+- A label "hit within N frames after the action": not collected (the trial stops at the action's end); the shorter
+  horizons tested were not easier.
+- Darknut and Gleeok with more data (the larger collection is goriya's, §7); capacity is measured in §7.
+- Any play: no chain or veto was run with a new classifier.
+
+### 7. The bench: hit prediction as the test of inputs and shapes
+
+**Why.** A representation or a network shape that cannot read the hit from the state under supervision will not
+learn to dodge under reinforcement; one that can is worth a reinforcement run. Supervised training on the three
+collections takes one or two minutes a candidate.
+
+**The bench** (`scripts/experiments/r36_hit_bench.py CANDIDATE --family F [--seed S] [--epochs E] [--train-frac
+P]`; `--table` renders `target/r36/bench.jsonl`). Fixed splits (every 7th episode held out, as round 35), 10 epochs,
+seeds 0 and 1, AdamW 4e-4 one-cycle, batch 1024, BCE on every judged candidate of future 0. Scored: P = R on the
+held-out draws of the planner's episodes / the model's own, the held-out log loss on every judged candidate, the
+minutes (one RTX 4090, shared). A candidate is `+`-joined parts; `base` is today's policy shape (room embedding, a
+1-layer entity transformer mean-pooled, the tile conv, the float blocks, a 256-wide 3-layer tower, one hit logit per
+joint action: round 35's guard) from scratch, `policy` the same initialised from the family's checkpoint. Inputs are
+computed from the dataset's observation and RAM (no look-ahead; the engine does not change here), per entity token
+(observation slot i is RAM object slot i + 1):
+- `rel`: Link-relative geometry in pixels on a scale where the 9-pixel touch test is one step: the middle-to-middle
+  offset / 8 (asm:Obj_GetMiddle: ObjX + 8, or + 4 with ObjAttr `$40`; Y + 8) clipped to ±12, the gap on each axis
+  before the test passes (max(|d| − 8, 0) / 8) and the larger of the two, touching, in his row, in his column, the
+  offset / 64 (10 columns);
+- `ramvel`: the velocity from ObjDir `$98` and the q-speed `$3BC` (px / frame) and the game's touch rule (`harmful`);
+- `contact`: the first agent's extrapolation per token (both in straight lines for 32 frames, Link standing or walking
+  N S W E at 1.5 px / frame: how soon they touch, how close they come); `wall`: the same stopped at walls (Link
+  stops where his lower half meets a tile class he cannot walk; walking monsters likewise; shots and fliers do not);
+- `prev1` / `prev2`: the previous one / two observations' offset and measured velocity of the same slot;
+- `patch`: a 9 x 9 tile patch centred on Link beside the whole grid, `patchonly` instead of it; `linkx`: Link's own
+  bytes (ObjState[0] bits, ObjTimer[0], his invincibility timer, the knockback); `cflat`: the first agent's flat
+  contact block (RAM slots 1-12) through a zero-initialised projection (its "obs + contact geometry").
+
+Shapes: `linktok2` / `linktok3` Link as a token (his float block) attending to the entity tokens, 2 / 3 layers of
+width 128, his final token the entity block's output (no mean pool); `relnet` each entity paired with Link by an MLP,
+pooled by max and by sum; `w2x` / `w4x` towers 512 / 1024 wide, `deep` 6 layers; `critic` the action as an input
+(one forward an action, one logit); `ehead` a per-entity head: each entity's final state with the tower's summary
+gives a hazard per (kind, direction, time bin: frames 0-3, 4-7, 8-15, 16+), plus an "other" hazard from the tower;
+the action's probability is 1 − exp(−the hazards of its kind and direction summed over entities and over the bins
+its duration covers), trained as competing risks on the verdict, the hit's frame bin and the hitting slot the probe
+recorded (`noslot`, `noframe`: without them). `trees`: XGBoost on the flat observation, as §3.
+
+**Goriya** (10 epochs; two seeds where two values are given; every row: `r36_hit_bench.py --table`):
+
+| goriya | parameters | planner draws P = R | model draws P = R | held-out log loss |
+|---|---:|---|---|---:|
+| **rel + ramvel + contact + wall + Link token (2 layers)** | 914,796 | **0.866** (0.868 / 0.864) | **0.814** (0.814 / 0.815) | 0.065 |
+| rel + Link token (2 layers) | 911,724 | 0.861 (0.861 / 0.861) | 0.811 (0.819 / 0.802) | 0.068 |
+| rel + ramvel + contact + wall | 639,020 | 0.851 (0.852 / 0.849) | 0.790 (0.794 / 0.785) | 0.072 |
+| Link token, 3 layers (the observation alone) | 1,042,924 | 0.850 (0.851 / 0.849) | 0.784 (0.786 / 0.782) | 0.076 |
+| rel + contact | 638,188 | 0.849 | 0.782 | 0.075 |
+| Link token, 2 layers (the observation alone) | 910,444 | 0.844 (0.844 / 0.844) | 0.777 (0.776 / 0.777) | 0.077 |
+| rel | 637,484 | 0.834 (0.835 / 0.834) | 0.767 (0.768 / 0.765) | 0.079 |
+| per-entity head (the observation alone) | 715,212 | 0.787 (0.786 / 0.789) | 0.687 (0.688 / 0.686) | 0.117 |
+| the first agent's contact block (fresh / from the policy) | 995,946 | 0.777 / 0.756 | 0.717 / 0.699 | 0.137 |
+| trees on the observation | | 0.763 (0.762 / 0.764) | 0.683 (0.681 / 0.686) | 0.133 |
+| base, towers 4x wide | 3,222,700 | 0.683 | 0.607 | 0.148 |
+| base (today's shape, from scratch) | 636,844 | 0.661 (0.662 / 0.660) | 0.562 (0.552 / 0.572) | 0.152 |
+| policy (today's shape from the checkpoint; §3's "obs") | 636,844 | 0.659 | 0.542 | 0.158 |
+| round 35's guard (5 epochs, as trained) | | 0.595 | 0.482 | 0.177 |
+
+What moves goriya:
+- **Link-relative pixels per entity are most of it**: `rel` alone +0.17 / +0.20 over today's shape, 0.07 / 0.08 above
+  the trees, the held-out log loss halved. The information was all in the observation (`dx / 255`); a 9-pixel test
+  is 0.035 on that scale and today's network never resolves it. The same geometry as the first agent's flat block
+  (RAM slots in a row) is worth 0.06 / 0.05 less than as columns of each entity's token.
+- **Or the network finds it itself when Link attends to the entities**: no mean pool, Link's token asking the entity
+  tokens, gets 0.844-0.850 / 0.777-0.784 from the plain observation (2-3 layers, two seeds each); the mean pool, not
+  the inputs' scale alone, is what loses the geometry. `rel` with the Link token 0.861 / 0.811, and with the whole
+  block 0.866 / 0.814: the best candidate.
+- **Extrapolation adds a little on top of `rel`**: contact +0.015 / +0.015, the same stopped at walls +0.01 / +0.016,
+  both with the RAM velocity +0.017 / +0.023 (0.851 / 0.790, two seeds); with the Link token +0.005 / +0.003, inside
+  the seed spread (0.819 / 0.802 for one candidate's two seeds on the model's draws). The wall stop is worth as much
+  as the straight line, not more.
+- **Nothing else**: the RAM velocity alone +0.01 / +0.00; a 9 x 9 Link-centred patch beside or instead of the grid
+  0.00 (with or without `rel`); Link's own state bytes 0.00; the previous observations +0.05 / +0.06 on the plain
+  observation (they carry offsets in pixels / 8) and −0.003 / −0.014 on top of `rel`: measured motion adds nothing to
+  what the RAM velocity gives, and neither adds to `rel`.
+- **The per-entity head teaches the geometry, then adds nothing**: on the plain observation +0.125 / +0.125 (two
+  seeds within 0.003), and the gain is the hitting slot's label: without it the head is today's shape (0.661 /
+  0.552); without the hit frame 0.717 / 0.653; without both 0.593 / 0.537. With `rel` −0.006 / −0.001, with `rel`
+  and the Link token −0.003 / 0.000, with the whole block and the Link token −0.004 / −0.004 (two seeds each); with
+  the Link token alone −0.011 / −0.022 (one seed): once the inputs or the shape give the geometry, who hit is no
+  longer news.
+- **Capacity is not the bottleneck**: towers 2x / 4x wide +0.004 / +0.017 and +0.022 / +0.045, 6 layers +0.005 /
+  +0.013 on the observation; 2x on `rel` +0.014 / +0.013. The action as an input (a critic's shape) −0.01 / −0.03; a
+  relational block (pairs pooled by max and sum) −0.02 / −0.03 on the observation, −0.01 / +0.01 on `rel`.
+- **Longer training does not change the order**: today's network from the checkpoint at 60 epochs 0.730 / 0.665 (the
+  first agent's 0.729 / 0.663), still below every candidate with `rel` or the Link token at 10; the two best at 30
+  epochs 0.863 / 0.804 and 0.862 / 0.812, as at 10: they reach their number by epoch 9-12 and then only overfit (the
+  held-out log loss 0.065-0.068 at 10 epochs, 0.094-0.096 at 30).
+
+**Boss-gleeok and darknut** (two seeds each, mean and the two values):
+
+| | boss-gleeok planner / model draws | darknut planner / model draws |
+|---|---|---|
+| rel + ramvel + contact + wall + Link token | **0.770** (0.771 / 0.768) / **0.678** (0.668 / 0.688) | **0.852** (0.855 / 0.848) / **0.778** (0.778 / 0.778) |
+| rel + Link token | 0.745 (0.747 / 0.743) / 0.670 (0.674 / 0.666) | 0.844 (0.845 / 0.843) / 0.778 (0.787 / 0.769) |
+| rel + ramvel + contact + wall + Link token + per-entity head | 0.748 (0.742 / 0.754) / 0.657 (0.654 / 0.660) | 0.850 (0.851 / 0.849) / 0.769 (0.772 / 0.766) |
+| rel + ramvel + contact + wall | 0.724 (0.719 / 0.729) / 0.643 (0.642 / 0.644) | 0.808 (0.811 / 0.805) / 0.731 (0.731 / 0.731) |
+| rel | 0.710 (0.700 / 0.720) / 0.623 (0.624 / 0.622) | 0.800 (0.801 / 0.799) / 0.730 (0.725 / 0.734) |
+| the same from the policy's checkpoint (the encoders it shares) | 0.710 (0.709 / 0.711) / 0.622 (0.616 / 0.628) | 0.767 (0.774 / 0.760) / 0.690 (0.693 / 0.687) |
+| Link token (the observation alone) | 0.696 (0.693 / 0.698) / 0.631 (0.628 / 0.634) | 0.767 (0.782 / 0.753) / 0.687 (0.699 / 0.675) |
+| the first agent's contact block, from the policy | 0.699 (0.704 / 0.693) / 0.621 (0.622 / 0.620) | 0.723 (0.733 / 0.714) / 0.639 (0.637 / 0.640) |
+| trees on the observation | 0.664 (0.661 / 0.667) / 0.567 (0.561 / 0.573) | 0.646 (0.643 / 0.649) / 0.557 (0.550 / 0.564) |
+| policy (today's shape from the checkpoint) | 0.653 (0.653 / 0.652) / 0.552 (0.549 / 0.555) | 0.728 (0.732 / 0.724) / 0.670 (0.667 / 0.673) |
+| per-entity head (the observation alone) | 0.555 (0.547 / 0.563) / 0.470 (0.451 / 0.489) | 0.743 (0.744 / 0.742) / 0.668 (0.673 / 0.664) |
+| base (today's shape from scratch) | 0.508 (0.528 / 0.489) / 0.442 (0.455 / 0.429) | 0.643 (0.645 / 0.640) / 0.564 (0.567 / 0.561) |
+
+- **The ranking holds**: goriya's best (the whole block with the Link token) is the best in all three families; `rel`
+  alone is the largest single step; the extrapolation adds most on Gleeok (+0.025 / +0.008 over `rel` with the Link
+  token), nothing on darknut; the per-entity head never adds once the geometry is given.
+- **Unlike goriya, today's shape needs the policy's weights** on Gleeok and darknut (from scratch it is 0.10-0.15
+  worse; on goriya the two are level, as the first agent found), but with `rel` the checkpoint's weights no longer
+  help (Gleeok level, darknut −0.04): a new input block starts better from scratch.
+- **Darknut moves.** Nothing the first agent tried moved it (±0.02; the flat contact block here 0.723 / 0.639 against
+  the policy's 0.728 / 0.670). The same geometry per entity token does: `rel` +0.07 / +0.06 over the policy, and with
+  the Link token +0.12 / +0.11 (0.844 / 0.778). It was the flat, slot-ordered form that hid it, not the darknut.
+- **What darknut still misses** (`r36_hit_errors.py` on the held-out draws, `rel` with the Link token against the
+  policy's network; pooled P = R 0.828 against 0.708): hits in the action's first 4 frames are now caught (missed 1-2%
+  against 9%), frames 4-7 16% (26%); the misses left are late: frames 8-15 36% (63%), 16+ 87% (92%), the last quarter
+  of a long action, BEAMS 29% (391 hits), the red Darknut 41% (81 hits). They are concentrated (36 cells of room ×
+  hitter × action × hit frame hold all 197 misses, the largest five 62%). The likely cause, not measured here: a
+  darknut that turns at a grid point by its random number (`Random+1,X`) partway through a long action: the game's
+  random numbers (`$18-$24`) are not in the observation and, given as RAM bytes, were memorised rather than used
+  (§3).
+
+**More data** (goriya: the same command with 600 + 600 runs a state and seed 50000, 1,546,538 decisions, 165 minutes
+in the job queue of which 109 waiting; with the first collection 2,059,552 decisions, family `goriya-all`, every
+7th episode held out: 141,061 model draws; 10 epochs, seed 0; P = R planner's / model's draws, ± about 0.005):
+
+| training candidates | 212 k (10%) | 519 k (25%) | 1.04 M (50%) | 2.13 M (100%) |
+|---|---|---|---|---|
+| rel + ramvel + contact + wall + Link token | 0.836 / 0.783 | 0.859 / 0.818 | 0.875 / 0.836 | **0.887 / 0.851** |
+| rel + ramvel + contact + wall | 0.807 / 0.751 | 0.841 / 0.797 | 0.857 / 0.812 | 0.870 / 0.828 |
+| Link token, 3 layers (the observation alone) | 0.732 / 0.663 | 0.838 / 0.795 | 0.864 / 0.828 | 0.879 / 0.842 |
+| base (today's shape) | 0.579 / 0.485 | 0.652 / 0.566 | 0.706 / 0.638 | 0.747 / 0.696 |
+
+More data still pays at 2 million decisions but less each doubling for the recommended candidate (+0.023 / +0.035,
++0.016 / +0.018, +0.012 / +0.015): it is near its flat part. Today's shape gains +0.04-0.07 a doubling and at 2
+million is below the recommendation at 212 thousand: data substitutes for the representation slowly. The Link token
+alone needs data (0.732 / 0.663 at 10%; from 50% on above the engine block in today's shape and 0.01 below the
+recommendation); the engine's columns make the
+network data-efficient, which is what a reinforcement run's early labels need.
+
+### 8. What it means for the program: the input block and the shape for the first reinforcement runs with a hit head
+
+**The recommendation.** Give the policy the engine's Link-relative danger block per entity (observation schema 7)
+and let Link attend to the entities as a token (no mean pool); put the hit head on its own tower over the same body,
+one logit per joint action, its stopped probabilities an input of the policy tower (the lab's `hithead` wiring). On
+the bench this is `base+rel+ramvel+contact+wall+linktok2`: 914,796 parameters, P = R (planner's / model's draws, two
+seeds) 0.866 / 0.814 on goriya, 0.770 / 0.678 on Gleeok, 0.852 / 0.778 on darknut, against today's network from
+the family's checkpoint 0.659 / 0.542, 0.653 / 0.552, 0.728 / 0.670, the trees 0.763 / 0.683, 0.664 / 0.567, 0.646
+/ 0.557, and round 35's guard 0.595 / 0.482 (goriya).
+
+**From the engine: new per-entity columns** (computed each step from RAM; listed in the order of measured gain, slot
+i of the observation being object slot i + 1; Gleeok's heads and the treasure slot from the positions the observation
+already uses):
+1. **Link-relative geometry, 10 columns** (`rel`; +0.17 / +0.20 goriya, +0.07 / +0.07 darknut and +0.06 / +0.07
+   Gleeok over the policy-initialised observation network): the middle-to-middle offset in pixels / 8, clipped to ±12
+   (`ObjX` `$70+i` + 8, or + 4 when `ObjAttr` `$4BF+i` has `$40`; `ObjY` `$84+i` + 8; Link's `$70` + 8, `$84` + 8,
+   asm:Obj_GetMiddle), the gap on each axis before the touch test passes, max(|d| − 8, 0) / 8, and the larger of the
+   two, touching (both under 9), in his row, in his column (|dy| or |dx| under 9), the offset / 64.
+2. **Contact, stopped at walls, 23 columns** (`ramvel`, `contact`, `wall`; on top of `rel` +0.017 / +0.023 goriya,
+   +0.014 / +0.020 Gleeok, +0.008 / +0.001 darknut; on top of the Link token +0.005 / +0.003 goriya, +0.025 /
+   +0.008 Gleeok, +0.008 / 0.000 darknut): the velocity from `ObjDir` `$98+i` and the q-speed `$3BC+i` (/ 64 px a
+   frame), the game's touch rule (`ObjType` `$34F+i`, `ObjMetastate` `$405+i` 0, `ObjStunTimer` `$3D+i` 0, a shot
+   only in `ObjState` `$AC+i` `$10-$1F`;
+   asm:Link_CheckMonsterTouch_NoReset), and for Link standing or walking N S W E: how soon they touch within 32
+   frames ((33 − t) / 33) and how close they come (gap / 32), once in straight lines and once stopped at walls (the
+   tile grid's walkable classes under Link's lower half; walking monsters likewise, shots and fliers not).
+
+Not worth columns (each measured at 0.00 ± 0.01 or below): a Link-centred tile patch, the previous observations'
+entity blocks (measured motion), Link's own state bytes, the RAM velocity alone, the raw RAM (§3). The tile grid and
+every schema 6 block stay.
+
+**Computed by the network:** the Link token. Link's float block projected to a token, the entity tokens (their
+features, the new columns, the type embedding) projected beside it, 2 transformer layers of width 128 (4 heads),
+Link's final token the entity block's output: on the plain observation alone it gets 0.844-0.851 / 0.776-0.786 on
+goriya, i.e. the network can find the geometry itself once it is not mean-pooled away; with the engine's columns it
+gets the most. Wider or deeper towers, a relational block, a critic's shape and a Link-centred patch are not needed.
+
+**The hit head and its labels.** One logit per joint action (352) on a tower of today's size; trained by BCE on the
+action taken's real outcome and on the look-ahead's verdicts for candidates not taken (the lab's `--aux hit=hit:C
+--try-others K:P`). The verdicts on untaken candidates are required, not a refinement: trained on the actions taken
+alone the same network reaches 0.506 / 0.499 (§5), and a veto's second choice is judged on them. The per-entity
+head (hazards per entity and time bin, trained on the hitting slot and frame) is the strongest teacher on the plain
+observation (+0.125 / +0.125 on goriya, from the slot label) but adds nothing once the geometry is given (−0.006 /
+−0.001 with `rel`, −0.004 / −0.004 with the whole block and the Link token, two seeds; on Gleeok and darknut the
+head with every input, 0.748 / 0.657 and 0.850 / 0.769, is level with the plain head on `rel` and the Link token,
+0.745 / 0.670 and 0.844 / 0.778): the lab needs no hit slot or hit frame in its trials.
+
+**The cost of a learned veto** (held-out model-alone episodes; the veto refuses as often as the look-ahead finds a
+hit, i.e. at P = R on the model's draws; per 1000 decisions of the model playing alone):
+
+| | goriya: hits caught / safe draws refused | Gleeok | darknut |
+|---|---|---|---|
+| hits a 1000 decisions (the look-ahead's veto rate) | 31.9 | 15.6 | 12.4 |
+| round 35's guard (`guard-a`) | 15.4 / 16.5 | | |
+| today's shape from the family's checkpoint (`policy`) | 17.3 / 14.6 | 8.6 / 7.0 | 8.3 / 4.1 |
+| trees on the observation | 21.8 / 10.1 | 8.8 / 6.8 | 6.9 / 5.5 |
+| rel + Link token (two seeds) | 25.9 / 6.0 | 10.5 / 5.1 | 9.6 / 2.8 |
+| the recommendation (engine block + Link token, two seeds) | **26.0 / 5.9** | **10.6 / 5.0** | **9.6 / 2.8** |
+
+**The class, as a specification.** `r36-lab` does not merge into `r36-hit` without conflicts (round 35's guard
+attachment against the lab's external policies, in `triforce/runner.py` and `crates/triforce-py/src/envpool.rs`), so
+the class is written here, not in `triforce/nets/`; it is the bench's candidate with the lab's towers and heads
+(`nets/wide.py`, `nets/hithead.py`), and runs on schema 6 as it is (the Link token alone) until the engine's columns
+land, which then only widen `entity_features`:
+
+```python
+@register
+class HitNet(LabNet):
+    """Link as a token over the entity tokens; a per-action hit head whose stopped probabilities feed the policy."""
+    arch = 'hitnet'
+    defaults = {'d_model': 128, 'layers': 2, 'hidden_dim': 256, 'depth': 3, 'hit_dim': 256, 'hit_input': True}
+
+    def __init__(self, config: dict):
+        super().__init__(config)
+        c, spec = self.config, self.config.obs_spec
+        d = c['d_model']
+        features = spec['entity_features']['shape'][1]           # schema 7: today's 41 + the 33 danger columns
+        self.room_embedding = nn.Embedding(spec['room_id']['vocab'], 16)
+        self.type_embedding = nn.Embedding(spec['entity_types']['vocab'], 16)
+        self.link_proj = layer_init(nn.Linear(spec['link']['shape'][0], d))
+        self.token_proj = layer_init(nn.Linear(features + 16, d))
+        self.role = nn.Parameter(torch.zeros(2, d))              # Link's token, an entity's token
+        layer = nn.TransformerEncoderLayer(d, 4, 2 * d, dropout=0.0, batch_first=True)
+        self.transformer = nn.TransformerEncoder(layer, c['layers'], enable_nested_tensor=False)
+        self.link_out = layer_init(nn.Linear(d, 128))
+        self.grid_encoder = GridEncoder(spec['grid']['vocab'], 22, 32, ModelConfig.from_dict({'obs_spec': spec}))
+        self.vector_keys = sorted(k for k in spec if k not in _SPECIAL_KEYS)
+        n = 16 + 128 + self.grid_encoder.output_dim + sum(spec[k]['shape'][0] for k in self.vector_keys)
+        self.hit_tower = tower(n, c['hit_dim'], 3)
+        self.hit_head = nn.Linear(c['hit_dim'], JOINT)          # zero weights, bias at the base rate's logit
+        self.policy_tower = tower(n + (JOINT if c['hit_input'] else 0), c['hidden_dim'], c['depth'], nn.Tanh)
+        self.value_tower = tower(n, c['hidden_dim'], c['depth'])
+        # kind_head, kind_condition, kind_embedding, direction_head, duration_head, value_head: as nets/wide.py
+
+    def body(self, obs: dict) -> torch.Tensor:
+        ef = obs['entity_features'].float()
+        empty = ef[..., 0] <= 0
+        tokens = self.token_proj(torch.cat([ef, self.type_embedding(obs['entity_types'].long())], -1)) + self.role[1]
+        link = (self.link_proj(obs['link'].float()) + self.role[0]).unsqueeze(1)
+        mask = torch.cat([torch.zeros_like(empty[:, :1]), empty], dim=1)
+        y = self.transformer(torch.cat([link, tokens], dim=1), src_key_padding_mask=mask)
+        return torch.cat([self.room_embedding(obs['room_id'].long().reshape(-1)), torch.relu(self.link_out(y[:, 0])),
+                          self.grid_encoder(obs['grid'])] + [obs[k].float() for k in self.vector_keys], dim=-1)
+
+    def heads(self, obs: dict, state=None):
+        features = self.body(obs)
+        hit = self.hit_head(self.hit_tower(features))           # [B, 352]: kind * 32 + direction * 4 + duration
+        policy_in = torch.cat([features, torch.sigmoid(hit).detach()], -1) if self.config['hit_input'] else features
+        policy = self.policy_tower(policy_in)
+        conditioned = torch.relu(self.kind_condition(policy).unsqueeze(1) + self.kind_embedding.weight)
+        return Heads(self.kind_head(policy), self.direction_head(conditioned), self.duration_head(conditioned),
+                     self.value_head(self.value_tower(features)).view(-1), {'hit': hit}), None
+```
+
+Run as the lab's `hithead` is (`--arch hitnet --aux hit=hit:C --try-others K:P`). The bench's number for this
+body and hit tower is the one to expect from the hit head when it is trained on the same labels; what the policy
+makes of it under reinforcement is the next experiment's question.
+
+
+Scripts: `r35_guard_data.py --probe` (labels with the RAM), `r36_hit_common.py` (data, RAM groups, contact features,
+metrics), `r36_hit_oracle.py` (the classifier), `r36_hit_trees.py` (trees and attribution), `r36_hit_errors.py`
+(error tables), `r36_hit_table.py` (the tables above).
+
 ## The corrected route
 
 The owner corrected `d3first` on Nov 21 (decisions 2026-11-21 "The program"; backlog "Track R"): Dungeons 3, 4, 1,

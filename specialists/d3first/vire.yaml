@@ -1,0 +1,82 @@
+# vire@d3first: the task of the family's run for d3first's wood-sword half (promoted.d3first is r34d4-vire-s1),
+# rebuilt (the yaml it trained on lived in its round's worktree, gone): the family's yaml with state_routes
+# [d3first] and the run's own terms as its run.json and docs/experiments/round34.md ("Dungeon 4", §4) record them:
+# harvested handoffs at 0.4, the family's chain_hp 0.5. The run trained on Dungeon 4's rooms with a harvest of
+# Dungeon 4 only (not kept); today's harvest holds Dungeon 6's 0x39 and 0x2d too, so the family's rooms stay. The
+# lab reads this file for the key f"{family}@d3first" (lab.collect.task_yaml).
+name: vire
+rooms:
+- (4, 0x71)
+- (4, 0x61)
+- (4, 0x50)
+- (4, 0x30)
+- (4, 0x31)
+- (4, 0x20)
+- (4, 0x12)
+- (4, 0x03)
+- (6, 0x39)
+- (6, 0x2d)
+start_states:
+- 4_71*_[0-9]
+- 4_61*_[0-9]
+- 4_50*_[0-9]
+- 4_30*_[0-9]
+- 4_31*_[0-9]
+- 4_20*_[0-9]
+- 4_12*_[0-9]
+- 4_03*_[0-9]
+- 6_39*_[0-9]
+- 6_2d*_[0-9]
+success:
+- exit-correct
+- triforce-collected
+reward_profile: default
+reward:
+  pbrs: true
+  item_targets: true
+  heart_value:
+    exit: true
+    potential: 20
+obs:
+  objective: true
+  target: true
+ram_randomization:
+  hp:
+  - 0.15
+  - max
+  full_hp: 0.5
+  chain_hp: 0.5
+  bombs:
+  - 0
+  - 8
+  bombs_share: 0.5
+  help_count:
+  - 0
+  - 9
+items:
+  bombs: free
+clips:
+  enabled: true
+  off_share: 0
+harvested_fraction: 0.4
+curriculum:
+  enabled: true
+one_room: true
+max_steps: 2000
+warm_start: null
+notes: 'Vire rooms (Dungeon 4, Nov 11-12): a Vire hops toward Link and splits into two Red Keese when hit with less than
+  a killing blow. Dungeon 4''s empty entrance hall 0x71 (S to N) and triforce room 0x03 (ends on pickup), as zol holds Dungeon
+  3''s; 0x61 (three Vires: S to N; best walked past); the dark 0x50 (five: E to N; the block clip cuts its diagonal); the
+  dark 0x30 (three Vires and two Bubbles: S in, E through the locked door); 0x31, a water maze whose land path winds from
+  the W door to the E shutter (five Vires: kill them all to open it on the way to the Breakfast Room; back from E, N through
+  the locked door onto 0x21''s island, round 21''s shortcut); 0x20, a water ring off the route since round 21 (tagged, no
+  start state); 0x12 (five: in through the W wall bombed from the rupee room, kill them, push the block to open the E shutter
+  into Gleeok''s room; round 22: in from N, out of the trap room 0x02). Bombs are free above the route''s reserve of 2 (Lee,
+  Nov 12: 0x31 and 0x12 are good places, a Vire killed outright can drop bombs). Copied from zol (one-room, curriculum,
+  2000 steps). Dungeon 6 (round 27, route `d6`; states `6_39n`, `6_2dn`): the dark 0x39 (five Vires, shut in: kill them
+  for the E shutter, then the ladder over the water column) and the dark 0x2d (three Vires, two Bubbles: kill the Vires
+  for the key, leave W). Bombs stay `free`, but the route''s reserve there is 1 and Link holds 1 after 0x28''s wall, so
+  BOMB is offered only on a drop above it (walked with no reserve: about one bomb spent a room, which the route owes to
+  Dungeon 8).'
+state_routes:
+- d3first

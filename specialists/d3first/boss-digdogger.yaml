@@ -1,0 +1,60 @@
+# boss-digdogger@d3first: the task of the family's run for d3first's wood-sword half (promoted.d3first is
+# r34d7b-dig-s1), rebuilt (the yaml it trained on lived in its round's worktree, gone): the family's yaml with
+# state_routes [d3first] and the run's own terms as its run.json and docs/experiments/round34.md (§9) record them:
+# chain_hp 1.0, the 0x1c handoffs at 0.5 of the resets, no curriculum. The lab reads this file for the key
+# f"{family}@d3first" (lab.collect.task_yaml).
+name: boss-digdogger
+rooms:
+- (5, 0x24)
+- (7, 0x1c)
+- (7, 0x39)
+start_states:
+- 5_24*_[0-9]
+- 7_39*_[0-9]
+- 7_1c*_[0-9]
+success:
+- exit-correct
+reward_profile: default
+reward:
+  pbrs: true
+  item_targets: true
+  heart_value:
+    exit: true
+    potential: 20
+obs:
+  objective: true
+  target: true
+ram_randomization:
+  hp:
+  - 0.15
+  - max
+  full_hp: 0.5
+  bombs:
+  - 0
+  - 8
+  bombs_share: 0.5
+  help_count:
+  - 0
+  - 9
+  chain_hp: 1.0
+items:
+  bombs: free
+  recorder: true
+curriculum:
+  enabled: false
+one_room: true
+max_steps: 900
+warm_start: null
+notes: 'Digdogger (Dungeon 5, round 24; docs/routes/d5.md): the big body (32x32, object $38) can''t be hurt; the recorder
+  played in the room shrinks it inside the recorder''s freeze, and at the freeze''s end (152 frames after the B press) it
+  is the small one ($18, HP $80: four white-sword hits, a bomb takes half). The fastest the game allows (measured): a bomb
+  on the big one''s top-left, the recorder within 46 frames, the sword on the small one''s first hittable frame with the
+  bomb, one more hit when its flash ends. Statue fireballs can''t be blocked (no magic shield). Entered from E through the
+  key door; the heart container (11 hearts) appears on the kill; the N shutter to the triforce room 0x14. RECORDER (round
+  24) is offered while the big one hasn''t heard it: the play that starts the split pays reward-recorder-split once, and
+  the small one''s hits are boss hits (reward-boss-hit). Copied from boss-manhandla. Dungeon 7 (round 26; docs/routes/d7.md):
+  0x1c from W, the recorder, the three small ones (the N shutter opens on the third), no heart container; 0x39 from S is
+  only crossed to the W door past the big one (RECORDER never offered there: the split would fill a room Link walks through).'
+state_routes:
+- d3first
+harvested_fraction: 0.5
