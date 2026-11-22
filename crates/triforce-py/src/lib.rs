@@ -418,6 +418,13 @@ mod _native {
             pyo3::types::PyTuple::new(py, zelda::clips::ClipStats::default().fields().map(|(name, _)| name))?,
         )?;
         m.add(
+            "AIMLESS_FIELDS",
+            pyo3::types::PyTuple::new(
+                py,
+                zelda::aimless::AimlessSummary::default().fields().map(|(name, _)| name),
+            )?,
+        )?;
+        m.add(
             "ACTION_KINDS",
             pyo3::types::PyTuple::new(py, zelda::ActionKind::ALL.iter().map(|k| k.name()))?,
         )?;

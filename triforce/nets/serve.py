@@ -18,6 +18,7 @@ import json
 import os
 import threading
 import time
+import weakref
 from typing import Optional
 
 import numpy as np
@@ -28,6 +29,9 @@ from .. import _native
 DEFAULT_GATHER = 0.005      # at most this many seconds a batch waits for the other active envs' rows
 ACTIVE_SECONDS = 1.0        # an env that asked this recently is waited for (``Server._loop``)
 CPU_THREADS = 4             # torch threads when serving on the CPU
+GRAPH_BUCKETS = (1, 2, 4, 8, 16, 32, 64)    # batch sizes a CUDA graph is captured for; larger batches run eagerly
+GRAPH_CHECKS = 3            # a new graph's first replays are compared with the eager forward on the same rows
+GRAPH_TOLERANCE = 1e-4      # ... and must agree within this (a graph replays the captured kernels; 0 measured)
 
 
 def serve_device() -> torch.device:
@@ -40,6 +44,52 @@ def serve_half() -> bool:
     """``$TRIFORCE_SERVE_HALF=1``: run served networks in half precision on the GPU (autocast float16; measured in
     docs/lab.md "Acting speed"; the logits differ from float32 within the half's precision)."""
     return os.environ.get('TRIFORCE_SERVE_HALF', '') not in ('', '0')
+
+
+def serve_graphs() -> bool:
+    """``$TRIFORCE_SERVE_GRAPHS=0`` turns off CUDA graphs for served networks (on by default on the GPU)."""
+    return os.environ.get('TRIFORCE_SERVE_GRAPHS', '1') not in ('', '0')
+
+
+def _bucket(rows: int) -> Optional[int]:
+    return next((b for b in GRAPH_BUCKETS if b >= rows), None)
+
+
+class _Graph:
+    """One network's forward at one batch size, captured as a CUDA graph: static inputs filled in place, one
+    replay, the logits and value side by side in a static output. A replay launches the captured kernels in one
+    call, so it costs about a millisecond where the eager forward's Python and launches cost 4-5 (docs/lab.md
+    "Acting speed")."""
+
+    def __init__(self, network, obs: dict, half: bool):
+        self.network, self.half = network, half
+        self.inputs = {key: value.clone() for key, value in obs.items()}
+        stream = torch.cuda.Stream()
+        stream.wait_stream(torch.cuda.current_stream())
+        with torch.cuda.stream(stream):
+            for _ in range(3):      # warm-up off the default stream (lazy initialisation, cuBLAS workspaces)
+                self._forward()
+        torch.cuda.current_stream().wait_stream(stream)
+        self.graph = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(self.graph):
+            self.output = self._forward()
+        self.checks = GRAPH_CHECKS
+
+    def _forward(self) -> torch.Tensor:
+        with torch.autocast('cuda', dtype=torch.float16, enabled=self.half):
+            heads, _ = self.network.heads(self.inputs)
+        return _flat(heads)
+
+    def run(self, obs: dict) -> torch.Tensor:
+        for key, value in obs.items():
+            self.inputs[key].copy_(value, non_blocking=True)
+        self.graph.replay()
+        return self.output
+
+
+def _flat(heads) -> torch.Tensor:
+    """The logits and the value side by side (one copy back)."""
+    return torch.cat([heads.flat().float(), heads.value.float().unsqueeze(-1)], dim=-1)
 
 
 def weights_hash(network: torch.nn.Module) -> int:
@@ -55,11 +105,16 @@ def weights_hash(network: torch.nn.Module) -> int:
 class Server:
     """Serves networks to pools through one queue (the module docstring)."""
 
-    def __init__(self, device=None, gather: float = DEFAULT_GATHER, threads: int = CPU_THREADS,
-                 half: Optional[bool] = None):
+    def __init__(self, device=None, gather: Optional[float] = None, threads: int = CPU_THREADS,
+                 half: Optional[bool] = None, graphs: Optional[bool] = None):
         self.device = torch.device(device) if device is not None else serve_device()
-        self.gather = gather
+        self.gather = float(os.environ.get('TRIFORCE_SERVE_GATHER', DEFAULT_GATHER)) if gather is None else gather
         self.half = (serve_half() if half is None else half) and self.device.type == 'cuda'
+        # CUDA graphs (``_Graph``) for networks without recurrent state, per batch size bucket; a network whose
+        # capture fails or whose replay disagrees with its eager forward is served eagerly from then on.
+        self.graphs = (serve_graphs() if graphs is None else graphs) and self.device.type == 'cuda'
+        self._graphs: dict[tuple[int, int], _Graph] = {}
+        self._eager: set[int] = set()
         if self.device.type == 'cpu':
             # torch's default (every core) contends with the pool's workers: measured 4 decisions/s on 10 envs.
             torch.set_num_threads(threads)
@@ -76,19 +131,30 @@ class Server:
 
     def policy(self, network: torch.nn.Module, key=None):
         """``network`` (moved to the server's device, eval mode) as an ``_native.ExternalPolicy``.  The same
-        ``key`` (default: the network object) reuses its model index and replaces the network there."""
+        ``key`` (default: the network object) reuses its model index and replaces the network there; a new key
+        always gets a new index."""
         key = id(network) if key is None else key
         with self._lock:
-            index = self._keys.setdefault(key, len(self._keys))
+            index = self._keys.get(key)
+            if index is None:
+                index = self._keys[key] = len(self.models)
             self.models[index] = network.to(self.device).eval()
             self._states = {k: v for k, v in self._states.items() if k[0] != index}
+            self._graphs = {k: v for k, v in self._graphs.items() if k[0] != index}
+            self._eager.discard(index)
         self._start()
         return self.queue.policy(index, weights_hash(network))
 
     def serve_copy(self, network: torch.nn.Module, key=None):
         """``policy`` of a frozen copy of ``network`` (``key`` default: the network object, so a training run's
-        rollouts reuse one index and the copy before is dropped)."""
-        return self.policy(copy.deepcopy(network), id(network) if key is None else key)
+        rollouts reuse one index and the copy before is dropped).  The default key lives as long as ``network``:
+        once it is gone its id may name another network (``load_model(path)[0].to_native()`` in a loop), which
+        must get its own index, never replace the one served for the network that died."""
+        if key is None:
+            key = id(network)
+            if key not in self._keys:
+                weakref.finalize(network, self._keys.pop, key, None)
+        return self.policy(copy.deepcopy(network), key)
 
     def _start(self):
         if self._thread is None or not self._thread.is_alive():
@@ -124,13 +190,15 @@ class Server:
         for model in np.unique(models):
             rows = np.nonzero(models == model)[0]
             network = self.models[int(model)]
-            obs = {key: torch.from_numpy(value[rows]).to(self.device, non_blocking=True)
-                   for key, value in batch['obs'].items()}
             state = self._state_rows(network, int(model), batch, rows)
-            with torch.autocast('cuda', dtype=torch.float16, enabled=self.half):
-                heads, new_state = network.heads(obs, state)
-            # One copy back: the logits and the value side by side.
-            out = torch.cat([heads.flat().float(), heads.value.float().unsqueeze(-1)], dim=-1).cpu().numpy()
+            out = self._graphed(int(model), network, batch, rows) if state is None and self.graphs else None
+            new_state = None
+            if out is None:
+                obs = {key: torch.from_numpy(value[rows]).to(self.device, non_blocking=True)
+                       for key, value in batch['obs'].items()}
+                with torch.autocast('cuda', dtype=torch.float16, enabled=self.half):
+                    heads, new_state = network.heads(obs, state)
+                out = _flat(heads).cpu().numpy()        # one copy back: the logits and the value side by side
             logits[rows] = out[:, :-1]
             values[rows] = out[:, -1]
             if new_state is not None:
@@ -138,6 +206,36 @@ class Server:
         self.queue.answer(batch['slot'], logits, values)
         self.batches += 1
         self.rows += count
+
+    def _graphed(self, model: int, network, batch: dict, rows) -> Optional[np.ndarray]:
+        """``rows`` of ``batch`` through ``network``'s CUDA graph for their bucket (the rows padded by repeating the
+        last; rows are independent), as the logits and value of each row; None when it is served eagerly (a batch
+        above the largest bucket, a network marked eager).  A capture that fails, or one of a graph's first replays
+        that disagrees with the eager forward on the same rows, marks the network eager with a warning."""
+        bucket = _bucket(len(rows))
+        if bucket is None or model in self._eager:
+            return None
+        padded = np.concatenate([rows, np.repeat(rows[-1:], bucket - len(rows))])
+        obs = {key: torch.from_numpy(value[padded]).to(self.device, non_blocking=True)
+               for key, value in batch['obs'].items()}
+        graph = self._graphs.get((model, bucket))
+        try:
+            if graph is None:
+                graph = self._graphs[(model, bucket)] = _Graph(network, obs, self.half)
+            out = graph.run(obs)
+            if graph.checks:
+                graph.checks -= 1
+                with torch.autocast('cuda', dtype=torch.float16, enabled=self.half):
+                    eager = _flat(network.heads(obs)[0])
+                if not torch.allclose(out, eager, atol=GRAPH_TOLERANCE, rtol=GRAPH_TOLERANCE):
+                    raise RuntimeError(f"graph and eager forward differ by {float((out - eager).abs().max()):.3g}")
+            return out[:len(rows)].cpu().numpy()
+        except Exception as error:     # pylint: disable=broad-exception-caught
+            self._eager.add(model)
+            self._graphs = {k: v for k, v in self._graphs.items() if k[0] != model}
+            print(f"triforce: warning: served network {model} runs without CUDA graphs: "
+                  f"{type(error).__name__}: {error}", flush=True)
+            return None
 
     def _state_rows(self, network, model: int, batch: dict, rows) -> Optional[torch.Tensor]:
         fresh = network.initial_state(len(rows)) if hasattr(network, 'initial_state') else None
