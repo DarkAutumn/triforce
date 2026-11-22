@@ -5,7 +5,9 @@
 //! room Link left. Drops count dropped items per
 //! kind as they appear (a new slot, or a slot whose lifetime timer went up, as `HeartTracker` counts hearts; items
 //! on the floor when a visit starts count too); pickups are `Change.items_gained`; hits are steps that lost
-//! health; keys are rises of the key count (the env passes Link's natural keys: a cheated key is no gain); bombs
+//! health; Bubble touches are steps a Bubble's touch landed in ([`Change::bubble_touched`]) and the blocked frames
+//! the frames of the steps that began with the sword blocked; keys are rises of the key count (the env passes Link's
+//! natural keys: a cheated key is no gain); bombs
 //! used and cheated items used are what the env's cheat ledger reports per step (`crate::cheats`), boss stuns/eats
 //! what the env's `env::critic::BossTransitions` reports (Dodongo stunned by a bomb's smoke, or swallowing a bomb).
 //! The exit is the direction Link left in (`n`/`s`/`e`/`w`, `cave` for stairs, caves and dungeon entrances), or how
@@ -69,6 +71,10 @@ pub struct RoomVisit {
     pub hits: u32,
     /// Hits on enemies (`Change::hits`).
     pub hits_dealt: u32,
+    /// Steps a Bubble's touch landed in ([`Change::bubble_touched`]; round 38), and the frames of the steps that
+    /// began with the sword blocked (the decisions taken without it).
+    pub bubble_touches: u32,
+    pub sword_blocked_frames: u64,
     /// Items dropped, per [`ITEM_KINDS`] index.
     pub drops: [u32; 6],
     /// Items picked up, per [`ITEM_KINDS`] index.
@@ -124,6 +130,9 @@ pub struct VisitStep<'a> {
     pub health_lost: f64,
     pub health_gained: f64,
     pub hits_dealt: u32,
+    /// A Bubble's touch landed in the step ([`Change::bubble_touched`]), and the step began with the sword blocked.
+    pub bubble_touched: bool,
+    pub began_blocked: bool,
     pub items_gained: &'a [i16],
     /// Bombs placed this step, its [`BombStats`] and cheated items used (set by the env; 0 from
     /// [`VisitStep::of`]).
@@ -151,6 +160,8 @@ impl VisitStep<'_> {
             health_lost: change.health_lost,
             health_gained: change.health_gained,
             hits_dealt: change.observed.hits() as u32,
+            bubble_touched: change.bubble_touched(),
+            began_blocked: change.previous.is_sword_blocked(),
             items_gained: &change.observed.items_gained,
             bombs_used: 0,
             bombs: BombStats::default(),
@@ -224,6 +235,10 @@ impl VisitTracker {
             visit.hits += 1;
         }
         visit.hits_dealt += step.hits_dealt;
+        visit.bubble_touches += u32::from(step.bubble_touched);
+        if step.began_blocked {
+            visit.sword_blocked_frames += step.frames as u64;
+        }
         visit.bombs_used += step.bombs_used;
         visit.bombs += step.bombs;
         visit.cheated += step.cheated;
@@ -279,6 +294,8 @@ impl VisitTracker {
             health_gained: 0.0,
             hits: 0,
             hits_dealt: 0,
+            bubble_touches: 0,
+            sword_blocked_frames: 0,
             drops,
             pickups: [0; 6],
             keys_gained: 0,
@@ -343,6 +360,8 @@ mod tests {
             health_lost,
             health_gained: 0.0,
             hits_dealt,
+            bubble_touched: false,
+            began_blocked: false,
             items_gained,
             bombs_used: 0,
             bombs: BombStats::default(),
@@ -439,8 +458,25 @@ mod tests {
         );
         let v = &t.visits[0];
         assert_eq!((v.hits, v.health_lost, v.health_gained), (2, 1.5, 1.0));
+        assert_eq!((v.bubble_touches, v.sword_blocked_frames), (0, 0));
         assert_eq!((v.health_in, v.health_out), (3.0, 2.5));
         assert_eq!(v.exit, EXIT_SUCCESS);
+    }
+
+    #[test]
+    fn bubble_touches_count_steps_and_the_blocked_frames_follow_the_steps_begun_blocked() {
+        let mut t = VisitTracker::default();
+        t.reset(&view(ROOM, 3.0, 0, &[]));
+        let go_on = VisitEnd::Continue;
+        let touch = VisitStep { bubble_touched: true, ..step(0.0, 0, &[]) };
+        let blocked = VisitStep { began_blocked: true, ..step(0.0, 0, &[]) };
+        let retouch = VisitStep { bubble_touched: true, began_blocked: true, ..step(0.0, 0, &[]) };
+        for s in [&touch, &blocked, &blocked, &retouch, &blocked] {
+            t.update(&view(ROOM, 3.0, 0, &[]), s, go_on);
+        }
+        t.update(&view(ROOM, 3.0, 0, &[]), &step(0.0, 0, &[]), VisitEnd::Ended(EXIT_TIMEOUT));
+        let v = &t.visits[0];
+        assert_eq!((v.bubble_touches, v.sword_blocked_frames, v.hits), (2, 4 * 8, 0), "a touch is no hit");
     }
 
     #[test]

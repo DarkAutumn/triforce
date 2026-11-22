@@ -100,6 +100,8 @@ pub struct StepInfo {
     /// Monster hits the step saw (`zelda::Observed::hits`: damage dealt, observed, no look-ahead; not in the info
     /// dict).
     pub hits: u32,
+    /// A Bubble's touch landed in the step (`zelda::Change::bubble_touched`; not in the info dict).
+    pub blocked: bool,
     pub action: Option<Action>,
     /// This step's reward terms (`rewards`).
     pub rewards: Vec<(&'static str, f64)>,
@@ -1169,6 +1171,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         info.menu_frames = change.menu_frames;
         info.health_lost = change.health_lost;
         info.hits = change.observed.hits() as u32;
+        info.blocked = change.bubble_touched();
         info.interrupt = change.interrupt;
         info.action = Some(action);
         info.rewards = rewards.terms().collect();
@@ -1191,6 +1194,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             rewards: Vec::new(),
             health_lost: 0.0,
             hits: 0,
+            blocked: false,
             // full_location: an underworld cellar is a sub-room like a cave (`1:0x7f:cave`), as in the visits.
             room: {
                 let l = state.full_location();
