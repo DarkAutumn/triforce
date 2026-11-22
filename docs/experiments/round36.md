@@ -151,10 +151,11 @@ own in brackets) only for small or easy tasks:
 | gibdo | dodongo-crossing 97 ± 3, moldorm 100, pols-voice 82 ± 9 (91 ± 5) |
 | any boss network | nothing |
 
-So seven families are absorbed by a broad network of their group with no loss beyond noise: ow-boulder, ow-peahat,
-ow-start (by ow-moblin or ow-zora), d2-rope, moldorm, lanmola, dodongo-crossing (by goriya, stalfos-keese-gel, zol
-or darknut). The largest set one network covers is ow-zora's: six families (itself, boulder, peahat, ghini,
-equipment-room, tektite), the last three at 0.90-0.91 of their own.
+So seven families look absorbed by a broad network of their group: ow-boulder, ow-peahat, ow-start (by ow-moblin or
+ow-zora), d2-rope, moldorm, lanmola, dodongo-crossing (by goriya, stalfos-keese-gel, zol or darknut). The largest set
+one network covers is ow-zora's: six families (itself, boulder, peahat, ghini, equipment-room, tektite), the last
+three at 0.90-0.91 of their own. **The chain check below finds that none of this is free on the route:** a 0.9 in
+this matrix is a room or two lost 5-13% of the time, and a segment pays it in full.
 
 **By mutual transfer** (average linkage of the two-way ratio, both capped at 1): at 0.75 the overworld forms
 {ghini, octorok, leever, peahat, start} and {moblin, tektite, zora}, the dungeon rooms {stalfos-keese-gel, moldorm,
@@ -229,21 +230,53 @@ These say what a merged network must be given, not that the skill is missing:
   network was trained to take there, and the `target` pointer does not override it (0:0x74 is entered three times by
   the route with three exits; 0:0x55's two visits).
 
+### The chain check: one network standing in for a merged set
+
+The largest set (ow-zora's) and the largest dungeon set (goriya's), each on the record segment its families hold,
+1000 runs, seeds 0-999, models alone, clips on, paired run for run with the chains of record (`read.py seg`):
+
+| Segment | Stand-in | Record | With the stand-in | Paired |
+|---|---|---:|---:|---:|
+| `post-d1` (`0_37c_v2_0` to step 97; ow-tektite 7 steps, ow-zora 5 of 19) | ow-zora's `r32d1-zora` for ow-tektite (`--checkpoint ow-tektite@d3first=`) | 99.8% (`r34land-1k-post-d1`) | 92.1% ± 0.9 | **-7.7 ± 0.9** |
+| `d7` (`7_79s_0` to step 194; goriya 13 steps of 21) | goriya's `r32d1-goriya` for dodongo-crossing (`--checkpoint dodongo-crossing@d3first=`) | 42.3% (`r35land-1k-d7`) | 34.9% ± 1.5 | **-7.4 ± 1.6** |
+
+- **`post-d1`'s record pairs:** it was played on 2.0.0.1, whose runs on this leg are today's (checked from its
+  meta); 100 runs of today's team (seeds 0-99, `--stop-at step:97`) are identical run for run (100 of 100).
+- **Where `post-d1` is lost:** 0:0x2c, leaving without the heart container behind the bomb wall (56 runs), the
+  bounce limit at 0:0x0c (18), the other ware taken in 0x2c's cave (3), 2 deaths. Every loss is an objective of a
+  tektite room (the heart container, the shop), none a fight; the matrix had ow-zora at 98% on 0x2c's screen and
+  cave (30 episodes each) and at 33% (own 48%) out of 0x0c's cave.
+- **Where `d7` is lost:** 71 more deaths in 7:0x0c (108 of the 659 runs that enter it, against few in the record),
+  the rest as the record; the matrix had goriya at 87% there (own 100%), and 13% of 66% of the runs is about the 7.4
+  points the chain lost.
+- **What it says:** the matrix predicts the chain room by room, and a family "covered" at 0.9 is not free: a merged
+  network must keep every room it takes over at its own network's rate, which none of today's networks does
+  zero-shot. Merging is a training problem (every teacher's rooms in the mix), not a choice of the best network.
+  The chain cost (job registry): 37 minutes, plus 22 minutes of a first batch killed for want of `--stop-at`.
+
 ### (e) Proposal: the first consolidation round
 
+No merge is free (the chain check), so the groups are for a training run that keeps every teacher's rooms in the
+mix; the matrix says where a group's body starts and which rooms will need the most of it.
+
 1. **Overworld: one network for all ten families, plus equipment-room's cellars.** ow-zora already plays five other
-   families' tasks at 0.9 or more and the rest at 0.67-0.87; the losses are the special exits, which every
-   overworld teacher's demonstrations cover. Start from ow-zora's or ow-moblin's weights.
+   families' tasks at 0.9 or more and the rest at 0.67-0.87; the losses are room objectives and special exits (the
+   recorder plays, docks, trees, wraps, bomb walls, the shop), not fights. Start from ow-zora's or ow-moblin's weights.
 2. **Dungeon rooms: one network for stalfos-keese-gel, zol, d2-rope, goriya, darknut, vire, gibdo, trap-room,
-   pols-voice, moldorm, lanmola, dodongo-crossing, like-like, wizzrobe, wallmaster.** The four broad networks cover
-   d2-rope, moldorm, lanmola and dodongo-crossing for free and cluster with vire and gibdo at 0.65; like-like and
-   wizzrobe cluster together; wallmaster needs its own data (nobody plays it). Start from goriya's or darknut's.
+   pols-voice, moldorm, lanmola, dodongo-crossing, like-like, wizzrobe, wallmaster.** The four broad networks play
+   d2-rope, moldorm, lanmola and dodongo-crossing at 0.9 or more and cluster with vire and gibdo at 0.65; like-like
+   and wizzrobe cluster together; wallmaster needs its own data (nobody plays it). Start from goriya's or darknut's.
 3. **Bosses: a shared body with a head a boss** (Aquamentus, Digdogger, Dodongo, Gleeok, Gohma, Manhandla, Ganon,
    Patra): no boss network plays another boss, and the broad dungeon networks are better at the bosses (Patra 64-71%,
    Dodongo 27-80%) than the other boss networks are (14-34%, 0-40%): a boss head starts from the dungeon body.
 4. **Overworld and dungeon rooms in one body is plausible next:** the dungeon networks already play overworld
    rooms at 0.80-0.84 of their owners'.
 
-The evidence a line each: (1) ow-zora covers 5 families at >= 0.9 (above), mean 0.88; (2) goriya/darknut/skg/zol cover
-4 families at >= 0.9, cluster of 8 at 0.65; (3) best other on a boss 0.17-0.42 (Manhandla, Ganon 0.62-0.63 on their
-easy states only); (4) dungeon networks on 5 overworld tasks 0.80-0.84 against 0.85-0.86 for the overworld's best.
+The evidence a line each: (1) ow-zora covers 5 families at >= 0.9, mean 0.88, and stood in for ow-tektite at -7.7
+± 0.9 on `post-d1` (room objectives, not fights); (2) goriya/darknut/skg/zol cover 4 families at >= 0.9, a cluster of
+8 at 0.65, and goriya stood in for dodongo-crossing at -7.4 ± 1.6 on `d7` (one room); (3) the best other boss
+network on a boss 0.17-0.42 (Gohma 0.83 by Ganon's arrows; Manhandla, Ganon 0.62-0.63 on their easy states only);
+(4) dungeon networks on 5 overworld tasks 0.80-0.84 against 0.85-0.86 for the overworld's best.
+
+**Cost:** 1.55 hours of queue run time for the matrix (504 cells, 110,490 episodes), 1.0 hour for the chains (0.6
+for the three that count, 0.4 for a first batch killed for want of `--stop-at`), 2.5 hours in all.
