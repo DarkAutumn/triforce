@@ -75,10 +75,13 @@ def parse_families(items, parallel: int, shares: Optional[dict] = None) -> list[
 
 class Teachers:
     """Each family's teacher (the network that plays its rooms today: ``registry.policy_checkpoint(key)``, or the
-    given checkpoints), on ``device``, labelling rows in batches: joint log-probs ``[n, 352]`` and values."""
+    given checkpoints), on ``device``, labelling rows in batches: joint log-probs ``[n, 352]`` and values.
+    ``weights``: key -> the weight of its rows' teacher term (default 1; 0: no teacher term for that key)."""
 
-    def __init__(self, keys, device, root=None, checkpoints: Optional[dict] = None):
+    def __init__(self, keys, device, root=None, checkpoints: Optional[dict] = None,
+                 weights: Optional[dict] = None):
         self.device = torch.device(device)
+        self.weights = {key: float((weights or {}).get(key, 1.0)) for key in keys}
         self.networks: dict[str, torch.nn.Module] = {}
         self.paths: dict[str, str] = {}
         loaded: dict[str, torch.nn.Module] = {}
@@ -113,12 +116,16 @@ class Teachers:
 class BufferSet:
     """The families' readied rollout buffers as one batch (``PPO.optimize`` reads ``flatten``)."""
 
-    def __init__(self, keys: list[str], buffers: list, labels: Optional[list] = None):
+    def __init__(self, keys: list[str], buffers: list, labels: Optional[list] = None,
+                 weights: Optional[list] = None):
         self.keys = keys
         self.buffers = buffers
         self.labels = labels
         self.rows = sum(b.rows for b in buffers)
         self.family = torch.cat([torch.full((b.rows,), i, dtype=torch.int64) for i, b in enumerate(buffers)])
+        self.weight = None      # teacher term weight per row; None: 1 everywhere
+        if weights is not None and any(w != 1.0 for w in weights):
+            self.weight = torch.tensor(weights, dtype=torch.float32)[self.family]
 
     @staticmethod
     def rows(buffer) -> tuple[dict, torch.Tensor]:
@@ -137,6 +144,8 @@ class BufferSet:
         if self.labels is not None:
             batch['teacher_joint'] = torch.cat([joint for joint, _ in self.labels]).to(device)
             batch['teacher_value'] = torch.cat([value for _, value in self.labels]).to(device)
+            if self.weight is not None:
+                batch['teacher_weight'] = self.weight.to(device)
         return batch
 
 
@@ -243,7 +252,8 @@ class MultiCollector:
             for key, collector in zip(self.keys, self.collectors):
                 obs, masks = BufferSet.rows(collector.buffer)
                 labels.append(self.teachers.label(key, obs, masks))
-        self.buffer = BufferSet(self.keys, [c.buffer for c in self.collectors], labels)
+        self.buffer = BufferSet(self.keys, [c.buffer for c in self.collectors], labels,
+                                None if self.teachers is None else [self.teachers.weights[k] for k in self.keys])
         self.recompute_seconds = time.time() - began
         merged = RolloutMetrics()
         for collector in self.collectors:
