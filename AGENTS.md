@@ -25,13 +25,23 @@ there).
   required wall's missing bomb is still cheated and counted, for now; what the game can answer is found in the
   emulator, not asked. The route landed in 2.0.0.5 (next bullet); retraining has not started.
 
+- **2.0.0.7 (Nov 22; round38.md "0x2d dropped"; decisions 2026-11-22 "2.0.0.7"): 0:0x2d's bomb-wall rupee cave left
+  `d3first`** (the owner's second route change): 0x2d is crossed W → S, 0x3d's Armos cave stays; 290 steps, every
+  step after 90 two lower than 2.0.0.6's; steps 89-153 and the D5 / out-of-Level-5 / D7 entries rebuilt (855
+  states, audit clean); `d2first` identical (100 runs). Today's 51 networks, not retrained, 1000 runs a segment:
+  to Level 2 99.1% → 98.3% (620 frames shorter), `d2` 98.4% → 99.3%, Level 5 to Level 7 78.9% → 83.1% (the new
+  state's purse and bombs, not the code); Dungeon 2 entered with 3.07 bombs (2.02); from the start 28 of 1000 take
+  Dungeon 2's triforce (21). Rupees cheated at the shops: none before; now 137 of 196 runs carrying their own purse
+  are a few rupees short at the arrows (2.2 a run). The golden race wins three of three (325 runs); the corpus's
+  `golden-d3first-51-networks` is replaced (160,248 frames, two wall bombs and one key cheated).
+
 - **2.0.0.6 (Nov 22; round37.md "The owner's bomb rules"; decisions 2026-11-22): the owner's bomb rules on
   `d3first`** (`bomb_rules:` in routes.yaml: bombs a weapon only in dungeon rooms the route fights, none but the
   wall's in 3:0x5b, a room's bombs fought for with 7 or fewer and then taken for the visit, dropped bombs the
   targets below the bag, the 10th kill's bomb always), and 2:0x5e crossed on `d3first`. Today's 51 networks, not
   retrained: weapon bombs in crossings 1.94 → 0 a run, cheated wall bombs 0.66 → 0.30 a run; `d3` −1.5, `d4` +2.6,
   `d2` −1.4 points, the rest unchanged within noise. 7:0x1b measured both ways (the floor lands; the crossing
-  override commented). `d2first` identical. 0:0x2d's rupee cave (the owner's second route change) is not in yet.
+  override commented). `d2first` identical. 0:0x2d's rupee cave (the owner's second route change) came in 2.0.0.7.
 
 - **2.0.0.5 (Nov 22; round36.md "The corrected route"; decisions 2026-11-22 "2.0.0.5"): the corrected `d3first` is
   the route.** 292 steps in the owner's order (above), `d2first` untouched (its step list and a 100-run chain
@@ -53,7 +63,8 @@ there).
   race from power on wins three of three** (411 runs together; tries per segment D3 6/9/4, D4 4/38/7, D1 1/3/4, D2
   1/2/2, D5 12/3/7, D7 with the 0x55 warp 29/64/42, D6 with the 0x3f warp and the sword 39/15/38, D8 16/13/16, D9
   25/6/5); the shortest (152,051 frames) was the corpus's `golden-d3first-51-networks` until 2.0.0.6 replaced it
-  (180,118 frames, under the bomb rules; `single-run-d3first-old-order-51-networks` stays: a single run on
+  (180,118 frames, under the bomb rules; 2.0.0.7's, 160,248 frames, without 0x2d's cave, replaced that one;
+  `single-run-d3first-old-order-51-networks` stays: a single run on
   2.0.0.3's order). The lab's yardstick was re-made on the corrected route's states and harvested
   entries (`docs/lab.md` "The yardstick"). What the baseline leaves open, in the order it costs the route:
   backlog Track R.
@@ -695,8 +706,9 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 
 ## Versioning (Lee, Nov 11)
 
-- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `2.0.0.5`: the owner's corrected `d3first`,
-  the two dock warps as engine macros, its rebuilt states, the lab's yardstick on them; no network retrained;
+- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `2.0.0.7`: 0:0x2d's rupee cave left
+  `d3first`, its states after 0x2d rebuilt; 2.0.0.6 was the owner's bomb rules; 2.0.0.5 was the owner's corrected
+  `d3first`, the two dock warps as engine macros, its rebuilt states, the lab's yardstick on them; no network retrained;
   2.0.0.4 was the lab, `docs/lab.md`: runs over several families, teachers, networks of any shape beside today's,
   the yardstick; no network's play changed; 2.0.0.3 was `d3first`'s bag of 8 bombs at
   Dungeon 5 removed, the owner's checkpoint; 2.0.0.2 was round 34's two late `d3first`
