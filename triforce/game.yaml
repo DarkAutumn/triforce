@@ -251,31 +251,6 @@ rooms:
     tile: [16, 2]
     wares: [[magic-shield, 160], [key, 100], [blue-candle, 60]]  # [item, rupees], left to right
 - level: 0
-  location: '0x0c'
-  routes: [d3first]  # phase X: d3first's candle shop (d2first crosses the room by the wrap exit)
-  exits:
-    cave:  # d3first-walks-a.md §5: the shop's open mouth, the blue candle
-      level: 0
-      location: '0x0c'
-      in_cave: true
-- level: 0
-  location: '0x0c'
-  in_cave: true
-  routes: [d3first]
-  specialist: ow-tektite
-  exits:
-    S:
-      level: 0
-      location: '0x0c'
-  enemies: null
-  # The shop $1E (phase X, d3first): magic shield 160 (X $58), key 100 (X $78), the blue candle 60 (X $98, d3first's
-  # `waypoint: blue-candle`; walked Nov 19, d3first-walks-a.md §5: the right ware). Laid out as 0x44's and 0x34's:
-  # off the other wares' squares. One ware a visit; any sets 0x0c's item flag $10.
-  treasure: blue-candle
-  treasure_tile: [19, 11]
-  requires_rupees: 60
-  path_costs: [{cols: [11, 11], rows: [11, 12], cost: 255}, {cols: [15, 15], rows: [11, 12], cost: 255}]
-- level: 0
   location: '0x0d'
   specialist: ow-tektite  # round 24: the clip way to Dungeon 5 (from S, W)
   exits:
@@ -2119,28 +2094,6 @@ rooms:
     how: burn
     tile: [16, 4]
     rupees: 100
-- level: 0
-  location: '0x62'
-  routes: [d3first]
-  specialist: ow-moblin  # phase X: d3first's dead woods 100 secret (5 Blue Moblins, edge spawns, as 0x61 and 0x63)
-  exits:
-    cave:  # d3first-walks-b.md §3: the burned tree's stairs (the blue candle facing W from ($A0,$5D))
-      level: 0
-      location: '0x62'
-      in_cave: true
-- level: 0
-  location: '0x62'
-  in_cave: true
-  routes: [d3first]
-  specialist: ow-moblin
-  exits:
-    S:
-      level: 0
-      location: '0x62'
-  enemies: null
-  # "IT'S A SECRET TO EVERYBODY": one rupee ware in the middle, taken walking up at X $78; 100 rupees, once per game
-  # (room flag $90 after it: the burned tree's $80 and the item's $10). Out of the cave Link stands at ($60,$7D).
-  treasure: 100-rupees
 - level: 0
   location: '0x63'
   specialist: ow-moblin  # d2first to Dungeon 3 (Nov 9)

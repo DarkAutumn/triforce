@@ -2241,7 +2241,8 @@ mod tests {
         );
         assert_eq!(map.requires_rupees(loc(0, 0x2c)), 0);
         assert_eq!(map.requires_rupees(loc(0, 0x44)), 0, "the room outside the shop needs none");
-        assert_eq!(map.for_route("d3first").requires_rupees(L::new(0, 0x0c, true)), 60);
+        // Round 36: d3first's candle shop (0x0c's cave) left the route and its game.yaml entry with it.
+        assert_eq!(map.for_route("d3first").requires_rupees(L::new(0, 0x0c, true)), 0);
         let tagged = GAME_YAML.replacen("  requires_bombs: true", "  requires_rupees: 80\n  requires_bombs: true", 1);
         assert_ne!(tagged, GAME_YAML);
         let map = GameMap::from_yaml(&tagged, ROUTES_YAML).unwrap();
@@ -2650,7 +2651,7 @@ mod tests {
         assert_eq!(tagged, route.union(&strays).copied().collect());
         // Beyond the default route's own rooms: the alternate (4:0x20 is on the D4 stretch's plain way since round 22)
         // and d3first's own rooms (phase X: Dungeon 3's way in, the Level 4 -> 1 leg's 0x46, row 2 E of 0x28, the
-        // secrets' and the candle shop's caves, the dead woods).
+        // secrets' caves; round 36 dropped the candle shop and the dead woods).
         let default: BTreeSet<L> = map.routes[DEFAULT_ROUTE].iter().map(RouteStep::location).collect();
         let beyond: BTreeSet<L> = route.difference(&default).copied().collect();
         let cave = |room: u8| L::new(0, room, true);
@@ -2665,9 +2666,6 @@ mod tests {
                 loc(0, 0x2a),
                 loc(0, 0x2b),
                 cave(0x2d),
-                cave(0x0c),
-                loc(0, 0x62),
-                cave(0x62),
                 cave(0x3d)
             ]
             .into()
@@ -2717,8 +2715,6 @@ mod tests {
         assert_eq!(
             own,
             [
-                loc(0, 0x0c),
-                cave(0x0c),
                 loc(0, 0x29),
                 loc(0, 0x2a),
                 loc(0, 0x2b),
@@ -2727,19 +2723,17 @@ mod tests {
                 loc(0, 0x3d),
                 cave(0x3d),
                 loc(0, 0x46),
-                loc(0, 0x62),
-                cave(0x62),
                 loc(3, 0x4a)
             ]
             .into()
         );
-        assert_eq!(d3.rooms().len(), map.rooms().len() + 4, "d3first's four caves");
-        let tags = [(loc(0, 0x29), "ow-leever"), (loc(0, 0x46), "ow-zora"), (loc(0, 0x62), "ow-moblin")];
+        assert_eq!(d3.rooms().len(), map.rooms().len() + 2, "d3first's two caves");
+        let tags = [(loc(0, 0x29), "ow-leever"), (loc(0, 0x46), "ow-zora")];
         for (room, family) in tags.into_iter().chain([(loc(3, 0x4a), "stalfos-keese-gel")]) {
             assert_eq!(map.get(room).unwrap().specialist, None, "{room}");
             assert_eq!(d3.get(room).unwrap().specialist.as_deref(), Some(family), "{room}");
         }
-        for room in [0x0c, 0x2d, 0x3d, 0x62] {
+        for room in [0x2d, 0x3d] {
             assert!(!map.get(loc(0, room)).unwrap().exits.contains_key("cave") && map.get(cave(room)).is_none());
             assert_eq!(d3.get(loc(0, room)).unwrap().exits["cave"].destination, cave(room));
         }
@@ -2749,11 +2743,11 @@ mod tests {
         assert_eq!((wall.requires_bombs, wall.bomb_secret), (true, Some((10, 2))));
         assert_eq!(wall.exits.keys().collect::<Vec<_>>(), ["N", "E", "S", "W", "cave"]);
         assert_eq!((&wall.enemies, &wall.specialist), (&shared.enemies, &shared.specialist));
-        // d3first's steps are checked against its own map: without its 0x0c entry (a route name routes.yaml lacks is
-        // a test's, its rooms unused) the shop's cave is no exit of 0x0c.
-        let unknown = GAME_YAML.replacen("routes: [d3first]", "routes: [d4first]", 1);
+        // d3first's steps are checked against its own map: without its 0x2d entry (a route name routes.yaml lacks is
+        // a test's, its rooms unused) the rock wall's cave is no exit of 0x2d.
+        let unknown = GAME_YAML.replacen("  location: '0x2d'\n  routes: [d3first]", "  location: '0x2d'\n  routes: [d4first]", 1);
         let e = GameMap::from_yaml(&unknown, ROUTES_YAML).unwrap_err().0;
-        assert!(e.contains("d3first") && e.contains("0x0c"), "{e}");
+        assert!(e.contains("d3first") && e.contains("0x2d"), "{e}");
     }
 
     /// The bow detour: 0x22's stairs lead into the cellar (an in_cave room under its own id) and its ladder back;

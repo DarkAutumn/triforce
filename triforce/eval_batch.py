@@ -117,20 +117,21 @@ class RouteSegments:
     milestones: tuple
 
 
-# d3first (phase X; docs/routes/d3first.md): the same kind of table in its own order, Dungeons 3, 4, 1, 5, 2, 7, 6, 8,
-# 9, its start states in its namespace (`d3first_3_7cs_0`).  0:0x74 is entered three times (into Level 3, out of it,
-# out of the whirlwind from Level 5), 0x45 twice, 0x37 out of Dungeon 1 after its entrance: an arrival or milestone
-# out of a dungeon is ordered after the dungeon's triforce room.
+# d3first (phase X; round 36, the owner's corrected order, docs/routes/d3first.md): the same kind of table in its own
+# order, Dungeons 3, 4, 1, 2, 5, 7, 6, 8, 9, its start states in its namespace (`d3first_3_7cs_0`).  0:0x74 is entered
+# twice (into Level 3, out of it), 0x45 twice (out of Level 4, the whirlwind from Level 5), 0x37 out of Dungeon 1
+# after its entrance, 0x3c into Level 2 and out of it, 0x0b and 0x42 into their levels and out: an arrival or
+# milestone out of a dungeon is ordered after the dungeon's triforce room.
 D3FIRST_SEGMENTS = ('full:start d3:3_7cs_0 post-d3:0_74c_0 d4:4_71s_0 post-d4:0_45c_0 d1:1_73s_0 '
-                    'post-d1:0_37c_v2_0 d5:5_76s_0 post-d5:0_0bc_0 d2:2_7ds_0 post-d2:0_3cc_0 d7:7_79s_0 '
+                    'post-d1:0_37c_v2_0 d2:2_7ds_0 post-d2:0_3cc_0 d5:5_76s_0 post-d5:0_0bc_0 d7:7_79s_0 '
                     'post-d7:0_42c_0 d6:6_79s_0 post-d6:0_22c_0 d8:8_7es_0 post-d8:0_6dc_0 d9:9_76s_0')
 D3FIRST_TARGETS = {'d3': '3:0x3d,0:0x74', 'post-d3': '4:0x71', 'd4': '4:0x03,0:0x45', 'post-d4': '1:0x73',
-                   'd1': '1:0x36,0:0x37', 'post-d1': '5:0x76', 'd5': '5:0x14,0:0x0b', 'post-d5': '2:0x7d',
-                   'd2': '2:0x0d,0:0x3c', 'post-d2': '7:0x79', 'd7': '7:0x2b,0:0x42', 'post-d7': '6:0x79',
+                   'd1': '1:0x36,0:0x37', 'post-d1': '2:0x7d', 'd2': '2:0x0d,0:0x3c', 'post-d2': '5:0x76',
+                   'd5': '5:0x14,0:0x0b', 'post-d5': '7:0x79', 'd7': '7:0x2b,0:0x42', 'post-d7': '6:0x79',
                    'd6': '6:0x0c,0:0x22', 'post-d6': '8:0x7e', 'd8': '8:0x2c,0:0x6d', 'post-d8': '9:0x76'}
 D3FIRST_MILESTONES = (('d3', '3:0x7c'), ('post-d3', '3:0x3d,0:0x74'), ('d4', '4:0x71'), ('post-d4', '4:0x03,0:0x45'),
-                      ('d1', '1:0x73'), ('post-d1', '1:0x36,0:0x37'), ('d5', '5:0x76'), ('post-d5', '5:0x14,0:0x0b'),
-                      ('d2', '2:0x7d'), ('post-d2', '2:0x0d,0:0x3c'), ('d7', '7:0x79'), ('post-d7', '7:0x2b,0:0x42'),
+                      ('d1', '1:0x73'), ('post-d1', '1:0x36,0:0x37'), ('d2', '2:0x7d'), ('post-d2', '2:0x0d,0:0x3c'),
+                      ('d5', '5:0x76'), ('post-d5', '5:0x14,0:0x0b'), ('d7', '7:0x79'), ('post-d7', '7:0x2b,0:0x42'),
                       ('d6', '6:0x79'), ('post-d6', '6:0x0c,0:0x22'), ('d8', '8:0x7e'), ('post-d8', '8:0x2c,0:0x6d'),
                       ('d9', '9:0x76'))
 

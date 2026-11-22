@@ -70,22 +70,28 @@ def _identity(step: dict) -> Tuple[str, str, str, Optional[str]]:
 def route_at(revision: str, route: str) -> List[dict]:
     """The steps of ``route`` as triforce/routes.yaml at git ``revision`` numbered them (each with its ``level``,
     ``room``, ``in_cave``, ``entry``, ``exit`` and ``way``; a ``stretch:`` block is its clip way's steps, then its
-    plain way's, as ``zelda::game_map`` numbers them)."""
+    plain way's, as ``zelda::game_map`` numbers them; an ``include:`` is its block's elements)."""
     import yaml  # pylint: disable=import-outside-toplevel
     text = subprocess.run(['git', 'show', f'{revision}:triforce/routes.yaml'], check=True, capture_output=True,
                           text=True, cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))).stdout
     routes = yaml.safe_load(text)
 
-    def flat(name: str) -> List[dict]:
-        body = routes[name]
-        items = body if isinstance(body, list) else flat(body['extends']) + body['steps']
+    def elements(items: List[dict]) -> List[dict]:
         steps = []
         for item in items:
-            if 'stretch' in item:
+            if 'include' in item:
+                steps += elements(routes['blocks'][item['include']])
+            elif 'stretch' in item:
                 steps += [dict(s, way=way) for way in ('clips', 'plain') for s in item[way]]
             else:
                 steps.append(dict(item, way=None))
         return steps
+
+    def flat(name: str) -> List[dict]:
+        body = routes[name]
+        if isinstance(body, list):
+            return elements(body)
+        return (flat(body['extends']) if 'extends' in body else []) + elements(body['steps'])
 
     return [{'level': s['level'], 'room': int(str(s['room']), 16), 'in_cave': bool(s.get('in_cave')),
              'entry': s['entry'], 'exit': s['exit'], 'way': s['way']} for s in flat(route)]

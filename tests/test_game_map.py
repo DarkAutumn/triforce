@@ -59,30 +59,34 @@ def test_dungeon_1_leaves_by_its_entrance_and_comes_back_in():
 
 
 def test_d3first_runs_from_the_start_to_the_end_of_the_game():
-    """Phase X: d3first's steps (Dungeons 3, 4, 1, 5, 2, 7, 6, 8, 9), its heart containers at each dungeon's entrance
-    as the audit counts them (``entry_states.RouteIndex``: 3, then one per heart-container room before it), its
-    purchases and secrets, its four whirlwinds."""
+    """Phase X, round 36 (the owner's corrected order, Nov 21): d3first's steps (Dungeons 3, 4, 1, 2, 5, 7, 6, 8, 9),
+    its heart containers at each dungeon's entrance as the audit counts them (``entry_states.RouteIndex``: 3, then one
+    per heart-container room before it: 7 at Level 2, 8 at Level 5, 9 at Level 7, 12 at the sword), its purchases and
+    secrets (no blue candle), its five whirlwinds: two of them the dock warps out of 0x55 and 0x3f."""
     from triforce.entry_states import RouteIndex                 # pylint: disable=import-outside-toplevel
     steps = native.route_steps('d3first')
     first, last = steps[0], steps[-1]
     assert (first['level'], first['room'], first['entry'], last['level'], last['room'], last['exit']) == (
-        0, 0x77, 'start', 9, 0x32, 'end') and len(steps) == 304
-    assert [s['level'] for s in steps if s['exit'] == 'triforce'] == [3, 4, 1, 5, 2, 7, 6, 8]
+        0, 0x77, 'start', 9, 0x32, 'end') and len(steps) == 292
+    assert [s['level'] for s in steps if s['exit'] == 'triforce'] == [3, 4, 1, 2, 5, 7, 6, 8]
     index = RouteIndex('d3first')
     entrances = {}
     for step in steps:
         entrances.setdefault(step['level'], step['index'])
     assert {level: index.hearts(i) for level, i in entrances.items() if level} == {
-        3: 3, 4: 4, 1: 5, 5: 7, 2: 10, 7: 11, 6: 12, 8: 13, 9: 15}
+        3: 3, 4: 4, 1: 5, 2: 7, 5: 8, 7: 9, 6: 12, 8: 13, 9: 15}
     assert index.max_hearts == 15
+    sword = next(s['index'] for s in steps if s['waypoint'] == 'sword')
+    assert index.hearts(sword) == 12
     assert [(s['room'], s['waypoint']) for s in steps if s['waypoint'] and s['level'] == 0] == [
-        (0x2c, 'heart'), (0x2d, 'rupees'), (0x0c, 'blue-candle'), (0x62, 'rupees'), (0x2f, 'heart'),
-        (0x3d, 'rupees'), (0x44, 'arrows'), (0x34, 'food'), (0x21, 'sword'), (0x47, 'heart')]
+        (0x2c, 'heart'), (0x2d, 'rupees'), (0x3d, 'rupees'), (0x0f, 'rupees'), (0x34, 'food'), (0x44, 'arrows'),
+        (0x2f, 'heart'), (0x21, 'sword'), (0x47, 'heart')]
     assert [(s['room'], steps[s['index'] + 1]['room']) for s in steps if s['exit'] == 'recorder'] == [
-        (0x0b, 0x74), (0x3c, 0x45), (0x22, 0x3c), (0x6d, 0x37)]
-    assert [(s['level'], s['room'], s['bomb_reserve']) for s in steps[:149] if s['bomb_reserve'] is not None] == [
+        (0x0b, 0x45), (0x55, 0x34), (0x3f, 0x31), (0x22, 0x3c), (0x6d, 0x37)]
+    assert [(s['level'], s['room'], s['bomb_reserve']) for s in steps[:181] if s['bomb_reserve'] is not None] == [
         (3, 0x7c, 6), (3, 0x59, 0), (3, 0x5b, 0), (3, 0x5c, 6), (3, 0x4d, 0), (3, 0x3d, 6), (4, 0x71, 2), (0, 0x45, 8),
-        (0, 0x37, 8), (5, 0x76, 8), (5, 0x05, 0), (5, 0x05, 8), (5, 0x24, 0), (0, 0x3c, 1)]
+        (0, 0x37, 8), (5, 0x76, 8), (5, 0x05, 0), (5, 0x05, 8), (5, 0x24, 0), (7, 0x79, 8), (7, 0x1b, 2), (7, 0x2a, 0),
+        (0, 0x42, 8)]
 
 
 def test_d3first_the_bomb_reserve_through_dungeon_3():
@@ -119,7 +123,7 @@ def test_d3first_keeps_the_bag_through_dungeon_7_to_0x1b():
                          (0x1a, entrance), (0x1b, 2), (0x1c, 2), (0x0c, 2), (0x0d, 2), (0x29, 2), (0x2a, 0),
                          (0x2b, 0)], route
         assert [s['treasure'] for s in native.route_steps(route) if (s['level'], s['room']) == (7, 0x1b)] == [wanted]
-    assert [len(native.route_steps(r)) for r in ('d2first', 'd3first')] == [354, 304]
+    assert [len(native.route_steps(r)) for r in ('d2first', 'd3first')] == [354, 292]
 
 
 def test_rooms_visited_more_than_once_have_later_visit_names():
@@ -134,8 +138,8 @@ def test_rooms_visited_more_than_once_have_later_visit_names():
         '0_5cw_v2', '0_5dw_v2', '0_64e_v2', '0_6dn_v2', '1_73s_v2', '5_07cave_v2', '9_75cave_v2']
     assert later['d3first'] == [
         'd3first_0_28s_v2', 'd3first_0_37c_v2', 'd3first_0_38s_v2', 'd3first_0_38w_v2', 'd3first_0_48w_v2',
-        'd3first_0_50e_v2', 'd3first_0_51e_v2', 'd3first_0_55n_v2', 'd3first_0_63s_v2', 'd3first_0_73e_v2',
-        'd3first_1_73s_v2', 'd3first_5_07cave_v2', 'd3first_9_75cave_v2']
+        'd3first_0_4cn_v2', 'd3first_0_4dw_v2', 'd3first_0_55n_v2', 'd3first_1_73s_v2', 'd3first_5_07cave_v2',
+        'd3first_9_75cave_v2']
 
 
 def test_d3first_segments_and_scopes_start_and_cut_at_its_steps():
@@ -148,7 +152,7 @@ def test_d3first_segments_and_scopes_start_and_cut_at_its_steps():
     segments = [item.split(':') for item in table.segments.split()]
     starts = [room_stats.state_step(plan, start) for _, start in segments]
     assert starts == sorted(starts) and [name for name, _ in segments] == [
-        'full', 'd3', 'post-d3', 'd4', 'post-d4', 'd1', 'post-d1', 'd5', 'post-d5', 'd2', 'post-d2', 'd7', 'post-d7',
+        'full', 'd3', 'post-d3', 'd4', 'post-d4', 'd1', 'post-d1', 'd2', 'post-d2', 'd5', 'post-d5', 'd7', 'post-d7',
         'd6', 'post-d6', 'd8', 'post-d8', 'd9']
     for (name, _), (_, following) in zip(segments[1:], segments[2:]):
         step = plan[room_stats.state_step(plan, following)]

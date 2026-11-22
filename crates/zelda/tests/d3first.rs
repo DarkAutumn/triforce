@@ -1,7 +1,8 @@
-//! Phase X: the route `d3first` (routes.yaml; docs/routes/d3first.md) as the engine reads it: its length and end,
-//! its triforces in order, what Link holds at each dungeon's entrance (sword, heart containers, items, pieces), the
-//! whirlwind's four warps (plays and facings from the game's index, `zelda::whirlwind::plays`), its stretches (the
-//! shared blocks'), and every step's room, entry and exit a door of game.yaml leading into the next step's room. Its
+//! Phase X, round 36 (the owner's corrected order): the route `d3first` (routes.yaml; docs/routes/d3first.md) as the
+//! engine reads it: its length and end, its triforces in order, what Link holds at each dungeon's entrance (sword,
+//! heart containers, items, pieces), the whirlwind's five warps, two of them dock warps (plays and facings from the
+//! game's index, `zelda::whirlwind::plays`), its stretches (the shared blocks'), and every step's room, entry and exit
+//! a door of game.yaml leading into the next step's room. Its
 //! game.yaml rooms are its own map's (`GameMap::route_map`): `d2first` plays 0:0x2d without the rock wall d3first
 //! bombs and 0:0x3d without the Armos stairs d3first takes (both in the real game, from d2first's own start states).
 #![cfg(feature = "zcore")]
@@ -15,7 +16,7 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 use zelda::cheats::{CheatItem, needs};
 use zelda::enums::SwordKind;
-use zelda::game_map::{RouteStep, whirlwind_level};
+use zelda::game_map::{RouteStep, dock_level, is_dock_room, whirlwind_level};
 use zelda::objectives::{GameCompletion, ObjectiveKind, StepProgress, route_entry, route_progress};
 use zelda::whirlwind::{FACING_DOWN, FACING_UP, plays, step_index};
 use zelda::{Action, ActionKind, Direction, GameMap, LoadOptions, MapLocation, Session, Var};
@@ -59,20 +60,20 @@ fn pieces(levels: &[u8]) -> u8 {
 fn the_route_runs_from_the_start_to_the_end_of_the_game() {
     let map = map();
     let steps = steps(&map);
-    assert_eq!(steps.len(), 304);
+    assert_eq!(steps.len(), 292);
     let (first, last) = (&steps[0], steps.last().unwrap());
     assert_eq!((first.level, first.room, first.entry.as_str(), first.exit.as_str()), (0, 0x77, "start", "cave"));
     assert_eq!((last.level, last.room, last.exit.as_str()), (9, 0x32, "end"));
     assert_eq!(map.namespace(ROUTE), Some("d3first"));
     let triforces: Vec<u8> = steps.iter().filter(|s| s.exit == "triforce").map(|s| s.level).collect();
-    assert_eq!(triforces, [3, 4, 1, 5, 2, 7, 6, 8]);
+    assert_eq!(triforces, [3, 4, 1, 2, 5, 7, 6, 8]);
     let stretches: Vec<&str> = map.stretches[ROUTE].iter().map(|s| s.name.as_str()).collect();
-    assert_eq!(stretches, ["d4-island", "dock-44", "woods", "ring-07", "arrow-20", "arrow-20n"], "the blocks' only");
+    assert_eq!(stretches, ["d4-island", "ring-07", "arrow-20", "arrow-20n"], "the blocks' only");
 }
 
 /// The wood sword until the grave's magic sword, the items and pieces in the route's order, and the heart containers
-/// the owner's list gives: 3, +1 for each of Dungeons 3, 4, 1, the heart rock, Dungeon 5, the ladder heart, the raft
-/// heart, Dungeons 2, 7, 6, 8 and 0x47's.
+/// the owner's list gives: 3, +1 for each of Dungeons 3, 4, 1, the heart rock, Dungeons 2, 5, 7, the ladder heart, the
+/// raft heart (12 at the sword), Dungeons 6, 8 and 0x47's.
 #[test]
 fn link_holds_the_routes_things_at_each_dungeons_entrance() {
     let map = map();
@@ -91,9 +92,9 @@ fn link_holds_the_routes_things_at_each_dungeons_entrance() {
         (3, Wood, 3, &[], &[]),
         (4, Wood, 4, &[3], &["raft"]),
         (1, Wood, 5, &[3, 4], &["raft", "ladder"]),
-        (5, Wood, 7, &[1, 3, 4], &["bow", "raft", "ladder"]),
-        (2, Wood, 10, &[1, 3, 4, 5], &["bow", "raft", "ladder", "recorder"]),
-        (7, Wood, 11, &[1, 2, 3, 4, 5], &["bow", "raft", "ladder", "recorder"]),
+        (2, Wood, 7, &[1, 3, 4], &["bow", "raft", "ladder"]),
+        (5, Wood, 8, &[1, 2, 3, 4], &["bow", "raft", "ladder"]),
+        (7, Wood, 9, &[1, 2, 3, 4, 5], &["bow", "raft", "ladder", "recorder"]),
         (6, Magic, 12, &[1, 2, 3, 4, 5, 7], &["bow", "raft", "ladder", "recorder"]),
         (8, Magic, 13, &[1, 2, 3, 4, 5, 6, 7], &["bow", "raft", "ladder", "recorder"]),
         (9, Magic, 15, &[1, 2, 3, 4, 5, 6, 7, 8], &["bow", "raft", "ladder", "recorder"]),
@@ -114,17 +115,18 @@ fn link_holds_the_routes_things_at_each_dungeons_entrance() {
     let tree_heart = index(steps, 0, 0x47, "cave", "E");
     assert_eq!(
         [rock, ladder_heart + 1, raft_heart, tree_heart].map(|i| hearts(&map, steps, i)),
-        [7, 9, 10, 15],
+        [7, 11, 12, 15],
         "the heart rock, the ladder heart, the raft heart, 0x47's"
     );
     assert!(!progress[entrance(9)].silver_arrow && progress[steps.len() - 1].ring && progress[steps.len() - 1].silver_arrow);
 }
 
-/// The four warps: out of Level 5 (index 0, pieces 1, 3, 4, 5) one play facing right or up lands in 0x74 (Level
-/// 3); out of Level 2 one play facing right or up on 0x45's pier (Level 4); out of Level 6 two plays facing down in
-/// 0x3c (Level 2); out of Level 8 one play facing down in 0x37 (Level 1). Link comes out of a level facing down: on
-/// the first two the family turns E before the play (RECORDER is offered only facing so). Each warp leaves the index
-/// on the level it went to (the game's own step, `step_index`).
+/// The five warps (round 36, `scripts/experiments/r36_recorder_search.py`): out of Level 5 (index 0, pieces 1-5) two
+/// plays facing down land in 0x45 (Level 4); in 0x55's water a dock warp to 0x34 (Level 4's stand-in room one row up:
+/// N, then W back, the index stays on Level 4); in 0x3f's water a dock warp to 0x31 (Level 7: two plays N); out of
+/// Level 6 two plays facing up in 0x3c (Level 2: Link turns before them); out of Level 8 one play facing down in 0x37
+/// (Level 1). Each sequence is the game's own steps (`step_index`), the plan recomputed after each play as the
+/// engine does (in the water: N for a step up, W for a step down).
 #[test]
 fn the_whirlwind_warps_follow_the_index() {
     let map = map();
@@ -134,24 +136,32 @@ fn the_whirlwind_warps_follow_the_index() {
     let mut warps = Vec::new();
     for (i, step) in steps.iter().enumerate().filter(|(_, s)| s.exit == "recorder") {
         let next = &steps[i + 1];
-        let level = whirlwind_level(next.location()).expect("a landing room");
+        let dock = is_dock_room(step.location());
+        let level = if dock { dock_level(next.location()) } else { whirlwind_level(next.location()) };
+        let level = level.expect("a landing room");
         let triforce = progress[i].triforces;
         let (count, facing) = plays(index, triforce, false, level).expect("the level's piece is held");
-        let up = facing & FACING_UP != 0;
-        index = (0..count).fold(index, |at, _| step_index(at, triforce, up));
+        let mut summoned = false;
+        while let Some((left, f)) = plays(index, triforce, summoned, level)
+            && left > 0
+        {
+            index = step_index(index, triforce, f & FACING_UP != 0);
+            summoned = true;
+        }
         assert_eq!(index & 7, level - 1, "step {i}: the plays leave the index on the level");
         warps.push((step.room, next.room, level, count, facing));
     }
     assert_eq!(
         warps,
         [
-            (0x0b, 0x74, 3, 1, FACING_UP),
-            (0x3c, 0x45, 4, 1, FACING_UP),
-            (0x22, 0x3c, 2, 2, FACING_DOWN),
+            (0x0b, 0x45, 4, 2, FACING_DOWN),
+            (0x55, 0x34, 4, 2, FACING_UP | FACING_DOWN),
+            (0x3f, 0x31, 7, 2, FACING_UP),
+            (0x22, 0x3c, 2, 2, FACING_UP),
             (0x6d, 0x37, 1, 1, FACING_DOWN)
         ]
     );
-    assert!(["ow-leever", "ow-octorok"].iter().all(|f| {
+    assert!(["ow-leever", "ow-lynel"].iter().all(|f| {
         let text = std::fs::read_to_string(common::repo().join(format!("specialists/{f}.yaml"))).unwrap();
         let v: serde_yaml_ng::Value = serde_yaml_ng::from_str(&text).unwrap();
         v["items"]["recorder"].as_bool() == Some(true)
@@ -225,9 +235,9 @@ fn the_rock_wall_of_0x2d_is_d3firsts_only() {
     assert_eq!(needs(&own, &d3first, None, &state)[CheatItem::Bombs], 1, "d3first bombs the wall");
 }
 
-/// 0:0x3d's secret Armos (the statue at X $90, Y $80; d3first's 30 secret, woken from its E side): only d3first's
-/// map gives the room its `cave` exit, so only there the game state offers MOVE W into it from (`$A0`, `$7D`);
-/// d2first's crossing (from its own pre-entry state) meets a statue as before.
+/// 0:0x3d's secret Armos (the statue at X $90, Y $80; d3first's 30 secret, its step entered from N since round 36):
+/// only d3first's map gives the room its `cave` exit, so only there the game state offers MOVE W into it from (`$A0`,
+/// `$7D`); d2first's crossing (from its own pre-entry state) meets a statue as before.
 #[test]
 fn only_d3first_walks_into_the_armos_of_0x3d() {
     let Some(mut s) = session("0_3ds_0", 0x3d) else { return };
@@ -239,7 +249,7 @@ fn only_d3first_walks_into_the_armos_of_0x3d() {
     s.set_map(map.route_map(ROUTE));
     assert!(s.state().is_secret_armos_direction(Direction::W), "the statue is the room's secret Armos");
     assert!(s.mask().is_allowed(&push), "d3first: {}", s.mask());
-    let stairs = index(steps(&map), 0, 0x3d, "E", "cave");
+    let stairs = index(steps(&map), 0, 0x3d, "N", "cave");
     let mut d3first = GameCompletion::new(s.game_map().clone(), ROUTE, Some(stairs)).unwrap();
     let objective = d3first.objectives(None, s.state());
     assert_eq!(objective.kind, ObjectiveKind::Cave, "d3first heads for the Armos's stairs");

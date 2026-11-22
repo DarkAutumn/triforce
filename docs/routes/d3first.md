@@ -1,13 +1,16 @@
 # d3first: Dungeon 3 first, the wood sword to the grave — the route as built
 
-The owner's second route (Nov 19; `docs/decisions.md` 2026-11-19 "Two routes"): the speedrunners' route, kept beside
-`d2first`, and the main route since 2.0.0.0 (`triforce/registry.py` `MAIN_ROUTE`): a golden path on it from console
-power on reached the ending (round32.md §11; decisions 2026-11-20 "2.0.0.0: `d3first` is the main route"). The
-wood sword until the magic sword (no white sword); Dungeons 3, 4, 1, 5, 2, 7, the magic sword, 6, 8, 9.
-Walked in the emulator before it was written: `docs/routes/d3first-walks-a.md` (the start to Level 5's entrance) and
-`d3first-walks-b.md` (Level 5 to the ending), their scripts `scripts/experiments/r32_*.py` and `r32b_*.py`. Data:
-`triforce/routes.yaml` `d3first` (304 steps since phase IX's merge: see "Phase IX" below), rooms in
-`triforce/game.yaml`; its start states are `d3first_<name>` (`states: d3first`, `docs/architecture.md` "Routes").
+The owner's second route (Nov 19; `docs/decisions.md` 2026-11-19 "Two routes"), the main route since 2.0.0.0
+(`triforce/registry.py` `MAIN_ROUTE`), **corrected by the owner on Nov 21** (decisions 2026-11-21 "The program";
+round 36): Dungeons 3, 4, 1, 0x2c's heart, 0x2d's 30 rupees, Dungeon 2, 0x0f's 100 rupees, Dungeon 5, the whirlwind
+to Level 4's screen, the raft to 0x55, **a dock warp there** to the meat under the Armos (0x34), the arrows (0x44),
+Dungeon 7 (wood sword, 9 containers), the world wrap at 0x60, the hearts at 0x5f and 0x2f, **a dock warp at 0x3f**
+into the graveyard (0x31), the magic sword (12), Dungeons 6, 8, 9 (0x47's heart and the red ring kept; no blue
+candle: the red one from Dungeon 7). The wood sword until the magic sword (no white sword). The first walks
+(`docs/routes/d3first-walks-a.md`, `d3first-walks-b.md`, scripts `scripts/experiments/r32_*.py`, `r32b_*.py`) were of
+the first order; the corrected middle is walked in `d3first-walks-c.md`. Data: `triforce/routes.yaml` `d3first` (292
+steps), rooms in `triforce/game.yaml`; its start states are `d3first_<name>` (`states: d3first`,
+`docs/architecture.md` "Routes").
 
 ```bash
 .venv/bin/python zelda-map.py --route d3first
@@ -30,16 +33,16 @@ sets its own reserves on its own steps before a block, and a block's own reserve
 | `to-level-4` | 24-30 | 0:0x74 cave → W to 0x45's mouth (the raft from 0x55) |
 | `dungeon-4` | 31-52 | 4:0x71 to 0x03, the stretch `d4-island` |
 | `dungeon-1` | 61-78 | 1:0x73 out S to 0:0x37 and back in, N by 0x63, 0x53's wall, the bow, to 0x36 (phase IX's) |
-| `dungeon-5` | 98-119 | 5:0x66 to 0x14 (the entrance, step 97, is each route's own) |
-| `dungeon-2` | 145-154 | 2:0x7d to 0x0d |
-| `to-level-7` | 156-173 | 0:0x45 out of the whirlwind to 0x42's pond: the stretch `dock-44`, the arrows, the meat |
-| `dungeon-7`, `dungeon-7-east` | 174-193 | 7:0x79 to 0x2b; the entrance (174) and 0x1b (186) are each route's own (round 34): d3first keeps the bag for 0x1b |
-| `to-level-6` | 194-210 | 0:0x42 to 0x22: the stretch `woods`, the graveyard, the magic sword (12 containers) |
-| `dungeon-6` | 211-226 | 6:0x79 to 0x0c |
-| `to-level-8` | 227-232 | 0:0x22 (two plays facing down) to 0x6d's burned tree |
-| `dungeon-8` | 233-242 | 8:0x7e to 0x2c |
-| `to-level-9` | 243-257 | 0:0x6d (one play facing down) to 0x05: 0x47's tree and heart (15), the ladder at 0x17 |
-| `dungeon-9` | 258-303 | 9:0x76 to Zelda's room (`exit: end`): the red ring, the silver arrow, Ganon |
+| `dungeon-2` | 97-106 | 2:0x7d to 0x0d |
+| `dungeon-5` | 125-146 | 5:0x66 to 0x14 (the entrance, step 124, is each route's own) |
+| `pond-42` | 156-159 | 0:0x54 to 0x42's pond (round 36: split from `to-level-7`, whose head d2first alone plays) |
+| `dungeon-7`, `dungeon-7-east` | 161-179 | 7:0x79 to 0x2b; the entrance (160) and 0x1b (172) are each route's own (round 34): d3first keeps the bag for 0x1b |
+| `graveyard` | 193-198 | 0:0x21's gravestone, the magic sword (12 containers), 0x31, 0x32, 0x22 (round 36: split from `to-level-6`) |
+| `dungeon-6` | 199-214 | 6:0x79 to 0x0c |
+| `to-level-8` | 215-220 | 0:0x22 (two plays facing up: Link turns first) to 0x6d's burned tree |
+| `dungeon-8` | 221-230 | 8:0x7e to 0x2c |
+| `to-level-9` | 231-245 | 0:0x6d (one play facing down) to 0x05: 0x47's tree and heart (15), the ladder at 0x17 |
+| `dungeon-9` | 246-291 | 9:0x76 to Zelda's room (`exit: end`): the red ring, the silver arrow, Ganon |
 
 ## The route
 
@@ -84,70 +87,97 @@ Its own steps in full; the blocks by their rooms.
 | 87 | `0_2cc` | 0:0x2c | cave → E | ow-tektite | | 7 / W |
 | 88 | `0_2dw` | 0:0x2d | W → cave | ow-zora | the rock wall (one bomb facing N from (`$50`,`$5D`); `bombs: required`) | 7 / W |
 | 89 | `0_2dcave` | 0:0x2d cave | S → S | ow-zora | `waypoint: rupees`: 30 | 7 / W |
-| 90 | `0_2dc` | 0:0x2d | cave → W | ow-zora | | 7 / W |
-| 91 | `0_2ce` | 0:0x2c | E → N | ow-tektite | | 7 / W |
-| 92 | `0_1cs` | 0:0x1c | S → N | ow-start | | 7 / W |
-| 93 | `0_0cs` | 0:0x0c | S → cave | ow-tektite | the shop's open mouth | 7 / W |
-| 94 | `0_0ccave` | 0:0x0c cave | S → S | ow-tektite | `waypoint: blue-candle` (60, `requires_rupees`) | 7 / W |
-| 95 | `0_0cc` | 0:0x0c | cave → W | ow-tektite | the wrap exit (CLIP E) onto the mountain top | 7 / W |
-| 96 | `0_0be` | 0:0x0b | E → cave | ow-leever | Level 5 | 7 / W |
-| 97 | `5_76s` | 5:0x76 | S → N | gibdo | `bomb_reserve: 8` (round 32's `grant: {bombs: 8}` removed in 2.0.0.3) | 7 / W |
-| 98-119 | | `dungeon-5` | | (d2first's) | the Olive Garden, the recorder, Digdogger's heart, the piece | 7 → 8 / W |
-| 120 | `0_0bc` | 0:0x0b | cave → recorder | ow-leever | one play facing right or up (MOVE E first) | 8 / W |
-| 121 | `0_74r` | 0:0x74 | recorder → W | ow-tektite | | 8 / W |
-| 122 | `0_73e_v2` | 0:0x73 | E → N | ow-moblin | | 8 / W |
-| 123 | `0_63s_v2` | 0:0x63 | S → W | ow-moblin | | 8 / W |
-| 124 | `0_62e` | 0:0x62 | E → cave | ow-moblin | the tree burned (the blue candle facing W from (`$A0`,`$5D`)) | 8 / W |
-| 125 | `0_62cave` | 0:0x62 cave | S → S | ow-moblin | `waypoint: rupees`: 100 | 8 / W |
-| 126 | `0_62c` | 0:0x62 | cave → N | ow-moblin | | 8 / W |
-| 127 | `0_52s` | 0:0x52 | S → W | ow-moblin | | 8 / W |
-| 128 | `0_51e` | 0:0x51 | E → W | ow-moblin | the wrap exit into 0x50 | 8 / W |
-| 129 | `0_50e` | 0:0x50 | E → S | ow-lynel | | 8 / W |
-| 130 | `0_60n` | 0:0x60 | N → W | ow-lynel | the wrap exit round the world into 0x5f | 8 / W |
-| 131 | `0_5fe` | 0:0x5f | E → N | ow-zora | the ladder clip, the ladder heart | 8 / W |
-| 132 | `0_4fs` | 0:0x4f | S → N | ow-zora | | 9 / W |
-| 137 | `0_3fs` | 0:0x3f | S → N | ow-zora | the raft | 9 / W |
-| 138 | `0_2fs` | 0:0x2f | S → cave | ow-start | | 9 / W |
-| 139 | `0_2fcave` | 0:0x2f cave | S → S | ow-start | `waypoint: heart` (the raft heart) | 9 / W |
-| 140 | `0_2fc` | 0:0x2f | cave → S | ow-start | the raft back | 10 / W |
-| 141 | `0_3fn` | 0:0x3f | N → W | ow-zora | | 10 / W |
-| 142 | `0_3ee` | 0:0x3e | E → W | ow-zora | the wrap exit into 0x3d | 10 / W |
-| 143 | `0_3de` | 0:0x3d | E → cave | ow-moblin | the Armos at X `$90` woken from its E side | 10 / W |
-| 144 | `0_3dcave` | 0:0x3d cave | S → S | ow-moblin | `waypoint: rupees`: 30 | 10 / W |
-| 145 | `0_3dc` | 0:0x3d | cave → S | ow-moblin | out E of the stairs, then S | 10 / W |
-| 146 | `0_4dn` | 0:0x4d | N → W | ow-moblin | | 10 / W |
-| 147 | `0_4ce` | 0:0x4c | E → N | ow-octorok | | 10 / W |
-| 148 | `0_3cs` | 0:0x3c | S → cave | ow-octorok | Level 2; `bomb_reserve: 1` (Dodongo's bomb) | 10 / W |
-| 149-158 | | `dungeon-2` | | (d2first's) | Dodongo's heart, the piece | 10 → 11 / W |
-| 159 | `0_3cc` | 0:0x3c | cave → recorder | ow-octorok | one play facing right or up (MOVE E first); `bomb_reserve: 0` | 11 / W |
-| 160-177 | | `to-level-7` | | (d2first's) | the arrows (80), the meat (60), the pond | 11 / W |
-| 178-197 | | `dungeon-7` | | (d2first's) | the red candle, the meat given, Aquamentus's heart, the piece | 11 → 12 / W |
-| 198-214 | | `to-level-6` | | (d2first's) | the magic sword at the grave | 12 / W → Ma |
-| 215-230 | | `dungeon-6` | | (d2first's) | Gohma's heart, the piece | 12 → 13 / Ma |
-| 231-236 | | `to-level-8` | | (d2first's) | two plays facing down: 0x3c; 0x6d's tree | 13 / Ma |
-| 237-246 | | `dungeon-8` | | (d2first's) | Gleeok's heart, the piece | 13 → 14 / Ma |
-| 247-261 | | `to-level-9` | | (d2first's) | one play facing down: 0x37; 0x47's heart (15); 0x05's wall | 14 → 15 / Ma |
-| 262-307 | | `dungeon-9` | | (d2first's) | the red ring, the silver arrow, Ganon, Zelda (`exit: end`) | 15 / Ma |
+| 90 | `0_2dc` | 0:0x2d | cave → S | ow-zora | round 36: S, not W | 7 / W |
+| 91 | `0_3dn` | 0:0x3d | N → cave | ow-moblin | the Armos woken (`how: armos`) | 7 / W |
+| 92 | `0_3dcave` | 0:0x3d cave | S → S | ow-moblin | `waypoint: rupees`: 30 | 7 / W |
+| 93 | `0_3dc` | 0:0x3d | cave → S | ow-moblin | | 7 / W |
+| 94 | `0_4dn` | 0:0x4d | N → W | ow-moblin | | 7 / W |
+| 95 | `0_4ce` | 0:0x4c | E → N | ow-octorok | | 7 / W |
+| 96 | `0_3cs` | 0:0x3c | S → cave | ow-octorok | Level 2 (the reserve of 8 holds: D5's walls) | 7 / W |
+| 97-106 | | `dungeon-2` | | (d2first's) | 0x1e's 4 bombs, Dodongo's heart, the piece | 7 → 8 / W |
+| 107 | `0_3cc` | 0:0x3c | cave → S | ow-octorok | | 8 / W |
+| 108 | `0_4cn` | 0:0x4c | N → E | ow-octorok | | 8 / W |
+| 109 | `0_4dw` | 0:0x4d | W → N | ow-moblin | | 8 / W |
+| 110 | `0_3ds` | 0:0x3d | S → N | ow-moblin | | 8 / W |
+| 111 | `0_2ds` | 0:0x2d | S → N | ow-zora | | 8 / W |
+| 112-114 | `0_1ds`, `0_1ew`, `0_1fw` | 0:0x1d, 0x1e, 0x1f | S → E, W → E, W → N | ow-peahat, ow-tektite, ow-peahat | 0x1f's wall gap at X `$80` | 8 / W |
+| 115-117 | `0_0fs`, `0_0fcave`, `0_0fc` | 0:0x0f | S → cave → S | ow-start | `waypoint: rupees`: 100 (open cave) | 8 / W |
+| 118-120 | `0_1fn`, `0_1ee`, `0_1de` | 0:0x1f, 0x1e, 0x1d | N → W, E → W, E → N | ow-peahat, ow-tektite, ow-peahat | | 8 / W |
+| 121 | `0_0ds` | 0:0x0d | S → W | ow-tektite | | 8 / W |
+| 122 | `0_0ce` | 0:0x0c | E → W | ow-tektite | the wrap exit (CLIP E) onto the mountain top | 8 / W |
+| 123 | `0_0be` | 0:0x0b | E → cave | ow-leever | Level 5 | 8 / W |
+| 124 | `5_76s` | 5:0x76 | S → N | gibdo | `bomb_reserve: 8` | 8 / W |
+| 125-146 | | `dungeon-5` | | (d2first's) | the Olive Garden, the recorder, Digdogger's heart, the piece | 8 → 9 / W |
+| 147 | `0_0bc` | 0:0x0b | cave → recorder | ow-leever | two plays facing down, as he comes out | 9 / W |
+| 148 | `0_45r` | 0:0x45 | recorder → S | ow-peahat | the raft S | 9 / W |
+| 149 | `0_55n_v2` | 0:0x55 | N → recorder | ow-zora | **the dock warp** (the engine's): MOVE S, CLIP N into the water at X `$78`, RECORDER: N, a turn W, again | 9 / W |
+| 150 | `0_34r` | 0:0x34 | recorder → cave | ow-leever | set down at (`$80`,`$8D`); the Armos | 9 / W |
+| 151 | `0_34cave` | 0:0x34 cave | S → S | ow-leever | `waypoint: food` (60) | 9 / W |
+| 152 | `0_34c` | 0:0x34 | cave → S | ow-leever | | 9 / W |
+| 153 | `0_44n` | 0:0x44 | N → cave | ow-zora | | 9 / W |
+| 154 | `0_44cave` | 0:0x44 cave | S → S | ow-zora | `waypoint: arrows` (80), `rupee_reserve: 2` | 9 / W |
+| 155 | `0_44c` | 0:0x44 | cave → S | ow-zora | | 9 / W |
+| 156-159 | | `pond-42` | | ow-zora, ow-moblin | the pond (the recorder, no index step) | 9 / W |
+| 160-179 | | 7:0x79, `dungeon-7`, 7:0x1b, `dungeon-7-east` | | (d2first's, the entrance and 0x1b own) | the red candle, the meat given, Aquamentus's heart, the piece | 9 → 10 / W |
+| 180 | `0_42c` | 0:0x42 | cave → S | ow-moblin | `bomb_reserve: 8` (every bomb for the walls) | 10 / W |
+| 181 | `0_52n` | 0:0x52 | N → W | ow-moblin | | 10 / W |
+| 182 | `0_51e` | 0:0x51 | E → W | ow-moblin | the wrap exit into 0x50 | 10 / W |
+| 183 | `0_50e` | 0:0x50 | E → S | ow-lynel | | 10 / W |
+| 184 | `0_60n` | 0:0x60 | N → W | ow-lynel | the wrap exit round the world into 0x5f | 10 / W |
+| 185 | `0_5fe` | 0:0x5f | E → N | ow-zora | the ladder clip, the ladder heart | 10 / W |
+| 186 | `0_4fs` | 0:0x4f | S → N | ow-zora | | 11 / W |
+| 187 | `0_3fs` | 0:0x3f | S → N | ow-zora | the raft | 11 / W |
+| 188-190 | `0_2fs`, `0_2fcave`, `0_2fc` | 0:0x2f | S → cave → S | ow-start | `waypoint: heart`; the raft back | 11 → 12 / W |
+| 191 | `0_3fn` | 0:0x3f | N → recorder | ow-zora | **the dock warp** (the engine's): MOVE S, CLIP N into the water at X `$58`, RECORDER: N twice | 12 / W |
+| 192 | `0_31r` | 0:0x31 | recorder → N | ow-ghini | set down at (`$80`,`$AD`) | 12 / W |
+| 193-198 | | `graveyard` | | ow-ghini, ow-lynel | the magic sword (12) | 12 / W → Ma |
+| 199-214 | | `dungeon-6` | | (d2first's) | Gohma's heart, the piece | 12 → 13 / Ma |
+| 215-220 | | `to-level-8` | | (d2first's) | two plays facing up (index on Level 7: Link turns first): 0x3c; 0x6d's tree | 13 / Ma |
+| 221-230 | | `dungeon-8` | | (d2first's) | Gleeok's heart, the piece | 13 → 14 / Ma |
+| 231-245 | | `to-level-9` | | (d2first's) | one play facing down: 0x37; 0x47's heart (15); 0x05's wall | 14 → 15 / Ma |
+| 246-291 | | `dungeon-9` | | (d2first's) | the red ring, the silver arrow, Ganon, Zelda (`exit: end`) | 15 / Ma |
 
 Dungeon entrances (`crates/zelda/tests/d3first.rs`, `tests/test_game_map.py`): Level 3 with 3 containers and no
-piece; Level 4 with 4, the raft, piece 3; Level 1 with 5, the raft and the ladder, pieces 3 and 4; Level 5 with 7,
-the bow too, pieces 1, 3, 4; Level 2 with 10, the recorder too, pieces 1, 3, 4, 5; Level 7 with 11, pieces 1-5;
-Level 6 with 12 and the magic sword, pieces 1-5 and 7; Level 8 with 13, pieces 1-7; Level 9 with 15, all eight.
+piece; Level 4 with 4, the raft, piece 3; Level 1 with 5, the raft and the ladder, pieces 3 and 4; Level 2 with 7,
+the bow too, pieces 1, 3, 4; Level 5 with 8, pieces 1-4; Level 7 with 9, the recorder, the food and the arrows,
+pieces 1-5; Level 6 with 12 and the magic sword, pieces 1-5 and 7; Level 8 with 13, pieces 1-7; Level 9 with 15,
+all eight.
 
-**The recorder** (walks-b §1; `zelda::whirlwind::plays` from the game's index `$523`, which only these four plays
-step): out of Level 5 (index 0, pieces 1, 3, 4, 5) one play facing right or up lands in 0x74; out of Level 2 (index
-on Level 3) one play facing right or up lands on 0x45's pier; out of Level 6 two plays facing down land in 0x3c; out
-of Level 8 one play facing down lands in 0x37. A step `exit: recorder` with the landing room next is all the route
-data says: the objective computes the plays and facing, the session offers RECORDER only facing the way the next
-play must step (`GameCompletion::recorder_facings`), so on the first two the family turns E (a MOVE E) before it
-plays; Link comes out of a level facing down. ow-leever (0x0b) and ow-octorok (0x3c, now `items: {recorder: true}`)
-are the families that turn.
+**The recorder chain** (round 36, `scripts/experiments/r36_recorder_search.py`: every sequence of one to three
+plays, each facing, the one-frame turn before a later play, played in the emulator from the route's states with the
+chain's index carried; the game's index `$523` is stepped by every overworld play, so the plays are one chain):
+
+| Where | Index in (level) | The plays | Second play's window (staging) | Lands |
+|---|---|---|---|---|
+| 0:0x0b out of Level 5 | 0 (L1), pieces 1-5 | 2 facing down, as Link comes out | 63 frames | 0x45 (`$80`,`$8D`), index on L4 |
+| 0:0x55, in the water | L4 | N, a one-frame turn W, again | 62 | 0x34 (dock warp) |
+| 0:0x3f, in the water | L4, pieces 1-5, 7 | 2 facing N | 51 (X `$58`) | 0x31 (dock warp), index on L7 |
+| 0:0x22 out of Level 6 | L7, pieces 1-7 | Link turns up (N or E), then 2 facing up | 64 | 0x3c, index on L2 |
+| 0:0x6d out of Level 8 | L2, all | 1 facing down | - | 0x37 |
+
+The search's tie-breaks: fewest turns between plays, fewest plays, fewest turns before the first, the widest window.
+Out of Level 5 three plays up also land in 0x45 (57 frames, a turn first); every landing in 0x45 leaves the index on
+Level 4, so no way to Level 4's screen changes 0x55's or 0x3f's plays. In the water only N and W turn Link in place
+(S and E move him). The owner's memory ("twice north" at 0x55, "once" at 0x3f): by the arriving index, two N plays at
+0x55 land in 0x34 only from Level 2's index and one N play at 0x3f lands in 0x31 only from Level 5's or Level 6's;
+no history of this order gives either (the 0x34 landing needs Level 4 at the pickup). Misses: at 0x55 a late
+second play lands in 0x77, N N in 0x26, W W in 0x2b; at 0x3f a late second play lands in 0x77, N W in 0x34.
+
+**The dock warps** are played by the engine (`zelda::Session::set_dock_warp`, the step's level from
+`GameCompletion::dock_warp`): on the dock below its trigger after the raft's ride down the mask is MOVE S only (any
+other step boards the raft back up); where the block clip N into the water is legal (`zelda::clips::dock_clip_at`:
+X on the grid W of the dock, T = the dock's row + 8 and the row stopped by water, G and G' land) CLIP N only, and a
+MOVE along the land stops on the clip's column (`dock_spot`, the nearest the dock: 0x55 `$78`, 0x3f `$58`); in the
+water on the row RECORDER only, which plays every play the index needs (`Executor::run_dock_warp`: N for a step up,
+W for a step down, the turn one frame before the B on the first free frame) and waits for the pickup. The landing
+is `Whirlwind_PrevRoomIds[level] - $10` (`zelda::game_map::dock_landing`; route entry `recorder`). A whirlwind out of
+a dock room into any other room ends a chain run `stuck` (`dock-warp-missed`).
 
 **Clips.** The screen scrolls the walks found cheaper (0x76, 0x64, 0x47, 0x29-0x2b: the plain wrap W/E) are CLIP
-actions the families choose (`clips: true`), nothing in the steps. The wrap exits of 0x75, 0x0c, 0x51, 0x60 and 0x3e
-are the only ways through those rooms on this route (no `stretch:`, clips only, the owner's Nov 18 rule): a run with
-the run-time switch off has no way past them. The shared blocks keep their stretches (`d4-island`, `dock-44`,
-`woods`, `ring-07`, `arrow-20`, `arrow-20n`).
+actions the families choose (`clips: true`), nothing in the steps. The wrap exits of 0x75, 0x0c, 0x51 and 0x60, and
+both dock clips, are the only ways through those rooms on this route (no `stretch:`, clips only, the owner's Nov 18
+rule): a run with the run-time switch off has no way past them. The shared blocks keep their stretches
+(`d4-island`, `ring-07`, `arrow-20`, `arrow-20n`).
 
 ## New vocabulary and game data
 

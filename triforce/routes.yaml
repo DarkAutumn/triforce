@@ -326,6 +326,7 @@ d2first:
 # skipped.
 - {level: 0, room: '0x0b', specialist: ow-leever, entry: cave, exit: recorder}
 - include: to-level-7
+- include: pond-42
 - {level: 7, room: '0x79', specialist: goriya, entry: S, exit: N, bomb_reserve: 3}
 - include: dungeon-7
 - {level: 7, room: '0x1b', specialist: goriya, entry: W, exit: E, treasure: {if_bombs_below: 5}, bomb_reserve: 2}
@@ -349,6 +350,7 @@ d2first:
 # from Dungeon 7's exit (0x28's wall and one owed to Dungeon 8), 1 after 0x28.  Rupee reserve 2 as before, 1 in
 # Gohma's room and after (Ganon's arrow).
 - include: to-level-6
+- include: graveyard
 - include: dungeon-6
 # Round 28 (docs/routes/d8.md §15, d8-walks.md; scouted as the route d8, merged into d2first): from Dungeon 6's
 # triforce (the game sets Link down at its entrance, 0x22) to Dungeon 8's.  The leg: the recorder twice out of 0x22
@@ -453,11 +455,13 @@ d3first:
   - {level: 0, room: '0x38', specialist: ow-zora, entry: S, exit: W}
   - {level: 0, room: '0x37', specialist: ow-octorok, entry: E, exit: cave}
   - include: dungeon-1
-  # Level 1 to Level 5 (walks-a §5): E along row 2 (0x29-0x2b scrollable), the heart rock 0x2c's wall (bomb) and its
-  # take-any cave's heart container (7), 0x2d's rock wall (bomb; ow-zora bombs it by the mask of `required`) and the
-  # secret cave's 30 rupees, back W, N 0x1c, N 0x0c: the shop's blue candle (`waypoint: blue-candle`, 60 rupees,
-  # cheated and counted when short: the walk had 40), out of 0x0c by its wrap exit (CLIP E) onto the mountain top,
-  # 0x0b's mouth.  0x1d (the owner's "one screen east") is two parts and its S part leads only E.
+  # Level 1 to Level 2 (walks-a §5; round 36, the owner's corrected order, docs/routes/d3first.md): E along row 2
+  # (0x29-0x2b scrollable), the heart rock 0x2c's wall (bomb) and its take-any cave's heart container (7), 0x2d's rock
+  # wall (bomb; ow-zora bombs it by the mask of `required`) and the secret cave's 30 rupees; then S (the lead's way:
+  # 0x3d has no W edge) through 0x3d, its Armos woken for the cave's 30 rupees (the purse's one cushion: 10 + 30 + 30
+  # + 100 against the meat's 60 and the arrows' 80), 0x4d W, 0x4c N into Level 2.  The bomb reserve of 8 holds to
+  # Dungeon 5: every bomb is kept for the walls (1:0x53, 0x2c, 0x2d, Dungeon 5's 0x66 and 0x65; Dodongo's room offers
+  # BOMB whatever the reserve), cheated where Link has none (walls only: the owner, Nov 21).
   - {level: 0, room: '0x37', specialist: ow-octorok, entry: cave, exit: E, bomb_reserve: 8}
   - {level: 0, room: '0x38', specialist: ow-zora, entry: W, exit: N}
   - {level: 0, room: '0x28', specialist: ow-zora, entry: S, exit: E}
@@ -469,60 +473,55 @@ d3first:
   - {level: 0, room: '0x2c', specialist: ow-tektite, entry: cave, exit: E}
   - {level: 0, room: '0x2d', specialist: ow-zora, entry: W, exit: cave, bombs: required}
   - {level: 0, room: '0x2d', in_cave: true, specialist: ow-zora, entry: S, exit: S, waypoint: rupees}
-  - {level: 0, room: '0x2d', specialist: ow-zora, entry: cave, exit: W}
-  - {level: 0, room: '0x2c', specialist: ow-tektite, entry: E, exit: N}
-  - {level: 0, room: '0x1c', specialist: ow-start, entry: S, exit: N}
-  - {level: 0, room: '0x0c', specialist: ow-tektite, entry: S, exit: cave}
-  - {level: 0, room: '0x0c', in_cave: true, specialist: ow-tektite, entry: S, exit: S, waypoint: blue-candle}
-  - {level: 0, room: '0x0c', specialist: ow-tektite, entry: cave, exit: W}
-  - {level: 0, room: '0x0b', specialist: ow-leever, entry: E, exit: cave}
-  # Dungeon 5's entrance, as d2first's: Link fights the Olive Garden with the bombs he brings (the reserve of 8 keeps
-  # them to there); the walls of 0x66 and 0x65 grant their own bomb when he has none (`zelda::cheats`).  Round 32's
-  # bag of 8 (`grant: {bombs: 8}`) was removed on the owner's word (Nov 21).
-  - {level: 5, room: '0x76', specialist: gibdo, entry: S, exit: N, bomb_reserve: 8}
-  - include: dungeon-5
-  # Level 5 to Level 2 (walks-b §1, §3): the whirlwind to Level 3 (Link comes out facing down; the index $523 is 0
-  # and one play facing right or up lands in 0x74: the objective computes it, zelda::whirlwind::plays, and RECORDER is
-  # offered only facing so, so ow-leever turns E first), W 0x73, N 0x63, W into 0x62: its tree burned by the blue
-  # candle facing W from the E of it (`how: burn`), the cave's 100 rupees; N 0x52, W 0x51 and its wrap exit (the
-  # screen scroll toward the graveyard) into 0x50, S 0x60 and its wrap exit round the world onto 0x5f's water, the
-  # ladder clip to the heart container (9); 0x4f, the raft from 0x3f's dock to 0x2f's take-any cave (10), back down,
-  # W 0x3e by its wrap exit into 0x3d: the Armos at X $90 woken from its E side (`how: armos`), the cave's 30
-  # rupees; S 0x4d, W 0x4c, N into Level 2.  Bomb reserve 1 from Level 2's mouth through Dungeon 2 (walks-b §4: the
-  # bag this route brings is goriya's and moldorm's to throw; one is kept for Dodongo, whose room offers BOMB
-  # whatever the reserve), 0 again from its exit (as d2first's from Dungeon 5 on).
-  - {level: 0, room: '0x0b', specialist: ow-leever, entry: cave, exit: recorder}
-  - {level: 0, room: '0x74', specialist: ow-tektite, entry: recorder, exit: W}
-  - {level: 0, room: '0x73', specialist: ow-moblin, entry: E, exit: N}
-  - {level: 0, room: '0x63', specialist: ow-moblin, entry: S, exit: W}
-  - {level: 0, room: '0x62', specialist: ow-moblin, entry: E, exit: cave}
-  - {level: 0, room: '0x62', in_cave: true, specialist: ow-moblin, entry: S, exit: S, waypoint: rupees}
-  - {level: 0, room: '0x62', specialist: ow-moblin, entry: cave, exit: N}
-  - {level: 0, room: '0x52', specialist: ow-moblin, entry: S, exit: W}
-  - {level: 0, room: '0x51', specialist: ow-moblin, entry: E, exit: W}
-  - {level: 0, room: '0x50', specialist: ow-lynel, entry: E, exit: S}
-  - {level: 0, room: '0x60', specialist: ow-lynel, entry: N, exit: W}
-  - {level: 0, room: '0x5f', specialist: ow-zora, entry: E, exit: N}
-  - {level: 0, room: '0x4f', specialist: ow-zora, entry: S, exit: N}
-  - {level: 0, room: '0x3f', specialist: ow-zora, entry: S, exit: N}
-  - {level: 0, room: '0x2f', specialist: ow-start, entry: S, exit: cave}
-  - {level: 0, room: '0x2f', in_cave: true, specialist: ow-start, entry: S, exit: S, waypoint: heart}
-  - {level: 0, room: '0x2f', specialist: ow-start, entry: cave, exit: S}
-  - {level: 0, room: '0x3f', specialist: ow-zora, entry: N, exit: W}
-  - {level: 0, room: '0x3e', specialist: ow-zora, entry: E, exit: W}
-  - {level: 0, room: '0x3d', specialist: ow-moblin, entry: E, exit: cave}
+  - {level: 0, room: '0x2d', specialist: ow-zora, entry: cave, exit: S}
+  - {level: 0, room: '0x3d', specialist: ow-moblin, entry: N, exit: cave}
   - {level: 0, room: '0x3d', in_cave: true, specialist: ow-moblin, entry: S, exit: S, waypoint: rupees}
   - {level: 0, room: '0x3d', specialist: ow-moblin, entry: cave, exit: S}
   - {level: 0, room: '0x4d', specialist: ow-moblin, entry: N, exit: W}
   - {level: 0, room: '0x4c', specialist: ow-octorok, entry: E, exit: N}
-  - {level: 0, room: '0x3c', specialist: ow-octorok, entry: S, exit: cave, bomb_reserve: 1}
+  - {level: 0, room: '0x3c', specialist: ow-octorok, entry: S, exit: cave}
   - include: dungeon-2
-  # Out of Level 2 the whirlwind to Level 4 (the index on Level 3: one play facing right or up lands on 0x45's pier,
-  # ow-octorok turns E first), then d2first's way: the arrows and the meat, Level 7, the magic sword (twelve
-  # containers), Level 6, the whirlwind to Level 2's mouth and Level 8, the whirlwind to Level 1's, 0x47's heart,
-  # Level 9.
-  - {level: 0, room: '0x3c', specialist: ow-octorok, entry: cave, exit: recorder, bomb_reserve: 0}
-  - include: to-level-7
+  # Level 2 to Level 5 (d2first's rooms, entries and exits; its clip ways): back S, E and N to 0x2d, N 0x1d, E along
+  # row 1 to 0x1f, N through its wall gap at X $80 into 0x0f's open secret cave (100 rupees), back S and W, 0x1d N,
+  # 0x0d W, out of 0x0c by its wrap exit (CLIP E) onto the mountain top, 0x0b's mouth.
+  - {level: 0, room: '0x3c', specialist: ow-octorok, entry: cave, exit: S}
+  - {level: 0, room: '0x4c', specialist: ow-octorok, entry: N, exit: E}
+  - {level: 0, room: '0x4d', specialist: ow-moblin, entry: W, exit: N}
+  - {level: 0, room: '0x3d', specialist: ow-moblin, entry: S, exit: N}
+  - {level: 0, room: '0x2d', specialist: ow-zora, entry: S, exit: N}
+  - {level: 0, room: '0x1d', specialist: ow-peahat, entry: S, exit: E}
+  - {level: 0, room: '0x1e', specialist: ow-tektite, entry: W, exit: E}
+  - {level: 0, room: '0x1f', specialist: ow-peahat, entry: W, exit: N}
+  - {level: 0, room: '0x0f', specialist: ow-start, entry: S, exit: cave}
+  - {level: 0, room: '0x0f', in_cave: true, specialist: ow-start, entry: S, exit: S, waypoint: rupees}
+  - {level: 0, room: '0x0f', specialist: ow-start, entry: cave, exit: S}
+  - {level: 0, room: '0x1f', specialist: ow-peahat, entry: N, exit: W}
+  - {level: 0, room: '0x1e', specialist: ow-tektite, entry: E, exit: W}
+  - {level: 0, room: '0x1d', specialist: ow-peahat, entry: E, exit: N}
+  - {level: 0, room: '0x0d', specialist: ow-tektite, entry: S, exit: W}
+  - {level: 0, room: '0x0c', specialist: ow-tektite, entry: E, exit: W}
+  - {level: 0, room: '0x0b', specialist: ow-leever, entry: E, exit: cave}
+  # Dungeon 5's entrance, as d2first's: Link fights the Olive Garden with the bombs he brings (Dungeon 2's 0x1e
+  # four now come before it); the walls of 0x66 and 0x65 grant their own bomb when he has none (`zelda::cheats`).
+  - {level: 5, room: '0x76', specialist: gibdo, entry: S, exit: N, bomb_reserve: 8}
+  - include: dungeon-5
+  # Level 5 to Level 7 (round 36; r36_recorder_search.py chose every play of the chain): the whirlwind to Level 4's
+  # screen (pieces 1-5, the index 0: two plays facing down as Link comes out, no turn), the raft S to 0x55, and the
+  # first dock warp: off the raft, the block clip N into the water W of the dock, the recorder N, a one-frame turn W,
+  # the recorder again (the index back on Level 4); the whirlwind carries Link over the dock, whose raft turns him
+  # up, and he is set down in 0x34 (Level 4's stand-in room 0x44 one row up: `zelda::game_map::dock_landing`), the
+  # meat under the Armos.  The engine plays the dock warp (`zelda::Session::set_dock_warp`).  Then S to 0x44's
+  # arrows, 0x54 W, 0x53 W, 0x52 N, 0x42's pond (the recorder, no index step) into Level 7.
+  - {level: 0, room: '0x0b', specialist: ow-leever, entry: cave, exit: recorder}
+  - {level: 0, room: '0x45', specialist: ow-peahat, entry: recorder, exit: S}
+  - {level: 0, room: '0x55', specialist: ow-zora, entry: N, exit: recorder}
+  - {level: 0, room: '0x34', specialist: ow-leever, entry: recorder, exit: cave}
+  - {level: 0, room: '0x34', in_cave: true, specialist: ow-leever, entry: S, exit: S, waypoint: food}
+  - {level: 0, room: '0x34', specialist: ow-leever, entry: cave, exit: S}
+  - {level: 0, room: '0x44', specialist: ow-zora, entry: N, exit: cave}
+  - {level: 0, room: '0x44', in_cave: true, specialist: ow-zora, entry: S, exit: S, waypoint: arrows, rupee_reserve: 2}
+  - {level: 0, room: '0x44', specialist: ow-zora, entry: cave, exit: S}
+  - include: pond-42
   # Round 34 (the lead, Nov 21): Dungeon 7's entrance and 0x1b are this route's own.  The record's runs threw the bag
   # down to the reserve of 3 before 0x1b (0x69, 0x49) and entered it with 1 bomb, so its four were wanted and its six
   # Blue Goriyas a wood-sword fight (460 of 874 died); the 31 that kept 5 crossed to the key door (5 died).  A reserve
@@ -533,7 +532,26 @@ d3first:
   - include: dungeon-7
   - {level: 7, room: '0x1b', specialist: goriya, entry: W, exit: E, treasure: {if_bombs_below: 2}, bomb_reserve: 2}
   - include: dungeon-7-east
-  - include: to-level-6
+  # Level 7 to the magic sword (round 36; r36-warp3f): 0x42 S, 0x52 W, 0x51's wrap exit (CLIP E: clips only) into
+  # 0x50, S 0x60 and its wrap exit round the world onto 0x5f's water, the ladder clip to the heart container (11);
+  # 0x4f, the raft from 0x3f's dock to 0x2f's take-any cave (12), back down, and the second dock warp: the block clip
+  # N into the water right beside the dock, the recorder N twice (the index from Level 4 to Level 7); the dock turns
+  # the whirlwind's carry up from Level 7's stand-in room 0x41: 0x31, S of 0x21's gravestone.  Bomb reserve 8 from
+  # Level 7's exit: every bomb is kept for the walls (6:0x28, 8:0x6e, 8:0x4c, 0:0x05, Dungeon 9's eight).
+  - {level: 0, room: '0x42', specialist: ow-moblin, entry: cave, exit: S, bomb_reserve: 8}
+  - {level: 0, room: '0x52', specialist: ow-moblin, entry: N, exit: W}
+  - {level: 0, room: '0x51', specialist: ow-moblin, entry: E, exit: W}
+  - {level: 0, room: '0x50', specialist: ow-lynel, entry: E, exit: S}
+  - {level: 0, room: '0x60', specialist: ow-lynel, entry: N, exit: W}
+  - {level: 0, room: '0x5f', specialist: ow-zora, entry: E, exit: N}
+  - {level: 0, room: '0x4f', specialist: ow-zora, entry: S, exit: N}
+  - {level: 0, room: '0x3f', specialist: ow-zora, entry: S, exit: N}
+  - {level: 0, room: '0x2f', specialist: ow-start, entry: S, exit: cave}
+  - {level: 0, room: '0x2f', in_cave: true, specialist: ow-start, entry: S, exit: S, waypoint: heart}
+  - {level: 0, room: '0x2f', specialist: ow-start, entry: cave, exit: S}
+  - {level: 0, room: '0x3f', specialist: ow-zora, entry: N, exit: recorder}
+  - {level: 0, room: '0x31', specialist: ow-ghini, entry: recorder, exit: N}
+  - include: graveyard
   - include: dungeon-6
   - include: to-level-8
   - include: dungeon-8
@@ -693,6 +711,8 @@ blocks:
   - {level: 0, room: '0x34', in_cave: true, specialist: ow-leever, entry: S, exit: S, waypoint: food}
   - {level: 0, room: '0x34', specialist: ow-leever, entry: cave, exit: S}
   - {level: 0, room: '0x44', specialist: ow-zora, entry: N, exit: S}
+  # 0x54 to 0x42's pond (round 36: split from `to-level-7`; d3first comes to 0x54 from 0x44's shop out of the dock warp).
+  pond-42:
   - {level: 0, room: '0x54', specialist: ow-zora, entry: N, exit: W}
   - {level: 0, room: '0x53', specialist: ow-moblin, entry: E, exit: W}
   - {level: 0, room: '0x52', specialist: ow-moblin, entry: E, exit: N}
@@ -737,6 +757,9 @@ blocks:
   - {level: 0, room: '0x40', specialist: ow-ghini, entry: S, exit: E}
   - {level: 0, room: '0x41', specialist: ow-ghini, entry: W, exit: N}
   - {level: 0, room: '0x31', specialist: ow-ghini, entry: S, exit: N}
+  # 0x21's gravestone, the magic sword, 0x32 to Level 6 (round 36: split from `to-level-6`; d3first comes to 0x31 by
+  # the dock warp out of 0x3f).
+  graveyard:
   - {level: 0, room: '0x21', specialist: ow-ghini, entry: S, exit: cave}
   - {level: 0, room: '0x21', in_cave: true, specialist: ow-ghini, entry: S, exit: S, waypoint: sword}
   - {level: 0, room: '0x21', specialist: ow-ghini, entry: cave, exit: S}
@@ -902,10 +925,10 @@ families:
   ow-start: ['(0, 0x1b)', '(0, 0x1c)', '(0, 0x77)', '(0, 0x77, cave)', '(0, 0x2f)', '(0, 0x2f, cave)', '(0, 0x0f)', '(0, 0x0f, cave)']
   ow-octorok: ['(0, 0x37)', '(0, 0x3c)', '(0, 0x4c)', '(0, 0x57)', '(0, 0x58)', '(0, 0x64)', '(0, 0x66)', '(0, 0x67)', '(0, 0x67, cave)', '(0, 0x68)', '(0, 0x78)']
   ow-zora: ['(0, 0x27)', '(0, 0x28)', '(0, 0x2d)', '(0, 0x38)', '(0, 0x55)', '(0, 0x56)', '(0, 0x59)', '(0, 0x5a)', '(0, 0x65)', '(0, 0x54)', '(0, 0x5f)', '(0, 0x4f)', '(0, 0x3f)', '(0, 0x3e)', '(0, 0x2e)', '(0, 0x6f)', '(0, 0x44)', '(0, 0x44, cave)', '(0, 0x47)', '(0, 0x47, cave)', '(0, 0x46)', '(0, 0x2d, cave)']
-  ow-moblin: ['(0, 0x3d)', '(0, 0x4d)', '(0, 0x5b)', '(0, 0x5c)', '(0, 0x5d)', '(0, 0x63)', '(0, 0x73)', '(0, 0x53)', '(0, 0x52)', '(0, 0x51)', '(0, 0x6d)', '(0, 0x6e)', '(0, 0x42)', '(0, 0x61)', '(0, 0x62)', '(0, 0x62, cave)', '(0, 0x3d, cave)']
+  ow-moblin: ['(0, 0x3d)', '(0, 0x4d)', '(0, 0x5b)', '(0, 0x5c)', '(0, 0x5d)', '(0, 0x63)', '(0, 0x73)', '(0, 0x53)', '(0, 0x52)', '(0, 0x51)', '(0, 0x6d)', '(0, 0x6e)', '(0, 0x42)', '(0, 0x61)', '(0, 0x3d, cave)']
   ow-leever: ['(0, 0x48)', '(0, 0x75)', '(0, 0x0b)', '(0, 0x34)', '(0, 0x34, cave)', '(0, 0x29)', '(0, 0x2a)', '(0, 0x2b)']
   ow-lynel: ['(0, 0x0a)', '(0, 0x0a, cave)', '(0, 0x50)', '(0, 0x60)', '(0, 0x32)', '(0, 0x22)', '(0, 0x07)', '(0, 0x06)', '(0, 0x05)']
-  ow-tektite: ['(0, 0x1a)', '(0, 0x2c)', '(0, 0x2c, cave)', '(0, 0x74)', '(0, 0x76)', '(0, 0x1e)', '(0, 0x0d)', '(0, 0x0c)', '(0, 0x0c, cave)']
+  ow-tektite: ['(0, 0x1a)', '(0, 0x2c)', '(0, 0x2c, cave)', '(0, 0x74)', '(0, 0x76)', '(0, 0x1e)', '(0, 0x0d)', '(0, 0x0c)']
   ow-peahat: ['(0, 0x45)', '(0, 0x1d)', '(0, 0x1f)']
   ow-boulder: ['(0, 0x17)', '(0, 0x18)', '(0, 0x19)']
   stalfos-keese-gel: ['(1, 0x33)', '(1, 0x36)', '(1, 0x42)', '(1, 0x43)', '(1, 0x52)', '(1, 0x53)', '(1, 0x63)', '(1, 0x72)', '(1, 0x73)', '(1, 0x74)', '(3, 0x4a)', '(4, 0x01)', '(4, 0x21)', '(4, 0x51)', '(6, 0x79)', '(6, 0x58)', '(6, 0x0c)', '(8, 0x7e)', '(8, 0x2c)', '(9, 0x76)', '(9, 0x66)', '(9, 0x26)', '(9, 0x06)', '(9, 0x62)']
