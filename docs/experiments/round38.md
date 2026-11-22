@@ -45,3 +45,13 @@ The two large shapes copy equally well (held-out KL 0.088 / 0.089), but the shap
 (its 768x3 two-entity-layer student: 0.116). No correction round was run: each is a 2-million-decision record,
 hours in the shared queue; the reinforcement's teacher term on the student's own states does its work. The chains
 on Dungeons 4, 7, 3, 5 and 8 (1,000 runs each, paired with the 51's chains of record) for w768e2 and h768 are queued.
+
+**The round-1 student on the chains: a warning, not a verdict.** w768e2-z (76 sources) on 1,000 runs, against the
+51 (hits a visit / hearts lost a visit / success): D4 0.626 / 0.436 / 1.0% (the 51: 0.354 / 0.236 / 18.5%), D7 1.111 /
+0.839 / 2.1% (13.1%), D3 0.587 / 0.402 / 0.0% (23.2%), D5 0.621 / 1.141 / 0.1% (31.2%), D8 2.425 / 2.654 / 0.0% (40.0%
+of 300). The runs die where the 21 missing sources' families fight: Manhandla 3:0x4d 1,000 lost of 1,000 entering,
+the Olive Garden's Darknuts 5:0x05 999, the Blue Darknuts 8:0x3e / 0x3f 982 / 1,000, 3:0x59's Darknuts 781, the
+like-like 4:0x32 628 and vire 4:0x31 339. The 21 sources the round-1 students never saw were exactly the reset tasks
+of those families (boss-manhandla, darknut, boss-gleeok, vire, like-like and their route parts); the bench's
+entries do not show it because they are other states. The shapes must be compared on the `-f` students (all 97
+sources); the h768 round-1 chains still pair the two shapes on the same handicap.
