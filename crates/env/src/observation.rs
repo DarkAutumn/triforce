@@ -1546,6 +1546,7 @@ mod tests {
             clips: false,
             treasure_refused: false,
             drops_first: false,
+            bag_drops: false,
         }
     }
 

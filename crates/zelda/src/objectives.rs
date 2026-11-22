@@ -138,6 +138,10 @@ pub struct Objective {
     /// The route step Link plays here says `drops: first` (round 31, 6:0x78): the env treats it as the family's
     /// `reward.drops_first` (`env::objective`).
     pub drops_first: bool,
+    /// The route's bomb rules play a floor (round 37, `BombRules::fills_the_bag`): dropped bombs below the bag's
+    /// maximum are shaping targets for every family and, once this is no fight, the targets while Link can reach
+    /// them (`env::objective`).
+    pub bag_drops: bool,
 }
 
 /// What Link holds on entering a route step: the triforce pieces earlier steps took (bit `level - 1`), the sword
@@ -778,16 +782,24 @@ impl GameCompletion {
     /// The `treasure:` rule the current step plays in `location` (None off its room): the step's, but where the
     /// route's bomb rules set a floor N for the room's bombs (round 37, `BombRules::treasure_below`: the owner's
     /// blanket rule), a step that takes the room's game.yaml bombs (no `treasure:` or `{if_bombs_below: M}`) fights
-    /// for them when Link came in holding fewer than N, and then while he holds fewer (`{if_bombs_below: N}`); with N
-    /// or more he crosses (`skip`): a bomb he spends in the room (3:0x5b's E wall) turns no crossing into a fight
-    /// beside the opened wall (round 23's trouble with a live floor, decisions 2026-11-14).
-    fn step_treasure(&self, location: MapLocation) -> Option<TreasureRule> {
+    /// for them when Link came in holding fewer than N, and that decision holds for the visit: he takes them while he
+    /// holds fewer than the bag's maximum (`{if_bombs_below: max}`), a drop that lifts him to N or more mid-fight
+    /// notwithstanding (the owner, 8:0x3f, Nov 22: 2 bombs in, a drop of four, the room's bombs left on the floor).
+    /// The treasure lying in the room is wanted below the maximum whatever he came in with (5:0x65's in the open, a
+    /// crossing's room cleared anyway).  With N or more and no treasure lying there he crosses (`skip`): a bomb he
+    /// spends in the room (3:0x5b's E wall) turns no crossing into a fight beside the opened wall (round 23's
+    /// trouble with a live floor, decisions 2026-11-14).
+    fn step_treasure(&self, location: MapLocation, state: &GameView) -> Option<TreasureRule> {
         let step = self.current_step(location)?;
         let floor = self.bomb_rules.treasure_below_at(location);
         let bombs = self.map.get(location).is_some_and(|r| r.treasure.as_deref() == Some("bombs"));
         Some(match (step.treasure, floor) {
             (TreasureRule::Take | TreasureRule::IfBombsBelow(_), Some(n)) if bombs => {
-                if self.entry_bombs < i32::from(n) { TreasureRule::IfBombsBelow(n) } else { TreasureRule::Skip }
+                if self.entry_bombs < i32::from(n) || state.treasure().is_some() {
+                    TreasureRule::IfBombsBelow(u8::try_from(state.bomb_max()).unwrap_or(u8::MAX))
+                } else {
+                    TreasureRule::Skip
+                }
             }
             (rule, _) => rule,
         })
@@ -1132,6 +1144,7 @@ impl GameCompletion {
                 .current_step(state.full_location())
                 .is_some_and(|s| s.treasure == crate::game_map::TreasureRule::Refuse),
             drops_first: self.current_step(state.full_location()).is_some_and(|s| s.drops_first),
+            bag_drops: self.bomb_rules.fills_the_bag(),
         }
     }
 
@@ -1146,6 +1159,7 @@ impl GameCompletion {
             clips: self.clips_effective(),
             treasure_refused: false,
             drops_first: false,
+            bag_drops: false,
         }
     }
 
@@ -1570,7 +1584,7 @@ impl GameCompletion {
         if state.ram()[ROOM_FLAGS_OW as usize + (loc.value & 0x7F) as usize] & FLAG_ITEM_TAKEN != 0 {
             return None;
         }
-        if !self.step_treasure(loc).is_none_or(|rule| rule.wants(state.bombs())) {
+        if !self.step_treasure(loc, state).is_none_or(|rule| rule.wants(state.bombs())) {
             return None;
         }
         match state.treasure() {
@@ -1684,9 +1698,9 @@ impl GameCompletion {
         if item.as_deref() == Some("key") && self.collected_key_rooms.contains(&loc) {
             item = None;
         }
-        // The step's `treasure:` rule (routes.yaml; round 37: the route's floor for a room's bombs), read live: 0x5b's
-        // bombs stop mattering once Link holds 4.
-        let rule = self.step_treasure(loc);
+        // The step's `treasure:` rule (routes.yaml; round 37: the route's floor for a room's bombs, judged on entering
+        // and held for the visit), read against what Link holds now: 0x5b's bombs stop mattering once he holds 4.
+        let rule = self.step_treasure(loc, state);
         let wanted = rule.is_none_or(|r| r.wants(state.bombs()));
         let clear = rule == Some(TreasureRule::Clear);
         let mut kind = ObjectiveKind::None;
@@ -2512,6 +2526,7 @@ mod tests {
             clips: false,
             treasure_refused: false,
             drops_first: false,
+            bag_drops: false,
         };
         for (row, correct) in [(3, true), (4, true), (15, false), (16, false)] {
             assert_eq!(

@@ -340,6 +340,7 @@ fn no_objective() -> Objective {
         clips: false,
         treasure_refused: false,
         drops_first: false,
+        bag_drops: false,
     }
 }
 
@@ -957,6 +958,90 @@ fn the_route_fights_for_a_rooms_bombs_below_its_floor() {
         let what = format!("{start} with {bombs} bombs");
         assert_eq!(state(&env).bombs(), bombs as i32, "{what}");
         assert_eq!(objective(&env).kind == ObjectiveKind::Fight, fight, "{what}: {:?}", objective(&env).kind);
+        nes = release(env);
+    }
+}
+
+/// A darknut env at `start` (8:0x3f from W) with Link holding `bombs`, walked in until the room's monsters are
+/// active, then the room emptied (every monster slot cleared, as `zelda/tests/d8.rs`' `clear_room`).
+fn fought_and_cleared(nes: ZCore, start: &str, bombs: u8) -> Env {
+    let mut env = make_env(nes, "darknut", Some(start), |c| {
+        c.ram_randomization = RamRandomization { bombs: Some((bombs.into(), bombs.into())), ..Default::default() };
+    });
+    env.reset(Some(0), None).unwrap();
+    for _ in 0..10 {
+        act(&mut env, "MOVE E 16");
+        if state(&env).has_active_enemies() {
+            break;
+        }
+    }
+    assert!(state(&env).has_active_enemies(), "{start}: in the room");
+    let s = env.session_mut();
+    for slot in 1..=11u16 {
+        s.nes_mut().poke(0x34F + slot, 0);
+    }
+    s.apply_ram(&[]);
+    env
+}
+
+/// The env's objective after one step with Link holding `bombs` of 8 and the room's treasure shown (`shown`, at the
+/// centre: where 8:0x3f's lay in the golden replay) or hidden, and `drop` (a pack of bombs lying at (x, y)).
+fn after(env: &mut Env, bombs: u8, shown: bool, drop: Option<(u8, u8)>) -> Objective {
+    let s = env.session_mut();
+    s.apply_ram(&[(Var::Bombs, bombs), (Var::BombMax, 8), (Var::TreasureFlag, u8::from(!shown)),
+        (Var::TreasureX, 0x80), (Var::TreasureY, 0x90)]);
+    if let Some((x, y)) = drop {
+        for (address, value) in [(0x34F, 0x60), (0xAC, item::BOMBS as u8), (0x70, x), (0x84, y), (0x405, 0), (0x3A8, 0xC0)] {
+            s.nes_mut().poke(address + 3, value);
+        }
+        s.apply_ram(&[]);
+    }
+    act(env, "MOVE N 4");
+    objective(env).clone()
+}
+
+/// Round 37, the owner watching 8:0x3f (Nov 22): "bombs were dropped bringing him from 2 up to 6, then the room
+/// dropped bombs were there with a clear room and he ignored them".  The golden replay's visit (frames 118614-120714
+/// of `golden-d3first-single-network.tfreplay`): in with 2, the last monster's drop of four taken (6), the room's
+/// bombs shown at ($80, $90), Link down the stairs.  The shared step's `{if_bombs_below: 5}`, read live, made the
+/// stairs the objective at 6 (as `d2first` still does).  Under `d3first`'s floor the decision made on entering holds
+/// for the visit: at 6 the treasure is the objective and the wavefront's only target, at 8 (full) not; a room
+/// entered with 8 (a crossing) whose bombs lie there all the same wants them at 7.  Dropped bombs (the room clear,
+/// the game shows its treasure again): a pack Link can reach is the only target below 8, before the treasure and the
+/// stairs; at 8 it is none (on `d2first` a target beside the others, as before).
+#[test]
+fn the_rooms_bombs_stay_wanted_after_a_drop() {
+    let Some(mut nes) = open_core() else { return };
+    for (start, entering, now, wanted) in [
+        ("d3first_8_3fw_0", 2, 6, true),
+        ("d3first_8_3fw_0", 2, 8, false),
+        ("d3first_8_3fw_0", 8, 7, true),
+        ("8_3fw_0", 2, 6, false),
+        ("8_3fw_0", 2, 4, true),
+    ] {
+        let mut env = fought_and_cleared(nes, start, entering);
+        let o = after(&mut env, now, true, None);
+        let what = format!("{start}: in with {entering}, holding {now}");
+        assert_eq!(o.kind == ObjectiveKind::Treasure, wanted, "{what}: {:?}", o.kind);
+        if wanted {
+            let treasure = state(&env).treasure().expect("shown");
+            let tiles: BTreeSet<Target> = treasure.link_overlap_tiles().into_iter().map(Target::Tile).collect();
+            assert!(!o.pbrs_targets.is_empty() && o.pbrs_targets.is_subset(&tiles), "{what}: {:?}", o.pbrs_targets);
+        }
+        nes = release(env);
+    }
+    let pack = (0x60, 0x90);
+    for (start, now, first) in [("d3first_8_3fw_0", 6, true), ("d3first_8_3fw_0", 8, false), ("8_3fw_0", 4, false)] {
+        let mut env = fought_and_cleared(nes, start, 2);
+        let o = after(&mut env, now, false, Some(pack));
+        let drop = state(&env).items.iter().find(|it| it.id == item::BOMBS).expect("the pack").link_overlap_tiles();
+        let tiles: BTreeSet<Target> = drop.into_iter().map(Target::Tile).collect();
+        let what = format!("{start}: a pack, holding {now}: {:?}", o.pbrs_targets);
+        assert_ne!(o.kind, ObjectiveKind::Fight, "{what}");
+        assert_eq!(!o.pbrs_targets.is_empty() && o.pbrs_targets.is_subset(&tiles), first, "{what}");
+        if !first && start.starts_with("d3first") {
+            assert!(o.pbrs_targets.is_disjoint(&tiles), "{what}");
+        }
         nes = release(env);
     }
 }

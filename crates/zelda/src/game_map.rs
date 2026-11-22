@@ -1000,9 +1000,14 @@ pub struct BombRules {
     pub wall_only: BTreeSet<MapLocation>,
     /// `treasure_below: N` (the owner's third rule, "a blanket rule": the floor under which a room's bombs are fought
     /// for): on every step whose room's game.yaml treasure is bombs and which takes it (no `treasure:`, or
-    /// `{if_bombs_below: M}`: the step's own M gives way), the treasure is wanted when Link came in holding fewer
-    /// than N, then while he holds fewer (`d3first`: 8, the bag; 7 or fewer is a fight). `skip`, `refuse` and `clear`
-    /// stay the step's. `zelda::objectives::GameCompletion::step_treasure`.
+    /// `{if_bombs_below: M}`: the step's own M gives way), the decision is made on entering and holds for the visit:
+    /// Link coming in with fewer than N fights for the treasure and takes it while he holds fewer than the bag's
+    /// maximum (a drop that lifts him over N mid-fight changes nothing: the owner, 8:0x3f, Nov 22), and the treasure
+    /// lying in the room is wanted below the maximum whatever he came in with (5:0x65's in the open; one a crossing
+    /// cleared anyway); with N or more and the treasure not lying there he crosses (`d3first`: 8, the bag; 7 or fewer
+    /// is a fight). `skip`, `refuse` and `clear` stay the step's. `zelda::objectives::GameCompletion::step_treasure`.
+    /// A route with a floor also makes dropped bombs, below the maximum, the targets after a fight
+    /// ([`BombRules::fills_the_bag`]).
     pub treasure_below: Option<u8>,
     /// `treasure_below_rooms: [{level, room, below: N}, ...]`: a room's own floor instead of `treasure_below` (on
     /// every step of the room that takes its bombs): the override for a room the rule costs too much in.
@@ -1013,6 +1018,14 @@ impl BombRules {
     /// The floor under which the route fights for the bombs of `room` ([`BombRules::treasure_below`]), if any.
     pub fn treasure_below_at(&self, room: MapLocation) -> Option<u8> {
         self.treasure_below_rooms.get(&room).copied().or(self.treasure_below)
+    }
+
+    /// The route plays a bomb floor ([`BombRules::treasure_below`] or a room's): dropped bombs lying in the room are
+    /// shaping targets for every family while Link holds fewer than the bag's maximum, and once the objective is no
+    /// fight they are the targets, not the exit, while Link can reach them (`Objective::bag_drops`, `env::objective`;
+    /// the owner, Nov 22: "make sure reward shaping pushes him towards bombs unless he's literally at max (8)").
+    pub fn fills_the_bag(&self) -> bool {
+        self.treasure_below.is_some() || !self.treasure_below_rooms.is_empty()
     }
 
     /// The `bomb_rules:` entry `v` of the route `route`, whose rooms must be dungeon rooms of its `steps`.
