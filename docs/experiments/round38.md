@@ -72,3 +72,32 @@ visit) and fewer hearts (-0.14) and wins more (+5.8 points); where neither has i
 never saw: Darknuts, Manhandla) neither shape survives, and Goriyas go the other way. **Verdict for now: the
 reinforcement starts from `hitnet` (h768-f)**, which is also the body the shared hit head is to sit in; the `-f`
 students (all 97 sources) must be chained to confirm it once the data is whole.
+
+## Why the bench was blind, and the rooms tier
+
+The round-1 student's bench (+1.2 points over the 51) and its chains (D3 0.0%, D4 1.0%, D5 0.1%, D7 2.1%, D8 0.0%)
+disagree for three reasons, measured on 2.0.0.5:
+
+- **Not the network or the path.** Bench and chain played the same file (hash a0b872e300ad67e5), the same act mode,
+  the Rust actor both. The served network computes what training wrote: the torch source against the Rust `-z` on
+  2,000 held-out rows, largest log-probability difference 4e-4 (round 1), 1.5e-5 (`w768e2-f`, round 37's student),
+  top-1 agreement 1.000, the legal sets equal.
+- **Coverage.** A chain harvests a room entry only at a handoff (the family changes), so a room entered from a room
+  of the same family is never harvested: never on the bench, never an `entries` data source. Of the 51's own chain
+  deaths, 21% (D3), 2% (D4), 69% (D5), 78% (D7) and 82% (D8) fall in such entries; of the round-1 student's, 20%,
+  30%, 100%, 82% and 99%. The Olive Garden's fight (5:0x05 from 0x06) is not on the bench; its two 5:0x05 entries
+  are the cleared revisit from 0x04 (3 decisions). Dungeon 8's 0x4e, 0x3e and 0x3f, Dungeon 7's Goriya rooms 0x1b,
+  0x19, 0x18 and 0x49, and 4:0x31's fight from 0x30 are missing the same way.
+- **Start conditions and weight.** The bench plays a harvested entry with the family's `ram_randomization`: eight
+  resets of the 3:0x59 entry that arrived at 0.5 hearts start at 0.5, 3.0, 1.0, 1.5, 2.5, 1.5, 3.0 and 3.0. Its
+  total weighs 51 keys alike: the round-1 student was 17.5 ± 3.5 points down on `darknut@d3first` (3:0x59: 13%
+  against the team's 80%, on 15 episodes) and still read +1.2 in total.
+- "Manhandla lost 1,000 of 1,000" counted lost per 1,000 entering: 4 runs reached 3:0x4d. Dungeon 3 is lost at the
+  Darknut rooms 3:0x59 (571 deaths), 0x69 and 0x5b.
+
+**The fix (rooms tier).** `eval-chain --harvest DIR --harvest-every-room` saves every correct room entry (Rust test
+`an_every_room_harvest_sees_a_same_family_entry`; 400 chain runs replayed identical to before). `bench rooms` builds
+`triforce/lab/bench-rooms.json` from an every-room harvest of the team (100 runs of each dungeon segment, seeds
+380000 on): the 97 room entries where the team lost 0.1 hearts a visit or more, or a run, 12 states each, played
+as they arrived (no randomization), one row per room entry; `compare` lists the losing rows (5 points or more,
+beyond two standard errors) on both tiers. A candidate reaches the chains only with no losing row.
