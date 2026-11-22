@@ -116,7 +116,8 @@ and `from . import mynet` at the end of `triforce/nets/__init__.py`. That is all
 log-probs, entropies, the joint distribution, `evaluate`, `get_value`, `joint_log_probs`, checkpoints
 (`registry.save_checkpoint` / `load_model`), evaluation, chains, training and the bench come from `LabNet` and
 the logits. Heads whose direction and duration don't depend on the kind repeat one row 11 times. The observation is
-`observation.py`'s (schema 6) for now; a network that wants another one waits for the observation round.
+`observation.py`'s (schema 7: schema 6's keys plus the per-entity `entity_rel` and `entity_contact`, which only the
+networks that ask for them read; `docs/architecture.md` "Observation").
 `triforce/nets/wide.py` is the worked example (today's encoders, wider towers). Test it like
 `tests/test_lab_nets.py` `test_architectures_side_by_side_save_load_and_play`.
 
@@ -251,7 +252,11 @@ and on the Rust actor a network pass a candidate to rank them) makes the rollout
 
 An output `[B]` predicts for the action taken; `[B, 352]` one value per joint action (`kind * 32 + direction * 4 +
 duration`), read at the action taken (and the tried ones). Logged: `losses/aux_<output>`,
-`charts/aux_<output>_labels` (labels a row).
+`charts/aux_<output>_labels` (labels a row); for a per-action `hit` output, before each update trains on the rollout
+(so held out, on the policy's own states; `lab.auxiliary.held_out`): `charts/aux_<output>_pr_taken` (precision =
+recall on the actions taken, their real outcome: experiment 2's "model's own draws"), `charts/aux_<output>_pr_judged`
+(with the tried candidates) and `charts/aux_<output>_lost_taken` / `_lost_judged` (the lost labels behind each, to
+pool iterations by; the precision is NaN, so not logged, in a rollout without a hit).
 
 **A hit head feeding the action choice** (`nets/hithead.py`, `hithead`): today's body plus a hit tower and a
 per-action hit head (`aux['hit']`, 352 logits) trained only by its own loss; its probabilities, gradient stopped, are
@@ -262,6 +267,19 @@ trial, and an act mode with foresight is refused for it as for any served networ
 ```
 python -m triforce.lab.train --name hit --families darknut --parallel 8 --iterations 200 --arch hithead \
     --aux hit=hit:0.5 --try-others 4:0.25 --seed 36
+```
+
+**The hit network** (`nets/hitnet.py`, `hitnet`; round36.md "Observation v7 and the hit network"): experiment 2's
+shape on observation schema 7. Link's `link` block is a token attending to the entity tokens (the type embedding,
+`entity_features`, `entity_rel`, `entity_contact`; `tokens` picks the groups), 2 layers of width 128, his final token
+joining the room embedding, the grid convs and the float vectors; today's towers and heads; the hit head on its own
+tower (`hit`: `joint` 352 logits, `kind_direction` 88 shared by the durations, `none`), `feed` its stopped
+probabilities into the policy tower, `detach_body`, `room` (the room embedding on or off).
+
+```
+python -m triforce.lab.train --name hitnet --families goriya@d3first --parallel 8 --iterations 400 --arch hitnet \
+    --arch-config '{"feed": true}' --aux hit=hit:0.5 --try-others 4:0.25 --teacher-coeff 1.0 --teacher-hold 100 \
+    --teacher-fade 200 --seed 36
 ```
 
 
@@ -304,7 +322,9 @@ once per rollout over its family's rows in batches of 4096 (`lab.collect.Teacher
   used per episode. Every episode is kept (state, seed), so `compare` pairs two networks episode by episode and gives
   each difference with its standard error.
 - `run --team --out team.json` (today's networks), `run --network CKPT --keys zol stalfos-keese-gel --out
-  student.json` (one network for some keys), `run --checkpoint KEY=CKPT ...`, `compare team.json student.json`.
+  student.json` (one network for some keys), `run --checkpoint KEY=CKPT ...`, `compare team.json student.json`;
+  `run --act MODE` plays another act mode than the manifest's (the planner beside a result:
+  `temperature:0.5+relax:16+plan:16:1`, for networks the Rust actor plays).
 - **Full tier** (`bench.json` `full`): the route's segment chains as the landings run them, `triforce eval-batch
   TAG --chains TAG --route d3first --runs 1000 --act model`, a candidate's networks given with `--checkpoint`; the
   `full` segment is the route from the start. It is what decides; the cheap tier only shortlists.

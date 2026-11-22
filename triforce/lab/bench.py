@@ -287,6 +287,9 @@ def main(argv=None) -> int:
     r.add_argument('--keys', nargs='*', default=None)
     r.add_argument('--checkpoint', nargs='*', default=[], metavar='KEY=CKPT')
     r.add_argument('--out', required=True)
+    r.add_argument('--act', default=None,
+                   help="another act mode than the manifest's (e.g. the planner beside a result: "
+                        "temperature:0.5+relax:16+plan:16:1; served networks refuse foresight)")
     s = sub.add_parser('speed')
     s.add_argument('--key', default='zol')
     s.add_argument('--paths', nargs='+', default=['rust', 'cpu', 'cuda'],
@@ -339,7 +342,7 @@ def main(argv=None) -> int:
     episodes = sum(len(e['states']) * manifest['episodes'] for e in manifest['entries'] if e['key'] in networks)
     with progress_job('lab-bench', 'eval', episodes, root=args.logs_dir,
                       work=work(eval_episodes=episodes)) as progress:
-        result = run_bench(networks, manifest, args.parallel, args.states_dir, progress=progress)
+        result = run_bench(networks, manifest, args.parallel, args.states_dir, act=args.act, progress=progress)
     write_json_atomic(args.out, compact(result))
     print(json.dumps(result['total'], indent=2))
     return 0

@@ -51,7 +51,7 @@ import torch
 from torch import nn
 
 from .metrics import EpisodeTracker, RolloutMetrics
-from .lab.auxiliary import aux_loss
+from .lab.auxiliary import aux_loss, held_out
 from .plr import PrioritizedReplay
 from .rollout_buffer import RolloutBuffer
 
@@ -557,6 +557,9 @@ class PPO:
             sil = self.sil
         sil_positive_share = sil.add(buffer) if sil is not None else 0.0
         sil_policy_loss = sil_value_loss = torch.tensor(0.0)
+        # The hit head on this rollout before it trains on it (held out from every earlier update).
+        held_stats = held_out(self.aux_losses, network, batch) if self.aux_losses and not getattr(
+            network, 'recurrent', False) else {}
 
         # The update is all-or-nothing: an exception (an interrupt included) restores this snapshot, as does the KL
         # rollback.
@@ -725,6 +728,7 @@ class PPO:
         stats.update(search_stats)
         if self.aux_losses:
             stats.update(aux_stats)
+            stats.update(held_stats)
         if b_teacher is not None:
             stats['losses/teacher_kl'] = teacher_kl.item()
             stats['charts/teacher_coeff'] = self.teacher_coeff

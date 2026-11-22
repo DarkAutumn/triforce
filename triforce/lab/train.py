@@ -44,7 +44,7 @@ from ..model import obs_spec_from_space
 from ..observation import observation_space
 from ..ppo import PPO, IterationResult, PPOConfig, joint_kl, minibatch_forward
 from ..train import CONFIRM_EPISODES, EarlyStop, curriculum_spec
-from .auxiliary import AuxLoss, aux_loss
+from .auxiliary import AuxLoss, aux_loss, held_out
 from .collect import MultiCollector, NeedSampler, Teachers, parse_families
 
 REFERENCE = Path(__file__).with_name('reference.json')
@@ -161,7 +161,7 @@ def imitate(network, optimizer, batch: dict, cfg: PPOConfig, value_coeff: float,
 
     network.train()
     kl = torch.tensor(0.0)
-    stats: dict = {}
+    stats: dict = held_out(list(aux_losses), network, batch) if aux_losses and sequence is None else {}
     for _ in range(cfg.num_epochs):
         for part in torch.tensor_split(torch.randperm(units, device=device), cfg.minibatches):
             mb, out, joint_of = forward(part)
@@ -170,7 +170,8 @@ def imitate(network, optimizer, batch: dict, cfg: PPOConfig, value_coeff: float,
             if value_coeff > 0:
                 loss = loss + value_coeff * 0.5 * (out.value - batch['teacher_value'][mb]).pow(2).mean()
             if aux_losses:
-                term, stats = aux_loss(list(aux_losses), out.aux, batch, mb)
+                term, aux_stats = aux_loss(list(aux_losses), out.aux, batch, mb)
+                stats.update(aux_stats)
                 loss = loss + term
             optimizer.zero_grad()
             loss.backward()

@@ -99,3 +99,51 @@ def aux_loss(losses: list[AuxLoss], aux: dict, batch: dict, rows) -> tuple[torch
         stats[f'losses/aux_{spec.output}'] = float(loss.detach())
         stats[f'charts/aux_{spec.output}_labels'] = labels / max(1, value.numel())
     return total, stats
+
+
+def matched_precision(scores: torch.Tensor, labels: torch.Tensor) -> float:
+    """Precision (= recall) when as many are refused as are lost: the top-k by score, k the lost (round 35/36's
+    "P = R at the look-ahead's veto rate"); NaN without a lost one."""
+    k = int(labels.sum())
+    if k == 0:
+        return float('nan')
+    return float(labels[torch.topk(scores, k).indices].float().mean())
+
+
+def held_out(losses: list[AuxLoss], network, batch: dict, chunk: int = 4096) -> dict:
+    """Before an update trains on ``batch`` (``RolloutBuffer.flatten``), how each per-action ``hit`` output reads it:
+    held out from every update so far, on the policy's own states. ``charts/aux_<output>_pr_taken``: precision =
+    recall on the actions taken (their real outcome; the model's own draws of experiment 2's bench);
+    ``..._pr_judged``: on every judged candidate (the taken ones and, with ``--try-others``, the tried ones);
+    ``..._lost_taken`` / ``..._lost_judged`` the lost labels behind each (pool iterations by them)."""
+    hit = [s for s in losses if s.target == 'hit']
+    if not hit:
+        return {}
+    rows = batch['actions'].shape[0]
+    outputs: dict = {s.output: [] for s in hit}
+    with torch.no_grad():
+        for start in range(0, rows, chunk):
+            part = slice(start, min(rows, start + chunk))
+            out = network.evaluate({k: v[part] for k, v in batch['obs'].items()}, batch['masks'][part],
+                                   batch['actions'][part])
+            for name in outputs:
+                if out.aux[name].dim() != 2:
+                    raise ValueError(f"held_out: {name} is not a per-action output")
+                outputs[name].append(out.aux[name])
+    stats = {}
+    taken = joint_index(batch['actions']).unsqueeze(-1)
+    lost = (batch['health_lost'] > 0).float()
+    for name, parts in outputs.items():
+        logits = torch.cat(parts)
+        scores, labels = [logits.gather(1, taken).squeeze(-1)], [lost]
+        stats[f'charts/aux_{name}_pr_taken'] = matched_precision(scores[0], labels[0])
+        if 'tried_lost' in batch:
+            tried = batch['tried_lost'] >= 0
+            index = joint_index(batch['tried_actions'].clamp(min=0))
+            scores.append(logits.gather(1, index)[tried])
+            labels.append(batch['tried_lost'][tried].float())
+        scores_all, labels_all = torch.cat(scores), torch.cat(labels)
+        stats[f'charts/aux_{name}_pr_judged'] = matched_precision(scores_all, labels_all)
+        stats[f'charts/aux_{name}_lost_taken'] = float(lost.sum())
+        stats[f'charts/aux_{name}_lost_judged'] = float(labels_all.sum())
+    return stats
