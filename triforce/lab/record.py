@@ -38,6 +38,7 @@ def parse_args(argv=None):
     parser.add_argument('--states-dir', default=None)
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--out', required=True)
+    parser.add_argument('--logs-dir', default=None, help="the log folder's root (default logs/, $TRIFORCE_LOGS_DIR)")
     parser.add_argument('--try-others', default=None, metavar='K:P',
                         help="the look-ahead's verdict on K other candidates on a share P of the decisions")
     add_job_arguments(parser)
