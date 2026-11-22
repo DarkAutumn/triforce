@@ -192,6 +192,18 @@ pub fn target_wavefront(
     Some(wavefront_to(state, objective, &targets))
 }
 
+/// Whether a dropped item pulls Link away from `objective` (the aimless score's `pulled`, `zelda::aimless`): one the
+/// shaping of `reward` makes a target, or one he wants ([`wanted_drop`]: a heart or fairy below full health, bombs
+/// below his maximum). Dropped items vanish; walking to one is no aimless walk (the owner, round 38: "walking towards
+/// a heart that disappears shouldn't count").
+pub fn pulled(reward: &RewardConfig, objective: &Objective, state: &GameView) -> bool {
+    let first = drops_first(reward, objective);
+    state
+        .items
+        .iter()
+        .any(|it| wanted_drop(state, it.id) || is_item_target(reward, first, state, it.id))
+}
+
 /// Direction bits (E 1, W 2, S 4, N 8) of the sides `objective`'s next rooms lie on from `state`'s room (a maze
 /// room's next step): the `next_room_*` observation.
 pub fn exit_bits(state: &GameView, objective: &Objective) -> u8 {
@@ -206,6 +218,8 @@ pub fn exit_bits(state: &GameView, objective: &Objective) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeSet;
+    use zelda::aimless::AimlessState;
     use zelda::GameMap;
     use zelda::tables::RAM_SIZE;
 
@@ -242,5 +256,48 @@ mod tests {
         assert_eq!(rupee.len(), 4);
         assert!(rupee.iter().all(|t| clock_and_rupee.contains(t) && !clock.contains(t)));
         assert!(targets(&ram, &near).is_empty());
+    }
+
+    /// Round 38, the aimless score: a dropped heart pulls a hurt Link whatever his family's shaping (it vanishes;
+    /// walking to it is no aimless walk), so no decision is calm while it lies there; at full health it pulls nobody
+    /// and the empty screen is calm again; a rupee pulls only a family whose shaping makes it a target.
+    #[test]
+    fn a_heart_that_can_vanish_is_no_calm_goal() {
+        const HEARTS: usize = 0x66F;
+        const PARTIAL: usize = 0x670;
+        let map = Arc::new(GameMap::builtin());
+        let mut ram = [0u8; RAM_SIZE];
+        (ram[LEVEL], ram[ROOM_ID], ram[GAME_MODE]) = (0, 0x77, 5);
+        (ram[OBJ_X], ram[OBJ_Y]) = (0x40, 0x8D);
+        (ram[OBJ_TYPE + 3], ram[OBJ_STATE + 3], ram[OBJ_X + 3], ram[OBJ_Y + 3]) = (0x60, item::HEART as u8, 0x60, 0x8D);
+        (ram[HEARTS], ram[PARTIAL]) = (0x21, 0x00);
+        let objective = Objective {
+            kind: ObjectiveKind::Move,
+            targets: BTreeSet::new(),
+            next_rooms: [zelda::MapLocation::new(0, 0x76, false)].into_iter().collect(),
+            pbrs_targets: [Target::Tile((-1, 10))].into_iter().collect(),
+            retreats: BTreeSet::new(),
+            clips: false,
+            treasure_refused: false,
+            drops_first: false,
+        };
+        let plain = RewardConfig::default();
+        let view = |ram: &[u8; RAM_SIZE]| GameView::new(ram, 0, false, map.clone());
+        let hurt = view(&ram);
+        assert!(!hurt.is_health_full());
+        assert!(pulled(&plain, &objective, &hurt));
+        assert!(!AimlessState::of(&hurt, &objective, true).quiet);
+
+        ram[PARTIAL] = 0xFF;
+        ram[HEARTS] = 0x22;
+        let full = view(&ram);
+        assert!(full.is_health_full());
+        assert!(!pulled(&plain, &objective, &full));
+        assert!(AimlessState::of(&full, &objective, false).quiet, "an empty screen with an exit to walk to");
+
+        ram[OBJ_STATE + 3] = item::RUPEE as u8;
+        let rupee = view(&ram);
+        assert!(!pulled(&plain, &objective, &rupee));
+        assert!(pulled(&RewardConfig { item_targets: true, ..Default::default() }, &objective, &rupee));
     }
 }
