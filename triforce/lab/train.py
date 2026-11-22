@@ -12,7 +12,9 @@ Modes: ``ppo`` (default; the teacher term KL(teacher ‖ student) beside PPO wit
 ``--teacher-hold`` iterations, then fading linearly to 0 over ``--teacher-fade``) and ``imitate`` (no PPO: the
 student minimises the KL alone; ``--actor student`` collects on the student's own states, DAgger-style, the
 distribution it will play; ``--actor teacher`` on the teachers', a fixed distribution for capacity tests).
-Metrics are logged per family (``family/<key>/...``) beside the merged ones.
+Metrics are logged per family (``family/<key>/...``) beside the merged ones.  The job's log folder (``--logs-dir``)
+holds a plan of kind ``lab-train`` and a stream a family (``RunLog``), so the training GUI draws the run: one group,
+a row a family.
 
 Also (docs/lab.md): auxiliary targets (``--aux OUTPUT=TARGET:COEFF``) and look-ahead labels for candidates not taken
 (``--try-others K:P``, training only); a recurrent network (``LabNet.initial_state``) trains on sequences of

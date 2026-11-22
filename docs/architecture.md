@@ -1231,7 +1231,12 @@ every step, so following an enemy that moves away pays again, and knockback rese
   folder's `NNN` may have any width; it is allocated under `<logs>/.lock`. `round.jsonl` / `round.log` cover the round (chain,
   `chain_progress`, errors, `end`). SIGTERM is turned into an interrupt, so a killed run still saves and writes
   `end`. Standalone `triforce.evaluate` and `eval-chain` log a folder of their own (`events.logged_job`: plan kind
-  `eval` / `chain`; `--no-log` skips the folder, not the turn) and end it `interrupted` on SIGTERM. `--events FILE`
+  `eval` / `chain`; `--no-log` skips the folder, not the turn) and end it `interrupted` on SIGTERM. A lab training
+  (`triforce.lab.train`) writes `<yymmdd>_<NNN>_lab-<name>`, plan kind `lab-train`, a run entry and a
+  `<family>.jsonl` stream a family, all trained at once (docs/lab.md "What a lab job writes"); the lab's bench and
+  recorder, and an experiment script that enters the queue itself, use `events.progress_job`: a folder whose one
+  run's `progress.jsonl` has `eval_start` / `eval_progress` (done of the total in its `unit`, the success so far) /
+  `end`, drawn as an evaluation's row. `--events FILE`
   (train, evaluate, eval-chain) writes into a given stream: in a folder with a `training.json` its driver
   (train_round, eval-batch) owns the plan, the stream and its `end`; in a folder without one the job writes its plan
   there

@@ -57,6 +57,13 @@ and on the last run) and ``chain`` (the summary)).  ``--no-log`` turns it off.  
 eval-chain) writes the events into FILE: in a folder with a plan its driver owns the plan, the stream and its
 ``end``; in a folder without one the job writes its plan there (``has_plan``), so every job has a plan.
 
+A lab training (``python -m triforce.lab.train``) writes ``<yymmdd>_<NNN>_lab-<name>``: plan kind ``lab-train``,
+a run entry and a ``<family>.jsonl`` stream a family (``lab.train.RunLog``: the training events above, every
+family at the run's iteration, its own numbers in ``metrics``).  A job with one line of progress (the lab's bench
+and recorder, an experiment script that enters the queue itself: ``progress_job``) writes a plan with one run whose
+``progress.jsonl`` has ``eval_start`` (``episodes``: the total, ``unit``), ``eval_progress`` (``done``, the running
+``success_rate`` when it measures one) and ``end``.
+
 An evaluation batch (``triforce eval-batch NAME``, ``triforce/eval_batch.py``) writes ``<yymmdd>_<NNN>_<NAME>``: plan
 kind ``eval-batch`` with every evaluation listed up front (``name``, ``kind`` chain / eval / report, ``total``,
 ``output``, ``command``; pending, ``evaluating``, then ``ok`` / ``failed`` / ``interrupted`` with its headline),
