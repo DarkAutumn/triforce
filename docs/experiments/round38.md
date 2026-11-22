@@ -101,3 +101,21 @@ disagree for three reasons, measured on 2.0.0.5:
 380000 on): the 97 room entries where the team lost 0.1 hearts a visit or more, or a run, 12 states each, played
 as they arrived (no randomization), one row per room entry; `compare` lists the losing rows (5 points or more,
 beyond two standard errors) on both tiers. A candidate reaches the chains only with no losing row.
+
+**The check on the dying rooms** (2.0.0.5; the 51 and the round-1 student, 5 episodes a state on the bench's seeds;
+each start played as the bench does, with the family's start randomization, and as the chain brought it; success
+of the 51 / the student):
+
+| room | entries | bench's start | as the chain brought it |
+|---|---|---|---|
+| 3:0x59 | the bench's own 3 | 0.80 / 0.13 | 0.87 / 0.13 |
+| 3:0x59 | the student's own arrivals | 0.86 / 0.19 | 0.85 / 0.19 |
+| 4:0x32 | the 51's arrivals | 0.93 / 0.83 (2.6 hearts) | 0.95 / 0.86 (2.8) |
+| 4:0x32 | the student's arrivals | 0.95 / 0.69 (2.6) | **0.73 / 0.46** (1.6) |
+| 5:0x05 fight, from 0x06 | the 51's arrivals (every-room harvest) | 0.47 / 0.00 | 0.57 / 0.00 |
+| 8:0x3e | the 51's arrivals | 0.86 / 0.14 (10.4 hearts) | **0.51 / 0.05** (5.9) |
+| 8:0x3f | the 51's arrivals | 0.88 / 0.60 (10.4) | **0.54 / 0.17** (5.1) |
+
+The student lacks the fight itself at 3:0x59, the Olive Garden and 8:0x3e whatever the start (the missing
+sources' families); the randomized start adds 35 points to the 51's Dungeon 8 rooms and hides how the student's
+lower arrival hearts compound (4:0x32: 0.46 at its own 1.6 hearts against 0.69 randomized).
