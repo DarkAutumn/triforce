@@ -2,7 +2,44 @@
 
 ## One network by imitation
 
-(results pending: see the end of this section)
+**Question.** How large must one network be to copy all 51 of today's networks (34 families, 17 wood-sword
+runs)? Supervised, offline, on the GPU: no PPO.
+
+**Data** (`scripts/experiments/r36_merge_record.py`): every key's teacher acting on 10 envs, every row labelled
+with the teacher's joint distribution over the 352 actions and its value. Two sources a key: its training resets
+(its yaml, its own hp and item randomisation; a route part's own yaml, from its old run's `run.json`) and the
+bench's distribution (the family's harvested pre-entry states, the hearts the runs bring, less every state the bench
+plays; no randomisation; each state labelled by the network that plays its route step: the `@d3first` run before
+the magic sword). Seeds 36,100,000 on, apart from the bench's. 81 sources (4 families without harvests, pols-voice
+all on the bench); a source of 20,480 decisions costs about 40-60 s of queue on the loaded machine (81,920: about
+3.4 min). Training uses 20,480 decisions a source: 1.66M rows (26 sources hold 81,920, unused beyond the first
+20,480). Held out: env 9 of every rollout (whole episodes, about 10%).
+
+**Training** (`scripts/experiments/r36_merge_distill.py train`): KL(teacher ‖ student) over the joint plus 0.02 ·
+½(V − V_teacher)² (values about 15 ± 5), Adam 1e-3 cosine, batch 4,096, 20 epochs (about 7,300 steps; 14 minutes
+for the 1x network on the shared 4090). A pilot on five keys: lr 1e-3 reaches held-out KL 0.12 where 3e-4 is at
+0.20 after the same steps.
+
+**The 1x student (today's architecture, 866,084 parameters, `r36merge/s1x`)**, held out
+(`docs/experiments/data/r36-merge/distill-s1x.json`): KL 0.160 (train 0.123: little overfitting, capacity- or
+optimisation-bound); top-1 agreement with the teacher's most likely action 0.836 for the joint, 0.963 kind, 0.953
+direction, 0.884 duration (where the head has a choice). Worst keys by KL: like-like 0.57 (joint 0.67), darknut
+0.46, ow-zora 0.41, boss-manhandla 0.39, vire 0.35, goriya 0.35, boss-manhandla@d3first 0.33, zol 0.32,
+goriya@d3first 0.31, darknut@d3first 0.30; best: lanmola 0.008, ow-start and dodongo-crossing 0.014, ow-peahat 0.03,
+trap-room 0.05. The hard ones to copy are the fights with long, timed exchanges and the families whose two runs
+disagree on the same rooms (darknut, goriya, zol and manhandla appear with both keys).
+
+**Not finished in this session** (the successor's status names the commands): the bench of `s1x` (queued:
+`bench run --network models/r36merge/s1x/ckpt.pt --manifest target/merge/student-manifest.json`, a manifest of
+the bench's 34 family entries plus the 17 default runs' rooms, `r36_merge_pairs.py --combined`; judged slot by slot
+by `r36_merge_report.py` against the 51 teachers); the sizes (wide 512x3 2.4x, 768x3 4.6x, 1024x3 7.5x, 768x3 with
+two entity layers, 256x2 with and without the room embedding) and the learning curve (1/4, 1/2 of the data at 1x)
+are training one after another on the GPU (`target/merge/gpu-a.sh`); DAgger rounds and the failure analysis
+(`r36_merge_failures.py`: objective failures, wrong exits, against fights, deaths) follow the benches.
+
+**Baseline for the slot report:** the 34 default runs alone (each family's default run also playing its
+wood-sword rooms) keep 96.8% of the 51 slots' mean success (-3.1 ± 0.2 points): a single student has to beat that to
+say more than "drop the route parts".
 
 ## The wood-sword pairs
 
