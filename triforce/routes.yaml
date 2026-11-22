@@ -578,8 +578,16 @@ d3first:
 # d3first, 8 (the bag): 3:0x4a, 3:0x5b's last pass, 2:0x1e, 5:0x65 eastbound, 7:0x1b, 8:0x3f, 9:0x16 northbound.
 # `treasure_below_rooms: [{level, room, below: N}, ...]`: a room's own floor instead (the override for a room where
 # the fight costs too much; 7:0x1b's crossing would be `{level: 7, room: '0x1b', below: 2}`).
+# `fights_only: true`: in a dungeon BOMB is a weapon only while the objective fights the room (the owner: "In
+# dungeons, link should only use bombs in rooms it somehow needs to clear"): a shutter the monsters hold on the step's
+# exit, a treasure or a block that waits on the kills and the step takes, a boss.  Where the route only crosses
+# (3:0x69: "slide past the darknuts to get the raft"), or once the fight is over, the family's mode is capped at
+# `required` (a `free` family: the wall the step leaves through and the 10th kill's bomb; `tenth`, `required` and
+# `never` place no weapon bomb already).  In a fight the family's mode and the reserve stand as before, but in a
+# `wall_only` room.  The overworld is untouched.
 bomb_rules:
   d3first:
+    fights_only: true
     wall_only: [{level: 3, room: '0x5b'}]
     treasure_below: 8
 # clips-gauntlet (round 21, docs/experiments/round21-gauntlet.md): an experiment route, not a way through the game.  Two

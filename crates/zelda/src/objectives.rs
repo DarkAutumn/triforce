@@ -945,13 +945,17 @@ impl GameCompletion {
         self.current_step(state.full_location())?.bombs.as_deref()
     }
 
-    /// The route's bomb rules (round 37, routes.yaml `bomb_rules:`) take BOMB as a weapon off in `state`'s room: it is
-    /// one of the owner's rooms where a bomb only opens the way (`wall_only`, 3:0x5b on `d3first`). There the env
-    /// caps the family's mode, or the step's, at `required` (`env::config::ItemsConfig::on_step`): the bomb that
-    /// opens the wall the objective leaves through and the 10th damage-free kill's (arming a forced drop of four,
-    /// always allowed: the owner, Nov 22), nothing else; `never` stays never.
+    /// The route's bomb rules (round 37, routes.yaml `bomb_rules:`) take BOMB as a weapon off in `state`'s room, after
+    /// [`GameCompletion::objectives`] for `state`: it is one of the owner's rooms where a bomb only opens the way
+    /// (`wall_only`, 3:0x5b on `d3first`), or (`fights_only`) a dungeon room the objective does not fight (the route
+    /// only crosses it, or its fight is over: a room that stops being a fight stops offering BOMB). There the env caps
+    /// the family's mode, or the step's, at `required` (`env::config::ItemsConfig::on_step`): the bomb that opens the
+    /// wall the objective leaves through and the 10th damage-free kill's (arming a forced drop of four, always
+    /// allowed: the owner, Nov 22), nothing else; `never` stays never.
     pub fn weapon_bombs_off(&self, state: &GameView) -> bool {
-        self.bomb_rules.wall_only.contains(&state.full_location())
+        let here = state.full_location();
+        self.bomb_rules.wall_only.contains(&here)
+            || (self.bomb_rules.fights_only && here.level != 0 && self.last_kind != ObjectiveKind::Fight)
     }
 
     /// The room edge (N/S/E/W) the route step Link plays in `state`'s room leaves through: the step

@@ -985,6 +985,13 @@ fn parse_route(name: &str, value: &Value, routes: &Routes, tables: &RouteTables,
 /// none: every room plays the family's `items: {bombs:}` mode and the step's.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct BombRules {
+    /// `fights_only: true` (the owner's first rule: "In dungeons, link should only use bombs in rooms it somehow
+    /// needs to clear"): in a dungeon room BOMB is a weapon only while the objective fights the room (a shutter the
+    /// monsters hold on the route's exit, a treasure or a block that waits on the kills and the route takes, a boss);
+    /// where the route only crosses, or once the fight is over, the family's mode is capped at `required` (the wall
+    /// the step leaves through and the 10th kill's bomb). The overworld is untouched.
+    /// `zelda::objectives::GameCompletion::weapon_bombs_off`.
+    pub fights_only: bool,
     /// `wall_only: [{level, room}, ...]` (the owner's second rule: "no bomb usage except to progress, not to fight"):
     /// in these rooms BOMB is never a weapon, whatever the family's mode, the step's or the fight: Link may place
     /// only the bomb that opens the wall the route leaves through and the 10th damage-free kill's, whose bomb kill
@@ -993,8 +1000,9 @@ pub struct BombRules {
     pub wall_only: BTreeSet<MapLocation>,
     /// `treasure_below: N` (the owner's third rule, "a blanket rule": the floor under which a room's bombs are fought
     /// for): on every step whose room's game.yaml treasure is bombs and which takes it (no `treasure:`, or
-    /// `{if_bombs_below: M}`: the step's own M gives way), the treasure is wanted only while Link holds fewer than N
-    /// (`d3first`: 8, the bag; 7 or fewer is a fight). `skip`, `refuse` and `clear` stay the step's.
+    /// `{if_bombs_below: M}`: the step's own M gives way), the treasure is wanted when Link came in holding fewer
+    /// than N, then while he holds fewer (`d3first`: 8, the bag; 7 or fewer is a fight). `skip`, `refuse` and `clear`
+    /// stay the step's. `zelda::objectives::GameCompletion::step_treasure`.
     pub treasure_below: Option<u8>,
     /// `treasure_below_rooms: [{level, room, below: N}, ...]`: a room's own floor instead of `treasure_below` (on
     /// every step of the room that takes its bombs): the override for a room the rule costs too much in.
@@ -1010,7 +1018,7 @@ impl BombRules {
     /// The `bomb_rules:` entry `v` of the route `route`, whose rooms must be dungeon rooms of its `steps`.
     fn parse(route: &str, v: &Value, steps: &[RouteStep]) -> Result<BombRules, MapError> {
         let what = format!("routes.yaml: bomb_rules: {route}");
-        check_keys(v, &["wall_only", "treasure_below", "treasure_below_rooms"], &what)?;
+        check_keys(v, &["fights_only", "wall_only", "treasure_below", "treasure_below_rooms"], &what)?;
         let rooms = |key: &str, keys: &[&str]| -> Result<Vec<(MapLocation, &Value)>, MapError> {
             let Some(list) = get(v, key) else { return Ok(Vec::new()) };
             let Some(list) = list.as_sequence() else {
@@ -1037,7 +1045,7 @@ impl BombRules {
                 None => err(format!("{what}: treasure_below_rooms {loc} needs `below: N`")),
             })
             .collect::<Result<_, _>>()?;
-        Ok(BombRules { wall_only, treasure_below, treasure_below_rooms })
+        Ok(BombRules { fights_only: flag(v, "fights_only", &what)?, wall_only, treasure_below, treasure_below_rooms })
     }
 }
 

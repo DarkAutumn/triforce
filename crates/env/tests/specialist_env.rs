@@ -895,6 +895,24 @@ fn the_owners_wall_only_room_offers_the_wall_and_the_tenth_kill() {
     ]);
 }
 
+/// Round 37, the owner's first rule (`d3first`'s `bomb_rules: {fights_only: true}`): in a dungeon BOMB is a weapon
+/// only where the objective fights the room.  3:0x59 from N (five Red Darknuts, its S shutter: a clear room, the
+/// reserve 0) offers it at 4 bombs; 3:0x69 from N (`treasure: skip`: the route slides past its Darknuts to the raft's
+/// stairs, a crossing) does not at 7, nor at `$50` = 8, and does on the 10th kill (`$50` = 9: always, the owner).
+/// `d2first`'s 3:0x69 (no rules, reserve 6) still offers it at 7.
+#[test]
+fn bombs_are_a_weapon_only_where_the_route_must_clear_the_room() {
+    let Some(nes) = open_core() else { return };
+    bomb_cases(nes, &[
+        ("darknut", "d3first_3_59n_0", "MOVE S 16", BombUse::Free, 4, 0, true),
+        ("darknut", "d3first_3_69n_0", "MOVE S 16", BombUse::Free, 7, 0, false),
+        ("darknut", "d3first_3_69n_0", "MOVE S 16", BombUse::Free, 7, 8, false),
+        ("darknut", "d3first_3_69n_0", "MOVE S 16", BombUse::Free, 7, 9, true),
+        ("darknut", "d3first_3_69n_0", "MOVE S 16", BombUse::Tenth, 1, 9, true),
+        ("darknut", "3_69n_0", "MOVE S 16", BombUse::Free, 7, 0, true),
+    ]);
+}
+
 /// Round 37, the owner's third rule (`d3first`'s `bomb_rules: {treasure_below: 8}`): a room the route takes the bombs
 /// of is a fight when Link comes in with 7 or fewer and a crossing with 8: 7:0x1b (round 34's floor of 2 gone),
 /// 8:0x3f (the shared step's `{if_bombs_below: 5}` gives way: 5 is a fight), 3:0x5b's last pass (whatever Link held,
