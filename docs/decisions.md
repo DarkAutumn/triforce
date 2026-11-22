@@ -3377,3 +3377,23 @@ and 0x29's walls need), so a run with 2 or more crosses to the key door. routes.
   the corrected route's entries (the first order's after Dungeon 1 left out, the new legs and Dungeons 2, 5, 7 at
   their new hearts harvested from its chains): 6,120 episodes, success 92.9%, hearts lost 0.249, hits 0.677 a visit.
   Experiments compare with the reference of the manifest they were played on (`docs/lab.md` "The yardstick").
+
+## 2026-11-22 — The target is one unbroken run in 10,000; combat that looks skilled; the corpus's names (Lee)
+
+- **A golden path with one network does not count as the goal** (it was reached on Nov 22: one network of 4.01
+  million parameters, copied from the 51, in every slot; three of three from power on in 966 runs). Lee: "No, it
+  doesn't count. I want to hit 1 run in 10,000 tries completes the game without restarting, this is a fine target."
+  That is the only stopping point; the lead does not stop without Lee naming one.
+- **Combat:** "I do want to prioritize getting the golden replay so I can see, but also your goal should be
+  stronger combat. it's ok if combat is weaker compared to the old model, but the gameplay should be 'fun' to watch,
+  and look like skilled combat, not just completing a run because it accidentally got lucky."
+- **Contact features** (arithmetic on the current state, no emulator step): "This is fine, hopefully you do this
+  with projectiles too."
+- **`d2first`:** "Once d3 is completely, completely done, I MAY want a single (separate) model that does d2 first.
+  The d3 first winning model shouldn't be trained on d2 routes."
+- **The corpus's replays are named for what they are** ("Rename the golden replays to be more meaningful than v3.
+  this one is golden-d3-first-single-network, or some such"): `golden-d3first-single-network`,
+  `golden-d3first-51-networks` (was `v2-golden-ending`), `golden-d2first-34-networks` (`v1-golden-ending`),
+  `golden-d2first-to-dungeon3-triforce` (`v0-golden`), `single-run-d3first-old-order-51-networks`
+  (`v2-single-ending`), `planner-d2first` (`v0-plan-ending`); the two format fixtures keep `v0-power-on` and
+  `v0-state`. Older documents name the old files.

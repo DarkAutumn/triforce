@@ -58,7 +58,7 @@ Level 7 to Level 6 by the world wrap, 0x2f's heart, the dock warp at 0x3f and th
 Lynels of 0x50 and 0x60 send Link back the old route's way), and out of Level 6 to Level 8 **32.0%** (the Lynel
 network walks back into Level 6). From the start, 23.5% of single runs take the Dungeon 3 triforce, 4.5% Dungeon
 4's, 3.8% Dungeon 1's, 3.0% Dungeon 2's, 6 of 1000 Dungeon 5's and 1 Dungeon 7's; none ends the game yet. In
-2.0.0.3's order one single run of 1000 did (`corpus/replays/v2-single-ending.tfreplay`).
+2.0.0.3's order one single run of 1000 did (`corpus/replays/single-run-d3first-old-order-51-networks.tfreplay`).
 
 **`d2first`**: out of 1,000 runs from the start of the game with the 2.0.0.0 team (round 33's Wizzrobe, Vire and
 Like-Like models on 1.9.0.1's team; act mode `temperature:0.5+relax:16`, the speedrunners' clips allowed;
@@ -168,7 +168,7 @@ uv run training-gui.py --web-only                               # only the web v
 .venv/bin/python play-zelda.py 4x3 --route d2first               # the same on the first route
 .venv/bin/python play-zelda.py 3x2 --live                        # the top left cell is a live game: c turns clips off (and on) for the rest of that run, the route re-plans from where Link stands
 .venv/bin/python play-zelda.py 2x3 runs/replays                  # or a folder of replay files, round and round (one FILE.tfreplay: on loop)
-.venv/bin/python play-zelda.py 1x1 corpus/replays/v2-golden-ending.tfreplay   # d3first's golden path from power on to the ending, the corrected order (v1-golden-ending: d2first's; v2-single-ending: one unbroken run from the start to the ending on 2.0.0.3's order)
+.venv/bin/python play-zelda.py 1x1 corpus/replays/golden-d3first-single-network.tfreplay   # ONE network in every slot beating the game by a golden path on d3first, from power on (golden-d3first-51-networks: the 51 specialists'; golden-d2first-34-networks: d2first's; single-run-d3first-old-order-51-networks: one unbroken run on 2.0.0.3's order)
 .venv/bin/python create-video.py wins.mp4 2x3 runs/wins --sound  # film replays on a grid into a video (needs ffmpeg; 1x1 by default; --sound: the middle cell's, else the top left one's; --controller)
 .venv/bin/python zelda-headless.py runs/wins 3 --wins-only       # no window: play until 3 runs won, keep them as replays (--deaths-only, --stuck-only, --power-on, --stop-at step:N, --clips off, --route d2first)
 .venv/bin/python zelda-headless.py runs/golden 1 --golden --power-on   # the golden path on d3first: games race triforce to triforce from each winner's state, stitched into one replay (--route d2first for the other)

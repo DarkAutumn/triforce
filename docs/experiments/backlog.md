@@ -12,6 +12,22 @@ where the project starts and may end; one is still what to try for. "You should 
 expectations": the merged models are not gated on matching today's specialists segment by segment (they are still
 compared with them).
 
+**The target, and the only stopping point (the owner, Nov 22):** **one run in 10,000 tries that completes the game
+without restarting**, one network, the corrected route. A golden path does not count ("No, it doesn't count"); it
+is wanted first all the same, to watch (one network won one on the corrected route on Nov 22:
+`corpus/replays/golden-d3first-single-network.tfreplay`). The lead does not stop short of that target unless the
+owner says so.
+
+**Stronger combat is the goal, and it must look it:** "your goal should be stronger combat. it's ok if combat is
+weaker compared to the old model, but the gameplay should be 'fun' to watch, and look like skilled combat, not just
+completing a run because it accidentally got lucky." Hits taken a room visit is the number that says it.
+
+**`d2first` is out of this program:** "Once d3 is completely, completely done, I MAY want a single (separate) model
+that does d2 first. The d3 first winning model shouldn't be trained on d2 routes." It stays as it is, 34 networks.
+
+**Contact features are allowed** (monsters' and shots' paths extended a few frames by arithmetic on the current
+state, no emulator step): "This is fine, hopefully you do this with projectiles too."
+
 **It is an experiment, in many rounds, not one attempt.** The owner: "You may change the observation drastically,
 you may try multiple neural network architectures, you could try many different techniques (lstm, rnn, graph
 networks, etc), or not try those things if you don't think they would help. You have full access to the game's ram,
