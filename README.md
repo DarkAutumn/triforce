@@ -3,9 +3,11 @@
 Triforce trains reinforcement learning agents to play *The Legend of Zelda* on the NES, from the start of the game to
 Ganon and Zelda, on two routes through the first quest:
 
-- **`d3first`, the main route (2.0.0.0)**, the speedrunners' order: the wood sword until the magic sword, Dungeons
-  3, 4, 1, 5, 2, 7, the magic sword under a gravestone, Dungeons 6, 8 and 9, by screen scrolls, recorder warps, the
-  blue candle, three secrets, the heart containers of heart rock, the ladder and the raft
+- **`d3first`, the main route (2.0.0.0; the owner's corrected order since round 36)**, the speedrunners' order: the
+  wood sword until the magic sword, Dungeons 3, 4, 1, 2, 5, 7, the magic sword under a gravestone, Dungeons 6, 8
+  and 9, by screen scrolls, recorder warps, two dock warps (the recorder played in the water beside a raft dock: the
+  whirlwind carries Link over the dock and the game sets him down on a screen it never meant to, 0x55 to the meat
+  under the Armos, 0x3f into the graveyard), the heart containers of heart rock, the ladder and the raft
   (`docs/routes/d3first.md`). The models play it from console power on to the end of the game.
 - **`d2first`**, the first route: Dungeon 2, the white sword, Dungeons 1, 3 and 4, the mountain (two heart
   containers, 100 rupees, the Lost Hills), Dungeon 5, the whirlwind, two shops and a pond to Dungeon 7, the magic
