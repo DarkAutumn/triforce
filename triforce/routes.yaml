@@ -557,6 +557,20 @@ d3first:
   - include: dungeon-8
   - include: to-level-9
   - include: dungeon-9
+# The owner's bomb rules (round 37, Nov 22; docs/routes/d3first.md "Bombs"), by route.  A route not named here plays
+# none (every room by the family's `items: {bombs:}` mode and its step's `bombs:`).  `d2first` is in scope for them
+# when its own work comes (the owner: "not until we've completed this work on d3-first, entirely"): the same entry
+# under its name switches them on there.
+# `wall_only: [{level, room}, ...]`: the rooms where the owner forbids bombs but to progress ("no bomb usage except
+# to progress, not to fight"): BOMB is no weapon there, a fight or not, whatever the family's mode or the step's
+# (capped at `required`); the bomb that opens the wall the step leaves through and the 10th damage-free kill's (its
+# bomb kill arms a forced drop of four: always allowed, the owner) are the only ones.  3:0x5b: crossed S to N with
+# no bomb at all (its first pass leaves by no wall); on its last pass (W to E) its Darknuts are fought by the sword
+# for the room's bombs, then its E wall is bombed (the step's `bomb_reserve: 0`, d2first's, bites no more there:
+# `required` keeps no reserve).
+bomb_rules:
+  d3first:
+    wall_only: [{level: 3, room: '0x5b'}]
 # clips-gauntlet (round 21, docs/experiments/round21-gauntlet.md): an experiment route, not a way through the game.  Two
 # steps per (room, entry): a specialist naming it (`route: clips-gauntlet`) draws one of the two exits at every
 # reset.  Entered from W the target is E or S, entered from E it is W or S.

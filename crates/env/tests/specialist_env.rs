@@ -819,12 +819,8 @@ fn triforce_pickup_is_success_in_the_triforce_room() {
 /// `bomb_usable` says the same.
 #[test]
 fn bombs_follow_the_mode_the_reserve_and_the_tenth_kill() {
-    let Some(mut nes) = open_core() else { return };
-    let usable = |obs: &env::observation::Observation| {
-        let at = feature_names().link.iter().position(|n| n == "bomb_usable").unwrap();
-        obs.link[at] == 1.0
-    };
-    let cases = [
+    let Some(nes) = open_core() else { return };
+    bomb_cases(nes, &[
         ("goriya", "1_44w_0", "MOVE E 16", BombUse::Free, 4, 0, true),
         ("goriya", "1_44w_0", "MOVE E 16", BombUse::Tenth, 4, 0, false),
         ("goriya", "1_44w_0", "MOVE E 16", BombUse::Tenth, 4, 9, true),
@@ -836,8 +832,22 @@ fn bombs_follow_the_mode_the_reserve_and_the_tenth_kill() {
         ("darknut", "3_5bs_0", "MOVE N 16", BombUse::Free, 7, 0, true),
         ("darknut", "3_5bs_0", "MOVE N 16", BombUse::Free, 1, 9, true),
         ("darknut", "3_5bw_0", "MOVE E 16", BombUse::Free, 1, 0, true),
-    ];
-    for (family, start, walk, mode, bombs, help, legal) in cases {
+    ]);
+}
+
+/// One case of [`bomb_cases`]: (family, start state, the walk off the door, the family's mode, bombs, `$50`, BOMB
+/// offered).
+type BombCase = (&'static str, &'static str, &'static str, BombUse, i64, i64, bool);
+
+/// Each case's start with its bombs and `$50` (the damage-free kill count), Link walked off the door tile (items
+/// can't be used there) until the enemies are out of their clouds: the session's mask, the observation's mask and
+/// its `bomb_usable` offer BOMB as the case says.
+fn bomb_cases(mut nes: ZCore, cases: &[BombCase]) -> ZCore {
+    let usable = |obs: &env::observation::Observation| {
+        let at = feature_names().link.iter().position(|n| n == "bomb_usable").unwrap();
+        obs.link[at] == 1.0
+    };
+    for &(family, start, walk, mode, bombs, help, legal) in cases {
         let mut env = make_env(nes, family, Some(start), |c| {
             c.ram_randomization = RamRandomization {
                 bombs: Some((bombs, bombs)),
@@ -847,7 +857,6 @@ fn bombs_follow_the_mode_the_reserve_and_the_tenth_kill() {
             c.items.bombs = mode;
         });
         env.reset(Some(0), None).unwrap();
-        // Off the door tile (items can't be used there) and the enemies out of their clouds.
         let mut obs = None;
         for _ in 0..10 {
             obs = Some(act(&mut env, walk).obs);
@@ -857,13 +866,33 @@ fn bombs_follow_the_mode_the_reserve_and_the_tenth_kill() {
             }
         }
         let obs = obs.unwrap();
-        let what = format!("{family} {mode:?} bombs {bombs} help {help}");
+        let what = format!("{family} {start} {mode:?} bombs {bombs} help {help}");
         assert!(state(&env).bombs() == bombs as i32 && state(&env).help_drop_count() == help as i32, "{what}");
         assert_eq!(env.session().mask().kind[ActionKind::Bomb.index()], legal, "{what}");
         assert_eq!(ActionMask::from_flat(&obs.action_mask).kind[ActionKind::Bomb.index()], legal, "{what}");
         assert_eq!(usable(&obs), legal, "{what}");
         nes = release(env);
     }
+    nes
+}
+
+/// Round 37, the owner's second rule ("no bomb usage except to progress, not to fight"): `d3first`'s
+/// `bomb_rules: {wall_only: [3:0x5b]}`.  On the first pass (S → N, no wall on the step) a `free` darknut holding 7
+/// bombs, above the reserve of 6, places none; on the last pass (W → E, reserve 0) none while its Darknuts live
+/// (the wall is no target while the objective fights them); in both the 10th damage-free kill's bomb is offered (the
+/// owner: always), and not at 8.  `d2first`'s rooms (bare state names) keep today's mask (the cases above).
+#[test]
+fn the_owners_wall_only_room_offers_the_wall_and_the_tenth_kill() {
+    let Some(nes) = open_core() else { return };
+    bomb_cases(nes, &[
+        ("darknut", "d3first_3_5bs_0", "MOVE N 16", BombUse::Free, 7, 0, false),
+        ("darknut", "d3first_3_5bs_0", "MOVE N 16", BombUse::Free, 7, 8, false),
+        ("darknut", "d3first_3_5bs_0", "MOVE N 16", BombUse::Free, 1, 9, true),
+        ("darknut", "d3first_3_5bw_0", "MOVE E 16", BombUse::Free, 4, 0, false),
+        ("darknut", "d3first_3_5bw_0", "MOVE E 16", BombUse::Free, 4, 8, false),
+        ("darknut", "d3first_3_5bw_0", "MOVE E 16", BombUse::Free, 4, 9, true),
+        ("darknut", "3_5bw_0", "MOVE E 16", BombUse::Free, 4, 0, true),
+    ]);
 }
 
 /// Round 26 (schema 6): the `link` block's `rupee_reserve`, `rupees_spare`, `rupees_few` and `arrow_usable` read the

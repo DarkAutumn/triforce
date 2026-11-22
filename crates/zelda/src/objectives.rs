@@ -13,8 +13,8 @@
 use crate::enums::{Direction, MapLocation, Position, SwordKind, Tile, enemy};
 use crate::game::{BombWall, GameView};
 use crate::game_map::{
-    END_EXIT, GameMap, MAZE_EXIT, MAZE_STEP, MODE_END, RECORDER, RouteStep, Secret, Way, dock_level, is_dock_room,
-    whirlwind_level,
+    BombRules, END_EXIT, GameMap, MAZE_EXIT, MAZE_STEP, MODE_END, RECORDER, RouteStep, Secret, Way, dock_level,
+    is_dock_room, whirlwind_level,
 };
 use crate::room::Target;
 use crate::room_entry::ROOM_FLAGS_OW;
@@ -462,6 +462,8 @@ pub struct GameCompletion {
     reserves: Vec<u8>,
     /// The rupee reserve (routes.yaml `rupee_reserve`, round 26) in force at each route step.
     rupee_reserves: Vec<u8>,
+    /// The route's `bomb_rules:` (round 37; none for a route without them).
+    bomb_rules: BombRules,
     /// Remembered room treasure per visited room (`RoomMemory.item`).
     rooms: HashMap<MapLocation, Option<String>>,
     /// The last map objective, keyed by its route key and the room's shape then: the intact bomb walls' direction
@@ -552,6 +554,7 @@ impl GameCompletion {
             last_step: step,
             reserves: per_step(reserve_ways(steps, bomb_reserve_of)),
             rupee_reserves: per_step(reserve_ways(steps, rupee_reserve_of)),
+            bomb_rules: map.bomb_rules.get(route).cloned().unwrap_or_default(),
             rooms: HashMap::new(),
             last_route: None,
             collected_key_rooms: BTreeSet::new(),
@@ -918,6 +921,15 @@ impl GameCompletion {
     /// family's `items: {bombs:}`; None: the family's own (no such step, or Link is not in its room).
     pub fn step_bombs(&self, state: &GameView) -> Option<&str> {
         self.current_step(state.full_location())?.bombs.as_deref()
+    }
+
+    /// The route's bomb rules (round 37, routes.yaml `bomb_rules:`) take BOMB as a weapon off in `state`'s room: it is
+    /// one of the owner's rooms where a bomb only opens the way (`wall_only`, 3:0x5b on `d3first`). There the env
+    /// caps the family's mode, or the step's, at `required` (`env::config::ItemsConfig::on_step`): the bomb that
+    /// opens the wall the objective leaves through and the 10th damage-free kill's (arming a forced drop of four,
+    /// always allowed: the owner, Nov 22), nothing else; `never` stays never.
+    pub fn weapon_bombs_off(&self, state: &GameView) -> bool {
+        self.bomb_rules.wall_only.contains(&state.full_location())
     }
 
     /// The room edge (N/S/E/W) the route step Link plays in `state`'s room leaves through: the step

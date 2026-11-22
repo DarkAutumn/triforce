@@ -658,6 +658,9 @@ pub struct GameMap {
     /// (`promoted.<route>`), from it on its default run ([`GameMap::step_policy`]). A route without one plays its
     /// route runs on every step.
     pub own_models_until: HashMap<String, usize>,
+    /// Each route's bomb rules (round 37, [`BombRules`]: routes.yaml's top-level `bomb_rules:`). A route it doesn't
+    /// name plays none.
+    pub bomb_rules: HashMap<String, BombRules>,
     /// The maps of the routes that play some rooms otherwise (game.yaml entries with `routes:`, phase X): this map's
     /// rooms with theirs over them ([`GameMap::route_map`]). Empty in a route's own map.
     route_maps: BTreeMap<String, Arc<GameMap>>,
@@ -977,6 +980,42 @@ fn parse_route(name: &str, value: &Value, routes: &Routes, tables: &RouteTables,
     Ok((steps, ns, own))
 }
 
+/// A route's bomb rules (round 37: the owner's, Nov 22; docs/routes/d3first.md "Bombs"): the routes.yaml top-level
+/// `bomb_rules:` maps a route's name to them. A route it doesn't name (`d2first`, until its own work: the owner) has
+/// none: every room plays the family's `items: {bombs:}` mode and the step's.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct BombRules {
+    /// `wall_only: [{level, room}, ...]` (the owner's second rule: "no bomb usage except to progress, not to fight"):
+    /// in these rooms BOMB is never a weapon, whatever the family's mode, the step's or the fight: Link may place
+    /// only the bomb that opens the wall the route leaves through and the 10th damage-free kill's, whose bomb kill
+    /// arms a forced drop of four (the owner: always allowed). 3:0x5b: its Darknuts are fought by the sword for the
+    /// room's bombs, its E wall bombed on the last pass. `zelda::objectives::GameCompletion::weapon_bombs_off`.
+    pub wall_only: BTreeSet<MapLocation>,
+}
+
+impl BombRules {
+    /// The `bomb_rules:` entry `v` of the route `route`, whose rooms must be rooms of its `steps`.
+    fn parse(route: &str, v: &Value, steps: &[RouteStep]) -> Result<BombRules, MapError> {
+        let what = format!("routes.yaml: bomb_rules: {route}");
+        check_keys(v, &["wall_only"], &what)?;
+        let mut wall_only = BTreeSet::new();
+        if let Some(list) = get(v, "wall_only") {
+            let Some(list) = list.as_sequence() else {
+                return err(format!("{what}: wall_only is not a list of rooms ({{level: N, room: '0xNN'}})"));
+            };
+            for room in list {
+                check_keys(room, &["level", "room", "in_cave"], &format!("{what}: wall_only"))?;
+                let loc = step_location(room)?;
+                if loc.level == 0 || !steps.iter().any(|s| s.location() == loc) {
+                    return err(format!("{what}: wall_only {loc} is no dungeon room of the route's steps"));
+                }
+                wall_only.insert(loc);
+            }
+        }
+        Ok(BombRules { wall_only })
+    }
+}
+
 /// The step a route's `own_models_until: {waypoint: NAME}` marks: the route's one step with that waypoint, on no
 /// stretch (both ways of a stretch must fall on one side of it).
 fn own_models_step(what: &str, marker: &Value, steps: &[RouteStep]) -> Result<usize, MapError> {
@@ -1047,12 +1086,13 @@ pub fn visit_at(steps: &[RouteStep], stretches: &[Stretch], index: usize, step: 
     (earlier + usize::from(begins(index))).max(1) as u32
 }
 
-/// Per route: its start-state namespace ([`GameMap::namespaces`]) and its own runs' cutoff
-/// ([`GameMap::own_models_until`]).
+/// Per route: its start-state namespace ([`GameMap::namespaces`]), its own runs' cutoff
+/// ([`GameMap::own_models_until`]) and its bomb rules ([`GameMap::bomb_rules`]).
 #[derive(Clone, Default)]
 struct RouteTables {
     namespaces: HashMap<String, String>,
     own_models: HashMap<String, usize>,
+    bomb_rules: HashMap<String, BombRules>,
 }
 
 fn parse_routes(text: &str) -> Result<(Routes, Vec<Alternate>, RouteTables), MapError> {
@@ -1079,7 +1119,7 @@ fn parse_routes(text: &str) -> Result<(Routes, Vec<Alternate>, RouteTables), Map
         let Some(name) = name.as_str() else {
             return err(format!("routes.yaml: a top-level key that isn't a name: {name:?}"));
         };
-        if matches!(name, "alternates" | "families" | "blocks") {
+        if matches!(name, "alternates" | "families" | "blocks" | "bomb_rules") {
             continue;
         }
         let (steps, ns, own) = parse_route(name, value, &routes, &tables, &blocks)?;
@@ -1089,6 +1129,18 @@ fn parse_routes(text: &str) -> Result<(Routes, Vec<Alternate>, RouteTables), Map
         }
         if let Some(own) = own {
             tables.own_models.insert(name.to_owned(), own);
+        }
+    }
+    if let Some(rules) = get(&data, "bomb_rules") {
+        let Some(rules) = rules.as_mapping() else {
+            return err("routes.yaml: bomb_rules is not a mapping of route names to their rules");
+        };
+        for (name, v) in rules {
+            let Some(steps) = name.as_str().and_then(|n| routes.get(n)) else {
+                return err(format!("routes.yaml: bomb_rules: {name:?} is no route"));
+            };
+            let name = name.as_str().expect("a route's name");
+            tables.bomb_rules.insert(name.to_owned(), BombRules::parse(name, v, steps)?);
         }
     }
     let included: std::collections::HashSet<&str> = map
@@ -1624,6 +1676,7 @@ impl GameMap {
             route_ranks: HashMap::new(),
             namespaces: tables.namespaces,
             own_models_until: tables.own_models,
+            bomb_rules: tables.bomb_rules,
             route_maps: BTreeMap::new(),
         };
         map.route_ranks = map
@@ -3739,5 +3792,25 @@ mod tests {
         let steps = &routes.routes["r"];
         assert_eq!(visit_at(steps, &[], 3, &steps[0]), 2, "an alternate for step 3: the second visit");
         assert_eq!(visit_at(steps, &[], 1, &steps[0]), 1, "right after step 0: another target of the first");
+    }
+
+    /// Round 37: a route's `bomb_rules:` (the owner's, Nov 22). `d3first`'s `wall_only` is 3:0x5b; `d2first` has
+    /// none; the loader refuses an unknown key, an overworld room and a room none of the route's steps plays.
+    #[test]
+    fn a_route_names_its_bomb_rules() {
+        let map = GameMap::builtin();
+        assert_eq!(map.bomb_rules["d3first"].wall_only, [loc(3, 0x5b)].into_iter().collect());
+        assert!(!map.bomb_rules.contains_key("d2first"));
+        let rules = "    wall_only: [{level: 3, room: '0x5b'}]\n";
+        assert!(ROUTES_YAML.contains(rules));
+        let load = |routes: &str| GameMap::from_yaml(GAME_YAML, routes).map(|_| ()).map_err(|e| e.0);
+        for (bad, error) in [
+            ("    wall_only: [{level: 0, room: '0x5b'}]\n", "no dungeon room"),
+            ("    wall_only: [{level: 3, room: '0x5f'}]\n", "no dungeon room"),
+            ("    wall_only: {level: 3, room: '0x5b'}\n", "not a list"),
+            ("    weapon_only: [{level: 3, room: '0x5b'}]\n", "weapon_only"),
+        ] {
+            assert!(load(&ROUTES_YAML.replacen(rules, bad, 1)).unwrap_err().contains(error), "{bad}");
+        }
     }
 }
