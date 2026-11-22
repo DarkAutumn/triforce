@@ -1,12 +1,13 @@
 # boss-gleeok@d3first: the task of the family's run for d3first's wood-sword half (promoted.d3first is
 # r34d4-gleeok4-s1-it2877), rebuilt (the yaml it trained on lived in its round's worktree, gone): the family's yaml
 # with state_routes [d3first] and the run's own terms as its run.json and docs/experiments/round34.md ("Dungeon 4",
-# §2 and §4.2) record them: 4:0x13 only, every reset a harvested handoff (1.0), the no-damage and max-steps endings
-# as failures with a 120-step no-damage window. The lab reads this file for the key f"{family}@d3first"
-# (lab.collect.task_yaml).
+# §2 and §4.2) record them: every reset a harvested handoff (1.0), the no-damage and max-steps endings as failures
+# with a 120-step no-damage window. The run's 1,200 handoffs were 4:0x13's only (not kept); today's harvest also
+# holds 8:0x3c's, so the family's rooms stay. The lab reads this file for the key f"{family}@d3first".
 name: boss-gleeok
 rooms:
 - (4, 0x13)
+- (8, 0x3c)
 start_states:
 - 4_13*_[0-9]
 success:

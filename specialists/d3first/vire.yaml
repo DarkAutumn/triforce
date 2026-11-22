@@ -1,8 +1,9 @@
 # vire@d3first: the task of the family's run for d3first's wood-sword half (promoted.d3first is r34d4-vire-s1),
 # rebuilt (the yaml it trained on lived in its round's worktree, gone): the family's yaml with state_routes
 # [d3first] and the run's own terms as its run.json and docs/experiments/round34.md ("Dungeon 4", §4) record them:
-# Dungeon 4's rooms only, harvested handoffs at 0.4, the family's chain_hp 0.5. The lab reads this file for the
-# key f"{family}@d3first" (lab.collect.task_yaml).
+# harvested handoffs at 0.4, the family's chain_hp 0.5. The run trained on Dungeon 4's rooms with a harvest of
+# Dungeon 4 only (not kept); today's harvest holds Dungeon 6's 0x39 and 0x2d too, so the family's rooms stay. The
+# lab reads this file for the key f"{family}@d3first" (lab.collect.task_yaml).
 name: vire
 rooms:
 - (4, 0x71)
@@ -13,6 +14,8 @@ rooms:
 - (4, 0x20)
 - (4, 0x12)
 - (4, 0x03)
+- (6, 0x39)
+- (6, 0x2d)
 start_states:
 - 4_71*_[0-9]
 - 4_61*_[0-9]
@@ -22,6 +25,8 @@ start_states:
 - 4_20*_[0-9]
 - 4_12*_[0-9]
 - 4_03*_[0-9]
+- 6_39*_[0-9]
+- 6_2d*_[0-9]
 success:
 - exit-correct
 - triforce-collected

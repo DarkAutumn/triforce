@@ -1,13 +1,26 @@
 # like-like@d3first: the task of the family's run for d3first's wood-sword half (promoted.d3first is r34d4-like),
 # rebuilt (the yaml it trained on lived in its round's worktree, gone): the family's yaml with state_routes
 # [d3first] and the run's own terms as its run.json and docs/experiments/round34.md ("Dungeon 4", §4) record them:
-# Dungeon 4's rooms only (4:0x32), harvested handoffs at 0.4, the family's chain_hp 0.5. The lab reads this file
-# for the key f"{family}@d3first" (lab.collect.task_yaml).
+# harvested handoffs at 0.4, the family's chain_hp 0.5. The run trained on Dungeon 4's rooms with a harvest of
+# 4:0x32 only (not kept); today's harvest holds the level 9 rooms too, so the family's rooms stay. The lab reads
+# this file for the key f"{family}@d3first" (lab.collect.task_yaml).
 name: like-like
 rooms:
 - (4, 0x32)
+- (6, 0x1d)
+- (9, 0x14)
+- (9, 0x51)
+- (9, 0x41)
+- (9, 0x03)
+- (9, 0x56)
 start_states:
 - 4_32*_[0-9]
+- 6_1d*_[0-9]
+- 9_14*_[0-9]
+- 9_51*_[0-9]
+- 9_41*_[0-9]
+- 9_03*_[0-9]
+- 9_56*_[0-9]
 success:
 - exit-correct
 reward_profile: default
