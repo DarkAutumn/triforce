@@ -200,6 +200,18 @@ def test_plan_alive_is_unknown_for_finished_and_other_host_plans():
     assert gui.plan_is_live(running_plan(os.getpid(), now))
 
 
+def test_a_plan_without_nice_shows_its_live_processs_niceness():
+    """A plan written without ``nice`` (an experiment script, an older checkout) shows what its process runs at;
+    a recorded niceness wins; a finished plan without one shows none."""
+    import time
+    plan = running_plan(os.getpid(), time.time())
+    plan.pop('nice', None)
+    assert gui.process_nice(os.getpid()) == os.nice(0) and gui.process_nice(2 ** 22 + 1) is None
+    assert gui.plan_nice(plan) == os.nice(0)
+    assert gui.plan_nice({**plan, 'nice': 15}) == 15
+    assert gui.plan_nice({**plan, 'status': 'completed'}) is None
+
+
 def test_a_real_process_and_its_plans_liveness(tmp_path):
     """A plan is live while its process runs and not once it is killed; unreadable and non-object plans are
     skipped."""
