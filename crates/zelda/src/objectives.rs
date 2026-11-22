@@ -12,7 +12,10 @@
 
 use crate::enums::{Direction, MapLocation, Position, SwordKind, Tile, enemy};
 use crate::game::{BombWall, GameView};
-use crate::game_map::{END_EXIT, GameMap, MAZE_EXIT, MAZE_STEP, MODE_END, RECORDER, RouteStep, Secret, Way, whirlwind_level};
+use crate::game_map::{
+    END_EXIT, GameMap, MAZE_EXIT, MAZE_STEP, MODE_END, RECORDER, RouteStep, Secret, Way, dock_level, is_dock_room,
+    whirlwind_level,
+};
 use crate::room::Target;
 use crate::room_entry::ROOM_FLAGS_OW;
 use crate::room_state::{SecretTrigger, decode_room_state, room_flags};
@@ -320,7 +323,9 @@ pub fn route_entry(prev: MapLocation, curr: MapLocation) -> Option<&'static str>
         return Some("S");
     }
     let side = curr.direction_to(prev);
-    if side == Direction::None && curr.level == 0 && whirlwind_level(curr).is_some() {
+    // Round 36: the dock warp out of a dock room sets Link down in a dock landing (`crate::game_map::dock_landing`).
+    let docked = is_dock_room(prev) && dock_level(curr).is_some();
+    if side == Direction::None && curr.level == 0 && (whirlwind_level(curr).is_some() || docked) {
         return Some(RECORDER);
     }
     side.is_cardinal().then(|| side.name())
@@ -693,9 +698,10 @@ impl GameCompletion {
             let fights = self.last_kind == ObjectiveKind::Fight;
             return if fights && crate::actions::recorder_wanted(state) { ANY } else { 0 };
         }
-        if let Some(level) = self.whirlwind_level_here(here) {
+        if let Some((level, dock)) = self.whirlwind_level_here(here) {
+            // The dock warp's RECORDER is the session's (`crate::Session::set_dock_warp`, played by the engine).
             return match crate::whirlwind::plan(state, level) {
-                crate::whirlwind::Plan::Play { facings, .. } => facings,
+                crate::whirlwind::Plan::Play { facings, .. } if !dock => facings,
                 _ => 0,
             };
         }
@@ -710,14 +716,28 @@ impl GameCompletion {
     }
 
     /// The destination level of the whirlwind step Link plays in `here` (the level whose landing room the next step
-    /// is), if the current step is one.
-    fn whirlwind_level_here(&self, here: MapLocation) -> Option<u8> {
+    /// is), if the current step is one, and whether it is a dock warp (round 36: from a dock room into a dock landing,
+    /// `crate::game_map::dock_landing`).
+    fn whirlwind_level_here(&self, here: MapLocation) -> Option<(u8, bool)> {
         let step = self.current_step(here)?;
         if step.exit != RECORDER {
             return None;
         }
-        let next = self.map.routes[&self.route].get(self.step? + 1)?;
-        whirlwind_level(next.location())
+        let next = self.map.routes[&self.route].get(self.step? + 1)?.location();
+        if is_dock_room(here)
+            && let Some(level) = dock_level(next)
+        {
+            return Some((level, true));
+        }
+        whirlwind_level(next).map(|level| (level, false))
+    }
+
+    /// The level of the dock warp the route plays in Link's room (round 36, docs/routes/d3first.md "The wrong warps"),
+    /// if its step is one, after [`GameCompletion::objectives`] for `state`: the session lets the engine play it
+    /// (`crate::Session::set_dock_warp`).
+    pub fn dock_warp(&self, state: &GameView) -> Option<u8> {
+        let (level, dock) = self.whirlwind_level_here(state.full_location())?;
+        dock.then_some(level)
     }
 
     /// The step of the route on the way it follows that enters Link's room from `entry` with exactly Link's progress
@@ -1097,7 +1117,7 @@ impl GameCompletion {
     fn whirlwind_objective(&mut self, state: &GameView) -> Option<Objective> {
         use crate::whirlwind::Plan;
         let here = state.full_location();
-        let level = self.whirlwind_level_here(here)?;
+        let (level, dock) = self.whirlwind_level_here(here)?;
         let landing = self.map.routes[&self.route][self.step? + 1].location();
         let mut objective = self.no_objective();
         let tile = |x: i32, y: i32| Target::Tile(Position::new(x, y).tile());
@@ -1122,7 +1142,14 @@ impl GameCompletion {
                 objective.next_rooms.insert(landing);
             }
             Plan::Play { .. } | Plan::Carried => {
-                objective.targets.insert(tile(state.link.position.x, state.link.position.y));
+                // The dock warp (round 36): the land below the water spot beside the dock (its G, where the clip into
+                // the water starts), until Link stands in the water there (`crate::clips::dock_spot`).
+                let spot = dock.then(|| crate::clips::dock_spot(state.room())).flatten();
+                let (x, y) = match spot {
+                    Some((x, row)) if !crate::clips::on_dock_spot(state) => (x, row + 16),
+                    _ => (state.link.position.x, state.link.position.y),
+                };
+                objective.targets.insert(tile(x, y));
                 objective.next_rooms.insert(landing);
             }
         }

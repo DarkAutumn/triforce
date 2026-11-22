@@ -545,6 +545,7 @@ impl GameView {
                 .with_open_doorways(&holes)
                 .with_wrap_exit(wrap_exit)
                 .with_wrap_in(wrap_in)
+                .with_dock(room.and_then(|r| r.exits.values().find_map(|e| e.dock)))
                 .with_path_costs(room.map_or(&[], |r| r.path_costs.as_slice()))
         })
     }

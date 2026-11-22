@@ -73,6 +73,15 @@ const MAX_POSE_FRAMES: u32 = 32;
 const ADDR_FLUTE_TIMER: usize = 0x3C;
 /// The freeze's length plus slack (a cap, never reached in play).
 const MAX_FREEZE_FRAMES: u32 = 0x98 + 8;
+/// asm:ObjDir of Link (`$98`).
+const ADDR_LINK_DIRECTION: usize = 0x98;
+/// asm:InvTriforce.
+const ADDR_TRIFORCE: usize = 0x671;
+/// Plays the dock warp may make in all (a sequence needs two: r36's search, docs/routes/d3first.md).
+const MAX_DOCK_PLAYS: u32 = 3;
+/// Frames the dock warp waits after its last play for the whirlwind to pick Link up (it reaches X `$7E` about 70
+/// frames after the freeze with its spawn cloud; a cap, never reached in play).
+const MAX_DOCK_WAIT_FRAMES: u32 = 200;
 const ADDR_LADDER_SLOT: usize = 0x64;
 const OBJ_X: usize = 0x70;
 const OBJ_Y: usize = 0x84;
@@ -368,6 +377,9 @@ pub struct Executor<S> {
     /// Dungeon doorways a MOVE may not walk into ([`Direction::value`] bits; round 27, kept by `Session`: the
     /// route's `keep_out` doorways the objective does not leave through): a MOVE toward one ends at its mouth.
     pub vetoed_doorways: u8,
+    /// The level of the dock warp the route plays here (round 36, kept by `Session`: `crate::Session::set_dock_warp`):
+    /// RECORDER played in the water on a dock's row plays the whole sequence ([`Executor::run_dock_warp`]).
+    pub dock_warp: Option<u8>,
 }
 
 impl<S> Default for Executor<S> {
@@ -379,6 +391,7 @@ impl<S> Default for Executor<S> {
             last_pre_entry: None,
             blocks: None,
             vetoed_doorways: 0,
+            dock_warp: None,
         }
     }
 }
@@ -420,7 +433,11 @@ impl<S> Executor<S> {
             let mut clip = None;
             let mut menu_frames = 0;
             let interrupt = if action.kind == ActionKind::Clip {
-                let (interrupt, outcome) = self.run_skip(m, action.direction, skip_target(state, action.direction));
+                // The overworld's one N clip, the dock warp's (round 36), is offered only on a dock-warp step.
+                let target = skip_target(state, action.direction).or_else(|| {
+                    (action.direction == Direction::N).then(|| crate::clips::dock_clip_target(state)).flatten()
+                });
+                let (interrupt, outcome) = self.run_skip(m, action.direction, target);
                 clip = Some(outcome);
                 interrupt
             } else if matches!(action.kind, ActionKind::Move | ActionKind::Wait) {
@@ -475,6 +492,12 @@ impl<S> Executor<S> {
             && (state.is_secret_push_direction(Direction::N) || state.secret_push_sliding());
         let pushing = is_move && (state.is_push_block_direction(action.direction) || pushing_stone);
         let mut first = true;
+        // Round 36: on a dock-warp step a MOVE along the land below the dock's row ends on the clip's column (the
+        // water spot nearest the dock, `crate::clips::dock_spot`), where the session offers the clip.
+        let dock_column = match (self.dock_warp, action.direction) {
+            (Some(_), Direction::W | Direction::E) if is_move => crate::clips::dock_spot(state.room()),
+            _ => None,
+        };
         // Where a MOVE ends without another frame of its direction (round 27): on a grid point facing a gravestone
         // square (one frame of pressing releases a flying Ghini, asm:Spawn_CheckTouchedArmosOrGravestone; the
         // route's own stone from below excepted), on the stairs the pushed stone uncovered (walking on leaves them
@@ -488,6 +511,12 @@ impl<S> Executor<S> {
                 return false;
             }
             let (px, py) = (i32::from(ram[ADDR_LINK_X]), i32::from(ram[ADDR_LINK_Y]));
+            if let Some((x, row)) = dock_column
+                && px == x
+                && (row + 8..=row + 24).contains(&py)
+            {
+                return true;
+            }
             let tiles = &m.nes.prg_ram()[TILE_LAYOUT.0 - 0x800..][..TILE_LAYOUT.1];
             let tile = |(c, r): Tile| {
                 let inside = (0..crate::room::COLS).contains(&c) && (0..crate::room::ROWS).contains(&r);
@@ -710,18 +739,12 @@ impl<S> Executor<S> {
             // asm:Flute_Wield sets FluteTimer and leaves Link's state at 0. Every frame that ends with the timer
             // still running had no play update (asm:Mode5Play_Update): those are the freeze's frames; the frame
             // that counts it to 0 plays again.
-            self.step(m, press, 1);
-            if m.read(ADDR_FLUTE_TIMER) == 0 {
-                self.step(m, press, 1);
-            }
-            for _ in 0..MAX_FREEZE_FRAMES {
-                if m.read(ADDR_FLUTE_TIMER) == 0 {
-                    break;
-                }
-                self.step(m, 0, 1);
-                if m.read(ADDR_FLUTE_TIMER) != 0 {
-                    menu_frames += 1;
-                }
+            menu_frames += self.play_recorder(m, press);
+            if let Some(level) = self.dock_warp
+                && crate::clips::on_dock_spot(state)
+            {
+                let (interrupt, frozen) = self.run_dock_warp(m, level);
+                return (interrupt, menu_frames + frozen);
             }
             return (None, menu_frames);
         }
@@ -736,6 +759,70 @@ impl<S> Executor<S> {
             }
         }
         (None, menu_frames)
+    }
+
+    /// One play of the recorder: the press (held a second frame when the first started nothing) and the freeze waited
+    /// out. Returns the frozen frames.
+    fn play_recorder<N: Nes>(&mut self, m: &mut Machine<N>, press: u8) -> u32 {
+        let mut frozen = 0;
+        self.step(m, press, 1);
+        if m.read(ADDR_FLUTE_TIMER) == 0 {
+            self.step(m, press, 1);
+        }
+        for _ in 0..MAX_FREEZE_FRAMES {
+            if m.read(ADDR_FLUTE_TIMER) == 0 {
+                break;
+            }
+            self.step(m, 0, 1);
+            if m.read(ADDR_FLUTE_TIMER) != 0 {
+                frozen += 1;
+            }
+        }
+        frozen
+    }
+
+    /// The dock warp after its first play (round 36, docs/routes/d3first.md "The wrong warps"), Link in the water on
+    /// the dock's row: the plays that leave the game's index on `level` with the whirlwind out
+    /// ([`crate::whirlwind::plays`], recomputed after each), each facing N for a step up or W for a step down (the
+    /// water blocks both: the one-frame turn moves him not; S and E would), on the first free frame after the
+    /// freeze; then nothing pressed until the whirlwind picks him up (`WhirlwindTeleportingState` 1), goes by (a hit
+    /// left him invincible or off the row), or a hit, room change or game over cuts it short. Returns that interrupt
+    /// and the frozen frames.
+    fn run_dock_warp<N: Nes>(&mut self, m: &mut Machine<N>, level: u8) -> (Option<Interrupt>, u32) {
+        use crate::whirlwind::{FACING_UP, LEVEL_INDEX, OBJ_WHIRLWIND, SUMMONED, TELEPORTING, plays};
+        let mut frozen = 0;
+        let row = m.read(OBJ_Y);
+        for _ in 1..MAX_DOCK_PLAYS {
+            let summoned = m.read(SUMMONED as usize) != 0;
+            let Some((n, facings)) = plays(m.read(LEVEL_INDEX as usize), m.read(ADDR_TRIFORCE), summoned, level) else {
+                break;
+            };
+            if n == 0 || m.read(OBJ_Y) != row {
+                break;
+            }
+            let face = if facings & FACING_UP != 0 { Direction::N } else { Direction::W };
+            if m.read(ADDR_LINK_DIRECTION) != face.value() {
+                self.step(m, direction_buttons(face), 1);
+            }
+            frozen += self.play_recorder(m, buttons::B);
+        }
+        let mut before = FrameWatch::new(m.ram());
+        let start_near = before.near;
+        for _ in 0..MAX_DOCK_WAIT_FRAMES {
+            let whirlwind = (1..=0x0B).any(|slot| m.read(OBJ_ID + slot) == OBJ_WHIRLWIND);
+            if m.read(TELEPORTING as usize) != 0 || !whirlwind {
+                break;
+            }
+            self.step(m, 0, 1);
+            let after = FrameWatch::new(m.ram());
+            match detect_interrupt(&before, &after, start_near) {
+                Some(i @ (Interrupt::GameOver | Interrupt::Transition | Interrupt::Damage)) => return (Some(i), frozen),
+                _ if SCROLLING_MODES.contains(&after.mode) => return (Some(Interrupt::Transition), frozen),
+                _ => {}
+            }
+            before = after;
+        }
+        (None, frozen)
     }
 
     /// Selects B item `slot` on the item sub-screen ([`crate::submenu`]): START, the scroll in, one step per frame

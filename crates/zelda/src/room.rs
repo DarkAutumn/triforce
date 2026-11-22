@@ -186,6 +186,9 @@ pub struct Room {
     /// The tile rows (Link's, game.yaml `wrap_in`) on which a screen wrap reaches the side of the room an exit is on,
     /// and that exit's direction ([`Room::with_wrap_in`]).
     wrap_in: Option<(Direction, (i32, i32))>,
+    /// Where Link stands to sail from the room's raft dock (game.yaml `raft_exits` `dock`, in pixels: X, Y), round 36:
+    /// the dock warp's water spot is the dock's row W of it ([`Room::with_dock`]).
+    dock: Option<(i32, i32)>,
     /// Per tile, the extra cost of a path-search step onto it (game.yaml `path_costs`, [`Room::with_path_costs`]);
     /// empty: none.
     path_cost: Vec<u8>,
@@ -226,6 +229,7 @@ impl Room {
             cave_tile: None,
             wrap_exit: None,
             wrap_in: None,
+            dock: None,
             path_cost: Vec::new(),
         };
         room.loaded = tiles
@@ -334,6 +338,18 @@ impl Room {
     /// The exit direction and Link's tile rows of the room's `wrap_in` exit, if it has one.
     pub fn wrap_in(&self) -> Option<(Direction, (i32, i32))> {
         self.wrap_in
+    }
+
+    /// The room with its raft dock (`GameView::room`, game.yaml `raft_exits` `dock: [col, row]`): Link sails from
+    /// (col * 8, row * 8 + `$3D`), the dock's trigger (asm:Dock_Update tests Link's X and Y only).
+    pub fn with_dock(mut self, dock: Option<Tile>) -> Room {
+        self.dock = dock.map(|(c, r)| (c * 8, r * 8 + 0x3D));
+        self
+    }
+
+    /// Link's position (X, Y) on the room's raft dock trigger, if it has one.
+    pub fn dock(&self) -> Option<(i32, i32)> {
+        self.dock
     }
 
     /// The room with its game.yaml `path_costs` (`GameView::room`): every step of the path search onto a tile of one

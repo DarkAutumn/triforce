@@ -1304,6 +1304,9 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         // The facings the route plays the recorder with (round 26: the whirlwind's count, the pond, a Digdogger fought).
         let facings = self.objectives.as_ref().map(|gc| gc.recorder_facings(self.session.state()));
         self.session.set_recorder_facings(facings);
+        // Round 36: the dock warp of the route's step, played by the engine (`zelda::Session::set_dock_warp`).
+        let dock = self.objectives.as_ref().and_then(|gc| gc.dock_warp(self.session.state()));
+        self.session.set_dock_warp(dock);
         // Round 27: ARROW's facings by the route (N under a Gohma) and the doorways MOVE keeps out of.
         let arrows = self.objectives.as_ref().and_then(|gc| gc.arrow_facings(self.session.state()));
         self.session.set_arrow_facings(arrows);
@@ -1412,6 +1415,14 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                     return Ok(ChainStatus::Done(result.clone()));
                 }
             }
+            // Round 36: the whirlwind out of a dock room (a dock warp: a wrong play count, a late second play, the
+            // clip spoiled into the ordinary warp) set Link down on a known wrong screen far off the route.
+            let dock_from = self
+                .change
+                .as_ref()
+                .map(|c| c.previous.full_location())
+                .filter(|&from| zelda::game_map::is_dock_room(from))
+                .filter(|&from| zelda::objectives::route_entry(from, location) == Some(zelda::game_map::RECORDER));
             let keys = self.carried(&state);
             let on_step = self.objectives.as_ref().and_then(GameCompletion::step);
             let result = self.result.as_mut().unwrap();
@@ -1431,6 +1442,19 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                 return Ok(ChainStatus::Done(result.clone()));
             }
             let room = map.get(location);
+            if correct == Some(false)
+                && let Some(from) = dock_from
+            {
+                let record = result.rooms.last_mut().unwrap();
+                record.outcome = "stuck".into();
+                result.result = "failure".into();
+                result.reason = format!(
+                    "dock-warp-missed: the whirlwind out of {} set Link down in {}, not on the route",
+                    describe(from),
+                    describe(location)
+                );
+                return Ok(ChainStatus::Done(result.clone()));
+            }
             if correct == Some(false) && room.and_then(|r| r.specialist.as_ref()).is_none() {
                 let from = result.rooms.last().unwrap().specialist.clone();
                 result.result = "failure".into();

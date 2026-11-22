@@ -28,7 +28,7 @@ use crate::change::Change;
 use crate::enums::{ActionKind, Direction, GAMEPLAY_START_Y, Position};
 use crate::executor::Interrupt;
 use crate::game::{GameView, at_dungeon_bound};
-use crate::room::{Jump, Room, WATER_TILE};
+use crate::room::{Jump, OW_WATER_TILES, Room, WATER_TILE};
 use crate::tables::{OBJ_DIRECTION, OBJ_ID, OBJ_POS_X, OBJ_POS_Y, OBJ_STATUS};
 use crate::vars::Var;
 use std::ops::AddAssign;
@@ -461,6 +461,58 @@ fn block_at(room: &Room, x: i32, y: i32, direction: Direction) -> Option<i32> {
         !at_dungeon_bound(x, clipped, d) && room.can_link_move_from(x, clipped, d) && !room.can_link_move_from(x, t, d)
     });
     sideways.then_some(t)
+}
+
+/// The dock warp's block clip (round 36, docs/routes/d3first.md "The wrong warps"): N from the land below a raft dock's
+/// row into the water on that row W of the dock (rooms 0x55 and 0x3f, game.yaml `raft_exits` `dock`), where the
+/// recorder's whirlwind carries Link over the dock's trigger. The plain grid-point skip heading N (mechanics.md "Block
+/// clip"): T is the grid point 8 pixels below the dock's row (Y `$85`), the clip ends on the row (Y `$7D`), facing N.
+/// Legal exactly there: Link's X on the grid W of the dock, within 16 pixels below T; T and the row stopped, with
+/// overworld water ahead (at 0x3f's `$58` the test's other tile is the dock's); G and G' (`$8D`, `$95`) open both
+/// ways (land). The overworld offers no other N clip ([`skip_target`]); the session offers this one only on a
+/// dock-warp step (`crate::Session::set_dock_warp`).
+pub fn dock_clip_at(room: &Room, x: i32, y: i32) -> Option<i32> {
+    let (dock_x, row) = room.dock()?;
+    let t = row + 8;
+    if room.location.level != 0 || x & 7 != 0 || !(0..dock_x).contains(&x) || !(t..=t + 16).contains(&y) {
+        return None;
+    }
+    let (n, s) = (Direction::N, Direction::S);
+    let water = |g: i32| {
+        !room.can_link_move_from(x, g, n)
+            && Room::hotspot_tiles(x, g, n).into_iter().any(|(c, r)| OW_WATER_TILES.contains(&room.tile(c, r)))
+    };
+    let (g, g2) = (t + 8, t + 16);
+    let land = |p: i32| room.can_link_move_from(x, p, n) && room.can_link_move_from(x, p, s);
+    (water(t) && water(row) && land(g) && land(g2) && room.can_link_move_from(x, t, s)).then_some(t)
+}
+
+/// The dock clip for Link in `state` ([`dock_clip_at`], with Link's state as [`block_target`] reads it).
+pub fn dock_clip_target(state: &GameView) -> Option<SkipTarget> {
+    if state.mode() != MODE_PLAY || state.link.status != 0 || state.var(Var::LinkShoveDir) != 0 {
+        return None;
+    }
+    let offset = state.var(Var::LinkGridOffset);
+    let facing = state.var(Var::LinkDirection) as u8;
+    if offset != 0 && !matches!(facing, 4 | 8) {
+        return None;
+    }
+    let t = dock_clip_at(state.room(), state.link.position.x, state.link.position.y)?;
+    Some(SkipTarget { direction: Direction::N, kind: SkipKind::Block, t: t as u8, end: -8 })
+}
+
+/// The dock warp's water spot of `room`: the X nearest the dock W of it whose clip is legal, and the dock's row
+/// (0x55: (`$78`, `$7D`); 0x3f: (`$58`, `$7D`), "right beside the dock").
+pub fn dock_spot(room: &Room) -> Option<(i32, i32)> {
+    let (dock_x, row) = room.dock()?;
+    (0..dock_x).rev().step_by(8).map(|x| x & !7).find(|&x| dock_clip_at(room, x, row + 16).is_some()).map(|x| (x, row))
+}
+
+/// Link stands in the water on the dock's row W of the dock (where the clip ends), in play.
+pub fn on_dock_spot(state: &GameView) -> bool {
+    let Some((dock_x, row)) = state.room().dock() else { return false };
+    let (x, y) = (state.link.position.x, state.link.position.y);
+    state.mode() == MODE_PLAY && state.level() == 0 && state.link.status == 0 && y == row && (0..dock_x).contains(&x)
 }
 
 /// Link at rest on (x, y) stands on a dungeon stairs square, whose warp check takes him down (asm:Warp_CheckUnderLink:

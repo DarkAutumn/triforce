@@ -38,6 +38,34 @@ pub fn whirlwind_level(location: MapLocation) -> Option<u8> {
     WHIRLWIND_LANDINGS.iter().position(|&r| r == location.value).map(|i| i as u8 + 1)
 }
 
+/// The overworld rooms with a raft dock (asm:Room_SetUpTileObjOW puts the dock object, type `$61`, in rooms `$3F` and
+/// `$55` only).
+pub const DOCK_ROOMS: [u8; 2] = [0x3F, 0x55];
+
+/// The dock warp (round 36, docs/routes/d3first.md "The wrong warps"): a whirlwind carries Link, standing in the water
+/// on a dock's row W of it, over the dock's trigger; the raft ride it starts turns him up (asm:Dock_Update: Link's X
+/// and Y only), and the scroll goes up instead of right from the whirlwind's stand-in room (asm:Mode7Scroll_Init_Sub0,
+/// asm:Room_CalcNext): he is set down in `Whirlwind_PrevRoomIds[level] - $10`, the landing room's W neighbour's N
+/// neighbour. Level 5's (`$0A - $10`) is no room: the game reloads the overworld at its start room
+/// (asm:Mode_LeaveLevelToOW), no route's landing.
+pub fn dock_landing(level: u8) -> Option<u8> {
+    let prev = WHIRLWIND_LANDINGS.get(level.checked_sub(1)? as usize)? - 1;
+    prev.checked_sub(0x10)
+}
+
+/// The level (1-8) whose dock warp sets Link down in `location` ([`dock_landing`]).
+pub fn dock_level(location: MapLocation) -> Option<u8> {
+    if location.level != 0 || location.in_cave {
+        return None;
+    }
+    (1..=8).find(|&level| dock_landing(level) == Some(location.value))
+}
+
+/// Whether `location` is an overworld room with a raft dock ([`DOCK_ROOMS`]).
+pub fn is_dock_room(location: MapLocation) -> bool {
+    location.level == 0 && !location.in_cave && DOCK_ROOMS.contains(&location.value)
+}
+
 /// An overworld secret over a room's stairs that a route step opens without a bomb (game.yaml `entrance:` with
 /// `how: armos`, `how: recorder`, `how: push` or `how: burn` and its `tile`; a rock wall is `bomb_secret`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1986,9 +2014,11 @@ fn check_whirlwinds(route: &str, steps: &[RouteStep]) -> Result<(), MapError> {
             }
         }
         if step.entry == RECORDER {
-            if whirlwind_level(step.location()).is_none() {
+            let dock = i > 0 && is_dock_room(steps[i - 1].location()) && dock_level(step.location()).is_some();
+            if whirlwind_level(step.location()).is_none() && !dock {
                 return err(format!(
-                    "{at}: entry recorder, but the whirlwind sets Link down only in {:02x?} (asm:Whirlwind_PrevRoomIds + 1)",
+                    "{at}: entry recorder, but the whirlwind sets Link down only in {:02x?} (asm:Whirlwind_PrevRoomIds \
+                     + 1), or from a dock room's water in a dock landing (`dock_landing`)",
                     WHIRLWIND_LANDINGS
                 ));
             }
