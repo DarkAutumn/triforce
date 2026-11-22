@@ -12,7 +12,12 @@ log-probs and value, written like ``lab.record`` (``<out>/<key>/<source>/shard-N
   where the family has them, as the bench chooses), less every state the bench plays, no randomisation; each state
   goes to the key that plays its route step (``_native.step_policy``: ``family@d3first`` before the magic sword).
 
-Seeds ``--seed`` + 1000 · key index (+ 500 for entries): disjoint from the bench's (360000 + i)."""
+Seeds ``--seed`` + 1000 · key index (+ 500 for entries): disjoint from the bench's (360000 + i).
+
+``meta.json`` lists the start state of every episode a source played (``start_states_used``). With ``--state-route``
+a source with an episode started outside the route's namespace fails before its ``meta.json`` is written
+(``foreign_starts``; round 38 found 1,280 such episodes, ``d2first``'s harvest, before the start-state pool kept to
+its namespaces)."""
 
 import argparse
 import json
@@ -31,6 +36,12 @@ from triforce.lab.collect import Family, MultiCollector, Teachers, route_only, t
 from triforce.specialist import load_specialist
 
 STEPS_PER_ENV = 512
+
+
+def foreign_starts(used, route: str) -> list:
+    """The start states of ``used`` (names or labels) outside ``route``'s start-state namespace, sorted."""
+    namespace = _native.route_namespace(route)
+    return sorted(s for s in used if _native.state_namespace(s) != namespace)
 
 
 def step_index() -> dict:
@@ -161,6 +172,10 @@ def main(argv=None):
                 teachers = Teachers([key], args.device)
                 meta = record(key, config, sdir, target, rollouts, seed, teachers, args.parallel, student)
                 meta.update(source=source, states=len(config.start_states))
+                foreign = foreign_starts(meta['start_states_used'], args.state_route) if args.state_route else []
+                if foreign:
+                    raise SystemExit(f"{key} {source}: {len(foreign)} start states outside {args.state_route}'s "
+                                     f"namespace (no meta.json written): {foreign[:5]}")
                 (target / 'meta.json').write_text(json.dumps(meta, indent=2), encoding='utf-8')
                 print(f"[record] {key} {source}: {meta['rows']} rows in {meta['seconds']}s", flush=True)
                 del teachers
