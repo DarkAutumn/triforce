@@ -308,7 +308,7 @@ def table(directory: Path, base: str) -> str:
 # ---------------------------------------------------------------------------------------------- retraining
 
 def retrain(init: str, sources: list[str], save: str, epochs: int, lr: float, batch: int, device, seed: int,
-             weights: list[float], fraction: float = 1.0) -> None:
+             weights: list[float], fraction: float = 1.0, by_row: bool = False) -> None:
     """The hit network's trunk and hit tower trained on every source's training candidates (BCE, AdamW one-cycle,
     as experiment 2's bench), from ``init`` (a ``hitnet`` or ``hitshift`` checkpoint, or ``fresh:POLICY``: a new
     ``hitnet`` on that policy's observation plus schema 7's fields, as experiment 2's bench builds it); P = R on each
@@ -339,9 +339,15 @@ def retrain(init: str, sources: list[str], save: str, epochs: int, lr: float, ba
                                                     replace=False)] = True
             m &= kept[rows.c_row]
         reps = max(1, int(round(weights[i]))) if weights else 1
-        train += [np.stack([np.full(m.sum(), i), np.flatnonzero(m)], 1)] * reps
+        units = np.unique(rows.c_row[m]) if by_row else np.flatnonzero(m)
+        train += [np.stack([np.full(len(units), i), units], 1)] * reps
     train = np.concatenate(train)
-    print(f'[retrain] {len(train)} training candidates from {sources}', flush=True)
+    # by_row: a batch is ``batch`` decisions, the trunk run once a decision for all its candidates
+    csr = []
+    for rows in data:
+        order = np.argsort(rows.c_row, kind='stable')
+        csr.append((order, np.searchsorted(rows.c_row[order], np.arange(rows.rows + 1))))
+    print(f"[retrain] {len(train)} training {'decisions' if by_row else 'candidates'} from {sources}", flush=True)
     params = [p for n, p in hitnet.named_parameters() if not n.startswith(
         ('policy_tower.', 'value_tower.', 'kind_', 'direction_head.', 'duration_head.', 'value_head.'))]
     optimizer = torch.optim.AdamW(params, lr=lr, weight_decay=1e-4)
@@ -352,28 +358,41 @@ def retrain(init: str, sources: list[str], save: str, epochs: int, lr: float, ba
     for epoch in range(epochs):
         hitnet.train()
         order = train[rng.permutation(len(train))]
-        total = 0.0
+        total, count = 0.0, 0
         for lo in range(0, len(order), batch):
             part = order[lo:lo + batch]
-            losses = []
+            losses, n = [], 0
             for i, rows in enumerate(data):
                 sel = part[part[:, 0] == i, 1]
                 if not len(sel):
                     continue
-                obs = to_device({k: rows.obs[k] for k in keys}, rows.c_row[sel], device)
-                logits = hitnet.hit_logits(hitnet.trunk(obs))
-                out = logits.gather(1, torch.as_tensor(rows.c_joint[sel], device=device).unsqueeze(-1)).squeeze(-1)
-                y = torch.as_tensor(rows.c_lost[sel].astype(np.float32), device=device)
+                if by_row:
+                    c_order, starts = csr[i]
+                    lengths = starts[sel + 1] - starts[sel]
+                    offsets = np.arange(lengths.sum()) - np.repeat(np.cumsum(lengths) - lengths, lengths)
+                    cand = c_order[np.repeat(starts[sel], lengths) + offsets]
+                    obs = to_device({k: rows.obs[k] for k in keys}, sel, device)
+                    logits = hitnet.hit_logits(hitnet.trunk(obs))
+                    pos = torch.as_tensor(np.repeat(np.arange(len(sel)), lengths), device=device)
+                    out = logits[pos, torch.as_tensor(rows.c_joint[cand], device=device)]
+                else:
+                    cand = sel
+                    obs = to_device({k: rows.obs[k] for k in keys}, rows.c_row[sel], device)
+                    logits = hitnet.hit_logits(hitnet.trunk(obs))
+                    out = logits.gather(1, torch.as_tensor(rows.c_joint[sel], device=device).unsqueeze(-1)).squeeze(-1)
+                y = torch.as_tensor(rows.c_lost[cand].astype(np.float32), device=device)
                 losses.append(F.binary_cross_entropy_with_logits(out, y, reduction='sum'))
-            loss = sum(losses) / len(part)
+                n += len(cand)
+            loss = sum(losses) / n
             optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(params, 1.0)
             optimizer.step()
             schedule.step()
-            total += float(loss) * len(part)
+            total += float(loss) * n
+            count += n
         hitnet.eval()
-        report = {'epoch': epoch + 1, 'train_loss': total / len(train)}
+        report = {'epoch': epoch + 1, 'train_loss': total / count}
         for rows in data:
             held = np.flatnonzero(rows.held)
             report[rows.name] = pr_report(rows, hit_logits(hitnet, rows.obs, held, device), held)
@@ -431,6 +450,8 @@ def main(argv=None) -> int:
     r.add_argument('--batch', type=int, default=1024)
     r.add_argument('--seed', type=int, default=0)
     r.add_argument('--fraction', type=float, default=1.0, help="share of each source's training decisions kept")
+    r.add_argument('--by-row', action='store_true', help='batches of decisions (--batch of them), the trunk run once '
+                   'a decision for all its candidates (fast on recordings: 9 candidates a decision)')
     t = sub.add_parser('table')
     t.add_argument('directory', type=Path)
     t.add_argument('--base', default='teacher')
@@ -465,7 +486,7 @@ def main(argv=None) -> int:
             write_json_atomic(args.out, results)
     elif args.command == 'retrain':
         retrain(args.init, args.data, args.save, args.epochs, args.lr, args.batch, torch.device(args.device),
-                args.seed, args.repeat, args.fraction)
+                args.seed, args.repeat, args.fraction, args.by_row)
     elif args.command == 'table':
         print(table(args.directory, args.base))
     return 0

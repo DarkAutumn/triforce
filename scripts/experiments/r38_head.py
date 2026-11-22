@@ -226,7 +226,6 @@ def slices36(head: str, family: str, device) -> dict:
     keep = where[data.c_row] >= 0
     scores = logits[torch.as_tensor(where[data.c_row[keep]]), torch.as_tensor(data.c_joint[keep])].cpu().numpy()
     lost = data.c_lost[keep].astype(bool)
-    threshold = np.sort(scores)[-int(lost.sum())]
     d = data.d
     typ = d['tried_hit_type'][data.c_index][keep].astype(np.int64)
     frame = d['tried_hit_frame'][data.c_index][keep].astype(np.int64)
@@ -235,9 +234,14 @@ def slices36(head: str, family: str, device) -> dict:
     groups = {'touch': lost & (typ < 0x53), 'shot_in_air': shot & ~post, 'shot_after': post}
     for lo, hi in ((0, 4), (4, 8), (8, 16), (16, 999)):
         groups[f'frame_{lo}_{hi}'] = lost & (frame >= lo) & (frame < hi)
-    for name, m in groups.items():
-        out[f'recall_{name}'] = float((scores[m] >= threshold).mean()) if m.any() else float('nan')
-        out[f'lost_{name}'] = int(m.sum())
+    # every judged candidate, then the model's own draws alone (mode 1, the taken action: where the heads differ)
+    own = data.c_own[keep] & (data.mode_of_row[data.c_row[keep]] == 1)
+    for prefix, sel in (('', np.ones(len(lost), bool)), ('taken1_', own)):
+        threshold = np.sort(scores[sel])[-int(lost[sel].sum())]
+        for name, m in groups.items():
+            m = m & sel
+            out[f'{prefix}recall_{name}'] = float((scores[m] >= threshold).mean()) if m.any() else float('nan')
+            out[f'{prefix}lost_{name}'] = int(m.sum())
     print(family, json.dumps({k: round(v, 3) if isinstance(v, float) else v for k, v in out.items()}), flush=True)
     return out
 
