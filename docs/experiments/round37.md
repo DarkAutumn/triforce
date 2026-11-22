@@ -96,3 +96,20 @@ better than the 51's same 13 (post-D7 pays for every dungeon loss), with D8, D9 
 owner, Nov 22: the single network is never trained on `d2first`'s states; `--state-route d3first` was built for the
 recorder and the lab, `r37-rl`); reinforcement on top (a first run from round 36's student was stopped at iteration
 54 under that rule).
+
+**The rest of the batch** (finished after the cut above):
+
+| segment | 51 networks | one network | paired (points) | hits a visit (51 / one) | hearts lost a visit | where (lost per 1,000 entering: 51 -> one) |
+|---|---:|---:|---:|---:|---:|---|
+| post-D6 | 32.0% (300) | 23.0% | -10.7 ± 3.7 | 1.214 / 0.930 | 2.011 / 1.477 | 0:0x32 750 -> 978; back into Level 6 (6:0x58 entered, 1000 lost there) |
+| D8 | 40.0% (300) | 19.5% | -18.0 ± 3.7 | 1.846 / 2.172 | 1.435 / 1.801 | Blue Darknuts 8:0x3e 254 -> 378, 0x3f 265 -> 427 |
+| post-D8 | 99.7% (300) | 97.5% | -2.7 ± 1.0 | 0.241 / 0.277 | 0.203 / 0.209 | 0:0x47 0 -> 30 |
+| D9 | 51.3% (300) | 42.4% | -7.0 ± 4.0 | 0.579 / 0.597 | 0.374 / 0.392 | Wizzrobes 9:0x10 140 -> 196 |
+| from the start | 0 of 1000 | 0 of 1000 | | | | D3's triforce 238 -> 109, D4's 45 -> 5, D1's 38 -> 2, D2's 30 -> 2, D5's 6 -> 1, D7's 1 -> 0 |
+
+**All 18 segments multiplied:** the one network 2.3e-7 (one run in 4.3 million; -ln p summed 15.27 against the
+9.21 one in 10,000 allows) against the 51's 6.7e-6 (one in 149,000; 11.91). Ordered by what each costs the one
+network: D4 2.49, D7 2.42, D3 2.35, D5 2.11, D8 1.63, post-D6 1.47, D6 1.12, D9 0.86, post-D5 0.49; the rest under
+0.2. Four dungeons (D4, D7, D3, D5), each about a quarter of the whole budget, are where the reinforcement must go
+first; all four are fights (Gleeok and the like-likes; Goriyas and Digdogger; Darknuts and Manhandla; the Olive
+Garden's Darknuts), and three of them (D3, D5, D7) are the rooms the owner's new bomb rules change.
