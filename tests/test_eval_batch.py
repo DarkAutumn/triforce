@@ -415,7 +415,9 @@ ENTRY_POINTS = {('triforce/train.py', 'cli'), ('triforce/evaluate.py', 'main'),
                 ('scripts/experiments/r27_plan_demos.py', 'main'),
                 # Round 36: the merged network's failures and its DAgger recording (they play models: jobs).
                 ('scripts/experiments/r36_merge_failures.py', 'main'),
-                ('scripts/experiments/r36_merge_record.py', 'main')}
+                ('scripts/experiments/r36_merge_record.py', 'main'),
+                # Round 38: the hit head's benches (they play models: a job).
+                ('scripts/experiments/r38_hit.py', 'main')}
 
 
 def test_only_the_training_and_evaluation_entry_points_begin_a_job():
