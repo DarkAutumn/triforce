@@ -229,7 +229,7 @@ Precision = recall on the actions taken (their real outcome) / on every judged c
 |---|---|---|---|
 | supervised (r36, 2 million decisions) | 0.886 / 0.857 | 0.736 / 0.679 (all) | 0.507 / 0.598 (all) |
 | + 4 epochs on rec-teacher (`hit-r0t`) | 0.888 / 0.861 | 0.813 / 0.792 (held out) | 0.619 / 0.722 (all, unseen) |
-| + rec-teacher + rec-w4, round 1 (`hit-r1`), 1 of 4 epochs | 0.882 / 0.845 | 0.807 / 0.786 | 0.563 / 0.706 (held out) |
+| + rec-teacher + rec-w4, round 1 (`hit-r1`, 4 epochs) | 0.890 / 0.862 | 0.826 / 0.806 | 0.593 / 0.738 (held out) |
 
 **It is the states, not the training.** The supervised head loses 0.12 on the teacher's states of the corrected
 route (0.857 → 0.736) with nothing trained in between; four epochs with those states in the mix win back most of it
@@ -237,12 +237,11 @@ route (0.857 → 0.736) with nothing trained in between; four epochs with those 
 number on the actions taken is biased there: the combination plays the actions its head passed, so the hits left
 among them are the head's blind spots by construction (its taken-lost rate is 1.59% against the teacher's 2.36%).
 The fair number is the judged one (the untaken candidates the policy ranked next): 0.598 → 0.722 with the teacher's
-states added, 0.706 after one epoch of round 1. Round 36's in-run head (0.46-0.56) was below even this: an in-run
+states added, 0.738 after round 1 (its own states in the training mix), with no loss on the old data or the teacher's states. Round 36's in-run head (0.46-0.56) was below even this: an in-run
 head sees 0.25 trials a decision against 8 here and starts from nothing; the pretrained arm P started at 0.65 and
 fell back with the trunk shared under policy losses.
 
-Not finished (the round's budget): round 1's last epochs (running when this was written, `models/r38hit/hit-r1`),
-its combination benched, round 2 (record the r1 combination's states on main's fixed start states, retrain on
+Not finished (the round's budget): round 1's head (`models/r38hit/hit-r1`) combined and benched, round 2 (record the r1 combination's states on main's fixed start states, retrain on
 everything), and the `hit_or_blocked` label (main's Bubble touches; `r38_hit.py` reads it as `DIR+blocked` from a
 recording made on the merged code).
 
