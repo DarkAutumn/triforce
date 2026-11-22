@@ -333,3 +333,59 @@ before the B) and waits for the pickup; a MOVE along the land stops on the clip'
 column the family's own mask: the network walks from the dock to the column. A whirlwind out of a dock room into
 any room but the landing ends a chain run `stuck` (`dock-warp-missed`). The landing is the level's
 `Whirlwind_PrevRoomIds` entry one row up (asm:Whirlwind_PrevRoomIds, asm:Dock_Update).
+
+### States
+
+The states of steps 90-216 (0x2d's cave to the whirlwind out of Level 6) were rebuilt for all three chains by
+walking the corrected route from the unchanged `d3first_0_2dc_*` (`entry_states build`, fights skipped where the
+first order's walks skipped them; `docs/routes/d3first-walks-c.md` §1, the legs by chain); Dungeon 5's and Dungeon
+7's entrance states were then cut from chain arrivals by the bombs runs bring (`5_76s`: 8 bombs at the median;
+`7_79s`: 2, 0 and 6). 84 states of the first order's dropped steps were removed, the manifest renumbered, and
+`entry_states audit --route d3first` passes: 861 states, no problem (a dock landing's first frame, Link facing N
+with the whirlwind still in the room, reads as a whirlwind entry: `entry_states.entry_side`).
+
+### The baseline
+
+Today's promoted networks (2.0.0.3's team, no retraining), models alone, clips on, 1000 runs a segment from its
+entry state (300 where marked), against 2.0.0.3's record where the segment is the same dungeon (the legs between
+dungeons are new legs and have no record). The unchanged segments (`d3`, `d4`) are identical run for run to
+2.0.0.3's record (and, after `main` was merged, 300 `d3` runs and 100 `d2first` runs identical run for run again).
+
+| Segment (entry → stop) | Containers | Success | 2.0.0.3 | Where runs are lost (per 1000 entering the room) |
+|---|---:|---:|---:|---|
+| `d3` (`3_7cs_0` → 24) | 3 | 23.2% | 23.2% | identical |
+| `post-d3` (300) | 4 | 100% | | |
+| `d4` (`4_71s_0` → 53) | 4 | 18.5% | 18.5% | identical |
+| `post-d4` (300) | 5 | 100% | | |
+| `d1` (`1_73s_0` → 79, 300) | 5 | 93.3% | 92.7% | |
+| `post-d1` (`0_37c_v2_0` → 97: 0x2c's heart, 0x2d's rupees, 0x3d's cave, Level 2) | 6 | 99.1% | new | ow-moblin 0x3d 5, 0x4d 2; ow-octorok 0x4c 2 |
+| `d2` (`2_7ds_0` → 107) | 7 | 99.8% | 100% (at 10) | boss-dodongo 2 |
+| `post-d2` (`0_3cc_0` → 124: 0x0f's 100 rupees, to Level 5) | 7 | 100% | new | |
+| `d5` (`5_76s_0` → 147, 8 bombs) | 8 | **31.2%** | 7.0% (2 bombs) | darknut Olive Garden 416 (record 811), 5:0x64 144; gibdo 5:0x66 124; boss-digdogger 106 |
+| `post-d5` (`0_0bc_0` → 160: 0x0b's whirlwind, **the 0x55 dock warp**, the meat, the arrows) | 9 | **31.7%** | new | **ow-zora 0x55 633**; ow-leever 0x0b 86, 0x34 49 |
+| `d7` (`7_79s_0` → 180, 2 bombs) | 9 | **13.1%** | 42.3% (at 11, the bag) | **goriya 7:0x1b 689** (record 149), 7:0x1a 116, 7:0x19 70; boss-digdogger 7:0x1c 161 |
+| `post-d7` (`0_42c_0` → 199: the wrap at 0x60, 0x5f, 0x2f, **the 0x3f dock warp**, the magic sword) | 9-12 | **22.4%** | new | **ow-lynel 0x50 644, 0x60 320**; ow-ghini 0x21's cave 100; ow-zora 0x3f 4 |
+| `d6` (`6_79s_0` → 215) | 13 | 36.4% | 35.2% | wizzrobe 6:0x3a 408, 6:0x2c 159, 6:0x38 117 |
+| `post-d6` (`0_22c_0` → 221, 300) | 13 | **32.0%** | | **ow-lynel 0x22 680** (back into Level 6: 180 die to 6:0x78's Wizzrobes) |
+| `d8` (`8_7es_0` → 231, 300) | 13 | 40.0% | 37.8% | |
+| `post-d8` (300) | 14 | 99.7% | | |
+| `d9` (`9_76s_0` → the ending, 300) | 15 | 51.3% | 48.9% | |
+
+**From the game start** (1000 runs, before the states were rebuilt: the route from the start loads no state after
+the first, so the rebuilt states change nothing it plays): the D3, D4 and D1 triforces as before (23.5%, 4.5%,
+3.8%), 30 take Dungeon 2's, 6 Dungeon 5's, 5 enter Level 7, 1 takes its triforce and the magic sword, none ends
+the game.
+
+**Which families the reorder breaks** (runs lost per 1000 entering the room, the rooms whose step is new or whose
+hearts, items or exits changed): ow-zora at 0x55's dock warp (633: the raft back to 0x45, below); ow-lynel at 0x50
+(644: it leaves N into the graveyard's 0x40, its `d2first` way, and the off-route objective's way back bounces
+between 0x40 and 0x50 to the bounce limit) and 0x60 (320: back E instead of the wrap W); ow-lynel at 0x22 out of
+Level 6 (680: the plays now want Link facing up, and its MOVE N on the dungeon's mouth walks back into Level 6);
+goriya at 7:0x1b with 9 containers and 2 bombs (689 against the record's 149 at 11 with the bag); ow-leever at
+0x0b's whirlwind out of Level 5 (86: two plays facing down now, where the first order played facing up to Level
+2's screen; 62 runs bounce between 0x0b and 0x1b). Dungeon 5 gains (31.2% against 7.0%: runs now bring 8 bombs to
+the Olive Garden). The dock warp at 0x3f costs 4 per 1000 (ow-zora lands 224 of 225).
+
+**Cheated a run** (walls only, the room grant; no route grant anywhere): `d3` 0.55 (3:0x5b), `d4` 0.30 (4:0x11,
+4:0x21), `d1` 1.00 (1:0x53), `d2` 0.03 (2:0x0e), `d7` 0.76 (7:0x1a 0.75), `d9` 0.08; rupees 0.47 a run at
+8:0x4c (`d8`); none on the new legs (0x0f's 100 and 0x3d's 30 pay the meat and the arrows), none in `d5` or `d6`.
