@@ -111,6 +111,17 @@ been retrained on the corrected order):
   measured: what the networks do before the step stays theirs).
 - [ ] **Cheated wall bombs, 0.76 a run in Dungeon 7** (7:0x1a 0.75), the largest count on a dungeon the reorder
   changed (`d1`'s 1.00 at 1:0x53 is in a segment it did not change).
+- [ ] **Bombs as a weapon only in dungeon rooms the route must clear** (the owner, Nov 22: "The agent wastes bombs
+  in rooms I wish it didn't. For example d3 0x69. In dungeons, link should only use bombs in rooms it somehow needs
+  to clear. [...] it's fine to use bombs in 0x59 because we have to clear the room to open the south door, in 0x69
+  it needs to slide past the darknuts to get the raft, then out of the room (I use sword-hit an enemy to make them
+  pass-through in this room, not kills with bombs)."). Today the rule is by family (`items: {bombs: free | required
+  | tenth | never}`) and the route's `bomb_reserve`; the owner's rule is by room: BOMB as a weapon is offered in a
+  dungeon room only while the step's objective is to clear it (a shutter the monsters hold, a treasure or block
+  that appears on the clear, a boss), and at a wall the route leaves through; nowhere else in a dungeon. To build
+  with the next change to the mask (no training is interrupted for it); it also saves bombs for the walls that are
+  cheated today. The rooms where the golden replay's network threw bombs that this rule forbids: scouted Nov 22,
+  the list is in round37.md "Bombs thrown where the route needs no clear".
 - [ ] **Later, the owner's stated goal:** a win without a cheated bomb. Drops only; the walls' shortfall is counted
   until the bomb economy closes it (old backlog "A win without a cheated bomb").
 
