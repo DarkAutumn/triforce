@@ -12,9 +12,10 @@ The cheap tier (``bench.json`` beside this file, committed): per policy key of t
 under ``<states>/harvested/<family>/``: a family's rooms by entry, the same number of states from each, chosen by a
 fixed hash order), else the family's seed start states (``source: seed``: no harvested entries; coverage missing).
 Every state is played ``episodes`` times on fixed seeds in the project's act mode, clips on.  Per key: success,
-hearts lost per episode, hits taken per room visit, decisions per episode, bombs used per episode; one JSON per
+hearts lost per episode, hits taken per room visit, Bubble touches per room visit (round 38: a touch blocks the sword
+and costs no health, so ``hits`` never sees it), decisions per episode, bombs used per episode; one JSON per
 network, every episode kept (state, seed) so ``compare`` pairs them: per key and in total, the paired difference
-and its standard error.
+and its standard error (a metric an older JSON lacks, ``bubble_touches`` before round 38, is missing there: no pair).
 
 The full tier (``bench.json`` ``full``): the segment chains of the route as the landings run them
 (``triforce eval-batch TAG --chains TAG --route ROUTE --runs 1000 --act model``, a candidate's networks given with
@@ -125,6 +126,7 @@ def _episode(record: dict) -> dict:
             'seed': record['seed'], 'success': bool(record['success']),
             'hearts_lost': float(record['start_health']) - float(record['health']),
             'hits': sum(int(v.get('hits', 0)) for v in visits), 'visits': len(visits),
+            'bubble_touches': sum(int(v.get('bubble_touches', 0)) for v in visits),
             'decisions': int(record['steps']), 'bombs': int((record.get('bombs') or {}).get('used', 0))}
 
 
@@ -135,6 +137,7 @@ def summarize(episodes: list[dict]) -> dict:
             'success': sum(e['success'] for e in episodes) / n if n else 0.0,
             'hearts_lost': sum(e['hearts_lost'] for e in episodes) / n if n else 0.0,
             'hits_per_visit': sum(e['hits'] for e in episodes) / visits if visits else 0.0,
+            'bubble_touches_per_visit': sum(e['bubble_touches'] for e in episodes) / visits if visits else 0.0,
             'decisions': sum(e['decisions'] for e in episodes) / n if n else 0.0,
             'bombs': sum(e['bombs'] for e in episodes) / n if n else 0.0}
 
@@ -170,7 +173,8 @@ def run_bench(networks: dict[str, str], manifest: dict, parallel: int, states_di
         total_seconds += seconds
         decisions += sum(e['decisions'] for e in episodes)
         log(f"[bench] {key}: success {rows[key]['success']:.3f} hearts lost {rows[key]['hearts_lost']:.2f} "
-            f"hits/visit {rows[key]['hits_per_visit']:.3f} decisions {rows[key]['decisions']:.0f} "
+            f"hits/visit {rows[key]['hits_per_visit']:.3f} "
+            f"bubble touches/visit {rows[key]['bubble_touches_per_visit']:.3f} decisions {rows[key]['decisions']:.0f} "
             f"({seconds:.0f}s)")
         if progress is not None:
             played = [e for row in rows.values() for e in row['records']]
@@ -186,8 +190,8 @@ def _manifest_hash(manifest: dict) -> str:
     return hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest()[:16]
 
 
-METRICS = ('success', 'hearts_lost', 'hits', 'decisions', 'bombs')
-FIELDS = ('state', 'seed', 'success', 'hearts_lost', 'hits', 'visits', 'decisions', 'bombs')
+METRICS = ('success', 'hearts_lost', 'hits', 'bubble_touches', 'decisions', 'bombs')
+FIELDS = ('state', 'seed', 'success', 'hearts_lost', 'hits', 'bubble_touches', 'visits', 'decisions', 'bombs')
 
 
 def compact(result: dict) -> dict:
@@ -205,11 +209,15 @@ def records(row: dict) -> list[dict]:
 
 
 def paired(a: list[dict], b: list[dict]) -> dict:
-    """Per metric, the mean of b - a over the episodes both played (by state and seed) and its standard error."""
+    """Per metric, the mean of b - a over the episodes both played (by state and seed) and its standard error; a
+    metric either side's episodes lack (an older JSON's) is None."""
     index = {(e['state'], e['seed']): e for e in a}
     pairs = [(index[(e['state'], e['seed'])], e) for e in b if (e['state'], e['seed']) in index]
     out = {'pairs': len(pairs)}
     for metric in METRICS:
+        if any(metric not in x or metric not in y for x, y in pairs):
+            out[metric] = None
+            continue
         diffs = [float(y[metric]) - float(x[metric]) for x, y in pairs]
         n = len(diffs)
         mean = sum(diffs) / n if n else 0.0
@@ -227,9 +235,10 @@ def compare(base: dict, new: dict) -> dict:
 
 
 def format_compare(result: dict) -> str:
-    lines = ['| key | pairs | success | hearts lost | hits | decisions | bombs |', '|---|---:|---:|---:|---:|---:|---:|']
+    lines = ['| key | pairs | success | hearts lost | hits | bubble touches | decisions | bombs |',
+             '|---|---:|---:|---:|---:|---:|---:|---:|']
     for key, row in [*result['keys'].items(), ('**total**', result['total'])]:
-        cells = [f"{row[m][0]:+.3f} ± {row[m][1]:.3f}" for m in METRICS]
+        cells = ['missing' if row[m] is None else f"{row[m][0]:+.3f} ± {row[m][1]:.3f}" for m in METRICS]
         lines.append(f"| {key} | {row['pairs']} | " + ' | '.join(cells) + ' |')
     return '\n'.join(lines)
 

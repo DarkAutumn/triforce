@@ -63,6 +63,8 @@ pub struct TrialOutcome {
     pub health_lost: f64,
     /// The game ended (Link died).
     pub game_over: bool,
+    /// A Bubble's touch landed in the action ([`crate::Change::bubble_touched`]; the lab's labels, not `lost`).
+    pub blocked: bool,
     /// Frames the trial emulated (the option's, menus included; no look-ahead).
     pub frames: u32,
 }
@@ -612,6 +614,7 @@ impl<N: Nes> Session<N> {
         Ok(TrialOutcome {
             health_lost: change.health_lost,
             game_over: change.state.game_over(),
+            blocked: change.bubble_touched(),
             frames,
         })
     }

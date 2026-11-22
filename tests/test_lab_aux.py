@@ -11,7 +11,7 @@ import torch
 from triforce import _native, nets
 from triforce.evaluate import evaluate_specialist
 from triforce.lab import train
-from triforce.lab.auxiliary import AuxLoss, aux_loss, joint_index
+from triforce.lab.auxiliary import AuxLoss, aux_loss, held_out, joint_index
 from triforce.rollout_buffer import RolloutBuffer
 
 from .conftest import REPO_STATES_DIR, require_state
@@ -41,7 +41,7 @@ def test_the_rollout_carries_what_each_action_did_and_tries_others_without_chang
     plain = _rollout(tmp_path, native)
     tried = _rollout(tmp_path, native, tried={'candidates': 3, 'share': 0.5})
     # Trials go back to exactly where the env stood: the same play, decision for decision.
-    for name in ('actions', 'rewards', 'frames', 'health_lost', 'hits', 'dones'):
+    for name in ('actions', 'rewards', 'frames', 'health_lost', 'hits', 'blocked', 'dones'):
         assert torch.equal(getattr(plain, name), getattr(tried, name)), name
     assert plain.tried_actions is None and torch.isfinite(plain.health_lost).all() and (plain.hits >= 0).all()
     assert (plain.health_lost > 0).any() or (plain.hits > 0).any()      # a random policy in a darknut room
@@ -56,6 +56,10 @@ def test_the_rollout_carries_what_each_action_did_and_tries_others_without_chang
         assert legal and taken[row].item() not in legal and len(set(legal)) == len(legal)
     assert ((tried.tried_frames.reshape(-1) > 0) == chosen).all()
     assert (candidates[~chosen] == joint_index(torch.tensor([-1, -1, -1]))).all()
+    # The trials' Bubble verdicts sit where their health verdicts do (a darknut room has no Bubble: all 0).
+    blocked = tried.tried_blocked.reshape(-1, 3)
+    assert ((blocked >= 0) == (lost >= 0)).all() and set(blocked.unique().tolist()) <= {-1, 0, 1}
+    assert plain.blocked.dtype == torch.bool and plain.tried_blocked is None
 
 
 def test_a_served_network_tries_its_own_ranked_candidates(tmp_path):
@@ -86,6 +90,41 @@ def test_aux_losses_read_the_taken_and_the_tried_actions():
         aux_loss([AuxLoss.parse('nope=hit:1')], {'hit': logits}, batch, rows)
     with pytest.raises(ValueError):
         AuxLoss.parse('hit=unknown:1')
+
+
+def test_hit_or_blocked_counts_a_bubble_touch_as_a_hit_taken_and_tried():
+    """Round 38: the label a head learns Bubbles from: a decision that lost health or that a Bubble touched, and the
+    look-ahead's candidates likewise; ``hit`` keeps the touch out."""
+    batch = {'actions': torch.tensor([[1, 2, 3], [0, 0, 0], [0, 0, 1]]), 'health_lost': torch.tensor([0.5, 0.0, 0.0]),
+             'blocked': torch.tensor([False, True, False]), 'hits': torch.zeros(3, dtype=torch.long),
+             'frames': torch.full((3,), 16.0),
+             'tried_actions': torch.tensor([[[2, 0, 0], [-1, -1, -1]], [[3, 0, 0], [4, 0, 0]],
+                                            [[-1, -1, -1], [-1, -1, -1]]]),
+             'tried_lost': torch.tensor([[0, -1], [1, 0], [-1, -1]]),
+             'tried_blocked': torch.tensor([[1, -1], [0, 1], [-1, -1]])}
+    rows = torch.arange(3)
+    # Logits sure of the label each target wants: hit_or_blocked fits only its own, hit only its own.
+    def sure(taken, tried):
+        logits = torch.full((3, 352), -20.0)
+        for row, action in enumerate(batch['actions']):
+            logits[row, joint_index(action)] = 20.0 if taken[row] else -20.0
+        for (row, k), label in tried.items():
+            logits[row, joint_index(batch['tried_actions'][row, k])] = 20.0 if label else -20.0
+        return logits
+    either = sure([1, 1, 0], {(0, 0): 1, (1, 0): 1, (1, 1): 1})
+    health = sure([1, 0, 0], {(0, 0): 0, (1, 0): 1, (1, 1): 0})
+    for logits, fits, misses in ((either, 'hit_or_blocked', 'hit'), (health, 'hit', 'hit_or_blocked')):
+        loss, stats = aux_loss([AuxLoss.parse(f'h={fits}:1')], {'h': logits}, batch, rows)
+        assert loss < 1e-6 and stats['charts/aux_h_labels'] == 6 / 3
+        assert aux_loss([AuxLoss.parse(f'h={misses}:1')], {'h': logits}, batch, rows)[0] > 1.0
+
+    class Fixed:                                   # a network whose per-action output is ``either`` on every row
+        def evaluate(self, obs, masks, actions):   # pylint: disable=unused-argument
+            return type('Out', (), {'aux': {'h': either[:len(actions)]}})()
+    batch.update(obs={'x': torch.zeros(3)}, masks=torch.ones(3, 352, dtype=torch.bool))
+    stats = held_out([AuxLoss.parse('h=hit_or_blocked:1')], Fixed(), batch)
+    assert stats['charts/aux_h_lost_taken'] == 2 and stats['charts/aux_h_lost_judged'] == 5
+    assert stats['charts/aux_h_pr_taken'] == 1.0 and stats['charts/aux_h_pr_judged'] == 1.0
 
 
 def test_the_hit_head_learns_only_from_its_own_loss():

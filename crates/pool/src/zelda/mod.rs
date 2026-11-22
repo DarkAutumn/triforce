@@ -204,6 +204,7 @@ pub fn visit_json(v: &RoomVisit) -> Value {
         "level": v.location.level, "room": v.location.value, "in_cave": v.location.in_cave, "steps": v.steps,
         "frames": v.frames, "health_in": v.health_in, "health_out": v.health_out, "max_health": v.max_health,
         "health_lost": v.health_lost, "health_gained": v.health_gained, "hits": v.hits, "hits_dealt": v.hits_dealt,
+        "bubble_touches": v.bubble_touches, "sword_blocked_frames": v.sword_blocked_frames,
         "drops": item_counts(&v.drops), "pickups": item_counts(&v.pickups), "keys_gained": v.keys_gained,
         "bombs_used": v.bombs_used, "boss_stuns": v.boss_stuns, "boss_eats": v.boss_eats, "exit": v.exit,
         "decisions": decisions_json(&v.decisions),

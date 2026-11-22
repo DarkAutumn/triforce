@@ -486,6 +486,11 @@ impl PyChange {
     fn health_lost(&self) -> f64 {
         self.change.health_lost
     }
+    /// A Bubble's touch landed in the step: the sword blocked, no health lost (round 38; `Change::bubble_touched`).
+    #[getter]
+    fn bubble_touched(&self) -> bool {
+        self.change.bubble_touched()
+    }
     #[getter]
     fn health_gained(&self) -> f64 {
         self.change.health_gained

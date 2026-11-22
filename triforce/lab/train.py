@@ -94,11 +94,12 @@ def parse_args(argv=None):
                              "start-state globs the route has, the curriculum tracks explored from its states)")
     parser.add_argument('--seed', type=int, default=None)
     parser.add_argument('--aux', nargs='*', default=[], metavar='OUTPUT=TARGET:COEFF',
-                        help="a loss on the network's auxiliary output OUTPUT against TARGET (hit, damaged, "
-                             "hearts_lost, frames; lab/auxiliary.py) weighted COEFF")
+                        help="a loss on the network's auxiliary output OUTPUT against TARGET (hit, hit_or_blocked, "
+                             "damaged, hearts_lost, frames; lab/auxiliary.py) weighted COEFF")
     parser.add_argument('--try-others', default=None, metavar='K:P',
                         help="on a share P of the decisions, try the policy's next K candidates in the env and keep "
-                             "whether each lost health (training only; the 'hit' target's extra labels)")
+                             "whether each lost health and whether a Bubble touched Link (training only; the 'hit' "
+                             "and 'hit_or_blocked' targets' extra labels)")
     parser.add_argument('--bptt', type=int, default=16,
                         help="a recurrent network's sequence length (truncated back-propagation through time)")
     parser.add_argument('--sampling', default='fixed', choices=['fixed', 'need'],

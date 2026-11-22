@@ -239,15 +239,19 @@ python -m triforce.lab.train --name mem --families zol stalfos-keese-gel --paral
 ## Auxiliary targets
 
 **What the rollout carries.** Per decision, besides the reward and the frames: `health_lost` (hearts the action's
-step lost, net of what it gained) and `hits` (monster hits it dealt, as the game showed them, no look-ahead)
-(`RolloutBuffer`, written by the pool from `StepInfo`). With `--try-others K:P` (training only), on a share P of
+step lost, net of what it gained), `hits` (monster hits it dealt, as the game showed them, no look-ahead) and
+`blocked` (round 38: a Bubble's touch landed during the action, `zelda::Change::bubble_touched`: the sword blocked
+for 151-160 frames, Link shoved, no health lost) (`RolloutBuffer`, written by the pool from `StepInfo`). With
+`--try-others K:P` (training only), on a share P of
 the decisions (drawn by the decision's key) the policy's next K candidates after the action taken (the Rust actor's
 ranking, `Actor::alternatives`; a served network's from its logits, `policy::logits::Heads::ranked`: a sample
 without replacement from the policy) are each tried in the env (`PoolEnv::trial`, the game's own future, back to
 exactly where it stood: the play is unchanged, decision for decision, `tests/test_lab_aux.py`); `tried_actions`,
-`tried_lost` (1 lost health, 0 not, -1 untried) and `tried_frames` keep them. Cost: each trial emulates its action
+`tried_lost` (1 lost health, 0 not, -1 untried), `tried_blocked` (1 a Bubble's touch landed, read from the trial's
+RAM at its end; -1 untried) and `tried_frames` keep them. Cost: each trial emulates its action
 from a checkpoint and back (no observation, no network), K·P trials a decision. Logged per family:
-`family/<key>/frames_per_decision`, `family/<key>/tried_frames_per_decision`. Measured (Nov 22) on goriya's
+`family/<key>/frames_per_decision`, `family/<key>/tried_frames_per_decision`, `family/<key>/hits_taken_per_episode`
+and `family/<key>/bubble_touches_per_episode`. Measured (Nov 22) on goriya's
 `d3first` rooms (`goriya@d3first`, its route run `r32d1-goriya` training, 8 envs, 10 iterations of 4,096 decisions,
 iterations 2-10; the machine at load 40-45, so the rates are noisy):
 
@@ -266,17 +270,19 @@ and on the Rust actor a network pass a candidate to rank them) makes the rollout
 | target | label (per decision) | loss |
 |---|---|---|
 | `hit` | the action lost health | BCE on logits; a per-action output also on every tried candidate's verdict |
+| `hit_or_blocked` | the action lost health, or a Bubble's touch landed (round 38: a head that learns to avoid Bubbles as it avoids damage) | as `hit`, the tried verdicts `tried_lost` or `tried_blocked` |
 | `damaged` | the action dealt a monster a hit | BCE on logits |
 | `hearts_lost` | hearts lost (net, ≥ 0) | ½ squared error |
 | `frames` | the action's frames / 16 | ½ squared error |
 
 An output `[B]` predicts for the action taken; `[B, 352]` one value per joint action (`kind * 32 + direction * 4 +
 duration`), read at the action taken (and the tried ones). Logged: `losses/aux_<output>`,
-`charts/aux_<output>_labels` (labels a row); for a per-action `hit` output, before each update trains on the rollout
+`charts/aux_<output>_labels` (labels a row); for a per-action `hit` or `hit_or_blocked` output (against its own
+labels), before each update trains on the rollout
 (so held out, on the policy's own states; `lab.auxiliary.held_out`): `charts/aux_<output>_pr_taken` (precision =
 recall on the actions taken, their real outcome: experiment 2's "model's own draws"), `charts/aux_<output>_pr_judged`
-(with the tried candidates) and `charts/aux_<output>_lost_taken` / `_lost_judged` (the lost labels behind each, to
-pool iterations by; the precision is NaN, so not logged, in a rollout without a hit).
+(with the tried candidates) and `charts/aux_<output>_lost_taken` / `_lost_judged` (the positive labels behind each,
+to pool iterations by; the precision is NaN, so not logged, in a rollout without one).
 
 **A hit head feeding the action choice** (`nets/hithead.py`, `hithead`): today's body plus a hit tower and a
 per-action hit head (`aux['hit']`, 352 logits) trained only by its own loss; its probabilities, gradient stopped, are
@@ -338,9 +344,11 @@ once per rollout over its family's rows in batches of 4096 (`lab.collect.Teacher
   later one is from chains of the corrected route (100 runs a segment from `post-d1` to `d9`, seeds 370000 on,
   `--harvest`); the first order's later entries (3 pieces or more: its legs, and Dungeons 5, 2 and 7 at its
   hearts) are left out. Every key now has harvested entries (no seed start states stand in).
-- Per key and in total: success, hearts lost per episode, hits taken per room visit, decisions per episode, bombs
-  used per episode. Every episode is kept (state, seed), so `compare` pairs two networks episode by episode and gives
-  each difference with its standard error.
+- Per key and in total: success, hearts lost per episode, hits taken per room visit, Bubble touches per room visit
+  (`bubble_touches`, round 38: a touch blocks the sword and costs no health, so a hit never counts it), decisions
+  per episode, bombs used per episode. Every episode is kept (state, seed), so `compare` pairs two networks episode
+  by episode and gives each difference with its standard error; a metric one side lacks (a result written before
+  round 38, as `reference.json`, has no `bubble_touches`) is `missing`, the rest pair as before.
 - `run --team --out team.json` (today's networks), `run --network CKPT --keys zol stalfos-keese-gel --out
   student.json` (one network for some keys), `run --checkpoint KEY=CKPT ...`, `compare team.json student.json`;
   `run --act MODE` plays another act mode than the manifest's (the planner beside a result:

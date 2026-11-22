@@ -518,6 +518,34 @@ fn health_changes() {
     assert_eq!(names(&r), ["penalty-lost-health"]);
 }
 
+/// Round 38: a Bubble's touch (asm:Bubble_Update: SwordBlockedLongTimer `$4C` := `$10`, one down every 10 frames)
+/// costs `penalty-sword-blocked` once: the step the timer rises in, from 0 or reloaded while it ran down (a second
+/// touch restarts the block); not the steps it runs down in. The red Bubble's flag (`$52E`, second quest) the same.
+#[test]
+fn a_bubble_touch_costs_once_per_touch() {
+    let free = Ram::new();
+    let timer = |t: u8| free.with(Var::SwordBlockedLongTimer, t);
+    let paid = |r: &StepRewards| value(r, "penalty-sword-blocked");
+    let r = critique(&mut critic(), &step(&free, &timer(0x10), "WAIT 8"));
+    assert_eq!(names(&r), ["penalty-sword-blocked"], "no health lost: the touch's only term");
+    assert_eq!(paid(&r), -env::config::SWORD_BLOCKED_PENALTY);
+    for (before, after) in [(0x10, 0x10), (0x10, 0x0F), (0x01, 0x00), (0, 0)] {
+        let r = critique(&mut critic(), &step(&timer(before), &timer(after), "WAIT 8"));
+        assert!(names(&r).is_empty(), "{before:#x} -> {after:#x}: {:?}", names(&r));
+    }
+    let r = critique(&mut critic(), &step(&timer(0x0D), &timer(0x10), "WAIT 8"));
+    assert_eq!(paid(&r), -env::config::SWORD_BLOCKED_PENALTY, "a second touch while blocked pays again");
+    let r = critique(&mut critic(), &step(&free, &free.with(Var::SwordBlocked, 1), "WAIT 8"));
+    assert_eq!(names(&r), ["penalty-sword-blocked"], "the red Bubble's block");
+    // A touch and a hit in the same step: both terms; `reward.sword_blocked_penalty` sets the size, 0 drops it.
+    let hurt = timer(0x10).with(Var::PartialHearts, 0x7F);
+    let r = critique(&mut critic(), &step(&free, &hurt, "WAIT 8"));
+    assert_eq!(names(&r), ["penalty-lost-health", "penalty-lost-beams", "penalty-sword-blocked"]);
+    let mut off = critic();
+    off.sword_blocked_penalty = 0.0;
+    assert!(names(&critique(&mut off, &step(&free, &timer(0x10), "WAIT 8"))).is_empty());
+}
+
 #[test]
 fn damage_halves_rewards_but_not_pickups() {
     let mut base = Ram::new();
