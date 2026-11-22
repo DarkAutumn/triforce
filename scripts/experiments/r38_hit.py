@@ -292,11 +292,21 @@ def table(directory: Path, base: str) -> str:
 def retrain(init: str, sources: list[str], save: str, epochs: int, lr: float, batch: int, device, seed: int,
             weights: list[float]) -> None:
     """The hit network's trunk and hit tower trained on every source's training candidates (BCE, AdamW one-cycle,
-    as experiment 2's bench), from ``init``; P = R on each source's held-out decisions after every epoch."""
+    as experiment 2's bench), from ``init`` (a ``hitnet`` or ``hitshift`` checkpoint, or ``fresh:POLICY``: a new
+    ``hitnet`` on that policy's observation plus schema 7's fields, as experiment 2's bench builds it); P = R on each
+    source's held-out decisions after every epoch."""
     torch.manual_seed(seed)
-    network = load(init).to(device)
-    hitnet = network.hit if isinstance(network, nets.ARCHS['hitshift']) else network
     data = [load_rows(s) for s in sources]
+    if init.startswith('fresh:'):
+        from triforce._native import OBS_SPEC  # pylint: disable=import-outside-toplevel
+        spec = {**load(init[len('fresh:'):]).config.obs_spec,
+                **{k: {'shape': list(OBS_SPEC[k]['shape']), 'vocab': None} for k in ('entity_rel', 'entity_contact')}}
+        rate = float(np.mean(np.concatenate([r.c_lost[~r.held[r.c_row]] for r in data])))
+        network = nets.create('hitnet', spec, hit='joint', hit_prior=rate)
+    else:
+        network = load(init)
+    network = network.to(device)
+    hitnet = network.hit if isinstance(network, nets.ARCHS['hitshift']) else network
     keys = None
     for rows in data:
         keys = set(rows.obs) if keys is None else keys & set(rows.obs)
