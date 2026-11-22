@@ -28,6 +28,7 @@ import numpy as np
 import torch
 
 from triforce import nets, registry
+from triforce.nets import roomheads  # noqa: F401  pylint: disable=unused-import  (registers 'roomheads')
 from triforce.model import obs_spec_from_space
 from triforce.observation import observation_space
 from triforce.ppo import joint_kl
@@ -189,6 +190,9 @@ def train(args):
         spec = obs_spec_from_space(observation_space())
         network = nets.create(args.arch, spec, **json.loads(args.arch_config))
     network.to(device).train()
+    for parameter in network.parameters():
+        if parameter.numel() == 0:      # room_embed_dim 0: CUDA's embedding backward fails on an empty table
+            parameter.requires_grad_(False)
     params = network.parameter_count()
     steps_per_epoch = len(train_rows) // args.batch
     total_steps = steps_per_epoch * args.epochs
