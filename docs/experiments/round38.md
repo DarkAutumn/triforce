@@ -55,3 +55,20 @@ like-like 4:0x32 628 and vire 4:0x31 339. The 21 sources the round-1 students ne
 of those families (boss-manhandla, darknut, boss-gleeok, vire, like-like and their route parts); the bench's
 entries do not show it because they are other states. The shapes must be compared on the `-f` students (all 97
 sources); the h768 round-1 chains still pair the two shapes on the same handicap.
+
+**The two shapes paired on the same handicap** (round-1 students, 76 sources, 2.0.0.5, 1,000 runs, seeds 0-999;
+hits a visit / hearts lost a visit / success, w768e2 -> h768, paired difference):
+
+| dungeon | hits a visit | hearts lost a visit | success | paired (points) | where |
+|---|---|---|---|---:|---|
+| D4 | 0.626 -> **0.447** | 0.436 -> **0.294** | 1.0% -> 6.8% | **+5.8 ± 0.9** | like-like 4:0x32 628 -> 212, vire 0x31 339 -> 126 lost per 1,000 entering; Gleeok 911 -> 840 |
+| D7 | 1.111 -> 1.121 | 0.839 -> 0.860 | 2.1% -> 0.3% | -1.8 ± 0.5 | goriya 7:0x1b 896 -> 977 (half of it the bounce limit out of 0x1b) |
+| D3 | 0.587 -> 0.566 | 0.402 -> 0.389 | 0.0% -> 0.9% | +0.9 ± 0.3 | 3:0x69 831 -> 545; 3:0x59 781 -> 834 |
+| D5 | 0.621 -> 0.604 | 1.141 -> 1.145 | 0.1% -> 0.0% | -0.1 ± 0.1 | the Olive Garden 5:0x05 kills 996 of 1,000 |
+| D8 | 2.466 -> 2.473 | 2.649 -> 2.627 | 0.0% -> 0.1% | +0.1 ± 0.1 | the Blue Darknuts 8:0x3e 905 |
+
+Where the student still has the fight at all (Dungeon 4), the shape that sees contact takes fewer hits (-0.18 a
+visit) and fewer hearts (-0.14) and wins more (+5.8 points); where neither has it (the families whose resets it
+never saw: Darknuts, Manhandla) neither shape survives, and Goriyas go the other way. **Verdict for now: the
+reinforcement starts from `hitnet` (h768-f)**, which is also the body the shared hit head is to sit in; the `-f`
+students (all 97 sources) must be chained to confirm it once the data is whole.
