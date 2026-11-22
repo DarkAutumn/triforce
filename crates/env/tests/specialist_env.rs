@@ -961,6 +961,31 @@ fn the_route_fights_for_a_rooms_bombs_below_its_floor() {
     }
 }
 
+/// Round 37 (the owner: "Drop the fight with the goriyas in d2 0x5e, that's only for d2 first"): `d3first` crosses
+/// 2:0x5e (no fight with its five Red Goriyas alive, so `fights_only` offers no weapon bomb, 7 in hand), `d2first`
+/// still clears it (`treasure: clear`, BOMB as a `free` goriya above its reserve of 0 there).
+#[test]
+fn d3first_crosses_dungeon_2s_goriya_room() {
+    let Some(mut nes) = open_core() else { return };
+    for (start, fight) in [("d3first_2_5es_0", false), ("2_5es_0", true)] {
+        let mut env = make_env(nes, "goriya", Some(start), |c| {
+            c.ram_randomization = RamRandomization { bombs: Some((7, 7)), help_count: Some((0, 0)), ..Default::default() };
+            c.items.bombs = BombUse::Free;
+        });
+        env.reset(Some(0), None).unwrap();
+        for _ in 0..10 {
+            act(&mut env, "MOVE N 16");
+            let p = state(&env).link.position;
+            if (0x5E..0xBD).contains(&p.y) && state(&env).has_active_enemies() {
+                break;
+            }
+        }
+        assert_eq!(objective(&env).kind == ObjectiveKind::Fight, fight, "{start}: {:?}", objective(&env).kind);
+        assert_eq!(env.session().mask().kind[ActionKind::Bomb.index()], fight, "{start}");
+        nes = release(env);
+    }
+}
+
 /// Round 26 (schema 6): the `link` block's `rupee_reserve`, `rupees_spare`, `rupees_few` and `arrow_usable` read the
 /// reserve of the route step Link plays (`update_disabled_kinds` hands it to the observation builder as it does the
 /// bomb reserve).  The route's step of 1:0x44 from W is given `rupee_reserve: 2`; Link holds the bow and arrows and

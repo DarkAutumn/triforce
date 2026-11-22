@@ -122,6 +122,9 @@ d2first:
 - {level: 0, room: '0x4c', specialist: ow-octorok, entry: E, exit: N}
 - {level: 0, room: '0x3c', specialist: ow-octorok, entry: S, exit: cave}
 - include: dungeon-2
+# 0x5e is cleared (`treasure: clear`, round 19): its Red Goriyas' bomb drops help against the Moldorm in 0x3e.
+- {level: 2, room: '0x5e', specialist: goriya, entry: S, exit: N, treasure: clear}
+- include: dungeon-2-north
 - {level: 0, room: '0x3c', specialist: ow-octorok, entry: cave, exit: S}
 - {level: 0, room: '0x4c', specialist: ow-octorok, entry: N, exit: E}
 - {level: 0, room: '0x4d', specialist: ow-moblin, entry: W, exit: N}
@@ -481,6 +484,11 @@ d3first:
   - {level: 0, room: '0x4c', specialist: ow-octorok, entry: E, exit: N}
   - {level: 0, room: '0x3c', specialist: ow-octorok, entry: S, exit: cave}
   - include: dungeon-2
+  # 0x5e is crossed (round 37, the owner: "Drop the fight with the goriyas in d2 0x5e, that's only for d2 first. (It's
+  # high bomb chances on start of a d2 run, but needless heart/time wasting in the d3 first route)"): no treasure, no
+  # key, its N door open; under `fights_only` no weapon bomb there but the 10th kill's.
+  - {level: 2, room: '0x5e', specialist: goriya, entry: S, exit: N}
+  - include: dungeon-2-north
   # Level 2 to Level 5 (d2first's rooms, entries and exits; its clip ways): back S, E and N to 0x2d, N 0x1d, E along
   # row 1 to 0x1f, N through its wall gap at X $80 into 0x0f's open secret cave (100 rupees), back S and W, 0x1d N,
   # 0x0d W, out of 0x0c by its wrap exit (CLIP E) onto the mountain top, 0x0b's mouth.
@@ -612,12 +620,12 @@ clips-gauntlet:
 # What differs between the routes inside a block (sword, heart containers, items, the reserves the route brings) is
 # their states', not route data.
 blocks:
+  # Dungeon 2 to 0x6e, and from 0x4e (each route writes 0x5e between: d2first fights it, d3first crosses it).
   dungeon-2:
   - {level: 2, room: '0x7d', specialist: d2-rope, entry: S, exit: E}
   - {level: 2, room: '0x7e', specialist: d2-rope, entry: W, exit: N}
   - {level: 2, room: '0x6e', specialist: d2-rope, entry: S, exit: N}
-  # 0x5e is cleared (`treasure: clear`, round 19): its Red Goriyas' bomb drops help against the Moldorm in 0x3e.
-  - {level: 2, room: '0x5e', specialist: goriya, entry: S, exit: N, treasure: clear}
+  dungeon-2-north:
   - {level: 2, room: '0x4e', specialist: d2-rope, entry: S, exit: N}
   - {level: 2, room: '0x3e', specialist: moldorm, entry: S, exit: N}
   - {level: 2, room: '0x2e', specialist: d2-rope, entry: S, exit: N}
