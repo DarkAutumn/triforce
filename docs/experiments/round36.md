@@ -389,3 +389,29 @@ the Olive Garden). The dock warp at 0x3f costs 4 per 1000 (ow-zora lands 224 of 
 **Cheated a run** (walls only, the room grant; no route grant anywhere): `d3` 0.55 (3:0x5b), `d4` 0.30 (4:0x11,
 4:0x21), `d1` 1.00 (1:0x53), `d2` 0.03 (2:0x0e), `d7` 0.76 (7:0x1a 0.75), `d9` 0.08; rupees 0.47 a run at
 8:0x4c (`d8`); none on the new legs (0x0f's 100 and 0x3d's 30 pay the meat and the arrows), none in `d5` or `d6`.
+
+### The dock warps with the monsters live
+
+With the networks (batch B): 0x55 loses 633 of 1000 runs entering it, nearly all by the bounce limit (a red
+Octorok on the land under the dock touches Link on the step off, the knockback puts him on the dock's trigger and
+the raft takes him back to 0x45, five times); 0x3f loses 4 (ow-zora lands 224 of 225). No whirlwind out of a dock
+room set Link down in a wrong room, in batch B or in 120 scripted tries (walks-c §3), so re-planning from a wrong
+landing was not built. **Done without any network learning** (`zelda::session::dock_warp_mask`): on the dock,
+SWORD S instead of the step off while a monster stands on the land below; on the water spot, WAIT instead of the
+plays while a shot is in the air. Scripted rule, 60 tries a dock: 0x55 17 → 33 landings, 0x3f 38 → 47 (waiting on
+the dock or at the clip's column was worse: the Octorok reaches him there; dropped). The legs with the networks and
+the change (`r36guard-1k-post-d5`, `-post-d7`, 1000 each) were queued and not yet read. Listed, not built: 0x0b's
+and 0x22's whirlwinds as engine-played macros like the docks (ow-leever 86, ow-lynel 680 lost per 1000); ow-lynel at
+0x50 and 0x60 needs training on the corrected order (explorer tracks made).
+
+### The golden race
+
+From console power on, models alone, clips on, the default route, three paths (`zelda-headless.py --golden
+--power-on`, the dock change in): **three of three reach the ending**, 411 runs together, every segment within the
+default 320 attempts. Runs a segment (paths 1, 2, 3): to D3's triforce 6, 9, 4; D4 4, 38, 7; D1 1, 3, 4; D2 1, 2,
+2; D5 12, 3, 7; **D7 (both legs, the 0x55 warp) 29, 64, 42**; **D6 (the 0x3f warp, the sword) 39, 15, 38**; D8 16,
+13, 16; D9 and the ending 25, 6, 5. Replays 184,934, 152,051 and 183,721 frames, all three `tf replay verify` ok.
+The shortest (152,051 frames, about 42 minutes of game; `r32team_golden.py`): triforces in the order 3, 4, 1, 2,
+5, 7, 6, 8; the wood sword at 0x77, the magic sword at 0x21 (step 195) before Level 6; the game ends in 9:0x32
+(mode `$13`). Cheats: 29 replay edits, the bomb writes (`$658`) the wall grant makes, room by room in the script's
+output (Levels 7, 6, 8 and 9 in the shortest path).
