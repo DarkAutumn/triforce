@@ -61,6 +61,15 @@ at 32 (a `hitshift` of 2.4M parameters). The answers agree with the eager forwar
 of four networks, no top-action change); a 20-run chain logging every decision matched the eager chain decision
 for decision. A graph's first three replays are checked against the eager forward; a capture that fails or a
 replay that disagrees serves that network eagerly from then on, with a warning. Recurrent networks stay eager.
+With graphs the batch window drops from 5 ms to 1 ms (`GRAPH_GATHER`; `TRIFORCE_SERVE_GATHER` overrides): a
+forward is cheap, so answering sooner beats a fuller batch. The 200-run `d3first` chain from `3_7cs_0` with four
+`hitshift` networks (106,936 decisions, every run identical across the three):
+
+| Serving | Wall | CPU (cores) | Decisions a second |
+|---|---:|---:|---:|
+| eager, 5 ms window (before) | 537 s | 20.7 (idle threads spinning) | 199 |
+| graphs, 5 ms window | 134 s | 4.2 | 798 |
+| graphs, 1 ms window (default) | 100 s | 11.0 | 1,068 |
 
 **One index a served network (Nov 22).** `load_model(path)[0].to_native()` in a loop (`runner.Policies`) served
 each copy under the id of a temporary that died at once; the next network often had the same id and replaced the
