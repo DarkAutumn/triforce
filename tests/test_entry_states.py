@@ -558,3 +558,21 @@ def test_entry_side_tells_the_whirlwind_from_a_walk_in_from_the_west():
     assert side(State(entry_states.WHIRLWIND_RELEASE_X)) == 'r'
     assert side(State(0xF0, {3: entry_states.OBJ_WHIRLWIND}, direction='W')) == 'e'
     assert side(State(0, {3: entry_states.OBJ_WHIRLWIND}, level=7)) == 'w'
+
+
+def test_entry_side_reads_a_dock_landing_as_the_whirlwind():
+    """Round 36: a dock warp (0:0x55 -> 0x34, 0:0x3f -> 0x31) sets Link down one row above the level's stand-in room
+    facing N, with the whirlwind still in the room; facing N without it he walked in from the S."""
+    class State:
+        def __init__(self, x, objects=(), room=0x34):
+            self.full_location = (0, room, False)
+            self.link = {'direction': 'N', 'x': x, 'y': 0x8D}
+            self._types = dict(objects)
+
+        def read(self, address):
+            return self._types.get(address - entry_states.OBJ_TYPE, 0)
+
+    side = entry_states.entry_side
+    assert side(State(0xF0, {2: entry_states.OBJ_WHIRLWIND})) == 'r'
+    assert side(State(0xE0, {2: entry_states.OBJ_WHIRLWIND}, room=0x31)) == 'r'
+    assert side(State(0xF0)) == 's'

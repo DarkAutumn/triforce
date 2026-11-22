@@ -1,7 +1,7 @@
 //! d3first's bombs in a chain run through Dungeon 5 (the owner, Nov 21: no bag handed over at the entrance): from
-//! `d3first_5_76s_0` (Link brings 2 bombs) to the Olive Garden's door.  The route grants nothing; 5:0x66's and
-//! 5:0x65's walls are opened with his own bombs, so he enters 5:0x05 with none and nothing cheated.  Skipped without
-//! the ROM.
+//! `d3first_5_76s_0` (Link brings 8 bombs, the median a chain run arrives with on the corrected route) to the Olive
+//! Garden's door.  The route grants nothing; 5:0x66's and 5:0x65's walls are opened with his own bombs, so he enters
+//! 5:0x05 with 6 and nothing cheated.  Skipped without the ROM.
 //!
 //! SETUP (RAM writes, the walk is about the items): the rooms' monsters are removed and Link's hearts refilled before
 //! every decision; a key door is lined up a frame at a time (walker aid, controller input).
@@ -198,15 +198,15 @@ fn no_bag_is_handed_over_at_dungeon_5() {
     let mut c = ChainEnv::new(data.clone(), nes, TfzStore::new(), route);
     let status = c.reset(Some(0), &mut ChaCha8Rng::seed_from_u64(0)).unwrap();
     let (_, grants) = c.context();
-    assert_eq!((c.session().state().bombs(), grants.route.bombs, grants.room.bombs), (2, 0, 0), "his own two");
+    assert_eq!((c.session().state().bombs(), grants.route.bombs, grants.room.bombs), (8, 0, 0), "his own eight");
     let run = walk(&mut c, status, 20_000);
     assert_eq!(run.result, "success", "{run:?}");
     let rooms: Vec<_> = run.rooms.iter().map(|r| (r.location(), r.bombs_in, r.route_bombs_in, r.cheated.bombs)).collect();
     let wall = |room: u8| rooms.iter().find(|r| r.0 == uw(room)).copied().unwrap();
-    // The two wall rooms take his two bombs; nothing is granted by the route anywhere.
+    // The two wall rooms take one of his bombs each; nothing is granted by the route anywhere.
     assert!(rooms.iter().all(|r| r.2 == 0), "{rooms:?}");
-    assert_eq!((wall(0x66).1, wall(0x65).1), (2, 1), "{rooms:?}");
+    assert_eq!((wall(0x66).1, wall(0x65).1), (8, 7), "{rooms:?}");
     assert_eq!(rooms.last().unwrap().0, uw(0x05), "{rooms:?}");
     assert_eq!(c.context().1.route.bombs, 0);
-    assert_eq!((c.session().state().bombs(), c.cheated().bombs), (0, 0), "both walls with his own bombs");
+    assert_eq!((c.session().state().bombs(), c.cheated().bombs), (6, 0), "both walls with his own bombs");
 }

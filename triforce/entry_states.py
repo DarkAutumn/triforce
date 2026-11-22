@@ -743,16 +743,18 @@ def entry_side(state) -> str:
     level, ``r`` set down by the whirlwind, ``cave`` inside one), read at the first controllable frame: Link faces into
     the room from the edge he came through; coming out of a cave or cellar he faces S away from the top edge; the
     whirlwind brings him in from the W edge facing E, as a walk in from the W does, but with the whirlwind in the
-    room (a built ``r`` state's first playable frame: X 0, carried for 87 more frames), and lets him go at X $80.
-    Through a dungeon's N door whose shutter closes behind him the game walks Link a square further in (6:0x39 from
-    N: Y $5D on the door's column X $78, where an open doorway leaves him at $4D; round 27)."""
+    room (a built ``r`` state's first playable frame: X 0, carried for 87 more frames), and lets him go at X $80; a
+    dock warp (the whirlwind over a raft dock: the game scrolls up from the level's stand-in room) sets him down
+    facing N with the whirlwind still in the room, so on the overworld a whirlwind in the room facing E or N means
+    ``r``. Through a dungeon's N door whose shutter closes behind him the game walks Link a square further in
+    (6:0x39 from N: Y $5D on the door's column X $78, where an open doorway leaves him at $4D; round 27)."""
     level, _, in_cave = state.full_location
     if in_cave:
         return 'cave'
     link = state.link
-    if level == 0 and link['direction'] == 'E' and (
-            link['x'] == WHIRLWIND_RELEASE_X
-            or any(state.read(OBJ_TYPE + slot) == OBJ_WHIRLWIND for slot in range(1, 12))):
+    whirlwind_here = any(state.read(OBJ_TYPE + slot) == OBJ_WHIRLWIND for slot in range(1, 12))
+    if level == 0 and ((link['direction'] == 'E' and (link['x'] == WHIRLWIND_RELEASE_X or whirlwind_here))
+                       or (link['direction'] == 'N' and whirlwind_here)):
         return 'r'
     facing = {'E': 'w', 'W': 'e', 'N': 's'}.get(link['direction'])
     if facing is not None:
