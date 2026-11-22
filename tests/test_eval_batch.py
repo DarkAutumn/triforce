@@ -404,17 +404,23 @@ def test_child_env_passes_the_niceness_on():
 
 # Only the training and evaluation entry points start a job (``jobs.begin_job``: the priority and the turn), never
 # library code that play and replay tools share (play-zelda, zelda-headless, create-video, zelda-map, tf replay,
-# explore, entry_states); only ``begin_job`` lowers the priority.
+# explore, entry_states); only ``begin_job`` lowers the priority.  Every one of them shows in the training GUI
+# (``tests/test_training_gui.py`` ``ENTRY_POINTS``).
 ENTRY_POINTS = {('triforce/train.py', 'cli'), ('triforce/evaluate.py', 'main'),
                 ('triforce/cli.py', '_cmd_eval_chain'), ('triforce/eval_batch.py', 'main'),
                 ('triforce/select_checkpoint.py', 'main'), ('scripts/train_round.py', 'main'),
+                ('triforce/lab/train.py', 'main'), ('triforce/lab/bench.py', 'main'),
+                ('triforce/lab/record.py', 'main'),
                 # Round 27: the honest planner's play recorded as demonstrations (it plays models: a job).
-                ('scripts/experiments/r27_plan_demos.py', 'main')}
+                ('scripts/experiments/r27_plan_demos.py', 'main'),
+                # Round 36: the merged network's failures and its DAgger recording (they play models: jobs).
+                ('scripts/experiments/r36_merge_failures.py', 'main'),
+                ('scripts/experiments/r36_merge_record.py', 'main')}
 
 
 def test_only_the_training_and_evaluation_entry_points_begin_a_job():
     calls = {'begin_job': set(), 'lower_priority': set()}
-    files = [*ROOT.glob('triforce/*.py'), *ROOT.glob('scripts/**/*.py'), *ROOT.glob('*.py')]
+    files = [*ROOT.glob('triforce/**/*.py'), *ROOT.glob('scripts/**/*.py'), *ROOT.glob('*.py')]
     for path in files:
         tree = ast.parse(path.read_text(encoding='utf-8'))
         for function in ast.walk(tree):
