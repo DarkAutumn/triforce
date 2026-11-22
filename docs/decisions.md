@@ -3309,3 +3309,40 @@ and 0x29's walls need), so a run with 2 or more crosses to the key door. routes.
   from the start to the ending joins it (`v2-single-ending.tfreplay`).
 - **A stop:** every training, selection and experiment was ended, every worktree removed (their data under
   `target/worktrees/`), and the work waits for Lee's direction.
+
+## 2026-11-21 — The program: the corrected d3 route, played by one network (Lee)
+
+- **The route was wrong** (Lee: "it's what I told you to do, but I realized it is wrong"). The d3 route is: "d3,
+  d4, d1, [heart in 2c], [bomb rupee secret in 2d], d2, [100 rupee secret in 0xf], d5, [warp to d4], go south to
+  0x55, in 0x55 ladder wrong warp to the location with the meat under armos, buy meat, south to buy arrows, d7,
+  [world wrap at 0x60], [heart at 0x5f], [heart at 0x2f], [wrong warp on 0x3f, clip into water west of dock,
+  whistle north ONCE, you land in the graveyard], magic sword, d6, d8, d9." It replaces `d3first` ("This is the d3
+  route"). The red candle instead of the blue; Dungeon 7 with the wood sword; 0x47's heart and the red ring kept
+  ("not things done in speedruns, but might as well do it to get more completions for now").
+- **The wrong warps:** "These glitches work, I use them. The only question is if I described them accurately
+  enough"; the counts and facings are to be found "from tests and emu, not my faulty memory"; at 0x3f Link clips
+  "right beside the dock"; the ROM is the one we have. How they are offered to a model: "Do whatever you do with
+  the current warp whistle code [...] This is just warp whistling again, with a block clip in front of it"; the
+  engine performing the whole sequence once Link clips at the right spot is acceptable for now.
+- **Bombs and rupees:** "No, never buy bombs. We are drops only." The shortfall: "Leave it to drops, that's what
+  speedrunning does. Cheated bombs are fine (for now) to make up the shortfall... but only as a way to progress
+  going to rooms." 0x3d's rupees and the way to Level 2: the lead's choice.
+- **Fewer networks:** "my goal for you was going to be reducing the number of neural networks as low as
+  possible... maybe even down to 1! (even if that model is super complicated)." A shared trunk with heads chosen
+  by a deterministic mechanism counts as one model; a learned selector is "overkill". "You should consider this a
+  reset of expectations [...] The end goal is to beat the d3 route with a single model (or handful of models,
+  likely a handful to start)." The room identity input: "Keep it, but experiment with that too. Generalization is
+  not the goal." On the guard: "that should be a piece of the network right? Which leads its logits to an input
+  into deciding what action to take? That's an idea not a directive."
+- **An experiment, not one attempt:** "Treat this as an experimentation and not a one-shot attempt at this. You may
+  change the observation drastically, you may try multiple neural network architectures, you could try many
+  different techniques (lstm, rnn, graph networks, etc), or not try those things if you don't think they would
+  help. You have full access to the game's ram, you could normalize some of the data with embeddings or small
+  calculations so the model doesn't have to. [...] This is going to be multiple rounds of experiments, this is NOT
+  a single round."
+- **The scale:** "the world record holder's attempts at the game is 252 completions against 13135 attempts [...]
+  when we talk about the golden path, or hopefully someday just beating gannon from start to finish on d3 without
+  golden path segmenting... that's the kind of scale you are looking at."
+- **The route and the models go together** ("you might as well do both of these together. In any order you
+  pick"). The backlog was set aside as `backlog.old.md` and a new one started on Lee's word; the lead plans the
+  rounds and asks for steering at check-ins.

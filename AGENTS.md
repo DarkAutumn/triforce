@@ -1,13 +1,32 @@
 # Agent instructions (triforce)
 
 Read this first, then `README.md` (setup, commands), `docs/architecture.md` (modules), and the newest
-`docs/experiments/round*.md` (start with its Summary) plus `docs/experiments/backlog.md` (the experiment backlog,
-called `todo.md` before Nov 8; where the work stands and what to try next, in order).
+`docs/experiments/round*.md` (start with its Summary) plus `docs/experiments/backlog.md` (the long-term plan since
+Nov 21: the program, the experiment queue, what to try next, in order; everything before that is in
+`docs/experiments/backlog.old.md`, called `todo.md` before Nov 8: a "backlog" section named in an older document is
+there).
 
 ## Where things stand (Nov 21)
 
+- **The program since Nov 21 (the owner; `docs/experiments/backlog.md`, decisions 2026-11-21 "The program"): the
+  corrected d3 route, played by one network.** Two things at once, both needing retraining, in many rounds of
+  experiments and not one attempt. **(1) The route `d3first` is replaced** by the owner's corrected order:
+  Dungeons 3, 4, 1, 0x2c's heart, 0x2d's rupees, Dungeon 2, 0x0f's 100 rupees, Dungeon 5, the recorder to Level
+  4's screen, the raft to 0x55, a wrong warp there to the meat under the Armos (0x34), the arrows, Dungeon 7 (wood
+  sword, 9 containers), the world wrap at 0x60, the hearts at 0x5f and 0x2f, a wrong warp at 0x3f into the
+  graveyard, the magic sword, Dungeons 6, 8, 9 (0x47's heart and the red ring kept; no blue candle). Both wrong
+  warps are a whirlwind carrying Link over a dock (found in the disassembly and reproduced in the emulator, Nov
+  21). **(2) Fewer networks, toward one:** the end goal is the game beaten on that route by a single network (a
+  handful is acceptable; one body with heads chosen by the route step is one model); the observation, the
+  architecture and the training method are all open to experiment ("You may change the observation drastically
+  [...] you have full access to the game's ram"), with a hit-prediction head inside the network as the first
+  design idea (the guard of round 35, made a piece of the network; look-ahead in training only). The scale to
+  think in: the world-record holder's 252 completions in 13,135 attempts. Bombs are never bought (drops only); a
+  required wall's missing bomb is still cheated and counted, for now; what the game can answer is found in the
+  emulator, not asked. Until the route lands, `main`'s `d3first` is 2.0.0.3's.
+
 - **2.0.0.3 (Nov 21; round35.md "The checkpoint"; decisions 2026-11-21 "2.0.0.3"): the owner's checkpoint. Nothing
-  runs; the work waits for his direction** (backlog "Where the work stopped"). Two calls of his: **no bag of bombs**
+  runs; the work waits for his direction** (backlog.old.md "Where the work stopped"). Two calls of his: **no bag of bombs**
   ("Don't blindly add 8 bombs. The goal is a win without a cheated bomb."): `d3first`'s Dungeon 5 entrance grants
   nothing any more and no route grants anything (the wall-bomb rule stands: a required wall with no bomb in hand is
   given one, counted); and **the learned guard waits** (a second network that predicts from the observation
