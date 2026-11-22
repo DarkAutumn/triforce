@@ -122,7 +122,7 @@ paired (`r36_merge_report.py`; reports in `docs/experiments/data/r36-merge/stude
 | 256x2, no room embedding | 684k | 0.172 | 0.828 | not benched | |
 | **1x (today's)** | 866k | 0.160 | 0.836 | 98.1% (-1.8 ± 0.3) | 88.4% |
 | 512x3 | 2.09M | 0.130 | 0.857 | queued | |
-| 768x3 | 3.97M | 0.119 | 0.866 | queued | |
+| 768x3 | 3.97M | 0.119 | 0.866 | 98.7% (-1.3 ± 0.3) | 92.7% |
 | 768x3, two entity layers | 4.01M | 0.116 | 0.869 | 99.0% (-1.0 ± 0.3) | 92.9% |
 | 1024x3 | 6.51M | 0.113 | 0.873 | 98.6% (-1.4 ± 0.3) | 90.9% |
 | 1x on 1/4 of the data | 866k | 0.230 | 0.808 | queued | |
