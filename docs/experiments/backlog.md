@@ -95,22 +95,34 @@ to the action taken; look-ahead for the others), never looking ahead at play.
 
 ### Infrastructure (blocks the experiments)
 
-- [ ] **A lab that can try any network:** a training run over several families at once; teachers (today's models)
+- [x] **A lab that can try any network** (on `main` since Nov 22, `docs/lab.md`; its extensions for memory, the
+  hit head's labels and sampling by need are on `r36-lab` until verified): a training run over several families at once; teachers (today's models)
   as an imitation target that fades; experimental architectures playable by the same evaluations and chains
   without a hand-written Rust port each (the Rust actor stays the production path; winners are ported); old and
   new architectures loadable side by side.
-- [ ] **A yardstick for experiments:** a fixed, cheap suite (representative rooms at the hearts runs bring, with
+- [x] **A yardstick for experiments** (`triforce/lab/bench.py`; today's 51 networks: 91.9% success, 0.241 hearts
+  lost an episode, 0.697 hits a room visit, 20 minutes): a fixed, cheap suite (representative rooms at the hearts runs bring, with
   success, hearts lost and hits a visit) and a full tier (segment chains, the route from the start, the golden
   path), so two networks are compared on the same thing in an hour, not a day.
 
 ### Experiment queue (in order; each names the decision it feeds)
 
-1. [ ] **Cross-play: how specialised are the specialists?** Each of today's models in other families' rooms, no
-   training. Feeds: which families merge for free, which are truly distinct (the grouping by data, not by guess).
-2. [ ] **What the observation lacks for seeing a hit coming.** The guard prototype read the look-ahead's verdict
-   with AUC 0.95 but only 0.5-0.6 precision at the planner's veto rate, though the verdict itself is not luck (two
-   redraws agree 99.85%). Give the same classifier the raw RAM of the object slots and of Link; whatever closes the
-   gap is what observation v7 must carry. Feeds: the observation redesign.
+1. [x] **Cross-play: how specialised are the specialists?** (round36.md "Cross-play", Nov 22.) No merge is free:
+   the best stand-in network costs 7-8 points on a segment (ow-zora for ow-tektite on `post-d1`, goriya for
+   dodongo-crossing on `d7`), and the matrix predicts the chain room by room. How general a network is follows how
+   many rooms its family trained in (ow-zora and ow-moblin play the other overworld tasks at 0.87-0.88 of their own
+   networks; goriya, darknut and stalfos-keese-gel 0.70-0.74 of the dungeon rooms and 0.80-0.84 of the overworld;
+   the narrow families 0.09-0.21). What does not transfer is a room's own objective (wrong exits, special actions
+   at one exit) and boss fights. **Decided from it:** merging means training with every family's rooms in the mix,
+   never picking a best network; the first groups are the overworld (10 families and the item cellars), the
+   dungeon rooms (15), the bosses as one body with a head each, then overworld and dungeon rooms in one body.
+2. [x] **What the observation lacks for seeing a hit coming** (round36.md "What the observation lacks" on
+   `r36-hit`, Nov 22). Not information: trees on the flat observation read the look-ahead's verdict better (0.76 /
+   0.68 precision = recall) than a policy-shaped network does (0.66 / 0.54 at 10 epochs, 0.73 / 0.66 at 60); raw
+   RAM bytes hurt. It is representation, then data and training time: contact geometry per entity (the touch rule
+   extrapolated along straight lines) adds 0.04-0.10, more data helps steeply, hits land in an action's first
+   frames. **Feeds:** observation v7's contact block and Link-relative pixel scale (its §4), a per-entity hit head
+   (§5), and the supervised hit bench as the cheap screen for representations and shapes (in progress).
 3. [ ] **Capacity by imitation alone:** one student copying a group of teachers at several sizes, judged on the
    yardstick. Feeds: how big the body must be.
 4. [ ] **The wood-sword pairs first** (51 to 34): one network a family for both swords. The same problem in
