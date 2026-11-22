@@ -991,28 +991,53 @@ pub struct BombRules {
     /// arms a forced drop of four (the owner: always allowed). 3:0x5b: its Darknuts are fought by the sword for the
     /// room's bombs, its E wall bombed on the last pass. `zelda::objectives::GameCompletion::weapon_bombs_off`.
     pub wall_only: BTreeSet<MapLocation>,
+    /// `treasure_below: N` (the owner's third rule, "a blanket rule": the floor under which a room's bombs are fought
+    /// for): on every step whose room's game.yaml treasure is bombs and which takes it (no `treasure:`, or
+    /// `{if_bombs_below: M}`: the step's own M gives way), the treasure is wanted only while Link holds fewer than N
+    /// (`d3first`: 8, the bag; 7 or fewer is a fight). `skip`, `refuse` and `clear` stay the step's.
+    pub treasure_below: Option<u8>,
+    /// `treasure_below_rooms: [{level, room, below: N}, ...]`: a room's own floor instead of `treasure_below` (on
+    /// every step of the room that takes its bombs): the override for a room the rule costs too much in.
+    pub treasure_below_rooms: BTreeMap<MapLocation, u8>,
 }
 
 impl BombRules {
-    /// The `bomb_rules:` entry `v` of the route `route`, whose rooms must be rooms of its `steps`.
+    /// The floor under which the route fights for the bombs of `room` ([`BombRules::treasure_below`]), if any.
+    pub fn treasure_below_at(&self, room: MapLocation) -> Option<u8> {
+        self.treasure_below_rooms.get(&room).copied().or(self.treasure_below)
+    }
+
+    /// The `bomb_rules:` entry `v` of the route `route`, whose rooms must be dungeon rooms of its `steps`.
     fn parse(route: &str, v: &Value, steps: &[RouteStep]) -> Result<BombRules, MapError> {
         let what = format!("routes.yaml: bomb_rules: {route}");
-        check_keys(v, &["wall_only"], &what)?;
-        let mut wall_only = BTreeSet::new();
-        if let Some(list) = get(v, "wall_only") {
+        check_keys(v, &["wall_only", "treasure_below", "treasure_below_rooms"], &what)?;
+        let rooms = |key: &str, keys: &[&str]| -> Result<Vec<(MapLocation, &Value)>, MapError> {
+            let Some(list) = get(v, key) else { return Ok(Vec::new()) };
             let Some(list) = list.as_sequence() else {
-                return err(format!("{what}: wall_only is not a list of rooms ({{level: N, room: '0xNN'}})"));
+                return err(format!("{what}: {key} is not a list of rooms ({{level: N, room: '0xNN'}})"));
             };
-            for room in list {
-                check_keys(room, &["level", "room", "in_cave"], &format!("{what}: wall_only"))?;
-                let loc = step_location(room)?;
-                if loc.level == 0 || !steps.iter().any(|s| s.location() == loc) {
-                    return err(format!("{what}: wall_only {loc} is no dungeon room of the route's steps"));
-                }
-                wall_only.insert(loc);
-            }
-        }
-        Ok(BombRules { wall_only })
+            list.iter()
+                .map(|room| {
+                    check_keys(room, keys, &format!("{what}: {key}"))?;
+                    let loc = step_location(room)?;
+                    if loc.level == 0 || !steps.iter().any(|s| s.location() == loc) {
+                        return err(format!("{what}: {key} {loc} is no dungeon room of the route's steps"));
+                    }
+                    Ok((loc, room))
+                })
+                .collect()
+        };
+        let wall_only = rooms("wall_only", &["level", "room", "in_cave"])?.into_iter().map(|(loc, _)| loc).collect();
+        let below = |v: Option<&Value>, key: &str| v.map(|n| as_u8(n, &format!("{what}: {key}"))).transpose();
+        let treasure_below = below(get(v, "treasure_below"), "treasure_below")?;
+        let treasure_below_rooms = rooms("treasure_below_rooms", &["level", "room", "in_cave", "below"])?
+            .into_iter()
+            .map(|(loc, room)| match below(get(room, "below"), "treasure_below_rooms: below")? {
+                Some(n) => Ok((loc, n)),
+                None => err(format!("{what}: treasure_below_rooms {loc} needs `below: N`")),
+            })
+            .collect::<Result<_, _>>()?;
+        Ok(BombRules { wall_only, treasure_below, treasure_below_rooms })
     }
 }
 
@@ -3794,23 +3819,35 @@ mod tests {
         assert_eq!(visit_at(steps, &[], 1, &steps[0]), 1, "right after step 0: another target of the first");
     }
 
-    /// Round 37: a route's `bomb_rules:` (the owner's, Nov 22). `d3first`'s `wall_only` is 3:0x5b; `d2first` has
-    /// none; the loader refuses an unknown key, an overworld room and a room none of the route's steps plays.
+    /// Round 37: a route's `bomb_rules:` (the owner's, Nov 22). `d3first`'s `wall_only` is 3:0x5b and its
+    /// `treasure_below` 8, no room of its own; `d2first` has none; the loader refuses an unknown key, an overworld room,
+    /// a room none of the route's steps plays, a room's floor without `below` and a route it doesn't know.
     #[test]
     fn a_route_names_its_bomb_rules() {
         let map = GameMap::builtin();
-        assert_eq!(map.bomb_rules["d3first"].wall_only, [loc(3, 0x5b)].into_iter().collect());
+        let d3first = &map.bomb_rules["d3first"];
+        assert_eq!(d3first.wall_only, [loc(3, 0x5b)].into_iter().collect());
+        assert_eq!((d3first.treasure_below, d3first.treasure_below_rooms.len()), (Some(8), 0));
+        assert_eq!(d3first.treasure_below_at(loc(7, 0x1b)), Some(8));
         assert!(!map.bomb_rules.contains_key("d2first"));
         let rules = "    wall_only: [{level: 3, room: '0x5b'}]\n";
         assert!(ROUTES_YAML.contains(rules));
-        let load = |routes: &str| GameMap::from_yaml(GAME_YAML, routes).map(|_| ()).map_err(|e| e.0);
+        let load = |routes: &str| GameMap::from_yaml(GAME_YAML, routes).map_err(|e| e.0);
+        let room = "    treasure_below_rooms: [{level: 7, room: '0x1b', below: 2}]\n";
+        let crossing = load(&ROUTES_YAML.replacen(rules, &format!("{rules}{room}"), 1)).unwrap();
+        assert_eq!(crossing.bomb_rules["d3first"].treasure_below_at(loc(7, 0x1b)), Some(2));
+        assert_eq!(crossing.bomb_rules["d3first"].treasure_below_at(loc(8, 0x3f)), Some(8));
         for (bad, error) in [
             ("    wall_only: [{level: 0, room: '0x5b'}]\n", "no dungeon room"),
             ("    wall_only: [{level: 3, room: '0x5f'}]\n", "no dungeon room"),
             ("    wall_only: {level: 3, room: '0x5b'}\n", "not a list"),
             ("    weapon_only: [{level: 3, room: '0x5b'}]\n", "weapon_only"),
+            ("    treasure_below_rooms: [{level: 7, room: '0x1b'}]\n", "needs `below: N`"),
+            ("    treasure_below_rooms: [{level: 7, room: '0x1b', below: 300}]\n", "expected a byte"),
         ] {
             assert!(load(&ROUTES_YAML.replacen(rules, bad, 1)).unwrap_err().contains(error), "{bad}");
         }
+        let unknown = ROUTES_YAML.replacen("bomb_rules:\n  d3first:\n", "bomb_rules:\n  d4first:\n", 1);
+        assert!(load(&unknown).unwrap_err().contains("is no route"));
     }
 }

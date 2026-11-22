@@ -895,6 +895,54 @@ fn the_owners_wall_only_room_offers_the_wall_and_the_tenth_kill() {
     ]);
 }
 
+/// Round 37, the owner's third rule (`d3first`'s `bomb_rules: {treasure_below: 8}`): a room the route takes the bombs
+/// of is a fight when Link comes in with 7 or fewer and a crossing with 8: 7:0x1b (round 34's floor of 2 gone),
+/// 8:0x3f (the shared step's `{if_bombs_below: 5}` gives way: 5 is a fight), 3:0x5b's last pass (whatever Link held,
+/// before).  `d2first`'s 8:0x3f keeps its 5.  A room's override (`treasure_below_rooms`, 7:0x1b `below: 2`, the
+/// crossing the owner allows if the fight kills too many runs) wins over the floor.
+#[test]
+fn the_route_fights_for_a_rooms_bombs_below_its_floor() {
+    let Some(mut nes) = open_core() else { return };
+    let read = |name: &str| std::fs::read_to_string(common::repo().join("triforce").join(name)).unwrap();
+    let floor = "    treasure_below: 8\n";
+    let routes = read("routes.yaml");
+    assert_eq!(routes.matches(floor).count(), 1, "d3first's floor");
+    let routes = routes.replace(floor, &format!("{floor}    treasure_below_rooms: [{{level: 7, room: '0x1b', below: 2}}]\n"));
+    let mut crossing = (**data()).clone();
+    crossing.map = Arc::new(zelda::GameMap::from_yaml(&read("game.yaml"), &routes).unwrap());
+    let crossing = Arc::new(crossing);
+    let cases = [
+        (data(), "goriya", "d3first_7_1bw_0", "MOVE E 16", 7, true),
+        (data(), "goriya", "d3first_7_1bw_0", "MOVE E 16", 8, false),
+        (data(), "goriya", "d3first_7_1bw_0", "MOVE E 16", 1, true),
+        (data(), "darknut", "d3first_8_3fw_0", "MOVE E 16", 5, true),
+        (data(), "darknut", "d3first_8_3fw_0", "MOVE E 16", 8, false),
+        (data(), "darknut", "8_3fw_0", "MOVE E 16", 5, false),
+        (data(), "darknut", "8_3fw_0", "MOVE E 16", 4, true),
+        (data(), "darknut", "d3first_3_5bw_0", "MOVE E 16", 7, true),
+        (data(), "darknut", "d3first_3_5bw_0", "MOVE E 16", 8, false),
+        (&crossing, "goriya", "d3first_7_1bw_0", "MOVE E 16", 7, false),
+        (&crossing, "goriya", "d3first_7_1bw_0", "MOVE E 16", 1, true),
+    ];
+    for (data, family, start, walk, bombs, fight) in cases {
+        let mut config = (*data.specialists[family]).clone();
+        config.ram_randomization = RamRandomization { bombs: Some((bombs, bombs)), ..Default::default() };
+        let opts = EnvOptions { start_state: Some(start.into()), ..Default::default() };
+        let mut env: Env = SpecialistEnv::new(Arc::new(config), data.clone(), nes, TfzStore::new(), opts).unwrap();
+        env.reset(Some(0), None).unwrap();
+        for _ in 0..10 {
+            act(&mut env, walk);
+            if state(&env).has_active_enemies() {
+                break;
+            }
+        }
+        let what = format!("{start} with {bombs} bombs");
+        assert_eq!(state(&env).bombs(), bombs as i32, "{what}");
+        assert_eq!(objective(&env).kind == ObjectiveKind::Fight, fight, "{what}: {:?}", objective(&env).kind);
+        nes = release(env);
+    }
+}
+
 /// Round 26 (schema 6): the `link` block's `rupee_reserve`, `rupees_spare`, `rupees_few` and `arrow_usable` read the
 /// reserve of the route step Link plays (`update_disabled_kinds` hands it to the observation builder as it does the
 /// bomb reserve).  The route's step of 1:0x44 from W is given `rupee_reserve: 2`; Link holds the bow and arrows and
