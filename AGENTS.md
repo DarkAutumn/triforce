@@ -27,7 +27,7 @@ there).
 
 - **2.0.0.5 (Nov 22; round36.md "The corrected route"; decisions 2026-11-22 "2.0.0.5"): the corrected `d3first` is
   the route.** 292 steps in the owner's order (above), `d2first` untouched (its step list and a 100-run chain
-  identical to 2.0.0.4's). **Nothing retrained: today's 51 networks.** Hearts 7 / 8 / 9 at Levels 2 / 5 / 7 and 12
+  identical to `main`'s before the landing). **Nothing retrained: today's 51 networks.** Hearts 7 / 8 / 9 at Levels 2 / 5 / 7 and 12
   at the magic sword; 861 entry states (steps 90-216 rebuilt on three chains, `entry_states audit` clean). **The
   recorder's plays were found by search** (the whirlwind's index, `$523`, is one chain over the route; out of Level
   5: two facing S; 0x55 in the water: N, a one-frame turn W, play; 0x3f beside the dock: N twice; out of Level 6:
