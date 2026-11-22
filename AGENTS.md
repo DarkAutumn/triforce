@@ -6,7 +6,7 @@ Nov 21: the program, the experiment queue, what to try next, in order; everythin
 `docs/experiments/backlog.old.md`, called `todo.md` before Nov 8: a "backlog" section named in an older document is
 there).
 
-## Where things stand (Nov 21)
+## Where things stand (Nov 22)
 
 - **The program since Nov 21 (the owner; `docs/experiments/backlog.md`, decisions 2026-11-21 "The program"): the
   corrected d3 route, played by one network.** Two things at once, both needing retraining, in many rounds of
@@ -23,7 +23,31 @@ there).
   design idea (the guard of round 35, made a piece of the network; look-ahead in training only). The scale to
   think in: the world-record holder's 252 completions in 13,135 attempts. Bombs are never bought (drops only); a
   required wall's missing bomb is still cheated and counted, for now; what the game can answer is found in the
-  emulator, not asked. Until the route lands, `main`'s `d3first` is 2.0.0.3's.
+  emulator, not asked. The route landed in 2.0.0.5 (next bullet); retraining has not started.
+
+- **2.0.0.5 (Nov 22; round36.md "The corrected route"; decisions 2026-11-22 "2.0.0.5"): the corrected `d3first` is
+  the route.** 292 steps in the owner's order (above), `d2first` untouched (its step list and a 100-run chain
+  identical to 2.0.0.4's). **Nothing retrained: today's 51 networks.** Hearts 7 / 8 / 9 at Levels 2 / 5 / 7 and 12
+  at the magic sword; 861 entry states (steps 90-216 rebuilt on three chains, `entry_states audit` clean). **The
+  recorder's plays were found by search** (the whirlwind's index, `$523`, is one chain over the route; out of Level
+  5: two facing S; 0x55 in the water: N, a one-frame turn W, play; 0x3f beside the dock: N twice; out of Level 6:
+  turn up, then two; out of Level 8: one S); the owner's remembered counts ("twice" at 0x55, "once" at 0x3f) fit no
+  index history of this order. **The two dock warps are a macro the engine plays once Link is on the dock step**
+  (`zelda::session::dock_warp_mask`: MOVE S off the dock, CLIP N where the block clip is legal, RECORDER on the
+  water spot, which plays the whole sequence; SWORD S from the dock while a monster stands below, WAIT on the spot
+  while a shot flies; a wrong landing ends the run `dock-warp-missed`). Baseline, models alone, 1000 runs a segment
+  from its entry state (300 where marked): D3 23.2%, D4 18.5%, D1 93.3% (300), the leg to Level 2 99.1%, D2
+  99.8%, to Level 5 100%, **D5 31.2%** (8 bombs brought; 7.0% in 2.0.0.3's order), **Level 5 to Level 7 78.9%**
+  (the 0x55 warp; 31.7% before the dock's sword strike and wait), **D7 13.1%** (9 containers, 2 bombs: goriya at
+  7:0x1b loses 689 a 1000), **Level 7 to Level 6 22.4%** (ow-lynel at 0x50 and 0x60), D6 36.4%, **out of Level 6
+  32.0%** (300; ow-lynel walks back into Level 6), D8 40.0% (300), D9 51.3% (300); from the start the D3, D4, D1
+  triforces as before (23.5%, 4.5%, 3.8%), 30 take Dungeon 2's, 6 Dungeon 5's, none ends the game. **The golden
+  race from power on wins three of three** (411 runs together; tries per segment D3 6/9/4, D4 4/38/7, D1 1/3/4, D2
+  1/2/2, D5 12/3/7, D7 with the 0x55 warp 29/64/42, D6 with the 0x3f warp and the sword 39/15/38, D8 16/13/16, D9
+  25/6/5); the shortest (152,051 frames) is `corpus/replays/v2-golden-ending.tfreplay` (`v2-single-ending` stays:
+  a single run on 2.0.0.3's order). The lab's yardstick was re-made on the corrected route's states and harvested
+  entries (`docs/lab.md` "The yardstick"). What the baseline leaves open, in the order it costs the route:
+  backlog Track R.
 
 - **2.0.0.3 (Nov 21; round35.md "The checkpoint"; decisions 2026-11-21 "2.0.0.3"): the owner's checkpoint. Nothing
   runs; the work waits for his direction** (backlog.old.md "Where the work stopped"). Two calls of his: **no bag of bombs**
@@ -622,9 +646,10 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 
 ## Versioning (Lee, Nov 11)
 
-- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `2.0.0.4`: the lab, `docs/lab.md`: runs
-  over several families, teachers, networks of any shape beside today's, the yardstick; no network's play
-  changed; 2.0.0.3 was `d3first`'s bag of 8 bombs at
+- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `2.0.0.5`: the owner's corrected `d3first`,
+  the two dock warps as engine macros, its rebuilt states, the lab's yardstick on them; no network retrained;
+  2.0.0.4 was the lab, `docs/lab.md`: runs over several families, teachers, networks of any shape beside today's,
+  the yardstick; no network's play changed; 2.0.0.3 was `d3first`'s bag of 8 bombs at
   Dungeon 5 removed, the owner's checkpoint; 2.0.0.2 was round 34's two late `d3first`
   route runs, darknut `r34d5-dg-s362` and boss-digdogger `r34d7b-dig-s1`; 2.0.0.1 was round 34's other `d3first`
   route runs, Dungeon 4's entrance states, Dungeon 7's bag reserve and the training-only stall ending; runs stamped
@@ -836,12 +861,14 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   (the main route, no `--route` needed; `eval_batch.D3FIRST_SEGMENTS`, its states `d3first_*` named bare):** full
   `triforce eval-chain --runs 20 --parallel 10`; Dungeon 3 `--from 3_7cs_0` (to `step:24`); after Dungeon 3 `--from
   0_74c_0` (`step:31`); Dungeon 4 `--from 4_71s_0` (`step:53`); after Dungeon 4 `--from 0_45c_0` (`step:61`); Dungeon
-  1 `--from 1_73s_0` (`step:79`); after Dungeon 1 `--from 0_37c_v2_0` (`step:97`); Dungeon 5 `--from 5_76s_0`
-  (`step:120`); after Dungeon 5 `--from 0_0bc_0` (`step:145`, the recorder's warp to Level 3's landing); Dungeon 2
-  `--from 2_7ds_0` (`step:155`); after Dungeon 2 `--from 0_3cc_0` (`step:174`, the warp to 0x45, Level 7); Dungeon 7
-  `--from 7_79s_0` (`step:194`); after Dungeon 7 `--from 0_42c_0` (`step:211`, the magic sword on the way); Dungeon 6
-  `--from 6_79s_0` (`step:227`); after Dungeon 6 `--from 0_22c_0` (`step:233`); Dungeon 8 `--from 8_7es_0`
-  (`step:243`); after Dungeon 8 `--from 0_6dc_0` (`step:258`); Dungeon 9 `--from 9_76s_0` (to the ending).
+  1 `--from 1_73s_0` (`step:79`); after Dungeon 1 `--from 0_37c_v2_0` (`step:97`: 0x2c's heart, 0x2d's rupees, to
+  Level 2); Dungeon 2 `--from 2_7ds_0` (`step:107`); after Dungeon 2 `--from 0_3cc_0` (`step:124`: 0x0f's rupees, to
+  Level 5); Dungeon 5 `--from 5_76s_0` (`step:147`); after Dungeon 5 `--from 0_0bc_0` (`step:160`: the recorder to
+  0x45, the raft, the dock warp at 0x55, the meat, the arrows); Dungeon 7 `--from 7_79s_0` (`step:180`); after
+  Dungeon 7 `--from 0_42c_0` (`step:199`: the wrap at 0x60, 0x5f's and 0x2f's hearts, the dock warp at 0x3f, the
+  magic sword); Dungeon 6 `--from 6_79s_0` (`step:215`); after Dungeon 6 `--from 0_22c_0` (`step:221`); Dungeon 8
+  `--from 8_7es_0` (`step:231`); after Dungeon 8 `--from 0_6dc_0` (`step:246`); Dungeon 9 `--from 9_76s_0` (to the
+  ending).
   **`d2first` (`--route d2first`):** full `triforce eval-chain --route d2first --runs 20
   --parallel 10`; Dungeon 2 `--from 2_7ds_0`; after Dungeon 2 `--from 0_3cc_0`;
   Dungeon 1 `--from 1_73s_0` (round 31: to its triforce's exit, `step:64`; the door trick leaves by 0:0x37 first);

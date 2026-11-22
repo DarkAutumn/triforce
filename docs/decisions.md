@@ -3346,3 +3346,34 @@ and 0x29's walls need), so a run with 2 or more crosses to the key door. routes.
 - **The route and the models go together** ("you might as well do both of these together. In any order you
   pick"). The backlog was set aside as `backlog.old.md` and a new one started on Lee's word; the lead plans the
   rounds and asks for steering at check-ins.
+
+## 2026-11-22 — 2.0.0.5: the corrected `d3first` is the route (the lead, the owner being away)
+
+- **A `REV`**: route data, 127 steps' entry states and the engine's dock warp change play; no network was
+  retrained (today's 51). `d3first` is replaced under its name by Lee's order (292 steps; round36.md "The
+  corrected route"); `d2first` is untouched (its 354 steps field by field and a 100-run chain run for run).
+- **The recorder's plays are one chain, found by search** (`scripts/experiments/r36_recorder_search.py`): every play
+  steps the whirlwind's index (`$523`, asm:Whirlwind_StepLevelIndex), so Level 5's exit sets what 0x55 starts
+  from, 0x55 sets 0x3f's, 0x3f sets Level 6's exit. Chosen by the fewest turns between plays, then the fewest plays,
+  then the widest window: out of Level 5 two facing S; 0x55 N, a one-frame turn W, play; 0x3f N twice; out of
+  Level 6 a turn up, then two; out of Level 8 one S. **Lee's remembered counts cannot be right for any index
+  history of this order:** a whirlwind into 0x45 always leaves the index on Level 4, from which "twice north" at
+  0x55 lands at 0x26 and "once" at 0x3f on Level 5's screen; they would be right only from indexes no way into
+  0x45 gives (Lee had asked for the emulator's answer over his memory).
+- **The warps are a macro the engine plays** (Lee: "warp whistling again, with a block clip in front of it"; the
+  engine performing the sequence accepted for now): on a dock-warp step the mask leaves MOVE S on the dock, CLIP N
+  where the block clip is legal, RECORDER on the water spot, and RECORDER plays the whole sequence and waits for
+  the pickup; the network only walks from the dock to the clip's column. Offering the plays one by one would need
+  ow-zora trained on the recorder and a turn inside a 50-frame window. A whirlwind out of a dock room into any
+  other room ends the run `stuck` (`dock-warp-missed`; never seen, so no re-planning was built).
+- **The dock strikes and waits:** with the monsters live, 0x55 lost 633 runs of 1000 (an Octorok's touch on the
+  step off knocks Link onto the dock's trigger and the raft takes him back). The mask now gives SWORD S on the dock
+  while a monster stands below it and WAIT on the water spot while a shot is in the air: the leg 31.7% → 78.9%,
+  no network changed (round36.md "The dock warps with the monsters live").
+- **The corpus's `d3first` golden path is the corrected route's** (`v2-golden-ending.tfreplay` replaced by the
+  shortest of the three golden races, 152,051 frames; no `REPLAY_VERSION` change); `v2-single-ending.tfreplay`
+  stays, a single run on 2.0.0.3's order.
+- **The lab's yardstick moves with the route:** `triforce/lab/bench.json` and `reference.json` were made again on
+  the corrected route's entries (the first order's after Dungeon 1 left out, the new legs and Dungeons 2, 5, 7 at
+  their new hearts harvested from its chains): 6,120 episodes, success 92.9%, hearts lost 0.249, hits 0.677 a visit.
+  Experiments compare with the reference of the manifest they were played on (`docs/lab.md` "The yardstick").

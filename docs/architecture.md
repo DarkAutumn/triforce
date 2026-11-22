@@ -171,6 +171,19 @@ route step wants it) and in the objective (targets, outcomes).
   bow. game.yaml `entrance: {how: armos|recorder, tile}` is the room's `Secret`: an `exit: cave` there targets the
   Armos statue's W and E stand tiles (tile ± 2 columns), or the pond's shore (`objectives::pond_shore`: its stairs lie
   in the water, out of the path search's reach), until the stairs show, then the stairs.
+- **Dock warps** (round 36, `d3first` since 2.0.0.5; round36.md "How the warps are played"): unlike the whirlwind
+  above, an executor macro. A step `exit: recorder` in a dock room (`game_map::DOCK_ROOMS`: 0x55, 0x3f) followed by `entry:
+  recorder` into its landing (`game_map::dock_landing`: 0x34, 0x31, one row above the level's
+  `Whirlwind_PrevRoomIds` stand-in room; `check_whirlwinds` accepts it after a dock room, `objectives::route_entry`
+  maps the jump to `recorder`) is a dock-warp step (`GameCompletion::dock_warp`; `Session::set_dock_warp`, set every
+  step by chain and specialist envs). Its mask (`zelda::session::dock_warp_mask`) leaves MOVE S on the dock below
+  its trigger (SWORD S instead while a monster stands on the land below), CLIP N where the block clip into the water
+  is legal (`zelda::clips::dock_clip_at`), and RECORDER on the water spot (`clips::dock_spot`: 0x55 X `$78`, 0x3f X
+  `$58`; WAIT instead while a shot is in the air); elsewhere the family's own mask, and a MOVE W/E on the step stops
+  on the clip's column. RECORDER there is `Executor::run_dock_warp`: the plays the index needs from
+  `whirlwind::plays` (N for a step up, W for a step down, a one-frame turn before the B), then nothing pressed until
+  the pickup (`$522`), the whirlwind gone, or an interrupt. The objective targets the clip's G tile. A whirlwind out
+  of a dock room into any other room ends a chain run `stuck` (`dock-warp-missed`).
 - **Masks.** RECORDER (`Session::set_recorder_facings`, set every step from `GameCompletion::recorder_facings`):
   on the whirlwind step only facing the way the next play must step the game's counter (`TeleportingLevelIndex`
   `$523`: +1 facing right or up, -1 left or down, then on past the levels whose piece Link lacks; only the first play
@@ -191,7 +204,9 @@ route step wants it) and in the objective (targets, outcomes).
   through by its door type, asm:Doorway_CheckLink; the N and W rims are unwalkable tiles). The doorway changes the
   path search and so the `target` input and PBRS after a bomb in every N or W bomb wall (7:0x69 N; on `d2first`
   4:0x21 N, 4:0x11 N).
-- **States and segments.** The entry side `r` names a state entered by the whirlwind (`0_45r_<chain>`,
+- **States and segments.** The entry side `r` names a state entered by the whirlwind (`0_45r_<chain>`; the dock
+  landings `0_34r`, `0_31r`, whose first frame faces N with the whirlwind still in the room: `entry_states.entry_side`
+  reads any level-0 entry with a whirlwind in the room as `r`;
   `entry_states.ENTRY_SIDES`, `StateName`). The stretch is part of `d2first` (decisions 2026-11-17: the scouting
   route `d7` was merged before any state was built), so its segments are two more of `eval_batch.SEGMENTS`:
   `post-d5` from `0_0bc_0` (arrival: 7:0x79) and `d7` from `7_79s_0` (the D7 triforce; arrival 0:0x42 entered after

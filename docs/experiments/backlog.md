@@ -63,18 +63,38 @@ built):
 - Of 891 start states 483 are unchanged, 72 differ in an exit or the index, 249 hold other hearts or items, 9
   depend on the 0x3f landing, 78 go; about 300 are rebuilt, all between 0x2d's cave and the magic sword.
 
-- [ ] **Recorder plays for the whole route, found by search** in the emulator: every play's facing and count from
-  Level 5's exit to Level 9 (the index is one chain: 0x55 sets what 0x3f and Level 6's exit start from), choosing
-  the most forgiving sequence.
-- [ ] **Engine:** the block clip north into overworld water (0x55 and 0x3f, beside the dock), the dock-warp exit
-  and its "one row up" landing rooms, the mask (the recorder only, until the pickup), played "as the current warp
-  whistle is, with a block clip in front"; the engine playing the whole sequence once Link clips at the right spot
-  is acceptable for now.
-- [ ] **Route data, states, audit, tests, documents:** `d3first` replaced; about 300 states rebuilt; the walks.
-- [ ] **Baseline:** today's models on the new route, segment by segment and from the start; a golden path.
-- [ ] Decided by the lead (the owner: "you pick"): 0x3d's 30 rupees are taken (the one cushion; the route crosses
-  the screen anyway); 0x2d to Level 2 by 0x3d, 0x4d, 0x4c; the turn at Level 6's exit stands unless the search
-  finds a sequence without it; 7:0x1b stays a crossing (survival over its four bombs: wall bombs may be cheated).
+- [x] **Recorder plays for the whole route, found by search** (2.0.0.5; round36.md "The recorder chain"): out of
+  Level 5 two facing S; 0x55 N, a one-frame turn W, play; 0x3f N twice; out of Level 6 turn up, then two; out of
+  Level 8 one S. The owner's counts fit no index history of this order.
+- [x] **Engine** (2.0.0.5; "How the warps are played"): the dock warp is a macro the engine plays from the dock
+  step (MOVE S, CLIP N, RECORDER), with a sword strike S from the dock at a monster below and a wait while a shot
+  flies; a wrong landing ends the run `dock-warp-missed`.
+- [x] **Route data, states, audit, tests, documents** (2.0.0.5): 292 steps, steps 90-216 rebuilt on three chains,
+  861 states audited clean, `docs/routes/d3first.md` and `d3first-walks-c.md`.
+- [x] **Baseline** (2.0.0.5; round36.md "The baseline", "The golden race"): every segment 1000 runs (300 where
+  marked), the route from the start, a golden race from power on that won three of three (411 runs).
+- [x] Decided by the lead: 0x3d's 30 rupees taken; 0x2d to Level 2 by 0x3d, 0x4d, 0x4c; the turn at Level 6's
+  exit stands (the search found none without it); 7:0x1b stays a crossing.
+
+What the baseline leaves open, in the order it costs the route (runs lost per 1000 entering the room; nothing has
+been retrained on the corrected order):
+
+- [ ] **The leg from Level 7 to Level 6, 22.4%:** ow-lynel at 0x50 (644: leaves N into 0x40, its `d2first` way,
+  and bounces between 0x40 and 0x50) and 0x60 (320: back E instead of the wrap W). Training on the corrected order
+  (explorer tracks made in round 36).
+- [ ] **Out of Level 6 to Level 8, 32.0%:** ow-lynel at 0x22 (680) walks back into Level 6 instead of turning up
+  and playing (180 then die to 6:0x78's Wizzrobes).
+- [ ] **Dungeon 7 at 9 containers and 2 bombs, 13.1%:** goriya at 7:0x1b (689, against 149 at 11 with the bag),
+  7:0x1a 116, 7:0x19 70; boss-digdogger 7:0x1c 161.
+- [ ] **The leg from Level 5 to Level 7, 78.9%** after the dock change (0x55 still loses 85, 58 of them rafted
+  back to the bounce limit).
+- [ ] **ow-leever at 0x0b's whirlwind out of Level 5** (86: two plays facing S now; 62 runs bounce between 0x0b and
+  0x1b).
+- [ ] **The whirlwinds at 0x0b and 0x22 could be played by the engine as the docks are** (a macro from the step
+  that plays the search's sequence): it would take the network out of ow-leever's 86 and ow-lynel's 680 (not
+  measured: what the networks do before the step stays theirs).
+- [ ] **Cheated wall bombs, 0.76 a run in Dungeon 7** (7:0x1a 0.75), the largest count on a dungeon the reorder
+  changed (`d1`'s 1.00 at 1:0x53 is in a segment it did not change).
 - [ ] **Later, the owner's stated goal:** a win without a cheated bomb. Drops only; the walls' shortfall is counted
   until the bomb economy closes it (old backlog "A win without a cheated bomb").
 

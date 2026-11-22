@@ -54,7 +54,8 @@ some decisions (4,400 against 4,126 on the same seeds): leave `TRIFORCE_SERVE_HA
 
 **Chosen: (c) with (a) as the generic path.** A network the Rust actor knows (`ZeldaPolicy`) plays as before, bit
 for bit (100 chain runs of `d3first` from `3_7cs_0`, seeds 0-99, today's networks: every run's record identical,
-field for field, between main and this branch); any other `torch.nn.Module` with the interface below is served by torch from the Python process that owns
+field for field, between main and this branch; again at 2.0.0.5 on the corrected route, between the route's branch
+before and after main's lab was merged); any other `torch.nn.Module` with the interface below is served by torch from the Python process that owns
 the pool. (b) was not built: it costs a heavy native dependency, every architecture must export (recurrent state
 and attention masks are where exports break), and a single row through TorchScript is still slower than the batch
 of 8–16 that (a) gets from the waiting envs. The Rust copy stays the reference: a winner is ported.
@@ -266,10 +267,12 @@ once per rollout over its family's rows in batches of 4096 (`lab.collect.Teacher
 - **Cheap tier.** Every policy key of today's team (51: 34 families, 17 `family@d3first`), each on 24 room entries
   as the chains bring them: the harvested pre-entry states (`triforce/states/harvested/<family>/`, untracked: copy
   them from main), `d3first_*` ones where a family has them, spread evenly over the family's rooms by a fixed hash
-  order; 5 episodes each on fixed seeds (360000 + i), `temperature:0.5+relax:16`, clips on: 5,735 episodes. A
-  route part plays its family's states (the harvest does not tell the two swords apart). **Coverage missing**
-  (no harvested entries; their seed start states stand in): boss-gohma, ganon, ow-boulder, ow-ghini; and lanmola,
-  patra, wizzrobe and ow-lynel have only older routes' entries.
+  order; 5 episodes each on fixed seeds (360000 + i), `temperature:0.5+relax:16`, clips on: 6,120 episodes. A
+  route part plays its family's states (the harvest does not tell the two swords apart). Since 2.0.0.5 the entries
+  are the corrected route's: those harvested before Dungeon 1's triforce (where both orders are one) are kept, every
+  later one is from chains of the corrected route (100 runs a segment from `post-d1` to `d9`, seeds 370000 on,
+  `--harvest`); the first order's later entries (3 pieces or more: its legs, and Dungeons 5, 2 and 7 at its
+  hearts) are left out. Every key now has harvested entries (no seed start states stand in).
 - Per key and in total: success, hearts lost per episode, hits taken per room visit, decisions per episode, bombs
   used per episode. Every episode is kept (state, seed), so `compare` pairs two networks episode by episode and gives
   each difference with its standard error.
@@ -280,8 +283,15 @@ once per rollout over its family's rows in batches of 4096 (`lab.collect.Teacher
   `full` segment is the route from the start. It is what decides; the cheap tier only shortlists.
 
 **The reference** (`triforce/lab/reference.json`: today's team, 2.0.0.3's 51 networks, on `bench.json`; played
-Nov 21 in 19.5 minutes of play on 10 envs): 5,735 episodes, success **91.9%**, hearts lost **0.241** an episode,
-hits taken **0.697** a room visit, **36.2** decisions and **0.524** bombs used an episode; per key in the file.
+Nov 22 on 10 envs on the corrected `d3first`'s entries): 6,120 episodes, success **92.9%**, hearts lost **0.249** an
+episode, hits taken **0.677** a room visit, **33.2** decisions and **0.360** bombs used an episode; per key in the
+file. It replaced the first reference (Nov 21, on the first order's entries: 5,735 episodes, success 91.9%,
+hearts lost 0.241, hits 0.697 a visit, 36.2 decisions, 0.524 bombs; four keys on seed start states). What moved
+most, per key on its new rooms (120 episodes): ow-lynel 97.5% → 64.2% (now the corrected route's 0x50, 0x60, 0x22,
+0x32 and 0x07, among them the legs the baseline loses), boss-gleeok@d3first 67.5% → 44.2% and boss-gleeok 12.5% → 56.7% (8:0x3c
+joins 4:0x13), boss-manhandla 65.8% → 81.7% (8:0x6e joins 3:0x4d), like-like 80.0% → 92.5%, ow-zora@d3first
+99.2% → 93.3% (the docks' screens 0x55 and 0x3f). The two references are not paired (other entries): compare a
+network with the reference of the manifest it was played on.
 Every experiment is compared with it: `python -m triforce.lab.bench compare triforce/lab/reference.json NEW.json`.
 
 ## The first experiment through the pipeline (smoke, Nov 21)

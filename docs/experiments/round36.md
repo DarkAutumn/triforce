@@ -974,3 +974,26 @@ The shortest (152,051 frames, about 42 minutes of game; `r32team_golden.py`): tr
 5, 7, 6, 8; the wood sword at 0x77, the magic sword at 0x21 (step 195) before Level 6; the game ends in 9:0x32
 (mode `$13`). Cheats: 29 replay edits, the bomb writes (`$658`) the wall grant makes, room by room in the script's
 output (Levels 7, 6, 8 and 9 in the shortest path).
+
+### The landing (2.0.0.5)
+
+The route landed on `main` as 2.0.0.5 (decisions 2026-11-22), after `main`'s lab (2.0.0.4) was merged into the
+branch. On the merged tree: `d2first`'s 354 steps identical to `main`'s and its 100-run chain (seeds 0-99, from the
+start) identical run for run to `main`'s; today's networks through the Rust actor on `d3first` from `3_7cs_0` (100
+runs, `step:24`) identical run for run to the branch before the merge, so the lab's identity check (`docs/lab.md`)
+still holds on the new route. The corpus's `v2-golden-ending.tfreplay` is the shortest golden path above (152,051
+frames); `v2-single-ending.tfreplay` stays, a single run on 2.0.0.3's order.
+
+**The lab's yardstick on the new states** (`docs/lab.md` "The yardstick"): `bench.json` was made again for the route
+as it now is. Entries harvested before Dungeon 1's triforce (both orders agree there) are kept; the first order's
+later ones (3 pieces or more) are left out; the corrected route's were harvested from 100-run chains of every
+segment from `post-d1` to `d9` (seeds 370000 on: 20,957 entries). 51 keys, 1,224 states, 6,120 episodes, every key
+on harvested entries (four were on seed start states). Today's 51 networks on it (`triforce/lab/reference.json`,
+which replaced the first): success **92.9%** (91.9% on the first), hearts lost **0.249** an episode (0.241), hits
+**0.677** a room visit (0.697), 33.2 decisions (36.2), 0.360 bombs (0.524). The largest moves are the rooms the
+reorder changed: ow-lynel 97.5% → 64.2% (0x50, 0x60, 0x22), ow-zora@d3first 99.2% → 93.3% (the docks' screens),
+and Dungeon 8's rooms joining its bosses' entries (boss-gleeok@d3first 67.5% → 44.2%).
+
+**Suites on the merged tree:** pytest 888 passed, 9 skipped, 1 failed and fixed (three `specialists/d3first` start
+globs no state of the new route matches: dropped, the test passes); cargo 1,055 passed, 1 ignored; zelda-asm 5;
+`asm.py check` ok; the corpus's 7 replays verify.
