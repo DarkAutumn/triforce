@@ -29,8 +29,17 @@ goriya@d3first 0.31, darknut@d3first 0.30; best: lanmola 0.008, ow-start and dod
 trap-room 0.05. The hard ones to copy are the fights with long, timed exchanges and the families whose two runs
 disagree on the same rooms (darknut, goriya, zol and manhandla appear with both keys).
 
-**Not finished in this session** (the successor's status names the commands): the bench of `s1x` (queued:
-`bench run --network models/r36merge/s1x/ckpt.pt --manifest target/merge/student-manifest.json`, a manifest of
+**The 1x student on the bench** (`r36_merge_report.py`, 51 slots, each teacher on the rooms it plays, paired on the
+bench's seeds; `docs/experiments/data/r36-merge/student-s1x-slots.json`): mean success over slots 0.945 against
+0.962, **98.1% kept (-1.8 ± 0.3 points)**; pooled over 5,675 episodes -1.6 ± 0.3 points, hearts lost +0.09 ± 0.01
+an episode; hits a visit 0.69 against 0.60. That beats the default-runs-only baseline below (-3.1). The worst ten
+slots keep 88%: boss-gleeok@d3first -31.7 ± 5.8, darknut (Dungeon 8) -23.3 ± 5.5, wallmaster@d3first -12.5 ± 3.7,
+darknut@d3first -10.0 ± 3.4, like-like@d3first -8.3 ± 3.3, boss-manhandla@d3first -6.7 ± 5.1, then -3 points
+(aquamentus, digdogger, ganon, vire). Every one of the large losses comes with more hearts lost (+0.3 to +2.2 an
+episode): they are fights (deaths), not objectives; the overworld and utility rooms are copied within 3 points.
+
+**Not finished in this session** (the successor's status names the commands): the larger sizes' benches
+(`bench run --network models/r36merge/ID/ckpt.pt --manifest target/merge/student-manifest.json`, a manifest of
 the bench's 34 family entries plus the 17 default runs' rooms, `r36_merge_pairs.py --combined`; judged slot by slot
 by `r36_merge_report.py` against the 51 teachers); the sizes (wide 512x3 2.4x, 768x3 4.6x, 1024x3 7.5x, 768x3 with
 two entity layers, 256x2 with and without the room embedding) and the learning curve (1/4, 1/2 of the data at 1x)
