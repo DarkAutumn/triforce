@@ -363,13 +363,18 @@ From the first walks (`d3first-walks-a.md`, `-b.md`), still standing:
 
 ## For the agents that build its states
 
-Steps 0-89 and 217-291 are the first order's states (round 32, below; the to-level-8 visits of 0x4c from N and 0x4d
-from W renamed `_v2`, the corrected order visiting both first on the way to Level 2). Steps 90-216 were rebuilt in
-round 36 by the explorer from `d3first_0_2dc_<chain>` with the fights it cannot clear skipped (`entry_states build
---skip-fights`; their states are marked `fight_skipped`), and Dungeon 5's and Dungeon 7's entrances (`5_76s`,
-`7_79s`) were then cut from the promoted models' chain arrivals by their bombs (`scripts/experiments/r32c_models.py
+Numbers of 2.0.0.7 (round 38: 290 steps). Steps 0-88 and 215-289 are the first order's states (round 32, below; the
+to-level-8 visits of 0x4c from N and 0x4d from W renamed `_v2`, the corrected order visiting both first on the way to
+Level 2; 0x2d's step 88 now leaves S). Steps 89-153 were rebuilt in round 38 by the explorer from
+`d3first_0_2dw_<chain>`, steps 154-214 are round 36's (rebuilt then from `d3first_0_2dc_<chain>`), both with the
+fights the explorer cannot clear skipped (`entry_states build --skip-fights`; their states are marked
+`fight_skipped`), and Dungeon 5's entrance, Dungeon 5's exit and Dungeon 7's entrance (`5_76s`, `0_0bc`, `7_79s`)
+were then cut from the promoted models' chain arrivals by their bombs (`scripts/experiments/r32c_models.py
 --bombs-quantiles 0.5,0.1,0.9`: chain 0 the median, 1 the low tenth, 2 the high tenth), so the segments start with
-what runs bring. The fights the walks crossed only by a rule (a fight to the end with the wood sword, a bomb fight):
+what runs bring. The states after 0x44's cave not rebuilt in round 38 (steps 154-157 and 159-289) hold about 30
+rupees more than runs bring there (0x2d's 30: 33 against the 7 of `7_79s_0`); rupees matter there only in the arrow
+rooms, which top the purse up anyway. The fights the walks crossed only by a rule (a fight to the end with the wood
+sword, a bomb fight; the first order's and round 36's step numbers):
 
 | Stretch | Room (step) | The rule that crossed it | Its state after |
 |---|---|---|---|
@@ -393,6 +398,14 @@ Also skipped in round 36: 2:0x1e (104), Dodongo 2:0x0e (105), 5:0x66 from W (137
 Gohma 6:0x1c (213). The explorer needed 8 attempts at 5:0x65 from E (chains 0, 2) and 2:0x3e (chain 1).
 
 ## The states as built
+
+**Round 38** (2.0.0.7, 0x2d's cave dropped): steps 89-153 (`0_3dn` to `0_44c`) rebuilt by `python -m
+triforce.entry_states build --route d3first --start-step 88 --source 'd3first_0_2dw_{chain}' --last-step 153
+--chains 0,1,2 --skip-fights 2:0x1e:S,2:0x0e:S,5:0x05:E,5:0x66:W,5:0x24:E` (chain 1 resumed at 5:0x66 S→W with
+`--attempts 8`); then `r32c_models.py 2_7ds --goal-step 122` (`5_76s`: 295 of 300 arrived, 225 with 8 bombs),
+`5_76s --goal-step 145` (`0_0bc`: 83 arrived) and `5_76s --goal-step 158` (`7_79s`: 65 arrived), each `--bombs-quantiles
+0.5,0.1,0.9 --chains 0 --runs 300 --seed0 10000 --parallel 10`; `0_2dcave` and `0_2dc` removed; 855 states, the
+audit clean.
 
 **Round 36** (the corrected order): steps 90-216 (`0_3dn` to `0_3cr`, 126 a chain) rebuilt by `python -m
 triforce.entry_states build --route d3first --start-step 90 --source 'd3first_0_2dc_{chain}' --last-step 216
