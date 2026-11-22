@@ -8,6 +8,7 @@ import torch
 from triforce import _native, nets
 from triforce.evaluate import evaluate_specialist
 from triforce.nets.base import Heads, LabNet, factored_evaluate, factored_joint
+from triforce.nets import serve as serve_module
 from triforce.nets.serve import Server
 from triforce.registry import load_model, save_checkpoint
 
@@ -203,6 +204,72 @@ def test_a_served_batch_comes_back_in_one_copy_and_half_precision_only_on_the_gp
     tolerance = 5e-2 if server.half else 1e-5
     assert np.allclose(logits, heads.flat().detach().numpy(), atol=tolerance)
     assert np.allclose(values, heads.value.detach().numpy(), atol=tolerance)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA graphs need the GPU")
+def test_cuda_graphs_answer_as_the_eager_forward_and_fall_back_when_they_disagree(observations, monkeypatch, capsys):
+    """A graphed answer is the eager forward's for every batch size (rows padded to the bucket), a replaced network
+    drops its graphs, and a graph that disagrees with the eager forward turns the network eager for good."""
+    torch.manual_seed(5)
+    networks = [nets.create('wide', native_spec(), hidden_dim=64, depth=2) for _ in range(2)]
+    answered = []
+
+    class Queue:
+        logits_size = 11 * 13
+
+        @staticmethod
+        def answer(slots, logits, values):
+            answered.append((logits.copy(), values.copy()))
+
+    def ask(server, n):
+        obs = {k: v[:n] for k, v in observations.items()}
+        server.answer({'obs': obs, 'slot': np.arange(n), 'model': np.zeros(n, dtype=np.int64), 'job': np.arange(n),
+                       'step': np.zeros(n, dtype=np.int64), 'bootstrap': np.zeros(n, dtype=bool)})
+        return answered[-1]
+
+    graphed, eager = Server(device='cuda', graphs=True), Server(device='cuda', graphs=False)
+    for server in (graphed, eager):
+        server.queue = Queue()
+        server.models[0] = networks[0].to('cuda').eval()
+    total = observations['action_mask'].shape[0]
+    for n in sorted({1, 3, min(5, total), total}):
+        for _ in range(5):          # past the checked replays
+            (a, va), (b, vb) = ask(graphed, n), ask(eager, n)
+            assert np.allclose(a, b, atol=1e-5) and np.allclose(va, vb, atol=1e-5)
+    assert graphed._graphs and not graphed._eager
+    # A replaced network: ``policy`` drops the key's graphs; this one's replays disagree with its eager forward.
+    graphed.models[0] = eager.models[0] = networks[1].to('cuda').eval()
+    graphed._graphs.clear()
+    monkeypatch.setattr(serve_module._Graph, 'run', lambda self, obs: self.output + 1.0)
+    (a, _), (b, _) = ask(graphed, 3), ask(eager, 3)
+    assert np.allclose(a, b, atol=1e-5) and 0 in graphed._eager       # answered eagerly, and eager from now on
+    assert 'runs without CUDA graphs' in capsys.readouterr().out
+
+
+def test_networks_served_from_temporaries_never_share_an_index():
+    """``load_model(path)[0].to_native()`` in a loop (``runner.Policies``): each temporary dies at once, and a later
+    network may reuse its id; each must keep its own index and weights (Nov 22: chains with several served
+    networks played one family's rooms with another's network in about two processes of three)."""
+    import gc
+    server = Server(device='cpu')
+    policies, sums = [], []
+    for seed in range(6):
+        torch.manual_seed(seed)
+        network = nets.create('wide', native_spec(), hidden_dim=32, depth=1)
+        sums.append(sum(float(p.detach().abs().sum()) for p in network.parameters()))
+        policies.append(server.serve_copy(network))
+        del network
+        gc.collect()
+    try:
+        assert len(server.models) == 6 and not server._keys      # every temporary gone, its key forgotten
+        served = [sum(float(p.detach().abs().sum()) for p in server.models[i].parameters()) for i in range(6)]
+        assert served == sums
+        learner = nets.create('wide', native_spec(), hidden_dim=32, depth=1)
+        server.serve_copy(learner)
+        server.serve_copy(learner)                                  # a live network's rollouts reuse one index
+        assert len(server.models) == 7 and server._keys == {id(learner): 6}
+    finally:
+        server.close()
 
 
 def test_architectures_side_by_side_save_load_and_play(states_dir, tmp_path):
