@@ -76,6 +76,75 @@ Cheats in the winning replays (the route's rules): a wall bomb at 3:0x5b, 1:0x53
 (1-5 a path), the 0x0c cave's rupees (8-16). Outside segment 3 the one network needs the tries of today's team,
 give or take a factor of two (Dungeon 8 and Level 9 about 5-10x); segment 3 costs 10-100x: that segment is where
 copying loses (the chains below say which rooms).
+**Every number in this round is on 2.0.0.3's `d3first` (the old order's states)**, not the corrected route of
+2.0.0.5.
+
+**Chains, segment by segment** (1,000 runs each, seeds 0-999, `--act model`, clips on, the landings' stops; D2
+to step 155, D6 to 227, the overworld segments to the next dungeon's entrance; `target/merge/one-chains.sh`;
+today's team re-run on the same seeds where the record was on other route data; table by
+`scripts/experiments/r36_one_table.py`, `docs/experiments/data/r36-merge/one1x-chains.json`):
+
+| segment | 51 networks | 1 network | paired | rooms that differ most (runs lost per 1,000 entering: team -> one) |
+|---|---:|---:|---:|---|
+| D3 | 23.2% | 3.7% | -19.5 ± 1.5 | Darknut 3:0x5b 117 -> 580, 0x59 68 -> 287, 0x69 126 -> 271; Manhandla 527 -> 673 |
+| post-D3 | 100.0% | 99.9% | -0.1 ± 0.1 | |
+| D4 | 18.5% | 2.8% | -15.7 ± 1.3 | Gleeok 4:0x13 736 -> 928; like-like 0x32 58 -> 210; vire 0x12 68 -> 204 |
+| post-D4 | 100.0% | 99.8% | -0.2 ± 0.1 | |
+| D1 | 92.7% | 80.4% | -12.3 ± 1.5 | Aquamentus 1:0x35 34 -> 76; goriya 0x44 35 -> 65 |
+| post-D1 | 99.8% | 97.8% | -2.0 ± 0.5 | tektite 0:0x0c 2 -> 8 |
+| D5 | 7.0% | 0.3% | -6.7 ± 0.8 | darknut 5:0x05 811 -> 992 |
+| post-D5 | 98.7% | 81.2% | -17.5 ± 1.3 | **wrong exit**: 280 runs end in 0:0x1b, a room the team never enters (314 lost / 1,000 entering); moblin 0x62 12 -> 85 |
+| D2 | 100.0% | 99.9% | -0.1 ± 0.1 | |
+| post-D2 | 99.9% | 97.4% | -2.5 ± 0.5 | **wrong exit**: 57 runs into 0:0x4c (never entered by the team) |
+| D7 | 42.3% | 28.9% | -13.4 ± 2.1 | Digdogger 7:0x1c 154 -> 244; goriya 0x1b 148 -> 205 |
+| post-D7 | 100.0% | 99.4% | -0.6 ± 0.2 | |
+| D6 | 35.2% | 19.7% | -15.5 ± 2.0 | wizzrobe 6:0x3a 406 -> 596 |
+| post-D6 | 100.0% | 99.8% | -0.2 ± 0.1 | |
+| D8 | 37.8% | 2.9% | -34.9 ± 1.6 | Blue Darknuts 8:0x3e 280 -> 782, 0x5e 3 -> 127 |
+| D9 | 48.9% | 24.3% | -24.6 ± 2.1 | wizzrobe 9:0x10 139 -> 290 |
+| from the start | 0.1% | 0.0% | -0.1 ± 0.1 | (the team wins 1 of 1,000) |
+
+**Verdict.** One network beats the game by a golden path, but it is a much weaker player than the team: the
+bench's 98.1% hides losses that compound over a dungeon's ten fights (D8 -35, D9 -25, D3 -20 points). The losses
+are fights (deaths in the rooms that already kill: Darknuts, Wizzrobes, Gleeok, Manhandla, Digdogger) except two
+overworld segments, where they are objectives (wrong exits into rooms the team never enters: 0x1b after D5, 0x4c
+after D2). The bench shortlists; only chains decide.
+
+## The size curve
+
+Same data (1.49M rows), same recipe (20 epochs; the wide students converted to `ZeldaPolicy` of the same shape by
+`scripts/experiments/r36_merge_convert.py`, logits identical, so the Rust actor plays them). Bench = the 51 slots,
+paired (`r36_merge_report.py`; reports in `docs/experiments/data/r36-merge/student-*-report.json`).
+
+| student | parameters | held-out KL | joint top-1 | bench kept (diff) | worst ten kept |
+|---|---:|---:|---:|---:|---:|
+| 256x2 | 733k | 0.171 | 0.829 | not benched | |
+| 256x2, no room embedding | 684k | 0.172 | 0.828 | not benched | |
+| **1x (today's)** | 866k | 0.160 | 0.836 | 98.1% (-1.8 ± 0.3) | 88.4% |
+| 512x3 | 2.09M | 0.130 | 0.857 | queued | |
+| 768x3 | 3.97M | 0.119 | 0.866 | queued | |
+| 768x3, two entity layers | 4.01M | 0.116 | 0.869 | 99.0% (-1.0 ± 0.3) | 92.9% |
+| 1024x3 | 6.51M | 0.113 | 0.873 | 98.6% (-1.4 ± 0.3) | 90.9% |
+| 1x on 1/4 of the data | 866k | 0.230 | 0.808 | queued | |
+| 1x on 1/2 of the data | 866k | 0.179 | 0.827 | queued | |
+
+Data matters more than size: halving the data costs as much KL (+0.019) as shrinking the towers, and doubling
+it (1/2 -> all) gains more than 7.5x the parameters. The room embedding does nothing to held-out agreement
+(0.171 / 0.172); where the two differ on the route is not measured.
+
+## The fights
+
+**A head a boss** (`triforce/nets/roomheads.py`: the shared body of the 1x student, one action head a boss
+family, the head picked by a fixed room-to-head table inside the network, `scripts/experiments/r36_merge_rooms.py`,
+10 heads; 1.61M parameters; same data and recipe): held-out KL 0.146; on the bosses' bench (paired, 1,185
+episodes; `boss-heads-bench.json`) +0.8 ± 0.9 pooled, Gleeok with the wood sword 0.358 -> 0.425 (+6.7 ± 6.0;
+its teacher about 0.68), Manhandla 0.642 -> 0.692 (+5.0 ± 4.7). The heads do not close Gleeok.
+
+**The correction copying needs (DAgger).** Round 1: the 1x student acts, the teachers label (51 keys, 20,480
+decisions a source, seeds 36,200,000 on), trained from the student on old + new rows (5 epochs, lr 3e-4):
+`r36merge/s1x-d1`, held-out KL 0.156 (from 0.160). Its chains (D3, D4, D5, D8, D1, D7) and round 2 were in the
+queue when this session ended (the status file has the commands).
+
 
 ## The wood-sword pairs
 
