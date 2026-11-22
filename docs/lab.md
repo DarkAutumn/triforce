@@ -34,7 +34,8 @@ a 10-minute chain batch becomes 35 minutes, a 1,000-run segment chain a few hour
 training, a reason to port a winner before its full tier. Serve on the GPU; the CPU path is a fallback for tests.
 
 **Chosen: (c) with (a) as the generic path.** A network the Rust actor knows (`ZeldaPolicy`) plays as before, bit
-for bit; any other `torch.nn.Module` with the interface below is served by torch from the Python process that owns
+for bit (100 chain runs of `d3first` from `3_7cs_0`, seeds 0-99, today's networks: every run's record identical,
+field for field, between main and this branch); any other `torch.nn.Module` with the interface below is served by torch from the Python process that owns
 the pool. (b) was not built: it costs a heavy native dependency, every architecture must export (recurrent state
 and attention masks are where exports break), and a single row through TorchScript is still slower than the batch
 of 8–16 that (a) gets from the waiting envs. The Rust copy stays the reference: a winner is ported.
