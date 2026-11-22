@@ -105,11 +105,11 @@
       ]
     },
     {
-      "key": "boss-dodongo@d3first",
+      "key": "boss-dodongo",
       "family": "boss-dodongo",
       "source": "harvested-rooms",
       "arrived": true,
-      "name": "boss-dodongo@d3first 2_0es",
+      "name": "boss-dodongo 2_0es",
       "team_visits": 100,
       "team_hearts_lost": 0.14,
       "team_deaths": 1,
@@ -537,11 +537,11 @@
       ]
     },
     {
-      "key": "equipment-room@d3first",
+      "key": "equipment-room",
       "family": "equipment-room",
       "source": "harvested-rooms",
       "arrived": true,
-      "name": "equipment-room@d3first 1_7fcave",
+      "name": "equipment-room 1_7fcave",
       "team_visits": 100,
       "team_hearts_lost": 0.31,
       "team_deaths": 0,
@@ -561,11 +561,11 @@
       ]
     },
     {
-      "key": "equipment-room@d3first",
+      "key": "equipment-room",
       "family": "equipment-room",
       "source": "harvested-rooms",
       "arrived": true,
-      "name": "equipment-room@d3first 3_0fcave",
+      "name": "equipment-room 3_0fcave",
       "team_visits": 78,
       "team_hearts_lost": 0.231,
       "team_deaths": 7,
@@ -585,11 +585,11 @@
       ]
     },
     {
-      "key": "equipment-room@d3first",
+      "key": "equipment-room",
       "family": "equipment-room",
       "source": "harvested-rooms",
       "arrived": true,
-      "name": "equipment-room@d3first 4_60cave",
+      "name": "equipment-room 4_60cave",
       "team_visits": 93,
       "team_hearts_lost": 0.247,
       "team_deaths": 7,
@@ -609,11 +609,11 @@
       ]
     },
     {
-      "key": "equipment-room@d3first",
+      "key": "equipment-room",
       "family": "equipment-room",
       "source": "harvested-rooms",
       "arrived": true,
-      "name": "equipment-room@d3first 5_04cave",
+      "name": "equipment-room 5_04cave",
       "team_visits": 52,
       "team_hearts_lost": 0.212,
       "team_deaths": 1,
@@ -657,11 +657,11 @@
       ]
     },
     {
-      "key": "equipment-room@d3first",
+      "key": "equipment-room",
       "family": "equipment-room",
       "source": "harvested-rooms",
       "arrived": true,
-      "name": "equipment-room@d3first 7_4acave",
+      "name": "equipment-room 7_4acave",
       "team_visits": 88,
       "team_hearts_lost": 0.176,
       "team_deaths": 0,
@@ -1281,11 +1281,11 @@
       ]
     },
     {
-      "key": "moldorm@d3first",
+      "key": "moldorm",
       "family": "moldorm",
       "source": "harvested-rooms",
       "arrived": true,
-      "name": "moldorm@d3first 2_3es",
+      "name": "moldorm 2_3es",
       "team_visits": 99,
       "team_hearts_lost": 0.338,
       "team_deaths": 0,
@@ -1425,11 +1425,11 @@
       ]
     },
     {
-      "key": "pols-voice@d3first",
+      "key": "pols-voice",
       "family": "pols-voice",
       "source": "harvested-rooms",
       "arrived": true,
-      "name": "pols-voice@d3first 5_25e",
+      "name": "pols-voice 5_25e",
       "team_visits": 31,
       "team_hearts_lost": 0.097,
       "team_deaths": 1,
@@ -1641,11 +1641,11 @@
       ]
     },
     {
-      "key": "trap-room@d3first",
+      "key": "trap-room",
       "family": "trap-room",
       "source": "harvested-rooms",
       "arrived": true,
-      "name": "trap-room@d3first 3_4cs",
+      "name": "trap-room 3_4cs",
       "team_visits": 48,
       "team_hearts_lost": 0.125,
       "team_deaths": 1,
@@ -1665,11 +1665,11 @@
       ]
     },
     {
-      "key": "trap-room@d3first",
+      "key": "trap-room",
       "family": "trap-room",
       "source": "harvested-rooms",
       "arrived": true,
-      "name": "trap-room@d3first 3_5aw",
+      "name": "trap-room 3_5aw",
       "team_visits": 71,
       "team_hearts_lost": 0.141,
       "team_deaths": 4,
@@ -1689,11 +1689,11 @@
       ]
     },
     {
-      "key": "trap-room@d3first",
+      "key": "trap-room",
       "family": "trap-room",
       "source": "harvested-rooms",
       "arrived": true,
-      "name": "trap-room@d3first 4_02w",
+      "name": "trap-room 4_02w",
       "team_visits": 76,
       "team_hearts_lost": 0.007,
       "team_deaths": 1,

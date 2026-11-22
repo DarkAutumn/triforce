@@ -293,6 +293,7 @@ def make_rooms_manifest(harvest: Path, chains: list[str], states_per_room: int, 
     for step in _native.route_steps(route):
         steps.setdefault((step['level'], step['room'], bool(step['in_cave']), step['entry'], step['visit']),
                          step['index'])
+    team = set(team_keys())
     entries = []
     for folder in sorted(p for p in harvest.iterdir() if p.is_dir()):
         family = folder.name
@@ -316,6 +317,7 @@ def make_rooms_manifest(harvest: Path, chains: list[str], states_per_room: int, 
                 continue
             step = steps.get(tuple(parsed))
             key = _native.step_policy(route, step, family) if step is not None else family
+            key = key if key in team else family        # a family without the route's own run plays its default
             chosen = sorted(paths, key=lambda p: _order(p.stem))[:states_per_room]
             target = states_dir / ROOMS / family
             target.mkdir(parents=True, exist_ok=True)
