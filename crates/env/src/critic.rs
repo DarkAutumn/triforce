@@ -162,6 +162,9 @@ pub struct GameplayCritic {
     pub boss_ate_bomb_penalty: f64,
     /// `reward.left_drop_penalty`: `penalty-left-drop` per wanted drop left on the floor (positive magnitude; 0 off).
     pub left_drop_penalty: f64,
+    /// `reward.sword_blocked_penalty`: `penalty-sword-blocked` per step a Bubble's touch landed in (positive
+    /// magnitude; 0 off).
+    pub sword_blocked_penalty: f64,
     /// The `retreat` ending is neutral (the default; `endings: {retreat: ...}` can make it a failure): leaving through
     /// a route step's `retreat` exit then costs no `penalty-wrong-location` either.
     pub neutral_retreat: bool,
@@ -183,6 +186,7 @@ impl GameplayCritic {
             fixed_pickup_reward: false,
             boss_ate_bomb_penalty: REWARD_MEDIUM,
             left_drop_penalty: 0.0,
+            sword_blocked_penalty: crate::config::SWORD_BLOCKED_PENALTY,
             neutral_retreat: true,
             correct_locations: HashSet::new(),
             correct_loops: HashSet::new(),
@@ -209,6 +213,7 @@ impl GameplayCritic {
         critic.fixed_pickup_reward = config.reward.fixed_pickup_reward;
         critic.boss_ate_bomb_penalty = config.reward.boss_ate_bomb_penalty;
         critic.left_drop_penalty = config.reward.left_drop_penalty;
+        critic.sword_blocked_penalty = config.reward.sword_blocked_penalty;
         critic.neutral_retreat = config.endings.get(RETREAT).is_none_or(|outcome| outcome == NEUTRAL);
         Ok(critic)
     }
@@ -265,6 +270,12 @@ impl GameplayCritic {
             ));
         }
         self.critique_health_change(c, rewards);
+        // Round 38: a Bubble's touch costs no health but blocks the sword for 151-160 frames (asm:Bubble_Update) and
+        // shoves Link; one payment a touch (the block timer's rise: a second touch while blocked restarts it, and
+        // pays again), flat, whatever the hearts.
+        if self.sword_blocked_penalty > 0.0 && change.bubble_touched() {
+            rewards.add(Outcome::penalty("penalty-sword-blocked", -self.sword_blocked_penalty));
+        }
         self.critique_wallmaster(c, rewards);
         if change.health_lost > 0.0 {
             rewards.scale_rewards(0.5, &["reward-gained-"]);

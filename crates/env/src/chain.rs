@@ -401,6 +401,10 @@ pub struct RoomRecord {
     /// (`Change::observed`; round 22).
     pub hits: u32,
     pub hits_dealt: u32,
+    /// Steps a Bubble's touch landed in (`Change::bubble_touched`: the sword blocked, no health lost; round 38), and
+    /// the frames of the steps begun with the sword blocked (as an evaluation's visit).
+    pub bubble_touches: u32,
+    pub sword_blocked_frames: u64,
     /// The route step Link played on entering the room (`GameCompletion::step`; None off the route; round 22).
     pub step: Option<usize>,
     /// The run-time clips switch when the visit began (round 22; [`ChainEnv::set_clips_allowed`]), and every flip
@@ -468,6 +472,8 @@ impl RoomRecord {
             decisions: DecisionStats::default(),
             hits: 0,
             hits_dealt: 0,
+            bubble_touches: 0,
+            sword_blocked_frames: 0,
             step: None,
             clips_allowed,
             clips_flips: Vec::new(),
@@ -507,6 +513,8 @@ impl RoomRecord {
             "drops": self.drops.iter().map(drop_json).collect::<Vec<_>>(),
         });
         let o = m.as_object_mut().expect("object");
+        o.insert("bubble_touches".into(), json!(self.bubble_touches));
+        o.insert("sword_blocked_frames".into(), json!(self.sword_blocked_frames));
         o.insert("route_bombs_in".into(), json!(self.route_bombs_in));
         if let Some(policy) = &self.policy {
             o.insert("policy".into(), json!(policy));
@@ -1153,6 +1161,10 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         record.clips.update(&change);
         record.hits += u32::from(change.health_lost > 0.0);
         record.hits_dealt += change.observed.hits() as u32;
+        record.bubble_touches += u32::from(change.bubble_touched());
+        if change.previous.is_sword_blocked() {
+            record.sword_blocked_frames += (change.frames + change.menu_frames) as u64;
+        }
         record.cheated += cheats.cheated;
         let boss = BossTransitions::of(&change);
         record.boss_stuns += boss.stuns;

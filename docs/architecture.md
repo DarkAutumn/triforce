@@ -990,6 +990,16 @@ below max health (`item_targets` includes them): for the overworld families, who
 would chase.
 `reward.boss_ate_bomb_penalty` (default 0.5, ≥ 0; 0 drops the term) is `penalty-boss-ate-bomb` per step in which a
 Dodongo swallowed a bomb (round 12).
+`reward.sword_blocked_penalty` (round 38; default `REWARD_TINY` = 0.05 in every family, ≥ 0; 0 drops the term) is
+`penalty-sword-blocked` per step in which a Bubble's touch landed (`zelda::Change::bubble_touched`: the flashing
+Bubble's `SwordBlockedLongTimer` `$4C` rose, 0 → `$10` or reloaded to `$10` while it ran down, or the red one's
+`IsSwordBlocked` `$52E` was set). A touch costs no health, so `penalty-lost-health` never saw it; it blocks the sword
+151-160 frames, shoves Link and makes him invincible `$18` frames (asm:Bubble_Update, asm:Link_HarmByObjType), so
+two touches are at least 24 frames apart: one payment a touch, a second touch while blocked pays again (it restarts
+the block), two inside one step pay once. Flat, not priced by the heart value: the touch changes no hearts, the
+hits it leads to are priced when they land. Counted beside the hits: the visits' and chain records'
+`bubble_touches` and `sword_blocked_frames` (frames of the steps begun with the sword blocked), the evaluation's
+`bubble_touches_per_visit`, the pool's `Outcome.blocked` (the lab's `blocked`, `tried_blocked`).
 `clips: true|false` (round 21; default false; "Grid-point skip" above; the removed designs' `{action: ...,
 shaping: ...}` block is refused): the CLIP kind where a skip is available, the observation's `clip_usable_*` and the
 skips as path-search jumps (PBRS pays the whole wavefront difference of a skip step, as for any position change,

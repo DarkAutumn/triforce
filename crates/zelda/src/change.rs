@@ -265,6 +265,18 @@ impl Change {
             })
     }
 
+    /// A Bubble's touch landed during the step (round 38): the flashing Bubble's `SwordBlockedLongTimer` (`$4C`) went
+    /// up (asm:Bubble_Update loads `$10` on a touch: 0 → `$10`, or back to `$10` while it ran down, a second touch
+    /// restarting the 151-160 frames without the sword), or the red one's `IsSwordBlocked` (`$52E`, second quest
+    /// only) was set. Nothing else writes either byte up, so a rise is a touch. The touch shoves Link and makes him
+    /// invincible for `$18` frames (asm:Link_HarmByObjType), during which no monster touches him: two touches are at
+    /// least 24 frames apart, and two inside one step count once.
+    pub fn bubble_touched(&self) -> bool {
+        let byte = |state: &GameView, var: Var| state.peek(var.addr());
+        let rose = |var: Var| byte(&self.state, var) > byte(&self.previous, var);
+        rose(Var::SwordBlockedLongTimer) || rose(Var::SwordBlocked)
+    }
+
     /// The step made the 10th damage-free kill (`$50` 9 → 10, or 9 → 0 when the forced drop already fell within
     /// the step and the kill count went up; a hit to Link that clears both is no kill).
     pub fn tenth_kill(&self) -> bool {
