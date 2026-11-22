@@ -129,12 +129,26 @@ been retrained on the corrected order):
   in routes.yaml; 3:0x5b is the first, more will come from the owner's watching.
 - [ ] **The floor for fighting a room for its bombs is the bag** (the owner, Nov 22, a blanket rule): the route
   fights a room for its bomb treasure while Link holds 7 or fewer (it was 5 at 8:0x3f, 2 at 7:0x1b on `d3first`,
-  the last pass of 3:0x5b by its own rule). 7:0x1b's six Blue Goriyas are then a wood-sword fight again whenever
-  the bag is not full (round 34 had made it a crossing because the fight killed half the runs): its cost is
-  measured with the rule and reported, not softened.
+  the last pass of 3:0x5b by its own rule). **7:0x1b's six Blue Goriyas** are then a wood-sword fight again whenever
+  the bag is not full (round 34 had made it a crossing because the fight killed half the runs). The owner: "that's
+  tough. I want you to measure the impact, and you have the ability to skip that fight for bombs if it kills too
+  many runs [...] Speedrunners skip that fight, but speedrunners are better at 'forcing' bombs than our model [...]
+  Feel free to decide this room either way, but I want you to try to improve the model's combat before calling it
+  'skip'." So: measured both ways with the rules; combat first (the contact inputs with Goriyas and their
+  boomerangs, the threat lane below, the hit head); the lead then decides, tells the owner with the numbers, and a
+  skip is recorded as an option to revisit if too many bombs are cheated later.
 - **Over all three: the 10th kill's bomb is always allowed and encouraged** (the owner, Nov 22: "we must ALWAYS
   allow bombs and deeply encourage them if we are on the 10th kill force drop, no matter the room or enemies, that
   remains true"): the forced drop of four is the route's bomb supply.
+- **`d2first` gets the same bomb rules later** (the owner: "d2-first is also in-scope for bomb rules for when we go
+  back and work on that single-model. Don't waste time on d2 first until we've completed this work on d3-first,
+  entirely."): the rules are route-level switches, off for `d2first` until then.
+- **An input to try, the owner's idea (Nov 22): a shooter's threat lane.** "maybe a projectile-using enemy with no
+  current projectile always has a 'danger zone' in front of them unless their projectile is in air... at which
+  point we use that projectile." Per shooter, the lane ahead along its facing for its shot's range, live only while
+  it can shoot, and for Link's five motions the frames until he enters it; off while its shot flies (the shot's
+  own contact columns carry the danger then). Schema 6's `in_line` is the bare form; to be ranked on the hit bench
+  and carried into an arm if it helps.
 - [ ] **Later, the owner's stated goal:** a win without a cheated bomb. Drops only; the walls' shortfall is counted
   until the bomb economy closes it (old backlog "A win without a cheated bomb").
 
