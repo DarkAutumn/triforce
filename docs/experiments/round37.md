@@ -174,9 +174,9 @@ TRIFORCE_MODELS_DIR=<worktree>/models triforce eval-batch r37fix-1k --chains r37
 | `post-d1` | 99.1% | 99.1% | 0.0 | 4.31 / 4.31 | identical |
 | `d2` | 99.8% | 98.4% | −1.4 ± 0.4 | 6.32 / 6.17 | 2:0x0e 2 → 7, 2:0x1e 0 → 5, 2:0x5e 0 → 3 (crossed: 1.16 hearts lost there against 0.52) |
 | `d5` | 31.2% | 31.2% | 0.0 | 4.11 / 4.12 | identical (the Olive Garden is a fight) |
-| `d7` | 13.1% | 12.6% | −0.5 ± 0.4 | 5.18 / 5.25 | 7:0x1b 689 → 698 |
+| `d7` | 13.1% | 12.6% | −0.5 ± 0.4 | 5.18 / 5.25 | 7:0x1b 689 → 701; 7:0x1c 161 → 145 |
 | `d6` | 36.4% | 36.4% | 0.0 ± 0.7 | 6.35 / 6.30 | — |
-| `d8` (300) | 40.0% | 40.0% | 0.0 ± 2.2 | 5.91 / 6.04 | 8:0x3f 265 → 232 |
+| `d8` (300) | 40.0% | 40.0% | 0.0 ± 2.2 | 5.91 / 6.04 | 8:0x3f 265 → 227 |
 | `d9` (300, the ending) | 51.3% | 55.7% | +4.3 ± 3.7 | | — |
 
 The product of the nine segments' rates: 1.10 times the record's (d3 and d2 lose, d4 and d9 gain). From the start

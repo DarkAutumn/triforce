@@ -25,6 +25,14 @@ there).
   required wall's missing bomb is still cheated and counted, for now; what the game can answer is found in the
   emulator, not asked. The route landed in 2.0.0.5 (next bullet); retraining has not started.
 
+- **2.0.0.6 (Nov 22; round37.md "The owner's bomb rules"; decisions 2026-11-22): the owner's bomb rules on
+  `d3first`** (`bomb_rules:` in routes.yaml: bombs a weapon only in dungeon rooms the route fights, none but the
+  wall's in 3:0x5b, a room's bombs fought for with 7 or fewer and then taken for the visit, dropped bombs the
+  targets below the bag, the 10th kill's bomb always), and 2:0x5e crossed on `d3first`. Today's 51 networks, not
+  retrained: weapon bombs in crossings 1.94 → 0 a run, cheated wall bombs 0.66 → 0.30 a run; `d3` −1.5, `d4` +2.6,
+  `d2` −1.4 points, the rest unchanged within noise. 7:0x1b measured both ways (the floor lands; the crossing
+  override commented). `d2first` identical. 0:0x2d's rupee cave (the owner's second route change) is not in yet.
+
 - **2.0.0.5 (Nov 22; round36.md "The corrected route"; decisions 2026-11-22 "2.0.0.5"): the corrected `d3first` is
   the route.** 292 steps in the owner's order (above), `d2first` untouched (its step list and a 100-run chain
   identical to `main`'s before the landing). **Nothing retrained: today's 51 networks.** Hearts 7 / 8 / 9 at Levels 2 / 5 / 7 and 12
@@ -632,8 +640,13 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   3. "I want to raise the 'get bombs from this room' floor, so in 0x5b he should fight the darknuts if he has 7 or
      less bombs, up from whatever it was. This is a blanket rule not for this room." `treasure_below: 8`: every
      step taking a room's bombs fights for them when Link comes in with 7 or fewer (a step's own `if_bombs_below`
-     gives way; a room's own floor is `treasure_below_rooms`, the override the owner allows for 7:0x1b: "you have
-     the ability to skip that fight for bombs if it kills too many runs").
+     gives way), and that decision holds for the visit: the treasure is taken while he holds fewer than the bag's
+     maximum, a drop lifting him over 7 mid-fight notwithstanding; a treasure lying in the room is wanted below the
+     maximum whatever he came in with (the owner on 8:0x3f, Nov 22: in with 2, a drop to 6, the room's bombs left).
+     Under a floor, dropped bombs below the maximum are shaping targets in every family and, once the fight is over,
+     the only targets while reachable (none at 8). A room's own floor is `treasure_below_rooms`, the override the
+     owner allows for 7:0x1b ("you have the ability to skip that fight for bombs if it kills too many runs"):
+     measured both ways in round 37 (12.6% / 12.7% on `d7`), left commented in routes.yaml for the lead's decision.
   Over all three: "we must ALWAYS allow bombs and deeply encourage them if we are on the 10th kill force drop, no
   matter the room or enemies, that remains true." Every mode but `never` (boss-gleeok's) offers BOMB on the 10th
   damage-free kill in every room (a granted bomb still opens only its wall); the bomb kill pays

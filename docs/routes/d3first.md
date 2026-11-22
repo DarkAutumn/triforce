@@ -243,11 +243,17 @@ under its name switches them on there):
 - `treasure_below: 8` (rule 3). Every step that takes a room's game.yaml bombs (no `treasure:`, or a step's own
   `{if_bombs_below: M}`, which gives way) fights for them when Link comes in with 7 or fewer and crosses with 8 (the
   bag); judged on entering (`GameCompletion::step_treasure`), so the wall bomb Link spends in 3:0x5b with a full bag
-  turns no crossing into a fight beside the opened wall (round 23's trouble). On `d3first`: 3:0x4a, 3:0x5b's last
-  pass, 2:0x1e, 5:0x65 eastbound (its four lie in the open: a pickup, no fight), 7:0x1b (round 34's floor of 2 gone),
-  8:0x3f (the shared step's 5 gives way), 9:0x16 northbound. A room's own floor is `treasure_below_rooms: [{level,
-  room, below: N}]`: 7:0x1b's crossing is `{level: 7, room: '0x1b', below: 2}` if its fight costs too much (the
-  owner: "you have the ability to skip that fight for bombs if it kills too many runs"; measured in round37.md).
+  turns no crossing into a fight beside the opened wall (round 23's trouble), and the decision holds for the visit:
+  the treasure is taken while Link holds fewer than the bag's maximum (the owner on 8:0x3f: in with 2, a drop to 6,
+  the room's bombs left on the floor by the shared step's live `{if_bombs_below: 5}`); a treasure lying in the room
+  is wanted below the maximum whatever he came in with. Under the floor, dropped bombs below the maximum are targets
+  in every family and, once the fight is over, the only targets while Link can reach them (`Objective::bag_drops`;
+  none at 8). On `d3first`: 3:0x4a, 3:0x5b's last pass, 2:0x1e, 5:0x65 eastbound (its four lie in the open: a
+  pickup, no fight), 7:0x1b (round 34's floor of 2 gone), 8:0x3f (the shared step's 5 gives way), 9:0x16
+  northbound. A room's own floor is `treasure_below_rooms: [{level, room, below: N}]`: 7:0x1b's crossing is
+  `{level: 7, room: '0x1b', below: 2}` (the owner: "you have the ability to skip that fight for bombs if it kills
+  too many runs"); measured both ways in round37.md (`d7` 12.6% with the floor, 12.7% crossing: the runs bring 0.21
+  bombs, so nearly every visit fights either way) and left commented under `bomb_rules` for the lead.
 - The 10th kill: every mode but `never` offers BOMB when the next kill is the 10th damage-free one (`$50` = 9; its
   bomb kill arms a forced drop of four), in a crossing, in 3:0x5b and on the overworld, below any reserve, as before
   (`never` is boss-gleeok's: only the sword hurts Gleeok; the `never` steps 0:0x07 and the state builders'). A
