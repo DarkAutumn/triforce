@@ -853,9 +853,13 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   (waiting ones as queued), and those that ended in the last 60 minutes under "finished" (Lee, Nov 18: then they
   leave the list by themselves, so it never piles up). The registry is also the
   line jobs wait in. `--events FILE` into a folder without a `training.json` now writes a plan there (a driver's
-  folder with a plan keeps owning the stream). Not shown by the GUI (but still waiting its turn and counted): a job
-  that writes no folder (`--no-log`). Invisible, and neither waiting nor counted: a job whose `--events` go into a
-  folder whose plan is someone else's (it is taken for that plan's child, as a round's trainings are).
+  folder with a plan keeps owning the stream). **A job the registry knows is never invisible** (the owner, Nov 22,
+  after two lab trainings ran while the GUI showed one queued batch): a job that writes no folder (`--no-log`, a
+  script that calls `triforce.jobs` itself, a checkout whose lab writes no plan) is listed from its registry entry
+  (name, kind, checkout, branch, time run or waited, estimate) and marked "no progress data"; a new kind of job
+  should still write a plan, so it shows its progress (`tests/test_training_gui.py` lists every entry point).
+  Invisible, and neither waiting nor counted: a job whose `--events` go into a folder whose plan is someone else's
+  (it is taken for that plan's child, as a round's trainings are).
 - **Chain segments** (20–40 runs each; several at once go in one batch: `triforce eval-batch NAME --chain 'd3:
   --from 3_7cs_0 --runs 40' --chain ...`, or every segment of a route with `--chains TAG [--route R]`). **`d3first`
   (the main route, no `--route` needed; `eval_batch.D3FIRST_SEGMENTS`, its states `d3first_*` named bare):** full

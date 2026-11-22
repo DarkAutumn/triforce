@@ -3,6 +3,7 @@
 import json
 
 from triforce import registry
+from triforce.events import PLAN_FILE, PROGRESS_FILE, progress_job
 from triforce.lab import bench
 
 from .networks import random_network
@@ -40,13 +41,23 @@ def test_the_manifest_is_regenerated_for_a_routes_states_and_team(tmp_path):
                                     'states': ['harvested/zol/d2first_3_7cs_h1_2']}]
 
 
-def test_a_bench_run_and_its_paired_comparison(states_dir, tmp_path):
+def test_a_bench_run_and_its_paired_comparison(states_dir, tmp_path, logs_dir):
     manifest = {'format': 1, 'act': registry.DEFAULT_ACT, 'episodes': 2, 'seed': 7, 'clips': 'on',
                 'entries': [{'key': 'ow-start', 'family': 'ow-start', 'source': 'seed', 'states': ['start']}]}
     paths = [registry.save_checkpoint('ow-start', f'n{seed}', random_network(seed), root=tmp_path)
              for seed in (1, 2)]
-    results = [bench.run_bench({'ow-start': str(p)}, manifest, 2, states_dir=states_dir, log=lambda _: None)
-               for p in paths]
+    # the bench's job has a log folder and a one-line progress: episodes played of the total, success so far
+    with progress_job('lab-bench', 'eval', 2) as progress:
+        first = bench.run_bench({'ow-start': str(paths[0])}, manifest, 2, states_dir=states_dir,
+                                log=lambda _: None, progress=progress)
+    results = [first, bench.run_bench({'ow-start': str(paths[1])}, manifest, 2, states_dir=states_dir,
+                                      log=lambda _: None)]
+    folder, = logs_dir.glob('*_lab-bench')
+    assert json.loads((folder / PLAN_FILE).read_text())['status'] == 'completed'
+    events = [json.loads(line) for line in (folder / PROGRESS_FILE).read_text().splitlines()]
+    assert [event['event'] for event in events] == ['eval_start', 'eval_progress', 'end']
+    assert events[1]['done'] == events[1]['episodes'] == 2 and events[1]['key'] == 'ow-start'
+    assert events[1]['success_rate'] == first['keys']['ow-start']['success'] and events[2]['status'] == 'completed'
     row = results[0]['keys']['ow-start']
     assert row['episodes'] == 2 and len(row['records']) == 2
     assert {'success', 'hearts_lost', 'hits_per_visit', 'decisions', 'bombs'} <= set(row)

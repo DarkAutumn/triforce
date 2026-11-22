@@ -33,7 +33,7 @@ it (``JobRecord.finish``); a job killed before that keeps its status with its pr
 Each ``register`` deletes the entries that ended (or whose process is
 gone) more than ``PRUNE_SECONDS`` ago.  A registry that can't be written is warned about once and otherwise ignored
 (no coordination: the job starts).  ``training-gui.py`` reads it (its own copy of ``jobs_dir``, ``job_alive`` and
-the line's order).
+the line's order) and lists every entry, one without a log folder from the entry itself ('no progress data').
 
 Estimates.  A job's estimate is its work at the rates the registry's history gives (``rates``: per unit the median
 over the ``RATE_HISTORY`` latest completed jobs that did some of it, their other work taken off at the other units'
