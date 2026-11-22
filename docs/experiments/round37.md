@@ -35,3 +35,20 @@ path 18,000 at 1:0x53, 6:0x28, 9:0x17; path 36,000 at 4:0x11, 1:0x53, 7:0x19, 7:
 Against the 51, one network costs about the same tries everywhere but two segments: the leg out of Dungeon 5 with
 Dungeon 7 (104-276 tries against 29-64) and Dungeon 8 (18-100 against 13-16). On the old order round 36's 1x
 student needed up to 1,314 tries for its worst segment; this one's worst is 276.
+
+**The 1x student too.** Round 36's `r36merge/s1x-d2` (today's architecture at today's size, 866k parameters, after
+two rounds of correction; never chained), the same race: **three of three win, 833 runs** (4.8 minutes); replays
+verify, one hash (8952f87c643033c2) in all 51 slots, the same order of triforces and swords, the 0x3f warp to
+0x31. Runs a segment (D3, D4, D1, D2, D5, D7, D6, D8, D9): path 0: 44 16 1 13 30 144 26 17 7 (153,417 frames);
+18,000: 9 13 4 16 70 78 24 25 9 (147,898, shorter than the 51's shortest, 152,051); 36,000: 8 14 3 20 106 34 9 76 17
+(160,978). Its worst segment is again the leg out of Dungeon 5 with Dungeon 7, or Dungeon 5 itself.
+
+**The bench on the corrected route's entries** (`lab/bench.json` of 2.0.0.5; `bench run --network`, every key's
+entries played by the one network; `bench compare` against `lab/reference.json`, 6,120 pairs on the same states and
+seeds; `target/r37/bench/r36w768e2-vs-ref.md`): the wide student **+1.4 ± 0.3 points** (94.3% against 92.9%),
+hearts lost -0.067 ± 0.015 an episode, hits -0.078 ± 0.014 a visit. Most of the gain is where the bench gives a key
+rooms its own network does not play on the route: boss-gleeok@d3first +27.5 ± 6.9 (the wood-sword run on 8:0x3c's
+entries too, which the chains give to the magic-sword run), boss-gleeok +15.0 ± 3.7; and ow-lynel +17.5 ± 4.0 on
+the corrected route's 0x50 / 0x60 / 0x22, where its teacher is weak (the student copied ow-lynel only on the old
+order's states). Losses: wallmaster@d3first -6.7 ± 3.9, boss-digdogger@d3first -5.8 ± 3.0, darknut@d3first -5.0 ±
+2.9, wizzrobe -4.2 ± 2.5. On this manifest the bench says the one network is as good as the team; only chains decide.
