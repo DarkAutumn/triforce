@@ -17,6 +17,7 @@ import hashlib
 import json
 import os
 import threading
+import time
 from typing import Optional
 
 import numpy as np
@@ -24,7 +25,9 @@ import torch
 
 from .. import _native
 
-DEFAULT_GATHER = 0.0005     # seconds a batch waits for more rows once one came (``ExternalQueue.take``)
+DEFAULT_GATHER = 0.005      # at most this many seconds a batch waits for the other active envs' rows
+ACTIVE_SECONDS = 1.0        # an env that asked this recently is waited for (``Server._loop``)
+CPU_THREADS = 4             # torch threads when serving on the CPU
 
 
 def serve_device() -> torch.device:
@@ -46,10 +49,13 @@ def weights_hash(network: torch.nn.Module) -> int:
 class Server:
     """Serves networks to pools through one queue (the module docstring)."""
 
-    def __init__(self, device=None, gather: float = DEFAULT_GATHER, target: int = 64):
+    def __init__(self, device=None, gather: float = DEFAULT_GATHER, threads: int = CPU_THREADS):
         self.device = torch.device(device) if device is not None else serve_device()
         self.gather = gather
-        self.target = target
+        if self.device.type == 'cpu':
+            # torch's default (every core) contends with the pool's workers: measured 4 decisions/s on 10 envs.
+            torch.set_num_threads(threads)
+        self._seen: dict[int, float] = {}       # slot -> when it last asked (the envs a batch waits for)
         self.queue = _native.ExternalQueue()
         self.models: dict[int, torch.nn.Module] = {}
         self._keys: dict = {}
@@ -83,9 +89,16 @@ class Server:
 
     def _loop(self):
         while not self.queue.closed:
-            batch = self.queue.take(timeout=0.1, gather=self.gather, target=self.target)
+            # Wait for every env that asked in the last second (they step their emulators at different times; a
+            # batch per straggler costs a forward each), at most ``gather`` seconds.
+            now = time.monotonic()
+            self._seen = {slot: t for slot, t in self._seen.items() if now - t < ACTIVE_SECONDS}
+            batch = self.queue.take(timeout=0.1, gather=self.gather, target=max(1, len(self._seen)))
             if batch is None:
                 continue
+            now = time.monotonic()
+            for slot in batch['slot']:
+                self._seen[int(slot)] = now
             try:
                 self.answer(batch)
             except BaseException as error:  # pylint: disable=broad-exception-caught
