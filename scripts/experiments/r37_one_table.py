@@ -58,6 +58,17 @@ def paired(a: dict, b: dict) -> tuple[float, float, int]:
     return 100 * m, 100 * sd / math.sqrt(n), n
 
 
+def per_visit(runs: dict) -> tuple[float, float]:
+    """(hits taken, hearts lost) a room visit over the runs: hits as the game showed them, hearts lost = health in -
+    health out where positive (healing in the room nets out)."""
+    visits = [room for r in runs.values() for room in r['rooms']]
+    if not visits:
+        return 0.0, 0.0
+    hits = sum(room.get('hits', 0) for room in visits) / len(visits)
+    lost = sum(max(0.0, room['health_in'] - room['health_out']) for room in visits) / len(visits)
+    return hits, lost
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--tag', required=True)
@@ -88,17 +99,19 @@ def main():
                           for _, (lv, rm), pa, pb, ea, eb in moves[:3] if abs(_) >= 5)
         ends = collections.Counter(r['reason'].split(' in ')[0].split(':')[0] for r in new.values()
                                    if r['result'] != 'success')
+        (ha, la), (hb, lb) = per_visit({s: ref[s] for s in common}), per_visit({s: new[s] for s in common})
         rows.append(f"| {seg} | {rate(ref):.1f}% ({len(ref)}) | {rate(new):.1f}% ({len(new)}) | "
-                    f"{diff:+.1f} ± {se:.1f} | {where} |")
+                    f"{diff:+.1f} ± {se:.1f} | {ha:.3f} / {hb:.3f} | {la:.3f} / {lb:.3f} | {where} |")
         out[seg] = {'team': rate(ref), 'team_runs': len(ref), 'one': rate(new), 'one_runs': len(new),
                     'paired': diff, 'se': se, 'n': n, 'ends': dict(ends.most_common(5)),
+                    'hits_per_visit': [ha, hb], 'hearts_lost_per_visit': [la, lb],
                     'rooms': [{'level': lv, 'room': rm, 'team_lost_per_1000': pa, 'one_lost_per_1000': pb,
                                'team_entering': ea, 'one_entering': eb}
                               for _, (lv, rm), pa, pb, ea, eb in moves[:8]],
                     'ref': str(ref_path(seg))}
-    print("| segment | 51 networks | one network | paired (points) | rooms that differ most (lost per 1,000 entering: "
-          "team -> one) |")
-    print("|---|---:|---:|---:|---|")
+    print("| segment | 51 networks | one network | paired (points) | hits a room visit (team / one) | hearts lost a "
+          "visit | rooms that differ most (lost per 1,000 entering: team -> one) |")
+    print("|---|---:|---:|---:|---:|---:|---|")
     print('\n'.join(rows))
     if args.json:
         Path(args.json).write_text(json.dumps(out, indent=1), encoding='utf-8')
