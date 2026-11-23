@@ -804,3 +804,57 @@ Not yet: Dungeon 8's darknut, boss-gleeok and boss-manhandla (39.1% -> 80.9% on 
 for its Dungeon 1 and Dungeon 7 chains on today's code (branch `r38-hit`). The chains of record of 2.0.0.8 are
 `r38-208-1k` (to come). The product of segment rates with every head is an estimate of about one in 1,000 (Head38b's
 `r38_head.py product`); no unbroken run from the start has finished yet.
+
+## Moldorm crossed, 9:0x56's key
+
+**The owner's change** (Nov 22, after the scout's ledger, `target/owner-review/r38-moldorm-key.md`): Moldorm's key
+"is only needed for d9? That's interesting because d9 0x56 drops a key and it's super safe to get. Confirm this
+works, then drop the moldorm fight (it's now passthrough) and fight in d9 0x56 to get the missing key." Branch
+`r39-key`, on 2.0.0.8 (v2.0.0.8, d8596127); `d2first` unchanged.
+
+### Confirmed first
+
+**The ledger** (`scripts/experiments/r39_keys.py ledger`: the route's key events, step numbers of the 290 steps,
+checked by the scout against the 1000-run records). A state at step N holds the count after step N − 1.
+
+| Step | Room | Event | Before | Now |
+|---:|---|---|---:|---:|
+| 96, 99 | 2:0x7e, 0x4e | +1 each (5 Ropes) | 4, 5 | 4, 5 |
+| 100 | 2:0x3e | Moldorm's key → crossed | 6 | 5 |
+| 127-142 | Level 5 | 0x06 W door, 0x66's Gibdo, 0x27 (+1, door), 0x25 W door | 5 out of Level 5 | 4 |
+| 163-170 | Level 7 | 0x38 N, 0x18 E, 0x1b E doors | 2 out of Level 7 | 1 |
+| 197 | 6:0x79 | W key door | 1 | **0** |
+| 200-210 | Level 6 | 0x58, 0x29, 0x2d (+1 each), 0x2c N door | 3 out of Level 6 | 2 |
+| 221, 222 | 8:0x5e, 0x4e | +1 (5 Blue Darknuts), N door | 3 out of Level 8 | 2 |
+| **246** | **9:0x56** | **+1 (2 Zols, 2 Like-Likes)** | 3 (crossed) | **3** |
+| 249, 262 | 9:0x14, 0x16 | E door, N door | 2, 1 | 2, 1 |
+| 266 | 9:0x63 | W key door (into 0x62) | 0 | **0** |
+| 268 | 9:0x61 | +1 (Patra) | 1, to the end | 1, to the end |
+
+Never below 0: the count reaches 0 after 6:0x79's door (197; 6:0x58 gives one back at 200) and after 9:0x63's (266),
+as before at 266; it ends at 1 both ways. From step 246 on the two ledgers are the same.
+
+**The key is real.** game.yaml 9:0x56: `treasure: key`, `trigger: kill-all-item` (attribute F & 7 = 7). The
+disassembly (`Secret_CheckUnderworld`, `Secret_UpdateRoomAllDead`): trigger 7 activates the room item (and plays
+the tune) on the first frame no counting monster is left in slots 1-12; Bubbles (types `$2B`-`$2D`) never count,
+a split Zol's Gels (`$14`) do, so the 2 Zols, their Gels and the 2 Like-Likes must die. The key lies at
+(`$80`,`$90`) between two water rows (level-9.md: the ladder from the N or S door). In the record `r37fix-1k-d9`
+(1000 runs from `9_76s_0`, the room a crossing then) 14 of 1030 visits killed all four, 6 took the key (keys 3 → 4)
+and left W `exit-correct`: the ladder reaches it and the way out is the same bomb wall.
+
+**What the step cost then:** the crossing took 470 frames and 0.001 hearts a visit (845 visits with no kill); the
+visits that cleared the room took 2,170-2,672 frames and 0.14-0.21 hearts (a network trained to cross, not to
+fight). Moldorm's fight cost about 1,000 frames and 0.5 hearts a visit (`r38-2d-1k-d2`), 1 death in 1000.
+
+### The change
+
+- routes.yaml: both routes write 2:0x4e, 0x3e and 9:0x56 themselves; the blocks are `dungeon-2-north` (now from
+  0x2e), `dungeon-9` (0x76, 0x66) and `dungeon-9-from-55`. `d3first`: 0x3e `treasure: skip` (the Moldorm left
+  alive; the room has no shutter), 0x56 with no `treasure:` (its key; `bombs: required` stays for the W wall).
+  `d2first`: the Moldorm fought, 0x56 crossed, as before (`test_d2first_is_its_golden_list`). 290 steps.
+- States: every `d3first` state after Moldorm's room through 9:0x56's entry (steps 101-246, 3 chains) holds one
+  key fewer. They were set to the ledger by writing `InvKeys` (`$66E`) alone (`r39_keys.py patch`: a load and save
+  without the write gives the same file byte for byte; the patched files' RAM differs from the old in that byte
+  only); their manifest entries carry `keys: {was, now}`. Chain 2's states 215-266 were one key short already (the
+  first order's build): 215-246 needed no change, 247-266 were set up to the ledger. 425 states; the audit is
+  clean (855). The plain stretch's 4:0x30 (step 44) keeps its key (its door is 0x30's).
