@@ -67,6 +67,7 @@ UPDATE_SECONDS = 300.0               # how often it says it still waits
 AGING = 0.5                          # the line's score: estimate - AGING * seconds waited (lowest starts first)
 EXPRESS_SECONDS = 600.0              # a job estimated at most this long may run in the express place
 OVERRUN = 2.0                        # a running job past this many times its estimate is flagged
+KEEP_SECONDS = 30 * 24 * 3600.0      # ended jobs' rows are kept this long (the history, a row a job, for good)
 
 # Work and rates.  A job's ``work`` is how much it asked for in a few coarse units; its estimate (seconds) is the sum
 # of amount x rate, a rate (seconds per unit) refitted from the history (``rates``), else these defaults, measured on
@@ -100,7 +101,8 @@ def queue_dir() -> Path:
 
 
 def connect(directory: Optional[Path] = None) -> sqlite3.Connection:
-    """The queue's database (created on first use), autocommit: callers group their decisions in ``transaction``."""
+    """The queue's database (created on first use; a column this code has and the file lacks is added, so checkouts
+    of different commits share one queue), autocommit: callers group their decisions in ``transaction``."""
     directory = queue_dir() if directory is None else Path(directory)
     (directory / LOCKS_DIR).mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(directory / DB_NAME, timeout=60, isolation_level=None)
@@ -108,7 +110,22 @@ def connect(directory: Optional[Path] = None) -> sqlite3.Connection:
     con.execute('PRAGMA journal_mode=WAL')
     con.execute('PRAGMA busy_timeout=60000')
     con.executescript(SCHEMA)
+    have = {row['name'] for row in con.execute('PRAGMA table_info(jobs)')}
+    for name, kind in _COLUMNS.items():
+        if name not in have:
+            try:
+                con.execute(f'ALTER TABLE jobs ADD COLUMN {name} {kind}')
+            except sqlite3.OperationalError:        # another process added it first
+                pass
     return con
+
+
+def prune(con: sqlite3.Connection, now: Optional[float] = None) -> int:
+    """Deletes the rows of jobs that ended more than ``KEEP_SECONDS`` ago; returns how many.  Call inside a
+    transaction."""
+    now = time.time() if now is None else now
+    return con.execute(f"DELETE FROM jobs WHERE status IN ({', '.join('?' * len(ENDED))}) AND finished_ts < ?",
+                       (*ENDED, now - KEEP_SECONDS)).rowcount
 
 
 @contextmanager
@@ -170,8 +187,8 @@ def update(con: sqlite3.Connection, job_id: int, **fields):
 
 
 def sweep(con: sqlite3.Connection, directory: Path, now: Optional[float] = None) -> list[int]:
-    """Marks ``dead`` every live job whose wrapper is gone (its job lock is free); returns their ids.  Call inside a
-    transaction."""
+    """Marks ``dead`` every live job whose wrapper is gone (its job lock is free) and removes its lock file; returns
+    their ids.  Call inside a transaction (a job joins and takes its lock in one, so none is swept while it joins)."""
     now = time.time() if now is None else now
     dead = []
     for row in con.execute("SELECT id FROM jobs WHERE status IN ('queued', 'running')").fetchall():
@@ -179,6 +196,10 @@ def sweep(con: sqlite3.Connection, directory: Path, now: Optional[float] = None)
             dead.append(row['id'])
     for job_id in dead:
         update(con, job_id, status='dead', finished_ts=now)
+        try:
+            lock_path(directory, f'job-{job_id}').unlink()
+        except OSError:
+            pass
     return dead
 
 

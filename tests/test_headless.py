@@ -44,7 +44,7 @@ def test_wins_only_plays_until_enough_runs_won(scripted_models, tmp_path, capsys
     out = tmp_path / 'new' / 'wins'
     status, saved, summary, _ = run(capsys, out, 3, '--wins-only', '--route', 'd2first', '--from',
                                     require_state(SEGMENT_STATE), '--stop-at', f'step:{SEGMENT_STOP_STEP}',
-                                    '--parallel', 2, '--models-dir', scripted_models, '--streams', 'decisions')
+                                    '--parallel', 2, '--models-dir', scripted_models)
     files = sorted(out.iterdir())
     assert status == 0 and len(files) == 3 and all(path.name.endswith('-win.tfreplay') for path in files)
     assert sorted(line[0] for line in saved) == [str(path) for path in files]

@@ -116,6 +116,131 @@ impl ObjectiveKind {
     }
 }
 
+/// What a target is (round 40, the owner: a replay says what Link was steered to): the entity the objective aims
+/// Link at, attached where the target is made and carried in [`Objective::labels`] beside the tiles. Nothing the
+/// observation or the reward computes reads it. Tiles are `(column, row)`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Role {
+    /// The room's edge toward a next room (its exit tiles, or the direction itself).
+    Exit(Direction),
+    /// A monster: its object slot and type.
+    Monster { slot: u8, kind: u8 },
+    /// A dropped item lying in the room: its object slot and item id.
+    Item { slot: u8, item: u8 },
+    /// The room's own treasure ([`TREASURES`] index; `0xFF` a name the table lacks).
+    Treasure { item: u8 },
+    /// The spot an intact bomb wall is bombed from, and the wall's side.
+    BombWall { tile: Tile, direction: Direction },
+    /// The push block (its top-left tile) and the way it is pushed.
+    PushBlock { tile: Tile, direction: Direction },
+    Stairs(Tile),
+    /// A cave mouth, or the rock wall that hides one (its top-left tile).
+    Cave(Tile),
+    /// A raft crossing's dock and the side it sails to.
+    Dock { tile: Tile, direction: Direction },
+    /// Where a secret is opened from (an Armos, a pushed stone, a burned tree, a pond's shore): the secret's tile.
+    Secret(Tile),
+    /// The tiles in front of Zelda (the end of the game).
+    Zelda,
+    /// The coming whirlwind's row (tile row).
+    Whirlwind { row: i32 },
+    /// The dock warp's spot below the water beside the dock.
+    DockWarp(Tile),
+    /// A spot by the wall that brings a Wallmaster out.
+    Lure,
+    /// Where Link stands to strike a boss (Gohma).
+    Stand(Tile),
+}
+
+/// Every role's replay name and the names of its fields, in [`Role::index`] order (a replay's META
+/// `tables.target_roles`).
+pub const ROLES: [(&str, &[&str]); 15] = [
+    ("exit", &["dir"]),
+    ("monster", &["slot", "type"]),
+    ("item", &["slot", "item"]),
+    ("treasure", &["slot", "item"]),
+    ("bomb-wall", &["col", "row", "dir"]),
+    ("push-block", &["col", "row", "dir"]),
+    ("stairs", &["col", "row"]),
+    ("cave", &["col", "row"]),
+    ("dock", &["col", "row", "dir"]),
+    ("secret", &["col", "row"]),
+    ("zelda", &[]),
+    ("whirlwind", &["row"]),
+    ("dock-warp", &["col", "row"]),
+    ("lure", &[]),
+    ("stand", &["col", "row"]),
+];
+
+/// The room treasures [`Role::Treasure`] names (game.yaml's `treasure:` values; a replay's META `tables.treasures`).
+pub const TREASURES: [&str; 33] = [
+    "key", "bombs", "5-rupees", "heart-container", "map", "compass", "triforce", "30-rupees", "100-rupees",
+    "wood-sword", "white-sword", "magic-sword", "wood-arrow", "silver-arrow", "bow", "wand", "triforce-of-power",
+    "red-ring", "blue-ring", "red-candle", "blue-candle", "recorder", "raft", "ladder", "power-bracelet",
+    "magic-key", "boomerang", "magic-boomerang", "food", "book", "clear", "potion", "letter",
+];
+
+/// `name`'s index in [`TREASURES`] (`0xFF`: none or unknown).
+pub fn treasure_index(name: Option<&str>) -> u8 {
+    name.and_then(|n| TREASURES.iter().position(|t| *t == n)).map_or(0xFF, |i| i as u8)
+}
+
+impl Role {
+    /// Its index in [`ROLES`].
+    pub fn index(&self) -> u8 {
+        match self {
+            Role::Exit(_) => 0,
+            Role::Monster { .. } => 1,
+            Role::Item { .. } => 2,
+            Role::Treasure { .. } => 3,
+            Role::BombWall { .. } => 4,
+            Role::PushBlock { .. } => 5,
+            Role::Stairs(_) => 6,
+            Role::Cave(_) => 7,
+            Role::Dock { .. } => 8,
+            Role::Secret(_) => 9,
+            Role::Zelda => 10,
+            Role::Whirlwind { .. } => 11,
+            Role::DockWarp(_) => 12,
+            Role::Lure => 13,
+            Role::Stand(_) => 14,
+        }
+    }
+
+    /// Its fields as [`ROLES`] names them, a byte each (tiles' columns and rows as `i8`; a direction as
+    /// `direction(d)`, the action space's index), the rest 0xFF.
+    pub fn fields(&self, direction: impl Fn(Direction) -> u8) -> [u8; 4] {
+        let t = |(c, r): Tile| [c as i8 as u8, r as i8 as u8];
+        match *self {
+            Role::Exit(d) => [direction(d), 0xFF, 0xFF, 0xFF],
+            Role::Monster { slot, kind } => [slot, kind, 0xFF, 0xFF],
+            Role::Item { slot, item } => [slot, item, 0xFF, 0xFF],
+            Role::Treasure { item } => [0xFF, item, 0xFF, 0xFF],
+            Role::BombWall { tile, direction: d } | Role::PushBlock { tile, direction: d } | Role::Dock { tile, direction: d } => {
+                let [c, r] = t(tile);
+                [c, r, direction(d), 0xFF]
+            }
+            Role::Stairs(tile) | Role::Cave(tile) | Role::Secret(tile) | Role::DockWarp(tile) | Role::Stand(tile) => {
+                let [c, r] = t(tile);
+                [c, r, 0xFF, 0xFF]
+            }
+            Role::Whirlwind { row } => [row as i8 as u8, 0xFF, 0xFF, 0xFF],
+            Role::Zelda | Role::Lure => [0xFF; 4],
+        }
+    }
+}
+
+/// A target with what it is.
+pub type Aim = (Target, Role);
+
+fn tiles_of(aims: &[Aim]) -> Vec<Target> {
+    aims.iter().map(|a| a.0).collect()
+}
+
+fn aims(tiles: Vec<Tile>, role: Role) -> impl Iterator<Item = Aim> {
+    tiles.into_iter().map(move |t| (Target::Tile(t), role))
+}
+
 /// The current objective.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Objective {
@@ -142,6 +267,9 @@ pub struct Objective {
     /// maximum are shaping targets for every family and, once this is no fight, the targets while Link can reach
     /// them (`env::objective`).
     pub bag_drops: bool,
+    /// What each target is (round 40, a replay's TARGETS): every tile or direction of `targets` and the route's
+    /// `pbrs_targets` with its [`Role`], an entity's tiles each under the same role. No observation or reward reads it.
+    pub labels: Vec<Aim>,
 }
 
 /// What Link holds on entering a route step: the triforce pieces earlier steps took (bit `level - 1`), the sword
@@ -421,10 +549,6 @@ fn purchase_held(kind: &str, state: &GameView) -> Option<bool> {
     }
 }
 
-fn overlap(tiles: Vec<Tile>) -> impl Iterator<Item = Target> {
-    tiles.into_iter().map(Target::Tile)
-}
-
 /// What the map objective's next rooms come from: the route step Link plays in this room, or the shortest way to
 /// the target (location, target, keys, collected key rooms, opened doors, Link's progress: it picks the route
 /// exits the way may prefer).
@@ -444,7 +568,7 @@ enum RouteKey {
     ),
 }
 /// Exit targets and next rooms of the map objective.
-type MapObjective = (Vec<Target>, BTreeSet<MapLocation>);
+type MapObjective = (Vec<Aim>, BTreeSet<MapLocation>);
 /// `closest_room` arguments besides the route sets: (location, keys, candidate targets).
 type ClosestKey = (MapLocation, i32, Vec<MapLocation>);
 /// How many `closest_room` results to remember before starting over.
@@ -675,6 +799,19 @@ impl GameCompletion {
     /// The route step Link is playing, None off the route.
     pub fn step(&self) -> Option<usize> {
         self.step
+    }
+
+    /// The way of the route step Link plays (true: the clip way, false: the plain way; None: a step both ways share,
+    /// or off the route): a replay's provenance label.
+    pub fn step_way(&self) -> Option<bool> {
+        self.map.routes.get(&self.route)?.get(self.step?)?.way.map(Way::clips)
+    }
+
+    /// The routes.yaml stretch whose clip or plain way holds the route step Link plays: a replay's provenance label.
+    pub fn stretch(&self) -> Option<&str> {
+        let step = self.step?;
+        let stretches = self.map.stretches.get(&self.route)?;
+        stretches.iter().find(|s| s.clips.contains(&step) || s.plain.contains(&step)).map(|s| s.name.as_str())
     }
 
     /// Bombs Link keeps for what the route needs them for (routes.yaml `bomb_reserve`) at the route step he is on,
@@ -1115,27 +1252,27 @@ impl GameCompletion {
         }
         self.update_exits(state);
         self.update_opened_doors(state);
-        let (mut kind, mut tiles, mut next_rooms) = self.room_objective(state);
+        let (mut kind, mut labels, mut next_rooms) = self.room_objective(state);
         if kind == ObjectiveKind::None {
             kind = ObjectiveKind::Move;
         }
-        let mut pbrs: BTreeSet<Target> = tiles.iter().copied().collect();
+        let mut pbrs: BTreeSet<Target> = labels.iter().map(|a| a.0).collect();
         for item in &state.items {
-            tiles.extend(overlap(item.link_overlap_tiles()));
+            labels.extend(aims(item.link_overlap_tiles(), Role::Item { slot: item.index as u8, item: item.id as u8 }));
         }
         if !matches!(
             kind,
             ObjectiveKind::Fight | ObjectiveKind::Treasure | ObjectiveKind::Cave
         ) {
-            let (exit_tiles, rooms) = self.map_objective(state);
-            tiles.extend(exit_tiles.iter().copied());
+            let (exit_aims, rooms) = self.map_objective(state);
+            pbrs.extend(exit_aims.iter().map(|a| a.0));
+            labels.extend(exit_aims);
             next_rooms.extend(rooms);
-            pbrs.extend(exit_tiles);
         }
         self.last_kind = kind;
         Objective {
             kind,
-            targets: tiles.into_iter().collect(),
+            targets: labels.iter().map(|a| a.0).collect(),
             next_rooms: next_rooms.into_iter().collect(),
             pbrs_targets: pbrs,
             retreats: self.retreats(state.full_location()),
@@ -1145,6 +1282,7 @@ impl GameCompletion {
                 .is_some_and(|s| s.treasure == crate::game_map::TreasureRule::Refuse),
             drops_first: self.current_step(state.full_location()).is_some_and(|s| s.drops_first),
             bag_drops: self.bomb_rules.fills_the_bag(),
+            labels,
         }
     }
 
@@ -1160,6 +1298,7 @@ impl GameCompletion {
             treasure_refused: false,
             drops_first: false,
             bag_drops: false,
+            labels: Vec::new(),
         }
     }
 
@@ -1175,7 +1314,7 @@ impl GameCompletion {
         let (level, dock) = self.whirlwind_level_here(here)?;
         let landing = self.map.routes[&self.route][self.step? + 1].location();
         let mut objective = self.no_objective();
-        let tile = |x: i32, y: i32| Target::Tile(Position::new(x, y).tile());
+        let tile = |x: i32, y: i32| Position::new(x, y).tile();
         match crate::whirlwind::plan(state, level) {
             Plan::Never => {
                 self.missed = Some(format!("no triforce piece of level {level}: no whirlwind goes to {landing}"));
@@ -1185,15 +1324,18 @@ impl GameCompletion {
                 let room = self.map.get(here)?;
                 for exit in room.exits.values().filter(|e| Direction::from_exit(&e.direction).is_some()) {
                     let targets = self.exit_targets(state, exit.destination, walls);
-                    if Self::walkable(state, &targets) {
-                        objective.targets.extend(targets.iter().copied());
-                        objective.pbrs_targets.extend(targets);
+                    if Self::walkable(state, &tiles_of(&targets)) {
+                        objective.targets.extend(targets.iter().map(|a| a.0));
+                        objective.pbrs_targets.extend(targets.iter().map(|a| a.0));
+                        objective.labels.extend(targets);
                         objective.retreats.insert(exit.destination);
                     }
                 }
             }
             Plan::Wait { row } => {
-                objective.targets.insert(tile(state.link.position.x, row));
+                let at = tile(state.link.position.x, row);
+                objective.targets.insert(Target::Tile(at));
+                objective.labels.push((Target::Tile(at), Role::Whirlwind { row: at.1 }));
                 objective.next_rooms.insert(landing);
             }
             Plan::Play { .. } | Plan::Carried => {
@@ -1204,7 +1346,10 @@ impl GameCompletion {
                     Some((x, row)) if !crate::clips::on_dock_spot(state) => (x, row + 16),
                     _ => (state.link.position.x, state.link.position.y),
                 };
-                objective.targets.insert(tile(x, y));
+                let at = tile(x, y);
+                objective.targets.insert(Target::Tile(at));
+                let role = if spot.is_some() { Role::DockWarp(at) } else { Role::Whirlwind { row: at.1 } };
+                objective.labels.push((Target::Tile(at), role));
                 objective.next_rooms.insert(landing);
             }
         }
@@ -1431,29 +1576,30 @@ impl GameCompletion {
     /// heart) or the pond's shore ([`pond_shore`]: the recorder drains it from anywhere out of the border band, and
     /// its stairs lie in the water, out of the path search's reach until then).  Underworld: the stairs down to the
     /// cellar (the top-left tile of each stairs square).
-    fn cave_tiles(&self, state: &GameView) -> Vec<Tile> {
+    fn cave_tiles(&self, state: &GameView) -> Vec<(Tile, Role)> {
+        let stairs = |tiles: Vec<Tile>| tiles.into_iter().map(|t| (t, Role::Stairs(t))).collect();
         if state.level() > 0 {
-            return state.room().stairs_tiles();
+            return stairs(state.room().stairs_tiles());
         }
         if let Some(tile) = state.room().cave_tile {
-            return vec![tile];
+            return vec![(tile, Role::Cave(tile))];
         }
         let room = self.map.get(state.full_location());
         if let Some((c, r)) = room.and_then(|r| r.bomb_secret) {
-            return vec![(c, r), (c + 1, r), (c, r + 1), (c + 1, r + 1)];
+            return [(c, r), (c + 1, r), (c, r + 1), (c + 1, r + 1)].map(|t| (t, Role::Cave((c, r)))).to_vec();
         }
         let Some(secret) = room.and_then(|r| r.secret) else {
             return Vec::new();
         };
-        let stairs = state.room().stairs_tiles();
-        if !stairs.is_empty() {
-            return stairs;
+        let shown = state.room().stairs_tiles();
+        if !shown.is_empty() {
+            return stairs(shown);
         }
-        match secret {
-            Secret::Armos((c, r)) => vec![(c - 2, r), (c + 2, r)],
-            Secret::Recorder(tile) => pond_shore(&state.room(), tile),
+        let (tiles, at) = match secret {
+            Secret::Armos((c, r)) => (vec![(c - 2, r), (c + 2, r)], (c, r)),
+            Secret::Recorder(tile) => (pond_shore(&state.room(), tile), tile),
             // The square under the stone: MOVE N from there pushes it (`GameView::is_secret_push_direction`).
-            Secret::Push((c, r)) => vec![(c, r + 2)],
+            Secret::Push((c, r)) => (vec![(c, r + 2)], (c, r)),
             // The tree's windows (`GameView::burn_facings`): every X of the six tiles on its row burns it, facing W
             // from the three E of it, E from the three W of it; and (round 29, 0x47's tree under its strip of
             // floor) the tiles of its column two to four rows above it, facing S, where Link can stand (in 0x6d
@@ -1462,10 +1608,13 @@ impl GameCompletion {
                 let room = state.room();
                 let above = [-1, 0].into_iter().flat_map(|dc| (2..=4).map(move |dr| (c + dc, r - dr)));
                 let row = [3, 4, 5, -5, -4, -3].into_iter().map(|d| (c + d, r));
-                row.chain(above.filter(|&(tc, tr)| room.is_tile_walkable(tc, tr) && room.is_tile_walkable(tc + 1, tr)))
-                    .collect()
+                let tiles = row
+                    .chain(above.filter(|&(tc, tr)| room.is_tile_walkable(tc, tr) && room.is_tile_walkable(tc + 1, tr)))
+                    .collect();
+                (tiles, (c, r))
             }
-        }
+        };
+        tiles.into_iter().map(|t| (t, Role::Secret(at))).collect()
     }
 
     /// With the raft, every game.yaml raft crossing counts as open for the path searches (`RoomExit::raft`).
@@ -1525,13 +1674,14 @@ impl GameCompletion {
         );
         let out = directions
             .iter()
-            .map(|direction| {
-                Target::Tile(match direction {
+            .map(|&direction| {
+                let at = match direction {
                     Direction::N => (col, row + 1),
                     Direction::S => (col, row - 2),
                     Direction::E => (col - 2, row),
                     _ => (col + 2, row),
-                })
+                };
+                (Target::Tile(at), Role::PushBlock { tile: (col, row), direction })
             })
             .collect();
         (out, rooms)
@@ -1577,7 +1727,7 @@ impl GameCompletion {
     /// default take, as in a dungeon): 0x5f's heart container, the only one the game makes
     /// (asm:Room_SetUpItemAndPushBlock), taken on both ways of the leg. The room's item flag says it is gone; the item
     /// appears a few frames into play (mode 5's entry tasks), so until then the game.yaml `treasure_tile` stands in.
-    fn overworld_treasure(&self, state: &GameView) -> Option<Vec<Target>> {
+    fn overworld_treasure(&self, state: &GameView) -> Option<Vec<Aim>> {
         let loc = state.full_location();
         let room = self.map.get(loc)?;
         room.treasure.as_ref()?;
@@ -1587,13 +1737,14 @@ impl GameCompletion {
         if !self.step_treasure(loc, state).is_none_or(|rule| rule.wants(state.bombs())) {
             return None;
         }
+        let role = Role::Treasure { item: treasure_index(room.treasure.as_deref()) };
         match state.treasure() {
-            Some(item) => Some(overlap(item.link_overlap_tiles()).collect()),
-            None => room.treasure_tile.map(|tile| vec![Target::Tile(tile)]),
+            Some(item) => Some(aims(item.link_overlap_tiles(), role).collect()),
+            None => room.treasure_tile.map(|tile| vec![(Target::Tile(tile), role)]),
         }
     }
 
-    fn room_objective(&mut self, state: &GameView) -> (ObjectiveKind, Vec<Target>, Vec<MapLocation>) {
+    fn room_objective(&mut self, state: &GameView) -> (ObjectiveKind, Vec<Aim>, Vec<MapLocation>) {
         if state.full_location().in_cave {
             return self.subroom_objective(state);
         }
@@ -1620,28 +1771,23 @@ impl GameCompletion {
                 || target.is_some_and(|t| dest == t || (dest.level != state.level() && dest.level == t.level));
             if wanted {
                 let next = if dest.level != state.level() { dest } else { MapLocation::new(state.level(), state.location(), true) };
-                return (ObjectiveKind::Cave, cave_tiles.into_iter().map(Target::Tile).collect(), vec![next]);
+                let tiles = cave_tiles.into_iter().map(|(t, role)| (Target::Tile(t), role)).collect();
+                return (ObjectiveKind::Cave, tiles, vec![next]);
             }
         }
         (ObjectiveKind::None, Vec::new(), Vec::new())
     }
 
     /// In a cave or a cellar: its treasure while the route wants it here, then the way out.
-    fn subroom_objective(&self, state: &GameView) -> (ObjectiveKind, Vec<Target>, Vec<MapLocation>) {
+    fn subroom_objective(&self, state: &GameView) -> (ObjectiveKind, Vec<Aim>, Vec<MapLocation>) {
         if self.should_collect_treasure(state) {
+            let room = self.map.get(state.full_location());
+            let role = Role::Treasure { item: treasure_index(room.and_then(|r| r.treasure.as_deref())) };
             if let Some(treasure) = state.treasure() {
-                return (
-                    ObjectiveKind::Treasure,
-                    overlap(treasure.link_overlap_tiles()).collect(),
-                    Vec::new(),
-                );
+                return (ObjectiveKind::Treasure, aims(treasure.link_overlap_tiles(), role).collect(), Vec::new());
             }
-            let tile = self
-                .map
-                .get(state.full_location())
-                .and_then(|r| r.treasure_tile)
-                .unwrap_or(CAVE_TREASURE_TILE);
-            return (ObjectiveKind::Treasure, vec![Target::Tile(tile)], Vec::new());
+            let tile = room.and_then(|r| r.treasure_tile).unwrap_or(CAVE_TREASURE_TILE);
+            return (ObjectiveKind::Treasure, vec![(Target::Tile(tile), role)], Vec::new());
         }
         let (targets, rooms) = self.subroom_exit(state);
         (ObjectiveKind::Move, targets, rooms.into_iter().collect())
@@ -1656,7 +1802,7 @@ impl GameCompletion {
         if !state.in_cellar() {
             let rooms = [MapLocation::new(loc.level, loc.value, false)].into_iter().collect();
             let exits = state.room().exits.get(Direction::S).unwrap_or_default();
-            return (exits.iter().map(|&t| Target::Tile(t)).collect(), rooms);
+            return (aims(exits.to_vec(), Role::Exit(Direction::S)).collect(), rooms);
         }
         let Some(room) = self.map.get(loc) else {
             return (Vec::new(), BTreeSet::new());
@@ -1670,16 +1816,16 @@ impl GameCompletion {
         };
         let exits = state.room().exits.get(Direction::N).unwrap_or_default();
         let tiles = exits.iter().filter(|t| half.is_none_or(|east| (t.0 >= CELLAR_EAST_COLUMN) == east));
-        (tiles.map(|&t| Target::Tile(t)).collect(), rooms)
+        (tiles.map(|&t| (Target::Tile(t), Role::Exit(Direction::N))).collect(), rooms)
     }
 
     /// The objective of the route's last step (`exit: end`, round 29: 9:0x32) while Link plays it: the tiles in
     /// front of Zelda ([`zelda_tiles`]), where the game ends; no next room. None on any other step.
-    fn end_objective(&self, state: &GameView) -> Option<(ObjectiveKind, Vec<Target>, Vec<MapLocation>)> {
-        self.ends_game(state).then(|| (ObjectiveKind::Move, zelda_tiles(state).into_iter().map(Target::Tile).collect(), Vec::new()))
+    fn end_objective(&self, state: &GameView) -> Option<(ObjectiveKind, Vec<Aim>, Vec<MapLocation>)> {
+        self.ends_game(state).then(|| (ObjectiveKind::Move, aims(zelda_tiles(state), Role::Zelda).collect(), Vec::new()))
     }
 
-    fn dungeon_room_objective(&mut self, state: &GameView) -> (ObjectiveKind, Vec<Target>, Vec<MapLocation>) {
+    fn dungeon_room_objective(&mut self, state: &GameView) -> (ObjectiveKind, Vec<Aim>, Vec<MapLocation>) {
         if let Some(objective) = self.end_objective(state) {
             return objective;
         }
@@ -1708,7 +1854,8 @@ impl GameCompletion {
         if let Some(treasure) = state.treasure() {
             if wanted && !matches!(item.as_deref(), Some("map") | Some("compass")) {
                 kind = ObjectiveKind::Treasure;
-                tiles.extend(overlap(treasure.link_overlap_tiles()));
+                let role = Role::Treasure { item: treasure_index(item.as_deref()) };
+                tiles.extend(aims(treasure.link_overlap_tiles(), role));
             }
         } else if !state.enemies.is_empty()
             && ((wanted && item.is_some())
@@ -1717,8 +1864,9 @@ impl GameCompletion {
                 || self.push_requires_combat(state))
         {
             kind = ObjectiveKind::Fight;
-            let enemy_tiles: Vec<Tile> = if let Some(tile) = gohma_stand(state) {
-                vec![tile]
+            let monster = |e: &crate::game::Enemy| Role::Monster { slot: e.index, kind: e.id };
+            let enemy_tiles: Vec<Aim> = if let Some(tile) = gohma_stand(state) {
+                vec![(Target::Tile(tile), Role::Stand(tile))]
             } else if let Some((g, phase)) = ganon(state) {
                 // Round 29: where his phase says (hidden: the square a stab reaches him from; shown: where he
                 // jumps to; brown: his row and column, for the arrow); dying, the square his ashes leave the
@@ -1726,31 +1874,27 @@ impl GameCompletion {
                 if phase == GanonPhase::Dying {
                     kind = ObjectiveKind::Treasure;
                 }
-                ganon_tiles(state, g, phase)
+                aims(ganon_tiles(state, g, phase), monster(g)).collect()
             } else if state.has_active_enemies() {
                 // A Patra's body takes no hit while a child lives (round 29): the children first.
                 let children = patra_children(state);
                 state
                     .active_enemies()
                     .filter(|e| !(children && is_patra(e.id)))
-                    .flat_map(|e| e.link_overlap_tiles())
+                    .flat_map(|e| aims(e.link_overlap_tiles(), monster(e)))
                     .collect()
             } else if state.enemies.iter().all(|e| e.id == enemy::WALLMASTER) {
                 // Every Wallmaster is in its wall (round 26, 7:0x0d): one comes out only while Link stands against
                 // a wall (asm:Wallmaster_Update@CheckLinkAtWall), and a hidden one's position is the spawn spot the
                 // game never uses, in the middle of the room.  The targets are the spots that bring one out.
-                crate::object_rules::wallmaster_lure_tiles()
+                aims(crate::object_rules::wallmaster_lure_tiles(), Role::Lure).collect()
             } else {
-                state
-                    .enemies
-                    .iter()
-                    .flat_map(|e| e.link_overlap_tiles())
-                    .collect()
+                state.enemies.iter().flat_map(|e| aims(e.link_overlap_tiles(), monster(e))).collect()
             };
             if enemy_tiles.is_empty() {
                 item = None;
             }
-            tiles.extend(enemy_tiles.into_iter().map(Target::Tile));
+            tiles.extend(enemy_tiles);
         }
         self.rooms.insert(loc, item);
         (kind, tiles, Vec::new())
@@ -1783,7 +1927,7 @@ impl GameCompletion {
         self.push_wanted(state, &next_rooms).is_some()
     }
 
-    fn map_objective(&mut self, state: &GameView) -> (Vec<Target>, BTreeSet<MapLocation>) {
+    fn map_objective(&mut self, state: &GameView) -> MapObjective {
         let loc = state.full_location();
         if loc.in_cave {
             return self.subroom_exit(state);
@@ -1864,12 +2008,12 @@ impl GameCompletion {
     /// Where Link leaves his room for the neighbouring room `next`: the exit's tiles within game.yaml's `span`, a
     /// raft crossing's dock, the spot to bomb an intact bomb wall from (`walls`: the intact walls' direction bits),
     /// the cave tiles for a sub-room or level below, else the direction itself.
-    fn exit_targets(&self, state: &GameView, next: MapLocation, walls: u8) -> Vec<Target> {
+    fn exit_targets(&self, state: &GameView, next: MapLocation, walls: u8) -> Vec<Aim> {
         let loc = state.full_location();
         let d = self.map.exit_direction(loc, next, state.peek(MAZE_STEP));
         if d == Direction::None {
             if next.in_cave != loc.in_cave {
-                return self.cave_tiles(state).into_iter().map(Target::Tile).collect();
+                return self.cave_tiles(state).into_iter().map(|(t, role)| (Target::Tile(t), role)).collect();
             }
             return Vec::new();
         }
@@ -1881,14 +2025,17 @@ impl GameCompletion {
             .filter(|exit| exit.raft)
             .and_then(|exit| exit.dock);
         if let Some(dock) = dock {
-            return vec![Target::Tile(dock)];
+            return vec![(Target::Tile(dock), Role::Dock { tile: dock, direction: d })];
         }
         let room = state.room();
         match room.exits.get(d) {
-            Some(tiles) => tiles_in_span(tiles, exit_span(&self.map, loc, d), d).into_iter().map(Target::Tile).collect(),
+            Some(tiles) => aims(tiles_in_span(tiles, exit_span(&self.map, loc, d), d), Role::Exit(d)).collect(),
             // An intact game.yaml bomb wall (Dungeon 3's 0x4c E into Manhandla's room): where to bomb it from.
-            None if walls & d.value() != 0 => vec![Target::Tile(bomb_spot(&room, d))],
-            None => vec![Target::Dir(d)],
+            None if walls & d.value() != 0 => {
+                let spot = bomb_spot(&room, d);
+                vec![(Target::Tile(spot), Role::BombWall { tile: spot, direction: d })]
+            }
+            None => vec![(Target::Dir(d), Role::Exit(d))],
         }
     }
 
@@ -1911,7 +2058,7 @@ impl GameCompletion {
                 && self.progress[i].matches(state)
                 && self
                     .step_exit(here, &step.exit)
-                    .is_some_and(|next| Self::walkable(state, &self.exit_targets(state, next, walls)))
+                    .is_some_and(|next| Self::walkable(state, &tiles_of(&self.exit_targets(state, next, walls))))
         })
     }
 
@@ -1928,7 +2075,7 @@ impl GameCompletion {
         };
         let mut best: (usize, BTreeSet<MapLocation>) = (usize::MAX, BTreeSet::new());
         for (name, exit) in &room.exits {
-            if Direction::from_exit(name).is_none() || !Self::walkable(state, &self.exit_targets(state, exit.destination, walls)) {
+            if Direction::from_exit(name).is_none() || !Self::walkable(state, &tiles_of(&self.exit_targets(state, exit.destination, walls))) {
                 continue;
             }
             let distance = goals
@@ -2527,6 +2674,7 @@ mod tests {
             treasure_refused: false,
             drops_first: false,
             bag_drops: false,
+            labels: Vec::new(),
         };
         for (row, correct) in [(3, true), (4, true), (15, false), (16, false)] {
             assert_eq!(

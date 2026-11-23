@@ -48,17 +48,24 @@ from typing import Callable, List, Optional
 from . import jobs
 from ._native import AcceptSpec, Explorer, ExploreResult, explore_states
 from .paths import TRAJECTORIES_DIR
+from .specialist import load_specialist
 
 __all__ = ['AcceptSpec', 'Explorer', 'ExploreResult', 'explore_specialist', 'main']
 
 
-def check_out(specialist: str, out) -> None:
-    """Raises ValueError when ``out`` is a specialist's track directory instead of the trajectories root (the
-    explorer appends ``<specialist>/``, so ``trajectories/<specialist>`` would write tracks no training loads)."""
+def family_name(specialist: str) -> str:
+    """The folder a specialist's tracks are written under: its config's name (``specialists/d3first/moldorm.yaml``
+    writes ``<out>/moldorm``, as the native explorer does)."""
+    return load_specialist(specialist).name
+
+
+def check_out(family: str, out) -> None:
+    """Raises ValueError when ``out`` is a family's track directory instead of the trajectories root (the
+    explorer appends ``<family>/``, so ``trajectories/<family>`` would write tracks no training loads)."""
     path = Path(out)
-    if path.name == specialist or any(path.glob('*/trajectory.json')):
+    if path.name == family or any(path.glob('*/trajectory.json')):
         raise ValueError(f"--out {out} is a track directory; pass the trajectories root (e.g. {path.parent}): "
-                         f"tracks are written to <out>/{specialist}/<state>")
+                         f"tracks are written to <out>/{family}/<state>")
 
 
 def track_dir(out, specialist: str, state: str, seed: int, variant: bool, kills: Optional[int] = None,
@@ -88,7 +95,8 @@ def explore_specialist(specialist: str, out: str, states: Optional[List[str]] = 
     state order.  ``out`` must be the trajectories root (``check_out``).  ``progress(done, total)``: the states
     explored so far, as they finish."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments
-    check_out(specialist, out)
+    family = family_name(specialist)
+    check_out(family, out)
 
     def run(root: str) -> list:
         return explore_states(specialist, root, states=states, iterations=iterations, explore_steps=explore_steps,
@@ -101,9 +109,9 @@ def explore_specialist(specialist: str, out: str, states: Optional[List[str]] = 
         return run(str(out))
     with tempfile.TemporaryDirectory() as tmp:
         results = run(tmp)
-        source = Path(tmp) / specialist          # the explorer creates it only when a state was solved
+        source = Path(tmp) / family              # the explorer creates it only when a state was solved
         tracks = sorted(source.iterdir()) if source.is_dir() else []
-        target_root = Path(out) / specialist
+        target_root = Path(out) / family
         for track in tracks:
             target_root.mkdir(parents=True, exist_ok=True)
             target = target_root / f'{track.name}~s{seed}'
@@ -133,7 +141,7 @@ def main(argv=None):
                         help="trajectories root (<out>/<specialist>/<state> is written; not <specialist>'s own dir)")
     args = parser.parse_args(argv)
     try:
-        check_out(args.specialist, args.out)
+        check_out(family_name(args.specialist), args.out)
     except ValueError as error:
         parser.error(str(error))
 
@@ -151,8 +159,8 @@ def main(argv=None):
         status = (f"success in {len(result.actions)} steps, health {result.health}"
                   + ("" if replayed else " (REPLAY MISMATCH)")) if result.success else "no success"
         kills = room_kills[2] if room_kills else None
-        track = track_dir(args.out, args.specialist, result.start_state, args.seed, args.variant, kills,
-                          args.clips == 'off')
+        track = track_dir(args.out, family_name(args.specialist), result.start_state, args.seed, args.variant,
+                          kills, args.clips == 'off')
         written = f"  -> {track}" if result.success and replayed else ''
         print(f"{result.start_state:8} {status:40} iterations={result.iterations} env_steps={result.env_steps} "
               f"cells={result.cells} {result.seconds:.0f}s{written}")

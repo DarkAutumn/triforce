@@ -52,6 +52,17 @@ def test_explore_writes_a_trajectory_the_curriculum_starts_from(room_states, tmp
     assert info['curriculum']['track'] == '0_67s_0'
 
 
+def test_a_variant_from_a_yaml_path_lands_under_the_family(room_states, tmp_path):
+    """``--specialist specialists/<route>/<family>.yaml --variant``: the track is moved to ``<out>/<family>``, the
+    folder the native explorer writes (it was looked for under the yaml path and lost)."""
+    from triforce.paths import SPECIALISTS_DIR  # pylint: disable=import-outside-toplevel
+    results = explore_specialist(str(SPECIALISTS_DIR / 'ow-octorok.yaml'), str(tmp_path), states=['0_67s_0'],
+                                 iterations=400, patience=10, states_dir=str(room_states), variant=True, seed=3)
+    [(result, replayed)] = results
+    assert result.success and replayed
+    assert (tmp_path / 'ow-octorok' / '0_67s_0~s3' / 'trajectory.json').is_file()
+
+
 def _allowed(env, action):
     from triforce.actions import Action, ActionMask  # pylint: disable=import-outside-toplevel
     return ActionMask.from_flat(env.mask).is_allowed(Action.parse(action))

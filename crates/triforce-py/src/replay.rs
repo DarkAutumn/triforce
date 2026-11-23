@@ -5,7 +5,7 @@ use crate::context::{self, TfzStore};
 use crate::convert::json_to_py;
 use crate::errors::{ReplayError, StateFormatError};
 use crate::game::screen_with;
-use ::replay::{Event, OUTCOME_CLASSES, Player, Replay};
+use ::replay::{Event, Names, OUTCOME_CLASSES, Player, Replay};
 use numpy::{PyArray, PyArray1, PyArrayMethods};
 use parking_lot::Mutex;
 use pyo3::prelude::*;
@@ -105,9 +105,9 @@ impl PyReplay {
             .collect()
     }
 
-    /// The events as dicts: `frame`, `type` ('control', 'room', 'outcome', 'episode' or 'segment') and the
+    /// The events as dicts: `frame`, `type` ('control', 'room', 'outcome', 'episode', 'segment' or 'visit') and the
     /// type's fields (room: `level`, `room`, `in_cave`, `step`, `policy`; outcome: `outcome`; episode: `ending`,
-    /// `outcome`, `terminated`, `truncated`).
+    /// `outcome`, `terminated`, `truncated`; visit: `record`, the room visit's record as the env judged it).
     fn events<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
         let out = PyList::empty(py);
         for record in self.replay.events() {
@@ -136,6 +136,16 @@ impl PyReplay {
                     d.set_item("truncated", truncated)?;
                 }
                 Event::Segment => d.set_item("type", "segment")?,
+                Event::Visit(text) => {
+                    d.set_item("type", "visit")?;
+                    // Python's parser: serde_json's default float parsing can be one ulp off (no
+                    // `float_roundtrip`, which would change every crate's parsing), and the record must read back
+                    // as the chain wrote it (`replay.chain_records`).
+                    let record = py.import("json")?.call_method1("loads", (text,)).map_err(|e| {
+                        ReplayError::new_err(format!("EVENTS section: a visit record: {e}"))
+                    })?;
+                    d.set_item("record", record)?;
+                }
             }
             out.append(d)?;
         }
@@ -162,14 +172,20 @@ impl PyReplay {
     }
 
     /// The model decisions: `frame`, `policy` int64 [n], `action` int64 [n, 3] (head indices), `value`
-    /// float32 [n] and `dist` float32 [n, N], every decision's whole distribution (META `actions` gives the
-    /// layout).  n = 0 when the replay has no decision stream.
+    /// float32 [n], `dist` float32 [n, N], every decision's whole distribution (META `actions` gives the
+    /// layout), and from version 2 `draw` (how the act mode drew it, META `tables.draws`; None before), `low` bool
+    /// [n] (its low-health part), `danger` (per decision None or `{joint index: P(hit)}` over the legal joint
+    /// actions) and `foresight` (per decision None or `{outcome, trials, frames, vetoed: [joint indices]}`).
+    /// n = 0 when the replay has no decision stream.
     fn decisions<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let width = self.replay.distribution().map_err(replay_err)?;
+        let names = Names::of(&self.replay.meta().map_err(replay_err)?);
         let records = self.replay.decisions().map_err(replay_err)?;
         let n = records.remaining() as usize;
         let (mut frame, mut policy, mut value) = (Vec::with_capacity(n), Vec::with_capacity(n), Vec::with_capacity(n));
         let (mut action, mut dist) = (Vec::with_capacity(3 * n), Vec::with_capacity(width * n));
+        let (draw, danger, foresight) = (PyList::empty(py), PyList::empty(py), PyList::empty(py));
+        let mut low = Vec::with_capacity(n);
         for decision in records {
             let d = decision.map_err(replay_err)?;
             frame.push(i64::from(d.frame));
@@ -177,6 +193,29 @@ impl PyReplay {
             action.extend(d.action.map(i64::from));
             value.push(d.value);
             dist.extend(d.distribution());
+            draw.append(d.draw.map(|i| names.draw(usize::from(i))))?;
+            low.push(d.low);
+            match d.danger {
+                Some(_) => {
+                    let row = PyDict::new(py);
+                    for (joint, p) in d.dangers() {
+                        row.set_item(joint, p)?;
+                    }
+                    danger.append(row)?;
+                }
+                None => danger.append(py.None())?,
+            }
+            match d.foresight {
+                Some(f) => {
+                    let row = PyDict::new(py);
+                    row.set_item("outcome", ["", "safe", "replaced", "unsafe"].get(usize::from(f.outcome)).copied())?;
+                    row.set_item("trials", f.trials)?;
+                    row.set_item("frames", f.frames)?;
+                    row.set_item("vetoed", f.vetoed().collect::<Vec<_>>())?;
+                    foresight.append(row)?;
+                }
+                None => foresight.append(py.None())?,
+            }
         }
         let n = frame.len();
         let out = PyDict::new(py);
@@ -185,6 +224,64 @@ impl PyReplay {
         out.set_item("action", PyArray::from_vec(py, action).reshape([n, 3])?)?;
         out.set_item("value", PyArray::from_vec(py, value))?;
         out.set_item("dist", PyArray::from_vec(py, dist).reshape([n, width])?)?;
+        out.set_item("draw", draw)?;
+        out.set_item("low", PyArray::from_vec(py, low))?;
+        out.set_item("danger", danger)?;
+        out.set_item("foresight", foresight)?;
+        Ok(out)
+    }
+
+    /// Every decision read for people, named by META `actions` (a kind only with the heads it has: `MOVE N 16`,
+    /// `SWORD E`, `WAIT 8`): per decision a dict of `chosen` (label, p, danger: P(hit) or None), `top` (the `top`
+    /// most likely legal actions, the same triples, most likely first), `legal` (how many were legal) and `vetoed`
+    /// (the planner's vetoed actions' labels, in the order tried).
+    #[pyo3(signature = (top=5))]
+    fn choices<'py>(&self, py: Python<'py>, top: usize) -> PyResult<Bound<'py, PyList>> {
+        let names = Names::of(&self.replay.meta().map_err(replay_err)?);
+        let out = PyList::empty(py);
+        for decision in self.replay.decisions().map_err(replay_err)? {
+            let d = decision.map_err(replay_err)?;
+            let choices = names.choices(&d);
+            let [k, di, u] = d.action.map(usize::from);
+            let chosen = choices.iter().find(|c| (c.kind, c.direction, c.duration) == (k, di, u));
+            let row = PyDict::new(py);
+            row.set_item(
+                "chosen",
+                chosen.map_or_else(|| (names.action_text(k, di, u), None, None), |c| (c.label.clone(), Some(c.p), c.danger)),
+            )?;
+            let best: Vec<_> = choices.iter().take(top).map(|c| (c.label.clone(), c.p, c.danger)).collect();
+            row.set_item("top", best)?;
+            row.set_item("legal", choices.len())?;
+            let vetoed: Vec<String> =
+                d.foresight.map_or_else(Vec::new, |f| f.vetoed().map(|j| names.joint_text(usize::from(j))).collect());
+            row.set_item("vetoed", vetoed)?;
+            out.append(row)?;
+        }
+        Ok(out)
+    }
+
+    /// The objective's changes (version 2; empty before), named by META `tables`: dicts of `frame`, `objective`
+    /// ('FIGHT', ...), `flags`, `route`, `step`, `way`, `stretch`, `next_rooms` and `retreats` ('8:0x3c') and
+    /// `targets` (each `{role, obs, reward_only, <the role's fields>}`: `{'role': 'monster', 'slot': 3, 'type': 42,
+    /// ...}`, `{'role': 'bomb-wall', 'col': 15, 'row': 2, 'dir': 'N', ...}`).
+    fn targets<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        let names = Names::of(&self.replay.meta().map_err(replay_err)?);
+        let out = PyList::empty(py);
+        for record in self.replay.targets() {
+            out.append(json_to_py(py, &names.targets_json(&record.map_err(replay_err)?))?)?;
+        }
+        Ok(out)
+    }
+
+    /// The action mask's changes (version 2; empty before): dicts of `frame`, `kinds` ({'MOVE': {'directions':
+    /// ['N', ...], 'durations': [4, 8, 16, 32]}, ...}: the legal kinds) and `blocked` ({'BOMB': ['tenth'], ...}: the
+    /// rules behind a kind's block, or that keep it to some directions).
+    fn masks<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        let names = Names::of(&self.replay.meta().map_err(replay_err)?);
+        let out = PyList::empty(py);
+        for record in self.replay.masks() {
+            out.append(json_to_py(py, &names.mask_json(&record.map_err(replay_err)?))?)?;
+        }
         Ok(out)
     }
 

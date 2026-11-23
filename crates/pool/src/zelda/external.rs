@@ -42,6 +42,9 @@ struct Reply {
     ready: bool,
     logits: Vec<f32>,
     value: f32,
+    /// The hit head's P(Link is hit) per joint action, when the network has one (`hit` false: none).
+    danger: Vec<f32>,
+    hit: bool,
 }
 
 struct QueueState {
@@ -98,12 +101,14 @@ impl ExternalQueue {
             st.replies.resize_with(slot + 1, Reply::default);
         }
         st.replies[slot].logits = vec![0.0; self.heads.size()];
+        st.replies[slot].danger = vec![0.0; self.heads.joint_size()];
         slot
     }
 
     /// Worker side: posts `obs` for `request` and waits for the answer: the logits into `logits`, the value
     /// returned. An error once the queue is closed.
-    fn ask(&self, request: Request, obs: &ObsData, logits: &mut [f32]) -> Result<f32, String> {
+    /// Worker side, also: the hit head's danger into `danger` and whether there is one.
+    fn ask(&self, request: Request, obs: &ObsData, logits: &mut [f32], danger: &mut [f32]) -> Result<(f32, bool), String> {
         let mut st = self.lock();
         if let Some(why) = &st.closed {
             return Err(why.clone());
@@ -120,7 +125,8 @@ impl ExternalQueue {
             if reply.ready {
                 reply.ready = false;
                 logits.copy_from_slice(&reply.logits);
-                return Ok(reply.value);
+                danger.copy_from_slice(&reply.danger);
+                return Ok((reply.value, reply.hit));
             }
             st = self.answered.wait(st).unwrap_or_else(|e| e.into_inner());
         }
@@ -164,17 +170,24 @@ impl ExternalQueue {
         true
     }
 
-    /// Server side: the answers of the rows taken for `slots` (row `i`: `logits[i * size..]`, `values[i]`).
-    pub fn answer(&self, slots: &[usize], logits: &[f32], values: &[f32]) -> Result<(), String> {
-        let size = self.heads.size();
-        if logits.len() != slots.len() * size || values.len() != slots.len() {
+    /// Server side: the answers of the rows taken for `slots` (row `i`: `logits[i * size..]`, `values[i]`) and, for
+    /// networks with a hit head, its logits per joint action (`hit[i * joint..]`, a row whose first value is NaN:
+    /// that network has none).
+    pub fn answer(&self, slots: &[usize], logits: &[f32], values: &[f32], hit: Option<&[f32]>) -> Result<(), String> {
+        let (size, joint) = (self.heads.size(), self.heads.joint_size());
+        if logits.len() != slots.len() * size
+            || values.len() != slots.len()
+            || hit.is_some_and(|h| h.len() != slots.len() * joint)
+        {
             return Err(format!(
-                "{} slots need {} logits and {} values, got {} and {}",
+                "{} slots need {} logits, {} values and {} hit logits, got {}, {} and {:?}",
                 slots.len(),
                 slots.len() * size,
                 slots.len(),
+                slots.len() * joint,
                 logits.len(),
-                values.len()
+                values.len(),
+                hit.map(<[f32]>::len)
             ));
         }
         let mut st = self.lock();
@@ -182,6 +195,13 @@ impl ExternalQueue {
             let reply = st.replies.get_mut(slot).ok_or_else(|| format!("no slot {slot}"))?;
             reply.logits.copy_from_slice(&logits[i * size..(i + 1) * size]);
             reply.value = values[i];
+            let row = hit.map(|h| &h[i * joint..(i + 1) * joint]).filter(|row| !row[0].is_nan());
+            reply.hit = row.is_some();
+            if let Some(row) = row {
+                for (p, &h) in reply.danger.iter_mut().zip(row) {
+                    *p = 1.0 / (1.0 + (-h).exp());
+                }
+            }
             reply.ready = true;
         }
         drop(st);
@@ -230,6 +250,11 @@ pub struct HybridScratch {
     acting: LogitScratch,
     /// A served decision's ranked alternatives ([`Heads::ranked`]).
     ranked: Vec<([usize; 3], f32)>,
+    /// The last decision was a served network's: its distribution (when kept) and its hit head's danger.
+    external: bool,
+    dist: Vec<f32>,
+    danger: Vec<f32>,
+    hit: bool,
 }
 
 impl HybridActor {
@@ -280,6 +305,10 @@ impl Actor<ZeldaAction> for HybridActor {
             logits: vec![0.0; self.queue.heads().size()],
             acting: self.queue.heads().scratch(),
             ranked: Vec::new(),
+            external: false,
+            dist: vec![0.0; if self.native.keeps_distributions() { self.queue.heads().size() } else { 0 }],
+            danger: vec![0.0; self.queue.heads().joint_size()],
+            hit: false,
         }
     }
 
@@ -293,7 +322,10 @@ impl Actor<ZeldaAction> for HybridActor {
         s: &mut HybridScratch,
     ) -> Result<(ZeldaAction, Decision), String> {
         match self.net(policy)? {
-            (_, Net::Native(i)) => self.native.act(obs, i as i64, job, step, situation, &mut s.native),
+            (_, Net::Native(i)) => {
+                s.external = false;
+                self.native.act(obs, i as i64, job, step, situation, &mut s.native)
+            }
             (p, Net::External(model)) => {
                 let request = Request {
                     slot: s.slot,
@@ -302,14 +334,19 @@ impl Actor<ZeldaAction> for HybridActor {
                     step,
                     bootstrap: false,
                 };
-                let value = self.queue.ask(request, obs, &mut s.logits)?;
+                let (value, hit) = self.queue.ask(request, obs, &mut s.logits, &mut s.danger)?;
+                (s.external, s.hit) = (true, hit);
                 let choose: Choose = self.modes[p].choose(situation.stall, situation.health);
-                let (out, acting) = self
-                    .queue
-                    .heads()
-                    .act(&s.logits, value, obs.bool(self.mask), choose, job, step, None, &mut s.acting)
+                let heads = self.queue.heads();
+                let mask = obs.bool(self.mask);
+                let (out, acting) = heads
+                    .act(&s.logits, value, mask, choose, job, step, None, &mut s.acting)
                     .map_err(|e| e.0)?;
+                if !s.dist.is_empty() {
+                    heads.distribution(&s.logits, mask, &mut s.dist);
+                }
                 let [k, d, u] = out.action;
+                let (draw, low) = self.modes[p].draw(situation.stall, situation.health);
                 Ok((
                     [k as i64, d as i64, u as i64],
                     Decision {
@@ -319,6 +356,8 @@ impl Actor<ZeldaAction> for HybridActor {
                         act_log_prob: acting.log_prob,
                         act_entropy: acting.entropy,
                         foresee: None,
+                        draw,
+                        low,
                     },
                 ))
             }
@@ -336,13 +375,20 @@ impl Actor<ZeldaAction> for HybridActor {
                     step: -1,
                     bootstrap: true,
                 };
-                self.queue.ask(request, obs, &mut s.logits)
+                self.queue.ask(request, obs, &mut s.logits, &mut s.danger).map(|(value, _)| value)
             }
         }
     }
 
     fn distribution<'a>(&self, s: &'a HybridScratch) -> Option<&'a [f32]> {
-        self.native.distribution(&s.native)
+        match s.external {
+            true => (!s.dist.is_empty()).then_some(&s.dist[..]),
+            false => self.native.distribution(&s.native),
+        }
+    }
+
+    fn danger<'a>(&self, s: &'a HybridScratch) -> Option<&'a [f32]> {
+        (s.external && s.hit).then_some(&s.danger[..])
     }
 
     fn foresight(&self, policy: i64, situation: Situation) -> Option<Foresight> {

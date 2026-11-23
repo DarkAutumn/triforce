@@ -32,7 +32,7 @@ def test_a_route_run_trains_on_its_own_yaml_where_there_is_one():
     """``family@d3first`` reads ``specialists/d3first/<family>.yaml`` (the wood-sword runs' tasks): each loads, on
     the route's states; a key without one (or without a route) reads the family's yaml."""
     yamls = sorted((ROOT / 'specialists' / 'd3first').glob('*.yaml'))
-    assert len(yamls) == 20
+    assert len(yamls) == 21
     for path in yamls:
         assert task_yaml(f'{path.stem}@d3first') == str(path)
         config = load_specialist(str(path))

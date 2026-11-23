@@ -5,6 +5,7 @@
     .venv/bin/python create-video.py wins.mp4 2x3 runs/wins                # a folder's replays, six at a time
     .venv/bin/python create-video.py best.mp4 3x3 a.tfreplay b.tfreplay … --sound   # with the middle cell's sound
     .venv/bin/python create-video.py run.mkv run.tfreplay --sound --controller --scale 3
+    .venv/bin/python create-video.py thinking.mp4 run.tfreplay --thoughts --scale 3
 
 OUT is the video file: H.264 (and AAC sound) in the container its name asks for (.mp4, .mkv, .mov), at the NES's
 60.1 frames per second.  It needs ffmpeg on the PATH.
@@ -25,6 +26,12 @@ savestate has no sound state to start from, so each voice comes in with its next
 
 --controller draws the controller in the top right of every cell (over -LIFE-), the buttons held on each frame
 lit white.
+
+--thoughts draws what each replay says the agent was thinking over the bottom of its cell, as play-zelda.py
+--thoughts does (triforce/thoughts.py): the objective and its targets with the rooms they lead to, the actions it
+could take (and the rule behind each blocked one), and the network that acted, the action it chose with its
+probability and danger estimate, and the next most likely actions.  Only replays recorded since version 2 carry
+these; older ones show none.  A larger --scale makes the lines readable.
 """
 
 import argparse
@@ -62,6 +69,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--controller', action='store_true',
                         help="draw the controller in the top right of every cell (over -LIFE-), the buttons held "
                              "on each frame lit white")
+    parser.add_argument('--thoughts', action='store_true',
+                        help="draw what each replay says the agent was thinking over its cell: the objective and "
+                             "targets, the actions it could take, the one chosen with its probability and the "
+                             "next most likely (replay version 2 on)")
     parser.add_argument('--states-dir', default=None,
                         help="where replays recorded with --state path find their start states (default the "
                              "states directory)")
@@ -117,7 +128,7 @@ def main(argv=None) -> int:
     try:
         ffmpeg()
         grid = VideoGrid(cols * rows, args.replays, heard=heard, controller=args.controller,
-                         states_dir=args.states_dir)
+                         states_dir=args.states_dir, thoughts=args.thoughts)
     except (RuntimeError, ValueError) as error:
         parser.error(str(error))
     app = QApplication.instance() or QApplication(sys.argv[:1])
@@ -147,7 +158,7 @@ def main(argv=None) -> int:
     jobs.progress(len(args.replays), len(args.replays), 'replays')
     print(json.dumps({'out': args.out, 'frames': frames, 'seconds': round(frames / grid.fps, 2),
                       'width': size.width() + size.width() % 2, 'height': size.height() + size.height() % 2,
-                      'replays': len(args.replays), 'sound': args.sound,
+                      'replays': len(args.replays), 'sound': args.sound, 'thoughts': args.thoughts,
                       'heard': heard, 'took': round(time.monotonic() - started, 1)}))
     return 0
 

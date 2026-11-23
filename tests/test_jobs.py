@@ -156,6 +156,60 @@ def test_descriptions_and_refused_commands():
             job.check_command(refused)
 
 
+def test_only_the_program_is_refused_not_an_argument_that_reads_like_one():
+    job.check_command(['python', '-m', 'pytest', '-k', 'timeout'])
+    job.check_command(['env', 'A=1', 'python', 'nice'])
+    job.check_command(['-k', 'timeout or nice'], options=True)       # the options of build, test and golden
+    job.check_command([], options=True)
+    for refused in (['env', '-i', 'A=1', 'nice', 'x'], ['A=1', 'timeout', '5', 'x'], ['env', 'TRIFORCE_JOB_ID=3', 'x']):
+        with pytest.raises(job.JobError):
+            job.check_command(refused)
+    with pytest.raises(job.JobError):
+        job.check_command(['CARGO_BUILD_JOBS=8'], options=True)
+
+
+def test_an_older_checkouts_golden_racer_is_not_called_dry(tmp_path, monkeypatch):
+    """A checkout whose tools do not answer the dry call (an old version's tree) would run its whole race outside
+    the queue: ``golden`` refuses it and says how to run it."""
+    (tmp_path / '.git').mkdir()
+    (tmp_path / 'triforce').mkdir()
+    (tmp_path / 'triforce' / 'jobs.py').write_text('# an old queue\n')
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(job, 'ask_work', lambda *_: pytest.fail("the old racer was started"))
+    assert job.main(['golden', '--agent', 'A', '--task', 'T', '--timeout', '10m']) == 2
+
+
+def test_the_database_gains_a_new_column_and_loses_old_rows(tmp_path):
+    con = q.connect(tmp_path)
+    con.execute('ALTER TABLE jobs DROP COLUMN progress')           # a file written before the column existed
+    con.close()
+    con = q.connect(tmp_path)
+    try:
+        assert 'progress' in {r['name'] for r in con.execute('PRAGMA table_info(jobs)')}
+        for status, finished in (('completed', NOW - q.KEEP_SECONDS - 1), ('completed', NOW - 60), ('running', None)):
+            con.execute("INSERT INTO jobs (status, finished_ts) VALUES (?, ?)", (status, finished))
+        with q.transaction(con):
+            assert q.prune(con, NOW) == 1
+        assert [r['status'] for r in q.read_jobs(con)] == ['completed', 'running']
+    finally:
+        con.close()
+
+
+def test_a_stop_is_noted_never_raised_from_the_handler(tmp_path, monkeypatch):
+    monkeypatch.setenv(jobs.JOB_ID_ENV, '0')
+    handled = (signal.SIGTERM, signal.SIGINT, signal.SIGHUP, signal.SIGALRM)
+    previous = {signum: signal.getsignal(signum) for signum in handled}
+    try:
+        wrapper = job.Wrapper(tmp_path)
+        wrapper._signal(signal.SIGTERM, None)       # pylint: disable=protected-access
+        assert wrapper.stopped == signal.SIGTERM
+        with pytest.raises(job.Stopped):
+            wrapper.check_stop()
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
+
+
 def test_which_commands_the_queue_measures(tmp_path):
     root = Path(__file__).resolve().parents[1]
     venv = str(root / '.venv' / 'bin')
@@ -273,5 +327,6 @@ def test_setup_makes_the_worktree_its_links_venv_and_build_as_one_tools_entry(tm
     assert [step.name for step in seen['steps']] == ['worktree', 'links', 'venv', 'install', 'build']
     assert seen['steps'][0].command[-3:] == ['-b', 'r41-x', 'main']
     target = tmp_path / 'triforce-r41-x'
-    assert all((target / name).resolve() == main / name for name in ('roms', 'trajectories', 'models'))
+    assert all((target / name).resolve() == main / name for name in ('roms', 'trajectories'))
+    assert not (target / 'models').exists()       # a worktree's runs and pointers stay its own
     assert seen['steps'][-1].env['CARGO_BUILD_JOBS'] == str(job.CARGO_JOBS)

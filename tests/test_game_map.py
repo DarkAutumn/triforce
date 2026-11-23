@@ -127,6 +127,20 @@ def test_d3first_keeps_the_bag_through_dungeon_7_to_0x1b():
     assert [len(native.route_steps(r)) for r in ('d2first', 'd3first')] == [354, 290]
 
 
+def test_d3first_crosses_moldorm_and_takes_0x56s_key():
+    """Round 39 (the owner, Nov 22): d3first crosses 2:0x3e (`treasure: skip`, the Moldorm left alive) and fights
+    9:0x56 for its key (its game.yaml treasure, which appears once the Zols and Like-Likes are dead: trigger 7); d2first
+    fights the Moldorm and crosses 0x56, as before.  Each route writes both rooms itself, between the blocks."""
+    rooms = {(2, 0x3e), (9, 0x56)}
+    for route, wanted in (('d3first', ['skip', None]), ('d2first', [None, 'skip'])):
+        steps = [s for s in native.route_steps(route) if (s['level'], s['room']) in rooms and not s['in_cave']]
+        assert [(s['specialist'], s['entry'], s['exit'], s['treasure']) for s in steps] == [
+            ('moldorm', 'S', 'N', wanted[0]), ('like-like', 'S', 'W', wanted[1])], route
+    game = native.game_rooms()
+    assert game[(2, 0x3e, False)]['treasure'] == game[(9, 0x56, False)]['treasure'] == 'key'
+    assert [s['index'] for s in native.route_steps('d3first') if (s['level'], s['room']) in rooms] == [100, 246]
+
+
 def test_rooms_visited_more_than_once_have_later_visit_names():
     """Phase X: a room the route enters from the same side again has its later visit's state name (``_v2``), on each
     route; d3first's are in its namespace."""

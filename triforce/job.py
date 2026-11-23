@@ -90,14 +90,27 @@ def check_description(text: Optional[str]) -> str:
     return text
 
 
-def check_command(command: list[str]):
-    """Refuses a priority, I/O priority, time limit or cargo job count given after ``--``: they are the queue's."""
-    if not command:
+def check_command(command: list[str], options: bool = False):
+    """Refuses a priority, I/O priority, time limit or cargo job count given after ``--``: they are the queue's.
+    A command (``run``): the program it starts (after ``env`` and its ``NAME=value`` assignments) must not be one
+    of ``REFUSED_PROGRAMS``, and no leading assignment one of ``REFUSED_ASSIGNMENTS``; an argument that merely
+    reads ``timeout`` or ``nice`` (``pytest -k timeout``) is the command's own.  ``options`` (what follows ``--``
+    of ``build``, ``test`` and ``golden``: the tool's options, no program): only the assignments."""
+    if not command and not options:
         raise JobError("no command after --")
-    for token in command:
-        if Path(token).name in REFUSED_PROGRAMS or token.startswith(REFUSED_ASSIGNMENTS):
-            raise JobError(f"'{token}' after --: priority, time limits and the cargo job count are the queue's "
-                           f"(--timeout is the time limit; nice and CARGO_BUILD_JOBS are set by the verb)")
+
+    def refuse(token: str):
+        raise JobError(f"'{token}' after --: priority, time limits and the cargo job count are the queue's "
+                       f"(--timeout is the time limit; nice and CARGO_BUILD_JOBS are set by the verb)")
+    for index, token in enumerate(command):
+        if token.startswith(REFUSED_ASSIGNMENTS):
+            refuse(token)
+        if options or token == 'env' or re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*=.*', token) or (
+                index and command[0] == 'env' and token.startswith('-')):
+            continue
+        if Path(token).name in REFUSED_PROGRAMS:
+            refuse(token)
+        break
 
 
 def git_root(path: Path) -> Optional[Path]:
@@ -148,11 +161,7 @@ def tool_of(command: list[str], cwd: Path) -> Optional[tuple[str, Path]]:
     if tool is None:
         return None
     checkout = checkout or git_root(cwd.resolve())
-    try:
-        announces = JOB_ESTIMATE_ENV in (checkout / 'triforce' / 'jobs.py').read_text(encoding='utf-8')
-    except (OSError, TypeError):
-        return None
-    return (tool, checkout) if announces else None
+    return (tool, checkout) if checkout is not None and announces(checkout) else None
 
 
 def ask_work(command: list[str], cwd: Path) -> Union[int, dict]:
@@ -171,10 +180,11 @@ def ask_work(command: list[str], cwd: Path) -> Union[int, dict]:
 
 class Step:
     """One command of a job (a build, a test suite), or a Python callable (``setup``'s links); its progress is the
-    row's ``steps``."""
+    row's ``steps``.  ``required``: its failure ends the job (the default; a test suite of several is not)."""
 
-    def __init__(self, name: str, command: Union[list, Callable[[], int]], cwd: Path, env: Optional[dict] = None):
-        self.name, self.command, self.cwd, self.env = name, command, cwd, env or {}
+    def __init__(self, name: str, command: Union[list, Callable[[], int]], cwd: Path, env: Optional[dict] = None,
+                 required: bool = True):
+        self.name, self.command, self.cwd, self.env, self.required = name, command, cwd, env or {}, required
 
 
 class Stopped(Exception):
@@ -202,15 +212,32 @@ class Wrapper:
         self.deadline: Optional[float] = None
         for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
             signal.signal(signum, self._signal)
+        signal.signal(signal.SIGALRM, self._alarm)
 
     def _signal(self, signum, _frame):
+        """A stop: noted, passed to the command's group, and the group killed ``GRACE_SECONDS`` later if it is still
+        there.  Nothing is raised from the handler (it can land inside a transaction, or between starting the
+        command and recording it): the waits check ``stopped`` (``check_stop``)."""
         self.stopped = signum
-        if self.child is None:
-            raise Stopped(signum)
-        try:
-            os.killpg(self.child.pid, signum)
-        except ProcessLookupError:
-            pass
+        if self.child is not None:
+            self._signal_group(signum)
+            signal.setitimer(signal.ITIMER_REAL, GRACE_SECONDS)
+
+    def _alarm(self, _signum, _frame):
+        self._signal_group(signal.SIGKILL)
+
+    def _signal_group(self, signum: int):
+        child = self.child
+        if child is not None:
+            try:
+                os.killpg(child.pid, signum)
+            except ProcessLookupError:
+                pass
+
+    def check_stop(self):
+        """Raises ``Stopped`` once a stop was noted and no command runs (while joining, waiting or between steps)."""
+        if self.stopped is not None and self.child is None:
+            raise Stopped(self.stopped)
 
     @property
     def name(self) -> str:
@@ -246,6 +273,7 @@ class Wrapper:
         began = time.monotonic()
         update = None
         while True:
+            self.check_stop()
             with q.transaction(self.con):
                 now = time.time()
                 current = q.turn(self.con, self.directory, self.id, now)
@@ -283,6 +311,8 @@ class Wrapper:
             say(f"{step.name}: {error}")
             return 127
         self.row['child'] = self.child.pid
+        if self.stopped is not None:        # a stop noted while the command was starting
+            self._signal(self.stopped, None)
         with q.transaction(self.con):
             q.update(self.con, self.id, child=self.child.pid)
         try:
@@ -296,7 +326,8 @@ class Wrapper:
                     self._stop_group(signal.SIGTERM)
                     self.deadline = None
         finally:
-            self._stop_group(signal.SIGKILL)     # nothing of the job outlives its command
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            self._signal_group(signal.SIGKILL)     # nothing of the job outlives its command
             self.child = None
         return code if code >= 0 else 128 - code
 
@@ -315,26 +346,32 @@ class Wrapper:
                 self._stop_group(signal.SIGKILL)
 
     def run_steps(self, steps: list[Step], timeout: Optional[float]) -> int:
-        """The job's steps in order (a failing one ends the job); returns the exit code of the last one run."""
+        """The job's steps in order; returns the first failing step's exit code (0: all passed).  A failing
+        ``required`` step ends the job (a build before its tests); after a failing one that is not (a test suite of
+        ``test all``) the next still run, so one entry shows every suite."""
         env = {key: value for key, value in os.environ.items() if key != JOB_ESTIMATE_ENV}
         env.update({JOB_ID_ENV: str(self.id), JOB_LABEL_ENV: self.row['name'], **OLD_QUEUE_OFF})
         self.deadline = None if timeout is None else time.monotonic() + timeout
         progress = [{'name': step.name, 'status': 'pending'} for step in steps]
         code = 0
         for index, step in enumerate(steps):
+            if self.stopped is not None:
+                break
             if len(steps) > 1:
                 progress[index]['status'] = 'running'
                 self.set_steps(progress)
-            code = self.run_command(step, env)
+            result = self.run_command(step, env)
             if len(steps) > 1:
-                progress[index]['status'] = 'completed' if code == 0 else 'failed'
+                progress[index]['status'] = 'completed' if result == 0 else 'failed'
                 self.set_steps(progress)
-            if code != 0 or self.timed_out or self.stopped:
+            code = code or result
+            if self.timed_out or self.stopped is not None or (result != 0 and step.required):
                 break
         return code
 
     def finish(self, status: str, code: Optional[int], result: Optional[str] = None):
-        """Marks the job ended and appends it to the history (the rates and the calibration learn from it)."""
+        """Marks the job ended and appends it to the history (the rates and the calibration learn from it); the
+        ended rows older than ``q.KEEP_SECONDS`` go (the history stays)."""
         now = time.time()
         admitted = self.row.get('admitted_ts')
         with q.transaction(self.con):
@@ -343,10 +380,15 @@ class Wrapper:
                              "VALUES (?, ?, ?, ?, ?, ?, ?)",
                              (self.id, self.row.get('kind'), json.dumps(self.row.get('work') or {}),
                               self.row.get('estimate'), None if admitted is None else now - admitted, status, now))
+            q.prune(self.con, now)
         for fd in (self.place_fd, self.job_fd):
             if fd is not None:
                 os.close(fd)
         self.place_fd = self.job_fd = None
+        try:        # the job's lock file has done its work (a late probe of it only recreates an empty file)
+            q.lock_path(self.directory, f'job-{self.id}').unlink()
+        except OSError:
+            pass
 
 
 def count_lines(path: Path, total: Optional[float], unit: str, stop) -> None:
@@ -390,8 +432,8 @@ def run_job(fields: dict, steps: list[Step], timeout: Optional[float] = None,
                 result, status, code = on_timeout(), 'completed', 0
             else:
                 code = 124
-        elif wrapper.stopped:
-            status = 'interrupted'
+        elif wrapper.stopped is not None:
+            status, code = 'interrupted', code or 128 + wrapper.stopped
         else:
             status = 'completed' if code == 0 else 'failed'
         if after is not None and not wrapper.stopped:
@@ -516,11 +558,23 @@ def checkout_python(root: Path) -> str:
     return str(python) if python.exists() else sys.executable
 
 
+def announces(checkout: Path) -> bool:
+    """The checkout's tools answer the wrapper's dry call (``jobs.announce``); an older version's would run."""
+    try:
+        return JOB_ESTIMATE_ENV in (checkout / 'triforce' / 'jobs.py').read_text(encoding='utf-8')
+    except OSError:
+        return False
+
+
 def cmd_golden(args, extra: list[str]) -> int:
-    check_command(extra or ['zelda-headless.py'])
+    check_command(extra, options=True)
     root = git_root(Path.cwd().resolve())
     if root is None:
         raise JobError("golden runs in a checkout (no git root above this folder)")
+    if not announces(root):
+        raise JobError(f"{root.name}'s golden racer is an older version's (it would not answer the queue's dry call "
+                       f"and may lack these flags): run it as `triforce job run --timeout 10m ... -- "
+                       f".venv/bin/python zelda-headless.py OUT 1 --golden ...` with the flags that version has")
     models = next((extra[i + 1] for i, token in enumerate(extra[:-1]) if token == '--models-dir'),
                   next((token.split('=', 1)[1] for token in extra if token.startswith('--models-dir=')), None))
     try:
@@ -553,15 +607,30 @@ def build_step(root: Path, extra: list[str]) -> Step:
 
 
 def test_steps(root: Path, suite: str, extra: list[str]) -> list[Step]:
+    """The suites' steps: ``python`` (pytest of ``tests``), ``asm`` (the disassembly's own tests, then ``asm.py
+    check``: no edit changed the code, every ``asm:`` citation resolves), ``rust`` (the cargo workspace).  None is
+    ``required``: with several, each runs whatever the one before did.  A worktree without its own ``models``
+    reads the main checkout's (``$TRIFORCE_MODELS_DIR``; a few tests read the promoted team), never linked in."""
     python = checkout_python(root)
     env = {'CARGO_BUILD_JOBS': str(CARGO_JOBS)}
+    if not (root / 'models').exists() and not os.environ.get('TRIFORCE_MODELS_DIR'):
+        try:
+            models = main_checkout(root) / 'models'
+        except (OSError, subprocess.SubprocessError):
+            models = None
+        if models is not None and models.is_dir():
+            env['TRIFORCE_MODELS_DIR'] = str(models)
 
-    def one(name: str) -> Step:
+    def some(name: str) -> list[Step]:
         if name == 'rust':
-            return Step('test rust', ['cargo', 'test', '--release', '--workspace', '--features', 'zelda/zcore',
-                                      *extra], root, env)
-        return Step(f'test {name}', [python, '-m', 'pytest', '-q', TEST_SUITES[name], *extra], root, env)
-    return [one(name) for name in (('python', 'asm', 'rust') if suite == 'all' else (suite,))]
+            return [Step('test rust', ['cargo', 'test', '--release', '--workspace', '--features', 'zelda/zcore',
+                                       *extra], root, env, required=False)]
+        steps = [Step(f'test {name}', [python, '-m', 'pytest', '-q', TEST_SUITES[name], *extra], root, env,
+                      required=False)]
+        if name == 'asm':
+            steps.append(Step('asm check', [python, 'zelda-asm/tools/asm.py', 'check'], root, env, required=False))
+        return steps
+    return [step for name in (('python', 'asm', 'rust') if suite == 'all' else (suite,)) for step in some(name)]
 
 
 def _tools_root() -> Path:
@@ -572,8 +641,7 @@ def _tools_root() -> Path:
 
 
 def cmd_build(args, extra: list[str]) -> int:
-    if extra:
-        check_command(extra)
+    check_command(extra, options=True)
     root = _tools_root()
     step = build_step(root, extra)
     fields = _fields(args, 'build', q.TOOLS_LANE, 'build', step.command, root, TOOL_NICE, None,
@@ -582,8 +650,8 @@ def cmd_build(args, extra: list[str]) -> int:
 
 
 def cmd_test(args, extra: list[str]) -> int:
+    check_command(extra, options=True)
     if extra:
-        check_command(extra)
         if args.suite == 'all':
             raise JobError("test all takes no options after -- (they would go to three different suites)")
     root = _tools_root()
@@ -610,7 +678,9 @@ def cmd_setup(args) -> int:
     args.task = 'setup'
 
     def link() -> int:
-        for name in ('roms', 'trajectories', 'models'):
+        # ``models`` is never linked: a worktree's own runs and pointers stay its own (it reads the main
+        # checkout's team with ``--models-dir``, and its tests with ``$TRIFORCE_MODELS_DIR``, ``test_steps``).
+        for name in ('roms', 'trajectories'):
             if not (target / name).exists() and (main / name).exists():
                 (target / name).symlink_to(main / name)
         return 0

@@ -522,6 +522,16 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 
 - **Commit after each finished item.** If an experiment makes no forward progress, ask whether to commit the code or
   only update the experiment ledger.
+- **The lead reviews before anything merges or runs at length** (the owner, Nov 23, until he says otherwise: "Treat
+  yourself as the arbiter of quality and correctness and clean up when needed, delegate to a subagent to clean up
+  if it's going to be a lot of work (but then re-review)"; and the order of work: "build this, then tell me, then I
+  review it, then I delegate back to you or a new subagent to actually run the code"). So a piece of work has three
+  steps with a stop between them: **build** (code, tests, a smoke of a few runs; the agent reports and stops, it
+  starts no training, chain or batch on unreviewed code), **review** (the lead reads the diff: the design, the edge
+  cases, what the tests really prove, dead code and shims left behind; fixes small things itself, sends large
+  clean-ups back with a list and reads the result again), **run** (the lead hands the experiments to the same
+  agent or a new one, on the reviewed commit). A branch marked `LANDABLE` is a proposal; suites passing is
+  necessary, never sufficient. Agents: say in the report where the risky parts are and what was not tested.
 - **Every completed stretch lands in the main checkout and is pushed, playable** (the owner, Nov 17: "after each
   completion (like d6 done, d8 -> d9 etc) gets merged back into triforce and pushed. I really want to be able to do
   play-zelda and see the progress as you work"). A stretch is a dungeon with its leg (the D7 triforce, the magic
@@ -758,7 +768,10 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 
 ## Versioning (the owner, Nov 11; the third number and model compatibility redefined Nov 23)
 
-- **One version, `MAJOR.MINOR.GEN.REV`, in the `VERSION` file** (now `2.0.0.12`: `ow-lynel`'s `late.d3first` run for the leg
+- **One version, `MAJOR.MINOR.GEN.REV`, in the `VERSION` file** (now `2.0.0.13`: `d3first` crosses 2:0x3e (the
+  Moldorm left) and takes 9:0x56's key instead, moldorm `r39t-moldorm` through `promoted.d3first` and like-like
+  `r39t-like` through `late.d3first` (Dungeon 9 6.7% -> 51.2% against 53.0% fighting the Moldorm, 1000 runs paired;
+  round39.md "Moldorm crossed, 9:0x56's key: the two fine-tunes"); 2.0.0.12 was `ow-lynel`'s `late.d3first` run for the leg
   after Dungeon 6 (33.3% -> 100.0%, 1000 runs; decisions 2026-11-23); 2.0.0.11 was `ow-lynel@d3first` for the leg
   after Dungeon 7 (24% -> 99%), rupees rewarded once a pickup and the beam terms, round38.md "Beams at range; rupees
   per pickup"; 2.0.0.10 was a fresh `ow-start@d3first` for
@@ -819,9 +832,9 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   (`TRIFORCE_ALLOW_INCOMPATIBLE_MODELS`) went with the old rule (Nov 23).
 - Tag releases `vX.Y.Z.R` on `main`. **Models are not checked in** (too large; kept in `/backup/triforce`, "Backups").
 - **Replays are `TFREPLAY` files** (`crates/replay`, `triforce/replay.py`) with their own integer `REPLAY_VERSION`,
-  independent of the repo version. It is bumped when an existing replay can no longer be replayed bit-exactly
-  (a container change the reader does not handle, a zcore behaviour change, a dropped state decoder), or when an older
-  reader could not read what is written (version 1, round 32: a state's route grants); the reader
+  independent of the repo version. Every format change bumps it (the owner, Nov 23: replays never need to be
+  readable by older readers; version 2 added TARGETS, MASKS and the always-on DECISIONS); a reader refuses a newer
+  replay by name and
   keeps reading every earlier version it can. `corpus/replays/` must keep verifying (`tf replay verify`, a cargo
   test): a deliberate break moves those files to `corpus/replays/retired/`, bumps `REPLAY_VERSION` and records new
   ones. Replacing a corpus file pins new facts: `crates/tools/tests/cli.rs` `the_replay_corpus_still_verifies`
@@ -838,7 +851,19 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 - **Recording and replaying** (`docs/architecture.md` "Replays", "Headless play and the golden path",
   "Watching"): `triforce eval-chain|evaluate --replays DIR`, `zelda-headless.py OUT [COUNT]
   [--wins-only|--deaths-only|--stuck-only] [--golden] [--clips on|off]`; optional streams `--streams
-  rewards,decisions,keyframes`.
+  rewards,keyframes`. **A replay says on its own what the agent was steered to, what it could do and what it
+  chose** (the owner, Nov 23; version 2): every replay carries the objective and its role-labelled targets
+  (TARGETS, `obs` or `reward-only`), the action mask with the rule behind each block (MASKS) and every decision
+  (DECISIONS: the network, the action, the quantized distribution, the hit head's danger, the act mode's draw,
+  the planner's vetoes), all named by its own META, which also describes each network that made a decision in it
+  (family, run, checkpoint SHA-1, architecture, outputs; the rest of the team by name, run and checkpoint SHA-1)
+  and a chain run's record. Keep it that way: a new target kind, role or network
+  output is a new META name, never a filesystem path (`test_a_replay_holds_no_filesystem_path`), and what is
+  computable from RAM is not recorded again. A chain's report and runs-250 record must be computable from its
+  replays alone (`replay.chain_records`, `scripts/full_runs.py report --from-replays`, `stats --from-replays`).
+  People read them with `tf replay
+  targets FILE [--room L:RR] [--masks] [--decisions]`, `play-zelda.py --thoughts` and `create-video.py
+  --thoughts`.
   `tf replay info FILE`, `tf replay verify FILE...` (the emulator alone; exit 1 on a divergence). The golden path
   is a race, so which seed wins a segment can differ between two invocations; each saved replay is exact.
   `play-zelda.py` plays replays: of runs it simulates in the background and files into queues
@@ -850,8 +875,9 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   clips" for a run played without). `--live` makes the top left cell a live game the models play while it is
   watched (in the `--act` mode, as the simulations): `c` acts on that run from its next decision and the route
   re-plans from where Link stands ("rest of the run no clips"); its finished runs join the queues. The keys are
-  in `--help`. `create-video.py OUT [GRID]
-  REPLAY... [--sound] [--controller]` films replays the same way into a video file (`ffmpeg`).
+  in `--help`. `--thoughts` draws over each cell what its replay says the agent was thinking (objective and
+  targets, the mask, the decision). `create-video.py OUT [GRID]
+  REPLAY... [--sound] [--controller] [--thoughts]` films replays the same way into a video file (`ffmpeg`).
 - **Sound is computed beside the emulator, never inside it** (`crates/zcore/src/sound.rs`, `docs/architecture.md`
   "Sound"): a `Synth` replays the APU register writes the bus notes. `MachineState`, state files, replays and
   training don't change with it, and must not: no sound state goes into `MachineState`. A replay that starts

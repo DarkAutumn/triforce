@@ -15,6 +15,7 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 
 from triforce import _native, video  # noqa: E402  pylint: disable=wrong-import-position
 from triforce.play_grid import Show  # noqa: E402  pylint: disable=wrong-import-position
+from triforce.thoughts import Thoughts  # noqa: E402  pylint: disable=wrong-import-position
 from triforce.video import RESULT_FRAMES, VideoGrid, center_cell, replay_files  # noqa: E402  pylint: disable=wrong-import-position
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -123,13 +124,31 @@ def test_the_films_sound_is_the_heard_cells_and_as_long_as_the_film(recordings):
     assert not after.any(), 'silence while its result is up'
 
 
+def test_a_film_with_thoughts_sends_what_its_replay_says_the_agent_was_thinking(recordings):
+    path = recordings / WINS[0]
+    thoughts = Thoughts(_native.Replay(path.read_bytes()))
+    assert thoughts.at(-1) == [], 'nothing before the first record'
+    messages, _ = _film(VideoGrid(1, [path]))
+    assert not _on(messages, 'thoughts'), 'only when asked'
+    messages, _ = _film(VideoGrid(1, [path], thoughts=True))
+    sent = [m['lines'] for _, m in _on(messages, 'thoughts', 0)]
+    assert len(sent) > 1 and all(a != b for a, b in zip(sent, sent[1:])), 'sent when they change'
+    # The last lines are the replay's last objective, mask and decision: the scripted network walks south.
+    objective, can, chose = sent[-1]
+    assert sent[-1] == thoughts.at(10 ** 9)
+    assert objective.split(':')[0].isupper() and can.startswith('can: MOVE')
+    assert chose.startswith(thoughts.models[thoughts.decisions['policy'][-1]] + ': MOVE S')
+
+
 def test_create_video_checks_its_command_line(recordings, tmp_path):
     out = str(tmp_path / 'film.mp4')
     args = create_video.parse_args([out, str(recordings / WINS[0])])
     assert (args.grid, [path.name for path in args.replays]) == ((1, 1), [WINS[0]])
-    assert (args.sound, args.controller, args.scale) == (False, False, 2)
-    args = create_video.parse_args([out, '3x1', str(recordings), '--sound', '--controller', '--scale', '1'])
-    assert (args.grid, len(args.replays), args.sound, args.controller, args.scale) == ((3, 1), 3, True, True, 1)
+    assert (args.sound, args.controller, args.thoughts, args.scale) == (False, False, False, 2)
+    args = create_video.parse_args([out, '3x1', str(recordings), '--sound', '--controller', '--thoughts',
+                                    '--scale', '1'])
+    assert (args.grid, len(args.replays), args.sound, args.controller, args.thoughts, args.scale) == (
+        (3, 1), 3, True, True, True, 1)
     for bad in ([out], [out, '2x2', str(recordings)], [out, '1x1', '2x1', str(recordings)],
                 [out, str(tmp_path / 'missing.tfreplay')], [out, str(recordings), '--scale', '0'],
                 [str(tmp_path / 'nowhere' / 'film.mp4'), str(recordings)]):
@@ -160,7 +179,8 @@ def test_create_video_writes_a_video_with_sound_from_the_middle_cell(recordings,
     assert abs(float(sound['duration']) - float(picture['duration'])) < 0.1
     assert sorted(path.name for path in tmp_path.iterdir()) == ['film.mp4'], 'no temporary files are left'
 
-    # Without --sound: a picture only.
+    # Without --sound: a picture only (with the thoughts drawn over it).
     quiet = tmp_path / 'quiet.mkv'
-    assert create_video.main([str(quiet), str(recordings / WINS[0]), '--scale', '1', '--controller']) == 0
+    assert create_video.main([str(quiet), str(recordings / WINS[0]), '--scale', '1', '--controller',
+                              '--thoughts']) == 0
     assert set(_probe(quiet)) == {'video'}

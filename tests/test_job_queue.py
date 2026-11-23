@@ -395,3 +395,43 @@ def test_the_wrapper_estimates_a_tool_from_its_dry_call_and_an_argument_error_fa
     assert row['kind'] == 'chain' and set(row['work']) == {'chain_steps'} and row['estimate'] is not None
     assert row['log_dir'] and Path(row['log_dir']).name.endswith('_tester-queue-chain')
     assert row['progress']['runs']['done'] == 1
+
+
+def test_sigterm_reaches_the_command_and_one_that_ignores_it_is_killed_after_the_grace(queue, tmp_path):
+    """A stop is passed to the command's group; a command that ignores SIGTERM is killed ``GRACE_SECONDS`` later
+    (the wrapper never waits for it for good), and the job ends ``interrupted``."""
+    ready = tmp_path / 'ready'
+    stubborn = queue.run('stubborn', PYTHON, '-c',
+                         "import signal, time, sys; signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+                         f"open({str(ready)!r}, 'w').write('x'); time.sleep(600)")
+    wait_until(ready.exists, 30, "the command")
+    started = time.monotonic()
+    stubborn.send_signal(signal.SIGTERM)
+    assert stubborn.wait(timeout=60) != 0
+    assert 1.5 <= time.monotonic() - started < 30          # the grace (2 s here), then SIGKILL
+    assert queue.status('stubborn') == 'interrupted'
+    polite = queue.run('polite', *sleeper())
+    wait_until(lambda: queue.status('polite') == 'running', 30, "the command")
+    polite.send_signal(signal.SIGTERM)
+    assert polite.wait(timeout=60) == 128 + signal.SIGTERM
+    assert queue.status('polite') == 'interrupted'
+
+
+def test_every_suite_of_test_all_runs_whatever_the_one_before_did(queue, tmp_path):
+    """``test all``'s suites are one entry whose steps all run (a failing suite does not hide the next); the exit
+    code is the first failure's.  A fake checkout: its python suite fails, its asm tests and check pass, cargo is
+    missing (127)."""
+    repo = tmp_path / 'repo'
+    (repo / 'tests').mkdir(parents=True)
+    (repo / 'zelda-asm' / 'tests').mkdir(parents=True)
+    (repo / 'zelda-asm' / 'tools').mkdir()
+    (repo / '.git').mkdir()
+    (repo / 'tests' / 'test_bad.py').write_text("def test_bad():\n    assert False\n")
+    (repo / 'zelda-asm' / 'tests' / 'test_ok.py').write_text("def test_ok():\n    pass\n")
+    (repo / 'zelda-asm' / 'tools' / 'asm.py').write_text("print('check: ok')\n")
+    process = queue.start('test', 'all', '--agent', 'tester', '--task', 'suites', cwd=repo, PATH='/nonexistent')
+    assert process.wait(timeout=120) == 1
+    row = queue.row('all')
+    assert [(step['name'], step['status']) for step in row['steps']] == [
+        ('test python', 'failed'), ('test asm', 'completed'), ('asm check', 'completed'), ('test rust', 'failed')]
+    assert row['status'] == 'failed' and row['exit_code'] == 1

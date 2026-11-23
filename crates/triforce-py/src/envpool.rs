@@ -977,7 +977,6 @@ fn record_options(record: Option<&Bound<'_, PyDict>>) -> PyResult<Option<Arc<::r
                 }
             }
             "rewards" => options.rewards = value.extract().map_err(|_| bad("a bool"))?,
-            "decisions" => options.decisions = value.extract().map_err(|_| bad("a bool"))?,
             "keyframe_frames" => {
                 options.keyframe_frames = value.extract().map_err(|_| bad("a frame count"))?
             }
@@ -990,7 +989,7 @@ fn record_options(record: Option<&Bound<'_, PyDict>>) -> PyResult<Option<Arc<::r
             }
             _ => {
                 return Err(PyValueError::new_err(format!(
-                    "unknown record key {key:?} (state, rewards, decisions, keyframe_frames, meta)"
+                    "unknown record key {key:?} (state, rewards, keyframe_frames, meta)"
                 )));
             }
         }
@@ -1078,7 +1077,7 @@ impl PyEnvPool {
     /// from (`seed`, `i`); `fps > 0` paces every env's real frames.  `record` (None: off) records every
     /// episode or run as a TFREPLAY file, reported as a `replay` event when it ends: a dict with `state`
     /// ('embed', the default: a replay that starts from a state file carries it; 'path': it names it),
-    /// `rewards`, `decisions` (bools: the optional streams; decisions also need `play(distributions=True)`),
+    /// `rewards` (a bool: the optional reward stream; the decisions, targets and masks are always recorded),
     /// `keyframe_frames` (a keyframe state once that many frames ran since the last; 0: none) and `meta` (the
     /// JSON text of the replay's META base object).
     #[new]
@@ -1322,12 +1321,12 @@ impl PyEnvPool {
     /// `poll_plays`, `active` and `wait_idle`. A chain run that ends with `hold_finished_frame` parks its env
     /// until `set_hold(env, False)`. `record`: None, 'actions' or 'observations' (see `poll_plays`).
     /// `replay` {job: [n, 3] actions}: replay those recorded episodes instead (the policies score the recorded
-    /// actions, under `act` too; a job outside `replay` or a replay running past its actions fails the env). `distributions`:
-    /// every decision's whole action distribution goes to the env's recording (`EnvPool(record={'decisions':
-    /// True})`; it costs the other kinds' heads per decision). Every decision's acting log-prob and entropy
+    /// actions, under `act` too; a job outside `replay` or a replay running past its actions fails the env). Every
+    /// decision's whole action distribution is kept for the env's recording (round 40: replays always record the
+    /// decisions; it costs the other kinds' heads per decision). Every decision's acting log-prob and entropy
     /// (`poll_plays` `act_log_prob`/`act_entropy`, the eval and chain records' decision statistics) are computed
     /// from the joint distribution. After `play` the pool only plays (`rollout` and another `play` raise).
-    #[pyo3(signature = (policies, act=None, record=None, replay=None, distributions=false))]
+    #[pyo3(signature = (policies, act=None, record=None, replay=None))]
     fn play(
         &self,
         py: Python<'_>,
@@ -1335,7 +1334,6 @@ impl PyEnvPool {
         act: Option<&Bound<'_, PyAny>>,
         record: Option<&str>,
         replay: Option<HashMap<i64, Bound<'_, PyAny>>>,
-        distributions: bool,
     ) -> PyResult<()> {
         let record = match record {
             None => Record::Off,
@@ -1368,9 +1366,9 @@ impl PyEnvPool {
             },
         };
         if let Some((queue, which)) = external {
-            if replay.is_some() || distributions {
+            if replay.is_some() {
                 return Err(PyValueError::new_err(
-                    "replays and recorded distributions need Rust networks (an ExternalPolicy has neither)",
+                    "replays need Rust networks (an ExternalPolicy can't score a recorded action)",
                 ));
             }
             let native_modes = which
@@ -1381,7 +1379,8 @@ impl PyEnvPool {
                 .collect();
             let native = PolicyActor::new(&LAYOUT, nets, native_modes)
                 .map_err(PyValueError::new_err)?
-                .with_acting(true);
+                .with_acting(true)
+                .with_distributions(true);
             let actor = HybridActor::new(native, queue, which, modes).map_err(PyValueError::new_err)?;
             return py.detach(|| self.pool.play(Arc::new(actor), record)).map_err(pool_err);
         }
@@ -1405,7 +1404,7 @@ impl PyEnvPool {
         }
         .map_err(PyValueError::new_err)?
         .with_acting(true)
-        .with_distributions(distributions);
+        .with_distributions(true);
         py.detach(|| self.pool.play(Arc::new(actor), record))
             .map_err(pool_err)
     }
