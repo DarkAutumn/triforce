@@ -125,8 +125,9 @@ def main(argv=None):
     parser.add_argument('--keys', nargs='*', default=None)
     parser.add_argument('--sources', nargs='*', default=['resets', 'entries'])
     parser.add_argument('--part-yaml', default=None,
-                        help="dir of <family>@d3first.yaml (round 36's old runs' tasks); default: the lab's task "
-                             "of the key (specialists/<route>/<family>.yaml, the corrected route's)")
+                        help="dir of <key>.yaml (round 36's old runs' tasks: <family>@d3first.yaml; a bare key's "
+                             "own task, <family>.yaml, when the dir has one); default: the lab's task of the key "
+                             "(specialists/<route>/<family>.yaml, the corrected route's)")
     parser.add_argument('--decisions', type=int, default=20480)
     parser.add_argument('--parallel', type=int, default=10)
     parser.add_argument('--seed', type=int, default=36_100_000)
@@ -154,7 +155,7 @@ def main(argv=None):
         if key not in keys:
             continue
         family, part = registry.split_policy(key)
-        if part and args.part_yaml:
+        if args.part_yaml and (part or (Path(args.part_yaml) / f'{key}.yaml').is_file()):
             base = load_specialist(str(Path(args.part_yaml) / f'{key}.yaml'))
         else:
             base = load_specialist(task_yaml(key))

@@ -206,3 +206,34 @@ ending 0. The overworld legs after Dungeons 7 and 6 cost the most, and they are 
 - **post-d6** (0:0x22 out of Dungeon 6 to 8:0x7e): at 0x22 Link must turn up and play the recorder twice; in 690 of
   1,067 visits he walks back into Dungeon 6 instead and dies to 6:0x78's Wizzrobes (570). The team's
   `r30e-lynel-s84` does the same (32.0%, round 36).
+
+## The overworld legs folded in (2.0.0.11)
+
+Main's `ow-lynel@d3first` (`r38rw-lynel`: 0x50 E->S, 0x60 N->W) took the team's post-d7 from 24% to 99%. Post-d6's
+loss is 0x22's recorder out of Dungeon 6, and no network of the team plays it (`r30e-lynel-s84`, 32-33%). Changes:
+
+- **A teacher for 0x22**: `r30e-lynel-s84` continued (PPO with SIL, 8 envs) on ow-lynel's `d3first` rooms after
+  `own_models_until` (0x22 out of Dungeon 6 and into it, 0x32, the Dungeon 9 leg 0x07, 0x06, 0x05; `d3first` states
+  only). It reached 0.99 training success in about 35 iterations. That snapshot, played as ow-lynel's `late.d3first`
+  in the frozen 2.0.0.11 team (1,000 runs, paired): post-d6 **33.3% -> 100.0%** (Dungeon 6's 0x78 and 0x68 deaths,
+  980 and 433 lost per 1,000 entering, go to 0), post-d7 98.7% -> 98.7%, post-d8 99.9% -> 99.9%. A chain's
+  `--checkpoint ow-lynel=RUN` overrides `ow-lynel@d3first` too (0x50, 0x60): post-d7 fell to 11% that way, so
+  route-part runs have to be measured through the models dir's pointers.
+- **Folded into the student**, two 5-epoch fine-tunes on all the data plus the new teachers' rows. The old bare
+  `ow-lynel` rows of the replaced rooms were dropped (their labels came from `r30e-lynel-s84`). Each teacher recorded
+  acting itself and labelling the student's decisions (`r36_merge_record.py --student`). `--part-yaml` now also
+  names a bare key's own task. `h768-d2a`: `r38rw-lynel` on 0x50/0x60 (184k rows). `h768-d2b`: plus the late
+  lynel on 0x22/0x32 and the Dungeon 9 leg (246k rows); held-out KL 0.089 -> 0.085 -> 0.081.
+
+| segment | the 51 (2.0.0.11) | team 2.0.0.11 | `d1-all-w8` | `d2a-all-w8` | `d2b-all-w8` |
+|---|---|---|---|---|---|
+| post-d7 | 22.1% | 98.7% | 24.0% | **98.1%** (+76.0 ± 1.4; hits a visit 0.166 vs the team's 0.180) | |
+| post-d6 | 33.3% | 33.3% | 34.5% | | **99.7%** (+66.4 ± 1.5; hits 0.144 vs 1.166) |
+
+**Dungeon 4**, the one dungeon where the team with heads stays ahead (2.0.0.11 team 68.4%, `d1-all-w8` 57.0%,
+-11.4 ± 2.1), comes down to two rooms. **4:0x11** is the blade-trap room with the bomb wall: the network loses 79
+runs per 1,000 there (78 stuck to the 2,000-step limit, 375 wrong exits), the team, `h768-d1` alone and `h768-r`
+none. The hit head at w8 keeps Link off the traps' lines and so off the way to the wall. **Gleeok 4:0x13**: 367
+against the team's 282 lost per 1,000 entering, although the network arrives with more hearts (2.96 against 2.71).
+At the same hearts in it loses more (2.5-3.5 hearts: 412 against 243; 3.5 and over: 181 against 54), and its
+deaths come fast (1,446 frames, 3.07 hits, against 4,563 frames and 2.31 hits).
