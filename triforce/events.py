@@ -138,7 +138,8 @@ def logs_root(root: Optional[str | os.PathLike] = None) -> Path:
 def new_log_dir(what: str, root=None, now: Optional[datetime] = None) -> Path:
     """Creates ``<root>/<yymmdd>_<NNN>_<what>`` with the next free NNN for that day (any width: 999 is followed by
     1000).  The scan and the mkdir hold an exclusive lock on ``<root>/.lock``, so concurrent jobs get distinct NNN
-    whatever their names."""
+    whatever their names.  ``$TRIFORCE_JOB_NAME`` replaces ``what`` (``jobs.job_name``)."""
+    what = jobs.job_name(what)
     base = logs_root(root)
     base.mkdir(parents=True, exist_ok=True)
     day = (now or datetime.now()).strftime('%y%m%d')
@@ -222,6 +223,7 @@ class TrainingPlan:
 
     def __init__(self, directory: str | os.PathLike, name: str, kind: str, runs: list[dict], *,
                  work: Optional[dict] = None, **extra):
+        name = jobs.job_name(name)              # $TRIFORCE_JOB_NAME: whose job this is, for the queue and the GUI
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
         self.path = self.directory / PLAN_FILE
