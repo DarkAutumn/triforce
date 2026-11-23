@@ -1146,6 +1146,11 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   (fleeing, waiting) needs `max_steps` near its explored path length (Aquamentus: 2000 → 400 took it from 0% to 93%).
 - Continuing a trained model with `--stop-success 0.99` (`--train-args "--load <run dir> --stop-success 0.99"`)
   often fixes the weak room the 95% early stop left behind.
+- **After merging a main that has round 40's refusals, run `triforce job build` in the worktree before any tool.**
+  The tools refuse a module without a build stamp (`triforce/_native.build.json`, written by every building verb of
+  `triforce job`, `--detach` too) or one older than its sources. A chain that plays a bare policy in place of a team
+  network with a hit head (a continued or experimental checkpoint without its head) needs `--headless KEY` for that
+  network, or it is refused: two arms must differ only in the factor under test (round 40).
 - Training at a narrow low-hp range alone can collapse a model (round 5, r11); keep the full-health share.
 
 ## Running a round
