@@ -741,7 +741,7 @@ The r72 team's chains (round22.md §8-§9; 1000 runs per segment, clips on `r72-
    brings into the next room, or a larger `reward-gained-health` at low health); start from the old model with
    that change; a curriculum of low-health starts; measure in the full route, where it matters.
 8. **goriya heart loss** (round18.md §2). goriya loses about +0.26 hearts per room (93% success) after 8M + 4M
-   steps; Lee's target is −0.1 to −0.2, i.e. a net gain like stalfos-keese-gel's. More training of the same
+   steps; the owner's target is −0.1 to −0.2, i.e. a net gain like stalfos-keese-gel's. More training of the same
    objective doesn't move it (r61 → r63a: +0.266 → +0.262). Likely needs shaping (boomerang blocks with the shield,
    the Goriyas' patterns), a different reward balance, or a longer horizon; goriya also loops by argmax in chains
    (52 `stuck` per 6000 runs), so it samples. The r71 goriya (`r71-goriya-cont`, 12M steps): 95.2%, −0.15 hearts
@@ -756,16 +756,16 @@ The r72 team's chains (round22.md §8-§9; 1000 runs per segment, clips on `r72-
      (`death_rate_entered`), comparing two tags (r70 vs r71) room by room; `eval_batch.report_commands` doesn't
      write the `-both` file of a tag measured with and without clips (run `triforce room-stats TAG --noclips`).
 
-## The first-quest draft route (Lee, Nov 13; branch `routes-5-9`)
+## The first-quest draft route (the owner, Nov 13; branch `routes-5-9`)
 
 `docs/routes/first-quest.md`, decisions 2026-11-13 "The rest of the first quest: a draft route" and 2026-11-14
-"The first-quest draft, Lee's first review".
+"The first-quest draft, the owner's first review".
 
 - [x] **Levels 5-9 in game.yaml** (`scripts/level_rooms.py`), pictured in `zelda-map.py` (`triforce/probe.py`),
   door marks and labels on every dungeon level.
-- [x] **The draft** (`triforce/draft_routes.yaml`, `first-quest`): Lee's overworld legs and a path through
+- [x] **The draft** (`triforce/draft_routes.yaml`, `first-quest`): the owner's overworld legs and a path through
   Dungeons 5, 7, 6, 8, 9; every step walked in the emulator with the fights skipped.
-- [x] **Lee's first review** (Nov 14): room bombs only (5:0x65, 7:0x1b when not full, 9:0x16), no shops or rupee
+- [x] **The owner's first review** (Nov 14): room bombs only (5:0x65, 7:0x1b when not full, 9:0x16), no shops or rupee
   detours, take the route's keys, no magic key, no wand or book, no blue ring; plain ways for every overworld leg
   (the Lost Woods for 0x51), drawn by the map's Clips selector.
 - [ ] **Bombs without drops:** seven cheated bombs on a run with none (first-quest.md's table). Later: 5:0x56's
@@ -978,7 +978,7 @@ Left open by round 22 (round22.md §9):
   frames). 4:0x12 kills 27 per 1000 D4 runs with clips on (round 21, entered from W: 95).
 - [ ] **like-like 4_32w on the rebuilt states and natural RNG**: round 21's model lost 1.26-1.35 hearts there (0.85
   in its own evaluation); 4.6M steps of continuation brought it to 0.89.
-- [ ] **Bomb fishing in 4:0x12** (Lee: "It would be nice if we used more bombs in 0x12 to fish for bomb drops, but
+- [ ] **Bomb fishing in 4:0x12** (the owner: "It would be nice if we used more bombs in 0x12 to fish for bomb drops, but
   this isn't a directive"; measured, not built). The mechanics (enemies.md "Drop tables"): the kill that brings
   `$50` to exactly 10 arms a bomb drop (+4) only if it is a bomb kill, and the drop needs a death of a droppable type
   (a Vire killed outright; split-off Keese don't drop). Proven in the game: one Vire left, `$50` = 9, one bomb,
@@ -1040,10 +1040,10 @@ buttons", 2026-11-12/13 the doorway mask, 2026-11-13 "Round 21 merged") is one c
   facing write's, not the game's; the movement cleanup (next item) removed the write and replaced the position rule
   with the buttons' own (`attack::plan`). The D2 segment still loses most in 2:0x1e (goriya, 61 deaths per 1000),
   2:0x3e (moldorm, 53) and 2:0x5e (goriya, 35). The r71 retrain brought D2 to 85.6% (the retrain item below).
-- [x] **Fewer writes to memory** (Lee, Nov 12; planned as round 22, done in round 21; round21.md §4). The executor
+- [x] **Fewer writes to memory** (the owner, Nov 12; planned as round 22, done in round 21; round21.md §4). The executor
   played some actions by writing RAM instead of pressing buttons, which made combat easier than the real game:
   - [x] **Item selection:** a BOMB, BOOMERANG or ARROW action wrote `Var::SelectedItem` before pressing B. Now the
-    item sub-screen chooses it (`zelda::submenu`: START, the cursor, START); by Lee's decision its frames (124-126,
+    item sub-screen chooses it (`zelda::submenu`: START, the cursor, START); by the owner's decision its frames (124-126,
     the game paused: no exposure) are `menu_frames`, played and counted in every total but not against the action.
   - [x] **Turning to attack:** every attack wrote `Var::LinkDirection` (after walking Link onto the grid point). Now
     the d-pad turns him (`zelda::attack`): the sword turns on its press, bombs and arrows take a turn frame, the mask
@@ -1082,7 +1082,7 @@ buttons", 2026-11-12/13 the doorway mask, 2026-11-13 "Round 21 merged") is one c
     paid `penalty-attack-miss`; CLIP stalled in the catch pose (a boomerang caught during the macro). Moot with the
     `long` trigger gone: a MOVE of 4-16 frames at the entry bound left by the wrong exit (−20), so `long` seed 1
     never found the W→E wrap.
-- [x] **Round 20's "Future route"** (Lee): through the ladder clip from 0x31 N onto 0x21's island (below, under
+- [x] **Round 20's "Future route"** (the owner): through the ladder clip from 0x31 N onto 0x21's island (below, under
   Dungeon 4).
 - [x] **The round 21 retrain (`r71`) and its chains** (round21.md §7-§11; decisions 2026-11-13 "The r71 retrain").
   All 24 families from scratch on 1.4.1.0 (93.7M env steps, 20.3 h), evaluated in both act modes, compared room by
@@ -1107,7 +1107,7 @@ Left open by round 21 (round21.md §10):
   opens. The mask could leave BOMB out there; the objective's bomb spot is (`$78`, `$5D`). Measured on the r71
   stalfos-keese-gel: 10 such bombs in 300 argmax episodes, against 497 of its 1033 BOMB decisions being BOMB S from
   the top band, which opens the wall (round21.md §10). The waste is elsewhere (next item).
-- [x] **stalfos-keese-gel wastes bombs in 4:0x21** (round 21 retrain). (Round 22, Lee: "Try to fix the 0x21 bombs
+- [x] **stalfos-keese-gel wastes bombs in 4:0x21** (round 21 retrain). (Round 22, the owner: "Try to fix the 0x21 bombs
   thing": the BOMB mask above offers BOMB in 0x21 only where the bomb lands within the game's reach of the N wall's
   hotspot, so never from the island's entry spot or mid-island; played in the game around every wall the rule touches,
   `crates/zelda/tests/bomb_mask.rs`. The r72 retrain: 1.6 bombs per chain visit (1558 in 967), 1.7-1.8 in single
@@ -1156,7 +1156,7 @@ Left open by round 21 (round21.md §10):
   wall 8+ px off the door's column; round21-vire-50.md). Not traced; with clips the route reaches the same row and
   never sticks there.
 - [ ] **Whether a B-item switch should cost something.** A switch between two held B items is free to the critic
-  (124-126 paused frames, outside the action's frames by Lee's decision) but costs about 2 s of real time when
+  (124-126 paused frames, outside the action's frames by the owner's decision) but costs about 2 s of real time when
   watched; a D3 fight alternating boomerang and bombs spends 3-4x its game time on the sub-screen. The gate's darknut
   switches 0.14 times per episode (4% more emulated frames).
 - [ ] **Goriya 2:0x1e by argmax** (round21-gate.md): −5.5 points on both seeds of the gate's new build (−1.7 by
@@ -1189,7 +1189,7 @@ Left open by round 21 (round21.md §10):
   stalls are gone; Gleeok's deaths at low health (Next projects 2), 4:0x12 (27 per 1000 D4 runs in round 22, entered
   from N) and real bombs into Dungeon 4 stay open.
 
-## Done (Nov 12): Dungeon 4 (Lee; round 20, 1.4.0.0)
+## Done (Nov 12): Dungeon 4 (the owner; round 20, 1.4.0.0)
 
 Scouted Nov 11 (`docs/routes/d4.md`, decisions 2026-11-11), merged into `d2first` and trained Nov 12
 (round20.md, decisions 2026-11-12): D4 segment 21.1%, the full route to the D4 triforce 1.8% (1000 runs each).
@@ -1201,13 +1201,13 @@ Scouted Nov 11 (`docs/routes/d4.md`, decisions 2026-11-11), merged into `d2first
   runs) and no Vire is ever bombed.
 - [x] **Gleeok has no method yet:** heads observed (synthetic enemies), base and flying heads are hazards, only head
   damage pays; trained with start health [0.5, max] and no PBRS (94.7% in a single room).
-- [x] **The rupee room 4:0x11 sits in `trap-room`:** Lee, Nov 12: keep it.
+- [x] **The rupee room 4:0x11 sits in `trap-room`:** the owner, Nov 12: keep it.
 - [x] **`treasure: skip` doesn't stop a pickup:** moot, the route takes both keys now (no cheated key in 1000 runs).
 - [x] **The ladder** (water was always a wall; 0x30's N door needs it), **uncounted kills** (a Vire's Red Keese
   didn't reset the stall penalty).
 - [x] **The explorer's cell key** and **the map objective's cache** (fixed during the scouting).
 
-Left open by round 20 (Lee, Nov 12: after the round 21 retrain, fix what the chains show is needed). Measured by
+Left open by round 20 (the owner, Nov 12: after the round 21 retrain, fix what the chains show is needed). Measured by
 the r71 chains (round21.md §9; D4 segment, 1000 runs):
 
 - [x] **Gleeok's stalls at low health.** Round 20: Link reached 4:0x13 with 2.1 hearts on average; below 3.5 hearts
@@ -1223,19 +1223,19 @@ the r71 chains (round21.md §9; D4 segment, 1000 runs):
   22", vire's argmax loops there).
 - [ ] **Bombs into Dungeon 4.** A real bomb for each wall (a pickup after Manhandla; round 23: 0x5b's last pass takes
   its bombs whatever Link holds), and
-  then whether vire bombs 0x31/0x12 and walks past 0x61 as Lee wants. Measured with r71: from `4_71s_0` every wall
+  then whether vire bombs 0x31/0x12 and walks past 0x61 as the owner wants. Measured with r71: from `4_71s_0` every wall
   visit still takes a cheated bomb and no Vire is bombed; from the game start (`r71-1k` full) 35 of 241 visits to
   4:0x21 and 20 of 232 to 4:0x11 used only real bombs, and Vires are bombed (0x31 in 157 of 505 visits, 413 bombs;
   0x61 34 of 260; 0x12 7 of 232), bombs the walls then lack. Open; round 23 keeps 0x21 to one bomb per wall.
 - [x] **Linger over 500 steps** in one single-room episode each: like-like (599), boss-gleeok (638),
   stalfos-keese-gel (598). r71 single rooms: like-like worst 91, boss-gleeok 25; over 500 only `no-damage` endings
   of the 600-step cap (stalfos-keese-gel 3, goriya 1, zol 2-3). Chains: round21.md §9.
-- [x] **Future route** (Lee): 0x30 – 0x31 – 0x32 – 0x31 – 0x21 – 0x11 through a ladder clip from 0x31 N onto
+- [x] **Future route** (the owner): 0x30 – 0x31 – 0x32 – 0x31 – 0x21 – 0x11 through a ladder clip from 0x31 N onto
   0x21's island. Done in round 21 (branch `ladder`, decisions 2026-11-12 "One clip design"): `d2first` goes 0x31
   E → N, 0x21 S → N (CLIP N off the island, a step down, BOMB N); the 0x30 E → N and 0x20 steps are gone.
   stalfos-keese-gel learned it in the r71 retrain without a curriculum (4:0x21 100% in its single room).
 
-## Done (Nov 12): bombs (Lee, Nov 11; round 19)
+## Done (Nov 12): bombs (the owner, Nov 11; round 19)
 
 1. [x] **Bombs as a weapon, the bomb reserve and the 10th kill's forced bomb drop** (round19.md, decisions
    2026-11-11): per-family bomb use, D3's reserve of 5, schema 3 observation, rewards, metrics, GUI charts, the
@@ -1316,18 +1316,18 @@ round 19. No emulator, environment or reward code changed (VERSION not bumped).
    every chain segment is back at or above the previous team (round18.md §3).
 2. **D3 still ends in 3:0x59** (darknut). D3 is 40.6% now (previous team 23.8%), still mostly 3:0x59 deaths.
 
-## Now (Lee, Nov 9): Rust actor, then better play
+## Now (the owner, Nov 9): Rust actor, then better play
 
 1. **Rust actor** (`docs/rust-actor.md`, decisions 2026-11-09): the policy's forward pass in Rust, rollouts in
    one call, eval/chains/play-zelda on the in-pool policy, replayable plays (seed + actions, with probabilities),
    endings on observed effects. **Done.** Profile done (`docs/performance.md`, Nov 9): AVX policy kernels and the
    rollout overlapped with the PPO update (+20–45% training). GPU vs CPU: CPU only (decisions 2026-11-09). The
-   deferred look-ahead was not built (Lee's rule: sub-15% is iffy; decisions 2026-11-09).
+   deferred look-ahead was not built (the owner's rule: sub-15% is iffy; decisions 2026-11-09).
    - Perf leftovers, each expected under 15%: the rollout barrier (workers idle 13–32% of a p16 rollout waiting
      for the slowest env: more envs than threads with work-stealing envs, or the deferred look-ahead); the PPO
      update's kernel-launch overhead (~17k launches per update; fewer host syncs, fused Adam, CUDA graphs).
 2. [x] **Fresh retrain** on the new stack: r56 promoted (round 16 §1).
-3. **Better play** (Lee's better-play plan, not in the repo; round 16): [x] §0 yardstick, [x] §6b act mode (argmax for
+3. **Better play** (the owner's better-play plan, not in the repo; round 16): [x] §0 yardstick, [x] §6b act mode (argmax for
    15 families, round 16 §3), §6b entropy annealing (not kept), §1a outcome fine-tuning (not kept alone), §3
    best-of-N (not kept) vs SIL (best arm on goriya; second family running), §2 Gumbel expert iteration (Dodongo: no
    gain at the ceiling; goriya running), §1b exit-health weight / harvested handoff states, §5 PLR, §6a PPG (goriya
@@ -1347,7 +1347,7 @@ round 19. No emulator, environment or reward code changed (VERSION not bumped).
      breaker (sample when the same observation repeats, or after N steps without progress) could keep argmax's
      hearts without the loops.
 
-## Before (Lee, Nov 8): baseline retrain on d2first (done)
+## Before (the owner, Nov 8): baseline retrain on d2first (done)
 
 Goal until further notice: a set of specialists that carries the `d2first` chain from the game start to the Dungeon 1
 triforce (Dungeon 2 and Dodongo first, the 0x2c heart cave, the white sword; `docs/routes/d2first.md`). The reset
@@ -1357,13 +1357,13 @@ onto it is done (below, "d2-first route" item 2). In order:
    (r47; boss-dodongo r49 after fixing its success to the W exit). Full route **25/120 (21%)**; from D2's exit
    29%; D1 from a full-health entry 96%. Losses: D2's Goriya rooms (0x5e, 0x1e) and Moldorm (one-room 91%/85%),
    and health attrition from 0x2c to D1 (no healing on the way). Lynel room ~98% one-room for every spawn.
-2. **Next: Lee's training ideas** (to come), measured against that baseline.
+2. **Next: the owner's training ideas** (to come), measured against that baseline.
 
 Findings from round 13 worth a look (not started): health attrition after D2 (Link reaches D1 with ~2 of 5
 hearts); the Goriya/Moldorm rooms; Lynel deaths on the way back out with the white sword; the near-cave Lynel
 spawn (95%).
 
-## Queued by Lee (Nov 9), in order
+## Queued by the owner (Nov 9), in order
 
 1. **The bow** (in progress, round 14): D1 detour to the trap room 0x22 and the bow cellar 0x7f; new families
    `trap-room` and `equipment-room`.
@@ -1373,7 +1373,7 @@ spawn (95%).
    them in the yaml. (Mapping started in branch `mapping`.)
 3. **Map Dungeon 3**: enter, reach the central Darknut room; W until you can't, N for a key, S for the raft (stairs);
    back to the central room; N for a key; E into the trap/gel room; bomb its E wall into Manhandla's room; the
-   triforce is N of it. Lee's directions: `W N N W W N S S (stairs: raft) N E E N E E (bomb E)`, possibly off by one.
+   triforce is N of it. The owner's directions: `W N N W W N S S (stairs: raft) N E E N E E (bomb E)`, possibly off by one.
    Treasure rules: skip the Darknut room above the raft room's treasure; take the central Darknut room's (bombs)
    only on its last visit and only if bombs < 4 (D4 will need 2). `requires_bombs` on the bomb-wall room and the
    boss room: Manhandla is killed with bombs dropped in his path (a perfect one kills him with one bomb and, with
@@ -1383,14 +1383,14 @@ spawn (95%).
    curricula for the new/changed families (Manhandla tracks: count bombs vs sword kills), smoke `eval-chain --from
    3_7cs_0`, then train them. Watch Manhandla hit/kill rewards (base kills count up to 24 per bomb, above).
 
-- [x] **Cheated items** (Lee, Nov 9; branch `cheats`): bombs, keys and rupees share one ledger
+- [x] **Cheated items** (the owner, Nov 9; branch `cheats`): bombs, keys and rupees share one ledger
   (`crates/zelda/src/cheats.rs`, architecture.md "Cheated items"): a key is granted at a still-locked route door
   once the room's own key is taken, rupees up to game.yaml `requires_rupees` (no room sets it yet); metrics are
   `cheated/<item>` and friends. Watch `cheated/keys` once D3 trains (0x4b's wrong locked door).
 
 ### Kill streaks and forced drops (researched Nov 9; implement later)
 
-Lee's idea: when Link is about to make the 10th kill without taking damage, light up part of the observation so the
+The owner's idea: when Link is about to make the 10th kill without taking damage, light up part of the observation so the
 model kills that enemy with a bomb, which forces a bomb drop (fewer cheated bombs). Decision: the research is done
 now (it is cheap and the facts are needed to design the feature); implementation waits until this item is picked
 up, after D3. The ASM facts (scout DropStreaks, `history://DropStreaks`; `asm:Link_BeHarmed`, `asm:Damage_KillMonster`,
@@ -1406,14 +1406,14 @@ up, after D3. The ASM facts (scout DropStreaks, `history://DropStreaks`; `asm:Li
 - **Spending:** the next drop-capable death (any weapon) gets the forced item instead of the table roll and clears
   `$50`/`$51` — including the 10th kill itself if that enemy can drop. No-drop deaths (Gel `$14/$15`, Keese
   `$1B–$1D`, Like Like `$17`, the dead dummy `$5D`, a Stalfos/Gibdo in slot 1 carrying the room item) consume
-  nothing, so the armed drop waits for the next capable kill (Lee's Keese example holds).
+  nothing, so the armed drop waits for the next capable kill (the owner's Keese example holds).
 - **Fairy:** no flag — a drop-capable death while `$627 == 16` drops a fairy and overrides the forced bomb (losing
   it); `$627` keeps counting past 16, so the fairy comes once per damage-free streak.
 - Normal drops: four rows (by enemy type) × 10 columns (`$52A`) with a per-row chance (31/59/41/41%); only row 2
   (slow Octoroks, Moblin `$03`, Lynel `$01`, Vire, Red Goriya, Darknut `$0B`, Wizzrobe `$24`, Gibdo) has bombs
   (columns 1, 6, 8). All bosses use row 3.
 - **Dodongo** forces bombs on a sword kill (sets `$50 = $51 = $0A`): his stun-and-sword kill always drops bombs
-  unless the fairy (`$627 == 16`) wins. **Manhandla** (Lee partly right; scout ManhandlaHits, `history://ManhandlaHits`,
+  unless the fairy (`$627 == 16`) wins. **Manhandla** (the owner partly right; scout ManhandlaHits, `history://ManhandlaHits`,
   `asm:Manhandla_CheckCollisions`, `asm:Damage_KillMonster`, `asm:Bomb_CheckBombOrFireVsMonster`, `asm:Bomb_StateTimes`,
   `asm:Bomb_Update`): four hands (slots 1–4) and a base (slot 5, HP `$40`).
   The base "revives": `Manhandla_CheckCollisions` zeroes its invincibility timer after every check and writes its
@@ -1443,12 +1443,12 @@ Goal then: a set of specialists that carries the milestone-1 chain to the Dungeo
   r38b promoted: 10/120 → 0/120 per route); §4 key-carriage audit (72/74 Dodongo arrivals keep all keys); §5
   arrival health decides the D2 Goriya room, chain-hp Goriya retested properly: no effect; §6 finite stall
   escape in training and the player; launcher hardening. Every "Work in this order" item is done. Open items
-  left need Lee: power-on RAM fill, the direction for arrival health, and whether to port observation schema 2
+  left need the owner: power-on RAM fill, the direction for arrival health, and whether to port observation schema 2
   to Rust for the scratch-team question.
 - **Promoted now:** ow-zora r24-fairy, ow-start r38b-rebalance (round 10 §3), ow-octorok r32-nearby-off, ow-moblin r26c-moblin,
   ow-leever-peahat r23-more, boss-aquamentus r30-exit, stalfos-keese-gel r25-skg-plain, goriya r31-block1,
   d2-rope r35-east-curriculum, wallmaster r10 copy. Overworld families use both routes' rooms; D2 rooms have 3 states each.
-- **Lee's order (Nov 5):** first finish the Rust port (plan steps 17–18: `round8.md` "Open", the watch-mode
+- **The owner's order (Nov 5):** first finish the Rust port (plan steps 17–18: `round8.md` "Open", the watch-mode
   restore below, then retiring the FCEUmm oracle and quirks). Then **raise test coverage** sensibly across the
   emulation core, the Rust crates and the Python wrappers: a robust unit suite plus a few end-to-end tests, no
   PPO training from scratch, suite stays fast. Then a **performance and optimization** step:
@@ -1458,14 +1458,14 @@ Goal then: a set of specialists that carries the milestone-1 chain to the Dungeo
   "Other open items"), as before: log every result, commit each finished item, keep going. Side experiments
   found during the port or the performance work go into "Other open items" instead of derailing the work.
   (Port, coverage and performance steps: done Nov 5.)
-- **Long jobs (Lee, Nov 5):** a state build, explore or chain hunt can hang (one hung on Aquamentus before).
+- **Long jobs (the owner, Nov 5):** a state build, explore or chain hunt can hang (one hung on Aquamentus before).
   Check any such job's progress at least every couple of hours and intervene early when a single state or room
   makes no progress (retry with another seed or source, record it, move on); **12 hours on any single task is a
   hard stop**: kill it, log it in the round doc, and continue with other work.
-- **Lee's order (Nov 7):** first **optimize the Rust emulation core** (done Nov 7, below); then go straight back
+- **The owner's order (Nov 7):** first **optimize the Rust emulation core** (done Nov 7, below); then go straight back
   to the **heart experiments** (below), a series, not one experiment.
 
-### Done: zcore speed (Lee, Nov 7)
+### Done: zcore speed (the owner, Nov 7)
 
 Make emulation faster with **perfect accuracy to the game**: nothing may change, checked before/after with the
 corpus goldens (`tf ladder-golden` / `ladder-diff`, 0 divergences), the start states and trajectories walked with
@@ -1475,7 +1475,7 @@ time end to end), not just the emulator. Iterate until further gains aren't wort
 because the real runs will be 6–12M steps per family (the old monolithic model took ~30M). Log it in
 `docs/performance.md`.
 
-**Exit criterion (Lee, Nov 7): the right `--parallel` for training.** Find where adding envs stops paying, from
+**Exit criterion (the owner, Nov 7): the right `--parallel` for training.** Find where adding envs stops paying, from
 two sides: (1) pure throughput (steps/s against env count); (2) convergence: more envs can waste steps, so
 measure the steps and the wall time to reach a working level (around 90% success, not 99%) against env count.
 Recommend a setting (per specialist if it differs).
@@ -1490,22 +1490,22 @@ Recommend a setting (per specialist if it differs).
   don't depend on the env count (ow-leever-peahat, ow-moblin; 4–24 envs, 3 seeds, 30/30 reached), so wall time
   is lowest at 12–16. Same for every specialist measured; no per-specialist setting needed.
 
-### Done (stopped): power-on RAM $00, regeneration and a fresh retrain (Lee, Nov 8; round 11)
+### Done (stopped): power-on RAM $00, regeneration and a fresh retrain (the owner, Nov 8; round 11)
 
 - [x] $00 fill, state version 6, states and trajectories regenerated (round 11 §1).
 - [x] Moldorm room 2:0x3e split out of d2-rope into its own specialist (`moldorm`).
 - [x] Per-room-visit evaluation (format 2, 100 episodes per start state) and `zelda-map.py`.
-- [x] Fresh retrain `r44-fresh` **stopped by Lee** during wallmaster: the next full retrain comes after Dodongo,
+- [x] Fresh retrain `r44-fresh` **stopped by the owner** during wallmaster: the next full retrain comes after Dodongo,
   on the d2-first route below. Finished runs (ow-start, ow-octorok, ow-zora, stalfos-keese-gel, goriya) kept,
   not promoted.
 
-### Done (paused by Lee, Nov 8): beat the Dungeon 2 boss, Dodongo (round 12)
+### Done (paused by the owner, Nov 8): beat the Dungeon 2 boss, Dodongo (round 12)
 
 Two ways to kill Dodongo: (1) make him swallow two bombs (works, wasteful); (2) **set a bomb in his path but just
 next to him, so he doesn't eat it and the smoke stuns him, then hit him with the sword while stunned (much
 better)**. Train a model for (2).
 
-- Bombs (Lee, Nov 8, replaces "infinite bombs"): counts stay natural, but Dodongo's room is `requires_bombs`
+- Bombs (the owner, Nov 8, replaces "infinite bombs"): counts stay natural, but Dodongo's room is `requires_bombs`
   (game.yaml): whenever Link has none there he gets one *cheated* bomb (start, entry, after every action); placing
   it counts as a cheated bomb used, leaving with it unused takes it back. Training, eval (per visit) and chains
   report `bombs used` and `bombs cheated`; the watch player's footer shows a run's cheated bombs (not beaten
@@ -1517,7 +1517,7 @@ better)**. Train a model for (2).
 - [x] **Solved:** r45-dodongo (promoted) kills him in 300/300 eval fights, 0.13 hearts lost per fight, 86% by
   bomb-stun + sword (67% with no swallow at all), 52% with one bomb, 2.5 bombs per fight. r46 (2M more steps;
   swallow penalty 0.5 → 1.0) no better. Details: round12.md §4–§5.
-- **Paused by Lee** (Nov 8): the training changes coming next will change how this is trained. What I would have
+- **Paused by the owner** (Nov 8): the training changes coming next will change how this is trained. What I would have
   done next to cut bombs per fight (the metric to minimize; 1 = perfect), in order:
   1. **One-bomb curriculum.** Explore many more seeds (`python -m triforce.explore --specialist boss-dodongo
      --seed S --variant --out <root>` for S in 10..40+; explore exits 1 on an unsolved or mismatched state, so a
@@ -1538,10 +1538,10 @@ better)**. Train a model for (2).
   5. Low-health deaths: r46's few failures were deaths at 0.5–1.5 starting hearts; watch this in d2-first chains.
   6. Small: a stun that ends and restarts inside one step is missed by the counter (2 of 300 records).
 
-### Done (Lee, Nov 8): the d2-first route, mapped and reset onto
+### Done (the owner, Nov 8): the d2-first route, mapped and reset onto
 
 1. Prove Dodongo can be beaten (above): r45 kills him 300/300 (round 12).
-2. [x] **The d2-first route**, mapped first so Lee could review it on the map (merged `ac03202`). Start → 0x58,
+2. [x] **The d2-first route**, mapped first so the owner could review it on the map (merged `ac03202`). Start → 0x58,
    east along row 5 → at 0x5d north → 0x3c (Dungeon 2); never the fairy. D2 as before (3 max hearts), skipping
    the magical boomerang (2:0x4f); kill Dodongo, take his heart (4), take the triforce in 2:0x0d (warps out to
    0x3c). Then round to 0x2c, bomb the secret rock for the heart (5), and `1c -> 1a -> 0a (white sword) -> 1a -> 17
@@ -1550,29 +1550,29 @@ better)**. Train a model for (2).
    - [x] **Reset done (Nov 8, `docs/decisions.md`):** d2first is the only route; milestone1/milestone1-fairy, the
      fairy waypoint and ow-leever-peahat removed; 0x2c to ow-tektite; route-step objectives (D1 key rooms in
      order); `retreat` at 0x0a; every state rebuilt (chains 0–2) and every curriculum re-explored.
-   - [x] **Baseline retrain done** (round 13): full route 25/120. Lee's training ideas next.
-3. Lee's ideas for improving training (to come, after the baseline).
+   - [x] **Baseline retrain done** (round 13): full route 25/120. The owner's training ideas next.
+3. The owner's ideas for improving training (to come, after the baseline).
 
-### Done (report to Lee): heart experiments (Lee, Nov 7; a series)
+### Done (report to the owner): heart experiments (the owner, Nov 7; a series)
 
-Goal: Link picks up dropped items, hearts above all, far more than the current models do. Lee's original models
+Goal: Link picks up dropped items, hearts above all, far more than the current models do. The owner's original models
 didn't take every item, but prioritized them far more. **This is solvable**: iterate until it works by the
 measure below, and only when out of reasonable ideas stop and report.
 
 - **Measure:** real health gained from pickups (`health_change` and hearts healed per visit/episode, not `total`,
   which counts overhealing) is the main metric of this work, not overall success. Current health dominates
-  everything (Lee, speedrunner): on average +1 heart wins more often in the long run, even though 2M steps and a
+  everything (the owner, speedrunner): on average +1 heart wins more often in the long run, even though 2M steps and a
   few evaluations can't show that statistically in success rates. Report pickups taken/left/healed alongside.
-- **Starting ideas (Lee, Nov 7; try them all, none mandated, combine or replace as results suggest):**
+- **Starting ideas (the owner, Nov 7; try them all, none mandated, combine or replace as results suggest):**
   - A fixed, rigid pickup reward (the current max step reward, `REWARD_MAXIMUM`) instead of today's 0.25–0.75
     urgency-scaled `reward-gained-health`.
   - Direction and distance to the nearest target (exit or item) in the observation: "a little bit cheating, but
     almost certainly a big difference". A new observation schema, so every model retrains.
-  - Every dropped item is a shaping target, as in Lee's original (hearts, clocks, rupees, bombs, keys, fairies:
+  - Every dropped item is a shaping target, as in the owner's original (hearts, clocks, rupees, bombs, keys, fairies:
     no dropped item is worthless), with hearts **not** a target while at max health. The model already sees
     `hp_full` and each dropped item's kind and position (round 10 Q&A, Nov 7).
 - **What failed before and why it may have** (round 6 §10 `collect_hearts`; round 7 §9 r32 `nearby_items`, which
-  is Lee's design for hearts/clocks): both were short continuations of models already trained toward exits, drops
+  is the owner's design for hearts/clocks): both were short continuations of models already trained toward exits, drops
   are rare in most families' training, the observation has no pointer to the target the shaping pulls toward, and
   r32 pulled toward hearts even at full health. Train from scratch (or long enough) where the treatment needs it.
 - **Where it pays** (round 10 §5): d2-rope leaves 0.36/0.39 hearts per visit on the floor in 2:0x7e/0x4e, around
@@ -1603,12 +1603,12 @@ measure below, and only when out of reasonable ideas stop and report.
 
 ### Work in this order
 
-From Lee watching `play-zelda.py` after round 6 (Nov 3), sorted: first the measurement everything else needs,
+From the owner watching `play-zelda.py` after round 6 (Nov 3), sorted: first the measurement everything else needs,
 then clear bugs, then what decides how the next full retrain looks, then reward/target changes aimed at the
 chain's death rooms, then the big ablation. Items 1–7 and the versioned observation comparison are complete;
-the remaining list is deferred until Lee resumes work.
+the remaining list is deferred until the owner resumes work.
 
-1. [x] **Track lingering (Lee: a standing requirement, see AGENTS.md).** Measure how long Link stays in a room
+1. [x] **Track lingering (the owner: a standing requirement, see AGENTS.md).** Measure how long Link stays in a room
    without progress, in training, eval and chains, and investigate whenever it's long, even if success looks fine.
    Progress = a kill, a hit on an enemy, an item/key/treasure taken, a new best wavefront distance to the
    objective, leaving the room. Record per episode / per chain room: the longest no-progress streak and the steps
@@ -1618,9 +1618,9 @@ the remaining list is deferred until Lee resumes work.
    on this metric.
    - **Done, round 7 §1:** behavior-neutral shared tracker, seeded gameplay parity, 383 tests, CUDA training events,
      real wide/narrow GUI and historical-data checks. Tracked evals and all 120 baseline chains complete.
-2. [x] **Aquamentus wanders after the kill (Lee).** Link kills Aquamentus, then walks left/right in 0x35 for a very long
+2. [x] **Aquamentus wanders after the kill (the owner).** Link kills Aquamentus, then walks left/right in 0x35 for a very long
    time before leaving; one run sat there "for ages" and only got unstuck by chance. Even with a good success rate
-   something is wrong, and Lee says it's unrelated to shadow Link: check it, or penalize hanging out in the boss
+   something is wrong, and the owner says it's unrelated to shadow Link: check it, or penalize hanging out in the boss
    room once the boss is dead. Likely cause: `boss-aquamentus.yaml` succeeds on `boss-dead-and-heart` (the episode
    ends when the heart container is taken), and its start states are all the fight entry, so walking out E into
    the triforce room 0x36 afterwards is never trained. The runner then gives the room up to 2000 steps
@@ -1633,7 +1633,7 @@ the remaining list is deferred until Lee resumes work.
    - **Done, round 7 §5:** promoted r30-exit and complete-visit curriculum. Exit-task eval 60/60; mean pickup-to-exit
      11.1 actions (old 92.0), worst 77 (old 1,963), health +0.69 (old +0.61). Both full chains removed old post-heart
      timeouts. Independent 20-run sweeps: full main/fairy 1/3, post-D1 main/fairy 0/4, D2 3; no execution errors.
-3. [x] **Observation audit (Lee: does Link get enough about enemies and the world, e.g. does he know an enemy is
+3. [x] **Observation audit (the owner: does Link get enough about enemies and the world, e.g. does he know an enemy is
    stunned?).** Do it before the next full retrain: observation changes invalidate every model, so bundle them.
    Already there (`observation.ENTITY_FEATURES`): per-slot type embedding, projectile, blockable (rock, arrow,
    boomerang; not the Zora fireball), hp, stun, invincibility, immunities, spawning, dying, active, item lifetime.
@@ -1654,26 +1654,26 @@ the remaining list is deferred until Lee resumes work.
      three containers/no boomerang/no triforce in post-D1 rooms; preserved the valid four-heart 0_3dc path and
      installed verified current 0_3dn_2 coverage. All 14 Moblin goal replays and 41 default-track route audits pass.
      D2 Goriya replacements and all 21 Rope tracks are installed; r36 freezes all 62 enabled tracks.
-   - [ ] **Temporal world snapshots (later; Lee, Nov 4).** Consider the current structured world observation
+   - [ ] **Temporal world snapshots (later; the owner, Nov 4).** Consider the current structured world observation
      plus 1–4 previous observations, so motion/changes are explicit to the policy. Full world-history stacking
      is not implemented: current inputs contain per-entity `vx/vy` estimated from the previous observation,
      plus last-action/timing/interrupt history, not previous world snapshots. Account for variable elapsed
      emulator frames and reset/mask history across episode/room changes and newly occupied object slots.
-   - [ ] **Enemy facing versus movement (later; Lee, Nov 4).** Facing is already supplied as per-entity
+   - [ ] **Enemy facing versus movement (later; the owner, Nov 4).** Facing is already supplied as per-entity
      `facing_N/S/W/E`; observed movement is also supplied as `vx/vy`. Review their decoding/usefulness rather
      than assuming direction is absent. Facing is not necessarily current motion (e.g. stun or knockback).
-   - [ ] **Distance plus unit direction from Link (later; Lee, Nov 4).** Lee's original Triforce supplied an
+   - [ ] **Distance plus unit direction from Link (later; the owner, Nov 4).** The owner's original Triforce supplied an
      enemy's distance and normalized direction vector, doing that geometry outside the network. Current
      inputs already include absolute `x/y` and Link-relative `dx/dy` scaled by room axes, but neither an explicit
      scalar distance nor a unit-length direction vector. Compare that explicit representation; use a consistent
      pixel metric and define the zero-distance case. These ideas are deferred, not added to frozen r36 inputs.
-4. [x] **Goriya rooms: blocking, and the corner stalemate (Lee).** v1 rewarded the shield-block sound, and that taught
+4. [x] **Goriya rooms: blocking, and the corner stalemate (the owner).** v1 rewarded the shield-block sound, and that taught
    Link to block instead of face-tanking. v2's old `critics.critique_block` rewarded ArrowDeflected sound onset;
    round 7 replaces that incomplete signal with per-frame confirmed shield collisions and per-collision decay.
    First count confirmed Goriya blocks per episode in evals and traces, then A/B a stronger
-   block reward on goriya (0x44 is the chain's top death room). Caveat (Lee): the sound alone is wrong in rooms
+   block reward on goriya (0x44 is the chain's top death room). Caveat (the owner): the sound alone is wrong in rooms
    with Darknuts etc. (their shields clink too), so require a blockable projectile in the air near Link plus the
-   clink. Lee also watched the stalemate: Link in the top-left corner not fighting while the Goriyas chase shadow
+   clink. The owner also watched the stalemate: Link in the top-left corner not fighting while the Goriyas chase shadow
    Link in the bottom right (AGENTS.md "Game mechanics"), no hits on either side, for ages. The stalling penalty
    (−0.01 to −0.02 per step after 150 quiet steps) is apparently not enough to break it; measure it with item 1,
    then consider a stronger penalty for quiet steps while enemies remain. Related, from round 6: at 1 heart the
@@ -1695,12 +1695,12 @@ the remaining list is deferred until Lee resumes work.
    - **Remaining navigation problem, round 7 §6:** faithful r31 chain replays find no enemies during the final
      1,000 stalled actions in D2 0x5e/0x1e (MOVE objective). Quiet-fight cost cannot fix post-kill exit pacing.
      Preserve this distinction in later cutoff/curriculum work; do not call it shadow-Link fighting.
-5. [x] **Hearts: aim at the nearer of heart or exit (Lee: "a big deal", v1 behaviour).** Agents leave many dropped
+5. [x] **Hearts: aim at the nearer of heart or exit (the owner: "a big deal", v1 behaviour).** Agents leave many dropped
    hearts (round 6 §8: overworld 26 of 34). In v1, dropped items were among the wavefront's targets, and the
    wavefront is a multi-source BFS, so PBRS led to a heart whenever it was closer than the exit by walking distance
    (not straight-line) and ignored it otherwise. v2 adds items to the objective's `targets` but not to
    `pbrs_targets` (`objectives._GameMapObjective.get_current_objectives`), so shaping never points at a heart.
-   Try: hearts and the clock (Lee: "certain items like the clock and hearts") in `pbrs_targets` alongside the
+   Try: hearts and the clock (the owner: "certain items like the clock and hearts") in `pbrs_targets` alongside the
    exits. This differs from the dropped `collect_hearts` (heart was the only target whenever Link was hurt, kind
    ITEM). A/B on stalfos-keese-gel, d2-rope and an overworld family; measure taken/left, real vs total heart
    change and the chain.
@@ -1713,7 +1713,7 @@ the remaining list is deferred until Lee resumes work.
      runtime chains finished: shaped Rope improves D2 but regresses both full routes; keep old Rope/SKG/Moblin.
      Ordinary Octorok off promoted after disjoint 80-seed comparisons improve combined success/physical health
      on all four segments. No shaped model promoted; nearby shaping stays off. Matched cutoff trial next.
-6. [x] **Cut runs that stop making progress (Lee: in v1 a run was truncated after ~100 steps without progress, e.g.
+6. [x] **Cut runs that stop making progress (the owner: in v1 a run was truncated after ~100 steps without progress, e.g.
    an item pickup or a kill).** Today training ends `stuck` after 50 steps without moving and `no-progress` after
    2000 steps without a new correct room (`end_conditions.Timeout`, the same 50/2000 as v1's Timeout; the ~100-step
    rule isn't in v1's code, so define it fresh). A room-stalling penalty starts after 150 steps, and the runner
@@ -1722,7 +1722,7 @@ the remaining list is deferred until Lee resumes work.
      cuts both helped a lot); chains stop spending minutes and hearts in a room the model can't leave; cleaner
      failure signal and a "stuck" count per room.
    - Cons: some rooms need waiting (the fairy pond refill, shutters, Leevers and Zoras that can't always be hit,
-     Link hiding in a Goriya room's corner until they come; Lee: that's fine while enemies can still reach him).
+     Link hiding in a Goriya room's corner until they come; the owner: that's fine while enemies can still reach him).
      "Progress" has to count more than kills and pickups (hits, damage dealt, a new best wavefront distance to the
      objective, a door, key or treasure), or slow but correct approaches get cut. In the chain a cut is a failed run.
    - Design: progress as in item 1 (kill, hit, item/treasure/key taken, new minimum objective distance, room exit).
@@ -1758,7 +1758,7 @@ the remaining list is deferred until Lee resumes work.
      One finisher captures live health on every finalized path; death stays zero. Two native fairy regressions,
      real healed-HP smoke, 16 runner checks and all 470 tests pass (merged 4cb8434). Old/off/on Rope reranking is
      complete on corrected runtime (§9); raw historical HP is retained, not retroactively imputed.
-7. [x] **D2: east first for the 0x7e key (Lee).** From the D2 entrance go 0x7d E → 0x7e (kill the ropes, take the key)
+7. [x] **D2: east first for the 0x7e key (the owner).** From the D2 entrance go 0x7d E → 0x7e (kill the ropes, take the key)
    → N 0x6e, instead of 0x7d N → 0x6d → E 0x6e. Slower, but the key is needed later in the dungeon (past the
    milestone). `game.yaml` already declares Rope ×5 and a key in 0x7e; generic FIGHT/TREASURE objectives apply.
    The route currently treats it only as an alternate. Make it canonical on both routes, retrain d2-rope, and
@@ -1792,7 +1792,7 @@ the remaining list is deferred until Lee resumes work.
      versus old 335/420/−0.338. All 131 native D2 arrivals depart east; all 34 Dodongo arrivals carry the 7e key.
      Both routes, 24 audited suffix states, 21 Rope/six D2 Goriya curricula and the promoted pointer are active
      in main at source 47788f7. Canonical CUDA training, six native main smoke runs and 471 tests pass.
-8. [x] **Boomerang after D1: does it help or hurt? (Lee: big but worth it; "get to the real bottom of this".)** Link
+8. [x] **Boomerang after D1: does it help or hurt? (The owner: big but worth it; "get to the real bottom of this".)** Link
    picks the boomerang up in 0x44 (that stays) and uses it often afterwards. Question: from D1 complete (`0_37c_2`,
    back on the overworld) to the Dodongo room, are the models better with the boomerang usable or masked?
    - Arms: A = boomerang on; B = `items: {boomerang: off}` for every specialist that plays after D1: ow-octorok,
@@ -1831,20 +1831,20 @@ the remaining list is deferred until Lee resumes work.
   - **Prerequisite (Nov 6):** the r36 bundle observation exists only in the old Python dev tree (`round4-dev`
     `4d35155`) and was never ported (the current `OBS_SCHEMA_VERSION = 2` is the `target` block, not that bundle).
     Answering this means porting the bundle into `crates/env`, then two scratch teams at a larger budget (roughly
-    10 families × 2 arms × 5M steps, a day of GPU). Lee to decide whether it is worth porting (r36: no better,
+    10 families × 2 arms × 5M steps, a day of GPU). The owner to decide whether it is worth porting (r36: no better,
     Zora worse).
 - [ ] **Arrival health is the D2 loss (round 10 §5).** 2:0x5e kills 24/28 arrivals at ≤1 heart and 4/130 above 3;
   post-D1 main reaches it with 1.64 hearts (fairy 2.39) after ~2.3 hearts of overworld damage spread over
   0x2b/0x3d/0x4c/0x2a/0x2d, with almost no drops there. Already ruled out: crossing-room damage penalty (round 6),
   heart objective (round 6), nearby-item shaping (r32), chain-hp Goriya (r39). Untried: a Goriya skill that works
   without beams (e.g. boomerang stun then melee, demonstrations), and d2-rope collecting the hearts it leaves in
-  2:0x7e/0x4e (0.36/0.39 per visit) by some other means than shaping. Needs Lee's direction before more GPU.
+  2:0x7e/0x4e (0.36/0.39 per visit) by some other means than shaping. Needs the owner's direction before more GPU.
 - [x] **Audit full D2 key carriage separately from milestone entry (r36 §21; deferred).** Both fresh teams
   reach Dodongo with the requested 7e key 7/80 times, but only 5/80 baseline versus 7/80 bundle arrivals satisfy
   the full-three-key audit. Keep both counters; do not silently count all milestone arrivals as full key carriage.
   - **Done, round 10 §4 (`8456c51`):** chain records carry `keys_in/keys_out`; `chain_summary` reports
     `arrival_keys`. Promoted team: 72 of 74 Dodongo arrivals carry all three keys (two fairy-route arrivals have two).
-- [x] **Swordless departure from the starting area (Lee, Nov 4).** Lee observes runs where Link leaves without
+- [x] **Swordless departure from the starting area (the owner, Nov 4).** The owner observes runs where Link leaves without
   taking the sword; these runs cannot win and waste training. Reduce how often this happens. His original
   training failed immediately on leaving the starting area swordless; that is an acceptable option, not a
   required implementation. Investigate the start specialist/task and chain behavior, then measure swordless
@@ -1860,7 +1860,7 @@ the remaining list is deferred until Lee resumes work.
   Fixed and proved through real/spawned CLI paths. Round 6's r20-pt, r21/r22-chainhp and r25/r27-heart treatment
   comparisons are not valid treatment evidence; model/chain measurements remain real. Explicit rejections remain.
 - **0x53 (5-Stalfos key room):** 5 deaths in the full chain after the D1 Goriya room's 15.
-- [x] **Finite stall escape in training and `play-zelda.py` (Lee, Nov 4; round 7 §9).** Lee still observes
+- [x] **Finite stall escape in training and `play-zelda.py` (the owner, Nov 4; round 7 §9).** The owner still observes
   half-heart/clock/stunned-enemy Goriya runs attacking while standing still indefinitely. Required:
   - **Training:** a finite no-progress timeout that stops such runs. It may be a while; endless attack loops
     must not survive merely because Link keeps selecting attacks. Choose/measure a suitable threshold.
@@ -1872,13 +1872,13 @@ the remaining list is deferred until Lee resumes work.
     definition for the requested player counter. Preserve the existing replacement/fade path.
   - Earlier native Rope seed 15 also had clock-frozen one-HP foes, a closed required shutter and a 2,942-action
     quiet tail (last 1,000: 978 MOVE/11 SWORD). Clock is observed; this is not shadow-Link chasing or the repaired
-    shutter objective. Implement only after the current experiment and Lee's requested pause/resumption.
+    shutter objective. Implement only after the current experiment and the owner's requested pause/resumption.
   - **Done, round 10 §6:** one no-damage counter (damage dealt or taken). Player `--stall-steps 300`: eligible
     for replacement at 300, run ends `stuck` at 600. Training/eval `no_damage_steps` default 600 (bootstrapped
     `no-damage` truncation). Thresholds from 9,033 successful chain visits (10 reach 600; every `stuck` does).
 - **Promote by damage too.** A model that wins 3% more but takes twice the damage is worse in a chain
   (ow-leever-peahat r9a vs r3). Evaluate at chain-like hp and rank by success and `mean_health_change`.
-- [x] **Bow route (Lee, Nov 9): mapped; training next.** On the route since Nov 9 (`docs/routes/d2first.md` "The
+- [x] **Bow route (the owner, Nov 9): mapped; training next.** On the route since Nov 9 (`docs/routes/d2first.md` "The
   bow detour", `docs/decisions.md` 2026-11-09): 0x43 N → 0x33 (key) → 0x23 (key) → 0x22 (push the west block N or
   S, stairs) → the bow cellar 0x7f → back to 0x43 → 0x44. New families `trap-room` and `equipment-room` with states
   and curricula; **next: train them** (and retrain stalfos-keese-gel / goriya / the families after the detour on the
@@ -1887,7 +1887,7 @@ the remaining list is deferred until Lee resumes work.
   re-entered; the objective then still points at the unreachable stairs (no wavefront path, no PBRS gradient). If
   trained models do this, consider sending Link out E and back in (the route's 0x23 from W without the bow is off
   the route and already leads back W).
-- **play-zelda GUI** (uncommitted, Lee trying it; see AGENTS.md): `--games N` with best-hidden-game swaps on room
+- **play-zelda GUI** (uncommitted, the owner trying it; see AGENTS.md): `--games N` with best-hidden-game swaps on room
   change / restart and a fade, fps in the window title, `--benchmark`. Offscreen 3x2 measurements: 6 games 55.8
   fps per cell, 32 games 56.9 (every game still emulating at 60). The cap is the GUI's 16 ms tick (about 57 ticks
   per second), not the game count: lower `TICK_MS` in `play-zelda.py` to reach 60. Each game opens its own CUDA
@@ -1904,10 +1904,10 @@ the remaining list is deferred until Lee resumes work.
   d2-rope but no chain gain; dropped (code removed). Item 4 above is a different rule (nearest of heart or exit).
 - ~~Refill hearts on the way~~ **done** as the second route `milestone1-fairy` (round 6 §9). No fairy stop exists
   before D1, and D2 has none.
-- ~~Skip the optional boomerang pickup in 0x44~~ **Rejected by Lee:** keep the pickup. (Item 7 tests using it
+- ~~Skip the optional boomerang pickup in 0x44~~ **Rejected by the owner:** keep the pickup. (Item 7 tests using it
   after D1, a different question.)
-- ~~Split Dungeon 1 into one model per enemy type~~ **Rejected by Lee:** group models by the enemies in the room,
-  but don't boil it down to one model per enemy type or per room (beyond what Lee asks for, e.g. `wallmaster`).
+- ~~Split Dungeon 1 into one model per enemy type~~ **Rejected by the owner:** group models by the enemies in the room,
+  but don't boil it down to one model per enemy type or per room (beyond what the owner asks for, e.g. `wallmaster`).
 
 ## Items
 
@@ -1950,7 +1950,7 @@ the remaining list is deferred until Lee resumes work.
   that, and d1-wallmaster `1_44w_2` is still unexplored: re-run it with the new cell.
 - [x] **Training-time `balanced_success_rate` lags** when a specialist finishes few room-entry episodes per iteration
   (d1-melee: 26 states, 5–17 episodes per iteration). Fixed by the per-start cohorts and the confirmation
-  evaluation (review F071); no time-based window (Lee).
+  evaluation (review F071); no time-based window (the owner).
 - **Long episodes starve the curriculum** (round 3; fixed for boss-aquamentus in round 5 with `max_steps: 400`,
   0% → 93%). `max_steps` sets the episode rate; set it from the explored path length for any curriculum specialist
   whose failures are slow (fleeing, waiting) rather than quick deaths.
@@ -1971,7 +1971,7 @@ the remaining list is deferred until Lee resumes work.
     (all 32 of their runs trained the full 245 updates). Detached launches that survive the tool shell:
     `setsid nohup CMD >> LOG 2>&1 < /dev/null & disown`.
 
-- **Keep training GUI logs in the standard main `logs/` root (Lee, Nov 4).** R36's isolated arm logs were put
+- **Keep training GUI logs in the standard main `logs/` root (the owner, Nov 4).** R36's isolated arm logs were put
   under `models/r36-observation-full-retrain-evidence/logs/schema1|schema2`. Those producer paths stay stable,
   but live ten-specialist series views now exist under standard `logs/` (round 7 §21), so normal GUI launch works.
   Future producer logs must also use the normal root, with arm identification in run/session metadata.
@@ -1979,12 +1979,12 @@ the remaining list is deferred until Lee resumes work.
 - **Re-running a subset with the same `--round` overwrites `models/<round>-summary.json`** (round 3: the
   boss-aquamentus r3c run replaced the ow-zora / d1-wallmaster summary). Merge into the existing summary, or
   refuse to reuse a round ID.
-- **Mapper runs log JSONL and get their own GUI view (Lee, Nov 3; later, not urgent).** `entry_states build/path`
+- **Mapper runs log JSONL and get their own GUI view (the owner, Nov 3; later, not urgent).** `entry_states build/path`
   and `triforce.explore` print text only. Write event logs (`logs/<yymmdd>_<NNN>_<what>/`, like training):
   per room/state attempts, iterations, cells, env steps, best progress, success/failure. Then teach
   `training-gui.py` to recognize a mapper log folder and show it sensibly (likely a different view that opens for
   that kind of folder: route steps as rows, per-attempt progress).
-- [x] **The test suites are slow (Lee, Nov 11).** Target: about 10 minutes for both, every test worth its time.
+- [x] **The test suites are slow (the owner, Nov 11).** Target: about 10 minutes for both, every test worth its time.
   Measured in the `replays` worktree while round r63a trained on main (load average 35 on 20 threads;
   one core still ran `tf bench` at 7,743 frames/s, so it is oversubscription, not slower cores):
   `cargo test --release --workspace --features zelda/zcore` 276–307 s (one test binary 87 s for 9 tests, three
@@ -2016,7 +2016,7 @@ the remaining list is deferred until Lee resumes work.
   - Left as they are: `corpus_check_passes` (replays the whole corpus, over a million frames, in parallel: its
     length is the longest movie) and the slower room of the attack test (about 26 s: 500 random steps, every legal
     attack tried at each).
-- [x] **Versioning, power-on starts, TFREPLAY replays, `zelda-headless.py`, the golden path (Lee, Nov 11;
+- [x] **Versioning, power-on starts, TFREPLAY replays, `zelda-headless.py`, the golden path (the owner, Nov 11;
   branch `replays`, `docs/decisions.md` 2026-11-11).** Measured with main's promoted team (r61–r63 runs, all
   models sampling), the round still training:
   - Golden path from power on to the D3 triforce, 8 games: won twice in two tries, 19 and 15 runs in 22 s
@@ -2043,7 +2043,7 @@ the remaining list is deferred until Lee resumes work.
     Both die in the same rooms first (goriya 2:0x5e 16 and 16, moldorm 2:0x3e 12 and 9, darknut 3:0x59 8 and
     10). The golden path wins with sampling because it needs one of several runs per segment.
   - [x] **Problem: a run can bounce between 0x4c and 0x4d for its whole step budget, every exit "correct"**
-    (fixed Nov 11, Lee: walking back and forward once or twice is fine, the endless bounce is not).
+    (fixed Nov 11, the owner: walking back and forward once or twice is fine, the endless bounce is not).
     Two of the 120 sampled runs (seed 64: 49,020 rooms entered; another: 48,599) alternated 0:0x4c (ow-octorok)
     and 0:0x4d (ow-moblin), one action per room, 24,505 times each, until `run exceeded 50000 steps`: 5.2
     million frames, about 12 minutes of one core, `wrong_exits` 1, `retreats` 0; `zelda-headless.py
@@ -2067,9 +2067,9 @@ the remaining list is deferred until Lee resumes work.
     - Not changed: why ow-start sometimes leaves 0x77 N without the sword when sampling (the off-route objective
       now brings Link back).
   - `hold_finished_frame` / `EnvPool.set_hold` (a finished chain run parks its env on its last frame) have no
-    caller since `play-zelda.py` plays replays (Nov 11). Left in the pool until Lee confirms the replay-driven
+    caller since `play-zelda.py` plays replays (Nov 11). Left in the pool until the owner confirms the replay-driven
     viewer stays; then remove them with their tests (`crates/pool/tests/pool.rs`, `tests/native/test_pool.py`).
-- [x] **Sound, `create-video.py`, the controller overlay (Lee, Nov 11; branch `sound`; decisions 2026-11-11,
+- [x] **Sound, `create-video.py`, the controller overlay (the owner, Nov 11; branch `sound`; decisions 2026-11-11,
   architecture "Sound", "Videos", "Watching").** Sound is a synthesizer beside the emulator
   (`crates/zcore/src/sound.rs`), fed by the APU register writes; nothing in `MachineState` changed.
   - Checked without ears: a pulse and the triangle play the pitch of their period (440.4 and 220.2 Hz), the
@@ -2083,7 +2083,7 @@ the remaining list is deferred until Lee resumes work.
     is the tap's note of each sound-register write (a byte and a bit) and a counter per frame. `tf bench
     --agent --render off`, three alternating runs each, a busy machine: 7373 / 7972 / 7835 frames/s before
     (mean 7727), 7497 / 7751 / 7737 with the tap (mean 7662): −0.8%, inside the 8% spread between runs.
-  - [x] **Lee listened** to the sample videos (Nov 11): "Perfect".
+  - [x] **The owner listened** to the sample videos (Nov 11): "Perfect".
   - [ ] **A replay from a savestate starts silent** until the game writes each sound register again (its next
     note per voice; a held note or a looping effect stays missing longer). The registers are not in a state
     file and must not go into `MachineState`. Fix idea: record the 24 register bytes the tap holds with each
@@ -2091,7 +2091,7 @@ the remaining list is deferred until Lee resumes work.
     hand them to `Synth::resume`; start states made by `entry_states` would still lack them.
   - Not checked: which of Zelda's effects use the DMC channel (its bytes are played; no test hears one), and
     the 5-step frame sequencer mode on the real ROM.
-  - Sound at other speeds than the console's is muted (Lee); a pitch-shifted fast-forward was the alternative.
+  - Sound at other speeds than the console's is muted (the owner); a pitch-shifted fast-forward was the alternative.
 
 ## Start states
 

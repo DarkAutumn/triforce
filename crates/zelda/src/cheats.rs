@@ -1,4 +1,4 @@
-//! Cheated items: the bombs, keys and rupees a room needs that Link may lack (Lee, Nov 8-9), shared by the
+//! Cheated items: the bombs, keys and rupees a room needs that Link may lack (the owner, Nov 8-9), shared by the
 //! specialist env and the chain runner (`env::specialist_env`, `env::chain`).
 //!
 //! Counts stay natural except where a room *needs* an item ([`needs`]); there, whenever Link holds fewer than the
@@ -312,7 +312,7 @@ impl CheatLedger {
                 step.used[item] = fall as u32;
                 step.cheated[item] = (room_part + route_part) as u32;
             }
-            // A natural pickup leaves the grants alone (Lee, F173): they are used first, and leaving takes the room's
+            // A natural pickup leaves the grants alone (the owner, F173): they are used first, and leaving takes the room's
             // back.
             let mut target = now;
             if left {

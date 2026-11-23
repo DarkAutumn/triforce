@@ -97,7 +97,7 @@ notes: 'Darknut rooms (Nov 9): shielded in front, hit only from the side or back
   22; a `requires_bombs` room, so bombs are free there: the Darknuts killed and their bombs taken whatever Link holds, round
   23, then the wall); 0x5c (3 Darknuts, round 22) W to N through its open doorway; 0x59 (5 Darknuts, kill-all S shutter)
   E to N, N to S (kill them all: the shutter) and S to E; 0x69 (8 Darknuts, bombs) N to the stairs down to the raft cellar
-  and back up N, never fighting for its treasure (Lee: `treasure: skip`). Copied from goriya. Dungeon 5 (round 24; docs/routes/d5.md):
+  and back up N, never fighting for its treasure (the owner: `treasure: skip`). Copied from goriya. Dungeon 5 (round 24; docs/routes/d5.md):
   Blue Darknuts join the Red (the owner). 0x64 (5 Blue Darknuts) E to the stairs inside its block diamond, with clips by
   the block clip N from ($A0,$9D) and no fight, without clips by killing them and pushing the W block N or S (one route
   step; the clips switch picks the objective); back out of the tunnel cellar E, running for the opened wall among them.

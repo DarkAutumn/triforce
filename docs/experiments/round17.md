@@ -1,12 +1,12 @@
 # Round 17: the code-review fix-up, then a fresh team (r61)
 
-Lee, Nov 10: work through every finding of the whole-repo review (`target/review-ledger.md`, 192 findings, read with
+The owner, Nov 10: work through every finding of the whole-repo review (`target/review-ledger.md`, 192 findings, read with
 `target/review-guide.md`): fix it, or close it with a recorded reason (`target/review-progress.md`). Then retrain the
 whole team from scratch with SIL on from the start (`--sil-coeff 0.1`). No continuation of the current models.
 
 ## Summary
 
-- **Review fixes: done.** 186 findings fixed, 5 closed as duplicates, 1 (F111) closed by Lee's decision (docs and a
+- **Review fixes: done.** 186 findings fixed, 5 closed as duplicates, 1 (F111) closed by the owner's decision (docs and a
   backlog experiment, no code); 6 new findings (N001–N006) found while fixing, 4 fixed, 2 closed as probe artifacts.
   Per-finding commits in `target/review-progress.md`; the changes that matter for training are in §2. Suites after
   the last code fix: Rust 699 pass (also with overflow checks), Python 450 pass, `tf ladder-diff` 0 of 7 diverge.
@@ -15,7 +15,7 @@ whole team from scratch with SIL on from the start (`--sil-coeff 0.1`). No conti
   curriculum tracks of the 14 curriculum families (old tracks in `trajectories.prev-r60`). Four tests that leaned on
   the old states' layouts were made layout-independent; one real bug surfaced (N007: a 32-frame step can span a
   Zora's surface-and-dive cycle, so a surfaced Zora that vanished was still counted as killed).
-- **Re-profile before the retrain (Lee):** no hotspot from the fixes (code above the emulator stays ~1% of cycles;
+- **Re-profile before the retrain (the owner):** no hotspot from the fixes (code above the emulator stays ~1% of cycles;
   +1.4 frames per sword/beam action and real bomb/boomerang throws by design). Three wins taken: the SIL replay ring
   on the GPU (`--parallel 16` SIL training ~+45%), the next rollout starts before the last one's buffer is
   prepared (+2–5%), no weapon look-ahead without a live target; and a failing early-stop confirmation ends as soon

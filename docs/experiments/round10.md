@@ -142,7 +142,7 @@ Chains, 120 runs on §1's seeds, only ow-start swapped:
 | Post-D1 fairy (ow-start plays the pond) | — | — | 18/120 | 18/120 |
 
 **Promoted r38b-rebalance** for ow-start: no swordless departures left in 240 full chains, the pond unchanged,
-and the full chains gain what the swordless runs used to lose. Lee's alternative (end training episodes on a
+and the full chains gain what the swordless runs used to lose. The owner's alternative (end training episodes on a
 swordless departure) wasn't needed: the existing `exit-wrong` ending plus targeted training was enough.
 
 ## 4. D2 key carriage audit (r36 §21 follow-up)
@@ -213,9 +213,9 @@ teach the Goriya model to survive five Goriyas without beams. The lever is arriv
 the hearts d2-rope leaves on the floor in 2:0x7e/0x4e: 0.36 and 0.39 per visit), or a different fighting skill,
 not the reset health distribution. The refreshed `chain_hp.json` stays (no canonical config uses it).
 
-## 6. Finite stall escape (Lee, Nov 4)
+## 6. Finite stall escape (the owner, Nov 4)
 
-Lee watched Goriya runs attacking while standing still indefinitely and asked for a finite timeout in training
+The owner watched Goriya runs attacking while standing still indefinitely and asked for a finite timeout in training
 and in `play-zelda.py`, counting real damage either way. Implemented as one counter (actions in a room since
 entry or the last damage dealt or taken; `docs/decisions.md` 2026-11-06, `docs/architecture.md`).
 
@@ -240,7 +240,7 @@ successes — identical to §3/§4, so recording the counter changes nothing):
   episodes end earlier (8 stuck/max-steps, 2 deaths, 2 slow successes). Evaluations from here on include it;
   earlier ones did not (the difference is these rare long stretches).
 
-## 7. zcore speed and the `--parallel` study (Lee, Nov 7)
+## 7. zcore speed and the `--parallel` study (the owner, Nov 7)
 
 Full write-up: `docs/performance.md` "zcore speed (Nov 7)" and "How many envs (`--parallel`)".
 
@@ -258,7 +258,7 @@ Full write-up: `docs/performance.md` "zcore speed (Nov 7)" and "How many envs (`
   the env count (medians 209–261k and 315–426k), and wall time is lowest at 12–16 (139–145 s and 188–209 s; at 4
   envs 349 s and 589 s). Recommendation: `--parallel 16` alone, 8 each for two rounds side by side.
 
-## 8. Heart pickups (r40; Lee, Nov 7)
+## 8. Heart pickups (r40; the owner, Nov 7)
 
 Goal: Link picks up dropped items, hearts above all; main metric real health gained (`hearts healed`,
 `health_change`), not success. Tools: `scripts/heart_stats.py` (dropped/taken/healed/wasted/left and **left while
@@ -270,7 +270,7 @@ takes a third; it leaves 0.16 per visit while hurt (~0.9 hearts per D2 run), wor
 drops per visit, 0.48 left while hurt) and 2:0x2e. Goriya takes nearly all its drops; overworld families rarely see
 one. Arrival health at the Goriya room 2:0x1e is 2.07 and a third of its visits die.
 
-**Controls (`85f0e81`, default off):** `reward.fixed_pickup_reward` (health gained pays `REWARD_MAXIMUM`, Lee's idea
+**Controls (`85f0e81`, default off):** `reward.fixed_pickup_reward` (health gained pays `REWARD_MAXIMUM`, the owner's idea
 1) and `reward.item_targets` (every dropped item is a PBRS target, hearts and fairies only below max health, idea 3).
 **Idea 2, the target observation** (branch `r40-target-obs`, worktree `../triforce2-obs`): observation schema 2 adds
 `target[8]` behind `obs.target`: walking-direction one-hot, wavefront distance, pixel offset to the nearest PBRS

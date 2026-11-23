@@ -13,7 +13,7 @@ one_room: true
 max_steps: 600
 warm_start: null
 notes: >-
-  Blade-trap rooms (Lee, Nov 9), whatever the dungeon: traps ($49) that slide at Link when he lines up with them and
+  Blade-trap rooms (the owner, Nov 9), whatever the dungeon: traps ($49) that slide at Link when he lines up with them and
   can't be killed. Dungeon 1's 0x22 (the bow detour, docs/routes/d2first.md; no monsters): from E, push the west
   block of the diamond N or S (the objective points at the push spots while it is pending), then take the stairs
   in the middle down to the bow cellar; back from the cellar (Link comes out below the reset block), leave E.
@@ -24,7 +24,7 @@ notes: >-
   cheated bomb if Link has none), offered only where the bomb lands within reach of the route's intact wall (round
   22). Dungeon 4 (Nov 11-12): the rupee room 0x11 (no monsters and no traps, ten rupees, four bombable walls: in
   through the S wall, bomb the N wall into the Keese room 0x01, round 22), the nearest thing to it, a room Link
-  crosses through a bomb wall (Lee, Nov 12: it stays here); round 22: the dark 0x02 (six blade traps, no monsters)
+  crosses through a bomb wall (the owner, Nov 12: it stays here); round 22: the dark 0x02 (six blade traps, no monsters)
   from W leave S into the Vire room 0x12 (level-4.md's recipe: wait in the doorway for the traps to pass).
   Dungeon 6 (round 27, route `d6`; state `6_48s`): 0x48 (six blade traps, no monsters) straight up the middle
   without stopping (walked zero-shot 40 of 40).

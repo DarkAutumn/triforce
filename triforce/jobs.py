@@ -27,7 +27,8 @@ their owner's folder and have no entry of their own, so a job counts once.  One 
 ``commit``, ``log_dir`` and ``plan`` (None for a ``--no-log`` job), ``name``, ``kind``, ``status`` (``queued``, then
 ``running``, then the plan's final status), ``queued`` (ISO) and ``queued_ts`` (Unix seconds) when it joined the
 line, ``admitted`` / ``admitted_ts`` (when it started running), ``lane`` (``regular`` or ``express``), ``no_wait``,
-``work`` (``{unit: amount}``: training steps, evaluation episodes, chain route steps; ``work``), ``estimate``
+``express`` (the job asked for the express place, ``--express``), ``work`` (``{unit: amount}``: training steps,
+evaluation episodes, chain route steps; ``work``), ``estimate``
 (seconds, ``estimate``), ``finished`` and ``ran`` (seconds from admitted to finished).  The plan's ``finish`` marks
 it (``JobRecord.finish``); a job killed before that keeps its status with its process gone (``job_alive`` False).
 Each ``register`` deletes the entries that ended (or whose process is
@@ -44,9 +45,12 @@ The line.  No controller: the registry is the queue and every job decides for it
 waited`` (lowest first; ties by join time, then file name), so a short job goes before a long one, and a long one
 moves up as it waits, passing fresh short jobs once it has waited about twice its own estimate.  They take the free
 places in that order: up to ``max_jobs()`` (``$TRIFORCE_MAX_JOBS``, default ``DEFAULT_MAX_JOBS``; 0 = no limit)
-regular places, and ``EXPRESS_JOBS`` express place for a job estimated at most ``EXPRESS_SECONDS``, so a short job
-doesn't wait for the hour-long ones that hold the regular places.  Every checkout runs this one rule (an entry
-without an estimate counts as estimate 0).  Liveness comes from ``/proc`` (pid and process start time), never from
+regular places, and ``EXPRESS_JOBS`` express place for a job estimated at most ``EXPRESS_SECONDS`` or one that asked
+for it (``--express``, ``$TRIFORCE_EXPRESS=1``: a short measurement whose estimate the history may put above the
+limit, e.g. the 250-run test of ``scripts/full_runs.py``; it still waits its turn in the line and for the express
+place itself, and counts as running), so a short job doesn't wait for the hour-long ones that hold the regular
+places.  Every checkout runs this one rule (an entry without an estimate counts as estimate 0; one without
+``express`` asked for nothing).  Liveness comes from ``/proc`` (pid and process start time), never from
 a job reporting in, so a
 job that dies, running or queued, simply stops counting: nothing has to be cleaned up for the line to move.  The
 check and the change to ``running`` happen under an exclusive ``flock`` on ``<jobs_dir>/.lock``, held only for that
@@ -57,6 +61,8 @@ resources are available: estimated 40 minutes; 2 jobs are running (...); 1 job i
 itself; next update in 5 minutes.``, and when it starts ``triforce: NAME starts after waiting 12 minutes``.  SIGTERM
 or Ctrl-C while it waits raise KeyboardInterrupt (the plan ends ``interrupted``).  ``--no-wait`` (``begin_job``) or
 ``$TRIFORCE_NO_WAIT=1`` starts the job at once in a regular place; it still counts as running for the others.
+``--express`` or ``$TRIFORCE_EXPRESS=1`` (``begin_job``) records ``express`` in the entry: the job is express-sized
+whatever its estimate (``express_sized``).
 """
 
 import fcntl
@@ -81,6 +87,7 @@ NICE_HELP = (f"lower this process's CPU priority to niceness N (default ${NICE_E
              "it alone; it is never raised)")
 
 NO_WAIT_ENV = 'TRIFORCE_NO_WAIT'
+EXPRESS_ENV = 'TRIFORCE_EXPRESS'
 MAX_JOBS_ENV = 'TRIFORCE_MAX_JOBS'
 DEFAULT_MAX_JOBS = 2
 POLL_SECONDS = 5.0                   # how often a waiting job checks the line
@@ -90,7 +97,9 @@ EXPRESS_SECONDS = 600.0              # a job estimated at most this long may run
 EXPRESS_JOBS = 1                     # express places beside the regular ones (0: none)
 NO_WAIT_HELP = (f"start at once instead of waiting while {DEFAULT_MAX_JOBS} other trainings or evaluations run "
                 f"(${MAX_JOBS_ENV}); the job still counts as running for the others (also ${NO_WAIT_ENV}=1)")
-_START = {'no_wait': False}          # begin(): this process's --no-wait
+EXPRESS_HELP = (f"may take the express place whatever the estimate (a short measurement the history estimates above "
+                f"{EXPRESS_SECONDS:.0f} s); it still waits its turn for that place (also ${EXPRESS_ENV}=1)")
+_START = {'no_wait': False, 'express': False}  # begin(): this process's --no-wait and --express
 
 # Work and estimates.  A job's ``work`` is how much it asked for in a few coarse units; its ``estimate`` (seconds) is
 # the sum of amount x rate, a rate (seconds per unit) learned from the registry's history (``rates``), else these
@@ -115,17 +124,19 @@ def default_nice() -> int:
 
 
 def add_job_arguments(parser):
-    """The options every training and evaluation command has: ``--nice N`` (default None: ``default_nice()``) and
-    ``--no-wait``."""
+    """The options every training and evaluation command has: ``--nice N`` (default None: ``default_nice()``),
+    ``--no-wait`` and ``--express``."""
     parser.add_argument('--nice', type=int, default=None, metavar='N', help=NICE_HELP)
     parser.add_argument('--no-wait', action='store_true', help=NO_WAIT_HELP)
+    parser.add_argument('--express', action='store_true', help=EXPRESS_HELP)
 
 
 def begin_job(args) -> int:
     """The start of a training or evaluation entry point (``args`` from a parser with ``add_job_arguments``): lowers the
-    priority to ``args.nice`` and records ``args.no_wait`` for the job's plan (``no_wait``).  Returns the niceness
-    the process runs at."""
+    priority to ``args.nice`` and records ``args.no_wait`` and ``args.express`` for the job's plan (``no_wait``,
+    ``express``).  Returns the niceness the process runs at."""
     _START['no_wait'] = bool(args.no_wait)
+    _START['express'] = bool(getattr(args, 'express', False))
     return lower_priority(args.nice)
 
 
@@ -152,6 +163,12 @@ def no_wait() -> bool:
     """Whether this process's job starts without waiting its turn: ``--no-wait`` (``begin_job``) or
     ``$TRIFORCE_NO_WAIT`` set to anything but 0."""
     return _START['no_wait'] or os.environ.get(NO_WAIT_ENV, '').strip() not in ('', '0')
+
+
+def express() -> bool:
+    """Whether this process's job asked for the express place: ``--express`` (``begin_job``) or ``$TRIFORCE_EXPRESS``
+    set to anything but 0."""
+    return _START['express'] or os.environ.get(EXPRESS_ENV, '').strip() not in ('', '0')
 
 
 def max_jobs() -> int:
@@ -326,8 +343,8 @@ def score(job: dict, now: float) -> float:
 
 
 def express_sized(job: dict) -> bool:
-    """Short enough for the express place."""
-    return job.get('estimate') is not None and job['estimate'] <= EXPRESS_SECONDS
+    """Short enough for the express place, or asked for it (``express``)."""
+    return bool(job.get('express')) or (job.get('estimate') is not None and job['estimate'] <= EXPRESS_SECONDS)
 
 
 @dataclass
@@ -525,7 +542,7 @@ def register(log_dir, plan, name: str, kind: str, directory: Optional[Path] = No
             'log_dir': None if log_dir is None else str(log_dir),
             'plan': None if plan is None else str(Path(plan).resolve()), 'name': name, 'kind': kind,
             'status': 'queued', 'queued': None, 'queued_ts': None, 'admitted': None, 'admitted_ts': None,
-            'lane': None, 'no_wait': False, 'work': amounts, 'nice': os.nice(0),
+            'lane': None, 'no_wait': False, 'express': express(), 'work': amounts, 'nice': os.nice(0),
             'estimate': round(estimate(amounts, rates(read_jobs(directory))), 1), 'finished': None, 'ran': None}
     path = directory / f"{data['host']}-{pid}-{int(started or now)}-{safe}.json"
     try:

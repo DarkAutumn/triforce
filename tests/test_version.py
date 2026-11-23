@@ -1,4 +1,6 @@
-"""One version (the ``VERSION`` file) for the package, the native module, pyproject.toml and the Cargo workspace."""
+"""One version, ``MAJOR.MINOR.GEN.REV`` (the ``VERSION`` file; AGENTS.md "Versioning"), for the package, the native
+module, pyproject.toml and the Cargo workspace (``MAJOR.MINOR.GEN``).  It is provenance: whether a model loads is
+decided by its checkpoint's schemas (tests/test_registry.py), never by a version."""
 
 import tomllib
 from pathlib import Path

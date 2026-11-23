@@ -34,7 +34,7 @@ weapon damage in game units: `$10` = one wooden sword hit; damage to Link in hea
 | Dungeon 9 to the red ring | 15 | magic | none | 3 → 1 | 0 → 4 → 0, **4 cheated before 0x16's Patra** | ≥1 for Ganon's arrow |
 | Dungeon 9 after cellar 0x00 | 15 | magic | **red: damage ÷ 4** (asm:Link_BeHarmed) | | | |
 
-- No magic shield, no blue ring, no potions (Lee's decisions of Nov 16, `docs/routes/rest-of-game.md` "What this
+- No magic shield, no blue ring, no potions (the owner's decisions of Nov 16, `docs/routes/rest-of-game.md` "What this
   is"). So every type `$55`, `$57`, `$58`, `$59` shot is **unblockable** on this route; only `$53`, `$54`, `$5B`,
   `$5C` (rock, monster arrow, **Goriya boomerang**) are parried, by the small shield (code:
   asm:Link_CheckMonsterTouch_NoReset@FacingOpposite).
@@ -416,7 +416,7 @@ Voice harmless ~32 frames (the family's learned trick, pols-voice.yaml).
   (circle/ellipse, small/wide) flips at most every 255 frames (first flip 63/74 frames after init, trace). No clock
   test. Children become dead dummies (no drop, but `WorldKillCount`/`HelpDropCount` +1 each).
 - **Where.** 0x61 (`$47`, forced, key in the open first), 0x52 (`$47`, forced: its N shutter into Ganon's room),
-  0x16 (`$48`, **killed for its 4 bombs** — Lee, draft), 0x27 (`$48`, crossed with a bomb at the N wall, ring
+  0x16 (`$48`, **killed for its 4 bombs** — the owner, draft), 0x27 (`$48`, crossed with a bomb at the N wall, ring
   detour). Not fought in any walk (level-9.md).
 - **Eyes.** Missing: whether children are live (Patra's state) (G5/G2); body `killable` 1 while children live (G6);
   orbit phase and pattern index (positions and velocities show the orbit; the next flip is hidden).
@@ -604,7 +604,7 @@ max hearts of that stretch (inferred from asm:Link_BeHarmed@HandleDied; ignores 
    0x1c are — check each is intended (enums.rs:333-352).
 5. **Kills that must not be made / hits that must not land.** Persons and the Grumble Goriya (fireballs until Link
    leaves); 0x39's big Digdogger must not be split (RECORDER offered there by `recorder_wanted`); 7:0x1b's Goriyas
-   only for bombs when the bag isn't full (draft); 9:0x16's Patra must die (Lee) but 0x27's need not.
+   only for bombs when the bag isn't full (draft); 9:0x16's Patra must die (the owner) but 0x27's need not.
 6. **Monsters that never count.** Bubbles, traps, statues (correct today: hazard class); red Keese count for the
    shutter but not for `RoomKillCount` (a split room refills); Lanmola rooms never bank as cleared; flying Gleeok
    heads are in the game's all-dead type range but vanish with the Gleeok.
@@ -751,7 +751,7 @@ of meaning of existing columns: a COMPAT bump by the version rule even without n
    Bubbles take the sword away; mixed with Like-Likes and traps. Today's model cannot see the Red one's cycle, the
    clock, its own sword-off timer, or tell a hidden one from a solid one (G2-G5); the approach shaping walks into
    the shot lines. Needs 6.1-6.3 features, a wizzrobe family with staged starts (room_kills as in D5), and likely
-   the planner (`plan:K:S`) as a teacher (Lee's answer 1 in Lee's decisions of Nov 16, `docs/routes/rest-of-game.md`
+   the planner (`plan:K:S`) as a teacher (the owner's answer 1 in the owner's decisions of Nov 16, `docs/routes/rest-of-game.md`
    "What this is").
 2. **Dungeon 9's damage budget.** 15 hearts, no refill, ~10 forced fights, 4 cheated bombs before 0x16, the worst
    rooms before the red ring; then the ring changes every damage by 4x mid-dungeon. One-room families trained
@@ -803,7 +803,7 @@ of meaning of existing columns: a COMPAT bump by the version rule even without n
    was played): hearts lost per room with a scripted or planner player, to set families' start-health ranges.
 8. The rupee count at 0x44 and after, on real chains (the 2-14 is from the draft's arithmetic).
 
-## 12. Open questions for Lee
+## 12. Open questions for the owner
 
 1. **Arrows outside Gohma and Ganon:** off everywhere (recommended here), or allowed in Pols Voice rooms (8:0x4c's
    eight, one arrow can kill a line) at the cost of a rupee each against the 2-14 budget?

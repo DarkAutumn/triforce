@@ -14,8 +14,8 @@ from pathlib import Path
 
 SEGMENTS = ['d3', 'post-d3', 'd4', 'post-d4', 'd1', 'post-d1', 'd2', 'post-d2', 'd5', 'post-d5', 'd7', 'post-d7',
             'd6', 'post-d6', 'd8', 'post-d8', 'd9', 'full']
-BASE = Path('/home/leculver/git/triforce/target/r56-chains')
-GUARD = Path('/home/leculver/git/triforce/target/worktrees/r36-route/r36-route/chains')
+BASE = Path('target/r56-chains')
+GUARD = Path('target/worktrees/r36-route/r36-route/chains')
 
 
 def ref_path(seg: str) -> Path:
@@ -72,7 +72,7 @@ def per_visit(runs: dict) -> tuple[float, float]:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--tag', required=True)
-    parser.add_argument('--chains', default='/home/leculver/git/triforce-r37-one/target/r37/chains')
+    parser.add_argument('--chains', default='../triforce-r37-one/target/r37/chains')
     parser.add_argument('--segments', nargs='*', default=SEGMENTS)
     parser.add_argument('--json', default=None)
     args = parser.parse_args()

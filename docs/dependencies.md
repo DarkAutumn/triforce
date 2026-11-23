@@ -208,7 +208,7 @@ written to `metrics.jsonl`, which the GUI and tools read.
 - Tests run Qt with `QT_QPA_PLATFORM=offscreen` (`tests/test_training_gui.py`, `tests/test_play_zelda.py`).
 - Standing UX rule from CLAUDE.md: the GUI is for a colorblind user; never red vs green (good = blue, bad = red,
   purple in between).
-- `play-zelda.py`, `play_grid.py` and `tests/test_play_zelda.py` have **uncommitted** changes on purpose (Lee is
+- `play-zelda.py`, `play_grid.py` and `tests/test_play_zelda.py` have **uncommitted** changes on purpose (the owner is
   trying them); `uv.lock` is untracked.
 
 ### 4.7 Minor
