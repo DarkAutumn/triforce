@@ -3596,3 +3596,10 @@ On the lead's four proposals for the fresh generation (2.0.1.0):
    human does! [...] If it's cheap, just test it. Take what you think works better." An arm without it, kept only if
    it plays better.
 4. **The planner as a teacher in training:** the lead's call.
+
+The owner confirmed the dock warp the same evening: "I want the docks to stay for current version, but in the next
+team gets no help from swords or dodging. The model needs to learn where and when to use it (it's ok to mask it if it
+wouldn't perform the trick correctly, the model doesn't need to learn to move west of the dock to use it, unless you
+think it should). That's just masking though which we already do for screen wrapping, not smarts about the monsters
+and dodging." So the fresh generation's macros are masked by Link's position only (offered where the sequence would
+work), never by where a monster or shot is.

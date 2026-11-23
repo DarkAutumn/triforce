@@ -385,7 +385,10 @@ thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
   penalty; `penalty-aimless` on or off (its experiment first: ow-start and pols-voice at 0.002 / 0.005 a frame).
 - **What the engine plays, not the network** (the owner, Nov 23: allowed if the network chooses the moment and the
   macro never dodges): the whirlwinds out of Level 5 (0x0b) and Level 6 (0x22) as fixed button sequences offered as
-  a choice; the dock warp's two monster give-ways (`dock_warp_mask`) removed so the network times the plays itself.
+  a choice; the dock warp's two monster give-ways (`dock_warp_mask`: the forced sword strike, the forced wait)
+  removed so the network times the plays itself. The owner confirmed (Nov 23): today's team keeps the docks as they
+  are; the next team "gets no help from swords or dodging", and masking stays where the trick would not work from
+  where Link stands (as for the screen wrap): position only, never the monsters.
 - **Teachers by group first** (the owner: "yes to all", start with the lead's idea, stop when it works): about five
   groups from scratch, a family split off where its group can't learn it; an arm without the room identity if cheap;
   the planner as a teacher in training at the lead's judgement.
