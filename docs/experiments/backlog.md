@@ -459,6 +459,16 @@ thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
     that grows slow is seen in the history. Left: `test_entry_states.py::test_configured_start_states_are_clean`
     (12 s) and the select-checkpoint test (about 25 s alone, 7 chains) set the suite's floor; nothing else is above
     7 s.
+  - **The Rust suite runs its test programs one after another** (Nov 23, from the first timing log: 820 s = 377 s
+    of a cold build + 440 s of 73 programs, mostly on one core; `tests/cli.rs` 151 s, `explore_bomb_grant` 62 s,
+    `attacks` 52 s, `wrap_exit` 32 s, `bomb_mask` 28 s, `zcore_session` 23 s). Drafted and never run (branch
+    `r40-tests`, commit 3335b576, stopped at the owner's order to fan the work out again): `triforce/cargo_tests.py`,
+    a pool that lists the programs with `cargo test --no-run --message-format=json` and runs several at once,
+    longest first by the timing logs, each as cargo runs it. Read from the code, untimed: `cli.rs`'s pole is
+    `the_replay_corpus_still_verifies` (`tf replay verify` checks the corpus's ten replays one after another, six of
+    them whole games; a `--jobs` option would spread them), and `explore_bomb_grant` is one 62-second test, the
+    floor whatever the pool does. To finish: wire it into `triforce job test rust`, one real run, measure the pool
+    size.
   - The plain ways the first-quest draft left open (the Lost Woods maze in the objective, the overworld ladder clip):
     dropped, the program plays clips on only.
 
