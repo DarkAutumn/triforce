@@ -51,6 +51,7 @@ RUN_NICE = 15               # trainings, evaluations, chains, golden races, scri
 TOOL_NICE = 10              # builds and test suites: above the jobs, below the owner's player
 CARGO_JOBS = 4
 GRACE_SECONDS = 30.0        # after a timeout's or a stop's SIGTERM, the command's group is killed
+STEP_POLL_SECONDS = 0.25    # how often a job with several commands running looks which of them ended
 DESC_LIMIT = 120
 GOLDEN_FLAGS = ('--golden', '--power-on', '--clips', 'on', '--act', 'model', '--parallel', '16')
 REFUSED_PROGRAMS = ('nice', 'ionice', 'renice', 'chrt', 'timeout')
@@ -308,11 +309,13 @@ class Wrapper:
         with q.transaction(self.con):
             q.update(self.con, self.id, steps=steps)
 
-    def run_commands(self, steps: list[Step], env: dict) -> list[int]:
+    def run_commands(self, steps: list[Step], env: dict, ended=None) -> list[int]:
         """Runs ``steps``' commands at the same time (one step: just it), each in its own process group at the job's
         niceness with the place lock handed down (the place stays taken while anything holding it runs); returns
         their exit codes (128 + signal when killed, 127 for a program that isn't there).  One command's output
-        passes straight through; several are each kept and shown whole, in order, once all have ended."""
+        passes straight through; several are each kept and shown whole, in order, once all have ended.
+        ``ended(index, code)`` is called as each command ends (the job's steps then show which suite is done while
+        the others still run)."""
         codes: list = [None] * len(steps)
         outputs: list = [None] * len(steps)
         running: list[tuple[int, subprocess.Popen]] = []
@@ -342,17 +345,32 @@ class Wrapper:
                 self.row['child'] = running[0][1].pid
                 with q.transaction(self.con):
                     q.update(self.con, self.id, child=running[0][1].pid)
-            for index, child in running:
-                while True:
-                    remaining = None if self.deadline is None else self.deadline - time.monotonic()
-                    try:
-                        code = child.wait(timeout=None if remaining is None else max(0.0, remaining))
-                        break
-                    except subprocess.TimeoutExpired:
-                        self.timed_out = True
-                        self._stop_groups()
-                        self.deadline = None
-                codes[index] = code if code >= 0 else 128 - code
+            pending = dict(running)
+            while pending:
+                for index, child in list(pending.items()):
+                    code = child.poll()
+                    if code is None:
+                        continue
+                    del pending[index]
+                    codes[index] = code if code >= 0 else 128 - code
+                    if ended is not None:
+                        ended(index, codes[index])
+                if not pending:
+                    break
+                remaining = None if self.deadline is None else self.deadline - time.monotonic()
+                if remaining is not None and remaining <= 0:
+                    self.timed_out = True
+                    self._stop_groups()
+                    self.deadline = None
+                    continue
+                # One command left: sleep until it ends; several: look at each a few times a second.
+                pause = STEP_POLL_SECONDS if len(pending) > 1 else None
+                if remaining is not None:
+                    pause = remaining if pause is None else min(pause, remaining)
+                try:
+                    next(iter(pending.values())).wait(timeout=pause)
+                except subprocess.TimeoutExpired:
+                    pass
         finally:
             signal.setitimer(signal.ITIMER_REAL, 0)
             self._signal_group(signal.SIGKILL)     # nothing of the job outlives its commands
@@ -401,7 +419,10 @@ class Wrapper:
                 for index in group:
                     progress[index]['status'] = 'running'
                 self.set_steps(progress)
-            results = self.run_commands([steps[index] for index in group], env)
+            def ended(position: int, result: int, group=group):
+                progress[group[position]]['status'] = 'completed' if result == 0 else 'failed'
+                self.set_steps(progress)
+            results = self.run_commands([steps[index] for index in group], env, ended if len(steps) > 1 else None)
             if len(steps) > 1:
                 for index, result in zip(group, results):
                     progress[index]['status'] = 'completed' if result == 0 else 'failed'

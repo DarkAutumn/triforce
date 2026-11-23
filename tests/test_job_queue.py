@@ -459,3 +459,27 @@ def test_steps_marked_together_run_at_the_same_time(queue, tmp_path):
     assert row['finished_ts'] - row['admitted_ts'] < 3.6, time.monotonic() - started
     refused = queue.start('test', 'asm', 'check', '--agent', 'tester', '--task', 'suites', '--', '-k', 'x', cwd=repo)
     assert refused.wait(timeout=60) == 2            # options after -- go to one suite
+
+
+def test_a_suite_that_ends_is_shown_done_while_the_others_still_run(queue, tmp_path):
+    """Each of a test job's suites is marked as it ends, not all of them when the last one does (the owner, Nov 23:
+    "test python: running" under a bar at 995 of 995)."""
+    repo = tmp_path / 'repo'
+    for folder in ('zelda-asm/tests', 'zelda-asm/tools'):
+        (repo / folder).mkdir(parents=True)
+    (repo / '.git').mkdir()
+    (repo / 'zelda-asm' / 'tests' / 'test_quick.py').write_text("def test_quick():\n    pass\n")
+    (repo / 'zelda-asm' / 'tools' / 'asm.py').write_text("import time\ntime.sleep(6)\nprint('check: ok')\n")
+    process = queue.start('test', 'asm', 'check', '--agent', 'tester', '--task', 'suites', cwd=repo)
+    seen = None
+    until = time.monotonic() + 60
+    while time.monotonic() < until and process.poll() is None:
+        row = queue.row('asm+check')
+        states = {step['name']: step['status'] for step in (row or {}).get('steps') or []}
+        if states.get('test asm') == 'completed':
+            seen = states
+            break
+        time.sleep(0.1)
+    assert seen == {'test asm': 'completed', 'asm check': 'running'}, seen
+    assert process.wait(timeout=120) == 0
+    assert [step['status'] for step in queue.row('asm+check')['steps']] == ['completed', 'completed']
