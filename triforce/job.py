@@ -775,6 +775,8 @@ def test_steps(root: Path, suites: list[str], extra: list[str]) -> list[Step]:
             models = None
         if models is not None and models.is_dir():
             env['TRIFORCE_MODELS_DIR'] = str(models)
+    # The runner runs every test program whatever another did (cargo alone stops at the first failing one, Nov 23:
+    # one failing program hid the state of thirty others for a 25-minute run).
     cargo = [*CARGO_TEST, *extra]
     commands = {
         'python': ('test python', [python, '-m', 'pytest', '-q', '-n', str(PYTEST_WORKERS), '--dist', 'worksteal',
