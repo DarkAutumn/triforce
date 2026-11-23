@@ -18,9 +18,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from r37_one_table import SEGMENTS, load, ref_path  # pylint: disable=wrong-import-position
 
+# Route step indices of 2.0.0.7 (round 38: 0x2d's cave dropped, every step after 90 two lower; chains of 2.0.0.6 and
+# earlier number them two higher: 107, 147, 180, 195, 215, 231).
 MILESTONES = [('Level 3 entered', 1), ('D3 triforce', 24), ('D4 triforce', 53), ('D1 triforce', 79),
-              ('D2 triforce', 107), ('D5 triforce', 147), ('D7 triforce', 180), ('magic sword', 195),
-              ('D6 triforce', 215), ('D8 triforce', 231)]
+              ('D2 triforce', 105), ('D5 triforce', 145), ('D7 triforce', 178), ('magic sword', 193),
+              ('D6 triforce', 213), ('D8 triforce', 229)]
 BUDGET = math.log(10_000)
 
 

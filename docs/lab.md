@@ -397,10 +397,14 @@ once per rollout over its family's rows in batches of 4096 (`lab.collect.Teacher
   with no losing row.
 
 **The reference** (`triforce/lab/reference.json`: today's team, 2.0.0.3's 51 networks, on `bench.json`; played
-Nov 22 on 10 envs on the corrected `d3first`'s entries): 6,120 episodes, success **92.9%**, hearts lost **0.249** an
-episode, hits taken **0.677** a room visit, **33.2** decisions and **0.360** bombs used an episode; per key in the
-file. It replaced the first reference (Nov 21, on the first order's entries: 5,735 episodes, success 91.9%,
-hearts lost 0.241, hits 0.697 a visit, 36.2 decisions, 0.524 bombs; four keys on seed start states). What moved
+Nov 22 on 10 envs on the corrected `d3first`'s entries): 6,120 episodes, success **92.9%**, hearts lost **0.248** an
+episode, hits taken **0.675** a room visit, **33.2** decisions and **0.357** bombs used an episode; per key in the
+file. In 2.0.0.7 the 20 episodes of `ow-zora` and `ow-zora@d3first` on `d3first_0_2dw_h370001_9` and
+`_h370075_9` were played again (0:0x2d is crossed W → S since its cave left the route; `bench run --checkpoint`
+with the two keys' networks, every other episode of the two keys identical): ow-zora 87.5% → 88.3%,
+ow-zora@d3first 93.3% → 92.5%, the total's success unchanged. It replaced the first reference (Nov 21, on the first
+order's entries: 5,735 episodes, success 91.9%, hearts lost 0.241, hits 0.697 a visit, 36.2 decisions, 0.524 bombs;
+four keys on seed start states). What moved
 most, per key on its new rooms (120 episodes): ow-lynel 97.5% → 64.2% (now the corrected route's 0x50, 0x60, 0x22,
 0x32 and 0x07, among them the legs the baseline loses), boss-gleeok@d3first 67.5% → 44.2% and boss-gleeok 12.5% → 56.7% (8:0x3c
 joins 4:0x13), boss-manhandla 65.8% → 81.7% (8:0x6e joins 3:0x4d), like-like 80.0% → 92.5%, ow-zora@d3first

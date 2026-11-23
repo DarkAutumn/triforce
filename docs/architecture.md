@@ -2103,7 +2103,7 @@ is joined at the end. It prints a JSON summary (`out`, `frames`, `seconds`, `wid
 - **A route's own runs play its part only** (round 32; decisions 2026-11-20 "A route's own runs play up to its
   cutoff"): routes.yaml `own_models_until: {waypoint: NAME}` on a route (kept by a route extending it) marks the one
   step (on no stretch) from which every family plays its default `promoted` run; before it a family with a
-  `promoted.<route>` plays that one. `d3first`'s is `{waypoint: sword}`, the magic sword's cave (0:0x21, step 206:
+  `promoted.<route>` plays that one. `d3first`'s is `{waypoint: sword}`, the magic sword's cave (0:0x21, step 192 in 2.0.0.7:
   its run trained for the wood-sword rooms lost the magic-sword rooms of its family). A route without the key
   (`d2first`) plays its route runs everywhere, as before. **One place decides a step's run**: the engine names each
   step's policy (`zelda::GameMap::step_policy`, `_native.step_policy`: `family@route` before the cutoff, else
