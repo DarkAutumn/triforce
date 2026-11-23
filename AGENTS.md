@@ -686,6 +686,14 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   the model [...] Best is defined as 'fewest cheated items, completed in the fewest frames' in that order." Other
   replays (deaths included) may be kept to peek at later, within reason. Near the 2 TB floor: **ask the owner what
   to trim; never trim without asking.**
+- **Check-ins are a document** (the owner, Nov 23): the lead keeps `target/owner-review/CHECKIN.md` as the check-in
+  itself, written as it goes (decisions owed, results, golden and single runs with their paths, newest first). When
+  the owner asks for a check-in the lead opens it in the editor without asking (`code-insiders
+  target/owner-review/CHECKIN.md`) and gives only a brief console summary with the tables; heavy text and decisions
+  stay in the document. After the owner answers, the answered parts move to a dated "answered" section.
+- **The 250 test for every versioned team** (the owner, Nov 23): 250 runs from console power on in the express lane,
+  the best and worst runs and up to three stuck runs in different rooms kept as replays, and a long-term JSON of the
+  statistics committed and compared build to build (branch `r39-runs250`, `scripts/full_runs.py`).
 - **0x0a before the white sword:** leaving S is a `retreat` (routes.yaml `retreat: S`; neutral by default, ow-lynel
   ships `endings: {retreat: soft-failure}` for the baseline), and a chain run goes on (0x1a sends Link back N).
   Whether a model learns to use it is open.
