@@ -382,6 +382,19 @@ once per rollout over its family's rows in batches of 4096 (`lab.collect.Teacher
 - **Full tier** (`bench.json` `full`): the route's segment chains as the landings run them, `triforce eval-batch
   TAG --chains TAG --route d3first --runs 1000 --act model`, a candidate's networks given with `--checkpoint`; the
   `full` segment is the route from the start. It is what decides; the cheap tier only shortlists.
+- **Rooms tier** (round 38, `bench-rooms.json`; `rooms --harvest DIR --chains ...` builds it): the cheap tier was
+  blind to what killed a student's chains. Its entries are chain handoffs only (a room entry where the family
+  changes), so a room entered from a room of the same family is never on it: Dungeon 8's Darknut rooms
+  0x4e-0x3e-0x3f, the Olive Garden's fight (5:0x05 from 0x06; the cheap tier's two 5:0x05 entries are the cleared
+  revisit from 0x04, 3 decisions), Dungeon 7's Goriya rooms (0x1b, 0x19, 0x18, 0x49), 4:0x31 from 0x30. On the
+  51's own 1,000-run chains 69% (D5), 78% (D7) and 82% (D8) of the deaths are in such entries. It plays its entries
+  with the family's `ram_randomization` (hearts and bombs drawn at reset), not what the chain brings. And its total
+  weighs every key alike: a round-1 student 17.5 ± 3.5 points down on `darknut@d3first` (3:0x59: 13% against the
+  team's 80%) still read +1.2 in total. The rooms tier takes every room entry where the team loses hearts, from an
+  every-room harvest of the team's chains (`eval-chain --harvest DIR --harvest-every-room`), 12 states each, played
+  as they arrived (`arrived`: no randomization), one row per room entry; `compare` lists the **losing** rows (down
+  5 points or more beyond two standard errors) under the table, on both tiers. A candidate reaches the chains only
+  with no losing row.
 
 **The reference** (`triforce/lab/reference.json`: today's team, 2.0.0.3's 51 networks, on `bench.json`; played
 Nov 22 on 10 envs on the corrected `d3first`'s entries): 6,120 episodes, success **92.9%**, hearts lost **0.248** an
@@ -398,6 +411,20 @@ joins 4:0x13), boss-manhandla 65.8% → 81.7% (8:0x6e joins 3:0x4d), like-like 8
 99.2% → 93.3% (the docks' screens 0x55 and 0x3f). The two references are not paired (other entries): compare a
 network with the reference of the manifest it was played on.
 Every experiment is compared with it: `python -m triforce.lab.bench compare triforce/lab/reference.json NEW.json`.
+
+**The rooms tier's reference** (`triforce/lab/reference-rooms.json`: the 51 on `bench-rooms.json`, 2.0.0.7, Nov 22;
+the team before 2.0.0.8's hit heads, so a 2.0.0.8 team row differs from it by the eight promoted families):
+the tier built from an every-room harvest of the 51's chains, 100 runs of each dungeon segment d1-d9 from seed
+380000 (`eval-chain --route d3first --clips on --act model --from 3_7cs_0 --stop-at step:24 --runs 100
+--first-seed 380000 --harvest DIR --harvest-every-room`, and so on with each segment's start and stop), then
+`python -m triforce.lab.bench rooms --harvest DIR --chains <those outputs>`: 100 room entries, 12 states each, 5
+episodes a state, 5,980 episodes; success **92.3%**, hearts lost **0.678** an episode, hits taken **1.003** a room
+visit, **48.0** decisions and **0.417** bombs an episode. Its states are untracked like `harvested/`:
+`bench rooms` copies the chosen ones to `triforce/states/harvested-rooms/<family>/`. On the first 2.0.0.5 harvest
+(97 entries) it ranked four students as their chains did (round 37's -1.4 points, then -2.3, -3.6, and -8.1 for
+the round-1 student the cheap tier had at +1.2 over the team). Compare a network with it:
+`python -m triforce.lab.bench run --network CKPT --manifest triforce/lab/bench-rooms.json --out NEW.json`, then
+`python -m triforce.lab.bench compare triforce/lab/reference-rooms.json NEW.json`.
 
 ## The first experiment through the pipeline (smoke, Nov 21)
 

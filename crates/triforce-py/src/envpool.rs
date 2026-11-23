@@ -160,7 +160,8 @@ fn check_seeds(seeds: impl IntoIterator<Item = u64>) -> PyResult<()> {
 /// cheated items used so far (`zelda::cheats`). `hold_finished_frame`: a finished run keeps its env's last frame
 /// published (the next run doesn't publish) until `EnvPool.set_hold(env, False)`. `harvest` (a directory, off by
 /// default): every correct room entry where the acting specialist changes saves its pre-entry state as
-/// `harvest/<specialist>/<level>_<room><side>_h<seed>_<n>.state` (`ChainEnv::set_harvest`).
+/// `harvest/<specialist>/<level>_<room><side>_h<seed>_<n>.state` (`ChainEnv::set_harvest`); with
+/// `harvest_every_room` every correct room entry does, also one from a room of the same family.
 ///
 /// A run starts from the game start state, or from one of: `start_from` (a state name or path); `power_on`
 /// (`{'name': 'LINK', 'delay': None, 'max_delay': 32766}`: console power on, the name registered after `delay`
@@ -186,6 +187,7 @@ pub struct PyChainTask {
     missing: HashMap<String, String>,
     states_dir: Option<PathBuf>,
     harvest: Option<PathBuf>,
+    harvest_every_room: bool,
     clips_live: bool,
 }
 
@@ -242,7 +244,7 @@ impl PyChainTask {
     #[pyo3(signature = (configs, route, seeds, stop_at=None, start_from=None, max_steps=50000, missing=None,
                         states_dir=None, stall_steps=None, hold_finished_frame=false, harvest=None,
                         stop_step=None, power_on=None, checkpoint=None, clips=true, clips_off_from=None,
-                        clips_live=false, policies=None))]
+                        clips_live=false, policies=None, harvest_every_room=false))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         py: Python<'_>,
@@ -264,6 +266,7 @@ impl PyChainTask {
         clips_off_from: Option<&Bound<'_, PyAny>>,
         clips_live: bool,
         policies: Option<Vec<String>>,
+        harvest_every_room: bool,
     ) -> PyResult<Self> {
         check_seeds(seeds.iter().copied())?;
         let configs = configs
@@ -337,6 +340,7 @@ impl PyChainTask {
             missing: missing.unwrap_or_default(),
             states_dir,
             harvest,
+            harvest_every_room,
             clips_live,
         })
     }
@@ -495,7 +499,7 @@ fn build(py: Python<'_>, task: &Bound<'_, PyAny>, opts: PoolOptions) -> PyResult
             chain.route_parts = route_parts.clone();
             chain.max_steps = t.max_steps;
             chain.stall_steps = t.stall_steps;
-            chain.set_harvest(t.harvest.clone());
+            chain.set_harvest(t.harvest.clone(), t.harvest_every_room);
             env.missing_mut().extend(t.missing.clone());
             env.set_hold_finished(t.hold_finished_frame);
             env.set_clips_switch(switch.clone(), t.clips_live);

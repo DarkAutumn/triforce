@@ -182,7 +182,54 @@ been retrained on the corrected order):
   replay: 457 and 1,282 aimless frames; today's medians 493 and 3,723 a visit, 0x4c 7% stuck). Act mode alone:
   `relax:4` trims the opening about 14%, nothing helps 0x4c. Next: the first training experiment written there
   (`ow-start` and `pols-voice` fine-tuned with `penalty-aimless` 0.002 and 0.005 a frame against 0); below combat
-  (the owner).
+  (the owner). **The owner's two causes to test first (Nov 22):** 0:0x77: "it gets confused if it has the sword or
+  not. The route walks north first, then east, and it gets confused because we walk west out of the cave in the
+  earlier training. I wonder if we train a fresh 0x77 model to learn from going north, east, in cave, due south,
+  west"; clarified: "I suspect it was trained moving North, then West, then grab sword, then walk east then North.
+  A fresh training run of 'North, west, sword, south, west' would avoid the back and forth confusion of the
+  model"; 8:0x4c: "the runs used to get the key which would require walking left away from the bombed hole, but now
+  we bypass the key even though it's still in the room. A byproduct of earlier training maybe?"
+- [ ] **Beams at range, not melee** (the owner, Nov 22: "The current golden run [...] doesn't value ranged kills with
+  beams enough. The model is super happy to walk up to enemies and just hit them up close. It should get more
+  reward for long range kills (out of melee range), and possibly a small penalty for ignoring a lined up shot. [...]
+  I used to zero out the correct-movement reward (or discount it a bit) if link was correctly in-line for a shot but
+  didn't take it. That had its drawbacks as I wasn't projecting ahead position, but you could use the enemy is
+  moving forward at this rate in this direction calculation you already do to reward timing beams that WOULD
+  intersect even if the enemy turns the other way in reality before it hits. [...] One problem with how much
+  damage the agent takes is closing with the enemy when he doesn't have to... he doesn't use the full effect of full
+  hearts, and instead gets close and loses beams.")
+- [ ] **Rupees rewarded per pickup, not per counted rupee** (the owner, Nov 22, 0:0x0f: "the agent waits for all
+  rupees to finish before leaving, probably because it gets reward per rupee incremented. What should ACTUALLY be
+  awarded for getting rupees is the 'rupees to add' counter getting set once. It could be a larger reward for 1 vs
+  5 vs more, but [...] you don't want that reward to hit on actions other than stepping on a rupee.")
+- [ ] **Red candle and boomerang in Bubble rooms** (the owner, Nov 22: 7:0x0d "Real speedrun strat is to pull out
+  the red candle and use it when our sword is disabled. [...] using boomerang to stun, then red candle to kill them
+  should be a real option. In fact, any room with bubbles after getting the red candle is an option (d6 38, for
+  example) but only an option... if it doesn't result in more clears of the particular dungeon in testing, don't
+  use it for the rooms in question. Reverse-C seems like a bad idea... but you never know until you try.")
+- [ ] **6:0x78's Wizzrobes sniped on the way through** (the owner, Nov 22: "Opportunistically killing a couple
+  wizrobes in d6 0x78 should be strongly encouraged, as they have a leader, and killing 1-2 might clear the room for
+  some lucky drops. I don't know we should say clearing the room is the goal, but you might give it a try to see
+  how often that costs us health/d6 completions versus bombs added. Or somehow encourage a quick snipe or two").
+- [ ] **Is Moldorm's key needed?** DECIDED (the owner, Nov 22, after the scout's ledger: needed only for Dungeon 9, short
+  at 9:0x63's west door): "drop the moldorm fight (it's now passthrough) and fight in d9 0x56 to get the missing key";
+  branch `r39-key`. (the owner, Nov 22: "Can we bypass the moldorm, or do we drop to 0 keys in the
+  run. If so where do we drop to 0 keys without it?")
+- [ ] **3:0x5b with a full bag walks between the wall and the bombs** (the owner, Nov 22: "If full on bombs the target
+  should be the bomb wall, he drops a bomb, the target should be on the bombs, when the bombs picked up, the target
+  is moving to the next room. [...] I suspect he has two targets here? Or was trained with something that had
+  conflicting targets?")
+- [ ] **An input and a target for "the next kill may drop bombs"** (the owner, Nov 22, for the next observation
+  change: "an observation flag for 'the next bomb-group enemy has the possibility of dropping a bomb' and targets
+  should be set to encourage killing those enemies. [...] if there's a darknut in a passthrough room, the target
+  should both be that nearest darknut and the exit, it's acceptable to passthrough, but also rewarded to walk to the
+  darknut, kill him, hope for a bomb drop. This [...] should NOT light up if link is full of bombs, couldn't receive
+  bombs (for example, a vire drops bombs but if link has the wood sword it shouldn't light up... that just creates
+  keese), or if the 10th kill part of the obs is lit up [...]. over the course of the run that should generate more
+  bombs, less cheated bombs.")
+- [ ] **7:0x0d's Wallmaster runs out of steps on 2.0.0.7** (Hit38c, Nov 22: 37 of 1000 `d7` runs with the goriya
+  head stopped there against 7 on 2.0.0.6): what changed for wallmaster between the two (states rebuilt from step 88
+  with the 0x2d change: keys, bombs, hearts on arrival?), and the fix.
 - [ ] **Later, the owner's stated goal:** a win without a cheated bomb. Drops only; the walls' shortfall is counted
   until the bomb economy closes it (old backlog "A win without a cheated bomb").
 

@@ -126,7 +126,8 @@ there).
   153,308 frames). `registry.MAIN_ROUTE = 'd3first'`: `play-zelda.py`, `zelda-headless.py`, the golden path,
   `eval-chain`, `eval-batch --chains` and `r56_chains.sh` play it when no route is named; `d2first` by `--route
   d2first` (the engine's `DEFAULT_ROUTE`, the route of bare state names, stays `d2first`). **The team:** every
-  family's default `promoted` run plays both routes; fifteen families have a route run, `promoted.d3first`, that
+  family's default `promoted` run plays both routes (`d3first`'s steps from the magic sword on by its `late.d3first`
+  where it has one, round 38); fifteen families have a route run, `promoted.d3first`, that
   plays only `d3first`'s steps 0-205 (the wood sword's half, routes.yaml `own_models_until: {waypoint: sword}`;
   `triforce list` shows them): zol `r32d3-zol`, darknut `r32d3-dark2-s44`, boss-manhandla `r32d3-manh`, vire
   `r32d4-vire2-s1`, like-like `r32d4-like2`, boss-gleeok `r32d4-gleeok2-s1-it2517`, boss-digdogger `r32late-dig`,
@@ -663,6 +664,28 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   matter the room or enemies, that remains true." Every mode but `never` (boss-gleeok's) offers BOMB on the 10th
   damage-free kill in every room (a granted bomb still opens only its wall); the bomb kill pays
   `reward-armed-bomb-drop`, the drop's pickup `reward-gained-bombs`, in every family.
+- **A new golden run after every big network change** (the owner, Nov 22: "When you make a big change to the
+  networks, finish a training run, etc. I want a new golden run dropped somewhere and the path to be part of the
+  checkin [...] I use these replays to spot check behavior and my knowledge of the game, so they are super
+  important for steering"). After a promotion, a landing that changes play, or a finished training run worth
+  watching: `zelda-headless.py OUT 3 --golden --power-on --clips on --act model --parallel 8 --attempts 2000`
+  (with `--models-dir` for a team that is not main's), the replays under `target/golden-<what>/`, the best into
+  `corpus/replays/` when it replaces a corpus file (update the pins in `crates/tools/tests/cli.rs`), and every new
+  path listed in the next check-in (newest first).
+- **Every replay is kept** (the owner, Nov 22: "I want these golden run replays of particular model versions saved
+  somewhere. Possibly checked in. I want to go back to previous runs and say 'see this was a problem' [...] You are
+  welcome to use /backups [...] Keep 2tb free there"). `scripts/archive_replays.py PATH...` names each replay from
+  its META (`<version>_<route>_<kind>_<networks>_<frames>f.tfreplay.bz2`), checks golden and single runs into
+  `replays/` (committed, about 100 KB each) and keeps every replay in `/backup/triforce/replays/` (`index.jsonl`:
+  each file's SHA-1, META summary and where it was found). Run it on every golden race's output and on a worktree
+  before removing it: `scripts/tidy_worktrees.sh NAME...` does that, and copies the worktree's models to
+  `/backup/triforce/models/worktrees/NAME/`, before `git worktree remove`. `/backup` (a separate 8 TB disk) keeps
+  at least 2 TB free. **What must be kept** (the owner, Nov 22): "a golden replay saved per model version (and if
+  there's a reason to collect more than one, like 51-networks vs single-network do that too). If you also happen to
+  get a run from the start to the end (no golden run, no segmenting) save the best one of those too per version of
+  the model [...] Best is defined as 'fewest cheated items, completed in the fewest frames' in that order." Other
+  replays (deaths included) may be kept to peek at later, within reason. Near the 2 TB floor: **ask the owner what
+  to trim; never trim without asking.**
 - **0x0a before the white sword:** leaving S is a `retreat` (routes.yaml `retreat: S`; neutral by default, ow-lynel
   ships `endings: {retreat: soft-failure}` for the baseline), and a chain run goes on (0x1a sends Link back N).
   Whether a model learns to use it is open.
@@ -683,8 +706,11 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   the other). Missing bombs, keys and rupees are cheated and counted on both. Route data:
   `docs/routes/d3first.md`; the dungeons and shared legs are routes.yaml `blocks:` both routes `include:`, so a
   change to one is a change to both (decisions 2026-11-19 "`d3first` as route data"). A route run
-  (`triforce promote FAMILY RUN --route d3first`) plays only `d3first`'s steps before the magic sword; a change to a
-  family's default run changes both routes and is measured on both.
+  (`triforce promote FAMILY RUN --route d3first`) plays only `d3first`'s steps before the magic sword; a late run
+  (`triforce promote FAMILY RUN --route d3first --late`, `models/<family>/late.d3first`, round 38) plays only its
+  steps from the magic sword on, in the family default's place: the way to change `d3first`'s later rooms without
+  touching `d2first` (no `promoted.*` name; `triforce list` shows it). A change to a family's default run changes
+  both routes and is measured on both.
 - **Old worktrees are deleted once their work is on `main`** (Lee, Nov 19: "you can always delete old worktrees.
   Once things are merged into main, delete them and keep stuff tidy"): `git worktree remove` (the branch stays);
   first copy out what is not in git and still wanted: promoted run dirs into `models/`, demonstration files into
@@ -706,7 +732,9 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 
 ## Versioning (Lee, Nov 11)
 
-- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `2.0.0.7`: 0:0x2d's rupee cave left
+- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `2.0.0.9`: goriya's head and Dungeon 8's
+  three through `late.d3first`, round38.md "2.0.0.9"; 2.0.0.8 was hit heads playing eight `d3first` families,
+  round38.md "2.0.0.8"; 2.0.0.7 was 0:0x2d's rupee cave leaving
   `d3first`, its states after 0x2d rebuilt; 2.0.0.6 was the owner's bomb rules; 2.0.0.5 was the owner's corrected
   `d3first`, the two dock warps as engine macros, its rebuilt states, the lab's yardstick on them; no network retrained;
   2.0.0.4 was the lab, `docs/lab.md`: runs over several families, teachers, networks of any shape beside today's,
