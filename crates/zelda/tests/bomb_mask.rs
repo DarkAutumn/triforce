@@ -182,7 +182,9 @@ fn one_bomb(state: &str, target: BombTarget, centre: (i32, i32)) {
     retarget(&mut s, target);
     assert!(s.mask().is_allowed(&bomb(d)), "{state}: a bomb out of reach blocked the good one");
     s.act(bomb(d)).unwrap();
-    for _ in 0..8 {
+    // 9 waits of 16 (144 frames): the blast ends on the bomb's frame 72 and the door's opening runs after it; the
+    // 8 waits of 17 frames this had before round 40 (each with its closing frame) were 136.
+    for _ in 0..9 {
         act(&mut s, "WAIT 16");
     }
     assert!(!shut(s.state(), target), "{state}: the good bomb opened {target:?} beside the far one");

@@ -59,6 +59,8 @@ const ADDR_LINK_X: usize = 0x70;
 const ADDR_LINK_Y: usize = 0x84;
 const ADDR_GRID_OFFSET: usize = 0x394;
 const ADDR_LINK_STATUS: usize = 0xAC;
+/// Link's knockback direction (ObjShoveDir slot 0); the game takes no direction input while it is set.
+const ADDR_LINK_SHOVE_DIR: usize = 0xC0;
 const ADDR_SWORD_ANIMATION: usize = 0xB9;
 const ADDR_TREASURE_FLAG: usize = 0xBF;
 const ADDR_TRIGGERED_DOOR_CMD: usize = 0x54;
@@ -380,6 +382,22 @@ pub struct Executor<S> {
     /// The level of the dock warp the route plays here (round 36, kept by `Session`: `crate::Session::set_dock_warp`):
     /// RECORDER played in the water on a dock's row plays the whole sequence ([`Executor::run_dock_warp`]).
     pub dock_warp: Option<u8>,
+    /// The latched buttons (A, B, Select, Start) the game read as held when this action began
+    /// ([`latched_held`]): the action's first frame that presses one of them is preceded by one frame of no buttons.
+    release: u8,
+}
+
+/// The game's held buttons of controller 1 (`ButtonsDown`, $FA: A $80, B $40, Select $20, Start $10, the read's bit
+/// order) as the executor's latched button bits ([`buttons`]). The game takes A, B, Select and Start as new presses
+/// only (`ButtonsPressed`: held now, not at the last read; asm:Input_ReadOneController; asm:Link_HandleInput for the
+/// sword and the B item, asm:Mode5Play_Update for Select and Start) and the directions as held (`ButtonsDown`,
+/// asm:Mode5Play_Update@CheckMenu -> `ObjInputDir`).
+fn latched_held<N: Nes>(m: &Machine<N>) -> u8 {
+    let down = m.read(0xFA);
+    [(0x80, buttons::A), (0x40, buttons::B), (0x20, buttons::SELECT), (0x10, buttons::START)]
+        .iter()
+        .filter(|(game, _)| down & game != 0)
+        .fold(0, |bits, (_, ours)| bits | ours)
 }
 
 impl<S> Default for Executor<S> {
@@ -392,6 +410,7 @@ impl<S> Default for Executor<S> {
             blocks: None,
             vetoed_doorways: 0,
             dock_warp: None,
+            release: 0,
         }
     }
 }
@@ -404,7 +423,8 @@ impl<S> Executor<S> {
         self.last_pre_entry = None;
     }
 
-    /// Skips frames until Link is controllable.  Returns frames elapsed.
+    /// Skips frames until Link is controllable, then one frame more (a load's first decision is where it always
+    /// was; an action closes with no such frame, round 40).  Returns frames elapsed.
     pub fn gain_control<N: Nes>(
         &mut self,
         m: &mut Machine<N>,
@@ -413,11 +433,14 @@ impl<S> Executor<S> {
         let start = m.frame;
         self.step(m, 0, 1);
         self.skip_uncontrollable(m, None, capture)?;
+        self.step(m, 0, 1);
         Ok((m.frame - start) as u32)
     }
 
-    /// Executes `action` from the controllable `state`.  `capture` builds `last_pre_entry` (with
-    /// `capture_pre_entry`).
+    /// Executes `action` from the controllable `state`, until Link is controllable again; no frame of no buttons
+    /// closes it (round 40, decisions 2026-11-23: it stopped Link for a frame between every two MOVEs, and the game
+    /// needs a released frame only before a new press of a button it still reads as held, [`latched_held`]).
+    /// `capture` builds `last_pre_entry` (with `capture_pre_entry`).
     pub fn execute<N: Nes>(
         &mut self,
         m: &mut Machine<N>,
@@ -430,6 +453,7 @@ impl<S> Executor<S> {
         let location = (state.level(), state.location(), state.full_location().in_cave);
         self.blocks = Some(Vec::new());
         let result = (|| {
+            self.release = latched_held(m);
             let mut clip = None;
             let mut menu_frames = 0;
             let interrupt = if action.kind == ActionKind::Clip {
@@ -464,8 +488,17 @@ impl<S> Executor<S> {
         result
     }
 
-    /// One or more real frames, watching shield collisions while an option executes.
+    /// One or more real frames, watching shield collisions while an option executes. The action's first frame that
+    /// presses a latched button the game still reads as held is preceded by one frame of no buttons, so the game sees
+    /// a new press (asm:Input_ReadOneController).
     fn step<N: Nes>(&mut self, m: &mut Machine<N>, buttons: u8, frames: u32) {
+        if std::mem::take(&mut self.release) & buttons != 0 {
+            self.step_frames(m, 0, 1);
+        }
+        self.step_frames(m, buttons, frames);
+    }
+
+    fn step_frames<N: Nes>(&mut self, m: &mut Machine<N>, buttons: u8, frames: u32) {
         let Some(blocks) = self.blocks.as_mut() else {
             m.step(buttons, frames);
             return;
@@ -566,9 +599,12 @@ impl<S> Executor<S> {
             if is_move {
                 if after.link != before.link {
                     stalled = 0;
-                } else if !pushing && after.ladder == before.ladder {
+                } else if !pushing && after.ladder == before.ladder && m.read(ADDR_LINK_SHOVE_DIR) == 0 {
                     // Link moves at least every other frame; two still frames means he hit something (a frame that
-                    // puts the ladder away or lays it is still too, asm:Ladder_CheckAndDraw@StashLadder).
+                    // puts the ladder away or lays it is still too, asm:Ladder_CheckAndDraw@StashLadder). Frames of a
+                    // shove don't count: the game reads no direction then (asm:Link_HandleInput returns while
+                    // ObjShoveDir is set), and a shove into a wall stands still (round 40: without the closing frame a
+                    // MOVE right after a hit can start in it).
                     stalled += 1;
                     if stalled >= 2 {
                         return Some(Interrupt::Wall);
@@ -874,6 +910,7 @@ impl<S> Executor<S> {
         (m.frame - start) as u32
     }
 
+    /// Steps (no buttons) through scrolls, cave entries, stuns and level transitions until Link is controllable.
     fn skip_uncontrollable<N: Nes>(
         &mut self,
         m: &mut Machine<N>,
@@ -911,7 +948,6 @@ impl<S> Executor<S> {
             });
         }
         self.was_in_cave = m.read(ADDR_MODE) == MODE_CAVE;
-        self.step(m, 0, 1);
         Ok(())
     }
 }
@@ -1025,13 +1061,14 @@ pub(crate) mod tests {
             let result = run(&mut m, &format!("WAIT {duration}"));
             assert_eq!(
                 (result.frames, result.control_frames, result.interrupt),
-                (duration + 1, duration, None)
+                (duration, duration, None),
+                "no frame closes an action (round 40)"
             );
             assert_eq!(result.blocks(), 1);
             assert_eq!(result.projectile_blocks[0].frame, 2);
             assert_eq!(
                 *observed.lock().unwrap(),
-                (1..=duration as u64 + 1).collect::<Vec<_>>()
+                (1..=duration as u64).collect::<Vec<_>>()
             );
             assert!(m.sink.is_some());
             assert_eq!(m.nes.buttons, vec![0; result.frames as usize]);
@@ -1046,15 +1083,15 @@ pub(crate) mod tests {
         let result = run(&mut m, "SWORD E");
         assert_eq!(
             (result.control_frames, result.frames, result.blocks()),
-            (3, 4, 1)
+            (3, 3, 1)
         );
-        assert_eq!(m.nes.buttons, vec![buttons::A, buttons::A, 0, 0]);
+        assert_eq!(m.nes.buttons, vec![buttons::A, buttons::A, 0]);
 
         let mut m = machine(6, 6);
         let result = run(&mut m, "WAIT 4");
         assert_eq!(
             (result.control_frames, result.frames, result.blocks()),
-            (4, 7, 1)
+            (4, 6, 1)
         );
         assert_eq!(result.projectile_blocks[0].frame, 6);
     }
@@ -1309,7 +1346,7 @@ pub(crate) mod tests {
             (7, 2, "SWORD S", vec![buttons::DOWN | buttons::A]),
             (7, 4, "SWORD S", vec![buttons::A]),
             // Not the selected B item: the sub-screen first (this script never opens it, so nothing follows).
-            (7, 2, "BOMB W", vec![buttons::START, 0]),
+            (7, 2, "BOMB W", vec![buttons::START]),
         ] {
             let mut ram = playable();
             ram[Var::SelectedItem.addr() as usize] = selected;

@@ -456,8 +456,9 @@ fn block_clip_west_push_block_of_level_1_room_22() {
 }
 
 /// The west block's push spot below it (Link stopped on T = ($60, $95)) is inside its clip zone: with clips on a
-/// plain MOVE N 16 or 32 still pushes the block ($10 frames against it), three MOVE N 8 don't (the count restarts
-/// between options), and CLIP N clips without a push.
+/// plain MOVE N 16 or 32 still pushes the block ($10 frames against it, asm:PushBlock_State0Idle), and so do three
+/// MOVE N 8 since round 40 (24 frames held without a break: no frame of no buttons closes a MOVE any more; before,
+/// the count restarted between them), and CLIP N clips without a push.
 #[test]
 fn the_west_blocks_push_spot_is_in_its_clip_zone() {
     let Some(mut s) = session() else { return };
@@ -479,7 +480,7 @@ fn the_west_blocks_push_spot_is_in_its_clip_zone() {
         act(&mut s, "WAIT 32");
         let label = format!("{moves:?}");
         assert_eq!(skips, u32::from(clipped), "{label}: {}", describe(&s));
-        let pushed = !clipped && moves.len() == 1;
+        let pushed = !clipped;
         assert_eq!(!s.state().push_block_pending(), pushed, "{label}: {}", describe(&s));
         if clipped {
             assert_eq!((link(&s).0, y(&s)), (0x60, 0x8D), "{label}: {}", describe(&s));
@@ -673,7 +674,7 @@ fn a_move_never_clips_in_a_dungeon() {
 
 /// The way through $22 with button-free actions only: from the E door MOVE W into the corner of the east block, MOVE
 /// S 8 and MOVE W (Link turns on the next grid point and the lower-right block stops him on G = ($A0, $9D)), one
-/// CLIP N, MOVE W 32 onto the stairs: in cellar $7F 218 frames after the room's first frame, no damage
+/// CLIP N, MOVE W 32 onto the stairs: in cellar $7F 210 frames after the room's first frame, no damage
 /// (mechanics.md: 117 frames from the doorway to the stairs by controller input, before the stairs' transition).
 #[test]
 fn the_way_through_22_by_moves_and_one_clip() {
@@ -690,11 +691,12 @@ fn the_way_through_22_by_moves_and_one_clip() {
         hurt += c.health_lost;
         skips += u32::from(c.clip.is_some_and(|c| c.completed()));
         if text == "CLIP N" {
-            assert_eq!((link(&s).0, y(&s), c.frames), (0xA0, 0x8D, 14), "{text}: {}", describe(&s));
+            assert_eq!((link(&s).0, y(&s), c.frames), (0xA0, 0x8D, 13), "{text}: {}", describe(&s));
         }
     }
     assert_eq!(s.state().full_location(), MapLocation::new(1, 0x7F, true), "{}", describe(&s));
-    assert_eq!((frames, skips, hurt), (218, 1, 0.0));
+    // 218 before round 40: each of the 8 actions closed with a frame of no buttons.
+    assert_eq!((frames, skips, hurt), (210, 1, 0.0));
 }
 
 const CARDINAL: [Direction; 4] = [Direction::N, Direction::S, Direction::W, Direction::E];
@@ -830,7 +832,7 @@ fn the_way_through_4_50_by_one_block_clip() {
             hurt += c.health_lost;
             if action.kind == ActionKind::Clip {
                 assert!(c.clip.is_some_and(|c| c.completed() && c.presses == 1), "{:?}", c.clip);
-                assert_eq!((link(&s).0, y(&s), c.frames), (0xB0, 0x7D, 14), "{}", describe(&s));
+                assert_eq!((link(&s).0, y(&s), c.frames), (0xB0, 0x7D, 13), "{}", describe(&s));
                 assert_move_mask_matches_the_game(&mut s, "after CLIP N");
                 let attacks = s.state().sword_directions();
                 assert_eq!(attacks.len(), 4, "inside the room's bounds: {attacks:?} {}", describe(&s));
@@ -849,7 +851,8 @@ fn the_way_through_4_50_by_one_block_clip() {
         assert_eq!(hurt, 0.0, "clips {clips}");
         frames.push(total);
     }
-    assert_eq!(frames, [424, 318]);
+    // [424, 318] before round 40 (each action closed with a frame of no buttons).
+    assert_eq!(frames, [410, 310]);
 }
 
 /// The skip is never offered in a dungeon doorway: every door entry state of levels 1-9, held into the room a frame
