@@ -2348,6 +2348,26 @@ with the voices it plays at that moment (`Synth::resume_only`); after a restore 
 checks the mirror's writes and cycles against the machine's, the default path sample for sample, the music on
 the title screen equal to the game's sound, and switching while playing.
 
+**The proofs** (Nov 23, `tf replay sound --check` in pieces of 40,000 frames, on the corpus's whole game
+`single-run-d3first-2.0.0.13-55-networks`, 159,769 frames, and `golden-d3first-51-networks`, 153,136):
+
+| Check | Whole game | Golden |
+|---|---|---|
+| Nothing off = main's sound (SHA-1 of every float sample, main's own `_native` against this branch's) | equal, 127,604,986 samples | equal, 122,307,310 |
+| The mirror's writes = the machine driver's, every frame it ran | 0 differ | 0 differ |
+| Music copy's song state (`SONG_TIME`) = the game's, frames a song plays | 0 of 130,675 | 0 of 122,341 |
+| Effects copy's tune/effect/sample state (`EFFECT_STATE`) = the game's, every frame | 0 of 159,769 | 0 of 153,136 |
+| Music track = full mix in every stretch of 5 s or more without an effect (fresh synths at its start) | 53 stretches, 28,391 frames, max difference 0.0 | 57, 28,069, 0.0 |
+| Beep off: a beep left / other square-0 tunes differ | 0 / 0 of 13,572 frames | 0 / 0 of 12,555 |
+| Driver reads outside its state and `PauseState`; faults | none; 0 | none; 0 |
+
+Where the game's driver plays no effect (12 frames settled), the effects track still sounds after some effects: the
+game's own tail of the tune just ended (e.g. square 1 after tune `$01`, frames 15,039-15,045, peak 0.048). Where no
+song plays the effects track is the full mix (difference below 2e-12 when both synths start together; up to 0.077
+from power on, the same tail at another oscillator phase, since the game's square played the music before).
+Time per frame (prepare + run): the single synth about 0.45 ms, the live split (warm, three synths, three driver
+runs) about 1.3 ms, of the 16.6 ms a frame lasts.
+
 ## Videos (`create-video.py`, `video.py`)
 
 `create-video.py OUT [COLUMNSxROWS] REPLAY... [--scale N] [--sound [--no-music] [--no-sound-effects]
