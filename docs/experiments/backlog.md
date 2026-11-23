@@ -238,10 +238,13 @@ been retrained on the corrected order):
   wizrobes in d6 0x78 should be strongly encouraged, as they have a leader, and killing 1-2 might clear the room for
   some lucky drops. I don't know we should say clearing the room is the goal, but you might give it a try to see
   how often that costs us health/d6 completions versus bombs added. Or somehow encourage a quick snipe or two").
-- [ ] **Is Moldorm's key needed?** DECIDED (the owner, Nov 22, after the scout's ledger: needed only for Dungeon 9, short
-  at 9:0x63's west door): "drop the moldorm fight (it's now passthrough) and fight in d9 0x56 to get the missing key";
-  branch `r39-key`. (the owner, Nov 22: "Can we bypass the moldorm, or do we drop to 0 keys in the
-  run. If so where do we drop to 0 keys without it?")
+- [x] **Is Moldorm's key needed?** DONE in 2.0.0.13 (the owner, Nov 22, after the scout's ledger: needed only for
+  Dungeon 9, short at 9:0x63's west door): "drop the moldorm fight (it's now passthrough) and fight in d9 0x56 to get
+  the missing key". `d3first` crosses 2:0x3e and takes 0x56's key (the count never below 0); fine-tuned moldorm and
+  like-like: 2:0x3e 0.35 hearts and 1 death in 1000 crossing (0.52 and 1 fighting), 9:0x56's key in 999 of 1000 runs,
+  Dungeon 9 51.2% (53.0% before, −1.8 ± 2.2 paired). round39.md "Moldorm crossed, 9:0x56's key: the two fine-tunes".
+  (the owner, Nov 22: "Can we bypass the moldorm, or do we drop to 0 keys in the run. If so where do we drop to 0
+  keys without it?")
 - [ ] **3:0x5b with a full bag walks between the wall and the bombs** CAUSE FOUND (round38.md "The owner's three causes"): the
   objective already follows the owner's order (one target at a time, test pinned); darknut@d3first was trained
   before the bomb rules, when the room's bombs were wanted at any count. Next: retrain it there with full-bag starts. (the owner, Nov 22: "If full on bombs the target
