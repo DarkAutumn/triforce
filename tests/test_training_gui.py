@@ -79,8 +79,20 @@ def queue(tmp_path_factory, monkeypatch):
 
 
 def texts(lines):
-    """The texts of ``job_lines`` (or a web job's lines)."""
+    """The texts of a widget's lines (``TextLines.lines``: (text, colour, font))."""
     return [line[0] for line in lines]
+
+
+def card_lines(card):
+    """A job card's lines as its widgets hold them: its head's (headline, description, state) and its foot's (a note,
+    the command)."""
+    return texts(card.head.lines) + texts(card.foot.lines)
+
+
+def bars(card):
+    """A job card's counters as its progress bars hold them: (label, done, total, unit, fraction)."""
+    return [(bar.counter['label'], bar.counter['done'], bar.counter['total'], bar.counter['unit'],
+             bar.counter['fraction']) for bar in card.bars]
 
 
 def series(values, label='success'):
@@ -299,15 +311,18 @@ def test_a_real_process_and_its_plans_liveness(tmp_path):
     assert scanner.live([plan_dir]) == []       # the cached plan (same file) is checked again
 
 
-def test_eval_chain_throughput_reads_episodes_per_second_or_seconds_per_episode():
+def test_eval_chain_throughput_reads_runs_a_second():
+    """The owner watches a chain's runs a second (the 250-run test: 0.7 runs/s), not episodes or seconds an
+    episode."""
     start = {'event': 'chain_start', 'ts': 100.0, 'runs': 1000}
     running = {'start': start, 'result': None, 'progress': {'ts': 110.0, 'done': 250, 'runs': 1000}}
-    assert gui.chain_speed(running) == '25.0 ep/s'
+    assert gui.chain_speed(running) == '25 runs/s'
     slow = {'start': start, 'result': {'ts': 400.0, 'runs': 120}, 'progress': {'ts': 390.0, 'done': 119}}
-    assert gui.chain_speed(slow) == '2.5 s/ep'                          # the result's count and time once done
-    assert gui.chain_speed({'start': start, 'result': {'ts': 110.0, 'runs': 60}, 'progress': None}) == '6.0 ep/s'
-    assert gui.chain_speed({'start': start, 'result': {'ts': 400.0, 'runs': 100}, 'progress': None}) == '3.0 s/ep'
-    assert gui.chain_speed({'start': start, 'result': None, 'progress': {'ts': 160.0, 'done': 20}}) == '3.0 s/ep'
+    assert gui.chain_speed(slow) == '0.4 runs/s'                        # the result's count and time once done
+    assert gui.chain_speed({'start': start, 'result': {'ts': 110.0, 'runs': 60}, 'progress': None}) == '6 runs/s'
+    assert gui.chain_speed({'start': start, 'result': {'ts': 400.0, 'runs': 250}, 'progress': None}) == '0.833 runs/s'
+    assert gui.chain_speed({'start': start, 'result': {'ts': 100.0 + 3e4, 'runs': 300}, 'progress': None}) == (
+        '0.01 runs/s')
     assert gui.chain_speed({'start': start, 'result': None, 'progress': None}) == ''
 
 
@@ -604,7 +619,7 @@ def test_currently_running_lists_jobs_of_other_checkouts(qapp, tmp_path, monkeyp
         assert window._heading_at == 1 and not window.finished_heading.isHidden()
         views = {view.key: view for view in window.views}
         assert views[live].model.dir == live_dir and views[done].model.dir == done_dir
-        assert texts(views[done].job_card.lines(time_now()))[2].startswith('completed exit 0 after ')
+        assert texts(views[done].job_card.head.lines)[2].startswith('completed exit 0 after ')
         labels = [window.combo.itemText(i) for i in range(window.combo.count())]
         assert '261113_001_live  (triforce-a · main)' in labels and '261113_002_done  (triforce-b · clips)' in labels
         assert window.clear_button.text() == 'Clear finished (1)'
@@ -777,6 +792,7 @@ def test_web_snapshot_with_nothing_running(tmp_path):
 
 
 def test_web_snapshot_shows_a_standalone_eval_chain(tmp_path):
+    """A chain whose stream has no tally (written before it): its wins blue, the other runs it finished red."""
     import time
     now = time.time()
     folder = web_plan(tmp_path, '261114_004_eval-chain', created=now, kind='chain')
@@ -787,8 +803,11 @@ def test_web_snapshot_shows_a_standalone_eval_chain(tmp_path):
     (folder / gui.PLAN_FILE).write_text(gui.json.dumps({**plan, 'events': 'round.jsonl', 'chain_runs': 10}))
     card, = gui.WebState(tmp_path, clock=lambda: now, machine=lambda: '', scan_every=0).refresh()['cards']
     assert card['kind'] == 'eval-chain' and card['status'] == 'running' and card['active']
-    assert card['blocks'] == [10, 4, 3] and card['bar_label'] == '4/10 runs · 3 reached the end'
-    assert card['numbers'] == '4 / 10 runs' and card['speed'] == '2.5 s/ep' and card['eta'] == '5s'
+    assert card['outcomes'] == {'total': 10, 'done': 4, 'label': '4/10 runs · 3 reached the end',
+                                'parts': [[3, gui.css_color(gui.C.ok)],
+                                          [1, gui.css_color(gui.with_alpha(gui.C.bad, 170))]]}
+    assert card['bar_label'] == '4/10 runs · 3 reached the end' and card['tally'] is None
+    assert card['numbers'] == '4 / 10 runs' and card['speed'] == '0.4 runs/s' and card['eta'] == '5s'
 
 
 def fetch(url):
@@ -914,13 +933,15 @@ def test_queue_listing_orders_live_jobs_by_admission_and_line_and_ended_ones_by_
     assert ended[0]['finished_ts'] == now
 
 
-def test_a_jobs_header_reads_as_triforce_job_list_in_the_window_and_the_web_view(qapp, tmp_path, monkeypatch,
-                                                                                  queue):
-    """Each job of the queue is listed by its header, ``jobqueue.describe``'s lines (``job_lines``), the same in the
-    window and the web view: who asked for it, its description, its state (RUNNING in its place against its
-    estimate, OVERRUN past twice the estimate, queued with its place in line, or how it ended), its progress (a bar,
-    a counter, 'no progress data'; a build's step is in its state) and its verb, kind, branch and command.  Running
-    in the running colour, queued in the queued purple, overrun in the warning colour; the ended ones under
+def test_a_jobs_card_draws_its_progress_with_widgets_in_the_window_and_the_web_view(qapp, tmp_path, monkeypatch,
+                                                                                     queue):
+    """Each job of the queue is listed by its card (``job_view``), the same in the window and the web view, its
+    progress drawn with widgets and never as a text bar (the owner, Nov 23: the 250 test "printing out essentially a
+    tqdm progress bar"): who asked for it, its description, its state (RUNNING in its place against its estimate,
+    OVERRUN past twice the estimate, queued with its place in line, or how it ended), a progress bar a counter with
+    its rate and time left (a counter without a total: its number and rate), its steps each with its state, 'no
+    progress reported' for a running job that reports nothing, then its verb, kind, branch and command.  Running in
+    the running colour, queued in the queued purple, overrun in the warning colour; the ended ones under
     'finished'.  A job without a log folder is drawn from its row alone."""
     monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
     now = float(int(time_now()))
@@ -938,22 +959,27 @@ def test_a_jobs_header_reads_as_triforce_job_list_in_the_window_and_the_web_view
     done = queue.add(subtask='done', status='completed', exit_code=0, admitted_ts=now - 900, finished_ts=now - 300,
                      estimate=600.0)
     keys = [gui.job_key({'id': job}) for job in (build, counter, chain, overrun, waiting, done)]
-    expected = {
+    head = {
         chain: ['Agent: Dark39b   Task: r40   Sub-task: d3-route', 'Evaluates r40 on the d3 route.',
-                'RUNNING regular 12m of ~40m', '[##########----------] 120/250 runs  2 runs/s  ~1m left',
-                'run chain  r40-queue  python -m triforce eval-chain --runs 250'],
+                'RUNNING regular 12m of ~40m'],
         counter: ['Agent: r40   Task: queue   Sub-task: counter', 'Checks the GUI lists the queue.',
-                  'RUNNING express 2m of ~5m', '1234 steps  45.2 steps/s  2m of ~5m',
-                  'run train  r40-queue  python scripts/train_round.py'],
+                  'RUNNING express 2m of ~5m'],
         overrun: ['Agent: r40   Task: queue   Sub-task: overrun', 'Checks the GUI lists the queue.',
-                  'RUNNING regular 1h06m of ~20m  OVERRUN', 'no progress data  1h06m of ~20m',
-                  'run round  r40-queue  python scripts/train_round.py'],
+                  'RUNNING regular 1h06m of ~20m  OVERRUN'],
         waiting: ['Agent: r40   Task: queue   Sub-task: waiting', 'Checks the GUI lists the queue.',
-                  'queued #1 ~40m waited 12m', 'run round  r40-queue  python scripts/train_round.py'],
-        build: ['Agent: r40   Task: queue   Sub-task: build', 'Checks the GUI lists the queue.',
-                'RUNNING tools 30s  step 1/2: build', 'build  r40-queue  cargo build'],
+                  'queued #1 ~40m waited 12m'],
+        build: ['Agent: r40   Task: queue   Sub-task: build', 'Checks the GUI lists the queue.', 'RUNNING tools 30s'],
         done: ['Agent: r40   Task: queue   Sub-task: done', 'Checks the GUI lists the queue.',
-               'completed exit 0 after 10m of ~10m', 'run round  r40-queue  python scripts/train_round.py']}
+               'completed exit 0 after 10m of ~10m']}
+    foot = {chain: ['run chain  r40-queue  python -m triforce eval-chain --runs 250'],
+            counter: ['run train  r40-queue  python scripts/train_round.py'],
+            overrun: ['no progress reported · 1h06m of ~20m', 'run round  r40-queue  python scripts/train_round.py'],
+            waiting: ['run round  r40-queue  python scripts/train_round.py'],
+            build: ['build  r40-queue  cargo build'],
+            done: ['run round  r40-queue  python scripts/train_round.py']}
+    counters = {chain: [('', 120, 250, 'runs', 0.48, '120 / 250 runs', '2 runs/s', '~1m left')],
+                counter: [('', 1234, None, 'steps', None, '1234 steps', '45.2 steps/s', '2m of ~5m')]}
+    steps = {build: [('build', 'running'), ('test', 'pending')]}
     colors = {chain: gui.C.accent, counter: gui.C.accent, overrun: gui.C.warn, waiting: gui.C.warn,
               build: gui.C.accent, done: gui.C.ok}
     assert gui.STATUS['running'][0] == gui.C.accent and gui.STATUS['queued'][0] == gui.C.warn
@@ -962,16 +988,26 @@ def test_a_jobs_header_reads_as_triforce_job_list_in_the_window_and_the_web_view
     try:
         assert window.live_mode and window._shown() == keys and window._heading_at == 5
         views = {view.key: view for view in window.views}
-        for job, lines in expected.items():
+        for job in head:
+            card = views[gui.job_key({'id': job})].job_card
+            assert texts(card.head.lines) == head[job] and texts(card.foot.lines) == foot[job], job
+            assert card.head.lines[2][1] == colors[job] and card.head.lines[2][2].bold()   # the state: colour, bold
+            assert [(bar.counter['label'], bar.counter['done'], bar.counter['total'], bar.counter['unit'],
+                     bar.counter['fraction'], bar.counter['numbers'], bar.counter['speed'], bar.counter['time'])
+                    for bar in card.bars] == counters.get(job, []), job
+            assert all(bar.color == colors[job] for bar in card.bars)
+            assert [(step['name'], step['status']) for step in card.steps.steps] == steps.get(job, [])
+            assert card.steps.isHidden() is (job not in steps)
+            assert not any('[' in text and '#' in text for text in card_lines(card))     # no text bar anywhere
             view = views[gui.job_key({'id': job})]
-            painted = view.job_card.lines(now)
-            assert texts(painted) == lines, job
-            assert painted[2][1] == colors[job] and painted[0][2] and painted[2][2]     # the state: its colour, bold
-            assert view.model is None and view.header.isHidden() and not view.job_card.isHidden()
-            view.job_card.grab()
-        window.select(views[keys[2]], 'round')                          # a job without a folder: its lines
+            assert view.model is None and view.header.isHidden() and not card.isHidden()
+            card.grab()
+        window.select(views[keys[2]], 'round')                          # a job without a folder: its card
         assert 'r40-d3-route' in window.detail.title.text()
-        assert [text for text, _ in window.detail.summary.sections[0][2]][:3] == expected[chain][:3]
+        progress, = [rows for kind, title, rows in window.detail.summary.sections if title == 'Progress']
+        assert progress == [('runs', 0.48, '120 / 250 runs · 2 runs/s · ~1m left', gui.C.accent)]
+        job_rows = [rows for kind, title, rows in window.detail.summary.sections if title == 'Job'][0]
+        assert [text for text, _ in job_rows][:3] == head[chain]
     finally:
         window.close()
         window.deleteLater()
@@ -980,11 +1016,17 @@ def test_a_jobs_header_reads_as_triforce_job_list_in_the_window_and_the_web_view
     jobs = snapshot['jobs']
     assert [job['id'] for job in jobs] == keys and [job['ended'] for job in jobs] == [False] * 5 + [True]
     for web, job in zip(jobs, (build, counter, chain, overrun, waiting, done)):
-        assert texts(web['lines']) == expected[job] and web['lines'][2][1] == colors[job].name()
-        assert web['folder'] == '' and web['plan'] is None
+        assert [web['headline'], web['description'], web['state']] == head[job] and web['color'] == colors[job].name()
+        assert [text for text in (web['note'], web['command']) if text] == foot[job]
+        assert [(c['label'], c['done'], c['total'], c['unit'], c['fraction'], c['numbers'], c['speed'], c['time'])
+                for c in web['counters']] == counters.get(job, [])
+        assert [(step['name'], step['status']) for step in web['steps']] == steps.get(job, [])
+        assert web['folder'] == '' and web['plan'] is None and 'lines' not in web
+    assert jobs[0]['steps'][0]['color'] == gui.C.accent.name() and jobs[0]['steps'][1]['label'] == 'pending'
     assert [job['place'] for job in jobs] == [None, None, None, None, 1, None]
     page = gui.web_page().decode()
     assert 'function jobHtml(job)' in page and '<div id="jobs">' in page and 'Finished &middot; last 60 min' in page
+    assert 'function counterHtml(counter, color)' in page and 'function tallyHtml(tally)' in page
 
 
 def test_a_jobs_log_folder_shows_its_runs_under_its_header(qapp, tmp_path, monkeypatch, queue):
@@ -1012,7 +1054,7 @@ def test_a_jobs_log_folder_shows_its_runs_under_its_header(qapp, tmp_path, monke
         assert window.views == [view] and view.model.dir.resolve() == plan.directory.resolve()
         assert not view.header.isHidden() and len(view.rows) == 2
         assert view.model.statuses() == ['training', 'pending']
-        assert texts(view.job_card.lines(time_now()))[3] == '[--------------------] 0/2 runs'
+        assert bars(view.job_card) == [('', 0, 2, 'runs', 0.0)]       # a counter the plan's rows don't show yet
         assert window.windowTitle().endswith('r40-round — Triforce training')
         for widget in (view.job_card, view.header, *view.rows):
             widget.grab()
@@ -1081,7 +1123,7 @@ def test_a_job_that_ends_stays_under_finished_for_an_hour(qapp, tmp_path, monkey
         window._scan_and_update()
         assert window._shown() == [live_key, dies_key] and window._heading_at == 1      # under 'finished'
         assert window.finished_heading.text() == 'FINISHED · LAST 60 MIN'
-        state = window.views[1].job_card.lines(time_now())[2]
+        state = window.views[1].job_card.head.lines[2]
         assert state[0].startswith('dead after ') and state[1] == gui.C.warn
         assert gui.STATUS['dead'] == (gui.C.warn, 'process gone')
         queue.update(dies, finished_ts=time_now() - gui.RECENT_SECONDS + 5)            # 59 minutes 55 seconds ago
@@ -1111,7 +1153,7 @@ ENTRY_POINTS = [
     ('triforce eval-batch', 'run', 'batch', 'eval-batch'),
     ('triforce select-checkpoint', 'run', 'batch', 'eval-batch'),
     ('scripts/train_round.py', 'run', 'round', 'round'),
-    ('scripts/full_runs.py', 'run', 'chain', None),
+    ('scripts/full_runs.py runs250', 'run', 'chain', 'chain'),  # its eval-chain writes the plan in --out
     ('triforce.lab.train', 'run', 'train', 'lab-train'),
     ('triforce.lab.bench', 'run', 'eval', 'eval'),
     ('triforce.lab.record', 'run', 'record', 'eval'),
@@ -1165,7 +1207,7 @@ def test_every_entry_point_is_listed_with_its_progress(qapp, queue, monkeypatch,
         window = gui.Window(root, None)
         try:
             view, = window.views
-            lines = texts(view.job_card.lines(time_now()))
+            lines = card_lines(view.job_card)
             assert view.key == gui.job_key({'id': job}) and not view.job_card.isHidden()
             assert lines[0] == f'Agent: r40   Task: queue   Sub-task: {subtask}'
             assert lines[2].startswith(f"RUNNING {'tools' if tools else 'regular'} ")
@@ -1179,7 +1221,7 @@ def test_every_entry_point_is_listed_with_its_progress(qapp, queue, monkeypatch,
             window.close()
             window.deleteLater()
         web, = gui.WebState(root, machine=lambda: '', scan_every=0).refresh()['jobs']
-        assert web['id'] == gui.job_key({'id': job}) and texts(web['lines'])[0] == lines[0]
+        assert web['id'] == gui.job_key({'id': job}) and web['headline'] == lines[0]
         assert (web['plan'] is not None) is (plan is not None)
     finally:
         if plan is not None:
@@ -1253,7 +1295,7 @@ def test_a_scripts_job_shows_one_line_of_progress(qapp, queue, monkeypatch, job_
             run, = view.model.runs
             assert view.model.name == 'r36-merge-record' and view.model.status() == 'running'
             assert view.model.statuses() == ['evaluating'] and run.unit == 'decisions'
-            assert texts(view.job_card.lines(time_now()))[3] == '[#####---------------] 1024/4096 decisions'
+            assert bars(view.job_card) == [('', 1024, 4096, 'decisions', 0.25)]
             assert gui.row_numbers(run, 'evaluating') == '1024 / 4096 decisions'
             assert gui.row_bar_label(run, 'evaluating', 0.25) == '1024/4096'
             assert gui.row_phase(run, 'evaluating', time_now()).startswith('1024/4096 decisions · ')
@@ -1270,3 +1312,252 @@ def test_a_scripts_job_shows_one_line_of_progress(qapp, queue, monkeypatch, job_
         assert gui.row_bar_label(run, 'evaluating', 0.4) == 'eval 4/10'
     model.poll()
     assert model.status() == 'completed' and model.statuses() == ['ok']
+
+
+# ------------------------------------------------------------------- a job's progress, entry point by entry point
+# What the owner watches (Nov 23): every job's progress drawn with widgets, never as a text bar; the 250-run test's
+# runs so far (wins, deaths, stuck runs, the triforces taken, the furthest step), a chain's and a batch's the same
+# way, a golden race's segments won and runs played, a training's steps, speed and success, a build's and a test's
+# steps.
+
+def chain_result(route_name: str, seed: int, steps: list, *, result: str = 'failure', reason: str = '',
+                 last: str = ''):
+    """A chain run (``runner.RunResult``) that played route ``steps`` in order, each room left by its exit but the
+    last, which ended ``last`` (death, stuck) unless the run won."""
+    from triforce import _native
+    from triforce.runner import RoomRecord, RunResult
+    route = _native.route_steps(route_name)
+    rooms = [RoomRecord(index=index, level=route[step]['level'], room=f"0x{route[step]['room']:02x}",
+                        in_cave=route[step]['in_cave'], specialist=route[step]['specialist'] or '', step=step,
+                        outcome=last if last and index == len(steps) - 1 else 'exit-correct')
+             for index, step in enumerate(steps)]
+    return RunResult(route=route_name, seed=seed, result=result, reason=reason, rooms=rooms)
+
+
+@pytest.fixture
+def every_report(monkeypatch):
+    """``jobs.progress`` writes every report (no two-second limit), its rates from this test's reports alone."""
+    from triforce import jobs
+    monkeypatch.setattr(jobs, 'PROGRESS_SECONDS', 0.0)
+    monkeypatch.setattr(jobs, '_PROGRESS', {})
+
+
+def section_titles(bar_list) -> list:
+    return [title for _, title, _ in bar_list.sections]
+
+
+def test_a_running_250_test_shows_its_runs_so_far(qapp, queue, monkeypatch, job_env, every_report):
+    """``full_runs.py runs250`` as the queue runs it: its eval-chain child writes the plan in ``--out`` with the
+    stream ``events.jsonl`` and reports its runs as the job's 'runs' counter.  The job's card has one progress bar
+    (runs done of 250, runs a second, time left); under it the chain's plan as any chain's: its header's bar of the
+    runs done, and the chain card's widgets: the runs by how they ended (wins blue, stuck purple, deaths red, errors
+    grey), how many took each dungeon's triforce in the route's order, the furthest route step reached and its
+    room.  The web view the same."""
+    from triforce import cli, events
+    from triforce.runner import Route
+    logs, root = job_env
+    out = logs / 'runs250'
+    run_as_job(queue, monkeypatch, subtask='runs250', kind='chain', place='express-1', estimate=330.0,
+               command=['.venv/bin/python', 'scripts/full_runs.py', 'runs250', '--out', str(out)])
+    stream = out / 'events.jsonl'
+    runs = [chain_result('d3first', 0, list(range(16)), reason='died in (level 3, room 0x0f)', last='death'),
+            chain_result('d3first', 1, list(range(61)), reason='died in (level 0, room 0x37)', last='death'),
+            chain_result('d3first', 2, list(range(31)), reason='bounce-limit: 0:0x45', last='stuck'),
+            chain_result('d3first', 3, [], result='error', reason='no model')]
+    with events.logged_job('eval-chain-d3first-power-on', 'chain', [], directory=out, events=stream.name,
+                           chain_runs=250):
+        log = events.EventLog(stream)
+        log.emit('chain_start', runs=250, parallel=10, route='d3first')
+        progress = cli.chain_progress_events(log, 250, None, Route.load('d3first'), seconds=0.0)
+        for result in runs:
+            progress(result)
+        window = gui.Window(root, None)
+        try:
+            view, = window.views
+            now = time_now()
+            assert view.model.plan['kind'] == 'chain' and view.model.dir.resolve() == out.resolve()
+            assert not view.header.isHidden() and not view.chain_card.isHidden() and view.rows == []
+            bar, = view.job_card.bars
+            assert bars(view.job_card) == [('', 4, 250, 'runs', 4 / 250)]
+            assert bar.counter['speed'].endswith(' runs/s') and bar.counter['time'].endswith(' left')
+            assert view.model.fraction(now) == pytest.approx(4 / 250) and view.model.eta(now) is not None
+            card = view.chain_card
+            outcomes = card.outcomes.outcomes
+            assert {key: outcomes[key] for key in ('total', 'done', 'wins', 'stucks', 'deaths', 'errors', 'other')} == {
+                'total': 250, 'done': 4, 'wins': 0, 'stucks': 1, 'deaths': 2, 'errors': 1, 'other': 0}
+            assert outcomes['label'] == '4/250 runs · 0 won · 2 died · 1 stuck · 1 error'
+            assert [color for count, color in gui.outcome_parts(outcomes) if count] == [
+                gui.C.warn, gui.with_alpha(gui.C.bad, 210), gui.C.muted]
+            assert [(item['level'], item['runs']) for item in card.tiles.triforces] == [
+                (3, 2), (4, 1), (1, 0), (2, 0), (5, 0), (7, 0), (6, 0), (8, 0), (9, 0)]
+            assert card.tiles.triforces[0]['share'] == 0.5 and card.tiles.triforces[0]['color'] == gui.rate_color(0.5)
+            assert card.reach.furthest == {'step': 60, 'room': '0:0x37', 'steps': 290, 'fraction': 60 / 290,
+                                           'label': 'step 60 of 290 · 0:0x37'}
+            assert not card.tiles.isHidden() and not card.reach.isHidden()
+            assert card.height() > gui.ChainCard.TOP + gui.ChainCard.TILES + gui.ChainCard.REACH
+            _, timing = gui.chain_caption(view.model.chain(), now)
+            assert timing[1].endswith(' runs/s') and timing[2].endswith(' left')
+            window.select(view, 'round')
+            titles = ['Runs so far (4 of 250)', 'Triforces taken', 'Furthest']
+            assert section_titles(window.detail.evaluation)[:3] == titles
+            assert section_titles(window.detail.summary) == titles       # not a training's empty sections
+            runs_so_far = window.detail.summary.sections[0][2]
+            assert [(label, text) for label, _, text, _ in runs_so_far] == [
+                ('won', '0/4'), ('stuck', '1/4'), ('died', '2/4'), ('errors', '1/4')]
+            for widget in (view.job_card, view.header, card):
+                widget.grab()
+        finally:
+            window.close()
+            window.deleteLater()
+        snapshot = gui.WebState(root, machine=lambda: '', scan_every=0).refresh()
+        web, = snapshot['jobs']
+        assert [(c['label'], c['done'], c['total'], c['unit']) for c in web['counters']] == [('', 4, 250, 'runs')]
+        assert web['plan']['plan_kind'] == 'chain' and web['plan']['fraction'] == pytest.approx(4 / 250)
+        chain_card, = snapshot['cards']
+        assert chain_card['outcomes']['parts'] == [[1, gui.css_color(gui.C.warn)],
+                                                   [2, gui.css_color(gui.with_alpha(gui.C.bad, 210))],
+                                                   [1, gui.css_color(gui.C.muted)]]
+        assert chain_card['tally']['triforces'][:2] == [['D3', 2, 0.5, gui.rate_color(0.5).name()],
+                                                        ['D4', 1, 0.25, gui.rate_color(0.25).name()]]
+        assert chain_card['tally']['furthest'] == {'fraction': 60 / 290, 'label': 'step 60 of 290 · 0:0x37'}
+        assert chain_card['speed'].endswith(' runs/s') and chain_card['eta']
+        # a win: every triforce, Dungeon 9's the game's end, the furthest step the end
+        progress(chain_result('d3first', 4, list(range(290)), result='success'))
+        model = gui.Training(out)
+        model.poll()
+        tally = gui.chain_tally(model.chain()['progress'])
+        assert [item['runs'] for item in tally['triforces']] == [3, 2, 1, 1, 1, 1, 1, 1, 1]
+        assert tally['furthest']['label'] == 'the end' and tally['furthest']['fraction'] == 1.0
+
+
+def test_a_batch_chain_entry_shows_its_runs_so_far(qapp, queue, monkeypatch, job_env, every_report):
+    """A batch's chain (``eval-batch``: each entry an eval-chain into its stream, its counter named for it) shows
+    its runs so far the same way: the row's bar is the runs by how they ended, the detail tab the triforces and the
+    furthest step; the job's card a bar for the batch's entries and one for the chain running."""
+    from triforce import cli, events, jobs
+    from triforce.runner import Route
+    logs, root = job_env
+    run_as_job(queue, monkeypatch, subtask='r40-chains', kind='batch', command=['triforce', 'eval-batch', 'r40'])
+    plan = events.TrainingPlan(events.new_log_dir('r40-chains', logs), 'r40-chains', 'eval-batch', [
+        {'name': 'd3', 'kind': 'chain', 'events': 'd3.jsonl', 'total': 40, 'status': 'evaluating'},
+        {'name': 'd4', 'kind': 'chain', 'events': 'd4.jsonl', 'total': 40, 'status': 'pending'}])
+    try:
+        jobs.progress(0, 2, 'entries', 'entries', force=True)
+        log = events.EventLog(plan.directory / 'd3.jsonl')
+        log.emit('chain_start', runs=40, parallel=10)
+        progress = cli.chain_progress_events(log, 40, 'd3', Route.load('d3first', stop_step=24), seconds=0.0)
+        for result in (chain_result('d3first', 0, list(range(24)), result='success'),
+                       chain_result('d3first', 1, list(range(11)), reason='died in (level 3, room 0x4b)', last='death'),
+                       chain_result('d3first', 2, list(range(21)), reason='wrong-exit-limit: 3:0x5c', last='stuck')):
+            progress(result)
+        window = gui.Window(root, None)
+        try:
+            view, = window.views
+            assert bars(view.job_card) == [('', 0, 2, 'entries', 0.0), ('d3', 3, 40, 'runs', 3 / 40)]
+            run = view.model.runs[0]
+            assert view.model.statuses() == ['evaluating', 'pending']
+            outcomes = gui.row_outcomes(run)
+            assert (outcomes['done'], outcomes['wins'], outcomes['deaths'], outcomes['stucks'], outcomes['total']) == (
+                3, 1, 1, 1, 40)
+            assert outcomes['label'] == '3/40 runs · 1 won · 1 died · 1 stuck'
+            assert gui.row_outcomes(view.model.runs[1]) is None
+            tally = gui.chain_tally(run.chain_progress)
+            assert [(item['level'], item['runs']) for item in tally['triforces']] == [(3, 1)]
+            assert tally['furthest']['label'] == 'step 23 of 290 · 3:0x3d'
+            assert gui.run_speed(run, 'evaluating').endswith(' runs/s')
+            window.select(view, 0)
+            assert section_titles(window.detail.evaluation)[:3] == ['Runs so far (3 of 40)', 'Triforces taken',
+                                                                    'Furthest']
+            for row in view.rows:
+                row.grab()
+        finally:
+            window.close()
+            window.deleteLater()
+        snapshot = gui.WebState(root, machine=lambda: '', scan_every=0).refresh()
+        card, = snapshot['cards']
+        assert card['name'] == 'd3' and card['bar_label'] == '3/40 runs · 1 won · 1 died · 1 stuck'
+        assert card['outcomes']['parts'] == [[1, gui.css_color(gui.C.ok)], [1, gui.css_color(gui.C.warn)],
+                                             [1, gui.css_color(gui.with_alpha(gui.C.bad, 210))]]
+        assert card['tally']['triforces'] == [['D3', 1, 1 / 3, gui.rate_color(1 / 3).name()]]
+    finally:
+        plan.finish('completed')
+
+
+def test_a_trainings_job_shows_its_steps_their_speed_and_its_success(qapp, queue, monkeypatch, job_env):
+    """A training (``triforce train``: its steps the job's counter, named for its family): the card's bar of steps
+    done of its target with steps a second and time left; its row the steps, steps a second and the success."""
+    from triforce import events
+    logs, root = job_env
+    run_as_job(queue, monkeypatch, subtask='train-zol', kind='train', progress={
+        'zol': {'done': 400, 'total': 1000, 'unit': 'steps', 'rate': 100.0, 'ts': time_now()}})
+    plan = events.TrainingPlan(events.new_log_dir('train-zol', logs), 'train-zol', 'train',
+                               [{'specialist': 'zol', 'status': 'running'}])
+    try:
+        write_events(plan.directory / 'zol.jsonl', training_events(time_now() - 4, 4))
+        window = gui.Window(root, None)
+        try:
+            view, = window.views
+            bar, = view.job_card.bars
+            assert bars(view.job_card) == [('zol', 400, 1000, 'steps', 0.4)]
+            assert (bar.counter['numbers'], bar.counter['speed'], bar.counter['time']) == (
+                '400 / 1000 steps', '100 steps/s', '~6s left')
+            run, = view.model.runs
+            now = time_now()
+            assert gui.row_numbers(run, 'training') == '400 / 1.0k'
+            assert gui.row_rate(run, 'training', now).startswith('100 sps · ')
+            assert gui.row_badge(run, 'training')[1][0] == ('36%', gui.rate_color(0.36))   # balanced success
+            view.job_card.grab()
+            view.rows[0].grab()
+        finally:
+            window.close()
+            window.deleteLater()
+        card, = gui.WebState(root, machine=lambda: '', scan_every=0).refresh()['cards']
+        assert card['numbers'] == '400 / 1.0k' and card['speed'] == '100 sps'
+        assert card['badge']['parts'][0][0] == '36%'
+    finally:
+        plan.finish('completed')
+
+
+def test_a_golden_race_and_a_build_with_its_tests_show_their_counters_and_steps(qapp, queue, job_env):
+    """Jobs without a plan are drawn from their row: a golden race's segments won of the route's (a bar) and its
+    runs played (a number with its rate); a build with its test suites: each step with its state (the build
+    completed, two suites running, one passed, one failed) and the Python suite's tests done of collected."""
+    _, root = job_env
+    now = time_now()
+    golden = queue.add(subtask='golden', verb='golden', kind='golden', command=['zelda-headless.py', '--golden'],
+                       estimate=600.0, progress={
+                           'segments won': {'done': 3, 'total': 9, 'unit': 'segments', 'rate': 0.01, 'ts': now},
+                           'runs played': {'done': 57, 'total': None, 'unit': 'runs', 'rate': 2.1, 'ts': now}})
+    tests = queue.add(subtask='all+build', verb='test', kind='test', lane=gui.jobqueue.TOOLS_LANE, place='tools-1',
+                      command=['maturin', 'develop'], admitted_ts=now - 30, steps=[
+                          {'name': 'build', 'status': 'completed'}, {'name': 'test python', 'status': 'running'},
+                          {'name': 'test asm', 'status': 'completed'}, {'name': 'asm check', 'status': 'running'},
+                          {'name': 'test rust', 'status': 'failed'}],
+                      progress={'tests': {'done': 120, 'total': 982, 'unit': 'tests', 'rate': 2.17, 'ts': now}})
+    steps = [('build', 'completed'), ('test python', 'running'), ('test asm', 'completed'), ('asm check', 'running'),
+             ('test rust', 'failed')]
+    window = gui.Window(root, None)
+    try:
+        views = {view.key: view for view in window.views}
+        race = views[gui.job_key({'id': golden})].job_card
+        assert bars(race) == [('segments won', 3, 9, 'segments', 1 / 3), ('runs played', 57, None, 'runs', None)]
+        assert [bar.counter['numbers'] for bar in race.bars] == ['3 / 9 segments', '57 runs']
+        assert race.bars[1].counter['speed'] == '2.1 runs/s' and race.steps.isHidden()
+        build = views[gui.job_key({'id': tests})].job_card
+        assert [(step['name'], step['status']) for step in build.steps.steps] == steps and not build.steps.isHidden()
+        assert bars(build) == [('', 120, 982, 'tests', 120 / 982)]
+        assert texts(build.head.lines)[2].startswith('RUNNING tools ') and 'step' not in texts(build.head.lines)[2]
+        window.select(views[gui.job_key({'id': tests})], 'round')
+        step_rows, = [rows for _, title, rows in window.detail.summary.sections if title == 'Steps']
+        assert step_rows == [(f"{name}: {gui.STATUS[status][1]}", gui.STATUS[status][0]) for name, status in steps]
+        assert [gui.STATUS[status][0] for _, status in steps[:3]] == [gui.C.ok, gui.C.accent, gui.C.ok]
+        assert gui.STATUS['failed'][0] == gui.C.bad
+        race.grab()
+        build.grab()
+    finally:
+        window.close()
+        window.deleteLater()
+    jobs = {job['id']: job for job in gui.WebState(root, machine=lambda: '', scan_every=0).refresh()['jobs']}
+    assert [(c['label'], c['done'], c['total']) for c in jobs[gui.job_key({'id': golden})]['counters']] == [
+        ('segments won', 3, 9), ('runs played', 57, None)]
+    assert [(step['name'], step['status']) for step in jobs[gui.job_key({'id': tests})]['steps']] == steps

@@ -170,22 +170,24 @@ class ChainOutput:
         write_json_atomic(meta_path(self.path), self.meta)
 
 
-def chain_progress_events(events, runs: int, label: Optional[str] = None):
-    """``on_result`` emitting ``chain_progress`` (done, runs, successes) at most once a second and on the last
-    run (``events`` None: none), and reporting the runs done as the job's progress (``jobs.progress``; ``label``:
-    this chain's counter among several, a batch's entry)."""
+def chain_progress_events(events, runs: int, label: Optional[str] = None, route=None, seconds: float = 1.0):
+    """``on_result`` emitting ``chain_progress`` (done, runs, successes and the ``runner.ChainTally`` of ``route``:
+    wins, deaths, stucks, errors, triforces, furthest step) at most once every ``seconds`` and on the last run
+    (``events`` None: none), and reporting the runs done as the job's progress (``jobs.progress``; ``label``: this
+    chain's counter among several, a batch's entry)."""
     import time  # pylint: disable=import-outside-toplevel
     from .jobs import progress as job_progress  # pylint: disable=import-outside-toplevel
-    progress = {'done': 0, 'successes': 0, 'last': 0.0}
+    from .runner import ChainTally  # pylint: disable=import-outside-toplevel
+    tally = ChainTally(route)
+    last = [None]
 
     def on_result(result):
-        progress['done'] += 1
-        progress['successes'] += result.result == 'success'
-        job_progress(progress['done'], runs, 'runs', label)
+        tally.add(result)
+        job_progress(tally.done, runs, 'runs', label)
         now = time.monotonic()
-        if events is not None and (now - progress['last'] >= 1.0 or progress['done'] == runs):
-            progress['last'] = now
-            events.emit('chain_progress', done=progress['done'], runs=runs, successes=progress['successes'])
+        if events is not None and (last[0] is None or now - last[0] >= seconds or tally.done == runs):
+            last[0] = now
+            events.emit('chain_progress', done=tally.done, runs=runs, successes=tally.wins, **tally.fields())
     return on_result
 
 
@@ -217,10 +219,12 @@ def _cmd_eval_chain(args):
     what = (f"eval-chain-{args.route}" + (f"-from-{args.start_from}" if args.start_from else '')
             + ('-power-on' if args.power_on else ''))
     announce('chain', work(chain_steps=args.runs * route.steps_played()), what)
-    # --events into a folder with a plan: its driver (e.g. triforce eval-batch) owns the stream and the final 'end';
-    # into a folder without one: this chain writes a plan there (the stream is the plan's), so the GUI lists it.
+    # --events into a folder with a plan: its driver (e.g. triforce eval-batch) owns the stream and the final 'end',
+    # and this chain's counter is named for its stream (the batch's entry); into a folder without one: this chain
+    # writes a plan there (the stream is the plan's), so the GUI lists it, and its counter is the job's 'runs'.
     stream = Path(args.events) if args.events else None
-    log = nullcontext() if stream is not None and has_plan(stream) else logged_job(
+    driven = stream is not None and has_plan(stream)
+    log = nullcontext() if driven else logged_job(
         what, 'chain', [], args.logs_dir, directory=None if stream is None else stream.parent, log=not args.no_log,
         work=work(chain_steps=args.runs * route.steps_played()),
         events=stream.name if stream else 'round.jsonl', chain_runs=args.runs, nice=nice)
@@ -242,7 +246,7 @@ def _cmd_eval_chain(args):
                         nice=nice)
         try:
             chain_output = ChainOutput(output, provenance, existing)
-            progress = chain_progress_events(events, args.runs, None if stream is None else stream.stem)
+            progress = chain_progress_events(events, args.runs, stream.stem if driven else None, route)
 
             def on_result(result):
                 chain_output.add(result)
