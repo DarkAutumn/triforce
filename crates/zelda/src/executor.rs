@@ -219,6 +219,9 @@ pub struct Machine<N: Nes> {
     pub frame: u64,
     pub render: bool,
     pub sink: Option<FrameSink<N>>,
+    /// Every real frame's RAM image, kept for the caller to take (`crate::Session::take_ram_log`: the chain's bomb
+    /// metrics, `crate::bomb_windows`); None: off.
+    pub ram_log: Option<Vec<Box<[u8; RAM_SIZE]>>>,
 }
 
 impl<N: Nes> Machine<N> {
@@ -228,6 +231,7 @@ impl<N: Nes> Machine<N> {
             frame: 0,
             render: false,
             sink: None,
+            ram_log: None,
         }
     }
 
@@ -238,6 +242,10 @@ impl<N: Nes> Machine<N> {
             self.frame += 1;
             if let Some(sink) = self.sink.as_mut() {
                 sink(&self.nes);
+            }
+            if self.ram_log.is_some() {
+                let image = self.ram_image();
+                self.ram_log.as_mut().expect("on").push(image);
             }
         }
     }

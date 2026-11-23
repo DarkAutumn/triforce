@@ -1081,6 +1081,13 @@ impl GameView {
         self.var(Var::KillStreak)
     }
 
+    /// The drop table's kill cycle (`$52A` WorldKillCycle, 0-9): the next death that advances it (every type's but
+    /// a child Gel's, a Red Keese's and the dead dummy's) first moves it on, then reads column cycle + 1 of its drop
+    /// group's row (asm:Obj_EndMetastate, asm:Drop_SetUpItem). Harm leaves it alone.
+    pub fn world_kill_cycle(&self) -> u8 {
+        self.byte(Var::WorldKillCycle)
+    }
+
     pub fn keys(&self) -> i32 {
         self.var(Var::Keys)
     }

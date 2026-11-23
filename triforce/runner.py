@@ -307,6 +307,35 @@ class RoomRecord:
     beam_kill_distance: Optional[int] = None
     beam_hearts_lost: Optional[float] = None
     beam_beams_lost: Optional[int] = None
+    # Nov 23, the owner's two bomb metrics (None/absent in older records; ``_native.BOMB_WINDOW_FIELDS``,
+    # crates/zelda/src/bomb_windows.rs, docs/architecture.md "Bomb windows"), counted from the run's frames.
+    # Metric A, the 10th-kill bomb (the next kill is the 10th damage-free one, a bomb in the bag, BOMB on the mask):
+    # resolved by a bomb kill (armed), a bomb that ended killing nothing and opening no wall (missed), another
+    # weapon's 10th kill (other); the same for windows opened with a full bag; streaks lost (harm) and paused windows
+    # ended without a bomb in the bag (no opportunities); forced bomb drops that fell, were taken, wasted, lost.
+    # Metric B, the bomb carrier (the next death reads a bomb column of drop group 2, no forced drop, room in the
+    # bag, an eligible carrier and a choice): the next death a carrier's (hit) or another's (miss_kill), Link left
+    # first (miss_leave); windows whose conditions ended (closed); bombs the hits dropped and those taken; cycle moves
+    # no slot accounted for.
+    tenth_armed: Optional[int] = None
+    tenth_missed: Optional[int] = None
+    tenth_other: Optional[int] = None
+    tenth_full_armed: Optional[int] = None
+    tenth_full_missed: Optional[int] = None
+    tenth_full_other: Optional[int] = None
+    tenth_lost: Optional[int] = None
+    tenth_paused_out: Optional[int] = None
+    tenth_forced_fell: Optional[int] = None
+    tenth_forced_taken: Optional[int] = None
+    tenth_forced_wasted: Optional[int] = None
+    tenth_forced_lost: Optional[int] = None
+    carrier_hits: Optional[int] = None
+    carrier_miss_kill: Optional[int] = None
+    carrier_miss_leave: Optional[int] = None
+    carrier_closed: Optional[int] = None
+    carrier_bombs: Optional[int] = None
+    carrier_bombs_taken: Optional[int] = None
+    carrier_unattributed: Optional[int] = None
     # Decisions taken in the visit (crates/zelda/src/decisions.rs, triforce/variety.py): n, low1/low5 (chosen with
     # probability under 1%/5% under the policy), low1_hit/low5_hit/low1_death/low5_death (followed by a hit or death
     # within 4 decisions), surprisal, act_entropy, actions (hex, two digits per decision), health ([decisions,
@@ -340,6 +369,9 @@ class RunResult:
     retreats: int = 0               # rooms left through a route step's `retreat` exit (4 end the run: retreat-limit)
     wrong_exits: int = 0            # wrong exits into tagged rooms (the 20th ends the run stuck: wrong-exit-limit)
     clips: Optional[bool] = None    # the run-time clips switch the run started with (round 22; None in older files)
+    # Nov 23: the bomb metrics' windows were open when the run ended (None in older files).
+    tenth_open_at_end: Optional[bool] = None
+    carrier_open_at_end: Optional[bool] = None
     rooms: List[RoomRecord] = field(default_factory=list)
 
     @property

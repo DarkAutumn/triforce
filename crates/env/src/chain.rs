@@ -13,6 +13,7 @@
 //! promoted model).  [`ChainEnv::set_harvest`] saves every handoff's (or every room entry's) pre-entry state as a
 //! harvested start state.
 
+use crate::bomb_windows::{BombFrames, StepFacts};
 use crate::config::{GameData, SpecialistConfig};
 use crate::critic::BossTransitions;
 use crate::error::EnvError;
@@ -30,6 +31,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use zelda::beams::BeamStats;
+use zelda::bomb_windows::BombWindowStats;
 use zelda::bombs::BombStats;
 use zelda::clips::ClipStats;
 use zelda::decisions::{DecisionNote, DecisionStats};
@@ -394,6 +396,9 @@ pub struct RoomRecord {
     pub bombs: BombStats,
     /// Sword shots and kills by range (`zelda::beams`, round 38; JSON `beam_<field>`).
     pub beams: BeamStats,
+    /// The owner's two bomb metrics, Nov 23 (`zelda::bomb_windows`, counted from the run's frames by
+    /// [`BombFrames`]; JSON keys as named: `tenth_*`, `carrier_*`).
+    pub bomb_windows: BombWindowStats,
     pub cheated: ItemCounts,
     /// Dodongo stuns and swallowed bombs during the visit ([`BossTransitions`]).
     pub boss_stuns: u32,
@@ -477,6 +482,7 @@ impl RoomRecord {
             cheated: ItemCounts::default(),
             boss_stuns: 0,
             boss_eats: 0,
+            bomb_windows: BombWindowStats::default(),
             clips: ClipStats::default(),
             decisions: DecisionStats::default(),
             hits: 0,
@@ -544,6 +550,9 @@ impl RoomRecord {
         for (name, value) in self.clips.fields() {
             o.insert(format!("clip_{name}"), json!(value));
         }
+        for (name, value) in self.bomb_windows.fields() {
+            o.insert(name.into(), json!(value));
+        }
         m
     }
 }
@@ -573,6 +582,10 @@ pub struct RunResult {
     pub rooms: Vec<RoomRecord>,
     /// The clips switch the run started with (round 22; each room's record has its own and the flips).
     pub clips: bool,
+    /// The two bomb windows were open when the run ended (`zelda::bomb_windows::BombWindows::open`: Metric A's
+    /// unresolved, Metric B's): JSON `tenth_open_at_end`, `carrier_open_at_end`.
+    pub tenth_open_at_end: bool,
+    pub carrier_open_at_end: bool,
 }
 
 impl RunResult {
@@ -581,7 +594,8 @@ impl RunResult {
         json!({
             "route": self.route, "seed": self.seed, "result": self.result, "reason": self.reason,
             "steps": self.steps, "frames": self.frames, "retreats": self.retreats, "wrong_exits": self.wrong_exits,
-            "clips": self.clips,
+            "clips": self.clips, "tenth_open_at_end": self.tenth_open_at_end,
+            "carrier_open_at_end": self.carrier_open_at_end,
             "rooms": self.rooms.iter().map(RoomRecord::to_json).collect::<Vec<_>>(),
         })
     }
@@ -701,6 +715,8 @@ pub struct ChainEnv<N: Nes, St: StateStore<N::State>> {
     clips_flipped: bool,
     /// A flip that takes effect at the room entry just made: the new room's record lists it at step 0.
     entry_flip: Option<bool>,
+    /// The run's bomb metrics, fed every real frame (the session's RAM log) and the room records as they are made.
+    bomb_frames: Option<BombFrames>,
 }
 
 impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
@@ -710,6 +726,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         // The map the route plays (game.yaml rooms of its own over the others, `GameMap::route_map`).
         let mut session = Session::new(nes, data.map.route_map(&route.name));
         session.look_ahead = zelda::LookAhead::Bombs;
+        session.set_ram_log(true);
         ChainEnv {
             session,
             data,
@@ -749,6 +766,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             pending_clips: None,
             clips_flipped: false,
             entry_flip: None,
+            bomb_frames: None,
         }
     }
 
@@ -1018,8 +1036,12 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             retreats: 0,
             wrong_exits: 0,
             clips: self.route.clips,
+            tenth_open_at_end: false,
+            carrier_open_at_end: false,
             rooms: Vec::new(),
         });
+        self.session.take_ram_log();
+        self.bomb_frames = Some(BombFrames::new());
         self.current = None;
         self.change = None;
         self.prev_objective = None;
@@ -1116,6 +1138,14 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             && track.ended()
         {
             track.restart(self.session.state(), self.objective.as_ref().expect("run started"));
+        }
+        // What the agent was told at this decision, for the bomb metrics: FIGHT, and BOMB on the mask.
+        if let Some(frames) = self.bomb_frames.as_mut() {
+            let facts = StepFacts {
+                kill_all: self.objective.as_ref().is_some_and(|o| o.kind == ObjectiveKind::Fight),
+                bomb_allowed: self.session.mask().kind[ActionKind::Bomb.index()],
+            };
+            frames.facts(frames.pushed(), facts);
         }
         let change = self.session.act(action)?;
         // The cheated items' state carries on (mask, observation); `change` keeps what the action did.
@@ -1226,6 +1256,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         self.objective = Some(objective);
         self.prev_objective = Some(prev_objective);
         self.change = Some(change);
+        self.bomb_sync();
         if state.game_over() {
             let result = self.result.as_mut().unwrap();
             result.rooms.last_mut().unwrap().outcome = "death".into();
@@ -1412,8 +1443,32 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
 
     /// The top of `Runner._run`'s loop: room bookkeeping, the observation and the budgets.
     fn advance(&mut self) -> ChainStatus {
-        self.room_entry()
-            .unwrap_or_else(|reason| self.error(reason))
+        let status = self.room_entry().unwrap_or_else(|reason| self.error(reason));
+        self.bomb_sync();
+        match status {
+            ChainStatus::Done(_) => ChainStatus::Done(self.result.clone().expect("run started")),
+            act => act,
+        }
+    }
+
+    /// Feeds the bomb metrics the room records made and the frames run since the last call, and writes their counts
+    /// into the records (and the open windows into the result).
+    fn bomb_sync(&mut self) {
+        let (Some(frames), Some(result)) = (self.bomb_frames.as_mut(), self.result.as_mut()) else {
+            return;
+        };
+        for record in &result.rooms[frames.planned().min(result.rooms.len())..] {
+            frames.plan(record.location());
+        }
+        for ram in self.session.take_ram_log() {
+            frames.push(ram);
+        }
+        for index in frames.take_changed() {
+            if let Some(record) = result.rooms.get_mut(index) {
+                record.bomb_windows = frames.stats(index);
+            }
+        }
+        (result.tenth_open_at_end, result.carrier_open_at_end) = frames.open();
     }
 
     fn room_entry(&mut self) -> Result<ChainStatus, String> {

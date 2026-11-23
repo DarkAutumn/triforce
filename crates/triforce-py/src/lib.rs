@@ -329,7 +329,9 @@ mod _native {
     #[pymodule_export]
     use crate::policy::{PyPolicy, act_mode, act_probabilities, keyed_noise};
     #[pymodule_export]
-    use crate::replay::{PyReplay, PyReplayPlayer, replay_stitch, replay_truncate, replay_verify};
+    use crate::replay::{
+        PyReplay, PyReplayPlayer, replay_bomb_windows, replay_stitch, replay_truncate, replay_verify,
+    };
     #[pymodule_export]
     use crate::theater::{PyReplayFeed, PyReplayScreen};
 
@@ -412,6 +414,13 @@ mod _native {
         m.add(
             "BOMB_STATS",
             pyo3::types::PyTuple::new(py, zelda::bombs::BombStats::default().fields().map(|(name, _)| name))?,
+        )?;
+        m.add(
+            "BOMB_WINDOW_FIELDS",
+            pyo3::types::PyTuple::new(
+                py,
+                zelda::bomb_windows::BombWindowStats::default().fields().map(|(name, _)| name),
+            )?,
         )?;
         m.add(
             "CLIP_STATS",

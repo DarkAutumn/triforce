@@ -79,6 +79,7 @@ impl TrialOutcome {
 /// What simulation mode put aside (`Session::set_simulating`).
 struct Stash<N: Nes> {
     sink: Option<FrameSink<N>>,
+    ram_log: Option<Vec<Box<[u8; crate::tables::RAM_SIZE]>>>,
     render: bool,
     capture_pre_entry: bool,
 }
@@ -241,6 +242,17 @@ impl<N: Nes> Session<N> {
     /// Called after every real frame (not look-ahead frames).
     pub fn set_frame_sink(&mut self, sink: Option<FrameSink<N>>) {
         self.machine.sink = sink;
+    }
+
+    /// Keep every real frame's RAM image (RAM then PRG-RAM) from now on, for [`Session::take_ram_log`] (on), or stop
+    /// (off). Simulation mode (search) keeps none.
+    pub fn set_ram_log(&mut self, on: bool) {
+        self.machine.ram_log = on.then(Vec::new);
+    }
+
+    /// The RAM images kept since the last call (empty when off).
+    pub fn take_ram_log(&mut self) -> Vec<Box<[u8; crate::tables::RAM_SIZE]>> {
+        self.machine.ram_log.as_mut().map(std::mem::take).unwrap_or_default()
     }
 
     /// Action kinds removed from every mask (the mask is recomputed only when they change).
@@ -522,6 +534,7 @@ impl<N: Nes> Session<N> {
             (true, false) => {
                 self.stash = Some(Stash {
                     sink: self.machine.sink.take(),
+                    ram_log: self.machine.ram_log.take(),
                     render: std::mem::replace(&mut self.machine.render, false),
                     capture_pre_entry: std::mem::replace(&mut self.executor.capture_pre_entry, false),
                 });
@@ -529,6 +542,7 @@ impl<N: Nes> Session<N> {
             (false, true) => {
                 let stash = self.stash.take().expect("simulating");
                 self.machine.sink = stash.sink;
+                self.machine.ram_log = stash.ram_log;
                 self.machine.render = stash.render;
                 self.executor.capture_pre_entry = stash.capture_pre_entry;
             }
