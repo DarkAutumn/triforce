@@ -223,7 +223,7 @@ The machine's job queue (the owner, Nov 23): everything heavier than a build or 
 triforce job run --agent A --task T --subtask S --desc "one sentence" [--express] [--timeout 40m] -- COMMAND...
 triforce job golden --agent A --task T --timeout 10m [-- racer options]  # zelda-headless.py --golden --power-on --clips on --act model --parallel 16
 triforce job build --agent A --task T                                    # maturin develop --release
-triforce job test python|rust|asm|all --agent A --task T [--build]       # a suite (--build: build first, one entry)
+triforce job test SUITE... --agent A --task T [--build]                 # python, asm, check, rust or all, side by side (--build: build first, one entry)
 triforce job setup BRANCH [--from main]                                  # worktree ../triforce-<branch>: links, venv, build
 triforce job list [--calibration]                                        # what runs, what waits in order, what ended in the last hour
 triforce job progress DONE [TOTAL] --unit U                              # progress from a shell script running as a job

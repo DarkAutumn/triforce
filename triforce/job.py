@@ -6,7 +6,8 @@ the exit code is the command's (the wrapper's own lines go to stderr, ``triforce
     triforce job run --agent A --task T --subtask S --desc "one sentence" [--express] [--timeout 40m] -- COMMAND...
     triforce job golden --agent A --task T --timeout 10m [--subtask S] [--desc ...] [-- racer options]
     triforce job build --agent A --task T [--timeout D] [-- maturin options]
-    triforce job test python|rust|asm|all --agent A --task T [--build] [--timeout D] [-- test options]
+    triforce job test SUITE... --agent A --task T [--build] [--timeout D] [-- one suite's options]
+                                                  (SUITE: python, asm, check, rust; all = the four)
     triforce job setup BRANCH [--from main] [--agent A]
     triforce job list [--all] [--calibration]
 
@@ -31,6 +32,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -57,7 +59,8 @@ TOOL_COMMANDS = ('train', 'evaluate', 'eval-chain', 'eval-batch', 'select-checkp
 TOOL_MODULES = ('triforce.train', 'triforce.evaluate', 'triforce.eval_batch', 'triforce.select_checkpoint',
                 'triforce.lab.train', 'triforce.lab.record', 'triforce.lab.bench')
 TOOL_SCRIPTS = ('train_round.py', 'full_runs.py', 'zelda-headless.py')
-TEST_SUITES = {'python': 'tests', 'asm': 'zelda-asm/tests'}
+SUITES = ('python', 'asm', 'check', 'rust')     # ``triforce job test``'s suites, in the order they are shown
+SLOW_TEST_SECONDS = 10.0    # the Python suite names its tests that took this long or longer when it ends
 
 
 class JobError(Exception):
@@ -180,11 +183,14 @@ def ask_work(command: list[str], cwd: Path) -> Union[int, dict]:
 
 class Step:
     """One command of a job (a build, a test suite), or a Python callable (``setup``'s links); its progress is the
-    row's ``steps``.  ``required``: its failure ends the job (the default; a test suite of several is not)."""
+    row's ``steps``.  ``required``: its failure ends the job (the default; a test suite of several is not).
+    ``together``: it runs at the same time as the ``together`` steps next to it (the suites of ``test all``), each
+    one's output shown whole when all have ended."""
 
     def __init__(self, name: str, command: Union[list, Callable[[], int]], cwd: Path, env: Optional[dict] = None,
-                 required: bool = True):
-        self.name, self.command, self.cwd, self.env, self.required = name, command, cwd, env or {}, required
+                 required: bool = True, together: bool = False):
+        self.name, self.command, self.cwd, self.env = name, command, cwd, env or {}
+        self.required, self.together = required, together
 
 
 class Stopped(Exception):
@@ -206,7 +212,7 @@ class Wrapper:
         self.row: dict = {}
         self.job_fd: Optional[int] = None
         self.place_fd: Optional[int] = None
-        self.child: Optional[subprocess.Popen] = None
+        self.children: list[subprocess.Popen] = []      # the commands running now (several: steps run together)
         self.stopped: Optional[int] = None
         self.timed_out = False
         self.deadline: Optional[float] = None
@@ -219,7 +225,7 @@ class Wrapper:
         there.  Nothing is raised from the handler (it can land inside a transaction, or between starting the
         command and recording it): the waits check ``stopped`` (``check_stop``)."""
         self.stopped = signum
-        if self.child is not None:
+        if self.children:
             self._signal_group(signum)
             signal.setitimer(signal.ITIMER_REAL, GRACE_SECONDS)
 
@@ -227,8 +233,8 @@ class Wrapper:
         self._signal_group(signal.SIGKILL)
 
     def _signal_group(self, signum: int):
-        child = self.child
-        if child is not None:
+        """Signals the process group of every command running now."""
+        for child in list(self.children):
             try:
                 os.killpg(child.pid, signum)
             except ProcessLookupError:
@@ -236,7 +242,7 @@ class Wrapper:
 
     def check_stop(self):
         """Raises ``Stopped`` once a stop was noted and no command runs (while joining, waiting or between steps)."""
-        if self.stopped is not None and self.child is None:
+        if self.stopped is not None and not self.children:
             raise Stopped(self.stopped)
 
     @property
@@ -297,75 +303,107 @@ class Wrapper:
         with q.transaction(self.con):
             q.update(self.con, self.id, steps=steps)
 
-    def run_command(self, step: Step, env: dict) -> int:
-        """Runs one step's command in its own process group at the job's niceness (the place lock handed down, so
-        the place stays taken while anything holding it runs); returns its exit code (128 + signal when killed)."""
-        if callable(step.command):
-            return step.command()
+    def run_commands(self, steps: list[Step], env: dict) -> list[int]:
+        """Runs ``steps``' commands at the same time (one step: just it), each in its own process group at the job's
+        niceness with the place lock handed down (the place stays taken while anything holding it runs); returns
+        their exit codes (128 + signal when killed, 127 for a program that isn't there).  One command's output
+        passes straight through; several are each kept and shown whole, in order, once all have ended."""
+        codes: list = [None] * len(steps)
+        outputs: list = [None] * len(steps)
+        running: list[tuple[int, subprocess.Popen]] = []
         os.set_inheritable(self.place_fd, True)
         try:
-            self.child = subprocess.Popen(step.command, cwd=step.cwd, env={**env, **step.env},  # pylint: disable=consider-using-with
-                                          preexec_fn=q.child_setup(self.row['nice'], os.getpid()),
-                                          pass_fds=(self.place_fd,))
-        except OSError as error:        # no such program: the job fails as a shell's would
-            say(f"{step.name}: {error}")
-            return 127
-        self.row['child'] = self.child.pid
-        if self.stopped is not None:        # a stop noted while the command was starting
-            self._signal(self.stopped, None)
-        with q.transaction(self.con):
-            q.update(self.con, self.id, child=self.child.pid)
-        try:
-            while True:
-                remaining = None if self.deadline is None else self.deadline - time.monotonic()
+            for index, step in enumerate(steps):
+                if callable(step.command):
+                    codes[index] = step.command()
+                    continue
+                if len(steps) > 1:
+                    outputs[index] = tempfile.TemporaryFile()      # pylint: disable=consider-using-with
                 try:
-                    code = self.child.wait(timeout=None if remaining is None else max(0.0, remaining))
-                    break
-                except subprocess.TimeoutExpired:
-                    self.timed_out = True
-                    self._stop_group(signal.SIGTERM)
-                    self.deadline = None
+                    child = subprocess.Popen(step.command, cwd=step.cwd, env={**env, **step.env},  # pylint: disable=consider-using-with
+                                             stdout=outputs[index],
+                                             stderr=None if outputs[index] is None else subprocess.STDOUT,
+                                             preexec_fn=q.child_setup(self.row['nice'], os.getpid()),
+                                             pass_fds=(self.place_fd,))
+                except OSError as error:        # no such program: the step fails as a shell's would
+                    say(f"{step.name}: {error}")
+                    codes[index] = 127
+                    continue
+                self.children.append(child)
+                running.append((index, child))
+                if self.stopped is not None:        # a stop noted while the command was starting
+                    self._signal(self.stopped, None)
+            if running:
+                self.row['child'] = running[0][1].pid
+                with q.transaction(self.con):
+                    q.update(self.con, self.id, child=running[0][1].pid)
+            for index, child in running:
+                while True:
+                    remaining = None if self.deadline is None else self.deadline - time.monotonic()
+                    try:
+                        code = child.wait(timeout=None if remaining is None else max(0.0, remaining))
+                        break
+                    except subprocess.TimeoutExpired:
+                        self.timed_out = True
+                        self._stop_groups()
+                        self.deadline = None
+                codes[index] = code if code >= 0 else 128 - code
         finally:
             signal.setitimer(signal.ITIMER_REAL, 0)
-            self._signal_group(signal.SIGKILL)     # nothing of the job outlives its command
-            self.child = None
-        return code if code >= 0 else 128 - code
+            self._signal_group(signal.SIGKILL)     # nothing of the job outlives its commands
+            self.children = []
+            for step, output, code in zip(steps, outputs, codes):
+                if output is not None:
+                    say(f"--- {step.name}: exit {code} ---")
+                    output.seek(0)
+                    sys.stdout.flush()
+                    shutil.copyfileobj(output, sys.stdout.buffer)
+                    sys.stdout.flush()
+                    output.close()
+        return codes
 
-    def _stop_group(self, signum: int):
-        """Signals the command's group; after a SIGTERM, kills it once ``GRACE_SECONDS`` passed."""
-        if self.child is None:
-            return
-        try:
-            os.killpg(self.child.pid, signum)
-        except ProcessLookupError:
-            return
-        if signum == signal.SIGTERM:
+    def _stop_groups(self):
+        """A timeout: SIGTERM to every command's group, then SIGKILL once ``GRACE_SECONDS`` passed."""
+        self._signal_group(signal.SIGTERM)
+        until = time.monotonic() + GRACE_SECONDS
+        for child in list(self.children):
             try:
-                self.child.wait(timeout=GRACE_SECONDS)
+                child.wait(timeout=max(0.0, until - time.monotonic()))
             except subprocess.TimeoutExpired:
-                self._stop_group(signal.SIGKILL)
+                pass
+        self._signal_group(signal.SIGKILL)
 
     def run_steps(self, steps: list[Step], timeout: Optional[float]) -> int:
-        """The job's steps in order; returns the first failing step's exit code (0: all passed).  A failing
-        ``required`` step ends the job (a build before its tests); after a failing one that is not (a test suite of
-        ``test all``) the next still run, so one entry shows every suite."""
+        """The job's steps in order, neighbouring ``together`` ones at the same time; returns the first failing
+        step's exit code (0: all passed).  A failing ``required`` step ends the job (a build before its tests);
+        after a failing one that is not (a test suite of ``test all``) the rest still run, so one entry shows every
+        suite."""
         env = {key: value for key, value in os.environ.items() if key != JOB_ESTIMATE_ENV}
         env.update({JOB_ID_ENV: str(self.id), JOB_LABEL_ENV: self.row['name'], **OLD_QUEUE_OFF})
         self.deadline = None if timeout is None else time.monotonic() + timeout
         progress = [{'name': step.name, 'status': 'pending'} for step in steps]
-        code = 0
+        groups: list[list[int]] = []
         for index, step in enumerate(steps):
+            if step.together and groups and steps[groups[-1][-1]].together:
+                groups[-1].append(index)
+            else:
+                groups.append([index])
+        code = 0
+        for group in groups:
             if self.stopped is not None:
                 break
             if len(steps) > 1:
-                progress[index]['status'] = 'running'
+                for index in group:
+                    progress[index]['status'] = 'running'
                 self.set_steps(progress)
-            result = self.run_command(step, env)
+            results = self.run_commands([steps[index] for index in group], env)
             if len(steps) > 1:
-                progress[index]['status'] = 'completed' if result == 0 else 'failed'
+                for index, result in zip(group, results):
+                    progress[index]['status'] = 'completed' if result == 0 else 'failed'
                 self.set_steps(progress)
-            code = code or result
-            if self.timed_out or self.stopped is not None or (result != 0 and step.required):
+            code = code or next((result for result in results if result), 0)
+            if self.timed_out or self.stopped is not None or any(
+                    result != 0 and steps[index].required for index, result in zip(group, results)):
                 break
         return code
 
@@ -492,8 +530,9 @@ def build_parser() -> argparse.ArgumentParser:
     build = sub.add_parser('build', help="maturin develop --release in this checkout (tools lane)")
     _common(build, subtask=False, desc=False)
     build.add_argument('--timeout', type=parse_duration, default=None)
-    test = sub.add_parser('test', help="a test suite in this checkout (tools lane)")
-    test.add_argument('suite', choices=('python', 'rust', 'asm', 'all'))
+    test = sub.add_parser('test', help="test suites in this checkout, run side by side (tools lane)")
+    test.add_argument('suites', nargs='+', choices=(*SUITES, 'all'), metavar='SUITE',
+                      help=f"one or more of {', '.join(SUITES)}; all: the four")
     _common(test, subtask=False, desc=False)
     test.add_argument('--build', action='store_true', help="build first, as one entry with both steps")
     test.add_argument('--timeout', type=parse_duration, default=None)
@@ -606,11 +645,14 @@ def build_step(root: Path, extra: list[str]) -> Step:
                 {'CARGO_BUILD_JOBS': str(CARGO_JOBS), 'VIRTUAL_ENV': str(root / '.venv')})
 
 
-def test_steps(root: Path, suite: str, extra: list[str]) -> list[Step]:
-    """The suites' steps: ``python`` (pytest of ``tests``), ``asm`` (the disassembly's own tests, then ``asm.py
-    check``: no edit changed the code, every ``asm:`` citation resolves), ``rust`` (the cargo workspace).  None is
-    ``required``: with several, each runs whatever the one before did.  A worktree without its own ``models``
-    reads the main checkout's (``$TRIFORCE_MODELS_DIR``; a few tests read the promoted team), never linked in."""
+def test_steps(root: Path, suites: list[str], extra: list[str]) -> list[Step]:
+    """The steps of ``suites`` (``SUITES``, in that order whatever order they were given in): ``python`` (pytest of
+    ``tests``, naming its tests of ``SLOW_TEST_SECONDS`` or more at the end), ``asm`` (the disassembly's own
+    tests), ``check`` (``asm.py check``: no edit changed the code, every ``asm:`` citation resolves), ``rust`` (the
+    cargo workspace).  They run at the same time (``together``: the Python suite is one process on one core for
+    minutes, the owner, Nov 23) and none is ``required``: each runs whatever another did.  A worktree without its
+    own ``models`` reads the main checkout's (``$TRIFORCE_MODELS_DIR``; a few tests read the promoted team), never
+    linked in."""
     python = checkout_python(root)
     env = {'CARGO_BUILD_JOBS': str(CARGO_JOBS)}
     if not (root / 'models').exists() and not os.environ.get('TRIFORCE_MODELS_DIR'):
@@ -620,17 +662,14 @@ def test_steps(root: Path, suite: str, extra: list[str]) -> list[Step]:
             models = None
         if models is not None and models.is_dir():
             env['TRIFORCE_MODELS_DIR'] = str(models)
-
-    def some(name: str) -> list[Step]:
-        if name == 'rust':
-            return [Step('test rust', ['cargo', 'test', '--release', '--workspace', '--features', 'zelda/zcore',
-                                       *extra], root, env, required=False)]
-        steps = [Step(f'test {name}', [python, '-m', 'pytest', '-q', TEST_SUITES[name], *extra], root, env,
-                      required=False)]
-        if name == 'asm':
-            steps.append(Step('asm check', [python, 'zelda-asm/tools/asm.py', 'check'], root, env, required=False))
-        return steps
-    return [step for name in (('python', 'asm', 'rust') if suite == 'all' else (suite,)) for step in some(name)]
+    slow = ['--durations=40', f'--durations-min={SLOW_TEST_SECONDS:g}']
+    commands = {
+        'python': ('test python', [python, '-m', 'pytest', '-q', *slow, 'tests', *extra]),
+        'asm': ('test asm', [python, '-m', 'pytest', '-q', 'zelda-asm/tests', *extra]),
+        'check': ('asm check', [python, 'zelda-asm/tools/asm.py', 'check', *extra]),
+        'rust': ('test rust', ['cargo', 'test', '--release', '--workspace', '--features', 'zelda/zcore', *extra]),
+    }
+    return [Step(*commands[name], root, env, required=False, together=True) for name in SUITES if name in suites]
 
 
 def _tools_root() -> Path:
@@ -651,15 +690,16 @@ def cmd_build(args, extra: list[str]) -> int:
 
 def cmd_test(args, extra: list[str]) -> int:
     check_command(extra, options=True)
-    if extra:
-        if args.suite == 'all':
-            raise JobError("test all takes no options after -- (they would go to three different suites)")
+    suites = [name for name in SUITES if name in args.suites or 'all' in args.suites]
+    if extra and len(suites) > 1:
+        raise JobError(f"options after -- go to one suite: name one (these are {len(suites)}: {' '.join(suites)})")
     root = _tools_root()
-    steps = ([build_step(root, [])] if args.build else []) + test_steps(root, args.suite, extra)
-    subtask = f"{args.suite}{'+build' if args.build else ''}"
+    steps = ([build_step(root, [])] if args.build else []) + test_steps(root, suites, extra)
+    named = 'all' if suites == list(SUITES) else '+'.join(suites)
+    subtask = f"{named}{'+build' if args.build else ''}"
     fields = _fields(args, 'test', q.TOOLS_LANE, 'test', [part for step in steps for part in (step.command + [';'])][:-1],
-                     root, TOOL_NICE, subtask, f"{'Build, then ' if args.build else ''}{args.suite} tests of "
-                     f"{root.name}.", timeout=args.timeout)
+                     root, TOOL_NICE, subtask, f"{'Build, then the ' if args.build else 'The '}"
+                     f"{', '.join(suites)} tests of {root.name}.", timeout=args.timeout)
     return run_job(fields, steps, args.timeout)
 
 

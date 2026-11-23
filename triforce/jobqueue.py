@@ -404,12 +404,15 @@ def headline(job: dict) -> str:
 
 def tags(job: dict, now: float, place: Optional[int] = None) -> str:
     """A job's state line: ``RUNNING express 3m of ~8m``, ``RUNNING regular 1h40m of ~40m OVERRUN``,
-    ``queued #2 ~40m waited 12m``, ``build 1/2: build``, or how it ended."""
+    ``RUNNING tools 2m  step 1/5: build``, ``RUNNING tools 6m  steps 2-5/5: test python, test asm, ...`` (steps run
+    together), ``queued #2 ~40m waited 12m``, or how it ended."""
     estimate = job.get('estimate')
     tilde = '' if estimate is None else f" of ~{short(estimate)}"
     steps = job.get('steps') or []
-    step = next((index for index, item in enumerate(steps) if item.get('status') == 'running'), None)
-    stepping = '' if step is None else f"  step {step + 1}/{len(steps)}: {steps[step]['name']}"
+    running = [index for index, item in enumerate(steps) if item.get('status') == 'running']
+    names = ', '.join(steps[index]['name'] for index in running)
+    stepping = ('' if not running else f"  step {running[0] + 1}/{len(steps)}: {names}" if len(running) == 1
+                else f"  steps {running[0] + 1}-{running[-1] + 1}/{len(steps)}: {names}")
     if job.get('status') == 'running':
         where = (job.get('place') or '').rsplit('-', 1)[0] or job.get('lane')
         text = f"RUNNING {where} {short(now - (job.get('admitted_ts') or now))}{tilde}{stepping}"
@@ -444,10 +447,11 @@ def progress_text(report: dict, job: dict, now: float) -> str:
 
 def progress_lines(job: dict, now: float) -> list[str]:
     """A running job's counters, each labelled when it has several; ``no progress data`` (with the elapsed time
-    against the estimate) for a running job that reports none."""
+    against the estimate) for a running job that reports none and has no steps either (a build's and a suite's
+    step is in ``tags``)."""
     reports = job.get('progress') or {}
     if not reports:
-        if job.get('status') != 'running':
+        if job.get('status') != 'running' or job.get('steps'):
             return []
         estimate = '' if job.get('estimate') is None else f" of ~{short(job['estimate'])}"
         return [f"no progress data  {short(now - (job.get('admitted_ts') or now))}{estimate}"]
@@ -457,10 +461,12 @@ def progress_lines(job: dict, now: float) -> list[str]:
 
 def describe(job: dict, now: float, place: Optional[int] = None) -> list[str]:
     """A job's row as ``triforce job list`` and the training GUI show it: the headline, the description, the state
-    (``tags``), its progress (``progress_lines``), then the command and where it runs."""
+    (``tags``), its progress (``progress_lines``), then what it is (verb, and kind where it says more), where it
+    runs and the command."""
     where = job.get('branch') or Path(job.get('checkout') or job.get('cwd') or '?').name
+    what = ' '.join(dict.fromkeys(part for part in (job.get('verb'), job.get('kind')) if part))
     return [headline(job), job.get('description') or '', tags(job, now, place), *progress_lines(job, now),
-            f"{job.get('verb')} {job.get('kind') or ''}  {where}  {' '.join(job.get('command') or [])}".strip()]
+            f"{what}  {where}  {' '.join(job.get('command') or [])}".strip()]
 
 
 def iso(ts: Optional[float]) -> Optional[str]:

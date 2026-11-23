@@ -12,11 +12,13 @@ This module imports ``triforce`` only inside functions: ``triforce.paths`` reads
 """
 
 import faulthandler
+import json
 import os
 import shutil
 import signal
 import tempfile
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -84,6 +86,11 @@ def pytest_configure(config):  # pylint: disable=unused-argument
     they don't refuse to start (``jobs.ENFORCE``); job 0 has no row, so their reports change nothing.  Tests of the
     queue and of the refusal set their own."""
     os.environ.setdefault('OMP_NUM_THREADS', '1')
+    # The job this suite itself runs in (``triforce job test``), noted before the session's own queue replaces it:
+    # the suite reports its tests done of collected there (``_report_suite``).
+    state = os.environ.get('XDG_STATE_HOME') or os.path.join(os.path.expanduser('~'), '.local', 'state')
+    _session['job'] = (os.environ.get('TRIFORCE_JOB_ID'),
+                       os.environ.get('TRIFORCE_QUEUE_DIR') or os.path.join(state, 'triforce'))
     os.environ['TRIFORCE_QUEUE_DIR'] = tempfile.mkdtemp(prefix='triforce-queue-')
     os.environ['TRIFORCE_JOB_ID'] = '0'
     for name in ('TRIFORCE_JOB_LABEL', 'TRIFORCE_JOB_ESTIMATE'):
@@ -91,6 +98,44 @@ def pytest_configure(config):  # pylint: disable=unused-argument
     _session['old_env'] = os.environ.get(STATES_DIR_ENV)
     _session['states_dir'] = Path(tempfile.mkdtemp(prefix='triforce-states-'))
     os.environ[STATES_DIR_ENV] = str(_session['states_dir'])
+
+
+def _report_suite(force: bool = False):
+    """Writes the suite's progress (tests done of collected, tests a second) into the row of the job that runs it;
+    at most every two seconds; nothing outside a job, and a queue that can't be written is ignored."""
+    job, directory = _session.get('job', (None, None))
+    counts = _session.get('tests')
+    if not job or job == '0' or counts is None:
+        return
+    now = time.monotonic()
+    if not force and now - _session.get('reported', 0.0) < 2.0:
+        return
+    _session['reported'] = now
+    done, total, began = counts
+    report = {'done': done, 'total': total, 'unit': 'tests', 'rate': done / (now - began) if now > began else None,
+              'ts': time.time()}
+    try:
+        from triforce import jobqueue  # pylint: disable=import-outside-toplevel
+        con = jobqueue.connect(Path(directory))
+        try:
+            con.execute("UPDATE jobs SET progress = json_set(coalesce(progress, '{}'), '$.tests', json(?)) "
+                        "WHERE id = ?", (json.dumps(report), int(job)))
+        finally:
+            con.close()
+    except Exception:  # pylint: disable=broad-exception-caught
+        pass
+
+
+def pytest_collection_finish(session):
+    _session['tests'] = [0, len(session.items), time.monotonic()]
+    _report_suite(force=True)
+
+
+def pytest_runtest_logfinish(nodeid, location):  # pylint: disable=unused-argument
+    counts = _session.get('tests')
+    if counts is not None:
+        counts[0] += 1
+        _report_suite(force=counts[0] >= counts[1])
 
 
 def pytest_sessionstart(session):  # pylint: disable=unused-argument

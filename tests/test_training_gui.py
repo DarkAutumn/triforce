@@ -951,7 +951,7 @@ def test_a_jobs_header_reads_as_triforce_job_list_in_the_window_and_the_web_view
         waiting: ['Agent: r40   Task: queue   Sub-task: waiting', 'Checks the GUI lists the queue.',
                   'queued #1 ~40m waited 12m', 'run round  r40-queue  python scripts/train_round.py'],
         build: ['Agent: r40   Task: queue   Sub-task: build', 'Checks the GUI lists the queue.',
-                'RUNNING tools 30s  step 1/2: build', 'no progress data  30s', 'build build  r40-queue  cargo build'],
+                'RUNNING tools 30s  step 1/2: build', 'build  r40-queue  cargo build'],
         done: ['Agent: r40   Task: queue   Sub-task: done', 'Checks the GUI lists the queue.',
                'completed exit 0 after 10m of ~10m', 'run round  r40-queue  python scripts/train_round.py']}
     colors = {chain: gui.C.accent, counter: gui.C.accent, overrun: gui.C.warn, waiting: gui.C.warn,
@@ -1169,7 +1169,7 @@ def test_every_entry_point_is_listed_with_its_progress(qapp, queue, monkeypatch,
             assert view.key == gui.job_key({'id': job}) and not view.job_card.isHidden()
             assert lines[0] == f'Agent: r40   Task: queue   Sub-task: {subtask}'
             assert lines[2].startswith(f"RUNNING {'tools' if tools else 'regular'} ")
-            assert lines[-1] == f'{verb} {kind}  r40-queue  {entry}'
+            assert lines[-1] == f"{verb if verb == kind else f'{verb} {kind}'}  r40-queue  {entry}"
             assert (view.model is not None) is (plan is not None) and view.header.isHidden() is (plan is None)
             if plan is not None:
                 assert view.model.dir.resolve() == plan.directory.resolve() and len(view.rows) == 1

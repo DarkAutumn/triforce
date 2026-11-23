@@ -435,3 +435,27 @@ def test_every_suite_of_test_all_runs_whatever_the_one_before_did(queue, tmp_pat
     assert [(step['name'], step['status']) for step in row['steps']] == [
         ('test python', 'failed'), ('test asm', 'completed'), ('asm check', 'completed'), ('test rust', 'failed')]
     assert row['status'] == 'failed' and row['exit_code'] == 1
+    shown = process.out.read_text()            # each suite's output whole, in order, under its own line
+    marks = [shown.index(f'--- {name}: exit {code} ---') for name, code in (
+        ('test python', 1), ('test asm', 0), ('asm check', 0), ('test rust', 127))]
+    assert marks == sorted(marks) and 'check: ok' in shown[marks[2]:marks[3]] and '1 failed' in shown[marks[0]:marks[1]]
+
+
+def test_steps_marked_together_run_at_the_same_time(queue, tmp_path):
+    """The suites of a test job run side by side (the Python suite is one process on one core for minutes): two
+    2-second suites end in about two seconds, not four."""
+    repo = tmp_path / 'repo'
+    for folder in ('tests', 'zelda-asm/tests', 'zelda-asm/tools'):
+        (repo / folder).mkdir(parents=True)
+    (repo / '.git').mkdir()
+    slow = "import time\n\ndef test_slow():\n    time.sleep(2)\n"
+    (repo / 'zelda-asm' / 'tests' / 'test_slow.py').write_text(slow)
+    (repo / 'zelda-asm' / 'tools' / 'asm.py').write_text("import time\ntime.sleep(2)\nprint('check: ok')\n")
+    started = time.monotonic()
+    process = queue.start('test', 'check', 'asm', '--agent', 'tester', '--task', 'suites', cwd=repo)
+    assert process.wait(timeout=120) == 0
+    row = queue.row('asm+check')                    # a list of suites, shown in the queue's order
+    assert [step['name'] for step in row['steps']] == ['test asm', 'asm check']
+    assert row['finished_ts'] - row['admitted_ts'] < 3.6, time.monotonic() - started
+    refused = queue.start('test', 'asm', 'check', '--agent', 'tester', '--task', 'suites', '--', '-k', 'x', cwd=repo)
+    assert refused.wait(timeout=60) == 2            # options after -- go to one suite

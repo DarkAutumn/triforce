@@ -926,9 +926,11 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   '.[dev]'` (pytest, pyyaml, PySide6, pygame). Python 3.12; RTX 4090, 10 cores / 20 threads. ROM at
   `roms/zelda.nes` (or `$TRIFORCE_ROM`); `triforce job setup BRANCH` makes a worktree with all of it. After changing
   any crate, rebuild the module: `triforce job build --agent A --task T` (`maturin develop --release`, niced).
-- Tests: `triforce job test python|rust|asm|all --agent A --task T [--build] [--timeout 60m]` (`pytest -q tests`,
-  `pytest -q zelda-asm/tests`, `cargo test --release --workspace --features zelda/zcore`; on an idle machine about 2.5
-  and 1.5 minutes after the build). Every Python test fails after 15 minutes (`$TRIFORCE_TEST_TIMEOUT` seconds,
+- Tests: `triforce job test SUITE... --agent A --task T [--build] [--timeout 60m]`, the suites `python`
+  (`pytest -q tests`; it names its tests of 10 seconds or more at the end), `asm` (`pytest -q zelda-asm/tests`),
+  `check` (`asm.py check`), `rust` (`cargo test --release --workspace --features zelda/zcore`), `all` = the four;
+  several run side by side as one entry, each one's output shown whole at the end (`test python asm check` leaves
+  Rust out). The Python suite is about 8.5 minutes on one core (backlog). Every Python test fails after 15 minutes (`$TRIFORCE_TEST_TIMEOUT` seconds,
   `tests/conftest.py`), so a hang ends as a failure with its traceback; the queue's `--timeout` bounds a whole suite.
   Keep them green. Emulator changes: `tf ladder-golden` before, `tf ladder-diff` after (README);
   behaviour gate for emulator changes: `scripts/port_gate.sh LABEL`.
