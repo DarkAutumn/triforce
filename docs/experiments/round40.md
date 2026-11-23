@@ -110,7 +110,7 @@ the bare `r34d3-zol-s341`, which the fresh seeds are judged against: they carry 
 
 The promoted policy: 98.5% (+0.01). Each number has a standard error of about 0.25 points. s401 comes within 0.3-0.6 points of it from 2.2M steps on. s402 plateaus 0.7-1.3 points short. Neither seed reaches 98.5% in single rooms within 4M steps.
 
-### `d3`: the chain decides (seeds 401 and 402; 403 in the line)
+### `d3`: the chain decides
 
 Dungeon 3 from its entrance (`--from 3_7cs_0 --stop-at step:24`, arrival at 3:0x3d or 0:0x74), 1000 runs, seeds
 0-999, clips on, the act mode, the frozen team. Only `zol@d3first` is swapped; `moldorm@d3first` and the late
@@ -127,9 +127,22 @@ visit: hits, hearts lost, frames, runs that ended in them (per 1000), sword kill
 | promoted (with head) | 39.2% | +6.0 ± 1.5 | 0.139 | 0.077 | 652 | 12 | 18.3% | 64.2% | 2.15 |
 | **s401**, 4.0M | 32.5% | **-0.7 ± 2.1** | 0.234 | 0.156 | 716 | 78 | 25.7% | 53.8% | 2.79 |
 | **s402**, 4.0M | 27.5% | **-5.7 ± 2.0** | 0.298 | 0.191 | 688 | 98 | 19.6% | 55.9% | 2.13 |
+| **s403**, 4.0M | 28.2% | **-5.0 ± 2.1** | 0.316 | 0.198 | 707 | 89 | 16.1% | 57.0% | 1.92 |
+| the three seeds' mean | 29.4% | -3.8 | 0.283 | 0.182 | 704 | 88 | | | |
 
-By room (runs lost per 1000; hits a visit), policy / s401 / s402: 3:0x49 (Bubbles, Zols, Blue Keese) 34 / 59 / 57,
-0.29 / 0.33 / 0.35; 3:0x4b 9 / 16 / 20; 3:0x6b 1 / 3 / 20, 0.54 / 0.47 / 0.70, 1,249 / 1,453 / 1,303 frames.
+By room (runs lost per 1000; hits a visit), policy / s401 / s402 / s403: 3:0x49 (Bubbles, Zols, Blue Keese) 34 / 59 /
+57 / 50, 0.29 / 0.33 / 0.35 / 0.22; 3:0x4b 9 / 16 / 20 / 19; 3:0x6b 1 / 3 / 20 / 20, hits 0.54 / 0.47 / 0.70 / 0.92,
+frames 1,249 / 1,453 / 1,303 / 1,390.
+
+The whole segment, all families (`triforce stats compare`, paired, against the policy; `target/r40/stats-compare-d3*.md`):
+
+| arm | hearts lost a run | hits taken a run | kills from range a run | shots fired a run |
+|---|---:|---:|---:|---:|
+| policy | 2.96 | 3.92 | 3.83 | 15.92 |
+| s401 | +0.08 ± 0.04 | +0.04 ± 0.06 | +1.88 ± 0.17 | +4.26 ± 0.60 |
+| s402 | +0.06 ± 0.04 | +0.15 ± 0.06 | +0.57 ± 0.15 | +0.03 ± 0.57 |
+| s403 | +0.10 ± 0.04 | +0.25 ± 0.06 | -0.02 ± 0.15 | -1.89 ± 0.59 |
+| promoted (with head) | -0.11 ± 0.03 | -0.19 ± 0.04 | +0.61 ± 0.07 | +2.74 ± 0.29 |
 
 The curve (250 runs, seeds 0-249, paired with the policy's first 250 runs, 34.0%):
 
@@ -137,19 +150,33 @@ The curve (250 runs, seeds 0-249, paired with the policy's first 250 runs, 34.0%
 |---|---:|---:|---:|---:|
 | s401 | 22.0% (-12.0 ± 4.1), hits 0.59 | 18.0% (-16.0 ± 3.8), 0.51 | 34.4% (+0.4 ± 4.3), 0.27 | 31.6%, 0.23 |
 | s402 | 16.0% (-18.0 ± 3.9), 0.51 | 23.6% (-10.4 ± 4.1), 0.37 | 31.2% (-2.8 ± 4.3), 0.25 | 26.8%, 0.30 |
+| s403 | 18.8% (-15.2 ± 3.8), 0.52 | 28.0% (-6.0 ± 4.0), 0.31 | 26.4% (-7.6 ± 4.1), 0.34 | 28.0%, 0.32 |
 
-What it says (two seeds of three):
+What it says:
 
-- One seed of two reaches today's bare policy on `d3` within noise (s401, -0.7 ± 2.1). The other is 5.7 ± 2.0
-  points short. Neither reaches the promoted network with its head (+6.0 over the bare policy). A fresh head would be
-  trained on the fresh policy's own play.
-- The chain needs 3M of the 4M steps: at 1M and 2M both seeds are 10-18 points short, with hits a visit 2-2.6 times
-  the policy's. Between 3M and 4M neither gains.
-- Where the gap stays: runs lost in zol's own rooms, 78 and 98 per 1000 against 44, most of them in 3:0x49 (57-59
-  against 34) and, for s402, 3:0x6b (20 against 1). Hits a visit are as low as the policy's for s401 (0.234 against
-  0.225), a third higher for s402.
-- Trained from scratch with today's beam terms (the lineage never had them), the fresh networks shoot more. Shots a
-  visit rise to 2.13-2.79 against 1.94. Sword kills out of melee range rise to 19.6-25.7% against 16.1%. Lined-up
-  decisions left unfired fall to 53.8-55.9% against 64.1%; in 0x6b, shots are 9.9 against 6.4 for s401. Rooms take
-  longer (716 against 654 frames a visit; 0x6b 1,453 against 1,249 for s401). This is the baseline arm of the beams
-  experiment (no firing-line targets).
+- **Today's recipe does not quite reproduce today's network.** One seed of three reaches the bare promoted policy
+  `r34d3-zol-s341` on `d3` within noise (s401, -0.7 ± 2.1). The other two are 5.0-5.7 points short (about 2.5
+  standard errors each). The three seeds' mean is 3.8 points under the policy, and 9.8 under the promoted network
+  with its hit head (+6.0 over the bare policy; a fresh head would be trained on the fresh policy's own play). The
+  spread between seeds (5 points) is as large as the gap: one family needs three seeds, chosen on its chain.
+- **The chain needs 3M of the 4M steps.** At 1M every seed is 12-18 points short, with hits a visit 2.3-2.6 times the
+  policy's. By 2-3M they are within 0-8 points, and between 3M and 4M none gains. Single rooms are no guide: from 2M on
+  every seed is 97-98% there, 0.3-1.3 points under the policy's 98.5%, while the chain still differs by up to 6 points.
+- **The gap is hits in zol's own rooms.** Runs lost there are 78-98 per 1000 against 44, most in 3:0x49 (Bubbles,
+  Zols and Blue Keese: 50-59 against 34) and, for s402 and s403, 3:0x6b (20 against 1, with 0.70-0.92 hits a visit
+  against 0.54). Over the whole segment the fresh seeds lose 0.06-0.10 hearts a run more (± 0.04). What the lineage
+  had and the recipe does not (above) is the candidate: 4M more steps on these rooms, the planner's demonstrations,
+  and the rooms it no longer draws. Untested which.
+- **Trained from scratch with today's beam terms (the lineage never had them), the fresh networks shoot more, but not
+  consistently.** s401 fires 4.3 more shots a run and makes 1.9 more kills from range (± 0.2). s402 is level. s403
+  shoots 1.9 less. In zol's rooms, lined-up decisions left unfired fall to 53.8-57.0% against 64.1% for all three.
+  Rooms take longer: 688-716 frames a zol visit against 654, and the segment's arrival comes 13 s later for s401's
+  winning runs. This is the baseline arm of the beams experiment (no firing-line targets); the replays are in
+  `target/r40/chains/replays-s40N/` (Fireline40 copies them for the owner's review).
+- **What it costs:** 1.6-2.2 hours of training a seed on the shared machine (about 1.5 h on the new queue with two
+  trainings at once). Then one 1000-run chain a seed for the final checkpoint (11-15 min), plus 250-run curve points
+  (3-10 min each). For a generation (an estimate): families x 3 seeds x 1.5 h / 2 places, about 2.3 h of machine time
+  a family for training, plus about 1 h of chains a family.
+
+Not done: single rooms for s403's checkpoints, a checkpoint selection (the curve shows no middle checkpoint clearly
+better than the last), other segments zol plays (`d4`'s 4:0x40, `d5`'s 5:0x57), a fresh hit head.
