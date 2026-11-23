@@ -12,10 +12,11 @@ from typing import Optional
 
 def prepare_chain(route_name: str, parallel: int = 1, models_dir=None, overrides=None, act=None,
                   stop_at=None, start_from=None, specialist_configs=None, threads=None, harvest=None,
-                  power_on=None, clips=True, clips_off_from=None):
+                  power_on=None, clips=True, clips_off_from=None, harvest_every_room=False):
     """The route (``--from``, ``--stop-at`` and the power-on start checked, ``runner.Route.load``) and a ``Runner``
     with its models loaded (``--checkpoint`` overrides checked); raises ``RunnerError`` before anything plays.
-    ``stop_at``: a room or ``step:N`` (``runner.parse_stop``); ``power_on``: ``Route.load``'s."""
+    ``stop_at``: a room or ``step:N`` (``runner.parse_stop``); ``power_on``: ``Route.load``'s; ``harvest_every_room``:
+    ``Runner``'s."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, import-outside-toplevel
     from .runner import Route, Runner, parse_stop
     stop_room, stop_step = parse_stop(stop_at)
@@ -25,7 +26,7 @@ def prepare_chain(route_name: str, parallel: int = 1, models_dir=None, overrides
                        clips_off_from=off_step if off_step is not None else off_room)
     runner = Runner(models_dir=models_dir, checkpoints=overrides, act=act,
                     specialist_configs=specialist_configs, parallel=parallel, threads=threads, harvest=harvest,
-                    route=route_name)
+                    route=route_name, harvest_every_room=harvest_every_room)
     return route, runner
 
 
@@ -183,7 +184,7 @@ def _cmd_eval_chain(args):
     route, runner = prepare_chain(args.route, args.parallel, args.models_dir, overrides, act_override(args.act),
                                   args.stop_at, args.start_from, {config.name: config for config in configs},
                                   args.threads, args.harvest, power_on_options(args), clips=args.clips == 'on',
-                                  clips_off_from=args.clips_off_from)
+                                  clips_off_from=args.clips_off_from, harvest_every_room=args.harvest_every_room)
     provenance = {**runner.provenance(route), 'first_seed': args.first_seed, 'runs': args.runs}
     try:
         record = replay.options_from(args, runner.record_meta(route))
@@ -231,7 +232,7 @@ def _cmd_eval_chain(args):
     print(f"route {args.route}: {summary['successes']}/{summary['runs']} = {summary['success_rate']:.0%}  "
           f"(per-run JSON lines {'appended to' if existing else 'in'} {output}, provenance in {meta_path(output)})")
     if args.harvest is not None:
-        print(f"handoff states harvested under {args.harvest}")
+        print(f"{'room entry' if args.harvest_every_room else 'handoff'} states harvested under {args.harvest}")
     if args.replays is not None:
         print(f"replays in {args.replays} (<seed>-<ending>{replay.SUFFIX}; `tf replay info|verify FILE`)")
     errors = sum(r.result == 'error' for r in results)
@@ -460,6 +461,9 @@ def add_eval_chain_arguments(chain):
                             "changes) as DIR/<specialist>/<level>_<room><side>_h<seed>_<n>.state; without DIR: "
                             f"{HARVESTED_DIR}, each specialist's default harvested_dir (read in training only "
                             "by a config with harvested_fraction > 0, or one without seed states)")
+    chain.add_argument('--harvest-every-room', action='store_true',
+                       help="with --harvest: every correct room entry, also one from a room of the same family (a "
+                            "handoff harvest never sees those: Dungeon 8's 0x4e-0x3e-0x3f, the Olive Garden's fight)")
     chain.add_argument('--logs-dir', default=None, help="event logs root (default $TRIFORCE_LOGS_DIR or <repo>/logs)")
     chain.add_argument('--no-log', action='store_true', help="no event-log folder (the training GUI won't show it)")
     chain.add_argument('--events', default=None, metavar='JSONL',

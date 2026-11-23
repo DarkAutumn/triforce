@@ -777,3 +777,30 @@ ow-zora@d3first 93.3% → 92.5%; the reference's total 92.9% unchanged, hearts l
 - The suites after `main` (4be3f4c8) was merged: pytest 946 passed, 12 skipped; `cargo test --release --workspace
   --features zelda/zcore` ok (the corpus test with the new path's pins among them); the zelda-asm tests 5 passed;
   `asm.py check` ok.
+
+## 2.0.0.8: the hit heads promoted for `d3first`
+
+Eight families play `d3first`'s own steps (before `own_models_until`) with their `hitshift` combination: the family's
+promoted policy plus a supervised hit network that lowers the logits of actions it reads as getting Link hit (\"The
+hit head across families\" above). Measured on 2.0.0.6 with the serve fix (CUDA graphs, one index a served network),
+1000 runs paired with `r37fix-1k`: Dungeon 4 21.1% -> 68.4%, Dungeon 3 21.7% -> 39.2%, Dungeon 5 31.2% -> 66.1%
+(the set as promoted). Promoted with `triforce promote FAMILY RUN --route d3first`; the runs they replace stay in
+`models/`:
+
+| Family | Promoted (`promoted.d3first`) | Replaced |
+|---|---|---|
+| boss-gleeok | r38head-fam-w8 | r34d4-gleeok4-s1-it2877 |
+| like-like | r38head-fam-w8 | r34d4-like |
+| vire | r38head-fam-w8 | r34d4-vire-s1 |
+| stalfos-keese-gel | r38head-fam-w8 | r34d3-skg-s341 |
+| darknut | r38head-fam-w8 | r34d5-dg-s362 |
+| boss-manhandla | r38head-fam-w4 | r32d3-manh |
+| zol | r38head-fam-w4 | r34d3-zol-s341 |
+| gibdo | r38head-fam-w4 | r32late-gibdo |
+
+Not yet: Dungeon 8's darknut, boss-gleeok and boss-manhandla (39.1% -> 80.9% on `d8`) play the bare keys, whose
+`promoted` pointer `d2first` also reads: they wait for a `d3first`-only pointer for the steps after
+`own_models_until` (branch `r38-late`), so `d2first` stays as it is. goriya's head (Dungeon 7 12.6% -> 79.1%) waits
+for its Dungeon 1 and Dungeon 7 chains on today's code (branch `r38-hit`). The chains of record of 2.0.0.8 are
+`r38-208-1k` (to come). The product of segment rates with every head is an estimate of about one in 1,000 (Head38b's
+`r38_head.py product`); no unbroken run from the start has finished yet.

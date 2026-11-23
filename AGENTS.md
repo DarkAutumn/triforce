@@ -663,6 +663,28 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   matter the room or enemies, that remains true." Every mode but `never` (boss-gleeok's) offers BOMB on the 10th
   damage-free kill in every room (a granted bomb still opens only its wall); the bomb kill pays
   `reward-armed-bomb-drop`, the drop's pickup `reward-gained-bombs`, in every family.
+- **A new golden run after every big network change** (the owner, Nov 22: "When you make a big change to the
+  networks, finish a training run, etc. I want a new golden run dropped somewhere and the path to be part of the
+  checkin [...] I use these replays to spot check behavior and my knowledge of the game, so they are super
+  important for steering"). After a promotion, a landing that changes play, or a finished training run worth
+  watching: `zelda-headless.py OUT 3 --golden --power-on --clips on --act model --parallel 8 --attempts 2000`
+  (with `--models-dir` for a team that is not main's), the replays under `target/golden-<what>/`, the best into
+  `corpus/replays/` when it replaces a corpus file (update the pins in `crates/tools/tests/cli.rs`), and every new
+  path listed in the next check-in (newest first).
+- **Every replay is kept** (the owner, Nov 22: "I want these golden run replays of particular model versions saved
+  somewhere. Possibly checked in. I want to go back to previous runs and say 'see this was a problem' [...] You are
+  welcome to use /backups [...] Keep 2tb free there"). `scripts/archive_replays.py PATH...` names each replay from
+  its META (`<version>_<route>_<kind>_<networks>_<frames>f.tfreplay.bz2`), checks golden and single runs into
+  `replays/` (committed, about 100 KB each) and keeps every replay in `/backup/triforce/replays/` (`index.jsonl`:
+  each file's SHA-1, META summary and where it was found). Run it on every golden race's output and on a worktree
+  before removing it: `scripts/tidy_worktrees.sh NAME...` does that, and copies the worktree's models to
+  `/backup/triforce/models/worktrees/NAME/`, before `git worktree remove`. `/backup` (a separate 8 TB disk) keeps
+  at least 2 TB free. **What must be kept** (the owner, Nov 22): "a golden replay saved per model version (and if
+  there's a reason to collect more than one, like 51-networks vs single-network do that too). If you also happen to
+  get a run from the start to the end (no golden run, no segmenting) save the best one of those too per version of
+  the model [...] Best is defined as 'fewest cheated items, completed in the fewest frames' in that order." Other
+  replays (deaths included) may be kept to peek at later, within reason. Near the 2 TB floor: **ask the owner what
+  to trim; never trim without asking.**
 - **0x0a before the white sword:** leaving S is a `retreat` (routes.yaml `retreat: S`; neutral by default, ow-lynel
   ships `endings: {retreat: soft-failure}` for the baseline), and a chain run goes on (0x1a sends Link back N).
   Whether a model learns to use it is open.
@@ -706,7 +728,8 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 
 ## Versioning (Lee, Nov 11)
 
-- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `2.0.0.7`: 0:0x2d's rupee cave left
+- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `2.0.0.8`: hit heads play eight `d3first`
+  families, round38.md "2.0.0.8"; 2.0.0.7 was 0:0x2d's rupee cave leaving
   `d3first`, its states after 0x2d rebuilt; 2.0.0.6 was the owner's bomb rules; 2.0.0.5 was the owner's corrected
   `d3first`, the two dock warps as engine macros, its rebuilt states, the lab's yardstick on them; no network retrained;
   2.0.0.4 was the lab, `docs/lab.md`: runs over several families, teachers, networks of any shape beside today's,
