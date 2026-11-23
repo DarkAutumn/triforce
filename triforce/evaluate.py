@@ -92,7 +92,7 @@ from .clips import MODES as CLIPS_MODES, default_mode as default_clips_mode, epi
 from .events import LOGS_DIR_ENV, EventLog, has_plan, logged_job, write_json_atomic
 from .jobs import add_job_arguments, begin_job, work
 from .metrics import heart_change_total
-from .provenance import code_version, data_hash, models_header
+from .provenance import checkpoint_description, code_version, data_hash, replay_models
 from .replay import ReplayDir
 from .specialist import SpecialistConfig, load_specialist
 from .variety import VISIT_RISK_KEYS, decisions_of, risk, sequence, variety
@@ -111,12 +111,12 @@ def _room_key(room) -> str:
 
 
 def _play(pool, policy, act: str, total: int, on_episode: Optional[Callable[[dict, int, int], None]],
-          replays: Optional[ReplayDir], distributions: bool) -> list[dict]:
+          replays: Optional[ReplayDir]) -> list[dict]:
     """Lets the eval pool play until every job ran; returns the records in completion order.  ``replays``: the
     folder every episode's recording (a ``replay`` event) is written to."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     records = []
-    pool.play([policy], act=act, distributions=distributions)
+    pool.play([policy], act=act)
     while True:
         idle = pool.wait_idle(timeout=0.1)
         for event in pool.poll_events():
@@ -304,12 +304,14 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
     clips = default_clips_mode(config) if clips is None else clips
     jobs = episode_jobs(config, episodes_per_state, seed, clips, states_dir)
 
-    policy = registry.load_model(checkpoint)[0].to_native()
+    network, saved = registry.load_model(checkpoint)
+    policy = network.to_native()
     act = registry.act_mode(checkpoint) if act is None else registry.parse_act(act)
     checkpoint_sha1 = registry.checkpoint_sha1(checkpoint)
     record = None
     if replays is not None:
-        models = models_header([config.name], [policy], {config.name: str(checkpoint)}, [act])
+        models = replay_models([config.name], [policy], [act],
+                               {config.name: checkpoint_description(network, saved, checkpoint)})
         record = replay.record_options(replay.meta('eval', models, specialist=config.name), streams, state,
                                        keyframe_frames)
         replays = ReplayDir(replays)
@@ -320,8 +322,7 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
         on_episode = _progress_events(events, on_episode)
     with _native.EnvPool(task, num_envs=max(1, min(parallel, len(jobs))), threads=threads, seed=seed,
                          record=record) as pool:
-        records = _play(pool, policy, act, len(jobs), on_episode, replays,
-                        bool(record and record['decisions']))
+        records = _play(pool, policy, act, len(jobs), on_episode, replays)
     records.sort(key=lambda r: r['seed'])
 
     return {

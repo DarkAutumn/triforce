@@ -22,7 +22,8 @@ import torch
 
 from . import __version__, _native, replay
 from .paths import STATES_DIR
-from .provenance import code_version, data_hash, location_text, models_header
+from .provenance import (checkpoint_description, code_version, data_hash, location_text, models_header,
+                         network_description, replay_models)
 from .registry import (CHECKPOINT_NAME, DEFAULT_ACT, act_mode, checkpoint_sha1, load_model, own_models_until,
                        parse_act, policy_checkpoint, route_part_key, route_policy, split_policy)
 from .replay import ReplayDir
@@ -400,7 +401,8 @@ class Policies:
     ``family@route`` key the route's part only; ``networks`` (key -> a ``ZeldaPolicy``) supplies a model directly
     (a family's for both parts); ``specialist_configs`` (family -> config) replaces a specialist's canonical YAML at
     runtime.  ``checkpoints`` afterwards maps each loaded key to its file and ``acts`` holds, per policy, its model's
-    act mode (the run's, ``registry.act_mode``; a given network acts by ``registry.DEFAULT_ACT``)."""
+    act mode (the run's, ``registry.act_mode``; a given network acts by ``registry.DEFAULT_ACT``); ``described``
+    holds per key the network as a replay's META describes it (``provenance.replay_models``)."""
 
     def __init__(self, models_dir=None, checkpoints: Optional[Dict[str, str]] = None,
                  specialist_configs: Optional[Dict[str, SpecialistConfig]] = None,
@@ -430,8 +432,11 @@ class Policies:
         self.checkpoints: Dict[str, str] = {}
         self.acts: List[str] = []
         self.missing: Dict[str, str] = {}
+        # Per key the network as a replay's META describes it (``provenance.replay_models``: no path).
+        self.described: Dict[str, dict] = {}
         # A run several keys name (a multi-family run promoted for several families, triforce.lab) loads once.
         loaded: Dict[str, object] = {}
+        described: Dict[str, dict] = {}
         for name in sorted(known):
             keys = [name]
             if parts:
@@ -455,12 +460,16 @@ class Policies:
                     real = str(Path(path).resolve() / CHECKPOINT_NAME if Path(path).is_dir() else Path(path).resolve())
                     if real not in loaded:
                         with torch.random.fork_rng():   # building the network draws init weights; keep seeds intact
-                            loaded[real] = load_model(path)[0].to_native()
+                            network, saved = load_model(path)
+                            loaded[real] = network.to_native()
+                            described[real] = checkpoint_description(network, saved, path)
                     native = loaded[real]
+                    self.described[key] = described[real]
                     self.checkpoints[key] = str(path)
                     act = act_mode(path)
                 else:
                     native = loaded.setdefault(f'network:{id(network)}', network.to_native())
+                    self.described[key] = network_description(network)
                 self.names.append(key)
                 self.configs.append(configs.get(name) or load_specialist(name))
                 self.policies.append(native)
@@ -518,8 +527,7 @@ class ChainPool:
 
     def play(self):
         """Every env starts acting on its own (``EnvPool.play``)."""
-        self.pool.play(self.policies.policies, act=self.acts,
-                       distributions=bool(self.record and self.record.get('decisions')))
+        self.pool.play(self.policies.policies, act=self.acts)
 
     def poll_events(self) -> List[dict]:
         """The pool's events since the last call; with ``replays`` set, every finished run's recording (a
@@ -602,10 +610,11 @@ class Runner:
 
     def record_meta(self, route: Route, **extra) -> dict:
         """The META object of recordings of ``route`` played by this runner (``chain_meta``)."""
-        return chain_meta(self.policies, self.act, route, **extra)
+        return chain_meta(self.policies, self.act, route, max_steps=self.max_steps, **extra)
 
     def provenance(self, route: Route) -> dict:
-        """What plays ``route``: per policy its name, checkpoint, ``ckpt.pt`` sha1, Rust network hash, act mode and
+        """What plays ``route``: per policy its name, checkpoint, the run's own family and run id (the checkpoint's;
+        a run linked into another family's folder keeps its own), ``ckpt.pt`` sha1, Rust network hash, act mode and
         config hash; the specialists without a model; the route, start, end and step cap; the code version and the
         game data hash (``replay``).  Stored with every chain result (``chain_summary``, ``eval-chain``'s
         ``<output>.meta.json``)."""
@@ -613,18 +622,11 @@ class Runner:
         models = models_header(policies.names, policies.policies, policies.checkpoints, policies.modes(self.act))
         for model, config in zip(models, policies.configs):
             checkpoint = policies.checkpoints.get(model['name'])
+            described = policies.described.get(model['name'], {})
+            model['family'], model['run'] = described.get('family'), described.get('run')
             model['checkpoint_sha1'] = None if checkpoint is None else checkpoint_sha1(checkpoint)
             model['config_sha256'] = hashlib.sha256(config.to_json().encode()).hexdigest()
-        checkpoint = route.checkpoint and {'step': route.checkpoint['step'], 'granted': route.checkpoint['granted'],
-                                           'route_granted': route.checkpoint['route_granted'],
-                                           'randomize_rng': route.checkpoint['randomize_rng'],
-                                           'state_sha1': hashlib.sha1(route.checkpoint['state']).hexdigest()}
-        return {'route': route.name, 'start_from': None if route.start_state == 'start' else route.start_state,
-                'power_on': route.power_on, 'checkpoint': checkpoint,
-                'stop_at': location_text(route.terminal), 'stop_step': route.stop_step, 'clips': route.clips,
-                'clips_off_from': (route.clips_off_from if isinstance(route.clips_off_from, (int, type(None)))
-                                   else location_text(route.clips_off_from)),
-                'max_steps': self.max_steps, 'models': models,
+        return {**route_header(route), 'max_steps': self.max_steps, 'models': models,
                 'missing': dict(sorted(policies.missing.items())), 'version': __version__, 'code': code_version(),
                 'data': data_hash()}
 
@@ -752,8 +754,34 @@ def chain_summary(results: List[RunResult]) -> dict:
     return summary
 
 
-def chain_meta(policies: Policies, act: Optional[str], route: Route, **extra) -> dict:
+def route_header(route: Route) -> dict:
+    """What a chain plays of ``route`` (``Runner.provenance``, a replay's META ``chain``): its name, start state, power
+    on, checkpoint (its state by SHA-1), end, clips."""
+    checkpoint = route.checkpoint and {'step': route.checkpoint['step'], 'granted': route.checkpoint['granted'],
+                                       'route_granted': route.checkpoint['route_granted'],
+                                       'randomize_rng': route.checkpoint['randomize_rng'],
+                                       'state_sha1': hashlib.sha1(route.checkpoint['state']).hexdigest()}
+    return {'route': route.name, 'start_from': None if route.start_state == 'start' else route.start_state,
+            'power_on': route.power_on, 'checkpoint': checkpoint,
+            'stop_at': location_text(route.terminal), 'stop_step': route.stop_step, 'clips': route.clips,
+            'clips_off_from': (route.clips_off_from if isinstance(route.clips_off_from, (int, type(None)))
+                               else location_text(route.clips_off_from))}
+
+
+def chain_meta(policies: Policies, act: Optional[str], route: Route, max_steps: Optional[int] = None,
+               **extra) -> dict:
     """The META object of recordings of ``route`` played by ``policies`` (``replay.meta``; ``act``:
-    ``ChainPool``'s; ``extra``: more entries): what ``replay.record_options`` takes."""
-    models = models_header(policies.names, policies.policies, policies.checkpoints, policies.modes(act))
-    return replay.meta('chain', models, route.name, stop_text(route), **extra)
+    ``ChainPool``'s; ``extra``: more entries): what ``replay.record_options`` takes.  Its ``chain`` is the chain's
+    provenance a reader needs without the repository (``replay.chain_records``): ``route_header`` (a start state by
+    name, never a path), the step cap, the families without a network (names only: the reasons name paths), and the
+    route's length and triforce steps (``route_steps``, ``triforces``: [[step, level], ...])."""
+    models = replay_models(policies.names, policies.policies, policies.modes(act), policies.described)
+    for model, config in zip(models, policies.configs):
+        model['config_sha256'] = hashlib.sha256(config.to_json().encode()).hexdigest()
+    header = route_header(route)
+    if header['start_from'] is not None:
+        header['start_from'] = Path(header['start_from']).name.removesuffix('.state')
+    steps = _native.route_steps(route.name)
+    chain = {**header, 'max_steps': max_steps, 'missing': sorted(policies.missing), 'route_steps': len(steps),
+             'triforces': [[step['index'], step['level']] for step in steps if step.get('exit') == 'triforce']}
+    return replay.meta('chain', models, route.name, stop_text(route), chain=chain, **extra)

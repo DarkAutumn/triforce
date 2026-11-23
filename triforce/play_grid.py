@@ -47,7 +47,9 @@ clock with it (the simulations are not the picture: they keep filling their queu
 
 ``set_sound(cell)`` makes one cell heard on the sound device (None: none), from whatever its game is playing at
 that moment; a cell's sound is made as its frames are played, so it is only right at ``NES_FPS``.  ``controller``
-draws the controller, its held buttons lit, into every replayed frame.
+draws the controller, its held buttons lit, into every replayed frame.  ``thoughts``: a replayed cell also sends
+``thoughts`` (``lines``: what its replay says the agent was steered to, could do and chose there,
+``triforce.thoughts``) whenever they change, which the window draws over the picture.
 """
 
 import bisect
@@ -62,6 +64,7 @@ import numpy as np
 
 from . import _native, golden, registry, replay
 from .runner import ChainPool, Policies, Route, RunResult, chain_meta
+from .thoughts import Thoughts
 
 FRAME_SHAPE = _native.FRAME_SHAPE   # rows, columns, RGB
 ROUTE = registry.MAIN_ROUTE
@@ -106,6 +109,7 @@ class Show:
                       for event in events if event['type'] == 'room']
         self._room_frames = [room[0] for room in self.rooms]
         self.cheats = recording.cheats()
+        self._thoughts: Optional[Thoughts] = None
 
     def status(self, frame: int) -> dict:
         """The ``room`` message's fields ``frame`` input frames into the replay."""
@@ -118,6 +122,12 @@ class Show:
                 cheated[item] += count
         return {'specialist': specialist, 'level': level, 'room': room, 'name': name, 'rooms': entered,
                 'cheated': cheated}
+
+    def thoughts_at(self, frame: int) -> List[str]:
+        """The ``thoughts`` overlay's lines ``frame`` input frames into the replay (read on first use)."""
+        if self._thoughts is None:
+            self._thoughts = Thoughts(_native.Replay(self.data))
+        return self._thoughts.at(frame)
 
 
 _ROOM_NAMES: Optional[Dict[tuple, str]] = None
@@ -372,6 +382,7 @@ class _Cell:
         self.phase = 'idle'                 # idle | playing | result
         self.until = 0.0                    # when a result's hold ends
         self.sent: Optional[dict] = None    # the last room message
+        self.thought: Optional[list] = None     # the last thoughts message's lines
         self.waiting = False                # a `wait` message is out
         self.error: Optional[str] = None    # why the next replay could not be had (shown once the hold ends)
         self.backoff = False                # after a failure: no new try until the hold ends
@@ -385,7 +396,8 @@ class ReplayGrid:
     a folder every simulated run is also saved into; ``streams``, ``state`` and
     ``keyframe_frames``: ``replay.record_options``'s.  ``controller``: draw the controller into every frame.
     ``clips``: the run-time clips switch the simulations start with (``set_clips`` changes it).  ``live``: cell 0 is
-    a ``LiveCell`` (the models play as it is watched; not with ``path``)."""
+    a ``LiveCell`` (the models play as it is watched; not with ``path``).  ``thoughts``: replayed cells send their
+    ``thoughts`` overlay (module doc)."""
     # pylint: disable=too-many-instance-attributes, too-many-public-methods
 
     def __init__(self, cells: int, fps: float, source: str = 'best', *, path=None, models_dir=None, states_dir=None,
@@ -395,7 +407,7 @@ class ReplayGrid:
                  stop_step: Optional[int] = None, stall_steps: Optional[int] = None, first_seed: int = 0,
                  attempts: int = golden.DEFAULT_ATTEMPTS, replays=None, streams=(), state: str = 'embed',
                  keyframe_frames: int = replay.DEFAULT_KEYFRAME_FRAMES, controller: bool = False,
-                 clips: bool = True, live: bool = False):
+                 clips: bool = True, live: bool = False, thoughts: bool = False):
         # pylint: disable=too-many-arguments, too-many-locals
         if path is None and source not in SOURCES:
             raise ValueError(f"unknown source {source!r}; sources: {SOURCES}")
@@ -414,6 +426,7 @@ class ReplayGrid:
         self.stall_steps, self.first_seed, self.attempts = stall_steps, first_seed, attempts
         self.replays = replays
         self.record = {'streams': streams, 'state': state, 'keyframe_frames': keyframe_frames}
+        self.thoughts = thoughts
         self.controller = controller
         self.live = live
         self._clips = clips
@@ -777,6 +790,11 @@ class ReplayGrid:
             if room != cell.sent:
                 cell.sent = room
                 self._status.put({'cell': index, 'event': 'room', **room})
+            if self.thoughts:
+                lines = show.thoughts_at(state['frame'])
+                if lines != cell.thought:
+                    cell.thought = lines
+                    self._status.put({'cell': index, 'event': 'thoughts', 'lines': lines})
             if state['status'] != 'finished':
                 return
             self._status.put({'cell': index, 'event': 'end', 'seed': show.seed, 'result': show.result,
@@ -815,6 +833,6 @@ class ReplayGrid:
             return
         screen.release(index)
         cell.show, cell.number, cell.next = cell.next, cell.next_number, None
-        cell.phase, cell.sent, cell.waiting = 'playing', None, False
+        cell.phase, cell.sent, cell.thought, cell.waiting = 'playing', None, None, False
         self._status.put({'cell': index, 'event': 'start', 'seed': cell.show.seed, 'source': cell.show.source,
                           'name': cell.show.name, 'clips': cell.show.clips})

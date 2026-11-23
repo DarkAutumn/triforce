@@ -86,8 +86,8 @@ def test_eval_chain_plays_the_route_run_before_the_grave_and_the_default_after(t
         (path,) = folder.iterdir()
         recording = _native.Replay(path.read_bytes())
         header = recording.meta['models']
-        assert [m['checkpoint'] for m in header if m['name'] in (FAMILY, PART)] == [
-            f'{FAMILY}/south/ckpt.pt', f'{FAMILY}/west/ckpt.pt']
+        assert [(m['family'], m['run']) for m in header if m['name'] in (FAMILY, PART)] == [
+            (FAMILY, 'south'), (FAMILY, 'west')]
         room = next(event for event in recording.events() if event['type'] == 'room')
         first = run['rooms'][0]
         plays[start] = (first['specialist'], first.get('policy'), first['step'], header[room['policy']]['name'])

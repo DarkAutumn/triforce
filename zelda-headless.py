@@ -6,7 +6,7 @@ the promoted models, a family's promoted.<route> over its promoted).
     .venv/bin/python zelda-headless.py runs/wins 3 --wins-only          # play until 3 runs finished the route
     .venv/bin/python zelda-headless.py runs/d2 5 --wins-only --power-on --stop-at step:24
                                                                         # from console power on to Dungeon 2's triforce
-    .venv/bin/python zelda-headless.py runs/deaths 20 --deaths-only --streams rewards,decisions
+    .venv/bin/python zelda-headless.py runs/deaths 20 --deaths-only --streams rewards
     .venv/bin/python zelda-headless.py runs/golden 1 --golden --power-on    # one stitched run to the route's end
 
 OUT is a folder (created if missing); COUNT (default 1) is how many replays to save.  Without a filter the runs

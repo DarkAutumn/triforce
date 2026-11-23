@@ -139,6 +139,25 @@ impl Heads {
         Ok(out)
     }
 
+    /// The factored distribution of `logits` under `mask` ([`crate::Policy::evaluate_with_distribution`]'s layout
+    /// and values: what a Rust network with these logits reports), into `dist` ([`Heads::size`] values).
+    pub fn distribution(&self, logits: &[f32], mask: &[bool], dist: &mut [f32]) {
+        let (kinds, dirs, durs) = (self.kinds, self.directions, self.durations);
+        let kind_mask = &mask[..kinds];
+        let legal_kinds = kind_mask.iter().filter(|&&m| m).count();
+        dist.fill(f32::NEG_INFINITY);
+        let mut kind_lp = [0f32; MAX_HEAD];
+        masked_log_softmax(&logits[..kinds], kind_mask, MASKED_LOGIT, &mut kind_lp[..kinds]);
+        let dur_base = kinds + kinds * dirs;
+        for kind in (0..kinds).filter(|&k| kind_mask[k]) {
+            dist[kind] = if legal_kinds > 1 { kind_lp[kind] } else { 0.0 };
+            for (at, n) in [(kinds + kind * dirs, dirs), (dur_base + kind * durs, durs)] {
+                let (lp, applies) = sub_log_probs(&logits[at..at + n], &mask[at..at + n]);
+                super::distribution_row(&mut dist[at..at + n], &lp, &mask[at..at + n], applies);
+            }
+        }
+    }
+
     /// The decision's next candidates after `first`, best first, at most `k`, each with its joint log-prob, appended
     /// to `out`: ranked as the Rust actor ranks its alternatives (`PolicyActor::alternatives`: argmax by the joint
     /// log-prob; a draw by ln q + the Gumbel noise of the decision's key). Reads the joint log-probs [`Heads::act`]

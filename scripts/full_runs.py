@@ -2,9 +2,9 @@
 250-run test of a build.
 
     .venv/bin/python scripts/full_runs.py run [--runs 100] [--first-seed 0] [--models-dir DIR] [--now] [--out DIR]
-    .venv/bin/python scripts/full_runs.py report OUT_DIR
+    .venv/bin/python scripts/full_runs.py report OUT_DIR [--from-replays]
     .venv/bin/python scripts/full_runs.py runs250 [--models-dir DIR] [--team NAME] [--out DIR] [--docs DIR] [--route R]
-    .venv/bin/python scripts/full_runs.py stats OUT_DIR [--team NAME] [--docs DIR] [--no-archive]
+    .venv/bin/python scripts/full_runs.py stats OUT_DIR [--team NAME] [--docs DIR] [--no-archive] [--from-replays]
     .venv/bin/python scripts/full_runs.py analyze JSON [JSON ...] [--markdown FILE] [--rooms N]
 
 ``run`` plays ``--runs`` runs of ``d3first`` from the start with every run recorded as a replay
@@ -16,7 +16,9 @@ instead of waiting its turn in the job line (the owner's call for a short measur
 stood on, so walking out of a room and back, or into a room off the route, adds nothing), then the fewest cheated
 bombs and keys, then the fewest cheated rupees, then the fewest frames.  The best run's replay is archived
 (``scripts/archive_replays.py``: ``replays/`` and ``/backup/triforce/replays``) and its path printed; ``best.json``
-in OUT_DIR keeps the report.
+in OUT_DIR keeps the report.  ``--from-replays`` computes it from ``OUT_DIR/replays/`` alone (the owner, Nov 23: a
+replay since version 2 carries its chain record and the route facts the report needs, ``replay.chain_records``),
+the same report but the wall time, which only ``timing.json`` knows.
 
 ``runs250`` is the test every versioned build gets (the owner, Nov 23): 250 runs of ``d3first`` from console power
 on (``--power-on``: each seed its own file-select delay), every one recorded, through the job line in the express
@@ -39,7 +41,11 @@ runs-250 --label <reasons>``: never the repository's ``replays/``).  It writes t
 version, commit, team (each family's run and checkpoint SHA-1), seeds, wall time and decisions a second, the runs
 that took each triforce, the endings by kind, deaths and stucks per room (room, route step, family), every room
 visit's hits and hearts lost per room, the cheated items and ending of each run, the median frames to each triforce
-and the kept replays.  ``--team`` names a team other than main's (``2.0.0.11_one-d1w8.json``).
+and the kept replays.  ``--team`` names a team other than main's (``2.0.0.11_one-d1w8.json``).  ``--from-replays``
+builds the record from ``OUT_DIR/replays/`` (``replay.chain_records``: the runs, the provenance and the route facts;
+the commit is the replays' own, META ``commit``) and writes it as ``OUT_DIR/runs250.replays.json``; what no replay
+knows, the wall times (``events.jsonl``, ``timing.json``) and the lane (``training.json``), still comes from the
+folder's files when it has them.  From the replays alone it equals the record from ``runs.jsonl`` but in those.
 
 ``analyze`` compares one or more of those records (the first is the baseline): per-dungeon rates and endings with
 their binomial standard errors and each record's difference from the baseline, and per room (room and route step)
@@ -72,20 +78,29 @@ RUN_FIELDS = ('seed', 'ending', 'room', 'step', 'furthest_step', 'triforces', 'c
 ROOM_FIELDS = ('room', 'step', 'family', 'visits', 'runs', 'deaths', 'stucks', 'hits', 'hearts_lost', 'frames')
 
 
-def order(steps: list) -> list:
-    """The route's dungeons in the order it takes their triforces (d3first: 3 4 1 2 5 7 6 8 9), Dungeon 9 last."""
-    levels = [step['level'] for step in steps if step.get('exit') == 'triforce']
+def route_facts(steps: list) -> dict:
+    """What the report needs of the route, as ``replay.chain_route`` gives it from a replay: ``{'steps': the step
+    count, 'triforces': {step: dungeon level}}`` (the steps whose exit is a triforce)."""
+    return {'steps': len(steps),
+            'triforces': {i: step['level'] for i, step in enumerate(steps) if step.get('exit') == 'triforce'}}
+
+
+def order(route: dict) -> list:
+    """The route's dungeons in the order it takes their triforces (d3first: 3 4 1 2 5 7 6 8 9), Dungeon 9 last.
+    ``route``: ``route_facts``."""
+    levels = [level for _, level in sorted((int(step), level) for step, level in route['triforces'].items())]
     return [*dict.fromkeys(levels), *([] if 9 in levels else [9])]
 
 
-def score(record: dict, steps: list) -> dict:
+def score(record: dict, route: dict) -> dict:
     """One run's place in the ranking (``best``) and what it took: a dungeon's triforce counts once the run left the
-    route step whose exit is that triforce correctly (not by entering the next dungeon: a run can die between)."""
+    route step whose exit is that triforce correctly (not by entering the next dungeon: a run can die between).
+    ``route``: ``route_facts``."""
     rooms = record.get('rooms') or []
     won = record.get('result') == 'success'
-    furthest = len(steps) if won else max(((room.get('step') or 0) for room in rooms), default=0)
-    levels = order(steps)
-    taken = sorted(triforce_frames(record, steps), key=levels.index)
+    furthest = route['steps'] if won else max(((room.get('step') or 0) for room in rooms), default=0)
+    levels = order(route)
+    taken = sorted(triforce_frames(record, route), key=levels.index)
     return {'seed': record['seed'], 'furthest_step': furthest, 'won': won,
             'cheated_bombs_keys': sum((room.get('cheated_bombs') or 0) + (room.get('cheated_keys') or 0)
                                       for room in rooms),
@@ -93,10 +108,10 @@ def score(record: dict, steps: list) -> dict:
             'frames': record.get('frames'), 'reason': record.get('reason'), 'triforces': taken}
 
 
-def triforce_frames(record: dict, steps: list) -> dict:
+def triforce_frames(record: dict, route: dict) -> dict:
     """{level: frames from the run's start to leaving its triforce step correctly}; a win took Dungeon 9's at its
-    last frame."""
-    by_step = {i: step['level'] for i, step in enumerate(steps) if step.get('exit') == 'triforce'}
+    last frame.  ``route``: ``route_facts``."""
+    by_step = route['triforces']
     frames, taken = 0, {}
     for room in record.get('rooms') or []:
         frames += room.get('frames') or 0
@@ -123,18 +138,55 @@ def worst(scores: list) -> dict:
     return max(scores, key=rank)
 
 
-def report(out: Path) -> dict:
-    steps = route_steps(out)
-    records = read_runs(out)
-    scores = [score(r, steps) for r in records]
+def step_label(record: dict, step: int, route: dict) -> str:
+    """Route step ``step`` as the run itself saw it: the room it stood in there (its last room record on that
+    step), so the label needs no route data; 'the end' past the last step."""
+    if step >= route['steps']:
+        return 'the end'
+    room = next((room for room in reversed(record.get('rooms') or []) if room.get('step') == step), None)
+    if room is None:
+        return f"step {step}"
+    return f"step {step}: level {room['level']} room {room['room']}" + (' (cave)' if room.get('in_cave') else '')
+
+
+def summary(records: list, route: dict) -> dict:
+    """The report of ``records`` (one chain's runs) on ``route`` (``route_facts``), but the wall time and the
+    replay's path."""
+    scores = [score(r, route) for r in records]
     top = best(scores)
     taken = Counter(level for s in scores for level in s['triforces'])
-    replay = replay_of(out, top['seed'])
+    record = next(r for r in records if r['seed'] == top['seed'])
+    return {'runs': len(scores), 'triforces': {f'D{level}': taken[level] for level in order(route)},
+            'won': sum(s['won'] for s in scores), 'best': top,
+            'best_step': step_label(record, top['furthest_step'], route)}
+
+
+def replay_report(files) -> dict:
+    """``summary`` from a chain's replays alone (version 2: ``replay.chain_records``, ``replay.chain_route``)."""
+    from triforce import replay  # pylint: disable=import-outside-toplevel
+    files = list(files)
+    records, _ = replay.chain_records(files)
+    return summary(records, replay.chain_route(files))
+
+
+def live_route(out=None) -> dict:
+    """``route_facts`` of the route OUT_DIR's runs played (``route_steps``: its ``route.json``, else this tree's route
+    of that name); without a folder, of this tree's ``d3first``."""
+    if out is not None:
+        return route_facts(route_steps(out))
+    from triforce import _native  # pylint: disable=import-outside-toplevel
+    return route_facts(_native.route_steps(ROUTE))
+
+
+def report(out: Path, from_replays: bool = False) -> dict:
+    """OUT_DIR's report (module doc), from its ``runs.jsonl`` and the route, or ``from_replays`` alone."""
+    if from_replays:
+        result = replay_report(replay_files(out))
+    else:
+        result = summary(read_runs(out), live_route(out))
+    replay = replay_of(out, result['best']['seed'])
     timing = json.loads((out / 'timing.json').read_text()) if (out / 'timing.json').exists() else {}
-    result = {'runs': len(scores), 'seconds': timing.get('seconds'),
-              'triforces': {f'D{level}': taken[level] for level in order(steps)},
-              'won': sum(s['won'] for s in scores), 'best': top,
-              'best_step': (str(steps[top['furthest_step']]) if top['furthest_step'] < len(steps) else 'the end'),
+    result = {'runs': result.pop('runs'), 'seconds': timing.get('seconds'), **result,
               'best_replay': str(replay) if replay else None}
     (out / 'best.json').write_text(json.dumps(result, indent=2) + '\n')
     if replay:
@@ -173,6 +225,10 @@ def read_runs(out: Path) -> list:
 
 def replay_of(out: Path, seed: int):
     return next(iter(sorted((out / 'replays').glob(f"{seed:08d}-*.tfreplay"))), None)
+
+
+def replay_files(out: Path) -> list:
+    return sorted((out / 'replays').glob('*.tfreplay'))
 
 
 def chain_command(out: Path, runs: int, first_seed: int, parallel: int, models_dir=None, route: str = ROUTE,
@@ -321,6 +377,18 @@ def git_head() -> str:
         return 'unknown'
 
 
+def team_entry(model: dict) -> dict:
+    """One network of the record's team, known by its family, run id and checkpoint SHA-1 (no path: the same from a
+    chain's provenance and from its replays).  A provenance written before the run's own family and run were recorded
+    (an older version's chain) gives them from its checkpoint label, ``<family>/<run>/ckpt.pt``."""
+    family, run = model.get('family'), model.get('run')
+    label = model.get('checkpoint')
+    if family is None and run is None and label:
+        family, run = label.split('/')[:2]
+    return {'name': model.get('name'), 'family': family, 'run': run, **{
+        key: model.get(key) for key in ('checkpoint_sha1', 'hash', 'act', 'version')}}
+
+
 def keep(records: list, scores: list) -> list:
     """The kept runs: best, worst and up to ``STUCK_KEPT`` stuck ones in different rooms (the rooms that stuck most
     first, the lowest seed of each); [{seed, reasons}] in that order, a run kept for two reasons once."""
@@ -336,10 +404,11 @@ def keep(records: list, scores: list) -> list:
     return [{'seed': seed, 'reasons': reasons} for seed, reasons in kept.items()]
 
 
-def summarize(records: list, provenance: dict, steps: list, seconds=None, total_seconds=None) -> dict:
-    """The runs-250 record of ``records`` (one chain's runs) and its ``provenance`` (``<output>.meta.json``)."""
+def summarize(records: list, provenance: dict, route: dict, seconds=None, total_seconds=None) -> dict:
+    """The runs-250 record of ``records`` (one chain's runs) and its ``provenance`` (``<output>.meta.json``) on
+    ``route`` (``route_facts``)."""
     # pylint: disable=too-many-locals
-    scores = {r['seed']: score(r, steps) for r in records}
+    scores = {r['seed']: score(r, route) for r in records}
     endings = Counter(ending(r) for r in records)
     rooms = defaultdict(lambda: {'visits': 0, 'runs': set(), 'deaths': 0, 'stucks': 0, 'hits': 0,
                                  'hearts_lost': 0.0, 'frames': 0, 'families': Counter()})
@@ -365,7 +434,7 @@ def summarize(records: list, provenance: dict, steps: list, seconds=None, total_
             else:
                 stucks[(*where, kind)] += 1
                 rooms[where[:2]]['stucks'] += 1
-        for level, frames in triforce_frames(record, steps).items():
+        for level, frames in triforce_frames(record, route).items():
             triforce_at[level].append(frames)
         s = scores[record['seed']]
         cheated = {item: sum(room.get(f'cheated_{item}') or 0 for room in record.get('rooms') or [])
@@ -383,15 +452,14 @@ def summarize(records: list, provenance: dict, steps: list, seconds=None, total_
         'schema': SCHEMA, 'test': 'runs-250', 'version': prov.get('version'), 'commit': git_head(),
         'code': prov.get('code'), 'data': prov.get('data'), 'route': prov.get('route', ROUTE),
         'power_on': prov.get('power_on'), 'clips': prov.get('clips'), 'max_steps': prov.get('max_steps'),
-        'route_steps': len(steps),
-        'team': [{key: model.get(key) for key in ('name', 'checkpoint', 'checkpoint_sha1', 'hash', 'act', 'version')}
-                 for model in prov.get('models') or []],
+        'route_steps': route['steps'],
+        'team': [team_entry(model) for model in prov.get('models') or []],
         'missing': prov.get('missing'),
         'seeds': {'first': batches[0].get('first_seed'), 'runs': len(records)},
         'wall_seconds': seconds, 'total_seconds': total_seconds, 'decisions': decisions,
         'decisions_per_second': round(decisions / seconds, 1) if seconds else None,
         'frames': sum(r.get('frames') or 0 for r in records),
-        'triforces': {f'D{level}': len(triforce_at[level]) for level in order(steps)},
+        'triforces': {f'D{level}': len(triforce_at[level]) for level in order(route)},
         'won': endings['win'],
         'endings': {'win': endings['win'], 'death': endings['death'], 'stuck': sum(stuck_kinds.values()),
                     'error': endings['error']},
@@ -399,7 +467,7 @@ def summarize(records: list, provenance: dict, steps: list, seconds=None, total_
         'furthest_step': {'median': statistics.median(furthest) if furthest else None,
                           'max': max(furthest, default=None)},
         'triforce_frames_median': {f'D{level}': (round(statistics.median(triforce_at[level]))
-                                                 if triforce_at[level] else None) for level in order(steps)},
+                                                 if triforce_at[level] else None) for level in order(route)},
         'deaths': [{'room': room, 'step': step, 'family': family, 'runs': n}
                    for (room, step, family), n in sorted(deaths.items(), key=lambda item: (-item[1], str(item[0])))],
         'stucks': [{'room': room, 'step': step, 'family': family, 'kind': kind, 'runs': n}
@@ -436,12 +504,20 @@ def record_name(version: str, team) -> str:
     return f"{version}{'_' + team if team else ''}.json"
 
 
-def stats(out: Path, team=None, docs: Path = DOCS, archive: bool = True) -> dict:
-    steps = route_steps(out)
-    meta = json.loads((out / 'runs.jsonl.meta.json').read_text())
+def stats(out: Path, team=None, docs: Path = DOCS, archive: bool = True, from_replays: bool = False) -> dict:
+    """OUT_DIR's runs-250 record (module doc), from its ``runs.jsonl``, meta and the route, or ``from_replays``
+    alone (written as ``OUT_DIR/runs250.replays.json``)."""
     timing = json.loads((out / 'timing.json').read_text()) if (out / 'timing.json').exists() else {}
-    record = summarize(read_runs(out), meta, steps, chain_seconds(out), timing.get('seconds'))
-    record['commit'] = timing.get('commit') or record['commit']
+    if from_replays:
+        from triforce import _native, replay  # pylint: disable=import-outside-toplevel
+        files = replay_files(out)
+        records, meta = replay.chain_records(files)
+        record = summarize(records, meta, replay.chain_route(files), chain_seconds(out), timing.get('seconds'))
+        record['commit'] = _native.Replay(files[0].read_bytes()).meta.get('commit') or record['commit']
+    else:
+        meta = json.loads((out / 'runs.jsonl.meta.json').read_text())
+        record = summarize(read_runs(out), meta, live_route(out), chain_seconds(out), timing.get('seconds'))
+        record['commit'] = timing.get('commit') or record['commit']
     plan = out / 'training.json'                 # the chain's plan: the place it took in the job line
     record['lane'] = json.loads(plan.read_text()).get('lane') if plan.exists() else None
     record['team_name'] = team or 'main'
@@ -462,7 +538,7 @@ def stats(out: Path, team=None, docs: Path = DOCS, archive: bool = True) -> dict
             if done:
                 print(f"full_runs: archive_replays.py failed ({done}) for {copy}", file=sys.stderr)
     text = dump(record)
-    (out / 'runs250.json').write_text(text)
+    (out / ('runs250.replays.json' if from_replays else 'runs250.json')).write_text(text)
     docs.mkdir(parents=True, exist_ok=True)
     path = docs / record_name(record['version'], team)
     path.write_text(text)
@@ -589,6 +665,8 @@ def main(argv=None) -> int:
     p_run.add_argument('--out', default=str(ROOT / 'target' / 'full-runs' / time.strftime('%y%m%d-%H%M%S')))
     p_report = sub.add_parser('report', help="report an earlier run's folder")
     p_report.add_argument('out')
+    p_report.add_argument('--from-replays', action='store_true',
+                          help="compute the report from OUT_DIR/replays alone (not runs.jsonl and the route)")
     p_250 = sub.add_parser('runs250', help="the 250-run test of a build from power on, then stats")
     p_250.add_argument('--runs', type=int, default=RUNS250)
     p_250.add_argument('--first-seed', type=int, default=0)
@@ -607,6 +685,8 @@ def main(argv=None) -> int:
     p_stats.add_argument('--team', default=None)
     p_stats.add_argument('--docs', default=str(DOCS))
     p_stats.add_argument('--no-archive', action='store_true')
+    p_stats.add_argument('--from-replays', action='store_true',
+                         help="build the record from OUT_DIR/replays alone (not runs.jsonl, its meta and the route)")
     p_analyze = sub.add_parser('analyze', help="compare runs-250 records (the first is the baseline)")
     p_analyze.add_argument('records', nargs='+')
     p_analyze.add_argument('--markdown', default=None, help="also write the Markdown summary here")
@@ -617,12 +697,12 @@ def main(argv=None) -> int:
     if args.command == 'runs250':
         return runs250(args)
     if args.command == 'stats':
-        stats(Path(args.out), args.team, Path(args.docs), archive=not args.no_archive)
+        stats(Path(args.out), args.team, Path(args.docs), archive=not args.no_archive, from_replays=args.from_replays)
         return 0
     if args.command == 'analyze':
         analyze(args.records, args.markdown, args.rooms)
         return 0
-    report(Path(args.out))
+    report(Path(args.out), from_replays=args.from_replays)
     return 0
 
 

@@ -12,6 +12,7 @@ spec.loader.exec_module(full_runs)
 # A tiny route: step 1 takes Dungeon 3's triforce, step 3 Dungeon 4's, step 4 is the last.
 STEPS = [{'level': 0, 'exit': 'n'}, {'level': 3, 'exit': 'triforce'}, {'level': 0, 'exit': 'e'},
          {'level': 4, 'exit': 'triforce'}, {'level': 9, 'exit': 'triforce'}]
+ROUTE = full_runs.route_facts(STEPS)
 
 
 def room(step, level, name, outcome='exit-correct', frames=100, hits=0, health_in=3.0, health_out=3.0,
@@ -55,7 +56,7 @@ def test_endings_by_kind():
 
 def test_best_worst_and_three_stuck_runs_in_different_rooms():
     rs = records()
-    scores = [full_runs.score(r, STEPS) for r in rs]
+    scores = [full_runs.score(r, ROUTE) for r in rs]
     assert full_runs.best(scores)['seed'] == 0
     # least far (step 0): seeds 5 and 6; the most cheated first
     assert full_runs.worst(scores)['seed'] == 5
@@ -70,7 +71,7 @@ def test_best_worst_and_three_stuck_runs_in_different_rooms():
 def test_the_record_counts_endings_rooms_and_triforces():
     record = full_runs.summarize(records(), {'provenance': {'version': '9.9.9.9', 'models': [
         {'name': 'boss', 'checkpoint': 'boss/r1/ckpt.pt', 'checkpoint_sha1': 'ab', 'hash': 'cd', 'act': 'x'}]},
-        'batches': [{'first_seed': 0, 'runs': 8}]}, STEPS, seconds=10.0, total_seconds=12.0)
+        'batches': [{'first_seed': 0, 'runs': 8}]}, ROUTE, seconds=10.0, total_seconds=12.0)
     assert record['version'] == '9.9.9.9' and record['seeds'] == {'first': 0, 'runs': 8}
     assert record['team'][0]['checkpoint_sha1'] == 'ab'
     assert record['endings'] == {'win': 1, 'death': 2, 'stuck': 5, 'error': 0}
@@ -92,8 +93,8 @@ def test_the_record_counts_endings_rooms_and_triforces():
 
 
 def test_analyze_compares_records_with_standard_errors(tmp_path):
-    base = full_runs.summarize(records(), {'provenance': {'version': '1'}}, STEPS)
-    other = full_runs.summarize(records()[:4], {'provenance': {'version': '2'}}, STEPS)
+    base = full_runs.summarize(records(), {'provenance': {'version': '1'}}, ROUTE)
+    other = full_runs.summarize(records()[:4], {'provenance': {'version': '2'}}, ROUTE)
     paths = []
     for name, record in (('1.json', base), ('2_one.json', {**other, 'team_name': 'one'})):
         (tmp_path / name).write_text(full_runs.dump(record))
@@ -160,8 +161,8 @@ def test_an_old_versions_runs_read_with_its_own_route(tmp_path):
                                           (2, '0x7d', 'exit-correct'), (1, '0x73', 'death'))]
     (tmp_path / 'runs.jsonl').write_text(json.dumps({'seed': 0, 'result': 'failure', 'reason': 'died in 1:0x73',
                                                      'frames': 400, 'steps': 40, 'rooms': rooms}) + '\n')
-    steps = full_runs.route_steps(tmp_path)
-    assert full_runs.order(steps) == [2, 1, 9]
+    route = full_runs.live_route(tmp_path)
+    assert full_runs.order(route) == [2, 1, 9]
     record = full_runs.read_runs(tmp_path)[0]
     assert [r['step'] for r in record['rooms']] == [0, 1, 1, 2] and record['rooms'][0]['step_derived']
-    assert full_runs.score(record, steps)['triforces'] == [2] and full_runs.score(record, steps)['furthest_step'] == 2
+    assert full_runs.score(record, route)['triforces'] == [2] and full_runs.score(record, route)['furthest_step'] == 2

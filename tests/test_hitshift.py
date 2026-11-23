@@ -122,6 +122,7 @@ def test_a_combination_is_a_run_like_any_other(shift_models):
 
 
 def test_a_chain_plays_and_records_it(shift_models, states_dir, tmp_path):
+    """Recorded like any other, its hit head's danger with every decision it took and named in META."""
     runner = Runner(models_dir=shift_models, max_steps=20, parallel=2, states_dir=states_dir)
     segment = _segment()
     results = runner.run_many(segment, [0, 1], record=replay.record_options(runner.record_meta(segment)),
@@ -130,6 +131,13 @@ def test_a_chain_plays_and_records_it(shift_models, states_dir, tmp_path):
     for path in sorted(tmp_path.iterdir()):
         recording = _native.Replay(path.read_bytes())
         assert _native.replay_verify(recording.data)['frames'] == recording.frames
+        models = recording.meta['models']
+        shift = next(m for m in models if m['name'] == 'ow-octorok')
+        assert shift['served'] and shift['architecture']['name'] == 'hitshift' and shift['run'] == 'shift-w8'
+        assert shift['outputs'] == ['distribution', 'value', 'hit'] and 'hit' in recording.meta['outputs']
+        decisions = recording.decisions()
+        mine = [row for policy, row in zip(decisions['policy'], decisions['danger']) if policy == shift['index']]
+        assert mine and all(row and all(0.0 <= p <= 1.0 for p in row.values()) for row in mine)
 
 
 def test_the_golden_race_plays_it(shift_models, states_dir):
@@ -142,8 +150,7 @@ def test_the_golden_race_plays_it(shift_models, states_dir):
 
 
 def test_zelda_headless_plays_it(shift_models, tmp_path, capsys):
-    """Its runs and its golden path; the optional ``decisions`` stream (every decision's distribution) is the Rust
-    actor's alone, refused for any served network (docs/lab.md)."""
+    """Its runs, with every decision recorded (the served network's too)."""
     spec = importlib.util.spec_from_file_location('zelda_headless', ROOT / 'zelda-headless.py')
     headless = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(headless)
@@ -151,10 +158,9 @@ def test_zelda_headless_plays_it(shift_models, tmp_path, capsys):
     common = ['--route', 'd2first', '--from', str(require_state(SEGMENT_STATE)), '--parallel', '2', '--models-dir',
               str(shift_models)]
     assert headless.main([str(out), '2', '--stop-at', f'step:{SEGMENT_STOP_STEP}', *common]) == 0
-    assert len(list(out.iterdir())) == 2
-    with pytest.raises(ValueError, match='need Rust networks'):
-        headless.main([str(tmp_path / 'streams'), '1', '--stop-at', f'step:{SEGMENT_STOP_STEP}', '--streams',
-                       'decisions', *common])
+    files = list(out.iterdir())
+    assert len(files) == 2
+    assert all(len(_native.Replay(path.read_bytes()).decisions()['frame']) > 0 for path in files)
     capsys.readouterr()
 
 

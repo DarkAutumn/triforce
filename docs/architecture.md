@@ -1884,21 +1884,25 @@ every step, so following an enemy that moves away pays again, and knockback rese
 
 ## Replays (`crates/replay`, `crates/pool/src/zelda`, `replay.py`)
 
-A replay (`.tfreplay`, `TFREPLAY`, `REPLAY_VERSION` 1; version 0 files still read) is one run or episode, exact enough to play back bit for
+A replay (`.tfreplay`, `TFREPLAY`, `REPLAY_VERSION` 2; versions 0 and 1 still read) is one run or episode, exact enough to play back bit for
 bit on the emulator alone: no env, reward or model code is needed, so a replay outlives changes to all three.
+Since version 2 (the owner, Nov 23) it also says on its own what the agent was steered to, what it could do and
+what it chose, named by its own META, so it can be shared and filmed without route data, networks or this code.
 The file layout is in `crates/replay/src/lib.rs`. It holds:
 
 | Section | What |
 |---|---|
-| META | JSON: what played (`triforce` version, `code`, `data`, `kind` chain/eval/train, `route`, `stop_at`, `models`), `seed`, `source`, `ending` (`kind`, `result`, `outcome`, `reason`), `rng_phase` (the natural RNG state a start state or redrawn checkpoint wrote, steps from reset; a stitch keeps each segment's), and the tables the streams index (`buttons`, `cheat_items`, `reward_terms`, `actions`) |
+| META | JSON: what played (`triforce` version, `code`, `data`, `commit`, `kind` chain/eval/train, `route`, `stop_at`, `models`: each network described without a path: name, family, run, iterations, steps, act mode, obs/action schema, checkpoint SHA-1, architecture and parameters, and the names of its `outputs` (distribution, value, hit), each described once in META `outputs` (stream, shape, labels, meaning, units)), `seed`, `source`, `ending` (`kind`, `result`, `outcome`, `reason`), `rng_phase` (the natural RNG state a start state or redrawn checkpoint wrote, steps from reset; a stitch keeps each segment's), the tables the streams index (`buttons`, `cheat_items`, `reward_terms`, `actions` with which kinds are directional and timed, `tables`: objective kinds, target roles with their fields, mask reasons, draws, routes, stretches), a chain run's `run` (its chain record without rooms) and `chain` (route, start state by name, max steps, missing families, the route's step count and triforce steps). No filesystem path (`tests/test_replay.py`) |
 | SOURCE | where the machine starts: console power on (name, idle delay), a state file by name (and its hash), or the embedded START state |
 | INPUTS | the controller byte of every frame, run-length encoded |
 | EDITS | every memory write that was not the game's: `(frame, address, previous byte, new byte)` (load randomization, hp draws, cheat grants, anything poked) |
 | CHEATS | cheated items spent: `(frame, item, count)` |
 | STATES | `TFZSTATE` blobs: START (embedded source), END (always), KEYFRAME (optional, every N frames), CHECKPOINT (a stitch boundary); each with its route step and the cheat grants still held, a room's and (version 1, round 32) a route step's, so a chain can continue from it |
-| EVENTS | CONTROL (the models take over), ROOM (level, room, route step, acting policy), OUTCOME (a room visit's), EPISODE (a training-style episode's ending), SEGMENT (a stitch boundary) |
+| EVENTS | CONTROL (the models take over), ROOM (level, room, route step, acting policy), OUTCOME (a room visit's), EPISODE (a training-style episode's ending), SEGMENT (a stitch boundary), VISIT (version 2: a room visit's record as the chain wrote it, at its close) |
 | REWARDS (optional) | every reward term of every step, scored by the code training uses (`rewards::score_step`, `env::RewardTrack`; chains are cut into the acting specialist's episodes) |
-| DECISIONS (optional) | every model decision: policy, action, value and the whole factored distribution (143 log-probabilities: kind[11], direction[kind][8], duration[kind][4]; META `actions` describes the space, so replays recorded with 7 kinds and 91, or 8 kinds and 104, still read) |
+| DECISIONS (always, version 2) | every model decision: policy, action, value, how the act mode drew it (META `tables.draws`), the factored distribution (143 log-probabilities: kind[11], direction[kind][8], duration[kind][4]; version 2 keeps the finite ones, a bitmap and one byte each, -byte/16 nats; META `actions` describes the space, so replays recorded with 7 kinds and 91, or 8 kinds and 104, still read), the hit head's P(Link is hit) per legal action where the network has one, and the planner's vetoes when the act mode plans |
+| TARGETS (version 2) | on change: the objective kind, its targets as (role, entity) (exit direction, monster slot and type, floor item slot and id, key, bomb wall tile and direction, push block, stairs, cave mouth, triforce, tile spot), each `obs` (in the observation's target) or `reward-only` (priced by the reward alone: drops, bag drops, heal targets), the rooms Link may leave to and the retreat rooms, the step's flags (treasure refused, drops first, bag drops, clips known), and a provenance label (route, step, way, stretch) no metric may depend on |
+| MASKS (version 2) | on change: the legal action kinds with their directions and durations, and the rule behind each blocked kind (e.g. BOMB by `tenth`, `never`, the reserve) |
 
 A record at frame `k` applies after input frame `k - 1` and before input frame `k`.
 
@@ -1910,17 +1914,35 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
   too, with ending `error`; one whose start can't be loaded records nothing). `state='embed'` carries the start state,
   `'path'` names it. `replay.ReplayDir(path, only=None)` writes them as `<seed:08d>-<ending>.tfreplay`
   (`ending`: `win`, `death`, `stuck`, `other`, `error`; `only` keeps the named endings). Command lines:
-  `--replays DIR [--streams rewards,decisions,keyframes] [--keyframe-frames N] [--state embed|path]` on
+  `--replays DIR [--streams rewards,keyframes] [--keyframe-frames N] [--state embed|path]` on
   `triforce eval-chain`, `triforce.evaluate` and `play-zelda.py`; `zelda-headless.py OUT` always records.
+  DECISIONS, TARGETS and MASKS are always recorded. Size (Nov 23, the 200-run Dungeon 8 chain from `8_7es_0`,
+  1,604,093 frames, 102,208 decisions): 6.80 MB before version 2 (no decisions), 28.4 MB with them: META 9.35 MB
+  (47 KB a replay: 54 networks described), DECISIONS 8.48 MB (83 bytes a decision; dense u8 distributions were
+  18.5 MB), EVENTS 4.44 MB (the VISIT records a report reads), MASKS 0.78 MB, TARGETS 0.29 MB. Roles are attached
+  where targets are made (`zelda::objectives`, `env::objective`) without changing what the observation or reward
+  compute: that chain played the same 200 runs before and after (results, frames and steps, and the INPUTS,
+  EDITS, CHEATS, STATES and SOURCE sections byte for byte).
   Recording rewards turns the look-ahead on for that run (rewards need it), so its steps are scored as training
   scores them; a chain run's observations, inputs, edits and result are the same with rewards on or off
   (`crates/pool/tests/zelda.rs`).
 - **Reading.** `_native.Replay(data)`: `version`, `frames`, `ending`, `meta`, `source`, `inputs()`, `edits()`,
-  `cheats()`, `events()`, `rewards()`, `decisions()`, `states()`, `end_ram()`. `tf replay info FILE` prints the
-  same, `act:` how the models acted (META `models[].act`: one mode for every model, or each mode with its models;
-  recordings from before round 23 say `deterministic`, read as argmax or sample), and `rng:` the start's RNG phase
-  read back from the frame-0 edits of `$18-$24` (checked against META `rng_phase`; replays recorded before round 22
-  show 13 bytes the game never holds).
+  `cheats()`, `events()`, `rewards()`, `decisions()`, `choices(top)` (each decision's chosen action with its
+  probability and danger, the `top` most likely, the vetoed ones, as text), `targets()`, `masks()` (records
+  with their `text`), `states()`, `end_ram()`. `tf replay info FILE` prints the same, the models, `act:` how the
+  models acted (META `models[].act`: one mode for every model, or each mode with its models; recordings from
+  before round 23 say `deterministic`, read as argmax or sample), and `rng:` the start's RNG phase read back from
+  the frame-0 edits of `$18-$24` (checked against META `rng_phase`; replays recorded before round 22 show 13 bytes
+  the game never holds). `tf replay targets FILE [--room L:RR] [--masks] [--decisions]` lists for people what
+  the agent was steered to at each change (`8:0x4c frame 140,213: MOVE {bomb wall N}`), with the masks and every
+  decision. `triforce.thoughts.Thoughts(recording).at(frame)` is the overlay `play-zelda.py --thoughts` and
+  `create-video.py --thoughts` draw. A chain's records and provenance come from its replays alone:
+  `replay.chain_records(files)` gives what `eval-chain` wrote to its JSON lines and `.meta.json`,
+  `replay.chain_route(files)` the route facts a report needs, so `scripts/full_runs.py report --from-replays`
+  is the same report as from `runs.jsonl`, and `stats --from-replays` the same runs-250 record (the wall times
+  and the job line's lane, which no replay knows, from the folder's files when it has them). META `models` describes in full only the networks that made a
+  decision in the replay; the others by `replay.BRIEF_MODEL_KEYS` (index, name, family, run, checkpoint SHA-1,
+  hash, act mode, version); a stitch keeps the full description either part has.
 - **Playing.** `_native.ReplayPlayer(data, states_dir=None)` (`step(frames, render)`, `seek(frame)`: from the
   nearest state at or before it, `ram()`, `screen()`, `save_state()`); `replay_verify(data)` / `tf replay verify
   FILE...` plays the whole replay and compares the machine with every recorded state (`ReplayError` naming the
@@ -1930,9 +1952,9 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
   whose embedded START is that state; `replay_stitch(a, b)` joins the two (frames shifted, a SEGMENT event and a
   CHECKPOINT state at the boundary, reward terms renumbered) when `b` starts in the machine `a` ends in and both
   were played by the same models with the same streams.
-- **Compatibility.** `REPLAY_VERSION` is its own integer, bumped only when an existing replay can no longer be
-  replayed bit for bit; a reader refuses a newer version by name. `corpus/replays/` holds recorded replays that
-  must keep verifying (`AGENTS.md`, Versioning).
+- **Compatibility.** `REPLAY_VERSION` is its own integer, bumped by every format change (the owner, Nov 23:
+  replays never need to be readable by older readers); a reader refuses a newer version by name and reads every
+  older one. `corpus/replays/` holds recorded replays that must keep verifying (`AGENTS.md`, Versioning).
 
 ## Headless play and the golden path (`zelda-headless.py`, `golden.py`)
 
@@ -2052,6 +2074,14 @@ A power-on run is shown from the frame the models took over. When a replay ends 
 - **The controller** (`--controller`, off by default): `theater::overlay::draw_controller` draws the pad into
   each frame at the console's resolution, top right over the HUD's `-LIFE-` (x 182–243, y 14–37; the hearts
   start at y 40): a translucent grey plate, idle buttons dark, the buttons held on that frame opaque white.
+- **The thoughts** (`--thoughts`, off by default): each replayed cell sends a `thoughts` message whenever its
+  `triforce.thoughts.Thoughts.at(frame)` lines change (`Show.thoughts_at`), and `play_view.CellView` draws them on
+  a dark band over the bottom of the picture, each cut to the width: the objective with its targets and the rooms
+  they lead to (`FIGHT: monster slot 3 type 0x2a -> 8:0x3c`), the legal actions and the rule behind each blocked
+  kind (`can: MOVE[N,S,W,E] WAIT SWORD[N,S,W,E] BOMB blocked: tenth`), and the network that acted with the action
+  it chose, its probability, the hit head's danger, the act mode's draw and the next most likely actions
+  (`boss-gleeok: SWORD N 62% hit 3% (temperature) | MOVE S 16 21%`). All of it comes from the replay alone
+  (version 2); an older replay shows none.
 
 ## Sound (`crates/zcore/src/sound.rs`)
 
@@ -2076,7 +2106,7 @@ device. The machine is bit-identical with sound on or off (`crates/zcore/tests/s
 
 ## Videos (`create-video.py`, `video.py`)
 
-`create-video.py OUT [COLUMNSxROWS] REPLAY... [--scale N] [--sound] [--controller] [--states-dir DIR]` films
+`create-video.py OUT [COLUMNSxROWS] REPLAY... [--scale N] [--sound] [--controller] [--thoughts] [--states-dir DIR]` films
 replays as `play-zelda.py` shows them (the same `play_view.Window`, rendered offscreen without its title bar)
 into `OUT`: H.264 yuv420p (CRF 18) at 39375000/655171 fps (the NES's 60.0988), with `--sound` AAC 48 kHz mono,
 in the container the file name asks for (`.mp4`, `.mkv`, `.mov`); it needs `ffmpeg`. The grid defaults to 1x1;
@@ -2088,8 +2118,9 @@ and the last result has had its pause. `--sound` adds the sound of the middle ce
 else of the top left one; `VideoGrid.audio()` hands out each film frame's exact share of samples (silence while
 that cell shows a result), so sound and picture stay together. In a grid of several cells that cell has the
 yellow frame. The picture is piped to ffmpeg as it is made; the sound goes to a temporary WAV beside `OUT` and
-is joined at the end. It prints a JSON summary (`out`, `frames`, `seconds`, `width`, `height`, `replays`,
-`sound`, `heard`, `took`); exit 1 when a replay can't be played or ffmpeg fails, 2 on a bad command line.
+is joined at the end. `--thoughts` draws each replay's thoughts as play-zelda does ("Watching"). It prints a JSON
+summary (`out`, `frames`, `seconds`, `width`, `height`, `replays`, `sound`, `thoughts`, `heard`, `took`); exit 1
+when a replay can't be played or ffmpeg fails, 2 on a bad command line.
 
 ## Routes: two routes, state namespaces, per-route promotion (phase X, 2.0.0.0)
 
