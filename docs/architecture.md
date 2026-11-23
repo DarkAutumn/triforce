@@ -1416,7 +1416,8 @@ every step, so following an enemy that moves away pays again, and knockback rese
   told apart), `started`, `command`, `cwd`, `checkout`, `branch`, `commit`, `log_dir`, `plan`, `name`, `kind`,
   `status` (`queued`, then `running`, then the plan's final status from `finish`), `queued` / `queued_ts` (when it
   joined the line), `admitted` / `admitted_ts` (when it started running), `lane` (`regular` or `express`),
-  `no_wait`, `work`, `estimate`, `finished` and `ran` (seconds from admitted to finished). A `--no-log` evaluation or
+  `no_wait`, `express` (it asked for the express place), `work`, `estimate`, `finished` and `ran` (seconds from
+  admitted to finished). A `--no-log` evaluation or
   chain registers too, without a folder (`log_dir`, `plan` null; `events.logged_job(log=False)`), named after its job.
   A top-level job counts once: a round's or batch's trainings, evaluations and chains write into their owner's
   folder (`--events` into a folder with a plan) and have no entry. Writes are atomic; a registry that can't be
@@ -1449,7 +1450,12 @@ every step, so following an enemy that moves away pays again, and knockback rese
   short chain doesn't wait for the hour-long trainings that usually hold both regular places: at most two regular
   jobs and one short one. A short job takes the express place when it is free, else a regular one; express jobs
   count only against the express place; a job that gets no place waits, and a later one may take a place it can use
-  (a short job passes long ones blocked on the regular places). Every checkout runs this one rule (since Nov 17
+  (a short job passes long ones blocked on the regular places). An **express request** (Nov 23: `--express` on every
+  job entry point, or `$TRIFORCE_EXPRESS=1`; the entry's `express` field) makes a job express-sized whatever its
+  estimate: a short measurement the owner wants in the fast lane (the 250-run test, `scripts/full_runs.py runs250`,
+  7-11 minutes) is not held back when the history's rates put it over 10 minutes. It still takes its turn in the
+  line by its score and waits for the express place itself (else a regular one), and counts as running. Every
+  checkout runs this one rule (since Nov 17
   there is no fallback for code from before it: an entry without an `estimate` counts as estimate 0). Entries of
   other hosts and of a job's own process are ignored; a running entry without a `lane`
   is regular. Liveness is read from `/proc` (pid and process start time, `job_alive`), never from a job

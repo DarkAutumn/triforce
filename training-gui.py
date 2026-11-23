@@ -1383,7 +1383,8 @@ def queue_state(log_dir: Path, plan: dict, jobs: list[dict], proc: Path = Path('
                 now: float | None = None) -> dict:
     """A queued plan's place in the job queue: {'place': 1-based or None, 'running': labels of the jobs it waits for,
     'ahead': labels of the queued jobs before it, 'limit': jobs run at once or None, 'since': Unix seconds it joined
-    the line or None, 'estimate': seconds it is expected to run or None, 'lane': 'regular' | 'express' | None}.
+    the line or None, 'estimate': seconds it is expected to run or None, 'lane': 'regular' | 'express' | None,
+    'express': its entry asked for the express place (``--express``)}.
     From the registry while the plan's entry is there and queued on this host:
     the line is this host's live queued entries in the order they will start (``queue_order`` at ``now``), what it
     waits for the live running ones of other processes.  Otherwise (no entry, another host, an entry already
@@ -1393,7 +1394,7 @@ def queue_state(log_dir: Path, plan: dict, jobs: list[dict], proc: Path = Path('
              'ahead': list(recorded.get('ahead') or []), 'limit': recorded.get('limit'),
              'since': parse_time(recorded.get('queued')), 'estimate': known(plan.get('estimate'),
                                                                             recorded.get('estimate')),
-             'lane': plan.get('lane') or recorded.get('lane')}
+             'lane': plan.get('lane') or recorded.get('lane'), 'express': False}
     entry = job_entry(log_dir, jobs, 'queued')
     if entry is None:
         return state
@@ -1406,9 +1407,10 @@ def queue_state(log_dir: Path, plan: dict, jobs: list[dict], proc: Path = Path('
     state.update(place=place + 1, ahead=[job_label(job) for job in line[:place]],
                  running=[job_label(job) for job in live
                           if job.get('status') == 'running' and job.get('pid') != entry.get('pid')
-                          and not (job.get('lane') == 'express'
+                          and not (job.get('lane') == 'express' and not entry.get('express')
                                    and (entry.get('estimate') or 0) > EXPRESS_SECONDS)],
-                 estimate=known(entry.get('estimate'), state['estimate']), lane=entry.get('lane') or state['lane'])
+                 estimate=known(entry.get('estimate'), state['estimate']), lane=entry.get('lane') or state['lane'],
+                 express=bool(entry.get('express')))
     if entry.get('queued_ts') is not None:
         state['since'] = entry['queued_ts']
     return state
@@ -1450,12 +1452,12 @@ def ordinal(number: int) -> str:
 
 def queue_times(state: dict, now: float) -> tuple[str, str]:
     """A queued plan's (estimate, wait): ('~3 min', 'waited 12m'), the estimate 'short ~3 min' when it is short
-    enough for the express place; ('', '12m 05s') for a plan that records no estimate."""
+    enough for the express place or asked for it; ('', '12m 05s') for a plan that records no estimate."""
     since, estimate = state.get('since'), state.get('estimate')
     if estimate is None:
         return '', fmt_duration(now - since) if since is not None else ''
     label = fmt_estimate(estimate)
-    if EXPRESS_JOBS and estimate <= EXPRESS_SECONDS:
+    if EXPRESS_JOBS and (state.get('express') or estimate <= EXPRESS_SECONDS):
         label = f"short {label}"
     return label, f"waited {fmt_coarse(now - since)}" if since is not None else ''
 

@@ -686,6 +686,17 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   the model [...] Best is defined as 'fewest cheated items, completed in the fewest frames' in that order." Other
   replays (deaths included) may be kept to peek at later, within reason. Near the 2 TB floor: **ask the owner what
   to trim; never trim without asking.**
+- **The 250-run test of every versioned build** (the owner, Nov 23: "When you build a new model that looks
+  'interesting' [...] I want you do 250 runs and record the best and worst [...] save up to 3 runs that end 'stuck',
+  with each [...] having a different room [...] capture detailed statistics about these runs [...] a .json that goes
+  along with each run of this test that we persist long term [...] from power on, not a save state [...] should also
+  always fit in the 'fast lane' for the queue"). `scripts/full_runs.py runs250 [--models-dir DIR --team NAME]`
+  freezes the team's pointers, plays 250 runs of `d3first` from console power on through the job line in the express
+  place (`eval-chain --express`), keeps the best, the worst and up to 3 stuck runs in different rooms (copies under
+  `target/`, archived to the backup with `archive_replays.py --kind runs-250`, never `replays/`) and commits the
+  record `docs/runs250/<version>[_<team>].json` (endings by kind, triforce rates, deaths and stucks per room and step,
+  hits and hearts lost per visit, cheated items per run, median frames to each triforce). `full_runs.py analyze
+  OLD.json NEW.json` compares records (binomial standard errors) and prints the Markdown for the check-in.
 - **0x0a before the white sword:** leaving S is a `retreat` (routes.yaml `retreat: S`; neutral by default, ow-lynel
   ships `endings: {retreat: soft-failure}` for the baseline), and a chain run goes on (0x1a sends Link back N).
   Whether a model learns to use it is open.
