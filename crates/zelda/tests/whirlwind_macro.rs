@@ -24,15 +24,24 @@ use zelda::{Action, GameMap, LoadOptions, MapLocation, Session};
 type S = Session<Counted>;
 
 const ROUTE: &str = "d3first";
-/// routes.yaml's `macros:` entry for `d3first` as landed (off), and the fresh generation's (on).
+/// routes.yaml's `macros:` entry for `d3first` as landed (2.0.0.14: the two whirlwinds on, the docks helped), with
+/// nothing on (how the team played before, and the networks' own play), and the fresh generation's (the docks unaided
+/// too).
+const LANDED: &str = "macros:\n  d3first:\n    whirlwinds: [{level: 0, room: '0x0b'}, {level: 0, room: '0x22'}]\n    \
+                      unaided_docks: false\n";
 const OFF: &str = "macros:\n  d3first:\n    whirlwinds: []\n    unaided_docks: false\n";
 const ON: &str = "macros:\n  d3first:\n    whirlwinds: [{level: 0, room: '0x0b'}, {level: 0, room: '0x22'}]\n    \
                   unaided_docks: true\n";
 
-/// The map with `d3first`'s macros on.
+/// The map with `d3first`'s macros entry replaced by `entry`.
+fn map_with(entry: &str) -> Arc<GameMap> {
+    assert!(ROUTES_YAML.contains(LANDED), "routes.yaml's d3first macros entry is the landed one");
+    Arc::new(GameMap::from_yaml(GAME_YAML, &ROUTES_YAML.replacen(LANDED, entry, 1)).unwrap())
+}
+
+/// The map with every macro of `d3first` on (the fresh generation's entry).
 fn map_on() -> Arc<GameMap> {
-    assert!(ROUTES_YAML.contains(OFF), "routes.yaml's d3first macros entry is the landed one");
-    Arc::new(GameMap::from_yaml(GAME_YAML, &ROUTES_YAML.replacen(OFF, ON, 1)).unwrap())
+    map_with(ON)
 }
 
 fn ow(room: u8) -> MapLocation {
@@ -136,33 +145,38 @@ impl Walk {
     }
 }
 
-/// routes.yaml as landed: `d3first` names its macros, every one off, and no other route has any; the fresh
-/// generation's entry turns them on; a room that is no whirlwind step's is refused.
+/// routes.yaml as landed (2.0.0.14): `d3first` plays its two whirlwinds as macros and its docks helped, and no other
+/// route has any macro; the fresh generation's entry turns the unaided docks on too; a room that is no whirlwind
+/// step's is refused.
 #[test]
-fn the_macros_are_a_route_switch_off_as_landed() {
+fn the_macros_are_a_route_switch_whirlwinds_on_as_landed() {
     let landed = GameMap::builtin();
-    assert_eq!(landed.macros[ROUTE], Macros::default());
+    assert_eq!(landed.macros[ROUTE].whirlwinds, [ow(0x0b), ow(0x22)].into_iter().collect());
+    assert!(!landed.macros[ROUTE].unaided_docks);
     assert!(!landed.macros.contains_key("d2first"));
+    assert_eq!(map_with(OFF).macros[ROUTE], Macros::default());
     let on = map_on();
     assert_eq!(on.macros[ROUTE].whirlwinds, [ow(0x0b), ow(0x22)].into_iter().collect());
     assert!(on.macros[ROUTE].unaided_docks);
     for room in ["0x45", "0x55"] {
-        let bad = ROUTES_YAML.replacen(OFF, &ON.replacen("0x0b", room, 1), 1);
+        let bad = ROUTES_YAML.replacen(LANDED, &ON.replacen("0x0b", room, 1), 1);
         let e = GameMap::from_yaml(GAME_YAML, &bad).unwrap_err().to_string();
         assert!(e.contains("is no whirlwind step's room"), "{room}: {e}");
     }
 }
 
-/// Off (as landed) the networks play the whirlwind by hand: out of Level 6 Link comes out facing down and RECORDER
-/// waits for him to face up; on, it is offered at once (the macro turns him) and is no dock warp's.
+/// Off the networks play the whirlwind by hand: out of Level 6 Link comes out facing down and RECORDER waits for him
+/// to face up; on (as landed), it is offered at once (the macro turns him) and is no dock warp's.
 #[test]
 fn the_switch_decides_who_plays_the_whirlwind() {
-    let Some(off) = Walk::start(&Arc::new(GameMap::builtin()), "d3first_0_22c_0", 0x22) else { return };
+    let Some(off) = Walk::start(&map_with(OFF), "d3first_0_22c_0", 0x22) else { return };
     assert_eq!(off.gc.warp(off.s.state()), None);
     assert!(!off.allowed("RECORDER"), "facing down out of Level 6: the network turns first");
-    let Some(on) = Walk::start(&map_on(), "d3first_0_22c_0", 0x22) else { return };
-    assert_eq!(on.gc.warp(on.s.state()), Some(Warp::Whirlwind { level: 2 }));
-    assert!(on.allowed("RECORDER"), "the macro turns Link itself");
+    for map in [Arc::new(GameMap::builtin()), map_on()] {
+        let Some(on) = Walk::start(&map, "d3first_0_22c_0", 0x22) else { return };
+        assert_eq!(on.gc.warp(on.s.state()), Some(Warp::Whirlwind { level: 2 }));
+        assert!(on.allowed("RECORDER"), "the macro turns Link itself");
+    }
 }
 
 /// The macro's RECORDER is masked by Link's position only: wherever he walks in 0x0b and 0x22, with the monsters
