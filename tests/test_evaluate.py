@@ -129,7 +129,7 @@ def test_write_result_keeps_the_old_file_when_the_write_fails(tmp_path, monkeypa
     with pytest.raises(OSError):
         write_result({'episodes': 1}, path)
     assert json.loads(path.read_text()) == {'episodes': 3}
-    assert [p.name for p in path.parent.iterdir()] == ['eval.json']
+    assert sorted(p.name for p in path.parent.iterdir()) == ['eval.json', 'eval.json.stats.json']    # no temp file
 
 
 def test_read_evaluation_finds_the_evaluation_in_the_act_mode_of_the_current_weights(tmp_path):
