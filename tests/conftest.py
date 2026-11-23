@@ -113,8 +113,9 @@ def _report_suite(force: bool = False):
         return
     _session['reported'] = now
     done, total, began = counts
-    report = {'done': done, 'total': total, 'unit': 'tests', 'rate': done / (now - began) if now > began else None,
-              'ts': time.time()}
+    # Named for the suite: a test job's bar is the Python suite's alone (the Rust suite beside it reports none).
+    report = {'done': done, 'total': total, 'unit': 'Python tests',
+              'rate': done / (now - began) if now > began else None, 'ts': time.time()}
     try:
         from triforce import jobqueue  # pylint: disable=import-outside-toplevel
         con = jobqueue.connect(Path(directory))
