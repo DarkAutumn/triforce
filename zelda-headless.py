@@ -6,7 +6,7 @@ the promoted models, a family's promoted.<route> over its promoted).
     .venv/bin/python zelda-headless.py runs/wins 3 --wins-only          # play until 3 runs finished the route
     .venv/bin/python zelda-headless.py runs/d2 5 --wins-only --power-on --stop-at step:24
                                                                         # from console power on to Dungeon 2's triforce
-    .venv/bin/python zelda-headless.py runs/deaths 20 --deaths-only --streams rewards,decisions
+    .venv/bin/python zelda-headless.py runs/deaths 20 --deaths-only --streams rewards
     .venv/bin/python zelda-headless.py runs/golden 1 --golden --power-on    # one stitched run to the route's end
 
 OUT is a folder (created if missing); COUNT (default 1) is how many replays to save.  Without a filter the runs
@@ -27,7 +27,10 @@ screen (0..=32766, or random: drawn from each run's seed).
 --golden plays the golden path instead: for each of the route's triforces in turn, --parallel games race to it
 from the same state; the first to stand on the overworld with it becomes the checkpoint every game restarts
 from, until the route's end (d2first: eight triforces, then Dungeon 9 to the ending).  The winners are stitched
-into one replay, OUT/golden-<first seed>-<ending>.tfreplay (COUNT of them, each from its own seeds).
+into one replay, OUT/golden-<first seed>-<ending>.tfreplay (COUNT of them, each from its own seeds).  A golden race
+is a job of the machine's queue (`triforce job golden --agent A --task T --timeout 10m`: its time cap is its
+estimate; triforce.jobs.announce), and reports the segments won of the route's and the runs played (as they
+finish) as its progress.
 
 Nothing is drawn and nothing else is written: one line per saved file (path, ending, frames, seed) and a JSON
 summary on stdout.
@@ -39,6 +42,8 @@ import os
 import sys
 
 from triforce import _native, golden, registry, replay
+from triforce.jobs import announce
+from triforce.jobs import progress as job_progress
 from triforce.runner import (STOP_AT_HELP, Route, Runner, RunnerError, add_power_on_arguments, parse_stop,
                              power_on_options)
 
@@ -168,13 +173,25 @@ def play_golden(args, runner: Runner, folder: replay.ReplayDir) -> int:
                                    args.keyframe_frames)
     segments = len(golden.checkpoints(args.route)) + 1      # at most: a start past a checkpoint has fewer
     runs = 0
+    won = before = 0            # segments won; runs played by the segments that ended
+
+    def on_run(_index: int, finished: int):
+        job_progress(before + finished, None, 'runs', 'runs played')
+
+    def on_segment(segment: dict):
+        nonlocal won, before
+        won += segment['won']
+        before += segment['runs_played']
+        job_progress(won, segments * args.count, 'segments', 'segments won', force=True)
+        job_progress(before, None, 'runs', 'runs played', force=True)
+        print(f"segment {json.dumps(segment)}", file=sys.stderr, flush=True)
+    job_progress(0, segments * args.count, 'segments', 'segments won', force=True)
     for index in range(args.count):
         first_seed = args.first_seed + index * segments * args.attempts
         data, summary = golden.golden_path(
             runner.policies, args.route, args.parallel, first_seed, record, start_from=args.start_from,
             power_on=args.power_on, attempts=args.attempts, act=runner.act,
-            max_steps=runner.max_steps,
-            on_segment=lambda segment: print(f"segment {json.dumps(segment)}", file=sys.stderr, flush=True))
+            max_steps=runner.max_steps, on_segment=on_segment, on_run=on_run)
         runs += sum(segment['runs_played'] for segment in summary['segments'])
         if summary['result'] != 'success':
             last = summary['segments'][-1]
@@ -189,6 +206,8 @@ def play_golden(args, runner: Runner, folder: replay.ReplayDir) -> int:
 
 def main(argv=None) -> int:
     args = parse_args(argv)
+    if args.golden:             # a race: a job of the machine's queue (the dry call ends here)
+        announce('golden')
     try:
         runner = Runner(models_dir=args.models_dir, act=registry.act_override(args.act),
                         parallel=args.parallel, route=args.route)

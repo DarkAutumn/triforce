@@ -18,6 +18,8 @@
 # Wizzrobes each), get tracks from starts with K of the seven kills banked (`--room-kills`, track `<state>~k<K>`).
 # The full fight is tried first; a staged or full-fight track that fails is reported and does not fail the script.
 set -uo pipefail
+source "$(dirname "$0")/../job.sh"      # a job of the machine's queue: triforce job run ... -- this script ...
+require_job "$0" "$@"
 cd "$(dirname "$0")/../.."
 PY=.venv/bin/python
 OUT=${1:-trajectories}

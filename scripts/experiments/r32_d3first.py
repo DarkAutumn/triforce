@@ -7,13 +7,18 @@ with the wooden sword, as route steps played in the running game (`r32_walks`).
 
 `stage` walks every step once from `start.state` with the monsters pinned and saves each step's pre-entry state under
 target/r32-walks/states (the route's state names); `rooms` plays each step alone from its state, 20 seeds, monsters
-live; `chain` plays the legs' steps one after another in one game from the first step's state, as a run would."""
+live; `chain` plays the legs' steps one after another in one game from the first step's state, as a run would.
+
+It plays the game over many seeded trials: a job of the machine's queue (``jobs.require_job``: ``triforce job run
+... --timeout 30m -- .venv/bin/python scripts/experiments/r32_d3first.py ...``)."""
 
 import argparse
 import collections
 import json
 import statistics
 from pathlib import Path
+
+from triforce.jobs import require_job
 
 from r26_walks import ROOT
 from r32_walks import Failed, Runner, first_monsters, hp, load, set_hearts, stage, summary, trial
@@ -400,6 +405,7 @@ def main():
     parser.add_argument('--containers', type=int, default=None, help='rooms: this many heart containers, full')
     parser.add_argument('--variant', default=None, help='rooms: play the steps that have this variant (VARIANTS)')
     args = parser.parse_args()
+    require_job()
     args.legs = args.legs.split(',')
     args.steps = args.steps.split(',') if args.steps else None
     {'stage': cmd_stage, 'rooms': cmd_rooms, 'chain': cmd_chain, 'scan': cmd_scan, 'table': cmd_table}[args.cmd](args)

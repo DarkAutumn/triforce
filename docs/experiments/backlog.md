@@ -95,20 +95,20 @@ built):
 What the baseline leaves open, in the order it costs the route (runs lost per 1000 entering the room; nothing has
 been retrained on the corrected order):
 
-- [ ] **The leg from Level 7 to Level 6, 22.4%:** ow-lynel at 0x50 (644: leaves N into 0x40, its `d2first` way,
-  and bounces between 0x40 and 0x50) and 0x60 (320: back E instead of the wrap W). Training on the corrected order
-  (explorer tracks made in round 36).
-- [ ] **Out of Level 6 to Level 8, 32.0%:** ow-lynel at 0x22 (680) walks back into Level 6 instead of turning up
-  and playing (180 then die to 6:0x78's Wizzrobes).
+- [x] **The leg from Level 7 to Level 6, 22.4%** (2.0.0.11: `ow-lynel@d3first` `r38rw-lynel`, 98.7% of 1000):
+  ow-lynel at 0x50 (644: leaves N into 0x40, its `d2first` way, and bounces between 0x40 and 0x50) and 0x60 (320:
+  back E instead of the wrap W).
+- [x] **Out of Level 6 to Level 8, 32.0%** (2.0.0.12: ow-lynel's `late.d3first` run `r38d-lynel-late-s1`, 33.3 ->
+  100.0% of 1000): ow-lynel at 0x22 (680) walked back into Level 6 instead of turning up and playing.
 - [ ] **Dungeon 7 at 9 containers and 2 bombs, 13.1%:** goriya at 7:0x1b (689, against 149 at 11 with the bag),
   7:0x1a 116, 7:0x19 70; boss-digdogger 7:0x1c 161.
 - [ ] **The leg from Level 5 to Level 7, 78.9%** after the dock change (0x55 still loses 85, 58 of them rafted
   back to the bounce limit).
 - [ ] **ow-leever at 0x0b's whirlwind out of Level 5** (86: two plays facing S now; 62 runs bounce between 0x0b and
   0x1b).
-- [ ] **The whirlwinds at 0x0b and 0x22 could be played by the engine as the docks are** (a macro from the step
-  that plays the search's sequence): it would take the network out of ow-leever's 86 and ow-lynel's 680 (not
-  measured: what the networks do before the step stays theirs).
+- [ ] **The whirlwinds at 0x0b and 0x22 played by the engine as the docks are** DECIDED (the owner, Nov 23): yes,
+  in the fresh generation, as fixed button sequences masked by Link's position only; the network chooses the moment
+  and does its own dodging; the dock warp loses its two monster give-ways then (below, "The fresh generation").
 - [ ] **Cheated wall bombs, 0.76 a run in Dungeon 7** (7:0x1a 0.75), the largest count on a dungeon the reorder
   changed (`d1`'s 1.00 at 1:0x53 is in a segment it did not change).
 - [x] **Bombs as a weapon only in dungeon rooms the route must clear** (landed 2.0.0.6, round37.md "The owner's
@@ -238,13 +238,20 @@ been retrained on the corrected order):
   wizrobes in d6 0x78 should be strongly encouraged, as they have a leader, and killing 1-2 might clear the room for
   some lucky drops. I don't know we should say clearing the room is the goal, but you might give it a try to see
   how often that costs us health/d6 completions versus bombs added. Or somehow encourage a quick snipe or two").
-- [ ] **Is Moldorm's key needed?** DECIDED (the owner, Nov 22, after the scout's ledger: needed only for Dungeon 9, short
-  at 9:0x63's west door): "drop the moldorm fight (it's now passthrough) and fight in d9 0x56 to get the missing key";
-  branch `r39-key`. (the owner, Nov 22: "Can we bypass the moldorm, or do we drop to 0 keys in the
-  run. If so where do we drop to 0 keys without it?")
-- [ ] **3:0x5b with a full bag walks between the wall and the bombs** CAUSE FOUND (round38.md "The owner's three causes"): the
-  objective already follows the owner's order (one target at a time, test pinned); darknut@d3first was trained
-  before the bomb rules, when the room's bombs were wanted at any count. Next: retrain it there with full-bag starts. (the owner, Nov 22: "If full on bombs the target
+- [x] **Is Moldorm's key needed?** DONE in 2.0.0.13 (the owner, Nov 22, after the scout's ledger: needed only for
+  Dungeon 9, short at 9:0x63's west door): "drop the moldorm fight (it's now passthrough) and fight in d9 0x56 to get
+  the missing key". `d3first` crosses 2:0x3e and takes 0x56's key (the count never below 0); fine-tuned moldorm and
+  like-like: 2:0x3e 0.35 hearts and 1 death in 1000 crossing (0.52 and 1 fighting), 9:0x56's key in 999 of 1000 runs,
+  Dungeon 9 51.2% (53.0% before, −1.8 ± 2.2 paired). round39.md "Moldorm crossed, 9:0x56's key: the two fine-tunes".
+  (the owner, Nov 22: "Can we bypass the moldorm, or do we drop to 0 keys in the run. If so where do we drop to 0
+  keys without it?")
+- [ ] **3:0x5b with a full bag walks between the wall and the bombs** TRAINED, NOT PROMOTED (round38.md "3:0x5b
+  with a full bag, trained", branch `r39-dark5b`): darknut@d3first was trained before the bomb rules;
+  `r39-dark5b-s1` continued it on full-bag starts (`ram_randomization.room_bombs`, landed): the owner's case 69% ->
+  100%, 5,542 -> 407 frames a visit; chains d3 +2.2 ± 2.2, d5 +0.4 ± 2.1, d8 −3.8 ± 1.5. The lead did not promote
+  it (Nov 23): the gain is within noise, the usual return to 3:0x5b takes more hits (0.33 -> 0.62 a visit, deaths 54
+  -> 100 of 1000 runs), a full bag there is 3 visits in 1000 runs, and the fresh generation trains darknut with the
+  full-bag starts anyway. (the owner, Nov 22: "If full on bombs the target
   should be the bomb wall, he drops a bomb, the target should be on the bombs, when the bombs picked up, the target
   is moving to the next room. [...] I suspect he has two targets here? Or was trained with something that had
   conflicting targets?")
@@ -385,7 +392,23 @@ thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
   penalty; `penalty-aimless` on or off (its experiment first: ow-start and pols-voice at 0.002 / 0.005 a frame).
 - **What the engine plays, not the network** (the owner, Nov 23: allowed if the network chooses the moment and the
   macro never dodges): the whirlwinds out of Level 5 (0x0b) and Level 6 (0x22) as fixed button sequences offered as
-  a choice; the dock warp's two monster give-ways (`dock_warp_mask`) removed so the network times the plays itself.
+  a choice; the dock warp's two monster give-ways (`dock_warp_mask`: the forced sword strike, the forced wait)
+  removed so the network times the plays itself. The owner confirmed (Nov 23): today's team keeps the docks as they
+  are; the next team "gets no help from swords or dodging", and masking stays where the trick would not work from
+  where Link stands (as for the screen wrap): position only, never the monsters.
+- **A cheated wall bomb appears only when the wall is the objective** (the owner, Nov 23: "I want cheat-bombs to
+  not show up unless the objective is to go into a wall that needs it (or dodongo d2 boss). [...] when we enter
+  something like [7:]0x1a to get the red candle, he has the cheated bombs this entire room, even when grabbing the
+  candle, or other rooms hit twice like the first time we hit d3 5b. Those bombs shouldn't show up until we are
+  headed towards the bomb-door and we aren't on a 'clear the room' directive like 0x5b on the way to 0x5c with
+  zero bombs."). Today the room's grant is topped up on entering a `requires_bombs` room (`zelda::cheats`,
+  `CheatLedger::settle`: "in the room Link is in now, a count below the need is topped up"). New rule, a route
+  switch on for the fresh generation (today's team keeps its timing): the grant is given only while the objective's
+  target is the bomb wall the route leaves through (not while it is a fight, a treasure, an item or another exit),
+  taken back if the objective turns away before the bomb is laid, and in Dodongo's room (2:0x0e, the bomb is the
+  weapon) for the fight. So the observation's bomb count, the BOMB mask and the 10th-kill logic see no bomb that
+  is not Link's own until the wall is next. Tests: 7:0x1a with the candle still to take, 3:0x5b's first visit (the
+  fight for its bombs) and its last pass with an empty bag, Dodongo.
 - **Teachers by group first** (the owner: "yes to all", start with the lead's idea, stop when it works): about five
   groups from scratch, a family split off where its group can't learn it; an arm without the room identity if cheap;
   the planner as a teacher in training at the lead's judgement.
@@ -410,6 +433,34 @@ thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
   `d2first`"): the yardstick's rooms are chosen from these lists.
 - The unused `grant:` vocabulary; one like-like run for both routes; the per-route tables never refitted;
   `select-checkpoint --segment` on `d3first`: tool and data debts, picked up when the code they touch is touched.
+- **From the lead's todo, Nov 23 (rewritten that day; these are not in the new short list):**
+  - The one network's Dungeon 4 (57.0% against the team's 68.4%; round38-one.md): the trap room 4:0x11 stuck 79 a
+    thousand with the hit head at weight 8 (none without it: weights 4 and 16 are built, `models/r38c/d2b-all-w{4,16}`
+    in the r38-one worktree); Gleeok 4:0x13 loses 367 a thousand against 282 (a DAgger round with the team's Gleeok
+    as the teacher). Superseded if the fresh generation's network does not show them.
+  - A full-route record of 1000 runs for each landed team from 2.0.0.12 on (`r40-2012-1k-full`), beside the 250 test.
+  - Power on against the start state: no difference in 100 + 100 runs; 1000 each would settle it.
+  - Tool debts found Nov 23: `python -m triforce.explore --variant` with a yaml path loses its tracks; `eval-batch`'s
+    summary step failed after a four-segment batch (Key39b, not looked into); replays with the decision streams are
+    several times larger (measure after the sparse encoding; `/backup` keeps 2 TB free).
+  - **A front door for jobs** (the owner's question, Nov 23: should the queue be an API rather than environment
+    variables kept on scout's honour; the lead's answer: a thin front door, not a service). `triforce job submit NAME
+    [--express] -- <tool and its arguments>` validates the name (`<work>-<subject>-<what>`), starts the tool detached,
+    prints the job's id and returns; `triforce job list | status ID | wait ID | cancel ID` (cancel only the caller's
+    own). A tool started directly without a name and without a terminal is refused, so the rules are enforced at
+    the door. The registry files stay the format (old trees and running jobs keep working); no daemon. Not before
+    the backtest is done (it ports `jobs.py` into 26 trees). Proposed, not started: the owner decides.
+  - **The Python suite was slow: done Nov 23 (r40-tests).** It was 7 minutes on ONE core (the owner, Nov 23: "Why
+    does pytest take so long?"; 982 tests, 410-433 s in three runs at load 2-5, the sum of ~980 small tests, many
+    end to end). Now `triforce job test python` runs it in 8 processes (pytest-xdist, worksteal): about a minute
+    on a quiet machine (AGENTS.md "Environment"). The owner's follow-up replaced the printout of slow tests: every
+    test run writes a timing log into the logs folder (`triforce.testlog`, the Rust suite per test binary) and
+    `triforce test-times` reads them together (each test's median and worst, the slowest, what grew), so a test
+    that grows slow is seen in the history. Left: `test_entry_states.py::test_configured_start_states_are_clean`
+    (12 s) and the select-checkpoint test (about 25 s alone, 7 chains) set the suite's floor; nothing else is above
+    7 s.
+  - The plain ways the first-quest draft left open (the Lost Woods maze in the objective, the overworld ladder clip):
+    dropped, the program plays clips on only.
 
 ## Questions for the owner (next check-in)
 

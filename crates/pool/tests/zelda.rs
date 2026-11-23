@@ -1215,6 +1215,8 @@ fn the_replay_tables_are_the_games() {
     assert_eq!(actions::KINDS.to_vec(), ActionKind::ALL.map(|k| k.name()).to_vec());
     assert_eq!(actions::DIRECTIONS.to_vec(), zelda::actions::DIRECTIONS.map(|d| d.name()).to_vec());
     assert_eq!(actions::DURATIONS, zelda::actions::DURATIONS);
+    assert_eq!(actions::DIRECTIONAL.to_vec(), ActionKind::ALL.map(zelda::actions::is_directional).to_vec());
+    assert_eq!(actions::TIMED.to_vec(), ActionKind::ALL.map(zelda::actions::is_timed).to_vec());
     assert_eq!(actions::DISTRIBUTION, MASK_SIZE);
     assert_eq!(replay::CHEAT_ITEMS.to_vec(), zelda::cheats::CheatItem::ALL.map(|i| i.name()).to_vec());
     assert_eq!(replay::OUTCOME_CLASSES.to_vec(), env::rewards::OUTCOMES.to_vec());

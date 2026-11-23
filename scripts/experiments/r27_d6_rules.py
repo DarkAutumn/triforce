@@ -27,6 +27,9 @@ dozens.  Each start state is played over seeds 1000.. with the reset's own hp an
 
 ``tracks`` writes, per start state, the first N clean runs as the curriculum reads them:
 ``OUT_DIR/<state>~rule<seed>/NNNN.state`` and ``trajectory.json`` (as ``r25_d5_37_tracks.py``).
+
+It plays the rule over many runs: a job of the machine's queue (``jobs.require_job``: ``triforce job run ...
+--timeout 30m -- .venv/bin/python scripts/experiments/r27_d6_rules.py ...``).
 """
 
 import argparse
@@ -37,6 +40,7 @@ from pathlib import Path
 
 from triforce._native import Env
 from triforce.demos import DemoRecorder, action_indices, legal
+from triforce.jobs import require_job
 
 OBJ_X, OBJ_Y, OBJ_TYPE, OBJ_METASTATE = 0x70, 0x84, 0x34F, 0x405      # slot 0 is Link, 1..11 the monsters
 GOHMA_TYPES = (0x33, 0x34)                                           # blue and red Gohma
@@ -249,6 +253,7 @@ def main(argv) -> int:
             one.add_argument('--runs', type=int, default=40 if command == 'play' else 200,
                              help="episodes a start state")
     args = parser.parse_args(argv)
+    require_job()
     if args.command == 'tracks':
         return 0 if tracks(args.rule, Path(args.out), args.per_state, args.max_loss) == 3 * args.per_state else 1
     clean = play(args.rule, args.runs, args.max_loss, Path(args.out) if args.command == 'demos' else None)

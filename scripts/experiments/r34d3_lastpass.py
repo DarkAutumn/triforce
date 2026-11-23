@@ -8,7 +8,9 @@ $01-$0B), the frame each one dies and the frame the last one does; every damage 
 x/y, the nearest object, its distance, the Darknuts alive then); bombs placed (the inventory count dropping) and the
 frame of each; frames Link spends within 16 / 24 pixels of a Darknut while any lives.  Printed per label by hearts
 on entering (<= 1, 1.5-2, > 2): endings, hits, where the hits happen (the fight, after it), kills, frames to the last
-kill, bombs placed before the last kill, the close-quarter share of the fight."""
+kill, bombs placed before the last kill, the close-quarter share of the fight.  It plays every replay given: a job of
+the machine's queue (``jobs.require_job``: ``triforce job run ... -- .venv/bin/python
+scripts/experiments/r34d3_lastpass.py ...``)."""
 
 import argparse
 import collections
@@ -16,6 +18,7 @@ import json
 from pathlib import Path
 
 from triforce._native import Replay, ReplayPlayer
+from triforce.jobs import require_job
 
 RAM_PRG = 0x800
 OBJ_TYPE, OBJ_X, OBJ_Y = 0x34F, 0x70, 0x84
@@ -130,6 +133,7 @@ def main():
     parser.add_argument('dirs', nargs='+', help='LABEL=REPLAY_DIR')
     parser.add_argument('--json', type=Path)
     args = parser.parse_args()
+    require_job()
     out = {}
     for spec in args.dirs:
         label, d = spec.split('=', 1)

@@ -8,11 +8,16 @@ every trial loads the room's pre-entry state with the game's own randomness for 
     python scripts/experiments/r29_fight_rooms.py look                     # what each room holds, who counts
     python scripts/experiments/r29_fight_rooms.py clear [--seeds N] [--rooms 07,05,20,10,30,03]
     python scripts/experiments/r29_fight_rooms.py bubbles [--seeds N]      # the three kinds of Bubble (two WRITTEN)
+
+It plays the game over many seeded trials: a job of the machine's queue (``jobs.require_job``: ``triforce job run
+... --timeout 30m -- .venv/bin/python scripts/experiments/r29_fight_rooms.py ...``).
 """
 
 import argparse
 import collections
 import statistics
+
+from triforce.jobs import require_job
 
 from r29_fight_walks import (BUBBLE, DIR_OF, HEARTS, LIKE_LIKE, LINK_INVINC, LINK_PARALYZED, OBJ_DIR, OBJ_HP, OBJ_META,
                              OBJ_STATE, OBJ_TYPE, OBJ_X, OBJ_Y, PLAY, ROOM_ALL_DEAD, SHOT_BLUE, SHOT_RED, SWORD_BLOCKED,
@@ -237,6 +242,7 @@ def main():
     parser.add_argument('--seeds', type=int, default=20)
     parser.add_argument('--rooms', default='07,05,20,10,30,03')
     args = parser.parse_args()
+    require_job()
     globals()[args.what](args)
 
 

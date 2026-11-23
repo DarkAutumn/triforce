@@ -6,7 +6,7 @@
 #
 #   [TAG=r79-base] [RUNS=100] [EPISODES=20] [MODELS=models] scripts/experiments/r29_d9_baseline.sh [run|report]
 #
-# run     the batch `TAG` (it waits its turn in the job line; a rerun skips what is done):
+# run     the batch `TAG` (inside this script's job of the machine's queue; a rerun skips what is done):
 #           post-d8  0_6dc_0 to the end of the game (arrival 9:0x76)  target/r56-chains/TAG-post-d8.jsonl
 #           d9       9_76s_0 to the end of the game                   target/r56-chains/TAG-d9.jsonl
 #           one evaluation a family of the stretch, EPISODES a state  target/TAG-rooms/<family>.json
@@ -18,6 +18,8 @@
 #         links each to its warm start (round29.md).
 # report  `triforce room-stats TAG` and the two Markdown tables (per room of the chains; per state of the rooms).
 set -euo pipefail
+source "$(dirname "$0")/../job.sh"      # a job of the machine's queue: triforce job run ... -- this script ...
+require_job "$0" "$@"
 cd "$(dirname "$0")/../.."
 PY=.venv/bin/python
 TAG=${TAG:-r79-base}

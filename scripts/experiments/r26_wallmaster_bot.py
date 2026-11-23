@@ -6,12 +6,16 @@ frames, and what a capture does.
     python scripts/experiments/r26_wallmaster_bot.py [--trials N] [--state STATE]
 
 The start is 7:0x0d entered through its bombed W wall with the route's inventory (`r26_walks.d7_state`), loaded
-with the game's own randomness per trial seed."""
+with the game's own randomness per trial seed.  It plays the game over many seeded trials: a job of the machine's
+queue (``jobs.require_job``: ``triforce job run ... --timeout 30m -- .venv/bin/python
+scripts/experiments/r26_wallmaster_bot.py ...``)."""
 
 import argparse
 import collections
 import tempfile
 from pathlib import Path
+
+from triforce.jobs import require_job
 
 from r26_walks import (BUBBLE, OBJ_DIR, OBJ_STATE, OBJ_X, OBJ_Y, OBJ_META, OBJ_TYPE, PLAY, SWORD_BLOCKED,
                        WALLMASTER, Walk, d7_state)
@@ -103,6 +107,7 @@ def main():
     parser.add_argument('--trials', type=int, default=20)
     parser.add_argument('--state', help='a 7:0x0d entry state (default: staged by r26_walks.d7_state)')
     args = parser.parse_args()
+    require_job()
     state = args.state or d7_state(Path(tempfile.mkdtemp()) / '7_0dw_walk.state', 0x0D, 'W', bombs=3)
     rows = []
     for seed in range(args.trials):

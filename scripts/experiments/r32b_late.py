@@ -11,9 +11,14 @@ rounds 27, 28 and 29 are played again with what `d3first` holds there (`r32b_wal
 
 What differs from d2first there is written over the earlier walks' inventories: before the grave the wood sword
 (round 27's walks hold the white one), and the keys, bombs and rupees of `d3first`'s ledger (§7); the containers,
-pieces, candles, arrows, recorder, raft and ladder are the same on both routes from Level 7 on."""
+pieces, candles, arrows, recorder, raft and ladder are the same on both routes from Level 7 on.
+
+It plays the game over many seeded trials: a job of the machine's queue (``jobs.require_job``: ``triforce job run
+... --timeout 30m -- .venv/bin/python scripts/experiments/r32b_late.py ...``)."""
 
 import argparse
+
+from triforce.jobs import require_job
 
 import r27_leg_walks
 import r27_walks
@@ -76,6 +81,7 @@ def main():
     parser.add_argument('what', choices=['grave', 'd8leg', 'd9leg', 'ledger'])
     parser.add_argument('--seeds', type=int, default=20)
     args = parser.parse_args()
+    require_job()
     globals()[args.what](args)
 
 

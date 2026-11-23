@@ -2,6 +2,10 @@
 
     python scripts/experiments/r36_merge_record.py --out target/merge/data --decisions 20480 [--keys ...] [--dry-run]
 
+Recording is a job of the machine's queue (``jobs.require_job``: ``triforce job run ... --timeout 3h --
+.venv/bin/python scripts/experiments/r36_merge_record.py ...``; ``--dry-run`` runs anywhere); the decisions recorded
+of the total are its progress (``events.progress_job``).
+
 Per key (51: 34 families, 17 ``family@d3first``) and source, the key's teacher (``registry.policy_checkpoint``)
 acting on 10 envs (``lab.collect.MultiCollector``, ``--actor teacher``), every row labelled with its joint
 log-probs and value, written like ``lab.record`` (``<out>/<key>/<source>/shard-NNNN.npz``, ``meta.json``):
@@ -25,7 +29,7 @@ import numpy as np
 
 from triforce import _native, registry
 from triforce.events import progress_job
-from triforce.jobs import add_job_arguments, begin_job, work
+from triforce.jobs import require_job, work
 from triforce.lab.bench import HARVESTED, ROUTE, load_manifest, team_keys
 from triforce.lab.collect import Family, MultiCollector, Teachers, route_only, task_yaml
 from triforce.specialist import load_specialist
@@ -115,9 +119,7 @@ def main(argv=None):
     parser.add_argument('--state-route', default=None, metavar='ROUTE',
                         help="resets on this route's states alone (lab.collect.route_only), entries only its harvest")
     parser.add_argument('--dry-run', action='store_true')
-    add_job_arguments(parser)
     args = parser.parse_args(argv)
-    begin_job(args)
     states_dir = Path(_native.paths()['states_dir'])
     every = team_keys()
     keys = args.keys or every
@@ -143,6 +145,7 @@ def main(argv=None):
         print(f"[plan] {key} {source}: {len(config.start_states)} start states", flush=True)
     if args.dry_run:
         return 0
+    require_job()
     out = Path(args.out)
     per_item = rollouts * STEPS_PER_ENV * args.parallel
     total = len(plan) * per_item

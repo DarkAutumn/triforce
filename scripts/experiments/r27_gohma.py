@@ -6,12 +6,17 @@ rupees, 2 keys after the door); every trial loads that state with the game's own
     python scripts/experiments/r27_gohma.py arrow [--seeds N]    # where and when an arrow kills
     python scripts/experiments/r27_gohma.py kill [--seeds N]     # the script: kill, heart container, out N, the piece
     python scripts/experiments/r27_gohma.py rupees               # a rupee per shot; no rupees
+
+It plays the game over many seeded trials: a job of the machine's queue (``jobs.require_job``: ``triforce job run
+... --timeout 30m -- .venv/bin/python scripts/experiments/r27_gohma.py ...``).
 """
 
 import argparse
 import collections
 import random
 import statistics
+
+from triforce.jobs import require_job
 
 from r26_walks import CUR_OPENED_DOORS, RUPEES
 from r27_walks import (FIREBALL_GOHMA, GOHMA, HEART_PARTIAL, HEARTS, OBJ_DIR, OBJ_META, OBJ_TYPE, OBJ_X, OBJ_Y, PLAY,
@@ -287,6 +292,7 @@ def main():
     parser.add_argument('what', choices=['cycle', 'arrow', 'kill', 'rupees'])
     parser.add_argument('--seeds', type=int, default=20)
     args = parser.parse_args()
+    require_job()
     globals()[args.what](args)
 
 

@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 import torch
 
-from triforce import _native, nets
+from triforce import _native, nets, replay
 from triforce.evaluate import evaluate_specialist
 from triforce.nets.base import Heads, LabNet, factored_evaluate, factored_joint
 from triforce.nets import serve as serve_module
@@ -128,6 +128,45 @@ def test_a_served_network_plays_run_for_run_like_the_rust_actor(states_dir, act)
         assert a == b
 
 
+class HitLogits(RustLogits):
+    """``RustLogits`` with a hit head: joint action ``j``'s hit logit is ``j / 88 - 2``."""
+
+    def heads(self, obs, state=None):
+        heads, state = super().heads(obs, state)
+        heads.aux = {'hit': (torch.arange(352, dtype=torch.float32) / 88 - 2).expand(heads.kind.shape[0], -1)}
+        return heads, state
+
+
+@pytest.mark.parametrize('head', [RustLogits, HitLogits])
+def test_a_served_hit_head_is_recorded_as_each_decisions_danger(states_dir, head):
+    """The server answers the hit head's logits beside the others; the replay's DECISIONS keep P(hit) per legal joint
+    action (a byte: within 1/255) for a network with one, and no danger for one without."""
+    config = _native.SpecialistConfig.load('ow-start').replace(start_states=['start'], max_steps=12)
+    task = _native.EvalTask(config, [('start', 0)], states_dir=str(states_dir))
+    server = Server(device='cpu')
+    pool = _native.EnvPool(task, num_envs=1, threads=1, seed=1, record=replay.record_options(replay.meta('eval', [])))
+    try:
+        pool.play([server.policy(head(random_network(4).to_native()))], act='sample')
+        data = []
+        while True:
+            idle = pool.wait_idle(timeout=0.1)
+            data += [e['data'] for e in pool.poll_events() if e['type'] == 'replay']
+            if idle:
+                break
+    finally:
+        pool.close()
+        server.close()
+    decisions = _native.Replay(data[0]).decisions()
+    assert len(decisions['frame']) > 0
+    if head is RustLogits:
+        assert all(row is None for row in decisions['danger'])
+        return
+    for row in decisions['danger']:
+        assert row
+        for joint, p in row.items():
+            assert abs(p - 1 / (1 + np.exp(2 - joint / 88))) <= 1 / 255 + 1e-6
+
+
 class Counter(LabNet):
     """A recurrent toy: its state counts the decisions of the episode; the kind logits prefer kind ``count % 2``."""
     arch = 'test-counter'
@@ -158,7 +197,7 @@ def test_the_server_keeps_a_recurrent_state_per_env_and_restarts_it_per_episode(
         logits_size = 11 * 13
 
         @staticmethod
-        def answer(slots, logits, values):
+        def answer(slots, logits, values, hit):
             answered.append(values.copy())
 
     server.queue = Queue()
@@ -192,18 +231,19 @@ def test_a_served_batch_comes_back_in_one_copy_and_half_precision_only_on_the_gp
         logits_size = 11 * 13
 
         @staticmethod
-        def answer(slots, logits, values):
-            answered.append((logits.copy(), values.copy()))
+        def answer(slots, logits, values, hit):
+            answered.append((logits.copy(), values.copy(), hit.copy()))
 
     server.queue = Queue()
     n = observations['action_mask'].shape[0]
     server.answer({'obs': observations, 'slot': np.arange(n), 'model': np.zeros(n, dtype=np.int64),
                    'job': np.arange(n), 'step': np.zeros(n, dtype=np.int64), 'bootstrap': np.zeros(n, dtype=bool)})
-    (logits, values), = answered
+    (logits, values, hit), = answered
     heads, _ = network.cpu().heads({k: torch.as_tensor(v) for k, v in observations.items()})
     tolerance = 5e-2 if server.half else 1e-5
     assert np.allclose(logits, heads.flat().detach().numpy(), atol=tolerance)
     assert np.allclose(values, heads.value.detach().numpy(), atol=tolerance)
+    assert hit.shape == (n, 352) and np.isnan(hit).all(), "no hit head: a row of NaN"
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA graphs need the GPU")
@@ -218,7 +258,7 @@ def test_cuda_graphs_answer_as_the_eager_forward_and_fall_back_when_they_disagre
         logits_size = 11 * 13
 
         @staticmethod
-        def answer(slots, logits, values):
+        def answer(slots, logits, values, hit):
             answered.append((logits.copy(), values.copy()))
 
     def ask(server, n):
@@ -279,7 +319,7 @@ def test_a_learner_process_serves_eagerly_beside_its_own_gpu_work(observations, 
             logits_size = 11 * 13
 
             @staticmethod
-            def answer(slots, logits, values):
+            def answer(slots, logits, values, hit):
                 pass
         server.queue = Queue()
         for n in (1, 2, 3, 5, 8):

@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Re-evaluate every promoted specialist model and replace its run's evaluation with a ``format: 2`` one.
 
-    python scripts/reeval_promoted.py [--specialists a,b] [--run-id ID] [--parallel 8] [--episodes-per-state 100]
+    triforce job run --agent A --task T --subtask S --desc '...' --timeout 2h -- \\
+        python scripts/reeval_promoted.py [--specialists a,b] [--run-id ID] [--parallel 8] [--episodes-per-state 100]
         [--models-dir models] [--output-dir DIR]
+
+A job of the machine's queue (``jobs.require_job``); the specialists done of the total are its progress.
 
 For each specialist (``specialists/*.yaml``, or ``--specialists``) with a promoted model
 (``<models>/<name>/promoted``), runs ``triforce.evaluate.evaluate_specialist`` on the promoted checkpoint in the
@@ -24,7 +27,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 # pylint: disable=wrong-import-position
-from triforce import registry
+from triforce import jobs, registry
 from triforce.evaluate import FORMAT, default_output, evaluate_specialist, write_result
 from triforce.specialist import list_specialists
 
@@ -56,10 +59,12 @@ def main(argv=None):
     parser.add_argument('--output-dir', default=None,
                         help="write <dir>/<name>/<run-id>/eval.json instead of into the models directory")
     args = parser.parse_args(argv)
+    jobs.require_job()
 
     names = args.specialists.split(',') if args.specialists else list_specialists()
     failed = 0
-    for name in names:
+    for done, name in enumerate(names):
+        jobs.progress(done, len(names), 'specialists')
         root = registry.models_root(args.models_dir)
         try:
             run_id = args.run_id or registry.promoted_run(name, args.models_dir)
@@ -88,6 +93,7 @@ def main(argv=None):
         print(f"{name} {run_id}: success {result['success_rate']:.1%} over {result['episodes']} episodes, "
               f"health change {result['mean_health_change']:+.2f}, {len(result['visited_rooms'])} rooms visited, "
               f"{time.monotonic() - start:.0f}s -> {output}", flush=True)
+    jobs.progress(len(names), len(names), 'specialists')
     return 1 if failed else 0
 
 

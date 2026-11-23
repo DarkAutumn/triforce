@@ -49,14 +49,16 @@ def cheated(result: dict) -> int:
 
 def race(route: Route, seeds, policies: Policies, parallel: int, record: dict, *, threads: Optional[int] = None,
          states_dir=None, act: Optional[str] = PLAY_ACT, max_steps: int = DEFAULT_MAX_STEPS,
-         cancel: Optional[Callable[[], bool]] = None) -> Tuple[dict, bytes, int]:
+         cancel: Optional[Callable[[], bool]] = None,
+         on_run: Optional[Callable[[int], None]] = None) -> Tuple[dict, bytes, int]:
     """Plays ``route`` from ``seeds`` on ``parallel`` games until one run succeeds.  Returns (the chosen run's
     result dict, its recording, the runs that finished).  The winner is the success with the fewest cheated items
     (bombs, keys and rupees together), then the fewest frames, then the lowest seed, among those finished when the
     first success is seen; the other games are dropped.  Without a success: the failed run with the most rooms,
     then the fewest cheated items, then the most frames, then the lowest seed.  ``RunnerError``
     when every run ended in an error (e.g. a specialist without a model).  ``cancel()`` is asked between polls:
-    True drops every game and raises ``Cancelled``."""
+    True drops every game and raises ``Cancelled``.  ``on_run(finished)``: the runs finished so far, after each
+    poll that finished one."""
     # pylint: disable=too-many-arguments, too-many-locals
     results, recordings, wins = {}, {}, []
     with ChainPool(route, seeds, policies, num_envs=parallel, threads=threads, act=act,
@@ -67,11 +69,15 @@ def race(route: Route, seeds, policies: Policies, parallel: int, record: dict, *
             if cancel is not None and cancel():
                 raise Cancelled()
             idle = pool.pool.wait_idle(timeout=POLL_SECONDS)
+            finished = False
             for event in pool.poll_events():
                 if event['type'] == 'run':
                     results[int(event['result']['seed'])] = event['result']
+                    finished = True
                 elif event['type'] == 'replay':
                     recordings[int(event['job'])] = event['data']
+            if finished and on_run is not None:
+                on_run(len(results))
             wins = [seed for seed, result in results.items() if result['result'] == 'success' and seed in recordings]
     if wins:
         seed = min(wins, key=lambda s: (cheated(results[s]), results[s]['frames'], s))
@@ -89,7 +95,8 @@ def golden_path(policies: Policies, route_name: str, parallel: int, first_seed: 
                 attempts: int = DEFAULT_ATTEMPTS, stops: Optional[list] = None, states_dir=None,
                 threads: Optional[int] = None, on_segment: Optional[Callable[[dict], None]] = None,
                 act: Optional[str] = PLAY_ACT, max_steps: int = DEFAULT_MAX_STEPS,
-                cancel: Optional[Callable[[], bool]] = None) -> Tuple[bytes, dict]:
+                cancel: Optional[Callable[[], bool]] = None,
+                on_run: Optional[Callable[[int, int], None]] = None) -> Tuple[bytes, dict]:
     """Plays the golden path of ``route_name`` (module doc) and returns (the stitched replay, a summary).
 
     ``record``: ``replay.record_options`` of every run; ``start_from`` / ``power_on``: the first segment's start
@@ -99,11 +106,13 @@ def golden_path(policies: Policies, route_name: str, parallel: int, first_seed: 
     (an act mode for all, default ``registry.PLAY_ACT``; None: each model's registered mode; unless every model
     draws, ``registry.draws``, the games of a later segment get their random numbers redrawn at the checkpoint,
     module doc);
-    ``on_segment(entry)`` is called with each segment's summary entry as it ends;
+    ``on_segment(entry)`` is called with each segment's summary entry as it ends; ``on_run(index, finished)`` as
+    the runs of segment ``index`` finish (``race``'s ``on_run``);
     ``cancel()`` is asked between polls of a race: True stops the path with ``Cancelled``.
 
     Summary: ``{'result': 'success' | 'failure', 'frames', 'segments': [{'index', 'stop_step', 'seed', 'frames',
-    'runs_played', 'ending'}]}`` (``frames``: the replay's; a segment's: its own replay's)."""
+    'runs_played', 'ending', 'won'}]}`` (``frames``: the replay's; a segment's: its own replay's; ``won``: a run got
+    to the segment's stop)."""
     # pylint: disable=too-many-arguments, too-many-locals
     if stops is None:
         start = Route.load(route_name, start_from=start_from, states_dir=states_dir, power_on=power_on).start_step
@@ -122,11 +131,11 @@ def golden_path(policies: Policies, route_name: str, parallel: int, first_seed: 
             route = Route.load(route_name, states_dir=states_dir, stop_step=stop, checkpoint=checkpoint)
         seeds = range(first_seed + index * attempts, first_seed + (index + 1) * attempts)
         result, recording, played = race(route, seeds, policies, parallel, record, threads=threads,
-                                         states_dir=states_dir, act=act, max_steps=max_steps,
-                                         cancel=cancel)
+                                         states_dir=states_dir, act=act, max_steps=max_steps, cancel=cancel,
+                                         on_run=None if on_run is None else lambda done, i=index: on_run(i, done))
         segment = _native.Replay(recording)
         entry = {'index': index, 'stop_step': stop, 'seed': int(result['seed']), 'frames': segment.frames,
-                 'runs_played': played, 'ending': segment.ending}
+                 'runs_played': played, 'ending': segment.ending, 'won': result['result'] == 'success'}
         segments.append(entry)
         if on_segment is not None:
             on_segment(entry)

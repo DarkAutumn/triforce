@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "triforce"
-version = "2.0.0.12"
+version = "2.0.0.13"
 description = "Specialist PPO agents that play The Legend of Zelda (NES) from structured RAM state"
 requires-python = ">=3.12,<3.13"
 dependencies = [
@@ -17,7 +17,7 @@ dependencies = [
 
 [project.optional-dependencies]
 gui = ["pyside6-essentials>=6.7", "pygame"]                # pygame: `triforce.run --render`
-dev = ["pytest", "pyyaml", "pyside6-essentials>=6.7", "pygame"]
+dev = ["pytest", "pytest-xdist", "pyyaml", "pyside6-essentials>=6.7", "pygame"]
 
 [project.scripts]
 triforce = "triforce.cli:main"
@@ -30,6 +30,7 @@ features = ["pyo3/extension-module"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "zelda-asm/tests"]
+addopts = ["-p", "triforce.testlog"]       # every run writes its timing log (triforce/testlog.py)
 markers = [
     "e2e: end-to-end tests over the whole stack (run by default; select with '-m e2e')",
 ]

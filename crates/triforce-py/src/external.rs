@@ -108,12 +108,16 @@ impl PyExternalQueue {
         Ok(Some(d))
     }
 
-    /// Answers the rows of the last `take` for `slots`: `logits` `[n, logits_size]` float32, `values` `[n]`.
+    /// Answers the rows of the last `take` for `slots`: `logits` `[n, logits_size]` float32, `values` `[n]`, and
+    /// `hit` `[n, joint]` float32, the hit head's logits per joint action (a row of NaN: that network has none;
+    /// None: no network has one).
+    #[pyo3(signature = (slots, logits, values, hit=None))]
     fn answer(
         &self,
         slots: PyReadonlyArray1<'_, i64>,
         logits: PyReadonlyArray2<'_, f32>,
         values: PyReadonlyArray1<'_, f32>,
+        hit: Option<PyReadonlyArray2<'_, f32>>,
     ) -> PyResult<()> {
         let slots: Vec<usize> = slots
             .as_slice()?
@@ -127,8 +131,9 @@ impl PyExternalQueue {
                 self.inner.heads().size()
             )));
         }
+        let hit = hit.as_ref().map(|h| h.as_slice()).transpose()?;
         self.inner
-            .answer(&slots, logits.as_slice()?, values.as_slice()?)
+            .answer(&slots, logits.as_slice()?, values.as_slice()?, hit)
             .map_err(PyValueError::new_err)
     }
 

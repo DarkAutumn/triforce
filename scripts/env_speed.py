@@ -1,12 +1,14 @@
 """Env-level emulator speed over every start state, by room family: the game path training pays for.
 
-    .venv/bin/python scripts/env_speed.py [--steps 60] [--repeats 2] [--seed 0] [--json OUT]
+    triforce job run --agent A --task T --subtask S --desc '...' --timeout 20m -- \\
+        .venv/bin/python scripts/env_speed.py [--steps 60] [--repeats 2] [--seed 0] [--json OUT]
 
 Every start state in triforce/states (one route, d2first: overworld, Dungeons 1-3) is loaded with seeded RNG/room
 entry, then plays ``--steps`` seeded random legal actions through ``Game.act`` with rendering off: the option
 executor, look-ahead, interrupts and masks. Reported per family (the routes.yaml specialist owning the state's room)
 and overall: real frames per second of ``act`` time (look-ahead frames are work but not counted as frames, so they
-lower it), steps per second, and load time separately. Run it on two builds (PYTHONPATH) to A/B.
+lower it), steps per second, and load time separately. Run it on two builds (PYTHONPATH) to A/B.  A job of the
+machine's queue (``jobs.require_job``); the states played of the total (all repeats) are its progress.
 """
 
 import argparse
@@ -18,7 +20,7 @@ from pathlib import Path
 
 import numpy as np
 
-from triforce import _native
+from triforce import _native, jobs
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
@@ -37,11 +39,13 @@ def main(argv=None) -> int:
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--json', default=None)
     args = parser.parse_args(argv)
+    jobs.require_job()
     families = family_of()
     stats = defaultdict(lambda: {'frames': 0, 'steps': 0, 'seconds': 0.0, 'load_seconds': 0.0, 'loads': 0})
     paths = sorted((ROOT / 'triforce' / 'states').glob('*.state'))
     for repeat in range(args.repeats):
         for i, path in enumerate(paths):
+            jobs.progress(repeat * len(paths) + i, args.repeats * len(paths), 'states')
             seed = args.seed + 1000 * repeat + i
             game = _native.Game()
             game.render = False
