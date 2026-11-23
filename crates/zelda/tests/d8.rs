@@ -788,7 +788,10 @@ fn the_d8_route_is_walked_from_the_d6_triforce_to_the_d8_triforce() {
     assert!(wall.iter().all(|k| k.step_bombs.as_deref() == Some("required")));
     assert_eq!(played(&wall, ActionKind::Bomb), 1);
     let offered: Vec<_> = wall.iter().filter(|k| !k.bombs.is_empty()).map(|k| (k.x, k.y)).collect();
-    assert!(!offered.is_empty() && offered.iter().all(|(_, y)| *y <= 0x7D), "BOMB only by the N wall: {offered:?}");
+    // Y $84 at most: a bomb placed 16 pixels ahead (N) lands within $18 of the N wall's hotspot Y $5D
+    // (asm:Bomb_TryOpenWall); round 40's walk (no closing frame after a MOVE) stands down to Y $84 there, the old
+    // walk never below $7D.
+    assert!(!offered.is_empty() && offered.iter().all(|(_, y)| *y <= 0x84), "BOMB only by the N wall: {offered:?}");
     let bomb = wall.iter().find(|k| k.action.kind == ActionKind::Bomb).unwrap();
     // (The objective's bomb spots are the tiles a bomb reaches the wall from: the first one on the walk's way.)
     assert_eq!(bomb.action.direction, Direction::N);
@@ -993,8 +996,14 @@ fn the_key_doors_off_the_route_are_masked_and_a_move_ends_at_their_mouth() {
             place(&mut w, x, y, d);
             look(&mut w, false);
         }
-        // The game's rule, by the controller: one frame of the direction at the mouth spends a key.
-        w.s.press(direction_buttons(d), 1);
+        // The game's rule, by the controller: the direction at the mouth spends a key (before round 40 on the first
+        // frame after the MOVE's closing frame; without it the first frames move Link into the doorway first).
+        for _ in 0..4 {
+            if w.s.state().keys() < keys {
+                break;
+            }
+            w.s.press(direction_buttons(d), 1);
+        }
         assert_eq!(w.s.state().keys(), keys - 1, "8:{room:#04x}: {}", describe(&w.s));
     }
 }
