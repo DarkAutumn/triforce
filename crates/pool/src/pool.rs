@@ -133,6 +133,9 @@ pub struct Outcome {
     pub hits: u32,
     /// A Bubble's touch landed in the step (`zelda::Change::bubble_touched`: the sword blocked, no health lost).
     pub blocked: bool,
+    /// The directions a sword shot fired from the decision's state would meet a monster (`zelda::beams::lined_up`
+    /// as `Direction` bits; round 39's beam head labels; 0 for an env that doesn't say).
+    pub beam_lined: u8,
     /// The decision was calm, the frames of progress it made toward the goal and the frames it added to its stretch's
     /// waste (`zelda::aimless::AimlessDecision`, round 38; false and 0 for an env that doesn't say).
     pub calm: bool,
@@ -973,6 +976,7 @@ fn run_rollout<E: PoolEnv, Ac: Actor<E::Action>, P: Planner<E>>(
         out.health_lost.push(o.health_lost);
         out.hits.push(o.hits);
         out.blocked.push(o.blocked);
+        out.beam_lined.push(o.beam_lined);
         out.calm.push(o.calm);
         out.progress.push(o.progress);
         out.waste.push(o.waste);

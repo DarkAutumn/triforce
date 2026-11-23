@@ -2259,8 +2259,8 @@ mod tests {
     fn dodongo_and_the_0x2c_secret_require_bombs() {
         let map = GameMap::builtin();
         let tagged: Vec<_> = map.rooms().values().filter(|r| r.requires_bombs).map(|r| r.location).collect();
-        // Dungeon 3's bombed E wall into the boss room and Manhandla (Lee, Nov 9); Dungeon 4's two bomb walls on the
-        // way to Gleeok (Lee, Nov 11); 0x67's rock wall (the secret rupees) and Dungeon 3's 0x5b E wall (round 22).
+        // Dungeon 3's bombed E wall into the boss room and Manhandla (the owner, Nov 9); Dungeon 4's two bomb walls on the
+        // way to Gleeok (the owner, Nov 11); 0x67's rock wall (the secret rupees) and Dungeon 3's 0x5b E wall (round 22).
         assert_eq!(
             tagged,
             vec![
@@ -3077,7 +3077,7 @@ mod tests {
                 assert!(e.contains("0x77"), "{name} names the room: {e}");
             }
         }
-        let bombs = "requires_bombs: true    # Lee (Nov 8): the d2first";
+        let bombs = "requires_bombs: true    # The owner (Nov 8): the d2first";
         let room_cases = [
             ("requires_bombs: yes", bombs, bombs.replace(": true", ": yes"), "requires_bombs must be"),
             ("require_bombs typo", bombs, bombs.replace("requires_", "require_"), "unknown key"),
@@ -3133,7 +3133,7 @@ mod tests {
         assert_eq!(map.get(loc(0, 0x74)).unwrap().exits["cave"].destination, loc(3, 0x7c));
     }
 
-    /// Dungeon 3: the boss room (Manhandla) between the bombed E wall of 0x4c and the triforce room 0x3d; Lee's
+    /// Dungeon 3: the boss room (Manhandla) between the bombed E wall of 0x4c and the triforce room 0x3d; the owner's
     /// directions from the entrance (W N N W W N S S, the raft cellar, N E E N E E, N) follow real exits.
     #[test]
     fn d3_boss_room_and_lees_route() {

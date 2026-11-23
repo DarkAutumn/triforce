@@ -61,7 +61,7 @@ from triforce.jobs import add_job_arguments, begin_job, work  # noqa: E402
 from triforce.lab import bench as yardstick  # noqa: E402
 
 R38H = ROOT / 'target' / 'r38h'
-CHAINS = '/home/leculver/git/triforce/target/r56-chains'
+CHAINS = str(ROOT / 'target' / 'r56-chains')
 RECORD = 'r37fix-1k'
 PLANNER = 'temperature:0.5+relax:16+plan:16:1'
 FEATURES = list(_native.ENTITY_FEATURES)

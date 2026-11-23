@@ -1,6 +1,6 @@
 # Round 16: the Rust actor, then a fresh team (r56)
 
-Lee, Nov 9: inference moves to Rust (one call per rollout; eval, chains and play-zelda on the same in-pool policy;
+The owner, Nov 9: inference moves to Rust (one call per rollout; eval, chains and play-zelda on the same in-pool policy;
 replayable plays), then profile and fix performance, then GPU vs CPU inference, then retrain the whole team from
 scratch on the new stack (the old checkpoints didn't load then; since review F066 pre-r56 checkpoints load again),
 then the better-play experiments one at a time.
@@ -11,7 +11,7 @@ then the better-play experiments one at a time.
   and play-zelda act inside the pool, replay files (`--plays`) replay bit for bit, endings count observed effects
   (eval and chains skip the look-ahead). The per-step `recv`/`send` path and `triforce/inference.py` are gone.
 - **Performance** (`docs/performance.md`, Nov 9): AVX policy kernels (0.77 → 0.31 ms per observation) and the
-  rollout overlapped with the PPO update (Lee: yes): training +20–45% (fresh-model bench). The deferred look-ahead
+  rollout overlapped with the PPO update (the owner: yes): training +20–45% (fresh-model bench). The deferred look-ahead
   was not built (expected under 15%). Inference stays on the CPU (it is ~10% of mass-play CPU, ~8% of training).
 - **Fresh team (r56, promoted):** single-room evaluations within the old team's range (85.7–99.7%); chains (120
   runs each, sampled): full route to the D3 triforce 0/120, D2 arrival 102, D1 arrival 40, D3 arrival 11; segments
@@ -28,7 +28,7 @@ then the better-play experiments one at a time.
 - **Found:** the training success rate lags slow failures and a late collapse (a Dodongo continuation read ~1.0 in
   training and was 54%; §5, mechanism corrected by review F071); argmax loops where a policy has no answer (§3).
   Both in the backlog.
-- **training-gui** (Lee, Nov 9): [currently running] shows every live training on the machine (other logs roots
+- **training-gui** (the owner, Nov 9): [currently running] shows every live training on the machine (other logs roots
   found from the running triforce processes; `0bc2949`); standalone `evaluate`/`eval-chain` log folders of their
   own (branch `better-play`, merged after r56).
 - **Better-play tooling** (branch `better-play`, worktree `../triforce2-better`, merged after r56; §2): the yardstick,

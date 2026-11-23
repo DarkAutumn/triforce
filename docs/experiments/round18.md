@@ -1,9 +1,9 @@
 # Round 18: back to the previous team's level (hearts, not just success)
 
-Lee, Nov 11: the r61 team (round 17) lost Dungeon 1 (115 → 80 of 120). Work on the stalfos-keese-gel model's
+The owner, Nov 11: the r61 team (round 17) lost Dungeon 1 (115 → 80 of 120). Work on the stalfos-keese-gel model's
 problems and whatever else they affect; heart loss can improve even when a room is a "success" (goriya should be
 able to reach −0.1 to −0.2 hearts per room with enough training or shaping). Get every chain segment back within 5%
-of the previous team before more experiments. Chains are measured with 1000 runs per segment from here on (Lee).
+of the previous team before more experiments. Chains are measured with 1000 runs per segment from here on (the owner).
 
 ## Summary
 
@@ -18,12 +18,12 @@ of the previous team before more experiments. Chains are measured with 1000 runs
   other family continued with the new stop rule (`r63a`, `r63b`, up to 4M steps); 13 improved and were promoted.
 - **Result, 1000 runs per segment, against the previous team on its own code and states** (§3): every segment at or
   above the previous team; the full route to the D3 triforce 2.6% → 10.6%; D3 23.8% → 40.6%.
-- **Moved to the backlog as projects of their own (Lee):** wallmaster no longer collects the hearts its kills drop
+- **Moved to the backlog as projects of their own (the owner):** wallmaster no longer collects the hearts its kills drop
   (old model +0.33 per room, +0.85 in the full route at low health; new 0.0: under γ = 0.99 rushing out is worth
   more than fighting for the drops, the old model had stopped training before it unlearned that, and
-  `exit_health_weight 1.0` doesn't bring it back), and goriya's heart loss (+0.26 per room; Lee's target is a net
+  `exit_health_weight 1.0` doesn't bring it back), and goriya's heart loss (+0.26 per room; the owner's target is a net
   gain of 0.1–0.2; more training of the same objective doesn't move it).
-- **Tooling (Lee):** `--device` defaults to `cuda` (CPU training is opt-in; a CPU update next to a running training
+- **Tooling (the owner):** `--device` defaults to `cuda` (CPU training is opt-in; a CPU update next to a running training
   took 80–170 s per iteration); the training GUI shows eval-chain throughput and a CPU/GPU/load status bar.
 
 ## 1. stalfos-keese-gel and zol
@@ -75,7 +75,7 @@ mode the table names (100 episodes per start state, seed 0; hearts lost is start
 | ow-start | 100.0% / 0.000 | 100.0% / 0.000 | r61 |
 
 Most families moved by a few hundredths of a heart: the stop rule matters for the families that stopped within
-minutes, not for the ones that already used their budget. goriya stays at about +0.26 hearts per room (Lee's
+minutes, not for the ones that already used their budget. goriya stays at about +0.26 hearts per room (the owner's
 target −0.1 to −0.2 is not reached by more training of the same objective; backlog).
 
 ## 3. Chains, 1000 runs per segment

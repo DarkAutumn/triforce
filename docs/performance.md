@@ -140,7 +140,7 @@ load):
 - **Where an iteration went (synchronous, goriya p16):** rollout ~47%, PPO update ~35% (0.8 s: 40 minibatch
   steps, ~17k kernel launches; launch-bound, the GPU itself busy ~0.27 s), torch recompute of log-probs and
   values on the GPU ~8% (`charts/recompute_seconds`).
-- **Overlap (Lee, Nov 9: "yes"):** `PPO.train` starts the next rollout on a thread (the pool releases the GIL)
+- **Overlap (the owner, Nov 9: "yes"):** `PPO.train` starts the next rollout on a thread (the pool releases the GIL)
   with the weights from before the update, into the second of two buffers, then updates. The rollout runs one
   update behind. `logp_old` stays the learner's recomputed one: with the acting policy's log-prob the KL early stop
   spent its budget on the lag (1 epoch per update) and a bandit learned half as fast; recomputed, it learns as

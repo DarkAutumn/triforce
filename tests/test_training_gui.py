@@ -889,7 +889,7 @@ def test_queue_state_reads_the_registry_or_falls_back_to_the_plans_queue(tmp_pat
                                 'waited': None}}
     state = gui.queue_state(tmp_path / 'job', plan, [])
     assert state == {'place': 3, 'running': ['r25-a (round)'], 'ahead': ['x (eval)', 'y (round)'], 'limit': 2,
-                     'since': pytest.approx(now - 90, abs=1), 'estimate': None, 'lane': None}
+                     'since': pytest.approx(now - 90, abs=1), 'estimate': None, 'lane': None, 'express': False}
     assert gui.waiting_text(state, state['since'] + 61) == 'waiting · 3rd in line · for r25-a (round) · 1m 01s'
     # a plan's queue with an estimate (top-level, else the queue's) and the wait, coarse
     new = {**plan, 'queue': {**plan['queue'], 'estimate': 2400.0, 'work': {'train_steps': 10 ** 6},
@@ -926,6 +926,12 @@ def test_queue_state_reads_the_registry_or_falls_back_to_the_plans_queue(tmp_pat
                                                  'queued_ts': now - 6000, 'estimate': 2400.0}))
     state = gui.queue_state(tmp_path / 'job', plan, gui.read_registry(registry), now=now)
     assert state['place'] == 2 and state['ahead'] == ['patient (round)']
+    # a long job that asked for the express place (--express) reads short and is in the registry's state
+    (registry / 'b.json').write_text(json.dumps({**entry, 'name': 'job', 'kind': 'chain', 'estimate': 900.0,
+                                                 'express': True, 'log_dir': str(tmp_path / 'job'),
+                                                 'queued_ts': now - 100}))
+    state = gui.queue_state(tmp_path / 'job', plan, gui.read_registry(registry), now=now)
+    assert state['express'] is True and gui.queue_times(state, now)[0] == 'short ~15 min'
 
 
 def test_estimates_and_run_times_read_coarsely():

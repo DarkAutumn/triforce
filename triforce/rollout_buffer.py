@@ -17,7 +17,8 @@ Layout (``n`` envs, ``T`` steps per env; index ``T`` holds the observation to re
   (0 = the episode's first decision): ``ppo.Collector`` follows episodes across rollouts with them.
 - ``health_lost`` float32, ``hits`` int64 and ``blocked`` bool ``[n, T]``: what each decision's action did (hearts
   lost, net; monster hits dealt; a Bubble's touch landed, the sword blocked: round 38), the lab's auxiliary targets
-  (``lab.auxiliary``).
+  (``lab.auxiliary``). ``beam_lined`` int64 ``[n, T]``: the directions a sword shot fired from each decision's state
+  would meet a monster out of melee range (``zelda::beams::lined_up`` as ``Direction`` bits; round 39's beam head).
 - With ``tried = K`` (the lab's ``--try-others``): ``tried_actions`` int64 ``[n, T, K, 3]``, ``tried_lost`` and
   ``tried_blocked`` int64 ``[n, T, K]`` (candidates not taken, tried by the look-ahead: 1 lost health / a Bubble
   touched, 0 not, -1 untried) and ``tried_frames`` int64 ``[n, T]`` (what the trials emulated).
@@ -123,6 +124,7 @@ class RolloutBuffer:
         self.health_lost = torch.zeros(n_envs, memory_length, dtype=torch.float32)
         self.hits = torch.zeros(n_envs, memory_length, dtype=torch.int64)
         self.blocked = torch.zeros(n_envs, memory_length, dtype=torch.bool)
+        self.beam_lined = torch.zeros(n_envs, memory_length, dtype=torch.int64)
         # The aimless score's per-decision targets (round 38, zelda::aimless): calm, frames of progress toward the
         # goal, frames added to the calm stretch's waste.
         self.calm = torch.zeros(n_envs, memory_length, dtype=torch.bool)
@@ -153,6 +155,7 @@ class RolloutBuffer:
                  'frames': self.frames.numpy(), 'bootstrap_value': self.bootstrap_value.numpy(),
                  'interrupts': self.interrupts.numpy(), 'job': self.jobs.numpy(), 'step': self.steps.numpy(),
                  'health_lost': self.health_lost.numpy(), 'hits': self.hits.numpy(), 'blocked': self.blocked.numpy(),
+                 'beam_lined': self.beam_lined.numpy(),
                  'calm': self.calm.numpy(), 'progress': self.progress.numpy(), 'waste': self.waste.numpy()}
         if self.tried:
             views.update(tried_actions=self.tried_actions.numpy(), tried_lost=self.tried_lost.numpy(),
@@ -261,6 +264,7 @@ class RolloutBuffer:
         batch['health_lost'] = self.health_lost.reshape(-1).to(device)
         batch['hits'] = self.hits.reshape(-1).to(device)
         batch['blocked'] = self.blocked.reshape(-1).to(device)
+        batch['beam_lined'] = self.beam_lined.reshape(-1).to(device)
         batch['calm'] = self.calm.reshape(-1).to(device)
         batch['progress'] = self.progress.reshape(-1).to(device)
         batch['waste'] = self.waste.reshape(-1).to(device)

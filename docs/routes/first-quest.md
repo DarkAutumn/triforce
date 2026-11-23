@@ -1,6 +1,6 @@
 # The rest of the first quest: the draft route after Dungeon 4
 
-Nov 13, 2026 (Lee): route the rest of the game, through the overworld to Dungeons 5 to 9 and through each of them,
+Nov 13, 2026 (the owner): route the rest of the game, through the overworld to Dungeons 5 to 9 and through each of them,
 and show it on the map for feedback. This is a **draft**: `triforce/draft_routes.yaml` (`first-quest`, which extends
 `d2first`), read only by `zelda-map.py`. Nothing is trained on it, `routes.yaml` is unchanged, and no model plays any
 of it. Every step was then walked in the emulator the same night (below: what "walked" means and what it does not).
@@ -8,21 +8,21 @@ of it. Every step was then walked in the emulator the same night (below: what "w
     .venv/bin/python zelda-map.py --route first-quest                     # the window; Route and Labels are on the bars
     QT_QPA_PLATFORM=offscreen .venv/bin/python zelda-map.py --route first-quest --level 9 --overlay labels --screenshot d9.png
 
-Order (Lee): **5, 7, the magic sword, 6, 8, 9.** The overworld legs are Lee's, room for room. The dungeon paths are
+Order (the owner): **5, 7, the magic sword, 6, 8, 9.** The overworld legs are the owner's, room for room. The dungeon paths are
 the shortest ones through `game.yaml`'s room graph that take what the game needs (the recorder, the red candle, the
-silver arrow) and what Lee asked for (the red ring), with the keys Link carries (Lee: use them); they leave out
+silver arrow) and what the owner asked for (the red ring), with the keys Link carries (the owner: use them); they leave out
 level 6's wand and level 8's book and magic key.
 
-## What Lee decided (Nov 13)
+## What the owner decided (Nov 13)
 
 - The overworld legs (the table below), with screen wraps and the recorder's whirlwind.
 - Use the carried keys for the shorter dungeon ways (level 7: 19 room entries and 5 bomb walls instead of 25 and 8).
 - Take the red ring in level 9 ("one extra Patra fight, but the result should be worth it; we can always drop it
   later").
 - No screen wrap in 0x17: the ladder crosses its river.
-- The first route through Dungeons 5-9 is the agent's to find; Lee reviews it on the map and adjusts.
+- The first route through Dungeons 5-9 is the agent's to find; the owner reviews it on the map and adjusts.
 
-Nov 14, Lee's answers to the first review:
+Nov 14, the owner's answers to the first review:
 
 - **Bombs come from the rooms on the way, never a shop: this is the speedrun route.** 5:0x65's Gibdo carries 4;
   7:0x1b's 6 Blue Goriyas are fought for the room's 4 bombs when the bag isn't full (not 7:0x0c's Dodongos); 9:0x16's
@@ -33,7 +33,7 @@ Nov 14, Lee's answers to the first review:
   route picks up every key it needs (it does: the ledger below). No magic key.
 - **Every overworld leg has a plain way (clips off) through the same heart containers:** 0x5f, 0x2f, then Dungeon
   5. The recorder's whirlwind is allowed with clips off. 0x51 without the wrap goes S into the Lost Woods (N, W, S,
-  W) and comes out in 0x60, then N to 0x50 (Lee).
+  W) and comes out in 0x60, then N to 0x50 (the owner).
 - **The overworld ladder clip is wanted;** building the movement (clips, wraps, the new actions) is the next phase.
 - **No blue ring:** that is a different route.
 
@@ -107,7 +107,7 @@ room, a boss). Everything else on the route is crossed.
 out); Dungeon 9 has three key doors before its only key (1 out). No cheated key is needed anywhere: level 9 is
 entered with the 3 it needs because of 6:0x2d's (a fight with 3 Vires) and 8:0x4c's (in the open).
 
-**Bombs** (the bag holds 8; Lee, Nov 14: room bombs and drops only). Walls: Dungeon 5 two, 7 five, 6 one, 8 two,
+**Bombs** (the bag holds 8; the owner, Nov 14: room bombs and drops only). Walls: Dungeon 5 two, 7 five, 6 one, 8 two,
 0x05's rock wall one, 9 eight: 19. Room bombs on the path: 5:0x65 (+4, carried by a Gibdo), 7:0x1b (+4, fought for
 when the bag isn't full), 9:0x16 (+4, its Patra). Leaving Dungeon 4 with none (what today's chains show) and with
 no drop at all:
@@ -164,7 +164,7 @@ Nothing of this route can be played by the agent yet. What it needs beyond rooms
   ARROW exists but no state has held arrows. Each new action kind makes every trained model unusable: decide them
   together (the version rule's COMPAT bump).
 - **The overworld ladder clip** (0x5f's heart container from the wrap arrival): `zelda::clips` offers ladder clips
-  in dungeons only. Next phase (Lee, Nov 14). The plain way takes the heart from 0x6f with the plain ladder.
+  in dungeons only. Next phase (the owner, Nov 14). The plain way takes the heart from 0x6f with the plain ladder.
 - **Plain ways (clips off)** are in the draft as `stretch:` blocks, as in `d2first` (the map's Clips selector shows
   either): coast-heart (row 5 E, 0x5d S, row 6 E, 0x6f N into 0x5f), lake-3e (0x3e N, 0x2e W), mountain (0x1d S,
   0x2d, 0x2c, 0x1c, the Lost Hills), dock-44 (0x55 S, 0x65 W, 0x64 N), woods (0x51 S, the Lost Woods, 0x60 N). All
@@ -179,9 +179,9 @@ Nothing of this route can be played by the agent yet. What it needs beyond rooms
   health and damage), Blue Goriya, Wallmasters with a push block, Wizzrobes, Gohma, Lanmola, Patra, Gleeok with
   four heads, Ganon; overworld rooms with Lynels, Peahats, Moblins, Leevers and Ghinis.
 
-## Open questions for Lee
+## Open questions for the owner
 
-The Nov 13 questions are answered above; the wand and the book stay out too (Lee, Nov 14). Left:
+The Nov 13 questions are answered above; the wand and the book stay out too (the owner, Nov 14). Left:
 
 1. Without drops the route cheats seven bombs (the table above); 5:0x56's Dodongos (+4) is the one source named
    for later.

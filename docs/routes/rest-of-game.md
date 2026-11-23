@@ -5,11 +5,11 @@
 - **The stretch:** from the D5 triforce (overworld 0x0b) to the end of the game along `docs/routes/first-quest.md`'s
   draft: the leg to Dungeon 7, Dungeon 7, the magic sword (0x21's gravestone), Dungeon 6, the leg and Dungeon 8, the
   leg and Dungeon 9, Ganon and Zelda.
-- **Lee's decisions, Nov 16:** (1) the honest planner (`plan:K:S`) runs beside the models as a second, labelled act
+- **The owner's decisions, Nov 16:** (1) the honest planner (`plan:K:S`) runs beside the models as a second, labelled act
   mode (golden path, play, teacher); the models alone stay the primary number; (2) breadth first to Ganon: each dungeon
   and leg gets rooms, states, families and a first trained team at a working rate (about 30% or better), one
   optimisation round after the first complete run; (3) run through, with a report, a tag and a push at the end of each
-  dungeon, stopping only for Lee's decisions (route, cheats, rules); (4) clips on is primary, every new stretch also
+  dungeon, stopping only for the owner's decisions (route, cheats, rules); (4) clips on is primary, every new stretch also
   gets its plain way and a clips-off number, untuned; (5) bombs, rupees (at the two shops) and keys that are missing
   are cheated and counted per room, aim zero, no route change; (6) breaking models is allowed when a family cannot be
   trained without it (`convert-model` where the models stay identical, otherwise every family retrained, with the
@@ -136,9 +136,9 @@ table).
 **Bombs.** From the D5 triforce on, a no-drop run cheats 6 bombs with 3 carried into Dungeon 7 (8:0x4c, 0:0x05, four in
 level 9) and 9 with none (`d7.md` §4, `d8.md` §7.3, `d9.md` §3.6); `first-quest.md`'s 7 counts the same walls from
 Dungeon 5's entrance, 5:0x66 included. Every bomb spent as a weapon, eaten by a 7:0x0c Dodongo (code, `d7.md` §2) or
-missed comes off a wall. Room bombs on the path not in Lee's Nov 14 rule: 7:0x69 (+4 for 5 Blue Goriyas, `d7.md` §3
+missed comes off a wall. Room bombs on the path not in the owner's Nov 14 rule: 7:0x69 (+4 for 5 Blue Goriyas, `d7.md` §3
 #2) and 8:0x3f (+4 for 1 Blue + 2 Red Darknuts and 3 Gibdos in a one-way room, `d8.md` §13 #1). 9:0x23's +3 net is a
-detour and is out by Lee's rule (`d9.md` §3.6).
+detour and is out by the owner's rule (`d9.md` §3.6).
 
 **Bombs into Dungeon 7 (disagreement).** `d7.md` §4 reads ~3 from round 24's Digdogger arrivals (0, 4 or 8 bombs; 0.94
 spent a fight); `late-mechanics.md` §1 says Dungeon 5 ends at 0 in most chains. Settle by reading the bomb count at
@@ -181,7 +181,7 @@ mask is no network input (`late-monsters.md` §2.3), so mask items change no inp
 vector keys `link`, `room_state`, `history`, `objective`, `target` by name and new action kinds; it does not touch
 `entity_types`, `entity_features`, `grid` or `action_mask`, and the Rust actor's all-zero-column drop covers the
 towers' first layers, not the entity projection (`late-monsters.md` §6). **Every (a) item that is an entity feature, and
-every meaning change of an existing column, is therefore one compatibility break; plan them together** (Lee's decision
+every meaning change of an existing column, is therefore one compatibility break; plan them together** (the owner's decision
 6). No new action kind is needed for the rest of the game (`late-monsters.md` §6.4).
 
 ### (a) What the models see
@@ -193,7 +193,7 @@ every meaning change of an existing column, is therefore one compatibility break
 | `hurts_on_touch` corrected: flashing Wizzrobes hurt; hidden Reds, returning monster boomerangs, unemerged Lanmola segments, early Patra children, dying Ganon don't | `d6.md` §4.4, §9 #6; `late-monsters.md` §2.2 G5 | `observation.rs` (`harmless = monster && (stun > 0 \|\| flashing)`) | meaning change (break) |
 | `killable` corrected: Patra body, Manhandla base, flying Ghini `$22`, Ganon by phase, guard fires killable | `late-monsters.md` §2.2 G6 | `observation.rs:829-830` | meaning change (break) |
 | Gohma eye state, open timer, next-open counter | `d6.md` §6, §11; `late-monsters.md` §3.10 | entity `phase` | yes, entity (break) |
-| Ganon phase, brown time left, sword count, visibility timer | `d9.md` §6.1, §8; `late-monsters.md` §3.17 | entity `phase`; Gleeok heads precedent | yes, entity (break); and Lee's question on hidden positions |
+| Ganon phase, brown time left, sword count, visibility timer | `d9.md` §6.1, §8; `late-monsters.md` §3.17 | entity `phase`; Gleeok heads precedent | yes, entity (break); and the owner's question on hidden positions |
 | Patra children live; Lanmola segment role; Manhandla base role; slot identity (6:0x78's ringleader) | `d9.md` §8; `late-monsters.md` §2.2 G1, §6.3 `slot_one`, `segment_role` | entity encoder has no slot input (`triforce/model.py`) | yes, entity (break). Manhandla's base as a synthesized hazard (as Gleeok's base, `game.rs`) needs no layout change (inferred, preferred) |
 | Trap state (home, charging, returning) | `d9.md` §8, §9 #7 | Traps are hazards today | yes, entity (break) |
 | Size of big monsters (Ganon 32×32, Gohma 48 px, big Digdogger, Dodongo) | `late-monsters.md` §2.2 G8 | `Enemy::dims` (`game.rs:150-160`), not observed | yes, entity (break) |
@@ -229,7 +229,7 @@ nothing: the tile grid is RAM (`d7.md` §2, `d9.md` §2).
 | Gravestones but the secret one | `late-mechanics.md` §2.4 | none |
 | Push only in the step's direction (a ring's W block pushed E closes the stairs until re-entry) | `d9.md` §3.4; `late-mechanics.md` §3.5 | `is_push_block_direction` (`actions.rs:368`) |
 | Never A on a dungeon person or the Grumble (fireballs until Link leaves) | `d9.md` §2; `late-monsters.md` §6.4 | `actions.rs:348-356` (safe today only because those rooms hold no enemy) |
-| Whirlwind as an executor macro ("play N times facing D, wait for pickup"), if Lee picks it | `d7.md` §10 #6; `d8.md` §11.1; `late-mechanics.md` §7 | the CLIP macro, `crates/zelda/src/executor.rs` |
+| Whirlwind as an executor macro ("play N times facing D, wait for pickup"), if the owner picks it | `d7.md` §10 #6; `d8.md` §11.1; `late-mechanics.md` §7 | the CLIP macro, `crates/zelda/src/executor.rs` |
 
 Built: the RECORDER, FOOD and CANDLE kinds (round 24, 1.4.2.0), ARROW, the sub-screen B switch in the executor, SWORD
 and BEAMS masked while a Bubble blocks the sword (`late-monsters.md` §2.3, `d6.md` §11, `d8.md` §5.2).
@@ -281,7 +281,7 @@ and BEAMS masked while a Bubble blocks the sword (`late-monsters.md` §2.3, `d6.
 | Chain: the whirlwind arrival as the route's entry; a Wallmaster drag to 7:0x79 mid-dungeon; death (CONTINUE or failure); counted shop rupee cheats; new segments (post-D5 `0_0bc_0`, `7_79s_0`, ... level 9 split at 0x76, the ring, 0x61's second visit, 0x42) | `d7.md` §9.5; `d9.md` §9; `late-mechanics.md` §3.17, §8 | `chain.rs`; `eval_batch.py`, `r56_chains.sh` |
 | Executor waits: the whirlwind ride, the Triforce of Power fanfare, Ganon's entry, the shop's 120-160-frame count, mode `$13` | `late-mechanics.md` §8 | `menu_frames` |
 | Hearts-aware chain reports (hearts at Gleeok's door, as round 24 for D4) | `d8.md` §11.7 | chain `RoomRecord` |
-| The planner as teacher in 0x38/0x3a, D9's Wizzrobe rooms, Gleeok (Lee's decision 1) | `d6.md` §10; `late-monsters.md` §9; `d8.md` §10 | `plan:K:S` |
+| The planner as teacher in 0x38/0x3a, D9's Wizzrobe rooms, Gleeok (the owner's decision 1) | `d6.md` §10; `late-monsters.md` §9; `d8.md` §10 | `plan:K:S` |
 | Tests that pin today's end (last step 5:0x14; triforce list; warp rooms) | `d7.md` §9.5 | `game_map.rs:1528-1545` |
 
 ### Built, though `first-quest.md` "What is not built" still lists it
@@ -338,12 +338,12 @@ and BEAMS masked while a Bubble blocks the sword (`late-monsters.md` §2.3, `d6.
 | 9:0x42 | Arrow in the blue phase; the brown window runs out | A rupee wasted; the sword count restarts | Arrow target mask; phase observation | `d9.md` §6.4 |
 | After 0x44 | ARROW at ordinary monsters | Each costs a rupee; at the low end Ganon's room becomes a dead end long after the mistake | `arrows: false` but Gohma/Ganon; `rupee_reserve` | `late-mechanics.md` §6; `late-monsters.md` §5.1 |
 | The ending (mode `$13`) | Start at submode 4 | Saves and starts the second quest | Never press Start in replays | `d9.md` §7 |
-| Anywhere | Death | Chain run over; the game's CONTINUE (3 hearts, level restart, history cleared, items kept) is not modelled | Lee's question | `late-mechanics.md` §3.17; `d9.md` §2 |
+| Anywhere | Death | Chain run over; the game's CONTINUE (3 hearts, level restart, history cleared, items kept) is not modelled | The owner's question | `late-mechanics.md` §3.17; `d9.md` §2 |
 | Any harm (Bubble, whirlwind pickup included) | — | Zeroes the 10th/16th damage-free kill counters: a pending forced bomb or fairy lost | none | `late-mechanics.md` §2.9, §3.15 |
 
 ## Families
 
-Families are by enemy (Lee). Existing (`specialists/`): ow-start, ow-octorok, ow-zora, ow-moblin, ow-leever, ow-tektite,
+Families are by enemy (the owner). Existing (`specialists/`): ow-start, ow-octorok, ow-zora, ow-moblin, ow-leever, ow-tektite,
 ow-lynel, ow-boulder, ow-peahat, stalfos-keese-gel, goriya, trap-room, equipment-room, wallmaster, boss-aquamentus,
 d2-rope, moldorm, boss-dodongo, zol, darknut, boss-manhandla, vire, like-like, boss-gleeok, gibdo, pols-voice,
 dodongo-crossing, boss-digdogger.
@@ -362,7 +362,7 @@ dodongo-crossing, boss-digdogger.
 New families: **ow-ghini** (0:0x40, 0x41, 0x31, 0x21), **wizzrobe** (6:0x78, 0x28, 0x29, 0x2c, 0x38, 0x3a; 9:0x65, 0x15,
 0x17, 0x07, 0x05, 0x20, 0x10, 0x31, 0x30, 0x04: the biggest family of the game, crossing and fighting, `d6.md` §10 #3),
 **boss-gohma** (6:0x1c), **lanmola** (9:0x55), **patra** (9:0x16, 0x27, 0x61, 0x52), **ganon** (9:0x42, perhaps with
-0x32). Possible, by Lee's answer: blue-goriya (D7's nine Goriya rooms), digdogger-crossing (7:0x39), a D7 Wallmaster
+0x32). Possible, by the owner's answer: blue-goriya (D7's nine Goriya rooms), digdogger-crossing (7:0x39), a D7 Wallmaster
 family (7:0x0d), a Darknut-Gibdo crossing family (8:0x4e, 0x3f), a Manhandla crossing (8:0x6e). Existing families that
 meet a new skill: goriya (blue: throw at once, 1 heart), wallmaster (lure and kill instead of rush), boss-digdogger
 (three), darknut (statues, magic sword, no bombs), boss-gleeok (four heads, three flying), vire and like-like (magic
@@ -479,14 +479,14 @@ scaffold's episodes (the env refills 0x07, 0x10, 0x20 and puts 0x61's Patra back
 | 0x21's flying Ghinis | `first-quest.md` (Nov 13) walked the push with no mention | overworld.md (Nov 9): Ghinis kept knocking Link off; code reading: the push itself releases one on the stairs (inferred) (`d6.md` §9 #8; `late-monsters.md` §8) | Walk 0x21 |
 | 0x21 after the cave | game.yaml and the draft: stairs where the stone stood | asm:Secret_RestoreStairsOW shows the gravestone again on re-layout (inferred) (`late-mechanics.md` §2.4) | Walk 0x21 |
 | 0x22's entrance | game.yaml: one tile `[14, 8]` | Code: X `$70`/`$78`/`$80` (asm:Warp_CheckUnderLink) (`d6.md` §1.6, §9 #3) | Walk |
-| Rupees for Gohma | level-6.md: "a few dozen rupees for misses" | The draft: 2-14, one shot each for Gohma and Ganon (`d6.md` §9 #1) | Lee (rupee question) and the rupee reading |
+| Rupees for Gohma | level-6.md: "a few dozen rupees for misses" | The draft: 2-14, one shot each for Gohma and Ganon (`d6.md` §9 #1) | The owner (rupee question) and the rupee reading |
 | D6's forced fights | `first-quest.md`: two Wizzrobe rooms to clear, the four Wizzrobe crossings "without a fight" | 0x58, 0x39 and 0x2d are forced too; the crossings' Reds appear on the path (0x2c was traced with its Wizzrobes removed) (`d6.md` §2.3, §9 #4, #7) | `d6.md` §12 #2 |
 | 6:0x38's push | level-6.md: both shutters open (trace) | game.yaml `push_block_opens: N` | Incomplete, not wrong: add the other side |
-| 7:0x69's bombs | level-7.md: a route source (+4) | Lee (Nov 14): 7:0x1b only; the draft: "need not die" (`d7.md` §3 #2) | Lee |
+| 7:0x69's bombs | level-7.md: a route source (+4) | The owner (Nov 14): 7:0x1b only; the draft: "need not die" (`d7.md` §3 #2) | The owner |
 | 7:0x2a's heart | 1:0x35 (same layout): heart at X `$C0`, entered from S | 7:0x2a: heart at X `$80`, entered from W (`d7.md` §2, §3 #8) | Both right; boss-aquamentus has seen only one |
 | 0x5d's openings | game.yaml: only the right one counts | Layout and level-8.md: the tree burns from the W part too (`d8.md` §8 #4) | Walked: both (`d8-walks.md` §1.3); game.yaml's note is wrong, its `span` a fair choice |
 | 0x6d's tree | level-8.md: "Not walked: the entrance tree" | game.yaml: walked Nov 14 (`d8.md` §8 #2) | Walked again Nov 17; level-8.md corrected |
-| 8:0x4e/0x3f's family | A new crossing family (`d8.md` §11.6) | darknut (`late-monsters.md` §7) | Lee (families) |
+| 8:0x4e/0x3f's family | A new crossing family (`d8.md` §11.6) | darknut (`late-monsters.md` §7) | The owner (families) |
 | Sword grade in the observation | None found (`d8.md` §4.4, inferred) | `sword_0`-`sword_3` in `link` (synthesis, `observation.rs`) | The code |
 | Held by a Like-Like | Missing (`d9.md` §8) | `paralyzed` observed (`d6.md` §4.4; `observation.rs`) | The code |
 | 9:0x32's fires | level-9.md step 32: two | `Zelda_Init` makes four (`d9.md` §3.8) | Both right; two are off Link's path (inferred) |
@@ -498,7 +498,7 @@ scaffold's episodes (the env refills 0x07, 0x10, 0x20 and puts 0x61's Patra back
 | The chase target | AGENTS.md: shadow Link copied from the current position | enemies.md: the mirrored point for up to 70 frames; both agree it is not always Link (`late-monsters.md` §8) | Read asm:Mode5Play_UpdateWorld against enemies.md |
 | Room left by its entry door | Built (`d7.md` §9.3; `late-mechanics.md` §0.9) | Missing for 8:0x5e's retreat (`d8.md` §11.4) | `d8.md` needs a planned retreat step with chain caps, which is more than the exit kind |
 
-## Open questions for Lee
+## Open questions for the owner
 
 Answered by the Nov 16 decisions and removed: where the D7 round ends (decisions 2-3 and the version rule: at the D7
 triforce, the sword in round 27; `d7.md` §8 #9); whether shop rupees may be cheated (decision 5; `d7.md` §8 #6); level
@@ -525,7 +525,7 @@ way; `d9.md` §12 #2); the planner as a teacher (decision 1; `d6.md` §10, `d8.m
    whether the game can be finished, or a death stays a failed run (`late-mechanics.md` §10 #1; `d9.md` §12 #5).
 6. **A Wallmaster capture in a chain** (7:0x0d → 7:0x79): end the run, or replay the 13-15 rooms back
    (`late-monsters.md` §12 #4).
-7. **Families.** Blue Goriyas in goriya (as Blue Darknuts joined darknut, Lee's own precedent) or a new blue-goriya
+7. **Families.** Blue Goriyas in goriya (as Blue Darknuts joined darknut, the owner's own precedent) or a new blue-goriya
    (nine rooms); 7:0x0d in wallmaster or its own; 7:0x1c in boss-digdogger; 7:0x39's crossing as its own family or
    with RECORDER masked; 8:0x4e/0x3f in darknut or a crossing family; one wizzrobe family that crosses and fights, or
    two (`d7.md` §8 #1-#3; `d8.md` §11.6; `d6.md` §10 #3).
@@ -554,7 +554,7 @@ way; `d9.md` §12 #2); the planner as a teacher (decision 1; `d6.md` §10, `d8.m
 
 Dependency order (synthesis). **[P]** items of one tier go in parallel worktrees; the rest wait for what they name.
 
-**Before round 26, once (decisions and the input break).** Lee's answers to questions 1, 3, 5, 6, 7, 15 (they shape
+**Before round 26, once (decisions and the input break).** The owner's answers to questions 1, 3, 5, 6, 7, 15 (they shape
 masks, steps and the observation). Design the whole observation change of "Everything the engine lacks" (a) for the four
 rounds at once, so that the models break once (decision 6): the `link` and `room_state` widenings convert; the entity
 features and the corrected `hurts_on_touch`/`killable` do not, unless `convert-model` and the Rust actor's zero-column
@@ -573,7 +573,7 @@ them wrong.
    Split from item 2 or sequence them: both touch `game_map.rs`.
 4. [P] Masks: RECORDER per step (never 7:0x39), FOOD at 7:0x28, `arrows: false` and `rupee_reserve` before the first
    arrow is bought at 0x44, the shops' wrong wares, off-route key doors (`d7.md` §10 #5; `late-monsters.md` §6.4).
-5. [P] The observation break and the converter (if decided), and the whirlwind macro (if Lee picks it) (`d7.md` §10
+5. [P] The observation break and the converter (if decided), and the whirlwind macro (if the owner picks it) (`d7.md` §10
    #6).
 6. [P] Chain and state tooling that every later round reuses: whirlwind arrivals as entries, state names, the
    Wallmaster drag, harvested states for history-dependent rooms (7:0x1a), new segments.
@@ -594,7 +594,7 @@ observation)
 **Round 28: Dungeon 8 (1.8)** (needs the whirlwind step from round 26, the secret-step pattern from round 27)
 1. Walks of round 28's gap list.
 2. [P] The tree burn step and the CANDLE masks (0x6d; 0x47 reuses it in round 29).
-3. [P] Per-step bomb rules (0x6e, 0x4c), retreat exits and chain caps (if Lee allows fighting in parts).
+3. [P] Per-step bomb rules (0x6e, 0x4c), retreat exits and chain caps (if the owner allows fighting in parts).
 4. [P] darknut with statues and the magic sword at 0 bombs; the 0x4e/0x3f crossing; pols-voice with the corner key and
    the wall; the Manhandla crossing and the base as a hazard (critic).
 5. [P] boss-gleeok with four heads, trained from low-heart harvested arrivals; hearts-aware chain reports.

@@ -573,7 +573,7 @@ fn rollout_array<'py, T: numpy::Element>(
 }
 
 /// The `EnvPool.rollout` buffer keys (`obs` holds one per observation key).
-const ROLLOUT_KEYS: [&str; 27] = [
+const ROLLOUT_KEYS: [&str; 28] = [
     "obs",
     "starts",
     "actions",
@@ -594,6 +594,7 @@ const ROLLOUT_KEYS: [&str; 27] = [
     "health_lost",
     "hits",
     "blocked",
+    "beam_lined",
     "calm",
     "progress",
     "waste",
@@ -676,6 +677,8 @@ struct RolloutOut<'py> {
     health_lost: Option<PyReadwriteArrayDyn<'py, f32>>,
     hits: Option<PyReadwriteArrayDyn<'py, i64>>,
     blocked: Option<PyReadwriteArrayDyn<'py, bool>>,
+    /// The directions a sword shot fired from the decision's state would meet a monster (`Direction` bits, round 39).
+    beam_lined: Option<PyReadwriteArrayDyn<'py, i64>>,
     /// The aimless score's per-decision targets (`zelda::aimless`, round 38).
     calm: Option<PyReadwriteArrayDyn<'py, bool>>,
     progress: Option<PyReadwriteArrayDyn<'py, f32>>,
@@ -845,6 +848,7 @@ impl<'py> RolloutOut<'py> {
             health_lost: rollout_array(out, "health_lost", &[n, steps])?,
             hits: rollout_array(out, "hits", &[n, steps])?,
             blocked: rollout_array(out, "blocked", &[n, steps])?,
+            beam_lined: rollout_array(out, "beam_lined", &[n, steps])?,
             calm: rollout_array(out, "calm", &[n, steps])?,
             progress: rollout_array(out, "progress", &[n, steps])?,
             waste: rollout_array(out, "waste", &[n, steps])?,
@@ -909,6 +913,10 @@ impl<'py> RolloutOut<'py> {
             }
             if let Some(a) = self.blocked.as_mut() {
                 rows(a.as_slice_mut()?, *env, steps, &r.blocked);
+            }
+            if let Some(a) = self.beam_lined.as_mut() {
+                let lined: Vec<i64> = r.beam_lined.iter().map(|&m| i64::from(m)).collect();
+                rows(a.as_slice_mut()?, *env, steps, &lined);
             }
             if let Some(a) = self.calm.as_mut() {
                 rows(a.as_slice_mut()?, *env, steps, &r.calm);
@@ -1220,7 +1228,9 @@ impl PyEnvPool {
     ///
     /// Per decision, written when present: `health_lost` `[n, steps]` float32 (hearts its step lost, net), `hits`
     /// `[n, steps]` int64 (monster hits it dealt), `blocked` `[n, steps]` bool (a Bubble's touch landed in it: the
-    /// sword blocked, no health lost; round 38), `calm` `[n, steps]` bool, `progress` and `waste` `[n, steps]` float32
+    /// sword blocked, no health lost; round 38), `beam_lined` `[n, steps]` int64 (the directions a sword shot fired
+    /// from its state would meet a monster out of melee range: `zelda::beams::lined_up` as `Direction` bits, E 1, W
+    /// 2, S 4, N 8; round 39), `calm` `[n, steps]` bool, `progress` and `waste` `[n, steps]` float32
     /// (the aimless score's: the decision was calm, the frames of progress it made toward the goal, the frames it
     /// added to its stretch's waste; `zelda::aimless`, round 38). `tried` (train pools only; docs/lab.md "Auxiliary
     /// targets"): None,

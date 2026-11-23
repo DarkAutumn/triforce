@@ -93,7 +93,7 @@ engine source; **(data)** ROM tables (`zelda-asm/data/`); **(draft)** claimed by
   can be touched meanwhile. Arrow: refused at `InvRupees` = 0, 1 rupee per shot (asm:Arrow_Wield). Margin at the low
   end: **one spare arrow in the whole run** (2 rupees, 2 needed arrows) (inferred).
 - Rupee sources on the way (code: asm:Drop_SetUpItem): the tenth damage-free kill's forced drop is 5 rupees unless the
-  killing blow was a bomb; table rupees (groups 0-3). No rupee room is on the route (Lee, Nov 14: no detours).
+  killing blow was a bomb; table rupees (groups 0-3). No rupee room is on the route (the owner, Nov 14: no detours).
 - Hearts: refills only at each triforce (mode `$12`, 43 frames per empty heart, asm:World_FillHearts) and from drops
   (heart +1, fairy +3, the 16th damage-free kill's forced fairy). The Triforce of Power refills nothing (code:
   asm:Item_UpdatePowerTriforceFanfare@FillHearts is unreachable). Red ring from 9:0x00 on: all damage /4
@@ -136,8 +136,8 @@ docs/architecture.md "Cheated items") but no room sets it (code).
 **Build:** `waypoint: arrows` / `waypoint: food` (cave steps) whose done test is the inventory byte (`InvArrow` `$659`
 >= 1, `InvFood` `$65D` = 1), the target the game.yaml `treasure_tile` of the wanted ware ([19, 11] = X `$98` as for
 0x2c/0x2f), `missed` when the room is left without it or another ware was bought (`InvMagicShield` `$676`, bombs
-count up, key count up); in-cave rooms `(0, 0x44, cave)`, `(0, 0x34, cave)` with `requires_rupees: 80` / `60` (Lee's
-rule 5, Lee's decisions of Nov 16 (`docs/routes/rest-of-game.md` "What this is"): cheat and count rupees at the two
+count up, key count up); in-cave rooms `(0, 0x44, cave)`, `(0, 0x34, cave)` with `requires_rupees: 80` / `60` (the owner's
+rule 5, the owner's decisions of Nov 16 (`docs/routes/rest-of-game.md` "What this is"): cheat and count rupees at the two
 shops). Perception: Link X exact to the pixel; the observation has
 `rupees` (observation.rs:370) but no ware entities (wares are drawn through slot `$13`, not objects) (code).
 
@@ -319,7 +319,7 @@ releases Link in 0x45 at (`$80`, `$8D`) (code), already on the dock column.
 direction = facing, a free monster slot, and water tile `$8D`-`$98` ahead (as the lookup returns them, so `$8D`/`$91`
 never) (asm:Ladder_RoomIdsOW, asm:Link_EndMoveAndAnimate@CheckLadder) (code). One square per laying; no edge test
 while it is out (code).
-**Draft:** 0x17 "the ladder W over the river, then N at X `$40`" (Lee: no wrap there) (draft). **Built** generically
+**Draft:** 0x17 "the ladder W over the river, then N at X `$40`" (the owner: no wrap there) (draft). **Built** generically
 (round24.md §5: "the room model knows overworld water and its one-square crossings in the game's ladder rooms")
 (code); 0x17 is a ladder room (code). Walk it before trusting the room model's crossings there.
 
@@ -567,7 +567,7 @@ die and don't count for "all dead" (code). Route Bubble rooms: 9:0x07 (3), 9:0x1
 | 1 | **Fix the magic-sword target**: 12 containers; an in-cave room `(0, 0x21, cave)` with `treasure: magic-sword` | objectives.rs:63 (13) vs asm:Cave_State2TalkOrShopOrDoorCharge (`$B0`); no room has the treasure (game.yaml) | `SWORD_UPGRADES`, the white-sword cave room `(0, 0x0a, cave)` (game.yaml:194-202) |
 | 2 | **Overworld stairs as cave tiles** (tile `$70` squares on level 0) | `cave_tiles` (objectives.rs:982-994) sees only `$F3` and `bomb_secret`; every new entrance is stairs (data) | `Room::stairs_tiles` (room.rs:250-256), dungeon branch of `cave_tiles` |
 | 3 | **In-cave rooms and families** for 0x44, 0x34, 0x21, 0x47 (and their overworld `cave` exits) | route steps need game.yaml rooms (test `route_room_exit_destinations_exist`) (code) | `(0, 0x2f, cave)`, `(0, 0x0f, cave)` (game.yaml:948-959, 302-) |
-| 4 | **Buy waypoints** `waypoint: arrows` / `food`, done by inventory, missed on a wrong ware; `requires_rupees` on the two caves | `waypoint_done` reads flag `$10` set by any ware (objectives.rs:300-310; asm:Cave_State2TalkOrShopOrDoorCharge `@Take`); Lee's rule 5 | `waypoint: heart|rupees`, `treasure_tile`, `cheats` rupees rule |
+| 4 | **Buy waypoints** `waypoint: arrows` / `food`, done by inventory, missed on a wrong ware; `requires_rupees` on the two caves | `waypoint_done` reads flag `$10` set by any ware (objectives.rs:300-310; asm:Cave_State2TalkOrShopOrDoorCharge `@Take`); the owner's rule 5 | `waypoint: heart|rupees`, `treasure_tile`, `cheats` rupees rule |
 | 5 | **Secret steps on the overworld**: `push` (gravestone 0x21), `armos` (0x34), `burn` (0x6d, 0x47), `recorder` pond (0x42): the target is the stand tile + facing, done when the stairs tile appears or flag `$80`/`$20` | no tile-object targets (architecture.md "Core"); game.yaml `entrance.how` + `tile` exist as data only (game_map.rs:233-256 "read elsewhere or by nothing yet") | `bomb_secret` (rock walls: the closest complete pattern, BombTarget reach rules) |
 | 6 | **Item actions on for the families that need them**: CANDLE (0x6d, 0x47 families), FOOD (7:0x28 family), RECORDER on the overworld (`recorder_wanted` widened to the whirlwind steps and 0x42) | actions.rs:381-394; config.rs:353-380 | round 24's kinds and `items:` switches |
 | 7 | **Whirlwind step**: `exit: recorder` / `entry: recorder`; the objective plays RECORDER k times facing a computed way, stands on the whirlwind's row; the chain accepts the jump into the landing room as the route's entry; observation of `$523` (and `IsWhirlwindSummoned` `$508`) | game_map.rs:263-265; objectives.rs:244 (None for jumps); draft_routes.py L11 | `exit: maze` loop handling (`MazeLoop` as a transition); RECORDER's menu-frame wait |
@@ -605,7 +605,7 @@ the first arrow is bought (0x44), or every later family wastes rupees; 10-11 bef
 | 9:0x42 | no silver arrow (skipped 9:0x4f) | dead end | `waypoint: silver-arrow` (cellar waypoint pattern) |
 | 7:0x28 | boomerang thrown while the food lies down | food removed (not consumed), place again | none needed |
 | 7:0x0d | Wallmaster grab | back to 7:0x79, 13-15 rooms again (trace) | chain test |
-| any | death | run over (chain); the game would continue | Lee's decision (§10) |
+| any | death | run over (chain); the game would continue | The owner's decision (§10) |
 | 0x60 → 0x5f (plain way, built) | wrap without the ladder | softlock (trace) | built (ladder held from D4) |
 
 ---
@@ -620,7 +620,7 @@ the first arrow is bought (0x44), or every later family wastes rupees; 10-11 bef
 2. **Rupee discipline over four dungeons.** Two arrows needed, 2-14 rupees held, ARROW unmasked for every family by
    default. A family per enemy cannot see that an arrow at a Wizzrobe in level 6 costs Ganon's arrow. Needs a
    route-level reserve (like `bomb_reserve`) or arrows masked outside two rooms; the cheat rule must count shop
-   top-ups (Lee's rule 5).
+   top-ups (the owner's rule 5).
 3. **Secrets on the overworld that need exact positions and leave hazards.** The gravestone (exact X, flying Ghinis
    that can't be killed), the Armos (side touch, an awake Armos next to the stairs), two trees (stand tile and facing
    to 8 px, a 94-frame wait, own fire). Rewards can't be shaped by distance alone (the target is a tile object, not an
@@ -677,7 +677,7 @@ the first arrow is bought (0x44), or every later family wastes rupees; 10-11 bef
 
 ---
 
-## 10. Open questions for Lee
+## 10. Open questions for the owner
 
 1. **Death:** should a run that dies continue (the game's CONTINUE: 3 hearts, level restart, everything kept), at
    least for measuring "can the game be finished", or does a death stay the end of a run?

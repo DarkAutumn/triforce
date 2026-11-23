@@ -95,20 +95,20 @@ built):
 What the baseline leaves open, in the order it costs the route (runs lost per 1000 entering the room; nothing has
 been retrained on the corrected order):
 
-- [ ] **The leg from Level 7 to Level 6, 22.4%:** ow-lynel at 0x50 (644: leaves N into 0x40, its `d2first` way,
-  and bounces between 0x40 and 0x50) and 0x60 (320: back E instead of the wrap W). Training on the corrected order
-  (explorer tracks made in round 36).
-- [ ] **Out of Level 6 to Level 8, 32.0%:** ow-lynel at 0x22 (680) walks back into Level 6 instead of turning up
-  and playing (180 then die to 6:0x78's Wizzrobes).
+- [x] **The leg from Level 7 to Level 6, 22.4%** (2.0.0.11: `ow-lynel@d3first` `r38rw-lynel`, 98.7% of 1000):
+  ow-lynel at 0x50 (644: leaves N into 0x40, its `d2first` way, and bounces between 0x40 and 0x50) and 0x60 (320:
+  back E instead of the wrap W).
+- [x] **Out of Level 6 to Level 8, 32.0%** (2.0.0.12: ow-lynel's `late.d3first` run `r38d-lynel-late-s1`, 33.3 ->
+  100.0% of 1000): ow-lynel at 0x22 (680) walked back into Level 6 instead of turning up and playing.
 - [ ] **Dungeon 7 at 9 containers and 2 bombs, 13.1%:** goriya at 7:0x1b (689, against 149 at 11 with the bag),
   7:0x1a 116, 7:0x19 70; boss-digdogger 7:0x1c 161.
 - [ ] **The leg from Level 5 to Level 7, 78.9%** after the dock change (0x55 still loses 85, 58 of them rafted
   back to the bounce limit).
 - [ ] **ow-leever at 0x0b's whirlwind out of Level 5** (86: two plays facing S now; 62 runs bounce between 0x0b and
   0x1b).
-- [ ] **The whirlwinds at 0x0b and 0x22 could be played by the engine as the docks are** (a macro from the step
-  that plays the search's sequence): it would take the network out of ow-leever's 86 and ow-lynel's 680 (not
-  measured: what the networks do before the step stays theirs).
+- [ ] **The whirlwinds at 0x0b and 0x22 played by the engine as the docks are** DECIDED (the owner, Nov 23): yes,
+  in the fresh generation, as fixed button sequences masked by Link's position only; the network chooses the moment
+  and does its own dodging; the dock warp loses its two monster give-ways then (below, "The fresh generation").
 - [ ] **Cheated wall bombs, 0.76 a run in Dungeon 7** (7:0x1a 0.75), the largest count on a dungeon the reorder
   changed (`d1`'s 1.00 at 1:0x53 is in a segment it did not change).
 - [x] **Bombs as a weapon only in dungeon rooms the route must clear** (landed 2.0.0.6, round37.md "The owner's
@@ -197,15 +197,32 @@ been retrained on the corrected order):
   moving forward at this rate in this direction calculation you already do to reward timing beams that WOULD
   intersect even if the enemy turns the other way in reality before it hits. [...] One problem with how much
   damage the agent takes is closing with the enemy when he doesn't have to... he doesn't use the full effect of full
-  hearts, and instead gets close and loses beams.") And (Nov 23): "I want to be clear about `Why beams rarely happen.` I notice this
-  everywhere. For example, look at rooms in dungeon 3. 0x6b and 0x4a are particularly bad. Link goes and hunts down
-  gel and keese up close (more often than not) with full hearts, in 0x6b it's really noticeable because he walks all
-  the way around the block geometry and rarely fires beams at them." (Full-hearts melee is common: not only a
-  hearts problem.)
+  hearts, and instead gets close and loses beams." Nov 23: "I want to be clear about `Why beams rarely happen.` I
+  notice this everywhere. [...] look at rooms in dungeon 3. 0x6b and 0x4a are particularly bad. Link goes and hunts
+  down gel and keese up close (more often than not) with full hearts, in 0x6b it's really noticeable because he walks
+  all the way around the block geometry and rarely fires beams at them.")
   Reward built (round38.md "Beams at range; rupees per pickup"): `reward-beam-kill`, `reward-beam-timed`,
   `penalty-beam-unfired`, `beam_*` in every record. Before: 0.3% of wizzrobe's sword kills out of melee range, 2.8%
-  of patra's. Continued with it, wizzrobe (1M steps) and patra (2M) fought as before and lost 3-7 points on `d6`/`d9`;
-  open: stronger weights, then wizzrobe, darknut, goriya, patra (the hearts melee costs, in that order).
+  of patra's. Continued with it, wizzrobe (1M steps) and patra (2M) fought as before and lost 3-7 points on `d6`/`d9`.
+  MEASURED, NOT SOLVED (round39.md "Beams at range"): stronger weights on wizzrobe did not carry to the chains; a
+  supervised beam head (`beamshift`, gated to fights) makes Link fire when lined up (3:0x6b unfired 54% → 4-16%,
+  far kills ×1.5) but three kills in four stay in melee: nothing makes him stand back to line a shot up. Two
+  causes: wizzrobe and Patra rooms are entered ~7 hearts short (hits, not pickups: a hit head for them), and in
+  Dungeon 3 Link is full (0x6b 93% of visits) and walks to the monsters anyway.
+  **Not a verdict yet** (the owner, Nov 23: is this "a 'Retraining' problem, yet again", old networks "too stuck" in
+  their behaviour for new rewards or inputs to sway them?). Every arm so far was a continuation or a head on a
+  frozen policy, so none tested whether the beam terms can teach the behaviour. The lead's reading of the code:
+  three things hold the old behaviour in place. (1) A continuation's policy is nearly deterministic in the
+  situations it has mastered, and `--sil-coeff 0.1` re-imitates its own past wins (melee wins). (2) The supervised
+  beam head scores one decision, so it can fire a lined-up shot but can't plan the several steps back to a firing
+  line. (3) Fresh training wouldn't fix it either: in a fight the objective's targets are the monsters' own tiles
+  (`crates/zelda/src/objectives.rs`, the FIGHT branch's `enemy_tiles`). So the movement reward (PBRS) pays every
+  step closer to a monster, and the observation's target input points at it. The rewards teach melee even from
+  scratch. Next, as one experiment: at full hearts with the sword able to beam, a fight's targets become
+  firing-line tiles (aligned with a monster, at range, the line clear), a family-scoped switch so no other
+  family's inputs change. Arms, 3 seeds each, zol@d3first (0x6b) first: from scratch with/without the switch, and
+  a continuation with it. Measure far kills per sword kill, unfired lined-up shots, hearts lost, frames, and the
+  `d3` segment. After the replay target stream lands (it touches the same code).
 - [ ] **Rupees rewarded per pickup, not per counted rupee** (the owner, Nov 22, 0:0x0f: "the agent waits for all
   rupees to finish before leaving, probably because it gets reward per rupee incremented. What should ACTUALLY be
   awarded for getting rupees is the 'rupees to add' counter getting set once. It could be a larger reward for 1 vs
@@ -242,6 +259,17 @@ been retrained on the corrected order):
 - [ ] **7:0x0d's Wallmaster runs out of steps on 2.0.0.7** (Hit38c, Nov 22: 37 of 1000 `d7` runs with the goriya
   head stopped there against 7 on 2.0.0.6): what changed for wallmaster between the two (states rebuilt from step 88
   with the 0x2d change: keys, bombs, hearts on arrival?), and the fix.
+- [ ] **0:0x1f's Peahats missed by the entry row** (the owner, Nov 23): "If your training route has link walk to the
+  second highest position in 1e before heading to 1f, it's very easy to navigate 1f without taking damage. That
+  is, link is standing such that his head touches the rocks (not overlaps, he could walk up a half tile but
+  doesn't). If you move 1e -> 1f in that position, there's a way to only move east or north only (maybe with a
+  brief pause) that misses all hits of peahats." On the route: `d3first` steps 111-112 (0x1e W -> E, ow-tektite;
+  0x1f W -> N, ow-peahat); `d2first` (165-166) stays as it is. Build: 0x1e's E exit constrained to that row (an
+  exit-tile target, the Y found in the game where Link's head meets the rocks), then 0x1f N/E with at most a pause:
+  demos of the line (`train --demos`) or a path cost off the Peahats' reach. Find the row and the line in the
+  emulator first (walk it, count hits over seeds); measure 0x1f's hits and hearts lost a visit before/after. A
+  route change: ow-tektite and ow-peahat trained on it (the fresh generation, or `d3first`-only continuations
+  measured on the leg).
 - [ ] **Later, the owner's stated goal:** a win without a cheated bomb. Drops only; the walls' shortfall is counted
   until the bomb economy closes it (old backlog "A win without a cheated bomb").
 
@@ -318,9 +346,12 @@ to the action taken; look-ahead for the others), never looking ahead at play.
    experiment 2 chose (below).
 7. [ ] **Observation v7** (specified by experiment 2: round36.md §4, §8): per monster ten `rel` columns and 23
    contact columns from the RAM (the game's touch rule extrapolated straight and stopped at walls: arithmetic on
-   the current state, no emulator step; for the owner to confirm it counts as a "small calculation" and not
-   look-ahead), as a NEW observation key so today's networks play unchanged; the room identity kept and also
-   tried without.
+   the current state, no emulator step), as a NEW observation key so today's networks play unchanged; the room
+   identity kept and also tried without. **Allowed** (the owner, Nov 23: no emulator steps at play; moving the
+   emulator ahead and back is fine in training only, never when playing or building replays). **Range-aware** (the
+   owner, Nov 23): a monster or shot across the screen is no threat this decision, so the contact columns speak in
+   frames to contact with a horizon (beyond it: "not soon", not a far-away hit), and the same for projectiles and
+   the shooter's threat lane.
 8. [ ] **Architectures:** a wider and deeper body; Link as a token attending to monsters and to tile patches; a
    graph over entities; memory (GRU/LSTM) where something is hidden or timed (Wizzrobes, Ganon, a Like-Like's
    hold); a head a boss against one head for all.
@@ -328,11 +359,49 @@ to the action taken; look-ahead for the others), never looking ahead at play.
    against from scratch; value normalisation across tasks; prioritised sampling across tasks (`plr.py`); the
    look-ahead as a teacher at full weight (old backlog "Idea 3: search distilled into the network"; round 34's
    0.05-0.15 imitation of the planner's rows did not take).
-10. [ ] **One network on the corrected route:** the merged model(s) trained on the new states; a golden path with
+10. [ ] **The next generation's teachers, trained fresh** (the owner, Nov 23; decisions 2026-11-23): every
+    teacher family trained from scratch on the new inputs, targets and rewards (v7, the bomb-carrier input, the
+    firing-line targets if they hold), measured on its chains; only then the student(s) of 11 learn from them.
+    Imitating today's 51 copies today's behaviour, so it is a capacity experiment, not the next generation.
+11. [ ] **One network on the corrected route:** the merged model(s) trained on the new states; a golden path with
     them; then single runs at the world-record scale.
 
 Each experiment is logged in a round document (`round36.md` on) with its setup, numbers and what it decided; an
 idea tried and dropped is marked here with the round, not deleted.
+
+### The fresh generation (2.0.1.0): what goes in before it trains
+
+The next from-scratch retrain is the last for a while (the owner, Nov 23), so everything that changes what a
+network sees, is steered to, is rewarded for or may do goes in first; otherwise the new networks learn the old
+thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
+
+- **Inputs:** v7 (`rel`, contact columns range-aware, projectiles too); the shooter's threat lane (screened on the
+  hit bench first); the "next kill may drop bombs" input (BombStats' `bomb_carrier_window`, so the metric and the
+  flag are one definition).
+- **Targets and objective:** firing-line targets at full hearts (if the zol experiment holds); bomb-carrier targets
+  in pass-through rooms (the exit and the nearest eligible carrier); 6:0x78's snipe as a case of them; the 0x1e
+  row and 0x1f's line; 9:0x56's key and Moldorm crossed (Key39b's route data).
+- **Rewards:** rupees once per pickup and the beam terms (built, never trained from scratch); the Bubble touch
+  penalty; `penalty-aimless` on or off (its experiment first: ow-start and pols-voice at 0.002 / 0.005 a frame).
+- **What the engine plays, not the network** (the owner, Nov 23: allowed if the network chooses the moment and the
+  macro never dodges): the whirlwinds out of Level 5 (0x0b) and Level 6 (0x22) as fixed button sequences offered as
+  a choice; the dock warp's two monster give-ways (`dock_warp_mask`: the forced sword strike, the forced wait)
+  removed so the network times the plays itself. The owner confirmed (Nov 23): today's team keeps the docks as they
+  are; the next team "gets no help from swords or dodging", and masking stays where the trick would not work from
+  where Link stands (as for the screen wrap): position only, never the monsters.
+- **Teachers by group first** (the owner: "yes to all", start with the lead's idea, stop when it works): about five
+  groups from scratch, a family split off where its group can't learn it; an arm without the room identity if cheap;
+  the planner as a teacher in training at the lead's judgement.
+- **Items and masks:** the red candle and boomerang in Bubble rooms (7:0x0d, 6:0x38): measured on today's code
+  first, then on or off per room in the generation's masks; 7:0x1b fight or crossing (its measurement at the new
+  combat).
+- **Architecture:** the Link token with the hit head (experiments 6 and 8, on the hit bench first); memory only if
+  the screens show the hidden or timed monsters need it.
+- **Solved by training fresh, nothing to build:** 0:0x77's opening order, 8:0x4c's key walk, 3:0x5b with a full
+  bag, the ow-lynel legs: today's networks learned those before the route changed.
+- **Recipe (the owner: "use your best judgement", not weeks; at least two long jobs at once, never one giant job):**
+  time one family from scratch on today's code first (also the repeatability check); then families in parallel
+  waves of two to three jobs, three seeds each, each judged on its chains; then the student(s).
 
 ## Carried over from the old backlog
 
@@ -344,6 +413,18 @@ idea tried and dropped is marked here with the round, not deleted.
   `d2first`"): the yardstick's rooms are chosen from these lists.
 - The unused `grant:` vocabulary; one like-like run for both routes; the per-route tables never refitted;
   `select-checkpoint --segment` on `d3first`: tool and data debts, picked up when the code they touch is touched.
+- **From the lead's todo, Nov 23 (rewritten that day; these are not in the new short list):**
+  - The one network's Dungeon 4 (57.0% against the team's 68.4%; round38-one.md): the trap room 4:0x11 stuck 79 a
+    thousand with the hit head at weight 8 (none without it: weights 4 and 16 are built, `models/r38c/d2b-all-w{4,16}`
+    in the r38-one worktree); Gleeok 4:0x13 loses 367 a thousand against 282 (a DAgger round with the team's Gleeok
+    as the teacher). Superseded if the fresh generation's network does not show them.
+  - A full-route record of 1000 runs for each landed team from 2.0.0.12 on (`r40-2012-1k-full`), beside the 250 test.
+  - Power on against the start state: no difference in 100 + 100 runs; 1000 each would settle it.
+  - Tool debts found Nov 23: `python -m triforce.explore --variant` with a yaml path loses its tracks; `eval-batch`'s
+    summary step failed after a four-segment batch (Key39b, not looked into); replays with the decision streams are
+    several times larger (measure after the sparse encoding; `/backup` keeps 2 TB free).
+  - The plain ways the first-quest draft left open (the Lost Woods maze in the objective, the overworld ladder clip):
+    dropped, the program plays clips on only.
 
 ## Questions for the owner (next check-in)
 

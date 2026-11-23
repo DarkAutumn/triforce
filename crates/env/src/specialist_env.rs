@@ -103,6 +103,10 @@ pub struct StepInfo {
     pub hits: u32,
     /// A Bubble's touch landed in the step (`zelda::Change::bubble_touched`; not in the info dict).
     pub blocked: bool,
+    /// The directions a sword shot fired from the decision's state would meet a monster out of melee range
+    /// (`zelda::beams::lined_up` of the step's previous state, as `Direction` bits; 0 on a room's first step, as
+    /// `BeamStats` counts it; round 39's beam head labels; not in the info dict).
+    pub beam_lined: u8,
     /// The decision was calm, and the frames of progress it made toward the goal (`zelda::aimless`, round 38; not
     /// in the info dict; never on a simulated step).
     pub aimless: AimlessDecision,
@@ -1237,6 +1241,11 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         info.health_lost = change.health_lost;
         info.hits = change.observed.hits() as u32;
         info.blocked = change.bubble_touched();
+        info.beam_lined = if sim || change.entered_room() {
+            0
+        } else {
+            zelda::beams::lined_up(&change.previous).into_iter().fold(0, |m, d| m | d as u8)
+        };
         info.aimless = aimless;
         info.interrupt = change.interrupt;
         info.action = Some(action);
@@ -1261,6 +1270,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             health_lost: 0.0,
             hits: 0,
             blocked: false,
+            beam_lined: 0,
             aimless: AimlessDecision::default(),
             // full_location: an underworld cellar is a sub-room like a cave (`1:0x7f:cave`), as in the visits.
             room: {

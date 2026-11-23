@@ -813,7 +813,7 @@ fn triforce_pickup_is_success_in_the_triforce_room() {
     );
 }
 
-/// Lee, Nov 11: BOMB by the family's mode, in 1:0x44 (no `requires_bombs` room; no reserve in Dungeon 1) with 4
+/// The owner, Nov 11: BOMB by the family's mode, in 1:0x44 (no `requires_bombs` room; no reserve in Dungeon 1) with 4
 /// bombs: `free` allows it, `tenth` only on the 10th damage-free kill (`$50` = 9), `never` not even then; and in
 /// Dungeon 3 (reserve 6 since round 22, 3:0x59) `free` only above the reserve.  Round 26: the same inside its
 /// bomb-wall room 3:0x5b on the first pass (S → W, the E wall no exit of that step: nothing at 6), and on the last
@@ -1285,7 +1285,7 @@ fn open_route_ignores_optional_combat() {
     assert_eq!(next_rooms(&env), rooms(&[(2, 0x5e)]));
 }
 
-/// 0x43 is crossed twice (the bow detour, Lee, Nov 9): from S (round 31: through 0x53's bombed wall) the route goes N
+/// 0x43 is crossed twice (the bow detour, the owner, Nov 9): from S (round 31: through 0x53's bombed wall) the route goes N
 /// to the Stalfos key room 0x33, back from N (with the bow) through the locked E door to 0x44; with or without a key
 /// the objective offers only that exit.  Without one, the locked route exit grants a cheated key (`zelda::cheats`).
 #[test]
@@ -1371,7 +1371,7 @@ fn a_room_the_route_crosses_twice_trains_both_steps() {
     }
 }
 
-/// 0x0a before the white sword: leaving S (back to 0x1a, to re-enter for a better Lynel spawn; Lee, Nov 8) ends the
+/// 0x0a before the white sword: leaving S (back to 0x1a, to re-enter for a better Lynel spawn; the owner, Nov 8) ends the
 /// one-room episode as `retreat`.  ow-lynel ships it as a soft failure (like a wrong exit, `endings: {retreat:
 /// soft-failure}`); without the override it is neutral: no terminal reward or penalty, no wrong-exit penalty.
 #[test]

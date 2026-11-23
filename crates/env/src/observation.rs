@@ -36,6 +36,14 @@ use zelda::{Action, Change};
 /// schema 6 key is unchanged, and a network that does not read the new keys plays exactly as before.
 pub const OBS_SCHEMA_VERSION: u32 = 7;
 
+/// The oldest observation schema whose checkpoints still load as they are (AGENTS.md "Versioning": compatibility is
+/// decided by the schema numbers, not the repo version): their `model_config.obs_spec` a subset of `OBS_SPEC` (same
+/// shapes and vocabularies), every column they read meaning what it meant. A change that only adds keys, or columns
+/// at a block's end, leaves it; one that changes what an existing column means raises it to the new
+/// `OBS_SCHEMA_VERSION` (older models are then widened by `triforce convert-model` or retrained). 6: schema 7 only
+/// added `entity_rel` and `entity_contact`; schema 5 is widened by `convert-model`.
+pub const OLDEST_OBS_SCHEMA: u32 = 6;
+
 /// NES object slots 1-$B, then the room item ("treasure").
 pub const NUM_ENTITY_SLOTS: usize = 12;
 pub const TREASURE_SLOT: usize = 11;
@@ -233,7 +241,7 @@ mod l {
     pub const BOOMERANG: usize = 69;
     pub const MAGIC_BOOMERANG: usize = 70;
     pub const MAGIC_SHIELD: usize = 71;
-    /// Bombs and the forced drop (schema 3, Lee Nov 11; replaced the always-zero `selected_*` slice).
+    /// Bombs and the forced drop (schema 3, the owner Nov 11; replaced the always-zero `selected_*` slice).
     pub const BOMB_USABLE: usize = 72;
     pub const BOMB_RESERVE: usize = 73;
     pub const BOMBS_SPARE: usize = 74;

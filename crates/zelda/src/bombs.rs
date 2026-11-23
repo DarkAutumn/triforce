@@ -1,4 +1,4 @@
-//! Bomb use per episode, room visit or chain room (Lee, Nov 11): bombs placed and what they did, the 10th
+//! Bomb use per episode, room visit or chain room (the owner, Nov 11): bombs placed and what they did, the 10th
 //! damage-free kills (each arms a forced drop: bombs when made with a bomb, else 5 rupees) and the bomb pickups.
 //! And where a bomb opens a wall (round 22): [`BombTarget`], [`landing`].
 
@@ -75,7 +75,7 @@ pub struct BombStats {
     /// Bombs placed that hit nothing.
     pub misses: u32,
     /// Damage the bombs dealt, in wood-sword hits (an enemy's HP >> 4): each credited hit's HP lost, a kill's
-    /// remaining HP (Lee: how hard the bombs hit; a bomb takes 4 off, a Keese or Gel counts 1).
+    /// remaining HP (the owner: how hard the bombs hit; a bomb takes 4 off, a Keese or Gel counts 1).
     pub damage: u32,
     /// 10th damage-free kills (`$50` 9 → 10), any weapon: the forced-drop opportunities taken.
     pub tenth_kills: u32,

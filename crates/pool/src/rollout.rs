@@ -230,6 +230,9 @@ pub struct EnvRollout<A> {
     pub health_lost: Vec<f32>,
     pub hits: Vec<u32>,
     pub blocked: Vec<bool>,
+    /// Per decision: the directions a sword shot fired from its state would meet a monster (`Direction` bits; round
+    /// 39; [`crate::Outcome`]).
+    pub beam_lined: Vec<u8>,
     /// Per decision: calm, the frames of progress toward the goal and the frames added to the stretch's waste
     /// (`zelda::aimless`, round 38; [`crate::Outcome`]).
     pub calm: Vec<bool>,
@@ -263,6 +266,7 @@ impl<A> EnvRollout<A> {
             health_lost: Vec::with_capacity(steps),
             hits: Vec::with_capacity(steps),
             blocked: Vec::with_capacity(steps),
+            beam_lined: Vec::with_capacity(steps),
             calm: Vec::with_capacity(steps),
             progress: Vec::with_capacity(steps),
             waste: Vec::with_capacity(steps),

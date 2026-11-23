@@ -49,14 +49,14 @@ use zelda::{Action, ActionKind, Change, LoadOptions, MapLocation, Nes, Session};
 pub const DEFAULT_MAX_STEPS: u64 = 50_000;
 /// A chain room gets at least this many steps before it counts as stuck.
 pub const MIN_ROOM_STEPS: u64 = 2000;
-/// Retreats (route steps' `retreat` exits) a run may take; one more ends it as `retreat-limit` (Lee, Nov 8: a chain
+/// Retreats (route steps' `retreat` exits) a run may take; one more ends it as `retreat-limit` (the owner, Nov 8: a chain
 /// must not loop on re-entering 0x0a forever).
 pub const MAX_RETREATS: u32 = 3;
 /// Wrong exits into tagged rooms a run may take; the `MAX_WRONG_EXITS`-th ends it `stuck` (`wrong-exit-limit`,
-/// Lee, Nov 10: a run that bounces between two tagged rooms must not go on to the run cap).
+/// the owner, Nov 10: a run that bounces between two tagged rooms must not go on to the run cap).
 pub const MAX_WRONG_EXITS: u32 = 20;
 /// Returns in a row into the room before the one Link just left (back and forth between two rooms) a run may make;
-/// the `MAX_BOUNCES`-th ends it `stuck` (`bounce-limit`).  Lee, Nov 11: walking back and forward again once or twice
+/// the `MAX_BOUNCES`-th ends it `stuck` (`bounce-limit`).  The owner, Nov 11: walking back and forward again once or twice
 /// is fine, the endless bounce is not (one run crossed between 0x4c and 0x4d 28,000 times, every crossing a correct
 /// exit, until it died 3 million frames later).  Crossings through a route step's `retreat` exit don't count (their
 /// own cap is `MAX_RETREATS`).

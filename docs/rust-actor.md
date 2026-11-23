@@ -1,10 +1,10 @@
 # The Rust actor: inference, rollouts and replays in Rust (design, Nov 9)
 
-Lee, Nov 9: inference moves to Rust. Python stops being called once per step; it calls once per rollout with
+The owner, Nov 9: inference moves to Rust. Python stops being called once per step; it calls once per rollout with
 the network's weights and gets the whole batch back. The same engine runs evaluation, chains and the watch player
 (play-zelda's simulations act inside the pool; since Nov 11 its picture is replays of their finished runs,
 `docs/architecture.md` "Watching"). Search (expert iteration,
-Lee's better-play plan §2, not in the repo) is **for training only**: the agent always acts from the policy, never
+the owner's better-play plan §2, not in the repo) is **for training only**: the agent always acts from the policy, never
 from a search. Only the current model config is supported; checkpoints from before r56 (`grid_encoder: 'conv'`)
 load again, since the conv encoder is the only one left. Background: `docs/all-rust.md` (why the learner,
 GUIs and scripting stay in Python).
@@ -223,7 +223,7 @@ low and at normal health.
 5. Profile end to end; GPU vs CPU inference; fresh retrain of the team (baseline on the new stack), then
    better-play §0, §1a + §3, §6b, §2, §1b/§5/§6a. (Done: round 16.)
 
-## GPU vs CPU inference (Lee, Nov 9): CPU only
+## GPU vs CPU inference (the owner, Nov 9): CPU only
 
 Training runs 8–24 envs, but the watch player may run hundreds of games at once (~128+, no training), where a CPU
 forward per game could become the bottleneck. The rule: GPU better for both → GPU only; GPU better for mass play
