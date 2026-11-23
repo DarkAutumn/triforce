@@ -1,8 +1,9 @@
-//! Round 40 (decisions 2026-11-23, "The fresh generation plays without the closing no-button frame"): an action
-//! closes with no frame of no buttons. The game reads the directions as held and A, B, Select and Start as new presses
-//! (asm:Input_ReadOneController; asm:Mode5Play_Update@CheckMenu takes Link's direction from `ButtonsDown`,
-//! asm:Link_HandleInput the sword and the B item from `ButtonsPressed`), so the executor releases a button for one
-//! frame only before an action presses it while the game still reads it as held.
+//! Round 40 (decisions 2026-11-23, "The fresh generation plays without the closing no-button frame"): a MOVE closes
+//! with no frame of no buttons (every other action keeps it: measured, the docks need it after a WAIT). The game reads
+//! the directions as held and A, B, Select and Start as new presses (asm:Input_ReadOneController;
+//! asm:Mode5Play_Update@CheckMenu takes Link's direction from `ButtonsDown`, asm:Link_HandleInput the sword and the B
+//! item from `ButtonsPressed`), so the executor releases a button for one frame only before an action presses it
+//! while the game still reads it as held.
 #![cfg(feature = "zcore")]
 
 mod common;
@@ -26,12 +27,12 @@ fn act(s: &mut Session<Counted>, action: &str) -> zelda::Change {
     s.act(Action::parse(action).unwrap()).unwrap()
 }
 
-/// An action lasts its own frames: two MOVEs, a WAIT, a turn.
+/// A MOVE lasts its own frames, the rest one more: two MOVEs, a WAIT, a turn.
 #[test]
-fn no_action_closes_with_a_frame_of_no_buttons() {
+fn no_move_closes_with_a_frame_of_no_buttons() {
     let Some(mut s) = session() else { return };
     let frames: Vec<u32> = ["MOVE E 8", "MOVE E 8", "WAIT 4", "MOVE N 4"].iter().map(|a| act(&mut s, a).frames).collect();
-    assert_eq!(frames, [8, 8, 4, 4]);
+    assert_eq!(frames, [8, 8, 5, 4]);
 }
 
 /// After a MOVE, a WAIT, a swing and a bomb, the next swing (A) and the next bomb (B) are new presses: the swing

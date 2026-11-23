@@ -479,10 +479,12 @@ impl<S> Executor<S> {
             let control_frames = (m.frame - start) as u32;
             if interrupt != Some(Interrupt::GameOver) && !is_game_over_mode(m.read(ADDR_MODE)) {
                 self.skip_uncontrollable(m, Some(location), capture)?;
-                // A CLIP keeps one frame of no buttons after it: the dock warps' clips (0x55, 0x3f) end with Link on
-                // the dock, and without the frame the run sails the raft from it instead of playing the warp
-                // (measured round 40, post-d7's 0x3f: 3,369 wrong exits into 0x2f).
-                if action.kind == ActionKind::Clip {
+                // Every action but a MOVE keeps one frame of no buttons after it (round 40, measured): only after a
+                // MOVE does the frame cost anything (Link standing still between two steps), and without it after
+                // the others the docks broke: a WAIT cut short by the raft's landing at 0x55 and 0x3f, then MOVE N on
+                // the next frame, sails the raft back (post-d5 0x55: 34 runs lost against 5; post-d7 0x3f: 159
+                // against 3, also with a CLIP's frame kept).
+                if action.kind != ActionKind::Move {
                     self.step(m, 0, 1);
                 }
             }
@@ -1121,14 +1123,13 @@ pub(crate) mod tests {
             let result = run(&mut m, &format!("WAIT {duration}"));
             assert_eq!(
                 (result.frames, result.control_frames, result.interrupt),
-                (duration, duration, None),
-                "no frame closes an action (round 40)"
+                (duration + 1, duration, None)
             );
             assert_eq!(result.blocks(), 1);
             assert_eq!(result.projectile_blocks[0].frame, 2);
             assert_eq!(
                 *observed.lock().unwrap(),
-                (1..=duration as u64).collect::<Vec<_>>()
+                (1..=duration as u64 + 1).collect::<Vec<_>>()
             );
             assert!(m.sink.is_some());
             assert_eq!(m.nes.buttons, vec![0; result.frames as usize]);
@@ -1143,15 +1144,15 @@ pub(crate) mod tests {
         let result = run(&mut m, "SWORD E");
         assert_eq!(
             (result.control_frames, result.frames, result.blocks()),
-            (3, 3, 1)
+            (3, 4, 1)
         );
-        assert_eq!(m.nes.buttons, vec![buttons::A, buttons::A, 0]);
+        assert_eq!(m.nes.buttons, vec![buttons::A, buttons::A, 0, 0]);
 
         let mut m = machine(6, 6);
         let result = run(&mut m, "WAIT 4");
         assert_eq!(
             (result.control_frames, result.frames, result.blocks()),
-            (4, 6, 1)
+            (4, 7, 1)
         );
         assert_eq!(result.projectile_blocks[0].frame, 6);
     }
@@ -1406,7 +1407,7 @@ pub(crate) mod tests {
             (7, 2, "SWORD S", vec![buttons::DOWN | buttons::A]),
             (7, 4, "SWORD S", vec![buttons::A]),
             // Not the selected B item: the sub-screen first (this script never opens it, so nothing follows).
-            (7, 2, "BOMB W", vec![buttons::START]),
+            (7, 2, "BOMB W", vec![buttons::START, 0]),
         ] {
             let mut ram = playable();
             ram[Var::SelectedItem.addr() as usize] = selected;
