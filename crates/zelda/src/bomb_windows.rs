@@ -282,8 +282,12 @@ pub struct Death {
     pub dropped: Option<i16>,
 }
 
+/// A monster in `state`'s slot in its death sparkle (ObjMetastate `$10`-`$14`). A slot that holds no monster can keep
+/// a dying metastate from an earlier object (the 2.0.0.13 250 test: 248 slots of type `$00` read `$10`-`$14`): that
+/// is no death under way.
 fn dying(state: &GameView, slot: u16) -> bool {
     (0x10..=0x14).contains(&state.peek(OBJ_METASTATE + slot))
+        && ObjectClass::of(state.peek(OBJ_TYPE + slot)) == ObjectClass::Monster
 }
 
 /// How far WorldKillCycle moved within the step, and the deaths that moved it, by slot: a slot that turned into a
@@ -1307,5 +1311,30 @@ mod tests {
         let stats = play(&mut w, &[start, both], true, true);
         assert_eq!((stats.carrier_hits, stats.carrier_miss_kill), (0, 1));
         assert_eq!(w.windows[0].killed, Some((enemy::ZOL, 4)));
+    }
+
+    /// The frames of the 2.0.0.13 250 test's seed 49 at frame 23677 (4:0x31): on 9 kills, Link's first bomb is
+    /// exploding, he places his last (the bag 1 → 0), and the first bomb's blast kills a Red Keese: `$50` 9 → 10, `$51`
+    /// set. The window stays open with an empty bag while a bomb of it is in the air, and closes `armed`: the bomb
+    /// that killed was placed with bombs in the bag. (A reference that asks for a bomb in the bag on the frame before
+    /// the kill misses it.)
+    #[test]
+    fn the_last_bomb_in_the_air_keeps_the_window_open() {
+        let mut start = base(2, 9, 4);
+        monster(&mut start, 11, enemy::RED_KEESE);
+        let first = placed(&start);
+        let exploding = bomb(&first, BOMB_EXPLODED);
+        let mut last = exploding;
+        set(&mut last, Var::Bombs, 0);
+        set(&mut last, Var::BombOrFlameAnimation2, BOMB_ACTIVE);
+        let mut killed = last;
+        killed[tables::OBJ_SPAWN_STATE.0 + 11] = 0x10;
+        set(&mut killed, Var::HelpDropCount, 10);
+        set(&mut killed, Var::HelpDropValue, 1);
+        set(&mut killed, Var::KillStreak, 10);
+        let mut w = BombWindows::default();
+        let stats = play(&mut w, &[start, start, first, exploding, last, killed], true, false);
+        assert_eq!((stats.tenth_armed, stats.tenth_paused_out, stats.tenth_full_armed), (1, 0, 0), "{:?}", w.windows);
+        assert_eq!(w.windows[0].killed, Some((enemy::RED_KEESE, 11)));
     }
 }
