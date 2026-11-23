@@ -1008,6 +1008,14 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
     the jobs that ran in the express place longer than 10 minutes, those in a regular place that took 10 minutes or
     less, and the kinds of job always out of the queue within 2 minutes of joining it. Numbers to look at; nothing
     acts on them.
+  - **`--detach` on `run`, `golden`, `build`, `test`, and `triforce job wait UNIT...`** (Nov 23): a job can wait in
+    line for hours, and a wrapper started from a shell call or an agent's background job dies when that call's own
+    time limit or the agent ends (it happened to the lead twice and to two agents in one afternoon: a chain cut
+    three minutes after it finally started). With `--detach` the same command starts as a systemd user unit
+    outside the caller's process tree and returns at once with a unit name; its output goes to
+    `~/.local/state/triforce/detached/<unit>.log`. `triforce job wait UNIT... [--timeout 30m]` follows it and exits
+    with the job's own exit code; stopping `wait` stops nothing and it can be run again. **Use `--detach` for every
+    job that may wait or run longer than your shell call lives**; stop one with `systemctl --user stop UNIT`.
   Two jobs run at once in the regular places, plus one estimated at 10 minutes or less (or `--express`) in the
   express place; the others wait, the shortest estimate first, a long one moving up as it waits (estimate minus half
   the time waited). A waiting job is only its wrapper: no model, no GPU memory, a check a second. It prints
