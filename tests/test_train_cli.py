@@ -530,7 +530,7 @@ def test_train_error_is_logged_before_raising(states_dir, tmp_path):
     (tmp_path / 'training.json').write_text('{}')                   # a driver's plan: the driver owns 'end'
     with pytest.raises(Exception) as error:
         train.main(_common(states_dir, tmp_path, '--parallel', '1', '--iterations', '1', '--run-id', 'bad',
-                           '--curriculum', str(tmp_path / 'missing'), '--events', str(events_path)))
+                           '--demos', str(tmp_path / 'missing.npz'), '--events', str(events_path)))
     events = read_jsonl(str(events_path))
     assert [e['event'] for e in events] == ['error', 'train_end']    # the caller owns 'end'
     assert str(error.value) in events[0]['message'] and 'Traceback' in events[0]['traceback']
@@ -549,7 +549,7 @@ def test_train_events_into_a_folder_without_a_plan_writes_one(states_dir, tmp_pa
     events_path = folder / 'mine.jsonl'
     with pytest.raises(Exception):
         train.main(_common(states_dir, tmp_path, '--parallel', '1', '--iterations', '1', '--run-id', 'bad',
-                           '--curriculum', str(tmp_path / 'missing'), '--events', str(events_path)))
+                           '--demos', str(tmp_path / 'missing.npz'), '--events', str(events_path)))
     plan = json.loads((folder / 'training.json').read_text())
     assert plan['kind'] == 'train' and plan['status'] == 'failed' and plan['runs'][0]['events'] == 'mine.jsonl'
     assert plan['runs'][0]['status'] == 'error' and plan['checkout'] and 'branch' in plan
