@@ -246,6 +246,53 @@ def test_cuda_graphs_answer_as_the_eager_forward_and_fall_back_when_they_disagre
     assert 'runs without CUDA graphs' in capsys.readouterr().out
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA graphs need the GPU")
+def test_a_learner_process_serves_eagerly_beside_its_own_gpu_work(observations, monkeypatch):
+    """A training's main thread recomputes values on the GPU while the server answers the rollouts (Nov 23: a graph
+    capture on the server thread and the learner's forwards failed each other, in every capture mode): a learner
+    process (``serve.learner_process``) serves eagerly, and both threads finish."""
+    import threading
+    monkeypatch.setitem(serve_module._LEARNER, 'on', False)
+    assert Server(device='cuda').graphs
+    serve_module.learner_process()
+    torch.manual_seed(7)
+    network = nets.create('wide', native_spec(), hidden_dim=64, depth=2).to('cuda').eval()
+    other = nets.create('wide', native_spec(), hidden_dim=64, depth=2).to('cuda').eval()
+    batch = {k: torch.as_tensor(v).to('cuda') for k, v in observations.items()}
+    stop, errors = threading.Event(), []
+
+    def learner():
+        try:
+            with torch.no_grad():
+                while not stop.is_set():
+                    other.heads(batch)
+                    torch.cuda.synchronize()
+        except Exception as error:     # pylint: disable=broad-exception-caught
+            errors.append(error)
+    thread = threading.Thread(target=learner)
+    thread.start()
+    try:
+        server = Server(device='cuda')
+        server.models[0] = network
+
+        class Queue:
+            logits_size = 11 * 13
+
+            @staticmethod
+            def answer(slots, logits, values):
+                pass
+        server.queue = Queue()
+        for n in (1, 2, 3, 5, 8):
+            obs = {k: v[:n] for k, v in observations.items()}
+            server.answer({'obs': obs, 'slot': np.arange(n), 'model': np.zeros(n, dtype=np.int64),
+                           'job': np.arange(n), 'step': np.zeros(n, dtype=np.int64),
+                           'bootstrap': np.zeros(n, dtype=bool)})
+    finally:
+        stop.set()
+        thread.join()
+    assert not server.graphs and not errors and not server._graphs
+
+
 def test_networks_served_from_temporaries_never_share_an_index():
     """``load_model(path)[0].to_native()`` in a loop (``runner.Policies``): each temporary dies at once, and a later
     network may reuse its id; each must keep its own index and weights (Nov 22: chains with several served

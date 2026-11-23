@@ -316,6 +316,8 @@ def main(argv=None) -> Path:
     # pylint: disable=too-many-locals, too-many-statements
     args = parse_args(argv)
     begin_job(args)
+    from ..nets.serve import learner_process  # pylint: disable=import-outside-toplevel
+    learner_process()           # its learner uses the GPU beside the rollouts' server: no CUDA graphs there
     if args.mode == 'imitate' and args.teacher_coeff <= 0:
         args.teacher_coeff = 1.0
     if args.actor == 'teacher' and args.mode != 'imitate':
