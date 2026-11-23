@@ -3574,7 +3574,6 @@ measurement (11% after Dungeon 7) swapped the network with `--checkpoint ow-lyne
 `ow-lynel@d3first`: a measuring mistake, not the network. 2.0.0.11's records: `target/r56-chains/r39-2011-1k-*`
 (post-d6, post-d7, post-d8, d4, d9). A `REV`: a continuation within the generation.
 
-<<<<<<< HEAD
 ## 2026-11-23 — The fresh generation's design calls (the owner)
 
 On the lead's four proposals for the fresh generation (2.0.1.0):
@@ -3604,7 +3603,7 @@ wouldn't perform the trick correctly, the model doesn't need to learn to move we
 think it should). That's just masking though which we already do for screen wrapping, not smarts about the monsters
 and dodging." So the fresh generation's macros are masked by Link's position only (offered where the sequence would
 work), never by where a monster or shot is.
-=======
+
 ## 2026-11-23 — 2.0.0.13: `d3first` crosses Moldorm's room and takes 9:0x56's key (the owner; landed by the lead)
 
 The owner, Nov 22, after the scout's key ledger (Moldorm's key is needed only at 9:0x63's west door): "drop the
@@ -3618,4 +3617,52 @@ hearts and 1 death in 1000 (fought: 0.52, 1), `d2` 99.3 -> 99.4%, 9:0x56's key i
 51.2% (−1.8 ± 2.2, the deaths in the rooms the change does not touch). The lead accepted Dungeon 9 within the noise
 of its old rate. round39.md "Moldorm crossed, 9:0x56's key: the two fine-tunes". A `REV`: continuations within the
 generation.
->>>>>>> 5a19dc3b
+
+## 2026-11-23 — The fresh generation plays without the closing no-button frame (the owner)
+
+Every action of the executor ends with one frame of no buttons (`Executor::skip_uncontrollable`, carried over from the
+v2 Python `skip_uncontrollable_states`; no reason written down). Peahat40 found it while measuring the 0x1e -> 0x1f
+line (0 hits with E held, 1 hit every time as env actions, because of that frame) and counted it in the 2.0.0.13
+win's inputs: 2,851 frames (1.78%, 47.5 s) where Link stands still between two moves in the same direction, 2,130
+more at turns, 598 before an A or B press. The owner: "I think you should drop the one-frame delay without keeping a
+backup when we do the brand new training run. You of course need to test the side effects of this and confirm things
+not from memory, but I think since we are doing a brand new training run from scratch it's the perfect time to cut
+over to remove the frame and don't look back."
+
+So: 2.0.1.0's executor has no such frame and no switch for it (the measurement switch `HoldMoves` on branch
+`r40-peahat` is for the tests before the cut-over only; today's team keeps today's timing until then). Before the
+generation's code is fixed: the game's input reading confirmed from the disassembly (which buttons are read as held
+and which as new presses, so where a release frame is truly needed, if anywhere); every piece of the engine tuned
+at today's timing found and re-proven or re-searched (the dock warps' plays, the whirlwind sequences, clips, block
+and gravestone pushes, attacks' turn frames, the planner's trials, anything that counts frames per action); and the
+chains with the frame removed on today's team, for what breaks.
+
+## 2026-11-23 — 2.0.1.0's team is the one network; no 51-network team is built or tested (the owner)
+
+The owner, after the one network `r38c/d2b-all-w8` won the golden path (37:56.351) and ended the game unbroken in 6 of
+1000 runs from the start (the 51-network team: 1 of 250): "We are dropping 51 networks on the next training run,
+right? All in on the single network now that we know it can win the golden path." Clarified: "I do not mean no
+teachers, I only mean having a 51-networks 'model' that we test on and evaluate. [...] Teachers are still fine."
+
+So the fresh generation's product, the thing that is versioned, raced on the golden path, put through the 250 test,
+chained on every segment and compared with 2.0.0.x, is ONE network. Its teachers (about five group teachers trained
+from scratch, a family split off where its group can't learn it) are a means: each is judged on its own chains as a
+teacher, none is promoted into a team of record, and no per-family team is assembled, raced or kept current beside
+the one network. The 51-against-one comparison ends with 2.0.0.x (its last table: One38d's ten segments of
+`d2b-all-w8` against the 2.0.0.13 team).
+
+## 2026-11-23 — 2.0.0.14: the engine plays `d3first`'s two whirlwinds as macros (the lead, the owner being away)
+
+Gen40eng's branch `r40-gen-eng` (the `Warp` enum, `macro_facing`, `run_warp`, routes.yaml `macros:`, run lineage in
+`run.json`; reviewed by the lead) measured the fresh generation's macros on TODAY's team, 1000 runs paired by seed
+with main: with `whirlwinds: [0x0b, 0x22]` the leg out of Dungeon 5 is 82.3% -> 89.3% (+7.0 ± 1.5) and 163 frames
+faster, the leg out of Dungeon 6 100% -> 100% and 48 frames faster; in 0:0x0b the networks' own recorder play left by
+the right exit in 88.8% of visits (they walked out N or back into Level 5 in 120 of 1073), the macro in all, at 0.024
+hits a visit against 0.151. With `unaided_docks: true` today's networks take the docks in 0 of 1000 runs (they were
+always handed the recorder as a forced choice), so the docks stay helped on today's team, as the owner ruled; the
+unaided dock is the fresh generation's, where ow-zora trains with it (the baseline to beat: 82.3% and 99.3%).
+
+The lead turned the whirlwind macros on for `d3first` as a `REV` (no network changed; `d2first` has no macro entry and
+plays as before), told the owner beforehand in the check-in file ("my plan unless you say no"), and landed it with
+the golden race and the 250 test. It is a change to how today's team plays that the owner had ruled on only for the
+fresh generation: his to overrule.

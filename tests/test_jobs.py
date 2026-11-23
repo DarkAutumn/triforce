@@ -307,14 +307,14 @@ def test_one_worktree_under_two_agent_names_is_warned_about(tmp_path, monkeypatc
 
 def test_setup_makes_the_worktree_its_links_venv_and_build_as_one_tools_entry(tmp_path, monkeypatch):
     main = tmp_path / 'triforce'
-    for name in ('roms', 'trajectories', 'models'):
+    for name in ('roms', 'trajectories', 'models', 'triforce/states/harvested'):
         (main / name).mkdir(parents=True)
     monkeypatch.setattr(job, 'main_checkout', lambda cwd: main)
     seen = {}
 
     def run_job(fields, steps, timeout=None, **_):
         seen.update(fields=fields, steps=steps)
-        (tmp_path / 'triforce-r41-x').mkdir()
+        (tmp_path / 'triforce-r41-x' / 'triforce' / 'states').mkdir(parents=True)     # the checkout's tracked folder
         return steps[1].command()
     monkeypatch.setattr(job, 'run_job', run_job)
     assert job.main(['setup', 'r41-x']) == 0
@@ -322,7 +322,8 @@ def test_setup_makes_the_worktree_its_links_venv_and_build_as_one_tools_entry(tm
     assert [step.name for step in seen['steps']] == ['worktree', 'links', 'venv', 'install', 'build']
     assert seen['steps'][0].command[-3:] == ['-b', 'r41-x', 'main']
     target = tmp_path / 'triforce-r41-x'
-    assert all((target / name).resolve() == main / name for name in ('roms', 'trajectories'))
+    assert all((target / name).resolve() == main / name
+               for name in ('roms', 'trajectories', 'triforce/states/harvested'))    # the data no checkout tracks
     assert not (target / 'models').exists()       # a worktree's runs and pointers stay its own
     assert seen['steps'][-1].env['CARGO_BUILD_JOBS'] == str(job.CARGO_JOBS)
 
@@ -357,3 +358,33 @@ def test_the_record_keeps_every_job_and_says_what_the_lanes_really_ran(tmp_path)
     assert [row['ran'] for row in metrics['express_long']] == [2000]
     assert [row['ran'] for row in metrics['regular_short']] == [300]
     assert metrics['always_quick'] == [{'what': 'maturin develop', 'jobs': 3, 'longest': 31, 'waited': 1}]
+
+
+def test_a_detached_job_is_the_same_command_as_a_user_unit_and_wait_reads_its_end(tmp_path, monkeypatch, capsys):
+    """``--detach`` starts the same ``triforce job`` command outside the caller's process tree (a job that waits for
+    hours must not die with the shell that queued it); ``wait`` returns the job's own exit code from its output."""
+    monkeypatch.setenv('TRIFORCE_QUEUE_DIR', str(tmp_path))
+    monkeypatch.setattr(job.shutil, 'which', lambda name: '/usr/bin/systemd-run')
+    started = []
+    monkeypatch.setattr(job.subprocess, 'run', lambda command, **_: started.append(command))
+    argv = ['run', '--agent', 'A', '--task', 'T', '--subtask', 'd3 1k', '--desc', 'x', '--detach', '--timeout', '5m',
+            '--', 'tool', '--detach', 'arg']
+    assert job.main(argv) == 0
+    (command,) = started
+    unit = next(part.split('=', 1)[1] for part in command if part.startswith('--unit='))
+    assert unit.startswith('tfjob-A-T-d3-1k-') and f'StandardOutput=file:{tmp_path}/detached/{unit}.log' in command
+    tail = command[command.index('triforce.job') + 1:]
+    assert command[command.index('triforce.job') - 2:][:2] == ['-P', '-m']      # never the caller's folder's triforce
+    assert tail == [arg for arg in argv[:argv.index('--')] if arg != '--detach'] + ['--', 'tool', '--detach', 'arg']
+    assert f'follow it with: triforce job wait {unit}' in capsys.readouterr().err
+
+    monkeypatch.setattr(job, 'unit_active', lambda name: False)
+    log = tmp_path / 'detached' / f'{unit}.log'
+    log.write_text("chain output\ntriforce job: #7 A-T-d3 (chain) failed after 3 minutes (exit 3)\n")
+    assert job.main(['wait', unit]) == 3
+    log.write_text("chain output, then killed\n")
+    assert job.main(['wait', unit]) == 1
+    assert job.main(['wait', 'tfjob-no-such']) == 2
+    monkeypatch.setattr(job, 'unit_active', lambda name: True)
+    monkeypatch.setattr(job, 'WAIT_POLL_SECONDS', 0.01)
+    assert job.main(['wait', unit, '--timeout', '1s']) == 124

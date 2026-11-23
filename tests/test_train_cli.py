@@ -69,6 +69,10 @@ def test_train_then_resume(states_dir, tmp_path):
     assert all(resumed['optimizer']['state'][p]['step'] > first_steps[p] for p in first_steps)
     run = json.loads((second / 'run.json').read_text())
     assert run['args']['parallel'] == 2 and run['args']['threads'] == 2
+    # Round 40: the parent by identity (family, run, iterations, SHA-1), never a path; none from scratch.
+    assert json.loads((first / 'run.json').read_text())['parent'] is None
+    assert run['parent'] == {'family': checkpoint['specialist'], 'run': 'first', 'iterations': 1,
+                             'sha1': registry.checkpoint_sha1(first)}
 
 
 def test_supplied_config_and_explicit_start_state(states_dir, tmp_path):
@@ -609,6 +613,8 @@ def test_training_into_an_existing_run_dir_sets_the_old_run_aside(states_dir, tm
     assert not (run_dir / 'act').exists() and not (run_dir / 'eval-sample.json').exists()
     assert (run_dir.with_name('x.prev-3') / 'eval-sample.json').is_file()
     assert registry.load_checkpoint(run_dir)['iterations'] == 2
+    # A same-dir continuation is the run itself: its first training's parent (none, from scratch) stays.
+    assert json.loads((run_dir / 'run.json').read_text())['parent'] is None
 
 
 def test_a_load_continuation_resumes_the_curriculum(states_dir, tmp_path):
@@ -746,3 +752,21 @@ def test_round_driver_sets_unfinished_runs_aside_and_skips_finished_ones(tmp_pat
     assert calls == [run_dir, run_dir]                                     # finished: skipped
     kinds = [e['event'] for e in read_jsonl(str(tmp_path / f'{SPECIALIST}.jsonl'))]
     assert kinds.count('partial_set_aside') == 1 and kinds[-1] == 'skipped'
+
+
+def test_a_task_that_draws_harvested_states_refuses_to_train_without_them(states_dir, tmp_path):
+    """A recipe must not change silently: with ``harvested_fraction`` above 0 and no harvested state to draw, the
+    training stops before it starts (Nov 23: a worktree without the main checkout's harvested states trained two runs
+    on seed states alone, noticed only in run.json)."""
+    empty = tmp_path / 'none'
+    empty.mkdir()
+    config = tmp_path / 'short.yaml'
+    config.write_text("name: ow-start\nrooms: ['(0, 0x77)', '(0, 0x77, cave)', '(0, 0x39)']\n"
+                      f"start_states: ['start']\nsuccess: [exit-correct]\nmax_steps: 4\n"
+                      f"harvested_states: {empty}\nharvested_fraction: 0.5\n")
+    with pytest.raises(SystemExit) as stopped:
+        train.main(['--specialist', str(config), '--states-dir', str(states_dir), '--parallel', '2',
+                    '--steps-per-update', '16', '--iterations', '1', '--models-dir', str(tmp_path),
+                    '--run-id', 'none', '--seed', '3', '--device', 'cpu'])
+    assert 'harvested states' in str(stopped.value) and str(empty) in str(stopped.value)
+    assert not (tmp_path / 'ow-start' / 'none' / 'run.json').exists()

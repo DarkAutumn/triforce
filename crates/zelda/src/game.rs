@@ -996,6 +996,12 @@ impl GameView {
         (hc >> 4) & 0x0F == hc & 0x0F && self.partial_hearts() >= 0x80
     }
 
+    /// Link holds his beams: a sword and the hearts a shot needs ([`Self::is_health_full_for_beams`]), whether or not
+    /// a shot can be made this frame (the slot busy, the sword blocked: [`Self::has_beams`]).
+    pub fn holds_beams(&self) -> bool {
+        self.sword() != SwordKind::None && self.is_health_full_for_beams()
+    }
+
     // --- Link: inventory ---
     pub fn sword(&self) -> SwordKind {
         SwordKind::from_value(self.byte(Var::Sword))

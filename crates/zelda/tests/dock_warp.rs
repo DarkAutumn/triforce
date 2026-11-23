@@ -2,8 +2,8 @@
 //! raft dock's row W of the dock, over the dock's trigger lands him one row above the whirlwind's stand-in room
 //! (`zelda::game_map::dock_landing`): 0x55 -> 0x34 by Level 4's whirlwind, 0x3f -> 0x31 by Level 7's. The engine plays
 //! it from the dock after the raft's ride down: MOVE S off the trigger, the block clip N into the water
-//! (`zelda::clips::dock_clip_at`), RECORDER with every play the index needs (`Executor::run_dock_warp`), offered only
-//! while the session has a dock warp (`Session::set_dock_warp`).
+//! (`zelda::clips::dock_clip_at`), RECORDER with every play the index needs (`Executor::run_warp`), offered only
+//! while the session has a dock warp (`Session::set_warp`).
 //!
 //! SETUP (RAM writes, the tests are about the warp's mechanics): the room's monsters and their shots are removed
 //! before every action (a Zora's fireball interrupts the clip or the plays; the live-monster tries are
@@ -19,7 +19,7 @@ use std::sync::Arc;
 use zelda::clips::{dock_clip_at, dock_spot};
 use zelda::game_map::{dock_landing, dock_level};
 use zelda::objectives::route_entry;
-use zelda::whirlwind::LEVEL_INDEX;
+use zelda::whirlwind::{LEVEL_INDEX, Warp};
 use zelda::{Action, GameMap, LoadOptions, MapLocation, Session, Var};
 
 type S = Session<Counted>;
@@ -80,7 +80,7 @@ fn off_the_raft(name: &str, pieces: u8, index: u8) -> Option<S> {
 
 /// The engine's dock warp from the raft's end to the landing; the frames it took.
 fn dock_warp(s: &mut S, level: u8, spot: (i32, i32), landing: u8) {
-    s.set_dock_warp(Some(level));
+    s.set_warp(Some(Warp::Dock { level, unaided: false }));
     // On the dock below the trigger: MOVE S only (any other step boards the raft back up).
     assert!(allowed(s, "MOVE S 8") && !allowed(s, "MOVE W 8") && !allowed(s, "MOVE N 8"), "{:?}", at(s));
     act(s, "MOVE S 8");
@@ -178,7 +178,7 @@ fn the_dock_warp_gives_way_to_a_hit_coming() {
     const OBJ_Y: u16 = 0x84;
     let Some(mut s) = off_the_raft("d3first_0_55n_v2_0", 0x1F, 3) else { return };
     tidy(&mut s);
-    s.set_dock_warp(Some(4));
+    s.set_warp(Some(Warp::Dock { level: 4, unaided: false }));
     let place = |s: &mut S, kind: u8, x: u8, y: u8| {
         for (address, value) in [(OBJ_TYPE + 1, kind), (OBJ_X + 1, x), (OBJ_Y + 1, y)] {
             zelda::Nes::poke(s.nes_mut(), address, value);

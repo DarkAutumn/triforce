@@ -768,7 +768,9 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 
 ## Versioning (the owner, Nov 11; the third number and model compatibility redefined Nov 23)
 
-- **One version, `MAJOR.MINOR.GEN.REV`, in the `VERSION` file** (now `2.0.0.13`: `d3first` crosses 2:0x3e (the
+- **One version, `MAJOR.MINOR.GEN.REV`, in the `VERSION` file** (now `2.0.0.14`: the engine plays `d3first`'s two
+  whirlwinds, 0:0x0b out of Level 5 and 0:0x22 out of Level 6, as macros (routes.yaml `macros:`; the leg out of
+  Dungeon 5 82.3% -> 89.3% of 1000 runs paired, round40.md "Engine macros"; no network changed); 2.0.0.13: `d3first` crosses 2:0x3e (the
   Moldorm left) and takes 9:0x56's key instead, moldorm `r39t-moldorm` through `promoted.d3first` and like-like
   `r39t-like` through `late.d3first` (Dungeon 9 6.7% -> 51.2% against 53.0% fighting the Moldorm, 1000 runs paired;
   round39.md "Moldorm crossed, 9:0x56's key: the two fine-tunes"); 2.0.0.12 was `ow-lynel`'s `late.d3first` run for the leg
@@ -1008,6 +1010,14 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
     the jobs that ran in the express place longer than 10 minutes, those in a regular place that took 10 minutes or
     less, and the kinds of job always out of the queue within 2 minutes of joining it. Numbers to look at; nothing
     acts on them.
+  - **`--detach` on `run`, `golden`, `build`, `test`, and `triforce job wait UNIT...`** (Nov 23): a job can wait in
+    line for hours, and a wrapper started from a shell call or an agent's background job dies when that call's own
+    time limit or the agent ends (it happened to the lead twice and to two agents in one afternoon: a chain cut
+    three minutes after it finally started). With `--detach` the same command starts as a systemd user unit
+    outside the caller's process tree and returns at once with a unit name; its output goes to
+    `~/.local/state/triforce/detached/<unit>.log`. `triforce job wait UNIT... [--timeout 30m]` follows it and exits
+    with the job's own exit code; stopping `wait` stops nothing and it can be run again. **Use `--detach` for every
+    job that may wait or run longer than your shell call lives**; stop one with `systemctl --user stop UNIT`.
   Two jobs run at once in the regular places, plus one estimated at 10 minutes or less (or `--express`) in the
   express place; the others wait, the shortest estimate first, a long one moving up as it waits (estimate minus half
   the time waited). A waiting job is only its wrapper: no model, no GPU memory, a check a second. It prints
@@ -1040,6 +1050,22 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   (`triforce select-checkpoint` does both). Two models on the same 1000 seeds differ by 2.2 points of noise
   (standard error of the paired difference; same seeds don't make different models' runs alike): about 5 points is
   a result, 2-3 points need 2000-5000 runs an arm; secondaries such as the hearts on entering a room are sharper.
+  **What decides, in order (the owner, Nov 23):** the main metric is the segment's rate (the dungeon cleared, the
+  game won). When two arms' rates are within noise of each other, the others decide, and each of them better is
+  better (no fixed weighting yet): the hearts kept, how long Link holds his beams (the frame he first drops below
+  full hearts), whether his shots hit and how many kills he makes from range, and the time taken (frames to ENTER
+  each route step over the runs that entered it in both arms, so a death counts up to its last room; "we are
+  competing with speedrunners so time matters, and not walking back around to enemies matters"). They never redeem
+  a worse rate: "it doesn't matter if we run faster and die quicker". Report them beside the rate for every arm.
+- **Read results with `triforce stats`, not a script of your own** (the owner, Nov 23: one standard set of
+  statistics for every agent's runs, in one place). Every chain, evaluation and training writes `<output>.stats.json`
+  (a run dir's `train.stats.json`) and registers it under its job (docs/architecture.md "Run statistics"):
+  `triforce stats list --agent A --since 24h`, `triforce stats show ID|PATH [--family F]`, and for an experiment
+  `triforce stats compare BASE ARM...` (paired by seed, in the order above: the rate, hearts, beams held, shots that
+  hit and kills from range, time to each step). An older output: `triforce stats ingest FILE --agent A --task T`
+  (a job). **Read its flags first**: a red flag (a step or family never played, a network that made no decision,
+  harvested states never drawn, runs short or ended in errors) voids the numbers until explained. A measure the
+  file lacks is added to `run_stats.py` for everyone, not computed on the side.
 - **Every job is in the queue, shown with its progress** (the owner, Nov 13, Nov 18, Nov 23). The queue
   (`$XDG_STATE_HOME/triforce/queue.db`, else `~/.local/state/triforce/queue.db`; `triforce/jobqueue.py`) holds every
   job of every worktree: who (`Agent: A   Task: T   Sub-task: S`), the description, its state (`RUNNING regular 10m
