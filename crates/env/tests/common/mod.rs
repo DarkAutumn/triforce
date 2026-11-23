@@ -211,6 +211,10 @@ pub fn obs_values(o: &Observation) -> Vec<(&'static str, Vec<f64>)> {
             "entity_contact",
             o.entity_contact.iter().flat_map(|r| f(r)).collect(),
         ),
+        (
+            "entity_threat",
+            o.entity_threat.iter().flat_map(|r| f(r)).collect(),
+        ),
     ]
 }
 

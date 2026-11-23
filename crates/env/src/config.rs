@@ -388,6 +388,10 @@ pub struct ObsConfig {
     /// invisible; round 26). Default `ram`.
     #[serde(default)]
     pub hidden_positions: HiddenPositions,
+    /// Fill the `entity_threat` observation block (schema 8, round 40: range-aware contact, the shooter's threat lane,
+    /// the bomb carrier; `env::observation::threat_block`). Default off: zeros, as today's networks were trained.
+    #[serde(default, deserialize_with = "de_bool")]
+    pub threat: bool,
 }
 
 impl Default for ObsConfig {
@@ -396,6 +400,7 @@ impl Default for ObsConfig {
             objective: true,
             target: false,
             hidden_positions: HiddenPositions::Ram,
+            threat: false,
         }
     }
 }

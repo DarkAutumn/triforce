@@ -89,7 +89,12 @@ fn crossable(class: u8) -> bool {
 /// Pixels a 16 x 16 object with its corner at screen `(x, y)` moves along the unit step `(ux, uy)` before its lower
 /// half (rows 8-15) meets a tile it cannot cross or the play area's edge, up to [`TRAVEL_LIMIT`].
 pub fn travel(x: f32, y: f32, ux: f32, uy: f32, grid: &Grid) -> f32 {
-    for s in 1..=TRAVEL_LIMIT {
+    travel_up_to(x, y, ux, uy, grid, TRAVEL_LIMIT)
+}
+
+/// [`travel`] searched up to `limit` pixels.
+pub fn travel_up_to(x: f32, y: f32, ux: f32, uy: f32, grid: &Grid, limit: u32) -> f32 {
+    for s in 1..=limit {
         let step = s as f32;
         let nx = x + ux * step;
         let ny = (y + uy * step) - 64.0;
@@ -103,7 +108,7 @@ pub fn travel(x: f32, y: f32, ux: f32, uy: f32, grid: &Grid) -> f32 {
             return (s - 1) as f32;
         }
     }
-    TRAVEL_LIMIT as f32
+    limit as f32
 }
 
 /// How soon (`(33 - t) / 33`, 0 never within [`HORIZON`]) and how close (the smallest gap before the touch test
