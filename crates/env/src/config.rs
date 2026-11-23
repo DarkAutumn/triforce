@@ -224,6 +224,31 @@ fn sword_blocked_penalty() -> f64 {
     SWORD_BLOCKED_PENALTY
 }
 
+/// Round 38's sword-shot terms (the owner: "more reward for long range kills (out of melee range), and possibly a
+/// small penalty for ignoring a lined up shot"; `zelda::beams`). `reward-beam-kill`: a kill a sword shot makes out of
+/// melee range, on the firing step (beside `reward-beam-hit`'s `REWARD_MEDIUM`, so such a kill fills the step's
+/// clamp where a melee kill pays `reward-hit`'s `REWARD_SMALL`).
+pub const BEAM_KILL_REWARD: f64 = crate::rewards::REWARD_MEDIUM;
+/// `reward-beam-timed`: a shot fired where the projection has it meet a monster out of melee range, each moving
+/// straight on, whether or not it turns away before.
+pub const BEAM_TIMED_REWARD: f64 = 2.0 * crate::rewards::REWARD_TINY;
+/// `penalty-beam-unfired`: a decision lined up for such a shot, with the shot ready, that fires none. A hit costs at
+/// least 0.5 (`penalty-lost-health` 0.25 a half heart and `penalty-lost-beams` 0.25): 25 decisions lined up without
+/// a shot cost what one hit does, so a dodge always pays more than a shot that walks into one.
+pub const BEAM_UNFIRED_PENALTY: f64 = 2.0 * crate::rewards::REWARD_MINIMUM;
+
+fn beam_kill_reward() -> f64 {
+    BEAM_KILL_REWARD
+}
+
+fn beam_timed_reward() -> f64 {
+    BEAM_TIMED_REWARD
+}
+
+fn beam_unfired_penalty() -> f64 {
+    BEAM_UNFIRED_PENALTY
+}
+
 /// `reward:` block.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -265,6 +290,15 @@ pub struct RewardConfig {
     /// (positive magnitude; 0 = off).
     #[serde(default = "sword_blocked_penalty")]
     pub sword_blocked_penalty: f64,
+    /// `reward-beam-kill` ([`BEAM_KILL_REWARD`]; round 38; 0 = off).
+    #[serde(default = "beam_kill_reward")]
+    pub beam_kill_reward: f64,
+    /// `reward-beam-timed` ([`BEAM_TIMED_REWARD`]; round 38; 0 = off).
+    #[serde(default = "beam_timed_reward")]
+    pub beam_timed_reward: f64,
+    /// `penalty-beam-unfired` ([`BEAM_UNFIRED_PENALTY`]; round 38; positive magnitude, 0 = off).
+    #[serde(default = "beam_unfired_penalty")]
+    pub beam_unfired_penalty: f64,
     /// `penalty-aimless` per frame a calm decision adds to its stretch's waste (`zelda::aimless`, round 38: lasted
     /// beyond the walk the ground it gained needed, with nothing in the room that can hurt Link and a goal that does
     /// not go away), scaled by `shaping_scale` (positive magnitude; 0 = off, the default; never charged while a
@@ -301,6 +335,9 @@ impl Default for RewardConfig {
             heal_targets: false,
             boss_ate_bomb_penalty: 0.5,
             sword_blocked_penalty: SWORD_BLOCKED_PENALTY,
+            beam_kill_reward: BEAM_KILL_REWARD,
+            beam_timed_reward: BEAM_TIMED_REWARD,
+            beam_unfired_penalty: BEAM_UNFIRED_PENALTY,
             aimless_penalty: 0.0,
             shaping_scale: 1.0,
             frame_penalty: 0.0,
@@ -922,6 +959,9 @@ impl SpecialistConfig {
             ("reward.boss_ate_bomb_penalty", self.reward.boss_ate_bomb_penalty),
             ("reward.aimless_penalty", self.reward.aimless_penalty),
             ("reward.sword_blocked_penalty", self.reward.sword_blocked_penalty),
+            ("reward.beam_kill_reward", self.reward.beam_kill_reward),
+            ("reward.beam_timed_reward", self.reward.beam_timed_reward),
+            ("reward.beam_unfired_penalty", self.reward.beam_unfired_penalty),
             ("reward.frame_penalty", self.reward.frame_penalty),
         ] {
             if !(value >= 0.0 && value.is_finite()) {
@@ -1599,6 +1639,9 @@ mod tests {
             "reward: {aimless_penalty: .nan}",
             "reward: {sword_blocked_penalty: -0.25}",
             "reward: {sword_blocked_penalty: .nan}",
+            "reward: {beam_kill_reward: -0.5}",
+            "reward: {beam_timed_reward: .nan}",
+            "reward: {beam_unfired_penalty: -0.02}",
             "reward: {frame_penalty: .inf}",
             "reward: {block_reward: .inf}",
             "reward_profile: nonsense",

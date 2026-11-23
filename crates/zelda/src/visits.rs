@@ -14,6 +14,7 @@
 //! the episode ended in the room ([`VisitEnd`]).
 
 use crate::aimless::AimlessSummary;
+use crate::beams::BeamStats;
 use crate::bombs::BombStats;
 use crate::decisions::{DecisionNote, DecisionStats};
 use crate::clips::ClipStats;
@@ -87,6 +88,8 @@ pub struct RoomVisit {
     pub bombs_used: u32,
     /// What the bombs did, the 10th kills and the bomb pickups ([`BombStats`]).
     pub bombs: BombStats,
+    /// Sword shots and kills by range ([`BeamStats`]; round 38).
+    pub beams: BeamStats,
     pub cheated: ItemCounts,
     /// Dodongo stuns (a bomb's smoke) and bombs he swallowed.
     pub boss_stuns: u32,
@@ -143,6 +146,8 @@ pub struct VisitStep<'a> {
     /// [`VisitStep::of`]).
     pub bombs_used: u32,
     pub bombs: BombStats,
+    /// The step's sword shots and kills ([`BeamStats`]; set by the env; empty from [`VisitStep::of`]).
+    pub beams: BeamStats,
     pub cheated: ItemCounts,
     /// Dodongo stuns and swallowed bombs this step (set by the env; 0 from [`VisitStep::of`]).
     pub boss_stuns: u32,
@@ -171,6 +176,7 @@ impl VisitStep<'_> {
             items_gained: &change.observed.items_gained,
             bombs_used: 0,
             bombs: BombStats::default(),
+            beams: BeamStats::default(),
             cheated: ItemCounts::default(),
             boss_stuns: 0,
             boss_eats: 0,
@@ -248,6 +254,7 @@ impl VisitTracker {
         visit.aimless = step.aimless;
         visit.bombs_used += step.bombs_used;
         visit.bombs += step.bombs;
+        visit.beams += step.beams;
         visit.cheated += step.cheated;
         visit.boss_stuns += step.boss_stuns;
         visit.boss_eats += step.boss_eats;
@@ -309,6 +316,7 @@ impl VisitTracker {
             keys_gained: 0,
             bombs_used: 0,
             bombs: BombStats::default(),
+            beams: BeamStats::default(),
             cheated: ItemCounts::default(),
             boss_stuns: 0,
             boss_eats: 0,
@@ -374,6 +382,7 @@ mod tests {
             items_gained,
             bombs_used: 0,
             bombs: BombStats::default(),
+            beams: BeamStats::default(),
             cheated: ItemCounts::default(),
             boss_stuns: 0,
             boss_eats: 0,

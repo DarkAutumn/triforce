@@ -365,7 +365,8 @@ fn beam_hits_and_long_shots() {
         &mut critic(),
         &hits(step(&base, &flying, "BEAMS N"), &[(3, 1)]),
     );
-    assert_eq!(names(&far), ["reward-beam-hit", "reward-beam-distance"]);
+    // The hit kills it (one heart), 81 pixels out: a kill at range (beyond the room's top, so no shot is lined up).
+    assert_eq!(names(&far), ["reward-beam-hit", "reward-beam-distance", "reward-beam-kill"]);
     assert_eq!(value(&far, "reward-beam-hit"), REWARD_MEDIUM);
     assert_eq!(value(&far, "reward-beam-distance"), REWARD_TINY);
     let near = critique(
@@ -380,6 +381,104 @@ fn beam_hits_and_long_shots() {
         &[(3, 1)],
     );
     assert_eq!(names(&critique(&mut critic(), &c)), ["reward-hit"]);
+}
+
+/// Round 38 (the owner: "more reward for long range kills (out of melee range), and possibly a small penalty for
+/// ignoring a lined up shot [...] reward timing beams that WOULD intersect even if the enemy turns the other way"):
+/// the projection carries each monster straight on (ObjDir, ObjQSpeedFrac), the shot made 12 frames after the press
+/// 16 pixels ahead at 3 a frame.
+#[test]
+fn beams_at_range_kill_timing_and_unfired_shots() {
+    const QSPEED: usize = 0x3BC;
+    let flying = |r: &Ram| r.with(Var::BeamAnimation, 16);
+    // A Stalfos 45 pixels north of Link (120, 141), standing.
+    let mut north = Ram::new();
+    north.enemy(3, enemy::STALFOS, 120, 96);
+    assert_eq!(zelda::beams::lined_up(&north.view()), [zelda::Direction::N]);
+    // Lined up, ready, and walking away: the small cost; a shot north: the timed shot (and its hit, and its kill).
+    let r = critique(&mut critic(), &step(&north, &north.link(124, 141), "MOVE E 4"));
+    assert_eq!(names(&r), ["penalty-beam-unfired"]);
+    assert_eq!(value(&r, "penalty-beam-unfired"), -2.0 * REWARD_MINIMUM);
+    let r = critique(&mut critic(), &hits(step(&north, &flying(&north), "BEAMS N"), &[(3, 1)]));
+    assert_eq!(names(&r), ["reward-beam-hit", "reward-beam-kill", "reward-beam-timed"]);
+    assert_eq!(value(&r, "reward-beam-kill"), REWARD_MEDIUM);
+    assert_eq!(value(&r, "reward-beam-timed"), 2.0 * REWARD_TINY);
+    // The shot meets it on its course but it turned away (no hit credited): the timed shot still pays.
+    let r = critique(&mut critic(), &step(&north, &flying(&north), "BEAMS N"));
+    assert_eq!(names(&r), ["penalty-attack-miss", "reward-beam-timed"]);
+    // A shot the other way: neither the timing nor the cost.
+    let r = critique(&mut critic(), &step(&north, &flying(&north), "BEAMS S"));
+    assert_eq!(names(&r), ["penalty-attack-miss"]);
+    // A hit that doesn't kill (two hearts): no kill reward.
+    let mut tough = north.clone();
+    tough.0[tables::OBJ_HEALTH.0 + 3] = 0x20;
+    let r = critique(&mut critic(), &hits(step(&tough, &flying(&tough), "BEAMS N"), &[(3, 1)]));
+    assert_eq!(names(&r), ["reward-beam-hit", "reward-beam-timed"]);
+    // Not ready (hurt: no beams; a shot already flying): nothing lined up, nothing charged.
+    let hurt = north.with(Var::PartialHearts, 0x7F);
+    assert!(critique(&mut critic(), &step(&hurt, &hurt.link(124, 141), "MOVE E 4")).is_empty());
+    let busy = flying(&north);
+    assert!(zelda::beams::lined_up(&busy.view()).is_empty());
+    // In melee range: not a shot at range.
+    let mut close = Ram::new();
+    close.enemy(3, enemy::STALFOS, 120, 120);
+    assert!(zelda::beams::lined_up(&close.view()).is_empty());
+    // Off the line now, walking onto it at 2 pixels a frame (ObjDir E, q-speed 128): lined up by its course; standing
+    // there, not.
+    let mut coming = Ram::new();
+    coming.enemy(3, enemy::STALFOS, 80, 96);
+    assert!(zelda::beams::lined_up(&coming.view()).is_empty());
+    coming.0[tables::OBJ_DIRECTION.0 + 3] = 1;
+    coming.0[QSPEED + 3] = 128;
+    assert_eq!(zelda::beams::lined_up(&coming.view()), [zelda::Direction::N]);
+    // A Darknut facing the shot takes no damage from it (asm:Damage_HandleWeaponHit@CheckDarknut); one facing aside
+    // does.
+    let mut darknut = Ram::new();
+    darknut.enemy(3, enemy::RED_DARKNUT, 120, 96);
+    darknut.0[tables::OBJ_DIRECTION.0 + 3] = 4;
+    assert!(zelda::beams::lined_up(&darknut.view()).is_empty(), "facing south, at Link");
+    darknut.0[tables::OBJ_DIRECTION.0 + 3] = 1;
+    assert_eq!(zelda::beams::lined_up(&darknut.view()), [zelda::Direction::N]);
+    // Immune to the sword (ObjInvincibilityMask bit 1): not lined up.
+    let mut immune = north.clone();
+    immune.0[0x4B2 + 3] = 0x01;
+    assert!(zelda::beams::lined_up(&immune.view()).is_empty());
+    // Each term off by its knob.
+    let mut off = critic();
+    off.beam_unfired_penalty = 0.0;
+    off.beam_timed_reward = 0.0;
+    off.beam_kill_reward = 0.0;
+    assert!(critique(&mut off, &step(&north, &north.link(124, 141), "MOVE E 4")).is_empty());
+    let r = critique(&mut off, &hits(step(&north, &flying(&north), "BEAMS N"), &[(3, 1)]));
+    assert_eq!(names(&r), ["reward-beam-hit"]);
+}
+
+/// The visit's shot and kill counts (`zelda::beams::BeamStats`, chain room records and evaluation visits).
+#[test]
+fn beam_stats_count_shots_lined_decisions_and_kills_by_range() {
+    use zelda::beams::BeamStats;
+    let killed = |mut c: Change, slot: u8| {
+        c.observed.enemies_killed = vec![slot];
+        c
+    };
+    let mut north = Ram::new();
+    north.enemy(3, enemy::STALFOS, 120, 96);
+    let flying = north.with(Var::BeamAnimation, 16);
+    let mut s = BeamStats::default();
+    s.update(&step(&north, &north.link(124, 141), "MOVE E 4"));
+    s.update(&step(&north, &flying, "BEAMS N"));
+    s.update(&killed(step(&flying, &flying, "WAIT 4"), 3));
+    assert_eq!((s.lined, s.lined_unfired, s.shots, s.shots_lined), (2, 1, 1, 1));
+    assert_eq!((s.kills_far, s.kills_near, s.kills_other, s.kill_distance), (1, 0, 0, 45));
+    // In melee range on a sword step: near; far without a shot flying (a bomb, an arrow): other.
+    let mut close = Ram::new();
+    close.enemy(3, enemy::STALFOS, 120, 121);
+    s.update(&killed(step(&close, &close, "SWORD N"), 3));
+    s.update(&killed(step(&north, &north, "BOMB N"), 3));
+    assert_eq!((s.kills_far, s.kills_near, s.kills_other, s.kill_distance), (1, 1, 1, 65));
+    // Hearts lost, and the beams with them.
+    s.update(&step(&close, &close.with(Var::PartialHearts, 0x7F), "WAIT 4"));
+    assert_eq!((s.hearts_lost, s.beams_lost), (0.5, 1));
 }
 
 #[test]
@@ -582,7 +681,7 @@ fn equipment_pickups_count_increases_only() {
             "reward-gained-rupees"
         ]
     );
-    assert_eq!(value(&r, "reward-gained-rupees"), REWARD_MEDIUM);
+    assert_eq!(value(&r, "reward-gained-rupees"), REWARD_LARGE, "5 rupees at once: a blue rupee's size");
     // Another level's compass bit, spending keys or rupees: nothing.
     let rich = base.with(Var::Rupees, 5).with(Var::Keys, 2);
     let r = critique(
@@ -597,6 +696,39 @@ fn equipment_pickups_count_increases_only() {
         ),
     );
     assert!(r.is_empty(), "{:?}", names(&r));
+}
+
+/// Round 38 (the owner, 0:0x0f: "what should ACTUALLY be awarded for getting rupees is the 'rupees to add' counter
+/// getting set once"): a pickup pays once on the step `InvRupeesToAdd` rises, sized by the amount, and nothing while
+/// asm:Inv_ChangeRupees counts it into `InvRupees`.
+#[test]
+fn rupees_pay_once_per_pickup_not_per_counted_rupee() {
+    let base = Ram::new().with(Var::Rupees, 76);
+    let pickup = |amount: u8| {
+        let r = critique(&mut critic(), &step(&base, &base.with(Var::RupeesToAdd, amount), "MOVE N 8"));
+        assert_eq!(names(&r), ["reward-gained-rupees"]);
+        value(&r, "reward-gained-rupees")
+    };
+    assert_eq!(pickup(1), REWARD_MEDIUM, "a rupee");
+    assert_eq!(pickup(5), REWARD_LARGE, "a blue rupee");
+    assert_eq!(pickup(30), REWARD_MAXIMUM, "a cave's gift");
+    assert_eq!(pickup(100), REWARD_MAXIMUM);
+    // A pickup counted in within the step (a rupee: 2 frames) pays the same.
+    let r = critique(&mut critic(), &step(&base, &base.with(Var::Rupees, 77), "MOVE N 8"));
+    assert_eq!(value(&r, "reward-gained-rupees"), REWARD_MEDIUM);
+    // The count running: InvRupees up by what InvRupeesToAdd lost, nothing.
+    let counting = base.with(Var::RupeesToAdd, 90);
+    let counted = counting.with(Var::Rupees, 80).with(Var::RupeesToAdd, 86);
+    assert!(critique(&mut critic(), &step(&counting, &counted, "WAIT 8")).is_empty());
+    // A pickup while the count runs pays for the pickup alone.
+    let picked = counted.with(Var::RupeesToAdd, 91);
+    let r = critique(&mut critic(), &step(&counting, &picked, "MOVE N 8"));
+    assert_eq!(value(&r, "reward-gained-rupees"), REWARD_LARGE, "4 counted, 5 picked up");
+    // A price counted off, or an arrow's rupee: nothing.
+    let buying = base.with(Var::RupeesToSubtract, 60);
+    assert!(critique(&mut critic(), &step(&base, &buying, "MOVE N 8")).is_empty());
+    let paying = buying.with(Var::Rupees, 70).with(Var::RupeesToSubtract, 54);
+    assert!(critique(&mut critic(), &step(&buying, &paying, "WAIT 8")).is_empty());
 }
 
 /// F043: walking from the overworld into a dungeon whose map and compass Link already holds is no pickup; taking

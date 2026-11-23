@@ -1052,6 +1052,31 @@ hits it leads to are priced when they land. Counted beside the hits: the visits'
 stretch's waste ("Aimless walking" above: lasted − needed so far, never charged while anything in the room can hurt
 Link), times the shaping scale; over a stretch it sums to about the stretch's aimless frames before the allowance.
 Training envs only (`SpecialistEnv`; a chain's `RewardTrack` does not record it).
+The sword-shot terms (round 38, "Beams at range"; `zelda::beams`; each ≥ 0, 0 drops it, defaults in every family):
+`reward.beam_kill_reward` (default `REWARD_MEDIUM` = 0.5) is `reward-beam-kill` on a step that fires a sword shot
+(`beams::fired`: BEAMS from a state with the beams ready, the shot's slot flying after) when a hit credited to it (the
+look-ahead's, on the firing step) kills a monster, not a boss, that stood out of melee range (`beams::MELEE_REACH`,
+32 pixels corner to corner: the swing reaches about 29), decayed with the room's combat rewards; beside
+`reward-beam-hit`'s 0.5 it fills the step's clamp, where a melee kill pays `reward-hit`'s 0.25.
+`reward.beam_timed_reward` (default 0.1) is `reward-beam-timed` on a shot fired in a direction the decision's
+projection had meet a monster out of melee range, hit or not (the owner: "reward timing beams that WOULD intersect
+even if the enemy turns the other way"), decayed on its own count per room after 8. `reward.beam_unfired_penalty`
+(default 0.02) is `penalty-beam-unfired` on a MOVE or WAIT from a decision lined up so with the shot ready: 25 of them
+cost what one hit does (`penalty-lost-health` 0.25 a half heart plus `penalty-lost-beams` 0.25), so a dodge always
+pays more than a shot that walks into a hit. The projection (`beams::shot_meets`, `lined_up`): per cardinal the
+attack's turn frames and Link's place at the press (`attack::press`), the shot made 12 frames later 16 pixels ahead,
+3 pixels a frame to the room's weapon bounds (asm:Room_BoundDir), its hit point within 12 pixels of a monster's
+middle on both axes (asm:SwordShot_CheckMonsterCollision); each monster carried straight on at its ObjDir and
+q-speed (`contact::velocity`), a walker stopped where a wall stops it (`contact::travel`); only monsters the shot can
+hurt (active, not dying, sword bit clear in ObjInvincibilityMask `$4B2`, not a Darknut facing the shot, not the big
+Digdogger). Counted in the visits and chain records as `beam_<field>` (`beams::BeamStats`: shots, shots lined up,
+decisions lined up and those that moved or waited, kills far / near / other with their summed distance, hearts lost,
+steps that cost the beams); `scripts/experiments/r38_beams.py` tabulates them per family or room.
+`reward-gained-rupees` (round 38, the owner: "what should ACTUALLY be awarded for getting rupees is the 'rupees to
+add' counter getting set once") pays once per pickup, on the step `InvRupees + InvRupeesToAdd − InvRupeesToSubtract`
+rises, by the amount: under 5 `REWARD_MEDIUM`, 5-9 `REWARD_LARGE`, 10 or more `REWARD_MAXIMUM`; nothing while
+asm:Inv_ChangeRupees counts it in (1 a second frame). Before, it paid 0.5 on every step `InvRupees` rose, so 0:0x0f's
+100-rupee gift paid about a dozen steps and Link waited in the cave for the count.
 `clips: true|false` (round 21; default false; "Grid-point skip" above; the removed designs' `{action: ...,
 shaping: ...}` block is refused): the CLIP kind where a skip is available, the observation's `clip_usable_*` and the
 skips as path-search jumps (PBRS pays the whole wavefront difference of a skip step, as for any position change,

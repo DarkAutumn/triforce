@@ -622,6 +622,11 @@ pub fn press_link(view: &GameView, kind: ActionKind, d: Direction) -> Option<Lin
     simulate(view, kind, d).ok().map(|(_, s)| s)
 }
 
+/// [`plan`]'s turn frames and [`press_link`]'s Link together (one simulation).
+pub fn press(view: &GameView, kind: ActionKind, d: Direction) -> Option<(u32, Link)> {
+    simulate(view, kind, d).ok()
+}
+
 fn simulate(view: &GameView, kind: ActionKind, d: Direction) -> Result<(u32, Link), Refusal> {
     let mut s = Link::read(&view.ram()[..0x800]);
     for frames in 0..=MAX_TURN_FRAMES {
