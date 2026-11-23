@@ -110,7 +110,7 @@ from typing import Deque, Dict, Iterable, Optional
 
 import torch
 
-from . import registry
+from . import lineage, registry
 from ._native import CurriculumSpec, EnvPool, TrainTask
 from .best_of_n import collect_best, success_by_state
 from .clips import OFF_LABEL, episode_jobs
@@ -124,6 +124,8 @@ from .model import ModelConfig, ZeldaPolicy, obs_spec_from_space
 from .observation import observation_space
 from .paths import TRAJECTORIES_DIR
 from .ppo import PPO, IterationResult, PPOConfig
+from .run_stats import TRAIN_NAME as TRAIN_STATS
+from .run_stats import write_train as write_train_stats
 from .specialist import SpecialistConfig, load_specialist
 
 
@@ -399,25 +401,27 @@ def resolve_warm_start(value: str, root) -> Path:
 
 
 def initial_model(args, config: SpecialistConfig, root):
-    """(network, optimizer_state, start_iteration, start_steps, source)."""
+    """(network, optimizer_state, start_iteration, start_steps, source, parent): ``parent`` the loaded checkpoint's
+    identity (``lineage.identity``: family, run, iterations, SHA-1), None from scratch."""
     if args.load:
         source = str(resolve_warm_start(args.load, root))
     else:
         source = str(resolve_warm_start(config.warm_start, root)) if config.warm_start else None
     if source is None:
         network = ZeldaPolicy(observation_space(), ModelConfig())
-        return network, None, 0, 0, None
+        return network, None, 0, 0, None, None
 
     # obs.target wants the full layout: an older checkpoint without `target` is widened (zero-initialised inputs).
     wanted = obs_spec_from_space(observation_space()) if config.obs.target else None
     network, checkpoint = registry.load_model(source, obs_spec=wanted)
+    parent = lineage.identity(checkpoint, source)
     added = sorted(set(network.config.obs_spec) - set(checkpoint['model_config']['obs_spec']))
     if added:
         print(f"[train] widened {source} to the current observation layout ({added} start at zero, fresh optimizer)")
     if args.load and checkpoint['specialist'] == config.name:
         optimizer = None if added else checkpoint.get('optimizer')
-        return network, optimizer, checkpoint['iterations'], checkpoint['steps'], source
-    return network, None, 0, 0, source
+        return network, optimizer, checkpoint['iterations'], checkpoint['steps'], source, parent
+    return network, None, 0, 0, source, parent
 
 
 def steps_per_iteration(args) -> int:
@@ -557,7 +561,7 @@ def set_aside_previous(out_dir: Path, continuing: bool) -> Optional[Path]:
     ``--load`` continuation (``continuing``) keeps its checkpoint, metrics.jsonl (appended to), curriculum and tb;
     its train_summary.json, act and eval files still go (they describe the old weights)."""
     stale = sorted(path for path in out_dir.iterdir()
-                   if path.name in ('train_summary.json', 'act')
+                   if path.name in ('train_summary.json', 'act', TRAIN_STATS)
                    or (path.name.startswith('eval') and path.suffix == '.json')
                    or (not continuing and path.name in PREVIOUS_RUN_FILES))
     if not stale:
@@ -600,7 +604,7 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
     """The training run proper; returns the train_end event fields."""
     # pylint: disable=too-many-locals, too-many-statements
     config = load_specialist(args.specialist)
-    network, optimizer_state, start_iteration, start_steps, source = initial_model(args, config, root)
+    network, optimizer_state, start_iteration, start_steps, source, parent = initial_model(args, config, root)
     continued = continued_run_dir(args, source, start_iteration)
     aside = set_aside_previous(out_dir, continuing=continued == out_dir.resolve())
     if aside is not None:
@@ -632,8 +636,12 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
                          f"harvested states and {harvested['dir']} holds none (a worktree made without `triforce "
                          f"job setup`? link the main checkout's triforce/states/harvested)")
     tracks = curriculum_tracks(trajectories)
+    if continued == out_dir.resolve() and (out_dir / 'run.json').is_file():
+        # A same-dir continuation is the run itself: its parent stays the one its first training recorded.
+        earlier = json.loads((out_dir / 'run.json').read_text(encoding='utf-8'))
+        parent = earlier.get('parent', parent)
     with open(out_dir / 'run.json', 'w', encoding='utf-8') as file:
-        json.dump({'args': vars(args), 'specialist': specialist, 'run_id': run_id, 'source': source,
+        json.dump({'args': vars(args), 'specialist': specialist, 'run_id': run_id, 'source': source, 'parent': parent,
                    'parameters': network.parameter_count(), 'model_config': network.config.to_dict(),
                    'ppo_config': ppo_config.to_dict(), 'start_iteration': start_iteration,
                    'start_steps': start_steps, 'curriculum': trajectories, 'curriculum_tracks': tracks,
@@ -834,6 +842,7 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
         'status': status, 'iterations': state['iteration'], 'steps': state['steps'],
         'iterations_trained': state['iteration'] - start_iteration, 'steps_trained': trained,
         'stopped_early': state['stopped_early'], 'wall_seconds': elapsed, 'steps_per_second': sps})
+    write_train_stats(out_dir)
     print(f"[train] {'interrupted' if status == 'interrupted' else 'done'}: {state['iteration'] - start_iteration} "
           f"iterations, {trained} steps in {elapsed:.1f}s ({sps:.1f} steps/sec); "
           + (f"checkpoint {ckpt}" if ckpt.is_file() else "no checkpoint"))

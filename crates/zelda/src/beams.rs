@@ -252,10 +252,53 @@ pub fn fired(change: &Change) -> bool {
         && change.state.animation_state(AnimationKind::Beams) != AnimationState::Inactive
 }
 
+/// The step's sword shot damaged a monster. The shot flew during the step (in flight before it, or made by it:
+/// [`fired`]) and stopped in it: slot $0E left state $10. A shot that overlaps a monster stops there, damaged or
+/// not (asm:SwordShot_CheckMonsterCollision calls asm:SwordShot_HandleBlocked: $10 becomes $11, the spread), and
+/// so does one at the room's bounds (asm:SwordShot_UpdateOrMagicShot); what tells the two apart is a monster that
+/// lost hit points on the step (`Change::observed`, asm:Damage_DealToMonster) where the sword itself could not
+/// reach it: out of melee range ([`MELEE_REACH`]), or on a step that did not swing it. A shot stops on its first
+/// overlap (a spreading shot hits nothing), so it damages one monster at most.
+///
+/// `Change::observed` knows the hit points lost, not the weapon: a step on which another of Link's weapons was live
+/// before or after it (a bomb placed or going off, a fire, an arrow, the boomerang, the rod's shot:
+/// [`OTHER_WEAPONS`]) counts no hit, as `kills_other` takes the kills no shot or swing explains. Still ambiguous: a
+/// weapon live only inside the step (an arrow loosed and spent within one long step) is not seen, and a shot that
+/// did hit on a step with another weapon live is not counted (an undercount).
+pub fn shot_hit(change: &Change) -> bool {
+    let (prev, curr) = (&change.previous, &change.state);
+    let flew = prev.animation_state(AnimationKind::Beams) == AnimationState::Active || fired(change);
+    if !flew || curr.animation_state(AnimationKind::Beams) == AnimationState::Active {
+        return false;
+    }
+    if OTHER_WEAPONS
+        .iter()
+        .any(|&w| [prev, curr].iter().any(|s| s.animation_state(w) != AnimationState::Inactive))
+    {
+        return false;
+    }
+    let swung = matches!(change.action.kind, ActionKind::Sword | ActionKind::Beams);
+    change.observed.enemies_hit.iter().any(|&(slot, damage)| {
+        damage > 0 && prev.enemy_by_index(slot).is_some_and(|e| e.distance > MELEE_REACH || !swung)
+    })
+}
+
+/// Link's weapons other than the sword and its shot ([`shot_hit`]).
+pub const OTHER_WEAPONS: [AnimationKind; 7] = [
+    AnimationKind::Magic,
+    AnimationKind::Bomb1,
+    AnimationKind::Bomb2,
+    AnimationKind::Flame1,
+    AnimationKind::Flame2,
+    AnimationKind::Arrow,
+    AnimationKind::Boomerang,
+];
+
 /// A visit's sword shots and kills (chain room records and evaluation visits: JSON `beam_<field>`). Kills are the
 /// step's observed ones (`Change::observed`: on the step a hit lands), each by where its monster stood: `far`, out of
 /// melee range ([`MELEE_REACH`]) while a sword shot flew; `near`, in melee range on a step that swung the sword; the
-/// rest `other` (bombs, arrows, fire, the rod, the boomerang on a monster at 0 HP).
+/// rest `other` (bombs, arrows, fire, the rod, the boomerang on a monster at 0 HP). A step that enters a room counts
+/// nothing (the visit's last: the scroll).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct BeamStats {
     /// Sword shots fired ([`fired`]), and those the decision's projection had meeting a monster ([`lined_up`] in
@@ -274,6 +317,15 @@ pub struct BeamStats {
     /// Hearts lost, and steps that cost Link his beams (full hearts before, not after, holding a sword).
     pub hearts_lost: f64,
     pub beams_lost: u32,
+    /// Shots that damaged a monster ([`shot_hit`]; round 40).
+    pub shots_hit: u32,
+    /// Frames counted (the steps' frames with the item sub-screen's, as the visit's `frames`), those of the steps
+    /// begun holding the beams (`GameView::holds_beams`: a sword and the hearts asm:SwordShot_Make needs), and the
+    /// frame of the visit (counted so) at the end of the first step that began holding them and ended without
+    /// (None: kept through the visit, or never held; round 40).
+    pub frames: u64,
+    pub held_frames: u64,
+    pub lost_frame: Option<u64>,
 }
 
 impl BeamStats {
@@ -283,6 +335,14 @@ impl BeamStats {
         if change.entered_room() {
             return;
         }
+        self.frames += u64::from(change.frames + change.menu_frames);
+        if prev.holds_beams() {
+            self.held_frames += u64::from(change.frames + change.menu_frames);
+            if !curr.holds_beams() && self.lost_frame.is_none() {
+                self.lost_frame = Some(self.frames);
+            }
+        }
+        self.shots_hit += u32::from(shot_hit(change));
         let lined = lined_up(prev);
         let fired = fired(change);
         self.shots += u32::from(fired);
@@ -318,25 +378,36 @@ impl BeamStats {
     }
 
     /// `{shots, shots_lined, lined, lined_unfired, kills_far, kills_near, kills_other, kill_distance, hearts_lost,
-    /// beams_lost}` (hearts as a float).
-    pub fn fields(&self) -> [(&'static str, f64); 10] {
+    /// beams_lost, shots_hit, held_frames, lost_frame}` (numbers as floats; `lost_frame` None when the beams were
+    /// not lost in the visit). `frames` is the visit's own `frames` and is not repeated.
+    pub fn fields(&self) -> [(&'static str, Option<f64>); 13] {
         [
-            ("shots", f64::from(self.shots)),
-            ("shots_lined", f64::from(self.shots_lined)),
-            ("lined", f64::from(self.lined)),
-            ("lined_unfired", f64::from(self.lined_unfired)),
-            ("kills_far", f64::from(self.kills_far)),
-            ("kills_near", f64::from(self.kills_near)),
-            ("kills_other", f64::from(self.kills_other)),
-            ("kill_distance", f64::from(self.kill_distance)),
-            ("hearts_lost", self.hearts_lost),
-            ("beams_lost", f64::from(self.beams_lost)),
+            ("shots", Some(f64::from(self.shots))),
+            ("shots_lined", Some(f64::from(self.shots_lined))),
+            ("lined", Some(f64::from(self.lined))),
+            ("lined_unfired", Some(f64::from(self.lined_unfired))),
+            ("kills_far", Some(f64::from(self.kills_far))),
+            ("kills_near", Some(f64::from(self.kills_near))),
+            ("kills_other", Some(f64::from(self.kills_other))),
+            ("kill_distance", Some(f64::from(self.kill_distance))),
+            ("hearts_lost", Some(self.hearts_lost)),
+            ("beams_lost", Some(f64::from(self.beams_lost))),
+            ("shots_hit", Some(f64::from(self.shots_hit))),
+            ("held_frames", Some(self.held_frames as f64)),
+            ("lost_frame", self.lost_frame.map(|f| f as f64)),
         ]
     }
 }
 
 impl AddAssign for BeamStats {
+    /// `o` counted after `self` (a visit's steps in order): its `lost_frame` moves by `self.frames`.
     fn add_assign(&mut self, o: BeamStats) {
+        if self.lost_frame.is_none() {
+            self.lost_frame = o.lost_frame.map(|f| self.frames + f);
+        }
+        self.frames += o.frames;
+        self.held_frames += o.held_frames;
+        self.shots_hit += o.shots_hit;
         self.shots += o.shots;
         self.shots_lined += o.shots_lined;
         self.lined += o.lined;
