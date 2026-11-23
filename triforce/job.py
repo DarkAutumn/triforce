@@ -10,6 +10,7 @@ the exit code is the command's (the wrapper's own lines go to stderr, ``triforce
                                                   (SUITE: python, asm, check, rust; all = the four)
     triforce job setup BRANCH [--from main] [--agent A]
     triforce job list [--all] [--calibration]
+    triforce job history [--since 24h] [--agent A] [--metrics] [--json]
 
 ``run`` takes the job's place in line before the command starts and runs it at nice ``RUN_NICE``.  A training or
 evaluation tool of this code (``jobs.announce``) is asked its work first (a dry call: its arguments are checked, an
@@ -409,8 +410,8 @@ class Wrapper:
         return code
 
     def finish(self, status: str, code: Optional[int], result: Optional[str] = None):
-        """Marks the job ended and appends it to the history (the rates and the calibration learn from it); the
-        ended rows older than ``q.KEEP_SECONDS`` go (the history stays)."""
+        """Marks the job ended and appends it to the history table (the rates and the calibration learn from it).
+        The job's row stays for good: it is the machine's record of what ran (``triforce job history``)."""
         now = time.time()
         admitted = self.row.get('admitted_ts')
         with q.transaction(self.con):
@@ -419,7 +420,6 @@ class Wrapper:
                              "VALUES (?, ?, ?, ?, ?, ?, ?)",
                              (self.id, self.row.get('kind'), json.dumps(self.row.get('work') or {}),
                               self.row.get('estimate'), None if admitted is None else now - admitted, status, now))
-            q.prune(self.con, now)
         for fd in (self.place_fd, self.job_fd):
             if fd is not None:
                 os.close(fd)
@@ -544,6 +544,13 @@ def build_parser() -> argparse.ArgumentParser:
     show = sub.add_parser('list', help="the queue: running, waiting and recently finished jobs")
     show.add_argument('--all', action='store_true', help="every finished job, not only the last hour's")
     show.add_argument('--calibration', action='store_true', help="estimates against actual times, per kind")
+    past = sub.add_parser('history', help="every job that ended: when it queued, started and ended, where it ran")
+    past.add_argument('--since', type=parse_duration, default=None, metavar='DURATION',
+                      help="only jobs that ended within this long (24h, 90m); default: all")
+    past.add_argument('--agent', default=None, help="only this agent's jobs")
+    past.add_argument('--metrics', action='store_true',
+                      help="the lanes against what the jobs really took, and the kinds of job that are always quick")
+    past.add_argument('--json', action='store_true', help="the rows (or the metrics) as JSON")
     return parser
 
 
@@ -782,6 +789,42 @@ def cmd_list(args) -> int:
     return 0
 
 
+def cmd_history(args) -> int:
+    """``triforce job history``: the queue's record of every ended job (``jobqueue.past``), newest last; with
+    ``--metrics`` what the owner checks from it (``jobqueue.lane_metrics``)."""
+    con = q.connect()
+    try:
+        rows = q.past(con, None if args.since is None else time.time() - args.since, args.agent)
+    finally:
+        con.close()
+    if args.metrics:
+        metrics = q.lane_metrics(rows)
+        if args.json:
+            print(json.dumps(metrics, indent=1))
+            return 0
+        for title, key in ((f"in the express place but ran longer than {q.duration(q.EXPRESS_SECONDS)}", 'express_long'),
+                           (f"in a regular place but ran {q.duration(q.EXPRESS_SECONDS)} or less", 'regular_short')):
+            print(f"{title}: {len(metrics[key])} of {metrics['jobs'][key.split('_', maxsplit=1)[0]]} jobs")
+            for row in metrics[key]:
+                print(f"  #{row['id']} {row['name']}  ran {q.short(row['ran'])} (estimated "
+                      f"{q.short(row['estimate'])}{', asked --express' if row['express'] else ''})  {row['what']}")
+        print(f"kinds of job always out of the queue within {q.duration(q.QUICK_SECONDS)} of joining it "
+              f"({q.QUICK_JOBS} jobs or more): {len(metrics['always_quick'])}")
+        for group in metrics['always_quick']:
+            print(f"  {group['what']}: {group['jobs']} jobs, longest {q.short(group['longest'])} "
+                  f"(waited at most {q.short(group['waited'])})")
+        return 0
+    if args.json:
+        print(json.dumps(rows, indent=1))
+        return 0
+    print(f"{'id':>5s} {'queued':19s} {'waited':>7s} {'ran':>7s} {'est':>7s} {'place':10s} {'status':11s} job / command")
+    for row in rows:
+        print(f"{row['id']:5d} {(q.iso(row['queued_ts']) or '?')[:19]:19s} {q.short(row['waited']):>7s} "
+              f"{q.short(row['ran']):>7s} {q.short(row['estimate']):>7s} {row['place'] or '-':10s} "
+              f"{row['status']:11s} {row['name']}  {row['what']}")
+    return 0
+
+
 def main(argv=None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     head, extra = (argv[:argv.index('--')], argv[argv.index('--') + 1:]) if '--' in argv else (argv, [])
@@ -789,12 +832,13 @@ def main(argv=None) -> int:
     try:
         if args.verb == 'run':
             return cmd_run(args, extra)
-        if extra and args.verb in ('setup', 'list', 'progress'):
+        if extra and args.verb in ('setup', 'list', 'progress', 'history'):
             raise JobError(f"{args.verb} takes nothing after --")
         verbs = {'golden': cmd_golden, 'build': cmd_build, 'test': cmd_test}
         if args.verb in verbs:
             return verbs[args.verb](args, extra)
-        return {'setup': cmd_setup, 'list': cmd_list, 'progress': cmd_progress}[args.verb](args)
+        return {'setup': cmd_setup, 'list': cmd_list, 'progress': cmd_progress,
+                'history': cmd_history}[args.verb](args)
     except JobError as error:
         print(f"triforce job: error: {error}", file=sys.stderr)
         return 2

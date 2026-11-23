@@ -991,9 +991,15 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
     python|rust|asm|all --agent A --task T [--build]` (`--build`: build, then test, as one entry): their own lane,
     two at once on the machine, first come first served, never behind a training; nice 10 and `CARGO_BUILD_JOBS=4`.
     Every build and every suite goes through them (`--timeout 60m` replaces `timeout 3600`).
-  - `triforce job setup BRANCH [--from main]`: the worktree `../triforce-<branch>` with `roms`, `trajectories` and
-    `models` linked, its venv and its build. `triforce job list [--calibration]`: what runs, what waits and in which
-    order, what ended in the last hour; `--calibration` compares estimates with actual times per kind.
+  - `triforce job setup BRANCH [--from main]`: the worktree `../triforce-<branch>` with `roms` and `trajectories`
+    linked (never `models`: a worktree's runs and pointers are its own), its venv and its build. `triforce job list
+    [--calibration]`: what runs, what waits and in which order, what ended in the last hour; `--calibration`
+    compares estimates with actual times per kind.
+  - `triforce job history [--since 24h] [--agent A] [--metrics] [--json]`: **every job's row is kept for good**
+    (the owner, Nov 23): when it queued, started and ended, its place, estimate, exit and command. `--metrics`:
+    the jobs that ran in the express place longer than 10 minutes, those in a regular place that took 10 minutes or
+    less, and the kinds of job always out of the queue within 2 minutes of joining it. Numbers to look at; nothing
+    acts on them.
   Two jobs run at once in the regular places, plus one estimated at 10 minutes or less (or `--express`) in the
   express place; the others wait, the shortest estimate first, a long one moving up as it waits (estimate minus half
   the time waited). A waiting job is only its wrapper: no model, no GPU memory, a check a second. It prints

@@ -67,7 +67,6 @@ UPDATE_SECONDS = 300.0               # how often it says it still waits
 AGING = 0.5                          # the line's score: estimate - AGING * seconds waited (lowest starts first)
 EXPRESS_SECONDS = 600.0              # a job estimated at most this long may run in the express place
 OVERRUN = 2.0                        # a running job past this many times its estimate is flagged
-KEEP_SECONDS = 30 * 24 * 3600.0      # ended jobs' rows are kept this long (the history, a row a job, for good)
 
 # Work and rates.  A job's ``work`` is how much it asked for in a few coarse units; its estimate (seconds) is the sum
 # of amount x rate, a rate (seconds per unit) refitted from the history (``rates``), else these defaults, measured on
@@ -89,7 +88,8 @@ SCHEMA = (f"CREATE TABLE IF NOT EXISTS jobs (id INTEGER PRIMARY KEY AUTOINCREMEN
           f"{', '.join(f'{name} {kind}' for name, kind in _COLUMNS.items())});"
           "CREATE TABLE IF NOT EXISTS history (job INTEGER, kind TEXT, work TEXT, estimate REAL, actual REAL, "
           "status TEXT, finished_ts REAL);"
-          "CREATE INDEX IF NOT EXISTS jobs_status ON jobs (status);")
+          "CREATE INDEX IF NOT EXISTS jobs_status ON jobs (status);"
+          "CREATE INDEX IF NOT EXISTS jobs_finished ON jobs (finished_ts);")
 
 
 def queue_dir() -> Path:
@@ -118,14 +118,6 @@ def connect(directory: Optional[Path] = None) -> sqlite3.Connection:
             except sqlite3.OperationalError:        # another process added it first
                 pass
     return con
-
-
-def prune(con: sqlite3.Connection, now: Optional[float] = None) -> int:
-    """Deletes the rows of jobs that ended more than ``KEEP_SECONDS`` ago; returns how many.  Call inside a
-    transaction."""
-    now = time.time() if now is None else now
-    return con.execute(f"DELETE FROM jobs WHERE status IN ({', '.join('?' * len(ENDED))}) AND finished_ts < ?",
-                       (*ENDED, now - KEEP_SECONDS)).rowcount
 
 
 @contextmanager
@@ -349,6 +341,87 @@ def overrun(job: dict, now: float) -> bool:
     """A running job past ``OVERRUN`` x its estimate."""
     return (job.get('status') == 'running' and (job.get('estimate') or 0) > 0 and job.get('admitted_ts') is not None
             and now - job['admitted_ts'] > OVERRUN * job['estimate'])
+
+
+# ------------------------------------------------------------------------------------------------ the record
+
+QUICK_SECONDS = 120.0                # "always quick": every job of a kind out of the queue this soon after joining
+QUICK_JOBS = 3                       # ... over at least this many jobs
+
+
+def what(command: Optional[list]) -> str:
+    """What a command is, without its arguments' values, so jobs of one kind group together: the program and its
+    subcommand, module or script (``triforce eval-chain``, ``python scripts/full_runs.py runs250``, ``maturin
+    develop``, ``pytest``); a job of several commands (``;`` between them) names each."""
+    def one(tokens: list) -> str:
+        while tokens and (tokens[0] == 'env' or re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*=.*', tokens[0])):
+            tokens = tokens[1:]
+        if not tokens:
+            return '?'
+        program, rest = Path(tokens[0]).name, tokens[1:]
+        if program.startswith('python'):
+            while rest and rest[0].startswith('-') and rest[0] != '-m':
+                rest = rest[1:]
+            if rest[:1] == ['-m'] and len(rest) > 1:
+                program, rest = rest[1], rest[2:]
+                if program not in ('triforce', 'triforce.cli'):     # pytest's first word is a folder, not a verb
+                    return program
+            elif rest:
+                script = Path(rest[0])
+                program, rest = f"python {'/'.join(script.parts[-2:])}", rest[1:]
+        # The first word that is no option (and not --models-dir's value): the subcommand, when it reads like one.
+        words = [token for index, token in enumerate(rest)
+                 if not token.startswith('-') and (index == 0 or rest[index - 1] != '--models-dir')]
+        return f'{program} {words[0]}' if words and re.fullmatch(r'[a-z][a-z0-9-]*', words[0]) else program
+    parts, current = [], []
+    for token in command or []:
+        if token == ';':
+            parts.append(current)
+            current = []
+        else:
+            current.append(token)
+    return ' ; '.join(one(part) for part in [*parts, current] if part) or '?'
+
+
+def past(con: sqlite3.Connection, since: Optional[float] = None, agent: Optional[str] = None) -> list[dict]:
+    """Every ended job (its row stays for good), oldest first, with what the times say: ``waited`` (queued to
+    started), ``ran`` (started to ended), ``total`` (queued to ended), ``lane_ran`` (``express``, ``regular`` or
+    ``tools``, from its place; None for a job that never started) and ``what`` (``what``).  ``since``: only jobs
+    that ended at or after this time; ``agent``: only that agent's."""
+    rows = read_jobs(con, f"status IN ({', '.join('?' * len(ENDED))})"
+                     + (" AND finished_ts >= ?" if since is not None else '')
+                     + (" AND agent = ?" if agent is not None else ''),
+                     (*ENDED, *([since] if since is not None else []), *([agent] if agent is not None else [])))
+    for row in rows:
+        queued, admitted, finished = row.get('queued_ts'), row.get('admitted_ts'), row.get('finished_ts')
+        row['waited'] = None if queued is None else (admitted if admitted is not None else finished or queued) - queued
+        row['ran'] = None if admitted is None or finished is None else finished - admitted
+        row['total'] = None if queued is None or finished is None else finished - queued
+        row['lane_ran'] = (row.get('place') or '').rsplit('-', 1)[0] or None
+        row['what'] = what(row.get('command'))
+    return sorted(rows, key=lambda row: (row.get('queued_ts') or 0.0, row['id']))
+
+
+def lane_metrics(rows: list[dict]) -> dict:
+    """What the record says of the lanes (the owner, Nov 23: numbers to look at, nothing acts on them), over ``rows``
+    (``past``): ``express_long``, the completed jobs that ran in the express place longer than ``EXPRESS_SECONDS``
+    (they should not have been there); ``regular_short``, the completed jobs that ran in a regular place that long
+    or less (they could have been); ``always_quick``, the kinds of job (``what``) with at least ``QUICK_JOBS`` jobs,
+    every one of them out of the queue within ``QUICK_SECONDS`` of joining it (waiting included), each with its
+    count, its longest total and its longest wait; ``jobs``, how many completed jobs each lane ran."""
+    done = [row for row in rows if row['status'] == 'completed' and row.get('ran') is not None]
+    by_what: dict[str, list] = {}
+    for row in rows:
+        if row.get('total') is not None and row['status'] in ('completed', 'failed'):
+            by_what.setdefault(row['what'], []).append(row)
+    quick = [{'what': name, 'jobs': len(group), 'longest': max(row['total'] for row in group),
+              'waited': max(row['waited'] or 0.0 for row in group)}
+             for name, group in sorted(by_what.items())
+             if len(group) >= QUICK_JOBS and all(row['total'] < QUICK_SECONDS for row in group)]
+    return {'jobs': {lane: sum(row['lane_ran'] == lane for row in done) for lane in ('express', 'regular', 'tools')},
+            'express_long': [row for row in done if row['lane_ran'] == 'express' and row['ran'] > EXPRESS_SECONDS],
+            'regular_short': [row for row in done if row['lane_ran'] == 'regular' and row['ran'] <= EXPRESS_SECONDS],
+            'always_quick': quick}
 
 
 # ------------------------------------------------------------------------------------------------ the texts

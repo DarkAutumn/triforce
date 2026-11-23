@@ -179,18 +179,13 @@ def test_an_older_checkouts_golden_racer_is_not_called_dry(tmp_path, monkeypatch
     assert job.main(['golden', '--agent', 'A', '--task', 'T', '--timeout', '10m']) == 2
 
 
-def test_the_database_gains_a_new_column_and_loses_old_rows(tmp_path):
+def test_the_database_gains_a_new_column(tmp_path):
     con = q.connect(tmp_path)
     con.execute('ALTER TABLE jobs DROP COLUMN progress')           # a file written before the column existed
     con.close()
     con = q.connect(tmp_path)
     try:
         assert 'progress' in {r['name'] for r in con.execute('PRAGMA table_info(jobs)')}
-        for status, finished in (('completed', NOW - q.KEEP_SECONDS - 1), ('completed', NOW - 60), ('running', None)):
-            con.execute("INSERT INTO jobs (status, finished_ts) VALUES (?, ?)", (status, finished))
-        with q.transaction(con):
-            assert q.prune(con, NOW) == 1
-        assert [r['status'] for r in q.read_jobs(con)] == ['completed', 'running']
     finally:
         con.close()
 
@@ -330,3 +325,35 @@ def test_setup_makes_the_worktree_its_links_venv_and_build_as_one_tools_entry(tm
     assert all((target / name).resolve() == main / name for name in ('roms', 'trajectories'))
     assert not (target / 'models').exists()       # a worktree's runs and pointers stay its own
     assert seen['steps'][-1].env['CARGO_BUILD_JOBS'] == str(job.CARGO_JOBS)
+
+
+def test_the_record_keeps_every_job_and_says_what_the_lanes_really_ran(tmp_path):
+    """Every ended job's row stays (queued, started, ended, place, estimate, command); the metrics the owner checks
+    from them: fast-lane jobs that ran long, regular-lane jobs that ran short, kinds of job that are always quick."""
+    assert q.what(['.venv/bin/triforce', '--models-dir', 'm', 'eval-chain', '--runs', '5']) == 'triforce eval-chain'
+    assert q.what(['/x/.venv/bin/python', 'scripts/full_runs.py', 'runs250', '--out', 'o']) == \
+        'python scripts/full_runs.py runs250'
+    assert q.what(['python', '-m', 'pytest', '-q', 'tests', ';', 'cargo', 'test', '--release']) == 'pytest ; cargo test'
+    con = q.connect(tmp_path)
+    jobs = [  # (place, estimate, express, queued, started, ended, command)
+        ('express-1', 500.0, 0, 0, 10, 2010, ['triforce', 'eval-chain']),            # fast lane, ran 2000 s
+        ('express-1', 3000.0, 1, 0, 5, 305, ['triforce', 'eval-chain']),             # asked --express, ran 300 s
+        ('regular-1', 4000.0, 0, 0, 100, 400, ['triforce', 'train']),                # regular, ran 300 s
+        ('regular-2', 4000.0, 0, 0, 100, 5000, ['triforce', 'train']),
+        *[('tools-1', None, 0, 0, 1, 31, ['maturin', 'develop', '--release'])] * 3,  # always out within 2 minutes
+        ('tools-1', None, 0, 0, 1, 500, ['cargo', 'test'])]
+    for place, estimate, express, queued, started, ended, command in jobs:
+        con.execute("INSERT INTO jobs (name, status, place, estimate, express, queued_ts, admitted_ts, finished_ts, "
+                    "command) VALUES ('n', 'completed', ?, ?, ?, ?, ?, ?, ?)",
+                    (place, estimate, express, NOW + queued, NOW + started, NOW + ended, json.dumps(command)))
+    con.execute("INSERT INTO jobs (name, status, queued_ts) VALUES ('live', 'running', ?)", (NOW,))
+    try:
+        rows = q.past(con)
+        assert len(rows) == 8 and rows[0]['waited'] == 10 and rows[0]['ran'] == 2000 and rows[0]['total'] == 2010
+        metrics = q.lane_metrics(rows)
+    finally:
+        con.close()
+    assert metrics['jobs'] == {'express': 2, 'regular': 2, 'tools': 4}
+    assert [row['ran'] for row in metrics['express_long']] == [2000]
+    assert [row['ran'] for row in metrics['regular_short']] == [300]
+    assert metrics['always_quick'] == [{'what': 'maturin develop', 'jobs': 3, 'longest': 31, 'waited': 1}]
