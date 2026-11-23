@@ -866,7 +866,8 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   People read them with `tf replay
   targets FILE [--room L:RR] [--masks] [--decisions]`, `play-zelda.py --thoughts` and `create-video.py
   --thoughts`.
-  `tf replay info FILE`, `tf replay verify FILE...` (the emulator alone; exit 1 on a divergence). The golden path
+  `tf replay info FILE`, `tf replay verify FILE... [--jobs N]` (the emulator alone, the files side by side on every
+  core unless `--jobs`, reported in name order; exit 1 on a divergence). The golden path
   is a race, so which seed wins a segment can differ between two invocations; each saved replay is exact.
   `play-zelda.py` plays replays: of runs it simulates in the background and files into queues
   (`best`, `success`, `stuck`, `died`, `random`, `golden`; `crates/theater`), or of the files of a PATH. Its
@@ -933,11 +934,14 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 - Tests: `triforce job test SUITE... --agent A --task T [--build] [--timeout 60m]`, the suites `python`
   (`pytest -q -n 8 --dist worksteal tests`: eight processes, pytest-xdist; about a minute on a quiet machine, 7
   minutes in one process: `-- -n 0`), `asm` (`pytest -q zelda-asm/tests`), `check` (`asm.py check`), `rust`
-  (`cargo test --release --workspace --features zelda/zcore`), `all` = the four; several run side by side as one
-  entry, each one's output shown whole at the end (`test python asm check` leaves Rust out). **Every test run
-  writes a timing log, not a printout** (the owner, Nov 23): `<yymmdd>_<NNN>_tests-<suite>[-<job>]/tests.jsonl` in
-  the main checkout's `logs/` (every pytest run of the repo through `pyproject.toml`'s `-p triforce.testlog`; the
-  Rust suite a line per test binary from cargo's output): a line per test (id, outcome, setup / call / teardown
+  (`cargo test --release --workspace --features zelda/zcore`, its test programs run 6 at a time, the longest first,
+  by `triforce.cargo_tests`: every program runs whatever another did, a failing one's output is shown whole and
+  named at the end with its rerun command; the job's progress is "Rust tests" done of the programs' `--list`), `all`
+  = the four; several run side by side as one entry, each one's output shown whole at the end (`test python asm
+  check` leaves Rust out). **Every test run writes a timing log, not a printout** (the owner, Nov 23):
+  `<yymmdd>_<NNN>_tests-<suite>[-<job>]/tests.jsonl` in the main checkout's `logs/` (every pytest run of the repo
+  through `pyproject.toml`'s `-p triforce.testlog`; the Rust suite a line per test program, `<package>
+  tests/cli.rs`): a line per test (id, outcome, setup / call / teardown
   seconds, worker) and a summary (suite, commit, branch, the job, wall seconds, counts, the load average at the
   start). `triforce test-times [--suite S] [--last N] [--json]` reads them together: the wall time run by run, each
   test's median and worst, the slowest, what grew. A test runs beside seven others: never a fixed port, a shared

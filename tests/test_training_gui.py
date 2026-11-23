@@ -95,6 +95,21 @@ def bars(card):
              bar.counter['fraction']) for bar in card.bars]
 
 
+def one_box(view):
+    """A job with a plan is one box (the owner, Nov 23): its card hidden, the header drawing ``job_box``; the box."""
+    assert view.job_card.isHidden() and not view.header.isHidden()
+    view.header.refresh()
+    return view.header.box
+
+
+def pill_texts(box):
+    return [text for text, _ in box['pills']]
+
+
+def fact_texts(box):
+    return [text for text, _ in box['facts']]
+
+
 def series(values, label='success'):
     return {'label': label, 'color': gui.C.ok, 'points': list(enumerate(values, 1))}
 
@@ -619,7 +634,8 @@ def test_currently_running_lists_jobs_of_other_checkouts(qapp, tmp_path, monkeyp
         assert window._heading_at == 1 and not window.finished_heading.isHidden()
         views = {view.key: view for view in window.views}
         assert views[live].model.dir == live_dir and views[done].model.dir == done_dir
-        assert texts(views[done].job_card.head.lines)[2].startswith('completed exit 0 after ')
+        done_box = one_box(views[done])
+        assert pill_texts(done_box)[0] == 'COMPLETED' and fact_texts(done_box)[0].startswith('after ')
         labels = [window.combo.itemText(i) for i in range(window.combo.count())]
         assert '261113_001_live  (triforce-a · main)' in labels and '261113_002_done  (triforce-b · clips)' in labels
         assert window.clear_button.text() == 'Clear finished (1)'
@@ -1029,34 +1045,51 @@ def test_a_jobs_card_draws_its_progress_with_widgets_in_the_window_and_the_web_v
     assert 'function counterHtml(counter, color)' in page and 'function tallyHtml(tally)' in page
 
 
-def test_a_jobs_log_folder_shows_its_runs_under_its_header(qapp, tmp_path, monkeypatch, queue):
+def test_a_job_with_a_plan_is_one_box_over_its_runs(qapp, tmp_path, monkeypatch, queue):
     """A job's tool records its log folder in its row once it writes its plan (``jobs.record_plan``): from then on
-    the job's entry shows that folder's progress under its header (its plan's header, a row per run), the same entry
-    as before; the web view puts the plan's line under the job's header and has a card a run."""
+    the job's entry is ONE box (the owner, Nov 23: the job's card and the plan's header were two boxes "all over the
+    place"; ``job_box``): the job's ``Agent / Task / Sub-task`` (not the plan's combined name) with the state, the
+    plan's kind and its checkout as badges; the description; one line of facts saying nothing twice (the place and
+    time against the estimate, OVERRUN in the warning colour, the plan's start, host and pid, nice; no elapsed time);
+    the plan's overall bar for a plan of several runs; the command once; no bar of the queue row's counters.  Under
+    it the plan's rows as before; selecting it shows the plan in the detail pane.  The web view the same box."""
     from triforce import events, jobs
     monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
     logs, root = tmp_path / 'logs', tmp_path / 'gui-root'
     logs.mkdir()
     root.mkdir()
-    job = queue.add(subtask='round', progress={'runs': {'done': 0, 'total': 2, 'unit': 'runs', 'rate': None,
-                                                         'ts': time_now()}})
+    job = queue.add(subtask='round', estimate=20.0, admitted_ts=time_now() - 60,
+                    progress={'runs': {'done': 0, 'total': 2, 'unit': 'runs', 'rate': None, 'ts': time_now()}})
     monkeypatch.setenv(jobs.JOB_ID_ENV, str(job))
     window = gui.Window(root, None)
     plan = None
     try:
         view, = window.views
         assert view.key == gui.job_key({'id': job}) and view.model is None and view.header.isHidden()
+        assert not view.job_card.isHidden() and bars(view.job_card) == [('', 0, 2, 'runs', 0.0)]   # no plan yet
         plan = events.TrainingPlan(events.new_log_dir('r40-round', logs), 'r40-round', 'round',
                                    [{'specialist': 'ow-start'}, {'specialist': 'goriya'}])
         write_events(plan.directory / 'ow-start.jsonl', training_events(time_now() - 20, 4))
         plan.update_run(0, status='running')
         window._scan_and_update()
         assert window.views == [view] and view.model.dir.resolve() == plan.directory.resolve()
-        assert not view.header.isHidden() and len(view.rows) == 2
-        assert view.model.statuses() == ['training', 'pending']
-        assert bars(view.job_card) == [('', 0, 2, 'runs', 0.0)]       # a counter the plan's rows don't show yet
+        assert len(view.rows) == 2 and view.model.statuses() == ['training', 'pending']
+        box = one_box(view)
+        assert box['headline'] == 'Agent: r40   Task: queue   Sub-task: round'
+        assert 'r40-queue-round' not in str(box) and 'r40-round' not in box['headline']    # no combined name
+        assert box['pills'][:2] == [('RUNNING', gui.C.warn), ('round', gui.C.muted)]       # overrun: warning colour
+        assert box['pills'][2][1] == gui.C.faint and box['description'] == 'Checks the GUI lists the queue.'
+        facts = fact_texts(box)
+        assert facts[0] == 'regular · 1m of ~20s' and box['facts'][1] == ('OVERRUN', gui.C.warn)
+        assert facts[2].startswith('started ') and any(' · pid ' in fact for fact in facts)
+        assert any(fact.startswith('nice ') for fact in facts) and not any('elapsed' in fact for fact in facts)
+        assert box['bar'] and box['command'] == 'run round  r40-queue  python scripts/train_round.py'
+        assert view.header.height() == (gui.Header.BOX_TOP + gui.Header.BOX_ROW + 3 * gui.Header.BOX_LINE
+                                        + gui.Header.BOX_BAR + gui.Header.BOX_BOTTOM)
         assert window.windowTitle().endswith('r40-round — Triforce training')
-        for widget in (view.job_card, view.header, *view.rows):
+        window.select(view, 'round')                                   # the detail pane shows the plan
+        assert 'r40-round' in window.detail.title.text() and window.detail.summary.sections
+        for widget in (view.header, *view.rows):
             widget.grab()
     finally:
         window.close()
@@ -1066,9 +1099,19 @@ def test_a_jobs_log_folder_shows_its_runs_under_its_header(qapp, tmp_path, monke
         web, = snapshot['jobs']
         assert Path(web['folder']).resolve() == plan.directory.resolve() and snapshot['plans'] == []
         assert web['plan']['plan'] == 'r40-round' and web['plan']['queued'] == ['goriya']
+        assert web['box']['headline'] == box['headline'] and web['box']['bar']
+        assert web['box']['pills'][:2] == [['RUNNING', gui.C.warn.name()], ['round', gui.C.muted.name()]]
+        assert [text for text, _ in web['box']['facts']][:2] == ['regular · 1m of ~20s', 'OVERRUN']
         assert [(card['name'], card['plan']) for card in snapshot['cards']] == [('ow-start', 'r40-round')]
+        assert 'function boxHtml(job)' in gui.web_page().decode()
     finally:
         plan.finish('completed')
+    # once it ended (its runs gone from the page) the web view still reads its plan for its box
+    queue.update(job, status='completed', exit_code=0, finished_ts=time_now())
+    queue.gone(job)
+    web, = gui.WebState(root, machine=lambda: '', scan_every=0).refresh()['jobs']
+    assert web['ended'] and web['box']['pills'][0] == ['COMPLETED', gui.C.ok.name()]
+    assert [text for text, _ in web['box']['facts']][0].startswith('after ')
 
 
 def test_frames_repaint_only_what_animates(qapp, tmp_path, monkeypatch):
@@ -1189,8 +1232,9 @@ def run_as_job(queue, monkeypatch, **fields) -> int:
 @pytest.mark.parametrize('entry,verb,kind,plan_kind', ENTRY_POINTS, ids=[entry for entry, *_ in ENTRY_POINTS])
 def test_every_entry_point_is_listed_with_its_progress(qapp, queue, monkeypatch, job_env, entry, verb, kind,
                                                        plan_kind):
-    """Whichever way a job runs, [currently running] and the web view list it under its header (who, its state, its
-    verb, kind and command); one whose entry point writes a plan shows its folder's runs under it."""
+    """Whichever way a job runs, [currently running] and the web view list it: a job without a plan by its card (who,
+    its state, its verb, kind and command), one whose entry point writes a plan as one box (the same who, the state
+    and the plan's kind as badges, the command) over its folder's runs."""
     import re
     from triforce import events
     logs, root = job_env
@@ -1207,22 +1251,29 @@ def test_every_entry_point_is_listed_with_its_progress(qapp, queue, monkeypatch,
         window = gui.Window(root, None)
         try:
             view, = window.views
-            lines = card_lines(view.job_card)
-            assert view.key == gui.job_key({'id': job}) and not view.job_card.isHidden()
-            assert lines[0] == f'Agent: r40   Task: queue   Sub-task: {subtask}'
-            assert lines[2].startswith(f"RUNNING {'tools' if tools else 'regular'} ")
-            assert lines[-1] == f"{verb if verb == kind else f'{verb} {kind}'}  r40-queue  {entry}"
+            headline = f'Agent: r40   Task: queue   Sub-task: {subtask}'
+            command = f"{verb if verb == kind else f'{verb} {kind}'}  r40-queue  {entry}"
+            assert view.key == gui.job_key({'id': job})
             assert (view.model is not None) is (plan is not None) and view.header.isHidden() is (plan is None)
-            if plan is not None:
+            if plan is None:
+                lines = card_lines(view.job_card)
+                assert not view.job_card.isHidden() and lines[0] == headline and lines[-1] == command
+                assert lines[2].startswith(f"RUNNING {'tools' if tools else 'regular'} ")
+                view.job_card.grab()
+            else:
                 assert view.model.dir.resolve() == plan.directory.resolve() and len(view.rows) == 1
                 assert view.model.plan['kind'] == plan_kind and view.model.status() == 'running'
-            view.job_card.grab()
+                box = one_box(view)
+                assert box['headline'] == headline and box['command'] == command and not box['bar']
+                assert pill_texts(box)[:2] == ['RUNNING', plan_kind]
+                assert fact_texts(box)[0].startswith(f"{'tools' if tools else 'regular'} · ")
+                view.header.grab()
         finally:
             window.close()
             window.deleteLater()
         web, = gui.WebState(root, machine=lambda: '', scan_every=0).refresh()['jobs']
-        assert web['id'] == gui.job_key({'id': job}) and web['headline'] == lines[0]
-        assert (web['plan'] is not None) is (plan is not None)
+        assert web['id'] == gui.job_key({'id': job}) and web['headline'] == headline
+        assert (web['plan'] is not None) is (plan is not None) and (web['box'] is not None) is (plan is not None)
     finally:
         if plan is not None:
             plan.finish('completed')
@@ -1295,7 +1346,8 @@ def test_a_scripts_job_shows_one_line_of_progress(qapp, queue, monkeypatch, job_
             run, = view.model.runs
             assert view.model.name == 'r36-merge-record' and view.model.status() == 'running'
             assert view.model.statuses() == ['evaluating'] and run.unit == 'decisions'
-            assert bars(view.job_card) == [('', 1024, 4096, 'decisions', 0.25)]
+            box = one_box(view)
+            assert pill_texts(box)[:2] == ['RUNNING', 'eval'] and not box['bar']
             assert gui.row_numbers(run, 'evaluating') == '1024 / 4096 decisions'
             assert gui.row_bar_label(run, 'evaluating', 0.25) == '1024/4096'
             assert gui.row_phase(run, 'evaluating', time_now()).startswith('1024/4096 decisions · ')
@@ -1348,11 +1400,11 @@ def section_titles(bar_list) -> list:
 
 def test_a_running_250_test_shows_its_runs_so_far(qapp, queue, monkeypatch, job_env, every_report):
     """``full_runs.py runs250`` as the queue runs it: its eval-chain child writes the plan in ``--out`` with the
-    stream ``events.jsonl`` and reports its runs as the job's 'runs' counter.  The job's card has one progress bar
-    (runs done of 250, runs a second, time left); under it the chain's plan as any chain's: its header's bar of the
-    runs done, and the chain card's widgets: the runs by how they ended (wins blue, stuck purple, deaths red, errors
-    grey), how many took each dungeon's triforce in the route's order, the furthest route step reached and its
-    room.  The web view the same."""
+    stream ``events.jsonl`` and reports its runs as the job's 'runs' counter.  The job and its plan are one box
+    (the state, the kind, the time against the estimate and the time left; no counter bar); under it the chain
+    card's widgets: the runs by how they ended (wins blue, stuck purple, deaths red, errors grey), how many took
+    each dungeon's triforce in the route's order, the furthest route step reached and its room.  The web view the
+    same."""
     from triforce import cli, events
     from triforce.runner import Route
     logs, root = job_env
@@ -1377,9 +1429,9 @@ def test_a_running_250_test_shows_its_runs_so_far(qapp, queue, monkeypatch, job_
             now = time_now()
             assert view.model.plan['kind'] == 'chain' and view.model.dir.resolve() == out.resolve()
             assert not view.header.isHidden() and not view.chain_card.isHidden() and view.rows == []
-            bar, = view.job_card.bars
-            assert bars(view.job_card) == [('', 4, 250, 'runs', 4 / 250)]
-            assert bar.counter['speed'].endswith(' runs/s') and bar.counter['time'].endswith(' left')
+            box = one_box(view)                 # the job and its chain plan: one box, no counter bar
+            assert pill_texts(box)[:2] == ['RUNNING', 'chain'] and not box['bar']
+            assert fact_texts(box)[0].startswith('express · ') and fact_texts(box)[-1].endswith(' left')
             assert view.model.fraction(now) == pytest.approx(4 / 250) and view.model.eta(now) is not None
             card = view.chain_card
             outcomes = card.outcomes.outcomes
@@ -1404,7 +1456,7 @@ def test_a_running_250_test_shows_its_runs_so_far(qapp, queue, monkeypatch, job_
             runs_so_far = window.detail.summary.sections[0][2]
             assert [(label, text) for label, _, text, _ in runs_so_far] == [
                 ('won the game', '0/4'), ('stuck', '1/4'), ('died', '2/4'), ('errors', '1/4')]
-            for widget in (view.job_card, view.header, card):
+            for widget in (view.header, card):
                 widget.grab()
         finally:
             window.close()
@@ -1433,7 +1485,7 @@ def test_a_running_250_test_shows_its_runs_so_far(qapp, queue, monkeypatch, job_
 def test_a_batch_chain_entry_shows_its_runs_so_far(qapp, queue, monkeypatch, job_env, every_report):
     """A batch's chain (``eval-batch``: each entry an eval-chain into its stream, its counter named for it) shows
     its runs so far the same way: the row's bar is the runs by how they ended, the detail tab the triforces and the
-    furthest step; the job's card a bar for the batch's entries and one for the chain running."""
+    furthest step; the job and its batch one box with the plan's bar (several entries)."""
     from triforce import cli, events, jobs
     from triforce.runner import Route
     logs, root = job_env
@@ -1453,7 +1505,8 @@ def test_a_batch_chain_entry_shows_its_runs_so_far(qapp, queue, monkeypatch, job
         window = gui.Window(root, None)
         try:
             view, = window.views
-            assert bars(view.job_card) == [('', 0, 2, 'entries', 0.0), ('d3', 3, 40, 'runs', 3 / 40)]
+            box = one_box(view)                 # a batch of several entries: the plan's bar, its counts
+            assert pill_texts(box)[:2] == ['RUNNING', 'eval-batch'] and box['bar']
             run = view.model.runs[0]
             assert view.model.statuses() == ['evaluating', 'pending']
             outcomes = gui.row_outcomes(run)
@@ -1484,8 +1537,8 @@ def test_a_batch_chain_entry_shows_its_runs_so_far(qapp, queue, monkeypatch, job
 
 
 def test_a_trainings_job_shows_its_steps_their_speed_and_its_success(qapp, queue, monkeypatch, job_env):
-    """A training (``triforce train``: its steps the job's counter, named for its family): the card's bar of steps
-    done of its target with steps a second and time left; its row the steps, steps a second and the success."""
+    """A training (``triforce train``): one box for the job and its plan (no bar: its one row says it all); its row
+    the steps, steps a second and the success."""
     from triforce import events
     logs, root = job_env
     run_as_job(queue, monkeypatch, subtask='train-zol', kind='train', progress={
@@ -1497,16 +1550,14 @@ def test_a_trainings_job_shows_its_steps_their_speed_and_its_success(qapp, queue
         window = gui.Window(root, None)
         try:
             view, = window.views
-            bar, = view.job_card.bars
-            assert bars(view.job_card) == [('zol', 400, 1000, 'steps', 0.4)]
-            assert (bar.counter['numbers'], bar.counter['speed'], bar.counter['time']) == (
-                '400 / 1000 steps', '100 steps/s', '~6s left')
+            box = one_box(view)
+            assert pill_texts(box)[:2] == ['RUNNING', 'train'] and not box['bar']
             run, = view.model.runs
             now = time_now()
             assert gui.row_numbers(run, 'training') == '400 / 1.0k'
             assert gui.row_rate(run, 'training', now).startswith('100 sps · ')
             assert gui.row_badge(run, 'training')[1][0] == ('36%', gui.rate_color(0.36))   # balanced success
-            view.job_card.grab()
+            view.header.grab()
             view.rows[0].grab()
         finally:
             window.close()

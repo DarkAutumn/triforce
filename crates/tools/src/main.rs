@@ -148,13 +148,16 @@ enum ReplayCmd {
     /// Print a replay's header, start, ending and sections.
     Info { file: PathBuf },
     /// Play replays on zcore, comparing the machine with every state they recorded; exit 1 if any fails. A folder
-    /// stands for its `*.tfreplay` files; a folder or more than one file is a job (`triforce job run`).
+    /// stands for its `*.tfreplay` files; a folder or more than one file is a job (`triforce job run`). The files
+    /// play on `--jobs` threads (default: every core), each reported in name order once all have played.
     Verify {
         #[arg(required = true)]
         files: Vec<PathBuf>,
         /// Where a replay recorded from a named state file finds it (default: triforce/states).
         #[arg(long)]
         states_dir: Option<PathBuf>,
+        #[arg(long)]
+        jobs: Option<usize>,
     },
     /// List what the agent was steered to (TARGETS, version 2): one line per objective change, with the room it
     /// was in ("8:0x4c frame 140213: MOVE {bomb-wall N (15, 2)} -> 8:0x3c"); `--masks` adds the mask's changes,
@@ -642,13 +645,17 @@ fn replay_cmd(cmd: ReplayCmd, rom: &rom::RomInfo) -> Result<i32> {
             replay_targets(&read_replay(&file)?, room.as_deref(), masks, decisions)?;
             Ok(0)
         }
-        ReplayCmd::Verify { files, states_dir } => {
+        ReplayCmd::Verify { files, states_dir, jobs: j } => {
             let rom = ::zcore::Rom::from_ines(&rom.bytes)?;
             let dir = states_dir.unwrap_or_else(|| rom::workspace_root().join("triforce/states"));
             let resolve = |name: &str| std::fs::read(state_path(&dir, name));
+            let files = replay_files(&files)?;
+            let results = corpus::par_map(&files, jobs(j), |file| {
+                read_replay(file).and_then(|replay| Ok(tfreplay::verify(rom.clone(), replay, &resolve)?))
+            });
             let mut failed = false;
-            for file in &replay_files(&files)? {
-                match read_replay(file).and_then(|replay| Ok(tfreplay::verify(rom.clone(), replay, &resolve)?)) {
+            for (file, result) in files.iter().zip(results) {
+                match result {
                     Ok(r) => println!("{}: ok, {} frames, {} edits, {} states", file.display(), r.frames, r.edits, r.states),
                     Err(e) => {
                         failed = true;
