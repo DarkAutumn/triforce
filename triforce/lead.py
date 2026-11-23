@@ -20,6 +20,7 @@ import shutil
 import sys
 import time
 import warnings
+from collections import Counter
 from pathlib import Path
 from typing import Optional
 
@@ -106,13 +107,28 @@ def team_from_manifest(manifest: dict) -> tuple[dict, list[str]]:
 
 def _newest(path: Path) -> float:
     newest = path.stat().st_mtime
-    for dirpath, _, filenames in os.walk(path, followlinks=True):
+    for dirpath, _, filenames in os.walk(path):
         for name in filenames:
-            try:
-                newest = max(newest, (Path(dirpath) / name).stat().st_mtime)
-            except OSError:
-                pass
+            newest = max(newest, (Path(dirpath) / name).lstat().st_mtime)
     return newest
+
+
+def find_links(root: Path) -> list[dict]:
+    """Every symbolic link under ``root`` (none followed), described (``store.describe_link``: loop, dangling,
+    link); a link to a run dir (a folder holding a ``ckpt.pt``) is a ``run alias``: the run is imported where it
+    is, the alias is not."""
+    found = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        here = Path(dirpath)
+        for name in [*dirnames, *filenames]:
+            path = here / name
+            if path.is_symlink():
+                link = store.describe_link(path)
+                if link['state'] == 'link' and path.is_dir() and (path / store.CHECKPOINT).is_file():
+                    link['state'] = 'run alias'
+                found.append(link)
+        dirnames[:] = [d for d in dirnames if not (here / d).is_symlink()]
+    return found
 
 
 def _is_after_training(name: str) -> bool:
@@ -143,9 +159,11 @@ def scan_models(models: Path) -> dict:
     pointers, records, legacy = [], [], []
     for dirpath, dirnames, filenames in os.walk(models):
         here = Path(dirpath)
-        dirnames[:] = sorted(d for d in dirnames if not covered(here / d))
+        dirnames[:] = sorted(d for d in dirnames if not covered(here / d) and not (here / d).is_symlink())
         for name in sorted(filenames):
             path = here / name
+            if path.is_symlink():          # listed by find_links, never copied
+                continue
             relative = str(path.relative_to(models))
             head, _, route = name.partition('.')
             if here != models and here.parent == models and head in POINTERS and \
@@ -162,7 +180,7 @@ def plan_import(checkout: Path, manifests: Optional[Path] = MANIFESTS) -> dict:
     """What ``import_legacy`` would do for ``checkout`` (no write): the ROM, each data folder (its kind, a name by
     date and content, files, bytes), the models folder's classification (``scan_models``), the manifests found."""
     checkout = Path(checkout).resolve()
-    plan = {'checkout': str(checkout), 'rom': None, 'data': [], 'models': None, 'manifests': []}
+    plan = {'checkout': str(checkout), 'rom': None, 'data': [], 'models': None, 'manifests': [], 'links': []}
     rom = checkout / paths.CHECKOUT_ROM
     if rom.is_file():
         plan['rom'] = str(rom)
@@ -171,13 +189,16 @@ def plan_import(checkout: Path, manifests: Optional[Path] = MANIFESTS) -> dict:
     for kind, source, current in sources:
         if not source.is_dir():
             continue
+        links = find_links(source)
+        plan['links'] += links
         sha256, files, size = store.tree_hash(source)
         name = f"{time.strftime('%y%m%d', time.localtime(_newest(source)))}-{sha256[:8]}"
         plan['data'].append({'kind': kind, 'source': str(source), 'name': name, 'sha256': sha256, 'files': files,
-                             'bytes': size, 'current': current})
+                             'bytes': size, 'current': current, 'links': len(links)})
     models = checkout / 'models'
     if models.is_dir():
         plan['models'] = scan_models(models)
+        plan['links'] += find_links(models)
     if manifests is not None and Path(manifests).is_dir():
         plan['manifests'] = [str(p) for p in sorted(Path(manifests).glob('*.json'))]
     return plan
@@ -215,6 +236,10 @@ def import_legacy(checkout: Path, apply: bool = False, manifests: Optional[Path]
         f"selection files, {len(models['pointers'])} pointers, {len(models['records'])} records, "
         f"{len(models['legacy'])} files without a home (legacy/)")
     out(f"  manifests: {len(plan['manifests'])}")
+    states = Counter(link['state'] for link in plan['links'])
+    out(f"  links, not copied: {len(plan['links'])} ({', '.join(f'{n} {s}' for s, n in sorted(states.items()))})")
+    for link in plan['links']:
+        out(f"    {link['state']:9} {link['path']} -> {link['target']}")
     if not apply:
         return report
     if not paths.store_exists():
@@ -326,7 +351,7 @@ def import_legacy(checkout: Path, apply: bool = False, manifests: Optional[Path]
         known.add(name)
         report['teams'][name] = f'from {manifest_path}'
     report['seconds'] = round(time.time() - started, 1)
-    report_path = store.job_folder('import-legacy') / f"import-report-{time.strftime('%H%M%S')}.json"
+    report_path = store.job_folder('import-legacy') / f"import-report-{time.time_ns()}.json"
     report_path.write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
     store.file_output(report_path, 'record', entry=LEAD)
     out(f"  done in {report['seconds']} s: {', '.join(report['done']) or 'nothing'}; skipped "

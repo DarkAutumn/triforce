@@ -216,55 +216,89 @@ def make_writable(path: Path):
                     full.chmod(stat.S_IMODE(full.stat().st_mode) | stat.S_IWUSR)
 
 
-def link_tree(source: Path, target: Path, link: bool = True) -> tuple[int, int]:
+def describe_link(path: Path) -> dict:
+    """A symbolic link as a report lists it: its path, what it points to, and ``state``: ``dangling`` (nothing
+    there), ``loop`` (it resolves into itself or a folder above it), else ``link``."""
+    path = Path(path)
+    target = os.readlink(path)
+    try:
+        real = path.resolve(strict=True)
+    except (OSError, RuntimeError):
+        return {'path': str(path), 'target': target, 'state': 'loop' if path.parent.exists() and
+                _loops(path) else 'dangling'}
+    above = path.parent.resolve()
+    state = 'loop' if real == above or real in above.parents else 'link'
+    return {'path': str(path), 'target': target, 'state': state}
+
+
+def _loops(path: Path) -> bool:
+    try:
+        path.resolve(strict=True)
+    except RuntimeError:
+        return True
+    except OSError as error:
+        return error.errno == 40        # ELOOP
+    return False
+
+
+def link_tree(source: Path, target: Path, link: bool = True, links: Optional[list] = None) -> tuple[int, int]:
     """Copies ``source`` (a file or a folder) to ``target`` (which must not exist): each file a hard link where
-    ``link`` and the filesystem allow, else a copy; symlinks inside are copied as the files they point to (a
-    snapshot holds content, not pointers).  Returns (files, bytes)."""
+    ``link`` and the filesystem allow, else a copy (``shutil.copy2``: times and modes kept).  A symbolic link inside
+    is never followed nor copied (a loop, a dangling link or a link into another data set must not become content):
+    each one is described into ``links`` (``describe_link``).  Returns (files, bytes)."""
     source, target = Path(source), Path(target)
     if target.exists() or target.is_symlink():
         raise StoreError(f"{target} exists")
+    if source.is_symlink() and links is not None and not source.is_dir():
+        links.append(describe_link(source))
+        return 0, 0
     if source.is_file():
         target.parent.mkdir(parents=True, exist_ok=True)
         _link_file(source, target, link)
         return 1, target.stat().st_size
     files = size = 0
-    for dirpath, dirnames, filenames in os.walk(source, followlinks=True):
-        relative = Path(dirpath).relative_to(source)
-        (target / relative).mkdir(parents=True, exist_ok=True)
+    for dirpath, dirnames, filenames in os.walk(source):
+        here = Path(dirpath)
+        (target / here.relative_to(source)).mkdir(parents=True, exist_ok=True)
+        for name in [d for d in dirnames if (here / d).is_symlink()]:
+            dirnames.remove(name)
+            if links is not None:
+                links.append(describe_link(here / name))
         dirnames.sort()
         for name in sorted(filenames):
-            src = Path(dirpath) / name
-            if not src.exists():           # a dangling link: nothing to keep
+            src = here / name
+            if src.is_symlink():
+                if links is not None:
+                    links.append(describe_link(src))
                 continue
-            _link_file(src, target / relative / name, link)
+            _link_file(src, target / here.relative_to(source) / name, link)
             files += 1
             size += src.stat().st_size
     return files, size
 
 
 def _link_file(source: Path, target: Path, link: bool):
-    real = source.resolve()
     if link:
         try:
-            os.link(real, target)
+            os.link(source, target)
             return
         except OSError:
             pass
-    shutil.copy2(real, target)
+    shutil.copy2(source, target)    # a tree's links never reach here (link_tree skips them)
 
 
 def tree_hash(path: Path) -> tuple[str, int, int]:
-    """(sha256, files, bytes) of a folder's content: every file's relative path and bytes, in sorted order (the
-    snapshot's identity, recorded once at install so no reader re-hashes it).  Symlinks count as the files they
-    point to and dangling ones not at all, as ``link_tree`` copies them."""
+    """(sha256, files, bytes) of a folder's content: every regular file's relative path and bytes, in sorted order
+    (the snapshot's identity, recorded once at install so no reader re-hashes it).  Symbolic links are not content
+    (``link_tree`` copies none) and are not followed."""
     digest = hashlib.sha256()
     files = size = 0
     path = Path(path)
-    for dirpath, dirnames, filenames in os.walk(path, followlinks=True):
-        dirnames.sort()
+    for dirpath, dirnames, filenames in os.walk(path):
+        dirnames[:] = sorted(d for d in dirnames if not (Path(dirpath) / d).is_symlink())
         for name in sorted(filenames):
             full = Path(dirpath) / name
-            if not full.exists():
+            if full.is_symlink():
                 continue
             digest.update(str(full.relative_to(path)).encode() + b'\0')
             with open(full, 'rb') as file:
@@ -590,11 +624,12 @@ def _drop_open(run: Run):
 
 
 def install_run(run: Run, source: Path, act: str, exclude: Iterable[str] = (), origin: str = 'import',
-                note: Optional[str] = None, entry: str = LEAD) -> dict:
+                note: Optional[str] = None, links: Optional[list] = None, entry: str = LEAD) -> dict:
     """Installs a copy of a finished run dir from outside the store as a sealed run (the lead's import): its files
     (times and modes kept, then read-only) except ``exclude`` (names relative to ``source``: the evaluations, ``act``
     and ``selection.json`` the import files by job, nested runs); the copy's checkpoint SHA-1, its act mode and its
-    file list recorded (what ``source_changed`` compares at the next import)."""
+    file list recorded (what ``source_changed`` compares at the next import).  A symbolic link inside is neither
+    followed nor copied: it is described into ``links``."""
     source = Path(source)
     excluded = {Path(name) for name in exclude}
     if not (source / CHECKPOINT).is_file():
@@ -610,15 +645,25 @@ def install_run(run: Run, source: Path, act: str, exclude: Iterable[str] = (), o
                 relative = entry_path.relative_to(source)
                 if relative in excluded:
                     continue
-                if entry_path.is_dir() and not entry_path.is_symlink():
+                if entry_path.is_symlink():
+                    if links is not None:
+                        links.append(describe_link(entry_path))
+                elif entry_path.is_dir():
                     for dirpath, dirnames, filenames in os.walk(entry_path):
                         here = Path(dirpath)
-                        dirnames[:] = sorted(d for d in dirnames if (here / d).relative_to(source) not in excluded)
+                        for name in [d for d in dirnames if (here / d).is_symlink()]:
+                            if links is not None:
+                                links.append(describe_link(here / name))
+                        dirnames[:] = sorted(d for d in dirnames if not (here / d).is_symlink()
+                                             and (here / d).relative_to(source) not in excluded)
                         (run.path / here.relative_to(source)).mkdir(parents=True, exist_ok=True)
                         for name in sorted(filenames):
-                            if (here / name).exists():
-                                _link_file(here / name, run.path / here.relative_to(source) / name, False)
-                elif entry_path.exists():
+                            if (here / name).is_symlink():
+                                if links is not None:
+                                    links.append(describe_link(here / name))
+                                continue
+                            _link_file(here / name, run.path / here.relative_to(source) / name, False)
+                else:
                     _link_file(entry_path, run.path / relative, False)
             sha1 = what['sha1'] = file_sha1(run.path / CHECKPOINT)
             files = run_files(run.path)
@@ -635,11 +680,17 @@ def install_run(run: Run, source: Path, act: str, exclude: Iterable[str] = (), o
 
 
 def run_files(folder: Path, exclude: Iterable[str] = ()) -> list[str]:
-    """The sorted relative paths of a run folder's files (``exclude``: top-level names left out)."""
-    skip = set(exclude)
+    """The sorted relative paths of a run folder's regular files, links not followed (``exclude``: names relative to
+    the folder left out, with what is below them)."""
+    skip = {Path(name) for name in exclude}
     folder = Path(folder)
-    return sorted(str(path.relative_to(folder)) for path in folder.rglob('*')
-                  if path.is_file() and path.relative_to(folder).parts[0] not in skip)
+    found = []
+    for dirpath, dirnames, filenames in os.walk(folder):
+        here = Path(dirpath)
+        dirnames[:] = [d for d in dirnames if not (here / d).is_symlink() and (here / d).relative_to(folder) not in skip]
+        found += [str((here / name).relative_to(folder)) for name in filenames
+                  if not (here / name).is_symlink() and (here / name).relative_to(folder) not in skip]
+    return sorted(found)
 
 
 def source_changed(run: Run, source: Path, exclude: Iterable[str] = ()) -> Optional[str]:

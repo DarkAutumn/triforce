@@ -170,17 +170,28 @@ def _legacy_checkout(root: Path) -> Path:
     (models / 'chain-r1.jsonl').write_text('{}\n')
     (models / 'evidence').mkdir()
     (models / 'evidence' / 'shot.png').write_bytes(b'png')
+    (root / 'trajectories' / 'trajectories').symlink_to(root / 'trajectories')     # main's harvested/harvested loop
+    (models / 'zol' / 'r1' / 'gone.json').symlink_to(root / 'nowhere.json')        # dangling, inside a run
+    (models / 'zol' / 'alias').symlink_to(models / 'zol' / 'r2')                     # a run alias
     return root
+
+
+def _modes(root: Path) -> dict:
+    """path -> mode of everything under ``root``, links not followed."""
+    return {Path(d) / n: (Path(d) / n).lstat().st_mode for d, dirs, files in os.walk(root) for n in dirs + files}
 
 
 def test_the_import_is_a_dry_run_first_then_idempotent(shared, tmp_path):
     checkout = _legacy_checkout(tmp_path / 'checkout')
-    before = {p: p.stat().st_mode for p in checkout.rglob('*')}
+    before = _modes(checkout)
     lines = []
     report = lead.import_legacy(checkout, apply=False, manifests=None, out=lines.append)
     assert not report['done'] and store.runs() == [] and '2 runs' in lines[3]
     report = lead.import_legacy(checkout, apply=True, manifests=None, out=lines.append)
     assert report['problems'] == [] and report['legacy'] == ['models/evidence/shot.png']
+    assert sorted(link['state'] for link in report['plan']['links']) == ['dangling', 'loop', 'run alias']
+    assert not (paths.run_dir('zol', 'r1') / 'gone.json').exists() and store.runs('zol/alias') == []
+    assert not (paths.data('trajectories') / 'trajectories').exists()
     assert {r['name'] for r in store.runs('zol')} == {'r1', 'r2'}
     assert not (paths.run_dir('zol', 'r1') / 'eval.json').exists()      # filed by job, indexed by the run
     assert [o['run'] for o in store.outputs(kind='evaluate')] == ['zol/r1']
@@ -189,7 +200,7 @@ def test_the_import_is_a_dry_run_first_then_idempotent(shared, tmp_path):
     assert team['name'] == lead.CURRENT_TEAM and team['slots']['zol@d3first']['run'] == 'zol/r2'
     assert (shared / 'rom' / 'zelda.nes').read_bytes() == b'rom'
     assert paths.current_name('trajectories') is not None
-    assert {p: p.stat().st_mode for p in checkout.rglob('*')} == before         # copies: the source is untouched
+    assert _modes(checkout) == before         # copies: the source is untouched
     assert (paths.run_dir('zol', 'r1') / 'ckpt.pt').stat().st_ino != (checkout / 'models/zol/r1/ckpt.pt').stat().st_ino
     again = lead.import_legacy(checkout, apply=True, manifests=None, out=lines.append)
     assert again['problems'] == [] and again['changed'] == [] and 'run zol/r1' in again['skipped']
