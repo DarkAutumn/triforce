@@ -369,6 +369,33 @@ to the action taken; look-ahead for the others), never looking ahead at play.
 Each experiment is logged in a round document (`round36.md` on) with its setup, numbers and what it decided; an
 idea tried and dropped is marked here with the round, not deleted.
 
+### The fresh generation (2.0.1.0): what goes in before it trains
+
+The next from-scratch retrain is the last for a while (the owner, Nov 23), so everything that changes what a
+network sees, is steered to, is rewarded for or may do goes in first; otherwise the new networks learn the old
+thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
+
+- **Inputs:** v7 (`rel`, contact columns range-aware, projectiles too); the shooter's threat lane (screened on the
+  hit bench first); the "next kill may drop bombs" input (BombStats' `bomb_carrier_window`, so the metric and the
+  flag are one definition).
+- **Targets and objective:** firing-line targets at full hearts (if the zol experiment holds); bomb-carrier targets
+  in pass-through rooms (the exit and the nearest eligible carrier); 6:0x78's snipe as a case of them; the 0x1e
+  row and 0x1f's line; 9:0x56's key and Moldorm crossed (Key39b's route data).
+- **Rewards:** rupees once per pickup and the beam terms (built, never trained from scratch); the Bubble touch
+  penalty; `penalty-aimless` on or off (its experiment first: ow-start and pols-voice at 0.002 / 0.005 a frame).
+- **What the engine plays, not the network:** the whirlwinds out of Level 5 (0x0b) and Level 6 (0x22) as macros
+  like the docks (decide before: a network should not learn plays the engine then takes over).
+- **Items and masks:** the red candle and boomerang in Bubble rooms (7:0x0d, 6:0x38): measured on today's code
+  first, then on or off per room in the generation's masks; 7:0x1b fight or crossing (its measurement at the new
+  combat).
+- **Architecture:** the Link token with the hit head (experiments 6 and 8, on the hit bench first); memory only if
+  the screens show the hidden or timed monsters need it.
+- **Solved by training fresh, nothing to build:** 0:0x77's opening order, 8:0x4c's key walk, 3:0x5b with a full
+  bag, the ow-lynel legs: today's networks learned those before the route changed.
+- **Recipe (the owner: "use your best judgement", not weeks; at least two long jobs at once, never one giant job):**
+  time one family from scratch on today's code first (also the repeatability check); then families in parallel
+  waves of two to three jobs, three seeds each, each judged on its chains; then the student(s).
+
 ## Carried over from the old backlog
 
 - The learned guard as built (branch `r35-guard`): superseded as a design by the hit head (queue 6); its label
