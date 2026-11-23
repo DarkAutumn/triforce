@@ -90,7 +90,7 @@ fn effect_active(ram: &[u8; 0x800], beep: bool) -> bool {
         || jingle(ram[tracks::SONG_REQUEST])
         || tune0_request != 0
         || ram[tracks::TUNE1_REQUEST] != 0
-        || ram[tracks::EFFECT_REQUEST] != 0
+        || ram[tracks::EFFECT_REQUEST] & 0x7F != 0
         || ram[tracks::SAMPLE_REQUEST] != 0
 }
 

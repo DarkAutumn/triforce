@@ -372,7 +372,10 @@ impl Voice {
                 }
                 requests[1] = 0;
                 requests[2] = 0;
-                requests[3] = 0;
+                // `EffectRequest` $80 (`asm:Sample_Silence`) only stops samples and tune 1, which the music never
+                // has; it runs anyway, so that the music's writes in the frame the game silences everything come
+                // at the game's cycles.
+                requests[3] &= 0x80;
                 requests[4] &= 0x80;
             }
         }
