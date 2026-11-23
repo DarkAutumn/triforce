@@ -438,6 +438,18 @@ touches 0.67 against 0.82) and 7:0x1a. Its other losses: 7:0x2a 18, 7:0x0d 11. `
 and 4 (3:0x4d 207, 3:0x5b 160, 3:0x69 107, 4:0x13 78), not goriya's; past step 107 PPO 31 runs against the team's
 21, past 160 5 against 3, past 180 4 against 0.
 
+**On 2.0.0.7** (the code it lands on; 2.0.0.7's team, the same seeds; `d1` from `d3first_1_73s_0` to step 79, 0:0x37
+with Dungeon 1's triforce, about 400 steps a run):
+
+| 2.0.0.7 | team | PPO aux | PPO aux − team | where |
+|---|---:|---:|---:|---|
+| `d1` finish Dungeon 1 | 92.8% | **97.7%** | **+4.9 ± 0.9** | 1:0x44 (Goriyas) lost 35 → 8, 0.99 → 0.29 hits a visit; 1:0x35 (Aquamentus, entered with 3.9 hearts against 3.3) lost 33 → 12 |
+| `d7` finish Dungeon 7 | 15.2% | **76.9%** | **+61.7 ± 1.8** | 7:0x1b lost 495 → 76 (2.10 hits a visit), 7:0x1a 163 → 6 |
+
+Against 2.0.0.6 on the same seeds: the team's `d7` +2.6 ± 1.5, the PPO arm's −2.2 ± 1.8. The PPO arm's change is
+not goriya's: 7:0x0d's Wallmaster ran out of steps in 37 runs (7 on 2.0.0.6); its other losses: 7:0x1c 54, 7:0x18
+21, 7:0x2a 12.
+
 **7:0x1b fought or crossed** (crossed: the room's `treasure: skip`, measured on 2.0.0.5 in a separate worktree, never
 landed; fought: 2.0.0.6; same seeds):
 
