@@ -308,6 +308,7 @@ The owner watches replays and reports what he sees. Much of the progress came fr
 | Nov 11 | Get back within 5% of the old team before new work | Owner | Worked | r18 |
 | Nov 15 | About 5 points is a result at 1000 runs; confirm on fresh seeds | Agents | Worked | r25 §7 |
 | Nov 22 | Bench shortlists, chains decide | Agents | Worked | r37 |
+| Nov 23 | Two bomb metrics in every 250 test, judged only by what the observation tells the agent: the 10th-kill bomb (taken with a bomb or not, full bag apart) and the bomb carrier (the next kill one that may drop bombs); computable from a replay alone | Owner (metrics, edge cases, replay scoring); agents built the counter | Built; baseline pending | architecture.md "Bomb windows" |
 
 ## How credit is kept from now on
 
