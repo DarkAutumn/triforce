@@ -128,9 +128,11 @@ def test_runs250_plays_from_power_on_in_the_express_place(tmp_path, monkeypatch)
 
     class Done:
         returncode = 2
+        stdout = 'abc123\n'                              # git rev-parse HEAD
 
     def fake_run(command, **_kw):
-        seen['command'] = command
+        if 'eval-chain' in command:
+            seen['command'] = command
         return Done()
     monkeypatch.setattr(full_runs.subprocess, 'run', fake_run)
     out = tmp_path / 'out'
@@ -139,3 +141,4 @@ def test_runs250_plays_from_power_on_in_the_express_place(tmp_path, monkeypatch)
     assert command[command.index('--runs') + 1] == '250' and '--power-on' in command and '--express' in command
     assert '--no-wait' not in command and command[command.index('--models-dir') + 1] == str(out / 'models')
     assert command.index('--models-dir') < command.index('eval-chain')     # the triforce command's own option
+    assert json.loads((out / 'timing.json').read_text())['commit'] == 'abc123'    # the code that played

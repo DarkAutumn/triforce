@@ -196,10 +196,10 @@ def runs250(args) -> int:
     models = freeze_models(Path(args.models_dir).resolve(), out / 'models')
     command = chain_command(out, args.runs, args.first_seed, args.parallel, models) + [
         '--power-on', '--express', '--events', str(out / 'events.jsonl')]
-    start = time.time()
+    start, commit = time.time(), git_head()      # the code that plays (stats may run later, on a newer commit)
     code = subprocess.run(command, cwd=ROOT, check=False).returncode
     (out / 'timing.json').write_text(json.dumps({'seconds': round(time.time() - start, 1), 'runs': args.runs,
-                                                 'express': True}) + '\n')
+                                                 'express': True, 'commit': commit}) + '\n')
     if code not in (0, 1):
         return code
     stats(out, args.team, Path(args.docs), archive=not args.no_archive)
@@ -385,6 +385,9 @@ def stats(out: Path, team=None, docs: Path = DOCS, archive: bool = True) -> dict
     meta = json.loads((out / 'runs.jsonl.meta.json').read_text())
     timing = json.loads((out / 'timing.json').read_text()) if (out / 'timing.json').exists() else {}
     record = summarize(read_runs(out), meta, steps, chain_seconds(out), timing.get('seconds'))
+    record['commit'] = timing.get('commit') or record['commit']
+    plan = out / 'training.json'                 # the chain's plan: the place it took in the job line
+    record['lane'] = json.loads(plan.read_text()).get('lane') if plan.exists() else None
     record['team_name'] = team or 'main'
     kept_dir = out / 'kept'
     kept_dir.mkdir(exist_ok=True)
@@ -469,7 +472,8 @@ def markdown(records: list, names: list, top_rooms: int = 12) -> str:
         rows.append([key, *(with_se(*c) for c in counts), *(diff(counts[0], c) for c in counts[1:])])
     lines += ['Runs that took each triforce (± binomial standard error, points):', ''] + table(header, rows) + ['']
     rows = [[f'D{level}', *(r['triforce_frames_median'][f'D{level}'] or '–' for r in records)] for level in ORDER]
-    lines += ['Median frames from power on to each triforce:', ''] + table(['dungeon', *labels], rows) + ['']
+    lines += ["Median frames to each triforce (the chain's count, from the game's start after the file select; a "
+              "replay adds the power-on boot and the file select):", ''] + table(['dungeon', *labels], rows) + ['']
     # Rooms: the ones that lost the most runs (deaths + stucks) in any record, by route step.
     by_room = [{(e['room'], e['step']): e for e in (dict(zip(r['room_fields'], row)) for row in r['rooms'])}
                for r in records]
