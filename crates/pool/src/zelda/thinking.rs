@@ -68,7 +68,9 @@ fn direction(d: zelda::Direction) -> u8 {
 }
 
 /// The TARGETS record of `objective` in `state`, the acting family's `reward` saying which targets its observation
-/// sees, `completion` labelling the route step.
+/// sees, `completion` labelling the route step. The targets are a set, written in (role, fields, flags) order: the
+/// objective's labels come in its targets' tile order, so in a fight the order followed the monsters as they moved
+/// and each change was a record (8:0x5e: 30 records for five keese and a drop).
 fn targets(
     tables: &Tables,
     objective: &Objective,
@@ -81,6 +83,15 @@ fn targets(
         .enumerate()
         .fold(0u8, |bits, (i, &on)| bits | u8::from(on) << i);
     let index = |names: &[String], name: Option<&str>| name.and_then(|n| names.iter().position(|x| x == n)).map(|i| i as u8);
+    let mut recorded: Vec<TargetRef> = env::objective::recorded_targets(objective, state, reward)
+        .into_iter()
+        .map(|(role, obs)| TargetRef {
+            role: role.index(),
+            flags: if obs { replay::TARGET_OBS } else { replay::TARGET_REWARD_ONLY },
+            fields: role.fields(direction),
+        })
+        .collect();
+    recorded.sort_unstable_by_key(|t| (t.role, t.fields, t.flags));
     Targets {
         frame: 0,
         objective: objective.kind as u8,
@@ -91,14 +102,7 @@ fn targets(
         stretch: index(&tables.stretches, completion.and_then(GameCompletion::stretch)),
         next_rooms: objective.next_rooms.iter().copied().map(room).collect(),
         retreats: objective.retreats.iter().copied().map(room).collect(),
-        targets: env::objective::recorded_targets(objective, state, reward)
-            .into_iter()
-            .map(|(role, obs)| TargetRef {
-                role: role.index(),
-                flags: if obs { replay::TARGET_OBS } else { replay::TARGET_REWARD_ONLY },
-                fields: role.fields(direction),
-            })
-            .collect(),
+        targets: recorded,
     }
 }
 

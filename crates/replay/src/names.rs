@@ -187,16 +187,21 @@ impl Names {
         text
     }
 
-    /// A TARGETS record as a JSON object of names: `frame`, `objective`, `flags`, `route`, `step`, `way`,
-    /// `stretch`, `next_rooms`, `retreats`, `targets` (each `{role, obs, reward_only, <fields>, text}`, `text`:
-    /// [`Names::target_text`]).
-    pub fn targets_json(&self, r: &Targets) -> Value {
-        let flags: Vec<&str> = ["treasure-refused", "drops-first", "bag-drops", "clips"]
-            .iter()
+    /// A TARGETS record's step flags by name: `treasure-refused`, `drops-first`, `bag-drops`, `clips`.
+    pub fn target_flags(r: &Targets) -> Vec<&'static str> {
+        ["treasure-refused", "drops-first", "bag-drops", "clips"]
+            .into_iter()
             .enumerate()
             .filter(|(i, _)| r.flags & (1 << i) != 0)
-            .map(|(_, f)| *f)
-            .collect();
+            .map(|(_, f)| f)
+            .collect()
+    }
+
+    /// A TARGETS record as a JSON object of names: `frame`, `objective`, `flags` ([`Names::target_flags`]),
+    /// `route`, `step`, `way`, `stretch`, `next_rooms`, `retreats`, `targets` (each `{role, obs, reward_only,
+    /// <fields>, text}`, `text`: [`Names::target_text`]).
+    pub fn targets_json(&self, r: &Targets) -> Value {
+        let flags = Names::target_flags(r);
         let targets: Vec<Value> = r
             .targets
             .iter()

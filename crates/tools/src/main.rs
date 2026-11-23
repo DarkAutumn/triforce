@@ -494,6 +494,10 @@ fn replay_targets(replay: &tfreplay::Replay, only: Option<&str>, masks: bool, de
         if let Some(step) = t.step {
             text += &format!("  [step {step}{}]", ["", " clips", " plain"][usize::from(t.way.min(2))]);
         }
+        let flags = tfreplay::Names::target_flags(&t);
+        if !flags.is_empty() {
+            text += &format!(" ({})", flags.join(", "));
+        }
         lines.push((t.frame, 0, text));
     }
     if masks {
