@@ -2108,11 +2108,11 @@ is joined at the end. It prints a JSON summary (`out`, `frames`, `seconds`, `wid
   (`d2first`) plays its route runs everywhere, as before. **One place decides a step's run**: the engine names each
   step's policy (`zelda::GameMap::step_policy`, `_native.step_policy`: `family@route` before the cutoff, else
   `family`; `GameMap::own_models_until`, `_native.own_models_until`), and `registry.policy_run(key, root, route)`
-  names the run of a key (`family@R`: `promoted.<R>`; `family`: `promoted` on a route with the key, else
-  `promoted_run`). `runner.Policies` loads both runs of such a family as two policies (`family` and `family@route`,
-  the same config) and the chain (`ChainEnv::route_parts`, `_native.ChainTask(policies=)`) plays a room by its step's
-  key (a room off the route by the run's last step: a wrong exit stays in its part) when that policy is loaded, else
-  by the family's. Every tool that plays goes through them: `eval-chain` (its
+  names the run of a key (`family@R`: `promoted.<R>`; `family`: `late.<route>` else `promoted` on a route with the
+  key, below; else `promoted_run`). `runner.Policies` loads both runs of such a family as two policies (`family`
+  and `family@route`, the same config) and the chain (`ChainEnv::route_parts`, `_native.ChainTask(policies=)`)
+  plays a room by its step's key (a room off the route by the run's last step: a wrong exit stays in its part)
+  when that policy is loaded, else by the family's. Every tool that plays goes through them: `eval-chain` (its
   `--checkpoint FAMILY=PATH` plays both parts, `FAMILY@ROUTE=PATH` the route's part only, refused on a route without
   the key), `eval-batch`, `play-zelda.py` and the theater's simulations, the golden path, `zelda-headless.py`;
   `select-checkpoint` selects the part its start is in (`Plan.policy`: a start before the cutoff replaces
@@ -2121,6 +2121,17 @@ is joined at the end. It prints a JSON summary (`out`, `frames`, `seconds`, `wid
   are as before); the chain's provenance and a replay's header list each policy with its checkpoint, and a replay's
   room events name the policy that played (a run of both parts names both runs). Training is not touched: a round
   trains one run, and which states a route's run draws is its yaml's `state_routes`.
+- **A late run per route, optional** (round 38): on a route with `own_models_until`, a family's
+  `models/<family>/late.<route>` (`triforce promote FAMILY RUN --route R --late`, `python -m triforce.registry
+  promote ... --late`; refused on a route without the key) names the run its family key plays there, the steps from
+  the cutoff on, over `promoted`. Its own part (`family@route`: `promoted.<route>`, else `promoted`, which a family
+  with only a late run then loads as that part so the late run never reaches the steps before the cutoff) and every
+  other route (`d2first` keeps `promoted`) are unchanged; `registry.policy_run` decides it, so chains, evaluation
+  batches, select-checkpoint, play, the golden path, `room-stats`, the lab bench (`--team` and `speed` on the
+  manifest's route) and the lab teachers (on `--state-route`) follow. The name is not `promoted.*`, so
+  `route_promotions` never takes it for a route's run; `registry.late_promotions` reads them, `triforce list` shows
+  `late.<route>=run (steps N-end, from ...)`, `python -m triforce.registry list` marks the run `late on <route>`, and
+  `triforce stamp` stamps them. No late pointer: the family key plays `promoted`, as before.
 - **Segments and scopes per route:** `eval_batch.ROUTE_SEGMENTS[route]` (segments, arrival targets, milestones;
   start states by bare name) and `room_stats.ROUTE_SCOPES[route]` (the room-stats scopes; `room-stats` takes the
   route from the chain files). `d2first`'s are the tables of before, unchanged; `d3first`'s (`D3FIRST_SEGMENTS`,

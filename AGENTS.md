@@ -126,7 +126,8 @@ there).
   153,308 frames). `registry.MAIN_ROUTE = 'd3first'`: `play-zelda.py`, `zelda-headless.py`, the golden path,
   `eval-chain`, `eval-batch --chains` and `r56_chains.sh` play it when no route is named; `d2first` by `--route
   d2first` (the engine's `DEFAULT_ROUTE`, the route of bare state names, stays `d2first`). **The team:** every
-  family's default `promoted` run plays both routes; fifteen families have a route run, `promoted.d3first`, that
+  family's default `promoted` run plays both routes (`d3first`'s steps from the magic sword on by its `late.d3first`
+  where it has one, round 38); fifteen families have a route run, `promoted.d3first`, that
   plays only `d3first`'s steps 0-205 (the wood sword's half, routes.yaml `own_models_until: {waypoint: sword}`;
   `triforce list` shows them): zol `r32d3-zol`, darknut `r32d3-dark2-s44`, boss-manhandla `r32d3-manh`, vire
   `r32d4-vire2-s1`, like-like `r32d4-like2`, boss-gleeok `r32d4-gleeok2-s1-it2517`, boss-digdogger `r32late-dig`,
@@ -683,8 +684,11 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   the other). Missing bombs, keys and rupees are cheated and counted on both. Route data:
   `docs/routes/d3first.md`; the dungeons and shared legs are routes.yaml `blocks:` both routes `include:`, so a
   change to one is a change to both (decisions 2026-11-19 "`d3first` as route data"). A route run
-  (`triforce promote FAMILY RUN --route d3first`) plays only `d3first`'s steps before the magic sword; a change to a
-  family's default run changes both routes and is measured on both.
+  (`triforce promote FAMILY RUN --route d3first`) plays only `d3first`'s steps before the magic sword; a late run
+  (`triforce promote FAMILY RUN --route d3first --late`, `models/<family>/late.d3first`, round 38) plays only its
+  steps from the magic sword on, in the family default's place: the way to change `d3first`'s later rooms without
+  touching `d2first` (no `promoted.*` name; `triforce list` shows it). A change to a family's default run changes
+  both routes and is measured on both.
 - **Old worktrees are deleted once their work is on `main`** (Lee, Nov 19: "you can always delete old worktrees.
   Once things are merged into main, delete them and keep stuff tidy"): `git worktree remove` (the branch stays);
   first copy out what is not in git and still wanted: promoted run dirs into `models/`, demonstration files into

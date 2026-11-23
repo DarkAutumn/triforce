@@ -51,8 +51,8 @@ _ENTRY = re.compile(r'^(.*)_h\d+_\d+$')
 
 
 def team_keys(root=None) -> list[str]:
-    """Every policy key of today's team: each family with a promoted run, and ``family@route`` for each of its
-    ``promoted.<route>`` on a route with its own runs."""
+    """Every policy key of today's team: each family with a promoted run, and ``family@route`` for each route with its
+    own runs where the family has a ``promoted.<route>`` or a ``late.<route>`` (``registry.route_part_key``)."""
     keys = []
     for family in sorted(_native.families()):
         try:
@@ -60,8 +60,8 @@ def team_keys(root=None) -> list[str]:
         except FileNotFoundError:
             continue
         keys.append(family)
-        for route in registry.route_promotions(family, root):
-            if registry.own_models_until(route) is not None:
+        for route in sorted({*registry.route_promotions(family, root), *registry.late_promotions(family, root)}):
+            if registry.route_part_key(family, root, route) is not None:
                 keys.append(registry.route_policy(family, route))
     return keys
 
@@ -256,7 +256,7 @@ def speed(key: str, manifest: dict, parallel: int, devices: list[str], states_di
     the Rust actor (``rust``) and the same network served by torch (``cpu``, ``cuda``, ``cuda-half``: autocast
     float16; ``nets.serve``)."""
     from ..nets import serve  # pylint: disable=import-outside-toplevel
-    checkpoint = checkpoint or registry.policy_checkpoint(key, root)
+    checkpoint = checkpoint or registry.policy_checkpoint(key, root, manifest['full']['route'])
     entry = next(e for e in manifest['entries'] if e['key'] == key)
     config, directory = entry_task(entry, states_dir)
     out = {}
@@ -298,7 +298,9 @@ def main(argv=None) -> int:
     m.add_argument('--route', default=ROUTE, help="the route whose own room entries (<route>_*) are preferred and "
                                                   "whose segments make the full tier")
     r = sub.add_parser('run')
-    r.add_argument('--team', action='store_true', help="every key's network of today (policy_checkpoint)")
+    r.add_argument('--team', action='store_true',
+                   help="every key's network of today on the manifest's route (policy_checkpoint: a family's "
+                        "late.<route> over its promoted)")
     r.add_argument('--network', default=None, help="one checkpoint for every key in --keys")
     r.add_argument('--keys', nargs='*', default=None)
     r.add_argument('--checkpoint', nargs='*', default=[], metavar='KEY=CKPT')
@@ -350,7 +352,8 @@ def main(argv=None) -> int:
     networks: dict[str, str] = {}
     if args.team:
         for entry in manifest['entries']:
-            networks[entry['key']] = str(registry.policy_checkpoint(entry['key'], args.models_dir))
+            networks[entry['key']] = str(registry.policy_checkpoint(entry['key'], args.models_dir,
+                                                                    manifest['full']['route']))
     if args.network:
         for key in args.keys or [e['key'] for e in manifest['entries']]:
             networks[key] = args.network

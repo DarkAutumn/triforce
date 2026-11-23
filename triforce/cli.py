@@ -244,7 +244,7 @@ def _cmd_eval_chain(args):
 
 def _cmd_promote(args):
     from .registry import promote  # pylint: disable=import-outside-toplevel
-    print(promote(args.specialist, args.run_id, args.models_dir, args.act, args.route))
+    print(promote(args.specialist, args.run_id, args.models_dir, args.act, args.route, args.late))
     return 0
 
 
@@ -262,9 +262,20 @@ def route_part_text(route: str) -> str:
     return f"steps 0-{until - 1}, before {where}"
 
 
+def late_part_text(route: str) -> str:
+    """Where ``route``'s late runs play (round 38, ``late.<route>``): ``steps 262-end, from 0:0x21:cave``."""
+    # pylint: disable=import-outside-toplevel
+    from . import _native
+    from .registry import own_models_until
+    until = own_models_until(route)
+    step = _native.route_steps(route)[until]
+    where = f"{step['level']}:0x{step['room']:02x}" + (':cave' if step['in_cave'] else '')
+    return f"steps {until}-end, from {where}"
+
+
 def _cmd_list(args):
     # pylint: disable=import-outside-toplevel
-    from .registry import list_runs, promoted_run, route_promotions
+    from .registry import late_promotions, list_runs, promoted_run, route_promotions
     from .specialist import list_specialists
     for name in list_specialists():
         try:
@@ -274,17 +285,20 @@ def _cmd_list(args):
         runs = list_runs(name, args.models_dir)
         routes = ''.join(f" {route}={run} ({route_part_text(route)})"
                          for route, run in route_promotions(name, args.models_dir).items())
+        routes += ''.join(f" late.{route}={run} ({late_part_text(route)})"
+                          for route, run in late_promotions(name, args.models_dir).items())
         print(f"{name:20} promoted={current or '-':24} runs={len(runs)}{routes}")
     return 0
 
 
 def _cmd_stamp(args):
     """``triforce stamp``: writes the ``version`` file of the given run, or of every promoted run (a route's own,
-    ``promoted.<route>``, too)."""
+    ``promoted.<route>``, and its late one, ``late.<route>``, too)."""
     # pylint: disable=import-outside-toplevel
     import re
     from . import __version__
-    from .registry import checkpoint_path, model_version, promoted_run, route_promotions, write_model_version
+    from .registry import (checkpoint_path, late_promotions, model_version, promoted_run, route_promotions,
+                           write_model_version)
     from .specialist import list_specialists
     version = args.version or __version__
     if not re.fullmatch(r'\d+(\.\d+){3}', version):
@@ -297,8 +311,8 @@ def _cmd_stamp(args):
                 runs.append((name, promoted_run(name, args.models_dir)))
             except FileNotFoundError:
                 pass
-            runs += [(name, run) for run in sorted(set(route_promotions(name, args.models_dir).values()))
-                     if (name, run) not in runs]
+            routed = [*route_promotions(name, args.models_dir).values(), *late_promotions(name, args.models_dir).values()]
+            runs += [(name, run) for run in sorted(set(routed)) if (name, run) not in runs]
     else:
         try:
             runs = [(args.specialist, args.run_id or promoted_run(args.specialist, args.models_dir))]
@@ -384,6 +398,10 @@ def main(argv=None):
     promote.add_argument('--route', default=None,
                          help="promote the run for this route only (models/<family>/promoted.<route>, which every "
                               "tool playing that route takes over promoted)")
+    promote.add_argument('--late', action='store_true',
+                         help="with --route on a route with own_models_until (d3first): the run of the family's key "
+                              "on the route's steps from that one on (models/<family>/late.<route>, over promoted "
+                              "there; the route's own run and every other route are unchanged)")
 
     stamp = sub.add_parser('stamp', help="stamp runs with the triforce version their models are compatible with "
                                          "(default: every promoted run, this code's version)")
@@ -423,7 +441,8 @@ def add_eval_chain_arguments(chain):
     from .runner import STOP_AT_HELP, add_power_on_arguments
     chain.add_argument('--route', default=MAIN_ROUTE,
                        help=f"routes.yaml route (default {MAIN_ROUTE}, registry.MAIN_ROUTE); its promoted runs play "
-                            "(a family's promoted.<route> over its promoted)")
+                            "(a family's promoted.<route> over its promoted; on a route with own_models_until its "
+                            "promoted.<route> before that step, its late.<route> over its promoted from it on)")
     chain.add_argument('--runs', type=int, default=20)
     chain.add_argument('--parallel', type=int, default=1, help="envs in the chain pool")
     chain.add_argument('--threads', type=int, default=None, help="pool worker threads (default min(parallel, cores))")
