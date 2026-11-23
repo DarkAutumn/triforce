@@ -117,7 +117,7 @@ from .clips import OFF_LABEL, episode_jobs
 from .demos import load_demos
 from .events import (LOGS_DIR_ENV, PROGRESS_METRICS, EventLog, TrainingPlan, has_plan, new_log_dir,
                      write_json_atomic)
-from .jobs import announce, work
+from .jobs import announce, flag, work
 from .jobs import progress as job_progress
 from .metrics import MetricsLogger, format_summary
 from .model import ModelConfig, ZeldaPolicy, obs_spec_from_space
@@ -611,6 +611,37 @@ def main(argv=None) -> Path:
     return out_dir
 
 
+# A data set of this training against the promoted run's of the family: a note past this share of difference.
+DATA_SHARE = 0.1
+CONTINUATION_SIL = 0.1          # AGENTS.md: continuations of trained models pass --sil-coeff 0.1
+
+
+def recipe_flags(args, config, recipe: dict, start_iteration: int, root):
+    """The training's own flags (``jobs.flag``, round 40): a continuation without ``--sil-coeff 0.1`` (a note), and
+    each data set (seed states, harvested states, curriculum files) against the family's promoted run's manifest on
+    the task's route: none where it drew some is red, a count off by more than ``DATA_SHARE`` a note."""
+    if start_iteration > 0 and args.sil_coeff != CONTINUATION_SIL:
+        flag('continuation-sil', f"a continuation from iteration {start_iteration} with --sil-coeff {args.sil_coeff} "
+                                 f"(continuations pass {CONTINUATION_SIL}, AGENTS.md)", level='note')
+    routes = config.to_dict().get('state_routes') or [None]
+    try:
+        promoted = registry.run_dir(config.name, registry.promoted_run(config.name, root, routes[0]), root)
+        theirs = manifest.read(promoted)
+    except (FileNotFoundError, ValueError):
+        return
+    for name, field in (('start_states', 'count'), ('harvested', 'count'), ('curriculum', 'tracks')):
+        mine = (recipe['data'].get(name) or {}).get(field)
+        reference = (theirs.get('data', {}).get(name) or {}).get(field)
+        if mine is None or not reference:
+            continue
+        if mine == 0:
+            flag(f'no-{name.replace("_", "-")}', f"this training draws 0 {name.replace('_', ' ')} where the promoted "
+                                                 f"run {promoted.name} drew {reference}")
+        elif abs(mine - reference) > DATA_SHARE * reference:
+            flag('data-differs', f"{name.replace('_', ' ')}: {mine} here, {reference} for the promoted run "
+                                 f"{promoted.name}", level='note')
+
+
 class RecipeMismatch(Exception):
     """``--same-recipe-as``: this training differs from the named run in more than ``--except`` allows."""
 
@@ -736,6 +767,7 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
                    'ppo_config': ppo_config.to_dict(), 'start_iteration': start_iteration,
                    'start_steps': start_steps, 'curriculum': trajectories, 'curriculum_tracks': tracks,
                    'harvested': harvested, 'nice': os.nice(0), 'manifest': recipe}, file, indent=2, default=str)
+    recipe_flags(args, config, recipe, start_iteration, root)
 
     print(f"[train] {specialist} run={run_id} dir={out_dir}")
     print(f"[train] parameters={network.parameter_count():,} "

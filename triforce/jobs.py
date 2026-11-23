@@ -123,6 +123,20 @@ def _execute(sql: str, args: tuple):
         pass
 
 
+def flag(code: str, text: str, level: str = 'red'):
+    """Raises a flag on the job this process runs in (round 40: ``{'level': 'red' | 'note', 'code': '<kebab-case>',
+    'text': '<one sentence>'}``, appended to its row's ``flags``: ``triforce job list``, ``history`` and the training
+    GUI show it) and prints it; outside a job it is only printed.  A red flag: the run may not be what it claims; a
+    note: worth a look."""
+    if level not in jobqueue.FLAG_LEVELS:
+        raise ValueError(f"flag level {level!r}: one of {jobqueue.FLAG_LEVELS}")
+    print(f"triforce: {'RED FLAG' if level == 'red' else 'note'} {code}: {text}", file=sys.stderr, flush=True)
+    job = job_id()
+    if job is not None:
+        _execute("UPDATE jobs SET flags = json_insert(coalesce(flags, '[]'), '$[#]', json(?)) WHERE id = ?",
+                 (json.dumps({'level': level, 'code': code, 'text': text}), job))
+
+
 def record_plan(log_dir, plan):
     """Records this job's log folder and plan in its row (the first one only: a script that runs several plans is
     shown by its first)."""
