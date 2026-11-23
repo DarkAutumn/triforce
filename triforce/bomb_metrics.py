@@ -158,19 +158,23 @@ RULE_REASONS = ('never', 'tenth', 'required', 'reserve')     # a BOMB block by t
 def replay_facts(replay) -> list:
     """The env's per-decision facts from a replay's targets stream (``_native.Replay``: ``targets()``, the objective
     when it changed; ``masks()``, the action mask and the rules that blocked kinds, when it changed):
-    ``[(frame, kill_all, bomb_rule)]`` at every frame either changed. ``bomb_rule``: no bomb-rule reason blocks BOMB
-    (BOMB off only for the game's own limits, a bomb in the air, an empty bag, still counts as allowed: the live
-    chain's ``BombUse::allows``). An older replay has neither: no facts (every window reads BOMB off, no FIGHT)."""
+    ``[(frame, kill_all, bomb_rule, bomb_never)]`` at every frame either changed. ``bomb_rule``: no bomb-rule reason
+    blocks BOMB (BOMB off only for the game's own limits, a bomb in the air, an empty bag, still counts as allowed: the
+    live chain's ``BombUse::allows``); ``bomb_never``: the mode is ``never``. An older replay has neither: no facts
+    (Metric A then opens on RAM alone, Metric B reads BOMB off and no FIGHT)."""
+    def bomb(m):
+        reasons = m['blocked'].get('BOMB', ())
+        return (not any(r in RULE_REASONS for r in reasons), 'never' in reasons)
     changes = sorted([(t['frame'], 0, t['objective'] == 'FIGHT') for t in replay.targets()]
-                     + [(m['frame'], 1, not any(r in RULE_REASONS for r in m['blocked'].get('BOMB', ())))
-                        for m in replay.masks()])
-    facts, current = [], [False, False]
+                     + [(m['frame'], 1, bomb(m)) for m in replay.masks()])
+    facts, current = [], [False, (False, False)]
     for frame, which, value in changes:
         current[which] = value
+        row = (frame, current[0], *current[1])
         if facts and facts[-1][0] == frame:
-            facts[-1] = (frame, *current)
+            facts[-1] = row
         else:
-            facts.append((frame, *current))
+            facts.append(row)
     return facts
 
 

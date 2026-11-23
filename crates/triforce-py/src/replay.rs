@@ -257,8 +257,9 @@ pub fn replay_verify<'py>(py: Python<'py>, data: &[u8], states_dir: Option<PathB
 
 /// The owner's two bomb metrics over a replay (`env::bomb_windows::BombFrames`, the chain's own counter): every
 /// frame played from the replay's start, its ROOM events as the visits, and `facts`, the env's per-decision facts
-/// `[(frame, kill_all, bomb_allowed), ...]` in frame order (the replay's targets stream: the objective FIGHT, BOMB
-/// allowed by the bomb rule; `frame` the input frames run before the decision). Returns `{'rooms': [{'level', 'room',
+/// `[(frame, kill_all, bomb_allowed, bomb_never), ...]` in frame order (the replay's targets stream: the objective
+/// FIGHT, BOMB allowed by the bomb rule, the mode `never`; `frame` the input frames run before the decision). Returns
+/// `{'rooms': [{'level', 'room',
 /// 'in_cave', <BOMB_WINDOW_FIELDS>...}], 'tenth_open_at_end', 'carrier_open_at_end', 'held'}` (`held`: frames of a
 /// room no visit names, never counted).
 #[pyfunction]
@@ -266,7 +267,7 @@ pub fn replay_verify<'py>(py: Python<'py>, data: &[u8], states_dir: Option<PathB
 pub fn replay_bomb_windows<'py>(
     py: Python<'py>,
     data: &[u8],
-    facts: Vec<(u64, bool, bool)>,
+    facts: Vec<(u64, bool, bool, bool)>,
     states_dir: Option<PathBuf>,
 ) -> PyResult<Bound<'py, PyDict>> {
     use env::bomb_windows::{BombFrames, StepFacts};
@@ -280,8 +281,8 @@ pub fn replay_bomb_windows<'py>(
     let frames = py
         .detach(|| {
             let mut frames = BombFrames::new();
-            for (frame, kill_all, bomb_allowed) in facts {
-                frames.facts(frame, StepFacts { kill_all, bomb_allowed });
+            for (frame, kill_all, bomb_allowed, bomb_never) in facts {
+                frames.facts(frame, StepFacts { kill_all, bomb_allowed, bomb_never });
             }
             for &location in &rooms {
                 frames.plan(location);

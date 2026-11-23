@@ -1045,8 +1045,10 @@ Octoroks, Moblin `$03`, Lynel `$01`, Vire, Goriya `$06`, Darknut `$0B`, Red Wizz
   dying, game over) are counted, each pair of consecutive ones a `Step`; transition frames (a dungeon's entry, a
   scroll, stairs, a cave door) end Link's stay in the room; the rest are skipped. Link's death ends the counting:
   a window open then is `open_at_end` (with a run that ends any other way). What RAM does not hold is what the env
-  told the agent at each decision (`env::bomb_windows::StepFacts`: the objective is FIGHT, the bomb rule allows
-  BOMB; a replay's masks name the rule that blocked BOMB: `never`, `tenth`, `required`, `reserve`), in
+  told the agent at each decision (`env::bomb_windows::StepFacts`: the objective is FIGHT; the bomb rule allows
+  BOMB, for a Vire; the effective mode is `never`, for Metric A, since a decision taken on 8 kills holds for the
+  frames on 9 within its action; a replay's masks name the rule that blocked BOMB: `never`, `tenth`, `required`,
+  `reserve`), in
   force from the decision's frame to the next.
 - **Live and offline, one implementation.** `env::bomb_windows::BombFrames` counts per room visit: live, the chain
   (`ChainEnv`) keeps every real frame's RAM image (`Session::set_ram_log`; search's simulated frames are not kept)

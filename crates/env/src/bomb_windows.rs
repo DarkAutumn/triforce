@@ -35,11 +35,15 @@ pub struct StepFacts {
     /// The bomb rule allows BOMB (`crate::config::BombUse::allows` of the effective mode, the mask's BOMB before the
     /// game's own limits; in a replay's masks: BOMB not blocked by `never`, `tenth`, `required` or `reserve`).
     pub bomb_allowed: bool,
+    /// The effective bomb mode is `never` (in a replay's masks: BOMB blocked by `never`). Metric A asks this, not
+    /// `bomb_allowed`: every other mode allows the 10th kill's bomb, and a decision taken on 8 kills (`required`
+    /// outside a wall room says no) holds for the frames on 9 that follow within its action.
+    pub bomb_never: bool,
 }
 
 impl WindowRules for StepFacts {
     fn tenth_rule(&mut self, _: &Arc<GameView>) -> bool {
-        self.bomb_allowed
+        !self.bomb_never
     }
 
     fn carrier_rules(&mut self, _: &Arc<GameView>) -> (bool, bool) {
@@ -195,14 +199,14 @@ mod tests {
     #[test]
     fn visits_hold_frames_and_facts_take_effect_by_frame() {
         let mut f = BombFrames::new();
-        f.facts(0, StepFacts { kill_all: true, bomb_allowed: true });
+        f.facts(0, StepFacts { kill_all: true, bomb_allowed: true, bomb_never: false });
         f.push(frame(0x44));
         assert_eq!(f.held(), 1, "no visit yet");
         f.plan(MapLocation::new(1, 0x44, false));
         assert_eq!(f.held(), 0);
         f.push(frame(0x44));
         assert!(!f.open().1, "FIGHT with a carrier only: no choice");
-        f.facts(f.pushed(), StepFacts { kill_all: false, bomb_allowed: true });
+        f.facts(f.pushed(), StepFacts { kill_all: false, bomb_allowed: true, bomb_never: false });
         f.push(frame(0x44));
         assert!(f.open().1, "passing through");
         f.push(frame(0x45));
