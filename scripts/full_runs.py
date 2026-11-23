@@ -33,7 +33,9 @@ runs-250 --label <reasons>``: never the repository's ``replays/``).  It writes t
 version, commit, team (each family's run and checkpoint SHA-1), seeds, wall time and decisions a second, the runs
 that took each triforce, the endings by kind, deaths and stucks per room (room, route step, family), every room
 visit's hits and hearts lost per room, the cheated items and ending of each run, the median frames to each triforce
-and the kept replays.  ``--team`` names a team other than main's (``2.0.0.11_one-d1w8.json``).
+and the kept replays, and the owner's two bomb metrics (``bomb_metrics``: a calculation over each replay,
+``triforce/bomb_metrics.py``; every window in ``OUT_DIR/bomb_windows.jsonl``).  ``--team`` names a team other than
+main's (``2.0.0.11_one-d1w8.json``).
 
 ``analyze`` compares one or more of those records (the first is the baseline): per-dungeon rates and endings with
 their binomial standard errors and each record's difference from the baseline, and per room (room and route step)
@@ -405,6 +407,7 @@ def stats(out: Path, team=None, docs: Path = DOCS, archive: bool = True) -> dict
                                    '--label', label, str(copy)], check=False).returncode
             if done:
                 print(f"full_runs: archive_replays.py failed ({done}) for {copy}", file=sys.stderr)
+    record['bomb_metrics'] = bomb_windows(out)
     text = dump(record)
     (out / 'runs250.json').write_text(text)
     docs.mkdir(parents=True, exist_ok=True)
@@ -507,7 +510,26 @@ def markdown(records: list, names: list, top_rooms: int = 12) -> str:
                          f"frames, {k['cheated_bombs_keys']} bombs/keys and {k['cheated_rupees']} rupees cheated: "
                          f"{k['ending']})" for k in r['kept'])
         lines.append(f'- {label} kept: {kept}.')
+    for label, r in zip(labels, records):
+        if r.get('bomb_metrics'):
+            from triforce import bomb_metrics  # pylint: disable=import-outside-toplevel
+            lines += ['', f'#### {label}', '', bomb_metrics.markdown(r['bomb_metrics'], top_rooms)]
     return '\n'.join(lines) + '\n'
+
+
+def bomb_windows(out: Path, parallel: int = 4) -> dict:
+    """The owner's two bomb metrics over the folder's replays (``triforce/bomb_metrics.py``, a calculation over each
+    replay): every window to ``OUT_DIR/bomb_windows.jsonl``, the batch's summary (counts and rooms, not per run) for
+    the record."""
+    from concurrent.futures import ProcessPoolExecutor  # pylint: disable=import-outside-toplevel
+    from triforce import bomb_metrics  # pylint: disable=import-outside-toplevel
+    replays = sorted((out / 'replays').glob('*.tfreplay'))
+    with ProcessPoolExecutor(parallel) as pool:
+        windows = [w for ws in pool.map(bomb_metrics.score_replay, replays) for w in ws]
+    bomb_metrics.write_windows(out / 'bomb_windows.jsonl', windows)
+    summary = bomb_metrics.summarize(windows)
+    summary.pop('per_run')
+    return summary
 
 
 def analyze(paths: list, out=None, top_rooms: int = 12) -> str:
