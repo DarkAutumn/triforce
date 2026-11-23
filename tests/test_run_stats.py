@@ -65,7 +65,9 @@ def test_chain_rate_endings_groups_time_and_beams():
     assert s['triforces'] == {'3': 2}
     step2 = s['by_step']['2']
     assert (step2['visits'], step2['exits'], step2['deaths'], step2['family']) == (4, 2, 2, 'darknut')
-    assert step2['hearts_lost'] == {'n': 4, 'sum': 4.0, 'mean': 1.0, 'se': 0.5774}
+    assert step2['hearts_lost'] == {'n': 4, 'sum': 4.0, 'sq': 8.0, 'mean': 1.0, 'se': 0.5774}
+    assert step2['enter'] == {'n': 4, 'sum': 850, 'sq': 182500.0, 'mean': 212.5, 'se': 12.5, 'median': 200, 'p90': 250}
+    assert s['runs']['furthest'] == [3, 2, 3, 2] and s['time']['3']['sum'] == 650
     assert s['by_family']['zol']['visits'] == 10 and s['all']['keys_used']['mean'] == 1.0
     assert s['all']['frames']['median'] == 100 and s['all']['shots_hit']['sum'] == 14
     # Frames to entering each step, per run, aligned with the seeds; the end for the winners.
@@ -180,3 +182,26 @@ def test_ingest_registers_without_writing_beside(tmp_path, capsys):
     stats = rs.load('0-theirs')
     assert (stats['job']['agent'], stats['job']['task']) == ('Other', 'T')
     assert '0-theirs: chain' in capsys.readouterr().out
+
+
+def test_what_a_row_is():
+    command = ['triforce', 'eval-batch', 'x', '--chain',
+               'd3: --from 3_7cs_0 --checkpoint zol@d3first=/m/zol/r40-x-s401 --output /o/a.jsonl',
+               '--chain', 'd4: --from 4_71s_0 --output /o/b.jsonl']
+    assert rs.checkpoint_overrides(command, '/o/a.jsonl') == ['zol@d3first = r40-x-s401']
+    assert rs.checkpoint_overrides(command, '/o/b.jsonl') == []
+    assert rs.checkpoint_overrides(['eval-chain', '--checkpoint', 'zol=/m/zol/r1/ckpt.pt']) == ['zol = r1']
+    s = rs.chain_stats([won(0)], {**meta(1), 'provenance': {**meta(1)['provenance'],
+                                                             'start_from': 'd3first_3_7cs_0'}},
+                       STEPS, 4, segment='d3', overrides=['zol@d3first = r40-x-s401'])
+    assert s['description'] == 'd3 (3_7cs_0 to step 4), 1 runs, zol@d3first = r40-x-s401'
+
+
+def test_compare_summary_in_the_owners_order():
+    base = chain([won(i) if i % 2 else died(i) for i in range(40)], meta=meta(40))
+    arm = chain([won(i, slow=30) for i in range(40)], meta=meta(40))
+    lines = rs.summary_lines(base, arm, 20)
+    assert lines[0].startswith('- rate: 50.0% -> 100.0%, +50.0 ± 8.0 points (40 pairs): **better**')
+    assert lines[1].endswith('**better**') and 'hearts lost' in lines[1]
+    assert 'within noise' in rs.verdict(0.1, 0.06, True) and rs.verdict(-0.2, 0.06, False) == 'better'
+    assert lines[-1].startswith('- time to enter step 3 (3:0x5b)') and lines[-1].endswith('**worse**')
