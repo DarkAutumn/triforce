@@ -208,8 +208,21 @@ been retrained on the corrected order):
   supervised beam head (`beamshift`, gated to fights) makes Link fire when lined up (3:0x6b unfired 54% → 4-16%,
   far kills ×1.5) but three kills in four stay in melee: nothing makes him stand back to line a shot up. Two
   causes: wizzrobe and Patra rooms are entered ~7 hearts short (hits, not pickups: a hit head for them), and in
-  Dungeon 3 Link is full (0x6b 93% of visits) and walks to the monsters anyway. Next: PPO with the beam head inside
-  the acting network (zol and stalfos-keese-gel `@d3first`), a firing-line potential.
+  Dungeon 3 Link is full (0x6b 93% of visits) and walks to the monsters anyway.
+  **Not a verdict yet** (the owner, Nov 23: is this "a 'Retraining' problem, yet again", old networks "too stuck" in
+  their behaviour for new rewards or inputs to sway them?). Every arm so far was a continuation or a head on a
+  frozen policy, so none tested whether the beam terms can teach the behaviour. The lead's reading of the code:
+  three things hold the old behaviour in place. (1) A continuation's policy is nearly deterministic in the
+  situations it has mastered, and `--sil-coeff 0.1` re-imitates its own past wins (melee wins). (2) The supervised
+  beam head scores one decision, so it can fire a lined-up shot but can't plan the several steps back to a firing
+  line. (3) Fresh training wouldn't fix it either: in a fight the objective's targets are the monsters' own tiles
+  (`crates/zelda/src/objectives.rs`, the FIGHT branch's `enemy_tiles`). So the movement reward (PBRS) pays every
+  step closer to a monster, and the observation's target input points at it. The rewards teach melee even from
+  scratch. Next, as one experiment: at full hearts with the sword able to beam, a fight's targets become
+  firing-line tiles (aligned with a monster, at range, the line clear), a family-scoped switch so no other
+  family's inputs change. Arms, 3 seeds each, zol@d3first (0x6b) first: from scratch with/without the switch, and
+  a continuation with it. Measure far kills per sword kill, unfired lined-up shots, hearts lost, frames, and the
+  `d3` segment. After the replay target stream lands (it touches the same code).
 - [ ] **Rupees rewarded per pickup, not per counted rupee** (the owner, Nov 22, 0:0x0f: "the agent waits for all
   rupees to finish before leaving, probably because it gets reward per rupee incremented. What should ACTUALLY be
   awarded for getting rupees is the 'rupees to add' counter getting set once. It could be a larger reward for 1 vs
