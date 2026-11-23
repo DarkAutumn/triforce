@@ -9,7 +9,11 @@ numbers alone (``schema_problem``; AGENTS.md "Versioning"), never by the repo ve
 ``OLDEST_OBS_SCHEMA`` on whose layout (``model_config['obs_spec']``) is a subset of the current ``OBS_SPEC``: every
 key it reads still exists with the same shape and vocabulary.  The network reads only its own keys.
 
-The models root is, in order: the ``root`` argument, ``$TRIFORCE_MODELS_DIR``, ``<repo>/models``.
+The models root is, in order: the ``root`` argument (``--models-dir``); the team this process plays (``--team``,
+handed to child processes as ``$TRIFORCE_TEAM``: ``use_team``), as a read-only old-style folder of links into the
+shared store (``store.team_view``); ``$TRIFORCE_MODELS_DIR``; ``<repo>/models`` while it exists (the layout before
+the store, until the lead's reconciliation); the store's current team; ``<repo>/models``.  ``team_in_use`` says
+whether a store team plays (a training then allocates its run in the store, an evaluation files its result by job).
 
 How a run's model acts (better-play §6b) is ``<run dir>/act``: ``<mode> <sha1 of ckpt.pt>``, ``mode`` being an act
 mode spelling (docs/rust-actor.md "Act modes": ``sample``, the default when the file is absent, ``argmax``,
@@ -49,12 +53,13 @@ from typing import Optional
 
 import torch
 
-from . import __version__
+from . import __version__, paths, store
 from ._native import ACTION_SCHEMA_VERSION, OBS_SCHEMA_VERSION, OBS_SPEC, OLDEST_OBS_SCHEMA
 from ._native import act_mode as act_mode_spelling
 from ._native import routes as native_routes
 
 MODELS_DIR_ENV = 'TRIFORCE_MODELS_DIR'
+TEAM_ENV = store.TEAM_ENV
 CHECKPOINT_NAME = 'ckpt.pt'
 PROMOTED_NAME = 'promoted'
 LATE_NAME = 'late'          # late.<route>: the family's key on a route's steps from its own_models_until on (round 38)
@@ -145,12 +150,50 @@ def obs_schema_version() -> int:
 
 
 def models_root(root: Optional[str | os.PathLike] = None) -> Path:
-    """Resolves the models directory."""
+    """Resolves the models directory (the module docstring's order)."""
     if root is not None:
         return Path(root)
+    spec = os.environ.get(TEAM_ENV, '').strip()
+    if spec:
+        return store.team_view(spec)
     if os.environ.get(MODELS_DIR_ENV):
         return Path(os.environ[MODELS_DIR_ENV])
-    return Path(__file__).resolve().parent.parent / 'models'
+    legacy = paths.legacy_models_dir()
+    if not legacy.exists() and paths.store_exists() and paths.current_team():
+        return store.team_view(paths.CURRENT)
+    return legacy
+
+
+def use_team(spec: Optional[str], models_dir=None) -> Optional[dict]:
+    """``--team SPEC`` (``store.parse_team_spec``: ``NAME[+SLOT=RUN]...``): this process and its children play that
+    team (``$TRIFORCE_TEAM``); returns its effective team (``store.effective_team``), None without ``spec``.  Refused
+    beside ``--models-dir``; a team that does not resolve exits naming what is missing."""
+    if spec is None:
+        return None
+    if models_dir is not None:
+        raise SystemExit("--team and --models-dir name two teams: give one (--models-dir is the layout before the "
+                         "store)")
+    try:
+        store.team_view(spec)
+    except (store.StoreError, paths.MissingError) as error:
+        raise SystemExit(f"--team {spec}: {error}") from error
+    os.environ[TEAM_ENV] = spec
+    return store.view_team(spec)
+
+
+def team_in_use(root=None) -> Optional[dict]:
+    """The effective store team ``models_root(root)`` resolves to, None for a models folder (``--models-dir``,
+    ``$TRIFORCE_MODELS_DIR``, ``<repo>/models``)."""
+    if root is not None:
+        return None
+    spec = os.environ.get(TEAM_ENV, '').strip()
+    if spec:
+        return store.view_team(spec)
+    if os.environ.get(MODELS_DIR_ENV) or paths.legacy_models_dir().exists():
+        return None
+    if paths.store_exists() and paths.current_team():
+        return store.view_team(paths.CURRENT)
+    return None
 
 
 def new_run_id() -> str:

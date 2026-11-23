@@ -335,19 +335,31 @@ def main(argv=None):
                    'convert-model': ('triforce.convert', 'main'),
                    'select-checkpoint': ('triforce.select_checkpoint', 'main'),
                    'test-times': ('triforce.testlog', 'report_main')}
-    # `triforce [--models-dir DIR] train|run|play|evaluate|eval-batch|room-stats|convert-model|select-checkpoint|test-times ...`
-    # forwards the rest to the module's own CLI.
-    models_dir, rest = None, argv
+    # `triforce [--models-dir DIR | --team TEAM] train|run|play|evaluate|eval-batch|room-stats|convert-model|
+    # select-checkpoint|test-times ...` forwards the rest to the module's own CLI (``--team``: ``registry.use_team``).
+    models_dir, team, rest = None, None, argv
     while rest:
-        if rest[0] == '--models-dir' and len(rest) > 1:
-            models_dir, rest = rest[1], rest[2:]
+        if rest[0] in ('--models-dir', '--team') and len(rest) > 1:
+            if rest[0] == '--team':
+                team = rest[1]
+            else:
+                models_dir = rest[1]
+            rest = rest[2:]
         elif rest[0].startswith('--models-dir='):
             models_dir, rest = rest[0].split('=', 1)[1], rest[1:]
+        elif rest[0].startswith('--team='):
+            team, rest = rest[0].split('=', 1)[1], rest[1:]
         else:
             break
     if rest and rest[0] == 'job':       # the job queue: before anything that needs the native module or torch
         from .job import main as job_main  # pylint: disable=import-outside-toplevel
         return job_main(rest[1:])
+    if rest and rest[0] == 'store':     # the shared store's listings (triforce.store_cli)
+        from .store_cli import main as store_main  # pylint: disable=import-outside-toplevel
+        return store_main(rest[1:])
+    if team is not None:
+        from .registry import use_team  # pylint: disable=import-outside-toplevel
+        use_team(team, models_dir)
     if rest and rest[0] in passthrough:
         import importlib  # pylint: disable=import-outside-toplevel
         module, entry = passthrough[rest[0]]
@@ -361,8 +373,13 @@ def main(argv=None):
     from .registry import ACT_HELP, act_argument  # pylint: disable=import-outside-toplevel
 
     parser = argparse.ArgumentParser(prog='triforce')
-    parser.add_argument('--models-dir', default=None)
+    parser.add_argument('--models-dir', default=None, help="an old-style models folder (the layout before the store)")
+    parser.add_argument('--team', default=None,
+                        help="the store's team to play: NAME, current, or NAME+SLOT=RUN... (an experiment's "
+                             "overrides; SLOT: family, family@route or family@route:late)")
     sub = parser.add_subparsers(dest='command', required=True)
+    sub.add_parser('store', help="where the shared things are and what the shared store holds (triforce store "
+                                 "paths|data|runs|teams|summaries|outputs|log|view)")
     sub.add_parser('train', help="python -m triforce.train ...")
     sub.add_parser('run', help="python -m triforce.run ...")
     sub.add_parser('play', help="python -m triforce.play ...")
