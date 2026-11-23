@@ -231,6 +231,11 @@ def test_the_title_shows_the_source_its_stock_and_the_simulations():
     assert [sound(True, 50.0, None), sound(True, 0.0, None)] == ['sound muted (not at 60.1 fps)'] * 2
     assert [sound(False, nes, None), sound(False, nes, 'no device')] == ['sound off'] * 2
     assert sound(True, nes, 'no sound output device') == 'no sound: no sound output device'
+    # Parts of the sound switched off (keys m, e, h) are named; muted or off says nothing of them.
+    Mix = play_grid.Mix
+    assert sound(True, nes, None, Mix(music=False)) == 'sound on (no music)'
+    assert sound(True, nes, None, Mix(effects=False, heart_beep=False)) == 'sound on (no effects, no beep)'
+    assert sound(False, nes, None, Mix(music=False)) == 'sound off'
 
     # The clips switch (key c), and the runs of each queue played without clips.
     clipped = {**stats, 'clips': False, 'live': False, 'feed': {**FEED, 'without_clips': {
@@ -257,6 +262,7 @@ class FakeGrid:
         self.stops = self.polls = self.skips = 0
         self.selected = []
         self.heard = []         # every set_sound call
+        self.mixes = []         # every set_mix call
         self.sound_error = None
         self.played = [0] * cells
         self.counters = [0] * cells     # frames shown (published) per cell
@@ -303,6 +309,9 @@ class FakeGrid:
 
     def set_sound(self, cell):
         self.heard.append(cell)
+
+    def set_mix(self, mix):
+        self.mixes.append(mix)
 
     def poll_status(self):
         self.polls += 1
@@ -594,6 +603,20 @@ def test_one_cell_is_heard_s_toggles_it_a_click_moves_it_and_it_is_muted_off_the
     lone = FakeGrid(cells=1, messages=[])
     window = play_view.Window(lone, cols=1, rows=1, scale=1)
     assert lone.heard == [0] and not window.views[0].heard and window.windowTitle().endswith('— sound on')
+    window.shutdown()
+
+
+def test_m_e_h_switch_music_effects_and_the_beep_at_once(qapp):  # pylint: disable=redefined-outer-name, unused-argument
+    keys, Mix = Qt.Key, play_grid.Mix
+    fake = FakeGrid(cells=2, messages=[])
+    window = play_view.Window(fake, cols=2, rows=1, scale=1, mix=Mix(heart_beep=False))
+    assert fake.mixes[-1] == Mix(heart_beep=False) and window.windowTitle().endswith('— sound on (no beep)')
+    assert window.handle_key(keys.Key_M) and fake.mixes[-1] == Mix(music=False, heart_beep=False)
+    assert window.windowTitle().endswith('— sound on (no music, no beep)')
+    assert window.handle_key(keys.Key_H) and window.handle_key(keys.Key_E)
+    assert fake.mixes[-1] == Mix(music=False, effects=False) and fake.heard[-1] == 0
+    assert window.handle_key(keys.Key_M) and window.handle_key(keys.Key_E) and fake.mixes[-1] == Mix()
+    assert window.windowTitle().endswith('— sound on')
     window.shutdown()
 
 

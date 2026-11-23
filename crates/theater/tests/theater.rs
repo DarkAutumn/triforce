@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use replay::{Context, ENDING_DEATH, ENDING_STUCK, ENDING_WIN, Ending, Event, Player, RecordOptions, Recorder, Replay, Source};
 use theater::screen::FRAME_BYTES;
 use theater::{Entry, Feed, Finished, Producer, Queue, Queues, Resolver, Ring, Screen, Status, overlay};
+use zcore::tracks::Mix;
 use zcore::{Rom, ZCore, state_file};
 
 fn rom() -> Option<Arc<Rom>> {
@@ -264,6 +265,14 @@ fn one_cell_is_heard_and_its_sound_moves_with_set_sound() {
     screen.frame(1, 0, &mut with).unwrap();
     screen.frame(0, 0, &mut without).unwrap();
     assert!(with == without);
+
+    // The music off: the title has nothing else, so the heard cell plays silence (as many samples).
+    screen.set_mix(Mix { music: false, ..Mix::ALL });
+    screen.play(1, Arc::from(data.clone()), 0, false);
+    wait_for("cell 1 without music", || screen.state(1).status == Status::Finished);
+    let quiet = drain(&ring);
+    assert!(quiet.len() >= ring.target() && quiet.iter().all(|x| x.abs() < 1e-3), "{}", quiet.len());
+    screen.set_mix(Mix::ALL);
 
     // Sound off: the cell plays on in silence.
     screen.set_sound(None);
