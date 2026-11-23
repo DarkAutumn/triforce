@@ -25,10 +25,11 @@ decides, in order": the segment's rate first; the rest only between arms within 
   frame below it; per room the share of its frames with beams;
 - where the time goes in ``--rooms``: frames walking (Link's corner moved), swinging (the sword slot busy), waiting
   for a shot (a shot flying or spreading, Link still and not swinging: one shot at a time) and standing (none);
-- where the hits land in ``--rooms`` (Link's hearts fall): the nearest live monster in line with Link (its corner
-  within 12 pixels across a row or column) or not, Link standing still the 8 frames before, a shot of his flying,
-  the distance; and the frames steered to firing lines (the replay's TARGETS: `firing-line` on the observation's
-  wavefront) while a live monster stood within melee reach (32 pixels): lines chosen away from a monster at hand.
+- where the hits land in ``--rooms`` (Link's hearts fall): whether the monster that touched him (the nearest live
+  one) was in his row or column (corners within 12 pixels) and out of melee reach 16 frames before (it came down the
+  line), Link standing still the 16 frames before, a shot of his flying, the distance; and the frames steered to
+  firing lines (the replay's TARGETS: `firing-line` on the observation's wavefront) while a live monster stood within
+  melee reach (32 pixels): lines chosen away from a monster at hand.
 """
 
 from __future__ import annotations
@@ -40,7 +41,7 @@ import multiprocessing
 import math
 import statistics
 import sys
-from collections import Counter, defaultdict
+from collections import Counter, defaultdict, deque
 from pathlib import Path
 
 FPS = 60.0988
@@ -256,6 +257,7 @@ def analyse_replay(path: Path, rooms: set, states_dir) -> dict:
     prev = None
     flying = None           # (frame fired, room) of the shot in flight
     still = 0
+    history = deque(maxlen=16)   # (Link x, y, the monster slots' corners) of the last 16 play frames
     si, lines_on = 0, False
     frame = 0
     while player.step(1, False):
@@ -266,6 +268,7 @@ def analyse_replay(path: Path, rooms: set, states_dir) -> dict:
             si += 1
         if ram[MODE] != 5:
             prev = None
+            history.clear()
             continue
         room = f"{int(ram[LEVEL])}:0x{int(ram[ROOM]):02x}"
         full = beam_health(ram)
@@ -318,10 +321,17 @@ def analyse_replay(path: Path, rooms: set, states_dir) -> dict:
                     if near is not None and near <= MELEE_REACH:
                         out['lines_near'][room] += 1
                 if health(ram) < health(prev) and mons:
-                    _, mx, my = min(mons, key=lambda m: math.hypot(m[1] - lx, m[2] - ly))
-                    out['hits'].append({'room': room, 'aligned': abs(mx - lx) < 12 or abs(my - ly) < 12,
-                                        'still': still >= 8, 'shot': shot == 0x10, 'lines': lines_on,
+                    slot, mx, my = min(mons, key=lambda m: math.hypot(m[1] - lx, m[2] - ly))
+                    # 16 frames before: was the monster that touched him in line with him, out of melee reach?
+                    down_line = False
+                    if len(history) == history.maxlen:
+                        olx, oly, old = history[0]
+                        ox, oy = old[slot - 1]
+                        down_line = (abs(ox - olx) < 12 or abs(oy - oly) < 12) and math.hypot(ox - olx, oy - oly) > MELEE_REACH
+                    out['hits'].append({'room': room, 'aligned': down_line,
+                                        'still': still >= 16, 'shot': shot == 0x10, 'lines': lines_on,
                                         'distance': math.hypot(mx - lx, my - ly)})
+        history.append((lx, ly, tuple((int(ram[OBJ_X + s]), int(ram[OBJ_Y + s])) for s in range(1, 12))))
         prev = ram.copy()
     return out
 
@@ -410,7 +420,7 @@ def report(result: dict, rooms: list) -> None:
             print(f"| {room} | {l} | {t['walk'] / n:.0f} | {t['swing'] / n:.0f} | {t['shot'] / n:.0f} | "
                   f"{t['stand'] / n:.0f} | {a['lines'][room] / n:.0f} | {a['lines_near'][room] / n:.0f} |")
     print('\n### Where the hits land (replays)\n')
-    print('| room | arm | hits | nearest monster in line | Link still 8+ frames | his shot flying | steered to lines | '
+    print('| room | arm | hits | toucher in line out of reach 16 frames before | Link still 16+ frames | his shot flying | steered to lines | '
           'mean distance |')
     print('|---|---|---:|---:|---:|---:|---:|---:|')
     for room in rooms:
