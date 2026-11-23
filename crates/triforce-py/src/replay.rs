@@ -13,6 +13,7 @@ use pyo3::types::{PyBytes, PyDict, PyList};
 use serde_json::Value;
 use std::path::PathBuf;
 use zcore::state_file;
+use zcore::tracks::Mix;
 
 fn replay_err(e: ::replay::ReplayError) -> PyErr {
     ReplayError::new_err(e.to_string())
@@ -444,19 +445,38 @@ impl PyReplayPlayer {
     /// Turns sound on at `rate` samples per second, or off (None).  It starts from whatever the game is
     /// playing at that moment; every frame stepped from now on adds its samples to what `audio()` returns.
     /// A `seek` is silent: the sound picks up where it lands.  Playback is the same with or without sound.
-    #[pyo3(signature = (rate=None))]
-    fn set_sound(&self, rate: Option<f64>) -> PyResult<()> {
+    /// `split`: `audio()` gives music and sound effects as two tracks (`set_mix` says which parts are heard).
+    #[pyo3(signature = (rate=None, split=false))]
+    fn set_sound(&self, rate: Option<f64>, split: bool) -> PyResult<()> {
         if rate.is_some_and(|rate| !(8000.0..=384_000.0).contains(&rate)) {
             return Err(pyo3::exceptions::PyValueError::new_err("rate must be 8000 to 384000 samples per second"));
         }
-        self.player.lock().set_sound(rate);
+        let mut player = self.player.lock();
+        player.set_split(split, false);
+        player.set_sound(rate);
         Ok(())
     }
 
+    /// Which parts of the sound are heard from the next frame on: the music (songs), the sound effects (tunes,
+    /// noise effects, samples, the item fanfare and the end-of-level tune) and, among the effects, the
+    /// low-hearts beep.  All on is the game's own sound.  Best set before `set_sound`.
+    #[pyo3(signature = (music=true, effects=true, heart_beep=true))]
+    fn set_mix(&self, music: bool, effects: bool, heart_beep: bool) {
+        self.player.lock().set_mix(Mix { music, effects, beep: heart_beep });
+    }
+
     /// The sound of the frames stepped since the last call (or since `set_sound`): a float32 array of mono
-    /// samples in -1..1.  A frame is 1/60.0988 s: about 798.7 samples at 48 kHz.
-    fn audio<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f32>> {
-        PyArray::from_vec(py, std::mem::take(self.player.lock().audio()))
+    /// samples in -1..1, or with `set_sound(split=True)` of shape (samples, 2): music, sound effects.  A frame
+    /// is 1/60.0988 s: about 798.7 samples at 48 kHz.
+    fn audio<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let mut player = self.player.lock();
+        let samples = std::mem::take(player.audio());
+        let pairs = samples.len() / 2;
+        let array = PyArray::from_vec(py, samples);
+        if player.split() {
+            return Ok(array.reshape([pairs, 2])?.into_any());
+        }
+        Ok(array.into_any())
     }
 
     /// The machine as a TFZSTATE file's bytes.
