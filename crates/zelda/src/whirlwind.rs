@@ -132,7 +132,7 @@ pub enum Warp {
     /// The whirlwind macro (round 40, routes.yaml `macros: {whirlwinds: [...]}`; decisions 2026-11-23 "The fresh
     /// generation's design calls"): RECORDER, offered wherever [`macro_facing`] finds the sequence playable from where
     /// Link stands, turns him to that facing, plays every play the index needs and waits for the pickup
-    /// (`Executor::run_whirlwind`), whatever the monsters do.
+    /// (`Executor::run_warp`), whatever the monsters do.
     Whirlwind { level: u8 },
 }
 

@@ -17,8 +17,9 @@ from pathlib import Path
 from typing import Optional
 
 from . import registry
+from .paths import BACKUP_DIR
 
-BACKUP_RUNS = Path('/backup/triforce/models/runs')
+BACKUP_RUNS = BACKUP_DIR / 'models' / 'runs'
 POINTERS = (registry.PROMOTED_NAME, f'{registry.PROMOTED_NAME}.', f'{registry.LATE_NAME}.')
 
 
