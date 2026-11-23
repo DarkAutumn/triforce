@@ -1,9 +1,9 @@
 # Round 13: reset onto d2first, baseline retrain, the Lynel room
 
-Lee, Nov 8: a complete reset onto the d2-first route (`docs/routes/d2first.md`), then a full retrain of every
-family from scratch **with the current training setup** to set a new baseline (team + chains); Lee's new training
+The owner, Nov 8: a complete reset onto the d2-first route (`docs/routes/d2first.md`), then a full retrain of every
+family from scratch **with the current training setup** to set a new baseline (team + chains); the owner's new training
 ideas come after that baseline. The Lynel room 0:0x0a is its own experimentation area, tackled like Dodongo.
-Lee is away for the night: no questions until the retrain is done.
+The owner is away for the night: no questions until the retrain is done.
 
 ## Summary
 
@@ -12,7 +12,7 @@ Lee is away for the night: no questions until the retrain is done.
 - **Baseline team** (r47, every family from scratch, current setup; boss-dodongo r49): one-room 85–100% (§6).
 - **Full d2first route: 25/120 (21%)** start to the D1 triforce (§7). Losses: D2's Goriya/Moldorm rooms and
   health attrition after D2; D1 from a full-health entry is 96%.
-- **Lynel room:** three spawns, Lee's walk-through trick confirmed in the ASM; ~98% one-room for every spawn,
+- **Lynel room:** three spawns, the owner's walk-through trick confirmed in the ASM; ~98% one-room for every spawn,
   no pirouette needed, 3 losses in 65 chain crossings (§2, §4, §5).
 - Bug found and fixed: boss-dodongo still ended on the heart (milestone1's end) and stalled in chains (§6, §7).
 
@@ -35,7 +35,7 @@ boss-aquamentus 3/3, goriya 12/12 (2 at 12000 iterations), moldorm 3/3 (12000 it
   corridor 23%, (80, 93) on the strip near the cave 22%.
 - Blue Lynel: 6 HP units, the wood sword takes 1 per hit (6 hits; white sword 3); **contact costs 2 hearts**; sword
   shots (type $57, not small-shield blockable); moves like a Goriya (`asm:Lynel_Update` → `asm:Goriya_Update`).
-- **Walk-through (Lee's trick, confirmed):** after a sword hit his invincibility timer runs ~31 frames, and while
+- **Walk-through (the owner's trick, confirmed):** after a sword hit his invincibility timer runs ~31 frames, and while
   it runs `asm:Collision_CheckMonsterVsWeaponsAndLink` returns before `asm:Link_CheckMonsterTouch`, so Link overlaps
   him unharmed (probe: 8–30 frames after the swing no damage; at 2 and 36 frames −2 hearts). Stunned monsters are
   skipped too.
@@ -82,7 +82,7 @@ Eval **98.4%**, health change −0.28 (r48 with the curriculum, 4M steps: 98.0%,
 does; the curriculum only got there in half the steps. Neither needed the pirouette, and with retreat a soft
 failure the model almost never leaves. The baseline run stays the team's ow-lynel (it is the baseline).
 
-Conclusion for now (Lee's goal: get through the room, however): reached, ~98% one-room for every spawn. Left
+Conclusion for now (the owner's goal: get through the room, however): reached, ~98% one-room for every spawn. Left
 open: deaths at full health (a few per 100 on the way back with the white sword), whether a neutral retreat for
 the near-cave spawn only would help (95% there), and how the room does in chains, where Link arrives with whatever
 health 0x1a left him.
@@ -148,6 +148,6 @@ way to D2 (8: 0x4c, 0x5b), the post-D2 overworld (11: 0x1a, 0x0a, 0x38, ...), D1
 each, ...). Per-room table: `target/r47/rooms-full-r49.txt`. Dodongo, the 0x2c cave, the triforce rooms and the
 white-sword cave lose almost nothing; the Lynel room loses 3 of 65.
 
-**Baseline for Lee's training ideas:** full route 21%; the losses are D2's Goriya and Moldorm rooms (one-room
+**Baseline for the owner's training ideas:** full route 21%; the losses are D2's Goriya and Moldorm rooms (one-room
 91% and 85%, the weakest families) and health attrition from 0x2c to D1 (no healing on the way; D1 at full health
 is 96%).

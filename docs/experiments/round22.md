@@ -331,7 +331,7 @@ dungeons.
 
 ## 5. The BOMB mask for wall families
 
-Lee: "Try to fix the 0x21 bombs thing, that's pretty bad" (round 21: 3.8 bombs per 4:0x21 visit, one needed).
+The owner: "Try to fix the 0x21 bombs thing, that's pretty bad" (round 21: 3.8 bombs per 4:0x21 visit, one needed).
 Built on `r22-route` (`1d1d787`; decisions 2026-11-13 "Round 22 route").
 
 **The rule:** in a `requires_bombs` room, a `required` family (ow-tektite, ow-octorok, trap-room,

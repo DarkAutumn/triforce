@@ -486,8 +486,6 @@ def build_parser() -> argparse.ArgumentParser:
     add_job_arguments(parser)
     parser.add_argument('--logs-dir', default=None)
     parser.add_argument('--models-dir', default=None)
-    parser.add_argument('--allow-incompatible-models', action='store_true',
-                        help="load models whose version differs from this code's in its first three numbers")
     return parser
 
 
@@ -553,10 +551,8 @@ def main(argv=None) -> int:
     """``triforce select-checkpoint``: 0 done, 1 a chain failed, 2 a selection that can't run, 130 stopped."""
     # pylint: disable=import-outside-toplevel
     from .events import write_json_atomic
-    from .registry import set_allow_incompatible
     argv = list(sys.argv[1:] if argv is None else argv)
     args = build_parser().parse_args(argv)
-    set_allow_incompatible(args.allow_incompatible_models)
     try:
         plan, pool = build_plan(args)
     except BatchError as error:

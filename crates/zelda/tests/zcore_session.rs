@@ -66,7 +66,7 @@ fn zcore_snapshot_restore_is_exact() {
 
 /// A sword stab into a Darknut's face plays the shield clink ($604 bit 0) and does no damage; it must not count as
 /// a projectile block (blocks need a blockable shot in flight with its bounce signature) nor as a hit. A stab in
-/// the back hurts him. (Lee, Nov 9: no false-positive blocks in Darknut rooms.)
+/// the back hurts him. (The owner, Nov 9: no false-positive blocks in Darknut rooms.)
 #[test]
 fn darknut_front_clink_is_not_a_block_or_a_hit() {
     let Some(nes) = open_core() else { return };

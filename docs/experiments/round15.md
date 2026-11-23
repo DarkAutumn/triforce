@@ -1,6 +1,6 @@
 # Round 15: the overworld, cheated items and Dungeon 3
 
-Lee, Nov 9 (while away): after the bow, map the whole overworld (with the two maze rooms), map Dungeon 3, route on
+The owner, Nov 9 (while away): after the bow, map the whole overworld (with the two maze rooms), map Dungeon 3, route on
 to D3 after D1 and try to train it; formalize cheated items (bombs, keys, rupees); research kill streaks and forced
 drops (for later); check Darknut shield clinks aren't counted as blocks.
 
@@ -9,7 +9,7 @@ drops (for later); check Darknut shield clinks aren't counted as blocks.
 - **Overworld and D3 mapped** (`9b8376a`, merged `03e89c3`): all 128 overworld rooms in game.yaml (exits verified
   by walking every edge, enemies from the ROM, 71 cave entrances, dungeon entrances L1–L9), map
   `docs/routes/overworld-map.png`; mazes in code and yaml (0x1b: four Ns reach 0x0b, not five; 0x61: N W S W
-  reaches 0x60); D3's 18 rooms + raft cellar, `docs/routes/d3.md`/`d3-map.png`. Lee's D3 directions match the real
+  reaches 0x60); D3's 18 rooms + raft cellar, `docs/routes/d3.md`/`d3-map.png`. The owner's D3 directions match the real
   layout exactly.
 - **Cheated items** (`999aa5a`, merged `10f8186`): one ledger (`zelda::cheats`) for bombs, keys and rupees.
 - **Kill streaks / forced drops** researched in the ASM and written into backlog.md (implementation later).
@@ -24,7 +24,7 @@ drops (for later); check Darknut shield clinks aren't counted as blocks.
   stairs) 22, Manhandla 15, 0x5b 9. Link loses ~1 heart per 0x59 visit and reaches 0x69 with ~2.3 of 6 hearts.
   Continuing darknut and boss-manhandla (r55).
 
-## 1. Darknut clinks (Lee's question)
+## 1. Darknut clinks (the owner's question)
 
 A block is counted only when a blockable enemy shot (types $53–$5C) is in flight before the frame and bounces with
 its signature next to Link, with the parry sound requested, no health lost and Link facing it
@@ -39,6 +39,6 @@ blocks / 0 hits; a back stab takes HP $40 → $20 and counts a hit. Darknut trai
 
 ## 3. Stopped
 
-The r55 continuation of darknut and boss-manhandla (8M more steps each) was cancelled by Lee (Nov 9): the 8M-step
-r54 models are the baseline; Lee has new ideas for improving training to discuss first. The promoted team is r54's
+The r55 continuation of darknut and boss-manhandla (8M more steps each) was cancelled by the owner (Nov 9): the 8M-step
+r54 models are the baseline; the owner has new ideas for improving training to discuss first. The promoted team is r54's
 (plus earlier rounds for unchanged families).

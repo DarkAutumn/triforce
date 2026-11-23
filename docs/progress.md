@@ -5,7 +5,7 @@ stand" and the newest `docs/experiments/round*.md`.
 
 Status by design phase (§11). Numbers are from this machine (10 cores / 20 threads, RTX 4090).
 
-## Phase 0 — Survey: docs written, awaiting Lee's review
+## Phase 0 — Survey: docs written, awaiting the owner's review
 
 - `docs/ram-catalog.md`: every RAM address v1 used plus the disassembly's room state, with bit-level decoding
   of room flags, door types, room items, secret triggers and push blocks.
@@ -13,8 +13,8 @@ Status by design phase (§11). Numbers are from this machine (10 cores / 20 thre
   (decoded from the ROM with the disassembly's own tables); three v1 errors in overworld room 0x3c were fixed.
 - `docs/specialists.md`: 9 trainable families plus a `boss-dodongo` tag. Differences from the §3.1 hypothesis
   are in `docs/decisions.md`.
-- The design asks for Lee's review before Phase 2. Phase 1 and the Phase 2 plumbing were built anyway, at
-  Lee's request for a first working version; nothing has been trained to a target yet.
+- The design asks for the owner's review before Phase 2. Phase 1 and the Phase 2 plumbing were built anyway, at
+  the owner's request for a first working version; nothing has been trained to a target yet.
 
 ## Phase 1 — Env: done, except the throughput target
 

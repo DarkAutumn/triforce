@@ -380,13 +380,13 @@ def main():
     parser.add_argument('--part', choices=sorted(PARTS), default='first')
     parser.add_argument('--tag', default=None, help="the chains' tag (default the part's: r32base, r32base2)")
     parser.add_argument('--chains-dir', default='target/r56-chains')
-    parser.add_argument('--d2first-chains', default='/home/leculver/git/triforce/target/r56-chains/r29land-1k')
+    parser.add_argument('--d2first-chains', default='target/r56-chains/r29land-1k')
     parser.add_argument('--d2first-steps', default='target/r32-base/d2first-main-steps.json')
     parser.add_argument('--rooms', default='target/r32-base/rooms', help="single-room results (part first only)")
     parser.add_argument('--models', default='models')
     parser.add_argument('--golden', action='store_true', help="only the golden path's segments")
     parser.add_argument('--d2first-ix-chains',
-                        default='/home/leculver/git/triforce-r31-steps/target/r31-chains/r31-1k',
+                        default='../triforce-r31-steps/target/r31-chains/r31-1k',
                         help="d2first's Dungeon 6, 8, 9 chains after phase IX (part rest; PREFIX-d6.jsonl ...)")
     parser.add_argument('--d2first-ix-steps', default='tests/fixtures/d2first_steps.json',
                         help="d2first's steps as the phase IX chains numbered them")

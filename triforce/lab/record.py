@@ -6,7 +6,9 @@ Plays rollouts like lab training (``collect.MultiCollector``: each family's pool
 the teachers acting (``--actor teacher``) or a given student (``--actor student --student CKPT``), and writes one
 ``DIR/shard-<n>.npz`` per rollout: every observation key, ``action_mask``, ``action`` (the one taken),
 ``teacher_joint`` (the family teacher's joint log-probs, ``[n, 352]``, ``-inf`` illegal), ``teacher_value``,
-``family`` (index into ``families`` in ``DIR/dataset.json``), ``health_lost`` and ``hits`` (the action taken's).
+``family`` (index into ``families`` in ``DIR/dataset.json``), ``health_lost``, ``hits`` and ``blocked`` (the action
+taken's) and ``beam_lined`` (the directions a sword shot fired from the decision's state would meet a monster out of
+melee range, ``Direction`` bits: round 39's beam labels, from ``zelda::beams``' projection).
 With ``--try-others K:P`` (as lab training's: the look-ahead tries K other candidates on a share P of the decisions,
 the play unchanged) also ``tried_actions`` ``[n, K, 3]`` and ``tried_lost`` ``[n, K]`` (1 lost health, 0 not, -1
 untried): hit labels on the actor's own states, recorded with no update. ``--state-route ROUTE`` keeps every family
@@ -54,6 +56,8 @@ def parse_args(argv=None):
 def main(argv=None) -> Path:
     args = parse_args(argv)
     begin_job(args)
+    from ..nets.serve import learner_process  # pylint: disable=import-outside-toplevel
+    learner_process()           # its labelling uses the GPU beside the actors' server: no CUDA graphs there
     if args.actor == 'student' and not args.student:
         raise SystemExit("--actor student needs --student CKPT")
     out = Path(args.out)
@@ -87,7 +91,7 @@ def main(argv=None) -> Path:
                               teacher_joint=batch['teacher_joint'].numpy(),
                               teacher_value=batch['teacher_value'].numpy(), family=batch['family'].numpy(),
                               health_lost=batch['health_lost'].numpy(), hits=batch['hits'].numpy(),
-                              blocked=batch['blocked'].numpy())
+                              blocked=batch['blocked'].numpy(), beam_lined=batch['beam_lined'].numpy())
                 if 'tried_lost' in batch:
                     arrays.update(tried_actions=batch['tried_actions'].numpy(), tried_lost=batch['tried_lost'].numpy(),
                                   tried_blocked=batch['tried_blocked'].numpy())

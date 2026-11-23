@@ -628,7 +628,7 @@ impl GameplayCritic {
 
     /// Bombs: placing one costs (`penalty-bomb-used`: a bomb that hits nothing is a loss), each hit the look-ahead
     /// credits to the placing step pays (`reward-bomb-hit`), and a 10th damage-free kill made with a bomb, which
-    /// arms a forced drop of 4 bombs, pays `reward-armed-bomb-drop` on the step it happens (Lee, Nov 11; picking
+    /// arms a forced drop of 4 bombs, pays `reward-armed-bomb-drop` on the step it happens (the owner, Nov 11; picking
     /// the bombs up is `reward-gained-bombs`).
     fn critique_item_usage(&mut self, c: &Critique, rewards: &mut StepRewards) {
         let change = c.change;

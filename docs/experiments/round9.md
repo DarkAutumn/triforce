@@ -335,5 +335,5 @@ experiment in `todo.md` (larger chain samples on the new states, then fine-tune 
 
 ## Status
 
-Plan step 18 complete except Lee's sign-off items: no quirk was kept; the one open choice is the power-on RAM
+Plan step 18 complete except the owner's sign-off items: no quirk was kept; the one open choice is the power-on RAM
 fill ($FF, FCEUmm's; 12 test ROMs pass only with $00) — see `docs/decisions.md`.

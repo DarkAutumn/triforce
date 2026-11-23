@@ -1,6 +1,6 @@
 # All Rust? Python's role once inference and search move to Rust (Nov 9)
 
-Question (Lee): if inference moves to the Rust side (a search, AlphaZero-style, makes several inferences per
+Question (the owner): if inference moves to the Rust side (a search, AlphaZero-style, makes several inferences per
 real step), training becomes "PPO in Python → push the model to Rust → run N steps → push obs/returns back". What
 is Python still worth then? Rewrite PPO and the GUIs in Rust too, or keep Python for the quick scripts (mapper,
 one-off investigations)?
@@ -116,7 +116,7 @@ compute is GPU kernels.
   state not re-checked today.] ~1.9k lines of learner plus ~1k of eval/registry to port and re-validate against
   the current training curves.
 - **Checkpoints.** 230 torch-pickle checkpoints (weights + optimizer). Warm starts (`--load`, `warm_start`,
-  `widen_policy`) are central to Lee's workflow; all of them need conversion (safetensors) or retraining.
+  `widen_policy`) are central to the owner's workflow; all of them need conversion (safetensors) or retraining.
 - **The next research is in the learner.** Expert iteration (backlog "Idea 3"), branch:K advantages ("Idea 2"),
   search-policy distillation and value targets are loss-function experiments. Torch is the fastest place to
   iterate on those. A Rust learner slows exactly the part about to change most.
@@ -127,7 +127,7 @@ compute is GPU kernels.
   (`crates/env/tests/common`, `crates/pool/tests/zelda.rs`, `crates/triforce-py/src/context.rs`). The
   `/tmp` bench above needed a hand-rolled `StateStore`, the ROM loader and a missed `zelda/zcore` feature before it
   compiled. Python's `Game`/`Env` plus numpy/PIL/json does these in a few lines. Opus writes the Rust fine,
-  but each investigation takes more code, more compile round trips and more tokens, and is harder for Lee to read
+  but each investigation takes more code, more compile round trips and more tokens, and is harder for the owner to read
   and tweak. At ~12 investigations a day that adds up.
 - **4.5k lines of Python tests** to port or drop.
 

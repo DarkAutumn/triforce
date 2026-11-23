@@ -34,7 +34,7 @@ lost is not below every earlier confirmed check's by more than max(D, 2 SE); wit
 (default 0.05; 0 = no bombs rule) the bomb value is not above every earlier one's by more than max(B, 2 SE).
 Confirmed checks are at least ``--stop-check-gap`` iterations apart (default 50), so the first one never stops
 (round 18: a family that reached 99% success after 4 minutes was still losing hearts it went on to stop losing;
-round 19, Lee: bomb use keeps improving after success and hearts look done).
+round 19, the owner: bomb use keeps improving after success and hearts look done).
 Only episodes that started at a room entry count, and the balance is over the seed start states only: episodes of
 harvested start states (chain handoffs) are reported as ``harvested/*`` and never move it; ``--curriculum`` episodes
 are reported separately as ``curriculum/*``.  ``in_flight/*``, ``success_rate_pessimistic`` and ``started/*``
@@ -354,9 +354,6 @@ def parse_args(argv=None):
                              "default: a new folder under --logs-dir with training.json and <specialist>.jsonl")
     parser.add_argument('--logs-dir', default=None, help=f"default ${LOGS_DIR_ENV} or <repo>/logs")
     add_job_arguments(parser)
-    parser.add_argument('--allow-incompatible-models', action='store_true',
-                        help="--load / warm-start from a model whose version differs from this code's in its first "
-                             "three numbers")
     return parser.parse_args(argv)
 
 
@@ -414,7 +411,6 @@ def initial_model(args, config: SpecialistConfig, root):
 
     # obs.target wants the full layout: an older checkpoint without `target` is widened (zero-initialised inputs).
     wanted = obs_spec_from_space(observation_space()) if config.obs.target else None
-    registry.require_compatible(source)
     network, checkpoint = registry.load_model(source, obs_spec=wanted)
     added = sorted(set(network.config.obs_spec) - set(checkpoint['model_config']['obs_spec']))
     if added:
@@ -513,8 +509,9 @@ def curriculum_spec(args, config, out_dir: Path,
 def main(argv=None) -> Path:
     """Runs training; returns the run directory."""
     argv = sys.argv[1:] if argv is None else list(argv)
+    from .nets.serve import learner_process  # pylint: disable=import-outside-toplevel
+    learner_process()           # its learner uses the GPU beside the rollouts' server: no CUDA graphs there
     args = parse_args(argv)
-    registry.set_allow_incompatible(args.allow_incompatible_models)
     validate_args(args)
     if args.seed is not None:
         torch.manual_seed(args.seed)

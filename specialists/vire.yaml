@@ -6,7 +6,7 @@ reward_profile: default
 reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20}}   # dungeon family (round 10 §8): dropped items are shaping targets; round 25: hearts priced by their worth to the run
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, chain_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chains arrive with partial hearts (round 5); round 33: half the resets into a profiled room (Dungeon 6's 0x39, 0x2d) take the route's hearts from triforce/chain_hp.json
-items: {bombs: free}                       # Lee, Nov 12: Vires may be bombed (one killed outright can drop bombs), above D4's reserve of 2
+items: {bombs: free}                       # The owner, Nov 12: Vires may be bombed (one killed outright can drop bombs), above D4's reserve of 2
 clips: {enabled: true, off_share: 0}       # round 21: the block clip (0x50's diagonal, 0x03) and the ladder clip; the owner, Nov 18: no episode with CLIP masked
 harvested_fraction: 0.2                   # round 33: chain handoffs at the route's hearts (6:0x39 and 0x2d after phase IX's 0x29 key and `bombs: tenth`), triforce/states/harvested/vire, not in git (docs/experiments/round33.md); with the seed states Dungeon 6 is about 36% of the resets (D4's eight rooms keep the rest)
 curriculum: {enabled: true}             # trajectories/vire (Go-Explore paths per start state)
@@ -21,7 +21,7 @@ notes: >-
   land path winds from the W door to the E shutter (five Vires: kill them all to open it on the way to the Breakfast
   Room; back from E, N through the locked door onto 0x21's island, round 21's shortcut); 0x20, a water ring off the
   route since round 21 (tagged, no start state); 0x12 (five: in through the W wall bombed from the rupee room, kill
-  them, push the block to open the E shutter into Gleeok's room; round 22: in from N, out of the trap room 0x02). Bombs are free above the route's reserve of 2 (Lee,
+  them, push the block to open the E shutter into Gleeok's room; round 22: in from N, out of the trap room 0x02). Bombs are free above the route's reserve of 2 (the owner,
   Nov 12: 0x31 and 0x12 are good places, a Vire killed outright can drop bombs). Copied from zol (one-room,
   curriculum, 2000 steps).
   Dungeon 6 (round 27, route `d6`; states `6_39n`, `6_2dn`): the dark 0x39 (five Vires, shut in: kill them for the E
