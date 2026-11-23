@@ -446,7 +446,7 @@ def test_chain_cli_uses_supplied_specialist_config(states_dir, models_dir, tmp_p
     output = tmp_path / 'chain.jsonl'
     subprocess.run([sys.executable, '-m', 'triforce.cli', '--models-dir', str(root), 'eval-chain',
                     '--parallel', '2', '--runs', '2', '--act', 'argmax', '--specialist-config', str(config),
-                    '--output', str(output)],
+                    '--stop-at', 'step:1', '--output', str(output)],    # ow-start's step only: the one network here
                    check=True, capture_output=True, text=True,
                    env={**os.environ, 'TRIFORCE_STATES_DIR': str(states_dir)})
     records = [json.loads(line) for line in output.read_text().splitlines()]

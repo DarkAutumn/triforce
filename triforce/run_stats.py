@@ -501,7 +501,17 @@ def chain_flags(stats: dict, steps: Optional[list], own_until: Optional[int], ru
     if not visited:
         flags.append(flag('no-route-steps', "no visit carries a route step: the records' step field is missing"))
         return flags
+    moved = sorted(k for k, g in visited.items()
+                   if k >= len(steps) or g.get('room') != room_key(steps[k]['level'], steps[k]['room'],
+                                                                   steps[k]['in_cave']))
+    if moved:
+        flags.append(flag('route-renumbered', f"the records' route steps are not this checkout's (step {moved[0]} is "
+                                              f"{visited[moved[0]].get('room')} in them): the records were played on "
+                                              "another route version, so the route canaries were not run", 'note'))
+        return flags
     low, high = min(visited), max(visited)
+    if prov.get('stop_step') is not None:
+        high = min(high, prov['stop_step'] - 1)     # the stop step is reached, not played (the run's milestone)
     clips = prov.get('clips')
     mixed = prov.get('clips_off_from') is not None or clips is None
 

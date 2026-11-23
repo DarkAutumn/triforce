@@ -7,7 +7,10 @@ reward: {pbrs: false, item_targets: true}  # The owner, Nov 12 (round 20): no PB
 obs: {objective: true, target: true}       # schema 2
 ram_randomization: {hp: [0.5, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # The owner, Nov 12: partial starts 3.5-7 hearts (at 1-3 hearts r70 never won)
 items: {bombs: never}                     # only the sword hurts Gleeok (invincibility mask $FE, zelda-asm/enemies.md)
-curriculum: {enabled: true}             # trajectories/boss-gleeok (Go-Explore paths per start state)
+curriculum:                              # trajectories/boss-gleeok (Go-Explore paths per start state)
+  enabled: true
+  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
+  - d3first_8_3cs_[0-9]
 # Round 30 (round30.md): a third of the resets from the chains' handoffs into 4:0x13 and 8:0x3c (triforce/states/
 # harvested/boss-gleeok, not in git: `eval-chain --from 4_71s_0 --stop-at step:133` and `--from 8_7es_0 --stop-at
 # step:296`, 300 runs each, `--first-seed 5000 --harvest DIR`), at the hearts the runs bring: a harvested start keeps

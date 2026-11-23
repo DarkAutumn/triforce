@@ -668,7 +668,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         let name = match name {
             Some(n) => n,
             None => match &mut self.pool {
-                Some(pool) => pool.next(&mut self.rng),
+                Some(pool) => pool.next(&mut self.rng)?,
                 None => {
                     return Err(EnvError::StartState(
                         "reset() needs a start state: this env has no start-state pool".into(),
