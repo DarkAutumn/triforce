@@ -75,6 +75,11 @@ target input they were trained on is the one they play with).
 
 ### First arm: the continuation with firing lines, seed 401 (Nov 23)
 
+**Withdrawn (a recipe fault):** this arm (and a scratch run stopped at 3.0M steps) trained in a worktree without
+`triforce/states/harvested`, so its 25% harvested resets had no states (run.json `harvested.states: 0`), unlike the
+lineage and Fresh40's arm. Kept as `models/zol/r40-fireline-*-s401-noharvest`; retrained with them. The numbers
+below are that arm's, for the record only.
+
 `d3` 1000 runs, seeds 0-999, paired with the promoted 2.0.0.13 team (`target/r40f/base-d3-1k.jsonl`,
 `cont-with-s401-d3-1k.jsonl`; `scripts/experiments/r40_fireline.py records`). The rate decides (AGENTS.md "What
 decides, in order"): **39.2% -> 32.1%, -7.1 ± 2.1 points, a real loss.** The rest, beside it: it shoots (shots a
