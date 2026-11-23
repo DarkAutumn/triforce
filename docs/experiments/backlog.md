@@ -455,7 +455,11 @@ thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
     one core of 20), and many are end-to-end (a real training, chain, batch or wrapper each starting its own
     interpreter with torch and the native module). To do: `pytest --durations=40` to rank them; run the suite in
     parallel (`pytest-xdist`: the session fixtures, the shared states dir and the queue tests' timing need a look);
-    shorten or mark the slowest end-to-end ones. Target: under 2 minutes, as `triforce job test python`.
+    shorten or mark the slowest end-to-end ones. Target: under 2 minutes, as `triforce job test python`. Until
+    then `triforce job test all` runs its suites (Python, asm, Rust) side by side (Nov 23). With it (the owner, Nov
+    23): the test verb ends with the slow tests named ("this test took longer than [threshold]: investigate it, or
+    ask the parent agent to queue it for investigation"), from pytest's own durations and cargo's per-binary times,
+    so a test that grows slow is seen the day it does.
   - The plain ways the first-quest draft left open (the Lost Woods maze in the objective, the overworld ladder clip):
     dropped, the program plays clips on only.
 
