@@ -5,6 +5,10 @@
     triforce job run ... --timeout 30m -- .venv/bin/python scripts/experiments/r40_fireline.py replays \\
         LABEL=DIR... [--rooms 3:0x6b,3:0x49,3:0x7b,3:0x4b] [--json OUT]
 
+``manhandla`` (the owner, Nov 23: what is judged now): victory = entering Manhandla's room 3:0x4d, nothing of
+the fight counts; arrival rate paired with the first arm, hearts, beams and bombs on arriving, frames to arrive, and
+hits, hearts lost, beams held and shooting on the way, deaths by room before it.
+
 ``records`` (chain records; each arm paired by seed against the first), in the order that decides (AGENTS.md "What
 decides, in order": the segment's rate first; the rest only between arms within noise of each other):
 1. The segment's rate (the run's ``result`` ``success``), the paired difference with its standard error; deaths by room.
@@ -438,6 +442,72 @@ def report(result: dict, rooms: list) -> None:
                   f"{sum(h['distance'] for h in hs) / n:.1f} |")
 
 
+# --- manhandla (the owner, Nov 23: victory = entering 3:0x4d; nothing of the fight counts) ---------------------------
+
+def manhandla_facts(run):
+    """What happened before Manhandla's room."""
+    f = dict(reached=False, frames=0, hits=0, hearts=0.0, shots=0, far=0, near=0, rooms_beams=0, lost=False,
+             hp_in=None, bombs_in=None, beams_in=None, died=None, lined=0, unfired=0)
+    for v in run['rooms']:
+        if v.get('specialist') == 'boss-manhandla':
+            f.update(reached=True, hp_in=v['health_in'], bombs_in=v['bombs_in'], beams_in=beams_full(v['health_in'], v['max_health']))
+            break
+        f['frames'] += v['frames']; f['hits'] += v.get('hits', 0)
+        f['hearts'] += max(0.0, v['health_in'] - v['health_out']) if v['health_out'] < v['health_in'] else 0.0
+        for k, b in (('shots', 'beam_shots'), ('far', 'beam_kills_far'), ('near', 'beam_kills_near'), ('lined', 'beam_lined'), ('unfired', 'beam_lined_unfired')):
+            f[k] += v.get(b, 0) or 0
+        if not f['lost']:
+            if beams_full(v['health_out'], v['max_health']): f['rooms_beams'] += 1
+            else: f['lost'] = True
+        if v.get('outcome') == 'death': f['died'] = f"{v['level']}:{v['room']}"
+    return f
+
+
+def cmd_manhandla(args) -> None:
+    """Victory = entering Manhandla's room (3:0x4d), every metric counted up to its door or the death before it;
+    paired by seed with the first arm (the lead's to_manhandla.py, Nov 23)."""
+    arms = {label: {s: manhandla_facts(r) for s, r in load(path).items()} for label, path in arms_of(args.arms)}
+    base = next(iter(arms.values()))
+    def mean(xs):
+        xs = list(xs)
+        return sum(xs) / len(xs) if xs else float('nan')
+    def paired(a, key, both_reached=False):
+        d = [key(a[s]) - key(base[s]) for s in base if s in a and (not both_reached or (a[s]['reached'] and base[s]['reached']))]
+        return mean(d), se(d), len(d)
+    out = []
+    out.append("## Victory = reaching Manhandla's room (3:0x4d). 1000 runs an arm, seeds 0-999, paired with the first row.\n")
+    out.append('| arm | reached Manhandla | difference | hearts on arriving | arrives holding beams | bombs on arriving | frames to arrive (both arrived) | seconds |')
+    out.append('|---|---:|---:|---:|---:|---:|---:|---:|')
+    for label, a in arms.items():
+        n = len(a); r = [f for f in a.values() if f['reached']]
+        d, e, _ = paired(a, lambda f: 100.0 * f['reached'])
+        t, te, tn = paired(a, lambda f: f['frames'], True)
+        out.append(f"| {label} | {len(r)} of {n} ({100*len(r)/n:.1f}%) | {d:+.1f} ± {e:.1f} | {mean(f['hp_in'] for f in r):.2f} | "
+                   f"{100*mean(f['beams_in'] for f in r):.1f}% | {mean(f['bombs_in'] for f in r):.2f} | {t:+.0f} ± {te:.0f} ({tn}) | {t/60.0988:+.1f} |")
+    out.append("\n## On the way there (every run, counted up to Manhandla's door or the death before it)\n")
+    out.append('| arm | hits a run | difference | hearts lost a run | difference | rooms cleared holding beams | difference | shots a run | kills from range a run | share of sword kills from range | lined up and not fired |')
+    out.append('|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|')
+    for label, a in arms.items():
+        fs = list(a.values())
+        h, he, _ = paired(a, lambda f: f['hits']); l, le, _ = paired(a, lambda f: f['hearts']); b, be, _ = paired(a, lambda f: f['rooms_beams'])
+        far, near = sum(f['far'] for f in fs), sum(f['near'] for f in fs)
+        out.append(f"| {label} | {mean(f['hits'] for f in fs):.2f} | {h:+.2f} ± {he:.2f} | {mean(f['hearts'] for f in fs):.2f} | {l:+.2f} ± {le:.2f} | "
+                   f"{mean(f['rooms_beams'] for f in fs):.2f} | {b:+.2f} ± {be:.2f} | {mean(f['shots'] for f in fs):.1f} | {far/len(fs):.1f} | "
+                   f"{100*far/max(1,far+near):.1f}% | {100*sum(f['unfired'] for f in fs)/max(1,sum(f['lined'] for f in fs)):.1f}% |")
+    out.append("\n## Where the runs that never arrive die (deaths before Manhandla's room, of 1000)\n")
+    rooms = Counter()
+    per = {}
+    for label, a in arms.items():
+        per[label] = Counter(f['died'] for f in a.values() if not f['reached'] and f['died'])
+        rooms.update(per[label])
+    order = [r for r, _ in rooms.most_common()]
+    out.append('| arm | ' + ' | '.join(order) + ' | all |')
+    out.append('|---|' + '---:|' * (len(order) + 1))
+    for label in arms:
+        out.append(f"| {label} | " + ' | '.join(str(per[label].get(r, 0)) for r in order) + f" | {sum(per[label].values())} |")
+    print('\n'.join(out))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest='cmd', required=True)
@@ -450,8 +520,10 @@ def main():
     p.add_argument('--states-dir', default=None)
     p.add_argument('--json')
     p.add_argument('--jobs', type=int, default=8, help='replays played at once')
+    m = sub.add_parser('manhandla', help="victory = entering 3:0x4d, every metric counted up to its door")
+    m.add_argument('arms', nargs='+', help='LABEL=PATH of a chain record (.jsonl); the first is the base')
     args = ap.parse_args()
-    {'records': cmd_records, 'replays': cmd_replays}[args.cmd](args)
+    {'records': cmd_records, 'replays': cmd_replays, 'manhandla': cmd_manhandla}[args.cmd](args)
 
 
 if __name__ == '__main__':

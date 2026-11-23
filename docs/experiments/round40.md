@@ -279,3 +279,12 @@ first):
    the triforce not slower beyond noise; beams held (rooms cleared holding them) not fewer; and shooting up (kills
    from range a run, shots that hit a run). A switch that shoots more but is slower or hit more (as the continuation)
    does not go in as it is; then cause 1 or 2 is the next change, measured the same way.
+
+**Judged up to Manhandla's door (the owner, Nov 23).** Manhandla's room hands out no cheated bombs since round 24 (a
+bug the lead is fixing), so its fight says nothing about firing lines: victory is entering 3:0x4d, every other metric
+is counted up to that door or the death before it (`scripts/experiments/r40_fireline.py manhandla`, the lead's
+`to_manhandla.py` folded in; `/home/leculver/triforce-review/firing-lines/to-manhandla.md`). Reached Manhandla,
+paired with the continuation without the switch: without 55.0%, lines 53.3% (-1.7 ± 2.2), lines + melee 50.4%
+(-4.6 ± 2.2), from scratch without (Fresh40, seed 401) 55.3% (+0.3 ± 2.3); time to arrive (runs arriving in both)
+lines +720 ± 120 frames (12.0 s), lines + melee +537 ± 153. The bar for the from-scratch arms above stands, read on
+"reached Manhandla" instead of the `d3` rate.
