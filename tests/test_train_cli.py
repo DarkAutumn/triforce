@@ -19,7 +19,10 @@ import pytest
 import torch
 
 from triforce import registry, train
+from triforce.inputs import MissingInput
 from triforce.metrics import EpisodeTracker, read_jsonl
+
+from .conftest import start_task
 
 SPECIALIST = 'ow-start'
 GAMEPLAY_PREFIXES = ('kind/', 'duration/', 'interrupt/', 'ending/', 'outcome/', 'reward/', 'health', 'hearts/',
@@ -28,8 +31,9 @@ GAMEPLAY_KEYS = ('episodes', 'episode_steps', 'episode_frames', 'success_rate', 
 
 
 def _common(states_dir, tmp_path, *extra):
-    """Training on the CPU is opt-in (--device defaults to cuda); a later --device in extra wins."""
-    return ['--specialist', SPECIALIST, '--states-dir', str(states_dir), '--models-dir', str(tmp_path),
+    """Training on the CPU is opt-in (--device defaults to cuda); a later --device in extra wins.  The task is
+    ``start_task()``: ``SPECIALIST``'s with the session states dir's ``start`` as its seed state."""
+    return ['--specialist', start_task(), '--states-dir', str(states_dir), '--models-dir', str(tmp_path),
             '--device', 'cpu', *extra]
 
 
@@ -404,7 +408,7 @@ def test_a_stop_proposal_is_confirmed_by_an_evaluation(states_dir, tmp_path, log
 
     monkeypatch.setattr(train, 'success_by_state', fake_eval)
     monkeypatch.setattr(train.EarlyStop, 'update', lambda self, *_: True)
-    run_dir = train.main(['--specialist', SPECIALIST, '--states-dir', str(states_dir), '--parallel', '2',
+    run_dir = train.main(['--specialist', start_task(), '--states-dir', str(states_dir), '--parallel', '2',
                           '--steps-per-update', '16', '--iterations', '3', '--models-dir', str(tmp_path),
                           '--run-id', 'confirm', '--seed', '5', '--no-curriculum', '--stop-success', '0.5',
                           '--stop-hearts-delta', '0', '--stop-bombs-delta', '0', '--device', 'cpu'])
@@ -448,7 +452,7 @@ def _plateau_checks(states_dir, tmp_path, logs_dir, monkeypatch, run_id, outcome
 
     monkeypatch.setattr(train, 'success_by_state', fake_eval)
     monkeypatch.setattr(train.EarlyStop, 'update', lambda self, *_: True)
-    run_dir = train.main(['--specialist', SPECIALIST, '--states-dir', str(states_dir), '--parallel', '2',
+    run_dir = train.main(['--specialist', start_task(), '--states-dir', str(states_dir), '--parallel', '2',
                           '--steps-per-update', '16', '--iterations', '8', '--models-dir', str(tmp_path),
                           '--run-id', run_id, '--seed', '5', '--no-curriculum', '--stop-success', '0.5',
                           '--stop-check-gap', '2', '--device', 'cpu', *flags])
@@ -694,7 +698,7 @@ def test_training_runs_on_cuda_unless_cpu_is_asked_for(states_dir, tmp_path, mon
     """--device defaults to cuda; without a GPU that is an error naming --device cpu, before anything is written."""
     assert train.parse_args(['--specialist', SPECIALIST]).device == 'cuda'
     monkeypatch.setattr(train.torch.cuda, 'is_available', lambda: False)
-    args = ['--specialist', SPECIALIST, '--states-dir', str(states_dir), '--models-dir', str(tmp_path),
+    args = ['--specialist', start_task(), '--states-dir', str(states_dir), '--models-dir', str(tmp_path),
             '--parallel', '2', '--run-id', 'nogpu']
     with pytest.raises(SystemExit, match='--device cpu'):
         train.main(args)
@@ -711,7 +715,7 @@ def test_target_steps_are_what_the_parallel_envs_train(states_dir, tmp_path, log
     start = next(e for e in events if e['event'] == 'start')
     assert start['target_steps'] == 60 == plan['runs'][0]['target_steps']
     assert registry.load_checkpoint(run_dir)['steps'] == 60
-    assert plan['command'][3:5] == ['--specialist', SPECIALIST]
+    assert plan['command'][3:5] == ['--specialist', start_task()]
 
 
 def test_round_driver_sets_unfinished_runs_aside_and_skips_finished_ones(tmp_path, monkeypatch):
@@ -758,9 +762,9 @@ def test_a_task_that_draws_harvested_states_refuses_to_train_without_them(states
     config.write_text("name: ow-start\nrooms: ['(0, 0x77)', '(0, 0x77, cave)', '(0, 0x39)']\n"
                       f"start_states: ['start']\nsuccess: [exit-correct]\nmax_steps: 4\n"
                       f"harvested_states: {empty}\nharvested_fraction: 0.5\n")
-    with pytest.raises(SystemExit) as stopped:
+    with pytest.raises(MissingInput) as stopped:
         train.main(['--specialist', str(config), '--states-dir', str(states_dir), '--parallel', '2',
                     '--steps-per-update', '16', '--iterations', '1', '--models-dir', str(tmp_path),
                     '--run-id', 'none', '--seed', '3', '--device', 'cpu'])
-    assert 'harvested states' in str(stopped.value) and str(empty) in str(stopped.value)
-    assert not (tmp_path / 'ow-start' / 'none' / 'run.json').exists()
+    assert 'harvested start states' in str(stopped.value) and str(empty) in str(stopped.value)
+    assert not (tmp_path / 'ow-start').exists()       # refused before the job waits: no run dir, no log

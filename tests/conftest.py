@@ -156,15 +156,29 @@ def _controller(config) -> bool:
 
 
 def pytest_sessionstart(session):
-    """Writes ``start.state`` into the session states dir (without a ROM it stays empty; ``states_dir`` fails);
-    each xdist worker writes its own, the controller none."""
+    """Writes ``start.state`` into the session states dir (without a ROM it stays empty; ``states_dir`` fails),
+    and the training tests' task beside it (``start_task``); each xdist worker writes its own, the controller none."""
     if not rom_path().exists() or _controller(session.config):
         return
     from triforce._native import Game  # pylint: disable=import-outside-toplevel
+    from triforce.specialist import load_specialist  # pylint: disable=import-outside-toplevel
     game = Game()
     state = game.play_movie(str(BASE_MOVIE))
     assert (state.mode, state.level, state.location) == (5, 0, 0x77)
     game.save_state_file(str(_session['states_dir'] / 'start.state'))
+    task = load_specialist('ow-start').replace(start_states=['start'])
+    (_session['states_dir'] / START_TASK).write_text(task.to_json(), encoding='utf-8')
+
+
+START_TASK = 'ow-start-from-start.yaml'
+
+
+def start_task() -> str:
+    """The training tests' task: ``ow-start``'s with ``start`` (the session states dir's one state) as its only seed
+    state, a yaml beside it.  Round 40: ``ow-start``'s own globs of shipped states match nothing in the session dir,
+    and a training refuses a glob that matches nothing; before, they were dropped and these tests trained on
+    ``start`` alone, as they still do."""
+    return str(_session['states_dir'] / START_TASK)
 
 
 def pytest_unconfigure(config):  # pylint: disable=unused-argument

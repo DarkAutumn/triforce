@@ -20,6 +20,7 @@ from typing import Optional
 import torch
 
 from .. import _native, registry
+from ..inputs import MissingInput, check_curriculum, check_harvested, check_start_states, declaration, untracked
 from ..paths import SPECIALISTS_DIR, TRAJECTORIES_DIR
 from ..metrics import RolloutMetrics
 from ..ppo import Collector
@@ -67,6 +68,13 @@ def route_only(config: SpecialistConfig, route: str, states_dir=None, tracks_dir
     tracks = sorted(p.parent for p in source.glob('*/trajectory.json')
                     if json.loads(p.read_text(encoding='utf-8')).get('start_state', '').startswith(prefix))
     if not tracks:
+        # No track of the route: a curriculum of none only when the task declares every one of its states untracked.
+        seeds = [Path(p).stem for p in config.resolve_start_states(states_dir)]
+        undeclared = [s for s in seeds if not any(fnmatch.fnmatchcase(s, g) for g in untracked(config))]
+        if undeclared:
+            raise SystemExit(f"{config.name}: the curriculum is on and {source} holds no track of route {route}'s "
+                             f"states; explore them, or add to the task's curriculum.untracked: "
+                             f"{declaration(undeclared, seeds)}")
         return config.replace(curriculum={'enabled': False})
     out = Path(tracks_dir or 'target/route-tracks').resolve() / route / config.name
     out.mkdir(parents=True, exist_ok=True)
@@ -77,17 +85,27 @@ def route_only(config: SpecialistConfig, route: str, states_dir=None, tracks_dir
     return config.replace(curriculum={'enabled': True, 'trajectories': str(out)})
 
 
-def parse_families(items, parallel: int, shares: Optional[dict] = None,
-                   state_route: Optional[str] = None) -> list[Family]:
+def parse_families(items, parallel: int, shares: Optional[dict] = None, state_route: Optional[str] = None,
+                   curriculum: bool = True, states_dir=None) -> list[Family]:
     """``key[=yaml]`` items (a key's task: the given yaml, else ``task_yaml``) with ``parallel`` envs split by
     ``shares`` (key -> weight; default equal), every family at least one; with ``state_route``, each task on that
-    route's states alone (``route_only``)."""
+    route's states alone (``route_only``).  Every input a task declares is checked (``triforce.inputs``: its
+    start-state globs and harvested states under ``states_dir``, with ``curriculum`` its tracks); a missing one stops
+    the run."""
     families = []
     for item in items:
         key, _, path = item.partition('=')
         config = load_specialist(path or task_yaml(key))
-        if state_route:
-            config = route_only(config, state_route)
+        try:
+            check_start_states(config, states_dir)
+            if state_route:
+                config = route_only(config, state_route, states_dir)
+            check_harvested(config, states_dir)
+            if curriculum and config.curriculum.enabled:
+                check_curriculum(config, config.curriculum.trajectories or TRAJECTORIES_DIR / config.name,
+                                 states_dir)
+        except MissingInput as error:
+            raise SystemExit(f"{key}: {error}") from None
         families.append(Family(key, config))
     keys = [f.key for f in families]
     if len(set(keys)) != len(keys):

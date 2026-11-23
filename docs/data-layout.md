@@ -220,33 +220,47 @@ Four kinds of thing share one folder:
 11. **Teams moved aside**: `target/models.prev-*` and `target/harvested.prev-*` hold what an old landing replaced;
     nothing reads them today, but they are the only copy of what they hold outside `/backup`.
 
-## Silent defaults found (missing read as "none")
+## Silent defaults found (missing read as "none"), and what round 40 made of each
 
-- A curriculum track missing for a seed state (`curriculum.rs`): the state plays without one; only `run.json`
-  lists the tracks.
-- Harvested states missing for a lab training (`lab/collect.py:207`): drawn from seed states only.
-- A harvested file deleted mid-training (F159): resets go back to seed states.
-- A start-state glob of a yaml that matches no file (`config.rs:1155-1170`): dropped; the family trains on the
-  others (only all of them matching nothing is an error, `start_states.rs:296-302`).
-- No `act` file, or one for other weights: `DEFAULT_ACT` (a warning in the second case only).
-- No `promoted.<route>`: the family's `promoted` plays the route's own part (by design, unrecorded at play).
-- A `--checkpoint family=RUN` override of a hit-head network with a bare policy: no remark.
-- The checkout's built module older than its `crates/`: nothing checks.
-- A `--load` continuation's curriculum progress resumes when the loaded run's `run.json` has no `curriculum` field
-  (`train.py:475-482`: "runs from before that field count as the same"), whatever trajectories it trained on.
-- `--load VALUE` that is no existing path is read as a family name (`train.py:394-398`): a mistyped run dir fails
-  as "No promoted model for specialist '<the path>'", loud but naming the wrong thing.
-- A worktree with its own `models/` (even a partial one) gives the test suite that team; only a worktree without
-  `models/` gets main's through `$TRIFORCE_MODELS_DIR` (`job.py:691-697`) [inference: tests needing a family the
-  partial dir lacks then fail or skip by their own rules].
-- `eval-chain --specialist-config YAML` for a family the route never plays: accepted and unused [inference from
-  `runner.Policies`, which looks configs up by the families it loads].
-- `eval-chain --harvest` without DIR writes into the shared harvested folder (`cli.py:454`), from any checkout
-  through the setup link: a scratch chain becomes every later training's input with no record.
-- A family with no promoted run on a chain's route: recorded in `provenance.missing`, and only the runs that reach
-  its rooms end `error` (exit 1 at the end, `runner.py:466-470`): a segment that never reaches it reports nothing.
-- The training GUI lists log folders of its own checkout only (`training-gui.py:4851`); a worktree's tool run
-  outside the queue is invisible to the owner's GUI.
+Line numbers are `23412d57`'s. **Refused**: the run stops before it starts and names where it looked
+(`docs/architecture.md` "Missing is an error"). **Declared**: "none" stays a legitimate recipe, written in the task.
+
+1. A curriculum track missing for a seed state (`curriculum.rs`): the state played without one; only `run.json`
+   listed the tracks. **Refused unless declared** (`curriculum.untracked` in the task; every task of `specialists/`
+   declares today's untracked states).
+2. Harvested states missing for a lab training (`lab/collect.py:207`): drawn from seed states only. **Refused**
+   (`lab.collect.parse_families`, and the native pool itself, 4).
+3. A harvested file deleted mid-training (F159): resets went back to the seed states. **Refused** (an error of the
+   running pool).
+4. A pool drawing harvested states from an empty folder (`start_states.rs:321-325`): the seed states alone.
+   **Refused** when the pool is built.
+5. A start-state glob of a task that matches no file (`config.rs:1155-1170`): dropped; the family trained on the
+   others. **Refused** (train, evaluate, the lab; none of today's tasks has one).
+6. No `act` file, or one for other weights: `DEFAULT_ACT` (a warning in the second case only). **Left as a rule**
+   (F064, the act played is in every chain's provenance; the store seals it into the run).
+7. No `promoted.<route>`: the family's `promoted` plays the route's own part. **Left as a rule** (phase X's team
+   rule; the key that played is in the provenance; the store's teams name every slot).
+8. A `--checkpoint family=RUN` override of a hit-head network with a bare policy: no remark. **Refused unless
+   declared** (`--headless KEY`; `select-checkpoint --headless`).
+9. The checkout's built module older than its `crates/`: nothing checked. **Refused** (the build's stamp,
+   `triforce.build`).
+10. A `--load` continuation's curriculum progress resumed when the loaded run's `run.json` had no `curriculum`
+    field (`train.py:475-482`). **Refused unless declared** (`--curriculum-unrecorded resume|fresh`).
+11. `--load VALUE` that is no existing path was read as a family name (`train.py:394-398`). **Refused** with what
+    was looked for (a directory without `ckpt.pt` too).
+12. A worktree with its own `models/` (even a partial one) gave the test suites that team (`job.py:691-697`).
+    **Fixed**: the suites read the main checkout's team always.
+13. `eval-chain --specialist-config YAML` for a family the runs never play: accepted and unused. **Refused**.
+14. `eval-chain --harvest` without DIR wrote into the shared harvested folder (`cli.py:454`). **Refused**: DIR is
+    required.
+15. A family with no promoted run on a chain's route: only the runs that reached its rooms ended `error`.
+    **Refused** before anything plays (`runner.check_team`).
+16. The training GUI lists log folders of its own checkout only (`training-gui.py:4851`). **Left**: not an input of
+    a run; every queued job shows through its row, and the store files job outputs in one place.
+17. A missing `version` stamp in a run dir reads as None (`registry.model_version`). **Left**: provenance records
+    None; not an input to play.
+18. The harvested folder rescanned under a running pool picks up files added since the start (`start_states.rs`
+    `HARVEST_RESCAN_RESETS`): an input that grows during the run. **Left** for the store's read-only snapshots.
 
 ## What the layout has to answer (for the lead and the owner)
 

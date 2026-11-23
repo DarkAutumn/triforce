@@ -22,10 +22,10 @@ import torch
 
 from . import __version__, _native, replay
 from .paths import STATES_DIR
-from .provenance import (checkpoint_description, code_version, data_hash, location_text, models_header,
-                         network_description, replay_models)
-from .registry import (CHECKPOINT_NAME, DEFAULT_ACT, act_mode, checkpoint_sha1, load_model, own_models_until,
-                       parse_act, policy_checkpoint, route_part_key, route_policy, split_policy)
+from .provenance import (checkpoint_description, checkpoint_label, code_version, data_hash, has_hit_head,
+                         location_text, models_header, network_description, replay_models)
+from .registry import (CHECKPOINT_NAME, DEFAULT_ACT, act_mode, checkpoint_sha1, load_checkpoint, load_model,
+                       own_models_until, parse_act, policy_checkpoint, route_part_key, route_policy, split_policy)
 from .replay import ReplayDir
 from .specialist import SpecialistConfig, list_specialists, load_specialist
 from .zelda_enums import MapLocation
@@ -129,6 +129,16 @@ class Route:
     def steps_played(self) -> int:
         """How many route steps a run that gets to the end plays (an estimate's chain work, ``jobs.work``)."""
         return steps_played(self.name, self.start_step, self.terminal, self.stop_step)
+
+    def steps_in_play(self) -> list[dict]:
+        """The route steps (``_native.route_steps``) a run of this route can play: from the start step to its end
+        (before ``stop_step`` or the first later step in ``terminal``, which end the run when reached; else to the
+        route's last), on the way the clips switch takes (both ways when ``clips_off_from`` flips it on the way)."""
+        steps = _native.route_steps(self.name)
+        if self.stop_step is not None or self.terminal is not None:
+            steps = steps[:self.start_step + steps_played(self.name, self.start_step, self.terminal, self.stop_step)]
+        ways = (None, 'clips' if self.clips else 'plain') if self.clips_off_from is None else (None, 'clips', 'plain')
+        return [step for step in steps[self.start_step:] if step['way'] in ways]
 
 
 def steps_played(route_name: str, start_step: int = 0, stop_room: Optional[MapLocation] = None,
@@ -430,7 +440,7 @@ class Policies:
     def __init__(self, models_dir=None, checkpoints: Optional[Dict[str, str]] = None,
                  specialist_configs: Optional[Dict[str, SpecialistConfig]] = None,
                  networks: Optional[Dict[str, object]] = None, names: Optional[Iterable[str]] = None,
-                 route: Optional[str] = None):
+                 route: Optional[str] = None, headless: Iterable[str] = ()):
         # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
         overrides = dict(checkpoints or {})
         configs = dict(specialist_configs or {})
@@ -485,10 +495,63 @@ class Policies:
                 self.configs.append(configs.get(name) or load_specialist(name))
                 self.policies.append(native)
                 self.acts.append(act)
+        self._check_heads(overrides, set(headless), models_dir, route)
+
+    def _check_heads(self, overrides: Dict[str, str], headless: set, models_dir, route: Optional[str]):
+        """Round 40 (a void comparison, Nov 23): a ``checkpoints`` override without a hit head that replaces a team
+        network with one is refused unless ``headless`` declares its key; a declaration that declares nothing (no such
+        override, or no head lost) is refused too.  Raises ``RunnerError``."""
+        unknown = sorted(headless - set(overrides))
+        if unknown:
+            raise RunnerError(f"--headless {unknown}: no --checkpoint override of those keys")
+        for key, path in sorted(overrides.items()):
+            family, part = split_policy(key)
+            replaced = [key] if part is not None else [family] + (
+                [route_policy(family, route)] if own_models_until(route) is not None
+                and route_part_key(family, models_dir, route) else [])
+            with_head = []
+            for team_key in replaced:
+                try:
+                    team = policy_checkpoint(team_key, models_dir, route)
+                except FileNotFoundError:
+                    continue
+                if has_hit_head(load_checkpoint(team, check_schema=False)):
+                    with_head.append(f"{team_key} ({checkpoint_label(team)})")
+            lost = bool(with_head) and 'hit' not in self.described[key]['outputs']
+            if lost and key not in headless:
+                raise RunnerError(f"--checkpoint {key}={path} has no hit head and replaces {', '.join(with_head)}, "
+                                  f"which has one: declare it with --headless {key}, or play a network with its head")
+            if key in headless and not lost:
+                raise RunnerError(f"--headless {key}: {path} replaces no network with a hit head that it lacks")
 
     def modes(self, act: Optional[str] = None) -> List[str]:
         """Per policy the act mode it plays by: its own (``acts``) for None, else ``act`` for every policy."""
         return list(self.acts) if act is None else [parse_act(act)] * len(self.policies)
+
+
+def check_team(route: Route, policies: Policies):
+    """Round 40 (missing is an error): raises ``RunnerError`` when a run of ``route`` would reach a policy key without
+    a network (``Policies.missing``: until then only the runs that got there ended ``error``)."""
+    until = own_models_until(route.name)
+    needed = {}
+    for step in route.steps_in_play():
+        family = step['specialist']
+        part = route_policy(family, route.name) if until is not None else None
+        key = part if part is not None and step['index'] < until and part in policies.names else family
+        if key in policies.missing:
+            needed.setdefault(key, f"step {step['index']}: {policies.missing[key]}")
+    if needed:
+        raise RunnerError("no network plays policies these runs reach: "
+                          + '; '.join(f"{key} ({why})" for key, why in sorted(needed.items())))
+
+
+def check_configs(route: Route, configs: Dict[str, SpecialistConfig]):
+    """Round 40: raises ``RunnerError`` for a specialist config override (``--specialist-config``) of a family whose
+    rooms no step of a run of ``route`` plays (it was accepted and unused); loads no model."""
+    unused = sorted(set(configs) - {step['specialist'] for step in route.steps_in_play()})
+    if unused:
+        raise RunnerError(f"--specialist-config for {unused}: no step from step {route.start_step} to this run's end "
+                          f"plays those families")
 
 
 class ChainPool:
@@ -589,7 +652,8 @@ class Runner:
                  max_steps: int = DEFAULT_MAX_STEPS,
                  specialist_configs: Optional[Dict[str, SpecialistConfig]] = None,
                  networks: Optional[Dict[str, object]] = None, parallel: int = 1, threads: Optional[int] = None,
-                 states_dir=None, harvest=None, route: Optional[str] = None, harvest_every_room: bool = False):
+                 states_dir=None, harvest=None, route: Optional[str] = None, harvest_every_room: bool = False,
+                 headless: Iterable[str] = ()):
         """
         checkpoints: specialist name → checkpoint path, overriding the registry's promoted model.
         specialist_configs: specialist name → loaded config, replacing its canonical YAML at runtime.
@@ -599,9 +663,11 @@ class Runner:
         harvest: save every handoff's pre-entry state under this directory (``ChainPool``); harvest_every_room: every
         correct room entry's.
         route: the route whose promoted runs play (phase X: ``promoted.<route>`` over ``promoted``; None: ``promoted``).
+        headless: the ``checkpoints`` keys declared to play without the hit head of the network they replace
+        (``Policies``).
         """
         # pylint: disable=too-many-arguments, too-many-positional-arguments
-        self.policies = Policies(models_dir, checkpoints, specialist_configs, networks, route=route)
+        self.policies = Policies(models_dir, checkpoints, specialist_configs, networks, route=route, headless=headless)
         self.act = None if act is None else parse_act(act)
         self.max_steps = max_steps
         self.parallel = parallel
