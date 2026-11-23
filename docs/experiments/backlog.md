@@ -383,8 +383,12 @@ thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
   row and 0x1f's line; 9:0x56's key and Moldorm crossed (Key39b's route data).
 - **Rewards:** rupees once per pickup and the beam terms (built, never trained from scratch); the Bubble touch
   penalty; `penalty-aimless` on or off (its experiment first: ow-start and pols-voice at 0.002 / 0.005 a frame).
-- **What the engine plays, not the network:** the whirlwinds out of Level 5 (0x0b) and Level 6 (0x22) as macros
-  like the docks (decide before: a network should not learn plays the engine then takes over).
+- **What the engine plays, not the network** (the owner, Nov 23: allowed if the network chooses the moment and the
+  macro never dodges): the whirlwinds out of Level 5 (0x0b) and Level 6 (0x22) as fixed button sequences offered as
+  a choice; the dock warp's two monster give-ways (`dock_warp_mask`) removed so the network times the plays itself.
+- **Teachers by group first** (the owner: "yes to all", start with the lead's idea, stop when it works): about five
+  groups from scratch, a family split off where its group can't learn it; an arm without the room identity if cheap;
+  the planner as a teacher in training at the lead's judgement.
 - **Items and masks:** the red candle and boomerang in Bubble rooms (7:0x0d, 6:0x38): measured on today's code
   first, then on or off per room in the generation's masks; 7:0x1b fight or crossing (its measurement at the new
   combat).
