@@ -71,6 +71,9 @@ const ADDR_PARTIAL_HEARTS: usize = 0x670;
 const TURN_SLACK_FRAMES: u32 = 4;
 /// Frames an attack waits for Link's item-use pose (a boomerang caught during the turn) to end before its press.
 const MAX_POSE_FRAMES: u32 = 32;
+/// Frames of Link's shove a MOVE waits out beyond its duration (his is $20 pixels at up to 4 a frame,
+/// asm:Shove_Update; a cap with slack).
+const MAX_SHOVE_FRAMES: u32 = 16;
 /// asm:FluteTimer: frames left of the recorder's freeze ($98 when played; the NMI counts it down).
 const ADDR_FLUTE_TIMER: usize = 0x3C;
 /// The freeze's length plus slack (a cap, never reached in play).
@@ -567,7 +570,21 @@ impl<S> Executor<S> {
                     .into_iter()
                     .any(|t| crate::game::is_gravestone_tile(tile(t)))
         };
+        // On the stairs the pushed stone uncovered the game takes them on a frame Link presses nothing (walking on
+        // presses into the moved stone; measured round 40: the closing frame of no buttons used to give it, without it
+        // every MOVE ended there at once and the run stood still).
+        let on_stairs = |m: &Machine<N>| -> bool {
+            let Some((c, r)) = stone else { return false };
+            let tiles = &m.nes.prg_ram()[TILE_LAYOUT.0 - 0x800..][..TILE_LAYOUT.1];
+            let inside = (0..crate::room::COLS).contains(&c) && (0..crate::room::ROWS).contains(&r);
+            let (px, py) = (i32::from(m.ram()[ADDR_LINK_X]), i32::from(m.ram()[ADDR_LINK_Y]));
+            inside && tiles[(c * crate::room::ROWS + r) as usize] == crate::room::STAIRS_TOP_LEFT_TILE
+                && (px, py) == (c * 8, r * 8 + 0x3D)
+        };
         if is_move && stops(m, first, self.vetoed_doorways) {
+            if on_stairs(m) {
+                self.step(m, 0, 1);
+            }
             return Some(Interrupt::Wall);
         }
         if is_move && !pushing && !state.can_link_move(action.direction) {
@@ -583,8 +600,15 @@ impl<S> Executor<S> {
         let mut before = FrameWatch::new(m.ram());
         let start_near = before.near;
         let mut stalled = 0;
-        for _ in 0..action.duration {
+        // A MOVE's frames of Link's shove (knockback) are not its own: the game reads no direction then
+        // (asm:Link_HandleInput returns while ObjShoveDir is set), so they neither count toward its duration nor as
+        // still frames (round 40: without the closing frame a MOVE right after a hit starts in the shove).
+        let (mut walked, mut shoved) = (0, 0);
+        while walked < action.duration {
             if is_move && !first && stops(m, first, self.vetoed_doorways) {
+                if on_stairs(m) {
+                    self.step(m, 0, 1);
+                }
                 return Some(Interrupt::Wall);
             }
             first = false;
@@ -597,19 +621,24 @@ impl<S> Executor<S> {
                 return Some(Interrupt::Transition);
             }
             if is_move {
+                let shove = m.read(ADDR_LINK_SHOVE_DIR) != 0 && shoved < MAX_SHOVE_FRAMES;
+                if shove {
+                    shoved += 1;
+                } else {
+                    walked += 1;
+                }
                 if after.link != before.link {
                     stalled = 0;
-                } else if !pushing && after.ladder == before.ladder && m.read(ADDR_LINK_SHOVE_DIR) == 0 {
+                } else if !pushing && after.ladder == before.ladder && !shove {
                     // Link moves at least every other frame; two still frames means he hit something (a frame that
-                    // puts the ladder away or lays it is still too, asm:Ladder_CheckAndDraw@StashLadder). Frames of a
-                    // shove don't count: the game reads no direction then (asm:Link_HandleInput returns while
-                    // ObjShoveDir is set), and a shove into a wall stands still (round 40: without the closing frame a
-                    // MOVE right after a hit can start in it).
+                    // puts the ladder away or lays it is still too, asm:Ladder_CheckAndDraw@StashLadder).
                     stalled += 1;
                     if stalled >= 2 {
                         return Some(Interrupt::Wall);
                     }
                 }
+            } else {
+                walked += 1;
             }
             before = after;
         }

@@ -376,7 +376,9 @@ fn a_wrap_that_lands_only_on_a_wrong_exit_is_not_offered() {
 /// The cut clip in the real game: 4:$21's ladder clip N with the Gels alive is often hit on the ladder (round 21:
 /// most of its aborted clips), leaving Link over the water; a `MOVE N 16` from there carries him onto the land beyond
 /// it, which finishes the clip (`Change::clip_finished_by_move`, counted once in `ClipStats::finished_by_move`; the
-/// clip stays in `aborted`). The first seed of 64 whose clip is cut by a hit.
+/// clip stays in `aborted`). The first seed of 64 whose cut clip a MOVE N 16 finishes. Round 40 (no closing frame of
+/// no buttons): seed 0's hit now comes a frame apart and leaves Link on the ladder at Y $7D, where the ladder only
+/// goes back down (asm:Ladder_CheckAndDraw) and no MOVE N gets off; such a seed is passed over.
 #[test]
 fn a_ladder_clip_cut_by_a_hit_and_finished_by_a_move_is_counted() {
     let Some(mut nes) = open_core() else { return };
@@ -399,16 +401,17 @@ fn a_ladder_clip_cut_by_a_hit_and_finished_by_a_move_is_counted() {
         if hit && s.state().full_location() == MapLocation::new(4, 0x21, false) && s.state().link.position.y > 0x5D {
             let on = s.act(move_n).unwrap();
             stats.update(&on);
-            assert!(on.clip_finished_by_move, "seed {seed}: Y ${:02X}", s.state().link.position.y);
-            let again = s.act(Action::parse("MOVE N 8").unwrap()).unwrap();
-            stats.update(&again);
-            assert!(!again.clip_finished_by_move, "counted once");
-            assert_eq!((stats.done, stats.aborted, stats.finished_by_move), (0, 1, 1), "seed {seed}");
-            return;
+            if on.clip_finished_by_move {
+                let again = s.act(Action::parse("MOVE N 8").unwrap()).unwrap();
+                stats.update(&again);
+                assert!(!again.clip_finished_by_move, "counted once");
+                assert_eq!((stats.done, stats.aborted, stats.finished_by_move), (0, 1, 1), "seed {seed}");
+                return;
+            }
         }
         nes = env.into_parts().0.into_nes();
     }
-    panic!("no ladder clip cut by a hit in 64 seeds");
+    panic!("no ladder clip cut by a hit and finished by a MOVE in 64 seeds");
 }
 
 /// The training mix (round 22): with nothing fixing it, every episode draws the switch from the env's generator at
