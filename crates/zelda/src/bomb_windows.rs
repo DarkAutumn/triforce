@@ -3,8 +3,8 @@
 //! testing behavior based on the obs flags we tell the agent, not on magic unknown knowledge to it").
 //!
 //! - **Metric A, the 10th-kill bomb** ([`tenth_bomb_window`]): the next kill is the 10th damage-free one (`$50` =
-//!   9), Link holds a bomb and the family's bomb rule leaves BOMB on. Made with a bomb, that kill arms a forced bomb
-//!   drop (asm:Damage_KillMonster sets `$51`). Today's observation shows the streak (`next_kill_arms`,
+//!   9), Link holds a bomb of his own and the bomb mode is not `never`. Made with a bomb, that kill arms a forced
+//!   bomb drop (asm:Damage_KillMonster sets `$51`). Today's observation shows the streak (`next_kill_arms`,
 //!   `help_count`, `drop_is_bombs`).
 //! - **Metric B, the bomb carrier** ([`bomb_carrier_window`]): the next death's drop is read from the table (no
 //!   forced drop overrides it), the kill cycle points at a bomb column of drop group 2, the bag has room and the
@@ -12,11 +12,13 @@
 //!   This is the future observation flag "next kill may drop bombs" (backlog): the predicate is written to be the
 //!   flag; today it feeds the metric only.
 //!
-//! **Frame by frame, from RAM alone** (the owner, Nov 23: old versions' replays are scored by the same rules):
-//! [`BombWindows`] follows both windows over the play frames of a run ([`frame_kind`]), each pair of consecutive
-//! play frames one [`Step`], and counts how each window ended ([`BombWindowStats`]). What RAM does not hold (the
-//! family's bomb rule, whether the route's objective fights the room) comes from a [`WindowRules`]: `env` answers it
-//! from the route data of the tree that played the run, the same way live in the chain and offline over a replay.
+//! **A calculation over a replay, nothing more** (the owner, Nov 23): [`BombWindows`] takes a replay's frames one by
+//! one ([`frame_kind`]: play frames counted, each pair of consecutive ones a [`Step`]; transition frames end Link's
+//! stay in a room) and lists every window it saw as a [`Window`] record (metric, open and close frame and room,
+//! outcome, what was killed, the bag, the drop); counts are sums over that list ([`BombWindowStats`], and
+//! `triforce/bomb_metrics.py`). What RAM does not hold comes from a [`WindowRules`]: the facts the replay's targets
+//! stream recorded at each decision (the objective FIGHT, the bomb rule; `env::bomb_windows::StepFacts`), and the
+//! cheated bombs come from its EDITS (`env::bomb_windows::BombFrames`). Nothing counts during play.
 //!
 //! The game's rules (zelda-asm `src/bank4/drop-items.asm`, `src/bank7/object-update-table.asm`,
 //! `src/bank1/weapon-damage-death.asm`):
@@ -285,10 +287,15 @@ fn dying(state: &GameView, slot: u16) -> bool {
 }
 
 /// How far WorldKillCycle moved within the step, and the deaths that moved it, by slot: a slot that turned into a
-/// dropped item (the type from Item_ObjMonsterType), or one whose sparkle ended with no drop (freed); a monster
-/// freed without a sparkle seen (killed and gone within a longer step) fills up to the count when
-/// Item_ObjMonsterType names it. Leaving the room within the step, the slots that were dying. Fewer deaths than
-/// moves: the rest are unattributed.
+/// dropped item (the type the slot held in `prev` while dying; Item_ObjMonsterType only when the whole death fell
+/// within the step), or one whose sparkle ended with no drop (freed); a monster freed without a sparkle seen (killed
+/// and gone within a longer step) fills up to the count when Item_ObjMonsterType names it. Leaving the room within
+/// the step, the slots that were dying. Fewer deaths than moves: the rest are unattributed.
+///
+/// Item_ObjMonsterType (`$412`) is not to be trusted on the frame the slot turns into the item: when the drop is a
+/// fairy, asm:Drop_SetUpItem goes on to asm:Fairy_Init in the same call, whose asm:Flyer_ResetState zeroes
+/// Flyer_ObjPosFrac, the same byte (a kill streak of 16, or a fairy column of the table: 3:0x5b's Darknut at cycle
+/// 9 → 0, 9:0x16's Patra at 4 → 5 in the 2.0.0.13 single run).
 pub fn cycle_deaths(step: &Step) -> (u8, Vec<Death>) {
     let (p, c) = (step.prev, step.curr);
     let moves = (i32::from(c.world_kill_cycle()) - i32::from(p.world_kill_cycle())).rem_euclid(10) as u8;
@@ -304,7 +311,7 @@ pub fn cycle_deaths(step: &Step) -> (u8, Vec<Death>) {
                 deaths.push(death(was, None));
             }
         } else if now == DROPPED_ITEM && was != DROPPED_ITEM {
-            let kind = c.peek(ITEM_OBJ_MONSTER_TYPE + slot);
+            let kind = if dying(p, slot) { was } else { c.peek(ITEM_OBJ_MONSTER_TYPE + slot) };
             if advances_cycle(kind) {
                 deaths.push(death(kind, c.item_by_index(slot as i8).map(|i| i.id)));
             }
@@ -1275,5 +1282,30 @@ mod tests {
         let stats = play(&mut w, &[start, start, dodongo, killed, killed, out, out], true, false);
         assert_eq!((stats.suspended, stats.tenth_other, stats.tenth_lost), (1, 0, 0), "{:?}", w.windows);
         assert!(w.open().1, "a carrier window opened after Dodongo's room");
+    }
+
+    /// A child Gel (`$14`) moves neither the cycle nor the room count; a Zol (`$13`) does (asm:Obj_EndMetastate).
+    /// Both dying in one step move the cycle by one, and the death is the Zol's (a miss, not a carrier); the Gel
+    /// is no monster of the choice either.
+    #[test]
+    fn a_child_gel_death_moves_nothing_beside_a_zol() {
+        let mut start = base(2, 3, 0);
+        monster(&mut start, 2, enemy::BLUE_MOBLIN);
+        monster(&mut start, 3, enemy::GREEN_GEL);
+        monster(&mut start, 4, enemy::ZOL);
+        let mut gel_only = start;
+        monster(&mut gel_only, 4, 0);
+        assert!(!carrier(&gel_only, true, true), "a child Gel gives no choice in a FIGHT");
+        let mut both = start;
+        both[ITEM_OBJ_MONSTER_TYPE as usize + 3] = enemy::GREEN_GEL;
+        both[tables::OBJ_ID.0 + 3] = 0;
+        died(&mut both, 4, Some(item::RUPEE));
+        let (p, c) = (view(&start, 0), view(&both, 8));
+        let step = Step { prev: &p, curr: &c, left: false, frames: 8, own_prev: 2 };
+        assert_eq!(cycle_deaths(&step), (1, vec![Death { slot: 4, kind: enemy::ZOL, dropped: Some(item::RUPEE) }]));
+        let mut w = BombWindows::default();
+        let stats = play(&mut w, &[start, both], true, true);
+        assert_eq!((stats.carrier_hits, stats.carrier_miss_kill), (0, 1));
+        assert_eq!(w.windows[0].killed, Some((enemy::ZOL, 4)));
     }
 }

@@ -43,3 +43,16 @@ def test_replay_facts_read_the_rule_not_the_moment():
 
     assert bomb_metrics.replay_facts(Replay) == [(10, True, True, False), (20, True, False, False),
                                                  (30, False, False, True)]
+
+
+def test_an_unattributed_window_fails_after_the_outputs(tmp_path, monkeypatch, capsys):
+    from triforce import jobs
+    monkeypatch.setattr(jobs, 'require_job', lambda: None)
+    path = tmp_path / 'in.jsonl'
+    bomb_metrics.write_windows(path, [window('carrier', 'hit'), window('carrier', 'miss', killed=None)])
+    out = tmp_path / 'out.jsonl'
+    assert bomb_metrics.main(['--windows', str(path), '--out', str(out)]) == 1
+    assert len(bomb_metrics.read_windows(out)) == 2
+    captured = capsys.readouterr()
+    assert 'FAILED: a miss window with no killed monster: 0.tfreplay frame 2' in captured.err
+    assert '**FAILED: 1 Metric B' in captured.out

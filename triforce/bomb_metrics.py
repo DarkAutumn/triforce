@@ -124,9 +124,13 @@ def markdown(s: dict, top_rooms: int = 12) -> str:
                   for o in outcomes]
         uncounted = ', '.join(f"{m[o]} {o}" for o in UNCOUNTED if m.get(o))
         lines += ['', f"Not counted: {uncounted or 'none'}.", '']
+    failed = s['carrier']['unattributed']
     lines += [f"Forced bomb drops after `armed`: {s['tenth']['forced']}. Bombs the carrier hits dropped: "
-              f"{s['carrier']['bombs']}; unattributed: {s['carrier']['unattributed']}.", '',
-              f"Rooms with the most opportunities (top {top_rooms}; the room each window closed in):", '',
+              f"{s['carrier']['bombs']}.", '']
+    if failed:
+        lines += [f"**FAILED: {failed} Metric B hit/miss windows with no killed monster** (bomb_metrics lists the "
+                  "replays and frames; the counts above are not to be trusted).", '']
+    lines += [f"Rooms with the most opportunities (top {top_rooms}; the room each window closed in):", '',
               '| room | A opp | armed | missed | other | A full | B opp | hit | miss | left |',
               '|---|---|---|---|---|---|---|---|---|---|']
     lines += ['| ' + ' | '.join(str(v) for v in row) + ' |' for row in s['rooms'][:top_rooms]]
@@ -149,17 +153,33 @@ def main(argv=None) -> int:
     parser.add_argument('--json', default=None, help="write the summary here")
     parser.add_argument('--rooms', type=int, default=12)
     args = parser.parse_args(argv)
+    from . import jobs  # pylint: disable=import-outside-toplevel
+    jobs.require_job()
     if args.windows:
         windows = read_windows(args.windows)
     else:
-        windows = [w for path in args.replays for w in score_replay(path)]
+        windows = []
+        for done, path in enumerate(args.replays, 1):
+            windows += score_replay(path)
+            jobs.progress(done, len(args.replays), 'replays')
     if args.out:
         write_windows(args.out, windows)
     summary = summarize(windows)
     if args.json:
         Path(args.json).write_text(json.dumps(summary, indent=1) + '\n')
     sys.stdout.write(markdown(summary, args.rooms))
-    return 0
+    bad = unattributed(windows)
+    for w in bad:
+        print(f"bomb_metrics: FAILED: a {w['outcome']} window with no killed monster: {w['replay']} frame "
+              f"{w['close_frame']} ({w['close_room']})", file=sys.stderr)
+    return 1 if bad else 0
+
+
+def unattributed(windows) -> list:
+    """Metric B's hits and misses whose death no slot accounted for: must be none (a rule of the game the calculator
+    does not know, or a frame it misread)."""
+    return [w for w in windows if w['metric'] == 'carrier' and w['outcome'] in ('hit', 'miss')
+            and w['killed_type'] is None]
 
 
 if __name__ == '__main__':

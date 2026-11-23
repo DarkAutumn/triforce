@@ -557,6 +557,9 @@ def stats(out: Path, team=None, docs: Path = DOCS, archive: bool = True, from_re
     path.write_text(text)
     print(markdown([record], [path.name]))
     print(f"record: {path}; kept replays: {kept_dir}")
+    for where in record['bomb_metrics']['unattributed']:
+        print(f"full_runs: FAILED: bomb metrics: a Metric B {where['outcome']} window with no killed monster: "
+              f"{where['replay']} frame {where['close_frame']}", file=sys.stderr)
     return record
 
 
@@ -662,15 +665,21 @@ def markdown(records: list, names: list, top_rooms: int = 12) -> str:
 def bomb_windows(out: Path, parallel: int = 4) -> dict:
     """The owner's two bomb metrics over the folder's replays (``triforce/bomb_metrics.py``, a calculation over each
     replay): every window to ``OUT_DIR/bomb_windows.jsonl``, the batch's summary (counts and rooms, not per run) for
-    the record."""
+    the record, with ``unattributed``: the Metric B hit/miss windows no death accounted for (must be none; ``stats``
+    prints each as a failure)."""
     from concurrent.futures import ProcessPoolExecutor  # pylint: disable=import-outside-toplevel
-    from triforce import bomb_metrics  # pylint: disable=import-outside-toplevel
+    from triforce import bomb_metrics, jobs  # pylint: disable=import-outside-toplevel
     replays = sorted((out / 'replays').glob('*.tfreplay'))
+    windows = []
     with ProcessPoolExecutor(parallel) as pool:
-        windows = [w for ws in pool.map(bomb_metrics.score_replay, replays) for w in ws]
+        for done, ws in enumerate(pool.map(bomb_metrics.score_replay, replays), 1):
+            windows += ws
+            jobs.progress(done, len(replays), 'replays', label='bomb metrics')
     bomb_metrics.write_windows(out / 'bomb_windows.jsonl', windows)
     summary = bomb_metrics.summarize(windows)
     summary.pop('per_run')
+    summary['unattributed'] = [{k: w[k] for k in ('replay', 'close_frame', 'close_room', 'outcome')}
+                               for w in bomb_metrics.unattributed(windows)]
     return summary
 
 
