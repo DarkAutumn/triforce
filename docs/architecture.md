@@ -1522,9 +1522,20 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `training.json`: the training GUI does not list it): `start`, a `test` line per test as it ends (`id`,
   `outcome`, `seconds`, `setup` / `call` / `teardown`, `worker`) and `summary` (checkout, branch, commit, `job`:
   id, label, agent, task, subtask; `workers`, `load` at the start, `wall`, `collected`, `counts`, `test_seconds`,
-  `exit`). The Rust suite runs as `python -m triforce.testlog cargo -- cargo test ...`, which passes cargo's output
-  through and writes a `test` line per test binary (`Running` / `Doc-tests`, then its `test result:`: counts and
-  `finished in`; stable Rust has no per-test times) and a summary with `compile` seconds. `triforce test-times`
+  `exit`). The Rust suite runs as `python -m triforce.cargo_tests -- cargo test ...` (the owner, Nov 23: "Test rust
+  is now the extremely long leg of testing"): `cargo test --no-run --message-format=json-render-diagnostics` builds
+  and lists the test programs (`compiler-artifact` messages of test profile), each program's `--list` counts its
+  tests (the job's progress: `Rust tests` done of that total, a program's counted as it ends, the doc tests added
+  when they end), and the programs run `cargo_tests.JOBS` = 6 at a time, the longest first (each one's median
+  over the last five whole Rust suites of the timing logs; a program without history first), each as cargo runs
+  it (its package's folder, `CARGO_MANIFEST_DIR`, the build scripts' library folders on `LD_LIBRARY_PATH`), the
+  doc tests (`cargo test --doc`) as one more entry. Every program runs whatever another did (cargo stops at the
+  first failing program); each one's output is printed whole under cargo's `Running` line when it ends, the
+  failed ones named again at the end with the `-p PACKAGE --test NAME` that reruns each; the exit code is cargo's
+  (101 when a test failed). A `test` line per program (`<package> tests/cli.rs`, `<package> unittests
+  src/lib.rs`, `<crate> doctests`; `seconds` its wall time; the counts of its `test result:`; stable Rust has no
+  per-test times) and a summary with `compile` (the build's seconds) and `test_wall`. `--no-run` or `--doc` run
+  cargo itself, read line by line. `triforce test-times`
   (`testlog.report_main`) reads every folder with a summary: per suite the wall time run by run, each test's median
   and worst over the last `--last` runs, the `--top` slowest, the tests whose newest time is 1.5x and 1 s over the
   median of the runs before; plain text or `--json`.

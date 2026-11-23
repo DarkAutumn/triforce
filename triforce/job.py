@@ -70,6 +70,7 @@ SUITES = ('python', 'asm', 'check', 'rust')     # ``triforce job test``'s suites
 # (load 3-5): one process 410-433 s; 6 processes 78 s, 8 61 s, 12 71 s.  The tools lane runs two test jobs at
 # once: two suites of 8 leave 4 of the 20 threads to the owner's player and the jobs.
 PYTEST_WORKERS = 8
+CARGO_TEST = ('cargo', 'test', '--release', '--workspace', '--features', 'zelda/zcore')     # the Rust suite
 
 
 class JobError(Exception):
@@ -758,10 +759,11 @@ def build_step(root: Path, extra: list[str]) -> Step:
 def test_steps(root: Path, suites: list[str], extra: list[str]) -> list[Step]:
     """The steps of ``suites`` (``SUITES``, in that order whatever order they were given in): ``python`` (pytest of
     ``tests`` in ``PYTEST_WORKERS`` processes; ``-- -n 0`` runs it in one), ``asm`` (the disassembly's own tests),
-    ``check`` (``asm.py check``: no edit changed the code, every
-    ``asm:`` citation resolves), ``rust`` (the cargo workspace, through ``triforce.testlog``'s reader of cargo's
-    output).  Every pytest run and the Rust suite write a timing log into the logs folder (``triforce.testlog``;
-    ``triforce test-times`` reads them).  They run at the same time (``together``) and none is ``required``: each
+    ``check`` (``asm.py check``: no edit changed the code, every ``asm:`` citation resolves), ``rust`` (the cargo
+    workspace's test programs side by side, ``triforce.cargo_tests``, which reports ``Rust tests`` done of the
+    listed total).  Every pytest run and the Rust suite write a timing log into the logs folder
+    (``triforce.testlog``; ``triforce test-times`` reads them).  They run at the same time (``together``) and none
+    is ``required``: each
     runs whatever another did.  A worktree without its own ``models`` reads the main checkout's
     (``$TRIFORCE_MODELS_DIR``; a few tests read the promoted team), never linked in."""
     python = checkout_python(root)
@@ -773,15 +775,15 @@ def test_steps(root: Path, suites: list[str], extra: list[str]) -> list[Step]:
             models = None
         if models is not None and models.is_dir():
             env['TRIFORCE_MODELS_DIR'] = str(models)
-    # --no-fail-fast: cargo stops at the first failing test program otherwise, and the programs after it are never
-    # run (Nov 23: one failing program hid the state of thirty others for a 25-minute run).
-    cargo = ['cargo', 'test', '--release', '--workspace', '--features', 'zelda/zcore', '--no-fail-fast', *extra]
+    # The runner runs every test program whatever another did (cargo alone stops at the first failing one, Nov 23:
+    # one failing program hid the state of thirty others for a 25-minute run).
+    cargo = [*CARGO_TEST, *extra]
     commands = {
         'python': ('test python', [python, '-m', 'pytest', '-q', '-n', str(PYTEST_WORKERS), '--dist', 'worksteal',
                                    'tests', *extra]),
         'asm': ('test asm', [python, '-m', 'pytest', '-q', 'zelda-asm/tests', *extra]),
         'check': ('asm check', [python, 'zelda-asm/tools/asm.py', 'check', *extra]),
-        'rust': ('test rust', [python, '-m', 'triforce.testlog', 'cargo', '--', *cargo]),
+        'rust': ('test rust', [python, '-m', 'triforce.cargo_tests', '--', *cargo]),
     }
     return [Step(*commands[name], root, env, required=False, together=True) for name in SUITES if name in suites]
 
