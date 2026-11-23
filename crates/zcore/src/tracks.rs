@@ -41,6 +41,11 @@ use crate::{Rom, ZCore};
 const AUDIO_DRIVE: u16 = 0x9825;
 /// `asm:Song_Silence` in bank 0.
 const SONG_SILENCE: u16 = 0x9D46;
+/// X as `asm:Nmi_Isr` leaves it when it calls `asm:Audio_Drive` (its random-number loop counts X from $18 through
+/// 13 bytes; `asm:Mmc1_SwitchBank` keeps it).  The driver reads it once: restarting a looping background sample,
+/// `asm:Sample_Drive` jumps from `@CheckBgSample` straight to the `STX DmcCounter` of a new sample, so the game
+/// sets the DMC's level to $25 there.  A, Y are 0 then too.
+const NMI_X: u8 = 0x25;
 /// `asm:PauseState`: the one byte outside its own state the driver reads.
 pub const PAUSE_STATE: usize = 0xE0;
 /// `asm:SongRequest` (then `asm:SampleRequest`, `asm:Tune1Request`, `asm:EffectRequest`).
@@ -212,7 +217,7 @@ impl Driver {
             writes: &mut self.writes,
             stray,
             a: 0,
-            x: 0,
+            x: NMI_X,
             y: 0,
             // A return address of $FFFF on the stack: the routine's RTS lands at $0000.
             s: 0xFD,

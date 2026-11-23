@@ -150,6 +150,7 @@ struct Checks {
     /// The frames of the loudest effects samples where silence was expected, and of the mirror's mismatches.
     silent_loud: Vec<(u32, f32)>,
     mismatched_frames: Vec<u32>,
+    mismatched_detail: Vec<Value>,
     mismatched_seen: u64,
     beep_frames: u64,
     beep_peak_without: f32,
@@ -293,6 +294,16 @@ impl Checks {
             if self.mismatched_frames.len() < 16 {
                 self.mismatched_frames.push(frame);
             }
+            if self.mismatched_detail.len() < 4 {
+                let mirror: Vec<String> =
+                    split.driver_writes(None).iter().map(|w| format!("{}:40{:02X}={:02X}", w.cycle, w.register, w.value)).collect();
+                let machine: Vec<String> = nes.sound().map_or(Vec::new(), |f| {
+                    f.events().iter().map(|e| format!("{}:{:?}={:02X}", e.cycle(), e.register(), e.value())).collect()
+                });
+                let ram = nes.ram();
+                self.mismatched_detail.push(json!({"frame": frame, "mirror": mirror, "machine": machine,
+                    "after": format!("{:02X?} pause {:02X}", &ram[0x600..0x60A], ram[tracks::PAUSE_STATE])}));
+            }
         }
         if self.check_beep {
             self.beep_frames += 1;
@@ -377,7 +388,7 @@ impl Checks {
         let frames = stats.frames.max(1) as f64;
         json!({
             "driver": {"frames": stats.frames, "driven": stats.driven, "mirror_mismatched": stats.mismatched,
-                       "mismatched_frames": self.mismatched_frames,
+                       "mismatched_frames": self.mismatched_frames, "mismatched_detail": self.mismatched_detail,
                        "faults": stats.faults, "stray": stats.stray.iter().map(|a| format!("${a:04X}")).collect::<Vec<_>>()},
             "music_song_state": self.song.json(),
             "effects_state": self.effect_state.json(),

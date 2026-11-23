@@ -451,12 +451,18 @@ def test_menus_do_what_the_keys_do_and_follow_them(qapp):  # pylint: disable=red
     assert list(items) == [
         'Show/Best', 'Show/Wins', 'Show/Stuck', 'Show/Died', 'Show/Random', 'Show/Golden path',
         'Show/Next replay in every cell', 'Playback/Pause', 'Playback/Uncapped speed', 'Playback/Faster',
-        'Playback/Slower', 'Options/Clips', 'View/Sound', 'View/Controller', 'View/Scale/1×', 'View/Scale/2×',
-        'View/Scale/3×', 'View/Scale/4×']
+        'Playback/Slower', 'Options/Clips', 'View/Sound', 'View/Music', 'View/Sound effects', 'View/Low-hearts beep',
+        'View/Controller', 'View/Scale/1×', 'View/Scale/2×', 'View/Scale/3×', 'View/Scale/4×']
     assert items['Show/Died'].text() == 'Died\tD' and items['View/Controller'].text() == 'Controller'
     assert not items['Show/Died'].shortcut().toString()      # the key is named, not bound twice
     checked = lambda: sorted(name for name, item in items.items() if item.isChecked())   # noqa: E731
-    assert checked() == ['Options/Clips', 'Show/Best', 'View/Scale/2×', 'View/Sound']
+    parts = ['View/Low-hearts beep', 'View/Music', 'View/Sound effects']
+    assert checked() == ['Options/Clips', 'Show/Best', *parts[:1], 'View/Music', 'View/Scale/2×', 'View/Sound',
+                         'View/Sound effects']
+    items['View/Music'].trigger()
+    assert fake.mixes[-1] == play_grid.Mix(music=False) and not items['View/Music'].isChecked()
+    window.handle_key(Qt.Key.Key_M)
+    assert items['View/Music'].isChecked()
 
     items['Show/Died'].trigger()
     items['Show/Next replay in every cell'].trigger()
@@ -464,13 +470,14 @@ def test_menus_do_what_the_keys_do_and_follow_them(qapp):  # pylint: disable=red
     items['View/Controller'].trigger()
     items['Playback/Pause'].trigger()
     assert (fake.selected, fake.skips, fake.clips, fake.controller, fake.paused) == (['died'], 1, False, True, True)
-    assert checked() == ['Playback/Pause', 'Show/Died', 'View/Controller', 'View/Scale/2×', 'View/Sound']
+    assert checked() == ['Playback/Pause', 'Show/Died', 'View/Controller', *parts[:2], 'View/Scale/2×', 'View/Sound',
+                         'View/Sound effects']
 
     # The keys move the check marks too.
     for key in (Qt.Key.Key_P, Qt.Key.Key_W, Qt.Key.Key_C, Qt.Key.Key_S, Qt.Key.Key_U):
         window.handle_key(key)
-    assert checked() == ['Options/Clips', 'Playback/Uncapped speed', 'Show/Wins', 'View/Controller',
-                         'View/Scale/2×']
+    assert checked() == ['Options/Clips', 'Playback/Uncapped speed', 'Show/Wins', 'View/Controller', *parts[:2],
+                         'View/Scale/2×', 'View/Sound effects']
     assert not items['Playback/Faster'].isEnabled() and not items['Playback/Slower'].isEnabled()
     items['Playback/Uncapped speed'].trigger()
     items['Playback/Slower'].trigger()
@@ -490,7 +497,8 @@ def test_menus_do_what_the_keys_do_and_follow_them(qapp):  # pylint: disable=red
     window.add_menus(remake=lambda **_: files, act='sample', acts=[('sample', 'sample')])
     assert list(_menus(window)) == [
         'Show/Next replay in every cell', 'Playback/Pause', 'Playback/Uncapped speed', 'Playback/Faster',
-        'Playback/Slower', 'View/Sound', 'View/Scale/1×', 'View/Scale/2×', 'View/Scale/3×', 'View/Scale/4×']
+        'Playback/Slower', 'View/Sound', 'View/Music', 'View/Sound effects', 'View/Low-hearts beep', 'View/Scale/1×',
+        'View/Scale/2×', 'View/Scale/3×', 'View/Scale/4×']
     window.shutdown()
 
 
