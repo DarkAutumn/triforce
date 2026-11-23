@@ -3550,3 +3550,14 @@ with no run id: their recipe cannot be replayed. A generation trained from scrat
 same pipeline (route data, states, curricula, rewards, recipe) must reach today's chains from nothing, family by
 family, and where it does not, the gap names what the lineage carried that the recipe does not. From here a run
 records its parent by family, run id and checkpoint SHA-1 (no path), so lineage stays traceable.
+
+## 2026-11-23 — A version's first three numbers each mean a fresh generation (the owner)
+
+The owner: "let's define that third version number, eg 2.0.0.0 -> 2.0.1.0 as a retrain like this, breaking the ship
+of theseus. [...] Major and Minor version numbers also require breaking the ship of theseus." This replaces the 90%
+rule of the versioning entry above: a `GEN` bump (and any `MAJOR` or `MINOR` bump) means every network the version
+plays was trained from scratch by that version's pipeline, with no weights carried from an earlier generation by
+continuation, warm start, conversion or imitation of its networks; a student may learn from the same generation's
+fresh teachers. Everything else, networks continued or replaced inside a generation included, is a `REV`. No version
+through 2.0.0.11 was a fresh generation (73 of 76 pointers are continuations, the entry above); none is renumbered.
+The next fresh generation is 2.0.1.0 unless the owner names it a bigger change. AGENTS.md "Versioning".

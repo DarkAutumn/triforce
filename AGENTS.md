@@ -770,18 +770,22 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   stamped 2.0.0.0). It is the
   single source: `triforce.__version__` and `_native.VERSION` read it, `pyproject.toml` repeats it and the Cargo
   workspace version is its first three numbers (`tests/test_version.py` checks all of them).
-  - `MAJOR` changes only when the owner says so. **2.0 is said (Nov 19): the `d3first` route** (above, "Two
-    routes"), landed Nov 20 as 2.0.0.0.
+  - **A fresh generation breaks the ship of Theseus** (the owner, Nov 23): every network the version plays is trained
+    from scratch by today's pipeline (route data, states, curricula, rewards, recipe): no weights carried from an
+    earlier generation by continuing, warm-starting, converting or imitating its networks (a student may learn from
+    the same generation's fresh teachers). It shows the approach is repeatable, not a hull rebuilt plank by plank.
+    `MAJOR`, `MINOR` and `GEN` bumps all require one.
+  - `MAJOR` changes only when the owner says so, with a fresh generation. **2.0 is said (Nov 19): the `d3first`
+    route** (above, "Two routes"), landed Nov 20 as 2.0.0.0 (before this rule: its networks were carried over).
   - `MINOR` +1 for a big change (the owner, Nov 19: "We are going to drop the 'dungeon # is the minor version'.
-    From here on, minor version bumps are big changes"). Through 1.9 it counted the dungeons the route completes
-    (1.3 = three).
-  - `GEN`, the **retrain generation** (the owner, Nov 23): +1, `REV` back to 0, when 90% or more of the promoted
-    models are retrained from scratch (fresh weights, not continued, warm-started or converted from an earlier run),
-    e.g. 2.0.0.123 -> 2.0.1.0. The promoted models are the runs the pointers name (`promoted`, `promoted.<route>`,
-    `late.<route>`). Nothing else bumps it. Until Nov 23 the third number was `COMPAT` (+1 on a change old models
-    could not load); every version through 2.0.0.11 was numbered by that rule, none is renumbered.
-  - `REV` +1 for every other change to what plays or how it trains: rewards, env or training code, promoted models
-    replaced short of a new generation, and an observation or action change, including one whose old models
+    From here on, minor version bumps are big changes"), with a fresh generation. Through 1.9 it counted the
+    dungeons the route completes (1.3 = three).
+  - `GEN`, the **retrain generation** (the owner, Nov 23): +1, `REV` back to 0, for a fresh generation without a
+    bigger change, e.g. 2.0.0.123 -> 2.0.1.0. Nothing else bumps it. Until Nov 23 the third number was `COMPAT` (+1 on
+    a change old models could not load); every version through 2.0.0.11 was numbered by that rule, none is
+    renumbered, and none was a fresh generation.
+  - `REV` +1 for every other change to what plays or how it trains: rewards, env or training code, networks
+    continued or replaced within the generation, and an observation or action change, including one whose old models
     `triforce convert-model` widens instead of retraining them.
   - Doc, GUI and tool-only changes bump nothing. A bump is its own line in the commit that causes it.
 - **Whether a model loads is decided by its checkpoint's schemas, never by a version** (the owner, Nov 23).
