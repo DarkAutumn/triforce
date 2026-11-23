@@ -155,6 +155,7 @@ All of the glitch knowledge is the owner's; the agents made the agent able to us
 | Nov 22 | A danger zone about 3 tiles in front of shooters while their shot is ready | Owner | Failed so far: reach measured within 2 tiles, under 1% of hits | r38 §6 |
 | Nov 22 | Bubbles cost time and hearts; penalise their touch | Owner (question); agents measured | Built; no trained result yet | r38 |
 | Nov 23 | Beams at range: reward ranged kills, cost an untaken lined-up shot (v1 did a version) | Owner; agents built the terms | Failed at these weights; stronger ones next | dec 11-23, bl |
+| Nov 23 | Firing-line targets: at full hearts a fight steers to tiles in line with a monster at range, not to the monster (follows the owner's beams note and v1's zeroed movement reward while in line) | Agents (the lead's diagnosis of the PBRS targets; built by the agents) | Built, switch off; the zol arms wait for the queue | r40 |
 | Nov 23 | Red candle and boomerang for Bubble rooms; snipe 6:0x78's Wizzrobes | Owner | Open (a 0x78 swing earned about 0.1 bombs a run) | bl, r33 |
 
 ## Bombs, keys and rupees

@@ -1073,6 +1073,12 @@ hurt (active, not dying, sword bit clear in ObjInvincibilityMask `$4B2`, not a D
 Digdogger). Counted in the visits and chain records as `beam_<field>` (`beams::BeamStats`: shots, shots lined up,
 decisions lined up and those that moved or waited, kills far / near / other with their summed distance, hearts lost,
 steps that cost the beams); `scripts/experiments/r38_beams.py` tabulates them per family or room.
+`reward.firing_lines` (round 40, the beams experiment; off by default, round40.md "Firing lines"): while Link holds
+a sword and full hearts (`beams::shoots_at_full`), a fight's PBRS and `target` destinations are its monsters'
+firing-line tiles instead of their own (`env::objective::firing_line_aims`, `beams::firing_lines`: Link's tiles in
+line with a monster within the shot's 12 pixels, at least `beams::FIRING_RANGE` = 48 pixels ahead, out of every
+monster's melee reach, on the room's floor; blocks between are no obstacle, the shot flies over tiles), labelled
+`Role::FiringLine` (TARGETS `firing-line`); none reachable, short of hearts or outside a fight, the monsters' tiles.
 `reward-gained-rupees` (round 38, the owner: "what should ACTUALLY be awarded for getting rupees is the 'rupees to
 add' counter getting set once") pays once per pickup, on the step `InvRupees + InvRupeesToAdd − InvRupeesToSubtract`
 rises, by the amount: under 5 `REWARD_MEDIUM`, 5-9 `REWARD_LARGE`, 10 or more `REWARD_MAXIMUM`; nothing while
