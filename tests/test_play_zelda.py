@@ -53,10 +53,10 @@ def test_parse_args_grid_path_and_sources(tmp_path):
     assert (args.act, args.replays, args.state, args.streams, args.power_on) == (registry.PLAY_ACT, None, 'embed', (),
                                                                                 None)
     assert (args.parallel, args.capacity, args.patience, args.first_seed, args.stop) == (8, 32, 64, 0, (None, None))
-    # A cell is heard and the controller is not drawn, unless asked otherwise.
-    assert (args.sound, args.controller) == (True, False)
-    args = play_zelda.parse_args(['--no-sound', '--controller'])
-    assert (args.sound, args.controller) == (False, True)
+    # A cell is heard and neither the controller nor the thoughts are drawn, unless asked otherwise.
+    assert (args.sound, args.controller, args.thoughts) == (True, False, False)
+    args = play_zelda.parse_args(['--no-sound', '--controller', '--thoughts'])
+    assert (args.sound, args.controller, args.thoughts) == (False, True, True)
     # Clips on and no live cell unless asked; --live needs the models, not files.
     assert (args.clips, args.live) == ('on', False)
     args = play_zelda.parse_args(['--clips', 'off', '--live'])

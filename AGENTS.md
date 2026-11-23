@@ -782,9 +782,9 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   converted models act bit for bit as their sources (round 26's proof, decisions 2026-11-16).
 - Tag releases `vX.Y.Z.R` on `main`. **Models are not checked in** (too large; Lee will pick a backup strategy).
 - **Replays are `TFREPLAY` files** (`crates/replay`, `triforce/replay.py`) with their own integer `REPLAY_VERSION`,
-  independent of the repo version. It is bumped when an existing replay can no longer be replayed bit-exactly
-  (a container change the reader does not handle, a zcore behaviour change, a dropped state decoder), or when an older
-  reader could not read what is written (version 1, round 32: a state's route grants); the reader
+  independent of the repo version. Every format change bumps it (the owner, Nov 23: replays never need to be
+  readable by older readers; version 2 added TARGETS, MASKS and the always-on DECISIONS); a reader refuses a newer
+  replay by name and
   keeps reading every earlier version it can. `corpus/replays/` must keep verifying (`tf replay verify`, a cargo
   test): a deliberate break moves those files to `corpus/replays/retired/`, bumps `REPLAY_VERSION` and records new
   ones. Replacing a corpus file pins new facts: `crates/tools/tests/cli.rs` `the_replay_corpus_still_verifies`
@@ -801,7 +801,17 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 - **Recording and replaying** (`docs/architecture.md` "Replays", "Headless play and the golden path",
   "Watching"): `triforce eval-chain|evaluate --replays DIR`, `zelda-headless.py OUT [COUNT]
   [--wins-only|--deaths-only|--stuck-only] [--golden] [--clips on|off]`; optional streams `--streams
-  rewards,decisions,keyframes`.
+  rewards,keyframes`. **A replay says on its own what the agent was steered to, what it could do and what it
+  chose** (the owner, Nov 23; version 2): every replay carries the objective and its role-labelled targets
+  (TARGETS, `obs` or `reward-only`), the action mask with the rule behind each block (MASKS) and every decision
+  (DECISIONS: the network, the action, the quantized distribution, the hit head's danger, the act mode's draw,
+  the planner's vetoes), all named by its own META, which also describes each network (family, run, checkpoint
+  SHA-1, architecture, outputs) and a chain run's record. Keep it that way: a new target kind, role or network
+  output is a new META name, never a filesystem path (`test_a_replay_holds_no_filesystem_path`), and what is
+  computable from RAM is not recorded again. A chain's report must be computable from its replays alone
+  (`replay.chain_records`, `scripts/full_runs.py report --from-replays`). People read them with `tf replay
+  targets FILE [--room L:RR] [--masks] [--decisions]`, `play-zelda.py --thoughts` and `create-video.py
+  --thoughts`.
   `tf replay info FILE`, `tf replay verify FILE...` (the emulator alone; exit 1 on a divergence). The golden path
   is a race, so which seed wins a segment can differ between two invocations; each saved replay is exact.
   `play-zelda.py` plays replays: of runs it simulates in the background and files into queues
@@ -813,8 +823,9 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   clips" for a run played without). `--live` makes the top left cell a live game the models play while it is
   watched (in the `--act` mode, as the simulations): `c` acts on that run from its next decision and the route
   re-plans from where Link stands ("rest of the run no clips"); its finished runs join the queues. The keys are
-  in `--help`. `create-video.py OUT [GRID]
-  REPLAY... [--sound] [--controller]` films replays the same way into a video file (`ffmpeg`).
+  in `--help`. `--thoughts` draws over each cell what its replay says the agent was thinking (objective and
+  targets, the mask, the decision). `create-video.py OUT [GRID]
+  REPLAY... [--sound] [--controller] [--thoughts]` films replays the same way into a video file (`ffmpeg`).
 - **Sound is computed beside the emulator, never inside it** (`crates/zcore/src/sound.rs`, `docs/architecture.md`
   "Sound"): a `Synth` replays the APU register writes the bus notes. `MachineState`, state files, replays and
   training don't change with it, and must not: no sound state goes into `MachineState`. A replay that starts

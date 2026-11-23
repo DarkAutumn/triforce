@@ -277,6 +277,7 @@ All specified by the owner and built by the agents unless noted.
 | Nov 11 | play-zelda from queues (success, stuck, died, random, best); headless runs; sound, video, a controller overlay | Worked | dec 11-11 |
 | Nov 13 | Statistics by segment, full run and room | Worked | r21 §8 |
 | Nov 14 | A web view of the training GUI for the phone | Worked | session history |
+| Nov 23 | **Replays that say on their own what the agent was steered to, could do and chose**: the objective and role-labelled targets (`reward-only` ones too), the action mask with its rules, every decision with its distribution and danger, named by the replay's own META (no paths, no route data); a chain's report from its replays alone; a thoughts overlay for the video. The owner's spec and answers; the agents the format (replay version 2), the reader and the overlay | Worked: the Dungeon 8 chain played the same 200 runs frame for frame with it | session history, `docs/architecture.md` "Replays" |
 
 ## Watching and steering
 

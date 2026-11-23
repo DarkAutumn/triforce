@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Collection, Iterable, Optional
 
 from . import __version__, _native
-from .provenance import code_version, data_hash
+from .provenance import code_commit, code_version, data_hash
 
 STREAMS = ('rewards', 'keyframes')     # the optional streams of a recording (decisions, targets, masks: always)
 DEFAULT_KEYFRAME_FRAMES = 600

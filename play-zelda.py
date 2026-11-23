@@ -10,6 +10,7 @@
     .venv/bin/python play-zelda.py 2x3 runs/replays    # a folder's replays (top level), six at a time, round and round
     .venv/bin/python play-zelda.py 3x2 --benchmark 30  # print the frame rate on screen, then quit
     .venv/bin/python play-zelda.py 2x2 --controller    # draw the controller, its held buttons lit, in every cell
+    .venv/bin/python play-zelda.py run.tfreplay --thoughts   # what the agent was steered to, could do and chose
     .venv/bin/python play-zelda.py 3x2 --live          # the top left cell is a live game: c turns its clips off
     .venv/bin/python play-zelda.py --clips off         # every simulated run without clips (c turns them back on)
 
@@ -69,7 +70,11 @@ note.
 The strip under a cell names the run's seed (a replay file: its name), the room, the specialist acting, and any
 cheated items the run used.  When a replay ends its result shows for a few seconds, then the cell takes the next
 one.  A run from console power on is shown from the moment the models take over.  --controller draws the
-controller in the top right of every cell (over -LIFE-), the buttons held on each frame lit white.
+controller in the top right of every cell (over -LIFE-), the buttons held on each frame lit white.  --thoughts
+draws what each replay says the agent was thinking over the bottom of its cell (triforce/thoughts.py): the
+objective and its targets with the rooms they lead to, the actions it could take (and the rule behind each
+blocked one), and the network that acted, the action it chose with its probability and danger estimate, and the
+next most likely actions.  Only replays recorded since version 2 carry these; older ones show none.
 The title shows the queues, the runs simulated and how they ended, how fast the cells play ("36 fps of 60.1
 max", ∞ when uncapped) and the sound.  --replays DIR also saves every simulated run.
 
@@ -128,6 +133,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--controller', action='store_true',
                         help="draw the controller in the top right of every cell (over -LIFE-), the buttons held "
                              "on each frame lit white")
+    parser.add_argument('--thoughts', action='store_true',
+                        help="draw what each replay says the agent was thinking over its cell: the objective and "
+                             "targets, the actions it could take, the one chosen with its probability and the "
+                             "next most likely (replay version 2 on)")
     parser.add_argument('--no-sound', dest='sound', action='store_false',
                         help="start with sound off (key s turns it on; a click on a cell makes it the one heard)")
     sim = parser.add_argument_group('the simulations (not with a PATH)')
@@ -248,7 +257,7 @@ def main(argv=None) -> int:
     # for a destroyed Wayland surface, which segfaults in QtWaylandClient).
     signal.signal(signal.SIGINT, lambda *_: QTimer.singleShot(0, app.quit))
     settings = {'source': args.show, 'fps': args.fps, 'act': args.act, 'clips': args.clips == 'on',
-                'live': args.live, 'controller': args.controller}
+                'live': args.live, 'controller': args.controller, 'thoughts': args.thoughts}
 
     def make_grid(**changes) -> ReplayGrid:
         """The grid for ``settings`` after ``changes`` (the window's menus: the act mode, the live cell)."""

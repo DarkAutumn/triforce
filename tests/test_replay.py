@@ -2,8 +2,10 @@
 replays on the emulator alone, its optional streams, its start (state file, embedded state, power on), and
 cutting, continuing and stitching.  The file format itself is tested in ``crates/replay``."""
 
+import importlib.util
 import json
 import shutil
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -31,6 +33,15 @@ def record(runner, route, seed, **options):
     (_, result), = chain.results(events)
     recording, = [_native.Replay(event['data']) for event in events if event['type'] == 'replay']
     return result, recording
+
+
+def _full_runs():
+    """``scripts/full_runs.py`` as a module."""
+    spec = importlib.util.spec_from_file_location('full_runs', Path(__file__).resolve().parents[1] / 'scripts'
+                                                  / 'full_runs.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def end_of(recording, states_dir=None):
@@ -144,6 +155,14 @@ def test_eval_chain_records_the_scripted_segment_as_wins(scripted_models, tmp_pa
         end = recording.states()[-1]
         assert (end['kind'], end['step']) == ('end', SEGMENT_STOP_STEP)
         assert _native.replay_verify(recording.data)['frames'] == recording.frames
+    # The chain's records and its full_runs report come from the replays alone, as from the chain's output.
+    records, provenance = replay.chain_records(sorted(folder.iterdir()))
+    assert records == runs and provenance['batches'][0]['first_seed'] == 0
+    assert provenance['provenance']['route'] == 'd2first'
+    full_runs = _full_runs()
+    route = full_runs.route_facts(_native.route_steps('d2first'))
+    assert replay.chain_route(sorted(folder.iterdir())) == route
+    assert full_runs.replay_report(sorted(folder.iterdir())) == full_runs.summary(runs, route)
     for bad, message in ((['--replays', str(folder), '--streams', 'sound'], "unknown replay stream(s) ['sound']"),
                          (['--streams', 'rewards'], '--streams needs --replays')):
         assert cli.main([*chain, '--runs', '1', '--output', str(tmp_path / 'bad.jsonl'), *bad]) == 2
