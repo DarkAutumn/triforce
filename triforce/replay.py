@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Collection, Iterable, Optional
 
 from . import __version__, _native
-from .provenance import code_commit, code_version, data_hash
+from .provenance import OUTPUTS, code_commit, code_version, data_hash
 
 STREAMS = ('rewards', 'keyframes')     # the optional streams of a recording (decisions, targets, masks: always)
 DEFAULT_KEYFRAME_FRAMES = 600
@@ -32,10 +32,11 @@ SUFFIX = '.tfreplay'
 
 def meta(kind: str, models: list, route: Optional[str] = None, stop_at: Optional[str] = None, **extra) -> dict:
     """The META base object of a recording: what played.  ``kind``: 'chain', 'eval' or 'train'; ``models``: per
-    policy index the network that played it, described without any path (``provenance.replay_models``); ``code``
-    and ``commit``: the checkout that played (``git describe``, ``git rev-parse HEAD``)."""
+    policy index the network that played it, described without any path (``provenance.replay_models``), with the
+    outputs each network's decisions keep described once in ``outputs`` (``provenance.OUTPUTS``); ``code`` and
+    ``commit``: the checkout that played (``git describe``, ``git rev-parse HEAD``)."""
     return {'triforce': __version__, 'code': code_version(), 'commit': code_commit(), 'data': data_hash(),
-            'kind': kind, 'route': route, 'stop_at': stop_at, 'models': models, **extra}
+            'kind': kind, 'route': route, 'stop_at': stop_at, 'models': models, 'outputs': OUTPUTS, **extra}
 
 
 def record_options(meta: dict, streams: Iterable[str] = (), state: str = 'embed',

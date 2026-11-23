@@ -19,8 +19,9 @@
 //! network or code of the version that recorded it) can print, for any frame, which network acted, the legal
 //! actions, the chosen one, the probabilities, the danger per action and the objective with its targets, each
 //! labelled: META `actions` describes the action space and the distribution's layout, `models[i]` the network
-//! of policy index `i` (family, run, checkpoint and its SHA-1, architecture and parameters, act mode, and its
-//! `outputs`: name, shape, labels, meaning and units of each output, the hit head's among them where it has one),
+//! of policy index `i` (family, run, checkpoint and its SHA-1, architecture and parameters, act mode, and the
+//! names of its `outputs`, the hit head among them where it has one), `outputs` each output's stream, shape,
+//! labels, meaning and units (once, by name),
 //! and `tables` the names TARGETS, MASKS and DECISIONS index.  A new output, role or table entry is written with
 //! its META description.
 //!

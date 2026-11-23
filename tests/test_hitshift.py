@@ -134,7 +134,7 @@ def test_a_chain_plays_and_records_it(shift_models, states_dir, tmp_path):
         models = recording.meta['models']
         shift = next(m for m in models if m['name'] == 'ow-octorok')
         assert shift['served'] and shift['architecture']['name'] == 'hitshift' and shift['run'] == 'shift-w8'
-        assert [o['name'] for o in shift['outputs']] == ['distribution', 'value', 'hit']
+        assert shift['outputs'] == ['distribution', 'value', 'hit'] and 'hit' in recording.meta['outputs']
         decisions = recording.decisions()
         mine = [row for policy, row in zip(decisions['policy'], decisions['danger']) if policy == shift['index']]
         assert mine and all(row and all(0.0 <= p <= 1.0 for p in row.values()) for row in mine)

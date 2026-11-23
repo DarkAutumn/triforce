@@ -212,7 +212,7 @@ def test_a_replay_holds_no_filesystem_path(scripted_models, states_dir, tmp_path
         assert_no_path(recording)
         for model in recording.meta['models']:
             assert 'checkpoint' not in model and model['run'] and len(model['checkpoint_sha1']) == 40
-            assert {output['name'] for output in model['outputs']} >= {'distribution', 'value'}
+            assert {'distribution', 'value'} <= set(model['outputs']) <= set(recording.meta['outputs'])
     played = _native.Replay(episodes[0].read_bytes()).meta['models']
     assert [(m['index'], m['family'], m['run']) for m in played] == [
         (0, 'ow-start', registry.promoted_run('ow-start', scripted_models))]

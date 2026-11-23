@@ -567,7 +567,7 @@ fn replay_cmd(cmd: ReplayCmd, rom: &rom::RomInfo) -> Result<i32> {
             for (index, model) in meta.get("models").and_then(|m| m.as_array()).into_iter().flatten().enumerate() {
                 let text = |key: &str| model.get(key).and_then(|v| v.as_str()).unwrap_or("-").to_owned();
                 let outputs: Vec<&str> = model.get("outputs").and_then(|o| o.as_array()).into_iter().flatten()
-                    .filter_map(|o| o.get("name").and_then(|n| n.as_str())).collect();
+                    .filter_map(|o| o.as_str()).collect();
                 let arch = model.get("architecture").and_then(|a| a.get("name")).and_then(|n| n.as_str());
                 println!("model {index:2}: {} = {}/{} sha1 {} {} act {} outputs [{}]", text("name"), text("family"),
                          text("run"), text("checkpoint_sha1"), arch.unwrap_or("-"), text("act"), outputs.join(", "));

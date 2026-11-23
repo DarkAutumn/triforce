@@ -71,33 +71,36 @@ def models_header(names: Iterable[str], policies: Iterable, checkpoints: dict, a
             for name, policy, act in zip(names, policies, acts)]
 
 
-# The outputs a replay's DECISIONS keep of a network, as META ``models[i].outputs`` describes them.
-DISTRIBUTION_OUTPUT = {
-    'name': 'distribution', 'stream': 'DECISIONS dist', 'shape': ['actions.distribution'],
-    'labels': "META actions.layout: the kind head (one entry per actions.kinds), then per kind its direction head "
-              "(actions.directions), then per kind its duration head (actions.durations)",
-    'meaning': "the network's action distribution as the act mode saw it before drawing: log-probabilities of each "
-               "head given the kind; -inf: masked (not legal here)",
-    'units': 'nats (a byte each: META actions.encoding)'}
-VALUE_OUTPUT = {
-    'name': 'value', 'stream': 'DECISIONS value', 'shape': [],
-    'meaning': "the critic's value of the state: the expected discounted return from here",
-    'units': "reward units of this policy's training"}
-HIT_OUTPUT = {
-    'name': 'hit', 'stream': 'DECISIONS danger', 'shape': ['actions.joint'],
-    'labels': "joint actions, (kind * len(actions.directions) + direction) * len(actions.durations) + duration; "
-              "only the legal ones are recorded",
-    'meaning': "P(Link loses health during this action if it is taken now): the hit head's prediction (the lab's "
-               "'hit' target)",
-    'units': 'probability (a byte each: P x 255)'}
+# The outputs a replay's DECISIONS keep of a network: META ``outputs`` describes each once by name and
+# ``models[i].outputs`` names the ones network ``i`` has (a team of 54 repeated them 54 times: 37 KB a replay).
+OUTPUTS = {
+    'distribution': {
+        'stream': 'DECISIONS dist', 'shape': ['actions.distribution'],
+        'labels': "META actions.layout: the kind head (one entry per actions.kinds), then per kind its direction "
+                  "head (actions.directions), then per kind its duration head (actions.durations)",
+        'meaning': "the network's action distribution as the act mode saw it before drawing: log-probabilities of "
+                   "each head given the kind; -inf: masked (not legal here)",
+        'units': 'nats (a byte each: META actions.encoding)'},
+    'value': {
+        'stream': 'DECISIONS value', 'shape': [],
+        'meaning': "the critic's value of the state: the expected discounted return from here",
+        'units': "reward units of this policy's training"},
+    'hit': {
+        'stream': 'DECISIONS danger', 'shape': ['actions.joint'],
+        'labels': "joint actions, (kind * len(actions.directions) + direction) * len(actions.durations) + "
+                  "duration; only the legal ones are recorded",
+        'meaning': "P(Link loses health during this action if it is taken now): the hit head's prediction (the "
+                   "lab's 'hit' target)",
+        'units': 'probability (a byte each: P x 255)'},
+}
 
 
 def network_description(network, checkpoint: Optional[dict] = None) -> dict:
     """What a replay's META says of ``network`` (a ``ZeldaPolicy`` or a ``triforce.nets`` network) beside its index,
     name, hash and act mode (``replay_models``): its family, run id, iterations and steps (from ``checkpoint``, the
     saved dict, when it has one), its architecture (name, parameter count, config without the observation layout),
-    whether it is served from Python, and the outputs DECISIONS record of it (``DISTRIBUTION_OUTPUT``,
-    ``VALUE_OUTPUT``, and ``HIT_OUTPUT`` when it has a hit head).  No path."""
+    whether it is served from Python, and the names of the outputs DECISIONS record of it (META ``outputs``,
+    ``OUTPUTS``: distribution, value, and hit when it has a hit head).  No path."""
     from . import nets  # pylint: disable=import-outside-toplevel,cyclic-import
     config = network.config.to_dict()
     arch = nets.arch_of(config)
@@ -105,7 +108,7 @@ def network_description(network, checkpoint: Optional[dict] = None) -> dict:
     out = {'architecture': {'name': arch, 'parameters': sum(p.numel() for p in network.parameters()),
                             'config': _without_layout(config)},
            'served': arch != nets.ZELDA,
-           'outputs': [DISTRIBUTION_OUTPUT, VALUE_OUTPUT, *([HIT_OUTPUT] if hit else [])]}
+           'outputs': ['distribution', 'value', *(['hit'] if hit else [])]}
     if checkpoint is not None:
         out.update({'family': checkpoint.get('specialist'), 'run': checkpoint.get('run_id'),
                     'iterations': checkpoint.get('iterations'), 'steps': checkpoint.get('steps'),
