@@ -556,7 +556,10 @@ impl Walk {
                 self.line_up(spot, under_stone);
             }
             // A key door the objective leaves through (its room has no exit tiles until it opens): within a tile of
-            // its mouth Link is lined up (walker aid) and walks into it, which spends the key.
+            // its mouth Link is lined up (walker aid) and walks into it, which spends the key. Round 40: any dungeon
+            // doorway the objective leaves by (`Dir`) gets the same aid: without the closing frame of no buttons a
+            // turn off the grid carries Link on to the next grid point of the way he walked (6:0x38's N door: E to
+            // X $7C then N ends at $80, W to $74 then N at $70), so the walk's 8-frame MOVEs never stop on X $78.
             let key_door = [Direction::N, Direction::S, Direction::W, Direction::E].into_iter().find_map(|d| {
                 let (mx, my) = match d {
                     Direction::N => (0x78, 0x5D),
@@ -566,8 +569,12 @@ impl Walk {
                 };
                 let mouth = zelda::Position::new(mx, my).tile();
                 let near = (mouth.0 - here.0).abs() <= 1 && (mouth.1 - here.1).abs() <= 1;
-                let wanted = objective.targets.contains(&Target::Dir(d)) && state.is_door_locked(d);
-                (state.mode() == 5 && state.keys() > 0 && wanted && near).then_some((d, (mx, my)))
+                let wanted = objective.targets.contains(&Target::Dir(d));
+                let key = state.is_door_locked(d);
+                let p = state.link.position;
+                let off_line = if matches!(d, Direction::N | Direction::S) { p.x != mx } else { p.y != my };
+                let aid = if key { state.keys() > 0 } else { state.level() > 0 && off_line };
+                (state.mode() == 5 && aid && wanted && near).then_some((d, (mx, my)))
             });
             let action = if let Some((d, mouth)) = key_door {
                 self.line_up(mouth, matches!(d, Direction::N | Direction::S));
@@ -740,7 +747,9 @@ fn the_d6_route_is_walked_from_the_d7_triforce_to_the_d6_triforce() {
     let wall = at(t, uw(0x28), 267);
     assert_eq!(played(&wall, ActionKind::Bomb), 1);
     let offered: Vec<_> = wall.iter().filter(|k| !k.bombs.is_empty()).map(|k| (k.x, k.y, k.bombs.clone())).collect();
-    assert!(!offered.is_empty() && offered.iter().all(|(x, _, _)| *x >= 0xB0), "BOMB only by the E wall: {offered:?}");
+    // X $A9 on: a bomb placed 16 pixels ahead lands within $18 of the E wall's hotspot X $D0 (asm:Bomb_TryOpenWall);
+    // round 40's walk (no closing frame) stands on X $AC there, which the old walk never did ($B0 was its first).
+    assert!(!offered.is_empty() && offered.iter().all(|(x, _, _)| *x >= 0xA9), "BOMB only by the E wall: {offered:?}");
     let bomb = wall.iter().find(|k| k.action.kind == ActionKind::Bomb).unwrap();
     assert_eq!((bomb.action.direction, bomb.x), (Direction::E, 0xD0));
     assert!((bomb.y - 0x8D).abs() <= 4, "on the door row's tile: Y {:#04x}", bomb.y);
@@ -917,8 +926,14 @@ fn the_doorways_off_the_route_are_masked_and_a_move_ends_at_their_mouth() {
     assert!(w.s.mask().is_allowed(&Action::parse("MOVE E 8").unwrap()), "{}", w.s.mask());
     w.s.act(up).unwrap();
     assert_eq!((w.s.state().keys(), w.s.state().full_location(), w.s.state().link.position.y), (keys, uw(0x29), 0x5D));
-    // The game's rule, by the controller: one frame of Up at the mouth spends a key.
-    w.s.press(direction_buttons(Direction::N), 1);
+    // The game's rule, by the controller: Up at the mouth spends a key (before round 40 on the first frame after the
+    // MOVE's closing frame; without that frame the first frames of Up move Link 2 pixels into the doorway first).
+    for _ in 0..4 {
+        if w.s.state().keys() < keys {
+            break;
+        }
+        w.s.press(direction_buttons(Direction::N), 1);
+    }
     assert_eq!(w.s.state().keys(), keys - 1, "{}", describe(&w.s));
 
     // 0x2c: S (five Wizzrobes shut Link in) is masked at its mouth, N (the route's key door) is not.
