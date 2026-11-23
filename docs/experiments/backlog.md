@@ -382,6 +382,17 @@ The next from-scratch retrain is the last for a while (the owner, Nov 23), so ev
 network sees, is steered to, is rewarded for or may do goes in first; otherwise the new networks learn the old
 thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
 
+- **The product is one network; no 51-network team is built or tested** (the owner, Nov 23; decisions 2026-11-23
+  "2.0.1.0's team is the one network"). Teachers stay (about five group teachers from scratch), judged on their own
+  chains as teachers; only the one network is versioned, raced on the golden path, put through the 250 test and
+  chained on every segment.
+- **Timing: the executor's closing no-button frame goes, with no switch kept** (the owner, Nov 23; decisions
+  2026-11-23 "The fresh generation plays without the closing no-button frame"): 2,851 frames (1.78%, 47.5 s) of the
+  2.0.0.13 win are Link standing still between two moves the same way, and the 0x1e -> 0x1f line (0 hits held, 1 hit
+  every time as actions) fails only because of it. Before the generation's code is fixed (Peahat40, branch
+  `r40-peahat`, the measurement switch `HoldMoves`): the input reading confirmed from the disassembly, every piece
+  tuned at today's timing re-proven or re-searched (dock warps, whirlwinds, clips, pushes, attacks' turn frames, the
+  planner's trials), chains on today's team with the frame removed.
 - **Inputs:** v7 (`rel`, contact columns range-aware, projectiles too); the shooter's threat lane (screened on the
   hit bench first); the "next kill may drop bombs" input (BombStats' `bomb_carrier_window`, so the metric and the
   flag are one definition).
@@ -425,6 +436,14 @@ thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
 
 ## Carried over from the old backlog
 
+- **Link never learns to pick up items with the boomerang** (the owner, Nov 23; an idea, not scheduled, not part of
+  the fresh generation's scope): the thrown boomerang carries back what it touches, so a heart, bombs, rupees or a
+  key across the room, behind monsters or over water can be taken without walking to it, and a drop about to
+  vanish can be reached in time. Today a dropped item is only a place to walk to (`reward.item_targets`,
+  `heal_targets`) and BOOMERANG is offered as an attack. To look at when it is picked up: which items the boomerang
+  carries (from the disassembly, not from memory), whether BOOMERANG is offered toward an item with no monster in
+  line, whether a pickup made this way is rewarded like any other, and a target that says "in the boomerang's
+  reach" as the firing lines say "in a shot's line".
 - The learned guard as built (branch `r35-guard`): superseded as a design by the hit head (queue 6); its label
   logging and data are what queue 2 starts from.
 - Round 35's stopped Dungeon 3 trainings and the ledger of where Dungeon 3 is lost (`backlog.old.md` "Where the
