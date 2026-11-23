@@ -83,6 +83,8 @@ def run(args) -> int:
         command += ['--models-dir', args.models_dir]
     if args.now:
         command.append('--no-wait')
+    if args.power_on:
+        command.append('--power-on')      # from console power on (a random file-select delay a seed), not the start state
     start = time.time()
     code = subprocess.run(command, cwd=ROOT, check=False).returncode
     (out / 'timing.json').write_text(json.dumps({'seconds': round(time.time() - start, 1), 'runs': args.runs,
@@ -102,6 +104,8 @@ def main(argv=None) -> int:
     p_run.add_argument('--parallel', type=int, default=10)
     p_run.add_argument('--models-dir', default=None, help="a team other than main's (e.g. one network in every slot)")
     p_run.add_argument('--now', action='store_true', help="start at once instead of waiting in the job line")
+    p_run.add_argument('--power-on', action='store_true',
+                       help="start each run from console power on (the golden races' start) instead of the start state")
     p_run.add_argument('--out', default=str(ROOT / 'target' / 'full-runs' / time.strftime('%y%m%d-%H%M%S')))
     p_report = sub.add_parser('report', help="report an earlier run's folder")
     p_report.add_argument('out')
