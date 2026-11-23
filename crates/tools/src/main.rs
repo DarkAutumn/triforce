@@ -459,7 +459,11 @@ fn act_summary(meta: &serde_json::Map<String, serde_json::Value>) -> Option<Stri
 /// `tf replay targets`: the objective's changes (and with `masks` the mask's, with `decisions` every decision),
 /// each with the room it happened in (the ROOM events), in frame order; `only`: one room's lines.
 fn replay_targets(replay: &tfreplay::Replay, only: Option<&str>, masks: bool, decisions: bool) -> Result<()> {
-    let names = tfreplay::Names::of(&replay.meta()?);
+    let meta = replay.meta()?;
+    let names = tfreplay::Names::of(&meta);
+    let models: Vec<String> = meta.get("models").and_then(serde_json::Value::as_array).map_or_else(Vec::new, |m| {
+        m.iter().map(|m| m.get("name").and_then(serde_json::Value::as_str).unwrap_or("?").to_owned()).collect()
+    });
     let rooms: Vec<(u32, String)> = replay
         .events()
         .filter_map(Result::ok)
@@ -503,23 +507,20 @@ fn replay_targets(replay: &tfreplay::Replay, only: Option<&str>, masks: bool, de
             let d = d?;
             let choices = names.choices(&d);
             let [k, di, u] = d.action.map(usize::from);
-            let (kind, dir, frames) = (names.kind(k), names.direction(di), names.duration(u).unwrap_or(0));
-            let chosen = choices.iter().find(|c| c.0 == kind && c.1 == dir && c.2 == frames);
-            let p = chosen.map_or(String::new(), |c| format!(" p {:.2}", c.3));
-            let danger = chosen.and_then(|c| c.4).map_or(String::new(), |h| format!(" hit {h:.2}"));
+            let chosen = choices.iter().find(|c| (c.kind, c.direction, c.duration) == (k, di, u));
+            let label = chosen.map_or_else(|| names.action_text(k, di, u), |c| c.label.clone());
+            let p = chosen.map_or(String::new(), |c| format!(" p {:.2}", c.p));
+            let danger = chosen.and_then(|c| c.danger).map_or(String::new(), |h| format!(" hit {h:.2}"));
             let draw = d.draw.map_or(String::new(), |i| format!(" {}", names.draw(usize::from(i))));
-            let others: Vec<String> =
-                choices.iter().take(3).map(|c| format!("{} {} {} {:.2}", c.0, c.1, c.2, c.3)).collect();
+            let others: Vec<String> = choices.iter().take(3).map(|c| format!("{} {:.2}", c.label, c.p)).collect();
             let low = if d.low { " low" } else { "" };
-            let mut text = format!(
-                "policy {} {kind} {dir} {frames}{p}{danger}{draw}{low} value {:.2}; top: {}",
-                d.policy,
-                d.value,
-                others.join(", ")
-            );
+            let policy = models.get(usize::from(d.policy)).cloned().unwrap_or_else(|| format!("#{}", d.policy));
+            let mut text =
+                format!("{policy} {label}{p}{danger}{draw}{low} value {:.2}; top: {}", d.value, others.join(", "));
             if let Some(f) = d.foresight {
-                let vetoed: Vec<String> = f.vetoed().map(|j| j.to_string()).collect();
-                text += &format!("; foresight {} after {} trials, vetoed [{}]", f.outcome, f.trials, vetoed.join(" "));
+                let vetoed: Vec<String> = f.vetoed().map(|j| names.joint_text(usize::from(j))).collect();
+                let outcome = ["?", "safe", "replaced", "unsafe"].get(usize::from(f.outcome)).copied().unwrap_or("?");
+                text += &format!("; foresight {outcome} after {} trials, vetoed [{}]", f.trials, vetoed.join(", "));
             }
             lines.push((d.frame, 2, text));
         }
@@ -563,6 +564,14 @@ fn replay_cmd(cmd: ReplayCmd, rom: &rom::RomInfo) -> Result<i32> {
                 println!("segments: {}", segments.len());
             }
             println!("rng:      {}", rng_start(&replay, &meta));
+            for (index, model) in meta.get("models").and_then(|m| m.as_array()).into_iter().flatten().enumerate() {
+                let text = |key: &str| model.get(key).and_then(|v| v.as_str()).unwrap_or("-").to_owned();
+                let outputs: Vec<&str> = model.get("outputs").and_then(|o| o.as_array()).into_iter().flatten()
+                    .filter_map(|o| o.get("name").and_then(|n| n.as_str())).collect();
+                let arch = model.get("architecture").and_then(|a| a.get("name")).and_then(|n| n.as_str());
+                println!("model {index:2}: {} = {}/{} sha1 {} {} act {} outputs [{}]", text("name"), text("family"),
+                         text("run"), text("checkpoint_sha1"), arch.unwrap_or("-"), text("act"), outputs.join(", "));
+            }
             let mut states = [0usize; tfreplay::STATE_KINDS.len()];
             for state in replay.states() {
                 states[state.kind as usize] += 1;

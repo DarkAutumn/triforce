@@ -227,6 +227,35 @@ impl PyReplay {
         Ok(out)
     }
 
+    /// Every decision read for people, named by META `actions` (a kind only with the heads it has: `MOVE N 16`,
+    /// `SWORD E`, `WAIT 8`): per decision a dict of `chosen` (label, p, danger: P(hit) or None), `top` (the `top`
+    /// most likely legal actions, the same triples, most likely first), `legal` (how many were legal) and `vetoed`
+    /// (the planner's vetoed actions' labels, in the order tried).
+    #[pyo3(signature = (top=5))]
+    fn choices<'py>(&self, py: Python<'py>, top: usize) -> PyResult<Bound<'py, PyList>> {
+        let names = Names::of(&self.replay.meta().map_err(replay_err)?);
+        let out = PyList::empty(py);
+        for decision in self.replay.decisions().map_err(replay_err)? {
+            let d = decision.map_err(replay_err)?;
+            let choices = names.choices(&d);
+            let [k, di, u] = d.action.map(usize::from);
+            let chosen = choices.iter().find(|c| (c.kind, c.direction, c.duration) == (k, di, u));
+            let row = PyDict::new(py);
+            row.set_item(
+                "chosen",
+                chosen.map_or_else(|| (names.action_text(k, di, u), None, None), |c| (c.label.clone(), Some(c.p), c.danger)),
+            )?;
+            let best: Vec<_> = choices.iter().take(top).map(|c| (c.label.clone(), c.p, c.danger)).collect();
+            row.set_item("top", best)?;
+            row.set_item("legal", choices.len())?;
+            let vetoed: Vec<String> =
+                d.foresight.map_or_else(Vec::new, |f| f.vetoed().map(|j| names.joint_text(usize::from(j))).collect());
+            row.set_item("vetoed", vetoed)?;
+            out.append(row)?;
+        }
+        Ok(out)
+    }
+
     /// The objective's changes (version 2; empty before), named by META `tables`: dicts of `frame`, `objective`
     /// ('FIGHT', ...), `flags`, `route`, `step`, `way`, `stretch`, `next_rooms` and `retreats` ('8:0x3c') and
     /// `targets` (each `{role, obs, reward_only, <the role's fields>}`: `{'role': 'monster', 'slot': 3, 'type': 42,

@@ -14,7 +14,7 @@ from triforce.runner import Route, Runner
 
 from .conftest import REPO_STATES_DIR, SEGMENT_START_STEP, SEGMENT_STATE, SEGMENT_STOP_STEP, require_state
 
-STREAMS = ('rewards', 'decisions', 'keyframes')
+STREAMS = ('rewards', 'keyframes')
 KINDS, DIRECTIONS, DURATIONS = 11, 8, 4
 DISTRIBUTION = KINDS + KINDS * DIRECTIONS + KINDS * DURATIONS
 
@@ -65,7 +65,7 @@ def test_every_run_is_one_replay_file_that_replays_on_the_emulator_alone(chain_r
         assert (meta['ending']['result'], meta['ending']['reason']) == (result.result, result.reason)
         assert meta['ending']['outcome'] == result.rooms[-1].outcome
         assert [model['name'] for model in meta['models']] == sorted(model['name'] for model in meta['models'])
-        assert (recording.version, recording.source) == (1, {'kind': 'state', 'name': 'start'})
+        assert (recording.version, recording.source) == (_native.REPLAY_VERSION, {'kind': 'state', 'name': 'start'})
         # The start state is embedded: the file replays without the states dir, to the state it recorded.
         report = _native.replay_verify(recording.data)
         assert (report['frames'], report['states']) == (recording.frames, len(recording.states()))
@@ -75,7 +75,7 @@ def test_every_run_is_one_replay_file_that_replays_on_the_emulator_alone(chain_r
         assert len(rooms) == len(result.rooms)
 
 
-def test_the_optional_streams_keep_rewards_decisions_and_keyframes(chain_replays):
+def test_every_replay_keeps_its_decisions_and_the_optional_streams_rewards_and_keyframes(chain_replays):
     folder, results, _ = chain_replays
     for path, result in zip(sorted(folder.iterdir()), results):
         recording = _native.Replay(path.read_bytes())
@@ -86,7 +86,8 @@ def test_the_optional_streams_keep_rewards_decisions_and_keyframes(chain_replays
         decisions = recording.decisions()
         dist, action = decisions['dist'], decisions['action']
         assert dist.shape == (result.steps, DISTRIBUTION) and recording.meta['actions']['distribution'] == DISTRIBUTION
-        assert np.allclose(np.exp(dist[:, :KINDS]).sum(axis=1), 1, atol=1e-4)
+        # A byte per entry (1/16 nat steps): the kind probabilities sum to 1 within the rounding.
+        assert np.allclose(np.exp(dist[:, :KINDS]).sum(axis=1), 1, atol=0.05)
         rows = np.arange(result.steps)
         kind, direction, duration = action.T
         taken = np.stack([dist[rows, kind], dist[rows, KINDS + kind * DIRECTIONS + direction],
@@ -129,7 +130,7 @@ def test_eval_chain_records_the_scripted_segment_as_wins(scripted_models, tmp_pa
     chain = ['--models-dir', str(scripted_models), 'eval-chain', '--no-log', '--route', 'd2first', '--from',
              str(require_state(SEGMENT_STATE)), '--stop-at', f'step:{SEGMENT_STOP_STEP}']
     assert cli.main([*chain, '--runs', '2', '--parallel', '2', '--replays', str(folder), '--streams',
-                     'decisions,rewards', '--output', str(output)]) == 0
+                     'rewards', '--output', str(output)]) == 0
     assert f'replays in {folder}' in capsys.readouterr().out
     assert sorted(p.name for p in folder.iterdir()) == ['00000000-win.tfreplay', '00000001-win.tfreplay']
     runs = [json.loads(line) for line in output.read_text().splitlines()]
@@ -148,6 +149,54 @@ def test_eval_chain_records_the_scripted_segment_as_wins(scripted_models, tmp_pa
         assert cli.main([*chain, '--runs', '1', '--output', str(tmp_path / 'bad.jsonl'), *bad]) == 2
         assert message in capsys.readouterr().err
     assert not (tmp_path / 'bad.jsonl').exists()
+
+
+def _strings(value):
+    """Every string (keys too) of a JSON value."""
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            yield str(key)
+            yield from _strings(item)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            yield from _strings(item)
+
+
+def assert_no_path(recording):
+    """No text of the replay (META, the source, the events) holds a '/' or '\\': no path of any kind."""
+    texts = [*_strings(recording.meta), *_strings(recording.source),
+             *_strings([{k: v for k, v in event.items() if k != 'frame'} for event in recording.events()])]
+    paths = sorted({text for text in texts if '/' in text or '\\' in text})
+    assert not paths, f"paths in a replay: {paths}"
+
+
+def test_a_replay_holds_no_filesystem_path(scripted_models, states_dir, tmp_path, capsys):
+    """The owner, Nov 23: passed around, a path is useless; a replay names no file or directory, not even a relative
+    one.  A chain run from a state file given by its path, an evaluation episode from a states folder: META, the
+    source and the events carry none, and each network is known by its family, run id and checkpoint SHA-1."""
+    folder = tmp_path / 'chain'
+    assert cli.main(['--models-dir', str(scripted_models), 'eval-chain', '--no-log', '--route', 'd2first', '--from',
+                     str(require_state(SEGMENT_STATE)), '--stop-at', f'step:{SEGMENT_STOP_STEP}', '--runs', '1',
+                     '--replays', str(folder), '--output', str(tmp_path / 'chain.jsonl')]) == 0
+    capsys.readouterr()
+    checkpoint = registry.promoted_checkpoint('ow-start', scripted_models)
+    config = _native.SpecialistConfig.load('ow-start').replace(start_states=['0_77c_0'], max_steps=8)
+    evaluate_specialist(config, checkpoint, episodes_per_state=1, seed=0, states_dir=REPO_STATES_DIR,
+                        replays=tmp_path / 'eval')
+    episodes = sorted((tmp_path / 'eval').iterdir())
+    files = [*folder.iterdir(), *episodes]
+    assert len(files) > len(episodes) > 0
+    for path in files:
+        recording = _native.Replay(path.read_bytes())
+        assert_no_path(recording)
+        for model in recording.meta['models']:
+            assert 'checkpoint' not in model and model['run'] and len(model['checkpoint_sha1']) == 40
+            assert {output['name'] for output in model['outputs']} >= {'distribution', 'value'}
+    played = _native.Replay(episodes[0].read_bytes()).meta['models']
+    assert [(m['index'], m['family'], m['run']) for m in played] == [
+        (0, 'ow-start', registry.promoted_run('ow-start', scripted_models))]
 
 
 def test_a_power_on_replay_is_inputs_alone(scripted_models, states_dir):

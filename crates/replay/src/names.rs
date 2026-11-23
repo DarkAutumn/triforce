@@ -18,12 +18,34 @@ pub struct Names {
     kinds: Vec<String>,
     directions: Vec<String>,
     durations: Vec<u64>,
+    directional: Vec<bool>,
+    timed: Vec<bool>,
+}
+
+/// One legal joint action of a decision ([`Names::choices`]).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Choice {
+    /// Its joint index (`(kind * directions + direction) * durations + duration`).
+    pub joint: usize,
+    pub kind: usize,
+    pub direction: usize,
+    pub duration: usize,
+    /// For people: `MOVE N 16`, `SWORD E`, `WAIT 8`, `RECORDER` ([`Names::action_text`]).
+    pub label: String,
+    /// Its probability under the network's distribution.
+    pub p: f32,
+    /// P(Link is hit) if taken, where the network has a hit head.
+    pub danger: Option<f32>,
 }
 
 fn strings(value: Option<&Value>) -> Vec<String> {
     value.and_then(Value::as_array).map_or_else(Vec::new, |a| {
         a.iter().map(|v| v.as_str().map_or_else(|| v.to_string(), str::to_owned)).collect()
     })
+}
+
+fn bools(value: Option<&Value>) -> Vec<bool> {
+    value.and_then(Value::as_array).map_or_else(Vec::new, |a| a.iter().filter_map(Value::as_bool).collect())
 }
 
 fn name(names: &[String], index: usize) -> String {
@@ -66,7 +88,37 @@ impl Names {
                 .and_then(|a| a.get("durations"))
                 .and_then(Value::as_array)
                 .map_or_else(Vec::new, |d| d.iter().filter_map(Value::as_u64).collect()),
+            directional: bools(actions.and_then(|a| a.get("directional"))),
+            timed: bools(actions.and_then(|a| a.get("timed"))),
         }
+    }
+
+    /// Whether kind `k` has a direction (META `actions.directional`; a replay that doesn't say: yes).
+    pub fn directional(&self, k: usize) -> bool {
+        self.directional.get(k).copied().unwrap_or(true)
+    }
+
+    /// Whether kind `k` has a duration (META `actions.timed`; a replay that doesn't say: yes).
+    pub fn timed(&self, k: usize) -> bool {
+        self.timed.get(k).copied().unwrap_or(true)
+    }
+
+    /// An action for people, with only the heads its kind has: `MOVE N 16`, `SWORD E`, `WAIT 8`, `RECORDER`.
+    pub fn action_text(&self, kind: usize, direction: usize, duration: usize) -> String {
+        let mut text = self.kind(kind);
+        if self.directional(kind) {
+            text += &format!(" {}", self.direction(direction));
+        }
+        if self.timed(kind) {
+            text += &format!(" {}", self.duration(duration).unwrap_or(duration as u64));
+        }
+        text
+    }
+
+    /// A joint action index (`(kind * directions + direction) * durations + duration`) for people.
+    pub fn joint_text(&self, joint: usize) -> String {
+        let (dirs, durs) = (self.directions.len().max(1), self.durations.len().max(1));
+        self.action_text(joint / (dirs * durs), (joint / durs) % dirs, joint % durs)
     }
 
     pub fn kind(&self, index: usize) -> String {
@@ -136,7 +188,8 @@ impl Names {
     }
 
     /// A TARGETS record as a JSON object of names: `frame`, `objective`, `flags`, `route`, `step`, `way`,
-    /// `stretch`, `next_rooms`, `retreats`, `targets` (each `{role, obs, reward_only, <fields>}`).
+    /// `stretch`, `next_rooms`, `retreats`, `targets` (each `{role, obs, reward_only, <fields>, text}`, `text`:
+    /// [`Names::target_text`]).
     pub fn targets_json(&self, r: &Targets) -> Value {
         let flags: Vec<&str> = ["treasure-refused", "drops-first", "bag-drops", "clips"]
             .iter()
@@ -152,6 +205,7 @@ impl Names {
                 fields.insert("role".into(), json!(role));
                 fields.insert("obs".into(), json!(t.flags & TARGET_OBS != 0));
                 fields.insert("reward_only".into(), json!(t.flags & TARGET_REWARD_ONLY != 0));
+                fields.insert("text".into(), json!(self.target_text(t)));
                 Value::Object(fields)
             })
             .collect();
@@ -169,15 +223,17 @@ impl Names {
         })
     }
 
-    /// A MASKS record as a JSON object of names: `frame`, `kinds` ({kind: {directions, durations}}), `blocked`
-    /// ({kind: [reasons]}).
+    /// A MASKS record as a JSON object of names: `frame`, `kinds` ({kind: {directions, durations}}: a kind without
+    /// a direction or a duration head lists none), `blocked` ({kind: [reasons]}), `text` ([`Names::mask_text`]).
     pub fn mask_json(&self, m: &Mask) -> Value {
         let mut kinds = Map::new();
         for k in (0..16).filter(|&k| m.allows(k)) {
-            let directions: Vec<String> =
-                (0..8).filter(|d| m.directions[k] & (1 << d) != 0).map(|d| self.direction(d)).collect();
+            let directions: Vec<String> = (0..8)
+                .filter(|d| self.directional(k) && m.directions[k] & (1 << d) != 0)
+                .map(|d| self.direction(d))
+                .collect();
             let durations: Vec<u64> = (0..8)
-                .filter(|u| m.durations[k] & (1 << u) != 0)
+                .filter(|u| self.timed(k) && m.durations[k] & (1 << u) != 0)
                 .map(|u| self.durations.get(u).copied().unwrap_or(u as u64))
                 .collect();
             kinds.insert(self.kind(k), json!({"directions": directions, "durations": durations}));
@@ -187,15 +243,17 @@ impl Names {
             let entry = blocked.entry(self.kind(usize::from(kind))).or_insert_with(|| json!([]));
             entry.as_array_mut().expect("array").push(json!(name(&self.mask_reasons, usize::from(reason))));
         }
-        json!({"frame": m.frame, "kinds": kinds, "blocked": blocked})
+        json!({"frame": m.frame, "kinds": kinds, "blocked": blocked, "text": self.mask_text(m)})
     }
 
-    /// A MASKS record for people: `MOVE[N,S,W,E] SWORD[N] BOMB blocked: tenth`.
+    /// A MASKS record for people: `MOVE[N,S,W,E] WAIT SWORD[N] BOMB blocked: tenth`.
     pub fn mask_text(&self, m: &Mask) -> String {
         let mut parts: Vec<String> = Vec::new();
         for k in (0..16).filter(|&k| m.allows(k)) {
-            let dirs: Vec<String> =
-                (0..8).filter(|d| m.directions[k] & (1 << d) != 0).map(|d| self.direction(d)).collect();
+            let dirs: Vec<String> = (0..8)
+                .filter(|d| self.directional(k) && m.directions[k] & (1 << d) != 0)
+                .map(|d| self.direction(d))
+                .collect();
             parts.push(if dirs.is_empty() { self.kind(k) } else { format!("{}[{}]", self.kind(k), dirs.join(",")) });
         }
         for &(kind, reason) in &m.blocked {
@@ -210,22 +268,25 @@ impl Names {
     }
 
     /// A decision's legal joint actions with their probabilities (and P(hit) where the network has a hit head),
-    /// most likely first: `(kind, direction, duration, p, danger)`.
-    pub fn choices(&self, d: &Decision<'_>) -> Vec<(String, String, u64, f32, Option<f32>)> {
+    /// most likely first.
+    pub fn choices(&self, d: &Decision<'_>) -> Vec<Choice> {
         let dist: Vec<f32> = d.distribution().collect();
         let (dirs, durs) = (self.directions.len().max(1), self.durations.len().max(1));
         let kinds = dist.len() / (1 + dirs + durs);
         let dangers = d.dangers();
-        let mut out: Vec<_> = legal_joint(dist.len(), |i| dist[i].is_finite())
+        let mut out: Vec<Choice> = legal_joint(dist.len(), |i| dist[i].is_finite())
             .map(|j| {
-                let j = usize::from(j);
-                let (k, di, u) = (j / (dirs * durs), (j / durs) % dirs, j % durs);
-                let lp = dist[k] + dist[kinds + k * dirs + di] + dist[kinds + kinds * dirs + k * durs + u];
-                let danger = dangers.iter().find(|&&(at, _)| usize::from(at) == j).map(|&(_, p)| p);
-                (self.kind(k), self.direction(di), self.durations.get(u).copied().unwrap_or(0), lp.exp(), danger)
+                let joint = usize::from(j);
+                let (kind, direction, duration) = (joint / (dirs * durs), (joint / durs) % dirs, joint % durs);
+                let lp = dist[kind]
+                    + dist[kinds + kind * dirs + direction]
+                    + dist[kinds + kinds * dirs + kind * durs + duration];
+                let danger = dangers.iter().find(|&&(at, _)| usize::from(at) == joint).map(|&(_, p)| p);
+                let label = self.action_text(kind, direction, duration);
+                Choice { joint, kind, direction, duration, label, p: lp.exp(), danger }
             })
             .collect();
-        out.sort_by(|a, b| b.3.total_cmp(&a.3));
+        out.sort_by(|a, b| b.p.total_cmp(&a.p));
         out
     }
 }

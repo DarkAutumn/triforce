@@ -78,6 +78,10 @@ pub mod actions {
     ];
     pub const DIRECTIONS: [&str; 8] = ["N", "S", "W", "E", "NW", "NE", "SW", "SE"];
     pub const DURATIONS: [u8; 4] = [4, 8, 16, 32];
+    /// Whether a kind's direction head applies (WAIT and RECORDER have none: their one legal direction is no choice).
+    pub const DIRECTIONAL: [bool; 11] = [true, false, true, true, true, true, true, true, false, true, true];
+    /// Whether a kind's duration head applies (MOVE and WAIT; the others take their one legal duration).
+    pub const TIMED: [bool; 11] = [true, true, false, false, false, false, false, false, false, false, false];
     /// The button a kind presses: 0 none, 1 A, 2 B (CLIP: the d-pad only, the grid-point skip macro).
     pub const KIND_BUTTONS: [u8; 11] = [0, 0, 1, 1, 2, 2, 2, 0, 2, 2, 2];
     /// The d-pad bits of each direction.
@@ -301,11 +305,13 @@ pub struct Decision<'a> {
     pub foresight: Option<Foresight<'a>>,
 }
 
-/// A decision's distribution: little-endian `f32`s (versions 0 and 1) or bytes ([`quantize_log_prob`], version 2).
+/// A decision's distribution: little-endian `f32`s (versions 0 and 1) or, from version 2, the finite entries only:
+/// `finite` a bitmap of the `width` entries (bit `i % 8` of byte `i / 8`: entry `i` is finite, not masked) and
+/// `values` one byte ([`quantize_log_prob`]) per finite entry in order.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Dist<'a> {
     F32(&'a [u8]),
-    Q8(&'a [u8]),
+    Q8 { width: usize, finite: &'a [u8], values: &'a [u8] },
 }
 
 /// What the act mode's foresight (`guard`, `plan`) did at a decision: `outcome` 1 safe (kept), 2 replaced, 3 unsafe
@@ -328,13 +334,17 @@ impl Foresight<'_> {
 impl Decision<'_> {
     /// The distribution's entries (natural-log probabilities, `-inf` masked).
     pub fn distribution(&self) -> impl Iterator<Item = f32> + '_ {
-        let (f32s, bytes) = match self.dist {
-            Dist::F32(b) => (b, &[][..]),
-            Dist::Q8(b) => (&[][..], b),
+        let (f32s, width, finite, values) = match self.dist {
+            Dist::F32(b) => (b, 0, &[][..], &[][..]),
+            Dist::Q8 { width, finite, values } => (&[][..], width, finite, values),
         };
-        f32s.chunks_exact(4)
-            .map(|c| f32::from_le_bytes(c.try_into().expect("4 bytes")))
-            .chain(bytes.iter().map(|&b| log_prob_of(b)))
+        let mut next = values.iter();
+        f32s.chunks_exact(4).map(|c| f32::from_le_bytes(c.try_into().expect("4 bytes"))).chain((0..width).map(
+            move |i| match finite[i / 8] & (1 << (i % 8)) {
+                0 => f32::NEG_INFINITY,
+                _ => next.next().map_or(f32::NEG_INFINITY, |&b| log_prob_of(b)),
+            },
+        ))
     }
 
     /// The danger of each legal joint action, `(joint index, P(hit))`.

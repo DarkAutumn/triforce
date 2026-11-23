@@ -210,11 +210,17 @@ impl Recorder {
         out.push(t.draw | u8::from(t.low) << 7);
         out.extend_from_slice(&t.value.to_le_bytes());
         out.push(u8::from(t.danger.is_some()) | u8::from(t.foresight.is_some()) << 1);
-        out.extend(t.dist.iter().map(|&p| quantize_log_prob(p)));
+        // The finite entries' bitmap, then their bytes: a masked entry costs a bit.
+        out.extend(t.dist.chunks(8).map(|eight| {
+            eight.iter().enumerate().fold(0u8, |bits, (i, p)| bits | u8::from(p.is_finite()) << i)
+        }));
+        out.extend(t.dist.iter().filter(|p| p.is_finite()).map(|&p| quantize_log_prob(p)));
         if let Some(danger) = t.danger {
-            let legal: Vec<u16> = legal_joint(width, |i| t.dist[i].is_finite()).collect();
-            put_varint(out, legal.len() as u32);
-            out.extend(legal.iter().map(|&j| quantize_probability(danger.get(j as usize).copied().unwrap_or(0.0))));
+            put_varint(out, legal_joint(width, |i| t.dist[i].is_finite()).count() as u32);
+            out.extend(
+                legal_joint(width, |i| t.dist[i].is_finite())
+                    .map(|j| quantize_probability(danger.get(usize::from(j)).copied().unwrap_or(0.0))),
+            );
         }
         if let Some((outcome, trials, frames, vetoed)) = t.foresight {
             out.push(outcome);
@@ -340,17 +346,19 @@ pub(crate) fn ending_meta(ending: &Ending) -> Value {
 }
 
 fn actions_meta(distribution: usize) -> Value {
+    let kinds = distribution / (1 + actions::DIRECTIONS.len() + actions::DURATIONS.len());
     json!({
         "kinds": actions::KINDS,
         "directions": actions::DIRECTIONS,
         "durations": actions::DURATIONS,
+        "directional": actions::DIRECTIONAL,
+        "timed": actions::TIMED,
         "kind_buttons": actions::KIND_BUTTONS,
         "direction_buttons": actions::DIRECTION_BUTTONS,
         "distribution": distribution,
-        "joint": distribution / (1 + actions::DIRECTIONS.len() + actions::DURATIONS.len())
-            * actions::DIRECTIONS.len() * actions::DURATIONS.len(),
+        "joint": kinds * actions::DIRECTIONS.len() * actions::DURATIONS.len(),
         "layout": actions::LAYOUT,
-        "encoding": "a byte an entry: 255 = -inf (masked), else -byte/16 nats",
+        "encoding": "the finite entries only (a bitmap; the others are masked, -inf), a byte each: the log-probability is minus the byte over 16, in nats",
     })
 }
 

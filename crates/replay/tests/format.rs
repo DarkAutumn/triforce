@@ -314,6 +314,15 @@ fn a_recording_reads_back_every_stream() {
     let f = decisions[3].foresight.expect("frame 24 is foreseen");
     assert_eq!((f.outcome, f.trials, f.frames, f.vetoed().collect::<Vec<_>>()), (2, 3, 64, vec![24, 7]));
     assert!(decisions[6].low);
+    // Read for people: a kind with only the heads it has (WAIT and RECORDER have no direction; only MOVE and WAIT
+    // a duration), the legal actions most likely first, a vetoed joint action by name.
+    let names = replay::Names::of(&meta);
+    let labels = [(0, 3, 2), (1, 0, 1), (2, 1, 0), (8, 0, 0)].map(|(k, d, u)| names.action_text(k, d, u));
+    assert_eq!(labels, ["MOVE E 16", "WAIT 8", "SWORD S", "RECORDER"]);
+    let choices = names.choices(d);
+    assert_eq!(choices.iter().map(|c| c.joint as u16).collect::<std::collections::BTreeSet<_>>(), legal.iter().copied().collect());
+    assert!(choices.windows(2).all(|w| w[0].p >= w[1].p) && choices.iter().all(|c| c.danger.is_some()));
+    assert_eq!(names.joint_text(24), "MOVE SW 4");
 
     // TARGETS and MASKS: a record when they changed (every 24 and 16 frames), not at every decision.
     let objectives = all(replay.targets());

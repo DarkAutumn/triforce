@@ -357,7 +357,9 @@ impl Replay {
             let draw = c.u8()?;
             let value = c.f32()?;
             let flags = c.u8()?;
-            let dist = Dist::Q8(c.take(width)?);
+            let finite = c.take(width.div_ceil(8))?;
+            let count = finite.iter().map(|b| b.count_ones() as usize).sum();
+            let dist = Dist::Q8 { width, finite, values: c.take(count)? };
             let danger = if flags & 1 != 0 {
                 let n = c.varint()? as usize;
                 Some(c.take(n)?)
