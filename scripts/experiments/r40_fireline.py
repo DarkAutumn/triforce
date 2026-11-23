@@ -317,11 +317,12 @@ def analyse_replay(path: Path, rooms: set, states_dir) -> dict:
                     kind = 'shot'
                 else:
                     kind = 'stand'
-                out['time'][room][kind] += 1
+                rkey = f"{room} {'beams' if full else 'no beams'}"
+                out['time'][rkey][kind] += 1
                 if lines_on and kind == 'walk':
-                    out['time'][room]['walk_lines'] += 1
+                    out['time'][rkey]['walk_lines'] += 1
                 if lines_on and kind in ('shot', 'stand'):
-                    out['time'][room]['still_lines'] += 1
+                    out['time'][rkey]['still_lines'] += 1
                 mons = live_monsters(ram)
                 near = min((math.hypot(x - lx, y - ly) for _, x, y in mons), default=None)
                 if lines_on:
@@ -336,7 +337,7 @@ def analyse_replay(path: Path, rooms: set, states_dir) -> dict:
                         olx, oly, old = history[0]
                         ox, oy = old[slot - 1]
                         down_line = (abs(ox - olx) < 12 or abs(oy - oly) < 12) and math.hypot(ox - olx, oy - oly) > MELEE_REACH
-                    out['hits'].append({'room': room, 'aligned': down_line,
+                    out['hits'].append({'room': rkey, 'type': int(ram[OBJ_TYPE + slot]), 'aligned': down_line,
                                         'still': still >= 16, 'shot': shot == 0x10, 'lines': lines_on,
                                         'distance': math.hypot(mx - lx, my - ly)})
         history.append((lx, ly, tuple((int(ram[OBJ_X + s]), int(ram[OBJ_Y + s])) for s in range(1, 12))))
@@ -416,11 +417,11 @@ def report(result: dict, rooms: list) -> None:
     for room in sorted(set(result[labels[0]]['room_frames']), key=lambda r: -result[labels[0]]['room_frames'][r])[:14]:
         print(f"| {room} | " + ' | '.join(
             f"{100 * result[l]['room_beams'][room] / max(1, result[l]['room_frames'][room]):.1f}%" for l in labels) + ' |')
-    print('\n### Where the time goes (frames a run in the room; replays)\n')
+    print('\n### Where the time goes (frames a run in the room, split by whether Link held his beams on the frame; replays)\n')
     print('| room | arm | walking | of it steered to lines | swinging | waiting on a shot | standing | still while '
           'steered to lines | steered to lines | of them a monster within 32 px |')
     print('|---|---|---:|---:|---:|---:|---:|---:|---:|---:|')
-    for room in rooms:
+    for room in [f"{r} {b}" for r in rooms for b in ('beams', 'no beams')]:
         for l in labels:
             a = result[l]
             t = a['time'].get(room, Counter())
@@ -430,16 +431,17 @@ def report(result: dict, rooms: list) -> None:
                   f"{a['lines_near'][room] / n:.0f} |")
     print('\n### Where the hits land (replays)\n')
     print('| room | arm | hits | toucher in line out of reach 16 frames before | Link still 16+ frames | his shot flying | steered to lines | '
-          'mean distance |')
-    print('|---|---|---:|---:|---:|---:|---:|---:|')
-    for room in rooms:
+          'mean distance | what touched him (ObjType) |')
+    print('|---|---|---:|---:|---:|---:|---:|---:|---|')
+    for room in [f"{r} {b}" for r in rooms for b in ('beams', 'no beams')]:
         for l in labels:
             hs = [h for h in result[l]['hits'] if h['room'] == room]
             n = max(1, len(hs))
             print(f"| {room} | {l} | {len(hs)} | {100 * sum(h['aligned'] for h in hs) / n:.0f}% | "
                   f"{100 * sum(h['still'] for h in hs) / n:.0f}% | {100 * sum(h['shot'] for h in hs) / n:.0f}% | "
                   f"{100 * sum(h['lines'] for h in hs) / n:.0f}% | "
-                  f"{sum(h['distance'] for h in hs) / n:.1f} |")
+                  f"{sum(h['distance'] for h in hs) / n:.1f} | "
+                  + ', '.join(f"${t:02X} {k}" for t, k in Counter(h['type'] for h in hs).most_common(3)) + ' |')
 
 
 # --- manhandla (the owner, Nov 23: victory = entering 3:0x4d; nothing of the fight counts) ---------------------------
