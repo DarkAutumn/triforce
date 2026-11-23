@@ -1046,6 +1046,101 @@ fn the_rooms_bombs_stay_wanted_after_a_drop() {
     }
 }
 
+/// What the target observation says at `env`'s last decision: its first step (N, S, W, E or `-`) and walking
+/// distance in tiles (None: Link's tile unreachable).
+fn target_step(obs: &Observation) -> (char, Option<i32>) {
+    let step = (0..4).find(|&i| obs.target[i] == 1.0).map_or('-', |i| ['N', 'S', 'W', 'E'][i]);
+    let distance = (obs.target[4] < 1.0).then(|| (f64::from(obs.target[4]) * 32.0).round() as i32);
+    (step, distance)
+}
+
+/// One decision toward the target observation's step (MOVE 8; WAIT 8 on the target or with no step).
+fn toward_target(env: &mut Env, obs: &Observation) -> Observation {
+    match target_step(obs) {
+        ('-', _) | (_, Some(0)) => act(env, "WAIT 8").obs,
+        (step, _) => act(env, &format!("MOVE {step} 8")).obs,
+    }
+}
+
+/// Backlog Track R (the owner, Nov 22, watching 3:0x5b's last pass on `d3first` with a full bag: "If full on bombs
+/// the target should be the bomb wall, he drops a bomb, the target should be on the bombs, when the bombs picked
+/// up, the target is moving to the next room. [...] I suspect he has two targets here?"). Each decision has one
+/// target, walked down by the target observation: from W with the room's bombs lying at ($80, $90) (the Darknuts
+/// dead) and 8 in the bag, the bomb spot before the E wall (the bombs are not wanted at 8: `treasure_below: 8`, read
+/// against the bag); BOMB E from there leaves 7 and the room's bombs are the target; taken (8), the way E (the spot
+/// while the smoke clears, then the opening). Entered with 4 (the fight's room): the bombs, the wall, and after the
+/// bomb (7, the treasure gone) the way E, never back. Entered with 8 and the Darknuts alive (a crossing): the wall,
+/// then the way E. `d2first` (no bomb rules) takes the bombs at 8 first, as it always did.
+#[test]
+fn the_owners_order_in_3_5b_wall_then_bombs_then_out() {
+    let Some(mut nes) = open_core() else { return };
+    for (start, entering, alive, order) in [
+        ("d3first_3_5bw_0", 8, false, "wall bombs out"),
+        ("d3first_3_5bw_0", 4, false, "bombs wall out"),
+        ("d3first_3_5bw_0", 8, true, "wall out"),
+        ("3_5bw_0", 8, false, "bombs wall out"),
+    ] {
+        let mut env = if alive {
+            let mut env = make_env(nes, "darknut", Some(start), |c| {
+                c.ram_randomization = RamRandomization { bombs: Some((entering, entering)), ..Default::default() };
+            });
+            env.reset(Some(0), None).unwrap();
+            for _ in 0..10 {
+                act(&mut env, "MOVE E 16");
+                if state(&env).has_active_enemies() {
+                    break;
+                }
+            }
+            env
+        } else {
+            let mut env = fought_and_cleared(nes, start, entering as u8);
+            env.session_mut().apply_ram(&[(Var::TreasureFlag, 0), (Var::TreasureX, 0x80), (Var::TreasureY, 0x70)]);
+            env
+        };
+        let what = format!("{start}: in with {entering}{}", if alive { ", the Darknuts alive" } else { "" });
+        let spot: BTreeSet<Target> = [Target::Tile(zelda::objectives::bomb_spot(state(&env).room(), Direction::E))].into();
+        let mut obs = act(&mut env, "MOVE E 4").obs;
+        let (mut seen, mut trace, mut bombed) = (Vec::new(), Vec::new(), false);
+        for _ in 0..300 {
+            let s = state(&env).clone();
+            if s.full_location() != MapLocation::new(3, 0x5b, false) {
+                break;
+            }
+            let o = objective(&env).clone();
+            let p = s.link.position;
+            trace.push(format!("({},{}) bombs {} {:?} {:?} treasure {:?} enemies {}", p.x, p.y, s.bombs(), o.kind, target_step(&obs), s.treasure().map(|t| (t.position.x, t.position.y)), s.enemies.len()));
+            let phase = if o.kind == ObjectiveKind::Treasure {
+                let tiles: BTreeSet<Target> = s.treasure().expect("shown").link_overlap_tiles().into_iter().map(Target::Tile).collect();
+                assert!(o.pbrs_targets.is_subset(&tiles), "{what}: the bombs alone: {:?}", o.pbrs_targets);
+                "bombs"
+            } else {
+                assert_eq!(o.kind, ObjectiveKind::Move, "{what}: {trace:?}");
+                if s.bomb_walls().is_empty() {
+                    let exits: BTreeSet<Target> = s.room().exits.get(Direction::E).unwrap_or_default().iter().map(|&t| Target::Tile(t)).collect();
+                    assert!(!o.pbrs_targets.is_empty() && o.pbrs_targets.is_subset(&exits), "{what}: the opening alone: {:?}", o.pbrs_targets);
+                } else {
+                    assert_eq!(o.pbrs_targets, spot, "{what}: the bomb spot alone: {trace:?}");
+                }
+                if bombed { "out" } else { "wall" }
+            };
+            if seen.last() != Some(&phase) {
+                seen.push(phase);
+            }
+            obs = if phase == "wall" && target_step(&obs).1 == Some(0) {
+                let obs = act(&mut env, "BOMB E").obs;
+                assert_eq!(state(&env).bombs(), 7, "{what}: the wall's bomb: {trace:?}");
+                bombed = true;
+                obs
+            } else {
+                toward_target(&mut env, &obs)
+            };
+        }
+        assert_eq!(state(&env).full_location(), MapLocation::new(3, 0x5c, false), "{what}: out E: {trace:?}");
+        assert_eq!(seen.join(" "), order, "{what}: {trace:?}");
+        nes = release(env);
+    }
+}
+
 /// Round 37 (the owner: "Drop the fight with the goriyas in d2 0x5e, that's only for d2 first"): `d3first` crosses
 /// 2:0x5e (no fight with its five Red Goriyas alive, so `fights_only` offers no weapon bomb, 7 in hand), `d2first`
 /// still clears it (`treasure: clear`, BOMB as a `free` goriya above its reserve of 0 there).
