@@ -232,6 +232,21 @@ Four kinds of thing share one folder:
 - No `promoted.<route>`: the family's `promoted` plays the route's own part (by design, unrecorded at play).
 - A `--checkpoint family=RUN` override of a hit-head network with a bare policy: no remark.
 - The checkout's built module older than its `crates/`: nothing checks.
+- A `--load` continuation's curriculum progress resumes when the loaded run's `run.json` has no `curriculum` field
+  (`train.py:475-482`: "runs from before that field count as the same"), whatever trajectories it trained on.
+- `--load VALUE` that is no existing path is read as a family name (`train.py:394-398`): a mistyped run dir fails
+  as "No promoted model for specialist '<the path>'", loud but naming the wrong thing.
+- A worktree with its own `models/` (even a partial one) gives the test suite that team; only a worktree without
+  `models/` gets main's through `$TRIFORCE_MODELS_DIR` (`job.py:691-697`) [inference: tests needing a family the
+  partial dir lacks then fail or skip by their own rules].
+- `eval-chain --specialist-config YAML` for a family the route never plays: accepted and unused [inference from
+  `runner.Policies`, which looks configs up by the families it loads].
+- `eval-chain --harvest` without DIR writes into the shared harvested folder (`cli.py:454`), from any checkout
+  through the setup link: a scratch chain becomes every later training's input with no record.
+- A family with no promoted run on a chain's route: recorded in `provenance.missing`, and only the runs that reach
+  its rooms end `error` (exit 1 at the end, `runner.py:466-470`): a segment that never reaches it reports nothing.
+- The training GUI lists log folders of its own checkout only (`training-gui.py:4851`); a worktree's tool run
+  outside the queue is invisible to the owner's GUI.
 
 ## What the layout has to answer (for the lead and the owner)
 
