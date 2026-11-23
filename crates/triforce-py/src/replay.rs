@@ -138,9 +138,13 @@ impl PyReplay {
                 Event::Segment => d.set_item("type", "segment")?,
                 Event::Visit(text) => {
                     d.set_item("type", "visit")?;
-                    let record: Value = serde_json::from_str(&text)
-                        .map_err(|e| ReplayError::new_err(format!("EVENTS section: a visit record: {e}")))?;
-                    d.set_item("record", json_to_py(py, &record)?)?;
+                    // Python's parser: serde_json's default float parsing can be one ulp off (no
+                    // `float_roundtrip`, which would change every crate's parsing), and the record must read back
+                    // as the chain wrote it (`replay.chain_records`).
+                    let record = py.import("json")?.call_method1("loads", (text,)).map_err(|e| {
+                        ReplayError::new_err(format!("EVENTS section: a visit record: {e}"))
+                    })?;
+                    d.set_item("record", record)?;
                 }
             }
             out.append(d)?;

@@ -1904,10 +1904,13 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
   (`ending`: `win`, `death`, `stuck`, `other`, `error`; `only` keeps the named endings). Command lines:
   `--replays DIR [--streams rewards,keyframes] [--keyframe-frames N] [--state embed|path]` on
   `triforce eval-chain`, `triforce.evaluate` and `play-zelda.py`; `zelda-headless.py OUT` always records.
-  DECISIONS, TARGETS and MASKS are always recorded (a full `d3first` route run was 33.8 KB before version 2;
-  sizes measured on the 200-run Dungeon 8 chain are in the r40 notes of `docs/decisions.md`). Roles are attached
+  DECISIONS, TARGETS and MASKS are always recorded. Size (Nov 23, the 200-run Dungeon 8 chain from `8_7es_0`,
+  1,604,093 frames, 102,208 decisions): 6.80 MB before version 2 (no decisions), 28.4 MB with them: META 9.35 MB
+  (47 KB a replay: 54 networks described), DECISIONS 8.48 MB (83 bytes a decision; dense u8 distributions were
+  18.5 MB), EVENTS 4.44 MB (the VISIT records a report reads), MASKS 0.78 MB, TARGETS 0.29 MB. Roles are attached
   where targets are made (`zelda::objectives`, `env::objective`) without changing what the observation or reward
-  compute: the Dungeon 8 chain played the same 200 runs, frame for frame, before and after.
+  compute: that chain played the same 200 runs before and after (results, frames and steps, and the INPUTS,
+  EDITS, CHEATS, STATES and SOURCE sections byte for byte).
   Recording rewards turns the look-ahead on for that run (rewards need it), so its steps are scored as training
   scores them; a chain run's observations, inputs, edits and result are the same with rewards on or off
   (`crates/pool/tests/zelda.rs`).
