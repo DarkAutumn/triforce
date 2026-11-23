@@ -412,6 +412,19 @@ joins 4:0x13), boss-manhandla 65.8% → 81.7% (8:0x6e joins 3:0x4d), like-like 8
 network with the reference of the manifest it was played on.
 Every experiment is compared with it: `python -m triforce.lab.bench compare triforce/lab/reference.json NEW.json`.
 
+**The rooms tier's reference** (`triforce/lab/reference-rooms.json`: the 51 on `bench-rooms.json`, 2.0.0.7, Nov 22):
+the tier built from an every-room harvest of the 51's chains, 100 runs of each dungeon segment d1-d9 from seed
+380000 (`eval-chain --route d3first --clips on --act model --from 3_7cs_0 --stop-at step:24 --runs 100
+--first-seed 380000 --harvest DIR --harvest-every-room`, and so on with each segment's start and stop), then
+`python -m triforce.lab.bench rooms --harvest DIR --chains <those outputs>`: 100 room entries, 12 states each, 5
+episodes a state, 5,980 episodes; success **92.3%**, hearts lost **0.678** an episode, hits taken **1.003** a room
+visit, **48.0** decisions and **0.417** bombs an episode. Its states are untracked like `harvested/`:
+`bench rooms` copies the chosen ones to `triforce/states/harvested-rooms/<family>/`. On the first 2.0.0.5 harvest
+(97 entries) it ranked four students as their chains did (round 37's -1.4 points, then -2.3, -3.6, and -8.1 for
+the round-1 student the cheap tier had at +1.2 over the team). Compare a network with it:
+`python -m triforce.lab.bench run --network CKPT --manifest triforce/lab/bench-rooms.json --out NEW.json`, then
+`python -m triforce.lab.bench compare triforce/lab/reference-rooms.json NEW.json`.
+
 ## The first experiment through the pipeline (smoke, Nov 21)
 
 One `ZeldaPolicy` for zol and stalfos-keese-gel, started from zol's run (`r79b-zol`), the families' default runs as
