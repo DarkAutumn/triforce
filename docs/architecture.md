@@ -117,7 +117,7 @@ look-ahead or other critic term was added. The observation spells their mask bit
 `recorder_usable`, `food_usable`, `candle_usable`), as `bomb_usable` and `clip_usable_*` do: whether the room heard
 the recorder or a blue candle's fire was used, and the family's switch, are visible nowhere else.
 
-BOMB follows the acting family's `items: {bombs: MODE}` (`env::config::BombUse`, Lee Nov 11; in `SpecialistEnv` and
+BOMB follows the acting family's `items: {bombs: MODE}` (`env::config::BombUse`, the owner Nov 11; in `SpecialistEnv` and
 chains, recomputed every step): `never`; `tenth`, only for the 10th damage-free kill (`$50` HelpDropCount = 9: a
 bomb kill then arms a forced drop of 4 bombs, `asm:Damage_KillMonster`); `required`, in game.yaml `requires_bombs`
 rooms and the 10th kill; `free`, wherever Link holds more bombs of his own than the route's bomb reserve (routes.yaml
@@ -842,7 +842,7 @@ time that cost health). Drops already on the floor on entry are not followed. Fa
 ### Cheated items (`crates/zelda/src/cheats.rs`)
 
 Bombs ($658), keys ($66E) and rupees ($66D) stay natural (never refilled; `items: {bombs: ...}` only masks the
-action) except where the room Link is in *needs* some (`cheats::needs`), Lee's Nov 8–9 rule:
+action) except where the room Link is in *needs* some (`cheats::needs`), the owner's Nov 8–9 rule:
 
 - **bombs:** 1 in rooms game.yaml tags `requires_bombs: true` (Dodongo 2:0x0e; the rock walls of 0x2c and 0x67; the
   bomb-wall rooms 3:0x5b, 3:0x4c, 4:0x21, 4:0x11, 5:0x66, 5:0x65, 7:0x69, 7:0x19, 7:0x1a, 7:0x0c, 7:0x29;
@@ -906,7 +906,7 @@ non-zero ones); chain `RoomRecord.bombs_used`, `cheated_bombs/keys/rupees` and `
 totals and `runs_with_cheated_<item>`; room events carry the run's `cheated` dict, shown in the watch player's
 footer (`cheated: 2 bombs, 1 key`, when any): such a game wasn't beaten naturally.
 
-Bomb use (`zelda::bombs::BombStats`, `_native.BOMB_STATS`, Lee Nov 11): `placed`, `hits` (credited to the placing
+Bomb use (`zelda::bombs::BombStats`, `_native.BOMB_STATS`, the owner Nov 11): `placed`, `hits` (credited to the placing
 step: every session looks ahead for bombs), `misses` (placed, no hit), `damage` (dealt by those hits, in wood-sword
 hits: an enemy's HP lost, a kill's remaining HP), `tenth_kills` (`$50` 9 → 10, any weapon),
 `tenth_tries` (placed while the next kill was the 10th), `armed` (the 10th kill made with a bomb: a forced bomb drop),
@@ -1239,7 +1239,7 @@ empty. `Session.look_ahead` (`zelda::LookAhead`): `All` in training, `Bombs` in 
 (`EnvOptions.skip_look_ahead`), chains and exploration (bombs only: their hits are counted, the rest credits only
 rewards), `Off` only by request (`Game(look_ahead=False)`).
 
-Bombs (Lee, Nov 11): placing one costs `penalty-bomb-used` (−0.25, also what a bomb that hits nothing costs), each
+Bombs (the owner, Nov 11): placing one costs `penalty-bomb-used` (−0.25, also what a bomb that hits nothing costs), each
 hit the look-ahead credits to it pays `reward-bomb-hit` (0.5, plus the usual `reward-hit`), a 10th damage-free kill
 made with a bomb (it arms a forced drop of 4 bombs) pays `reward-armed-bomb-drop` (0.75) on the step it happens, and
 a bomb pickup pays `reward-gained-bombs` (0.5) like other item
@@ -1528,7 +1528,7 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `ram_randomization: {chain_hp: p}` draws its reset hp from its start room's list in a share `p` of room-entry
   resets (not curriculum starts); the rest keep the `hp` / `full_hp` draw. A config with `chain_hp` and no room
   with at least 5 arrivals is refused.
-- Bombs and the kill streak at reset (Lee, Nov 11; every family): `ram_randomization: {bombs: [0, 8], bombs_share:
+- Bombs and the kill streak at reset (the owner, Nov 11; every family): `ram_randomization: {bombs: [0, 8], bombs_share:
   0.5, help_count: [0, 9]}` draws Link's bomb count in half the resets (the other half keep the start state's own
   count, what the route carries there: none in Dungeon 2, round 19 §4) and a damage-free kill streak (`$50` =
   `$627` = n, `$51` = 0), so bomb use and the 10th kill's forced bomb drop come up in every family's training.
@@ -2195,7 +2195,7 @@ and a refused treasure taken fails the crossing);
 default `target/entry-states/<yymmdd-HHMMSS>`), merging each file's manifest entry into `<out>/entry_states.json`
 (atomically) as soon as the file is written, and exit 1 when a crossing failed; `install DIR [--partial]` copies a
 finished build into the states dir and merges its manifest. `audit [--dir DIR | --specialist S | --states GLOB]`
-checks start states against Lee's rules and exits 1 on any flag: NAME, MISNAMED, ENTRY, POST-ENTRY, SHORT, HEARTS,
+checks start states against the owner's rules and exits 1 on any flag: NAME, MISNAMED, ENTRY, POST-ENTRY, SHORT, HEARTS,
 HP, OFFROUTE, BOSS-ENTRY and, for a whole directory, MISSING and ORPHAN (meanings in the module docstring). All
 use `Game`, `Explorer` and `AcceptSpec` from `triforce._native`.
 

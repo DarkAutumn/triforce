@@ -2,7 +2,7 @@
 
 ## Summary
 
-Lee resumed experiment mode on Nov 3: keep the omp todo live, reconcile it with `todo.md` between experiments,
+The owner resumed experiment mode on Nov 3: keep the omp todo live, reconcile it with `todo.md` between experiments,
 run experiments, log every result and commit each finished item. Aquamentus r30-exit is now promoted.
 
 - Backlog item 1 complete: behavior-neutral lingering measurement, seeded gameplay parity, training/eval/runner/GUI
@@ -16,7 +16,7 @@ run experiments, log every result and commit each finished item. Aquamentus r30-
   This is a smoke checkpoint in `/tmp`, not a candidate for promotion.
 - GUI verified on measured training, measured per-room eval and historical absent-data logs, at wide/narrow sizes.
   Logs: `logs/261103_029_boss-aquamentus/`, `logs/261103_030_r29-linger-baseline/` and old r28-d2.
-- Lee's running player uses most VRAM. He authorizes killing `play-zelda.py` without asking **only if CUDA memory
+- The owner's running player uses most VRAM. He authorizes killing `play-zelda.py` without asking **only if CUDA memory
   exhaustion crashes the experiment**. The CUDA smoke succeeded; the player was not killed.
 - Backlog item 2 complete: r30-exit trains kill → heart → east exit. Matched exit-task eval improved 59/60 →
   60/60; mean pickup-to-exit 92.0 → 11.1 actions, worst 1,963 → 77; health change +0.61 → +0.69 hearts.
@@ -41,7 +41,7 @@ run experiments, log every result and commit each finished item. Aquamentus r30-
 - R36 full observation comparison complete (§21): twenty fresh full-budget models, 12,400 evaluation episodes,
   800 native chains, zero evaluation/chain errors. Bundle worsens Zora and stalls nearly every full chain;
   D2 requested-key arrivals tie 7/80, all-three-key arrivals 5/80 → 7/80. No cutover/promotion; keep r35 team.
-- Main remains schema 1; schema 2 stays in dev. Experiment work is paused at Lee's request; no next study starts.
+- Main remains schema 1; schema 2 stays in dev. Experiment work is paused at the owner's request; no next study starts.
 
 ## 1. Shared lingering metric
 
@@ -111,7 +111,7 @@ states, seeds 0–59, six workers. Output: `aquamentus-through-exit.json` in the
 - Replayed that exact seed through the real env: reproduced all 2,000 actions and saved screenshots at boss death,
   heart pickup, 100 actions after pickup and the end, only with `$12 == 5` (playable, not mid-scroll).
 - Post-heart trace: objective MOVE throughout; 770 `MOVE E 8`, 757 `MOVE W 8`, and 94 `WAIT 8` actions dominate.
-  Final positions bounce between (148,101) and (160,101), north of the east door. This confirms Lee's observation,
+  Final positions bounce between (148,101) and (160,101), north of the east door. This confirms the owner's observation,
   not a shadow-Link fight explanation. The training task ends before this behavior is evaluated.
 
 Decision: train the same boss model through the required heart pickup and east exit, not a stronger penalty first.
@@ -190,7 +190,7 @@ following arms supplied temporary YAML files, whose overrides the CLI discarded:
 
 Their measured model/chain scores remain real, but those comparisons **do not establish the requested treatment's
 effect**: the variant file was not used for training. Old main-YAML values cannot be recovered from these run files,
-so do not retrospectively invent exact treatment settings. Round 6 is annotated accordingly. Lee's explicit rejected
+so do not retrospectively invent exact treatment settings. Round 6 is annotated accordingly. The owner's explicit rejected
 ideas stay rejected; this audit is not authorization to reintroduce pass-through damage or heart-only objectives.
 
 ## 5. Aquamentus exit training protocol (r30)
@@ -288,7 +288,7 @@ in favor of actual RAM/screen/timing/callback parity, and an unrelated exit-clas
 CUDA smoke with the triple-block config, warm-started from promoted r21-goriya-chainhp: two updates / 1,024 actual
 actions, five completed episodes (four successes), 10.7 seconds. Training emitted measured `blocks=0` for these
 five episodes; this proves the updated CUDA/metric path runs, not a nonzero-block reward or a model improvement.
-The natural trace above provides the nonzero-block proof. No CUDA exhaustion; Lee's player was left running.
+The natural trace above provides the nonzero-block proof. No CUDA exhaustion; the owner's player was left running.
 
 ### r31 matched block-reward comparison
 
@@ -352,7 +352,7 @@ Standalone Goriya also exposes a different distribution: 0x23 would lose 12/46 s
 1/44 in 0x44, 1/43 in 0x1e and 0/45 in 0x5e. Measure by family/room and compare training effects before enabling
 thresholds; current promoted configs retain no measured cutoff.
 
-Quiet-fight control verification after retaining Lee's newer GUI changes: **462 full-suite tests passed in
+Quiet-fight control verification after retaining the owner's newer GUI changes: **462 full-suite tests passed in
 231.79 seconds** under concurrent r31 training. The new real-emulator regression checks the exact grace boundary
 and removes targetable enemies without clearing the long quiet tail: the additional penalty stops after the fight.
 No model improvement is claimed from this control verification.
@@ -454,7 +454,7 @@ reset hp sequences: `models/r31-block-evidence/seed-after.json`.
 
 The original two fresh CLI invocations now both produce WAIT/MOVE/BEAMS/SWORD = 2/59/10/57 over 128 actions.
 CUDA smoke also passed: two updates / 256 actions, two completed successful episodes, mean health change −0.75
-hearts. This is path verification, not a candidate model or a claim of deterministic CUDA training. Lee's player
+hearts. This is path verification, not a candidate model or a claim of deterministic CUDA training. The owner's player
 was not killed. Shared asynchronous curriculum and resumed RNG continuation retain the limits stated above.
 
 Integrated dev suite after the seed fix: **462 passed in 204.83 seconds**, including actual single-process and
@@ -499,7 +499,7 @@ and curriculum settings remain unchanged. Bombs off; no measured cutoff or extra
 Each arm: seed 32, four workers, 245 updates ×4,096 = 1,003,520 additional actions, CUDA, no success early stop.
 At most four train/eval jobs run at once. Config copies live in each run directory; source/seed/protocol snapshots
 at `models/r32-nearby-evidence/protocol.json`. Runtime main source, canonical specialist YAML and entry states
-stay frozen through all training and background evaluations. Lee's player has not been killed.
+stay frozen through all training and background evaluations. The owner's player has not been killed.
 
 All three old promoted checkpoints are re-evaluated under current canonical YAML; each new model uses the same
 common evaluation task, 20 episodes per start state, seed 0, three CPU workers. Selection must compare success,
@@ -1241,11 +1241,11 @@ full/post-D1 routes plus D2 (40 runs/block, 80/segment/team), pinning all ten ch
 
 First schema-1 ow-start optimization hit actual CUDA OOM before completing an update: 44 MiB requested,
 26.12 MiB free, no candidate checkpoint. Failed attempt preserved separately under `schema1/failed-oom/`.
-Under Lee's standing actual-OOM permission, stopped the dedicated `play-zelda.py 3x2 --games 64` process
+Under the owner's standing actual-OOM permission, stopped the dedicated `play-zelda.py 3x2 --games 64` process
 group; observed 19,311 MiB GPU memory free afterward. Retry is fresh with unchanged settings, not loaded
 partial weights. No treatment/source/data changes mid-run; completed results follow below.
 
-Protocol/evidence: `models/r36-observation-full-retrain-evidence/`. Lee's new swordless-start and finite
+Protocol/evidence: `models/r36-observation-full-retrain-evidence/`. The owner's new swordless-start and finite
 training/player-stall requirements are recorded in `todo.md`, not implemented during this trial. Finish,
 record and commit this experiment, then pause; no boomerang ablation or other next experiment before he resumes.
 
@@ -1274,7 +1274,7 @@ normally after both ten-row plans completed. Bundle validation completed: 6,200 
 YAMLs across the frozen sources. Analysis excludes zero-action milestone markers from played-room linger
 statistics; all played rooms must have real measurements.
 
-Lee asked to wrap up and explicitly selected finishing the remaining comparison rather than stopping with
+The owner asked to wrap up and explicitly selected finishing the remaining comparison rather than stopping with
 an incomplete result. Replaced only baseline's serial post-training scheduling with four independent CLI
 jobs at a time: unchanged four-worker evaluations and six-worker chain blocks, at most twenty emulator
 workers. Five already completed evaluation files were validated/reused; interrupted console logs remain

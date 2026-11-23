@@ -34,7 +34,7 @@ lost is not below every earlier confirmed check's by more than max(D, 2 SE); wit
 (default 0.05; 0 = no bombs rule) the bomb value is not above every earlier one's by more than max(B, 2 SE).
 Confirmed checks are at least ``--stop-check-gap`` iterations apart (default 50), so the first one never stops
 (round 18: a family that reached 99% success after 4 minutes was still losing hearts it went on to stop losing;
-round 19, Lee: bomb use keeps improving after success and hearts look done).
+round 19, the owner: bomb use keeps improving after success and hearts look done).
 Only episodes that started at a room entry count, and the balance is over the seed start states only: episodes of
 harvested start states (chain handoffs) are reported as ``harvested/*`` and never move it; ``--curriculum`` episodes
 are reported separately as ``curriculum/*``.  ``in_flight/*``, ``success_rate_pessimistic`` and ``started/*``

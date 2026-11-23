@@ -36,7 +36,7 @@ reasoning) will take it and fix the problems. Write each entry for that agent.
   impact: who is affected (training rewards / endings / eval numbers / chains / replays / determinism / GUI) and
     how badly; whether existing models or results are invalidated.
   fix: the change you would make, specific enough to implement (function, condition, constant); alternatives if
-    the right fix depends on a decision Lee must make (say so).
+    the right fix depends on a decision the owner must make (say so).
   test: the regression test that would have caught it (where it belongs, what it asserts).
   related: other finding ids, or "none".
   ```

@@ -268,7 +268,7 @@ pub mod size {
 }
 
 impl State {
-    /// Power-on fill of console and cart RAM: $00 (Lee, Nov 8). The hardware leaves it unspecified; Zelda never
+    /// Power-on fill of console and cart RAM: $00 (the owner, Nov 8). The hardware leaves it unspecified; Zelda never
     /// reads RAM it hasn't written, and twelve test ROMs need $00 (docs/decisions.md 2026-11-08).
     pub const POWER_ON_RAM: u8 = 0x00;
 

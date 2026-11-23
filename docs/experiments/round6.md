@@ -1,6 +1,6 @@
 # Round 6: enemy-based families, rooms toward the bow, pass-through damage
 
-Lee (Nov 3): rooms are rooms; a Red Goriya room needs the same skills in any dungeon. Split the Goriya rooms into
+The owner (Nov 3): rooms are rooms; a Red Goriya room needs the same skills in any dungeon. Split the Goriya rooms into
 their own model, give Wallmasters their own model, name Dungeon 1's melee family by its enemies, and add the two
 off-route Dungeon 1 rooms toward the bow. Also try a damage penalty for rooms Link only has to cross.
 
@@ -18,11 +18,11 @@ Best chains (40 runs each, to the Dodongo room 2:0x0e):
 | after D1 (`--from 0_37c_2`), milestone1-fairy | **8/40** |
 | D2 entrance at full hearts (`--from 2_7ds_2`) | 9/40 |
 
-- **Fairy route** (§9, §11): `milestone1-fairy` (Lee) goes south after D1, past the fairy pond 0x39, then east and
+- **Fairy route** (§9, §11): `milestone1-fairy` (the owner) goes south after D1, past the fairy pond 0x39, then east and
   north into D2. It beats milestone1 after D1: 37/40 reach the D2 entrance with 2.5 hearts (milestone1: 27/40 with
   1.7); every pond visit refilled to full. 40 new start states; ow-zora / ow-octorok / ow-start learned the new
   rooms (97–98%; the pond 2% → 98%).
-- **The Moblin room Lee flagged** (§9): 0x5b's east edge has two openings and the lower one leads into a pocket of
+- **The Moblin room the owner flagged** (§9): 0x5b's east edge has two openings and the lower one leads into a pocket of
   0x5c that only exits south; leaving through it counted as success. game.yaml exit `span` limits it to the upper
   opening. The wavefront also had an off-map lane under every overworld room's bottom tree line (fixed). ow-moblin
   failed for a third reason (r9a's habit of leaving Moblin rooms west, fatal when entering from the west);
@@ -30,7 +30,7 @@ Best chains (40 runs each, to the Dodongo room 2:0x0e):
 - **Heart tracking** (§8): drops / taken / left / healed / wasted per room in training metrics, eval, chain
   records and the GUI (real vs total heart change). Overworld models left 26 of 34 dropped hearts; dungeon models
   take 55–80%. A "heart is the objective when hurt" option (`collect_hearts`) didn't help the chain (d2-rope:
-  12/80 vs 16/80) and was removed; Lee's v1-style variant (nearest of heart or exit) is still to try (todo.md).
+  12/80 vs 16/80) and was removed; the owner's v1-style variant (nearest of heart or exit) is still to try (todo.md).
 - **Dungeon 2** (§12): D2 rooms got 3 start states each (were 1). d2-rope r28 95% (was 90%), promoted; it lifted
   the fairy post-D1 chain from 2/40 to 8/40. goriya r28 lost to r21 in the chain (D2 6/40 vs 9/40), r21 stays.
 - **Dropped after testing:** pass-through damage penalty (§5), chain-matched hp (§6), heart objective (§10).
@@ -38,7 +38,7 @@ Best chains (40 runs each, to the Dodongo room 2:0x0e):
   runs that reach it, and only 8 of 40 runs leave D1 alive. 0x53 kills 5 more.
 - **Promoted at the end:** ow-start / ow-zora / ow-octorok r24-fairy, ow-moblin r26c, ow-leever-peahat and
   boss-aquamentus r23, stalfos-keese-gel r25, goriya r21, wallmaster r10 copy, d2-rope r28.
-- Lee's observations from watching `play-zelda.py` after the round (Link lingering in rooms, monsters chasing
+- The owner's observations from watching `play-zelda.py` after the round (Link lingering in rooms, monsters chasing
   "shadow Link", Aquamentus wandering after the kill, hearts left behind, blocking, stuck runs, the boomerang
   question, D2's 0x7e key) are in todo.md "Next up", in order, and the game mechanics in AGENTS.md.
 
@@ -46,7 +46,7 @@ Best chains (40 runs each, to the Dodongo room 2:0x0e):
 and reloaded the default specialist by name. Confirmed affected training arms: r20-rope-pt, r21-goriya-chainhp,
 r22-skg-chainhp, r25-skg-hearts and r27-rope-hearts (`run.json` records the temporary paths; round7.md §4).
 Their measured scores remain real, but these comparisons do not establish the named treatment's effect. No exact
-old main-YAML settings are recoverable from those run files. Lee's rejected ideas stay rejected; do not silently
+old main-YAML settings are recoverable from those run files. The owner's rejected ideas stay rejected; do not silently
 reintroduce them because of this finding. The CLI bug is fixed for subsequent experiments.
 
 ## 1. Families
@@ -215,7 +215,7 @@ Chains after the promotions (40 runs each; r22 chains in brackets):
 Goriya room 16 (of 32 that reached it), 0x53 7, Aquamentus 4, D2 rooms 7. Post-D1: 0x4c 8 (ow-octorok, arriving
 with 1.8 hearts), 0x6d 7, 0x6e 6, 0x5e 6, 0x4e 5. D2: 0x3e 11, 0x2e 5, 0x5e 4, 0x1e 4.
 
-## 8. Heart tracking (Lee): do the agents pick up dropped hearts?
+## 8. Heart tracking (the owner): do the agents pick up dropped hearts?
 
 New: `hearts.HeartTracker` follows every dropped heart (item 0x22 only; fairies, triforce and containers don't
 count) through a room visit: `dropped`, `taken` (by Link or his weapons; a vanished heart whose lifetime couldn't
@@ -245,7 +245,7 @@ health (total +0.63 vs real +0.32). Hearts are already worth a lot: success pays
 heart at the exit adds 2.5–3.3, plus `reward-gained-health`. But PBRS never points at a heart: dropped items are
 added to the objective's `targets`, not to `pbrs_targets`, so the shaping always pulls toward the exit.
 
-## 9. Second route past the fairy pond (Lee): `milestone1-fairy`
+## 9. Second route past the fairy pond (the owner): `milestone1-fairy`
 
 After D1: 0x38 S 0x48 S 0x58 E 0x59 N 0x49 N 0x39 (fairy pond) S 0x49 S 0x59 E 0x5a E 0x5b E 0x5c E 0x5d N
 0x4d W 0x4c, then as milestone1 (`docs/route.md`; mechanics in `docs/decisions.md`). 40 entry states built and
@@ -263,7 +263,7 @@ bit, which they had never seen change there.
 | ow-moblin | 18% | 28% (stopped) | 0x5b / 0x5c / 0x5d 0% |
 
 Promoted: ow-zora, ow-octorok, ow-start r24-fairy. ow-moblin collapsed into 2000-step timeouts (1–4 episodes
-per iteration). Lee pointed at the cause: a Moblin room with two tree openings, one leading E and the other S.
+per iteration). The owner pointed at the cause: a Moblin room with two tree openings, one leading E and the other S.
 0x5b's east edge has two openings. The lower one opens into a pocket of 0x5c that only leads south, yet the
 objective counted every tile of that edge as the exit to 0x5c, and a wavefront-greedy walker from the west entry
 took exactly the lower one. Also, `Room.can_move` let Link's 2×2 top-left tile run along the off-map last row,

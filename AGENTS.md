@@ -436,7 +436,7 @@ there).
   Dungeons 7, (the magic sword), 6, 8 and 9 to Zelda. A draft is read only by `zelda-map.py --route first-quest`
   (Route selector; the Labels overlay shows each step's note; door marks on every dungeon level); `routes.yaml`, the
   objective and training know nothing of it. Every draft step was walked in the emulator with the fights skipped
-  (`triforce/probe.py` puts Link into any dungeon room without a savestate). Lee's first review (Nov 14): bombs only
+  (`triforce/probe.py` puts Link into any dungeon room without a savestate). The owner's first review (Nov 14): bombs only
   from rooms on the way (5:0x65, 7:0x1b when not full, 9:0x16) and drops, else cheated; take the route's keys; no
   magic key, wand or book; every overworld leg has a plain way (`stretch:` blocks, the Lost Woods and Lost Hills by
   `exit: maze`).
@@ -482,10 +482,10 @@ there).
   split at B+152, a small one at HP `$80` (bomb `$40`, white sword `$20`). Training's darknut stages the Olive
   Garden and 0x64 (`room_kills`: the game makes 1-5 Darknuts fewer, half the resets).
 - **Long jobs:** check a build/explore/chain hunt every couple of hours; 12 hours on one task is a hard stop.
-- Lee's experiment mode stands: keep the omp todo updated (Lee's numbered phases, e.g. I./II.), reconcile it
+- The owner's experiment mode stands: keep the omp todo updated (the owner's numbered phases, e.g. I./II.), reconcile it
   with `backlog.md` between experiments, log every result, check off completed backlog entries, commit each
   finished item and keep going.
-- **VRAM (Lee, Nov 3):** leave his running `play-zelda.py` alone unless an experiment crashes from CUDA memory
+- **VRAM (the owner, Nov 3):** leave his running `play-zelda.py` alone unless an experiment crashes from CUDA memory
   exhaustion. If it does, kill the player without asking, then resume the experiment.
 
 ## Goal
@@ -514,14 +514,14 @@ Gohma by arrows) and its triforce, then (round 28) the leg to Dungeon 8 (the whi
 tree) and Dungeon 8 (`docs/routes/d8.md`: Manhandla crossed with a bomb, two Blue Darknut rooms, the Pols Voices,
 Gleeok) and its triforce, then (round 29, 1.9.0.0) the leg to Dungeon 9 (the whirlwind to 0x37, 0x47's heart
 container, 0x05's rock wall) and Dungeon 9 (`docs/routes/d9.md`: the red ring, the silver arrow, Wizzrobes, Lanmolas,
-Patras, Ganon) to Zelda's room, where the route ends with the end of the game (`exit: end`). Lee owns the direction;
+Patras, Ganon) to Zelda's room, where the route ends with the end of the game (`exit: end`). The owner owns the direction;
 the standing invitation is to come up with ideas, test them, keep what helps, and log everything.
 
-## Lee's standing rules
+## The owner's standing rules
 
 - **Commit after each finished item.** If an experiment makes no forward progress, ask whether to commit the code or
   only update the experiment ledger.
-- **Every completed stretch lands in the main checkout and is pushed, playable** (Lee, Nov 17: "after each
+- **Every completed stretch lands in the main checkout and is pushed, playable** (the owner, Nov 17: "after each
   completion (like d6 done, d8 -> d9 etc) gets merged back into triforce and pushed. I really want to be able to do
   play-zelda and see the progress as you work"). A stretch is a dungeon with its leg (the D7 triforce, the magic
   sword and the D6 triforce, D8, D9 and Ganon), complete when its first team takes it at a working rate. Landing
@@ -539,7 +539,7 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   joint (who did which part), and what came of it; the ledger is `docs/credits.md`.
 - **Families are by enemy, not by dungeon** (`docs/specialists.md`, `docs/decisions.md` 2026-11-03): a Red Goriya
   room needs the same skills anywhere. Group rooms by the enemies in them, but don't boil it down to one model per
-  enemy type or per room beyond what Lee asks for. Families are the d2first route's rooms (`routes.yaml`
+  enemy type or per room beyond what the owner asks for. Families are the d2first route's rooms (`routes.yaml`
   `families`): ow-start, ow-octorok (0x66, 0x67 and its secret cave since round 22), ow-zora, ow-moblin, ow-leever
   (0x48, 0x75), ow-tektite (0x1a, 0x2c and its heart cave, 0x74, 0x76), ow-lynel, ow-boulder, stalfos-keese-gel
   (4:0x01 since round 22), goriya, trap-room (1:0x22, 3:0x5a, 3:0x4c, the rupee room 4:0x11, 4:0x02), equipment-room
@@ -572,7 +572,7 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   and 0x2d's secret cave, ow-leever 0:0x29, 0x2a, 0x2b (screen scrolls), ow-tektite 0x0c's cave (the blue candle),
   ow-moblin 0:0x62 and its cave, 0x3d's cave; the families keep their rooms on both routes, and fifteen have a
   route run for `d3first`'s wood-sword half (Where things stand).
-- Rejected ideas stay rejected (marked in `backlog.md`), e.g. skipping the optional D1 boomerang *pickup*. (Lee
+- Rejected ideas stay rejected (marked in `backlog.md`), e.g. skipping the optional D1 boomerang *pickup*. (The owner
   also had the boomerang usable vs masked after D1 tested: round 10 §2, no effect; the boomerang stays.)
 - **Start states** (`triforce/states/`, `TFZSTATE` files) must be clean pre-entry states: delete bad ones
   rather than keep them (originals are on the `v2-stable-retro` branch). No 16-heart states: max hearts follow
@@ -589,8 +589,8 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   states after it marked `fight_skipped`) until a model clears it; then those states are rebuilt from chain runs'
   harvested states (`eval-chain --harvest`), their hearts refilled as every entry state's (`write_entry_state`).
 - **Training mixes full health (sword beams) and partial health** (`full_hp: 0.5`; partial down to
-  `hp: [0.15, max]`; Lee, Nov 12: boss-gleeok `[0.5, max]`). The beam look-ahead must credit the firing step.
-- **Clips only: the no-clip way is dropped** (Lee, Nov 18; supersedes "clip families train with clips on and with
+  `hp: [0.15, max]`; the owner, Nov 12: boss-gleeok `[0.5, max]`). The beam look-ahead must credit the firing step.
+- **Clips only: the no-clip way is dropped** (the owner, Nov 18; supersedes "clip families train with clips on and with
   CLIP masked" of Nov 13, round 22): "From here on, you can drop the no-clip runs. They were an interesting spot of
   comparison, but should be dropped in favor of just clipping through blocks when needed." From here on: no
   clips-off chains, tags or evaluations (`CLIPS=off`, `-noclips`, `--clips both`); a clip family's new rounds train
@@ -600,13 +600,13 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   block clip, that is the way. What exists stays: the route's plain ways and `stretch:` forks, the run-time switch
   and `play-zelda.py`'s key `c` (turning clips off now plays ways no model is trained on from Dungeon 7 onward),
   the clips-off numbers of rounds 22-26 in their documents.
-- **No potions, no CONTINUE** (Lee, Nov 19: "We aren't doing potions or continues, that's the call"): a run is one
+- **No potions, no CONTINUE** (the owner, Nov 19: "We aren't doing potions or continues, that's the call"): a run is one
   life from where it starts to the ending, and it never buys or takes a potion (0x47's take-any gives the heart
   container; the medicine shops are not on the route). A death ends the run; the game's CONTINUE is not modelled,
   measured or trained. The survival budget of Dungeons 6, 8 and 9 (more hearts lost by the rooms than the
   containers hold, no refill but drops) is closed by play: hearts carried into the dear rooms (`reward.heart_value`,
   starts at the hearts runs bring), block clips, drops, the planner as a teacher.
-- **Bombs (Lee, Nov 11; supersedes "bombs only where the route needs them"; round 26: granted bombs and the reserve
+- **Bombs (the owner, Nov 11; supersedes "bombs only where the route needs them"; round 26: granted bombs and the reserve
   inside bomb-wall rooms)**: a family's `items: {bombs: MODE}`
   (`env::config::BombUse`, checked every step in training and chains): `free` (goriya, darknut, moldorm, Dodongo,
   Manhandla, Digdogger, vire: bombs as a weapon while Link holds more of his own than the route's `bomb_reserve`),
@@ -621,7 +621,7 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   2026-11-17): while the cheat ledger holds a granted bomb in a bomb-wall room, BOMB is offered only in reach of the
   wall the objective leaves through, in every mode and on the 10th kill too (before, a `free` family threw it at a
   monster and was handed the next: 7.8 cheated bombs a Dungeon 7 run, 1.1 a Dungeon 3 run in 3:0x5b); Dodongo's
-  room has no wall, there the granted bomb is the weapon. **No route hands items over** (Lee, Nov 21: "Don't
+  room has no wall, there the granted bomb is the weapon. **No route hands items over** (the owner, Nov 21: "Don't
   blindly add 8 bombs. The goal is a win without a cheated bomb."): round 32's route grant (routes.yaml `grant:`,
   8 bombs at `d3first`'s Dungeon 5 entrance) is removed in 2.0.0.3 and must not come back in another form; what a
   route lacks is a problem of its bomb economy to solve, and the wall bombs still cheated are counted and
@@ -702,8 +702,8 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 - **The training GUI is for a colorblind user:** never red vs green. Good = blue, bad = red, purple in between.
 - A damage penalty for rooms Link only has to cross was tried twice (round 6) and dropped: it didn't help the
   chains, and a penalty like that could also discourage required bombing later.
-- Deferred by Lee: mapper (explore / entry_states) JSONL logs with their own GUI view (`backlog.md`, Driver section).
-- **Two routes (Lee, Nov 19).** `d2first` is complete once the owner's changes from watching the first complete
+- Deferred by the owner: mapper (explore / entry_states) JSONL logs with their own GUI view (`backlog.md`, Driver section).
+- **Two routes (the owner, Nov 19).** `d2first` is complete once the owner's changes from watching the first complete
   game are in (Dungeon 1's entrance door trick, its skipped key rooms and its bombed wall; Dungeon 6's 0x78, 0x29
   and 0x2d; Dungeon 8's 0x4c; Dungeon 9's 0x56). **`d3first` is built beside it and both are kept**: the wood sword
   until the magic sword (no white sword), Dungeons 3, 4, 1, 5, 2, 7, the magic sword, 6, 8, 9, by screen scrolls,
@@ -721,16 +721,16 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   steps from the magic sword on, in the family default's place: the way to change `d3first`'s later rooms without
   touching `d2first` (no `promoted.*` name; `triforce list` shows it). A change to a family's default run changes
   both routes and is measured on both.
-- **Old worktrees are deleted once their work is on `main`** (Lee, Nov 19: "you can always delete old worktrees.
+- **Old worktrees are deleted once their work is on `main`** (the owner, Nov 19: "you can always delete old worktrees.
   Once things are merged into main, delete them and keep stuff tidy"): `git worktree remove` (the branch stays);
   first copy out what is not in git and still wanted: promoted run dirs into `models/`, demonstration files into
   `target/demos/` (every `--demos` file a lineage used must stay findable there), harvested states, chains of record.
-- **Experiment data is cleaned up as it stops being needed** (Lee, Nov 22: "Yes please clean up experiment data
+- **Experiment data is cleaned up as it stops being needed** (the owner, Nov 22: "Yes please clean up experiment data
   occasionally. When we don't need it remove it, but you can run all the way down to 30gb free and we are ok... I
   still want it cleaned up before then"): recorded datasets and their caches, finished rounds' worktree data under
   `target/worktrees/`, candidate run dirs nothing names; never the promoted runs, the demonstration files a lineage
   used, the chains of record of the last two landings, the owner's `trajectories.prev-*` and videos.
-- **The job queue is the machine's capacity, not a fault** (Lee, Nov 22: "We have only one computer and we are at
+- **The job queue is the machine's capacity, not a fault** (the owner, Nov 22: "We have only one computer and we are at
   full capacity [...] The queue is working as intended, and we can't go any faster unless we further optimize the
   runs"). **Watch the speed instead:** "You should occasionally check steps per second, episodes per second, etc to
   make sure they haven't greatly dropped. If they have check why and perhaps fix the perf problem." Reference
@@ -740,7 +740,7 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   lengths; `docs/performance.md` has the quiet machine's. Every agent that trains or chains reports its decisions a
   second; a drop of a third or more against these is looked into before more work is queued.
 
-## Versioning (Lee, Nov 11)
+## Versioning (the owner, Nov 11)
 
 - **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `2.0.0.11`: `ow-lynel@d3first` for the leg
   after Dungeon 7 (24% -> 99%), rupees rewarded once a pickup and the beam terms, round38.md "Beams at range; rupees
@@ -764,9 +764,9 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   stamped 2.0.0.0, `triforce stamp --force`). It is the
   single source: `triforce.__version__` and `_native.VERSION` read it, `pyproject.toml` repeats it and the Cargo
   workspace version is its first three numbers (`tests/test_version.py` checks all of them).
-  - `MAJOR` changes only when Lee says so. **2.0 is said (Nov 19): the `d3first` route** (above, "Two routes"),
+  - `MAJOR` changes only when the owner says so. **2.0 is said (Nov 19): the `d3first` route** (above, "Two routes"),
     landed Nov 20 as 2.0.0.0.
-  - `MINOR` +1 for a big change (Lee, Nov 19: "We are going to drop the 'dungeon # is the minor version'. From here
+  - `MINOR` +1 for a big change (the owner, Nov 19: "We are going to drop the 'dungeon # is the minor version'. From here
     on, minor version bumps are big changes"). Through 1.9 it counted the dungeons the route completes (1.3 =
     three).
   - `COMPAT` +1 on any change that makes previously trained models unusable (observation layout or meaning, action
@@ -780,7 +780,7 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   A 1.5.0 model is converted, not stamped: `triforce --models-dir MODELS convert-model --promoted --out DIR` (or
   `convert-model RUN_DIR... --out DIR`; `triforce/convert.py`) writes widened copies (source untouched); the
   converted models act bit for bit as their sources (round 26's proof, decisions 2026-11-16).
-- Tag releases `vX.Y.Z.R` on `main`. **Models are not checked in** (too large; Lee will pick a backup strategy).
+- Tag releases `vX.Y.Z.R` on `main`. **Models are not checked in** (too large; the owner will pick a backup strategy).
 - **Replays are `TFREPLAY` files** (`crates/replay`, `triforce/replay.py`) with their own integer `REPLAY_VERSION`,
   independent of the repo version. It is bumped when an existing replay can no longer be replayed bit-exactly
   (a container change the reader does not handle, a zcore behaviour change, a dropped state decoder), or when an older
@@ -833,15 +833,15 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   `python zelda-asm/tools/asm.py where Name` finds it, and translates an old upstream name or `file:line`;
   `asm.py check` verifies every `asm:` citation in the repo). Edit it only by its README's rules (never the code;
   renames through `asm.py rename`; `asm.py gen` and `asm.py check --final` afterwards).
-- **Monsters don't always chase Link; they often chase "shadow Link"** (Lee; `docs/ram-catalog.md` `$60–$62`,
+- **Monsters don't always chase Link; they often chase "shadow Link"** (the owner; `docs/ram-catalog.md` `$60–$62`,
   `asm:Mode5Play_UpdateWorld`). The actual instruction order copies current Link X/Y before flipping to the alternate
   mode, so normally it mirrors the current position even if Link moved (the upstream "last frame" comment was wrong).
-  So a Link who stands still in a corner can send the whole room to the opposite corner for a long time. Lee watched
+  So a Link who stands still in a corner can send the whole room to the opposite corner for a long time. The owner watched
   the goriya model do exactly that in the Red Goriya room: Link in the top left not fighting, the Goriyas chasing
   shadow Link in the bottom right, no hits either way, "for ages". In training the room-stalling penalty does fire
   then (after 150 steps without a kill, item or damage taken: −0.01 to −0.02 per step), but it may be too weak;
   in a chain nothing stops it short of the runner's room budget (max(`max_steps`, 2000) steps).
-- **Track how long Link lingers in a room, in every training run** (Lee, Nov 3). A long stretch without progress
+- **Track how long Link lingers in a room, in every training run** (the owner, Nov 3). A long stretch without progress
   (kill, hit, pickup, getting closer to the objective, leaving) is a problem to investigate and fix, even when the
   success rate looks fine (Aquamentus: high success, yet Link walks back and forth after the kill). Watch
   `linger/max_steps`, `linger/tail_steps`, `linger/worst_steps` (and frames), eval's per-room summaries and chain
@@ -893,7 +893,7 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   runs to the first playable frame) and check `$12 == 5` before capturing. Round 6: a mid-scroll screenshot of
   0x5c looked like a different room.
 - Launch long jobs through the tool's async/background mode; `( cmd & )` from a shell call gets killed.
-- **Evaluations go through the batch runner, as one named group** (Lee, Nov 13): never a string of separate
+- **Evaluations go through the batch runner, as one named group** (the owner, Nov 13): never a string of separate
   `triforce evaluate` / `eval-chain` calls. `triforce eval-batch NAME ...` (`triforce/eval_batch.py`) lists every
   evaluation up front in one log folder (`training.json` kind `eval-batch`), runs them one after another (or family
   evaluations side by side with `--jobs N` within `--parallel` cores) and the training GUI shows one group named
@@ -904,7 +904,7 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   argmax'`. A failed entry is marked and the batch goes on (exit 1); SIGTERM marks the rest `interrupted`; running
   the same batch again skips what is done (an existing chain output, an evaluation file holding the same
   measurement; `--redo` measures again).
-- **Training and evaluation jobs lower their own priority and wait their turn: you do nothing** (Lee, Nov 13 and
+- **Training and evaluation jobs lower their own priority and wait their turn: you do nothing** (the owner, Nov 13 and
   Nov 15). `scripts/train_round.py`, `triforce train`, `triforce evaluate`, `triforce eval-chain`, `triforce
   eval-batch` and `triforce select-checkpoint` set their own CPU priority to nice 15 at start (never raised; recorded in the plan and `run.json`;
   what they start inherits it), and at most two of them run at once on the machine, plus one short job (estimated
@@ -918,7 +918,7 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   it starts; the training GUI lists it as waiting in the order the line will drain, with its estimate. **Seeing
   that line, wait** (check back as for any long job; a long job can wait for hours behind short ones, that is by
   design): don't kill it or the jobs it waits for to get ahead, don't stagger, split or nice jobs by hand, don't
-  restart it with `--no-wait`. **A job there is no reason to run any more is ended** (Lee, Nov 18: "kill running
+  restart it with `--no-wait`. **A job there is no reason to run any more is ended** (the owner, Nov 18: "kill running
   jobs if there's no reason to run something. I more meant don't needlessly kill running jobs"): a duplicate, a
   measurement a decision made pointless (a clips-off chain after Nov 18), an arm already decided. End your own job
   with one SIGTERM (its plan ends `interrupted`), running or waiting; never another agent's or the owner's without
@@ -935,7 +935,7 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   agent's `cargo test`, two explorers and a chain it got 1.8 cores for its 8 games (load average 60 on 20 threads)
   and its queues filled slowly. So everything heavy an agent starts that is not a queued job (`cargo`, `maturin`,
   pytest, `triforce.explore`, `entry_states build`, walk scripts) gets `nice -n 10`: above the jobs' 15, below the
-  player. **The CPU, not the GPU, is what runs out** (Lee, Nov 17): the job line carries everything that plays
+  player. **The CPU, not the GPU, is what runs out** (the owner, Nov 17): the job line carries everything that plays
   models; outside it an agent runs one heavy thing at a time, explorers with `--parallel 4`, cargo and maturin with
   `CARGO_BUILD_JOBS=4`, full suites once at the end of its task, and starts nothing heavy while the load average is
   above 30. For the fastest start of the player: `.venv/bin/python play-zelda.py 3x3` in the foreground or with `&!`
@@ -951,12 +951,12 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   (`triforce select-checkpoint` does both). Two models on the same 1000 seeds differ by 2.2 points of noise
   (standard error of the paired difference; same seeds don't make different models' runs alike): about 5 points is
   a result, 2-3 points need 2000-5000 runs an arm; secondaries such as the hearts on entering a room are sharper.
-- **Every job is in the job registry, and every job has a plan** (Lee, Nov 13; replaces round 21's "start single
+- **Every job is in the job registry, and every job has a plan** (the owner, Nov 13; replaces round 21's "start single
   trainings without `--events`"). Each plan (`train_round.py`, `triforce train|evaluate|eval-chain|eval-batch`,
   from any worktree or `--logs-dir`) registers itself in `$HOME/.local/state/triforce/jobs/` (`$XDG_STATE_HOME`;
   `$TRIFORCE_JOBS_DIR` overrides; `triforce/jobs.py`) with its folder, checkout, branch and commit, and marks the
   entry when it ends, so `training-gui.py`'s [currently running] lists every job on the machine with its checkout
-  (waiting ones as queued), and those that ended in the last 60 minutes under "finished" (Lee, Nov 18: then they
+  (waiting ones as queued), and those that ended in the last 60 minutes under "finished" (the owner, Nov 18: then they
   leave the list by themselves, so it never piles up). The registry is also the
   line jobs wait in. `--events FILE` into a folder without a `training.json` now writes a plan there (a driver's
   folder with a plan keeps owning the stream). **A job the registry knows is never invisible** (the owner, Nov 22,

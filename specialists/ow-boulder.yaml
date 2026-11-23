@@ -13,7 +13,7 @@ one_room: true                          # round 5: per-room episodes
 max_steps: 600
 warm_start: null
 notes: >-
-  Falling-boulder rooms (Lee, Nov 8: hard to predict, can't be blocked). Not trained yet. 0x19, 0x18, 0x17 from E
+  Falling-boulder rooms (the owner, Nov 8: hard to predict, can't be blocked). Not trained yet. 0x19, 0x18, 0x17 from E
   (0x17 leaves S). Each room has a boulder generator ($31) dropping boulders ($32) and a Zora in the river.
   Round 29 (route `d9`, step 308): 0x17 from S leaves N over the river by the ladder (up X $88 to Y $9D, W along it,
   up the corridor at X $40). The first round (no curriculum, no demonstrations) learned nothing of it: the model

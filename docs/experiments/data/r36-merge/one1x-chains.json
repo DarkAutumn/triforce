@@ -347,7 +347,7 @@
    }
   ],
   "files": {
-   "team": "/home/leculver/git/triforce/target/r56-chains/r35nobag-1k-d5.jsonl",
+   "team": "target/r56-chains/r35nobag-1k-d5.jsonl",
    "one": "target/merge/chains/one1x-1k-d5.jsonl"
   }
  },
@@ -866,7 +866,7 @@
    }
   ],
   "files": {
-   "team": "/home/leculver/git/triforce/target/r56-chains/r35nobag-1k-full.jsonl",
+   "team": "target/r56-chains/r35nobag-1k-full.jsonl",
    "one": "target/merge/chains/one1x-1k-full.jsonl"
   }
  }

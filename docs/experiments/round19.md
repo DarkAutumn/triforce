@@ -1,6 +1,6 @@
 # Round 19: bombs (the new baseline)
 
-Lee, Nov 11: bombs should help with the Goriyas and Darknuts. Bombs as a weapon where enemies take more than 3
+The owner, Nov 11: bombs should help with the Goriyas and Darknuts. Bombs as a weapon where enemies take more than 3
 hits (goriya, darknut), moldorm too, not Aquamentus and not the overworld; save bombs for what the route needs
 (D3: 3 for the bomb wall, 2 for Manhandla), with machinery for "from here to there never drop below X"; train every
 family to bomb the 10th damage-free kill (it arms a forced drop of 4 bombs), rewarded for arming and for the
@@ -13,7 +13,7 @@ Bombs are in (1.3.2.0, observation schema 3): bomb use per family (`free` for go
 Manhandla, `required` where the route needs them, the 10th damage-free kill everywhere else), D3's reserve of 5,
 rewards and metrics for all of it, GUI charts and an early stop that also waits on the bomb value. The whole team was
 retrained from scratch (§3). Two fixes followed the first chains: half the resets keep the start state's bombs
-(Dungeon 2 has none; §4–5), and, Lee's idea, Link now clears 2:0x5e for its Red Goriyas' bomb drops before the
+(Dungeon 2 has none; §4–5), and, the owner's idea, Link now clears 2:0x5e for its Red Goriyas' bomb drops before the
 Moldorm (a new route rule `treasure: clear`; §6). Final chains, 1000 runs per segment, against round 18: from the
 start to Dungeon 1 55.2% (49.3%), to Dungeon 3 36.3% (29.2%), to the D3 triforce 10.3% (10.6%, within noise). The
 D2 segment from its entrance state is 82.1% (87.6%), and the D3 segment 39.5% (40.6%): Darknuts stall on 3:0x59's
@@ -38,7 +38,7 @@ Checked on the emulator (throwaway scripts, `/tmp/bomb_facts.py`, `/tmp/darknut_
 - A bomb kill on the 9th → 10th damage-free kill sets `$51`; the next drop is a bombs item (2 of 2 seeds in 1:0x44;
   also the test `a_bomb_on_the_tenth_kill_arms_a_forced_bomb_drop`).
 - Darknuts (3:0x5b, 6 seeds, bombs placed within 40 px, Darknuts that kept one direction during the blast): facing
-  opposite to Link's facing when he placed the bomb, 434 cases, 0 hits; otherwise 951 hits of 1,478. Lee's claim
+  opposite to Link's facing when he placed the bomb, 434 cases, 0 hits; otherwise 951 hits of 1,478. The owner's claim
   holds and is broader than "facing Link": only the directions count.
 
 ## 2. Pilot: goriya, darknut, moldorm (`r65-pilot-a`, `r65-pilot-b`)
@@ -76,7 +76,7 @@ Moldorm bombs the chain hard (two segments per bomb). The Darknut rooms rarely b
 (`treasure: skip`) and D3's reserve of 5 masks bombs at 5 or fewer, which the random 0–8 bombs make about two
 thirds of resets. All three pilots are better than the models they replace on success and hearts.
 
-After the pilots, `bombs-dev` (the bomb damage counter, Lee: "how hard we are hitting", and the bombs early-stop
+After the pilots, `bombs-dev` (the bomb damage counter, the owner: "how hard we are hitting", and the bombs early-stop
 rule) was merged into `bombs`.
 
 ## 3. The full retrain
@@ -171,11 +171,11 @@ streams. Argmax, 100 episodes per start state, seed 0; hearts lost per episode:
 
 goriya recovered its bombless D2 rooms; moldorm did not (4M steps, no early stop). d2-rope `r67-share-b` stopped early
 at 98% (sample 98.3%, argmax 98.6%, as r66-dg). A moldorm continuation with bombs in a fifth of resets (`r68-moldorm`)
-was stopped when Lee's 0x5e question (§6) superseded it.
+was stopped when the owner's 0x5e question (§6) superseded it.
 
-## 6. Clearing 2:0x5e for bomb drops (Lee)
+## 6. Clearing 2:0x5e for bomb drops (the owner)
 
-Lee: the Red Goriya room before the Moldorm can drop bombs if it is cleared, and early in a run a high-variance play
+The owner: the Red Goriya room before the Moldorm can drop bombs if it is cleared, and early in a run a high-variance play
 is fine. Experiment (branches `exp-clear5e`, `exp-sword-moldorm`): a new route rule `treasure: clear` (fight until
 the room is empty, no correct exit before; `3c56836`) on 0x5e, goriya continued 4M steps on it (`r68-clear5e`:
 sample 95.4% / 0.16 hearts, argmax 95.3% / 0.14; 0x5e 86–87%), against a baseline that runs through 0x5e with a
@@ -197,7 +197,7 @@ sword-only moldorm (`r68-sword`: r67-share-b continued 4M steps with `bombs: nev
   moldorm is below the sword-only one (96.5%).
 - 0x4e (d2-rope) deaths: baseline 17, clear 3 and 11 (Link arrives healthier).
 
-Decision (Lee's rule: keep the clear plan within 4 points of the baseline, judged on the Moldorm room's exit: hearts
+Decision (the owner's rule: keep the clear plan within 4 points of the baseline, judged on the Moldorm room's exit: hearts
 and bombs): **clear 0x5e**. Reaching 0x2e is 1.7–2.0 points below the baseline, hearts out of the Moldorm room are
 the same (2.31–2.32; ≥ 2.5 hearts 60–62% in both; ≤ 1 heart 3–4 points more often), and one run in five leaves it
 with bombs. Promoted: goriya `r68-clear5e` (sample), moldorm `r67-share-b` (argmax; yaml back to `bombs_share:

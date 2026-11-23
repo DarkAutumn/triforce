@@ -233,7 +233,7 @@ mod l {
     pub const BOOMERANG: usize = 69;
     pub const MAGIC_BOOMERANG: usize = 70;
     pub const MAGIC_SHIELD: usize = 71;
-    /// Bombs and the forced drop (schema 3, Lee Nov 11; replaced the always-zero `selected_*` slice).
+    /// Bombs and the forced drop (schema 3, the owner Nov 11; replaced the always-zero `selected_*` slice).
     pub const BOMB_USABLE: usize = 72;
     pub const BOMB_RESERVE: usize = 73;
     pub const BOMBS_SPARE: usize = 74;

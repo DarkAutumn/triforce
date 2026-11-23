@@ -7,7 +7,7 @@
 # way and the plain way where they differ, as in routes.yaml: the map's Clips selector shows one or both.
 #
 # No draft is left.  first-quest (Nov 13-14; docs/routes/first-quest.md) was d2first, then the rest of the first
-# quest: the overworld legs and their plain ways (Lee, Nov 13-14), the dungeon paths with the keys the route finds,
+# quest: the overworld legs and their plain ways (the owner, Nov 13-14), the dungeon paths with the keys the route finds,
 # without level 6's wand and level 8's book and magic key, level 9 with the red ring; bombs only from the rooms and
 # drops on the way.  Its parts moved into routes.yaml as they were built: round 24 the leg from Dungeon 4 and Dungeon
 # 5, round 26 the leg from Dungeon 5 and Dungeon 7, round 27 the magic sword and Dungeon 6, rounds 28 and 29 (merged at

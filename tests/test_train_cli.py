@@ -470,7 +470,7 @@ def test_a_stop_also_waits_for_the_hearts_lost_to_stop_improving(states_dir, tmp
 
 
 def test_a_stop_also_waits_for_the_bomb_value_to_stop_improving(states_dir, tmp_path, logs_dir, monkeypatch):
-    """With --stop-bombs-delta (Lee, round 19) a confirmed check also needs the bomb value per episode (the bomb
+    """With --stop-bombs-delta (the owner, round 19) a confirmed check also needs the bomb value per episode (the bomb
     reward terms: 0.5 per hit, 0.75 per drop armed, 0.5 per pickup, -0.25 per bomb) to be no better than the best
     earlier check by the delta or 2 SE: hearts level from the start, bombs rising, then level."""
     bombs = [{'placed': 2, 'hits': 0}, {'placed': 2, 'hits': 1}, {'placed': 2, 'hits': 2, 'armed': 1},

@@ -63,7 +63,7 @@ max_steps: 2000
 warm_start: null
 harvested_fraction: 0.4
 notes: 'Like Like rooms (Dungeon 4, Nov 11-12): a Like Like swallows Link and eats his magic shield. Dungeon 4''s Breakfast
-  Room 0x32 (Lee''s name: two Like Likes, two Zols, two Bubbles): in from W, kill the Like Likes and Zols (the Bubbles don''t
+  Room 0x32 (the owner''s name: two Like Likes, two Zols, two Bubbles): in from W, kill the Like Likes and Zols (the Bubbles don''t
   count), push the block (any way; it moves only once the room is clear) so the stairs appear at tiles (26-27, 4-5), and
   go down to the ladder cellar 0x60; back up, leave W. Copied from zol (one-room, curriculum, 2000 steps). Dungeon 6 (round
   27, route `d6`; state `6_1dc`): 0x1d (two Like-Likes, two Zols, two Bubbles) out of the tunnel''s stairs, crossed to the
