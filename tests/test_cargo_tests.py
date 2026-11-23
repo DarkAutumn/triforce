@@ -9,7 +9,7 @@ import sys
 import time
 from pathlib import Path
 
-from triforce import cargo_tests, testlog
+from triforce import cargo_tests, jobqueue, testlog
 
 # A fake cargo: `--no-run` prints the artifacts of $FAKE_PROGRAMS (JSON) and exits $FAKE_BUILD_EXIT, `--doc` runs
 # one crate's doc tests, anything else prints a whole sequential `cargo test` run.
@@ -38,6 +38,7 @@ sys.exit(101)
 
 PROGRAM = """\
 #!/bin/sh
+case " $* " in *" --list "*) printf 'first: test\\nsecond: test\\n'; exit 0;; esac
 echo "running 2 tests from $(pwd) with $RUST_TEST_THREADS threads, args: $*"
 sleep {sleep}
 echo "test result: {result}. {passed} passed; {failed} failed; 0 ignored; 0 measured; 0 filtered out; finished in {sleep}s"
@@ -71,9 +72,9 @@ def _setup(tmp_path: Path, programs: list[tuple]) -> tuple[Path, list[dict]]:
     return cargo, messages
 
 
-def _run(tmp_path: Path, cargo: Path, messages: list[dict], *args, build_exit: int = 0):
+def _run(tmp_path: Path, cargo: Path, messages: list[dict], *args, build_exit: int = 0, **env):
     environ = {**os.environ, 'TRIFORCE_LOGS_DIR': str(tmp_path / 'logs'), 'FAKE_PROGRAMS': json.dumps(messages),
-               'FAKE_BUILD_EXIT': str(build_exit)}
+               'FAKE_BUILD_EXIT': str(build_exit), **env}
     environ.pop('RUST_TEST_THREADS', None)
     began = time.monotonic()
     done = subprocess.run([sys.executable, '-m', 'triforce.cargo_tests', *args, '--', str(cargo), 'test', '--release'],
@@ -89,9 +90,19 @@ def _stream(logs: Path) -> list[dict]:
 def test_the_programs_run_side_by_side_each_timed_and_shown_whole(tmp_path):
     cargo, messages = _setup(tmp_path, [('zelda', 'test', 'd9', 1.5, True), ('env', 'test', 'clips', 1.5, True),
                                         ('zcore', 'lib', 'zcore', 1.5, True)])
-    done, seconds = _run(tmp_path, cargo, messages, '--jobs', '3', '--test-threads', '2')
+    queue = tmp_path / 'queue'          # a job of its own: the progress lands in its row
+    con = jobqueue.connect(queue)
+    con.execute("INSERT INTO jobs (id, agent, status) VALUES (5, 'tester', 'running')")
+    con.close()
+    done, seconds = _run(tmp_path, cargo, messages, '--jobs', '3', '--test-threads', '2',
+                         TRIFORCE_JOB_ID='5', TRIFORCE_QUEUE_DIR=str(queue))
     assert done.returncode == 0, done.stdout + done.stderr
     assert seconds < 4.0, seconds              # three 1.5-second programs at once, not 4.5 s one after another
+    con = jobqueue.connect(queue)
+    (progress,) = con.execute("SELECT progress FROM jobs WHERE id = 5").fetchone()
+    con.close()
+    report = json.loads(progress)['Rust tests']         # 2 listed a program, then the doc tests' 3 when they ended
+    assert (report['done'], report['total'], report['unit']) == (9, 9, 'Rust tests')
     out = done.stdout
     for shown, folder in (('tests/d9.rs (deps/d9-0123456789abcdef)', 'zelda'),
                           ('tests/clips.rs (deps/clips-0123456789abcdef)', 'env'),

@@ -1,21 +1,23 @@
 """The Rust suite of ``triforce job test rust``: cargo's test programs run side by side, timed into the suite's
-timing log (``triforce.testlog``; the lead's follow-up, Nov 23: the suite's 440 s of programs ran one after another,
-mostly on one core).
+timing log (``triforce.testlog``; the owner, Nov 23: "Test rust is now the extremely long leg of testing": its
+programs ran one after another, mostly on one core).
 
     python -m triforce.cargo_tests [--jobs N] [--test-threads T] -- cargo test CARGO-ARGS... [-- HARNESS-ARGS...]
 
 1. ``cargo test CARGO-ARGS --no-run --message-format=json-render-diagnostics`` builds every test program (its
    progress and errors on stderr, as cargo prints them) and lists them (``compiler-artifact`` messages of test
    profile with an executable); a build that fails ends here with cargo's exit code.
-2. The programs run ``--jobs`` at a time, the longest first (their median over the last timing logs; a program
-   without history first of all), each as cargo runs it: in its package's folder, with ``CARGO_MANIFEST_DIR`` and
-   ``CARGO_PKG_NAME``, the build scripts' native library folders and the target folder on ``LD_LIBRARY_PATH``,
-   ``HARNESS-ARGS`` after it, and ``RUST_TEST_THREADS`` = ``--test-threads`` unless set.  The doc tests
-   (``cargo test CARGO-ARGS --doc``) are one more entry of the pool, when cargo would run them (no target
-   selected).  Each program's output is kept and printed whole when it ends, under a ``Running`` line as cargo's,
-   so a failing program reads as it does under cargo; the failed ones are named again at the end with the command
-   that reruns each.
-3. The timing log gets a ``test`` line a program (``id``: ``<package> unittests src/lib.rs``, ``<package>
+2. Each program's ``--list`` gives the suite's test count: the job's progress is ``Rust tests`` done of that total
+   (``jobs.progress``), a program's tests counted done when it ends (the doc tests join the total when they end).
+3. The programs run ``--jobs`` at a time, the longest first (their median over the last whole Rust suites of the
+   timing logs; a program without history first of all), each as cargo runs it: in its package's folder, with
+   ``CARGO_MANIFEST_DIR`` and ``CARGO_PKG_NAME``, the build scripts' native library folders and the target folder
+   on ``LD_LIBRARY_PATH``, ``HARNESS-ARGS`` after it (``--test-threads`` sets ``RUST_TEST_THREADS``; by default the
+   harness's own, a thread a core).  The doc tests (``cargo test CARGO-ARGS --doc``) are one more entry of the
+   pool, when cargo would run them (no target selected).  Each program's output is kept and printed whole when it
+   ends, under a ``Running`` line as cargo's, so a failing program reads as it does under cargo; every program
+   runs whatever another did, and the failed ones are named again at the end with the command that reruns each.
+4. The timing log gets a ``test`` line a program (``id``: ``<package> unittests src/lib.rs``, ``<package>
    tests/cli.rs``, ``<crate> doctests``; ``seconds``: its wall time; ``tests``/``passed``/``failed``/``ignored``
    from its ``test result:`` line) and the summary (``compile``: the build's seconds, ``test_wall``: the programs'
    wall seconds, ``workers``: ``--jobs``).  Exit: cargo's (0; 101 when a program failed; the build's code when it
@@ -42,10 +44,9 @@ from pathlib import Path
 from typing import Optional
 
 from . import events, jobs, testlog
+from .job import CARGO_TEST
 
-# Measured Nov 23 (docs/architecture.md "The test suites"): see the module's report in the branch r40-tests.
-JOBS = 6                # programs at once
-TEST_THREADS = 4        # each program's test threads (its harness; a test's own threads are its own)
+JOBS = 6                # programs at once (measured Nov 23: docs/architecture.md "The test suites")
 FAILED_EXIT = 101       # cargo's exit code when a test failed
 HISTORY_RUNS = 5        # the timing logs the order is taken from
 TARGET_FLAGS = ('--lib', '--bins', '--bin', '--tests', '--test', '--examples', '--example', '--benches', '--bench',
@@ -143,10 +144,14 @@ def split_command(command: list[str]) -> tuple[list[str], list[str]]:
 
 
 class Program:
-    """One test program to run: the doc tests are one too (a cargo command)."""
+    """One test program to run: the doc tests are one too (a cargo command).  ``legacy``: its id in the timing
+    logs before Nov 23 (``tests/cli.rs (cli)``), for the order."""
 
-    def __init__(self, test_id: str, command: list[str], cwd: Path, env: dict, rerun: str, shown: str):
+    def __init__(self, test_id: str, command: list[str], cwd: Path, env: dict, rerun: str, shown: str,
+                 legacy: Optional[str] = None):
         self.id, self.command, self.cwd, self.env, self.rerun, self.shown = test_id, command, cwd, env, rerun, shown
+        self.legacy = legacy
+        self.listed = 0         # its tests (``--list``)
 
 
 def programs_of(messages: list[dict], harness: list[str], workspace: Path) -> list[Program]:
@@ -180,7 +185,8 @@ def programs_of(messages: list[dict], harness: list[str], workspace: Path) -> li
                     f"--bin {target['name']}" if 'bin' in kinds else '--lib')
         found.append(Program(f"{package_name} {what}", [executable, *harness], package, env,
                              f"-p {package_name} {selector}",
-                             f"{what} ({os.path.relpath(executable, workspace)})"))
+                             f"{what} ({os.path.relpath(executable, workspace)})",
+                             legacy=f"{what} ({binary_name(executable)})"))
     return found
 
 
@@ -249,7 +255,37 @@ def write(text: str):
     sys.stdout.flush()
 
 
-def run_programs(cargo: list[str], harness: list[str], jobs_count: int, test_threads: int,
+def count_listed(program: Program) -> int:
+    """The tests ``program --list`` names (the harness's filters in ``HARNESS-ARGS`` apply); 0 when it can't say
+    and for the doc tests (cargo compiles them only to run them)."""
+    if program.id == 'doctests':
+        return 0
+    try:
+        out = subprocess.run([*program.command, '--list', '--format', 'terse'], cwd=program.cwd,
+                             env={**os.environ, **program.env}, capture_output=True, text=True, timeout=120,
+                             check=False).stdout
+    except (OSError, subprocess.SubprocessError):
+        return 0
+    return sum(1 for line in out.splitlines() if line.endswith(': test'))
+
+
+class Progress:
+    """``Rust tests`` done of the listed total, into the job's row (``jobs.progress``)."""
+
+    UNIT = 'Rust tests'
+
+    def __init__(self, total: int):
+        self.done, self.total = 0, total
+        jobs.progress(0, total, self.UNIT, force=True)
+
+    def ended(self, ran: int, listed: int):
+        """A program ended having run ``ran`` tests of the ``listed`` counted for it (a crash: all of them)."""
+        self.total += max(0, ran - listed)
+        self.done += max(ran, listed)
+        jobs.progress(self.done, self.total, self.UNIT)
+
+
+def run_programs(cargo: list[str], harness: list[str], jobs_count: int, test_threads: Optional[int],
                  tally: Tally, workspace: Path) -> tuple[int, Optional[float], float]:
     """Builds, then runs the programs side by side: (exit code, the build's seconds, the programs' wall seconds)."""
     began = time.monotonic()
@@ -276,9 +312,14 @@ def run_programs(cargo: list[str], harness: list[str], jobs_count: int, test_thr
     if not any(flag in cargo or any(arg.startswith(flag + '=') for arg in cargo) for flag in TARGET_FLAGS):
         programs.append(Program('doctests', [*cargo, '--doc', *(['--', *harness] if harness else [])], workspace,
                                 {}, '--doc', 'the doc tests (cargo test --doc)'))
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        for program, listed in zip(programs, executor.map(count_listed, programs)):
+            program.listed = listed
+    progress = Progress(sum(program.listed for program in programs))
     expected = expected_seconds()
-    programs.sort(key=lambda program: -expected.get(program.id, float('inf')))
-    os.environ.setdefault('RUST_TEST_THREADS', str(test_threads))
+    programs.sort(key=lambda program: -expected.get(program.id, expected.get(program.legacy, float('inf'))))
+    if test_threads is not None:
+        os.environ['RUST_TEST_THREADS'] = str(test_threads)
     pool = Pool(jobs_count)
     previous = signal.signal(signal.SIGTERM, lambda signum, _frame: pool.stop(signum))
     failed = []
@@ -292,14 +333,15 @@ def run_programs(cargo: list[str], harness: list[str], jobs_count: int, test_thr
                 if code is None:
                     continue
                 write(f"     Running {program.shown}  [{seconds:.1f} s]\n{output}")
+                counts, said_failed = result_counts(output)
+                progress.ended(sum(counts.values()), program.listed)
                 if program.id == 'doctests':        # cargo's own output: a line a crate
                     reader = CargoReader(tally, crates)
                     for line in output.splitlines():
                         reader.feed(line)
-                    if code != 0 and reader.tally.counts['failed'] == 0:
+                    if code != 0 and not said_failed:
                         tally.add('doctests', True, seconds, {})
                 else:
-                    counts, said_failed = result_counts(output)
                     tally.add(program.id, code != 0 or said_failed, seconds, counts)
                 if code != 0:
                     failed.append(program)
@@ -339,18 +381,18 @@ def passthrough(command: list[str], tally: Tally) -> tuple[int, Optional[float]]
 def main(argv: Optional[list] = None) -> int:
     parser = argparse.ArgumentParser(prog='python -m triforce.cargo_tests', description=__doc__.split('\n\n')[0])
     parser.add_argument('--jobs', type=int, default=JOBS, help=f"test programs at once (default {JOBS})")
-    parser.add_argument('--test-threads', type=int, default=TEST_THREADS,
-                        help=f"each program's test threads, unless $RUST_TEST_THREADS is set (default {TEST_THREADS})")
+    parser.add_argument('--test-threads', type=int, default=None,
+                        help="each program's test threads ($RUST_TEST_THREADS; default: the harness's, a thread a core)")
     parser.add_argument('command', nargs=argparse.REMAINDER, help="-- cargo test ...")
     args = parser.parse_args(argv)
     command = args.command[1:] if args.command[:1] == ['--'] else args.command
     if not command:
         parser.error("no command after --")
-    if args.jobs < 1 or args.test_threads < 1:
+    if args.jobs < 1 or (args.test_threads is not None and args.test_threads < 1):
         parser.error("--jobs and --test-threads are 1 or more")
     cargo, harness = split_command(command)
     job = testlog.job_fields()
-    whole = not harness and cargo[2:] == ['--release', '--workspace', '--features', 'zelda/zcore']
+    whole = not harness and tuple(cargo[1:]) == CARGO_TEST[1:]       # the suite, not a part of it
     facts = {**jobs.checkout(), 'job': job, 'workers': args.jobs, **testlog.machine_fields(), 'args': command}
     try:
         log = testlog.open_log('rust' if whole else 'rust-part', job)
