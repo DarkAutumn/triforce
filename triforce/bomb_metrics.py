@@ -2,6 +2,11 @@
 over chain records: per run, per batch, and per room, so the rooms where the chances arise stand out.
 
     .venv/bin/python -m triforce.bomb_metrics RUNS.jsonl [RUNS.jsonl ...] [--rooms 12] [--json OUT]
+    .venv/bin/python -m triforce.bomb_metrics --replays REPLAY [REPLAY ...] [--rooms 12] [--json OUT]
+
+Chain jsonl carries the counts made live; ``--replays`` scores replays offline (``score_replay``: the same Rust
+counter over the replay's frames, its ROOM events and the facts of its targets stream), the way an old version's
+runs are scored by today's rules.
 
 **Metric A, the 10th-kill bomb.** Opportunities = ``tenth_armed`` (the 10th kill by a bomb) + ``tenth_missed`` (a bomb
 placed in the window that ended killing nothing and opening no wall) + ``tenth_other`` (the 10th kill by another
@@ -147,13 +152,40 @@ def read_records(paths) -> list:
     return [json.loads(line) for path in paths for line in Path(path).read_text().splitlines() if line.strip()]
 
 
+def replay_facts(replay) -> list:
+    """The env's per-decision facts from a replay's targets stream (``_native.Replay``: ``targets()``, the objective
+    when it changed; ``masks()``, the action mask when it changed): ``[(frame, kill_all, bomb_allowed)]`` at every
+    frame either changed. An older replay has neither: no facts (every window then reads BOMB off, no FIGHT)."""
+    changes = sorted([(t['frame'], 0, t['objective'] == 'FIGHT') for t in replay.targets()]
+                     + [(m['frame'], 1, 'BOMB' in m['kinds']) for m in replay.masks()])
+    facts, current = [], [False, False]
+    for frame, which, value in changes:
+        current[which] = value
+        if facts and facts[-1][0] == frame:
+            facts[-1] = (frame, *current)
+        else:
+            facts.append((frame, *current))
+    return facts
+
+
+def score_replay(path, states_dir=None) -> dict:
+    """One replay scored offline as a chain run record: ``{'seed', 'rooms': [...], 'tenth_open_at_end',
+    'carrier_open_at_end', 'held'}`` (rooms in ROOM-event order, as the chain's records)."""
+    data = Path(path).read_bytes()
+    replay = _native.Replay(data)
+    scored = _native.replay_bomb_windows(data, replay_facts(replay), states_dir)
+    return {'seed': replay.meta.get('seed'), **scored}
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n', maxsplit=1)[0])
-    parser.add_argument('runs', nargs='+', help="chain jsonl files")
+    parser.add_argument('runs', nargs='+', help="chain jsonl files (with --replays: replay files)")
+    parser.add_argument('--replays', action='store_true', help="score replays offline instead of reading jsonl")
     parser.add_argument('--rooms', type=int, default=12)
     parser.add_argument('--json', default=None, help="also write the summary here")
     args = parser.parse_args(argv)
-    summary = summarize(read_records(args.runs))
+    records = [score_replay(p) for p in args.runs] if args.replays else read_records(args.runs)
+    summary = summarize(records)
     if args.json:
         Path(args.json).write_text(json.dumps(summary, indent=1) + '\n')
     sys.stdout.write(markdown(summary, args.rooms))

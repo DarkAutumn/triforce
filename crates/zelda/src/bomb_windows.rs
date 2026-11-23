@@ -136,7 +136,7 @@ fn vire_dies(state: &GameView, bomb_rule: bool) -> bool {
 }
 
 /// `e` is an **eligible carrier**: a group-2 type, not the slot-1 room-item Gibdo, and a Vire only where Link can
-/// kill it outright ([`vire_dies`]). A dying one still counts: its death, not yet ended, is the next one.
+/// kill it outright ([`vire_dies`]).
 pub fn is_bomb_carrier(state: &GameView, e: &Enemy, bomb_rule: bool) -> bool {
     carrier_type(e.id, e.index) && (e.id != enemy::VIRE || vire_dies(state, bomb_rule))
 }
@@ -149,9 +149,11 @@ fn is_other_kill(e: &Enemy) -> bool {
     !carrier_type(e.id, e.index) && e.id != enemy::VIRE && advances_cycle(e.id) && !e.is_big_digdogger()
 }
 
-/// What [`bomb_carrier_window`] tests without the rules: the cycle, no forced drop, room in the bag, a carrier type.
+/// What [`bomb_carrier_window`] tests without the rules: the cycle, no death pending, no forced drop, room in the bag,
+/// a carrier type.
 fn carrier_window_possible(state: &GameView) -> bool {
     BOMB_CYCLES.contains(&state.world_kill_cycle())
+        && !death_pending(state)
         && state.help_drop_count() < 9
         && state.kill_streak() != 15
         && state.bombs() < state.bomb_max()
@@ -159,7 +161,8 @@ fn carrier_window_possible(state: &GameView) -> bool {
 }
 
 /// **Metric B's window**, the future observation flag "next kill may drop bombs": every one of
-/// - WorldKillCycle reads 0, 5 or 7 ([`BOMB_CYCLES`]);
+/// - WorldKillCycle reads 0, 5 or 7 ([`BOMB_CYCLES`]), and no death that will move it is under way (a monster in its
+///   death sparkle: the cycle then speaks for a kill already made, and the flag waits the sparkle's ~19 frames);
 /// - no forced drop overrides the table: `$50` < 9 (at 9 with bombs Metric A applies, without them the 10th kill
 ///   forces 5 rupees; at 10 the forced drop is armed), and WorldKillCount is not 15 (the next kill makes it 16:
 ///   a fairy);
@@ -974,5 +977,21 @@ mod tests {
         w.skip(true);
         w.frame(view(&ram, 4), &mut rules, &mut stats);
         assert_eq!(stats.carrier_miss_leave, 1);
+    }
+
+    /// B: while a death sparkle runs, the cycle speaks for a kill already made: no window opens, and that death
+    /// counts for nothing.
+    #[test]
+    fn no_window_over_a_pending_death() {
+        let mut start = base(2, 3, 0);
+        monster(&mut start, 2, enemy::RED_DARKNUT);
+        monster(&mut start, 3, enemy::STALFOS);
+        start[tables::OBJ_SPAWN_STATE.0 + 3] = 0x10;
+        assert!(!bomb_carrier_window(&view(&start, 0), true, false));
+        let mut gone = start;
+        gone[tables::OBJ_SPAWN_STATE.0 + 3] = 0;
+        died(&mut gone, 3, None);
+        let stats = play(&mut BombWindows::default(), &[start, gone], true, false);
+        assert_eq!((stats.carrier_hits, stats.carrier_miss_kill), (0, 0));
     }
 }

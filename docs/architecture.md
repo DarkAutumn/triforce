@@ -1027,11 +1027,12 @@ Octoroks, Moblin `$03`, Lynel `$01`, Vire, Goriya `$06`, Darknut `$0B`, Red Wizz
   The forced drop is followed: `tenth_forced_fell`, `_taken`, `_wasted` (expired or left), `_lost` (harm or the
   fairy before it fell).
 - **Metric B, the bomb carrier** (`bomb_carrier_window`: the future observation flag, written for it to call; the
-  observation does not use it yet): the cycle reads 0, 5 or 7; no forced drop overrides the table (`$50` < 9 and
+  observation does not use it yet): the cycle reads 0, 5 or 7 and no death sparkle that will move it is under way
+  (else the cycle speaks for a kill already made); no forced drop overrides the table (`$50` < 9 and
   `$627` ≠ 15); the bag is not full; an **eligible carrier** lives (a group-2 type, not slot 1's Gibdo, a Vire only
   with the magic sword or with BOMB on the mask: else it splits into Keese); and a **choice** exists: the objective
   is not FIGHT, or a monster whose death moves the cycle and is no carrier lives too. Bubbles, traps, fires and
-  Gleeok's flying heads are no monsters on either side. A dying monster still counts (its death is the next one).
+  Gleeok's flying heads are no monsters on either side. An open window stays open through a pending death.
   Resolution: the next death that moves the cycle (attributed by slot: the slot turned into a dropped item, whose
   Item_ObjMonsterType `$412` names the type, or its sparkle ended) is a carrier's → **hit** (one step killing a
   carrier and another: hit), anyone else's → **miss by kill**; Link leaves the room first (another room, or any
