@@ -179,7 +179,7 @@ def test_the_import_is_a_dry_run_first_then_idempotent(shared, tmp_path):
     lines = []
     report = lead.import_legacy(checkout, apply=False, manifests=None, out=lines.append)
     assert not report['done'] and store.runs() == [] and '2 runs' in lines[3]
-    report = lead.import_legacy(checkout, apply=True, manifests=None, out=lines.append, copy=('trajectories',))
+    report = lead.import_legacy(checkout, apply=True, manifests=None, out=lines.append)
     assert report['problems'] == [] and report['legacy'] == ['models/evidence/shot.png']
     assert {r['name'] for r in store.runs('zol')} == {'r1', 'r2'}
     assert not (paths.run_dir('zol', 'r1') / 'eval.json').exists()      # filed by job, indexed by the run
@@ -189,11 +189,16 @@ def test_the_import_is_a_dry_run_first_then_idempotent(shared, tmp_path):
     assert team['name'] == lead.CURRENT_TEAM and team['slots']['zol@d3first']['run'] == 'zol/r2'
     assert (shared / 'rom' / 'zelda.nes').read_bytes() == b'rom'
     assert paths.current_name('trajectories') is not None
-    assert {p: p.stat().st_mode for p in checkout.rglob('*') if p in before and
-            p.suffix not in ('.pt', '.jsonl', '.nes', '.png')} == {
-        p: m for p, m in before.items() if p.suffix not in ('.pt', '.jsonl', '.nes', '.png')}
+    assert {p: p.stat().st_mode for p in checkout.rglob('*')} == before         # copies: the source is untouched
+    assert (paths.run_dir('zol', 'r1') / 'ckpt.pt').stat().st_ino != (checkout / 'models/zol/r1/ckpt.pt').stat().st_ino
     again = lead.import_legacy(checkout, apply=True, manifests=None, out=lines.append)
-    assert again['problems'] == [] and len(store.runs('zol')) == 2 and 'run zol/r1' in again['skipped']
+    assert again['problems'] == [] and again['changed'] == [] and 'run zol/r1' in again['skipped']
+    (checkout / 'models/zol/r2/metrics.jsonl').write_text('{}\n{}\n')        # still written in the old layout
+    _checkpoint(checkout / 'models/zol/r1/ckpt.pt', 'retrained')
+    (checkout / 'models/zol/r2/extra.json').write_text('{}')
+    third = lead.import_legacy(checkout, apply=True, manifests=None, out=lines.append)
+    assert sorted(line.split(':')[0] for line in third['changed']) == ['run zol/r1', 'run zol/r2']
+    assert store.get_run(Run('zol', 'r1'))['sha1'] == store.file_sha1(paths.run_dir('zol', 'r1') / 'ckpt.pt')
 
 
 def test_the_public_help_never_names_the_lead_entry_point():

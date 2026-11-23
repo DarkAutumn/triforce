@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS snapshots (kind TEXT, name TEXT, created REAL, files 
 CREATE TABLE IF NOT EXISTS currents (kind TEXT PRIMARY KEY, name TEXT, ts REAL);
 CREATE TABLE IF NOT EXISTS runs (family TEXT, name TEXT, status TEXT, created REAL, sealed REAL, owner_job TEXT,
     owner_agent TEXT, sha1 TEXT, act TEXT, parent TEXT, parent_sha1 TEXT, origin TEXT, team TEXT, data TEXT,
-    note TEXT, hit_head INTEGER, PRIMARY KEY (family, name));
+    note TEXT, hit_head INTEGER, files TEXT, PRIMARY KEY (family, name));
 CREATE INDEX IF NOT EXISTS runs_sha1 ON runs (sha1);
 CREATE TABLE IF NOT EXISTS teams (name TEXT PRIMARY KEY, created REAL, sha256 TEXT, source TEXT, note TEXT);
 CREATE TABLE IF NOT EXISTS jobs (job TEXT PRIMARY KEY, label TEXT, agent TEXT, created REAL, folder TEXT);
@@ -356,11 +356,11 @@ def snapshot(kind: str, name: str = paths.CURRENT) -> dict:
     return {**dict(row), 'path': str(path)}
 
 
-def install_snapshot(kind: str, name: str, source: Path, link: bool = True, note: Optional[str] = None,
-                     known: Optional[tuple[str, int, int]] = None, entry: str = LEAD) -> dict:
-    """Installs ``source`` (a folder) as ``data/<kind>/<name>/``: hard links (``link``) or copies, read-only, its
-    count, bytes and content hash recorded (``known``: the ``tree_hash`` of ``source`` already taken, used as is
-    for hard links, which are the same files).  The lead's (``triforce-lead data install``)."""
+def install_snapshot(kind: str, name: str, source: Path, note: Optional[str] = None, entry: str = LEAD) -> dict:
+    """Installs a copy of ``source`` (a folder; times and modes kept, then read-only) as ``data/<kind>/<name>/``, its
+    count, bytes and content hash (of the copy) recorded.  A copy, never a hard link: the store's files are its own,
+    so the source stays writable and a write to it never changes the snapshot.  The lead's (``triforce-lead data
+    install``, the import)."""
     paths.data_root(kind)
     if not name or '/' in name or name == paths.CURRENT or name.startswith('.'):
         raise StoreError(f"bad snapshot name {name!r}")
@@ -368,13 +368,13 @@ def install_snapshot(kind: str, name: str, source: Path, link: bool = True, note
     if not source.is_dir():
         raise MissingError(f"{source} is not a folder")
     target = paths.data_root(kind) / name
-    with writing('data-install', {'kind': kind, 'name': name, 'source': str(source), 'link': link}, entry) as con:
+    with writing('data-install', {'kind': kind, 'name': name, 'source': str(source)}, entry) as con:
         if con.execute('SELECT 1 FROM snapshots WHERE kind = ? AND name = ?', (kind, name)).fetchone() or \
                 target.exists():
             raise StoreError(f"{kind} snapshot {name!r} exists ({target}); a snapshot is never changed")
         try:
-            link_tree(source, target, link)
-            sha256, files, size = known if known is not None and link else tree_hash(target)
+            link_tree(source, target, link=False)
+            sha256, files, size = tree_hash(target)
             make_readonly(target)
         except BaseException:
             if target.exists():
@@ -382,7 +382,7 @@ def install_snapshot(kind: str, name: str, source: Path, link: bool = True, note
                 shutil.rmtree(target, ignore_errors=True)
             raise
         con.execute('INSERT INTO snapshots VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                    (kind, name, time.time(), files, size, sha256, str(source), int(link), note))
+                    (kind, name, time.time(), files, size, sha256, str(source), 0, note))
     return {'kind': kind, 'name': name, 'files': files, 'bytes': size, 'sha256': sha256, 'path': str(target)}
 
 
@@ -589,19 +589,18 @@ def _drop_open(run: Run):
         con.execute('DELETE FROM runs WHERE family = ? AND name = ? AND status = ?', (run.family, run.name, OPEN))
 
 
-def install_run(run: Run, source: Path, act: str, exclude: Iterable[str] = (), link: bool = True,
-                origin: str = 'import', note: Optional[str] = None, entry: str = LEAD) -> dict:
-    """Installs a finished run dir from outside the store as a sealed run (the lead's import): its files hard-linked
-    (``link``) or copied, except ``exclude`` (names relative to ``source``: the evaluations, ``act`` and
-    ``selection.json`` the import files by job, nested runs), read-only; checkpoint SHA-1 and act mode recorded."""
+def install_run(run: Run, source: Path, act: str, exclude: Iterable[str] = (), origin: str = 'import',
+                note: Optional[str] = None, entry: str = LEAD) -> dict:
+    """Installs a copy of a finished run dir from outside the store as a sealed run (the lead's import): its files
+    (times and modes kept, then read-only) except ``exclude`` (names relative to ``source``: the evaluations, ``act``
+    and ``selection.json`` the import files by job, nested runs); the copy's checkpoint SHA-1, its act mode and its
+    file list recorded (what ``source_changed`` compares at the next import)."""
     source = Path(source)
     excluded = {Path(name) for name in exclude}
-    ckpt = source / CHECKPOINT
-    if not ckpt.is_file():
+    if not (source / CHECKPOINT).is_file():
         raise MissingError(f"{source} has no {CHECKPOINT}")
-    sha1 = file_sha1(ckpt)
-    with writing('run-install', {'run': run.identity, 'source': str(source), 'sha1': sha1, 'act': act,
-                                 'origin': origin}, entry) as con:
+    what = {'run': run.identity, 'source': str(source), 'act': act, 'origin': origin}
+    with writing('run-install', what, entry) as con:
         if con.execute('SELECT 1 FROM runs WHERE family = ? AND name = ?', (run.family, run.name)).fetchone() or \
                 run.path.exists():
             raise StoreError(f"run {run.identity} exists in the store")
@@ -618,19 +617,44 @@ def install_run(run: Run, source: Path, act: str, exclude: Iterable[str] = (), l
                         (run.path / here.relative_to(source)).mkdir(parents=True, exist_ok=True)
                         for name in sorted(filenames):
                             if (here / name).exists():
-                                _link_file(here / name, run.path / here.relative_to(source) / name, link)
+                                _link_file(here / name, run.path / here.relative_to(source) / name, False)
                 elif entry_path.exists():
-                    _link_file(entry_path, run.path / relative, link)
+                    _link_file(entry_path, run.path / relative, False)
+            sha1 = what['sha1'] = file_sha1(run.path / CHECKPOINT)
+            files = run_files(run.path)
             make_readonly(run.path)
         except BaseException:
             make_writable(run.path)
             shutil.rmtree(run.path, ignore_errors=True)
             raise
-        con.execute('INSERT INTO runs (family, name, status, created, sealed, sha1, act, origin, note) '
-                    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                    (run.family, run.name, SEALED, ckpt.stat().st_mtime, time.time(), sha1, act, origin,
-                     note or str(source)))
+        con.execute('INSERT INTO runs (family, name, status, created, sealed, sha1, act, origin, note, files) '
+                    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    (run.family, run.name, SEALED, (run.path / CHECKPOINT).stat().st_mtime, time.time(), sha1, act,
+                     origin, note or str(source), json.dumps(files)))
     return get_run(run)
+
+
+def run_files(folder: Path, exclude: Iterable[str] = ()) -> list[str]:
+    """The sorted relative paths of a run folder's files (``exclude``: top-level names left out)."""
+    skip = set(exclude)
+    folder = Path(folder)
+    return sorted(str(path.relative_to(folder)) for path in folder.rglob('*')
+                  if path.is_file() and path.relative_to(folder).parts[0] not in skip)
+
+
+def source_changed(run: Run, source: Path, exclude: Iterable[str] = ()) -> Optional[str]:
+    """Why ``source`` (the run dir the store's ``run`` was imported from) differs now (its checkpoint SHA-1 or its
+    file list), None when it does not: a run changed in the old layout since its import (reconciliation's list)."""
+    row = get_run(run)
+    sha1 = file_sha1(Path(source) / CHECKPOINT)
+    if sha1 != row['sha1']:
+        return f"ckpt.pt sha1 {row['sha1'][:12]} -> {sha1[:12]}"
+    if row.get('files') is not None:
+        before, now = set(json.loads(row['files'])), set(run_files(source, exclude))
+        if before != now:
+            return (f"files added {sorted(now - before)[:5]}" if now - before else '') + \
+                (f" removed {sorted(before - now)[:5]}" if before - now else '')
+    return None
 
 
 def run_of_path(path) -> Optional[Run]:

@@ -6,9 +6,9 @@ Every operation here is a row of the store's audit log with entry point ``lead``
 - ``init``: make the store (root, index, README, layout).
 - ``team new NAME (--from-models DIR | --from-manifest FILE | --base TEAM) [--slot SLOT=RUN ...]``: an immutable team.
 - ``team set-current NAME``: the team of record (replaces ``triforce promote``).
-- ``data install KIND NAME --from DIR [--copy]``, ``data set-current KIND NAME``: named snapshots.
-- ``import-legacy --checkout DIR [--apply] [--copy KINDS] [--manifests DIR]``: today's checkout into the store by
-  hard links (dry run without ``--apply``; idempotent; never writes the source).
+- ``data install KIND NAME --from DIR``, ``data set-current KIND NAME``: named snapshots (copies).
+- ``import-legacy --checkout DIR [--apply] [--manifests DIR]``: a copy of today's checkout into the store (dry run
+  without ``--apply``; idempotent: changed sources are reported, never overwritten; never writes the source).
 - ``delete run|team|data|job ...``: what nothing refers to any more.
 - ``backup [--to DIR] [--apply]``: copies what is not yet in the archive (``/backup/triforce/store``).
 """
@@ -190,19 +190,21 @@ def _hit_head(path: Path) -> bool:
         return False
 
 
-def import_legacy(checkout: Path, apply: bool = False, copy: tuple = (), manifests: Optional[Path] = MANIFESTS,
+def import_legacy(checkout: Path, apply: bool = False, manifests: Optional[Path] = MANIFESTS,
                   team: str = CURRENT_TEAM, out=print) -> dict:
-    """Imports ``checkout``'s shared things into the store (``plan_import``): the ROM; each data folder as a named
-    snapshot (the checkout's own folders made current; ``copy`` names kinds copied instead of hard-linked); every run
+    """Imports a COPY of ``checkout``'s shared things into the store (``plan_import``; times and modes kept, then
+    read-only; never a hard link, so the checkout stays writable and a write there never changes the store): the ROM;
+    each data folder as a named snapshot (the checkout's own folders made current when the kind has none); every run
     dir as a sealed run (its evaluations, ``act`` and ``selection.json`` filed by this job, indexed by the run); the
     loose records filed by this job; what has no home under ``legacy/import-<date>/`` (listed); the team ``team`` from
     the checkout's pointers (made current) and a team per archive manifest whose runs resolve.  Idempotent: what is
-    already there (same content) is skipped.  Without ``apply`` only the plan and its counts are printed.  The source
-    is never written (hard links share its files: making the store's read-only makes them read-only too; the
-    report says so)."""
+    already there with the same content is skipped; a run or data folder that changed in the checkout since its
+    import is reported in ``changed`` (the reconciliation's list) and the store's copy is never overwritten.  Without
+    ``apply`` only the plan and its counts are printed.  The source is never written."""
     from . import registry  # pylint: disable=import-outside-toplevel
+    started = time.time()
     plan = plan_import(checkout, manifests)
-    report = {'plan': plan, 'done': [], 'skipped': [], 'problems': [], 'teams': {}, 'legacy': []}
+    report = {'plan': plan, 'done': [], 'skipped': [], 'changed': [], 'problems': [], 'teams': {}, 'legacy': []}
     models = plan['models'] or {'runs': [], 'pointers': [], 'records': [], 'legacy': []}
     out(f"import of {plan['checkout']} into {store.root()} ({'apply' if apply else 'dry run'})")
     out(f"  rom: {plan['rom'] or 'none'}")
@@ -226,22 +228,25 @@ def import_legacy(checkout: Path, apply: bool = False, copy: tuple = (), manifes
         else:
             with store.writing('rom-install', {'source': plan['rom']}, LEAD):
                 target.parent.mkdir(parents=True, exist_ok=True)
-                store.link_tree(Path(plan['rom']), target)
+                store.link_tree(Path(plan['rom']), target, link=False)
                 target.chmod(0o444)
             report['done'].append('rom')
     # The data snapshots.
     existing = {(row['kind'], row['sha256']): row['name'] for row in store.snapshots()}
+    sources = {(row['kind'], row['source']) for row in store.snapshots()}
     for item in plan['data']:
         name = existing.get((item['kind'], item['sha256']))
         if name is None:
-            store.install_snapshot(item['kind'], item['name'], Path(item['source']), link=item['kind'] not in copy,
-                                   note=f"import of {item['source']}",
-                                   known=(item['sha256'], item['files'], item['bytes']))
+            if (item['kind'], str(Path(item['source']).resolve())) in sources:
+                report['changed'].append(f"data {item['kind']} {item['source']}: new content, installed as "
+                                         f"{item['name']} (the current snapshot is unchanged)")
+            store.install_snapshot(item['kind'], item['name'], Path(item['source']),
+                                   note=f"import of {item['source']}")
             name = item['name']
             report['done'].append(f"data {item['kind']}/{name}")
         else:
             report['skipped'].append(f"data {item['kind']}/{name}")
-        if item['current'] and paths.current_name(item['kind']) != name:
+        if item['current'] and paths.current_name(item['kind']) is None:
             store.set_current_snapshot(item['kind'], name)
     # The runs.
     imported = 0
@@ -250,8 +255,10 @@ def import_legacy(checkout: Path, apply: bool = False, copy: tuple = (), manifes
         source = Path(entry['source'])
         row = store.run_row(run)
         if row is not None:
-            if row['sha1'] != store.file_sha1(source / store.CHECKPOINT):
-                report['problems'].append(f"run {run.identity}: the store's differs from {source} (left as it is)")
+            why = store.source_changed(run, source, [*entry['after'], *entry['nested']])
+            if why:
+                report['changed'].append(f"run {run.identity}: {why} in {source} since its import (the store's "
+                                         f"copy is left as it is)")
             report['skipped'].append(f"run {run.identity}")
             continue
         with warnings.catch_warnings():
@@ -283,7 +290,7 @@ def import_legacy(checkout: Path, apply: bool = False, copy: tuple = (), manifes
         if target.exists():
             continue
         with store.writing('legacy', {'path': f'models/{relative}', 'into': str(target)}, LEAD):
-            store.link_tree(models_dir / relative, target)
+            store.link_tree(models_dir / relative, target, link=False)
             target.chmod(0o444)
     if report['legacy']:
         listing = legacy_root / 'LIST.txt'
@@ -318,11 +325,14 @@ def import_legacy(checkout: Path, apply: bool = False, copy: tuple = (), manifes
             manifest.get('route_of_record'), {}).get('how'), entry=LEAD)
         known.add(name)
         report['teams'][name] = f'from {manifest_path}'
-    report_path = store.job_folder('import-legacy') / 'import-report.json'
+    report['seconds'] = round(time.time() - started, 1)
+    report_path = store.job_folder('import-legacy') / f"import-report-{time.strftime('%H%M%S')}.json"
     report_path.write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
-    store.file_output(report_path, 'record', name='import-report.json', entry=LEAD)
-    out(f"  done: {', '.join(report['done']) or 'nothing'}; skipped {len(report['skipped'])}; "
-        f"legacy {len(report['legacy'])}; teams {json.dumps(report['teams'], indent=1)}")
+    store.file_output(report_path, 'record', entry=LEAD)
+    out(f"  done in {report['seconds']} s: {', '.join(report['done']) or 'nothing'}; skipped "
+        f"{len(report['skipped'])}; legacy {len(report['legacy'])}; teams {json.dumps(report['teams'], indent=1)}")
+    for line in report['changed']:
+        out(f"  changed in the checkout since its import: {line}")
     for problem in report['problems']:
         out(f"  problem: {problem}")
     out(f"  report: {report_path}")
@@ -444,7 +454,6 @@ def main(argv=None) -> int:
     install.add_argument('kind', choices=paths.DATA_KINDS)
     install.add_argument('name')
     install.add_argument('--from', dest='source', type=Path, required=True)
-    install.add_argument('--copy', action='store_true', help="copy instead of hard links")
     install.add_argument('--note')
     data_current = data.add_parser('set-current')
     data_current.add_argument('kind', choices=paths.DATA_KINDS)
@@ -453,7 +462,6 @@ def main(argv=None) -> int:
                                                "without --apply)")
     imp.add_argument('--checkout', type=Path, default=Path('/home/leculver/git/triforce'))
     imp.add_argument('--apply', action='store_true')
-    imp.add_argument('--copy', default='', help="data kinds to copy instead of hard-linking (comma-separated)")
     imp.add_argument('--manifests', type=Path, default=MANIFESTS)
     imp.add_argument('--team', default=CURRENT_TEAM, help="the name of the team the pointers make")
     remove = sub.add_parser('delete', help="a run in no team, a team or snapshot not current, a job's files")
@@ -489,16 +497,11 @@ def main(argv=None) -> int:
             store.set_current_team(args.name)
             print(f"current team: {args.name}")
         elif args.command == 'data' and args.action == 'install':
-            print(json.dumps(store.install_snapshot(args.kind, args.name, args.source, link=not args.copy,
-                                                    note=args.note), indent=2))
+            print(json.dumps(store.install_snapshot(args.kind, args.name, args.source, note=args.note), indent=2))
         elif args.command == 'data':
             print(store.set_current_snapshot(args.kind, args.name))
         elif args.command == 'import-legacy':
-            copy = tuple(kind for kind in args.copy.split(',') if kind)
-            unknown = set(copy) - set(paths.DATA_KINDS)
-            if unknown:
-                parser.error(f"--copy: unknown kinds {sorted(unknown)}")
-            report = import_legacy(args.checkout, args.apply, copy, args.manifests, args.team)
+            report = import_legacy(args.checkout, args.apply, args.manifests, args.team)
             return 1 if report['problems'] else 0
         elif args.command == 'delete':
             if args.what == 'data' and not args.kind:
