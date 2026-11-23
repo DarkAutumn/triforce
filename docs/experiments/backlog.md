@@ -346,9 +346,12 @@ to the action taken; look-ahead for the others), never looking ahead at play.
    experiment 2 chose (below).
 7. [ ] **Observation v7** (specified by experiment 2: round36.md §4, §8): per monster ten `rel` columns and 23
    contact columns from the RAM (the game's touch rule extrapolated straight and stopped at walls: arithmetic on
-   the current state, no emulator step; for the owner to confirm it counts as a "small calculation" and not
-   look-ahead), as a NEW observation key so today's networks play unchanged; the room identity kept and also
-   tried without.
+   the current state, no emulator step), as a NEW observation key so today's networks play unchanged; the room
+   identity kept and also tried without. **Allowed** (the owner, Nov 23: no emulator steps at play; moving the
+   emulator ahead and back is fine in training only, never when playing or building replays). **Range-aware** (the
+   owner, Nov 23): a monster or shot across the screen is no threat this decision, so the contact columns speak in
+   frames to contact with a horizon (beyond it: "not soon", not a far-away hit), and the same for projectiles and
+   the shooter's threat lane.
 8. [ ] **Architectures:** a wider and deeper body; Link as a token attending to monsters and to tile patches; a
    graph over entities; memory (GRU/LSTM) where something is hidden or timed (Wizzrobes, Ganon, a Like-Like's
    hold); a head a boss against one head for all.
