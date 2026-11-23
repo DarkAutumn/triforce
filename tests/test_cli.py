@@ -143,12 +143,14 @@ def test_eval_chain_answers_the_wrapper_dry_call_and_creates_nothing(tmp_path):
     assert sorted(p.name for p in tmp_path.iterdir()) == ['estimate.json']
 
 
-def test_eval_chain_exits_non_zero_when_a_run_ends_in_an_error(tmp_path, capsys):
+def test_eval_chain_refuses_a_team_without_a_network_its_runs_reach(tmp_path, capsys):
+    """Round 40 (missing is an error): an empty models dir plays nothing; until then every run ended `error`."""
     output = tmp_path / 'chain.jsonl'
     assert cli.main(['--models-dir', str(tmp_path / 'models'), 'eval-chain', '--runs', '1', '--no-log',
-                     '--output', str(output)]) == 1
-    assert '1 of 1 runs ended in an error' in capsys.readouterr().err
-    assert json.loads(output.read_text())['result'] == 'error'
+                     '--output', str(output)]) == 2
+    err = capsys.readouterr().err
+    assert 'no network plays policies these runs reach' in err and 'ow-start (step 0: ' in err
+    assert not output.exists()
 
 
 def test_eval_chain_writes_provenance_and_appends_only_the_same_team(models_dir, tmp_path, capsys):

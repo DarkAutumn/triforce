@@ -14,6 +14,7 @@ from triforce.ppo import PPO, PPOConfig
 from triforce.rollout_buffer import RolloutBuffer
 
 from . import synthetic
+from .conftest import start_task
 
 SMALL = ModelConfig(hidden_dim=64, entity_d_model=32, entity_ff_dim=64, entity_out_dim=32, grid_channels=(8, 8, 8),
                     grid_out_dim=32)
@@ -121,7 +122,7 @@ def test_searched_rows_stay_out_of_the_ppo_term():
 
 def test_train_with_search_distills_searched_rows(states_dir, tmp_path):
     search = {'candidates': 2, 'simulations': 2, 'futures': 1, 'depth': 1, 'fraction': 0.5}
-    run = train.main(['--specialist', 'ow-start', '--states-dir', str(states_dir), '--models-dir', str(tmp_path),
+    run = train.main(['--specialist', start_task(), '--states-dir', str(states_dir), '--models-dir', str(tmp_path),
                       '--parallel', '2', '--steps-per-update', '64', '--iterations', '1', '--seed', '1',
                       '--no-curriculum', '--run-id', 'search', '--search', json.dumps(search), '--device', 'cpu'])
     metrics = read_jsonl(str(run / 'metrics.jsonl'))[-1]

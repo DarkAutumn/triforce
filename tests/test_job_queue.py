@@ -22,7 +22,7 @@ from triforce import jobqueue as q
 from triforce import jobs
 from triforce.registry import save_checkpoint
 
-from .conftest import ROOT, SEGMENT_STATE, SEGMENT_STOP_STEP, require_state, seeded_network
+from .conftest import ROOT, SEGMENT_STATE, SEGMENT_STOP_STEP, require_state, seeded_network, start_task
 from .test_evaluate import SMALL
 
 PYTHON = sys.executable
@@ -40,6 +40,9 @@ def environment(queue: Path, **extra) -> dict:
     env = {key: value for key, value in os.environ.items()
            if key not in (jobs.JOB_ID_ENV, jobs.JOB_LABEL_ENV, jobs.JOB_ESTIMATE_ENV)}
     env.update({q.QUEUE_DIR_ENV: str(queue)}, **extra)
+    # A test job in a made-up repo has no main checkout to take the team from (`test_steps`); the suite itself is
+    # run with the variable set by `triforce job test` and without it by hand: the tests must not differ.
+    env.setdefault('TRIFORCE_MODELS_DIR', str(queue))
     return env
 
 
@@ -176,14 +179,17 @@ def test_builds_and_tests_have_two_places_of_their_own(queue, tmp_path):
 
 
 def fake_checkout(tmp_path: Path, build_seconds: float = 0) -> Path:
-    """A checkout whose ``.venv`` has a ``maturin`` that records its niceness and cargo job count, and a ``python``
-    whose test suite records its niceness."""
+    """A git checkout whose ``.venv`` has a ``maturin`` that records its niceness and cargo job count and leaves a
+    module the build's stamp records (``triforce.build``), and a ``python`` whose test suite records its niceness."""
     root = tmp_path / 'checkout'
-    (root / '.git').mkdir(parents=True)
     (root / '.venv' / 'bin').mkdir(parents=True)
+    (root / 'triforce').mkdir()
+    (root / 'models').mkdir()           # the team the suites read (``job.test_steps``)
+    subprocess.run(['git', 'init', '-q', str(root)], check=True)
     maturin = root / '.venv' / 'bin' / 'maturin'
     maturin.write_text(f"#!/bin/sh\necho \"build nice $(cut -d' ' -f19 /proc/$$/stat) jobs $CARGO_BUILD_JOBS\" "
-                       f">> {root / 'record.txt'}\nsleep {build_seconds}\n")
+                       f">> {root / 'record.txt'}\nsleep {build_seconds}\necho module > "
+                       f"{root / 'triforce' / '_native.abi3.so'}\n")
     maturin.chmod(0o755)
     python = root / '.venv' / 'bin' / 'python'
     python.write_text(f'#!/bin/sh\nexec {PYTHON} "$@"\n')
@@ -202,7 +208,9 @@ def test_test_with_build_is_one_entry_with_both_steps_at_nice_10(queue, tmp_path
     assert process.wait(timeout=120) == 0, process.out.read_text()
     (row,) = queue.rows()
     assert row['verb'] == 'test' and row['lane'] == q.TOOLS_LANE and row['status'] == 'completed'
-    assert row['steps'] == [{'name': 'build', 'status': 'completed'}, {'name': 'test python', 'status': 'completed'}]
+    assert row['steps'] == [{'name': 'build', 'status': 'completed'}, {'name': 'stamp', 'status': 'completed'},
+                            {'name': 'test python', 'status': 'completed'}]
+    assert json.loads((checkout / 'triforce' / '_native.build.json').read_text())['module'] == '_native.abi3.so'
     assert (checkout / 'record.txt').read_text().splitlines() == ['build nice 10 jobs 4', 'test nice 10 jobs 4']
 
 
@@ -355,7 +363,7 @@ def commands(tmp_path, states_dir, scripted_models):
                        '--runs', '1', '--parallel', '1', '--output', str(tmp_path / 'chain.jsonl')],
         'eval-batch': ['triforce.eval_batch', 'qbatch', '--parallel', '1', '--evaluate',
                        ' '.join(['e:', *evaluate, '--output', str(tmp_path / 'batch-eval.json')])],
-        'train': ['triforce.train', '--specialist', 'ow-start', '--states-dir', str(states_dir), '--models-dir',
+        'train': ['triforce.train', '--specialist', start_task(), '--states-dir', str(states_dir), '--models-dir',
                   str(models), '--device', 'cpu', '--parallel', '1', '--steps-per-update', '16', '--iterations', '1',
                   '--no-curriculum', '--run-id', 'q'],
         'round': [str(ROOT / 'scripts' / 'train_round.py'), '--round', 'rq', '--specialists', 'ow-start',

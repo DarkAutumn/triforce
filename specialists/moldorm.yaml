@@ -7,7 +7,10 @@ reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chain arrives with partial hearts (round 5); about 40% of chain runs bring bombs from 0x5e (round 19)
 items: {bombs: free}                       # The owner, Nov 11: bombs as a weapon (enemies with more than 3 hits); above the route's bomb reserve
-curriculum: {enabled: true}              # trajectories/moldorm: the three 2_3es entry paths
+curriculum:                              # trajectories/moldorm: the three 2_3es entry paths
+  enabled: true
+  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
+  - d3first_2_3es_[0-9]
 one_room: true
 max_steps: 3000
 harvested_fraction: 0.33                  # round 30: 2:0x3e from S as the full route hands it over (2.63 of 3 hearts, its bombs), 486 handoffs of a full-route chain to step 68 (eval-chain --harvest) in triforce/states/harvested/moldorm
