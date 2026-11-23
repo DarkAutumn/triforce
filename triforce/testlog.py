@@ -43,7 +43,7 @@ import statistics
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -335,7 +335,8 @@ def read_runs(root: Path) -> list[dict]:
 
 
 def summarize(runs: list[dict], last: int, top: int, ratio: float, grew_seconds: float) -> dict:
-    """One suite's runs (oldest first) -> its report: ``runs`` (wall time and counts run by run), ``tests`` (each
+    """One suite's runs (oldest first) -> its report: ``runs`` (when each started, its wall time and counts),
+    ``tests`` (each
     test's median and worst seconds over the last ``last`` runs that ran it, passed or failed), ``slowest`` (the
     ``top`` highest medians), ``grew`` (tests whose newest time is ``ratio`` times the median of their earlier
     runs in the window and ``grew_seconds`` more)."""
@@ -343,7 +344,8 @@ def summarize(runs: list[dict], last: int, top: int, ratio: float, grew_seconds:
     for run in runs:
         summary = run['summary']
         job = summary.get('job') or {}
-        rows.append({'time': summary['time'], 'folder': Path(run['folder']).name, 'branch': summary.get('branch'),
+        began = datetime.fromtimestamp(summary['ts'] - summary['wall'], timezone.utc).isoformat(timespec='seconds')
+        rows.append({'time': began, 'folder': Path(run['folder']).name, 'branch': summary.get('branch'),
                      'commit': summary.get('commit'), 'agent': job.get('agent'), 'task': job.get('task'),
                      'workers': summary.get('workers'), 'load': (summary.get('load') or [None])[0],
                      'wall': summary['wall'], 'collected': summary.get('collected'), 'counts': summary.get('counts'),
