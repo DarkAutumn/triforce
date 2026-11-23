@@ -613,7 +613,8 @@ class Runner:
         return chain_meta(self.policies, self.act, route, max_steps=self.max_steps, **extra)
 
     def provenance(self, route: Route) -> dict:
-        """What plays ``route``: per policy its name, checkpoint, ``ckpt.pt`` sha1, Rust network hash, act mode and
+        """What plays ``route``: per policy its name, checkpoint, the run's own family and run id (the checkpoint's;
+        a run linked into another family's folder keeps its own), ``ckpt.pt`` sha1, Rust network hash, act mode and
         config hash; the specialists without a model; the route, start, end and step cap; the code version and the
         game data hash (``replay``).  Stored with every chain result (``chain_summary``, ``eval-chain``'s
         ``<output>.meta.json``)."""
@@ -621,6 +622,8 @@ class Runner:
         models = models_header(policies.names, policies.policies, policies.checkpoints, policies.modes(self.act))
         for model, config in zip(models, policies.configs):
             checkpoint = policies.checkpoints.get(model['name'])
+            described = policies.described.get(model['name'], {})
+            model['family'], model['run'] = described.get('family'), described.get('run')
             model['checkpoint_sha1'] = None if checkpoint is None else checkpoint_sha1(checkpoint)
             model['config_sha256'] = hashlib.sha256(config.to_json().encode()).hexdigest()
         return {**route_header(route), 'max_steps': self.max_steps, 'models': models,

@@ -140,7 +140,9 @@ def chain_records(files: Iterable) -> tuple[list, dict]:
     models outside them): (the runs sorted by seed, each as ``eval-chain`` writes it to its JSON lines:
     ``RunResult.to_dict`` of META ``run`` with the VISIT events as its rooms; the ``<output>.meta.json`` object:
     ``{'provenance': ..., 'batches': [{'first_seed', 'runs', 'finished'}]}``).  The provenance is META ``chain``
-    with the models (a checkpoint as ``<family>/<run>/ckpt.pt``: a numbered snapshot's own folder is not kept), the
+    with the models (each with its own family and run id; ``checkpoint`` is the run's own folder,
+    ``<family>/<run>/ckpt.pt``, where a live provenance names the folder a pointer links: a numbered snapshot's own
+    folder is not kept), the
     version, code and data; ``missing`` names the families without a network (their reasons named paths: None).
     ``files``: replay paths or bytes of one chain (the same META ``chain``, ``models``); ValueError otherwise."""
     from .runner import RunResult   # pylint: disable=import-outside-toplevel,cyclic-import
@@ -166,6 +168,7 @@ def chain_records(files: Iterable) -> tuple[list, dict]:
     chain = {k: v for k, v in header['chain'].items() if k not in ('route_steps', 'triforces')}
     models = [{'name': m['name'], 'checkpoint': f"{m['family']}/{m['run']}/ckpt.pt" if m.get('run') else None,
                'hash': m['hash'], 'act': m['act'], 'version': m.get('version'),
+               'family': m.get('family'), 'run': m.get('run'),
                'checkpoint_sha1': m.get('checkpoint_sha1'), 'config_sha256': m.get('config_sha256')}
               for m in models]
     provenance = {**chain, 'models': models, 'missing': {name: None for name in chain['missing']},

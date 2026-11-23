@@ -315,6 +315,18 @@ def git_head() -> str:
         return 'unknown'
 
 
+def team_entry(model: dict) -> dict:
+    """One network of the record's team, known by its family, run id and checkpoint SHA-1 (no path: the same from a
+    chain's provenance and from its replays).  A provenance written before the run's own family and run were recorded
+    (an older version's chain) gives them from its checkpoint label, ``<family>/<run>/ckpt.pt``."""
+    family, run = model.get('family'), model.get('run')
+    label = model.get('checkpoint')
+    if family is None and run is None and label:
+        family, run = label.split('/')[:2]
+    return {'name': model.get('name'), 'family': family, 'run': run, **{
+        key: model.get(key) for key in ('checkpoint_sha1', 'hash', 'act', 'version')}}
+
+
 def keep(records: list, scores: list) -> list:
     """The kept runs: best, worst and up to ``STUCK_KEPT`` stuck ones in different rooms (the rooms that stuck most
     first, the lowest seed of each); [{seed, reasons}] in that order, a run kept for two reasons once."""
@@ -379,8 +391,7 @@ def summarize(records: list, provenance: dict, route: dict, seconds=None, total_
         'code': prov.get('code'), 'data': prov.get('data'), 'route': prov.get('route', ROUTE),
         'power_on': prov.get('power_on'), 'clips': prov.get('clips'), 'max_steps': prov.get('max_steps'),
         'route_steps': route['steps'],
-        'team': [{key: model.get(key) for key in ('name', 'checkpoint', 'checkpoint_sha1', 'hash', 'act', 'version')}
-                 for model in prov.get('models') or []],
+        'team': [team_entry(model) for model in prov.get('models') or []],
         'missing': prov.get('missing'),
         'seeds': {'first': batches[0].get('first_seed'), 'runs': len(records)},
         'wall_seconds': seconds, 'total_seconds': total_seconds, 'decisions': decisions,
