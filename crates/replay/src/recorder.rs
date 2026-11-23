@@ -57,6 +57,8 @@ pub struct Recorder {
     rng_phase: Option<u32>,
     /// META entries the env adds ([`Recorder::set_meta`]).
     meta: Map<String, Value>,
+    /// The policies that made a decision (bit `policy`): META `models` describes the others briefly.
+    acted: [u64; 4],
 }
 
 /// One decision as [`Recorder::decision`] takes it: who acted, the head indices taken, the value estimate, how the
@@ -100,6 +102,7 @@ impl Recorder {
             keyframe: 0,
             rng_phase: None,
             meta: Map::new(),
+            acted: [0; 4],
         }
     }
 
@@ -206,6 +209,7 @@ impl Recorder {
         assert_eq!(t.dist.len(), width, "every decision of a recording has the same distribution size");
         let out = self.decisions.record(u32::try_from(self.inputs.len()).expect("a run under 2^32 frames"));
         out.push(t.policy);
+        self.acted[usize::from(t.policy / 64)] |= 1 << (t.policy % 64);
         out.extend_from_slice(&t.action);
         out.push(t.draw | u8::from(t.low) << 7);
         out.extend_from_slice(&t.value.to_le_bytes());
@@ -298,6 +302,9 @@ impl Recorder {
         if self.options.rewards {
             meta.insert("reward_terms".into(), json!(self.reward_terms));
         }
+        if let Some(Value::Array(models)) = meta.get_mut("models") {
+            brief_models(models, &self.acted);
+        }
         meta.insert("actions".into(), actions_meta(self.distribution.unwrap_or(actions::DISTRIBUTION)));
         meta.extend(std::mem::take(&mut self.meta));
         let meta = serde_json::to_vec(&Value::Object(meta)).expect("JSON serializes");
@@ -343,6 +350,51 @@ pub(crate) fn ending_meta(ending: &Ending) -> Value {
         "outcome": ending.outcome,
         "reason": ending.reason,
     })
+}
+
+/// What META `models` keeps of a network that made no decision in the replay: who it is and what played
+/// (`hash`, `act`, `version`), not how it is built.
+pub(crate) const BRIEF_MODEL_KEYS: [&str; 8] =
+    ["index", "name", "family", "run", "checkpoint_sha1", "hash", "act", "version"];
+
+/// META `models` with the entries of the policies not in `acted` (bit = index, else position) cut to
+/// [`BRIEF_MODEL_KEYS`].
+fn brief_models(models: &mut [Value], acted: &[u64; 4]) {
+    for (position, model) in models.iter_mut().enumerate() {
+        let Value::Object(fields) = model else { continue };
+        let index = fields.get("index").and_then(Value::as_u64).map_or(position, |i| i as usize);
+        if index >= 256 || acted[index / 64] & (1 << (index % 64)) == 0 {
+            fields.retain(|key, _| BRIEF_MODEL_KEYS.contains(&key.as_str()));
+        }
+    }
+}
+
+/// META `models` of two replays of one team joined (a stitch): per entry the full description where either has
+/// it; None when they are not the same team (an entry's brief fields differ, or a full one differs).
+pub(crate) fn merge_models(a: &Value, b: &Value) -> Option<Value> {
+    let (Value::Array(a), Value::Array(b)) = (a, b) else {
+        return (a == b).then(|| a.clone());
+    };
+    if a.len() != b.len() {
+        return None;
+    }
+    let brief = |model: &Value| -> Vec<Option<Value>> {
+        BRIEF_MODEL_KEYS.iter().map(|key| model.get(key).cloned()).collect()
+    };
+    let size = |model: &Value| model.as_object().map_or(0, Map::len);
+    a.iter()
+        .zip(b)
+        .map(|(x, y)| {
+            if x == y {
+                Some(x.clone())
+            } else if brief(x) != brief(y) || size(x) == size(y) {
+                None
+            } else {
+                Some(if size(x) > size(y) { x } else { y }.clone())
+            }
+        })
+        .collect::<Option<Vec<_>>>()
+        .map(Value::Array)
 }
 
 fn actions_meta(distribution: usize) -> Value {

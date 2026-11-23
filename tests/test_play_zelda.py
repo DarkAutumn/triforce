@@ -2,6 +2,7 @@
 with real replays: files on loop, the queues filled by simulations, golden paths."""
 
 import argparse
+import gc
 import importlib.util
 import json
 import os
@@ -42,6 +43,16 @@ play_zelda = _load_script()
 @pytest.fixture(scope='module')
 def qapp():
     return QApplication.instance() or QApplication([])
+
+
+@pytest.fixture(autouse=True)
+def qt_dies_on_the_main_thread():
+    """A test's windows die here, on the main thread.  A ``play_view.Window`` is in reference cycles (its menu
+    lambdas hold it), so only the cycle collector frees it, on whichever thread triggers a collection: a grid's
+    thread loading the models, say, where ``~QWidget`` waits for the main thread to flush window events while it
+    holds the GIL, and the test hangs (seen on r40-targets, whose allocations moved the collections)."""
+    yield
+    gc.collect()
 
 
 # ---------------------------------------------------------------------------------------------- command line

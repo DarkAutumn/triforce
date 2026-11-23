@@ -221,12 +221,17 @@ pub fn target_wavefront(
 
 /// The targets the wavefront of [`target_wavefront`] leads to (sorted, each once).
 fn wavefront_targets(objective: &Objective, state: &GameView, reward: &RewardConfig) -> Vec<Target> {
+    route_targets(objective, state, reward, firing_line_aims(reward, state, objective).as_deref())
+}
+
+/// [`wavefront_targets`] with the state's [`firing_line_aims`] already computed (`firing`).
+fn route_targets(objective: &Objective, state: &GameView, reward: &RewardConfig, firing: Option<&[Aim]>) -> Vec<Target> {
     let mut targets: Vec<Target> = match drops_first_targets(reward, state, objective) {
         Some(drops) => drops,
         None => {
             let first = drops_first(reward, objective);
-            let route: Vec<Target> = match firing_line_aims(reward, state, objective) {
-                Some(aims) => aims.into_iter().map(|a| a.0).collect(),
+            let route: Vec<Target> = match firing {
+                Some(aims) => aims.iter().map(|a| a.0).collect(),
                 None => objective.pbrs_targets.iter().copied().collect(),
             };
             route.into_iter().chain(item_targets(reward, first, objective.bag_drops, state)).collect()
@@ -242,10 +247,10 @@ fn wavefront_targets(objective: &Objective, state: &GameView, reward: &RewardCon
 /// one [`target_wavefront`] builds for `reward`: true) or only priced by the reward (a dropped item, the
 /// critic's targets: false). Nothing here changes what the observation or the reward compute.
 pub fn recorded_targets(objective: &Objective, state: &GameView, reward: &RewardConfig) -> Vec<(Role, bool)> {
-    let wavefront = wavefront_targets(objective, state, reward);
-    let firing = firing_line_aims(reward, state, objective).unwrap_or_default();
+    let firing = firing_line_aims(reward, state, objective);
+    let wavefront = route_targets(objective, state, reward, firing.as_deref());
     let mut out: Vec<(Role, bool)> = Vec::new();
-    for (target, role) in objective.labels.iter().chain(&firing) {
+    for (target, role) in objective.labels.iter().chain(firing.iter().flatten()) {
         let obs = wavefront.binary_search(target).is_ok();
         match out.iter_mut().find(|(r, _)| r == role) {
             Some((_, seen)) => *seen |= obs,
@@ -417,5 +422,34 @@ mod tests {
         ram[HEARTS] = 0x21;
         let hurt = view(&ram);
         assert_eq!(attach_objective(objective.clone(), &hurt, &on, true).objective, objective);
+    }
+
+    /// The firing lines and the shot's projection are two computations of one geometry and must agree: from every
+    /// firing-line tile of a standing Gel, Link at the tile's corner with full hearts is lined up for a shot
+    /// (`zelda::beams::lined_up`, what the BEAMS look-ahead and the `beam_*` numbers use).
+    #[test]
+    fn a_shot_from_every_firing_line_tile_meets_the_monster() {
+        let map = Arc::new(GameMap::builtin());
+        let mut ram = [0u8; RAM_SIZE];
+        (ram[LEVEL], ram[ROOM_ID], ram[GAME_MODE]) = (3, 0x6b, 5);
+        (ram[OBJ_X], ram[OBJ_Y]) = (0x78, 0xB5);
+        (ram[OBJ_TYPE + 1], ram[OBJ_X + 1], ram[OBJ_Y + 1]) = (enemy::GREEN_GEL, 0x78, 0x8D);
+        (ram[0x66F], ram[0x670], ram[0x657]) = (0x22, 0xFF, 1);
+        let view = |ram: &[u8; RAM_SIZE]| GameView::new(ram, 0, false, map.clone());
+        let lines: BTreeSet<Tile> = zelda::beams::firing_lines(&view(&ram), &[1]).into_iter().map(|(t, _)| t).collect();
+        assert!(lines.len() > 10, "{lines:?}");
+        let mut stood = BTreeSet::new();
+        for y in (0x3Du8..=0xDD).step_by(8) {
+            for x in (0u8..=0xF0).step_by(8) {
+                (ram[OBJ_X], ram[OBJ_Y]) = (x, y);
+                let state = view(&ram);
+                let tile = state.link.tile();
+                if lines.contains(&tile) {
+                    assert!(!zelda::beams::lined_up(&state).is_empty(), "no shot from the firing-line tile {tile:?}");
+                    stood.insert(tile);
+                }
+            }
+        }
+        assert_eq!(stood, lines);
     }
 }

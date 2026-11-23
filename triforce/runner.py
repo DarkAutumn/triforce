@@ -388,6 +388,29 @@ def write_jsonl(path, results: List[RunResult], append: bool = False):
         tmp.unlink(missing_ok=True)
 
 
+def check_overrides(overrides: Dict[str, str], configs: Optional[Dict[str, SpecialistConfig]] = None,
+                    networks: Optional[Dict[str, object]] = None, names: Optional[Iterable[str]] = None,
+                    route: Optional[str] = None) -> set:
+    """``Policies``' checks of its ``checkpoints`` overrides, loading no model (an entry point makes them before it
+    waits its turn): known specialists, a route's part only on its route, a checkpoint file at each path; raises
+    ``RunnerError``.  Returns the known specialists (``names``, else every one, with the given networks' and configs')."""
+    known = (set(names if names is not None else list_specialists())
+             | {split_policy(key)[0] for key in networks or {}} | set(configs or {}))
+    unknown = sorted(key for key in overrides if split_policy(key)[0] not in known)
+    if unknown:
+        raise RunnerError(f"--checkpoint for unknown specialist(s) {unknown}; known: {sorted(known)}")
+    parts = own_models_until(route) is not None
+    for key in [*overrides, *(networks or {})]:
+        part = split_policy(key)[1]
+        if part is not None and (part != route or not parts):
+            raise RunnerError(f"{key}: a route's part is played only on a route with own_models_until, "
+                              f"the route it names (this chain plays {route})")
+    for name, path in overrides.items():
+        if not Path(path).is_file() and not (Path(path) / CHECKPOINT_NAME).is_file():
+            raise RunnerError(f"--checkpoint {name}={path}: no checkpoint file there")
+    return known
+
+
 class Policies:
     """The specialists' Rust networks for a chain pool, in policy-index order, plus why the others are missing.
 
@@ -412,20 +435,8 @@ class Policies:
         overrides = dict(checkpoints or {})
         configs = dict(specialist_configs or {})
         given = dict(networks or {})
-        known = (set(names if names is not None else list_specialists())
-                 | {split_policy(key)[0] for key in given} | set(configs))
-        unknown = sorted(key for key in overrides if split_policy(key)[0] not in known)
-        if unknown:
-            raise RunnerError(f"--checkpoint for unknown specialist(s) {unknown}; known: {sorted(known)}")
+        known = check_overrides(overrides, configs, given, names, route)
         parts = own_models_until(route) is not None
-        for key in [*overrides, *given]:
-            part = split_policy(key)[1]
-            if part is not None and (part != route or not parts):
-                raise RunnerError(f"{key}: a route's part is played only on a route with own_models_until, "
-                                  f"the route it names (this chain plays {route})")
-        for name, path in overrides.items():
-            if not Path(path).is_file() and not (Path(path) / CHECKPOINT_NAME).is_file():
-                raise RunnerError(f"--checkpoint {name}={path}: no checkpoint file there")
         self.names: List[str] = []
         self.configs: List[SpecialistConfig] = []
         self.policies: list = []
@@ -613,7 +624,8 @@ class Runner:
         return chain_meta(self.policies, self.act, route, max_steps=self.max_steps, **extra)
 
     def provenance(self, route: Route) -> dict:
-        """What plays ``route``: per policy its name, checkpoint, ``ckpt.pt`` sha1, Rust network hash, act mode and
+        """What plays ``route``: per policy its name, checkpoint, the run's own family and run id (the checkpoint's;
+        a run linked into another family's folder keeps its own), ``ckpt.pt`` sha1, Rust network hash, act mode and
         config hash; the specialists without a model; the route, start, end and step cap; the code version and the
         game data hash (``replay``).  Stored with every chain result (``chain_summary``, ``eval-chain``'s
         ``<output>.meta.json``)."""
@@ -621,6 +633,8 @@ class Runner:
         models = models_header(policies.names, policies.policies, policies.checkpoints, policies.modes(self.act))
         for model, config in zip(models, policies.configs):
             checkpoint = policies.checkpoints.get(model['name'])
+            described = policies.described.get(model['name'], {})
+            model['family'], model['run'] = described.get('family'), described.get('run')
             model['checkpoint_sha1'] = None if checkpoint is None else checkpoint_sha1(checkpoint)
             model['config_sha256'] = hashlib.sha256(config.to_json().encode()).hexdigest()
         return {**route_header(route), 'max_steps': self.max_steps, 'models': models,
@@ -749,6 +763,72 @@ def chain_summary(results: List[RunResult]) -> dict:
         summary[f'cheated_{item}'] = sum(c[item] for c in cheated)
         summary[f'runs_with_cheated_{item}'] = sum(c[item] > 0 for c in cheated)
     return summary
+
+
+class ChainTally:
+    """A chain's runs so far, as a person watches them (each ``chain_progress`` event; the training GUI draws it):
+    the wins, the deaths, the stuck runs (any other end) and the errors; how many runs took each dungeon's triforce,
+    in the order the chain's stretch of ``route`` takes them (a triforce counts once its route step was left by its
+    exit; a chain that plays to the route's end counts a win as the end step's level, Dungeon 9 on both routes);
+    and the furthest route step a run reached, with the room it stood in there.  ``route`` None: only the endings
+    and the furthest step (no route length, no triforces)."""
+
+    def __init__(self, route: Optional[Route] = None):
+        self.done = self.wins = self.deaths = self.stucks = self.errors = 0
+        self.route_steps = None
+        self.triforce_steps: Dict[int, int] = {}
+        self.levels: List[int] = []
+        self.end_level = None             # the level a win counts (a chain to the route's end step, exit 'end')
+        self.furthest: Optional[Tuple[int, str]] = None
+        self.taken: Dict[int, int] = {}
+        if route is None:
+            return
+        steps = _native.route_steps(route.name)
+        end = route.start_step + route.steps_played()
+        self.route_steps = len(steps)
+        self.triforce_steps = {step['index']: step['level'] for step in steps
+                               if step.get('exit') == 'triforce' and route.start_step <= step['index'] < end}
+        self.levels = list(dict.fromkeys(level for _, level in sorted(self.triforce_steps.items())))
+        if route.stop_step is None and route.terminal is None and steps[-1].get('exit') == 'end':
+            self.end_level = steps[-1]['level']
+            self.levels = list(dict.fromkeys([*self.levels, self.end_level]))
+
+    def add(self, result: RunResult):
+        """Counts one finished run."""
+        self.done += 1
+        won = result.result == 'success'
+        if won:
+            self.wins += 1
+        elif result.result == 'error':
+            self.errors += 1
+        elif result.reason.startswith('died in'):
+            self.deaths += 1
+        else:
+            self.stucks += 1
+        taken = {self.triforce_steps[room.step] for room in result.rooms
+                 if room.step in self.triforce_steps and room.outcome == 'exit-correct'}
+        if won and self.end_level is not None:
+            taken.add(self.end_level)
+        for level in taken:
+            self.taken[level] = self.taken.get(level, 0) + 1
+        reached = max(((room.step, room) for room in result.rooms if room.step is not None),
+                      key=lambda item: item[0], default=None)
+        if won and self.end_level is not None:
+            reached = (self.route_steps, None)
+        if reached is not None and (self.furthest is None or reached[0] > self.furthest[0]):
+            room = reached[1]
+            where = 'the end' if room is None else f"{room.level}:{room.room}" + (':cave' if room.in_cave else '')
+            self.furthest = (reached[0], where)
+
+    def fields(self) -> dict:
+        """The tally as ``chain_progress`` carries it beside ``successes`` (the wins): deaths, stucks, errors,
+        triforces ([[level, runs], ...] in the route's order), furthest_step and furthest_room (None before a run
+        reached a route step), route_steps."""
+        return {'deaths': self.deaths, 'stucks': self.stucks, 'errors': self.errors,
+                'triforces': [[level, self.taken.get(level, 0)] for level in self.levels],
+                'furthest_step': None if self.furthest is None else self.furthest[0],
+                'furthest_room': None if self.furthest is None else self.furthest[1],
+                'route_steps': self.route_steps}
 
 
 def route_header(route: Route) -> dict:

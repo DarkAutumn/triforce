@@ -8,11 +8,16 @@ are live and the hearts real.
     python scripts/experiments/r27_leg_walks.py gravestone             # what a touched stone does; what hurts Ghinis
     python scripts/experiments/r27_leg_walks.py whirlwind              # where a play lands with the D7 piece held
     python scripts/experiments/r27_leg_walks.py entrance               # 0x22's mouth at X $70 / $78 / $80; slow tiles
+
+It plays the game over many seeded trials: a job of the machine's queue (``jobs.require_job``: ``triforce job run
+... --timeout 30m -- .venv/bin/python scripts/experiments/r27_leg_walks.py ...``).
 """
 
 import argparse
 import collections
 import statistics
+
+from triforce.jobs import require_job
 
 from r26_walks import TELEPORT_INDEX, TRIFORCE
 from r27_walks import (FLYING_GHINI, GHINI, HEARTS, INV_SWORD, OBJ_DIR, OBJ_HP, OBJ_META, OBJ_STATE, OBJ_TYPE, OBJ_X,
@@ -390,6 +395,7 @@ def main():
     parser.add_argument('what', choices=['rooms', 'sword', 'gravestone', 'whirlwind', 'entrance'])
     parser.add_argument('--seeds', type=int, default=30)
     args = parser.parse_args()
+    require_job()
     globals()[args.what](args)
 
 

@@ -488,6 +488,28 @@ little difference for CPU evaluation (goriya: 29.2 s default, 30.9 s with 1 thre
 segment waits for its longest runs (40 runs on 20 envs; run lengths vary several-fold, e.g. 134–1,547 steps on
 d2 seeds 100–105); how much of the chain time that tail is was not measured.
 
+## Idle cost of a waiting or loaded process (Nov 23)
+
+Measured on a quiet machine, after 17 chains loading at once (load average 200) never finished loading in 25-48
+minutes (the lead's live observation). The cause was loading outside the line, not an idle spin: until Nov 23 a
+tool loaded its networks and then waited its turn in the per-tool line.
+
+- **A loaded, queued chain** (its d3first team, 54 policies, loaded; QUEUED in the old per-tool line): 0.2% CPU,
+  151 wake-ups a second (CUDA's own event thread 129/s, two network-serving threads 10/s each) and 496 MiB of GPU
+  memory held.
+- **The serving thread** of `triforce/nets/serve.py` idled at 10.1 wake-ups a second (a 0.1 s `take` timeout);
+  with no env active it now blocks until a request comes (`IDLE_SECONDS`): 0.0/s.
+- **No speed lost by that change**: the speed bench (`python -m triforce.lab.bench speed --paths cuda`, zol, 10 envs,
+  4,255 decisions, the same successes), six runs each, old and new code alternating:
+
+| Code | Decisions a second (six runs) | Mean |
+|---|---|---:|
+| old | 859.6, 892.2, 913.8, 874.5, 837.4, 830.1 | 867.9 |
+| new | 838.9, 870.4, 875.8, 928.7, 847.9, 827.6 | 864.9 |
+
+The difference is within the ±5% noise. Under the job queue (`triforce job`, docs/architecture.md "The job queue")
+a waiting job is only its wrapper: no torch, no models, no GPU memory; the loaded-and-queued state no longer exists.
+
 ## What's left
 
 In order of size, for ow-zora p16:

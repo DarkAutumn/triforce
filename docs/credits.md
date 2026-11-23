@@ -265,6 +265,8 @@ All of the glitch knowledge is the owner's; the agents made the agent able to us
 | Nov 23 | A golden replay per model version, backed up; 250 runs per new model with best, worst and stuck runs | Owner | Open | session history |
 | Nov 23 | Versioning's third number is the retrain generation (90% of the promoted models retrained from scratch); models load by their checkpoint's schemas, not the version | Owner; agents found the version gates and built the schema check (`OLDEST_OBS_SCHEMA` for a change of meaning) | Worked: every promoted run of today's families loads | dec 11-23 |
 | Nov 23 | A version's first three numbers each mean a fresh generation: every network retrained from scratch, breaking the ship of Theseus; the next generation's teachers trained fresh too | Owner; the lead traced the lineage (73 of 76 promoted networks are continuations, 69 with lost origins) | Rule set; first fresh generation is 2.0.1.0 | dec 11-23 |
+| Nov 23 | **One job queue for the machine**: everything heavier than a build or a test runs through `triforce job`, replacing the Nov 15 per-tool line | Owner (the job API: one command, lanes, a build and test lane, the golden verb, timeouts, progress, enforcement); the lead (the join-first finding: chains loaded their networks before joining the line; the single scheduler on SQLite and kernel locks, confirmed by the owner); built by Queue40 | Built | r40-queue |
+| Nov 23 | **Test timing logs and a parallel Python suite**: every test run writes a JSONL of its tests' times into the logs folder, read together for history; the Rust suite too; the Python suite's long poles and parallelism tackled | Owner (the logs, their purpose, the Rust lines, the parallel cleanup); built by Tests40 (`triforce.testlog`, `triforce test-times`, pytest-xdist in 8 processes) | Worked: the Python suite 410-433 s → about 1 minute | r40-tests |
 
 ## Tools for watching
 
@@ -281,6 +283,7 @@ All specified by the owner and built by the agents unless noted.
 | Nov 13 | Statistics by segment, full run and room | Worked | r21 §8 |
 | Nov 14 | A web view of the training GUI for the phone | Worked | session history |
 | Nov 23 | **Replays that say on their own what the agent was steered to, could do and chose**: the objective and role-labelled targets (`reward-only` ones too), the action mask with its rules, every decision with its distribution and danger, named by the replay's own META (no paths, no route data); a chain's report from its replays alone; a thoughts overlay for the video. The owner's spec and answers; the agents the format (replay version 2), the reader and the overlay | Worked: the Dungeon 8 chain played the same 200 runs frame for frame with it | session history, `docs/architecture.md` "Replays" |
+| Nov 23 | **The GUI draws every job's progress with its own widgets**, never a text bar; the 250-run test reports what he watches live (runs done, wins, each triforce's runs, deaths and stucks, the furthest step, runs a second and time left), as a chain, a batch, a golden race and a training show theirs. The owner's ask ("the gui+you launching is 99% of my workflow"); built by Gui40 | Built | r40-gui |
 
 ## Watching and steering
 

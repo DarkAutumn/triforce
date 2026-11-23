@@ -7,11 +7,16 @@ bombed S wall with 13 hearts and the magic sword (`r28_walks.d8_state`).
     python scripts/experiments/r28_gleeok.py kill [--seeds N] [--hearts H] [--row Y]   # the scripted fight
 
 Addresses: the necks' segment arrays and the shared head byte as `crates/zelda/src/game.rs` reads them
-(asm:Gleeok_NeckXAddrsLo, asm:GleeokDeadNeckMask; the attached heads share slot 5's HP and timer)."""
+(asm:Gleeok_NeckXAddrsLo, asm:GleeokDeadNeckMask; the attached heads share slot 5's HP and timer).
+
+It plays the game over many seeded trials: a job of the machine's queue (``jobs.require_job``: ``triforce job run
+... --timeout 30m -- .venv/bin/python scripts/experiments/r28_gleeok.py ...``)."""
 
 import argparse
 import collections
 import statistics
+
+from triforce.jobs import require_job
 
 from r28_walks import (ALL_DEAD, CUR_OPENED_DOORS, FIREBALL_BOSS, FLYING_HEAD, GLEEOK4, HEARTS, OBJ_DIR, OBJ_HP,
                        OBJ_INVINC, OBJ_META, OBJ_TYPE, OBJ_X, OBJ_Y, PLAY, ROOM_KILL_COUNT, TRIFORCE,
@@ -372,6 +377,7 @@ def main():
     parser.add_argument('--hearts', type=float, default=None)
     parser.add_argument('--row', type=lambda s: int(s, 0), default=0x9D)
     args = parser.parse_args()
+    require_job()
     globals()[args.what](args)
 
 

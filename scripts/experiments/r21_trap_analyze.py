@@ -9,6 +9,9 @@ with the record whose ``seed`` is the job).  Every replay is played on the emula
 decision.  A completed clip leaves Link 8 px inside one of the diamond's eight block squares (no walk can do that;
 the west block's square only counts before it was pushed), so each clip is placed: the block, where Link started
 it, with which action, and what came next.  A push is the ``reward-pushed-block`` term.
+
+Analysing a run plays its replays: a job of the machine's queue (``jobs.require_job``: ``triforce job run ... --
+.venv/bin/python scripts/experiments/r21_trap_analyze.py RUN_DIR``); ``--table`` runs anywhere.
 """
 
 import json
@@ -17,6 +20,7 @@ from collections import Counter
 from pathlib import Path
 
 from triforce._native import Replay, ReplayPlayer
+from triforce.jobs import require_job
 
 # The diamond's block squares (Link coordinates of the square's top-left; game.yaml room 1:0x22); the stairs
 # are at (0x80, 0x8d), every block 0x20 (Manhattan) from them.
@@ -253,6 +257,7 @@ def table(models: Path) -> int:
 def main(argv) -> int:
     if argv and argv[0] == '--table':
         return table(Path(argv[1] if len(argv) > 1 else 'models'))
+    require_job()
     run_dir = Path(argv[0])
     result = {'run': str(run_dir), 'learning': learning(run_dir)}
     for act in ('sample', 'argmax'):

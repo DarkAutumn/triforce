@@ -1,4 +1,8 @@
 //! `tf`: movie, replay, zcore self-diff, trace, corpus and benchmark tooling for zcore.
+//!
+//! The heavy subcommands (`ladder-golden`, `ladder-diff`, `corpus check`, `replay verify` of a folder or of more
+//! than one file, `bench` of movies or recordings) run as jobs of the machine's queue (`require_job`):
+//! `triforce job run --agent A --task T --subtask S --desc '...' --timeout 40m -- target/release/tf ladder-diff`.
 
 mod corpus;
 use movie as formats;
@@ -30,7 +34,7 @@ enum Cmd {
         #[command(subcommand)]
         cmd: MovieCmd,
     },
-    /// Write all-domain zcore goldens (the regression baseline for `ladder-diff`).
+    /// Write all-domain zcore goldens (the regression baseline for `ladder-diff`). A job (`triforce job run`).
     LadderGolden {
         /// Movies to replay (default: every corpus movie).
         movies: Vec<PathBuf>,
@@ -42,7 +46,8 @@ enum Cmd {
         #[arg(long)]
         jobs: Option<usize>,
     },
-    /// Replay the movie of every golden in DIR on zcore; exit 0 or print each movie's first divergence.
+    /// Replay the movie of every golden in DIR on zcore; exit 0 or print each movie's first divergence. A job
+    /// (`triforce job run`).
     LadderDiff {
         /// Golden directory (default: the committed corpus/golden).
         dir: Option<PathBuf>,
@@ -64,7 +69,8 @@ enum Cmd {
         cmd: CorpusCmd,
     },
     /// zcore frames per second on one core, render on and off: random input on the start screen, or with
-    /// `--movie`/`--agent` timed windows spread evenly over each corpus movie's whole length.
+    /// `--movie`/`--agent` timed windows spread evenly over each corpus movie's whole length (then a job:
+    /// `triforce job run`).
     Bench {
         #[arg(long, default_value_t = 20_000)]
         frames: usize,
@@ -141,7 +147,8 @@ enum MovieCmd {
 enum ReplayCmd {
     /// Print a replay's header, start, ending and sections.
     Info { file: PathBuf },
-    /// Play replays on zcore, comparing the machine with every state they recorded; exit 1 if any fails.
+    /// Play replays on zcore, comparing the machine with every state they recorded; exit 1 if any fails. A folder
+    /// stands for its `*.tfreplay` files; a folder or more than one file is a job (`triforce job run`).
     Verify {
         #[arg(required = true)]
         files: Vec<PathBuf>,
@@ -169,6 +176,7 @@ enum CorpusCmd {
     /// Rebuild corpus/manifest.toml from corpus/movies/*.tfmovie.
     Sync,
     /// Coverage gate: manifest up to date, ≥ 1M frames, and (replayed) gameplay in the overworld and Dungeons 1-3.
+    /// A job (`triforce job run`).
     Check {
         #[arg(long)]
         jobs: Option<usize>,
@@ -181,6 +189,9 @@ fn jobs(j: Option<usize>) -> usize {
 
 fn main() {
     let cli = Cli::parse();
+    if heavy(&cli.cmd) {
+        require_job();
+    }
     match run(cli) {
         Ok(code) => std::process::exit(code),
         Err(e) => {
@@ -188,6 +199,38 @@ fn main() {
             std::process::exit(2);
         }
     }
+}
+
+/// The subcommands that replay many movies or replays: jobs of the machine's queue.
+fn heavy(cmd: &Cmd) -> bool {
+    match cmd {
+        Cmd::LadderGolden { .. } | Cmd::LadderDiff { .. } | Cmd::Corpus { cmd: CorpusCmd::Check { .. } } => true,
+        Cmd::Replay { cmd: ReplayCmd::Verify { files, .. } } => files.len() > 1 || files.iter().any(|f| f.is_dir()),
+        Cmd::Bench { movies, agent, recordings, .. } => !movies.is_empty() || *agent || recordings.is_some(),
+        _ => false,
+    }
+}
+
+/// A heavy subcommand runs inside a job of the machine's queue (`triforce job`, which sets `$TRIFORCE_JOB_ID` for the
+/// command and its children) or with a terminal on stdin and stdout (the owner at a shell); otherwise it prints the
+/// `triforce job run` form of the command and exits 2, as the Python tools do (`triforce.jobs.require_job`).
+fn require_job() {
+    use std::io::IsTerminal;
+    let in_job = std::env::var_os("TRIFORCE_JOB_ID").is_some_and(|id| !id.is_empty());
+    if in_job || (std::io::stdin().is_terminal() && std::io::stdout().is_terminal()) {
+        return;
+    }
+    let quote = |arg: String| {
+        if !arg.is_empty() && arg.chars().all(|c| c.is_ascii_alphanumeric() || "-_./:=,@+%".contains(c)) {
+            arg
+        } else {
+            format!("'{}'", arg.replace('\'', r"'\''"))
+        }
+    };
+    let command: Vec<String> = std::env::args().map(quote).collect();
+    eprintln!("triforce: tf runs under the machine's job queue (AGENTS.md \"The job queue\"):\n  triforce job run --agent \
+               AGENT --task TASK --subtask SUBTASK --desc '...' --timeout 40m -- {}", command.join(" "));
+    std::process::exit(2);
 }
 
 fn check_movie_rom(movie: &Movie, rom: &rom::RomInfo, path: &Path) -> Result<()> {
@@ -604,7 +647,7 @@ fn replay_cmd(cmd: ReplayCmd, rom: &rom::RomInfo) -> Result<i32> {
             let dir = states_dir.unwrap_or_else(|| rom::workspace_root().join("triforce/states"));
             let resolve = |name: &str| std::fs::read(state_path(&dir, name));
             let mut failed = false;
-            for file in &files {
+            for file in &replay_files(&files)? {
                 match read_replay(file).and_then(|replay| Ok(tfreplay::verify(rom.clone(), replay, &resolve)?)) {
                     Ok(r) => println!("{}: ok, {} frames, {} edits, {} states", file.display(), r.frames, r.edits, r.states),
                     Err(e) => {
@@ -616,6 +659,25 @@ fn replay_cmd(cmd: ReplayCmd, rom: &rom::RomInfo) -> Result<i32> {
             Ok(i32::from(failed))
         }
     }
+}
+
+/// The replays of `tf replay verify`'s arguments: a file as given, a folder's `*.tfreplay` files in name order.
+fn replay_files(args: &[PathBuf]) -> Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+    for arg in args {
+        if arg.is_dir() {
+            let mut found: Vec<PathBuf> = std::fs::read_dir(arg)
+                .with_context(|| format!("reading {}", arg.display()))?
+                .filter_map(|e| e.ok().map(|e| e.path()))
+                .filter(|p| p.extension().is_some_and(|e| e == "tfreplay"))
+                .collect();
+            found.sort();
+            files.extend(found);
+        } else {
+            files.push(arg.clone());
+        }
+    }
+    Ok(files)
 }
 
 /// One line per instruction of records `frame..frame + count`, prefixed with the record number, so

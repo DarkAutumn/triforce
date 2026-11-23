@@ -1,8 +1,11 @@
 #!/bin/bash
 # Long-haul profile of one real training run: py-spy over the whole run (Python threads, idle waits included),
 # perf over every thread of the python process (not py-spy) for PERF_SECONDS from WARMUP seconds in (counted from
-# when the training starts: it may first wait its turn behind other trainings and evaluations, triforce/jobs.py).
-#   scripts/profile_train.sh LABEL [ITERATIONS] [WARMUP] [PERF_SECONDS]
+# when the training starts; it runs inside this script's job and never waits).  A job of the machine's queue:
+#   triforce job run --agent A --task T --subtask S --desc '...' --timeout 1h -- \
+#       scripts/profile_train.sh LABEL [ITERATIONS] [WARMUP] [PERF_SECONDS]
+source "$(dirname "$0")/job.sh"
+require_job "$0" "$@"
 cd "$(dirname "$0")/.."
 OUT=target/perf/profile-${1:-baseline}
 rm -rf $OUT; mkdir -p $OUT

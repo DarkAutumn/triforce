@@ -720,6 +720,15 @@ pub struct RamRandomization {
     /// evaluation, chains, exploration and state builds keep the natural drop.
     #[serde(default)]
     pub drop_bombs: Option<f64>,
+    /// `room_bombs: {'(3, 0x5b)': [8, 8]}` (round 39, 3:0x5b with a full bag): a reset into a listed room draws its
+    /// bombs from that room's range instead of `bombs`, with probability `room_bombs_share` (absent: every such
+    /// reset; the rest keep the `bombs` draw). Wherever `bombs` applies (not a harvested start); a reset into a room
+    /// not listed draws nothing more, so the family's random stream is unchanged there.
+    #[serde(default)]
+    pub room_bombs: std::collections::BTreeMap<String, (i64, i64)>,
+    /// Share of resets into a `room_bombs` room that draw its range; absent = every one.
+    #[serde(default)]
+    pub room_bombs_share: Option<f64>,
 }
 
 impl RamRandomization {
@@ -734,6 +743,11 @@ impl RamRandomization {
             .collect()
     }
 
+    /// The `room_bombs` range of the room `at`, if listed.
+    pub fn room_bombs_at(&self, at: MapLocation) -> Option<(i64, i64)> {
+        self.room_bombs.iter().find(|(room, _)| parse_room(room).is_ok_and(|r| r == at)).map(|(_, &range)| range)
+    }
+
     fn validate(&self) -> Result<(), String> {
         for (key, value) in [
             ("full_hp", self.full_hp),
@@ -741,6 +755,7 @@ impl RamRandomization {
             ("bombs_share", self.bombs_share),
             ("room_kills_share", self.room_kills_share),
             ("drop_bombs", self.drop_bombs),
+            ("room_bombs_share", self.room_bombs_share),
         ] {
             if let Some(v) = value
                 && !(0.0..=1.0).contains(&v)
@@ -772,6 +787,12 @@ impl RamRandomization {
             }
             if !(0 <= lo && lo <= hi && hi <= 14) {
                 return Err(format!("room_kills: {room}: range must satisfy 0 <= lo <= hi <= 14, got [{lo}, {hi}]"));
+            }
+        }
+        for (room, &(lo, hi)) in &self.room_bombs {
+            parse_room(room).map_err(|e| format!("room_bombs: {}", e.0))?;
+            if !(0 <= lo && lo <= hi && hi <= 255) {
+                return Err(format!("room_bombs: {room}: range must satisfy 0 <= lo <= hi <= 255, got [{lo}, {hi}]"));
             }
         }
         Ok(())
@@ -1644,6 +1665,22 @@ mod tests {
             ("{room_kills: {'5:0x05': [1, 2]}}", "Bad room"),
             ("{room_kills_share: 2}", "probability"),
             ("{drop_bombs: 2}", "probability"),
+        ] {
+            let e = minimal(&format!("ram_randomization: {bad}\n")).unwrap_err().0;
+            assert!(e.contains(why), "{bad}: {e}");
+        }
+    }
+
+    /// `ram_randomization.room_bombs` (round 39): any room, a bombs range, a share in [0, 1].
+    #[test]
+    fn room_bombs_parse_and_reject_bad_ranges() {
+        let c = minimal("ram_randomization: {room_bombs: {'(3, 0x5b)': [8, 8]}, room_bombs_share: 0.5}\n").unwrap();
+        assert_eq!(c.ram_randomization.room_bombs_at(MapLocation::new(3, 0x5b, false)), Some((8, 8)));
+        assert_eq!(c.ram_randomization.room_bombs_at(MapLocation::new(3, 0x5c, false)), None);
+        for (bad, why) in [
+            ("{room_bombs: {'(3, 0x5b)': [3, 2]}}", "0 <= lo <= hi <= 255"),
+            ("{room_bombs: {'3:0x5b': [8, 8]}}", "Bad room"),
+            ("{room_bombs_share: 2}", "probability"),
         ] {
             let e = minimal(&format!("ram_randomization: {bad}\n")).unwrap_err().0;
             assert!(e.contains(why), "{bad}: {e}");

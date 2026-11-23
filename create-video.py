@@ -10,6 +10,10 @@
 OUT is the video file: H.264 (and AAC sound) in the container its name asks for (.mp4, .mkv, .mov), at the NES's
 60.1 frames per second.  It needs ffmpeg on the PATH.
 
+Filming is a job of the machine's queue (``jobs.require_job``): ``triforce job run --agent A --task T --subtask S
+--desc '...' --timeout 1h -- .venv/bin/python create-video.py OUT ...``; the replays filmed of the total are its
+progress.
+
 GRID is COLUMNSxROWS (default 1x1).  The replays (files, or folders: their top-level *.tfreplay files in name
 order) must be at least as many as the cells.  The first ones start in the cells in order, top left first.  A
 cell whose replay ended shows its result for a few seconds, as play-zelda.py does, then plays the next replay not
@@ -42,7 +46,7 @@ os.environ['QT_QPA_PLATFORM'] = 'offscreen'     # filming needs no display
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import QApplication
 
-from triforce import _native, replay
+from triforce import _native, jobs, replay
 from triforce.play_view import GRID, Window, parse_grid
 from triforce.video import SAMPLE_RATE, Encoder, VideoGrid, center_cell, ffmpeg, replay_files
 
@@ -118,6 +122,7 @@ def film(window: Window, grid: VideoGrid, encoder: Encoder, progress=None) -> in
 def main(argv=None) -> int:
     parser = build_parser()
     args = parse_args(argv, parser)
+    jobs.require_job()
     cols, rows = args.grid
     heard = center_cell(cols, rows) if args.sound else None
     try:
@@ -138,6 +143,7 @@ def main(argv=None) -> int:
         seconds = frames / grid.fps
         print(f"  {int(seconds // 60)}:{seconds % 60:04.1f} filmed, replay {grid.played + 1} of "
               f"{len(args.replays)}", file=sys.stderr, flush=True)
+        jobs.progress(grid.played, len(args.replays), 'replays')
 
     try:
         try:
@@ -149,6 +155,7 @@ def main(argv=None) -> int:
         return 1
     finally:
         window.close()
+    jobs.progress(len(args.replays), len(args.replays), 'replays')
     print(json.dumps({'out': args.out, 'frames': frames, 'seconds': round(frames / grid.fps, 2),
                       'width': size.width() + size.width() % 2, 'height': size.height() + size.height() % 2,
                       'replays': len(args.replays), 'sound': args.sound, 'thoughts': args.thoughts,

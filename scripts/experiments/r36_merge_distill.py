@@ -12,7 +12,9 @@ shard and env.  Several data dirs (``--data A B``: the teacher-acting data and D
 cosine decay.  Held out: env 9 of every rollout (each env's episodes are its own, so the held-out rows are whole
 episodes, about 10%).  Reported per key on the held-out rows (``distill.json`` in the run): KL, top-1 agreement of
 the joint action and of each head where it has a choice (kind; direction and duration given the teacher's kind),
-the value's squared error.  The checkpoint is a normal run (``registry.save_checkpoint``), playable by the bench."""
+the value's squared error.  The checkpoint is a normal run (``registry.save_checkpoint``), playable by the bench.
+Both are jobs of the machine's queue (``jobs.require_job``: ``triforce job run ... --timeout 3h -- .venv/bin/python
+scripts/experiments/r36_merge_distill.py train ...``)."""
 
 import argparse
 import json
@@ -28,6 +30,7 @@ import numpy as np
 import torch
 
 from triforce import nets, registry
+from triforce.jobs import require_job
 from triforce.nets import roomheads  # noqa: F401  pylint: disable=unused-import  (registers 'roomheads')
 from triforce.model import obs_spec_from_space
 from triforce.observation import observation_space
@@ -264,6 +267,7 @@ def main(argv=None):
     t.add_argument('--seed', type=int, default=36)
     t.add_argument('--device', default='cuda')
     args = parser.parse_args(argv)
+    require_job()
     if args.command == 'cache':
         build_cache(args.data, Path(args.cache))
     else:
