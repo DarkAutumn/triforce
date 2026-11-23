@@ -1079,6 +1079,8 @@ firing-line tiles instead of their own (`env::objective::firing_line_aims`, `bea
 line with a monster within the shot's 12 pixels, at least `beams::FIRING_RANGE` = 48 pixels ahead, out of every
 monster's melee reach, on the room's floor; blocks between are no obstacle, the shot flies over tiles), labelled
 `Role::FiringLine` (TARGETS `firing-line`); none reachable, short of hearts or outside a fight, the monsters' tiles.
+`reward.firing_lines_melee` (the second variant, off by default) keeps the monsters' own tiles beside their lines, so the
+wavefront leads to whichever is nearer.
 `reward-gained-rupees` (round 38, the owner: "what should ACTUALLY be awarded for getting rupees is the 'rupees to
 add' counter getting set once") pays once per pickup, on the step `InvRupees + InvRupeesToAdd − InvRupeesToSubtract`
 rises, by the amount: under 5 `REWARD_MEDIUM`, 5-9 `REWARD_LARGE`, 10 or more `REWARD_MAXIMUM`; nothing while

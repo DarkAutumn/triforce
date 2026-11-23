@@ -188,7 +188,10 @@ pub fn attach_objective(
     wavefront: bool,
 ) -> Attached {
     if let Some(aims) = firing_line_aims(reward, state, &objective) {
-        objective.pbrs_targets = aims.iter().map(|a| a.0).collect();
+        if !reward.firing_lines_melee {
+            objective.pbrs_targets.clear();
+        }
+        objective.pbrs_targets.extend(aims.iter().map(|a| a.0));
         objective.labels.extend(aims);
     }
     let first = drops_first(reward, &objective);
@@ -231,6 +234,9 @@ fn route_targets(objective: &Objective, state: &GameView, reward: &RewardConfig,
         None => {
             let first = drops_first(reward, objective);
             let route: Vec<Target> = match firing {
+                Some(aims) if reward.firing_lines_melee => {
+                    objective.pbrs_targets.iter().copied().chain(aims.iter().map(|a| a.0)).collect()
+                }
                 Some(aims) => aims.iter().map(|a| a.0).collect(),
                 None => objective.pbrs_targets.iter().copied().collect(),
             };
@@ -418,6 +424,21 @@ mod tests {
         let plain = attach_objective(objective.clone(), &full, &off, true);
         assert_eq!(plain.objective, objective);
         assert_eq!(recorded_targets(&objective, &full, &off), vec![(role, true)]);
+
+        // The second variant keeps the Gel's own tiles beside its lines: Link two rows below the Gel is led to it
+        // (2 steps) rather than back down to the line below it (3 steps); the TARGETS record has both on.
+        let melee = RewardConfig { firing_lines: true, firing_lines_melee: true, ..Default::default() };
+        let both: BTreeSet<Target> = lines.union(&objective.pbrs_targets).copied().collect();
+        assert_eq!(attach_objective(objective.clone(), &full, &melee, true).objective.pbrs_targets, both);
+        assert_eq!(wavefront_targets(&objective, &full, &melee), both.iter().copied().collect::<Vec<_>>());
+        assert_eq!(recorded_targets(&objective, &full, &melee), vec![(role, true), (firing, true)]);
+        ram[OBJ_Y] = 0xA5;
+        let near = view(&ram);
+        let distance = |reward: &RewardConfig| {
+            attach_objective(objective.clone(), &near, reward, true).wavefront.and_then(|w| w.get(near.link.tile()))
+        };
+        assert_eq!((distance(&on), distance(&melee)), (Some(3), Some(2)));
+        ram[OBJ_Y] = 0xB5;
 
         ram[HEARTS] = 0x21;
         let hurt = view(&ram);

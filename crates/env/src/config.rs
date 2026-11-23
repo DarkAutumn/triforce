@@ -288,6 +288,11 @@ pub struct RewardConfig {
     /// items join them as before (`objective::firing_line_aims`).
     #[serde(default, deserialize_with = "de_bool")]
     pub firing_lines: bool,
+    /// With `firing_lines` (round 40, the second variant; off by default): the monsters' own tiles stay the fight's
+    /// targets beside their firing lines, so the path search leads to whichever is nearer (melee at hand, a line
+    /// when the monster is far) instead of to a line only.
+    #[serde(default, deserialize_with = "de_bool")]
+    pub firing_lines_melee: bool,
     /// `penalty-boss-ate-bomb` per bomb a Dodongo swallows (round 12; the stun-and-sword kill wants none).
     #[serde(default = "half")]
     pub boss_ate_bomb_penalty: f64,
@@ -338,6 +343,7 @@ impl Default for RewardConfig {
             item_targets: false,
             drops_first: false,
             firing_lines: false,
+            firing_lines_melee: false,
             left_drop_penalty: 0.0,
             heal_targets: false,
             boss_ate_bomb_penalty: 0.5,

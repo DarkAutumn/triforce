@@ -72,3 +72,26 @@ continuation WITHOUT it (`specialists/d3first/zol.yaml`), the fair base for a co
 a visit, frames) and on the `d3` chain (1000 runs paired with the promoted team, only `zol@d3first` swapped by
 `--checkpoint zol@d3first=RUN`, the switch arms with `--specialist-config experiments/r40/zol-fireline.yaml` so the
 target input they were trained on is the one they play with).
+
+### First arm: the continuation with firing lines, seed 401 (Nov 23)
+
+`d3` 1000 runs, seeds 0-999, paired with the promoted 2.0.0.13 team (`target/r40f/base-d3-1k.jsonl`,
+`cont-with-s401-d3-1k.jsonl`; `scripts/experiments/r40_fireline.py records`). The rate decides (AGENTS.md "What
+decides, in order"): **39.2% -> 32.1%, -7.1 ± 2.1 points, a real loss.** The rest, beside it: it shoots (shots a
+visit in zol's rooms 2.15 -> 3.41, far share of sword kills 18.3% -> 46.8%, 3:0x6b 18% -> 57%; lined-up decisions not
+fired 64% -> 39%), and it is slower and hit more (hits a visit 0.139 -> 0.260, hearts lost 0.077 -> 0.169; frames to
+leave 3:0x6b +336 ± 22, to the D3 triforce +523 ± 215, 8.7 s; deaths in 3:0x49 5 -> 57), and loses the beams sooner
+(rooms cleared with them 5.62 -> 4.73, -0.89 ± 0.20; 3:0x6b entered with them 89.3% -> 81.0%, first lost in 3:0x7b
+107 -> 191 runs, where this arm shoots less). Not a verdict on the switch: one seed, a continuation, and the base
+carries zol's hit head (`r38head-fam-w4`) where the continuation is the bare policy; the fair bases (the
+continuation without the switch, the bare policy `r34d3-zol-s341` alone) are queued, and the replays of both chains
+to see where the time and the hits go.
+
+### A second variant (READY FOR REVIEW, not trained)
+
+The lines replace the monsters' own tiles, so the path search leads to the nearest line tile even when a Gel stands
+next to Link (a line is at least 48 pixels from its monster: walking back from melee to shoot). `reward.firing_lines_melee:
+true` (beside `firing_lines`; off by default) keeps the monsters' own tiles as targets beside their lines: the
+wavefront then leads to whichever is nearer, melee at hand, a line when the monster is far. Test: Link two rows below
+a Gel is 3 steps from the line below it and 2 from the Gel; with the variant he is led to the Gel
+(`a_fight_at_full_hearts_steers_to_the_firing_lines`). Yaml: `experiments/r40/zol-fireline-melee.yaml`.
