@@ -233,7 +233,10 @@ def team(args) -> int:
         if run.split('/')[0] != family:
             print(f"{key}: run {run} is not under its family; copy it by hand", file=sys.stderr)
             return 1
-        if not (out / run).exists():
+        if args.link and not (out / run).exists():
+            (out / run).parent.mkdir(parents=True, exist_ok=True)
+            (out / run).symlink_to(kept.root / 'runs' / stored, target_is_directory=True)
+        elif not (out / run).exists():
             shutil.copytree(kept.root / 'runs' / stored, out / run,      # the numbered snapshots do not play
                             ignore=shutil.ignore_patterns('checkpoints'))
         pointer = 'promoted' if '@' not in key else f"promoted.{key.split('@')[1]}"
@@ -331,6 +334,8 @@ def main(argv=None) -> int:
     p.add_argument('version')
     p.add_argument('out_dir')
     p.add_argument('--route')
+    p.add_argument('--link', action='store_true', help="symlink each run dir to the backup instead of copying it "
+                                                       "(the backup's files are read-only)")
     sub.add_parser('index', help="rewrite INDEX.md")
     args = parser.parse_args(argv)
     return {'store': store, 'manifest': manifest, 'team': team, 'index': index}[args.command](args)
