@@ -47,6 +47,11 @@ are the lines, Link a step from one, the TARGETS record `monster` off the wavefr
 switch off or one heart short leaves the objective untouched). The experiment's yaml:
 `experiments/r40/zol-fireline.yaml` (`specialists/d3first/zol.yaml` plus the switch).
 
+On the real room (`d3first_3_6bs_0`, the zol@d3first yaml with the switch on and off, the same seeds, Link walked
+down the `target` input's shortest way; no job): resets drawn at full hearts (seeds 1 and 2) steer him to a firing
+line one tile from the door (distance 1, then 0: he stands on it) where the switch off sends him 6 tiles up to a Gel;
+resets drawn short of hearts (seeds 0 and 3: 1.5 and 2 of 3) walk the same tiles with the switch on and off.
+
 ### The experiment (not run yet: the queue was stopped)
 
 zol on `d3first` (it plays 3:0x6b). Baseline arm: Fresh40's zol@d3first from scratch without the switch (branch
