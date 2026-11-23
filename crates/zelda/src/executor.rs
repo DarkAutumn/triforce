@@ -477,6 +477,12 @@ impl<S> Executor<S> {
             let control_frames = (m.frame - start) as u32;
             if interrupt != Some(Interrupt::GameOver) && !is_game_over_mode(m.read(ADDR_MODE)) {
                 self.skip_uncontrollable(m, Some(location), capture)?;
+                // A CLIP keeps one frame of no buttons after it: the dock warps' clips (0x55, 0x3f) end with Link on
+                // the dock, and without the frame the run sails the raft from it instead of playing the warp
+                // (measured round 40, post-d7's 0x3f: 3,369 wrong exits into 0x2f).
+                if action.kind == ActionKind::Clip {
+                    self.step(m, 0, 1);
+                }
             }
             Ok(OptionResult {
                 frames: (m.frame - start) as u32,
