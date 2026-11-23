@@ -3574,6 +3574,7 @@ measurement (11% after Dungeon 7) swapped the network with `--checkpoint ow-lyne
 `ow-lynel@d3first`: a measuring mistake, not the network. 2.0.0.11's records: `target/r56-chains/r39-2011-1k-*`
 (post-d6, post-d7, post-d8, d4, d9). A `REV`: a continuation within the generation.
 
+<<<<<<< HEAD
 ## 2026-11-23 — The fresh generation's design calls (the owner)
 
 On the lead's four proposals for the fresh generation (2.0.1.0):
@@ -3603,3 +3604,18 @@ wouldn't perform the trick correctly, the model doesn't need to learn to move we
 think it should). That's just masking though which we already do for screen wrapping, not smarts about the monsters
 and dodging." So the fresh generation's macros are masked by Link's position only (offered where the sequence would
 work), never by where a monster or shot is.
+=======
+## 2026-11-23 — 2.0.0.13: `d3first` crosses Moldorm's room and takes 9:0x56's key (the owner; landed by the lead)
+
+The owner, Nov 22, after the scout's key ledger (Moldorm's key is needed only at 9:0x63's west door): "drop the
+moldorm fight (it's now passthrough) and fight in d9 0x56 to get the missing key"; Nov 23: "This key is the correct
+route, other keys are not." `d3first` crosses 2:0x3e with the Moldorm alive and clears 9:0x56 for its key (the key
+count never below 0; 425 states set to the ledger; `d2first` unchanged). The two networks that play the new steps
+were fine-tuned on `d3first`'s states: moldorm `r39t-moldorm` (from `r75-f-b`, the crossing; `promoted.d3first`) and
+like-like `r39t-like` (from `r33-like-s83`, the family's late `d3first` rooms with explored tracks that take the key
+over the water with the ladder; `late.d3first`). 1000 runs paired with 2.0.0.8's record: 2:0x3e crossed at 0.35
+hearts and 1 death in 1000 (fought: 0.52, 1), `d2` 99.3 -> 99.4%, 9:0x56's key in 999 of 1000 runs, Dungeon 9 53.0 ->
+51.2% (−1.8 ± 2.2, the deaths in the rooms the change does not touch). The lead accepted Dungeon 9 within the noise
+of its old rate. round39.md "Moldorm crossed, 9:0x56's key: the two fine-tunes". A `REV`: continuations within the
+generation.
+>>>>>>> 5a19dc3b

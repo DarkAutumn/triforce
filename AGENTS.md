@@ -756,7 +756,10 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 
 ## Versioning (the owner, Nov 11; the third number and model compatibility redefined Nov 23)
 
-- **One version, `MAJOR.MINOR.GEN.REV`, in the `VERSION` file** (now `2.0.0.12`: `ow-lynel`'s `late.d3first` run for the leg
+- **One version, `MAJOR.MINOR.GEN.REV`, in the `VERSION` file** (now `2.0.0.13`: `d3first` crosses 2:0x3e (the
+  Moldorm left) and takes 9:0x56's key instead, moldorm `r39t-moldorm` through `promoted.d3first` and like-like
+  `r39t-like` through `late.d3first` (Dungeon 9 6.7% -> 51.2% against 53.0% fighting the Moldorm, 1000 runs paired;
+  round39.md "Moldorm crossed, 9:0x56's key: the two fine-tunes"); 2.0.0.12 was `ow-lynel`'s `late.d3first` run for the leg
   after Dungeon 6 (33.3% -> 100.0%, 1000 runs; decisions 2026-11-23); 2.0.0.11 was `ow-lynel@d3first` for the leg
   after Dungeon 7 (24% -> 99%), rupees rewarded once a pickup and the beam terms, round38.md "Beams at range; rupees
   per pickup"; 2.0.0.10 was a fresh `ow-start@d3first` for
