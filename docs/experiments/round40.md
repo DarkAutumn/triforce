@@ -98,3 +98,58 @@ Measurement in the line (Nov 23 evening; the lead's plan: no checkpoint selectio
 `d3` (1000 runs, seeds 0-999, replays) and 250 runs at about 1M, 2M and 3M steps, paired by seed with Fireline40's
 chains of the same team (`target/r40f/base-d3-1k.jsonl`, the promoted zol with its head; `policy-alone-d3-1k.jsonl`,
 the bare `r34d3-zol-s341`, which the fresh seeds are judged against: they carry no hit head).
+
+### Single rooms by checkpoint
+
+`triforce evaluate`, today's yaml, 100 episodes a state, 30 states, the act mode (success; hearts an episode):
+
+| steps | 0.5M | 1.0M | 2.2M | 2.9M | 3.9M |
+|---|---:|---:|---:|---:|---:|
+| s401 | 94.0% (-0.28) | 94.3% (-0.14) | 98.1% (-0.01) | 98.2% (-0.02) | 97.9% (-0.02) |
+| s402 | 95.0% (-0.25) | 96.7% (-0.13) | 97.8% (-0.04) | 97.3% (-0.04) | 97.2% (-0.02) |
+
+The promoted policy: 98.5% (+0.01). Each number has a standard error of about 0.25 points. s401 comes within 0.3-0.6 points of it from 2.2M steps on. s402 plateaus 0.7-1.3 points short. Neither seed reaches 98.5% in single rooms within 4M steps.
+
+### `d3`: the chain decides (seeds 401 and 402; 403 in the line)
+
+Dungeon 3 from its entrance (`--from 3_7cs_0 --stop-at step:24`, arrival at 3:0x3d or 0:0x74), 1000 runs, seeds
+0-999, clips on, the act mode, the frozen team. Only `zol@d3first` is swapped; `moldorm@d3first` and the late
+like-like differ from the references' team, and neither plays Dungeon 3. Paired by seed with Fireline40's chains of
+the same team: `policy` = the bare `r34d3-zol-s341` (the like-for-like reference: the fresh seeds have no hit head),
+`promoted` = `r38head-fam-w4` (that policy with its head). zol's rooms (0x7c, 0x7b, 0x6b, 0x4b, 0x49, 0x3d) per
+visit: hits, hearts lost, frames, runs that ended in them (per 1000), sword kills out of melee range per sword kill
+(`far`), decisions lined up for a shot that fired none (`unfired`), shots
+(`scripts/experiments/r40_fresh.py`):
+
+| arm | d3 | vs policy | hits | hearts | frames | runs lost | far | unfired | shots |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| policy (`r34d3-zol-s341`) | 33.2% | | 0.225 | 0.142 | 654 | 44 | 16.1% | 64.1% | 1.94 |
+| promoted (with head) | 39.2% | +6.0 ± 1.5 | 0.139 | 0.077 | 652 | 12 | 18.3% | 64.2% | 2.15 |
+| **s401**, 4.0M | 32.5% | **-0.7 ± 2.1** | 0.234 | 0.156 | 716 | 78 | 25.7% | 53.8% | 2.79 |
+| **s402**, 4.0M | 27.5% | **-5.7 ± 2.0** | 0.298 | 0.191 | 688 | 98 | 19.6% | 55.9% | 2.13 |
+
+By room (runs lost per 1000; hits a visit), policy / s401 / s402: 3:0x49 (Bubbles, Zols, Blue Keese) 34 / 59 / 57,
+0.29 / 0.33 / 0.35; 3:0x4b 9 / 16 / 20; 3:0x6b 1 / 3 / 20, 0.54 / 0.47 / 0.70, 1,249 / 1,453 / 1,303 frames.
+
+The curve (250 runs, seeds 0-249, paired with the policy's first 250 runs, 34.0%):
+
+| steps | 1M | 2M | 3M | 4M (first 250 of the 1000) |
+|---|---:|---:|---:|---:|
+| s401 | 22.0% (-12.0 ± 4.1), hits 0.59 | 18.0% (-16.0 ± 3.8), 0.51 | 34.4% (+0.4 ± 4.3), 0.27 | 31.6%, 0.23 |
+| s402 | 16.0% (-18.0 ± 3.9), 0.51 | 23.6% (-10.4 ± 4.1), 0.37 | 31.2% (-2.8 ± 4.3), 0.25 | 26.8%, 0.30 |
+
+What it says (two seeds of three):
+
+- One seed of two reaches today's bare policy on `d3` within noise (s401, -0.7 ± 2.1). The other is 5.7 ± 2.0
+  points short. Neither reaches the promoted network with its head (+6.0 over the bare policy). A fresh head would be
+  trained on the fresh policy's own play.
+- The chain needs 3M of the 4M steps: at 1M and 2M both seeds are 10-18 points short, with hits a visit 2-2.6 times
+  the policy's. Between 3M and 4M neither gains.
+- Where the gap stays: runs lost in zol's own rooms, 78 and 98 per 1000 against 44, most of them in 3:0x49 (57-59
+  against 34) and, for s402, 3:0x6b (20 against 1). Hits a visit are as low as the policy's for s401 (0.234 against
+  0.225), a third higher for s402.
+- Trained from scratch with today's beam terms (the lineage never had them), the fresh networks shoot more. Shots a
+  visit rise to 2.13-2.79 against 1.94. Sword kills out of melee range rise to 19.6-25.7% against 16.1%. Lined-up
+  decisions left unfired fall to 53.8-55.9% against 64.1%; in 0x6b, shots are 9.9 against 6.4 for s401. Rooms take
+  longer (716 against 654 frames a visit; 0x6b 1,453 against 1,249 for s401). This is the baseline arm of the beams
+  experiment (no firing-line targets).
