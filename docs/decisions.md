@@ -103,7 +103,7 @@ Format: date — what changed — why — evidence.
   changes. Moving between rooms of the same family uses `build(change)`.
 - **Why:** this matches training, where an episode continues through correct exits inside the family.
 
-## 2026-11-03 — Families by enemy, not by dungeon (Lee)
+## 2026-11-03 — Families by enemy, not by dungeon (the owner)
 
 - **What:** `d1-melee` → `stalfos-keese-gel`; every Red Goriya room (D1 0x44, D2 0x5e and 0x1e, off-route D1 0x23)
   → `goriya`; the Wallmaster room → `wallmaster`; `d1-wallmaster` and `d2-goriya` are gone. Off-route D1 0x33
@@ -113,7 +113,7 @@ Format: date — what changed — why — evidence.
 - **Note:** with 0x33 tagged, D1 pathfinding can use its key again; the route-only exits and route order
   (`objectives._get_map_objective`, `GameMap.route_first`) keep the milestone route's objective unchanged.
 
-## 2026-11-03 — Second route after Dungeon 1 past the fairy pond (Lee)
+## 2026-11-03 — Second route after Dungeon 1 past the fairy pond (the owner)
 
 - **What:** `routes.yaml` route `milestone1-fairy`: milestone1 with the overworld between 0x38 and 0x4c replaced
   by the south road plus a detour to the fairy pond 0x39 (`waypoint: fairy`). Objectives take a route:
@@ -132,7 +132,7 @@ Format: date — what changed — why — evidence.
 - **Data:** 0x39, 0x49, 0x59, 0x5a, 0x5b, 0x5c, 0x5d are tagged (families by enemy; the enemy-free pond room joins
   `ow-start`). 0x5e and 0x6d were missing from game.yaml and were added with exits only (0x5d leads there).
 
-## 2026-11-03 — Exit openings (`span`) and no off-map wavefront lane (found via Lee's 0x5b/0x5c report)
+## 2026-11-03 — Exit openings (`span`) and no off-map wavefront lane (found via the owner's 0x5b/0x5c report)
 
 - **What:** a game.yaml exit can carry `span: [lo, hi]`, the tile range along the edge (rows for E/W, columns for
   N/S) of Link's top-left tile where leaving counts as that exit. The objective's exit targets keep only those
@@ -153,7 +153,7 @@ Format: date — what changed — why — evidence.
   frontend: NTSC, no overscan crop, `fceumm_up_down_allowed=enabled` so a movie's controller byte reaches the
   game unchanged, battery PRG-RAM zero-filled before the first frame). Movies (`TFMOVIE` v1) carry a `base`:
   every movie but `power_on_to_start` starts from the end of that movie (first gameplay frame after
-  registering LINK, mode 5, room 0x77), so nothing replays the title and registration screens per run (Lee).
+  registering LINK, mode 5, room 0x77), so nothing replays the title and registration screens per run (the owner).
   `OracleEmulator` caches the base state on disk; `tf` backends play the base once per process.
 - **Why:** FCEUmm is the emulator the models were trained on (stable-retro wraps it), and a power-on movie is
   the only artifact every emulator can replay. The base keeps every run starting from the same registered
@@ -568,7 +568,7 @@ entry below and `crates/zcore/UPSTREAM.md`.
   `sword_cave_in_out` frame 300): the PPU's internal OAMADDR reset during sprite fetches went through
   `write_oamaddr` and cleared the I/O latch; a `$2002` read OR-ed its status bits into the latch instead of driving
   them. Both bugs are still in upstream TetaNES `a0a6b17f`; the fixes are hardware fixes, suitable for upstream.
-- **Open decision for Lee: power-on RAM fill.** zcore powers on work RAM, PRG-RAM and CHR-RAM filled with `$FF`
+- **Open decision for the owner: power-on RAM fill.** zcore powers on work RAM, PRG-RAM and CHR-RAM filled with `$FF`
   (`State::POWER_ON_RAM`), FCEUmm's fill and the one every corpus movie and start state was recorded with; real RAM
   powers on unspecified, so it is not a quirk. Twelve test-ROM snapshots (`instr_timing` and eleven blargg 2005 APU
   ROMs) were captured by TetaNES with zero-filled RAM: they pass with `$00` and stay `#[ignore]`d ("power-on RAM:
@@ -643,7 +643,7 @@ entry below and `crates/zcore/UPSTREAM.md`.
   truncation. Watch player: `play-zelda.py --stall-steps N` (default 300) makes a game N actions in without
   damage eligible to give its cell to a game further along (the existing replacement/fade path), and ends its run
   `stuck` at 2N, replacement or not. Chains record `no_damage_max` per visit; `eval-chain` keeps no stall budget.
-- **Why:** Lee (Nov 4) watched Goriya runs attack while standing still indefinitely (half a heart, clock or
+- **Why:** the owner (Nov 4) watched Goriya runs attack while standing still indefinitely (half a heart, clock or
   stunned enemies) and required a finite timeout in training and the player, counting real damage either way,
   not attack commands and not `LingerTracker`'s progress (which ignores damage taken).
 - **Evidence:** round 10 §6. 480 chains of the current team: 16 of 9,033 successful room visits had a 300-action
@@ -657,7 +657,7 @@ entry below and `crates/zcore/UPSTREAM.md`.
   0/63 diverging in every digest domain, the 481-state walk 0 of 18,728 digests differing, and an identical
   seeded training digest. Training uses `--parallel 16` when a run has the machine to itself (`train_round.py`'s
   default), 8 each when two rounds share it.
-- **Why:** Lee (Nov 7) asked for faster emulation with nothing about the game changing, and for the env count to
+- **Why:** the owner (Nov 7) asked for faster emulation with nothing about the game changing, and for the env count to
   come out of both throughput and convergence. Changes that would alter state that's never observed (skipping
   dead sprite-slot fetches) were left out on purpose.
 - **Evidence:** `docs/performance.md` "zcore speed" and "How many envs": env benchmark 1.60× (2,832 → 4,526
@@ -673,7 +673,7 @@ entry below and `crates/zcore/UPSTREAM.md`.
   a subset; a network reads only its own keys) and `--load` with `obs.target` widens them, the new inputs starting
   at zero, so families migrate one at a time instead of all retraining at once. `reward.fixed_pickup_reward` stays
   off (no gain on top of item targets).
-- **Why:** Lee's heart series (Nov 7): health gained from pickups is the metric. Lee expected the pointer to be "a
+- **Why:** the owner's heart series (Nov 7): health gained from pickups is the metric. The owner expected the pointer to be "a
   little bit cheating, but almost certainly a big difference"; it was, and it also cut damage roughly tenfold.
 - **Evidence:** round 10 §8 (r40): d2-rope from scratch, 2 seeds per arm; D2 chain Dodongo arrivals 44 → 74–87 of
   120, healed per D2 run 0.45 → 1.2, Goriya arrival health 2.1 → 3.0; team full routes 3/6 → 16/29 of 120.
@@ -694,7 +694,7 @@ entry below and `crates/zcore/UPSTREAM.md`.
 - **What:** zcore powers console and cart RAM on with $00 (was $FF, FCEUmm's fill). State files bump to version 6;
   every start state and curriculum trajectory was regenerated, and the whole team retrains from scratch (round 11,
   `r44-fresh`: 8M steps per family, `--parallel 16`, early stop only at 0.99 balanced success).
-- **Why:** Lee's call (Nov 8). The hardware leaves the fill unspecified; Zelda never reads RAM it hasn't written,
+- **Why:** the owner's call (Nov 8). The hardware leaves the fill unspecified; Zelda never reads RAM it hasn't written,
   and twelve TetaNES test ROMs only pass with $00 (now un-ignored).
 - **Evidence:** round 11 §1: the old goldens diverge only in RAM/CHR at frame 0; the scripted movies re-record
   byte-identical; the old team on the regenerated states reproduces its chain results exactly (74/43/61/27/46 of
@@ -702,7 +702,7 @@ entry below and `crates/zcore/UPSTREAM.md`.
 
 ## 2026-11-08 — The d2-first route; route-order triforces, heart waypoints, three new overworld families
 
-- **What:** `routes.yaml` gains `d2first` (Lee): wood sword, east along row 5 to Dungeon 2 at 3 hearts, Dodongo
+- **What:** `routes.yaml` gains `d2first` (the owner): wood sword, east along row 5 to Dungeon 2 at 3 hearts, Dodongo
   and the D2 triforce, the 0x2c take-any cave's heart container (bomb the rock wall), the white sword at 0x0a, then
   Dungeon 1 with the boomerang through the D1 triforce, where the route ends. Objectives take a route's triforce
   steps in route order (milestone1 is unchanged: its only triforce step is D1's). `waypoint: heart` makes a cave's
@@ -710,14 +710,14 @@ entry below and `crates/zcore/UPSTREAM.md`.
   run fails). game.yaml gains `bomb_secret` (the rock wall's tiles are the cave entrance) and `treasure_tile` (a
   cave ware off the middle). 0x2c is `requires_bombs`. New families `ow-lynel` (0x0a and its cave), `ow-tektite`
   (0x1a) and `ow-boulder` (0x17–0x19), not trained yet.
-- **Why:** Lee (Nov 8): a route that takes Dungeon 2 first, never the fairy, and reaches Dungeon 1 with the white
+- **Why:** the owner (Nov 8): a route that takes Dungeon 2 first, never the fairy, and reaches Dungeon 1 with the white
   sword. The white sword needs 5 heart containers, hence the required heart; Lynels, Tektites and boulders need
   their own skills.
 - **Evidence:** `docs/routes/d2first.md` (route table, emulator checks of every new room, the 0x2c secret, states).
 
 ## 2026-11-08 — Reset onto d2first: one route, route-step objectives, `retreat`
 
-- **What:** `d2first` is the only route (Lee). `milestone1`, `milestone1-fairy`, spliced routes (`base`/`replace`),
+- **What:** `d2first` is the only route (the owner). `milestone1`, `milestone1-fairy`, spliced routes (`base`/`replace`),
   the fairy waypoint, `terminal` exits and the `ow-leever-peahat` family (0x29–0x2b, milestone1 only) are gone;
   0x39, 0x48, 0x49 and 2:0x6d are untagged; 0x2c and its heart cave moved to `ow-tektite` (with bombs). Dungeon 1
   follows milestone1's key-room path (0x73 W, 0x72 back, 0x73 E, 0x74 back, 0x73 N) although Link carries D2's
@@ -725,7 +725,7 @@ entry below and `crates/zcore/UPSTREAM.md`.
   in, with the route's progress there (triforce pieces and sword), decides the correct exit (plus alternates
   replacing its next room); off the route (or on cave/stairs/triforce steps) the key-aware shortest path to the
   target still applies. `start_route` picks the step the same way. A route step may name a `retreat` exit: 0x0a
-  before the white sword may leave S (Lee) — a one-room episode ends `retreat`, whose outcome each specialist sets
+  before the white sword may leave S (the owner) — a one-room episode ends `retreat`, whose outcome each specialist sets
   in `endings:` (default the new `neutral` outcome: no terminal reward or penalty; `ow-lynel` ships with
   `soft-failure`, like a wrong exit, for the first baseline); a chain records the room as `retreat` and goes on
   (0x1a without the white sword is off the route, so its objective sends Link back N), up to 3 retreats per run
@@ -733,16 +733,16 @@ entry below and `crates/zcore/UPSTREAM.md`.
   d2first as chains 0–2 (plus D1's bow-side rooms 0x33/0x23/0x22 via `entry_states path` from `1_43w_N`), and every
   curriculum re-explored. The heart waypoint reads the overworld room flags directly, so a Dungeon 1 state knows the
   heart was taken.
-- **Why:** Lee (Nov 8): reset onto the d2-first route and retrain every family from scratch on it — first a baseline
+- **Why:** the owner (Nov 8): reset onto the d2-first route and retrain every family from scratch on it — first a baseline
   with the current training setup, then his training ideas. One route means no route-only machinery to keep.
-- **Evidence:** `docs/routes/d2first.md` (Lee's answers, states, explore results); tests
+- **Evidence:** `docs/routes/d2first.md` (the owner's answers, states, explore results); tests
   `objectives::dungeon_1_entrance_follows_the_route_steps`, `lynel_room_retreat_and_return`,
   `specialist_env::the_d1_entrance_follows_the_route_steps`, `leaving_the_lynel_room_south_is_a_neutral_retreat`,
   `chain_explore::lynel_retreat_continues_the_run`.
 
 ## 2026-11-09 — The bow detour on d2first; underworld cellars as sub-rooms; `trap-room` and `equipment-room`
 
-- **What:** d2first's Dungeon 1 now detours for the bow (Lee): 0x43 from W goes N (was E) through 0x33 and 0x23 to
+- **What:** d2first's Dungeon 1 now detours for the bow (the owner): 0x43 from W goes N (was E) through 0x33 and 0x23 to
   the blade-trap room 0x22, pushes its west block N or S, takes the stairs down to the item cellar 0x7f for the bow
   (`waypoint: bow`), climbs out and goes back 0x22 E → 0x23 S → 0x33 S → 0x43 E → 0x44 (steps 55–63). A cellar is
   modelled as a sub-room like a cave: `MapLocation.in_cave` under the cellar's own room id (`GameView::in_cellar`,
@@ -754,7 +754,7 @@ entry below and `crates/zcore/UPSTREAM.md`.
   push spots instead of the walled-in stairs; `reward-pushed-block` pays for a push in a listed direction (0x22 has
   no block secret trigger: its stairs are there from the start). New families `trap-room` (0x22) and
   `equipment-room` (the cellar); 0x33/0x23 stay in stalfos-keese-gel/goriya, now on the route twice each.
-- **Why:** Lee (Nov 9): add the bow to the route; blade-trap rooms and item cellars ("all equipment rooms are
+- **Why:** the owner (Nov 9): add the bow to the route; blade-trap rooms and item cellars ("all equipment rooms are
   pretty much the same") get their own families. A sub-room flag reuses every cave rule (entries, exits, state
   names `1_7fcave_N`, Python `:cave` keys) instead of a second location kind.
 - **Evidence:** `docs/routes/d2first.md` "The bow detour" (emulator and disassembly checks); tests
@@ -771,9 +771,9 @@ entry below and `crates/zcore/UPSTREAM.md`.
   (`game_map::MAZES`), mirrored by game.yaml `maze:` blocks checked at load; a synthetic `maze` exit and
   `GameMap::exit_direction` (MazeStep $52F) let objectives and the observation point at the sequence's next
   direction; a routes.yaml step through a maze's sequence is a load error. 3:0x4c and 3:0x4d are `requires_bombs`
-  (Lee). No route, family or tag changed; existing entries kept verbatim.
-- **Why:** Lee (Nov 9): map the world before the D3 route; the mazes never change, so code owns them.
-- **Evidence:** `docs/routes/overworld.md`, `docs/routes/d3.md` (Lee's D3 directions walked end to end in the
+  (the owner). No route, family or tag changed; existing entries kept verbatim.
+- **Why:** the owner (Nov 9): map the world before the D3 route; the mazes never change, so code owns them.
+- **Evidence:** `docs/routes/overworld.md`, `docs/routes/d3.md` (the owner's D3 directions walked end to end in the
   emulator), tests `game_map::tests::{mazes_load_with_their_loops, maze_sequences_follow_check_mazes,
   maze_exit_direction_follows_maze_step, maze_yaml_and_routes_are_checked, whole_overworld_is_mapped,
   d3_boss_room_and_lees_route}`.
@@ -790,10 +790,10 @@ entry below and `crates/zcore/UPSTREAM.md`.
   `cheated_<item>_per_visit`, chain `RoomRecord.cheated_<item>`, `chain_summary` `cheated_<item>` /
   `runs_with_cheated_<item>`, room events `cheated`; the watch player's footer reads `cheated: 2 bombs, 1 key`.
   Chain `keys_in/keys_out` and visit `keys_gained` count natural keys only.
-- **Why:** Lee (Nov 9): the route always has enough keys, but a model can spend one on the wrong locked door (D3's
+- **Why:** the owner (Nov 9): the route always has enough keys, but a model can spend one on the wrong locked door (D3's
   0x4b) and strand the run; shops on later routes need rupees. "Well designed, not ad hoc": one mechanism, not a
   copy per item. Bomb behaviour is unchanged.
-- **Decisions made while Lee was away:** the key need asks the route step (`GameCompletion::route_edge_exit`, the
+- **Decisions made while the owner was away:** the key need asks the route step (`GameCompletion::route_edge_exit`, the
   step the objective will pick for the state), so off-route rooms get no key; the magic key needs none; a door whose
   opening animation runs (`$54` 6–8, `$55` bit) is no longer locked, since the game spends the key a few frames
   before the tiles change (measured on 1:0x33: without it a second key was granted and taken back on leaving); the
@@ -810,7 +810,7 @@ entry below and `crates/zcore/UPSTREAM.md`.
 ## 2026-11-09 — d2first goes on to Dungeon 3 and ends on its triforce; route-step treasure rules; bomb-wall exits
 
 - **What:** after the D1 triforce (which warps Link to 0:0x37) the route walks 0x37 E, 0x38 S, 0x48 S, 0x58 W, 0x57
-  W, 0x56 W, 0x55 S, 0x65 W, 0x64 W, 0x63 S, 0x73 E to 0x74 and into Dungeon 3, then Lee's directions (`W N N W W N
+  W, 0x56 W, 0x55 S, 0x65 W, 0x64 W, 0x63 S, 0x73 E to 0x74 and into Dungeon 3, then the owner's directions (`W N N W W N
   S S`, the raft cellar 3:0x0f, `N E E N E E` with 0x4c's E wall bombed, N): steps 68–97, ending on the D3 triforce
   (`chain::Route::final_triforce` = 3). routes.yaml steps take `treasure: skip` or `treasure: {if_bombs_below: N}`
   (`game_map::TreasureRule`, read live by `GameCompletion::dungeon_room_objective`; absent = take the treasure, as
@@ -823,10 +823,10 @@ entry below and `crates/zcore/UPSTREAM.md`.
   `ow-leever` (0:0x48), `zol` (3:0x7c, 7b, 6b, 49, 4b, 3d), `darknut` (3:0x5b, 59, 69), `boss-manhandla` (3:0x4d);
   `trap-room` gains 3:0x5a and 3:0x4c (and bombs, for 0x4c), `equipment-room` the raft cellar, the overworld families
   0x57/0x64 (ow-octorok), 0x55/0x56/0x65 (ow-zora), 0x63/0x73 (ow-moblin), 0x74 (ow-tektite).
-- **Why:** Lee (Nov 9): route on to D3 after D1 and beat it; skip the Darknut room above the raft cellar's treasure;
+- **Why:** the owner (Nov 9): route on to D3 after D1 and beat it; skip the Darknut room above the raft cellar's treasure;
   take the central Darknut room's bombs only on its last visit and only below 4 bombs (D4 needs 2); Manhandla with
   bombs. The default stays "take the room's treasure", so every earlier room behaves as before.
-- **Decisions made while Lee was away:**
+- **Decisions made while the owner was away:**
   - The overworld walk: every shortest way (11 rooms) passes 0x48 (0x37 leads only E, 0x38 only S toward D3) and
     0x64 (its potion shop's mouth is open: walking in is a wrong exit). 0x55's W third is cut off from its E part
     (tile columns 10–13 impassable in every row; found when Go-Explore stalled there), which rules out the ways
@@ -855,10 +855,10 @@ entry below and `crates/zcore/UPSTREAM.md`.
 - **What:** a Rust CPU forward pass of the policy (`crates/policy`, current model config only), run by the pool's
   workers: training collects a whole rollout per call, eval/chains/the watch player use the same in-pool policy.
   The learner, GUIs and scripting stay in Python (`docs/all-rust.md`). The look-ahead's credit settles off the step
-  loop on idle workers (Lee's continuation queue) once the endings use observed effects only. Plays can be stored
+  loop on idle workers (the owner's continuation queue) once the endings use observed effects only. Plays can be stored
   as seed + actions and replayed with the probabilities shown at the time. Search (better-play §2) is a training
   job only; the agent always acts from the policy. Design: `docs/rust-actor.md`.
-- **Why (Lee):** one call per rollout instead of per step; search needs many inferences per real step; plays must
+- **Why (the owner):** one call per rollout instead of per step; search needs many inferences per real step; plays must
   replay exactly (play-zelda recording results and actions, not observations).
 - **Determinism:** Rust ↔ Rust bit for bit (batch- and thread-invariant), Python ↔ Rust within tolerance; episodes
   and plays reproduce, whole training runs don't (non-goal). The learner recomputes `logp_old`/values itself.
@@ -878,9 +878,9 @@ entry below and `crates/zcore/UPSTREAM.md`.
     and base64 actions. A replay recomputes every decision's log-prob, entropy and value bit for bit.
   - Endings, linger, the chain stall counter and visit metrics count observed effects only (`Change.observed`); the
     look-ahead feeds rewards and nothing else, so evaluation and chains skip it.
-- **Why:** one way to act (Lee: inference in Rust, no per-step round trips); plays that replay exactly; the
+- **Why:** one way to act (the owner: inference in Rust, no per-step round trips); plays that replay exactly; the
   look-ahead costs 12–35% of step time in beam/bomb rooms under attack-heavy play and only rewards need it.
-- **Deferred look-ahead in training (Lee, Nov 9):** "profile first, then decide". Moving the training look-ahead
+- **Deferred look-ahead in training (the owner, Nov 9):** "profile first, then decide". Moving the training look-ahead
   off the step loop needs a deferred critic, separate emulators and helper threads; it is decided from the VII.7
   profile (`docs/rust-actor.md` item 4).
 - **Evidence:** tests: thread-invariant rollouts and plays, replays bit for bit (also in a fresh process), the same
@@ -891,7 +891,7 @@ entry below and `crates/zcore/UPSTREAM.md`.
 - **What:** `PPO.train` runs the next rollout during the PPO update, with the pre-update weights (one update of
   policy lag). The learner recomputes `logp_old` with its current network (the acting policy's log-prob made the KL
   early stop spend its budget on the lag). The policy forward got AVX kernels (0.77 → 0.31 ms/observation).
-- **Why (Lee):** a ~1.5× estimate; "yes, overlap rollout with ppo update. It only becomes a question sub-20%
+- **Why (the owner):** a ~1.5× estimate; "yes, overlap rollout with ppo update. It only becomes a question sub-20%
   speedup. It only becomes iffy sub 15% speedup." Measured +20–45% (`docs/performance.md`, Nov 9).
 - **Deferred look-ahead (VII.5b), decided by that rule:** not built. It only fills idle worker time (the rollout
   barrier, 13–32% of a p16 rollout) with look-ahead work (12–35% of step time in beam/bomb rooms, little
@@ -903,7 +903,7 @@ entry below and `crates/zcore/UPSTREAM.md`.
 
 - **What:** the Rust CPU forward (`crates/policy`) is the only backend for training, evaluation, chains and the
   watch player.
-- **Why (Lee's rule: GPU better for both → GPU; for mass play only → both; CPU better for both → CPU):** the forward
+- **Why (the owner's rule: GPU better for both → GPU; for mass play only → both; CPU better for both → CPU):** the forward
   is ~10% of CPU in uncapped 128-game play (zcore 86%) and ~8% of rollout CPU in training, so a GPU could at most
   win that back, by making workers wait on cross-worker batches with a second set of numerics. 128 games at 60 fps
   use about a tenth of the machine. Evidence: `docs/rust-actor.md` "GPU vs CPU inference".
@@ -931,9 +931,9 @@ entry below and `crates/zcore/UPSTREAM.md`.
 - **Not kept** (round16.md §4–§6): entropy annealing, outcome fine-tuning, best-of-N, PLR, PPG, the exit-health
   weight, harvested handoff states, Gumbel expert iteration. The flags stay (all off by default).
 
-## 2026-11-10 — Review fix-up decisions (Lee)
+## 2026-11-10 — Review fix-up decisions (the owner)
 
-A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked through (round17.md). Lee's decisions:
+A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked through (round17.md). The owner's decisions:
 
 - **Retrain:** one full retrain of every family from scratch after all fixes; no continuation of current models.
 - **SIL:** on from the start of that retrain (`--sil-coeff 0.1` in every family).
@@ -994,7 +994,7 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   Against the old team on the fixed measurement code (B1): D2 89 → 100, after D2 34 → 92 (the 0x0a bounce is gone),
   from the start to D1 14 → 55 arrivals of 120; D1 115 → 80 is the one regression (round17.md §5).
 
-## 2026-11-11 — Versioning, power-on starts, TFREPLAY replays, headless play, the golden path (Lee)
+## 2026-11-11 — Versioning, power-on starts, TFREPLAY replays, headless play, the golden path (the owner)
 
 - **Version `1.3.1.0`** (`VERSION`; MAJOR.dungeons.model-breaking.revision; AGENTS.md "Versioning"). Every run
   dir carries the version that saved it; a model whose first three numbers differ from the code's (or with no
@@ -1007,7 +1007,7 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   idle; a run is the same with or without them.
 - **New replays replace both old recorders** (the `--plays` action files and the pool's `movie` event):
   `TFREPLAY`, one binary file per run that replays bit for bit on the emulator alone, with its own integer
-  version (0). `TFMOVIE` stays for the scripted corpus and the goldens. Chosen by Lee: the decision stream is the
+  version (0). `TFMOVIE` stays for the scripted corpus and the goldens. Chosen by the owner: the decision stream is the
   whole factored joint (91 × f32); state blobs are zstd `TFZSTATE` files (a keyframe is a loadable state);
   streams are not compressed; chain rewards are scored by the code training uses; `play-zelda.py` gets flags
   only (no golden mode, no playback UI).
@@ -1016,10 +1016,10 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
 - **Golden path:** games race to the next triforce; the first to stand on the overworld with it is the
   checkpoint every game restarts from. The games of a segment differ only by policy sampling: no memory write
   and no inserted frame at a checkpoint.
-- **The action executor keeps writing memory for attacks** (Lee, Nov 11): Link's facing (`$98`) and the selected
+- **The action executor keeps writing memory for attacks** (the owner, Nov 11): Link's facing (`$98`) and the selected
   B item (`$656`) are set directly instead of through the d-pad and the inventory screen, and a replay records
   those writes as edits (184–217 in a golden path). Runs made of controller inputs alone are not a goal.
-- **Decided while building (not Lee's; say so if they should change):**
+- **Decided while building (not the owner's; say so if they should change):**
   - `--stop-at step:N` ends a run only when the step's room is entered by the route's own exit. A wrong exit can
     land in that room with the step's progress (measured: 8 of the 15 one-move segments from shipped states that
     reach their next step's room do it through a wrong exit, e.g. leaving Dungeon 1's
@@ -1030,9 +1030,9 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   - `replay_stitch` renumbers reward terms instead of requiring equal term tables (terms are numbered by first
     use, so two segments rarely agree).
 
-## 2026-11-11 — play-zelda plays replays from queues, not live games (Lee)
+## 2026-11-11 — play-zelda plays replays from queues, not live games (the owner)
 
-- **What Lee asked for:** the GUI driven by queues of replays that a background thread in Rust fills: `success`,
+- **What the owner asked for:** the GUI driven by queues of replays that a background thread in Rust fills: `success`,
   `stuck`, `died`, `random` (a copy of any run, so it is not skewed by what the others take) and `best` (a heap
   like the old "best on screen": furthest, most hearts, shortest), about 32 entries each; taking a `best` run
   queues `parallelism × missing` runs and keeps the best of them; the simulations pause once every queue is
@@ -1069,21 +1069,21 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
 - **What:** a confirmed early stop also needs the hearts lost per episode in its confirmation evaluation to have
   stopped improving (`--stop-hearts-delta 0.02`, `--stop-hearts-gap 50`, both defaults; 0 turns it off). The team
   was continued under that rule and promoted where better (round18.md §2); chains are measured with 1000 runs per
-  segment (Lee). `triforce.train --device` defaults to `cuda`; CPU training is opt-in (`--device cpu`, Lee).
+  segment (the owner). `triforce.train --device` defaults to `cuda`; CPU training is opt-in (`--device cpu`, the owner).
 - **Why:** stalfos-keese-gel stopped after 4 minutes at a confirmed 99% success while still losing hearts it went
   on to stop losing (+0.10 → −0.07 per episode), and that cost Dungeon 1 115 → 80 of 120 in chains. Success alone
   can't see it. With the rule and the continuations every chain segment is back at or above the previous team.
   120-run chains have ±8-point intervals; the differences that matter here are a few points.
 
-## 2026-11-11 — Sound, videos and the controller overlay (Lee)
+## 2026-11-11 — Sound, videos and the controller overlay (the owner)
 
-- **What Lee asked for:** sound when watching replays: in `play-zelda.py` one cell is heard, the top left one
+- **What the owner asked for:** sound when watching replays: in `play-zelda.py` one cell is heard, the top left one
   at first, with a yellow frame; `S` turns sound off and on; a click on another cell moves the sound there.
   `create-video.py`: a grid (1x1 by default) and a list of replays, at least one per cell, rendered as
   `play-zelda.py` shows them but finite, the last screens held until every replay is done; `--sound` adds the
   sound of the middle cell, or of the top left one when the grid has no middle. A controller overlay in the top
   right of the picture, over `-LIFE-`: a translucent grey pad whose buttons light up opaque white while held.
-- **Lee's answers and later instructions:** `S` is sound and the success queue moves to `W`. Extra replays of a
+- **The owner's answers and later instructions:** `S` is sound and the success queue moves to `W`. Extra replays of a
   video play next in whichever cell is free. Sound is muted unless the cells play at the console's speed. The
   heard cell is framed in videos too. The controller is off unless `--controller`. No frame around a lone cell
   (1x1), in the viewer or a video; while sound is muted or off the frame is hidden. The strip under a cell
@@ -1111,9 +1111,9 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
     exact frame rate, AAC 192 kbit mono 48 kHz; the container follows the file name; default scale 2 as in the
     viewer; a result is held 3 s as in the viewer, the last one too, then the video ends.
 
-## 2026-11-11 — The endless 0x4c/0x4d bounce: off-route objectives and a bounce limit (Lee)
+## 2026-11-11 — The endless 0x4c/0x4d bounce: off-route objectives and a bounce limit (the owner)
 
-- **What Lee asked for:** walking back and forward once or twice is fine; the infinite bounce is not.
+- **What the owner asked for:** walking back and forward once or twice is fine; the infinite bounce is not.
 - **Cause:** off the route, when no shortest way to the target left through a route exit, the objective took the
   route's exits of every step in the room, whatever Link held. A run that left 0x77 without the sword was led
   along the whole route to 0x4d, then sent W there and E back from 0x4c, every crossing a correct exit (backlog,
@@ -1124,14 +1124,14 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   judged; `retreat` crossings don't count (their own cap stays 3). REV bump to `1.3.1.1`: off-route objectives
   (rewards, the target observation) change; models stay loadable.
 
-## 2026-11-11 — Dungeon 4 scouted: map, the route d2first-d4, start states; no training (Lee)
+## 2026-11-11 — Dungeon 4 scouted: map, the route d2first-d4, start states; no training (the owner)
 
-- **What Lee asked for:** map Dungeon 4; the route is a direct path to the ladder; the room with the stairs to the
+- **What the owner asked for:** map Dungeon 4; the route is a direct path to the ladder; the room with the stairs to the
   ladder is the "Breakfast Room", and the yaml and its parser allow "fun" room names; from the Breakfast Room all
   the way west back to the Vire room already crossed, north 1, east 1, bomb N into the rupee room, bomb E into the
   Vire room, then E to the boss. Mapping, save states and the rest of the scouting work only: no training yet.
 - **Done** (`docs/routes/d4.md`): the 20 rooms and the ladder cellar in game.yaml (ROM tables, each room loaded in
-  the emulator); Lee's directions match the layout and were walked end to end; `name: Breakfast Room` on 4:0x32
+  the emulator); the owner's directions match the layout and were walked end to end; `name: Breakfast Room` on 4:0x32
   (`GameRoom::name`); the way there by raft; the route; chains 0–2 of start states for every new step.
 - **Choices made while building (say so if they should change):**
   - **A second route, `d2first-d4`, not a longer `d2first`.** routes.yaml gained `{extends: d2first, steps: [...]}`.
@@ -1157,9 +1157,9 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   - **Version:** `1.3.1.2` (the objective and the explorer changed; trained models are unaffected). MINOR stays 3:
     the route everything plays still ends at three dungeons.
 
-## 2026-11-11 — Bombs as a weapon, a bomb reserve and the 10th kill's forced bomb drop (Lee; version 1.3.2.0)
+## 2026-11-11 — Bombs as a weapon, a bomb reserve and the 10th kill's forced bomb drop (the owner; version 1.3.2.0)
 
-- **What Lee asked for** (his list was suggestions, not rules): bombs where enemies take more than 3 hits (goriya,
+- **What the owner asked for** (his list was suggestions, not rules): bombs where enemies take more than 3 hits (goriya,
   darknut), moldorm too, not Aquamentus, not on the overworld; save bombs for what the route needs (D2: none, the 4
   before Dodongo are enough; D1: none; D3: 3 for the bomb wall, 2 for Manhandla, and the central Darknut room's bombs
   taken at 4 or fewer); machinery for "from here to there never drop below X"; train every family to bomb the 10th
@@ -1181,30 +1181,30 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
     `fairy_next` (a fairy at `$627` = 16 overrides an armed drop). COMPAT bump to 1.3.2.0: no older model loads.
   - Rewards: `penalty-bomb-used` (−0.25, unchanged) is the miss cost, `reward-bomb-hit` (+0.5 per credited hit)
     unchanged; new `reward-armed-bomb-drop` (+0.75) on the step the arming kill happens; `reward-gained-bombs` (+0.5)
-    pays the pickup. No penalty for a 10th kill made without a bomb (Lee: they may choose not to).
+    pays the pickup. No penalty for a 10th kill made without a bomb (the owner: they may choose not to).
   - Training resets draw `bombs: [0, 8]` and `help_count: [0, 9]` (a damage-free streak) in every family.
   - Every session looks ahead for bombs (`zelda::LookAhead::Bombs` in evaluation, chains and exploration; `All` in
     training), so bomb hits are counted everywhere (`zelda::bombs::BombStats`).
-  - The early stop waits for bombs too (Lee): a confirmed check also needs the bomb value per episode in its
+  - The early stop waits for bombs too (the owner): a confirmed check also needs the bomb value per episode in its
     confirmation evaluation (the bomb reward terms: 0.5 per hit, 0.75 per drop armed, 0.5 per pickup, −0.25 per
     bomb; `train.BOMB_VALUE`) to have stopped improving, like the hearts lost: not above every earlier check's by
     more than max(`--stop-bombs-delta` 0.05, 2 SE). `--stop-hearts-gap` became `--stop-check-gap` (both rules).
 - **Checked:** the ASM (`asm:Damage_KillMonster`, `asm:Drop_SetUpItem`) and the emulator: a bomb kill on the 9th→10th
   damage-free kill sets `$51` and the next drop is a bombs item (test
-  `a_bomb_on_the_tenth_kill_arms_a_forced_bomb_drop`). Lee's Darknut claim holds and is broader: the front-shield
+  `a_bomb_on_the_tenth_kill_arms_a_forced_bomb_drop`). The owner's Darknut claim holds and is broader: the front-shield
   check (`asm:Damage_HandleWeaponHit`) compares only directions, so a bomb never hurts a Darknut facing opposite
   to Link's facing when he placed it, wherever it stands (measured over 6 seeds in 3:0x5b: 434 such cases, 0 hits;
   951 of 1478 others hit). No special handling: the observation has each Darknut's direction.
 
-## 2026-11-12 — Dungeon 4 joins d2first: the ladder, Gleeok's heads, uncounted kills (Lee)
+## 2026-11-12 — Dungeon 4 joins d2first: the ladder, Gleeok's heads, uncounted kills (the owner)
 
-- **What Lee asked for:** finish Dungeon 4: merge it into the one route (delete `d2first-d4`), train its families,
+- **What the owner asked for:** finish Dungeon 4: merge it into the one route (delete `d2first-d4`), train its families,
   measure them in single rooms and in chains, promote. Vires may be bombed (0x31 and 0x12 are good places, a Vire
   killed outright can drop bombs; in 0x61 the model should learn to walk past). Take the keys of 0x51 and 0x40
   (they lie on the floor from the start). Families stay as scouted (`vire`, `like-like`, `ow-peahat`,
   `boss-gleeok`; the rupee room 0x11 stays in `trap-room`).
 - **Route:** the 25 steps follow the D3 triforce in `d2first` (steps 98–122); the route ends on the D4 triforce;
-  `bomb_reserve: 2` from 4:0x71 (the walls of 0x21 and 0x11; Lee named no number). The states moved from
+  `bomb_reserve: 2` from 4:0x71 (the walls of 0x21 and 0x11; the owner named no number). The states moved from
   `triforce/states/d4/` into `triforce/states/` (manifest route `d2first`). `extends:` stays for later scouting.
 - **What the scouting got wrong** (zelda-asm `levels/level-4.md`): the route does need the ladder (0x30's water row
   before its N door, step 116), and the env had no idea water can be crossed. Gleeok's heads were invisible (slots
@@ -1301,9 +1301,9 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   takes him to the N door in 318 frames against 424 for the plain way (monsters cleared). The experiment route
   `clips-gauntlet` still draws both targets and changes no family's resets (`crates/env/tests/clips.rs`).
 
-## 2026-11-12 — Round 21: one change set, one retrain (Lee)
+## 2026-11-12 — Round 21: one change set, one retrain (the owner)
 
-- **What Lee decided** (Nov 12, final for the round): round 21 becomes one change set followed by one full retrain
+- **What the owner decided** (Nov 12, final for the round): round 21 becomes one change set followed by one full retrain
   of every family, under one COMPAT bump over `main`'s 1.4.0.0 (1.4.1.0; action schema 2, observation schema 4).
   1. **Clips:** the CLIP action kind is the design; the `long`/`edge` MOVE triggers and `walk` shaping go; each
      specialist keeps an on/off switch (next entry).
@@ -1323,7 +1323,7 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
 - **The round's document:** `docs/experiments/round21.md` (the experiments: `round21-gauntlet.md`,
   `round21-trap-room.md`, `round21-vire-50.md`; the cleanup's gate: `round21-gate.md`).
 
-## 2026-11-12 — One clip design (the CLIP kind); the ladder clip; Dungeon 4's shortcut through 0x21 (Lee)
+## 2026-11-12 — One clip design (the CLIP kind); the ladder clip; Dungeon 4's shortcut through 0x21 (the owner)
 
 - **The design: the CLIP action kind**, legal only where the skip is available (`zelda::clips::skip_target`), the path
   search's skips as jumps (PBRS pays the whole wavefront difference). A specialist's YAML keeps one switch, `clips:
@@ -1350,7 +1350,7 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   down) squares wide stops the plain ladder, with land beyond; the macro relays a second ladder where needed and puts
   the last one away. The MOVE mask models a laid ladder. Every offer in Dungeon 4 completes in the game (0x21, 0x20,
   a few in 0x31); hits abort it and Link can always go on. The overworld ladder clip (0x5f, 0x4f) is not built.
-- **The route shortcut** (Lee): `d2first` goes 0x32 → 0x31 (E → N, its locked door, key 2) → 0x21 (S → N: onto the
+- **The route shortcut** (the owner): `d2first` goes 0x32 → 0x31 (E → N, its locked door, key 2) → 0x21 (S → N: onto the
   island, `CLIP N` to Y `$55`, a step down, BOMB N from (`$78`, `$5D`); from `$55` the bomb is spent and the wall
   stays shut) → 0x11, instead of 0x31 W → 0x30 N → 0x20 E → 0x21 from W. Two room entries fewer, the same 2 keys
   (0x30 E, 0x31 N) and 2 bombs (`bomb_reserve: 2`). The route step by actions: 419 frames, 10 actions, the scroll into
@@ -1405,7 +1405,7 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
 ## 2026-11-12 — Attacks by buttons: no facing or selected-item writes (round 21, movement cleanup)
 
 - **What changed:** the executor no longer writes Link's facing (`$98`) to aim an attack nor the selected B item
-  (`$656`) to use one (backlog "Fewer writes to memory", Lee, Nov 12; round 21 decision 3, planned as round 22 and
+  (`$656`) to use one (backlog "Fewer writes to memory", the owner, Nov 12; round 21 decision 3, planned as round 22 and
   folded in). An attack is the button sequence a player presses (`crates/zelda/src/attack.rs`, `submenu.rs`;
   architecture.md "Attacks by buttons"), and the mask offers exactly the strikes those buttons can make from where
   Link stands (`GameView::attack_directions(kind)` = `attack::plan`); the round 20 position rule (Link_BorderBounds
@@ -1440,7 +1440,7 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   in a dungeon / 65 overworld to the first active frame, one cursor step per frame, START, 59 frames out): 123 + steps
   frames in a dungeon, 124 + steps overworld (1 step between boomerang and bombs, 2 to the arrow). The game is paused
   throughout (only the random numbers, the frame counter and sound run): nothing moves and Link can't be hit. So those
-  frames don't count against the action (Lee's decision 3, entry "Round 21: one change set"): `Change.menu_frames`,
+  frames don't count against the action (the owner's decision 3, entry "Round 21: one change set"): `Change.menu_frames`,
   outside `Change.frames`. Discounting (`StepInfo.frames`, the pool's rollout rows, `rollout_buffer.py`), the frame
   penalty, the observation's history, heart timers and linger don't see them; every total of frames played does
   (`episode_frames`, visits, chain rooms and runs, the pool's emulated frames, replays;
@@ -1578,7 +1578,7 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   lower their own CPU priority (`--nice`, `$TRIFORCE_NICE`; children inherit it); play and replay tools keep
   normal priority.
 
-## 2026-11-13 — Natural RNG at every start; spawn and fresh-room writes the game can hold (round 22, Lee)
+## 2026-11-13 — Natural RNG at every start; spawn and fresh-room writes the game can hold (round 22, the owner)
 
 - **What:** a start from a saved state (training resets, evaluation, a chain's start state), a chain checkpoint
   with `redraw_rng` and a search future (`perturb_rng`) write the RNG register (`$18-$24`) as a natural state: the
@@ -1588,7 +1588,7 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   runs (it already did), so the entry frames, spawn clouds and first monster decisions run on natural values. The
   edge spawn cell is drawn from the 41 values the game holds (never the corners `$E0`/`$4F`) in every level, and a
   fresh room clears only its saved kills, no longer writing `$FF` into the room history.
-- **Why:** Lee (Nov 13): "Set it with a natural state, including that second and a half where they are spawning
+- **Why:** the owner (Nov 13): "Set it with a natural state, including that second and a half where they are spawning
   ... make it play for real with RNG." A corner edge cell sends asm:EdgeSpawn_FindNextCell off the ring (from `$E0`:
   `$F0`, `$00`, ..., `$3F`, ...): a monster placed off the screen or a search that never ends; 120 of the 364
   stored start states hold such a cell, left by the old draw.
@@ -1604,9 +1604,9 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   state, act modes; old → new): goriya 95.2% → 95.8%, −0.15 → −0.19 hearts; ow-moblin 99.0% → 98.8%, −0.07 →
   −0.07; boss-gleeok 99.7% → 99.7%, +0.29 → +0.11: every difference within two standard errors.
 
-## 2026-11-13 — The run-time clips switch and route stretches (round 22, Lee)
+## 2026-11-13 — The run-time clips switch and route stretches (round 22, the owner)
 
-- **Context:** Lee wants to turn clips off at any moment ("rest of the run no clips") and to run with and without
+- **Context:** the owner wants to turn clips off at any moment ("rest of the run no clips") and to run with and without
   them; where the clip way and the plain way go through different rooms the route needs both.
 - **Decision:** one run-time switch `clips_allowed` (default on) beside the family's `clips: true`: CLIP is offered
   only when both are on (`Session::set_clips_allowed`, `GameCompletion::set_clips_allowed`,
@@ -1667,9 +1667,9 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
 - **Evidence:** from 0x76's E edge into Dungeon 3 (monsters removed) takes 51 actions and 779 frames; the CLIP
   itself takes 130.
 
-## 2026-11-13 — Clips in training, evaluation and watching: the mix, the combined figure, the key (round 22, Lee)
+## 2026-11-13 — Clips in training, evaluation and watching: the mix, the combined figure, the key (round 22, the owner)
 
-- **Context:** Lee: "The models need to be trained with clips enabled, and also with the clip action masked so it
+- **Context:** the owner: "The models need to be trained with clips enabled, and also with the clip action masked so it
   has to traverse as normal. Keep track of stats of rooms on how well the model does with and without clipping",
   and "imagine I'm watching live, not a replay, and want to just say: ok, rest of the run no clips". The switch
   itself is the entry above.
@@ -1677,7 +1677,7 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   (`env::config::ClipsConfig`, `DEFAULT_CLIPS_OFF_SHARE`): each episode draws its switch from the env's seeded
   generator, off with probability `off_share`, unless its start state fixes it (a room the route enters on one way
   only) or `Env.set_clips_allowed` does; curriculum starts and exploration keep it on (their tracks were explored
-  with it on). Half and half because a model that never trains the plain way can't take it when Lee turns clips
+  with it on). Half and half because a model that never trains the plain way can't take it when the owner turns clips
   off mid-run, and the clip way still needs its practice; `off_share` is there to move it by experiment. Metrics
   `clips/enabled_share` and `clips/on|off/{episodes, success_rate, health_change, hearts_at_exit}`; the early stop
   counts `<state>:clips-off` as a start state of its own, so both switch states must clear the bar.
@@ -1699,7 +1699,7 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   (`test_a_live_cell_plays_while_watched_takes_the_clips_key_and_files_its_runs`); offscreen with the round 21 team
   from `4_31e_0`: `c` in 0x31 and the live run turned W into 0x30 ("no clips from L4 0x31").
 
-## 2026-11-13 — Round 22 route: 0x67's secret, both ways to Dungeon 3, 0x5b E → 0x5c → 0x4c, 0x01's key (Lee)
+## 2026-11-13 — Round 22 route: 0x67's secret, both ways to Dungeon 3, 0x5b E → 0x5c → 0x4c, 0x01's key (the owner)
 
 - **What** (`triforce/routes.yaml` `d2first`, `docs/routes/overworld.md`, `d3.md`, `d4.md`): after Dungeon 1 the
   route goes S from 0x58 to 0x68 and 0x67, bombs 0x67's rock wall and takes the secret cave's 30 rupees (`waypoint:
@@ -1710,14 +1710,14 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   goes N from 0x11 (its N bomb wall) into 0x01 (its key, on the water: the ladder), E into 0x02, S into 0x12 (from
   N). Steps: 0x58 S is 71, the cave 74, the clip way 75–79, the plain way 80–86, Dungeon 3 87–104, Dungeon 4's
   entrance 112, 0x11 128, 0x01 129, 0x02 130, 0x12 131, the end 133.
-- **Lee's words and the lead's reading:** "0x11 north to 0x10 -> 0x20 -> 0x12" is read as 0x11 N → 0x01 → 0x02 →
+- **The owner's words and the lead's reading:** "0x11 north to 0x10 -> 0x20 -> 0x12" is read as 0x11 N → 0x01 → 0x02 →
   0x12: 0x10 and 0x20 are not on a way to 0x12 and hold no key; north of 0x11 is 0x01, the key's room. The overworld
   "wrap" is an E-edge wrap in 0x75 followed by Left (decisions "The wrap exit"); the plain way is not a straight
   line (0x65's one ford, 0x63 S to 0x73).
 - **Bombs:** `bomb_reserve: 6` from Dungeon 3's entrance (one bomb per wall, a spare each, two for Manhandla; was 5
   for one wall); 0x5b's last visit takes its bombs below 6 (`if_bombs_below: 6`), and 0x5b is `requires_bombs`
   (darknut bombs `free`). 0x67's wall takes the bomb Link used to bring into Dungeon 3. Dungeon 4 keeps 2.
-- **BOMB only at the wall** (Lee: "Try to fix the 0x21 bombs thing"): a `required` family (ow-tektite, ow-octorok,
+- **BOMB only at the wall** (the owner: "Try to fix the 0x21 bombs thing"): a `required` family (ow-tektite, ow-octorok,
   trap-room, stalfos-keese-gel) in a `requires_bombs` room is offered BOMB only where the bomb lands within the game's
   reach of the wall the objective leaves through (16 px ahead after any turn; a dungeon wall within `$18` px of its
   hotspot on both axes, a rock wall within `$10`), else only on the 10th damage-free kill; `free` families are
@@ -1861,7 +1861,7 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
 ## 2026-11-14 — 0x5b's last pass: fight first whatever Link holds (round 23)
 
 - **What:** `d2first` step 100 (3:0x5b W → E) drops `treasure: {if_bombs_below: 6}`: the objective kills the three
-  Darknuts, takes their bombs and then leaves through the E bomb wall, whatever Link holds. Lee's Nov 9 plan took the
+  Darknuts, takes their bombs and then leaves through the E bomb wall, whatever Link holds. The owner's Nov 9 plan took the
   bombs only below 4 (round 22: below 6, the reserve). `TreasureRule::IfBombsBelow` stays in the route language; no
   step uses it.
 - **Why** (r72 problem 1: 145 of 404 full-route visits died there): the rule is read live, so at 6 bombs the
@@ -1901,34 +1901,34 @@ A whole-repo review (`target/review-ledger.md`, 192 findings) is being worked th
   what is watched, and per-family tuning lost (the best mode per family, 24.7%).
 - **Version:** 1.4.1.2 (the round's REV): models load unchanged.
 
-## 2026-11-13 — The rest of the first quest: a draft route, drawn on the map before anything is built (Lee)
+## 2026-11-13 — The rest of the first quest: a draft route, drawn on the map before anything is built (the owner)
 
-- **What:** `triforce/draft_routes.yaml` `first-quest` extends `d2first` with Lee's overworld legs and a path
+- **What:** `triforce/draft_routes.yaml` `first-quest` extends `d2first` with the owner's overworld legs and a path
   through Dungeons 5, 7, 6, 8 and 9 to Zelda (`docs/routes/first-quest.md`). A draft is read only by
   `zelda-map.py`; `routes.yaml`, the objective, the chain runner and training are untouched, and no version number
   moves. `game.yaml` got every room of levels 5-9 from the ROM (`scripts/level_rooms.py`), four overworld wrap
   exits, and `shutter: true` on shutter sides (for display).
-- **Lee's decisions:** the order 5, 7, the magic sword (after Dungeon 7's heart makes twelve), 6, 8, 9; the
+- **The owner's decisions:** the order 5, 7, the magic sword (after Dungeon 7's heart makes twelve), 6, 8, 9; the
   overworld legs room for room, with screen wraps (0x51, 0x60 round the world into 0x5f, 0x3e, 0x0c) and the
   recorder's whirlwind (0x0b to 0x45, 0x22 to 0x3c, 0x6d to 0x37); the heart containers of 0x5f, 0x2f and 0x47;
   arrows at 0x44 and food at 0x34; carried keys are used for the shorter dungeon ways; the red ring is taken in
   level 9; 0x17 is crossed with the ladder, not a wrap. "I think those routes are solvable for you without me
   needing to walk you through every room. I will make some adjustments then": the agent routes the dungeons and
   presents them on the map.
-- **The agent's choices, open to Lee's adjustment:** the shortest path through each level's room graph that takes
+- **The agent's choices, open to the owner's adjustment:** the shortest path through each level's room graph that takes
   what the game needs; without level 6's wand and level 8's book and magic key; level 9's three key doors paid with
   carried keys (6:0x2d's and 8:0x4c's keys are picked up for them); level 9's bombs from the Patra of 0x16.
 - **Why a draft and not a route:** a routes.yaml route needs every room tagged with a family that has a config,
   and its steps feed the objective; five dungeons with unbuilt mechanics (the recorder, food, the candle, shops,
-  the whirlwind) cannot meet that, and Lee wanted to see and correct the route first.
+  the whirlwind) cannot meet that, and the owner wanted to see and correct the route first.
 - **Evidence:** every draft step was walked in the emulator, one continuous game per dungeon and for the
   overworld, fights skipped (monsters put into the game's own death state), level 9 to the end of the game.
   `game.yaml`'s door kinds equal the level blocks in RAM for all 236 dungeon rooms
   (`tests/test_draft_routes.py`). The level documents carry the traces.
-- **Open:** `first-quest.md` "Open questions for Lee" (bombs, rupees, keys or the magic key, the overworld ladder
+- **Open:** `first-quest.md` "Open questions for the owner" (bombs, rupees, keys or the magic key, the overworld ladder
   clip, clips off on the wrap exits, rings).
 
-## 2026-11-14 — The first-quest draft, Lee's first review: bombs, keys, plain ways (Lee)
+## 2026-11-14 — The first-quest draft, the owner's first review: bombs, keys, plain ways (the owner)
 
 - **Bombs:** the speedrun route buys none. Room bombs on the way only: 5:0x65's Gibdo, 7:0x1b's Blue Goriyas
   (fought when the bag isn't full; not 7:0x0c's Dodongos), 9:0x16's Patra (no extra rooms for bombs); otherwise
@@ -2215,7 +2215,7 @@ Hills). Decided by the agent building it (the owner away):
   and network) are stamped 1.5.0.0 by `triforce stamp --force` (a different stamp is only overwritten with
   `--force`); other 1.4.2 runs need the same or `--allow-incompatible-models`.
 
-## 2026-11-15 — Trainings and evaluations wait their turn, two at a time (Lee)
+## 2026-11-15 — Trainings and evaluations wait their turn, two at a time (the owner)
 
 - **At most two trainings or evaluations run at once on the machine** (`$TRIFORCE_MAX_JOBS`, default 2): two side by
   side is a bit more efficient than one, more are not (a load average of 120 when they piled up). A third waits,
@@ -2248,10 +2248,10 @@ Hills). Decided by the agent building it (the owner away):
   Dungeon 4 49.7 → 60.2% clips on, 44.2 → 51.9% clips off (docs/routes/d3.md "Manhandla's drop"). It enters Dungeon 4
   with fewer bombs (3.64 against 4.15: sword kills arm no bomb drop).
 
-## 2026-11-15 — The line drains the fastest jobs first; an express place for short ones (Lee)
+## 2026-11-15 — The line drains the fastest jobs first; an express place for short ones (the owner)
 
 The first-come line (above) let long jobs hog it: a three-minute chain queued behind two waiting rounds waited for
-hours. Lee: "fast jobs run sooner than later ... the time waited check will EVENTUALLY bring them to the front."
+hours. The owner: "fast jobs run sooner than later ... the time waited check will EVENTUALLY bring them to the front."
 
 - **Every job estimates its run time.** It names its work in three coarse units (training steps asked for,
   evaluation episodes, chain route steps: runs x the steps from its start to its stop, so a full-route run counts ~9x
@@ -2262,7 +2262,7 @@ hours. Lee: "fast jobs run sooner than later ... the time waited check will EVEN
   Estimates are coarse and may be wrong (early stops, load, envs); the ordering only needs short vs long right, and
   the history corrects the rates.
 - **Why a score, `estimate - 0.5 x waited`.** Shortest-first alone starves long jobs; first-come alone lets them hog
-  the line. The score is Lee's rule: a short job goes first, and a long one gains half a second per second waited,
+  the line. The score is the owner's rule: a short job goes first, and a long one gains half a second per second waited,
   so it passes fresh short jobs after waiting about twice its own length. Long jobs may wait long; they always start.
 - **Why an express place.** Ordering the line does little when both places are held by hour-long trainings: the
   short job is first in line and still waits an hour. So one more place exists for a job estimated at most 10
@@ -2391,19 +2391,19 @@ round25.md §4 and §10 and in the backlog ("Left open by round 25").
 REV +1: reward terms, objective data, training options, the planner act mode and thirteen promoted runs. Nothing a
 loaded model reads changed, so COMPAT stays 0 and the Cargo workspace stays 1.5.0.
 
-## 2026-11-16 — The rest of the game: order, the planner, cheats, clips off, breaking models (Lee)
+## 2026-11-16 — The rest of the game: order, the planner, cheats, clips off, breaking models (the owner)
 
-Lee, Nov 16, after round 25: "After all of these are done, go for the rest. You beat d5. Now d7 d6 d8 d9. You have
+The owner, Nov 16, after round 25: "After all of these are done, go for the rest. You beat d5. Now d7 d6 d8 d9. You have
 the scouting runs for the route, to get the magic sword." And on its size: "It's going to be harder than you think";
 the plan is to come from deeply mining the disassembly and the level documents (`docs/routes/rest-of-game.md` and
-the documents it indexes), treated as a project nobody is sure can be finished. Asked before starting, Lee decided:
+the documents it indexes), treated as a project nobody is sure can be finished. Asked before starting, the owner decided:
 
 1. **The planner:** the honest planner runs beside the models (the entry above).
 2. **Order:** breadth first to Ganon. Each dungeon and leg gets rooms, states, families and a first trained team
    that completes its own segment at a working rate (about 30% or better), then the next; one optimisation round
    over the whole route after the first complete run.
 3. **Check-ins:** run through; a report, a tag and a push at the end of each dungeon; stop only for a decision that
-   is Lee's (route, cheats, rules).
+   is the owner's (route, cheats, rules).
 4. **Clips off:** built and measured, not tuned: every new stretch has its plain way in the route, states and
    tracks and a clips-off number in each report; no training effort on raising it until the game is finished with
    clips on.
@@ -2412,7 +2412,7 @@ the documents it indexes), treated as a project nobody is sure can be finished. 
 6. **Breaking models:** allowed when a family cannot be trained without it; converted where the models stay
    identical, otherwise every family retrained; reported with the COMPAT bump.
 
-The route's order stays Lee's of Nov 13: 5, 7, the magic sword, 6, 8, 9 (`docs/routes/first-quest.md`).
+The route's order stays the owner's of Nov 13: 5, 7, the magic sword, 6, 8, 9 (`docs/routes/first-quest.md`).
 
 ## 2026-11-16 — Schema 6: the one input change for Dungeon 7 to Ganon, every model converted (round 26, 1.5.1.0)
 
@@ -2508,10 +2508,10 @@ as built: `docs/architecture.md` "Observation".
   `in_line` against each shooter's own test and a Red Wizzrobe's `phase_time` with retries are code only until
   their rounds walk them.
 
-## 2026-11-17 — One line, one rule: the fallback for older code is gone (Lee)
+## 2026-11-17 — One line, one rule: the fallback for older code is gone (the owner)
 
 The machine was restarted on Nov 17 with every job stopped, so no process of the code from before the scored line
-was left. Lee: "make sure all worktrees including the main branch have the cooperative scheduling/queueing now, and
+was left. The owner: "make sure all worktrees including the main branch have the cooperative scheduling/queueing now, and
 no leftover 'in case the old version of the code' is running."
 
 - **Removed:** the first-come-first-served fallback while an entry without an estimate waits (`jobs.turn`'s
@@ -2547,9 +2547,9 @@ scouted the leg and Dungeon 5. Before any state was built it was merged into the
 - **No version bump:** no trained model reads the route's length; on steps 0-208 the chains play as before
   (round26.md §5).
 
-## 2026-11-17 — 7:0x1b is fought only at 4 bombs or fewer; clips off is not a concern (Lee)
+## 2026-11-17 — 7:0x1b is fought only at 4 bombs or fewer; clips off is not a concern (the owner)
 
-Lee, on the room the explorer could not clear: "as long as you bomb into it, that room IS clearable. You do so to
+The owner, on the room the explorer could not clear: "as long as you bomb into it, that room IS clearable. You do so to
 grab the bombs. Only grab bombs at 4 or less, otherwise traverse the room and get out asap." And: "Clips-off is not
 a problem. We might even drop it in the future."
 
@@ -2568,7 +2568,7 @@ a problem. We might even drop it in the future."
 
 ## 2026-11-17 — A granted bomb opens the wall and does nothing else; the reserve holds inside bomb-wall rooms (round 26)
 
-Lee's standing decision is that bombs a run lacks are cheated and counted, aim zero. The first 1000-run chain of
+The owner's standing decision is that bombs a run lacks are cheated and counted, aim zero. The first 1000-run chain of
 Dungeon 7 counted 7.7 cheated bombs a run. They were no need of the route: a `requires_bombs` room tops Link up to
 one bomb whenever he holds none, and the Nov 11 rule let a `free` family bomb anywhere in such a room whatever the
 reserve ("It doesn't apply in `requires_bombs` rooms"). goriya threw the granted bomb at a Goriya and was handed the
@@ -2582,7 +2582,7 @@ next (3.9 bombs a visit of 7:0x19 with none of its own); darknut did the same in
     a pickup the next bomb laid would still be the cheated one wherever it lands.
   - *The 10th kill* did let a grant be spent as a weapon (BOMB anywhere, a forced drop of four for one cheated bomb):
     with a granted bomb outstanding it no longer lifts the limit. With bombs of his own it stays as it was.
-  - *Dodongo's room 2:0x0e* is `requires_bombs` without a wall: there the granted bomb is the weapon (Lee, Nov 8),
+  - *Dodongo's room 2:0x0e* is `requires_bombs` without a wall: there the granted bomb is the weapon (the owner, Nov 8),
     unchanged. Manhandla's room grants none once Link is in (its only bomb wall is his way in).
 - **Rule B (replaces the Nov 11 sentence).** The reserve means the same inside a bomb-wall room as outside: a
   `free` family at or below it is kept to the route's wall there, the wall open or shut. A fight the bombs are kept
@@ -2622,27 +2622,27 @@ next (3.9 bombs a visit of 7:0x19 with none of its own); darknut did the same in
 - **Left as it is:** F173; `cheats::bomb_need` (a room keeps its need while any of its bomb walls is shut, also one
   the route never opens: 7:0x69's W, 4:0x11's E and W; the bomb in hand is unusable and taken back on leaving).
 
-## 2026-11-17 — Round 27's working answers: the magic sword and Dungeon 6 (the lead; Lee may overrule any of them)
+## 2026-11-17 — Round 27's working answers: the magic sword and Dungeon 6 (the lead; the owner may overrule any of them)
 
-`docs/routes/d6-walks.md` §10 ends with nine questions that are Lee's. Round 27's route vocabulary (the scouting
+`docs/routes/d6-walks.md` §10 ends with nine questions that are the owner's. Round 27's route vocabulary (the scouting
 route `d6`, `docs/routes/d6.md` §14) had to be built before he answered, so the lead gave each a **working answer**.
-They are not Lee's decisions: each is the cheapest thing to undo that the walks support, and each names what
+They are not the owner's decisions: each is the cheapest thing to undo that the walks support, and each names what
 changes if he says otherwise.
 
 1. **0x38 and 0x3a, and the 30% bar.** Keep the aim (a first team at about 30% on its segment, decision 2 of Nov
    16) and report honestly. The walks' best plays of the two rooms multiply to 20% from full hearts before any other
    room is counted, and the stretch's survival budget does not close (`docs/experiments/round27.md` §3): if the
-   first trained team stays under the bar, the report says so with the rooms' numbers, and the bar is Lee's to move.
+   first trained team stays under the bar, the report says so with the rooms' numbers, and the bar is the owner's to move.
 2. **Hidden positions for Red Wizzrobes.** The wizzrobe family trains on `obs.hidden_positions: ram` (today's
    default). The walk shows `ram`, `last_seen` and `zero` tell a model the same about where a Red will appear
    (nothing: the spot is drawn on the frame it starts to fade in). The question stays open for Ganon, whose hidden
    position is live in RAM.
 3. **The phase counter.** `phase` and `phase_time` stay (schema 6): a Red's frames to its shot are what a player
-   reads from the fade. Removing them would be a second model-breaking change, which Lee ruled out.
+   reads from the fade. Removing them would be a second model-breaking change, which the owner ruled out.
 4. **Bombs in Dungeon 6.** `required` at 0x28's door spot (the room is `requires_bombs`; BOMB only in reach of its
    E wall) and `tenth` everywhere else for the wizzrobe family; no counted cheats for bombs as weapons. vire keeps
    `free`, held by the route's reserve (2 until 0x28, 1 after: Link holds exactly the reserve, so only a dropped
-   bomb is free). If Lee prefers `free` with counted cheats, it is one line of the family's yaml.
+   bomb is free). If the owner prefers `free` with counted cheats, it is one line of the family's yaml.
 5. **The doorways into 0x18 and 0x3c, and 0x29's key door.** Masked: game.yaml `keep_out: true` on 6:0x28 N, 6:0x29
    N and 6:0x2c S; no MOVE into them is offered while the route does not leave through them, and a MOVE toward one
    ends at its mouth. By the precedent that a mask offers only what the route step uses (the BOMB mask of `required`
@@ -2661,11 +2661,11 @@ changes if he says otherwise.
 9. **ow-lynel's 0x50.** Retrained for the corridor N from both entries (the wrap's E and the plain way's S), with
    0x60 E → N, 0x32 and 0x22; the clip way keeps its own 0x50 step. Neither way is played today (0 of 40).
 
-## 2026-11-17 — Round 28's working answers: the leg to Dungeon 8 and Dungeon 8 (the lead; Lee may overrule any of them)
+## 2026-11-17 — Round 28's working answers: the leg to Dungeon 8 and Dungeon 8 (the lead; the owner may overrule any of them)
 
-`docs/routes/d8-walks.md` §10 ends with nine questions that are Lee's. Round 28's route vocabulary (the scouting
+`docs/routes/d8-walks.md` §10 ends with nine questions that are the owner's. Round 28's route vocabulary (the scouting
 route `d8`, `docs/routes/d8.md` §15) had to be built before he answered, so the lead gave each a **working answer**,
-as round 27 did. They are not Lee's decisions: each is the cheapest thing to undo that the walks support, and each
+as round 27 did. They are not the owner's decisions: each is the cheapest thing to undo that the walks support, and each
 names what changes if he says otherwise.
 
 1. **The leg.** Out of Dungeon 6 the recorder twice from the spot the game sets Link down on in 0x22 (the whirlwind
@@ -2687,7 +2687,7 @@ names what changes if he says otherwise.
    step: the file's bytes are in every run's data stamp, which is why the walk left it alone, and a vocabulary step
    changes the file anyway.
 4. **Bombs.** BOMB in 0x6e and 0x4c only at their walls (both rooms `requires_bombs`, both played by the BOMB mask of
-   `required`). 0x3f's four bombs by Lee's rule for 7:0x1b (Nov 17: a room is fought for its bombs only at 4 bombs
+   `required`). 0x3f's four bombs by the owner's rule for 7:0x1b (Nov 17: a room is fought for its bombs only at 4 bombs
    or fewer, else crossed): `treasure: {if_bombs_below: 5}`. A run arrives there with 0 (one bomb in, 0x6e's wall),
    so the fight is the usual case, and its bombs pay 0x4c's wall and 0:0x05's rock wall on the way to Dungeon 9; a
    run that cannot win it and leaves by the stairs has 0x4c's bomb cheated and counted. Reserves: 1 to 0x6e's wall,
@@ -2703,7 +2703,7 @@ names what changes if he says otherwise.
    crosses 0x3f 40 of 40). pols-voice: 0x4c. boss-gleeok: the four-headed fight. **0x6e stays boss-manhandla** (a
    Manhandla is in it) though it is crossed, not fought: a route step may now name its own bomb mode (`bombs:
    required` on the step replaces the family's `items.bombs` there), which was the smallest mechanism that keeps the
-   room with its monster's family. If Lee would rather have it in a crossing family (trap-room and gibdo crossed it
+   room with its monster's family. If the owner would rather have it in a crossing family (trap-room and gibdo crossed it
    60 of 60 zero-shot), it is the step's `specialist:` and one line of game.yaml. Fighting a Darknut room in parts is
    dropped from the plan (the walk: no gain); `MAX_RETREATS` stays as it is.
 7. **The `stuck` rule against a hold** (found by the Dungeon 9 walk, needed from Dungeon 6 on: 6:0x38 and 0x3a hold
@@ -2720,14 +2720,14 @@ names what changes if he says otherwise.
    to Dungeon 8's, and the round 25 team plays 300 full-route `d2first` runs on the build before and after the
    change, compared field by field (round28.md §4).
 
-Not answered here, still Lee's (round28.md §7): the bar for the stretch (the best plays leave about four hearts
+Not answered here, still the owner's (round28.md §7): the bar for the stretch (the best plays leave about four hearts
 after Gleeok), and whether 0x5e and 0x3e are trained with hearts-at-exit priced above everything else.
 
-## 2026-11-17 — Round 29's working answers: the leg to Dungeon 9, Dungeon 9, Ganon and the end (the lead; Lee may overrule any of them)
+## 2026-11-17 — Round 29's working answers: the leg to Dungeon 9, Dungeon 9, Ganon and the end (the lead; the owner may overrule any of them)
 
-`docs/routes/d9-walks.md` ends with six questions and `docs/routes/d9-fights-walks.md` §9 with seven that are Lee's.
+`docs/routes/d9-walks.md` ends with six questions and `docs/routes/d9-fights-walks.md` §9 with seven that are the owner's.
 Round 29's route vocabulary (the scouting route `d9`, `docs/routes/d9.md` §13) had to be built before he answered,
-so the lead gave each a **working answer**, as rounds 27 and 28 did. They are not Lee's decisions: each is the
+so the lead gave each a **working answer**, as rounds 27 and 28 did. They are not the owner's decisions: each is the
 cheapest thing to undo that the walks support, and each names what changes if he says otherwise.
 
 1. **The red ring detour is taken.** On the crossings alone it loses 1.4 hearts and costs three bombs
@@ -2740,7 +2740,7 @@ cheapest thing to undo that the walks support, and each names what changes if he
    2.33 with it, so its place after the detour is the walk's.
 3. **Missing bombs are cheated and counted.** A run with no drops reaches 0:0x6d with none and meets five walls
    before 0x16's four (the rock wall of 0:0x05, 9:0x65 N, 0x26 E, 0x27 N, 0x17 N): each is one bomb written and
-   counted in the run's ledger, by the standing rule (Lee, Nov 14: bombs only from rooms on the way and drops, else
+   counted in the run's ledger, by the standing rule (the owner, Nov 14: bombs only from rooms on the way and drops, else
    cheated). `bomb_reserve` is the walls ahead before the next bombs (5 from 0x6d, one fewer after each; 4 again
    from 0x06, down to 0 after 0x04's). A full bag out of Dungeon 8 is not made a goal of the earlier rounds.
 4. **9:0x14 is cleared** (`treasure: clear` on step 317): walking its spiral a Like-Like holds Link in 20 of 20
@@ -2765,7 +2765,7 @@ cheapest thing to undo that the walks support, and each names what changes if he
 8. **The first frame of game mode `$13` is the route's last step**: 9:0x32 `exit: end`, the ending
    `game-completed`, a chain run's success "the game ended in ...". The credits are not played.
 9. **Ganon's hidden position stays on `ram`** (`obs.hidden_positions`, the default; the ganon family names
-   nothing) **until Lee decides.** The walk's table, 20 runs each from 15 hearts
+   nothing) **until the owner decides.** The walk's table, 20 runs each from 15 hearts
    (`d9-fights-walks.md` §4.6):
 
    | Eyes | no ring | red ring |
@@ -2788,22 +2788,22 @@ cheapest thing to undo that the walks support, and each names what changes if he
     `clips: true` for wizzrobe, lanmola and like-like (half their episodes with CLIP masked, the standing rule; not
     scoped to rooms, the owner's word: on the clip way the objective also takes a skip through 9:0x51's blocks and
     out of 0x04's ring), and a start's kept kills that follow the switch (`objectives::start_banked_kills`; the env
-    decides the switch before loading such a state). If Lee says no, the stretches and the three `clips:` lines go.
+    decides the switch before loading such a state). If the owner says no, the stretches and the three `clips:` lines go.
 
-Not answered here, still Lee's (round29.md §8): the survival gap (the best plays seen cost about 23 hearts on the
+Not answered here, still the owner's (round29.md §8): the survival gap (the best plays seen cost about 23 hearts on the
 route and 26 in the fights with the ring, of 15 containers and no refill; with the block clips of 0x55, 0x07, 0x20
 and 0x03 the fights cost 15), and the clips way above.
 
-## 2026-11-17 — Every completed stretch lands in the main checkout, pushed and playable (Lee)
+## 2026-11-17 — Every completed stretch lands in the main checkout, pushed and playable (the owner)
 
-Lee: "I want to add a directive, that after each completion (like d6 done, d8 -> d9 etc) gets merged back into
+The owner: "I want to add a directive, that after each completion (like d6 done, d8 -> d9 etc) gets merged back into
 triforce and pushed. I really want to be able to do play-zelda and see the progress as you work."
 
 - **What lands:** each stretch of the rest of the game when its first team takes it at a working rate (decision 2
   of 2026-11-16): Dungeon 7 with its leg, the magic sword and Dungeon 6, Dungeon 8, Dungeon 9 with Ganon. It sharpens
   decision 3 ("a report, a tag and a push per dungeon"): the push is of `main`, and the main checkout itself is left
   able to play the stretch.
-- **How:** the checklist in `AGENTS.md` "Lee's standing rules": `main` merged into the line and the suites green,
+- **How:** the checklist in `AGENTS.md` "The owner's standing rules": `main` merged into the line and the suites green,
   `main` fast-forwarded, the module rebuilt in the main checkout, the promoted runs copied into its `models/` with
   their `promoted`, `act`, `version` and `eval.json`, trajectories copied, a short chain from the main checkout as
   the proof, the tag, the push, the report.
@@ -2812,9 +2812,9 @@ triforce and pushed. I really want to be able to do play-zelda and see the progr
 - **In between:** work in progress is watched from the line's worktree with its own models
   (`TRIFORCE_MODELS_DIR=$PWD/models .venv/bin/python play-zelda.py`).
 
-## 2026-11-17 — The remaining dungeons are prepared in parallel; training is the serial resource (Lee)
+## 2026-11-17 — The remaining dungeons are prepared in parallel; training is the serial resource (the owner)
 
-Lee: "You KNOW we are doing d7 d6 d8 d9. Why do it sequentially when you could do it in parallel? Do your best to
+The owner: "You KNOW we are doing d7 d6 d8 d9. Why do it sequentially when you could do it in parallel? Do your best to
 parallelize this, and at the end you can always clean up, refine, like you would have done anyway. I mean look at
 the retraining you would do... that all can be front loaded looking at the dungeons first anyway."
 
@@ -2835,7 +2835,7 @@ the retraining you would do... that all can be front loaded looking at the dunge
   clean-up and tuning round comes after the first complete game.
 - **Given up for it:** the honest planner's 1000-run chains with clips off for round 25 (the clips-on set is in
   round25.md §13); they are measured when the line is idle.
-- **The CPU is the scarce resource, not the GPU** (Lee, the same day: "the CPU load is the problem not the gpu
+- **The CPU is the scarce resource, not the GPU** (the owner, the same day: "the CPU load is the problem not the gpu
   load... You are constantly overloading the cpu. Optimize for that. But really, just let the cpu queueing handle
   most of this... Just make sure training and evals go into the queue (as they already do!)"). The job line stays
   as it is and carries everything that plays models. What agents start outside it is capped: one heavy thing at a
@@ -2843,9 +2843,9 @@ the retraining you would do... that all can be front loaded looking at the dunge
   `CARGO_BUILD_JOBS=4`, all under `nice -n 10`, full suites once at the end of a task, and nothing heavy started
   while the load average is above 30. The GPU has not been a limit in any round.
 
-## 2026-11-18 — Clips only: the no-clip way is dropped; the Lanmola room is clipped (Lee)
+## 2026-11-18 — Clips only: the no-clip way is dropped; the Lanmola room is clipped (the owner)
 
-Lee: "The lanmola room should be bypassed with a block clip. From here on, you can drop the no-clip runs. They
+The owner: "The lanmola room should be bypassed with a block clip. From here on, you can drop the no-clip runs. They
 were an interesting spot of comparison, but should be dropped in favor of just clipping through blocks when needed."
 (Nov 17 already: "Clips-off is not a problem. We might even drop it in the future.")
 
@@ -2890,9 +2890,9 @@ above the working rate the owner set for a first team (about 30%, decisions 2026
 loaded model reads changed since 1.5.1.0, so the 1.5.1 runs are stamped 1.6.0.0 (`triforce stamp`), not converted.
 The Cargo workspace is 1.6.0.
 
-## 2026-11-18 — The no-clip runs are dropped; the Lanmola room is bypassed by its block clip (Lee)
+## 2026-11-18 — The no-clip runs are dropped; the Lanmola room is bypassed by its block clip (the owner)
 
-Lee, Nov 18: "From here on, you can drop the no-clip runs. They were an interesting spot of comparison, but should
+The owner, Nov 18: "From here on, you can drop the no-clip runs. They were an interesting spot of comparison, but should
 be dropped in favor of just clipping through blocks when needed." And: "The lanmola room should be bypassed with a
 block clip." As the lead passed it on, and as the first Dungeon 9 team applied it (round29.md §16):
 
@@ -2937,12 +2937,12 @@ and round 29's working answer 11 in so far as it kept the fights as the clips-of
   their own teams' chains confirmed them; `r79t5-base` (the continued runs under this code, same states and seeds)
   judged every continued run on equal terms.
 
-## 2026-11-19 — No potions, no CONTINUE (Lee)
+## 2026-11-19 — No potions, no CONTINUE (the owner)
 
 Asked what closes the survival budget of the last stretches (Dungeon 9's rooms cost 18.6 hearts against 15
 containers in the second team's chain, with no refill but drops; arriving with 12 hearts instead of 15 cuts the share
 of runs that end the game from 14.3% to 3.9%), with the potion and the game's CONTINUE as the two route-level
-answers. Lee: "We aren't doing potions or continues, that's the call."
+answers. The owner: "We aren't doing potions or continues, that's the call."
 
 - A run is one life from its start to the ending. A death ends it; CONTINUE is not modelled, measured or trained.
 - No potion is bought or taken: 0x47's take-any stays the heart container, no medicine shop joins the route.
@@ -3058,7 +3058,7 @@ is one run per family for all 358 steps, chosen this way:
   the full route's milestones to Dungeon 5 +7 to +10 points better. From the start the models alone end the game
   in 0 of 1000 runs, the planner in 89 of 300.
 
-## 2026-11-19 — Two routes, version 2.0, old worktrees (Lee)
+## 2026-11-19 — Two routes, version 2.0, old worktrees (the owner)
 
 After watching the first complete game (`corpus/replays/v1-golden-ending.tfreplay`):
 
@@ -3076,10 +3076,10 @@ After watching the first complete game (`corpus/replays/v1-golden-ending.tfrepla
   its bombs), 0x49, 0x59, 0x69, 0x59, then 0x5a and 0x5b only on the way back, 0x5c, 0x4c, 0x4d, 0x3d. The models
   are shared where they can be; a family may get a run of its own for this route. When a golden path on `d3first`
   reaches the ending it becomes the main route and `d2first` the secondary.
-- **Version:** MINOR no longer counts dungeons: a MINOR bump is a big change, MAJOR stays Lee's. `d3first`'s work is
+- **Version:** MINOR no longer counts dungeons: a MINOR bump is a big change, MAJOR stays the owner's. `d3first`'s work is
   2.0.0.0 from the start of its implementation and lands as 2.0.0.0.
 - **Old worktrees** are deleted once their work is on `main`.
-- Lee is away after this; the lead's defaults while he is: where his words and the game disagree, the closest way
+- The owner is away after this; the lead's defaults while he is: where his words and the game disagree, the closest way
   that works is walked and logged in a "For the owner" section; trainings in the shared queue in the order
   optimisation round, the `d2first` changes, `d3first`; finished pieces land and are pushed without asking.
 
@@ -3103,7 +3103,7 @@ After watching the first complete game (`corpus/replays/v1-golden-ending.tfrepla
 
 ## 2026-11-19 — `d3first` as route data: shared blocks, its own legs (phase X)
 
-The lead's decisions while Lee is away (`docs/routes/d3first.md`):
+The lead's decisions while the owner is away (`docs/routes/d3first.md`):
 
 - **Dungeon insides are written once:** routes.yaml `blocks:` with `{include: NAME}` in both routes; every dungeon
   but Dungeon 3's way in, and the legs both routes take (to Level 4 after Dungeon 3, everything from the whirlwind's
@@ -3115,12 +3115,12 @@ The lead's decisions while Lee is away (`docs/routes/d3first.md`):
   0x63, 0x62, 0x52, 0x51's wrap exit, 0x50, 0x60's wrap exit.
 - **Screen scrolls are the families' CLIP**, not route data; the wrap exits of 0x75, 0x0c, 0x51, 0x60, 0x3e are
   d3first's only ways (no plain way, no stretch).
-- **Dungeon 1 is the shared block** although this route needs neither 0x23's nor 0x53's key (noted for Lee).
+- **Dungeon 1 is the shared block** although this route needs neither 0x23's nor 0x53's key (noted for the owner).
 - **Bombs for the Olive Garden with the wood sword: no new cheat.** A reserve of 8 from Level 4's exit to Dungeon 5
   keeps what Link finds; walls are cheated as before. A reserve of 1 through Dungeon 2 keeps Dodongo's bomb from the
   goriya and moldorm families.
 - **Rupees:** no reserve of its own (its own steps hold no arrows); the shared reserves from the arrows on are where
-  the ledger says it runs dry; Ganon's and 8:0x4c's arrows have no cheat (noted for Lee).
+  the ledger says it runs dry; Ganon's and 8:0x4c's arrows have no cheat (noted for the owner).
 - **Rooms both routes cross keep d2first's play:** what d3first knows of a room that d2first never played (the caves
   it enters, 0x2d's rock wall, the tags of the rooms only it crosses) is its own game.yaml entry (`routes:
   [d3first]`) in its own map; d2first plays the shared rooms, its observations and masks bit for bit those of
@@ -3131,7 +3131,7 @@ The lead's decisions while Lee is away (`docs/routes/d3first.md`):
 
 ## 2026-11-20 — `d3first`'s bag and the arrow rooms' rupees are cheated (round 32)
 
-Lee's list for `d3first` says Link needs "at or around 30 rupees leaving Level 1 and 5-8 bombs" and then: "The 'you
+The owner's list for `d3first` says Link needs "at or around 30 rupees leaving Level 1 and 5-8 bombs" and then: "The 'you
 need x bombs and rupees' can be ignored since we have the ability to cheat them to the character in game". The
 lead's decisions (supersede 2026-11-19's "Bombs for the Olive Garden with the wood sword: no new cheat" and "Ganon's
 and 8:0x4c's arrows have no cheat"):
@@ -3202,11 +3202,11 @@ then again on the new one.
 
 ## 2026-11-20 — 2.0.0.0: `d3first` is the main route (rounds 32 and 33 land)
 
-Lee's condition (Nov 19): `d3first` "becomes the main route when it works, 'works as defined as "a golden path
+The owner's condition (Nov 19): `d3first` "becomes the main route when it works, 'works as defined as "a golden path
 eventually succeeds"'". With the route's team three golden paths from console power on, the models alone, ended
-the game (176, 135 and 91 runs; round32.md §11). The lead's decisions for the landing, Lee being away:
+the game (176, 135 and 91 runs; round32.md §11). The lead's decisions for the landing, the owner being away:
 
-- **One landing, 2.0.0.0** (Lee's MAJOR for `d3first`; no input changed, so no COMPAT bump and every 1.9 run is
+- **One landing, 2.0.0.0** (the owner's MAJOR for `d3first`; no input changed, so no COMPAT bump and every 1.9 run is
   stamped 2.0.0.0): both routes, the route's team, the flip, round 33's qualified `d2first` runs.
 - **The flip:** `registry.MAIN_ROUTE = 'd3first'`: `play-zelda.py`, `zelda-headless.py` and the golden path,
   `eval-chain`, `eval-batch --chains` and the chains script play `d3first` when no route is named; `d2first` by
@@ -3290,15 +3290,15 @@ and 0x29's walls need), so a run with 2 or more crosses to the key door. routes.
   1.8, `d5` +5.6 ± 2.0, `d7` +3.6 ± 2.0.
 - The numbers: round34.md "2.0.0.2".
 
-## 2026-11-21 — 2.0.0.3: no bag of bombs; the guard waits; a checkpoint and a stop (Lee)
+## 2026-11-21 — 2.0.0.3: no bag of bombs; the guard waits; a checkpoint and a stop (the owner)
 
-- **Lee:** "Don't blindly add 8 bombs. The goal is a win without a cheated bomb. Not to just blindly add them."
+- **The owner:** "Don't blindly add 8 bombs. The goal is a win without a cheated bomb. Not to just blindly add them."
   Round 32's route grant at `d3first`'s Dungeon 5 entrance (`grant: {bombs: 8}`, the lead's reading of "can be
   ignored since we have the ability to cheat them") is removed; no route grants anything. A `REV` (route data
   changes play). The mechanism stays unused, because recorded replays carry its fields; whether it goes is open.
   The wall-bomb rule (a required wall, no bomb in hand: one bomb, counted) stands, and is what a cheat-free win now
   has to get rid of: six walls are cheated in every golden path (round35.md "The checkpoint").
-- **Lee on the learned guard:** "I like that idea of a neural network that predicts if link will get hit. I want to
+- **The owner on the learned guard:** "I like that idea of a neural network that predicts if link will get hit. I want to
   make sure that look-ahead is only done in training (which is fine) but not in inference time (meaning when we
   PLAY the game). If that's the case, it could be used for the whole game." Then: "I think the guard is a good
   idea, but I want to dig into a bigger picture thought about model construction." The experiment was stopped
@@ -3308,11 +3308,11 @@ and 0x29's walls need), so a run with 2 or more crosses to the key door. routes.
   file still verified, but it showed a run the route no longer allows; no `REPLAY_VERSION` change). A single run
   from the start to the ending joins it (`v2-single-ending.tfreplay`).
 - **A stop:** every training, selection and experiment was ended, every worktree removed (their data under
-  `target/worktrees/`), and the work waits for Lee's direction.
+  `target/worktrees/`), and the work waits for the owner's direction.
 
-## 2026-11-21 — The program: the corrected d3 route, played by one network (Lee)
+## 2026-11-21 — The program: the corrected d3 route, played by one network (the owner)
 
-- **The route was wrong** (Lee: "it's what I told you to do, but I realized it is wrong"). The d3 route is: "d3,
+- **The route was wrong** (the owner: "it's what I told you to do, but I realized it is wrong"). The d3 route is: "d3,
   d4, d1, [heart in 2c], [bomb rupee secret in 2d], d2, [100 rupee secret in 0xf], d5, [warp to d4], go south to
   0x55, in 0x55 ladder wrong warp to the location with the meat under armos, buy meat, south to buy arrows, d7,
   [world wrap at 0x60], [heart at 0x5f], [heart at 0x2f], [wrong warp on 0x3f, clip into water west of dock,
@@ -3344,23 +3344,23 @@ and 0x29's walls need), so a run with 2 or more crosses to the key door. routes.
   when we talk about the golden path, or hopefully someday just beating gannon from start to finish on d3 without
   golden path segmenting... that's the kind of scale you are looking at."
 - **The route and the models go together** ("you might as well do both of these together. In any order you
-  pick"). The backlog was set aside as `backlog.old.md` and a new one started on Lee's word; the lead plans the
+  pick"). The backlog was set aside as `backlog.old.md` and a new one started on the owner's word; the lead plans the
   rounds and asks for steering at check-ins.
 
 ## 2026-11-22 — 2.0.0.5: the corrected `d3first` is the route (the lead, the owner being away)
 
 - **A `REV`**: route data, 127 steps' entry states and the engine's dock warp change play; no network was
-  retrained (today's 51). `d3first` is replaced under its name by Lee's order (292 steps; round36.md "The
+  retrained (today's 51). `d3first` is replaced under its name by the owner's order (292 steps; round36.md "The
   corrected route"); `d2first` is untouched (its 354 steps field by field and a 100-run chain run for run).
 - **The recorder's plays are one chain, found by search** (`scripts/experiments/r36_recorder_search.py`): every play
   steps the whirlwind's index (`$523`, asm:Whirlwind_StepLevelIndex), so Level 5's exit sets what 0x55 starts
   from, 0x55 sets 0x3f's, 0x3f sets Level 6's exit. Chosen by the fewest turns between plays, then the fewest plays,
   then the widest window: out of Level 5 two facing S; 0x55 N, a one-frame turn W, play; 0x3f N twice; out of
-  Level 6 a turn up, then two; out of Level 8 one S. **Lee's remembered counts cannot be right for any index
+  Level 6 a turn up, then two; out of Level 8 one S. **The owner's remembered counts cannot be right for any index
   history of this order:** a whirlwind into 0x45 always leaves the index on Level 4, from which "twice north" at
   0x55 lands at 0x26 and "once" at 0x3f on Level 5's screen; they would be right only from indexes no way into
-  0x45 gives (Lee had asked for the emulator's answer over his memory).
-- **The warps are a macro the engine plays** (Lee: "warp whistling again, with a block clip in front of it"; the
+  0x45 gives (the owner had asked for the emulator's answer over his memory).
+- **The warps are a macro the engine plays** (the owner: "warp whistling again, with a block clip in front of it"; the
   engine performing the sequence accepted for now): on a dock-warp step the mask leaves MOVE S on the dock, CLIP N
   where the block clip is legal, RECORDER on the water spot, and RECORDER plays the whole sequence and waits for
   the pickup; the network only walks from the dock to the clip's column. Offering the plays one by one would need
@@ -3378,12 +3378,12 @@ and 0x29's walls need), so a run with 2 or more crosses to the key door. routes.
   their new hearts harvested from its chains): 6,120 episodes, success 92.9%, hearts lost 0.249, hits 0.677 a visit.
   Experiments compare with the reference of the manifest they were played on (`docs/lab.md` "The yardstick").
 
-## 2026-11-22 — The target is one unbroken run in 10,000; combat that looks skilled; the corpus's names (Lee)
+## 2026-11-22 — The target is one unbroken run in 10,000; combat that looks skilled; the corpus's names (the owner)
 
 - **A golden path with one network does not count as the goal** (it was reached on Nov 22: one network of 4.01
-  million parameters, copied from the 51, in every slot; three of three from power on in 966 runs). Lee: "No, it
+  million parameters, copied from the 51, in every slot; three of three from power on in 966 runs). The owner: "No, it
   doesn't count. I want to hit 1 run in 10,000 tries completes the game without restarting, this is a fine target."
-  That is the only stopping point; the lead does not stop without Lee naming one.
+  That is the only stopping point; the lead does not stop without the owner naming one.
 - **Combat:** "I do want to prioritize getting the golden replay so I can see, but also your goal should be
   stronger combat. it's ok if combat is weaker compared to the old model, but the gameplay should be 'fun' to watch,
   and look like skilled combat, not just completing a run because it accidentally got lucky."
@@ -3398,14 +3398,14 @@ and 0x29's walls need), so a run with 2 or more crosses to the key door. routes.
   (`v2-single-ending`), `planner-d2first` (`v0-plan-ending`); the two format fixtures keep `v0-power-on` and
   `v0-state`. Older documents name the old files.
 
-## 2026-11-22 — Bombs: where they are a weapon (Lee, from watching the one-network golden replay)
+## 2026-11-22 — Bombs: where they are a weapon (the owner, from watching the one-network golden replay)
 
 - **Only in dungeon rooms the route must clear:** "The agent wastes bombs in rooms I wish it didn't. For example d3
   0x69. In dungeons, link should only use bombs in rooms it somehow needs to clear. For example, it's fine to use
   bombs in 0x59 because we have to clear the room to open the south door, in 0x69 it needs to slide past the
   darknuts to get the raft, then out of the room (I use sword-hit an enemy to make them pass-through in this room,
   not kills with bombs)."
-- **Rooms Lee names: no bomb but the wall's:** "some rooms I want to explicitly say 'don't use bombs in this room
+- **Rooms the owner names: no bomb but the wall's:** "some rooms I want to explicitly say 'don't use bombs in this room
   just because the owner says so' (well there's good reasons). 0x5b is a great example, the point of fighting the
   darknuts in that room is to get the bomb drop, wasting the bombs to kill them is not the right play. BUT link
   still needs to bomb the wall to get through there. So no bombs except the 1 to blow up the wall. [...] I may have
@@ -3415,24 +3415,24 @@ and 0x29's walls need), so a run with 2 or more crosses to the key door. routes.
   it was. This is a blanket rule not for this room."
 - **The 10th kill's bomb, always:** "we must ALWAYS allow bombs and deeply encourage them if we are on the 10th
   kill force drop, no matter the room or enemies, that remains true."
-- The lead applies them to `d3first` (`d2first` stays as it is, by Lee's word of the same day); built on branch
+- The lead applies them to `d3first` (`d2first` stays as it is, by the owner's word of the same day); built on branch
   `r37-rules` with their cost to today's networks measured before they land.
 
-## 2026-11-22 — 2.0.0.6: Lee's three bomb rules on `d3first` (the lead builds them, Lee being away)
+## 2026-11-22 — 2.0.0.6: the owner's three bomb rules on `d3first` (the lead builds them, the owner being away)
 
-- **What:** routes.yaml's top-level `bomb_rules:` (by route; `d3first` only) with three keys, each Lee's words
+- **What:** routes.yaml's top-level `bomb_rules:` (by route; `d3first` only) with three keys, each the owner's words
   (AGENTS.md "The owner's three bomb rules", docs/routes/d3first.md "Bombs"): `fights_only: true` (bombs as a weapon
   in a dungeon only while the objective fights the room: 3:0x59 yes, 3:0x69 no), `wall_only: [3:0x5b]` (no weapon
   bomb there at all, the wall's one bomb only), `treasure_below: 8` (every room the route takes the bombs of is a
-  fight when Link comes in with 7 or fewer). Over all three, Lee: "we must ALWAYS allow bombs and deeply encourage
+  fight when Link comes in with 7 or fewer). Over all three, the owner: "we must ALWAYS allow bombs and deeply encourage
   them if we are on the 10th kill force drop, no matter the room or enemies, that remains true": the 10th
   damage-free kill's bomb stays offered in every mode but `never`, in every room.
 - **How (the lead's choices):** the rules cap a `free` family's mode at `required` where they take the weapon away
-  (no new mode: `required` is already "the wall the step leaves through and the 10th kill", which is what Lee asked
+  (no new mode: `required` is already "the wall the step leaves through and the 10th kill", which is what the owner asked
   for 3:0x5b; a second name for it would be a second convention). Rule 1 reads the objective's own kind every
   step, so a room stops offering BOMB the step its fight ends. Rule 3 is a floor over the steps' own
   `{if_bombs_below: M}` (8:0x3f's 5 is a shared block's, for `d2first`) with a per-room override
-  (`treasure_below_rooms`) for the room Lee allows to be skipped (7:0x1b); it is judged on entering the room, so a
+  (`treasure_below_rooms`) for the room the owner allows to be skipped (7:0x1b); it is judged on entering the room, so a
   bomb Link spends there (3:0x5b's wall with a full bag) does not turn the crossing into a fight (round 23's trouble
   with a live floor). The keys are route-level so the shared blocks stay `d2first`'s: `d2first` unchanged until its
   own work ("Don't waste time on d2 first until we've completed this work on d3-first, entirely"; one entry under its
@@ -3440,7 +3440,7 @@ and 0x29's walls need), so a run with 2 or more crosses to the key door. routes.
 - **Reward:** what pays for the 10th kill's bomb was already there in every family (`reward-armed-bomb-drop` 0.75 on
   the bomb kill that arms the drop, `reward-gained-bombs` 0.5 on the pickup); not using it costs nothing. No term
   was added.
-- **8:0x3f (Lee, the same day, from the golden replay: in with 2, a drop to 6, the room's bombs ignored):** the
+- **8:0x3f (the owner, the same day, from the golden replay: in with 2, a drop to 6, the room's bombs ignored):** the
   shared step's `{if_bombs_below: 5}` read live made the stairs the objective at 6; under the floor the decision
   made on entering now holds for the visit (taken below the bag's maximum), a treasure lying in the room is wanted
   below the maximum whatever Link came in with, and dropped bombs below the maximum are the targets once the fight
@@ -3454,9 +3454,9 @@ and 0x29's walls need), so a run with 2 or more crosses to the key door. routes.
   0.51 → 0.20). 7:0x1b both ways (d7): the floor 12.6%, the crossing override 12.7% (runs bring 0.21 bombs, so
   nearly every visit fights either way); the floor lands, the override commented beside it.
 
-## 2026-11-22 — 2.0.0.7: 0:0x2d's rupee cave leaves `d3first` (Lee; the lead lands it, Lee being away)
+## 2026-11-22 — 2.0.0.7: 0:0x2d's rupee cave leaves `d3first` (the owner; the lead lands it, the owner being away)
 
-- **What:** Lee, from watching: "Overworld: drop the bomb for rupees in 0xd2, keep the armos rupees in 3d [...] we
+- **What:** the owner, from watching: "Overworld: drop the bomb for rupees in 0xd2, keep the armos rupees in 3d [...] we
   may have to cheat rupees more, but that 1 30 secret + the 100 secret + drops is the intended route"; asked, he
   confirmed "0x2d is indeed what I meant". `d3first` crosses 0:0x2d W → S (its rock wall is no longer bombed, its
   cave's 30 rupees no longer taken); 0x3d's Armos cave stays. 290 steps (every step after 90 two lower); `game.yaml`
@@ -3465,7 +3465,7 @@ and 0x29's walls need), so a run with 2 or more crosses to the key door. routes.
 - **States:** steps 89-153 rebuilt by the explorer, the Dungeon 5, out-of-Level-5 and Dungeon 7 entries cut from the
   new chains' arrivals (855 states, audit clean); the other states after step 153 were not, and hold about 30
   rupees more than runs bring (they matter only in the arrow rooms, which top the purse up).
-- **Rupees:** the shortfall at the shops is cheated and counted as Lee allowed. Before, no run was short; now 137 of
+- **Rupees:** the shortfall at the shops is cheated and counted as the owner allowed. Before, no run was short; now 137 of
   196 runs that carry their own purse from after Dungeon 2 are short at the arrows (80, 0x44), about 3 rupees each
   (2.2 a run); the meat is never short.
 - **Evidence:** round38.md "0x2d dropped" (1000 runs a segment, paired by seed): to Level 2 99.1% → 98.3% (−0.8 ±
@@ -3475,7 +3475,7 @@ and 0x29's walls need), so a run with 2 or more crosses to the key door. routes.
   `golden-d3first-51-networks` replaced by the path with the fewest cheated bombs (two), then frames (160,248).
 
 
-## 2026-11-22 — 2.0.0.8: hit heads play eight `d3first` families (the lead promotes them, Lee being away)
+## 2026-11-22 — 2.0.0.8: hit heads play eight `d3first` families (the lead promotes them, the owner being away)
 
 A supervised hit network shifting each family's action logits (round 38) cut the runs lost in Dungeons 4, 3 and 5 by
 a third to four fifths on 1000-run paired chains. Promoted for `d3first` only (`promoted.d3first`): boss-gleeok,
@@ -3483,29 +3483,81 @@ like-like, vire, stalfos-keese-gel, darknut (w8), boss-manhandla, zol, gibdo (w4
 Dungeon 8's bare-key runs wait for a `d3first`-only pointer; goriya's for its chains on today's code. REV bump:
 promoted models replaced. Table and the replaced runs: round38.md "2.0.0.8".
 
-## 2026-11-22 — 2.0.0.9: goriya's hit head and Dungeon 8's three, through a `d3first`-only late pointer (the lead, Lee being away)
+## 2026-11-22 — 2.0.0.9: goriya's hit head and Dungeon 8's three, through a `d3first`-only late pointer (the lead, the owner being away)
 
 goriya `r38ppo-aux-s38` promoted for `d3first` (Dungeon 7 15.2% -> 76.9%, Dungeon 1 92.8% -> 97.7%). Dungeon 8's
 darknut, boss-gleeok and boss-manhandla hit-head runs play the bare keys, whose `promoted` `d2first` reads: a new
 pointer `late.<route>` names a route's own run for the steps after `own_models_until`, so they are promoted for
-`d3first` alone and `d2first` stays as it is (Lee's rule). REV bump: promoted models replaced.
+`d3first` alone and `d2first` stays as it is (the owner's rule). REV bump: promoted models replaced.
 
-## 2026-11-23 — 2.0.0.10: the opening and 8:0x4c retrained from Lee's diagnosis (the lead lands them, Lee being away)
+## 2026-11-23 — 2.0.0.10: the opening and 8:0x4c retrained from the owner's diagnosis (the lead lands them, the owner being away)
 
-Lee, watching the golden replays: the opening's back-and-forth comes from a network trained on another route's
+The owner, watching the golden replays: the opening's back-and-forth comes from a network trained on another route's
 opening, and 8:0x4c's from training when the key was still taken. Both confirmed (round38.md "The owner's three
 causes"): `ow-start`'s `r74-leg2` learned only `d2first`'s opening; `pols-voice`'s `r78t4-pols` learned to take the
 key. Promoted for `d3first` only: `ow-start r38t-start-fresh2 --route d3first` (a fresh run: opening aimless frames
 661 -> 4 a visit) and `pols-voice r38t-pols --route d3first --late` (8:0x4c 92.2% -> 100%, 5,267 -> 2 aimless frames).
 3:0x5b's walk between the wall and the bombs is darknut@d3first trained before the bomb rules; the objective is
-right (a test pins Lee's order); retraining it is next. REV bump: promoted models replaced.
+right (a test pins the owner's order); retraining it is next. REV bump: promoted models replaced.
 
-## 2026-11-23 — 2.0.0.11: ow-lynel for `d3first`'s leg after Dungeon 7; rupees once a pickup; beam terms (the lead, Lee being away)
+## 2026-11-23 — 2.0.0.11: ow-lynel for `d3first`'s leg after Dungeon 7; rupees once a pickup; beam terms (the lead, the owner being away)
 
 The leg after Dungeon 7 was played at 0:0x50 by a `d2first` network that left by the wrong exit in 663 of 763 visits;
 `ow-lynel r38rw-lynel --route d3first`, trained on this route's rooms, takes the leg from 24.0% to 99.0% (300 runs
-paired). Lee's rupee note: rupees now pay once a pickup, sized by the amount, nothing while the counter runs (the
-opening's network still carries the old reward until retrained). Lee's beam note: a range-kill bonus, credit for a
+paired). The owner's rupee note: rupees now pay once a pickup, sized by the amount, nothing while the counter runs (the
+opening's network still carries the old reward until retrained). The owner's beam note: a range-kill bonus, credit for a
 beam that would meet a monster on its projected course, and a cost for a lined-up shot not taken are in, but at
 these weights continued wizzrobe and patra runs did not fight differently (beam share unchanged, both lost: not
 promoted); the next try raises the weights. REV bump: promoted models replaced, rewards changed.
+
+## 2026-11-23 — Versioning: the third number is the retrain generation; models load by their schemas (the owner)
+
+The owner's rule: the version is `MAJOR.MINOR.GEN.REV`. MAJOR and MINOR are as before. The third number, `COMPAT`
+until now, is the retrain generation: +1 (`REV` back to 0) when 90% or more of the promoted models are retrained
+from scratch (2.0.0.123 -> 2.0.1.0), nothing else. `REV` +1 for every other change that bumped `REV` or `COMPAT`,
+including an observation or action change whose old models `triforce convert-model` widens (no retrain). Whether a
+model loads moves off the version onto the checkpoint: its action schema, its network architecture
+(`model_config['arch']`) and its observation schema (from `OLDEST_OBS_SCHEMA`, a new constant beside
+`OBS_SCHEMA_VERSION`, 6 today, to 7, an older one's layout a subset of today's) decide (`registry.schema_problem`,
+in `load_checkpoint`, which every load goes through). The agents built it: `require_compatible` (the version's
+first three numbers), `triforce stamp` and `--allow-incompatible-models` / `TRIFORCE_ALLOW_INCOMPATIBLE_MODELS`
+are gone, `convert-model` no longer reads its source's `version`; the run dir's `version` stays as provenance.
+`OLDEST_OBS_SCHEMA` keeps the old `COMPAT` bump's other half: a change to what an existing column means raises it,
+so older models are refused until converted or retrained. Every one of the 1,771 checkpoints under `models/` records
+its schema numbers, so no run-dir fallback is needed; all 57 promoted runs of today's families load (the 4
+promoted runs of retired families, action schema 1, were refused before and are refused still). `VERSION` stays
+2.0.0.11 (no generation yet).
+
+## 2026-11-23 — The next generation's teachers are trained fresh, not continued (the owner)
+
+The owner, on which upcoming work needs a complete retrain: "I think the models the main model learns from will
+need to also be retrained and not continued from previous training to get new behaviors." A student that imitates
+today's 51 copies today's behaviour (melee at full hearts, objectives learned before a route change), whatever its
+own weights start from. So the next generation (observation v7, the bomb-carrier input, firing-line targets if the
+zol experiment holds, the Link-token architecture with its hit head) is built in two stages: first every teacher
+family is trained from scratch on the new inputs, targets and rewards (no `--load`, no warm start, no conversion),
+measured on its chains like any family; then the one network (or the handful of groups) learns from those fresh
+teachers and continues with PPO. Imitating the current 51 stays useful only as an experiment on capacity (Track M,
+experiment 3), not as the path to the next generation. The input and reward changes are gathered into that one
+generation so the families are retrained once (the lead's recommendation, the owner's rule).
+
+The owner, the same day: "This also helps us understand if our approach is repeatable or we are building the ship
+of Theseus." The lineage of today's networks says why (the lead, from every `run.json`'s `args.load`, Nov 23): of the
+76 promoted pointers (`promoted`, `promoted.<route>`, `late.<route>`), 3 were trained from scratch; 73 are
+continuations, up to 5 deep (wizzrobe: r33w-s93 <- r30w-wj-s89 <- r79c-wj-s85 <- r80-wplan-s78 <- r78-wizz-s78 <-
+?), and for 69 of them the chain ends in a parent that is no longer kept or in a load of "that family's promoted run"
+with no run id: their recipe cannot be replayed. A generation trained from scratch is the test of repeatability: the
+same pipeline (route data, states, curricula, rewards, recipe) must reach today's chains from nothing, family by
+family, and where it does not, the gap names what the lineage carried that the recipe does not. From here a run
+records its parent by family, run id and checkpoint SHA-1 (no path), so lineage stays traceable.
+
+## 2026-11-23 — A version's first three numbers each mean a fresh generation (the owner)
+
+The owner: "let's define that third version number, eg 2.0.0.0 -> 2.0.1.0 as a retrain like this, breaking the ship
+of theseus. [...] Major and Minor version numbers also require breaking the ship of theseus." This replaces the 90%
+rule of the versioning entry above: a `GEN` bump (and any `MAJOR` or `MINOR` bump) means every network the version
+plays was trained from scratch by that version's pipeline, with no weights carried from an earlier generation by
+continuation, warm start, conversion or imitation of its networks; a student may learn from the same generation's
+fresh teachers. Everything else, networks continued or replaced inside a generation included, is a `REV`. No version
+through 2.0.0.11 was a fresh generation (73 of 76 pointers are continuations, the entry above); none is renumbered.
+The next fresh generation is 2.0.1.0 unless the owner names it a bigger change. AGENTS.md "Versioning".

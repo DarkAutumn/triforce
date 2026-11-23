@@ -1,8 +1,8 @@
 # Round 14: the bow (Dungeon 1 trap room 0x22 and the bow cellar 0x7f)
 
-Lee, Nov 9: add the bow to the route. In Dungeon 1 go up to 0x22 (the game's first blade-trap room), avoid the
+The owner, Nov 9: add the bow to the route. In Dungeon 1 go up to 0x22 (the game's first blade-trap room), avoid the
 traps, push the west block N or S, take the stairs to the item cellar, take the bow, come back. New families:
-`trap-room` (blade-trap rooms) and `equipment-room` (item cellars, "all pretty much the same"). Lee had found the
+`trap-room` (blade-trap rooms) and `equipment-room` (item cellars, "all pretty much the same"). The owner had found the
 trap room very hard for plain PPO (the negative scores discourage it) and expected a curriculum to work.
 
 ## Summary
@@ -13,7 +13,7 @@ trap room very hard for plain PPO (the negative scores discourage it) and expect
   the detour on (205 files, audit 0 problems).
 - **trap-room: 100% (600 eval episodes), 93% of visits without a hit, in 0.4M steps with the curriculum.** The same
   yaml without the curriculum: best training success 12.5%, 0% after 2M steps (episodes end `no-damage`/`stuck`:
-  it learned to stand still). Lee's diagnosis holds and the curriculum fixes it.
+  it learned to stand still). The owner's diagnosis holds and the curriculum fixes it.
 - **equipment-room: 99.3%** (0.7M steps, curriculum), 67% of visits without a hit (4 Blue Keese).
 - D1 families continued on the bow-carrying states (r51): stalfos-keese-gel 99.0%, goriya 93.4%, wallmaster 100%.
 - Chains: D1 from its entrance **84/120 (70%)** with the detour (96% without it, round 13), the bow taken in 117/120;
@@ -70,5 +70,5 @@ The detour costs D1 about 6 points at full health (0x44 5, 0x35 3, single deaths
 low-health arrivals of a real run it costs much more: post-D2 runs now die in 0x33 (12), 0x44 (12), 0x23 (10), 0x43
 (9) on top of the overworld (0x0a 9, 0x27 7). Link reaches D1 with ~2 of 5 hearts and the detour adds four fights
 before Aquamentus; there is no healing anywhere between 0x2c and the D1 triforce. Health attrition is now the
-route's main problem (with D2's Goriya/Moldorm rooms): a candidate for Lee's training ideas (and for the kill-streak
+route's main problem (with D2's Goriya/Moldorm rooms): a candidate for the owner's training ideas (and for the kill-streak
 fairy, backlog).

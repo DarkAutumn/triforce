@@ -170,7 +170,7 @@ def test_promote_late_is_refused_off_a_route_with_its_own_runs(late_runs):
     assert registry.late_promotions(FAMILY, late_runs) == {}
 
 
-def test_promote_late_list_and_stamp(late_runs, capsys):
+def test_promote_late_and_list(late_runs, capsys):
     models = ['--models-dir', str(late_runs)]
     assert cli.main([*models, 'promote', FAMILY, 'late', '--route', 'd3first', '--late']) == 0
     assert capsys.readouterr().out.strip() == str(late_runs / FAMILY / 'late.d3first')
@@ -185,6 +185,3 @@ def test_promote_late_list_and_stamp(late_runs, capsys):
     rows = {line.split()[1 if line.startswith('*') else 0]: line for line in capsys.readouterr().out.splitlines()}
     assert rows['late'].endswith(' late on d3first') and rows['west'].endswith(' promoted on d3first')
     assert rows['south'].startswith('* ')
-    assert cli.main([*models, 'stamp']) == 0
-    stamped = set(capsys.readouterr().out.split())
-    assert {f'{FAMILY}/late:', f'{FAMILY}/west:', f'{FAMILY}/south:', 'darknut/late:', 'darknut/base:'} <= stamped

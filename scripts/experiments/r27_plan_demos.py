@@ -68,7 +68,6 @@ def record_demos(family: str, checkpoint: Path, out: Path, stems: list[str], run
                  file_runs: int | None = None) -> int:
     """Plays, filters and writes the rows; returns how many."""
     config = load_specialist(family)
-    registry.require_compatible(checkpoint)
     policy = registry.load_model(checkpoint)[0].to_native()
     file_runs = runs if file_runs is None else file_runs
     starts = [s for s in state_names(stems, route) for _ in range(runs)]

@@ -136,6 +136,9 @@ def load_manifest(path=None) -> dict:
     return json.loads(Path(path or MANIFEST).read_text(encoding='utf-8'))
 
 
+BEAMS = ('shots', 'lined', 'lined_unfired', 'kills_far', 'kills_near', 'kill_distance')
+
+
 def _episode(record: dict) -> dict:
     visits = record.get('visits') or []
     return {'state': Path(str(record['start_state'])).stem,
@@ -144,12 +147,15 @@ def _episode(record: dict) -> dict:
             'hits': sum(int(v.get('hits', 0)) for v in visits), 'visits': len(visits),
             'bubble_touches': sum(int(v.get('bubble_touches', 0)) for v in visits),
             'aimless_frames': sum(int(v.get('aimless_frames', 0)) for v in visits),
-            'decisions': int(record['steps']), 'bombs': int((record.get('bombs') or {}).get('used', 0))}
+            'decisions': int(record['steps']), 'bombs': int((record.get('bombs') or {}).get('used', 0)),
+            **{f'beam_{f}': sum(int(v.get(f'beam_{f}', 0)) for v in visits) for f in BEAMS}}
 
 
 def summarize(episodes: list[dict]) -> dict:
     n = len(episodes)
     visits = sum(e['visits'] for e in episodes)
+    beams = {f: sum(e.get(f'beam_{f}', 0) for e in episodes) for f in BEAMS}
+    sword = beams['kills_far'] + beams['kills_near']
     return {'episodes': n,
             'success': sum(e['success'] for e in episodes) / n if n else 0.0,
             'hearts_lost': sum(e['hearts_lost'] for e in episodes) / n if n else 0.0,
@@ -158,7 +164,14 @@ def summarize(episodes: list[dict]) -> dict:
             'aimless_frames_per_visit': (sum(e.get('aimless_frames', 0) for e in episodes) / visits
                                          if visits else 0.0),
             'decisions': sum(e['decisions'] for e in episodes) / n if n else 0.0,
-            'bombs': sum(e['bombs'] for e in episodes) / n if n else 0.0}
+            'bombs': sum(e['bombs'] for e in episodes) / n if n else 0.0,
+            # Round 39, the sword shots (`zelda::beams::BeamStats`): the share of sword kills made from out of melee
+            # range, their mean distance, shots an episode, and the share of decisions lined up for a shot that
+            # moved or waited instead.
+            'beam_far_share': beams['kills_far'] / sword if sword else 0.0,
+            'beam_kill_distance': beams['kill_distance'] / sword if sword else 0.0,
+            'beam_shots': beams['shots'] / n if n else 0.0,
+            'beam_unfired_share': beams['lined_unfired'] / beams['lined'] if beams['lined'] else 0.0}
 
 
 def entry_task(entry: dict, states_dir=None):
@@ -201,7 +214,8 @@ def run_bench(networks: dict[str, str], manifest: dict, parallel: int, states_di
         log(f"[bench] {label}: success {row['success']:.3f} hearts lost {row['hearts_lost']:.2f} "
             f"hits/visit {row['hits_per_visit']:.3f} bubble touches/visit {row['bubble_touches_per_visit']:.3f} "
             f"aimless frames/visit {row['aimless_frames_per_visit']:.1f} decisions {row['decisions']:.0f} "
-            f"({seconds:.0f}s)")
+            f"far kills {row['beam_far_share']:.1%} at {row['beam_kill_distance']:.0f} px, lined unfired "
+            f"{row['beam_unfired_share']:.1%} ({seconds:.0f}s)")
         if progress is not None:
             played = [e for r in rows.values() for e in r['records']]
             progress.update(len(played), summarize(played)['success'], key=label)
@@ -218,7 +232,7 @@ def _manifest_hash(manifest: dict) -> str:
 
 METRICS = ('success', 'hearts_lost', 'hits', 'bubble_touches', 'aimless_frames', 'decisions', 'bombs')
 FIELDS = ('state', 'seed', 'success', 'hearts_lost', 'hits', 'bubble_touches', 'aimless_frames', 'visits', 'decisions',
-          'bombs')
+          'bombs', *(f'beam_{f}' for f in BEAMS))
 
 
 def compact(result: dict) -> dict:

@@ -44,7 +44,7 @@ It reports the room each state really loads into, whether it was saved before en
 the room's full count (``game.yaml``, Zoras excluded: they are not part of the room's monster list), the number
 of distinct spawn layouts at the first controllable frame, and Link's hearts.  Edge-spawn overworld rooms bring
 their monsters in later from the screen edges (RNG-driven), so they show one layout here but still vary.  It flags
-Lee's start-state rules: a name that isn't ``<level>_<room><entry>[_v<visit>]_<chain>`` with chain 0-2 (NAME), the
+the owner's start-state rules: a name that isn't ``<level>_<room><entry>[_v<visit>]_<chain>`` with chain 0-2 (NAME), the
 wrong room (MISNAMED) or entry side (ENTRY, Link's position and facing at the first controllable frame), saved after
 entry (POST-ENTRY), fewer monsters than the room's full count (SHORT), max hearts not the route's at that step (counted
 along the stretch way the step is on) or 16 (HEARTS), less than full health (HP), no route step and no manifest entry
@@ -686,7 +686,7 @@ def install(staged: str, states_dir: str = STATES_DIR, partial: bool = False) ->
 # --- audit ---
 
 STATE_NAME = re.compile(r'^(?:[a-z][a-z0-9-]*_)?(\d)_([0-9a-f]{2})(n|s|e|w|c|r|cave)(?:_v([2-9]|[1-9]\d+))?_([0-2])$')
-HEARTS_NEVER = 16                    # a 16-heart state is never a route state (Lee)
+HEARTS_NEVER = 16                    # a 16-heart state is never a route state (the owner)
 
 
 def route_rooms(route: Optional[str]) -> dict:

@@ -12,7 +12,7 @@ Changed for v2: dict observations, factored (kind, direction, duration) actions,
 Rollouts come from a native ``EnvPool`` (``TrainTask``) in one call per rollout (``Collector``): the pool's worker
 threads step their envs ``T`` decisions each, acting with the Rust copy of the network (``ZeldaPolicy.to_native``)
 and keyed Gumbel noise (per episode job and decision), and write the env-major buffer (docs/rust-actor.md). Envs
-auto-reset and episodes continue across rollouts. ``train`` overlaps each PPO update with the next rollout (Lee,
+auto-reset and episodes continue across rollouts. ``train`` overlaps each PPO update with the next rollout (the owner,
 Nov 9): that rollout acts with the weights from before the update, one update behind (without PLR it starts as soon
 as the last one ends, before that one's buffer is readied). The learner recomputes every
 step's log-prob, entropy and value with its current torch network (``RolloutBuffer.recompute``), so the update never

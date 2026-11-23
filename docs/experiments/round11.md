@@ -1,6 +1,6 @@
 # Round 11: power-on RAM $00 and a fresh retrain (Nov 8)
 
-Lee (Nov 8): use $00 for the power-on RAM fill, regenerate everything, then retrain the whole team from scratch up
+The owner (Nov 8): use $00 for the power-on RAM fill, regenerate everything, then retrain the whole team from scratch up
 to 8M steps per family, through `scripts/train_round.py` with `logs/` for the training GUI, 16 workers.
 
 ## 1. Regeneration
@@ -28,16 +28,16 @@ order, with the canonical yamls (round 10 §8–§10: `obs.target` everywhere, i
 Early stop only at 0.99 balanced success for 5 updates (the round default 0.95 would stop before health is refined;
 round 10 §8). Not promoted automatically: the new team must beat the old one on the same chains first.
 
-**Stopped and resumed (Lee, Nov 8).** The first launch (`logs/261108_019_r44-fresh/`) trained ow-start (early stop
+**Stopped and resumed (the owner, Nov 8).** The first launch (`logs/261108_019_r44-fresh/`) trained ow-start (early stop
 at 0.99 after 180k steps; eval 100%), ow-octorok (8M; eval 98%) and ow-zora (8M; evaluated separately after the
-stop). Lee then had the round stopped right after ow-zora to **split the Moldorm room 2:0x3e out of d2-rope**
+stop). The owner then had the round stopped right after ow-zora to **split the Moldorm room 2:0x3e out of d2-rope**
 into its own specialist `moldorm` (`0acabad`: yaml, game.yaml tag, routes.yaml family and step; its three 2_3es
 trajectories moved to `trajectories/moldorm`; until its retrained model exists, the promoted moldorm is a copy of
 d2-rope r40-obs-s41). The round resumed for the other eight families (stalfos-keese-gel restarted from scratch):
 `--specialists stalfos-keese-gel,goriya,wallmaster,boss-aquamentus,ow-leever-peahat,ow-moblin,d2-rope,moldorm`,
 same settings, GUI log folder `logs/261108_020_r44-fresh/`.
 
-**Second stop: per-room evaluation (Lee, Nov 8).** After goriya (8M) the round was stopped again to finish the
+**Second stop: per-room evaluation (the owner, Nov 8).** After goriya (8M) the round was stopped again to finish the
 per-room-visit evaluation started in another session (`cde10ca`: `zelda::visits`, eval `format: 2`) and the
 `zelda-map.py` room map (`6eb8a1c`). Evaluation now runs 100 episodes per start state (`20b2074`; 60 for the
 re-evals below). Re-evaluated with format 2 at 60 per state: all 11 promoted models and the finished r44 runs
@@ -46,7 +46,7 @@ health change -0.51 (promoted goriya 79.0%, -0.83). The round resumed from wallm
 boss-aquamentus, ow-leever-peahat, ow-moblin, d2-rope, moldorm), GUI log folder `logs/261108_021_r44-fresh/`.
 `zelda-map.py --run-id r44-fresh` shows the r44 runs where they exist, else the promoted models.
 
-**Stopped for good (Lee, Nov 8).** Lee stopped the round during wallmaster (interrupted at 1.0M steps): the next
+**Stopped for good (the owner, Nov 8).** The owner stopped the round during wallmaster (interrupted at 1.0M steps): the next
 full retrain comes after Dodongo is solved, on a new d2-first route (backlog.md "Later: the d2-first route").
 Finished r44-fresh runs, kept as evidence and not promoted: ow-start (early stop, 180k), ow-octorok (early stop at
 0.99, 6.65M), ow-zora, stalfos-keese-gel and goriya (8M each); their format-2 evals are in their run dirs. The
