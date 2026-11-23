@@ -1040,6 +1040,13 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   (`triforce select-checkpoint` does both). Two models on the same 1000 seeds differ by 2.2 points of noise
   (standard error of the paired difference; same seeds don't make different models' runs alike): about 5 points is
   a result, 2-3 points need 2000-5000 runs an arm; secondaries such as the hearts on entering a room are sharper.
+  **What decides, in order (the owner, Nov 23):** the main metric is the segment's rate (the dungeon cleared, the
+  game won). When two arms' rates are within noise of each other, the others decide, and each of them better is
+  better (no fixed weighting yet): the hearts kept, how long Link holds his beams (the frame he first drops below
+  full hearts), whether his shots hit and how many kills he makes from range, and the time taken (frames to ENTER
+  each route step over the runs that entered it in both arms, so a death counts up to its last room; "we are
+  competing with speedrunners so time matters, and not walking back around to enemies matters"). They never redeem
+  a worse rate: "it doesn't matter if we run faster and die quicker". Report them beside the rate for every arm.
 - **Every job is in the queue, shown with its progress** (the owner, Nov 13, Nov 18, Nov 23). The queue
   (`$XDG_STATE_HOME/triforce/queue.db`, else `~/.local/state/triforce/queue.db`; `triforce/jobqueue.py`) holds every
   job of every worktree: who (`Agent: A   Task: T   Sub-task: S`), the description, its state (`RUNNING regular 10m
