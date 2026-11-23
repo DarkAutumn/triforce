@@ -2270,7 +2270,10 @@ on every access and cannot run over another bus) over the ROM's bank 0 and fixed
 - **the music driver** gets the songs' requests; `Tune0Request` `$80` (silence) as the game does; a jingle's
   request or `Tune1Request` bit 7 runs `asm:Song_Silence` before its driver (the game replaces the song, or
   silences it before Link's death tune), so the music is silent during the fanfare as in the game and the game
-  starts its song again itself. Tunes, effects and samples never reach it, so no voice is ever taken from it.
+  starts its song again itself. Tunes, effects and samples never reach it, so no voice is ever taken from it. It
+  does get `EffectRequest` `$80` (`asm:Sample_Silence`, which stops only samples and tune 1, both always idle in
+  it): skipping it put the music's writes of the frame where the game silences everything (`asm:Audio_SilenceAll`
+  on a room or mode change) about 50 cycles off the game's, enough to differ from the full mix by up to 0.14 there.
 - **the effects driver** gets both tunes, the effects, the samples and the two jingles; a song's request over a
   playing jingle only ends it (its squares go to volume 0 as a tune's end writes them, the triangle as a rest).
   With the beep off its requests lose bit `$40`; a beep playing when it is switched off ends at once (the writes
@@ -2279,7 +2282,11 @@ on every access and cannot run over another bus) over the ROM's bank 0 and fixed
   it, mixed as the console mixes (a clone of the mirror and of the game's synth when the beep goes off).
 
 Each driver runs when the machine's did: the frame's first sound write is the driver's (`$4017 = $FF`, or
-`$4015 = 0` while paused), and each copy's writes are placed as many cycles after it as its own first write.
+`$4015 = 0` while paused), and each copy's writes are placed as many cycles after it as its own first write. A
+copy starts with the registers `asm:Nmi_Isr` leaves: X = $25 (its random-number loop), A = Y = 0. The driver reads
+X once: restarting a looping background sample, `asm:Sample_Drive` jumps from `@CheckBgSample` to the
+`STX DmcCounter` of a new sample, so the game sets the DMC's level to $25 there (with X = 0 the mirror differed
+from the machine on 7-9 frames per 80,000 and the effects track's DMC level was wrong).
 The writes after the machine driver's (the game's own: `$4015 = $0F` on unpausing, a reset's) go to every synth;
 the DMC's fetched sample bytes to the effects and quiet synths (the effects driver starts the same samples at the
 same frames). The music synth's DMC rests at the game synth's resting level between samples, since the console
