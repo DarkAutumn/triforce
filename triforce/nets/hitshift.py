@@ -75,6 +75,17 @@ class HitShift(LabNet):
             for p in self.hit.parameters():
                 p.requires_grad_(False)
 
+    @classmethod
+    def of(cls, policy, hitnet, weight: float, form: str = 'softplus', freeze_hit: bool = False) -> 'HitShift':
+        """The combination of a trained ``policy`` and a trained ``hitnet`` (their weights copied, nothing
+        trained), on the hit network's observation layout."""
+        network = cls({'obs_spec': hitnet.config.obs_spec, 'policy': policy.config.to_dict(),
+                       'hitnet': hitnet.config.to_dict(), 'weight': float(weight), 'form': form,
+                       'freeze_hit': freeze_hit})
+        network.policy.load_state_dict(policy.state_dict())
+        network.hit.load_state_dict(hitnet.state_dict())
+        return network
+
     def hit_logits(self, obs: dict) -> torch.Tensor:
         return self.hit.hit_logits(self.hit.trunk(obs))
 

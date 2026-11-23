@@ -132,6 +132,7 @@ chain_runs!(
     back_and_forth_hits_the_bounce_limit,
     mid_route_triforce_is_the_correct_exit,
     harvested_states_hold_no_granted_bomb,
+    an_every_room_harvest_sees_a_same_family_entry,
     a_granted_bomb_only_opens_the_wall_in_a_chain,
     one_room_entries_reset_the_observation,
     target_observation_follows_the_acting_specialist,
@@ -449,7 +450,7 @@ fn mid_route_triforce_is_the_correct_exit(nes: ZCore, data: &Arc<GameData>) -> Z
     let route = Route::load(&data.map, &data.states_dir, "d2first", None, Some("2_0de_0")).unwrap();
     let mut c = chain(nes, data, route);
     let dir = tempfile::tempdir().unwrap();
-    c.set_harvest(Some(dir.path().to_path_buf()));
+    c.set_harvest(Some(dir.path().to_path_buf()), false);
     let mut rng = ChaCha8Rng::seed_from_u64(0);
     let ChainStatus::Act { .. } = c.reset(Some(0), &mut rng).unwrap() else { panic!("run ended at reset") };
     if let Some(r) = walk_onto_the_triforce(&mut c) {
@@ -843,7 +844,7 @@ fn harvested_states_hold_no_granted_bomb(nes: ZCore, data: &Arc<GameData>) -> ZC
     let route = Route::load(&data.map, &data.states_dir, "d2first", None, Some(start.to_str().unwrap())).unwrap();
     let mut c = chain(nes, data, route);
     let harvest = dir.path().join("harvested");
-    c.set_harvest(Some(harvest.clone()));
+    c.set_harvest(Some(harvest.clone()), false);
     let ChainStatus::Act { .. } = c.reset(Some(0), &mut rng).unwrap() else { panic!("run ended at reset") };
     assert_eq!(c.session().state().bombs(), 1, "the room's granted bomb");
     let west = MapLocation::new(3, 0x5a, false);
@@ -858,6 +859,38 @@ fn harvested_states_hold_no_granted_bomb(nes: ZCore, data: &Arc<GameData>) -> ZC
     let saved = common::read_state_file(&files[0]).unwrap();
     assert_eq!(saved.machine.peek(0x658), 0, "{}", files[0].display());
     c.into_parts().0.into_nes()
+}
+
+/// Round 38: a handoff harvest never sees a room entered from a room of the same family (the bench and the
+/// recorded entries missed Dungeon 8's Darknut rooms and the Olive Garden's fight for it); `every_room` does.
+/// `d3first` step 82: 0:0x29 (ow-leever) out E into 0:0x2a (ow-leever).
+fn an_every_room_harvest_sees_a_same_family_entry(mut nes: ZCore, data: &Arc<GameData>) -> ZCore {
+    let east = MapLocation::new(0, 0x2a, false);
+    for every_room in [false, true] {
+        let route = Route::load(&data.map, &data.states_dir, "d3first", None, Some("0_29w_0")).unwrap();
+        let mut c = chain(nes, data, route);
+        let dir = tempfile::tempdir().unwrap();
+        c.set_harvest(Some(dir.path().to_path_buf()), every_room);
+        let mut rng = ChaCha8Rng::seed_from_u64(0);
+        let ChainStatus::Act { .. } = c.reset(Some(0), &mut rng).unwrap() else { panic!("run ended at reset") };
+        for a in walk_to(&mut c, east) {
+            if let ChainStatus::Done(r) = c.step(a).unwrap() {
+                panic!("run ended on the walk: {r:?}");
+            }
+        }
+        assert_eq!(c.session().state().full_location(), east);
+        let r = c.result().unwrap();
+        let rooms: Vec<_> = r.rooms.iter().map(|x| (x.room.as_str(), x.specialist.as_str())).collect();
+        assert_eq!(rooms, [("0x29", "ow-leever"), ("0x2a", "ow-leever")]);
+        let files = glob_files(dir.path());
+        if every_room {
+            assert_eq!(files, [dir.path().join("ow-leever/d3first_0_2aw_h0_1.state")]);
+        } else {
+            assert!(files.is_empty(), "{files:?}");
+        }
+        nes = c.into_parts().0.into_nes();
+    }
+    nes
 }
 
 fn glob_files(dir: &std::path::Path) -> Vec<std::path::PathBuf> {

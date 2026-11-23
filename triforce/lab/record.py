@@ -64,7 +64,8 @@ def main(argv=None) -> Path:
     with progress_job('lab-record', 'eval', total, unit='decisions', root=args.logs_dir,
                       work=work(train_steps=total)) as progress:
         out.mkdir(parents=True, exist_ok=True)
-        teachers = Teachers(keys, args.device, root, checkpoints=dict(t.split('=', 1) for t in args.teacher))
+        teachers = Teachers(keys, args.device, root, checkpoints=dict(t.split('=', 1) for t in args.teacher),
+                            route=args.state_route)
         student = registry.load_model(args.student)[0] if args.student else teachers.networks[keys[0]]
         from .train import parse_try_others  # pylint: disable=import-outside-toplevel
         collector = MultiCollector(families, out / 'run', args.steps_per_env, 0.99, 0.95, seed=args.seed,
