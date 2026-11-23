@@ -242,9 +242,11 @@ been retrained on the corrected order):
   at 9:0x63's west door): "drop the moldorm fight (it's now passthrough) and fight in d9 0x56 to get the missing key";
   branch `r39-key`. (the owner, Nov 22: "Can we bypass the moldorm, or do we drop to 0 keys in the
   run. If so where do we drop to 0 keys without it?")
-- [ ] **3:0x5b with a full bag walks between the wall and the bombs** CAUSE FOUND (round38.md "The owner's three causes"): the
-  objective already follows the owner's order (one target at a time, test pinned); darknut@d3first was trained
-  before the bomb rules, when the room's bombs were wanted at any count. Next: retrain it there with full-bag starts. (the owner, Nov 22: "If full on bombs the target
+- [x] **3:0x5b with a full bag walks between the wall and the bombs** DONE (round38.md "3:0x5b with a full bag,
+  trained", branch `r39-dark5b`): darknut@d3first was trained before the bomb rules; `r39-dark5b-s1` continued it
+  on full-bag starts (`ram_randomization.room_bombs`): the owner's case 69% -> 100%, 5,542 -> 407 frames a visit;
+  chains d3 +2.2 ± 2.2, d5 +0.4 ± 2.1 (promoted.d3first), d8 −3.8 ± 1.5 (late.d3first kept). Left: 3:0x5b's
+  return in the chain dies more (54 -> 100 of 1000 runs, more hits taken at every health). (the owner, Nov 22: "If full on bombs the target
   should be the bomb wall, he drops a bomb, the target should be on the bombs, when the bombs picked up, the target
   is moving to the next room. [...] I suspect he has two targets here? Or was trained with something that had
   conflicting targets?")
