@@ -412,7 +412,8 @@ joins 4:0x13), boss-manhandla 65.8% → 81.7% (8:0x6e joins 3:0x4d), like-like 8
 network with the reference of the manifest it was played on.
 Every experiment is compared with it: `python -m triforce.lab.bench compare triforce/lab/reference.json NEW.json`.
 
-**The rooms tier's reference** (`triforce/lab/reference-rooms.json`: the 51 on `bench-rooms.json`, 2.0.0.7, Nov 22):
+**The rooms tier's reference** (`triforce/lab/reference-rooms.json`: the 51 on `bench-rooms.json`, 2.0.0.7, Nov 22;
+the team before 2.0.0.8's hit heads, so a 2.0.0.8 team row differs from it by the eight promoted families):
 the tier built from an every-room harvest of the 51's chains, 100 runs of each dungeon segment d1-d9 from seed
 380000 (`eval-chain --route d3first --clips on --act model --from 3_7cs_0 --stop-at step:24 --runs 100
 --first-seed 380000 --harvest DIR --harvest-every-room`, and so on with each segment's start and stop), then
