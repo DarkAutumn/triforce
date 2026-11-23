@@ -732,8 +732,9 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 
 ## Versioning (Lee, Nov 11)
 
-- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `2.0.0.8`: hit heads play eight `d3first`
-  families, round38.md "2.0.0.8"; 2.0.0.7 was 0:0x2d's rupee cave leaving
+- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `2.0.0.9`: goriya's head and Dungeon 8's
+  three through `late.d3first`, round38.md "2.0.0.9"; 2.0.0.8 was hit heads playing eight `d3first` families,
+  round38.md "2.0.0.8"; 2.0.0.7 was 0:0x2d's rupee cave leaving
   `d3first`, its states after 0x2d rebuilt; 2.0.0.6 was the owner's bomb rules; 2.0.0.5 was the owner's corrected
   `d3first`, the two dock warps as engine macros, its rebuilt states, the lab's yardstick on them; no network retrained;
   2.0.0.4 was the lab, `docs/lab.md`: runs over several families, teachers, networks of any shape beside today's,

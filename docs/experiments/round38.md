@@ -970,3 +970,13 @@ Not yet: Dungeon 8's darknut, boss-gleeok and boss-manhandla (39.1% -> 80.9% on 
 for its Dungeon 1 and Dungeon 7 chains on today's code (branch `r38-hit`). The chains of record of 2.0.0.8 are
 `r38-208-1k` (to come). The product of segment rates with every head is an estimate of about one in 1,000 (Head38b's
 `r38_head.py product`); no unbroken run from the start has finished yet.
+
+## 2.0.0.9: goriya's head and Dungeon 8's three, a late pointer per route
+
+**A late pointer** (branch `r38-late`): `models/<family>/late.<route>` (`triforce promote FAMILY RUN --route R
+--late`) names the run a family's bare key plays on a route with `own_models_until` from that step on; `d2first`,
+which reads `promoted`, plays as before (100 runs identical). Promoted with it for `d3first`: darknut
+`r38head-bare-w8`, boss-gleeok `r38head-bare-w8`, boss-manhandla `r38head-bare-w4` (Dungeon 8: 39.1% -> 80.9% of 1000
+runs on 2.0.0.6; 82.0% of 300 with the pointer, run for run equal to the arm). **goriya** for `d3first`:
+`r38ppo-aux-s38` (replacing `r32d1-goriya`): on 2.0.0.7, `d1` 92.8% -> 97.7% (+4.9 +- 0.9), `d7` 15.2% -> 76.9%
+(+61.7 +- 1.8), paired 1000 runs (\"The hit head at play\" §11).
