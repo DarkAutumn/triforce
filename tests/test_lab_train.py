@@ -14,7 +14,7 @@ from triforce.lab.collect import Teachers, task_yaml
 from triforce.specialist import load_specialist
 from triforce.runner import Policies
 
-from .conftest import ROOT
+from .conftest import ROOT, start_task
 from .networks import native_spec, random_network
 
 YAML = str(ROOT / 'specialists' / 'ow-start.yaml')
@@ -55,7 +55,8 @@ def test_teachers_label_with_each_familys_network(tmp_path):
 
 def test_a_two_family_run_with_teachers_trains_links_and_loads_once(tmp_path, logs_dir):
     _teachers(tmp_path)
-    common = ['--families', 'ow-start', f'ow-start@d3first={YAML}', '--parallel', '2', '--steps-per-update', '64',
+    common = ['--families', f'ow-start={start_task()}', f'ow-start@d3first={start_task()}', '--parallel', '2',
+              '--steps-per-update', '64',
               '--device', 'cpu', '--models-dir', str(tmp_path), '--seed', '3', '--save-every', '1']
     run = train.main(['--name', 'set', '--run-id', 'r1', '--iterations', '2', '--teacher-coeff', '1.0',
                       '--teacher-fade', '1', '--arch', 'wide', '--arch-config', '{"hidden_dim": 32, "depth": 1}',
@@ -100,13 +101,14 @@ def run_summary(run):
 
 def test_imitation_alone_with_the_teachers_acting_and_the_recorder(tmp_path, logs_dir):
     _teachers(tmp_path)
-    run = train.main(['--name', 'imit', '--run-id', 'r2', '--families', 'ow-start', '--parallel', '2',
+    run = train.main(['--name', 'imit', '--run-id', 'r2', '--families', f'ow-start={start_task()}', '--parallel', '2',
                       '--steps-per-update', '64', '--device', 'cpu', '--models-dir', str(tmp_path), '--seed', '4',
                       '--iterations', '2', '--mode', 'imitate', '--actor', 'teacher', '--epochs', '2'])
     lines = (run / 'metrics.jsonl').read_text().splitlines()
     assert len(lines) == 2 and 'charts/teacher_agreement' in lines[-1]
     assert nets.arch_of(registry.load_checkpoint(run)['model_config']) == nets.ZELDA
-    out = record.main(['--families', 'ow-start', '--rollouts', '2', '--steps-per-env', '16', '--parallel', '2',
+    out = record.main(['--families', f'ow-start={start_task()}', '--rollouts', '2', '--steps-per-env', '16',
+                       '--parallel', '2',
                        '--device', 'cpu', '--models-dir', str(tmp_path), '--out', str(tmp_path / 'data')])
     meta, data = record.load(out)
     assert meta['families'] == ['ow-start'] and data['teacher_joint'].shape == (64, 352)
@@ -135,11 +137,13 @@ def test_teacher_weights_need_targets_and_rehearsal(tmp_path):
     """``--teacher-weight KEY=0`` takes a family's rows out of the teacher term, ``--need-target-for`` sets its need
     target, ``--rehearse`` adds the KL on stored teacher rows of keys outside the rollout."""
     _teachers(tmp_path)
-    out = record.main(['--families', 'ow-start', '--rollouts', '1', '--steps-per-env', '16', '--parallel', '2',
+    out = record.main(['--families', f'ow-start={start_task()}', '--rollouts', '1', '--steps-per-env', '16',
+                       '--parallel', '2',
                        '--device', 'cpu', '--models-dir', str(tmp_path), '--out', str(tmp_path / 'data')])
     _, data = record.load(out)
     _cache(data, tmp_path / 'cache', 'ow-start')
-    run = train.main(['--name', 'reh', '--run-id', 'r3', '--families', 'ow-start@d3first=' + YAML, '--parallel', '1',
+    run = train.main(['--name', 'reh', '--run-id', 'r3', '--families', f'ow-start@d3first={start_task()}',
+                      '--parallel', '1',
                       '--steps-per-update', '32', '--device', 'cpu', '--models-dir', str(tmp_path), '--seed', '5',
                       '--iterations', '2', '--teacher-coeff', '1.0',
                       '--teacher-weight', 'ow-start@d3first=0', '--sampling', 'need', '--need-target', '0.5',
@@ -159,7 +163,8 @@ def test_the_wrapper_dry_call_writes_the_training_steps_and_creates_nothing(tmp_
     estimate = tmp_path / 'estimate.json'
     environ = {**{k: v for k, v in os.environ.items() if k != jobs.JOB_ID_ENV}, jobs.JOB_ESTIMATE_ENV: str(estimate)}
     out = subprocess.run([sys.executable, '-m', 'triforce.lab.train', '--name', 'dry', '--run-id', 'r1', '--families',
-                          'ow-start', '--parallel', '2', '--steps-per-update', '64', '--iterations', '3', '--device',
+                          f'ow-start={start_task()}', '--parallel', '2', '--steps-per-update', '64', '--iterations',
+                          '3', '--device',
                           'cpu', '--models-dir', str(tmp_path / 'models'), '--logs-dir', str(tmp_path / 'logs')],
                          env=environ, cwd=ROOT, capture_output=True, text=True, timeout=120, check=False)
     assert out.returncode == 0, out.stderr

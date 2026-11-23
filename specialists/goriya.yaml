@@ -13,7 +13,10 @@ ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0
                     room_kills: {'(7, 0x49)': [1, 5], '(7, 0x1a)': [1, 5], '(7, 0x1b)': [1, 5]}, room_kills_share: 0.5}
 items: {bombs: free, food: true}           # The owner, Nov 11: bombs as a weapon (enemies with more than 3 hits); above the route's bomb reserve; round 26: the food where a Grumble waits (7:0x28)
 clips: {enabled: true, off_share: 0}      # round 26: 7:0x1a's block clip to the stairs; clips only (the owner, Nov 18): no episode with CLIP masked
-curriculum: {enabled: true}             # trajectories/goriya (Go-Explore paths per start state)
+curriculum:                              # trajectories/goriya (Go-Explore paths per start state)
+  enabled: true
+  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
+  - d3first_7_49s_[0-9]
 # Round 27 (round26.md §17): Dungeon 2's two rooms had 6 of 15 seed states (40% of the resets) before Dungeon 7 joined
 # and 6 of 54 (11%) after.  Resets start from handoffs harvested from chains (triforce/states/harvested/goriya, not
 # in git), at the hearts and bombs the chain brings.  Round 30 (round30.md): beside Dungeon 2's 566 (`eval-chain

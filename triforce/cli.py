@@ -25,25 +25,31 @@ def load_chain_route(route_name: str, stop_at=None, start_from=None, power_on=No
 
 
 def chain_runner(route_name: str, parallel: int = 1, models_dir=None, overrides=None, act=None,
-                 specialist_configs=None, threads=None, harvest=None, harvest_every_room=False):
-    """A ``Runner`` for ``route_name`` with its models loaded (``--checkpoint`` overrides checked; raises
-    ``RunnerError``): only once the job's turn has come (``triforce.jobs``).  ``harvest_every_room``: ``Runner``'s."""
+                 specialist_configs=None, threads=None, harvest=None, harvest_every_room=False, headless=()):
+    """A ``Runner`` for ``route_name`` with its models loaded (``--checkpoint`` overrides checked, ``headless``:
+    ``Policies``'; raises ``RunnerError``): only once the job's turn has come (``triforce.jobs``).
+    ``harvest_every_room``: ``Runner``'s."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, import-outside-toplevel
     from .runner import Runner
     return Runner(models_dir=models_dir, checkpoints=overrides, act=act, specialist_configs=specialist_configs,
                   parallel=parallel, threads=threads, harvest=harvest, route=route_name,
-                  harvest_every_room=harvest_every_room)
+                  harvest_every_room=harvest_every_room, headless=headless)
 
 
 def prepare_chain(route_name: str, parallel: int = 1, models_dir=None, overrides=None, act=None,
                   stop_at=None, start_from=None, specialist_configs=None, threads=None, harvest=None,
                   power_on=None, clips=True, clips_off_from=None, harvest_every_room=False):
-    """The route (``load_chain_route``) and its ``Runner`` (``chain_runner``), for a caller already in its turn (a
-    round's chain); raises ``RunnerError`` before anything plays."""
-    # pylint: disable=too-many-arguments, too-many-positional-arguments
+    """The route (``load_chain_route``) and its ``Runner`` (``chain_runner``) with a network for every policy its
+    runs reach (``runner.check_team``), for a caller already in its turn (a round's chain); raises ``RunnerError``
+    before anything plays."""
+    # pylint: disable=too-many-arguments, too-many-positional-arguments, import-outside-toplevel
+    from .runner import check_configs, check_team
     route = load_chain_route(route_name, stop_at, start_from, power_on, clips, clips_off_from)
-    return route, chain_runner(route_name, parallel, models_dir, overrides, act, specialist_configs, threads,
-                               harvest, harvest_every_room)
+    check_configs(route, specialist_configs or {})
+    runner = chain_runner(route_name, parallel, models_dir, overrides, act, specialist_configs, threads, harvest,
+                          harvest_every_room)
+    check_team(route, runner.policies)
+    return route, runner
 
 
 def eval_chain(route_name: str, runs: int, parallel: int = 1, models_dir=None, overrides=None,
@@ -202,7 +208,7 @@ def _cmd_eval_chain(args):
     from .events import EventLog, has_plan, logged_job
     from .jobs import announce, work
     from .registry import act_override
-    from .runner import RunnerError, check_overrides, parse_overrides, power_on_options
+    from .runner import RunnerError, check_configs, check_overrides, check_team, parse_overrides, power_on_options
     from .specialist import load_specialist
     nice = os.nice(0)
     configs = {config.name: config for config in (load_specialist(path) for path in args.specialist_config)}
@@ -214,6 +220,10 @@ def _cmd_eval_chain(args):
     route = load_chain_route(args.route, args.stop_at, args.start_from, power_on_options(args),
                              clips=args.clips == 'on', clips_off_from=args.clips_off_from)
     check_overrides(overrides, configs, route=args.route)
+    check_configs(route, configs)
+    unknown = sorted(set(args.headless) - set(overrides))
+    if unknown:
+        raise RunnerError(f"--headless {unknown}: no --checkpoint override of those keys")
     check_output(output, None, args.append)
     try:
         replay.options_from(args, {}) if args.replays is None else replay.parse_streams(args.streams)
@@ -233,7 +243,8 @@ def _cmd_eval_chain(args):
         events=stream.name if stream else 'round.jsonl', chain_runs=args.runs, nice=nice)
     with log as plan:
         runner = chain_runner(args.route, args.parallel, args.models_dir, overrides, act_override(args.act), configs,
-                              args.threads, args.harvest, args.harvest_every_room)
+                              args.threads, args.harvest, args.harvest_every_room, args.headless)
+        check_team(route, runner.policies)
         provenance = {**runner.provenance(route), 'first_seed': args.first_seed, 'runs': args.runs}
         try:
             record = replay.options_from(args, runner.record_meta(route))
@@ -448,6 +459,9 @@ def add_eval_chain_arguments(chain):
                        help="play this checkpoint file or run dir for the family: on a route with own_models_until "
                             "(d3first) for both parts, or with @ROUTE (darknut@d3first=DIR) for the route's own part "
                             "only, the steps before that one")
+    chain.add_argument('--headless', action='append', default=[], metavar='KEY',
+                       help="declare that --checkpoint KEY=PATH has no hit head and replaces a network that has one "
+                            "(without it such a chain is refused; round 40)")
     chain.add_argument('--specialist-config', action='append', default=[], metavar='YAML',
                        help="override specialist config, selected by config.name (repeatable YAML paths)")
     chain.add_argument('--output', default=None,
@@ -458,11 +472,10 @@ def add_eval_chain_arguments(chain):
                        help="add these runs to an existing --output played by the same models, act modes, route, "
                             "code and data (its .meta.json), with new seeds")
     replay_arguments(chain, default_state='embed')
-    chain.add_argument('--harvest', nargs='?', const=str(HARVESTED_DIR), default=None, metavar='DIR',
+    chain.add_argument('--harvest', default=None, metavar='DIR',
                        help="save every handoff's pre-entry state (a correct room entry where the acting specialist "
-                            "changes) as DIR/<specialist>/<level>_<room><side>_h<seed>_<n>.state; without DIR: "
-                            f"{HARVESTED_DIR}, each specialist's default harvested_dir (read in training only "
-                            "by a config with harvested_fraction > 0, or one without seed states)")
+                            "changes) as DIR/<specialist>/<level>_<room><side>_h<seed>_<n>.state; DIR is required "
+                            f"(round 40: a bare --harvest wrote into {HARVESTED_DIR}, every training's input)")
     chain.add_argument('--harvest-every-room', action='store_true',
                        help="with --harvest: every correct room entry, also one from a room of the same family (a "
                             "handoff harvest never sees those: Dungeon 8's 0x4e-0x3e-0x3f, the Olive Garden's fight)")

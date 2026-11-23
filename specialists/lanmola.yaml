@@ -9,7 +9,10 @@ obs: {objective: true, target: true}       # schema 2: direction/distance to the
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # as moldorm (round 25)
 items: {bombs: free}                       # as moldorm: a bomb takes 3 segments in the median; only above the route's reserve (3 here: on a run with no drops there is none to spend)
 clips: {enabled: true, off_share: 0}       # round 29: the block clip of 9:0x55 to its stairs; the owner, Nov 18: the room is bypassed by the clip and nothing else (no episode with CLIP masked, the fight is not trained)
-curriculum: {enabled: true}             # trajectories/lanmola, once explored
+curriculum:                              # trajectories/lanmola, once explored
+  enabled: true
+  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
+  - d3first_9_55e_[0-9]
 one_room: true
 max_steps: 3000
 warm_start: moldorm                        # round 29: a first training starts from moldorm's promoted run (a worm of segments; settings copied from it)

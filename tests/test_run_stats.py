@@ -213,3 +213,17 @@ def test_an_evaluations_wrong_exits_are_not_stuck_runs():
     s = rs.eval_stats({'specialist': 'zol', 'checkpoint': '/m/zol/r1/ckpt.pt', 'records': episodes,
                        'config': {'rooms': ['(3, 0x7c)']}})
     assert s['endings']['stuck'] == 30 and codes(s, 'red') == []
+
+
+def test_route_canaries_skip_the_stop_step_and_other_route_versions():
+    runs = [won(i) for i in range(30)]
+    stop = {**meta(30), 'provenance': {**meta(30)['provenance'], 'stop_step': 3}}
+    for run in runs:            # the stop step is reached (the milestone), never played; a few runs go beyond
+        run['rooms'] = [r for r in run['rooms'] if r['step'] != 3]
+    runs[0]['rooms'].insert(-1, {**visit(3), 'step': 3})
+    assert 'step-never-entered' not in codes(chain(runs, meta=stop))
+    renumbered = [won(i) for i in range(30)]
+    for run in renumbered:
+        run['rooms'][1]['room'] = '0x11'
+    s = chain(renumbered, meta=meta(30))
+    assert 'route-renumbered' in codes(s, 'note') and 'family-never-played' not in codes(s)

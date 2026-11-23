@@ -16,19 +16,20 @@ or ``rust``; inside a job (``triforce job test``) the job's label follows (``<ag
 - ``start``: ``checkout``, ``branch``, ``commit``, ``job`` (``id``, ``label``, ``agent``, ``task``, ``subtask``;
   null outside a job), ``workers`` (pytest-xdist processes; 1 without), ``load`` (the machine's 1/5/15-minute load
   average when the suite started), ``cpus``, ``nice``, ``args``.
-- ``test``, one a test as it ends: ``id`` (pytest's node id; a Rust test binary), ``outcome`` (passed, failed,
+- ``test``, one a test as it ends: ``id`` (pytest's node id; a Rust test program), ``outcome`` (passed, failed,
   skipped, error, xfailed, xpassed), ``seconds`` (the test's whole time), ``setup``, ``call``, ``teardown`` (Python:
-  each phase's seconds), ``worker`` (the xdist worker, ``gw0``..., when parallel); a Rust binary has ``tests``,
-  ``passed``, ``failed``, ``ignored`` (cargo's ``test result:`` line; ``seconds`` is its ``finished in``: stable
-  Rust gives no time a test).
+  each phase's seconds), ``worker`` (the xdist worker, ``gw0``..., when parallel); a Rust program has ``tests``,
+  ``passed``, ``failed``, ``ignored`` (its ``test result:`` line; ``seconds`` is its wall time: stable Rust gives no
+  time a test).
 - ``summary``, last: ``start``'s fields again, ``wall`` (seconds), ``collected``, ``counts`` (by outcome),
   ``test_seconds`` (the sum of the tests' ``seconds``), ``exit`` (pytest's exit status, cargo's exit code); Rust
-  also ``compile`` (cargo's ``Finished ... in``, seconds).  A folder without it is a suite that was killed.
+  also ``compile`` (the build's seconds) and ``test_wall`` (the programs').  A folder without it is a suite that
+  was killed.
 
 ``triforce test-times`` reads many of them (``report_main``): a suite's wall time run by run, every test's median and
 worst time over the last N runs, the slowest tests and the tests whose time grew; plain text or ``--json``.  The
-Rust suite's lines come from ``python -m triforce.testlog cargo -- cargo test ...`` (``cargo_main``), which passes
-cargo's output through and reads it as it goes.
+Rust suite's lines come from ``python -m triforce.cargo_tests -- cargo test ...``, which runs cargo's test programs
+side by side.
 
 This module imports neither ``triforce._native`` nor torch, and nothing that reads ``$TRIFORCE_STATES_DIR``
 (``tests/conftest.py`` sets it after the plugin is loaded).
@@ -37,8 +38,6 @@ This module imports neither ``triforce._native`` nor torch, and nothing that rea
 import argparse
 import json
 import os
-import re
-import signal
 import statistics
 import subprocess
 import sys
@@ -207,112 +206,6 @@ def pytest_configure(config):
     config.pluginmanager.register(TimingLog(config), 'triforce-timing-log')
 
 
-# ------------------------------------------------------------------------------------------------ the Rust suite
-
-RUNNING = re.compile(r'^\s*Running (?:(?P<what>.+?) )?\((?P<binary>[^)]+)\)\s*$|^\s*Running (?P<bare>\S+)\s*$')
-DOCTESTS = re.compile(r'^\s*Doc-tests (?P<crate>\S+)\s*$')
-RESULT = re.compile(r'^test result: (?P<result>\w+)\. (?P<passed>\d+) passed; (?P<failed>\d+) failed; '
-                    r'(?P<ignored>\d+) ignored;.*finished in (?P<seconds>[\d.]+)s')
-FINISHED = re.compile(r'^\s*Finished .* in (?P<time>.+?)\s*$')
-
-
-def cargo_seconds(text: str) -> Optional[float]:
-    """Cargo's durations: ``0.06s``, ``1m 23s``, ``2h 01m 05s``."""
-    total, found = 0.0, False
-    for amount, unit in re.findall(r'([\d.]+)\s*(h|m|s)\b', text):
-        total += float(amount) * {'h': 3600, 'm': 60, 's': 1}[unit]
-        found = True
-    return total if found else None
-
-
-def binary_name(path: str) -> str:
-    """``target/release/deps/zelda-0a1b2c3d`` -> ``zelda``."""
-    name = Path(path).name
-    return re.sub(r'-[0-9a-f]{8,}$', '', name)
-
-
-class CargoReader:
-    """Reads cargo's output line by line into the stream: a ``test`` line for every test binary."""
-
-    def __init__(self, log: Optional[events.EventLog]):
-        self.log = log
-        self.current: Optional[str] = None
-        self.counts = dict.fromkeys(OUTCOMES, 0)
-        self.binaries = 0
-        self.tests = dict.fromkeys(('passed', 'failed', 'ignored'), 0)
-        self.test_seconds = 0.0
-        self.compile: Optional[float] = None
-
-    def feed(self, line: str):
-        if (match := RUNNING.match(line)) is not None:
-            what, binary = match['what'], match['binary'] or match['bare']
-            self.current = f"{what} ({binary_name(binary)})" if what else binary_name(binary)
-        elif (match := DOCTESTS.match(line)) is not None:
-            self.current = f"doctests ({match['crate']})"
-        elif (match := RESULT.match(line)) is not None:
-            counts = {key: int(match[key]) for key in ('passed', 'failed', 'ignored')}
-            outcome = 'passed' if match['result'] == 'ok' else 'failed'
-            seconds = float(match['seconds'])
-            self.binaries += 1
-            self.counts[outcome] += 1
-            self.test_seconds += seconds
-            for key, value in counts.items():
-                self.tests[key] += value
-            if self.log is not None:
-                self.log.emit('test', id=self.current or f'binary {self.binaries}', outcome=outcome, seconds=seconds,
-                              tests=sum(counts.values()), **counts)
-            self.current = None
-        elif (match := FINISHED.match(line)) is not None and self.compile is None:
-            self.compile = cargo_seconds(match['time'])
-
-
-def cargo_main(argv: Optional[list] = None) -> int:
-    """``python -m triforce.testlog cargo -- cargo test ...``: runs the command with its output (stdout and stderr,
-    merged) passed through to stdout, writes the ``rust`` suite's timing stream, exits with the command's code.  A
-    SIGTERM (the job stopped) is passed to cargo, and the stream still gets its summary."""
-    parser = argparse.ArgumentParser(prog='python -m triforce.testlog cargo')
-    parser.add_argument('command', nargs=argparse.REMAINDER, help="-- cargo test ...")
-    args = parser.parse_args(argv)
-    command = args.command[1:] if args.command[:1] == ['--'] else args.command
-    if not command:
-        parser.error("no command after --")
-    job = job_fields()
-    facts = {**jobs.checkout(), 'job': job, 'workers': 1, **machine_fields(), 'args': command}
-    try:
-        log = open_log('rust', job)
-        log.emit('start', **facts)
-    except OSError as error:
-        log = None
-        print(f"triforce.testlog: no timing log ({error})", file=sys.stderr)
-    reader = CargoReader(log)
-    began = time.monotonic()
-    try:
-        child = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)  # pylint: disable=consider-using-with
-    except OSError as error:        # no such program: exit as a shell would
-        print(f"triforce.testlog: {error}", file=sys.stderr)
-        child = None
-    if child is None:
-        code = 127
-    else:
-        previous = signal.signal(signal.SIGTERM, lambda signum, _frame: child.send_signal(signum))
-        try:
-            with child:
-                for raw in child.stdout:
-                    sys.stdout.buffer.write(raw)
-                    sys.stdout.buffer.flush()
-                    reader.feed(raw.decode('utf-8', errors='replace'))
-                code = child.wait()
-        finally:
-            signal.signal(signal.SIGTERM, previous)
-        code = code if code >= 0 else 128 - code
-    if log is not None:
-        counts = {key: value for key, value in reader.counts.items() if value}
-        log.emit('summary', **facts, wall=round(time.monotonic() - began, 3), collected=reader.binaries,
-                 counts=counts, tests=reader.tests, test_seconds=round(reader.test_seconds, 3),
-                 compile=reader.compile, exit=code)
-    return code
-
-
 # ------------------------------------------------------------------------------------------------ the reader
 
 def read_runs(root: Path) -> list[dict]:
@@ -453,4 +346,4 @@ def report_main(argv: Optional[list] = None) -> int:
 
 
 if __name__ == '__main__':
-    sys.exit(cargo_main(sys.argv[2:]) if sys.argv[1:2] == ['cargo'] else report_main())
+    sys.exit(report_main())
