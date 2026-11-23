@@ -535,6 +535,8 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   TRIFORCE_MODELS_DIR=$PWD/models .venv/bin/python play-zelda.py 3x2`).
 - **Log every experiment** in `docs/experiments/roundN.md` (setup, numbers, what was promoted, what wasn't and why)
   and every idea or problem found along the way in `docs/experiments/backlog.md`.
+- **Note where each idea came from** in the round doc: the owner's (from his own messages only), the agents', or
+  joint (who did which part), and what came of it; the ledger is `docs/credits.md`.
 - **Families are by enemy, not by dungeon** (`docs/specialists.md`, `docs/decisions.md` 2026-11-03): a Red Goriya
   room needs the same skills anywhere. Group rooms by the enemies in them, but don't boil it down to one model per
   enemy type or per room beyond what Lee asks for. Families are the d2first route's rooms (`routes.yaml`
