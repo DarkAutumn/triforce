@@ -379,8 +379,8 @@ class Policies:
     A policy is named by its key (round 32, ``registry.policy_run``): the family, and on a route with
     ``own_models_until`` also ``family@route`` for a family with a run promoted for the route, which plays the
     family's rooms before that step (the engine picks a step's key, ``zelda::GameMap::step_policy``); the family's
-    key plays its default run there.  On a route without the key a family's ``promoted.<route>`` plays every step
-    under the family's key (phase X).
+    key plays its default run there, or its ``late.<route>`` where it has one (round 38).  On a route without the key a
+    family's ``promoted.<route>`` plays every step under the family's key (phase X).
 
     ``checkpoints`` (key -> checkpoint file or run dir) overrides the registry's run: a family's key both parts, a
     ``family@route`` key the route's part only; ``networks`` (key -> a ``ZeldaPolicy``) supplies a model directly

@@ -107,19 +107,21 @@ def parse_families(items, parallel: int, shares: Optional[dict] = None,
 
 
 class Teachers:
-    """Each family's teacher (the network that plays its rooms today: ``registry.policy_checkpoint(key)``, or the
-    given checkpoints), on ``device``, labelling rows in batches: joint log-probs ``[n, 352]`` and values.
-    ``weights``: key -> the weight of its rows' teacher term (default 1; 0: no teacher term for that key)."""
+    """Each family's teacher (the network that plays its rooms today: ``registry.policy_checkpoint(key, root,
+    route)``, on ``route`` a family's ``late.<route>`` over its ``promoted``, or the given checkpoints), on ``device``,
+    labelling rows in batches: joint log-probs ``[n, 352]`` and values.  ``weights``: key -> the weight of its rows'
+    teacher term (default 1; 0: no teacher term for that key)."""
 
     def __init__(self, keys, device, root=None, checkpoints: Optional[dict] = None,
-                 weights: Optional[dict] = None):
+                 weights: Optional[dict] = None, route: Optional[str] = None):
+        # pylint: disable=too-many-arguments, too-many-positional-arguments
         self.device = torch.device(device)
         self.weights = {key: float((weights or {}).get(key, 1.0)) for key in keys}
         self.networks: dict[str, torch.nn.Module] = {}
         self.paths: dict[str, str] = {}
         loaded: dict[str, torch.nn.Module] = {}
         for key in keys:
-            path = (checkpoints or {}).get(key) or registry.policy_checkpoint(key, root)
+            path = (checkpoints or {}).get(key) or registry.policy_checkpoint(key, root, route)
             real = str(Path(path).resolve())
             if real not in loaded:
                 loaded[real] = registry.load_model(path)[0].to(self.device).eval()
