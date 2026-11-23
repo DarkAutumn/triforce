@@ -129,11 +129,12 @@ def logs_root(root: Optional[str | os.PathLike] = None) -> Path:
     return Path(__file__).resolve().parents[1] / 'logs'
 
 
-def new_log_dir(what: str, root=None, now: Optional[datetime] = None) -> Path:
+def new_log_dir(what: str, root=None, now: Optional[datetime] = None, job_label: bool = True) -> Path:
     """Creates ``<root>/<yymmdd>_<NNN>_<what>`` with the next free NNN for that day (any width: 999 is followed by
     1000).  The scan and the mkdir hold an exclusive lock on ``<root>/.lock``, so concurrent jobs get distinct NNN
-    whatever their names.  Inside a job its name, ``<agent>-<task>-<subtask>``, replaces ``what`` (``jobs.label``)."""
-    what = jobs.label(what)
+    whatever their names.  Inside a job its name, ``<agent>-<task>-<subtask>``, replaces ``what`` (``jobs.label``)
+    unless ``job_label`` is False (a test suite's timing folder, ``triforce.testlog``, names the job itself)."""
+    what = jobs.label(what) if job_label else what
     base = logs_root(root)
     base.mkdir(parents=True, exist_ok=True)
     day = (now or datetime.now()).strftime('%y%m%d')

@@ -329,8 +329,9 @@ def main(argv=None):
                    'play': ('triforce.play', 'main'), 'evaluate': ('triforce.evaluate', 'main'),
                    'eval-batch': ('triforce.eval_batch', 'main'), 'room-stats': ('triforce.room_stats', 'main'),
                    'convert-model': ('triforce.convert', 'main'),
-                   'select-checkpoint': ('triforce.select_checkpoint', 'main')}
-    # `triforce [--models-dir DIR] train|run|play|evaluate|eval-batch|room-stats|convert-model|select-checkpoint ...`
+                   'select-checkpoint': ('triforce.select_checkpoint', 'main'),
+                   'test-times': ('triforce.testlog', 'report_main')}
+    # `triforce [--models-dir DIR] train|run|play|evaluate|eval-batch|room-stats|convert-model|select-checkpoint|test-times ...`
     # forwards the rest to the module's own CLI.
     models_dir, rest = None, argv
     while rest:
@@ -370,6 +371,8 @@ def main(argv=None):
                                          "observation schema 5 checkpoints to this code's observation)")
     sub.add_parser('select-checkpoint', help="python -m triforce.select_checkpoint FAMILY RUN ... (choose a run's "
                                              "numbered checkpoint by a chain segment, confirmed on fresh seeds)")
+    sub.add_parser('test-times', help="the test suites' timing logs read together: wall time run by run, each "
+                                      "test's median and worst, the slowest, what grew (triforce.testlog)")
     sub.add_parser('list', help="specialists, their promoted run and run count")
 
     promote = sub.add_parser('promote', help="mark a run as the specialist's promoted model")
