@@ -73,8 +73,10 @@ pub const CUR_SONG: usize = 0x609;
 pub const BACKGROUND_SAMPLE: usize = 0x5F6;
 /// `asm:Tune0ScriptOffset`.
 pub const TUNE0_SCRIPT_OFFSET: usize = 0x60E;
-/// `asm:CurNoteLowPeriodTrg`.
-const CUR_NOTE_LOW_PERIOD_TRG: usize = 0x5F0;
+/// The song's bytes `asm:Song_PrepPhrase` does not set, which a jingle therefore inherits from the song it replaces:
+/// `asm:CurNoteLowPeriodTrg` (the triangle vibrato writes it every frame until the jingle's first triangle note),
+/// `asm:SongRepetitionsTrg`, `asm:SongRepeatStartOffset` and `asm:SongPhraseIndex`.
+const SONG_KEPT: [usize; 4] = [0x5F0, 0x61E, 0x61F, 0x6C];
 /// `Tune0Request` / `CurTune0` of the low-hearts beep (`asm:Audio_DriveTune0`).
 pub const BEEP: u8 = 0x40;
 /// The driver's own RAM: `asm:SongScriptPtrLo` .. `asm:NoteCounterTune1` and `asm:CurNoteLowPeriodTrg` ..
@@ -365,10 +367,9 @@ impl Voice {
             Kind::Quiet => {}
             Kind::Effects => {
                 if jingle(*song) {
-                    // A jingle inherits from the song it replaces the triangle's note period
-                    // (`asm:CurNoteLowPeriodTrg`, which no phrase start resets and the vibrato writes every frame
-                    // until the jingle's first triangle note).
-                    mine[CUR_NOTE_LOW_PERIOD_TRG] = ram[CUR_NOTE_LOW_PERIOD_TRG];
+                    for addr in SONG_KEPT {
+                        mine[addr] = ram[addr];
+                    }
                 } else {
                     // A song's request replaces a jingle in the game; here it only stops it.
                     self.stop |= *song != 0 && jingle(mine[CUR_SONG]);

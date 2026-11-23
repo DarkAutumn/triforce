@@ -193,10 +193,7 @@ impl Checks {
         }
         self.effect_state.add(frame, differ(mine(split, Track::Effects), ram, &tracks::EFFECT_STATE));
         if jingle(song) {
-            // A jingle is one phrase: `asm:SongPhraseIndex` ($6C) belongs to the multi-phrase songs and keeps the
-            // music's value in the game.
-            let jingle_time: Vec<usize> = tracks::SONG_TIME.iter().copied().filter(|&a| a != 0x6C).collect();
-            self.jingle.add(frame, differ(mine(split, Track::Effects), ram, &jingle_time));
+            self.jingle.add(frame, differ(mine(split, Track::Effects), ram, &tracks::SONG_TIME));
         }
         let without = mine(quiet, Track::Effects);
         self.beep_left += u64::from(without[tracks::CUR_TUNE0] == tracks::BEEP);
