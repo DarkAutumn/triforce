@@ -143,3 +143,66 @@ entering, 4:0x31 119 -> 56; Gleeok 4:0x13 905 -> 928): 300 iterations of reinfor
 **Decision: a correction round (DAgger) before any more reinforcement**, the student acting, the teachers labelling,
 with the every-room entries the data never had, on the rooms the rooms tier and these chains name (D5's Olive Garden,
 D8's Darknut rooms, D3's 0x59/0x5b/0x69, D4's 0x32/0x12/0x13, D7's 0x1b/0x1c), then the student re-tuned and chained.
+
+## The every-room data, a correction round and the shared hit head: above the 51 (2.0.0.7)
+
+Three steps on the hitnet student (`h768`, 768 wide, 3 deep, joint hit output), each a 5-epoch fine-tune at lr 3e-4
+from the one before on all the data so far:
+
+1. **`h768-r`: the every-room entries.** `r36_merge_record.py --sources rooms --harvest DIR` (an every-room harvest
+   as a data source, less both bench tiers' states): 200 chains of the 51 on each of the 17 segments harvested every
+   correct room entry (`eval-chain --harvest DIR --harvest-every-room`), 45 keys, 921,600 rows the teachers labelled
+   at the hearts the chain brought. Held-out KL 0.118 -> 0.100.
+2. **`h768-d1`: one correction round (DAgger).** `h768-r` played 400 chains of D3, D4, D5, D7 and D8 with the
+   every-room harvest on (20,608 arrivals, its own hearts); the teachers labelled the student's own decisions on
+   them (`--student`, 18 keys, 737,280 rows). Held-out KL 0.089.
+3. **`d1-all-w8`: the shared hit head.** `h768-d1` with the one hit head trained over every family
+   (`models/r38head-hit/all`, round38.md "The hit head across families"), a fixed shift on the logits, softplus,
+   weight 8 (`r38_hit.combine`). The network is one file; the head is not retrained per family.
+
+**The rooms tier** (`triforce/lab/bench-rooms.json`, rebuilt on 2.0.0.7: 100 room entries, 5,980 episodes, each
+start as the chain brought it), success, hits a visit, hearts lost a visit, per dungeon in points against the 51,
+and the rows `bench compare` lists as losing (-5 points beyond 2 SE):
+
+| network | total | hits | hearts | D1 | D3 | D4 | D5 | D6 | D7 | D8 | D9 | losing rows |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| the 51 (reference) | 92.3% | 1.003 | 0.678 | | | | | | | | | |
+| `h768-f` | 90.4% | 1.092 | 0.789 | -2.6 | -2.1 | -3.9 | -3.9 | -1.3 | -1.3 | -3.6 | +0.2 | 11 |
+| `h768-r` | 91.2% | 1.032 | 0.726 | +0.2 | -2.0 | -2.4 | -2.3 | -1.7 | -1.0 | +0.5 | +0.2 | 5 |
+| `h768-d1` | 91.9% | 1.009 | 0.699 | -2.6 | -0.4 | -0.8 | -2.4 | -1.0 | +0.6 | +1.2 | +0.6 | 2 |
+| `d1-all-w8` | **94.7%** | **0.719** | **0.409** | -1.0 | +3.3 | +4.7 | +4.7 | +0.2 | +2.1 | +7.1 | +0.8 | **0** |
+
+The every-room data took out six of `h768-f`'s eleven losing rows (the Olive Garden 5_05e -31.7 -> -15, Dungeon 8's
+darknut 8_3fw -21.7 -> -8, like-like 4_32w -16.7 -> -10); the correction round two more and goriya's 7_1bw, lost
+every time before (-22 -> -5). With the head no row loses; wizzrobe 6_3aw (-13) is the worst, inside 2 SE.
+
+**The chains** (1,000 runs, seeds 0-999, paired by seed with the 51: D3 and D4 with `r37fix-1k` cut at the
+segment's exit, D5, D7, D8 with the 51 re-chained on 2.0.0.7), success (paired difference), hits a visit, hearts lost
+a visit:
+
+| dungeon | the 51 | `h768-r` | `h768-d1` | `d1-all-w8` | the team with heads (round38.md, 2.0.0.6) |
+|---|---|---|---|---|---|
+| D4 | 21.1%, 0.342, 0.229 | 10.0% (-11.1 ± 1.6), 0.405, 0.276 | 15.5% (-5.6 ± 1.7), 0.359, 0.247 | **57.0% (+35.9 ± 2.1)**, 0.208, 0.123 | 66.6% |
+| D3 | 21.7%, 0.310, 0.215 | 12.7% (-9.0 ± 1.7), 0.373, 0.253 | 16.5% (-5.2 ± 1.8), 0.344, 0.239 | **42.5% (+20.8 ± 2.0)**, 0.210, 0.153 | 40.1% |
+| D5 | 29.7%, 0.352, 0.494 | 14.7% (-15.0 ± 1.9), 0.436, 0.675 | 25.4% (-4.3 ± 2.0), 0.382, 0.541 | **70.0% (+40.3 ± 2.0)**, 0.221, 0.247 | 66.1% |
+| D7 | 15.2%, 0.932, 0.639 | 0.0% (-15.2 ± 1.1), 0.994, 0.770 | 10.1% (-5.1 ± 1.5), 0.961, 0.676 | **66.2% (+51.0 ± 1.9)**, 0.625, 0.336 | 71.3% (goriya's head, 2.0.0.5) |
+| D8 | 39.1%, 1.834, 1.419 | 34.6% (-4.5 ± 2.1), 1.862, 1.482 | 42.4% (+3.3 ± 2.1), 1.777, 1.369 | **84.0% (+44.9 ± 2.0)**, 0.954, 0.609 | 80.9% |
+
+Where the runs are lost per 1,000 entering, the 51 -> `d1-all-w8`: Gleeok 4:0x13 705 -> 367, like-like 4:0x32 118 ->
+5; 3:0x59 68 -> 13, 3:0x5b 120 -> 74; the Olive Garden 5:0x05 422 -> 137; goriya 7:0x1b 670 -> 97, 7:0x1a 178 -> 12;
+8:0x3e 283 -> 33, 8:0x3f 221 -> 24. The correction round alone closed 5.5 / 3.8 / 10.7 / 10.1 / 7.8 points of
+`h768-r`'s gap (D4 / D3 / D5 / D7 / D8) and left the student 4-6 points under the 51 on four dungeons; the head
+then took it 21 to 51 points above, about level with the team with heads (D4 the exception: 57.0 against 66.6).
+
+**One run from the start**, `d1-all-w8` in every slot, the 18 segments at 1,000 runs each: product of the segment
+rates **1.53e-3** (one in 653; the 51 6.7e-6, the owner's target 1e-4). The segments under 90%: post-d7 24.0%,
+post-d6 34.5%, D3 42.5%, D6 49.7%, D9 53.5%, D4 57.0%, D7 66.2%, D5 70.0%, post-d5 76.5%, D8 84.0%. 1,000 runs of
+the whole route: D3's triforce 470, D4 259, D1 256, D2 235, D5 127, D7 51, the magic sword 24, D6 13, D8 3, the
+ending 0. The overworld legs after Dungeons 7 and 6 cost the most, and they are route, not combat:
+
+- **post-d7** (0:0x42 to 6:0x79): 0x50 leaves by a wrong exit in 768 of 1,100 visits (its teacher, `r30e-lynel-s84`,
+  a `d2first` run, never trained 0x50 E->S), then Link wanders the Ghini rooms (0x40, 0x41, 0x31, 0x21) to the
+  wrong-exit limit or dies in 0x32. The team lost the leg the same way (24.0%) until 2.0.0.11's `ow-lynel@d3first`.
+- **post-d6** (0:0x22 out of Dungeon 6 to 8:0x7e): at 0x22 Link must turn up and play the recorder twice; in 690 of
+  1,067 visits he walks back into Dungeon 6 instead and dies to 6:0x78's Wizzrobes (570). The team's
+  `r30e-lynel-s84` does the same (32.0%, round 36).
