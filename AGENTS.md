@@ -923,14 +923,22 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 ## Environment
 
 - Setup (README "Getting started"): `uv venv --python 3.12 .venv`, then `uv pip install --python .venv/bin/python -e
-  '.[dev]'` (pytest, pyyaml, PySide6, pygame). Python 3.12; RTX 4090, 10 cores / 20 threads. ROM at
+  '.[dev]'` (pytest, pytest-xdist, pyyaml, PySide6, pygame). Python 3.12; RTX 4090, 10 cores / 20 threads. ROM at
   `roms/zelda.nes` (or `$TRIFORCE_ROM`); `triforce job setup BRANCH` makes a worktree with all of it. After changing
   any crate, rebuild the module: `triforce job build --agent A --task T` (`maturin develop --release`, niced).
 - Tests: `triforce job test SUITE... --agent A --task T [--build] [--timeout 60m]`, the suites `python`
-  (`pytest -q tests`; it names its tests of 10 seconds or more at the end), `asm` (`pytest -q zelda-asm/tests`),
-  `check` (`asm.py check`), `rust` (`cargo test --release --workspace --features zelda/zcore`), `all` = the four;
-  several run side by side as one entry, each one's output shown whole at the end (`test python asm check` leaves
-  Rust out). The Python suite is about 8.5 minutes on one core (backlog). Every Python test fails after 15 minutes (`$TRIFORCE_TEST_TIMEOUT` seconds,
+  (`pytest -q -n 8 --dist worksteal tests`: eight processes, pytest-xdist; about a minute on a quiet machine, 7
+  minutes in one process: `-- -n 0`), `asm` (`pytest -q zelda-asm/tests`), `check` (`asm.py check`), `rust`
+  (`cargo test --release --workspace --features zelda/zcore`), `all` = the four; several run side by side as one
+  entry, each one's output shown whole at the end (`test python asm check` leaves Rust out). **Every test run
+  writes a timing log, not a printout** (the owner, Nov 23): `<yymmdd>_<NNN>_tests-<suite>[-<job>]/tests.jsonl` in
+  the main checkout's `logs/` (every pytest run of the repo through `pyproject.toml`'s `-p triforce.testlog`; the
+  Rust suite a line per test binary from cargo's output): a line per test (id, outcome, setup / call / teardown
+  seconds, worker) and a summary (suite, commit, branch, the job, wall seconds, counts, the load average at the
+  start). `triforce test-times [--suite S] [--last N] [--json]` reads them together: the wall time run by run, each
+  test's median and worst, the slowest, what grew. A test runs beside seven others: never a fixed port, a shared
+  file outside its `tmp_path`, or a time bound that only an idle machine meets; session fixtures run once per
+  worker. Every Python test fails after 15 minutes (`$TRIFORCE_TEST_TIMEOUT` seconds,
   `tests/conftest.py`), so a hang ends as a failure with its traceback; the queue's `--timeout` bounds a whole suite.
   Keep them green. Emulator changes: `tf ladder-golden` before, `tf ladder-diff` after (README);
   behaviour gate for emulator changes: `scripts/port_gate.sh LABEL`.

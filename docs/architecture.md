@@ -31,7 +31,7 @@ flowchart LR
 | `crates/theater` | Replays for watching: `queues.rs` (`Queues`: `success`/`stuck`/`died`/`random` first-in-first-out and `best`, the top runs seen), `feed.rs` (`Feed`: the background thread that files every finished run of a `Producer` and pauses it while nothing is wanted), `screen.rs` (`Screen`: one thread per cell playing a replay at a frame rate, one cell heard), `speaker.rs` (`Ring`, `Speaker`: the sound device, `cpal`), `overlay.rs` (the controller drawn into a frame). Knows replays and the emulator only. |
 | `crates/policy` | `Policy`: the network's Rust copy that acts inside the pool (forward pass, masked heads, keyed Gumbel noise `noise.rs`). |
 | `crates/tools` | The `tf` CLI (below). |
-| `triforce/` (Python) | `ppo.py`, `rollout_buffer.py`, `metrics.py`, `model.py`, `train.py`, `evaluate.py`, `runner.py`, `replay.py`, `golden.py`, `provenance.py`, `run.py`, `cli.py`, `play.py`, `play_grid.py`, `play_view.py`, `video.py`, `explore.py`, `entry_states.py`, `chain_hp.py`, `heart_value.py`, `events.py`, `registry.py`, `plr.py`, `best_of_n.py`, `eval_batch.py`, `select_checkpoint.py`, `jobqueue.py` / `job.py` / `jobs.py` (the job queue, `triforce job`); thin `observation.py` (gym space from `OBS_SPEC`), `actions.py` (`Action`, `ActionMask` flat-mask view), `zelda_enums.py` (`ActionKind`, `Direction`, `MapLocation`), `specialist.py`, `paths.py` (`STATES_DIR`, `TRAJECTORIES_DIR`). |
+| `triforce/` (Python) | `ppo.py`, `rollout_buffer.py`, `metrics.py`, `model.py`, `train.py`, `evaluate.py`, `runner.py`, `replay.py`, `golden.py`, `provenance.py`, `run.py`, `cli.py`, `play.py`, `play_grid.py`, `play_view.py`, `video.py`, `explore.py`, `entry_states.py`, `chain_hp.py`, `heart_value.py`, `events.py`, `registry.py`, `plr.py`, `best_of_n.py`, `eval_batch.py`, `select_checkpoint.py`, `jobqueue.py` / `job.py` / `jobs.py` (the job queue, `triforce job`), `testlog.py` (the test suites' timing logs, `triforce test-times`); thin `observation.py` (gym space from `OBS_SPEC`), `actions.py` (`Action`, `ActionMask` flat-mask view), `zelda_enums.py` (`ActionKind`, `Direction`, `MapLocation`), `specialist.py`, `paths.py` (`STATES_DIR`, `TRAJECTORIES_DIR`). |
 
 ## Processes and threads
 
@@ -1483,6 +1483,24 @@ every step, so following an enemy that moves away pays again, and knockback rese
   most a write every 2 s), a shell script with `triforce job progress DONE [TOTAL] --unit U`, any command with `run
   --progress-lines FILE --total N` (the wrapper counts the file's lines); `build`, `test` and `setup` show their
   steps (`steps`). `triforce job list [--all]`: what runs, what waits in which order, what ended in the last hour.
+- The test suites (`triforce job test`, `job.test_steps`; the owner, Nov 23): the Python suite runs in
+  `PYTEST_WORKERS` = 8 processes (pytest-xdist, `--dist worksteal`: a test to whichever is free; 410-433 s in one
+  process, about a minute in eight, on a quiet machine; 12 were slower than 8, and the tools lane runs two suites at
+  once). `tests/conftest.py` runs in every worker (its own states dir, queue dir and session fixtures); the
+  controller runs no test and reports the suite's tests done of collected into the job's row (the total from
+  `pytest_xdist_node_collection_finished`, each test's end forwarded by xdist). **Timing logs** (`testlog.py`, a
+  pytest plugin that `pyproject.toml` loads for every run of the repo): the reporting process (the controller, or
+  the one process) writes `<logs>/<yymmdd>_<NNN>_tests-<suite>[-<job label>]/tests.jsonl` (`events.EventLog`;
+  `<logs>` is `$TRIFORCE_LOGS_DIR`, else the main checkout's `logs/`, so a worktree's runs join one history; no
+  `training.json`: the training GUI does not list it): `start`, a `test` line per test as it ends (`id`,
+  `outcome`, `seconds`, `setup` / `call` / `teardown`, `worker`) and `summary` (checkout, branch, commit, `job`:
+  id, label, agent, task, subtask; `workers`, `load` at the start, `wall`, `collected`, `counts`, `test_seconds`,
+  `exit`). The Rust suite runs as `python -m triforce.testlog cargo -- cargo test ...`, which passes cargo's output
+  through and writes a `test` line per test binary (`Running` / `Doc-tests`, then its `test result:`: counts and
+  `finished in`; stable Rust has no per-test times) and a summary with `compile` seconds. `triforce test-times`
+  (`testlog.report_main`) reads every folder with a summary: per suite the wall time run by run, each test's median
+  and worst over the last `--last` runs, the `--top` slowest, the tests whose newest time is 1.5x and 1 s over the
+  median of the runs before; plain text or `--json`.
 - Enforcement (`jobs.ENFORCE`, the owner, Nov 23): `announce` and `require_job` return inside a job
   (`$TRIFORCE_JOB_ID`, inherited by every child: a batch's chains, a round's trainings) or with a terminal attached
   (`jobs.attended`: the owner at a shell); otherwise they print the `triforce job run ...` form of the same command

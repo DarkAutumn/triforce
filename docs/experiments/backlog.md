@@ -450,16 +450,15 @@ thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
     own). A tool started directly without a name and without a terminal is refused, so the rules are enforced at
     the door. The registry files stay the format (old trees and running jobs keep working); no daemon. Not before
     the backtest is done (it ports `jobs.py` into 26 trees). Proposed, not started: the owner decides.
-  - **The Python suite is slow: about 8.5 minutes on a quiet machine, on ONE core** (the owner, Nov 23: "Why does
-    pytest take so long?"). 990 tests run one after another in one process (measured: 512 s; the process at 95% of
-    one core of 20), and many are end-to-end (a real training, chain, batch or wrapper each starting its own
-    interpreter with torch and the native module). To do: `pytest --durations=40` to rank them; run the suite in
-    parallel (`pytest-xdist`: the session fixtures, the shared states dir and the queue tests' timing need a look);
-    shorten or mark the slowest end-to-end ones. Target: under 2 minutes, as `triforce job test python`. Until
-    then `triforce job test all` runs its suites (Python, asm, Rust) side by side (Nov 23). With it (the owner, Nov
-    23): the test verb ends with the slow tests named ("this test took longer than [threshold]: investigate it, or
-    ask the parent agent to queue it for investigation"), from pytest's own durations and cargo's per-binary times,
-    so a test that grows slow is seen the day it does.
+  - **The Python suite was slow: done Nov 23 (r40-tests).** It was 7 minutes on ONE core (the owner, Nov 23: "Why
+    does pytest take so long?"; 982 tests, 410-433 s in three runs at load 2-5, the sum of ~980 small tests, many
+    end to end). Now `triforce job test python` runs it in 8 processes (pytest-xdist, worksteal): about a minute
+    on a quiet machine (AGENTS.md "Environment"). The owner's follow-up replaced the printout of slow tests: every
+    test run writes a timing log into the logs folder (`triforce.testlog`, the Rust suite per test binary) and
+    `triforce test-times` reads them together (each test's median and worst, the slowest, what grew), so a test
+    that grows slow is seen in the history. Left: `test_entry_states.py::test_configured_start_states_are_clean`
+    (12 s) and the select-checkpoint test (about 25 s alone, 7 chains) set the suite's floor; nothing else is above
+    7 s.
   - The plain ways the first-quest draft left open (the Lost Woods maze in the objective, the overworld ladder clip):
     dropped, the program plays clips on only.
 

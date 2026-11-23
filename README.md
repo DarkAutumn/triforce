@@ -156,7 +156,7 @@ Trained models aren't checked in either (they're too big), so watching the agent
 
 ```bash
 cargo test --release --workspace --features zelda/zcore        # Rust tests (~1 min; see "Testing")
-.venv/bin/python -m pytest -q                                   # Python tests (~1 min)
+.venv/bin/python -m pytest -q -n 8 tests                       # Python tests (~1 min in 8 processes; 7 in one)
 .venv/bin/python -m pytest -q -m e2e                           # only the end-to-end tests (untrained nets, seconds)
 .venv/bin/python -m triforce.play --state 1_44w_0               # load a savestate and look at the room
 .venv/bin/python -m triforce.play "MOVE E 16" "SWORD E"         # act; the session persists between calls
