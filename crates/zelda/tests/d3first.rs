@@ -3,8 +3,8 @@
 //! heart containers, items, pieces), the whirlwind's five warps, two of them dock warps (plays and facings from the
 //! game's index, `zelda::whirlwind::plays`), its stretches (the shared blocks'), and every step's room, entry and exit
 //! a door of game.yaml leading into the next step's room. Its
-//! game.yaml rooms are its own map's (`GameMap::route_map`): `d2first` plays 0:0x2d without the rock wall d3first
-//! bombs and 0:0x3d without the Armos stairs d3first takes (both in the real game, from d2first's own start states).
+//! game.yaml rooms are its own map's (`GameMap::route_map`): `d2first` plays 0:0x3d without the Armos stairs d3first
+//! takes (in the real game, from d2first's own start states); neither route bombs 0:0x2d's rock wall (round 38).
 #![cfg(feature = "zcore")]
 
 mod common;
@@ -60,7 +60,7 @@ fn pieces(levels: &[u8]) -> u8 {
 fn the_route_runs_from_the_start_to_the_end_of_the_game() {
     let map = map();
     let steps = steps(&map);
-    assert_eq!(steps.len(), 292);
+    assert_eq!(steps.len(), 290);
     let (first, last) = (&steps[0], steps.last().unwrap());
     assert_eq!((first.level, first.room, first.entry.as_str(), first.exit.as_str()), (0, 0x77, "start", "cave"));
     assert_eq!((last.level, last.room, last.exit.as_str()), (9, 0x32, "end"));
@@ -213,11 +213,11 @@ fn session(state: &str, room: u8) -> Option<Session<Counted>> {
     panic!("{state}: never in 0:{room:#04x}: {}", s.state().full_location());
 }
 
-/// 0:0x2d's rock wall (d3first's 30 secret, its own game.yaml entry for the room): d2first plays the room without it
-/// (no wall to bomb, no bomb granted on its step crossing S -> W into the heart rock's room, from its own pre-entry
-/// state); in d3first's map the wall is shut and a Link with no bomb gets one where the step leaves by the cave.
+/// 0:0x2d's rock wall (round 38, the owner: d3first's 30 secret dropped): neither route's map has it; both play the
+/// room by its edges (no wall to bomb, no bomb granted on d2first's step S -> W or d3first's W -> S, from d2first's own
+/// pre-entry state with no bomb).
 #[test]
-fn the_rock_wall_of_0x2d_is_d3firsts_only() {
+fn neither_route_bombs_the_rock_wall_of_0x2d() {
     let Some(mut s) = session("0_2ds_0", 0x2d) else { return };
     s.apply_ram(&[(Var::Bombs, 0)]);
     let map = s.game_map().clone();
@@ -229,10 +229,10 @@ fn the_rock_wall_of_0x2d_is_d3firsts_only() {
     assert_eq!(needs(&map, &d2first, None, &state)[CheatItem::Bombs], 0, "d2first crosses 0x2d");
     s.set_map(map.route_map(ROUTE));
     let (own, state) = (s.game_map().clone(), s.state().clone());
-    assert!(state.ow_bomb_secret_closed());
-    let wall = index(steps(&own), 0, 0x2d, "W", "cave");
-    let d3first = GameCompletion::new(own.clone(), ROUTE, Some(wall)).unwrap();
-    assert_eq!(needs(&own, &d3first, None, &state)[CheatItem::Bombs], 1, "d3first bombs the wall");
+    assert!(!state.ow_bomb_secret_closed() && !own.requires_bombs(state.full_location()));
+    let crossing = index(steps(&own), 0, 0x2d, "W", "S");
+    let d3first = GameCompletion::new(own.clone(), ROUTE, Some(crossing)).unwrap();
+    assert_eq!(needs(&own, &d3first, None, &state)[CheatItem::Bombs], 0, "d3first crosses 0x2d");
 }
 
 /// 0:0x3d's secret Armos (the statue at X $90, Y $80; d3first's 30 secret, its step entered from N since round 36):

@@ -3454,3 +3454,23 @@ and 0x29's walls need), so a run with 2 or more crosses to the key door. routes.
   0.51 → 0.20). 7:0x1b both ways (d7): the floor 12.6%, the crossing override 12.7% (runs bring 0.21 bombs, so
   nearly every visit fights either way); the floor lands, the override commented beside it.
 
+## 2026-11-22 — 2.0.0.7: 0:0x2d's rupee cave leaves `d3first` (Lee; the lead lands it, Lee being away)
+
+- **What:** Lee, from watching: "Overworld: drop the bomb for rupees in 0xd2, keep the armos rupees in 3d [...] we
+  may have to cheat rupees more, but that 1 30 secret + the 100 secret + drops is the intended route"; asked, he
+  confirmed "0x2d is indeed what I meant". `d3first` crosses 0:0x2d W → S (its rock wall is no longer bombed, its
+  cave's 30 rupees no longer taken); 0x3d's Armos cave stays. 290 steps (every step after 90 two lower); `game.yaml`
+  keeps no `d3first`-only 0x2d entries; `ow-zora` loses the cave room. `d2first` unchanged (a 100-run chain the
+  same as before).
+- **States:** steps 89-153 rebuilt by the explorer, the Dungeon 5, out-of-Level-5 and Dungeon 7 entries cut from the
+  new chains' arrivals (855 states, audit clean); the other states after step 153 were not, and hold about 30
+  rupees more than runs bring (they matter only in the arrow rooms, which top the purse up).
+- **Rupees:** the shortfall at the shops is cheated and counted as Lee allowed. Before, no run was short; now 137 of
+  196 runs that carry their own purse from after Dungeon 2 are short at the arrows (80, 0x44), about 3 rupees each
+  (2.2 a run); the meat is never short.
+- **Evidence:** round38.md "0x2d dropped" (1000 runs a segment, paired by seed): to Level 2 99.1% → 98.3% (−0.8 ±
+  0.5; 620 frames shorter), `d2` 98.4% → 99.3% (+0.9 ± 0.5; 3.07 bombs in, 2.02 before), to Level 5 100% both,
+  Level 5 to Level 7 78.9% → 83.1% (the new state's; 2.0.0.6's state on the new code 78.9%); from the start 28 of
+  1000 take Dungeon 2's triforce (21). The golden race from power on: three of three; the corpus's
+  `golden-d3first-51-networks` replaced by the path with the fewest cheated bombs (two), then frames (160,248).
+

@@ -37,12 +37,13 @@ needed it, a family has a second run for that route's part (before the magic swo
 
 ## How well it plays
 
-**`d3first`** (2.0.0.6, the owner's corrected order and his bomb rules: on this route a bomb is a weapon only in
-dungeon rooms the route must clear, and the 10th kill's bomb anywhere; `docs/experiments/round36.md` "The corrected
-route", `round37.md` "The owner's bomb rules"; nothing retrained: 2.0.0.3's 51 networks): a golden path (games race
-from triforce to triforce, each segment's first winner continuing, stitched into one replay) from console power on,
-the models alone, reaches the ending; three of three races did, in 320 runs together (180,118 frames for the
-corpus's: about 50 minutes of game, two wall bombs cheated). No bombs are handed
+**`d3first`** (2.0.0.7, the owner's corrected order and his bomb rules: on this route a bomb is a weapon only in
+dungeon rooms the route must clear, and the 10th kill's bomb anywhere; 0:0x2d's bomb-wall rupee cave left out;
+`docs/experiments/round36.md` "The corrected route", `round37.md` "The owner's bomb rules", `round38.md` "0x2d
+dropped"; nothing retrained: 2.0.0.3's 51 networks): a golden path (games race from triforce to triforce, each
+segment's first winner continuing, stitched into one replay) from console power on, the models alone, reaches the
+ending; three of three races did, in 325 runs together (160,248 frames for the corpus's: about 45 minutes of game,
+two wall bombs and one key cheated). No bombs are handed
 over: a wall the route must bomb when Link has none is still given one and counted. Single runs are the hard part:
 the wood sword makes Dungeons 3, 4, 5 and 7 hard, and two of the new legs lose most runs. Of 1,000 runs started at
 each dungeon's entrance (300 for Dungeons 1, 8 and 9), models alone, in the route's order:

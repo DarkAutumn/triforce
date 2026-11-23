@@ -966,32 +966,6 @@ rooms:
     tile: [10, 2]
     rupees: 30
 - level: 0
-  location: '0x2d'
-  routes: [d3first]
-  # Secret (phase X, d3first; walked Nov 19, d3first-walks-a.md §5): a rock wall tile object at x=80 y=80, tiles
-  # (10-11, 2-3); one bomb facing N from ($50,$5D) opens it (room flag $80) to the secret-rupee cave $21: 30 rupees.
-  # d2first crosses the room by its edges and plays it without the secret.
-  requires_bombs: true    # d3first's 30 secret (zelda::cheats cheats one in)
-  bomb_secret: [10, 2]
-  exits:
-    cave:
-      level: 0
-      location: '0x2d'
-      in_cave: true
-- level: 0
-  location: '0x2d'
-  in_cave: true
-  routes: [d3first]
-  specialist: ow-zora
-  exits:
-    S:
-      level: 0
-      location: '0x2d'
-  enemies: null
-  # "IT'S A SECRET TO EVERYBODY": one rupee ware in the middle, taken walking up at X $78 (as 0x67's), the cave's
-  # default treasure tile; 30 rupees, once per game (room flag $10 of 0x2d).
-  treasure: 30-rupees
-- level: 0
   location: '0x2e'
   specialist: ow-zora  # round 24: the plain way of the leg's lake stretch (0x3e N, W to 0x2d)
   exits:

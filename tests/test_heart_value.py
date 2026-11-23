@@ -158,7 +158,8 @@ def test_the_d3first_table_prices_the_steps_its_chains_played():
     the steps the corrected order added or moved (0x2d's cave to 0x0c with Dungeon 2, which the alignment's longest
     common subsequence leaves to the old order's other side; the dock warp out of 0x55, 0x34's landing, 0x44 from the
     north and its cave; 0x51 to the dock warp out of 0x3f and the graveyard's landing) have no visits yet: the damage
-    prior alone, over the next steps' curves, until the new order's chains refit them."""
+    prior alone, over the next steps' curves, until the new order's chains refit them.  Round 38 (2.0.0.7: 0x2d's
+    cave dropped, every step after 90 two lower) refit it the same way onto the 290 steps."""
     root = Path(__file__).resolve().parent.parent
     table = json.loads((root / 'triforce' / 'heart_value.d3first.json').read_text())
     from triforce import _native
@@ -166,17 +167,17 @@ def test_the_d3first_table_prices_the_steps_its_chains_played():
     assert table['route'] == 'd3first'
     assert [r['room'] for r in table['steps']] == [heart_value.room_key(s) for s in steps]
     clip_way = [k for k, s in enumerate(steps) if s['way'] in (None, 'clips')]
-    unvisited = set(range(90, 123)) | {149, 150, 153, 154, 155} | set(range(182, 193))
+    unvisited = set(range(88, 121)) | {147, 148, 151, 152, 153} | set(range(180, 191))
     assert all(table['steps'][k]['clips'] is not None for k in clip_way)
     assert {k for k in clip_way if table['steps'][k]['clips']['visits'] < 20} == unvisited
     for k in unvisited:
         clips = table['steps'][k]['clips']
         assert clips['visits'] == 0 and clips['values'][0] == 0.0 and clips['values'] == sorted(clips['values'])
-    assert [table['steps'][k]['room'] for k in (90, 106, 122, 149, 150, 191, 192)] == \
+    assert [table['steps'][k]['room'] for k in (88, 104, 120, 147, 148, 189, 190)] == \
         ['0:0x2d', '2:0x0d', '0:0x0c', '0:0x55', '0:0x34', '0:0x3f', '0:0x31']
     assert all(row['plain'] is None for row in table['steps'])
     assert all(table['steps'][k]['clips'] is None for k, s in enumerate(steps) if s['way'] == 'plain')
-    for k, room in ((9, '3:0x5b'), (37, '4:0x31'), (145, '5:0x24'), (173, '7:0x1c')):
+    for k, room in ((9, '3:0x5b'), (37, '4:0x31'), (143, '5:0x24'), (171, '7:0x1c')):
         assert table['steps'][k]['room'] == room
         values = table['steps'][k]['clips']['values']
         assert values == sorted(values) and values[2] < values[4] < values[6]
