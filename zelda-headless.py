@@ -29,7 +29,8 @@ from the same state; the first to stand on the overworld with it becomes the che
 from, until the route's end (d2first: eight triforces, then Dungeon 9 to the ending).  The winners are stitched
 into one replay, OUT/golden-<first seed>-<ending>.tfreplay (COUNT of them, each from its own seeds).  A golden race
 is a job of the machine's queue (`triforce job golden --agent A --task T --timeout 10m`: its time cap is its
-estimate; triforce.jobs.announce), and reports the segments raced and the runs played as its progress.
+estimate; triforce.jobs.announce), and reports the segments won of the route's and the runs played (as they
+finish) as its progress.
 
 Nothing is drawn and nothing else is written: one line per saved file (path, ending, frames, seed) and a JSON
 summary on stdout.
@@ -172,21 +173,25 @@ def play_golden(args, runner: Runner, folder: replay.ReplayDir) -> int:
                                    args.keyframe_frames)
     segments = len(golden.checkpoints(args.route)) + 1      # at most: a start past a checkpoint has fewer
     runs = 0
-    raced = played = 0
+    won = before = 0            # segments won; runs played by the segments that ended
+
+    def on_run(_index: int, finished: int):
+        job_progress(before + finished, None, 'runs', 'runs played')
 
     def on_segment(segment: dict):
-        nonlocal raced, played
-        raced += 1
-        played += segment['runs_played']
-        job_progress(raced, segments * args.count, 'segments', 'segments raced', force=True)
-        job_progress(played, None, 'runs', 'runs played', force=True)
+        nonlocal won, before
+        won += segment['won']
+        before += segment['runs_played']
+        job_progress(won, segments * args.count, 'segments', 'segments won', force=True)
+        job_progress(before, None, 'runs', 'runs played', force=True)
         print(f"segment {json.dumps(segment)}", file=sys.stderr, flush=True)
+    job_progress(0, segments * args.count, 'segments', 'segments won', force=True)
     for index in range(args.count):
         first_seed = args.first_seed + index * segments * args.attempts
         data, summary = golden.golden_path(
             runner.policies, args.route, args.parallel, first_seed, record, start_from=args.start_from,
             power_on=args.power_on, attempts=args.attempts, act=runner.act,
-            max_steps=runner.max_steps, on_segment=on_segment)
+            max_steps=runner.max_steps, on_segment=on_segment, on_run=on_run)
         runs += sum(segment['runs_played'] for segment in summary['segments'])
         if summary['result'] != 'success':
             last = summary['segments'][-1]

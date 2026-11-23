@@ -52,8 +52,10 @@ nothing follows it.  A stream without ``end`` belongs to a run that is still goi
 Standalone jobs log too (``logged_job``): ``python -m triforce.evaluate`` writes ``<yymmdd>_<NNN>_eval-<name>``
 (plan kind ``eval``, one run evaluating, its ``<specialist>.jsonl`` with the eval events above) and ``triforce
 eval-chain`` writes ``<yymmdd>_<NNN>_eval-chain-<route>`` (plan kind ``chain``, no runs, ``round.jsonl`` with
-``chain_start`` (runs, parallel, overrides, act), ``chain_progress`` (done, runs, successes, at most once a second
-and on the last run) and ``chain`` (the summary)).  ``--events FILE`` (train, evaluate,
+``chain_start`` (runs, parallel, overrides, act), ``chain_progress`` (done, runs, successes, and the runs so far by
+``runner.ChainTally``: deaths, stucks, errors, triforces ``[[level, runs], ...]`` in the route's order,
+furthest_step, furthest_room, route_steps; at most once a second and on the last run) and ``chain`` (the summary)).
+``--events FILE`` (train, evaluate,
 eval-chain) writes the events into FILE: in a folder with a plan its driver owns the plan, the stream and its
 ``end``; in a folder without one the job writes its plan there (``has_plan``), so every job has a plan.
 

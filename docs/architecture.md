@@ -1372,12 +1372,21 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `round.jsonl` (`start`, `entry_start`, `entry_end`, `end`). Plans record the niceness the job runs at (`nice`).
   `training-gui.py`'s [currently running] shows every job of the machine's job queue, whatever checkout runs it
   (`read_queue`: the live jobs and those that ended in the last 60 minutes, after `jobqueue.sweep` marked the dead):
-  each under its header, the lines `triforce job list` prints for it (`jobqueue.describe`: who, the description,
-  its state, its progress, its verb, kind, branch and command). A job whose log folder holds its plan (in its row:
-  `jobs.record_plan`) shows that folder's runs, bars and evaluation rows under its header; one without (a script,
-  a `--no-log` evaluation, an old tree's command) is drawn from its row alone, "no progress data" when it reports
-  none: a job in the queue is never invisible (Nov 22, after the lab's trainings ran unseen). A live log folder
-  under the logs root that no job owns (a run the owner started at a terminal) is listed among the running ones.
+  each by its card (`job_view`), drawn with widgets (Nov 23, the owner: the 250 test's progress was "essentially a
+  tqdm progress bar"; the ASCII bar of `jobqueue.describe` is `triforce job list`'s alone): who, the description,
+  its state, a progress bar a counter (`JobCard`/`CounterBar`: done of total, rate, time left; a counter without a
+  total its number and rate), its steps each with its state (`StepList`: a build's and a test's), its verb, kind,
+  branch and command. A job whose log folder holds its plan (in its row: `jobs.record_plan`) shows that plan's full
+  view under its card (its header, its runs' rows, its eval-chain card), and leaves off its card the counters its
+  rows show (done, ended, or not reported for 5 minutes: `COUNTER_STALE`); one without (a script, a golden race, a
+  `--no-log` evaluation, an old tree's command) is drawn from its row alone, "no progress reported" when it reports
+  none: a job in the queue is never invisible (Nov 22, after the lab's trainings ran unseen). An eval-chain's card
+  (a standalone chain, the 250-run test's, a round's; a batch's chain rows the same) draws its runs by how they
+  ended (`OutcomeBar`: wins blue, stuck purple, deaths red, errors grey, a block a run up to 120), how many took
+  each dungeon's triforce in the route's order (`TriforceTiles`) and the furthest route step with its room
+  (`ReachBar`), from each `chain_progress`'s `runner.ChainTally` fields; its runs a second and time left. A live log
+  folder under the logs root that no job owns (a run the owner started at a terminal) is listed among the running
+  ones.
   Folders from another checkout are labelled with its directory and branch. Order (window and web view, Nov 17):
   what runs now is on top, the job that began to run last first (`admitted_ts`; never the folder's name, each
   checkout numbers its own), so a job that starts is added at the top and pushes the others down; then the queued
@@ -1406,7 +1415,7 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `/api/state` (JSON), 404 for anything else; nothing reaches the filesystem from a request. Its own thread builds a
   snapshot a second from its own `Training` models, found as [currently running] finds folders, so the window and
   the server never wait for each other; the window's widgets and the page share the Qt-free presentation code
-  (`plan_meta`, `row_phase`, `row_badge`, `chain_bar`, `CHARTS`/`run_chart_data`/`chart_bounds`,
+  (`plan_meta`, `row_phase`, `row_badge`, `job_view`, `chain_outcomes`, `chain_tally`, `CHARTS`/`run_chart_data`/`chart_bounds`,
   `run_eval_sections`). No selection: a card per run (training run, batch evaluation, eval-chain), the running
   ones on top (newest start first), the ended ones below them (newest end first); pending runs only in their live
   plan's queue line; a run that ended stays 60 s after its end

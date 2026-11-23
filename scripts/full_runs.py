@@ -28,7 +28,10 @@ the same report but the wall time, which only ``timing.json`` knows.
 on (``--power-on``: each seed its own file-select delay), every one recorded (``triforce job run --express`` puts
 it in the express place whatever the history estimates).  The team is frozen first:
 the family pointers of ``--models-dir`` (default ``<repo>/models``) are copied into ``OUT_DIR/models`` (their run
-folders linked), so a promotion during the test changes nothing.  Then ``stats``.  The back-test (every past version
+folders linked), so a promotion during the test changes nothing.  Then ``stats``.  While it plays, the training GUI
+(the job's row, its folder's plan and ``events.jsonl``) shows the runs done of 250 with their rate and time left,
+the wins, deaths and stuck runs, how many took each dungeon's triforce and the furthest route step reached (the
+chain's ``chain_progress``); the chain's console summary is not printed.  The back-test (every past version
 on its own code and team, ``docs/runs250/backtest.md``) runs a copy of this script in each version's tree, under the
 main checkout's ``triforce job run --timeout``: ``--route`` (``d2first`` before 2.0.0.0),
 ``--allow-incompatible-models`` (a team stamped by a later version), the chain's options it has (``--clips``,
@@ -315,7 +318,9 @@ def runs250(args) -> int:
     if args.allow_incompatible_models:          # a team stamped by a later version (the back-test's old versions)
         command.insert(3, '--allow-incompatible-models')
     start, commit = time.time(), git_head()      # the code that plays (stats may run later, on a newer commit)
-    code = subprocess.run(command, cwd=ROOT, check=False).returncode
+    # The chain's console summary (a JSON of every model) goes: the GUI draws the test from its events (each
+    # ``chain_progress``: wins, deaths, stucks, the triforces taken, the furthest step) and ``stats`` reports it.
+    code = subprocess.run(command, cwd=ROOT, check=False, stdout=subprocess.DEVNULL).returncode
     (out / 'timing.json').write_text(json.dumps({'seconds': round(time.time() - start, 1), 'runs': args.runs,
                                                  'commit': commit, 'chain_options': sorted(accepted)}) + '\n')
     if code not in (0, 1):
