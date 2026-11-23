@@ -579,6 +579,8 @@ def build_parser() -> argparse.ArgumentParser:
     show = sub.add_parser('list', help="the queue: running, waiting and recently finished jobs")
     show.add_argument('--all', action='store_true', help="every finished job, not only the last hour's")
     show.add_argument('--calibration', action='store_true', help="estimates against actual times, per kind")
+    doctor = sub.add_parser('doctor', help="the checks every job start makes, for a checkout (exit 1 on a red flag)")
+    doctor.add_argument('path', nargs='?', default='.', help="a folder of the checkout (default this one)")
     past = sub.add_parser('history', help="every job that ended: when it queued, started and ended, where it ran")
     past.add_argument('--since', type=parse_duration, default=None, metavar='DURATION',
                       help="only jobs that ended within this long (24h, 90m); default: all")
@@ -659,12 +661,83 @@ def cmd_wait(args) -> int:
     return worst
 
 
+# What a legacy worktree reads through the links ``setup`` made (``docs/data-layout.md``).
+LEGACY_DATA = ('roms/zelda.nes', 'trajectories', 'triforce/states/harvested')
+FLAG_FILES = 8                      # the edited files a ``main-edited`` flag names before "and N more"
+
+
+def _git_lines(root: Path, *args) -> list[str]:
+    try:
+        out = subprocess.run(['git', '-C', str(root), *args], capture_output=True, text=True, timeout=30, check=True)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return [line for line in out.stdout.splitlines() if line.strip()]
+
+
+def checkout_flags(root: Path, module: bool = True) -> list[dict]:
+    """The flags a job started in the checkout at ``root`` carries (round 40; ``jobs.flag``'s shape): the main
+    checkout's tracked files differing from HEAD beyond ``uv.lock`` (red ``main-edited``, naming them: agents must
+    never edit main); then, for a checkout whose tools are this code's (an old version's tree runs its own code in its
+    own layout), a worktree behind main (note ``behind-main``), a legacy worktree's data link missing (red
+    ``data-missing``), and with ``module`` a built module that is not the build of its sources (red
+    ``module-stale``, ``triforce.build``)."""
+    flags = []
+    try:
+        main = main_checkout(root)
+    except (OSError, subprocess.SubprocessError):
+        return [{'level': 'note', 'code': 'not-a-checkout',
+                 'text': f"git cannot read {root}: neither it nor the main checkout was looked at"}]
+    edited = [line[3:] for line in _git_lines(main, 'status', '--porcelain', '--untracked-files=no')
+              if line[3:] != 'uv.lock']
+    if edited:
+        more = f" and {len(edited) - FLAG_FILES} more" if len(edited) > FLAG_FILES else ''
+        flags.append({'level': 'red', 'code': 'main-edited',
+                      'text': f"the main checkout's tracked files differ from HEAD beyond uv.lock: "
+                              f"{', '.join(edited[:FLAG_FILES])}{more}"})
+    if not announces(root):
+        return flags
+    if root.resolve() != main.resolve():
+        behind = _git_lines(root, 'rev-list', '--count', 'HEAD..main')
+        if behind and behind[0] != '0':
+            flags.append({'level': 'note', 'code': 'behind-main',
+                          'text': f"{root.name} is {behind[0]} commits behind main"})
+        missing = [name for name in LEGACY_DATA if not (root / name).exists()]
+        if missing:
+            flags.append({'level': 'red', 'code': 'data-missing',
+                          'text': f"{root.name} lacks {', '.join(missing)}: the main checkout's data it reads "
+                                  f"through the links triforce job setup makes"})
+    # A tree from before build stamps (no triforce/build.py) cannot have one: its module is not looked at.
+    problem = build.problem(root) if module and (root / 'triforce' / 'build.py').is_file() else None
+    if problem:
+        flags.append({'level': 'red', 'code': 'module-stale', 'text': f"{root.name}: {problem}"})
+    return flags
+
+
 def _fields(args, verb: str, lane: str, kind: str, command: list, cwd: Path, nice: int, subtask: Optional[str],
             description: str, **extra) -> dict:
+    """A job's row as it joins the line, with its checkout's flags (``checkout_flags``: a build or a suite builds or
+    tests the module, so its stamp is not looked at), each also said."""
     facts = q.git_facts(cwd)
+    root = git_root(Path(cwd).resolve())
+    flags = [] if root is None else checkout_flags(root, module=verb not in ('build', 'test', 'setup'))
+    for entry in flags:
+        say(f"{'RED FLAG' if entry['level'] == 'red' else 'note'} {entry['code']}: {entry['text']}")
     return {'agent': args.agent, 'task': args.task, 'subtask': subtask, 'description': description, 'verb': verb,
             'lane': lane, 'kind': kind, 'name': q.job_label(args.agent, args.task, subtask), 'command': command,
-            'cwd': str(cwd), **facts, 'nice': max(nice, os.nice(0)), **extra}
+            'cwd': str(cwd), **facts, 'nice': max(nice, os.nice(0)), 'flags': flags, **extra}
+
+
+def cmd_doctor(args) -> int:
+    """``triforce job doctor [PATH]``: the checks every job start makes (``checkout_flags``, the module's stamp
+    included) for the checkout at PATH (default this one), each one's answer printed; exit 1 when one is red."""
+    root = git_root(Path(args.path).resolve())
+    if root is None:
+        raise JobError(f"{args.path} is in no git checkout")
+    flags = checkout_flags(root)
+    print(f"{root}: {'clean' if not flags else f'{len(flags)} flag(s)'}")
+    for entry in flags:
+        print(f"  {'RED FLAG' if entry['level'] == 'red' else 'note'} {entry['code']}: {entry['text']}")
+    return 1 if any(entry['level'] == 'red' for entry in flags) else 0
 
 
 def _rates() -> dict:
@@ -935,6 +1008,8 @@ def cmd_history(args) -> int:
         print(f"{row['id']:5d} {(q.iso(row['queued_ts']) or '?')[:19]:19s} {q.short(row['waited']):>7s} "
               f"{q.short(row['ran']):>7s} {q.short(row['estimate']):>7s} {row['place'] or '-':10s} "
               f"{row['status']:11s} {row['name']}  {row['what']}")
+        for line in q.flag_lines(row):
+            print(f"{'':5s} {line}")
     return 0
 
 
@@ -947,13 +1022,13 @@ def main(argv=None) -> int:
             return detach(args, head, extra)
         if args.verb == 'run':
             return cmd_run(args, extra)
-        if extra and args.verb in ('setup', 'list', 'progress', 'history', 'wait'):
+        if extra and args.verb in ('setup', 'list', 'progress', 'history', 'wait', 'doctor'):
             raise JobError(f"{args.verb} takes nothing after --")
         verbs = {'golden': cmd_golden, 'build': cmd_build, 'test': cmd_test}
         if args.verb in verbs:
             return verbs[args.verb](args, extra)
         return {'setup': cmd_setup, 'list': cmd_list, 'progress': cmd_progress, 'history': cmd_history,
-                'wait': cmd_wait}[args.verb](args)
+                'wait': cmd_wait, 'doctor': cmd_doctor}[args.verb](args)
     except JobError as error:
         print(f"triforce job: error: {error}", file=sys.stderr)
         return 2

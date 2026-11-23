@@ -1369,16 +1369,21 @@ def job_view(job: dict, now: float, place: int | None = None, has_plan: bool = F
     (``jobqueue.tags`` without the running step, which the steps' list shows) in 'color' (``job_color``),
     'counters' (``job_counters``), 'steps' (a build's and a test's: [{'name', 'status'}], status pending, running,
     completed or failed), 'note' (a running job that reports nothing and has no plan: 'no progress reported' and its
-    time against its estimate) and 'command' (its verb and kind, where it runs, its command)."""
+    time against its estimate), 'flags' (``jobs.flag``: [{'level', 'code', 'text', 'color'}], red ones in the bad
+    colour, notes in the in-between one) and 'command' (its verb and kind, where it runs, its command)."""
     steps = [{'name': str(step.get('name') or '?'), 'status': str(step.get('status') or 'pending')}
              for step in job.get('steps') or []]
     note = ''
     if job.get('status') == 'running' and not job.get('progress') and not steps and not has_plan:
         estimate = '' if job.get('estimate') is None else f" of ~{jobqueue.short(job['estimate'])}"
         note = f"no progress reported · {jobqueue.short(now - (job.get('admitted_ts') or now))}{estimate}"
+    flags = [{'level': flag.get('level'), 'code': flag.get('code'), 'text': flag.get('text'),
+              'color': (C.bad if flag.get('level') == 'red' else C.warn)}
+             for flag in job.get('flags') or []]
     return {'headline': jobqueue.headline(job), 'description': job.get('description') or '',
             'state': jobqueue.tags({**job, 'steps': None}, now, place), 'color': job_color(job, now),
-            'counters': job_counters(job, now, has_plan), 'steps': steps, 'note': note, 'command': job_command(job)}
+            'counters': job_counters(job, now, has_plan), 'steps': steps, 'note': note, 'flags': flags,
+            'command': job_command(job)}
 
 
 def job_command(job: dict) -> str:
@@ -1400,10 +1405,18 @@ def job_sections(view: dict) -> list:
     if view['steps']:
         sections.append(('text', 'Steps', [(f"{step['name']}: {STATUS[step['status']][1]}", STATUS[step['status']][0])
                                            for step in view['steps'] if step['status'] in STATUS]))
+    if view['flags']:
+        sections.append(('text', 'Flags', [(line, flag['color']) for flag in view['flags']
+                                           for line in flag_lines(flag)]))
     lines = [(view['headline'], C.text), (view['description'], C.muted), (view['state'], view['color']),
              (view['note'], C.muted), (view['command'], C.faint)]
     sections.append(('text', 'Job', [(text, color) for text, color in lines if text]))
     return sections
+
+
+def flag_lines(flag: dict) -> list[str]:
+    """A flag as a card shows it: its badge (``RED FLAG <code>`` / ``note <code>``), then its sentence."""
+    return [f"{'⚑ RED FLAG' if flag['level'] == 'red' else '● note'} {flag['code']}", flag['text']]
 
 
 # ---------------------------------------------------------------------------------------------------- presentation
@@ -1470,7 +1483,8 @@ def job_box(job: dict, model: Training, now: float, place: int | None = None) ->
     (``plan_meta`` without its elapsed time, which the first fact says), then the time left where known), 'bar'
     (whether the plan's overall bar is drawn: only for a plan of several runs, where it says what no row does, the
     whole plan's share done and its counts; a training's, an evaluation's or a chain's one row or chain card says it
-    all) and 'command' (faint, once).  No counter of the queue row: the plan's rows are the progress."""
+    all) and 'command' (faint, once), 'flags' ([(line, colour)], one a ``jobs.flag``: red ones in the bad colour,
+    notes in the in-between one).  No counter of the queue row: the plan's rows are the progress."""
     status = job.get('status')
     color = job_color(job, now)
     state = (f"QUEUED #{place}" if place else 'QUEUED') if status == 'queued' else (
@@ -1483,8 +1497,10 @@ def job_box(job: dict, model: Training, now: float, place: int | None = None) ->
     eta = model.eta(now)
     if eta is not None:
         facts.append((f"≈ {fmt_duration(eta)} left", C.text))
+    flags = [(' — '.join(flag_lines(flag)), C.bad if flag.get('level') == 'red' else C.warn)
+             for flag in job.get('flags') or []]
     return {'headline': jobqueue.headline(job), 'pills': [(text, pill) for text, pill in pills if text],
-            'description': job.get('description') or '', 'facts': facts, 'bar': len(model.runs) > 1,
+            'description': job.get('description') or '', 'facts': facts, 'flags': flags, 'bar': len(model.runs) > 1,
             'command': job_command(job)}
 
 
@@ -2188,7 +2204,8 @@ class Header(Clickable):
         if box is None:
             self.setFixedHeight(self.HEIGHT)
         else:
-            self.setFixedHeight(self.BOX_TOP + self.BOX_ROW + self.BOX_LINE * (2 + bool(box['description']))
+            self.setFixedHeight(self.BOX_TOP + self.BOX_ROW + self.BOX_LINE * (2 + bool(box['description'])
+                                                                               + len(box['flags']))
                                 + (self.BOX_BAR if box['bar'] else 0) + self.BOX_BOTTOM)
         self.update()
 
@@ -2324,6 +2341,10 @@ class Header(Clickable):
             p.drawText(QPointF(x, y + 14), part)
             x += p.fontMetrics().horizontalAdvance(part)
         y += self.BOX_LINE
+        for text, color in box['flags']:
+            p.setPen(color)
+            p.drawText(QPointF(left, y + 14), p.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, width))
+            y += self.BOX_LINE
         if box['bar']:
             self._paint_bar(p, QRectF(left, y + 6, right - left, 22), model, now, t)
             y += self.BOX_BAR
@@ -2484,7 +2505,9 @@ class JobCard(Clickable):
         self.head.set_lines([] if not shown else [
             (shown['headline'], C.text, font(10.5, QFont.Weight.Bold)),
             (shown['description'], C.muted, font(9.5)),
-            (shown['state'], shown['color'], font(9.5, QFont.Weight.Bold))])
+            (shown['state'], shown['color'], font(9.5, QFont.Weight.Bold)),
+            *[(line, flag['color'], font(9.5, QFont.Weight.Bold) if index == 0 else font(9))
+              for flag in shown.get('flags') or [] for index, line in enumerate(flag_lines(flag))]])
         self.steps.set_steps(shown.get('steps') or [])
         self.foot.set_lines([] if not shown else [(shown['note'], C.muted, font(9)),
                                                   (shown['command'], C.faint, font(8.5, mono=True))])
@@ -4154,14 +4177,17 @@ def web_job(job: dict, place: int | None, now: float, model: Training | None = N
     if model is not None and model.plan:
         box = job_box(job, model, now, place)
         box = {**box, 'pills': [[text, color.name()] for text, color in box['pills']],
-               'facts': [[text, color.name()] for text, color in box['facts']]}
+               'facts': [[text, color.name()] for text, color in box['facts']],
+               'flags': [[text, color.name()] for text, color in box['flags']]}
     return {'id': job_key(job), 'status': job.get('status') or '', 'color': view['color'].name(),
             'place': place, 'ended': job.get('status') in jobqueue.ENDED, 'headline': view['headline'],
             'description': view['description'], 'state': view['state'], 'counters': view['counters'],
             'steps': [{**step, 'label': STATUS.get(step['status'], (C.muted, step['status']))[1],
                        'color': STATUS.get(step['status'], (C.muted, ''))[0].name()} for step in view['steps']],
             'note': view['note'], 'command': view['command'], 'folder': str(folder) if folder else '', 'plan': None,
-            'box': box}
+            'box': box,
+            'flags': [{'level': flag['level'], 'code': flag['code'], 'text': flag['text'],
+                       'color': flag['color'].name()} for flag in view['flags']]}
 
 
 def web_outcomes(outcomes: dict | None) -> dict | None:
@@ -4496,6 +4522,9 @@ main{padding:12px 16px 48px;max-width:2600px;margin:0 auto}
 .jdesc{color:var(--muted);font-size:13px;overflow-wrap:anywhere}
 .jstate{color:var(--c);font-weight:700;font-size:13px;font-variant-numeric:tabular-nums}
 .jnote{color:var(--muted);font-size:12.5px}
+.jflag{display:inline-block;margin:3px 0 0;padding:1px 8px;border-radius:9px;background:var(--f);color:#fff;
+  font-weight:700;font-size:12.5px}
+.jflagt{color:var(--f);font-size:12.5px;overflow-wrap:anywhere}
 .jfacts{font-size:12.5px;font-variant-numeric:tabular-nums;display:flex;flex-wrap:wrap;gap:0 8px;margin:1px 0 3px}
 .jfacts i{font-style:normal;color:var(--faint)}
 .jhd .pill{font-size:11px;vertical-align:2px}
@@ -4852,6 +4881,13 @@ function tallyHtml(tally) {
       barHtml(tally.furthest.fraction, 'var(--eval)', tally.furthest.label) + '</div>' : '');
 }
 
+// A job's red flags and notes (``jobs.flag``), on its box and on its card alike.
+function flagsHtml(job) {
+  return job.flags.map(flag => `<div style="--f:${flag.color}"><span class="jflag">` +
+    `${flag.level === 'red' ? '⚑ RED FLAG' : '● note'} ${esc(flag.code)}</span>` +
+    `<div class="jflagt">${esc(flag.text)}</div></div>`).join('');
+}
+
 // A job with a plan, as the window draws its one box (``job_box``): who with the state and the plan's badges, the
 // description, one line of facts, the plan's bar when it has several runs (its line's share done and counts), the
 // command. Its runs' cards follow below with every other card.
@@ -4862,7 +4898,7 @@ function boxHtml(job) {
       `<span class="pill" style="color:${color}">${esc(text)}</span>`).join(' ') + '</div>' +
     (box.description ? `<div class="jdesc">${esc(box.description)}</div>` : '') +
     '<div class="jfacts">' + box.facts.map(([text, color]) => `<span style="color:${color}">${esc(text)}</span>`)
-      .join('<i>·</i>') + '</div>' +
+      .join('<i>·</i>') + '</div>' + flagsHtml(job) +
     (box.bar && plan ? '<div class="ctr">' + barHtml(plan.fraction, job.color, `${Math.floor(pct(plan.fraction))}%`) +
       `<span class="cr">${esc(plan.counts.join('  ·  '))}</span></div>` : '') +
     `<div class="jcmd">${esc(box.command)}</div></div>`;
@@ -4878,6 +4914,7 @@ function jobHtml(job) {
     `<div class="jhd">${esc(job.headline)}</div>` +
     (job.description ? `<div class="jdesc">${esc(job.description)}</div>` : '') +
     `<div class="jstate">${esc(job.state)}</div>` +
+    flagsHtml(job) +
     (job.counters.length ? '<div class="ctrs">' + job.counters.map(counter => counterHtml(counter, job.color))
       .join('') + '</div>' : '') +
     (steps ? `<div class="steps">${steps}</div>` : '') +
