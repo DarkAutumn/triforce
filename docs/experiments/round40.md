@@ -111,10 +111,10 @@ policy and the continuation without the switch, not against the promoted team. `
 (`target/r40f/*-d3-1k.jsonl`, replays under `target/r40f/replays/`; `scripts/experiments/r40_fireline.py records`,
 whole tables in `target/r40f/ab-records.md`):
 
-| arm (zol@d3first) | hit head | `d3` | vs the bare policy | vs cont-without | zol: shots a visit | far share of sword kills | lined up, not fired | hits a visit | hearts lost a visit | 3:0x6b median frames | frames to enter 3:0x49 vs base | rooms cleared holding beams |
+| arm (zol@d3first) | hit head | `d3` | vs the bare policy | vs cont-without | zol: shots a visit | far share of sword kills | lined up, not fired | hits a visit | hearts lost a visit | 3:0x6b median frames | frames to enter 3:0x49 vs the bare policy (paired) | rooms cleared holding beams |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| promoted (`r38head-fam-w4`) | yes | 39.2% | +6.0 ± 1.5 | | 2.15 | 18.3% | 64.2% | 0.139 | 0.077 | 1217 | | 5.62 |
-| bare policy `r34d3-zol-s341` | no | 33.2% | | | 1.94 | 16.1% | 64.1% | 0.225 | 0.142 | 1225 | +23 ± 12 (policy - base: -23) | 4.83 |
+| promoted (`r38head-fam-w4`) | yes | 39.2% | +6.0 ± 1.5 | | 2.15 | 18.3% | 64.2% | 0.139 | 0.077 | 1217 | -23 ± 12 | 5.62 |
+| bare policy `r34d3-zol-s341` | no | 33.2% | | | 1.94 | 16.1% | 64.1% | 0.225 | 0.142 | 1225 | | 4.83 |
 | continued without the switch | no | 32.3% | -0.9 ± 2.1 | | 1.85 | 12.9% | 66.2% | 0.213 | 0.130 | 1173 | -46 ± 26 | 4.93 |
 | continued WITH firing lines | no | 32.6% | -0.6 ± 2.2 | +0.3 ± 2.1 | 3.45 | 47.3% | 44.9% | 0.249 | 0.164 | 1566 | +526 ± 34 | 4.84 |
 
