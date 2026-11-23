@@ -13,7 +13,8 @@ DIR`): the rupees there are the rupees at 0x0b (nothing on the way changes them)
 own states: 5_14s_<c> walked up to the triforce (the level ends, Link comes out at 0x0b), or the coast states
 0_54e_<c> / 0_52e_<c> walked to 0x44 / 0x42 with the monster slots emptied on the way (`Walk.staging`) and the
 arrival's inventory written (what is written is printed).  Every trial loads with the game's own randomness for its
-seed."""
+seed.  It plays the game over many seeded trials: a job of the machine's queue (``jobs.require_job``: ``triforce
+job run ... --timeout 30m -- .venv/bin/python scripts/experiments/r26_leg_walks.py ...``)."""
 
 import argparse
 import collections
@@ -22,6 +23,8 @@ import json
 import statistics
 import tempfile
 from pathlib import Path
+
+from triforce.jobs import require_job
 
 from r26_walks import (ARROW, BOMBS, FLUTE_TIMER, FOOD, KEYS, MAGIC_SHIELD, OBJ_DIR, OBJ_STATE, OBJ_TYPE, PLAY,
                        RUPEES, SECRET_COLOR_CYCLE, SUBMODE, TELEPORT_INDEX, TRIFORCE, WHIRLWIND, WHIRLWIND_SUMMONED,
@@ -333,6 +336,7 @@ def main():
     p.add_argument('--seeds', type=int, default=40)
     sub.add_parser('pond')
     args = parser.parse_args()
+    require_job()
     {'ledger': ledger, 'whirlwind': whirlwind, 'shops': shops, 'armos': armos, 'pond': pond}[args.cmd](args)
 
 

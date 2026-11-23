@@ -9,11 +9,15 @@ hearts, the magic sword, no bomb (the route's ledger) unless a measurement says 
 
 The fight (`Fighter`) reads positions and facings only, a frame at a time: it stabs a Darknut that stands in the
 sword's reach and does not face the blade, steps aside from what is predicted to touch Link (`r28_walks.Dodger`),
-and else walks to the nearest Darknut's flank."""
+and else walks to the nearest Darknut's flank.  It plays the game over many seeded trials: a job of the machine's
+queue (``jobs.require_job``: ``triforce job run ... --timeout 30m -- .venv/bin/python
+scripts/experiments/r28_darknut.py ...``)."""
 
 import argparse
 import collections
 import statistics
+
+from triforce.jobs import require_job
 
 from r28_walks import (BOMBS, BOMB_SLOT, CELLAR, DARKNUT_BLUE, DARKNUT_RED, GIBDO, HEARTS, KEYS, OBJ_DIR, OBJ_HP,
                        OBJ_INVINC, OBJ_META, OBJ_TYPE, OBJ_X, OBJ_Y, PLAY, RUPEES, SWORD_BLOCKED, Dodger, Tally28,
@@ -421,6 +425,7 @@ def main():
     parser.add_argument('what', choices=['measure', 'clear', 'parts', 'mixed'])
     parser.add_argument('--seeds', type=int, default=20)
     args = parser.parse_args()
+    require_job()
     globals()[args.what](args)
 
 

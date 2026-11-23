@@ -9,7 +9,7 @@
 # and the track written; the script exits 1 if any plain (unstaged) state was left without a track.  SKIP_DONE=1
 # leaves out every state whose track is already there (to go on after an interruption); FIGHT_ITERATIONS (9000) is
 # the explorer's budget for the fights; PARALLEL (4) its threads (the machine's cap for explorers).  FIGHTS=0 leaves
-# the fights out (the crossings only: minutes), FIGHTS=only runs them alone (hours).  Run it under `nice -n 10`.
+# the fights out (the crossings only: minutes), FIGHTS=only runs them alone (hours).  A job of the machine's queue.
 #
 # ow-octorok and stalfos-keese-gel have no `curriculum:` in their yamls; their tracks are written anyway (they show
 # the states are solvable and how long the way is) and are not loaded by a training.
@@ -21,6 +21,8 @@
 # `python scripts/experiments/r28_demos.py darknut-5e|darknut-3e|gleeok --tracks OUT/<family>` (track
 # `<state>~rule<seed>`).
 set -uo pipefail
+source "$(dirname "$0")/../job.sh"      # a job of the machine's queue: triforce job run ... -- this script ...
+require_job "$0" "$@"
 cd "$(dirname "$0")/../.."
 PY=.venv/bin/python
 OUT=${1:-trajectories}

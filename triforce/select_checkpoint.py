@@ -4,7 +4,7 @@
         [--runs 1000] [--first-seed 0] [--clips on|off] [--act model|MODE]
         [--confirm 1000] [--confirm-top 1] [--confirm-first-seed S] [--only LABEL,...] [--no-promoted]
         [--apply] [--output PATH] [--chains-dir DIR] [--name BATCH] [--report-only] [--redo]
-        [--parallel CORES] [--logs-dir DIR] [--models-dir DIR] [--nice N] [--no-wait]
+        [--parallel CORES] [--logs-dir DIR] [--models-dir DIR]
 
 The candidates are the run's numbered checkpoints (``train --checkpoint-every N``: ``<run>/checkpoints/it<N>/``,
 labelled ``it<N>``) and its ``ckpt.pt`` (``last``; a numbered checkpoint with the same weights is left out), and,
@@ -12,9 +12,9 @@ as the reference, the family's promoted run (``promoted``; left out with ``--no-
 promoted run).  ``promoted`` is the run promoted when the selection starts, pinned for the whole batch: a promotion
 while the batch waits or plays changes nothing in it.  ``--only`` keeps the listed labels.  Each candidate plays the
 same chain seeds (``--runs`` from ``--first-seed``) of the segment in place of the family's promoted model, the rest
-of the team as promoted (``eval-chain --checkpoint FAMILY=DIR``), all in one ``eval-batch`` job
-(``triforce.eval_batch.run_batch``: one entry in the machine's job line, one group in the training GUI; it waits its
-turn and lowers its priority).
+of the team as promoted (``eval-chain --checkpoint FAMILY=DIR``), all in one ``eval-batch``
+(``triforce.eval_batch.run_batch``: one job of the machine's queue, ``triforce job run -- triforce select-checkpoint
+...``, one group in the training GUI).
 
 A segment (``--segment``, ``eval_batch.SEGMENTS``: ``d5`` = ``--from 5_76s_0``) is scored by its arrivals: the runs
 that entered the next segment's start room (``eval_batch.TARGETS``), for the last segment (and a ``--stop-at``
@@ -54,9 +54,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
-from .eval_batch import (ROOT, BatchError, Entry, Options, arrival, arrival_hearts, bare_state, chain_entry,
-                         parse_target, read_runs, route_segments, run_batch, segment_starts)
-from .jobs import add_job_arguments, begin_job
+from .eval_batch import (ROOT, BatchError, Entry, Options, arrival, arrival_hearts, bare_state, batch_work,
+                         chain_entry, parse_target, read_runs, route_segments, run_batch, segment_starts)
+from .jobs import announce
 
 LAST = 'last'
 PROMOTED = 'promoted'
@@ -483,7 +483,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--report-only', action='store_true', help="only read the chains that exist")
     parser.add_argument('--redo', action='store_true', help="measure again what was measured")
     parser.add_argument('--parallel', type=int, default=os.cpu_count() or 1, help="envs of each chain")
-    add_job_arguments(parser)
     parser.add_argument('--logs-dir', default=None)
     parser.add_argument('--models-dir', default=None)
     return parser
@@ -561,10 +560,11 @@ def main(argv=None) -> int:
     selection = Selection(plan, pool)
     code = 0
     if not args.report_only:
-        nice = begin_job(args)
+        entries = selection.entries()
+        announce('batch', batch_work(entries), plan.options.batch)
         plan.chains_dir.mkdir(parents=True, exist_ok=True)
-        code = run_batch(plan.options.batch, selection.entries(), logs_dir=args.logs_dir, cores=args.parallel,
-                         nice=nice, command=[sys.executable, '-m', 'triforce.select_checkpoint', *argv],
+        code = run_batch(plan.options.batch, entries, logs_dir=args.logs_dir, cores=args.parallel,
+                         nice=os.nice(0), command=[sys.executable, '-m', 'triforce.select_checkpoint', *argv],
                          extra={'models_dir': args.models_dir, 'selection': str(plan.run_dir)})
         if code == 130:
             return code

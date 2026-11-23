@@ -2,10 +2,10 @@
 //! other stream is decoded as it is iterated.
 
 use crate::format::{
-    Cheat, Context, Cursor, Decision, ENDINGS, ENTRY_LEN, EVENT_CONTROL, EVENT_EPISODE, EVENT_OUTCOME,
-    EVENT_ROOM, EVENT_SEGMENT, Edit, Event, EventRecord, HEADER_LEN, MAGIC, NO_POLICY, NO_STEP,
-    REPLAY_VERSION, ReplayError, Reward, SOURCE_EMBEDDED, SOURCE_FILE, SOURCE_POWER_ON, Source, State,
-    StateKind, format_error, section,
+    Cheat, Context, Cursor, Decision, Dist, ENDINGS, ENTRY_LEN, EVENT_CONTROL, EVENT_EPISODE, EVENT_OUTCOME,
+    EVENT_ROOM, EVENT_SEGMENT, EVENT_VISIT, Edit, Event, EventRecord, Foresight, HEADER_LEN, MAGIC, Mask, NO_POLICY,
+    NO_STEP, REPLAY_VERSION, ReplayError, Reward, SOURCE_EMBEDDED, SOURCE_FILE, SOURCE_POWER_ON, Source, State,
+    StateKind, Targets, format_error, section,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -313,6 +313,7 @@ impl Replay {
                     Event::Episode { ending, class, terminated: flags & 1 != 0, truncated: flags & 2 != 0 }
                 }
                 EVENT_SEGMENT => Event::Segment,
+                EVENT_VISIT => Event::Visit(c.text()?),
                 _ => return c.error("an unknown event"),
             };
             Ok(EventRecord { frame, event })
@@ -337,13 +338,63 @@ impl Replay {
         }
     }
 
-    /// The model decisions (empty without a DECISIONS section).
+    /// The model decisions (empty without a DECISIONS section): `f32` distributions before version 2, bytes from it
+    /// with the draw, the danger and the foresight.
     pub fn decisions(&self) -> Result<Records<'_, Decision<'_>>, ReplayError> {
-        Ok(self.records(section::DECISIONS, self.distribution()?, |c, frame, width| {
+        let width = self.distribution()?;
+        if self.version < 2 {
+            return Ok(self.records(section::DECISIONS, width, |c, frame, width| {
+                let policy = c.u8()?;
+                let action = [c.u8()?, c.u8()?, c.u8()?];
+                let value = c.f32()?;
+                let dist = Dist::F32(c.take(4 * width)?);
+                Ok(Decision { frame, policy, action, value, dist, draw: None, low: false, danger: None, foresight: None })
+            }));
+        }
+        Ok(self.records(section::DECISIONS, width, |c, frame, width| {
             let policy = c.u8()?;
             let action = [c.u8()?, c.u8()?, c.u8()?];
-            Ok(Decision { frame, policy, action, value: c.f32()?, dist: c.take(4 * width)? })
+            let draw = c.u8()?;
+            let value = c.f32()?;
+            let flags = c.u8()?;
+            let finite = c.take(width.div_ceil(8))?;
+            let count = finite.iter().map(|b| b.count_ones() as usize).sum();
+            let dist = Dist::Q8 { width, finite, values: c.take(count)? };
+            let danger = if flags & 1 != 0 {
+                let n = c.varint()? as usize;
+                Some(c.take(n)?)
+            } else {
+                None
+            };
+            let foresight = if flags & 2 != 0 {
+                let (outcome, trials, frames) = (c.u8()?, c.varint()?, c.varint()?);
+                let n = c.u8()? as usize;
+                Some(Foresight { outcome, trials, frames, vetoed: c.take(2 * n)? })
+            } else {
+                None
+            };
+            Ok(Decision {
+                frame,
+                policy,
+                action,
+                value,
+                dist,
+                draw: Some(draw & 0x7F),
+                low: draw & 0x80 != 0,
+                danger,
+                foresight,
+            })
         }))
+    }
+
+    /// The objective's changes (version 2; empty before): kind, targets with their roles, next and retreat rooms.
+    pub fn targets(&self) -> Records<'_, Targets> {
+        self.records(section::TARGETS, 0, |c, frame, _| Targets::decode(c, frame))
+    }
+
+    /// The action mask's changes (version 2; empty before), with the rules that blocked kinds.
+    pub fn masks(&self) -> Records<'_, Mask> {
+        self.records(section::MASKS, 0, |c, frame, _| Mask::decode(c, frame))
     }
 
     fn state_records(&self) -> Records<'_, State<'_>> {

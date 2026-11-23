@@ -17,8 +17,40 @@ fn have_rom() -> bool {
     test_rom::path().is_some()
 }
 
+/// `tf` as a job of the machine's queue runs it (`$TRIFORCE_JOB_ID`, the job's id or 0 as in the Python tests): its
+/// heavy subcommands refuse to run outside one without a terminal, and a test's output is no terminal.
+fn tf_command() -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_tf"));
+    command.env("TRIFORCE_JOB_ID", std::env::var("TRIFORCE_JOB_ID").unwrap_or_else(|_| "0".to_owned()));
+    command.current_dir(repo());
+    command
+}
+
 fn tf(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_tf")).args(args).current_dir(repo()).output().expect("tf runs")
+    tf_command().args(args).output().expect("tf runs")
+}
+
+/// Outside a job and without a terminal the heavy subcommands refuse (exit 2) with the `triforce job run` form of
+/// the command, before they read anything; the light ones (one replay verified) run.
+#[test]
+fn heavy_subcommands_run_only_as_jobs() {
+    let outside = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_tf")).args(args).env_remove("TRIFORCE_JOB_ID").current_dir(repo())
+            .stdin(std::process::Stdio::null()).output().expect("tf runs")
+    };
+    for args in [&["ladder-diff"][..], &["ladder-golden", "--short", "-o", "x y"], &["corpus", "check"],
+                 &["replay", "verify", "a.tfreplay", "b.tfreplay"], &["replay", "verify", "corpus/replays"],
+                 &["bench", "--agent"]] {
+        let out = outside(args);
+        assert_eq!(out.status.code(), Some(2), "{args:?}: {}", stderr(&out));
+        let text = stderr(&out);
+        assert!(text.contains("runs under the machine's job queue"), "{args:?}: {text}");
+        assert!(text.contains("triforce job run --agent AGENT --task TASK --subtask SUBTASK"), "{text}");
+        assert!(text.contains(&format!(" -- {} {}", env!("CARGO_BIN_EXE_tf"), args[0])), "{text}");
+    }
+    assert!(stderr(&outside(&["ladder-golden", "--short", "-o", "x y"])).ends_with(" -o 'x y'\n"));
+    let out = outside(&["replay", "verify", "missing.tfreplay"]);
+    assert!(!stderr(&out).contains("job queue"), "{}", stderr(&out));
 }
 
 fn stdout(out: &Output) -> String {
@@ -246,7 +278,7 @@ fn corpus_check_fails_without_dungeon_2_gameplay() {
     liar.inputs = vec![0; 10];
     liar.save(&tmp.join("movies/liar.tfmovie")).unwrap();
     let corpus = |args: &[&str]| {
-        Command::new(env!("CARGO_BIN_EXE_tf")).args(args).env("TF_CORPUS", &tmp.0).current_dir(repo()).output().unwrap()
+        tf_command().args(args).env("TF_CORPUS", &tmp.0).output().unwrap()
     };
     let out = corpus(&["corpus", "sync"]);
     assert!(out.status.success(), "{}", stderr(&out));
@@ -432,14 +464,13 @@ fn the_replay_corpus_still_verifies() {
                    "golden-d3first-51-networks", "golden-d3first-single-network"] {
         assert!(files.contains(&format!("corpus/replays/{needed}.tfreplay")), "{needed} is missing: {files:?}");
     }
-    let mut args = vec!["replay", "verify"];
-    args.extend(files.iter().map(String::as_str));
-    let out = tf(&args);
+    let out = tf(&["replay", "verify", "corpus/replays"]);         // the folder: every *.tfreplay in it
     let text = stdout(&out);
     assert_eq!(out.status.code(), Some(0), "{text}{}", stderr(&out));
     for file in &files {
         assert!(text.contains(&format!("{file}: ok, ")), "{text}");
     }
+    assert_eq!(text.lines().count(), files.len(), "{text}");
 
     let info = |name: &str| stdout(&tf(&["replay", "info", &format!("corpus/replays/{name}.tfreplay")]));
     let golden = info("golden-d2first-to-dungeon3-triforce");

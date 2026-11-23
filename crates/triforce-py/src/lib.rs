@@ -340,6 +340,7 @@ mod _native {
         use env::observation as obs;
         let py = m.py();
         m.add("VERSION", include_str!("../../../VERSION").trim())?;
+        m.add("REPLAY_VERSION", ::replay::REPLAY_VERSION)?;
         m.add("MAX_POWER_ON_DELAY", zelda::power_on::MAX_DELAY)?;
         m.add("POWER_ON_IDLE_STEP", zelda::power_on::IDLE_STEP)?;
         m.add("OBS_SCHEMA_VERSION", obs::OBS_SCHEMA_VERSION)?;

@@ -9,7 +9,7 @@
 # and the track written; the script exits 1 if any crossing was left without a track.  SKIP_DONE=1 leaves out every
 # state whose track is already there (to go on after an interruption); FIGHT_ITERATIONS (9000) is the explorer's
 # budget for the fights; PARALLEL (4) its threads (the machine's cap for explorers).  FIGHTS=0 leaves the fights out
-# (the crossings only), FIGHTS=only runs them alone (hours).  Run it under `nice -n 10`.
+# (the crossings only), FIGHTS=only runs them alone (hours).  A job of the machine's queue.
 #
 # The clips way (the stretches ring-07, arrow-20, arrow-20n; wizzrobe, lanmola and like-like have `clips: true`): a
 # state's own track is the explorer's with the run-time switch on (the block clips of 0x55, 0x07, 0x20 and 0x03, and
@@ -26,6 +26,8 @@
 # no track the scripted rules write one: `python scripts/experiments/r29_demos.py ROOM --tracks OUT/<family>`
 # (`<state>~rule<seed>`; round29.md "Curricula").
 set -uo pipefail
+source "$(dirname "$0")/../job.sh"      # a job of the machine's queue: triforce job run ... -- this script ...
+require_job "$0" "$@"
 cd "$(dirname "$0")/../.."
 PY=.venv/bin/python
 OUT=${1:-trajectories}

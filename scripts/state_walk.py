@@ -1,13 +1,15 @@
 """Walk game states through the full game path and digest every step, to prove an emulator change changes nothing.
 
-    .venv/bin/python scripts/state_walk.py OUT.json [--steps 40] [--trajectories 300] [--seed 0]
+    triforce job run --agent A --task T --subtask S --desc '...' --timeout 30m -- \\
+        .venv/bin/python scripts/state_walk.py OUT.json [--steps 40] [--trajectories 300] [--seed 0]
 
 Every start state in triforce/states and an evenly spaced sample of trajectory snapshots is loaded through
 ``Game.load`` (RNG randomization and room entry seeded), then plays ``--steps`` random legal actions drawn from a
 seeded generator, through the option executor with look-ahead, interrupts and masks. Each step's RAM + PRG-RAM,
 rendered RGB frame and change description are hashed; each state is played twice, rendering on and off, and the
 RAM digests of the two must agree (rendering may not change emulation). OUT.json maps state -> per-step digests;
-compare two runs with ``--compare A.json B.json``.
+compare two runs with ``--compare A.json B.json`` (anywhere).  The walk is a job of the machine's queue
+(``jobs.require_job``); the states walked of the total are its progress.
 """
 
 import argparse
@@ -19,7 +21,7 @@ from pathlib import Path
 
 import numpy as np
 
-from triforce import _native
+from triforce import _native, jobs
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -90,14 +92,18 @@ def main(argv=None) -> int:
         return compare(*args.compare)
     if not args.out:
         parser.error('OUT is required unless --compare')
+    jobs.require_job()
     began, result, mismatched = time.time(), {}, []
-    for i, path in enumerate(states(args.trajectories)):
+    walked = states(args.trajectories)
+    for i, path in enumerate(walked):
+        jobs.progress(i, len(walked), 'states')
         seed = args.seed + i
         on = walk(path, args.steps, seed, render=True)
         off = walk(path, args.steps, seed, render=False)
         if [d.split(':')[0] for d in on] != [d.split(':')[0] for d in off]:
             mismatched.append(path)
         result[str(Path(path).relative_to(ROOT))] = on
+    jobs.progress(len(walked), len(walked), 'states')
     Path(args.out).write_text(json.dumps(result, indent=0, sort_keys=True))
     steps = sum(len(v) for v in result.values())
     print(f"{len(result)} states, {steps} steps in {time.time() - began:.0f}s; render on/off mismatches: "

@@ -21,7 +21,9 @@ per 1000 runs of the segment (the 300-run segments scaled).
 ``bench``: one queued job; per family its manifest (24 of its ``d3first`` harvested entries x 10 seeds, the
 yardstick's choice) and every arm, ``DIR/<family>/bench-<arm>.json`` (``r38_hit.py table DIR/<family>``). An arm
 ``SPEC``: ``teacher`` (today's network), ``planner`` (today's network with the look-ahead, beside), or a combination
-name ``NAME-w<w>`` (``models/r38head/<family>-NAME-w<w>``).
+name ``NAME-w<w>`` (``models/r38head/<family>-NAME-w<w>``).  ``bench``, ``pr`` and ``slices36`` play or run
+networks: jobs of the machine's queue (``jobs.require_job``: ``triforce job run ... --timeout 1h -- .venv/bin/python
+scripts/experiments/r38_head.py bench ...``).
 
 ``pr``: per family, each head on the held-out shards of the recordings (``DIR#KEY``): precision = recall on the
 actions taken and on every judged candidate (``r38_hit.pr_report``), and the judged hits split by what was in the
@@ -57,7 +59,7 @@ from r37_one_table import SEGMENTS, ref_path  # noqa: E402
 from triforce import _native, registry  # noqa: E402
 from triforce.eval_batch import D3FIRST_MILESTONES, D3FIRST_TARGETS  # noqa: E402
 from triforce.events import progress_job, write_json_atomic  # noqa: E402
-from triforce.jobs import add_job_arguments, begin_job, work  # noqa: E402
+from triforce.jobs import require_job, work  # noqa: E402
 from triforce.lab import bench as yardstick  # noqa: E402
 
 R38H = ROOT / 'target' / 'r38h'
@@ -385,7 +387,6 @@ def main(argv=None) -> int:
     b.add_argument('--manifests', type=Path, default=R38H)
     b.add_argument('--parallel', type=int, default=10)
     b.add_argument('--logs-dir', default=None)
-    add_job_arguments(b)
     p = sub.add_parser('pr')
     p.add_argument('--hit', nargs='+', required=True, metavar='NAME=CKPT', help='CKPT may hold {family}')
     p.add_argument('--data', nargs='+', required=True, help='recording DIRs (each read per family)')
@@ -408,6 +409,8 @@ def main(argv=None) -> int:
     for q in (p, s):
         q.add_argument('--device', default='cuda')
     args = parser.parse_args(argv)
+    if args.command in ('bench', 'pr', 'slices36'):
+        require_job()       # they play or run networks: jobs of the machine's queue
     if args.command == 'cost':
         result = cost(args.records)
         write_json_atomic(args.out, result)
@@ -417,7 +420,6 @@ def main(argv=None) -> int:
     elif args.command == 'combine':
         combine(args.families, args.head, args.weights)
     elif args.command == 'bench':
-        begin_job(args)
         bench(args.families, args.arm, args.out, args.manifests, args.parallel, args.logs_dir)
     elif args.command == 'pr':
         sources = []

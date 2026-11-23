@@ -5,7 +5,9 @@ one before a death is what killed him.  Round 26's walks of Dungeon 7 (docs/rout
     python scripts/experiments/r26_replay_damage.py REPLAY_DIR [--states-dir DIR] [--json OUT]
 
 Per replay: the room, its ending, hearts at the start and the end, frames, every damage event (frame, hearts lost,
-type of the nearest object, its distance) and the arrows and bombs Link used (counted from the inventory)."""
+type of the nearest object, its distance) and the arrows and bombs Link used (counted from the inventory).  It plays
+every replay of the folder: a job of the machine's queue (``jobs.require_job``: ``triforce job run ... --
+.venv/bin/python scripts/experiments/r26_replay_damage.py ...``)."""
 
 import argparse
 import collections
@@ -13,6 +15,7 @@ import json
 from pathlib import Path
 
 from triforce._native import Replay, ReplayPlayer
+from triforce.jobs import require_job
 
 RAM_PRG = 0x800                      # ReplayPlayer.ram(): RAM, then PRG-RAM from $6000
 OBJ_TYPE, OBJ_X, OBJ_Y = 0x34F, 0x70, 0x84
@@ -83,6 +86,7 @@ def main():
     parser.add_argument('--states-dir', type=Path)
     parser.add_argument('--json', type=Path)
     args = parser.parse_args()
+    require_job()
     rows = [analyse(p, args.states_dir) for p in sorted(args.replays.glob('*.tfreplay'))]
     by_room = collections.defaultdict(list)
     for row in rows:

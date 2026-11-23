@@ -51,11 +51,14 @@
 # the room alone; zelda-map.py shows the newest).
 #
 # It is one batch of `triforce eval-batch TAG --chains TAG` (triforce/eval_batch.py): one log folder named for the
-# tag, one progress bar per segment in the training GUI, then the report, everything at nice 15. A segment whose
-# output exists is done; a rerun plays the rest. PARALLEL (default: every core), NICE (default 15). CLIPS=off plays
+# tag, one progress bar per segment in the training GUI, then the report, all in one job of the machine's queue
+# (scripts/job.sh: triforce job run ... -- this script ...). A segment whose output exists is done; a rerun plays the
+# rest. PARALLEL (default: every core). CLIPS=off plays
 # every segment with the run-time clips switch off (round 22: CLIP masked, the plain way through every stretch);
 # give such a measurement its own tag, e.g. CLIPS=off TAG=r71-1k-noclips.
 set -uo pipefail
+source "$(dirname "$0")/../job.sh"
+require_job "$0" "$@"
 cd "$(dirname "$0")/../.."
 PY=.venv/bin/python
 ACT=${ACT:-model}
@@ -79,4 +82,4 @@ case ${1:-all} in
   *) echo "usage: $0 [run|report|all]" >&2; exit 2 ;;
 esac
 exec $PY -m triforce.cli eval-batch "$TAG" --chains "$TAG" --act "$ACT" --runs "$RUNS" --chains-dir "$OUT" \
-  "${route[@]}" "${segments[@]}" ${PARALLEL:+--parallel $PARALLEL} ${NICE:+--nice $NICE} "${clips[@]}" "${mode[@]}"
+  "${route[@]}" "${segments[@]}" ${PARALLEL:+--parallel $PARALLEL} "${clips[@]}" "${mode[@]}"

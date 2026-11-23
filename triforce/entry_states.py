@@ -9,6 +9,13 @@ state, and install a finished build into the states dir.
                                          [--out DIR]
     python -m triforce.entry_states install DIR [--partial]
     python -m triforce.entry_states audit [--dir DIR | --specialist NAME ... | --states GLOB ...] [--loads 9]
+    python -m triforce.entry_states idle [--out DIR]
+
+Every subcommand but ``start`` is a job of the machine's queue (``jobs.require_job``: outside ``triforce job`` and
+without a terminal it refuses): ``triforce job run --agent A --task T --subtask S --desc '...' --timeout 2h --
+python -m triforce.entry_states build ...``.  Its progress (``triforce job list``, the training GUI) is the route
+steps crossed of each chain's total (``build``), the rooms entered (``path``), the states audited (``audit``) and the
+files written (``install``, ``idle``).
 
 ``start``, ``build`` and ``path`` write into a staging directory (``--out``, default
 ``target/entry-states/<yymmdd-HHMMSS>``), never straight into the live states dir: each file's manifest entry is
@@ -71,6 +78,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional
 
+from . import jobs
 from ._native import DEFAULT_ROUTE, AcceptSpec, Explorer, Game, Snapshot, game_rooms, power_on_idle_states
 from ._native import route_alternates, route_namespace, route_state
 from ._native import route_steps as native_route_steps
@@ -257,6 +265,7 @@ def write_idle_states(out: Optional[str] = None) -> List[str]:
             file.write(data)
         os.replace(tmp, path)
         paths.append(path)
+        jobs.progress(len(paths), unit='files')
     return paths
 
 
@@ -441,18 +450,19 @@ def build_chain(chain: int, out: str, iterations: int, patience: int, log: Calla
     # The clip way through every stretch (round 22): its steps follow each other.
     way = [s for s in steps if s.way in (None, 'clips')]
     first = next(i for i, s in enumerate(way) if s.index >= start_step)
+    crossings = [(step, target) for step, target in zip(way[first:], way[first + 1:])
+                 if last_step is None or target.index <= last_step]
     os.makedirs(out, exist_ok=True)
     manifest = []
-    for step, target in zip(way[first:], way[first + 1:]):
-        if last_step is not None and target.index > last_step:
-            break
-        jobs = [(target, True)] + [(alt, False) for origin, alt in alternates if origin == step.index]
+    for crossed, (step, target) in enumerate(crossings):
+        jobs.progress(crossed, len(crossings), 'steps', label=f'chain {chain}')
+        goals = [(target, True)] + [(alt, False) for origin, alt in alternates if origin == step.index]
         next_source = None
         crossing = source
         if skip_fights and (step.level, step.room, step.entry) in skip_fights:
             crossing = fight_skipped_source(source, os.path.join(out, 'fight-skipped', str(chain)), states_dir)
             skipped = True
-        for goal, on_route in jobs:
+        for goal, on_route in goals:
             started = time.time()
             pre_entry, stats = cross_room(step, goal, crossing, chain, iterations, patience, attempts=attempts,
                                           states_dir=states_dir, rooms=rooms, objective=on_route, route=route)
@@ -477,6 +487,7 @@ def build_chain(chain: int, out: str, iterations: int, patience: int, log: Calla
             if on_route:
                 next_source = path
         source = next_source
+    jobs.progress(len(crossings), len(crossings), 'steps', label=f'chain {chain}')
     return manifest, None
 
 
@@ -622,6 +633,7 @@ def build_path(source: str, rooms: List[MapLocation], chain: int, out: str, iter
     os.makedirs(out, exist_ok=True)
     i = 0
     while i < len(rooms):
+        jobs.progress(i, len(rooms), 'rooms')
         target, current, goal = rooms[i], currents[i], goals[i]
         here_tag = specialist_for(current.as_tuple(), played) or 'none'
         exit_side = current.get_direction_to(target).name
@@ -653,6 +665,7 @@ def build_path(source: str, rooms: List[MapLocation], chain: int, out: str, iter
         sources.append(path)
         currents.append(target)
         i += 1
+    jobs.progress(len(manifest), len(rooms), 'rooms', force=True)
     failed = [goal.filename(chain) for goal in goals[len(manifest):]]
     if failed:
         log(f"[path] not built: {', '.join(failed)}")
@@ -675,10 +688,11 @@ def install(staged: str, states_dir: str = STATES_DIR, partial: bool = False) ->
     staged_manifest = read_manifest(staged)
     names = sorted(os.path.basename(p) for p in glob.glob(os.path.join(staged, '*.state')))
     os.makedirs(states_dir, exist_ok=True)
-    for name in names:
+    for done, name in enumerate(names, 1):
         tmp = os.path.join(states_dir, f'.{name}.{os.getpid()}.tmp')
         shutil.copyfile(os.path.join(staged, name), tmp)
         os.replace(tmp, os.path.join(states_dir, name))
+        jobs.progress(done, len(names), 'files')
     _merge_manifest(states_dir, [staged_manifest[name] for name in names if name in staged_manifest])
     return names
 
@@ -880,9 +894,13 @@ def audit_state(game: Game, path: str, loads: int = 9, full: Optional[dict] = No
 
 
 def audit(paths: List[str], loads: int = 9, states_dir: str = STATES_DIR, route: str = DEFAULT_ROUTE) -> List[dict]:
-    """Audits many start states with one game."""
+    """Audits many start states with one game (the states done are the job's progress)."""
     game, full, index = Game(seed=0, states_dir=str(states_dir)), full_monster_counts(), RouteIndex(route)
-    return [audit_state(game, path, loads, full, index) for path in paths]
+    rows = []
+    for path in paths:
+        rows.append(audit_state(game, path, loads, full, index))
+        jobs.progress(len(rows), len(paths), 'states')
+    return rows
 
 
 def audit_problems(row: dict) -> List[str]:
@@ -1020,6 +1038,7 @@ def main(argv=None):
     if args.command == 'start':
         print(f"wrote {write_start_state(args.out or default_out())}")
         return 0
+    jobs.require_job()      # exploring, auditing and copying many states: a job
 
     if args.command == 'idle':
         for path in write_idle_states(args.out):

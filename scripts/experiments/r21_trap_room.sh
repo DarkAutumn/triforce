@@ -14,6 +14,8 @@
 # Arms are experiments/r21/trap22-ARM.yaml; start states experiments/r21/states (1_22e_0..2); models under
 # models/trap22-ARM/r21-s<SEED>, event logs under logs/.  Run from anywhere; everything is relative to the repo.
 set -euo pipefail
+source "$(dirname "$0")/../job.sh"      # a job of the machine's queue: triforce job run ... -- this script ...
+require_job "$0" "$@"
 cd "$(dirname "$0")/../.."
 export TRIFORCE_STATES_DIR=experiments/r21/states
 PY=${PY:-.venv/bin/python}

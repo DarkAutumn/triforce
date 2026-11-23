@@ -7,6 +7,9 @@ its seed.
     python scripts/experiments/r29_fight_patra.py facts [--seeds N]     # children out, orbits, flips, touch, weapons
     python scripts/experiments/r29_fight_patra.py freeze [--seeds N]    # the child in slot 3 dead: no more flips
     python scripts/experiments/r29_fight_patra.py kill [--seeds N] [--rooms 61,52,16] [--plain]
+
+It plays the game over many seeded trials: a job of the machine's queue (``jobs.require_job``: ``triforce job run
+... --timeout 30m -- .venv/bin/python scripts/experiments/r29_fight_patra.py ...``).
 """
 
 import argparse
@@ -15,6 +18,8 @@ import math
 import statistics
 
 import numpy as np
+
+from triforce.jobs import require_job
 
 from r29_fight_walks import (BOMBS, DIR_OF, HEARTS, LINK_INVINC, OBJ_DIR, OBJ_HP, OBJ_INVINC, OBJ_META, OBJ_STATE,
                              OBJ_TIMER, OBJ_TYPE, OBJ_X, OBJ_Y, PATRA_A, PATRA_B, PATRA_CHILD_A, PATRA_CHILD_B, PLAY,
@@ -437,6 +442,7 @@ def main():
     parser.add_argument('--rooms', default='61,52,16')
     parser.add_argument('--plain', action='store_true', help='without the slot-3 rule')
     args = parser.parse_args()
+    require_job()
     globals()[args.what](args)
 
 

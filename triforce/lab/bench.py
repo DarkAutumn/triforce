@@ -51,7 +51,7 @@ from .. import __version__, _native, registry
 from ..eval_batch import route_segments
 from ..evaluate import evaluate_specialist
 from ..events import progress_job, write_json_atomic
-from ..jobs import add_job_arguments, begin_job, work
+from ..jobs import announce, work
 from ..specialist import load_specialist
 
 MANIFEST = Path(__file__).with_name('bench.json')
@@ -432,7 +432,6 @@ def main(argv=None) -> int:
         p.add_argument('--parallel', type=int, default=10)
         p.add_argument('--manifest', default=str(MANIFEST))
         p.add_argument('--logs-dir', default=None, help="the log folder's root (default logs/, $TRIFORCE_LOGS_DIR)")
-        add_job_arguments(p)
     c = sub.add_parser('compare')
     c.add_argument('base')
     c.add_argument('new')
@@ -466,9 +465,9 @@ def main(argv=None) -> int:
         result = compare(json.loads(Path(args.base).read_text()), json.loads(Path(args.new).read_text()))
         print(format_compare(result))
         return 0
-    begin_job(args)
     manifest = load_manifest(args.manifest)
     if args.command == 'speed':
+        announce('eval', work(eval_episodes=100), 'lab-speed')
         with progress_job('lab-speed', 'eval', len(args.paths), unit='acting paths', root=args.logs_dir,
                           work=work(eval_episodes=100)) as progress:
             result = speed(args.key, manifest, args.parallel, args.paths, args.states_dir, args.models_dir,
@@ -487,6 +486,7 @@ def main(argv=None) -> int:
             networks[key] = args.network
     networks.update(item.split('=', 1) for item in args.checkpoint)
     episodes = sum(len(e['states']) * manifest['episodes'] for e in manifest['entries'] if e['key'] in networks)
+    announce('eval', work(eval_episodes=episodes), 'lab-bench')
     with progress_job('lab-bench', 'eval', episodes, root=args.logs_dir,
                       work=work(eval_episodes=episodes)) as progress:
         result = run_bench(networks, manifest, args.parallel, args.states_dir, act=args.act, progress=progress)

@@ -6,7 +6,9 @@ the Rust actor plays it (the bench's and the chains' fast path).
 ``WidePolicy`` is ``ZeldaPolicy``'s encoders under towers of ``depth`` layers ``hidden_dim`` wide and the same heads:
 the weights map one to one (``encoders.X`` -> ``X``, ``policy_tower`` / ``value_tower`` -> ``mlp_extractor.policy_net``
 / ``value_net``).  Writes ``<run>-z`` beside the run (its ``distill.json`` copied) after checking the two networks
-give the same joint log-probabilities and values on held-out cache rows."""
+give the same joint log-probabilities and values on held-out cache rows.  The check runs both networks: a job of the
+machine's queue (``jobs.require_job``: ``triforce job run ... --timeout 20m -- .venv/bin/python
+scripts/experiments/r36_merge_convert.py ...``)."""
 import argparse
 import json
 import shutil
@@ -20,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from r36_merge_distill import HOLDOUT_ENV, Data  # pylint: disable=wrong-import-position
 
 from triforce import registry  # pylint: disable=wrong-import-position
+from triforce.jobs import require_job  # pylint: disable=wrong-import-position
 from triforce.model import ModelConfig, ZeldaPolicy  # pylint: disable=wrong-import-position
 
 
@@ -64,6 +67,7 @@ def main(argv=None):
     parser.add_argument('--cache', default='target/merge/cache')
     parser.add_argument('--rows', type=int, default=20000)
     args = parser.parse_args(argv)
+    require_job()
     run = Path(args.run)
     wide, checkpoint = registry.load_model(run / 'ckpt.pt')
     wide.eval()

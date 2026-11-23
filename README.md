@@ -124,7 +124,7 @@ Needs Linux, Python 3.12 and stable Rust (`rust-toolchain.toml`).
 ```bash
 uv venv --python 3.12 .venv
 uv pip install --python .venv/bin/python -e '.[dev]'             # builds triforce._native through maturin
-.venv/bin/maturin develop --release                              # rebuild the module after Rust changes
+.venv/bin/maturin develop --release                              # rebuild the module after Rust changes (agents: triforce job build)
 ```
 
 The ROM isn't included. Put an uncompressed *Legend of Zelda (U)* ROM at `roms/zelda.nes` or point
@@ -156,7 +156,7 @@ Trained models aren't checked in either (they're too big), so watching the agent
 
 ```bash
 cargo test --release --workspace --features zelda/zcore        # Rust tests (~1 min; see "Testing")
-.venv/bin/python -m pytest -q                                   # Python tests (~1 min)
+.venv/bin/python -m pytest -q -n 8 tests                       # Python tests (~1 min in 8 processes; 7 in one)
 .venv/bin/python -m pytest -q -m e2e                           # only the end-to-end tests (untrained nets, seconds)
 .venv/bin/python -m triforce.play --state 1_44w_0               # load a savestate and look at the room
 .venv/bin/python -m triforce.play "MOVE E 16" "SWORD E"         # act; the session persists between calls
@@ -165,14 +165,15 @@ cargo test --release --workspace --features zelda/zcore        # Rust tests (~1 
 .venv/bin/python -m triforce.explore --specialist ow-zora --parallel 16   # Go-Explore: trajectories/ow-zora
 .venv/bin/python -m triforce.train --specialist ow-zora --parallel 16   # curriculum: on in ow-zora.yaml
 .venv/bin/python scripts/train_round.py --round round1          # train + evaluate every specialist (promotes only with --promote)
-uv run training-gui.py                                          # live monitor: every running training/evaluation on the machine, any worktree (job registry, $TRIFORCE_JOBS_DIR), else the newest logs/ folder; also serves http://<host>:22222/
+uv run training-gui.py                                          # live monitor: every job of the machine's job queue (triforce job, any worktree), else the newest logs/ folder; also serves http://<host>:22222/
 uv run training-gui.py --web-only                               # only the web view, no window (no display needed, e.g. over SSH)
 .venv/bin/python play-zelda.py 4x3                               # watch replays of the promoted models' runs on the main route (d3first) as they are simulated: the best so far (keys b w k d r g: best/success/stuck/died/random/golden; n next; s sound, click a cell to hear it; u/+/-/p; c clips off/on; --controller, --act argmax|sample|model, --power-on, --stop-at, --clips on|off)
 .venv/bin/python play-zelda.py 4x3 --route d2first               # the same on the first route
 .venv/bin/python play-zelda.py 3x2 --live                        # the top left cell is a live game: c turns clips off (and on) for the rest of that run, the route re-plans from where Link stands
 .venv/bin/python play-zelda.py 2x3 runs/replays                  # or a folder of replay files, round and round (one FILE.tfreplay: on loop)
+.venv/bin/python play-zelda.py 1x1 run.tfreplay --thoughts       # over the picture: what the replay says the agent was steered to (objective, targets), could do (the mask) and chose (network, action, probability, danger)
 .venv/bin/python play-zelda.py 1x1 corpus/replays/golden-d3first-single-network.tfreplay   # ONE network in every slot beating the game by a golden path on d3first, from power on (golden-d3first-51-networks: the 51 specialists'; golden-d2first-34-networks: d2first's; single-run-d3first-old-order-51-networks: one unbroken run on 2.0.0.3's order)
-.venv/bin/python create-video.py wins.mp4 2x3 runs/wins --sound  # film replays on a grid into a video (needs ffmpeg; 1x1 by default; --sound: the middle cell's, else the top left one's; --controller)
+.venv/bin/python create-video.py wins.mp4 2x3 runs/wins --sound  # film replays on a grid into a video (needs ffmpeg; 1x1 by default; --sound: the middle cell's, else the top left one's; --controller; --thoughts)
 .venv/bin/python zelda-headless.py runs/wins 3 --wins-only       # no window: play until 3 runs won, keep them as replays (--deaths-only, --stuck-only, --power-on, --stop-at step:N, --clips off, --route d2first)
 .venv/bin/python zelda-headless.py runs/golden 1 --golden --power-on   # the golden path on d3first: games race triforce to triforce from each winner's state, stitched into one replay (--route d2first for the other)
 .venv/bin/python zelda-map.py                                   # room map + per-room stats by scope: full run, segment, room only; clips both/on/off (--stats FILE, --route d2first, --rerender)
@@ -185,7 +186,7 @@ triforce --models-dir models convert-model --promoted --out target/converted-mod
 triforce eval-chain --runs 20 --parallel 20                     # route d3first (the main route; --route d2first for the other); writes runs/eval-chain-<yymmdd-HHMMSS>.jsonl + .meta.json
 triforce eval-chain --from 4_71s_0 --runs 20 --clips off       # every run with clips off (the plain way through every stretch); --clips-off-from 4:0x31 turns them off on the way
 triforce eval-chain --runs 20 --parallel 20 --power-on --stop-at step:24   # from console power on (random idle delay per seed) to the overworld with Dungeon 3's triforce (d2first's step 24: Dungeon 2's)
-triforce eval-chain --runs 20 --parallel 20 --replays runs/replays   # also record every run as runs/replays/<seed>-<ending>.tfreplay (--streams rewards,decisions,keyframes)
+triforce eval-chain --runs 20 --parallel 20 --replays runs/replays   # also record every run as runs/replays/<seed>-<ending>.tfreplay (its decisions, targets and masks; --streams rewards,keyframes)
 triforce eval-batch r71-1k --chains r71-1k --runs 1000 --act model   # the fourteen chain segments (full, d2, post-d2, d1, post-d1, d3, post-d3, d4, post-d4, d5, post-d5, d7, post-d7, d6) as one batch (one log folder, a GUI bar each) into target/r56-chains/r71-1k-*.jsonl, then yardstick + room-stats
 triforce eval-batch r71-families --families all --acts sample,argmax --jobs 4   # every family's promoted run in both act modes, 4 side by side
 triforce eval-batch r71-check --chain 'd3: --from 3_7cs_0 --runs 200' --evaluate 'darknut: --specialist darknut --act argmax'   # a mixed batch (rerun: skips what is done)
@@ -215,17 +216,32 @@ Evaluations go through `triforce eval-batch NAME` (`triforce/eval_batch.py`): on
 listed up front, shown in the training GUI as one group named NAME with a progress bar per evaluation; its Eval tab
 gives each outcome its share (`108× (10.8%)` of a chain's runs or of a family evaluation's episodes).
 
-Trainings and evaluations look after the machine by themselves; you pass nothing. `train_round.py` and `triforce
-train|evaluate|eval-chain|eval-batch` lower their own priority to nice 15 (`--nice N`, 0 leaves it alone,
-`$TRIFORCE_NICE` sets the default; the jobs they start inherit it), and at most two of them run at once on the
-machine (`$TRIFORCE_MAX_JOBS`), plus one short job (estimated at most 10 minutes) beside them. The others wait,
-printing `triforce: NAME is paused until resources are available: estimated 40 minutes; ... It starts by itself; next
-update in 5 minutes.`: the line drains the fastest jobs first (each job estimates its run time from its work and how
-long such work took lately), and a long job moves up as it waits, so it is never starved. The training GUI lists
-the waiting jobs in the order they will start. There is no controller: the per-user job registry
-(`triforce/jobs.py`, read through `/proc`, shared by every worktree) is the queue. `--no-wait` starts a job at once
-(it still counts for the others). Play, replay and build tools (`play-zelda.py`, `zelda-headless.py`,
-`create-video.py`, `zelda-map.py`, `tf replay`, explore, entry_states) keep normal priority and never wait.
+The machine's job queue (the owner, Nov 23): everything heavier than a build or a test runs through `triforce job`
+(`triforce/job.py`, `triforce/jobqueue.py`), from any checkout:
+
+```bash
+triforce job run --agent A --task T --subtask S --desc "one sentence" [--express] [--timeout 40m] -- COMMAND...
+triforce job golden --agent A --task T --timeout 10m [-- racer options]  # zelda-headless.py --golden --power-on --clips on --act model --parallel 16
+triforce job build --agent A --task T                                    # maturin develop --release
+triforce job test SUITE... --agent A --task T [--build]                 # python, asm, check, rust or all, side by side (--build: build first, one entry)
+triforce job setup BRANCH [--from main]                                  # worktree ../triforce-<branch>: links, venv, build
+triforce job list [--calibration]                                        # what runs, what waits in order, what ended in the last hour
+triforce job progress DONE [TOTAL] --unit U                              # progress from a shell script running as a job
+```
+
+Each verb blocks until the work is done; output and exit code are the command's, and SIGTERM or Ctrl-C stops the
+job. Two jobs run at once in the regular places plus one estimated at 10 minutes or less (or `--express`) in the
+express place; the others wait, the shortest estimate first, a long one moving up as it waits (a tool's estimate
+comes from its work and the queue's history; any other command needs `--timeout`, which is its estimate and where
+it is stopped, exit 124). Builds and test suites have their own lane, two at once, first come first served, at nice
+10 with `CARGO_BUILD_JOBS=4`; jobs run at nice 15, below the owner's player. A waiting job is only its wrapper (no
+model, no GPU memory); `nice`, `ionice`, `timeout` or `CARGO_BUILD_JOBS=` after `--` are refused. The tools
+(`triforce train|evaluate|eval-chain|eval-batch|select-checkpoint`, `train_round.py`, `full_runs.py`, the lab's
+train, record and bench, every script that plays, trains or crunches) refuse to run outside a job unless a terminal
+is attached, so the commands under "Commands" work as typed at a shell. The queue is one SQLite database
+(`~/.local/state/triforce/queue.db`) with kernel locks for its places and no server; the training GUI and `triforce
+job list` read it. Exempt: `play-zelda.py`, `zelda-map.py`, `training-gui.py` and what finishes in seconds. The
+rest (names, descriptions, ending a job, an old tree's commands): AGENTS.md "The job queue".
 
 `zelda-map.py` stitches each level's rooms (Overworld, Dungeon 1–9) into one zoomable map from the savestates'
 first playable frames; an overworld room without a savestate is walked into from the game start, so the overworld
@@ -291,15 +307,16 @@ it). It is not re-recorded for a retrain, only after a deliberate break (then th
 `corpus/replays/retired/` and `REPLAY_VERSION` goes up):
 
 ```bash
-.venv/bin/python zelda-headless.py target/replays/po 1 --wins-only --power-on --name LINK --delay 100 --stop-at step:3 --streams rewards,decisions,keyframes --keyframe-frames 300    # -> v<N>-power-on.tfreplay
-.venv/bin/python zelda-headless.py target/replays/state 1 --wins-only --from 0_3cc_0 --stop-at step:27 --streams rewards,decisions,keyframes --keyframe-frames 300                    # -> v<N>-state.tfreplay
+.venv/bin/python zelda-headless.py target/replays/po 1 --wins-only --power-on --name LINK --delay 100 --stop-at step:3 --streams rewards,keyframes --keyframe-frames 300    # -> v<N>-power-on.tfreplay
+.venv/bin/python zelda-headless.py target/replays/state 1 --wins-only --from 0_3cc_0 --stop-at step:27 --streams rewards,keyframes --keyframe-frames 300                    # -> v<N>-state.tfreplay
 .venv/bin/python zelda-headless.py target/replays/golden 1 --golden --power-on --parallel 8                                                                                           # -> v<N>-golden.tfreplay
 ```
 
 ## Testing
 
 Two suites, both about a minute: `cargo test --release --workspace --features zelda/zcore` and
-`.venv/bin/python -m pytest -q`. Nothing trains a model from scratch; pipeline tests use untrained networks.
+`.venv/bin/python -m pytest -q` (an agent runs them as `triforce job test rust|python`). Nothing trains a model from
+scratch; pipeline tests use untrained networks.
 
 | Layer | Where | What it guards |
 |---|---|---|

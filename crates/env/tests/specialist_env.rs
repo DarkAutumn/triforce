@@ -341,6 +341,7 @@ fn no_objective() -> Objective {
         treasure_refused: false,
         drops_first: false,
         bag_drops: false,
+        labels: Vec::new(),
     }
 }
 

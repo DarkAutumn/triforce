@@ -81,7 +81,7 @@ def test_a_recurrent_network_trains_on_sequences_and_plays(states_dir, tmp_path)
             registry.promote('ow-start', 'teach', tmp_path)
         run = train.main(['--name', f'mem-{mode}', '--run-id', 'g1', '--families', 'ow-start', '--parallel', '2',
                           '--steps-per-update', '64', '--device', 'cpu', '--models-dir', str(tmp_path), '--seed', '6',
-                          '--no-wait', '--iterations', '2', '--arch', 'gru', '--bptt', '8', '--mode', mode,
+                          '--iterations', '2', '--arch', 'gru', '--bptt', '8', '--mode', mode,
                           '--arch-config', '{"hidden_dim": 32, "core_dim": 16}', *extra])
         lines = (run / 'metrics.jsonl').read_text().splitlines()
         assert len(lines) == 2
@@ -108,7 +108,7 @@ def test_a_need_sampled_run_changes_and_logs_each_familys_rows(tmp_path):
     yaml.write_text((ROOT / 'specialists' / 'ow-start.yaml').read_text().replace('max_steps: 600', 'max_steps: 8'))
     run = train.main(['--name', 'need', '--run-id', 'n1', '--families', 'ow-start', f'ow-start@d3first={yaml}',
                       '--parallel', '2', '--steps-per-update', '64', '--device', 'cpu', '--models-dir', str(tmp_path),
-                      '--seed', '7', '--no-wait', '--iterations', '3', '--arch', 'wide', '--sampling', 'need',
+                      '--seed', '7', '--iterations', '3', '--arch', 'wide', '--sampling', 'need',
                       '--need-target', '1.0', '--arch-config', '{"hidden_dim": 16, "depth": 1}',
                       '--checkpoint-every', '1', '--checkpoint-keep', '2'])
     lines = [json.loads(line) for line in (run / 'metrics.jsonl').read_text().splitlines()]

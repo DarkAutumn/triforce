@@ -12,12 +12,17 @@ seed, the monsters made fresh and live.
     python scripts/experiments/r31_d9_walks.py clip55 [--seeds 20]  # from the E arrival: to the clip point, CLIP, stairs
 
 A held Link (a Like-Like) stabs once every 12 frames (`r29_clips.follow`); bombs are written when the bag is empty
-(counted).  Hearts are read from the bytes (`precise_hearts`)."""
+(counted).  Hearts are read from the bytes (`precise_hearts`).
+
+It plays the game over many seeded trials: a job of the machine's queue (``jobs.require_job``: ``triforce job run
+... --timeout 30m -- .venv/bin/python scripts/experiments/r31_d9_walks.py ...``)."""
 
 import argparse
 import collections
 import statistics
 from pathlib import Path
+
+from triforce.jobs import require_job
 
 import r29_clips
 from r26_walks import BOMBS, KEYS, PLAY, STATES
@@ -171,6 +176,7 @@ def main():
     p.add_argument('cmd', choices=['states', 'n66', 'w56', 'scan55', 'clip55'])
     p.add_argument('--seeds', type=int, default=20)
     args = p.parse_args()
+    require_job()
     {'states': cmd_states, 'n66': cmd_n66, 'w56': cmd_w56, 'scan55': cmd_scan55, 'clip55': cmd_clip55}[args.cmd](args)
 
 

@@ -9,13 +9,18 @@ with the wood sword against the white.
 Rooms (`r26_walks.d7_state`: the probe with the route's inventory, doors, keys and bombs before the room, the sword
 written): 0x49 (3 Blue Goriyas, 3 blue Keese, 2 Bubbles), 0x1b (6 Blue Goriyas: the 4 bombs), 0x1c (the recorder, the
 three small Digdoggers: one kill opens the room as d2first plays it, and all three), Aquamentus 0x2a.  Each from full
-11 hearts and from 7."""
+11 hearts and from 7.
+
+It plays the game over many seeded trials: a job of the machine's queue (``jobs.require_job``: ``triforce job run
+... --timeout 30m -- .venv/bin/python scripts/experiments/r32b_d7.py ...``)."""
 
 import argparse
 import collections
 import statistics
 import tempfile
 from pathlib import Path
+
+from triforce.jobs import require_job
 
 from r26_walks import AQUAMENTUS, DIGDOGGER_SMALL, GORIYA_BLUE, GORIYA_RED, KEESE_BLUE, d7_state
 from r27_walks import load, summary
@@ -46,6 +51,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     parser.add_argument('--seeds', type=int, default=20)
     args = parser.parse_args()
+    require_job()
     for label, room, entry, targets, prelude, kills in ROOMS:
         for sword, sname in ((1, 'wood'), (2, 'white')):
             for hearts in (11.0, 7.0):

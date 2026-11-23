@@ -46,7 +46,10 @@ them.  What that grain costs is the point of the numbers this prints (with every
 lost booked to the object nearest to Link when the action that cost it ended).
 
 Rows: a MOVE or WAIT row is cloned without its duration; an item or sword row is written `REPEAT` times.  Only runs
-that end as the family's success are kept."""
+that end as the family's success are kept.  It plays the rule over many runs: a job of the machine's queue
+(``jobs.require_job``: ``triforce job run ... --timeout 30m -- .venv/bin/python scripts/experiments/r29_demos.py
+...``; every script that plays its rules through ``main``, ``r29_clip_demos.py``, ``r31_mouth_demos.py``,
+``r32p_rules.py``, ``r32t_recorder_demos.py``, ``r33_d6_demos.py``, ``r33_d9_demos.py``, ``r36_dock_demos.py``, too)."""
 
 import argparse
 import collections
@@ -912,6 +915,8 @@ def main():
     parser.add_argument('--route', default='d2first', help="the route whose step and states it plays (`r28_demos.py "
                                                            "--route`)")
     args = parser.parse_args()
+    from triforce.jobs import require_job  # pylint: disable=import-outside-toplevel
+    require_job()
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     return play(args)
 
