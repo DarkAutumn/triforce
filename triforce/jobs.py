@@ -88,6 +88,7 @@ NICE_HELP = (f"lower this process's CPU priority to niceness N (default ${NICE_E
 
 NO_WAIT_ENV = 'TRIFORCE_NO_WAIT'
 EXPRESS_ENV = 'TRIFORCE_EXPRESS'
+JOB_NAME_ENV = 'TRIFORCE_JOB_NAME'      # the name the queue and the training GUI show for this process's job
 MAX_JOBS_ENV = 'TRIFORCE_MAX_JOBS'
 DEFAULT_MAX_JOBS = 2
 POLL_SECONDS = 5.0                   # how often a waiting job checks the line
@@ -169,6 +170,13 @@ def express() -> bool:
     """Whether this process's job asked for the express place: ``--express`` (``begin_job``) or ``$TRIFORCE_EXPRESS``
     set to anything but 0."""
     return _START['express'] or os.environ.get(EXPRESS_ENV, '').strip() not in ('', '0')
+
+
+def job_name(default: str) -> str:
+    """The name this process's job shows in the queue, its log folder and the training GUI: ``$TRIFORCE_JOB_NAME``
+    when set (whoever starts the job says whose it is and what it measures), else the tool's own ``default`` (the
+    specialist, the round, ``eval-chain-d3first-power-on``)."""
+    return os.environ.get(JOB_NAME_ENV, '').strip() or default
 
 
 def max_jobs() -> int:
@@ -530,7 +538,9 @@ def register(log_dir, plan, name: str, kind: str, directory: Optional[Path] = No
     """Records a job (this process, its log folder and plan: None for a job without one, its ``work`` ``amounts``
     and the ``estimate`` of them by the registry's ``rates``) in the registry as ``queued``, joining the line now,
     and prunes old entries; None when the registry can't be written (warned once).  ``JobRecord.wait_turn`` then
-    waits for its turn."""
+    waits for its turn.  ``$TRIFORCE_JOB_NAME`` replaces ``name`` (the tool's own, e.g. the specialist or
+    ``eval-chain-d3first-power-on``), so whoever started the job can say whose it is and what it measures."""
+    name = job_name(name)
     directory = jobs_dir() if directory is None else Path(directory)
     pid, now = os.getpid(), time.time()
     started = process_start(pid)
