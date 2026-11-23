@@ -156,6 +156,7 @@ All of the glitch knowledge is the owner's; the agents made the agent able to us
 | Nov 22 | Bubbles cost time and hearts; penalise their touch | Owner (question); agents measured | Built; no trained result yet | r38 |
 | Nov 23 | Beams at range: reward ranged kills, cost an untaken lined-up shot (v1 did a version) | Owner; agents built the terms | Failed at these weights; stronger ones next | dec 11-23, bl |
 | Nov 23 | Red candle and boomerang for Bubble rooms; snipe 6:0x78's Wizzrobes | Owner | Open (a 0x78 swing earned about 0.1 bombs a run) | bl, r33 |
+| Nov 23 | Drop the executor's closing no-button frame for the fresh generation, no switch kept | Agents found the frame (Peahat40, measuring the 0x1f line); owner (the cut-over, "don't look back"); agents built the rule (kept after every action but a MOVE in play, measured on today's team) and fixed the six engine faults it hid | Open (r40-noclose, for review) | dec 11-23, r40 |
 
 ## Bombs, keys and rupees
 
