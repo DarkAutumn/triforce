@@ -7,7 +7,8 @@
     python scripts/experiments/r38_head.py bench --families KEY... --arm NAME=SPEC... --out DIR
     python scripts/experiments/r38_head.py pr --hit NAME=CKPT... --data DIR... --families KEY... --out JSON
     python scripts/experiments/r38_head.py slices36 --hit CKPT --family darknut|boss-gleeok|goriya-all
-    python scripts/experiments/r38_head.py chains A.jsonl B.jsonl [--from-room ...]  # paired chain comparison
+    python scripts/experiments/r38_head.py chains BASE.jsonl NEW.jsonl... --target L:0xRR,...  [--out JSON]
+    python scripts/experiments/r38_head.py product [--arm SEG=NEW.jsonl...]  [--out JSON]
 
 ``cost``: from the 1000-run segment chains of today's 51 networks on the corrected route (``r36base``: every room
 record has its family, hits and health in and out), per family and segment the runs lost in its rooms (the run's
@@ -28,6 +29,12 @@ air at the decision (from the inputs: an enemy shot present, ``projectile`` and 
 the P = R threshold of the hits with a shot in the air and of those without one (touches, and shots fired after
 the decision; the recordings do not name the hitter). ``slices36``: the same on round 36's collections, where the
 hitter is known (touch / a shot in the air / a shot fired after the decision), and by the hit's frame in the action.
+
+``chains``: paired on seeds, the arrival rate with its standard error, the rooms that lose runs, and per family
+(its rooms summed) hits and hearts lost a visit and runs lost, base against new. ``product``: the predicted rate of
+one run from the start (round 37's ``r37_single_run.py``): the product of the segment rates of today's team (main's
+1000-run record ``r37fix-1k`` where it has the segment, round 36's ``r37_one_table.ref_path`` otherwise; every rate
+by the segment's arrival, ``eval_batch.D3FIRST_TARGETS``), and the same with each ``--arm`` segment's rate instead.
 """
 
 import argparse
@@ -46,13 +53,16 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts' / 'experiments'))
 
 import r38_hit as rh  # noqa: E402
+from r37_one_table import SEGMENTS, ref_path  # noqa: E402
 from triforce import _native, registry  # noqa: E402
+from triforce.eval_batch import D3FIRST_MILESTONES, D3FIRST_TARGETS  # noqa: E402
 from triforce.events import progress_job, write_json_atomic  # noqa: E402
 from triforce.jobs import add_job_arguments, begin_job, work  # noqa: E402
 from triforce.lab import bench as yardstick  # noqa: E402
 
 R38H = ROOT / 'target' / 'r38h'
 CHAINS = '/home/leculver/git/triforce/target/r56-chains'
+RECORD = 'r37fix-1k'
 PLANNER = 'temperature:0.5+relax:16+plan:16:1'
 FEATURES = list(_native.ENTITY_FEATURES)
 PRESENCE, PROJECTILE, HURTS = (FEATURES.index(k) for k in ('presence', 'projectile', 'hurts_on_touch'))
@@ -298,6 +308,57 @@ def chain_compare(base: str, new: str, target: str) -> dict:
     return out
 
 
+def family_rows(rooms: dict) -> dict:
+    """``chain_compare``'s rooms summed by family: visits, hits and hearts lost a visit, runs lost, each side."""
+    sums: dict = defaultdict(lambda: defaultdict(float))
+    for name, cell in rooms.items():
+        for k, v in cell.items():
+            sums[name.split(' ', 1)[1]][k] += v
+    rows = {}
+    for family, c in sums.items():
+        row = {}
+        for tag in ('base', 'new'):
+            visits = c[f'{tag}_visits']
+            row.update({f'{tag}_visits': visits, f'{tag}_lost': c[f'{tag}_lost'],
+                        f'{tag}_hits': c[f'{tag}_hits'] / visits if visits else 0.0,
+                        f'{tag}_hearts': c[f'{tag}_hearts'] / visits if visits else 0.0})
+        rows[family] = row
+    return dict(sorted(rows.items(), key=lambda kv: -kv[1]['base_lost']))
+
+
+def segment_rate(path, segment: str) -> tuple:
+    """(the share of a chain's runs that arrive at ``segment``'s end, runs); 'start' arrives at Level 3's entrance;
+    a segment without a target (d9, the last) counts success."""
+    runs = [json.loads(line) for line in open(path, encoding='utf-8') if line.strip()]
+    if segment == 'start':
+        ok = [arrival(r, dict(D3FIRST_MILESTONES)['d3']) >= 0 for r in runs]
+    elif segment in D3FIRST_TARGETS:
+        ok = [arrival(r, D3FIRST_TARGETS[segment]) >= 0 for r in runs]
+    else:
+        ok = [r['result'] == 'success' for r in runs]
+    return sum(ok) / len(runs), len(runs)
+
+
+def product(arms: dict) -> dict:
+    """Per segment the team's rate (its record) and the arm's where given; both products (module docstring)."""
+    out: dict = {'segments': {}}
+    team = with_arms = 1.0
+    for segment in ['start', *SEGMENTS[:-1]]:
+        name = 'full' if segment == 'start' else segment
+        record = Path(CHAINS) / f'{RECORD}-{name}.jsonl'
+        record = record if record.is_file() else ref_path(name)
+        p, runs = segment_rate(record, segment)
+        row = {'record': str(record), 'p': p, 'runs': runs}
+        if segment in arms:
+            row['arm_p'], row['arm_runs'] = segment_rate(arms[segment], segment)
+            row['arm'] = arms[segment]
+        team *= p
+        with_arms *= row.get('arm_p', p)
+        out['segments'][segment] = row
+    out['team'], out['with_arms'] = team, with_arms
+    return out
+
+
 # ---------------------------------------------------------------------------------------------- main
 
 def main(argv=None) -> int:
@@ -340,6 +401,10 @@ def main(argv=None) -> int:
     h.add_argument('new', nargs='+')
     h.add_argument('--target', required=True, help="the segment's arrival, eval_batch's D3FIRST_TARGETS (d4: "
                    "'4:0x03,0:0x45')")
+    h.add_argument('--out', type=Path, default=None, help='JSON: each new chain\'s comparison, rooms and families')
+    o = sub.add_parser('product')
+    o.add_argument('--arm', nargs='*', default=[], metavar='SEG=JSONL', help="a segment's chain in place of the team's")
+    o.add_argument('--out', type=Path, default=None)
     for q in (p, s):
         q.add_argument('--device', default='cuda')
     args = parser.parse_args(argv)
@@ -367,14 +432,35 @@ def main(argv=None) -> int:
         if args.out:
             write_json_atomic(args.out, results)
     elif args.command == 'chains':
+        results = {}
         for new in args.new:
             result = chain_compare(args.base, new, args.target)
-            rooms = result.pop('rooms')
-            print(new, json.dumps(result))
-            for room, cell in list(rooms.items())[:8]:
+            result['families'] = family_rows(result['rooms'])
+            results[new] = result
+            print(new, json.dumps({k: v for k, v in result.items() if k not in ('rooms', 'families')}))
+            for room, cell in list(result['rooms'].items())[:8]:
                 print(f"  {room}: lost {cell.get('base_lost', 0):.0f} -> {cell.get('new_lost', 0):.0f}; hits a visit "
                       f"{cell.get('base_hits', 0) / max(cell.get('base_visits', 1), 1):.2f} -> "
                       f"{cell.get('new_hits', 0) / max(cell.get('new_visits', 1), 1):.2f}")
+            for family, row in result['families'].items():
+                if row['base_lost'] or row['new_lost']:
+                    print(f"  [{family}] visits {row['base_visits']:.0f} -> {row['new_visits']:.0f}; hits a visit "
+                          f"{row['base_hits']:.3f} -> {row['new_hits']:.3f}; hearts lost a visit "
+                          f"{row['base_hearts']:.3f} -> {row['new_hearts']:.3f}; runs lost {row['base_lost']:.0f} -> "
+                          f"{row['new_lost']:.0f}")
+        if args.out:
+            write_json_atomic(args.out, results)
+    elif args.command == 'product':
+        result = product(dict(arm.split('=', 1) for arm in args.arm))
+        print(f"team {result['team']:.3g} (one in {1 / result['team']:,.0f}); with the arms {result['with_arms']:.3g} "
+              f"(one in {1 / result['with_arms']:,.0f}); the owner's target 1e-4")
+        print('| segment | team p | arm p | -ln p team | -ln p arm |\n|---|---:|---:|---:|---:|')
+        for segment, row in result['segments'].items():
+            arm = row.get('arm_p')
+            print(f"| {segment} | {100 * row['p']:.1f}% | {'' if arm is None else f'{100 * arm:.1f}%'} | "
+                  f"{-math.log(row['p']):.2f} | {'' if arm is None else f'{-math.log(arm):.2f}'} |")
+        if args.out:
+            write_json_atomic(args.out, result)
     return 0
 
 
