@@ -1171,3 +1171,33 @@ branch's base).
 
 Next to train with the beam terms, by the hearts melee costs on the route (2.0.0.8's records): wizzrobe (22,150
 hearts, 1167 deaths), darknut (5,370; 368), goriya (5,117; 351), patra (4,324; 40), with stronger weights first.
+
+## 3:0x5b with a full bag, trained (branch `r39-dark5b`)
+
+The cure named in "The owner's three causes": darknut@d3first (`r38head-fam-w8`: the policy of `r34d5-dg-s362`
+and round 38's hit head, w 8) continued on its d3first rooms under 2.0.0.11's rules (`--sil-coeff 0.1`, 300
+iterations at 8 envs, 1.23M steps, the hit body unchanged: 91 of 91 `hit.*` tensors identical). New in the task:
+`ram_randomization.room_bombs` (crates/env, `start_states::apply_room_bombs`; docs/architecture.md): half of
+0x5b's resets hold 8 bombs, and `room_kills` banks 2 or 3 of its 3 Darknuts in half the staged resets (one left,
+or the room's bombs already lying). Run `r39-dark5b-s1`.
+
+**Single room** (`scripts/experiments/r39_dark5b.py`; act `temperature:0.5+relax:16`, paired by state and seed).
+The owner's case: 30 states (`r39_dark5b.py states`) entered from W with the Darknuts banked, the room's bombs lying
+at ($80, $90), a full bag and Link E of them, 10 seeds each; the crossing: `d3first_3_5bw_0-2` with 8 bombs and the
+Darknuts alive, 100 seeds each.
+
+| 3:0x5b | success | the wall's bomb laid | frames a visit (mean / median / p90) | aimless frames (mean / median / p90) |
+|---|---:|---:|---|---|
+| full bag, bombs lying: `r38head-fam-w8` | 69.0% | 69.3% | 5,542 / 5,168 / 10,068 | 3,476 / 3,114 / 6,716 |
+| `r39-dark5b-s1` it 100 | 100% | 100% | 488 / 460 / 596 | 19 / 2 / 62 |
+| `r39-dark5b-s1` it 300 | **100%** | **100%** | **407** / 396 / 467 | **11** / 0 / 25 |
+| full bag, Darknuts alive: `r38head-fam-w8` | 82.3% | 88.7% | 589 / 553 / 889 | 0 |
+| `r39-dark5b-s1` it 300 | **94.7%** (+12.3 ± 2.1) | 96.0% | 466 / 468 / 537 | 0 |
+
+The pacing is gone (frames −5,135 ± 192 a visit). The family's rooms (its yaml, 30 seeds a seed state, 1,620
+episodes): 94.2% → 95.6%, hearts −0.63 → −0.55 an episode; no room below its start beyond the noise of 90 episodes
+(0x5b 91.7 → 97.2%, 3:0x69 92.2 → 95.0%, 5:0x05 80.0 → 83.9%, 8:0x3e 88.9 → 91.1%, 8:0x5e 93.3 → 90.0%).
+
+**Chains** (1000 runs, seeds 0-999, 2.0.0.11's team on the branch): the base `r39d5b-base` d3 39.2% (3:0x5b step
+19: 738 visits, 54 deaths, 1,520 frames and 213 aimless a visit), d5 66.1% (5:0x05: 131 deaths), d8 89.1%. The arm
+(`promoted.d3first` and `late.d3first` = `r39-dark5b-s1`) is not run yet: `local://r39-dark5b-status.md`.
