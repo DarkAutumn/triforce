@@ -3561,3 +3561,15 @@ continuation, warm start, conversion or imitation of its networks; a student may
 fresh teachers. Everything else, networks continued or replaced inside a generation included, is a `REV`. No version
 through 2.0.0.11 was a fresh generation (73 of 76 pointers are continuations, the entry above); none is renumbered.
 The next fresh generation is 2.0.1.0 unless the owner names it a bigger change. AGENTS.md "Versioning".
+
+## 2026-11-23 — 2.0.0.12: a late ow-lynel for `d3first`'s leg after Dungeon 6 (the lead, the owner being away)
+
+The best of 100 single runs on 2.0.0.11 died after Dungeon 6's triforce at 0:0x22 (walked back into the dungeon).
+One38d continued ow-lynel from `r30e-lynel-s84` on `d3first`'s late ow-lynel rooms (0_22c, 0_22s, 0_32w, 0_07s,
+0_06e, 0_05e; PPO with SIL, `target/r38/yaml/ow-lynel-late.yaml` in the r38-one worktree) and promoted it through
+`late.d3first` only (`r38d-lynel-late-s1`, the measured snapshot; `promoted` and `promoted.d3first` unchanged, so
+`d2first` and `d3first`'s steps before 192 play as before). On the frozen 2.0.0.11 team, 1000 runs paired by seed:
+the leg after Dungeon 6 33.3 -> **100.0%**, after Dungeon 7 98.7 -> 98.7%, after Dungeon 8 99.9 -> 99.9%. An earlier
+measurement (11% after Dungeon 7) swapped the network with `--checkpoint ow-lynel=`, which also replaced
+`ow-lynel@d3first`: a measuring mistake, not the network. 2.0.0.11's records: `target/r56-chains/r39-2011-1k-*`
+(post-d6, post-d7, post-d8, d4, d9). A `REV`: a continuation within the generation.
