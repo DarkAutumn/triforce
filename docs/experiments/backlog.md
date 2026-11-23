@@ -198,10 +198,16 @@ been retrained on the corrected order):
   intersect even if the enemy turns the other way in reality before it hits. [...] One problem with how much
   damage the agent takes is closing with the enemy when he doesn't have to... he doesn't use the full effect of full
   hearts, and instead gets close and loses beams.")
+  Reward built (round38.md "Beams at range; rupees per pickup"): `reward-beam-kill`, `reward-beam-timed`,
+  `penalty-beam-unfired`, `beam_*` in every record. Before: 0.3% of wizzrobe's sword kills out of melee range, 2.8%
+  of patra's. Continued with it, wizzrobe (1M steps) and patra (2M) fought as before and lost 3-7 points on `d6`/`d9`;
+  open: stronger weights, then wizzrobe, darknut, goriya, patra (the hearts melee costs, in that order).
 - [ ] **Rupees rewarded per pickup, not per counted rupee** (the owner, Nov 22, 0:0x0f: "the agent waits for all
   rupees to finish before leaving, probably because it gets reward per rupee incremented. What should ACTUALLY be
   awarded for getting rupees is the 'rupees to add' counter getting set once. It could be a larger reward for 1 vs
   5 vs more, but [...] you don't want that reward to hit on actions other than stepping on a rupee.")
+  Reward built (round38.md "Beams at range; rupees per pickup"): paid once per pickup by its size. Open: ow-start,
+  which plays 0x0f, trained on it (2.0.0.8: the cave visit 329 frames, the step out 198, medians of 996 runs).
 - [ ] **Red candle and boomerang in Bubble rooms** (the owner, Nov 22: 7:0x0d "Real speedrun strat is to pull out
   the red candle and use it when our sword is disabled. [...] using boomerang to stun, then red candle to kill them
   should be a real option. In fact, any room with bubbles after getting the red candle is an option (d6 38, for
