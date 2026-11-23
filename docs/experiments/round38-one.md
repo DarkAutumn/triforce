@@ -243,3 +243,13 @@ the game** (seeds 209, 266, 415, 499, 607, 958; 145,393 to 152,650 frames, 2 to 
 `d1-all-w8` -> `d2b-all-w8`: D3's triforce 470 -> 460, D4 259 -> 226, D1 256 -> 224, D2 235 -> 211, D5 127 -> 121,
 D7 51 -> 47, the magic sword 24 -> 42, D6 13 -> 23, D8 3 -> 15, the ending 0 -> **6**. The best unbroken run (fewest
 cheated items, then fewest frames) is seed 958: 2 cheated items, 151,567 frames.
+
+**Golden race with `d2b-all-w8` in every slot** (2.0.0.12; `zelda-headless.py OUT 3 --golden --power-on --clips on
+--act model --parallel 8 --attempts 2000`): three of three paths in 93 runs, 142,057, 163,128 and 155,625 frames
+(`scripts/speedrun.py time`: 37:56.351, 39:11.211, 39:14.838; the fastest would place 211th of 463 on the Any% No Up+A
+board). The segment from Dungeon 7's triforce to Dungeon 6's (the two fixed legs and Dungeon 6) took 8, 13 and 6
+runs, Dungeon 9 5, 8 and 8.
+
+**Dungeon 4 after the two fine-tunes**: `d2b-all-w8` 52.4% (2.0.0.12 team 68.4%, -16.0 ± 2.1; `d1-all-w8` 57.0%).
+Gleeok 4:0x13 loses 427 a thousand entering (`d1-all-w8` 367, the team 282) and 4:0x11 65 (79, 0). No Gleeok row
+changed between them: the fight drifted with the fine-tunes on the legs' data.
