@@ -163,6 +163,9 @@ def test_eval_chain_records_the_scripted_segment_as_wins(scripted_models, tmp_pa
     route = full_runs.route_facts(_native.route_steps('d2first'))
     assert replay.chain_route(sorted(folder.iterdir())) == route
     assert full_runs.replay_report(sorted(folder.iterdir())) == full_runs.summary(runs, route)
+    live = json.loads(Path(f'{output}.meta.json').read_text())
+    assert (full_runs.summarize(records, provenance, replay.chain_route(sorted(folder.iterdir())))
+            == full_runs.summarize(runs, live, route)), "the runs-250 record from the replays alone"
     for bad, message in ((['--replays', str(folder), '--streams', 'sound'], "unknown replay stream(s) ['sound']"),
                          (['--streams', 'rewards'], '--streams needs --replays')):
         assert cli.main([*chain, '--runs', '1', '--output', str(tmp_path / 'bad.jsonl'), *bad]) == 2

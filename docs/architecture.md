@@ -1939,7 +1939,10 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
   `create-video.py --thoughts` draw. A chain's records and provenance come from its replays alone:
   `replay.chain_records(files)` gives what `eval-chain` wrote to its JSON lines and `.meta.json`,
   `replay.chain_route(files)` the route facts a report needs, so `scripts/full_runs.py report --from-replays`
-  is the same report as from `runs.jsonl`.
+  is the same report as from `runs.jsonl`, and `stats --from-replays` the same runs-250 record (the wall times
+  and the job line's lane, which no replay knows, from the folder's files when it has them). META `models` describes in full only the networks that made a
+  decision in the replay; the others by `replay.BRIEF_MODEL_KEYS` (index, name, family, run, checkpoint SHA-1,
+  hash, act mode, version); a stitch keeps the full description either part has.
 - **Playing.** `_native.ReplayPlayer(data, states_dir=None)` (`step(frames, render)`, `seek(frame)`: from the
   nearest state at or before it, `ram()`, `screen()`, `save_state()`); `replay_verify(data)` / `tf replay verify
   FILE...` plays the whole replay and compares the machine with every recorded state (`ReplayError` naming the

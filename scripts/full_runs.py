@@ -36,9 +36,10 @@ version, commit, team (each family's run and checkpoint SHA-1), seeds, wall time
 that took each triforce, the endings by kind, deaths and stucks per room (room, route step, family), every room
 visit's hits and hearts lost per room, the cheated items and ending of each run, the median frames to each triforce
 and the kept replays.  ``--team`` names a team other than main's (``2.0.0.11_one-d1w8.json``).  ``--from-replays``
-builds the record from ``OUT_DIR/replays/`` alone (``replay.chain_records``: the runs, the provenance and the route
-facts); it equals the one from ``runs.jsonl`` but in what only the folder knows: the wall times (``events.jsonl``,
-``timing.json``) and the lane (``training.json``); the commit is the replays' own (META ``commit``).
+builds the record from ``OUT_DIR/replays/`` (``replay.chain_records``: the runs, the provenance and the route facts;
+the commit is the replays' own, META ``commit``) and writes it as ``OUT_DIR/runs250.replays.json``; what no replay
+knows, the wall times (``events.jsonl``, ``timing.json``) and the lane (``training.json``), still comes from the
+folder's files when it has them.  From the replays alone it equals the record from ``runs.jsonl`` but in those.
 
 ``analyze`` compares one or more of those records (the first is the baseline): per-dungeon rates and endings with
 their binomial standard errors and each record's difference from the baseline, and per room (room and route step)

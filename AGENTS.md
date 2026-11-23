@@ -840,11 +840,13 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   chose** (the owner, Nov 23; version 2): every replay carries the objective and its role-labelled targets
   (TARGETS, `obs` or `reward-only`), the action mask with the rule behind each block (MASKS) and every decision
   (DECISIONS: the network, the action, the quantized distribution, the hit head's danger, the act mode's draw,
-  the planner's vetoes), all named by its own META, which also describes each network (family, run, checkpoint
-  SHA-1, architecture, outputs) and a chain run's record. Keep it that way: a new target kind, role or network
+  the planner's vetoes), all named by its own META, which also describes each network that made a decision in it
+  (family, run, checkpoint SHA-1, architecture, outputs; the rest of the team by name, run and checkpoint SHA-1)
+  and a chain run's record. Keep it that way: a new target kind, role or network
   output is a new META name, never a filesystem path (`test_a_replay_holds_no_filesystem_path`), and what is
-  computable from RAM is not recorded again. A chain's report must be computable from its replays alone
-  (`replay.chain_records`, `scripts/full_runs.py report --from-replays`). People read them with `tf replay
+  computable from RAM is not recorded again. A chain's report and runs-250 record must be computable from its
+  replays alone (`replay.chain_records`, `scripts/full_runs.py report --from-replays`, `stats --from-replays`).
+  People read them with `tf replay
   targets FILE [--room L:RR] [--masks] [--decisions]`, `play-zelda.py --thoughts` and `create-video.py
   --thoughts`.
   `tf replay info FILE`, `tf replay verify FILE...` (the emulator alone; exit 1 on a divergence). The golden path
