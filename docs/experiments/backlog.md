@@ -197,7 +197,11 @@ been retrained on the corrected order):
   moving forward at this rate in this direction calculation you already do to reward timing beams that WOULD
   intersect even if the enemy turns the other way in reality before it hits. [...] One problem with how much
   damage the agent takes is closing with the enemy when he doesn't have to... he doesn't use the full effect of full
-  hearts, and instead gets close and loses beams.")
+  hearts, and instead gets close and loses beams.") And (Nov 23): "I want to be clear about `Why beams rarely happen.` I notice this
+  everywhere. For example, look at rooms in dungeon 3. 0x6b and 0x4a are particularly bad. Link goes and hunts down
+  gel and keese up close (more often than not) with full hearts, in 0x6b it's really noticeable because he walks all
+  the way around the block geometry and rarely fires beams at them." (Full-hearts melee is common: not only a
+  hearts problem.)
   Reward built (round38.md "Beams at range; rupees per pickup"): `reward-beam-kill`, `reward-beam-timed`,
   `penalty-beam-unfired`, `beam_*` in every record. Before: 0.3% of wizzrobe's sword kills out of melee range, 2.8%
   of patra's. Continued with it, wizzrobe (1M steps) and patra (2M) fought as before and lost 3-7 points on `d6`/`d9`;
