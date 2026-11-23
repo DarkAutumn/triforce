@@ -416,13 +416,6 @@ mod _native {
             pyo3::types::PyTuple::new(py, zelda::bombs::BombStats::default().fields().map(|(name, _)| name))?,
         )?;
         m.add(
-            "BOMB_WINDOW_FIELDS",
-            pyo3::types::PyTuple::new(
-                py,
-                zelda::bomb_windows::BombWindowStats::default().fields().map(|(name, _)| name),
-            )?,
-        )?;
-        m.add(
             "CLIP_STATS",
             pyo3::types::PyTuple::new(py, zelda::clips::ClipStats::default().fields().map(|(name, _)| name))?,
         )?;

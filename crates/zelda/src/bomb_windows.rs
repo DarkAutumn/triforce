@@ -29,7 +29,7 @@
 //!   else 5 rupees), else `Drop_ItemTable[group * 10 + cycle]` if the slot's random byte is under the group's rate
 //!   (group 2: `$68`, 41%). A Stalfos or Gibdo in slot 1 (the room item's carrier) drops nothing.
 
-use crate::enums::{AnimationKind, AnimationState, Direction, ObjectClass, SwordKind, enemy, item};
+use crate::enums::{AnimationKind, AnimationState, Direction, MapLocation, ObjectClass, SwordKind, enemy, item};
 use crate::game::{Enemy, GameView};
 use std::sync::Arc;
 
@@ -111,11 +111,18 @@ impl WindowRules for FixedRules {
     }
 }
 
-/// **Metric A's window** (the 10th-kill bomb): `$50` = 9, Link holds at least one bomb and `bomb_rule`
-/// ([`WindowRules::tenth_rule`]). A full bag counts (today's observation lights the streak the same with it;
-/// [`BombWindowStats`] counts it apart).
-pub fn tenth_bomb_window(state: &GameView, bomb_rule: bool) -> bool {
-    bomb_rule && state.next_kill_arms_drop() && state.bombs() >= 1
+/// **Metric A's window** (the 10th-kill bomb): `$50` = 9, Link holds at least one bomb of his own (`own_bombs`: the
+/// bag less the cheated wall bombs not yet spent, [`own_bombs`]) and `bomb_rule` ([`WindowRules::tenth_rule`]). A full
+/// bag counts (today's observation lights the streak the same with it; each [`Window`] says whether the bag was
+/// full when it closed).
+pub fn tenth_bomb_window(state: &GameView, own_bombs: i32, bomb_rule: bool) -> bool {
+    bomb_rule && state.next_kill_arms_drop() && own_bombs >= 1
+}
+
+/// Link's own bombs in `state`: the bag (`$658`) less `granted`, the cheated bombs (`zelda::cheats`, a replay's
+/// EDITS raising `$658`) not yet spent or taken back.
+pub fn own_bombs(state: &GameView, granted: i32) -> i32 {
+    (state.bombs() - granted).max(0)
 }
 
 /// A death of `kind` moves WorldKillCycle on.
@@ -130,15 +137,15 @@ fn carrier_type(kind: u8, slot: u8) -> bool {
 
 /// A Vire dies only to a hit of `$40` or more (the magic sword or its beam, a bomb, the silver arrow); any weaker
 /// hit splits it into two Red Keese, whose deaths move nothing (zelda-asm enemies.md "Vire"). The metric counts the
-/// magic sword and BOMB (allowed by the rule, a bomb in the bag).
-fn vire_dies(state: &GameView, bomb_rule: bool) -> bool {
-    state.sword() == SwordKind::Magic || (bomb_rule && state.bombs() > 0)
+/// magic sword and BOMB (allowed by the rule, a bomb of Link's own in the bag).
+fn vire_dies(state: &GameView, own_bombs: i32, bomb_rule: bool) -> bool {
+    state.sword() == SwordKind::Magic || (bomb_rule && own_bombs > 0)
 }
 
 /// `e` is an **eligible carrier**: a group-2 type, not the slot-1 room-item Gibdo, and a Vire only where Link can
 /// kill it outright ([`vire_dies`]).
-pub fn is_bomb_carrier(state: &GameView, e: &Enemy, bomb_rule: bool) -> bool {
-    carrier_type(e.id, e.index) && (e.id != enemy::VIRE || vire_dies(state, bomb_rule))
+pub fn is_bomb_carrier(state: &GameView, e: &Enemy, own_bombs: i32, bomb_rule: bool) -> bool {
+    carrier_type(e.id, e.index) && (e.id != enemy::VIRE || vire_dies(state, own_bombs, bomb_rule))
 }
 
 /// `e` is the other side of the choice: a monster whose death moves the cycle and reads no bomb column (a
@@ -149,8 +156,8 @@ fn is_other_kill(e: &Enemy) -> bool {
     !carrier_type(e.id, e.index) && e.id != enemy::VIRE && advances_cycle(e.id) && !e.is_big_digdogger()
 }
 
-/// What [`bomb_carrier_window`] tests without the rules: the cycle, no death pending, no forced drop, room in the bag,
-/// a carrier type.
+/// What [`bomb_carrier_window`] tests without the rules: the cycle, no death pending (so a kill streak of 16 with a
+/// death under way, a forced fairy, is out too), no forced drop, room in the bag, a carrier type.
 fn carrier_window_possible(state: &GameView) -> bool {
     BOMB_CYCLES.contains(&state.world_kill_cycle())
         && !death_pending(state)
@@ -167,26 +174,26 @@ fn carrier_window_possible(state: &GameView) -> bool {
 ///   forces 5 rupees; at 10 the forced drop is armed), and WorldKillCount is not 15 (the next kill makes it 16:
 ///   a fairy);
 /// - the bag is not full;
-/// - the room holds an eligible carrier ([`is_bomb_carrier`]; `bomb_rule`: BOMB allowed now by the acting family's
-///   rule, for a Vire);
-/// - a choice exists: `kill_all` (the route objective is FIGHT: every monster must die) is off, or a monster of the
-///   other side lives too.
-pub fn bomb_carrier_window(state: &GameView, bomb_rule: bool, kill_all: bool) -> bool {
+/// - the room holds an eligible carrier ([`is_bomb_carrier`]; `own_bombs` and `bomb_rule`, BOMB allowed now by the
+///   acting family's rule, for a Vire);
+/// - a choice exists: `kill_all` (the objective Link was given is FIGHT: every monster must die) is off, or a monster
+///   of the other side lives too.
+pub fn bomb_carrier_window(state: &GameView, own_bombs: i32, bomb_rule: bool, kill_all: bool) -> bool {
     carrier_window_possible(state)
-        && state.enemies.iter().any(|e| is_bomb_carrier(state, e, bomb_rule))
+        && state.enemies.iter().any(|e| is_bomb_carrier(state, e, own_bombs, bomb_rule))
         && (!kill_all || state.enemies.iter().any(is_other_kill))
 }
 
 /// [`bomb_carrier_window`] asking `rules` only when an answer can change it (a Vire without the magic sword, or no
 /// monster of the other side).
-fn carrier_window_with(state: &Arc<GameView>, rules: &mut dyn WindowRules) -> bool {
+fn carrier_window_with(state: &Arc<GameView>, own_bombs: i32, rules: &mut dyn WindowRules) -> bool {
     if !carrier_window_possible(state) {
         return false;
     }
     let vire = state.sword() != SwordKind::Magic && state.enemies.iter().any(|e| e.id == enemy::VIRE);
     let other = state.enemies.iter().any(is_other_kill);
     let (bomb_rule, kill_all) = if vire || !other { rules.carrier_rules(state) } else { (false, false) };
-    bomb_carrier_window(state, bomb_rule, kill_all)
+    bomb_carrier_window(state, own_bombs, bomb_rule, kill_all)
 }
 
 /// A bomb wall or bomb secret opened in Link's room between two states: a dungeon bomb door turned open, or the
@@ -215,6 +222,8 @@ pub struct Step<'a> {
     pub left: bool,
     /// Frames from `prev` to `curr`.
     pub frames: u32,
+    /// Link's own bombs in `prev` ([`own_bombs`]).
+    pub own_prev: i32,
 }
 
 impl Step<'_> {
@@ -322,163 +331,305 @@ fn death_pending(state: &GameView) -> bool {
     MONSTER_SLOTS.into_iter().any(|slot| dying(state, slot) && advances_cycle(state.peek(OBJ_TYPE + slot)))
 }
 
-/// Dropped bombs followed to their fate (as `crate::bombs::BombStats` follows every bomb drop): taken (gone while
-/// the lifetime could not have run out, or Link's count rose) or wasted (expired, or left on the floor).
-#[derive(Clone, Debug, Default)]
-struct Followed(Vec<(i8, u8)>);
+/// The monsters a step killed, (type, slot): those that started dying, else those whose slot changed type (killed
+/// and gone within a longer step). None when Link left the room.
+fn new_kills(step: &Step) -> Vec<(u8, u8)> {
+    if step.left {
+        return Vec::new();
+    }
+    let (p, c) = (step.prev, step.curr);
+    let alive = |slot: u16| ObjectClass::of(p.peek(OBJ_TYPE + slot)) == ObjectClass::Monster && !dying(p, slot);
+    let kill = |slot: u16| (p.peek(OBJ_TYPE + slot), slot as u8);
+    let started: Vec<_> = MONSTER_SLOTS.filter(|&s| alive(s) && dying(c, s)).map(kill).collect();
+    if !started.is_empty() {
+        return started;
+    }
+    MONSTER_SLOTS.filter(|&s| alive(s) && c.peek(OBJ_TYPE + s) != p.peek(OBJ_TYPE + s)).map(kill).collect()
+}
 
-impl Followed {
-    fn add(&mut self, state: &GameView, slot: i8) {
-        if let Some(i) = state.items.iter().find(|i| i.index == slot && i.id == item::BOMBS) {
-            self.0.push((slot, i.timer));
+/// Dodongo is in the room (types `$31`, `$32`): his room is outside both metrics (his own bomb rules).
+fn dodongo_here(state: &GameView) -> bool {
+    MONSTER_SLOTS.into_iter().any(|s| matches!(state.peek(OBJ_TYPE + s), enemy::DODONGO | enemy::DODONGO2))
+}
+
+/// The bag is full (`$658` ≥ `$67C`).
+fn bag_full(state: &GameView) -> bool {
+    state.bombs() >= state.bomb_max()
+}
+
+/// Which metric a [`Window`] is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Metric {
+    /// A, the 10th-kill bomb.
+    Tenth,
+    /// B, the bomb carrier.
+    Carrier,
+}
+
+impl Metric {
+    pub const fn name(self) -> &'static str {
+        match self {
+            Metric::Tenth => "tenth",
+            Metric::Carrier => "carrier",
+        }
+    }
+}
+
+/// How a [`Window`] ended. [`Outcome::opportunity`]: the six that count.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Outcome {
+    /// A: the 10th kill by a bomb (the forced bomb drop armed).
+    Armed,
+    /// A: a bomb placed in the window ended (exploded, or was gone when Link left) with no 10th kill and no wall
+    /// opened.
+    Missed,
+    /// A: the 10th kill by any other weapon, whatever it killed (`killed` names it).
+    Other,
+    /// A: harm lost the streak first.
+    Lost,
+    /// A: a paused window (no bomb of Link's own, or the rule masks BOMB) ended by the 10th kill or harm.
+    PausedOut,
+    /// B: the next death that moved the cycle was an eligible carrier's.
+    Hit,
+    /// B: it was another monster's.
+    Miss,
+    /// B: Link left the room first, an eligible carrier alive.
+    Left,
+    /// B: the window's conditions ended with no death pending.
+    Closed,
+    /// Either: Link entered Dodongo's room (or Dodongo appeared) with it open.
+    Suspended,
+    /// Either: still open when the replay ended.
+    OpenAtEnd,
+}
+
+impl Outcome {
+    pub const fn name(self) -> &'static str {
+        match self {
+            Outcome::Armed => "armed",
+            Outcome::Missed => "missed",
+            Outcome::Other => "other",
+            Outcome::Lost => "lost",
+            Outcome::PausedOut => "paused-out",
+            Outcome::Hit => "hit",
+            Outcome::Miss => "miss",
+            Outcome::Left => "left",
+            Outcome::Closed => "closed",
+            Outcome::Suspended => "suspended",
+            Outcome::OpenAtEnd => "open-at-end",
         }
     }
 
-    /// (taken, wasted) within the step.
-    fn update(&mut self, step: &Step) -> (u32, u32) {
-        if step.left {
-            return (0, std::mem::take(&mut self.0).len() as u32);
+    /// An opportunity the metric counts.
+    pub const fn opportunity(self) -> bool {
+        matches!(self, Outcome::Armed | Outcome::Missed | Outcome::Other | Outcome::Hit | Outcome::Miss | Outcome::Left)
+    }
+}
+
+/// The bombs a closed window brought: Metric A's forced drop after `armed`, Metric B's table drop after `hit`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DropFate {
+    /// A hit's death dropped no bombs.
+    NoBombs,
+    /// Armed, not fallen yet (the next drop-capable death takes it).
+    Pending,
+    /// On the floor (the replay ended before its fate).
+    Fell,
+    Taken,
+    /// Expired, or left on the floor.
+    Wasted,
+    /// Armed, then harm (or the fairy at 16 kills) took it before it fell.
+    Lost,
+}
+
+impl DropFate {
+    pub const fn name(self) -> &'static str {
+        match self {
+            DropFate::NoBombs => "none",
+            DropFate::Pending => "pending",
+            DropFate::Fell => "fell",
+            DropFate::Taken => "taken",
+            DropFate::Wasted => "wasted",
+            DropFate::Lost => "lost",
         }
+    }
+}
+
+/// One window of either metric, from the frame it opened to the frame it closed (frames: the states' `frame`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Window {
+    pub metric: Metric,
+    pub open_frame: u64,
+    pub open_room: MapLocation,
+    pub close_frame: u64,
+    /// The room the closing step started in (a `left` window: the room left).
+    pub close_room: MapLocation,
+    pub outcome: Outcome,
+    /// (type, slot) of what closed it: the 10th kill's victim, the death that moved the cycle.
+    pub killed: Option<(u8, u8)>,
+    /// The bag was full. Metric A: on the frame before the resolving action (before the bomb was placed, before the
+    /// other weapon's 10th kill landed): the bag Link chose with. With a full bag a bomb 10th kill goes 8 → 7 → 8
+    /// (the forced four capped at the bag): nothing gained, and the 5 rupees lost (the owner, Nov 23). Metric B: at
+    /// the close (the kill does not change the bag; the carrier's drop comes after).
+    pub full_bag: bool,
+    /// The bombs it brought (`armed`, `hit`), else None.
+    pub drop: Option<DropFate>,
+}
+
+/// Dropped bombs followed to their fate, each for its window (as `crate::bombs::BombStats` follows every bomb drop):
+/// taken (gone while the lifetime could not have run out, or Link's count rose) or wasted (expired, or left on the
+/// floor).
+#[derive(Clone, Debug, Default)]
+struct Followed(Vec<(i8, u8, usize)>);
+
+impl Followed {
+    fn add(&mut self, state: &GameView, slot: i8, window: usize) -> bool {
+        let found = state.items.iter().find(|i| i.index == slot && i.id == item::BOMBS);
+        if let Some(i) = found {
+            self.0.push((slot, i.timer, window));
+        }
+        found.is_some()
+    }
+
+    fn update(&mut self, step: &Step, windows: &mut [Window]) {
         let (p, c) = (step.prev, step.curr);
         let reach = step.frames / 2 + crate::hearts::TIMER_MARGIN;
         let gained = c.bombs() > p.bombs();
-        let (mut taken, mut wasted) = (0, 0);
-        self.0.retain_mut(|(slot, timer)| {
-            match c.items.iter().find(|i| i.index == *slot && i.id == item::BOMBS && i.timer <= *timer) {
-                Some(i) => {
-                    *timer = i.timer;
-                    true
-                }
-                None => {
-                    if u32::from(*timer) > reach || gained {
-                        taken += 1;
-                    } else {
-                        wasted += 1;
-                    }
-                    false
-                }
+        self.0.retain_mut(|(slot, timer, window)| {
+            let now = c.items.iter().find(|i| i.index == *slot && i.id == item::BOMBS && i.timer <= *timer);
+            if let Some(i) = now.filter(|_| !step.left) {
+                *timer = i.timer;
+                return true;
             }
+            let taken = !step.left && (u32::from(*timer) > reach || gained);
+            windows[*window].drop = Some(if taken { DropFate::Taken } else { DropFate::Wasted });
+            false
         });
-        (taken, wasted)
     }
 }
 
 /// Metric A's window over a run: opened at a step that starts inside [`tenth_bomb_window`], paused while Link is
-/// on 9 without a bomb in the bag or in the air (or the rule masks BOMB), resumed as the same opportunity.
+/// on 9 without a bomb of his own in the bag or in the air (or the rule masks BOMB), resumed as the same window.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum Tenth {
     #[default]
     Closed,
-    Open { id: u32, full: bool },
-    Paused { id: u32, full: bool },
+    Open { frame: u64, room: MapLocation },
+    Paused { frame: u64, room: MapLocation },
 }
 
-/// A bomb placed while Metric A's window `id` was open, live until its animation slot goes inactive.
+/// A bomb placed while Metric A's window opened at frame `id` was open, live until its animation slot goes
+/// inactive; `full`: the bag was full on the frame before it was placed.
 #[derive(Clone, Copy, Debug)]
 struct LiveBomb {
     kind: AnimationKind,
-    id: u32,
+    id: u64,
+    full: bool,
     opened_wall: bool,
 }
 
-/// How each window of a room visit ended (chain records and replay scores: JSON keys as named; `fields`). Metric A's
-/// opportunities are `tenth_armed + tenth_missed + tenth_other`, Metric B's `carrier_hits + carrier_miss_kill +
-/// carrier_miss_leave`.
+/// Counts of a list of windows (tests and quick looks; reports sum the list in Python): Metric A's opportunities are
+/// `tenth_armed + tenth_missed + tenth_other`, Metric B's `carrier_hits + carrier_miss_kill + carrier_miss_leave`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct BombWindowStats {
-    /// The 10th kill made by a bomb: the forced bomb drop armed.
     pub tenth_armed: u32,
-    /// A bomb placed in the window that ended (exploded, or was gone with the room) without the 10th kill and
-    /// without opening a wall.
     pub tenth_missed: u32,
-    /// The 10th kill made by any other weapon.
     pub tenth_other: u32,
-    /// The three above, of windows that opened with the bag full.
+    /// The three above with a full bag ([`Window::full_bag`]).
     pub tenth_full_armed: u32,
     pub tenth_full_missed: u32,
     pub tenth_full_other: u32,
-    /// Windows the streak was lost in (harm) before any of the three: not opportunities.
     pub tenth_lost: u32,
-    /// Paused windows ended by the 10th kill or harm while Link had no bomb: not opportunities.
     pub tenth_paused_out: u32,
-    /// Forced bomb drops that fell, then were taken or wasted (expired, left on the floor); armed drops lost
-    /// before falling (harm, or the fairy at 16 kills).
+    /// Armed drops that fell (taken, wasted or still on the floor), were taken, wasted, lost before falling.
     pub tenth_forced_fell: u32,
     pub tenth_forced_taken: u32,
     pub tenth_forced_wasted: u32,
     pub tenth_forced_lost: u32,
-    /// The next death that moved the cycle was an eligible carrier's.
     pub carrier_hits: u32,
-    /// It was any other monster's.
     pub carrier_miss_kill: u32,
-    /// Link left the room first.
     pub carrier_miss_leave: u32,
-    /// The window's conditions ended with no death pending (bag filled, the streak reached 9, the carriers gone
-    /// without a death that moved the cycle): not opportunities.
     pub carrier_closed: u32,
-    /// Bombs the hits dropped (the 41% roll), and those taken.
+    /// Hits whose death dropped bombs, and those taken.
     pub carrier_bombs: u32,
     pub carrier_bombs_taken: u32,
-    /// Cycle moves in an open window no slot accounted for (expected 0).
+    /// Hits and misses no slot accounted for (expected 0).
     pub carrier_unattributed: u32,
+    pub suspended: u32,
+    pub open_at_end: u32,
 }
 
 impl BombWindowStats {
-    pub fn fields(&self) -> [(&'static str, u32); 19] {
-        [
-            ("tenth_armed", self.tenth_armed),
-            ("tenth_missed", self.tenth_missed),
-            ("tenth_other", self.tenth_other),
-            ("tenth_full_armed", self.tenth_full_armed),
-            ("tenth_full_missed", self.tenth_full_missed),
-            ("tenth_full_other", self.tenth_full_other),
-            ("tenth_lost", self.tenth_lost),
-            ("tenth_paused_out", self.tenth_paused_out),
-            ("tenth_forced_fell", self.tenth_forced_fell),
-            ("tenth_forced_taken", self.tenth_forced_taken),
-            ("tenth_forced_wasted", self.tenth_forced_wasted),
-            ("tenth_forced_lost", self.tenth_forced_lost),
-            ("carrier_hits", self.carrier_hits),
-            ("carrier_miss_kill", self.carrier_miss_kill),
-            ("carrier_miss_leave", self.carrier_miss_leave),
-            ("carrier_closed", self.carrier_closed),
-            ("carrier_bombs", self.carrier_bombs),
-            ("carrier_bombs_taken", self.carrier_bombs_taken),
-            ("carrier_unattributed", self.carrier_unattributed),
-        ]
+    pub fn of(windows: &[Window]) -> BombWindowStats {
+        let mut s = BombWindowStats::default();
+        for w in windows {
+            let full = u32::from(w.full_bag);
+            let fell = matches!(w.drop, Some(DropFate::Fell | DropFate::Taken | DropFate::Wasted));
+            let (taken, wasted) = (w.drop == Some(DropFate::Taken), w.drop == Some(DropFate::Wasted));
+            match w.outcome {
+                Outcome::Armed => {
+                    s.tenth_armed += 1;
+                    s.tenth_full_armed += full;
+                    s.tenth_forced_fell += u32::from(fell);
+                    s.tenth_forced_taken += u32::from(taken);
+                    s.tenth_forced_wasted += u32::from(wasted);
+                    s.tenth_forced_lost += u32::from(w.drop == Some(DropFate::Lost));
+                }
+                Outcome::Missed => {
+                    s.tenth_missed += 1;
+                    s.tenth_full_missed += full;
+                }
+                Outcome::Other => {
+                    s.tenth_other += 1;
+                    s.tenth_full_other += full;
+                }
+                Outcome::Lost => s.tenth_lost += 1,
+                Outcome::PausedOut => s.tenth_paused_out += 1,
+                Outcome::Hit => {
+                    s.carrier_hits += 1;
+                    s.carrier_bombs += u32::from(fell);
+                    s.carrier_bombs_taken += u32::from(taken);
+                }
+                Outcome::Miss => s.carrier_miss_kill += 1,
+                Outcome::Left => s.carrier_miss_leave += 1,
+                Outcome::Closed => s.carrier_closed += 1,
+                Outcome::Suspended => s.suspended += 1,
+                Outcome::OpenAtEnd => s.open_at_end += 1,
+            }
+            s.carrier_unattributed += u32::from(matches!(w.outcome, Outcome::Hit | Outcome::Miss) && w.killed.is_none());
+        }
+        s
     }
 }
 
 /// Both windows over one run: [`BombWindows::frame`] on every counted frame ([`FrameKind::Play`]),
-/// [`BombWindows::skip`] on the others; a fresh one per run.
+/// [`BombWindows::skip`] on the others, [`BombWindows::finish`] at the end; the closed windows in `windows`.
 #[derive(Clone, Debug, Default)]
 pub struct BombWindows {
+    pub windows: Vec<Window>,
     tenth: Tenth,
-    opened: u32,
     bombs: Vec<LiveBomb>,
-    carrier: bool,
+    carrier: Option<(u64, MapLocation)>,
     forced: Followed,
     carried: Followed,
-    /// A forced bomb drop armed by a 10th kill and not yet fallen (Dodongo's death arms one too, zelda-asm
+    /// The `armed` window whose forced drop has not fallen yet (Dodongo's death arms one too, zelda-asm
     /// `src/bank4/dodongo.asm`: not the metric's).
-    armed_pending: bool,
-    prev: Option<Arc<GameView>>,
+    armed_pending: Option<usize>,
+    /// The last counted frame and Link's own bombs then.
+    prev: Option<(Arc<GameView>, i32)>,
     /// A transition frame since `prev`, and frames since it.
     left: bool,
     gap: u32,
+    /// Dodongo's room Link stands in: nothing counts until he leaves it.
+    excluded: bool,
     /// Link died: nothing counts after.
     over: bool,
 }
 
 impl BombWindows {
-    /// (Metric A's window unresolved, open or paused; Metric B's open): at the run's end, `open_at_end`.
+    /// (Metric A's window unresolved, open or paused; Metric B's open).
     pub fn open(&self) -> (bool, bool) {
-        (self.tenth != Tenth::Closed, self.carrier)
-    }
-
-    /// The last counted frame's state.
-    pub fn last(&self) -> Option<&Arc<GameView>> {
-        self.prev.as_ref()
+        (self.tenth != Tenth::Closed, self.carrier.is_some())
     }
 
     /// A frame not counted: a transition (`left`) ends Link's stay in the room.
@@ -487,147 +638,219 @@ impl BombWindows {
         self.left |= left;
     }
 
-    /// Counts the step from the last counted frame to `state` into `stats` (the room the step started in);
-    /// `rules` answer for that step's start.
-    pub fn frame(&mut self, state: Arc<GameView>, rules: &mut dyn WindowRules, stats: &mut BombWindowStats) {
+    /// Counts the step from the last counted frame to `state` (`granted`: the cheated bombs in its bag, see
+    /// [`own_bombs`]); `rules` answer for the step's start.
+    pub fn frame(&mut self, state: Arc<GameView>, granted: i32, rules: &mut dyn WindowRules) {
         if self.over {
             return;
         }
-        if let Some(prev) = self.prev.take() {
+        let own = own_bombs(&state, granted);
+        if let Some((prev, own_prev)) = self.prev.take() {
             let left = self.left || prev.full_location() != state.full_location();
-            self.update(&Step { prev: &prev, curr: &state, left, frames: self.gap + 1 }, rules, stats);
+            let step = Step { prev: &prev, curr: &state, left, frames: self.gap + 1, own_prev };
+            let dodongo = dodongo_here(&state);
+            if self.excluded {
+                // The step that leaves Dodongo's room is his room's too.
+                self.excluded = !left;
+            } else if !dodongo || left {
+                // The step that enters his room is the room left's.
+                self.update(&step, rules);
+            }
+            if dodongo && !self.excluded {
+                self.suspend(&step);
+            }
+        } else {
+            self.excluded = dodongo_here(&state);
         }
         (self.left, self.gap) = (false, 0);
         self.over = state.game_over();
-        self.prev = Some(state);
+        self.prev = Some((state, own));
     }
 
-    /// Counts one step into `stats`.
-    pub fn update(&mut self, step: &Step, rules: &mut dyn WindowRules, stats: &mut BombWindowStats) {
-        self.update_tenth(step, rules, stats);
-        self.update_carrier(step, rules, stats);
+    /// The replay ended: open windows are `open-at-end`.
+    pub fn finish(&mut self) {
+        let Some((last, _)) = self.prev.clone() else { return };
+        let end = Step { prev: &last, curr: &last, left: false, frames: 0, own_prev: 0 };
+        let full = bag_full(&last);
+        if let Tenth::Open { frame, room } | Tenth::Paused { frame, room } = self.tenth {
+            self.close(Metric::Tenth, (frame, room), &end, Outcome::OpenAtEnd, None, full);
+        }
+        if let Some(open) = self.carrier.take() {
+            self.close(Metric::Carrier, open, &end, Outcome::OpenAtEnd, None, full);
+        }
+        self.tenth = Tenth::Closed;
     }
 
-    fn update_tenth(&mut self, step: &Step, rules: &mut dyn WindowRules, stats: &mut BombWindowStats) {
+    fn close(
+        &mut self,
+        metric: Metric,
+        open: (u64, MapLocation),
+        step: &Step,
+        outcome: Outcome,
+        killed: Option<(u8, u8)>,
+        full_bag: bool,
+    ) -> usize {
+        self.windows.push(Window {
+            metric,
+            open_frame: open.0,
+            open_room: open.1,
+            close_frame: step.curr.frame,
+            close_room: step.prev.full_location(),
+            outcome,
+            killed,
+            full_bag,
+            drop: None,
+        });
+        self.windows.len() - 1
+    }
+
+    /// Dodongo's room: the open windows are suspended (the bombs in the air go with them).
+    fn suspend(&mut self, step: &Step) {
+        let full = bag_full(step.prev);
+        if let Tenth::Open { frame, room } | Tenth::Paused { frame, room } = self.tenth {
+            self.close(Metric::Tenth, (frame, room), step, Outcome::Suspended, None, full);
+        }
+        if let Some(open) = self.carrier.take() {
+            self.close(Metric::Carrier, open, step, Outcome::Suspended, None, full);
+        }
+        self.tenth = Tenth::Closed;
+        self.bombs.clear();
+        self.excluded = true;
+    }
+
+    /// Counts one step.
+    pub fn update(&mut self, step: &Step, rules: &mut dyn WindowRules) {
+        self.update_tenth(step, rules);
+        self.update_carrier(step, rules);
+    }
+
+    fn update_tenth(&mut self, step: &Step, rules: &mut dyn WindowRules) {
         let (p, c) = (step.prev, step.curr);
-        let window = p.next_kill_arms_drop() && p.bombs() >= 1 && rules.tenth_rule(p);
+        let window = p.next_kill_arms_drop() && step.own_prev >= 1 && rules.tenth_rule(p);
         self.tenth = match self.tenth {
-            Tenth::Closed if window => {
-                self.opened += 1;
-                Tenth::Open { id: self.opened, full: p.bombs() >= p.bomb_max() }
-            }
-            Tenth::Paused { id, full } if window => Tenth::Open { id, full },
+            Tenth::Closed if window => Tenth::Open { frame: p.frame, room: p.full_location() },
+            Tenth::Paused { frame, room } if window => Tenth::Open { frame, room },
             // Still on 9 (harm is closed within its own step), a bomb of the window in the air: still open.
-            Tenth::Open { id, full } if !window && p.next_kill_arms_drop() => {
-                if self.bombs.iter().any(|b| b.id == id) {
-                    Tenth::Open { id, full }
+            Tenth::Open { frame, room } if !window && p.next_kill_arms_drop() => {
+                if self.bombs.iter().any(|b| b.id == frame) {
+                    Tenth::Open { frame, room }
                 } else {
-                    Tenth::Paused { id, full }
+                    Tenth::Paused { frame, room }
                 }
             }
-            Tenth::Open { .. } if !window => {
-                stats.tenth_lost += 1;
+            Tenth::Open { frame, room } if !window => {
+                self.close(Metric::Tenth, (frame, room), step, Outcome::Lost, None, bag_full(p));
                 Tenth::Closed
             }
             t => t,
         };
-        if let Tenth::Open { id, .. } = self.tenth {
+        if let Tenth::Open { frame, .. } = self.tenth {
             let placed: Vec<AnimationKind> = step.placed_bombs().collect();
-            self.bombs.extend(placed.into_iter().map(|kind| LiveBomb { kind, id, opened_wall: false }));
+            let full = bag_full(p);
+            self.bombs.extend(placed.into_iter().map(|kind| LiveBomb { kind, id: frame, full, opened_wall: false }));
         }
         let opened = opened_wall(p, c);
         for b in &mut self.bombs {
             b.opened_wall |= opened;
         }
         if step.tenth_kill() {
+            let killed = new_kills(step).first().copied();
             match self.tenth {
-                Tenth::Open { full, .. } if step.armed_bomb_drop() => {
-                    stats.tenth_armed += 1;
-                    stats.tenth_full_armed += u32::from(full);
+                Tenth::Open { frame, room } => {
+                    let armed = step.armed_bomb_drop();
+                    // A bomb's kill: the bag before the first bomb of the window still in the air (the one that
+                    // went off first); another weapon's: the bag on the frame before it landed.
+                    let full = match self.bombs.iter().find(|b| b.id == frame) {
+                        Some(b) if armed => b.full,
+                        _ => bag_full(p),
+                    };
+                    let outcome = if armed { Outcome::Armed } else { Outcome::Other };
+                    let index = self.close(Metric::Tenth, (frame, room), step, outcome, killed, full);
+                    if armed {
+                        self.windows[index].drop = Some(DropFate::Pending);
+                        self.armed_pending = Some(index);
+                    }
                 }
-                Tenth::Open { full, .. } => {
-                    stats.tenth_other += 1;
-                    stats.tenth_full_other += u32::from(full);
+                Tenth::Paused { frame, room } => {
+                    self.close(Metric::Tenth, (frame, room), step, Outcome::PausedOut, killed, bag_full(p));
                 }
-                Tenth::Paused { .. } => stats.tenth_paused_out += 1,
                 Tenth::Closed => {}
             }
             self.tenth = Tenth::Closed;
             self.bombs.clear();
         } else if self.tenth != Tenth::Closed && !c.next_kill_arms_drop() && !c.game_over() {
-            match self.tenth {
-                Tenth::Paused { .. } => stats.tenth_paused_out += 1,
-                _ => stats.tenth_lost += 1,
+            if let Tenth::Open { frame, room } | Tenth::Paused { frame, room } = self.tenth {
+                let outcome = if matches!(self.tenth, Tenth::Paused { .. }) { Outcome::PausedOut } else { Outcome::Lost };
+                self.close(Metric::Tenth, (frame, room), step, outcome, None, bag_full(p));
             }
             self.tenth = Tenth::Closed;
             self.bombs.clear();
         }
         let current = match self.tenth {
-            Tenth::Open { id, full } | Tenth::Paused { id, full } => Some((id, full)),
+            Tenth::Open { frame, room } | Tenth::Paused { frame, room } => Some((frame, room)),
             Tenth::Closed => None,
         };
         let mut missed = None;
         self.bombs.retain(|b| {
             let ended = step.left || c.animation_state(b.kind) == AnimationState::Inactive;
             if ended && !b.opened_wall && current.is_some_and(|(id, _)| id == b.id) {
-                missed = current.map(|(_, full)| full);
+                missed = Some(b.full);
             }
             !ended
         });
-        if let Some(full) = missed {
-            stats.tenth_missed += 1;
-            stats.tenth_full_missed += u32::from(full);
+        if let (Some(full), Some(open)) = (missed, current) {
+            self.close(Metric::Tenth, open, step, Outcome::Missed, None, full);
             self.tenth = Tenth::Closed;
             self.bombs.clear();
         }
-        let (taken, wasted) = self.forced.update(step);
-        stats.tenth_forced_taken += taken;
-        stats.tenth_forced_wasted += wasted;
+        self.forced.update(step, &mut self.windows);
         let armed = |s: &GameView| s.help_drop_count() >= 10 && s.help_drop_is_bombs();
-        self.armed_pending |= step.armed_bomb_drop();
-        if self.armed_pending && !armed(c) {
-            self.armed_pending = false;
-            let drops = step.new_bomb_drops();
-            if drops.is_empty() {
-                stats.tenth_forced_lost += 1;
-            } else {
-                stats.tenth_forced_fell += 1;
-                for slot in drops {
-                    self.forced.add(c, slot);
+        if let Some(index) = self.armed_pending
+            && !armed(c)
+        {
+            self.armed_pending = None;
+            self.windows[index].drop = Some(DropFate::Lost);
+            for slot in step.new_bomb_drops() {
+                if self.forced.add(c, slot, index) {
+                    self.windows[index].drop = Some(DropFate::Fell);
                 }
             }
         }
     }
 
-    fn update_carrier(&mut self, step: &Step, rules: &mut dyn WindowRules, stats: &mut BombWindowStats) {
+    fn update_carrier(&mut self, step: &Step, rules: &mut dyn WindowRules) {
         let (p, c) = (step.prev, step.curr);
-        let window = carrier_window_with(p, rules);
-        if self.carrier && !window && !death_pending(p) {
-            stats.carrier_closed += 1;
-            self.carrier = false;
+        let window = carrier_window_with(p, step.own_prev, rules);
+        if let Some(open) = self.carrier
+            && !window
+            && !death_pending(p)
+        {
+            self.close(Metric::Carrier, open, step, Outcome::Closed, None, bag_full(p));
+            self.carrier = None;
         }
-        self.carrier |= window;
-        let (taken, _) = self.carried.update(step);
-        stats.carrier_bombs_taken += taken;
+        if self.carrier.is_none() && window {
+            self.carrier = Some((p.frame, p.full_location()));
+        }
+        self.carried.update(step, &mut self.windows);
         let (moves, deaths) = cycle_deaths(step);
+        let Some(open) = self.carrier else { return };
         if moves > 0 {
-            if self.carrier {
-                stats.carrier_unattributed += u32::from(moves).saturating_sub(deaths.len() as u32);
-                let hits: Vec<&Death> = deaths.iter().filter(|d| carrier_type(d.kind, d.slot)).collect();
-                if hits.is_empty() {
-                    stats.carrier_miss_kill += 1;
-                } else {
-                    stats.carrier_hits += 1;
-                    for d in hits.into_iter().filter(|d| d.dropped == Some(item::BOMBS)) {
-                        stats.carrier_bombs += 1;
-                        self.carried.add(c, d.slot as i8);
+            let hit = deaths.iter().find(|d| carrier_type(d.kind, d.slot));
+            let killed = hit.or(deaths.first()).map(|d| (d.kind, d.slot));
+            let outcome = if hit.is_some() { Outcome::Hit } else { Outcome::Miss };
+            let index = self.close(Metric::Carrier, open, step, outcome, killed, bag_full(p));
+            if hit.is_some() {
+                self.windows[index].drop = Some(DropFate::NoBombs);
+                for d in deaths.iter().filter(|d| carrier_type(d.kind, d.slot) && d.dropped == Some(item::BOMBS)) {
+                    if self.carried.add(c, d.slot as i8, index) {
+                        self.windows[index].drop = Some(DropFate::Fell);
                     }
                 }
-                self.carrier = false;
             }
-        } else if self.carrier && step.left {
-            stats.carrier_miss_leave += 1;
-            self.carrier = false;
+            self.carrier = None;
+        } else if step.left {
+            self.close(Metric::Carrier, open, step, Outcome::Left, None, bag_full(p));
+            self.carrier = None;
         }
     }
 }
@@ -688,14 +911,25 @@ mod tests {
         ram[Var::KillStreak.addr() as usize] += 1;
     }
 
-    /// Feeds `rams` as consecutive play frames.
+    /// [`bomb_carrier_window`] of `ram`, its whole bag Link's own.
+    fn carrier(ram: &Ram, bomb_rule: bool, kill_all: bool) -> bool {
+        let v = view(ram, 0);
+        bomb_carrier_window(&v, v.bombs(), bomb_rule, kill_all)
+    }
+
+    /// [`tenth_bomb_window`] of `ram`, its whole bag Link's own.
+    fn tenth(ram: &Ram, bomb_rule: bool) -> bool {
+        let v = view(ram, 0);
+        tenth_bomb_window(&v, v.bombs(), bomb_rule)
+    }
+
+    /// Feeds `rams` as consecutive play frames (no cheated bombs); the counts of the windows closed.
     fn play(w: &mut BombWindows, rams: &[Ram], bomb_rule: bool, kill_all: bool) -> BombWindowStats {
-        let mut stats = BombWindowStats::default();
         let mut rules = FixedRules { bomb_rule, kill_all };
         for (i, ram) in rams.iter().enumerate() {
-            w.frame(view(ram, 100 + i as u64), &mut rules, &mut stats);
+            w.frame(view(ram, 100 + i as u64), 0, &mut rules);
         }
-        stats
+        BombWindowStats::of(&w.windows)
     }
 
     const BOMB_ACTIVE: u8 = 18;
@@ -717,10 +951,10 @@ mod tests {
 
     #[test]
     fn tenth_window_needs_nine_a_bomb_and_the_rule() {
-        assert!(tenth_bomb_window(&view(&base(1, 9, 3), 0), true));
-        assert!(!tenth_bomb_window(&view(&base(1, 9, 3), 0), false), "bombs: never");
-        assert!(!tenth_bomb_window(&view(&base(0, 9, 3), 0), true), "no bomb");
-        assert!(!tenth_bomb_window(&view(&base(4, 8, 3), 0), true), "not the 10th");
+        assert!(tenth(&base(1, 9, 3), true));
+        assert!(!tenth(&base(1, 9, 3), false), "bombs: never");
+        assert!(!tenth(&base(0, 9, 3), true), "no bomb");
+        assert!(!tenth(&base(4, 8, 3), true), "not the 10th");
     }
 
     /// A: the 10th kill by a bomb arms the drop; the forced drop then falls and is taken.
@@ -852,7 +1086,7 @@ mod tests {
         let mut start = base(2, 3, 5);
         monster(&mut start, 2, enemy::RED_DARKNUT);
         monster(&mut start, 3, enemy::STALFOS);
-        assert!(bomb_carrier_window(&view(&start, 0), true, false));
+        assert!(carrier(&start, true, false));
         let mut killed = start;
         kill(&mut killed, 2, Some(item::BOMBS));
         let mut w = BombWindows::default();
@@ -860,7 +1094,7 @@ mod tests {
         assert_eq!((stats.carrier_hits, stats.carrier_miss_kill, stats.carrier_bombs), (1, 0, 1));
         assert!(!w.open().1);
         // The cycle now reads 6: no bomb column next.
-        assert!(!bomb_carrier_window(&view(&killed, 0), true, false));
+        assert!(!carrier(&killed, true, false));
     }
 
     /// B: a non-carrier dies first: a miss by kill. The carrier's sparkle running over the 9th kill keeps the
@@ -907,15 +1141,15 @@ mod tests {
         let mut darknuts = base(2, 0, 0);
         monster(&mut darknuts, 2, enemy::RED_DARKNUT);
         monster(&mut darknuts, 3, enemy::RED_DARKNUT);
-        assert!(!bomb_carrier_window(&view(&darknuts, 0), true, true), "FIGHT, Darknuts only");
-        assert!(bomb_carrier_window(&view(&darknuts, 0), true, false), "pass-through");
+        assert!(!carrier(&darknuts, true, true), "FIGHT, Darknuts only");
+        assert!(carrier(&darknuts, true, false), "pass-through");
         let mut mixed = darknuts;
         monster(&mut mixed, 4, enemy::STALFOS);
-        assert!(bomb_carrier_window(&view(&mixed, 0), true, true));
+        assert!(carrier(&mixed, true, true));
         let shut = |f: &dyn Fn(&mut Ram)| {
             let mut ram = mixed;
             f(&mut ram);
-            !bomb_carrier_window(&view(&ram, 0), true, false)
+            !carrier(&ram, true, false)
         };
         assert!(shut(&|r| set(r, Var::Bombs, 8)), "full bag");
         assert!(shut(&|r| set(r, Var::HelpDropCount, 9)), "Metric A's streak");
@@ -931,9 +1165,9 @@ mod tests {
         // The slot-1 Gibdo carries the room item and drops nothing: no carrier.
         let mut gibdo = base(2, 0, 0);
         monster(&mut gibdo, 1, enemy::GIBDO);
-        assert!(!bomb_carrier_window(&view(&gibdo, 0), true, false));
+        assert!(!carrier(&gibdo, true, false));
         monster(&mut gibdo, 2, enemy::GIBDO);
-        assert!(bomb_carrier_window(&view(&gibdo, 0), true, true), "slot 2's Gibdo, the slot-1 one the choice");
+        assert!(carrier(&gibdo, true, true), "slot 2's Gibdo, the slot-1 one the choice");
     }
 
     /// B: Bubbles are no monsters: Red Wizzrobes with Bubbles in a FIGHT room never count.
@@ -943,8 +1177,8 @@ mod tests {
         monster(&mut ram, 2, enemy::RED_WIZZROBE);
         monster(&mut ram, 3, enemy::BUBBLE);
         monster(&mut ram, 4, enemy::BLUE_BUBBLE);
-        assert!(!bomb_carrier_window(&view(&ram, 0), true, true));
-        assert!(bomb_carrier_window(&view(&ram, 0), true, false));
+        assert!(!carrier(&ram, true, true));
+        assert!(carrier(&ram, true, false));
     }
 
     /// B: a Vire is a carrier only with the magic sword or BOMB allowed with a bomb in the bag (else it splits).
@@ -953,17 +1187,17 @@ mod tests {
         let mut ram = base(0, 0, 0);
         monster(&mut ram, 2, enemy::VIRE);
         set(&mut ram, Var::Sword, 1);
-        assert!(!bomb_carrier_window(&view(&ram, 0), true, false), "wood sword, no bombs");
+        assert!(!carrier(&ram, true, false), "wood sword, no bombs");
         set(&mut ram, Var::Bombs, 2);
-        assert!(!bomb_carrier_window(&view(&ram, 0), false, false), "bombs masked");
-        assert!(bomb_carrier_window(&view(&ram, 0), true, false), "bombs allowed");
+        assert!(!carrier(&ram, false, false), "bombs masked");
+        assert!(carrier(&ram, true, false), "bombs allowed");
         set(&mut ram, Var::Bombs, 0);
         set(&mut ram, Var::Sword, 3);
-        assert!(bomb_carrier_window(&view(&ram, 0), false, false), "magic sword");
+        assert!(carrier(&ram, false, false), "magic sword");
         // A splitting Vire is no choice either: Vire and Stalfos under FIGHT with the wood sword and no bombs.
         set(&mut ram, Var::Sword, 1);
         monster(&mut ram, 3, enemy::STALFOS);
-        assert!(!bomb_carrier_window(&view(&ram, 0), true, true));
+        assert!(!carrier(&ram, true, true));
     }
 
     /// B: a transition frame between two play frames of the same room (a maze loop scrolls the room in again) is a
@@ -977,15 +1211,14 @@ mod tests {
         set(&mut ram, Var::Level, 0);
         monster(&mut ram, 2, enemy::BLUE_MOBLIN);
         let mut rules = FixedRules { bomb_rule: true, kill_all: false };
-        let mut stats = BombWindowStats::default();
         let mut w = BombWindows::default();
-        w.frame(view(&ram, 0), &mut rules, &mut stats);
+        w.frame(view(&ram, 0), 0, &mut rules);
         w.skip(false);
-        w.frame(view(&ram, 2), &mut rules, &mut stats);
-        assert_eq!((stats.carrier_miss_leave, w.open().1), (0, true));
+        w.frame(view(&ram, 2), 0, &mut rules);
+        assert_eq!((BombWindowStats::of(&w.windows).carrier_miss_leave, w.open().1), (0, true));
         w.skip(true);
-        w.frame(view(&ram, 4), &mut rules, &mut stats);
-        assert_eq!(stats.carrier_miss_leave, 1);
+        w.frame(view(&ram, 4), 0, &mut rules);
+        assert_eq!(BombWindowStats::of(&w.windows).carrier_miss_leave, 1);
     }
 
     /// B: while a death sparkle runs, the cycle speaks for a kill already made: no window opens, and that death
@@ -996,11 +1229,51 @@ mod tests {
         monster(&mut start, 2, enemy::RED_DARKNUT);
         monster(&mut start, 3, enemy::STALFOS);
         start[tables::OBJ_SPAWN_STATE.0 + 3] = 0x10;
-        assert!(!bomb_carrier_window(&view(&start, 0), true, false));
+        assert!(!carrier(&start, true, false));
         let mut gone = start;
         gone[tables::OBJ_SPAWN_STATE.0 + 3] = 0;
         died(&mut gone, 3, None);
         let stats = play(&mut BombWindows::default(), &[start, gone], true, false);
         assert_eq!((stats.carrier_hits, stats.carrier_miss_kill), (0, 0));
+    }
+
+    /// A: with a full bag, a bomb 10th kill reads full (the bag before the bomb was placed: 8), though the bag is 7
+    /// when it lands; the record names the window's frames, rooms and the killed Stalfos.
+    #[test]
+    fn full_bag_before_the_bomb_and_the_record() {
+        let mut start = base(8, 9, 3);
+        monster(&mut start, 2, enemy::STALFOS);
+        let s1 = placed(&start);
+        let mut s2 = bomb(&s1, 0);
+        s2[tables::OBJ_SPAWN_STATE.0 + 2] = 0x10;
+        set(&mut s2, Var::HelpDropCount, 10);
+        set(&mut s2, Var::HelpDropValue, 1);
+        let mut w = BombWindows::default();
+        let stats = play(&mut w, &[start, start, s1, s2], true, false);
+        assert_eq!((stats.tenth_armed, stats.tenth_full_armed), (1, 1));
+        let r = w.windows[0];
+        assert_eq!((r.metric, r.outcome, r.open_frame, r.close_frame), (Metric::Tenth, Outcome::Armed, 100, 103));
+        assert_eq!((r.close_room.value, r.killed, r.drop), (0x44, Some((enemy::STALFOS, 2)), Some(DropFate::Pending)));
+    }
+
+    /// Dodongo's room is outside both metrics: an open window is suspended on entering, nothing opens or closes
+    /// there, and after he is left a new window may open.
+    #[test]
+    fn dodongo_rooms_are_excluded() {
+        let mut start = base(2, 9, 0);
+        monster(&mut start, 3, enemy::STALFOS);
+        let mut dodongo = base(2, 9, 0);
+        set(&mut dodongo, Var::Location, 0x45);
+        monster(&mut dodongo, 1, enemy::DODONGO);
+        monster(&mut dodongo, 3, enemy::STALFOS);
+        let mut killed = dodongo;
+        kill(&mut killed, 3, None);
+        let mut out = base(2, 0, 0);
+        set(&mut out, Var::Location, 0x46);
+        monster(&mut out, 2, enemy::BLUE_MOBLIN);
+        let mut w = BombWindows::default();
+        let stats = play(&mut w, &[start, start, dodongo, killed, killed, out, out], true, false);
+        assert_eq!((stats.suspended, stats.tenth_other, stats.tenth_lost), (1, 0, 0), "{:?}", w.windows);
+        assert!(w.open().1, "a carrier window opened after Dodongo's room");
     }
 }
