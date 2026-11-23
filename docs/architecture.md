@@ -1072,7 +1072,8 @@ q-speed (`contact::velocity`), a walker stopped where a wall stops it (`contact:
 hurt (active, not dying, sword bit clear in ObjInvincibilityMask `$4B2`, not a Darknut facing the shot, not the big
 Digdogger). Counted in the visits and chain records as `beam_<field>` (`beams::BeamStats`: shots, shots lined up,
 decisions lined up and those that moved or waited, kills far / near / other with their summed distance, hearts lost,
-steps that cost the beams); `scripts/experiments/r38_beams.py` tabulates them per family or room.
+steps that cost the beams; round 40: `shots_hit`, `held_frames`, `lost_frame`, "Run statistics" below);
+`scripts/experiments/r38_beams.py` tabulates them per family or room.
 `reward-gained-rupees` (round 38, the owner: "what should ACTUALLY be awarded for getting rupees is the 'rupees to
 add' counter getting set once") pays once per pickup, on the step `InvRupees + InvRupeesToAdd − InvRupeesToSubtract`
 rises, by the amount: under 5 `REWARD_MEDIUM`, 5-9 `REWARD_LARGE`, 10 or more `REWARD_MAXIMUM`; nothing while
@@ -1904,6 +1905,82 @@ every step, so following an enemy that moves away pays again, and knockback rese
   specialist handed over (positions too; enemies spawn as the entry draws them). Units granted in the previous room
   are taken out of the saved snapshot, as the game takes them back on leaving; entry-state builds do the same.
   Refresh the harvest after promoting an upstream specialist.
+
+## Run statistics (`run_stats.py`; round 40)
+
+The owner (Nov 23): every training and every big evaluation leaves "a robust, standard set of statistics" in one
+place, so anyone can look at any agent's runs without that agent's own script; and a run that saw none of an input
+its reference saw thousands of is said out loud. One pure function per kind of output turns its records into one
+file; the tools write it themselves, nobody runs anything for it.
+
+- **Where.** `<output>.stats.json` beside a chain's jsonl (`cli.ChainOutput.finish`: `eval-chain`, each chain of an
+  `eval-batch`, `select-checkpoint`'s, a round's, the 250 test's; a batch's chain is written as `<output>.tmp` and
+  its statistics move with it, `run_stats.move_chain`) and an evaluation's json (`evaluate.write_result`, so
+  `eval.json.stats.json`), and `<run dir>/train.stats.json` when `triforce train` ends (written again with the
+  evaluation's headline when the run's `eval.json` is written; set aside with the run's stale files). Each is also
+  put into the store by `run_stats.register(stats, agent=None, task=None) -> Path` as `<job id>-<name>.stats.json`,
+  its `job` block (id, agent, task, subtask, description, commit, branch, checkout, command) from the queue row of
+  `$TRIFORCE_JOB_ID`. The store's place, `run_stats.store_path()`, is a placeholder (`$XDG_STATE_HOME/triforce/stats`)
+  until the shared store files a job's outputs under `jobs/<job id>-<label>/`. A failure to compute is printed, never
+  raised: the records stand, and `triforce stats ingest` makes the file later.
+- **A chain's file** (`chain_stats(runs, meta, steps, own_until)`): `rate` (n, successes, rate, binomial se);
+  `endings` (wins, deaths, stuck, errors; stuck runs by reason: `bounce-limit`, `wrong-exit-limit`, `max-steps`,
+  `left-route`...; deaths and stuck runs by room); `triforces` (runs that left each dungeon's triforce step by its
+  exit), `game_ended`, `furthest_step`; `all`, `by_step`, `by_room`, `by_family`, each: visits, runs, exits, wrong
+  exits, deaths, stuck, other endings, and per visit `{n, sum, mean, se}` of hits, hearts lost, health in and out,
+  linger (longest quiet stretch, tail), bombs used, keys used, cheated bombs, keys and rupees, shots, shots lined up,
+  lined-up decisions and those not fired, kills far / near / other, kill distance, shots that hit, beams lost,
+  frames holding the beams and visits that lost them; frames and the frame the beams were lost with median and 90th
+  percentile. `beams`: rooms cleared still within half a heart of full and the frames to the entry of the room that
+  took them (any record; a won run's arrival counts one room), runs that never lost them, where they were lost
+  first, and with round 40's counters the run frame they were lost and the frames held. `time`: frames from the
+  start to entering each step and to the end. `runs`: per run, aligned with `seeds`, `result` (one letter: w win, d
+  death, s stuck, e error), frames, hearts at the end, hearts lost, hits, shots, shots that hit, kills far and near,
+  the beams measures, `enter` (step -> frames to entering it, null where not entered) and `end`: what pairing two
+  files by seed needs. `records` (the counters the records carry: `round40`, `round38`, `older`; runs played and
+  asked; seeds), `provenance` (route, start, stop, clips, the team by name: run, act, checkpoint SHA-1), `manifest`
+  (the meta's, else null), `flags`. A number the records lack is null, never zero. Cost: 3.5 s and 0.2 MB for a
+  1000-run Dungeon 3 chain (33 MB of records), 4 s and 1.2 MB for the 250 full runs.
+- **An evaluation's** (`eval_stats`): the same groups over its episodes' room visits (`by_room`, `by_family`, `all`;
+  hearts lost is the visit's `health_lost`), the rate over episodes and `by_state`, `runs` keyed `<start state>#<seed>`.
+  **A training's** (`train_stats`): the last 20 iterations' training figures (success, balanced success, health
+  change, hearts at exit, hearts taken and dropped, linger, episode frames and steps, harvested success, SPS) with
+  their se, the iteration and step each threshold of the early-stop rate (0.5, 0.8, 0.9, 0.95, 0.99, the run's
+  `--stop-success`) was first reached, steps a second, harvested states and episodes drawn from them, curriculum
+  tracks, the evaluation's rate, hits and hearts.
+- **Flags** (`{level, code, text}`, the shape of `jobs.flag`; red: something is wrong with the run's inputs or its
+  recording, look before using any number; note: worth knowing): `run-error` (red, any run ending `error`);
+  `rate-extreme` (note, exactly 0% or 100% over 100 runs or more); `stuck-share` (red, more than 5% of the runs and at
+  least 5 ended stuck: chains of record end stuck in 0-1%, the 250 test in 4 of 250; a route or model fault, a 9:0x56
+  with 616 of 1000, shows as stuck); `runs-short` (red, fewer runs than the meta asked, or a batch never finished);
+  `seeds-duplicate` (red) and `seeds-nonstandard` (note: not 0..N-1, pairs only with a file on the same seeds);
+  `records-old` (note: records before round 40's counters); `step-never-entered` (red: a route step on the chain's
+  way, between the first and last steps visited, that no run entered though 20 or more visits left the step before
+  it by its exit); `family-never-played` (red: a family with route steps there and not one visit);
+  `network-no-decisions` (red: a network the team lists for steps the chain played, `family@route` before
+  `own_models_until`, else the family's key, that made no decision while its family played 20 visits or more);
+  `family-room-never-played` (red, an evaluation of 20 episodes or more: a room of the family's config no episode
+  entered); `no-visits` (note: a format 1 evaluation); `harvested-none` (red, a training with `harvested_fraction`
+  above 0, no `--start-state`, and not one episode drawn from a harvested state); `curriculum-empty` (red: a
+  curriculum with no track); `interrupted` (note); an evaluation's flags inside its training's as `eval-<code>`.
+- **Reading.** `triforce stats list [--agent A] [--task T] [--since 24h]`; `triforce stats show ID|PATH [--rooms N]
+  [--family F]` (markdown: the headline, the flags, the route steps, families, the N rooms with most deaths);
+  `triforce stats compare BASE ARM... [--min-pairs 20]`: paired by seed, in the owner's order (AGENTS.md "What
+  decides, in order"): the rate with its paired difference and se, hearts lost a run, hearts at the end (runs won in
+  both), hits, beams held (rooms, frames to the room that took them, frames held), shots that hit, kills from range,
+  shots, the shooting totals, frames to entering each step over the runs that entered it in both (steps with fewer
+  than `--min-pairs`), one table a metric. `triforce stats ingest FILE... [--agent A --task T]` computes the file of
+  any existing chain jsonl, evaluation json or run dir (a job: it reads the records), registers it with the data's
+  owner and writes nothing beside the source. ID is a store id or a unique part of one; PATH a statistics file or an
+  output with one beside it.
+- **The new counters** (`zelda::beams`, round 40; additive, nothing a network sees or a reward pays): `shots_hit`, a
+  step on which Link's flying sword shot stopped (slot $0E left state $10: asm:SwordShot_CheckMonsterCollision ends a
+  shot on any monster it overlaps through asm:SwordShot_HandleBlocked, and the room bounds stop it the same way,
+  asm:SwordShot_UpdateOrMagicShot) while a monster lost hit points (asm:Damage_DealToMonster, `Change::observed`)
+  out of the sword's own reach (`MELEE_REACH`) or on a step that did not swing it; `held_frames`, the frames of the
+  visit's steps begun holding the beams (`GameView::holds_beams`: a sword and the hearts asm:SwordShot_Make needs);
+  `lost_frame`, the visit's frame at the end of the first step that began holding them and ended without (null:
+  not lost in the visit). The step entering the next room counts nothing (as for the other beam counters).
 
 ## Replays (`crates/replay`, `crates/pool/src/zelda`, `replay.py`)
 

@@ -380,6 +380,7 @@ def chain_entry(name: Optional[str], args: list[str], options: Options, *, outpu
     without ``--stop-at``)."""
     # pylint: disable=import-outside-toplevel
     from .cli import add_eval_chain_arguments, meta_path
+    from .run_stats import move_chain
     from .runner import RunResult, chain_summary
     parser = argparse.ArgumentParser(prog=f'eval-batch --chain {name or ""}'.strip())
     add_eval_chain_arguments(parser)
@@ -417,6 +418,7 @@ def chain_entry(name: Optional[str], args: list[str], options: Options, *, outpu
         if tmp.exists():
             os.replace(meta_path(tmp), meta_path(output))
             os.replace(tmp, output)
+            move_chain(tmp, output)
         return chain_headline(summary, read_runs(output) if target is not None else None, target)
 
     def resume():

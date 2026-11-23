@@ -610,9 +610,11 @@ def detach(args, head: list[str], extra: list[str]) -> int:
     log = detached_dir() / f'{unit}.log'
     command = [*(arg for arg in head if arg != '--detach'), *(['--', *extra] if extra else [])]
     env = [f'--setenv={key}={value}' for key, value in os.environ.items() if '\n' not in value]
+    # ``-P``: the unit starts in the caller's folder, which must not be searched for modules (an old-version tree's
+    # own ``triforce`` package there would shadow this one: "No module named triforce.job", Nov 23).
     subprocess.run(['systemd-run', '--user', '--collect', '--quiet', f'--unit={unit}',
                     f'--working-directory={Path.cwd()}', '-p', f'StandardOutput=file:{log}',
-                    '-p', f'StandardError=file:{log}', *env, sys.executable, '-m', 'triforce.job', *command],
+                    '-p', f'StandardError=file:{log}', *env, sys.executable, '-P', '-m', 'triforce.job', *command],
                    check=True)
     say(f"detached as {unit}; output in {log}; follow it with: triforce job wait {unit}")
     return 0
