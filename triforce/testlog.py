@@ -101,19 +101,24 @@ def machine_fields() -> dict:
 # ------------------------------------------------------------------------------------------------ the pytest plugin
 
 def suite_of(config) -> str:
-    """``python``, ``asm`` or ``python+asm`` from the paths pytest was given (its ``testpaths`` when none)."""
+    """``python``, ``asm`` or ``python+asm`` from the paths pytest was given (its ``testpaths`` when none); a run
+    of less than a suite's whole folder (a file, a test, ``-k``, ``-m``, ``--lf``) is ``<suite>-part``, so the
+    reader's wall times, run by run, are whole suites only."""
     root = Path(str(config.rootpath)).resolve()
+    option = config.option
+    part = bool(getattr(option, 'keyword', '') or getattr(option, 'markexpr', '') or getattr(option, 'lf', False))
     names = set()
     for arg in config.args:
         path = Path(arg.split('::', 1)[0])
         path = (path if path.is_absolute() else Path(str(config.invocation_params.dir)) / path).resolve()
         try:
-            top = path.relative_to(root).parts[:1]
+            below = path.relative_to(root).parts
         except ValueError:
-            top = ()
-        names.add({('tests',): 'python', ('zelda-asm',): 'asm'}.get(top, 'pytest'))
+            below = ()
+        names.add({('tests',): 'python', ('zelda-asm',): 'asm'}.get(below[:1], 'pytest'))
+        part = part or '::' in arg or len(below) > (2 if below[:2] == ('zelda-asm', 'tests') else 1)
     order = ('python', 'asm', 'pytest')
-    return '+'.join(name for name in order if name in names) or 'pytest'
+    return ('+'.join(name for name in order if name in names) or 'pytest') + ('-part' if part else '')
 
 
 class TimingLog:

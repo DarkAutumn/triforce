@@ -191,3 +191,19 @@ def test_the_reader_gives_medians_worst_times_the_slowest_and_what_grew(tmp_path
     assert {row['id'] for row in every['tests']} == {'t::slow', 't::grows', 't::fast'}
     assert testlog.report_main(['--logs', str(logs), '--suite', 'rust']) == 0
     assert 'no test timing logs' in capsys.readouterr().out
+
+
+def test_a_run_of_less_than_a_suite_is_named_apart(tmp_path):
+    """The reader's wall times, run by run, are whole suites: a file, a test or a filter is ``<suite>-part``."""
+    from types import SimpleNamespace
+
+    def suite(*args, **options):
+        option = SimpleNamespace(**{'keyword': '', 'markexpr': '', 'lf': False, **options})
+        return testlog.suite_of(SimpleNamespace(rootpath=tmp_path, args=list(args), option=option,
+                                                invocation_params=SimpleNamespace(dir=tmp_path)))
+    assert suite('tests') == 'python' and suite('zelda-asm/tests') == 'asm'
+    assert suite('tests', 'zelda-asm/tests') == 'python+asm'
+    assert suite('tests/test_jobs.py') == 'python-part' and suite('tests/native') == 'python-part'
+    assert suite('tests/test_jobs.py::test_one') == 'python-part'
+    assert suite('tests', keyword='queue') == 'python-part' and suite('tests', lf=True) == 'python-part'
+    assert suite('zelda-asm/tests/test_asm.py') == 'asm-part'
