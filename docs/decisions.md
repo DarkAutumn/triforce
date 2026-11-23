@@ -3636,3 +3636,17 @@ and which as new presses, so where a release frame is truly needed, if anywhere)
 at today's timing found and re-proven or re-searched (the dock warps' plays, the whirlwind sequences, clips, block
 and gravestone pushes, attacks' turn frames, the planner's trials, anything that counts frames per action); and the
 chains with the frame removed on today's team, for what breaks.
+
+## 2026-11-23 — 2.0.1.0's team is the one network; no 51-network team is built or tested (the owner)
+
+The owner, after the one network `r38c/d2b-all-w8` won the golden path (37:56.351) and ended the game unbroken in 6 of
+1000 runs from the start (the 51-network team: 1 of 250): "We are dropping 51 networks on the next training run,
+right? All in on the single network now that we know it can win the golden path." Clarified: "I do not mean no
+teachers, I only mean having a 51-networks 'model' that we test on and evaluate. [...] Teachers are still fine."
+
+So the fresh generation's product, the thing that is versioned, raced on the golden path, put through the 250 test,
+chained on every segment and compared with 2.0.0.x, is ONE network. Its teachers (about five group teachers trained
+from scratch, a family split off where its group can't learn it) are a means: each is judged on its own chains as a
+teacher, none is promoted into a team of record, and no per-family team is assembled, raced or kept current beside
+the one network. The 51-against-one comparison ends with 2.0.0.x (its last table: One38d's ten segments of
+`d2b-all-w8` against the 2.0.0.13 team).
