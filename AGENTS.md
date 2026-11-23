@@ -945,6 +945,16 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 - Training GUI: `uv run training-gui.py` (PEP 723 script; it also serves a read-only web view of the current runs on
   port 22222, every interface: `--web-port`, `--web-host`, `--no-web`, `--web-only` without a window or display;
   `play-zelda.py`, `create-video.py` and `zelda-map.py` run from the venv, which has PySide6 through the `dev` extra).
+- **Shared things live in the shared store, `~/triforce-shared/`, outside every checkout; nobody writes there by
+  hand** (the owner, Nov 23; `docs/data-layout.md`): the ROM, the data sets as named read-only snapshots, every
+  network run (allocated by `triforce train`, sealed read-only when it ends), the teams, and what each job filed.
+  Look with `triforce store paths|data|runs|teams|summaries|outputs|log`. Play a team with `--team NAME` (default the
+  current one), an experiment with `--team NAME+zol@d3first=RUN`; train with `--load family@route` or
+  `--load FAMILY/RUN` (a continuation is a new run with a parent; an interrupted one continues with
+  `--resume FAMILY/RUN`); read data by name with `--data KIND=NAME`. A tool files its outputs by job; a sealed run or
+  a snapshot is never written. An old version's tree gets its `models/` with `triforce store view TEAM --into DIR`.
+  Until the lead's cutover, the layout below (`--models-dir`, a checkout's own `models/`, `roms`, `trajectories`,
+  harvested links) keeps working exactly as before.
 - `logs/`, `models/`, `trajectories/` are gitignored. `models/<specialist>/<run-id>/` holds `ckpt.pt`,
   `metrics.jsonl`, `run.json`, `train.log`, `act` (`<mode> <ckpt.pt sha1>`) and `eval.json`, the canonical
   evaluation (the model's act mode, 100 episodes per state, seed 0); other evaluations are

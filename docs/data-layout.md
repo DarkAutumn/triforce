@@ -1,4 +1,91 @@
-# What a run reads and writes that git does not track (inventory, Nov 23)
+# Where things are: the shared store and each checkout (the owner's layout, Nov 23)
+
+Everything a run shares with other runs lives in **one place outside every checkout**, the shared store
+`~/triforce-shared/` (`$TRIFORCE_SHARED` for tests and other machines), and is written **only through one program**,
+`triforce.store` (the owner's decisions of Nov 23; the store's shape is the lead's; `docs/credits.md`). A checkout
+holds the tracked files and its scratch, `target/`, which is never an input to another run. Every location is one
+function's answer in `triforce/paths.py` (its Rust twin is the `paths` crate); `triforce store paths` prints them all,
+and the store keeps them in `layout.json` for tools that are not Python.
+
+## The store
+
+```
+~/triforce-shared/
+  README.md            the rules, for a person who opens the folder (text: triforce/store_readme.md)
+  layout.json          every location (paths.layout()), rewritten by the store whenever a `current` changes
+  store.db, locks/     the index: snapshots, runs, teams, jobs, filed outputs, kept summaries, and the audit log
+                       (every write: when, job, agent, user, entry point `public` or `lead`, what)
+  rom/zelda.nes        read-only
+  data/<kind>/<name>/  named snapshots, read-only: harvested, harvested-rooms, trajectories, demos; file count,
+                       bytes and content hash recorded at install (no reader re-hashes); data/<kind>/current names
+                       the default
+  runs/<family>/<run>/ network runs; family may be a group's path (r38head-hit, r36-...-evidence/schema2/goriya)
+  teams/<name>.json    immutable teams; teams/current names the team of record
+  jobs/<job>-<label>/  what a job filed: chains/, evaluate/<family>/<run>/, selection/, batches/, harvested/,
+                       replays, golden races, runs250/, statistics
+  legacy/import-<date>/ what the import of an old models folder found no home for, with LIST.txt
+```
+
+## The rules
+
+1. **Nothing shared is changed in place**; things are added: a snapshot installed, a run sealed, a team made. What is
+   read-only is read-only on disk (files 0444, folders 0555), so an accident fails.
+2. **A run** is allocated by the store (unique name in its family, owner job and agent, its parent, the effective
+   team and the data snapshots it read), written by its training while **open**, then **sealed**: read-only, its
+   checkpoint SHA-1 and default act mode recorded. A continuation (`train --load FAMILY/RUN` or a team slot), a
+   checkpoint chosen by `select-checkpoint --apply`, a converted model is a **new run with a parent**. An interrupted
+   training leaves its run open; its owner (the same agent) continues it in place with `train --resume FAMILY/RUN`.
+3. **What used to be written into a run dir after training** (`eval*.json`, `selection.json`, `act`) is filed by the
+   job that made it, indexed by the run (`triforce store outputs --run FAMILY/RUN`); the act mode is the run's sealed
+   default and each team slot's. A tool given a team reads a run's filed evaluations as files of the run (the view).
+4. **A team** names per slot a sealed run, its checkpoint SHA-1, its act mode and whether it has a hit head. Slots:
+   `family` (what `promoted` was), `family@route` (`promoted.<route>`), `family@route:late` (`late.<route>`). A tool
+   plays `--team NAME` (default the current one) or an experiment's override, `--team NAME+zol@d3first=r40-x-s401`
+   (`+SLOT=RUN`, repeatable; `RUN` alone is of the slot's family), and records the effective team (name, overrides,
+   content hash, every slot) with its result: a chain's provenance `team`, a run's `run.json` and index row.
+5. **Data** is read by name: `train --data harvested=NAME` (default the kind's current snapshot), recorded with the
+   run. `eval-chain --harvest` without a folder writes into the job's folder, never into a snapshot; a harvest becomes
+   training data only when the lead installs it.
+6. **Every evaluation, chain and training filed leaves one summary row** kept for good (what was measured, of which
+   run or team, on what data, runs or episodes, successes, rate and its standard error, and the headline numbers of
+   the run statistics' compact row); the raw files in the job's folder are what a later trim may remove.
+   `triforce store summaries --run FAMILY/RUN | --team NAME` lists them over time.
+7. **Missing is an error** that names where it looked (the ROM, a snapshot, a run, a team).
+8. **Only the store writes the store.** Agents use `triforce store ...` to look; the tools call `triforce.store` to
+   allocate, seal and file. Nobody copies, links, moves or edits anything there by hand.
+
+## A checkout
+
+- Tracked files, `target/` (scratch: builds and tools' working folders, `paths.scratch()`), `logs/` (the GUI's event
+  logs, `paths.logs_dir()`), the venv and the built module.
+- **No models folder and no data links.** `triforce job setup` makes none once the store exists.
+- Our tools write nothing in a checkout outside `target/` and `logs/` when they play a store team.
+
+## The transition (staged cutover)
+
+Until the lead's reconciliation, today's layout keeps working exactly as before: `--models-dir DIR`,
+`$TRIFORCE_MODELS_DIR` and a checkout's own `models/` (in that order, before the store's current team) are read and
+written as they always were and recorded as such; a checkout's own `roms/`, `trajectories/`,
+`triforce/states/harvested` are read before the store's snapshots. Old versions' trees get an old-style folder of
+links: `triforce store view TEAM --into DIR`. What resolves where:
+
+| thing | first | then | then |
+|---|---|---|---|
+| ROM | `$TRIFORCE_ROM` (only it) | store `rom/zelda.nes` | `<checkout>/roms/zelda.nes` |
+| networks | `--models-dir` | `--team` / `$TRIFORCE_TEAM` | `$TRIFORCE_MODELS_DIR`, `<checkout>/models`, the store's current team |
+| harvested, trajectories | `--data KIND=NAME` | the checkout's own folder | the store's current snapshot |
+| run written by `train` | `--models-dir` (as before) | the store (a store team plays) | |
+
+## Hardcoded locations replaced (each is now `triforce.paths`)
+
+`context.rs` and `crates/tools/src/rom.rs` and `crates/test-rom/src/lib.rs` ROM lookups (the `paths` crate);
+`tests/conftest.py` ROM lookup; `scripts/level_rooms.py:152`; `events.logs_root`; `entry_states.STAGING_ROOT`;
+`room_stats.CHAINS_DIR`; `select_checkpoint`'s chains folder; the lab's `target/route-tracks` and its trajectories
+source; `eval-chain --harvest`'s default; `registry.models_root`'s default; the trajectories folder of `train`.
+Left as they were (tracked, or per checkout): `STATES_DIR`, `SPECIALISTS_DIR`, the corpus, `GameData.trajectories_dir`
+(informational), the scripts' own `target/` folders.
+
+# Appendix A: before the store (the inventory of Nov 23, Recipe40)
 
 Round 40, step 0 of the recipe work (the owner, through the lead: "a full, written layout of every file a run reads
 or writes that git does not track, and each one's rules", before anything moves). Measured in the main checkout

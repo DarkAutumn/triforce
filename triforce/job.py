@@ -828,9 +828,14 @@ def cmd_setup(args) -> int:
     args.task = 'setup'
 
     def link() -> int:
-        # ``models`` is never linked: a worktree's own runs and pointers stay its own (it reads the main
-        # checkout's team with ``--models-dir``, and its tests with ``$TRIFORCE_MODELS_DIR``, ``test_steps``).
-        # The harvested start states are data no checkout tracks and every family's recipe draws from.
+        # With the shared store (``triforce.paths.store_exists``) a worktree gets no links and no models folder: its
+        # tools read the ROM, the data snapshots and the teams from the store (``docs/data-layout.md``).  Until the
+        # lead makes it (the staged cutover), a worktree links what it always did: ``roms``, ``trajectories`` and
+        # the harvested start states (never ``models``: it reads the main checkout's team with ``--models-dir``,
+        # its tests with ``$TRIFORCE_MODELS_DIR``, ``test_steps``).
+        from .paths import store_exists  # pylint: disable=import-outside-toplevel
+        if store_exists():
+            return 0
         for name in ('roms', 'trajectories', 'triforce/states/harvested'):
             if not (target / name).exists() and (main / name).exists():
                 (target / name).symlink_to(main / name)
