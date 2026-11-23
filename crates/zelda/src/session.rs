@@ -12,6 +12,7 @@ use crate::nes::Nes;
 use crate::rng;
 use crate::room_entry::{is_pre_entry, make_room_fresh, pending_room, randomize_spawn};
 use crate::vars::Var;
+use crate::whirlwind::Warp;
 use rand::Rng;
 use std::sync::Arc;
 
@@ -112,9 +113,10 @@ pub struct Session<N: Nes> {
     /// (`crate::objectives::GameCompletion::recorder_facings`: the whirlwind's count, the pond, a Digdogger fought);
     /// None: the game state's alone ([`crate::actions::recorder_wanted`]).  The env sets it every step.
     recorder_facings: Option<u8>,
-    /// The level of the dock warp the route plays in this room (round 36, `crate::objectives::GameCompletion::dock_warp`;
-    /// None: none), which the engine plays: see [`dock_warp_mask`]. The env sets it every step.
-    dock_warp: Option<u8>,
+    /// The whirlwind step the route plays in this room, which the engine plays (`crate::objectives::GameCompletion::
+    /// warp`; None: none): round 36's dock warp ([`dock_warp_mask`], [`unaided_dock_mask`]) or round 40's whirlwind
+    /// macro ([`crate::whirlwind::macro_facing`]). The env sets it every step.
+    warp: Option<Warp>,
     /// ARROW only facing these ways ([`Direction::value`] bits), round 27: the route's rule
     /// (`crate::objectives::GameCompletion::arrow_facings`: N in Gohma's room, whose eye an arrow reaches only from
     /// below); None: every way the game allows.  The env sets it every step.
@@ -155,7 +157,7 @@ impl<N: Nes> Session<N> {
             vetoed_wraps: Vec::new(),
             bomb_targets: None,
             recorder_facings: None,
-            dock_warp: None,
+            warp: None,
             arrow_facings: None,
             candle_facings: None,
             vetoed_doorways: 0,
@@ -308,13 +310,14 @@ impl<N: Nes> Session<N> {
         self.refresh_mask();
     }
 
-    /// The dock warp the route plays here (round 36; None: none); the mask is recomputed when it changes.
-    pub fn set_dock_warp(&mut self, level: Option<u8>) {
-        if self.dock_warp == level {
+    /// The whirlwind step the engine plays here (round 36's dock warp, round 40's whirlwind macro; None: none); the
+    /// mask is recomputed when it changes.
+    pub fn set_warp(&mut self, warp: Option<Warp>) {
+        if self.warp == warp {
             return;
         }
-        self.dock_warp = level;
-        self.executor.dock_warp = level;
+        self.warp = warp;
+        self.executor.warp = warp;
         self.refresh_mask();
     }
 
@@ -642,6 +645,13 @@ impl<N: Nes> Session<N> {
                 mask.allow(ActionKind::Recorder, None);
             }
         }
+        // Round 40: the whirlwind macro's RECORDER, wherever the sequence plays from Link's position, whatever he faces.
+        if let Some(Warp::Whirlwind { level }) = self.warp {
+            mask.disallow_kind(ActionKind::Recorder);
+            if crate::whirlwind::macro_facing(state, level).is_some() {
+                mask.allow(ActionKind::Recorder, None);
+            }
+        }
         if self.clips_effective() {
             clips::allow_clips(&mut mask, state, &self.vetoed_wraps);
         }
@@ -672,10 +682,14 @@ impl<N: Nes> Session<N> {
                 }
             }
         }
-        if let Some(level) = self.dock_warp
-            && let Some(only) = dock_warp_mask(state, level, self.clips_effective())
-        {
-            mask = only;
+        match self.warp {
+            Some(Warp::Dock { level, unaided: false }) => {
+                if let Some(only) = dock_warp_mask(state, level, self.clips_effective()) {
+                    mask = only;
+                }
+            }
+            Some(Warp::Dock { level, unaided: true }) => unaided_dock_mask(&mut mask, state, level, self.clips_effective()),
+            Some(Warp::Whirlwind { .. }) | None => {}
         }
         mask
     }
@@ -685,7 +699,7 @@ impl<N: Nes> Session<N> {
 /// reaches it, while its whirlwind is still to be called (`crate::whirlwind::Plan::Play`); None elsewhere (the mask
 /// as it is). On the land below the dock's row W of the dock, CLIP N into the water only (with clips on:
 /// [`clips::dock_clip_target`]); in the water on the row, RECORDER only (the executor plays every play the
-/// whirlwind's index needs and waits for the pickup: `Executor::run_dock_warp`); on the dock below its trigger after
+/// whirlwind's index needs and waits for the pickup: `Executor::run_warp`); on the dock below its trigger after
 /// the raft's ride down, MOVE S only (any other first step puts Link on the trigger, and the raft takes him back up:
 /// asm:Dock_Update). Two of them give way to what would otherwise get Link hit (round 36, the dock warps with the
 /// monsters live, docs/routes/d3first-walks-c.md §3): on the dock, SWORD S instead of the step off while a monster
@@ -731,6 +745,35 @@ fn dock_warp_mask(state: &GameView, level: u8, clips_on: bool) -> Option<ActionM
         return None;
     }
     Some(only)
+}
+
+/// The dock warp unaided (round 40, routes.yaml `macros: {unaided_docks: true}`; the owner, Nov 23: the next team
+/// "gets no help from swords or dodging [...] it's ok to mask it if it wouldn't perform the trick correctly"): the
+/// plays of [`dock_warp_mask`] are offered where Link's position lets them work, beside the family's own actions,
+/// and the network chooses the moment; no monster or shot changes the mask. In the water on the dock's row RECORDER
+/// (the whole sequence, `Executor::run_warp`); where the block clip into the water is legal (clips on) CLIP N; on the
+/// dock below its trigger after the raft's ride down MOVE S, and no MOVE N, W or E (each puts Link on the trigger
+/// and the raft takes him back up: asm:Dock_Update). While the whirlwind is still to be called only
+/// (`crate::whirlwind::Plan::Play`); elsewhere the mask is left as it is.
+fn unaided_dock_mask(mask: &mut ActionMask, state: &GameView, level: u8, clips_on: bool) {
+    use crate::whirlwind::{Plan, plan};
+    if state.level() != 0 || !matches!(plan(state, level), Plan::Play { .. }) {
+        return;
+    }
+    let Some((dock_x, row)) = state.room().dock() else { return };
+    let (x, y) = (state.link.position.x, state.link.position.y);
+    if clips::on_dock_spot(state) {
+        if crate::actions::recorder_playable(state) {
+            mask.allow(ActionKind::Recorder, None);
+        }
+    } else if clips_on && clips::dock_clip_target(state).is_some() {
+        mask.allow(ActionKind::Clip, Some(Direction::N));
+    } else if x == dock_x && (row + 1..row + 8).contains(&y) {
+        for d in [Direction::N, Direction::W, Direction::E] {
+            mask.disallow(ActionKind::Move, d);
+        }
+        mask.allow(ActionKind::Move, Some(Direction::S));
+    }
 }
 
 /// Link stands on an overworld cave or dungeon mouth (the entrance tile is right above him).

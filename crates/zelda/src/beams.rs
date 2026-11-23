@@ -156,10 +156,22 @@ pub fn fired(change: &Change) -> bool {
 /// lost hit points on the step (`Change::observed`, asm:Damage_DealToMonster) where the sword itself could not
 /// reach it: out of melee range ([`MELEE_REACH`]), or on a step that did not swing it. A shot stops on its first
 /// overlap (a spreading shot hits nothing), so it damages one monster at most.
+///
+/// `Change::observed` knows the hit points lost, not the weapon: a step on which another of Link's weapons was live
+/// before or after it (a bomb placed or going off, a fire, an arrow, the boomerang, the rod's shot:
+/// [`OTHER_WEAPONS`]) counts no hit, as `kills_other` takes the kills no shot or swing explains. Still ambiguous: a
+/// weapon live only inside the step (an arrow loosed and spent within one long step) is not seen, and a shot that
+/// did hit on a step with another weapon live is not counted (an undercount).
 pub fn shot_hit(change: &Change) -> bool {
     let (prev, curr) = (&change.previous, &change.state);
     let flew = prev.animation_state(AnimationKind::Beams) == AnimationState::Active || fired(change);
     if !flew || curr.animation_state(AnimationKind::Beams) == AnimationState::Active {
+        return false;
+    }
+    if OTHER_WEAPONS
+        .iter()
+        .any(|&w| [prev, curr].iter().any(|s| s.animation_state(w) != AnimationState::Inactive))
+    {
         return false;
     }
     let swung = matches!(change.action.kind, ActionKind::Sword | ActionKind::Beams);
@@ -167,6 +179,17 @@ pub fn shot_hit(change: &Change) -> bool {
         damage > 0 && prev.enemy_by_index(slot).is_some_and(|e| e.distance > MELEE_REACH || !swung)
     })
 }
+
+/// Link's weapons other than the sword and its shot ([`shot_hit`]).
+pub const OTHER_WEAPONS: [AnimationKind; 7] = [
+    AnimationKind::Magic,
+    AnimationKind::Bomb1,
+    AnimationKind::Bomb2,
+    AnimationKind::Flame1,
+    AnimationKind::Flame2,
+    AnimationKind::Arrow,
+    AnimationKind::Boomerang,
+];
 
 /// A visit's sword shots and kills (chain room records and evaluation visits: JSON `beam_<field>`). Kills are the
 /// step's observed ones (`Change::observed`: on the step a hit lands), each by where its monster stood: `far`, out of

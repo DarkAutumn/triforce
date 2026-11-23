@@ -42,6 +42,7 @@ import json
 import math
 import os
 import re
+import shlex
 import sys
 import time
 from collections import Counter, defaultdict
@@ -86,7 +87,7 @@ class Mean:
         mean = self.sum / self.n
         se = (math.sqrt(max(0.0, (self.sq - self.n * mean * mean) / (self.n - 1)) / self.n)
               if self.n > 1 else None)
-        return {'n': self.n, 'sum': _round(self.sum), 'mean': _round(mean), 'se': _round(se)}
+        return {'n': self.n, 'sum': _round(self.sum), 'sq': _round(self.sq), 'mean': _round(mean), 'se': _round(se)}
 
 
 def mean_se(values: list) -> tuple:
@@ -111,8 +112,8 @@ def distribution(values: list) -> Optional[dict]:
     if not values:
         return None
     m, se = mean_se(values)
-    return {'n': len(values), 'mean': _round(m), 'se': _round(se), 'median': quantile(values, 0.5),
-            'p90': quantile(values, 0.9)}
+    return {'n': len(values), 'sum': sum(values), 'sq': _round(sum(float(v) * v for v in values)), 'mean': _round(m),
+            'se': _round(se), 'median': quantile(values, 0.5), 'p90': quantile(values, 0.9)}
 
 
 # A visit's per-visit figures (``visit_figures``), in the order the reader shows them.
@@ -269,9 +270,12 @@ def _sum(rooms: list, field: str, need: bool = True):
 # ------------------------------------------------------------------------------------------------------- chains
 
 def chain_stats(runs: list, meta: Optional[dict] = None, steps: Optional[list] = None,
-                own_until: Optional[int] = None, source: Optional[str] = None) -> dict:
+                own_until: Optional[int] = None, source: Optional[str] = None, segment: Optional[str] = None,
+                overrides: Optional[list] = None) -> dict:
     """The statistics of a chain's records (``runs``: the jsonl's dicts), its ``.meta.json`` (``meta``), the route's
-    steps (``_native.route_steps``) and ``own_models_until`` (for the canaries).  Pure: reads nothing."""
+    steps (``_native.route_steps``) and ``own_models_until`` (for the canaries); ``segment``: the route segment its
+    start state begins (``eval_batch.segment_starts``), ``overrides``: its ``--checkpoint`` overrides as ``KEY = run``
+    (``checkpoint_overrides``), both for the one-line ``description``.  Pure: reads nothing."""
     # pylint: disable=too-many-locals, too-many-branches, too-many-statements
     runs = sorted(runs, key=lambda r: (r.get('seed') is None, r.get('seed')))
     provenance = (meta or {}).get('provenance') or {}
@@ -287,6 +291,7 @@ def chain_stats(runs: list, meta: Optional[dict] = None, steps: Optional[list] =
     furthest = None
     per_run = defaultdict(list)
     enter: dict = defaultdict(dict)
+    networks: dict = defaultdict(Counter)
     beam_first_room = Counter()
     seeds = []
     for index, run in enumerate(runs):
@@ -323,6 +328,7 @@ def chain_stats(runs: list, meta: Optional[dict] = None, steps: Optional[list] =
             step = v.get('step')
             if step is not None:
                 by_step[step].add(key, outcome, figures, family, room)
+                networks[step][v.get('policy') or family] += 1
                 enter[step].setdefault(index, t)
                 furthest = step if furthest is None else max(furthest, step)
             t += v.get('frames') or 0
@@ -331,6 +337,7 @@ def chain_stats(runs: list, meta: Optional[dict] = None, steps: Optional[list] =
             beam_first_room[lost_room] += 1
         exact = beams_lost_at(played)
         per_run['frames'].append(run.get('frames'))
+        per_run['furthest'].append(max((v['step'] for v in played if v.get('step') is not None), default=None))
         per_run['end'].append(run.get('frames') if letter == 'w' else None)
         per_run['hearts_end'].append(rooms[-1].get('health_out') if rooms else None)
         per_run['hearts_lost'].append(_sum(played, 'beam_hearts_lost'))
@@ -362,7 +369,7 @@ def chain_stats(runs: list, meta: Optional[dict] = None, steps: Optional[list] =
         'manifest': (meta or {}).get('manifest'),
         'provenance': {**{k: provenance.get(k) for k in ('start_from', 'power_on', 'stop_at', 'stop_step', 'clips',
                                                          'clips_off_from', 'version', 'code', 'data')},
-                       'route': route,
+                       'route': route, 'segment': segment, 'overrides': list(overrides or ()),
                        'team': {m['name']: {'run': m.get('run'), 'act': m.get('act'),
                                             'checkpoint_sha1': (m.get('checkpoint_sha1') or '')[:12] or None}
                                 for m in provenance.get('models') or ()},
@@ -380,7 +387,9 @@ def chain_stats(runs: list, meta: Optional[dict] = None, steps: Optional[list] =
         'game_ended': game_ended,
         'furthest_step': furthest,
         'all': groups_all.out(),
-        'by_step': {str(step): {**by_step[step].out(), 'room': names[step][0], 'family': names[step][1]}
+        'by_step': {str(step): {**by_step[step].out(), 'room': names[step][0], 'family': names[step][1],
+                                'enter': distribution(list(enter[step].values())),
+                                **network_of(networks[step], provenance)}
                     for step in sorted(by_step)},
         'by_room': {room: g.out() for room, g in sorted(by_room.items())},
         'by_family': {family: g.out() for family, g in sorted(by_family.items())},
@@ -399,7 +408,16 @@ def chain_stats(runs: list, meta: Optional[dict] = None, steps: Optional[list] =
                  'enter': enter_rows},
     }
     stats['flags'] = chain_flags(stats, steps, own_until, runs)
+    stats['description'] = describe(stats)
     return stats
+
+
+def network_of(played: Counter, provenance: dict) -> dict:
+    """The network that played a step most (its policy key) and that key's run and checkpoint SHA-1 in the team."""
+    key = played.most_common(1)[0][0] if played else None
+    model = next((m for m in provenance.get('models') or () if m['name'] == key), {})
+    return {'network': key, 'network_run': model.get('run'),
+            'network_sha1': (model.get('checkpoint_sha1') or '')[:12] or None}
 
 
 def mean_of(values: Iterable) -> Optional[dict]:
@@ -431,9 +449,10 @@ def flag(code: str, text: str, level: str = 'red') -> dict:
     return {'level': level, 'code': code, 'text': text}
 
 
-def common_flags(stats: dict, unit: str = 'runs') -> list:
-    """The flags a chain and an evaluation share: errors, extreme rate, stuck share, runs asked, seeds, old
-    records."""
+def common_flags(stats: dict, unit: str = 'runs', stuck: bool = True) -> list:
+    """The flags a chain and an evaluation share: errors, extreme rate, stuck share (``stuck``: a chain's; an
+    evaluation's other endings, a wrong exit, no damage, the step cap, are its task's ordinary failures), runs asked,
+    seeds, old records."""
     flags = []
     rate, endings, records = stats['rate'], stats['endings'], stats['records']
     n = rate['n']
@@ -446,7 +465,7 @@ def common_flags(stats: dict, unit: str = 'runs') -> list:
     if n >= RATE_EXTREME_RUNS and rate['successes'] in (0, n):
         flags.append(flag('rate-extreme', f"the rate is exactly {100 * rate['rate']:.0f}% over {n} {unit}: check the "
                                           "start and stop (a segment that cannot fail or cannot succeed)", 'note'))
-    if endings['stuck'] >= STUCK_MIN and endings['stuck'] > STUCK_SHARE * n:
+    if stuck and endings['stuck'] >= STUCK_MIN and endings['stuck'] > STUCK_SHARE * n:
         reasons = ', '.join(f"{k} {v}" for k, v in list(endings['stuck_reasons'].items())[:3])
         flags.append(flag('stuck-share', f"{endings['stuck']} of {n} {unit} ended stuck ({reasons}), above "
                                          f"{STUCK_SHARE:.0%}: check the rooms in endings.stuck_rooms for a route or "
@@ -526,6 +545,68 @@ def chain_flags(stats: dict, steps: Optional[list], own_until: Optional[int], ru
     return flags
 
 
+def describe(stats: dict) -> str:
+    """What the file IS, in the words a person scanning ``stats list`` needs: a chain's segment (or start), end, runs
+    and its ``--checkpoint`` overrides (the arm); an evaluation's family, run, act mode and episodes; a training's
+    family, run and iterations."""
+    prov = stats.get('provenance') or {}
+    if stats['kind'] == 'chain':
+        start = prov.get('start_from')
+        if start and prov.get('route') and start.startswith(f"{prov['route']}_"):
+            start = start[len(prov['route']) + 1:]
+        start = start or ('power on' if prov.get('power_on') else 'the start')
+        where = prov.get('segment') or start
+        end = (f"step {prov['stop_step']}" if prov.get('stop_step') is not None
+               else prov.get('stop_at') or 'the end')
+        arm = ', '.join(prov.get('overrides') or ()) or 'no --checkpoint override'
+        return f"{where} ({start} to {end}), {stats['rate']['n']} runs, {arm}"
+    if stats['kind'] == 'evaluate':
+        run = Path(prov.get('checkpoint') or 'run/ckpt.pt').parent.name
+        return f"evaluate {prov.get('specialist')} {run} ({prov.get('act')}), {stats['rate']['n']} episodes"
+    return (f"train {prov.get('specialist')} {prov.get('run_id')}, {stats['records']['iterations']} iterations to "
+            f"step {stats['records']['steps']}")
+
+
+def checkpoint_overrides(command: Iterable, output=None) -> list:
+    """``KEY = run`` for each ``--checkpoint KEY=PATH`` of a command (a batch's: of the ``--chain`` entry naming
+    ``output``'s file)."""
+    tokens = [str(t) for t in command or ()]
+    if output is not None:
+        name = Path(output).name
+        spec = next((t for t in tokens if name in t and ' ' in t), None)
+        if spec is not None:
+            head = spec.split(' ', 1)[0]
+            tokens = shlex.split(spec.split(':', 1)[1] if head.endswith(':') else spec)
+    out = []
+    for i, token in enumerate(tokens):
+        value = (tokens[i + 1] if token == '--checkpoint' and i + 1 < len(tokens)
+                 else token.split('=', 1)[1] if token.startswith('--checkpoint=') else None)
+        if value and '=' in value:
+            key, path = value.split('=', 1)
+            path = Path(path)
+            out.append(f"{key} = {path.parent.name if path.suffix == '.pt' else path.name}")
+    return out
+
+
+def source_job(path) -> Optional[dict]:
+    """The queue job that wrote the chain output ``path``: the latest whose command names its file."""
+    # pylint: disable=import-outside-toplevel
+    from .jobqueue import connect, read_jobs
+    path = Path(path).resolve()
+    try:
+        con = connect()
+        try:
+            rows = read_jobs(con, 'command LIKE ?', (f'%{path.name}%',))
+        finally:
+            con.close()
+    except Exception:  # pylint: disable=broad-except
+        return None
+    named = [r for r in rows if 'ingest' not in (r.get('command') or ())
+             and any(str(path) in str(t) or f'/{path.name}' in str(t) or str(t) == path.name
+                     for t in r.get('command') or ())]
+    return named[-1] if named else None
+
+
 def chain_name(source) -> str:
     """A chain file's name: its file name without ``.jsonl`` (and a batch's ``.tmp``)."""
     name = Path(source).name
@@ -559,21 +640,28 @@ def route_context(route: Optional[str]) -> tuple:
     return route_steps(route), own_models_until(route)
 
 
-def compute_chain(path) -> dict:
-    """The statistics of the chain output ``path`` (its runs and ``.meta.json``)."""
+def compute_chain(path, overrides: Optional[list] = None) -> dict:
+    """The statistics of the chain output ``path`` (its runs and ``.meta.json``; ``overrides`` as ``chain_stats``)."""
+    # pylint: disable=import-outside-toplevel
+    from .eval_batch import bare_state, segment_starts
     path = Path(path)
     meta = read_json(f'{path}.meta.json')
     runs = read_jsonl(path)
-    route = ((meta or {}).get('provenance') or {}).get('route') or (runs[0].get('route') if runs else None)
+    provenance = (meta or {}).get('provenance') or {}
+    route = provenance.get('route') or (runs[0].get('route') if runs else None)
     steps, until = route_context(route)
-    return chain_stats(runs, meta, steps, until, source=str(path.resolve()))
+    start = provenance.get('start_from')
+    segment = (segment_starts(route).get(bare_state(start)) if start else None) if steps else None
+    if segment is None and steps and not start and not provenance.get('power_on'):
+        segment = 'full'
+    return chain_stats(runs, meta, steps, until, source=str(path.resolve()), segment=segment, overrides=overrides)
 
 
 def write_chain(path) -> Optional[Path]:
     """Writes ``<path>.stats.json`` and registers it; a failure is printed, never raised (the chain's records stand
     and ``triforce stats ingest`` computes it again)."""
     try:
-        stats = compute_chain(path)
+        stats = compute_chain(path, checkpoint_overrides(sys.argv[1:]))
         register(stats)
         return write(stats, stats_path(path))
     except Exception as error:  # pylint: disable=broad-except
@@ -679,7 +767,7 @@ def eval_stats(result: dict, source: Optional[str] = None, meta: Optional[dict] 
                   'held_frames': mean_of(per_run['beam_held'])},
         'runs': {'seeds': keys, 'result': ''.join(eval_letter(r) for r in records), **dict(per_run)},
     }
-    flags = common_flags(stats, 'episodes')
+    flags = common_flags(stats, 'episodes', stuck=False)
     if not has_visits and n:
         flags.append(flag('no-visits', "the evaluation's records have no room visits (format 1): per-room "
                                        "statistics are empty; evaluate again with this code", 'note'))
@@ -693,6 +781,7 @@ def eval_stats(result: dict, source: Optional[str] = None, meta: Optional[dict] 
                                                               f"{n} episodes: no start state reaches it; check "
                                                               "its start_states"))
     stats['flags'] = flags
+    stats['description'] = describe(stats)
     return stats
 
 
@@ -776,6 +865,7 @@ def train_stats(run: dict, metrics: list, summary: Optional[dict], evaluation: O
     if evaluation is not None:
         flags.extend({**f, 'code': f"eval-{f['code']}"} for f in evaluation.get('flags') or ())
     stats['flags'] = flags
+    stats['description'] = describe(stats)
     return stats
 
 
@@ -1019,10 +1109,13 @@ def show_train(stats: dict) -> list:
 
 def paired(base: dict, arm: dict, field: str, keep=None) -> Optional[tuple]:
     """(pairs, base mean, arm mean, mean difference, its se) of a per-run field over the seeds both files have
-    (``keep(i_base, i_arm)``: which pairs count)."""
+    (``win``: 1 a won run, else 0; ``keep(i_base, i_arm)``: which pairs count)."""
     bi = {s: i for i, s in enumerate(base['runs']['seeds'])}
     ai = {s: i for i, s in enumerate(arm['runs']['seeds'])}
-    bv, av = base['runs'].get(field), arm['runs'].get(field)
+    if field == 'win':
+        bv, av = ([1.0 if c == 'w' else 0.0 for c in s['runs']['result']] for s in (base, arm))
+    else:
+        bv, av = base['runs'].get(field), arm['runs'].get(field)
     if bv is None or av is None:
         return None
     pairs = [(bv[bi[s]], av[ai[s]]) for s in bi if s in ai and (keep is None or keep(bi[s], ai[s]))]
@@ -1039,6 +1132,56 @@ def pm(d, se, digits=2, scale=1.0) -> str:
     return f"{d * scale:+.{digits}f}" + (f" ± {se * scale:.{digits}f}" if se is not None else '')
 
 
+def time_pairs(base: dict, arm: dict, step: str) -> Optional[list]:
+    """(base, arm) frames to entering ``step`` (``end``: to the end) over the seeds both entered it in; None when
+    a file has no route time (an evaluation)."""
+    bv = (base['runs'].get('enter') or {}).get(step) if step != 'end' else base['runs'].get('end')
+    av = (arm['runs'].get('enter') or {}).get(step) if step != 'end' else arm['runs'].get('end')
+    if bv is None or av is None:
+        return None
+    bi = {s: i for i, s in enumerate(base['runs']['seeds'])}
+    ai = {s: i for i, s in enumerate(arm['runs']['seeds'])}
+    pairs = [(bv[bi[s]], av[ai[s]]) for s in bi if s in ai]
+    return [(b, a) for b, a in pairs if b is not None and a is not None]
+
+
+def verdict(d, se, higher_is_better: bool) -> str:
+    """``better``, ``worse`` or ``within noise`` (within 2 standard errors; one pair or none is noise)."""
+    if d is None:
+        return 'not in both files'
+    if se is None or abs(d) <= 2 * se:
+        return 'within noise'
+    return 'better' if (d > 0) == higher_is_better else 'worse'
+
+
+def summary_lines(base: dict, arm: dict, min_pairs: int) -> list:
+    """One line a measure in the owner's order: the rate, hearts, beams held, shots that hit and kills from range,
+    time to the last step both files entered with ``min_pairs`` runs or more."""
+    def line(label: str, field: str, higher: bool, digits: int = 2, scale: float = 1.0, units: tuple = ('', '')):
+        p = paired(base, arm, field)
+        if p is None:
+            return f"- {label}: not in both files"
+        return (f"- {label}: {fmt(p[1] * scale, digits)}{units[0]} -> {fmt(p[2] * scale, digits)}{units[0]}, "
+                f"{pm(p[3], p[4], digits, scale)}{units[1]} ({p[0]} pairs): **{verdict(p[3], p[4], higher)}**")
+    out = [line('rate', 'win', True, 1, 100, ('%', ' points')),
+           line('hearts lost a run', 'hearts_lost', False),
+           line('beams held, rooms cleared holding them', 'beam_rooms', True)]
+    if paired(base, arm, 'beam_held') is not None:
+        out.append(line('beams held, frames holding them', 'beam_held', True, 0))
+    out += [line('shots that hit a run', 'shots_hit', True), line('kills from range a run', 'kills_far', True)]
+    steps = sorted(set(base['runs'].get('enter') or {}) & set(arm['runs'].get('enter') or {}), key=int)
+    last = next((s for s in reversed(steps) if len(time_pairs(base, arm, s) or ()) >= min_pairs), None)
+    if last is None:
+        out.append("- time: no step both files entered in enough runs")
+    else:
+        pairs = time_pairs(base, arm, last)
+        d, se = mean_se([a - b for b, a in pairs])
+        room = (base.get('by_step', {}).get(last) or {}).get('room', '?')
+        out.append(f"- time to enter step {last} ({room}), the last both entered in {min_pairs}+ runs: "
+                   f"{pm(d, se, 0)} frames ({d / FPS:+.1f} s, {len(pairs)} pairs): **{verdict(d, se, False)}**")
+    return out
+
+
 def compare(base: dict, arms: list, min_pairs: int = 20) -> str:
     """Arms against a base, paired by seed, in the owner's order (AGENTS.md "What decides, in order"): the rate,
     then hearts, beams held, shots that hit and kills from range, time to each step; one table a metric."""
@@ -1052,9 +1195,9 @@ def compare(base: dict, arms: list, min_pairs: int = 20) -> str:
         for f in s.get('flags') or ():
             if f['level'] == 'red':
                 lines.append(f"- **RED** {name} `{f['code']}`: {f['text']}")
-    win = lambda s: [1.0 if c == 'w' else 0.0 for c in s['runs']['result']]  # noqa: E731
-    for s in (base, *arms):
-        s['runs']['win'] = win(s)
+    lines += ['', "## Summary (the owner's order; a difference beyond 2 standard errors is better or worse)", '']
+    for arm, name in zip(arms, names[1:]):
+        lines += [f"**{name}** against **{names[0]}**:", *summary_lines(base, arm, min_pairs), '']
     lines += ['', '## The rate (paired by seed)', '']
     rows = [[names[0], base['rate']['n'], base['rate']['successes'], f"{100 * base['rate']['rate']:.1f}%", '', '']]
     for arm, name in zip(arms, names[1:]):
@@ -1102,17 +1245,10 @@ def compare(base: dict, arms: list, min_pairs: int = 20) -> str:
                       "paired by seed)", '']
         rows = []
         steps = sorted(set(base['runs'].get('enter') or {}) & set(arm['runs'].get('enter') or {}), key=int)
-        bi = {s: i for i, s in enumerate(base['runs']['seeds'])}
-        ai = {s: i for i, s in enumerate(arm['runs']['seeds'])}
         for step in [*steps, 'end']:
-            bv = base['runs']['enter'][step] if step != 'end' else base['runs'].get('end')
-            av = arm['runs']['enter'][step] if step != 'end' else arm['runs'].get('end')
-            if bv is None or av is None:
-                continue        # an evaluation: no route time
-            pairs = [(bv[bi[s]], av[ai[s]]) for s in bi if s in ai]
-            pairs = [(b, a) for b, a in pairs if b is not None and a is not None]
-            if len(pairs) < min_pairs:
-                continue
+            pairs = time_pairs(base, arm, step)
+            if pairs is None or len(pairs) < min_pairs:
+                continue        # an evaluation has no route time
             d, se = mean_se([a - b for b, a in pairs])
             where = 'the end' if step == 'end' else (base.get('by_step', {}).get(step) or {}).get('room', '?')
             family = '' if step == 'end' else (base.get('by_step', {}).get(step) or {}).get('family', '')
@@ -1133,10 +1269,9 @@ def parse_since(text: Optional[str]) -> Optional[float]:
 
 
 def list_text(rows: list) -> str:
-    lines = table(['id', 'written', 'kind', 'agent', 'task', 'subtask', 'runs', 'rate', 'red', 'notes'], [
-        [s.get('id'), (s.get('written') or '')[:16], s['kind'], (s.get('job') or {}).get('agent'),
-         (s.get('job') or {}).get('task'), (s.get('job') or {}).get('subtask'),
-         (s.get('rate') or {}).get('n', (s.get('records') or {}).get('iterations')),
+    lines = table(['id', 'written', 'agent', 'task', 'what', 'rate', 'red', 'notes'], [
+        [s.get('id'), (s.get('written') or '')[:16], (s.get('job') or {}).get('agent'),
+         (s.get('job') or {}).get('task'), s.get('description') or s['kind'],
          f"{100 * s['rate']['rate']:.1f}%" if (s.get('rate') or {}).get('rate') is not None else '-',
          sum(f['level'] == 'red' for f in s.get('flags') or ()), sum(f['level'] == 'note' for f in s.get('flags') or ())]
         for s in rows])
@@ -1145,19 +1280,25 @@ def list_text(rows: list) -> str:
 
 def ingest(paths: list, agent: Optional[str], task: Optional[str]) -> list:
     """Computes the statistics of existing outputs (a chain's jsonl, an evaluation's json, a run dir) and registers
-    them; writes nothing beside them (other agents' trees are read only)."""
+    them; writes nothing beside them (other agents' trees are read only).  A chain's ``--checkpoint`` overrides,
+    and its owner when ``agent`` / ``task`` are not given, come from the queue job that wrote it (``source_job``)."""
     out = []
     for ref in paths:
         path = Path(ref)
+        owner = (agent, task)
         if path.is_dir():
             stats = compute_train(path)
         elif path.suffix == '.jsonl':
-            stats = compute_chain(path)
+            job = source_job(path) or {}
+            stats = compute_chain(path, checkpoint_overrides(job.get('command'), path))
+            stats['provenance']['source_job'] = {k: job.get(k) for k in ('id', 'agent', 'task', 'subtask',
+                                                                          'description')} if job else None
+            owner = (agent or job.get('agent'), task or job.get('task'))
         else:
             result = json.loads(path.read_text(encoding='utf-8'))
             stats = eval_stats(result, str(path.resolve()), read_json(f'{path}.meta.json'))
             stats['name'] = eval_name(result, path)
-        register(stats, agent, task)
+        register(stats, *owner)
         out.append(stats)
     return out
 

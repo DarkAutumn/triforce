@@ -73,6 +73,10 @@ def test_train_then_resume(states_dir, tmp_path):
     assert all(resumed['optimizer']['state'][p]['step'] > first_steps[p] for p in first_steps)
     run = json.loads((second / 'run.json').read_text())
     assert run['args']['parallel'] == 2 and run['args']['threads'] == 2
+    # Round 40: the parent by identity (family, run, iterations, SHA-1), never a path; none from scratch.
+    assert json.loads((first / 'run.json').read_text())['parent'] is None
+    assert run['parent'] == {'family': checkpoint['specialist'], 'run': 'first', 'iterations': 1,
+                             'sha1': registry.checkpoint_sha1(first)}
 
 
 def test_supplied_config_and_explicit_start_state(states_dir, tmp_path):
@@ -621,6 +625,8 @@ def test_training_into_an_existing_run_dir_sets_the_old_run_aside(states_dir, tm
     assert not (run_dir / 'act').exists() and not (run_dir / 'eval-sample.json').exists()
     assert (run_dir.with_name('x.prev-3') / 'eval-sample.json').is_file()
     assert registry.load_checkpoint(run_dir)['iterations'] == 2
+    # A same-dir continuation is the run itself: its first training's parent (none, from scratch) stays.
+    assert json.loads((run_dir / 'run.json').read_text())['parent'] is None
 
 
 def test_a_load_continuation_resumes_the_curriculum(states_dir, tmp_path):
