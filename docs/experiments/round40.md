@@ -248,3 +248,34 @@ decide, and they split: the switch makes Link shoot (shots a visit ×1.9, far ki
 0.297, its deaths 14 -> 46) and no longer holding the beams (rooms cleared with them 4.93 -> 4.84). So the lines
 teach shooting by continuation, at a cost in time and hits; whether the melee variant or a scratch run does better
 is the next read (queued: the melee continuation's chain; both s401 scratch runs).
+
+### The melee variant, and what the from-scratch runs must show (Nov 23, before they are read)
+
+The continuation with lines plus the monsters' own tiles (`r40-fireline-zolmelee-s401`, harvested states, bare):
+`d3` 29.2%, -3.1 ± 2.1 against the continuation without the switch (within two standard errors, leaning worse);
+kills from range a run 2.6 / 9.4 / 8.2 (without / lines / lines + melee), zol hits a run 1.12 / 1.31 / 1.36, 3:0x49
+entered +581 ± 31 / +450 ± 29 frames later than without (the lead's paired read). So keeping the melee tiles does
+not buy back the time or the hits: the cost is not only lines chosen far from a monster at hand.
+
+**Reading of the design (before the replays analysis, which is queued: `replays-why`).** Three causes, each with a
+different cure, and the continuation cannot tell them apart:
+1. *Target*: a firing line is a tile in a monster's row or column, which is where a Zol or Gel walking at Link goes
+   next; standing there waits for the one shot in flight while the monster comes down the line (3:0x6b's visits are
+   6.5 s longer; 3:0x49's hits more than double where Link barely shoots: Bubbles cannot be shot, Blue Keese fly
+   erratically). The cure would be lines checked against the monsters' paths (`beams::shot_meets`' projection from
+   the candidate tile, as the beam terms already judge a lined-up decision), not their positions.
+2. *Reward*: nothing prices time in a fight (the stall penalty starts after 150 steps), so walking to a line and
+   waiting there is free; the cure would be a per-frame cost in fights, or the PBRS potential only while a shot is
+   ready.
+3. *Continuation*: a policy that has 7M steps of melee behind it may use any new target badly; only the from-scratch
+   arms can say.
+
+**What the from-scratch arms must show for firing lines to go into the fresh generation** (AGENTS.md "What decides,
+in order"; lines and lines + melee, each against Fresh40's scratch without the switch, paired by seed, seed 401
+first):
+1. The `d3` rate not worse beyond noise (the paired difference above -2 standard errors, about -4 points at 1000
+   runs); a loss beyond that ends it whatever else improves.
+2. Within noise, every one of: hearts lost and hits a run not higher beyond noise; frames to enter each step and to
+   the triforce not slower beyond noise; beams held (rooms cleared holding them) not fewer; and shooting up (kills
+   from range a run, shots that hit a run). A switch that shoots more but is slower or hit more (as the continuation)
+   does not go in as it is; then cause 1 or 2 is the next change, measured the same way.
