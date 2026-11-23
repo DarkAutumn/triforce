@@ -35,7 +35,7 @@ from typing import Optional
 
 import torch
 
-from .. import nets, registry
+from .. import lineage, nets, registry
 from ..best_of_n import success_by_state
 from ..demos import load_demos
 from ..events import EventLog, logged_job
@@ -141,12 +141,13 @@ def teacher_coeff(args, iteration: int) -> float:
 
 
 def initial_network(args):
-    """(network, source)."""
+    """(network, source, parent): ``parent`` the loaded checkpoint's identity (``lineage.identity``), None from
+    scratch."""
     if args.load:
-        network, _ = registry.load_model(args.load)
-        return network, str(args.load)
+        network, checkpoint = registry.load_model(args.load)
+        return network, str(args.load), lineage.identity(checkpoint, args.load)
     spec = obs_spec_from_space(observation_space())
-    return nets.create(args.arch, spec, **json.loads(args.arch_config)), None
+    return nets.create(args.arch, spec, **json.loads(args.arch_config)), None, None
 
 
 def link_families(root: Path, name: str, run_id: str, keys: list[str]):
@@ -337,7 +338,7 @@ def main(argv=None) -> Path:
                     mode=args.mode) as plan:
         log = RunLog(plan, keys, run_id)
         out_dir.mkdir(parents=True, exist_ok=True)
-        network, source = initial_network(args)
+        network, source, parent = initial_network(args)
         aux_losses = [AuxLoss.parse(text) for text in args.aux]
         tried = parse_try_others(args.try_others)
         recurrent = getattr(network, 'recurrent', False)
@@ -400,8 +401,9 @@ def main(argv=None) -> Path:
         run = {'args': vars(args), 'name': args.name, 'run_id': run_id, 'families': keys,
                'envs': collector.shares, 'arch': nets.arch_of(network.config.to_dict()),
                'parameters': network.parameter_count(), 'model_config': network.config.to_dict(),
-               'ppo_config': cfg.to_dict(), 'source': source,
-               'teachers': None if teachers is None else teachers.paths}
+               'ppo_config': cfg.to_dict(), 'source': source, 'parent': parent,
+               'teachers': None if teachers is None else teachers.paths,
+               'teacher_ids': None if teachers is None else teachers.identities}
         (out_dir / 'run.json').write_text(json.dumps(run, indent=2, default=str), encoding='utf-8')
         link_families(root, args.name, run_id, keys)
         print(f"[lab] {args.name} run={run_id} dir={out_dir} arch={run['arch']} "

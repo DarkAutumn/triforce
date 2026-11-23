@@ -299,9 +299,10 @@ def main(argv=None):
                    'play': ('triforce.play', 'main'), 'evaluate': ('triforce.evaluate', 'main'),
                    'eval-batch': ('triforce.eval_batch', 'main'), 'room-stats': ('triforce.room_stats', 'main'),
                    'convert-model': ('triforce.convert', 'main'),
-                   'select-checkpoint': ('triforce.select_checkpoint', 'main')}
-    # `triforce [--models-dir DIR] train|run|play|evaluate|eval-batch|room-stats|convert-model|select-checkpoint ...`
-    # forwards the rest to the module's own CLI.
+                   'select-checkpoint': ('triforce.select_checkpoint', 'main'),
+                   'lineage': ('triforce.lineage', 'main')}
+    # `triforce [--models-dir DIR] train|run|play|evaluate|eval-batch|room-stats|convert-model|select-checkpoint|lineage
+    # ...` forwards the rest to the module's own CLI.
     models_dir, rest = None, argv
     while rest:
         if rest[0] == '--models-dir' and len(rest) > 1:
@@ -338,6 +339,8 @@ def main(argv=None):
     sub.add_parser('select-checkpoint', help="python -m triforce.select_checkpoint FAMILY RUN ... (choose a run's "
                                              "numbered checkpoint by a chain segment, confirmed on fresh seeds)")
     sub.add_parser('list', help="specialists, their promoted run and run count")
+    sub.add_parser('lineage', help="python -m triforce.lineage [--route R] (each promoted pointer's chain of "
+                                   "parents back to its origin)")
 
     promote = sub.add_parser('promote', help="mark a run as the specialist's promoted model")
     promote.add_argument('specialist')

@@ -603,6 +603,22 @@ bomb_rules:
     # lost per 1000, hearts 3.59 in, 1.30 out, 4.16 bombs out of it; with the line below 12.7%, 685, 3.59 / 1.29, 3.99;
     # walls cheated later a run 7:0x1a 0.754 both, 6:0x28 0.024 / 0.027.  Uncomment to cross it with 2 or more:
     # treasure_below_rooms: [{level: 7, room: '0x1b', below: 2}]
+# Round 40 (the fresh generation, 2.0.1.0; decisions 2026-11-23 "The fresh generation's design calls";
+# docs/routes/d3first.md "The engine's macros"): what the engine plays instead of the network, by route name.  A macro
+# is a fixed button sequence offered as one choice among the family's actions, masked by Link's position only, never
+# by a monster or a shot ("The model needs to smartly choose to use a macro, not that the macro performs dodging for
+# it", the owner).  `whirlwinds: [rooms]`: those whirlwind steps' RECORDER turns Link, plays every play the index
+# needs at the search's timing and waits for the pickup (zelda::whirlwind::Warp::Whirlwind); the fresh generation's
+# rooms are 0x0b (out of Level 5) and 0x22 (out of Level 6).  `unaided_docks: true`: the dock warps of 0x55 and 0x3f
+# lose their two give-ways (SWORD S forced while a monster stands below the dock, WAIT forced while a shot flies) and
+# their plays are offered beside the family's own actions.  Both off: today's networks (2.0.0.12) were trained
+# without the macros and with the give-ways ("I want the docks to stay for current version", the owner).  The fresh
+# generation's entry, turned on when it trains (round40.md "Engine macros" has today's team measured with it):
+#   d3first: {whirlwinds: [{level: 0, room: '0x0b'}, {level: 0, room: '0x22'}], unaided_docks: true}
+macros:
+  d3first:
+    whirlwinds: []
+    unaided_docks: false
 # clips-gauntlet (round 21, docs/experiments/round21-gauntlet.md): an experiment route, not a way through the game.  Two
 # steps per (room, entry): a specialist naming it (`route: clips-gauntlet`) draws one of the two exits at every
 # reset.  Entered from W the target is E or S, entered from E it is W or S.

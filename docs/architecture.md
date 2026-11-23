@@ -175,15 +175,27 @@ route step wants it) and in the objective (targets, outcomes).
   above, an executor macro. A step `exit: recorder` in a dock room (`game_map::DOCK_ROOMS`: 0x55, 0x3f) followed by `entry:
   recorder` into its landing (`game_map::dock_landing`: 0x34, 0x31, one row above the level's
   `Whirlwind_PrevRoomIds` stand-in room; `check_whirlwinds` accepts it after a dock room, `objectives::route_entry`
-  maps the jump to `recorder`) is a dock-warp step (`GameCompletion::dock_warp`; `Session::set_dock_warp`, set every
-  step by chain and specialist envs). Its mask (`zelda::session::dock_warp_mask`) leaves MOVE S on the dock below
-  its trigger (SWORD S instead while a monster stands on the land below), CLIP N where the block clip into the water
-  is legal (`zelda::clips::dock_clip_at`), and RECORDER on the water spot (`clips::dock_spot`: 0x55 X `$78`, 0x3f X
-  `$58`; WAIT instead while a shot is in the air); elsewhere the family's own mask, and a MOVE W/E on the step stops
-  on the clip's column. RECORDER there is `Executor::run_dock_warp`: the plays the index needs from
-  `whirlwind::plays` (N for a step up, W for a step down, a one-frame turn before the B), then nothing pressed until
-  the pickup (`$522`), the whirlwind gone, or an interrupt. The objective targets the clip's G tile. A whirlwind out
-  of a dock room into any other room ends a chain run `stuck` (`dock-warp-missed`).
+  maps the jump to `recorder`) is a dock-warp step (`GameCompletion::warp` gives `whirlwind::Warp::Dock`;
+  `Session::set_warp`, set every step by chain and specialist envs). Its mask (`zelda::session::dock_warp_mask`)
+  leaves MOVE S on the dock below its trigger (SWORD S instead while a monster stands on the land below), CLIP N where
+  the block clip into the water is legal (`zelda::clips::dock_clip_at`), and RECORDER on the water spot
+  (`clips::dock_spot`: 0x55 X `$78`, 0x3f X `$58`; WAIT instead while a shot is in the air); elsewhere the family's own
+  mask, and a MOVE W/E on the step stops on the clip's column. RECORDER there is `Executor::run_warp` (in the water):
+  the plays the index needs from `whirlwind::plays` (N for a step up, W for a step down, a one-frame turn before the
+  B), then nothing pressed until the pickup (`$522`), the whirlwind gone, or an interrupt. The objective targets the
+  clip's G tile. A whirlwind out of a dock room into any other room ends a chain run `stuck` (`dock-warp-missed`).
+- **Engine macros by route** (round 40, the fresh generation; routes.yaml's top-level `macros:`, `game_map::Macros`,
+  docs/routes/d3first.md "The engine's macros"; the owner's rule: a fixed button sequence offered as one choice,
+  masked by Link's position only, never by a monster or a shot). Both off on `d3first` as landed (today's networks
+  were trained without them). `whirlwinds: [rooms]`: on those `exit: recorder` steps (not a dock) `GameCompletion::warp`
+  gives `Warp::Whirlwind`; the session offers RECORDER wherever `whirlwind::macro_facing` finds the sequence playable
+  from where Link stands (plays to make, the recorder playable, a facing that starts the sequence reached by the input
+  model `attack::plan`, Link's own first, else the fewest turn frames, left or right first), whatever he faces; the
+  executor turns him (`attack::next`'s RECORDER with a direction turns as FOOD), plays, and `Executor::run_warp` (on
+  land: no turn while his facing makes the play, else E or W) plays the rest and waits for the pickup.
+  `unaided_docks: true`: `Warp::Dock { unaided }` swaps `dock_warp_mask` for `unaided_dock_mask`: the same plays added
+  to the family's own mask where Link's position lets them work (MOVE N/W/E taken off the dock below its trigger), no
+  give-way. Tests: `crates/zelda/tests/whirlwind_macro.rs`.
 - **Masks.** RECORDER (`Session::set_recorder_facings`, set every step from `GameCompletion::recorder_facings`):
   on the whirlwind step only facing the way the next play must step the game's counter (`TeleportingLevelIndex`
   `$523`: +1 facing right or up, -1 left or down, then on past the levels whose piece Link lacks; only the first play
@@ -1318,8 +1330,13 @@ every step, so following an enemy that moves away pays again, and knockback rese
   records a numbered checkpoint as `<family>/<run>/checkpoints/it<N>/ckpt.pt`. A new training into the run dir sets
   `checkpoints/` and `selection.json` aside with the rest (`PREVIOUS_RUN_FILES`).
 - Metrics (design §12) go to TensorBoard and `metrics.jsonl` in the run directory; `run.json` records the
-  arguments and configs, `harvested` ({dir, states, fraction, drawn}) and `curriculum_tracks` (each track loaded,
-  with its trajectory.json time); `train_summary.json`
+  arguments and configs, `parent` (round 40, `triforce.lineage.identity`: the checkpoint the weights came from as
+  `{family, run, iterations, sha1}`, never a path; `null` from scratch; a same-dir continuation keeps its first
+  training's; the lab's trainer also `teacher_ids`), `harvested` ({dir, states, fraction, drawn}) and
+  `curriculum_tracks` (each track loaded, with its trajectory.json time); `triforce lineage [--route R]` prints each
+  promoted pointer's chain back to its origin (run dirs in the models dir and `/backup/triforce/models/runs`; older
+  runs by their recorded `source` path or `args.load`, a family's name being a promoted run with no run id);
+  `train_summary.json`
   records `status` (completed | early_stop | interrupted), total and this run's (`iterations_trained`,
   `steps_trained`) iterations/steps, `stopped_early`, wall time and steps/sec (`train.run_status(run_dir)`). An
   interrupted run (SIGINT, or SIGTERM from `python -m triforce.train` / `triforce train`) saves its checkpoint and

@@ -13,8 +13,8 @@
 use crate::enums::{Direction, MapLocation, Position, SwordKind, Tile, enemy};
 use crate::game::{BombWall, GameView};
 use crate::game_map::{
-    BombRules, END_EXIT, GameMap, MAZE_EXIT, MAZE_STEP, MODE_END, RECORDER, RouteStep, Secret, TreasureRule, Way,
-    dock_level, is_dock_room, whirlwind_level,
+    BombRules, END_EXIT, GameMap, MAZE_EXIT, MAZE_STEP, MODE_END, Macros, RECORDER, RouteStep, Secret, TreasureRule,
+    Way, dock_level, is_dock_room, whirlwind_level,
 };
 use crate::room::Target;
 use crate::room_entry::ROOM_FLAGS_OW;
@@ -468,6 +468,8 @@ pub struct GameCompletion {
     rupee_reserves: Vec<u8>,
     /// The route's `bomb_rules:` (round 37; none for a route without them).
     bomb_rules: BombRules,
+    /// The route's `macros:` (round 40; none for a route without them).
+    macros: Macros,
     /// The bombs Link held on entering his room (or at the episode's start): the route's floor for a room's bombs is
     /// judged by them ([`GameCompletion::step_treasure`]).
     entry_bombs: i32,
@@ -562,6 +564,7 @@ impl GameCompletion {
             reserves: per_step(reserve_ways(steps, bomb_reserve_of)),
             rupee_reserves: per_step(reserve_ways(steps, rupee_reserve_of)),
             bomb_rules: map.bomb_rules.get(route).cloned().unwrap_or_default(),
+            macros: map.macros.get(route).cloned().unwrap_or_default(),
             entry_bombs: 0,
             rooms: HashMap::new(),
             last_route: None,
@@ -710,7 +713,7 @@ impl GameCompletion {
             return if fights && crate::actions::recorder_wanted(state) { ANY } else { 0 };
         }
         if let Some((level, dock)) = self.whirlwind_level_here(here) {
-            // The dock warp's RECORDER is the session's (`crate::Session::set_dock_warp`, played by the engine).
+            // The dock warp's RECORDER is the session's (`crate::Session::set_warp`, played by the engine).
             return match crate::whirlwind::plan(state, level) {
                 crate::whirlwind::Plan::Play { facings, .. } if !dock => facings,
                 _ => 0,
@@ -743,12 +746,18 @@ impl GameCompletion {
         whirlwind_level(next).map(|level| (level, false))
     }
 
-    /// The level of the dock warp the route plays in Link's room (round 36, docs/routes/d3first.md "The wrong warps"),
-    /// if its step is one, after [`GameCompletion::objectives`] for `state`: the session lets the engine play it
-    /// (`crate::Session::set_dock_warp`).
-    pub fn dock_warp(&self, state: &GameView) -> Option<u8> {
-        let (level, dock) = self.whirlwind_level_here(state.full_location())?;
-        dock.then_some(level)
+    /// The whirlwind step the engine plays in Link's room, if its step is one the engine plays, after
+    /// [`GameCompletion::objectives`] for `state` (`crate::Session::set_warp`): a dock warp (round 36,
+    /// docs/routes/d3first.md "The wrong warps"; unaided by the route's `macros: {unaided_docks: true}`, round 40), or a
+    /// whirlwind the route's `macros: {whirlwinds: [...]}` plays as a macro (round 40).
+    pub fn warp(&self, state: &GameView) -> Option<crate::whirlwind::Warp> {
+        use crate::whirlwind::Warp;
+        let here = state.full_location();
+        let (level, dock) = self.whirlwind_level_here(here)?;
+        if dock {
+            return Some(Warp::Dock { level, unaided: self.macros.unaided_docks });
+        }
+        self.macros.whirlwinds.contains(&here).then_some(Warp::Whirlwind { level })
     }
 
     /// The step of the route on the way it follows that enters Link's room from `entry` with exactly Link's progress
