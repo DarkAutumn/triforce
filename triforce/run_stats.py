@@ -1043,6 +1043,9 @@ def compare(base: dict, arms: list, min_pairs: int = 20) -> str:
     """Arms against a base, paired by seed, in the owner's order (AGENTS.md "What decides, in order"): the rate,
     then hearts, beams held, shots that hit and kills from range, time to each step; one table a metric."""
     # pylint: disable=too-many-locals
+    if any(s['kind'] == 'train' for s in (base, *arms)):
+        raise SystemExit("triforce stats compare: a training has no runs to pair by seed; compare its evaluations "
+                         "or chains (`triforce stats show` reads a training's file)")
     names = [base.get('id') or base.get('name')] + [a.get('id') or a.get('name') for a in arms]
     lines = [f"# {names[0]} against {', '.join(names[1:])}", '']
     for s, name in zip([base, *arms], names):
@@ -1102,8 +1105,10 @@ def compare(base: dict, arms: list, min_pairs: int = 20) -> str:
         bi = {s: i for i, s in enumerate(base['runs']['seeds'])}
         ai = {s: i for i, s in enumerate(arm['runs']['seeds'])}
         for step in [*steps, 'end']:
-            bv = base['runs']['enter'][step] if step != 'end' else base['runs']['end']
-            av = arm['runs']['enter'][step] if step != 'end' else arm['runs']['end']
+            bv = base['runs']['enter'][step] if step != 'end' else base['runs'].get('end')
+            av = arm['runs']['enter'][step] if step != 'end' else arm['runs'].get('end')
+            if bv is None or av is None:
+                continue        # an evaluation: no route time
             pairs = [(bv[bi[s]], av[ai[s]]) for s in bi if s in ai]
             pairs = [(b, a) for b, a in pairs if b is not None and a is not None]
             if len(pairs) < min_pairs:
