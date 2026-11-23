@@ -717,6 +717,9 @@ pub struct ChainEnv<N: Nes, St: StateStore<N::State>> {
     entry_flip: Option<bool>,
     /// The run's bomb metrics, fed every real frame (the session's RAM log) and the room records as they are made.
     bomb_frames: Option<BombFrames>,
+    /// The acting family's bomb rule allows BOMB in the session's state (`BombUse::allows` with the route's reserve
+    /// and bomb rules: the mask's BOMB before the game's own limits), for the bomb metrics.
+    bomb_rule: bool,
 }
 
 impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
@@ -767,6 +770,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             clips_flipped: false,
             entry_flip: None,
             bomb_frames: None,
+            bomb_rule: false,
         }
     }
 
@@ -1139,11 +1143,11 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         {
             track.restart(self.session.state(), self.objective.as_ref().expect("run started"));
         }
-        // What the agent was told at this decision, for the bomb metrics: FIGHT, and BOMB on the mask.
+        // What the agent was told at this decision, for the bomb metrics: FIGHT, and BOMB allowed by the bomb rule.
         if let Some(frames) = self.bomb_frames.as_mut() {
             let facts = StepFacts {
                 kill_all: self.objective.as_ref().is_some_and(|o| o.kind == ObjectiveKind::Fight),
-                bomb_allowed: self.session.mask().kind[ActionKind::Bomb.index()],
+                bomb_allowed: self.bomb_rule,
             };
             frames.facts(frames.pushed(), facts);
         }
@@ -1376,6 +1380,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         let weapon = self.objectives.as_ref().is_none_or(|gc| !gc.weapon_bombs_off(self.session.state()));
         let items = config.items.on_step(step_bombs, weapon);
         let mut kinds = items.disabled_kinds(self.session.game_map(), self.session.state(), reserve, rupees);
+        self.bomb_rule = items.bombs.allows(self.session.game_map(), self.session.state(), reserve);
         // Round 29: a route step may put the sword away (`sword: false`, 9:0x06's old man).
         if self.objectives.as_ref().is_some_and(|gc| !gc.step_sword(self.session.state())) {
             kinds.extend([ActionKind::Sword, ActionKind::Beams]);

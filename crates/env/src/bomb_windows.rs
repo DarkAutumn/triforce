@@ -8,8 +8,9 @@
 //! none ever does (a run that ended on the threshold).
 //!
 //! **Facts.** What RAM does not hold is what the env told the agent at each decision ([`StepFacts`]): the
-//! objective's kind (FIGHT: every monster must die) and whether the mask offered BOMB. Live the chain notes them
-//! before each action from its objective and mask; offline they come from the replay's targets stream. A fact noted
+//! objective's kind (FIGHT: every monster must die) and whether the family's bomb rule allowed BOMB (the mask before
+//! the game's own limits: not a bomb in the air or an empty bag). Live the chain notes them before each action from
+//! its objective and `BombUse::allows`; offline they come from the replay's targets stream. A fact noted
 //! when `n` frames have been pushed holds for the steps that start at frame `n` and later, until the next.
 
 use std::collections::{BTreeSet, VecDeque};
@@ -31,7 +32,8 @@ static MAP: LazyLock<Arc<GameMap>> = LazyLock::new(|| Arc::new(GameMap::builtin(
 pub struct StepFacts {
     /// The objective is FIGHT (every monster must die).
     pub kill_all: bool,
-    /// The action mask offers BOMB (the family's rule, the reserve, a bomb in the bag, the game's own rules).
+    /// The bomb rule allows BOMB (`crate::config::BombUse::allows` of the effective mode, the mask's BOMB before the
+    /// game's own limits; in a replay's masks: BOMB not blocked by `never`, `tenth`, `required` or `reserve`).
     pub bomb_allowed: bool,
 }
 

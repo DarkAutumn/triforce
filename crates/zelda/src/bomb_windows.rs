@@ -519,7 +519,11 @@ impl BombWindows {
             Tenth::Paused { id, full } if window => Tenth::Open { id, full },
             // Still on 9 (harm is closed within its own step), a bomb of the window in the air: still open.
             Tenth::Open { id, full } if !window && p.next_kill_arms_drop() => {
-                if self.bombs.iter().any(|b| b.id == id) { Tenth::Open { id, full } } else { Tenth::Paused { id, full } }
+                if self.bombs.iter().any(|b| b.id == id) {
+                    Tenth::Open { id, full }
+                } else {
+                    Tenth::Paused { id, full }
+                }
             }
             Tenth::Open { .. } if !window => {
                 stats.tenth_lost += 1;

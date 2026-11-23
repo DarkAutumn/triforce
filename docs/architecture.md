@@ -1014,13 +1014,14 @@ death's drop is then a fairy (`$627` = 16), else the forced drop (`$50` ≥ 10: 
 Octoroks, Moblin `$03`, Lynel `$01`, Vire, Goriya `$06`, Darknut `$0B`, Red Wizzrobe, Gibdo) has bombs in columns
 1, 6 and 8 at 41%; a Stalfos or Gibdo in slot 1 (the room item's carrier) drops nothing.
 
-- **Metric A, the 10th-kill bomb** (`tenth_bomb_window`): `$50` = 9, a bomb in the bag, BOMB on the mask (the
-  family's rule: every mode but `never` allows the 10th kill's bomb). Today's observation shows it (`next_kill_arms`,
+- **Metric A, the 10th-kill bomb** (`tenth_bomb_window`): `$50` = 9, a bomb in the bag, BOMB allowed by the bomb
+  rule (`BombUse::allows` of the effective mode: every mode but `never` allows the 10th kill's bomb; not the
+  momentary mask, which also drops BOMB while a bomb is in the air). Today's observation shows it (`next_kill_arms`,
   `help_count`). Resolution, the first event wins: the 10th kill by a bomb (`$51` set) → **armed**; a bomb placed in
   the window that ends (explodes, or is gone with the room) with no 10th kill and no wall opened (a dungeon bomb door
   turned open, an overworld secret flag `$80`) → **missed**, and a new window opens if Link is still on 9 with
   bombs ("each new chance counts"); a bomb that opened a wall → ignored, the window stays; the 10th kill by any
-  other weapon → **other**. No bomb left (the last one spent on a wall) or BOMB off the mask while still on 9: the
+  other weapon → **other**. No bomb left (the last one spent on a wall) or the rule masks BOMB while still on 9: the
   window **pauses** and resumes as the same opportunity (a 10th kill or harm while paused ends it uncounted,
   `tenth_paused_out`). Harm first: the streak is lost, not an opportunity (`tenth_lost`). A window opened with the
   bag full is also counted in `tenth_full_*`; every report shows both columns, all windows and without a full bag.
@@ -1030,7 +1031,8 @@ Octoroks, Moblin `$03`, Lynel `$01`, Vire, Goriya `$06`, Darknut `$0B`, Red Wizz
   observation does not use it yet): the cycle reads 0, 5 or 7 and no death sparkle that will move it is under way
   (else the cycle speaks for a kill already made); no forced drop overrides the table (`$50` < 9 and
   `$627` ≠ 15); the bag is not full; an **eligible carrier** lives (a group-2 type, not slot 1's Gibdo, a Vire only
-  with the magic sword or with BOMB on the mask: else it splits into Keese); and a **choice** exists: the objective
+  with the magic sword or with BOMB allowed by the rule and a bomb in the bag: else it splits into Keese); and a
+  **choice** exists: the objective
   is not FIGHT, or a monster whose death moves the cycle and is no carrier lives too. Bubbles, traps, fires and
   Gleeok's flying heads are no monsters on either side. An open window stays open through a pending death.
   Resolution: the next death that moves the cycle (attributed by slot: the slot turned into a dropped item, whose
@@ -1043,7 +1045,8 @@ Octoroks, Moblin `$03`, Lynel `$01`, Vire, Goriya `$06`, Darknut `$0B`, Red Wizz
   dying, game over) are counted, each pair of consecutive ones a `Step`; transition frames (a dungeon's entry, a
   scroll, stairs, a cave door) end Link's stay in the room; the rest are skipped. Link's death ends the counting:
   a window open then is `open_at_end` (with a run that ends any other way). What RAM does not hold is what the env
-  told the agent at each decision (`env::bomb_windows::StepFacts`: the objective is FIGHT, BOMB on the mask), in
+  told the agent at each decision (`env::bomb_windows::StepFacts`: the objective is FIGHT, the bomb rule allows
+  BOMB; a replay's masks name the rule that blocked BOMB: `never`, `tenth`, `required`, `reserve`), in
   force from the decision's frame to the next.
 - **Live and offline, one implementation.** `env::bomb_windows::BombFrames` counts per room visit: live, the chain
   (`ChainEnv`) keeps every real frame's RAM image (`Session::set_ram_log`; search's simulated frames are not kept)

@@ -257,10 +257,10 @@ pub fn replay_verify<'py>(py: Python<'py>, data: &[u8], states_dir: Option<PathB
 
 /// The owner's two bomb metrics over a replay (`env::bomb_windows::BombFrames`, the chain's own counter): every
 /// frame played from the replay's start, its ROOM events as the visits, and `facts`, the env's per-decision facts
-/// `[(frame, kill_all, bomb_allowed), ...]` in frame order (the replay's targets stream: the objective FIGHT, BOMB on
-/// the mask; `frame` the input frames run before the decision). Returns `{'rooms': [{'level', 'room', 'in_cave',
-/// <BOMB_WINDOW_FIELDS>...}], 'tenth_open_at_end', 'carrier_open_at_end', 'held'}` (`held`: frames of a room no
-/// visit names, never counted).
+/// `[(frame, kill_all, bomb_allowed), ...]` in frame order (the replay's targets stream: the objective FIGHT, BOMB
+/// allowed by the bomb rule; `frame` the input frames run before the decision). Returns `{'rooms': [{'level', 'room',
+/// 'in_cave', <BOMB_WINDOW_FIELDS>...}], 'tenth_open_at_end', 'carrier_open_at_end', 'held'}` (`held`: frames of a
+/// room no visit names, never counted).
 #[pyfunction]
 #[pyo3(signature = (data, facts, states_dir=None))]
 pub fn replay_bomb_windows<'py>(

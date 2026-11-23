@@ -152,12 +152,18 @@ def read_records(paths) -> list:
     return [json.loads(line) for path in paths for line in Path(path).read_text().splitlines() if line.strip()]
 
 
+RULE_REASONS = ('never', 'tenth', 'required', 'reserve')     # a BOMB block by the bomb rule (not the game's own)
+
+
 def replay_facts(replay) -> list:
     """The env's per-decision facts from a replay's targets stream (``_native.Replay``: ``targets()``, the objective
-    when it changed; ``masks()``, the action mask when it changed): ``[(frame, kill_all, bomb_allowed)]`` at every
-    frame either changed. An older replay has neither: no facts (every window then reads BOMB off, no FIGHT)."""
+    when it changed; ``masks()``, the action mask and the rules that blocked kinds, when it changed):
+    ``[(frame, kill_all, bomb_rule)]`` at every frame either changed. ``bomb_rule``: no bomb-rule reason blocks BOMB
+    (BOMB off only for the game's own limits, a bomb in the air, an empty bag, still counts as allowed: the live
+    chain's ``BombUse::allows``). An older replay has neither: no facts (every window reads BOMB off, no FIGHT)."""
     changes = sorted([(t['frame'], 0, t['objective'] == 'FIGHT') for t in replay.targets()]
-                     + [(m['frame'], 1, 'BOMB' in m['kinds']) for m in replay.masks()])
+                     + [(m['frame'], 1, not any(r in RULE_REASONS for r in m['blocked'].get('BOMB', ())))
+                        for m in replay.masks()])
     facts, current = [], [False, False]
     for frame, which, value in changes:
         current[which] = value

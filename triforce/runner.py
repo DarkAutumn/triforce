@@ -309,7 +309,7 @@ class RoomRecord:
     beam_beams_lost: Optional[int] = None
     # Nov 23, the owner's two bomb metrics (None/absent in older records; ``_native.BOMB_WINDOW_FIELDS``,
     # crates/zelda/src/bomb_windows.rs, docs/architecture.md "Bomb windows"), counted from the run's frames.
-    # Metric A, the 10th-kill bomb (the next kill is the 10th damage-free one, a bomb in the bag, BOMB on the mask):
+    # Metric A, the 10th-kill bomb (the 10th damage-free kill next, a bomb in the bag, BOMB allowed by the rule):
     # resolved by a bomb kill (armed), a bomb that ended killing nothing and opening no wall (missed), another
     # weapon's 10th kill (other); the same for windows opened with a full bag; streaks lost (harm) and paused windows
     # ended without a bomb in the bag (no opportunities); forced bomb drops that fell, were taken, wasted, lost.
