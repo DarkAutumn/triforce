@@ -10,9 +10,14 @@ log-probs and value, written like ``lab.record`` (``<out>/<key>/<source>/shard-N
   ``run.json`` ``specialist`` of the old run), its own hp and item randomisation;
 - ``entries``: the family's harvested pre-entry states as the chains bring them (the route's own, ``d3first_*``,
   where the family has them, as the bench chooses), less every state the bench plays, no randomisation; each state
-  goes to the key that plays its route step (``_native.step_policy``: ``family@d3first`` before the magic sword).
+  goes to the key that plays its route step (``_native.step_policy``: ``family@d3first`` before the magic sword);
+- ``rooms`` (``--harvest DIR``): the same from an every-room harvest (``eval-chain --harvest DIR
+  --harvest-every-room``, ``DIR/<family>/``), with the room entries a chain makes from a room of the same family,
+  which the handoff harvest never saves, less both tiers' states (``bench.json``, ``bench-rooms.json``). With
+  ``--student`` and the student's own harvest it is a correction round on the rooms the student brings itself to,
+  at the hearts it brings.
 
-Seeds ``--seed`` + 1000 · key index (+ 500 for entries): disjoint from the bench's (360000 + i).
+Seeds ``--seed`` + 1000 · key index (+ 500 for entries, + 700 for rooms): disjoint from the bench's (360000 + i).
 
 ``meta.json`` lists the start state of every episode a source played (``start_states_used``). With ``--state-route``
 a source with an episode started outside the route's namespace fails before its ``meta.json`` is written
@@ -31,7 +36,7 @@ import numpy as np
 from triforce import _native, registry
 from triforce.events import progress_job
 from triforce.jobs import add_job_arguments, begin_job, work
-from triforce.lab.bench import HARVESTED, ROUTE, load_manifest, team_keys
+from triforce.lab.bench import HARVESTED, ROOMS_MANIFEST, ROUTE, load_manifest, team_keys
 from triforce.lab.collect import Family, MultiCollector, Teachers, route_only, task_yaml
 from triforce.specialist import load_specialist
 
@@ -54,14 +59,15 @@ def step_index() -> dict:
     return index
 
 
-def entry_states(keys: list[str], states_dir: Path, route_only_entries: bool = False) -> dict:
-    """key -> harvested state names (bare) it plays, less the bench's; ``route_only_entries``: only the route's own
-    (``d3first_*``), never another route's harvest in their place."""
-    bench = {Path(s).name for e in load_manifest()['entries'] for s in e['states']}
+def entry_states(keys: list[str], harvested: Path, route_only_entries: bool = False) -> dict:
+    """key -> state names (bare) in ``harvested/<family>/`` it plays, less both bench tiers';
+    ``route_only_entries``: only the route's own (``d3first_*``), never another route's harvest in their place."""
+    bench = {Path(s).name for manifest in (load_manifest(), load_manifest(ROOMS_MANIFEST))
+             for e in manifest['entries'] for s in e['states']}
     steps = step_index()
     result: dict = {k: [] for k in keys}
     for family in sorted({registry.split_policy(k)[0] for k in keys}):
-        folder = states_dir / HARVESTED / family
+        folder = harvested / family
         names = sorted(p.stem for p in folder.glob('*.state')) if folder.is_dir() else []
         routed = [n for n in names if n.startswith(f'{ROUTE}_')]
         for name in routed if route_only_entries else (routed or names):
@@ -129,6 +135,8 @@ def main(argv=None):
                         help="a checkpoint that acts instead of the teachers (DAgger: the teachers label its states)")
     parser.add_argument('--state-route', default=None, metavar='ROUTE',
                         help="resets on this route's states alone (lab.collect.route_only), entries only its harvest")
+    parser.add_argument('--harvest', default=None, metavar='DIR',
+                        help="an every-room harvest (DIR/<family>/*.state): the 'rooms' source's states")
     parser.add_argument('--dry-run', action='store_true')
     add_job_arguments(parser)
     args = parser.parse_args(argv)
@@ -136,7 +144,10 @@ def main(argv=None):
     states_dir = Path(_native.paths()['states_dir'])
     every = team_keys()
     keys = args.keys or every
-    entries = entry_states(every, states_dir, args.state_route is not None)
+    entries = entry_states(every, states_dir / HARVESTED, args.state_route is not None)
+    if 'rooms' in args.sources and not args.harvest:
+        parser.error("the 'rooms' source needs --harvest DIR")
+    rooms = entry_states(every, Path(args.harvest), True) if args.harvest else {}
     rollouts = max(1, round(args.decisions / (STEPS_PER_ENV * args.parallel)))
     plan = []
     for i, key in enumerate(every):
@@ -154,6 +165,9 @@ def main(argv=None):
         if 'entries' in args.sources and entries[key]:
             config = load_specialist(family).replace(start_states=entries[key], ram_randomization={})
             plan.append((key, 'entries', config, str(states_dir / HARVESTED / family), args.seed + 1000 * i + 500))
+        if 'rooms' in args.sources and rooms[key]:
+            config = load_specialist(family).replace(start_states=rooms[key], ram_randomization={})
+            plan.append((key, 'rooms', config, str(Path(args.harvest) / family), args.seed + 1000 * i + 700))
     for key, source, config, _, _ in plan:
         print(f"[plan] {key} {source}: {len(config.start_states)} start states", flush=True)
     if args.dry_run:

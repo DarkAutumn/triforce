@@ -35,7 +35,7 @@ from triforce.ppo import joint_kl
 
 STEPS_PER_ENV = 512
 HOLDOUT_ENV = 9
-SOURCES = ('resets', 'entries', 'dagger')
+SOURCES = ('resets', 'entries', 'dagger', 'rooms')
 DTYPES = {'obs/room_id': np.int16, 'obs/entity_types': np.uint8, 'obs/grid': np.uint8,
           'teacher_joint': np.float16}
 SHAPE = (11, 8, 4)
