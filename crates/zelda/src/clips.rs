@@ -470,7 +470,7 @@ fn block_at(room: &Room, x: i32, y: i32, direction: Direction) -> Option<i32> {
 /// Legal exactly there: Link's X on the grid W of the dock, within 16 pixels below T; T and the row stopped, with
 /// overworld water ahead (at 0x3f's `$58` the test's other tile is the dock's); G and G' (`$8D`, `$95`) open both
 /// ways (land). The overworld offers no other N clip ([`skip_target`]); the session offers this one only on a
-/// dock-warp step (`crate::Session::set_dock_warp`).
+/// dock-warp step (`crate::Session::set_warp`).
 pub fn dock_clip_at(room: &Room, x: i32, y: i32) -> Option<i32> {
     let (dock_x, row) = room.dock()?;
     let t = row + 8;

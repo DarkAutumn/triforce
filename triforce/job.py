@@ -773,7 +773,9 @@ def test_steps(root: Path, suites: list[str], extra: list[str]) -> list[Step]:
             models = None
         if models is not None and models.is_dir():
             env['TRIFORCE_MODELS_DIR'] = str(models)
-    cargo = ['cargo', 'test', '--release', '--workspace', '--features', 'zelda/zcore', *extra]
+    # --no-fail-fast: cargo stops at the first failing test program otherwise, and the programs after it are never
+    # run (Nov 23: one failing program hid the state of thirty others for a 25-minute run).
+    cargo = ['cargo', 'test', '--release', '--workspace', '--features', 'zelda/zcore', '--no-fail-fast', *extra]
     commands = {
         'python': ('test python', [python, '-m', 'pytest', '-q', '-n', str(PYTEST_WORKERS), '--dist', 'worksteal',
                                    'tests', *extra]),

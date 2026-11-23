@@ -661,6 +661,9 @@ pub struct GameMap {
     /// Each route's bomb rules (round 37, [`BombRules`]: routes.yaml's top-level `bomb_rules:`). A route it doesn't
     /// name plays none.
     pub bomb_rules: HashMap<String, BombRules>,
+    /// Each route's engine macros (round 40, [`Macros`]: routes.yaml's top-level `macros:`). A route it doesn't name
+    /// plays none.
+    pub macros: HashMap<String, Macros>,
     /// The maps of the routes that play some rooms otherwise (game.yaml entries with `routes:`, phase X): this map's
     /// rooms with theirs over them ([`GameMap::route_map`]). Empty in a route's own map.
     route_maps: BTreeMap<String, Arc<GameMap>>,
@@ -1062,6 +1065,48 @@ impl BombRules {
     }
 }
 
+/// A route's engine macros (round 40, the fresh generation; decisions 2026-11-23 "The fresh generation's design calls"):
+/// routes.yaml's top-level `macros:` maps a route's name to them. A route it doesn't name, or a key it leaves out,
+/// plays as 2.0.0.12's team was trained: the networks play these whirlwinds by hand and the dock warps give way.
+/// A macro is a fixed button sequence offered as one choice among the family's actions, masked by Link's position
+/// only, never by a monster or a shot (the owner: "The model needs to smartly choose to use a macro, not that the
+/// macro performs dodging for it").
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Macros {
+    /// `whirlwinds: [{level: 0, room: '0xNN'}, ...]`: overworld rooms whose whirlwind step (`exit: recorder`, no dock
+    /// warp) RECORDER plays as one macro: the turn to a facing that starts the sequence, every play the index needs on
+    /// the first free frame after the last one's freeze, the wait for the pickup (`crate::whirlwind::Warp::Whirlwind`).
+    pub whirlwinds: BTreeSet<MapLocation>,
+    /// `unaided_docks: true`: the dock warps lose their two give-ways (SWORD S forced while a monster stands below the
+    /// dock, WAIT forced while a shot flies) and their plays are offered beside the family's own actions
+    /// (`crate::whirlwind::Warp::Dock`'s `unaided`).
+    pub unaided_docks: bool,
+}
+
+impl Macros {
+    /// The `macros:` entry `v` of the route `route`, whose `whirlwinds` must be its steps' whirlwind rooms.
+    fn parse(route: &str, v: &Value, steps: &[RouteStep]) -> Result<Macros, MapError> {
+        let what = format!("routes.yaml: macros: {route}");
+        check_keys(v, &["whirlwinds", "unaided_docks"], &what)?;
+        let mut whirlwinds = BTreeSet::new();
+        if let Some(list) = get(v, "whirlwinds") {
+            let Some(list) = list.as_sequence() else {
+                return err(format!("{what}: whirlwinds is not a list of rooms ({{level: 0, room: '0xNN'}})"));
+            };
+            for room in list {
+                check_keys(room, &["level", "room", "in_cave"], &format!("{what}: whirlwinds"))?;
+                let loc = step_location(room)?;
+                if is_dock_room(loc) || !steps.iter().any(|s| s.location() == loc && s.exit == RECORDER) {
+                    return err(format!("{what}: whirlwinds {loc} is no whirlwind step's room of the route (exit \
+                                        recorder, no dock warp)"));
+                }
+                whirlwinds.insert(loc);
+            }
+        }
+        Ok(Macros { whirlwinds, unaided_docks: flag(v, "unaided_docks", &what)? })
+    }
+}
+
 /// The step a route's `own_models_until: {waypoint: NAME}` marks: the route's one step with that waypoint, on no
 /// stretch (both ways of a stretch must fall on one side of it).
 fn own_models_step(what: &str, marker: &Value, steps: &[RouteStep]) -> Result<usize, MapError> {
@@ -1133,12 +1178,13 @@ pub fn visit_at(steps: &[RouteStep], stretches: &[Stretch], index: usize, step: 
 }
 
 /// Per route: its start-state namespace ([`GameMap::namespaces`]), its own runs' cutoff
-/// ([`GameMap::own_models_until`]) and its bomb rules ([`GameMap::bomb_rules`]).
+/// ([`GameMap::own_models_until`]), its bomb rules ([`GameMap::bomb_rules`]) and its macros ([`GameMap::macros`]).
 #[derive(Clone, Default)]
 struct RouteTables {
     namespaces: HashMap<String, String>,
     own_models: HashMap<String, usize>,
     bomb_rules: HashMap<String, BombRules>,
+    macros: HashMap<String, Macros>,
 }
 
 fn parse_routes(text: &str) -> Result<(Routes, Vec<Alternate>, RouteTables), MapError> {
@@ -1165,7 +1211,7 @@ fn parse_routes(text: &str) -> Result<(Routes, Vec<Alternate>, RouteTables), Map
         let Some(name) = name.as_str() else {
             return err(format!("routes.yaml: a top-level key that isn't a name: {name:?}"));
         };
-        if matches!(name, "alternates" | "families" | "blocks" | "bomb_rules") {
+        if matches!(name, "alternates" | "families" | "blocks" | "bomb_rules" | "macros") {
             continue;
         }
         let (steps, ns, own) = parse_route(name, value, &routes, &tables, &blocks)?;
@@ -1187,6 +1233,18 @@ fn parse_routes(text: &str) -> Result<(Routes, Vec<Alternate>, RouteTables), Map
             };
             let name = name.as_str().expect("a route's name");
             tables.bomb_rules.insert(name.to_owned(), BombRules::parse(name, v, steps)?);
+        }
+    }
+    if let Some(macros) = get(&data, "macros") {
+        let Some(macros) = macros.as_mapping() else {
+            return err("routes.yaml: macros is not a mapping of route names to their macros");
+        };
+        for (name, v) in macros {
+            let Some(steps) = name.as_str().and_then(|n| routes.get(n)) else {
+                return err(format!("routes.yaml: macros: {name:?} is no route"));
+            };
+            let name = name.as_str().expect("a route's name");
+            tables.macros.insert(name.to_owned(), Macros::parse(name, v, steps)?);
         }
     }
     let included: std::collections::HashSet<&str> = map
@@ -1723,6 +1781,7 @@ impl GameMap {
             namespaces: tables.namespaces,
             own_models_until: tables.own_models,
             bomb_rules: tables.bomb_rules,
+            macros: tables.macros,
             route_maps: BTreeMap::new(),
         };
         map.route_ranks = map

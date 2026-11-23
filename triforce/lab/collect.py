@@ -19,7 +19,7 @@ from typing import Optional
 
 import torch
 
-from .. import _native, registry
+from .. import _native, lineage, registry
 from ..paths import SPECIALISTS_DIR, TRAJECTORIES_DIR
 from ..metrics import RolloutMetrics
 from ..ppo import Collector
@@ -119,13 +119,16 @@ class Teachers:
         self.weights = {key: float((weights or {}).get(key, 1.0)) for key in keys}
         self.networks: dict[str, torch.nn.Module] = {}
         self.paths: dict[str, str] = {}
-        loaded: dict[str, torch.nn.Module] = {}
+        # Each teacher as run.json names it (round 40, `lineage.identity`: family, run, iterations, SHA-1).
+        self.identities: dict[str, dict] = {}
+        loaded: dict[str, tuple] = {}
         for key in keys:
             path = (checkpoints or {}).get(key) or registry.policy_checkpoint(key, root, route)
             real = str(Path(path).resolve())
             if real not in loaded:
-                loaded[real] = registry.load_model(path)[0].to(self.device).eval()
-            self.networks[key] = loaded[real]
+                network, checkpoint = registry.load_model(path)
+                loaded[real] = network.to(self.device).eval(), lineage.identity(checkpoint, path)
+            self.networks[key], self.identities[key] = loaded[real]
             self.paths[key] = str(path)
         self._native: dict[str, object] = {}
 

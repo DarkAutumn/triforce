@@ -11,6 +11,8 @@ TRAJECTORIES_DIR = ROOT / 'trajectories'
 SPECIALISTS_DIR = ROOT / 'specialists'
 CORPUS_MOVIES_DIR = ROOT / 'corpus' / 'movies'
 BASE_MOVIE = CORPUS_MOVIES_DIR / 'power_on_to_start.tfmovie'
+# The project's archive (`/backup/triforce/README.md`): `$TRIFORCE_BACKUP`, else /backup/triforce.
+BACKUP_DIR = Path(os.environ.get('TRIFORCE_BACKUP', '/backup/triforce'))
 
 
 def state_path(name: str) -> Path:
