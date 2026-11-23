@@ -3639,17 +3639,22 @@ chains with the frame removed on today's team, for what breaks.
 
 As built (Peahat40, branch `r40-noclose`; measured on today's team in `docs/experiments/round40.md` of `r40-peahat`):
 a MOVE that leaves Link in play ends on its last frame, and the next decision comes on the next frame. Every other
-action, and a MOVE that ends in a transition (a scroll, stairs, a cave, a stun), keeps the one frame of no buttons
-after it. A press of a button the game still holds as down (`ButtonsDown`, asm:Input_ReadOneController) gets one
-released frame before it, as the game reads A, B, Start and Select only as new presses. Dropping the frame after
-every action instead lost the docks (a WAIT cut short by the raft's landing, then MOVE N on the next frame, sails it
-back: post-d7 22.0% against 99.0%), so the measured rule keeps it there. The frame had hidden six engine faults, each
-fixed in the executor: the 0x21 gravestone stairs (asm:Warp_CheckUnderLink, tested after Link moves: a MOVE stopping
-on the uncovered stairs gets a released frame), a MOVE started during a shove (asm:Shove_Update: shove frames do not
-count toward its duration), the raft landings at 0x55 and 0x3f (asm:Dock_Update: the frame kept after a WAIT), the
-secret Armos (asm:Spawn_CheckTouchedArmosOrGravestone: a MOVE into it holds its press), decisions during play's own
-init (asm:Nmi_Isr, IsUpdatingMode: a MOVE ending in a transition keeps the frame) and a Start on a lag frame
-(asm:Nmi_Isr: the item sub-screen's Start held a second frame when unread, as the attacks' press already was).
+action, a MOVE that ends in a transition (a scroll, stairs, a cave, a stun) and a MOVE that played no frame keep the
+one frame of no buttons after it. A press of a button the game still holds as down (`ButtonsDown`,
+asm:Input_ReadOneController) gets one released frame before it, as the game reads A, B, Start and Select only as new
+presses. Dropping the frame after every action instead lost the docks (a WAIT cut short by the raft's landing, then
+MOVE N on the next frame, sails it back: post-d7 22.0% against 99.0%), so the measured rule keeps it there. On
+today's team (200 runs, paired by seed with today's executor): post-d7 99.5% against 99.0% (+0.5 ± 0.9), 139 ± 65
+frames shorter (2.4%); post-d5 89.0% against 91.0% (-2.0 ± 3.0, the same rooms lost: 0x45/0x55's raft bounce,
+0x34), 270 ± 90 frames shorter (4.6%), hearts +0.14 ± 0.15. The frame had hidden seven engine faults, each fixed in
+the executor: the 0x21 gravestone stairs (asm:Warp_CheckUnderLink, tested after Link moves: a MOVE stopping on the
+uncovered stairs gets a released frame), a MOVE started during a shove (asm:Shove_Update: shove frames do not count
+toward its duration), the raft landings at 0x55 and 0x3f (asm:Dock_Update: the frame kept after a WAIT), the secret
+Armos (asm:Spawn_CheckTouchedArmosOrGravestone: a MOVE into it holds its press), decisions during play's own init
+(asm:Nmi_Isr, IsUpdatingMode: a MOVE ending in a transition keeps the frame), a Start on a lag frame (asm:Nmi_Isr:
+the item sub-screen's Start held a second frame when unread, as the attacks' press already was) and a MOVE that
+stops before its first frame (no game frame at all: such MOVEs repeated to the 2000-step limit in 0x3f; it keeps
+the frame).
 
 ## 2026-11-23 — 2.0.1.0's team is the one network; no 51-network team is built or tested (the owner)
 

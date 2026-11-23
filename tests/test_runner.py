@@ -287,7 +287,8 @@ def test_a_run_in_a_low_health_act_mode_replays_bit_exactly(states_dir, models_d
     route = Route.load('d2first', start_from=str(require_state('0_5aw_0')))
     record = replay.record_options(runner.record_meta(route))
     events = []
-    with runner.pool(route, [3], record=record, num_envs=1, threads=1) as chain:
+    # Seed 2 (3 before round 40: on the timing without the closing frame its Link never dropped below 3 hearts).
+    with runner.pool(route, [2], record=record, num_envs=1, threads=1) as chain:
         chain.play()
         while not chain.pool.wait_idle(timeout=0.05):
             events += chain.poll_events()
@@ -310,7 +311,9 @@ def test_a_run_with_foresight_replays_bit_exactly(states_dir, models_dir, foresi
     route = Route.load('d2first', start_from=str(require_state('0_5aw_0')))
     record = replay.record_options(runner.record_meta(route))
     events = []
-    with runner.pool(route, [3, 4], record=record, num_envs=2, threads=2) as chain:
+    # Seeds 2 and 5 (3 and 4 before round 40: on the timing without the closing frame no decision of theirs would
+    # have lost health; 2 and 5 have one or more replaced under each mode).
+    with runner.pool(route, [2, 5], record=record, num_envs=2, threads=2) as chain:
         chain.play()
         while not chain.pool.wait_idle(timeout=0.05):
             events += chain.poll_events()
