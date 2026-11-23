@@ -7,7 +7,7 @@ use crate::format::{
     put_varint, section,
 };
 use crate::reader::{Records, Replay};
-use crate::recorder::ending_meta;
+use crate::recorder::{ending_meta, merge_models};
 
 fn stitch_error<T>(message: impl Into<String>) -> Result<T, ReplayError> {
     Err(ReplayError::Stitch(message.into()))
@@ -117,14 +117,28 @@ pub fn stitch(
     if !kinds.iter().copied().eq(b.sections().map(|(kind, ..)| kind)) {
         return stitch_error("the replays do not record the same streams");
     }
-    if let Some(kind) = kinds.iter().find(|&&kind| kind > section::DECISIONS) {
+    if let Some(kind) = kinds.iter().find(|&&kind| kind > section::MASKS) {
         return stitch_error(format!("section kind {kind} is not known to this build"));
     }
+    if a.has(section::DECISIONS) && a.version().min(b.version()) < 2 {
+        return stitch_error("decisions of a replay before version 2 (f32 distributions) don't join");
+    }
     let (meta_a, meta_b) = (a.meta()?, b.meta()?);
-    for key in ["actions", "models"] {
-        if meta_a.get(key) != meta_b.get(key) {
-            return stitch_error(format!("the replays' META {key} differ"));
-        }
+    let differ = |key: &str| stitch_error(format!("the replays' META {key} differ"));
+    if meta_a.get("actions") != meta_b.get("actions") {
+        return differ("actions");
+    }
+    // A network that made no decision in one of them is described briefly there (Recorder::finish).
+    let models = match (meta_a.get("models"), meta_b.get("models")) {
+        (None, None) => None,
+        (Some(x), Some(y)) => match merge_models(x, y) {
+            Some(models) => Some(models),
+            None => return differ("models"),
+        },
+        _ => return differ("models"),
+    };
+    if meta_a.get("tables") != meta_b.get("tables") {
+        return differ("tables");
     }
     let Some(frames) = a.frames().checked_add(b.frames()) else {
         return stitch_error("the joined replay would run past 2^32 frames");
@@ -134,6 +148,9 @@ pub fn stitch(
     let rewards = join_rewards(a, b, &mut reward_terms, &terms(&meta_b))?;
     let mut meta = meta_a.clone();
     meta.insert("ending".into(), meta_b.get("ending").cloned().unwrap_or(Value::Null));
+    if let Some(models) = models {
+        meta.insert("models".into(), models);
+    }
     if a.has(section::REWARDS) {
         meta.insert("reward_terms".into(), Value::Array(reward_terms));
     }
@@ -161,7 +178,9 @@ pub fn stitch(
     let mut streams = vec![(section::REWARDS, rewards)];
     for &kind in &kinds {
         let stream = match kind {
-            section::EDITS | section::CHEATS | section::DECISIONS => join(a, b, kind, false)?,
+            section::EDITS | section::CHEATS | section::DECISIONS | section::TARGETS | section::MASKS => {
+                join(a, b, kind, false)?
+            }
             section::EVENTS => join(a, b, kind, true)?,
             _ => continue,
         };
@@ -278,8 +297,17 @@ pub fn truncate(replay: &Replay, state_index: usize) -> Result<Vec<u8>, ReplayEr
         streams.push((section::REWARDS, prefix(replay.rewards(), |at, _| at <= frame)?));
     }
     if replay.has(section::DECISIONS) {
-        // The decision at the cut frame is the first of what follows.
+        if replay.version() < 2 {
+            return format_error("decisions of a replay before version 2 (f32 distributions) are not cut");
+        }
+        // The decision at the cut frame is the first of what follows; so are its objective and mask.
         streams.push((section::DECISIONS, prefix(replay.decisions()?, |at, _| at < frame)?));
+    }
+    if replay.has(section::TARGETS) {
+        streams.push((section::TARGETS, prefix(replay.targets(), |at, _| at < frame)?));
+    }
+    if replay.has(section::MASKS) {
+        streams.push((section::MASKS, prefix(replay.masks(), |at, _| at < frame)?));
     }
     let mut sections = vec![
         SectionOut { kind: section::META, count: 1, last_frame: 0, bytes: &meta },

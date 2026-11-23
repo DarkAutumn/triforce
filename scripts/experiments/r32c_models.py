@@ -17,7 +17,9 @@ state; every run counts for the win rate.
 
 `--bombs-quantiles` pools the arrivals of every chain played and writes one state a quantile, chain i the i-th: the
 first arrival (by seed) holding the bombs at that quantile of the arrivals' bombs (nearest rank), so the states hold
-what runs bring (round 34: `0.5,0.1,0.9`, chain 0 the median, the one segment chains start from)."""
+what runs bring (round 34: `0.5,0.1,0.9`, chain 0 the median, the one segment chains start from).  Its chains and
+replays make it a job of the machine's queue (``jobs.require_job``: ``triforce job run ... --timeout 1h --
+.venv/bin/python scripts/experiments/r32c_models.py ...``); the chains run inside it."""
 
 import argparse
 import json
@@ -26,6 +28,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from triforce.jobs import require_job  # noqa: E402  pylint: disable=wrong-import-position
 
 ROUTE = 'd3first'
 
@@ -222,7 +226,9 @@ def main():
                         help="the route step whose entry is cut (default: the step after STEM's)")
     parser.add_argument('--bombs-quantiles', default=None, type=lambda s: [float(q) for q in s.split(',')],
                         help="pool the chains' arrivals; chain i's state holds the bombs at the i-th quantile")
-    return harvest(parser.parse_args())
+    args = parser.parse_args()
+    require_job()
+    return harvest(args)
 
 
 if __name__ == '__main__':

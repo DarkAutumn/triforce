@@ -31,7 +31,7 @@ flowchart LR
 | `crates/theater` | Replays for watching: `queues.rs` (`Queues`: `success`/`stuck`/`died`/`random` first-in-first-out and `best`, the top runs seen), `feed.rs` (`Feed`: the background thread that files every finished run of a `Producer` and pauses it while nothing is wanted), `screen.rs` (`Screen`: one thread per cell playing a replay at a frame rate, one cell heard), `speaker.rs` (`Ring`, `Speaker`: the sound device, `cpal`), `overlay.rs` (the controller drawn into a frame). Knows replays and the emulator only. |
 | `crates/policy` | `Policy`: the network's Rust copy that acts inside the pool (forward pass, masked heads, keyed Gumbel noise `noise.rs`). |
 | `crates/tools` | The `tf` CLI (below). |
-| `triforce/` (Python) | `ppo.py`, `rollout_buffer.py`, `metrics.py`, `model.py`, `train.py`, `evaluate.py`, `runner.py`, `replay.py`, `golden.py`, `provenance.py`, `run.py`, `cli.py`, `play.py`, `play_grid.py`, `play_view.py`, `video.py`, `explore.py`, `entry_states.py`, `chain_hp.py`, `heart_value.py`, `events.py`, `registry.py`, `plr.py`, `best_of_n.py`, `eval_batch.py`, `select_checkpoint.py`; thin `observation.py` (gym space from `OBS_SPEC`), `actions.py` (`Action`, `ActionMask` flat-mask view), `zelda_enums.py` (`ActionKind`, `Direction`, `MapLocation`), `specialist.py`, `paths.py` (`STATES_DIR`, `TRAJECTORIES_DIR`). |
+| `triforce/` (Python) | `ppo.py`, `rollout_buffer.py`, `metrics.py`, `model.py`, `train.py`, `evaluate.py`, `runner.py`, `replay.py`, `golden.py`, `provenance.py`, `run.py`, `cli.py`, `play.py`, `play_grid.py`, `play_view.py`, `video.py`, `explore.py`, `entry_states.py`, `chain_hp.py`, `heart_value.py`, `events.py`, `registry.py`, `plr.py`, `best_of_n.py`, `eval_batch.py`, `select_checkpoint.py`, `jobqueue.py` / `job.py` / `jobs.py` (the job queue, `triforce job`), `testlog.py` (the test suites' timing logs, `triforce test-times`); thin `observation.py` (gym space from `OBS_SPEC`), `actions.py` (`Action`, `ActionMask` flat-mask view), `zelda_enums.py` (`ActionKind`, `Direction`, `MapLocation`), `specialist.py`, `paths.py` (`STATES_DIR`, `TRAJECTORIES_DIR`). |
 
 ## Processes and threads
 
@@ -1370,49 +1370,56 @@ every step, so following an enemy that moves away pays again, and knockback rese
   folder's `NNN` may have any width; it is allocated under `<logs>/.lock`. `round.jsonl` / `round.log` cover the round (chain,
   `chain_progress`, errors, `end`). SIGTERM is turned into an interrupt, so a killed run still saves and writes
   `end`. Standalone `triforce.evaluate` and `eval-chain` log a folder of their own (`events.logged_job`: plan kind
-  `eval` / `chain`; `--no-log` skips the folder, not the turn) and end it `interrupted` on SIGTERM. A lab training
+  `eval` / `chain`; `--no-log` skips the folder) and end it `interrupted` on SIGTERM. A lab training
   (`triforce.lab.train`) writes `<yymmdd>_<NNN>_lab-<name>`, plan kind `lab-train`, a run entry and a
   `<family>.jsonl` stream a family, all trained at once (docs/lab.md "What a lab job writes"); the lab's bench and
-  recorder, and an experiment script that enters the queue itself, use `events.progress_job`: a folder whose one
+  recorder, and an experiment script running as a job, use `events.progress_job`: a folder whose one
   run's `progress.jsonl` has `eval_start` / `eval_progress` (done of the total in its `unit`, the success so far) /
   `end`, drawn as an evaluation's row. `--events FILE`
   (train, evaluate, eval-chain) writes into a given stream: in a folder with a `training.json` its driver
   (train_round, eval-batch) owns the plan, the stream and its `end`; in a folder without one the job writes its plan
   there
-  (`events.has_plan`), so every job has a plan. Every plan names its checkout (`checkout`, `branch`, `commit`) and
-  registers in the machine's job registry (`jobs.py`, below). An evaluation batch (`triforce eval-batch`, below) is
-  one folder, plan kind
+  (`events.has_plan`), so every job has a plan. Every plan names its checkout (`checkout`, `branch`, `commit`), and
+  a job's first plan is recorded in its row of the job queue (`jobs.record_plan`, below). An evaluation batch
+  (`triforce eval-batch`, below) is one folder, plan kind
   `eval-batch`: every evaluation a plan entry (`name`, `kind` chain / eval / report, `events`, `log`, `output`,
   `total` runs or episodes, `command`; status pending → `evaluating` → `ok` / `failed` / `interrupted` with its
   headline `chain_*` or `eval_*` fields and `wall_seconds`), one `<entry>.jsonl` each (the command's `chain_start`
   / `chain_progress` / `chain` or `eval_start` / `eval_progress` / `eval`, then the batch's `error` and `end`), and
   `round.jsonl` (`start`, `entry_start`, `entry_end`, `end`). Plans record the niceness the job runs at (`nice`).
-  `training-gui.py`'s [currently running] shows every live job on the machine, wherever it writes: the registry's
-  running and queued jobs (pid alive with the recorded start time) and its own logs root's. A job the registry knows
-  is never invisible (Nov 22, after the lab's trainings ran unseen): one without a log folder holding its plan (a
-  `--no-log` evaluation, a job of a checkout whose lab writes no plan, a script that registers itself) is shown from
-  its registry file (`job_key`, `entry_plan`: the file stands in for the folder, `registry_only`), in the same
-  order as the others, with its name, kind, checkout and branch, status, time run or waited, estimate and command,
-  marked "no progress data" (a header without segments, a web card and plan line without a bar); once its folder
-  has a plan it is shown from the folder instead (`superseded`). `tests/test_training_gui.py` checks every entry
-  point into the queue, and a new module's folder-less job, in the window and the web view. Folders from another
-  checkout are labelled with its directory and branch. Order (window and web view, Nov 17): what runs now is on top,
-  the job
-  that began to run last first (`run_start`: when it was admitted, else its plan's creation; never the folder's
-  name, each checkout numbers its own), so a job that starts is added at the top and pushes the others down; then
-  the waiting ones in the order they will start; then what ended, the last to end first (`plan_ended`), so a job
-  that ends joins that list at its top and nothing below the running ones changes places. Under a "finished"
-  heading below the live ones: folders whose
-  training ended while shown (its plan is no longer `running`, or its process is gone: `plan_is_live`) and the
-  registry's jobs that ended in the last 60 minutes (`RECENT_SECONDS`; one whose process died without ending its
-  plan shows "process gone"). A finished folder leaves the list by itself 60 minutes after it ended (after the
-  window saw it end, for one that was shown live: `Window._expire_finished`), so the list never piles up; the
-  "Clear finished" button hides them at once for the rest of the session, and trainings that start later still
-  appear. The 30-a-second frame timer steps and repaints only what moves (`Header.animating`, `RunRow.animating`):
-  a running plan's header and its training or evaluating rows every frame, a waiting plan's header once a second,
-  a finished folder not at all once its bars have eased to their fill (`settled`, cleared when the folder's data
-  changes: `FolderView.poll` repaints it then); a header's registry facts are looked up once a second, not in
-  every paint, and a row's sparkline draws a point a pixel. A batch folder is one group with its name and one row
+  `training-gui.py`'s [currently running] shows every job of the machine's job queue, whatever checkout runs it
+  (`read_queue`: the live jobs and those that ended in the last 60 minutes, after `jobqueue.sweep` marked the dead):
+  each by its card (`job_view`), drawn with widgets (Nov 23, the owner: the 250 test's progress was "essentially a
+  tqdm progress bar"; the ASCII bar of `jobqueue.describe` is `triforce job list`'s alone): who, the description,
+  its state, a progress bar a counter (`JobCard`/`CounterBar`: done of total, rate, time left; a counter without a
+  total its number and rate), its steps each with its state (`StepList`: a build's and a test's), its verb, kind,
+  branch and command. A job whose log folder holds its plan (in its row: `jobs.record_plan`) shows that plan's full
+  view under its card (its header, its runs' rows, its eval-chain card), and leaves off its card the counters its
+  rows show (done, ended, or not reported for 5 minutes: `COUNTER_STALE`); one without (a script, a golden race, a
+  `--no-log` evaluation, an old tree's command) is drawn from its row alone, "no progress reported" when it reports
+  none: a job in the queue is never invisible (Nov 22, after the lab's trainings ran unseen). An eval-chain's card
+  (a standalone chain, the 250-run test's, a round's; a batch's chain rows the same) draws its runs by how they
+  ended (`OutcomeBar`: wins blue, stuck purple, deaths red, errors grey, a block a run up to 120), how many took
+  each dungeon's triforce in the route's order (`TriforceTiles`) and the furthest route step with its room
+  (`ReachBar`), from each `chain_progress`'s `runner.ChainTally` fields; its runs a second and time left. A live log
+  folder under the logs root that no job owns (a run the owner started at a terminal) is listed among the running
+  ones.
+  Folders from another checkout are labelled with its directory and branch. Order (window and web view, Nov 17):
+  what runs now is on top, the job that began to run last first (`admitted_ts`; never the folder's name, each
+  checkout numbers its own), so a job that starts is added at the top and pushes the others down; then the queued
+  ones, each lane's line in the order they will start (`jobqueue.line`) with its place; then what ended, the last
+  to end first (`plan_ended`), so a job that ends joins that list at its top and nothing below the running ones
+  changes places. Under a "finished" heading below the live ones: the queue's jobs that ended in the last 60
+  minutes (`RECENT_SECONDS`; a `dead` one, whose wrapper is gone, shows "process gone") and the folders whose
+  training ended while shown (its plan is no longer `running`, or its process is gone: `plan_is_live`). A finished
+  one leaves the list by itself 60 minutes after it ended (after the window saw it end, for one that was shown
+  live: `Window._expire_finished`), so the list never piles up; the "Clear finished" button hides them at once for
+  the rest of the session, and jobs that start later still appear. The 30-a-second frame timer steps and repaints
+  only what moves (`Header.animating`, `RunRow.animating`): a running plan's header and its training or evaluating
+  rows every frame, a waiting job's header once a second, a finished folder not at all once its bars have eased to
+  their fill (`settled`, cleared when the folder's data changes: `FolderView.poll` repaints it then); the queue is
+  read at each scan (`Window._scan`), not in every paint, and a row's sparkline draws a point a pixel. A batch
+  folder is one group with its name and one row
   per evaluation: waiting,
   running (the bar is the runs or episodes done of the total, from `chain_progress` / `eval_progress`), done (its
   headline: a chain's arrivals and route-end success, an evaluation's success and health change; `resumed` when an
@@ -1425,95 +1432,107 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `/api/state` (JSON), 404 for anything else; nothing reaches the filesystem from a request. Its own thread builds a
   snapshot a second from its own `Training` models, found as [currently running] finds folders, so the window and
   the server never wait for each other; the window's widgets and the page share the Qt-free presentation code
-  (`plan_meta`, `row_phase`, `row_badge`, `chain_bar`, `CHARTS`/`run_chart_data`/`chart_bounds`,
+  (`plan_meta`, `row_phase`, `row_badge`, `job_view`, `chain_outcomes`, `chain_tally`, `CHARTS`/`run_chart_data`/`chart_bounds`,
   `run_eval_sections`). No selection: a card per run (training run, batch evaluation, eval-chain), the running
   ones on top (newest start first), the ended ones below them (newest end first); pending runs only in their live
   plan's queue line; a run that ended stays 60 s after its end
   (`WEB_EXPIRE`; a run seen running whose process died, from when that was seen), so runs that ended before the
   server started never show. A taken port (a second training-gui) is an error: one line on stderr and exit 1, with
   or without a window; `--no-web` is the only way to run without the web view.
-- Job registry (`jobs.py`): `TrainingPlan` registers every plan at its start (`jobs.register`) as one JSON file in
-  `jobs.jobs_dir()` (`$TRIFORCE_JOBS_DIR`, else `$XDG_STATE_HOME/triforce/jobs`, else
-  `$HOME/.local/state/triforce/jobs`: per user, outside every checkout, shared by every worktree), `<host>-<pid>-
-  <process start>-<log folder>.json`: `host`, `pid`, `pid_start` (the process start from `/proc`, so a reused pid is
-  told apart), `started`, `command`, `cwd`, `checkout`, `branch`, `commit`, `log_dir`, `plan`, `name`, `kind`,
-  `status` (`queued`, then `running`, then the plan's final status from `finish`), `queued` / `queued_ts` (when it
-  joined the line), `admitted` / `admitted_ts` (when it started running), `lane` (`regular` or `express`),
-  `no_wait`, `express` (it asked for the express place), `work`, `estimate`, `finished` and `ran` (seconds from
-  admitted to finished). A `--no-log` evaluation or
-  chain registers too, without a folder (`log_dir`, `plan` null; `events.logged_job(log=False)`), named after its job.
-  A top-level job counts once: a round's or batch's trainings, evaluations and chains write into their owner's
-  folder (`--events` into a folder with a plan) and have no entry. Writes are atomic; a registry that can't be
-  written warns once and the job goes on (no coordination: it starts). Each registration deletes entries that ended
-  (or whose process is gone) more than 7 days ago (`PRUNE_SECONDS`). The tests register in a session directory and
-  never wait (`tests/conftest.py`: `$TRIFORCE_MAX_JOBS=0`; the line's own tests set their limit).
-- Work and estimates (`jobs.py`, Nov 15): every job names its `work` when it creates its plan (`TrainingPlan(...,
-  work=jobs.work(...))`), in three coarse units: `train_steps` (the training steps asked for: a round's
-  specialists x iterations x steps per update, those `--train-args` sets winning as they do in the training's command
-  (`train_round.effective_schedule`), a training's iterations x steps per iteration), `eval_episodes` (an
-  evaluation's `evaluate.episode_count`; a round's evaluation of each specialist, seed states x episodes per state x
-  the clips switch states it plays, counted without loading a state; a batch's evaluation entries) and
-  `chain_steps` (runs x the route steps a run plays from its start to its stop, `runner.steps_played`: a full-route
-  run is ~200 steps, a Dungeon 5 run 23); a batch sums its entries that an earlier run hasn't measured yet (their
-  `resume`); a report counts nothing. Its `estimate` (seconds) is amount x rate summed; a rate (seconds per unit,
-  `jobs.rates`) is the median over the 20 latest `completed` jobs in the registry that did some of that unit, each
-  giving its `ran` less its other work at the other units' rates (those of jobs that did only that unit) per amount
-  of the unit, so a round (training and evaluation) teaches the training rate; without history `DEFAULT_RATES`,
-  measured on the training machine on Nov 15 from every checkout's log folders: 0.00044 s per training step (259
-  round runs: training wall seconds per target step, early stops included), 0.046 s per evaluation episode (801 batch
-  family evaluations), 0.0026 s per chain run-step (168 batch chains, mostly `--parallel 20`). An estimate may be
-  wrong (early stops, load, fewer envs); the history corrects the rates.
-- The line (`jobs.py`, Nov 15): no controller: the registry is the queue and every job decides for itself
-  (`JobRecord.wait_turn`, `jobs.turn`). Fast jobs drain first: waiting jobs are ordered by their score, `estimate −
-  AGING × seconds waited` (`AGING` 0.5; lowest first; ties by `queued_ts`, then file name): a short job goes before a
-  long one, and a long one moves up as it waits, passing fresh short jobs once it has waited about twice its own
-  estimate, so nothing starves. In that order they take the free places: `$TRIFORCE_MAX_JOBS` regular places
-  (default 2; 0 = no limit; two at a time is a bit faster than one, more are not: load averages of 120 when they
-  piled up) and `EXPRESS_JOBS` (1) express place for a job estimated at most `EXPRESS_SECONDS` (10 minutes), so a
-  short chain doesn't wait for the hour-long trainings that usually hold both regular places: at most two regular
-  jobs and one short one. A short job takes the express place when it is free, else a regular one; express jobs
-  count only against the express place; a job that gets no place waits, and a later one may take a place it can use
-  (a short job passes long ones blocked on the regular places). An **express request** (Nov 23: `--express` on every
-  job entry point, or `$TRIFORCE_EXPRESS=1`; the entry's `express` field) makes a job express-sized whatever its
-  estimate: a short measurement the owner wants in the fast lane (the 250-run test, `scripts/full_runs.py runs250`,
-  7-11 minutes) is not held back when the history's rates put it over 10 minutes. It still takes its turn in the
-  line by its score and waits for the express place itself (else a regular one), and counts as running. Every
-  checkout runs this one rule (since Nov 17
-  there is no fallback for code from before it: an entry without an `estimate` counts as estimate 0). Entries of
-  other hosts and of a job's own process are ignored; a running entry without a `lane`
-  is regular. Liveness is read from `/proc` (pid and process start time, `job_alive`), never from a job
-  reporting in: a job that dies, running or queued, simply stops counting and nothing has to be cleaned up for the
-  line to move. Registration (the `queued_ts` stamp) and each check with its change to `running` (and its `lane`)
-  happen under an exclusive `flock` on `<jobs_dir>/.lock`, held only for that moment (the kernel drops it if the
-  holder dies), so two jobs starting at the same instant for one free place can't both take it.
-  `TrainingPlan.__init__` registers and blocks until its turn: a job that starts at once never shows as queued; one
-  that has to wait saves its plan with status `queued` and a `queue` object (`queued`, `place`, `running`, `ahead`,
-  `limit`, `estimate`, `work`, `score`, `lane`, `checked`, then `admitted`, `waited`),
-  writes `queue.jsonl` in its folder (`queued`, `waiting` every 5 minutes, then `admitted` with `waited` and its
-  lane, or `interrupted`), polls every 5 s (`POLL_SECONDS`) and prints on stdout, at first and every 5 minutes
-  (`UPDATE_SECONDS`), `triforce: NAME is paused until resources are available: estimated 40 minutes; 2 jobs are
-  running (A (round), B (eval)); 1 job is ahead in line (C (chain)). It starts by itself; next update in 5
-  minutes.`, then `triforce: NAME starts after waiting 12 minutes`. Every plan has `work`, `estimate` and, once it
-  runs, `lane`. Ctrl-C or SIGTERM while it waits ends the plan and its entry `interrupted`. The work a job does
-  before its plan (argument and checkpoint checks, counting its work) runs before it waits, so a wrong command fails
-  at once. `--no-wait` (every training and evaluation command; `$TRIFORCE_NO_WAIT=1` for wrappers) starts the job
-  at once in a regular place; it still counts as running for the others. The training GUI is a reader: [currently
-  running] lists the queued plans after the running ones in the order they will start (its own copy of the
-  score) as `queued` (purple), with their place, what they wait for, the estimate and the wait (`short
-  ~5 min · waited 12m`; `short` for express-sized jobs), `process gone` when the process died; running jobs show
-  their `express` lane and `est ~40 min · ran 12m`; the web view shows queued plans as dashed "waiting" lines under
-  the running plans, in the same order, with no cards; the window title and the web's running count count running
-  jobs only.
-- CPU priority and the start of a job (`jobs.py`): every training and evaluation entry point
-  (`scripts/train_round.py`, `triforce.train` `cli`, `triforce.evaluate` `main`, `cli._cmd_eval_chain`,
-  `eval_batch.main`) adds `jobs.add_job_arguments` (`--nice N`, `--no-wait`) and calls `jobs.begin_job(args)` at
-  start, which lowers the priority (`lower_priority`: niceness 15 by default, `$TRIFORCE_NICE` overrides it, 0
-  leaves it alone; only ever raised, so a child of a niced driver keeps its parent's: drivers pass theirs on as
-  `$TRIFORCE_NICE`, `jobs.child_env`) and records `--no-wait` for the plan. Library code never calls it: play,
-  replay and build tools that share the evaluation code (play-zelda, zelda-headless, create-video, zelda-map, `tf
-  replay`, explore, entry_states) keep normal priority and never wait their turn: they are interactive, short, or
-  build the data jobs need (`tests/test_eval_batch.py` checks the call sites; `tests/test_job_queue.py` reads each
-  entry point's niceness back from `/proc`). I/O priority is left alone.
+- The job queue (`jobqueue.py` the scheduler, `job.py` the `triforce job` command, `jobs.py` what a tool does; the
+  owner's design, Nov 23; until Nov 23 every tool registered itself in a per-user registry of JSON files and waited
+  its own turn after loading, which let 17 chains load their teams outside the line). Every heavy job and every
+  build or test suite runs as the child of a `triforce job` wrapper (verbs `run`, `golden`, `build`, `test`,
+  `setup`, `list`, `progress`; AGENTS.md "The job queue"), which takes the job's place in line before the command
+  starts, waits for a free place, runs it and records how it ended; the tools never wait. No daemon: a server is one
+  more thing that can be down while the owner is away; with one database and kernel locks the queue works as long
+  as the wrappers do, and a wrapper that dies takes only its own job with it. `triforce job` imports neither
+  `triforce._native` nor torch (it works before the first build), and a waiting job is only its wrapper: no model,
+  no GPU memory, a check a second (`POLL_SECONDS`).
+- State (`jobqueue.py`): one SQLite database, `queue_dir()/queue.db` (`$TRIFORCE_QUEUE_DIR`, else
+  `$XDG_STATE_HOME/triforce`, else `$HOME/.local/state/triforce`: per user, outside every checkout, shared by every
+  worktree), in WAL mode; every decision (join, sweep, admit, finish) is one `BEGIN IMMEDIATE` transaction, so two
+  wrappers never decide at once. `jobs` has a row per job: who (`agent`, `task`, `subtask`, `description`), what
+  (`verb`, `kind`, `command`, `work`, `estimate`), where it stands (`status` `queued` → `running` → `completed` /
+  `failed` / `interrupted` / `timeout` / `dead`, `place`, `queued_ts` / `admitted_ts` / `finished_ts`, `exit_code`,
+  `result`) and its progress (`log_dir`, `plan`, `progress`, `steps`); `history` a row per finished job (kind, work,
+  estimate, the seconds it actually ran). The tests run in a session directory with `$TRIFORCE_JOB_ID=0` (a job
+  without a row: the tools start, their reports change nothing; `tests/conftest.py`).
+- Places are kernel `flock`s in `queue_dir()/locks`: each place (`PLACES`: `regular-1`, `regular-2`, `express-1` in
+  the jobs lane, `tools-1`, `tools-2` in the tools lane) is a lock file, and a job runs only while its wrapper holds
+  that place's lock; the lock is handed to the command too (`pass_fds`), so a place is never free while anything of
+  its work runs. Each wrapper also holds its job's lock (`job-<id>`) for its lifetime: a live job whose lock can be
+  taken has lost its wrapper, and `sweep` marks it `dead` at every decision (the kernel freed its place already). No
+  /proc heuristics, no stale entries, nothing to clean up for the line to move.
+- The command (`job.py`): the wrapper's child, in its own process group, killed when the wrapper dies
+  (`PR_SET_PDEATHSIG`; `jobqueue.child_setup`), at niceness 15 (`RUN_NICE`: `run`, `golden`) or 10 (`TOOL_NICE`:
+  `build`, `test`, `setup`, with `CARGO_BUILD_JOBS=4`), only ever raised. Its stdout and stderr pass through and the
+  exit code is the command's; the wrapper's own lines go to stderr (`triforce job: ...`). SIGTERM, SIGINT and SIGHUP
+  to the wrapper are forwarded to the group (a job stopped while it waits ends `interrupted`). `--timeout D` sends
+  SIGTERM, then SIGKILL after 30 s (`GRACE_SECONDS`): status `timeout`, exit 124 (a golden race's timeout is its
+  result, exit 0). Priority, time limits and the cargo job count are the queue's: `nice`, `ionice`, `renice`,
+  `chrt`, `timeout` and `CARGO_BUILD_JOBS=` (and the queue's own variables) after `--` are refused (exit 2). A
+  command from an old version's tree runs under `run --timeout D` like any script; the wrapper sets
+  `TRIFORCE_NO_WAIT=1` (`OLD_QUEUE_OFF`), which switches that tree's own line off.
+- Work and estimates: for a queued tool (`triforce train|evaluate|eval-chain|eval-batch|select-checkpoint`,
+  `train_round.py`, `full_runs.py`, `triforce.lab.train|record|bench`, `zelda-headless.py --golden`; `job.tool_of`)
+  the wrapper first makes a dry call with `$TRIFORCE_JOB_ESTIMATE` set: the tool checks its arguments and
+  `jobs.announce` writes its kind and `work` there and exits 0 before anything loads (an argument error fails before
+  the wait, the estimate never needs a loaded model); a script's `jobs.require_job` answers `script` with no work.
+  Work is three coarse units (`UNITS`): `train_steps` (a round's specialists x iterations x steps per update,
+  `--train-args` winning as in the training's command, `train_round.effective_schedule`; a training's iterations x
+  steps per iteration), `eval_episodes` (`evaluate.episode_count`; a round's evaluation of each specialist; a
+  batch's evaluation entries) and `chain_steps` (runs x the route steps a run plays, `runner.steps_played`: a
+  full-route run is ~200, a Dungeon 5 run 23); a batch sums the entries an earlier run hasn't measured. The
+  estimate is work x rates, each rate (seconds per unit, `jobqueue.rates`) refitted from the `history` table over
+  the 20 latest completed jobs that did some of that unit (`RATE_WINDOW`; their seconds less their other work at the
+  other units' rates, a total over the amounts, so a big job weighs as its size), else `DEFAULT_RATES` (Nov 15:
+  0.00044 s per training step, 0.046 s per evaluation episode, 0.0026 s per chain run-step). A command the queue
+  can't measure (a script, an old version's tool) needs `--timeout`, which is its estimate; a golden race's
+  `--timeout` is too. `triforce job list --calibration`: per kind, over its 20 latest completed jobs, the median and
+  the worst actual / estimate, and the rates; a running job past twice its estimate is `OVERRUN` (`OVERRUN`,
+  `jobqueue.overrun`).
+- The lanes (`jobqueue.line`): the jobs lane orders its waiting jobs by score, `estimate − 0.5 × seconds waited`
+  (`AGING`; lowest first, ties by join time): a short job goes before a long one and a long one moves up as it
+  waits, passing fresh short jobs once it has waited about twice its own estimate, so nothing starves. In that
+  order they take the free places: a job estimated at most 600 s (`EXPRESS_SECONDS`) or run with `--express` takes
+  the express place while it is free, else a regular one, so a short chain or a 250 test doesn't wait for the
+  hour-long trainings that usually hold both regular places (two at a time is a bit faster than one, more are not:
+  load averages of 120 when they piled up). The tools lane (`build`, `test`, `setup`) is first come first served on
+  its two places and never waits behind a training or a chain. A waiting wrapper prints `triforce job: #12 A-T-S
+  waits for a place: estimated 40 minutes; 2 jobs are running (...)` at first and every 5 minutes
+  (`UPDATE_SECONDS`), then `... starts (regular-1, nice 15, ...)`.
+- Progress: a tool's log folder is named for the job, `<yymmdd>_<NNN>_<agent>-<task>-<subtask>` (`jobs.label`, from
+  `$TRIFORCE_JOB_LABEL`), and its first plan is recorded in the job's row (`jobs.record_plan`), where `triforce job
+  list` and the training GUI draw its runs. A command reports its movement into the row's `progress` JSON (one
+  counter per label: done, total, unit, the rate over the last minute) with `jobs.progress(done, total, unit)` (at
+  most a write every 2 s), a shell script with `triforce job progress DONE [TOTAL] --unit U`, any command with `run
+  --progress-lines FILE --total N` (the wrapper counts the file's lines); `build`, `test` and `setup` show their
+  steps (`steps`). `triforce job list [--all]`: what runs, what waits in which order, what ended in the last hour.
+- The test suites (`triforce job test`, `job.test_steps`; the owner, Nov 23): the Python suite runs in
+  `PYTEST_WORKERS` = 8 processes (pytest-xdist, `--dist worksteal`: a test to whichever is free; 410-433 s in one
+  process, about a minute in eight, on a quiet machine; 12 were slower than 8, and the tools lane runs two suites at
+  once). `tests/conftest.py` runs in every worker (its own states dir, queue dir and session fixtures); the
+  controller runs no test and reports the suite's tests done of collected into the job's row (the total from
+  `pytest_xdist_node_collection_finished`, each test's end forwarded by xdist). **Timing logs** (`testlog.py`, a
+  pytest plugin that `pyproject.toml` loads for every run of the repo): the reporting process (the controller, or
+  the one process) writes `<logs>/<yymmdd>_<NNN>_tests-<suite>[-<job label>]/tests.jsonl` (`events.EventLog`;
+  `<logs>` is `$TRIFORCE_LOGS_DIR`, else the main checkout's `logs/`, so a worktree's runs join one history; no
+  `training.json`: the training GUI does not list it): `start`, a `test` line per test as it ends (`id`,
+  `outcome`, `seconds`, `setup` / `call` / `teardown`, `worker`) and `summary` (checkout, branch, commit, `job`:
+  id, label, agent, task, subtask; `workers`, `load` at the start, `wall`, `collected`, `counts`, `test_seconds`,
+  `exit`). The Rust suite runs as `python -m triforce.testlog cargo -- cargo test ...`, which passes cargo's output
+  through and writes a `test` line per test binary (`Running` / `Doc-tests`, then its `test result:`: counts and
+  `finished in`; stable Rust has no per-test times) and a summary with `compile` seconds. `triforce test-times`
+  (`testlog.report_main`) reads every folder with a summary: per suite the wall time run by run, each test's median
+  and worst over the last `--last` runs, the `--top` slowest, the tests whose newest time is 1.5x and 1 s over the
+  median of the runs before; plain text or `--json`.
+- Enforcement (`jobs.ENFORCE`, the owner, Nov 23): `announce` and `require_job` return inside a job
+  (`$TRIFORCE_JOB_ID`, inherited by every child: a batch's chains, a round's trainings) or with a terminal attached
+  (`jobs.attended`: the owner at a shell); otherwise they print the `triforce job run ...` form of the same command
+  and exit 2. Every script that plays, trains, collects or crunches calls `jobs.require_job()` first. Library code
+  calls neither, so the play, replay and build tools that share the evaluation code (play-zelda, zelda-headless
+  without `--golden`, create-video, zelda-map, `tf replay`) are not queued.
 - `train --stop-success R [--stop-patience 5]` (`EarlyStop`) proposes a stop once the start-state-balanced
   success rate (`balanced_success_rate`: the mean over the seed start states of each state's exact success over
   its most recent whole per-start cohorts that together cover at least 20 room-entry episodes) is ≥ R for that
@@ -1563,6 +1582,11 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `$627` = n, `$51` = 0), so bomb use and the 10th kill's forced bomb drop come up in every family's training.
   Curriculum starts get them too (like hp); harvested starts don't (they keep what the upstream specialist handed
   over).
+- A room's own bombs (round 39; darknut@d3first at 3:0x5b): `ram_randomization: {room_bombs: {'(3, 0x5b)': [8, 8]},
+  room_bombs_share: 0.5}` draws the bombs of a reset into a listed room from that room's range in a share of those
+  resets (absent: all), in place of the `bombs` draw (`start_states::apply_room_bombs`); a reset into any other room
+  draws nothing more. Like `bombs`, every reset that randomizes RAM gets it (training, evaluation, curriculum
+  starts), harvested starts don't.
 - A forced bomb drop (round 25; boss-manhandla): `ram_randomization: {drop_bombs: P}` arms the game's help drop as
   bombs (`HelpDropCount` $0A, `IsHelpDropBomb` 1, asm:Drop_SetUpItem) in a share P of resets, at the reset and again
   after every step while a monster is in the room (harm to Link clears both), so the room's next drop (Manhandla's
@@ -1622,7 +1646,7 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `$TRIFORCE_MODELS_DIR` or `<repo>/models`. `--skip-existing` skips finished runs only; an unfinished run dir is renamed `<run>.partial-N`
   (`partial_set_aside` event) and the specialist trains fresh.
 - `triforce eval-batch NAME [--chains TAG] [--families all|a,b] [--chain '[ENTRY:] ARGS' ...] [--evaluate
-  '[ENTRY:] ARGS' ...] [--parallel CORES] [--eval-parallel 4] [--jobs 1] [--nice N] [--no-wait] [--redo]`
+  '[ENTRY:] ARGS' ...] [--parallel CORES] [--eval-parallel 4] [--jobs 1] [--redo]`
   (`eval_batch.py`):
   evaluations as one named batch (log layout above), each its own process (`eval-chain` / `evaluate` with
   `--events <batch>/<entry>.jsonl`), one at a time; `--jobs N` runs family evaluations side by side within
@@ -1817,8 +1841,7 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `--checkpoint`; exit 1 if any run ends `error`. `triforce promote <specialist> <run-id>`; `triforce list`;
   `triforce train|run|play|evaluate|eval-batch|room-stats|convert-model|select-checkpoint ...` forward to the module
   CLIs (`triforce --models-dir DIR ...` forwards the models dir to all but `play`). `eval-chain --events FILE` appends its events to a
-  caller's stream (no folder of its own); `--nice N` (CPU priority), `--no-wait` (start without waiting its turn;
-  both above).
+  caller's stream (no folder of its own).
 - `scripts/yardstick.py report --run RUN [--mode sample|argmax] [--chain NAME=PATH[@L:0xRR] ...] --output OUT.json`
   reads each specialist's evaluation in the run's act mode (`evaluate.read_evaluation`; a missing one is an error
   unless `--allow-mode-mismatch`) and the chain files, and reports success (Wilson intervals), hearts and chain
@@ -1901,21 +1924,25 @@ every step, so following an enemy that moves away pays again, and knockback rese
 
 ## Replays (`crates/replay`, `crates/pool/src/zelda`, `replay.py`)
 
-A replay (`.tfreplay`, `TFREPLAY`, `REPLAY_VERSION` 1; version 0 files still read) is one run or episode, exact enough to play back bit for
+A replay (`.tfreplay`, `TFREPLAY`, `REPLAY_VERSION` 2; versions 0 and 1 still read) is one run or episode, exact enough to play back bit for
 bit on the emulator alone: no env, reward or model code is needed, so a replay outlives changes to all three.
+Since version 2 (the owner, Nov 23) it also says on its own what the agent was steered to, what it could do and
+what it chose, named by its own META, so it can be shared and filmed without route data, networks or this code.
 The file layout is in `crates/replay/src/lib.rs`. It holds:
 
 | Section | What |
 |---|---|
-| META | JSON: what played (`triforce` version, `code`, `data`, `kind` chain/eval/train, `route`, `stop_at`, `models`), `seed`, `source`, `ending` (`kind`, `result`, `outcome`, `reason`), `rng_phase` (the natural RNG state a start state or redrawn checkpoint wrote, steps from reset; a stitch keeps each segment's), and the tables the streams index (`buttons`, `cheat_items`, `reward_terms`, `actions`) |
+| META | JSON: what played (`triforce` version, `code`, `data`, `commit`, `kind` chain/eval/train, `route`, `stop_at`, `models`: each network described without a path: name, family, run, iterations, steps, act mode, obs/action schema, checkpoint SHA-1, architecture and parameters, and the names of its `outputs` (distribution, value, hit), each described once in META `outputs` (stream, shape, labels, meaning, units)), `seed`, `source`, `ending` (`kind`, `result`, `outcome`, `reason`), `rng_phase` (the natural RNG state a start state or redrawn checkpoint wrote, steps from reset; a stitch keeps each segment's), the tables the streams index (`buttons`, `cheat_items`, `reward_terms`, `actions` with which kinds are directional and timed, `tables`: objective kinds, target roles with their fields, mask reasons, draws, routes, stretches), a chain run's `run` (its chain record without rooms) and `chain` (route, start state by name, max steps, missing families, the route's step count and triforce steps). No filesystem path (`tests/test_replay.py`) |
 | SOURCE | where the machine starts: console power on (name, idle delay), a state file by name (and its hash), or the embedded START state |
 | INPUTS | the controller byte of every frame, run-length encoded |
 | EDITS | every memory write that was not the game's: `(frame, address, previous byte, new byte)` (load randomization, hp draws, cheat grants, anything poked) |
 | CHEATS | cheated items spent: `(frame, item, count)` |
 | STATES | `TFZSTATE` blobs: START (embedded source), END (always), KEYFRAME (optional, every N frames), CHECKPOINT (a stitch boundary); each with its route step and the cheat grants still held, a room's and (version 1, round 32) a route step's, so a chain can continue from it |
-| EVENTS | CONTROL (the models take over), ROOM (level, room, route step, acting policy), OUTCOME (a room visit's), EPISODE (a training-style episode's ending), SEGMENT (a stitch boundary) |
+| EVENTS | CONTROL (the models take over), ROOM (level, room, route step, acting policy), OUTCOME (a room visit's), EPISODE (a training-style episode's ending), SEGMENT (a stitch boundary), VISIT (version 2: a room visit's record as the chain wrote it, at its close) |
 | REWARDS (optional) | every reward term of every step, scored by the code training uses (`rewards::score_step`, `env::RewardTrack`; chains are cut into the acting specialist's episodes) |
-| DECISIONS (optional) | every model decision: policy, action, value and the whole factored distribution (143 log-probabilities: kind[11], direction[kind][8], duration[kind][4]; META `actions` describes the space, so replays recorded with 7 kinds and 91, or 8 kinds and 104, still read) |
+| DECISIONS (always, version 2) | every model decision: policy, action, value, how the act mode drew it (META `tables.draws`), the factored distribution (143 log-probabilities: kind[11], direction[kind][8], duration[kind][4]; version 2 keeps the finite ones, a bitmap and one byte each, -byte/16 nats; META `actions` describes the space, so replays recorded with 7 kinds and 91, or 8 kinds and 104, still read), the hit head's P(Link is hit) per legal action where the network has one, and the planner's vetoes when the act mode plans |
+| TARGETS (version 2) | on change: the objective kind, its targets as (role, entity) (exit direction, monster slot and type, floor item slot and id, key, bomb wall tile and direction, push block, stairs, cave mouth, triforce, tile spot), each `obs` (in the observation's target) or `reward-only` (priced by the reward alone: drops, bag drops, heal targets), the rooms Link may leave to and the retreat rooms, the step's flags (treasure refused, drops first, bag drops, clips known), and a provenance label (route, step, way, stretch) no metric may depend on |
+| MASKS (version 2) | on change: the legal action kinds with their directions and durations, and the rule behind each blocked kind (e.g. BOMB by `tenth`, `never`, the reserve) |
 
 A record at frame `k` applies after input frame `k - 1` and before input frame `k`.
 
@@ -1927,17 +1954,35 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
   too, with ending `error`; one whose start can't be loaded records nothing). `state='embed'` carries the start state,
   `'path'` names it. `replay.ReplayDir(path, only=None)` writes them as `<seed:08d>-<ending>.tfreplay`
   (`ending`: `win`, `death`, `stuck`, `other`, `error`; `only` keeps the named endings). Command lines:
-  `--replays DIR [--streams rewards,decisions,keyframes] [--keyframe-frames N] [--state embed|path]` on
+  `--replays DIR [--streams rewards,keyframes] [--keyframe-frames N] [--state embed|path]` on
   `triforce eval-chain`, `triforce.evaluate` and `play-zelda.py`; `zelda-headless.py OUT` always records.
+  DECISIONS, TARGETS and MASKS are always recorded. Size (Nov 23, the 200-run Dungeon 8 chain from `8_7es_0`,
+  1,604,093 frames, 102,208 decisions): 6.80 MB before version 2 (no decisions), 28.4 MB with them: META 9.35 MB
+  (47 KB a replay: 54 networks described), DECISIONS 8.48 MB (83 bytes a decision; dense u8 distributions were
+  18.5 MB), EVENTS 4.44 MB (the VISIT records a report reads), MASKS 0.78 MB, TARGETS 0.29 MB. Roles are attached
+  where targets are made (`zelda::objectives`, `env::objective`) without changing what the observation or reward
+  compute: that chain played the same 200 runs before and after (results, frames and steps, and the INPUTS,
+  EDITS, CHEATS, STATES and SOURCE sections byte for byte).
   Recording rewards turns the look-ahead on for that run (rewards need it), so its steps are scored as training
   scores them; a chain run's observations, inputs, edits and result are the same with rewards on or off
   (`crates/pool/tests/zelda.rs`).
 - **Reading.** `_native.Replay(data)`: `version`, `frames`, `ending`, `meta`, `source`, `inputs()`, `edits()`,
-  `cheats()`, `events()`, `rewards()`, `decisions()`, `states()`, `end_ram()`. `tf replay info FILE` prints the
-  same, `act:` how the models acted (META `models[].act`: one mode for every model, or each mode with its models;
-  recordings from before round 23 say `deterministic`, read as argmax or sample), and `rng:` the start's RNG phase
-  read back from the frame-0 edits of `$18-$24` (checked against META `rng_phase`; replays recorded before round 22
-  show 13 bytes the game never holds).
+  `cheats()`, `events()`, `rewards()`, `decisions()`, `choices(top)` (each decision's chosen action with its
+  probability and danger, the `top` most likely, the vetoed ones, as text), `targets()`, `masks()` (records
+  with their `text`), `states()`, `end_ram()`. `tf replay info FILE` prints the same, the models, `act:` how the
+  models acted (META `models[].act`: one mode for every model, or each mode with its models; recordings from
+  before round 23 say `deterministic`, read as argmax or sample), and `rng:` the start's RNG phase read back from
+  the frame-0 edits of `$18-$24` (checked against META `rng_phase`; replays recorded before round 22 show 13 bytes
+  the game never holds). `tf replay targets FILE [--room L:RR] [--masks] [--decisions]` lists for people what
+  the agent was steered to at each change (`8:0x4c frame 140,213: MOVE {bomb wall N}`), with the masks and every
+  decision. `triforce.thoughts.Thoughts(recording).at(frame)` is the overlay `play-zelda.py --thoughts` and
+  `create-video.py --thoughts` draw. A chain's records and provenance come from its replays alone:
+  `replay.chain_records(files)` gives what `eval-chain` wrote to its JSON lines and `.meta.json`,
+  `replay.chain_route(files)` the route facts a report needs, so `scripts/full_runs.py report --from-replays`
+  is the same report as from `runs.jsonl`, and `stats --from-replays` the same runs-250 record (the wall times
+  and the job line's lane, which no replay knows, from the folder's files when it has them). META `models` describes in full only the networks that made a
+  decision in the replay; the others by `replay.BRIEF_MODEL_KEYS` (index, name, family, run, checkpoint SHA-1,
+  hash, act mode, version); a stitch keeps the full description either part has.
 - **Playing.** `_native.ReplayPlayer(data, states_dir=None)` (`step(frames, render)`, `seek(frame)`: from the
   nearest state at or before it, `ram()`, `screen()`, `save_state()`); `replay_verify(data)` / `tf replay verify
   FILE...` plays the whole replay and compares the machine with every recorded state (`ReplayError` naming the
@@ -1947,9 +1992,9 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
   whose embedded START is that state; `replay_stitch(a, b)` joins the two (frames shifted, a SEGMENT event and a
   CHECKPOINT state at the boundary, reward terms renumbered) when `b` starts in the machine `a` ends in and both
   were played by the same models with the same streams.
-- **Compatibility.** `REPLAY_VERSION` is its own integer, bumped only when an existing replay can no longer be
-  replayed bit for bit; a reader refuses a newer version by name. `corpus/replays/` holds recorded replays that
-  must keep verifying (`AGENTS.md`, Versioning).
+- **Compatibility.** `REPLAY_VERSION` is its own integer, bumped by every format change (the owner, Nov 23:
+  replays never need to be readable by older readers); a reader refuses a newer version by name and reads every
+  older one. `corpus/replays/` holds recorded replays that must keep verifying (`AGENTS.md`, Versioning).
 
 ## Headless play and the golden path (`zelda-headless.py`, `golden.py`)
 
@@ -2069,6 +2114,14 @@ A power-on run is shown from the frame the models took over. When a replay ends 
 - **The controller** (`--controller`, off by default): `theater::overlay::draw_controller` draws the pad into
   each frame at the console's resolution, top right over the HUD's `-LIFE-` (x 182–243, y 14–37; the hearts
   start at y 40): a translucent grey plate, idle buttons dark, the buttons held on that frame opaque white.
+- **The thoughts** (`--thoughts`, off by default): each replayed cell sends a `thoughts` message whenever its
+  `triforce.thoughts.Thoughts.at(frame)` lines change (`Show.thoughts_at`), and `play_view.CellView` draws them on
+  a dark band over the bottom of the picture, each cut to the width: the objective with its targets and the rooms
+  they lead to (`FIGHT: monster slot 3 type 0x2a -> 8:0x3c`), the legal actions and the rule behind each blocked
+  kind (`can: MOVE[N,S,W,E] WAIT SWORD[N,S,W,E] BOMB blocked: tenth`), and the network that acted with the action
+  it chose, its probability, the hit head's danger, the act mode's draw and the next most likely actions
+  (`boss-gleeok: SWORD N 62% hit 3% (temperature) | MOVE S 16 21%`). All of it comes from the replay alone
+  (version 2); an older replay shows none.
 
 ## Sound (`crates/zcore/src/sound.rs`)
 
@@ -2093,7 +2146,7 @@ device. The machine is bit-identical with sound on or off (`crates/zcore/tests/s
 
 ## Videos (`create-video.py`, `video.py`)
 
-`create-video.py OUT [COLUMNSxROWS] REPLAY... [--scale N] [--sound] [--controller] [--states-dir DIR]` films
+`create-video.py OUT [COLUMNSxROWS] REPLAY... [--scale N] [--sound] [--controller] [--thoughts] [--states-dir DIR]` films
 replays as `play-zelda.py` shows them (the same `play_view.Window`, rendered offscreen without its title bar)
 into `OUT`: H.264 yuv420p (CRF 18) at 39375000/655171 fps (the NES's 60.0988), with `--sound` AAC 48 kHz mono,
 in the container the file name asks for (`.mp4`, `.mkv`, `.mov`); it needs `ffmpeg`. The grid defaults to 1x1;
@@ -2105,8 +2158,9 @@ and the last result has had its pause. `--sound` adds the sound of the middle ce
 else of the top left one; `VideoGrid.audio()` hands out each film frame's exact share of samples (silence while
 that cell shows a result), so sound and picture stay together. In a grid of several cells that cell has the
 yellow frame. The picture is piped to ffmpeg as it is made; the sound goes to a temporary WAV beside `OUT` and
-is joined at the end. It prints a JSON summary (`out`, `frames`, `seconds`, `width`, `height`, `replays`,
-`sound`, `heard`, `took`); exit 1 when a replay can't be played or ffmpeg fails, 2 on a bad command line.
+is joined at the end. `--thoughts` draws each replay's thoughts as play-zelda does ("Watching"). It prints a JSON
+summary (`out`, `frames`, `seconds`, `width`, `height`, `replays`, `sound`, `thoughts`, `heard`, `took`); exit 1
+when a replay can't be played or ffmpeg fails, 2 on a bad command line.
 
 ## Routes: two routes, state namespaces, per-route promotion (phase X, 2.0.0.0)
 

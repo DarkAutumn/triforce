@@ -21,13 +21,17 @@ square.  A trial succeeds when Link stands in the cellar.  Hearts are read from 
 `returns`: what a clip changes later.  A room that was clipped, not emptied, is full when the route comes back:
 0x07 out of the ring cellar to the S wall, 0x61 out of the tunnel to the N door, and 0x20, whose first visit (out of
 the tunnel, the bomb at the N wall) and second (from N to the stairs) both meet its five Wizzrobes.  The same
-crossings with the room as the fight leaves it (the route as built) are walked beside them."""
+crossings with the room as the fight leaves it (the route as built) are walked beside them.  It plays the game over
+many seeded trials: a job of the machine's queue (``jobs.require_job``: ``triforce job run ... --timeout 30m --
+.venv/bin/python scripts/experiments/r29_clips.py ...``)."""
 
 import argparse
 import collections
 import sys
 import tempfile
 from pathlib import Path
+
+from triforce.jobs import require_job
 
 from r26_walks import BOMBS, PLAY
 from r27_walks import StagingWalk
@@ -230,6 +234,7 @@ def main():
     parser.add_argument('what', choices=['scan', 'walk', 'returns'])
     parser.add_argument('--seeds', type=int, default=20)
     args = parser.parse_args()
+    require_job()
     {'scan': scan, 'walk': walk, 'returns': returns}[args.what](args)
 
 

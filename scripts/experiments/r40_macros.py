@@ -66,18 +66,25 @@ def main():
     parser.add_argument('--hearts', default='own', help="own (the state's), family (its draws) or a number")
     parser.add_argument('--max-steps', type=int, default=60)
     args = parser.parse_args()
+    from triforce import jobs                                  # pylint: disable=import-outside-toplevel
     from triforce.demos import action_indices, legal           # pylint: disable=import-outside-toplevel
+    jobs.require_job()
+    waits_list = [int(w) for w in args.waits.split(',')]
+    chains = [int(c) for c in args.chains.split(',')]
+    planned, played_runs = len(waits_list) * len(chains) * args.runs, 0
     family, stem = ROOMS[args.room]
     r32p_rules.ROOM = args.room
-    for waits in (int(w) for w in args.waits.split(',')):
+    for waits in waits_list:
         total = {'runs': 0, 'won': 0, 'endings': collections.Counter(), 'hit_runs': 0, 'hits': 0, 'hearts_lost': 0.0,
                  'not_offered': 0, 'deaths': 0}
-        for chain in (int(c) for c in args.chains.split(',')):
+        for chain in chains:
             state = f'd3first_{stem}_{chain}'
             env = r32p_rules.rule_env(family, state, args.hearts)
             for seed in range(SEED0, SEED0 + args.runs):
                 obs, _ = env.reset(seed=seed, options={'start_state': state})
                 act = rule(args.room, waits)
+                played_runs += 1
+                jobs.progress(played_runs, planned, 'runs')
                 ram = bytes(env.state.ram)
                 health = r29_demos.hearts_of(ram)
                 hits, info, played = 0, {}, False

@@ -99,6 +99,7 @@ class CellState:
         self.rooms = 0
         self.playing = False        # a room message arrived: the replay has a picture
         self.cheated = {}           # cheated items used so far in the run, {bombs, keys, rupees}
+        self.thoughts: list = []    # the thoughts overlay's lines (``triforce.thoughts``), when the grid sends them
 
     def apply(self, message: dict):
         event = message.get('event')
@@ -124,6 +125,8 @@ class CellState:
                 self.clips, self.clips_from = message['clips'], message.get('clips_from')
         elif event == 'clips':
             self.clips, self.clips_from = message.get('clips'), message.get('clips_from')
+        elif event == 'thoughts':
+            self.thoughts = list(message.get('lines') or [])
         elif event == 'end':
             self.seed = message.get('seed', self.seed)
             self.outcome = message.get('outcome')
@@ -297,6 +300,8 @@ class CellView(QWidget):
         else:
             painter.setPen(QColor(MUTED))
             painter.drawText(game, Qt.AlignmentFlag.AlignCenter, self.state.placeholder())
+        if self.image is not None and self.state.thoughts:
+            self._paint_thoughts(painter, game)
 
         strip = QRect(0, game.bottom() + 1, self.width(), STRIP_HEIGHT)
         painter.fillRect(strip, QColor(STRIP))
@@ -335,6 +340,22 @@ class CellView(QWidget):
             painter.setPen(pen)
             inset = HEARD_WIDTH // 2
             painter.drawRect(self.rect().adjusted(inset, inset, -inset - 1, -inset - 1))
+
+    def _paint_thoughts(self, painter: QPainter, game: QRect):
+        """The thoughts overlay: its lines on a dark band over the bottom of the picture, each cut to the width."""
+        mono = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+        mono.setPointSizeF(5.5 + 1.5 * self.scale)
+        painter.setFont(mono)
+        metrics = painter.fontMetrics()
+        lines = self.state.thoughts
+        band = QRect(0, game.bottom() + 1 - len(lines) * metrics.height() - 4, game.width(),
+                     len(lines) * metrics.height() + 4)
+        painter.fillRect(band, QColor(0, 0, 0, 170))
+        painter.setPen(QColor(TEXT))
+        for index, line in enumerate(lines):
+            row = QRect(band.left() + 4, band.top() + 2 + index * metrics.height(), band.width() - 8, metrics.height())
+            painter.drawText(row, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                             metrics.elidedText(line, Qt.TextElideMode.ElideRight, row.width()))
 
 
 class Benchmark:

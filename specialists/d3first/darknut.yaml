@@ -3,6 +3,11 @@
 # [d3first] and the run's own terms as its run.json and docs/experiments/round34.md ("The Olive Garden") record
 # them: harvested handoffs at 0.33 (the run's dir of 8,580 handoffs, the Garden a third, was not kept), no chain_hp.
 # The lab reads this file for the key f"{family}@d3first" (lab.collect.task_yaml).
+# Round 39 (the owner, Nov 22: "3:0x5b with a full bag walks between the wall and the bombs"; round38.md "The owner's
+# three causes"): the run was trained before 2.0.0.6's bomb rules, when 0x5b's last pass took the room's bombs at any
+# count. Its continuation trains 0x5b under today's order (a full bag: the wall, then the room's bombs, then out) with
+# full-bag starts: `room_bombs` gives half of 0x5b's resets 8 bombs, and `room_kills` banks 2 or 3 of its 3 Darknuts
+# in half the staged resets (one Darknut left, or the room's bombs already lying when Link comes in).
 name: darknut
 rooms:
 - (3, 0x5b)
@@ -55,6 +60,9 @@ ram_randomization:
   - 0
   - 9
   room_kills:
+    (3, 0x5b):
+    - 2
+    - 3
     (5, 0x05):
     - 1
     - 5
@@ -68,6 +76,11 @@ ram_randomization:
     - 1
     - 5
   room_kills_share: 0.5
+  room_bombs:
+    (3, 0x5b):
+    - 8
+    - 8
+  room_bombs_share: 0.5
 items:
   bombs: free
 clips:

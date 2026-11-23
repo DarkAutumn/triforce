@@ -8,10 +8,13 @@
                 that took, per env count and seed.
 
 Results append to target/perf/parallel/LABEL/{throughput,converge}.jsonl; a finished (mode, specialist, parallel,
-seed) is skipped on a rerun, so an interrupted study resumes.
+seed) is skipped on a rerun, so an interrupted study resumes.  ``throughput`` and ``converge`` are jobs of the
+machine's queue (``jobs.require_job``; their trainings run inside it); the arms done of the total are the progress.
 
-    .venv/bin/python scripts/parallel_study.py LABEL throughput --specialists ow-moblin,goriya --parallel 4,8,16
-    .venv/bin/python scripts/parallel_study.py LABEL converge --specialists ow-leever --parallel 4,8,16 \
+    triforce job run --agent A --task T --subtask S --desc '...' --timeout 3h -- \
+        .venv/bin/python scripts/parallel_study.py LABEL throughput --specialists ow-moblin,goriya --parallel 4,8,16
+    triforce job run --agent A --task T --subtask S --desc '...' --timeout 8h -- \
+        .venv/bin/python scripts/parallel_study.py LABEL converge --specialists ow-leever --parallel 4,8,16 \
         --seeds 1,2,3
     .venv/bin/python scripts/parallel_study.py LABEL report
 """
@@ -25,6 +28,8 @@ import sys
 import time
 from collections import defaultdict
 from pathlib import Path
+
+from triforce import jobs
 
 ROOT = Path(__file__).resolve().parent.parent
 PYTHON = sys.executable
@@ -53,56 +58,57 @@ def train(run: Path, specialist: str, parallel: int, seed: int, extra: list[str]
         code = subprocess.call(cmd, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT)
     if code != 0:
         raise SystemExit(f'{run}: triforce.train exited {code}')
-    # Minus the time the run waited for its turn (triforce.jobs: queue.jsonl's 'admitted' when it had to wait).
-    waited = sum(e.get('waited', 0) for f in glob.glob(f'{run}/logs/*/queue.jsonl') for e in map(json.loads, open(f))
-                 if e.get('event') == 'admitted')
-    return time.monotonic() - start - waited
+    return time.monotonic() - start
 
 
 def run_throughput(out: Path, args) -> None:
     results = out / 'throughput.jsonl'
     done = done_keys(results)
-    for specialist in args.specialists:
+    arms = [(specialist, parallel) for specialist in args.specialists for parallel in args.parallel]
+    for index, (specialist, parallel) in enumerate(arms):
+        jobs.progress(index, len(arms), 'arms')
         promoted = (ROOT / 'models' / specialist / 'promoted').read_text().strip()
-        for parallel in args.parallel:
-            if (specialist, parallel, 1) in done:
-                continue
-            run = out / 'runs' / f'throughput-{specialist}-p{parallel}'
-            train(run, specialist, parallel, 1,
-                  ['--load', str(ROOT / 'models' / specialist / promoted), '--iterations', str(args.iterations)])
-            rates = progress_rates(run)[4:]     # rates[i] is iteration i + 2: skip the first 5 (train_bench.sh)
-            row = {'specialist': specialist, 'parallel': parallel, 'seed': 1, 'iterations': args.iterations,
-                   'steps_per_second': statistics.median(rates), 'rates': len(rates)}
-            print(json.dumps(row), flush=True)
-            with open(results, 'a') as f:
-                f.write(json.dumps(row) + '\n')
+        if (specialist, parallel, 1) in done:
+            continue
+        run = out / 'runs' / f'throughput-{specialist}-p{parallel}'
+        train(run, specialist, parallel, 1,
+              ['--load', str(ROOT / 'models' / specialist / promoted), '--iterations', str(args.iterations)])
+        rates = progress_rates(run)[4:]     # rates[i] is iteration i + 2: skip the first 5 (train_bench.sh)
+        row = {'specialist': specialist, 'parallel': parallel, 'seed': 1, 'iterations': args.iterations,
+               'steps_per_second': statistics.median(rates), 'rates': len(rates)}
+        print(json.dumps(row), flush=True)
+        with open(results, 'a') as f:
+            f.write(json.dumps(row) + '\n')
+    jobs.progress(len(arms), len(arms), 'arms')
 
 
 def run_converge(out: Path, args) -> None:
     results = out / 'converge.jsonl'
     done = done_keys(results)
     # Interleaved (seed outermost, env counts alternating) so slow drift in machine load spreads across arms.
-    for seed in args.seeds:
-        for specialist in args.specialists:
-            for parallel in args.parallel:
-                if (specialist, parallel, seed) in done:
-                    continue
-                run = out / 'runs' / f'converge-{specialist}-p{parallel}-s{seed}'
-                wall = train(run, specialist, parallel, seed,
-                             ['--iterations', str(args.max_iterations), '--stop-success', str(args.target),
-                              '--stop-patience', str(args.patience)])
-                summary = json.loads(next((run / 'models').glob('*/study/train_summary.json')).read_text())
-                metrics = [json.loads(line) for line in next((run / 'models').glob('*/study/metrics.jsonl')).open()]
-                balanced = [m.get('balanced_success_rate') for m in metrics]
-                row = {'specialist': specialist, 'parallel': parallel, 'seed': seed, 'target': args.target,
-                       'patience': args.patience, 'reached': bool(summary['stopped_early']),
-                       'steps': summary['steps'], 'iterations': summary['iterations'],
-                       'train_seconds': summary['wall_seconds'], 'wall_seconds': wall,
-                       'final_balanced': balanced[-1],
-                       'steps_per_second': summary['steps'] / summary['wall_seconds']}
-                print(json.dumps(row), flush=True)
-                with open(results, 'a') as f:
-                    f.write(json.dumps(row) + '\n')
+    arms = [(seed, specialist, parallel) for seed in args.seeds for specialist in args.specialists
+            for parallel in args.parallel]
+    for index, (seed, specialist, parallel) in enumerate(arms):
+        jobs.progress(index, len(arms), 'arms')
+        if (specialist, parallel, seed) in done:
+            continue
+        run = out / 'runs' / f'converge-{specialist}-p{parallel}-s{seed}'
+        wall = train(run, specialist, parallel, seed,
+                     ['--iterations', str(args.max_iterations), '--stop-success', str(args.target),
+                      '--stop-patience', str(args.patience)])
+        summary = json.loads(next((run / 'models').glob('*/study/train_summary.json')).read_text())
+        metrics = [json.loads(line) for line in next((run / 'models').glob('*/study/metrics.jsonl')).open()]
+        balanced = [m.get('balanced_success_rate') for m in metrics]
+        row = {'specialist': specialist, 'parallel': parallel, 'seed': seed, 'target': args.target,
+               'patience': args.patience, 'reached': bool(summary['stopped_early']),
+               'steps': summary['steps'], 'iterations': summary['iterations'],
+               'train_seconds': summary['wall_seconds'], 'wall_seconds': wall,
+               'final_balanced': balanced[-1],
+               'steps_per_second': summary['steps'] / summary['wall_seconds']}
+        print(json.dumps(row), flush=True)
+        with open(results, 'a') as f:
+            f.write(json.dumps(row) + '\n')
+    jobs.progress(len(arms), len(arms), 'arms')
 
 
 def report(out: Path) -> None:
@@ -143,6 +149,8 @@ def main() -> None:
     if args.mode == 'throughput' and args.iterations < 7:
         parser.error('throughput needs --iterations >= 7 (the first 5 iterations are warm-up)')
     out = ROOT / 'target' / 'perf' / 'parallel' / args.label
+    if args.mode != 'report':
+        jobs.require_job()
     out.mkdir(parents=True, exist_ok=True)
     if args.mode == 'throughput':
         run_throughput(out, args)

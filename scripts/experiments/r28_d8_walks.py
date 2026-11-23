@@ -11,11 +11,15 @@ walls, the tunnel's ladders, what a room remembers of its kills, the Bubbles.  S
     python scripts/experiments/r28_d8_walks.py bubbles [--seeds N]     # which Bubbles, what a touch does
 
 The Manhandla rooms are `r28_manhandla.py`, the Darknut fights `r28_darknut.py`, 0x4c's Pols Voices
-`r28_pols.py`, Gleeok `r28_gleeok.py`."""
+`r28_pols.py`, Gleeok `r28_gleeok.py`.  It plays the game over many seeded trials: a job of the machine's queue
+(``jobs.require_job``: ``triforce job run ... --timeout 30m -- .venv/bin/python scripts/experiments/r28_d8_walks.py
+...``)."""
 
 import argparse
 import collections
 import statistics
+
+from triforce.jobs import require_job
 
 from r28_walks import (ALL_DEAD, BOMBS, CELLAR, CUR_OPENED_DOORS, D8_ROUTE, DARKNUT_BLUE, DARKNUT_RED,
                        FIREBALL_STATUE, GIBDO, HEARTS, KEYS, LEVEL_KILL_COUNTS, OBJ_DIR, OBJ_META, OBJ_TYPE, PLAY,
@@ -619,6 +623,7 @@ def main():
     parser.add_argument('what', choices=['rooms', 'crossings', 'doors', 'history', 'tunnel', 'bubbles'])
     parser.add_argument('--seeds', type=int, default=30)
     args = parser.parse_args()
+    require_job()
     {'history': history_cmd}.get(args.what, globals().get(args.what))(args)
 
 

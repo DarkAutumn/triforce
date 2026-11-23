@@ -16,6 +16,8 @@
 #   harvest  harvested handoff states from chains (§1b): HARVEST=<dir from eval-chain --harvest>, fraction 0.5
 # Runs from this worktree's code; models and logs go to the main checkout (training-gui sees them).
 set -uo pipefail
+source "$(dirname "$0")/../job.sh"      # a job of the machine's queue: triforce job run ... -- this script ...
+require_job "$0" "$@"
 cd "$(dirname "$0")/../.."
 PY=.venv/bin/python
 MAIN=${MAIN:-$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")}   # the main checkout

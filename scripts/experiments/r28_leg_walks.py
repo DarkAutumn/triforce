@@ -6,11 +6,16 @@ randomness for its seed; the monsters are live and the hearts real.
     python scripts/experiments/r28_leg_walks.py whirlwind [--seeds N]  # 0x22: the two plays, their window, a miss
     python scripts/experiments/r28_leg_walks.py rooms [--seeds N]      # every crossing by a scripted straight walk
     python scripts/experiments/r28_leg_walks.py tree [--seeds N]       # 0x6d: where the candle burns the tree
+
+It plays the game over many seeded trials: a job of the machine's queue (``jobs.require_job``: ``triforce job run
+... --timeout 30m -- .venv/bin/python scripts/experiments/r28_leg_walks.py ...``).
 """
 
 import argparse
 import collections
 import statistics
+
+from triforce.jobs import require_job
 
 from r28_walks import (CANDLE_SLOT, LegWalk, OBJ_DIR, OBJ_STATE, OBJ_TYPE, OBJ_X, OBJ_Y, OW_FLAGS, PLAY,
                        RECORDER_SLOT, SECOND_PLAY, STAIRS_TILES, TELEPORT_INDEX, TMP, TREE_TILE, TRIFORCE,
@@ -400,6 +405,7 @@ def main():
     parser.add_argument('what', choices=['whirlwind', 'rooms', 'tree'])
     parser.add_argument('--seeds', type=int, default=30)
     args = parser.parse_args()
+    require_job()
     globals()[args.what](args)
 
 

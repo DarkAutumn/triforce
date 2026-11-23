@@ -26,15 +26,19 @@ def test_checkpoints_follow_the_route_triforces():
 
 def test_a_scripted_segment_is_won_and_recorded(scripted_models, states_dir):
     policies = Policies(scripted_models)
-    entries = []
+    entries, finished = [], []
     data, summary = golden.golden_path(policies, 'd2first', 2, 10, options(policies),
                                        start_from=str(require_state(SEGMENT_STATE)), stops=[SEGMENT_STOP_STEP],
-                                       states_dir=states_dir, attempts=4, on_segment=entries.append)
+                                       states_dir=states_dir, attempts=4, on_segment=entries.append,
+                                       on_run=lambda index, done: finished.append((index, done)))
     recording = _native.Replay(data)
     assert summary == {'result': 'success', 'frames': recording.frames, 'segments': entries}
     segment, = entries
-    assert (segment['index'], segment['stop_step'], segment['ending']) == (0, SEGMENT_STOP_STEP, 'win')
+    assert (segment['index'], segment['stop_step'], segment['ending'], segment['won']) == (
+        0, SEGMENT_STOP_STEP, 'win', True)
     assert 10 <= segment['seed'] < 14 and 1 <= segment['runs_played'] <= 4
+    # the runs as they finish (the job's live 'runs played'), the last report the segment's count
+    assert finished and {index for index, _ in finished} == {0} and finished[-1][1] == segment['runs_played']
     assert recording.ending == 'win' and recording.states()[-1]['step'] == SEGMENT_STOP_STEP
     assert _native.replay_verify(data)['frames'] == recording.frames
 
@@ -47,7 +51,7 @@ def test_segments_start_from_the_winner_and_a_lost_segment_ends_the_path(scripte
                                        start_from=str(require_state(SEGMENT_STATE)), stops=[SEGMENT_STOP_STEP, 64],
                                        states_dir=states_dir, attempts=3, max_steps=12)
     first, second = summary['segments']
-    assert summary['result'] == 'failure'
+    assert summary['result'] == 'failure' and (first['won'], second['won']) == (True, False)
     assert first['ending'] == 'win' and second['ending'] != 'win' and second['runs_played'] == 3
     assert 0 <= first['seed'] < 3 <= second['seed'] < 6, "each segment plays its own seeds"
     joined = _native.Replay(data)

@@ -1,15 +1,18 @@
 """The ``triforce`` command (``triforce.cli.main``) in-process: list, promote, argument errors and passthrough."""
 
 import json
+import os
 import shutil
+import subprocess
+import sys
 
 import pytest
 import torch
 
 import triforce
-from triforce import _native, cli, registry
+from triforce import _native, cli, jobs, registry
 from triforce.model import ModelConfig
-from triforce.runner import Policies, RunnerError
+from triforce.runner import Policies, RunnerError, chain_steps
 from triforce.specialist import list_specialists
 
 from .conftest import REPO_STATES_DIR, SEGMENT_STATE, SEGMENT_STOP_STEP, require_state, seeded_network
@@ -124,6 +127,22 @@ def test_eval_chain_checks_its_inputs_before_anything_runs(tmp_path, capsys, arg
     assert not list(tmp_path.iterdir())
 
 
+def test_eval_chain_answers_the_wrapper_dry_call_and_creates_nothing(tmp_path):
+    """``triforce job run`` asks the chain its work first (``$TRIFORCE_JOB_ESTIMATE``, no job id yet): its route
+    steps, written as ``{kind, work, name}`` once its arguments are checked, before any log folder, output or model."""
+    estimate = tmp_path / 'estimate.json'
+    environ = {**{k: v for k, v in os.environ.items() if k != jobs.JOB_ID_ENV}, jobs.JOB_ESTIMATE_ENV: str(estimate)}
+    out = subprocess.run([sys.executable, '-m', 'triforce.cli', '--models-dir', str(tmp_path / 'models'), 'eval-chain',
+                          '--route', 'd2first', '--stop-at', '0:0x77', '--runs', '3', '--output',
+                          str(tmp_path / 'c.jsonl'), '--logs-dir', str(tmp_path / 'logs')],
+                         env=environ, capture_output=True, text=True, timeout=120, check=False)
+    assert out.returncode == 0, out.stderr
+    steps = chain_steps('d2first', 3, None, '0:0x77')
+    assert steps > 0 and json.loads(estimate.read_text()) == {
+        'kind': 'chain', 'work': {'chain_steps': steps}, 'name': 'eval-chain-d2first'}
+    assert sorted(p.name for p in tmp_path.iterdir()) == ['estimate.json']
+
+
 def test_eval_chain_exits_non_zero_when_a_run_ends_in_an_error(tmp_path, capsys):
     output = tmp_path / 'chain.jsonl'
     assert cli.main(['--models-dir', str(tmp_path / 'models'), 'eval-chain', '--runs', '1', '--no-log',
@@ -188,26 +207,79 @@ def test_eval_chain_in_an_act_mode_with_the_switch_off(scripted_models, states_d
         assert _native.replay_verify(path.read_bytes(), states_dir=str(states_dir))['frames'] == recording.frames
 
 
-def test_eval_chain_events_into_a_folder_with_or_without_a_plan(models_dir, tmp_path):
+def test_eval_chain_events_into_a_folder_with_or_without_a_plan(models_dir, tmp_path, monkeypatch):
     """``--events FILE``: a folder without a plan gets one (kind chain, the stream as its events, finished
-    completed); a driver's folder with a plan keeps it untouched."""
+    completed) and the chain's counter is the job's 'runs' (the 250-run test's: it was named 'events' for its
+    stream); a driver's folder with a plan keeps it untouched and the counter is named for the stream (the batch's
+    entry).  Each ``chain_progress`` carries the runs so far (``runner.ChainTally``)."""
+    counters = []
+    monkeypatch.setattr(jobs, 'progress', lambda done, total, unit, label=None, force=False: counters.append(
+        (label or unit, done, total)))
     chain = ['--models-dir', str(models_dir), 'eval-chain', '--stop-at', '0:0x77', '--runs', '1']
     alone = tmp_path / 'alone' / 'chain.jsonl'
     assert cli.main([*chain, '--output', str(tmp_path / 'a.jsonl'), '--events', str(alone)]) == 0
     plan = json.loads((alone.parent / 'training.json').read_text())
     assert plan['kind'] == 'chain' and plan['events'] == 'chain.jsonl' and plan['status'] == 'completed'
-    assert [json.loads(line)['event'] for line in alone.read_text().splitlines()] == [
-        'chain_start', 'chain_progress', 'chain']
+    events = [json.loads(line) for line in alone.read_text().splitlines()]
+    assert [event['event'] for event in events] == ['chain_start', 'chain_progress', 'chain']
+    progress = events[1]
+    assert progress['done'] == 1 and progress['deaths'] + progress['stucks'] + progress['errors'] + progress[
+        'successes'] == 1
+    assert progress['route_steps'] == len(_native.route_steps('d3first')) and progress['triforces'] == []
+    assert counters == [('runs', 1, 1)]
     driven = tmp_path / 'driven'
     driven.mkdir()
     (driven / 'training.json').write_text('{"kind": "eval-batch"}')
     assert cli.main([*chain, '--output', str(tmp_path / 'b.jsonl'), '--events', str(driven / 'x.jsonl')]) == 0
     assert json.loads((driven / 'training.json').read_text()) == {'kind': 'eval-batch'}
     assert (driven / 'x.jsonl').read_text().count('"chain"') >= 1
+    assert counters[-1] == ('x', 1, 1)
+
+
+def test_chain_progress_carries_the_runs_so_far():
+    """``chain_progress`` (what the training GUI draws of a chain, the 250-run test's): wins, deaths, stuck runs
+    and errors, the runs that took each triforce in the route's order (a full route's win takes Dungeon 9's, the
+    game's end), the furthest route step and its room; at most once every ``seconds`` and always on the last run."""
+    from triforce.runner import RoomRecord, Route, RunResult
+    steps = _native.route_steps('d3first')
+
+    def run(seed, played, result='failure', reason='', last=''):
+        rooms = [RoomRecord(index=i, level=steps[s]['level'], room=f"0x{steps[s]['room']:02x}",
+                            in_cave=steps[s]['in_cave'], specialist='', step=s,
+                            outcome=last if last and i == len(played) - 1 else 'exit-correct')
+                 for i, s in enumerate(played)]
+        return RunResult(route='d3first', seed=seed, result=result, reason=reason, rooms=rooms)
+
+    class Events:
+        def __init__(self):
+            self.emitted = []
+
+        def emit(self, event, **fields):
+            self.emitted.append((event, fields))
+
+    events = Events()
+    progress = cli.chain_progress_events(events, 4, route=Route.load('d3first'), seconds=3600.0)
+    progress(run(0, list(range(60)), reason='died in (level 0, room 0x37)', last='death'))
+    progress(run(1, list(range(31)), reason='bounce-limit: 0:0x45', last='stuck'))    # within the hour: not sent
+    progress(run(2, [], result='error', reason='no model'))
+    assert [fields['done'] for _, fields in events.emitted] == [1]
+    progress(run(3, list(range(len(steps))), result='success'))                       # the last run: sent
+    (_, first), (_, last) = events.emitted
+    assert {key: first[key] for key in ('deaths', 'stucks', 'errors', 'successes')} == {
+        'deaths': 1, 'stucks': 0, 'errors': 0, 'successes': 0}
+    assert last == {'done': 4, 'runs': 4, 'successes': 1, 'deaths': 1, 'stucks': 1, 'errors': 1,
+                    'triforces': [[3, 3], [4, 2], [1, 1], [2, 1], [5, 1], [7, 1], [6, 1], [8, 1], [9, 1]],
+                    'furthest_step': len(steps), 'furthest_room': 'the end', 'route_steps': len(steps)}
+    assert first['furthest_step'] == 59 and first['furthest_room'] == f"0:0x{steps[59]['room']:02x}" + (
+        ':cave' if steps[59]['in_cave'] else '')
+    # a chain to a stop: only the triforces before it, a win is not the game's end
+    segment = cli.chain_progress_events(events, 1, route=Route.load('d3first', stop_step=24))
+    segment(run(4, list(range(24)), result='success'))
+    assert events.emitted[-1][1]['triforces'] == [[3, 1]] and events.emitted[-1][1]['furthest_step'] == 23
 
 
 def test_eval_chain_keeps_the_runs_that_finished_before_a_failure(models_dir, tmp_path, monkeypatch):
-    def failing_progress(_events, _runs):
+    def failing_progress(_events, _runs, _label=None, _route=None):
         calls = []
 
         def on_result(_result):

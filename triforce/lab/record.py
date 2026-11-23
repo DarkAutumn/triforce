@@ -25,7 +25,7 @@ import numpy as np
 
 from .. import registry
 from ..events import progress_job
-from ..jobs import add_job_arguments, begin_job, work
+from ..jobs import announce, work
 from .collect import MultiCollector, Teachers, parse_families
 
 
@@ -49,13 +49,11 @@ def parse_args(argv=None):
     parser.add_argument('--logs-dir', default=None, help="the log folder's root (default logs/, $TRIFORCE_LOGS_DIR)")
     parser.add_argument('--try-others', default=None, metavar='K:P',
                         help="the look-ahead's verdict on K other candidates on a share P of the decisions")
-    add_job_arguments(parser)
     return parser.parse_args(argv)
 
 
 def main(argv=None) -> Path:
     args = parse_args(argv)
-    begin_job(args)
     from ..nets.serve import learner_process  # pylint: disable=import-outside-toplevel
     learner_process()           # its labelling uses the GPU beside the actors' server: no CUDA graphs there
     if args.actor == 'student' and not args.student:
@@ -65,6 +63,7 @@ def main(argv=None) -> Path:
     keys = [f.key for f in families]
     root = registry.models_root(args.models_dir)
     total = args.rollouts * args.steps_per_env * args.parallel
+    announce('record', work(train_steps=total), 'lab-record')
     with progress_job('lab-record', 'eval', total, unit='decisions', root=args.logs_dir,
                       work=work(train_steps=total)) as progress:
         out.mkdir(parents=True, exist_ok=True)

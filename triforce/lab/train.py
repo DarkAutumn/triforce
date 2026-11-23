@@ -39,7 +39,8 @@ from .. import lineage, nets, registry
 from ..best_of_n import success_by_state
 from ..demos import load_demos
 from ..events import EventLog, logged_job
-from ..jobs import add_job_arguments, begin_job, work
+from ..jobs import announce, work
+from ..jobs import progress as job_progress
 from ..metrics import MetricsLogger, format_summary
 from ..model import obs_spec_from_space
 from ..observation import observation_space
@@ -129,7 +130,6 @@ def parse_args(argv=None):
     parser.add_argument('--stop-patience', type=int, default=5)
     parser.add_argument('--logs-dir', default=None,
                         help="the root of the run's log folder (default logs/, $TRIFORCE_LOGS_DIR)")
-    add_job_arguments(parser)
     return parser.parse_args(argv)
 
 
@@ -253,6 +253,7 @@ class RunLog:
         eta = (target_steps - steps) / sps if sps else None
         shared = {key: value for key, value in metrics.items()
                   if key in SHARED_METRICS or key.startswith('losses/aux_')}
+        job_progress(steps, target_steps, 'steps')
         for key, stream in zip(self.keys, self.streams):
             prefix = f'family/{key}/'
             own = {name[len(prefix):]: value for name, value in metrics.items() if name.startswith(prefix)}
@@ -316,7 +317,6 @@ class FamilyStop:
 def main(argv=None) -> Path:
     # pylint: disable=too-many-locals, too-many-statements
     args = parse_args(argv)
-    begin_job(args)
     from ..nets.serve import learner_process  # pylint: disable=import-outside-toplevel
     learner_process()           # its learner uses the GPU beside the rollouts' server: no CUDA graphs there
     if args.mode == 'imitate' and args.teacher_coeff <= 0:
@@ -333,6 +333,7 @@ def main(argv=None) -> Path:
     keys = [f.key for f in families]
     steps_per_env = max(1, args.steps_per_update // args.parallel)
     total = args.iterations * steps_per_env * args.parallel
+    announce('train', work(train_steps=total), f'lab-{args.name}')
     with logged_job(f'lab-{args.name}', KIND, RunLog.runs(keys, run_id, out_dir, total, args.iterations),
                     args.logs_dir, work=work(train_steps=total), families=keys, run_dir=str(out_dir),
                     mode=args.mode) as plan:

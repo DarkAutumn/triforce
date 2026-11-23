@@ -34,7 +34,7 @@ sets its own reserves on its own steps before a block, and a block's own reserve
 | `to-level-4` | 24-30 | 0:0x74 cave → W to 0x45's mouth (the raft from 0x55) |
 | `dungeon-4` | 31-52 | 4:0x71 to 0x03, the stretch `d4-island` |
 | `dungeon-1` | 61-78 | 1:0x73 out S to 0:0x37 and back in, N by 0x63, 0x53's wall, the bow, to 0x36 (phase IX's) |
-| `dungeon-2` | 95-104 | 2:0x7d to 0x0d |
+| `dungeon-2`, `dungeon-2-north` | 95-97, 101-104 | 2:0x7d to 0x6e; 0x2e to 0x0d. 0x5e, 0x4e and 0x3e (98-100) are each route's own (rounds 37 and 39): d3first crosses 0x5e and the Moldorm, d2first fights both |
 | `dungeon-5` | 123-144 | 5:0x66 to 0x14 (the entrance, step 122, is each route's own) |
 | `pond-42` | 154-157 | 0:0x54 to 0x42's pond (round 36: split from `to-level-7`, whose head d2first alone plays) |
 | `dungeon-7`, `dungeon-7-east` | 159-177 | 7:0x79 to 0x2b; the entrance (158) and 0x1b (170) are each route's own (round 34): d3first keeps the bag for 0x1b |
@@ -43,7 +43,7 @@ sets its own reserves on its own steps before a block, and a block's own reserve
 | `to-level-8` | 213-218 | 0:0x22 (two plays facing up: Link turns first) to 0x6d's burned tree |
 | `dungeon-8` | 219-228 | 8:0x7e to 0x2c |
 | `to-level-9` | 229-243 | 0:0x6d (one play facing down) to 0x05: 0x47's tree and heart (15), the ladder at 0x17 |
-| `dungeon-9` | 244-289 | 9:0x76 to Zelda's room (`exit: end`): the red ring, the silver arrow, Ganon |
+| `dungeon-9`, `dungeon-9-from-55` | 244-245, 247-289 | 9:0x76, 0x66; 0x55 to Zelda's room (`exit: end`): the red ring, the silver arrow, Ganon. 0x56 (246) is each route's own (round 39): d3first fights it for its key, d2first crosses it |
 
 ## The route
 
@@ -93,7 +93,7 @@ Its own steps in full; the blocks by their rooms.
 | 92 | `0_4dn` | 0:0x4d | N → W | ow-moblin | | 7 / W |
 | 93 | `0_4ce` | 0:0x4c | E → N | ow-octorok | | 7 / W |
 | 94 | `0_3cs` | 0:0x3c | S → cave | ow-octorok | Level 2 (the reserve of 8 holds: D5's walls) | 7 / W |
-| 95-104 | | `dungeon-2` | | (d2first's) | 0x1e's 4 bombs, Dodongo's heart, the piece | 7 → 8 / W |
+| 95-104 | | `dungeon-2`, 0x5e, 0x4e, 0x3e, `dungeon-2-north` | | (d2first's; 0x5e and 0x3e own) | 0x5e crossed (round 37); 0x3e crossed, the Moldorm left and its key with it (round 39); 0x1e's 4 bombs, Dodongo's heart, the piece | 7 → 8 / W |
 | 105 | `0_3cc` | 0:0x3c | cave → S | ow-octorok | | 8 / W |
 | 106 | `0_4cn` | 0:0x4c | N → E | ow-octorok | | 8 / W |
 | 107 | `0_4dw` | 0:0x4d | W → N | ow-moblin | | 8 / W |
@@ -134,7 +134,7 @@ Its own steps in full; the blocks by their rooms.
 | 213-218 | | `to-level-8` | | (d2first's) | two plays facing up (index on Level 7: Link turns first): 0x3c; 0x6d's tree | 13 / Ma |
 | 219-228 | | `dungeon-8` | | (d2first's) | Gleeok's heart, the piece | 13 → 14 / Ma |
 | 229-243 | | `to-level-9` | | (d2first's) | one play facing down: 0x37; 0x47's heart (15); 0x05's wall | 14 → 15 / Ma |
-| 244-289 | | `dungeon-9` | | (d2first's) | the red ring, the silver arrow, Ganon, Zelda (`exit: end`) | 15 / Ma |
+| 244-289 | | `dungeon-9`, 0x56, `dungeon-9-from-55` | | (d2first's; 0x56 own) | 0x56's key (round 39: its 2 Zols and 2 Like-Likes killed, the ladder to the key), the red ring, the silver arrow, Ganon, Zelda (`exit: end`) | 15 / Ma |
 
 Dungeon entrances (`crates/zelda/tests/d3first.rs`, `tests/test_game_map.py`): Level 3 with 3 containers and no
 piece; Level 4 with 4, the raft, piece 3; Level 1 with 5, the raft and the ladder, pieces 3 and 4; Level 2 with 7,
@@ -294,16 +294,17 @@ fewer. **Wall**: a crossing whose exit is a bomb wall (one bomb). **Owner's**: n
 | 3 | 0x6b S→N (8); 0x4b S→W (10); 0x59 N→S (13); 0x4d W→N (22) | 0x4a E→W (11) | — | 0x4c S→E (21) | 0x5b S→N (9); 0x5b W→E (19, < 8, wall) | 0x7c S→W (6); 0x7b E→N (7); 0x49 E→S (12); 0x69 N→cave (14); 0x69 cave→N (16); 0x59 S→E (17); 0x5a W→E (18); 0x5c W→N (20); 0x3d S→triforce (23) |
 | 4 | 0x31 W→E (37); 0x32 W→cave (38); 0x12 N→E (50); 0x13 W→N (51) | — | — | 0x21 S→N (42); 0x21 W→N (46); 0x11 S→N (47) | — | 0x71 S→N (31); 0x61 S→N (32); 0x51 S→W (33); 0x50 E→N (34); 0x40 S→N (35); 0x30 S→E (36); 0x32 cave→W (40); 0x31 E→N (41); 0x31 E→W (43); 0x30 E→N (44); 0x20 S→E (45); 0x01 S→E (48); 0x02 W→S (49); 0x03 S→triforce (52) |
 | 1 | 0x23 S→W (68); 0x44 W→E (75); 0x35 S→E (77) | — | 0x53 S→N (65) | — | — | 0x73 S→S (61); 0x73 S→N (63); 0x63 S→N (64); 0x43 S→N (66); 0x33 S→N (67); 0x22 E→cave (69); 0x22 cave→E (71); 0x23 W→S (72); 0x33 N→S (73); 0x43 N→E (74); 0x45 W→N (76); 0x36 W→triforce (78) |
-| 2 | 0x7e W→N (96); 0x4e S→N (99); 0x3e S→N (100); 0x2e S→N (101); 0x0e S→W (103) | 0x1e S→N (102) | — | — | — | 0x7d S→E (95); 0x6e S→N (97); 0x5e S→N (98: crossed since round 37, the owner); 0x0d E→triforce (104) |
+| 2 | 0x7e W→N (96); 0x4e S→N (99); 0x2e S→N (101); 0x0e S→W (103) | 0x1e S→N (102) | — | — | — | 0x7d S→E (95); 0x6e S→N (97); 0x5e S→N (98: crossed since round 37, the owner); 0x3e S→N (100: crossed since round 39, the owner); 0x0d E→triforce (104) |
 | 5 | 0x05 E→cave (128); 0x66 W→N (135); 0x24 E→N (143) | — | — | 0x66 S→W (123); 0x65 E→W (124) | — | 0x76 S→N (122); 0x64 E→cave (125); 0x06 cave→W (127); 0x05 cave→E (130); 0x06 W→cave (131); 0x64 cave→E (133); 0x65 W→E (134, its bombs a pickup < 8); 0x56 S→E (136); 0x57 W→N (137); 0x47 S→N (138); 0x37 S→N (139); 0x27 S→W (140); 0x26 E→W (141); 0x25 E→W (142); 0x14 S→triforce (144) |
 | 7 | 0x49 S→N (161); 0x1c W→N (171); 0x0d W→cave (173); 0x2a W→E (176) | 0x1b W→E (170) | — | 0x69 S→N (159); 0x19 W→E (166); 0x1a cave→E (169); 0x0c S→E (172); 0x29 cave→E (175) | — | 0x79 S→N (158); 0x59 S→N (160); 0x39 S→W (162); 0x38 E→N (163); 0x28 S→N (164); 0x18 S→E (165); 0x1a W→cave (167); 0x2b W→triforce (177) |
 | 6 | 0x58 S→N (200); 0x38 S→N (202); 0x39 N→E (205); 0x3a W→cave (206); 0x2d N→W (209); 0x1c S→N (211) | — | — | 0x28 S→E (203) | — | 0x79 S→W (197); 0x78 E→N (198); 0x68 S→N (199); 0x48 S→N (201); 0x29 W→S (204); 0x1d cave→S (208); 0x2c E→N (210); 0x0c S→triforce (212) |
 | 8 | 0x5e S→N (221); 0x3e S→E (223); 0x3c S→N (227) | 0x3f W→cave (224) | — | 0x6e S→N (220); 0x4c cave→N (226) | — | 0x7e S→N (219); 0x4e S→N (222); 0x2c S→triforce (228) |
-| 9 | 0x14 cave→E (249); 0x05 E→cave (264); 0x61 E→cave (268); 0x10 S→cave (272); 0x30 E→cave (282); 0x52 cave→N (287); 0x42 S→N (288) | 0x16 S→N (262) | 0x20 cave→N (271, plain way) | 0x56 S→W (246); 0x26 N→E (252); 0x27 W→N (253); 0x17 S→N (254); 0x06 S→W (263); 0x20 cave→N (270); 0x31 S→W (281); 0x04 cave→W (284) | — | 0x76 S→N (244); 0x66 S→N (245); 0x55 E→cave (247); 0x15 W→E (250); 0x16 W→S (251); 0x07 S→cave (255); 0x07 cave→S (257, 258); 0x17 N→S (259); 0x27 N→W (260); 0x26 E→N (261); 0x63 cave→W (266); 0x62 E→W (267); 0x10 cave→S (274); 0x20 N→cave (275, 276); 0x61 cave→N (278); 0x51 S→N (279); 0x41 S→N (280); 0x03 E→cave (285); 0x32 S→end (289) |
+| 9 | 0x14 cave→E (249); 0x05 E→cave (264); 0x61 E→cave (268); 0x10 S→cave (272); 0x30 E→cave (282); 0x52 cave→N (287); 0x42 S→N (288) | 0x16 S→N (262) | 0x56 S→W (246: its key, round 39); 0x20 cave→N (271, plain way) | 0x26 N→E (252); 0x27 W→N (253); 0x17 S→N (254); 0x06 S→W (263); 0x20 cave→N (270); 0x31 S→W (281); 0x04 cave→W (284) | — | 0x76 S→N (244); 0x66 S→N (245); 0x55 E→cave (247); 0x15 W→E (250); 0x16 W→S (251); 0x07 S→cave (255); 0x07 cave→S (257, 258); 0x17 N→S (259); 0x27 N→W (260); 0x26 E→N (261); 0x63 cave→W (266); 0x62 E→W (267); 0x10 cave→S (274); 0x20 N→cave (275, 276); 0x61 cave→N (278); 0x51 S→N (279); 0x41 S→N (280); 0x03 E→cave (285); 0x32 S→end (289) |
 
 A clear room becomes a crossing once its fight is over (3:0x59's Darknuts dead, a treasure taken, a shutter open):
 the mask follows the objective every step. 8:0x6e's step `bombs: required` (the shared block's, for `d2first`) is
-what `fights_only` gives it on `d3first` anyway; 9:0x56's `required` is like-like's only way to bomb its wall.
+what `fights_only` gives it on `d3first` anyway; 9:0x56's `required` is like-like's only way to bomb its wall (a
+fight for its key since round 39: like-like's `tenth` mode places no weapon bomb, the wall's and the 10th kill's only).
 
 ## Reserves
 

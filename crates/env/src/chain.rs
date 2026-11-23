@@ -671,6 +671,9 @@ pub struct ChainEnv<N: Nes, St: StateStore<N::State>> {
     current: Option<Acting>,
     change: Option<Change>,
     prev_objective: Option<Objective>,
+    /// Why the acting family's mask blocks what it blocks (`ItemsConfig::mask_rules`, the route's rules; a replay's
+    /// MASKS), as of the last `update_disabled_kinds`.
+    mask_rules: Vec<(ActionKind, &'static str)>,
     hearts: HeartTracker,
     supply: SupplyTracker,
     linger: LingerTracker,
@@ -729,6 +732,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             result: None,
             objectives: None,
             objective: None,
+            mask_rules: Vec::new(),
             current: None,
             change: None,
             prev_objective: None,
@@ -811,6 +815,21 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
     /// Actions in a row without progress in the acting room (its linger count, `zelda::linger`).
     pub fn quiet_steps(&self) -> u32 {
         self.linger.tail_steps()
+    }
+
+    /// The rules behind the current mask's blocks (a replay's MASKS; nothing reads them in play).
+    pub fn mask_rules(&self) -> &[(ActionKind, &'static str)] {
+        &self.mask_rules
+    }
+
+    /// The route's objectives (None before a run starts): the route step, way and stretch a replay labels.
+    pub fn completion(&self) -> Option<&GameCompletion> {
+        self.objectives.as_ref()
+    }
+
+    /// The acting specialist's reward shaping (None before a run starts): which targets its observation sees.
+    pub fn acting_reward(&self) -> Option<&crate::config::RewardConfig> {
+        self.current.as_ref().map(|c| &c.config.reward)
     }
 
     /// Cheated items used so far this run.
@@ -1344,10 +1363,12 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         let step_bombs = self.objectives.as_ref().and_then(|gc| gc.step_bombs(self.session.state()));
         let weapon = self.objectives.as_ref().is_none_or(|gc| !gc.weapon_bombs_off(self.session.state()));
         let items = config.items.on_step(step_bombs, weapon);
-        let mut kinds = items.disabled_kinds(self.session.game_map(), self.session.state(), reserve, rupees);
+        let mut rules = items.mask_rules(self.session.game_map(), self.session.state(), reserve, rupees);
+        let mut kinds: Vec<ActionKind> = rules.iter().map(|&(kind, _)| kind).collect();
         // Round 29: a route step may put the sword away (`sword: false`, 9:0x06's old man).
         if self.objectives.as_ref().is_some_and(|gc| !gc.step_sword(self.session.state())) {
             kinds.extend([ActionKind::Sword, ActionKind::Beams]);
+            rules.extend([(ActionKind::Sword, "sword-off"), (ActionKind::Beams, "sword-off")]);
         }
         self.session.set_disabled_kinds(&kinds);
         let granted = self.cheats.granted(CheatItem::Bombs);
@@ -1371,6 +1392,8 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             zelda::objectives::doorways_kept_out(self.session.game_map(), self.session.state(), objective)
         });
         self.session.set_vetoed_doorways(doorways);
+        crate::config::route_mask_rules(&mut rules, targets.is_some(), arrows.is_some(), candle.is_some(), doorways);
+        self.mask_rules = rules;
         self.session.set_clips(config.clips.enabled);
         // The switch in force: a switch off waits while Link stands stranded without the skips (round 24).
         let allowed = self.objectives.as_ref().map_or(self.clips_allowed, GameCompletion::clips_allowed);

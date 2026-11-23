@@ -1,6 +1,7 @@
 """The networks half of the backup (``/backup/triforce``; its layout and why: ``/backup/triforce/README.md``).
 
-    .venv/bin/python scripts/backup_models.py store MODELS_DIR --source NAME [--link]
+    triforce job run --agent A --task T --subtask S --desc '...' --timeout 1h -- \\
+        .venv/bin/python scripts/backup_models.py store MODELS_DIR --source NAME [--link]
     .venv/bin/python scripts/backup_models.py manifest VERSION CHAIN.meta.json [--how TEXT] [--confidence LEVEL]
     .venv/bin/python scripts/backup_models.py team VERSION OUT_DIR [--route ROUTE]
     .venv/bin/python scripts/backup_models.py index
@@ -19,6 +20,9 @@ every ``<source>:<path>`` it was found as.
 ``promoted`` / ``promoted.<route>`` written; a family's late run is its bare key, which plays where ``late.<route>``
 did), for ``--models-dir`` with the version's tag checked out. ``index`` rewrites ``INDEX.md``: what is kept, and
 which versions' teams are complete.
+
+``store`` is a job of the machine's queue (``jobs.require_job``: it hashes and copies a whole ``models/``); its
+progress is the run dirs kept of those found, then the other files.
 """
 import argparse
 import datetime
@@ -31,6 +35,8 @@ import subprocess
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
+
+from triforce import jobs
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKUP = Path(os.environ.get('TRIFORCE_BACKUP', '/backup/triforce'))
@@ -130,6 +136,7 @@ def walk(models: Path):
 
 def store(args, hashes: dict | None = None) -> int:
     """``hashes``: path -> SHA-1 already computed (a migration's ``sha1sum`` of everything)."""
+    jobs.require_job()
     models, source = Path(args.models_dir).resolve(), args.source
     kept = Store(Path(args.backup))
     hashed = hashes or {}
@@ -139,7 +146,8 @@ def store(args, hashes: dict | None = None) -> int:
 
     run_dirs, others = walk(models)
     mapping, differs, new_runs = [], 0, 0
-    for rel in sorted(run_dirs):
+    for done, rel in enumerate(sorted(run_dirs)):
+        jobs.progress(done, len(run_dirs), 'run dirs')
         ckpt_sha = digest(models / rel / 'ckpt.pt')
         path = str(rel)
         same = [p for p in (path, *[q for q in kept.runs if q.startswith(path + '@')])
@@ -162,8 +170,10 @@ def store(args, hashes: dict | None = None) -> int:
         if f'{source}:{path}' not in entry['found']:
             entry['found'].append(f'{source}:{path}')
         mapping.append(f'{path}\t{dest}\n')
-    for rel in others:
+    jobs.progress(len(run_dirs), len(run_dirs), 'run dirs')
+    for done, rel in enumerate(others, 1):
         kept.put(models / rel, f'sources/{source}/{rel}', digest(models / rel), args.link)
+        jobs.progress(done, len(others), 'files')
     runs_txt = kept.root / 'sources' / source / 'runs.txt'
     runs_txt.parent.mkdir(parents=True, exist_ok=True)
     runs_txt.write_text(''.join(mapping))

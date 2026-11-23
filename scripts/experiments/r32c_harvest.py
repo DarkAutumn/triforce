@@ -22,7 +22,9 @@ win rate is the rule's (clears of the seeds played), the state the first cleared
 The leg after Dungeon 5 (the recorder to Level 3's landing, 0x74 ... 0x3c into Level 2: `tallies()`) has the walks'
 rules of `r32b_leg.py` (one `Tally` function a room, monsters live) and `r32b_recorder.ride`, not `LEGS` steps: the
 rule plays the room and the pre-entry frame of the next room (the scroll's or the cave's, a wrap exit's from the
-engine's macro) is the next step's state."""
+engine's macro) is the next step's state.  It plays the rule over many seeds: a job of the machine's queue
+(``jobs.require_job``: ``triforce job run ... --timeout 30m -- .venv/bin/python scripts/experiments/r32c_harvest.py
+...``)."""
 
 import argparse
 import collections
@@ -36,6 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from r32_d3first import BEST, LEGS, VARIANTS  # noqa: E402  pylint: disable=wrong-import-position
 from r32_walks import PLAY, CAVE, CELLAR, Failed, Runner, hp  # noqa: E402  pylint: disable=wrong-import-position
 from r27_walks import load  # noqa: E402  pylint: disable=wrong-import-position
+from triforce.jobs import require_job  # noqa: E402  pylint: disable=wrong-import-position
 
 ROUTE = 'd3first'
 
@@ -358,6 +361,7 @@ def main():
     parser.add_argument('--seeds', type=int, default=10, help='runs a chain (every one is played)')
     parser.add_argument('--seed0', type=int, default=1000)
     args = parser.parse_args()
+    require_job()
     args.chains = [int(c) for c in args.chains.split(',')]
     return harvest(args)
 

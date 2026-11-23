@@ -7,10 +7,15 @@ own randomness for its seed; the one Red Octorok of 0:0x37 is live.
     python scripts/experiments/r31_d1_door.py frames                 # the frame CurOpenedDoors ($EE) takes bit 8
 
 asm: Door_SetEnteringDoorwayOpened (mode 7's first init step sets $EE to the side opposite Link's facing, also when
-the scroll leaves the level), Mode_LeaveLevelToOW, Door_AddRoomFlagsToOpenedDoors, Door_LayOut, Door_TouchKey."""
+the scroll leaves the level), Mode_LeaveLevelToOW, Door_AddRoomFlagsToOpenedDoors, Door_LayOut, Door_TouchKey.
+
+It plays the game over many seeded trials: a job of the machine's queue (``jobs.require_job``: ``triforce job run
+... --timeout 30m -- .venv/bin/python scripts/experiments/r31_d1_door.py ...``)."""
 
 import argparse
 import collections
+
+from triforce.jobs import require_job
 
 from r26_walks import CUR_OPENED_DOORS, KEYS, PLAY, STATES
 from r27_walks import Tally, load
@@ -172,6 +177,7 @@ def main():
     p.add_argument('cmd', choices=['door', 'frames'])
     p.add_argument('--seeds', type=int, default=20)
     args = p.parse_args()
+    require_job()
     {'door': cmd_door, 'frames': cmd_frames}[args.cmd](args)
 
 

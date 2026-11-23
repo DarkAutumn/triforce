@@ -2,13 +2,16 @@
 # Behaviour gate for emulator changes (plan step 18): evaluate every promoted specialist and run the six chain
 # segments of the route on the current build of triforce._native; compare two labels (before and after a change).
 #
-#   scripts/port_gate.sh LABEL [SEED]
+#   triforce job run --agent A --task T --subtask S --desc '...' --timeout 40m -- scripts/port_gate.sh LABEL [SEED]
 #
 # Writes target/gate/LABEL/{eval/<specialist>.json, chains/<segment>.jsonl, summary.json}, replacing anything an
-# earlier run with the same label left there. About 15 minutes on 20 cores, plus any time its evaluations wait their
-# turn behind other trainings and evaluations (triforce/jobs.py; no timeout, so a wait doesn't fail the gate). Rebuild
-# the module first (.venv/bin/maturin develop --release) so the gate measures the change.
+# earlier run with the same label left there. About 15 minutes on 20 cores. A job of the machine's queue (job.sh's
+# require_job: outside `triforce job` and without a terminal it refuses); its evaluations and chains run inside the
+# job, and the gate's steps done (evaluations, then chains) are its progress. Rebuild the module first
+# (`triforce job build`) so the gate measures the change.
 set -euo pipefail
+source "$(dirname "$0")/job.sh"
+require_job "$0" "$@"
 cd "$(dirname "$0")/.."
 LABEL=${1:?label}
 SEED=${2:-0}
@@ -21,15 +24,20 @@ mkdir -p "$OUT/eval" "$OUT/chains"
 
 # Every specialist with a promoted model.
 SPECIALISTS=$(for f in specialists/*.yaml; do s=$(basename "$f" .yaml); if [ -f "models/$s/promoted" ]; then echo "$s"; fi; done)
+STEPS=$(( $(echo "$SPECIALISTS" | wc -w) + 6 ))
+DONE=0
+job_progress "$DONE" "$STEPS" steps
 for s in $SPECIALISTS; do
   $PY -m triforce.evaluate --specialist "$s" --models-dir models --episodes-per-state 20 --parallel 16 \
     --threads 16 --seed "$SEED" --output "$OUT/eval/$s.json" > "$OUT/eval/$s.log" 2>&1
+  DONE=$((DONE + 1)); job_progress "$DONE" "$STEPS" steps
 done
 
 chain() {
   local name=$1; shift
   $PY -m triforce.cli eval-chain --runs "$RUNS" --parallel 20 --first-seed "$SEED" \
     --output "$OUT/chains/$name.jsonl" "$@" > "$OUT/chains/$name.log" 2>&1
+  DONE=$((DONE + 1)); job_progress "$DONE" "$STEPS" steps
 }
 chain full
 chain d2 --from 2_7ds_0

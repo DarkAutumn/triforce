@@ -117,7 +117,8 @@ from .clips import OFF_LABEL, episode_jobs
 from .demos import load_demos
 from .events import (LOGS_DIR_ENV, PROGRESS_METRICS, EventLog, TrainingPlan, has_plan, new_log_dir,
                      write_json_atomic)
-from .jobs import add_job_arguments, begin_job, work
+from .jobs import announce, work
+from .jobs import progress as job_progress
 from .metrics import MetricsLogger, format_summary
 from .model import ModelConfig, ZeldaPolicy, obs_spec_from_space
 from .observation import observation_space
@@ -353,7 +354,6 @@ def parse_args(argv=None):
                              "owns the stream and writes its final 'end', else this run writes a plan beside it; "
                              "default: a new folder under --logs-dir with training.json and <specialist>.jsonl")
     parser.add_argument('--logs-dir', default=None, help=f"default ${LOGS_DIR_ENV} or <repo>/logs")
-    add_job_arguments(parser)
     return parser.parse_args(argv)
 
 
@@ -379,11 +379,10 @@ def run_status(run_dir) -> Optional[str]:
 
 
 def cli(argv=None) -> int:
-    """``python -m triforce.train`` / ``triforce train``: lowers its priority and waits its turn (``--nice``,
-    ``--no-wait``, ``triforce.jobs``), trains, then exits 0, or ``EXIT_INTERRUPTED`` if the run was interrupted (its
-    checkpoint and summary are still saved) or stopped while it waited (nothing trained)."""
+    """``python -m triforce.train`` / ``triforce train`` (a job: ``triforce job run -- ...``, ``jobs.announce``):
+    trains, then exits 0, or ``EXIT_INTERRUPTED`` if the run was interrupted (its checkpoint and summary are still
+    saved) or stopped before training started."""
     interrupt_on_sigterm()
-    begin_job(parse_args(argv))
     try:
         run_dir = main(argv)
     except KeyboardInterrupt:
@@ -525,10 +524,11 @@ def main(argv=None) -> Path:
         raise SystemExit("--device cuda requested but CUDA is not available")
 
     specialist = load_specialist(args.specialist).name
+    announce('train', work(train_steps=args.iterations * steps_per_iteration(args)), specialist)
     root = registry.models_root(args.models_dir)
     run_id = args.run_id or registry.new_run_id()
     out_dir = registry.run_dir(specialist, run_id, root)
-    events, plan = open_events(args, specialist, run_id, out_dir, argv)     # waits its turn (triforce.jobs)
+    events, plan = open_events(args, specialist, run_id, out_dir, argv)
     out_dir.mkdir(parents=True, exist_ok=True)
     try:
         summary = _train(args, specialist, run_id, root, out_dir, events)
@@ -789,6 +789,7 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
         print(f"[train] iter={state['iteration']} steps={state['steps']} " + format_summary(metrics), flush=True)
         elapsed = time.time() - started
         fraction = result.iteration / args.iterations
+        job_progress(state['steps'] - start_steps, target_steps - start_steps, 'steps', specialist)
         events.emit('progress', iteration=state['iteration'], iterations=start_iteration + args.iterations,
                     steps=state['steps'], target_steps=target_steps, fraction=round(fraction, 4),
                     elapsed=round(elapsed, 1), sps=round((state['steps'] - start_steps) / elapsed, 1),

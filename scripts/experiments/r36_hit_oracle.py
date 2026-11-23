@@ -15,7 +15,9 @@ family's checkpoint) trained on the look-ahead's verdicts with different inputs:
 ``--train-frac``: a share of the training episodes (the learning curve). ``--horizon K``: the label is "a loss that
 lands within the action's first K frames" (later losses count as safe). ``--init random``: the network from scratch.
 Held out as round 35 (every 7th episode); the numbers (``r36_hit_common.summary``) after every epoch into OUT.json;
-``--scores``: the held-out candidates' final scores. GPU work: no job queue (one process).
+``--scores``: the held-out candidates' final scores.  Training on the GPU is a job of the machine's queue
+(``jobs.require_job``: ``triforce job run ... --timeout 1h -- .venv/bin/python scripts/experiments/r36_hit_oracle.py
+...``).
 """
 
 import argparse
@@ -33,6 +35,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from r36_hit_common import contact_features, contact_from_obs, group_of, load, ram_columns, summary  # noqa: E402
 
 from triforce import registry  # noqa: E402
+from triforce.jobs import require_job  # noqa: E402
 from triforce.guard import JOINT, make_guard  # noqa: E402
 from triforce.model import MASK_KEY, ZeldaPolicy  # noqa: E402
 
@@ -119,6 +122,7 @@ def main(argv) -> int:
     parser.add_argument('--scores', type=Path, default=None)
     parser.add_argument('--device', default='cuda')
     args = parser.parse_args(argv)
+    require_job()
     torch.manual_seed(args.seed)
     device = torch.device(args.device)
     t0 = time.time()

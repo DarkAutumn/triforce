@@ -126,6 +126,9 @@ d2first:
 - include: dungeon-2
 # 0x5e is cleared (`treasure: clear`, round 19): its Red Goriyas' bomb drops help against the Moldorm in 0x3e.
 - {level: 2, room: '0x5e', specialist: goriya, entry: S, exit: N, treasure: clear}
+- {level: 2, room: '0x4e', specialist: d2-rope, entry: S, exit: N}
+# The Moldorm is fought for its key (round 39: d3first crosses it).
+- {level: 2, room: '0x3e', specialist: moldorm, entry: S, exit: N}
 - include: dungeon-2-north
 - {level: 0, room: '0x3c', specialist: ow-octorok, entry: cave, exit: S}
 - {level: 0, room: '0x4c', specialist: ow-octorok, entry: N, exit: E}
@@ -403,6 +406,9 @@ d2first:
 # (Ganon's arrow), 0 in his room.
 - include: to-level-9
 - include: dungeon-9
+# 0x56's key is left (d3first takes it, round 39: Moldorm's key is not taken on that route).
+- {level: 9, room: '0x56', specialist: like-like, entry: S, exit: W, treasure: skip, bombs: required}
+- include: dungeon-9-from-55
 # d3first (phase X, the owner's list and answers of Nov 19; docs/routes/d3first.md, d3first-walks-a.md and
 # d3first-walks-b.md): the speedrunners' route, to become the main one once a golden path on it reaches the ending.
 # The wood sword until the magic sword (no white sword); Dungeons 3, 4, 1, 5, 2, 7, the magic sword, 6, 8, 9, their
@@ -488,6 +494,12 @@ d3first:
   # high bomb chances on start of a d2 run, but needless heart/time wasting in the d3 first route)"): no treasure, no
   # key, its N door open; under `fights_only` no weapon bomb there but the 10th kill's.
   - {level: 2, room: '0x5e', specialist: goriya, entry: S, exit: N}
+  - {level: 2, room: '0x4e', specialist: d2-rope, entry: S, exit: N}
+  # 0x3e is crossed (round 39, the owner, Nov 22: Moldorm's key "is only needed for d9? [...] d9 0x56 drops a key and
+  # it's super safe to get. Confirm this works, then drop the moldorm fight (it's now passthrough) and fight in d9
+  # 0x56 to get the missing key"): no treasure, the Moldorm left alive (the room has no shutter); the route's one key
+  # short is 9:0x56's, taken below.
+  - {level: 2, room: '0x3e', specialist: moldorm, entry: S, exit: N, treasure: skip}
   - include: dungeon-2-north
   # Level 2 to Level 5 (d2first's rooms, entries and exits; its clip ways): back S, E and N to 0x2d, N 0x1d, E along
   # row 1 to 0x1f, N through its wall gap at X $80 into 0x0f's open secret cave (100 rupees), back S and W, 0x1d N,
@@ -567,6 +579,12 @@ d3first:
   - include: dungeon-8
   - include: to-level-9
   - include: dungeon-9
+  # 0x56 is fought for its key (round 39, the owner: the key Moldorm's crossing leaves): the 2 Zols (their Gels
+  # too) and 2 Like-Likes killed, the Bubbles don't count (asm:Secret_UpdateRoomAllDead), the key at ($80,$90)
+  # between two water rows (the ladder), then the W bomb wall.  Without it the route is a key short at 9:0x63's W
+  # door (steps 197 and 262 already leave none).
+  - {level: 9, room: '0x56', specialist: like-like, entry: S, exit: W, bombs: required}
+  - include: dungeon-9-from-55
 # The owner's bomb rules (round 37, Nov 22; docs/routes/d3first.md "Bombs"), by route.  A route not named here plays
 # none (every room by the family's `items: {bombs:}` mode and its step's `bombs:`).  `d2first` is in scope for them
 # when its own work comes (the owner: "not until we've completed this work on d3-first, entirely"): the same entry
@@ -641,14 +659,13 @@ clips-gauntlet:
 # What differs between the routes inside a block (sword, heart containers, items, the reserves the route brings) is
 # their states', not route data.
 blocks:
-  # Dungeon 2 to 0x6e, and from 0x4e (each route writes 0x5e between: d2first fights it, d3first crosses it).
+  # Dungeon 2 to 0x6e, and from 0x2e (each route writes 0x5e, 0x4e and 0x3e between: d2first fights 0x5e and the
+  # Moldorm, d3first crosses both).
   dungeon-2:
   - {level: 2, room: '0x7d', specialist: d2-rope, entry: S, exit: E}
   - {level: 2, room: '0x7e', specialist: d2-rope, entry: W, exit: N}
   - {level: 2, room: '0x6e', specialist: d2-rope, entry: S, exit: N}
   dungeon-2-north:
-  - {level: 2, room: '0x4e', specialist: d2-rope, entry: S, exit: N}
-  - {level: 2, room: '0x3e', specialist: moldorm, entry: S, exit: N}
   - {level: 2, room: '0x2e', specialist: d2-rope, entry: S, exit: N}
   - {level: 2, room: '0x1e', specialist: goriya, entry: S, exit: N}
   - {level: 2, room: '0x0e', specialist: boss-dodongo, entry: S, exit: W}
@@ -884,7 +901,8 @@ blocks:
   dungeon-9:
   - {level: 9, room: '0x76', specialist: stalfos-keese-gel, entry: S, exit: N, bomb_reserve: 4, rupee_reserve: 1}
   - {level: 9, room: '0x66', specialist: stalfos-keese-gel, entry: S, exit: N}
-  - {level: 9, room: '0x56', specialist: like-like, entry: S, exit: W, treasure: skip, bombs: required}
+  # 0x56 is each route's own (round 39): d2first crosses it, d3first fights it for its key.
+  dungeon-9-from-55:
   - {level: 9, room: '0x55', specialist: lanmola, entry: E, exit: cave, bomb_reserve: 3}
   - {level: 9, room: '0x60', in_cave: true, specialist: equipment-room, entry: S, exit: W}
   - {level: 9, room: '0x14', specialist: like-like, entry: cave, exit: E, treasure: clear}

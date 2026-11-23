@@ -2,8 +2,8 @@
 //! raft dock's row W of the dock, over the dock's trigger lands him one row above the whirlwind's stand-in room
 //! (`zelda::game_map::dock_landing`): 0x55 -> 0x34 by Level 4's whirlwind, 0x3f -> 0x31 by Level 7's. The engine plays
 //! it from the dock after the raft's ride down: MOVE S off the trigger, the block clip N into the water
-//! (`zelda::clips::dock_clip_at`), RECORDER with every play the index needs (`Executor::run_dock_warp`), offered only
-//! while the session has a dock warp (`Session::set_dock_warp`).
+//! (`zelda::clips::dock_clip_at`), RECORDER with every play the index needs (`Executor::run_warp`), offered only
+//! while the session has a dock warp (`Session::set_warp`).
 //!
 //! SETUP (RAM writes, the tests are about the warp's mechanics): the room's monsters and their shots are removed
 //! before every action (a Zora's fireball interrupts the clip or the plays; the live-monster tries are

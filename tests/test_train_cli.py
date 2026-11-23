@@ -537,10 +537,14 @@ def test_train_error_is_logged_before_raising(states_dir, tmp_path):
     assert events[1]['status'] == 'error'
 
 
-def test_train_events_into_a_folder_without_a_plan_writes_one(states_dir, tmp_path):
+def test_train_events_into_a_folder_without_a_plan_writes_one(states_dir, tmp_path, monkeypatch):
     """``--events FILE`` with no training.json beside it: the run writes its plan there (the GUI lists it), ends
-    its own stream and is in the job registry."""
-    from triforce import jobs
+    its own stream and records the folder and plan in its job's queue row (``jobs.record_plan``)."""
+    from triforce import jobqueue, jobs
+    monkeypatch.setenv(jobqueue.QUEUE_DIR_ENV, str(tmp_path / 'queue'))
+    con = jobqueue.connect()
+    job = con.execute("INSERT INTO jobs (status) VALUES ('running')").lastrowid
+    monkeypatch.setenv(jobs.JOB_ID_ENV, str(job))
     folder = tmp_path / 'somewhere'
     events_path = folder / 'mine.jsonl'
     with pytest.raises(Exception):
@@ -550,8 +554,9 @@ def test_train_events_into_a_folder_without_a_plan_writes_one(states_dir, tmp_pa
     assert plan['kind'] == 'train' and plan['status'] == 'failed' and plan['runs'][0]['events'] == 'mine.jsonl'
     assert plan['runs'][0]['status'] == 'error' and plan['checkout'] and 'branch' in plan
     assert [e['event'] for e in read_jsonl(str(events_path))] == ['error', 'train_end', 'end']
-    (job,) = [job for job in jobs.read_jobs() if job['log_dir'] == str(folder.resolve())]
-    assert job['status'] == 'failed' and job['kind'] == 'train' and job['pid'] == os.getpid()
+    (row,) = jobqueue.read_jobs(con, 'id = ?', (job,))
+    assert (row['log_dir'], row['plan']) == (str(folder.resolve()), str((folder / 'training.json').resolve()))
+    con.close()
 
 
 def test_an_interrupted_run_saves_but_exits_130(states_dir, tmp_path):

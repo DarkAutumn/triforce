@@ -125,7 +125,7 @@ pub fn plan(state: &GameView, level: u8) -> Plan {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Warp {
     /// A dock warp (round 36, docs/routes/d3first.md "The wrong warps"): RECORDER in the water on the dock's row plays
-    /// every play the index needs and waits for the pickup (`Executor::run_dock_warp`). `unaided` (round 40, routes.yaml
+    /// every play the index needs and waits for the pickup (`Executor::run_warp`). `unaided` (round 40, routes.yaml
     /// `macros: {unaided_docks: true}`): the mask offers the plays beside the family's own actions (the session's
     /// `unaided_dock_mask`); off, it leaves the play alone and gives way to a monster or a shot (`dock_warp_mask`).
     Dock { level: u8, unaided: bool },

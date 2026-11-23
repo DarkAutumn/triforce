@@ -2,6 +2,10 @@
 
     triforce room-stats TAG [--noclips [TAG2]] [--chains-dir DIR] [--output FILE] [--route NAME] [--models-dir DIR]
 
+A job of the machine's queue (``jobs.require_job``; it reads every chain file of a measurement): ``triforce job run
+--agent A --task T --subtask S --desc '...' --timeout 20m -- triforce room-stats TAG``.  Its progress is the scopes
+read of the route's scope table.
+
 A room's death rate means little on its own: 5% of the isolated episodes started in Gleeok's room is another number
 than a 5% chance of dying there on a run from the game start.  This module reads the chain files of one measurement
 (``scripts/experiments/r56_chains.sh``: ``<chains-dir>/<TAG>-<file>.jsonl``, one run per line with a ``RoomRecord``
@@ -83,7 +87,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from . import __version__, _native, registry
+from . import __version__, _native, jobs, registry
 from .events import write_json_atomic
 from .paths import ROOT
 from .variety import VISIT_RISK_KEYS, decisions_of, risk, variety
@@ -743,7 +747,8 @@ def build(tag: str, chains_dir: Path = CHAINS_DIR, models_dir=None, route: Optio
     tags = [tag, *([noclips] if noclips else [])]
     loaded, scopes, team, plans, found = {}, {}, None, {}, set()
     table = route_scopes(route or tag_route(tags, chains_dir))
-    for scope in table:
+    for done, scope in enumerate(table):
+        jobs.progress(done, len(table), 'scopes')
         paths = {}                          # resolved -> the path of the first tag that has it
         for name in tags:
             path = chains_dir / f'{name}-{scope.file}.jsonl'
@@ -776,6 +781,7 @@ def build(tag: str, chains_dir: Path = CHAINS_DIR, models_dir=None, route: Optio
             plans[name] = list(route_steps(name))
         scopes[scope.name] = {**chain_scope(runs, plans[name], scope), 'route': name, 'source': sources[0],
                               'files': sources}
+    jobs.progress(len(table), len(table), 'scopes')
     for name in tags:
         if name not in found:
             raise RoomStatsError(f"no chain files {name}-*.jsonl in {chains_dir}")
@@ -859,6 +865,7 @@ def main(argv=None) -> int:
     parser.add_argument('--models-dir', default=None,
                         help="models root (default $TRIFORCE_MODELS_DIR or <repo>/models)")
     args = parser.parse_args(argv)
+    jobs.require_job()
     noclips = noclips_tag(args.tag) if args.noclips is True else args.noclips
     try:
         data = build(args.tag, args.chains_dir, args.models_dir, args.route, noclips)
