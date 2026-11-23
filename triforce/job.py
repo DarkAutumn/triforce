@@ -258,9 +258,10 @@ class Wrapper:
         values = [json.dumps(row[key]) if key in q._JSON and row[key] is not None else row[key]  # pylint: disable=protected-access
                   for key in columns]
         with q.transaction(self.con):
+            # One worktree, one agent name; ``setup`` runs in the main checkout for another tree, under any name.
             others = [r['agent'] for r in self.con.execute(
-                "SELECT DISTINCT agent FROM jobs WHERE checkout = ? AND agent != ?",
-                (row.get('checkout'), row.get('agent')))] if row.get('checkout') else []
+                "SELECT DISTINCT agent FROM jobs WHERE checkout = ? AND agent != ? AND verb != 'setup'",
+                (row.get('checkout'), row.get('agent')))] if row.get('checkout') and row.get('verb') != 'setup' else []
             cursor = self.con.execute(f"INSERT INTO jobs ({', '.join(columns)}) VALUES ({', '.join('?' * len(columns))})",
                                       values)
             self.id = cursor.lastrowid
