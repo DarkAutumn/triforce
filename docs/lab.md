@@ -60,7 +60,10 @@ bucket (1, 2, 4, ..., 64; rows padded by repeating the last) and replays it: 0.6
 at 32 (a `hitshift` of 2.4M parameters). The answers agree with the eager forward within 2e-5 (3,000 real batches
 of four networks, no top-action change); a 20-run chain logging every decision matched the eager chain decision
 for decision. A graph's first three replays are checked against the eager forward; a capture that fails or a
-replay that disagrees serves that network eagerly from then on, with a warning. Recurrent networks stay eager.
+replay that disagrees serves that network eagerly from then on, with a warning. Recurrent networks stay eager, and
+so does every network served in a training or recording process (`triforce.train`, `lab.train`, `lab.record` call
+`serve.learner_process()`): a capture on the server thread and the learner's own GPU work on the main thread fail
+each other in every capture mode (Nov 23, a darknut continuation's first rollout).
 With graphs the batch window drops from 5 ms to 1 ms (`GRAPH_GATHER`; `TRIFORCE_SERVE_GATHER` overrides): a
 forward is cheap, so answering sooner beats a fuller batch. The 200-run `d3first` chain from `3_7cs_0` with four
 `hitshift` networks (106,936 decisions, every run identical across the three):

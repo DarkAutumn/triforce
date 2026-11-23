@@ -54,6 +54,8 @@ def parse_args(argv=None):
 def main(argv=None) -> Path:
     args = parse_args(argv)
     begin_job(args)
+    from ..nets.serve import learner_process  # pylint: disable=import-outside-toplevel
+    learner_process()           # its labelling uses the GPU beside the actors' server: no CUDA graphs there
     if args.actor == 'student' and not args.student:
         raise SystemExit("--actor student needs --student CKPT")
     out = Path(args.out)

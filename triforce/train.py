@@ -513,6 +513,8 @@ def curriculum_spec(args, config, out_dir: Path,
 def main(argv=None) -> Path:
     """Runs training; returns the run directory."""
     argv = sys.argv[1:] if argv is None else list(argv)
+    from .nets.serve import learner_process  # pylint: disable=import-outside-toplevel
+    learner_process()           # its learner uses the GPU beside the rollouts' server: no CUDA graphs there
     args = parse_args(argv)
     registry.set_allow_incompatible(args.allow_incompatible_models)
     validate_args(args)
