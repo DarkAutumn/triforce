@@ -1,11 +1,14 @@
 """Lab training (``triforce.lab``): several families in one run, teachers, imitation, the recorder."""
 
 import json
+import os
+import subprocess
+import sys
 
 import numpy as np
 import torch
 
-from triforce import nets, registry
+from triforce import jobs, nets, registry
 from triforce.lab import record, train
 from triforce.lab.collect import Teachers, task_yaml
 from triforce.specialist import load_specialist
@@ -53,7 +56,7 @@ def test_teachers_label_with_each_familys_network(tmp_path):
 def test_a_two_family_run_with_teachers_trains_links_and_loads_once(tmp_path, logs_dir):
     _teachers(tmp_path)
     common = ['--families', 'ow-start', f'ow-start@d3first={YAML}', '--parallel', '2', '--steps-per-update', '64',
-              '--device', 'cpu', '--models-dir', str(tmp_path), '--seed', '3', '--no-wait', '--save-every', '1']
+              '--device', 'cpu', '--models-dir', str(tmp_path), '--seed', '3', '--save-every', '1']
     run = train.main(['--name', 'set', '--run-id', 'r1', '--iterations', '2', '--teacher-coeff', '1.0',
                       '--teacher-fade', '1', '--arch', 'wide', '--arch-config', '{"hidden_dim": 32, "depth": 1}',
                       *common])
@@ -99,13 +102,12 @@ def test_imitation_alone_with_the_teachers_acting_and_the_recorder(tmp_path, log
     _teachers(tmp_path)
     run = train.main(['--name', 'imit', '--run-id', 'r2', '--families', 'ow-start', '--parallel', '2',
                       '--steps-per-update', '64', '--device', 'cpu', '--models-dir', str(tmp_path), '--seed', '4',
-                      '--no-wait', '--iterations', '2', '--mode', 'imitate', '--actor', 'teacher', '--epochs', '2'])
+                      '--iterations', '2', '--mode', 'imitate', '--actor', 'teacher', '--epochs', '2'])
     lines = (run / 'metrics.jsonl').read_text().splitlines()
     assert len(lines) == 2 and 'charts/teacher_agreement' in lines[-1]
     assert nets.arch_of(registry.load_checkpoint(run)['model_config']) == nets.ZELDA
     out = record.main(['--families', 'ow-start', '--rollouts', '2', '--steps-per-env', '16', '--parallel', '2',
-                       '--device', 'cpu', '--models-dir', str(tmp_path), '--out', str(tmp_path / 'data'),
-                       '--no-wait'])
+                       '--device', 'cpu', '--models-dir', str(tmp_path), '--out', str(tmp_path / 'data')])
     meta, data = record.load(out)
     assert meta['families'] == ['ow-start'] and data['teacher_joint'].shape == (64, 352)
     assert set(np.unique(data['family'])) == {0} and data['obs/grid'].shape[0] == 64
@@ -134,13 +136,12 @@ def test_teacher_weights_need_targets_and_rehearsal(tmp_path):
     target, ``--rehearse`` adds the KL on stored teacher rows of keys outside the rollout."""
     _teachers(tmp_path)
     out = record.main(['--families', 'ow-start', '--rollouts', '1', '--steps-per-env', '16', '--parallel', '2',
-                       '--device', 'cpu', '--models-dir', str(tmp_path), '--out', str(tmp_path / 'data'),
-                       '--no-wait'])
+                       '--device', 'cpu', '--models-dir', str(tmp_path), '--out', str(tmp_path / 'data')])
     _, data = record.load(out)
     _cache(data, tmp_path / 'cache', 'ow-start')
     run = train.main(['--name', 'reh', '--run-id', 'r3', '--families', 'ow-start@d3first=' + YAML, '--parallel', '1',
                       '--steps-per-update', '32', '--device', 'cpu', '--models-dir', str(tmp_path), '--seed', '5',
-                      '--no-wait', '--iterations', '2', '--teacher-coeff', '1.0',
+                      '--iterations', '2', '--teacher-coeff', '1.0',
                       '--teacher-weight', 'ow-start@d3first=0', '--sampling', 'need', '--need-target', '0.5',
                       '--need-target-for', 'ow-start@d3first=0.99', '--rehearse', str(tmp_path / 'cache'),
                       '--rehearse-rows', '20'])
@@ -150,6 +151,20 @@ def test_teacher_weights_need_targets_and_rehearsal(tmp_path):
     assert metrics['losses/rehearse_kl'] > 0.0
     assert abs(metrics['family/ow-start@d3first/need'] - 0.99 + metrics.get(
         'family/ow-start@d3first/recent_success', 0.0)) < 1e-6
+
+
+def test_the_wrapper_dry_call_writes_the_training_steps_and_creates_nothing(tmp_path):
+    """``triforce job run`` asks a lab training its work first (``$TRIFORCE_JOB_ESTIMATE``, no job id yet): its
+    steps, written as ``{kind, work, name}`` before any run folder, log folder or network."""
+    estimate = tmp_path / 'estimate.json'
+    environ = {**{k: v for k, v in os.environ.items() if k != jobs.JOB_ID_ENV}, jobs.JOB_ESTIMATE_ENV: str(estimate)}
+    out = subprocess.run([sys.executable, '-m', 'triforce.lab.train', '--name', 'dry', '--run-id', 'r1', '--families',
+                          'ow-start', '--parallel', '2', '--steps-per-update', '64', '--iterations', '3', '--device',
+                          'cpu', '--models-dir', str(tmp_path / 'models'), '--logs-dir', str(tmp_path / 'logs')],
+                         env=environ, cwd=ROOT, capture_output=True, text=True, timeout=120, check=False)
+    assert out.returncode == 0, out.stderr
+    assert json.loads(estimate.read_text()) == {'kind': 'train', 'work': {'train_steps': 192}, 'name': 'lab-dry'}
+    assert sorted(p.name for p in tmp_path.iterdir()) == ['estimate.json']
 
 
 def test_weighted_joint_kl():

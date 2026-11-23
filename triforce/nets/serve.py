@@ -32,6 +32,7 @@ from ..actions import NUM_DIRECTIONS, NUM_DURATIONS, NUM_KINDS
 DEFAULT_GATHER = 0.005      # at most this many seconds a batch waits for the other active envs' rows (eager forwards)
 GRAPH_GATHER = 0.001        # ... with CUDA graphs (a forward is cheap: answering sooner beats a fuller batch)
 ACTIVE_SECONDS = 1.0        # an env that asked this recently is waited for (``Server._loop``)
+IDLE_SECONDS = 3600.0       # with no env active the thread blocks this long for a request (``close`` wakes it)
 CPU_THREADS = 4             # torch threads when serving on the CPU
 GRAPH_BUCKETS = (1, 2, 4, 8, 16, 32, 64)    # batch sizes a CUDA graph is captured for; larger batches run eagerly
 GRAPH_CHECKS = 3            # a new graph's first replays are compared with the eager forward on the same rows
@@ -186,10 +187,12 @@ class Server:
     def _loop(self):
         while not self.queue.closed:
             # Wait for every env that asked in the last second (they step their emulators at different times; a
-            # batch per straggler costs a forward each), at most ``gather`` seconds.
+            # batch per straggler costs a forward each), at most ``gather`` seconds.  With none active the thread
+            # blocks until a request comes (Nov 23: an idle server woke ten times a second, per served network).
             now = time.monotonic()
             self._seen = {slot: t for slot, t in self._seen.items() if now - t < ACTIVE_SECONDS}
-            batch = self.queue.take(timeout=0.1, gather=self.gather, target=max(1, len(self._seen)))
+            batch = self.queue.take(timeout=0.1 if self._seen else IDLE_SECONDS, gather=self.gather,
+                                    target=max(1, len(self._seen)))
             if batch is None:
                 continue
             now = time.monotonic()

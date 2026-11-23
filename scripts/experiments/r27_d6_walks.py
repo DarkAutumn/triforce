@@ -10,10 +10,15 @@ keys, bombs and opened doors), every trial loaded with the game's own randomness
     python scripts/experiments/r27_d6_walks.py dark                 # the dark rooms and the candle
     python scripts/experiments/r27_d6_walks.py keys                 # the keys of 0x58 and 0x2d, the shut-in rooms
     python scripts/experiments/r27_d6_walks.py sentry [--seeds N]   # 0x3a fought from its W doorway
+
+It plays the game over many seeded trials: a job of the machine's queue (``jobs.require_job``: ``triforce job run
+... --timeout 30m -- .venv/bin/python scripts/experiments/r27_d6_walks.py ...``).
 """
 
 import argparse
 import collections
+
+from triforce.jobs import require_job
 
 from r26_walks import CUR_OPENED_DOORS, KEYS
 from r27_walks import (BOMBS, BUBBLE, HEARTS, INV_SWORD, LIKE_LIKE, OBJ_DIR, OBJ_META, OBJ_STATE, OBJ_TYPE, OBJ_X,
@@ -525,6 +530,7 @@ def main():
     parser.add_argument('--seeds', type=int, default=40)
     parser.add_argument('--sword', type=int, default=3)
     args = parser.parse_args()
+    require_job()
     globals()[args.what](args)
 
 

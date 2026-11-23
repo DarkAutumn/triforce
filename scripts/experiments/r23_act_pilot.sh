@@ -18,8 +18,10 @@
 #
 # A batch skips what it measured before (same measurement), so a rerun resumes. Defaults: the round 23 grid.
 # PARALLEL (every core) caps the envs, EVAL_PARALLEL (4) per family evaluation, JOBS (5) evaluations side by side;
-# everything runs at nice 15 (NICE).
+# everything runs in one job of the machine's queue (scripts/job.sh: triforce job run ... -- this script ...).
 set -uo pipefail
+source "$(dirname "$0")/../job.sh"
+require_job "$0" "$@"
 cd "$(dirname "$0")/../.."
 PY=${PY:-.venv/bin/python}
 CLIPS=${CLIPS:-}
@@ -48,7 +50,7 @@ rooms() {
   for mode in $ROOM_MODES; do
     $PY -m triforce.cli eval-batch "r23-pilot-$mode${CLIPS:+-clips$CLIPS}" --families "$FAMILIES" --acts "$mode" \
       ${CLIPS:+--clips $CLIPS} --output-dir "$OUT/rooms/$mode" --parallel "$PARALLEL" \
-      --eval-parallel "$EVAL_PARALLEL" --jobs "$JOBS" ${NICE:+--nice $NICE} || return 1
+      --eval-parallel "$EVAL_PARALLEL" --jobs "$JOBS" || return 1
   done
 }
 

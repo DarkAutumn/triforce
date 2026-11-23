@@ -1,15 +1,19 @@
 """Unbroken runs of the whole game from the start (no golden stitching, no segments): the best of them, and the
 250-run test of a build.
 
-    .venv/bin/python scripts/full_runs.py run [--runs 100] [--first-seed 0] [--models-dir DIR] [--now] [--out DIR]
+    .venv/bin/python scripts/full_runs.py run [--runs 100] [--first-seed 0] [--models-dir DIR] [--out DIR]
     .venv/bin/python scripts/full_runs.py report OUT_DIR [--from-replays]
     .venv/bin/python scripts/full_runs.py runs250 [--models-dir DIR] [--team NAME] [--out DIR] [--docs DIR] [--route R]
     .venv/bin/python scripts/full_runs.py stats OUT_DIR [--team NAME] [--docs DIR] [--no-archive] [--from-replays]
     .venv/bin/python scripts/full_runs.py analyze JSON [JSON ...] [--markdown FILE] [--rooms N]
 
 ``run`` plays ``--runs`` runs of ``d3first`` from the start with every run recorded as a replay
-(``OUT_DIR/replays/``), writes the chain records (``OUT_DIR/runs.jsonl``), then reports.  ``--now`` starts at once
-instead of waiting its turn in the job line (the owner's call for a short measurement he is waiting on).
+(``OUT_DIR/replays/``), writes the chain records (``OUT_DIR/runs.jsonl``), then reports.
+
+Every subcommand but ``analyze`` is a job of the machine's queue (``triforce job run -- .venv/bin/python
+scripts/full_runs.py ...``): ``run`` and ``runs250`` announce their chain's work (``jobs.announce``), so the queue
+estimates them, and the chain inside reports its runs as the job's progress; ``report`` and ``stats`` crunch and
+archive replays (``jobs.require_job``: ``--timeout`` states their duration).
 
 ``report`` reads ``OUT_DIR``: the wall time, how many runs took each dungeon's triforce and ended the game, and the
 **best run** (the owner, Nov 23): the furthest route step reached (a room record's ``step`` is the route step the run
@@ -21,16 +25,16 @@ replay since version 2 carries its chain record and the route facts the report n
 the same report but the wall time, which only ``timing.json`` knows.
 
 ``runs250`` is the test every versioned build gets (the owner, Nov 23): 250 runs of ``d3first`` from console power
-on (``--power-on``: each seed its own file-select delay), every one recorded, through the job line in the express
-place (``eval-chain --express``: it fits the fast lane whatever the history estimates).  The team is frozen first:
+on (``--power-on``: each seed its own file-select delay), every one recorded (``triforce job run --express`` puts
+it in the express place whatever the history estimates).  The team is frozen first:
 the family pointers of ``--models-dir`` (default ``<repo>/models``) are copied into ``OUT_DIR/models`` (their run
 folders linked), so a promotion during the test changes nothing.  Then ``stats``.  The back-test (every past version
-on its own code and team, ``docs/runs250/backtest.md``) runs a copy of this script in each version's tree:
-``--route`` (``d2first`` before 2.0.0.0), ``--allow-incompatible-models`` (a team stamped by a later version), the
-chain's options it has (``--clips``, ``--events``; one without ``--express`` runs inside that tree's
-``scripts/express_job.py``), and ``OUT_DIR/route.json``: the route's steps as the playing code had them, which
-``stats`` and ``report`` read in any checkout.  A room record without ``step`` (before 1.4.1.0) gets the step
-counted from the route exits taken correctly before it.
+on its own code and team, ``docs/runs250/backtest.md``) runs a copy of this script in each version's tree, under the
+main checkout's ``triforce job run --timeout``: ``--route`` (``d2first`` before 2.0.0.0),
+``--allow-incompatible-models`` (a team stamped by a later version), the chain's options it has (``--clips``,
+``--events``), and ``OUT_DIR/route.json``: the route's steps as the playing code had them, which ``stats`` and
+``report`` read in any checkout.  A room record without ``step`` (before 1.4.1.0) gets the step counted from the
+route exits taken correctly before it.
 
 ``stats`` reads such an ``OUT_DIR`` and keeps (``kept``): the **best** run (the ranking above), the **worst** (the
 reverse: least far; ties the most cheated, then the most frames) and up to 3 runs that ended **stuck** (any end but
@@ -244,24 +248,30 @@ def chain_command(out: Path, runs: int, first_seed: int, parallel: int, models_d
 
 def chain_options() -> frozenset:
     """The options of this checkout's ``triforce eval-chain`` among those the 250 test uses (an older version's
-    chain may lack ``--clips``, ``--events`` or ``--express``)."""
+    chain may lack ``--clips`` or ``--events``)."""
     text = subprocess.run([sys.executable, '-m', 'triforce.cli', 'eval-chain', '--help'], cwd=ROOT,
                           capture_output=True, text=True, check=False).stdout
-    return frozenset(option for option in ('--clips', '--events', '--express') if option in text)
+    return frozenset(option for option in ('--clips', '--events') if option in text)
+
+
+def announce_chain(runs: int, name: str, route: str = ROUTE):
+    """The chain's work for the queue (``jobs.announce``: the wrapper's dry call ends here)."""
+    sys.path.insert(0, str(ROOT))
+    from triforce.jobs import announce, work  # pylint: disable=import-outside-toplevel
+    from triforce.runner import steps_played  # pylint: disable=import-outside-toplevel
+    announce('chain', work(chain_steps=runs * steps_played(route)), name)
 
 
 def run(args) -> int:
+    announce_chain(args.runs, 'full-runs')
     out = Path(args.out)
     (out / 'replays').mkdir(parents=True, exist_ok=True)
     command = chain_command(out, args.runs, args.first_seed, args.parallel, args.models_dir)
-    if args.now:
-        command.append('--no-wait')
     if args.power_on:
         command.append('--power-on')      # from console power on (a random file-select delay a seed), not the start state
     start = time.time()
     code = subprocess.run(command, cwd=ROOT, check=False).returncode
-    (out / 'timing.json').write_text(json.dumps({'seconds': round(time.time() - start, 1), 'runs': args.runs,
-                                                 'now': args.now}) + '\n')
+    (out / 'timing.json').write_text(json.dumps({'seconds': round(time.time() - start, 1), 'runs': args.runs}) + '\n')
     if code not in (0, 1):
         return code
     report(out)
@@ -293,6 +303,7 @@ def runs250(args) -> int:
         print(f"{out / 'runs.jsonl'} exists; `full_runs.py stats {out}` reports it, or choose a new --out",
               file=sys.stderr)
         return 2
+    announce_chain(args.runs, 'runs250', args.route)
     (out / 'replays').mkdir(parents=True, exist_ok=True)
     models = freeze_models(Path(args.models_dir).resolve(), out / 'models')
     from triforce import _native  # pylint: disable=import-outside-toplevel
@@ -303,16 +314,10 @@ def runs250(args) -> int:
         '--power-on', *(['--events', str(out / 'events.jsonl')] if '--events' in accepted else [])]
     if args.allow_incompatible_models:          # a team stamped by a later version (the back-test's old versions)
         command.insert(3, '--allow-incompatible-models')
-    if '--express' in accepted:
-        command.append('--express')
-    else:       # a version whose chain predates the express place: main's job line around it (scripts/express_job.py)
-        command = [sys.executable, str(ROOT / 'scripts' / 'express_job.py'), '--name', f'runs250-{args.route}',
-                   '--chain-steps', str(args.runs * len(steps)), '--private-jobs', str(out / 'jobs'), '--', *command]
     start, commit = time.time(), git_head()      # the code that plays (stats may run later, on a newer commit)
     code = subprocess.run(command, cwd=ROOT, check=False).returncode
     (out / 'timing.json').write_text(json.dumps({'seconds': round(time.time() - start, 1), 'runs': args.runs,
-                                                 'express': True, 'commit': commit,
-                                                 'chain_options': sorted(accepted)}) + '\n')
+                                                 'commit': commit, 'chain_options': sorted(accepted)}) + '\n')
     if code not in (0, 1):
         return code
     stats(out, args.team, Path(args.docs), archive=not args.no_archive)
@@ -659,7 +664,6 @@ def main(argv=None) -> int:
     p_run.add_argument('--first-seed', type=int, default=0)
     p_run.add_argument('--parallel', type=int, default=10)
     p_run.add_argument('--models-dir', default=None, help="a team other than main's (e.g. one network in every slot)")
-    p_run.add_argument('--now', action='store_true', help="start at once instead of waiting in the job line")
     p_run.add_argument('--power-on', action='store_true',
                        help="start each run from console power on (the golden races' start) instead of the start state")
     p_run.add_argument('--out', default=str(ROOT / 'target' / 'full-runs' / time.strftime('%y%m%d-%H%M%S')))
@@ -696,11 +700,14 @@ def main(argv=None) -> int:
         return run(args)
     if args.command == 'runs250':
         return runs250(args)
-    if args.command == 'stats':
-        stats(Path(args.out), args.team, Path(args.docs), archive=not args.no_archive, from_replays=args.from_replays)
-        return 0
     if args.command == 'analyze':
         analyze(args.records, args.markdown, args.rooms)
+        return 0
+    sys.path.insert(0, str(ROOT))
+    from triforce.jobs import require_job  # pylint: disable=import-outside-toplevel
+    require_job()               # crunching and archiving many replays: a job (--timeout states how long)
+    if args.command == 'stats':
+        stats(Path(args.out), args.team, Path(args.docs), archive=not args.no_archive, from_replays=args.from_replays)
         return 0
     report(Path(args.out), from_replays=args.from_replays)
     return 0

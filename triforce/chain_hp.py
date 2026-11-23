@@ -2,6 +2,10 @@
 
     python -m triforce.chain_hp models/*chain*.jsonl [--out triforce/chain_hp.json]
 
+A fit is a job of the machine's queue (``jobs.require_job``; it reads every chain file given): ``triforce job run
+--agent A --task T --subtask S --desc '...' --timeout 20m -- python -m triforce.chain_hp ...``; the chain files read
+of the total are its progress.
+
 Chain runs (``triforce eval-chain`` / ``scripts/train_round.py``) record ``health_in`` for every room visit.  This
 collects the arrivals per room (``"<level>:0x<room>[:cave]"``, ``env::config::room_key``) into a JSON profile; a
 run's first room is its start state (the game start or ``--from``), not an arrival, so it is left out.  A
@@ -19,6 +23,7 @@ import json
 import os
 from typing import Dict, Iterable, List
 
+from . import jobs
 from .events import write_json_atomic
 
 PROFILE_PATH = os.path.join(os.path.dirname(__file__), 'chain_hp.json')
@@ -28,7 +33,8 @@ def build_profile(paths: Iterable[str]) -> Dict[str, List[float]]:
     """room key -> sorted list of the hearts Link entered it with, over every run in the chain jsonl files (each
     run's first room, its start state, excluded)."""
     profile: Dict[str, List[float]] = {}
-    for path in paths:
+    paths = list(paths)
+    for done, path in enumerate(paths, 1):
         with open(path, encoding='utf-8') as file:
             for line in file:
                 if not line.strip():
@@ -36,6 +42,7 @@ def build_profile(paths: Iterable[str]) -> Dict[str, List[float]]:
                 for room in json.loads(line)['rooms'][1:]:
                     key = f"{room['level']}:{room['room']}" + (':cave' if room['in_cave'] else '')
                     profile.setdefault(key, []).append(float(room['health_in']))
+        jobs.progress(done, len(paths), 'files')
     return {key: sorted(values) for key, values in sorted(profile.items())}
 
 
@@ -48,6 +55,7 @@ def main(argv=None):
                              "triforce/chain_hp.NS.json, the profile its states' trainings read)")
     parser.add_argument('--out', default=None, help="default triforce/chain_hp.json (or the route's, --route)")
     args = parser.parse_args(argv)
+    jobs.require_job()
     if args.out is None:
         from ._native import route_namespace  # pylint: disable=import-outside-toplevel
         namespace = route_namespace(args.route) if args.route else None

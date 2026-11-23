@@ -10,11 +10,16 @@ randomness for its seed.  The B item is set by RAM (SelectedItemSlot: what the s
     python scripts/experiments/r29_fight_ganon.py kill [--seeds N] [--eyes ram|screen|tells|sweep]   # the scripted kills
     python scripts/experiments/r29_fight_ganon.py end [--seeds N]       # from his room's door to game mode $13
     python scripts/experiments/r29_fight_ganon.py death                 # Link dies in the room: what follows
+
+It plays the game over many seeded trials: a job of the machine's queue (``jobs.require_job``: ``triforce job run
+... --timeout 30m -- .venv/bin/python scripts/experiments/r29_fight_ganon.py ...``).
 """
 
 import argparse
 import collections
 import statistics
+
+from triforce.jobs import require_job
 
 from r29_fight_walks import (ARROW_STATE, DIR_OF, FIREBALL, FRAME_COUNTER, GANON, GUARD_FIRE, HEART_PARTIAL, HEARTS,
                              INV_POWER_TRIFORCE, LINK_INVINC, MODE, OBJ_DIR, OBJ_HP, OBJ_INVINC, OBJ_META, OBJ_STATE,
@@ -788,6 +793,7 @@ def main():
     parser.add_argument('--eyes', default='ram,screen,tells,sweep')
     parser.add_argument('--fine', action='store_true', help='sword: every pixel of X instead of every fourth')
     args = parser.parse_args()
+    require_job()
     globals()[args.what](args)
 
 

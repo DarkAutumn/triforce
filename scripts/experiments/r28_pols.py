@@ -5,10 +5,15 @@ no-drop run would have cheated in for the wall (`r28_walks.d8_cellar_states`).
 
     python scripts/experiments/r28_pols.py measure [--seeds N]     # sword hits, a touch, arrows through a line, bombs
     python scripts/experiments/r28_pols.py cross [--seeds N]       # ring exit, (key,) wall: straight, dodging, shooting
+
+It plays the game over many seeded trials: a job of the machine's queue (``jobs.require_job``: ``triforce job run
+... --timeout 30m -- .venv/bin/python scripts/experiments/r28_pols.py ...``).
 """
 
 import argparse
 import collections
+
+from triforce.jobs import require_job
 
 from r28_walks import (ARROW_SLOT, BOMBS, BOMB_SLOT, CUR_OPENED_DOORS, HEARTS, KEYS, OBJ_DIR, OBJ_HP, OBJ_INVINC,
                        OBJ_META, OBJ_STATE, OBJ_TYPE, OBJ_X, OBJ_Y, PLAY, POLS_VOICE, RUPEES, Dodger, Tally28,
@@ -270,6 +275,7 @@ def main():
     parser.add_argument('what', choices=['measure', 'cross'])
     parser.add_argument('--seeds', type=int, default=30)
     args = parser.parse_args()
+    require_job()
     globals()[args.what](args)
 
 

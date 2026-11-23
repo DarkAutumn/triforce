@@ -12,6 +12,9 @@ A completed block clip leaves Link exactly where no walk can: 8 px into one of t
 (``LANDINGS``, measured by putting Link on each of the 60 offered grid points of 4_50e_0 with the monsters
 removed and running ``CLIP N``/``CLIP S``).  So a clip is a ``CLIP``/``MOVE`` N or S that ends on a landing from
 that square's side (``landing``); the number placed is capped by the executor's own count (``clips.done``).
+
+Analysing a run plays its replays: a job of the machine's queue (``jobs.require_job``: ``triforce job run ... --
+.venv/bin/python scripts/experiments/r21_vire50_analyze.py RUN_DIR``); ``--table`` runs anywhere.
 """
 
 import json
@@ -20,6 +23,7 @@ from collections import Counter
 from pathlib import Path
 
 from triforce._native import Replay, ReplayPlayer
+from triforce.jobs import require_job
 
 # (heading, X) -> landing Ys: a clip N (S) on column X ends 8 px into the block above (below), on (X, landing).
 # Offered from the three grid points 8, 16 and 24 px below (above) the landing.
@@ -310,6 +314,7 @@ def table(models: Path) -> int:
 def main(argv) -> int:
     if argv and argv[0] == '--table':
         return table(Path(argv[1] if len(argv) > 1 else 'models'))
+    require_job()
     run_dir = Path(argv[0])
     result = {'run': str(run_dir), 'learning': learning(run_dir)}
     for act in ('sample', 'argmax'):

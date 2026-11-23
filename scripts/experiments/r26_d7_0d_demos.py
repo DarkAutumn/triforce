@@ -34,6 +34,9 @@ writes the rows of the winning runs (``triforce.demos``): a SWORD row `SWING_REP
 `PUSH_REPEAT` times (five and one decisions of a run); a WAIT, and a MOVE that ends at a wall, without its
 duration.  With ``--policy`` (DAgger) a checkpoint plays at temperature 0.5 and the rule labels every state it
 visits.
+
+It plays the rule over many runs: a job of the machine's queue (``jobs.require_job``: ``triforce job run ...
+--timeout 30m -- .venv/bin/python scripts/experiments/r26_d7_0d_demos.py ...``).
 """
 
 import argparse
@@ -45,6 +48,7 @@ import numpy as np
 
 from triforce._native import Env
 from triforce.demos import DemoRecorder, action_indices, legal
+from triforce.jobs import require_job
 
 OBJ_ID, OBJ_X, OBJ_Y, OBJ_DIR, OBJ_STATE, OBJ_METASTATE = 0x34F, 0x70, 0x84, 0x98, 0xAC, 0x405   # slot 0 is Link
 FACING_S, FACING_N = 4, 8
@@ -291,6 +295,7 @@ def main(argv) -> int:
                         help="DAgger: this checkpoint plays (temperature 0.5), the rule labels")
     parser.add_argument('--verbose', action='store_true', help="print every decision")
     args = parser.parse_args(argv)
+    require_job()
     policy = sampler(args.policy) if args.policy else None
     if args.measure:
         if args.out is not None:                        # `--measure 50`: the one positional is the run count

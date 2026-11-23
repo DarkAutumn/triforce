@@ -388,6 +388,29 @@ def write_jsonl(path, results: List[RunResult], append: bool = False):
         tmp.unlink(missing_ok=True)
 
 
+def check_overrides(overrides: Dict[str, str], configs: Optional[Dict[str, SpecialistConfig]] = None,
+                    networks: Optional[Dict[str, object]] = None, names: Optional[Iterable[str]] = None,
+                    route: Optional[str] = None) -> set:
+    """``Policies``' checks of its ``checkpoints`` overrides, loading no model (an entry point makes them before it
+    waits its turn): known specialists, a route's part only on its route, a checkpoint file at each path; raises
+    ``RunnerError``.  Returns the known specialists (``names``, else every one, with the given networks' and configs')."""
+    known = (set(names if names is not None else list_specialists())
+             | {split_policy(key)[0] for key in networks or {}} | set(configs or {}))
+    unknown = sorted(key for key in overrides if split_policy(key)[0] not in known)
+    if unknown:
+        raise RunnerError(f"--checkpoint for unknown specialist(s) {unknown}; known: {sorted(known)}")
+    parts = own_models_until(route) is not None
+    for key in [*overrides, *(networks or {})]:
+        part = split_policy(key)[1]
+        if part is not None and (part != route or not parts):
+            raise RunnerError(f"{key}: a route's part is played only on a route with own_models_until, "
+                              f"the route it names (this chain plays {route})")
+    for name, path in overrides.items():
+        if not Path(path).is_file() and not (Path(path) / CHECKPOINT_NAME).is_file():
+            raise RunnerError(f"--checkpoint {name}={path}: no checkpoint file there")
+    return known
+
+
 class Policies:
     """The specialists' Rust networks for a chain pool, in policy-index order, plus why the others are missing.
 
@@ -412,20 +435,8 @@ class Policies:
         overrides = dict(checkpoints or {})
         configs = dict(specialist_configs or {})
         given = dict(networks or {})
-        known = (set(names if names is not None else list_specialists())
-                 | {split_policy(key)[0] for key in given} | set(configs))
-        unknown = sorted(key for key in overrides if split_policy(key)[0] not in known)
-        if unknown:
-            raise RunnerError(f"--checkpoint for unknown specialist(s) {unknown}; known: {sorted(known)}")
+        known = check_overrides(overrides, configs, given, names, route)
         parts = own_models_until(route) is not None
-        for key in [*overrides, *given]:
-            part = split_policy(key)[1]
-            if part is not None and (part != route or not parts):
-                raise RunnerError(f"{key}: a route's part is played only on a route with own_models_until, "
-                                  f"the route it names (this chain plays {route})")
-        for name, path in overrides.items():
-            if not Path(path).is_file() and not (Path(path) / CHECKPOINT_NAME).is_file():
-                raise RunnerError(f"--checkpoint {name}={path}: no checkpoint file there")
         self.names: List[str] = []
         self.configs: List[SpecialistConfig] = []
         self.policies: list = []

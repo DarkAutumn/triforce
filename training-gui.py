@@ -17,31 +17,28 @@ one that started last first), below them the ended ones (the one that ended last
 training-gui on the same port does not start: it says so and exits 1.
 
 Picking a folder in the dropdown stops the automatic switching; picking [currently running] turns it back on.
-[currently running] covers every live training and evaluation on this machine, whatever checkout or logs root it
-writes to: every job registers its plan in the machine's job registry (``triforce/jobs.py``; ``jobs_dir``:
-``$TRIFORCE_JOBS_DIR``, else ``$XDG_STATE_HOME/triforce/jobs``, else ``$HOME/.local/state/triforce/jobs``).  Folders
-from elsewhere are listed with their checkout and branch.  A job the registry knows is never invisible: a job without
-a log folder (a ``--no-log`` evaluation, a lab job of a checkout that writes no plan, a script that registers itself
-in the queue) is listed like the others, running, waiting or finished, from what the registry knows (its name, kind,
-checkout and branch, how long it has run or waited, its estimate, its command), marked 'no progress data'.  A job
-waiting its turn (``$TRIFORCE_MAX_JOBS`` run at
-once, plus an express place for a short one) is listed below the running ones as 'queued', in the order the jobs
-will start: shortest estimate first, older ones moving up as they wait.  Each shows its place in line, the jobs it
-waits for, its estimate and how long it
-has waited; a running job shows its estimate beside how long it has run, and 'express' when it took the express
-place.  The GUI only reads the registry, it controls nothing.  The running folders are on top, the one that began to
-run last first: a job that starts is added at the top and pushes the others down.  Then the waiting ones, in the
-order they will start.  Below the live folders, under a 'finished' heading: the folders whose training ended while
-shown, and the registered jobs (any checkout) that ended in the last 60 minutes (``RECENT_SECONDS``; a job whose
-process died without ending its plan, a waiting one too, shows as 'process gone'), the one that ended last first:
-a folder that ends joins that list at its top, so nothing below the running folders ever changes places.  A
-finished folder leaves the list by itself 60 minutes after it ended (after the window saw it end, for one that was
-shown live), so the list never piles up; 'Clear finished' hides them at once, leaving the live ones, and trainings
-that start later still appear.
+[currently running] covers every job of the machine's job queue (``triforce.jobqueue``: the SQLite ``queue.db`` that
+``triforce job`` schedules every training, evaluation, script, build and test suite through, whatever checkout it
+runs; ``$TRIFORCE_QUEUE_DIR``, else ``$XDG_STATE_HOME/triforce``, else ``$HOME/.local/state/triforce``).  Each job is
+listed under its header, the lines ``triforce job list`` prints for it (``jobqueue.describe``): who asked for it
+(agent, task, sub-task), its description, its state (RUNNING in its place with the time run against its estimate,
+OVERRUN past twice the estimate, its place in line and wait while queued, or how it ended), the progress it reports
+(a bar, or a counter), then its verb, kind, branch and command.  A job whose log folder holds its plan
+(``training.json``) shows that folder's progress under its header (its runs, bars and evaluation rows); one without
+is drawn from its row alone.  The running jobs are on top, the one that began to run last first (a job that starts is
+added at the top and pushes the others down), then the queued ones in the order they will start, each lane's line
+(``jobqueue.line``) with its place.  A live log folder under the logs root that no job owns (a run the owner started
+at a terminal) is listed among the running ones.  The GUI only reads the queue (it marks the jobs whose wrapper is
+gone dead first, as ``triforce job list`` does); it controls nothing.  Below the live ones, under a 'finished'
+heading: the jobs that ended in the last 60 minutes (``RECENT_SECONDS``) and the folders whose training ended while
+shown, the one that ended last first: a job that ends joins that list at its top, so nothing below the running ones
+ever changes places.  A finished one leaves the list by itself 60 minutes after it ended, so the list never piles
+up; 'Clear finished' hides them at once, leaving the live ones, and jobs that start later still appear.
 
 Reads ``training.json`` (the plan, rewritten atomically) and tails ``round.jsonl`` plus every ``<specialist>.jsonl``
-twice a second; see ``triforce/events.py`` for the format.  Self-contained (PEP 723 inline dependencies): it does
-not import triforce or need the project's virtualenv.
+twice a second; see ``triforce/events.py`` for the format.  Self-contained (PEP 723 inline dependencies) but for
+``triforce.jobqueue`` (standard library only), imported from the checkout it sits in: it needs no project
+virtualenv.
 """
 
 import argparse
@@ -51,6 +48,7 @@ import os
 import re
 import socket
 import subprocess
+import sqlite3
 import sys
 import threading
 import time
@@ -65,6 +63,8 @@ from PySide6.QtGui import (QColor, QFont, QFontDatabase, QFontMetrics, QLinearGr
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QGridLayout, QHBoxLayout, QLabel,
                                QMainWindow, QPlainTextEdit, QPushButton, QScrollArea, QSplitter, QStackedWidget,
                                QTabWidget, QVBoxLayout, QWidget)
+
+from triforce import jobqueue
 
 PLAN_FILE = 'training.json'
 LOGS_DIR_ENV = 'TRIFORCE_LOGS_DIR'
@@ -104,7 +104,7 @@ class C:
 # status -> (color, label)
 STATUS = {
     'pending': (C.idle, 'pending'),
-    'queued': (C.warn, 'queued'),           # waiting its turn in the job queue (purple: in between)
+    'queued': (C.warn, 'queued'),           # a job waiting its turn in the job queue (purple: in between)
     'starting': (C.accent, 'starting'),
     'training': (C.accent, 'training'),
     'evaluating': (C.eval, 'evaluating'),
@@ -115,6 +115,8 @@ STATUS = {
     'failed': (C.bad, 'failed'),
     'interrupted': (C.warn, 'interrupted'),
     'lost': (C.warn, 'process gone'),
+    'dead': (C.warn, 'process gone'),       # a job whose wrapper is gone (``jobqueue.sweep``)
+    'timeout': (C.bad, 'timed out'),        # a job killed at its ``--timeout``
     'skipped': (C.idle, 'skipped'),
 }
 ACTIVE = ('starting', 'training', 'evaluating', 'running')
@@ -195,27 +197,6 @@ def fmt_duration(seconds) -> str:
     if minutes:
         return f'{minutes}m {secs:02d}s'
     return f'{secs}s'
-
-
-def fmt_coarse(seconds) -> str:
-    """Seconds -> 1h 02m / 12m / 42s (a wait, a run's time so far: no seconds once it is minutes)."""
-    seconds = max(0, int(seconds))
-    hours, rest = divmod(seconds, 3600)
-    if hours:
-        return f'{hours}h {rest // 60:02d}m'
-    return f'{rest // 60}m' if rest >= 60 else f'{rest}s'
-
-
-def fmt_estimate(seconds) -> str:
-    """An estimate, rounded as far as it can be trusted: ~40 s (5 s steps), ~3 min, ~1 h 20 min (10 min steps)."""
-    rounded = round(seconds / 5) * 5
-    if rounded < 60:
-        return f'~{max(5, rounded)} s'
-    minutes = round(seconds / 60)
-    if minutes < 60:
-        return f'~{minutes} min'
-    hours, minutes = divmod(round(seconds / 600) * 10, 60)
-    return f'~{hours} h {minutes} min' if minutes else f'~{hours} h'
 
 
 def fmt_pct(value) -> str:
@@ -817,13 +798,10 @@ def process_started(pid: int, proc: Path = Path('/proc')) -> float | None:
 PID_START_SLACK = 2.0   # seconds; the plan is written by its process after it started, never before
 
 
-LIVE_STATUSES = ('queued', 'running')   # a plan's (and a registry entry's) status while its process should be there
-
-
 def plan_alive(plan: dict) -> bool | None:
-    """Is a 'running' (or 'queued': waiting its turn) plan's process still there?  None when unknown (finished, other
-    host).  A process that started after the plan was created has reused the pid: the plan's process is gone."""
-    if plan.get('status') not in LIVE_STATUSES:
+    """Is a 'running' plan's process still there?  None when unknown (finished, other host).  A process that started
+    after the plan was created has reused the pid: the plan's process is gone."""
+    if plan.get('status') != 'running':
         return None
     pid = plan.get('pid')
     if not pid or plan.get('host') != socket.gethostname():
@@ -859,14 +837,13 @@ def plan_nice(plan: dict) -> int | None:
 
 
 def plan_is_live(plan: dict) -> bool:
-    """A training is going on or waits its turn: the plan says running (or queued) and its process isn't known to be
-    dead (another host's plan can't be checked, so it counts)."""
-    return plan.get('status') in LIVE_STATUSES and plan_alive(plan) is not False
+    """A training is going on: the plan says running and its process isn't known to be dead (another host's plan
+    can't be checked, so it counts)."""
+    return plan.get('status') == 'running' and plan_alive(plan) is not False
 
 
 class Training:
-    """A log folder: training.json + round.jsonl + one Run per specialist.  A registered job without a log folder
-    (``registry_only``: ``dir`` is its registry file) has the plan ``entry_plan`` makes of its entry and no runs."""
+    """A log folder: training.json + round.jsonl + one Run per specialist."""
 
     def __init__(self, log_dir: Path):
         self.dir = log_dir
@@ -881,11 +858,6 @@ class Training:
     @property
     def name(self) -> str:
         return self.plan.get('name') or self.dir.name
-
-    @property
-    def registry_only(self) -> bool:
-        """A registered job without a log folder: no progress data, only what the registry knows."""
-        return registry_only(self.dir)
 
     def poll(self) -> bool:
         """Reloads the plan if it changed and reads new events; True if anything changed."""
@@ -906,7 +878,7 @@ class Training:
         return changed
 
     def _load_plan(self) -> bool:
-        path = plan_file(self.dir)
+        path = self.dir / PLAN_FILE
         try:
             stat = path.stat()
         except OSError:
@@ -939,7 +911,7 @@ class Training:
 
     def status(self) -> str:
         status = self.plan.get('status') or 'pending'
-        if status in LIVE_STATUSES and self.live is False:
+        if status == 'running' and self.live is False:
             return 'lost'
         return status
 
@@ -957,10 +929,7 @@ class Training:
         return parse_time(self.plan.get('finished'))
 
     def run_status(self, run: 'Run') -> str:
-        """The run's status under this plan: a finished plan's unfinished runs are not active; a queued plan (waiting
-        its turn) has started none."""
-        if self.plan.get('status') == 'queued':
-            return 'pending'
+        """The run's status under this plan: a finished plan's unfinished runs are not active."""
         return run.status(self.live, self.plan.get('status') or 'running')
 
     def statuses(self) -> list[str]:
@@ -1087,7 +1056,7 @@ class Training:
         elif start is not None:
             status = {'running': 'running', 'lost': 'lost'}.get(self.status(), 'interrupted')
         else:
-            status = 'pending' if self.plan.get('status') in LIVE_STATUSES else 'skipped'
+            status = 'pending' if self.plan.get('status') == 'running' else 'skipped'
         return {'status': status, 'runs': (start or {}).get('runs') or runs, 'parallel': (start or {}).get('parallel'),
                 'start': start, 'result': result, 'error': error, 'progress': progress}
 
@@ -1219,150 +1188,13 @@ def find_log_dirs(root: Path) -> list[Path]:
         return []
 
 
-# The machine's job registry (``triforce/jobs.py``): every plan any checkout's jobs started, one JSON file each.
-JOBS_DIR_ENV = 'TRIFORCE_JOBS_DIR'
-RECENT_SECONDS = 3600          # finished jobs stay in [currently running] (under 'finished') this long, then leave
-# The line's order (as ``triforce.jobs``): a queued job's score is its estimate (seconds) minus AGING seconds per
-# second it has waited, lowest first; a job estimated at EXPRESS_SECONDS or less may also take one of EXPRESS_JOBS
-# express places besides the ``$TRIFORCE_MAX_JOBS`` regular ones.
-AGING = 0.5
-EXPRESS_SECONDS = 600
-EXPRESS_JOBS = 1
-
-
-def jobs_dir() -> Path:
-    """``$TRIFORCE_JOBS_DIR``, else ``$XDG_STATE_HOME/triforce/jobs``, else ``$HOME/.local/state/triforce/jobs`` (as
-    ``triforce.jobs.jobs_dir``)."""
-    if os.environ.get(JOBS_DIR_ENV):
-        return Path(os.environ[JOBS_DIR_ENV])
-    state = os.environ.get('XDG_STATE_HOME') or str(Path.home() / '.local' / 'state')
-    return Path(state) / 'triforce' / 'jobs'
-
-
-def read_registry(directory: Path | None = None) -> list[dict]:
-    """Every readable job of the registry, each with ``path`` (its file).  A job without a log folder (``--no-log``,
-    a lab job) is among them: it is shown from what the registry knows (``job_key``)."""
-    directory = jobs_dir() if directory is None else directory
-    jobs = []
+def read_plan(log_dir: Path) -> dict | None:
+    """A folder's plan (``training.json``; {} when it is not an object), None when it can't be read."""
     try:
-        paths = sorted(directory.glob('*.json'))
-    except OSError:
-        return jobs
-    for path in paths:
-        try:
-            data = json.loads(path.read_text(encoding='utf-8'))
-        except (OSError, ValueError):
-            continue
-        if isinstance(data, dict):
-            jobs.append({**data, 'path': str(path)})
-    return jobs
-
-
-def job_alive(job: dict, proc: Path = Path('/proc')) -> bool | None:
-    """Is a registered job running or waiting its turn ('queued')?  False once it ended or its process is gone (a pid
-    now used by a process that started at another time counts as gone); None for another host's unfinished job."""
-    if job.get('status') not in LIVE_STATUSES:
-        return False
-    if job.get('host') != socket.gethostname():
-        return None
-    started = process_started(int(job.get('pid') or 0), proc)
-    if started is None:
-        return False
-    recorded = job.get('pid_start')
-    return recorded is None or abs(started - recorded) <= PID_START_SLACK
-
-
-# A job the registry knows is never invisible.  One with a log folder holding its plan is shown from the folder; one
-# without (a ``--no-log`` evaluation, a lab job of a checkout that writes no plan, a script that registers itself) is
-# shown from its registry file, which stands in for the folder everywhere a folder goes ([currently running], the
-# dropdown, the web view): its name, kind, checkout and branch, status, timing and estimate, 'no progress data'.
-REGISTRY_SUFFIX = '.json'      # a shown path ending so is a registry file (log folders never do)
-NO_PROGRESS = 'no progress data'
-
-
-def registry_only(key: Path) -> bool:
-    """Is this shown path a registered job without a log folder (its registry file)?"""
-    return key.suffix == REGISTRY_SUFFIX
-
-
-def job_key(job: dict) -> Path:
-    """Where a registered job is shown from: its log folder when the folder holds its plan, else its registry
-    file."""
-    if job.get('log_dir') and (Path(job['log_dir']) / PLAN_FILE).is_file():
-        return Path(job['log_dir'])
-    return Path(job['path'])
-
-
-def plan_file(key: Path) -> Path:
-    """The file a shown path's plan is read from: a folder's ``training.json``, or the registry file itself."""
-    return key if registry_only(key) else key / PLAN_FILE
-
-
-def entry_plan(job: dict) -> dict:
-    """The plan of a registered job without a log folder: what the registry knows, in a plan's fields (no runs, no
-    events; ``registry_only`` set)."""
-    return {'name': job.get('name') or f"pid {job.get('pid')}", 'kind': job.get('kind'), 'status': job.get('status'),
-            'created': job.get('started'), 'updated': None, 'finished': job.get('finished'), 'host': job.get('host'),
-            'pid': job.get('pid'), 'checkout': job.get('checkout'), 'branch': job.get('branch'),
-            'commit': job.get('commit'), 'command': job.get('command'), 'cwd': job.get('cwd'),
-            'estimate': job.get('estimate'), 'lane': job.get('lane'), 'nice': job.get('nice'),
-            'queue': {'queued': job.get('queued'), 'admitted': job.get('admitted'), 'estimate': job.get('estimate'),
-                      'lane': job.get('lane')},
-            'runs': [], 'registry_only': True}
-
-
-def read_plan(key: Path) -> dict | None:
-    """A shown path's plan (``plan_file``; a registry file as ``entry_plan``), None when it can't be read."""
-    try:
-        data = json.loads(plan_file(key).read_text(encoding='utf-8'))
+        data = json.loads((log_dir / PLAN_FILE).read_text(encoding='utf-8'))
     except (OSError, ValueError):
         return None
-    if not isinstance(data, dict):
-        return {}
-    return entry_plan(data) if registry_only(key) else data
-
-
-def registry_folders(jobs: list[dict], now: float, proc: Path = Path('/proc')) -> tuple[list[Path], list[Path]]:
-    """(shown paths (``job_key``) of live jobs (running or queued), of jobs that ended in the last
-    ``RECENT_SECONDS``: finished, or their process gone without a final status), newest first.  Every job is
-    there: one without a folder by its registry file."""
-    live, recent = [], []
-    for job in jobs:
-        key = job_key(job)
-        alive = job_alive(job, proc)
-        if alive is not False:
-            live.append(key)
-            continue
-        ended = parse_time(job.get('finished')) or parse_time(job.get('started'))
-        if ended is not None and now - ended <= RECENT_SECONDS:
-            recent.append(key)
-    order = lambda paths: sorted(dict.fromkeys(paths), key=log_dir_key, reverse=True)  # noqa: E731
-    return order(live), order(recent)
-
-
-def superseded(jobs: list[dict]) -> set[Path]:
-    """Registry files of jobs whose log folder holds their plan by now (shown from the folder instead: a plan is
-    written a moment after its job registered)."""
-    return {Path(job['path']) for job in jobs if job_key(job) != Path(job['path'])}
-
-
-def job_label(job: dict) -> str:
-    """A registry entry as a queue names it (as ``triforce.jobs.label``): its log folder and kind,
-    '261115_001_r25-a (round)'; a job without a folder by its name."""
-    name = Path(job['log_dir']).name if job.get('log_dir') else job.get('name') or f"pid {job.get('pid')}"
-    return f"{name} ({job['kind']})" if job.get('kind') else name
-
-
-def job_entry(log_dir: Path, jobs: list[dict], status: str) -> dict | None:
-    """The registry entry of this host with ``status`` whose log folder is ``log_dir`` (or whose registry file it is,
-    for a job without a folder), None if there is none."""
-    host = socket.gethostname()
-    if registry_only(log_dir):
-        return next((job for job in jobs if job.get('status') == status and job.get('host') == host
-                     and job.get('path') == str(log_dir)), None)
-    target = log_dir.resolve()
-    return next((job for job in jobs if job.get('status') == status and job.get('host') == host
-                 and job.get('log_dir') and Path(job['log_dir']).resolve() == target), None)
+    return data if isinstance(data, dict) else {}
 
 
 def known(*values):
@@ -1370,108 +1202,10 @@ def known(*values):
     return next((value for value in values if value is not None), None)
 
 
-def queue_order(queued: list[dict], now: float) -> list[dict]:
-    """The live queued entries in the order they will start (as ``triforce.jobs``): by score, estimate - AGING *
-    seconds waited, lowest first, ties by join time and file name (an entry without an estimate counts as 0)."""
-    def score(job):
-        return ((job.get('estimate') or 0.0) - AGING * max(0.0, now - (job.get('queued_ts') or now)),
-                job.get('queued_ts') or 0.0, Path(job.get('path') or '').name)
-    return sorted(queued, key=score)
-
-
-def queue_state(log_dir: Path, plan: dict, jobs: list[dict], proc: Path = Path('/proc'),
-                now: float | None = None) -> dict:
-    """A queued plan's place in the job queue: {'place': 1-based or None, 'running': labels of the jobs it waits for,
-    'ahead': labels of the queued jobs before it, 'limit': jobs run at once or None, 'since': Unix seconds it joined
-    the line or None, 'estimate': seconds it is expected to run or None, 'lane': 'regular' | 'express' | None,
-    'express': its entry asked for the express place (``--express``)}.
-    From the registry while the plan's entry is there and queued on this host:
-    the line is this host's live queued entries in the order they will start (``queue_order`` at ``now``), what it
-    waits for the live running ones of other processes.  Otherwise (no entry, another host, an entry already
-    admitted) the plan's own ``queue`` says it, as of its last rewrite."""
-    recorded = plan.get('queue') or {}
-    state = {'place': recorded.get('place'), 'running': list(recorded.get('running') or []),
-             'ahead': list(recorded.get('ahead') or []), 'limit': recorded.get('limit'),
-             'since': parse_time(recorded.get('queued')), 'estimate': known(plan.get('estimate'),
-                                                                            recorded.get('estimate')),
-             'lane': plan.get('lane') or recorded.get('lane'), 'express': False}
-    entry = job_entry(log_dir, jobs, 'queued')
-    if entry is None:
-        return state
-    host = socket.gethostname()
-    live = [job for job in jobs if job.get('host') == host and job_alive(job, proc)]
-    line = queue_order([job for job in live if job.get('status') == 'queued'], time.time() if now is None else now)
-    if entry not in line:
-        return state
-    place = line.index(entry)
-    state.update(place=place + 1, ahead=[job_label(job) for job in line[:place]],
-                 running=[job_label(job) for job in live
-                          if job.get('status') == 'running' and job.get('pid') != entry.get('pid')
-                          and not (job.get('lane') == 'express' and not entry.get('express')
-                                   and (entry.get('estimate') or 0) > EXPRESS_SECONDS)],
-                 estimate=known(entry.get('estimate'), state['estimate']), lane=entry.get('lane') or state['lane'],
-                 express=bool(entry.get('express')))
-    if entry.get('queued_ts') is not None:
-        state['since'] = entry['queued_ts']
-    return state
-
-
-def run_start(log_dir: Path, plan: dict, jobs: list[dict]) -> float | None:
-    """When a plan began to run (Unix seconds): when it was admitted (its registry entry's stamp, else its plan's),
-    else when the plan was created."""
-    entry = job_entry(log_dir, jobs, 'running') or {}
-    return known(parse_time(entry.get('admitted')), parse_time((plan.get('queue') or {}).get('admitted')),
-                 parse_time(plan.get('created')))
-
-
 def plan_ended(plan: dict) -> float | None:
     """When a plan ended (Unix seconds): its ``finished`` stamp, else (its process gone without one) its last
     rewrite, else its creation."""
     return known(parse_time(plan.get('finished')), parse_time(plan.get('updated')), parse_time(plan.get('created')))
-
-
-def run_facts(log_dir: Path, plan: dict, jobs: list[dict], now: float) -> dict:
-    """A running plan's lane and timing: {'express': in the express lane (its registry entry's or its plan's
-    ``lane``), 'est': 'est ~40 min · ran 12m' (ran: since ``run_start``), '' for a plan that records no estimate}."""
-    entry = job_entry(log_dir, jobs, 'running') or {}
-    recorded = plan.get('queue') or {}
-    lane = entry.get('lane') or plan.get('lane') or recorded.get('lane')
-    estimate = known(entry.get('estimate'), plan.get('estimate'), recorded.get('estimate'))
-    est = ''
-    if estimate is not None:
-        start = run_start(log_dir, plan, jobs)
-        est = f"est {fmt_estimate(estimate)}" + (f" · ran {fmt_coarse(now - start)}" if start is not None else '')
-    return {'express': lane == 'express', 'est': est}
-
-
-def ordinal(number: int) -> str:
-    """1 -> '1st', 2 -> '2nd', 11 -> '11th'."""
-    suffix = 'th' if 10 <= number % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(number % 10, 'th')
-    return f"{number}{suffix}"
-
-
-def queue_times(state: dict, now: float) -> tuple[str, str]:
-    """A queued plan's (estimate, wait): ('~3 min', 'waited 12m'), the estimate 'short ~3 min' when it is short
-    enough for the express place or asked for it; ('', '12m 05s') for a plan that records no estimate."""
-    since, estimate = state.get('since'), state.get('estimate')
-    if estimate is None:
-        return '', fmt_duration(now - since) if since is not None else ''
-    label = fmt_estimate(estimate)
-    if EXPRESS_JOBS and (state.get('express') or estimate <= EXPRESS_SECONDS):
-        label = f"short {label}"
-    return label, f"waited {fmt_coarse(now - since)}" if since is not None else ''
-
-
-def waiting_text(state: dict, now: float) -> str:
-    """A queued plan's line: 'waiting · 2nd in line · for r25-a (round), eval-b (eval) · ~40 min · waited 12m'
-    ('waiting · ... · 12m 05s' for a plan that records no estimate)."""
-    parts = ['waiting']
-    if state.get('place'):
-        parts.append(f"{ordinal(state['place'])} in line")
-    if state.get('running'):
-        parts.append('for ' + ', '.join(state['running']))
-    parts += [part for part in queue_times(state, now) if part]
-    return ' · '.join(parts)
 
 
 def checkout_label(plan: dict) -> str:
@@ -1484,8 +1218,7 @@ def checkout_label(plan: dict) -> str:
 
 
 class LiveScanner:
-    """Which log folders (and registered jobs without one, ``registry_only``) have a live training; re-reads only the
-    plans that changed."""
+    """Which log folders have a live training; re-reads only the plans that changed."""
 
     def __init__(self):
         self._plans: dict[Path, tuple[tuple, dict]] = {}
@@ -1495,7 +1228,7 @@ class LiveScanner:
         result = []
         for log_dir in dirs:
             try:
-                stat = plan_file(log_dir).stat()
+                stat = (log_dir / PLAN_FILE).stat()
             except OSError:
                 continue
             signature = (stat.st_mtime_ns, stat.st_size, stat.st_ino)
@@ -1516,6 +1249,74 @@ class LiveScanner:
             self.live([log_dir])
             cached = self._plans.get(log_dir)
         return cached[1] if cached else {}
+
+
+# ---------------------------------------------------------------------------------------------------- the job queue
+# [currently running] lists the jobs of the machine's job queue (``triforce.jobqueue``), read from its database: the
+# window and the web view list them alike (``queue_listing``) and draw each one's header alike (``job_lines``).
+
+RECENT_SECONDS = 3600          # ended jobs stay in [currently running] (under 'finished') this long, then leave
+
+
+def read_queue(now: float, recent: float = RECENT_SECONDS) -> list[dict]:
+    """The queue's jobs that are running or queued, or ended in the last ``recent`` seconds (rows of
+    ``jobqueue.read_jobs``), those whose wrapper is gone marked dead first (``jobqueue.sweep``, as ``triforce job
+    list`` does); [] while the queue can't be read."""
+    try:
+        con = jobqueue.connect()
+    except (OSError, sqlite3.Error):
+        return []
+    try:
+        with jobqueue.transaction(con):
+            jobqueue.sweep(con, jobqueue.queue_dir(), now)
+        return jobqueue.read_jobs(con, "status IN ('queued', 'running') OR finished_ts >= ?", (now - recent,))
+    except (OSError, sqlite3.Error):
+        return []
+    finally:
+        con.close()
+
+
+def queue_listing(jobs: list[dict], now: float) -> tuple[list[tuple[dict, int | None]], list[dict]]:
+    """[currently running]'s jobs: (the live ones, each with its place in line: the running ones (no place), the one
+    that began to run last first, then the queued ones, each lane's in the order they will start (``jobqueue.line``)
+    with their place in it; the ended ones, the one that ended last first)."""
+    running = sorted((job for job in jobs if job.get('status') == 'running'),
+                     key=lambda job: (-(job.get('admitted_ts') or 0.0), -job['id']))
+    live = [(job, None) for job in running]
+    for lane in (jobqueue.JOBS_LANE, jobqueue.TOOLS_LANE):
+        live += [(job, place) for place, job in enumerate(jobqueue.line(jobs, lane, now), 1)]
+    ended = sorted((job for job in jobs if job.get('status') in jobqueue.ENDED),
+                   key=lambda job: (-(job.get('finished_ts') or 0.0), -job['id']))
+    return live, ended
+
+
+def job_key(job: dict) -> str:
+    """The key of a queue job's view in [currently running] (a log folder's is its path)."""
+    return f"job #{job['id']}"
+
+
+def job_folder(job: dict) -> Path | None:
+    """A job's log folder when it holds its plan (``jobs.record_plan`` put it in the job's row), else None: the job
+    is drawn from its row alone."""
+    folder = job.get('log_dir')
+    return Path(folder) if folder and (Path(folder) / PLAN_FILE).is_file() else None
+
+
+def job_color(job: dict, now: float) -> QColor:
+    """A job's state colour: running, queued (purple), overrun (the warning colour), or how it ended."""
+    if jobqueue.overrun(job, now):
+        return C.warn
+    return STATUS.get(job.get('status'), (C.muted, ''))[0]
+
+
+def job_lines(job: dict, now: float, place: int | None = None) -> list[tuple[str, QColor, bool]]:
+    """A job's header, the lines ``triforce job list`` prints for it (``jobqueue.describe``), each with its colour and
+    whether it is bold: the headline, the description, the state (``job_color``), its progress (a bar, a counter, or
+    'no progress data'), then its verb, kind, branch and command.  An empty line (no description) is left out."""
+    lines = jobqueue.describe(job, now, place)
+    styles = [(C.text, True), (C.muted, False), (job_color(job, now), True)]
+    styles += [(C.text, False)] * (len(lines) - 4) + [(C.faint, False)]
+    return [(text, color, bold) for text, (color, bold) in zip(lines, styles) if text]
 
 
 # ---------------------------------------------------------------------------------------------------- presentation
@@ -1539,10 +1340,7 @@ def plan_meta(model: Training, now: float) -> list[str]:
 
 
 def plan_counts(model: Training, statuses: list[str]) -> list[str]:
-    """A plan's run counts: '3 / 10 done', the unhappy endings, the run going on now; 'no progress data' for a job
-    without a log folder."""
-    if model.registry_only:
-        return [NO_PROGRESS]
+    """A plan's run counts: '3 / 10 done', the unhappy endings, the run going on now."""
     counts = {}
     for status in statuses:
         counts[status] = counts.get(status, 0) + 1
@@ -1555,22 +1353,6 @@ def plan_counts(model: Training, statuses: list[str]) -> list[str]:
     if active is not None:
         summary.append(f"now: {model.runs[active].name}")
     return summary
-
-
-def registry_lines(plan: dict) -> list[str]:
-    """What the registry knows of a job without a log folder, a line each: that it has no progress data, its command,
-    its working directory, its checkout's commit."""
-    command = [str(part) for part in plan.get('command') or []]
-    if command:
-        command[0] = Path(command[0]).name          # the interpreter, without its virtualenv's path
-    lines = [f"{NO_PROGRESS}: the job writes no log folder (only its registry entry)"]
-    if command:
-        lines.append(' '.join(command))
-    if plan.get('cwd'):
-        lines.append(f"in {plan['cwd']}")
-    if plan.get('commit'):
-        lines.append(f"commit {plan['commit']}")
-    return lines
 
 
 def row_fraction(run: Run, status: str, now: float) -> float:
@@ -2148,8 +1930,6 @@ class Header(Clickable):
         self.setFixedHeight(138)
         self.shown = {}
         self.settled = False        # nothing left to animate until the folder's data changes (FolderView.poll)
-        self._facts = (None, {})    # (second, registry snapshot) -> run_facts: looked up once a second, not a paint
-        self._second = None         # the second a waiting plan's header was last repainted in
 
     def targets(self) -> dict:
         """Each run's bar fill now, by run index."""
@@ -2166,22 +1946,16 @@ class Header(Clickable):
 
     def animating(self) -> bool:
         """Is the header due a step and a repaint this frame?  Every frame while its plan runs (the shimmer and
-        stripes of its segments) or a segment still eases toward its fill; once a second while its plan waits in
-        line or a job without a log folder runs (only its clocks move); never once a finished folder has settled.
+        stripes of its segments) or a segment still eases toward its fill; never once a finished folder has settled.
         [currently running] keeps a day of finished folders (Nov 18: 153 of them stepped and repainted 30 times a
         second took a whole core)."""
         model = self.view.model
         if model is None or self.settled:
             return False
-        status = model.status()
-        if status == 'running' and not model.registry_only:
+        if model.status() == 'running':
             return True
         if any(abs(self.shown.get(index, 0.0) - target) > 0.001 for index, target in self.targets().items()):
             return True
-        if status in LIVE_STATUSES:
-            second = int(time.time())
-            due, self._second = second != self._second, second
-            return due
         self.settled = True
         return False
 
@@ -2207,9 +1981,6 @@ class Header(Clickable):
         color, label = STATUS.get(status, (C.muted, status))
         x += paint_pill(p, x, rect.top() + 17, label.upper(), color) + 6
         x += paint_pill(p, x, rect.top() + 17, str(model.plan.get('kind', '')), C.muted) + 6
-        facts = self.facts(now)
-        if facts['express']:
-            x += paint_pill(p, x, rect.top() + 17, 'express', C.warn) + 6
         where = checkout_label(model.plan)
         if where:
             paint_pill(p, x, rect.top() + 17, where, C.faint)
@@ -2242,19 +2013,11 @@ class Header(Clickable):
                 p.fillRect(QRectF(x - 1, bar.top(), 2, bar.height()), C.bg)
         p.restore()
         fraction = model.fraction(now)
-        paint_bar_label(p, bar, NO_PROGRESS if model.registry_only else f'{fraction:.0%}', 9.5)
+        paint_bar_label(p, bar, f'{fraction:.0%}', 9.5)
 
-        x, y = left, bar.bottom() + 22
-        waiting = self.waiting(now)
-        if waiting:
-            p.setFont(font(9.5, QFont.Weight.Bold))
-            p.setPen(STATUS['queued'][0])
-            p.drawText(QPointF(x, y), waiting)
-            x += p.fontMetrics().horizontalAdvance(waiting) + 18
-        summary = plan_counts(model, statuses) + ([facts['est']] if facts['est'] else [])
         p.setFont(font(9.5))
         p.setPen(C.muted)
-        p.drawText(QPointF(x, y), '   ·   '.join(summary))
+        p.drawText(QPointF(left, bar.bottom() + 22), '   ·   '.join(plan_counts(model, statuses)))
         eta = model.eta(now)
         if eta is not None:
             p.setFont(font(10, QFont.Weight.Bold))
@@ -2262,26 +2025,50 @@ class Header(Clickable):
             p.drawText(QRectF(left, bar.bottom() + 8, right - left, 18), Qt.AlignmentFlag.AlignRight,
                        f"≈ {fmt_duration(eta)} left")
 
-    def waiting(self, now: float) -> str:
-        """A queued plan's waiting line ('' for any other plan): its place in line, what it waits for, its estimate
-        and how long it has waited."""
-        model = self.view.model
-        if model is None or model.status() != 'queued':
-            return ''
-        queue = self.view.owner.queues.get(model.dir) or queue_state(model.dir, model.plan, [], now=now)
-        return waiting_text(queue, now)
 
-    def facts(self, now: float) -> dict:
-        """A running plan's ``run_facts`` (its express lane, 'est ~40 min · ran 12m'); nothing for any other plan.
-        Kept for the second and the registry snapshot it was read in: the lookup walks every registry entry, and
-        the header is painted 30 times a second while its plan runs."""
-        model = self.view.model
-        if model is None or model.status() != 'running':
-            return {'express': False, 'est': ''}
-        key = (int(now), id(self.view.owner.jobs))
-        if self._facts[0] != key:
-            self._facts = (key, run_facts(model.dir, model.plan, self.view.owner.jobs, now))
-        return self._facts[1]
+class JobCard(Clickable):
+    """A queue job's header, painted line by line as ``triforce job list`` prints it (``job_lines``: the headline,
+    the description, the state, the progress, the command), above its log folder's header and rows when it has
+    one."""
+
+    LINE = 18
+
+    def __init__(self, view):
+        super().__init__('round')
+        self.view = view
+        self._second = None         # the second the card was last repainted in
+        self.refresh()
+
+    def lines(self, now: float) -> list[tuple[str, QColor, bool]]:
+        job = self.view.job
+        return job_lines(job, now, self.view.place) if job is not None else []
+
+    def refresh(self):
+        """Fits the card to its job's lines (their number changes with its progress counters) and repaints it."""
+        self.setFixedHeight(20 + self.LINE * max(1, len(self.lines(time.time()))))
+        self.update()
+
+    def animating(self) -> bool:
+        """Once a second while its job is live (its clocks move); never once it ended."""
+        job = self.view.job
+        if job is None or job.get('status') not in jobqueue.LIVE:
+            return False
+        second = int(time.time())
+        due, self._second = second != self._second, second
+        return due
+
+    def paintEvent(self, _event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = self.paint_card(p)
+        left, width = rect.left() + 16, rect.width() - 32
+        y = rect.top() + 10
+        for text, color, bold in self.lines(time.time()):
+            p.setFont(font(9.5, QFont.Weight.Bold if bold else QFont.Weight.Normal, mono=True))
+            p.setPen(color)
+            p.drawText(QRectF(left, y, width, self.LINE), Qt.AlignmentFlag.AlignVCenter,
+                       p.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, int(width)))
+            y += self.LINE
 
 
 def chain_sections(result: dict) -> list:
@@ -2335,8 +2122,7 @@ def window_title(models: list, now: float) -> str:
     running = [model for model in models if model.status() == 'running']
     if not running:
         return 'Triforce training'
-    parts = [model.name if model.registry_only else f"{model.fraction(now):.0%} {model.name}"
-             for model in running[:TITLE_PLANS]]
+    parts = [f"{model.fraction(now):.0%} {model.name}" for model in running[:TITLE_PLANS]]
     if len(running) > TITLE_PLANS:
         parts.append(f"+{len(running) - TITLE_PLANS} more")
     return ' · '.join(parts) + ' — Triforce training'
@@ -2901,7 +2687,17 @@ class DetailPane(QWidget):
         self.skip_startup = True        # Window's 'skip startup' checkbox
         self._log_signature = None
 
-    def refresh(self, model: Training, selection, force: bool = False):
+    def refresh(self, model: Training, selection, force: bool = False, job: dict | None = None,
+                place: int | None = None):
+        """Shows ``selection`` (a run index or 'round') of ``model``; a queue ``job`` without a log folder (no
+        ``model``) by its header's lines."""
+        if (model is None or not model.plan) and job is not None:
+            lines = job_lines(job, time.time(), place)
+            key = ('job', tuple(text for text, _, _ in lines))
+            if key != self._key or force:
+                self._key = key
+                self._show_job(job, lines)
+            return
         key = (id(model), selection, model.version if model else None)
         if key != self._key or force:
             self._key = key
@@ -2925,6 +2721,17 @@ class DetailPane(QWidget):
         self.events.clear()
         self.log.clear()
         self._log_signature = None
+
+    def _show_job(self, job: dict, lines: list[tuple[str, QColor, bool]]):
+        """A queue job without a log folder: its header's lines (``job_lines``) are all there is to show."""
+        self._clear()
+        label = STATUS.get(job.get('status'), (C.muted, job.get('status')))[1]
+        self.title.setText(f"<span style='font-size:15pt; font-weight:700'>{job.get('name') or ''}</span>"
+                           f"&nbsp;&nbsp;<span style='color:{job_color(job, time.time()).name()}; font-weight:700'>"
+                           f"{label}</span><br><span style='color:{C.faint.name()}'>{job.get('cwd') or ''}</span>")
+        self.chart_stack.setCurrentIndex(1)
+        self.summary.set_sections([('text', 'Job', [(text, color) for text, color, _ in lines])])
+        self.evaluation.set_sections([], 'no log folder')
 
     # -- run
 
@@ -2955,12 +2762,6 @@ class DetailPane(QWidget):
                            f"&nbsp;&nbsp;<span style='color:{color.name()}; font-weight:700'>{label}</span>"
                            f"<br><span style='color:{C.faint.name()}'>{model.dir}</span>")
         self.chart_stack.setCurrentIndex(1)
-        if model.registry_only:
-            self.summary.set_sections([('text', 'Job registry', [(line, C.muted)
-                                                                 for line in registry_lines(model.plan)])])
-            self.evaluation.set_sections([], NO_PROGRESS)
-            self._set_events([])
-            return
         evals, train, sps, wall, linger = [], [], [], [], []
         speeds = [run.sps() or 0 for run in model.runs]
         walls = [((run.finished_ts or time.time()) - run.started_ts) if run.started_ts else 0 for run in model.runs]
@@ -3057,17 +2858,26 @@ class DetailPane(QWidget):
 
 
 class FolderView(QWidget):
-    """One log folder in the left column: header, a row per run and the eval-chain card."""
+    """One entry of the left column: a queue job's card (``JobCard``), when it is one, then its log folder (when it
+    has one): header, a row per run and the eval-chain card.  ``key``: the job's (``job_key``), else the folder's
+    path (None for the empty view)."""
 
-    def __init__(self, owner, model: 'Training | None'):
+    def __init__(self, owner, model: 'Training | None', job: dict | None = None, place: int | None = None):
         super().__init__()
         self.owner = owner
         self.model = model
+        self.job, self.place = job, place
+        self.key = job_key(job) if job is not None else (model.dir if model else None)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
+        self.job_card = JobCard(self)
+        self.job_card.clicked.connect(self._clicked)
+        self.job_card.setVisible(job is not None)
+        layout.addWidget(self.job_card)
         self.header = Header(self)
         self.header.clicked.connect(self._clicked)
+        self.header.setVisible(model is not None or job is None)
         layout.addWidget(self.header)
         self.rows_layout = QVBoxLayout()
         self.rows_layout.setSpacing(6)
@@ -3082,6 +2892,18 @@ class FolderView(QWidget):
     @property
     def dir(self) -> Path | None:
         return self.model.dir if self.model else None
+
+    def set_job(self, job: dict, place: int | None) -> bool:
+        """The job's row as of the queue's last read; its log folder, once it has one, is shown under its card (True
+        when it just got it)."""
+        self.job, self.place = job, place
+        folder = job_folder(job)
+        attached = self.model is None and folder is not None
+        if attached:
+            self.model = Training(folder)
+            self.header.setVisible(True)
+        self.job_card.refresh()
+        return attached
 
     def _clicked(self, key):
         self.owner.select(self, key)
@@ -3120,8 +2942,10 @@ class FolderView(QWidget):
         return changed
 
     def frame(self):
-        """One animation frame: only what animates is stepped and repainted (a live plan's header, a run that is
-        training or evaluating, a bar still easing)."""
+        """One animation frame: only what animates is stepped and repainted (a live job's card once a second, a live
+        plan's header, a run that is training or evaluating, a bar still easing)."""
+        if self.job_card.animating():
+            self.job_card.update()
         if self.header.animating():
             self.header.step()
             self.header.update()
@@ -3133,12 +2957,13 @@ class FolderView(QWidget):
             self.chain_card.update()
 
     def show_selection(self, key):
-        """Highlights ``key`` (a run index or 'round'); None when another folder holds the selection."""
+        """Highlights ``key`` (a run index or 'round'); None when another entry holds the selection."""
         for row in self.rows:
             row.selected = row.index == key
             row.update()
-        self.header.selected = key == 'round'
+        self.header.selected = self.job_card.selected = key == 'round'
         self.header.update()
+        self.job_card.update()
 
 
 MACHINE_MS = 2000      # status bar refresh
@@ -3230,10 +3055,10 @@ class MachineStatus(QObject):
 
 
 class Window(QMainWindow):
-    """Folder picker on top; one log folder, or every live one ([currently running]), on the left; details on
-    the right.  ``auto_live`` (set by picking [currently running], or at startup without a folder; cleared by
-    picking a folder) keeps [currently running] selected: it shows the live folders and the finished ones not
-    cleared yet, and nothing while none is live; a training that starts appears by itself."""
+    """Folder picker on top; one log folder, or every job of the queue and live folder ([currently running]), on the
+    left; details on the right.  ``auto_live`` (set by picking [currently running], or at startup without a folder;
+    cleared by picking a folder) keeps [currently running] selected: it shows the live jobs and folders and the
+    finished ones not cleared yet, and nothing while none is live; a job that starts appears by itself."""
 
     def __init__(self, root: Path, initial: Path | None):
         super().__init__()
@@ -3241,17 +3066,19 @@ class Window(QMainWindow):
         self.views: list[FolderView] = []
         self.auto_live = initial is None
         self.live_mode = False
-        self.kept: list[Path] = []          # folders shown in this [currently running] session (live or finished;
-                                            # 'Clear finished' drops the finished ones, RECENT_SECONDS expires them)
+        self.kept: list[Path] = []          # folders no job owns shown in this [currently running] session (live or
+                                            # finished; 'Clear finished' drops the finished ones, RECENT_SECONDS
+                                            # expires them)
         self.left_live: dict[Path, float] = {}  # kept folders no longer live -> when the window first saw that
-        self.live_dirs: list[Path] = []
-        self.recent: list[Path] = []        # registered jobs (any checkout) that ended in the last RECENT_SECONDS
-        self.cleared: set[Path] = set()     # finished folders 'Clear finished' hid (they don't come back)
+        self.live_dirs: list[Path] = []     # live folders no job owns (a run started at a terminal)
+        self.cleared: set = set()           # finished entries (job keys, folders) 'Clear finished' hid (for good)
         self._heading_at: int | None = None
-        self.queues: dict[Path, dict] = {}  # live queued folders -> queue_state (refreshed by each scan)
-        self.jobs: list[dict] = []          # the job registry as of the last scan (running jobs' lanes, estimates)
+        self.queue_live: list[tuple[dict, int | None]] = []    # the queue's live jobs and places (``queue_listing``)
+        self.queue_ended: list[dict] = []   # the queue's jobs that ended in the last RECENT_SECONDS, last one first
+        self.queue_rows: dict[str, tuple[dict, int | None]] = {}   # job key -> (row, place) as of the last scan
+        self.claimed: set[Path] = set()     # the log folders of the queue's jobs (resolved): shown under their job
         self.scanner = LiveScanner()
-        self.selection: tuple[Path | None, object] | None = None    # (folder, run index | 'round')
+        self.selection: tuple[object, object] | None = None    # (view key, run index | 'round')
         self.auto_selection = True
         self.t = 0.0
         self._t0 = time.monotonic()
@@ -3314,7 +3141,7 @@ class Window(QMainWindow):
         else:
             self._update_mode()
         if not self.views:
-            self._show_dirs([])
+            self._show([])
 
         self.poll_timer = QTimer(self)
         self.poll_timer.timeout.connect(self.poll)
@@ -3341,44 +3168,37 @@ class Window(QMainWindow):
 
     # -- folders and modes
 
-    def _shown_dirs(self) -> list[Path]:
-        return [view.dir for view in self.views if view.dir is not None]
+    def _shown(self) -> list:
+        """The keys of the shown views (``FolderView.key``: a job's, a folder's path), top to bottom."""
+        return [view.key for view in self.views if view.key is not None]
 
     def _scan(self):
-        """Lists the log folders (dropdown) and finds the live ones; [currently running] can always be picked.
-        Besides the root's folders: the jobs in the machine's job registry (every checkout's: the live ones and
-        those that ended in the last ``RECENT_SECONDS``; one without a log folder by its registry file, until its
-        folder has a plan).  A live folder whose plan is queued gets its place in the job queue (``queues``)."""
+        """Reads the job queue (``read_queue``: its live jobs and those that ended in the last ``RECENT_SECONDS``),
+        lists the log folders (dropdown: the root's and the queue's jobs', every checkout's) and finds the live ones
+        no job owns (``live_dirs``); [currently running] can always be picked."""
         dirs = find_log_dirs(self.root)
         root = self.root.resolve()
-        jobs, now = read_registry(), time.time()
-        registered, recent = registry_folders(jobs, now)
-        gone = superseded(jobs)
-        self.kept = [path for path in self.kept if path not in gone]
-        dirs += [path for path in self.scanner.live(registered) if path not in dirs]
-        self.recent = [path for path in recent if path not in self.cleared]
-        dirs += [path for path in self.recent if path not in dirs]
+        now = time.time()
+        jobs = read_queue(now)
+        self.queue_live, self.queue_ended = queue_listing(jobs, now)
+        self.queue_rows = {job_key(job): (job, place)
+                           for job, place in self.queue_live + [(job, None) for job in self.queue_ended]}
+        folders = [folder for folder in map(job_folder, jobs) if folder is not None]
+        self.claimed = {folder.resolve() for folder in folders}
+        listed = {path.resolve() for path in dirs}
+        dirs += [folder for folder in dict.fromkeys(folders) if folder.resolve() not in listed]
         if not self.live_mode:
-            dirs += [shown for shown in self._shown_dirs() if shown not in dirs and shown not in gone]
-        self.live_dirs = self.scanner.live(dirs)
-        self.jobs = jobs
-        self.queues = {path: queue_state(path, self.scanner.plan(path), jobs, now=now) for path in self.live_dirs
-                       if self.scanner.plan(path).get('status') == 'queued'}
+            dirs += [shown for shown in self._shown() if isinstance(shown, Path) and shown not in dirs]
+        self.live_dirs = self.scanner.live([path for path in dirs if path.resolve() not in self.claimed])
         if dirs != self.dirs or self.combo.count() == 0:
             self.dirs = dirs
             self.combo.blockSignals(True)
             self.combo.clear()
             self.combo.addItem(LIVE_LABEL, LIVE_KEY)
             for path in dirs:
-                if registry_only(path):       # a job without a log folder: its name, not its registry file's
-                    plan = self.scanner.plan(path)
-                    name = plan.get('name') or path.name
-                    where = ' · '.join(filter(None, (checkout_label(plan), 'no log folder')))
-                else:
-                    name = path.name
-                    where = '' if path.parent.resolve() == root else (checkout_label(self.scanner.plan(path))
-                                                                      or str(path.parent))
-                self.combo.addItem(f"{name}  ({where})" if where else name, str(path))
+                where = '' if path.parent.resolve() == root else (checkout_label(self.scanner.plan(path))
+                                                                  or str(path.parent))
+                self.combo.addItem(f"{path.name}  ({where})" if where else path.name, str(path))
             self.combo.blockSignals(False)
         self.combo.model().item(0).setEnabled(True)
         self._sync_clear()
@@ -3389,7 +3209,7 @@ class Window(QMainWindow):
         if self.live_mode:
             self.combo.setCurrentIndex(0)
         else:
-            shown = self._shown_dirs()
+            shown = self._shown()
             index = self.combo.findData(str(shown[0])) if shown else -1
             if index >= 0:
                 self.combo.setCurrentIndex(index)
@@ -3401,8 +3221,8 @@ class Window(QMainWindow):
 
     def _update_mode(self):
         """[currently running] stays selected once entered (by picking it, or at startup without a folder): it shows
-        the live folders and the finished ones not cleared yet, or nothing while none is live.  A folder the user
-        picked stays put."""
+        the live jobs and folders and the finished ones not cleared yet, or nothing while none is live.  A folder the
+        user picked stays put."""
         if self.live_mode:
             self.kept += [path for path in self.live_dirs if path not in self.kept]
             self._expire_finished(time.time())
@@ -3417,7 +3237,9 @@ class Window(QMainWindow):
 
     def _expire_finished(self, now: float):
         """Drops the kept folders that stopped being live more than ``RECENT_SECONDS`` ago (by the window's own
-        clock: a job that dies has no finish stamp, and should still be seen as 'process gone' for the hour)."""
+        clock: a training whose process dies has no finish stamp, and should still be seen as 'process gone' for the
+        hour), and those a job owns by now (shown under the job)."""
+        self.kept = [path for path in self.kept if path.resolve() not in self.claimed]
         ended = {path: self.left_live.get(path, now) for path in self.kept if path not in self.live_dirs}
         self.left_live = {path: seen for path, seen in ended.items() if now - seen <= RECENT_SECONDS}
         self.kept = [path for path in self.kept if path in self.live_dirs or path in self.left_live]
@@ -3429,40 +3251,44 @@ class Window(QMainWindow):
         self._sync_clear()
         self._sync_combo()
 
-    def _finished(self) -> list[Path]:
-        """[currently running]'s finished folders, the one that ended last first (``plan_ended``; a folder that ends
-        joins at the top, the others keep their order): kept ones whose training ended and the registry's recently
-        ended jobs, minus what 'Clear finished' hid."""
-        paths = {path for path in self.kept if path not in self.live_dirs} | set(self.recent)
-        return sorted((path for path in paths if path not in self.live_dirs and path not in self.cleared),
-                      key=lambda path: (plan_ended(self.scanner.plan(path)) or 0.0, log_dir_key(path)), reverse=True)
+    def _finished(self) -> list:
+        """[currently running]'s finished entries, the one that ended last first (one that ends joins at the top, the
+        others keep their order): the queue's jobs that ended in the last ``RECENT_SECONDS`` and the kept folders
+        whose training ended (``plan_ended``), minus what 'Clear finished' hid."""
+        ended = [(job.get('finished_ts') or 0.0, job_key(job)) for job in self.queue_ended]
+        ended += [(plan_ended(self.scanner.plan(path)) or 0.0, path) for path in self.kept
+                  if path not in self.live_dirs]
+        return [key for _, key in sorted(ended, key=lambda item: item[0], reverse=True) if key not in self.cleared]
 
     def _show_live(self):
-        """[currently running]: the running folders, the one that began to run last on top (``run_start``: a job
-        that starts is added at the top and pushes the others down), the queued ones (waiting their turn) after them
-        in the order they will start (their place in line), then the 'finished' heading and the finished ones."""
-        live = [path for path in self.kept if path in self.live_dirs]
-        running = sorted((path for path in live if path not in self.queues), reverse=True,
-                         key=lambda path: (run_start(path, self.scanner.plan(path), self.jobs) or 0.0,
-                                           log_dir_key(path)))
-        waiting = sorted((path for path in live if path in self.queues),
-                         key=lambda path: (self.queues[path].get('place') or math.inf, log_dir_key(path)))
-        live = running + waiting
+        """[currently running]: the running jobs and live folders, the one that began to run last on top (a job that
+        starts is added at the top and pushes the others down), the queued jobs after them in the order they will
+        start (``queue_listing``), then the 'finished' heading and the finished ones."""
+        running = [(job.get('admitted_ts') or 0.0, job_key(job)) for job, _ in self.queue_live
+                   if job.get('status') == 'running']
+        running += [(parse_time(self.scanner.plan(path).get('created')) or 0.0, path) for path in self.kept
+                    if path in self.live_dirs]
+        live = [key for _, key in sorted(running, key=lambda item: item[0], reverse=True)]
+        live += [job_key(job) for job, _ in self.queue_live if job.get('status') == 'queued']
         finished = self._finished()
         heading = len(live) if finished else None
-        if live + finished != self._shown_dirs() or heading != self._heading_at or not self.views:
-            self._show_dirs(live + finished, heading)
+        if live + finished != self._shown() or heading != self._heading_at or not self.views:
+            self._show(live + finished, heading)
+        attached = [view.set_job(*self.queue_rows[view.key]) for view in self.views
+                    if view.job is not None and view.key in self.queue_rows]
+        if any(attached):
+            self.poll(force=True)
 
     def _sync_clear(self):
-        """'Clear finished' is there only in [currently running], enabled while it shows a finished folder."""
+        """'Clear finished' is there only in [currently running], enabled while it shows a finished entry."""
         finished = len(self._finished()) if self.live_mode else 0
         self.clear_button.setVisible(self.live_mode)
         self.clear_button.setEnabled(finished > 0)
         self.clear_button.setText(f"Clear finished ({finished})" if finished else 'Clear finished')
 
     def clear_finished(self):
-        """Hides the finished folders of [currently running] for the rest of the session: only the live ones stay,
-        a cleared folder doesn't come back, trainings that start later are added as before."""
+        """Hides the finished entries of [currently running] for the rest of the session: only the live ones stay,
+        a cleared one doesn't come back, jobs that start later are added as before."""
         if not self.live_mode:
             return
         self._scan()
@@ -3474,27 +3300,32 @@ class Window(QMainWindow):
     def _enter_folder(self, path: Path):
         self.live_mode = False
         self.kept = []
-        self._show_dirs([path])
+        self._show([path])
         self._scan()
 
     def load(self, log_dir: Path):
         """Shows one log folder."""
         self._enter_folder(log_dir)
 
-    def _show_dirs(self, dirs: list[Path], heading_at: int | None = None):
-        """Shows these folders top to bottom (the 'finished' heading before ``dirs[heading_at]``), reusing the
-        views (and their state) of folders already shown."""
-        existing = {view.dir: view for view in self.views if view.dir is not None}
+    def _show(self, keys: list, heading_at: int | None = None):
+        """Shows these entries top to bottom (the 'finished' heading before ``keys[heading_at]``): a job of the queue
+        by its key (``queue_rows``), a folder by its path; the views (and their state) of those already shown are
+        reused."""
+        existing = {view.key: view for view in self.views if view.key is not None}
         views = []
-        for path in dirs:
-            view = existing.get(path)
+        for key in keys:
+            view = existing.get(key)
             if view is None:
-                model = Training(path)
-                model.poll()
-                view = FolderView(self, model)
+                job, place = (None, None) if isinstance(key, Path) else self.queue_rows[key]
+                folder = key if job is None else job_folder(job)
+                model = None
+                if folder is not None:
+                    model = Training(folder)
+                    model.poll()
+                view = FolderView(self, model, job, place)
             views.append(view)
         if not views:
-            empty = next((view for view in self.views if view.model is None), None)
+            empty = next((view for view in self.views if view.key is None), None)
             views = [empty or FolderView(self, None)]
         for view in self.views:
             self.views_layout.removeWidget(view)
@@ -3504,11 +3335,11 @@ class Window(QMainWindow):
         for index, view in enumerate(views):
             self.views_layout.insertWidget(index, view)
         self.views = views
-        self._heading_at = heading_at if heading_at is not None and dirs else None
+        self._heading_at = heading_at if heading_at is not None and keys else None
         if self._heading_at is not None:
             self.views_layout.insertWidget(self._heading_at, self.finished_heading)
         self.finished_heading.setVisible(self._heading_at is not None)
-        if self.selection is not None and self.selection[0] not in dirs:
+        if self.selection is not None and self.selection[0] not in keys:
             self.selection = None
             self.auto_selection = True
         self._sync_clear()
@@ -3522,7 +3353,7 @@ class Window(QMainWindow):
                 self._enter_live()
             return
         path = Path(data)
-        if self.live_mode or self._shown_dirs()[:1] != [path]:
+        if self.live_mode or self._shown()[:1] != [path]:
             self.auto_live = False
             self.load(path)
 
@@ -3542,41 +3373,44 @@ class Window(QMainWindow):
             self.root = path
             self.auto_live = True
             self.live_mode, self.kept = False, []
-            self._show_dirs([])
+            self._show([])
             self._scan()
             self._update_mode()
 
     # -- selection and updates
 
     def select(self, view: FolderView, key):
-        """A click on a folder's header/chain card ('round') or one of its runs (index).  Following the active run
-        resumes only when the click lands on what auto-selection would pick anyway."""
-        self.selection = (view.dir, key)
+        """A click on an entry's job card, header or chain card ('round') or one of its runs (index).  Following the
+        active run resumes only when the click lands on what auto-selection would pick anyway."""
+        self.selection = (view.key, key)
         self.auto_selection = self.selection == self._auto_target()
         self._apply_selection()
 
     def _selected_view(self) -> FolderView | None:
         if self.selection is None:
             return None
-        return next((view for view in self.views if view.dir == self.selection[0]), None)
+        return next((view for view in self.views if view.key == self.selection[0]), None)
 
     def _refresh_detail(self, force: bool = False):
         view = self._selected_view()
-        self.detail.refresh(view.model if view else None, self.selection[1] if view else None, force=force)
+        if view is None:
+            self.detail.refresh(None, None, force=force)
+        else:
+            self.detail.refresh(view.model, self.selection[1], force=force, job=view.job, place=view.place)
 
     def _apply_selection(self):
         for view in self.views:
-            selected = self.selection is not None and view.dir == self.selection[0]
+            selected = self.selection is not None and view.key == self.selection[0]
             view.show_selection(self.selection[1] if selected else None)
         self._refresh_detail()
 
-    def _auto_target(self) -> tuple[Path | None, object] | None:
-        """The active run of the topmost folder that has one, else the topmost folder."""
+    def _auto_target(self) -> tuple[object, object] | None:
+        """The active run of the topmost entry that has one, else the topmost entry."""
         for view in self.views:
             active = view.model.active_index() if view.model else None
             if active is not None:
-                return view.dir, active
-        return (self.views[0].dir, 'round') if self.views else None
+                return view.key, active
+        return (self.views[0].key, 'round') if self.views else None
 
     def _auto_select(self) -> bool:
         """Moves the selection to the auto target; True if it changed."""
@@ -3725,23 +3559,19 @@ def bar_style(status: str) -> str:
 
 
 def plan_fields(model: Training) -> dict:
-    """What every card of a plan says about it (``no_progress``: a job without a log folder)."""
-    return {'plan': model.name, 'plan_kind': str(model.plan.get('kind') or ''), 'checkout': checkout_label(model.plan),
-            'no_progress': model.registry_only}
+    """What every card of a plan says about it."""
+    return {'plan': model.name, 'plan_kind': str(model.plan.get('kind') or ''), 'checkout': checkout_label(model.plan)}
 
 
-def job_card(model: Training, started, now: float) -> dict:
-    """A registered job without a log folder: one card with what the registry knows (its name, kind, checkout,
-    command, time run) and no progress."""
-    elapsed = ((model.finished_ts or now) - started) if started else None
-    return {
-        **plan_fields(model), 'kind': str(model.plan.get('kind') or ''), 'name': model.name, 'family': '',
-        'where': '', 'fraction': 0.0, 'bar_label': NO_PROGRESS, 'bar': '', 'blocks': None, 'numbers': '',
-        'phase': NO_PROGRESS, 'outcome': '', 'speed': '', 'elapsed': fmt_duration(elapsed) if elapsed is not None
-        else '', 'eta': '', 'badge': web_badge(None), 'clips': '', 'act': '',
-        'lines': [[line, C.muted.name()] for line in registry_lines(model.plan)[1:]], 'charts': [], 'summary': [],
-        'eval': [], 'log': [], 'log_name': '',
-    }
+def web_job(job: dict, place: int | None, now: float) -> dict:
+    """A queue job as the page lists it, its header as the window paints it (``job_lines``): {'id': its key,
+    'status', 'color', 'place' (in line, while queued), 'ended', 'lines': [[text, color, bold]], 'folder': its log
+    folder ('' without one), 'plan': its folder's plan line while it runs (``WebState``), else None}."""
+    folder = job_folder(job)
+    return {'id': job_key(job), 'status': job.get('status') or '', 'color': job_color(job, now).name(),
+            'place': place, 'ended': job.get('status') in jobqueue.ENDED,
+            'lines': [[text, color.name(), bold] for text, color, bold in job_lines(job, now, place)],
+            'folder': str(folder) if folder else '', 'plan': None}
 
 
 def run_card(model: Training, run: Run, status: str, now: float) -> dict:
@@ -3834,20 +3664,20 @@ class MachineSampler:
 
 
 class WebState:
-    """What the page shows: the runs going on now on top, the one that started last first (a run that starts is added
-    at the top and pushes the others down), below them the runs that ended, the one that ended last first (a run that
-    ends joins them at their top, so below the running cards nothing changes places); each live plan's queue, the
-    plan that began to run last first; and the jobs waiting their turn in the job queue.
+    """What the page shows: the queue's jobs as [currently running] lists them (``queue_listing``: the running ones,
+    the one that began to run last first, the queued ones in the order they will start with their place in line,
+    then those that ended in the last ``RECENT_SECONDS``), each by its header's lines (``job_lines``, as the window
+    paints them) and, while its log folder's plan runs, that plan's line; the running plans no job owns (a run
+    started at a terminal); then the runs going on now on top, the one that started last first (a run that starts is
+    added at the top and pushes the others down), below them the runs that ended, the one that ended last first (a
+    run that ends joins them at their top, so below the running cards nothing changes places).
 
-    Its folders are found as [currently running] finds them (the logs root, the job registry, the running triforce
-    processes' roots), each read by its own ``Training``.  A card is a training run of a round, an evaluation of a
-    batch, or a plan's eval-chain; pending runs are only listed in their plan's line.  A queued plan (waiting its turn)
-    has no cards and no plan line: it is a 'waiting' line (its place in line, what it waits for, its estimate, since
-    when; in the order they will start) until it runs, or until its process is gone; a running plan in the express
-    lane says so, and one with an estimate shows it beside its time run.  A run that ended stays ``expire`` seconds
-    after its end (the time its events or plan record; a run seen running that ended without one, e.g. its process
-    died, from when it was seen ended), so runs that ended before the server started never show.  ``clock`` is the
-    time source (tests inject one); ``machine`` returns the machine line."""
+    Its folders are the logs root's and the queue's jobs' (every checkout's), each read by its own ``Training``.  A
+    card is a training run of a round, an evaluation of a batch, or a plan's eval-chain; pending runs are only listed
+    in their plan's line.  A run that ended stays ``expire`` seconds after its end (the time its events or plan
+    record; a run seen running that ended without one, e.g. its process died, from when it was seen ended), so runs
+    that ended before the server started never show.  ``clock`` is the time source (tests inject one); ``machine``
+    returns the machine line."""
 
     def __init__(self, root: Path, *, clock=time.time, expire: float = WEB_EXPIRE, machine=None,
                  scan_every: float = WEB_SCAN):
@@ -3863,10 +3693,10 @@ class WebState:
         self.ended: dict[str, float] = {}     # cards seen active that ended without a time of their own
         self.first_seen: dict[str, float] = {}
         self._scanned = None
-        self.jobs: list[dict] = []            # the job registry as of the last scan
+        self.jobs: list[dict] = []            # the queue's jobs as of the last scan (``read_queue``)
         self._lock = threading.Lock()
         self.snapshot: dict = {}
-        self._body = json.dumps({'loading': True, 'cards': [], 'plans': [], 'waiting': []}).encode()
+        self._body = json.dumps({'loading': True, 'cards': [], 'plans': [], 'jobs': []}).encode()
 
     def body(self) -> bytes:
         """The latest snapshot as JSON."""
@@ -3879,15 +3709,13 @@ class WebState:
         return ended is not None and now - ended < self.expire
 
     def scan(self, now: float):
-        """Finds the folders to read: every live plan (running or queued; a registered job without a log folder by
-        its registry file), and plans that ended within ``expire`` seconds; keeps the registry for the queued plans'
-        places in line."""
+        """Reads the job queue and finds the folders to read: the root's and the queue's jobs' whose plan runs, or
+        ended within ``expire`` seconds."""
         dirs = find_log_dirs(self.root)
-        self.jobs = read_registry()
-        for path in superseded(self.jobs):
-            self.models.pop(path, None)
-        registered, recent = registry_folders(self.jobs, now)
-        candidates = list(dict.fromkeys(dirs + registered + recent))
+        self.jobs = read_queue(now)
+        listed = {path.resolve() for path in dirs}
+        folders = [folder for folder in map(job_folder, self.jobs) if folder is not None]
+        candidates = dirs + [folder for folder in dict.fromkeys(folders) if folder.resolve() not in listed]
         live = set(self.scanner.live(candidates))
         self.dropped -= live
         for path in candidates:
@@ -3930,29 +3758,14 @@ class WebState:
                 started = (chain['start'] or {}).get('ts') or self.first_seen.setdefault(key, now)
                 cards.append({'id': key, 'started_ts': started, 'ended_ts': ended, 'status': chain['status'],
                               'expires_in': left, **chain_card(model, chain, now)})
-        if model.registry_only and model.status() != 'queued':
-            key, status = str(model.dir), model.status()
-            shown, left, ended = self._visible(key, status in ACTIVE, model.finished_ts, now)
-            if shown:
-                started = run_start(model.dir, model.plan, self.jobs) or self.first_seen.setdefault(key, now)
-                cards.append({'id': key, 'started_ts': started, 'ended_ts': ended, 'status': status,
-                              'expires_in': left, **job_card(model, started, now)})
-        facts = self._facts(model, now)
         for card in cards:
             color, label = STATUS.get(card['status'], (C.muted, card['status']))
             card.update(status_label=label, color=color.name(), active=card['status'] in ACTIVE,
-                        started=fmt_clock(card['started_ts']), **facts)
+                        started=fmt_clock(card['started_ts']))
         return cards
 
-    def _facts(self, model: Training, now: float) -> dict:
-        """A running plan's ``run_facts`` (express lane, 'est ~40 min · ran 12m'); nothing for any other plan."""
-        if model.status() != 'running':
-            return {'express': False, 'est': ''}
-        return run_facts(model.dir, model.plan, self.jobs, now)
-
     def _plan_line(self, model: Training, now: float) -> dict:
-        """A live plan's line: its header's facts (its express lane, estimate and time run) and the runs it has
-        queued."""
+        """A running plan's line: its share done, time left, run counts and timing, and the runs it has queued."""
         statuses = model.statuses()
         queued = [run.name for run, status in zip(model.runs, statuses) if status == 'pending']
         chain = model.chain()
@@ -3963,22 +3776,20 @@ class WebState:
         return {'id': str(model.dir), **plan_fields(model), 'status': model.status(), 'status_label': label,
                 'color': color.name(), 'fraction': model.fraction(now), 'eta': fmt_duration(eta) if eta is not None
                 else '', 'meta': plan_meta(model, now), 'counts': plan_counts(model, statuses), 'queued': queued,
-                'created_ts': model.created_ts, 'started_ts': run_start(model.dir, model.plan, self.jobs),
-                **self._facts(model, now)}
+                'created_ts': model.created_ts}
 
-    def _waiting_line(self, model: Training, now: float) -> dict:
-        """A queued plan's line: its place in line (the order they will start), name, kind, what it waits for, its
-        estimate and for how long it has waited."""
-        queue = queue_state(model.dir, model.plan, self.jobs, now=now)
-        color, label = STATUS['queued']
-        place = queue['place']
-        estimate, waited = queue_times(queue, now)
-        return {'id': str(model.dir), **plan_fields(model), 'status': 'queued', 'status_label': label,
-                'color': color.name(), 'place': place, 'place_label': f"{ordinal(place)} in line" if place else '',
-                'running': queue['running'], 'ahead': queue['ahead'], 'limit': queue['limit'],
-                'waits': ('for ' + ', '.join(queue['running'])) if queue['running'] else '',
-                'estimate': estimate, 'waited': waited,
-                'text': waiting_text(queue, now), 'created_ts': model.created_ts}
+    def _jobs(self, plans: list[dict], now: float) -> list[dict]:
+        """The queue's jobs (``web_job``), in [currently running]'s order; a job whose log folder's plan runs takes
+        that plan's line out of ``plans``."""
+        live, ended = queue_listing(self.jobs, now)
+        owned = {str(Path(plan['id']).resolve()): plan for plan in plans}
+        jobs = [web_job(job, place, now) for job, place in live + [(job, None) for job in ended]]
+        for job in jobs:
+            plan = owned.get(str(Path(job['folder']).resolve())) if job['folder'] else None
+            if plan is not None:
+                job['plan'] = plan
+                plans.remove(plan)
+        return jobs
 
     def refresh(self) -> dict:
         """Reads what changed and builds a new snapshot; returns it (the server's thread calls this)."""
@@ -3987,12 +3798,9 @@ class WebState:
         if self._scanned is None or tick - self._scanned >= self.scan_every:
             self._scanned = tick
             self.scan(now)
-        cards, plans, waiting = [], [], []
+        cards, plans = [], []
         for path, model in list(self.models.items()):
             model.poll()
-            if model.status() == 'queued':
-                waiting.append(self._waiting_line(model, now))
-                continue
             shown = self._cards(model, now)
             cards += shown
             if model.status() == 'running':
@@ -4003,10 +3811,10 @@ class WebState:
         # Running cards first, newest start on top; then the ended ones, newest end on top.
         cards.sort(key=lambda card: (not card['active'], -(card['started_ts'] if card['active'] else card['ended_ts']),
                                      card['id']))
-        plans.sort(key=lambda plan: (-(plan['started_ts'] or 0), plan['id']))
-        waiting.sort(key=lambda line: (line['place'] or math.inf, line['created_ts'] or 0, line['id']))
+        plans.sort(key=lambda plan: (-(plan['created_ts'] or 0), plan['id']))
+        jobs = self._jobs(plans, now)
         snapshot = json_safe({'now': now, 'clock': fmt_clock(now), 'host': socket.gethostname(),
-                              'machine': self.machine(), 'expire': self.expire, 'plans': plans, 'waiting': waiting,
+                              'machine': self.machine(), 'expire': self.expire, 'jobs': jobs, 'plans': plans,
                               'cards': cards})
         body = json.dumps(snapshot, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
         with self._lock:
@@ -4043,6 +3851,15 @@ header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px so
 .conn{margin-left:auto;color:var(--faint);font-size:12px;font-variant-numeric:tabular-nums}
 .conn.lost{color:var(--bad);font-weight:700}
 main{padding:12px 16px 48px;max-width:2600px;margin:0 auto}
+#jobs{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+#jobs:empty{display:none}
+.job{background:var(--card);border:1px solid var(--border);border-left:3px solid var(--c);border-radius:10px;
+  padding:7px 12px;min-width:0}
+.job.ended{opacity:.8}
+.jls{font:12.5px/1.5 ui-monospace,"DejaVu Sans Mono",Menlo,Consolas,monospace;white-space:pre;overflow-x:auto}
+.jl.b{font-weight:700}
+.jh{color:var(--muted);font-weight:700;font-size:12px;letter-spacing:.04em;text-transform:uppercase;
+  padding:6px 2px 0}
 #plans{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
 .plan{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:7px 12px;display:flex;
   flex-wrap:wrap;gap:3px 12px;align-items:center;font-size:13px}
@@ -4053,11 +3870,8 @@ main{padding:12px 16px 48px;max-width:2600px;margin:0 auto}
 .muted{color:var(--muted)}.faint{color:var(--faint)}
 .queued{color:var(--muted);flex-basis:100%}
 .queued b{color:var(--faint);font-weight:600}
-#waiting{display:flex;flex-direction:column;gap:6px;margin:-8px 0 14px}
-#waiting:empty{display:none}
-.plan.waiting{border-style:dashed;border-color:var(--c)}
-.plan.waiting .dot{animation:none}
-.plan.waiting .wl{color:var(--c);font-weight:700}
+.plan.nested{border:none;border-top:1px solid var(--border);border-radius:0;padding:6px 0 0;margin-top:6px;
+  background:none}
 #empty{color:var(--muted);text-align:center;padding:70px 10px;font-size:16px}
 #empty small{display:block;color:var(--faint);font-size:13px;margin-top:6px}
 #cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,640px),1fr));gap:14px;align-items:start}
@@ -4075,7 +3889,6 @@ main{padding:12px 16px 48px;max-width:2600px;margin:0 auto}
 .pill:empty{display:none}
 .pill.status{color:var(--c);text-transform:uppercase}
 .pill.kind,.pill.ends{color:var(--muted)}
-.pill.express{color:var(--warn)}
 .badge{margin-left:auto;display:flex;gap:6px;align-items:baseline;font-weight:700;font-size:13px}
 .badge .note{color:var(--faint);font-size:11px;font-weight:600}
 .badge .pill{font-size:12px}
@@ -4142,7 +3955,7 @@ pre.log{margin:6px 0 0;background:#11141a;border-radius:8px;padding:8px 10px;col
 <body>
 <header><span class="brand">&#9650; Triforce<small>training monitor &middot; currently running</small></span>
 <span class="machine" id="machine"></span><span class="conn" id="conn">connecting…</span></header>
-<main><div id="plans"></div><div id="waiting"></div><div id="empty" hidden></div><div id="cards"></div></main>
+<main><div id="jobs"></div><div id="plans"></div><div id="empty" hidden></div><div id="cards"></div></main>
 <script>
 'use strict';
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -4246,7 +4059,7 @@ function skeleton() {
   const el = document.createElement('article');
   el.className = 'card';
   el.innerHTML = '<div class="top"><span class="dot"></span><span class="name"></span><span class="family"></span>' +
-    '<span class="pill status"></span><span class="pill kind"></span><span class="pill express"></span>' +
+    '<span class="pill status"></span><span class="pill kind"></span>' +
     '<span class="pill ends"></span>' +
     '<span class="badge"></span></div><div class="sub"></div><div class="where"></div><div class="phase"></div>' +
     '<div class="bar"><div class="fill"></div><div class="blocks"></div><div class="label"></div></div>' +
@@ -4268,7 +4081,6 @@ function update(el, card) {
   setText($('.family', el), card.family && card.family !== card.name ? card.family : '');
   setText($('.pill.status', el), card.status_label);
   setText($('.pill.kind', el), card.kind);
-  setText($('.pill.express', el), card.express ? 'express' : '');
   setText($('.pill.ends', el), card.active || card.expires_in == null ? '' :
     `ended · gone in ${Math.max(0, Math.ceil(card.expires_in))}s`);
   const badge = card.badge;
@@ -4276,7 +4088,7 @@ function update(el, card) {
     `<span class="pill" style="color:${color}">${esc(text)}</span>` : `<span style="color:${color}">${esc(text)}</span>`)
     .join('') + (badge.note ? `<span class="note">${esc(badge.note)}</span>` : ''));
   setText($('.sub', el), [card.plan + (card.plan_kind ? ` (${card.plan_kind})` : ''), card.checkout,
-    card.act ? `act ${card.act}` : '', `started ${card.started}`, card.est].filter(Boolean).join('  ·  '));
+    card.act ? `act ${card.act}` : '', `started ${card.started}`].filter(Boolean).join('  ·  '));
   setText($('.where', el), card.where);
   const phase = $('.phase', el);
   setText(phase, card.phase);
@@ -4320,8 +4132,7 @@ function update(el, card) {
   }
   $('.d-summary', el).hidden = !card.summary.length;
   setHTML($('.summary', el), sectionsHtml(card.summary, ''));
-  setHTML($('.eval', el), sectionsHtml(card.eval, card.no_progress ? 'no progress data' :
-                                                  card.kind === 'eval-chain' ? 'no chain results yet' :
+  setHTML($('.eval', el), sectionsHtml(card.eval, card.kind === 'eval-chain' ? 'no chain results yet' :
                                                   'not evaluated yet'));
   const log = $('.log', el), details = $('.d-log', el);
   details.hidden = !card.log_name;
@@ -4334,6 +4145,29 @@ function update(el, card) {
   }
 }
 
+// A plan's line: its share done, time left, run counts and timing, the runs it has queued (``nested``: under its
+// job's header).
+function planHtml(plan, nested) {
+  const queued = plan.queued.length ? `<span class="queued"><b>queued</b> ${esc(plan.queued.join(', '))}</span>` : '';
+  return `<div class="plan${nested ? ' nested' : ''}" style="--c:${plan.color}"><span class="dot"></span>` +
+    `<span class="pname">${esc(plan.plan)}</span><span class="pill" style="color:var(--muted)">` +
+    `${esc(plan.plan_kind)}</span>` +
+    (plan.checkout ? `<span class="pill" style="color:var(--faint)">${esc(plan.checkout)}</span>` : '') +
+    `<span class="mini"><span style="width:${pct(plan.fraction)}%"></span></span><b>` +
+    `${Math.floor(pct(plan.fraction))}%</b>` +
+    (plan.eta ? `<span>≈ ${esc(plan.eta)} left</span>` : '') +
+    `<span class="muted">${esc(plan.counts.join('  ·  '))}</span>` +
+    `<span class="faint">${esc(plan.meta.join('  ·  '))}</span>${queued}</div>`;
+}
+
+// A job of the queue: its header's lines as the window paints them (``job_lines``), then its plan's line.
+function jobHtml(job) {
+  return `<div class="job${job.ended ? ' ended' : ''}" style="--c:${job.color}"><div class="jls">` +
+    job.lines.map(([text, color, bold]) =>
+      `<div class="jl${bold ? ' b' : ''}" style="color:${color}">${esc(text)}</div>`).join('') +
+    '</div>' + (job.plan ? planHtml(job.plan, true) : '') + '</div>';
+}
+
 function render(state) {
   // Keep what is on screen where it is when cards come, go or grow above it (Safari has no scroll anchoring).
   let anchor = null, anchorTop = 0;
@@ -4344,29 +4178,12 @@ function render(state) {
     }
   }
   setText($('#machine'), state.machine || '');
-  setHTML($('#plans'), (state.plans || []).map(plan => {
-    const queued = plan.queued.length ? `<span class="queued"><b>queued</b> ${esc(plan.queued.join(', '))}</span>` : '';
-    return `<div class="plan" style="--c:${plan.color}"><span class="dot"></span><span class="pname">` +
-      `${esc(plan.plan)}</span><span class="pill" style="color:var(--muted)">${esc(plan.plan_kind)}</span>` +
-      (plan.express ? '<span class="pill express">express</span>' : '') +
-      (plan.checkout ? `<span class="pill" style="color:var(--faint)">${esc(plan.checkout)}</span>` : '') +
-      (plan.no_progress ? '' : `<span class="mini"><span style="width:${pct(plan.fraction)}%"></span></span><b>` +
-                               `${Math.floor(pct(plan.fraction))}%</b>`) +
-      (plan.eta ? `<span>≈ ${esc(plan.eta)} left</span>` : '') +
-      (plan.est ? `<span>${esc(plan.est)}</span>` : '') +
-      `<span class="muted">${esc(plan.counts.join('  ·  '))}</span>` +
-      `<span class="faint">${esc(plan.meta.join('  ·  '))}</span>${queued}</div>`;
-  }).join(''));
-  // Jobs waiting their turn in the job queue: a line each, in the order they will start (no cards until they run).
-  setHTML($('#waiting'), (state.waiting || []).map(job =>
-    `<div class="plan waiting" style="--c:${job.color}"><span class="dot"></span><span class="wl">waiting` +
-    (job.place_label ? ` · ${esc(job.place_label)}` : '') + `</span><span class="pname">${esc(job.plan)}</span>` +
-    `<span class="pill" style="color:var(--muted)">${esc(job.plan_kind)}</span>` +
-    (job.checkout ? `<span class="pill" style="color:var(--faint)">${esc(job.checkout)}</span>` : '') +
-    (job.waits ? `<span class="muted">${esc(job.waits)}</span>` : '') +
-    (job.estimate ? `<span>${esc(job.estimate)}</span>` : '') +
-    (job.waited ? `<span>${esc(job.waited)}</span>` : '') +
-    (job.no_progress ? '<span class="muted">no progress data</span>' : '') + '</div>').join(''));
+  // The queue's jobs, as [currently running] lists them: the live ones, then the ones that ended under a heading.
+  const jobs = state.jobs || [];
+  const ended = jobs.findIndex(job => job.ended);
+  setHTML($('#jobs'), jobs.map((job, index) =>
+    (index === ended ? '<div class="jh">Finished &middot; last 60 min</div>' : '') + jobHtml(job)).join(''));
+  setHTML($('#plans'), (state.plans || []).map(plan => planHtml(plan, false)).join(''));
   const container = $('#cards'), seen = new Set();
   let previous = null;
   for (const card of state.cards || []) {
@@ -4384,11 +4201,10 @@ function render(state) {
     if (Math.abs(shift) > 0.5) window.scrollBy(0, shift);
   }
   const empty = $('#empty');
-  empty.hidden = !!(state.cards || []).length || state.loading;
+  empty.hidden = !!((state.cards || []).length || jobs.some(job => !job.ended)) || state.loading;
   setHTML(empty, (state.plans || []).length ? 'Nothing is running right now; the plans above have runs queued.' :
-    (state.waiting || []).length ? 'Nothing is running right now; the jobs above wait their turn.' :
-    'Nothing is running.<small>Trainings and evaluations that start appear here by themselves.</small>');
-  const active = (state.cards || []).filter(card => card.active).length;
+    'Nothing is running.<small>Jobs, trainings and evaluations that start appear here by themselves.</small>');
+  const active = jobs.filter(job => job.status === 'running').length + (state.plans || []).length;
   document.title = active ? `${active} running — Triforce training` : 'Triforce training';
 }
 

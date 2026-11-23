@@ -15,7 +15,9 @@ out). ``combine`` writes ``hitshift`` networks (``triforce/nets/hitshift.py``): 
 hit network side by side, the policy's joint action shifted by ``-weight * softplus(hit logit)``; nothing is
 trained. ``bench`` plays every arm on every manifest in one queued job (the yardstick's ``run_bench``; one JSON an
 arm in ``DIR``, ``bench compare`` reads them); ``ACT`` an act mode (the planner beside:
-``temperature:0.5+relax:16+plan:16:1`` on today's network).
+``temperature:0.5+relax:16+plan:16:1`` on today's network).  ``calibrate``, ``bench``, ``pr`` and ``retrain`` play
+or train networks: jobs of the machine's queue (``jobs.require_job``: ``triforce job run ... --timeout 1h --
+.venv/bin/python scripts/experiments/r38_hit.py bench ...``).
 """
 
 import argparse
@@ -35,7 +37,7 @@ sys.path.insert(0, str(ROOT / 'scripts' / 'experiments'))
 from triforce import nets, registry  # noqa: E402
 from triforce.actions import NUM_DURATIONS  # noqa: E402
 from triforce.events import progress_job, write_json_atomic  # noqa: E402
-from triforce.jobs import add_job_arguments, begin_job, work  # noqa: E402
+from triforce.jobs import require_job, work  # noqa: E402
 from triforce.lab import bench as yardstick  # noqa: E402
 from triforce.lab.auxiliary import matched_precision  # noqa: E402
 from triforce.model import MASK_KEY  # noqa: E402
@@ -459,7 +461,6 @@ def main(argv=None) -> int:
     b.add_argument('--out', type=Path, required=True)
     b.add_argument('--parallel', type=int, default=10)
     b.add_argument('--logs-dir', default=None)
-    add_job_arguments(b)
     p = sub.add_parser('pr')
     p.add_argument('--hit', nargs='+', required=True)
     p.add_argument('--data', nargs='+', required=True)
@@ -483,6 +484,8 @@ def main(argv=None) -> int:
     for q in (c, k, p, r):
         q.add_argument('--device', default='cuda')
     args = parser.parse_args(argv)
+    if args.command in ('calibrate', 'bench', 'pr', 'retrain'):
+        require_job()
     if args.command == 'combine':
         combine(args.policy, args.hit, args.weights, args.name, args.run, args.form, args.freeze_hit)
     elif args.command == 'manifests':
@@ -495,7 +498,6 @@ def main(argv=None) -> int:
         if args.out:
             write_json_atomic(args.out, results)
     elif args.command == 'bench':
-        begin_job(args)
         bench(args.manifest, args.arm, args.out, args.parallel, args.logs_dir)
     elif args.command == 'pr':
         device = torch.device(args.device)

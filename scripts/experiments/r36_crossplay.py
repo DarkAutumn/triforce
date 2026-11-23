@@ -7,11 +7,13 @@
         states listed by name; nothing else changes (rooms, masks, items, RAM randomization, max_steps).
     python scripts/experiments/r36_crossplay.py run GROUP SPECS_DIR OUT_DIR --pairs A:B[,B...] ... [--episodes 5]
         [--seed 100000] [--parallel 10] [--models-dir DIR] [--states-bare]
-        Plays every (network A, task B) of the group in one process that waits its turn in the job line
-        (triforce.jobs): A's run (pre: A's `promoted.d3first` else `promoted`; post: `promoted`) on each part of B's
-        task, `--episodes` a start state, episode i seeded `seed + i` (so every network meets the same episodes of
-        a task), A's own act mode.  Each result goes to OUT_DIR/<A>__<B>-<part>.json (records slimmed); an existing
-        file is done (resume).  `A:all` plays A on every task in SPECS_DIR; `all:B` every family's network on B.
+        Plays every (network A, task B) of the group in one job of the machine's queue (``triforce job run ...
+        --timeout 2h -- .venv/bin/python scripts/experiments/r36_crossplay.py run ...``; the pairs played of the
+        total are its progress): A's run (pre: A's `promoted.d3first` else `promoted`; post: `promoted`) on each
+        part of B's task, `--episodes` a start state, episode i seeded `seed + i` (so every network meets the same
+        episodes of a task), A's own act mode.  Each result goes to OUT_DIR/<A>__<B>-<part>.json (records slimmed);
+        an existing file is done (resume).  `A:all` plays A on every task in SPECS_DIR; `all:B` every family's
+        network on B.
     python scripts/experiments/r36_crossplay.py check FAMILY RUN OUT --episodes N [--seed 0]
         The pipeline's check: RUN on FAMILY's own config restricted to the bare states its main eval.json holds.
     python scripts/experiments/r36_crossplay.py report EVALS_DIR OUT_JSON
@@ -35,7 +37,7 @@ from triforce.clips import episode_jobs
 from triforce.entry_states import route_steps
 from triforce.evaluate import evaluate_specialist
 from triforce.events import logged_job
-from triforce.jobs import work
+from triforce.jobs import progress, require_job, work
 from triforce.specialist import list_specialists, load_specialist
 
 ROUTE = 'd3first'
@@ -122,8 +124,9 @@ def cmd_run(a):
                    for _, b, part in todo)
     print(f'{a.group}: {len(pairs)} pairs, {len(todo)} to play, {episodes} episodes', flush=True)
     runs = [{'specialist': f'{n}@{b}-{part}', 'status': 'pending'} for n, b, part in todo]
-    with logged_job(f'r36x-{a.group}', 'eval', runs, a.logs_dir, nice=10, work=work(eval_episodes=episodes)):
-        for net, task, part in todo:
+    with logged_job(f'r36x-{a.group}', 'eval', runs, a.logs_dir, work=work(eval_episodes=episodes)):
+        for done, (net, task, part) in enumerate(todo):
+            progress(done, len(todo), 'pairs')
             config = load_specialist(str(spec_dir / f'{task}-{part}.yaml'))
             checkpoint = network(net, part, a.models_dir)
             result = evaluate_specialist(config, checkpoint, a.episodes, a.parallel, a.seed, threads=a.parallel)
@@ -149,7 +152,7 @@ def cmd_check(a):
     path.write_text(json.dumps(spec, indent=1))
     checkpoint = registry.checkpoint_path(a.family, a.run, a.models_dir)
     with logged_job(f'r36x-check-{a.family}', 'eval', [{'specialist': a.family, 'status': 'pending'}], a.logs_dir,
-                    nice=10, work=work(eval_episodes=a.episodes * len(states))):
+                    work=work(eval_episodes=a.episodes * len(states))):
         result = evaluate_specialist(load_specialist(str(path)), checkpoint, a.episodes, a.parallel, a.seed,
                                      threads=a.parallel)
     rows = []
@@ -301,6 +304,8 @@ def main():
     room_report.add_argument('evals')
     room_report.add_argument('output')
     args = parser.parse_args()
+    if args.cmd in ('run', 'check'):
+        require_job()       # they play networks
     {'specs': cmd_specs, 'run': cmd_run, 'check': cmd_check, 'report': cmd_report, 'rooms': cmd_rooms}[args.cmd](args)
 
 

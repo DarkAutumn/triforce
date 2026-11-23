@@ -2,6 +2,10 @@
 
     triforce [--models-dir DIR] convert-model (RUN_DIR... | --promoted) [--out DIR]
 
+Converting more than one run (``--promoted``: the whole team) is a job of the machine's queue
+(``jobs.require_job``): ``triforce job run --agent A --task T --subtask S --desc '...' --timeout 30m -- triforce
+convert-model --promoted --out DIR``; the runs converted of the total are its progress.
+
 Round 26 (1.5.1.0, observation schema 6; decisions 2026-11-16 "Schema 6: the one observation change for the rest of
 the game") added inputs to three blocks and changed no existing column: 8 entity features after the 33 of schema 5
 (``touch_harms``, ``weapon_target``, ``touch_damage``, ``visible``, ``phase``, ``phase_time``, ``in_line``,
@@ -44,7 +48,7 @@ from pathlib import Path
 
 import torch
 
-from . import __version__, registry
+from . import __version__, jobs, registry
 from ._native import ACTION_KINDS, ACTION_SCHEMA_VERSION, OBS_SCHEMA_VERSION
 from ._native import OBS_SPEC as _OBS_SPEC
 from .model import policy_spec
@@ -284,11 +288,14 @@ def main(argv=None) -> int:
             runs.append(registry.models_root(args.models_dir) / name / run)
     if not runs:
         parser.error("give run dirs or --promoted")
+    if args.promoted or len(runs) > 1:
+        jobs.require_job()
     failed = False
-    for run in runs:
+    for done, run in enumerate(runs, 1):
         try:
             print(f"{run} -> {convert_run(run, args.out)}")
         except ConvertError as error:
             print(f"triforce convert-model: error: {error}", file=sys.stderr)
             failed = True
+        jobs.progress(done, len(runs))
     return 1 if failed else 0

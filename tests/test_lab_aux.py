@@ -140,7 +140,7 @@ def test_the_hit_head_learns_only_from_its_own_loss():
 def test_a_hit_head_run_trains_on_its_labels_and_plays_without_trials(states_dir, tmp_path):
     run = train.main(['--name', 'hit', '--run-id', 'h1', '--families', 'ow-start', '--parallel', '2',
                       '--steps-per-update', '64', '--device', 'cpu', '--models-dir', str(tmp_path), '--seed', '5',
-                      '--no-wait', '--iterations', '2', '--arch', 'hithead',
+                      '--iterations', '2', '--arch', 'hithead',
                       '--arch-config', '{"hidden_dim": 32, "depth": 1, "hit_dim": 32}',
                       '--aux', 'hit=hit:0.5', '--try-others', '2:0.5'])
     lines = [json.loads(line) for line in (run / 'metrics.jsonl').read_text().splitlines()]

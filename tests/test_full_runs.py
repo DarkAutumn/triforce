@@ -2,6 +2,9 @@
 records (no emulator)."""
 import importlib.util
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -122,7 +125,7 @@ def test_freeze_models_copies_pointers_and_links_runs(tmp_path):
     assert (frozen / 'fam' / 'promoted').read_text() == 'r1'
 
 
-def test_runs250_plays_from_power_on_in_the_express_place(tmp_path, monkeypatch):
+def test_runs250_plays_from_power_on(tmp_path, monkeypatch):
     (tmp_path / 'models' / 'fam').mkdir(parents=True)
     (tmp_path / 'models' / 'fam' / 'promoted').write_text('r1')
     seen = {}
@@ -145,10 +148,25 @@ def test_runs250_plays_from_power_on_in_the_express_place(tmp_path, monkeypatch)
     out = tmp_path / 'out'
     assert full_runs.main(['runs250', '--models-dir', str(tmp_path / 'models'), '--out', str(out)]) == 2
     command = seen['command']
-    assert command[command.index('--runs') + 1] == '250' and '--power-on' in command and '--express' in command
-    assert '--no-wait' not in command and command[command.index('--models-dir') + 1] == str(out / 'models')
+    assert command[command.index('--runs') + 1] == '250' and '--power-on' in command
+    assert '--express' not in command and command[command.index('--models-dir') + 1] == str(out / 'models')
     assert command.index('--models-dir') < command.index('eval-chain')     # the triforce command's own option
     assert json.loads((out / 'timing.json').read_text())['commit'] == 'abc123'    # the code that played
+
+
+def test_the_wrapper_dry_call_writes_the_chain_work_and_creates_nothing(tmp_path):
+    """``triforce job run`` asks ``run`` its work first (``$TRIFORCE_JOB_ESTIMATE``, no job id yet): the route steps
+    of its runs, written as ``{kind, work, name}`` before any output folder."""
+    from triforce import jobs
+    from triforce.runner import steps_played
+    estimate, out = tmp_path / 'estimate.json', tmp_path / 'out'
+    environ = {**{k: v for k, v in os.environ.items() if k != jobs.JOB_ID_ENV}, jobs.JOB_ESTIMATE_ENV: str(estimate)}
+    done = subprocess.run([sys.executable, str(ROOT / 'scripts' / 'full_runs.py'), 'run', '--runs', '3', '--out',
+                           str(out)], env=environ, capture_output=True, text=True, timeout=120, check=False)
+    assert done.returncode == 0, done.stderr
+    assert json.loads(estimate.read_text()) == {
+        'kind': 'chain', 'work': {'chain_steps': 3 * steps_played(full_runs.ROUTE)}, 'name': 'full-runs'}
+    assert not out.exists()
 
 
 def test_an_old_versions_runs_read_with_its_own_route(tmp_path):

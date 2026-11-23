@@ -6,12 +6,15 @@ run's eval-replays.json, whose records give each replay's start state and target
 
 A wrap is a decision after which Link's X jumped across the screen (|dX| > 128) with no room change: W when he came
 out at the east edge, E at the west.  Prints one JSON line per episode (start state, target, ending, actions, wraps
-with the step, the direction and Link's position) and a summary."""
+with the step, the direction and Link's position) and a summary.  It plays every replay of the folder: a job of the
+machine's queue (``jobs.require_job``: ``triforce job run ... -- .venv/bin/python scripts/experiments/r21_behaviour.py
+...``)."""
 import json
 import sys
 from pathlib import Path
 
 from triforce import _native as native
+from triforce.jobs import require_job
 
 KINDS = ['MOVE', 'WAIT', 'SWORD', 'BEAMS', 'BOMB', 'BOOMERANG', 'ARROW', 'CLIP']
 DIRS = ['N', 'S', 'W', 'E', 'NW', 'NE', 'SW', 'SE']
@@ -57,6 +60,7 @@ def analyse(actions, positions, entry, target):
 
 
 def main():
+    require_job()
     replay_dir, eval_json = Path(sys.argv[1]), Path(sys.argv[2])
     records = json.loads(eval_json.read_text())['records']
     by_seed = {r['seed']: r for r in records}

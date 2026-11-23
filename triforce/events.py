@@ -53,7 +53,7 @@ Standalone jobs log too (``logged_job``): ``python -m triforce.evaluate`` writes
 (plan kind ``eval``, one run evaluating, its ``<specialist>.jsonl`` with the eval events above) and ``triforce
 eval-chain`` writes ``<yymmdd>_<NNN>_eval-chain-<route>`` (plan kind ``chain``, no runs, ``round.jsonl`` with
 ``chain_start`` (runs, parallel, overrides, act), ``chain_progress`` (done, runs, successes, at most once a second
-and on the last run) and ``chain`` (the summary)).  ``--no-log`` turns it off.  ``--events FILE`` (train, evaluate,
+and on the last run) and ``chain`` (the summary)).  ``--events FILE`` (train, evaluate,
 eval-chain) writes the events into FILE: in a folder with a plan its driver owns the plan, the stream and its
 ``end``; in a folder without one the job writes its plan there (``has_plan``), so every job has a plan.
 
@@ -69,15 +69,10 @@ kind ``eval-batch`` with every evaluation listed up front (``name``, ``kind`` ch
 ``output``, ``command``; pending, ``evaluating``, then ``ok`` / ``failed`` / ``interrupted`` with its headline),
 one ``<entry>.jsonl`` each (the chain_* or eval_* events above, then ``end``) and ``round.jsonl`` (``start``,
 ``entry_start``, ``entry_end``, ``end``).  Plans carry ``nice``, the niceness the job runs at, and the checkout whose
-code runs (``checkout``, ``branch``, ``commit``); every plan is in the machine's job registry from its start to its
-``finish`` (``triforce.jobs``), which the GUI reads to find jobs in any checkout.
-
-A job waits its turn when it creates its plan (``TrainingPlan``; at most ``jobs.max_jobs()`` run at once): a job that
-had to wait has plan status ``queued`` with a ``queue`` object (``queued``, ``place``, ``running``, ``ahead``,
-``limit``, ``checked``, ``admitted``, ``waited``) until it starts, and ``queue.jsonl`` in its folder: ``queued``, then
-``waiting`` every five minutes, then ``admitted`` (``waited`` seconds) or ``interrupted``, each with ``place``,
-``running``, ``ahead`` (``<log folder> (kind)`` of the jobs it waits for and of those before it in line, ``jobs.label``)
-and ``limit``.  A job that starts at once writes neither.
+code runs (``checkout``, ``branch``, ``commit``).  A job's first plan is recorded in its row of the machine's job
+queue (``jobs.record_plan``; ``triforce.jobqueue``), where ``triforce job list`` and the training GUI find it; the
+folder is named for the job (``<yymmdd>_<NNN>_<agent>-<task>-<subtask>``, ``jobs.label``).  Waiting for a place is
+the wrapper's (``triforce job``): a plan is written only once its job runs.
 """
 
 import fcntl
@@ -96,7 +91,6 @@ from . import jobs
 
 LOGS_DIR_ENV = 'TRIFORCE_LOGS_DIR'
 PLAN_FILE = 'training.json'
-QUEUE_FILE = 'queue.jsonl'           # a job that had to wait its turn: queued, waiting, admitted | interrupted
 SCHEMA_VERSION = 1
 
 # Metrics copied into progress events (when present).
@@ -138,8 +132,8 @@ def logs_root(root: Optional[str | os.PathLike] = None) -> Path:
 def new_log_dir(what: str, root=None, now: Optional[datetime] = None) -> Path:
     """Creates ``<root>/<yymmdd>_<NNN>_<what>`` with the next free NNN for that day (any width: 999 is followed by
     1000).  The scan and the mkdir hold an exclusive lock on ``<root>/.lock``, so concurrent jobs get distinct NNN
-    whatever their names.  ``$TRIFORCE_JOB_NAME`` replaces ``what`` (``jobs.job_name``)."""
-    what = jobs.job_name(what)
+    whatever their names.  Inside a job its name, ``<agent>-<task>-<subtask>``, replaces ``what`` (``jobs.label``)."""
+    what = jobs.label(what)
     base = logs_root(root)
     base.mkdir(parents=True, exist_ok=True)
     day = (now or datetime.now()).strftime('%y%m%d')
@@ -212,63 +206,27 @@ class EventLog:
 
 class TrainingPlan:
     """``training.json``: what this log folder is running, in order, and the status of each run.  Every plan names
-    the checkout whose code runs it (``checkout``, ``branch``, ``commit``) and is recorded in the machine's job
-    registry (``jobs.register``) until ``finish`` marks it there too.  ``work`` (``jobs.work``: what the job will
-    do) gives the plan and the entry its ``estimate`` (seconds, ``jobs.estimate``).  Creating a plan waits for the
-    job's turn (``jobs.JobRecord.wait_turn``: the line ``jobs.turn`` orders): while it waits the plan says ``queued``
-    with what it waits for (``queue``) and ``queue.jsonl`` gets ``queued``, ``waiting`` and ``admitted``; a job that
-    starts at once never shows as queued and writes no queue file.  Once it runs, ``lane`` says which place it took
-    (regular or express).  Interrupted while it waits (Ctrl-C, SIGTERM), the plan ends ``interrupted`` and
-    KeyboardInterrupt goes on."""
+    the checkout whose code runs it (``checkout``, ``branch``, ``commit``) and its ``work`` (``jobs.work``: what the
+    job will do); a job's first plan is recorded in its queue row (``jobs.record_plan``).  The job already has its
+    place when the plan is written (``triforce job``)."""
 
     def __init__(self, directory: str | os.PathLike, name: str, kind: str, runs: list[dict], *,
                  work: Optional[dict] = None, **extra):
-        name = jobs.job_name(name)              # $TRIFORCE_JOB_NAME: whose job this is, for the queue and the GUI
+        name = jobs.label(name)                 # whose job this is (``<agent>-<task>-<subtask>``), for the GUI
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
         self.path = self.directory / PLAN_FILE
         self.data = {'schema': SCHEMA_VERSION, 'name': name, 'kind': kind, 'log_dir': str(self.directory),
                      'status': 'running', 'created': _now()['time'], 'updated': None, 'finished': None,
                      'host': socket.gethostname(), 'pid': os.getpid(), **jobs.checkout(), **extra,
-                     'work': dict(work or {}), 'estimate': None, 'lane': None,
+                     'work': dict(work or {}),
                      'runs': [{'index': i, 'status': 'pending', 'started': None, 'finished': None, **run}
                               for i, run in enumerate(runs)]}
         if self.data.get('nice') is None:       # every plan says the niceness its job runs at, whoever wrote it
             self.data['nice'] = os.nice(0)
         self._lock = threading.RLock()
-        self.job = jobs.register(self.directory, self.path, name, kind, amounts=work)
-        self.data['estimate'] = (self.job.data['estimate'] if self.job is not None
-                                 else round(jobs.estimate(work, jobs.DEFAULT_RATES), 1))
-        if self.job is not None:
-            try:
-                self.job.wait_turn(self._report_turn)
-            except KeyboardInterrupt:
-                if 'queue' in self.data:
-                    EventLog(self.directory / QUEUE_FILE).emit('interrupted', **{
-                        key: self.data['queue'][key] for key in ('place', 'running', 'ahead', 'limit')})
-                self.finish('interrupted')
-                raise
-            self.data['lane'] = self.job.data.get('lane')
-        self.data['status'] = 'running'         # also when the registry failed mid-wait (jobs: the job starts)
         self.save()
-
-    def _report_turn(self, event: Optional[str], turn: jobs.Turn, waited: float):
-        """``jobs.Report`` of the wait: the plan says ``queued`` and what it waits for (``queue``: also its work,
-        estimate, score and, once admitted, its lane), then ``running`` once admitted; ``event`` goes into
-        ``queue.jsonl``."""
-        details = {**turn.details(), 'work': self.data['work']}
-        with self._lock:
-            queue = self.data.setdefault('queue', {'queued': self.job.data['queued'], 'admitted': None,
-                                                   'waited': None})
-            queue.update(details, checked=_now()['time'])
-            if event == 'admitted':
-                queue.update(admitted=self.job.data['admitted'], waited=round(waited, 1))
-                self.data['lane'] = turn.lane
-            self.data['status'] = 'running' if event == 'admitted' else 'queued'
-            self.save()
-        if event is not None:
-            EventLog(self.directory / QUEUE_FILE).emit(event, **details,
-                                                       **({'waited': round(waited, 1)} if event == 'admitted' else {}))
+        jobs.record_plan(self.directory, self.path)
 
     def save(self):
         """Rewrites training.json atomically."""
@@ -289,12 +247,10 @@ class TrainingPlan:
             self.save()
 
     def finish(self, status: str, **fields):
-        """Marks the whole plan finished (completed | failed | interrupted), here and in the job registry."""
+        """Marks the whole plan finished (completed | failed | interrupted)."""
         with self._lock:
             self.data.update(status=status, finished=_now()['time'], **fields)
             self.save()
-            if self.job is not None:
-                self.job.finish(status)
 
 
 def has_plan(events_path) -> bool:
@@ -309,47 +265,36 @@ def logged_job(what: str, kind: str, runs: list[dict], root=None, *, directory=N
     """A log folder (``new_log_dir(what, root)``, or ``directory``: the folder of an ``--events`` stream that has
     no plan yet) with its ``training.json`` plan for a job outside a training round, e.g. a standalone evaluation
     (``kind`` 'eval') or eval-chain ('chain'), so the training GUI shows it while it runs.  Yields the
-    ``TrainingPlan`` once the job's turn has come (``TrainingPlan``); the plan finishes ``completed``,
-    ``interrupted`` (Ctrl-C, or SIGTERM, which the block turns into KeyboardInterrupt when it runs in the main
-    thread) or ``failed`` with the block.  ``work``: the plan's (``TrainingPlan``).  ``log=False`` (``--no-log``): no
-    folder and no plan (yields None), but the job still waits its turn and counts in the job registry under
-    ``what``."""
+    ``TrainingPlan``; the plan finishes ``completed``, ``interrupted`` (Ctrl-C, or SIGTERM, which the block turns into
+    KeyboardInterrupt when it runs in the main thread) or ``failed`` with the block.  ``work``: the plan's
+    (``TrainingPlan``).  ``log=False`` (``--no-log``): no folder and no plan (yields None)."""
     installed = threading.current_thread() is threading.main_thread()
     if installed:
         def interrupt(signum, _frame):
             raise KeyboardInterrupt(f"signal {signum}")
         previous = signal.signal(signal.SIGTERM, interrupt)
+    plan = None
     try:
         if log:
             if directory is not None:
                 Path(directory).mkdir(parents=True, exist_ok=True)
             plan = TrainingPlan(new_log_dir(what, root) if directory is None else directory, what, kind, runs,
                                 work=work, **extra)
-            finish = plan.finish
-        else:
-            plan, job = None, jobs.register(None, None, what, kind, amounts=work)
-
-            def finish(status: str, **_fields):
-                if job is not None:
-                    job.finish(status)
-            if job is not None:
-                try:
-                    job.wait_turn()
-                except KeyboardInterrupt:
-                    finish('interrupted')
-                    raise
         try:
             yield plan
         except KeyboardInterrupt:
-            finish('interrupted')
+            if plan is not None:
+                plan.finish('interrupted')
             raise
         except BaseException as error:
-            finish('failed', error=f"{type(error).__name__}: {error}")
+            if plan is not None:
+                plan.finish('failed', error=f"{type(error).__name__}: {error}")
             raise
     finally:
         if installed:
             signal.signal(signal.SIGTERM, previous)
-    finish('completed')
+    if plan is not None:
+        plan.finish('completed')
 
 
 PROGRESS_FILE = 'progress.jsonl'    # progress_job's stream
@@ -372,8 +317,10 @@ class JobProgress:
         self.events.emit('eval_start', episodes=self.total, unit=unit)
 
     def update(self, done: int, success_rate: Optional[float] = None, **fields):
-        """``done`` of the total so far (and the success over them, when the job measures one)."""
+        """``done`` of the total so far (and the success over them, when the job measures one); also the job's
+        progress in the queue (``jobs.progress``)."""
         self.done = int(done)
+        jobs.progress(self.done, self.total, self.unit)
         now = time.monotonic()
         if self.done < self.total and self._shown is not None and now - self._shown < PROGRESS_SECONDS:
             return
@@ -389,11 +336,10 @@ class JobProgress:
 @contextmanager
 def progress_job(what: str, kind: str, total: int, *, unit: str = 'episodes', root=None,
                  work: Optional[dict] = None, **extra):
-    """A job with a log folder and a one-line progress, for a script that enters the job queue itself (an
-    experiment script, a lab tool): ``logged_job(what, kind, ...)`` with one run entry (``what``, ``total``,
-    ``unit``) whose stream ``JobProgress`` writes.  Yields the ``JobProgress`` once the job's turn has come; call
-    its ``update(done, success_rate)`` as the work goes.  Its stream ends ``completed``, ``interrupted`` or
-    ``failed`` with the block, as the plan does."""
+    """A job with a log folder and a one-line progress, for a script that runs as a job (an experiment script, a lab
+    tool): ``logged_job(what, kind, ...)`` with one run entry (``what``, ``total``, ``unit``) whose stream
+    ``JobProgress`` writes.  Yields the ``JobProgress``; call its ``update(done, success_rate)`` as the work goes.
+    Its stream ends ``completed``, ``interrupted`` or ``failed`` with the block, as the plan does."""
     runs = [{'name': what, 'events': PROGRESS_FILE, 'status': 'evaluating', 'total': int(total), 'unit': unit}]
     with logged_job(what, kind, runs, root, work=work, **extra) as plan:
         progress = JobProgress(plan, total, unit)

@@ -7,13 +7,18 @@ down at Level 3 (0x74), Level 4 (0x45), Level 2 (0x3c) and Level 1 (0x37).
 Each exit is staged by `r32b_walks.out_of` (the probe into the triforce room, the walk onto the piece: the game
 ends the level).  The table plays every facing (as he comes out, i.e. down; Right, Up, Left: 2 frames of the
 button, then release) with 1, 2 and 3 plays (each later play on the first free frame after the tune's 152-frame
-freeze); the chosen sequence is then played on `--seeds` trials with the game's own randomness (monsters live)."""
+freeze); the chosen sequence is then played on `--seeds` trials with the game's own randomness (monsters live).
+
+It plays the game over many seeded trials: a job of the machine's queue (``jobs.require_job``: ``triforce job run
+... --timeout 30m -- .venv/bin/python scripts/experiments/r32b_recorder.py ...``)."""
 
 import argparse
 import collections
 import statistics
 import tempfile
 from pathlib import Path
+
+from triforce.jobs import require_job
 
 from r26_walks import OBJ_DIR, OBJ_STATE, OBJ_TYPE, PLAY, TELEPORT_INDEX, WHIRLWIND, WHIRLWIND_SUMMONED
 from r27_walks import load
@@ -58,6 +63,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     parser.add_argument('--seeds', type=int, default=20)
     args = parser.parse_args()
+    require_job()
     for left, dest, landing, face, plays in WARPS:
         w = out_of(left)
         row = ledger_row(w)

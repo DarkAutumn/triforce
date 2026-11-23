@@ -1,10 +1,12 @@
-"""The machine's job registry (``triforce.jobs``): every plan registers, finishes, is told apart from a reused pid
-and pruned; an unwritable registry is only a warning.  The line's admission rule (``jobs.turn``) on a fake
-``/proc``; real processes waiting their turn are in ``test_job_queue.py``."""
+"""The job queue's rules without processes (``triforce.jobqueue``, ``triforce.job``, ``triforce.jobs``): the line's
+order and the places each lane gives, the rates refitted from the history and the calibration, the overrun flag,
+the texts ``triforce job list`` and the GUI show, the parameters ``triforce job run`` requires or refuses, which
+commands the queue measures, and the tool side's reports.  Real wrappers waiting their turn are in
+``test_job_queue.py``."""
 
 import json
 import os
-import socket
+import signal
 import subprocess
 import sys
 import time
@@ -12,393 +14,319 @@ from pathlib import Path
 
 import pytest
 
-from triforce import jobs
-from triforce.events import TrainingPlan, logged_job
+from triforce import jobqueue as q
+from triforce import job, jobs
+
+NOW = 1_800_000_000.0
 
 
-@pytest.fixture
-def registry(tmp_path, monkeypatch):
-    directory = tmp_path / 'jobs'
-    monkeypatch.setenv(jobs.JOBS_DIR_ENV, str(directory))
-    # An earlier test's begin_job(--no-wait) in this process (tests/test_hitnet.py) must not reach these.
-    monkeypatch.setitem(jobs._START, 'no_wait', False)  # pylint: disable=protected-access
-    monkeypatch.setitem(jobs._START, 'express', False)  # pylint: disable=protected-access
-    monkeypatch.delenv(jobs.EXPRESS_ENV, raising=False)
-    return directory
+def row(job_id: int, estimate=None, status='queued', lane=q.JOBS_LANE, queued=NOW, express=0, place=None, **extra):
+    return {'id': job_id, 'estimate': estimate, 'status': status, 'lane': lane, 'queued_ts': queued,
+            'express': express, 'place': place, 'name': f'job{job_id}', 'kind': 'chain', **extra}
 
 
-def test_jobs_dir_follows_the_environment(monkeypatch, tmp_path):
-    monkeypatch.setenv(jobs.JOBS_DIR_ENV, str(tmp_path / 'x'))
-    assert jobs.jobs_dir() == tmp_path / 'x'
-    monkeypatch.delenv(jobs.JOBS_DIR_ENV)
-    monkeypatch.setenv('XDG_STATE_HOME', str(tmp_path / 'state'))
-    assert jobs.jobs_dir() == tmp_path / 'state' / 'triforce' / 'jobs'
-    monkeypatch.delenv('XDG_STATE_HOME')
-    assert jobs.jobs_dir() == Path.home() / '.local' / 'state' / 'triforce' / 'jobs'
+def ids(entries: list) -> list:
+    return [entry['id'] for entry in entries]
 
 
-def test_a_plan_registers_and_its_finish_marks_the_entry(registry, tmp_path):
-    plan = TrainingPlan(tmp_path / 'logs' / '261113_001_x', 'x', 'eval-batch', [{'name': 'a'}])
-    (job,) = jobs.read_jobs()
-    assert job['log_dir'] == str((tmp_path / 'logs' / '261113_001_x').resolve()) and job['kind'] == 'eval-batch'
-    assert job['plan'] == str(plan.path.resolve()) and job['pid'] == os.getpid() and job['status'] == 'running'
-    assert job['queued'] and job['queued_ts'] and job['admitted'] and job['no_wait'] is False
-    assert job['work'] == {} and job['estimate'] == 0.0 and job['lane'] == 'regular' and job['ran'] is None
-    assert plan.data['status'] == 'running' and 'queue' not in plan.data                # it never waited
-    assert plan.data['work'] == {} and plan.data['estimate'] == 0.0 and plan.data['lane'] == 'regular'
-    assert not (plan.directory / 'queue.jsonl').exists()
-    assert job['checkout'] == str(Path(jobs.__file__).resolve().parents[1]) and 'branch' in job and 'commit' in job
-    assert job['command'][0] == sys.executable and job['cwd'] == os.getcwd()
-    assert jobs.job_alive(job) is True
-    assert Path(job['path']).name.startswith(f"{job['host']}-{os.getpid()}-") and job['pid_start'] is not None
-    assert plan.data['checkout'] == job['checkout']                    # the plan names its checkout too
-    assert plan.data['nice'] == os.nice(0) == job['nice']              # ... and the niceness it runs at, unasked
-    plan.finish('completed')
-    (job,) = jobs.read_jobs()
-    assert job['status'] == 'completed' and job['finished'] and jobs.job_alive(job) is False
-    assert job['ran'] is not None and 0 <= job['ran'] < 60                    # admitted to finished
+def test_the_line_puts_short_jobs_first_and_a_long_one_moves_up_as_it_waits():
+    short, long_ = row(1, estimate=60, queued=NOW), row(2, estimate=3600, queued=NOW)
+    assert ids(q.line([long_, short], q.JOBS_LANE, NOW)) == [1, 2]
+    old = row(3, estimate=3600, queued=NOW - 2 * 3600)          # waited twice its estimate: passes a fresh short one
+    assert ids(q.line([short, old], q.JOBS_LANE, NOW)) == [3, 1]
+    tie_a, tie_b = row(4, estimate=60, queued=NOW - 1), row(5, estimate=60, queued=NOW)
+    assert ids(q.line([tie_b, tie_a], q.JOBS_LANE, NOW)) == [4, 5]
 
 
-def test_a_plan_records_its_work_and_estimate(registry, tmp_path):
-    work = jobs.work(train_steps=1_000_000, eval_episodes=0, chain_steps=2000)
-    assert work == {'train_steps': 1_000_000, 'chain_steps': 2000}           # no amount: no unit
-    with pytest.raises(ValueError, match='unknown work units'):
-        jobs.work(minutes=3)
-    plan = TrainingPlan(tmp_path / 'logs' / 'x', 'x', 'train', [], work=work)
-    expected = 1_000_000 * jobs.DEFAULT_RATES['train_steps'] + 2000 * jobs.DEFAULT_RATES['chain_steps']
-    (job,) = jobs.read_jobs()
-    assert job['work'] == plan.data['work'] == work
-    assert job['estimate'] == plan.data['estimate'] == round(expected, 1)
-    saved = json.loads(plan.path.read_text())
-    assert saved['work'] == work and saved['estimate'] == round(expected, 1) and saved['lane'] == 'regular'
+def test_the_tools_lane_is_first_come_first_served():
+    jobs_ = [row(1, lane=q.TOOLS_LANE, queued=NOW), row(2, lane=q.TOOLS_LANE, queued=NOW - 5),
+             row(3, estimate=1, queued=NOW - 100)]
+    assert ids(q.line(jobs_, q.TOOLS_LANE, NOW)) == [2, 1]
 
 
-def test_logged_job_marks_an_interrupted_job(registry, tmp_path):
-    with pytest.raises(KeyboardInterrupt):
-        with logged_job('eval-x', 'eval', [], tmp_path / 'logs'):
-            raise KeyboardInterrupt
-    (job,) = jobs.read_jobs()
-    assert job['status'] == 'interrupted' and job['kind'] == 'eval'
+def test_places_regular_express_and_tools():
+    long_, short, asked = row(1, estimate=3600), row(2, estimate=60), row(3, estimate=7200, express=1)
+    free = ['regular-1', 'regular-2', 'express-1']
+    assert q.assign([short, long_], free, q.JOBS_LANE) == {2: 'express-1', 1: 'regular-1'}
+    assert q.assign([long_], ['express-1'], q.JOBS_LANE) == {}                 # a long job never takes express
+    assert q.assign([asked], ['express-1'], q.JOBS_LANE) == {3: 'express-1'}   # --express asks for it
+    assert q.assign([short], ['regular-2'], q.JOBS_LANE) == {2: 'regular-2'}   # a short one takes a regular one too
+    tools = [row(i, lane=q.TOOLS_LANE) for i in (4, 5, 6)]
+    assert q.assign(tools, ['tools-1', 'tools-2'], q.TOOLS_LANE) == {4: 'tools-1', 5: 'tools-2'}
+    assert q.assign(tools, ['regular-1'], q.TOOLS_LANE) == {}
 
 
-def test_a_reused_pid_or_a_dead_process_is_not_alive(registry, tmp_path):
-    child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])
+def test_turn_counts_only_live_jobs_and_a_held_place_lock(tmp_path):
+    con = q.connect(tmp_path)
+    fds = []
     try:
-        started = jobs.process_start(child.pid)
-        job = {'status': 'running', 'host': __import__('socket').gethostname(), 'pid': child.pid,
-               'pid_start': started}
-        assert jobs.job_alive(job) is True
-        assert jobs.job_alive({**job, 'pid_start': started - 3600}) is False     # the pid is someone else's now
-        assert jobs.job_alive({**job, 'host': 'elsewhere'}) is None
+        def insert(**fields) -> int:
+            cursor = con.execute(f"INSERT INTO jobs ({', '.join(fields)}) VALUES ({', '.join('?' * len(fields))})",
+                                 tuple(fields.values()))
+            fds.append(q.take_lock(q.lock_path(tmp_path, f'job-{cursor.lastrowid}')))
+            return cursor.lastrowid
+        insert(status='running', lane=q.JOBS_LANE, place='regular-1', estimate=3600, queued_ts=NOW)
+        mine = insert(status='queued', lane=q.JOBS_LANE, estimate=3600, queued_ts=NOW)
+        with q.transaction(con):
+            assert q.turn(con, tmp_path, mine, NOW).place == 'regular-2'
+        held = q.take_lock(q.lock_path(tmp_path, 'regular-2'))        # work of a dead wrapper still holds it
+        with q.transaction(con):
+            current = q.turn(con, tmp_path, mine, NOW)
+        assert current.place is None and len(current.running) == 1
+        os.close(held)
+        os.close(fds[0])                                              # the running job's wrapper dies
+        with q.transaction(con):
+            assert q.turn(con, tmp_path, mine, NOW).place == 'regular-1'
+        assert q.read_jobs(con, 'id = 1')[0]['status'] == 'dead'
     finally:
-        child.kill()
-        child.wait()
-    assert jobs.job_alive(job) is False
+        for fd in fds[1:]:
+            os.close(fd)
+        con.close()
 
 
-def test_prune_deletes_long_ended_entries_only(registry, tmp_path):
-    registry.mkdir()
-    now = time.time()
-    old = jobs._iso(now - jobs.PRUNE_SECONDS - 60)
-    fresh = jobs._iso(now - 60)
-    host = __import__('socket').gethostname()
-    entries = {'ended-long-ago': {'status': 'completed', 'finished': old, 'started': old},
-               'ended-lately': {'status': 'completed', 'finished': fresh, 'started': fresh},
-               'gone-long-ago': {'status': 'running', 'host': host, 'pid': 2 ** 22 + 7, 'started': old},
-               'running': {'status': 'running', 'host': host, 'pid': os.getpid(),
-                           'pid_start': jobs.process_start(os.getpid()), 'started': old}}
-    for name, data in entries.items():
-        (registry / f'{name}.json').write_text(json.dumps({**data, 'log_dir': f'/x/{name}'}))
-    (registry / 'broken.json').write_text('{')
-    os.utime(registry / 'broken.json', (now - jobs.PRUNE_SECONDS - 60,) * 2)
-    assert jobs.prune(registry, now) == 3
-    assert sorted(p.stem for p in registry.glob('*.json')) == ['ended-lately', 'running']
+def history(kind: str, work: dict, estimate: float, actual: float, at: float, status='completed') -> dict:
+    return {'kind': kind, 'work': work, 'estimate': estimate, 'actual': actual, 'status': status, 'finished_ts': at}
 
 
-def test_an_unwritable_registry_warns_once_and_the_job_goes_on(tmp_path, monkeypatch, capsys):
-    blocked = tmp_path / 'file'
-    blocked.write_text('not a directory')
-    monkeypatch.setenv(jobs.JOBS_DIR_ENV, str(blocked / 'jobs'))
-    monkeypatch.setitem(jobs._WARNED, 'registry', False)
-    first = TrainingPlan(tmp_path / 'a', 'a', 'train', [])
-    second = TrainingPlan(tmp_path / 'b', 'b', 'train', [])
-    assert first.job is None and second.job is None
-    assert json.loads((tmp_path / 'a' / 'training.json').read_text())['status'] == 'running'   # started at once
-    first.finish('completed')
-    assert json.loads((tmp_path / 'a' / 'training.json').read_text())['status'] == 'completed'
-    assert capsys.readouterr().err.count("job registry") == 1
+def test_rates_are_refitted_from_the_latest_completed_jobs_and_calibration_compares_per_kind():
+    assert q.rates([]) == q.DEFAULT_RATES
+    rows = [history('chain', {'chain_steps': 1000}, 2.6, 5.0, at=i) for i in range(30)]
+    rows += [history('chain', {'chain_steps': 1000}, 2.6, 500.0, at=-1)]              # older than the window
+    rows += [history('chain', {'chain_steps': 1000}, 2.6, 900.0, at=99, status='failed')]
+    assert q.rates(rows)['chain_steps'] == pytest.approx(0.005)
+    mixed = [history('round', {'train_steps': 1_000_000, 'chain_steps': 1000}, 450, 445.0, at=1)]
+    assert q.rates(rows + mixed)['train_steps'] == pytest.approx((445.0 - 1000 * 0.005) / 1_000_000)
+    assert q.estimate({'chain_steps': 2000}, {'chain_steps': 0.005}) == pytest.approx(10.0)
+    (chain,) = q.calibration(rows[:3] + [history('chain', {}, 10.0, 40.0, at=50)])
+    assert chain['kind'] == 'chain' and chain['jobs'] == 4 and chain['worst'] == pytest.approx(4.0)
+    assert chain['median'] == pytest.approx(5.0 / 2.6)
 
 
-# ---------------------------------------------------------------------------------------------------------- the line
-
-HOST = socket.gethostname()
-TICK = os.sysconf('SC_CLK_TCK')
-BOOT = 1_700_000_000
-NOW = 100_000.0
+def test_a_running_job_past_twice_its_estimate_is_flagged():
+    running = row(1, estimate=600, status='running', admitted_ts=NOW - 1300, place='regular-1')
+    assert q.overrun(running, NOW) and 'OVERRUN' in q.tags(running, NOW)
+    assert not q.overrun({**running, 'admitted_ts': NOW - 1100}, NOW)
 
 
-def fake_proc(root: Path, processes: dict) -> Path:
-    """A ``/proc`` with ``processes`` (pid -> start, seconds after boot) running."""
-    root.mkdir(parents=True, exist_ok=True)
-    (root / 'stat').write_text(f"cpu 1 2 3\nbtime {BOOT}\n")
-    for pid, start in processes.items():
-        (root / str(pid)).mkdir()
-        (root / str(pid) / 'stat').write_text(f"{pid} (python) S {' '.join(['0'] * 18)} {int(start * TICK)} 0 0\n")
-    return root
+def test_the_rows_texts():
+    running = row(7, estimate=2400, status='running', place='regular-2', admitted_ts=NOW - 600, agent='Fresh40',
+                  task='Retraining', subtask='d3', description='Train d3 on the new reward.', verb='run',
+                  branch='r40-fresh', command=['triforce', 'train'],
+                  progress={'steps': {'done': 250_000, 'total': 1_000_000, 'unit': 'steps', 'rate': 500.0}})
+    lines = q.describe(running, NOW)
+    assert lines[0] == 'Agent: Fresh40   Task: Retraining   Sub-task: d3'
+    assert lines[1] == 'Train d3 on the new reward.'
+    assert lines[2] == 'RUNNING regular 10m of ~40m'
+    assert lines[3] == '[#####---------------] 250000/1e+06 steps  500 steps/s  ~25m left'
+    counter = {**running, 'progress': {'runs': {'done': 12, 'total': None, 'unit': 'runs', 'rate': 0.5}}}
+    assert q.describe(counter, NOW)[3] == '12 runs  0.5 runs/s  10m of ~40m'
+    silent = {**running, 'progress': None}
+    assert q.describe(silent, NOW)[3] == 'no progress data  10m of ~40m'
+    queued = row(8, estimate=300, queued=NOW - 120, agent='A', task='T', subtask='S')
+    assert q.tags(queued, NOW, place=2) == 'queued #2 express ~5m waited 2m'
+    build = row(9, status='running', lane=q.TOOLS_LANE, place='tools-1', admitted_ts=NOW - 30,
+                steps=[{'name': 'build', 'status': 'completed'}, {'name': 'test python', 'status': 'running'}])
+    assert q.tags(build, NOW) == 'RUNNING tools 30s  step 2/2: test python'
+    ended = row(10, estimate=60, status='completed', admitted_ts=NOW - 90, finished_ts=NOW, exit_code=0,
+                result='no golden path in 10 minutes')
+    assert q.tags(ended, NOW) == 'completed exit 0 after 1m of ~1m  no golden path in 10 minutes'
+    assert q.job_label('Fresh 40', 'Re/training', 'd3') == 'Fresh-40-Re-training-d3'
 
 
-def entry(name: str, pid: int, status: str = 'running', queued: float | None = None, host: str = HOST,
-          start: float = 10.0, kind: str = 'chain', path: str | None = None, estimate: float | None = None,
-          lane: str | None = None) -> dict:
-    """A registry entry as ``read_jobs`` returns it (``queued``, ``estimate`` and ``lane`` only when given)."""
-    data = {'host': host, 'pid': pid, 'pid_start': BOOT + start, 'name': name, 'kind': kind, 'status': status,
-            'path': f'/jobs/{path or name}.json'}
-    if queued is not None:
-        data.update(queued_ts=queued)
-    if estimate is not None:
-        data.update(estimate=estimate)
-    if lane is not None:
-        data.update(lane=lane)
-    return data
+@pytest.mark.parametrize('text, seconds', [('90s', 90), ('40m', 2400), ('2h', 7200), ('1h30m', 5400)])
+def test_durations(text, seconds):
+    assert job.parse_duration(text) == seconds
 
 
-def names(entries: list) -> list:
-    return [job['name'] for job in entries]
+@pytest.mark.parametrize('text', ['', '40', 'soon', '0m'])
+def test_bad_durations(text):
+    with pytest.raises(Exception):
+        job.parse_duration(text)
 
 
-@pytest.fixture
-def proc(tmp_path):
-    """A fake /proc with processes 1..9 alive."""
-    return fake_proc(tmp_path / 'proc', {pid: 10.0 for pid in range(1, 10)})
+def test_descriptions_and_refused_commands():
+    assert job.check_description('  Measure the d3 segment. ') == 'Measure the d3 segment.'
+    for bad in (None, '', '   ', 'x' * 121, 'one\ntwo'):
+        with pytest.raises(job.JobError):
+            job.check_description(bad)
+    job.check_command(['python', 'script.py', '--timeout-ish'])
+    for refused in (['nice', 'python'], ['/usr/bin/ionice', '-c3', 'x'], ['timeout', '10', 'x'],
+                    ['env', 'CARGO_BUILD_JOBS=8', 'cargo'], ['TRIFORCE_NICE=0', 'python'], []):
+        with pytest.raises(job.JobError):
+            job.check_command(refused)
 
 
-# ---------------------------------------------------------------------------------------------------- the limit
-
-def test_two_running_jobs_hold_a_third_and_one_running_lets_it_start(proc):
-    me = entry('me', 9, 'queued', queued=NOW - 100, estimate=2400.0)
-    a, b = entry('a', 1, queued=50.0), entry('b', 2, queued=60.0)
-    held = jobs.turn(me, [b, a, me], 2, proc, NOW)
-    assert not held.admitted and names(held.running) == ['a', 'b'] and held.ahead == [] and held.place == 1
-    assert held.reason() == 'estimated 40 minutes; 2 jobs are running (a (chain), b (chain))'
-    assert held.fields() == {'place': 1, 'running': ['a (chain)', 'b (chain)'], 'ahead': [], 'limit': 2}
-    assert jobs.turn(me, [a, me], 2, proc, NOW).admitted
-    assert not jobs.turn(me, [a, me], 1, proc, NOW).admitted                # the limit is the caller's
-    assert jobs.turn(me, [a, b, me], 0, proc, NOW).admitted                 # 0: no limit
+def test_only_the_program_is_refused_not_an_argument_that_reads_like_one():
+    job.check_command(['python', '-m', 'pytest', '-k', 'timeout'])
+    job.check_command(['env', 'A=1', 'python', 'nice'])
+    job.check_command(['-k', 'timeout or nice'], options=True)       # the options of build, test and golden
+    job.check_command([], options=True)
+    for refused in (['env', '-i', 'A=1', 'nice', 'x'], ['A=1', 'timeout', '5', 'x'], ['env', 'TRIFORCE_JOB_ID=3', 'x']):
+        with pytest.raises(job.JobError):
+            job.check_command(refused)
+    with pytest.raises(job.JobError):
+        job.check_command(['CARGO_BUILD_JOBS=8'], options=True)
 
 
-def test_other_hosts_own_process_and_dead_jobs_are_ignored(tmp_path):
-    proc = fake_proc(tmp_path / 'proc', {1: 10.0, 2: 10.0, 9: 10.0})
-    for estimate in (None, 50.0):
-        me = entry('me', 9, 'queued', queued=100.0, estimate=estimate)
-        others = [entry('elsewhere', 1, host='other-host'), entry('elsewhere-queued', 2, 'queued', 1.0, host='x'),
-                  entry('mine', 9, start=10.0), entry('mine-queued', 9, 'queued', queued=1.0),  # its own process
-                  entry('dead', 5), entry('dead-queued', 6, 'queued', queued=1.0),              # no such process
-                  entry('reused', 1, start=500.0), entry('reused-queued', 2, 'queued', 1.0, start=500.0),
-                  entry('ended', 1, 'completed'), entry('ended-queued', 2, 'interrupted', queued=1.0)]
-        current = jobs.turn(me, [*others, me], 1, proc, NOW)
-        assert current.admitted and current.running == [] and current.ahead == []     # the dead ones don't count
+def test_an_older_checkouts_golden_racer_is_not_called_dry(tmp_path, monkeypatch):
+    """A checkout whose tools do not answer the dry call (an old version's tree) would run its whole race outside
+    the queue: ``golden`` refuses it and says how to run it."""
+    (tmp_path / '.git').mkdir()
+    (tmp_path / 'triforce').mkdir()
+    (tmp_path / 'triforce' / 'jobs.py').write_text('# an old queue\n')
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(job, 'ask_work', lambda *_: pytest.fail("the old racer was started"))
+    assert job.main(['golden', '--agent', 'A', '--task', 'T', '--timeout', '10m']) == 2
 
 
-def test_a_running_entry_without_a_lane_counts_as_regular_and_a_queued_one_is_alive(proc):
-    me = entry('me', 9, 'queued', queued=100.0, estimate=5000.0)
-    old = [entry('old-a', 1), entry('old-b', 2)]                     # running, no queue fields, no lane
-    assert not jobs.turn(me, [*old, me], 2, proc, NOW).admitted
-    assert jobs.job_alive(me, proc) is True and jobs.job_alive({**me, 'pid': 20}, proc) is False
+def test_the_database_gains_a_new_column_and_loses_old_rows(tmp_path):
+    con = q.connect(tmp_path)
+    con.execute('ALTER TABLE jobs DROP COLUMN progress')           # a file written before the column existed
+    con.close()
+    con = q.connect(tmp_path)
+    try:
+        assert 'progress' in {r['name'] for r in con.execute('PRAGMA table_info(jobs)')}
+        for status, finished in (('completed', NOW - q.KEEP_SECONDS - 1), ('completed', NOW - 60), ('running', None)):
+            con.execute("INSERT INTO jobs (status, finished_ts) VALUES (?, ?)", (status, finished))
+        with q.transaction(con):
+            assert q.prune(con, NOW) == 1
+        assert [r['status'] for r in q.read_jobs(con)] == ['completed', 'running']
+    finally:
+        con.close()
 
 
-# ---------------------------------------------------------------------------------------------- the scored line
-
-def test_a_short_job_goes_before_a_long_one(proc):
-    running = entry('a', 1, lane='regular', estimate=3600.0, queued=0.0)
-    long = entry('long', 3, 'queued', queued=NOW - 100, estimate=3600.0)
-    short = entry('short', 4, 'queued', queued=NOW - 10, estimate=1200.0)
-    everyone = [running, long, short]
-    first = jobs.turn(short, everyone, 2, proc, NOW, express=0)
-    assert first.admitted and first.lane == 'regular' and first.ahead == []
-    assert first.score == 1200.0 - jobs.AGING * 10
-    held = jobs.turn(long, everyone, 2, proc, NOW, express=0)
-    assert not held.admitted and names(held.ahead) == ['short'] and held.place == 2
-    assert held.reason() == ('estimated 1 hour; 1 job is running (a (chain)); 1 job is ahead in line '
-                             '(short (chain))')
-    assert held.details() == {**held.fields(), 'estimate': 3600.0, 'score': 3600.0 - 50.0, 'lane': None}
+def test_a_stop_is_noted_never_raised_from_the_handler(tmp_path, monkeypatch):
+    monkeypatch.setenv(jobs.JOB_ID_ENV, '0')
+    handled = (signal.SIGTERM, signal.SIGINT, signal.SIGHUP, signal.SIGALRM)
+    previous = {signum: signal.getsignal(signum) for signum in handled}
+    try:
+        wrapper = job.Wrapper(tmp_path)
+        wrapper._signal(signal.SIGTERM, None)       # pylint: disable=protected-access
+        assert wrapper.stopped == signal.SIGTERM
+        with pytest.raises(job.Stopped):
+            wrapper.check_stop()
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
 
 
-def test_aging_brings_a_long_job_in_front_of_fresh_short_ones(proc):
-    """A long job (3600 s) waiting w passes a fresh short one (1200 s) once 3600 - w/2 < 1200: w > 4800 s."""
-    running = [entry('a', 1, lane='regular'), entry('b', 2, lane='regular')]
-
-    def ahead_of_long(waited: float) -> list:
-        long = entry('long', 3, 'queued', queued=NOW - waited, estimate=3600.0)
-        short = entry('short', 4, 'queued', queued=NOW, estimate=1200.0)
-        return names(jobs.turn(long, [*running, long, short], 2, proc, NOW, express=0).ahead)
-    assert ahead_of_long(4790.0) == ['short']
-    assert ahead_of_long(4810.0) == []
-    # once in front, it takes the next free place
-    long = entry('long', 3, 'queued', queued=NOW - 4810.0, estimate=3600.0)
-    short = entry('short', 4, 'queued', queued=NOW, estimate=1200.0)
-    assert jobs.turn(long, [running[0], long, short], 2, proc, NOW, express=0).admitted
-    assert not jobs.turn(short, [running[0], long, short], 2, proc, NOW, express=0).admitted
-
-
-def test_equal_scores_go_by_join_time_then_file_name(proc):
-    running = [entry('a', 1, lane='regular'), entry('b', 2, lane='regular')]
-    me = entry('me', 9, 'queued', queued=NOW - 200, estimate=1100.0, path='m')       # score 1000
-    older = entry('older', 3, 'queued', queued=NOW - 400, estimate=1200.0)          # score 1000, joined first
-    newer = entry('newer', 4, 'queued', queued=NOW - 100, estimate=1050.0)          # score 1000, joined later
-    assert names(jobs.turn(me, [*running, me, older, newer], 2, proc, NOW, express=0).ahead) == ['older']
-    tie_a = entry('tie-a', 5, 'queued', queued=NOW - 200, estimate=1100.0, path='a')
-    tie_z = entry('tie-z', 6, 'queued', queued=NOW - 200, estimate=1100.0, path='z')
-    assert names(jobs.turn(me, [*running, me, tie_a, tie_z], 2, proc, NOW, express=0).ahead) == ['tie-a']
+def test_which_commands_the_queue_measures(tmp_path):
+    root = Path(__file__).resolve().parents[1]
+    venv = str(root / '.venv' / 'bin')
+    assert job.tool_of([f'{venv}/triforce', 'eval-chain', '--runs', '5'], tmp_path) == ('eval-chain', root)
+    assert job.tool_of([f'{venv}/triforce', '--models-dir', 'm', 'train'], tmp_path)[0] == 'train'
+    assert job.tool_of([f'{venv}/python', '-m', 'triforce.lab.bench', 'bench'], tmp_path)[0] == 'triforce.lab.bench'
+    assert job.tool_of([f'{venv}/python', '-m', 'triforce.cli', 'eval-batch', 'x'], tmp_path)[0] == 'eval-batch'
+    assert job.tool_of(['python', 'scripts/train_round.py', '--round', 'r'], root)[0] == 'train_round.py'
+    assert job.tool_of(['uv', 'run', 'triforce', 'evaluate'], root)[0] == 'evaluate'
+    assert job.tool_of([f'{venv}/python', 'scripts/experiments/r38_hit.py'], root) is None   # a script
+    assert job.tool_of([f'{venv}/triforce', 'list'], tmp_path) is None
+    old = tmp_path / 'old'                         # a checkout whose tools don't announce (an old version)
+    (old / '.git').mkdir(parents=True)
+    (old / 'triforce').mkdir()
+    (old / 'triforce' / 'jobs.py').write_text("def begin_job(args): pass\n")
+    assert job.tool_of(['python', 'scripts/full_runs.py', 'runs250'], old) is None
 
 
-def test_the_express_place(proc):
-    regular = [entry('a', 1, lane='regular'), entry('b', 2)]                 # an old running entry is regular
-    short = entry('short', 3, 'queued', queued=NOW - 5, estimate=300.0)
-    long = entry('long', 4, 'queued', queued=NOW - 9000, estimate=3600.0)
-    # both regular places taken: the short job runs beside them, the long one waits (it is ahead in line)
-    current = jobs.turn(short, [*regular, long, short], 2, proc, NOW)
-    assert current.admitted and current.lane == 'express' and names(current.ahead) == ['long']
-    assert not jobs.turn(long, [*regular, long, short], 2, proc, NOW).admitted
-    # a second short job waits for the first, and for a shorter-scored short one
-    express = entry('fast', 5, lane='express', estimate=200.0)
-    assert not jobs.turn(short, [*regular, express, short], 2, proc, NOW).admitted
-    shorter = entry('shorter', 6, 'queued', queued=NOW - 5, estimate=100.0)
-    assert not jobs.turn(short, [*regular, shorter, short], 2, proc, NOW).admitted
-    assert jobs.turn(shorter, [*regular, shorter, short], 2, proc, NOW).lane == 'express'
-    # a long job doesn't wait for the express job; a short one does
-    assert names(jobs.turn(long, [*regular, express, long], 2, proc, NOW).running) == ['a', 'b']
-    assert names(jobs.turn(short, [*regular, express, short], 2, proc, NOW).running) == ['a', 'b', 'fast']
-    # an express job doesn't hold a regular place; with both free a short job takes the express one
-    assert jobs.turn(long, [regular[0], express, long], 2, proc, NOW).lane == 'regular'
-    assert jobs.turn(short, [short], 2, proc, NOW).lane == 'express'
-    # not express-sized: a job estimated over EXPRESS_SECONDS
-    medium = entry('medium', 7, 'queued', queued=NOW, estimate=jobs.EXPRESS_SECONDS + 1)
-    assert not jobs.turn(medium, [*regular, medium], 2, proc, NOW).admitted
-    # no lane: EXPRESS_JOBS 0
-    assert not jobs.turn(short, [*regular, short], 2, proc, NOW, express=0).admitted
-    # limit 0: no limit, everyone starts in a regular place
-    unlimited = jobs.turn(long, [*regular, express, short, long], 0, proc, NOW)
-    assert unlimited.admitted and unlimited.lane == 'regular'
+def test_announce_answers_the_dry_call_and_exits(tmp_path):
+    answer = tmp_path / 'work.json'
+    code = ("from triforce import jobs; jobs.announce('chain', jobs.work(chain_steps=12), 'c'); "
+            "print('went on')")
+    env = {**os.environ, jobs.JOB_ESTIMATE_ENV: str(answer)}
+    env.pop(jobs.JOB_ID_ENV, None)
+    done = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True, env=env, check=True,
+                          stdin=subprocess.DEVNULL)
+    assert 'went on' not in done.stdout
+    assert json.loads(answer.read_text()) == {'kind': 'chain', 'work': {'chain_steps': 12}, 'name': 'c'}
+    script = subprocess.run([sys.executable, '-c', "from triforce import jobs; jobs.require_job(); print('x')"],
+                            capture_output=True, text=True, env=env, check=True, stdin=subprocess.DEVNULL)
+    assert 'x' not in script.stdout and json.loads(answer.read_text())['kind'] == 'script'
 
 
-def test_an_express_request_takes_the_express_place_whatever_its_estimate(proc):
-    regular = [entry('a', 1, lane='regular'), entry('b', 2, lane='regular')]
-    asked = {**entry('runs-250', 3, 'queued', queued=NOW, estimate=900.0), 'express': True}
-    plain = entry('plain', 4, 'queued', queued=NOW, estimate=900.0)
-    assert not jobs.turn(plain, [*regular, plain], 2, proc, NOW).admitted
-    current = jobs.turn(asked, [*regular, asked], 2, proc, NOW)
-    assert current.admitted and current.lane == 'express'
-    # it still waits for the express place itself (and the job there counts as running for it)
-    held = entry('fast', 5, lane='express', estimate=200.0)
-    waiting = jobs.turn(asked, [*regular, held, asked], 2, proc, NOW)
-    assert not waiting.admitted and names(waiting.running) == ['a', 'b', 'fast']
-    # and its turn in the line: a shorter express-sized job goes first
-    shorter = entry('shorter', 6, 'queued', queued=NOW, estimate=100.0)
-    assert not jobs.turn(asked, [*regular, shorter, asked], 2, proc, NOW).admitted
-    assert jobs.turn(shorter, [*regular, shorter, asked], 2, proc, NOW).lane == 'express'
+def test_progress_and_the_plan_go_to_the_jobs_row(tmp_path, monkeypatch):
+    monkeypatch.setenv(q.QUEUE_DIR_ENV, str(tmp_path))
+    con = q.connect(tmp_path)
+    try:
+        job_id = con.execute("INSERT INTO jobs (status) VALUES ('running')").lastrowid
+        monkeypatch.setenv(jobs.JOB_ID_ENV, str(job_id))
+        monkeypatch.setattr(jobs, '_PROGRESS', {})
+        jobs.progress(5, 10, 'files')
+        jobs.progress(6, 10, 'files')                  # rate-limited: not written
+        jobs.progress(2, None, 'runs', label='runs played')
+        jobs.record_plan(tmp_path / 'logs' / 'a', tmp_path / 'logs' / 'a' / 'training.json')
+        jobs.record_plan(tmp_path / 'logs' / 'b', None)                  # the first plan stays
+        (stored,) = q.read_jobs(con)
+    finally:
+        con.close()
+    assert stored['progress']['files']['done'] == 5 and stored['progress']['files']['total'] == 10
+    assert stored['progress']['runs played'] == {**stored['progress']['runs played'], 'done': 2, 'total': None}
+    assert stored['log_dir'].endswith('logs/a')
 
 
-def test_express_is_recorded_from_begin_job_or_the_environment(registry, monkeypatch):
-    import argparse
-    parser = argparse.ArgumentParser()
-    jobs.add_job_arguments(parser)
-    monkeypatch.setattr(jobs, 'lower_priority', lambda nice=None: 0)
-    jobs.begin_job(parser.parse_args([]))
-    assert jobs.register(None, None, 'plain', 'chain').data['express'] is False
-    jobs.begin_job(parser.parse_args(['--express']))
-    record = jobs.register(None, None, 'asked', 'chain', amounts={'chain_steps': 10 ** 7})
-    assert record.data['express'] is True and record.data['estimate'] > jobs.EXPRESS_SECONDS
-    assert jobs.express_sized(record.data)
-    jobs.begin_job(parser.parse_args([]))
-    monkeypatch.setenv(jobs.EXPRESS_ENV, '1')
-    assert jobs.register(None, None, 'env', 'chain').data['express'] is True
+def test_job_imports_without_the_native_module_or_torch():
+    code = ("import sys, triforce.cli, triforce.job; "
+            "assert 'triforce._native' not in sys.modules and 'torch' not in sys.modules")
+    subprocess.run([sys.executable, '-c', code], check=True)
 
 
-def test_the_environment_names_a_job(registry, monkeypatch):
-    assert jobs.register(None, None, 'zol', 'train').data['name'] == 'zol'
-    monkeypatch.setenv(jobs.JOB_NAME_ENV, 'backtest v2.0.0.2 250')
-    record = jobs.register(None, None, 'eval-chain-d3first-power-on', 'chain')
-    assert record.data['name'] == 'backtest v2.0.0.2 250'
-    assert any(job['name'] == 'backtest v2.0.0.2 250' for job in jobs.read_jobs())
+def test_a_golden_race_that_runs_out_of_time_is_a_result(tmp_path, monkeypatch):
+    monkeypatch.setenv(q.QUEUE_DIR_ENV, str(tmp_path))
+    monkeypatch.setenv(jobs.JOB_ID_ENV, '0')           # the wrapper names its job in its own environment
+    stops = (signal.SIGTERM, signal.SIGINT, signal.SIGHUP)
+    previous = {signum: signal.getsignal(signum) for signum in stops}    # the wrapper handles the stop signals
+    fields = {'agent': 'A', 'task': 'T', 'subtask': 'v', 'description': 'd', 'verb': 'golden', 'lane': q.JOBS_LANE,
+              'kind': 'golden', 'name': 'A-T-v', 'command': ['sleep'], 'nice': os.nice(0), 'estimate': 1.0}
+    archived = []
+    started = time.monotonic()
+    try:
+        code = job.run_job(fields, [job.Step('golden', ['sleep', '30'], tmp_path)], timeout=1.0,
+                           on_timeout=lambda: 'no golden path in 1 minutes', after=lambda: archived.append(True))
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
+    assert code == 0 and archived == [True] and time.monotonic() - started < 25
+    con = q.connect(tmp_path)
+    try:
+        (stored,) = q.read_jobs(con)
+        (past,) = q.read_history(con)
+    finally:
+        con.close()
+    assert stored['status'] == 'completed' and stored['result'] == 'no golden path in 1 minutes'
+    assert past['kind'] == 'golden' and past['estimate'] == 1.0 and past['actual'] >= 1.0
 
 
-def test_a_waiting_entry_without_an_estimate_counts_as_estimate_zero(proc):
-    regular = [entry('a', 1, lane='regular'), entry('b', 2, lane='regular')]
-    bare = entry('bare', 3, 'queued', queued=NOW - 50)
-    short = entry('short', 4, 'queued', queued=NOW, estimate=60.0)
-    held = jobs.turn(short, [*regular, bare, short], 2, proc, NOW, express=0)
-    assert not held.admitted and names(held.ahead) == ['bare']               # 0 - 25 < 60
-    assert jobs.turn(short, [*regular, bare, short], 2, proc, NOW).lane == 'express'
+def test_one_worktree_under_two_agent_names_is_warned_about(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv(jobs.JOB_ID_ENV, '0')
+    fields = {'agent': 'Fresh40', 'task': 'T', 'subtask': 's', 'verb': 'run', 'lane': q.JOBS_LANE,
+              'checkout': '/w/triforce-r40-fresh', 'nice': 15}
+    first = job.Wrapper(tmp_path)
+    first.join(fields)
+    first.finish('completed', 0)
+    second = job.Wrapper(tmp_path)
+    second.join({**fields, 'agent': 'r40-fresh'})
+    second.finish('completed', 0)
+    assert 'ran jobs as Fresh40 before' in capsys.readouterr().err
+    for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        signal.signal(signum, signal.SIG_DFL if signum != signal.SIGINT else signal.default_int_handler)
 
 
-def test_check_starts_the_entry_under_the_lock_and_wait_turn_honours_no_wait(registry, tmp_path, monkeypatch):
-    monkeypatch.setenv(jobs.MAX_JOBS_ENV, '2')
-    record = jobs.register(tmp_path / 'logs' / 'x', None, 'x', 'eval', amounts={'eval_episodes': 100})
-    (job,) = jobs.read_jobs()
-    assert job['status'] == 'queued' and job['admitted'] is None and job['queued_ts'] and job['log_dir']
-    assert job['estimate'] == round(100 * jobs.DEFAULT_RATES['eval_episodes'], 1) and job['lane'] is None
-    assert jobs.job_alive(job) is True
-    assert record.check().admitted
-    (job,) = jobs.read_jobs()
-    assert job['status'] == 'running' and job['lane'] == 'express' and job['admitted_ts']
-    assert (registry / jobs.LOCK_FILE).exists()
-    monkeypatch.setenv(jobs.NO_WAIT_ENV, '1')
-    other = jobs.register(None, None, 'no-log', 'chain')                     # a --no-log job: no folder
-    assert other.wait_turn() == 0.0
-    assert other.data['status'] == 'running' and other.data['no_wait'] is True and other.data['log_dir'] is None
-    assert other.data['lane'] == 'regular' and Path(other.path).name.endswith('-no-log.json')
+def test_setup_makes_the_worktree_its_links_venv_and_build_as_one_tools_entry(tmp_path, monkeypatch):
+    main = tmp_path / 'triforce'
+    for name in ('roms', 'trajectories', 'models'):
+        (main / name).mkdir(parents=True)
+    monkeypatch.setattr(job, 'main_checkout', lambda cwd: main)
+    seen = {}
 
-
-# ---------------------------------------------------------------------------------------------------- estimates
-
-def finished(name: str, work: dict, ran: float, status: str = 'completed', at: float = 0.0) -> dict:
-    return {'name': name, 'status': status, 'work': work, 'ran': ran, 'finished': jobs._iso(BOOT + at)}
-
-
-def test_rates_come_from_completed_history_else_the_defaults():
-    assert jobs.rates([]) == jobs.DEFAULT_RATES
-    history = [finished('e1', {'eval_episodes': 100}, 10.0), finished('e2', {'eval_episodes': 100}, 30.0),
-               finished('e3', {'eval_episodes': 200}, 40.0),
-               finished('failed', {'eval_episodes': 100}, 900.0, status='failed'),        # only completed ones
-               finished('interrupted', {'eval_episodes': 100}, 900.0, status='interrupted'),
-               finished('no-ran', {'eval_episodes': 100}, 0.0), {'status': 'completed', 'ran': 5.0}]
-    rates = jobs.rates(history)
-    assert rates['eval_episodes'] == pytest.approx(0.2)                    # median of 0.1, 0.3, 0.2
-    assert rates['train_steps'] == jobs.DEFAULT_RATES['train_steps'] and rates['chain_steps'] == 0.0026
-
-
-def test_a_mixed_job_gives_a_rate_with_its_other_work_taken_off():
-    """A round (training and evaluation): the evaluation's share at the evaluation rate of pure jobs comes off."""
-    history = [finished('eval', {'eval_episodes': 1000}, 100.0),                               # 0.1 s/episode
-               finished('round', {'train_steps': 1_000_000, 'eval_episodes': 1000}, 600.0)]   # 500 s training
-    rates = jobs.rates(history)
-    assert rates['train_steps'] == pytest.approx(0.0005)
-    # and the round's evaluation, with its training at the training rate of pure jobs (none: the default)
-    assert rates['eval_episodes'] == pytest.approx((0.1 + (600 - 1e6 * jobs.DEFAULT_RATES['train_steps']) / 1000) / 2)
-
-
-def test_rates_use_the_latest_jobs_only_and_an_estimate_is_a_sum():
-    history = [finished(f'new{i}', {'chain_steps': 100}, 1.0, at=1000 + i) for i in range(jobs.RATE_HISTORY)]
-    history += [finished(f'old{i}', {'chain_steps': 100}, 500.0, at=i) for i in range(jobs.RATE_HISTORY)]
-    assert jobs.rates(history)['chain_steps'] == pytest.approx(0.01)        # the 20 newest
-    rates = {'train_steps': 0.001, 'eval_episodes': 0.5, 'chain_steps': 0.01}
-    assert jobs.estimate({'train_steps': 1000, 'eval_episodes': 10, 'chain_steps': 100}, rates) == 1 + 5 + 1
-    assert jobs.estimate({}, rates) == 0.0 and jobs.estimate(None, rates) == 0.0
-
-
-def test_settings_and_texts(monkeypatch):
-    monkeypatch.delenv(jobs.MAX_JOBS_ENV, raising=False)
-    monkeypatch.delenv(jobs.NO_WAIT_ENV, raising=False)
-    assert jobs.max_jobs() == jobs.DEFAULT_MAX_JOBS == 2
-    for value, expected in (('0', 0), ('3', 3), ('-1', 0), ('x', 2)):
-        monkeypatch.setenv(jobs.MAX_JOBS_ENV, value)
-        assert jobs.max_jobs() == expected
-    monkeypatch.setitem(jobs._START, 'no_wait', False)
-    assert not jobs.no_wait()
-    monkeypatch.setenv(jobs.NO_WAIT_ENV, '0')
-    assert not jobs.no_wait()
-    monkeypatch.setenv(jobs.NO_WAIT_ENV, '1')
-    assert jobs.no_wait()
-    assert [jobs._duration(s) for s in (1, 40, 300, 3600, 4320)] == [
-        '1 second', '40 seconds', '5 minutes', '1 hour', '1 hour 12 minutes']
-    assert (jobs.AGING, jobs.EXPRESS_SECONDS, jobs.EXPRESS_JOBS) == (0.5, 600.0, 1)
+    def run_job(fields, steps, timeout=None, **_):
+        seen.update(fields=fields, steps=steps)
+        (tmp_path / 'triforce-r41-x').mkdir()
+        return steps[1].command()
+    monkeypatch.setattr(job, 'run_job', run_job)
+    assert job.main(['setup', 'r41-x']) == 0
+    assert seen['fields']['lane'] == q.TOOLS_LANE and seen['fields']['nice'] >= job.TOOL_NICE
+    assert [step.name for step in seen['steps']] == ['worktree', 'links', 'venv', 'install', 'build']
+    assert seen['steps'][0].command[-3:] == ['-b', 'r41-x', 'main']
+    target = tmp_path / 'triforce-r41-x'
+    assert all((target / name).resolve() == main / name for name in ('roms', 'trajectories'))
+    assert not (target / 'models').exists()       # a worktree's runs and pointers stay its own
+    assert seen['steps'][-1].env['CARGO_BUILD_JOBS'] == str(job.CARGO_JOBS)

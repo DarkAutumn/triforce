@@ -3,7 +3,7 @@
     python -m triforce.evaluate --specialist NAME [--checkpoint PATH | --run-id ID] [--models-dir DIR]
         [--episodes-per-state 100] [--parallel 1] [--threads N] [--seed 0] [--act model|MODE]
         [--clips on|off|both] [--output PATH] [--replays DIR [--streams LIST] [--keyframe-frames N]
-        [--state embed|path]] [--events JSONL] [--nice N] [--no-wait]
+        [--state embed|path]] [--events JSONL]
 
 Training metrics mix start states and ``eval-chain`` plays the whole route; this measures one model in
 isolation.  Every seed savestate of the specialist (``SpecialistConfig.resolve_start_states``) is played
@@ -80,6 +80,7 @@ merging several evaluations weight by visits.
 
 import argparse
 import json
+import os
 import time
 import traceback
 from collections import Counter
@@ -90,7 +91,8 @@ from typing import Callable, Optional
 from . import __version__, _native, registry, replay
 from .clips import MODES as CLIPS_MODES, default_mode as default_clips_mode, episode_jobs, name as switch_name
 from .events import LOGS_DIR_ENV, EventLog, has_plan, logged_job, write_json_atomic
-from .jobs import add_job_arguments, begin_job, work
+from .jobs import announce, work
+from .jobs import progress as job_progress
 from .metrics import heart_change_total
 from .provenance import checkpoint_description, code_version, data_hash, replay_models
 from .replay import ReplayDir
@@ -449,11 +451,13 @@ def read_evaluation(run_dir, mode: Optional[str] = None) -> tuple[Path, dict]:
 
 def _progress_events(events, on_episode):
     """``on_episode`` that also emits ``eval_progress`` (done, episodes, running success_rate) at most once a
-    second and on the last episode."""
+    second and on the last episode, and reports the episodes as the job's progress (``jobs.progress``, labelled by
+    the stream)."""
     progress = {'successes': 0, 'last': 0.0}
 
     def emit(record: dict, done: int, total: int):
         progress['successes'] += bool(record['success'])
+        job_progress(done, total, 'episodes', events.path.stem)
         now = time.monotonic()
         if now - progress['last'] >= 1.0 or done == total:
             progress['last'] = now
@@ -575,7 +579,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--events', default=None, metavar='JSONL',
                         help="write the eval events to this stream: in a folder with a plan its driver (e.g. triforce "
                              "eval-batch) owns it and writes the final 'end'; else this evaluation writes the plan")
-    add_job_arguments(parser)
     return parser
 
 
@@ -613,22 +616,22 @@ def main(argv=None):
         parser.error(str(error))
     if streams and args.replays is None:
         parser.error("--streams needs --replays")
-    nice = begin_job(args)
 
     config = load_specialist(args.specialist)
     name = config.name
     checkpoint = resolve_checkpoint(name, args.checkpoint, args.run_id, args.models_dir)
     run_id = checkpoint.parent.name
+    episodes = episode_count(config, args.episodes_per_state, args.clips)
+    announce('eval', work(eval_episodes=episodes), f'eval-{name}')
     # --events into a folder with a plan: its driver (e.g. triforce eval-batch) owns the stream and the final 'end';
-    # into a folder without one: this evaluation writes a plan there, so the training GUI lists it.  Every
-    # evaluation but a driver's child waits its turn (triforce.jobs), a --no-log one too.
+    # into a folder without one: this evaluation writes a plan there, so the training GUI lists it.
     stream = Path(args.events) if args.events else None
     log = nullcontext() if stream is not None and has_plan(stream) else logged_job(
         f'eval-{name}', 'eval', [{'specialist': name, 'run_id': run_id,
                                   'events': stream.name if stream else f'{name}.jsonl',
                                   'run_dir': str(checkpoint.parent), 'status': 'evaluating'}], args.logs_dir,
-        directory=None if stream is None else stream.parent, log=not args.no_log, nice=nice,
-        work=work(eval_episodes=episode_count(config, args.episodes_per_state, args.clips)))
+        directory=None if stream is None else stream.parent, log=not args.no_log, nice=os.nice(0),
+        work=work(eval_episodes=episodes))
     with log as plan:
         events = (EventLog(stream, specialist=name, run_id=run_id) if stream is not None else
                   None if plan is None else EventLog(plan.directory / f'{name}.jsonl', specialist=name, run_id=run_id))

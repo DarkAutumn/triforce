@@ -22,8 +22,9 @@ replaced (``decisions.foresight.replaced`` of the episode's visit: the policy's 
 ``--repeat`` times, since it is the lesson and a few among a hundred. 0x28's bomb stays ``bomb28.npz``
 (``r27_d6_rules.py``), the planner's 0x28 (it walks back out and in) is not recorded.
 
-It plays a model, so it is a job: it waits its turn in the machine's line (``triforce.jobs``) with a log folder
-(``events.logged_job``) and lowers its own priority, like ``triforce evaluate``.
+It plays a model, so it is a job of the machine's queue (``jobs.require_job``): ``triforce job run --agent A --task T
+--subtask S --desc '...' --timeout 1h -- .venv/bin/python scripts/experiments/r27_plan_demos.py ...``, with a log
+folder (``events.logged_job``); the episodes played of the total are its progress.
 """
 
 import argparse
@@ -36,7 +37,7 @@ from triforce import _native, registry
 from triforce.best_of_n import play_episodes
 from triforce.demos import save_demos
 from triforce.events import logged_job
-from triforce.jobs import add_job_arguments, begin_job, work
+from triforce.jobs import progress, require_job, work
 from triforce.model import MASK_KEY
 from triforce.specialist import load_specialist
 
@@ -72,10 +73,10 @@ def record_demos(family: str, checkpoint: Path, out: Path, stems: list[str], run
     file_runs = runs if file_runs is None else file_runs
     starts = [s for s in state_names(stems, route) for _ in range(runs)]
     starts += [s for s in state_files or [] for _ in range(file_runs)]
-    jobs = [(state, seed + index, True) for index, state in enumerate(starts)]
-    task = _native.EvalTask(config, jobs)
+    entries = [(state, seed + index, True) for index, state in enumerate(starts)]
+    task = _native.EvalTask(config, entries)
     records, plays = {}, {}
-    with _native.EnvPool(task, num_envs=max(1, min(parallel, len(jobs))), seed=seed) as pool:
+    with _native.EnvPool(task, num_envs=max(1, min(parallel, len(entries))), seed=seed) as pool:
         pool.play([policy], act=act, record='observations')
         while True:
             idle = pool.wait_idle(timeout=0.5)
@@ -83,6 +84,7 @@ def record_demos(family: str, checkpoint: Path, out: Path, stems: list[str], run
                 if event['type'] == 'eval':
                     records[int(event['record']['seed'])] = event['record']
             plays.update((int(play['job']), play) for play in pool.poll_plays())
+            progress(len(records), len(entries), 'episodes')
             if idle:
                 break
     observations, actions = [], []
@@ -138,14 +140,13 @@ def main(argv) -> int:
     parser.add_argument('--repeat', type=int, default=5, help="rows a replaced decision is written")
     parser.add_argument('--parallel', type=int, default=8)
     parser.add_argument('--seed', type=int, default=5000)
-    add_job_arguments(parser)
     args = parser.parse_args(argv)
-    nice = begin_job(args)
+    require_job()
     file_runs = args.runs if args.file_runs is None else args.file_runs
     episodes = 3 * len(args.states) * args.runs + len(args.state_files) * file_runs
     name = load_specialist(args.family).name
     with logged_job('r27-plan-demos', 'eval', [{'specialist': name, 'run_id': args.checkpoint.name,
-                                                 'status': 'evaluating'}], nice=nice,
+                                                 'status': 'evaluating'}],
                     work=work(eval_episodes=2 * episodes)):
         record_demos(args.family, args.checkpoint, args.out, args.states, args.runs, args.max_loss, args.repeat,
                      args.parallel, args.seed, args.act, args.state_files, args.route, file_runs)
