@@ -486,6 +486,11 @@ impl PyChange {
     fn health_lost(&self) -> f64 {
         self.change.health_lost
     }
+    /// A Bubble's touch landed in the step: the sword blocked, no health lost (round 38; `Change::bubble_touched`).
+    #[getter]
+    fn bubble_touched(&self) -> bool {
+        self.change.bubble_touched()
+    }
     #[getter]
     fn health_gained(&self) -> f64 {
         self.change.health_gained
@@ -691,6 +696,7 @@ pub fn observe<'py>(py: Python<'py>, state: &PyGameState, rupee_reserve: u8) -> 
         clips: false,
         treasure_refused: false,
         drops_first: false,
+        bag_drops: false,
     };
     let obs = builder.reset(&state.view, &objective, None, &zelda::actions::ActionMask::default());
     crate::convert::obs_to_dict(py, &obs)

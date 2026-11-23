@@ -25,6 +25,14 @@ there).
   required wall's missing bomb is still cheated and counted, for now; what the game can answer is found in the
   emulator, not asked. The route landed in 2.0.0.5 (next bullet); retraining has not started.
 
+- **2.0.0.6 (Nov 22; round37.md "The owner's bomb rules"; decisions 2026-11-22): the owner's bomb rules on
+  `d3first`** (`bomb_rules:` in routes.yaml: bombs a weapon only in dungeon rooms the route fights, none but the
+  wall's in 3:0x5b, a room's bombs fought for with 7 or fewer and then taken for the visit, dropped bombs the
+  targets below the bag, the 10th kill's bomb always), and 2:0x5e crossed on `d3first`. Today's 51 networks, not
+  retrained: weapon bombs in crossings 1.94 → 0 a run, cheated wall bombs 0.66 → 0.30 a run; `d3` −1.5, `d4` +2.6,
+  `d2` −1.4 points, the rest unchanged within noise. 7:0x1b measured both ways (the floor lands; the crossing
+  override commented). `d2first` identical. 0:0x2d's rupee cave (the owner's second route change) is not in yet.
+
 - **2.0.0.5 (Nov 22; round36.md "The corrected route"; decisions 2026-11-22 "2.0.0.5"): the corrected `d3first` is
   the route.** 292 steps in the owner's order (above), `d2first` untouched (its step list and a 100-run chain
   identical to `main`'s before the landing). **Nothing retrained: today's 51 networks.** Hearts 7 / 8 / 9 at Levels 2 / 5 / 7 and 12
@@ -44,8 +52,9 @@ there).
   triforces as before (23.5%, 4.5%, 3.8%), 30 take Dungeon 2's, 6 Dungeon 5's, none ends the game. **The golden
   race from power on wins three of three** (411 runs together; tries per segment D3 6/9/4, D4 4/38/7, D1 1/3/4, D2
   1/2/2, D5 12/3/7, D7 with the 0x55 warp 29/64/42, D6 with the 0x3f warp and the sword 39/15/38, D8 16/13/16, D9
-  25/6/5); the shortest (152,051 frames) is `corpus/replays/golden-d3first-51-networks.tfreplay` (`single-run-d3first-old-order-51-networks` stays:
-  a single run on 2.0.0.3's order). The lab's yardstick was re-made on the corrected route's states and harvested
+  25/6/5); the shortest (152,051 frames) was the corpus's `golden-d3first-51-networks` until 2.0.0.6 replaced it
+  (180,118 frames, under the bomb rules; `single-run-d3first-old-order-51-networks` stays: a single run on
+  2.0.0.3's order). The lab's yardstick was re-made on the corrected route's states and harvested
   entries (`docs/lab.md` "The yardstick"). What the baseline leaves open, in the order it costs the route:
   backlog Track R.
 
@@ -83,7 +92,7 @@ there).
   `r34d3-skg-s341`, darknut `r34d3-dark-s341` (Dungeon 3), vire `r34d4-vire-s1`, like-like `r34d4-like`, boss-gleeok
   `r34d4-gleeok4-s1-it2877` (Dungeon 4), wallmaster `r34d7-wall-s3`, boss-aquamentus `r34d7-aqua-s1` (Dungeon 7 and
   Dungeon 1's boss); `d3first_4_71s_*` rebuilt from chain arrivals (bombs 5/1/7, 2 keys); Dungeon 7 keeps the bag
-  (`d3first`: reserve 8 from its entrance, 7:0x1b fought only below 2 bombs); a training config may end a
+  (`d3first`: reserve 8 from its entrance; 7:0x1b's floor 2 then, 8 since round 37); a training config may end a
   truncation (`no-damage`, `max-steps`, `no-room-progress`) as a failure (training only). The chains of record
   `r34land-1k` (seeds 0-999, paired with 2.0.0.0's): Dungeon 3 12.6% → 18.0% (+5.4 ± 1.6), 4 6.2% → 18.5% (+12.3 ±
   1.4), 1 89.6% → 92.7% (+3.1 ± 1.3), 5 24.0% → 27.4% (+3.4 ± 1.9), 7 9.4% → 38.7% (+29.3 ± 1.8); `post-d1`, `d8`
@@ -617,6 +626,32 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   the start state's own bombs, round 19). A Darknut facing opposite to Link's facing when he placed
   a bomb takes no damage from it (ASM and measured, round 19). Overworld families don't bomb but for the 10th kill
   and the rock walls of 0x2c (ow-tektite) and 0x67 (ow-octorok).
+- **The owner's three bomb rules (Nov 22, round 37, 2.0.0.6; routes.yaml's top-level `bomb_rules:`, on `d3first`
+  only: `d2first` is in scope "when we go back and work on that single-model", one entry under its name; its
+  table and the reading in docs/routes/d3first.md "Bombs")**:
+  1. "In dungeons, link should only use bombs in rooms it somehow needs to clear. For example, it's fine to use
+     bombs in 0x59 because we have to clear the room to open the south door, in 0x69 it needs to slide past the
+     darknuts to get the raft, then out of the room (I use sword-hit an enemy to make them pass-through in this room,
+     not kills with bombs)." `fights_only: true`: in a dungeon room the objective does not fight (a crossing, or a
+     fight that is over) a `free` family's mode is capped at `required` (the wall the step leaves through, the 10th
+     kill); in a fight the family's mode and the reserve stand; the overworld is untouched.
+  2. "0x5b is a great example, the point of fighting the darknuts in that room is to get the bomb drop, wasting the
+     bombs to kill them is not the right play. BUT link still needs to bomb the wall to get through there. So no
+     bombs except the 1 to blow up the wall." `wall_only: [3:0x5b]`: no weapon bomb there, a fight or not.
+  3. "I want to raise the 'get bombs from this room' floor, so in 0x5b he should fight the darknuts if he has 7 or
+     less bombs, up from whatever it was. This is a blanket rule not for this room." `treasure_below: 8`: every
+     step taking a room's bombs fights for them when Link comes in with 7 or fewer (a step's own `if_bombs_below`
+     gives way), and that decision holds for the visit: the treasure is taken while he holds fewer than the bag's
+     maximum, a drop lifting him over 7 mid-fight notwithstanding; a treasure lying in the room is wanted below the
+     maximum whatever he came in with (the owner on 8:0x3f, Nov 22: in with 2, a drop to 6, the room's bombs left).
+     Under a floor, dropped bombs below the maximum are shaping targets in every family and, once the fight is over,
+     the only targets while reachable (none at 8). A room's own floor is `treasure_below_rooms`, the override the
+     owner allows for 7:0x1b ("you have the ability to skip that fight for bombs if it kills too many runs"):
+     measured both ways in round 37 (12.6% / 12.7% on `d7`), left commented in routes.yaml for the lead's decision.
+  Over all three: "we must ALWAYS allow bombs and deeply encourage them if we are on the 10th kill force drop, no
+  matter the room or enemies, that remains true." Every mode but `never` (boss-gleeok's) offers BOMB on the 10th
+  damage-free kill in every room (a granted bomb still opens only its wall); the bomb kill pays
+  `reward-armed-bomb-drop`, the drop's pickup `reward-gained-bombs`, in every family.
 - **0x0a before the white sword:** leaving S is a `retreat` (routes.yaml `retreat: S`; neutral by default, ow-lynel
   ships `endings: {retreat: soft-failure}` for the baseline), and a chain run goes on (0x1a sends Link back N).
   Whether a model learns to use it is open.
@@ -643,6 +678,20 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   Once things are merged into main, delete them and keep stuff tidy"): `git worktree remove` (the branch stays);
   first copy out what is not in git and still wanted: promoted run dirs into `models/`, demonstration files into
   `target/demos/` (every `--demos` file a lineage used must stay findable there), harvested states, chains of record.
+- **Experiment data is cleaned up as it stops being needed** (Lee, Nov 22: "Yes please clean up experiment data
+  occasionally. When we don't need it remove it, but you can run all the way down to 30gb free and we are ok... I
+  still want it cleaned up before then"): recorded datasets and their caches, finished rounds' worktree data under
+  `target/worktrees/`, candidate run dirs nothing names; never the promoted runs, the demonstration files a lineage
+  used, the chains of record of the last two landings, the owner's `trajectories.prev-*` and videos.
+- **The job queue is the machine's capacity, not a fault** (Lee, Nov 22: "We have only one computer and we are at
+  full capacity [...] The queue is working as intended, and we can't go any faster unless we further optimize the
+  runs"). **Watch the speed instead:** "You should occasionally check steps per second, episodes per second, etc to
+  make sure they haven't greatly dropped. If they have check why and perhaps fix the perf problem." Reference
+  numbers on this machine, busy (Nov 22): the Rust actor about 830 decisions a second on 10 envs (`python -m
+  triforce.lab.bench speed`), a lab training about 690 decisions a second with 8 parts, the generic torch path 1.6
+  to 2.9 times slower, one step about 17.5 frames, a full-route chain of 1000 runs about 6 minutes at today's run
+  lengths; `docs/performance.md` has the quiet machine's. Every agent that trains or chains reports its decisions a
+  second; a drop of a third or more against these is looked into before more work is queued.
 
 ## Versioning (Lee, Nov 11)
 
@@ -684,7 +733,10 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   reader could not read what is written (version 1, round 32: a state's route grants); the reader
   keeps reading every earlier version it can. `corpus/replays/` must keep verifying (`tf replay verify`, a cargo
   test): a deliberate break moves those files to `corpus/replays/retired/`, bumps `REPLAY_VERSION` and records new
-  ones. From 1.3.1.0 a `MachineState` layout change adds a decoder for the previous `TFZSTATE` version instead of
+  ones. Replacing a corpus file pins new facts: `crates/tools/tests/cli.rs` `the_replay_corpus_still_verifies`
+  checks each named file's frames and version, so update it and run `cargo test --release -p triforce-tools
+  --features zelda/zcore --test cli` with the swap (Nov 22: a swap without it failed the suite; the core was
+  sound). From 1.3.1.0 a `MachineState` layout change adds a decoder for the previous `TFZSTATE` version instead of
   refusing it (replays embed states). Play (play-zelda with its live cell, zelda-headless, the golden path) is
   stochastic by default (one constant, `registry.PLAY_ACT`, since round 23 `temperature:0.5+relax:16`, the same
   rule as every `act` file); `--act model` or any act mode

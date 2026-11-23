@@ -302,8 +302,11 @@ class MultiCollector:
     def family_metrics(self) -> dict:
         """The last rollout's summary metrics per family, as ``family/<key>/<metric>``, with each family's share of
         the rows (``rows_share``), the hits Link took an episode (``hits_taken_per_episode``: the decisions that lost
-        health over the episodes the rollout ended, the bench's hits a visit), the frames its decisions played
-        (``frames_per_decision``) and, with ``tried``, the frames the look-ahead's trials emulated
+        health over the episodes the rollout ended, the bench's hits a visit) and the Bubble touches
+        (``bubble_touches_per_episode``: the decisions a Bubble's touch landed in, round 38), the aimless score's
+        (round 38: ``waste_frames_per_episode``, the frames calm decisions added to their stretches' waste, and
+        ``calm_share``, the share of decisions that were calm), the frames its decisions
+        played (``frames_per_decision``) and, with ``tried``, the frames the look-ahead's trials emulated
         (``tried_frames_per_decision``); with a sampler, its ``need`` and ``recent_success``."""
         result = {f'family/{key}/{name}': value for key, metrics in self.by_family.items()
                   for name, value in metrics.summary().items() if isinstance(value, (int, float))}
@@ -313,6 +316,9 @@ class MultiCollector:
                 ended = float(buffer.dones[:, 1:].sum())
                 if ended:
                     result[f'family/{key}/hits_taken_per_episode'] = float((buffer.health_lost > 0).sum()) / ended
+                    result[f'family/{key}/bubble_touches_per_episode'] = float(buffer.blocked.sum()) / ended
+                    result[f'family/{key}/waste_frames_per_episode'] = float(buffer.waste.sum()) / ended
+                result[f'family/{key}/calm_share'] = float(buffer.calm.float().mean())
                 result[f'family/{key}/frames_per_decision'] = float(buffer.frames.float().mean())
                 if buffer.tried_frames is not None:
                     result[f'family/{key}/tried_frames_per_decision'] = float(buffer.tried_frames.float().mean())

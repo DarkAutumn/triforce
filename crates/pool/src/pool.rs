@@ -126,6 +126,13 @@ pub struct Outcome {
     /// Hearts the step lost (net of what it gained) and the monster hits it dealt (0 for an env that doesn't say).
     pub health_lost: f32,
     pub hits: u32,
+    /// A Bubble's touch landed in the step (`zelda::Change::bubble_touched`: the sword blocked, no health lost).
+    pub blocked: bool,
+    /// The decision was calm, the frames of progress it made toward the goal and the frames it added to its stretch's
+    /// waste (`zelda::aimless::AimlessDecision`, round 38; false and 0 for an env that doesn't say).
+    pub calm: bool,
+    pub progress: f32,
+    pub waste: f32,
 }
 
 /// What an env factory gets.
@@ -939,13 +946,13 @@ fn run_rollout<E: PoolEnv, Ac: Actor<E::Action>, P: Planner<E>>(
                                   &mut alternatives)
                     .map_err(usage)?;
                 for (candidate, _) in alternatives.drain(..).take(k) {
-                    let Some(Trial { lost, frames: f }) =
+                    let Some(Trial { lost, blocked, frames: f }) =
                         env.trial(&candidate, None).map_err(|error| PoolError::Env { env: id, error })?
                     else {
                         return Err(usage("the env can't try actions (TryOthers needs a TrainTask)".into()));
                     };
                     frames += f;
-                    out.tried.push(Some((candidate, lost)));
+                    out.tried.push(Some((candidate, lost, blocked)));
                 }
             }
             out.tried.resize(begin + k, None);
@@ -959,6 +966,10 @@ fn run_rollout<E: PoolEnv, Ac: Actor<E::Action>, P: Planner<E>>(
         out.interrupt.push(o.interrupt);
         out.health_lost.push(o.health_lost);
         out.hits.push(o.hits);
+        out.blocked.push(o.blocked);
+        out.calm.push(o.calm);
+        out.progress.push(o.progress);
+        out.waste.push(o.waste);
         out.terminated.push(o.terminated);
         out.truncated.push(o.truncated);
         let bootstrap_value = if o.bootstrap && slot.final_valid {
@@ -1004,7 +1015,7 @@ impl<E: PoolEnv, Ac: Actor<E::Action>> PlayWork<E, Ac> {
         for f in 0..foresight.trials() {
             let future = (foresight.futures > 0)
                 .then(|| policy::noise::key_of(&[TAG_FUTURE, slot.job as u64, slot.step as u64, f as u64]));
-            let Some(Trial { lost, frames }) = env.trial(action, future).map_err(|error| PoolError::Env { env: id, error })?
+            let Some(Trial { lost, frames, .. }) = env.trial(action, future).map_err(|error| PoolError::Env { env: id, error })?
             else {
                 return Ok(None);
             };

@@ -231,6 +231,8 @@ class TrainingPlan:
                      'work': dict(work or {}), 'estimate': None, 'lane': None,
                      'runs': [{'index': i, 'status': 'pending', 'started': None, 'finished': None, **run}
                               for i, run in enumerate(runs)]}
+        if self.data.get('nice') is None:       # every plan says the niceness its job runs at, whoever wrote it
+            self.data['nice'] = os.nice(0)
         self._lock = threading.RLock()
         self.job = jobs.register(self.directory, self.path, name, kind, amounts=work)
         self.data['estimate'] = (self.job.data['estimate'] if self.job is not None

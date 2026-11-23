@@ -15,11 +15,12 @@ Layout (``n`` envs, ``T`` steps per env; index ``T`` holds the observation to re
   searched) and ``search_policy`` ``[n, T, JOINT_SIZE]`` (the search's improved policy π' over the joint actions).
 - ``jobs`` and ``steps``: int64 ``[n, T]``, each row's episode ``job`` key and its decision index in that episode
   (0 = the episode's first decision): ``ppo.Collector`` follows episodes across rollouts with them.
-- ``health_lost`` float32 and ``hits`` int64 ``[n, T]``: what each decision's action did (hearts lost, net; monster
-  hits dealt), the lab's auxiliary targets (``lab.auxiliary``).
-- With ``tried = K`` (the lab's ``--try-others``): ``tried_actions`` int64 ``[n, T, K, 3]`` and ``tried_lost`` int64
-  ``[n, T, K]`` (candidates not taken, tried by the look-ahead: 1 lost health, 0 not, -1 untried) and
-  ``tried_frames`` int64 ``[n, T]`` (what the trials emulated).
+- ``health_lost`` float32, ``hits`` int64 and ``blocked`` bool ``[n, T]``: what each decision's action did (hearts
+  lost, net; monster hits dealt; a Bubble's touch landed, the sword blocked: round 38), the lab's auxiliary targets
+  (``lab.auxiliary``).
+- With ``tried = K`` (the lab's ``--try-others``): ``tried_actions`` int64 ``[n, T, K, 3]``, ``tried_lost`` and
+  ``tried_blocked`` int64 ``[n, T, K]`` (candidates not taken, tried by the look-ahead: 1 lost health / a Bubble
+  touched, 0 not, -1 untried) and ``tried_frames`` int64 ``[n, T]`` (what the trials emulated).
 - A recurrent network's sequences (``recompute_sequence``): ``chunk_states`` ``[n, T / L, *state]``, the learner's
   state at the start of every ``L`` decisions (``chunk_length``), for truncated back-propagation through time.
 
@@ -121,9 +122,16 @@ class RolloutBuffer:
         self.steps = torch.zeros(n_envs, memory_length, dtype=torch.int64)
         self.health_lost = torch.zeros(n_envs, memory_length, dtype=torch.float32)
         self.hits = torch.zeros(n_envs, memory_length, dtype=torch.int64)
+        self.blocked = torch.zeros(n_envs, memory_length, dtype=torch.bool)
+        # The aimless score's per-decision targets (round 38, zelda::aimless): calm, frames of progress toward the
+        # goal, frames added to the calm stretch's waste.
+        self.calm = torch.zeros(n_envs, memory_length, dtype=torch.bool)
+        self.progress = torch.zeros(n_envs, memory_length, dtype=torch.float32)
+        self.waste = torch.zeros(n_envs, memory_length, dtype=torch.float32)
         self.tried = tried
         self.tried_actions = torch.full((n_envs, memory_length, tried, 3), -1, dtype=torch.int64) if tried else None
         self.tried_lost = torch.full((n_envs, memory_length, tried), -1, dtype=torch.int64) if tried else None
+        self.tried_blocked = torch.full((n_envs, memory_length, tried), -1, dtype=torch.int64) if tried else None
         self.tried_frames = torch.zeros(n_envs, memory_length, dtype=torch.int64) if tried else None
         self.chunk_states: Optional[torch.Tensor] = None
         self.chunk_length = 0
@@ -144,10 +152,11 @@ class RolloutBuffer:
                  'logp_ent_val': self.logp_ent_val.numpy(), 'rewards': self.rewards.numpy(),
                  'frames': self.frames.numpy(), 'bootstrap_value': self.bootstrap_value.numpy(),
                  'interrupts': self.interrupts.numpy(), 'job': self.jobs.numpy(), 'step': self.steps.numpy(),
-                 'health_lost': self.health_lost.numpy(), 'hits': self.hits.numpy()}
+                 'health_lost': self.health_lost.numpy(), 'hits': self.hits.numpy(), 'blocked': self.blocked.numpy(),
+                 'calm': self.calm.numpy(), 'progress': self.progress.numpy(), 'waste': self.waste.numpy()}
         if self.tried:
             views.update(tried_actions=self.tried_actions.numpy(), tried_lost=self.tried_lost.numpy(),
-                         tried_frames=self.tried_frames.numpy())
+                         tried_blocked=self.tried_blocked.numpy(), tried_frames=self.tried_frames.numpy())
         if self.search_mask is not None:
             views['search_mask'] = self.search_mask.numpy()
             views['search_policy'] = self.search_policy.numpy()
@@ -251,9 +260,14 @@ class RolloutBuffer:
         batch['frames'] = self.frames.reshape(-1).to(device)
         batch['health_lost'] = self.health_lost.reshape(-1).to(device)
         batch['hits'] = self.hits.reshape(-1).to(device)
+        batch['blocked'] = self.blocked.reshape(-1).to(device)
+        batch['calm'] = self.calm.reshape(-1).to(device)
+        batch['progress'] = self.progress.reshape(-1).to(device)
+        batch['waste'] = self.waste.reshape(-1).to(device)
         if self.tried:
             batch['tried_actions'] = self.tried_actions.reshape(-1, self.tried, 3).to(device)
             batch['tried_lost'] = self.tried_lost.reshape(-1, self.tried).to(device)
+            batch['tried_blocked'] = self.tried_blocked.reshape(-1, self.tried).to(device)
         if self.chunk_states is not None:
             batch['chunk_states'] = self.chunk_states.reshape(-1, *self.chunk_states.shape[2:]).to(device)
             batch['starts'] = self.dones[:, :length].reshape(-1).bool().to(device)

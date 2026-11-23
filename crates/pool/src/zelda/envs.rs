@@ -85,12 +85,13 @@ fn trial<M: Nes>(session: &mut Session<M>, action: &ZeldaAction, future: Option<
     let [kind, direction, duration] = head_indices(*action)?;
     let action = Action::from_indices(kind, direction, duration).map_err(|e| EnvError::InvalidAction(e.0))?;
     if session.try_state().is_none() || !session.mask().is_allowed(&action) {
-        return Ok(Some(Trial { lost: true, frames: 0 }));
+        return Ok(Some(Trial { lost: true, blocked: false, frames: 0 }));
     }
     let phase = future.map(|key| zelda::rng::draw_phase(&mut ChaCha8Rng::seed_from_u64(key)));
     let outcome = session.trial(action, phase)?;
     Ok(Some(Trial {
         lost: outcome.lost(),
+        blocked: outcome.blocked,
         frames: outcome.frames,
     }))
 }
@@ -415,6 +416,10 @@ fn specialist_outcome(r: &StepResult) -> Outcome {
         policy: 0,
         health_lost: r.info.health_lost as f32,
         hits: r.info.hits,
+        blocked: r.info.blocked,
+        calm: r.info.aimless.calm,
+        progress: r.info.aimless.progress_frames,
+        waste: r.info.aimless.waste_frames,
     }
 }
 

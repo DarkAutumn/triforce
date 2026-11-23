@@ -37,11 +37,16 @@ fn trap_tiles(state: &GameView) -> Vec<Tile> {
 /// Whether the dropped item `id` is a PBRS target under `reward` with Link at `state`'s health:
 /// `nearby_items` takes hearts and clocks; `item_targets` every dropped item, hearts and fairies only below max
 /// health (and with `drops_first`, the family's or the route step's: [`drops_first`], bombs only below the bomb
-/// maximum); `heal_targets` hearts and fairies alone, below max health. The room's own treasure is never one (it is
-/// the objective's business), nor a clock while a Wallmaster lives ([`clock_is_a_trap`]).
-fn is_item_target(reward: &RewardConfig, drops_first: bool, state: &GameView, id: i16) -> bool {
+/// maximum); `heal_targets` hearts and fairies alone, below max health. Under a route's bomb floor (`bag`,
+/// `Objective::bag_drops`, round 37) bombs are one below the bomb maximum and only there, in every family. The
+/// room's own treasure is never one (it is the objective's business), nor a clock while a Wallmaster lives
+/// ([`clock_is_a_trap`]).
+fn is_item_target(reward: &RewardConfig, drops_first: bool, bag: bool, state: &GameView, id: i16) -> bool {
     if id < 0 || clock_is_a_trap(state, id) {
         return false;
+    }
+    if bag && id == item::BOMBS {
+        return state.bombs() < state.bomb_max();
     }
     let heals = id == item::HEART || id == item::FAIRY;
     if reward.item_targets {
@@ -72,33 +77,40 @@ fn drops_first(reward: &RewardConfig, objective: &Objective) -> bool {
     reward.drops_first || objective.drops_first
 }
 
-/// The tiles of the dropped items `reward` makes PBRS targets.
+/// The tiles of the dropped items `reward` (and, `bag`, the route's bomb floor) makes PBRS targets.
 fn item_targets<'a>(
     reward: &'a RewardConfig,
     drops_first: bool,
+    bag: bool,
     state: &'a GameView,
 ) -> impl Iterator<Item = Target> + 'a {
     state
         .items
         .iter()
-        .filter(move |it| is_item_target(reward, drops_first, state, it.id))
+        .filter(move |it| is_item_target(reward, drops_first, bag, state, it.id))
         .flat_map(|it| it.link_overlap_tiles().into_iter().map(Target::Tile))
 }
 
-/// With [`drops_first`], once `objective` is no fight (the room's monsters are dead, or a room only crossed), the
-/// tiles of the wanted drops lying in the room ([`wanted_drop`]): they are the only targets until taken or gone (round
-/// 25, the owner: "make it a primary objective to pick them up on win"). None without any.
+/// Once `objective` is no fight (the room's monsters are dead, or a room only crossed), the drops that come first
+/// as the only targets until taken or gone: with [`drops_first`] the tiles of the wanted drops lying in the room
+/// ([`wanted_drop`]; round 25, the owner: "make it a primary objective to pick them up on win"); under the route's
+/// bomb floor (`Objective::bag_drops`, round 37) the dropped bombs below the bomb maximum, while Link can reach them
+/// (the owner, Nov 22: no push out of the room past bombs he could take). None without any.
 fn drops_first_targets(reward: &RewardConfig, state: &GameView, objective: &Objective) -> Option<Vec<Target>> {
-    if !drops_first(reward, objective) || objective.kind == ObjectiveKind::Fight {
+    let first = drops_first(reward, objective);
+    if !(first || objective.bag_drops) || objective.kind == ObjectiveKind::Fight {
         return None;
     }
     let tiles: Vec<Target> = state
         .items
         .iter()
-        .filter(|it| wanted_drop(state, it.id))
+        .filter(|it| wanted_drop(state, it.id) && (first || it.id == item::BOMBS))
         .flat_map(|it| it.link_overlap_tiles().into_iter().map(Target::Tile))
         .collect();
-    (!tiles.is_empty()).then_some(tiles)
+    if tiles.is_empty() || (!first && wavefront_to(state, objective, &tiles).get(state.link.tile()).is_none()) {
+        return None;
+    }
+    Some(tiles)
 }
 
 /// The wavefront to `objective`'s `targets` (locked doors count as open while Link holds a key in a dungeon; the
@@ -146,7 +158,7 @@ pub fn attach_objective(
     let first = drops_first(reward, &objective);
     match drops_first_targets(reward, state, &objective) {
         Some(drops) => objective.pbrs_targets = drops.into_iter().collect(),
-        None => objective.pbrs_targets.extend(item_targets(reward, first, state)),
+        None => objective.pbrs_targets.extend(item_targets(reward, first, objective.bag_drops, state)),
     }
     let wavefront = (wavefront && !state.game_over()).then(|| {
         let targets: Vec<Target> = objective.pbrs_targets.iter().copied().collect();
@@ -172,12 +184,24 @@ pub fn target_wavefront(
         Some(drops) => drops,
         None => {
             let first = drops_first(reward, objective);
-            objective.pbrs_targets.iter().copied().chain(item_targets(reward, first, state)).collect()
+            objective.pbrs_targets.iter().copied().chain(item_targets(reward, first, objective.bag_drops, state)).collect()
         }
     };
     targets.sort_unstable();
     targets.dedup();
     Some(wavefront_to(state, objective, &targets))
+}
+
+/// Whether a dropped item pulls Link away from `objective` (the aimless score's `pulled`, `zelda::aimless`): one the
+/// shaping of `reward` makes a target, or one he wants ([`wanted_drop`]: a heart or fairy below full health, bombs
+/// below his maximum). Dropped items vanish; walking to one is no aimless walk (the owner, round 38: "walking towards
+/// a heart that disappears shouldn't count").
+pub fn pulled(reward: &RewardConfig, objective: &Objective, state: &GameView) -> bool {
+    let first = drops_first(reward, objective);
+    state
+        .items
+        .iter()
+        .any(|it| wanted_drop(state, it.id) || is_item_target(reward, first, objective.bag_drops, state, it.id))
 }
 
 /// Direction bits (E 1, W 2, S 4, N 8) of the sides `objective`'s next rooms lie on from `state`'s room (a maze
@@ -194,6 +218,8 @@ pub fn exit_bits(state: &GameView, objective: &Objective) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeSet;
+    use zelda::aimless::AimlessState;
     use zelda::GameMap;
     use zelda::tables::RAM_SIZE;
 
@@ -218,7 +244,7 @@ mod tests {
             (ram[OBJ_TYPE + slot], ram[OBJ_STATE + slot], ram[OBJ_X + slot], ram[OBJ_Y + slot]) = (0x60, kind as u8, x, y);
         }
         let targets = |ram: &[u8; RAM_SIZE], reward: &RewardConfig| -> Vec<Target> {
-            item_targets(reward, reward.drops_first, &GameView::new(ram, 0, false, map.clone())).collect()
+            item_targets(reward, reward.drops_first, false, &GameView::new(ram, 0, false, map.clone())).collect()
         };
         let all = RewardConfig { item_targets: true, ..Default::default() };
         let near = RewardConfig { nearby_items: true, ..Default::default() };
@@ -230,5 +256,49 @@ mod tests {
         assert_eq!(rupee.len(), 4);
         assert!(rupee.iter().all(|t| clock_and_rupee.contains(t) && !clock.contains(t)));
         assert!(targets(&ram, &near).is_empty());
+    }
+
+    /// Round 38, the aimless score: a dropped heart pulls a hurt Link whatever his family's shaping (it vanishes;
+    /// walking to it is no aimless walk), so no decision is calm while it lies there; at full health it pulls nobody
+    /// and the empty screen is calm again; a rupee pulls only a family whose shaping makes it a target.
+    #[test]
+    fn a_heart_that_can_vanish_is_no_calm_goal() {
+        const HEARTS: usize = 0x66F;
+        const PARTIAL: usize = 0x670;
+        let map = Arc::new(GameMap::builtin());
+        let mut ram = [0u8; RAM_SIZE];
+        (ram[LEVEL], ram[ROOM_ID], ram[GAME_MODE]) = (0, 0x77, 5);
+        (ram[OBJ_X], ram[OBJ_Y]) = (0x40, 0x8D);
+        (ram[OBJ_TYPE + 3], ram[OBJ_STATE + 3], ram[OBJ_X + 3], ram[OBJ_Y + 3]) = (0x60, item::HEART as u8, 0x60, 0x8D);
+        (ram[HEARTS], ram[PARTIAL]) = (0x21, 0x00);
+        let objective = Objective {
+            kind: ObjectiveKind::Move,
+            targets: BTreeSet::new(),
+            next_rooms: [zelda::MapLocation::new(0, 0x76, false)].into_iter().collect(),
+            pbrs_targets: [Target::Tile((-1, 10))].into_iter().collect(),
+            retreats: BTreeSet::new(),
+            clips: false,
+            treasure_refused: false,
+            drops_first: false,
+            bag_drops: false,
+        };
+        let plain = RewardConfig::default();
+        let view = |ram: &[u8; RAM_SIZE]| GameView::new(ram, 0, false, map.clone());
+        let hurt = view(&ram);
+        assert!(!hurt.is_health_full());
+        assert!(pulled(&plain, &objective, &hurt));
+        assert!(!AimlessState::of(&hurt, &objective, true).quiet);
+
+        ram[PARTIAL] = 0xFF;
+        ram[HEARTS] = 0x22;
+        let full = view(&ram);
+        assert!(full.is_health_full());
+        assert!(!pulled(&plain, &objective, &full));
+        assert!(AimlessState::of(&full, &objective, false).quiet, "an empty screen with an exit to walk to");
+
+        ram[OBJ_STATE + 3] = item::RUPEE as u8;
+        let rupee = view(&ram);
+        assert!(!pulled(&plain, &objective, &rupee));
+        assert!(pulled(&RewardConfig { item_targets: true, ..Default::default() }, &objective, &rupee));
     }
 }

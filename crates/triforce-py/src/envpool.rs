@@ -573,7 +573,7 @@ fn rollout_array<'py, T: numpy::Element>(
 }
 
 /// The `EnvPool.rollout` buffer keys (`obs` holds one per observation key).
-const ROLLOUT_KEYS: [&str; 22] = [
+const ROLLOUT_KEYS: [&str; 27] = [
     "obs",
     "starts",
     "actions",
@@ -593,8 +593,13 @@ const ROLLOUT_KEYS: [&str; 22] = [
     "search_value",
     "health_lost",
     "hits",
+    "blocked",
+    "calm",
+    "progress",
+    "waste",
     "tried_actions",
     "tried_lost",
+    "tried_blocked",
     "tried_frames",
 ];
 
@@ -667,13 +672,19 @@ struct RolloutOut<'py> {
     terminated: Option<PyReadwriteArrayDyn<'py, bool>>,
     truncated: Option<PyReadwriteArrayDyn<'py, bool>>,
     search: SearchOut<'py>,
-    /// What each decision's step did: hearts lost (net) and monster hits.
+    /// What each decision's step did: hearts lost (net), monster hits, a Bubble's touch.
     health_lost: Option<PyReadwriteArrayDyn<'py, f32>>,
     hits: Option<PyReadwriteArrayDyn<'py, i64>>,
+    blocked: Option<PyReadwriteArrayDyn<'py, bool>>,
+    /// The aimless score's per-decision targets (`zelda::aimless`, round 38).
+    calm: Option<PyReadwriteArrayDyn<'py, bool>>,
+    progress: Option<PyReadwriteArrayDyn<'py, f32>>,
+    waste: Option<PyReadwriteArrayDyn<'py, f32>>,
     /// [`TryOthers`]'s labels: `tried_k` candidates a row (-1 / -1 where none was tried), per row the trials' frames.
     tried_k: usize,
     tried_actions: Option<PyReadwriteArrayDyn<'py, i64>>,
     tried_lost: Option<PyReadwriteArrayDyn<'py, i64>>,
+    tried_blocked: Option<PyReadwriteArrayDyn<'py, i64>>,
     tried_frames: Option<PyReadwriteArrayDyn<'py, i64>>,
 }
 
@@ -833,9 +844,14 @@ impl<'py> RolloutOut<'py> {
             search: SearchOut::borrow(out, n, steps, search_k)?,
             health_lost: rollout_array(out, "health_lost", &[n, steps])?,
             hits: rollout_array(out, "hits", &[n, steps])?,
+            blocked: rollout_array(out, "blocked", &[n, steps])?,
+            calm: rollout_array(out, "calm", &[n, steps])?,
+            progress: rollout_array(out, "progress", &[n, steps])?,
+            waste: rollout_array(out, "waste", &[n, steps])?,
             tried_k,
             tried_actions: rollout_array(out, "tried_actions", &[n, steps, tried_k, 3])?,
             tried_lost: rollout_array(out, "tried_lost", &[n, steps, tried_k])?,
+            tried_blocked: rollout_array(out, "tried_blocked", &[n, steps, tried_k])?,
             tried_frames: rollout_array(out, "tried_frames", &[n, steps])?,
         })
     }
@@ -891,17 +907,35 @@ impl<'py> RolloutOut<'py> {
                 let hits: Vec<i64> = r.hits.iter().map(|&h| h as i64).collect();
                 rows(a.as_slice_mut()?, *env, steps, &hits);
             }
+            if let Some(a) = self.blocked.as_mut() {
+                rows(a.as_slice_mut()?, *env, steps, &r.blocked);
+            }
+            if let Some(a) = self.calm.as_mut() {
+                rows(a.as_slice_mut()?, *env, steps, &r.calm);
+            }
+            if let Some(a) = self.progress.as_mut() {
+                rows(a.as_slice_mut()?, *env, steps, &r.progress);
+            }
+            if let Some(a) = self.waste.as_mut() {
+                rows(a.as_slice_mut()?, *env, steps, &r.waste);
+            }
             let k = self.tried_k;
             let tried = |t: usize, j: usize| r.tried.get(t * k + j).and_then(Option::as_ref);
             if let Some(a) = self.tried_actions.as_mut() {
                 let flat: Vec<i64> = (0..steps * k)
-                    .flat_map(|i| tried(i / k, i % k).map_or([-1; 3], |(action, _)| *action))
+                    .flat_map(|i| tried(i / k, i % k).map_or([-1; 3], |(action, _, _)| *action))
                     .collect();
                 rows(a.as_slice_mut()?, *env, steps * k * 3, &flat);
             }
             if let Some(a) = self.tried_lost.as_mut() {
                 let flat: Vec<i64> =
-                    (0..steps * k).map(|i| tried(i / k, i % k).map_or(-1, |&(_, lost)| lost as i64)).collect();
+                    (0..steps * k).map(|i| tried(i / k, i % k).map_or(-1, |&(_, lost, _)| lost as i64)).collect();
+                rows(a.as_slice_mut()?, *env, steps * k, &flat);
+            }
+            if let Some(a) = self.tried_blocked.as_mut() {
+                let flat: Vec<i64> = (0..steps * k)
+                    .map(|i| tried(i / k, i % k).map_or(-1, |&(_, _, blocked)| blocked as i64))
+                    .collect();
                 rows(a.as_slice_mut()?, *env, steps * k, &flat);
             }
             if let Some(a) = self.tried_frames.as_mut() {
@@ -1185,12 +1219,17 @@ impl PyEnvPool {
     /// `search_actions` `[n, steps, k, 3]` int64 (the candidates), `search_value` `[n, steps]` float32 (the
     /// search's root value).
     ///
-    /// Per decision, written when present: `health_lost` `[n, steps]` float32 (hearts its step lost, net) and `hits`
-    /// `[n, steps]` int64 (monster hits it dealt). `tried` (train pools only; docs/lab.md "Auxiliary targets"): None,
+    /// Per decision, written when present: `health_lost` `[n, steps]` float32 (hearts its step lost, net), `hits`
+    /// `[n, steps]` int64 (monster hits it dealt), `blocked` `[n, steps]` bool (a Bubble's touch landed in it: the
+    /// sword blocked, no health lost; round 38), `calm` `[n, steps]` bool, `progress` and `waste` `[n, steps]` float32
+    /// (the aimless score's: the decision was calm, the frames of progress it made toward the goal, the frames it
+    /// added to its stretch's waste; `zelda::aimless`, round 38). `tried` (train pools only; docs/lab.md "Auxiliary
+    /// targets"): None,
     /// or `{'candidates': K, 'share': P}`: on a share P of the decisions (drawn by the decision's key) the policy's
     /// next K candidates after the action taken are tried in the env (the game's own future; the decision is
-    /// unchanged), written to `tried_actions` `[n, steps, K, 3]` int64 and `tried_lost` `[n, steps, K]` int64 (1:
-    /// it lost health, 0: it didn't; -1 / -1 where nothing was tried) and `tried_frames` `[n, steps]` int64 (the
+    /// unchanged), written to `tried_actions` `[n, steps, K, 3]` int64, `tried_lost` `[n, steps, K]` int64 (1:
+    /// it lost health, 0: it didn't; -1 / -1 where nothing was tried), `tried_blocked` likewise (1: a Bubble's touch
+    /// landed in it) and `tried_frames` `[n, steps]` int64 (the
     /// frames the decision's trials emulated).
     #[pyo3(signature = (policies, steps, out, deterministic=false, search=None, tried=None))]
     fn rollout(

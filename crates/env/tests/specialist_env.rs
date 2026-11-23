@@ -340,6 +340,7 @@ fn no_objective() -> Objective {
         clips: false,
         treasure_refused: false,
         drops_first: false,
+        bag_drops: false,
     }
 }
 
@@ -819,12 +820,8 @@ fn triforce_pickup_is_success_in_the_triforce_room() {
 /// `bomb_usable` says the same.
 #[test]
 fn bombs_follow_the_mode_the_reserve_and_the_tenth_kill() {
-    let Some(mut nes) = open_core() else { return };
-    let usable = |obs: &env::observation::Observation| {
-        let at = feature_names().link.iter().position(|n| n == "bomb_usable").unwrap();
-        obs.link[at] == 1.0
-    };
-    let cases = [
+    let Some(nes) = open_core() else { return };
+    bomb_cases(nes, &[
         ("goriya", "1_44w_0", "MOVE E 16", BombUse::Free, 4, 0, true),
         ("goriya", "1_44w_0", "MOVE E 16", BombUse::Tenth, 4, 0, false),
         ("goriya", "1_44w_0", "MOVE E 16", BombUse::Tenth, 4, 9, true),
@@ -836,8 +833,22 @@ fn bombs_follow_the_mode_the_reserve_and_the_tenth_kill() {
         ("darknut", "3_5bs_0", "MOVE N 16", BombUse::Free, 7, 0, true),
         ("darknut", "3_5bs_0", "MOVE N 16", BombUse::Free, 1, 9, true),
         ("darknut", "3_5bw_0", "MOVE E 16", BombUse::Free, 1, 0, true),
-    ];
-    for (family, start, walk, mode, bombs, help, legal) in cases {
+    ]);
+}
+
+/// One case of [`bomb_cases`]: (family, start state, the walk off the door, the family's mode, bombs, `$50`, BOMB
+/// offered).
+type BombCase = (&'static str, &'static str, &'static str, BombUse, i64, i64, bool);
+
+/// Each case's start with its bombs and `$50` (the damage-free kill count), Link walked off the door tile (items
+/// can't be used there) until the enemies are out of their clouds: the session's mask, the observation's mask and
+/// its `bomb_usable` offer BOMB as the case says.
+fn bomb_cases(mut nes: ZCore, cases: &[BombCase]) -> ZCore {
+    let usable = |obs: &env::observation::Observation| {
+        let at = feature_names().link.iter().position(|n| n == "bomb_usable").unwrap();
+        obs.link[at] == 1.0
+    };
+    for &(family, start, walk, mode, bombs, help, legal) in cases {
         let mut env = make_env(nes, family, Some(start), |c| {
             c.ram_randomization = RamRandomization {
                 bombs: Some((bombs, bombs)),
@@ -847,7 +858,6 @@ fn bombs_follow_the_mode_the_reserve_and_the_tenth_kill() {
             c.items.bombs = mode;
         });
         env.reset(Some(0), None).unwrap();
-        // Off the door tile (items can't be used there) and the enemies out of their clouds.
         let mut obs = None;
         for _ in 0..10 {
             obs = Some(act(&mut env, walk).obs);
@@ -857,11 +867,206 @@ fn bombs_follow_the_mode_the_reserve_and_the_tenth_kill() {
             }
         }
         let obs = obs.unwrap();
-        let what = format!("{family} {mode:?} bombs {bombs} help {help}");
+        let what = format!("{family} {start} {mode:?} bombs {bombs} help {help}");
         assert!(state(&env).bombs() == bombs as i32 && state(&env).help_drop_count() == help as i32, "{what}");
         assert_eq!(env.session().mask().kind[ActionKind::Bomb.index()], legal, "{what}");
         assert_eq!(ActionMask::from_flat(&obs.action_mask).kind[ActionKind::Bomb.index()], legal, "{what}");
         assert_eq!(usable(&obs), legal, "{what}");
+        nes = release(env);
+    }
+    nes
+}
+
+/// Round 37, the owner's second rule ("no bomb usage except to progress, not to fight"): `d3first`'s
+/// `bomb_rules: {wall_only: [3:0x5b]}`.  On the first pass (S → N, no wall on the step) a `free` darknut holding 7
+/// bombs, above the reserve of 6, places none; on the last pass (W → E, reserve 0) none while its Darknuts live
+/// (the wall is no target while the objective fights them); in both the 10th damage-free kill's bomb is offered (the
+/// owner: always), and not at 8.  `d2first`'s rooms (bare state names) keep today's mask (the cases above).
+#[test]
+fn the_owners_wall_only_room_offers_the_wall_and_the_tenth_kill() {
+    let Some(nes) = open_core() else { return };
+    bomb_cases(nes, &[
+        ("darknut", "d3first_3_5bs_0", "MOVE N 16", BombUse::Free, 7, 0, false),
+        ("darknut", "d3first_3_5bs_0", "MOVE N 16", BombUse::Free, 7, 8, false),
+        ("darknut", "d3first_3_5bs_0", "MOVE N 16", BombUse::Free, 1, 9, true),
+        ("darknut", "d3first_3_5bw_0", "MOVE E 16", BombUse::Free, 4, 0, false),
+        ("darknut", "d3first_3_5bw_0", "MOVE E 16", BombUse::Free, 4, 8, false),
+        ("darknut", "d3first_3_5bw_0", "MOVE E 16", BombUse::Free, 4, 9, true),
+        ("darknut", "3_5bw_0", "MOVE E 16", BombUse::Free, 4, 0, true),
+    ]);
+}
+
+/// Round 37, the owner's first rule (`d3first`'s `bomb_rules: {fights_only: true}`): in a dungeon BOMB is a weapon
+/// only where the objective fights the room.  3:0x59 from N (five Red Darknuts, its S shutter: a clear room, the
+/// reserve 0) offers it at 4 bombs; 3:0x69 from N (`treasure: skip`: the route slides past its Darknuts to the raft's
+/// stairs, a crossing) does not at 7, nor at `$50` = 8, and does on the 10th kill (`$50` = 9: always, the owner).
+/// `d2first`'s 3:0x69 (no rules, reserve 6) still offers it at 7.
+#[test]
+fn bombs_are_a_weapon_only_where_the_route_must_clear_the_room() {
+    let Some(nes) = open_core() else { return };
+    bomb_cases(nes, &[
+        ("darknut", "d3first_3_59n_0", "MOVE S 16", BombUse::Free, 4, 0, true),
+        ("darknut", "d3first_3_69n_0", "MOVE S 16", BombUse::Free, 7, 0, false),
+        ("darknut", "d3first_3_69n_0", "MOVE S 16", BombUse::Free, 7, 8, false),
+        ("darknut", "d3first_3_69n_0", "MOVE S 16", BombUse::Free, 7, 9, true),
+        ("darknut", "d3first_3_69n_0", "MOVE S 16", BombUse::Tenth, 1, 9, true),
+        ("darknut", "3_69n_0", "MOVE S 16", BombUse::Free, 7, 0, true),
+    ]);
+}
+
+/// Round 37, the owner's third rule (`d3first`'s `bomb_rules: {treasure_below: 8}`): a room the route takes the bombs
+/// of is a fight when Link comes in with 7 or fewer and a crossing with 8: 7:0x1b (round 34's floor of 2 gone),
+/// 8:0x3f (the shared step's `{if_bombs_below: 5}` gives way: 5 is a fight), 3:0x5b's last pass (whatever Link held,
+/// before).  `d2first`'s 8:0x3f keeps its 5.  A room's override (`treasure_below_rooms`, 7:0x1b `below: 2`, the
+/// crossing the owner allows if the fight kills too many runs) wins over the floor.
+#[test]
+fn the_route_fights_for_a_rooms_bombs_below_its_floor() {
+    let Some(mut nes) = open_core() else { return };
+    let read = |name: &str| std::fs::read_to_string(common::repo().join("triforce").join(name)).unwrap();
+    let floor = "    treasure_below: 8\n";
+    let routes = read("routes.yaml");
+    assert_eq!(routes.matches(floor).count(), 1, "d3first's floor");
+    let routes = routes.replace(floor, &format!("{floor}    treasure_below_rooms: [{{level: 7, room: '0x1b', below: 2}}]\n"));
+    let mut crossing = (**data()).clone();
+    crossing.map = Arc::new(zelda::GameMap::from_yaml(&read("game.yaml"), &routes).unwrap());
+    let crossing = Arc::new(crossing);
+    let cases = [
+        (data(), "goriya", "d3first_7_1bw_0", "MOVE E 16", 7, true),
+        (data(), "goriya", "d3first_7_1bw_0", "MOVE E 16", 8, false),
+        (data(), "goriya", "d3first_7_1bw_0", "MOVE E 16", 1, true),
+        (data(), "darknut", "d3first_8_3fw_0", "MOVE E 16", 5, true),
+        (data(), "darknut", "d3first_8_3fw_0", "MOVE E 16", 8, false),
+        (data(), "darknut", "8_3fw_0", "MOVE E 16", 5, false),
+        (data(), "darknut", "8_3fw_0", "MOVE E 16", 4, true),
+        (data(), "darknut", "d3first_3_5bw_0", "MOVE E 16", 7, true),
+        (data(), "darknut", "d3first_3_5bw_0", "MOVE E 16", 8, false),
+        (&crossing, "goriya", "d3first_7_1bw_0", "MOVE E 16", 7, false),
+        (&crossing, "goriya", "d3first_7_1bw_0", "MOVE E 16", 1, true),
+    ];
+    for (data, family, start, walk, bombs, fight) in cases {
+        let mut config = (*data.specialists[family]).clone();
+        config.ram_randomization = RamRandomization { bombs: Some((bombs, bombs)), ..Default::default() };
+        let opts = EnvOptions { start_state: Some(start.into()), ..Default::default() };
+        let mut env: Env = SpecialistEnv::new(Arc::new(config), data.clone(), nes, TfzStore::new(), opts).unwrap();
+        env.reset(Some(0), None).unwrap();
+        for _ in 0..10 {
+            act(&mut env, walk);
+            if state(&env).has_active_enemies() {
+                break;
+            }
+        }
+        let what = format!("{start} with {bombs} bombs");
+        assert_eq!(state(&env).bombs(), bombs as i32, "{what}");
+        assert_eq!(objective(&env).kind == ObjectiveKind::Fight, fight, "{what}: {:?}", objective(&env).kind);
+        nes = release(env);
+    }
+}
+
+/// A darknut env at `start` (8:0x3f from W) with Link holding `bombs`, walked in until the room's monsters are
+/// active, then the room emptied (every monster slot cleared, as `zelda/tests/d8.rs`' `clear_room`).
+fn fought_and_cleared(nes: ZCore, start: &str, bombs: u8) -> Env {
+    let mut env = make_env(nes, "darknut", Some(start), |c| {
+        c.ram_randomization = RamRandomization { bombs: Some((bombs.into(), bombs.into())), ..Default::default() };
+    });
+    env.reset(Some(0), None).unwrap();
+    for _ in 0..10 {
+        act(&mut env, "MOVE E 16");
+        if state(&env).has_active_enemies() {
+            break;
+        }
+    }
+    assert!(state(&env).has_active_enemies(), "{start}: in the room");
+    let s = env.session_mut();
+    for slot in 1..=11u16 {
+        s.nes_mut().poke(0x34F + slot, 0);
+    }
+    s.apply_ram(&[]);
+    env
+}
+
+/// The env's objective after one step with Link holding `bombs` of 8 and the room's treasure shown (`shown`, at the
+/// centre: where 8:0x3f's lay in the golden replay) or hidden, and `drop` (a pack of bombs lying at (x, y)).
+fn after(env: &mut Env, bombs: u8, shown: bool, drop: Option<(u8, u8)>) -> Objective {
+    let s = env.session_mut();
+    s.apply_ram(&[(Var::Bombs, bombs), (Var::BombMax, 8), (Var::TreasureFlag, u8::from(!shown)),
+        (Var::TreasureX, 0x80), (Var::TreasureY, 0x90)]);
+    if let Some((x, y)) = drop {
+        for (address, value) in [(0x34F, 0x60), (0xAC, item::BOMBS as u8), (0x70, x), (0x84, y), (0x405, 0), (0x3A8, 0xC0)] {
+            s.nes_mut().poke(address + 3, value);
+        }
+        s.apply_ram(&[]);
+    }
+    act(env, "MOVE N 4");
+    objective(env).clone()
+}
+
+/// Round 37, the owner watching 8:0x3f (Nov 22): "bombs were dropped bringing him from 2 up to 6, then the room
+/// dropped bombs were there with a clear room and he ignored them".  The golden replay's visit (frames 118614-120714
+/// of `golden-d3first-single-network.tfreplay`): in with 2, the last monster's drop of four taken (6), the room's
+/// bombs shown at ($80, $90), Link down the stairs.  The shared step's `{if_bombs_below: 5}`, read live, made the
+/// stairs the objective at 6 (as `d2first` still does).  Under `d3first`'s floor the decision made on entering holds
+/// for the visit: at 6 the treasure is the objective and the wavefront's only target, at 8 (full) not; a room
+/// entered with 8 (a crossing) whose bombs lie there all the same wants them at 7.  Dropped bombs (the room clear,
+/// the game shows its treasure again): a pack Link can reach is the only target below 8, before the treasure and the
+/// stairs; at 8 it is none (on `d2first` a target beside the others, as before).
+#[test]
+fn the_rooms_bombs_stay_wanted_after_a_drop() {
+    let Some(mut nes) = open_core() else { return };
+    for (start, entering, now, wanted) in [
+        ("d3first_8_3fw_0", 2, 6, true),
+        ("d3first_8_3fw_0", 2, 8, false),
+        ("d3first_8_3fw_0", 8, 7, true),
+        ("8_3fw_0", 2, 6, false),
+        ("8_3fw_0", 2, 4, true),
+    ] {
+        let mut env = fought_and_cleared(nes, start, entering);
+        let o = after(&mut env, now, true, None);
+        let what = format!("{start}: in with {entering}, holding {now}");
+        assert_eq!(o.kind == ObjectiveKind::Treasure, wanted, "{what}: {:?}", o.kind);
+        if wanted {
+            let treasure = state(&env).treasure().expect("shown");
+            let tiles: BTreeSet<Target> = treasure.link_overlap_tiles().into_iter().map(Target::Tile).collect();
+            assert!(!o.pbrs_targets.is_empty() && o.pbrs_targets.is_subset(&tiles), "{what}: {:?}", o.pbrs_targets);
+        }
+        nes = release(env);
+    }
+    let pack = (0x60, 0x90);
+    for (start, now, first) in [("d3first_8_3fw_0", 6, true), ("d3first_8_3fw_0", 8, false), ("8_3fw_0", 4, false)] {
+        let mut env = fought_and_cleared(nes, start, 2);
+        let o = after(&mut env, now, false, Some(pack));
+        let drop = state(&env).items.iter().find(|it| it.id == item::BOMBS).expect("the pack").link_overlap_tiles();
+        let tiles: BTreeSet<Target> = drop.into_iter().map(Target::Tile).collect();
+        let what = format!("{start}: a pack, holding {now}: {:?}", o.pbrs_targets);
+        assert_ne!(o.kind, ObjectiveKind::Fight, "{what}");
+        assert_eq!(!o.pbrs_targets.is_empty() && o.pbrs_targets.is_subset(&tiles), first, "{what}");
+        if !first && start.starts_with("d3first") {
+            assert!(o.pbrs_targets.is_disjoint(&tiles), "{what}");
+        }
+        nes = release(env);
+    }
+}
+
+/// Round 37 (the owner: "Drop the fight with the goriyas in d2 0x5e, that's only for d2 first"): `d3first` crosses
+/// 2:0x5e (no fight with its five Red Goriyas alive, so `fights_only` offers no weapon bomb, 7 in hand), `d2first`
+/// still clears it (`treasure: clear`, BOMB as a `free` goriya above its reserve of 0 there).
+#[test]
+fn d3first_crosses_dungeon_2s_goriya_room() {
+    let Some(mut nes) = open_core() else { return };
+    for (start, fight) in [("d3first_2_5es_0", false), ("2_5es_0", true)] {
+        let mut env = make_env(nes, "goriya", Some(start), |c| {
+            c.ram_randomization = RamRandomization { bombs: Some((7, 7)), help_count: Some((0, 0)), ..Default::default() };
+            c.items.bombs = BombUse::Free;
+        });
+        env.reset(Some(0), None).unwrap();
+        for _ in 0..10 {
+            act(&mut env, "MOVE N 16");
+            let p = state(&env).link.position;
+            if (0x5E..0xBD).contains(&p.y) && state(&env).has_active_enemies() {
+                break;
+            }
+        }
+        assert_eq!(objective(&env).kind == ObjectiveKind::Fight, fight, "{start}: {:?}", objective(&env).kind);
+        assert_eq!(env.session().mask().kind[ActionKind::Bomb.index()], fight, "{start}");
         nes = release(env);
     }
 }

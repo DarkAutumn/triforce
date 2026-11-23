@@ -60,7 +60,8 @@ def test_a_bench_run_and_its_paired_comparison(states_dir, tmp_path, logs_dir):
     assert events[1]['success_rate'] == first['keys']['ow-start']['success'] and events[2]['status'] == 'completed'
     row = results[0]['keys']['ow-start']
     assert row['episodes'] == 2 and len(row['records']) == 2
-    assert {'success', 'hearts_lost', 'hits_per_visit', 'decisions', 'bombs'} <= set(row)
+    assert {'success', 'hearts_lost', 'hits_per_visit', 'bubble_touches_per_visit', 'decisions', 'bombs'} <= set(row)
+    assert all('bubble_touches' in e for e in row['records'])
     same = bench.compare(results[0], results[0])
     assert same['total']['pairs'] == 2 and same['total']['success'] == (0.0, 0.0)
     other = bench.compare(results[0], results[1])
@@ -69,6 +70,17 @@ def test_a_bench_run_and_its_paired_comparison(states_dir, tmp_path, logs_dir):
     assert '**total**' in bench.format_compare(other)
     stored = json.loads(json.dumps(bench.compact(results[1])))
     assert bench.compare(results[0], stored) == other
+    # A result written before round 38 has no bubble_touches: the comparison says it is missing, the rest pair.
+    old = json.loads(json.dumps(bench.compact(results[1])))
+    for key_row in old['keys'].values():
+        fields = key_row['records']['fields']
+        gone = fields.index('bubble_touches')
+        key_row['records'] = {'fields': fields[:gone] + fields[gone + 1:],
+                              'rows': [r[:gone] + r[gone + 1:] for r in key_row['records']['rows']]}
+    against_old = bench.compare(results[0], old)
+    assert against_old['total']['bubble_touches'] is None
+    assert against_old['total']['decisions'] == other['total']['decisions']
+    assert '| missing |' in bench.format_compare(against_old)
 
 
 def _row(successes):

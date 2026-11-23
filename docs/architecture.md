@@ -953,6 +953,54 @@ and `linger_worst_{steps,frames}` maxima overall, per room and per start state. 
 absent, not zero. Multi-room env episodes reset their tail on each exit and retain the episode's worst gap;
 runner records always describe one visit.
 
+### Aimless walking (`crates/zelda/src/aimless.rs`, round 38)
+
+The owner (Nov 22): Link walking back and forth with nothing to fight and nowhere to go but the goal (the opening
+screen before the sword, Dungeon 8's 0x4c after its wall is bombed). Measurement only: nothing acts on it but
+`reward.aimless_penalty` (default 0, below).
+
+- **Calm decision.** As it is taken: nothing in the room can hurt Link (`aimless::threatened`: no monster, living
+  or spawning and not dying, which takes in a Wallmaster in its wall, a Zora under water, a Leever under the sand;
+  no monster shot; no hazard but the cave's standing fires, which hurt only on touch, never move and are walked
+  round, and the boulders' invisible generator: traps, boulders, Bubbles and Gleeok's flying heads count); the
+  objective is a place that does not go away (`aimless::fixed_goal`: kind `MOVE` (an exit side, the stairs out of a
+  cellar, Zelda's tiles), `CAVE` (a cave, stairs, a level entrance) or `TREASURE` (a room's treasure, a heart
+  container, the triforce, a key, a shop's ware, the sword in its cave), with targets; never `FIGHT`, whose targets
+  move); no dropped item pulls him (`env::objective::pulled`: one the family's shaping makes a target, or one he
+  wants, a heart or fairy below full health, bombs below his maximum: dropped items vanish, and walking to one is no
+  aimless walk: "walking towards a heart that disappears shouldn't count"); and the objective's own wavefront (no
+  dropped items; `linger_wavefront` without the PBRS one) reaches him at a distance above 0.
+- **Stretch.** Consecutive calm decisions in one room visit and one objective phase (room, kind, targets, next
+  rooms, keys); its wavefront is frozen at its first decision. It ends when a decision is not calm (a monster
+  appears, a shot flies in, a pickup starts to pull), the phase changes (a bombed wall opens, the treasure is
+  taken), Link reaches the goal (distance 0) or leaves the room, or the visit ends.
+- **Per stretch.** *Lasted*: the frames Link had control in its decisions (`Change::control_frames` minus the item
+  sub-screen's and the recorder's `menu_frames`). *Needed*: the tiles gained (start distance minus end distance,
+  never below 0; leaving by the objective's exit or maze loop ends at 0, any other exit gains nothing on the last
+  step) at walking speed, `FRAMES_PER_TILE` = 6 (8 pixels at 4/3 a frame, measured on the env's MOVEs: 64 pixels in
+  48 frames in the sword's cave, 16 tiles in 96 frames out of it to 0x77's west edge); a stretch cut by a monster is
+  scored to that point by the ground it gained. *Aimless frames* = lasted − needed − `STRETCH_ALLOWANCE`, never
+  below 0. The allowance (16 frames, under three tiles' walk) covers lining up on the 8-pixel grid to turn and the
+  last MOVE's frames past the tile that ends the stretch: a scripted shortest walk scores 0 (`tests/test_aimless.py`).
+- **Companions.** `calm_reversals`: MOVEs opposite to the stretch's previous MOVE; `calm_away`: calm decisions that
+  ended farther from the goal than they began, beside `calm_decisions`; `calm_stretches`.
+- **Not calm, and why** (each a wait the game forces or a frame Link does not control): the frames after a decision's
+  control ends (`frames − control_frames`: a room scroll, the stairs, a pickup's fanfare, the cave's text typing,
+  Link frozen by the triforce); the item sub-screen and the recorder's tune (`menu_frames`); standing on a goal tile
+  (a block's push time, the whirlwind's spot, a dock warp's spot: distance 0); a shutter still opening or a wall not
+  yet blown open (the wavefront cannot reach Link); the old man's text before Link may move (inside the cave's entry
+  step); fights, and everything while a monster or shot is in the room.
+
+Carried per room visit as `_native.AIMLESS_FIELDS` (`aimless_frames`, `calm_frames`, `calm_needed_frames`,
+`calm_stretches`, `calm_decisions`, `calm_away`, `calm_reversals`) in evaluation visits (and `visited_rooms`'
+`<field>_per_visit`) and chain `RoomRecord`s (`ChainEnv`: its tracker resets with each room record, the acting
+family's shaping decides `pulled`); `triforce room-stats` adds them per visit, `aimless_frames` summed per room and
+`aimless_frames_per_run` per scope, and lists the rooms that waste most. Per decision (`StepInfo.aimless`, the pool's
+`Outcome`, `EnvPool.rollout`'s `calm`, `progress`, `waste`; the lab's `calm`, `progress`, `waste` targets): calm,
+the frames of progress toward the goal (tiles gained × 6, negative when ground is lost) and the frames the decision
+added to its stretch's waste (the rise of lasted − needed so far). The bench reports `aimless_frames_per_visit`.
+Simulated env steps (`step_sim`) leave the tracker alone; `_native.Env.aimless` reads the visit so far.
+
 ### Experimental reward and cutoff controls
 
 `reward.block_reward` (nonnegative, default 1) multiplies `REWARD_MEDIUM` for each confirmed shield collision,
@@ -990,6 +1038,20 @@ below max health (`item_targets` includes them): for the overworld families, who
 would chase.
 `reward.boss_ate_bomb_penalty` (default 0.5, ≥ 0; 0 drops the term) is `penalty-boss-ate-bomb` per step in which a
 Dodongo swallowed a bomb (round 12).
+`reward.sword_blocked_penalty` (round 38; default `REWARD_TINY` = 0.05 in every family, ≥ 0; 0 drops the term) is
+`penalty-sword-blocked` per step in which a Bubble's touch landed (`zelda::Change::bubble_touched`: the flashing
+Bubble's `SwordBlockedLongTimer` `$4C` rose, 0 → `$10` or reloaded to `$10` while it ran down, or the red one's
+`IsSwordBlocked` `$52E` was set). A touch costs no health, so `penalty-lost-health` never saw it; it blocks the sword
+151-160 frames, shoves Link and makes him invincible `$18` frames (asm:Bubble_Update, asm:Link_HarmByObjType), so
+two touches are at least 24 frames apart: one payment a touch, a second touch while blocked pays again (it restarts
+the block), two inside one step pay once. Flat, not priced by the heart value: the touch changes no hearts, the
+hits it leads to are priced when they land. Counted beside the hits: the visits' and chain records'
+`bubble_touches` and `sword_blocked_frames` (frames of the steps begun with the sword blocked), the evaluation's
+`bubble_touches_per_visit`, the pool's `Outcome.blocked` (the lab's `blocked`, `tried_blocked`).
+`reward.aimless_penalty` (round 38; default 0, ≥ 0) is `penalty-aimless`, per frame a calm decision adds to its
+stretch's waste ("Aimless walking" above: lasted − needed so far, never charged while anything in the room can hurt
+Link), times the shaping scale; over a stretch it sums to about the stretch's aimless frames before the allowance.
+Training envs only (`SpecialistEnv`; a chain's `RewardTrack` does not record it).
 `clips: true|false` (round 21; default false; "Grid-point skip" above; the removed designs' `{action: ...,
 shaping: ...}` block is refused): the CLIP kind where a skip is available, the observation's `clip_usable_*` and the
 skips as path-search jumps (PBRS pays the whole wavefront difference of a skip step, as for any position change,

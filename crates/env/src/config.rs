@@ -215,6 +215,15 @@ fn half() -> f64 {
     0.5
 }
 
+/// `reward.sword_blocked_penalty`'s default (round 38): a Bubble's touch, priced flat at `REWARD_TINY`. Measured on
+/// `d3first`'s Bubble rooms (round38.md "A Bubble's touch"): a touch costs 0.07-0.08 hearts (0.04 at
+/// `penalty-lost-health`'s 0.25 a half heart) and about 90 frames of the visit; `REWARD_TINY` is the nearest step.
+pub const SWORD_BLOCKED_PENALTY: f64 = crate::rewards::REWARD_TINY;
+
+fn sword_blocked_penalty() -> f64 {
+    SWORD_BLOCKED_PENALTY
+}
+
 /// `reward:` block.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -251,6 +260,17 @@ pub struct RewardConfig {
     /// `penalty-boss-ate-bomb` per bomb a Dodongo swallows (round 12; the stun-and-sword kill wants none).
     #[serde(default = "half")]
     pub boss_ate_bomb_penalty: f64,
+    /// `penalty-sword-blocked` per step in which a Bubble's touch blocked the sword (`zelda::Change::bubble_touched`;
+    /// round 38: a touch costs no health, so `penalty-lost-health` never saw it). Flat, like `penalty-lost-health`
+    /// (positive magnitude; 0 = off).
+    #[serde(default = "sword_blocked_penalty")]
+    pub sword_blocked_penalty: f64,
+    /// `penalty-aimless` per frame a calm decision adds to its stretch's waste (`zelda::aimless`, round 38: lasted
+    /// beyond the walk the ground it gained needed, with nothing in the room that can hurt Link and a goal that does
+    /// not go away), scaled by `shaping_scale` (positive magnitude; 0 = off, the default; never charged while a
+    /// monster or shot is in the room).
+    #[serde(default)]
+    pub aimless_penalty: f64,
     /// Multiplies every non-terminal reward and penalty (outcome fine-tuning, in [0, 1]); training's
     /// `--shaping-anneal` lowers it between rollouts.
     #[serde(default = "one")]
@@ -280,6 +300,8 @@ impl Default for RewardConfig {
             left_drop_penalty: 0.0,
             heal_targets: false,
             boss_ate_bomb_penalty: 0.5,
+            sword_blocked_penalty: SWORD_BLOCKED_PENALTY,
+            aimless_penalty: 0.0,
             shaping_scale: 1.0,
             frame_penalty: 0.0,
             exit_health_weight: 0.5,
@@ -429,6 +451,16 @@ impl BombUse {
             _ => return None,
         })
     }
+
+    /// The mode where the route's bomb rules take BOMB as a weapon off (round 37,
+    /// `zelda::objectives::GameCompletion::weapon_bombs_off`): `free` becomes `required` (the bomb that opens the
+    /// route's wall, and the 10th kill's); the others place no weapon bomb but the 10th kill's already.
+    pub fn without_weapon(self) -> BombUse {
+        match self {
+            BombUse::Free => BombUse::Required,
+            mode => mode,
+        }
+    }
 }
 
 /// `items:` block: inventory items the specialist may use (false = masked out even when Link has it; bombs:
@@ -470,9 +502,11 @@ impl Default for ItemsConfig {
 impl ItemsConfig {
     /// These switches on a route step with its own bomb mode (routes.yaml `bombs:`, round 28,
     /// `zelda::objectives::GameCompletion::step_bombs`; None: the family's): 8:0x6e, which boss-manhandla (`free`)
-    /// crosses to its bomb wall by the mask of `required`.
-    pub fn on_step(&self, bombs: Option<&str>) -> ItemsConfig {
-        ItemsConfig { bombs: bombs.and_then(BombUse::named).unwrap_or(self.bombs), ..self.clone() }
+    /// crosses to its bomb wall by the mask of `required`. `weapon`: BOMB may be a weapon here (false where the
+    /// route's bomb rules take it off, round 37: the mode is [`BombUse::without_weapon`]).
+    pub fn on_step(&self, bombs: Option<&str>, weapon: bool) -> ItemsConfig {
+        let mode = bombs.and_then(BombUse::named).unwrap_or(self.bombs);
+        ItemsConfig { bombs: if weapon { mode } else { mode.without_weapon() }, ..self.clone() }
     }
 
     /// Action kinds masked out in `state` with `bomb_reserve` bombs and `rupee_reserve` rupees to keep (routes.yaml),
@@ -886,6 +920,8 @@ impl SpecialistConfig {
             ("reward.block_reward", self.reward.block_reward),
             ("reward.quiet_enemy_penalty", self.reward.quiet_enemy_penalty),
             ("reward.boss_ate_bomb_penalty", self.reward.boss_ate_bomb_penalty),
+            ("reward.aimless_penalty", self.reward.aimless_penalty),
+            ("reward.sword_blocked_penalty", self.reward.sword_blocked_penalty),
             ("reward.frame_penalty", self.reward.frame_penalty),
         ] {
             if !(value >= 0.0 && value.is_finite()) {
@@ -1559,6 +1595,10 @@ mod tests {
             "reward: {block_reward: .nan}",
             "reward: {quiet_enemy_penalty: .nan}",
             "reward: {boss_ate_bomb_penalty: .nan}",
+            "reward: {aimless_penalty: -0.001}",
+            "reward: {aimless_penalty: .nan}",
+            "reward: {sword_blocked_penalty: -0.25}",
+            "reward: {sword_blocked_penalty: .nan}",
             "reward: {frame_penalty: .inf}",
             "reward: {block_reward: .inf}",
             "reward_profile: nonsense",
@@ -1580,9 +1620,14 @@ mod tests {
             "endings: {'enter-room:1:0x72': hard-failure, triforce-collected: soft-failure}",
             "max_steps: 4294967295",
             "endings: {max-steps: hard-failure, no-damage: hard-failure, no-room-progress: soft-failure}",
+            "reward: {sword_blocked_penalty: 0}",
+            "reward: {aimless_penalty: 0.001}",
         ] {
             assert!(minimal(ok).is_ok(), "{ok} should load: {:?}", minimal(ok).err());
         }
+        // Round 38: every family pays a Bubble's touch unless its yaml says otherwise.
+        assert_eq!(minimal("").unwrap().reward.sword_blocked_penalty, SWORD_BLOCKED_PENALTY);
+        assert_eq!(minimal("reward: {sword_blocked_penalty: 0}").unwrap().reward.sword_blocked_penalty, 0.0);
         let bad = |text: &str| SpecialistConfig::from_yaml(text, "t.yaml", None).is_err();
         assert!(bad(
             "name: t\nrooms: ['(1, 0x73)']\nsuccess: [exit-sideways]\n"
@@ -1684,14 +1729,21 @@ mod tests {
 
     /// Round 28: a route step's own bomb mode replaces the family's on that step (`ItemsConfig::on_step`): a `free`
     /// family on a `bombs: required` step is kept to the bomb targets in a `requires_bombs` room, as a `required`
-    /// family is; no step mode, or an unknown name, leaves the family's.
+    /// family is; no step mode, or an unknown name, leaves the family's.  Round 37: where the route's bomb rules take
+    /// BOMB as a weapon off (`weapon` false), `free` becomes `required` (the step's mode too) and the others stay.
     #[test]
     fn a_step_names_its_own_bomb_mode() {
         let free = ItemsConfig { bombs: BombUse::Free, arrows: true, ..Default::default() };
-        assert_eq!(free.on_step(None), free);
-        assert_eq!(free.on_step(Some("sometimes")), free);
-        let step = free.on_step(Some("required"));
+        assert_eq!(free.on_step(None, true), free);
+        assert_eq!(free.on_step(Some("sometimes"), true), free);
+        let step = free.on_step(Some("required"), true);
         assert_eq!(step, ItemsConfig { bombs: BombUse::Required, ..free.clone() });
+        assert_eq!(free.on_step(None, false), step, "no weapon: free is required");
+        assert_eq!(free.on_step(Some("free"), false), step, "the step's free too");
+        for mode in [BombUse::Never, BombUse::Tenth, BombUse::Required] {
+            assert_eq!(mode.without_weapon(), mode);
+            assert_eq!(free.on_step(Some(&format!("{mode:?}").to_lowercase()), false).bombs, mode);
+        }
         for (name, mode) in [("never", BombUse::Never), ("tenth", BombUse::Tenth), ("free", BombUse::Free)] {
             assert_eq!(BombUse::named(name), Some(mode));
         }
