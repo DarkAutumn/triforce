@@ -459,6 +459,9 @@ pub struct BombWindows {
     carrier: bool,
     forced: Followed,
     carried: Followed,
+    /// A forced bomb drop armed by a 10th kill and not yet fallen (Dodongo's death arms one too, zelda-asm
+    /// `src/bank4/dodongo.asm`: not the metric's).
+    armed_pending: bool,
     prev: Option<Arc<GameView>>,
     /// A transition frame since `prev`, and frames since it.
     left: bool,
@@ -577,7 +580,9 @@ impl BombWindows {
         stats.tenth_forced_taken += taken;
         stats.tenth_forced_wasted += wasted;
         let armed = |s: &GameView| s.help_drop_count() >= 10 && s.help_drop_is_bombs();
-        if (armed(p) || step.armed_bomb_drop()) && !armed(c) {
+        self.armed_pending |= step.armed_bomb_drop();
+        if self.armed_pending && !armed(c) {
+            self.armed_pending = false;
             let drops = step.new_bomb_drops();
             if drops.is_empty() {
                 stats.tenth_forced_lost += 1;
