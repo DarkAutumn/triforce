@@ -2,14 +2,24 @@
 
     .venv/bin/python scripts/speedrun.py fetch                  # snapshot the board (run only when asked)
     .venv/bin/python scripts/speedrun.py time REPLAY...         # time wins and place them on the snapshot
+    .venv/bin/python scripts/speedrun.py list [PATH...]         # every run's frames and duration
 
 ``fetch`` reads the whole board from speedrun.com's API (stdlib only) into ``target/leaderboard/zelda-any-noupa.json``
 (not committed; it goes out of date, which is fine: refresh only when the owner asks).
 
-``time`` times each replay that ends in a win (golden paths and single runs alike): **from the frame Link can first
-be controlled to the replay's last frame, the game's end**, at the NES's 60.0988 frames a second (NTSC: 39375000 /
-655171), and gives the place that time would take on the snapshot (one more than the runs strictly faster).
-Replays that are not wins are skipped with a note.
+**The timing (the board's rule, the owner, Nov 23):** from the first frame Link can be controlled on the overworld in
+0:0x77 to the frame Link stands beside Zelda, the first frame he can no longer be controlled. Frame-exact, read from
+the game's RAM as the replay plays:
+
+- start: the replay's first frame after which `GameMode` ($12) is 5 (play) with `CurLevel` 0 and `RoomId` $77;
+  Link's input is read from the next frame on, the first controllable frame;
+- end: the first frame after which Zelda (object slot 1) is in state 1 with Link halted (`ObjState` $AC = $40) in
+  9:0x32: asm:Zelda_Update caught him in front of her during that frame, the last frame he moved; the next frame
+  is the first he cannot be controlled (mode $13, the win, begins the frame after: asm:Zelda_State1WaitForEnding).
+
+The time is (end - start) frames at the NES's 60.0988 frames a second (NTSC: 39375000 / 655171); a run that did
+not end the game is timed from the start to its last frame.  ``time`` places each win on the snapshot (one more than
+the runs strictly faster).  Times are cached by the replay's SHA-1 in ``target/leaderboard/times.json``.
 """
 import argparse
 import json
@@ -94,20 +104,58 @@ def place(seconds: float, board: dict) -> int:
     return 1 + sum(1 for run in board['runs'] if run['seconds'] < seconds)
 
 
-def describe(path: Path) -> dict:
-    """Any replay: its ending, frames, the frame Link can first be controlled, and the duration from there to the
-    last frame at the NES's rate (for a win, the speedrun time)."""
+TIMES = ROOT / 'target' / 'leaderboard' / 'times.json'
+START_SCAN = 60_000          # frames searched for the start (power on to control takes about 5,000-35,000)
+END_SCAN = 4_000             # frames before a win's last frame searched for the touch of Zelda
+
+
+def _span(data: bytes, frames: int, finished: bool) -> tuple:
+    """(start, end) frame counts, the board's rule (the module docstring): start = frames run when the game is first
+    in play in 0:0x77 (None when the replay never is: a segment), end = frames run when Zelda first holds Link
+    (None when the run did not end the game)."""
+    from triforce import _native  # pylint: disable=import-outside-toplevel
+    player = _native.ReplayPlayer(data)
+    start = end = None
+    player.seek(0)
+    while player.frame < min(frames, START_SCAN) and player.step(1):
+        ram = player.ram()
+        if ram[0x12] == 5 and ram[0x10] == 0 and ram[0xEB] == 0x77:
+            start = player.frame
+            break
+    if finished:
+        player.seek(max(0, frames - END_SCAN))
+        while player.step(1):
+            ram = player.ram()
+            if ram[0x10] == 9 and ram[0xEB] == 0x32 and ram[0xAD] == 1 and ram[0xAC] == 0x40:
+                end = player.frame
+                break
+    return start, end
+
+
+def describe(path: Path, cache: dict) -> dict:
+    """Any replay: its ending, frames, the board's start and end frames and the time between (the module
+    docstring); a run that did not end the game is timed to its last frame."""
     import bz2  # pylint: disable=import-outside-toplevel
+    import hashlib  # pylint: disable=import-outside-toplevel
     from triforce import _native  # pylint: disable=import-outside-toplevel
     data = path.read_bytes()
-    replay = _native.Replay(bz2.decompress(data) if path.suffix == '.bz2' else data)
-    control = next((e['frame'] for e in replay.events() if e.get('type') == 'control'), 0)
-    meta = replay.meta
-    finished = str(replay.ending) == 'win' and 'game ended' in str(meta.get('ending', ''))
-    return {'file': str(path), 'version': str(meta.get('triforce', '')), 'route': str(meta.get('route', '')),
-            'golden': str(meta.get('golden', '')) == 'True', 'ending': 'end' if finished else str(replay.ending),
-            'frames': replay.frames, 'control_frame': control, 'played_frames': replay.frames - control,
-            'seconds': (replay.frames - control) / NES_FPS}
+    data = bz2.decompress(data) if path.suffix == '.bz2' else data
+    sha = hashlib.sha1(data).hexdigest()
+    if sha not in cache:
+        replay = _native.Replay(data)
+        meta = replay.meta
+        finished = str(replay.ending) == 'win' and 'game ended' in str(meta.get('ending', ''))
+        start, end = _span(data, replay.frames, finished)
+        cache[sha] = {'version': str(meta.get('triforce', '')), 'route': str(meta.get('route', '')),
+                      'golden': str(meta.get('golden', '')) == 'True',
+                      'ending': 'end' if finished else str(replay.ending), 'frames': replay.frames,
+                      'start_frame': start, 'end_frame': end}
+    row = {'file': str(path), 'sha1': sha, **cache[sha]}
+    first = row['start_frame'] or 0
+    last = row['end_frame'] if row['end_frame'] is not None else row['frames']
+    row['played_frames'] = last - first
+    row['seconds'] = row['played_frames'] / NES_FPS
+    return row
 
 
 def _replays(paths: list) -> list:
@@ -141,26 +189,31 @@ def main(argv=None) -> int:
         print(f"(no board snapshot at {board_path}: `speedrun.py fetch` first; times only)")
     else:
         print(f"board: {board['category']}, {len(board['runs'])} runs, fetched {board['fetched']}")
+    cache = json.loads(TIMES.read_text()) if TIMES.exists() else {}
+    names = _replays(args.paths) if args.command == 'list' else [Path(n) for n in args.replays]
+    rows = [describe(f, cache) for f in names]
+    TIMES.parent.mkdir(parents=True, exist_ok=True)
+    TIMES.write_text(json.dumps(cache, indent=1) + '\n')
+    for row in rows:
+        row['place'] = place(row['seconds'], board) if board and row['ending'] == 'end' else None
     if args.command == 'list':
-        rows = [describe(f) for f in _replays(args.paths)]
-        print(f"{'version':9} {'kind':7} {'ending':7} {'frames':>7} {'control':>7} {'played':>7} {'time':>10} "
-              f"{'place':>9}  file")
+        print(f"{'version':9} {'kind':7} {'ending':7} {'frames':>7} {'start':>7} {'end':>7} {'played':>7} "
+              f"{'time':>10} {'place':>9}  file")
         for row in sorted(rows, key=lambda r: (r['version'], r['file'])):
-            row['place'] = place(row['seconds'], board) if board and row['ending'] == 'end' else None
             kind = 'golden' if row['golden'] else 'run'
             where = f"{row['place']}/{len(board['runs']) + 1}" if row['place'] else ''
-            print(f"{row['version']:9} {kind:7} {row['ending']:7} {row['frames']:>7} {row['control_frame']:>7} "
-                  f"{row['played_frames']:>7} {clock(row['seconds']):>10} {where:>9}  {Path(row['file']).name}")
+            print(f"{row['version']:9} {kind:7} {row['ending']:7} {row['frames']:>7} {row['start_frame'] or '-':>7} "
+                  f"{row['end_frame'] or '-':>7} {row['played_frames']:>7} {clock(row['seconds']):>10} {where:>9}  "
+                  f"{Path(row['file']).name}")
         if args.json:
             Path(args.json).write_text(json.dumps(rows, indent=1) + '\n')
         return 0
-    for name in args.replays:
-        row = describe(Path(name))
+    for row in rows:
         if row['ending'] != 'end':
-            print(f"{name}: did not end the game ({row['ending']}), skipped")
+            print(f"{row['file']}: did not end the game ({row['ending']}), skipped")
             continue
-        where = f"place {place(row['seconds'], board)} of {len(board['runs']) + 1}" if board else ''
-        print(f"{clock(row['seconds']):>10}  {where:>18}  frames {row['control_frame']}-{row['frames']}  {name}")
+        where = f"place {row['place']} of {len(board['runs']) + 1}" if board else ''
+        print(f"{clock(row['seconds']):>10}  {where:>18}  frames {row['start_frame']}-{row['end_frame']}  {row['file']}")
     return 0
 
 
