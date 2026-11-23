@@ -450,6 +450,12 @@ thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
     own). A tool started directly without a name and without a terminal is refused, so the rules are enforced at
     the door. The registry files stay the format (old trees and running jobs keep working); no daemon. Not before
     the backtest is done (it ports `jobs.py` into 26 trees). Proposed, not started: the owner decides.
+  - **The Python suite is slow: about 8.5 minutes on a quiet machine, on ONE core** (the owner, Nov 23: "Why does
+    pytest take so long?"). 990 tests run one after another in one process (measured: 512 s; the process at 95% of
+    one core of 20), and many are end-to-end (a real training, chain, batch or wrapper each starting its own
+    interpreter with torch and the native module). To do: `pytest --durations=40` to rank them; run the suite in
+    parallel (`pytest-xdist`: the session fixtures, the shared states dir and the queue tests' timing need a look);
+    shorten or mark the slowest end-to-end ones. Target: under 2 minutes, as `triforce job test python`.
   - The plain ways the first-quest draft left open (the Lost Woods maze in the objective, the overworld ladder clip):
     dropped, the program plays clips on only.
 
