@@ -436,6 +436,14 @@ thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
 
 ## Carried over from the old backlog
 
+- **Link never learns to pick up items with the boomerang** (the owner, Nov 23; an idea, not scheduled, not part of
+  the fresh generation's scope): the thrown boomerang carries back what it touches, so a heart, bombs, rupees or a
+  key across the room, behind monsters or over water can be taken without walking to it, and a drop about to
+  vanish can be reached in time. Today a dropped item is only a place to walk to (`reward.item_targets`,
+  `heal_targets`) and BOOMERANG is offered as an attack. To look at when it is picked up: which items the boomerang
+  carries (from the disassembly, not from memory), whether BOOMERANG is offered toward an item with no monster in
+  line, whether a pickup made this way is rewarded like any other, and a target that says "in the boomerang's
+  reach" as the firing lines say "in a shot's line".
 - The learned guard as built (branch `r35-guard`): superseded as a design by the hit head (queue 6); its label
   logging and data are what queue 2 starts from.
 - Round 35's stopped Dungeon 3 trainings and the ledger of where Dungeon 3 is lost (`backlog.old.md` "Where the
