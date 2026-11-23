@@ -337,16 +337,10 @@ def main(argv=None):
                    'eval-batch': ('triforce.eval_batch', 'main'), 'room-stats': ('triforce.room_stats', 'main'),
                    'convert-model': ('triforce.convert', 'main'),
                    'select-checkpoint': ('triforce.select_checkpoint', 'main'),
-<<<<<<< HEAD
-                   'test-times': ('triforce.testlog', 'report_main'),
+                   'test-times': ('triforce.testlog', 'report_main'), 'stats': ('triforce.run_stats', 'main'),
                    'lineage': ('triforce.lineage', 'main')}
     # `triforce [--models-dir DIR] train|run|play|evaluate|eval-batch|room-stats|convert-model|select-checkpoint|
-    # test-times|lineage ...` forwards the rest to the module's own CLI.
-=======
-                   'test-times': ('triforce.testlog', 'report_main'), 'stats': ('triforce.run_stats', 'main')}
-    # `triforce [--models-dir DIR] train|run|play|evaluate|eval-batch|room-stats|convert-model|select-checkpoint|test-times|stats ...`
-    # forwards the rest to the module's own CLI.
->>>>>>> main
+    # test-times|stats|lineage ...` forwards the rest to the module's own CLI.
     models_dir, rest = None, argv
     while rest:
         if rest[0] == '--models-dir' and len(rest) > 1:
