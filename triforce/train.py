@@ -104,13 +104,14 @@ import sys
 import time
 import traceback
 from collections import Counter, deque
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Deque, Dict, Iterable, Optional
 
 import torch
 
-from . import registry
+from . import paths, registry, store
 from ._native import CurriculumSpec, EnvPool, TrainTask
 from .best_of_n import collect_best, success_by_state
 from .clips import OFF_LABEL, episode_jobs
@@ -256,7 +257,8 @@ def parse_args(argv=None):
     parser = argparse.ArgumentParser(prog='python -m triforce.train', description=__doc__.split('\n\n')[0])
     parser.add_argument('--specialist', required=True, help="specialists/<name>.yaml")
     parser.add_argument('--load', default=None,
-                        help="checkpoint file, run dir, or a specialist name (its promoted checkpoint) to start from")
+                        help="checkpoint file, run dir, a specialist name (its promoted checkpoint), a team slot "
+                             "(family@route, family@route:late) or a store run (FAMILY/RUN) to start from")
     parser.add_argument('--parallel', type=int, default=1, help="number of envs in the pool")
     parser.add_argument('--threads', type=int, default=None,
                         help="env worker threads (default: min(parallel, cpu count))")
@@ -267,7 +269,17 @@ def parse_args(argv=None):
                              "the CPU is opt-in, --device cpu)")
     parser.add_argument('--run-id', default=None)
     parser.add_argument('--models-dir', default=None,
-                        help=f"default ${registry.MODELS_DIR_ENV} or <repo>/models")
+                        help=f"an old-style models folder to read and write (default ${registry.MODELS_DIR_ENV}, else "
+                             "<repo>/models while it exists, else the shared store: the run is allocated there and "
+                             "sealed at the end)")
+    parser.add_argument('--team', default=None,
+                        help="the store's team --load names resolve in (NAME, current, NAME+SLOT=RUN...; default "
+                             "the current one); the run is allocated in the store and sealed at the end")
+    parser.add_argument('--data', action='append', default=[], metavar='KIND=NAME',
+                        help="read this store snapshot of a data kind (harvested, trajectories); default: this "
+                             "checkout's own folder while it has one, else the kind's current snapshot")
+    parser.add_argument('--resume', default=None, metavar='FAMILY/RUN',
+                        help="continue an open store run of yours (a training that was interrupted) in place")
     parser.add_argument('--save-every', type=int, default=10, help="checkpoint every N iterations (and at the end)")
     parser.add_argument('--checkpoint-every', type=int, default=0, metavar='N',
                         help="also keep a numbered checkpoint every N iterations of this run in <run>/checkpoints/"
@@ -392,9 +404,20 @@ def cli(argv=None) -> int:
 
 
 def resolve_warm_start(value: str, root) -> Path:
-    """A warm_start entry is a checkpoint path/run dir, or a specialist name (its promoted checkpoint)."""
+    """A warm_start entry is a checkpoint path/run dir, a team slot (``family@route``: its ``promoted.<route>``,
+    ``family@route:late``: its ``late.<route>``), a store run (``FAMILY/RUN``), or a specialist name (its promoted
+    checkpoint)."""
     if os.path.exists(value):
         return Path(value)
+    if '@' in value:
+        family, route, late = store.split_slot(value)
+        pointer = (registry.late_pointer(family, root, route) if late else
+                   registry.promoted_pointer(family, root, route))
+        if not pointer.is_file():
+            raise FileNotFoundError(f"--load {value}: no {pointer.name} for {family} in {registry.models_root(root)}")
+        return registry.run_dir(family, pointer.read_text(encoding='utf-8').strip(), root) / registry.CHECKPOINT_NAME
+    if '/' in value and paths.store_exists():
+        return Path(store.get_run(store.parse_run(value))['path']) / registry.CHECKPOINT_NAME
     return registry.promoted_checkpoint(value, root)
 
 
@@ -482,16 +505,18 @@ def _same_trajectories(run_dir: Path, trajectories: str) -> bool:
     return recorded is None or Path(recorded).resolve() == Path(trajectories).resolve()
 
 
-def curriculum_spec(args, config, out_dir: Path,
-                    continued: Optional[Path] = None) -> tuple[Optional[CurriculumSpec], Optional[str]]:
+def curriculum_spec(args, config, out_dir: Path, continued: Optional[Path] = None,
+                    trajectories_root: Optional[Path] = None) -> tuple[Optional[CurriculumSpec], Optional[str]]:
     """(spec, trajectories dir) of the run's curriculum: --curriculum, else the specialist's ``curriculum`` config
-    when enabled (and not --no-curriculum).  Progress (``<run dir>/curriculum.json``) starts fresh, except for a
-    ``--load`` continuation (``continued``: its run dir) on the same trajectories, which resumes the loaded run's
+    when enabled (and not --no-curriculum), else the family's folder of ``trajectories_root`` (``Where``: this
+    checkout's ``trajectories/`` or a store snapshot).  Progress (``<run dir>/curriculum.json``) starts fresh, except
+    for a ``--load`` continuation (``continued``: its run dir) on the same trajectories, which resumes the loaded run's
     progress (copied; tracks whose length changed or that are new start fresh, ``Curriculum::new``)."""
     settings = config.curriculum
     if args.no_curriculum or not (args.curriculum or settings.enabled):
         return None, None
-    trajectories = str(args.curriculum or settings.trajectories or TRAJECTORIES_DIR / config.name)
+    trajectories = str(args.curriculum or settings.trajectories
+                       or (trajectories_root or TRAJECTORIES_DIR) / config.name)
     state_path = out_dir / 'curriculum.json'
     resume = continued / 'curriculum.json' if continued is not None else None
     if resume is not None and resume.is_file() and _same_trajectories(continued, trajectories):
@@ -505,8 +530,88 @@ def curriculum_spec(args, config, out_dir: Path,
     return CurriculumSpec(trajectories, str(state_path), fraction=fraction, threshold=threshold), trajectories
 
 
+# The options of the store: left out of run.json's ``args`` when unset, so a run of the layout before the store
+# records what it recorded before.
+STORE_ARGS = ('team', 'data', 'resume')
+
+
+@dataclass
+class Where:
+    """Where a training reads and writes: ``models`` (networks ``--load`` names resolve in), ``root`` (the folder its
+    run dir is ``<root>/<family>/<run>`` of: the models folder, or the store's ``runs/``), ``run`` (its store run,
+    None outside the store), ``team`` (the effective store team, recorded), ``data`` (kind -> (folder, record)
+    of the data snapshots it reads; a missing kind is (None, None))."""
+    models: Path
+    root: Path
+    run: Optional['store.Run'] = None
+    team: Optional[dict] = None
+    data: dict = field(default_factory=dict)
+
+    def folder(self, kind: str) -> Optional[Path]:
+        return self.data.get(kind, (None, None))[0]
+
+    def snapshot(self, kind: str) -> Optional[Path]:
+        """The kind's folder when it is a store snapshot (not this checkout's own folder)."""
+        path, record = self.data.get(kind, (None, None))
+        return path if record is not None and 'snapshot' in record else None
+
+    def records(self) -> list:
+        return [record for _, record in self.data.values() if record is not None]
+
+
+def data_sources(args) -> dict:
+    """kind -> (folder, record) of the harvested states and trajectories a training reads (``paths.data_source``:
+    ``--data KIND=NAME``, else this checkout's own folder while it has one, else the kind's current snapshot); a kind
+    that is nowhere is (None, None) and the training behaves as it always did without it (a named one is an
+    error)."""
+    names = {}
+    for item in args.data:
+        kind, sep, name = item.partition('=')
+        if not sep or kind not in ('harvested', 'trajectories') or not name:
+            raise SystemExit(f"--data {item}: KIND=NAME with KIND harvested or trajectories")
+        names[kind] = name
+    found = {}
+    for kind in ('harvested', 'trajectories'):
+        try:
+            found[kind] = paths.data_source(kind, names.get(kind))
+        except paths.MissingError as error:
+            if kind in names:
+                raise SystemExit(f"triforce train: --data {kind}={names[kind]}: {error}") from error
+            found[kind] = (None, None)
+    return found
+
+
+def where_to(args, specialist: str) -> Where:
+    """The training's ``Where``: in the store when a store team plays (``--team``, or no models folder here and the
+    store has a current one) or ``--resume`` names an open run: its run allocated there (``--run-id`` its name;
+    ``--load`` of a store run its parent) or resumed; else the models folder as before."""
+    models = registry.models_root(args.models_dir)
+    team = registry.team_in_use(args.models_dir)
+    data = data_sources(args)
+    if team is None and args.resume is None:
+        return Where(models, models, data=data)
+    if args.resume is not None:
+        run = store.resume_run(store.parse_run(args.resume, specialist))
+        if run.family != specialist:
+            raise SystemExit(f"--resume {args.resume}: a run of {run.family}, not {specialist}")
+        args.load = str(run.path)
+        return Where(models, paths.runs_dir(), run, team, data)
+    parent = None
+    if args.load:
+        try:
+            parent = store.run_of_path(resolve_warm_start(args.load, models))
+        except (FileNotFoundError, store.StoreError):
+            parent = None
+    run = store.allocate_run(specialist, args.run_id, parent=parent, origin='train', team=team,
+                             data=[record for _, record in data.values() if record is not None])
+    print(f"[train] store run {run.identity} (open until the training ends; {run.path})", flush=True)
+    return Where(models, paths.runs_dir(), run, team, data)
+
+
 def main(argv=None) -> Path:
-    """Runs training; returns the run directory."""
+    """Runs training; returns the run directory.  In the store (``where_to``) the run is sealed when the training
+    ends (completed or stopped early); an interrupted or failed one stays open, and its owner continues it with
+    ``--resume FAMILY/RUN``."""
     argv = sys.argv[1:] if argv is None else list(argv)
     from .nets.serve import learner_process  # pylint: disable=import-outside-toplevel
     learner_process()           # its learner uses the GPU beside the rollouts' server: no CUDA graphs there
@@ -520,16 +625,17 @@ def main(argv=None) -> Path:
         raise SystemExit("--threads must be >= 1")
     if args.device == 'cuda' and not torch.cuda.is_available():
         raise SystemExit("--device cuda requested but CUDA is not available")
+    registry.use_team(args.team, args.models_dir)
 
     specialist = load_specialist(args.specialist).name
     announce('train', work(train_steps=args.iterations * steps_per_iteration(args)), specialist)
-    root = registry.models_root(args.models_dir)
-    run_id = args.run_id or registry.new_run_id()
-    out_dir = registry.run_dir(specialist, run_id, root)
+    where = where_to(args, specialist)
+    run_id = where.run.name if where.run is not None else args.run_id or registry.new_run_id()
+    out_dir = registry.run_dir(specialist, run_id, where.root)
     events, plan = open_events(args, specialist, run_id, out_dir, argv)
     out_dir.mkdir(parents=True, exist_ok=True)
     try:
-        summary = _train(args, specialist, run_id, root, out_dir, events)
+        summary = _train(args, specialist, run_id, where, out_dir, events)
     except Exception as error:
         events.emit('error', message=f"{type(error).__name__}: {error}", traceback=traceback.format_exc())
         events.emit('train_end', status='error')
@@ -537,12 +643,31 @@ def main(argv=None) -> Path:
             events.emit('end', status='error', message=f"{type(error).__name__}: {error}")
             plan.update_run(0, status='error')
             plan.finish('failed')
+        if where.run is not None:
+            print(f"[train] store run {where.run.identity} stays open (continue it: --resume {where.run.identity})",
+                  flush=True)
         raise
+    if where.run is not None:
+        end_store_run(where, summary)
     if plan is not None:
         events.emit('end', **summary)
         plan.update_run(0, **summary)
         plan.finish('interrupted' if summary['status'] == 'interrupted' else 'completed')
     return out_dir
+
+
+def end_store_run(where: Where, summary: dict):
+    """Seals the store run of a training that ended (completed, stopped early) and keeps its summary row; an
+    interrupted one stays open for ``--resume``."""
+    run = where.run
+    if summary['status'] == 'interrupted' or not (run.path / registry.CHECKPOINT_NAME).is_file():
+        print(f"[train] store run {run.identity} stays open: continue it with --resume {run.identity}", flush=True)
+        return
+    sealed = store.seal_run(run)
+    store.record_summary('train', run.identity, run=run.identity, team=where.team and where.team['name'],
+                         data=where.records(), result={'status': summary['status'],
+                                                       'iterations': summary['iterations']})
+    print(f"[train] sealed store run {run.identity} (ckpt.pt sha1 {sealed['sha1']}, act {sealed['act']})", flush=True)
 
 
 # A run dir's files from an earlier training (``set_aside_previous``); train.log belongs to the caller
@@ -571,6 +696,17 @@ def set_aside_previous(out_dir: Path, continuing: bool) -> Optional[Path]:
     return aside
 
 
+def file_previous(out_dir: Path) -> Optional[Path]:
+    """A resumed store run's files of its earlier attempt that describe the old weights (``train_summary.json``,
+    ``act``, evaluations) filed by this job instead of set aside beside the run; returns where, None for nothing."""
+    stale = [path for path in sorted(out_dir.iterdir())
+             if path.name in ('train_summary.json', 'act') or (path.name.startswith('eval') and path.suffix == '.json')]
+    filed = None
+    for path in stale:
+        filed = store.file_output(path, 'record', name=f'previous/{path.name}', move=True).parent
+    return filed
+
+
 def harvested_source(args, config) -> dict:
     """Where the run's harvested start states would come from (F069): ``dir``, ``states`` (files there now),
     ``fraction`` (``harvested_fraction``) and ``drawn`` (whether and how resets draw them)."""
@@ -596,16 +732,29 @@ def curriculum_tracks(trajectories: Optional[str]) -> Optional[Dict[str, str]]:
             .isoformat(timespec='seconds') for path in sorted(Path(trajectories).glob('*/trajectory.json'))}
 
 
-def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: EventLog) -> dict:
+def with_data(config, where: Where):
+    """``config`` reading the store's harvested snapshot (``harvested_states: <snapshot>/<family>``) when the
+    training reads one and the yaml names no folder of its own; else as it is."""
+    snapshot = where.snapshot('harvested')
+    if snapshot is None or config.harvested_states:
+        return config
+    return config.replace({'harvested_states': str(snapshot / config.name)})
+
+
+def _train(args, specialist: str, run_id: str, where: Where, out_dir: Path, events: EventLog) -> dict:
     """The training run proper; returns the train_end event fields."""
     # pylint: disable=too-many-locals, too-many-statements
-    config = load_specialist(args.specialist)
-    network, optimizer_state, start_iteration, start_steps, source = initial_model(args, config, root)
+    root = where.root
+    config = with_data(load_specialist(args.specialist), where)
+    network, optimizer_state, start_iteration, start_steps, source = initial_model(args, config, where.models)
     continued = continued_run_dir(args, source, start_iteration)
-    aside = set_aside_previous(out_dir, continuing=continued == out_dir.resolve())
+    if where.run is None:
+        aside = set_aside_previous(out_dir, continuing=continued == out_dir.resolve())
+    else:       # a resumed store run: the earlier attempt's summary and evaluations are filed by this job
+        aside = file_previous(out_dir)
     if aside is not None:
         print(f"[train] moved the previous files of {out_dir} to {aside}")
-    curriculum, trajectories = curriculum_spec(args, config, out_dir, continued)
+    curriculum, trajectories = curriculum_spec(args, config, out_dir, continued, where.folder('trajectories'))
     task = TrainTask(config, str(out_dir), start_state=args.start_state, curriculum=curriculum,
                      states_dir=args.states_dir)
 
@@ -632,12 +781,16 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
                          f"harvested states and {harvested['dir']} holds none (a worktree made without `triforce "
                          f"job setup`? link the main checkout's triforce/states/harvested)")
     tracks = curriculum_tracks(trajectories)
+    recorded = {key: value for key, value in vars(args).items() if key not in STORE_ARGS or value}
+    stored = {} if where.run is None else {
+        'store_run': where.run.identity, 'team': where.team and store.team_record(where.team),
+        'data': where.records(), 'parent': (store.run_row(where.run) or {}).get('parent')}
     with open(out_dir / 'run.json', 'w', encoding='utf-8') as file:
-        json.dump({'args': vars(args), 'specialist': specialist, 'run_id': run_id, 'source': source,
+        json.dump({'args': recorded, 'specialist': specialist, 'run_id': run_id, 'source': source,
                    'parameters': network.parameter_count(), 'model_config': network.config.to_dict(),
                    'ppo_config': ppo_config.to_dict(), 'start_iteration': start_iteration,
                    'start_steps': start_steps, 'curriculum': trajectories, 'curriculum_tracks': tracks,
-                   'harvested': harvested, 'nice': os.nice(0)}, file, indent=2, default=str)
+                   'harvested': harvested, 'nice': os.nice(0), **stored}, file, indent=2, default=str)
 
     print(f"[train] {specialist} run={run_id} dir={out_dir}")
     print(f"[train] parameters={network.parameter_count():,} "

@@ -174,11 +174,11 @@ def use_team(spec: Optional[str], models_dir=None) -> Optional[dict]:
         raise SystemExit("--team and --models-dir name two teams: give one (--models-dir is the layout before the "
                          "store)")
     try:
-        store.team_view(spec)
+        team = store.team_of(spec)
     except (store.StoreError, paths.MissingError) as error:
         raise SystemExit(f"--team {spec}: {error}") from error
     os.environ[TEAM_ENV] = spec
-    return store.view_team(spec)
+    return team
 
 
 def team_in_use(root=None) -> Optional[dict]:
@@ -188,11 +188,11 @@ def team_in_use(root=None) -> Optional[dict]:
         return None
     spec = os.environ.get(TEAM_ENV, '').strip()
     if spec:
-        return store.view_team(spec)
+        return store.team_of(spec)
     if os.environ.get(MODELS_DIR_ENV) or paths.legacy_models_dir().exists():
         return None
     if paths.store_exists() and paths.current_team():
-        return store.view_team(paths.CURRENT)
+        return store.team_of(paths.CURRENT)
     return None
 
 

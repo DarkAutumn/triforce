@@ -365,12 +365,15 @@ class BatchError(ValueError):
 
 @dataclass
 class Options:
-    """What every entry shares."""
+    """What every entry shares; ``team`` (the effective store team's name) and ``output_root`` (the job's folder in
+    the store) when a store team plays: chain outputs default there and every chain is filed by the job."""
     batch: str
     cores: int
     eval_parallel: int
     models_dir: Optional[str] = None
     redo: bool = False
+    team: Optional[str] = None
+    output_root: Optional[Path] = None
 
 
 def chain_entry(name: Optional[str], args: list[str], options: Options, *, output: Optional[Path] = None,
@@ -395,8 +398,8 @@ def chain_entry(name: Optional[str], args: list[str], options: Options, *, outpu
         target = route_segments(parsed.route).targets.get(starts[bare_state(parsed.start_from)])
     if target is not None:
         parse_target(target)
-    output = Path(parsed.output) if parsed.output else (output or Path('runs') / _safe(options.batch)
-                                                        / f"{_safe(name)}.jsonl")
+    output = Path(parsed.output) if parsed.output else (output or (options.output_root or Path('runs'))
+                                                        / _safe(options.batch) / f"{_safe(name)}.jsonl")
     tmp = Path(f"{output}.tmp")
     args = _drop_option(args, '--output')
     parallel = parsed.parallel if _has_option(args, '--parallel') else options.cores
@@ -417,6 +420,11 @@ def chain_entry(name: Optional[str], args: list[str], options: Options, *, outpu
         if tmp.exists():
             os.replace(meta_path(tmp), meta_path(output))
             os.replace(tmp, output)
+        if options.team is not None:
+            from . import store
+            store.file_output(output, 'chain', team=options.team,
+                              result={'n': summary.get('runs'), 'successes': summary.get('successes')})
+            store.file_output(meta_path(output), 'chain-meta', team=options.team)
         return chain_headline(summary, read_runs(output) if target is not None else None, target)
 
     def resume():
@@ -906,15 +914,19 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--redo', action='store_true', help="measure entries again that an earlier run measured")
     parser.add_argument('--logs-dir', default=None, help=f"event logs root (default ${LOGS_DIR_ENV} or <repo>/logs)")
     parser.add_argument('--models-dir', default=None)
+    parser.add_argument('--team', default=None,
+                        help="the store's team every entry plays (NAME, current, NAME+SLOT=RUN...); chain outputs "
+                             "default to the job's folder of the store and every chain is filed by the job")
     return parser
 
 
-def build_entries(args) -> list[Entry]:
-    """The batch's entries in command-line order; raises BatchError (or argparse's SystemExit) when one is wrong."""
+def build_entries(args, team: Optional[str] = None, output_root: Optional[Path] = None) -> list[Entry]:
+    """The batch's entries in command-line order (``team`` / ``output_root``: ``Options``'); raises BatchError (or
+    argparse's SystemExit) when one is wrong."""
     # pylint: disable=import-outside-toplevel
     from . import registry
     from .room_stats import CHAINS_DIR
-    options = Options(args.name, args.parallel, args.eval_parallel, args.models_dir, args.redo)
+    options = Options(args.name, args.parallel, args.eval_parallel, args.models_dir, args.redo, team, output_root)
     entries = []
     for kind, value in getattr(args, 'entries', None) or []:
         if kind == 'chain':
@@ -952,11 +964,16 @@ def main(argv=None) -> int:
         print("triforce eval-batch: error: --parallel, --eval-parallel and --jobs must be >= 1", file=sys.stderr)
         return 2
     try:
+        from . import registry, store  # pylint: disable=import-outside-toplevel
+        registry.use_team(args.team, args.models_dir)
         entries = build_entries(args)
         announce('batch', batch_work(entries), args.name)
+        team = registry.team_in_use(args.models_dir)
+        if team is not None:      # the job's turn has come: its folder in the store holds the outputs
+            entries = build_entries(args, team['name'], store.output_dir('batches'))
         return run_batch(args.name, entries, logs_dir=args.logs_dir, cores=args.parallel, jobs=args.jobs,
                          nice=os.nice(0), command=[sys.executable, '-m', 'triforce.eval_batch', *argv],
-                         extra={'models_dir': args.models_dir})
+                         extra={'models_dir': args.models_dir, **({'team': team['name']} if team else {})})
     except BatchError as error:
         print(f"triforce eval-batch: error: {error}", file=sys.stderr)
         return 2

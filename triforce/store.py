@@ -805,13 +805,13 @@ def team_record(team: dict) -> dict:
 # ---------------------------------------------------------------------------------------------------------------
 # Views: an old-style models folder of links for a team
 
-def write_view(team: dict, into: Path, evaluations: bool = True) -> Path:
+def write_view(team: dict, into: Path, evaluations: bool = True, readonly: bool = True) -> Path:
     """Writes the old-style models folder of ``team`` into ``into`` (which must not exist or be empty):
     ``<family>/<pointer>`` files (``promoted``, ``promoted.<route>``, ``late.<route>``) naming each slot's run, and
     ``<family>/<run>/`` per run: links to every file of the sealed run, an ``act`` file (``<mode> <sha1>``, the
     slot's), and (``evaluations``) links to the evaluations filed for the run (the latest of each name).  The folder
-    is made read-only: a tool that would write into a run through it fails.  What ``--team`` plays, and
-    ``triforce store view`` (old-version trees)."""
+    is made read-only (``readonly``): a tool that would write into a run through it fails.  What ``--team`` plays,
+    and ``triforce store view`` (old-version trees)."""
     into = Path(into)
     if into.exists() and any(into.iterdir()):
         raise StoreError(f"{into} exists and is not empty")
@@ -837,7 +837,8 @@ def write_view(team: dict, into: Path, evaluations: bool = True) -> Path:
             (folder / 'act').write_text(mode, encoding='utf-8')
         (into / family / pointer_name(key)).write_text(run.name + '\n', encoding='utf-8')
     (into / 'TEAM.json').write_text(json.dumps(team_record(team), indent=2) + '\n', encoding='utf-8')
-    make_readonly(into)
+    if readonly:
+        make_readonly(into)
     return into
 
 
@@ -857,30 +858,32 @@ def _filed_evaluations() -> dict:
     return found
 
 
+_TEAMS: dict = {}
 _VIEWS: dict = {}
 
 
+def team_of(spec: str) -> dict:
+    """``effective_team(spec)``, resolved once per process (a run, a chain, an evaluation records this one)."""
+    if spec not in _TEAMS:
+        _TEAMS[spec] = effective_team(spec)
+    return _TEAMS[spec]
+
+
 def team_view(spec: str) -> Path:
-    """This process's view (``write_view``) of team ``spec``: made once in a temporary folder, removed at exit."""
+    """This process's view (``write_view``) of team ``spec`` (``team_of``): made once in a temporary folder, removed
+    at exit."""
     if spec not in _VIEWS:
-        team = effective_team(spec)
         base = Path(os.environ.get('XDG_RUNTIME_DIR') or tempfile.gettempdir())
         folder = Path(tempfile.mkdtemp(prefix=f'triforce-team-{os.getpid()}-', dir=base))
-        write_view(team, folder / 'models')
-        _VIEWS[spec] = (folder / 'models', team)
+        write_view(team_of(spec), folder / 'models')
+        _VIEWS[spec] = folder / 'models'
         import atexit  # pylint: disable=import-outside-toplevel
 
         def remove(folder=folder):
             make_writable(folder)
             shutil.rmtree(folder, ignore_errors=True)
         atexit.register(remove)
-    return _VIEWS[spec][0]
-
-
-def view_team(spec: str) -> dict:
-    """The effective team of a ``team_view`` this process made."""
-    team_view(spec)
-    return _VIEWS[spec][1]
+    return _VIEWS[spec]
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -942,10 +945,11 @@ def file_output(path, kind: str, *, run: Optional[str] = None, team: Optional[st
                 data: Optional[list] = None, summary: Optional[dict] = None, result: Optional[dict] = None,
                 name: Optional[str] = None, move: bool = False, entry: str = PUBLIC) -> Path:
     """Files ``path`` (a file or a folder: an evaluation, a chain's records and its ``.meta.json``, statistics, a
-    replay pack, a harvest) for this job: a path inside the job's folder is indexed where it is; one outside is
-    hard-linked (or copied, ``move``: moved) into it.  The filed copy is read-only.  ``run`` (``family/run``) and
-    ``team`` (the effective team's name) index it; ``kind`` 'chain', 'evaluate' or 'train' also leaves one kept summary
-    row (``summary_row``: the statistics dict ``summary``, else ``result``'s ``n`` / ``successes``)."""
+    replay pack, a harvest) for this job: a path inside the job's folder is indexed where it is; one outside is copied
+    (``move``: moved) into it, so the tool's own file stays as it was.  The filed copy is read-only.  ``run``
+    (``family/run``) and ``team`` (the effective team's name) index it; ``kind`` 'chain', 'evaluate' or 'train' also
+    leaves one kept summary row (``summary_row``: the statistics dict ``summary``, else ``result``'s ``n`` /
+    ``successes``)."""
     source = Path(path)
     if not source.exists():
         raise MissingError(f"nothing to file at {source}")
@@ -961,7 +965,7 @@ def file_output(path, kind: str, *, run: Optional[str] = None, team: Optional[st
         if move:
             shutil.move(str(source), target)
         else:
-            link_tree(source, target)
+            link_tree(source, target, link=False)
     row = summary_row(summary, result) if kind in ('chain', 'evaluate', 'train') else None
     caller = who()
     with writing('file', {'kind': kind, 'path': _relative(target), 'run': run, 'team': team}, entry) as con:
@@ -978,6 +982,20 @@ def file_output(path, kind: str, *, run: Optional[str] = None, team: Optional[st
                          row['se'], None if row['compact'] is None else json.dumps(row['compact']),
                          cursor.lastrowid))
     return target
+
+
+def record_summary(kind: str, name: str, *, run: Optional[str] = None, team: Optional[str] = None,
+                   data: Optional[list] = None, summary: Optional[dict] = None, result: Optional[dict] = None,
+                   entry: str = PUBLIC):
+    """A kept summary row with no file of its own (a training: its files are its sealed run)."""
+    row = summary_row(summary, result)
+    caller = who()
+    with writing('summary', {'kind': kind, 'name': name, 'run': run, 'team': team}, entry) as con:
+        con.execute('INSERT INTO summaries (ts, kind, name, job, run, team, data, n, successes, rate, se, compact) '
+                    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    (time.time(), kind, name, caller['job'], run, team, None if data is None else json.dumps(data),
+                     row['n'], row['successes'], row['rate'], row['se'],
+                     None if row['compact'] is None else json.dumps(row['compact'])))
 
 
 def outputs(job: Optional[str] = None, run: Optional[str] = None, kind: Optional[str] = None) -> list[dict]:
