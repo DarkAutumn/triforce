@@ -777,3 +777,55 @@ ow-zora@d3first 93.3% → 92.5%; the reference's total 92.9% unchanged, hearts l
 - The suites after `main` (4be3f4c8) was merged: pytest 946 passed, 12 skipped; `cargo test --release --workspace
   --features zelda/zcore` ok (the corpus test with the new path's pins among them); the zelda-asm tests 5 passed;
   `asm.py check` ok.
+
+## The owner's three causes: 3:0x5b, 8:0x4c, 0:0x77 (branch `r38-target`)
+
+The owner, Nov 22, watching the golden replays (backlog Track R: "3:0x5b with a full bag walks between the wall and the
+bombs" and the two causes under "Aimless walking"). Everything measured on 2.0.0.7's code and team (main 840d1021),
+1000 runs a chain, seeds 0-999, clips on, `--act model`, paired by seed against the same team with the promoted runs.
+
+### 3:0x5b (route step 19): one target at a time, in the owner's order; the network predates the rule
+
+The objective was read frame by frame from both golden replays (their RAM replayed, the chain's objective and target
+computed on it at d3first's step 19) and from single-room episodes of `d3first_3_5bw_0` (bag 8, bag 4, Darknuts
+alive; and `d2first`'s `3_5bw_0`). **There are never two targets and the target never flips back.** With a full bag
+and the room's bombs on the floor the target is only the spot to bomb the wall from (the single-network replay:
+frames 15176-16866, 1,691 frames, Link pacing 0-2 tiles from it); the frame the bomb is laid (7 in the bag) it is
+only the room's bombs; picked up, the bomb spot while the smoke clears, then the opening E. Below 8 on entry it is
+the bombs first, then the wall, then out. That is the owner's order; no objective change.
+`crates/env/tests/specialist_env.rs` `the_owners_order_in_3_5b_wall_then_bombs_then_out` pins it (the four cases, one
+target a decision, the phase order; `d2first`'s 0x5b keeps taking the bombs first).
+
+**The network was trained against another rule.** darknut@d3first `r38head-fam-w8` (2.0.0.6) is round 38's hit head
+on the policy of `r34d5-dg-s362` (identical weights, no training of its own since); that lineage (s362 ← s353, the
+run trained on 0x5b's last pass ← s341 ← r32d3 ← r78-dark37, Nov 17-21) trained before round 37's bomb rules (2.0.0.6,
+Nov 22: `wall_only` for 3:0x5b, `treasure_below 8`). Before them d3first's step 19 had no `treasure:` rule, so the
+room's bombs were wanted at any count: the network learned fight, take the bombs even at 8, then the wall. It has
+never had the wall as its target with the bombs lying. Started in the owner's state (the single-network replay's
+frame 15200) with 8 bombs the target stays on the bomb spot at every decision and the policy paces there (W 4 / E 4),
+walks W 32 to the bombs at 1.0 and E back, BOMB at 0.00 on the spot: 63 decisions until a sampled bomb; the same state
+with 6 bombs walks to the bombs at 1.0, back, BOMB E at 0.975, out in 16. The cure is training darknut@d3first on
+0x5b's last pass under 2.0.0.6's rules with full-bag starts (not done here). Seen on the way, not changed: with a full
+bag the walk to the bomb spot runs along y 141, over the room's bombs at ($80,$90) when a drop filled the bag;
+`asm:Item_TryTake` takes them at the cap, so the room ends at 7, not 8.
+
+### 8:0x4c (route step 226): the key the network was trained to take
+
+**Which network plays it.** d3first's `own_models_until` is step 192, so step 226 is played by the family's default
+run, pols-voice `r78t4-pols` (round 28, Nov 16; the chain's provenance names it). It trained when the route took 0x4c's
+key (the yaml's round-28 note: "round to the key in the NE corner, back along the top row to the N bomb wall"); round
+31 (Nov 19, phase IX) left the key (`treasure: skip`, both routes). Its curriculum tracks (`trajectories/pols-voice`)
+`8_4cc_0` and `8_4cc_0~rule1001` take the key at tile (26, 5) and walk W along the top row to tile 4 (keys 3 → 4, the
+item gone; read from the tracks' own frames), the golden loop's leg (W along the top row to the W wall and back); its
+demonstrations (`r28-demos/pols.npz`) are of that route too.
+
+**Today's target points N at once.** From `d3first_8_4cc_0` at step 226 the target is the bomb spot (120, 88) on the
+first frame (the same on `d2first`'s step 290); with no route step the objective falls back to the room's item and
+the target is the key (208, 96), which is what the round-28 run learned. After the wall opens the target is the
+opening (the golden replay's first calm decision, above).
+
+**The fix**: pols-voice fine-tuned from `r78t4-pols` on d3first's states (`specialists/d3first/pols-voice.yaml`,
+`state_routes: [d3first]`), new tracks explored on them (none takes the key; target/traj, not main's
+`trajectories/`), no demonstrations, SIL 0.1, 488 iterations at 8 envs; one arm with `penalty-aimless` 0.002.
+Landed through `late.d3first` (2.0.0.9's pointer for a family's steps after `own_models_until`): `d2first` keeps
+`r78t4-pols`.
