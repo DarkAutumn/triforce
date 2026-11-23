@@ -489,19 +489,24 @@ fn beam_stats_count_shots_lined_decisions_and_kills_by_range() {
     s.update(&hits(step(&close.with(Var::BeamAnimation, 16), &close, "SWORD N"), &[(3, 1)]));
     s.update(&hits(step(&flying, &flying, "WAIT 4"), &[(3, 1)]));
     assert_eq!(s.shots_hit, 1);
+    // A shot stopped at the bounds on the step a bomb (placed, or going off) took the monster's hit point: the bomb's,
+    // not the shot's.
+    let bombed = north.with(Var::BombOrFlameAnimation, 18);
+    s.update(&hits(step(&flying.with(Var::BombOrFlameAnimation, 18), &bombed, "WAIT 4"), &[(3, 1)]));
+    assert_eq!(s.shots_hit, 1);
     // The beams held (8 frames a step here): every step so far began with them; the first loss is the visit's
     // frame at the end of its step, and a step begun without them is not held.
-    assert_eq!((s.frames, s.held_frames, s.lost_frame), (32, 32, None));
+    assert_eq!((s.frames, s.held_frames, s.lost_frame), (40, 40, None));
     let hurt = close.with(Var::PartialHearts, 0x7F);
     s.update(&step(&close, &hurt, "WAIT 4"));
     s.update(&step(&hurt, &close, "WAIT 4"));
     s.update(&step(&close, &hurt, "WAIT 4"));
-    assert_eq!((s.frames, s.held_frames, s.lost_frame), (56, 48, Some(40)));
+    assert_eq!((s.frames, s.held_frames, s.lost_frame), (64, 56, Some(48)));
     // Steps added after earlier ones (an evaluation visit sums its steps): the loss moves by the frames before.
     let mut visit = BeamStats::default();
     visit.update(&step(&close, &close, "WAIT 4"));
     visit += s;
-    assert_eq!((visit.frames, visit.held_frames, visit.lost_frame), (64, 56, Some(48)));
+    assert_eq!((visit.frames, visit.held_frames, visit.lost_frame), (72, 64, Some(56)));
 }
 
 #[test]
