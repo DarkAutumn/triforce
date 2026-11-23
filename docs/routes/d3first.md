@@ -162,15 +162,38 @@ Level 4, so no way to Level 4's screen changes 0x55's or 0x3f's plays. In the wa
 no history of this order gives either (the 0x34 landing needs Level 4 at the pickup). Misses: at 0x55 a late
 second play lands in 0x77, N N in 0x26, W W in 0x2b; at 0x3f a late second play lands in 0x77, N W in 0x34.
 
-**The dock warps** are played by the engine (`zelda::Session::set_dock_warp`, the step's level from
-`GameCompletion::dock_warp`): on the dock below its trigger after the raft's ride down the mask is MOVE S only (any
+**The dock warps** are played by the engine (`zelda::Session::set_warp`, the step's level from
+`GameCompletion::warp`): on the dock below its trigger after the raft's ride down the mask is MOVE S only (any
 other step boards the raft back up); where the block clip N into the water is legal (`zelda::clips::dock_clip_at`:
 X on the grid W of the dock, T = the dock's row + 8 and the row stopped by water, G and G' land) CLIP N only, and a
 MOVE along the land stops on the clip's column (`dock_spot`, the nearest the dock: 0x55 `$78`, 0x3f `$58`); in the
-water on the row RECORDER only, which plays every play the index needs (`Executor::run_dock_warp`: N for a step up,
+water on the row RECORDER only, which plays every play the index needs (`Executor::run_warp`: N for a step up,
 W for a step down, the turn one frame before the B on the first free frame) and waits for the pickup. The landing
 is `Whirlwind_PrevRoomIds[level] - $10` (`zelda::game_map::dock_landing`; route entry `recorder`). A whirlwind out of
 a dock room into any other room ends a chain run `stuck` (`dock-warp-missed`).
+
+**The engine's macros** (round 40, for the fresh generation 2.0.1.0; routes.yaml's top-level `macros:`; decisions
+2026-11-23 "The fresh generation's design calls"). The owner's rule: a macro is a fixed button sequence the network
+chooses as one of its actions, "not that the macro performs dodging for it"; it is masked by Link's position only (as
+the screen wrap's CLIP is), never by where a monster or a shot is. Both switches are off as landed: today's networks
+(2.0.0.12) play the whirlwinds by hand and the docks with their give-ways ("I want the docks to stay for current
+version, but in the next team gets no help from swords or dodging").
+
+- `whirlwinds: [{level: 0, room: '0x0b'}, {level: 0, room: '0x22'}]`: out of Level 5 and out of Level 6 RECORDER is
+  the whole whirlwind: offered wherever the sequence plays from Link's position (`zelda::whirlwind::macro_facing`:
+  plays still to make, the recorder playable, a facing that starts the sequence reached by the input model, Link's own
+  facing first, else a turn left or right, which keeps the whirlwind's row and never walks into the level's mouth),
+  whatever he faces; it turns him, plays every play the index needs on the first free frame after the last freeze
+  (0x0b: two facing down, as he comes out; 0x22: a turn E, two facing up: the search's sequences above) and waits for
+  the pickup. Off, the network turns and plays each RECORDER itself, masked by facing (as since round 26).
+- `unaided_docks: true`: the two give-ways of the dock warps go (SWORD S forced while a monster stands below the dock,
+  WAIT forced while a shot flies); the plays (MOVE S off the dock, CLIP N where the clip is legal, RECORDER on the water
+  spot) are offered beside the family's own actions where Link's position lets them work, and MOVE N, W and E stay
+  off the dock below its trigger (each boards the raft back up). The network times the plays.
+
+Measured in round40.md "Engine macros": the macros played blind from the route's states over many seeds (how often a
+fixed sequence lands and how often Link is hit while it plays: what a network choosing the moment must learn to
+avoid), and today's networks with the docks unaided (the baseline the fresh networks must beat).
 
 **Clips.** The screen scrolls the walks found cheaper (0x76, 0x64, 0x47, 0x29-0x2b: the plain wrap W/E) are CLIP
 actions the families choose (`clips: true`), nothing in the steps. The wrap exits of 0x75, 0x0c, 0x51 and 0x60, and
