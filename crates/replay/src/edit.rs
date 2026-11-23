@@ -117,11 +117,14 @@ pub fn stitch(
     if !kinds.iter().copied().eq(b.sections().map(|(kind, ..)| kind)) {
         return stitch_error("the replays do not record the same streams");
     }
-    if let Some(kind) = kinds.iter().find(|&&kind| kind > section::DECISIONS) {
+    if let Some(kind) = kinds.iter().find(|&&kind| kind > section::MASKS) {
         return stitch_error(format!("section kind {kind} is not known to this build"));
     }
+    if a.has(section::DECISIONS) && a.version().min(b.version()) < 2 {
+        return stitch_error("decisions of a replay before version 2 (f32 distributions) don't join");
+    }
     let (meta_a, meta_b) = (a.meta()?, b.meta()?);
-    for key in ["actions", "models"] {
+    for key in ["actions", "models", "tables"] {
         if meta_a.get(key) != meta_b.get(key) {
             return stitch_error(format!("the replays' META {key} differ"));
         }
@@ -161,7 +164,9 @@ pub fn stitch(
     let mut streams = vec![(section::REWARDS, rewards)];
     for &kind in &kinds {
         let stream = match kind {
-            section::EDITS | section::CHEATS | section::DECISIONS => join(a, b, kind, false)?,
+            section::EDITS | section::CHEATS | section::DECISIONS | section::TARGETS | section::MASKS => {
+                join(a, b, kind, false)?
+            }
             section::EVENTS => join(a, b, kind, true)?,
             _ => continue,
         };
@@ -278,8 +283,17 @@ pub fn truncate(replay: &Replay, state_index: usize) -> Result<Vec<u8>, ReplayEr
         streams.push((section::REWARDS, prefix(replay.rewards(), |at, _| at <= frame)?));
     }
     if replay.has(section::DECISIONS) {
-        // The decision at the cut frame is the first of what follows.
+        if replay.version() < 2 {
+            return format_error("decisions of a replay before version 2 (f32 distributions) are not cut");
+        }
+        // The decision at the cut frame is the first of what follows; so are its objective and mask.
         streams.push((section::DECISIONS, prefix(replay.decisions()?, |at, _| at < frame)?));
+    }
+    if replay.has(section::TARGETS) {
+        streams.push((section::TARGETS, prefix(replay.targets(), |at, _| at < frame)?));
+    }
+    if replay.has(section::MASKS) {
+        streams.push((section::MASKS, prefix(replay.masks(), |at, _| at < frame)?));
     }
     let mut sections = vec![
         SectionOut { kind: section::META, count: 1, last_frame: 0, bytes: &meta },

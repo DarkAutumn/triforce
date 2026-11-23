@@ -500,6 +500,36 @@ impl BombUse {
     }
 }
 
+/// The rules a replay's MASKS names (round 40; META `tables.mask_reasons`): BOMB's mode (`never`, `tenth`,
+/// `required`, `reserve`), a family's `items` switch, ARROW's `rupee-reserve`, a step's `sword-off`, and the rules
+/// that keep a kind to some directions: `bomb-targets` (BOMB only toward the wall it opens), `facings` (ARROW,
+/// CANDLE by the route), `doorways` (MOVE kept out of a doorway).
+pub const MASK_REASONS: [&str; 10] = [
+    "never", "tenth", "required", "reserve", "items", "rupee-reserve", "sword-off", "bomb-targets", "facings",
+    "doorways",
+];
+
+/// The route's direction rules in force, added to `rules` ([`ItemsConfig::mask_rules`]): BOMB kept to the bomb
+/// targets, ARROW and CANDLE to the route's facings, MOVE out of the `doorways` (direction bits) it keeps out of.
+pub fn route_mask_rules(
+    rules: &mut Vec<(ActionKind, &'static str)>,
+    bomb_targets: bool,
+    arrow_facings: bool,
+    candle_facings: bool,
+    doorways: u8,
+) {
+    for (on, kind, why) in [
+        (bomb_targets, ActionKind::Bomb, "bomb-targets"),
+        (arrow_facings, ActionKind::Arrow, "facings"),
+        (candle_facings, ActionKind::Candle, "facings"),
+        (doorways != 0, ActionKind::Move, "doorways"),
+    ] {
+        if on {
+            rules.push((kind, why));
+        }
+    }
+}
+
 /// `items:` block: inventory items the specialist may use (false = masked out even when Link has it; bombs:
 /// [`BombUse`]). `recorder`, `food` and `candle` (round 24) are off unless a family turns them on: no family before
 /// Dungeon 5 uses them, and a model that never had them unmasked never learned what they do. `arrows` too (round 26,
@@ -557,6 +587,34 @@ impl ItemsConfig {
     ) -> Vec<ActionKind> {
         let arrows = self.arrows && state.rupees() > i32::from(rupee_reserve);
         self.kinds_off(self.bombs.allows(map, state, bomb_reserve), arrows)
+    }
+
+    /// Why [`ItemsConfig::disabled_kinds`] masks each kind it masks (round 40, a replay's MASKS): BOMB by its mode
+    /// (`never`, `tenth`, `required`: not a room that requires bombs, `reserve`: no more than the route's reserve),
+    /// ARROW by `rupee-reserve` when on, every other kind (and ARROW off) by the family's `items` switch.
+    pub fn mask_rules(
+        &self,
+        map: &zelda::GameMap,
+        state: &zelda::GameView,
+        bomb_reserve: u8,
+        rupee_reserve: u8,
+    ) -> Vec<(ActionKind, &'static str)> {
+        self.disabled_kinds(map, state, bomb_reserve, rupee_reserve)
+            .into_iter()
+            .map(|kind| {
+                let why = match kind {
+                    ActionKind::Bomb => match self.bombs {
+                        BombUse::Never => "never",
+                        BombUse::Tenth => "tenth",
+                        BombUse::Required => "required",
+                        BombUse::Free => "reserve",
+                    },
+                    ActionKind::Arrow if self.arrows => "rupee-reserve",
+                    _ => "items",
+                };
+                (kind, why)
+            })
+            .collect()
     }
 
     /// What BOMB is kept to in `state`: only bombs landing in reach of what the objective leaves through

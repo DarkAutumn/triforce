@@ -352,6 +352,8 @@ pub struct SpecialistEnv<N: Nes, St: StateStore<N::State>> {
     specialist: Arc<str>,
     objectives: Option<GameCompletion>,
     attached: Option<Attached>,
+    /// Why the mask blocks what it blocks (`ItemsConfig::mask_rules`, the route's rules; a replay's MASKS).
+    mask_rules: Vec<(zelda::ActionKind, &'static str)>,
     episode_state: String,
     curriculum_tag: Option<CurriculumTag>,
     start_health: f64,
@@ -495,6 +497,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             end_conditions,
             objectives: None,
             attached: None,
+            mask_rules: Vec::new(),
             episode_state: String::new(),
             curriculum_tag: None,
             start_health: 0.0,
@@ -582,6 +585,16 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
     /// The current state's objective (after reset/step).
     pub fn objective(&self) -> Option<&Attached> {
         self.attached.as_ref()
+    }
+
+    /// The rules behind the current mask's blocks (a replay's MASKS; nothing reads them in play).
+    pub fn mask_rules(&self) -> &[(zelda::ActionKind, &'static str)] {
+        &self.mask_rules
+    }
+
+    /// The route's objectives (None before an episode starts): the route step, way and stretch a replay labels.
+    pub fn completion(&self) -> Option<&GameCompletion> {
+        self.objectives.as_ref()
     }
 
     /// (route, step) the episode's objectives follow.
@@ -844,10 +857,12 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         let step_bombs = self.objectives.as_ref().and_then(|gc| gc.step_bombs(self.session.state()));
         let weapon = self.objectives.as_ref().is_none_or(|gc| !gc.weapon_bombs_off(self.session.state()));
         let items = self.config.items.on_step(step_bombs, weapon);
-        let mut kinds = items.disabled_kinds(self.session.game_map(), self.session.state(), reserve, rupees);
+        let mut rules = items.mask_rules(self.session.game_map(), self.session.state(), reserve, rupees);
+        let mut kinds: Vec<zelda::ActionKind> = rules.iter().map(|&(kind, _)| kind).collect();
         // Round 29: a route step may put the sword away (`sword: false`, 9:0x06's old man).
         if self.objectives.as_ref().is_some_and(|gc| !gc.step_sword(self.session.state())) {
             kinds.extend([zelda::ActionKind::Sword, zelda::ActionKind::Beams]);
+            rules.extend([(zelda::ActionKind::Sword, "sword-off"), (zelda::ActionKind::Beams, "sword-off")]);
         }
         self.session.set_disabled_kinds(&kinds);
         let granted = self.cheats.granted(CheatItem::Bombs);
@@ -866,6 +881,8 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         self.session.set_candle_facings(candle);
         let doorways = zelda::objectives::doorways_kept_out(self.session.game_map(), self.session.state(), objective);
         self.session.set_vetoed_doorways(doorways);
+        crate::config::route_mask_rules(&mut rules, targets.is_some(), arrows.is_some(), candle.is_some(), doorways);
+        self.mask_rules = rules;
         self.session.set_clips(self.config.clips.enabled);
         // The switch in force: a switch off waits while Link stands stranded without the skips (round 24).
         let allowed = self.objectives.as_ref().map_or(self.clips_allowed, GameCompletion::clips_allowed);

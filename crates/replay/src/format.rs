@@ -4,11 +4,13 @@ use std::fmt;
 
 /// File magic.
 pub const MAGIC: &[u8; 8] = b"TFREPLAY";
-/// The newest format this build writes and reads.  Bumped when an existing replay can no longer be replayed
-/// bit-exactly, or when what this build writes can't be read by an older one (AGENTS.md "Versioning"); the reader
-/// keeps reading every earlier version it can.  Version 1 (round 32): a STATES record's context holds the route's
-/// grants after the room's ([`Context::route_granted`]; a version 0 record has none).
-pub const REPLAY_VERSION: u32 = 1;
+/// The newest format this build writes and reads.  Bumped on every format change: a replay never needs to be read
+/// by an older reader (the owner, Nov 23), which refuses a newer one with [`ReplayError::Version`]; this reader keeps
+/// reading every earlier version (AGENTS.md "Versioning").  Version 1 (round 32): a STATES record's context holds the
+/// route's grants after the room's ([`Context::route_granted`]; a version 0 record has none).  Version 2 (Nov 23):
+/// the TARGETS and MASKS sections, DECISIONS quantized (a byte an entry, the hit head's danger, the act mode's draw
+/// and the foresight's vetoes; version 0 and 1 hold `f32`s) and the VISIT event.
+pub const REPLAY_VERSION: u32 = 2;
 
 pub(crate) const HEADER_LEN: usize = 48;
 pub(crate) const ENTRY_LEN: usize = 32;
@@ -24,11 +26,14 @@ pub mod section {
     pub const EVENTS: u16 = 7;
     pub const REWARDS: u16 = 8;
     pub const DECISIONS: u16 = 9;
+    pub const TARGETS: u16 = 10;
+    pub const MASKS: u16 = 11;
     /// Sections every replay has.
     pub const REQUIRED: [u16; 7] = [META, SOURCE, INPUTS, EDITS, CHEATS, STATES, EVENTS];
     /// Display names, indexed by kind (index 0 unused).
-    pub const NAMES: [&str; 10] = [
-        "", "META", "SOURCE", "INPUTS", "EDITS", "CHEATS", "STATES", "EVENTS", "REWARDS", "DECISIONS",
+    pub const NAMES: [&str; 12] = [
+        "", "META", "SOURCE", "INPUTS", "EDITS", "CHEATS", "STATES", "EVENTS", "REWARDS", "DECISIONS", "TARGETS",
+        "MASKS",
     ];
 }
 
@@ -92,6 +97,39 @@ pub(crate) const EVENT_ROOM: u8 = 2;
 pub(crate) const EVENT_OUTCOME: u8 = 3;
 pub(crate) const EVENT_EPISODE: u8 = 4;
 pub(crate) const EVENT_SEGMENT: u8 = 5;
+pub(crate) const EVENT_VISIT: u8 = 6;
+
+/// DECISIONS (version 2): a natural-log probability as a byte (`255`: `-inf`, masked; else `-byte / 16` nats).
+pub fn quantize_log_prob(log_prob: f32) -> u8 {
+    if log_prob.is_nan() || log_prob == f32::NEG_INFINITY {
+        255
+    } else {
+        (-log_prob * 16.0).round().clamp(0.0, 254.0) as u8
+    }
+}
+
+/// The inverse of [`quantize_log_prob`] (to within 1/32 nat).
+pub fn log_prob_of(byte: u8) -> f32 {
+    if byte == 255 { f32::NEG_INFINITY } else { -f32::from(byte) / 16.0 }
+}
+
+/// DECISIONS (version 2): a probability (the hit head's danger) as a byte, `p * 255` rounded.
+pub fn quantize_probability(p: f32) -> u8 {
+    (p.clamp(0.0, 1.0) * 255.0).round() as u8
+}
+
+/// The legal joint actions of a factored distribution (`kinds` x 8 directions x 4 durations, [`actions::LAYOUT`]),
+/// in joint order (`(kind * 8 + direction) * 4 + duration`): a joint action is legal when its kind's entry, its
+/// direction's and its duration's are all finite (`is_legal(entry)`).  The order of DECISIONS' danger bytes.
+pub fn legal_joint(width: usize, is_legal: impl Fn(usize) -> bool) -> impl Iterator<Item = u16> {
+    let (dirs, durs) = (actions::DIRECTIONS.len(), actions::DURATIONS.len());
+    let kinds = width / (1 + dirs + durs);
+    (0..kinds * dirs * durs).filter_map(move |j| {
+        let (k, d, u) = (j / (dirs * durs), (j / durs) % dirs, j % durs);
+        let legal = is_legal(k) && is_legal(kinds + k * dirs + d) && is_legal(kinds + kinds * dirs + k * durs + u);
+        legal.then_some(j as u16)
+    })
+}
 
 /// Why a replay can't be read, joined or played.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -113,14 +151,11 @@ impl fmt::Display for ReplayError {
         match self {
             ReplayError::Format(m) | ReplayError::Source(m) => f.write_str(m),
             ReplayError::Version { found, recorded_by } => {
-                write!(
-                    f,
-                    "TFREPLAY version {found} is newer than this build reads ({REPLAY_VERSION})"
-                )?;
-                match recorded_by {
-                    Some(v) => write!(f, "; it was recorded by triforce {v}"),
-                    None => Ok(()),
+                write!(f, "replay version {found}")?;
+                if let Some(v) = recorded_by {
+                    write!(f, " (recorded by triforce {v})")?;
                 }
+                write!(f, "; this reader reads up to {REPLAY_VERSION}: update")
             }
             ReplayError::Stitch(m) => write!(f, "cannot stitch: {m}"),
             ReplayError::Diverged { frame, what } => write!(f, "diverged at frame {frame}: {what}"),
@@ -200,6 +235,9 @@ pub enum Event {
     Episode { ending: String, class: u8, terminated: bool, truncated: bool },
     /// A stitch boundary.
     Segment,
+    /// A room visit closed, as the env judged it (version 2): its record, a JSON object (a chain's `RoomRecord`:
+    /// room, route step, family, outcome and reason, hearts in and out, hits, cheats, frames, ...).
+    Visit(String),
 }
 
 /// How the recorded run ended.
@@ -244,21 +282,204 @@ pub struct Reward {
     pub value: f32,
 }
 
-/// One model decision: who acted, the head indices taken, the value estimate and the whole distribution
-/// (`dist`: little-endian `f32`s, META `actions` describes them).
+/// One model decision: who acted, the head indices taken, the value estimate, the whole distribution (META
+/// `actions` describes it), and from version 2 how the act mode drew it, the hit head's danger and the foresight.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Decision<'a> {
     pub frame: u32,
     pub policy: u8,
     pub action: [u8; 3],
     pub value: f32,
-    pub dist: &'a [u8],
+    pub dist: Dist<'a>,
+    /// How the act mode chose (META `tables.draws`); None before version 2.
+    pub draw: Option<u8>,
+    /// The act mode's low-health part chose (`+low:H:...`).
+    pub low: bool,
+    /// P(Link is hit) a legal joint action ([`legal_joint`] order), a byte each ([`quantize_probability`]), when the
+    /// acting network has a hit head (META `models[policy].outputs`).
+    pub danger: Option<&'a [u8]>,
+    pub foresight: Option<Foresight<'a>>,
+}
+
+/// A decision's distribution: little-endian `f32`s (versions 0 and 1) or bytes ([`quantize_log_prob`], version 2).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Dist<'a> {
+    F32(&'a [u8]),
+    Q8(&'a [u8]),
+}
+
+/// What the act mode's foresight (`guard`, `plan`) did at a decision: `outcome` 1 safe (kept), 2 replaced, 3 unsafe
+/// (everything lost health: kept); its trials and their frames; the actions it refused, in the order tried (joint
+/// indices, little-endian `u16`s; the first is the network's own choice when it replaced it).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Foresight<'a> {
+    pub outcome: u8,
+    pub trials: u32,
+    pub frames: u32,
+    pub vetoed: &'a [u8],
+}
+
+impl Foresight<'_> {
+    pub fn vetoed(&self) -> impl Iterator<Item = u16> + '_ {
+        self.vetoed.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]]))
+    }
 }
 
 impl Decision<'_> {
-    /// The distribution's entries.
+    /// The distribution's entries (natural-log probabilities, `-inf` masked).
     pub fn distribution(&self) -> impl Iterator<Item = f32> + '_ {
-        self.dist.chunks_exact(4).map(|c| f32::from_le_bytes(c.try_into().expect("4 bytes")))
+        let (f32s, bytes) = match self.dist {
+            Dist::F32(b) => (b, &[][..]),
+            Dist::Q8(b) => (&[][..], b),
+        };
+        f32s.chunks_exact(4)
+            .map(|c| f32::from_le_bytes(c.try_into().expect("4 bytes")))
+            .chain(bytes.iter().map(|&b| log_prob_of(b)))
+    }
+
+    /// The danger of each legal joint action, `(joint index, P(hit))`.
+    pub fn dangers(&self) -> Vec<(u16, f32)> {
+        let Some(danger) = self.danger else { return Vec::new() };
+        let dist: Vec<f32> = self.distribution().collect();
+        legal_joint(dist.len(), |i| dist[i].is_finite())
+            .zip(danger)
+            .map(|(j, &b)| (j, f32::from(b) / 255.0))
+            .collect()
+    }
+}
+
+/// A room as TARGETS names it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RoomRef {
+    pub level: u8,
+    pub room: u8,
+    pub in_cave: bool,
+}
+
+/// One target: `role` indexes META `tables.target_roles` (each role names its `fields`), `flags` bit 0 `obs` (in
+/// the target the observation's wavefront leads to), bit 1 `reward-only` (priced by the reward, not in that target).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TargetRef {
+    pub role: u8,
+    pub flags: u8,
+    pub fields: [u8; 4],
+}
+
+pub const TARGET_OBS: u8 = 1;
+pub const TARGET_REWARD_ONLY: u8 = 2;
+
+/// A TARGETS record: what the objective was at a decision, written when it changed.  `objective` indexes META
+/// `tables.objective_kinds`; `flags` bit 0 treasure refused, 1 drops first, 2 bag drops, 3 the path search knows the
+/// clips; the provenance label (no metric may depend on it): `route` and `stretch` index META `tables.routes` and
+/// `tables.stretches`, `way` 0 none, 1 clips, 2 plain.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Targets {
+    pub frame: u32,
+    pub objective: u8,
+    pub flags: u8,
+    pub route: Option<u8>,
+    pub step: Option<u16>,
+    pub way: u8,
+    pub stretch: Option<u8>,
+    pub next_rooms: Vec<RoomRef>,
+    pub retreats: Vec<RoomRef>,
+    pub targets: Vec<TargetRef>,
+}
+
+pub const OBJECTIVE_TREASURE_REFUSED: u8 = 1;
+pub const OBJECTIVE_DROPS_FIRST: u8 = 2;
+pub const OBJECTIVE_BAG_DROPS: u8 = 4;
+pub const OBJECTIVE_CLIPS: u8 = 8;
+
+impl Targets {
+    pub(crate) fn encode(&self, out: &mut Vec<u8>) {
+        out.extend_from_slice(&[self.objective, self.flags, self.route.unwrap_or(0xFF)]);
+        out.extend_from_slice(&self.step.unwrap_or(NO_STEP).to_le_bytes());
+        out.extend_from_slice(&[self.way, self.stretch.unwrap_or(0xFF)]);
+        for rooms in [&self.next_rooms, &self.retreats] {
+            out.push(u8::try_from(rooms.len()).expect("under 256 rooms"));
+            for r in rooms {
+                out.extend_from_slice(&[r.level, r.room, u8::from(r.in_cave)]);
+            }
+        }
+        out.push(u8::try_from(self.targets.len()).expect("under 256 targets"));
+        for t in &self.targets {
+            out.extend_from_slice(&[t.role, t.flags]);
+            out.extend_from_slice(&t.fields);
+        }
+    }
+
+    pub(crate) fn decode(c: &mut Cursor<'_>, frame: u32) -> Result<Targets, ReplayError> {
+        let (objective, flags, route) = (c.u8()?, c.u8()?, c.u8()?);
+        let step = c.u16()?;
+        let (way, stretch) = (c.u8()?, c.u8()?);
+        let mut rooms = [Vec::new(), Vec::new()];
+        for list in &mut rooms {
+            for _ in 0..c.u8()? {
+                list.push(RoomRef { level: c.u8()?, room: c.u8()?, in_cave: c.u8()? != 0 });
+            }
+        }
+        let mut targets = Vec::new();
+        for _ in 0..c.u8()? {
+            let (role, flags) = (c.u8()?, c.u8()?);
+            targets.push(TargetRef { role, flags, fields: [c.u8()?, c.u8()?, c.u8()?, c.u8()?] });
+        }
+        let [next_rooms, retreats] = rooms;
+        Ok(Targets {
+            frame,
+            objective,
+            flags,
+            route: (route != 0xFF).then_some(route),
+            step: (step != NO_STEP).then_some(step),
+            way,
+            stretch: (stretch != 0xFF).then_some(stretch),
+            next_rooms,
+            retreats,
+            targets,
+        })
+    }
+}
+
+/// A MASKS record: the legal actions at a decision, written when they changed (they agree with the decision's
+/// distribution, whose `-inf` entries are the masked ones), and the rule that blocked a kind or some of its
+/// directions where the env knows it cheaply.  `kinds` bit `k`: kind `k` (META `actions.kinds`) is legal; per kind
+/// its legal directions (bit `d`: META `actions.directions[d]`) and durations (bit `u`); `blocked`: `(kind, reason)`
+/// with `reason` indexing META `tables.mask_reasons`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Mask {
+    pub frame: u32,
+    pub kinds: u16,
+    pub directions: [u8; 16],
+    pub durations: [u8; 16],
+    pub blocked: Vec<(u8, u8)>,
+}
+
+impl Mask {
+    pub fn allows(&self, kind: usize) -> bool {
+        kind < 16 && self.kinds & (1 << kind) != 0
+    }
+
+    pub(crate) fn encode(&self, out: &mut Vec<u8>) {
+        out.extend_from_slice(&self.kinds.to_le_bytes());
+        for k in (0..16).filter(|&k| self.allows(k)) {
+            out.extend_from_slice(&[self.directions[k], self.durations[k]]);
+        }
+        out.push(u8::try_from(self.blocked.len()).expect("under 256 blocks"));
+        for &(kind, reason) in &self.blocked {
+            out.extend_from_slice(&[kind, reason]);
+        }
+    }
+
+    pub(crate) fn decode(c: &mut Cursor<'_>, frame: u32) -> Result<Mask, ReplayError> {
+        let mut mask = Mask { frame, kinds: c.u16()?, ..Mask::default() };
+        let kinds = mask.kinds;
+        for k in (0..16).filter(|&k| kinds & (1 << k) != 0) {
+            (mask.directions[k], mask.durations[k]) = (c.u8()?, c.u8()?);
+        }
+        for _ in 0..c.u8()? {
+            mask.blocked.push((c.u8()?, c.u8()?));
+        }
+        Ok(mask)
     }
 }
 
@@ -327,6 +548,10 @@ impl Stream {
                 out.extend_from_slice(&[*class, u8::from(*terminated) | u8::from(*truncated) << 1]);
             }
             Event::Segment => out.push(EVENT_SEGMENT),
+            Event::Visit(text) => {
+                out.push(EVENT_VISIT);
+                put_text(out, text);
+            }
         }
     }
 }

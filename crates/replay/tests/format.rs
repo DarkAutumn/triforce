@@ -4,8 +4,8 @@
 use std::sync::Arc;
 
 use replay::{
-    Cheat, Context, Edit, Ending, Event, EventRecord, RecordOptions, Recorder, Replay, ReplayError, Source,
-    StateKind, section, stitch, truncate,
+    Cheat, Context, Edit, Ending, Event, EventRecord, Mask, RecordOptions, Recorder, Replay, ReplayError, RoomRef,
+    Source, StateKind, TargetRef, Targets, Thought, section, stitch, truncate,
 };
 use serde_json::json;
 
@@ -19,18 +19,69 @@ fn blob(tag: u8) -> Vec<u8> {
     blob
 }
 
-fn options(rewards: bool, decisions: bool) -> Arc<RecordOptions> {
+fn options(rewards: bool) -> Arc<RecordOptions> {
     Arc::new(RecordOptions {
         embed_start: true,
         rewards,
-        decisions,
         keyframe_frames: 0,
         meta: json!({"triforce": "1.3.1.0", "kind": "chain", "models": [{"name": "ow-start", "hash": "00ff"}]}),
     })
 }
 
+/// A distribution whose entries a byte holds exactly (multiples of 1/16 nat above -15.875).
 fn dist(frame: u32) -> Vec<f32> {
-    (0..DIST).map(|i| if i % 9 == 0 { f32::NEG_INFINITY } else { -(frame as f32) - i as f32 / 8.0 }).collect()
+    (0..DIST).map(|i| if i % 9 == 0 { f32::NEG_INFINITY } else { -((frame % 7) as f32) - (i % 16) as f32 / 16.0 }).collect()
+}
+
+/// The danger the fixed game's hit head gives the joint actions at `frame` (a byte holds each exactly).
+fn danger(frame: u32) -> Vec<f32> {
+    (0..352).map(|j| ((j as u32 + frame) % 256) as f32 / 255.0).collect()
+}
+
+/// The fixed game's objective at `frame`: it changes every 24 frames.
+fn targets(frame: u32) -> Targets {
+    let n = (frame / 24) as u8;
+    Targets {
+        frame: 0,
+        objective: n % 5,
+        flags: n & 0x0F,
+        route: (n % 2 == 0).then_some(1),
+        step: Some(u16::from(n) * 3),
+        way: n % 3,
+        stretch: (n % 3 == 1).then_some(n),
+        next_rooms: vec![RoomRef { level: 8, room: 0x4c - n, in_cave: false }],
+        retreats: (0..n % 2).map(|_| RoomRef { level: 0, room: 0x77, in_cave: true }).collect(),
+        targets: (0..=n % 3)
+            .map(|i| TargetRef { role: i, flags: 1 + (i % 2), fields: [n, i, 0x13, 0xFF] })
+            .collect(),
+    }
+}
+
+/// The fixed game's mask at `frame`: BOMB legal every other 16 frames, blocked by reason 2 otherwise.
+fn mask(frame: u32) -> Mask {
+    let bomb = (frame / 16) % 2 == 0;
+    let mut mask = Mask { kinds: 0b11 | (u16::from(bomb) << 4), ..Mask::default() };
+    (mask.directions[0], mask.durations[0]) = (0x0F, 0x0F);
+    mask.durations[1] = 0x0F;
+    if bomb {
+        mask.directions[4] = 0b0101;
+    } else {
+        mask.blocked.push((4, 2));
+    }
+    mask
+}
+
+fn thought<'a>(k: u32, dist: &'a [f32], danger: &'a [f32], vetoed: &'a [u16]) -> Thought<'a> {
+    Thought {
+        policy: (k / 8 % 3) as u8,
+        action: [(k % 7) as u8, (k % 8) as u8, (k % 4) as u8],
+        value: k as f32 / 4.0,
+        draw: (k / 8 % 4) as u8,
+        low: k % 48 == 0,
+        dist,
+        danger: (k % 16 == 0).then_some(danger),
+        foresight: (k % 24 == 0).then_some((2, 3, 40 + k, vetoed)),
+    }
 }
 
 fn context(frame: u32) -> Context {
@@ -44,11 +95,14 @@ fn ending(kind: u8) -> Ending {
 /// Feeds `rec` the frames `base + rec.frames() .. until` of one fixed game: what happens at a frame depends
 /// only on its absolute number, so a recording continued from frame `base` sees the same records.  A
 /// keyframe is taken at every frame of `keyframes`.
-fn play(rec: &mut Recorder, base: u32, until: u32, keyframes: &[u32]) {
+fn play(rec: &mut Recorder, base: u32, until: u32, keyframes: &[u32], decide: bool) {
     while base + rec.frames() < until {
         let k = base + rec.frames();
-        if k % 8 == 0 {
-            rec.decision((k / 8 % 3) as u8, [(k % 7) as u8, (k % 8) as u8, (k % 4) as u8], k as f32 / 4.0, &dist(k));
+        if k % 8 == 0 && decide {
+            rec.targets(&targets(k));
+            rec.mask(&mask(k));
+            let (dist, danger, vetoed) = (dist(k), danger(k), [(k % 352) as u16, 7]);
+            rec.decision(&thought(k, &dist, &danger, &vetoed));
         }
         if k % 5 == 0 {
             rec.edit(0x0600 + (k % 7) as u16, k as u8, (k + 1) as u8);
@@ -65,6 +119,7 @@ fn play(rec: &mut Recorder, base: u32, until: u32, keyframes: &[u32]) {
             }
             rec.cheat((k / 8 % 3) as u8, k);
             rec.event(Event::Outcome(format!("exit-{k}")));
+            rec.event(Event::Visit(format!("{{\"room\": {k}}}")));
             rec.event(Event::Room {
                 level: (k % 4) as u8,
                 room: k as u8,
@@ -84,18 +139,20 @@ fn play(rec: &mut Recorder, base: u32, until: u32, keyframes: &[u32]) {
 
 /// The fixed game's frames `0..until` from a state file, ending in `blob(end)`.
 fn recorded(until: u32, keyframes: &[u32], rewards: bool, decisions: bool, end: u8) -> Replay {
-    let mut rec = Recorder::new(options(rewards, decisions));
+    let mut rec = Recorder::new(options(rewards));
     rec.set_source(Source::File { name: "0_77c_0".into(), file_hash: 0x1122_3344_5566_7788 });
+    rec.set_meta("tables", json!({"draws": ["argmax", "sample"]}));
     rec.event(Event::Control);
-    play(&mut rec, 0, until, keyframes);
+    play(&mut rec, 0, until, keyframes, decisions);
     Replay::parse(rec.finish(7, ending(1), context(until), &blob(end))).unwrap()
 }
 
 /// The fixed game continued from frame `base` (the embedded state `blob(start)`) to `until`.
 fn continued(base: u32, until: u32, keyframes: &[u32], start: u8, end: u8) -> Replay {
-    let mut rec = Recorder::new(options(true, true));
+    let mut rec = Recorder::new(options(true));
+    rec.set_meta("tables", json!({"draws": ["argmax", "sample"]}));
     rec.state(StateKind::Start, context(base), &blob(start));
-    play(&mut rec, base, until, keyframes);
+    play(&mut rec, base, until, keyframes, true);
     Replay::parse(rec.finish(8, ending(2), context(until), &blob(end))).unwrap()
 }
 
@@ -111,7 +168,10 @@ struct Streams {
     cheats: Vec<Cheat>,
     events: Vec<EventRecord>,
     rewards: Vec<(u32, String, f32)>,
-    decisions: Vec<(u32, u8, [u8; 3], f32, Vec<u32>)>,
+    #[allow(clippy::type_complexity)]
+    decisions: Vec<(u32, u8, [u8; 3], f32, Vec<u32>, Option<u8>, bool, Vec<(u16, u32)>, Option<(u8, u32, u32, Vec<u16>)>)>,
+    targets: Vec<Targets>,
+    masks: Vec<Mask>,
 }
 
 fn streams(replay: &Replay, shift: u32) -> Streams {
@@ -133,22 +193,57 @@ fn streams(replay: &Replay, shift: u32) -> Streams {
             .collect(),
         decisions: all(replay.decisions().unwrap())
             .into_iter()
-            .map(|d| (d.frame + shift, d.policy, d.action, d.value, d.distribution().map(f32::to_bits).collect()))
+            .map(|d| {
+                let dangers = d.dangers().into_iter().map(|(j, p)| (j, p.to_bits())).collect();
+                let foresight = d.foresight.map(|f| (f.outcome, f.trials, f.frames, f.vetoed().collect()));
+                let dist = d.distribution().map(f32::to_bits).collect();
+                (d.frame + shift, d.policy, d.action, d.value, dist, d.draw, d.low, dangers, foresight)
+            })
             .collect(),
+        targets: changes(all(replay.targets()).into_iter().map(|t| Targets { frame: t.frame + shift, ..t })),
+        masks: changes(all(replay.masks()).into_iter().map(|m| Mask { frame: m.frame + shift, ..m })),
     }
+}
+
+/// TARGETS and MASKS mean "from here on": a record equal to the one before it but for its frame (a stitched
+/// segment's first, which repeats where the last one stood) says nothing new.
+trait Framed: Clone + PartialEq {
+    fn at(&self, frame: u32) -> Self;
+}
+
+impl Framed for Targets {
+    fn at(&self, frame: u32) -> Self {
+        Targets { frame, ..self.clone() }
+    }
+}
+
+impl Framed for Mask {
+    fn at(&self, frame: u32) -> Self {
+        Mask { frame, ..self.clone() }
+    }
+}
+
+fn changes<T: Framed>(records: impl Iterator<Item = T>) -> Vec<T> {
+    let mut out: Vec<T> = Vec::new();
+    for record in records {
+        if out.last().is_none_or(|last| last.at(0) != record.at(0)) {
+            out.push(record);
+        }
+    }
+    out
 }
 
 #[test]
 fn a_recording_reads_back_every_stream() {
     let replay = recorded(100, &[40, 80], true, true, 9);
-    assert_eq!((replay.version(), replay.frames(), replay.ending_name()), (1, 100, "win"));
+    assert_eq!((replay.version(), replay.frames(), replay.ending_name()), (2, 100, "win"));
     assert_eq!(replay.rom_sha1(), [0xAB; 20]);
     assert_eq!(
         replay.source().unwrap(),
         Source::File { name: "0_77c_0".into(), file_hash: 0x1122_3344_5566_7788 }
     );
     let kinds: Vec<u16> = replay.sections().map(|(kind, ..)| kind).collect();
-    assert_eq!(kinds, (1..=9).collect::<Vec<u16>>());
+    assert_eq!(kinds, (1..=11).collect::<Vec<u16>>());
 
     let meta = replay.meta().unwrap();
     assert_eq!(meta["triforce"], "1.3.1.0");
@@ -165,6 +260,7 @@ fn a_recording_reads_back_every_stream() {
     assert_eq!(meta["actions"]["kinds"].as_array().unwrap().len(), 11);
     assert_eq!(meta["actions"]["kind_buttons"].as_array().unwrap().len(), 11);
     assert!(!meta.contains_key("segments"));
+    assert_eq!(meta["tables"]["draws"][1], "sample");
 
     let inputs = replay.inputs();
     assert_eq!(inputs.len(), 100);
@@ -182,8 +278,9 @@ fn a_recording_reads_back_every_stream() {
     let events = all(replay.events());
     assert_eq!(events[0], EventRecord { frame: 0, event: Event::Control });
     assert_eq!(events[1], EventRecord { frame: 8, event: Event::Outcome("exit-8".into()) });
+    assert_eq!(events[2], EventRecord { frame: 8, event: Event::Visit("{\"room\": 8}".into()) });
     assert_eq!(
-        events[4],
+        events[6],
         EventRecord {
             frame: 16,
             event: Event::Room { level: 0, room: 16, in_cave: true, step: Some(16), policy: Some(2) }
@@ -204,9 +301,29 @@ fn a_recording_reads_back_every_stream() {
     let decisions = all(replay.decisions().unwrap());
     assert_eq!(decisions.len(), 13);
     let d = &decisions[2];
-    assert_eq!((d.frame, d.policy, d.action, d.value), (16, 2, [2, 0, 0], 4.0));
+    assert_eq!((d.frame, d.policy, d.action, d.value, d.draw, d.low), (16, 2, [2, 0, 0], 4.0, Some(2), false));
+    // The encoding round trip: the distribution and the danger come back exactly (multiples of the steps).
     let want: Vec<u32> = dist(16).iter().map(|p| p.to_bits()).collect();
     assert_eq!(d.distribution().map(f32::to_bits).collect::<Vec<_>>(), want);
+    let legal: Vec<u16> = replay::legal_joint(DIST, |i| dist(16)[i].is_finite()).collect();
+    assert!(!legal.is_empty() && legal.len() < 352);
+    let dangers = d.dangers();
+    assert_eq!(dangers.iter().map(|&(j, _)| j).collect::<Vec<_>>(), legal);
+    assert!(dangers.iter().all(|&(j, p)| p == danger(16)[j as usize]));
+    assert!(d.foresight.is_none() && decisions[1].danger.is_none());
+    let f = decisions[3].foresight.expect("frame 24 is foreseen");
+    assert_eq!((f.outcome, f.trials, f.frames, f.vetoed().collect::<Vec<_>>()), (2, 3, 64, vec![24, 7]));
+    assert!(decisions[6].low);
+
+    // TARGETS and MASKS: a record when they changed (every 24 and 16 frames), not at every decision.
+    let objectives = all(replay.targets());
+    assert_eq!(objectives.iter().map(|t| t.frame).collect::<Vec<_>>(), [0, 24, 48, 72, 96]);
+    assert_eq!(objectives[2], Targets { frame: 48, ..targets(48) });
+    assert_eq!(objectives[2].targets[2], TargetRef { role: 2, flags: 1, fields: [2, 2, 0x13, 0xFF] });
+    let masks = all(replay.masks());
+    assert_eq!(masks.iter().map(|m| m.frame).collect::<Vec<_>>(), [0, 16, 32, 48, 64, 80, 96]);
+    assert_eq!(masks[1], Mask { frame: 16, ..mask(16) });
+    assert!(masks[0].allows(4) && !masks[1].allows(4) && masks[1].blocked == [(4, 2)]);
 
     let states: Vec<_> = replay.states().collect();
     assert_eq!(
@@ -221,19 +338,21 @@ fn a_recording_reads_back_every_stream() {
 #[test]
 fn optional_streams_are_left_out_and_read_as_empty() {
     let replay = recorded(30, &[], false, false, 1);
-    assert!(!replay.has(section::REWARDS) && !replay.has(section::DECISIONS));
+    assert!(!replay.has(section::REWARDS));
+    assert!(replay.has(section::DECISIONS) && replay.has(section::TARGETS) && replay.has(section::MASKS));
     assert_eq!(replay.rewards().count() + replay.decisions().unwrap().count(), 0);
+    assert_eq!(replay.targets().count() + replay.masks().count(), 0);
     let meta = replay.meta().unwrap();
-    assert!(!meta.contains_key("reward_terms") && !meta.contains_key("actions"));
+    assert!(!meta.contains_key("reward_terms") && meta.contains_key("actions"));
 }
 
 #[test]
 fn truncating_to_a_mark_drops_the_look_ahead_frames_and_edits_only() {
-    let mut plain = Recorder::new(options(true, true));
-    let mut looked = Recorder::new(options(true, true));
+    let mut plain = Recorder::new(options(true));
+    let mut looked = Recorder::new(options(true));
     for rec in [&mut plain, &mut looked] {
         rec.set_source(Source::PowerOn { name: "LINK".into(), delay: 12 });
-        play(rec, 0, 23, &[16]);
+        play(rec, 0, 23, &[16], true);
     }
     let mark = looked.mark();
     for k in 0..40 {
@@ -244,7 +363,7 @@ fn truncating_to_a_mark_drops_the_look_ahead_frames_and_edits_only() {
     looked.truncate(mark);
     assert_eq!(looked.frames(), 23);
     for rec in [&mut plain, &mut looked] {
-        play(rec, 0, 50, &[48]);
+        play(rec, 0, 50, &[48], true);
     }
     let finish = |rec: Recorder| rec.finish(1, ending(4), Context::default(), &blob(3));
     let (plain, looked) = (finish(plain), finish(looked));
@@ -270,12 +389,14 @@ fn stitching_moves_the_second_replays_frames_past_the_first() {
     assert_eq!(both.cheats, [first.cheats, second.cheats].concat());
     assert_eq!(both.rewards, [first.rewards, second.rewards].concat());
     assert_eq!(both.decisions, [first.decisions, second.decisions].concat());
+    assert_eq!(both.targets, changes([first.targets, second.targets].concat().into_iter()));
+    assert_eq!(both.masks, changes([first.masks, second.masks].concat().into_iter()));
     let boundary = vec![EventRecord { frame: 60, event: Event::Segment }];
     assert_eq!(both.events, [first.events, boundary, second.events].concat());
     // The whole game recorded in one go has the same streams (and no boundary).
     let whole = streams(&recorded(130, &[], true, true, 6), 0);
     assert_eq!((&both.inputs, &both.edits, &both.cheats, &both.decisions), (&whole.inputs, &whole.edits, &whole.cheats, &whole.decisions));
-    assert_eq!(both.rewards, whole.rewards);
+    assert_eq!((&both.rewards, &both.targets, &both.masks), (&whole.rewards, &whole.targets, &whole.masks));
 
     let states: Vec<_> = joined.states().map(|s| (s.frame, s.kind, s.edits, s.blob[30])).collect();
     assert_eq!(
@@ -343,20 +464,20 @@ fn stitching_refuses_replays_that_do_not_join() {
     assert!(stitch(&a, &elsewhere, &|end, start| (end[30], start[30]) == (5, 4)).is_ok());
     assert!(reason(&recorded(30, &[], true, true, 5), true).contains("embedded state"));
 
-    let mut bare = Recorder::new(options(false, true));
+    let mut bare = Recorder::new(options(false));
     bare.state(StateKind::Start, Context::default(), &blob(5));
     bare.frame(0);
     let bare = Replay::parse(bare.finish(0, ending(1), Context::default(), &blob(6))).unwrap();
     assert!(reason(&bare, true).contains("same streams"));
 
-    let mut other = RecordOptions::clone(&options(true, true));
+    let mut other = RecordOptions::clone(&options(true));
     other.meta["models"] = json!([{"name": "ow-start", "hash": "beef"}]);
     let mut rec = Recorder::new(Arc::new(other));
     rec.state(StateKind::Start, Context::default(), &blob(5));
     let models = Replay::parse(rec.finish(0, ending(1), Context::default(), &blob(6))).unwrap();
     assert!(reason(&models, true).contains("META models differ"));
 
-    let mut rec = Recorder::new(options(true, true));
+    let mut rec = Recorder::new(options(true));
     let mut start = blob(5);
     start[10] = 0;
     rec.state(StateKind::Start, Context::default(), &start);
@@ -418,17 +539,17 @@ fn newer_and_damaged_files_are_refused_without_a_panic() {
 
     assert_eq!(Replay::parse(b"TFMOVIE\0 not one of ours, but long enough to hold a header".to_vec()).unwrap_err().to_string(), "not a TFREPLAY file");
     let mut newer = bytes.clone();
-    newer[8] = 2;
+    newer[8] = 3;
     let error = Replay::parse(newer.clone()).unwrap_err();
-    assert_eq!(error, ReplayError::Version { found: 2, recorded_by: Some("1.3.1.0".into()) });
+    assert_eq!(error, ReplayError::Version { found: 3, recorded_by: Some("1.3.1.0".into()) });
     assert_eq!(
         error.to_string(),
-        "TFREPLAY version 2 is newer than this build reads (1); it was recorded by triforce 1.3.1.0"
+        "replay version 3 (recorded by triforce 1.3.1.0); this reader reads up to 2: update"
     );
     newer.truncate(60);
     assert_eq!(
         Replay::parse(newer).unwrap_err().to_string(),
-        "TFREPLAY version 2 is newer than this build reads (1)"
+        "replay version 3; this reader reads up to 2: update"
     );
 
     for cut in (0..bytes.len()).step_by(97) {

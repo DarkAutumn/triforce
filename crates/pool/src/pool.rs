@@ -62,16 +62,21 @@ pub trait PoolEnv: Send + 'static {
         Ok(None)
     }
 
-    /// [`Pool::play`] only: policy `policy` decided `action` on the current observation (`decision`; with its
-    /// whole distribution when the actor keeps one), just before `step` executes it.  For recording.
-    fn decided(
-        &mut self,
-        _policy: i64,
-        _action: &Self::Action,
-        _decision: &Decision,
-        _distribution: Option<&[f32]>,
-    ) {
-    }
+    /// [`Pool::play`] only: a decision on the current observation, just before `step` executes it.  For recording.
+    fn decided(&mut self, _decided: &Decided<'_, Self::Action>) {}
+}
+
+/// What [`PoolEnv::decided`] learns of a decision: who decided `action` (`decision`), the whole distribution and the
+/// hit head's danger per joint action when the actor reports them, and the actions the act mode's foresight refused
+/// (in the order tried).
+#[derive(Clone, Copy, Debug)]
+pub struct Decided<'a, A> {
+    pub policy: i64,
+    pub action: &'a A,
+    pub decision: &'a Decision,
+    pub distribution: Option<&'a [f32]>,
+    pub danger: Option<&'a [f32]>,
+    pub vetoed: &'a [A],
 }
 
 /// An env a search can simulate in ([`crate::rollout::Planner`]): exact save and load mid-episode, and steps with
@@ -588,6 +593,7 @@ impl<E: PoolEnv> Pool<E> {
                 record,
                 play: None,
                 alternatives: Vec::new(),
+                vetoed: Vec::new(),
             };
             self.dispatch(Cmd::Run(id, Box::new(job)), id);
         }
@@ -994,6 +1000,8 @@ struct PlayWork<E: PoolEnv, Ac: Actor<E::Action>> {
     play: Option<Play<E::Action>>,
     /// A foreseen decision's alternatives (kept for its allocation).
     alternatives: Vec<(E::Action, Decision)>,
+    /// The actions the last decision's foresight refused (kept for its allocation).
+    vetoed: Vec<E::Action>,
 }
 
 /// Key tag of a plan's redrawn futures (`plan:K:S`).
@@ -1049,10 +1057,14 @@ impl<E: PoolEnv, Ac: Actor<E::Action>> PlayWork<E, Ac> {
             frames: 0,
             refused: None,
         };
+        self.vetoed.clear();
         match Self::refused(env, id, slot, foresight, action, &mut foresee)? {
             None => return Ok(None),
             Some(false) => return Ok(Some(foresee)),
-            Some(true) => foresee.outcome = Foreseen::Unsafe,
+            Some(true) => {
+                foresee.outcome = Foreseen::Unsafe;
+                self.vetoed.push(action.clone());
+            }
         }
         if foresight.candidates < 2 {
             return Ok(Some(foresee));
@@ -1076,9 +1088,14 @@ impl<E: PoolEnv, Ac: Actor<E::Action>> PlayWork<E, Ac> {
                 let mut result = Ok(());
                 for (a, d) in alternatives.drain(..) {
                     match Self::refused(env, id, slot, foresight, &a, &mut foresee) {
-                        Ok(Some(true)) => continue,
+                        Ok(Some(true)) => {
+                            self.vetoed.push(a);
+                            continue;
+                        }
                         Ok(_) => {
-                            (*action, *decision) = (a, d);
+                            // The act mode drew it still: the alternative keeps the decision's draw.
+                            let (draw, low) = (decision.draw, decision.low);
+                            (*action, *decision) = (a, Decision { draw, low, ..d });
                             foresee.outcome = Foreseen::Replaced;
                             foresee.refused = first;
                         }
@@ -1104,6 +1121,7 @@ impl<E: PoolEnv, Ac: Actor<E::Action>> Work<E> for PlayWork<E, Ac> {
             .actor
             .act(&slot.obs, slot.policy, slot.job, slot.step, situation, &mut self.scratch)
             .map_err(|e| PoolError::Usage(format!("env {id}: {e}")))?;
+        self.vetoed.clear();
         if let Some(foresight) = self.actor.foresight(slot.policy, situation) {
             decision.foresee = self.foresee(env, id, slot, situation, &foresight, &mut action, &mut decision)?;
         }
@@ -1117,7 +1135,14 @@ impl<E: PoolEnv, Ac: Actor<E::Action>> Work<E> for PlayWork<E, Ac> {
                 obs.push(&slot.obs);
             }
         }
-        env.decided(slot.policy, &action, &decision, self.actor.distribution(&self.scratch));
+        env.decided(&Decided {
+            policy: slot.policy,
+            action: &action,
+            decision: &decision,
+            distribution: self.actor.distribution(&self.scratch),
+            danger: self.actor.danger(&self.scratch),
+            vetoed: &self.vetoed,
+        });
         Worker::<E>::execute(env, id, Some(action), slot, events)?;
         let o = slot.outcome;
         self.shared.controls[id].add_emulated_frames((o.frames + o.menu_frames).max(0) as u64);

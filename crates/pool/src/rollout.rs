@@ -18,6 +18,10 @@ pub struct Decision {
     pub act_entropy: f32,
     /// What the act mode's foresight did ([`Foresee`]; None: it has none at this decision).
     pub foresee: Option<Foresee>,
+    /// How the act mode drew it (`policy::act::DRAWS` index) and whether its low-health part did (a replay's
+    /// DECISIONS; 0 and false where the actor doesn't say).
+    pub draw: u8,
+    pub low: bool,
 }
 
 /// What a decision's foresight did (`PlayWork`; [`Actor::foresight`]).
@@ -95,6 +99,12 @@ pub trait Actor<A>: Send + Sync {
     /// The whole action distribution of the decision `act` just made with `scratch`, when the actor keeps it
     /// (the layout is the actor's: the Zelda policy's is `policy::Policy::evaluate_with_distribution`).
     fn distribution<'a>(&self, _scratch: &'a Self::Scratch) -> Option<&'a [f32]> {
+        None
+    }
+
+    /// The hit head's P(Link is hit) per joint action of the decision `act` just made with `scratch`, when the
+    /// acting network has one.
+    fn danger<'a>(&self, _scratch: &'a Self::Scratch) -> Option<&'a [f32]> {
         None
     }
 
