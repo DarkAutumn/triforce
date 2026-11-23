@@ -208,7 +208,8 @@ def runs250(args) -> int:
 
 def ending(record: dict) -> str:
     """win, death, error, else the stuck kind: bounce-limit, wrong-exit-limit, retreat-limit, dock-warp-missed,
-    no-room-progress, stalled, room-step-cap, run-step-cap (or other)."""
+    no-room-progress, stalled, room-step-cap, run-step-cap, off-route (left the route into an untagged room) or
+    other."""
     reason = record.get('reason') or ''
     if record.get('result') == 'success':
         return 'win'
@@ -222,7 +223,7 @@ def ending(record: dict) -> str:
     if reason.startswith('run exceeded'):
         return 'run-step-cap'
     for marker, kind in ((' no-room-progress:', 'no-room-progress'), (' stalled:', 'stalled'),
-                         (' exceeded ', 'room-step-cap')):
+                         (' exceeded ', 'room-step-cap'), (' left the route into untagged ', 'off-route')):
         if marker in reason:
             return kind
     return 'other'

@@ -49,6 +49,8 @@ def test_endings_by_kind():
                      'no-room-progress', 'death']
     assert full_runs.ending({'result': 'error', 'reason': 'x'}) == 'error'
     assert full_runs.ending({'result': 'failure', 'reason': 'ow stalled: 10 actions'}) == 'stalled'
+    assert full_runs.ending({'result': 'failure',
+                             'reason': 'ow-ghini left the route into untagged (level 0, room 0x30)'}) == 'off-route'
 
 
 def test_best_worst_and_three_stuck_runs_in_different_rooms():
