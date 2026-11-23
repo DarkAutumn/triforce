@@ -2,11 +2,14 @@
 # Training throughput benchmark: real `triforce.train` runs warm-started from the promoted models (or fresh models
 # with START=fresh; curriculum and yaml as configured), CUDA, 4,096 steps per update, one run at a time. Settled
 # steps/s = median of the per-iteration charts/SPS-equivalent (steps / iteration wall time) after the first 5
-# iterations. Each run may first wait its turn behind other trainings and evaluations (triforce/jobs.py; no timeout,
-# so a wait doesn't kill it); the rates count only its iterations.
+# iterations. The runs are the trainings of this script's job (the machine's queue: they never wait); the rates count
+# only their iterations.
 #
-#   scripts/train_bench.sh LABEL [ITERATIONS] [promoted|fresh]   -> target/perf/LABEL/<specialist>-p<N>/ and summary.txt
+#   triforce job run --agent A --task T --subtask S --desc '...' --timeout 3h -- \
+#       scripts/train_bench.sh LABEL [ITERATIONS] [promoted|fresh]   -> target/perf/LABEL/<specialist>-p<N>/, summary.txt
 set -uo pipefail
+source "$(dirname "$0")/job.sh"
+require_job "$0" "$@"
 cd "$(dirname "$0")/.."
 LABEL=${1:?label}
 ITERS=${2:-25}

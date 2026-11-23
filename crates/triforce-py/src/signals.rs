@@ -17,6 +17,17 @@ pub fn interruptible<T: Send>(
     work: impl FnOnce() -> T + Send,
     interrupt: impl FnOnce(),
 ) -> PyResult<T> {
+    interruptible_ticking(py, work, interrupt, |_| Ok(()))
+}
+
+/// `interruptible`, calling `tick` on the calling thread (GIL held) between signal checks while `work` runs (a
+/// progress report); an error from `tick` stops the work as a signal does and is raised.
+pub fn interruptible_ticking<T: Send>(
+    py: Python<'_>,
+    work: impl FnOnce() -> T + Send,
+    interrupt: impl FnOnce(),
+    mut tick: impl FnMut(Python<'_>) -> PyResult<()>,
+) -> PyResult<T> {
     let done = (Mutex::new(false), Condvar::new());
     std::thread::scope(|scope| {
         let handle = scope.spawn(|| {
@@ -39,7 +50,7 @@ pub fn interruptible<T: Send>(
                 break;
             }
             if raised.is_none()
-                && let Err(error) = py.check_signals()
+                && let Err(error) = py.check_signals().and_then(|()| tick(py))
             {
                 if let Some(stop) = interrupt.take() {
                     stop();

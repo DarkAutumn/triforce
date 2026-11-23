@@ -6,10 +6,15 @@ with the monsters pinned) with the game's own randomness for its seed; the monst
     python scripts/experiments/r29_route_leg.py whirlwind [--seeds N]  # the count, the pickup among Moblins, a miss
     python scripts/experiments/r29_route_leg.py tree                   # 0x47: where the candle burns it, the wares
     python scripts/experiments/r29_route_leg.py wall                   # 0x05: where the bomb opens it, 0x07's cave
+
+It plays the game over many seeded trials: a job of the machine's queue (``jobs.require_job``: ``triforce job run
+... --timeout 30m -- .venv/bin/python scripts/experiments/r29_route_leg.py ...``).
 """
 
 import argparse
 import collections
+
+from triforce.jobs import require_job
 
 from r26_walks import BOMBS, OBJ_TYPE, OBJ_X, OBJ_Y, PLAY, RUPEES, TELEPORT_INDEX, TRIFORCE, WHIRLWIND_SUMMONED
 from r27_walks import TMP, Tally, load, name, summary
@@ -443,4 +448,5 @@ if __name__ == '__main__':
     parser.add_argument('--seeds', type=int, default=30)
     parser.add_argument('--guard', action='store_true', help='rooms: stab what stands in the way')
     arguments = parser.parse_args()
+    require_job()
     {'rooms': rooms, 'whirlwind': whirlwind, 'tree': tree, 'wall': wall}[arguments.what](arguments)

@@ -13,8 +13,11 @@
 #
 # SRC is a checkout whose triforce/states and trajectories/ hold round 21's states and tracks (the curricula are
 # gitignored; a fresh clone explores everything with `python -m triforce.explore --specialist NAME`).  Exploration
-# is training preparation: it runs at nice 15 (NICE=..).  Run from anywhere: everything is relative to this repo.
+# is training preparation: a job of the machine's queue (its explorers at nice NICE=15 on top of the queue's).  Run
+# from anywhere: everything is relative to this repo.
 set -euo pipefail
+source "$(dirname "$0")/../job.sh"      # a job of the machine's queue: triforce job run ... -- this script ...
+require_job "$0" "$@"
 cd "$(dirname "$0")/../.."
 PY=${PY:-.venv/bin/python}
 NICE=${NICE:-15}

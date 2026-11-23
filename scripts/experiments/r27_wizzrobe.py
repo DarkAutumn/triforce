@@ -9,11 +9,16 @@ his position and facing are written to RAM; the monsters, their timers and the d
     python scripts/experiments/r27_wizzrobe.py touch [--seeds N]    # a just-hit Wizzrobe's touch
     python scripts/experiments/r27_wizzrobe.py likelike [--seeds N] # the hold: cost, frames, what frees Link, shots
     python scripts/experiments/r27_wizzrobe.py bubble [--seeds N]   # the sword-off timer
+
+It plays the game over many seeded trials: a job of the machine's queue (``jobs.require_job``: ``triforce job run
+... --timeout 30m -- .venv/bin/python scripts/experiments/r27_wizzrobe.py ...``).
 """
 
 import argparse
 import collections
 import statistics
+
+from triforce.jobs import require_job
 
 from r26_walks import SELECTED_SLOT
 from r27_walks import (BOMBS, BUBBLE, HEART_PARTIAL, HEARTS, INV_SWORD, LIKE_LIKE, LINK_PARALYZED, OBJ_DIR, OBJ_HP,
@@ -397,6 +402,7 @@ def main():
     parser.add_argument('what', choices=['red', 'blue', 'kills', 'touch', 'likelike', 'bubble'])
     parser.add_argument('--seeds', type=int, default=20)
     args = parser.parse_args()
+    require_job()
     globals()[args.what](args)
 
 

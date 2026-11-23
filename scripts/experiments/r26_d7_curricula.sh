@@ -15,6 +15,8 @@
 # (three Blue and three Red Goriyas, then the push; with clips the block clip needs no fight).  A staged track that
 # fails is reported and does not fail the script.
 set -uo pipefail
+source "$(dirname "$0")/../job.sh"      # a job of the machine's queue: triforce job run ... -- this script ...
+require_job "$0" "$@"
 cd "$(dirname "$0")/../.."
 PY=.venv/bin/python
 OUT=${1:-trajectories}

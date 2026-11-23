@@ -8,6 +8,9 @@ that entry out of chain replays (`eval-chain --replays DIR`), the frame before t
 harvested states (`<out>/0_44s_h<seed>_0.state`; the family's `harvested_dir`, read at `harvested_fraction`).
 
     python scripts/experiments/r26_arrow_states.py REPLAY_DIR OUT_DIR [--step 217] [--x 128]
+
+It plays every replay of the folder: a job of the machine's queue (``jobs.require_job``: ``triforce job run ... --
+.venv/bin/python scripts/experiments/r26_arrow_states.py ...``).
 """
 
 import argparse
@@ -15,6 +18,7 @@ import glob
 import os
 
 from triforce import _native
+from triforce.jobs import require_job
 
 # zelda::room_entry: the game modes of a room transition and of a room entry, $12 and $11 (IsUpdatingMode).
 TRANSITION_MODES = {0x02, 0x03, 0x06, 0x07, 0x0A, 0x10}
@@ -45,6 +49,7 @@ def main():
     parser.add_argument('--step', type=int, default=217, help="the route step entering 0:0x44 from S")
     parser.add_argument('--x', type=int, default=128, help="Link's X on entry to keep")
     args = parser.parse_args()
+    require_job()
     os.makedirs(args.out, exist_ok=True)
     saved = 0
     for path in sorted(glob.glob(os.path.join(args.replays, '*.tfreplay'))):

@@ -15,6 +15,8 @@
 # logs in logs/r21-gauntlet/; replays (2 episodes per state, sample, the decisions stream) in
 # target/r21-gauntlet/replays/<arm>-s<seed>/.
 set -euo pipefail
+source "$(dirname "$0")/../job.sh"      # a job of the machine's queue: triforce job run ... -- this script ...
+require_job "$0" "$@"
 cd "$(dirname "$0")/../.."
 PY=.venv/bin/python
 export TRIFORCE_STATES_DIR=experiments/r21/states

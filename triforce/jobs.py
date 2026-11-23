@@ -1,637 +1,172 @@
-"""Process-level concerns of the training and evaluation jobs: their CPU priority, the machine's job registry and
-its line (at most ``max_jobs()`` jobs run at once, the others wait their turn).  The caller does nothing for any of
-it: every job lowers its own priority and waits its own turn.
+"""What a training or evaluation tool does about the machine's job queue (``triforce.jobqueue``, run by
+``triforce job``): nothing that waits.  The wrapper takes the job's place in line before the command starts and runs
+it at the queue's priority; the tool only
 
-Start.  Every training and evaluation entry point (``scripts/train_round.py``, ``python -m triforce.train``,
-``triforce evaluate``, ``triforce eval-chain``, ``triforce eval-batch``, ``triforce select-checkpoint``) adds
-``add_job_arguments`` to its parser
-(``--nice N``, ``--no-wait``) and calls ``begin_job(args)`` at start, which lowers the priority and records the
-``--no-wait`` choice for the job's plan.  Library code never calls it, so play, replay and build tools
-(play-zelda, zelda-headless, create-video, zelda-map, ``tf replay``, explore, entry_states) that share the
-evaluation code keep their normal priority and never wait: they are interactive or short, or build data.
+- tells the wrapper its work before anything loads (``announce``): asked with ``$TRIFORCE_JOB_ESTIMATE`` set (the
+  wrapper's dry call), the tool checks its arguments, writes its kind and work there and exits 0 at once, so an
+  argument error still fails before the job waits, and the estimate comes from cheap data (route steps x runs,
+  training steps from the yaml and the arguments, episodes), never from a loaded model;
+- refuses to run outside the queue (``ENFORCE``): without ``$TRIFORCE_JOB_ID`` (the wrapper's, inherited by every
+  child: a batch's chains, a round's trainings) and without a terminal (the owner at a shell is unaffected) it prints
+  the ``triforce job run ...`` form of the same command and exits 2;
+- names its log folders for the job (``label``: ``$TRIFORCE_JOB_LABEL``, ``<agent>-<task>-<subtask>``) and records
+  the first one with its plan in the job's row (``record_plan``), where ``triforce job list`` and the training GUI
+  find its progress.
 
-Priority.  ``lower_priority`` raises the process's niceness to ``--nice N`` (default ``$TRIFORCE_NICE``, else
-``DEFAULT_NICE``; 0 leaves the priority alone).  The niceness only ever goes up (lower priority), never down: a
-process already at N or lower priority stays where it is, and children inherit it (``child_env``).  I/O priority is
-left alone.
-
-Registry.  Every top-level job is recorded at its start in one place per user, outside every checkout:
-``jobs_dir()`` = ``$TRIFORCE_JOBS_DIR``, else ``$XDG_STATE_HOME/triforce/jobs``, else
-``$HOME/.local/state/triforce/jobs``.  A top-level job is a log folder's plan (``events.TrainingPlan``: a round, a
-standalone training, an evaluation, a chain, an eval-batch, wherever their checkout or ``--logs-dir`` is), or a
-``--no-log`` evaluation or chain (no folder; ``events.logged_job``).  The children of a round or a batch write into
-their owner's folder and have no entry of their own, so a job counts once.  One JSON file per job,
-``<host>-<pid>-<process start>-<log folder or name>.json`` (``register``), written atomically: ``schema``, ``host``,
-``pid``, ``pid_start`` (the process's start time, Unix seconds, from ``/proc``: a reused pid is told apart),
-``started`` (registration), ``command``, ``cwd``, ``checkout`` (the root of the code that runs), ``branch``,
-``commit``, ``log_dir`` and ``plan`` (None for a ``--no-log`` job), ``name``, ``kind``, ``status`` (``queued``, then
-``running``, then the plan's final status), ``queued`` (ISO) and ``queued_ts`` (Unix seconds) when it joined the
-line, ``admitted`` / ``admitted_ts`` (when it started running), ``lane`` (``regular`` or ``express``), ``no_wait``,
-``express`` (the job asked for the express place, ``--express``), ``work`` (``{unit: amount}``: training steps,
-evaluation episodes, chain route steps; ``work``), ``estimate``
-(seconds, ``estimate``), ``finished`` and ``ran`` (seconds from admitted to finished).  The plan's ``finish`` marks
-it (``JobRecord.finish``); a job killed before that keeps its status with its process gone (``job_alive`` False).
-Each ``register`` deletes the entries that ended (or whose process is
-gone) more than ``PRUNE_SECONDS`` ago.  A registry that can't be written is warned about once and otherwise ignored
-(no coordination: the job starts).  ``training-gui.py`` reads it (its own copy of ``jobs_dir``, ``job_alive`` and
-the line's order) and lists every entry, one without a log folder from the entry itself ('no progress data').
-
-Estimates.  A job's estimate is its work at the rates the registry's history gives (``rates``: per unit the median
-over the ``RATE_HISTORY`` latest completed jobs that did some of it, their other work taken off at the other units'
-rates; ``DEFAULT_RATES`` without history).  It is allowed to be wrong (early stops, load); the history corrects it.
-
-The line.  No controller: the registry is the queue and every job decides for itself (``JobRecord.wait_turn``,
-``turn``).  Fast jobs drain first: the waiting jobs are ordered by their score, ``estimate - AGING x seconds
-waited`` (lowest first; ties by join time, then file name), so a short job goes before a long one, and a long one
-moves up as it waits, passing fresh short jobs once it has waited about twice its own estimate.  They take the free
-places in that order: up to ``max_jobs()`` (``$TRIFORCE_MAX_JOBS``, default ``DEFAULT_MAX_JOBS``; 0 = no limit)
-regular places, and ``EXPRESS_JOBS`` express place for a job estimated at most ``EXPRESS_SECONDS`` or one that asked
-for it (``--express``, ``$TRIFORCE_EXPRESS=1``: a short measurement whose estimate the history may put above the
-limit, e.g. the 250-run test of ``scripts/full_runs.py``; it still waits its turn in the line and for the express
-place itself, and counts as running), so a short job doesn't wait for the hour-long ones that hold the regular
-places.  Every checkout runs this one rule (an entry without an estimate counts as estimate 0; one without
-``express`` asked for nothing).  Liveness comes from ``/proc`` (pid and process start time), never from
-a job reporting in, so a
-job that dies, running or queued, simply stops counting: nothing has to be cleaned up for the line to move.  The
-check and the change to ``running`` happen under an exclusive ``flock`` on ``<jobs_dir>/.lock``, held only for that
-moment (the kernel drops it if the holder dies), so two jobs starting at the same instant for one free place can't
-both take it.  A job never waits for entries of its own process.  A waiting job polls every ``POLL_SECONDS`` and
-prints (stdout), when it first has to wait and then every ``UPDATE_SECONDS``, ``triforce: NAME is paused until
-resources are available: estimated 40 minutes; 2 jobs are running (...); 1 job is ahead in line (...). It starts by
-itself; next update in 5 minutes.``, and when it starts ``triforce: NAME starts after waiting 12 minutes``.  SIGTERM
-or Ctrl-C while it waits raise KeyboardInterrupt (the plan ends ``interrupted``).  ``--no-wait`` (``begin_job``) or
-``$TRIFORCE_NO_WAIT=1`` starts the job at once in a regular place; it still counts as running for the others.
-``--express`` or ``$TRIFORCE_EXPRESS=1`` (``begin_job``) records ``express`` in the entry: the job is express-sized
-whatever its estimate (``express_sized``).
+The entry points: ``triforce train|evaluate|eval-chain|eval-batch|select-checkpoint``, ``scripts/train_round.py``,
+``scripts/full_runs.py``, ``triforce.lab.train|record|bench`` and ``zelda-headless.py --golden``.  Library code
+never calls ``announce``, so play, replay and build tools that share the evaluation code are not queued.
 """
 
-import fcntl
 import json
 import os
-import signal
-import socket
+import shlex
+import sqlite3
 import subprocess
 import sys
-import threading
 import time
-from contextlib import contextmanager
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Optional
 
-NICE_ENV = 'TRIFORCE_NICE'
-DEFAULT_NICE = 15
-NICE_HELP = (f"lower this process's CPU priority to niceness N (default ${NICE_ENV}, else {DEFAULT_NICE}; 0 leaves "
-             "it alone; it is never raised)")
+from . import jobqueue
 
-NO_WAIT_ENV = 'TRIFORCE_NO_WAIT'
-EXPRESS_ENV = 'TRIFORCE_EXPRESS'
-JOB_NAME_ENV = 'TRIFORCE_JOB_NAME'      # the name the queue and the training GUI show for this process's job
-MAX_JOBS_ENV = 'TRIFORCE_MAX_JOBS'
-DEFAULT_MAX_JOBS = 2
-POLL_SECONDS = 5.0                   # how often a waiting job checks the line
-UPDATE_SECONDS = 300.0               # how often it says it still waits (stdout, queue.jsonl)
-AGING = 0.5                          # the line's score: estimate - AGING * seconds waited (lowest starts first)
-EXPRESS_SECONDS = 600.0              # a job estimated at most this long may run in the express place
-EXPRESS_JOBS = 1                     # express places beside the regular ones (0: none)
-NO_WAIT_HELP = (f"start at once instead of waiting while {DEFAULT_MAX_JOBS} other trainings or evaluations run "
-                f"(${MAX_JOBS_ENV}); the job still counts as running for the others (also ${NO_WAIT_ENV}=1)")
-EXPRESS_HELP = (f"may take the express place whatever the estimate (a short measurement the history estimates above "
-                f"{EXPRESS_SECONDS:.0f} s); it still waits its turn for that place (also ${EXPRESS_ENV}=1)")
-_START = {'no_wait': False, 'express': False}  # begin(): this process's --no-wait and --express
-
-# Work and estimates.  A job's ``work`` is how much it asked for in a few coarse units; its ``estimate`` (seconds) is
-# the sum of amount x rate, a rate (seconds per unit) learned from the registry's history (``rates``), else these
-# defaults, measured on the training machine (Nov 15) from the log folders of every checkout: 259 round runs (the
-# training's wall seconds per target step, early stops included: 0.00044), 801 batch family evaluations (wall per
-# episode: 0.046) and 168 batch chains (wall per run per route step played: 0.0026).
-UNITS = ('train_steps', 'eval_episodes', 'chain_steps')
-DEFAULT_RATES = {'train_steps': 0.00044, 'eval_episodes': 0.046, 'chain_steps': 0.0026}
-RATE_HISTORY = 20                    # the latest finished jobs a rate is taken over (their total, ``rates``)
+JOB_ID_ENV = 'TRIFORCE_JOB_ID'              # the job this process belongs to (set by ``triforce job``)
+JOB_LABEL_ENV = 'TRIFORCE_JOB_LABEL'        # its name, ``<agent>-<task>-<subtask>``: the log folders'
+JOB_ESTIMATE_ENV = 'TRIFORCE_JOB_ESTIMATE'  # the wrapper's dry call: write the work here and exit
+ENFORCE = True                              # tools refuse to run outside ``triforce job`` (the owner, Nov 23)
+UNITS = jobqueue.UNITS
 
 
-def default_nice() -> int:
-    """``$TRIFORCE_NICE`` (an integer), else ``DEFAULT_NICE``."""
-    value = os.environ.get(NICE_ENV, '').strip()
-    if not value:
-        return DEFAULT_NICE
+def work(**amounts) -> dict:
+    """A job's work, ``{unit: amount}`` (``UNITS``), without the units it has none of."""
+    unknown = set(amounts) - set(UNITS)
+    if unknown:
+        raise ValueError(f"unknown work units {sorted(unknown)}; known: {UNITS}")
+    return {unit: amount for unit, amount in amounts.items() if amount}
+
+
+def job_id() -> Optional[int]:
+    """The queue's id of the job this process belongs to, None outside one."""
+    value = os.environ.get(JOB_ID_ENV, '').strip()
     try:
-        return int(value)
+        return int(value) if value else None
     except ValueError:
-        print(f"triforce: warning: ${NICE_ENV}={value!r} is not an integer; using {DEFAULT_NICE}", file=sys.stderr)
-        return DEFAULT_NICE
-
-
-def add_job_arguments(parser):
-    """The options every training and evaluation command has: ``--nice N`` (default None: ``default_nice()``),
-    ``--no-wait`` and ``--express``."""
-    parser.add_argument('--nice', type=int, default=None, metavar='N', help=NICE_HELP)
-    parser.add_argument('--no-wait', action='store_true', help=NO_WAIT_HELP)
-    parser.add_argument('--express', action='store_true', help=EXPRESS_HELP)
-
-
-def begin_job(args) -> int:
-    """The start of a training or evaluation entry point (``args`` from a parser with ``add_job_arguments``): lowers the
-    priority to ``args.nice`` and records ``args.no_wait`` and ``args.express`` for the job's plan (``no_wait``,
-    ``express``).  Returns the niceness the process runs at."""
-    _START['no_wait'] = bool(args.no_wait)
-    _START['express'] = bool(getattr(args, 'express', False))
-    return lower_priority(args.nice)
-
-
-def lower_priority(nice: Optional[int] = None) -> int:
-    """Raises this process's niceness to ``nice`` (None: ``default_nice()``) when it is lower; never lowers it (0
-    or a value at or below the current niceness changes nothing).  Returns the niceness the process runs at."""
-    target = default_nice() if nice is None else nice
-    current = os.nice(0)
-    if target > current:
-        try:
-            current = os.nice(target - current)
-        except OSError as error:
-            print(f"triforce: warning: could not lower the priority to nice {target}: {error}", file=sys.stderr)
-    return current
-
-
-def child_env(nice: Optional[int] = None, env: Optional[dict] = None) -> dict:
-    """The environment of a child training or evaluation: ``$TRIFORCE_NICE`` set to the parent's niceness (``nice``,
-    None: this process's), so the child's own ``lower_priority`` keeps what the parent chose (also ``--nice 0``)."""
-    return {**(os.environ if env is None else env), NICE_ENV: str(os.nice(0) if nice is None else nice)}
-
-
-def no_wait() -> bool:
-    """Whether this process's job starts without waiting its turn: ``--no-wait`` (``begin_job``) or
-    ``$TRIFORCE_NO_WAIT`` set to anything but 0."""
-    return _START['no_wait'] or os.environ.get(NO_WAIT_ENV, '').strip() not in ('', '0')
-
-
-def express() -> bool:
-    """Whether this process's job asked for the express place: ``--express`` (``begin_job``) or ``$TRIFORCE_EXPRESS``
-    set to anything but 0."""
-    return _START['express'] or os.environ.get(EXPRESS_ENV, '').strip() not in ('', '0')
-
-
-def job_name(default: str) -> str:
-    """The name this process's job shows in the queue, its log folder and the training GUI: ``$TRIFORCE_JOB_NAME``
-    when set (whoever starts the job says whose it is and what it measures), else the tool's own ``default`` (the
-    specialist, the round, ``eval-chain-d3first-power-on``)."""
-    return os.environ.get(JOB_NAME_ENV, '').strip() or default
-
-
-def max_jobs() -> int:
-    """How many jobs run at once: ``$TRIFORCE_MAX_JOBS`` (0 = no limit), else ``DEFAULT_MAX_JOBS``."""
-    value = os.environ.get(MAX_JOBS_ENV, '').strip()
-    if not value:
-        return DEFAULT_MAX_JOBS
-    try:
-        return max(0, int(value))
-    except ValueError:
-        print(f"triforce: warning: ${MAX_JOBS_ENV}={value!r} is not an integer; using {DEFAULT_MAX_JOBS}",
-              file=sys.stderr)
-        return DEFAULT_MAX_JOBS
-
-
-# ------------------------------------------------------------------------------------------------------- registry
-
-JOBS_DIR_ENV = 'TRIFORCE_JOBS_DIR'
-JOB_SCHEMA = 1
-LOCK_FILE = '.lock'
-LIVE_STATUSES = ('queued', 'running')
-PRUNE_SECONDS = 7 * 24 * 3600        # entries that ended longer ago are deleted at the next registration
-PID_START_SLACK = 2.0                # seconds between /proc's process start time and the recorded one
-_WARNED = {'registry': False}
-
-
-def jobs_dir() -> Path:
-    """``$TRIFORCE_JOBS_DIR``, else ``$XDG_STATE_HOME/triforce/jobs``, else ``$HOME/.local/state/triforce/jobs``."""
-    if os.environ.get(JOBS_DIR_ENV):
-        return Path(os.environ[JOBS_DIR_ENV])
-    state = os.environ.get('XDG_STATE_HOME') or str(Path.home() / '.local' / 'state')
-    return Path(state) / 'triforce' / 'jobs'
-
-
-def process_start(pid: int, proc: Path = Path('/proc')) -> Optional[float]:
-    """When the process started (Unix seconds; ``/proc/<pid>/stat`` field 22 and ``/proc/stat`` btime), None
-    without /proc or when the process is gone."""
-    try:
-        fields = (proc / str(pid) / 'stat').read_text().rsplit(')', 1)[1].split()
-        ticks = int(fields[19])         # field 22 overall; fields[0] is field 3 (state)
-        btime = next(int(line.split()[1]) for line in (proc / 'stat').read_text().splitlines()
-                     if line.startswith('btime '))
-        return btime + ticks / os.sysconf('SC_CLK_TCK')
-    except (OSError, ValueError, IndexError, StopIteration):
         return None
+
+
+def label(default: str) -> str:
+    """The name of this process's log folders: the job's (``$TRIFORCE_JOB_LABEL``), else the tool's ``default``."""
+    return os.environ.get(JOB_LABEL_ENV, '').strip() or default
+
+
+def attended() -> bool:
+    """A terminal is attached (the owner at a shell)."""
+    try:
+        return sys.stdin.isatty() and sys.stdout.isatty()
+    except (AttributeError, ValueError):
+        return False
+
+
+def queue_command(argv: Optional[list] = None) -> str:
+    """The ``triforce job run ...`` form of this process's command."""
+    argv = list(sys.orig_argv if argv is None else argv)
+    return ("triforce job run --agent AGENT --task TASK --subtask SUBTASK --desc 'ONE SENTENCE (<= 120 characters)' "
+            f"[--timeout 40m] -- {shlex.join(argv)}")
+
+
+def announce(kind: str, amounts: Optional[dict] = None, name: Optional[str] = None):
+    """The start of a queued entry point, once its arguments are checked and before it loads, builds or creates
+    anything: in the wrapper's dry call (``$TRIFORCE_JOB_ESTIMATE``) writes ``{kind, work, name}`` there and exits 0;
+    inside a job (``$TRIFORCE_JOB_ID``) or at a terminal returns; otherwise (``ENFORCE``) refuses with the
+    ``triforce job run`` form of the command (exit 2)."""
+    path = os.environ.get(JOB_ESTIMATE_ENV)
+    if path:
+        Path(path).write_text(json.dumps({'kind': kind, 'work': dict(amounts or {}), 'name': name}),
+                              encoding='utf-8')
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(0)     # nothing else runs: no log folder, no model, no pool
+    require_job()
+
+
+def require_job():
+    """The first call of every heavy command that is not one of the queued tools (a script that plays, collects,
+    trains, crunches replays or archives: anything heavier than a build or a test): in the wrapper's dry call it
+    answers ``script`` with no work (the job needs ``--timeout``) and exits; inside a job or at a terminal it
+    returns; otherwise (``ENFORCE``) it refuses with the ``triforce job run`` form of the command (exit 2)."""
+    if os.environ.get(JOB_ESTIMATE_ENV):
+        announce('script')
+    if job_id() is not None or not ENFORCE or attended():
+        return
+    print(f"triforce: {Path(sys.argv[0]).name} runs under the machine's job queue (AGENTS.md \"The job queue\"):\n"
+          f"  {queue_command()}", file=sys.stderr, flush=True)
+    raise SystemExit(2)
+
+
+def _execute(sql: str, args: tuple):
+    """One statement on this job's row; nothing outside a job, and a queue that can't be written is ignored (the
+    job goes on)."""
+    try:
+        con = jobqueue.connect()
+        try:
+            con.execute(sql, args)
+        finally:
+            con.close()
+    except (OSError, sqlite3.Error):
+        pass
+
+
+def record_plan(log_dir, plan):
+    """Records this job's log folder and plan in its row (the first one only: a script that runs several plans is
+    shown by its first)."""
+    job = job_id()
+    if job is not None:
+        _execute("UPDATE jobs SET log_dir = ?, plan = ? WHERE id = ? AND log_dir IS NULL",
+                 (str(Path(log_dir).resolve()), None if plan is None else str(Path(plan).resolve()), job))
+
+
+PROGRESS_SECONDS = 2.0          # at most one progress write every two seconds per label (and always the last one)
+RATE_WINDOW_SECONDS = 60.0      # a rate is taken over the reports of the last minute
+_PROGRESS: dict = {}            # label -> {'shown': monotonic, 'samples': [(time, done)]}
+
+
+def progress(done: float, total: Optional[float] = None, unit: str = 'runs', label: Optional[str] = None,
+             force: bool = False):
+    """Reports a job's movement for ``triforce job list`` and the training GUI: ``done`` of ``total`` (None: the end
+    isn't knowable, a counter) ``unit``s, with the rate over the last minute.  ``label`` names one counter of the job
+    (a batch's entries, each chain of it; default the unit).  Rate-limited (``PROGRESS_SECONDS``; ``force`` and the
+    last one, ``done >= total``, always write); nothing outside a job."""
+    job = job_id()
+    if job is None:
+        return
+    key = label or unit
+    now = time.time()
+    state = _PROGRESS.setdefault(key, {'shown': None, 'samples': []})
+    state['samples'] = [(t, d) for t, d in state['samples'] if now - t <= RATE_WINDOW_SECONDS] + [(now, done)]
+    final = total is not None and done >= total
+    if not (force or final) and state['shown'] is not None and now - state['shown'] < PROGRESS_SECONDS:
+        return
+    state['shown'] = now
+    (first_t, first_done) = state['samples'][0]
+    rate = (done - first_done) / (now - first_t) if now - first_t > 0 else None
+    report = {'done': done, 'total': total, 'unit': unit, 'rate': rate, 'ts': now}
+    _execute("UPDATE jobs SET progress = json_set(coalesce(progress, '{}'), ?, json(?)) WHERE id = ?",
+             (f'$."{key}"', json.dumps(report), job))
 
 
 @lru_cache(maxsize=1)
 def checkout() -> dict:
     """The checkout whose code runs: ``checkout`` (its root), ``branch`` and ``commit`` (None where git can't
     tell)."""
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parent.parent
 
     def git(*args) -> Optional[str]:
         try:
-            out = subprocess.run(['git', '-C', str(root), *args], capture_output=True, text=True, timeout=5,
-                                 check=True)
+            out = subprocess.run(['git', '-C', str(root), *args], capture_output=True, text=True, timeout=10,
+                                 check=False)
         except (OSError, subprocess.SubprocessError):
             return None
-        return out.stdout.strip() or None
+        return out.stdout.strip() or None if out.returncode == 0 else None
     return {'checkout': str(root), 'branch': git('rev-parse', '--abbrev-ref', 'HEAD'),
             'commit': git('rev-parse', '--short', 'HEAD')}
-
-
-def _warn(error: Exception):
-    if not _WARNED['registry']:
-        _WARNED['registry'] = True
-        print(f"triforce: warning: the job registry {jobs_dir()} can't be written ({error}); this job doesn't wait "
-              f"its turn, and the training GUI may not find it outside its own logs root", file=sys.stderr)
-
-
-def _iso(ts: float) -> str:
-    return datetime.fromtimestamp(ts, timezone.utc).isoformat(timespec='seconds')
-
-
-def _write(path: Path, data: dict):
-    from .events import write_json_atomic  # pylint: disable=import-outside-toplevel
-    write_json_atomic(path, data, default=str)
-
-
-@contextmanager
-def _locked(directory: Path):
-    """The registry's lock (``LOCK_FILE``), held exclusively for the block; the kernel drops it if the holder
-    dies."""
-    with open(directory / LOCK_FILE, 'a', encoding='utf-8') as handle:
-        fcntl.flock(handle, fcntl.LOCK_EX)
-        yield
-
-
-def label(job: dict) -> str:
-    """A job as the line names it: ``<log folder> (kind)`` (unique: two chains of one segment share a name), else
-    ``<name> (kind)`` for a job without a folder."""
-    return f"{Path(job['log_dir']).name if job.get('log_dir') else job.get('name')} ({job.get('kind')})"
-
-
-def _order(job: dict) -> tuple:
-    """A job's place in the line: when it joined (old entries: 0), then its file name."""
-    return job.get('queued_ts') or 0.0, Path(job.get('path') or '').name
-
-
-def _duration(seconds: float) -> str:
-    """``40 seconds``, ``5 minutes``, ``1 hour 12 minutes``."""
-    def unit(n: int, name: str) -> str:
-        return f"{n} {name}{'' if n == 1 else 's'}"
-    seconds = int(round(seconds))
-    if seconds < 60:
-        return unit(seconds, 'second')
-    if seconds < 3600:
-        return unit(round(seconds / 60), 'minute')
-    hours, minutes = divmod(round(seconds / 60), 60)
-    return unit(hours, 'hour') + (f" {unit(minutes, 'minute')}" if minutes else '')
-
-
-def work(**amounts) -> dict:
-    """A job's work, ``{unit: amount}`` (``UNITS``), without the units it has none of."""
-    unknown = sorted(set(amounts) - set(UNITS))
-    if unknown:
-        raise ValueError(f"unknown work units {unknown} (known: {', '.join(UNITS)})")
-    return {unit: amount for unit, amount in amounts.items() if amount}
-
-
-def _finished_ts(job: dict) -> float:
-    try:
-        return datetime.fromisoformat(job['finished']).timestamp()
-    except (KeyError, TypeError, ValueError):
-        return 0.0
-
-
-def rates(history: list[dict]) -> dict:
-    """Seconds per unit of work, from the registry entries ``history`` (``read_jobs``): for each unit, over the
-    ``RATE_HISTORY`` latest ``completed`` jobs that did some of it, the seconds they ran (``ran``: admitted to
-    finished) less what their other work takes by the other units' rates (those of jobs that did only that unit,
-    else ``DEFAULT_RATES``), divided by the amount of the unit they did: the total over those jobs, not the median
-    of each job's ratio, so a big job weighs as its size (Nov 22: small chains' start-up made the median 6x the rate
-    of big chains, and a 17-segment batch was estimated at 28 hours and starved).  ``DEFAULT_RATES`` where nothing
-    finished yet."""
-    done = sorted((job for job in history if job.get('status') == 'completed' and (job.get('ran') or 0) > 0
-                   and isinstance(job.get('work'), dict) and job['work']
-                   and set(job['work']) <= set(UNITS) and all((a or 0) > 0 for a in job['work'].values())),
-                  key=_finished_ts, reverse=True)
-
-    def total(samples: list, default: float) -> float:
-        amount = sum(a for _, a in samples)
-        return sum(s for s, _ in samples) / amount if amount else default
-    pure = {unit: total([(job['ran'], job['work'][unit]) for job in done if set(job['work']) == {unit}]
-                        [:RATE_HISTORY], DEFAULT_RATES[unit]) for unit in UNITS}
-    result = {}
-    for unit in UNITS:
-        samples = []
-        for job in (job for job in done if unit in job['work']):
-            rest = sum(amount * pure[other] for other, amount in job['work'].items() if other != unit)
-            if job['ran'] > rest:
-                samples.append((job['ran'] - rest, job['work'][unit]))
-            if len(samples) == RATE_HISTORY:
-                break
-        result[unit] = total(samples, DEFAULT_RATES[unit])
-    return result
-
-
-def estimate(amounts: Optional[dict], unit_rates: Optional[dict] = None) -> float:
-    """Seconds ``amounts`` (a job's ``work``) are expected to take at ``unit_rates`` (default: ``rates`` of the
-    registry); 0 for a job that names no work."""
-    if not amounts:
-        return 0.0
-    unit_rates = rates(read_jobs()) if unit_rates is None else unit_rates
-    return float(sum(amount * unit_rates[unit] for unit, amount in amounts.items()))
-
-
-def score(job: dict, now: float) -> float:
-    """A waiting job's score in the line, lowest first: its estimate less ``AGING`` x the seconds it has waited."""
-    return (job.get('estimate') or 0.0) - AGING * max(0.0, now - (job.get('queued_ts') or now))
-
-
-def express_sized(job: dict) -> bool:
-    """Short enough for the express place, or asked for it (``express``)."""
-    return bool(job.get('express')) or (job.get('estimate') is not None and job['estimate'] <= EXPRESS_SECONDS)
-
-
-@dataclass
-class Turn:
-    """A job's turn (``turn``): whether it may start and in which place (``lane``: regular or express), the live
-    ``running`` jobs it waits for (a job too long for the express place doesn't wait for the job there) and the live
-    ``queued`` jobs ahead of it in the line (registry entries, in line order), the regular limit, the job's own
-    estimate and its score now."""
-    admitted: bool
-    running: list = field(default_factory=list)
-    ahead: list = field(default_factory=list)
-    limit: int = DEFAULT_MAX_JOBS
-    lane: Optional[str] = None
-    estimate: Optional[float] = None
-    score: Optional[float] = None
-
-    @property
-    def place(self) -> int:
-        """Its place in line (1: next to start)."""
-        return len(self.ahead) + 1
-
-    def fields(self) -> dict:
-        """What it waits for, as the plan and ``queue.jsonl`` record it (a change of these is reported)."""
-        return {'place': self.place, 'running': [label(job) for job in self.running],
-                'ahead': [label(job) for job in self.ahead], 'limit': self.limit}
-
-    def details(self) -> dict:
-        """``fields`` with the estimate, the score and the lane."""
-        return {**self.fields(), 'estimate': None if self.estimate is None else round(self.estimate, 1),
-                'score': None if self.score is None else round(self.score, 1), 'lane': self.lane}
-
-    def reason(self) -> str:
-        """``estimated 40 minutes; 2 jobs are running (A, B); 1 job is ahead in line (C)``."""
-        def jobs(entries: list, verb: str) -> str:
-            names = ', '.join(label(job) for job in entries)
-            return f"{len(entries)} job{' is' if len(entries) == 1 else 's are'} {verb} ({names})"
-        parts = [f"estimated {_duration(self.estimate)}"] if self.estimate is not None else []
-        if self.running:
-            parts.append(jobs(self.running, 'running'))
-        if self.ahead:
-            parts.append(jobs(self.ahead, 'ahead in line'))
-        return '; '.join(parts)
-
-
-def turn(job: dict, others: list[dict], limit: int, proc: Path = Path('/proc'), now: Optional[float] = None,
-         express: Optional[int] = None) -> Turn:
-    """``job``'s turn among the registry entries ``others`` (``read_jobs``; ``job`` itself may be among them).
-    Entries of another host, of ``job``'s own process and those not alive are ignored.
-
-    The line is ordered by ``score`` (lowest first; ties by join time, then file name) and its jobs take
-    the free places in that order: an express-sized job the express place while one of ``express`` is free (running
-    jobs there count only against it), else a regular place while fewer than ``limit`` (0: no limit) run outside
-    it; a job that gets neither waits, and a later job may still get a place it can use.  ``job`` may start when it
-    gets a place.  ``now``: the time scores are taken at (default now); ``express``: the express places (default
-    ``EXPRESS_JOBS``)."""
-    host = socket.gethostname()
-    now = time.time() if now is None else now
-    express = EXPRESS_JOBS if express is None else express
-    running, waiting = [], []
-    for other in others:
-        if other.get('host') != host or other.get('pid') == job.get('pid') or job_alive(other, proc) is not True:
-            continue
-        (running if other.get('status') == 'running' else waiting).append(other)
-    running.sort(key=_order)
-    mine_score = score(job, now)
-    line = sorted([*waiting, job], key=lambda entry: (score(entry, now), *_order(entry)))
-    regular = float('inf') if limit <= 0 else limit - sum(other.get('lane') != 'express' for other in running)
-    spare = express - sum(other.get('lane') == 'express' for other in running)
-    lane = None
-    for entry in line:
-        if limit > 0 and spare > 0 and express_sized(entry):
-            spare, lane = spare - 1, 'express'
-        elif regular > 0:
-            regular, lane = regular - 1, 'regular'
-        else:
-            lane = None
-        if entry is job:
-            break
-    ahead = line[:next(index for index, entry in enumerate(line) if entry is job)]
-    # what it waits for: the jobs holding places it could take (a job too long for the express place doesn't wait
-    # for the one there)
-    blocking = running if limit > 0 and express_sized(job) else [
-        other for other in running if other.get('lane') != 'express']
-    return Turn(lane is not None, blocking, ahead, limit, lane, job.get('estimate'), mine_score)
-
-
-@contextmanager
-def _interruptible():
-    """While a job waits: SIGTERM raises KeyboardInterrupt (in the main thread), as Ctrl-C does."""
-    if threading.current_thread() is not threading.main_thread():
-        yield
-        return
-
-    def interrupt(signum, _frame):
-        raise KeyboardInterrupt(f"signal {signum}")
-    previous = signal.signal(signal.SIGTERM, interrupt)
-    try:
-        yield
-    finally:
-        signal.signal(signal.SIGTERM, previous)
-
-
-# report(event, turn, waited): event 'queued' (it first has to wait), 'waiting' (every UPDATE_SECONDS), 'admitted'
-# (it starts after waiting) or None (what it waits for changed); waited in seconds.
-Report = Callable[[Optional[str], Turn, float], None]
-
-
-class JobRecord:
-    """One registry entry (its file and contents)."""
-
-    def __init__(self, path: Path, data: dict):
-        self.path = path
-        self.data = data
-
-    def _save(self, **fields):
-        self.data.update(fields)
-        _write(self.path, self.data)
-
-    def check(self, proc: Path = Path('/proc')) -> Turn:
-        """This job's turn now (``turn``, ``max_jobs()``); when it may start, its entry turns ``running`` in its
-        place (``lane``) under the same hold of the lock.  OSError when the registry can't be read or written."""
-        with _locked(self.path.parent):
-            now = time.time()
-            current = turn({**self.data, 'path': str(self.path)}, read_jobs(self.path.parent), max_jobs(), proc,
-                           now)
-            if current.admitted:
-                self._save(status='running', admitted=_iso(now), admitted_ts=now, lane=current.lane)
-        return current
-
-    def wait_turn(self, report: Optional[Report] = None) -> float:
-        """Blocks until this job may start (``check`` every ``POLL_SECONDS``), saying so on stdout when it first has
-        to wait, every ``UPDATE_SECONDS`` and when it starts, and calling ``report`` (``Report``).  ``no_wait()``
-        starts it at once.  A registry that can't be used any more starts it too (warned once).  SIGTERM and
-        Ctrl-C raise KeyboardInterrupt.  Returns the seconds it waited (0 when it started at once)."""
-        name = self.data.get('name')
-        began = time.monotonic()
-        try:
-            if no_wait():
-                now = time.time()
-                self._save(status='running', admitted=_iso(now), admitted_ts=now, lane='regular', no_wait=True)
-                return 0.0
-            with _interruptible():
-                shown, update = None, None
-                while True:
-                    current = self.check()
-                    now = time.monotonic()
-                    waited = now - began
-                    if current.admitted:
-                        if update is not None:
-                            if report is not None:
-                                report('admitted', current, waited)
-                            print(f"triforce: {name} starts after waiting {_duration(waited)}", flush=True)
-                        return waited if update is not None else 0.0
-                    # Recorded first, said second: whoever reads the line can already read the plan.
-                    event = None
-                    if update is None or now >= update:
-                        event = 'queued' if update is None else 'waiting'
-                        update = now + UPDATE_SECONDS
-                    if report is not None and (event is not None or current.fields() != shown):
-                        report(event, current, waited)
-                    if event is not None:
-                        print(f"triforce: {name} is paused until resources are available: {current.reason()}. It "
-                              f"starts by itself; next update in {_duration(UPDATE_SECONDS)}.", flush=True)
-                    shown = current.fields()
-                    time.sleep(POLL_SECONDS)
-        except OSError as error:
-            _warn(error)
-            return time.monotonic() - began
-
-    def finish(self, status: str):
-        """Marks the job ended with ``status`` (the plan's final status) and the seconds it ran (``ran``: from its
-        admission, the time ``rates`` learn from)."""
-        now = time.time()
-        admitted = self.data.get('admitted_ts')
-        try:
-            self._save(status=status, finished=_iso(now), ran=None if admitted is None else round(now - admitted, 1))
-        except OSError as error:
-            _warn(error)
-
-
-def register(log_dir, plan, name: str, kind: str, directory: Optional[Path] = None,
-             amounts: Optional[dict] = None) -> Optional[JobRecord]:
-    """Records a job (this process, its log folder and plan: None for a job without one, its ``work`` ``amounts``
-    and the ``estimate`` of them by the registry's ``rates``) in the registry as ``queued``, joining the line now,
-    and prunes old entries; None when the registry can't be written (warned once).  ``JobRecord.wait_turn`` then
-    waits for its turn.  ``$TRIFORCE_JOB_NAME`` replaces ``name`` (the tool's own, e.g. the specialist or
-    ``eval-chain-d3first-power-on``), so whoever started the job can say whose it is and what it measures."""
-    name = job_name(name)
-    directory = jobs_dir() if directory is None else Path(directory)
-    pid, now = os.getpid(), time.time()
-    started = process_start(pid)
-    log_dir = None if log_dir is None else Path(log_dir).resolve()
-    safe = ''.join(c if c.isalnum() or c in '-_.' else '-' for c in (name if log_dir is None else log_dir.name))
-    amounts = dict(amounts or {})
-    data = {'schema': JOB_SCHEMA, 'host': socket.gethostname(), 'pid': pid, 'pid_start': started,
-            'started': _iso(now), 'command': [sys.executable, *sys.argv], 'cwd': os.getcwd(), **checkout(),
-            'log_dir': None if log_dir is None else str(log_dir),
-            'plan': None if plan is None else str(Path(plan).resolve()), 'name': name, 'kind': kind,
-            'status': 'queued', 'queued': None, 'queued_ts': None, 'admitted': None, 'admitted_ts': None,
-            'lane': None, 'no_wait': False, 'express': express(), 'work': amounts, 'nice': os.nice(0),
-            'estimate': round(estimate(amounts, rates(read_jobs(directory))), 1), 'finished': None, 'ran': None}
-    path = directory / f"{data['host']}-{pid}-{int(started or now)}-{safe}.json"
-    try:
-        directory.mkdir(parents=True, exist_ok=True)
-        with _locked(directory):        # joins the line in the order of the lock: first come, first served
-            joined = time.time()
-            data.update(queued=_iso(joined), queued_ts=joined)
-            _write(path, data)
-    except OSError as error:
-        _warn(error)
-        return None
-    prune(directory, now)
-    return JobRecord(path, data)
-
-
-def read_jobs(directory: Optional[Path] = None) -> list[dict]:
-    """Every readable registry entry (each with ``path``, its file)."""
-    directory = jobs_dir() if directory is None else Path(directory)
-    jobs = []
-    try:
-        paths = sorted(directory.glob('*.json'))
-    except OSError:
-        return jobs
-    for path in paths:
-        try:
-            data = json.loads(path.read_text(encoding='utf-8'))
-        except (OSError, ValueError):
-            continue
-        if isinstance(data, dict):
-            jobs.append({**data, 'path': str(path)})
-    return jobs
-
-
-def job_alive(job: dict, proc: Path = Path('/proc')) -> Optional[bool]:
-    """Is a registered job still there (queued or running)?  False once it ended or its process is gone (or the pid
-    now belongs to a process that started at another time); None for another host's job that hasn't ended."""
-    if job.get('status') not in LIVE_STATUSES:
-        return False
-    if job.get('host') != socket.gethostname():
-        return None
-    started = process_start(int(job.get('pid') or 0), proc)
-    if started is None:
-        return False
-    recorded = job.get('pid_start')
-    return recorded is None or abs(started - recorded) <= PID_START_SLACK
-
-
-def _ended(job: dict) -> Optional[float]:
-    """When a job ended (Unix seconds): its ``finished`` stamp, else (a job whose process is gone) its start."""
-    stamp = job.get('finished') or (job.get('started') if job_alive(job) is False else None)
-    try:
-        return datetime.fromisoformat(stamp).timestamp() if stamp else None
-    except ValueError:
-        return None
-
-
-def prune(directory: Optional[Path] = None, now: Optional[float] = None, keep: float = PRUNE_SECONDS) -> int:
-    """Deletes the entries that ended more than ``keep`` seconds ago (unreadable ones by their file's age); returns
-    how many."""
-    directory = jobs_dir() if directory is None else Path(directory)
-    now = time.time() if now is None else now
-    removed = 0
-    try:
-        paths = list(directory.glob('*.json'))
-    except OSError:
-        return 0
-    for path in paths:
-        try:
-            data = json.loads(path.read_text(encoding='utf-8'))
-            ended = _ended(data) if isinstance(data, dict) else path.stat().st_mtime
-        except (OSError, ValueError):
-            try:
-                ended = path.stat().st_mtime
-            except OSError:
-                continue
-        if ended is not None and now - ended > keep:
-            try:
-                path.unlink()
-                removed += 1
-            except OSError:
-                pass
-    return removed

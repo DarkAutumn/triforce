@@ -11,7 +11,8 @@ differences of two columns); ``obs``: the observation's vector blocks flattened 
 ``entity_types``, ``link``, ``room_state``, ``history``, ``objective``, ``target``, ``room_id``; the tile grid left
 out). Held out as round 35. Written: the held-out numbers (``r36_hit_common.summary``), the gain of every feature
 and its sum by RAM group (``RAM_GROUPS``; the offsets count as ``relative``, the action as ``action``).
-XGBoost on the GPU: no job queue.
+XGBoost on the GPU: a job of the machine's queue (``jobs.require_job``: ``triforce job run ... --timeout 30m --
+.venv/bin/python scripts/experiments/r36_hit_trees.py ...``).
 """
 
 import argparse
@@ -23,6 +24,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from r36_hit_common import group_of, load, ram_columns, ram_names, summary  # noqa: E402
+from triforce.jobs import require_job  # noqa: E402
 
 OBS_KEYS = ['entity_features', 'entity_types', 'link', 'room_state', 'history', 'objective', 'target', 'room_id']
 
@@ -78,6 +80,7 @@ def main(argv) -> int:
     parser.add_argument('--device', default='cuda')
     parser.add_argument('--threads', type=int, default=4)
     args = parser.parse_args(argv)
+    require_job()
     data = load(args.data)
     held = data.held_rows[data.c_row]
     tr, te = np.flatnonzero(~held), np.flatnonzero(held)

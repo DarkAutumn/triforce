@@ -10,7 +10,9 @@ ow-zora's own 0x28, so its entry has no handoff. This cuts the frame before the 
 (``eval-chain --replays DIR``) for every replay that enters the route step, and writes it as a harvested state
 ``OUT_DIR/<stem>_h<seed>_0.state`` (``STEP:STEM``: the step's seed-state stem, e.g. ``44:0_38n``). A harvested start
 keeps the hearts, bombs and position the chain brought (no ``ram_randomization``). ``--count`` keeps the first N
-per step (by seed). Prints Link's X and Y on entry (12 frames in) of the states written.
+per step (by seed). Prints Link's X and Y on entry (12 frames in) of the states written.  It plays every replay of
+the folder: a job of the machine's queue (``jobs.require_job``: ``triforce job run ... -- .venv/bin/python
+scripts/experiments/r29_zora_states.py ...``).
 """
 
 import argparse
@@ -19,6 +21,7 @@ import glob
 import os
 
 from triforce import _native
+from triforce.jobs import require_job
 
 # zelda::room_entry: the game modes of a room transition and of a room entry, $12 and $11 (IsUpdatingMode).
 TRANSITION_MODES = {0x02, 0x03, 0x06, 0x07, 0x0A, 0x10}
@@ -63,6 +66,7 @@ def main():
                         help="a route step and its seed-state stem (repeatable)")
     parser.add_argument('--count', type=int, default=0, help="at most N states a step (0: every one)")
     args = parser.parse_args()
+    require_job()
     steps = {int(step): stem for step, stem in (item.split(':', 1) for item in args.step)}
     os.makedirs(args.out, exist_ok=True)
     saved = collections.Counter()

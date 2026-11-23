@@ -1,0 +1,22 @@
+# moldorm@d3first (round 39, the owner, Nov 22: "drop the moldorm fight (it's now passthrough) and fight in d9 0x56 to
+# get the missing key"): the family's yaml on d3first's states only. d3first crosses 2:0x3e S to N with the Moldorm
+# alive (routes.yaml `treasure: skip`; the room has no shutter); d2first still fights it for its key. The family's run
+# (r75-f-b) learned the fight; fine-tuned from it on the crossing with tracks explored on d3first's states. The lab
+# reads this file for the key f"{family}@d3first" (lab.collect.task_yaml).
+name: moldorm
+rooms: ['(2, 0x3e)']
+start_states: ['2_3e*_[0-9]']
+state_routes: [d3first]
+success: [exit-correct]
+reward_profile: default
+reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20}}
+obs: {objective: true, target: true}
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}
+items: {bombs: free}
+curriculum: {enabled: true}
+one_room: true
+max_steps: 3000
+warm_start: null
+notes: >-
+  The Moldorm room in Dungeon 2 on d3first: in from 0x4e in the S, out N into 0x2e past the living Moldorm (its key
+  left: Dungeon 9's 0x56 gives the route that key instead).

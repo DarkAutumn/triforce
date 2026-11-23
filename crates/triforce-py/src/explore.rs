@@ -6,7 +6,7 @@ use crate::context::{self, TfzStore};
 use crate::envs::info_dict;
 use crate::errors::env_err;
 use crate::game::{PyGameState, PySnapshot};
-use crate::signals::interruptible;
+use crate::signals::{interruptible, interruptible_ticking};
 use env::config::{GameData, SpecialistConfig};
 use env::explore::{AcceptSpec, ExploreResult, Explorer};
 use env::start_states::state_label;
@@ -306,10 +306,11 @@ fn explore_one(
 /// every worker at its next iteration (KeyboardInterrupt; states already written stay written). `room_kills`
 /// [(level, room, kills)] explores staged starts (kills banked before the entry, round 24) into
 /// `<out>/<specialist>/<state>~k<kills>`; `clips=False` explores with the run-time clips switch off (a plain-way
-/// track, `<state>[~k<kills>]~plain`).
+/// track, `<state>[~k<kills>]~plain`). `progress(done, total)` is called on the calling thread with the states
+/// explored so far: at the start and whenever the count moves (an exception from it stops the search).
 #[pyfunction]
 #[pyo3(signature = (specialist, out, states=None, iterations=3000, explore_steps=25, patience=300, parallel=1,
-                    seed=0, states_dir=None, room_kills=None, clips=None))]
+                    seed=0, states_dir=None, room_kills=None, clips=None, progress=None))]
 #[allow(clippy::too_many_arguments)]
 pub fn explore_states(
     py: Python<'_>,
@@ -324,6 +325,7 @@ pub fn explore_states(
     states_dir: Option<PathBuf>,
     room_kills: Option<Vec<(u8, u8, u8)>>,
     clips: Option<bool>,
+    progress: Option<Bound<'_, PyAny>>,
 ) -> PyResult<Vec<(PyExploreResult, bool)>> {
     let room_kills: Option<Vec<((u8, u8), u8)>> =
         room_kills.map(|r| r.into_iter().map(|(l, room, k)| ((l, room), k)).collect());
@@ -346,9 +348,22 @@ pub fn explore_states(
     let budget = (iterations, explore_steps, patience);
     let results: Vec<Mutex<Option<Explored>>> = states.iter().map(|_| Mutex::new(None)).collect();
     let next = AtomicUsize::new(0);
+    let explored = AtomicUsize::new(0);
     let workers = parallel.clamp(1, states.len().max(1));
     let stop = Arc::new(AtomicBool::new(false));
-    interruptible(
+    let mut reported = None;
+    let mut report = |_py: Python<'_>| -> PyResult<()> {
+        let done = explored.load(Ordering::Relaxed);
+        if let Some(callback) = &progress
+            && reported != Some(done)
+        {
+            callback.call1((done, states.len()))?;
+            reported = Some(done);
+        }
+        Ok(())
+    };
+    report(py)?;
+    interruptible_ticking(
         py,
         || {
             std::thread::scope(|scope| {
@@ -359,13 +374,16 @@ pub fn explore_states(
                             let Some(state) = states.get(i) else { break };
                             let r = explore_one(&config, &data, &rom, state, &out, budget, seed, &stop, room_kills.as_deref(), clips);
                             *results[i].lock() = Some(r);
+                            explored.fetch_add(1, Ordering::Relaxed);
                         }
                     });
                 }
             });
         },
         || stop.store(true, Ordering::Relaxed),
+        &mut report,
     )?;
+    report(py)?;
     results
         .into_iter()
         .map(|r| {

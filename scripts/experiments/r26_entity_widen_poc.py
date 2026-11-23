@@ -12,7 +12,9 @@ every slot (present or not). Compared bit for bit: the joint log-probs over all 
 action each picks from the same Gumbel noise. B's action is played. Exit 0 if every decision matched.
 
 Without the entity zero-column drop in `crates/policy` (the policy's `live` drop extended to `input_proj`) the
-values differ in the last bits (the dot product's lanes shift); with it they are identical.
+values differ in the last bits (the dot product's lanes shift); with it they are identical.  It plays networks: a
+job of the machine's queue (``jobs.require_job``: ``triforce job run ... --timeout 20m -- .venv/bin/python
+scripts/experiments/r26_entity_widen_poc.py ...``).
 """
 
 import argparse
@@ -28,6 +30,7 @@ ROOT = Path(subprocess.run(['git', 'rev-parse', '--show-toplevel'], capture_outp
                            cwd=Path(__file__).parent, check=True).stdout.strip())
 sys.path.insert(0, str(ROOT))
 from triforce import _native, registry      # noqa: E402  pylint: disable=wrong-import-position
+from triforce.jobs import require_job       # noqa: E402  pylint: disable=wrong-import-position
 
 PROJ = 'entity_encoder.input_proj.weight'
 
@@ -59,6 +62,7 @@ def main(argv=None) -> int:
     parser.add_argument('--steps', type=int, default=400, help='decisions per episode at most')
     parser.add_argument('--seed', type=int, default=0)
     args = parser.parse_args(argv)
+    require_job()
     models = registry.models_root()
     run_dir = models / args.family / (models / args.family / 'promoted').read_text().strip()
     a, b, features = policies(run_dir, args.extra)

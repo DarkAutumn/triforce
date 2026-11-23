@@ -50,7 +50,8 @@ own tower; only the trunk and the hit tower train here) on the ENGINE's schema 7
 (not this script's numpy); ``hitkd`` its head with one logit per kind and direction slot (88; the durations share it);
 ``norel``, ``nocontact``, ``nofeatures`` leave a token group out.
 
-GPU work: no job queue, one process at a time.
+Training on the GPU is a job of the machine's queue (``jobs.require_job``: ``triforce job run ... --timeout 1h --
+.venv/bin/python scripts/experiments/r36_hit_bench.py CANDIDATE ...``); ``--table`` runs anywhere.
 """
 
 import argparse
@@ -69,6 +70,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from r36_hit_common import Data, _extrapolate, contact_features, summary  # noqa: E402
 
 from triforce import registry  # noqa: E402
+from triforce.jobs import require_job  # noqa: E402
 from triforce.model import MASK_KEY, EntityEncoder, GridEncoder, ModelConfig, ZeldaPolicy, layer_init  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -641,6 +643,7 @@ def main(argv) -> int:
     if args.table:
         print_table(args.results)
         return 0
+    require_job()
     spec = parse(args.candidate)
     torch.manual_seed(args.seed)
     device = torch.device(args.device)

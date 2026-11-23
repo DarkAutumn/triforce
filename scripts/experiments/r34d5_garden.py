@@ -13,7 +13,8 @@ middle) and how many Darknuts lived; after the last kill: the frames to the exit
 With EVAL.json (the evaluation's records, matched by seed): bombs landed (`bombs.hits`).  Printed per label: endings,
 hits a visit and their decisions and places, kills by sword and by bomb, bombs placed and landed and when, the fight's
 length (frames to the last kill), the after-fight phase, the share of fight frames within 16 px of a Darknut and
-where Link spends the fight."""
+where Link spends the fight.  It plays every replay given: a job of the machine's queue (``jobs.require_job``:
+``triforce job run ... -- .venv/bin/python scripts/experiments/r34d5_garden.py ...``)."""
 
 import argparse
 import collections
@@ -21,6 +22,7 @@ import json
 from pathlib import Path
 
 from triforce._native import Replay, ReplayPlayer
+from triforce.jobs import require_job
 
 OBJ_TYPE, OBJ_X, OBJ_Y, OBJ_STATE = 0x34F, 0x70, 0x84, 0xAC
 HEARTS, PARTIAL, BOMBS = 0x66F, 0x670, 0x658
@@ -176,6 +178,7 @@ def main():
     parser.add_argument('dirs', nargs='+', help='LABEL=REPLAY_DIR[:EVAL.json]')
     parser.add_argument('--json', type=Path)
     args = parser.parse_args()
+    require_job()
     out = {}
     for spec in args.dirs:
         label, rest = spec.split('=', 1)

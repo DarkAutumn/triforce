@@ -10,13 +10,16 @@ the rule's decisions during PPO (`triforce.demos`, as round 25 did for 5:0x37's 
 
 The rule: `FOOD N` where the mask offers it (else the first FOOD direction offered), otherwise `MOVE N`.  A FOOD
 row is written `FOOD_REPEAT` times (it is one decision of a run); a MOVE N's duration is not cloned.  Only runs
-that leave by the N door are kept."""
+that leave by the N door are kept.  It plays the rule over many runs: a job of the machine's queue
+(``jobs.require_job``: ``triforce job run ... --timeout 30m -- .venv/bin/python
+scripts/experiments/r26_d7_28_food_demos.py ...``)."""
 
 import sys
 from pathlib import Path
 
 from triforce._native import Env
 from triforce.demos import DemoRecorder, action_indices, legal
+from triforce.jobs import require_job
 
 STATES = ('7_28s_0', '7_28s_1', '7_28s_2')
 MAX_STEPS = 120
@@ -61,6 +64,7 @@ def main(argv) -> int:
     if not argv:
         print(__doc__, file=sys.stderr)
         return 2
+    require_job()
     rows, kept, played = demos(Path(argv[0]), int(argv[1]) if len(argv) > 1 else 100)
     print(f"{rows} rows from {kept} of {played} runs -> {argv[0]}")
     return 0 if kept else 1

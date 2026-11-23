@@ -7,7 +7,10 @@ Link put into a level 7 room by `triforce.probe` with the route's inventory, doo
     python scripts/experiments/r26_d7_walks.py ladder [--seeds N]      # 7:0x49 / 0x18: the ladder refused
     python scripts/experiments/r26_d7_walks.py clip [--seeds N]        # 7:0x1a: CLIP N by the agent's action
     python scripts/experiments/r26_d7_walks.py food                    # 7:0x28: FOOD by the agent's action
-    python scripts/experiments/r26_d7_walks.py crossings [--seeds N]   # 0x69, 0x19, 0x39, 0x59 walked blind"""
+    python scripts/experiments/r26_d7_walks.py crossings [--seeds N]   # 0x69, 0x19, 0x39, 0x59 walked blind
+
+It plays the game over many seeded trials: a job of the machine's queue (``jobs.require_job``: ``triforce job run
+... --timeout 30m -- .venv/bin/python scripts/experiments/r26_d7_walks.py ...``)."""
 
 import argparse
 import collections
@@ -15,6 +18,8 @@ import random
 import statistics
 import tempfile
 from pathlib import Path
+
+from triforce.jobs import require_job
 
 from r26_walks import (BOMBS, CUR_OPENED_DOORS, DIGDOGGER_BIG3, DIGDOGGER_SMALL, DODONGO, FOOD, GRUMBLE, OBJ_META,
                        OBJ_STATE, OBJ_TYPE, OBJ_X, OBJ_Y, PLAY, UW_FLAGS_7TO9, Walk, d7_state)
@@ -292,6 +297,7 @@ def main():
         p = sub.add_parser(name)
         p.add_argument('--seeds', type=int, default=40)
     args = parser.parse_args()
+    require_job()
     globals()[args.cmd](args)
 
 

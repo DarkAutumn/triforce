@@ -68,6 +68,29 @@ def _short_config(tmp_path, name='ow-start'):
     return config
 
 
+def test_evaluate_answers_the_wrapper_dry_call_and_creates_nothing(states_dir, tmp_path):
+    """``triforce job run`` asks the evaluation its work first (``$TRIFORCE_JOB_ESTIMATE``, no job id yet): its
+    episodes, written as ``{kind, work, name}`` before the network loads and before any log folder or output."""
+    from triforce import jobs
+    from triforce.specialist import load_specialist
+    config = _short_config(tmp_path)
+    checkpoint = tmp_path / 'run' / 'ckpt.pt'
+    checkpoint.parent.mkdir()
+    checkpoint.write_bytes(b'')                  # never loaded
+    estimate = tmp_path / 'estimate.json'
+    environ = {**{k: v for k, v in os.environ.items() if k != jobs.JOB_ID_ENV}, jobs.JOB_ESTIMATE_ENV: str(estimate),
+               'TRIFORCE_STATES_DIR': str(states_dir)}
+    out = subprocess.run([sys.executable, '-m', 'triforce.evaluate', '--specialist', str(config), '--checkpoint',
+                          str(checkpoint), '--episodes-per-state', '3', '--output', str(tmp_path / 'eval.json'),
+                          '--logs-dir', str(tmp_path / 'logs')],
+                         env=environ, capture_output=True, text=True, timeout=120, check=False)
+    assert out.returncode == 0, out.stderr
+    episodes = evaluate.episode_count(load_specialist(str(config)), 3)
+    assert episodes >= 3 and json.loads(estimate.read_text()) == {
+        'kind': 'eval', 'work': {'eval_episodes': episodes}, 'name': 'eval-ow-start'}
+    assert sorted(p.name for p in tmp_path.iterdir()) == ['estimate.json', 'ow-start.yaml', 'run']
+
+
 def test_only_the_canonical_evaluation_is_written_to_eval_json(states_dir, tmp_path):
     """F125: another act mode, episode count, seed or specialist goes to its own file; eval.json is untouched."""
     checkpoint = save_checkpoint('ow-start', 'canon', seeded_network(3, SMALL), root=tmp_path)

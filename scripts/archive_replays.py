@@ -1,8 +1,12 @@
 """Keeps every replay that shows how a version of the networks played (the owner, Nov 22: "I want to go back to
 previous runs and say 'see this was a problem'").
 
-    .venv/bin/python scripts/archive_replays.py [PATH ...] [--git-history] [--kind KIND --label LABEL]
-                                                [--repo replays] [--backup DIR]
+    triforce job run --agent A --task T --subtask S --desc '...' --timeout 20m -- \\
+        .venv/bin/python scripts/archive_replays.py [PATH ...] [--git-history] [--kind KIND --label LABEL]
+                                                    [--repo replays] [--backup DIR]
+
+A job of the machine's queue (``jobs.require_job``: it reads, compresses and writes many replays); its progress is
+the replays done of those found, then the 7z archives written.
 
 Each replay (a file, or every ``*.tfreplay`` under a directory, and with ``--git-history`` every version of every
 replay ever committed) is named by what it is, from its own META:
@@ -37,7 +41,7 @@ import tempfile
 from collections import defaultdict
 from pathlib import Path
 
-from triforce import _native
+from triforce import _native, jobs
 
 ROOT = Path(__file__).resolve().parents[1]
 SINGLE_FILE_KINDS = ('golden', 'single-run')
@@ -138,6 +142,7 @@ def main(argv=None) -> int:
         parser.error(f"--kind {args.kind!r}: letters, digits, '.', '_' and '-' only")
     if args.label is not None and not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*', args.label):
         parser.error(f"--label {args.label!r}: letters, digits, '.', '_' and '-' only")
+    jobs.require_job()
     repo, backup = Path(args.repo), Path(args.backup)
     backup.mkdir(parents=True, exist_ok=True)
     index_path = backup / 'index.jsonl'
@@ -156,7 +161,8 @@ def main(argv=None) -> int:
         items += git_versions()
     added = kept = 0
     segments = defaultdict(list)            # 7z path (relative to the backup) -> [(member, bytes)]
-    for data, where in items:
+    for done, (data, where) in enumerate(items):
+        jobs.progress(done, len(items), 'replays')
         sha = hashlib.sha1(data).hexdigest()
         if sha in index:
             if where not in index[sha]['found']:
@@ -188,8 +194,10 @@ def main(argv=None) -> int:
         index[sha] = {**entry, 'found': [where]}
         added += 1
         print(f"kept {entry['path']}{':' + entry['member'] if 'member' in entry else ''}  <- {where}")
-    for archive, members in segments.items():
+    jobs.progress(len(items), len(items), 'replays')
+    for done, (archive, members) in enumerate(segments.items(), 1):
         add_to_7z(backup / archive, members)
+        jobs.progress(done, len(segments), 'archives')
     index_path.write_text(''.join(json.dumps(e) + '\n' for e in sorted(index.values(), key=lambda e: e['name'])))
     print(f"{added} new, {kept} already kept; {len(index)} in {index_path}")
     return 0

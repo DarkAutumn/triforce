@@ -9,11 +9,16 @@ the nearest Darknut's flank) with the wood sword and the bombs the route brings,
 
 Every trial loads d2first's own pre-entry state of the room (`5_05e_<c>`, `5_24e_<c>`, c = seed mod 3: natural spawns
 and randomness for the seed) and writes what `d3first` holds there: the sword, 7 heart containers (full unless a
-line says otherwise), the bombs of the line.  The rest of the inventory is d2first's (the recorder, keys)."""
+line says otherwise), the bombs of the line.  The rest of the inventory is d2first's (the recorder, keys).
+
+It plays the game over many seeded trials: a job of the machine's queue (``jobs.require_job``: ``triforce job run
+... --timeout 30m -- .venv/bin/python scripts/experiments/r32b_d5.py ...``)."""
 
 import argparse
 import collections
 import statistics
+
+from triforce.jobs import require_job
 
 from r26_walks import BOMBS, DIGDOGGER_SMALL, HEARTS, OBJ_DIR, OBJ_HP, OBJ_INVINC, OBJ_META, OBJ_STATE, OBJ_TYPE
 from r27_walks import INV_SWORD, hearts_bytes, load, summary
@@ -198,6 +203,7 @@ def main():
     parser.add_argument('--seeds', type=int, default=20)
     parser.add_argument('--bombs', type=lambda s: [int(x) for x in s.split(',')], default=[0, 2, 4, 8])
     args = parser.parse_args()
+    require_job()
     globals()[args.what](args)
 
 

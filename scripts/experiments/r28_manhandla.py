@@ -5,11 +5,16 @@ door.  The Manhandla is live, the hearts real (13, the magic sword unused).
     python scripts/experiments/r28_manhandla.py cross [--seeds N]    # 0x6e: straight walk and a dodging walk
     python scripts/experiments/r28_manhandla.py other [--seeds N]    # 0x2e S -> N
     python scripts/experiments/r28_manhandla.py drop [--seeds N]     # the blast's credited kills and the forced drop
+
+It plays the game over many seeded trials: a job of the machine's queue (``jobs.require_job``: ``triforce job run
+... --timeout 30m -- .venv/bin/python scripts/experiments/r28_manhandla.py ...``).
 """
 
 import argparse
 import collections
 import statistics
+
+from triforce.jobs import require_job
 
 from r28_walks import (BOMBS, BOMB_SLOT, CUR_OPENED_DOORS, DARKNUT_BLUE, HELP_COUNT, HELP_DROP_BOMB, KEYS,
                        KILL_COUNT, MANHANDLA, OBJ_DIR, OBJ_META, OBJ_STATE, OBJ_TYPE, OBJ_X, OBJ_Y, PLAY, RUPEES, TMP,
@@ -175,6 +180,7 @@ def main():
     parser.add_argument('what', choices=['cross', 'other', 'drop'])
     parser.add_argument('--seeds', type=int, default=30)
     args = parser.parse_args()
+    require_job()
     globals()[args.what](args)
 
 

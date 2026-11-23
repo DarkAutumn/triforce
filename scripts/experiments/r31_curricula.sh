@@ -10,12 +10,14 @@
 # OUT: the trajectories root (default `trajectories`).  FIGHT_ITERATIONS (9000) is the explorer's budget for the
 # fights; PARALLEL (4) its threads (the machine's cap for explorers).  FIGHTS=0 does the crossings only (minutes),
 # FIGHTS=only the fights and the rules' tracks (hours).  The script exits 1 if a plain crossing was left without a
-# track; a fight or staged start that fails is reported, as rounds 27 and 28 had it.  Run it under `nice -n 10`.
+# track; a fight or staged start that fails is reported, as rounds 27 and 28 had it.  A job of the machine's queue.
 #
 # The lists are rounds 27-29's (`r27_d6_curricula.sh`, `r28_d8_curricula.sh`, `r29_d9_curricula.sh`) cut to the
 # states whose file changed since 1.9.0.0, plus Dungeon 9's new 9_56s (like-like) and 9_55e (lanmola).
 # stalfos-keese-gel and ow-octorok have no curriculum and are left out.
 set -uo pipefail
+source "$(dirname "$0")/../job.sh"      # a job of the machine's queue: triforce job run ... -- this script ...
+require_job "$0" "$@"
 cd "$(dirname "$0")/../.."
 PY=.venv/bin/python
 OUT=${1:-trajectories}
