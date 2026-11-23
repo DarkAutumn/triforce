@@ -215,7 +215,9 @@ been retrained on the corrected order):
   at 9:0x63's west door): "drop the moldorm fight (it's now passthrough) and fight in d9 0x56 to get the missing key";
   branch `r39-key`. (the owner, Nov 22: "Can we bypass the moldorm, or do we drop to 0 keys in the
   run. If so where do we drop to 0 keys without it?")
-- [ ] **3:0x5b with a full bag walks between the wall and the bombs** (the owner, Nov 22: "If full on bombs the target
+- [ ] **3:0x5b with a full bag walks between the wall and the bombs** CAUSE FOUND (round38.md "The owner's three causes"): the
+  objective already follows the owner's order (one target at a time, test pinned); darknut@d3first was trained
+  before the bomb rules, when the room's bombs were wanted at any count. Next: retrain it there with full-bag starts. (the owner, Nov 22: "If full on bombs the target
   should be the bomb wall, he drops a bomb, the target should be on the bombs, when the bombs picked up, the target
   is moving to the next room. [...] I suspect he has two targets here? Or was trained with something that had
   conflicting targets?")

@@ -3489,3 +3489,13 @@ goriya `r38ppo-aux-s38` promoted for `d3first` (Dungeon 7 15.2% -> 76.9%, Dungeo
 darknut, boss-gleeok and boss-manhandla hit-head runs play the bare keys, whose `promoted` `d2first` reads: a new
 pointer `late.<route>` names a route's own run for the steps after `own_models_until`, so they are promoted for
 `d3first` alone and `d2first` stays as it is (Lee's rule). REV bump: promoted models replaced.
+
+## 2026-11-23 — 2.0.0.10: the opening and 8:0x4c retrained from Lee's diagnosis (the lead lands them, Lee being away)
+
+Lee, watching the golden replays: the opening's back-and-forth comes from a network trained on another route's
+opening, and 8:0x4c's from training when the key was still taken. Both confirmed (round38.md "The owner's three
+causes"): `ow-start`'s `r74-leg2` learned only `d2first`'s opening; `pols-voice`'s `r78t4-pols` learned to take the
+key. Promoted for `d3first` only: `ow-start r38t-start-fresh2 --route d3first` (a fresh run: opening aimless frames
+661 -> 4 a visit) and `pols-voice r38t-pols --route d3first --late` (8:0x4c 92.2% -> 100%, 5,267 -> 2 aimless frames).
+3:0x5b's walk between the wall and the bombs is darknut@d3first trained before the bomb rules; the objective is
+right (a test pins Lee's order); retraining it is next. REV bump: promoted models replaced.
