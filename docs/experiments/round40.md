@@ -67,12 +67,13 @@ targets between the two; the replay and queue code changed). Seed 403 ran from n
 | 401 | 2 | 2.58M | 3,342 | 772 | one other training (the new queue) |
 | 402 | 1 | 1.45M | 4,408 | 329 | seed 401, the old queue |
 | 402 | 2 | 2.55M | 3,077 | 829 | one other training |
+| 403 | all | 4.00M | 5,759 | 695 | one other training (the new queue) |
 | **401** | total | **4.00M** | **7,764 (2.16 h)** | 515 | |
 | **402** | total | **4.00M** | **7,485 (2.08 h)** | 534 | |
+| **403** | total | **4.00M** | **5,759 (1.60 h)** | 695 | |
 
-On the new queue, with two trainings at once and nothing else heavy, a seed runs at about 800 decisions a second:
-4M steps in about 1.4 hours. The estimate for a generation (training only, two places): families x 3 seeds x 1.4 h /
-2, about **2.1 hours of machine time a family**, plus its chains. A training alone was not measured.
+On the new queue, with two trainings at once, a seed runs at 700-830 decisions a second: 4M steps in 1.4-1.6 hours. The estimate for a generation (training only, two places): families x 3 seeds x 1.5 h /
+2, about **2.3 hours of machine time a family** (an estimate), plus its chains. A training alone was not measured.
 
 Training success (start-state balanced, the training's own statistic) by steps:
 
@@ -93,3 +94,7 @@ Single rooms (`triforce evaluate`, today's yaml, 100 episodes a state, 30 states
 | s401 | 0.5M / 1.0M | 94.0% / 94.3% | -0.28 / -0.14 |
 | s402 | 0.5M / 1.0M | 95.0% / 96.7% | -0.25 / -0.13 |
 
+Measurement in the line (Nov 23 evening; the lead's plan: no checkpoint selection): per seed, the final checkpoint on
+`d3` (1000 runs, seeds 0-999, replays) and 250 runs at about 1M, 2M and 3M steps, paired by seed with Fireline40's
+chains of the same team (`target/r40f/base-d3-1k.jsonl`, the promoted zol with its head; `policy-alone-d3-1k.jsonl`,
+the bare `r34d3-zol-s341`, which the fresh seeds are judged against: they carry no hit head).
