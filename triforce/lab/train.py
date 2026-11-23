@@ -360,7 +360,7 @@ def main(argv=None) -> Path:
             unknown = sorted(set(weights) - set(keys))
             if unknown:
                 raise SystemExit(f"--teacher-weight {unknown}: not in --families")
-            teachers = Teachers(keys, args.device, root, overrides, weights)
+            teachers = Teachers(keys, args.device, root, overrides, weights, args.state_route)
         rehearsal = None
         if args.rehearse:
             names = json.loads((Path(args.rehearse) / 'cache.json').read_text(encoding='utf-8'))['keys']

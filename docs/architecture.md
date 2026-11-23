@@ -1052,6 +1052,31 @@ hits it leads to are priced when they land. Counted beside the hits: the visits'
 stretch's waste ("Aimless walking" above: lasted − needed so far, never charged while anything in the room can hurt
 Link), times the shaping scale; over a stretch it sums to about the stretch's aimless frames before the allowance.
 Training envs only (`SpecialistEnv`; a chain's `RewardTrack` does not record it).
+The sword-shot terms (round 38, "Beams at range"; `zelda::beams`; each ≥ 0, 0 drops it, defaults in every family):
+`reward.beam_kill_reward` (default `REWARD_MEDIUM` = 0.5) is `reward-beam-kill` on a step that fires a sword shot
+(`beams::fired`: BEAMS from a state with the beams ready, the shot's slot flying after) when a hit credited to it (the
+look-ahead's, on the firing step) kills a monster, not a boss, that stood out of melee range (`beams::MELEE_REACH`,
+32 pixels corner to corner: the swing reaches about 29), decayed with the room's combat rewards; beside
+`reward-beam-hit`'s 0.5 it fills the step's clamp, where a melee kill pays `reward-hit`'s 0.25.
+`reward.beam_timed_reward` (default 0.1) is `reward-beam-timed` on a shot fired in a direction the decision's
+projection had meet a monster out of melee range, hit or not (the owner: "reward timing beams that WOULD intersect
+even if the enemy turns the other way"), decayed on its own count per room after 8. `reward.beam_unfired_penalty`
+(default 0.02) is `penalty-beam-unfired` on a MOVE or WAIT from a decision lined up so with the shot ready: 25 of them
+cost what one hit does (`penalty-lost-health` 0.25 a half heart plus `penalty-lost-beams` 0.25), so a dodge always
+pays more than a shot that walks into a hit. The projection (`beams::shot_meets`, `lined_up`): per cardinal the
+attack's turn frames and Link's place at the press (`attack::press`), the shot made 12 frames later 16 pixels ahead,
+3 pixels a frame to the room's weapon bounds (asm:Room_BoundDir), its hit point within 12 pixels of a monster's
+middle on both axes (asm:SwordShot_CheckMonsterCollision); each monster carried straight on at its ObjDir and
+q-speed (`contact::velocity`), a walker stopped where a wall stops it (`contact::travel`); only monsters the shot can
+hurt (active, not dying, sword bit clear in ObjInvincibilityMask `$4B2`, not a Darknut facing the shot, not the big
+Digdogger). Counted in the visits and chain records as `beam_<field>` (`beams::BeamStats`: shots, shots lined up,
+decisions lined up and those that moved or waited, kills far / near / other with their summed distance, hearts lost,
+steps that cost the beams); `scripts/experiments/r38_beams.py` tabulates them per family or room.
+`reward-gained-rupees` (round 38, the owner: "what should ACTUALLY be awarded for getting rupees is the 'rupees to
+add' counter getting set once") pays once per pickup, on the step `InvRupees + InvRupeesToAdd − InvRupeesToSubtract`
+rises, by the amount: under 5 `REWARD_MEDIUM`, 5-9 `REWARD_LARGE`, 10 or more `REWARD_MAXIMUM`; nothing while
+asm:Inv_ChangeRupees counts it in (1 a second frame). Before, it paid 0.5 on every step `InvRupees` rose, so 0:0x0f's
+100-rupee gift paid about a dozen steps and Link waited in the cave for the count.
 `clips: true|false` (round 21; default false; "Grid-point skip" above; the removed designs' `{action: ...,
 shaping: ...}` block is refused): the CLIP kind where a skip is available, the observation's `clip_usable_*` and the
 skips as path-search jumps (PBRS pays the whole wavefront difference of a skip step, as for any position change,
@@ -2108,11 +2133,11 @@ is joined at the end. It prints a JSON summary (`out`, `frames`, `seconds`, `wid
   (`d2first`) plays its route runs everywhere, as before. **One place decides a step's run**: the engine names each
   step's policy (`zelda::GameMap::step_policy`, `_native.step_policy`: `family@route` before the cutoff, else
   `family`; `GameMap::own_models_until`, `_native.own_models_until`), and `registry.policy_run(key, root, route)`
-  names the run of a key (`family@R`: `promoted.<R>`; `family`: `promoted` on a route with the key, else
-  `promoted_run`). `runner.Policies` loads both runs of such a family as two policies (`family` and `family@route`,
-  the same config) and the chain (`ChainEnv::route_parts`, `_native.ChainTask(policies=)`) plays a room by its step's
-  key (a room off the route by the run's last step: a wrong exit stays in its part) when that policy is loaded, else
-  by the family's. Every tool that plays goes through them: `eval-chain` (its
+  names the run of a key (`family@R`: `promoted.<R>`; `family`: `late.<route>` else `promoted` on a route with the
+  key, below; else `promoted_run`). `runner.Policies` loads both runs of such a family as two policies (`family`
+  and `family@route`, the same config) and the chain (`ChainEnv::route_parts`, `_native.ChainTask(policies=)`)
+  plays a room by its step's key (a room off the route by the run's last step: a wrong exit stays in its part)
+  when that policy is loaded, else by the family's. Every tool that plays goes through them: `eval-chain` (its
   `--checkpoint FAMILY=PATH` plays both parts, `FAMILY@ROUTE=PATH` the route's part only, refused on a route without
   the key), `eval-batch`, `play-zelda.py` and the theater's simulations, the golden path, `zelda-headless.py`;
   `select-checkpoint` selects the part its start is in (`Plan.policy`: a start before the cutoff replaces
@@ -2121,6 +2146,17 @@ is joined at the end. It prints a JSON summary (`out`, `frames`, `seconds`, `wid
   are as before); the chain's provenance and a replay's header list each policy with its checkpoint, and a replay's
   room events name the policy that played (a run of both parts names both runs). Training is not touched: a round
   trains one run, and which states a route's run draws is its yaml's `state_routes`.
+- **A late run per route, optional** (round 38): on a route with `own_models_until`, a family's
+  `models/<family>/late.<route>` (`triforce promote FAMILY RUN --route R --late`, `python -m triforce.registry
+  promote ... --late`; refused on a route without the key) names the run its family key plays there, the steps from
+  the cutoff on, over `promoted`. Its own part (`family@route`: `promoted.<route>`, else `promoted`, which a family
+  with only a late run then loads as that part so the late run never reaches the steps before the cutoff) and every
+  other route (`d2first` keeps `promoted`) are unchanged; `registry.policy_run` decides it, so chains, evaluation
+  batches, select-checkpoint, play, the golden path, `room-stats`, the lab bench (`--team` and `speed` on the
+  manifest's route) and the lab teachers (on `--state-route`) follow. The name is not `promoted.*`, so
+  `route_promotions` never takes it for a route's run; `registry.late_promotions` reads them, `triforce list` shows
+  `late.<route>=run (steps N-end, from ...)`, `python -m triforce.registry list` marks the run `late on <route>`, and
+  `triforce stamp` stamps them. No late pointer: the family key plays `promoted`, as before.
 - **Segments and scopes per route:** `eval_batch.ROUTE_SEGMENTS[route]` (segments, arrival targets, milestones;
   start states by bare name) and `room_stats.ROUTE_SCOPES[route]` (the room-stats scopes; `room-stats` takes the
   route from the chain files). `d2first`'s are the tables of before, unchanged; `d3first`'s (`D3FIRST_SEGMENTS`,

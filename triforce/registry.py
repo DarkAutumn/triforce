@@ -59,6 +59,7 @@ MODELS_DIR_ENV = 'TRIFORCE_MODELS_DIR'
 ALLOW_INCOMPATIBLE_ENV = 'TRIFORCE_ALLOW_INCOMPATIBLE_MODELS'
 CHECKPOINT_NAME = 'ckpt.pt'
 PROMOTED_NAME = 'promoted'
+LATE_NAME = 'late'          # late.<route>: the family's key on a route's steps from its own_models_until on (round 38)
 ACT_NAME = 'act'
 VERSION_NAME = 'version'
 SNAPSHOTS_NAME = 'checkpoints'
@@ -408,19 +409,24 @@ def list_runs(specialist: str, root=None) -> list[str]:
     return sorted(p.name for p in base.iterdir() if (p / CHECKPOINT_NAME).is_file())
 
 
-def promote(specialist: str, run_id: str, root=None, act: Optional[str] = None, route: Optional[str] = None) -> Path:
+def promote(specialist: str, run_id: str, root=None, act: Optional[str] = None, route: Optional[str] = None,
+            late: bool = False) -> Path:
     """Marks run_id as the specialist's promoted model (``<models>/<specialist>/promoted`` holds the id; with ``route``,
-    phase X, ``promoted.<route>``: that route's run, over ``promoted`` there); ``act`` also sets how the run acts
-    (``set_act_mode``)."""
+    phase X, ``promoted.<route>``: that route's run, over ``promoted`` there; with ``late`` too, ``late.<route>``: the
+    run of the family's key on the route's steps from its ``own_models_until`` on, over ``promoted`` there, round 38);
+    ``act`` also sets how the run acts (``set_act_mode``)."""
     if route is not None and route not in native_routes():
         raise ValueError(f"unknown route {route!r} (routes.yaml has {native_routes()})")
+    if late and (route is None or own_models_until(route) is None):
+        raise ValueError(f"a late run plays a route's steps from its own_models_until on: route {route} has none "
+                         "(without own_models_until a route's run is promoted.<route>, --route alone)")
     ckpt = checkpoint_path(specialist, run_id, root)
     if not ckpt.is_file():
         raise FileNotFoundError(f"No checkpoint for {specialist}/{run_id}: {ckpt}")
     load_checkpoint(ckpt)
     if act is not None:
         set_act_mode(ckpt, act)
-    pointer = promoted_pointer(specialist, root, route)
+    pointer = late_pointer(specialist, root, route) if late else promoted_pointer(specialist, root, route)
     tmp = pointer.with_name(f'.{pointer.name}.{os.getpid()}.tmp')
     tmp.write_text(run_id + '\n', encoding='utf-8')
     os.replace(tmp, pointer)
@@ -505,8 +511,23 @@ def promoted_run(specialist: str, root=None, route: Optional[str] = None) -> str
 
 def route_promotions(specialist: str, root=None) -> dict[str, str]:
     """Route -> run of every ``promoted.<route>`` of the specialist (phase X)."""
+    return _route_pointers(specialist, root, PROMOTED_NAME)
+
+
+def late_pointer(specialist: str, root, route: str) -> Path:
+    """The file naming the run of the family's key on ``route``'s steps from its ``own_models_until`` on (round 38):
+    ``late.<route>``, over ``promoted`` there (never ``promoted.*``: no reader of route runs mistakes it for one)."""
+    return models_root(root) / specialist / f'{LATE_NAME}.{route}'
+
+
+def late_promotions(specialist: str, root=None) -> dict[str, str]:
+    """Route -> run of every ``late.<route>`` of the specialist (round 38)."""
+    return _route_pointers(specialist, root, LATE_NAME)
+
+
+def _route_pointers(specialist: str, root, name: str) -> dict[str, str]:
     base = models_root(root) / specialist
-    prefix = f'{PROMOTED_NAME}.'
+    prefix = f'{name}.'
     if not base.is_dir():
         return {}
     return {p.name[len(prefix):]: p.read_text(encoding='utf-8').strip()
@@ -547,16 +568,23 @@ def own_models_until(route: Optional[str]) -> Optional[int]:
 
 
 def policy_run(key: str, root=None, route: Optional[str] = None) -> str:
-    """The run that plays policy ``key`` on ``route``: for ``family@R`` the family's ``promoted.<R>``; for a family
-    its ``promoted`` on a route with ``own_models_until`` (its own runs play only before that step), else
-    ``promoted_run(family, root, route)`` (``promoted.<route>`` over ``promoted``).  FileNotFoundError without one."""
+    """The run that plays policy ``key`` on ``route``: for ``family@R`` the family's ``promoted.<R>`` (a family with
+    only a ``late.<R>``: its ``promoted``, which the late run does not replace before the cutoff); for a family on a
+    route with ``own_models_until`` (its own runs play only before that step) its ``late.<route>`` (round 38: the
+    route's later steps only) else its ``promoted``; on any other route ``promoted_run(family, root, route)``
+    (``promoted.<route>`` over ``promoted``).  FileNotFoundError without one."""
     family, part = split_policy(key)
     if part is not None:
         pointer = promoted_pointer(family, root, part)
-        if not pointer.is_file():
-            raise FileNotFoundError(f"No run of '{family}' promoted for route {part} ({pointer})")
-        return pointer.read_text(encoding='utf-8').strip()
-    return promoted_run(family, root, None if own_models_until(route) is not None else route)
+        if pointer.is_file():
+            return pointer.read_text(encoding='utf-8').strip()
+        if late_pointer(family, root, part).is_file():
+            return promoted_run(family, root)
+        raise FileNotFoundError(f"No run of '{family}' promoted for route {part} ({pointer})")
+    if own_models_until(route) is None:
+        return promoted_run(family, root, route)
+    late = late_pointer(family, root, route)
+    return late.read_text(encoding='utf-8').strip() if late.is_file() else promoted_run(family, root)
 
 
 def policy_checkpoint(key: str, root=None, route: Optional[str] = None) -> Path:
@@ -569,9 +597,10 @@ def policy_checkpoint(key: str, root=None, route: Optional[str] = None) -> Path:
 
 
 def route_part_key(family: str, root=None, route: Optional[str] = None) -> Optional[str]:
-    """``family@route`` when ``route`` has ``own_models_until`` and the family a run promoted for it (a second policy
-    plays the family's rooms before that step), else None."""
-    if own_models_until(route) is None or not promoted_pointer(family, root, route).is_file():
+    """``family@route`` when ``route`` has ``own_models_until`` and the family a run promoted for it, or a late one
+    (a second policy plays the family's rooms before that step: the route's run, else ``promoted``), else None."""
+    if own_models_until(route) is None or not (promoted_pointer(family, root, route).is_file()
+                                               or late_pointer(family, root, route).is_file()):
         return None
     return route_policy(family, route)
 
@@ -589,6 +618,9 @@ def main(argv=None):
                                 help=f"also set how the run acts ({ACT_HELP})")
     promote_parser.add_argument('--route', default=None,
                                 help="promote the run for this route only (promoted.<route>, over promoted there)")
+    promote_parser.add_argument('--late', action='store_true',
+                                help="with --route on a route with own_models_until: the run of the family's key on "
+                                     "the route's steps from that one on (late.<route>, over promoted there)")
     args = parser.parse_args(argv)
 
     if args.command == 'list':
@@ -597,17 +629,20 @@ def main(argv=None):
         except FileNotFoundError:
             current = None
         routes = route_promotions(args.specialist, args.models_dir)
+        late = late_promotions(args.specialist, args.models_dir)
         for run_id in list_runs(args.specialist, args.models_dir):
             path = checkpoint_path(args.specialist, run_id, args.models_dir)
             ckpt = _torch_load(path)
             mark = '*' if run_id == current else ' '
             success = ckpt.get('metrics', {}).get('success_rate')
             only = [route for route, run in routes.items() if run == run_id]
+            later = [route for route, run in late.items() if run == run_id]
             print(f"{mark} {run_id}  iterations={ckpt.get('iterations')} steps={ckpt.get('steps')} "
                   f"success_rate={success} act={act_mode(path)}"
-                  + (f" promoted on {','.join(only)}" if only else ''))
+                  + (f" promoted on {','.join(only)}" if only else '')
+                  + (f" late on {','.join(later)}" if later else ''))
     else:
-        print(promote(args.specialist, args.run_id, args.models_dir, args.act, args.route))
+        print(promote(args.specialist, args.run_id, args.models_dir, args.act, args.route, args.late))
 
 
 if __name__ == '__main__':

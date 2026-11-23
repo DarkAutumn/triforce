@@ -126,7 +126,8 @@ there).
   153,308 frames). `registry.MAIN_ROUTE = 'd3first'`: `play-zelda.py`, `zelda-headless.py`, the golden path,
   `eval-chain`, `eval-batch --chains` and `r56_chains.sh` play it when no route is named; `d2first` by `--route
   d2first` (the engine's `DEFAULT_ROUTE`, the route of bare state names, stays `d2first`). **The team:** every
-  family's default `promoted` run plays both routes; fifteen families have a route run, `promoted.d3first`, that
+  family's default `promoted` run plays both routes (`d3first`'s steps from the magic sword on by its `late.d3first`
+  where it has one, round 38); fifteen families have a route run, `promoted.d3first`, that
   plays only `d3first`'s steps 0-205 (the wood sword's half, routes.yaml `own_models_until: {waypoint: sword}`;
   `triforce list` shows them): zol `r32d3-zol`, darknut `r32d3-dark2-s44`, boss-manhandla `r32d3-manh`, vire
   `r32d4-vire2-s1`, like-like `r32d4-like2`, boss-gleeok `r32d4-gleeok2-s1-it2517`, boss-digdogger `r32late-dig`,
@@ -705,8 +706,11 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   the other). Missing bombs, keys and rupees are cheated and counted on both. Route data:
   `docs/routes/d3first.md`; the dungeons and shared legs are routes.yaml `blocks:` both routes `include:`, so a
   change to one is a change to both (decisions 2026-11-19 "`d3first` as route data"). A route run
-  (`triforce promote FAMILY RUN --route d3first`) plays only `d3first`'s steps before the magic sword; a change to a
-  family's default run changes both routes and is measured on both.
+  (`triforce promote FAMILY RUN --route d3first`) plays only `d3first`'s steps before the magic sword; a late run
+  (`triforce promote FAMILY RUN --route d3first --late`, `models/<family>/late.d3first`, round 38) plays only its
+  steps from the magic sword on, in the family default's place: the way to change `d3first`'s later rooms without
+  touching `d2first` (no `promoted.*` name; `triforce list` shows it). A change to a family's default run changes
+  both routes and is measured on both.
 - **Old worktrees are deleted once their work is on `main`** (Lee, Nov 19: "you can always delete old worktrees.
   Once things are merged into main, delete them and keep stuff tidy"): `git worktree remove` (the branch stays);
   first copy out what is not in git and still wanted: promoted run dirs into `models/`, demonstration files into
@@ -728,8 +732,13 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 
 ## Versioning (Lee, Nov 11)
 
-- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `2.0.0.8`: hit heads play eight `d3first`
-  families, round38.md "2.0.0.8"; 2.0.0.7 was 0:0x2d's rupee cave leaving
+- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `2.0.0.11`: `ow-lynel@d3first` for the leg
+  after Dungeon 7 (24% -> 99%), rupees rewarded once a pickup and the beam terms, round38.md "Beams at range; rupees
+  per pickup"; 2.0.0.10 was a fresh `ow-start@d3first` for
+  the opening and a `pols-voice` for 8:0x4c that leaves the key, round38.md "The owner's three causes"; 2.0.0.9 was
+  goriya's head and Dungeon 8's
+  three through `late.d3first`, round38.md "2.0.0.9"; 2.0.0.8 was hit heads playing eight `d3first` families,
+  round38.md "2.0.0.8"; 2.0.0.7 was 0:0x2d's rupee cave leaving
   `d3first`, its states after 0x2d rebuilt; 2.0.0.6 was the owner's bomb rules; 2.0.0.5 was the owner's corrected
   `d3first`, the two dock warps as engine macros, its rebuilt states, the lab's yardstick on them; no network retrained;
   2.0.0.4 was the lab, `docs/lab.md`: runs over several families, teachers, networks of any shape beside today's,

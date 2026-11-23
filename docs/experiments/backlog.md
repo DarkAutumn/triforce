@@ -198,10 +198,16 @@ been retrained on the corrected order):
   intersect even if the enemy turns the other way in reality before it hits. [...] One problem with how much
   damage the agent takes is closing with the enemy when he doesn't have to... he doesn't use the full effect of full
   hearts, and instead gets close and loses beams.")
+  Reward built (round38.md "Beams at range; rupees per pickup"): `reward-beam-kill`, `reward-beam-timed`,
+  `penalty-beam-unfired`, `beam_*` in every record. Before: 0.3% of wizzrobe's sword kills out of melee range, 2.8%
+  of patra's. Continued with it, wizzrobe (1M steps) and patra (2M) fought as before and lost 3-7 points on `d6`/`d9`;
+  open: stronger weights, then wizzrobe, darknut, goriya, patra (the hearts melee costs, in that order).
 - [ ] **Rupees rewarded per pickup, not per counted rupee** (the owner, Nov 22, 0:0x0f: "the agent waits for all
   rupees to finish before leaving, probably because it gets reward per rupee incremented. What should ACTUALLY be
   awarded for getting rupees is the 'rupees to add' counter getting set once. It could be a larger reward for 1 vs
   5 vs more, but [...] you don't want that reward to hit on actions other than stepping on a rupee.")
+  Reward built (round38.md "Beams at range; rupees per pickup"): paid once per pickup by its size. Open: ow-start,
+  which plays 0x0f, trained on it (2.0.0.8: the cave visit 329 frames, the step out 198, medians of 996 runs).
 - [ ] **Red candle and boomerang in Bubble rooms** (the owner, Nov 22: 7:0x0d "Real speedrun strat is to pull out
   the red candle and use it when our sword is disabled. [...] using boomerang to stun, then red candle to kill them
   should be a real option. In fact, any room with bubbles after getting the red candle is an option (d6 38, for
@@ -215,7 +221,9 @@ been retrained on the corrected order):
   at 9:0x63's west door): "drop the moldorm fight (it's now passthrough) and fight in d9 0x56 to get the missing key";
   branch `r39-key`. (the owner, Nov 22: "Can we bypass the moldorm, or do we drop to 0 keys in the
   run. If so where do we drop to 0 keys without it?")
-- [ ] **3:0x5b with a full bag walks between the wall and the bombs** (the owner, Nov 22: "If full on bombs the target
+- [ ] **3:0x5b with a full bag walks between the wall and the bombs** CAUSE FOUND (round38.md "The owner's three causes"): the
+  objective already follows the owner's order (one target at a time, test pinned); darknut@d3first was trained
+  before the bomb rules, when the room's bombs were wanted at any count. Next: retrain it there with full-bag starts. (the owner, Nov 22: "If full on bombs the target
   should be the bomb wall, he drops a bomb, the target should be on the bombs, when the bombs picked up, the target
   is moving to the next room. [...] I suspect he has two targets here? Or was trained with something that had
   conflicting targets?")
@@ -227,6 +235,9 @@ been retrained on the corrected order):
   bombs (for example, a vire drops bombs but if link has the wood sword it shouldn't light up... that just creates
   keese), or if the 10th kill part of the obs is lit up [...]. over the course of the run that should generate more
   bombs, less cheated bombs.")
+- [ ] **7:0x0d's Wallmaster runs out of steps on 2.0.0.7** (Hit38c, Nov 22: 37 of 1000 `d7` runs with the goriya
+  head stopped there against 7 on 2.0.0.6): what changed for wallmaster between the two (states rebuilt from step 88
+  with the 0x2d change: keys, bombs, hearts on arrival?), and the fix.
 - [ ] **Later, the owner's stated goal:** a win without a cheated bomb. Drops only; the walls' shortfall is counted
   until the bomb economy closes it (old backlog "A win without a cheated bomb").
 

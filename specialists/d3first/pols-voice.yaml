@@ -1,0 +1,24 @@
+# pols-voice@d3first (round 38, the owner, Nov 22, 8:0x4c: "the runs used to get the key which would require walking
+# left away from the bombed hole, but now we bypass the key even though it's still in the room. A byproduct of
+# earlier training maybe?"): the family's yaml on d3first's states only. The family's run (r78t4-pols, round 28)
+# learned 0x4c when the route took its key (round 31 left it: `treasure: skip`); its curriculum tracks walk to the
+# key in the NE corner and back W along the top row. Fine-tuned from it on today's objective (the N wall, no key) with
+# tracks explored on d3first's states. The lab reads this file for the key f"{family}@d3first" (lab.collect.task_yaml).
+name: pols-voice
+rooms: ['(5, 0x27)', '(5, 0x25)', '(8, 0x4c)']
+start_states: ['5_27*_[0-9]', '5_25*_[0-9]', '8_4c*_[0-9]']
+state_routes: [d3first]
+success: [exit-correct]
+reward_profile: default
+reward: {pbrs: true, item_targets: true}
+obs: {objective: true, target: true}
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}
+items: {bombs: required, arrows: true}
+curriculum: {enabled: true}
+one_room: true
+max_steps: 600
+warm_start: null
+notes: >-
+  Pols Voice rooms on d3first (the family's yaml, specialists/pols-voice.yaml, has the rooms' story): Dungeon 5's
+  0x27 S to W and 0x25 E to W; Dungeon 8's 0x4c from the cellar's stairs: out of the block ring, the Pols Voices,
+  BOMB N from (X $78, Y $5D) and out N; its key is left (round 31).

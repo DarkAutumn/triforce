@@ -237,13 +237,14 @@ route (0.857 → 0.736) with nothing trained in between; four epochs with those 
 number on the actions taken is biased there: the combination plays the actions its head passed, so the hits left
 among them are the head's blind spots by construction (its taken-lost rate is 1.59% against the teacher's 2.36%).
 The fair number is the judged one (the untaken candidates the policy ranked next): 0.598 → 0.722 with the teacher's
-states added, 0.738 after round 1 (its own states in the training mix), with no loss on the old data or the teacher's states. Round 36's in-run head (0.46-0.56) was below even this: an in-run
-head sees 0.25 trials a decision against 8 here and starts from nothing; the pretrained arm P started at 0.65 and
-fell back with the trunk shared under policy losses.
+states added, 0.738 after round 1 (its own states in the training mix), with no loss on the old data or the
+teacher's states. Round 36's in-run head (0.46-0.56) was below even this: an in-run head sees 0.25 trials a decision
+against 8 here and starts from nothing; the pretrained arm P started at 0.65 and fell back with the trunk shared
+under policy losses.
 
-Not finished (the round's budget): round 1's head (`models/r38hit/hit-r1`) combined and benched, round 2 (record the r1 combination's states on main's fixed start states, retrain on
-everything), and the `hit_or_blocked` label (main's Bubble touches; `r38_hit.py` reads it as `DIR+blocked` from a
-recording made on the merged code).
+Round 1's head in the combination, round 2 (the r1 combination's own states on main's fixed start states) and the
+`hit_or_blocked` label (main's Bubble touches; `r38_hit.py` reads it as `DIR+blocked`): "The retrained head at
+play" below.
 
 ### 4. Reinforcement with the head protected: not run
 
@@ -257,9 +258,24 @@ they want the merged code (branch `r38-hit-m`).
 ### 5. 7:0x1b as a fight
 
 The room's row of §2: with the six Blue Goriyas and 0-7 bombs the teacher wins 83.3% at 3.83 hits a visit and 1.94
-hearts; the fixed combination (w = 8) 94.3% at 2.08 and 0.39; the planner 98.3% at 1.01. The `d7` chains (1000 runs,
-`--checkpoint goriya@d3first=models/r38shift/pre-w8`, and today's team on the same seeds and code; the planner on
-300) were queued. Today's team with 7:0x1b a fight (this branch's code, seeds 0-999, from `d3first_7_79s_0` to step 180, out of Dungeon 7 with its triforce): **12.5% of runs finish Dungeon 7**; 517 of the 875 losses are in 7:0x1b (3.51 hits a visit over 737 visits), then 7:0x1a 136, 7:0x19 67, Digdogger's 7:0x1c 31. The planner beside (300 runs, every network with the look-ahead): 96.7%, 1.12 hits a visit in 7:0x1b, 2 runs lost there. With goriya played by the fixed combination (w = 8, the rest of the team today's, the same seeds and code): **67.8% finish Dungeon 7, +55.3 ± 1.8 points paired on the 1000 seeds**; in 7:0x1b 2.45 hits a visit against 3.51 and 0.96 hearts lost a visit against 2.47 (1,087 visits against 737: more runs get there), and 105 runs lost there against 517. The losses left: 7:0x1b 105, 7:0x18 66, Digdogger's 7:0x1c 57, 7:0x1a 21. It is still below round 34's crossing (`d7` 86.9% at 2 bombs, the backlog's baseline) and the planner (96.7%). **The decision for the lead:** with today's goriya network 7:0x1b must stay a crossing (a fight keeps 12.5%); with the head connected as a shift the fight keeps 68%: worth keeping as the fight the owner wants only once the head is stronger (round 1's head, §3, is not yet benched) and the remaining 0x1b and 0x18 losses are worked on; until then the crossing costs 19 fewer runs in 100.
+hearts; the fixed combination (w = 8) 94.3% at 2.08 and 0.39; the planner 98.3% at 1.01.
+
+**The `d7` chains** (1000 runs, seeds 0-999, from `d3first_7_79s_0` to step 180, 0:0x42 out of Dungeon 7 with its
+triforce; 7:0x1b a fight below 8 bombs; the code before main's merge, which plays identically):
+
+| `d7` (1000 runs) | finish Dungeon 7 | 7:0x1b visits | hits a visit there | hearts lost a visit there | runs lost there | then |
+|---|---:|---:|---:|---:|---:|---|
+| today's team | 12.5% | 737 | 3.51 | 2.47 | 517 | 7:0x1a 136, 7:0x19 67, 7:0x1c 31 |
+| goriya by the fixed combination (w = 8), the rest today's | **67.8%** | 1,087 | 2.45 | 0.96 | 105 | 7:0x18 66, 7:0x1c 57, 7:0x1a 21 |
+| the planner beside (300 runs, every network with the look-ahead) | 96.7% | | 1.12 | | 2 of 300 | |
+
+**+55.3 ± 1.8 points** paired on the 1000 seeds; more runs reach 7:0x1b with the combination (1,087 visits against
+737), and fewer are lost there. It is still below round 34's crossing (`d7` 86.9% on the first order, at 2 bombs)
+and the planner (96.7%).
+
+**The decision for the lead:** with today's goriya network 7:0x1b must stay a crossing (a fight keeps 12.5%); with
+the head connected as a shift the fight keeps 68%: worth keeping as the fight the owner wants once the remaining
+0x1b and 0x18 losses are worked on. Both ways on one code and one set of seeds: below, "7:0x1b both ways".
 
 ### 6. The threat lane
 
@@ -282,7 +298,12 @@ The lane catches a third more of the hits it is for (0.26 → 0.34 recall) and l
 nothing. On goriya the slice is under 1% of the hits, so the lane cannot move goriya's totals. The shooter family it
 is meant for (Octoroks: a 48-frame stand still before the rock, 3 px a frame) had no collection: one was queued with
 the probe logger of branch `r36-hit` (ow-octorok's `d3first` rooms 0x37, 0x3c, 0x4c, 0x64; 100 planner and 100
-model-alone runs from each of 30 states; queue cost: 83 minutes from queueing to the file, most of it waiting). It does not rank the lane: the model and the planner on those rooms were hit by a rock fired after the decision only 24 times in the whole collection (2 held out), and the three inputs read the rest of its hits alike (P = R 0.65-0.73 / 0.57-0.61, within the seeds' spread on a small set). The shot speed checks out (3 px a frame from RAM). An Octorok ranking needs a collection aimed at the slice: states where Link walks into a standing Octorok's lane.
+model-alone runs from each of 30 states; queue cost: 83 minutes from queueing to the file, most of it waiting). It
+does not rank the lane: the model and the planner on those rooms were hit by a rock fired after the decision only 24
+times in the whole collection (2 held out), and the three inputs read the rest of its hits alike (P = R 0.65-0.73 /
+0.57-0.61, within the seeds' spread on a small set). The shot speed checks out (3 px a frame from RAM). An Octorok
+ranking needs a collection aimed at the slice: states where Link walks into a standing Octorok's lane.
+
 **The engine fields, if the Octorok ranking agrees**: per entity, 11 inputs: can fire (Goriya: `ObjState` bit 7
 clear; Octorok, Moblin, Lynel: shoot timer `$451` zero or above `$10`; not stunned `$3D`, metastate `$405` 0), the
 delay to the shot (Goriya `ObjTimer` `$28`; the others' timer − `$10`, or 32 when it has not started) / 64, in the
@@ -316,6 +337,151 @@ rooms (the labels are cheap: `lab.record --try-others 8:1.0` adds no network pas
 combined network reaches (§3), kept out of the policy's gradient; the shift applied at play with one weight (w = 4-8
 fitted goriya, darknut and Gleeok alike); branch `r38-one`'s `h768` shape (a hitnet with a dormant joint head) is
 the body to put it on.
+
+## The combination as goriya's run (branch `r38-hit` after main's merge)
+
+**Code base from here:** main 76832c54 merged (the Bubble's touch, harvested start states by namespace, the
+queue's niceness), plus one commit that only this measurement needs and the lead drops when 2.0.0.6's bomb rules
+land: d3first's 7:0x1b `treasure: {if_bombs_below: 8}` (the fight below 8 bombs, what 2.0.0.6's floor gives it).
+The merged code plays as before: §2's bench, played again on it, gives the same numbers to the last digit (teacher
+0.808, w = 4 0.519, w = 8 0.529 hits a visit; 7:0x1b 3.833 / 2.320 / 2.083).
+
+### 8. A run like any other
+
+`r38_hit.py combine --name goriya --run r38shift-pre --weights 8` writes `models/goriya/r38shift-pre-w8`: `ckpt.pt`
+(arch `hitshift`, its `specialist` goriya), `version`, `act` (`temperature:0.5+relax:16` bound to the weights) and,
+from the canonical evaluation (`triforce evaluate --specialist specialists/d3first/goriya.yaml`, 100 episodes a
+state), `eval.json`; `triforce list` counts it among goriya's runs and `triforce promote goriya r38shift-pre-w8
+--route d3first` makes it the route's goriya. `tests/test_hitshift.py`: the shifted heads have the marginals of
+p · exp(−w · softplus(h)) over (kind), (kind, direction), (kind, duration); w = 0 returns the policy's logits
+exactly; the policy's losses never reach the hit body; a combination promoted in a models directory is played by a
+chain with replays, the golden race, `zelda-headless.py` and `play-zelda.py`'s two simulation sources, and by an
+evaluation, all from the observation alone (an act mode with the planner's look-ahead is refused for it). One
+limit, the lab's for every served network: the optional replay stream `decisions` (each decision's distribution)
+needs the Rust actor.
+
+### 9. Round 1's head at play
+
+The head retrained once on the corrected route's states (§3, `hit-r1`) in the same combination, on §2's bench
+(played on the merged code, same states and seeds):
+
+| arm | goriya@d3first hits a visit | hearts lost | success | 7:0x1b hits a visit | hearts lost | won |
+|---|---:|---:|---:|---:|---:|---:|
+| teacher | 0.808 | 0.151 | 98.3% | 3.833 | 1.942 | 83.3% |
+| first head, w = 4 | 0.519 | −0.084 | 99.0% | 2.320 | 0.588 | 92.7% |
+| first head, w = 8 | 0.529 | −0.095 | 99.0% | 2.083 | 0.385 | 94.3% |
+| round 1's head, w = 4 | 0.402 | −0.159 | 99.2% | 2.220 | 0.435 | 93.3% |
+| **round 1's head, w = 8** | **0.340** | **−0.191** | 99.2% | **1.973** | **0.217** | **96.0%** |
+| planner beside | 0.248 | −0.227 | 99.4% | 1.013 | −0.247 | 98.3% |
+
+Round 1 against the first head at w = 8, paired: goriya's rooms −0.190 ± 0.034 hits an episode (−36% a visit),
+hearts −0.096 ± 0.025; 7:0x1b −0.110 ± 0.085 hits, hearts −0.168 ± 0.104, won +1.7 ± 1.1 points. Against the
+teacher it now takes 58% fewer hits a visit in goriya's rooms (0.808 → 0.340): **84% of the planner's edge** there
+(the first head 50%), 66% in 7:0x1b. A head that has seen the combination's own states reads the hits the
+combination meets; w = 8 is now better than w = 4 in goriya's rooms too.
+
+### 10. Does the goriya head carry to Digdogger and the Wallmaster?
+
+The same construction with each family's `@d3first` network and the goriya head (the first one, w = 4 and 8), on
+their yardstick entries (the harvested `d3first` entries, 120 episodes, paired):
+
+| | hits a visit | hearts lost | success | hits − teacher (an episode) |
+|---|---:|---:|---:|---:|
+| boss-digdogger@d3first teacher (r34d7b-dig-s1) | 2.008 | 0.425 | 95.0% | |
+| goriya head, w = 4 | 1.908 | 0.317 | 96.7% | −0.100 ± 0.121 |
+| goriya head, w = 8 | 2.008 | 0.300 | 95.8% | +0.000 ± 0.116 |
+| planner | 1.358 | −0.117 | 96.7% | −0.650 ± 0.175 |
+| wallmaster@d3first teacher (r34d7-wall-s3) | 0.117 | −0.037 | 90.8% | |
+| goriya head, w = 4 and 8 | 0.117 | −0.037 | 90.8% | +0.000 ± 0.012 |
+| planner | 0.025 | −0.096 | 95.0% | −0.092 ± 0.029 |
+
+**It does not carry**: on Digdogger the goriya head moves nothing measurable while the planner takes a third fewer
+hits; Digdogger needs its own head (branch `r38-head` records boss-digdogger's look-ahead labels for that). The
+Wallmaster's entries are not lost to hits (0.12 a visit for every arm and the teacher), so a hit head has nothing
+to act on there.
+
+### 11. Reinforcement on the combination, and the chains that decide the promotion
+
+**Code base:** 2.0.0.6 merged (its `bomb_rules: treasure_below: 8` makes 7:0x1b a fight below 8 bombs, so the
+branch's own route line was reverted), then 2.0.0.7 (the 2.0.0.7 rows below). Chains: 1000 runs, seeds 0-999, one
+served torch network (goriya `@d3first`), act `temperature:0.5+relax:16`, paired by seed.
+
+**The two PPO arms** (§4's design, run on the merged code: `lab.train` from the fixed combination `pre-w8`, which is
+also the fading teacher, `--state-route d3first`, 300 iterations, seed 38): (frozen) the hit body frozen; (aux) the
+hit body trained only by its own loss on fresh look-ahead labels (`--aux hit=hit:0.5`), never by the policy's.
+Benched as §2 (paired against `pre-w8`, their start):
+
+| arm | training | goriya@d3first hits a visit | 7:0x1b hits a visit | 7:0x1b won | Bubble rooms hits a visit |
+|---|---|---:|---:|---:|---:|
+| pre-w8 (start) | | 0.529 | 2.083 | 94.3% | 0.783 |
+| frozen (`r38ppo-frozen-s38`) | 4,351 s, 283 steps/s | 0.523 (−0.006 ± 0.045) | 1.937 (−0.147 ± 0.104) | | 0.920 (+0.137 ± 0.077) |
+| **aux (`r38ppo-aux-s38`)** | 3,675 s, 335 steps/s | **0.315 (−0.215 ± 0.041)** | **1.810 (−0.273 ± 0.095)** | 95.0% | **0.590 (−0.193 ± 0.070)** |
+| r1-w8 (§9, no training) | | 0.340 | 1.973 | 96.0% | 0.757 |
+
+(Bubble rooms: 7:0x49 and 7:0x18's seed states × 50; differences an episode.) With the hit body frozen the policy
+does not learn to use the shift: no better than its start. With the head kept on its own labels it does: fewer hits
+than the fixed combination and shorter fights (−9.7 ± 1.6 decisions in 7:0x1b, −24 in the Bubble rooms). The aux
+arm's own evaluation (`eval.json`, the canonical 5,400 episodes): 99.2% success, −0.09 hearts.
+
+**The chains** (2.0.0.6; `d7` from `d3first_7_79s_0` to 0:0x42 with Dungeon 7's triforce, `d2` from
+`d3first_2_7ds_0` to 0:0x3c):
+
+| `d7` | finish Dungeon 7 | − team | 7:0x1b visits / hits a visit / lost | 7:0x18 hits a visit / lost | 7:0x1c lost | 7:0x1a lost |
+|---|---:|---:|---|---|---:|---:|
+| today's team | 12.6% | | 736 / 3.51 / 514 | 0.97 / 28 | 32 | 137 |
+| r1-w8 (§9) | 71.2% | +58.6 ± 1.8 | 1,079 / 2.33 / 75 | 0.94 / 63 | 65 | 22 |
+| **PPO aux** | **79.1%** | **+66.5 ± 1.7** | 1,169 / 2.24 / 71 | **0.43** / 30 | 50 | 7 |
+
+PPO aux − r1-w8: +7.9 ± 1.9 points; most of it in 7:0x18 (a Bubble and Goriyas: 0.43 hits a visit against 0.94,
+touches 0.67 against 0.82) and 7:0x1a. Its other losses: 7:0x2a 18, 7:0x0d 11. `d2`: team 98.4%, PPO aux 99.7%
+(+1.3 ± 0.4). The full route: 0 of 1000 for both, identical until goriya's rooms; the runs are lost in Dungeons 3
+and 4 (3:0x4d 207, 3:0x5b 160, 3:0x69 107, 4:0x13 78), not goriya's; past step 107 PPO 31 runs against the team's
+21, past 160 5 against 3, past 180 4 against 0.
+
+**On 2.0.0.7** (the code it lands on; 2.0.0.7's team, the same seeds; `d1` from `d3first_1_73s_0` to step 79, 0:0x37
+with Dungeon 1's triforce, about 400 steps a run):
+
+| 2.0.0.7 | team | PPO aux | PPO aux − team | where |
+|---|---:|---:|---:|---|
+| `d1` finish Dungeon 1 | 92.8% | **97.7%** | **+4.9 ± 0.9** | 1:0x44 (Goriyas) lost 35 → 8, 0.99 → 0.29 hits a visit; 1:0x35 (Aquamentus, entered with 3.9 hearts against 3.3) lost 33 → 12 |
+| `d7` finish Dungeon 7 | 15.2% | **76.9%** | **+61.7 ± 1.8** | 7:0x1b lost 495 → 76 (2.10 hits a visit), 7:0x1a 163 → 6 |
+
+Against 2.0.0.6 on the same seeds: the team's `d7` +2.6 ± 1.5, the PPO arm's −2.2 ± 1.8. The PPO arm's change is
+not goriya's: 7:0x0d's Wallmaster ran out of steps in 37 runs (7 on 2.0.0.6); its other losses: 7:0x1c 54, 7:0x18
+21, 7:0x2a 12.
+
+**7:0x1b fought or crossed** (crossed: the room's `treasure: skip`, measured on 2.0.0.5 in a separate worktree, never
+landed; fought: 2.0.0.6; same seeds):
+
+| `d7` | finish | lost in 0x1b | lost in 0x1c (Digdogger) | bombs into 0x1c | 0x1c hits a visit | cheated bombs a run |
+|---|---:|---:|---:|---:|---:|---:|
+| team, fought | 12.6% | 514 | 32 | 4.16 | 2.74 | 0.76 |
+| team, crossed | 10.8% | 186 | 369 | 0.18 | 3.77 | 1.03 |
+| r1-w8, fought | 71.2% | 75 | 65 | 3.92 | 2.72 | 1.00 |
+| r1-w8, crossed | 40.2% | 27 | 425 | 0.25 | 5.89 | 1.87 |
+| PPO aux, fought | 79.1% | 71 | 50 | 3.70 | 2.59 | 1.00 |
+
+Fought − crossed, paired: r1-w8 +31.0 ± 2.0 points, the team +1.8 ± 1.3. **Why crossing loses:** 7:0x1b's treasure
+is four bombs, and those bombs are what Digdogger's network (7:0x1c, next) fights with. Crossed, runs reach
+Digdogger with 0.2 bombs, take twice the hits there, and 37-43% of all runs die in that one room; the walls of 0x0c
+and 0x29 are then cheated (0.9 more bombs a run). With the head the fight in 0x1b loses 7-8% of the runs, the
+crossing loses 40-43% in 0x1c: 7:0x1b stays a fight.
+
+**Whose fault are the hits left** (the combinations' own states, `lab.record --try-others 8:1.0`; a hit is "missed"
+when the head read the action played as safe, "saw, safe" when it read it as a hit while a tried action was safe,
+"cornered" when it read it and no tried action was safe; threshold P = R over all judged candidates):
+
+| arm (143,360 decisions) | hits | missed | saw, a safe action tried | cornered |
+|---|---:|---:|---:|---:|
+| pre-w8 | 1,970 | 64% | 18% | 18% |
+| r1-w8 | 1,523 | 62% | 18% | 20% |
+| pre-w8, 7:0x1b | 231 | 146 | 55 | 30 |
+| pre-w8, 7:0x18 | 106 | 53 | 35 | 18 |
+| pre-w8, 7:0x1a | 177 | 94 | 40 | 43 |
+
+Two thirds of the remaining hits are the head's misses (better labels: §3's rounds); a sixth are a shift too weak
+against the policy's prior, the part a policy trained with the shift can take back (the PPO aux arm); a sixth are
+the earlier moves'.
 
 ## The hit head across families (branch `r38-head`)
 
@@ -778,6 +944,119 @@ ow-zora@d3first 93.3% → 92.5%; the reference's total 92.9% unchanged, hearts l
   --features zelda/zcore` ok (the corpus test with the new path's pins among them); the zelda-asm tests 5 passed;
   `asm.py check` ok.
 
+## The owner's three causes: 3:0x5b, 8:0x4c, 0:0x77 (branch `r38-target`)
+
+The owner, Nov 22, watching the golden replays (backlog Track R: "3:0x5b with a full bag walks between the wall and the
+bombs" and the two causes under "Aimless walking"). Everything measured on 2.0.0.7's code and team (main 840d1021),
+1000 runs a chain, seeds 0-999, clips on, `--act model`, paired by seed against the same team with the promoted runs.
+
+### 3:0x5b (route step 19): one target at a time, in the owner's order; the network predates the rule
+
+The objective was read frame by frame from both golden replays (their RAM replayed, the chain's objective and target
+computed on it at d3first's step 19) and from single-room episodes of `d3first_3_5bw_0` (bag 8, bag 4, Darknuts
+alive; and `d2first`'s `3_5bw_0`). **There are never two targets and the target never flips back.** With a full bag
+and the room's bombs on the floor the target is only the spot to bomb the wall from (the single-network replay:
+frames 15176-16866, 1,691 frames, Link pacing 0-2 tiles from it); the frame the bomb is laid (7 in the bag) it is
+only the room's bombs; picked up, the bomb spot while the smoke clears, then the opening E. Below 8 on entry it is
+the bombs first, then the wall, then out. That is the owner's order; no objective change.
+`crates/env/tests/specialist_env.rs` `the_owners_order_in_3_5b_wall_then_bombs_then_out` pins it (the four cases, one
+target a decision, the phase order; `d2first`'s 0x5b keeps taking the bombs first).
+
+**The network was trained against another rule.** darknut@d3first `r38head-fam-w8` (2.0.0.6) is round 38's hit head
+on the policy of `r34d5-dg-s362` (identical weights, no training of its own since); that lineage (s362 ← s353, the
+run trained on 0x5b's last pass ← s341 ← r32d3 ← r78-dark37, Nov 17-21) trained before round 37's bomb rules (2.0.0.6,
+Nov 22: `wall_only` for 3:0x5b, `treasure_below 8`). Before them d3first's step 19 had no `treasure:` rule, so the
+room's bombs were wanted at any count: the network learned fight, take the bombs even at 8, then the wall. It has
+never had the wall as its target with the bombs lying. Started in the owner's state (the single-network replay's
+frame 15200) with 8 bombs the target stays on the bomb spot at every decision and the policy paces there (W 4 / E 4),
+walks W 32 to the bombs at 1.0 and E back, BOMB at 0.00 on the spot: 63 decisions until a sampled bomb; the same state
+with 6 bombs walks to the bombs at 1.0, back, BOMB E at 0.975, out in 16. The cure is training darknut@d3first on
+0x5b's last pass under 2.0.0.6's rules with full-bag starts (not done here). Seen on the way, not changed: with a full
+bag the walk to the bomb spot runs along y 141, over the room's bombs at ($80,$90) when a drop filled the bag;
+`asm:Item_TryTake` takes them at the cap, so the room ends at 7, not 8.
+
+### 8:0x4c (route step 226): the key the network was trained to take
+
+**Which network plays it.** d3first's `own_models_until` is step 192, so step 226 is played by the family's default
+run, pols-voice `r78t4-pols` (round 28, Nov 16; the chain's provenance names it). It trained when the route took 0x4c's
+key (the yaml's round-28 note: "round to the key in the NE corner, back along the top row to the N bomb wall"); round
+31 (Nov 19, phase IX) left the key (`treasure: skip`, both routes). Its curriculum tracks (`trajectories/pols-voice`)
+`8_4cc_0` and `8_4cc_0~rule1001` take the key at tile (26, 5) and walk W along the top row to tile 4 (keys 3 → 4, the
+item gone; read from the tracks' own frames), the golden loop's leg (W along the top row to the W wall and back); its
+demonstrations (`r28-demos/pols.npz`) are of that route too.
+
+**Today's target points N at once.** From `d3first_8_4cc_0` at step 226 the target is the bomb spot (120, 88) on the
+first frame (the same on `d2first`'s step 290); with no route step the objective falls back to the room's item and
+the target is the key (208, 96), which is what the round-28 run learned. After the wall opens the target is the
+opening (the golden replay's first calm decision, above).
+
+**The fix**: pols-voice fine-tuned from `r78t4-pols` on d3first's states (`specialists/d3first/pols-voice.yaml`,
+`state_routes: [d3first]`), new tracks explored on them (none takes the key; target/traj, not main's
+`trajectories/`), no demonstrations, SIL 0.1, 488 iterations at 8 envs; one arm with `penalty-aimless` 0.002.
+Landed through `late.d3first` (2.0.0.9's pointer for a family's steps after `own_models_until`): `d2first` keeps
+`r78t4-pols`.
+
+| 8:0x4c, `8_4cc_0` to step 227 | success | aimless frames a visit (mean / median / p90) | frames a visit | reversals | hearts lost |
+|---|---:|---|---:|---:|---:|
+| `r78t4-pols` (today's) | 92.2% (77 at the 2,000-step cap, 1 out W) | 5,267 / 3,730 / 14,552 | 6,728 | 73.0 | 0 |
+| **`r38t-pols`** (fine-tuned, today's rewards) | **100.0%** (+7.8 ± 0.8) | **2 / 0 / 6** | **767** | 0.0 | 0 |
+| `r38t-pols-aim` (+ `penalty-aimless` 0.002) | 100.0% (+7.8 ± 0.8) | 3 / 1 / 8 | 768 | 0.2 | 0 |
+
+The fine-tune on today's objective alone removes the loop: the visit is nine times shorter, no run sticks, the key
+is never taken (0 of 1000 in every arm), and no arm loses a heart. The aimless penalty adds nothing, so the run with
+today's rewards is the one to land: `r38t-pols` through `late.d3first`.
+
+### 0:0x77 (route steps 0-2): d2first's walk out of the cave, played without the sword
+
+**What the network learned.** ow-start has no d3first run, so `r74-leg2` (Nov 15) plays the opening; its curriculum
+tracks are d2first's (bare names) only. The owner's correction (Nov 22): "I suspect it was trained moving North, then
+West, then grab sword, then walk east then North." It was: `start` walks W and N into the cave (the start screen's
+cave is up and to the W, at (64, 77)); `0_77c` (d2first's step 2) leaves the cave E along tile row 3 and N out of
+the room at tile 14; `0_77n` (d2first's wrap way) walks S then W. d3first's step 2 (out of the cave, W) was never
+trained (`d3first_0_77c` is not among its tracks). The golden loop at the cave's mouth (E 32 to x = 110, round 38's
+"Aimless walking") is that walk E toward d2first's N exit, played at step 0 without the sword.
+
+**The route matches the owner's sequence.** d3first's steps 0-2: 0x77 from the start into the cave (N, then W to the
+cave's column, N in), the cave (the sword, S out), 0x77 from the cave out W; step 3 is 0:0x76.
+
+**The fresh run.** `specialists/d3first/ow-start.yaml`: the family's yaml on d3first's states only
+(`state_routes: [d3first]`): 0x77 (start, cave, out W), 0x0f and 0x2f (their caves; both are d3first ow-start steps
+before `own_models_until`, so `ow-start@d3first` plays them too), new tracks explored on those states, no warm start.
+400 iterations (`r38t-start-fresh`) with today's rewards learned the opening walk but looped in the sword cave (41%
+of visits, 14 runs stuck) and stalled the curriculum on 0x2f's take-any cave; with `penalty-aimless` 0.002 from the
+start (`r38t-start-aim`) the cave was clean, the opening's walk 52 aimless frames, but 25 runs bounced back into 0x77
+from 0x76. **`r38t-start-fresh2`** is `r38t-start-fresh` trained 400 more iterations from the rooms' entry states
+(`--no-curriculum`) with `penalty-aimless` 0.002 (a training-only reward; target/ yaml, not committed); its lineage
+never saw a d2first state.
+
+| segment (1000 runs) | arm | success | aimless a visit (mean / median / p90) | frames a visit | reversals |
+|---|---|---:|---|---:|---:|
+| the start to step 3 (0:0x76) | `r74-leg2` | 100% | step 0: 661 / 500 / 1,383; cave and out: 0 | 1,168 / 339 / 208 | 40.1 |
+| | `r38t-start-fresh` | 98.6% (14 stuck in the cave) | step 0: 1; cave: 1,788 / 0 / 6,611 | 453 / 2,396 / 210 | 0.1 / 46.8 |
+| | `r38t-start-aim` | 97.5% (25 bounce-limit at 0x76) | step 0: 52 / 0 / 182; cave 0 | 495 / 343 / 207 | 2.8 |
+| | **`r38t-start-fresh2`** | **100%** | **step 0: 4 / 0 / 15**; cave and out: 0 | **450** / 342 / 208 | 0.3 |
+| 0x0f, `0_0fs_0` to step 116 | `r74-leg2` | 100% | cave (114): 3 / 0 / 1 | 313 | 8.8 |
+| | `r38t-start-fresh2` | 100% | cave: 105 / 95 / 148 | 444 | 6.1 |
+| 0x2f, `0_2fs_0` to step 189 | `r74-leg2` | 99.9% | cave (187): 2 / 0 / 9 | 392 | 0.6 |
+| | `r38t-start-fresh2` | 100% | cave: 0 / 0 / 0 | 388 | 0.2 |
+
+The opening's waste is gone: 661 aimless frames a visit to 4, the walk to the cave 1,168 frames to 450, every run
+reaches 0x76. The cost is 0x0f's rupee cave: 105 aimless frames a visit against 3
+(about two seconds; no run lost). No room fights here, so no hits or hearts lost in any arm. Promoted for d3first
+(`triforce promote ow-start r38t-start-fresh2 --route d3first`): steps 0-2, 113-115 and 186-188; `d2first` keeps
+`r74-leg2`.
+
+### Golden run and checks
+
+- A golden run with the two new runs in the team (2.0.0.9's 51 networks, `ow-start@d3first` = `r38t-start-fresh2`,
+  pols-voice's `late.d3first` = `r38t-pols`; `zelda-headless.py OUT 3 --golden --power-on --clips on --act model
+  --parallel 8 --attempts 2000`): three wins of three, 246 runs played (`golden-00000000-win`, `-00018000-win`,
+  `-00036000-win`).
+- `tests/test_lab_train.py`: 19 route yamls (ow-start's and pols-voice's added). The suites after main (2.0.0.9)
+  was merged: pytest 965 passed, 12 skipped; `cargo test --release --workspace --features zelda/zcore` ok; the
+  zelda-asm tests 5 passed; `asm.py check` ok.
+- Not done: darknut@d3first retrained on 0x5b's last pass under 2.0.0.6's rules (the cure for the owner's 3:0x5b).
+
 ## 2.0.0.8: the hit heads promoted for `d3first`
 
 Eight families play `d3first`'s own steps (before `own_models_until`) with their `hitshift` combination: the family's
@@ -804,6 +1083,94 @@ Not yet: Dungeon 8's darknut, boss-gleeok and boss-manhandla (39.1% -> 80.9% on 
 for its Dungeon 1 and Dungeon 7 chains on today's code (branch `r38-hit`). The chains of record of 2.0.0.8 are
 `r38-208-1k` (to come). The product of segment rates with every head is an estimate of about one in 1,000 (Head38b's
 `r38_head.py product`); no unbroken run from the start has finished yet.
+
+## 2.0.0.9: goriya's head and Dungeon 8's three, a late pointer per route
+
+**A late pointer** (branch `r38-late`): `models/<family>/late.<route>` (`triforce promote FAMILY RUN --route R
+--late`) names the run a family's bare key plays on a route with `own_models_until` from that step on; `d2first`,
+which reads `promoted`, plays as before (100 runs identical). Promoted with it for `d3first`: darknut
+`r38head-bare-w8`, boss-gleeok `r38head-bare-w8`, boss-manhandla `r38head-bare-w4` (Dungeon 8: 39.1% -> 80.9% of 1000
+runs on 2.0.0.6; 82.0% of 300 with the pointer, run for run equal to the arm). **goriya** for `d3first`:
+`r38ppo-aux-s38` (replacing `r32d1-goriya`): on 2.0.0.7, `d1` 92.8% -> 97.7% (+4.9 +- 0.9), `d7` 15.2% -> 76.9%
+(+61.7 +- 1.8), paired 1000 runs (\"The hit head at play\" §11).
+
+## Beams at range; rupees per pickup (branch `r38-reward`)
+
+The owner's two notes of Nov 22 (backlog, Track R): the networks walk up to a monster and hit it in melee instead
+of shooting it with the beam full hearts give ("he doesn't use the full effect of full hearts, and instead gets close
+and loses beams"), and Link waits at 0:0x0f while the 100 rupees count up, the critic paying every counted rupee.
+
+**The reward** (crates/env/src/critic.rs, `reward.beam_*`, docs/architecture.md):
+
+- `reward-gained-rupees` once per pickup, on the rise of `InvRupees + InvRupeesToAdd - InvRupeesToSubtract`, by its
+  size (under 5: 0.5, 5-9: 0.75, 10 and more: 1.0); nothing while the game counts them in. The old term paid 0.5 on
+  every step the count rose, about 12 steps for 0x0f's 100.
+- `reward-beam-kill` 0.5: a kill by a sword shot out of melee range. `reward-beam-timed` 0.1: a shot the projection
+  (`zelda::beams`: the shot carried on, each monster straight on at its speed and direction) has meeting a monster,
+  even if it turns away before. `penalty-beam-unfired` 0.02: a decision lined up for such a shot that moved or
+  waited instead.
+- `BeamStats` in every visit and chain record (`beam_*`): shots, shots lined up, decisions lined up and those
+  unfired, sword kills out of melee range (`far`) and in it (`near`), other kills, the kill distance, hearts lost,
+  steps that cost the beams. `scripts/experiments/r38_beams.py` tables them by family or room.
+
+The code plays as before: 100 `d9` runs (seeds 0-99) on the branch are record for record identical to 2.0.0.8's
+`r38-208-1k-d9` but for the `beam_*` fields.
+
+**Before: how kills happen** (2.0.0.8's team, 300 `post-d7` runs and 100 `d9` runs on the branch, every visit
+they played). Out of the sword kills, the share made out of melee range, and per visit Link entered with full
+hearts, the hearts lost and the share that cost him his beams:
+
+| Family | Sword kills | Far | Mean distance (px) | Hearts lost a full visit | Beams lost |
+|---|---|---|---|---|---|
+| wizzrobe | 1988 | 0.3% | 19.2 | 0.61 | 16% |
+| patra | 1335 | 2.8% | 23.0 | 1.01 | 25% |
+| like-like | 705 | 4.7% | 18.9 | 0.04 | 3% |
+| stalfos-keese-gel | 202 | 8.4% | 24.2 | 0.05 | 6% |
+| ow-lynel | 2 | 0% | - | 0.19 | 4% |
+
+Lined up for a shot, the networks moved or waited instead 83-99% of the time. Where melee costs hearts on the whole
+route (2.0.0.8's three 1000-run records, `d2`, `d6`, `d9`, every visit): wizzrobe 22,150 hearts lost (1.30 a visit,
+1167 deaths), darknut 5,370 (368 deaths), goriya 5,117 (351), patra 4,324 (40), the rest under 1,300 each.
+
+**The arms** (continuations with the new critic, `--sil-coeff 0.1`), 300 runs each, paired by seed with 2.0.0.8's
+team (`post-d7`: 300 runs on the branch; `d6`, `d9`: the first 300 seeds of `r38-208-1k`):
+
+| Arm | Segment | 2.0.0.8 | Arm | Paired (base only / arm only) | Far kills, the family |
+|---|---|---|---|---|---|
+| ow-lynel@d3first `r38rw-lynel` (0x50, 0x60) | `post-d7` (to 6:0x79) | 24.0% | **99.0%** | 0 / 225 | none (Lynels avoided) |
+| wizzrobe `r38rw-wizz` | `d6` (to 0:0x22) | 41.7% | 35.0% | 75 / 55 | 0.3% -> 1.3% |
+| wizzrobe `r38rw-wizz` | `d9` (Zelda) | 55.7% | 51.7% | 72 / 60 | 0.1% -> 0.1% |
+| patra `r38rw-patra` (2M steps) | `d9` (Zelda) | 55.7% | 52.3% | 77 / 67 | 2.8% -> 2.5% |
+
+- **ow-lynel@d3first** wins by the route, not the beams: 2.0.0.8's `d3first` plays 0x50 and 0x60 with
+  `r30e-lynel-s84`, a `d2first` run that never trained 0x50 E->S: 663 of its 763 visits to 0x50 left by a wrong exit,
+  and 227 of the 230 runs that did so never reached Dungeon 6 (213 stuck at 0x40 by the graveyard). The arm
+  (`specialists/d3first/ow-lynel.yaml`: 0x50 E->S and 0x60 N->W only) leaves both rooms correctly in every visit
+  (301 and 301). On `d3first` it plays only those two steps (the family's later steps are after `own_models_until`,
+  192, and keep `r30e-lynel-s84`).
+- **wizzrobe** loses on both segments (−6.7 and −4.0 points, deaths in its rooms 164 -> 178 on `d6`); a million
+  steps barely moved its beams (far kills 1.3% on `d6`, 0.1% on `d9`; unfired lined-up decisions 90-93%). Not
+  promoted.
+- **patra** (`r38rw-patra`, two million steps from `r30w-patra`, the next family by the hearts melee costs that has
+  no hit head): the unfired cost fell in training (−0.031 -> −0.009 an episode), but on `d9` its far kills stay at
+  2.5%, hearts lost a full visit 1.01 -> 1.18, deaths in its rooms 9 -> 13; −3.4 points (77 / 67, inside the noise
+  of 300 runs: the wizzrobe rooms, unchanged, lose 8 more). Not promoted.
+- The beam terms at these weights do not change how continued networks fight: shots stay rare and short (mean
+  sword-kill distance 18-23 px; melee range, `MELEE_REACH`, is 32) in every family measured. The terms stay on
+  (they cost nothing where no beam is lined up); making them matter takes a larger `beam_kill`/`beam_unfired` or
+  training from earlier checkpoints, measured on the same families.
+- **Rupees at 0:0x0f**: no arm plays it (ow-start does). On 2.0.0.8 (`r38-208-1k-d2`, 996 runs through it) the
+  cave visit takes 329 frames (median), the step out 198; the golden race's 100 rupees counted for 245 frames while
+  Link moved in 90 of them. The term pays the pickup once from now on; ow-start's next run trains on it.
+
+**Golden race** with 2.0.0.8's team and `r38rw-lynel` for `d3first` (the branch before main's 2.0.0.9 merge;
+`zelda-headless.py OUT 3 --golden --power-on --clips on --act model --parallel 8 --attempts 2000`): three of three
+paths in 311 runs (2.0.0.8: three in 319), 146,380, 159,309 and 176,938 frames; the segment through 0x50, 0x60 and
+Dungeon 6 (to step 213) took 6, 7 and 5 runs. Kept in the replay backup (their META names the code 2.0.0.7, the
+branch's base).
+
+Next to train with the beam terms, by the hearts melee costs on the route (2.0.0.8's records): wizzrobe (22,150
+hearts, 1167 deaths), darknut (5,370; 368), goriya (5,117; 351), patra (4,324; 40), with stronger weights first.
 
 ## Moldorm crossed, 9:0x56's key
 

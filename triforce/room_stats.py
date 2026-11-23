@@ -683,8 +683,8 @@ def room_scope(models_dir: Path, team: Optional[dict[str, dict]]) -> dict:
 
 def promoted_runs(models_dir: Path, route: Optional[str] = None) -> dict[str, str]:
     """Each current family's promoted run by policy key (``registry.policy_run`` on ``route``: its ``promoted.<route>``
-    over ``promoted``, phase X; on a route with ``own_models_until`` its ``promoted`` and, as ``family@route``, its
-    route's run, round 32; absent: none promoted)."""
+    over ``promoted``, phase X; on a route with ``own_models_until`` its ``late.<route>`` over its ``promoted``, round
+    38, and, as ``family@route``, its route's run, round 32; absent: none promoted)."""
     from .specialist import list_specialists  # pylint: disable=import-outside-toplevel
     root = Path(models_dir)
     found = {}
