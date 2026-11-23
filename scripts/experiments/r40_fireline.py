@@ -314,6 +314,10 @@ def analyse_replay(path: Path, rooms: set, states_dir) -> dict:
                 else:
                     kind = 'stand'
                 out['time'][room][kind] += 1
+                if lines_on and kind == 'walk':
+                    out['time'][room]['walk_lines'] += 1
+                if lines_on and kind in ('shot', 'stand'):
+                    out['time'][room]['still_lines'] += 1
                 mons = live_monsters(ram)
                 near = min((math.hypot(x - lx, y - ly) for _, x, y in mons), default=None)
                 if lines_on:
@@ -409,16 +413,17 @@ def report(result: dict, rooms: list) -> None:
         print(f"| {room} | " + ' | '.join(
             f"{100 * result[l]['room_beams'][room] / max(1, result[l]['room_frames'][room]):.1f}%" for l in labels) + ' |')
     print('\n### Where the time goes (frames a run in the room; replays)\n')
-    print('| room | arm | walking | swinging | waiting on a shot | standing | steered to lines | of them a monster '
-          'within 32 px |')
-    print('|---|---|---:|---:|---:|---:|---:|---:|')
+    print('| room | arm | walking | of it steered to lines | swinging | waiting on a shot | standing | still while '
+          'steered to lines | steered to lines | of them a monster within 32 px |')
+    print('|---|---|---:|---:|---:|---:|---:|---:|---:|---:|')
     for room in rooms:
         for l in labels:
             a = result[l]
             t = a['time'].get(room, Counter())
             n = max(1, a['runs'])
-            print(f"| {room} | {l} | {t['walk'] / n:.0f} | {t['swing'] / n:.0f} | {t['shot'] / n:.0f} | "
-                  f"{t['stand'] / n:.0f} | {a['lines'][room] / n:.0f} | {a['lines_near'][room] / n:.0f} |")
+            print(f"| {room} | {l} | {t['walk'] / n:.0f} | {t['walk_lines'] / n:.0f} | {t['swing'] / n:.0f} | "
+                  f"{t['shot'] / n:.0f} | {t['stand'] / n:.0f} | {t['still_lines'] / n:.0f} | {a['lines'][room] / n:.0f} | "
+                  f"{a['lines_near'][room] / n:.0f} |")
     print('\n### Where the hits land (replays)\n')
     print('| room | arm | hits | toucher in line out of reach 16 frames before | Link still 16+ frames | his shot flying | steered to lines | '
           'mean distance |')
