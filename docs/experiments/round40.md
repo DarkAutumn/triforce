@@ -100,3 +100,28 @@ true` (beside `firing_lines`; off by default) keeps the monsters' own tiles as t
 wavefront then leads to whichever is nearer, melee at hand, a line when the monster is far. Test: Link two rows below
 a Gel is 3 steps from the line below it and 2 from the Gel; with the variant he is led to the Gel
 (`a_fight_at_full_hearts_steers_to_the_firing_lines`). Yaml: `experiments/r40/zol-fireline-melee.yaml`.
+
+### The continuations, seed 401, against their fair bases (Nov 23)
+
+Every run trained on the harvested states (run.json `harvested`: `triforce/states/harvested/zol`, 3,396 states,
+fraction 0.25), 1M steps from `r34d3-zol-s341` (`--sil-coeff 0.1`), and played bare (no hit head). The promoted base
+plays the same policy with zol's hit head (`r38head-fam-w4`): **the hit head alone is worth 6.0 ± 1.5 points on
+`d3`** (the bare policy 33.2% against 39.2%; deaths in 3:0x49 5 -> 34), so the bare arms are read against the bare
+policy and the continuation without the switch, not against the promoted team. `d3`, 1000 runs, seeds 0-999
+(`target/r40f/*-d3-1k.jsonl`, replays under `target/r40f/replays/`; `scripts/experiments/r40_fireline.py records`,
+whole tables in `target/r40f/ab-records.md`):
+
+| arm (zol@d3first) | hit head | `d3` | vs the bare policy | vs cont-without | zol: shots a visit | far share of sword kills | lined up, not fired | hits a visit | hearts lost a visit | 3:0x6b median frames | frames to enter 3:0x49 vs base | rooms cleared holding beams |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| promoted (`r38head-fam-w4`) | yes | 39.2% | +6.0 ± 1.5 | | 2.15 | 18.3% | 64.2% | 0.139 | 0.077 | 1217 | | 5.62 |
+| bare policy `r34d3-zol-s341` | no | 33.2% | | | 1.94 | 16.1% | 64.1% | 0.225 | 0.142 | 1225 | +23 ± 12 (policy - base: -23) | 4.83 |
+| continued without the switch | no | 32.3% | -0.9 ± 2.1 | | 1.85 | 12.9% | 66.2% | 0.213 | 0.130 | 1173 | -46 ± 26 | 4.93 |
+| continued WITH firing lines | no | 32.6% | -0.6 ± 2.2 | +0.3 ± 2.1 | 3.45 | 47.3% | 44.9% | 0.249 | 0.164 | 1566 | +526 ± 34 | 4.84 |
+
+The rate does not move (+0.3 ± 2.1 against the continuation without the switch). Within that noise the others
+decide, and they split: the switch makes Link shoot (shots a visit ×1.9, far kills 12.9% -> 47.3% of sword kills,
+3:0x6b 13% -> 57%; lined-up decisions left unfired 66% -> 45%, 3:0x6b 55% -> 28%) but slower (3:0x6b's median visit
+1173 -> 1566 frames, 6.5 s; 3:0x49 entered 8.7 s later), hit somewhat more (0.213 -> 0.249 a visit; 3:0x49 0.131 ->
+0.297, its deaths 14 -> 46) and no longer holding the beams (rooms cleared with them 4.93 -> 4.84). So the lines
+teach shooting by continuation, at a cost in time and hits; whether the melee variant or a scratch run does better
+is the next read (queued: the melee continuation's chain; both s401 scratch runs).
