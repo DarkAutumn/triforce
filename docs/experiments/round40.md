@@ -60,4 +60,26 @@ The fixed sequence lands from every spawn arrangement when played at once; what 
 at 0x22's mouth (after about 160 frames a Lynel reaches Link and a hit during the plays leaves the whirlwind to go by:
 12 of 300 missed, none again until the room is entered again) and, at 0x0b, the Leevers' few hits.
 
-<!-- r40-gen-eng: dock and chain numbers follow -->
+### The docks unaided, played blind (same script, `dock-55`, `dock-3f`, ow-zora)
+
+From `d3first_0_55n_v2_{0,1,2}` and `d3first_0_3fn_{0,1,2}`, 100 seeds a state, the switch on, monsters live; the rule
+steps off the dock, walks W to the clip's column, clips N and plays at once (or after K WAIT 8 in the water), never
+dodging. 300 runs a row:
+
+| Dock | WAITs first | Lands | Runs hit | Hits a visit | Hearts lost a visit | Never reached the play |
+|---|---|---|---|---|---|---|
+| 0x55 | 0 | 27.7% | 78.0% | 1.02 | 0.51 | 110 |
+| | 2 | 27.7% | 80.3% | 1.03 | 0.52 | 125 |
+| | 5 | 22.0% | 86.7% | 1.16 | 0.58 | 131 |
+| | 10 | 14.0% | 88.0% | 1.31 | 0.66 | 131 |
+| 0x3f | 0 | 72.0% | 36.3% | 0.49 | 0.24 | 12 |
+| | 2 | 72.3% | 41.0% | 0.51 | 0.26 | 24 |
+| | 5 | 78.7% | 42.7% | 0.55 | 0.28 | 27 |
+| | 10 | 69.7% | 54.3% | 0.76 | 0.38 | 30 |
+
+0x55 is the hard one: a blind rule is hit on the way to the play in most runs (the red Octorok below the dock and
+the Zora; 110-131 of 300 never reach the water spot, most of the rest leave by the wrong exit after a knock-back
+onto the dock's trigger). The give-ways hid this from today's networks; the fresh generation's ow-zora must learn
+it (round 36's scripted rule with the give-ways: 6 of 20 at 0x55, 13 of 20 at 0x3f).
+
+<!-- r40-gen-eng: the identity proof and today's networks with the docks unaided follow (status file) -->
