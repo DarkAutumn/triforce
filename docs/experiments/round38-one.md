@@ -237,3 +237,9 @@ none. The hit head at w8 keeps Link off the traps' lines and so off the way to t
 against the team's 282 lost per 1,000 entering, although the network arrives with more hearts (2.96 against 2.71).
 At the same hearts in it loses more (2.5-3.5 hearts: 412 against 243; 3.5 and over: 181 against 54), and its
 deaths come fast (1,446 frames, 3.07 hits, against 4,563 frames and 2.31 hits).
+
+**One run from the start with `d2b-all-w8` in every slot** (1,000 runs, seeds 0-999, 2.0.0.11's code): **6 runs end
+the game** (seeds 209, 266, 415, 499, 607, 958; 145,393 to 152,650 frames, 2 to 6 cheated items). The milestones,
+`d1-all-w8` -> `d2b-all-w8`: D3's triforce 470 -> 460, D4 259 -> 226, D1 256 -> 224, D2 235 -> 211, D5 127 -> 121,
+D7 51 -> 47, the magic sword 24 -> 42, D6 13 -> 23, D8 3 -> 15, the ending 0 -> **6**. The best unbroken run (fewest
+cheated items, then fewest frames) is seed 958: 2 cheated items, 151,567 frames.
