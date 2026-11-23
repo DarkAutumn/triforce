@@ -47,9 +47,21 @@ def serve_half() -> bool:
     return os.environ.get('TRIFORCE_SERVE_HALF', '') not in ('', '0')
 
 
+_LEARNER = {'on': False}
+
+
+def learner_process():
+    """Marks this process as one whose own threads use the GPU while the server serves (a training, a recording):
+    its servers run eagerly.  A CUDA graph capture on the server thread cannot coexist with another thread's GPU
+    work in the same process (Nov 23: a training's value recompute and the capture failed each other with
+    cudaErrorStreamCaptureUnsupported, in every capture mode)."""
+    _LEARNER['on'] = True
+
+
 def serve_graphs() -> bool:
-    """``$TRIFORCE_SERVE_GRAPHS=0`` turns off CUDA graphs for served networks (on by default on the GPU)."""
-    return os.environ.get('TRIFORCE_SERVE_GRAPHS', '1') not in ('', '0')
+    """CUDA graphs for served networks: on by default on the GPU, off in a learner process (``learner_process``) and
+    with ``$TRIFORCE_SERVE_GRAPHS=0``."""
+    return not _LEARNER['on'] and os.environ.get('TRIFORCE_SERVE_GRAPHS', '1') not in ('', '0')
 
 
 def _bucket(rows: int) -> Optional[int]:

@@ -17,7 +17,7 @@ one_room: true
 max_steps: 1000
 warm_start: null
 notes: >-
-  Manhandla (Dungeon 3, Nov 9): one $3C object, a base and four hands, which speeds up as hands die. Lee: kill him
+  Manhandla (Dungeon 3, Nov 9): one $3C object, a base and four hands, which speeds up as hands die. The owner: kill him
   with bombs dropped into his path (a bomb does $40 to the base, enough to kill it, and each hand dies to one; a
   well-placed one kills him outright). Entered from W through 0x4c's bombed wall; the N and S shutters open and the
   heart container appears when he dies; success is the N exit to the triforce room (the heart first). Backlog

@@ -20,7 +20,7 @@ warm_start: null
 harvested_fraction: 0.25                  # round 33: chain handoffs at the route's hearts (from 0_6dc_0: 9:0x56 from S 400, 0x14 130, 0x51 66, 0x03 34), triforce/states/harvested/like-like, not in git (docs/experiments/round33.md)
 notes: >-
   Like Like rooms (Dungeon 4, Nov 11-12): a Like Like swallows Link and eats his magic shield.
-  Dungeon 4's Breakfast Room 0x32 (Lee's name: two Like Likes, two Zols, two Bubbles): in from W, kill the Like
+  Dungeon 4's Breakfast Room 0x32 (the owner's name: two Like Likes, two Zols, two Bubbles): in from W, kill the Like
   Likes and Zols (the Bubbles don't count), push the block (any way; it moves only once the room is clear) so the
   stairs appear at tiles (26-27, 4-5), and go down to the ladder cellar 0x60; back up, leave W. Copied from zol
   (one-room, curriculum, 2000 steps).

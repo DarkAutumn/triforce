@@ -1,6 +1,6 @@
 # The overworld map (game.yaml level 0)
 
-Mapping pass of Nov 9 (Lee): every overworld room 0x00–0x7f is in `triforce/game.yaml` with its exits, enemies,
+Mapping pass of Nov 9 (the owner): every overworld room 0x00–0x7f is in `triforce/game.yaml` with its exits, enemies,
 caves and secrets; the two maze rooms are modelled in code (`crates/zelda/src/game_map.rs` `MAZES`). Data only: no
 route, family or tag changed (`specialist:` stays on the route rooms that had it). Map image:
 [`overworld-map.png`](overworld-map.png) (half-size renders, room ids; blue box `Ln` = dungeon n entrance, orange
@@ -201,7 +201,7 @@ existing rooms got exits they lacked: 0x1b's maze loops, 0x1f N (the wall gap) a
 
 ## The route after Dungeon 1 (round 22)
 
-Lee (Nov 13): from the D1 triforce (0x37) S to 0x67, bomb its wall and take the rupees, then on to Dungeon 3 (0x74)
+The owner (Nov 13): from the D1 triforce (0x37) S to 0x67, bomb its wall and take the rupees, then on to Dungeon 3 (0x74)
 by the wrap with clips, or along row 6 without. `d2first` steps 68–87 (`triforce/routes.yaml`, the stretch
 `d3-approach`; decisions 2026-11-13 "Round 22 route"). The scout's findings, played in the game, are summarised
 here; the route tests are `crates/zelda/tests/route_ways.rs` (monsters removed, frame counts printed).

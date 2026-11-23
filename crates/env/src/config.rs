@@ -441,7 +441,7 @@ impl Default for CurriculumConfig {
     }
 }
 
-/// `items: {bombs: ...}`: when the specialist may place bombs (Lee, Nov 11).  Every mode but `never` also allows
+/// `items: {bombs: ...}`: when the specialist may place bombs (the owner, Nov 11).  Every mode but `never` also allows
 /// the 10th damage-free kill's bomb (`$50` = 9: a bomb kill then arms a forced bomb drop), whatever the room and the
 /// reserve: that bomb pays itself back.  In every mode a granted bomb (`zelda::cheats`) only opens the wall
 /// ([`ItemsConfig::bomb_targets`]).

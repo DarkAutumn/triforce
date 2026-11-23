@@ -34,7 +34,7 @@ def reached(run: dict) -> int:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--tag', default='team')
-    parser.add_argument('--chains', default='/home/leculver/git/triforce-r37-one/target/r37/chains')
+    parser.add_argument('--chains', default='../triforce-r37-one/target/r37/chains')
     parser.add_argument('--team', action='store_true')
     parser.add_argument('--json', default=None)
     args = parser.parse_args()

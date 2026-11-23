@@ -34,7 +34,7 @@ Level facts from LevelInfo (ROM): D1 start room $73, boss room $35, triforce roo
 - **D1 → D2.** BFS gives two 11-room ties:
   - North: 0x28…0x2d, 0x3d, 0x4d. This is canonical: it matches the design's `ow-leever-peahat` family and stays inside v1's `LeftOverworld2Area` box.
   - South: 0x48, 0x58, 0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x4d. Tagged in round 6 as part of `milestone1-fairy`
-    (Lee): the south road plus a 4-room detour 0x59 N 0x49 N 0x39 to the fairy pond, which refills every heart
+    (the owner): the south road plus a 4-room detour 0x59 N 0x49 N 0x39 to the fairy pond, which refills every heart
     (`asm:PondFairy_Update`: Link at the pond edge, Y=$AD, $70 ≤ X < $81, is halted until the hearts are full).
     `routes.yaml` defines it as milestone1 with the steps from 0x38 (from W) up to 0x4c (from E) replaced.
 - **D1 path.** This is v1's "locked-door branch" (`dungeon1-late-chain`: 0x43→0x44→0x45→0x35, `Dungeon1DidntGetKey`). It needs no bombs, and Link starts with 0 bombs (RAM `start`: `$658`=0).

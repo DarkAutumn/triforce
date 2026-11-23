@@ -366,7 +366,7 @@ fn room_exit_resets_visit_clock(nes: ZCore, data: &Arc<GameData>) -> ZCore {
     c.into_parts().0.into_nes()
 }
 
-/// Leaving 0x0a S before the white sword (routes.yaml `retreat: S`, Lee Nov 8) doesn't end the run: the visit ends as
+/// Leaving 0x0a S before the white sword (routes.yaml `retreat: S`, the owner Nov 8) doesn't end the run: the visit ends as
 /// `retreat`, the run goes on in 0x1a, whose objective sends Link back N (a correct exit).  A retreat beyond the
 /// run's cap (`MAX_RETREATS` = 3; 1 here) ends the run as a failure, `retreat-limit`.
 fn lynel_retreat_continues_the_run(nes: ZCore, data: &Arc<GameData>) -> ZCore {
@@ -414,7 +414,7 @@ fn cave_bounce_hits_the_wrong_exit_limit(nes: ZCore, data: &Arc<GameData>) -> ZC
     c.into_parts().0.into_nes()
 }
 
-/// Lee, Nov 11: walking back into the room before the last and forward again once or twice is fine; the 5th return
+/// The owner, Nov 11: walking back into the room before the last and forward again once or twice is fine; the 5th return
 /// in a row (`MAX_BOUNCES`) ends the run `stuck` (`bounce-limit`), before the wrong-exit limit.  Here Link walks
 /// between 0x4d and 0x4c from 0x4d's route entry.
 fn back_and_forth_hits_the_bounce_limit(nes: ZCore, data: &Arc<GameData>) -> ZCore {

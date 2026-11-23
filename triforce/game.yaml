@@ -902,7 +902,7 @@ rooms:
   # Secret (d2first, Nov 8; emulator-checked): OW attr B cave index $11, a rock wall tile object (asm:RockWall_Update)
   # at x=144 y=160, tiles (18-19, 12-13) in the middle rock.  A bomb there opens it (room flag $80) to the take-any
   # cave: potion ($20) on the left, heart container ($1A) on the right.
-  requires_bombs: true    # Lee (Nov 8): the d2first heart needs a bomb here (zelda::cheats cheats one in)
+  requires_bombs: true    # The owner (Nov 8): the d2first heart needs a bomb here (zelda::cheats cheats one in)
   bomb_secret: [18, 12]
   exits:
     N:
@@ -1894,7 +1894,7 @@ rooms:
       level: 0
       location: '0x5c'
       # Two openings: rows 3-4 reach 0x5c's east exit; rows 15-16 open into a pocket of 0x5c that only leads S
-      # (round 6, Lee).  Only the upper one counts.
+      # (round 6, the owner).  Only the upper one counts.
       span: [0, 9]
     S:
       level: 0
@@ -2171,7 +2171,7 @@ rooms:
   # Secret (round 22, played): a rock wall tile object (asm:RockWall_Update) at x=112 y=80, tiles (14-15, 2-3), first
   # quest only (attr F `qs` Q1).  A bomb blast whose middle is within 16 px of the wall's on both axes opens it (room
   # flag $80; Link facing N on Y $5D at X $68-$78, or at X $70 on Y $65/$6D) to the secret-rupee cave $21.
-  requires_bombs: true    # round 22 (Lee, Nov 13): bomb the wall and take the cave's 30 rupees (zelda::cheats cheats one in)
+  requires_bombs: true    # round 22 (the owner, Nov 13): bomb the wall and take the cave's 30 rupees (zelda::cheats cheats one in)
   bomb_secret: [14, 2]
   exits:
     E:
@@ -2701,7 +2701,7 @@ rooms:
 # --- Dungeon 1 (level 1) --- (exit conventions: see Dungeon 2)
 - level: 1
   location: '0x22'
-  specialist: trap-room  # the bow detour (Lee, Nov 9); emulator-checked through Game.load at mode 5
+  specialist: trap-room  # the bow detour (the owner, Nov 9); emulator-checked through Game.load at mode 5
   exits:
     E:
       level: 1
@@ -2991,7 +2991,7 @@ rooms:
 - level: 2
   location: '0x0e'
   specialist: boss-dodongo
-  requires_bombs: true    # Lee (Nov 8): Link always has a bomb here (zelda::cheats cheats one in when he has none)
+  requires_bombs: true    # The owner (Nov 8): Link always has a bomb here (zelda::cheats cheats one in when he has none)
   exits:
     S:
       level: 2
@@ -3258,7 +3258,7 @@ rooms:
 # Rooms: Level_InfoUW3 SubmenuMapMask (rotation $0C) over Level_BlockUW1to6Q1; doors from attr A/B (N A>>5, S A>>2,
 # W B>>5, E B>>2; 0 open, 1 wall, 4 bomb, 5/6 key, 7 shutter), enemies from attr C/D + FoeCounts, item from
 # attr E & $1F, `trigger` from attr F & 7 (asm:Secret_RunTrigger).  Every room was loaded in the emulator
-# (room-id retarget from 0x7c) and Lee's route was walked there (docs/routes/d3.md).  The boss room's only open way
+# (room-id retarget from 0x7c) and the owner's route was walked there (docs/routes/d3.md).  The boss room's only open way
 # in is 0x4c's E bomb wall (exit conventions: see Dungeon 2).
 - level: 3
   location: '0x2a'
@@ -3368,9 +3368,9 @@ rooms:
   treasure: key
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 3
-  location: '0x4c'  # blade traps and Zols (Lee: "trap/gel room"); its E wall is bombable into the boss room
+  location: '0x4c'  # blade traps and Zols (the owner: "trap/gel room"); its E wall is bombable into the boss room
   specialist: trap-room
-  requires_bombs: true    # Lee (Nov 9): the E wall is bombed open into the boss room (round 22: entered from S)
+  requires_bombs: true    # The owner (Nov 9): the E wall is bombed open into the boss room (round 22: entered from S)
   exits:
     E:  # bomb wall
       level: 3
@@ -3389,7 +3389,7 @@ rooms:
 - level: 3
   location: '0x4d'  # Manhandla (one $3C object, five slots: the body and four heads)
   specialist: boss-manhandla
-  requires_bombs: true    # Lee (Nov 9): the plan kills Manhandla with bombs dropped into his path
+  requires_bombs: true    # The owner (Nov 9): the plan kills Manhandla with bombs dropped into his path
   exits:
     N:  # shutter
       level: 3
@@ -3446,7 +3446,7 @@ rooms:
 - level: 3
   location: '0x5b'  # the central Darknut room; its bombs appear when the Darknuts are dead
   specialist: darknut
-  requires_bombs: true    # round 22 (Lee, Nov 13): its E wall is bombed open into 0x5c on the last visit
+  requires_bombs: true    # round 22 (the owner, Nov 13): its E wall is bombed open into 0x5c on the last visit
   exits:
     N:
       level: 3
@@ -3567,7 +3567,7 @@ rooms:
 # --- Dungeon 4 (level 4) (mapping, Nov 11; docs/routes/d4.md) ---
 # Rooms: the rooms reachable from Level_InfoUW4 StartRoomId (0x71) over Level_BlockUW1to6Q1, the same as its
 # SubmenuMapMask (rotation $06); doors, enemies, items and triggers as for Dungeon 3.  Every room was loaded in
-# the emulator (room-id retarget from 0x71) and Lee's route was walked there (docs/routes/d4.md).  `dark: true`
+# the emulator (room-id retarget from 0x71) and the owner's route was walked there (docs/routes/d4.md).  `dark: true`
 # is attr E bit 7 (the room is black without a candle; its tiles are the same).  Exit conventions: see Dungeon 2.
 - level: 4
   location: '0x00'  # an old man (UW person $4E; Unknown_78 by the repo enum names): "WALK INTO THE WATERFALL"
@@ -3584,7 +3584,7 @@ rooms:
   treasure: null
 - level: 4
   location: '0x01'  # Blue Keese over water; the key in the middle needs the ladder
-  specialist: stalfos-keese-gel  # round 22 (Lee, Nov 13): S in through the wall bombed from 0x11, the key, E out
+  specialist: stalfos-keese-gel  # round 22 (the owner, Nov 13): S in through the wall bombed from 0x11, the key, E out
   exits:
     E:
       level: 4
@@ -3603,7 +3603,7 @@ rooms:
   dark: true
 - level: 4
   location: '0x02'  # six blade traps ($49) in the dark
-  specialist: trap-room  # round 22 (Lee, Nov 13): W in from 0x01, S out into the Vire room 0x12
+  specialist: trap-room  # round 22 (the owner, Nov 13): W in from 0x01, S out into the Vire room 0x12
   exits:
     S:
       level: 4
@@ -3645,7 +3645,7 @@ rooms:
 - level: 4
   location: '0x11'  # the rupee room (ten rupees, a $35 rupee stash; no monsters): all four walls are bombable
   specialist: trap-room  # Dungeon 4 (Nov 11)
-  requires_bombs: true    # Lee (Nov 11): a wall is bombed open (round 22, Nov 13: the N wall into the Keese room 0x01)
+  requires_bombs: true    # The owner (Nov 11): a wall is bombed open (round 22, Nov 13: the N wall into the Keese room 0x01)
   exits:
     N:  # bomb wall
       level: 4
@@ -3718,7 +3718,7 @@ rooms:
 - level: 4
   location: '0x21'  # Blue Gels; its N wall is bombable into the rupee room; the S door (locked) leads onto the island, which only the ladder clip leaves (round 21 route)
   specialist: stalfos-keese-gel  # Dungeon 4 (Nov 11)
-  requires_bombs: true    # Lee (Nov 11): the N wall is bombed open into the rupee room
+  requires_bombs: true    # The owner (Nov 11): the N wall is bombed open into the rupee room
   exits:
     N:  # bomb wall
       level: 4
@@ -3736,7 +3736,7 @@ rooms:
   bomb_walls: [N]
   dark: true
 - level: 4
-  location: '0x30'  # Vires and Bubbles (Lee: "the vire room we already pathed through"); row 2 is water from wall to wall: N needs the ladder
+  location: '0x30'  # Vires and Bubbles (the owner: "the vire room we already pathed through"); row 2 is water from wall to wall: N needs the ladder
   specialist: vire  # Dungeon 4 (Nov 11)
   exits:
     N:
@@ -3777,7 +3777,7 @@ rooms:
   trigger: kill-all  # attr F & 7 = 1
 - level: 4
   location: '0x32'  # Like Likes, Zols and Bubbles; a pushed block reveals the stairs to the ladder cellar 0x60
-  name: Breakfast Room  # Lee (Nov 11): the room with the stairs to the ladder
+  name: Breakfast Room  # The owner (Nov 11): the room with the stairs to the ladder
   specialist: like-like  # Dungeon 4 (Nov 11)
   exits:
     W:  # open here; a shutter on 0x31's side

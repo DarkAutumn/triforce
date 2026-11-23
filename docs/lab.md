@@ -60,7 +60,10 @@ bucket (1, 2, 4, ..., 64; rows padded by repeating the last) and replays it: 0.6
 at 32 (a `hitshift` of 2.4M parameters). The answers agree with the eager forward within 2e-5 (3,000 real batches
 of four networks, no top-action change); a 20-run chain logging every decision matched the eager chain decision
 for decision. A graph's first three replays are checked against the eager forward; a capture that fails or a
-replay that disagrees serves that network eagerly from then on, with a warning. Recurrent networks stay eager.
+replay that disagrees serves that network eagerly from then on, with a warning. Recurrent networks stay eager, and
+so does every network served in a training or recording process (`triforce.train`, `lab.train`, `lab.record` call
+`serve.learner_process()`): a capture on the server thread and the learner's own GPU work on the main thread fail
+each other in every capture mode (Nov 23, a darknut continuation's first rollout).
 With graphs the batch window drops from 5 ms to 1 ms (`GRAPH_GATHER`; `TRIFORCE_SERVE_GATHER` overrides): a
 forward is cheap, so answering sooner beats a fuller batch. The 200-run `d3first` chain from `3_7cs_0` with four
 `hitshift` networks (106,936 decisions, every run identical across the three):
@@ -149,7 +152,8 @@ networks that ask for them read; `docs/architecture.md` "Observation").
 
 `ZeldaPolicy` also answers `heads` (so it can be served; `tests/test_lab_nets.py` checks that its logits give
 its own `evaluate` and `joint_log_probs`). A checkpoint without `model_config['arch']` is a `ZeldaPolicy`; old and
-new checkpoints load side by side (no COMPAT change).
+new checkpoints load side by side: the architecture is part of what decides whether a checkpoint loads
+(`registry.schema_problem`, AGENTS.md "Versioning"), and a new one is a new `arch` name.
 
 ## Several families in one run
 
@@ -174,7 +178,7 @@ python -m triforce.lab.train --name zol+skg --families zol stalfos-keese-gel --p
 - `--arch NAME --arch-config JSON` for a fresh network of another class; `--load CKPT` to start from a checkpoint.
 - The run is `<models>/<name>/<run-id>`; every member family gets a link `<models>/<family>/<run-id>` to it. So
   `triforce promote zol <run>` (and `--route d3first` for a route part), `triforce evaluate` per family,
-  `eval-chain`, `select-checkpoint`, `triforce list` and the version stamp work unchanged, and `runner.Policies`
+  `eval-chain`, `select-checkpoint`, `triforce list` and the run's `version` work unchanged, and `runner.Policies`
   loads a run that several keys name once.
 - As in `triforce train`: `--checkpoint-every N [--checkpoint-keep K]` (numbered checkpoints `<run>/checkpoints/
   it<N>/`, `select-checkpoint FAMILY RUN` reads them through the family's link), `--demos FILE... --demo-coeff C`

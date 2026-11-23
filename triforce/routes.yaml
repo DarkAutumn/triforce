@@ -1,4 +1,4 @@
-# The route (docs/routes/d2first.md; Lee, Nov 8: the only route; the bow detour and Dungeon 3, Nov 9).
+# The route (docs/routes/d2first.md; the owner, Nov 8: the only route; the bow detour and Dungeon 3, Nov 9).
 # entry = side of the room Link enters from (start = game start, cave = emerging from a cave/dungeon stairs/cellar or
 # the triforce's warp); exit = direction Link leaves (cave = enter the cave, dungeon stairs or cellar stairs in this
 # room; triforce = level ends on pickup, asm:Item_Take -> GameMode $12 -> OW; terminal = the route ends on entering
@@ -63,7 +63,7 @@
 # `bomb_reserve: N`: from this step on (until a later step sets another; 0 at the start) Link keeps N bombs for what
 # the route needs them for: BOMB as a weapon is masked while he holds N or fewer of his own, inside a bomb-wall room
 # as outside (round 26; a `free` family's BOMB at the wall the route leaves through stays), but for the 10th
-# damage-free kill, which arms a forced bomb drop (Lee, Nov 11; docs/decisions.md).  A fight the bombs are kept for
+# damage-free kill, which arms a forced bomb drop (the owner, Nov 11; docs/decisions.md).  A fight the bombs are kept for
 # sets its own step's reserve (0: Manhandla, Digdogger, the Olive Garden, 3:0x5b's last pass, whose own four bombs
 # pay for what follows).  Bombs a room grants (game.yaml `requires_bombs`, `zelda::cheats`) only open its wall.
 # `rupee_reserve: N` (round 26): the same for rupees, kept for the route's arrows: ARROW is masked while Link holds
@@ -141,7 +141,7 @@ d2first:
 - {level: 0, room: '0x1c', specialist: ow-start, entry: S, exit: W}
 - {level: 0, room: '0x1b', specialist: ow-start, entry: E, exit: W}
 - {level: 0, room: '0x1a', specialist: ow-tektite, entry: E, exit: N}
-# Lee (Nov 8): leaving 0x0a S before the white sword (to re-enter for a better Lynel spawn) is allowed.
+# The owner (Nov 8): leaving 0x0a S before the white sword (to re-enter for a better Lynel spawn) is allowed.
 - {level: 0, room: '0x0a', specialist: ow-lynel, entry: S, exit: cave, retreat: S}
 - {level: 0, room: '0x0a', in_cave: true, specialist: ow-lynel, entry: S, exit: S}
 - {level: 0, room: '0x0a', specialist: ow-lynel, entry: cave, exit: S}
@@ -161,7 +161,7 @@ d2first:
 # even (3 in, 3 out).  The boomerang (0x44) stays.  0x73's N key door is `keep_out` (round 31: MOVE into it only on
 # the step that leaves N, so leaving S never spends a key on it).
 - include: dungeon-1
-# To Dungeon 3 (round 22, Lee, Nov 13; docs/routes/overworld.md): 0x38 S into the Leever room 0x48 is forced (0x37
+# To Dungeon 3 (round 22, the owner, Nov 13; docs/routes/overworld.md): 0x38 S into the Leever room 0x48 is forced (0x37
 # leads only E, 0x38 only N/S/W); S through 0x58 and 0x68 to 0x67, bomb its rock wall (first quest only) and take
 # the secret cave's 30 rupees (`waypoint: rupees`; the pickup works only walking up at X $78, the cave's middle ware).
 # Then the stretch `d3-approach`: with clips S to 0x77, W through 0x76 into 0x75's E part and CLIP E there (the wrap
@@ -191,7 +191,7 @@ d2first:
   - {level: 0, room: '0x63', specialist: ow-moblin, entry: E, exit: S}
   - {level: 0, room: '0x73', specialist: ow-moblin, entry: N, exit: E}
   - {level: 0, room: '0x74', specialist: ow-tektite, entry: W, exit: cave}
-# Dungeon 3 (Lee, Nov 9; round 22, Nov 13; docs/routes/d3.md): W N N W W N S S (stairs: the raft) N E E, bomb 0x5b's
+# Dungeon 3 (the owner, Nov 9; round 22, Nov 13; docs/routes/d3.md): W N N W W N S S (stairs: the raft) N E E, bomb 0x5b's
 # E wall, N, bomb 0x4c's E wall, N (0x4b and its key door are off the route since round 22).
 # Treasure rules: 0x5b (the central Darknut room) takes its bombs only on its last visit (W to E), whatever Link holds
 # (round 23: `if_bombs_below: 6` turned the walk to the wall into a fight beside the opened wall whenever a bomb spent
@@ -211,17 +211,17 @@ d2first:
 - {level: 3, room: '0x49', specialist: zol, entry: S, exit: S}
 - {level: 3, room: '0x59', specialist: darknut, entry: N, exit: S}
 - include: dungeon-3
-# Dungeon 4 (Lee, Nov 11-12; docs/routes/d4.md).  From the D3 triforce's warp (0x74) back the way Link came to 0x65,
-# N to the dock of 0x55 and by raft to the island 0x45.  Dungeon 4, Lee's directions: the keys of 0x51 and 0x40
+# Dungeon 4 (the owner, Nov 11-12; docs/routes/d4.md).  From the D3 triforce's warp (0x74) back the way Link came to 0x65,
+# N to the dock of 0x55 and by raft to the island 0x45.  Dungeon 4, the owner's directions: the keys of 0x51 and 0x40
 # (both in the open from the start), the direct way to the ladder (N N W N N E E: the Breakfast Room 0x32, whose
 # pushed block reveals the stairs), back W to the Vire room 0x31, then the stretch `d4-island`: with clips N through
-# its locked door onto the island of 0x21 and the ladder clip N over its two squares of water (round 21, Lee, Nov 12;
+# its locked door onto the island of 0x21 and the ladder clip N over its two squares of water (round 21, the owner, Nov 12;
 # only a family with `clips: true` leaves the island), without clips W to 0x30, N over its water, E through 0x20 into
 # 0x21 from W (round 20's way; round 22 keeps both); bomb N into the rupee room 0x11 and N again into the dark Keese
-# room 0x01 (round 22, Lee, Nov 13: its key, on the water: the ladder), E into the dark trap room 0x02, S into the
+# room 0x01 (round 22, the owner, Nov 13: its key, on the water: the ladder), E into the dark trap room 0x02, S into the
 # Vire room 0x12, whose pushed block opens the E shutter to Gleeok, N to the triforce.  Keys: 0x30's E door and (clip
 # way) 0x31's N door; 0x01's key is a spare for later dungeons.
-# Bomb reserve 2 from the entrance (Lee, Nov 12): the walls of 0x21 and 0x11 (both N).
+# Bomb reserve 2 from the entrance (the owner, Nov 12): the walls of 0x21 and 0x11 (both N).
 - include: to-level-4
 - include: dungeon-4
 # The leg to Dungeon 5 (round 24, the owner, Nov 13-14; docs/routes/d5-leg.md, first-quest.md, overworld.md): from
@@ -661,7 +661,7 @@ blocks:
   - {level: 1, room: '0x73', specialist: stalfos-keese-gel, entry: S, exit: N}
   - {level: 1, room: '0x63', specialist: stalfos-keese-gel, entry: S, exit: N}
   - {level: 1, room: '0x53', specialist: stalfos-keese-gel, entry: S, exit: N}
-  # The bow detour (Lee, Nov 9): 0x43 N through both north key rooms to the blade-trap room 0x22, push its west block
+  # The bow detour (the owner, Nov 9): 0x43 N through both north key rooms to the blade-trap room 0x22, push its west block
   # N or S, down the stairs for the bow, back out and the same way back to 0x43.
   - {level: 1, room: '0x43', specialist: stalfos-keese-gel, entry: S, exit: N}
   - {level: 1, room: '0x33', specialist: stalfos-keese-gel, entry: S, exit: N}

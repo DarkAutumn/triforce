@@ -115,7 +115,7 @@ def _same_bits(a: dict, b: dict):
 
 def test_the_converted_model_acts_as_the_source_bit_for_bit(layout):
     source = _source_checkpoint(1)
-    converted = convert.convert_checkpoint(source, f'{convert.SOURCE_VERSION}.0')
+    converted = convert.convert_checkpoint(source)
     old, new = _native_policy(source), _native_policy(converted)
     added = sum(len(names) for names in convert.ADDED.values())
     assert added > 0
@@ -133,7 +133,7 @@ def test_the_converted_model_acts_as_the_source_bit_for_bit(layout):
 
 def test_weights_and_adam_moments_are_placed_by_name(layout):
     source = _source_checkpoint(3)
-    converted = convert.convert_checkpoint(source, f'{convert.SOURCE_VERSION}.0')
+    converted = convert.convert_checkpoint(source)
     old, new = source['state_dict'], converted['state_dict']
     assert converted['obs_schema_version'] == _native.OBS_SCHEMA_VERSION
     assert {k: v['shape'] for k, v in converted['model_config']['obs_spec'].items()} == \
@@ -164,10 +164,9 @@ def test_weights_and_adam_moments_are_placed_by_name(layout):
 
 def test_anything_but_the_source_layout_is_refused(layout):
     source = _source_checkpoint(4)
-    version = f'{convert.SOURCE_VERSION}.0'
-    converted = convert.convert_checkpoint(source, version)
+    converted = convert.convert_checkpoint(source)
     with pytest.raises(convert.ConvertError, match='the source layout has shape'):
-        convert.convert_checkpoint(converted, version)
+        convert.convert_checkpoint(converted)
     for edit, problem in (
             (lambda c: c['model_config']['obs_spec']['link'].update(shape=[7]), "'link'"),
             (lambda c: c['model_config']['obs_spec'][convert.ENTITY_KEY].update(shape=[12, 30]), "'entity_features'"),
@@ -178,11 +177,7 @@ def test_anything_but_the_source_layout_is_refused(layout):
         bad['state_dict'] = dict(source['state_dict'])
         edit(bad)
         with pytest.raises(convert.ConvertError, match=problem):
-            convert.convert_checkpoint(bad, version)
-    with pytest.raises(convert.ConvertError, match='version stamp missing'):
-        convert.convert_checkpoint(source, None)
-    with pytest.raises(convert.ConvertError, match='version stamp 1.4.2.0'):
-        convert.convert_checkpoint(source, '1.4.2.0')
+            convert.convert_checkpoint(bad)
 
 
 # --------------------------------------------------------------------------------------- a real promoted run
@@ -193,7 +188,7 @@ def _source_root() -> Path:
 
 
 def _source_run() -> Path:
-    """A promoted run stamped with the source version (the smallest family that has one), else skip."""
+    """A promoted run saved with the source observation schema (the smallest family that has one), else skip."""
     if not _current_added():
         pytest.skip("this code's layout is still the source layout")
     root = _source_root()
@@ -201,10 +196,10 @@ def _source_run() -> Path:
         pointer = root / name / registry.PROMOTED_NAME
         if pointer.is_file():
             run = root / name / pointer.read_text(encoding='utf-8').strip()
-            version = registry.model_version(run)
-            if version and version.startswith(convert.SOURCE_VERSION + '.'):
+            if registry._torch_load(run / registry.CHECKPOINT_NAME).get(   # pylint: disable=protected-access
+                    'obs_schema_version') == convert.SOURCE_OBS_SCHEMA:
                 return run
-    pytest.skip(f"no promoted {convert.SOURCE_VERSION} run under {root}")
+    pytest.skip(f"no promoted observation schema {convert.SOURCE_OBS_SCHEMA} run under {root}")
 
 
 def _sha1(path: Path) -> str:
@@ -263,7 +258,8 @@ def test_a_converted_run_is_stamped_and_keeps_its_files(converted_run):
     assert info['source_sha1'] == _sha1(run / registry.CHECKPOINT_NAME)
     assert info['sha1'] == _sha1(target / registry.CHECKPOINT_NAME)
     assert info['added_features'] == {key: list(names) for key, names in convert.ADDED.items()}
-    with pytest.raises(convert.ConvertError, match=f'version stamp {_native.VERSION}'):
+    with pytest.raises(convert.ConvertError,
+                       match=f'obs_schema_version {_native.OBS_SCHEMA_VERSION} != {convert.SOURCE_OBS_SCHEMA}'):
         convert.convert_run(target, target.parent.parent.parent / 'again')
     with pytest.raises(convert.ConvertError, match='exists'):
         convert.convert_run(run, target.parent.parent)
@@ -271,8 +267,6 @@ def test_a_converted_run_is_stamped_and_keeps_its_files(converted_run):
 
 def test_loading_an_unconverted_model_says_how_to_convert(converted_run):
     run, _ = converted_run
-    with pytest.raises(registry.IncompatibleModelError, match='convert-model'):
-        registry.require_compatible(run)
     with pytest.raises(registry.SchemaMismatchError, match='convert-model'):
         registry.load_checkpoint(run)
     network, _ = registry.load_model(run, check_schema=False)

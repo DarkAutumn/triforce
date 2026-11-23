@@ -413,7 +413,7 @@ def test_after_d3_the_route_goes_on_by_raft_to_dungeon_4_and_follows_lees_direct
     assert stretch == {'name': 'd4-island', 'clips': [first, first + 1], 'plain': list(range(first + 2, first + 6)),
                        'rejoin': first + 6}
     assert [(s['room'], s['waypoint']) for s in steps[after_d3:d4 + 1] if s['waypoint']] == [(0x60, 'ladder')]
-    # Both keys in the open (0x51, 0x40) are taken (Lee, Nov 12): no treasure rule in Dungeon 4.
+    # Both keys in the open (0x51, 0x40) are taken (the owner, Nov 12): no treasure rule in Dungeon 4.
     assert [(s['room'], s['treasure']) for s in steps[after_d3:d4 + 1] if s['treasure']] == []
     # Round 24: the leg to Dungeon 5 goes on from the triforce's warp to 0x45, down by raft.
     assert (steps[d4 + 1]['room'], steps[d4 + 1]['entry'], steps[d4 + 1]['exit']) == (0x45, 'cave', 'S')

@@ -424,7 +424,7 @@ Dungeon 1, replacing steps 46-55 (the comment above them too):
 - {level: 1, room: '0x73', specialist: stalfos-keese-gel, entry: S, exit: N}          # (scratch: proved)
 - {level: 1, room: '0x63', specialist: stalfos-keese-gel, entry: S, exit: N}          # (scratch)
 - {level: 1, room: '0x53', specialist: stalfos-keese-gel, entry: S, exit: N}          # (scratch)
-# The bow detour (Lee, Nov 9): 0x43 N through both north key rooms to the blade-trap room 0x22, ...
+# The bow detour (the owner, Nov 9): 0x43 N through both north key rooms to the blade-trap room 0x22, ...
 - {level: 1, room: '0x43', specialist: stalfos-keese-gel, entry: S, exit: N}          # (scratch)
 ```
 
