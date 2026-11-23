@@ -858,3 +858,46 @@ fight). Moldorm's fight cost about 1,000 frames and 0.5 hearts a visit (`r38-2d-
   only); their manifest entries carry `keys: {was, now}`. Chain 2's states 215-266 were one key short already (the
   first order's build): 215-246 needed no change, 247-266 were set up to the ledger. 425 states; the audit is
   clean (855). The plain stretch's 4:0x30 (step 44) keeps its key (its door is 0x30's).
+
+### Measured (2.0.0.8's team, not retrained; 1000 runs a segment, paired by seed with `r38-208-1k`)
+
+Batch `r39-key-1k` on the branch at v2.0.0.8 with 2.0.0.8's networks, against the record `r38-208-1k` (the same
+code base and team, seeds 0-999, `--act model`), each segment scored by its arrival:
+
+| Segment | 2.0.0.8 | Moldorm crossed, 0x56's key | Paired | Hearts arriving | Frames to arrival (both arrive) |
+|---|---:|---:|---:|---:|---:|
+| `d2` | 99.3% | 99.0% | −0.3 ± 0.3 | 6.12 / 6.13 | 7,236 / 6,546 (986 seeds) |
+| `d6` | 36.4% | 35.5% | −0.9 ± 2.1 | 6.30 / 6.22 | 9,525 / 9,552 (140) |
+| `d9` (the ending) | 53.0% | **6.7%** | **−46.3 ± 1.8** | | |
+| `full`: Dungeon 2's triforce, of 1000 | 167 | 158 | | | |
+
+No key is cheated anywhere, before or after (`cheated_keys` 0 in every room of the four segments both ways; 6:0x79's
+door is opened with the last key in every `d6` run that reaches it).
+
+**Moldorm crossed** (2:0x3e, `d2`, 999 visits each way): 383 frames a visit against 1,008 (625 fewer; the segment 690
+fewer to its arrival), but 0.78 hearts lost there against 0.52 (0.40 net of drops before), and **5 deaths against 1**;
+0.18 kills a visit (9.5). From the start (175 visits each way): 578 frames against 1,056, 0.92 hearts against 0.60,
+**7 deaths against 1**: Dungeon 2's triforce 158 against 167. The moldorm network was trained to fight; crossing, it
+walks into the worm. The rooms after it are unchanged (0x2e 0 / 0 deaths, 0x1e 2 / 3, Dodongo 3 / 1).
+
+**9:0x56 fought for its key: today's like-like network cannot take it.** Of 1016 visits, **873 end `stuck`** (the
+family's 2,000-step cap; 744 of them after 4 kills, 115 after 3), 143 leave W, 128 with the key (7,162 frames and
+0.43 hearts a visit). The cleared room's key lies inside a ring of water rows (rows 6-7 and 14-15 of the room's tile
+grid, the bottom row Link enters on below them): the ladder must be walked into, which the network, trained to cross
+by the bottom row, never learned; its curriculum tracks (`trajectories/like-like`, `9_56s_*`) cross without the key.
+Past 0x56 the route holds: of the 127 runs that got through, 67 end the game (62 of the same seeds on 2.0.0.8).
+
+**`d2first`:** its 100-run chain is the same as `d2first-100-land` in result, steps and frames on all 100 runs.
+
+**Not landable as it is.** Both rooms need their network taught the new step, as round 38 did for 8:0x4c
+(`r38t-pols`):
+
+- **like-like for 9:0x56** (step 246 ≥ `own_models_until`: through `late.d3first`): fine-tune the family's
+  `promoted` run on `d3first_9_56s_*` with the key objective (`specialists/d3first/like-like.yaml`, `state_routes:
+  [d3first]`), new Go-Explore tracks that clear the room and take the key over the water (the explorer crossed this
+  room in round 32), SIL as `r38t-pols`; a 1000-run `d9` against `r38-208-1k-d9`.
+- **moldorm for 2:0x3e** (step 100: `promoted.d3first`): fine-tune `promoted` on `d3first_2_3es_*` with the crossing
+  objective, against the fight's 1 death in 1000 and 0.52 hearts.
+- The other key, if the fine-tune is not wanted: 8:0x4c's (step 226, in the open, no kill). Its network
+  `r38t-pols` (2.0.0.10's `late.d3first`) was trained to leave it; `r78t4-pols` (d2first's) still takes it (92.2%
+  from `8_4cc_0`, round38.md "8:0x4c"), at about 5,000 aimless frames a visit.
