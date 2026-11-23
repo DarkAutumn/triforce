@@ -96,14 +96,22 @@ top of `threat` here), `feed: true` (the hit head's stopped probabilities as an 
 `--aux hit=hit:C --try-others K:P` (the head as an auxiliary target, round 36 §8), the room embedding kept off only if
 the next screen agrees.
 
-### Not done (the queue was stopped; status file `local://r40-gen-obs-status.md`)
+### Identity with `obs.threat` off (jobs #189 main 964e7f99, #186 this branch at 002051c3; seeds 0-199)
+
+| segment | runs | outcomes, rooms, actions, hits, frames | per-decision diagnostics |
+|---|---:|---|---|
+| `d3first` Dungeon 1 (`1_73s_0`; plays goriya's `hitshift`, which reads schema 7's tokens) | 200 | identical run for run (8,966,637 frames each side; 19,176 room visits) | the served network's `act_entropy` and `surprisal` differ by at most 2.4e-5 / 3.7e-5 |
+| `d2first` Dungeon 1 | 200 | identical | identical (every record field) |
+
+Every action, every frame and every room record is the same. The only difference is in two float diagnostics the
+served `hitshift` network logs per decision, in the fifth decimal, with the same action drawn every time: GPU
+arithmetic of the served network (its batches are formed by whichever envs ask together), not the observation, whose
+schema 7 blocks are bit-exact against `main`'s (3,000 rows). A main-against-main pair would show whether that noise is
+there without this branch; not run.
+
+### Not done (status file `local://r40-gen-obs-status.md`)
 - The other collections (darknut, boss-gleeok, ow-moblin, ow-lynel; ow-octorok has 16 of 30 chunks) and second
   seeds: the table above is one family, one seed.
-- The proof that today's teams play bit-identically (200-run chains on `d3first`'s Dungeon 1, which plays goriya's
-  `hitshift` reading schema 7's tokens, and `d2first`'s, from `main`'s code and this branch): the "before" batch was
-  queued and stopped by the full stop. What is shown without it: the new key is computed only with `obs.threat` (no
-  yaml sets it), every other key is identical with it on or off, `danger_blocks` is bit-exact against `main`'s, and
-  schema 7 checkpoints read only their own keys (`registry.schema_problem`, `tests/test_registry.py`).
 - The bomb-carrier column waits for `r40-bombstats`.
 
 Ideas: the threat lane, the bomb-carrier flag and range-aware contact are the owner's; `rel`, the contact block and
