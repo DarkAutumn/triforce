@@ -940,10 +940,11 @@ impl<S> Executor<S> {
         let start = m.frame;
         let active = submenu::active_state(m.read(ADDR_LEVEL));
         self.step(m, buttons::START, 1);
-        // A lag frame reads no input (asm:Nmi_Isr@CheckInput keeps the last read): a one-frame Start can go unread,
-        // as the attacks' press can (`run_attack` holds it a second frame). Round 40: with the closing frame gone a
-        // BOOMERANG's single Start went unread in Manhandla's busy room (zcore_session; a lag frame, inferred) and the
-        // sub-screen never opened.
+        // A lag frame reads no input: all game logic runs in the NMI, and a frame that runs past the next vertical
+        // blank loses that NMI (asm:Nmi_Isr: no controller read, no FrameCounter step). A one-frame Start can go
+        // unread, as the attacks' press can (`run_attack` holds it a second frame). Round 40: with the closing frame
+        // gone a BOOMERANG's Start in Manhandla's room fell on one (traced: FrameCounter $15 unchanged over the
+        // Start frame, mode 5 updating, no scroll; the second Start was read and opened the sub-screen).
         if m.read(submenu::ADDR_SUBMENU_STATE) == 0 {
             self.step(m, buttons::START, 1);
         }

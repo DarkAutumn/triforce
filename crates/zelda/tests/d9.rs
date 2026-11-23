@@ -709,7 +709,20 @@ impl Walk {
         match phase {
             GanonPhase::Scene | GanonPhase::Shown => Some(wait),
             GanonPhase::Brown => None,
-            GanonPhase::Dying => objective.targets.contains(&Target::Tile(state.link.tile())).then_some(wait),
+            GanonPhase::Dying => {
+                if !objective.targets.contains(&Target::Tile(state.link.tile())) {
+                    return None;
+                }
+                // Walker aid (round 40): the target tiles are the ones Link's sprite overlaps the Triforce of Power
+                // from, wider than the game's take range (|dX| < 9, asm:Item_TryTake): on the new timing the walk
+                // stopped at X $6C, 11 from the Triforce at $77 on his ashes, and waited there. Once it shows
+                // (ObjState[$13] $BF = 0) Link is lined up on the grid column of its tile.
+                if state.peek(0xBF) == 0 {
+                    let p = state.link.position;
+                    self.line_up((i32::from(state.peek(OBJ_X + 0x13)) & !7, p.y), true);
+                }
+                Some(wait)
+            }
             GanonPhase::Hidden => {
                 let stand = |gx: i32, gy: i32| {
                     let left = gx - 12 >= 0x20;
@@ -835,7 +848,10 @@ impl Walk {
                 self.line_up(spot, under_stone);
             }
             // A key door the objective leaves through: within a tile of its mouth Link is lined up (walker aid) and
-            // walks into it, which spends the key.
+            // walks into it, which spends the key. Round 40 (as in d6.rs): any dungeon doorway the objective leaves by
+            // (`Dir`) gets the same aid: without the closing frame of no buttons a turn off the grid carries Link on to
+            // the next grid point of the way he walked (9:0x42's N door after the Triforce of Power: N on X $70), so
+            // the walk's 8-frame MOVEs never stop on X $78.
             let key_door = CARDINALS.into_iter().find_map(|d| {
                 let (mx, my) = match d {
                     Direction::N => (0x78, 0x5D),
@@ -845,8 +861,12 @@ impl Walk {
                 };
                 let mouth = zelda::Position::new(mx, my).tile();
                 let near = (mouth.0 - here.0).abs() <= 1 && (mouth.1 - here.1).abs() <= 1;
-                let wanted = objective.targets.contains(&Target::Dir(d)) && state.is_door_locked(d);
-                (state.mode() == 5 && state.keys() > 0 && wanted && near).then_some((d, (mx, my)))
+                let wanted = objective.targets.contains(&Target::Dir(d));
+                let key = state.is_door_locked(d);
+                let p = state.link.position;
+                let off_line = if matches!(d, Direction::N | Direction::S) { p.x != mx } else { p.y != my };
+                let aid = if key { state.keys() > 0 } else { state.level() > 0 && off_line };
+                (state.mode() == 5 && aid && wanted && near).then_some((d, (mx, my)))
             });
             let action = if let Some((d, mouth)) = key_door {
                 self.line_up(mouth, matches!(d, Direction::N | Direction::S));
