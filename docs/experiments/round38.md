@@ -1174,26 +1174,25 @@ hearts, 1167 deaths), darknut (5,370; 368), goriya (5,117; 351), patra (4,324; 4
 
 ## The owner's bomb metrics (branch `r40-bombstats`, Nov 23)
 
-The owner's two metrics for every 250 test and every chain, measured before the observation learns "next kill may
-drop bombs" (backlog) and after: **Metric A**, the 10th-kill bomb (on a 9-kill streak with a bomb in the bag, was the
-10th kill made with a bomb?), and **Metric B**, the bomb carrier (the drop table's next column is bombs for drop
-group 2 and a carrier can die: was the next kill a carrier?). Definitions, the game's rules and every edge case:
-`docs/architecture.md` "Bomb windows" (the owner's answers to the edge cases; his ideas, the agents built the
-counter). Counted frame by frame from RAM (`zelda::bomb_windows`), the same Rust counter live in the chain
-(`env::bomb_windows::BombFrames`) and offline over a replay (`_native.replay_bomb_windows`, `python -m
-triforce.bomb_metrics --replays`), with the two facts RAM does not hold (the objective is FIGHT; the bomb rule allows
-BOMB) taken live from the env and offline from the replay's targets stream (branch `r40-targets`).
+The owner's two metrics for every 250 test, measured before the observation learns "next kill may drop bombs"
+(backlog) and after: **Metric A**, the 10th-kill bomb (on a 9-kill streak with a bomb of his own, was the 10th kill
+made with a bomb?), and **Metric B**, the bomb carrier (the drop table's next column is bombs for drop group 2 and a
+carrier can die: was the next kill a carrier?). Definitions, the game's rules and the owner's rulings on every edge
+case: `docs/architecture.md` "Bomb windows" (his ideas and rulings; the agents built the calculator). **A
+calculation over a replay, nothing more** (the owner): RAM frame by frame (`zelda::bomb_windows`), the cheated bombs
+from its EDITS, and what the env told the agent (the objective FIGHT, the bomb rule) from the targets stream of
+branch `r40-targets`; the output is a list of windows, one record each, and the counts are its sums
+(`triforce/bomb_metrics.py`, `bomb_windows.jsonl`). A first version also counted live in the chain; it is gone.
 
-Checked against RAM: on the corpus's `single-run-d3first-2.0.0.11-51-networks` (offline, the rule allowing BOMB
-everywhere) the counter's 10th kills are RAM's exactly (2 armed at 3:0x4d and 2:0x3e, 3 other at 3:0x4c, 4:0x31,
-2:0x1e); the 225 kill-cycle moves attribute by slot as the disassembly says (three Darknuts in one frame move the
-cycle by 3; Manhandla's dead dummy `$5D` and Red Keese move nothing; slot 1's Gibdo drops nothing; Dodongo's death
-forces the bomb drop, now not counted as a 10th kill's). A first 20-run chain (2.0.0.11 team, from power on) showed
-the momentary mask was the wrong fact (BOMB is masked while a bomb is in the air, so bomb kills went uncounted at
-3:0x4d, 4:0x31): the facts are the bomb rule since. Its other numbers, not of record: Metric A 19 opportunities, 6
-armed, 1 missed, 12 other weapon, 1 with a full bag; Metric B 74 opportunities, 1 hit, 8 misses by kill, 65 by
-leaving (the overworld's pass-through rooms 0x63, 0x64, 0x73, 0x3d and Dungeon 3's 0x5b and 0x69 crossed under MOVE).
+Checked against RAM: on the corpus's `single-run-d3first-2.0.0.11-51-networks` the calculator's 10th kills are RAM's
+exactly (2 armed at 3:0x4d and 2:0x3e, 3 other at 3:0x4c, 4:0x31, 2:0x1e); the 225 kill-cycle moves attribute by
+slot as the disassembly says (three Darknuts in one frame move the cycle by 3; Manhandla's dead dummy `$5D` and Red
+Keese move nothing; slot 1's Gibdo drops nothing; Dodongo's death forces a bomb drop that is not a 10th kill's).
+Two facts first chosen wrong, found by the RAM checks of 20 and 50 chain runs (2.0.0.11 team, from power on): the
+momentary mask (BOMB is masked while a bomb is in the air, so bomb kills went uncounted), then `BombUse::allows` of
+the decision taken on 8 kills (`required` outside a wall room says no, and holds for the frames on 9 within its
+action: 4:0x50, 4:0x31); Metric A now asks only whether the mode is `never`. With that, 12 of 12 replays of the
+50-run check agree with RAM on every 10th kill (offline, no targets stream: the rule from RAM alone).
 
-**The baseline of record waits** for `r40-targets` (replays carrying the targets stream): the 2.0.0.11 250 test is
-then scored offline from its replays, the path the backtest of old versions takes, and live = offline is proved on
-the same runs.
+**The baseline of record waits** for `r40-targets` (replays carrying the targets stream) and the 250 test on main:
+the 2.0.0.12 250 test is then scored from its replays, the path the backtest of old versions takes.

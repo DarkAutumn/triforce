@@ -1003,63 +1003,65 @@ Simulated env steps (`step_sim`) leave the tracker alone; `_native.Env.aimless` 
 
 ### Bomb windows (`crates/zelda/src/bomb_windows.rs`, `crates/env/src/bomb_windows.rs`; the owner, Nov 23)
 
-The owner's two bomb metrics, in every chain and every 250 test, measured before the observation learns "next kill
-may drop bombs" and after. His principle: "We are testing behavior based on the obs flags we tell the agent, not on
-magic unknown knowledge to it." Measurement only. The game's rules are in zelda-asm (asm:Drop_SetUpItem,
-asm:Obj_EndMetastate, asm:Damage_KillMonster): `$50` HelpDropCount counts damage-free kills when the hit lands (to
-10; harm zeroes it, `$51` and `$627`); `$51` is set by the bomb kill that takes `$50` to 10; `$52A` WorldKillCycle
-moves on (0-9) when a death sparkle ends, for every type but a child Gel, a Red Keese and the dead dummy, and that
-death's drop is then a fairy (`$627` = 16), else the forced drop (`$50` ≥ 10: bombs if `$51`, else 5 rupees), else
-`Drop_ItemTable[group × 10 + cycle]` if the slot's random byte is below the group's rate. Drop group 2 (blue
-Octoroks, Moblin `$03`, Lynel `$01`, Vire, Goriya `$06`, Darknut `$0B`, Red Wizzrobe, Gibdo) has bombs in columns
-1, 6 and 8 at 41%; a Stalfos or Gibdo in slot 1 (the room item's carrier) drops nothing.
+The owner's two bomb metrics, for every 250 test, measured before the observation learns "next kill may drop bombs"
+and after. His principle: "We are testing behavior based on the obs flags we tell the agent, not on magic unknown
+knowledge to it." **A calculation over a replay, nothing more** (the owner, Nov 23): no live counting, nothing
+written into the replay; the same rules score every version's replays. The game's rules are in zelda-asm
+(asm:Drop_SetUpItem, asm:Obj_EndMetastate, asm:Damage_KillMonster): `$50` HelpDropCount counts damage-free kills
+when the hit lands (to 10; harm zeroes it, `$51` and `$627`); `$51` is set by the bomb kill that takes `$50` to 10;
+`$52A` WorldKillCycle moves on (0-9) when a death sparkle ends, for every type but a child Gel, a Red Keese and the
+dead dummy, and that death's drop is then a fairy (`$627` = 16), else the forced drop (`$50` ≥ 10: bombs if `$51`,
+else 5 rupees), else `Drop_ItemTable[group × 10 + cycle]` if the slot's random byte is below the group's rate. Drop
+group 2 (blue Octoroks, Moblin `$03`, Lynel `$01`, Vire, Goriya `$06`, Darknut `$0B`, Red Wizzrobe, Gibdo) has bombs
+in columns 1, 6 and 8 at 41%; a Stalfos or Gibdo in slot 1 (the room item's carrier) drops nothing.
 
-- **Metric A, the 10th-kill bomb** (`tenth_bomb_window`): `$50` = 9, a bomb in the bag, BOMB allowed by the bomb
-  rule (`BombUse::allows` of the effective mode: every mode but `never` allows the 10th kill's bomb; not the
-  momentary mask, which also drops BOMB while a bomb is in the air). Today's observation shows it (`next_kill_arms`,
-  `help_count`). Resolution, the first event wins: the 10th kill by a bomb (`$51` set) → **armed**; a bomb placed in
-  the window that ends (explodes, or is gone with the room) with no 10th kill and no wall opened (a dungeon bomb door
-  turned open, an overworld secret flag `$80`) → **missed**, and a new window opens if Link is still on 9 with
-  bombs ("each new chance counts"); a bomb that opened a wall → ignored, the window stays; the 10th kill by any
-  other weapon → **other**. No bomb left (the last one spent on a wall) or the rule masks BOMB while still on 9: the
-  window **pauses** and resumes as the same opportunity (a 10th kill or harm while paused ends it uncounted,
-  `tenth_paused_out`). Harm first: the streak is lost, not an opportunity (`tenth_lost`). A window opened with the
-  bag full is also counted in `tenth_full_*`; every report shows both columns, all windows and without a full bag.
-  The forced drop is followed: `tenth_forced_fell`, `_taken`, `_wasted` (expired or left), `_lost` (harm or the
-  fairy before it fell).
+- **Metric A, the 10th-kill bomb** (`tenth_bomb_window`): `$50` = 9, a bomb of Link's own in the bag (the bag less
+  the cheated wall bombs not yet spent: a replay's EDITS raising `$658`), and the bomb mode is not `never` (every
+  other mode allows the 10th kill's bomb). Today's observation shows it (`next_kill_arms`, `help_count`).
+  Resolution, the first event wins: the 10th kill by a bomb (`$51` set) → **armed**; a bomb placed in the window
+  that ends (explodes, or is in the air when Link leaves the room) with no 10th kill and no wall opened (a dungeon
+  bomb door turned open, an overworld secret flag `$80`) → **missed**, and a new window opens if Link is still on 9
+  with bombs ("each new chance counts"); a bomb that opened a wall → ignored, the window stays; the 10th kill by any
+  other weapon → **other**, whatever it killed (a Keese, a Gel: the record names it). Leaving a room is nothing (the
+  streak carries on). No bomb of his own left (the last one spent on a wall) or the mode `never` while still on 9:
+  the window **pauses** and resumes as the same window (a 10th kill or harm while paused: `paused-out`). Harm first:
+  `lost`. **Full bag** (Metric A): the bag on the frame before the resolving action (before the bomb was placed,
+  before the other weapon's 10th kill landed), the bag Link chose with: it answers "was spending a bomb worth
+  anything" (the owner, Nov 23): with a full bag a bomb 10th kill goes 8 → 7 → 8 (the forced four capped at the
+  bag), nothing gained and the 5 rupees lost. Judged at the close it would never read full after a bomb (8 → 7). The
+  forced drop is followed (`drop`: `pending`, `fell`, `taken`, `wasted` (expired or left), `lost` (harm or the
+  fairy before it fell)).
 - **Metric B, the bomb carrier** (`bomb_carrier_window`: the future observation flag, written for it to call; the
   observation does not use it yet): the cycle reads 0, 5 or 7 and no death sparkle that will move it is under way
-  (else the cycle speaks for a kill already made); no forced drop overrides the table (`$50` < 9 and
-  `$627` ≠ 15); the bag is not full; an **eligible carrier** lives (a group-2 type, not slot 1's Gibdo, a Vire only
-  with the magic sword or with BOMB allowed by the rule and a bomb in the bag: else it splits into Keese); and a
-  **choice** exists: the objective
-  is not FIGHT, or a monster whose death moves the cycle and is no carrier lives too. Bubbles, traps, fires and
-  Gleeok's flying heads are no monsters on either side. An open window stays open through a pending death.
-  Resolution: the next death that moves the cycle (attributed by slot: the slot turned into a dropped item, whose
-  Item_ObjMonsterType `$412` names the type, or its sparkle ended) is a carrier's → **hit** (one step killing a
-  carrier and another: hit), anyone else's → **miss by kill**; Link leaves the room first (another room, or any
-  transition frame: a maze loop) → **miss by leaving**; harm changes nothing. A window whose conditions end with no
-  death pending is closed uncounted (`carrier_closed`). The bombs the hits dropped are counted (`carrier_bombs`,
-  `carrier_bombs_taken`); `carrier_unattributed` (cycle moves no slot explains) should stay 0.
-- **Frames, not steps.** `zelda::bomb_windows::BombWindows` takes every frame of a run: play frames (modes 5, 9, 11,
-  dying, game over) are counted, each pair of consecutive ones a `Step`; transition frames (a dungeon's entry, a
-  scroll, stairs, a cave door) end Link's stay in the room; the rest are skipped. Link's death ends the counting:
-  a window open then is `open_at_end` (with a run that ends any other way). What RAM does not hold is what the env
-  told the agent at each decision (`env::bomb_windows::StepFacts`: the objective is FIGHT; the bomb rule allows
-  BOMB, for a Vire; the effective mode is `never`, for Metric A, since a decision taken on 8 kills holds for the
-  frames on 9 within its action; a replay's masks name the rule that blocked BOMB: `never`, `tenth`, `required`,
-  `reserve`), in
-  force from the decision's frame to the next.
-- **Live and offline, one implementation.** `env::bomb_windows::BombFrames` counts per room visit: live, the chain
-  (`ChainEnv`) keeps every real frame's RAM image (`Session::set_ram_log`; search's simulated frames are not kept)
-  and notes the facts before each action; offline, `_native.replay_bomb_windows(data, facts)` plays a replay's
-  frames with its ROOM events as the visits and the facts of its targets stream (round 40's always-on stream), so
-  an old version's runs are scored by today's rules from their replays.
-- **Where.** Chain `RoomRecord`s carry `_native.BOMB_WINDOW_FIELDS` (`tenth_armed`, `tenth_missed`, `tenth_other`,
-  `tenth_full_*`, `tenth_lost`, `tenth_paused_out`, `tenth_forced_*`, `carrier_hits`, `carrier_miss_kill`,
-  `carrier_miss_leave`, `carrier_closed`, `carrier_bombs`, `carrier_bombs_taken`, `carrier_unattributed`) for the
-  room the step started in; `RunResult` `tenth_open_at_end`, `carrier_open_at_end`. `triforce/bomb_metrics.py`
-  sums them per run, per batch and per room (`python -m triforce.bomb_metrics RUNS.jsonl`).
+  (else the cycle speaks for a kill already made; with it a kill streak of 16 and a death pending, a forced fairy,
+  is out like 15); no forced drop overrides the table (`$50` < 9 and `$627` ≠ 15); the bag is not full; an
+  **eligible carrier** lives (a group-2 type, not slot 1's Gibdo, a Vire only with the magic sword or with BOMB
+  allowed by the rule and a bomb of his own: else it splits into Keese); and a **choice** exists: the objective Link
+  was given at that moment is not FIGHT (MOVE through 3:0x5b or 0x69 on a crossing counts like 6:0x78), or a monster
+  whose death moves the cycle and is no carrier lives too. Bubbles, traps, fires and Gleeok's flying heads are no
+  monsters on either side. An open window stays open through a pending death. Resolution: the next death that moves
+  the cycle (attributed by slot: the slot turned into a dropped item, whose Item_ObjMonsterType `$412` names the
+  type, or its sparkle ended) is a carrier's → **hit** (one step killing a carrier and another: hit), anyone else's
+  → **miss**; Link leaves the room first (another room, or any transition frame: a maze loop) → **left**, credited
+  to the room left; harm changes nothing. A window whose conditions end with no death pending: `closed`. Full bag:
+  at the close (the kill does not change the bag; the carrier's drop comes after). `drop` follows a hit's bombs.
+- **Dodongo's rooms** are outside both metrics (his own bomb rules): nothing opens or closes there; a window open
+  on entering (or when he appears) is `suspended`, and after Link leaves a new one may open.
+- **Frames, not steps.** `zelda::bomb_windows::BombWindows` takes every frame of a replay: play frames (modes 5, 9,
+  11, dying, game over) are counted, each pair of consecutive ones a `Step`; transition frames (a dungeon's entry, a
+  scroll, stairs, a cave door) end Link's stay in the room; the rest are skipped. Link's death ends the counting; a
+  window open at the replay's end is `open-at-end`. What RAM does not hold is what the env told the agent at each
+  decision, from the replay's targets stream (`env::bomb_windows::StepFacts`: the objective is FIGHT; BOMB not
+  blocked by a bomb-rule reason, `never`, `tenth`, `required` or `reserve`, for a Vire; the mode is `never`, for
+  Metric A, since a decision taken on 8 kills holds for the frames on 9 within its action), in force from the
+  decision's frame to the next.
+- **The output is a list of windows**, one record each (`_native.replay_bomb_windows(data, facts)`,
+  `triforce.bomb_metrics.score_replay`): `metric` (`tenth` | `carrier`), `open_frame`, `open_room`, `close_frame`,
+  `close_room` (the credit: the room where it closed), `outcome` (`armed`, `missed`, `other`; `hit`, `miss`,
+  `left`; not opportunities: `lost`, `paused-out`, `closed`, `suspended`, `open-at-end`), `killed_type` and
+  `killed_slot`, `full_bag`, `drop`, and the run's `seed` and `replay`. Counts are sums over the list, per run, per
+  room and per batch, always with and without the full-bag windows (`python -m triforce.bomb_metrics REPLAY...
+  --out bomb_windows.jsonl`, beside the 250 test's JSON).
 
 ### Experimental reward and cutoff controls
 
