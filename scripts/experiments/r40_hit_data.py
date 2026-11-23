@@ -163,7 +163,7 @@ def main(argv=None) -> int:
         'key': args.key, 'route': args.route, 'checkpoint': checkpoint, 'temperature': TEMPERATURE,
         'try': args.try_others, 'seed': args.seed, 'chunk': CHUNK, 'chunks': chunks}, indent=1))
     t0 = time.time()
-    name = f"r40-hit-data-{args.key.replace('@', '-')}"
+    name = os.environ.get('TRIFORCE_JOB_NAME') or f"r40-gen-obs-{args.key.split('@')[0]}-data"
     with progress_job(name, 'eval', args.decisions, unit='decisions', root=args.logs_dir,
                       work=work(eval_episodes=max(1, args.decisions // 400))) as progress:
         done = (chunks - len(tasks)) * CHUNK

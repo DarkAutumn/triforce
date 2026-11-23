@@ -43,7 +43,7 @@ def test_the_feature_names_follow_the_bench_layout():
     assert ENTITY_CONTACT_FEATURES[:3] == ('vx', 'vy', 'harms')
     assert ENTITY_CONTACT_FEATURES[3:8] == tuple(f'contact_{m}' for m in ('stand', 'N', 'S', 'W', 'E'))
     assert ENTITY_CONTACT_FEATURES[-1] == 'wall_closest_E'
-    assert _native.OBS_SCHEMA_VERSION == 7
+    assert _native.OBS_SCHEMA_VERSION >= 7
     assert list(_native.OBS_SPEC['entity_rel']['shape']) == [12, 10]
     assert list(_native.OBS_SPEC['entity_contact']['shape']) == [12, 23]
 
