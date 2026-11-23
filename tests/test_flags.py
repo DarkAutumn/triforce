@@ -67,6 +67,7 @@ def test_every_job_start_looks_at_main_and_its_worktree(tmp_path, monkeypatch):
     main = tmp_path / 'triforce'
     (main / 'triforce').mkdir(parents=True)
     (main / 'triforce' / 'jobs.py').write_text(f"{jobs.JOB_ESTIMATE_ENV}\n")       # this code's tools (``announces``)
+    (main / 'triforce' / 'build.py').write_text('')                     # a tree that stamps its builds
     (main / 'notes.txt').write_text('one\n')
     (main / 'uv.lock').write_text('lock\n')
     _git(main, 'init', '-q', '-b', 'main')

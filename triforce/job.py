@@ -704,7 +704,8 @@ def checkout_flags(root: Path, module: bool = True) -> list[dict]:
             flags.append({'level': 'red', 'code': 'data-missing',
                           'text': f"{root.name} lacks {', '.join(missing)}: the main checkout's data it reads "
                                   f"through the links triforce job setup makes"})
-    problem = build.problem(root) if module else None
+    # A tree from before build stamps (no triforce/build.py) cannot have one: its module is not looked at.
+    problem = build.problem(root) if module and (root / 'triforce' / 'build.py').is_file() else None
     if problem:
         flags.append({'level': 'red', 'code': 'module-stale', 'text': f"{root.name}: {problem}"})
     return flags
