@@ -31,7 +31,7 @@ flowchart LR
 | `crates/theater` | Replays for watching: `queues.rs` (`Queues`: `success`/`stuck`/`died`/`random` first-in-first-out and `best`, the top runs seen), `feed.rs` (`Feed`: the background thread that files every finished run of a `Producer` and pauses it while nothing is wanted), `screen.rs` (`Screen`: one thread per cell playing a replay at a frame rate, one cell heard), `speaker.rs` (`Ring`, `Speaker`: the sound device, `cpal`), `overlay.rs` (the controller drawn into a frame). Knows replays and the emulator only. |
 | `crates/policy` | `Policy`: the network's Rust copy that acts inside the pool (forward pass, masked heads, keyed Gumbel noise `noise.rs`). |
 | `crates/tools` | The `tf` CLI (below). |
-| `triforce/` (Python) | `ppo.py`, `rollout_buffer.py`, `metrics.py`, `model.py`, `train.py`, `evaluate.py`, `runner.py`, `replay.py`, `golden.py`, `provenance.py`, `run.py`, `cli.py`, `play.py`, `play_grid.py`, `play_view.py`, `video.py`, `explore.py`, `entry_states.py`, `chain_hp.py`, `heart_value.py`, `events.py`, `registry.py`, `plr.py`, `best_of_n.py`, `eval_batch.py`, `select_checkpoint.py`, `jobqueue.py` / `job.py` / `jobs.py` (the job queue, `triforce job`), `testlog.py` (the test suites' timing logs, `triforce test-times`); thin `observation.py` (gym space from `OBS_SPEC`), `actions.py` (`Action`, `ActionMask` flat-mask view), `zelda_enums.py` (`ActionKind`, `Direction`, `MapLocation`), `specialist.py`, `paths.py` (`STATES_DIR`, `TRAJECTORIES_DIR`). |
+| `triforce/` (Python) | `ppo.py`, `rollout_buffer.py`, `metrics.py`, `model.py`, `train.py`, `evaluate.py`, `runner.py`, `replay.py`, `golden.py`, `provenance.py`, `run.py`, `cli.py`, `play.py`, `play_grid.py`, `play_view.py`, `video.py`, `explore.py`, `entry_states.py`, `chain_hp.py`, `heart_value.py`, `events.py`, `registry.py`, `plr.py`, `best_of_n.py`, `eval_batch.py`, `select_checkpoint.py`, `jobqueue.py` / `job.py` / `jobs.py` (the job queue, `triforce job`), `testlog.py` (the test suites' timing logs, `triforce test-times`), `inputs.py` (a task's declared inputs, each checked before a run starts) and `build.py` (the sources the built module was built from), round 40; thin `observation.py` (gym space from `OBS_SPEC`), `actions.py` (`Action`, `ActionMask` flat-mask view), `zelda_enums.py` (`ActionKind`, `Direction`, `MapLocation`), `specialist.py`, `paths.py` (`STATES_DIR`, `TRAJECTORIES_DIR`). |
 
 ## Processes and threads
 
@@ -1545,6 +1545,70 @@ every step, so following an enemy that moves away pays again, and knockback rese
   and exit 2. Every script that plays, trains, collects or crunches calls `jobs.require_job()` first. Library code
   calls neither, so the play, replay and build tools that share the evaluation code (play-zelda, zelda-headless
   without `--golden`, create-video, zelda-map, `tf replay`) are not queued.
+- **Missing is an error, never "none"** (round 40, the owner: two results of Nov 23 were void because a run drew
+  nothing from an input that was not there; `docs/data-layout.md` "Silent defaults found"). Every input a run
+  declares is checked before the job waits its turn, and a refusal names where it looked (exit 2):
+  - `triforce.inputs` (`triforce train`, `triforce evaluate`, the lab's `parse_families`): every `start_states` glob
+    matches a state file (`check_start_states`; a glob that matched nothing was dropped); a task with
+    `harvested_fraction > 0` finds harvested states of its namespaces (`check_harvested`; the lab's trainings drew
+    none silently); with the curriculum on, a track for every seed state except those the task declares in
+    `curriculum.untracked` (globs of state names; `check_curriculum`: a seed state without a track trained without
+    one, seen only in `run.json`). `untracked` is read by these checks only (the Rust config keeps it, the env never
+    reads it); the refusal prints the declaration to add.
+  - The native start-state pool (`crates/env/src/start_states.rs`): a pool that draws harvested states and finds
+    none is refused when it is built, and a harvested file removed under a running pool is an error (F159 had the
+    resets fall back to the seed states).
+  - `train --load` / a task's `warm_start` (`train.resolve_warm_start`): a checkpoint file, a run dir holding one,
+    or a family with a promoted run; anything else is named (a mistyped run dir was read as a family name). A
+    continuation of a run whose `run.json` does not record its curriculum's trajectories needs
+    `--curriculum-unrecorded resume|fresh` (such runs counted as the same trajectories).
+  - Chains (`runner.check_team`, `check_configs`, `Policies._check_heads`): a policy key the runs reach with no
+    network refuses the chain (until then only the runs that got there ended `error`); a `--specialist-config` of a
+    family no step of the run plays is refused; a `--checkpoint KEY=PATH` without a hit head that replaces a team
+    network with one needs `--headless KEY` (`select-checkpoint --headless`), and a `--headless` that declares
+    nothing is refused. `eval-chain --harvest` takes a DIR (a bare `--harvest` wrote into the shared harvested
+    states every training draws).
+  - The built module (`triforce.build`): `triforce job build` (and `test --build`, `setup`) stamps
+    `triforce/_native.build.json` with the fingerprint of the sources it built (the index entries, working-tree
+    changes and untracked files of `crates/`, `Cargo.toml`, `Cargo.lock`, `pyproject.toml`) and the module's
+    SHA-1; `jobs.announce` refuses a queued tool when the module has no stamp or the sources changed since (a
+    module rebuilt from the same sources, `uv run` after a landing, is fine). About 25 ms a start.
+  - The test suites read the main checkout's `models/` whatever a worktree's own holds (`job.test_steps`; a
+    partial one gave the tests a partial team).
+  Left as declared rules, not refusals: a run dir without an `act` file plays `DEFAULT_ACT` and one whose `act` was
+  set for other weights plays it with a warning (F064; the act played is in every chain's provenance); a family
+  without `promoted.<route>` plays its `promoted` there (the team rule of phase X; the key that played is in the
+  provenance).
+- **The manifest** (`triforce.manifest`, round 40, the lead's design): one resolved description of what a run
+  consumed, built before it starts and written under `manifest` into a training's `run.json`, a chain's
+  `<output>.meta.json` and an evaluation's `<output>.meta.json`: `code` (commit, `describe`, the tracked files that
+  differ from HEAD, branch, version, the module's stamp and any `build.problem`), `rom` (SHA-1), `task` (family, yaml
+  label and SHA-256, the effective config after defaults; a chain: its route and every network's config SHA-256),
+  `data` (per data set where it came from, how many files and a content hash: the seed states per `start_states`
+  glob, the harvested states with the fraction drawn, the curriculum's files with `untracked`, demonstration files;
+  a chain's start state and game data), `networks` (per policy key: family, run, iterations, checkpoint SHA-1,
+  architecture, hit head, act mode, file), `models` (`legacy`: the models dir, until the store), `arguments` (paths
+  labelled), `seeds`, `job`. No absolute path of a checkout: `label` writes a path relative to the checkout of this
+  repository it lies in (main or a worktree, so arms in two worktrees compare), else `~/...`. Hashing is by content
+  (zol@d3first's 3,396 harvested states 0.17 s, wizzrobe's 17,410 curriculum files 2.1 s, warm cache).
+- **Diffs and arms** (`triforce manifest diff A B [--json]`, `show X`): A and B are run dirs, `run.json` files, chain
+  outputs or their `.meta.json`, or statistics files; every difference one line, grouped (code, task, data, networks,
+  arguments, then the run's own fields). A record from before manifests is read for what it holds (`legacy_train`:
+  the args, the harvested count, the curriculum's tracks, the warm start; `legacy_chain`: the provenance's networks
+  and route) and lists what it cannot say (`unknown`). `train --same-recipe-as RUN [--except KEY,...]` refuses (exit
+  2) a training whose manifest differs from RUN's but for the run's own fields (seed, run id, outputs, logs, its
+  module's build time) and the excepted keys (a key names every path whose dotted parts it matches: `sil_coeff`,
+  `harvested`, `reward.firing_lines`), printing every difference; what the reference never recorded is printed as
+  unknown and does not refuse. `eval-chain --same-team-as OUTPUT [--except FAMILY,...]` does the same for a chain's
+  team (every network and task config; a family names its route keys too).
+- **Red flags** (`jobs.flag(code, text, level='red'|'note')`): appended to the job's row (`flags`, a JSON list of
+  `{'level', 'code', 'text'}`) and printed; `triforce job list` and `history` print them under the job, the training
+  GUI draws a badge (red: the bad colour; a note: the in-between purple) with the sentence under it on the job's
+  card, its detail pane and the web view. Every job start adds its checkout's (`job.checkout_flags`): the main
+  checkout's tracked files differing from HEAD beyond `uv.lock` (red `main-edited`, the files named), and for a
+  checkout running this code a worktree behind main (note `behind-main`), a legacy worktree's missing data link (red
+  `data-missing`), a module that is not the build of its sources (red `module-stale`; not for builds and suites).
+  `triforce job doctor [PATH]` prints the same checks for any checkout (exit 1 on a red flag).
 - `train --stop-success R [--stop-patience 5]` (`EarlyStop`) proposes a stop once the start-state-balanced
   success rate (`balanced_success_rate`: the mean over the seed start states of each state's exact success over
   its most recent whole per-start cohorts that together cover at least 20 room-entry episodes) is ≥ R for that

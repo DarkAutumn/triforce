@@ -10,7 +10,16 @@ obs: {objective: true, target: true}       # schema 2: direction/distance to the
 # triforce/chain_hp.json (0x52 entered with 3.3 on average, 0x61 4.4, 0x16 8.4).
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, chain_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # as moldorm (round 25)
 items: {bombs: required}                   # 0x27's N wall only (offered in reach of it), else the 10th damage-free kill's bomb: no bomb, arrow or boomerang touches a Patra (0 of 780 uses)
-curriculum: {enabled: true}             # trajectories/patra, once explored
+curriculum:                              # trajectories/patra, once explored
+  enabled: true
+  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
+  - d3first_9_16s_[0-9]
+  - d3first_9_16w_[0-9]
+  - d3first_9_27n_[0-9]
+  - d3first_9_27w_[0-9]
+  - d3first_9_52c_[0-9]
+  - d3first_9_61c_[0-9]
+  - d3first_9_61e_[0-9]
 one_room: true
 max_steps: 3000
 warm_start: moldorm                        # round 29: a first training starts from moldorm's promoted run (the nearest: a body only the sword hurts, behind parts that must die first)

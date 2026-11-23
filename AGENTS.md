@@ -928,7 +928,9 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 - Setup (README "Getting started"): `uv venv --python 3.12 .venv`, then `uv pip install --python .venv/bin/python -e
   '.[dev]'` (pytest, pytest-xdist, pyyaml, PySide6, pygame). Python 3.12; RTX 4090, 10 cores / 20 threads. ROM at
   `roms/zelda.nes` (or `$TRIFORCE_ROM`); `triforce job setup BRANCH` makes a worktree with all of it. After changing
-  any crate, rebuild the module: `triforce job build --agent A --task T` (`maturin develop --release`, niced).
+  any crate, rebuild the module: `triforce job build --agent A --task T` (`maturin develop --release`, niced). The
+  build stamps the module with the sources it was built from; the queued tools refuse a module without that stamp
+  or older than its sources (round 40, `triforce.build`): rebuild with `triforce job build`.
 - Tests: `triforce job test SUITE... --agent A --task T [--build] [--timeout 60m]`, the suites `python`
   (`pytest -q -n 8 --dist worksteal tests`: eight processes, pytest-xdist; about a minute on a quiet machine, 7
   minutes in one process: `-- -n 0`), `asm` (`pytest -q zelda-asm/tests`), `check` (`asm.py check`), `rust`
@@ -1001,10 +1003,10 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   - `triforce job golden --agent A --task T --timeout 10m [--subtask S] [-- racer options]`: a golden race
     (`zelda-headless.py --golden --power-on --clips on --act model --parallel 16`), at most `--timeout`, which is its
     estimate; running out of time is a result ("no golden path in 10 minutes", exit 0); its replays are archived.
-  - `triforce job build --agent A --task T` (`maturin develop --release`) and `triforce job test
-    python|rust|asm|all --agent A --task T [--build]` (`--build`: build, then test, as one entry): their own lane,
-    two at once on the machine, first come first served, never behind a training; nice 10 and `CARGO_BUILD_JOBS=4`.
-    Every build and every suite goes through them (`--timeout 60m` replaces `timeout 3600`).
+  - `triforce job build --agent A --task T` (`maturin develop --release`, then the module's stamp) and `triforce job
+    test python|rust|asm|all --agent A --task T [--build]` (`--build`: build, then test, as one entry): their own
+    lane, two at once on the machine, first come first served, never behind a training; nice 10 and
+    `CARGO_BUILD_JOBS=4`. Every build and every suite goes through them (`--timeout 60m` replaces `timeout 3600`).
   - `triforce job setup BRANCH [--from main]`: the worktree `../triforce-<branch>` with `roms` and `trajectories`
     linked (never `models`: a worktree's runs and pointers are its own), its venv and its build. `triforce job list
     [--calibration]`: what runs, what waits and in which order, what ended in the last hour; `--calibration`
@@ -1138,11 +1140,21 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   --specialist NAME --states ...`) whenever a family's rooms change; a trajectory that runs into another family's
   room crashes training. `--out` is the trajectories *root* (explore appends `<specialist>/<state>`; it refuses
   `--out <trajectories>/<specialist>`, prints each track it writes and exits 1 on an unsolved or mismatched state).
-  Check `run.json` `curriculum_tracks` (track names and trajectory.json times) lists the tracks you expect.
+  Every seed state of a task with the curriculum on has a track, or the task declares it in `curriculum.untracked`
+  (globs of state names): `triforce train` refuses otherwise and prints the declaration to add (round 40, the
+  owner: missing is an error, never "none"; `docs/architecture.md` "Missing is an error"). The same rule stops a run
+  whose start-state glob matches no file, a task drawing harvested states from an empty folder, a `--load` that names
+  nothing, a chain whose runs reach a family with no network, a `--checkpoint` that drops a team network's hit head
+  without `--headless KEY`, and a bare `eval-chain --harvest` (it takes a DIR).
 - `max_steps` sets how many episodes finish per iteration. A curriculum specialist whose failures are slow
   (fleeing, waiting) needs `max_steps` near its explored path length (Aquamentus: 2000 → 400 took it from 0% to 93%).
 - Continuing a trained model with `--stop-success 0.99` (`--train-args "--load <run dir> --stop-success 0.99"`)
   often fixes the weak room the 95% early stop left behind.
+- **After merging a main that has round 40's refusals, run `triforce job build` in the worktree before any tool.**
+  The tools refuse a module without a build stamp (`triforce/_native.build.json`, written by every building verb of
+  `triforce job`, `--detach` too) or one older than its sources. A chain that plays a bare policy in place of a team
+  network with a hit head (a continued or experimental checkpoint without its head) needs `--headless KEY` for that
+  network, or it is refused: two arms must differ only in the factor under test (round 40).
 - Training at a narrow low-hp range alone can collapse a model (round 5, r11); keep the full-health share.
 
 ## Running a round
