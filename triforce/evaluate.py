@@ -389,10 +389,14 @@ def _start_health_fraction(records: list[dict]) -> float:
 
 
 def write_result(result: dict, path) -> Path:
-    """Writes an evaluation result atomically (the file is the previous one or complete); returns the path."""
+    """Writes an evaluation result atomically (the file is the previous one or complete) and its statistics
+    (``run_stats.write_eval``: ``<path>.stats.json``, registered); returns the path."""
+    from .run_stats import write_eval  # pylint: disable=import-outside-toplevel
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    return write_json_atomic(path, result)
+    written = write_json_atomic(path, result)
+    write_eval(result, path)
+    return written
 
 
 def default_output(checkpoint, specialist: str, act: str, episodes_per_state: int, seed: int,

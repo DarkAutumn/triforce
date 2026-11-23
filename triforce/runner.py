@@ -308,6 +308,12 @@ class RoomRecord:
     beam_kill_distance: Optional[int] = None
     beam_hearts_lost: Optional[float] = None
     beam_beams_lost: Optional[int] = None
+    # Round 40 (None/absent in older records; BeamStats too): shots that damaged a monster (beams::shot_hit), the
+    # frames of the visit's steps begun holding the beams (a sword and the hearts a shot needs), and the visit's frame
+    # at the end of the first step that lost them (None: not lost in the visit).
+    beam_shots_hit: Optional[int] = None
+    beam_held_frames: Optional[int] = None
+    beam_lost_frame: Optional[int] = None
     # Decisions taken in the visit (crates/zelda/src/decisions.rs, triforce/variety.py): n, low1/low5 (chosen with
     # probability under 1%/5% under the policy), low1_hit/low5_hit/low1_death/low5_death (followed by a hit or death
     # within 4 decisions), surprisal, act_entropy, actions (hex, two digits per decision), health ([decisions,

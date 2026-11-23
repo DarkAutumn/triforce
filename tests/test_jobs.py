@@ -374,6 +374,7 @@ def test_a_detached_job_is_the_same_command_as_a_user_unit_and_wait_reads_its_en
     unit = next(part.split('=', 1)[1] for part in command if part.startswith('--unit='))
     assert unit.startswith('tfjob-A-T-d3-1k-') and f'StandardOutput=file:{tmp_path}/detached/{unit}.log' in command
     tail = command[command.index('triforce.job') + 1:]
+    assert command[command.index('triforce.job') - 2:][:2] == ['-P', '-m']      # never the caller's folder's triforce
     assert tail == [arg for arg in argv[:argv.index('--')] if arg != '--detach'] + ['--', 'tool', '--detach', 'arg']
     assert f'follow it with: triforce job wait {unit}' in capsys.readouterr().err
 
