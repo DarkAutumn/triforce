@@ -1638,6 +1638,9 @@ def chain_caption(chain: dict, now: float) -> tuple[str, list[str]]:
     status = chain['status']
     runs = chain['runs']
     sub = f"{runs} runs" + (f" · {chain['parallel']} parallel" if chain['parallel'] else '')
+    start = (chain['progress'] or {}).get('from_step')
+    if start:                                   # where it starts: the bar's label says only where runs got to
+        sub += f" · from step {start}"
     timing = []
     if status == 'running' and chain['start']:
         timing.append(fmt_duration(now - chain['start']['ts']))
@@ -1652,24 +1655,28 @@ def chain_caption(chain: dict, now: float) -> tuple[str, list[str]]:
     return sub, timing
 
 
-def win_words(progress: dict | None) -> str:
+def win_words(progress: dict | None, start_too: bool = True) -> str:
     """What a chain's successes are, by the stretch of the route it plays (``runner.ChainTally``'s from_step, to_step
     and route_steps): only a chain from the route's first step to its end wins the game; any other reaches the
-    step it stops at (the owner, Nov 23: a Dungeon 3 segment's "won" read as games won)."""
+    step it stops at (the owner, Nov 23: a Dungeon 3 segment's "won" read as games won).  ``start_too``: with the
+    step it starts from ('reached step 24 from step 6', the detail pane's); else without it (a bar's label: the
+    chain card's caption says where it starts)."""
     start, end, steps = ((progress or {}).get(key) for key in ('from_step', 'to_step', 'route_steps'))
     if start is None or end is None or not steps:
         return 'reached the end'
     if end >= steps:
-        return 'won the game' if start == 0 else f'finished the game from step {start}'
-    return f'reached step {end} from step {start}'
+        return 'won the game' if start == 0 else ('finished the game' + (f' from step {start}' if start_too else ''))
+    return f'reached step {end}' + (f' from step {start}' if start_too else '')
 
 
 def chain_outcomes(runs: int, progress: dict | None, result: dict | None) -> dict | None:
     """A chain's runs by how they ended so far, from its latest ``chain_progress`` (``progress``; since the r40 GUI
     work it carries ``runner.ChainTally``'s deaths, stucks and errors) or, for an older stream, its successes alone
     (the summary's once it ended): {'total', 'done', 'wins', 'stucks', 'deaths', 'errors', 'other' (the runs that
-    did not win, of a stream without the tally), 'won' (what a success is: ``win_words``), 'label'}; None before a
-    run ended."""
+    did not win, of a stream without the tally), 'won' (what a success is: ``win_words``), 'label' (the bar's: how
+    the runs ended, short, '282 reached step 24 · 715 died · 3 stuck': a batch row says its run count beside it),
+    'runs' ('4/250 runs': the chain card puts it before the label, its rows have no other)}; None before a run
+    ended."""
     if progress is None and result is None:
         return None
     total = max(1, (result or {}).get('runs') or runs or (progress or {}).get('runs') or 1)
@@ -1681,14 +1688,15 @@ def chain_outcomes(runs: int, progress: dict | None, result: dict | None) -> dic
                               if tallied else (0, 0, 0))
     won = win_words(progress)
     if tallied:
-        label = (f"{done}/{total} runs · {wins} {won} · {deaths} died · {stucks} stuck"
+        label = (f"{wins} {win_words(progress, start_too=False)} · {deaths} died · {stucks} stuck"
                  + (f" · {errors} error{'s' if errors != 1 else ''}" if errors else ''))
     elif source is result:
         label = f"{wins}/{total} = {fmt_pct(result.get('success_rate'))}"
     else:
-        label = f"{done}/{total} runs · {wins} {won}"
+        label = f"{wins} {win_words(progress, start_too=False)}"
     return {'total': total, 'done': done, 'wins': wins, 'stucks': stucks, 'deaths': deaths, 'errors': errors,
-            'other': 0 if tallied else done - wins, 'won': won, 'label': label}
+            'other': 0 if tallied else done - wins, 'won': won, 'label': label,
+            'runs': '' if source is result and not tallied else f"{done}/{total} runs"}
 
 
 def outcome_parts(outcomes: dict) -> list[tuple[int, QColor]]:
@@ -1999,12 +2007,27 @@ def paint_fill(p: QPainter, rect: QRectF, fraction: float, color: QColor, t: flo
         p.fillRect(QRectF(fill.right() - 2, fill.top(), 2, fill.height()), color.lighter(160))
 
 
+def bar_label_text(text: str, width: float, size: float = 8.5) -> str:
+    """A bar's label as it fits a bar ``width`` wide: cut at its end with an ellipsis, never at its start (a batch
+    row's centred label once lost both ends: '000 runs · 282 reached ... · 3')."""
+    return QFontMetrics(font(size, QFont.Weight.Bold)).elidedText(text, Qt.TextElideMode.ElideRight,
+                                                                   max(0, int(width - 12)))
+
+
 def paint_bar_label(p: QPainter, rect: QRectF, text: str, size: float = 8.5):
+    """A bar's label, centred, cut at its end when too long (``bar_label_text``)."""
     p.setFont(font(size, QFont.Weight.Bold))
+    text = bar_label_text(text, rect.width(), size)
     p.setPen(QColor(0, 0, 0, 150))
     p.drawText(rect.translated(0, 1), Qt.AlignmentFlag.AlignCenter, text)
     p.setPen(QColor('white'))
     p.drawText(rect, Qt.AlignmentFlag.AlignCenter, text)
+
+
+def outcome_text(outcomes: dict, with_runs: bool = False) -> str:
+    """An outcome bar's label: how the runs ended (``chain_outcomes``' short label), after the runs done of the
+    total with ``with_runs`` (the chain card's bar, whose card says them nowhere else)."""
+    return f"{outcomes['runs']} · {outcomes['label']}" if with_runs and outcomes['runs'] else outcomes['label']
 
 
 def paint_bar(p: QPainter, rect: QRectF, fraction: float, color: QColor, t: float, *, ticks: int = 0,
@@ -2705,7 +2728,7 @@ class RunRow(Clickable):
                                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, total)
 
 
-def paint_outcomes(p: QPainter, bar: QRectF, outcomes: dict):
+def paint_outcomes(p: QPainter, bar: QRectF, outcomes: dict, with_runs: bool = False):
     """A chain's outcome bar (``chain_outcomes``): every run of it a block while there are 120 or fewer, else
     stretches; wins blue, stuck purple, deaths red, errors grey (``outcome_parts``), the runs still to come the
     empty track; its label on it."""
@@ -2729,7 +2752,7 @@ def paint_outcomes(p: QPainter, bar: QRectF, outcomes: dict):
             p.fillRect(QRectF(x, bar.top(), bar.width() * count / total, bar.height()), color)
             x += bar.width() * count / total
     p.restore()
-    paint_bar_label(p, bar, outcomes['label'], 8.5 if bar.height() < 20 else 9.5)
+    paint_bar_label(p, bar, outcome_text(outcomes, with_runs), 8.5 if bar.height() < 20 else 9.5)
 
 
 def row_outcomes(run: Run) -> dict | None:
@@ -2756,7 +2779,7 @@ class OutcomeBar(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         bar = QRectF(self.rect())
         if self.outcomes is not None:
-            paint_outcomes(p, bar, self.outcomes)
+            paint_outcomes(p, bar, self.outcomes, with_runs=True)
         else:
             running = self.status == 'running'
             paint_bar(p, bar, 1.0 if running else 0.0, STATUS.get(self.status, (C.muted, ''))[0], self.view.owner.t,
@@ -4227,7 +4250,7 @@ def chain_card(model: Training, chain: dict, now: float) -> dict:
         **plan_fields(model), 'kind': 'eval-chain', 'name': 'eval-chain', 'family': str(model.plan.get('route') or ''),
         'where': '',
         'fraction': (done / total if total else 0.0) if outcomes else (1.0 if status == 'running' else 0.0),
-        'bar_label': outcomes['label'] if outcomes else ('running' if status == 'running' else ''),
+        'bar_label': outcome_text(outcomes, with_runs=True) if outcomes else ('running' if status == 'running' else ''),
         'bar': bar_style(status), 'outcomes': web_outcomes(outcomes), 'tally': web_tally(tally),
         'numbers': f"{done} / {total} runs", 'phase': sub, 'outcome': '', 'speed': chain_speed(chain),
         'elapsed': fmt_duration(elapsed) if elapsed is not None else '',
@@ -4565,8 +4588,11 @@ main{padding:12px 16px 48px;max-width:2600px;margin:0 auto}
 .bar.hatch .fill{background-image:repeating-linear-gradient(-45deg,rgba(14,17,22,.55) 0 3px,transparent 3px 8px)}
 .bar .blocks{position:absolute;inset:0;display:flex}
 .bar .blocks span{height:100%;flex:none}
-.bar .label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:700;
-  font-size:12px;text-shadow:0 1px 2px #000,0 0 3px #000;white-space:nowrap}
+.bar .label{position:absolute;inset:0;display:block;text-align:center;overflow:hidden;text-overflow:ellipsis;
+  padding:0 6px;line-height:20px;font-weight:700;font-size:12px;text-shadow:0 1px 2px #000,0 0 3px #000;
+  white-space:nowrap}
+.ctr .bar .label,.reach .bar .label{line-height:16px}
+.tiles .bar .label{line-height:18px}
 .facts{display:flex;flex-wrap:wrap;gap:2px 16px;margin:7px 0 2px;font-size:13px;font-variant-numeric:tabular-nums}
 .facts span{white-space:nowrap}
 .facts i{font-style:normal;color:var(--faint);margin-right:4px}
