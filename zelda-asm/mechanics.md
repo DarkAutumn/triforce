@@ -26,11 +26,11 @@ Contents (generated; `L` = line in this file):
 - L929 Special-cased rooms
 - L970 Ladder and raft
 - L994 Monster spawning, edge spawns and respawn (room history)
-- L1056 Combat: collision boxes, damage, invincibility, knockback, stun
-- L1128 Hearts, rings and death
-- L1165 Room flags and saved state
-- L1194 Level data formats
-- L1207 Second quest differences
+- L1059 Combat: collision boxes, damage, invincibility, knockback, stun
+- L1131 Hearts, rings and death
+- L1168 Room flags and saved state
+- L1197 Level data formats
+- L1210 Second quest differences
 <!-- /toc -->
 
 # Game modes and the frame loop
@@ -1050,6 +1050,9 @@ Monsters are made when a room is entered (modes 4, 9, `$B`, `$C`) from two attri
 - A room is banked as all dead when it made no monsters, when the kills reach `RoomObjCount`, or when at least one kill was made and the first monster's type is non-recurring. [`RoomHistory_SaveKillCountUW`](src/bank5/room-history-uw.asm#L110)
 - Non-recurring = list id or type `$32`-`$48` except `$3A`/`$3B` (Lanmola): Dodongo `$32`, Gohma, rupee stash, Grumble, Zelda, Digdogger, Manhandla, Aquamentus, Ganon, guard and standing fire, Moldorm, Gleeok, Patra. Dodongo type `$31` is outside the range. [`RoomHistory_ModifyObjCountUW`](src/bank5/room-history-uw.asm#L50)
 - Entry, room in the history or flags not "all dead": count minus `LevelKillCounts[RoomId]` (none if negative). [`RoomHistory_ModifyObjCountUW@CalcObjCount`](src/bank5/room-history-uw.asm#L86)
+- The bank is a number, not a record of which monsters died: on entry the lowered count takes the first entries of the room's list, whatever was killed. (trace, 4:`$32`, list Bubble, Bubble, Zol, Zol, Like-Like, Like-Like: the Like-Likes killed and the Zols split, 2 kills banked; on the way back from the cellar Bubble, Bubble, Zol, Zol.) [`RoomHistory_ModifyObjCountUW@CalcObjCount`](src/bank5/room-history-uw.asm#L86) [`Room_EnterCommon@PlaceList`](src/bank5/enter-room.asm#L354)
+- A Zol that splits is never a kill: its slot is freed uncounted and `RoomObjCount` goes up by 1, and its child Gels (`$14`) are not counted when they die (a room's own Gels, `$15`, are). Only the room's other kills are banked, so with the wooden sword (or fire) the Zols come back; a Zol killed outright (damage `$20` or more) is banked. [`Zol_State2Split`](src/bank4/zol-gel.asm#L113) [`Obj_EndMetastate`](src/bank7/object-update-table.asm#L308)
+- Monsters no weapon harms (Bubbles) are in the count, so a room holding them is never banked all dead. [`Bubble_Update`](src/bank4/bubble-keese.asm#L93) [`RoomHistory_SaveKillCountUW`](src/bank5/room-history-uw.asm#L110)
 - Entry, flags all dead and room out of the history: a non-recurring room makes nothing, permanently; any other room has its flags bits 6-7 and banked count cleared and refills. [`RoomHistory_ModifyObjCountUW`](src/bank5/room-history-uw.asm#L50)
 - `LevelKillCounts` is zeroed only when a level is loaded (mode 2), so after leaving and re-entering a dungeon a partly cleared room is full again while a dead boss stays dead. [`Mode2Load_Init`](src/bank7/init-mode-dispatch.asm#L147)
 

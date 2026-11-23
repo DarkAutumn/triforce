@@ -64,7 +64,6 @@ import json
 import os
 import signal
 import socket
-import statistics
 import subprocess
 import sys
 import threading
@@ -100,7 +99,7 @@ _START = {'no_wait': False}          # begin(): this process's --no-wait
 # episode: 0.046) and 168 batch chains (wall per run per route step played: 0.0026).
 UNITS = ('train_steps', 'eval_episodes', 'chain_steps')
 DEFAULT_RATES = {'train_steps': 0.00044, 'eval_episodes': 0.046, 'chain_steps': 0.0026}
-RATE_HISTORY = 20                    # finished jobs a rate is the median of
+RATE_HISTORY = 20                    # the latest finished jobs a rate is taken over (their total, ``rates``)
 
 
 def default_nice() -> int:
@@ -282,30 +281,33 @@ def _finished_ts(job: dict) -> float:
 
 
 def rates(history: list[dict]) -> dict:
-    """Seconds per unit of work, from the registry entries ``history`` (``read_jobs``): for each unit the median
-    over the ``RATE_HISTORY`` latest ``completed`` jobs that did some of it, each giving the seconds it ran
-    (``ran``: admitted to finished) less what its other work takes by the other units' rates (those of jobs that did
-    only that unit, else ``DEFAULT_RATES``), per amount of the unit.  A job that did only that unit gives its seconds
-    per amount as they are.  ``DEFAULT_RATES`` where nothing finished yet."""
+    """Seconds per unit of work, from the registry entries ``history`` (``read_jobs``): for each unit, over the
+    ``RATE_HISTORY`` latest ``completed`` jobs that did some of it, the seconds they ran (``ran``: admitted to
+    finished) less what their other work takes by the other units' rates (those of jobs that did only that unit,
+    else ``DEFAULT_RATES``), divided by the amount of the unit they did: the total over those jobs, not the median
+    of each job's ratio, so a big job weighs as its size (Nov 22: small chains' start-up made the median 6x the rate
+    of big chains, and a 17-segment batch was estimated at 28 hours and starved).  ``DEFAULT_RATES`` where nothing
+    finished yet."""
     done = sorted((job for job in history if job.get('status') == 'completed' and (job.get('ran') or 0) > 0
                    and isinstance(job.get('work'), dict) and job['work']
                    and set(job['work']) <= set(UNITS) and all((a or 0) > 0 for a in job['work'].values())),
                   key=_finished_ts, reverse=True)
 
-    def median(values: list, default: float) -> float:
-        return statistics.median(values) if values else default
-    pure = {unit: median([job['ran'] / job['work'][unit] for job in done if set(job['work']) == {unit}]
-                         [:RATE_HISTORY], DEFAULT_RATES[unit]) for unit in UNITS}
+    def total(samples: list, default: float) -> float:
+        amount = sum(a for _, a in samples)
+        return sum(s for s, _ in samples) / amount if amount else default
+    pure = {unit: total([(job['ran'], job['work'][unit]) for job in done if set(job['work']) == {unit}]
+                        [:RATE_HISTORY], DEFAULT_RATES[unit]) for unit in UNITS}
     result = {}
     for unit in UNITS:
         samples = []
         for job in (job for job in done if unit in job['work']):
             rest = sum(amount * pure[other] for other, amount in job['work'].items() if other != unit)
             if job['ran'] > rest:
-                samples.append((job['ran'] - rest) / job['work'][unit])
+                samples.append((job['ran'] - rest, job['work'][unit]))
             if len(samples) == RATE_HISTORY:
                 break
-        result[unit] = median(samples, DEFAULT_RATES[unit])
+        result[unit] = total(samples, DEFAULT_RATES[unit])
     return result
 
 

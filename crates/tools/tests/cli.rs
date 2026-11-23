@@ -458,13 +458,14 @@ fn the_replay_corpus_still_verifies() {
         assert!(state.contains(line), "{line}: {state}");
     }
     let ending = info("golden-d3first-51-networks");
-    for line in ["version:  1", "frames:   160248", "ending:   win", "segments: 9", "states:   1 END, 8 CHECKPOINT",
-                 "triforce: 2.0.0.7", "the game ended in (level 9, room 0x32)"] {
+    for line in ["version:  1", "frames:   142862", "ending:   win", "segments: 9", "states:   1 END, 8 CHECKPOINT",
+                 "triforce: 2.0.0.9", "the game ended in (level 9, room 0x32)"] {
         assert!(ending.contains(line), "{line}: {ending}");
     }
-    // One network in all 51 model slots (round 37): a golden path of the corrected route from power on.
+    // One network in all 51 model slots (round 37's student, 2.0.0.7: the owner's bomb rules; nothing cheated): a
+    // golden path of the corrected route from power on.
     let single = info("golden-d3first-single-network");
-    for line in ["version:  1", "frames:   155243", "ending:   win", "segments: 9", "(every model, 51)",
+    for line in ["version:  1", "frames:   149346", "ending:   win", "segments: 9", "(every model, 51)", "triforce: 2.0.0.7",
                  "the game ended in (level 9, room 0x32)"] {
         assert!(single.contains(line), "{line}: {single}");
     }
