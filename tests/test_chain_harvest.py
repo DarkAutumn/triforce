@@ -95,6 +95,22 @@ def test_eval_chain_command_harvests_into_the_default_harvested_dir(states_dir, 
     assert not set(drawn) & set(files), drawn
 
 
+def test_an_every_room_harvest_also_saves_entries_from_the_same_family(states_dir, models_dir, tmp_path):
+    """``harvest_every_room`` (``eval-chain --harvest-every-room``): ow-leever walks E out of 0x29 into its own 0x2a
+    (``d3first`` step 82), no handoff; only the every-room harvest saves it."""
+    files = {}
+    for every_room in (False, True):
+        directory = tmp_path / str(every_room)
+        runner = Runner(models_dir=models_dir, max_steps=40, parallel=2, states_dir=states_dir,
+                        networks={'ow-leever': scripted('MOVE E 16')}, harvest=directory,
+                        harvest_every_room=every_room)
+        runner.run_many(Route.load('d3first', None, str(require_state('d3first_0_29w_0'))), SEEDS)
+        files[every_room] = sorted(str(p.relative_to(directory)) for p in directory.rglob('*.state'))
+    entries = {f'ow-leever/d3first_0_2aw_h{seed}_1.state' for seed in SEEDS}
+    assert entries <= set(files[True]) and not entries & set(files[False]), files
+    assert set(files[False]) <= set(files[True]), files      # every handoff still is one
+
+
 def test_training_resets_from_harvested_states_with_their_true_health(states_dir, harvested, tmp_path):
     directory, results = harvested
     health_in = handoffs(results)
