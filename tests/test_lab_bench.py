@@ -83,6 +83,50 @@ def test_a_bench_run_and_its_paired_comparison(states_dir, tmp_path, logs_dir):
     assert '| missing |' in bench.format_compare(against_old)
 
 
+def _row(successes):
+    return {'records': [{'state': f's{i}', 'seed': i, 'success': s, 'hearts_lost': 0.0, 'hits': 0, 'visits': 1,
+                         'decisions': 1, 'bombs': 0} for i, s in enumerate(successes)]}
+
+
+def test_compare_lists_the_rows_a_network_loses_on():
+    base = {'keys': {'kept': _row([True] * 20), 'lost': _row([True] * 20), 'noise': _row([True] * 20)}}
+    new = {'keys': {'kept': _row([True] * 20), 'lost': _row([False] * 10 + [True] * 10),
+                    'noise': _row([False] + [True] * 19)}}
+    result = bench.compare(base, new)
+    assert result['losing'] == ['lost']           # -0.05 on one episode in 20 is within two standard errors
+    assert '**Losing** (1 rows' in bench.format_compare(result) and 'lost -0.500' in bench.format_compare(result)
+
+
+def test_an_arrived_entry_plays_its_states_without_the_familys_randomization(tmp_path):
+    entry = {'key': 'darknut@d3first', 'family': 'darknut', 'source': bench.ROOMS, 'arrived': True,
+             'states': [f'{bench.ROOMS}/darknut/d3first_3_59n_h5_7']}
+    config, directory = bench.entry_task(entry, tmp_path)
+    assert directory == str(tmp_path / bench.ROOMS / 'darknut')
+    assert config.to_dict()['ram_randomization']['hp'] is None
+    config, _ = bench.entry_task({**entry, 'arrived': False}, tmp_path)
+    assert config.to_dict()['ram_randomization']['hp'] is not None
+
+
+def test_the_rooms_manifest_keeps_the_room_entries_that_cost_the_team(tmp_path):
+    harvest = tmp_path / 'harvest' / 'darknut'
+    harvest.mkdir(parents=True)
+    for name in ['d3first_3_59n_h5_7', 'd3first_3_59n_h6_7', 'd3first_3_5bw_h5_9']:
+        (harvest / f'{name}.state').write_bytes(b'')
+    room = {'level': 3, 'room': '0x59', 'health_out': 1.0, 'outcome': 'exit-correct'}
+    runs = [{'seed': 5, 'rooms': [{**room, 'index': 7, 'health_in': 2.0},
+                                  {**room, 'room': '0x5b', 'index': 9, 'health_in': 1.0}]},
+            {'seed': 6, 'rooms': [{**room, 'index': 7, 'health_in': 1.0, 'health_out': 0.0, 'outcome': 'death'}]}]
+    chains = tmp_path / 'harv.jsonl'
+    chains.write_text(''.join(json.dumps(r) + '\n' for r in runs))
+    states = tmp_path / 'states'
+    manifest = bench.make_rooms_manifest(tmp_path / 'harvest', [str(chains)], 12, 5, 380000, 0.1, states)
+    entry, = manifest['entries']                  # 0x5b lost nothing: out
+    assert entry['key'] == 'darknut@d3first' and entry['name'] == 'darknut@d3first 3_59n' and entry['arrived']
+    assert entry['team_visits'] == 2 and entry['team_deaths'] == 1 and entry['team_hearts_lost'] == 1.0
+    assert entry['states'] == [f'{bench.ROOMS}/darknut/d3first_3_59n_h5_7', f'{bench.ROOMS}/darknut/d3first_3_59n_h6_7']
+    assert (states / bench.ROOMS / 'darknut' / 'd3first_3_59n_h6_7.state').is_file()
+
+
 def test_the_committed_manifest_covers_the_team():
     manifest = bench.load_manifest()
     assert manifest['act'] == registry.DEFAULT_ACT and len(manifest['entries']) == 51
