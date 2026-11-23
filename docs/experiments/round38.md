@@ -400,6 +400,77 @@ hits; Digdogger needs its own head (branch `r38-head` records boss-digdogger's l
 Wallmaster's entries are not lost to hits (0.12 a visit for every arm and the teacher), so a hit head has nothing
 to act on there.
 
+### 11. Reinforcement on the combination, and the chains that decide the promotion
+
+**Code base:** 2.0.0.6 merged (its `bomb_rules: treasure_below: 8` makes 7:0x1b a fight below 8 bombs, so the
+branch's own route line was reverted), then 2.0.0.7 (the 2.0.0.7 rows below). Chains: 1000 runs, seeds 0-999, one
+served torch network (goriya `@d3first`), act `temperature:0.5+relax:16`, paired by seed.
+
+**The two PPO arms** (§4's design, run on the merged code: `lab.train` from the fixed combination `pre-w8`, which is
+also the fading teacher, `--state-route d3first`, 300 iterations, seed 38): (frozen) the hit body frozen; (aux) the
+hit body trained only by its own loss on fresh look-ahead labels (`--aux hit=hit:0.5`), never by the policy's.
+Benched as §2 (paired against `pre-w8`, their start):
+
+| arm | training | goriya@d3first hits a visit | 7:0x1b hits a visit | 7:0x1b won | Bubble rooms hits a visit |
+|---|---|---:|---:|---:|---:|
+| pre-w8 (start) | | 0.529 | 2.083 | 94.3% | 0.783 |
+| frozen (`r38ppo-frozen-s38`) | 4,351 s, 283 steps/s | 0.523 (−0.006 ± 0.045) | 1.937 (−0.147 ± 0.104) | | 0.920 (+0.137 ± 0.077) |
+| **aux (`r38ppo-aux-s38`)** | 3,675 s, 335 steps/s | **0.315 (−0.215 ± 0.041)** | **1.810 (−0.273 ± 0.095)** | 95.0% | **0.590 (−0.193 ± 0.070)** |
+| r1-w8 (§9, no training) | | 0.340 | 1.973 | 96.0% | 0.757 |
+
+(Bubble rooms: 7:0x49 and 7:0x18's seed states × 50; differences an episode.) With the hit body frozen the policy
+does not learn to use the shift: no better than its start. With the head kept on its own labels it does: fewer hits
+than the fixed combination and shorter fights (−9.7 ± 1.6 decisions in 7:0x1b, −24 in the Bubble rooms). The aux
+arm's own evaluation (`eval.json`, the canonical 5,400 episodes): 99.2% success, −0.09 hearts.
+
+**The chains** (2.0.0.6; `d7` from `d3first_7_79s_0` to 0:0x42 with Dungeon 7's triforce, `d2` from
+`d3first_2_7ds_0` to 0:0x3c):
+
+| `d7` | finish Dungeon 7 | − team | 7:0x1b visits / hits a visit / lost | 7:0x18 hits a visit / lost | 7:0x1c lost | 7:0x1a lost |
+|---|---:|---:|---|---|---:|---:|
+| today's team | 12.6% | | 736 / 3.51 / 514 | 0.97 / 28 | 32 | 137 |
+| r1-w8 (§9) | 71.2% | +58.6 ± 1.8 | 1,079 / 2.33 / 75 | 0.94 / 63 | 65 | 22 |
+| **PPO aux** | **79.1%** | **+66.5 ± 1.7** | 1,169 / 2.24 / 71 | **0.43** / 30 | 50 | 7 |
+
+PPO aux − r1-w8: +7.9 ± 1.9 points; most of it in 7:0x18 (a Bubble and Goriyas: 0.43 hits a visit against 0.94,
+touches 0.67 against 0.82) and 7:0x1a. Its other losses: 7:0x2a 18, 7:0x0d 11. `d2`: team 98.4%, PPO aux 99.7%
+(+1.3 ± 0.4). The full route: 0 of 1000 for both, identical until goriya's rooms; the runs are lost in Dungeons 3
+and 4 (3:0x4d 207, 3:0x5b 160, 3:0x69 107, 4:0x13 78), not goriya's; past step 107 PPO 31 runs against the team's
+21, past 160 5 against 3, past 180 4 against 0.
+
+**7:0x1b fought or crossed** (crossed: the room's `treasure: skip`, measured on 2.0.0.5 in a separate worktree, never
+landed; fought: 2.0.0.6; same seeds):
+
+| `d7` | finish | lost in 0x1b | lost in 0x1c (Digdogger) | bombs into 0x1c | 0x1c hits a visit | cheated bombs a run |
+|---|---:|---:|---:|---:|---:|---:|
+| team, fought | 12.6% | 514 | 32 | 4.16 | 2.74 | 0.76 |
+| team, crossed | 10.8% | 186 | 369 | 0.18 | 3.77 | 1.03 |
+| r1-w8, fought | 71.2% | 75 | 65 | 3.92 | 2.72 | 1.00 |
+| r1-w8, crossed | 40.2% | 27 | 425 | 0.25 | 5.89 | 1.87 |
+| PPO aux, fought | 79.1% | 71 | 50 | 3.70 | 2.59 | 1.00 |
+
+Fought − crossed, paired: r1-w8 +31.0 ± 2.0 points, the team +1.8 ± 1.3. **Why crossing loses:** 7:0x1b's treasure
+is four bombs, and those bombs are what Digdogger's network (7:0x1c, next) fights with. Crossed, runs reach
+Digdogger with 0.2 bombs, take twice the hits there, and 37-43% of all runs die in that one room; the walls of 0x0c
+and 0x29 are then cheated (0.9 more bombs a run). With the head the fight in 0x1b loses 7-8% of the runs, the
+crossing loses 40-43% in 0x1c: 7:0x1b stays a fight.
+
+**Whose fault are the hits left** (the combinations' own states, `lab.record --try-others 8:1.0`; a hit is "missed"
+when the head read the action played as safe, "saw, safe" when it read it as a hit while a tried action was safe,
+"cornered" when it read it and no tried action was safe; threshold P = R over all judged candidates):
+
+| arm (143,360 decisions) | hits | missed | saw, a safe action tried | cornered |
+|---|---:|---:|---:|---:|
+| pre-w8 | 1,970 | 64% | 18% | 18% |
+| r1-w8 | 1,523 | 62% | 18% | 20% |
+| pre-w8, 7:0x1b | 231 | 146 | 55 | 30 |
+| pre-w8, 7:0x18 | 106 | 53 | 35 | 18 |
+| pre-w8, 7:0x1a | 177 | 94 | 40 | 43 |
+
+Two thirds of the remaining hits are the head's misses (better labels: §3's rounds); a sixth are a shift too weak
+against the policy's prior, the part a policy trained with the shift can take back (the PPO aux arm); a sixth are
+the earlier moves'.
+
 ## Aimless walking
 
 **The question** (the owner, watching the golden replay `corpus/replays/golden-d3first-single-network.tfreplay`):
