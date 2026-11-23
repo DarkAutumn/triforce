@@ -95,6 +95,12 @@ OUTPUTS = {
 }
 
 
+def has_hit_head(checkpoint: dict) -> bool:
+    """Whether a saved checkpoint (``registry.load_checkpoint``'s dict) holds a hit head: a ``hit_head`` module among
+    its weights, as ``network_description`` finds it in a built network (round 38's hit-head networks)."""
+    return any('hit_head' in name.split('.') for name in checkpoint.get('state_dict') or {})
+
+
 def network_description(network, checkpoint: Optional[dict] = None) -> dict:
     """What a replay's META says of ``network`` (a ``ZeldaPolicy`` or a ``triforce.nets`` network) beside its index,
     name, hash and act mode (``replay_models``): its family, run id, iterations and steps (from ``checkpoint``, the

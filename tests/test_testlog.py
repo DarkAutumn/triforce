@@ -1,5 +1,5 @@
-"""The test suites' timing logs (``triforce.testlog``): a pytest run's ``tests.jsonl`` (serial and in parallel), the
-Rust suite's lines read from cargo's output, and ``triforce test-times`` over many of them."""
+"""The test suites' timing logs (``triforce.testlog``): a pytest run's ``tests.jsonl`` (serial and in parallel) and
+``triforce test-times`` over many of them (the Rust suite's lines: ``tests/test_cargo_tests.py``)."""
 
 import json
 import os
@@ -106,54 +106,6 @@ def test_collect_only_writes_nothing(tmp_path):
     project, logs = _project(tmp_path), tmp_path / 'logs'
     assert _pytest(project, logs, '--collect-only').returncode == 0
     assert not logs.exists()
-
-
-CARGO = """\
-#!/bin/sh
-echo "    Finished \\`release\\` profile [optimized] target(s) in 1m 02s" >&2
-echo "     Running unittests src/lib.rs (target/release/deps/zelda-0123456789abcdef)" >&2
-echo "test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 2.50s"
-echo "     Running tests/d9.rs (target/release/deps/d9-fedcba9876543210)" >&2
-echo "test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.25s"
-echo "   Doc-tests zelda" >&2
-echo "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
-exit 101
-"""
-
-
-def _cargo(tmp_path: Path, *command) -> subprocess.CompletedProcess:
-    environ = {**os.environ, 'TRIFORCE_LOGS_DIR': str(tmp_path / 'logs')}
-    return subprocess.run([sys.executable, '-m', 'triforce.testlog', 'cargo', '--', *command], env=environ,
-                          capture_output=True, text=True, timeout=60, check=False)
-
-
-def test_the_rust_suite_gets_a_line_a_test_binary_from_cargos_output(tmp_path):
-    cargo = tmp_path / 'cargo'
-    cargo.write_text(CARGO)
-    cargo.chmod(0o755)
-    done = _cargo(tmp_path, str(cargo), 'test')
-    assert done.returncode == 101                       # the command's exit, its output passed through whole
-    assert done.stdout.count('test result:') == 3 and 'Running tests/d9.rs' in done.stdout
-    lines = _stream(tmp_path / 'logs')
-    tests = [{key: line[key] for key in ('id', 'outcome', 'seconds', 'tests', 'passed', 'failed', 'ignored')}
-             for line in lines if line['event'] == 'test']
-    assert tests == [
-        {'id': 'unittests src/lib.rs (zelda)', 'outcome': 'passed', 'seconds': 2.5, 'tests': 4, 'passed': 3,
-         'failed': 0, 'ignored': 1},
-        {'id': 'tests/d9.rs (d9)', 'outcome': 'failed', 'seconds': 10.25, 'tests': 2, 'passed': 1, 'failed': 1,
-         'ignored': 0},
-        {'id': 'doctests (zelda)', 'outcome': 'passed', 'seconds': 0.0, 'tests': 0, 'passed': 0, 'failed': 0,
-         'ignored': 0}]
-    summary = lines[-1]
-    assert summary['suite'] == 'rust' and summary['exit'] == 101 and summary['compile'] == 62.0
-    assert summary['counts'] == {'passed': 2, 'failed': 1} and summary['tests'] == {'passed': 4, 'failed': 1,
-                                                                                    'ignored': 1}
-
-
-def test_a_missing_cargo_exits_127_as_a_shell_would(tmp_path):
-    done = _cargo(tmp_path, str(tmp_path / 'no-such-cargo'), 'test')
-    assert done.returncode == 127
-    assert _stream(tmp_path / 'logs')[-1]['exit'] == 127
 
 
 def _run(logs: Path, number: int, wall: float, times: dict, suite: str = 'python'):

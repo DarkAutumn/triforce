@@ -319,13 +319,14 @@ def test_setup_makes_the_worktree_its_links_venv_and_build_as_one_tools_entry(tm
     monkeypatch.setattr(job, 'run_job', run_job)
     assert job.main(['setup', 'r41-x']) == 0
     assert seen['fields']['lane'] == q.TOOLS_LANE and seen['fields']['nice'] >= job.TOOL_NICE
-    assert [step.name for step in seen['steps']] == ['worktree', 'links', 'venv', 'install', 'build']
+    assert [step.name for step in seen['steps']] == ['worktree', 'links', 'venv', 'install', 'build', 'stamp']
     assert seen['steps'][0].command[-3:] == ['-b', 'r41-x', 'main']
     target = tmp_path / 'triforce-r41-x'
     assert all((target / name).resolve() == main / name
                for name in ('roms', 'trajectories', 'triforce/states/harvested'))    # the data no checkout tracks
     assert not (target / 'models').exists()       # a worktree's runs and pointers stay its own
-    assert seen['steps'][-1].env['CARGO_BUILD_JOBS'] == str(job.CARGO_JOBS)
+    (build,) = [step for step in seen['steps'] if step.name == 'build']
+    assert build.env['CARGO_BUILD_JOBS'] == str(job.CARGO_JOBS)
 
 
 def test_the_record_keeps_every_job_and_says_what_the_lanes_really_ran(tmp_path):

@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from triforce import build
+
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('full_runs', ROOT / 'scripts' / 'full_runs.py')
 full_runs = importlib.util.module_from_spec(spec)
@@ -145,6 +147,8 @@ def test_runs250_plays_from_power_on(tmp_path, monkeypatch):
             seen['command'] = command
         return Done()
     monkeypatch.setattr(full_runs.subprocess, 'run', fake_run)
+    # The module check (``triforce.build``) asks git through the same subprocess.run this test answers by hand.
+    monkeypatch.setattr(build, 'problem', lambda root=None: None)
     out = tmp_path / 'out'
     assert full_runs.main(['runs250', '--models-dir', str(tmp_path / 'models'), '--out', str(out)]) == 2
     command = seen['command']
