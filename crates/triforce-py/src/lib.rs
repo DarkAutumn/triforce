@@ -325,7 +325,7 @@ mod _native {
     #[pymodule_export]
     use crate::game::{
         PyChange, PyGame, PyGameState, PySnapshot, danger_blocks, observe, power_on_idle_states, power_on_name,
-        threat_blocks,
+        lane_probe, threat_blocks,
     };
     #[pymodule_export]
     use crate::policy::{PyPolicy, act_mode, act_probabilities, keyed_noise};

@@ -804,6 +804,42 @@ pub fn threat_blocks<'py>(
     Ok(PyArray::from_vec(py, out).reshape([n, NUM_ENTITY_SLOTS, ENTITY_THREAT_SIZE])?.into_any())
 }
 
+/// `zelda::threat::lane` of every object slot 1-12 of `N` RAM images `[N, 10240]` (CPU RAM and PRG-RAM, as
+/// `ReplayPlayer.ram` gives them), the tile grid decoded from the same image: `[N, 12, 5]` float32 per slot `ready`,
+/// `wait` (frames), `inside`, `arrival` (frames, -1 outside the lane), `leave` (frames, inf where walls keep Link in
+/// the lane); all 0 (arrival -1) for a slot that is not a shooter. For `scripts/experiments/r40_lane_check.py`.
+#[pyfunction]
+pub fn lane_probe<'py>(py: Python<'py>, ram: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    use numpy::PyUntypedArrayMethods;
+    use std::sync::{Arc, LazyLock};
+    use zelda::tables::RAM_SIZE;
+    static MAP: LazyLock<Arc<zelda::GameMap>> = LazyLock::new(|| Arc::new(zelda::GameMap::builtin()));
+    let ram = crate::policy::contiguous::<u8>(py, ram, "uint8", "ram")?;
+    let n = ram.shape().first().copied().unwrap_or(0);
+    if ram.shape() != [n, RAM_SIZE] {
+        return Err(PyValueError::new_err(format!("want ram [N, {RAM_SIZE}]; got {:?}", ram.shape())));
+    }
+    let ram = ram.as_slice()?;
+    let mut out = vec![0f32; n * 12 * 5];
+    for i in 0..n {
+        let image: &[u8; RAM_SIZE] = ram[i * RAM_SIZE..(i + 1) * RAM_SIZE].try_into().unwrap();
+        let view = zelda::game::GameView::new(image, 0, false, MAP.clone());
+        let grid = zelda::tiles::build_grid(&view, &zelda::room_state::decode_room_state(view.ram()));
+        for slot in 1..=12usize {
+            let o = &mut out[(i * 12 + slot - 1) * 5..(i * 12 + slot) * 5];
+            o[3] = -1.0;
+            if let Some(lane) = zelda::threat::lane(view.ram(), slot, &grid) {
+                o[0] = lane.ready as u8 as f32;
+                o[1] = lane.wait;
+                o[2] = lane.inside as u8 as f32;
+                o[3] = lane.arrival.unwrap_or(-1.0);
+                o[4] = lane.leave;
+            }
+        }
+    }
+    Ok(PyArray::from_vec(py, out).reshape([n, 12, 5])?.into_any())
+}
+
 /// The name a power-on start registers for `name`: upper-cased.  ValueError if it can't be registered (1 to 8
 /// of A-Z, 0-9 and space, not all spaces) or starts the second quest (ZELDA).
 #[pyfunction]
