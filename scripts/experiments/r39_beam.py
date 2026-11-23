@@ -3,7 +3,9 @@
 
     python scripts/experiments/r39_beam.py bench BASE.json NEW.json...                 # the rooms tier, beams beside
     python scripts/experiments/r39_beam.py chains BASE.jsonl NEW.jsonl... [--target L:0xRR,...] [--family F...]
-    python scripts/experiments/r39_beam.py combine --policy CKPT --beam CKPT --weights 2 4 --name FAMILY --run RUN
+    python scripts/experiments/r39_beam.py hearts LABEL=a.jsonl,b.jsonl... [--family F...]
+    python scripts/experiments/r39_beam.py combine --policy CKPT --beam CKPT --weights 2 4 --name FAMILY --run RUN \
+        [--objectives FIGHT]
 
 ``bench``: each network's ``triforce.lab.bench`` result against the base, paired by episode (success, hearts lost,
 hits a visit; ``bench.compare``), and beside them the sword shots (round 39's ``beam_*`` episode fields): sword kills
@@ -16,9 +18,15 @@ every one with sword kills) from ``r38_beams.table``: visits, far share, kill di
 entered with the beams (hearts within half a heart of full) and their share, hits and hearts lost a visit, and the
 runs that ended in the family's rooms.
 
+``hearts``: per family, how its visits are entered (the beams need full hearts): the share entered full, the mean
+deficit, hits a visit and deaths entered full against short, and for the short visits, walking back to the last
+room Link left full: the share short since the segment's start, the share with a dropped heart or fairy left untaken
+on the way and the share whose untaken drops would have filled him, and the families those hearts went to.
+
 ``combine``: ``beamshift`` networks (``triforce/nets/beamshift.py``), one a weight: a policy (any run, a
 ``hitshift`` included) and a beam head (``r38_hit.py retrain`` on ``DIR+beam`` recordings), nothing trained; saved
-as ``<models>/<name>/<run>-w<weight>`` with the default act mode, loadable like any run.
+as ``<models>/<name>/<run>-w<weight>`` with the default act mode, loadable like any run. ``--objectives``: the shift
+only under those objective kinds (``FIGHT``: the rooms the route fights, not the ones it crosses).
 """
 
 import argparse
@@ -124,12 +132,79 @@ def chain_report(base: str, news: list[str], target, families) -> str:
     return '\n'.join(lines)
 
 
-def combine(policy_path: str, beam_path: str, weights: list[float], name: str, run: str, models_dir=None) -> None:
+FAIRY_HEARTS = 3.0     # a dropped fairy heals three hearts
+
+
+def full(room: dict) -> bool:
+    """Entered with the beams: within half a heart of full (r38_beams.table's test)."""
+    return room['max_health'] > 0 and room['health_in'] >= room['max_health'] - 0.5
+
+
+def lost_in(room: dict) -> float:
+    """Hearts the visit cost (health in, plus what it healed, minus health out)."""
+    return max(0.0, room['health_in'] + room.get('hearts_healed', 0.0) - room['health_out'])
+
+
+def hearts_report(sets: list[str], families) -> str:
+    """Per set (``LABEL=a.jsonl,b.jsonl``) and family: how its visits are entered, what being full changes in the
+    room, and for the short ones what lay on the way since Link last left a room full (the untaken hearts and
+    fairies, ``drops`` fates expired/left), where the hearts went, and how many were short since the segment's
+    start."""
+    lines = ['| set | family | visits | entered full | deficit | hits full / short | deaths full / short | '
+             'short since start | short, a drop untaken | untaken would fill | lost on the way to it (top) |',
+             '|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|']
+    for spec in sets:
+        label, paths = spec.split('=', 1)
+        agg = defaultdict(lambda: defaultdict(float))
+        sources = defaultdict(lambda: defaultdict(float))
+        for path in paths.split(','):
+            for run in map(json.loads, open(path, encoding='utf-8')):
+                rooms = [r for r in run.get('rooms', []) if r.get('max_health')]
+                for i, room in enumerate(rooms):
+                    a = agg[room['specialist']]
+                    a['visits'] += 1
+                    side = 'full' if full(room) else 'short'
+                    a[side] += 1
+                    a[f'{side}_hits'] += room['hits']
+                    a[f'{side}_deaths'] += room['outcome'] == 'death'
+                    if side == 'full':
+                        continue
+                    deficit = room['max_health'] - room['health_in']
+                    a['deficit'] += deficit
+                    hearts = fairies = 0
+                    j = i - 1
+                    while j >= 0 and rooms[j]['health_out'] < rooms[j]['max_health'] - 0.5:
+                        before = rooms[j]
+                        untaken = [d for d in before.get('drops', []) if d.get('fate') in ('expired', 'left')]
+                        fairies += sum(1 for d in untaken if d.get('kind') == 'fairy')
+                        hearts += sum(1 for d in untaken if d.get('kind') != 'fairy')
+                        sources[room['specialist']][before['specialist']] += lost_in(before)
+                        j -= 1
+                    a['since_start'] += j < 0
+                    a['untaken'] += hearts + fairies > 0
+                    a['would_fill'] += hearts + FAIRY_HEARTS * fairies >= deficit - 0.5
+        keys = families or sorted(agg, key=lambda k: -agg[k]['visits'])
+        for key in keys:
+            a = agg.get(key)
+            if not a:
+                continue
+            f, s = a['full'] or math.nan, a['short'] or math.nan
+            top = sorted(sources[key].items(), key=lambda kv: -kv[1])[:3]
+            way = ', '.join(f'{k} {v / s:.2f}' for k, v in top)
+            lines.append(f"| {label} | {key} | {int(a['visits'])} | {a['full'] / a['visits']:.1%} | "
+                         f"{a['deficit'] / s:.2f} | {a['full_hits'] / f:.2f} / {a['short_hits'] / s:.2f} | "
+                         f"{a['full_deaths'] / f:.1%} / {a['short_deaths'] / s:.1%} | {a['since_start'] / s:.1%} | "
+                         f"{a['untaken'] / s:.1%} | {a['would_fill'] / s:.1%} | {way} |")
+    return '\n'.join(lines)
+
+
+def combine(policy_path: str, beam_path: str, weights: list[float], name: str, run: str, models_dir=None,
+            objectives=()) -> None:
     from triforce.nets.beamshift import BeamShift  # pylint: disable=import-outside-toplevel
     policy = registry.load_model(policy_path, check_schema=False)[0]
     beam = registry.load_model(beam_path, check_schema=False)[0]
     for weight in weights:
-        network = BeamShift.of(policy, beam, weight)
+        network = BeamShift.of(policy, beam, weight, objectives)
         path = registry.save_checkpoint(name, f'{run}-w{weight:g}', network, root=models_dir,
                                         extra={'policy': str(policy_path), 'beam': str(beam_path)})
         registry.set_act_mode(path, registry.DEFAULT_ACT)
@@ -147,6 +222,9 @@ def main(argv=None) -> int:
     c.add_argument('new', nargs='+')
     c.add_argument('--target', default=None)
     c.add_argument('--family', nargs='*', default=None)
+    h = sub.add_parser('hearts')
+    h.add_argument('sets', nargs='+', help='LABEL=a.jsonl,b.jsonl')
+    h.add_argument('--family', nargs='*', default=None)
     m = sub.add_parser('combine')
     m.add_argument('--policy', required=True)
     m.add_argument('--beam', required=True)
@@ -154,13 +232,16 @@ def main(argv=None) -> int:
     m.add_argument('--name', required=True)
     m.add_argument('--run', required=True)
     m.add_argument('--models-dir', default=None)
+    m.add_argument('--objectives', nargs='*', default=[])
     args = parser.parse_args(argv)
     if args.command == 'bench':
         print(bench_report(args.base, args.new))
     elif args.command == 'chains':
         print(chain_report(args.base, args.new, args.target, args.family))
+    elif args.command == 'hearts':
+        print(hearts_report(args.sets, args.family))
     else:
-        combine(args.policy, args.beam, args.weights, args.name, args.run, args.models_dir)
+        combine(args.policy, args.beam, args.weights, args.name, args.run, args.models_dir, args.objectives)
     return 0
 
 

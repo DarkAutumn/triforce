@@ -14,6 +14,7 @@ from triforce.actions import CARDINALS, DIRECTION_INDEX
 from triforce.nets.base import factored_joint
 from triforce.nets.beamshift import BEAMS, BeamShift
 from triforce.nets.hitshift import HitShift
+from triforce.observation import OBJECTIVE_FEATURES
 
 from .networks import random_network
 from .test_hitshift import MASK, _batch, _hitnet
@@ -59,6 +60,28 @@ def test_weight_zero_is_the_policy_and_the_head_never_trains():
     for name in ('kind', 'direction', 'duration', 'value'):
         assert torch.equal(getattr(alone, name), getattr(combined, name)), name
     assert not any(p.requires_grad for p in network.beam.parameters())
+
+
+def test_the_fight_gate_shifts_fights_alone_and_saves(tmp_path):
+    """``objectives=['FIGHT']``: rows whose objective is a fight get the shift, rows that cross (MOVE) play the policy."""
+    policy, beamnet = random_network(11, sharpen=3.0), _hitnet(12)
+    network = BeamShift.of(policy, beamnet, 8.0, ['FIGHT']).eval()
+    obs = _batch(6, seed=4)
+    obs[MASK][:, BEAMS] = True
+    kind = torch.zeros(6, len(OBJECTIVE_FEATURES))
+    kind[:3, OBJECTIVE_FEATURES.index('objective_FIGHT')] = 1.0
+    kind[3:, OBJECTIVE_FEATURES.index('objective_MOVE')] = 1.0
+    obs['objective'] = kind
+    with torch.no_grad():
+        f = torch.exp(factored_joint(network.heads(obs)[0], obs[MASK])).view(6, 11, 8, 4)
+        p = factored_joint(policy.heads(obs)[0], obs[MASK])
+        beam = beamnet.hit_logits(beamnet.trunk(obs))
+    q = _expected(p, beam, 8.0)
+    assert torch.allclose(f[:3].sum((2, 3)), q[:3].sum((2, 3)), atol=1e-5)
+    assert torch.allclose(f[3:].sum((2, 3)), torch.exp(p[3:]).view(3, 11, 32).sum(-1), atol=1e-5)
+    path = registry.save_checkpoint('wizzrobe', 'beam-fight-w8', network, root=tmp_path)
+    loaded = registry.load_model(path, check_schema=False)[0].eval()
+    assert loaded.config['objectives'] == ['FIGHT'] and loaded.gate == network.gate
 
 
 def test_a_hitshift_nests_as_the_policy_and_saves_as_a_run(tmp_path):
