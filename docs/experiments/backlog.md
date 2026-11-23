@@ -95,20 +95,20 @@ built):
 What the baseline leaves open, in the order it costs the route (runs lost per 1000 entering the room; nothing has
 been retrained on the corrected order):
 
-- [ ] **The leg from Level 7 to Level 6, 22.4%:** ow-lynel at 0x50 (644: leaves N into 0x40, its `d2first` way,
-  and bounces between 0x40 and 0x50) and 0x60 (320: back E instead of the wrap W). Training on the corrected order
-  (explorer tracks made in round 36).
-- [ ] **Out of Level 6 to Level 8, 32.0%:** ow-lynel at 0x22 (680) walks back into Level 6 instead of turning up
-  and playing (180 then die to 6:0x78's Wizzrobes).
+- [x] **The leg from Level 7 to Level 6, 22.4%** (2.0.0.11: `ow-lynel@d3first` `r38rw-lynel`, 98.7% of 1000):
+  ow-lynel at 0x50 (644: leaves N into 0x40, its `d2first` way, and bounces between 0x40 and 0x50) and 0x60 (320:
+  back E instead of the wrap W).
+- [x] **Out of Level 6 to Level 8, 32.0%** (2.0.0.12: ow-lynel's `late.d3first` run `r38d-lynel-late-s1`, 33.3 ->
+  100.0% of 1000): ow-lynel at 0x22 (680) walked back into Level 6 instead of turning up and playing.
 - [ ] **Dungeon 7 at 9 containers and 2 bombs, 13.1%:** goriya at 7:0x1b (689, against 149 at 11 with the bag),
   7:0x1a 116, 7:0x19 70; boss-digdogger 7:0x1c 161.
 - [ ] **The leg from Level 5 to Level 7, 78.9%** after the dock change (0x55 still loses 85, 58 of them rafted
   back to the bounce limit).
 - [ ] **ow-leever at 0x0b's whirlwind out of Level 5** (86: two plays facing S now; 62 runs bounce between 0x0b and
   0x1b).
-- [ ] **The whirlwinds at 0x0b and 0x22 could be played by the engine as the docks are** (a macro from the step
-  that plays the search's sequence): it would take the network out of ow-leever's 86 and ow-lynel's 680 (not
-  measured: what the networks do before the step stays theirs).
+- [ ] **The whirlwinds at 0x0b and 0x22 played by the engine as the docks are** DECIDED (the owner, Nov 23): yes,
+  in the fresh generation, as fixed button sequences masked by Link's position only; the network chooses the moment
+  and does its own dodging; the dock warp loses its two monster give-ways then (below, "The fresh generation").
 - [ ] **Cheated wall bombs, 0.76 a run in Dungeon 7** (7:0x1a 0.75), the largest count on a dungeon the reorder
   changed (`d1`'s 1.00 at 1:0x53 is in a segment it did not change).
 - [x] **Bombs as a weapon only in dungeon rooms the route must clear** (landed 2.0.0.6, round37.md "The owner's
@@ -413,6 +413,18 @@ thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
   `d2first`"): the yardstick's rooms are chosen from these lists.
 - The unused `grant:` vocabulary; one like-like run for both routes; the per-route tables never refitted;
   `select-checkpoint --segment` on `d3first`: tool and data debts, picked up when the code they touch is touched.
+- **From the lead's todo, Nov 23 (rewritten that day; these are not in the new short list):**
+  - The one network's Dungeon 4 (57.0% against the team's 68.4%; round38-one.md): the trap room 4:0x11 stuck 79 a
+    thousand with the hit head at weight 8 (none without it: weights 4 and 16 are built, `models/r38c/d2b-all-w{4,16}`
+    in the r38-one worktree); Gleeok 4:0x13 loses 367 a thousand against 282 (a DAgger round with the team's Gleeok
+    as the teacher). Superseded if the fresh generation's network does not show them.
+  - A full-route record of 1000 runs for each landed team from 2.0.0.12 on (`r40-2012-1k-full`), beside the 250 test.
+  - Power on against the start state: no difference in 100 + 100 runs; 1000 each would settle it.
+  - Tool debts found Nov 23: `python -m triforce.explore --variant` with a yaml path loses its tracks; `eval-batch`'s
+    summary step failed after a four-segment batch (Key39b, not looked into); replays with the decision streams are
+    several times larger (measure after the sparse encoding; `/backup` keeps 2 TB free).
+  - The plain ways the first-quest draft left open (the Lost Woods maze in the objective, the overworld ladder clip):
+    dropped, the program plays clips on only.
 
 ## Questions for the owner (next check-in)
 
