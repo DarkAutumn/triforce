@@ -478,13 +478,17 @@ impl<S> Executor<S> {
             };
             let control_frames = (m.frame - start) as u32;
             if interrupt != Some(Interrupt::GameOver) && !is_game_over_mode(m.read(ADDR_MODE)) {
+                let walking = m.frame;
                 self.skip_uncontrollable(m, Some(location), capture)?;
                 // Every action but a MOVE keeps one frame of no buttons after it (round 40, measured): only after a
                 // MOVE does the frame cost anything (Link standing still between two steps), and without it after
                 // the others the docks broke: a WAIT cut short by the raft's landing at 0x55 and 0x3f, then MOVE N on
                 // the next frame, sails the raft back (post-d5 0x55: 34 runs lost against 5; post-d7 0x3f: 159
-                // against 3, also with a CLIP's frame kept).
-                if action.kind != ActionKind::Move {
+                // against 3, also with a CLIP's frame kept). A MOVE that ended in a transition (a scroll, stairs,
+                // a cave, a stun) keeps it too: the next decision comes where it always did, out of play's own init
+                // (asm:IsUpdatingMode; without it the first decision out of Level 5 at 0x0b came while the game read
+                // no input and its RECORDER's sub-screen never opened).
+                if action.kind != ActionKind::Move || m.frame != walking {
                     self.step(m, 0, 1);
                 }
             }
@@ -536,7 +540,12 @@ impl<S> Executor<S> {
         let pushing_stone = is_move
             && action.direction == Direction::N
             && (state.is_secret_push_direction(Direction::N) || state.secret_push_sliding());
-        let pushing = is_move && (state.is_push_block_direction(action.direction) || pushing_stone);
+        // Round 40: a MOVE into the route's secret Armos holds its press too. The game wakes it from the tile Link's
+        // walk collides with (asm:Spawn_CheckTouchedArmosOrGravestone reads ObjCollidedTile), and a one-frame press
+        // (the wall's single frame) lands on a frame Link's walk does not step only by its phase: with the closing
+        // frame gone the d7 probe's phase moved and the Armos never woke.
+        let armos = is_move && state.is_secret_armos_direction(action.direction);
+        let pushing = is_move && (state.is_push_block_direction(action.direction) || pushing_stone || armos);
         let mut first = true;
         // Round 36: on a dock-warp step a MOVE along the land below the dock's row ends on the clip's column (the
         // water spot nearest the dock, `crate::clips::dock_spot`), where the session offers the clip.
@@ -931,6 +940,13 @@ impl<S> Executor<S> {
         let start = m.frame;
         let active = submenu::active_state(m.read(ADDR_LEVEL));
         self.step(m, buttons::START, 1);
+        // A lag frame reads no input (asm:Nmi_Isr@CheckInput keeps the last read): a one-frame Start can go unread,
+        // as the attacks' press can (`run_attack` holds it a second frame). Round 40: with the closing frame gone a
+        // BOOMERANG's single Start went unread in Manhandla's busy room (zcore_session; a lag frame, inferred) and the
+        // sub-screen never opened.
+        if m.read(submenu::ADDR_SUBMENU_STATE) == 0 {
+            self.step(m, buttons::START, 1);
+        }
         if m.read(submenu::ADDR_SUBMENU_STATE) != 0 {
             for _ in 0..submenu::MAX_OPEN_FRAMES {
                 if m.read(submenu::ADDR_SUBMENU_STATE) == active {
@@ -1406,8 +1422,9 @@ pub(crate) mod tests {
             (1, 2, "BOMB E", turn),
             (7, 2, "SWORD S", vec![buttons::DOWN | buttons::A]),
             (7, 4, "SWORD S", vec![buttons::A]),
-            // Not the selected B item: the sub-screen first (this script never opens it, so nothing follows).
-            (7, 2, "BOMB W", vec![buttons::START, 0]),
+            // Not the selected B item: the sub-screen first, Start held a second frame when the first went unread
+            // (this script never opens it, so nothing follows).
+            (7, 2, "BOMB W", vec![buttons::START, buttons::START, 0]),
         ] {
             let mut ram = playable();
             ram[Var::SelectedItem.addr() as usize] = selected;
