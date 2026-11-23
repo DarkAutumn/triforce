@@ -1,0 +1,28 @@
+# ow-start@d3first (round 38, the owner, Nov 22: "A fresh training run of 'North, west, sword, south, west' would
+# avoid the back and forth confusion of the model"): the family's yaml on d3first's states only. The family's run
+# (r74-leg2) learned 0:0x77 on d2first's states, where Link leaves the sword cave E along its row and N out of the
+# room, the very walk the opening's loop at the cave's mouth repeats without the sword; d3first leaves 0x77 W. Trained
+# fresh (no warm start) on d3first's ow-start rooms: 0x77 (the start: N, W, into the cave; the cave: the sword, S;
+# out of the cave: W), 0x0f and 0x2f (their caves, as the family's yaml). The lab reads this file for the key
+# f"{family}@d3first" (lab.collect.task_yaml).
+name: ow-start
+rooms: ['(0, 0x77)', '(0, 0x77, cave)', '(0, 0x2f)', '(0, 0x2f, cave)', '(0, 0x0f)', '(0, 0x0f, cave)']
+start_states: ['start', '0_77*_[0-9]', '0_2f*_[0-9]', '0_0f*_[0-9]']
+state_routes: [d3first]
+success: [exit-correct]
+reward_profile: default
+reward: {pbrs: true}
+obs: {objective: true, target: true}
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}
+items: {bombs: tenth}
+clips: true
+curriculum: {enabled: true}
+one_room: true
+max_steps: 600
+warm_start: null
+notes: >-
+  d3first's rooms without enemies where Link walks to a spot (the family's yaml, specialists/ow-start.yaml, has the
+  rooms' story): the start screen 0x77 from the game start into the sword cave (N, then W to the cave's column, N in),
+  the cave (the sword, then S out), 0x77 out of the cave W toward Level 3; 0x2f from S into the take-any cave, the
+  heart container, out and S; 0x0f from S into its secret cave, the 100 rupees, out and S. 0x1c and 0x1b are
+  d2first's only.
