@@ -29,7 +29,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
-from . import jobqueue
+from . import build, jobqueue
 
 JOB_ID_ENV = 'TRIFORCE_JOB_ID'              # the job this process belongs to (set by ``triforce job``)
 JOB_LABEL_ENV = 'TRIFORCE_JOB_LABEL'        # its name, ``<agent>-<task>-<subtask>``: the log folders'
@@ -77,9 +77,15 @@ def queue_command(argv: Optional[list] = None) -> str:
 
 def announce(kind: str, amounts: Optional[dict] = None, name: Optional[str] = None):
     """The start of a queued entry point, once its arguments are checked and before it loads, builds or creates
-    anything: in the wrapper's dry call (``$TRIFORCE_JOB_ESTIMATE``) writes ``{kind, work, name}`` there and exits 0;
-    inside a job (``$TRIFORCE_JOB_ID``) or at a terminal returns; otherwise (``ENFORCE``) refuses with the
-    ``triforce job run`` form of the command (exit 2)."""
+    anything: refuses (exit 2) a module that is not the build of this checkout's sources (``build.problem``, round 40);
+    in the wrapper's dry call (``$TRIFORCE_JOB_ESTIMATE``) writes ``{kind, work, name}`` there and exits 0; inside a
+    job (``$TRIFORCE_JOB_ID``) or at a terminal returns; otherwise (``ENFORCE``) refuses with the ``triforce job run``
+    form of the command (exit 2)."""
+    stale = build.problem()
+    if stale:
+        print(f"triforce: {Path(sys.argv[0]).name}: the built module is not this checkout's build: {stale}; rebuild "
+              f"with `triforce job build --agent A --task T`", file=sys.stderr, flush=True)
+        raise SystemExit(2)
     path = os.environ.get(JOB_ESTIMATE_ENV)
     if path:
         Path(path).write_text(json.dumps({'kind': kind, 'work': dict(amounts or {}), 'name': name}),

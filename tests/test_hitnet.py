@@ -12,6 +12,7 @@ from triforce.evaluate import evaluate_specialist
 from triforce.lab import train
 from triforce.lab.auxiliary import matched_precision
 
+from .conftest import start_task
 from .networks import native_spec
 
 SMALL = {'d_model': 32, 'layers': 1, 'link_out': 32, 'hidden_dim': 32, 'depth': 1, 'hit_dim': 32, 'hit_depth': 1}
@@ -87,7 +88,8 @@ def test_matched_precision():
 
 
 def test_a_hitnet_run_trains_its_head_and_plays_without_trials(states_dir, tmp_path):
-    run = train.main(['--name', 'hitnet', '--run-id', 'h1', '--families', 'ow-start', '--parallel', '2',
+    run = train.main(['--name', 'hitnet', '--run-id', 'h1', '--families', f'ow-start={start_task()}', '--parallel',
+                      '2',
                       '--steps-per-update', '64', '--device', 'cpu', '--models-dir', str(tmp_path), '--seed', '5',
                       '--iterations', '2', '--arch', 'hitnet', '--arch-config',
                       json.dumps({**SMALL, 'feed': True}), '--aux', 'hit=hit:0.5', '--try-others', '2:0.5'])

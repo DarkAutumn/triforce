@@ -329,7 +329,8 @@ def main(argv=None) -> Path:
     run_id = args.run_id or registry.new_run_id()
     out_dir = registry.run_dir(args.name, run_id, root)
     shares = {k: float(w) for k, _, w in (s.partition('=') for s in args.shares)}
-    families = parse_families(args.families, args.parallel, shares, args.state_route)
+    families = parse_families(args.families, args.parallel, shares, args.state_route,
+                              curriculum=not args.no_curriculum, states_dir=args.states_dir)
     keys = [f.key for f in families]
     steps_per_env = max(1, args.steps_per_update // args.parallel)
     total = args.iterations * steps_per_env * args.parallel
@@ -376,7 +377,8 @@ def main(argv=None) -> Path:
         curricula = {}
         for family in families:
             spec, _ = curriculum_spec(argparse.Namespace(no_curriculum=args.no_curriculum, curriculum=None,
-                                                         curriculum_fraction=None, curriculum_threshold=None),
+                                                         curriculum_fraction=None, curriculum_threshold=None,
+                                                         curriculum_unrecorded=None),
                                       family.config, out_dir / 'tasks' / family.key)
             curricula[family.key] = spec
         (out_dir / 'tasks').mkdir(exist_ok=True)

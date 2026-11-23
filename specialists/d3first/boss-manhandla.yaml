@@ -38,6 +38,8 @@ items:
   bombs: free
 curriculum:
   enabled: true
+  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
+  - d3first_8_6es_[0-9]
 harvested_fraction: 0.25
 one_room: true
 max_steps: 1000

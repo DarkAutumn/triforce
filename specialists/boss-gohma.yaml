@@ -7,7 +7,10 @@ reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8), as b
 obs: {objective: true, target: true}       # schema 2
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # as boss-digdogger (round 25)
 items: {bombs: tenth, arrows: true}        # round 27: the only family with arrows; ARROW is offered facing N while Gohma lives and Link holds more rupees than the route's reserve (1 here)
-curriculum: {enabled: true}             # trajectories/boss-gohma (Go-Explore paths per start state)
+curriculum:                              # trajectories/boss-gohma (Go-Explore paths per start state)
+  enabled: true
+  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
+  - d3first_6_1cs_[0-9]
 one_room: true
 max_steps: 900
 warm_start: boss-digdogger                 # round 27: a first training starts from boss-digdogger's promoted run (nothing transfers zero-shot: 0 of 20 with five boss families)

@@ -10,7 +10,7 @@ from triforce.actions import MASK_SIZE, Action, ActionMask
 from triforce.metrics import read_jsonl
 from triforce.model import MASK_KEY
 
-from .conftest import REPO_STATES_DIR, require_state
+from .conftest import REPO_STATES_DIR, require_state, start_task
 from .networks import scripted
 
 
@@ -128,7 +128,7 @@ def test_train_refreshes_the_best_runs_every_best_every_iterations(states_dir, t
         empty = torch.zeros(0, dtype=torch.bool)
         return best_of_n.BestRuns({}, empty, torch.zeros(0, 3, dtype=torch.int64), 6, len(collections), 0, 0, 0)
     monkeypatch.setattr(train, 'collect_best', collect_best)
-    run = train.main(['--specialist', 'ow-start', '--states-dir', str(states_dir), '--models-dir', str(tmp_path),
+    run = train.main(['--specialist', start_task(), '--states-dir', str(states_dir), '--models-dir', str(tmp_path),
                       '--parallel', '2', '--steps-per-update', '16', '--iterations', '4', '--no-curriculum',
                       '--seed', '3', '--best-of-n', '3', '--best-keep', '1', '--best-every', '2',
                       '--best-parallel', '2', '--device', 'cpu'])

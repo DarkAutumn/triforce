@@ -45,6 +45,7 @@ import time
 from pathlib import Path
 from typing import Callable, Optional, Union
 
+from . import build
 from . import jobqueue as q
 from . import jobs
 from .jobs import JOB_ESTIMATE_ENV, JOB_ID_ENV, JOB_LABEL_ENV
@@ -562,9 +563,9 @@ def build_parser() -> argparse.ArgumentParser:
                         help="how long the race may run: its estimate (10m or less: the express place)")
     golden.add_argument('--out', default=None, help="the replays' folder (default runs/golden/<yymmdd-hhmmss>)")
     golden.add_argument('--count', type=int, default=1, help="golden paths raced, each from its own seeds")
-    build = sub.add_parser('build', help="maturin develop --release in this checkout (tools lane)")
-    _common(build, subtask=False, desc=False)
-    build.add_argument('--timeout', type=parse_duration, default=None)
+    builder = sub.add_parser('build', help="maturin develop --release in this checkout (tools lane), then its stamp")
+    _common(builder, subtask=False, desc=False)
+    builder.add_argument('--timeout', type=parse_duration, default=None)
     test = sub.add_parser('test', help="test suites in this checkout, run side by side (tools lane)")
     test.add_argument('suites', nargs='+', choices=(*SUITES, 'all'), metavar='SUITE',
                       help=f"one or more of {', '.join(SUITES)}; all: the four")
@@ -751,10 +752,13 @@ def cmd_golden(args, extra: list[str]) -> int:
                    on_timeout=lambda: f"no golden path in {minutes:g} minutes", after=archive)
 
 
-def build_step(root: Path, extra: list[str]) -> Step:
+def build_steps(root: Path, extra: list[str]) -> list[Step]:
+    """``maturin develop --release`` in ``root``, then the module's stamp (``triforce.build``: the sources it was
+    built from, which the tools check before they start)."""
     maturin = root / '.venv' / 'bin' / 'maturin'
-    return Step('build', [str(maturin), 'develop', '--release', *extra], root,
-                {'CARGO_BUILD_JOBS': str(CARGO_JOBS), 'VIRTUAL_ENV': str(root / '.venv')})
+    return [Step('build', [str(maturin), 'develop', '--release', *extra], root,
+                 {'CARGO_BUILD_JOBS': str(CARGO_JOBS), 'VIRTUAL_ENV': str(root / '.venv')}),
+            Step('stamp', lambda: build.write_stamp(root), root)]
 
 
 def test_steps(root: Path, suites: list[str], extra: list[str]) -> list[Step]:
@@ -764,18 +768,16 @@ def test_steps(root: Path, suites: list[str], extra: list[str]) -> list[Step]:
     workspace's test programs side by side, ``triforce.cargo_tests``, which reports ``Rust tests`` done of the
     listed total).  Every pytest run and the Rust suite write a timing log into the logs folder
     (``triforce.testlog``; ``triforce test-times`` reads them).  They run at the same time (``together``) and none
-    is ``required``: each
-    runs whatever another did.  A worktree without its own ``models`` reads the main checkout's
-    (``$TRIFORCE_MODELS_DIR``; a few tests read the promoted team), never linked in."""
+    is ``required``: each runs whatever another did.  The suites read the main checkout's ``models``
+    (``$TRIFORCE_MODELS_DIR``; a few tests read the promoted team), whatever a worktree's own holds (round 40: a
+    partial one gave the tests a partial team); a ``$TRIFORCE_MODELS_DIR`` already set is kept."""
     python = checkout_python(root)
     env = {'CARGO_BUILD_JOBS': str(CARGO_JOBS)}
-    if not (root / 'models').exists() and not os.environ.get('TRIFORCE_MODELS_DIR'):
-        try:
-            models = main_checkout(root) / 'models'
-        except (OSError, subprocess.SubprocessError):
-            models = None
-        if models is not None and models.is_dir():
-            env['TRIFORCE_MODELS_DIR'] = str(models)
+    if not os.environ.get('TRIFORCE_MODELS_DIR'):
+        models = main_checkout(root) / 'models'
+        if not models.is_dir():
+            raise JobError(f"the test suites read the main checkout's team and {models} is not a folder")
+        env['TRIFORCE_MODELS_DIR'] = str(models)
     # The runner runs every test program whatever another did (cargo alone stops at the first failing one, Nov 23:
     # one failing program hid the state of thirty others for a 25-minute run).
     cargo = [*CARGO_TEST, *extra]
@@ -799,10 +801,10 @@ def _tools_root() -> Path:
 def cmd_build(args, extra: list[str]) -> int:
     check_command(extra, options=True)
     root = _tools_root()
-    step = build_step(root, extra)
-    fields = _fields(args, 'build', q.TOOLS_LANE, 'build', step.command, root, TOOL_NICE, None,
+    steps = build_steps(root, extra)
+    fields = _fields(args, 'build', q.TOOLS_LANE, 'build', steps[0].command, root, TOOL_NICE, None,
                      f"Build of {root.name}.", timeout=args.timeout)
-    return run_job(fields, [step], args.timeout)
+    return run_job(fields, steps, args.timeout)
 
 
 def cmd_test(args, extra: list[str]) -> int:
@@ -811,10 +813,11 @@ def cmd_test(args, extra: list[str]) -> int:
     if extra and len(suites) > 1:
         raise JobError(f"options after -- go to one suite: name one (these are {len(suites)}: {' '.join(suites)})")
     root = _tools_root()
-    steps = ([build_step(root, [])] if args.build else []) + test_steps(root, suites, extra)
+    steps = (build_steps(root, []) if args.build else []) + test_steps(root, suites, extra)
     named = 'all' if suites == list(SUITES) else '+'.join(suites)
     subtask = f"{named}{'+build' if args.build else ''}"
-    fields = _fields(args, 'test', q.TOOLS_LANE, 'test', [part for step in steps for part in (step.command + [';'])][:-1],
+    fields = _fields(args, 'test', q.TOOLS_LANE, 'test', [part for step in steps if not callable(step.command)
+                                                         for part in (step.command + [';'])][:-1],
                      root, TOOL_NICE, subtask, f"{'Build, then the ' if args.build else 'The '}"
                      f"{', '.join(suites)} tests of {root.name}.", timeout=args.timeout)
     return run_job(fields, steps, args.timeout)
@@ -849,7 +852,7 @@ def cmd_setup(args) -> int:
              Step('venv', ['uv', 'venv', '--python', '3.12', str(target / '.venv')], main),
              Step('install', ['uv', 'pip', 'install', '--python', venv_python, '-e', '.[dev]', 'maturin'], target,
                   {'CARGO_BUILD_JOBS': str(CARGO_JOBS)}),
-             build_step(target, [])]
+             *build_steps(target, [])]
     fields = _fields(args, 'setup', q.TOOLS_LANE, 'setup', ['triforce', 'job', 'setup', args.branch, '--from',
                                                            args.start], main, TOOL_NICE, args.branch,
                      f"Worktree {target.name} from {args.start}: links, venv and build.")
