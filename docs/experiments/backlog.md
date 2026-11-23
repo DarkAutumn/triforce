@@ -423,6 +423,13 @@ thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
   - Tool debts found Nov 23: `python -m triforce.explore --variant` with a yaml path loses its tracks; `eval-batch`'s
     summary step failed after a four-segment batch (Key39b, not looked into); replays with the decision streams are
     several times larger (measure after the sparse encoding; `/backup` keeps 2 TB free).
+  - **A front door for jobs** (the owner's question, Nov 23: should the queue be an API rather than environment
+    variables kept on scout's honour; the lead's answer: a thin front door, not a service). `triforce job submit NAME
+    [--express] -- <tool and its arguments>` validates the name (`<work>-<subject>-<what>`), starts the tool detached,
+    prints the job's id and returns; `triforce job list | status ID | wait ID | cancel ID` (cancel only the caller's
+    own). A tool started directly without a name and without a terminal is refused, so the rules are enforced at
+    the door. The registry files stay the format (old trees and running jobs keep working); no daemon. Not before
+    the backtest is done (it ports `jobs.py` into 26 trees). Proposed, not started: the owner decides.
   - The plain ways the first-quest draft left open (the Lost Woods maze in the objective, the overworld ladder clip):
     dropped, the program plays clips on only.
 
