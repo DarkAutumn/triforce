@@ -337,9 +337,10 @@ def main(argv=None):
                    'eval-batch': ('triforce.eval_batch', 'main'), 'room-stats': ('triforce.room_stats', 'main'),
                    'convert-model': ('triforce.convert', 'main'),
                    'select-checkpoint': ('triforce.select_checkpoint', 'main'),
-                   'test-times': ('triforce.testlog', 'report_main'), 'stats': ('triforce.run_stats', 'main')}
-    # `triforce [--models-dir DIR] train|run|play|evaluate|eval-batch|room-stats|convert-model|select-checkpoint|test-times|stats ...`
-    # forwards the rest to the module's own CLI.
+                   'test-times': ('triforce.testlog', 'report_main'), 'stats': ('triforce.run_stats', 'main'),
+                   'lineage': ('triforce.lineage', 'main')}
+    # `triforce [--models-dir DIR] train|run|play|evaluate|eval-batch|room-stats|convert-model|select-checkpoint|
+    # test-times|stats|lineage ...` forwards the rest to the module's own CLI.
     models_dir, rest = None, argv
     while rest:
         if rest[0] == '--models-dir' and len(rest) > 1:
@@ -382,6 +383,8 @@ def main(argv=None):
                                       "test's median and worst, the slowest, what grew (triforce.testlog)")
     sub.add_parser('stats', help="run statistics: list, show, compare (paired by seed), ingest (triforce.run_stats)")
     sub.add_parser('list', help="specialists, their promoted run and run count")
+    sub.add_parser('lineage', help="python -m triforce.lineage [--route R] (each promoted pointer's chain of "
+                                   "parents back to its origin)")
 
     promote = sub.add_parser('promote', help="mark a run as the specialist's promoted model")
     promote.add_argument('specialist')

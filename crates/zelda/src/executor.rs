@@ -14,6 +14,7 @@ use crate::room_entry::is_pre_entry;
 use crate::tables::{RAM_SIZE, SRAM_OFFSET, TILE_LAYOUT};
 use crate::submenu;
 use crate::vars::Var;
+use crate::whirlwind::Warp;
 use std::fmt;
 
 pub const MODE_DUNGEON_TRANSITION: u8 = 2;
@@ -382,9 +383,10 @@ pub struct Executor<S> {
     /// Dungeon doorways a MOVE may not walk into ([`Direction::value`] bits; round 27, kept by `Session`: the
     /// route's `keep_out` doorways the objective does not leave through): a MOVE toward one ends at its mouth.
     pub vetoed_doorways: u8,
-    /// The level of the dock warp the route plays here (round 36, kept by `Session`: `crate::Session::set_dock_warp`):
-    /// RECORDER played in the water on a dock's row plays the whole sequence ([`Executor::run_dock_warp`]).
-    pub dock_warp: Option<u8>,
+    /// The whirlwind step the engine plays here (round 36's dock warp, round 40's whirlwind macro; kept by `Session`:
+    /// `crate::Session::set_warp`): RECORDER played in the water on a dock's row, or anywhere the whirlwind macro is
+    /// offered, plays the whole sequence ([`Executor::run_warp`]).
+    pub warp: Option<Warp>,
     /// The latched buttons (A, B, Select, Start) the game read as held when this action began
     /// ([`latched_held`]): the action's first frame that presses one of them is preceded by one frame of no buttons.
     release: u8,
@@ -412,7 +414,7 @@ impl<S> Default for Executor<S> {
             last_pre_entry: None,
             blocks: None,
             vetoed_doorways: 0,
-            dock_warp: None,
+            warp: None,
             release: 0,
         }
     }
@@ -536,8 +538,8 @@ impl<S> Executor<S> {
         let mut first = true;
         // Round 36: on a dock-warp step a MOVE along the land below the dock's row ends on the clip's column (the
         // water spot nearest the dock, `crate::clips::dock_spot`), where the session offers the clip.
-        let dock_column = match (self.dock_warp, action.direction) {
-            (Some(_), Direction::W | Direction::E) if is_move => crate::clips::dock_spot(state.room()),
+        let dock_column = match (self.warp, action.direction) {
+            (Some(Warp::Dock { .. }), Direction::W | Direction::E) if is_move => crate::clips::dock_spot(state.room()),
             _ => None,
         };
         // Where a MOVE ends without another frame of its direction (round 27): on a grid point facing a gravestone
@@ -755,7 +757,17 @@ impl<S> Executor<S> {
     /// mask doesn't offer it) presses nothing. Returns the interrupt that cut the turn short (a hit, a room change,
     /// game over) and the paused or frozen frames.
     fn run_attack<N: Nes>(&mut self, m: &mut Machine<N>, action: &Action, state: &GameView) -> (Option<Interrupt>, u32) {
-        let (kind, d) = (action.kind, action.direction);
+        let (kind, mut d) = (action.kind, action.direction);
+        // Round 40: the whirlwind macro's RECORDER first turns Link to the facing that starts the sequence.
+        let whirlwind = match self.warp {
+            Some(Warp::Whirlwind { level }) if kind == ActionKind::Recorder => {
+                crate::whirlwind::macro_facing(state, level).map(|facing| (level, facing))
+            }
+            _ => None,
+        };
+        if let Some((_, facing)) = whirlwind {
+            d = facing;
+        }
         let Some(turn_frames) = attack::plan(state, kind, d) else {
             return (None, 0);
         };
@@ -811,10 +823,14 @@ impl<S> Executor<S> {
             // still running had no play update (asm:Mode5Play_Update): those are the freeze's frames; the frame
             // that counts it to 0 plays again.
             menu_frames += self.play_recorder(m, press);
-            if let Some(level) = self.dock_warp
+            if let Some((level, _)) = whirlwind {
+                let (interrupt, frozen) = self.run_warp(m, level, true);
+                return (interrupt, menu_frames + frozen);
+            }
+            if let Some(Warp::Dock { level, .. }) = self.warp
                 && crate::clips::on_dock_spot(state)
             {
-                let (interrupt, frozen) = self.run_dock_warp(m, level);
+                let (interrupt, frozen) = self.run_warp(m, level, false);
                 return (interrupt, menu_frames + frozen);
             }
             return (None, menu_frames);
@@ -852,14 +868,15 @@ impl<S> Executor<S> {
         frozen
     }
 
-    /// The dock warp after its first play (round 36, docs/routes/d3first.md "The wrong warps"), Link in the water on
-    /// the dock's row: the plays that leave the game's index on `level` with the whirlwind out
-    /// ([`crate::whirlwind::plays`], recomputed after each), each facing N for a step up or W for a step down (the
-    /// water blocks both: the one-frame turn moves him not; S and E would), on the first free frame after the
-    /// freeze; then nothing pressed until the whirlwind picks him up (`WhirlwindTeleportingState` 1), goes by (a hit
-    /// left him invincible or off the row), or a hit, room change or game over cuts it short. Returns that interrupt
-    /// and the frozen frames.
-    fn run_dock_warp<N: Nes>(&mut self, m: &mut Machine<N>, level: u8) -> (Option<Interrupt>, u32) {
+    /// A whirlwind step after its first play: the plays that leave the game's index on `level` with the whirlwind out
+    /// ([`crate::whirlwind::plays`], recomputed after each), each on the first free frame after the freeze; then
+    /// nothing pressed until the whirlwind picks Link up (`WhirlwindTeleportingState` 1), goes by (a hit left him
+    /// invincible or off the row), or a hit, room change or game over cuts it short. Returns that interrupt and the
+    /// frozen frames. In the water on a dock's row (round 36's dock warp, docs/routes/d3first.md "The wrong warps",
+    /// `on_land` false) each play faces N for a step up or W for a step down (the water blocks both: the one-frame
+    /// turn moves him not; S and E would). On land (round 40's whirlwind macro) a play Link's facing makes needs no
+    /// turn, and a turn is E for a step up or W for a step down (along the whirlwind's row).
+    fn run_warp<N: Nes>(&mut self, m: &mut Machine<N>, level: u8, on_land: bool) -> (Option<Interrupt>, u32) {
         use crate::whirlwind::{FACING_UP, LEVEL_INDEX, OBJ_WHIRLWIND, SUMMONED, TELEPORTING, plays};
         let mut frozen = 0;
         let row = m.read(OBJ_Y);
@@ -871,8 +888,16 @@ impl<S> Executor<S> {
             if n == 0 || m.read(OBJ_Y) != row {
                 break;
             }
-            let face = if facings & FACING_UP != 0 { Direction::N } else { Direction::W };
-            if m.read(ADDR_LINK_DIRECTION) != face.value() {
+            let facing = m.read(ADDR_LINK_DIRECTION);
+            let face = match (on_land, facings & FACING_UP != 0) {
+                (true, _) if facings & facing != 0 => None,
+                (true, true) => Some(Direction::E),
+                (false, true) => Some(Direction::N),
+                (_, false) => Some(Direction::W),
+            };
+            if let Some(face) = face
+                && facing != face.value()
+            {
                 self.step(m, direction_buttons(face), 1);
             }
             frozen += self.play_recorder(m, buttons::B);

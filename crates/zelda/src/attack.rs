@@ -223,7 +223,8 @@ fn faces_into_room(s: &Link) -> bool {
 /// The next input of an attack of `kind` in `d` for Link in state `s` (not halted, in his normal state). FOOD and
 /// CANDLE are placed ahead of Link like a bomb (asm:Link_PlaceWeaponAhead): face `d`, then B. RECORDER takes no
 /// direction: B as Link faces, where his facing's border band lets B through (no turn: in a dungeon room's floor
-/// the band never drops B, only in a doorway).
+/// the band never drops B, only in a doorway); given one (round 40, the whirlwind macro's first play,
+/// `crate::whirlwind::macro_facing`), it turns to it first, as FOOD.
 pub fn next(kind: ActionKind, d: Direction, s: &Link) -> Next {
     let b_item = matches!(
         kind,
@@ -260,9 +261,10 @@ pub fn next(kind: ActionKind, d: Direction, s: &Link) -> Next {
                 return Next::Press(buttons::B);
             }
         }
-        ActionKind::Recorder => {
+        ActionKind::Recorder if want == 0 || facing == want => {
             return if survives(facing) { Next::Press(buttons::B) } else { Next::Impossible };
         }
+        ActionKind::Recorder => {}
         ActionKind::Move | ActionKind::Wait | ActionKind::Clip => return Next::Impossible,
     }
     let target = facing_for(d);
