@@ -130,7 +130,13 @@ def test_runs250_plays_from_power_on_in_the_express_place(tmp_path, monkeypatch)
         returncode = 2
         stdout = 'abc123\n'                              # git rev-parse HEAD
 
+    class Help:
+        returncode = 0
+        stdout = '--clips {on,off} --events EVENTS --express'   # eval-chain --help (chain_options)
+
     def fake_run(command, **_kw):
+        if '--help' in command:
+            return Help()
         if 'eval-chain' in command:
             seen['command'] = command
         return Done()
@@ -142,3 +148,20 @@ def test_runs250_plays_from_power_on_in_the_express_place(tmp_path, monkeypatch)
     assert '--no-wait' not in command and command[command.index('--models-dir') + 1] == str(out / 'models')
     assert command.index('--models-dir') < command.index('eval-chain')     # the triforce command's own option
     assert json.loads((out / 'timing.json').read_text())['commit'] == 'abc123'    # the code that played
+
+
+def test_an_old_versions_runs_read_with_its_own_route(tmp_path):
+    """The back-test: the route's steps come from OUT_DIR/route.json (the playing code's), its triforce order from
+    them, and room records without ``step`` (before 1.4.1.0) count it from the exits taken correctly."""
+    d2first = [{'level': 0, 'exit': 'n'}, {'level': 2, 'exit': 'triforce'}, {'level': 1, 'exit': 'triforce'}]
+    (tmp_path / 'route.json').write_text(json.dumps({'route': 'd2first', 'steps': d2first}))
+    rooms = [{k: v for k, v in room(None, level, name, outcome).items() if k != 'step'}
+             for level, name, outcome in ((0, '0x77', 'exit-correct'), (2, '0x7d', 'exit-wrong'),
+                                          (2, '0x7d', 'exit-correct'), (1, '0x73', 'death'))]
+    (tmp_path / 'runs.jsonl').write_text(json.dumps({'seed': 0, 'result': 'failure', 'reason': 'died in 1:0x73',
+                                                     'frames': 400, 'steps': 40, 'rooms': rooms}) + '\n')
+    steps = full_runs.route_steps(tmp_path)
+    assert full_runs.order(steps) == [2, 1, 9]
+    record = full_runs.read_runs(tmp_path)[0]
+    assert [r['step'] for r in record['rooms']] == [0, 1, 1, 2] and record['rooms'][0]['step_derived']
+    assert full_runs.score(record, steps)['triforces'] == [2] and full_runs.score(record, steps)['furthest_step'] == 2
