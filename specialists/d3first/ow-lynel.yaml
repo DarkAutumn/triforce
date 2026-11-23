@@ -1,0 +1,47 @@
+# ow-lynel@d3first (round 38, "Beams at range"): the family's yaml with state_routes [d3first] and only the rooms
+# d3first plays before the magic sword, 0x50 E->S and 0x60 N->W on the way from Level 7 (post-d7); no harvested
+# handoffs (the family's are 0x0a's, a d2first room).
+name: ow-lynel
+rooms: ['(0, 0x0a)', '(0, 0x0a, cave)', '(0, 0x50)', '(0, 0x60)', '(0, 0x32)', '(0, 0x22)', '(0, 0x07)', '(0, 0x06)', '(0, 0x05)']
+start_states: ['0_50*_[0-9]', '0_60*_[0-9]']
+success: [exit-correct]
+endings: {retreat: soft-failure}           # Lee (Nov 8): a retreat counts as a wrong exit for the first baseline
+reward_profile: default
+reward: {pbrs: true}
+obs: {objective: true, target: true}       # schema 2 pointer, no item targets (as ow-moblin)
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chain arrives with partial hearts (round 5)
+items: {bombs: tenth, recorder: true}      # the 10th kill's bomb; round 28: the recorder where the route plays it (0x22's whirlwind out of Dungeon 6)
+clips: {enabled: true, off_share: 0}    # round 21: the screen wrap (W/E; none in 0x0a); round 24: 0x50/0x60 fix it on; the owner, Nov 18: no episode with CLIP masked (it was 0.5)
+curriculum: {enabled: true}             # round 24: 0x60's wrap exit (CLIP E on Y $85/$8D only), 0x0a's sword cave
+one_room: true                          # round 5: per-room episodes
+max_steps: 600
+harvested_fraction: 0
+warm_start: null
+state_routes:
+- d3first
+notes: >-
+  Lynel rooms (Lee, Nov 8: very hard monsters, the main enemy of many later rooms). 0x0a (Blue Lynel and a Zora)
+  with the white-sword cave: enter the cave, take the sword (needs 5 heart containers), leave S. Leaving S before
+  the sword (to re-enter for a better Lynel spawn) ends the episode as `retreat` (routes.yaml `retreat: S`); the
+  ending is configurable and is a soft failure (like a wrong exit, with its wrong-location penalty) for the first
+  baseline. Lee will study Lynel spawns and may make it neutral, possibly only when the Lynel blocks the way
+  (docs/routes/d2first.md). Round 24, the leg's clip way (docs/routes/d5-leg.md): 0x50 (five Red Lynels) from E
+  leaves S; 0x60 (two Red and two Blue Lynels, two Peahats) from N leaves W by CLIP E round the world into 0x5f
+  (room id - 1), offered on Y $85/$8D only. Both are on the clip way only, so their states fix the switch on.
+  Round 27, the leg from Dungeon 7 to Dungeon 6 (route `d6`, docs/routes/d6.md §14; states `0_50e_v2`, `0_60e`,
+  `0_50s`, `0_32w`, `0_22s`): 0x50 E→N
+  (out of 0x51's wrap, up the corridor at X $E0) and S→N (plain), 0x60 E→N (plain), 0x32 W→N, 0x22 S into Dungeon 6
+  past its Armos statues. Walked zero-shot with the round 25 run: 0x50 0 of 40, 0x60 5 of 20, 0x32 7 of 40, 0x22 35
+  of 40: the family must be trained on them (docs/decisions.md 2026-11-17).
+  Round 28, the leg to Dungeon 8 (route `d8`, docs/routes/d8.md §15; state `0_22c`): 0x22 out of Dungeon 6
+  (`exit: recorder`): RECORDER twice from the spot the game sets Link down on, facing down (the mask offers it only
+  so, while plays remain: the second counts on frames 152-216 after the first), then wait for the whirlwind: Dungeon
+  2's entrance 0x3c. Walked: 30 of 30 by buttons, 20 of 20 through the env; this family zero-shot 0 of 40.
+  Round 29, the leg to Dungeon 9 (route `d9`, docs/routes/d9.md "as built"; states `0_07s`, `0_06e`, `0_05e` on
+  chains 0-2): 0x07 S→W (one Red
+  Lynel; `bombs: never` on the step: a bomb at X $A0 opens a cave that takes 20 rupees on entry; walked zero-shot 40
+  of 40), 0x06 E→W (two Blue and two Red Lynels, two Peahats, along Y $8D: a straight scripted walk loses 2.2
+  hearts; zero-shot 12 of 40, 28 deaths) and 0x05 E→the rock wall over Dungeon 9's stairs (two Blue, two Red Lynels,
+  two Leevers; `bombs: required` on the step: BOMB only in reach of the wall, one bomb facing N from X $48-$58 on Y
+  $AD, open 49 frames later; the script loses 2.9 hearts; zero-shot 0 of 40: no bomb was offered before round 29,
+  the family being `tenth` and the wall's target missing for a level's entrance).

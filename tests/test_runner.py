@@ -345,6 +345,7 @@ def test_runs_record_rooms_and_end_cleanly(states_dir, models_dir, tmp_path):
         assert result.rooms[-1].outcome in ('stuck', 'death', 'milestone', 'exit-wrong')
         room = result.rooms[0]
         assert room.hearts_dropped == room.hearts_taken + room.hearts_left + room.hearts_expired
+        assert room.beam_shots is not None and room.beam_kills_far is not None     # BeamStats (round 38)
 
     path = tmp_path / 'runs.jsonl'
     write_jsonl(str(path), results)

@@ -5,6 +5,7 @@
 pub mod actions;
 pub mod aimless;
 pub mod attack;
+pub mod beams;
 pub mod blocks;
 pub mod bombs;
 pub mod cheats;

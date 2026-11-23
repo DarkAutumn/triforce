@@ -1180,6 +1180,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             let mut step = VisitStep::of(&change);
             step.bombs_used = cheats.used.bombs;
             step.bombs.update(&change);
+            step.beams.update(&change);
             step.cheated = cheats.cheated;
             step.boss_stuns = boss.stuns;
             step.boss_eats = boss.eats;

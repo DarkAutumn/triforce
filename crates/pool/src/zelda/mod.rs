@@ -219,6 +219,9 @@ pub fn visit_json(v: &RoomVisit) -> Value {
     for (name, value) in v.bombs.fields() {
         o.insert(format!("bomb_{name}"), json!(value));
     }
+    for (name, value) in v.beams.fields() {
+        o.insert(format!("beam_{name}"), json!(value));
+    }
     for (name, value) in v.clips.fields() {
         o.insert(format!("clip_{name}"), json!(value));
     }

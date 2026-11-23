@@ -1,8 +1,9 @@
 #!/bin/bash
 # Removes finished worktrees of the main checkout (branches stay in git), after keeping what they hold that git does
 # not: every replay (scripts/archive_replays.py: golden and single runs into replays/, all into
-# /backup/triforce/replays) and every model run dir (/backup/triforce/models/worktrees/<name>/).  Skips a worktree
-# with a live job, a process whose cwd is inside it, or modified tracked files (uv.lock aside).
+# /backup/triforce/replays), every model run dir (/backup/triforce/models/worktrees/<name>/) and the experiment data
+# (target/, runs/, logs/: chains, benches, datasets; /backup/triforce/worktree-data/<name>/, without build output).
+# Skips a worktree with a live job, a process whose cwd is inside it, or modified tracked files (uv.lock aside).
 #     scripts/tidy_worktrees.sh NAME...        (NAME: the worktree's directory under the checkout's parent)
 main=$(git -C "$(dirname "$0")" rev-parse --show-toplevel) || exit 1
 cd "$main" || exit 1
@@ -33,6 +34,12 @@ for name in "$@"; do
     mkdir -p "$backup/models/worktrees"
     if [ -d "$dir/models" ] && ! nice -n 10 rsync -a --copy-unsafe-links "$dir/models/" "$backup/models/worktrees/$name/"; then
         echo "skip $name: backing up its models failed"; continue
+    fi
+    mkdir -p "$backup/worktree-data/$name"
+    if ! nice -n 10 rsync -a --exclude 'release/' --exclude 'debug/' --exclude 'maturin/' --exclude '*.rlib' \
+            --exclude 'incremental/' --exclude '.fingerprint/' --exclude 'deps/' --exclude 'build/' \
+            $(for sub in target runs logs; do [ -d "$dir/$sub" ] && echo "$dir/$sub"; done) "$backup/worktree-data/$name/"; then
+        echo "skip $name: backing up its experiment data failed"; continue
     fi
     size=$(du -sh "$dir" 2>/dev/null | cut -f1)
     if nice -n 10 git worktree remove --force "$dir" 2>/tmp/tidy-err; then echo "removed $name ($size)"
