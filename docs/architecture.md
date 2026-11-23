@@ -1529,7 +1529,9 @@ every step, so following an enemy that moves away pays again, and knockback rese
   and lists the test programs (`compiler-artifact` messages of test profile), each program's `--list` counts its
   tests (the job's progress: `Rust tests` done of that total, a program's counted as it ends, the doc tests added
   when they end), and the programs run `cargo_tests.JOBS` = 6 at a time, the longest first (each one's median
-  over the last five whole Rust suites of the timing logs; a program without history first), each as cargo runs
+  over the last five whole Rust suites of the timing logs; a program without history first), each with the
+  harness's own threads (Nov 23, load 11-30: the test phase is the longest program, 141 s; `--test-threads=3` a
+  program made it 170 s: `bomb_mask`'s and `attacks`' ten long tests waited for each other), each as cargo runs
   it (its package's folder, `CARGO_MANIFEST_DIR`, the build scripts' library folders on `LD_LIBRARY_PATH`), the
   doc tests (`cargo test --doc`) as one more entry. Every program runs whatever another did (cargo stops at the
   first failing program); each one's output is printed whole under cargo's `Running` line when it ends, the
