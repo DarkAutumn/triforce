@@ -1268,3 +1268,6 @@ Past 0x56 the route holds: of the 127 runs that got through, 67 end the game (62
 - The other key, if the fine-tune is not wanted: 8:0x4c's (step 226, in the open, no kill). Its network
   `r38t-pols` (2.0.0.10's `late.d3first`) was trained to leave it; `r78t4-pols` (d2first's) still takes it (92.2%
   from `8_4cc_0`, round38.md "8:0x4c"), at about 5,000 aimless frames a visit.
+
+Both fine-tunes were done and landed in 2.0.0.13 (round39.md "Moldorm crossed, 9:0x56's key: the two fine-tunes");
+the owner ruled out the 8:0x4c key (Nov 23: "This key is the correct route, other keys are not").

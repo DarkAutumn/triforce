@@ -202,3 +202,67 @@ the rate, so not promoted and no golden run.
    for getting lined up. A potential (PBRS, so it cannot be farmed) on "a monster on one of Link's four lines out of
    melee range, shot ready" would make standing back to shoot worth walking to, and the head (or the policy) fires.
 3. **Hearts for wizzrobe and Patra**: the hit head of "Hearts into the beam rooms" above.
+
+## Moldorm crossed, 9:0x56's key: the two fine-tunes (branch `r39-key`, 2.0.0.13)
+
+The owner's change of Nov 22 (round38.md "Moldorm crossed, 9:0x56's key": `d3first` crosses 2:0x3e and takes
+9:0x56's key instead; the ledger, the routes.yaml change and the states patched there) left two networks playing a
+step they were not trained for: Dungeon 9 fell from 53.0% to 6.7% (like-like stuck at 0x56) and the crossing of
+0x3e lost more hearts than the fight (5 deaths in 1000 against 1). The owner, Nov 23: "This key is the correct route,
+other keys are not": fine-tune (or retrain) the two networks, no 8:0x4c fallback.
+
+**Which runs play the steps.** Step 246 (9:0x56) is after `own_models_until` (192): the bare key `like-like` plays,
+its `late.d3first` else its `promoted`, `r33-like-s83` (round 33; not a hit-head run). Step 100 (2:0x3e) is
+`moldorm@d3first`, which had no `promoted.d3first`: `r75-f-b`. 2:0x3e is `d3first`'s only Moldorm step.
+
+**9:0x56 over the water.** On the room's three entry states (`d3first_9_56s_{0,1,2}`, keys 2, bombs 5-6) Link holds
+the ladder (`InvLadder` `$663` = 1). The room is a land ring between two water rows (tile rows 6-7 and 14-15 of the
+grid): Link enters on the bottom row, the monsters and the key ((128, 144)) are inside, and the W bomb wall opens on
+the middle rows, so every way through steps onto the water. With the room clear the objective is the key
+(`objective_TREASURE`) and the target walks over the water: the room's wavefront counts the ladder's crossings
+(`Room::compute_ladder_crossings`, the water the game lays the ladder on; the slot rule, a free monster slot, holds
+once the four are dead and the two Bubbles leave ten). Go-Explore (`python -m triforce.explore`, three seeds a state)
+found 9 tracks, each killing the two Zols and two Like-Likes, laying the ladder (slot 11), taking the key (keys 2 → 3)
+and leaving W: 96-245 decisions.
+
+**like-like `r39t-like`**: `r33-like-s83` fine-tuned 600 iterations (`--parallel 8`, `--sil-coeff 0.1`) on the
+family's rooms that `late.d3first` plays (steps 208-285: 6:0x1d, 9:0x56, 0x14, 0x51, 0x41, 0x03; the family's yaml
+with those rooms, `state_routes: [d3first]`, no harvested starts), the 9 tracks as curriculum. Promoted through
+`late.d3first`: `d2first` and the wood-sword half (4:0x32, `promoted.d3first`) play as before.
+
+**moldorm `r39t-moldorm`**: `r75-f-b` fine-tuned 400 iterations (SIL 0.1) on `specialists/d3first/moldorm.yaml`
+(the family's yaml, `state_routes: [d3first]`: the objective is the N door, the Moldorm left), 9 explored crossings
+as curriculum. Promoted as `promoted.d3first`.
+
+| One room, `eval-chain --from`, `--act model` | network | runs | took the key, out W | frames | hearts lost | hits | deaths |
+|---|---|---:|---:|---:|---:|---:|---:|
+| 9:0x56, `9_56s_0` to step 247 | `r33-like-s83` | 300 | 17% (250 stuck) | 15,702 | 0.24 | 0.25 | 0 |
+| | **`r39t-like`** | 300 | **100%** | **1,219** | **0.11** | 0.12 | 0 |
+| 2:0x3e crossed, `d3first_2_3es_0` to step 101 | `r75-f-b` | 1000 | | 370 | 0.68 | 1.36 | 0 |
+| | **`r39t-moldorm`** | 1000 | | **333** | **0.38** | 0.75 | 0 |
+| 2:0x3e fought, `2_3es_0` (`d2first`, 3 hearts) to step 20 | `r75-f-b` | 1000 | | 817 | 0.39 | 1.66 | 0 |
+
+**The chains** (`r39-key2-1k`: the branch on 2.0.0.8's code and team with the two runs, 1000 runs a segment, paired
+by seed with `r38-208-1k`; on that code the bare key's late steps read `promoted`, set to `r39t-like` for the batch,
+which is what `late.d3first` plays):
+
+| Segment | 2.0.0.8 (Moldorm fought, 0x56 crossed) | Moldorm crossed, 0x56's key (old networks) | **fine-tuned** |
+|---|---:|---:|---:|
+| `d2` | 99.3% | 99.0% | **99.4%** (+0.1 ± 0.3) |
+| `d6` | 36.4% | 35.5% | 35.7% (−0.7 ± 2.1) |
+| `d9` | 53.0% | 6.7% | **51.2%** (−1.8 ± 2.2) |
+
+- 2:0x3e in `d2` (999 visits): 320 frames, **0.35 hearts lost**, 0.69 hits, **1 death**: the fight was 1,008 frames,
+  0.52 hearts, 1 death; the old network crossing 383 frames, 0.78 hearts, 5 deaths. From the start (`full`): no
+  death in 0x3e (1 on 2.0.0.8).
+- 9:0x56 in `d9`: 999 of the 1000 runs take the key (1065 visits: the others are returns after it), every visit out W
+  (1 by a wrong exit), none stuck, 1,192 frames and 0.10 hearts a visit (the old network: 873 stuck, 15,963 frames).
+- `d9`'s 1.8 points are inside the noise and not in 0x56: the runs die where they died on 2.0.0.8 (0x10 143 / 130,
+  0x30 139 / 155, 0x42 52 / 51, 0x52 28 / 23, 0x04 25 / 12).
+- No key cheated in any segment, either way.
+- `d2first` after the merge of 2.0.0.12 with the two runs promoted (its pointers untouched): 100 runs, result, steps
+  and frames equal to `d2first-100-land` on every run.
+
+Also fixed: `python -m triforce.explore --variant` with a yaml path (`--specialist specialists/d3first/moldorm.yaml`)
+looked for the explorer's tracks under the yaml's path instead of the family's name and dropped them; tracks now go to
+`<out>/<family>/<state>~s<seed>` (`tests/test_explore.py`).
