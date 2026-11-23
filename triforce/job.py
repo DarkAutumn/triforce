@@ -11,6 +11,8 @@ the exit code is the command's (the wrapper's own lines go to stderr, ``triforce
     triforce job setup BRANCH [--from main] [--agent A]
     triforce job list [--all] [--calibration]
     triforce job history [--since 24h] [--agent A] [--metrics] [--json]
+    triforce job run|golden|build|test ... --detach     (start outside this shell; prints a unit name)
+    triforce job wait UNIT... [--timeout 30m]           (follow detached jobs; stopping it stops nothing)
 
 ``run`` takes the job's place in line before the command starts and runs it at nice ``RUN_NICE``.  A training or
 evaluation tool of this code (``jobs.announce``) is asked its work first (a dry call: its arguments are checked, an
@@ -52,6 +54,8 @@ TOOL_NICE = 10              # builds and test suites: above the jobs, below the 
 CARGO_JOBS = 4
 GRACE_SECONDS = 30.0        # after a timeout's or a stop's SIGTERM, the command's group is killed
 STEP_POLL_SECONDS = 0.25    # how often a job with several commands running looks which of them ended
+WAIT_POLL_SECONDS = 5.0     # how often `triforce job wait` looks whether a detached job ended
+WAIT_TAIL_LINES = 40        # how much of a detached job's output `triforce job wait` shows when it ended
 DESC_LIMIT = 120
 GOLDEN_FLAGS = ('--golden', '--power-on', '--clips', 'on', '--act', 'model', '--parallel', '16')
 REFUSED_PROGRAMS = ('nice', 'ionice', 'renice', 'chrt', 'timeout')
@@ -522,6 +526,10 @@ def _common(parser: argparse.ArgumentParser, subtask: bool = True, desc: bool = 
         parser.add_argument('--subtask', required=True, help="the part of the task (e.g. d3)")
     if desc:
         parser.add_argument('--desc', required=True, help=f"one sentence, at most {DESC_LIMIT} characters")
+    parser.add_argument('--detach', action='store_true',
+                        help="start the job outside this shell (a systemd user unit) and return at once: it then "
+                             "waits its turn and runs whatever becomes of the caller; `triforce job wait UNIT` "
+                             "watches it")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -575,7 +583,75 @@ def build_parser() -> argparse.ArgumentParser:
     past.add_argument('--metrics', action='store_true',
                       help="the lanes against what the jobs really took, and the kinds of job that are always quick")
     past.add_argument('--json', action='store_true', help="the rows (or the metrics) as JSON")
+    wait = sub.add_parser('wait', help="wait for detached jobs (--detach) to end; safe to stop and start again")
+    wait.add_argument('units', nargs='+', metavar='UNIT', help="the unit names --detach printed")
+    wait.add_argument('--timeout', type=parse_duration, default=None,
+                      help="give up waiting after this long (exit 124; the jobs go on)")
     return parser
+
+
+def detached_dir() -> Path:
+    """Where detached jobs' output is kept (one file a unit)."""
+    return q.queue_dir() / 'detached'
+
+
+def detach(args, head: list[str], extra: list[str]) -> int:
+    """``--detach``: this same ``triforce job`` command started as a transient systemd user unit, outside the
+    caller's process tree, and the caller returns at once.  A job that waits its turn for hours then no longer dies
+    with the shell or the agent that queued it (Nov 23: with 30 jobs in line, callers' own time limits killed
+    waiting wrappers).  Its output goes to ``detached_dir()/<unit>.log``; ``triforce job wait UNIT`` follows it;
+    ``systemctl --user stop UNIT`` stops it (one SIGTERM to the wrapper, as for any job)."""
+    if shutil.which('systemd-run') is None:
+        raise JobError("--detach needs systemd-run (a systemd user session); run the job without it")
+    label = '-'.join(str(part) for part in (args.agent, args.task, getattr(args, 'subtask', None) or args.verb)
+                     if part)
+    unit = f"tfjob-{re.sub(r'[^A-Za-z0-9_.]+', '-', label)[:80]}-{time.strftime('%H%M%S')}-{os.getpid()}"
+    detached_dir().mkdir(parents=True, exist_ok=True)
+    log = detached_dir() / f'{unit}.log'
+    command = [*(arg for arg in head if arg != '--detach'), *(['--', *extra] if extra else [])]
+    env = [f'--setenv={key}={value}' for key, value in os.environ.items() if '\n' not in value]
+    subprocess.run(['systemd-run', '--user', '--collect', '--quiet', f'--unit={unit}',
+                    f'--working-directory={Path.cwd()}', '-p', f'StandardOutput=file:{log}',
+                    '-p', f'StandardError=file:{log}', *env, sys.executable, '-m', 'triforce.job', *command],
+                   check=True)
+    say(f"detached as {unit}; output in {log}; follow it with: triforce job wait {unit}")
+    return 0
+
+
+def unit_active(unit: str) -> bool:
+    state = subprocess.run(['systemctl', '--user', 'is-active', unit], capture_output=True, text=True, check=False)
+    return state.stdout.strip() in ('active', 'activating')
+
+
+def cmd_wait(args) -> int:
+    """``triforce job wait UNIT...``: blocks until the detached jobs ended, shows the end of each one's output and
+    exits with the worst of their exit codes (1 for a job that ended without its closing line: killed).  Stopping
+    this command stops nothing: the jobs go on, and it can be run again."""
+    deadline = None if args.timeout is None else time.monotonic() + args.timeout
+    pending, worst = list(args.units), 0
+    while pending:
+        for unit in list(pending):
+            if unit_active(unit):
+                continue
+            pending.remove(unit)
+            log = detached_dir() / f'{unit}.log'
+            if not log.is_file():
+                say(f"{unit}: no such detached job (no {log})")
+                worst = max(worst, 2)
+                continue
+            lines = log.read_text(encoding='utf-8', errors='replace').splitlines()
+            print('\n'.join(lines[-WAIT_TAIL_LINES:]))
+            closing = next((re.search(r'\(exit (\d+)\)\s*$', line) for line in reversed(lines)
+                            if line.startswith('triforce job:') and '(exit ' in line), None)
+            if closing is None:
+                say(f"{unit} ended without its closing line (killed?); its output: {log}")
+            worst = max(worst, 1 if closing is None else int(closing.group(1)))
+        if pending:
+            if deadline is not None and time.monotonic() >= deadline:
+                say(f"still going: {', '.join(pending)}")
+                return 124
+            time.sleep(WAIT_POLL_SECONDS)
+    return worst
 
 
 def _fields(args, verb: str, lane: str, kind: str, command: list, cwd: Path, nice: int, subtask: Optional[str],
@@ -754,7 +830,8 @@ def cmd_setup(args) -> int:
     def link() -> int:
         # ``models`` is never linked: a worktree's own runs and pointers stay its own (it reads the main
         # checkout's team with ``--models-dir``, and its tests with ``$TRIFORCE_MODELS_DIR``, ``test_steps``).
-        for name in ('roms', 'trajectories'):
+        # The harvested start states are data no checkout tracks and every family's recipe draws from.
+        for name in ('roms', 'trajectories', 'triforce/states/harvested'):
             if not (target / name).exists() and (main / name).exists():
                 (target / name).symlink_to(main / name)
         return 0
@@ -856,15 +933,17 @@ def main(argv=None) -> int:
     head, extra = (argv[:argv.index('--')], argv[argv.index('--') + 1:]) if '--' in argv else (argv, [])
     args = build_parser().parse_args(head)
     try:
+        if getattr(args, 'detach', False):
+            return detach(args, head, extra)
         if args.verb == 'run':
             return cmd_run(args, extra)
-        if extra and args.verb in ('setup', 'list', 'progress', 'history'):
+        if extra and args.verb in ('setup', 'list', 'progress', 'history', 'wait'):
             raise JobError(f"{args.verb} takes nothing after --")
         verbs = {'golden': cmd_golden, 'build': cmd_build, 'test': cmd_test}
         if args.verb in verbs:
             return verbs[args.verb](args, extra)
-        return {'setup': cmd_setup, 'list': cmd_list, 'progress': cmd_progress,
-                'history': cmd_history}[args.verb](args)
+        return {'setup': cmd_setup, 'list': cmd_list, 'progress': cmd_progress, 'history': cmd_history,
+                'wait': cmd_wait}[args.verb](args)
     except JobError as error:
         print(f"triforce job: error: {error}", file=sys.stderr)
         return 2
