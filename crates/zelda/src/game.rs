@@ -991,7 +991,7 @@ impl GameView {
     }
 
     /// Exact NES beam condition (asm:SwordShot_Make): containers-1 == filled and partial >= $80.
-    fn is_health_full_for_beams(&self) -> bool {
+    pub fn is_health_full_for_beams(&self) -> bool {
         let hc = self.hearts_and_containers();
         (hc >> 4) & 0x0F == hc & 0x0F && self.partial_hearts() >= 0x80
     }

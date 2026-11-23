@@ -150,11 +150,14 @@ pub enum Role {
     Lure,
     /// Where Link stands to strike a boss (Gohma).
     Stand(Tile),
+    /// A tile in line with a monster to shoot it from at range (round 40, `reward.firing_lines`): the monster's
+    /// slot and type (`crate::beams::firing_lines`).
+    FiringLine { slot: u8, kind: u8 },
 }
 
 /// Every role's replay name and the names of its fields, in [`Role::index`] order (a replay's META
 /// `tables.target_roles`).
-pub const ROLES: [(&str, &[&str]); 15] = [
+pub const ROLES: [(&str, &[&str]); 16] = [
     ("exit", &["dir"]),
     ("monster", &["slot", "type"]),
     ("item", &["slot", "item"]),
@@ -170,6 +173,7 @@ pub const ROLES: [(&str, &[&str]); 15] = [
     ("dock-warp", &["col", "row"]),
     ("lure", &[]),
     ("stand", &["col", "row"]),
+    ("firing-line", &["slot", "type"]),
 ];
 
 /// The room treasures [`Role::Treasure`] names (game.yaml's `treasure:` values; a replay's META `tables.treasures`).
@@ -204,6 +208,7 @@ impl Role {
             Role::DockWarp(_) => 12,
             Role::Lure => 13,
             Role::Stand(_) => 14,
+            Role::FiringLine { .. } => 15,
         }
     }
 
@@ -213,7 +218,7 @@ impl Role {
         let t = |(c, r): Tile| [c as i8 as u8, r as i8 as u8];
         match *self {
             Role::Exit(d) => [direction(d), 0xFF, 0xFF, 0xFF],
-            Role::Monster { slot, kind } => [slot, kind, 0xFF, 0xFF],
+            Role::Monster { slot, kind } | Role::FiringLine { slot, kind } => [slot, kind, 0xFF, 0xFF],
             Role::Item { slot, item } => [slot, item, 0xFF, 0xFF],
             Role::Treasure { item } => [0xFF, item, 0xFF, 0xFF],
             Role::BombWall { tile, direction: d } | Role::PushBlock { tile, direction: d } | Role::Dock { tile, direction: d } => {

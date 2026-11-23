@@ -13,8 +13,9 @@
 use crate::attack;
 use crate::change::Change;
 use crate::contact;
-use crate::enums::{ActionKind, AnimationKind, AnimationState, Direction, enemy};
+use crate::enums::{ActionKind, AnimationKind, AnimationState, Direction, Tile, enemy};
 use crate::game::{Enemy, GameView};
+use crate::room::Room;
 use crate::room_state::decode_room_state;
 use crate::tiles::{Grid, build_grid};
 use std::ops::AddAssign;
@@ -33,6 +34,18 @@ pub const SHOT_HORIZON: u32 = 90;
 /// `crate::game::Enemy`). The swing's thin box reaches a monster's corner about 29 pixels out
 /// (asm:Sword_LinkToWeaponOffsetsX/Y, $10 along and $0C across, asm:Collision_CheckStabVsMonster).
 pub const MELEE_REACH: f32 = 32.0;
+/// A firing line's least distance (pixels, Link's corner to the monster's along the shot's line; round 40): out of
+/// melee reach by the shot's own start ([`MELEE_REACH`] + [`SHOT_AHEAD`]), so the shot is made between Link and the
+/// monster and meets it out of melee range even as it closes in during the swing ([`SHOT_DELAY`] frames).
+pub const FIRING_RANGE: f32 = MELEE_REACH + SHOT_AHEAD;
+/// The rectangle of Link's corner (x, y, both ends included) where the game reads the sword's button whatever he
+/// faces (asm:Link_FilterInput: A is discarded near an edge in front of or behind him) and he stands in the room's
+/// floor, not a doorway: (left, right, top, bottom).
+fn firing_box(overworld: bool) -> (i32, i32, i32, i32) {
+    if overworld { (0x08, 0xE8, 0x45, 0xD5) } else { (0x20, 0xD0, 0x5D, 0xBD) }
+}
+/// Link's corner on a tile row is 5 pixels below the row's top (his rows are $3D + 8k, `GAMEPLAY_START_Y` $38).
+const LINK_ROW_OFFSET: i32 = 5;
 /// asm:ObjInvincibilityMask ($4B2 + slot): bit 1 is the sword's damage type (sword, rod swing, sword shot).
 const INVINCIBILITY_MASK: u16 = 0x4B2;
 const SWORD_DAMAGE: u8 = 0x01;
@@ -141,6 +154,96 @@ pub fn lined_up(state: &GameView) -> Vec<Direction> {
     Direction::CARDINALS.into_iter().filter(|&d| shot_meets(state, &grid, d).is_some()).collect()
 }
 
+/// Link holds a sword and full hearts (within half a heart: asm:SwordShot_Make): a swing makes a shot, whether or
+/// not one is flying now.
+pub fn shoots_at_full(state: &GameView) -> bool {
+    state.sword() != crate::enums::SwordKind::None && state.is_health_full_for_beams()
+}
+
+/// A monster a firing line aims at ([`firing_tiles`]): its corner, the x of its middle from the corner
+/// (`contact::middle_x`), and the directions a shot hurts it from (a Darknut's shield: [`shootable`]).
+#[derive(Clone, Copy, Debug)]
+pub struct Aimed {
+    pub x: i32,
+    pub y: i32,
+    pub middle_x: f32,
+    /// Bits of the shot's direction (N 1, S 2, W 4, E 8) the monster can be hurt from.
+    pub from: u8,
+}
+
+fn direction_bit(d: Direction) -> u8 {
+    match d {
+        Direction::N => 1,
+        Direction::S => 2,
+        Direction::W => 4,
+        Direction::E => 8,
+        _ => 0,
+    }
+}
+
+/// The firing-line tiles of `aimed` in `room` (round 40, the beams experiment): Link's tiles (his corner's, tile
+/// aligned) from which a shot pressed toward the monster meets it where it stands now, at range. The shot's hit
+/// point (6, 8) or (8, 6) from its corner must pass within [`SHOT_HIT`] of the monster's middle across the line
+/// (asm:Collision_CheckThinWeaponVsMonster_Thresholds), the monster at least [`FIRING_RANGE`] ahead along it, and
+/// every corner in `near` (the room's monsters) farther than [`MELEE_REACH`] from Link's. The line is always clear:
+/// a shot flies over every tile and stops only at the room's bounds (asm:Room_BoundDirHorizontally/Vertically), so
+/// blocks between Link and the monster are no obstacle (0x6b's are fired across). Link stands on the tile: inside
+/// the [`firing_box`] (no doorway, the sword's button read) with his feet (the row below his corner's) on walkable
+/// tiles; whether he can walk there is the path search's question.
+pub fn firing_tiles(room: &Room, overworld: bool, aimed: &Aimed, near: &[(i32, i32)]) -> Vec<Tile> {
+    let (left, right, top, bottom) = firing_box(overworld);
+    let (mx, my) = (aimed.x as f32 + aimed.middle_x, aimed.y as f32 + 8.0);
+    let mut out = Vec::new();
+    for row in 0..crate::room::ROWS {
+        let y = crate::enums::GAMEPLAY_START_Y + 8 * row + LINK_ROW_OFFSET;
+        if !(top..=bottom).contains(&y) {
+            continue;
+        }
+        for col in 0..crate::room::COLS {
+            let x = 8 * col;
+            if !(left..=right).contains(&x) {
+                continue;
+            }
+            let (dx, dy) = ((aimed.x - x) as f32, (aimed.y - y) as f32);
+            let vertical = (x as f32 + 6.0 - mx).abs() < SHOT_HIT && dy.abs() >= FIRING_RANGE;
+            let horizontal = (y as f32 + 6.0 - my).abs() < SHOT_HIT && dx.abs() >= FIRING_RANGE;
+            let toward = |aligned: bool, d: Direction| aligned && aimed.from & direction_bit(d) != 0;
+            let lined = toward(vertical, if dy < 0.0 { Direction::N } else { Direction::S })
+                || toward(horizontal, if dx < 0.0 { Direction::W } else { Direction::E });
+            if lined
+                && room.is_tile_walkable(col, row + 1)
+                && room.is_tile_walkable(col + 1, row + 1)
+                && near.iter().all(|&(ex, ey)| ((ex - x) as f32).hypot((ey - y) as f32) > MELEE_REACH)
+            {
+                out.push((col, row));
+            }
+        }
+    }
+    out
+}
+
+/// [`firing_tiles`] of the monsters in `slots` that a shot can hurt from some side ([`shootable`]), each tile with
+/// its monster, in `state`'s room (every active monster's corner kept out of melee reach).
+pub fn firing_lines<'a>(state: &'a GameView, slots: &[u8]) -> Vec<(Tile, &'a Enemy)> {
+    let ram = state.ram();
+    let near: Vec<(i32, i32)> =
+        state.enemies.iter().filter(|e| e.is_active() && !e.is_dying()).map(|e| (e.position.x, e.position.y)).collect();
+    let mut out = Vec::new();
+    for e in state.enemies.iter().filter(|e| slots.contains(&e.index)) {
+        let from = Direction::CARDINALS
+            .into_iter()
+            .filter(|&d| shootable(state, e, d))
+            .fold(0, |bits, d| bits | direction_bit(d));
+        if from == 0 {
+            continue;
+        }
+        let (_, attr) = contact::slot_type(ram, usize::from(e.index));
+        let aimed = Aimed { x: e.position.x, y: e.position.y, middle_x: contact::middle_x(attr), from };
+        out.extend(firing_tiles(state.room(), state.level() == 0, &aimed, &near).into_iter().map(|t| (t, e)));
+    }
+    out
+}
+
 /// The step fired a sword shot: a BEAMS action from a state that could, and the shot's slot holds a flying sword shot
 /// after it.
 pub fn fired(change: &Change) -> bool {
@@ -244,5 +347,81 @@ impl AddAssign for BeamStats {
         self.kill_distance += o.kill_distance;
         self.hearts_lost += o.hearts_lost;
         self.beams_lost += o.beams_lost;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::enums::MapLocation;
+    use crate::room::{COLS, ROWS, Tiles};
+
+    const FLOOR: u8 = 0x74;
+    const BLOCK: u8 = 0xB0;
+    /// A Gel's corner in the middle of a dungeon room (its middle 8 pixels right of the corner).
+    const GEL: (i32, i32) = (0x78, 0x8D);
+
+    /// A floor-only dungeon room (3:0x6b's place) with `blocks` (tiles) unwalkable.
+    fn room(blocks: &[Tile]) -> Room {
+        let mut tiles: Tiles = [FLOOR; (COLS * ROWS) as usize];
+        for &(c, r) in blocks {
+            tiles[(c * ROWS + r) as usize] = BLOCK;
+        }
+        Room::new(MapLocation::new(3, 0x6b, false), &tiles, false)
+    }
+
+    fn gel(from: u8) -> Aimed {
+        Aimed { x: GEL.0, y: GEL.1, middle_x: 8.0, from }
+    }
+
+    /// In line with the Gel (its column for N and S shots, its row for W and E within the shot's 12 pixels), at
+    /// least 48 pixels away along the line, inside the room's floor: the top and bottom rows of its three columns,
+    /// and its three rows from the W wall to 48 pixels short of it and from 48 pixels past it to the E wall.
+    #[test]
+    fn firing_lines_are_in_line_at_range() {
+        let tiles = firing_tiles(&room(&[]), false, &gel(0x0F), &[]);
+        let mut expected: Vec<Tile> = Vec::new();
+        for col in 14..=16 {
+            expected.extend([(col, 4), (col, 16)]);
+        }
+        for row in 9..=11 {
+            expected.extend((4..=9).chain(21..=26).map(|c| (c, row)));
+        }
+        let mut got = tiles.clone();
+        got.sort_unstable();
+        expected.sort_unstable();
+        assert_eq!(got, expected);
+        assert!(!tiles.contains(&(15, 5)), "40 pixels above: too close");
+        assert!(!tiles.contains(&(10, 10)), "40 pixels to the W: too close");
+        assert!(!tiles.contains(&(26, 12)), "14 pixels below its row: the shot passes beside it");
+        assert!(!tiles.contains(&(2, 10)), "the W doorway");
+    }
+
+    /// The shot flies over the room's tiles: blocks between Link and the Gel leave the line; a block under Link's
+    /// feet (the row below his corner's) takes the two tiles standing on it out.
+    #[test]
+    fn blocks_between_leave_the_line_blocks_underfoot_take_the_tile() {
+        let between: Vec<Tile> = (11..=13).flat_map(|c| (8..=13).map(move |r| (c, r))).collect();
+        assert!(firing_tiles(&room(&between), false, &gel(0x0F), &[]).contains(&(9, 10)));
+        let underfoot = firing_tiles(&room(&[(5, 11)]), false, &gel(0x0F), &[]);
+        assert!(!underfoot.contains(&(4, 10)) && !underfoot.contains(&(5, 10)));
+        assert!(underfoot.contains(&(6, 10)) && underfoot.contains(&(5, 9)));
+    }
+
+    /// A Darknut takes a shot only from the sides its shield doesn't face: facing N it is hurt by a shot flying S
+    /// (fired from above), N or across; only those lines are left.
+    #[test]
+    fn a_shield_leaves_only_the_lines_behind_it() {
+        let from_above = firing_tiles(&room(&[]), false, &gel(direction_bit(Direction::S)), &[]);
+        assert!(from_above.contains(&(15, 4)));
+        assert!(!from_above.contains(&(15, 16)) && !from_above.contains(&(9, 10)));
+    }
+
+    /// No firing line stands in melee reach of another monster.
+    #[test]
+    fn no_firing_line_in_melee_reach_of_another_monster() {
+        let tiles = firing_tiles(&room(&[]), false, &gel(0x0F), &[GEL, (0x28, 0x8D)]);
+        assert!(!tiles.contains(&(9, 10)) && !tiles.contains(&(5, 10)), "32 pixels or less from the second");
+        assert!(tiles.contains(&(26, 10)) && tiles.contains(&(15, 4)));
     }
 }

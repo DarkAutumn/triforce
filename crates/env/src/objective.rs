@@ -5,7 +5,7 @@ use crate::config::{RewardConfig, SpecialistConfig};
 use std::sync::Arc;
 use zelda::enums::{Direction, Tile, enemy, item};
 use zelda::game::GameView;
-use zelda::objectives::{GameCompletion, Objective, ObjectiveKind, Role};
+use zelda::objectives::{Aim, GameCompletion, Objective, ObjectiveKind, Role};
 use zelda::room::{Target, Wavefront};
 
 /// A state's objective and PBRS wavefront.
@@ -128,6 +128,38 @@ fn wavefront_to(state: &GameView, objective: &Objective, targets: &[Target]) -> 
     state.room().wavefront(targets, &trap_tiles(state), &locked, objective.clips)
 }
 
+/// With `reward.firing_lines` (round 40, the beams experiment), the targets a fight steers Link to while he holds a
+/// sword and full hearts ([`zelda::beams::shoots_at_full`]): the firing-line tiles of the monsters the objective
+/// fights ([`zelda::beams::firing_lines`], its `Role::Monster` labels; not Ganon, whose tiles are his phase's), each
+/// labelled `Role::FiringLine`. None without the switch, outside a fight, short of hearts, without a line, or when
+/// Link can walk to none of them: the monsters' own tiles stay the targets.
+fn firing_line_aims(reward: &RewardConfig, state: &GameView, objective: &Objective) -> Option<Vec<Aim>> {
+    if !reward.firing_lines
+        || objective.kind != ObjectiveKind::Fight
+        || !zelda::beams::shoots_at_full(state)
+        || zelda::objectives::ganon(state).is_some()
+    {
+        return None;
+    }
+    let slots: Vec<u8> = objective
+        .labels
+        .iter()
+        .filter_map(|(_, role)| match *role {
+            Role::Monster { slot, .. } => Some(slot),
+            _ => None,
+        })
+        .collect();
+    let aims: Vec<Aim> = zelda::beams::firing_lines(state, &slots)
+        .into_iter()
+        .map(|(tile, e)| (Target::Tile(tile), Role::FiringLine { slot: e.index, kind: e.id }))
+        .collect();
+    let tiles: Vec<Target> = aims.iter().map(|a| a.0).collect();
+    if tiles.is_empty() || wavefront_to(state, objective, &tiles).get(state.link.tile()).is_none() {
+        return None;
+    }
+    Some(aims)
+}
+
 /// Whether a specialist needs the wavefront: for PBRS or for its `target` observation.
 pub fn needs_wavefront(config: &SpecialistConfig) -> bool {
     config.reward.pbrs || config.obs.target
@@ -155,6 +187,10 @@ pub fn attach_objective(
     reward: &RewardConfig,
     wavefront: bool,
 ) -> Attached {
+    if let Some(aims) = firing_line_aims(reward, state, &objective) {
+        objective.pbrs_targets = aims.iter().map(|a| a.0).collect();
+        objective.labels.extend(aims);
+    }
     let first = drops_first(reward, &objective);
     match drops_first_targets(reward, state, &objective) {
         Some(drops) => objective.pbrs_targets = drops.into_iter().collect(),
@@ -189,7 +225,11 @@ fn wavefront_targets(objective: &Objective, state: &GameView, reward: &RewardCon
         Some(drops) => drops,
         None => {
             let first = drops_first(reward, objective);
-            objective.pbrs_targets.iter().copied().chain(item_targets(reward, first, objective.bag_drops, state)).collect()
+            let route: Vec<Target> = match firing_line_aims(reward, state, objective) {
+                Some(aims) => aims.into_iter().map(|a| a.0).collect(),
+                None => objective.pbrs_targets.iter().copied().collect(),
+            };
+            route.into_iter().chain(item_targets(reward, first, objective.bag_drops, state)).collect()
         }
     };
     targets.sort_unstable();
@@ -203,8 +243,9 @@ fn wavefront_targets(objective: &Objective, state: &GameView, reward: &RewardCon
 /// critic's targets: false). Nothing here changes what the observation or the reward compute.
 pub fn recorded_targets(objective: &Objective, state: &GameView, reward: &RewardConfig) -> Vec<(Role, bool)> {
     let wavefront = wavefront_targets(objective, state, reward);
+    let firing = firing_line_aims(reward, state, objective).unwrap_or_default();
     let mut out: Vec<(Role, bool)> = Vec::new();
-    for (target, role) in &objective.labels {
+    for (target, role) in objective.labels.iter().chain(&firing) {
         let obs = wavefront.binary_search(target).is_ok();
         match out.iter_mut().find(|(r, _)| r == role) {
             Some((_, seen)) => *seen |= obs,
@@ -323,5 +364,58 @@ mod tests {
         let rupee = view(&ram);
         assert!(!pulled(&plain, &objective, &rupee));
         assert!(pulled(&RewardConfig { item_targets: true, ..Default::default() }, &objective, &rupee));
+    }
+
+    /// Round 40, `reward.firing_lines`: in a fight at full hearts with a sword the PBRS and `target` destinations are
+    /// the Gel's firing lines (Link one row short of the line below it is a step from one), labelled
+    /// `firing-line`, the Gel itself kept as a label the wavefront no longer leads to; short of hearts, or with the
+    /// switch off, the targets are the Gel's own tiles as before.
+    #[test]
+    fn a_fight_at_full_hearts_steers_to_the_firing_lines() {
+        const HEARTS: usize = 0x66F;
+        const PARTIAL: usize = 0x670;
+        const SWORD: usize = 0x657;
+        let map = Arc::new(GameMap::builtin());
+        let mut ram = [0u8; RAM_SIZE];
+        (ram[LEVEL], ram[ROOM_ID], ram[GAME_MODE]) = (3, 0x6b, 5);
+        (ram[OBJ_X], ram[OBJ_Y]) = (0x78, 0xB5);
+        (ram[OBJ_TYPE + 1], ram[OBJ_X + 1], ram[OBJ_Y + 1]) = (enemy::GREEN_GEL, 0x78, 0x8D);
+        (ram[HEARTS], ram[PARTIAL], ram[SWORD]) = (0x22, 0xFF, 1);
+        let view = |ram: &[u8; RAM_SIZE]| GameView::new(ram, 0, false, map.clone());
+        let full = view(&ram);
+        let gel = full.enemy_by_index(1).expect("the Gel").clone();
+        let role = Role::Monster { slot: 1, kind: enemy::GREEN_GEL };
+        let labels: Vec<Aim> = gel.link_overlap_tiles().into_iter().map(|t| (Target::Tile(t), role)).collect();
+        let objective = Objective {
+            kind: ObjectiveKind::Fight,
+            targets: labels.iter().map(|a| a.0).collect(),
+            next_rooms: BTreeSet::new(),
+            pbrs_targets: labels.iter().map(|a| a.0).collect(),
+            retreats: BTreeSet::new(),
+            clips: false,
+            treasure_refused: false,
+            drops_first: false,
+            bag_drops: false,
+            labels,
+        };
+        let on = RewardConfig { firing_lines: true, ..Default::default() };
+        let off = RewardConfig::default();
+        let lines: BTreeSet<Target> = zelda::beams::firing_lines(&full, &[1]).into_iter().map(|(t, _)| Target::Tile(t)).collect();
+        assert!(lines.contains(&Target::Tile((15, 16))) && lines.contains(&Target::Tile((9, 10))));
+
+        let steered = attach_objective(objective.clone(), &full, &on, true);
+        assert_eq!(steered.objective.pbrs_targets, lines);
+        assert_eq!(steered.wavefront.as_ref().and_then(|w| w.get(full.link.tile())), Some(1));
+        assert_eq!(wavefront_targets(&objective, &full, &on), lines.iter().copied().collect::<Vec<_>>());
+        let firing = Role::FiringLine { slot: 1, kind: enemy::GREEN_GEL };
+        assert_eq!(recorded_targets(&objective, &full, &on), vec![(role, false), (firing, true)]);
+
+        let plain = attach_objective(objective.clone(), &full, &off, true);
+        assert_eq!(plain.objective, objective);
+        assert_eq!(recorded_targets(&objective, &full, &off), vec![(role, true)]);
+
+        ram[HEARTS] = 0x21;
+        let hurt = view(&ram);
+        assert_eq!(attach_objective(objective.clone(), &hurt, &on, true).objective, objective);
     }
 }

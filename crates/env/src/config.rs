@@ -282,6 +282,12 @@ pub struct RewardConfig {
     /// families, where `item_targets`' rupees and bombs pulled Link into fights); `item_targets` includes them.
     #[serde(default, deserialize_with = "de_bool")]
     pub heal_targets: bool,
+    /// Round 40 (the beams experiment; off by default): while Link holds a sword and full hearts, a fight's PBRS and
+    /// `target` destinations are its monsters' firing-line tiles (`zelda::beams::firing_lines`: in line with a
+    /// monster at range, where a shot meets it) instead of the monsters' own tiles, when he can walk to one; dropped
+    /// items join them as before (`objective::firing_line_aims`).
+    #[serde(default, deserialize_with = "de_bool")]
+    pub firing_lines: bool,
     /// `penalty-boss-ate-bomb` per bomb a Dodongo swallows (round 12; the stun-and-sword kill wants none).
     #[serde(default = "half")]
     pub boss_ate_bomb_penalty: f64,
@@ -331,6 +337,7 @@ impl Default for RewardConfig {
             fixed_pickup_reward: false,
             item_targets: false,
             drops_first: false,
+            firing_lines: false,
             left_drop_penalty: 0.0,
             heal_targets: false,
             boss_ate_bomb_penalty: 0.5,
