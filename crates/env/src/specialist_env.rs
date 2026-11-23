@@ -28,7 +28,7 @@ use crate::observation::{Observation, ObservationBuilder};
 use crate::rewards::{Outcome, SUCCESS, Scored, score_step};
 use std::sync::atomic::{AtomicU64, Ordering};
 use crate::start_states::{
-    StartStatePool, StartWeights, StateStore, ram_randomization_values,
+    StartStatePool, StartWeights, StateStore, apply_room_bombs, ram_randomization_values,
     state_entry, state_label, state_visit, verify_start_room,
 };
 use indexmap::IndexMap;
@@ -732,7 +732,8 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
                 } else {
                     None
                 };
-            let values = ram_randomization_values(spec, state.max_health(), &mut self.rng, chain);
+            let mut values = ram_randomization_values(spec, state.max_health(), &mut self.rng, chain);
+            apply_room_bombs(spec, state.full_location(), &mut self.rng, &mut values);
             if !values.is_empty() {
                 state = self.session.apply_ram(&values).clone();
             }

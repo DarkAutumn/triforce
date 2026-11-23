@@ -7,7 +7,7 @@
 //!   follow them instead of the selector's own weights.
 //! - Harvested states (`<harvested dir>/*.state` of the family's start-state namespaces, `state_routes:`) mix with
 //!   seed states at `harvested_fraction`.
-//! - [`ram_randomization_values`]: reset-time hp/bombs/keys.
+//! - [`ram_randomization_values`]: reset-time hp/bombs/keys; [`apply_room_bombs`]: a listed room's own bombs.
 //!
 //! States are opaque here: a [`StateStore`] turns names into emulator states and writes captures.  Python's
 //! `random` streams are not reproduced; every draw comes from the caller's RNG.
@@ -555,6 +555,23 @@ pub fn ram_randomization_values<R: Rng + ?Sized>(
     values
 }
 
+/// `room_bombs` (round 39): a reset into a listed room `at` draws its bombs from the room's range, with probability
+/// `room_bombs_share`, in place of `bombs`' draw among `values`. A room not listed draws nothing (the random stream
+/// stays the family's).
+pub fn apply_room_bombs<R: Rng + ?Sized>(
+    spec: &crate::config::RamRandomization,
+    at: MapLocation,
+    rng: &mut R,
+    values: &mut Vec<(Var, u8)>,
+) {
+    let Some((lo, hi)) = spec.room_bombs_at(at) else { return };
+    if spec.room_bombs_share.is_some_and(|p| rng.random::<f64>() >= p) {
+        return;
+    }
+    values.retain(|(var, _)| *var != Var::Bombs);
+    values.push((Var::Bombs, rng.random_range(lo..=hi) as u8));
+}
+
 /// A chain handoff's harvested start-state file name, `[<ns>_]<stem>_h<seed>_<n>.state` (`n`: the run's room index;
 /// the stem [`StateName::stem`] of the routes.yaml entry (`zelda::objectives::route_entry`) and `visit`, the route
 /// visit of the step Link plays there, 1 off the route; `ns` the run's route's start-state namespace, phase X), so
@@ -1004,5 +1021,36 @@ mod tests {
         assert!((160..240).contains(&drawn), "{drawn}");
         let all = RamRandomization { bombs_share: None, ..spec };
         assert!((0..50).all(|_| ram_randomization_values(&all, 3, &mut r, None).iter().any(|(v, _)| *v == Var::Bombs)));
+    }
+
+    /// `room_bombs` (round 39): a listed room's share of resets holds its own count (one bombs value, replacing the
+    /// `bombs` draw); the rest keep `bombs`' draw; a room not listed draws nothing more from the generator.
+    #[test]
+    fn room_bombs_replace_the_draw_in_their_room() {
+        let room = MapLocation::new(3, 0x5b, false);
+        let spec = RamRandomization {
+            bombs: Some((0, 6)),
+            room_bombs: [("(3, 0x5b)".to_owned(), (8, 8))].into(),
+            room_bombs_share: Some(0.5),
+            ..Default::default()
+        };
+        let mut r = rng();
+        let full = (0..400)
+            .filter(|_| {
+                let mut values = ram_randomization_values(&spec, 3, &mut r, None);
+                apply_room_bombs(&spec, room, &mut r, &mut values);
+                let bombs: Vec<u8> = values.iter().filter(|(v, _)| *v == Var::Bombs).map(|b| b.1).collect();
+                assert_eq!(bombs.len(), 1, "{values:?}");
+                bombs[0] == 8
+            })
+            .count();
+        assert!((160..240).contains(&full), "{full}");
+        let (mut a, mut b) = (rng(), rng());
+        let mut values = ram_randomization_values(&spec, 3, &mut a, None);
+        let before = values.clone();
+        apply_room_bombs(&spec, MapLocation::new(3, 0x5c, false), &mut a, &mut values);
+        assert_eq!(values, before);
+        ram_randomization_values(&spec, 3, &mut b, None);
+        assert_eq!(a.random::<u64>(), b.random::<u64>(), "no draw for a room not listed");
     }
 }
