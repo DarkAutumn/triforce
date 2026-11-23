@@ -1927,18 +1927,25 @@ file; the tools write it themselves, nobody runs anything for it.
   `endings` (wins, deaths, stuck, errors; stuck runs by reason: `bounce-limit`, `wrong-exit-limit`, `max-steps`,
   `left-route`...; deaths and stuck runs by room); `triforces` (runs that left each dungeon's triforce step by its
   exit), `game_ended`, `furthest_step`; `all`, `by_step`, `by_room`, `by_family`, each: visits, runs, exits, wrong
-  exits, deaths, stuck, other endings, and per visit `{n, sum, mean, se}` of hits, hearts lost, health in and out,
+  exits, deaths, stuck, other endings, and per visit `{n, sum, sq, mean, se}` (`sq` the sum of squares: a query over
+  many files forms any mean and se from the sums; the store's tables take these keys as their column names) of hits,
+  hearts lost, health in and out,
   linger (longest quiet stretch, tail), bombs used, keys used, cheated bombs, keys and rupees, shots, shots lined up,
   lined-up decisions and those not fired, kills far / near / other, kill distance, shots that hit, beams lost,
-  frames holding the beams and visits that lost them; frames and the frame the beams were lost with median and 90th
-  percentile. `beams`: rooms cleared still within half a heart of full and the frames to the entry of the room that
+  frames holding the beams and visits that lost them; frames and the frame the beams were lost as `{n, sum, sq, mean,
+  se, median, p90}`; a step's group also `enter` (frames from the start to entering it, the same shape) and the
+  `network` that played it most (its policy key) with the team's `network_run` and `network_sha1`. `beams`: rooms
+  cleared still within half a heart of full and the frames to the entry of the room that
   took them (any record; a won run's arrival counts one room), runs that never lost them, where they were lost
   first, and with round 40's counters the run frame they were lost and the frames held. `time`: frames from the
   start to entering each step and to the end. `runs`: per run, aligned with `seeds`, `result` (one letter: w win, d
-  death, s stuck, e error), frames, hearts at the end, hearts lost, hits, shots, shots that hit, kills far and near,
+  death, s stuck, e error), `furthest` (route step), frames, hearts at the end, hearts lost, hits, shots, shots that
+  hit, kills far and near,
   the beams measures, `enter` (step -> frames to entering it, null where not entered) and `end`: what pairing two
   files by seed needs. `records` (the counters the records carry: `round40`, `round38`, `older`; runs played and
-  asked; seeds), `provenance` (route, start, stop, clips, the team by name: run, act, checkpoint SHA-1), `manifest`
+  asked; seeds), `provenance` (route, `segment`, start, stop, clips, `overrides`: the chain's `--checkpoint` overrides
+  as `KEY = run`, the team by name: run, act, checkpoint SHA-1), `description` (one line: segment, start to end,
+  runs, overrides), `manifest`
   (the meta's, else null), `flags`. A number the records lack is null, never zero. Cost: 3.5 s and 0.2 MB for a
   1000-run Dungeon 3 chain (33 MB of records), 4 s and 1.2 MB for the 250 full runs.
 - **An evaluation's** (`eval_stats`): the same groups over its episodes' room visits (`by_room`, `by_family`, `all`;
@@ -1952,7 +1959,8 @@ file; the tools write it themselves, nobody runs anything for it.
   recording, look before using any number; note: worth knowing): `run-error` (red, any run ending `error`);
   `rate-extreme` (note, exactly 0% or 100% over 100 runs or more); `stuck-share` (red, more than 5% of the runs and at
   least 5 ended stuck: chains of record end stuck in 0-1%, the 250 test in 4 of 250; a route or model fault, a 9:0x56
-  with 616 of 1000, shows as stuck); `runs-short` (red, fewer runs than the meta asked, or a batch never finished);
+  with 616 of 1000, shows as stuck; chains only: an evaluation's wrong exits and cutoffs are its task's ordinary
+  failures); `runs-short` (red, fewer runs than the meta asked, or a batch never finished);
   `seeds-duplicate` (red) and `seeds-nonstandard` (note: not 0..N-1, pairs only with a file on the same seeds);
   `records-old` (note: records before round 40's counters); `step-never-entered` (red: a route step on the chain's
   way, between the first and last steps visited, that no run entered though 20 or more visits left the step before
@@ -1963,21 +1971,29 @@ file; the tools write it themselves, nobody runs anything for it.
   entered); `no-visits` (note: a format 1 evaluation); `harvested-none` (red, a training with `harvested_fraction`
   above 0, no `--start-state`, and not one episode drawn from a harvested state); `curriculum-empty` (red: a
   curriculum with no track); `interrupted` (note); an evaluation's flags inside its training's as `eval-<code>`.
-- **Reading.** `triforce stats list [--agent A] [--task T] [--since 24h]`; `triforce stats show ID|PATH [--rooms N]
+- **Reading.** `triforce stats list [--agent A] [--task T] [--since 24h]` (each row's id, owner, what it is, rate,
+  red flags and notes); `triforce stats show ID|PATH [--rooms N]
   [--family F]` (markdown: the headline, the flags, the route steps, families, the N rooms with most deaths);
-  `triforce stats compare BASE ARM... [--min-pairs 20]`: paired by seed, in the owner's order (AGENTS.md "What
-  decides, in order"): the rate with its paired difference and se, hearts lost a run, hearts at the end (runs won in
+  `triforce stats compare BASE ARM... [--min-pairs 20]`: paired by seed, a one-screen summary first in the owner's
+  order (AGENTS.md "What decides, in order"): the rate, hearts lost, beams held, shots that hit, kills from range and
+  the time to the last step both files entered in `--min-pairs` runs, each with its paired difference ± se and
+  "better", "worse" or "within noise" (2 standard errors); then one table a metric: the rate, hearts lost a run,
+  hearts at the end (runs won in
   both), hits, beams held (rooms, frames to the room that took them, frames held), shots that hit, kills from range,
   shots, the shooting totals, frames to entering each step over the runs that entered it in both (steps with fewer
-  than `--min-pairs`), one table a metric. `triforce stats ingest FILE... [--agent A --task T]` computes the file of
+  than `--min-pairs`). `triforce stats ingest FILE... [--agent A --task T]` computes the file of
   any existing chain jsonl, evaluation json or run dir (a job: it reads the records), registers it with the data's
-  owner and writes nothing beside the source. ID is a store id or a unique part of one; PATH a statistics file or an
-  output with one beside it.
+  owner (default: the agent and task of the queue job whose command wrote the file, whose `--checkpoint` overrides
+  also name the arm) and writes nothing beside the source. ID is a store id or a unique part of one; PATH a
+  statistics file or an output with one beside it.
 - **The new counters** (`zelda::beams`, round 40; additive, nothing a network sees or a reward pays): `shots_hit`, a
   step on which Link's flying sword shot stopped (slot $0E left state $10: asm:SwordShot_CheckMonsterCollision ends a
   shot on any monster it overlaps through asm:SwordShot_HandleBlocked, and the room bounds stop it the same way,
   asm:SwordShot_UpdateOrMagicShot) while a monster lost hit points (asm:Damage_DealToMonster, `Change::observed`)
-  out of the sword's own reach (`MELEE_REACH`) or on a step that did not swing it; `held_frames`, the frames of the
+  out of the sword's own reach (`MELEE_REACH`) or on a step that did not swing it, and no other weapon of Link's
+  (`beams::OTHER_WEAPONS`: a bomb, a fire, an arrow, the boomerang, the rod's shot) live before or after the step:
+  the records know the hit points lost, not the weapon, so such a step counts no hit (an undercount; a weapon live
+  only inside one step is still not seen); `held_frames`, the frames of the
   visit's steps begun holding the beams (`GameView::holds_beams`: a sword and the hearts asm:SwordShot_Make needs);
   `lost_frame`, the visit's frame at the end of the first step that began holding them and ended without (null:
   not lost in the visit). The step entering the next room counts nothing (as for the other beam counters).
