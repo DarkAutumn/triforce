@@ -676,14 +676,14 @@ def main(argv=None):
             from .run_stats import stats_path  # pylint: disable=import-outside-toplevel
             team = registry.team_in_use(args.models_dir)
             stats = stats_path(output)
+            summary_stats = json.loads(stats.read_text(encoding='utf-8')) if stats.is_file() else None
             store.file_output(output, 'evaluate', run=stored.identity, team=team and team['name'],
-                              name=f'{stored.identity}/{default.name}',
-                              summary=json.loads(stats.read_text(encoding='utf-8')) if stats.is_file() else None,
+                              name=f'{stored.identity}/{default.name}', summary=summary_stats,
                               result={'n': result['episodes'],
                                       'successes': round(result['success_rate'] * result['episodes'])})
             if stats.is_file():
                 store.file_output(stats, 'stats', run=stored.identity, team=team and team['name'],
-                                  name=f'{stored.identity}/{stats.name}')
+                                  name=f'{stored.identity}/{stats.name}', summary=summary_stats)
         if events is not None:
             events.emit('eval', **eval_event(result), path=str(output))
         if plan is not None:

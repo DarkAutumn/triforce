@@ -426,6 +426,36 @@ def delete(what: str, name: str, kind: Optional[str] = None) -> str:
     raise store.StoreError(f"delete what? run, team, data or job, not {what!r}")
 
 
+def stats_backfill(files: list, team: Optional[str] = None, out=print) -> dict:
+    """Computes the statistics of chain records that have none (``run_stats.compute_chain``: the records, their
+    ``.meta.json``, the route) and files them by this job (``store.file_output(..., 'stats', summary=...)``: the
+    statistics tables).  Without ``files``: every chain record the store has filed (``chain`` and ``record``
+    outputs ending ``.jsonl`` with a ``.meta.json``).  ``team``: the store team those records were played by, when
+    known.  Returns counts and what could not be computed."""
+    from . import run_stats  # pylint: disable=import-outside-toplevel
+    if not files:
+        files = [store.root() / row['path'] for row in store.outputs()
+                 if row['kind'] in ('chain', 'record') and row['path'].endswith('.jsonl')
+                 and (store.root() / f"{row['path']}.meta.json").is_file()]
+    done, failed = 0, []
+    folder = store.output_dir('stats')
+    for path in map(Path, files):
+        try:
+            stats = run_stats.compute_chain(path)
+        except Exception as error:  # pylint: disable=broad-except
+            failed.append(f"{path}: {type(error).__name__}: {error}")
+            continue
+        target = folder / f"{len(list(folder.iterdir())):05d}-{path.name}.stats.json"
+        target.write_text(json.dumps(stats, indent=1, default=str) + '\n', encoding='utf-8')
+        store.file_output(target, 'stats', team=team, summary=stats, entry=LEAD)
+        done += 1
+    out(f"statistics filed for {done} of {len(files)} chain records" + (f"; {len(failed)} not computed" if failed
+                                                                         else ''))
+    for line in failed[:20]:
+        out(f"  {line}")
+    return {'filed': done, 'failed': failed}
+
+
 def backup(to: Optional[Path] = None, apply: bool = False, out=print) -> list[str]:
     """Copies into the archive (``$TRIFORCE_BACKUP/store``, else ``/backup/triforce/store``) every sealed run, team,
     snapshot, job folder and the index that is not there yet (its own disk: real copies, made read-only)."""
@@ -494,6 +524,9 @@ def main(argv=None) -> int:
     remove.add_argument('name', help="FAMILY/RUN, TEAM, NAME (with --kind) or JOB")
     remove.add_argument('--kind', choices=paths.DATA_KINDS)
     back = sub.add_parser('backup', help="copy what the archive lacks (dry run without --apply)")
+    fill = sub.add_parser('stats-backfill', help="statistics of chain records that have none, into the tables")
+    fill.add_argument('files', nargs='*', type=Path, help="chain .jsonl files (default: every filed chain record)")
+    fill.add_argument('--team', help="the store team the records were played by")
     back.add_argument('--to', type=Path)
     back.add_argument('--apply', action='store_true')
     args = parser.parse_args(argv)
@@ -534,6 +567,8 @@ def main(argv=None) -> int:
             print(delete(args.what, args.name, args.kind))
         elif args.command == 'backup':
             backup(args.to, args.apply)
+        elif args.command == 'stats-backfill':
+            stats_backfill(args.files, args.team)
     except (store.StoreError, paths.MissingError) as error:
         print(f"triforce-lead: error: {error}", file=sys.stderr)
         return 2

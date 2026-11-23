@@ -1056,7 +1056,20 @@ def file_output(path, kind: str, *, run: Optional[str] = None, team: Optional[st
                          team, None if data is None else json.dumps(data), row['n'], row['successes'], row['rate'],
                          row['se'], None if row['compact'] is None else json.dumps(row['compact']),
                          cursor.lastrowid))
+        if kind == 'stats' and summary is not None:       # the statistics tables (triforce.store_stats)
+            from . import store_stats  # pylint: disable=import-outside-toplevel
+            store_stats.index(con, summary, target, cursor.lastrowid, _store_fields(team, run, data), time.time())
     return target
+
+
+def _store_fields(team: Optional[str], run: Optional[str], data: Optional[list]) -> dict:
+    """The store's identities of a statistics row: the effective team (name, content hash, overrides), the run, the
+    data snapshots."""
+    known = next((t for t in _TEAMS.values() if t['name'] == team), None)
+    return {'store_team': team, 'store_team_sha256': known and known['sha256'],
+            'store_overrides': None if known is None or not known.get('overrides') else
+            json.dumps(known['overrides'], sort_keys=True),
+            'store_run': run, 'store_data': None if data is None else json.dumps(data)}
 
 
 def record_summary(kind: str, name: str, *, run: Optional[str] = None, team: Optional[str] = None,
@@ -1071,6 +1084,29 @@ def record_summary(kind: str, name: str, *, run: Optional[str] = None, team: Opt
                     (time.time(), kind, name, caller['job'], run, team, None if data is None else json.dumps(data),
                      row['n'], row['successes'], row['rate'], row['se'],
                      None if row['compact'] is None else json.dumps(row['compact'])))
+        if kind == 'train' and summary is not None and run is not None:     # the run's own train.stats.json
+            from . import store_stats  # pylint: disable=import-outside-toplevel
+            raw = parse_run(run).path / 'train.stats.json'
+            store_stats.index(con, summary, raw, None, _store_fields(team, run, data), time.time())
+
+
+def reindex(entry: str = PUBLIC) -> dict:
+    """Rebuilds the statistics tables from the filed statistics files (``store_stats.reindex``)."""
+    from . import store_stats  # pylint: disable=import-outside-toplevel
+    with writing('stats-reindex', {}, entry) as con:
+        return store_stats.reindex(con, root())
+
+
+def query(sql: str, params: Optional[dict] = None) -> tuple[list[str], list[tuple]]:
+    """(columns, rows) of a read-only query of the index (the statistics tables, the runs, the summaries)."""
+    import math  # pylint: disable=import-outside-toplevel
+    con = sqlite3.connect(f'file:{root() / DB_NAME}?mode=ro', uri=True)
+    try:
+        con.create_function('SQRT', 1, lambda x: None if x is None or x < 0 else math.sqrt(x), deterministic=True)
+        cursor = con.execute(sql, params or {})
+        return [d[0] for d in cursor.description or ()], cursor.fetchall()
+    finally:
+        con.close()
 
 
 def outputs(job: Optional[str] = None, run: Optional[str] = None, kind: Optional[str] = None) -> list[dict]:

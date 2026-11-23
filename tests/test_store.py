@@ -218,3 +218,40 @@ def test_the_public_help_never_names_the_lead_entry_point():
     for command in ('paths', 'data', 'runs', 'teams', 'summaries', 'outputs', 'log', 'view'):
         assert command in out
     assert 'lead' not in out.lower()
+
+
+def _stats(name: str, deaths: int, bombs: list) -> dict:
+    """A chain's statistics file as triforce.run_stats writes it (the fields the tables read)."""
+    group = {'visits': 10, 'runs': 10, 'exits': 10 - deaths, 'wrong_exits': 0, 'deaths': deaths, 'stuck': 0,
+             'other_endings': {}, 'room': '3:0x5b', 'family': 'zol', 'network': 'zol@d3first',
+             'network_run': 'zol/r1', 'network_sha1': 'abcdef012345',
+             'frames': {'n': 10, 'sum': 1000, 'sq': 120000, 'median': 90, 'p90': 150},
+             'enter': {'n': 10, 'sum': 5000, 'sq': 2600000, 'median': 480, 'p90': 600},
+             'bombs_used': {'n': len(bombs), 'sum': sum(bombs), 'sq': sum(b * b for b in bombs)}}
+    return {'schema': 1, 'kind': 'chain', 'name': name, 'id': f'0-{name}', 'source': f'/x/{name}.jsonl',
+            'written': '2026-11-23T12:00:00', 'description': f'd3, 10 runs ({name})',
+            'provenance': {'route': 'd3first', 'start_from': 'd3first_3_7cs_0', 'stop_step': 24, 'segment': 'd3'},
+            'records': {'counters': 'round40', 'runs': 10, 'asked': 10}, 'flags': [],
+            'rate': {'n': 10, 'successes': 10 - deaths, 'rate': (10 - deaths) / 10, 'se': 0.1},
+            'endings': {'wins': 10 - deaths, 'deaths': deaths, 'stuck': 0, 'errors': 0},
+            'by_step': {'3': group}, 'runs': {'seeds': list(range(10)), 'result': 'w' * (10 - deaths) + 'd' * deaths}}
+
+
+def test_statistics_tables_are_filed_queried_and_rebuilt(shared, tmp_path):
+    from triforce import store_stats
+    for name, deaths, bombs in (('base', 4, [1, 2, 3]), ('arm', 2, [0, 1])):
+        path = tmp_path / f'{name}.stats.json'
+        stats = _stats(name, deaths, bombs)
+        path.write_text(json.dumps(stats))
+        store.file_output(path, 'stats', team='t1' if name == 'base' else 't1+zol@d3first=zol/r9', summary=stats)
+    columns, rows = store.query(store_stats.EXAMPLES['deaths-by-room-over-time'][1], {'level': 3, 'room': 0x5b})
+    by_team = {row[columns.index('team')]: row[columns.index('deaths_per_1000')] for row in rows}
+    assert by_team == {'t1': 400.0, 't1+zol@d3first=zol/r9': 200.0}
+    columns, rows = store.query(store_stats.EXAMPLES['bombs-by-family'][1])
+    assert rows[0][columns.index('family')] == 'zol' and rows[0][columns.index('n')] == 5
+    assert rows[0][columns.index('mean')] == 1.4
+    _, rows = store.query('SELECT runs, to_step, from_step, rate_successes FROM evaluations ORDER BY id')
+    assert store_stats.runs_of(rows[0][0])['result'] == 'wwwwwwdddd' and rows[0][1:] == (24, 3, 6)
+    assert store.reindex() == {'evaluations': 2, 'rooms': 2, 'unreadable': []}
+    _, rows = store.query('SELECT COUNT(*) FROM evaluation_rooms WHERE enter_n = 10')
+    assert rows == [(2,)]

@@ -431,7 +431,7 @@ def chain_entry(name: Optional[str], args: list[str], options: Options, *, outpu
                               result={'n': summary.get('runs'), 'successes': summary.get('successes')})
             store.file_output(meta_path(output), 'chain-meta', team=options.team)
             if stats.is_file():
-                store.file_output(stats, 'stats', team=options.team)
+                store.file_output(stats, 'stats', team=options.team, summary=summary_stats)
         return chain_headline(summary, read_runs(output) if target is not None else None, target)
 
     def resume():

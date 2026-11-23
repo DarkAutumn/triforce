@@ -339,7 +339,7 @@ def file_chain(output, team: dict, summary: dict, replays: Optional[str], harves
                           result={'n': summary['runs'], 'successes': summary['successes']})
         store.file_output(meta_path(output), 'chain-meta', team=team['name'])
         if stats.is_file():
-            store.file_output(stats, 'stats', team=team['name'])
+            store.file_output(stats, 'stats', team=team['name'], summary=summary_stats)
     for kind, folder in (('replays', replays), ('harvest', harvest)):
         if folder is not None and Path(folder).is_dir() and (kind == 'replays' or store.root() in Path(folder).parents):
             store.file_output(folder, kind, team=team['name'])

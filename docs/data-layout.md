@@ -54,6 +54,34 @@ and the store keeps them in `layout.json` for tools that are not Python.
 8. **Only the store writes the store.** Agents use `triforce store ...` to look; the tools call `triforce.store` to
    allocate, seal and file. Nobody copies, links, moves or edits anything there by hand.
 
+## The statistics tables (the aggregate kept for good)
+
+The run statistics (`triforce.run_stats`: every chain, evaluation and training leaves `<output>.stats.json`) are
+duplicated into two SQL tables of `store.db` when a job files them (`triforce.store_stats`, in the filing's
+transaction): derived, rebuildable (`triforce store reindex`), queryable after the raw files are trimmed or moved to
+`/backup`. Column names are the statistics file's fields one to one, nested names joined with `_`.
+
+- `evaluations`: one row per statistics file: who and when (`job_id`, `job_agent`, `job_task`, `job_subtask`,
+  `written`), what (`kind`, `name`, `description`, `provenance_route`, `from_step`, `to_step`, `provenance_code`,
+  `provenance_version`), played by what (`store_team`, `store_team_sha256`, `store_overrides`, `store_run`,
+  `store_data`), the rate (`rate_n`, `rate_successes`, `rate_rate`, `rate_se`), the endings, the beams, hearts lost
+  and frames as count, sum and sum of squares, the flags, `raw_path` (the file, which may later be gone) and `runs`:
+  every run's outcome (seed, result, furthest step, frames, frames to each step ...) as one compressed JSON blob
+  (`store_stats.runs_of`), enough to pair two evaluations by seed.
+- `evaluation_rooms`: one row per evaluation and route step (an evaluation's per room): `step`, `room`, `level`,
+  `room_id`, `cave`, `family`, `network`, `network_run`, `network_sha1`, the counters (`visits`, `exits`, `deaths`,
+  `stuck` ...), and every per-visit figure (hits, hearts lost, health in and out, bombs and keys used and cheated,
+  shots, shots that hit, far and near kills, lined-up unfired, held frames, linger ...) as `<name>_n`, `<name>_sum`,
+  `<name>_sq`, so a mean and its standard error is a query; frames to enter the step as `enter_*`.
+- Indexes on (level, room), family, team, time; `stats_schema` numbers the layout.
+
+```
+triforce store query                                   # the examples
+triforce store query deaths-by-room-over-time --param level=3 --param room=0x5b
+triforce store query bombs-by-family
+triforce store query "SELECT store_team, SUM(rate_successes), SUM(rate_n) FROM evaluations GROUP BY 1"
+```
+
 ## A checkout
 
 - Tracked files, `target/` (scratch: builds and tools' working folders, `paths.scratch()`), `logs/` (the GUI's event

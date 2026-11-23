@@ -124,6 +124,37 @@ def cmd_view(args) -> int:
     return 0
 
 
+def cmd_query(args) -> int:
+    from .store_stats import EXAMPLES  # pylint: disable=import-outside-toplevel
+    if args.sql is None:
+        for name, (what, sql) in EXAMPLES.items():
+            print(f"{name}: {what}\n  {sql}\n")
+        return 0
+    sql = EXAMPLES[args.sql][1] if args.sql in EXAMPLES else args.sql
+    params = {}
+    for item in args.param:
+        key, _, value = item.partition('=')
+        try:
+            params[key] = int(value, 0)         # 3, 0x5b
+        except ValueError:
+            params[key] = value
+    columns, rows = store.query(sql, params)
+    if args.json:
+        _print_json([dict(zip(columns, row)) for row in rows])
+        return 0
+    widths = [max(len(str(c)), *(len(str(r[i])) for r in rows)) if rows else len(str(c))
+              for i, c in enumerate(columns)]
+    print('  '.join(str(c).ljust(w) for c, w in zip(columns, widths)))
+    for row in rows:
+        print('  '.join(str(v).ljust(w) for v, w in zip(row, widths)))
+    return 0
+
+
+def cmd_reindex(args) -> int:  # pylint: disable=unused-argument
+    print(json.dumps(store.reindex(), indent=2))
+    return 0
+
+
 def main(argv=None) -> int:
     """``triforce store ...``."""
     parser = argparse.ArgumentParser(prog='triforce store', description="Where the shared things are and what the "
@@ -152,11 +183,18 @@ def main(argv=None) -> int:
     view = sub.add_parser('view', help="an old-style models folder of links for TEAM (an old version's tree)")
     view.add_argument('team', help="NAME, current, or NAME+SLOT=RUN...")
     view.add_argument('--into', type=Path, required=True)
-    for parser_ in (data, runs, teams, summaries, outputs, log):
+    query = sub.add_parser('query', help="the statistics tables (evaluations, evaluation_rooms) in SQL: an example's "
+                                         "name or a SELECT; without one, the examples")
+    query.add_argument('sql', nargs='?')
+    query.add_argument('--param', action='append', default=[], metavar='NAME=VALUE',
+                       help="a :NAME parameter (deaths-by-room-over-time: --param level=3 --param room=0x5b)")
+    sub.add_parser('reindex', help="rebuild the statistics tables from the filed statistics files")
+    for parser_ in (data, runs, teams, summaries, outputs, log, query):
         parser_.add_argument('--json', action='store_true')
     args = parser.parse_args(argv)
     commands = {'paths': cmd_paths, 'data': cmd_data, 'runs': cmd_runs, 'teams': cmd_teams,
-                'summaries': cmd_summaries, 'outputs': cmd_outputs, 'log': cmd_log, 'view': cmd_view}
+                'summaries': cmd_summaries, 'outputs': cmd_outputs, 'log': cmd_log, 'view': cmd_view,
+                'query': cmd_query, 'reindex': cmd_reindex}
     try:
         return commands[args.command](args)
     except (store.StoreError, paths.MissingError) as error:
