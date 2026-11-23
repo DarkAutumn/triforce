@@ -314,6 +314,14 @@ def test_express_is_recorded_from_begin_job_or_the_environment(registry, monkeyp
     assert jobs.register(None, None, 'env', 'chain').data['express'] is True
 
 
+def test_the_environment_names_a_job(registry, monkeypatch):
+    assert jobs.register(None, None, 'zol', 'train').data['name'] == 'zol'
+    monkeypatch.setenv(jobs.JOB_NAME_ENV, 'backtest v2.0.0.2 250')
+    record = jobs.register(None, None, 'eval-chain-d3first-power-on', 'chain')
+    assert record.data['name'] == 'backtest v2.0.0.2 250'
+    assert any(job['name'] == 'backtest v2.0.0.2 250' for job in jobs.read_jobs())
+
+
 def test_a_waiting_entry_without_an_estimate_counts_as_estimate_zero(proc):
     regular = [entry('a', 1, lane='regular'), entry('b', 2, lane='regular')]
     bare = entry('bare', 3, 'queued', queued=NOW - 50)

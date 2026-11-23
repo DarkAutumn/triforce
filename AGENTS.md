@@ -1001,6 +1001,15 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   should still write a plan, so it shows its progress (`tests/test_training_gui.py` lists every entry point).
   Invisible, and neither waiting nor counted: a job whose `--events` go into a folder whose plan is someone else's
   (it is taken for that plan's child, as a round's trainings are).
+- **Every job is named for who runs it and what it measures** (the owner, Nov 23: "I have no idea which ones in
+  the queues would be theirs"). A tool's own name says neither (`zol` three times for three seeds,
+  `eval-chain-d3first-power-on` for every version's 250 test), so every job an agent starts sets
+  `TRIFORCE_JOB_NAME` (`jobs.job_name`: the name in the queue, the log folder and the training GUI), or gives
+  `train_round.py --round` / `eval-batch NAME` a name by the same convention: **`<work>-<subject>-<what>`**, lower
+  case with dashes: `<work>` the piece of work or its branch (`backtest`, `r40-fresh`, `r40-fireline`, `one38`),
+  `<subject>` the version, team or family measured (`v2.0.0.2`, `2012`, `zol`, `d2bw8`), `<what>` the job (`250`,
+  `golden`, `smoke`, `d3-1k`, `train-s1`, `rooms`). Examples: `backtest-v2.0.0.2-250`, `backtest-v1.9.0.0-smoke`,
+  `r40-fresh-zol-train-s2`, `r40-fireline-zol-scratch-s1`, `one38-d2bw8-d4-1k`, `r40-2012-d3-1k`.
 - **Chain segments** (20–40 runs each; several at once go in one batch: `triforce eval-batch NAME --chain 'd3:
   --from 3_7cs_0 --runs 40' --chain ...`, or every segment of a route with `--chains TAG [--route R]`). **`d3first`
   (the main route, no `--route` needed; `eval_batch.D3FIRST_SEGMENTS`, its states `d3first_*` named bare):** full
