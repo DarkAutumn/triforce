@@ -675,11 +675,17 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 - **Every replay is kept** (the owner, Nov 22: "I want these golden run replays of particular model versions saved
   somewhere. Possibly checked in. I want to go back to previous runs and say 'see this was a problem' [...] You are
   welcome to use /backups [...] Keep 2tb free there"). `scripts/archive_replays.py PATH...` names each replay from
-  its META (`<version>_<route>_<kind>_<networks>_<frames>f.tfreplay.bz2`), checks golden and single runs into
-  `replays/` (committed, about 100 KB each) and keeps every replay in `/backup/triforce/replays/` (`index.jsonl`:
-  each file's SHA-1, META summary and where it was found). Run it on every golden race's output and on a worktree
-  before removing it: `scripts/tidy_worktrees.sh NAME...` does that, and copies the worktree's models to
-  `/backup/triforce/models/worktrees/NAME/`, before `git worktree remove`. `/backup` (a separate 8 TB disk) keeps
+  its META (`<version>_<route>_<kind>_<networks>_<frames>f`), checks golden and single runs into `replays/` as plain
+  `.tfreplay` files (committed; never compressed under `~/git`: the owner, Nov 23, "hard to watch") and keeps every
+  replay in `/backup/triforce/replays/<version>/<kind>/` (one `.tfreplay.bz2` each; segments one 7z per directory;
+  `--kind runs-250 --label best` for a backup-only kind; `index.jsonl`: each replay's SHA-1, META summary, path and
+  where it was found). Run it on every golden race's output. **`/backup/triforce` is an organised archive, by
+  version** (the owner, Nov 23; layout: `/backup/triforce/README.md`, contents: `INDEX.md`): run dirs once under
+  `models/runs/` (`scripts/backup_models.py store`), the team each version played in `models/teams/<version>.json`
+  (**at every landing:** `scripts/backup_models.py manifest VERSION <a chain of the landed team>.meta.json`, then
+  `store` main's `models/` with `--source <date>_main` and `index`), worktree data under
+  `worktree-data/<date>_<branch>/`. Remove a finished worktree with `scripts/tidy_worktrees.sh NAME...` (replays,
+  models and data kept that way first). `/backup` (a separate 8 TB disk) keeps
   at least 2 TB free. **What must be kept** (the owner, Nov 22): "a golden replay saved per model version (and if
   there's a reason to collect more than one, like 51-networks vs single-network do that too). If you also happen to
   get a run from the start to the end (no golden run, no segmenting) save the best one of those too per version of

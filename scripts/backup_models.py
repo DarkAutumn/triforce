@@ -234,7 +234,8 @@ def team(args) -> int:
             print(f"{key}: run {run} is not under its family; copy it by hand", file=sys.stderr)
             return 1
         if not (out / run).exists():
-            shutil.copytree(kept.root / 'runs' / stored, out / run)
+            shutil.copytree(kept.root / 'runs' / stored, out / run,      # the numbered snapshots do not play
+                            ignore=shutil.ignore_patterns('checkpoints'))
         pointer = 'promoted' if '@' not in key else f"promoted.{key.split('@')[1]}"
         (out / family / pointer).write_text(run.split('/', 1)[1] + '\n')
     acts = sorted({str(n.get('act')) for n in networks.values()})
@@ -257,10 +258,11 @@ def index(args) -> int:
              f"Written by `scripts/backup_models.py index` on {datetime.date.today()}; the layout and how to use it: "
              "`README.md`.", '',
              '## Can a version\'s 250-run test run again without retraining?', '',
-             "Yes when every network of the version's team (its route of record) is kept, matched by checkpoint SHA-1 "
-             "(`models/teams/<version>.json`; rebuild a models dir with `scripts/backup_models.py team VERSION DIR`). "
-             "The one-network student is the single network a golden or single run of that version played.", '',
-             '| version | route | networks | team complete | missing runs | one-network student kept | team from |',
+             "Yes when every network of the version's team (its route of record first) is kept, matched by checkpoint "
+             "SHA-1 (`models/teams/<version>.json`; rebuild a models dir with `scripts/backup_models.py team VERSION "
+             "DIR`). The one-network student is the single network that version's golden race played (kept: where; "
+             "other students that version's branches tried are counted after it).", '',
+             '| version | route | networks | team complete | missing runs | one-network student | team from |',
              '|---|---|---|---|---|---|---|']
     by_sha = kept.by_sha1()
     for record in teams:
@@ -269,8 +271,18 @@ def index(args) -> int:
             entry = routes[route]
             _, missing = completeness(kept, entry['networks'])
             students = [s for s in record.get('one_network') or [] if s.get('route', route) == route]
-            student = ', '.join(f"{s['run']} ({'yes' if by_sha.get(s.get('checkpoint_sha1') or '') else 'no'})"
-                                for s in students) or 'none played'
+
+            def where(s):
+                if not s.get('checkpoint_sha1'):
+                    return f"{s['run']} (SHA-1 unknown: only its play hash {s.get('hash')} was recorded)"
+                kept_at = by_sha.get(s['checkpoint_sha1'])
+                return f"`{kept_at[0]}`" if kept_at else f"not kept ({s['run']})"
+            golden = [where(s) for s in students if s.get('of_record')]
+            others = [s for s in students if not s.get('of_record')]
+            student = ', '.join(golden) or 'none'
+            if others:
+                student += (f" (+{len(others)} tried on branches, "
+                            f"{sum(1 for s in others if by_sha.get(s.get('checkpoint_sha1') or ''))} kept)")
             lines.append(f"| {record['version']} | {route} | {len(entry['networks'])} | "
                          f"{'**yes**' if not missing else 'no'} | {', '.join(missing) or '-'} | {student} | "
                          f"{entry['confidence']}: {entry['how']} |")
