@@ -38,6 +38,13 @@ const OBJ_ATTR: usize = 0x4BF;
 pub const OBJ_INVINCIBILITY_TIMER: usize = 0x4F0;
 /// The shoot timer's value at which the shot leaves.
 const SHOT_LEAVES: u8 = 0x10;
+/// asm:Shooter_ObjWantsToShoot ($412 + slot): a Goriya sets it at a grid point with its chase target within $51 px
+/// and throws once its ObjTimer is 0 (asm:Walker_SetInputDirAndTryThrowBoomerang).
+const OBJ_WANTS_TO_SHOOT: usize = 0x412;
+/// asm:ObjGridOffset ($394 + slot): signed pixels moved since the last grid point (16 px apart).
+const OBJ_GRID_OFFSET: usize = 0x394;
+/// asm:ObjQSpeedFrac ($3BC + slot).
+const OBJ_QSPEED: usize = 0x3BC;
 
 /// The horizon the observation uses, in frames: hits are decided in an action's first frames (round 36: half by
 /// frame 2, three quarters by frame 4; the bench's choice, round40.md).
@@ -124,7 +131,18 @@ pub fn lane(ram: &[u8], slot: usize, grid: &Grid) -> Option<Lane> {
     let s = shooter(obj_type)?;
     let live = ram[OBJ_METASTATE + slot] == 0 && ram[OBJ_STUN + slot] == 0;
     let (ready, wait) = if s.goriya {
-        (live && ram[OBJ_STATE + slot] & 0x80 == 0, ram[OBJ_TIMER + slot] as f32)
+        // It throws when its timer is 0 and it wants to; the wish is set only at a grid point, so without it the
+        // next throw is at least the frames to the next grid point away (measured on 2.0.0.13's replays: the timer
+        // alone read 0 up to 16 frames before most throws; round40.md "The lane against the game").
+        let timer = ram[OBJ_TIMER + slot] as f32;
+        let wait = if ram[OBJ_WANTS_TO_SHOOT + slot] != 0 {
+            timer
+        } else {
+            let speed = (ram[OBJ_QSPEED + slot] as f32 / 64.0).max(0.25);
+            let moved = (ram[OBJ_GRID_OFFSET + slot] as i8).unsigned_abs() as f32 % 16.0;
+            timer.max(((16.0 - moved) / speed).ceil())
+        };
+        (live && ram[OBJ_STATE + slot] & 0x80 == 0, wait)
     } else {
         let timer = ram[OBJ_SHOOT_TIMER + slot];
         if timer > SHOT_LEAVES {

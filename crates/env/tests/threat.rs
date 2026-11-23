@@ -185,13 +185,22 @@ fn a_shooter_facing_link_threatens_his_lane_until_its_shot_is_out() {
 
 #[test]
 fn a_goriya_waiting_for_its_boomerang_has_no_lane() {
-    // A blue Goriya 14 px ahead facing Link, its throw timer at 0: the boomerang (2.5 px a frame) arrives at
-    // 0 + 1 + 6 / 2.5 = 3.4, frame 4.
-    let goriya = |state: u8| Obj { state, ..Obj::new(1, 0x05, 114).moving(2, 0) };
-    let t = Room::new().put(goriya(0)).threat(0);
+    // A blue Goriya 14 px ahead facing Link, its throw timer at 0 and wanting to throw: the boomerang (2.5 px a
+    // frame) arrives at 0 + 1 + 6 / 2.5 = 3.4, frame 4.
+    let goriya = |state: u8| Obj { state, ..Obj::new(1, 0x05, 114).moving(2, 0x20) };
+    let wanting = |mut room: Room| {
+        room.ram[0x412 + 1] = 1;
+        room
+    };
+    let t = wanting(Room::new().put(goriya(0))).threat(0);
     assert_eq!((t("lane_ready"), t("lane_in"), t("lane_soon")), (1.0, 1.0, soon(4)));
+    // Not wanting yet, 4 px past a grid point at 0.5 px a frame: the next grid point is 24 frames away.
+    let mut room = Room::new().put(goriya(0));
+    room.ram[0x394 + 1] = 4;
+    let t = room.threat(0);
+    assert_eq!((t("lane_wait"), t("lane_in"), t("lane_soon")), (24.0 / 32.0, 1.0, 0.0));
     // Waiting for it to come back (ObjState bit 7).
-    let t = Room::new().put(goriya(0x80)).threat(0);
+    let t = wanting(Room::new().put(goriya(0x80))).threat(0);
     assert_eq!((t("lane_ready"), t("lane_in"), t("lane_soon")), (0.0, 0.0, 0.0));
 }
 
