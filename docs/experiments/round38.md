@@ -521,7 +521,7 @@ chain room records, evaluation visits, rollouts, the bench and `triforce room-st
 
 The golden replay carries no decision stream, so its two segments were played again with one
 (`Route.load(..., power_on={'name': 'LINK', 'delay': 4587})` with seed 7 to route step 3; the replay's own checkpoint
-at step 215 with seed 14042 to step 229; the single network in every slot, `temperature:0.5+relax:16`): **both
+at step 213 with seed 14042 to step 227; the single network in every slot, `temperature:0.5+relax:16`): **both
 reproduce the golden game exactly** (1,493 and 11,160 frames, the two visits' 948 and 2,317 frames), so the
 probabilities below are the ones the golden run drew from. The objective's wavefront step at each decision is the
 `target` observation of a single-family env replaying the same actions from the same state (0:0x77 from the game
@@ -531,7 +531,7 @@ step), which reproduces the chain's score of the visit to the frame.
 | visit | frames | calm frames | needed | aimless | calm decisions | away | reversals |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | 0:0x77, the opening (step 0) | 948 | 563 | 90 | **457** | 45 | 13 | 26 |
-| 8:0x4c after the Pols Voices (step 228) | 2,317 | 1,495 | 180 | **1,282** | 119 | 35 | 11 |
+| 8:0x4c after the Pols Voices (step 226) | 2,317 | 1,495 | 180 | **1,282** | 119 | 35 | 11 |
 
 The score sees what the owner saw: the opening's straight walk to the cave needs 90 frames and took 563; 0x4c's
 walk out needs 180 and took 1,495. Every other room of the two segments scores 0.
@@ -576,8 +576,8 @@ Until a policy is trained against it, only sampling breaks a loop.
 One batch on the branch (`r38walk`, 300 runs an entry, seeds 0-299, clips on): the team (today's 51 networks,
 `--act model`, every one `temperature:0.5+relax:16`) and the one network (`r36merge/w768e2-z` in every slot). The
 opening is played from the game start to route step 3 (0:0x77, its cave, 0:0x77 again, into 0:0x76); 0x4c from
-`8_4cc_0` (up the cellar's stairs: the Pols Voices, the bomb wall) to step 229. Aimless frames a visit of 0:0x77
-(step 0) and 8:0x4c (step 228): mean, median, 90th percentile; success: the run reached the stop; stuck: the
+`8_4cc_0` (up the cellar's stairs: the Pols Voices, the bomb wall) to step 227. Aimless frames a visit of 0:0x77
+(step 0) and 8:0x4c (step 226): mean, median, 90th percentile; success: the run reached the stop; stuck: the
 family's 2,000-step cap.
 
 | arm | team: 0:0x77 aimless (mean / med / p90) | reversals | team: 8:0x4c aimless | success (stuck) | one: 0:0x77 | one: 8:0x4c | success |
@@ -613,9 +613,9 @@ act mode tones 0x4c down, and the opening only by a seventh; both need training.
 each). From the game start (`--act model`, no stop; no run reached the end of the game): 841 aimless frames a run
 (median 647, p90 1,686), 5.9% of the runs' frames, 185 calm decisions a run of which 12.5% moved away, 45.6
 reversals a run; the opening holds 668 of the 841. The `d8` segment (from `8_7es_0` to 0:0x6d, 40.0% success):
-1,473 aimless frames a run, 20% of its frames; **8:0x4c at step 228 holds 440,306 of the segment's 441,817** (154
+1,473 aimless frames a run, 20% of its frames; **8:0x4c at step 226 holds 440,306 of the segment's 441,817** (154
 visits, 2,859 a visit, median 809, p90 9,723). Over the 600 runs of `d3` and `d8`, the rooms that waste most:
-8:0x4c (228) 90%, 3:0x59 (17) 8.7%, 3:0x5b (19) 0.7%, then 8:0x2c (230) and 3:0x3d (23) at 8 frames a visit; 28
+8:0x4c (226) 90%, 3:0x59 (17) 8.7%, 3:0x5b (19) 0.7%, then 8:0x2c (228) and 3:0x3d (23) at 8 frames a visit; 28
 room-steps hold all of it.
 
 **Dungeon 3, the team** (the identity check's entry, 300 runs from `3_7cs_0` to 0:0x74, 21.3% success): 156
@@ -666,3 +666,114 @@ family until an arm shows fewer aimless frames at no loss of success or hits.
   three about 60), and an entry's start (loading 34 networks, the pool) is a fixed cost the unit doesn't count, so
   short entries and long rooms are underestimated most. A unit of decisions (or of the route steps' frames from the
   latest chains of record) would fit.
+
+## 0x2d dropped
+
+**The owner's change** (Nov 22, from watching): "Overworld: drop the bomb for rupees in 0xd2, keep the armos rupees in
+3d (losing too many hearts in that d2 fight, and it's redundant with 0x3d)... we may have to cheat rupees more, but
+that 1 30 secret + the 100 secret + drops is the intended route." Asked which room, he confirmed: "0x2d is indeed
+what I meant." Landed as **2.0.0.7** (branch `r38-2d`); `d2first` unchanged.
+
+**What changed.** `d3first`'s three steps at 0:0x2d (in from W, the rock wall bombed, the cave's 30 rupees, out S)
+are one crossing, W → S; every step after 90 is two lower (292 → 290 steps). 0x3d's Armos cave stays. `game.yaml`
+loses `d3first`'s own 0x2d entries (the wall, the secret cave): both routes play the room alike, and neither bombs
+its wall. `ow-zora` loses the cave room (`specialists/ow-zora.yaml`, `specialists/d3first/ow-zora.yaml`). The
+entry states after 0x2d were made again: steps 89-153 by the explorer from `d3first_0_2dw_*`, the Dungeon 5
+entrance (`5_76s`), the Level 5 exit (`0_0bc`) and Dungeon 7's entrance (`7_79s`) cut from the new chains' arrivals;
+the audit is clean (855 states); `heart_value.d3first.json` refit on the 290 steps. The purse in the rebuilt states
+(RAM `$66D`, chains 0/1/2), 2.0.0.6 → 2.0.0.7: Dungeon 2's entrance 62/70/74 → 32/40/45 (bombs 2/4/0 → 3/5/0), out
+of Dungeon 2 72/79/83 → 36/55/65, Dungeon 5's entrance 179/182/196 → 147/147/150, out of Level 5 172/180/183 →
+147/148/148, before the arrows (0_44n) 112/120/123 → 76/96/107.
+
+### Measured (today's 51 networks, 1000 runs a segment, paired by seed)
+
+Batch `r38-2d-1k` against 2.0.0.6's `r37fix-1k` (post-d1, d2, the route from the start); 2.0.0.6 has no post-d2 or
+post-d5 record, so those two compare with 2.0.0.5's `r36base-1k-post-d2` and `r36guard-1k-post-d5`:
+
+| segment | before | 2.0.0.7 | paired difference |
+|---|---:|---:|---:|
+| post-d1 (to Level 2) | 99.1% | 98.3% | −0.8 ± 0.5 |
+| d2 | 98.4% | 99.3% | +0.9 ± 0.5 |
+| post-d2 (to Level 5) | 100% | 100% | 0 |
+| post-d5 (Level 5 to Level 7: the dock warp, the meat, the arrows) | 78.9% | 83.1% | +4.2 ± 1.7 |
+
+The post-d5 gain is the new start state's, not the code's: 2.0.0.7's code from 2.0.0.6's own Level 5 exit state
+(`post-d5-206`, `--stop-at 7:0x79`) makes 78.9% again. The leg to Level 2 is **620 frames shorter** (4,719 against
+5,339 a run to arrival).
+
+**Bombs.** Runs enter Dungeon 2 with **3.07** bombs (2.02 before): the bomb that opened 0x2d's wall is kept. It
+hardly reaches the later walls: from post-d1, Dungeon 5 is entered with 6.98 (6.95), runs with none 22 of about 850
+(27); from post-d2 8.0 both ways. No bomb is cheated on the leg to Level 2 either way.
+
+**From the start** (runs of 1000 reaching each triforce, 2.0.0.6 → 2.0.0.7): Dungeon 3 195 → 195, Dungeon 4 36 → 36,
+Dungeon 1 31 → 31, **Dungeon 2 21 → 28**, Dungeon 5 4 → 6, Dungeon 7 0 → 1 (that run also entered Dungeon 6). No
+run ends the game.
+
+**`d2first`:** the 100-run chain is the same as `d2first-100-land` in result, steps and frames on all 100 runs (the
+room records differ only by the two counters `bubble_touches` and `sword_blocked_frames`, which the older record
+lacks).
+
+### Rupees cheated at the shops (the owner's question)
+
+Rupees are cheated only at the two shops, the meat at 0x34 (60) and the arrows at 0x44 (80): where Link stands at
+the counter short, the shortfall is handed over and counted (`cheated_rupees` of the cave rooms).
+
+- **Before (2.0.0.6): none.** No run that reached the shops was short (779 runs from Level 5's exit, 146 continuing
+  from after Dungeon 1).
+- **Now, for a run that carries its own purse from after Dungeon 2: short at the arrows about 7 times in 10.** 137 of
+  the 196 runs that reached the shops were short at 0x44, by about 3 rupees each (438 rupees in all: 2.2 a run over
+  all 196). The meat is never short.
+- **Now, from the shop leg's own start state: none** (824 runs): that state was cut with 147 rupees, more than the
+  140 the two shops cost.
+
+In plain words: without 0x2d's 30, the purse reaches the shops with about what the meat and the arrows cost; most
+runs come up a few rupees short at the arrows and get them cheated, about 3 rupees a short run, never more than the
+30 the cave gave. The states after 0x44 (steps 154-157, 159-289) were not made again and hold about 30 rupees more
+than runs bring there; rupees matter there only in the arrow rooms, which top the purse up anyway.
+
+### The golden race on 2.0.0.7
+
+`zelda-headless.py OUT 3 --golden --power-on --clips on --act model --parallel 8 --attempts 2000`, today's 51
+networks on the branch after `main` (4be3f4c8) was merged: **three of three paths reach the ending**, 325 runs in
+all (3 min 36 s: the served networks' batch window). All three verify (`tf replay verify`). Runs a segment (D3, D4,
+D1, D2, D5, D7, D6, D8, D9 + Ganon) and the cheated items (`scripts/experiments/r32team_golden.py`; no rupee cheated
+on any path):
+
+| path (first seed) | runs a segment | runs | frames | cheated |
+|---|---|---:|---:|---|
+| 0 | 4 / 4 / 5 / 1 / 7 / 25 / 26 / 12 / 6 | 90 | 160,248 | 2 bombs (3:0x5b, 7:0x1a), 1 key (9:0x63) |
+| 18,000 | 16 / 8 / 4 / 1 / 11 / 12 / 32 / 21 / 9 | 114 | 177,038 | 4 bombs (7:0x69, 7:0x19, 7:0x1a, 6:0x28) |
+| 36,000 | 7 / 15 / 2 / 1 / 8 / 18 / 35 / 28 / 7 | 121 | 157,553 | 8 bombs (3:0x5b, 4:0x21, 4:0x11, 1:0x53, 0:0x2c, 7:0x19, 7:0x1a, 6:0x28) |
+
+Path 0 replaces `corpus/replays/golden-d3first-51-networks.tfreplay` (fewest cheated bombs, then frames): two
+bombs like 2.0.0.6's path, 19,870 frames shorter (180,118 before). It is the first golden path with a cheated key
+(Level 9's 0x63; every earlier one cheated none).
+
+### The batch's report step
+
+`r38-2d-1k`'s chains all finished; its last entry, the report (`scripts/yardstick.py report --run promoted`, then
+`triforce room-stats`), failed after 32 s, and so did the report of every batch since `r74-1k` (Nov 15: `r37rules`,
+`r37fix`, `r37x1b`, `r37land-d2first`). **The inputs, not the tool:** the yardstick's specialist rows read each
+promoted network's evaluation in its act mode, and seven promoted networks have none of their current weights:
+`d2-rope`, `moldorm`, `ow-peahat`, `ow-start` and `ow-tektite` were widened to schema 6 by `triforce convert-model`
+(Nov 16), whose `eval.json` stays the source's by design ("measure the converted run again for a canonical
+evaluation of its own"); `boss-dodongo`'s evaluation is of weights older than its conversion's source; `ow-octorok`'s
+run has none. The chain rows (arrivals, hearts, cheats) compute for every `d3first` segment, and `room-stats` ran
+(`r38-2d-1k-room-stats.json`). The fix is to evaluate the seven in `temperature:0.5+relax:16`
+(`python -m triforce.evaluate --specialist S`, or `triforce eval-batch TAG --families ...`), a queue job.
+
+### The lab's reference
+
+`triforce/lab/reference.json`'s `ow-zora` and `ow-zora@d3first` each played 10 episodes on `d3first_0_2dw_h370001_9`
+and `_h370075_9`, whose objective was the cave. Played again with the bench's own command (`python -m
+triforce.lab.bench run --checkpoint ow-zora=... ow-zora@d3first=...`, the keys' networks, the manifest's seeds; 14 s
+through the queue): every other episode of the two keys identical, those 20 replaced: ow-zora 87.5% → 88.3%,
+ow-zora@d3first 93.3% → 92.5%; the reference's total 92.9% unchanged, hearts lost 0.249 → 0.248 an episode, hits
+0.677 → 0.675 a visit, bombs 0.360 → 0.357 an episode (docs/lab.md "The yardstick").
+
+### Checks
+
+- `entry_states audit --route d3first` exit 0 (855 states); `d2first`'s states and manifest entries untouched.
+- The suites after `main` (4be3f4c8) was merged: pytest 946 passed, 12 skipped; `cargo test --release --workspace
+  --features zelda/zcore` ok (the corpus test with the new path's pins among them); the zelda-asm tests 5 passed;
+  `asm.py check` ok.

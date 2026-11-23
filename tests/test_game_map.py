@@ -67,7 +67,7 @@ def test_d3first_runs_from_the_start_to_the_end_of_the_game():
     steps = native.route_steps('d3first')
     first, last = steps[0], steps[-1]
     assert (first['level'], first['room'], first['entry'], last['level'], last['room'], last['exit']) == (
-        0, 0x77, 'start', 9, 0x32, 'end') and len(steps) == 292
+        0, 0x77, 'start', 9, 0x32, 'end') and len(steps) == 290
     assert [s['level'] for s in steps if s['exit'] == 'triforce'] == [3, 4, 1, 2, 5, 7, 6, 8]
     index = RouteIndex('d3first')
     entrances = {}
@@ -79,11 +79,11 @@ def test_d3first_runs_from_the_start_to_the_end_of_the_game():
     sword = next(s['index'] for s in steps if s['waypoint'] == 'sword')
     assert index.hearts(sword) == 12
     assert [(s['room'], s['waypoint']) for s in steps if s['waypoint'] and s['level'] == 0] == [
-        (0x2c, 'heart'), (0x2d, 'rupees'), (0x3d, 'rupees'), (0x0f, 'rupees'), (0x34, 'food'), (0x44, 'arrows'),
+        (0x2c, 'heart'), (0x3d, 'rupees'), (0x0f, 'rupees'), (0x34, 'food'), (0x44, 'arrows'),
         (0x2f, 'heart'), (0x21, 'sword'), (0x47, 'heart')]
     assert [(s['room'], steps[s['index'] + 1]['room']) for s in steps if s['exit'] == 'recorder'] == [
         (0x0b, 0x45), (0x55, 0x34), (0x3f, 0x31), (0x22, 0x3c), (0x6d, 0x37)]
-    assert [(s['level'], s['room'], s['bomb_reserve']) for s in steps[:181] if s['bomb_reserve'] is not None] == [
+    assert [(s['level'], s['room'], s['bomb_reserve']) for s in steps[:179] if s['bomb_reserve'] is not None] == [
         (3, 0x7c, 6), (3, 0x59, 0), (3, 0x5b, 0), (3, 0x5c, 6), (3, 0x4d, 0), (3, 0x3d, 6), (4, 0x71, 2), (0, 0x45, 8),
         (0, 0x37, 8), (5, 0x76, 8), (5, 0x05, 0), (5, 0x05, 8), (5, 0x24, 0), (7, 0x79, 8), (7, 0x1b, 2), (7, 0x2a, 0),
         (0, 0x42, 8)]
@@ -124,7 +124,7 @@ def test_d3first_keeps_the_bag_through_dungeon_7_to_0x1b():
                          (0x1a, entrance), (0x1b, 2), (0x1c, 2), (0x0c, 2), (0x0d, 2), (0x29, 2), (0x2a, 0),
                          (0x2b, 0)], route
         assert [s['treasure'] for s in native.route_steps(route) if (s['level'], s['room']) == (7, 0x1b)] == [wanted]
-    assert [len(native.route_steps(r)) for r in ('d2first', 'd3first')] == [354, 292]
+    assert [len(native.route_steps(r)) for r in ('d2first', 'd3first')] == [354, 290]
 
 
 def test_rooms_visited_more_than_once_have_later_visit_names():
@@ -282,12 +282,12 @@ def test_specialist_tags():
         assert native.specialist_for(room) is None, room
     # Phase X: d3first's rooms off d2first (d3first-walks-a.md §9, d3first-walks-b.md §8): tagged in d3first's own
     # game.yaml entries (`routes: [d3first]`), untagged in the rooms d2first plays.  Round 36's corrected order plays
-    # neither 0x0c's candle shop nor 0x62's tree: their entries are gone.
-    own = [(0, 0x29), (0, 0x2a), (0, 0x2b), (0, 0x46), (3, 0x4a), (0, 0x3d, True), (0, 0x2d, True)]
+    # neither 0x0c's candle shop nor 0x62's tree, round 38 not 0x2d's cave: their entries are gone.
+    own = [(0, 0x29), (0, 0x2a), (0, 0x2b), (0, 0x46), (3, 0x4a), (0, 0x3d, True)]
     assert [native.specialist_for(room, 'd3first') for room in own] == [
-        'ow-leever', 'ow-leever', 'ow-leever', 'ow-zora', 'stalfos-keese-gel', 'ow-moblin', 'ow-zora']
-    assert [native.specialist_for(room, 'd3first') for room in [(0, 0x62), (0, 0x62, True), (0, 0x0c, True)]] == \
-        [None] * 3
+        'ow-leever', 'ow-leever', 'ow-leever', 'ow-zora', 'stalfos-keese-gel', 'ow-moblin']
+    gone = [(0, 0x62), (0, 0x62, True), (0, 0x0c, True), (0, 0x2d, True)]
+    assert [native.specialist_for(room, 'd3first') for room in gone] == [None] * 4
     assert [native.specialist_for(room) for room in own] == [None] * len(own)
     assert [native.specialist_for(room, 'd2first') for room in own] == [None] * len(own)
     d7 = {(7, room, False) for room in (0x79, 0x69, 0x59, 0x49, 0x38, 0x28, 0x18, 0x19, 0x1a, 0x1b, 0x29, 0x2b)}
