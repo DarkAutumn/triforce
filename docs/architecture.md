@@ -2286,3 +2286,34 @@ self-diff is zcore's regression suite (README, "Emulator regression suite"). `tr
 prints every instruction of records K..K+N-1 for diffing two builds; `corpus {sync,check}` rebuilds the manifest
 and checks its frame counts, the 1M-frame total and the presence of a `power-on-to-d2` movie; `bench` reports
 frames/s with render on and off.
+
+## Backups (`/backup/triforce`; `scripts/archive_replays.py`, `scripts/backup_models.py`, `scripts/tidy_worktrees.sh`)
+
+`/backup/triforce` (its own disk, at least 2 TB kept free) is an archive organised by version, not a copy of
+checkouts; `/backup/triforce/README.md` documents it and `INDEX.md` there lists what it holds.
+
+- **Runs once, by content.** `backup_models.py store MODELS_DIR --source <date>_<branch>` keeps every run dir (a
+  directory with `ckpt.pt`) at `models/runs/<path under models/>`; a later run of the same path with another
+  checkpoint becomes `<path>@<sha1[:8]>`. Identical files are hard links to one copy (`models/files.tsv`), so a
+  checkout that holds main's 1,700 runs again costs nothing. `models/runs.jsonl` lists each run dir: checkpoint SHA-1,
+  `version`, size and every `<source>:<path>` it was found as. Whatever else a checkout's `models/` held (pointer
+  files, chain records, evidence) goes to `models/sources/<source>/` with `runs.txt` (its run paths -> kept dirs).
+- **A team per version.** `models/teams/<version>.json`: per route, each provenance key (`<family>@<route>`: the
+  family's `promoted.<route>`; a bare family: its `late.<route>` or `promoted`) -> run, checkpoint SHA-1, play hash,
+  act mode, and for hit-head networks the hit network and base policy they were built from; the one-network
+  students a version's golden or single runs played; how it was established and how sure. `backup_models.py manifest
+  VERSION CHAIN.meta.json` writes one from a chain's provenance (at a landing); the teams before Nov 23 were
+  reconstructed from chain `.meta.json` files and replay METAs, preferring main's records made with the version's code
+  at or just before its tag. `backup_models.py team VERSION DIR` rebuilds a models dir that plays that team (runs
+  copied out, `promoted` / `promoted.<route>` written: a bare key plays where `late.<route>` did), for `--models-dir`
+  in a worktree of the version's tag; it refuses when a network's SHA-1 is not kept. `backup_models.py index`
+  rewrites `INDEX.md`, whose table says for which versions that works.
+- **Replays by version and kind.** `archive_replays.py` keeps golden and single runs as one `.tfreplay.bz2` each in
+  `replays/<version>/{golden,single-run}/` and segments in `replays/<version>/chain/<checkout>_<dir>.7z`, one 7z per
+  directory they came from; `--kind K [--label L]` keeps files under `replays/<version>/K/` only (the 250-run test's
+  best, worst and stuck runs: `--kind runs-250`). `replays/index.jsonl` records each replay's SHA-1, META summary,
+  path (and 7z member) and where it was found. The repository's `replays/` holds golden and single runs as plain
+  `.tfreplay` files (the owner, Nov 23: compressed replays under `~/git` are hard to watch).
+- **Worktree data.** `tidy_worktrees.sh NAME...` archives a finished worktree's replays, stores its `models/`, copies
+  `target/`, `runs/` and `logs/` (no build output) to `worktree-data/<date>_<branch>/` (the branch's last commit
+  day), removes the worktree and rewrites `INDEX.md`.

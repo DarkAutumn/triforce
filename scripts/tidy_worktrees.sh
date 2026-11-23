@@ -1,8 +1,11 @@
 #!/bin/bash
 # Removes finished worktrees of the main checkout (branches stay in git), after keeping what they hold that git does
 # not: every replay (scripts/archive_replays.py: golden and single runs into replays/, all into
-# /backup/triforce/replays), every model run dir (/backup/triforce/models/worktrees/<name>/) and the experiment data
-# (target/, runs/, logs/: chains, benches, datasets; /backup/triforce/worktree-data/<name>/, without build output).
+# /backup/triforce/replays/<version>/), every model run dir (scripts/backup_models.py store: each once under
+# /backup/triforce/models/runs/, the rest of models/ under models/sources/<date>_<branch>/) and the experiment data
+# (target/, runs/, logs/: chains, benches, datasets; /backup/triforce/worktree-data/<date>_<branch>/, without build
+# output); <date> is the day of the branch's last commit. INDEX.md is rewritten at the end; the layout:
+# /backup/triforce/README.md.
 # Skips a worktree with a live job, a process whose cwd is inside it, or modified tracked files (uv.lock aside).
 #     scripts/tidy_worktrees.sh NAME...        (NAME: the worktree's directory under the checkout's parent)
 main=$(git -C "$(dirname "$0")" rev-parse --show-toplevel) || exit 1
@@ -28,17 +31,21 @@ for name in "$@"; do
     fi
     keep=()
     for sub in target runs; do [ -d "$dir/$sub" ] && keep+=("$dir/$sub"); done
-    if [ ${#keep[@]} -gt 0 ] && ! nice -n 10 .venv/bin/python scripts/archive_replays.py "${keep[@]}" | tail -n 1; then
-        echo "skip $name: archiving its replays failed"; continue
+    if [ ${#keep[@]} -gt 0 ]; then
+        out=$(nice -n 10 .venv/bin/python scripts/archive_replays.py --backup "$backup/replays" "${keep[@]}") \
+            || { echo "skip $name: archiving its replays failed"; continue; }
+        echo "$out" | tail -n 1
     fi
-    mkdir -p "$backup/models/worktrees"
-    if [ -d "$dir/models" ] && ! nice -n 10 rsync -a --copy-unsafe-links "$dir/models/" "$backup/models/worktrees/$name/"; then
-        echo "skip $name: backing up its models failed"; continue
+    kept=$(git -C "$dir" log -1 --format=%cs)_${name#triforce-}
+    if [ -d "$dir/models" ]; then
+        out=$(nice -n 10 .venv/bin/python scripts/backup_models.py --backup "$backup" store "$dir/models" \
+                --source "$kept") || { echo "skip $name: backing up its models failed"; continue; }
+        echo "$out" | tail -n 1
     fi
-    mkdir -p "$backup/worktree-data/$name"
+    mkdir -p "$backup/worktree-data/$kept"
     if ! nice -n 10 rsync -a --exclude 'release/' --exclude 'debug/' --exclude 'maturin/' --exclude '*.rlib' \
             --exclude 'incremental/' --exclude '.fingerprint/' --exclude 'deps/' --exclude 'build/' \
-            $(for sub in target runs logs; do [ -d "$dir/$sub" ] && echo "$dir/$sub"; done) "$backup/worktree-data/$name/"; then
+            $(for sub in target runs logs; do [ -d "$dir/$sub" ] && echo "$dir/$sub"; done) "$backup/worktree-data/$kept/"; then
         echo "skip $name: backing up its experiment data failed"; continue
     fi
     size=$(du -sh "$dir" 2>/dev/null | cut -f1)
@@ -46,4 +53,5 @@ for name in "$@"; do
     else echo "FAILED $name: $(head -c 200 /tmp/tidy-err)"; fi
 done
 git worktree prune
+nice -n 10 .venv/bin/python scripts/backup_models.py --backup "$backup" index
 df -h "$main" "$backup" | tail -n 2
