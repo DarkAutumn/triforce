@@ -307,14 +307,14 @@ def test_one_worktree_under_two_agent_names_is_warned_about(tmp_path, monkeypatc
 
 def test_setup_makes_the_worktree_its_links_venv_and_build_as_one_tools_entry(tmp_path, monkeypatch):
     main = tmp_path / 'triforce'
-    for name in ('roms', 'trajectories', 'models'):
+    for name in ('roms', 'trajectories', 'models', 'triforce/states/harvested'):
         (main / name).mkdir(parents=True)
     monkeypatch.setattr(job, 'main_checkout', lambda cwd: main)
     seen = {}
 
     def run_job(fields, steps, timeout=None, **_):
         seen.update(fields=fields, steps=steps)
-        (tmp_path / 'triforce-r41-x').mkdir()
+        (tmp_path / 'triforce-r41-x' / 'triforce' / 'states').mkdir(parents=True)     # the checkout's tracked folder
         return steps[1].command()
     monkeypatch.setattr(job, 'run_job', run_job)
     assert job.main(['setup', 'r41-x']) == 0
@@ -322,7 +322,8 @@ def test_setup_makes_the_worktree_its_links_venv_and_build_as_one_tools_entry(tm
     assert [step.name for step in seen['steps']] == ['worktree', 'links', 'venv', 'install', 'build']
     assert seen['steps'][0].command[-3:] == ['-b', 'r41-x', 'main']
     target = tmp_path / 'triforce-r41-x'
-    assert all((target / name).resolve() == main / name for name in ('roms', 'trajectories'))
+    assert all((target / name).resolve() == main / name
+               for name in ('roms', 'trajectories', 'triforce/states/harvested'))    # the data no checkout tracks
     assert not (target / 'models').exists()       # a worktree's runs and pointers stay its own
     assert seen['steps'][-1].env['CARGO_BUILD_JOBS'] == str(job.CARGO_JOBS)
 

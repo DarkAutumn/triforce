@@ -754,7 +754,8 @@ def cmd_setup(args) -> int:
     def link() -> int:
         # ``models`` is never linked: a worktree's own runs and pointers stay its own (it reads the main
         # checkout's team with ``--models-dir``, and its tests with ``$TRIFORCE_MODELS_DIR``, ``test_steps``).
-        for name in ('roms', 'trajectories'):
+        # The harvested start states are data no checkout tracks and every family's recipe draws from.
+        for name in ('roms', 'trajectories', 'triforce/states/harvested'):
             if not (target / name).exists() and (main / name).exists():
                 (target / name).symlink_to(main / name)
         return 0
