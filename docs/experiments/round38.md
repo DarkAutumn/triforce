@@ -119,3 +119,27 @@ of the 51 / the student):
 The student lacks the fight itself at 3:0x59, the Olive Garden and 8:0x3e whatever the start (the missing
 sources' families); the randomized start adds 35 points to the 51's Dungeon 8 rooms and hides how the student's
 lower arrival hearts compound (4:0x32: 0.46 at its own 1.6 hearts against 0.69 randomized).
+
+## The `-f` students on the chains (all 97 sources; 2.0.0.5, 1,000 runs, seeds 0-999; D8 paired on the 51's 300)
+
+Success (paired with the 51), hits a room visit, hearts lost a room visit:
+
+| dungeon | the 51 | `w768e2-f-z` | `h768-f` | `d4a` (RL from `h768-f`) | round 37's `r36w768e2` |
+|---|---|---|---|---|---|
+| D4 | 18.5%, 0.354, 0.236 | 2.8% (-15.7 ± 1.3), 0.540, 0.364 | 2.7% (-15.8 ± 1.3), 0.515, 0.347 | 2.0% (-16.5 ± 1.3), 0.498, 0.335 | 8.3% (-10.2 ± 1.5), 0.440, 0.290 |
+| D7 | 13.1%, 0.945, 0.672 | 2.4% (-10.7 ± 1.1), 1.002, 0.762 | 0.6% (-12.5 ± 1.1), 1.000, 0.766 | | |
+| D3 | 23.2%, 0.300, 0.208 | 4.0% (-19.2 ± 1.5), 0.477, 0.320 | 6.9% (-16.3 ± 1.5), 0.449, 0.299 | | 9.5% (-13.7 ± 1.6), 0.375, 0.259 |
+| D5 | 31.2%, 0.350, 0.485 | 2.5% (-28.7 ± 1.5), 0.594, 1.006 | 11.1% (-20.1 ± 1.7), 0.469, 0.727 | | |
+| D8 | 40.0%, 1.846, 1.435 | 9.7% (-30.3 ± 3.4), 2.386, 2.177 | 22.0% (-18.0 ± 3.5), 2.109, 1.745 | | |
+
+The 21 sources lifted the dying rooms (the Olive Garden lost 999 -> 664 a thousand entering for `h768-f`, 8:0x3e 982
+-> 388, 3:0x59 781 -> 171) but every dungeon stays 10-30 points under the 51: the copy is the gap, not the shape.
+Hitnet takes fewer hits than today's shape everywhere and wins D3, D5 and D8 (+3 to +12 points); the shape verdict
+stands. **`d4a` did not go above its start**: -0.7 ± 0.7 against `h768-f` (4:0x12 vire 183 -> 340 lost a thousand
+entering, 4:0x31 119 -> 56; Gleeok 4:0x13 905 -> 928): 300 iterations of reinforcement left Dungeon 4 at 2%,
+16.5 points under the 51. The rooms tier ranked the four the same way (round 37's student -1.4, `h768-f` -2.3,
+`w768e2-f-z` -3.6, round 1 -8.1 points).
+
+**Decision: a correction round (DAgger) before any more reinforcement**, the student acting, the teachers labelling,
+with the every-room entries the data never had, on the rooms the rooms tier and these chains name (D5's Olive Garden,
+D8's Darknut rooms, D3's 0x59/0x5b/0x69, D4's 0x32/0x12/0x13, D7's 0x1b/0x1c), then the student re-tuned and chained.
