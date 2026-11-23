@@ -50,30 +50,46 @@ What the lineage carried that no file of today's recipe records:
    3,396 harvested handoffs (the lineage's last run saw 2,293). The fresh runs train with them; the lineage never
    did.
 
-### The runs (stopped by the queue's full stop; to be resumed)
+### The runs and their timing
 
-Today's recipe, from scratch (no `--load`, no demonstrations, no hit head), three seeds:
-`triforce train --specialist specialists/d3first/zol.yaml --parallel 8 --iterations 1954 --checkpoint-every 122
---seed 40N --stop-success 1.01` (the lineage's PPO settings; learning rate and entropy are constant, so a run stopped
-at iteration N is the first N iterations of a longer one). Started 08:31 EST Nov 23, two at once; at load 40 they ran
-at 600 decisions a second, falling to 320 (about 1.2M steps an hour each), so the budget was cut to 4M steps
-(iteration 977; the third seed re-queued as `--iterations 977 --checkpoint-every 61`). All three were stopped at
-14:43 UTC by the lead's queue sweep and then the owner's full stop of the queue (decisions: the queue is replaced by
-one scheduler), with their checkpoints saved:
+Today's recipe, from scratch (no `--load`, no demonstrations, no hit head), three seeds, through the job queue:
+`triforce train --specialist specialists/d3first/zol.yaml --parallel 8 --iterations 977 --checkpoint-every 61
+--seed 40N --stop-success 1.01` (the lineage's PPO settings; learning rate and entropy are constant, so the 4M-step
+budget, iteration 977, is the same recipe however the run is cut). Seeds 401 and 402 were started at 08:31 with a
+longer plan (`--iterations 1954 --checkpoint-every 122`), stopped at 1.42M and 1.45M steps by the queue's full stop
+(14:43 UTC), and resumed from their own `ckpt.pt` (`--load` of their own run dir: optimizer, counters and curriculum
+restored; runs `r40-fresh-zol-s401b`, `-s402b`) on main's 2.0.0.13 code (no change to zol's observation, rewards or
+targets between the two; the replay and queue code changed). Seed 403 ran from nothing on 2.0.0.13.
 
-| run | iterations | steps | wall | decisions a second | training success (balanced), by 0.25M |
-|---|---:|---:|---:|---:|---|
-| `r40-fresh-zol-s401` | 347 | 1.42M | 4,422 s | 321 | 0.50, 0.84, 0.92, 0.95, 0.94, **0.96** at 1.42M |
-| `r40-fresh-zol-s402` | 354 | 1.45M | 4,408 s | 329 | 0.54, 0.87, 0.94, 0.94, 0.95, **0.95** at 1.45M |
-| `r40-fresh-zol-s403` | 0 | 0 | | | queued, never started |
+| seed | part | steps | seconds | decisions a second | beside it |
+|---|---|---:|---:|---:|---|
+| 401 | 1 | 1.42M | 4,422 | 321 | seed 402, the old queue at load 40-200 |
+| 401 | 2 | 2.58M | 3,342 | 772 | one other training (the new queue) |
+| 402 | 1 | 1.45M | 4,408 | 329 | seed 401, the old queue |
+| 402 | 2 | 2.55M | 3,077 | 829 | one other training |
+| **401** | total | **4.00M** | **7,764 (2.16 h)** | 515 | |
+| **402** | total | **4.00M** | **7,485 (2.08 h)** | 534 | |
 
-Against the lineage's own training numbers (the same statistic, start-state balanced, the last 20 iterations):
-`r71-e` from scratch on `d2first`'s rooms reached 0.996 at 0.63M; on `d3first`'s states `r32d3-zol` ended at 0.971
-and `r34d3-zol-s341` at 0.982. The promoted networks' single rooms on today's yaml (`triforce evaluate`, 100
-episodes a state, 30 states, the act mode): `r34d3-zol-s341` **98.5%**, `r38head-fam-w4` **99.1%**.
+On the new queue, with two trainings at once and nothing else heavy, a seed runs at about 800 decisions a second:
+4M steps in about 1.4 hours. The estimate for a generation (training only, two places): families x 3 seeds x 1.4 h /
+2, about **2.1 hours of machine time a family**, plus its chains. A training alone was not measured.
 
-Not yet measured (the queue's full stop): the checkpoints' single rooms, the steps to 98.5%, and the `d3` chains.
-The resume: each seed from its own `ckpt.pt` (`--load` of its own run dir restores the optimizer, the counters and
-the curriculum; same task, so still from scratch) to 4M steps, the third seed from nothing; then
-`scripts/experiments/r40_fresh.py` on the chains (the segment paired by seed, and in zol's rooms hits, hearts lost,
-frames, far kills per sword kill and unfired lined-up decisions).
+Training success (start-state balanced, the training's own statistic) by steps:
+
+| steps | 0.25M | 0.5M | 1.0M | 1.5M | 2.0M | 3.0M | 4.0M |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| s401 | 0.50 | 0.84 | 0.95 | 0.96 | 0.96 | 0.98 | 0.98 |
+| s402 | 0.54 | 0.87 | 0.94 | 0.95 | 0.97 | 0.97 | 0.97 |
+
+The lineage on the same statistic: `r71-e` from scratch on `d2first`'s rooms 0.996 at 0.63M; on `d3first`'s states
+`r32d3-zol` ended at 0.971, `r34d3-zol-s341` at 0.982.
+
+Single rooms (`triforce evaluate`, today's yaml, 100 episodes a state, 30 states, the act mode; hearts an episode):
+
+| network | steps | success | hearts |
+|---|---:|---:|---:|
+| `r34d3-zol-s341` (the promoted policy) | 7.10M (lineage) | **98.5%** | +0.01 |
+| `r38head-fam-w4` (promoted, with its head) | | **99.1%** | +0.05 |
+| s401 | 0.5M / 1.0M | 94.0% / 94.3% | -0.28 / -0.14 |
+| s402 | 0.5M / 1.0M | 95.0% / 96.7% | -0.25 / -0.13 |
+
