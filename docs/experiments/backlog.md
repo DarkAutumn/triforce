@@ -392,6 +392,19 @@ thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
   removed so the network times the plays itself. The owner confirmed (Nov 23): today's team keeps the docks as they
   are; the next team "gets no help from swords or dodging", and masking stays where the trick would not work from
   where Link stands (as for the screen wrap): position only, never the monsters.
+- **A cheated wall bomb appears only when the wall is the objective** (the owner, Nov 23: "I want cheat-bombs to
+  not show up unless the objective is to go into a wall that needs it (or dodongo d2 boss). [...] when we enter
+  something like [7:]0x1a to get the red candle, he has the cheated bombs this entire room, even when grabbing the
+  candle, or other rooms hit twice like the first time we hit d3 5b. Those bombs shouldn't show up until we are
+  headed towards the bomb-door and we aren't on a 'clear the room' directive like 0x5b on the way to 0x5c with
+  zero bombs."). Today the room's grant is topped up on entering a `requires_bombs` room (`zelda::cheats`,
+  `CheatLedger::settle`: "in the room Link is in now, a count below the need is topped up"). New rule, a route
+  switch on for the fresh generation (today's team keeps its timing): the grant is given only while the objective's
+  target is the bomb wall the route leaves through (not while it is a fight, a treasure, an item or another exit),
+  taken back if the objective turns away before the bomb is laid, and in Dodongo's room (2:0x0e, the bomb is the
+  weapon) for the fight. So the observation's bomb count, the BOMB mask and the 10th-kill logic see no bomb that
+  is not Link's own until the wall is next. Tests: 7:0x1a with the candle still to take, 3:0x5b's first visit (the
+  fight for its bombs) and its last pass with an empty bag, Dodongo.
 - **Teachers by group first** (the owner: "yes to all", start with the lead's idea, stop when it works): about five
   groups from scratch, a family split off where its group can't learn it; an arm without the room identity if cheap;
   the planner as a teacher in training at the lead's judgement.
