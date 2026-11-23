@@ -15,7 +15,7 @@ from triforce.lab.collect import Family, MultiCollector, NeedSampler
 from triforce.metrics import RolloutMetrics
 from triforce.rollout_buffer import RolloutBuffer
 
-from .conftest import REPO_STATES_DIR, ROOT, require_state
+from .conftest import REPO_STATES_DIR, ROOT, require_state, start_task
 from .networks import native_spec
 
 
@@ -79,7 +79,8 @@ def test_a_recurrent_network_trains_on_sequences_and_plays(states_dir, tmp_path)
         if mode == 'imitate':
             registry.save_checkpoint('ow-start', 'teach', nets.create('zelda', native_spec()), root=tmp_path)
             registry.promote('ow-start', 'teach', tmp_path)
-        run = train.main(['--name', f'mem-{mode}', '--run-id', 'g1', '--families', 'ow-start', '--parallel', '2',
+        run = train.main(['--name', f'mem-{mode}', '--run-id', 'g1', '--families', f'ow-start={start_task()}',
+                          '--parallel', '2',
                           '--steps-per-update', '64', '--device', 'cpu', '--models-dir', str(tmp_path), '--seed', '6',
                           '--iterations', '2', '--arch', 'gru', '--bptt', '8', '--mode', mode,
                           '--arch-config', '{"hidden_dim": 32, "core_dim": 16}', *extra])
@@ -105,8 +106,9 @@ def test_need_sampling_gives_the_rows_to_the_families_below_target():
 
 def test_a_need_sampled_run_changes_and_logs_each_familys_rows(tmp_path):
     yaml = tmp_path / 'short.yaml'
-    yaml.write_text((ROOT / 'specialists' / 'ow-start.yaml').read_text().replace('max_steps: 600', 'max_steps: 8'))
-    run = train.main(['--name', 'need', '--run-id', 'n1', '--families', 'ow-start', f'ow-start@d3first={yaml}',
+    yaml.write_text(_native.SpecialistConfig.load(start_task()).replace(max_steps=8).to_json())
+    run = train.main(['--name', 'need', '--run-id', 'n1', '--families', f'ow-start={start_task()}',
+                      f'ow-start@d3first={yaml}',
                       '--parallel', '2', '--steps-per-update', '64', '--device', 'cpu', '--models-dir', str(tmp_path),
                       '--seed', '7', '--iterations', '3', '--arch', 'wide', '--sampling', 'need',
                       '--need-target', '1.0', '--arch-config', '{"hidden_dim": 16, "depth": 1}',

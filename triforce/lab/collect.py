@@ -105,7 +105,7 @@ def parse_families(items, parallel: int, shares: Optional[dict] = None, state_ro
                 check_curriculum(config, config.curriculum.trajectories or TRAJECTORIES_DIR / config.name,
                                  states_dir)
         except MissingInput as error:
-            raise SystemExit(f"{key}: {error}") from None
+            raise SystemExit(f"{key}: {error}" if key.split('@')[0] != config.name else str(error)) from None
         families.append(Family(key, config))
     keys = [f.key for f in families]
     if len(set(keys)) != len(keys):
