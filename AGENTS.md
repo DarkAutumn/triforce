@@ -732,7 +732,9 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 
 ## Versioning (Lee, Nov 11)
 
-- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `2.0.0.10`: a fresh `ow-start@d3first` for
+- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `2.0.0.11`: `ow-lynel@d3first` for the leg
+  after Dungeon 7 (24% -> 99%), rupees rewarded once a pickup and the beam terms, round38.md "Beams at range; rupees
+  per pickup"; 2.0.0.10 was a fresh `ow-start@d3first` for
   the opening and a `pols-voice` for 8:0x4c that leaves the key, round38.md "The owner's three causes"; 2.0.0.9 was
   goriya's head and Dungeon 8's
   three through `late.d3first`, round38.md "2.0.0.9"; 2.0.0.8 was hit heads playing eight `d3first` families,
