@@ -262,6 +262,11 @@ which is what `late.d3first` plays):
 - No key cheated in any segment, either way.
 - `d2first` after the merge of 2.0.0.12 with the two runs promoted (its pointers untouched): 100 runs, result, steps
   and frames equal to `d2first-100-land` on every run.
+- Golden race with the 2.0.0.13 team (`zelda-headless.py OUT 3 --golden --power-on --clips on --act model
+  --parallel 8 --attempts 2000`): three wins of three in 109 runs, 155,143, 162,946 and 155,838 frames (2.0.0.11's
+  corpus path: 167,136), each `tf replay verify` ok; archived as `2.0.0.13/golden/`.
+- Suites: `cargo test --release --workspace --features zelda/zcore` (1073 passed), pytest with the zelda-asm tests
+  (976 passed, 12 skipped), `asm.py check` ok, `tf replay verify corpus/replays/*.tfreplay` ok.
 
 Also fixed: `python -m triforce.explore --variant` with a yaml path (`--specialist specialists/d3first/moldorm.yaml`)
 looked for the explorer's tracks under the yaml's path instead of the family's name and dropped them; tracks now go to
