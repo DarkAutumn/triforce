@@ -7,7 +7,12 @@ reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8): drop
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chains arrive with partial hearts (round 5)
 items: {bombs: required, arrows: true}     # round 28: BOMB only at 8:0x4c's N wall (its requires_bombs room; elsewhere as `tenth`: the owner, Nov 14: no bombs in Dungeon 5); ARROW above the route's rupee reserve: one arrow kills every Pols Voice on its line
-curriculum: {enabled: true}             # trajectories/pols-voice (Go-Explore paths per start state)
+curriculum:                              # trajectories/pols-voice (Go-Explore paths per start state)
+  enabled: true
+  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
+  - d3first_5_25e_[0-9]
+  - d3first_5_27s_[0-9]
+  - d3first_8_4cc_[0-9]
 one_room: true
 max_steps: 600                             # round 24: explored tracks 66-136 steps
 warm_start: null

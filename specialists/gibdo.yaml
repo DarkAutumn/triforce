@@ -7,7 +7,10 @@ reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chains arrive with partial hearts (round 5)
 items: {bombs: required}                   # its requires_bombs rooms 0x66 and 0x65: one bomb at each W wall (offered only in reach of it); else the 10th kill
-curriculum: {enabled: true}             # trajectories/gibdo (Go-Explore paths per start state)
+curriculum:                              # trajectories/gibdo (Go-Explore paths per start state)
+  enabled: true
+  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
+  - d3first_5_66w_[0-9]
 # Round 30: a third of the resets start from the chain's entries of Dungeon 5's way back at the route's hearts
 # (triforce/states/harvested/gibdo, not in git: 0x65 and 0x66 from W, 0x47, 0x26; round30.md "Darknut").
 harvested_fraction: 0.33
