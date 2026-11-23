@@ -527,7 +527,7 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   sword and the D6 triforce, D8, D9 and Ganon), complete when its first team takes it at a working rate. Landing
   means all of: `main` merged into the line of work and the five suites green there; `main` fast-forwarded; the
   module rebuilt in the main checkout (`.venv/bin/maturin develop --release`); every promoted run copied into the
-  main checkout's `models/` with its `promoted`, `act`, `version` and `eval.json` (`triforce stamp` when needed),
+  main checkout's `models/` with its `promoted`, `act`, `version` and `eval.json`,
   the trajectories copied, the start states as committed; a short chain run from the main checkout as the proof
   that `play-zelda.py` there plays the new stretch; the tag `v<VERSION>`; `git push` of `main` and the tag; the
   report. Nothing else waits on the next stretch: a stretch is never held back to be landed together with a later
@@ -746,9 +746,9 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   lengths; `docs/performance.md` has the quiet machine's. Every agent that trains or chains reports its decisions a
   second; a drop of a third or more against these is looked into before more work is queued.
 
-## Versioning (the owner, Nov 11)
+## Versioning (the owner, Nov 11; the third number and model compatibility redefined Nov 23)
 
-- **One version, `MAJOR.MINOR.COMPAT.REV`, in the `VERSION` file** (now `2.0.0.11`: `ow-lynel@d3first` for the leg
+- **One version, `MAJOR.MINOR.GEN.REV`, in the `VERSION` file** (now `2.0.0.11`: `ow-lynel@d3first` for the leg
   after Dungeon 7 (24% -> 99%), rupees rewarded once a pickup and the beam terms, round38.md "Beams at range; rupees
   per pickup"; 2.0.0.10 was a fresh `ow-start@d3first` for
   the opening and a `pols-voice` for 8:0x4c that leaves the key, round38.md "The owner's three causes"; 2.0.0.9 was
@@ -762,31 +762,47 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   Dungeon 5 removed, the owner's checkpoint; 2.0.0.2 was round 34's two late `d3first`
   route runs, darknut `r34d5-dg-s362` and boss-digdogger `r34d7b-dig-s1`; 2.0.0.1 was round 34's other `d3first`
   route runs, Dungeon 4's entrance states, Dungeon 7's bag reserve and the training-only stall ending; runs stamped
-  2.0.0.0 load as they are, the first three numbers being equal; 2.0.0.0 was the `d3first` route, the main
-  route since its golden path reached the ending, with round 33's `d2first` runs; 1.9.0.1 was rounds 30 and 31 on
-  `d2first` as phase IX changed it; 1.9.0.0 nine dungeons, rounds 28 and 29's Dungeons 8 and 9 to the end of the
-  game; it carries round 26's schema 6 observation of 1.5.1.0, the one input change for Dungeon 7 to Ganon,
-  decisions 2026-11-16; earlier runs are stamped 1.9.0.0, not converted; 2.0.0.0 changes no input, so a 1.9 run is
-  stamped 2.0.0.0, `triforce stamp --force`). It is the
+  2.0.0.0 load as they are, the first three numbers being equal (the rule then); 2.0.0.0 was the `d3first` route,
+  the main route since its golden path reached the ending, with round 33's `d2first` runs; 1.9.0.1 was rounds 30
+  and 31 on `d2first` as phase IX changed it; 1.9.0.0 nine dungeons, rounds 28 and 29's Dungeons 8 and 9 to the
+  end of the game; it carries round 26's schema 6 observation of 1.5.1.0, the one input change for Dungeon 7 to Ganon,
+  decisions 2026-11-16; earlier runs are stamped 1.9.0.0, not converted; 2.0.0.0 changes no input, so a 1.9 run was
+  stamped 2.0.0.0). It is the
   single source: `triforce.__version__` and `_native.VERSION` read it, `pyproject.toml` repeats it and the Cargo
   workspace version is its first three numbers (`tests/test_version.py` checks all of them).
-  - `MAJOR` changes only when the owner says so. **2.0 is said (Nov 19): the `d3first` route** (above, "Two routes"),
-    landed Nov 20 as 2.0.0.0.
-  - `MINOR` +1 for a big change (the owner, Nov 19: "We are going to drop the 'dungeon # is the minor version'. From here
-    on, minor version bumps are big changes"). Through 1.9 it counted the dungeons the route completes (1.3 =
-    three).
-  - `COMPAT` +1 on any change that makes previously trained models unusable (observation layout or meaning, action
-    space, network architecture, anything a loaded model would misread); it resets `REV` to 0.
-  - `REV` +1 for a compatible change to rewards, env or training code, or when the promoted models are replaced.
+  - `MAJOR` changes only when the owner says so. **2.0 is said (Nov 19): the `d3first` route** (above, "Two
+    routes"), landed Nov 20 as 2.0.0.0.
+  - `MINOR` +1 for a big change (the owner, Nov 19: "We are going to drop the 'dungeon # is the minor version'.
+    From here on, minor version bumps are big changes"). Through 1.9 it counted the dungeons the route completes
+    (1.3 = three).
+  - `GEN`, the **retrain generation** (the owner, Nov 23): +1, `REV` back to 0, when 90% or more of the promoted
+    models are retrained from scratch (fresh weights, not continued, warm-started or converted from an earlier run),
+    e.g. 2.0.0.123 -> 2.0.1.0. The promoted models are the runs the pointers name (`promoted`, `promoted.<route>`,
+    `late.<route>`). Nothing else bumps it. Until Nov 23 the third number was `COMPAT` (+1 on a change old models
+    could not load); every version through 2.0.0.11 was numbered by that rule, none is renumbered.
+  - `REV` +1 for every other change to what plays or how it trains: rewards, env or training code, promoted models
+    replaced short of a new generation, and an observation or action change, including one whose old models
+    `triforce convert-model` widens instead of retraining them.
   - Doc, GUI and tool-only changes bump nothing. A bump is its own line in the commit that causes it.
-- **Every run dir carries a `version` file**, written when the checkpoint is saved. Loading a model whose first three
-  numbers differ from the code's (or that has no stamp) is refused: chains, evaluation, `--load`. Override with
-  `--allow-incompatible-models` (or `TRIFORCE_ALLOW_INCOMPATIBLE_MODELS=1`); stamp runs known to be compatible with
-  `triforce stamp [SPECIALIST [RUN_ID]] [--version V] [--force]` (default: every promoted run, the code's version).
-  A 1.5.0 model is converted, not stamped: `triforce --models-dir MODELS convert-model --promoted --out DIR` (or
-  `convert-model RUN_DIR... --out DIR`; `triforce/convert.py`) writes widened copies (source untouched); the
-  converted models act bit for bit as their sources (round 26's proof, decisions 2026-11-16).
-- Tag releases `vX.Y.Z.R` on `main`. **Models are not checked in** (too large; the owner will pick a backup strategy).
+- **Whether a model loads is decided by its checkpoint's schemas, never by a version** (the owner, Nov 23).
+  `registry.load_checkpoint` (every load: chains, evaluation, play, `--load` and warm starts, promote) refuses a
+  model with `SchemaMismatchError`, naming its path, what differs and the version that trained it, unless its
+  `action_schema_version` is `ACTION_SCHEMA_VERSION`, its network architecture (`model_config['arch']`, absent:
+  `zelda`) is one `triforce.nets` builds, and its `obs_schema_version` is from `OLDEST_OBS_SCHEMA` to
+  `OBS_SCHEMA_VERSION`, an older one's `model_config.obs_spec` a subset of today's `OBS_SPEC`
+  (`registry.schema_problem`). An input change so bumps the schema it changes (`OBS_SCHEMA_VERSION` in
+  `crates/env/src/observation.rs`, `ACTION_SCHEMA_VERSION` in `crates/zelda/src/actions.rs`); one that changes what
+  an existing observation column means also raises `OLDEST_OBS_SCHEMA` (beside `OBS_SCHEMA_VERSION`) to the new
+  schema; a new network is a new
+  `arch`. Models of a schema no longer read are widened by `triforce --models-dir MODELS convert-model --promoted
+  --out DIR` (or `convert-model RUN_DIR... --out DIR`; `triforce/convert.py`, extended for the change), which writes
+  widened copies (source untouched) that act bit for bit as their sources (round 26's proof, decisions
+  2026-11-16), or retrained. There is no override: a model of another schema would misread its inputs.
+- **Every run dir carries a `version` file**, written when the checkpoint is saved: provenance (which code trained
+  it), carried into numbered checkpoints, chain metadata, replays and `convert.json`; it decides nothing about
+  loading, and a run without one loads like any other. `triforce stamp` and `--allow-incompatible-models`
+  (`TRIFORCE_ALLOW_INCOMPATIBLE_MODELS`) went with the old rule (Nov 23).
+- Tag releases `vX.Y.Z.R` on `main`. **Models are not checked in** (too large; kept in `/backup/triforce`, "Backups").
 - **Replays are `TFREPLAY` files** (`crates/replay`, `triforce/replay.py`) with their own integer `REPLAY_VERSION`,
   independent of the repo version. It is bumped when an existing replay can no longer be replayed bit-exactly
   (a container change the reader does not handle, a zcore behaviour change, a dropped state decoder), or when an older
@@ -949,7 +965,7 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   after `pyproject.toml` changed, which is every landing.
 - **Compare models fairly:** re-evaluate the old model under the *current* yaml (hp distribution, one_room) before
   comparing, and rank by success **and** `mean_health_change` (per-room numbers are in `eval.json` `by_room`). A model
-  that wins 3% more but takes twice the damage loses in a chain. After a COMPAT bump the old model doesn't load:
+  that wins 3% more but takes twice the damage loses in a chain. When a schema change refuses the old model:
   compare with its own `eval.json`, knowing the code under it differs (round 21). **Single rooms don't decide a
   promotion; the chain does** (round 25): r74-darknut4 and r74-darknut5 were both 97% in single rooms and 34.9 /
   46.4% on the Dungeon 5 segment. Measure the segments the family plays (1000 runs, clips on first), and report a

@@ -354,9 +354,6 @@ def parse_args(argv=None):
                              "default: a new folder under --logs-dir with training.json and <specialist>.jsonl")
     parser.add_argument('--logs-dir', default=None, help=f"default ${LOGS_DIR_ENV} or <repo>/logs")
     add_job_arguments(parser)
-    parser.add_argument('--allow-incompatible-models', action='store_true',
-                        help="--load / warm-start from a model whose version differs from this code's in its first "
-                             "three numbers")
     return parser.parse_args(argv)
 
 
@@ -414,7 +411,6 @@ def initial_model(args, config: SpecialistConfig, root):
 
     # obs.target wants the full layout: an older checkpoint without `target` is widened (zero-initialised inputs).
     wanted = obs_spec_from_space(observation_space()) if config.obs.target else None
-    registry.require_compatible(source)
     network, checkpoint = registry.load_model(source, obs_spec=wanted)
     added = sorted(set(network.config.obs_spec) - set(checkpoint['model_config']['obs_spec']))
     if added:
@@ -516,7 +512,6 @@ def main(argv=None) -> Path:
     from .nets.serve import learner_process  # pylint: disable=import-outside-toplevel
     learner_process()           # its learner uses the GPU beside the rollouts' server: no CUDA graphs there
     args = parse_args(argv)
-    registry.set_allow_incompatible(args.allow_incompatible_models)
     validate_args(args)
     if args.seed is not None:
         torch.manual_seed(args.seed)

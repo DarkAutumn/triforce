@@ -26,13 +26,13 @@ schema 3) is widened, not retrained:
   moment yet, the step count already high), settling within a few dozen updates (as round 24's).
 
 The source run dir is left untouched: each converted run is a full copy, ``<out>/<specialist>/<run>/``, with the new
-``ckpt.pt``, its ``version`` stamped with this code's, its ``act`` file re-bound to the new sha1 (same mode: the
-converted model acts as the source did), the specialist's ``promoted`` pointer when it names the run, and
+``ckpt.pt``, its ``version`` this code's (the code that wrote it), its ``act`` file re-bound to the new sha1 (same
+mode: the converted model acts as the source did), the specialist's ``promoted`` pointer when it names the run, and
 ``convert.json`` (source sha1 and version, the added features). ``eval.json`` stays the source's (bound to the source
 sha1: measure the converted run again for a canonical evaluation of its own). A checkpoint that is not exactly the old
-layout (version stamp, schemas, shapes, the feature names it implies, the action heads) is refused. Inputs added
-elsewhere in the same release join ``ADDED`` (names are matched; a name the current observation doesn't have is
-ignored).
+layout (schemas, shapes, the feature names it implies, the action heads) is refused; its run's ``version`` is
+provenance only and decides nothing (AGENTS.md "Versioning"). Inputs added elsewhere in the same release join
+``ADDED`` (names are matched; a name the current observation doesn't have is ignored).
 """
 
 import argparse
@@ -55,7 +55,6 @@ from .observation import (ENTITY_FEATURES, HISTORY_FEATURES, LINK_FEATURES, OBJE
 OBS_SPEC = policy_spec(_OBS_SPEC)
 
 # What the convertible checkpoints were saved with.
-SOURCE_VERSION = registry.CONVERTIBLE_VERSION
 SOURCE_ACTION_SCHEMA = 3
 SOURCE_OBS_SCHEMA = registry.CONVERTIBLE_OBS_SCHEMA
 # The observation features added since (per key, by name).
@@ -98,11 +97,9 @@ def source_shape(key: str) -> list:
     return current
 
 
-def check_source(checkpoint: dict, version) -> None:
-    """Raises ConvertError unless ``checkpoint`` (and its run's ``version`` stamp) is exactly the source layout."""
+def check_source(checkpoint: dict) -> None:
+    """Raises ConvertError unless ``checkpoint`` is exactly the source layout."""
     problems = []
-    if version is None or version.split('.')[:3] != SOURCE_VERSION.split('.'):
-        problems.append(f"version stamp {version or 'missing'} is not {SOURCE_VERSION}.x")
     if ACTION_SCHEMA_VERSION != SOURCE_ACTION_SCHEMA:
         problems.append(f"this code's action schema {ACTION_SCHEMA_VERSION} is not the source's {SOURCE_ACTION_SCHEMA}"
                         " (this converter widens observations only)")
@@ -200,10 +197,10 @@ def widen_optimizer(optimizer, state: dict, widened: dict, placed: dict, names: 
     return out
 
 
-def convert_checkpoint(checkpoint: dict, version) -> dict:
-    """The widened checkpoint of a source ``checkpoint`` (dict) whose run is stamped ``version``."""
+def convert_checkpoint(checkpoint: dict) -> dict:
+    """The widened checkpoint of a source ``checkpoint`` (dict)."""
     from .model import ZeldaPolicy  # pylint: disable=import-outside-toplevel
-    check_source(checkpoint, version)
+    check_source(checkpoint)
     spec = {key: {'shape': _spec(entry['shape']), 'vocab': entry['vocab']} for key, entry in OBS_SPEC.items()}
     network = ZeldaPolicy(config={**checkpoint['model_config'], 'obs_spec': spec})
     prefix = network.feature_dim - sum(spec[key]['shape'][0] for key in network.vector_keys)
@@ -231,7 +228,7 @@ def convert_run(run_dir, out_root) -> Path:
     checkpoint = registry._torch_load(source)      # pylint: disable=protected-access
     found = registry.model_version(source)
     try:
-        converted = convert_checkpoint(checkpoint, found)
+        converted = convert_checkpoint(checkpoint)
     except ConvertError as error:
         raise ConvertError(f"{run_dir}: {error}") from None
     target = Path(out_root) / run_dir.parent.name / run_dir.name

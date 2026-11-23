@@ -24,7 +24,7 @@ from . import __version__, _native, replay
 from .paths import STATES_DIR
 from .provenance import code_version, data_hash, location_text, models_header
 from .registry import (CHECKPOINT_NAME, DEFAULT_ACT, act_mode, checkpoint_sha1, load_model, own_models_until,
-                       parse_act, policy_checkpoint, require_compatible, route_part_key, route_policy, split_policy)
+                       parse_act, policy_checkpoint, route_part_key, route_policy, split_policy)
 from .replay import ReplayDir
 from .specialist import SpecialistConfig, list_specialists, load_specialist
 from .zelda_enums import MapLocation
@@ -452,7 +452,6 @@ class Policies:
                         except FileNotFoundError as err:
                             self.missing[key] = str(err)
                             continue
-                    require_compatible(path)
                     real = str(Path(path).resolve() / CHECKPOINT_NAME if Path(path).is_dir() else Path(path).resolve())
                     if real not in loaded:
                         with torch.random.fork_rng():   # building the network draws init weights; keep seeds intact

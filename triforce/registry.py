@@ -2,10 +2,12 @@
 
 A checkpoint is a dict with ``obs_schema_version``, ``action_schema_version``, ``specialist``, ``model_config``
 (including the observation layout, so the network can be rebuilt from it alone), ``state_dict``,
-``optimizer``, ``iterations``, ``steps``, ``metrics``.  Loading a checkpoint raises ``SchemaMismatchError`` unless
-its action schema is the current one and its observation schema is the current one or an older one whose layout
-(``model_config['obs_spec']``) is a subset of the current ``OBS_SPEC``: every key it reads still exists with the
-same shape and vocabulary (schema 1 is schema 2 without ``target``).  The network reads only its own keys.
+``optimizer``, ``iterations``, ``steps``, ``metrics``.  Whether this code can load a model is decided by those schema
+numbers alone (``schema_problem``; AGENTS.md "Versioning"), never by the repo version: loading raises
+``SchemaMismatchError`` unless its action schema is the current one, its network architecture
+(``model_config['arch']``) one this code builds, and its observation schema the current one or an older one from
+``OLDEST_OBS_SCHEMA`` on whose layout (``model_config['obs_spec']``) is a subset of the current ``OBS_SPEC``: every
+key it reads still exists with the same shape and vocabulary.  The network reads only its own keys.
 
 The models root is, in order: the ``root`` argument, ``$TRIFORCE_MODELS_DIR``, ``<repo>/models``.
 
@@ -22,11 +24,8 @@ Checkpoints load with ``torch.load(weights_only=True)`` (no pickled code runs); 
 ``metrics`` plain floats/ints so that stays true.
 
 Every run dir also carries ``version``: the triforce version (``triforce.__version__``) that saved the checkpoint,
-written by ``save_checkpoint``.  A model whose first three numbers differ from the code's is refused
-(``require_compatible``, called wherever a model is loaded to act or to continue training) unless
-``$TRIFORCE_ALLOW_INCOMPATIBLE_MODELS`` is ``1`` (``--allow-incompatible-models``); ``triforce stamp`` stamps runs
-known to be compatible.  The stamp is a file of its own because ``act`` and ``eval.json`` bind to ``ckpt.pt``'s
-sha1: stamping must not rewrite the checkpoint.
+written by ``save_checkpoint`` (provenance: which code trained it; copied with the checkpoint by numbered checkpoints
+and ``select-checkpoint``).  It decides nothing about loading.
 
 Numbered checkpoints (``train --checkpoint-every N``, round 25): ``<run dir>/checkpoints/it<iteration:06d>/`` each
 hold a copy of ``ckpt.pt`` as saved at that iteration with its own ``version`` and ``act`` (bound to that copy's
@@ -51,12 +50,11 @@ from typing import Optional
 import torch
 
 from . import __version__
-from ._native import ACTION_SCHEMA_VERSION, OBS_SCHEMA_VERSION, OBS_SPEC
+from ._native import ACTION_SCHEMA_VERSION, OBS_SCHEMA_VERSION, OBS_SPEC, OLDEST_OBS_SCHEMA
 from ._native import act_mode as act_mode_spelling
 from ._native import routes as native_routes
 
 MODELS_DIR_ENV = 'TRIFORCE_MODELS_DIR'
-ALLOW_INCOMPATIBLE_ENV = 'TRIFORCE_ALLOW_INCOMPATIBLE_MODELS'
 CHECKPOINT_NAME = 'ckpt.pt'
 PROMOTED_NAME = 'promoted'
 LATE_NAME = 'late'          # late.<route>: the family's key on a route's steps from its own_models_until on (round 38)
@@ -137,11 +135,8 @@ def act_override(choice: str) -> Optional[str]:
 
 
 class SchemaMismatchError(ValueError):
-    """A checkpoint was saved with a different observation or action schema."""
-
-
-class IncompatibleModelError(ValueError):
-    """A model's version is not compatible with this code's (the first three numbers differ, or it has none)."""
+    """A checkpoint this code can't load: another action schema or network architecture, or an observation schema
+    it doesn't read (``schema_problem``)."""
 
 
 def obs_schema_version() -> int:
@@ -255,7 +250,7 @@ def _plain_metrics(metrics: dict) -> dict:
 
 
 def model_version(checkpoint) -> Optional[str]:
-    """The triforce version the model in ``checkpoint`` (file or run dir) was saved or stamped with: its run dir's
+    """The triforce version that saved the model in ``checkpoint`` (file or run dir), as provenance: its run dir's
     ``version`` file, None when there is none."""
     try:
         return (_resolve(checkpoint).parent / VERSION_NAME).read_text(encoding='utf-8').strip()
@@ -264,8 +259,8 @@ def model_version(checkpoint) -> Optional[str]:
 
 
 def write_model_version(checkpoint, version: str = __version__) -> Path:
-    """Stamps the run dir of ``checkpoint`` (file or run dir) with ``version`` (written atomically); returns the
-    ``version`` file."""
+    """Writes ``version`` into the run dir of ``checkpoint`` (file or run dir) atomically; returns the ``version``
+    file."""
     path = _resolve(checkpoint).parent / VERSION_NAME
     tmp = path.with_name(f'.{VERSION_NAME}.{os.getpid()}.tmp')
     tmp.write_text(version + '\n', encoding='utf-8')
@@ -273,41 +268,10 @@ def write_model_version(checkpoint, version: str = __version__) -> Path:
     return path
 
 
-def compatible(a: str, b: str) -> bool:
-    """Whether two versions can share models: their first three numbers (MAJOR.MINOR.COMPAT) are equal."""
-    return a.split('.')[:3] == b.split('.')[:3]
-
-
-def set_allow_incompatible(on: bool) -> None:
-    """``--allow-incompatible-models``: when ``on``, incompatible models load with a warning, here and in every
-    child process (the environment variable is inherited).  Never switches it back off."""
-    if on:
-        os.environ[ALLOW_INCOMPATIBLE_ENV] = '1'
-
-
-# Models of this version prefix and observation schema `triforce convert-model` widens to this code's layout
-# (triforce/convert.py).
-CONVERTIBLE_VERSION = '1.5.0'
+# The observation schema `triforce convert-model` widens to this code's layout (triforce/convert.py).
 CONVERTIBLE_OBS_SCHEMA = 5
-CONVERT_HINT = ("a 1.5.0 model is widened to this code's observation by `triforce convert-model RUN_DIR... --out DIR` "
-                "(or `triforce --models-dir MODELS convert-model --promoted --out DIR`)")
-
-
-def require_compatible(checkpoint) -> None:
-    """Raises ``IncompatibleModelError`` unless the model in ``checkpoint`` (file or run dir) carries a version
-    compatible with this code's; with ``$TRIFORCE_ALLOW_INCOMPATIBLE_MODELS=1`` it warns instead."""
-    found = model_version(checkpoint)
-    if found is not None and compatible(found, __version__):
-        return
-    message = (f"{_resolve(checkpoint)}: model version {found or 'unversioned'} is not compatible with triforce "
-               f"{__version__} (the first three numbers must match)")
-    if os.environ.get(ALLOW_INCOMPATIBLE_ENV) == '1':
-        warnings.warn(message, stacklevel=2)
-        return
-    if found is not None and compatible(found, CONVERTIBLE_VERSION + '.0'):
-        raise IncompatibleModelError(f"{message}; {CONVERT_HINT}")
-    raise IncompatibleModelError(f"{message}; stamp a model known to be compatible with `triforce stamp`, or pass "
-                                 "--allow-incompatible-models")
+CONVERT_HINT = ("a schema 5 model is widened to this code's observation by `triforce convert-model RUN_DIR... --out "
+                "DIR` (or `triforce --models-dir MODELS convert-model --promoted --out DIR`)")
 
 
 def _resolve(path) -> Path:
@@ -357,24 +321,37 @@ def _obs_layout_problem(checkpoint: dict) -> Optional[str]:
     return None
 
 
+def schema_problem(checkpoint: dict) -> Optional[str]:
+    """Why this code can't load ``checkpoint`` (a loaded dict), None when it can: decided by the schema numbers and
+    the network architecture it records (AGENTS.md "Versioning"), never by its run's ``version``."""
+    from . import nets  # pylint: disable=import-outside-toplevel,cyclic-import
+    action = checkpoint.get('action_schema_version')
+    if action != ACTION_SCHEMA_VERSION:
+        return f"action schema {action}, this code's is {ACTION_SCHEMA_VERSION}"
+    obs = checkpoint.get('obs_schema_version')
+    if not isinstance(obs, int) or not OLDEST_OBS_SCHEMA <= obs <= OBS_SCHEMA_VERSION:
+        hint = f"; {CONVERT_HINT}" if obs == CONVERTIBLE_OBS_SCHEMA else ""
+        return f"observation schema {obs}, this code reads schemas {OLDEST_OBS_SCHEMA} to {OBS_SCHEMA_VERSION}{hint}"
+    layout = _obs_layout_problem(checkpoint) if obs < OBS_SCHEMA_VERSION else None
+    if layout is not None:
+        return f"observation schema {obs}: {layout}"
+    arch = nets.arch_of(checkpoint.get('model_config'))
+    if arch not in nets.names():
+        return f"network architecture {arch!r}, this code builds {nets.names()}"
+    return None
+
+
 def load_checkpoint(path, check_schema: bool = True) -> dict:
-    """Loads a checkpoint (file or run directory).  Raises SchemaMismatchError when the action schema differs or
-    the observation schema is newer, or older with a layout that isn't a subset of the current one."""
+    """Loads a checkpoint (file or run directory).  Raises SchemaMismatchError when ``schema_problem`` finds one
+    (naming the version that trained it, as provenance)."""
     path = _resolve(path)
     checkpoint = _torch_load(path)
     if check_schema:
-        action = checkpoint.get('action_schema_version')
-        if action != ACTION_SCHEMA_VERSION:
-            raise SchemaMismatchError(f"{path}: action_schema_version is {action}, "
-                                      f"code expects {ACTION_SCHEMA_VERSION}")
-        obs = checkpoint.get('obs_schema_version')
-        if obs != obs_schema_version():
-            problem = (_obs_layout_problem(checkpoint) if isinstance(obs, int) and obs < obs_schema_version()
-                       else "not an older schema")
-            if problem is not None:
-                hint = f"; {CONVERT_HINT}" if obs == CONVERTIBLE_OBS_SCHEMA else ""
-                raise SchemaMismatchError(f"{path}: obs_schema_version is {obs}, code expects "
-                                          f"{obs_schema_version()} ({problem}){hint}")
+        problem = schema_problem(checkpoint)
+        if problem is not None:
+            raise SchemaMismatchError(f"{path}: can't load this model: {problem} (trained by triforce "
+                                      f"{model_version(path) or 'unknown'}; models load by their schemas, not "
+                                      "by version)")
     return checkpoint
 
 

@@ -1,4 +1,4 @@
-"""The ``triforce`` command: promote, stamp, eval-chain, list, and shortcuts to train/run/play/evaluate/eval-batch/
+"""The ``triforce`` command: promote, eval-chain, list, and shortcuts to train/run/play/evaluate/eval-batch/
 room-stats/convert-model/select-checkpoint.  ``eval-chain`` lowers its own priority and waits its turn (``--nice``,
 ``--no-wait``, ``triforce.jobs``)."""
 
@@ -292,52 +292,6 @@ def _cmd_list(args):
     return 0
 
 
-def _cmd_stamp(args):
-    """``triforce stamp``: writes the ``version`` file of the given run, or of every promoted run (a route's own,
-    ``promoted.<route>``, and its late one, ``late.<route>``, too)."""
-    # pylint: disable=import-outside-toplevel
-    import re
-    from . import __version__
-    from .registry import (checkpoint_path, late_promotions, model_version, promoted_run, route_promotions,
-                           write_model_version)
-    from .specialist import list_specialists
-    version = args.version or __version__
-    if not re.fullmatch(r'\d+(\.\d+){3}', version):
-        print(f"triforce stamp: error: --version {version!r} is not MAJOR.MINOR.COMPAT.REV", file=sys.stderr)
-        return 2
-    if args.specialist is None:
-        runs = []
-        for name in list_specialists():
-            try:
-                runs.append((name, promoted_run(name, args.models_dir)))
-            except FileNotFoundError:
-                pass
-            routed = [*route_promotions(name, args.models_dir).values(), *late_promotions(name, args.models_dir).values()]
-            runs += [(name, run) for run in sorted(set(routed)) if (name, run) not in runs]
-    else:
-        try:
-            runs = [(args.specialist, args.run_id or promoted_run(args.specialist, args.models_dir))]
-        except FileNotFoundError as error:
-            print(f"triforce stamp: error: {error}", file=sys.stderr)
-            return 1
-    failed = False
-    for name, run_id in runs:
-        checkpoint = checkpoint_path(name, run_id, args.models_dir)
-        found = model_version(checkpoint)
-        if not checkpoint.is_file():
-            print(f"triforce stamp: error: {name}/{run_id}: no checkpoint at {checkpoint}", file=sys.stderr)
-            failed = True
-        elif found is not None and found != version and not args.force:
-            print(f"triforce stamp: error: {name}/{run_id} is stamped {found}, not {version} (--force overwrites)",
-                  file=sys.stderr)
-            failed = True
-        else:
-            if found != version:
-                write_model_version(checkpoint, version)
-            print(f"{name}/{run_id}: {version}")
-    return 1 if failed else 0
-
-
 def main(argv=None):
     """Entry point for the ``triforce`` console script."""
     argv = list(sys.argv[1:] if argv is None else argv)
@@ -346,16 +300,14 @@ def main(argv=None):
                    'eval-batch': ('triforce.eval_batch', 'main'), 'room-stats': ('triforce.room_stats', 'main'),
                    'convert-model': ('triforce.convert', 'main'),
                    'select-checkpoint': ('triforce.select_checkpoint', 'main')}
-    # `triforce [--models-dir DIR] [--allow-incompatible-models] train|run|play|evaluate|eval-batch|room-stats|
-    # convert-model|select-checkpoint ...` forwards the rest to the module's own CLI.
-    models_dir, allow, rest = None, False, argv
+    # `triforce [--models-dir DIR] train|run|play|evaluate|eval-batch|room-stats|convert-model|select-checkpoint ...`
+    # forwards the rest to the module's own CLI.
+    models_dir, rest = None, argv
     while rest:
         if rest[0] == '--models-dir' and len(rest) > 1:
             models_dir, rest = rest[1], rest[2:]
         elif rest[0].startswith('--models-dir='):
             models_dir, rest = rest[0].split('=', 1)[1], rest[1:]
-        elif rest[0] == '--allow-incompatible-models':
-            allow, rest = True, rest[1:]
         else:
             break
     if rest and rest[0] in passthrough:
@@ -367,15 +319,11 @@ def main(argv=None):
                 print("triforce: error: play has no --models-dir (it plays one game, no models)", file=sys.stderr)
                 return 2
             forwarded = ['--models-dir', models_dir, *forwarded]
-        if allow:
-            from .registry import set_allow_incompatible  # pylint: disable=import-outside-toplevel
-            set_allow_incompatible(True)
         return getattr(importlib.import_module(module), entry)(forwarded)
-    from .registry import ACT_HELP, act_argument, set_allow_incompatible  # pylint: disable=import-outside-toplevel
+    from .registry import ACT_HELP, act_argument  # pylint: disable=import-outside-toplevel
 
     parser = argparse.ArgumentParser(prog='triforce')
     parser.add_argument('--models-dir', default=None)
-    parser.add_argument('--allow-incompatible-models', action='store_true', help=ALLOW_HELP)
     sub = parser.add_subparsers(dest='command', required=True)
     sub.add_parser('train', help="python -m triforce.train ...")
     sub.add_parser('run', help="python -m triforce.run ...")
@@ -385,8 +333,8 @@ def main(argv=None):
                                       "one log folder, one after another, niced)")
     sub.add_parser('room-stats', help="python -m triforce.room_stats TAG ... (per-room chain and eval statistics "
                                       "by scope: full run, segments, room only)")
-    sub.add_parser('convert-model', help="python -m triforce.convert RUN_DIR... | --promoted --out DIR (widen 1.5.0 "
-                                         "checkpoints to this code's observation)")
+    sub.add_parser('convert-model', help="python -m triforce.convert RUN_DIR... | --promoted --out DIR (widen "
+                                         "observation schema 5 checkpoints to this code's observation)")
     sub.add_parser('select-checkpoint', help="python -m triforce.select_checkpoint FAMILY RUN ... (choose a run's "
                                              "numbered checkpoint by a chain segment, confirmed on fresh seeds)")
     sub.add_parser('list', help="specialists, their promoted run and run count")
@@ -404,31 +352,20 @@ def main(argv=None):
                               "on the route's steps from that one on (models/<family>/late.<route>, over promoted "
                               "there; the route's own run and every other route are unchanged)")
 
-    stamp = sub.add_parser('stamp', help="stamp runs with the triforce version their models are compatible with "
-                                         "(default: every promoted run, this code's version)")
-    stamp.add_argument('specialist', nargs='?', default=None, help="default: every specialist with a promoted run")
-    stamp.add_argument('run_id', nargs='?', default=None, help="default: the promoted run")
-    stamp.add_argument('--version', default=None, help="default: this code's version")
-    stamp.add_argument('--force', action='store_true', help="overwrite a different existing stamp")
-
     add_eval_chain_arguments(sub.add_parser('eval-chain', help="run the route N times; the milestone metric"))
 
     args = parser.parse_args(argv)
-    set_allow_incompatible(args.allow_incompatible_models)
     if args.command in passthrough:     # reached only through options the passthrough above doesn't take
         parser.error(f"{args.command}: put its options after the command (triforce {args.command} --help)")
     if args.command == 'eval-chain':
-        from .registry import IncompatibleModelError  # pylint: disable=import-outside-toplevel
+        from .registry import SchemaMismatchError  # pylint: disable=import-outside-toplevel
         from .runner import RunnerError  # pylint: disable=import-outside-toplevel
         try:
             return _cmd_eval_chain(args)
-        except (RunnerError, IncompatibleModelError) as error:
+        except (RunnerError, SchemaMismatchError) as error:
             print(f"triforce eval-chain: error: {error}", file=sys.stderr)
             return 2
-    return {'promote': _cmd_promote, 'list': _cmd_list, 'stamp': _cmd_stamp}[args.command](args)
-
-
-ALLOW_HELP = "load models whose version differs from this code's in its first three numbers"
+    return {'promote': _cmd_promote, 'list': _cmd_list}[args.command](args)
 
 
 def add_eval_chain_arguments(chain):
@@ -489,8 +426,6 @@ def add_eval_chain_arguments(chain):
                        help="write the chain_* events to this stream: in a folder with a plan its driver (e.g. "
                             "triforce eval-batch) owns it; else this chain writes the plan beside it")
     add_job_arguments(chain)
-    chain.add_argument('--allow-incompatible-models', action='store_true', default=argparse.SUPPRESS,
-                       help=ALLOW_HELP)
 
 
 if __name__ == '__main__':

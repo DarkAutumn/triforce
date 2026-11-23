@@ -92,10 +92,10 @@ def test_load_widens_an_older_checkpoint_only_with_obs_target(states_dir, tmp_pa
     from .conftest import seeded_network  # pylint: disable=import-outside-toplevel
     spec = obs_spec_from_space(observation_space())
     del spec['target']
-    old = registry.save_checkpoint(SPECIALIST, 'schema1', seeded_network(1, ModelConfig(obs_spec=spec, hidden_dim=32)),
+    old = registry.save_checkpoint(SPECIALIST, 'older', seeded_network(1, ModelConfig(obs_spec=spec, hidden_dim=32)),
                                    iterations=3, steps=96, root=tmp_path)
     checkpoint = torch.load(old, weights_only=False)
-    checkpoint['obs_schema_version'] = 1
+    checkpoint['obs_schema_version'] = registry.OLDEST_OBS_SCHEMA
     torch.save(checkpoint, old)
     config = tmp_path / 'target.yaml'
     config.write_text("name: ow-start\nrooms: ['(0, 0x77)', '(0, 0x77, cave)', '(0, 0x39)']\n"

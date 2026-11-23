@@ -635,7 +635,8 @@ kept); a wrap whose landing edge the objective doesn't use (it goes S) stays.
 step's) before each. `_native.observe(state, rupee_reserve=0)` is one observation of a probe's state from a fresh
 builder (no objective, mask or previous action), for probes and tests.
 Python sees the layout as
-`triforce._native.OBS_SPEC` (`key → {shape, vocab, dtype}`) plus `OBS_SCHEMA_VERSION`, `ROOM_VOCAB`,
+`triforce._native.OBS_SPEC` (`key → {shape, vocab, dtype}`) plus `OBS_SCHEMA_VERSION`, `OLDEST_OBS_SCHEMA` (the
+oldest schema whose checkpoints still load, "Checkpoint" below), `ROOM_VOCAB`,
 `ENTITY_VOCAB`, `NUM_TILE_CLASSES`, `NUM_ENTITY_SLOTS = 12` and the feature-name tuples;
 `triforce/observation.py` builds the `gymnasium.spaces.Dict` the policy uses.
 
@@ -1263,8 +1264,13 @@ every step, so following an enemy that moves away pays again, and knockback rese
 - GAE discount per step: `gamma ** (frames / 8)`, `gamma = 0.99`; `frames` stored in the rollout buffer.
 - Checkpoint (`models/<specialist>/<run-id>/ckpt.pt`): `obs_schema_version`, `action_schema_version`,
   `specialist`, `model_config`, `state_dict`, `optimizer`, `iterations`, `steps`, `metrics`.
-  Loading raises `SchemaMismatchError` on a different action schema, a newer observation schema, or an older one
-  whose `model_config.obs_spec` isn't a subset of the current `OBS_SPEC` (same shape and vocabulary per key); the
+  Whether a model loads is decided by these alone, never by the run's `version` (AGENTS.md "Versioning", the
+  owner's rule of Nov 23; `registry.schema_problem`): loading raises `SchemaMismatchError` (the path, what differs,
+  the version that trained it) on a different action schema, a network architecture (`model_config['arch']`) that
+  `triforce.nets` doesn't build, an observation schema outside `OLDEST_OBS_SCHEMA` (6) to `OBS_SCHEMA_VERSION` (7;
+  both `crates/env/src/observation.rs`), or an older one whose `model_config.obs_spec` isn't a subset of the current
+  `OBS_SPEC` (same shape and vocabulary per key); a change to what an existing column means raises
+  `OLDEST_OBS_SCHEMA`. The run dir's `version` (the code that saved it) is provenance only. The
   network reads only the keys of its own `obs_spec` (`ZeldaPolicy._batch`). Training a specialist with
   `obs.target` on from an older checkpoint (`--load` or `warm_start`) widens it to the current layout
   (`model.widen_policy` via `registry.load_model(obs_spec=...)`): every weight is copied and the towers' input
@@ -1276,10 +1282,10 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `ckpt.pt`, the source untouched. Schema 6's added features (`convert.ADDED`, matched by feature name) get zero
   columns in the first tower layers (`link`, `room_state`) and in the entity encoder's `input_proj` (the entity
   features, before the type embedding's columns); the Adam moments are padded with zeros (so `--load` continues as
-  from the source). The copy is stamped with this code's version, its `act` file re-bound to the new sha1 (same
+  from the source). The copy's `version` is this code's, its `act` file re-bound to the new sha1 (same
   mode), `promoted` copied, and `convert.json` names the source sha1 and version and the added features; `eval.json`
-  stays the source's (bound to its sha1). Anything but exactly the 1.5.0 layout and stamp is refused; loading an
-  unconverted 1.5.0 run says how to convert it, and `model.widen_policy` (new vector keys only) refuses a changed
+  stays the source's (bound to its sha1). Anything but exactly the schema 5 layout is refused; loading an
+  unconverted schema 5 run says how to convert it, and `model.widen_policy` (new vector keys only) refuses a changed
   key with the same pointer. The Rust policy drops input columns no weight reads, of the towers' first layers
   (`Policy::live`) and of `input_proj` (`Policy::entity_live`): a zero column changes no output but would move later
   columns into other lanes of the fixed-order dot product, so a widened model computes bit for bit what its source
@@ -1927,8 +1933,8 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
 - `zelda-headless.py OUT [COUNT] [--wins-only | --deaths-only | --stuck-only] [--parallel N] [--first-seed S]
   [--max-runs M] [--route R] [--from STATE | --power-on [--name NAME] [--delay N|random]]
   [--stop-at ROOM|step:N] [--act MODE|model] [--streams LIST] [--keyframe-frames N]
-  [--state embed|path] [--golden [--attempts A]] [--clips on|off] [--models-dir DIR]
-  [--allow-incompatible-models]` plays the route in one chain pool without a window or rendering and writes
+  [--state embed|path] [--golden [--attempts A]] [--clips on|off] [--models-dir DIR]` plays the route in one
+  chain pool without a window or rendering and writes
   replays into `OUT`
   (`<seed>-<ending>.tfreplay`). Without a filter it plays seeds `S .. S+COUNT-1` and saves them all; with one
   it plays on (at most `--max-runs`, default 1000 × COUNT) until COUNT runs ended that way and drops the
@@ -2123,7 +2129,7 @@ is joined at the end. It prints a JSON summary (`out`, `frames`, `seconds`, `wid
 - **A promoted run per route, optional:** `models/<family>/promoted` stays every route's; `promoted.<route>`
   (`triforce promote FAMILY RUN --route R`) overrides it on R (`registry.promoted_run(family, root, route)`).
   Chains, evaluation batches, select-checkpoint (`--route`), play and the golden path resolve it by the route
-  they play; `triforce list` shows each `route=run` and where it plays, `triforce stamp` stamps them too. A replay
+  they play; `triforce list` shows each `route=run` and where it plays. A replay
   names the route and each model's checkpoint (`<family>/<run>/ckpt.pt`), so it records which run played.
 - **A route's own runs play its part only** (round 32; decisions 2026-11-20 "A route's own runs play up to its
   cutoff"): routes.yaml `own_models_until: {waypoint: NAME}` on a route (kept by a route extending it) marks the one
@@ -2155,8 +2161,8 @@ is joined at the end. It prints a JSON summary (`out`, `frames`, `seconds`, `wid
   batches, select-checkpoint, play, the golden path, `room-stats`, the lab bench (`--team` and `speed` on the
   manifest's route) and the lab teachers (on `--state-route`) follow. The name is not `promoted.*`, so
   `route_promotions` never takes it for a route's run; `registry.late_promotions` reads them, `triforce list` shows
-  `late.<route>=run (steps N-end, from ...)`, `python -m triforce.registry list` marks the run `late on <route>`, and
-  `triforce stamp` stamps them. No late pointer: the family key plays `promoted`, as before.
+  `late.<route>=run (steps N-end, from ...)` and `python -m triforce.registry list` marks the run `late on <route>`.
+  No late pointer: the family key plays `promoted`, as before.
 - **Segments and scopes per route:** `eval_batch.ROUTE_SEGMENTS[route]` (segments, arrival targets, milestones;
   start states by bare name) and `room_stats.ROUTE_SCOPES[route]` (the room-stats scopes; `room-stats` takes the
   route from the chain files). `d2first`'s are the tables of before, unchanged; `d3first`'s (`D3FIRST_SEGMENTS`,
