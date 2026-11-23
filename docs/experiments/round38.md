@@ -1046,6 +1046,17 @@ reaches 0x76. The cost is 0x0f's rupee cave: 105 aimless frames a visit against 
 (`triforce promote ow-start r38t-start-fresh2 --route d3first`): steps 0-2, 113-115 and 186-188; `d2first` keeps
 `r74-leg2`.
 
+### Golden run and checks
+
+- A golden run with the two new runs in the team (2.0.0.9's 51 networks, `ow-start@d3first` = `r38t-start-fresh2`,
+  pols-voice's `late.d3first` = `r38t-pols`; `zelda-headless.py OUT 3 --golden --power-on --clips on --act model
+  --parallel 8 --attempts 2000`): three wins of three, 246 runs played (`golden-00000000-win`, `-00018000-win`,
+  `-00036000-win`).
+- `tests/test_lab_train.py`: 19 route yamls (ow-start's and pols-voice's added). The suites after main (2.0.0.9)
+  was merged: pytest 965 passed, 12 skipped; `cargo test --release --workspace --features zelda/zcore` ok; the
+  zelda-asm tests 5 passed; `asm.py check` ok.
+- Not done: darknut@d3first retrained on 0x5b's last pass under 2.0.0.6's rules (the cure for the owner's 3:0x5b).
+
 ## 2.0.0.8: the hit heads promoted for `d3first`
 
 Eight families play `d3first`'s own steps (before `own_models_until`) with their `hitshift` combination: the family's

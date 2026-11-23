@@ -29,12 +29,12 @@ def test_a_route_run_trains_on_its_own_yaml_where_there_is_one():
     """``family@d3first`` reads ``specialists/d3first/<family>.yaml`` (the wood-sword runs' tasks): each loads, on
     the route's states; a key without one (or without a route) reads the family's yaml."""
     yamls = sorted((ROOT / 'specialists' / 'd3first').glob('*.yaml'))
-    assert len(yamls) == 17
+    assert len(yamls) == 19
     for path in yamls:
         assert task_yaml(f'{path.stem}@d3first') == str(path)
         config = load_specialist(str(path))
         assert config.name == path.stem and list(config.state_routes) == ['d3first']
-    assert task_yaml('zol') == 'zol' and task_yaml('ow-start@d3first') == 'ow-start'
+    assert task_yaml('zol') == 'zol' and task_yaml('ow-lynel@d3first') == 'ow-lynel'
 
 
 def test_teachers_label_with_each_familys_network(tmp_path):
