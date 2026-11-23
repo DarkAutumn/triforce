@@ -36,7 +36,9 @@ def describe(data: bytes) -> dict:
     meta = replay.meta
     source = str(meta.get('source', ''))
     golden = str(meta.get('golden', '')) == 'True'
-    whole = 'power-on' in source and str(meta.get('stop_at', 'None')) in ('None', '')
+    # From power on, or from the route's own start state ('start'), to the end with no stop: one unbroken run.
+    whole = (('power-on' in source or "'name': 'start'" in source)
+             and str(meta.get('stop_at', 'None')) in ('None', ''))
     if golden:
         kind = 'golden'
     elif whole:
