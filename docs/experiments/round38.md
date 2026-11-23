@@ -1315,9 +1315,13 @@ chain (3 visits each). 3:0x69 pays it back (deaths 148 → 110) and 3:0x59's ret
 d5: 5:0x05 as before (deaths 131 → 134, frames 3,034 → 2,649), 5:0x37 hearts 0.39 → 0.14 a visit. d8 is worse:
 8:0x3e deaths 36 → 57 (hearts 1.34 → 1.80 a visit), 8:0x4e 1 → 8.
 
-**Decision**: `promoted.d3first` = `r39-dark5b-s1` (d3 and d5 not worse); `late.d3first` stays `r38head-bare-w8`
-(d8 −3.8 ± 1.5). The idea is the owner's report (the pacing at 3:0x5b with a full bag); the cause and the fix
-(full-bag starts, `room_bombs`) are the agents'.
+**The agent's recommendation**: `promoted.d3first` = `r39-dark5b-s1` (d3 and d5 not worse); `late.d3first` stays
+`r38head-bare-w8` (d8 −3.8 ± 1.5). **The lead's decision (Nov 23): not promoted; the code landed** (`room_bombs`,
+the yaml, the script). The chain gain is within its noise, the usual return to 3:0x5b takes more hits (0.33 → 0.62 a
+visit, deaths 54 → 100 of 1000 runs), the case it fixes is 3 visits in 1000 runs, and the fresh generation
+(2.0.1.0) trains darknut from scratch with the full-bag starts. The run is kept (`/backup/triforce`, the
+`r39-dark5b` worktree's models). The idea is the owner's report (the pacing at 3:0x5b with a full bag); the cause
+and the fix (full-bag starts, `room_bombs`) are the agents'.
 
 **Golden run** (main 242736bf merged, so 2.0.0.12's team with darknut's `promoted.d3first` = `r39-dark5b-s1`;
 `zelda-headless.py target/golden-r39d5b 3 --golden --power-on --clips on`, 109 runs): three wins, 148,440 /
