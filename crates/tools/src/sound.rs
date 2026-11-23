@@ -90,7 +90,7 @@ fn effect_active(ram: &[u8; 0x800], beep: bool) -> bool {
         || jingle(ram[tracks::SONG_REQUEST])
         || tune0_request != 0
         || ram[tracks::TUNE1_REQUEST] != 0
-        || ram[tracks::EFFECT_REQUEST] & 0x7F != 0
+        || ram[tracks::EFFECT_REQUEST] != 0
         || ram[tracks::SAMPLE_REQUEST] != 0
 }
 
@@ -155,10 +155,17 @@ struct Checks {
     beep_peak_without: f32,
     beep_peak_with: f32,
     check_silence: bool,
+    /// No song plays (the effects track should then be the game's sound), and how far it is from it.
+    songless: bool,
+    songless_frames: u64,
+    songless_off: f32,
+    songless_loud: Vec<Value>,
     check_beep: bool,
     /// The stretch now compared: its synths, first frame, length and largest difference.
     stretch: Option<(Tracks, u32, u32, f32)>,
     stretches: Vec<(u32, u32, f32)>,
+    /// The first frame of each stretch where the music differs from the game's sound, and what differed.
+    stretch_diffs: Vec<Value>,
     borrows: Vec<Borrow>,
     open: [Option<usize>; 3],
     music_volume: [u8; 3],
@@ -199,6 +206,7 @@ impl Checks {
         }
         let active = effect_active(ram, true);
         self.check_silence = !active && self.quiet_run >= SETTLE;
+        self.songless = ram[tracks::CUR_SONG] == 0 && ram[tracks::SONG_REQUEST] == 0;
         self.quiet_run = if active { 0 } else { self.quiet_run + 1 };
         let active_but_beep = effect_active(ram, false);
         self.check_beep = !active_but_beep && self.quiet_beep_run >= SETTLE && ram[tracks::CUR_TUNE0] == tracks::BEEP;
@@ -263,6 +271,17 @@ impl Checks {
     fn after(&mut self, frame: u32, nes: &ZCore, split: &Tracks, quiet: &Tracks) {
         let effects = split.samples(Track::Effects);
         if self.check_silence {
+            if self.songless {
+                // What still sounds here is the tail of an effect the game's driver has finished with: the full
+                // mix must have it too.
+                let game = split.samples(Track::Game);
+                self.songless_frames += 1;
+                let off = game.iter().zip(effects).fold(0.0f32, |m, (a, b)| m.max((a - b).abs()));
+                self.songless_off = self.songless_off.max(off);
+                if off > 1e-4 && self.songless_loud.len() < 10 {
+                    self.songless_loud.push(json!([frame, off, peak(effects), peak(game)]));
+                }
+            }
             self.silent_frames += 1;
             self.silent_peak = self.silent_peak.max(peak(effects));
             if peak(effects) > 1e-4 && self.silent_loud.len() < 10 {
@@ -280,11 +299,26 @@ impl Checks {
             self.beep_peak_with = self.beep_peak_with.max(peak(effects));
             self.beep_peak_without = self.beep_peak_without.max(peak(quiet.samples(Track::Effects)));
         }
-        if let Some((tracks, _, frames, off)) = &mut self.stretch {
+        if let Some((tracks, start, frames, off)) = &mut self.stretch {
             let mut out = Vec::new();
             tracks.run(nes, &mut out);
             let game = tracks.samples(Track::Game);
             let worst = game.iter().zip(&out).fold(0.0f32, |m, (a, b)| m.max((a - b).abs()));
+            if worst > 1e-6 && *off <= 1e-6 && self.stretch_diffs.len() < 12 {
+                let rel = |w: &[tracks::Write]| -> Vec<(u32, u8, u8)> {
+                    let at = w.first().map_or(0, |w| w.cycle);
+                    w.iter().map(|w| (w.cycle - at, w.register, w.value)).collect()
+                };
+                let (mine, real) = (rel(tracks.driver_writes(Some(Track::Music))), rel(tracks.driver_writes(None)));
+                let first = mine.iter().zip(&real).position(|(a, b)| a != b);
+                let events: Vec<String> = nes.sound().map_or(Vec::new(), |f| {
+                    f.events().iter().map(|e| format!("{}:{:?}={:02X}", e.cycle(), e.register(), e.value())).collect()
+                });
+                self.stretch_diffs.push(json!({"stretch": start, "frame": frame, "into": *frames, "worst": worst,
+                    "writes_same": mine == real, "music_writes": mine.len(), "machine_writes": real.len(),
+                    "first_differing_write": first.map(|i| format!("{:?} vs {:?}", mine.get(i), real.get(i))),
+                    "machine_events": events}));
+            }
             *off = off.max(worst);
             *frames += 1;
         }
@@ -349,10 +383,13 @@ impl Checks {
             "effects_state": self.effect_state.json(),
             "effects_jingle_state": self.jingle.json(),
             "effects_silence": {"frames": self.silent_frames, "peak": self.silent_peak,
-                                "loudest_first": self.silent_loud.iter().map(|(f, p)| json!([f, p])).collect::<Vec<_>>()},
+                                "loudest_first": self.silent_loud.iter().map(|(f, p)| json!([f, p])).collect::<Vec<_>>(),
+                                "songless_frames": self.songless_frames, "songless_max_abs_difference_from_full": self.songless_off,
+                                "songless_differing_first": self.songless_loud},
             "music_is_the_game_without_effects": {"stretches": self.stretches.len(), "longest_frames": longest,
                 "frames": self.stretches.iter().map(|s| u64::from(s.1)).sum::<u64>(), "max_abs_difference": off,
-                "first": self.stretches.iter().take(5).map(|s| json!({"start": s.0, "frames": s.1, "max_abs_difference": s.2})).collect::<Vec<_>>()},
+                "first": self.stretches.iter().take(5).map(|s| json!({"start": s.0, "frames": s.1, "max_abs_difference": s.2})).collect::<Vec<_>>(),
+                "first_differences": self.stretch_diffs},
             "borrowed_voices": by_voice,
             "borrowed_table": table,
             "beep_off": {"beep_left_frames": self.beep_left, "other_tune0": self.tune0_without_beep.json(),
