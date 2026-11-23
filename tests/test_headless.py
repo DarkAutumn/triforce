@@ -136,16 +136,24 @@ def test_a_bad_route_start_is_an_error(scripted_models, tmp_path, capsys):
     assert status == 2 and summary is None and "Unknown start state 'nope_0'" in err
 
 
-def test_golden_saves_one_stitched_replay_per_count(scripted_models, tmp_path, capsys, short_runs):
+def test_golden_saves_one_stitched_replay_per_count(scripted_models, tmp_path, capsys, short_runs, monkeypatch):
     """From 0x3c (route step 24) the path has eight segments: to step 64 (outside Dungeon 1), step 101 (outside
     Dungeon 3), step 130 (outside Dungeon 4), step 205 (outside Dungeon 5), step 244 (outside Dungeon 7), step 277
     (outside Dungeon 6), step 293 (outside Dungeon 8), then the route's end.  Twenty steps don't get there: each path
-    is its first segment's furthest run, saved under its ending."""
+    is its first segment's furthest run, saved under its ending.  Its job's counters: the segments won of the
+    route's (none here) and the runs played, counted as they finish."""
+    reports = []
+    monkeypatch.setattr(headless, 'job_progress', lambda done, total, unit, label, force=False: reports.append(
+        (label, done, total, unit)))
     status, saved, summary, err = run(capsys, tmp_path, 2, '--golden', '--route', 'd2first', '--from',
                                       require_state(SEGMENT_STATE), '--attempts', 2, '--parallel', 2, '--models-dir',
                                       scripted_models)
     files = sorted(tmp_path.iterdir())
     assert status == 0 and summary['saved'] == 2 and summary['runs'] == 4
+    won = [report for report in reports if report[0] == 'segments won']
+    played = [report[1] for report in reports if report[0] == 'runs played']
+    assert won[0] == ('segments won', 0, 18, 'segments') and {report[1] for report in won} == {0}
+    assert played == sorted(played) and played[-1] == 4 and {2, 4} <= set(played)
     # Each path owns (segments of the whole route, nine) x attempts seeds: 9 x 2.
     assert [path.name[:15] for path in files] == ['golden-00000000', 'golden-00000018']
     assert [json.loads(line.split(' ', 1)[1])['stop_step'] for line in err.splitlines()

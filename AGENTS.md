@@ -999,9 +999,15 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
     python|rust|asm|all --agent A --task T [--build]` (`--build`: build, then test, as one entry): their own lane,
     two at once on the machine, first come first served, never behind a training; nice 10 and `CARGO_BUILD_JOBS=4`.
     Every build and every suite goes through them (`--timeout 60m` replaces `timeout 3600`).
-  - `triforce job setup BRANCH [--from main]`: the worktree `../triforce-<branch>` with `roms`, `trajectories` and
-    `models` linked, its venv and its build. `triforce job list [--calibration]`: what runs, what waits and in which
-    order, what ended in the last hour; `--calibration` compares estimates with actual times per kind.
+  - `triforce job setup BRANCH [--from main]`: the worktree `../triforce-<branch>` with `roms` and `trajectories`
+    linked (never `models`: a worktree's runs and pointers are its own), its venv and its build. `triforce job list
+    [--calibration]`: what runs, what waits and in which order, what ended in the last hour; `--calibration`
+    compares estimates with actual times per kind.
+  - `triforce job history [--since 24h] [--agent A] [--metrics] [--json]`: **every job's row is kept for good**
+    (the owner, Nov 23): when it queued, started and ended, its place, estimate, exit and command. `--metrics`:
+    the jobs that ran in the express place longer than 10 minutes, those in a regular place that took 10 minutes or
+    less, and the kinds of job always out of the queue within 2 minutes of joining it. Numbers to look at; nothing
+    acts on them.
   Two jobs run at once in the regular places, plus one estimated at 10 minutes or less (or `--express`) in the
   express place; the others wait, the shortest estimate first, a long one moving up as it waits (estimate minus half
   the time waited). A waiting job is only its wrapper: no model, no GPU memory, a check a second. It prints
@@ -1041,9 +1047,14 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   time left when the total is known, else a counter with its rate and the elapsed time against the estimate; "no
   progress data" for a command that reports none), and its log folder, named for the job:
   `<yymmdd>_<NNN>_<agent>-<task>-<subtask>`. `training-gui.py`'s [currently running] and `triforce job list` read it;
-  the jobs that ended in the last 60 minutes are listed under "finished" and then leave by themselves. A tool's log
-  folder still has its plan (`training.json`) with its runs, which the GUI draws under the job; `--events FILE` into
-  a folder without a plan writes one there (a driver's folder keeps owning the stream).
+  the jobs that ended in the last 60 minutes are listed under "finished" and then leave by themselves. **The GUI
+  draws a job's progress with widgets, never as text** (the owner, Nov 23: "the gui+you launching is 99% of my
+  workflow"): a progress bar a counter, a build's and a test's steps with their states; the ASCII bar is `triforce
+  job list`'s alone. A tool's log folder still has its plan (`training.json`) with its runs, which the GUI draws
+  under the job (a chain, the 250-run test's: its wins, deaths and stuck runs, the runs that took each triforce and
+  the furthest step, from each `chain_progress`); `--events FILE` into a folder without a plan writes one there (a
+  driver's folder keeps owning the stream). Output meant only for a person at a shell may go (the owner accepts a
+  plainer terminal).
 - **Chain segments** (20–40 runs each; several at once go in one batch: `triforce eval-batch NAME --chain 'd3:
   --from 3_7cs_0 --runs 40' --chain ...`, or every segment of a route with `--chains TAG [--route R]`). **`d3first`
   (the main route, no `--route` needed; `eval_batch.D3FIRST_SEGMENTS`, its states `d3first_*` named bare):** full

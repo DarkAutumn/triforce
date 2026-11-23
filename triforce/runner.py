@@ -765,6 +765,72 @@ def chain_summary(results: List[RunResult]) -> dict:
     return summary
 
 
+class ChainTally:
+    """A chain's runs so far, as a person watches them (each ``chain_progress`` event; the training GUI draws it):
+    the wins, the deaths, the stuck runs (any other end) and the errors; how many runs took each dungeon's triforce,
+    in the order the chain's stretch of ``route`` takes them (a triforce counts once its route step was left by its
+    exit; a chain that plays to the route's end counts a win as the end step's level, Dungeon 9 on both routes);
+    and the furthest route step a run reached, with the room it stood in there.  ``route`` None: only the endings
+    and the furthest step (no route length, no triforces)."""
+
+    def __init__(self, route: Optional[Route] = None):
+        self.done = self.wins = self.deaths = self.stucks = self.errors = 0
+        self.route_steps = None
+        self.triforce_steps: Dict[int, int] = {}
+        self.levels: List[int] = []
+        self.end_level = None             # the level a win counts (a chain to the route's end step, exit 'end')
+        self.furthest: Optional[Tuple[int, str]] = None
+        self.taken: Dict[int, int] = {}
+        if route is None:
+            return
+        steps = _native.route_steps(route.name)
+        end = route.start_step + route.steps_played()
+        self.route_steps = len(steps)
+        self.triforce_steps = {step['index']: step['level'] for step in steps
+                               if step.get('exit') == 'triforce' and route.start_step <= step['index'] < end}
+        self.levels = list(dict.fromkeys(level for _, level in sorted(self.triforce_steps.items())))
+        if route.stop_step is None and route.terminal is None and steps[-1].get('exit') == 'end':
+            self.end_level = steps[-1]['level']
+            self.levels = list(dict.fromkeys([*self.levels, self.end_level]))
+
+    def add(self, result: RunResult):
+        """Counts one finished run."""
+        self.done += 1
+        won = result.result == 'success'
+        if won:
+            self.wins += 1
+        elif result.result == 'error':
+            self.errors += 1
+        elif result.reason.startswith('died in'):
+            self.deaths += 1
+        else:
+            self.stucks += 1
+        taken = {self.triforce_steps[room.step] for room in result.rooms
+                 if room.step in self.triforce_steps and room.outcome == 'exit-correct'}
+        if won and self.end_level is not None:
+            taken.add(self.end_level)
+        for level in taken:
+            self.taken[level] = self.taken.get(level, 0) + 1
+        reached = max(((room.step, room) for room in result.rooms if room.step is not None),
+                      key=lambda item: item[0], default=None)
+        if won and self.end_level is not None:
+            reached = (self.route_steps, None)
+        if reached is not None and (self.furthest is None or reached[0] > self.furthest[0]):
+            room = reached[1]
+            where = 'the end' if room is None else f"{room.level}:{room.room}" + (':cave' if room.in_cave else '')
+            self.furthest = (reached[0], where)
+
+    def fields(self) -> dict:
+        """The tally as ``chain_progress`` carries it beside ``successes`` (the wins): deaths, stucks, errors,
+        triforces ([[level, runs], ...] in the route's order), furthest_step and furthest_room (None before a run
+        reached a route step), route_steps."""
+        return {'deaths': self.deaths, 'stucks': self.stucks, 'errors': self.errors,
+                'triforces': [[level, self.taken.get(level, 0)] for level in self.levels],
+                'furthest_step': None if self.furthest is None else self.furthest[0],
+                'furthest_room': None if self.furthest is None else self.furthest[1],
+                'route_steps': self.route_steps}
+
+
 def route_header(route: Route) -> dict:
     """What a chain plays of ``route`` (``Runner.provenance``, a replay's META ``chain``): its name, start state, power
     on, checkpoint (its state by SHA-1), end, clips."""

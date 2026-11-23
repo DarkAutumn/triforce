@@ -20,13 +20,16 @@ Picking a folder in the dropdown stops the automatic switching; picking [current
 [currently running] covers every job of the machine's job queue (``triforce.jobqueue``: the SQLite ``queue.db`` that
 ``triforce job`` schedules every training, evaluation, script, build and test suite through, whatever checkout it
 runs; ``$TRIFORCE_QUEUE_DIR``, else ``$XDG_STATE_HOME/triforce``, else ``$HOME/.local/state/triforce``).  Each job is
-listed under its header, the lines ``triforce job list`` prints for it (``jobqueue.describe``): who asked for it
-(agent, task, sub-task), its description, its state (RUNNING in its place with the time run against its estimate,
-OVERRUN past twice the estimate, its place in line and wait while queued, or how it ended), the progress it reports
-(a bar, or a counter), then its verb, kind, branch and command.  A job whose log folder holds its plan
-(``training.json``) shows that folder's progress under its header (its runs, bars and evaluation rows); one without
-is drawn from its row alone.  The running jobs are on top, the one that began to run last first (a job that starts is
-added at the top and pushes the others down), then the queued ones in the order they will start, each lane's line
+listed by its card (``job_view``), drawn with widgets and never as text bars (the ASCII bar is ``triforce job
+list``'s): who asked for it (agent, task, sub-task), its description, its state (RUNNING in its place with the time
+run against its estimate, OVERRUN past twice the estimate, its place in line and wait while queued, or how it
+ended), a progress bar a counter it reports (done of total, its rate and time left; a counter without a total its
+number and rate), its steps (a build's and a test's, each with its state), then its verb, kind, branch and command.
+A job whose log folder holds its plan (``training.json``) shows that plan's full view under its card (its header,
+its runs' rows, its eval-chain card: the runs by how they ended, the triforces taken, the furthest step); one
+without is drawn from its row alone.  The running jobs are on top, the one that began to run last first (a job that
+starts is added at the top and pushes the others down), then the queued ones in the order they will start, each
+lane's line
 (``jobqueue.line``) with its place.  A live log folder under the logs root that no job owns (a run the owner started
 at a terminal) is listed among the running ones.  The GUI only reads the queue (it marks the jobs whose wrapper is
 gone dead first, as ``triforce job list`` does); it controls nothing.  Below the live ones, under a 'finished'
@@ -963,9 +966,13 @@ class Training:
 
     def eta(self, now: float):
         """Rough seconds left: the current run's estimate, then the finished runs' pace for the rest; a lab run's
-        families train together, so its time left is theirs (the longest)."""
+        families train together, so its time left is theirs (the longest); a plan without runs (an eval-chain): its
+        chain's."""
         if self.plan.get('status') != 'running':
             return None
+        if not self.runs:
+            chain = self.chain()
+            return None if chain is None else chain_eta(chain, now)
         if self.is_batch:
             return self.batch_eta(now)
         if self.plan.get('kind') == LAB_KIND:
@@ -1073,14 +1080,15 @@ def fmt_episode_rate(episodes: float, seconds: float) -> str:
 
 
 def chain_speed(chain: dict) -> str:
-    """An eval-chain's throughput: finished runs over the time since its start (the last progress event while
-    running, the result once done)."""
+    """An eval-chain's throughput in runs a second: finished runs over the time since its start (the last progress
+    event while running, the result once done)."""
     start = chain.get('start')
     end = chain.get('result') or chain.get('progress')
     if not start or not end or 'ts' not in start or 'ts' not in end:
         return ''
     done = (end.get('runs') if chain.get('result') else end.get('done')) or 0
-    return fmt_episode_rate(done, end['ts'] - start['ts'])
+    seconds = end['ts'] - start['ts']
+    return fmt_rate(done / seconds, 'runs') if done > 0 and seconds > 0 else ''
 
 
 def describe(event: dict) -> str:
@@ -1253,7 +1261,7 @@ class LiveScanner:
 
 # ---------------------------------------------------------------------------------------------------- the job queue
 # [currently running] lists the jobs of the machine's job queue (``triforce.jobqueue``), read from its database: the
-# window and the web view list them alike (``queue_listing``) and draw each one's header alike (``job_lines``).
+# window and the web view list them alike (``queue_listing``) and draw each one's card alike (``job_view``).
 
 RECENT_SECONDS = 3600          # ended jobs stay in [currently running] (under 'finished') this long, then leave
 
@@ -1309,14 +1317,89 @@ def job_color(job: dict, now: float) -> QColor:
     return STATUS.get(job.get('status'), (C.muted, ''))[0]
 
 
-def job_lines(job: dict, now: float, place: int | None = None) -> list[tuple[str, QColor, bool]]:
-    """A job's header, the lines ``triforce job list`` prints for it (``jobqueue.describe``), each with its colour and
-    whether it is bold: the headline, the description, the state (``job_color``), its progress (a bar, a counter, or
-    'no progress data'), then its verb, kind, branch and command.  An empty line (no description) is left out."""
-    lines = jobqueue.describe(job, now, place)
-    styles = [(C.text, True), (C.muted, False), (job_color(job, now), True)]
-    styles += [(C.text, False)] * (len(lines) - 4) + [(C.faint, False)]
-    return [(text, color, bold) for text, (color, bold) in zip(lines, styles) if text]
+COUNTER_STALE = 300.0          # a counter not reported this long is not drawn over its job's plan (its rows show it)
+
+
+def fmt_amount(value) -> str:
+    """A counter's amount: ``133``, ``2.5``, ``41.0k`` (``fmt_steps`` from 10,000 on)."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return str(value)
+    return fmt_steps(value) if abs(value) >= 10_000 else f"{value:g}"
+
+
+def fmt_rate(rate, unit: str) -> str:
+    """``0.78 runs/s``, ``45.2 steps/s``, ``1,234 steps/s`` ('' without a rate)."""
+    if not rate:
+        return ''
+    return f"{rate:,.0f} {unit}/s" if rate >= 100 else f"{rate:.3g} {unit}/s"
+
+
+def job_counters(job: dict, now: float, has_plan: bool = False) -> list[dict]:
+    """The counters a job's card draws (``jobs.progress``, one per name), each {'name', 'label' (its name where it
+    says more than its unit, else ''), 'done', 'total' (None: no end known), 'unit', 'rate' (a second, None before
+    one is measured), 'fraction' (None without a total), 'left' (seconds at its rate, None when unknown), 'numbers'
+    ('133 / 250 runs'), 'speed' ('0.78 runs/s'), 'time' ('~2m left'; without a total the time run against the job's
+    estimate)}.  A job whose log folder's plan is drawn under it (``has_plan``) leaves out what its plan's rows
+    show: the counters done, those of a job that ended and those not reported for ``COUNTER_STALE`` seconds (a
+    training that stopped early)."""
+    running = job.get('status') == 'running'
+    elapsed = now - (job.get('admitted_ts') or now)
+    estimate = '' if job.get('estimate') is None else f" of ~{jobqueue.short(job['estimate'])}"
+    counters = []
+    for name, report in (job.get('progress') or {}).items():
+        done, total, unit = report.get('done') or 0, report.get('total') or None, report.get('unit') or ''
+        rate = report.get('rate') or None
+        complete = total is not None and done >= total
+        if has_plan and (complete or not running or now - (report.get('ts') or now) > COUNTER_STALE):
+            continue
+        left = (total - done) / rate if total is not None and rate and rate > 0 and not complete else None
+        timing = (f"~{jobqueue.short(left)} left" if left is not None else '') if total is not None else (
+            f"{jobqueue.short(elapsed)}{estimate}" if running else '')
+        counters.append({'name': name, 'label': name if name != unit else '', 'done': done, 'total': total,
+                         'unit': unit, 'rate': rate, 'fraction': None if total is None else min(1.0, done / total),
+                         'left': left, 'speed': fmt_rate(rate, unit), 'time': timing,
+                         'numbers': (f"{fmt_amount(done)} / {fmt_amount(total)} {unit}" if total is not None
+                                     else f"{fmt_amount(done)} {unit}").strip()})
+    return counters
+
+
+def job_view(job: dict, now: float, place: int | None = None, has_plan: bool = False) -> dict:
+    """A job's card, as the window draws it with its widgets (``JobCard``) and the web view with its elements (the
+    ASCII bar is ``triforce job list``'s alone): 'headline' (agent, task, sub-task), 'description', 'state'
+    (``jobqueue.tags`` without the running step, which the steps' list shows) in 'color' (``job_color``),
+    'counters' (``job_counters``), 'steps' (a build's and a test's: [{'name', 'status'}], status pending, running,
+    completed or failed), 'note' (a running job that reports nothing and has no plan: 'no progress reported' and its
+    time against its estimate) and 'command' (its verb and kind, where it runs, its command)."""
+    steps = [{'name': str(step.get('name') or '?'), 'status': str(step.get('status') or 'pending')}
+             for step in job.get('steps') or []]
+    note = ''
+    if job.get('status') == 'running' and not job.get('progress') and not steps and not has_plan:
+        estimate = '' if job.get('estimate') is None else f" of ~{jobqueue.short(job['estimate'])}"
+        note = f"no progress reported · {jobqueue.short(now - (job.get('admitted_ts') or now))}{estimate}"
+    where = job.get('branch') or Path(job.get('checkout') or job.get('cwd') or '?').name
+    what = ' '.join(dict.fromkeys(part for part in (job.get('verb'), job.get('kind')) if part))
+    return {'headline': jobqueue.headline(job), 'description': job.get('description') or '',
+            'state': jobqueue.tags({**job, 'steps': None}, now, place), 'color': job_color(job, now),
+            'counters': job_counters(job, now, has_plan), 'steps': steps, 'note': note,
+            'command': f"{what}  {where}  {' '.join(job.get('command') or [])}".strip()}
+
+
+def job_sections(view: dict) -> list:
+    """The detail pane's sections of a job without a log folder (``job_view``): its counters as bars, its steps,
+    then who, what and where."""
+    sections = []
+    if view['counters']:
+        sections.append(('bars', 'Progress', [
+            (counter['label'] or counter['unit'], counter['fraction'],
+             ' · '.join(part for part in (counter['numbers'], counter['speed'], counter['time']) if part),
+             view['color']) for counter in view['counters']]))
+    if view['steps']:
+        sections.append(('text', 'Steps', [(f"{step['name']}: {STATUS[step['status']][1]}", STATUS[step['status']][0])
+                                           for step in view['steps'] if step['status'] in STATUS]))
+    lines = [(view['headline'], C.text), (view['description'], C.muted), (view['state'], view['color']),
+             (view['note'], C.muted), (view['command'], C.faint)]
+    sections.append(('text', 'Job', [(text, color) for text, color in lines if text]))
+    return sections
 
 
 # ---------------------------------------------------------------------------------------------------- presentation
@@ -1488,7 +1571,7 @@ def row_badge(run: Run, status: str):
 
 
 def chain_caption(chain: dict, now: float) -> tuple[str, list[str]]:
-    """An eval-chain card's second line (its run count) and third (elapsed time and throughput)."""
+    """An eval-chain card's second line (its run count) and third (elapsed time, runs a second, time left)."""
     status = chain['status']
     runs = chain['runs']
     sub = f"{runs} runs" + (f" · {chain['parallel']} parallel" if chain['parallel'] else '')
@@ -1500,7 +1583,82 @@ def chain_caption(chain: dict, now: float) -> tuple[str, list[str]]:
     speed = chain_speed(chain)
     if speed:
         timing.append(speed)
+    eta = chain_eta(chain, now)
+    if eta is not None:
+        timing.append(f"~{fmt_duration(eta)} left")
     return sub, timing
+
+
+def chain_outcomes(runs: int, progress: dict | None, result: dict | None) -> dict | None:
+    """A chain's runs by how they ended so far, from its latest ``chain_progress`` (``progress``; since the r40 GUI
+    work it carries ``runner.ChainTally``'s deaths, stucks and errors) or, for an older stream, its successes alone
+    (the summary's once it ended): {'total', 'done', 'wins', 'stucks', 'deaths', 'errors', 'other' (the runs that
+    did not win, of a stream without the tally), 'label'}; None before a run ended."""
+    if progress is None and result is None:
+        return None
+    total = max(1, (result or {}).get('runs') or runs or (progress or {}).get('runs') or 1)
+    tallied = progress is not None and 'deaths' in progress
+    source = progress if tallied or result is None else result
+    done = total if source is result else min(total, progress.get('done') or 0)
+    wins = source.get('successes') or 0
+    deaths, stucks, errors = ((progress.get('deaths') or 0, progress.get('stucks') or 0, progress.get('errors') or 0)
+                              if tallied else (0, 0, 0))
+    if tallied:
+        label = (f"{done}/{total} runs · {wins} won · {deaths} died · {stucks} stuck"
+                 + (f" · {errors} error{'s' if errors != 1 else ''}" if errors else ''))
+    elif source is result:
+        label = f"{wins}/{total} = {fmt_pct(result.get('success_rate'))}"
+    else:
+        label = f"{done}/{total} runs · {wins} reached the end"
+    return {'total': total, 'done': done, 'wins': wins, 'stucks': stucks, 'deaths': deaths, 'errors': errors,
+            'other': 0 if tallied else done - wins, 'label': label}
+
+
+def outcome_parts(outcomes: dict) -> list[tuple[int, QColor]]:
+    """The stretches of an outcome bar in order (``chain_outcomes``): wins blue, stuck purple, deaths red, errors
+    grey, then an older stream's runs that did not win (red, fainter)."""
+    return [(outcomes['wins'], C.ok), (outcomes['stucks'], C.warn), (outcomes['deaths'], with_alpha(C.bad, 210)),
+            (outcomes['errors'], C.muted), (outcomes['other'], with_alpha(C.bad, 170))]
+
+
+def chain_tally(progress: dict | None) -> dict | None:
+    """What a chain's latest ``chain_progress`` says beyond its endings (None for a stream without the tally):
+    {'done', 'triforces': [{'level', 'runs', 'share' (of the runs done), 'color' (``rate_color``)}] in the route's
+    order, 'furthest': {'step', 'room', 'steps', 'fraction', 'label'} or None before a run reached a route step}."""
+    if progress is None or 'deaths' not in progress:
+        return None
+    done = progress.get('done') or 0
+    triforces = []
+    for level, runs in progress.get('triforces') or []:
+        share = runs / done if done else None
+        triforces.append({'level': level, 'runs': runs, 'share': share, 'color': rate_color(share)})
+    step, steps, room = progress.get('furthest_step'), progress.get('route_steps'), progress.get('furthest_room')
+    furthest = None
+    if step is not None:
+        place = 'the end' if steps and step >= steps else f"step {step}" + (f" of {steps}" if steps else '')
+        furthest = {'step': step, 'room': room, 'steps': steps,
+                    'fraction': min(1.0, step / steps) if steps else None,
+                    'label': place + (f" · {room}" if room and room != 'the end' else '')}
+    return {'done': done, 'triforces': triforces, 'furthest': furthest}
+
+
+def chain_tally_sections(outcomes: dict | None, tally: dict | None) -> list:
+    """Eval tab sections of a chain's runs so far: how they ended, the runs that took each triforce, the furthest
+    route step reached."""
+    if outcomes is None or not outcomes['done']:
+        return []
+    done = outcomes['done']
+    rows = [(what, count / done, f"{count}/{done}", color) for what, count, color in (
+        ('won', outcomes['wins'], C.ok), ('stuck', outcomes['stucks'], C.warn), ('died', outcomes['deaths'], C.bad),
+        ('errors', outcomes['errors'], C.muted), ('not won', outcomes['other'], C.bad)) if count or what == 'won']
+    sections = [('bars', f"Runs so far ({done} of {outcomes['total']})", rows)]
+    if tally and tally['triforces']:
+        sections.append(('bars', 'Triforces taken', [(f"Dungeon {item['level']}", item['share'],
+                                                      f"{item['runs']}/{done}", item['color'])
+                                                     for item in tally['triforces']]))
+    if tally and tally['furthest']:
+        sections.append(('text', 'Furthest', [(tally['furthest']['label'], C.eval)]))
+    return sections
 
 
 def chain_lines(chain: dict | None) -> list[tuple[str, QColor]]:
@@ -1516,21 +1674,6 @@ def chain_lines(chain: dict | None) -> list[tuple[str, QColor]]:
     elif chain and chain['error']:
         lines.append((str(chain['error'].get('message', '')), C.bad))
     return lines
-
-
-def chain_bar(chain: dict):
-    """An eval-chain's bar of runs, (total, done, successes, label), once runs have finished (None before): every
-    run of a finished chain, the runs done so far of a running one."""
-    result = chain['result']
-    progress = chain['progress'] if chain['status'] == 'running' else None
-    if not result and not progress:
-        return None
-    total = max(1, (result or {}).get('runs') or chain['runs'] or 1)
-    successes = (result or progress).get('successes') or 0
-    done = total if result else min(total, progress.get('done') or 0)
-    label = (f"{successes}/{total} = {fmt_pct(result.get('success_rate'))}" if result
-             else f"{done}/{total} runs · {successes} reached the end")
-    return total, done, successes, label
 
 
 # The training charts of a run (the Charts tab, the web view): key -> (title, value format, y scale, empty text).
@@ -1684,13 +1827,19 @@ def run_eval_sections(run: Run) -> list:
             sections.append(('bars', f"Failures (share of all {ev.get('episodes')} episodes)",
                              failure_rows(failures, ev.get('episodes'))))
     elif run.chain is not None:
-        sections += chain_sections(run.chain_result())
+        tally = chain_tally(run.chain_progress)
+        sections += (chain_tally_sections(row_outcomes(run), tally) if tally else []) + chain_sections(
+            run.chain_result())
     elif run.chain_start is not None:
-        done, total = run.eval_done()
-        running = running_rate(run)
-        sections.append(('bars', 'eval-chain (running)', [
-            ('runs', done / total if total else 0.0, f"{done}/{total}", C.eval),
-            ('reached the end so far', running, fmt_pct(running), rate_color(running))]))
+        tally = chain_tally(run.chain_progress)
+        if tally is not None:
+            sections += chain_tally_sections(row_outcomes(run), tally)
+        else:
+            done, total = run.eval_done()
+            running = running_rate(run)
+            sections.append(('bars', 'eval-chain (running)', [
+                ('runs', done / total if total else 0.0, f"{done}/{total}", C.eval),
+                ('reached the end so far', running, fmt_pct(running), rate_color(running))]))
     elif run.eval_start:
         done, total = run.eval_done()
         running = (run.eval_progress or {}).get('success_rate')
@@ -2011,8 +2160,10 @@ class Header(Clickable):
             x = seg.right()
             if x < bar.right() - 1:
                 p.fillRect(QRectF(x - 1, bar.top(), 2, bar.height()), C.bg)
-        p.restore()
         fraction = model.fraction(now)
+        if not model.runs:          # a plan without runs (an eval-chain): one stretch, its chain's runs done
+            paint_fill(p, bar, fraction, color, t, stripes=status == 'running')
+        p.restore()
         paint_bar_label(p, bar, f'{fraction:.0%}', 9.5)
 
         p.setFont(font(9.5))
@@ -2026,26 +2177,164 @@ class Header(Clickable):
                        f"≈ {fmt_duration(eta)} left")
 
 
-class JobCard(Clickable):
-    """A queue job's header, painted line by line as ``triforce job list`` prints it (``job_lines``: the headline,
-    the description, the state, the progress, the command), above its log folder's header and rows when it has
-    one."""
+class TextLines(QWidget):
+    """Lines of text one under another, each (text, colour, font), elided to the width; empty ones left out."""
 
-    LINE = 18
+    def __init__(self):
+        super().__init__()
+        self.lines: list[tuple[str, QColor, QFont]] = []
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+    @staticmethod
+    def line_height(line_font: QFont) -> int:
+        return QFontMetrics(line_font).height() + 4
+
+    def set_lines(self, lines: list[tuple[str, QColor, QFont]]):
+        self.lines = [line for line in lines if line[0]]
+        self.setFixedHeight(sum(self.line_height(line_font) for _, _, line_font in self.lines))
+        self.setVisible(bool(self.lines))
+        self.update()
+
+    def paintEvent(self, _event):
+        p = QPainter(self)
+        y = 0
+        for text, color, line_font in self.lines:
+            height = self.line_height(line_font)
+            p.setFont(line_font)
+            p.setPen(color)
+            p.drawText(QRectF(0, y, self.width(), height), Qt.AlignmentFlag.AlignVCenter,
+                       p.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, self.width()))
+            y += height
+
+
+class CounterBar(QWidget):
+    """One counter of a job (``job_counters``): its label when it has one, a progress bar of done / total with the
+    numbers on it, then its rate and time left; a counter without a total: its number (no bar), its rate and its
+    time against the job's estimate."""
+
+    HEIGHT = 22
+
+    def __init__(self):
+        super().__init__()
+        self.counter: dict = {}
+        self.color = C.accent
+        self.setFixedHeight(self.HEIGHT)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+    def set_counter(self, counter: dict, color: QColor):
+        self.counter, self.color = counter, color
+        self.update()
+
+    def paintEvent(self, _event):
+        counter = self.counter
+        if not counter:
+            return
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        width, height = float(self.width()), float(self.height())
+        label_w = 130.0 if counter['label'] else 0.0
+        if label_w:
+            p.setFont(font(9))
+            p.setPen(C.muted)
+            p.drawText(QRectF(0, 0, label_w - 10, height), Qt.AlignmentFlag.AlignVCenter,
+                       p.fontMetrics().elidedText(counter['label'], Qt.TextElideMode.ElideRight, int(label_w - 10)))
+        right_w = min(220.0, width * 0.35)
+        area = QRectF(label_w, 3, max(60.0, width - label_w - right_w - 12), height - 6)
+        if counter['fraction'] is not None:
+            paint_bar(p, area, counter['fraction'], self.color, 0.0, label=counter['numbers'])
+        else:
+            p.setFont(font(9.5, QFont.Weight.Bold))
+            p.setPen(C.text)
+            p.drawText(area, Qt.AlignmentFlag.AlignVCenter, counter['numbers'])
+        p.setFont(font(9))
+        p.setPen(C.muted)
+        p.drawText(QRectF(area.right() + 12, 0, right_w, height), Qt.AlignmentFlag.AlignVCenter,
+                   '  ·  '.join(part for part in (counter['speed'], counter['time']) if part))
+
+
+class StepList(QWidget):
+    """A job's steps in order (a build, then its test suites), each its status icon and its name."""
+
+    HEIGHT = 22
+
+    def __init__(self, view):
+        super().__init__()
+        self.view = view
+        self.steps: list[dict] = []
+        self.setFixedHeight(self.HEIGHT)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+    def set_steps(self, steps: list[dict]):
+        self.steps = steps
+        self.setVisible(bool(steps))
+        self.update()
+
+    def paintEvent(self, _event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setFont(font(9.5, QFont.Weight.DemiBold))
+        x, cy = 7.0, self.height() / 2
+        for step in self.steps:
+            paint_status_icon(p, QPointF(x, cy), step['status'], self.view.owner.t, 6.5)
+            p.setFont(font(9.5, QFont.Weight.DemiBold))
+            p.setPen(C.text if step['status'] != 'pending' else C.muted)
+            p.drawText(QPointF(x + 12, cy + 4.5), step['name'])
+            x += 12 + p.fontMetrics().horizontalAdvance(step['name']) + 26
+
+
+class JobCard(Clickable):
+    """A queue job's card (``job_view``), drawn with widgets: who asked for it, its description and its state, a
+    progress bar a counter (``CounterBar``), its steps (``StepList``), then what it is and where it runs; above its
+    log folder's header and rows when it has one."""
+
+    MARGIN, SPACING = 10, 3
 
     def __init__(self, view):
         super().__init__('round')
         self.view = view
-        self._second = None         # the second the card was last repainted in
+        self._second = None         # the second the card was last refreshed in
+        self.shown: dict = {}       # the ``job_view`` drawn
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, self.MARGIN, 16, self.MARGIN)
+        layout.setSpacing(self.SPACING)
+        self.head = TextLines()
+        self.counters = QVBoxLayout()
+        self.counters.setSpacing(self.SPACING)
+        self.steps = StepList(view)
+        self.foot = TextLines()
+        layout.addWidget(self.head)
+        layout.addLayout(self.counters)
+        layout.addWidget(self.steps)
+        layout.addWidget(self.foot)
+        self.bars: list[CounterBar] = []
         self.refresh()
 
-    def lines(self, now: float) -> list[tuple[str, QColor, bool]]:
-        job = self.view.job
-        return job_lines(job, now, self.view.place) if job is not None else []
-
     def refresh(self):
-        """Fits the card to its job's lines (their number changes with its progress counters) and repaints it."""
-        self.setFixedHeight(20 + self.LINE * max(1, len(self.lines(time.time()))))
+        """Reads its job's row as of the queue's last read into its widgets and fits the card to them."""
+        job = self.view.job
+        shown = self.shown = ({} if job is None else
+                              job_view(job, time.time(), self.view.place, has_plan=self.view.model is not None))
+        counters = shown.get('counters') or []
+        while len(self.bars) > len(counters):
+            bar = self.bars.pop()
+            self.counters.removeWidget(bar)
+            bar.deleteLater()
+        while len(self.bars) < len(counters):
+            bar = CounterBar()
+            self.counters.addWidget(bar)
+            self.bars.append(bar)
+        for bar, counter in zip(self.bars, counters):
+            bar.set_counter(counter, shown['color'])
+        self.head.set_lines([] if not shown else [
+            (shown['headline'], C.text, font(10.5, QFont.Weight.Bold)),
+            (shown['description'], C.muted, font(9.5)),
+            (shown['state'], shown['color'], font(9.5, QFont.Weight.Bold))])
+        self.steps.set_steps(shown.get('steps') or [])
+        self.foot.set_lines([] if not shown else [(shown['note'], C.muted, font(9)),
+                                                  (shown['command'], C.faint, font(8.5, mono=True))])
+        parts = [widget.minimumHeight() for widget in (self.head, *self.bars, self.steps, self.foot)
+                 if not widget.isHidden()]
+        self.setFixedHeight(2 * self.MARGIN + sum(parts) + self.SPACING * max(0, len(parts) - 1))
         self.update()
 
     def animating(self) -> bool:
@@ -2060,15 +2349,7 @@ class JobCard(Clickable):
     def paintEvent(self, _event):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        rect = self.paint_card(p)
-        left, width = rect.left() + 16, rect.width() - 32
-        y = rect.top() + 10
-        for text, color, bold in self.lines(time.time()):
-            p.setFont(font(9.5, QFont.Weight.Bold if bold else QFont.Weight.Normal, mono=True))
-            p.setPen(color)
-            p.drawText(QRectF(left, y, width, self.LINE), Qt.AlignmentFlag.AlignVCenter,
-                       p.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, int(width)))
-            y += self.LINE
+        self.paint_card(p)
 
 
 def chain_sections(result: dict) -> list:
@@ -2227,7 +2508,10 @@ class RunRow(Clickable):
         bar = QRectF(rect.left() + 40 + name_w + 14, cy - 8, max(60.0, width - name_w - right_w - 70), 16)
         label = row_bar_label(run, status, self.shown)
         hatch = 1.0 if status in ('early', 'failed', 'interrupted', 'lost') else None
-        if status == 'starting':
+        outcomes = row_outcomes(run)
+        if outcomes is not None:            # a chain's entry: its runs by how they ended, as the chain card draws them
+            paint_outcomes(p, bar, outcomes)
+        elif status == 'starting':
             paint_bar(p, bar, 1.0, with_alpha(C.accent, 90), t, stripes=True, label=label)
         else:
             paint_bar(p, bar, self.shown, color, t,
@@ -2273,22 +2557,164 @@ class RunRow(Clickable):
                                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, total)
 
 
+def paint_outcomes(p: QPainter, bar: QRectF, outcomes: dict):
+    """A chain's outcome bar (``chain_outcomes``): every run of it a block while there are 120 or fewer, else
+    stretches; wins blue, stuck purple, deaths red, errors grey (``outcome_parts``), the runs still to come the
+    empty track; its label on it."""
+    total = outcomes['total']
+    path = rounded(bar, bar.height() / 2)
+    p.fillPath(path, C.track)
+    p.save()
+    p.setClipPath(path)
+    parts = [(count, color) for count, color in outcome_parts(outcomes) if count > 0]
+    if total <= 120:
+        width = bar.width() / total
+        gap = 2.0 if width > 6 else 0.0
+        index = 0
+        for count, color in parts:
+            for _ in range(count):
+                p.fillRect(QRectF(bar.left() + index * width, bar.top(), width - gap, bar.height()), color)
+                index += 1
+    else:
+        x = bar.left()
+        for count, color in parts:
+            p.fillRect(QRectF(x, bar.top(), bar.width() * count / total, bar.height()), color)
+            x += bar.width() * count / total
+    p.restore()
+    paint_bar_label(p, bar, outcomes['label'], 8.5 if bar.height() < 20 else 9.5)
+
+
+def row_outcomes(run: Run) -> dict | None:
+    """A chain entry's runs by how they ended so far (``chain_outcomes``; None for another entry, or before its
+    first run ended)."""
+    if run.kind != 'chain' and run.chain_start is None:
+        return None
+    return chain_outcomes(run.eval_done()[1], run.chain_progress, run.chain)
+
+
+class OutcomeBar(QWidget):
+    """A chain's runs by how they ended (``paint_outcomes``); before the first one ends a striped bar while it
+    runs."""
+
+    def __init__(self, view):
+        super().__init__()
+        self.view = view
+        self.outcomes: dict | None = None
+        self.status = 'pending'
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+    def paintEvent(self, _event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        bar = QRectF(self.rect())
+        if self.outcomes is not None:
+            paint_outcomes(p, bar, self.outcomes)
+        else:
+            running = self.status == 'running'
+            paint_bar(p, bar, 1.0 if running else 0.0, STATUS.get(self.status, (C.muted, ''))[0], self.view.owner.t,
+                      stripes=True, label='running' if running else '')
+
+
+class TriforceTiles(QWidget):
+    """How many of a chain's runs took each dungeon's triforce so far (``chain_tally``), in the route's order: a
+    small bar a dungeon, filled by its share of the runs done (``rate_color``), its count on it."""
+
+    GAP = 6.0
+
+    def __init__(self):
+        super().__init__()
+        self.triforces: list[dict] = []
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+    def paintEvent(self, _event):
+        if not self.triforces:
+            return
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        width = min(92.0, (self.width() - self.GAP * (len(self.triforces) - 1)) / len(self.triforces))
+        for index, item in enumerate(self.triforces):
+            tile = QRectF(index * (width + self.GAP), 0, width, self.height())
+            paint_bar(p, tile, item['share'] or 0.0, item['color'], 0.0, label=f"D{item['level']}  {item['runs']}")
+
+
+class ReachBar(QWidget):
+    """The furthest route step a chain's run reached (``chain_tally``): a bar of the route's steps, its step and
+    room on it."""
+
+    def __init__(self):
+        super().__init__()
+        self.furthest: dict | None = None
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+    def paintEvent(self, _event):
+        if self.furthest is None:
+            return
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        paint_bar(p, QRectF(self.rect()), self.furthest['fraction'] or 0.0, C.eval, 0.0, label=self.furthest['label'])
+
+
 class ChainCard(Clickable):
-    """eval-chain after the round: one block per chain run once results are in."""
+    """A plan's eval-chain (a standalone chain, the 250-run test's, a round's): its name, run count, time, runs a
+    second and time left; its runs by how they ended (``OutcomeBar``); from a chain's tally on, the runs that took
+    each dungeon's triforce (``TriforceTiles``) and the furthest route step reached (``ReachBar``); a finished
+    chain's success and first failures."""
 
     TOP = RunRow.HEIGHT + 12         # three lines on the left: name, runs, time and throughput
+    TILES, REACH, ROW_GAP = 22, 16, 8
 
     def __init__(self, view):
         super().__init__('round')
         self.view = view
         self.lines: list[tuple[str, QColor]] = []
+        self.outcomes = OutcomeBar(view)
+        self.tiles = TriforceTiles()
+        self.reach = ReachBar()
+        for child in (self.outcomes, self.tiles, self.reach):
+            child.setParent(self)
+        self.tally: dict | None = None
         self.setFixedHeight(self.TOP)
 
     def refresh(self):
         chain = self.view.model.chain() if self.view.model else None
         self.lines = chain_lines(chain)
-        self.setFixedHeight(self.TOP + (len(self.lines) * 18 + 6 if self.lines else 0))
+        self.tally = None if chain is None else chain_tally(chain['progress'])
+        self.outcomes.outcomes = None if chain is None else chain_outcomes(chain['runs'], chain['progress'],
+                                                                            chain['result'])
+        self.outcomes.status = 'pending' if chain is None else chain['status']
+        self.tiles.triforces = (self.tally or {}).get('triforces') or []
+        self.reach.furthest = (self.tally or {}).get('furthest')
+        self.tiles.setVisible(bool(self.tiles.triforces))
+        self.reach.setVisible(self.reach.furthest is not None)
+        self.setFixedHeight(self.TOP + self._tally_height() + (len(self.lines) * 18 + 6 if self.lines else 0))
         self.setVisible(chain is not None)
+        self._place()
+        self.update()
+
+    def _tally_height(self) -> int:
+        return sum(height + self.ROW_GAP for child, height in ((self.tiles, self.TILES), (self.reach, self.REACH))
+                   if not child.isHidden())
+
+    def _columns(self) -> tuple[float, float]:
+        """(left of the bars, right of the bars): the name column, then the bars to the edge but for a finished
+        chain's "NN% success"."""
+        name_w = min(210.0, max(140.0, self.width() * 0.2))
+        chain = self.view.model.chain() if self.view.model else None
+        right_w = QFontMetrics(font(9.5, QFont.Weight.DemiBold)).horizontalAdvance('100.0% success') + 32.0 if (
+            chain and chain['result']) else 0.0
+        return 40 + name_w + 14, self.width() - 16 - right_w
+
+    def _place(self):
+        left, right = self._columns()
+        self.outcomes.setGeometry(int(left), self.TOP // 2 - 8, int(max(60.0, right - left)), 16)
+        y = self.TOP - 4
+        for child, height in ((self.tiles, self.TILES), (self.reach, self.REACH)):
+            if not child.isHidden():
+                child.setGeometry(int(left), y, int(max(60.0, self.width() - 16 - left)), height)
+                y += height + self.ROW_GAP
+
+    def resizeEvent(self, _event):
+        self._place()
 
     def animating(self) -> bool:
         chain = self.view.model.chain() if self.view.model else None
@@ -2304,10 +2730,8 @@ class ChainCard(Clickable):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = self.paint_card(p)
         status = chain['status']
-        color = STATUS.get(status, (C.muted, ''))[0]
         icon_status = status if status != 'running' else 'evaluating'
-        top = QRectF(rect.left(), rect.top(), rect.width(), self.TOP)
-        cy = top.center().y()
+        cy = rect.top() + self.TOP / 2
         paint_status_icon(p, QPointF(rect.left() + 22, cy), icon_status, t)
         name_w = min(210.0, max(140.0, rect.width() * 0.2))
         p.setFont(font(11, QFont.Weight.Bold))
@@ -2315,7 +2739,7 @@ class ChainCard(Clickable):
         p.drawText(QPointF(rect.left() + 40, rect.top() + 23), 'eval-chain')
         p.setFont(font(9))
         p.setPen(C.muted)
-        # Second line: the run count; third: elapsed time and throughput (each elided to the name column).
+        # Second line: the run count; third: elapsed time, runs a second, time left (each elided to the name column).
         sub, timing = chain_caption(chain, now)
         metrics = p.fontMetrics()
         p.drawText(QPointF(rect.left() + 40, rect.top() + 41),
@@ -2323,46 +2747,19 @@ class ChainCard(Clickable):
         if timing:
             p.drawText(QPointF(rect.left() + 40, rect.top() + 57),
                        metrics.elidedText(' · '.join(timing), Qt.TextElideMode.ElideRight, int(name_w)))
-
+        # The tally's rows: their names in the name column, beside the tiles and the furthest step's bar.
+        for child, name in ((self.tiles, 'triforces'), (self.reach, 'furthest step')):
+            if not child.isHidden():
+                p.drawText(QRectF(rect.left() + 40, child.y(), name_w, child.height()), Qt.AlignmentFlag.AlignVCenter,
+                           name)
         result = chain['result']
-        # Right of the bar only a finished chain's "NN% success" (bold); otherwise the bar runs to the edge.
-        p.setFont(font(9.5, QFont.Weight.DemiBold))
-        right_w = p.fontMetrics().horizontalAdvance('100.0% success') + 32.0 if result else 0.0
-        p.setFont(font(9))
-        left = rect.left() + 40 + name_w + 14
-        bar = QRectF(left, cy - 8, max(60.0, rect.right() - 16 - right_w - left), 16)
-
-        blocks = chain_bar(chain)
-        if blocks is not None:
-            # finished: every run, successes first; running: the runs done so far, the rest still empty
-            total, done, successes, label = blocks
-            path = rounded(bar, bar.height() / 2)
-            p.fillPath(path, C.track)
-            p.save()
-            p.setClipPath(path)
-            if total <= 120:
-                gap = 2.0 if bar.width() / total > 6 else 0.0
-                width = bar.width() / total
-                for i in range(done):
-                    block = QRectF(bar.left() + i * width, bar.top(), width - gap, bar.height())
-                    p.fillRect(block, C.ok if i < successes else with_alpha(C.bad, 170))
-            else:
-                p.fillRect(QRectF(bar.left(), bar.top(), bar.width() * successes / total, bar.height()), C.ok)
-                p.fillRect(QRectF(bar.left() + bar.width() * successes / total, bar.top(),
-                                  bar.width() * (done - successes) / total, bar.height()), with_alpha(C.bad, 170))
-            p.restore()
-            paint_bar_label(p, bar, label)
-            if result is None:
-                return
+        if result is not None:
             p.setFont(font(9.5, QFont.Weight.DemiBold))
             p.setPen(rate_color(result.get('success_rate')))
-            p.drawText(QPointF(bar.right() + 16, cy + 5), f"{fmt_pct(result.get('success_rate'))} success")
-        else:
-            paint_bar(p, bar, 1.0 if status == 'running' else 0.0, color, t, stripes=True,
-                      label='running' if status == 'running' else '')
-
+            p.drawText(QPointF(self.outcomes.geometry().right() + 16, cy + 5),
+                       f"{fmt_pct(result.get('success_rate'))} success")
         p.setFont(font(9, mono=True))
-        y = rect.top() + self.TOP + 2
+        y = rect.top() + self.TOP + self._tally_height() + 2
         for text, line_color in self.lines:
             p.setPen(line_color)
             p.drawText(QPointF(rect.left() + 40, y + 12),
@@ -2690,13 +3087,13 @@ class DetailPane(QWidget):
     def refresh(self, model: Training, selection, force: bool = False, job: dict | None = None,
                 place: int | None = None):
         """Shows ``selection`` (a run index or 'round') of ``model``; a queue ``job`` without a log folder (no
-        ``model``) by its header's lines."""
+        ``model``) by its card (``job_sections``)."""
         if (model is None or not model.plan) and job is not None:
-            lines = job_lines(job, time.time(), place)
-            key = ('job', tuple(text for text, _, _ in lines))
+            view = job_view(job, time.time(), place)
+            key = ('job', json.dumps(view, default=str, sort_keys=True))
             if key != self._key or force:
                 self._key = key
-                self._show_job(job, lines)
+                self._show_job(job, view)
             return
         key = (id(model), selection, model.version if model else None)
         if key != self._key or force:
@@ -2722,15 +3119,16 @@ class DetailPane(QWidget):
         self.log.clear()
         self._log_signature = None
 
-    def _show_job(self, job: dict, lines: list[tuple[str, QColor, bool]]):
-        """A queue job without a log folder: its header's lines (``job_lines``) are all there is to show."""
+    def _show_job(self, job: dict, view: dict):
+        """A queue job without a log folder: its card (``job_view``: its counters as bars, its steps, who, what and
+        where) is all there is to show."""
         self._clear()
         label = STATUS.get(job.get('status'), (C.muted, job.get('status')))[1]
         self.title.setText(f"<span style='font-size:15pt; font-weight:700'>{job.get('name') or ''}</span>"
-                           f"&nbsp;&nbsp;<span style='color:{job_color(job, time.time()).name()}; font-weight:700'>"
+                           f"&nbsp;&nbsp;<span style='color:{view['color'].name()}; font-weight:700'>"
                            f"{label}</span><br><span style='color:{C.faint.name()}'>{job.get('cwd') or ''}</span>")
         self.chart_stack.setCurrentIndex(1)
-        self.summary.set_sections([('text', 'Job', [(text, color) for text, color, _ in lines])])
+        self.summary.set_sections(job_sections(view))
         self.evaluation.set_sections([], 'no log folder')
 
     # -- run
@@ -2783,10 +3181,16 @@ class DetailPane(QWidget):
                         f"{speed:,.0f}" if speed else '–', C.accent))
             wall.append((run.name, seconds / max(walls) if seconds and max(walls) else None,
                          fmt_duration(seconds) if seconds else '–', C.muted))
-        self.summary.set_sections([('bars', 'Eval success', evals),
-                                   ('text', 'Eval no progress (action steps)', linger),
-                                   ('bars', 'Training success (last)', train),
-                                   ('bars', 'Steps / second', sps), ('bars', 'Wall time', wall)])
+        chain = model.chain()
+        tallied = [] if chain is None else chain_tally_sections(
+            chain_outcomes(chain['runs'], chain['progress'], chain['result']), chain_tally(chain['progress']))
+        if model.runs:
+            self.summary.set_sections([('bars', 'Eval success', evals),
+                                       ('text', 'Eval no progress (action steps)', linger),
+                                       ('bars', 'Training success (last)', train),
+                                       ('bars', 'Steps / second', sps), ('bars', 'Wall time', wall)])
+        else:                       # a plan without runs (an eval-chain, the 250-run test's): its runs so far
+            self.summary.set_sections(tallied, 'no run finished yet')
 
         sections = []
         if model.is_batch:
@@ -2798,7 +3202,7 @@ class DetailPane(QWidget):
                 rows.append((run.name, value, text,
                              rate_color(value) if value is not None else STATUS.get(status, (C.muted, ''))[0]))
             sections.append(('bars', 'Evaluations', rows))
-        chain = model.chain()
+        sections += tallied
         if chain and chain['result']:
             sections += chain_sections(chain['result'])
         errors = [(str(e.get('message', '')), C.bad) for e in model.round_errors()]
@@ -2945,7 +3349,7 @@ class FolderView(QWidget):
         """One animation frame: only what animates is stepped and repainted (a live job's card once a second, a live
         plan's header, a run that is training or evaluating, a bar still easing)."""
         if self.job_card.animating():
-            self.job_card.update()
+            self.job_card.refresh()
         if self.header.animating():
             self.header.step()
             self.header.update()
@@ -3515,10 +3919,13 @@ def log_tail(path: Path | None, lines: int = WEB_LOG_LINES) -> list[str]:
 
 def run_speed(run: Run, status: str) -> str:
     """A run's throughput: steps/second while it trains (and once trained), an evaluation's episodes (a chain's
-    runs) per second while it evaluates or once it has."""
+    runs, in runs a second) per second while it evaluates or once it has."""
     start, progress, _ = run._eval_events()
     if (run.kind or status == 'evaluating') and start and progress:
-        return fmt_episode_rate(progress.get('done') or 0, progress['ts'] - start['ts'])
+        done, seconds = progress.get('done') or 0, progress['ts'] - start['ts']
+        if run.chain_start is not None:
+            return fmt_rate(done / seconds, 'runs') if done > 0 and seconds > 0 else ''
+        return fmt_episode_rate(done, seconds)
     sps = run.sps() if not run.kind else None
     return f"{sps:,.0f} sps" if sps else ''
 
@@ -3563,31 +3970,64 @@ def plan_fields(model: Training) -> dict:
     return {'plan': model.name, 'plan_kind': str(model.plan.get('kind') or ''), 'checkout': checkout_label(model.plan)}
 
 
+def css_color(color: QColor) -> str:
+    """A colour for the page, its alpha kept: ``rgba(255,77,94,0.824)``."""
+    return f"rgba({color.red()},{color.green()},{color.blue()},{color.alphaF():.3f})"
+
+
 def web_job(job: dict, place: int | None, now: float) -> dict:
-    """A queue job as the page lists it, its header as the window paints it (``job_lines``): {'id': its key,
-    'status', 'color', 'place' (in line, while queued), 'ended', 'lines': [[text, color, bold]], 'folder': its log
-    folder ('' without one), 'plan': its folder's plan line while it runs (``WebState``), else None}."""
+    """A queue job as the page lists it, its card as the window draws it (``job_view``): {'id': its key, 'status',
+    'color', 'place' (in line, while queued), 'ended', 'headline', 'description', 'state', 'counters' (``job_counters``:
+    the page draws each one's bar), 'steps' ([{'name', 'status', 'label', 'color'}]), 'note', 'command', 'folder': its
+    log folder ('' without one), 'plan': its folder's plan line while it runs (``WebState``), else None}."""
     folder = job_folder(job)
-    return {'id': job_key(job), 'status': job.get('status') or '', 'color': job_color(job, now).name(),
-            'place': place, 'ended': job.get('status') in jobqueue.ENDED,
-            'lines': [[text, color.name(), bold] for text, color, bold in job_lines(job, now, place)],
-            'folder': str(folder) if folder else '', 'plan': None}
+    view = job_view(job, now, place, has_plan=folder is not None)
+    return {'id': job_key(job), 'status': job.get('status') or '', 'color': view['color'].name(),
+            'place': place, 'ended': job.get('status') in jobqueue.ENDED, 'headline': view['headline'],
+            'description': view['description'], 'state': view['state'], 'counters': view['counters'],
+            'steps': [{**step, 'label': STATUS.get(step['status'], (C.muted, step['status']))[1],
+                       'color': STATUS.get(step['status'], (C.muted, ''))[0].name()} for step in view['steps']],
+            'note': view['note'], 'command': view['command'], 'folder': str(folder) if folder else '', 'plan': None}
+
+
+def web_outcomes(outcomes: dict | None) -> dict | None:
+    """``chain_outcomes`` for the page: {'total', 'done', 'label', 'parts': [[runs, css colour]] (``outcome_parts``,
+    the empty ones left out)}."""
+    if outcomes is None:
+        return None
+    return {'total': outcomes['total'], 'done': outcomes['done'], 'label': outcomes['label'],
+            'parts': [[count, css_color(color)] for count, color in outcome_parts(outcomes) if count > 0]}
+
+
+def web_tally(tally: dict | None) -> dict | None:
+    """``chain_tally`` for the page: {'triforces': [[label, runs, share, colour]], 'furthest': {'fraction', 'label'}
+    or None}."""
+    if tally is None:
+        return None
+    furthest = tally['furthest']
+    return {'triforces': [[f"D{item['level']}", item['runs'], item['share'], item['color'].name()]
+                          for item in tally['triforces']],
+            'furthest': None if furthest is None else {'fraction': furthest['fraction'], 'label': furthest['label']}}
 
 
 def run_card(model: Training, run: Run, status: str, now: float) -> dict:
-    """One run's card: a training run of a round or an evaluation of a batch (its row and its detail tabs)."""
+    """One run's card: a training run of a round or an evaluation of a batch (its row and its detail tabs); a chain
+    entry's runs by how they ended (``outcomes``) and its tally."""
     eta = run.eta(now) if status == 'training' else run.eval_eta(now) if status == 'evaluating' else None
     started = run.started_ts
     elapsed = ((run.finished_ts or now) - started) if started else None
     fraction = row_fraction(run, status, now)
     metrics = (run.progress[-1].get('metrics') or {}) if run.progress else {}
     log = run.log_path
+    outcomes = row_outcomes(run)
     return {
         **plan_fields(model), 'kind': run.kind or 'train', 'name': run.name,
         'family': run.entry.get('specialist') or (run.start or {}).get('specialist') or '',
         'where': (run.start or {}).get('run_dir') or run.entry.get('output') or run.entry.get('run_dir') or '',
-        'fraction': 1.0 if status == 'starting' else fraction, 'bar_label': row_bar_label(run, status, fraction),
-        'bar': bar_style(status), 'blocks': None, 'numbers': row_numbers(run, status),
+        'fraction': 1.0 if status == 'starting' else fraction,
+        'bar_label': outcomes['label'] if outcomes else row_bar_label(run, status, fraction),
+        'bar': bar_style(status), 'outcomes': web_outcomes(outcomes),
+        'tally': web_tally(chain_tally(run.chain_progress)), 'numbers': row_numbers(run, status),
         'phase': row_phase(run, status, now), 'outcome': run_outcome(run, status), 'speed': run_speed(run, status),
         'elapsed': fmt_duration(elapsed) if elapsed is not None else '', 'eta': fmt_duration(eta) if eta is not None
         else '', 'badge': web_badge(row_badge(run, status)), 'clips': fmt_clips(metrics),
@@ -3599,30 +4039,35 @@ def run_card(model: Training, run: Run, status: str, now: float) -> dict:
 
 
 def chain_card(model: Training, chain: dict, now: float) -> dict:
-    """A plan's eval-chain card (a standalone eval-chain, or the chain after a round): its chain card and the round's
-    Eval tab."""
+    """A plan's eval-chain card (a standalone eval-chain, the 250-run test's, or the chain after a round): what its
+    chain card draws (its runs by how they ended, the triforces taken, the furthest step) and the round's Eval
+    tab."""
     status = chain['status']
     sub, _ = chain_caption(chain, now)
-    blocks = chain_bar(chain)
-    total, done, successes = blocks[:3] if blocks else (chain['runs'], 0, 0)
+    outcomes = chain_outcomes(chain['runs'], chain['progress'], chain['result'])
+    total, done, wins = ((outcomes['total'], outcomes['done'], outcomes['wins']) if outcomes
+                         else (chain['runs'], 0, 0))
     started = (chain['start'] or {}).get('ts')
     end = (chain['result'] or chain['error'] or {}).get('ts') or model.finished_ts
     elapsed = ((end or now) - started) if started else None
     eta = chain_eta(chain, now)
-    rate = successes / done if done else None
+    rate = wins / done if done else None
     result = chain['result']
     log = model.log_path
+    tally = chain_tally(chain['progress'])
     return {
         **plan_fields(model), 'kind': 'eval-chain', 'name': 'eval-chain', 'family': str(model.plan.get('route') or ''),
-        'where': '', 'fraction': (done / total if total else 0.0) if blocks else (1.0 if status == 'running' else 0.0),
-        'bar_label': blocks[3] if blocks else ('running' if status == 'running' else ''),
-        'bar': bar_style(status), 'blocks': [total, done, successes] if blocks else None,
+        'where': '',
+        'fraction': (done / total if total else 0.0) if outcomes else (1.0 if status == 'running' else 0.0),
+        'bar_label': outcomes['label'] if outcomes else ('running' if status == 'running' else ''),
+        'bar': bar_style(status), 'outcomes': web_outcomes(outcomes), 'tally': web_tally(tally),
         'numbers': f"{done} / {total} runs", 'phase': sub, 'outcome': '', 'speed': chain_speed(chain),
         'elapsed': fmt_duration(elapsed) if elapsed is not None else '',
         'eta': fmt_duration(eta) if eta is not None else '',
         'badge': web_badge(None if rate is None else ('pill', f"success {fmt_pct(rate)}", rate_color(rate))),
         'clips': '', 'act': '', 'lines': [[text, color.name()] for text, color in chain_lines(chain)], 'charts': [],
-        'summary': [], 'eval': web_sections(chain_sections(result)) if result else [],
+        'summary': [], 'eval': web_sections(chain_tally_sections(outcomes, tally)
+                                            + (chain_sections(result) if result else [])),
         'log': log_tail(log), 'log_name': log.name if log else '',
     }
 
@@ -3666,8 +4111,8 @@ class MachineSampler:
 class WebState:
     """What the page shows: the queue's jobs as [currently running] lists them (``queue_listing``: the running ones,
     the one that began to run last first, the queued ones in the order they will start with their place in line,
-    then those that ended in the last ``RECENT_SECONDS``), each by its header's lines (``job_lines``, as the window
-    paints them) and, while its log folder's plan runs, that plan's line; the running plans no job owns (a run
+    then those that ended in the last ``RECENT_SECONDS``), each by its card (``web_job``: ``job_view``, as the window
+    draws it) and, while its log folder's plan runs, that plan's line; the running plans no job owns (a run
     started at a terminal); then the runs going on now on top, the one that started last first (a run that starts is
     added at the top and pushes the others down), below them the runs that ended, the one that ended last first (a
     run that ends joins them at their top, so below the running cards nothing changes places).
@@ -3856,8 +4301,31 @@ main{padding:12px 16px 48px;max-width:2600px;margin:0 auto}
 .job{background:var(--card);border:1px solid var(--border);border-left:3px solid var(--c);border-radius:10px;
   padding:7px 12px;min-width:0}
 .job.ended{opacity:.8}
-.jls{font:12.5px/1.5 ui-monospace,"DejaVu Sans Mono",Menlo,Consolas,monospace;white-space:pre;overflow-x:auto}
-.jl.b{font-weight:700}
+.jhd{font-weight:700;font-size:14px;overflow-wrap:anywhere}
+.jdesc{color:var(--muted);font-size:13px;overflow-wrap:anywhere}
+.jstate{color:var(--c);font-weight:700;font-size:13px;font-variant-numeric:tabular-nums}
+.jnote{color:var(--muted);font-size:12.5px}
+.jcmd{color:var(--faint);font:11.5px/1.5 ui-monospace,"DejaVu Sans Mono",Menlo,Consolas,monospace;white-space:pre;
+  overflow-x:auto}
+.ctrs{display:flex;flex-direction:column;gap:4px;margin:5px 0 3px}
+.ctr{display:flex;align-items:center;gap:10px;font-size:12.5px;font-variant-numeric:tabular-nums}
+.ctr .cl{flex:0 0 120px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ctr .bar{flex:1 1 auto;height:16px;min-width:60px}
+.ctr .cnum{flex:1 1 auto;font-weight:700}
+.ctr .cr{flex:0 0 auto;color:var(--muted);white-space:nowrap}
+.steps{display:flex;flex-wrap:wrap;gap:4px 16px;margin:5px 0 3px;font-size:12.5px;font-weight:600}
+.step{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.step i{font-style:normal;font-weight:400;color:var(--muted)}
+.sdot{width:11px;height:11px;border-radius:50%;background:var(--s);display:inline-block}
+.step.running .sdot{background:none;border:2px solid var(--s);border-top-color:transparent;
+  animation:spin 1s linear infinite}
+.step.pending .sdot{background:none;border:2px solid var(--s)}
+.tally:empty{display:none}
+.tiles{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.tiles .bar{flex:1 1 56px;max-width:110px;height:18px}
+.reach{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:12px}
+.reach i{font-style:normal;color:var(--faint);white-space:nowrap}
+.reach .bar{flex:1 1 auto;height:16px}
 .jh{color:var(--muted);font-weight:700;font-size:12px;letter-spacing:.04em;text-transform:uppercase;
   padding:6px 2px 0}
 #plans{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
@@ -3947,6 +4415,7 @@ pre.log{margin:6px 0 0;background:#11141a;border-radius:8px;padding:8px 10px;col
 @keyframes stripes{from{background-position:0 0}to{background-position:17px 0}}
 @keyframes pulse{0%{box-shadow:0 0 0 0 var(--c)}70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0
   transparent}}
+@keyframes spin{to{transform:rotate(360deg)}}
 @media (max-width:520px){main{padding:10px 8px 40px}header{padding:6px 10px;gap:0 12px}.brand{font-size:15px}
   .brand small{display:none}.machine{font-size:12px}.conn{font-size:11px}.card{padding:10px 10px 8px}
   .badge{margin-left:0;flex-basis:100%}.plan{padding:6px 10px}.mini{width:80px}summary{padding:6px 0}
@@ -4063,7 +4532,7 @@ function skeleton() {
     '<span class="pill ends"></span>' +
     '<span class="badge"></span></div><div class="sub"></div><div class="where"></div><div class="phase"></div>' +
     '<div class="bar"><div class="fill"></div><div class="blocks"></div><div class="label"></div></div>' +
-    '<div class="facts"></div><div class="lines"></div>' +
+    '<div class="tally"></div><div class="facts"></div><div class="lines"></div>' +
     '<details class="d-charts" open><summary>Charts</summary><div class="charts main"></div>' +
     `<details class="d-more"${WIDE ? ' open' : ''}><summary>More charts</summary><div class="charts more"></div>` +
     '</details></details>' +
@@ -4095,25 +4564,26 @@ function update(el, card) {
   phase.classList.toggle('bad', ['failed', 'interrupted', 'lost'].includes(card.status));
   const bar = $('.bar', el);
   bar.className = 'bar ' + card.bar;
-  $('.fill', bar).style.width = (card.blocks ? 0 : pct(card.fraction)) + '%';
+  const outcomes = card.outcomes;
+  $('.fill', bar).style.width = (outcomes ? 0 : pct(card.fraction)) + '%';
   let blocks = '';
-  if (card.blocks) {
-    const [total, done, successes] = card.blocks;
-    const ok = 'var(--ok)', bad = rgba(getComputedStyle(document.documentElement).getPropertyValue('--bad').trim(),
-                                       170 / 255);
+  if (outcomes) {
+    // a chain's runs by how they ended: a block a run while 120 or fewer, else stretches
+    const total = outcomes.total;
     if (total <= 120) {
       const gap = bar.clientWidth / total > 6 ? 2 : 0;
-      for (let i = 0; i < done; i++) {
-        blocks += `<span style="width:calc(${100 / total}% - ${gap}px);margin-right:${gap}px;` +
-          `background:${i < successes ? ok : bad}"></span>`;
+      for (const [count, color] of outcomes.parts) {
+        blocks += (`<span style="width:calc(${100 / total}% - ${gap}px);margin-right:${gap}px;` +
+          `background:${color}"></span>`).repeat(count);
       }
     } else {
-      blocks = `<span style="width:${100 * successes / total}%;background:${ok}"></span>` +
-        `<span style="width:${100 * (done - successes) / total}%;background:${bad}"></span>`;
+      blocks = outcomes.parts.map(([count, color]) =>
+        `<span style="width:${100 * count / total}%;background:${color}"></span>`).join('');
     }
   }
   setHTML($('.blocks', bar), blocks);
   setText($('.label', bar), card.bar_label);
+  setHTML($('.tally', el), tallyHtml(card.tally));
   const facts = [[card.numbers, ''], [card.speed, ''], [card.elapsed, 'elapsed'], [card.eta, 'left'],
                  [card.outcome, ''], [card.clips, '']].filter(([text]) => text);
   setHTML($('.facts', el), facts.map(([text, what]) =>
@@ -4160,12 +4630,45 @@ function planHtml(plan, nested) {
     `<span class="faint">${esc(plan.meta.join('  ·  '))}</span>${queued}</div>`;
 }
 
-// A job of the queue: its header's lines as the window paints them (``job_lines``), then its plan's line.
+// A bar with its fill and its label, as the cards' (``cls``: its sizing).
+function barHtml(fraction, color, label, cls) {
+  return `<div class="bar ${cls || ''}"><div class="fill" style="width:${pct(fraction)}%;background-color:${color}">` +
+    `</div><div class="label">${esc(label)}</div></div>`;
+}
+
+// One counter of a job (``job_counters``): its label, its bar of done / total (a counter without a total: its
+// number), its rate and time left.
+function counterHtml(counter, color) {
+  const right = [counter.speed, counter.time].filter(Boolean).join('  ·  ');
+  return '<div class="ctr">' + (counter.label ? `<span class="cl">${esc(counter.label)}</span>` : '') +
+    (counter.fraction == null ? `<span class="cnum">${esc(counter.numbers)}</span>` :
+      barHtml(counter.fraction, color, counter.numbers)) +
+    `<span class="cr">${esc(right)}</span></div>`;
+}
+
+// A chain's tally (``chain_tally``): a small bar a dungeon's triforce, the furthest route step's bar.
+function tallyHtml(tally) {
+  if (!tally) return '';
+  return (tally.triforces.length ? '<div class="tiles">' + tally.triforces.map(([label, runs, share, color]) =>
+    barHtml(share, color, `${label}  ${runs}`)).join('') + '</div>' : '') +
+    (tally.furthest ? '<div class="reach"><i>furthest step</i>' +
+      barHtml(tally.furthest.fraction, 'var(--eval)', tally.furthest.label) + '</div>' : '');
+}
+
+// A job of the queue, as the window draws its card (``job_view``): who, its description and state, a bar a counter,
+// its steps, its command; then its plan's line.
 function jobHtml(job) {
-  return `<div class="job${job.ended ? ' ended' : ''}" style="--c:${job.color}"><div class="jls">` +
-    job.lines.map(([text, color, bold]) =>
-      `<div class="jl${bold ? ' b' : ''}" style="color:${color}">${esc(text)}</div>`).join('') +
-    '</div>' + (job.plan ? planHtml(job.plan, true) : '') + '</div>';
+  const steps = job.steps.map(step => `<span class="step ${esc(step.status)}" style="--s:${step.color}">` +
+    `<span class="sdot"></span>${esc(step.name)}<i>${esc(step.label)}</i></span>`).join('');
+  return `<div class="job${job.ended ? ' ended' : ''}" style="--c:${job.color}">` +
+    `<div class="jhd">${esc(job.headline)}</div>` +
+    (job.description ? `<div class="jdesc">${esc(job.description)}</div>` : '') +
+    `<div class="jstate">${esc(job.state)}</div>` +
+    (job.counters.length ? '<div class="ctrs">' + job.counters.map(counter => counterHtml(counter, job.color))
+      .join('') + '</div>' : '') +
+    (steps ? `<div class="steps">${steps}</div>` : '') +
+    (job.note ? `<div class="jnote">${esc(job.note)}</div>` : '') +
+    `<div class="jcmd">${esc(job.command)}</div>` + (job.plan ? planHtml(job.plan, true) : '') + '</div>';
 }
 
 function render(state) {

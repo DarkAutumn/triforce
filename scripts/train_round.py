@@ -64,7 +64,7 @@ from triforce.evaluate import default_output, eval_event, evaluate_specialist, w
 from triforce.events import LOGS_DIR_ENV, EventLog, TrainingPlan, new_log_dir, write_json_atomic
 from triforce.jobs import announce, work
 from triforce.metrics import read_jsonl
-from triforce.runner import steps_played
+from triforce.runner import Route, steps_played
 from triforce.specialist import list_specialists, load_specialist
 from triforce.train import interrupt_on_sigterm, run_status
 
@@ -558,9 +558,9 @@ def _run_round(args, names, models: Path, log_dir: Path, plan: TrainingPlan, eve
         for stale in (chain_path, meta_path(chain_path)):     # a rerun of the round replaces its chain
             stale.unlink(missing_ok=True)
         try:
+            progress = chain_progress_events(events, args.chain_runs, route=Route.load(_native.DEFAULT_ROUTE))
             _, chain = eval_chain(_native.DEFAULT_ROUTE, args.chain_runs, args.chain_parallel,
-                                  models_dir=str(models), overrides=overrides,
-                                  on_result=chain_progress_events(events, args.chain_runs), output=chain_path)
+                                  models_dir=str(models), overrides=overrides, on_result=progress, output=chain_path)
             events.emit('chain', **chain)
         except Exception as error:  # pylint: disable=broad-exception-caught
             chain = {'error': f"{type(error).__name__}: {error}"}
