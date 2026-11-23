@@ -147,6 +147,10 @@ struct Checks {
     quiet_beep_run: u32,
     silent_frames: u64,
     silent_peak: f32,
+    /// The frames of the loudest effects samples where silence was expected, and of the mirror's mismatches.
+    silent_loud: Vec<(u32, f32)>,
+    mismatched_frames: Vec<u32>,
+    mismatched_seen: u64,
     beep_frames: u64,
     beep_peak_without: f32,
     beep_peak_with: f32,
@@ -181,7 +185,10 @@ impl Checks {
         }
         self.effect_state.add(frame, differ(mine(split, Track::Effects), ram, &tracks::EFFECT_STATE));
         if jingle(song) {
-            self.jingle.add(frame, differ(mine(split, Track::Effects), ram, &tracks::SONG_TIME));
+            // A jingle is one phrase: `asm:SongPhraseIndex` ($6C) belongs to the multi-phrase songs and keeps the
+            // music's value in the game.
+            let jingle_time: Vec<usize> = tracks::SONG_TIME.iter().copied().filter(|&a| a != 0x6C).collect();
+            self.jingle.add(frame, differ(mine(split, Track::Effects), ram, &jingle_time));
         }
         let without = mine(quiet, Track::Effects);
         self.beep_left += u64::from(without[tracks::CUR_TUNE0] == tracks::BEEP);
@@ -253,11 +260,20 @@ impl Checks {
     }
 
     /// After the frame ran.
-    fn after(&mut self, nes: &ZCore, split: &Tracks, quiet: &Tracks) {
+    fn after(&mut self, frame: u32, nes: &ZCore, split: &Tracks, quiet: &Tracks) {
         let effects = split.samples(Track::Effects);
         if self.check_silence {
             self.silent_frames += 1;
             self.silent_peak = self.silent_peak.max(peak(effects));
+            if peak(effects) > 1e-4 && self.silent_loud.len() < 10 {
+                self.silent_loud.push((frame, peak(effects)));
+            }
+        }
+        if split.stats().mismatched > self.mismatched_seen {
+            self.mismatched_seen = split.stats().mismatched;
+            if self.mismatched_frames.len() < 16 {
+                self.mismatched_frames.push(frame);
+            }
         }
         if self.check_beep {
             self.beep_frames += 1;
@@ -327,11 +343,13 @@ impl Checks {
         let frames = stats.frames.max(1) as f64;
         json!({
             "driver": {"frames": stats.frames, "driven": stats.driven, "mirror_mismatched": stats.mismatched,
+                       "mismatched_frames": self.mismatched_frames,
                        "faults": stats.faults, "stray": stats.stray.iter().map(|a| format!("${a:04X}")).collect::<Vec<_>>()},
             "music_song_state": self.song.json(),
             "effects_state": self.effect_state.json(),
             "effects_jingle_state": self.jingle.json(),
-            "effects_silence": {"frames": self.silent_frames, "peak": self.silent_peak},
+            "effects_silence": {"frames": self.silent_frames, "peak": self.silent_peak,
+                                "loudest_first": self.silent_loud.iter().map(|(f, p)| json!([f, p])).collect::<Vec<_>>()},
             "music_is_the_game_without_effects": {"stretches": self.stretches.len(), "longest_frames": longest,
                 "frames": self.stretches.iter().map(|s| u64::from(s.1)).sum::<u64>(), "max_abs_difference": off,
                 "first": self.stretches.iter().take(5).map(|s| json!({"start": s.0, "frames": s.1, "max_abs_difference": s.2})).collect::<Vec<_>>()},
@@ -416,7 +434,7 @@ pub fn sound(
                 let t = Instant::now();
                 live.run(nes, &mut scratch);
                 checks.time_live += t.elapsed().as_secs_f64();
-                checks.after(nes, &split, &quiet);
+                checks.after(frame, nes, &split, &quiet);
             }
         })?;
         if !ran {
