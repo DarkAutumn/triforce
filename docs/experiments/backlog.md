@@ -245,9 +245,13 @@ been retrained on the corrected order):
   Dungeon 9 51.2% (53.0% before, −1.8 ± 2.2 paired). round39.md "Moldorm crossed, 9:0x56's key: the two fine-tunes".
   (the owner, Nov 22: "Can we bypass the moldorm, or do we drop to 0 keys in the run. If so where do we drop to 0
   keys without it?")
-- [ ] **3:0x5b with a full bag walks between the wall and the bombs** CAUSE FOUND (round38.md "The owner's three causes"): the
-  objective already follows the owner's order (one target at a time, test pinned); darknut@d3first was trained
-  before the bomb rules, when the room's bombs were wanted at any count. Next: retrain it there with full-bag starts. (the owner, Nov 22: "If full on bombs the target
+- [ ] **3:0x5b with a full bag walks between the wall and the bombs** TRAINED, NOT PROMOTED (round38.md "3:0x5b
+  with a full bag, trained", branch `r39-dark5b`): darknut@d3first was trained before the bomb rules;
+  `r39-dark5b-s1` continued it on full-bag starts (`ram_randomization.room_bombs`, landed): the owner's case 69% ->
+  100%, 5,542 -> 407 frames a visit; chains d3 +2.2 ± 2.2, d5 +0.4 ± 2.1, d8 −3.8 ± 1.5. The lead did not promote
+  it (Nov 23): the gain is within noise, the usual return to 3:0x5b takes more hits (0.33 -> 0.62 a visit, deaths 54
+  -> 100 of 1000 runs), a full bag there is 3 visits in 1000 runs, and the fresh generation trains darknut with the
+  full-bag starts anyway. (the owner, Nov 22: "If full on bombs the target
   should be the bomb wall, he drops a bomb, the target should be on the bombs, when the bombs picked up, the target
   is moving to the next room. [...] I suspect he has two targets here? Or was trained with something that had
   conflicting targets?")

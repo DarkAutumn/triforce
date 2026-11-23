@@ -1546,6 +1546,11 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `$627` = n, `$51` = 0), so bomb use and the 10th kill's forced bomb drop come up in every family's training.
   Curriculum starts get them too (like hp); harvested starts don't (they keep what the upstream specialist handed
   over).
+- A room's own bombs (round 39; darknut@d3first at 3:0x5b): `ram_randomization: {room_bombs: {'(3, 0x5b)': [8, 8]},
+  room_bombs_share: 0.5}` draws the bombs of a reset into a listed room from that room's range in a share of those
+  resets (absent: all), in place of the `bombs` draw (`start_states::apply_room_bombs`); a reset into any other room
+  draws nothing more. Like `bombs`, every reset that randomizes RAM gets it (training, evaluation, curriculum
+  starts), harvested starts don't.
 - A forced bomb drop (round 25; boss-manhandla): `ram_randomization: {drop_bombs: P}` arms the game's help drop as
   bombs (`HelpDropCount` $0A, `IsHelpDropBomb` 1, asm:Drop_SetUpItem) in a share P of resets, at the reset and again
   after every step while a monster is in the room (harm to Link clears both), so the room's next drop (Manhandla's

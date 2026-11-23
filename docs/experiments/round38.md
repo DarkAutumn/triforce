@@ -1271,3 +1271,56 @@ Past 0x56 the route holds: of the 127 runs that got through, 67 end the game (62
 
 Both fine-tunes were done and landed in 2.0.0.13 (round39.md "Moldorm crossed, 9:0x56's key: the two fine-tunes");
 the owner ruled out the 8:0x4c key (Nov 23: "This key is the correct route, other keys are not").
+
+## 3:0x5b with a full bag, trained (branch `r39-dark5b`)
+
+The cure named in "The owner's three causes": darknut@d3first (`r38head-fam-w8`: the policy of `r34d5-dg-s362`
+and round 38's hit head, w 8) continued on its d3first rooms under 2.0.0.11's rules (`--sil-coeff 0.1`, 300
+iterations at 8 envs, 1.23M steps, the hit body unchanged: 91 of 91 `hit.*` tensors identical). New in the task:
+`ram_randomization.room_bombs` (crates/env, `start_states::apply_room_bombs`; docs/architecture.md): half of
+0x5b's resets hold 8 bombs, and `room_kills` banks 2 or 3 of its 3 Darknuts in half the staged resets (one left,
+or the room's bombs already lying). Run `r39-dark5b-s1`.
+
+**Single room** (`scripts/experiments/r39_dark5b.py`; act `temperature:0.5+relax:16`, paired by state and seed).
+The owner's case: 30 states (`r39_dark5b.py states`) entered from W with the Darknuts banked, the room's bombs lying
+at ($80, $90), a full bag and Link E of them, 10 seeds each; the crossing: `d3first_3_5bw_0-2` with 8 bombs and the
+Darknuts alive, 100 seeds each.
+
+| 3:0x5b | success | the wall's bomb laid | frames a visit (mean / median / p90) | aimless frames (mean / median / p90) |
+|---|---:|---:|---|---|
+| full bag, bombs lying: `r38head-fam-w8` | 69.0% | 69.3% | 5,542 / 5,168 / 10,068 | 3,476 / 3,114 / 6,716 |
+| `r39-dark5b-s1` it 100 | 100% | 100% | 488 / 460 / 596 | 19 / 2 / 62 |
+| `r39-dark5b-s1` it 300 | **100%** | **100%** | **407** / 396 / 467 | **11** / 0 / 25 |
+| full bag, Darknuts alive: `r38head-fam-w8` | 82.3% | 88.7% | 589 / 553 / 889 | 0 |
+| `r39-dark5b-s1` it 300 | **94.7%** (+12.3 ± 2.1) | 96.0% | 466 / 468 / 537 | 0 |
+
+The pacing is gone (frames −5,135 ± 192 a visit). The family's rooms (its yaml, 30 seeds a seed state, 1,620
+episodes): 94.2% → 95.6%, hearts −0.63 → −0.55 an episode; no room below its start beyond the noise of 90 episodes
+(0x5b 91.7 → 97.2%, 3:0x69 92.2 → 95.0%, 5:0x05 80.0 → 83.9%, 8:0x3e 88.9 → 91.1%, 8:0x5e 93.3 → 90.0%).
+
+**Chains** (1000 runs, seeds 0-999, paired by seed; base `r39d5b-base`: 2.0.0.11's team on the branch; arm
+`r39d5b-arm`: the same with `promoted.d3first` and `late.d3first` = `r39-dark5b-s1`):
+
+| segment (pointer) | base | arm | paired | base only / arm only | decisions a second (base / arm) |
+|---|---:|---:|---|---|---|
+| d3 (`promoted.d3first`) | 39.2% | 41.4% | +2.2 ± 2.2 | 223 / 245 | 863 / 580 |
+| d5 (`promoted.d3first`) | 66.1% | 66.5% | +0.4 ± 2.1 | 214 / 218 | 941 / 1,264 |
+| d8 (`late.d3first`) | 89.1% | **85.3%** | **−3.8 ± 1.5** | 131 / 93 | 1,156 / 1,422 |
+
+(Decisions a second: steps / the chain's seconds on a shared machine; the arm's d3 ran beside other jobs.)
+In d3, 3:0x5b's return (step 19) is quicker and no longer aimless (frames 1,520 → 1,162 a visit, aimless 213 → 34)
+but costs more: deaths 54 of 738 visits → 100 of 773, hits taken 0.33 → 0.62 a visit, at every arrival health
+(below 1.5 hearts 18.7 → 28.8%, 1.5-2.5 4.9 → 16.8%), kills the same (2.8 / 2.7); a full bag there is rare in the
+chain (3 visits each). 3:0x69 pays it back (deaths 148 → 110) and 3:0x59's return loses its aimless frames (134 → 15).
+d5: 5:0x05 as before (deaths 131 → 134, frames 3,034 → 2,649), 5:0x37 hearts 0.39 → 0.14 a visit. d8 is worse:
+8:0x3e deaths 36 → 57 (hearts 1.34 → 1.80 a visit), 8:0x4e 1 → 8.
+
+**Decision**: `promoted.d3first` = `r39-dark5b-s1` (d3 and d5 not worse); `late.d3first` stays `r38head-bare-w8`
+(d8 −3.8 ± 1.5). The idea is the owner's report (the pacing at 3:0x5b with a full bag); the cause and the fix
+(full-bag starts, `room_bombs`) are the agents'.
+
+**Golden run** (main 242736bf merged, so 2.0.0.12's team with darknut's `promoted.d3first` = `r39-dark5b-s1`;
+`zelda-headless.py target/golden-r39d5b 3 --golden --power-on --clips on`, 109 runs): three wins, 148,440 /
+155,081 / 151,321 frames, cheated bombs 2 / 4 / 6 (path 0's at 7:0x1a and 6:0x28), on the board 38:09.829 /
+38:00.444 / 38:26.701 (2.0.0.12's path: 153,136 frames, 2 cheated bombs, 37:40.644). Archived (`archive_replays.py`, as
+2.0.0.12, the branch's version) as `2.0.0.12_d3first_golden_54-networks_{148440,155081,151321}f`.
