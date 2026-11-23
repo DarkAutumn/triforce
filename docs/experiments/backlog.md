@@ -259,6 +259,16 @@ been retrained on the corrected order):
 - [ ] **7:0x0d's Wallmaster runs out of steps on 2.0.0.7** (Hit38c, Nov 22: 37 of 1000 `d7` runs with the goriya
   head stopped there against 7 on 2.0.0.6): what changed for wallmaster between the two (states rebuilt from step 88
   with the 0x2d change: keys, bombs, hearts on arrival?), and the fix.
+- [ ] **0:0x1f's Peahats missed by the entry row** (the owner, Nov 23): "If your training route has link walk to the
+  second highest position in 1e before heading to 1f, it's very easy to navigate 1f without taking damage. That
+  is, link is standing such that his head touches the rocks (not overlaps, he could walk up a half tile but
+  doesn't). If you move 1e -> 1f in that position, there's a way to only move east or north only (maybe with a
+  brief pause) that misses all hits of peahats." On the route: `d3first` steps 111-112 (0x1e W -> E, ow-tektite;
+  0x1f W -> N, ow-peahat), `d2first` 165-166. Build: 0x1e's E exit constrained to that row (an exit-tile target, the
+  Y found in the game where Link's head meets the rocks), then 0x1f N/E with at most a pause: demos of the line
+  (`train --demos`) or a path cost off the Peahats' reach. Find the row and the line in the emulator first
+  (walk it, count hits over seeds); measure 0x1f's hits and hearts lost a visit before/after on both routes. A
+  route change: retrain ow-tektite and ow-peahat on it (the fresh generation, or a continuation measured on the leg).
 - [ ] **Later, the owner's stated goal:** a win without a cheated bomb. Drops only; the walls' shortfall is counted
   until the bomb economy closes it (old backlog "A win without a cheated bomb").
 
