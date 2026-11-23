@@ -768,7 +768,9 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 
 ## Versioning (the owner, Nov 11; the third number and model compatibility redefined Nov 23)
 
-- **One version, `MAJOR.MINOR.GEN.REV`, in the `VERSION` file** (now `2.0.0.13`: `d3first` crosses 2:0x3e (the
+- **One version, `MAJOR.MINOR.GEN.REV`, in the `VERSION` file** (now `2.0.0.14`: the engine plays `d3first`'s two
+  whirlwinds, 0:0x0b out of Level 5 and 0:0x22 out of Level 6, as macros (routes.yaml `macros:`; the leg out of
+  Dungeon 5 82.3% -> 89.3% of 1000 runs paired, round40.md "Engine macros"; no network changed); 2.0.0.13: `d3first` crosses 2:0x3e (the
   Moldorm left) and takes 9:0x56's key instead, moldorm `r39t-moldorm` through `promoted.d3first` and like-like
   `r39t-like` through `late.d3first` (Dungeon 9 6.7% -> 51.2% against 53.0% fighting the Moldorm, 1000 runs paired;
   round39.md "Moldorm crossed, 9:0x56's key: the two fine-tunes"); 2.0.0.12 was `ow-lynel`'s `late.d3first` run for the leg

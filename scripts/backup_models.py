@@ -37,9 +37,9 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from triforce import jobs
+from triforce.paths import BACKUP_DIR as BACKUP
 
 ROOT = Path(__file__).resolve().parents[1]
-BACKUP = Path(os.environ.get('TRIFORCE_BACKUP', '/backup/triforce'))
 
 
 def sha1_of(path: Path) -> str:
