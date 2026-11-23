@@ -1010,6 +1010,14 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
     the jobs that ran in the express place longer than 10 minutes, those in a regular place that took 10 minutes or
     less, and the kinds of job always out of the queue within 2 minutes of joining it. Numbers to look at; nothing
     acts on them.
+  - **`--detach` on `run`, `golden`, `build`, `test`, and `triforce job wait UNIT...`** (Nov 23): a job can wait in
+    line for hours, and a wrapper started from a shell call or an agent's background job dies when that call's own
+    time limit or the agent ends (it happened to the lead twice and to two agents in one afternoon: a chain cut
+    three minutes after it finally started). With `--detach` the same command starts as a systemd user unit
+    outside the caller's process tree and returns at once with a unit name; its output goes to
+    `~/.local/state/triforce/detached/<unit>.log`. `triforce job wait UNIT... [--timeout 30m]` follows it and exits
+    with the job's own exit code; stopping `wait` stops nothing and it can be run again. **Use `--detach` for every
+    job that may wait or run longer than your shell call lives**; stop one with `systemctl --user stop UNIT`.
   Two jobs run at once in the regular places, plus one estimated at 10 minutes or less (or `--express`) in the
   express place; the others wait, the shortest estimate first, a long one moving up as it waits (estimate minus half
   the time waited). A waiting job is only its wrapper: no model, no GPU memory, a check a second. It prints
@@ -1049,6 +1057,15 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   each route step over the runs that entered it in both arms, so a death counts up to its last room; "we are
   competing with speedrunners so time matters, and not walking back around to enemies matters"). They never redeem
   a worse rate: "it doesn't matter if we run faster and die quicker". Report them beside the rate for every arm.
+- **Read results with `triforce stats`, not a script of your own** (the owner, Nov 23: one standard set of
+  statistics for every agent's runs, in one place). Every chain, evaluation and training writes `<output>.stats.json`
+  (a run dir's `train.stats.json`) and registers it under its job (docs/architecture.md "Run statistics"):
+  `triforce stats list --agent A --since 24h`, `triforce stats show ID|PATH [--family F]`, and for an experiment
+  `triforce stats compare BASE ARM...` (paired by seed, in the order above: the rate, hearts, beams held, shots that
+  hit and kills from range, time to each step). An older output: `triforce stats ingest FILE --agent A --task T`
+  (a job). **Read its flags first**: a red flag (a step or family never played, a network that made no decision,
+  harvested states never drawn, runs short or ended in errors) voids the numbers until explained. A measure the
+  file lacks is added to `run_stats.py` for everyone, not computed on the side.
 - **Every job is in the queue, shown with its progress** (the owner, Nov 13, Nov 18, Nov 23). The queue
   (`$XDG_STATE_HOME/triforce/queue.db`, else `~/.local/state/triforce/queue.db`; `triforce/jobqueue.py`) holds every
   job of every worktree: who (`Agent: A   Task: T   Sub-task: S`), the description, its state (`RUNNING regular 10m
