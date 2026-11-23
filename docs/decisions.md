@@ -3474,3 +3474,11 @@ and 0x29's walls need), so a run with 2 or more crosses to the key door. routes.
   1000 take Dungeon 2's triforce (21). The golden race from power on: three of three; the corpus's
   `golden-d3first-51-networks` replaced by the path with the fewest cheated bombs (two), then frames (160,248).
 
+
+## 2026-11-22 — 2.0.0.8: hit heads play eight `d3first` families (the lead promotes them, Lee being away)
+
+A supervised hit network shifting each family's action logits (round 38) cut the runs lost in Dungeons 4, 3 and 5 by
+a third to four fifths on 1000-run paired chains. Promoted for `d3first` only (`promoted.d3first`): boss-gleeok,
+like-like, vire, stalfos-keese-gel, darknut (w8), boss-manhandla, zol, gibdo (w4). `d2first` plays as before.
+Dungeon 8's bare-key runs wait for a `d3first`-only pointer; goriya's for its chains on today's code. REV bump:
+promoted models replaced. Table and the replaced runs: round38.md "2.0.0.8".
