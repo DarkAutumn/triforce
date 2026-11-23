@@ -262,6 +262,7 @@ All of the glitch knowledge is the owner's; the agents made the agent able to us
 | Nov 17 | Every finished stretch lands on main, pushed and playable | Owner | Rule | dec 11-17 |
 | Nov 21 | The lab: any network in chains | Agents | Worked | r36 |
 | Nov 23 | A golden replay per model version, backed up; 250 runs per new model with best, worst and stuck runs | Owner | Open | session history |
+| Nov 23 | Versioning's third number is the retrain generation (90% of the promoted models retrained from scratch); models load by their checkpoint's schemas, not the version | Owner; agents found the version gates and built the schema check (`OLDEST_OBS_SCHEMA` for a change of meaning) | Worked: every promoted run of today's families loads | dec 11-23 |
 
 ## Tools for watching
 

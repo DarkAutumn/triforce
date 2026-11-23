@@ -152,7 +152,8 @@ networks that ask for them read; `docs/architecture.md` "Observation").
 
 `ZeldaPolicy` also answers `heads` (so it can be served; `tests/test_lab_nets.py` checks that its logits give
 its own `evaluate` and `joint_log_probs`). A checkpoint without `model_config['arch']` is a `ZeldaPolicy`; old and
-new checkpoints load side by side (no COMPAT change).
+new checkpoints load side by side: the architecture is part of what decides whether a checkpoint loads
+(`registry.schema_problem`, AGENTS.md "Versioning"), and a new one is a new `arch` name.
 
 ## Several families in one run
 
@@ -177,7 +178,7 @@ python -m triforce.lab.train --name zol+skg --families zol stalfos-keese-gel --p
 - `--arch NAME --arch-config JSON` for a fresh network of another class; `--load CKPT` to start from a checkpoint.
 - The run is `<models>/<name>/<run-id>`; every member family gets a link `<models>/<family>/<run-id>` to it. So
   `triforce promote zol <run>` (and `--route d3first` for a route part), `triforce evaluate` per family,
-  `eval-chain`, `select-checkpoint`, `triforce list` and the version stamp work unchanged, and `runner.Policies`
+  `eval-chain`, `select-checkpoint`, `triforce list` and the run's `version` work unchanged, and `runner.Policies`
   loads a run that several keys name once.
 - As in `triforce train`: `--checkpoint-every N [--checkpoint-keep K]` (numbered checkpoints `<run>/checkpoints/
   it<N>/`, `select-checkpoint FAMILY RUN` reads them through the family's link), `--demos FILE... --demo-coeff C`

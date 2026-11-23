@@ -85,8 +85,6 @@ def build_parser() -> argparse.ArgumentParser:
                         help="with --golden: runs tried per segment before the path fails "
                              f"(default {golden.DEFAULT_ATTEMPTS})")
     parser.add_argument('--models-dir', default=None, help="models root (default $TRIFORCE_MODELS_DIR or models/)")
-    parser.add_argument('--allow-incompatible-models', action='store_true',
-                        help="play models whose version differs from this code's in its first three numbers")
     return parser
 
 
@@ -191,7 +189,6 @@ def play_golden(args, runner: Runner, folder: replay.ReplayDir) -> int:
 
 def main(argv=None) -> int:
     args = parse_args(argv)
-    registry.set_allow_incompatible(args.allow_incompatible_models)
     try:
         runner = Runner(models_dir=args.models_dir, act=registry.act_override(args.act),
                         parallel=args.parallel, route=args.route)
@@ -200,7 +197,7 @@ def main(argv=None) -> int:
             runs, errors = play_golden(args, runner, folder), 0
         else:
             runs, errors = play(args, runner, folder)
-    except (RunnerError, registry.IncompatibleModelError) as error:
+    except (RunnerError, registry.SchemaMismatchError) as error:
         print(f"zelda-headless.py: error: {error}", file=sys.stderr)
         return 2
     print(json.dumps({'saved': folder.saved, 'runs': runs, 'endings': dict(sorted(folder.endings.items())),

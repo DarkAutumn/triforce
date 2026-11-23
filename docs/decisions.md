@@ -3509,3 +3509,21 @@ opening's network still carries the old reward until retrained). Lee's beam note
 beam that would meet a monster on its projected course, and a cost for a lined-up shot not taken are in, but at
 these weights continued wizzrobe and patra runs did not fight differently (beam share unchanged, both lost: not
 promoted); the next try raises the weights. REV bump: promoted models replaced, rewards changed.
+
+## 2026-11-23 — Versioning: the third number is the retrain generation; models load by their schemas (the owner)
+
+The owner's rule: the version is `MAJOR.MINOR.GEN.REV`. MAJOR and MINOR are as before. The third number, `COMPAT`
+until now, is the retrain generation: +1 (`REV` back to 0) when 90% or more of the promoted models are retrained
+from scratch (2.0.0.123 -> 2.0.1.0), nothing else. `REV` +1 for every other change that bumped `REV` or `COMPAT`,
+including an observation or action change whose old models `triforce convert-model` widens (no retrain). Whether a
+model loads moves off the version onto the checkpoint: its action schema, its network architecture
+(`model_config['arch']`) and its observation schema (from `OLDEST_OBS_SCHEMA`, a new constant beside
+`OBS_SCHEMA_VERSION`, 6 today, to 7, an older one's layout a subset of today's) decide (`registry.schema_problem`,
+in `load_checkpoint`, which every load goes through). The agents built it: `require_compatible` (the version's
+first three numbers), `triforce stamp` and `--allow-incompatible-models` / `TRIFORCE_ALLOW_INCOMPATIBLE_MODELS`
+are gone, `convert-model` no longer reads its source's `version`; the run dir's `version` stays as provenance.
+`OLDEST_OBS_SCHEMA` keeps the old `COMPAT` bump's other half: a change to what an existing column means raises it,
+so older models are refused until converted or retrained. Every one of the 1,771 checkpoints under `models/` records
+its schema numbers, so no run-dir fallback is needed; all 57 promoted runs of today's families load (the 4
+promoted runs of retired families, action schema 1, were refused before and are refused still). `VERSION` stays
+2.0.0.11 (no generation yet).

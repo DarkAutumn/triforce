@@ -304,7 +304,6 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
     clips = default_clips_mode(config) if clips is None else clips
     jobs = episode_jobs(config, episodes_per_state, seed, clips, states_dir)
 
-    registry.require_compatible(checkpoint)
     policy = registry.load_model(checkpoint)[0].to_native()
     act = registry.act_mode(checkpoint) if act is None else registry.parse_act(act)
     checkpoint_sha1 = registry.checkpoint_sha1(checkpoint)
@@ -576,8 +575,6 @@ def build_parser() -> argparse.ArgumentParser:
                         help="write the eval events to this stream: in a folder with a plan its driver (e.g. triforce "
                              "eval-batch) owns it and writes the final 'end'; else this evaluation writes the plan")
     add_job_arguments(parser)
-    parser.add_argument('--allow-incompatible-models', action='store_true',
-                        help="load a model whose version differs from this code's in its first three numbers")
     return parser
 
 
@@ -609,7 +606,6 @@ def main(argv=None):
     """Command line."""
     parser = build_parser()
     args = parser.parse_args(argv)
-    registry.set_allow_incompatible(args.allow_incompatible_models)
     try:
         streams = replay.parse_streams(args.streams)
     except ValueError as error:
