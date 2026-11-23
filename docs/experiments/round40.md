@@ -52,15 +52,23 @@ down the `target` input's shortest way; no job): resets drawn at full hearts (se
 line one tile from the door (distance 1, then 0: he stands on it) where the switch off sends him 6 tiles up to a Gel;
 resets drawn short of hearts (seeds 0 and 3: 1.5 and 2 of 3) walk the same tiles with the switch on and off.
 
-### The experiment (not run yet: the queue was stopped)
+### The switch off changes nothing (Nov 23)
 
-zol on `d3first` (it plays 3:0x6b). Baseline arm: Fresh40's zol@d3first from scratch without the switch (branch
-`r40-fresh`: `triforce train --specialist specialists/d3first/zol.yaml --parallel 8 --iterations 1954
---checkpoint-every 122 --seed 40N --stop-success 1.01`, seeds 401-403, 8.0M steps). Arms of this branch, the same
-recipe adding only the switch (`--specialist experiments/r40/zol-fireline.yaml`): from scratch, seeds 401-403; a
-continuation of today's zol@d3first policy (`--load models/zol/r34d3-zol-s341`) with the switch. Measured in zol's
-rooms (`scripts/experiments/r40_fireline.py`: far kills per sword kill, unfired lined-up decisions, hits and hearts
-lost a visit, frames) and on the `d3` chain (1000 runs paired, the frozen 2.0.0.12 team with only `zol@d3first`
-swapped by `--checkpoint zol@d3first=RUN`, the switch arms with `--specialist-config
-experiments/r40/zol-fireline.yaml`). The 200-run identity proof (today's teams, switch off, before/after) and the
-arms wait for the new queue.
+The `d3` segment (`--from 3_7cs_0 --stop-at step:24`), 200 runs, seeds 0-199, the 2.0.0.13 team, `--act model`, once on
+main's module and once on this branch's (both on main's `models/`): 77 of 200 arrive on both; every run's result,
+reason, steps and frames equal (1,870,702 frames each), and every room record equal but for the decisions'
+`surprisal` and `act_entropy` sums, which differ by at most 4e-5 (the GPU's float noise; the actions themselves are
+equal). `target/r40f/id-main-d3.jsonl`, `id-fireline-d3.jsonl`.
+
+### The experiment
+
+zol on `d3first` (it plays 3:0x6b), every arm three seeds (401-403). From scratch WITHOUT the switch is Fresh40's
+`r40-fresh-zol-s401..403` (branch `r40-fresh`; not trained again here). This branch: from scratch WITH the switch, the
+same recipe and budget (`triforce train --specialist experiments/r40/zol-fireline.yaml --parallel 8 --iterations 977
+--checkpoint-every 61 --seed 40N --stop-success 1.01`, 4M steps); continued from today's zol@d3first policy
+(`--load models/zol/r34d3-zol-s341 --iterations 244 --sil-coeff 0.1`, 1M steps) WITH the switch, and the same
+continuation WITHOUT it (`specialists/d3first/zol.yaml`), the fair base for a continuation. Measured in zol's rooms
+(`scripts/experiments/r40_fireline.py`: far kills per sword kill, unfired lined-up decisions, hits and hearts lost
+a visit, frames) and on the `d3` chain (1000 runs paired with the promoted team, only `zol@d3first` swapped by
+`--checkpoint zol@d3first=RUN`, the switch arms with `--specialist-config experiments/r40/zol-fireline.yaml` so the
+target input they were trained on is the one they play with).
