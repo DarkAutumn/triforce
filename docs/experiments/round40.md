@@ -82,4 +82,43 @@ the Zora; 110-131 of 300 never reach the water spot, most of the rest leave by t
 onto the dock's trigger). The give-ways hid this from today's networks; the fresh generation's ow-zora must learn
 it (round 36's scripted rule with the give-ways: 6 of 20 at 0x55, 13 of 20 at 0x3f).
 
-<!-- r40-gen-eng: the identity proof and today's networks with the docks unaided follow (status file) -->
+### Today's team (2.0.0.12) with the switches (the lead's proofs, Nov 23)
+
+`d3first`, seeds 0-999, models alone; the base is main's code (`triforce-r40-gen-eng-base`), the arms this branch
+(deefe891) with `routes.yaml` edited in a side tree; paired by seed (`scripts/experiments/r40_compare.py`).
+
+**Identity, switches off** (this branch, 200 runs, against the base's seeds 0-199): every record identical, frames
+included, on the three segments holding the rooms: post-d5 (0x0b, 0x55) 1,116,463 frames, post-d6 (0x22) 453,096,
+post-d7 (0x3f) 1,159,226.
+
+**The segments** (1000 runs; the difference paired by seed, ± one standard error):
+
+| Segment | Arm | Base | Arm | Difference | Frames a run (both won) |
+|---|---|---|---|---|---|
+| post-d5 (0_0bc_0 -> 7:0x79) | whirlwind macros | 82.3% | 89.3% | +7.0 ± 1.5 | -163 ± 45 |
+| post-d6 (0_22c_0 -> 8:0x7e) | whirlwind macros | 100.0% | 100.0% | 0 | -47.8 ± 3.0 |
+| post-d5 (0_0bc_0 -> 7:0x79) | unaided docks | 82.3% | 0.0% | -82.3 ± 1.2 | - |
+| post-d7 (0_42c_0 -> 6:0x79) | unaided docks | 99.3% | 0.0% | -99.3 ± 0.3 | - |
+
+**The rooms** (every visit of the 1000 runs; base -> arm):
+
+| Room | Arm | Visits | Left by the right exit | Hits a visit | Hearts lost a visit | Frames a visit | Runs ended there |
+|---|---|---|---|---|---|---|---|
+| 0x0b | macros | 1073 -> 1000 | 88.8% -> 100% | 0.151 -> 0.024 | 0.075 -> 0.012 | 818 -> 662 | 0 -> 0 |
+| 0x22 | macros | 1000 -> 1000 | 100% -> 100% | 0 -> 0 | 0 -> 0 | 710 -> 663 | 0 -> 0 |
+| 0x55 | unaided docks | 1697 -> 2493 | 50.4% -> 0% | 0.74 -> 5.13 | 0.35 -> 2.55 | 690 -> 1721 | 54 -> 936 |
+| 0x3f | unaided docks | 2161 -> 2406 | 93.8% -> 41.6% | 0.44 -> 9.07 | 0.22 -> 4.53 | 541 -> 1158 | 5 -> 1000 |
+
+No run ended `stuck` in any of them. With the macros today's networks are better and faster: out of Level 5 the
+hand-played whirlwind went wrong in 11% of the visits (a play facing the wrong way, a hit before the pickup, a walk
+out); the macro lands every time. With the docks unaided today's ow-zora never plays the warp: at 0x55 it clips into
+the water 15 times a visit (37,337 clips in 2,493 visits) and steps back out without ever choosing RECORDER (567 runs
+die there, 369 bounce back into 0x45 five times); at 0x3f it rarely clips at all (83 clips in 2,406 visits) and all
+1000 runs die there. The plays were single forced choices it was never trained to pick, so this is the cost of
+taking the help away from a network trained with it, the number a fresh ow-zora must beat (82.3% and 99.3% with the
+help); the blind rule above shows the plays land when chosen (0x55 28%, 0x3f 72% at once, never dodging).
+
+**For the fresh generation:** the whirlwind macros can be turned on now (they help even today's team). The unaided
+docks are ready as a training-time switch (mechanism tested; position-only mask) but only a network trained with
+them plays them: ow-zora must train on the dock steps (0x55 and 0x3f entry states) with the switch on, and 0x55's
+Octorok and Zora make it the harder of the two.
