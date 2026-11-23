@@ -293,6 +293,20 @@ class RoomRecord:
     calm_decisions: Optional[int] = None
     calm_away: Optional[int] = None
     calm_reversals: Optional[int] = None
+    # Round 38, "Beams at range" (None/absent in older records; crates/zelda/src/beams.rs BeamStats): sword shots fired
+    # and those the projection had meeting a monster; decisions lined up for a shot and those that moved or waited;
+    # kills by a shot out of melee range, in melee range on a sword step, by anything else, and the summed distance
+    # (pixels) of the first two; hearts lost; steps that cost the beams.
+    beam_shots: Optional[int] = None
+    beam_shots_lined: Optional[int] = None
+    beam_lined: Optional[int] = None
+    beam_lined_unfired: Optional[int] = None
+    beam_kills_far: Optional[int] = None
+    beam_kills_near: Optional[int] = None
+    beam_kills_other: Optional[int] = None
+    beam_kill_distance: Optional[int] = None
+    beam_hearts_lost: Optional[float] = None
+    beam_beams_lost: Optional[int] = None
     # Decisions taken in the visit (crates/zelda/src/decisions.rs, triforce/variety.py): n, low1/low5 (chosen with
     # probability under 1%/5% under the policy), low1_hit/low5_hit/low1_death/low5_death (followed by a hit or death
     # within 4 decisions), surprisal, act_entropy, actions (hex, two digits per decision), health ([decisions,
