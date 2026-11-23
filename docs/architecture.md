@@ -1979,8 +1979,11 @@ file; the tools write it themselves, nobody runs anything for it.
   with 616 of 1000, shows as stuck; chains only: an evaluation's wrong exits and cutoffs are its task's ordinary
   failures); `runs-short` (red, fewer runs than the meta asked, or a batch never finished);
   `seeds-duplicate` (red) and `seeds-nonstandard` (note: not 0..N-1, pairs only with a file on the same seeds);
-  `records-old` (note: records before round 40's counters); `step-never-entered` (red: a route step on the chain's
-  way, between the first and last steps visited, that no run entered though 20 or more visits left the step before
+  `records-old` (note: records before round 40's counters); `route-renumbered` (note: a visited step's room is not
+  this checkout's step of that number, the records come from another route version, and the route canaries below are
+  not run); `step-never-entered` (red: a route step on the chain's
+  way, between the first step visited and the last before the `--stop-at` step (reached, never played), that no run
+  entered though 20 or more visits left the step before
   it by its exit); `family-never-played` (red: a family with route steps there and not one visit);
   `network-no-decisions` (red: a network the team lists for steps the chain played, `family@route` before
   `own_models_until`, else the family's key, that made no decision while its family played 20 visits or more);
