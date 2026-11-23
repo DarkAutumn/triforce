@@ -124,6 +124,8 @@ from .model import ModelConfig, ZeldaPolicy, obs_spec_from_space
 from .observation import observation_space
 from .paths import TRAJECTORIES_DIR
 from .ppo import PPO, IterationResult, PPOConfig
+from .run_stats import TRAIN_NAME as TRAIN_STATS
+from .run_stats import write_train as write_train_stats
 from .specialist import SpecialistConfig, load_specialist
 
 
@@ -559,7 +561,7 @@ def set_aside_previous(out_dir: Path, continuing: bool) -> Optional[Path]:
     ``--load`` continuation (``continuing``) keeps its checkpoint, metrics.jsonl (appended to), curriculum and tb;
     its train_summary.json, act and eval files still go (they describe the old weights)."""
     stale = sorted(path for path in out_dir.iterdir()
-                   if path.name in ('train_summary.json', 'act')
+                   if path.name in ('train_summary.json', 'act', TRAIN_STATS)
                    or (path.name.startswith('eval') and path.suffix == '.json')
                    or (not continuing and path.name in PREVIOUS_RUN_FILES))
     if not stale:
@@ -840,6 +842,7 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
         'status': status, 'iterations': state['iteration'], 'steps': state['steps'],
         'iterations_trained': state['iteration'] - start_iteration, 'steps_trained': trained,
         'stopped_early': state['stopped_early'], 'wall_seconds': elapsed, 'steps_per_second': sps})
+    write_train_stats(out_dir)
     print(f"[train] {'interrupted' if status == 'interrupted' else 'done'}: {state['iteration'] - start_iteration} "
           f"iterations, {trained} steps in {elapsed:.1f}s ({sps:.1f} steps/sec); "
           + (f"checkpoint {ckpt}" if ckpt.is_file() else "no checkpoint"))
