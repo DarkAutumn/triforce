@@ -382,6 +382,10 @@ The next from-scratch retrain is the last for a while (the owner, Nov 23), so ev
 network sees, is steered to, is rewarded for or may do goes in first; otherwise the new networks learn the old
 thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
 
+- **The product is one network; no 51-network team is built or tested** (the owner, Nov 23; decisions 2026-11-23
+  "2.0.1.0's team is the one network"). Teachers stay (about five group teachers from scratch), judged on their own
+  chains as teachers; only the one network is versioned, raced on the golden path, put through the 250 test and
+  chained on every segment.
 - **Timing: the executor's closing no-button frame goes, with no switch kept** (the owner, Nov 23; decisions
   2026-11-23 "The fresh generation plays without the closing no-button frame"): 2,851 frames (1.78%, 47.5 s) of the
   2.0.0.13 win are Link standing still between two moves the same way, and the 0x1e -> 0x1f line (0 hits held, 1 hit
