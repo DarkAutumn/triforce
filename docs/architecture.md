@@ -654,6 +654,7 @@ oldest schema whose checkpoints still load, "Checkpoint" below), `ROOM_VOCAB`,
 | `action_mask` | bool [143] | flat `ActionMask` |
 | `entity_rel` | float32 [12, 10] | schema 7: Link-relative geometry per entity slot (below) |
 | `entity_contact` | float32 [12, 23] | schema 7: velocity, the touch rule and its extrapolation per entity slot (below) |
+| `entity_threat` | float32 [12, 15] | schema 8: range-aware contact, the shooter's threat lane, the bomb carrier per entity slot; all zero unless `obs.threat` (below) |
 
 When the objective block is on, the env attaches the objective (`crates/env/src/objective.rs`) before calling
 the builder.
@@ -765,6 +766,36 @@ of goriya, Gleeok and darknut, bit for bit.
 | `entity_contact` 3-7 | `contact_{stand,N,S,W,E}` | Link standing or walking that way at 1.5 px a frame, the object moving straight on at its velocity: how soon both middles come within 9 px on both axes in frames 0-32, (33 − t) / 33, 0 never; 0 when it does not harm |
 | `entity_contact` 8-12 | `closest_{stand,N,S,W,E}` | the smallest gap (max(\|dx\|, \|dy\|) − 9) over those frames, clipped to 0-64, / 32; 2 when it does not harm |
 | `entity_contact` 13-22 | `wall_contact_*`, `wall_closest_*` | the same with both stopped at walls: Link where his lower half (rows 8-15 of his 16 × 16 box) meets a tile class he cannot cross (all but walkable, the door corridors, stairs) or the play area's edge, searched up to 48 px; a walking monster likewise along its velocity; shots and fliers (Keese, Gleeok, Peahat) never |
+
+**Schema 8 (round 40, `docs/experiments/round40.md` "Observation v7's danger block"; the fresh generation's).** One NEW
+key, `entity_threat`, after `entity_contact`; no schema 7 key or column changes, so `OLDEST_OBS_SCHEMA` stays 6 and
+every schema 6 and 7 checkpoint loads and plays as before (a `ZeldaPolicy` and the Rust actor never read it:
+`model.TOKEN_KEYS`; `hitnet` reads it with the token group `threat`). It is filled only with **`obs.threat: true`** in
+the task's yaml (`env::config::ObsConfig::threat`, default false: zeros, as `target`), so today's teams compute
+nothing new. `env::observation::threat_block` computes it from the RAM, the tile grid and the entity block (the same
+positions, RAM velocities, touch rule and wall stops as `danger_blocks`, shared through `EntityMotion`) and
+`zelda::threat` (the horizon, the shooters, the lane): **arithmetic on the current state only**, no emulator step.
+`_native.threat_blocks(ram, grid, entity_features, horizon=, lane_slack=, invincibility=)` computes it for recorded
+RAM (the hit bench screens those choices; `bomb_carrier` reads 0 there). **Range-aware** (the owner, Nov 23): a touch
+later than the horizon `H` (`zelda::threat::HORIZON`, 16 frames) reads "not soon" (0), never a far-away hit; `H` was
+chosen on the hit bench (round40.md). `crates/env/tests/threat.rs` checks the columns on hand-built states (a monster
+walking at Link, one across the room, a shot in flight and a bouncing one, a wall between, a shooter facing Link with
+and without its shot out, in a corridor, behind a wall, walking, a Goriya waiting for its boomerang, Link's
+invincibility); `tests/test_obs_threat.py` that the env's block is `threat_blocks` and that the switch changes nothing
+else.
+
+| Key, columns | Names | Value |
+|---|---|---|
+| `entity_threat` 0-4 | `soon_{stand,N,S,W,E}` | Link standing or walking that way at 1.5 px a frame, the object moving on at its RAM velocity, both stopped at walls (`danger_blocks`' wall rule): the first frame `t` at which both middles are within 9 px on both axes, searched from Link's invincibility timer `$4F0` on (no touch harms him before it runs out) to `H`; `(H + 1 − t) / (H + 1)`, 0 when none or when the object does not harm |
+| `entity_threat` 5-9 | `near_{stand,N,S,W,E}` | the smallest gap before the test passes (max(\|dx\|, \|dy\|) − 9, at least 0) over frames 0-`H`, / 16, at most 1; 1 when it does not harm |
+| `entity_threat` 10 | `lane_ready` | a shooter whose shot flies straight along its facing (`zelda::threat::shooter`: Lynels `$01/$02` sword shot 3 px a frame, Moblins `$03/$04` arrow 2, Goriyas `$05/$06` boomerang 2.5 for `$51` px, Octoroks `$07-$0A` rock 3, stopped by walls) can fire: live, not stunned, its shot not flying (a Goriya: ObjState bit 7 clear; the others: ObjShootTimer `$451` 0 or above `$10`) |
+| `entity_threat` 11 | `lane_wait` | frames until its next shot can leave, / 32, at most 1: a Goriya's ObjTimer `$28`; a standing shooter's `$451` − `$10`; a walking one 33 (it must stand 32 frames first, asm:Shooter_RunShootTimer); 0 when not ready |
+| `entity_threat` 12 | `lane_in` | ready, and Link's middle is ahead along its facing (ObjDir `$98`), within 9 px across, within the shot's reach (the rock's to the first tile it cannot cross) |
+| `entity_threat` 13 | `lane_soon` | the owner's threat lane: in the lane, the shot's arrival `t` = wait + 1 + (distance − 8) / speed as `(H + 1 − ⌈t⌉) / (H + 1)`, kept only while `t` ≤ `H` and `t` ≤ the frames Link needs to step 9 px out of the lane sideways (the nearer side a wall leaves open; never where both are walled) + `zelda::threat::LANE_SLACK`; 0 otherwise: where he can still leave, a shot is no threat this decision |
+| `entity_threat` 14 | `bomb_carrier` | this monster's death may drop bombs now (the owner's Metric B, `zelda::bomb_windows::bomb_carrier_window` and `is_bomb_carrier`, branch `r40-bombstats`): 0 until that module is on `main` (round40.md "The bomb carrier") |
+
+Aimed shots (Zora, Aquamentus, Gleeok, Gohma fireballs) and the Wizzrobes' magic have no lane: their shots are seen
+by `soon_*` once they exist. The treasure slot and Gleeok's heads have no RAM slot and so no lane.
 
 Checkpoints saved before r56 carry `model_config.grid_encoder: 'conv'`; the conv encoder is the only one left, so
 `ModelConfig.from_dict` drops that key and refuses any other encoder.

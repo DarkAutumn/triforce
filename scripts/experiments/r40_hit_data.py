@@ -1,7 +1,7 @@
 """Round 40 (docs/experiments/round40.md "Observation v7's danger block"): hit labels with the RAM beside them, for
 the supervised hit bench (``r40_obs_bench.py``).
 
-    python scripts/experiments/r40_hit_data.py goriya@d3first --decisions 120000 --out target/r40/data/goriya
+    python scripts/experiments/r40_hit_data.py KEY... --decisions 120000 --out target/r40/data
         [--route d3first] [--parallel 8] [--envs 8] [--try 4:0.5] [--seed 0] [--express]
 
 Experiment 2's collections (round36.md §1, ``r35_guard_data.py --probe``) are gone with their worktree, and the lab's
@@ -138,9 +138,9 @@ def _chunk(task):
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    parser.add_argument('key', help='a policy key, e.g. goriya@d3first')
+    parser.add_argument('keys', nargs='+', help='policy keys, e.g. goriya@d3first (one dataset each, OUT/<family>)')
     parser.add_argument('--route', default='d3first')
-    parser.add_argument('--decisions', type=int, default=120000)
+    parser.add_argument('--decisions', type=int, default=120000, help='a key')
     parser.add_argument('--parallel', type=int, default=8)
     parser.add_argument('--envs', type=int, default=8, help='envs a worker plays side by side')
     parser.add_argument('--try', dest='try_others', default='4:0.5', metavar='K:P')
@@ -154,27 +154,32 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     begin_job(args)
     k, share = args.try_others.split(':')
-    checkpoint = str(registry.policy_checkpoint(args.key, route=args.route))
-    args.out.mkdir(parents=True, exist_ok=True)
     chunks = (args.decisions + CHUNK - 1) // CHUNK
-    tasks = [(c % args.parallel, c, args.seed * 100_000 + c, int(k), float(share), str(args.out))
-             for c in range(chunks) if not any(args.out.glob(f'shard-*-{c:04d}.npz'))]
-    (args.out / 'dataset.json').write_text(json.dumps({
-        'key': args.key, 'route': args.route, 'checkpoint': checkpoint, 'temperature': TEMPERATURE,
-        'try': args.try_others, 'seed': args.seed, 'chunk': CHUNK, 'chunks': chunks}, indent=1))
+    total_decisions = args.decisions * len(args.keys)
     t0 = time.time()
-    name = os.environ.get('TRIFORCE_JOB_NAME') or f"r40-gen-obs-{args.key.split('@')[0]}-data"
-    with progress_job(name, 'eval', args.decisions, unit='decisions', root=args.logs_dir,
-                      work=work(eval_episodes=max(1, args.decisions // 400))) as progress:
-        done = (chunks - len(tasks)) * CHUNK
-        lost = total = 0
-        ctx = mp.get_context('spawn')
-        with ctx.Pool(args.parallel, initializer=_init, initargs=(args.key, args.route, checkpoint, args.envs)) as pool:
-            for rows, l, t in pool.imap_unordered(_chunk, tasks):
-                done, lost, total = done + rows, lost + l, total + t
-                progress.update(done)
-                print(f'{done} decisions, {total} judged candidates, {lost / max(total, 1):.3f} lost, '
-                      f'{(time.time() - t0) / 60:.1f} min', flush=True)
+    families = '-'.join(key.split('@')[0] for key in args.keys) if len(args.keys) < 3 else 'families'
+    name = os.environ.get('TRIFORCE_JOB_NAME') or f"r40-gen-obs-{families}-data"
+    with progress_job(name, 'eval', total_decisions, unit='decisions', root=args.logs_dir,
+                      work=work(eval_episodes=max(1, total_decisions // 400))) as progress:
+        done = 0
+        for key in args.keys:
+            out = args.out / key.split('@')[0]
+            out.mkdir(parents=True, exist_ok=True)
+            checkpoint = str(registry.policy_checkpoint(key, route=args.route))
+            tasks = [(c % args.parallel, c, args.seed * 100_000 + c, int(k), float(share), str(out))
+                     for c in range(chunks) if not any(out.glob(f'shard-*-{c:04d}.npz'))]
+            (out / 'dataset.json').write_text(json.dumps({
+                'key': key, 'route': args.route, 'checkpoint': checkpoint, 'temperature': TEMPERATURE,
+                'try': args.try_others, 'seed': args.seed, 'chunk': CHUNK, 'chunks': chunks}, indent=1))
+            done += (chunks - len(tasks)) * CHUNK
+            lost = total = 0
+            ctx = mp.get_context('spawn')
+            with ctx.Pool(args.parallel, initializer=_init, initargs=(key, args.route, checkpoint, args.envs)) as pool:
+                for rows, l, t in pool.imap_unordered(_chunk, tasks):
+                    done, lost, total = done + rows, lost + l, total + t
+                    progress.update(done)
+                    print(f'{key}: {done} decisions, {total} judged candidates, {lost / max(total, 1):.3f} lost, '
+                          f'{(time.time() - t0) / 60:.1f} min', flush=True)
     return 0
 
 
