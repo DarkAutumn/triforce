@@ -70,7 +70,8 @@ SUITES = ('python', 'asm', 'check', 'rust')     # ``triforce job test``'s suites
 # (load 3-5): one process 410-433 s; 6 processes 78 s, 8 61 s, 12 71 s.  The tools lane runs two test jobs at
 # once: two suites of 8 leave 4 of the 20 threads to the owner's player and the jobs.
 PYTEST_WORKERS = 8
-CARGO_TEST = ('cargo', 'test', '--release', '--workspace', '--features', 'zelda/zcore')     # the Rust suite
+# The Rust suite: the release-tests profile is release without link-time optimisation (Cargo.toml)
+CARGO_TEST = ('cargo', 'test', '--profile', 'release-tests', '--workspace', '--features', 'zelda/zcore')
 
 
 class JobError(Exception):

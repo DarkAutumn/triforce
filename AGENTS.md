@@ -932,7 +932,8 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 - Tests: `triforce job test SUITE... --agent A --task T [--build] [--timeout 60m]`, the suites `python`
   (`pytest -q -n 8 --dist worksteal tests`: eight processes, pytest-xdist; about a minute on a quiet machine, 7
   minutes in one process: `-- -n 0`), `asm` (`pytest -q zelda-asm/tests`), `check` (`asm.py check`), `rust`
-  (`cargo test --release --workspace --features zelda/zcore`, its test programs run 6 at a time, the longest first,
+  (`cargo test --profile release-tests --workspace --features zelda/zcore`: release without link-time
+  optimisation, Cargo.toml; its test programs run 6 at a time, the longest first,
   by `triforce.cargo_tests`: every program runs whatever another did, a failing one's output is shown whole and
   named at the end with its rerun command; the job's progress is "Rust tests" done of the programs' `--list`), `all`
   = the four; several run side by side as one entry, each one's output shown whole at the end (`test python asm
