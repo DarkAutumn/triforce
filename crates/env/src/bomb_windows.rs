@@ -172,3 +172,41 @@ impl BombFrames {
         true
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Play in 1:`room` with 2 bombs of 8, the cycle at 0 and a blue Moblin (a carrier) in slot 2.
+    fn frame(room: u8) -> Box<[u8; RAM_SIZE]> {
+        let mut ram = Box::new([0u8; RAM_SIZE]);
+        (ram[GAME_MODE], ram[0x10], ram[0xEB]) = (5, 1, room);
+        (ram[0x70], ram[0x84]) = (120, 140);
+        (ram[0x66F], ram[0x670]) = (0x22, 0xFF);
+        (ram[0x658], ram[0x67C]) = (2, 8);
+        (ram[0x34F + 2], ram[0x70 + 2], ram[0x84 + 2], ram[0x485 + 2]) = (0x03, 40, 100, 0x20);
+        ram
+    }
+
+    /// Frames wait for their visit; a fact holds from the frame count it was noted at; the step that leaves a room
+    /// is the old visit's.
+    #[test]
+    fn visits_hold_frames_and_facts_take_effect_by_frame() {
+        let mut f = BombFrames::new();
+        f.facts(0, StepFacts { kill_all: true, bomb_allowed: true });
+        f.push(frame(0x44));
+        assert_eq!(f.held(), 1, "no visit yet");
+        f.plan(MapLocation::new(1, 0x44, false));
+        assert_eq!(f.held(), 0);
+        f.push(frame(0x44));
+        assert!(!f.open().1, "FIGHT with a carrier only: no choice");
+        f.facts(f.pushed(), StepFacts { kill_all: false, bomb_allowed: true });
+        f.push(frame(0x44));
+        assert!(f.open().1, "passing through");
+        f.push(frame(0x45));
+        assert_eq!(f.held(), 1);
+        f.plan(MapLocation::new(1, 0x45, false));
+        assert_eq!((f.stats(0).carrier_miss_leave, f.stats(1).carrier_miss_leave, f.held()), (1, 0, 0));
+        assert_eq!(f.take_changed(), [0].into());
+    }
+}

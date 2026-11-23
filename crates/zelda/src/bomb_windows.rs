@@ -953,4 +953,26 @@ mod tests {
         monster(&mut ram, 3, enemy::STALFOS);
         assert!(!bomb_carrier_window(&view(&ram, 0), true, true));
     }
+
+    /// B: a transition frame between two play frames of the same room (a maze loop scrolls the room in again) is a
+    /// leaving; an item sub-screen or any other skipped frame is not.
+    #[test]
+    fn a_transition_frame_is_a_leaving() {
+        assert_eq!(frame_kind(7), FrameKind::Transition);
+        assert_eq!(frame_kind(5), FrameKind::Play);
+        assert_eq!(frame_kind(0x12), FrameKind::Other);
+        let mut ram = base(2, 0, 0);
+        set(&mut ram, Var::Level, 0);
+        monster(&mut ram, 2, enemy::BLUE_MOBLIN);
+        let mut rules = FixedRules { bomb_rule: true, kill_all: false };
+        let mut stats = BombWindowStats::default();
+        let mut w = BombWindows::default();
+        w.frame(view(&ram, 0), &mut rules, &mut stats);
+        w.skip(false);
+        w.frame(view(&ram, 2), &mut rules, &mut stats);
+        assert_eq!((stats.carrier_miss_leave, w.open().1), (0, true));
+        w.skip(true);
+        w.frame(view(&ram, 4), &mut rules, &mut stats);
+        assert_eq!(stats.carrier_miss_leave, 1);
+    }
 }
