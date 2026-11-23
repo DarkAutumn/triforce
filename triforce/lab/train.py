@@ -35,7 +35,7 @@ from typing import Optional
 
 import torch
 
-from .. import nets, paths, registry, store
+from .. import lineage, nets, paths, registry, store
 from ..best_of_n import success_by_state
 from ..demos import load_demos
 from ..events import EventLog, logged_job
@@ -47,7 +47,7 @@ from ..observation import observation_space
 from ..ppo import PPO, IterationResult, PPOConfig, joint_kl, minibatch_forward
 from ..train import CONFIRM_EPISODES, EarlyStop, curriculum_spec
 from .auxiliary import AuxLoss, aux_loss, held_out
-from .collect import MultiCollector, NeedSampler, Teachers, parse_families
+from .collect import MultiCollector, NeedSampler, Teachers, parse_families, trajectories_root
 from .rehearse import Rehearsal
 
 REFERENCE = Path(__file__).with_name('reference.json')
@@ -144,12 +144,13 @@ def teacher_coeff(args, iteration: int) -> float:
 
 
 def initial_network(args):
-    """(network, source)."""
+    """(network, source, parent): ``parent`` the loaded checkpoint's identity (``lineage.identity``), None from
+    scratch."""
     if args.load:
-        network, _ = registry.load_model(args.load)
-        return network, str(args.load)
+        network, checkpoint = registry.load_model(args.load)
+        return network, str(args.load), lineage.identity(checkpoint, args.load)
     spec = obs_spec_from_space(observation_space())
-    return nets.create(args.arch, spec, **json.loads(args.arch_config)), None
+    return nets.create(args.arch, spec, **json.loads(args.arch_config)), None, None
 
 
 def link_families(root: Path, name: str, run_id: str, keys: list[str]):
@@ -333,7 +334,8 @@ def main(argv=None) -> Path:
     run_id = args.run_id or registry.new_run_id()
     root = models
     shares = {k: float(w) for k, _, w in (s.partition('=') for s in args.shares)}
-    families = parse_families(args.families, args.parallel, shares, args.state_route)
+    families = parse_families(args.families, args.parallel, shares, args.state_route,
+                              curriculum=not args.no_curriculum, states_dir=args.states_dir)
     keys = [f.key for f in families]
     steps_per_env = max(1, args.steps_per_update // args.parallel)
     total = args.iterations * steps_per_env * args.parallel
@@ -349,7 +351,7 @@ def main(argv=None) -> Path:
                     mode=args.mode) as plan:
         log = RunLog(plan, keys, run_id)
         out_dir.mkdir(parents=True, exist_ok=True)
-        network, source = initial_network(args)
+        network, source, parent = initial_network(args)
         aux_losses = [AuxLoss.parse(text) for text in args.aux]
         tried = parse_try_others(args.try_others)
         recurrent = getattr(network, 'recurrent', False)
@@ -386,8 +388,10 @@ def main(argv=None) -> Path:
         curricula = {}
         for family in families:
             spec, _ = curriculum_spec(argparse.Namespace(no_curriculum=args.no_curriculum, curriculum=None,
-                                                         curriculum_fraction=None, curriculum_threshold=None),
-                                      family.config, out_dir / 'tasks' / family.key)
+                                                         curriculum_fraction=None, curriculum_threshold=None,
+                                                         curriculum_unrecorded=None),
+                                      family.config, out_dir / 'tasks' / family.key,
+                                      trajectories_root=trajectories_root())
             curricula[family.key] = spec
         (out_dir / 'tasks').mkdir(exist_ok=True)
         for family in families:
@@ -413,8 +417,9 @@ def main(argv=None) -> Path:
         run = {'args': recorded, 'name': args.name, 'run_id': run_id, 'families': keys,
                'envs': collector.shares, 'arch': nets.arch_of(network.config.to_dict()),
                'parameters': network.parameter_count(), 'model_config': network.config.to_dict(),
-               'ppo_config': cfg.to_dict(), 'source': source,
-               'teachers': None if teachers is None else teachers.paths}
+               'ppo_config': cfg.to_dict(), 'source': source, 'parent': parent,
+               'teachers': None if teachers is None else teachers.paths,
+               'teacher_ids': None if teachers is None else teachers.identities}
         (out_dir / 'run.json').write_text(json.dumps(run, indent=2, default=str), encoding='utf-8')
         if stored is None:      # a store run's families find it through a team's slots, not links
             link_families(root, args.name, run_id, keys)

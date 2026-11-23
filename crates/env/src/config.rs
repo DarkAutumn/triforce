@@ -412,7 +412,10 @@ pub enum HiddenPositions {
     Zero,
 }
 
-/// `curriculum:` block: the backward curriculum over `trajectories/<name>` (off unless enabled).
+/// `curriculum:` block: the backward curriculum over `trajectories/<name>` (off unless enabled).  `untracked`
+/// (round 40): globs of the seed states that train without a track (never explored, or no track found); every other
+/// seed state must have one, or `triforce train` refuses (`triforce.inputs.check_curriculum`): a missing track is
+/// an error, a declared one is the recipe.  Read by the checks only, never by the env.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CurriculumConfig {
@@ -424,6 +427,8 @@ pub struct CurriculumConfig {
     pub fraction: f64,
     #[serde(default = "default_threshold")]
     pub threshold: f64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub untracked: Vec<String>,
 }
 
 fn default_threshold() -> f64 {
@@ -437,6 +442,7 @@ impl Default for CurriculumConfig {
             trajectories: None,
             fraction: 0.5,
             threshold: 0.6,
+            untracked: Vec::new(),
         }
     }
 }

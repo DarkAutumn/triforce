@@ -10,7 +10,11 @@ obs: {objective: true, target: true}       # schema 2; `hidden_positions` stays 
 # chains: Ganon entered with 3.25 on average).
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, chain_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # as boss-gohma (round 27)
 items: {bombs: never, arrows: true}        # nothing of his is hurt by a bomb; ARROW is offered only while he is brown, facing him from his row or column, above the route's rupee reserve (0 in his room)
-curriculum: {enabled: true}             # trajectories/ganon, once explored
+curriculum:                              # trajectories/ganon, once explored
+  enabled: true
+  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
+  - d3first_9_32s_[0-9]
+  - d3first_9_42s_[0-9]
 one_room: true
 max_steps: 900
 warm_start: boss-gohma                     # round 29: a first training starts from boss-gohma's promoted run (the arrow's rule, a boss fought by sword and one arrow)

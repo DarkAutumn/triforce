@@ -59,7 +59,8 @@ def main(argv=None) -> Path:
     if args.actor == 'student' and not args.student:
         raise SystemExit("--actor student needs --student CKPT")
     out = Path(args.out)
-    families = parse_families(args.families, args.parallel, state_route=args.state_route)
+    families = parse_families(args.families, args.parallel, state_route=args.state_route, curriculum=False,
+                              states_dir=args.states_dir)
     keys = [f.key for f in families]
     root = registry.models_root(args.models_dir)
     total = args.rollouts * args.steps_per_env * args.parallel

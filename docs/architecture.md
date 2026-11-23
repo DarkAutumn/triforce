@@ -31,7 +31,7 @@ flowchart LR
 | `crates/theater` | Replays for watching: `queues.rs` (`Queues`: `success`/`stuck`/`died`/`random` first-in-first-out and `best`, the top runs seen), `feed.rs` (`Feed`: the background thread that files every finished run of a `Producer` and pauses it while nothing is wanted), `screen.rs` (`Screen`: one thread per cell playing a replay at a frame rate, one cell heard), `speaker.rs` (`Ring`, `Speaker`: the sound device, `cpal`), `overlay.rs` (the controller drawn into a frame). Knows replays and the emulator only. |
 | `crates/policy` | `Policy`: the network's Rust copy that acts inside the pool (forward pass, masked heads, keyed Gumbel noise `noise.rs`). |
 | `crates/tools` | The `tf` CLI (below). |
-| `triforce/` (Python) | `ppo.py`, `rollout_buffer.py`, `metrics.py`, `model.py`, `train.py`, `evaluate.py`, `runner.py`, `replay.py`, `golden.py`, `provenance.py`, `run.py`, `cli.py`, `play.py`, `play_grid.py`, `play_view.py`, `video.py`, `explore.py`, `entry_states.py`, `chain_hp.py`, `heart_value.py`, `events.py`, `registry.py`, `plr.py`, `best_of_n.py`, `eval_batch.py`, `select_checkpoint.py`, `jobqueue.py` / `job.py` / `jobs.py` (the job queue, `triforce job`), `testlog.py` (the test suites' timing logs, `triforce test-times`); thin `observation.py` (gym space from `OBS_SPEC`), `actions.py` (`Action`, `ActionMask` flat-mask view), `zelda_enums.py` (`ActionKind`, `Direction`, `MapLocation`), `specialist.py`, `paths.py` (`STATES_DIR`, `TRAJECTORIES_DIR`). |
+| `triforce/` (Python) | `ppo.py`, `rollout_buffer.py`, `metrics.py`, `model.py`, `train.py`, `evaluate.py`, `runner.py`, `replay.py`, `golden.py`, `provenance.py`, `run.py`, `cli.py`, `play.py`, `play_grid.py`, `play_view.py`, `video.py`, `explore.py`, `entry_states.py`, `chain_hp.py`, `heart_value.py`, `events.py`, `registry.py`, `plr.py`, `best_of_n.py`, `eval_batch.py`, `select_checkpoint.py`, `jobqueue.py` / `job.py` / `jobs.py` (the job queue, `triforce job`), `testlog.py` (the test suites' timing logs, `triforce test-times`), `inputs.py` (a task's declared inputs, each checked before a run starts) and `build.py` (the sources the built module was built from), round 40; thin `observation.py` (gym space from `OBS_SPEC`), `actions.py` (`Action`, `ActionMask` flat-mask view), `zelda_enums.py` (`ActionKind`, `Direction`, `MapLocation`), `specialist.py`, `paths.py` (`STATES_DIR`, `TRAJECTORIES_DIR`). |
 
 ## Processes and threads
 
@@ -175,15 +175,27 @@ route step wants it) and in the objective (targets, outcomes).
   above, an executor macro. A step `exit: recorder` in a dock room (`game_map::DOCK_ROOMS`: 0x55, 0x3f) followed by `entry:
   recorder` into its landing (`game_map::dock_landing`: 0x34, 0x31, one row above the level's
   `Whirlwind_PrevRoomIds` stand-in room; `check_whirlwinds` accepts it after a dock room, `objectives::route_entry`
-  maps the jump to `recorder`) is a dock-warp step (`GameCompletion::dock_warp`; `Session::set_dock_warp`, set every
-  step by chain and specialist envs). Its mask (`zelda::session::dock_warp_mask`) leaves MOVE S on the dock below
-  its trigger (SWORD S instead while a monster stands on the land below), CLIP N where the block clip into the water
-  is legal (`zelda::clips::dock_clip_at`), and RECORDER on the water spot (`clips::dock_spot`: 0x55 X `$78`, 0x3f X
-  `$58`; WAIT instead while a shot is in the air); elsewhere the family's own mask, and a MOVE W/E on the step stops
-  on the clip's column. RECORDER there is `Executor::run_dock_warp`: the plays the index needs from
-  `whirlwind::plays` (N for a step up, W for a step down, a one-frame turn before the B), then nothing pressed until
-  the pickup (`$522`), the whirlwind gone, or an interrupt. The objective targets the clip's G tile. A whirlwind out
-  of a dock room into any other room ends a chain run `stuck` (`dock-warp-missed`).
+  maps the jump to `recorder`) is a dock-warp step (`GameCompletion::warp` gives `whirlwind::Warp::Dock`;
+  `Session::set_warp`, set every step by chain and specialist envs). Its mask (`zelda::session::dock_warp_mask`)
+  leaves MOVE S on the dock below its trigger (SWORD S instead while a monster stands on the land below), CLIP N where
+  the block clip into the water is legal (`zelda::clips::dock_clip_at`), and RECORDER on the water spot
+  (`clips::dock_spot`: 0x55 X `$78`, 0x3f X `$58`; WAIT instead while a shot is in the air); elsewhere the family's own
+  mask, and a MOVE W/E on the step stops on the clip's column. RECORDER there is `Executor::run_warp` (in the water):
+  the plays the index needs from `whirlwind::plays` (N for a step up, W for a step down, a one-frame turn before the
+  B), then nothing pressed until the pickup (`$522`), the whirlwind gone, or an interrupt. The objective targets the
+  clip's G tile. A whirlwind out of a dock room into any other room ends a chain run `stuck` (`dock-warp-missed`).
+- **Engine macros by route** (round 40, the fresh generation; routes.yaml's top-level `macros:`, `game_map::Macros`,
+  docs/routes/d3first.md "The engine's macros"; the owner's rule: a fixed button sequence offered as one choice,
+  masked by Link's position only, never by a monster or a shot). Both off on `d3first` as landed (today's networks
+  were trained without them). `whirlwinds: [rooms]`: on those `exit: recorder` steps (not a dock) `GameCompletion::warp`
+  gives `Warp::Whirlwind`; the session offers RECORDER wherever `whirlwind::macro_facing` finds the sequence playable
+  from where Link stands (plays to make, the recorder playable, a facing that starts the sequence reached by the input
+  model `attack::plan`, Link's own first, else the fewest turn frames, left or right first), whatever he faces; the
+  executor turns him (`attack::next`'s RECORDER with a direction turns as FOOD), plays, and `Executor::run_warp` (on
+  land: no turn while his facing makes the play, else E or W) plays the rest and waits for the pickup.
+  `unaided_docks: true`: `Warp::Dock { unaided }` swaps `dock_warp_mask` for `unaided_dock_mask`: the same plays added
+  to the family's own mask where Link's position lets them work (MOVE N/W/E taken off the dock below its trigger), no
+  give-way. Tests: `crates/zelda/tests/whirlwind_macro.rs`.
 - **Masks.** RECORDER (`Session::set_recorder_facings`, set every step from `GameCompletion::recorder_facings`):
   on the whirlwind step only facing the way the next play must step the game's counter (`TeleportingLevelIndex`
   `$523`: +1 facing right or up, -1 left or down, then on past the levels whose piece Link lacks; only the first play
@@ -1072,7 +1084,8 @@ q-speed (`contact::velocity`), a walker stopped where a wall stops it (`contact:
 hurt (active, not dying, sword bit clear in ObjInvincibilityMask `$4B2`, not a Darknut facing the shot, not the big
 Digdogger). Counted in the visits and chain records as `beam_<field>` (`beams::BeamStats`: shots, shots lined up,
 decisions lined up and those that moved or waited, kills far / near / other with their summed distance, hearts lost,
-steps that cost the beams); `scripts/experiments/r38_beams.py` tabulates them per family or room.
+steps that cost the beams; round 40: `shots_hit`, `held_frames`, `lost_frame`, "Run statistics" below);
+`scripts/experiments/r38_beams.py` tabulates them per family or room.
 `reward-gained-rupees` (round 38, the owner: "what should ACTUALLY be awarded for getting rupees is the 'rupees to
 add' counter getting set once") pays once per pickup, on the step `InvRupees + InvRupeesToAdd − InvRupeesToSubtract`
 rises, by the amount: under 5 `REWARD_MEDIUM`, 5-9 `REWARD_LARGE`, 10 or more `REWARD_MAXIMUM`; nothing while
@@ -1318,8 +1331,13 @@ every step, so following an enemy that moves away pays again, and knockback rese
   records a numbered checkpoint as `<family>/<run>/checkpoints/it<N>/ckpt.pt`. A new training into the run dir sets
   `checkpoints/` and `selection.json` aside with the rest (`PREVIOUS_RUN_FILES`).
 - Metrics (design §12) go to TensorBoard and `metrics.jsonl` in the run directory; `run.json` records the
-  arguments and configs, `harvested` ({dir, states, fraction, drawn}) and `curriculum_tracks` (each track loaded,
-  with its trajectory.json time); `train_summary.json`
+  arguments and configs, `parent` (round 40, `triforce.lineage.identity`: the checkpoint the weights came from as
+  `{family, run, iterations, sha1}`, never a path; `null` from scratch; a same-dir continuation keeps its first
+  training's; the lab's trainer also `teacher_ids`), `harvested` ({dir, states, fraction, drawn}) and
+  `curriculum_tracks` (each track loaded, with its trajectory.json time); `triforce lineage [--route R]` prints each
+  promoted pointer's chain back to its origin (run dirs in the models dir and `/backup/triforce/models/runs`; older
+  runs by their recorded `source` path or `args.load`, a family's name being a promoted run with no run id);
+  `train_summary.json`
   records `status` (completed | early_stop | interrupted), total and this run's (`iterations_trained`,
   `steps_trained`) iterations/steps, `stopped_early`, wall time and steps/sec (`train.run_status(run_dir)`). An
   interrupted run (SIGINT, or SIGTERM from `python -m triforce.train` / `triforce train`) saves its checkpoint and
@@ -1504,9 +1522,20 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `training.json`: the training GUI does not list it): `start`, a `test` line per test as it ends (`id`,
   `outcome`, `seconds`, `setup` / `call` / `teardown`, `worker`) and `summary` (checkout, branch, commit, `job`:
   id, label, agent, task, subtask; `workers`, `load` at the start, `wall`, `collected`, `counts`, `test_seconds`,
-  `exit`). The Rust suite runs as `python -m triforce.testlog cargo -- cargo test ...`, which passes cargo's output
-  through and writes a `test` line per test binary (`Running` / `Doc-tests`, then its `test result:`: counts and
-  `finished in`; stable Rust has no per-test times) and a summary with `compile` seconds. `triforce test-times`
+  `exit`). The Rust suite runs as `python -m triforce.cargo_tests -- cargo test ...` (the owner, Nov 23: "Test rust
+  is now the extremely long leg of testing"): `cargo test --no-run --message-format=json-render-diagnostics` builds
+  and lists the test programs (`compiler-artifact` messages of test profile), each program's `--list` counts its
+  tests (the job's progress: `Rust tests` done of that total, a program's counted as it ends, the doc tests added
+  when they end), and the programs run `cargo_tests.JOBS` = 6 at a time, the longest first (each one's median
+  over the last five whole Rust suites of the timing logs; a program without history first), each as cargo runs
+  it (its package's folder, `CARGO_MANIFEST_DIR`, the build scripts' library folders on `LD_LIBRARY_PATH`), the
+  doc tests (`cargo test --doc`) as one more entry. Every program runs whatever another did (cargo stops at the
+  first failing program); each one's output is printed whole under cargo's `Running` line when it ends, the
+  failed ones named again at the end with the `-p PACKAGE --test NAME` that reruns each; the exit code is cargo's
+  (101 when a test failed). A `test` line per program (`<package> tests/cli.rs`, `<package> unittests
+  src/lib.rs`, `<crate> doctests`; `seconds` its wall time; the counts of its `test result:`; stable Rust has no
+  per-test times) and a summary with `compile` (the build's seconds) and `test_wall`. `--no-run` or `--doc` run
+  cargo itself, read line by line. `triforce test-times`
   (`testlog.report_main`) reads every folder with a summary: per suite the wall time run by run, each test's median
   and worst over the last `--last` runs, the `--top` slowest, the tests whose newest time is 1.5x and 1 s over the
   median of the runs before; plain text or `--json`.
@@ -1516,6 +1545,40 @@ every step, so following an enemy that moves away pays again, and knockback rese
   and exit 2. Every script that plays, trains, collects or crunches calls `jobs.require_job()` first. Library code
   calls neither, so the play, replay and build tools that share the evaluation code (play-zelda, zelda-headless
   without `--golden`, create-video, zelda-map, `tf replay`) are not queued.
+- **Missing is an error, never "none"** (round 40, the owner: two results of Nov 23 were void because a run drew
+  nothing from an input that was not there; `docs/data-layout.md` "Silent defaults found"). Every input a run
+  declares is checked before the job waits its turn, and a refusal names where it looked (exit 2):
+  - `triforce.inputs` (`triforce train`, `triforce evaluate`, the lab's `parse_families`): every `start_states` glob
+    matches a state file (`check_start_states`; a glob that matched nothing was dropped); a task with
+    `harvested_fraction > 0` finds harvested states of its namespaces (`check_harvested`; the lab's trainings drew
+    none silently); with the curriculum on, a track for every seed state except those the task declares in
+    `curriculum.untracked` (globs of state names; `check_curriculum`: a seed state without a track trained without
+    one, seen only in `run.json`). `untracked` is read by these checks only (the Rust config keeps it, the env never
+    reads it); the refusal prints the declaration to add.
+  - The native start-state pool (`crates/env/src/start_states.rs`): a pool that draws harvested states and finds
+    none is refused when it is built, and a harvested file removed under a running pool is an error (F159 had the
+    resets fall back to the seed states).
+  - `train --load` / a task's `warm_start` (`train.resolve_warm_start`): a checkpoint file, a run dir holding one,
+    or a family with a promoted run; anything else is named (a mistyped run dir was read as a family name). A
+    continuation of a run whose `run.json` does not record its curriculum's trajectories needs
+    `--curriculum-unrecorded resume|fresh` (such runs counted as the same trajectories).
+  - Chains (`runner.check_team`, `check_configs`, `Policies._check_heads`): a policy key the runs reach with no
+    network refuses the chain (until then only the runs that got there ended `error`); a `--specialist-config` of a
+    family no step of the run plays is refused; a `--checkpoint KEY=PATH` without a hit head that replaces a team
+    network with one needs `--headless KEY` (`select-checkpoint --headless`), and a `--headless` that declares
+    nothing is refused. `eval-chain --harvest` takes a DIR (a bare `--harvest` wrote into the shared harvested
+    states every training draws).
+  - The built module (`triforce.build`): `triforce job build` (and `test --build`, `setup`) stamps
+    `triforce/_native.build.json` with the fingerprint of the sources it built (the index entries, working-tree
+    changes and untracked files of `crates/`, `Cargo.toml`, `Cargo.lock`, `pyproject.toml`) and the module's
+    SHA-1; `jobs.announce` refuses a queued tool when the module has no stamp or the sources changed since (a
+    module rebuilt from the same sources, `uv run` after a landing, is fine). About 25 ms a start.
+  - The test suites read the main checkout's `models/` whatever a worktree's own holds (`job.test_steps`; a
+    partial one gave the tests a partial team).
+  Left as declared rules, not refusals: a run dir without an `act` file plays `DEFAULT_ACT` and one whose `act` was
+  set for other weights plays it with a warning (F064; the act played is in every chain's provenance); a family
+  without `promoted.<route>` plays its `promoted` there (the team rule of phase X; the key that played is in the
+  provenance).
 - `train --stop-success R [--stop-patience 5]` (`EarlyStop`) proposes a stop once the start-state-balanced
   success rate (`balanced_success_rate`: the mean over the seed start states of each state's exact success over
   its most recent whole per-start cohorts that together cover at least 20 room-entry episodes) is ≥ R for that
@@ -1904,6 +1967,101 @@ every step, so following an enemy that moves away pays again, and knockback rese
   specialist handed over (positions too; enemies spawn as the entry draws them). Units granted in the previous room
   are taken out of the saved snapshot, as the game takes them back on leaving; entry-state builds do the same.
   Refresh the harvest after promoting an upstream specialist.
+
+## Run statistics (`run_stats.py`; round 40)
+
+The owner (Nov 23): every training and every big evaluation leaves "a robust, standard set of statistics" in one
+place, so anyone can look at any agent's runs without that agent's own script; and a run that saw none of an input
+its reference saw thousands of is said out loud. One pure function per kind of output turns its records into one
+file; the tools write it themselves, nobody runs anything for it.
+
+- **Where.** `<output>.stats.json` beside a chain's jsonl (`cli.ChainOutput.finish`: `eval-chain`, each chain of an
+  `eval-batch`, `select-checkpoint`'s, a round's, the 250 test's; a batch's chain is written as `<output>.tmp` and
+  its statistics move with it, `run_stats.move_chain`) and an evaluation's json (`evaluate.write_result`, so
+  `eval.json.stats.json`), and `<run dir>/train.stats.json` when `triforce train` ends (written again with the
+  evaluation's headline when the run's `eval.json` is written; set aside with the run's stale files). Each is also
+  put into the store by `run_stats.register(stats, agent=None, task=None) -> Path` as `<job id>-<name>.stats.json`,
+  its `job` block (id, agent, task, subtask, description, commit, branch, checkout, command) from the queue row of
+  `$TRIFORCE_JOB_ID`. The store's place, `run_stats.store_path()`, is a placeholder (`$XDG_STATE_HOME/triforce/stats`)
+  until the shared store files a job's outputs under `jobs/<job id>-<label>/`. A failure to compute is printed, never
+  raised: the records stand, and `triforce stats ingest` makes the file later.
+- **A chain's file** (`chain_stats(runs, meta, steps, own_until)`): `rate` (n, successes, rate, binomial se);
+  `endings` (wins, deaths, stuck, errors; stuck runs by reason: `bounce-limit`, `wrong-exit-limit`, `max-steps`,
+  `left-route`...; deaths and stuck runs by room); `triforces` (runs that left each dungeon's triforce step by its
+  exit), `game_ended`, `furthest_step`; `all`, `by_step`, `by_room`, `by_family`, each: visits, runs, exits, wrong
+  exits, deaths, stuck, other endings, and per visit `{n, sum, sq, mean, se}` (`sq` the sum of squares: a query over
+  many files forms any mean and se from the sums; the store's tables take these keys as their column names) of hits,
+  hearts lost, health in and out,
+  linger (longest quiet stretch, tail), bombs used, keys used, cheated bombs, keys and rupees, shots, shots lined up,
+  lined-up decisions and those not fired, kills far / near / other, kill distance, shots that hit, beams lost,
+  frames holding the beams and visits that lost them; frames and the frame the beams were lost as `{n, sum, sq, mean,
+  se, median, p90}`; a step's group also `enter` (frames from the start to entering it, the same shape) and the
+  `network` that played it most (its policy key) with the team's `network_run` and `network_sha1`. `beams`: rooms
+  cleared still within half a heart of full and the frames to the entry of the room that
+  took them (any record; a won run's arrival counts one room), runs that never lost them, where they were lost
+  first, and with round 40's counters the run frame they were lost and the frames held. `time`: frames from the
+  start to entering each step and to the end. `runs`: per run, aligned with `seeds`, `result` (one letter: w win, d
+  death, s stuck, e error), `furthest` (route step), frames, hearts at the end, hearts lost, hits, shots, shots that
+  hit, kills far and near,
+  the beams measures, `enter` (step -> frames to entering it, null where not entered) and `end`: what pairing two
+  files by seed needs. `records` (the counters the records carry: `round40`, `round38`, `older`; runs played and
+  asked; seeds), `provenance` (route, `segment`, start, stop, clips, `overrides`: the chain's `--checkpoint` overrides
+  as `KEY = run`, the team by name: run, act, checkpoint SHA-1), `description` (one line: segment, start to end,
+  runs, overrides), `manifest`
+  (the meta's, else null), `flags`. A number the records lack is null, never zero. Cost: 3.5 s and 0.2 MB for a
+  1000-run Dungeon 3 chain (33 MB of records), 4 s and 1.2 MB for the 250 full runs.
+- **An evaluation's** (`eval_stats`): the same groups over its episodes' room visits (`by_room`, `by_family`, `all`;
+  hearts lost is the visit's `health_lost`), the rate over episodes and `by_state`, `runs` keyed `<start state>#<seed>`.
+  **A training's** (`train_stats`): the last 20 iterations' training figures (success, balanced success, health
+  change, hearts at exit, hearts taken and dropped, linger, episode frames and steps, harvested success, SPS) with
+  their se, the iteration and step each threshold of the early-stop rate (0.5, 0.8, 0.9, 0.95, 0.99, the run's
+  `--stop-success`) was first reached, steps a second, harvested states and episodes drawn from them, curriculum
+  tracks, the evaluation's rate, hits and hearts.
+- **Flags** (`{level, code, text}`, the shape of `jobs.flag`; red: something is wrong with the run's inputs or its
+  recording, look before using any number; note: worth knowing): `run-error` (red, any run ending `error`);
+  `rate-extreme` (note, exactly 0% or 100% over 100 runs or more); `stuck-share` (red, more than 5% of the runs and at
+  least 5 ended stuck: chains of record end stuck in 0-1%, the 250 test in 4 of 250; a route or model fault, a 9:0x56
+  with 616 of 1000, shows as stuck; chains only: an evaluation's wrong exits and cutoffs are its task's ordinary
+  failures); `runs-short` (red, fewer runs than the meta asked, or a batch never finished);
+  `seeds-duplicate` (red) and `seeds-nonstandard` (note: not 0..N-1, pairs only with a file on the same seeds);
+  `records-old` (note: records before round 40's counters); `route-renumbered` (note: a visited step's room is not
+  this checkout's step of that number, the records come from another route version, and the route canaries below are
+  not run); `step-never-entered` (red: a route step on the chain's
+  way, between the first step visited and the last before the `--stop-at` step (reached, never played), that no run
+  entered though 20 or more visits left the step before
+  it by its exit); `family-never-played` (red: a family with route steps there and not one visit);
+  `network-no-decisions` (red: a network the team lists for steps the chain played, `family@route` before
+  `own_models_until`, else the family's key, that made no decision while its family played 20 visits or more);
+  `family-room-never-played` (red, an evaluation of 20 episodes or more: a room of the family's config no episode
+  entered); `no-visits` (note: a format 1 evaluation); `harvested-none` (red, a training with `harvested_fraction`
+  above 0, no `--start-state`, and not one episode drawn from a harvested state); `curriculum-empty` (red: a
+  curriculum with no track); `interrupted` (note); an evaluation's flags inside its training's as `eval-<code>`.
+- **Reading.** `triforce stats list [--agent A] [--task T] [--since 24h]` (each row's id, owner, what it is, rate,
+  red flags and notes); `triforce stats show ID|PATH [--rooms N]
+  [--family F]` (markdown: the headline, the flags, the route steps, families, the N rooms with most deaths);
+  `triforce stats compare BASE ARM... [--min-pairs 20]`: paired by seed, a one-screen summary first in the owner's
+  order (AGENTS.md "What decides, in order"): the rate, hearts lost, beams held, shots that hit, kills from range and
+  the time to the last step both files entered in `--min-pairs` runs, each with its paired difference ± se and
+  "better", "worse" or "within noise" (2 standard errors); then one table a metric: the rate, hearts lost a run,
+  hearts at the end (runs won in
+  both), hits, beams held (rooms, frames to the room that took them, frames held), shots that hit, kills from range,
+  shots, the shooting totals, frames to entering each step over the runs that entered it in both (steps with fewer
+  than `--min-pairs`). `triforce stats ingest FILE... [--agent A --task T]` computes the file of
+  any existing chain jsonl, evaluation json or run dir (a job: it reads the records), registers it with the data's
+  owner (default: the agent and task of the queue job whose command wrote the file, whose `--checkpoint` overrides
+  also name the arm) and writes nothing beside the source. ID is a store id or a unique part of one; PATH a
+  statistics file or an output with one beside it.
+- **The new counters** (`zelda::beams`, round 40; additive, nothing a network sees or a reward pays): `shots_hit`, a
+  step on which Link's flying sword shot stopped (slot $0E left state $10: asm:SwordShot_CheckMonsterCollision ends a
+  shot on any monster it overlaps through asm:SwordShot_HandleBlocked, and the room bounds stop it the same way,
+  asm:SwordShot_UpdateOrMagicShot) while a monster lost hit points (asm:Damage_DealToMonster, `Change::observed`)
+  out of the sword's own reach (`MELEE_REACH`) or on a step that did not swing it, and no other weapon of Link's
+  (`beams::OTHER_WEAPONS`: a bomb, a fire, an arrow, the boomerang, the rod's shot) live before or after the step:
+  the records know the hit points lost, not the weapon, so such a step counts no hit (an undercount; a weapon live
+  only inside one step is still not seen); `held_frames`, the frames of the
+  visit's steps begun holding the beams (`GameView::holds_beams`: a sword and the hearts asm:SwordShot_Make needs);
+  `lost_frame`, the visit's frame at the end of the first step that began holding them and ended without (null:
+  not lost in the visit). The step entering the next room counts nothing (as for the other beam counters).
 
 ## Replays (`crates/replay`, `crates/pool/src/zelda`, `replay.py`)
 

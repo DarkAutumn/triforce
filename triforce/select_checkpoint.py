@@ -206,6 +206,8 @@ class Plan:
     # The policy the candidates replace (round 32): ``family@route`` when the start is a step before the route's
     # ``own_models_until`` (a selection of the route's own run), else the family (``_native.step_policy``).
     key: Optional[str] = None
+    # ``--headless``: the candidates replace a network with a hit head and have none (eval-chain --headless).
+    headless: bool = False
 
     @property
     def policy(self) -> str:
@@ -225,7 +227,8 @@ def chain_output(plan: Plan, phase: str, label: str) -> Path:
 def candidate_args(plan: Plan, candidate: Candidate, phase: str) -> list[str]:
     """``eval-chain`` arguments of one candidate's chain in ``phase``."""
     runs, first_seed = plan.seeds(phase)
-    override = [] if candidate.path is None else ['--checkpoint', f'{plan.policy}={candidate.path}']
+    override = [] if candidate.path is None else ['--checkpoint', f'{plan.policy}={candidate.path}',
+                                                  *(['--headless', plan.policy] if plan.headless else [])]
     return [*plan.chain_args, '--runs', str(runs), '--first-seed', str(first_seed), *override]
 
 
@@ -488,6 +491,9 @@ def build_parser() -> argparse.ArgumentParser:
                         help="default --first-seed + --runs (the seeds right after the screen's)")
     parser.add_argument('--only', default=None, help="comma-separated candidate labels (it<N>, last, promoted)")
     parser.add_argument('--no-promoted', action='store_true', help="leave the promoted run out")
+    parser.add_argument('--headless', action='store_true',
+                        help="the candidates have no hit head and replace a network that has one (eval-chain "
+                             "--headless; without it such a chain is refused)")
     parser.add_argument('--apply', action='store_true',
                         help="make the chosen checkpoint the run's ckpt.pt (a store run: a new sealed run with the run "
                              "as its parent)")
@@ -559,7 +565,7 @@ def build_plan(args) -> tuple[Plan, list[Candidate]]:
     key = step_policy(route, _start_step(route_steps(route), start), args.family)
     plan = Plan(args.family, run_dir, start, args.clips == 'on', args.route, args.stop_at, chain_args, target,
                 args.runs, args.first_seed, args.confirm, confirm_first, args.confirm_top, Path(chains_dir).resolve(),
-                options, key=key)
+                options, key=key, headless=args.headless)
     only = None if args.only is None else [label for label in args.only.split(',') if label]
     pool = candidates(args.family, run_dir, args.models_dir, only, promoted=not args.no_promoted, route=args.route,
                       key=key)

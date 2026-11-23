@@ -19,8 +19,9 @@ from typing import Optional
 
 import torch
 
-from .. import _native, paths, registry
-from ..paths import SPECIALISTS_DIR
+from .. import _native, lineage, paths, registry
+from ..inputs import MissingInput, check_curriculum, check_harvested, check_start_states, declaration, untracked
+from ..paths import SPECIALISTS_DIR, TRAJECTORIES_DIR
 from ..metrics import RolloutMetrics
 from ..ppo import Collector
 from ..specialist import SpecialistConfig, load_specialist
@@ -65,10 +66,17 @@ def route_only(config: SpecialistConfig, route: str, states_dir=None, tracks_dir
     config = config.replace(state_routes=[route], start_states=kept)
     if not config.curriculum.enabled:
         return config
-    source = Path(config.curriculum.trajectories or paths.data_source('trajectories')[0] / config.name)
+    source = Path(config.curriculum.trajectories or trajectories_root() / config.name)
     tracks = sorted(p.parent for p in source.glob('*/trajectory.json')
                     if json.loads(p.read_text(encoding='utf-8')).get('start_state', '').startswith(prefix))
     if not tracks:
+        # No track of the route: a curriculum of none only when the task declares every one of its states untracked.
+        seeds = [Path(p).stem for p in config.resolve_start_states(states_dir)]
+        undeclared = [s for s in seeds if not any(fnmatch.fnmatchcase(s, g) for g in untracked(config))]
+        if undeclared:
+            raise SystemExit(f"{config.name}: the curriculum is on and {source} holds no track of route {route}'s "
+                             f"states; explore them, or add to the task's curriculum.untracked: "
+                             f"{declaration(undeclared, seeds)}")
         return config.replace(curriculum={'enabled': False})
     out = Path(tracks_dir or paths.scratch('route-tracks')).resolve() / route / config.name
     out.mkdir(parents=True, exist_ok=True)
@@ -79,17 +87,49 @@ def route_only(config: SpecialistConfig, route: str, states_dir=None, tracks_dir
     return config.replace(curriculum={'enabled': True, 'trajectories': str(out)})
 
 
-def parse_families(items, parallel: int, shares: Optional[dict] = None,
-                   state_route: Optional[str] = None) -> list[Family]:
+def trajectories_root() -> Path:
+    """The trajectories a lab family reads (``paths.data_source``: this checkout's own folder, else the store's
+    current snapshot; the layout's default when neither exists, for the refusal to name)."""
+    try:
+        return paths.data_source('trajectories')[0]
+    except paths.MissingError:
+        return TRAJECTORIES_DIR
+
+
+def with_snapshot(config: SpecialistConfig) -> SpecialistConfig:
+    """``config`` drawing the store's harvested snapshot (``harvested_states: <snapshot>/<family>``) when this checkout
+    has no harvested folder of its own and the task names none; else as it is."""
+    try:
+        folder, record = paths.data_source('harvested')
+    except paths.MissingError:
+        return config
+    if 'snapshot' not in record or config.harvested_states:
+        return config
+    return config.replace({'harvested_states': str(folder / config.name)})
+
+
+def parse_families(items, parallel: int, shares: Optional[dict] = None, state_route: Optional[str] = None,
+                   curriculum: bool = True, states_dir=None) -> list[Family]:
     """``key[=yaml]`` items (a key's task: the given yaml, else ``task_yaml``) with ``parallel`` envs split by
     ``shares`` (key -> weight; default equal), every family at least one; with ``state_route``, each task on that
-    route's states alone (``route_only``)."""
+    route's states alone (``route_only``).  Every input a task declares is checked (``triforce.inputs``: its
+    start-state globs and harvested states under ``states_dir``, with ``curriculum`` its tracks); a missing one stops
+    the run."""
     families = []
     for item in items:
         key, _, path = item.partition('=')
         config = load_specialist(path or task_yaml(key))
-        if state_route:
-            config = route_only(config, state_route)
+        try:
+            check_start_states(config, states_dir)
+            if state_route:
+                config = route_only(config, state_route, states_dir)
+            config = with_snapshot(config)
+            check_harvested(config, states_dir)
+            if curriculum and config.curriculum.enabled:
+                check_curriculum(config, config.curriculum.trajectories or trajectories_root() / config.name,
+                                 states_dir)
+        except MissingInput as error:
+            raise SystemExit(f"{key}: {error}" if key.split('@')[0] != config.name else str(error)) from None
         families.append(Family(key, config))
     keys = [f.key for f in families]
     if len(set(keys)) != len(keys):
@@ -121,13 +161,16 @@ class Teachers:
         self.weights = {key: float((weights or {}).get(key, 1.0)) for key in keys}
         self.networks: dict[str, torch.nn.Module] = {}
         self.paths: dict[str, str] = {}
-        loaded: dict[str, torch.nn.Module] = {}
+        # Each teacher as run.json names it (round 40, `lineage.identity`: family, run, iterations, SHA-1).
+        self.identities: dict[str, dict] = {}
+        loaded: dict[str, tuple] = {}
         for key in keys:
             path = (checkpoints or {}).get(key) or registry.policy_checkpoint(key, root, route)
             real = str(Path(path).resolve())
             if real not in loaded:
-                loaded[real] = registry.load_model(path)[0].to(self.device).eval()
-            self.networks[key] = loaded[real]
+                network, checkpoint = registry.load_model(path)
+                loaded[real] = network.to(self.device).eval(), lineage.identity(checkpoint, path)
+            self.networks[key], self.identities[key] = loaded[real]
             self.paths[key] = str(path)
         self._native: dict[str, object] = {}
 

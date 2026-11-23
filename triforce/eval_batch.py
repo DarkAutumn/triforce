@@ -383,6 +383,7 @@ def chain_entry(name: Optional[str], args: list[str], options: Options, *, outpu
     without ``--stop-at``)."""
     # pylint: disable=import-outside-toplevel
     from .cli import add_eval_chain_arguments, meta_path
+    from .run_stats import move_chain
     from .runner import RunResult, chain_summary
     parser = argparse.ArgumentParser(prog=f'eval-batch --chain {name or ""}'.strip())
     add_eval_chain_arguments(parser)
@@ -420,11 +421,17 @@ def chain_entry(name: Optional[str], args: list[str], options: Options, *, outpu
         if tmp.exists():
             os.replace(meta_path(tmp), meta_path(output))
             os.replace(tmp, output)
+            move_chain(tmp, output)
         if options.team is not None:
             from . import store
-            store.file_output(output, 'chain', team=options.team,
+            from .run_stats import stats_path
+            stats = stats_path(output)
+            summary_stats = json.loads(stats.read_text(encoding='utf-8')) if stats.is_file() else None
+            store.file_output(output, 'chain', team=options.team, summary=summary_stats,
                               result={'n': summary.get('runs'), 'successes': summary.get('successes')})
             store.file_output(meta_path(output), 'chain-meta', team=options.team)
+            if stats.is_file():
+                store.file_output(stats, 'stats', team=options.team)
         return chain_headline(summary, read_runs(output) if target is not None else None, target)
 
     def resume():

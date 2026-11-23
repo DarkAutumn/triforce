@@ -28,6 +28,8 @@ STATES_DIR = Path(os.environ.get('TRIFORCE_STATES_DIR', PACKAGE_DIR / 'states'))
 SPECIALISTS_DIR = ROOT / 'specialists'
 CORPUS_MOVIES_DIR = ROOT / 'corpus' / 'movies'
 BASE_MOVIE = CORPUS_MOVIES_DIR / 'power_on_to_start.tfmovie'
+# The project's archive (`/backup/triforce/README.md`): `$TRIFORCE_BACKUP`, else /backup/triforce.
+BACKUP_DIR = Path(os.environ.get('TRIFORCE_BACKUP', '/backup/triforce'))
 
 SHARED_ENV = 'TRIFORCE_SHARED'
 ROM_ENV = 'TRIFORCE_ROM'
