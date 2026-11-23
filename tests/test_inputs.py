@@ -231,3 +231,11 @@ def test_the_test_suites_read_the_main_checkouts_team(tmp_path, monkeypatch):
     (root / 'models').mkdir()
     (step,) = job.test_steps(root, ['python'], [])
     assert step.env['TRIFORCE_MODELS_DIR'] == str(root / 'models')
+
+
+def test_a_missing_demonstration_file_is_refused(tmp_path):
+    result = subprocess.run([sys.executable, '-m', 'triforce.train', '--specialist', 'ow-start', '--device', 'cpu',
+                             '--start-state', 'start', '--demos', str(tmp_path / 'gone.npz'),
+                             '--models-dir', str(tmp_path)], capture_output=True, text=True, check=False,
+                            env={**os.environ, 'TRIFORCE_JOB_ESTIMATE': str(tmp_path / 'work.json')})
+    assert result.returncode == 2 and f"--demos {tmp_path}/gone.npz: no such file" in result.stderr, result.stderr

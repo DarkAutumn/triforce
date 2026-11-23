@@ -525,12 +525,19 @@ def test_train_stops_early_and_writes_summary_and_events(states_dir, tmp_path, l
     assert [e['seq'] for e in events] == list(range(len(events)))
 
 
-def test_train_error_is_logged_before_raising(states_dir, tmp_path):
+def _failing_pool(*_args, **_kwargs):
+    raise RuntimeError("the pool could not be built")
+
+
+def test_train_error_is_logged_before_raising(states_dir, tmp_path, monkeypatch):
+    """A failure inside the run (here: building its pool, before 'start'; round 40's refusals of missing inputs
+    come before the run and its events) is logged and re-raised."""
+    monkeypatch.setattr(train, 'EnvPool', _failing_pool)
     events_path = tmp_path / 'stream.jsonl'
     (tmp_path / 'training.json').write_text('{}')                   # a driver's plan: the driver owns 'end'
     with pytest.raises(Exception) as error:
         train.main(_common(states_dir, tmp_path, '--parallel', '1', '--iterations', '1', '--run-id', 'bad',
-                           '--demos', str(tmp_path / 'missing.npz'), '--events', str(events_path)))
+                           '--events', str(events_path)))
     events = read_jsonl(str(events_path))
     assert [e['event'] for e in events] == ['error', 'train_end']    # the caller owns 'end'
     assert str(error.value) in events[0]['message'] and 'Traceback' in events[0]['traceback']
@@ -547,9 +554,10 @@ def test_train_events_into_a_folder_without_a_plan_writes_one(states_dir, tmp_pa
     monkeypatch.setenv(jobs.JOB_ID_ENV, str(job))
     folder = tmp_path / 'somewhere'
     events_path = folder / 'mine.jsonl'
+    monkeypatch.setattr(train, 'EnvPool', _failing_pool)
     with pytest.raises(Exception):
         train.main(_common(states_dir, tmp_path, '--parallel', '1', '--iterations', '1', '--run-id', 'bad',
-                           '--demos', str(tmp_path / 'missing.npz'), '--events', str(events_path)))
+                           '--events', str(events_path)))
     plan = json.loads((folder / 'training.json').read_text())
     assert plan['kind'] == 'train' and plan['status'] == 'failed' and plan['runs'][0]['events'] == 'mine.jsonl'
     assert plan['runs'][0]['status'] == 'error' and plan['checkout'] and 'branch' in plan

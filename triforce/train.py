@@ -572,6 +572,9 @@ def main(argv=None) -> Path:
         resolve_warm_start(args.load or config.warm_start, registry.models_root(args.models_dir))
     if args.start_state is None:
         check_task(config, args.states_dir, curriculum_dir(args, config))
+    missing = [path for path in args.demos or () if not Path(path).is_file()]
+    if missing:
+        raise MissingInput(f"--demos {', '.join(missing)}: no such file")
     announce('train', work(train_steps=args.iterations * steps_per_iteration(args)), specialist)
     root = registry.models_root(args.models_dir)
     run_id = args.run_id or registry.new_run_id()
