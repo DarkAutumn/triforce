@@ -27,15 +27,17 @@ ROOT = Path(__file__).resolve().parent.parent
 REPO_STATES_DIR = ROOT / 'triforce' / 'states'       # the shipped route states
 BASE_MOVIE = ROOT / 'corpus' / 'movies' / 'power_on_to_start.tfmovie'
 STATES_DIR_ENV = 'TRIFORCE_STATES_DIR'
-ROM_MISSING = "ROM not found: set TRIFORCE_ROM or create roms/zelda.nes"
 ALLOW_NO_ROM_ENV = 'TRIFORCE_ALLOW_NO_ROM'     # =1: a missing ROM skips ROM tests instead of failing them
 
 _session = {}       # 'states_dir': the session's states dir; 'old_env': TRIFORCE_STATES_DIR before the session
 
 
 def rom_path() -> Path:
-    """$TRIFORCE_ROM, else <repo>/roms/zelda.nes."""
-    return Path(os.environ.get('TRIFORCE_ROM', ROOT / 'roms' / 'zelda.nes'))
+    """The ROM ``triforce.paths.rom`` finds ($TRIFORCE_ROM, else the store's, else <repo>/roms/zelda.nes); the first
+    place looked in when there is none."""
+    from triforce import paths  # pylint: disable=import-outside-toplevel
+    candidates = paths.rom_candidates()
+    return next((path for path in candidates if path.is_file()), candidates[0])
 
 
 def rom_missing_allowed() -> bool:
@@ -45,8 +47,11 @@ def rom_missing_allowed() -> bool:
 
 def require_rom():
     """Fails the calling test when the ROM isn't available (skips it with ``TRIFORCE_ALLOW_NO_ROM=1``)."""
-    if not rom_path().exists():
-        message = f"{ROM_MISSING} ({rom_path()}); {ALLOW_NO_ROM_ENV}=1 skips the ROM tests"
+    from triforce import paths  # pylint: disable=import-outside-toplevel
+    try:
+        paths.rom()
+    except paths.MissingError as error:
+        message = f"{error}; {ALLOW_NO_ROM_ENV}=1 skips the ROM tests"
         if rom_missing_allowed():
             pytest.skip(message)
         pytest.fail(message, pytrace=False)
@@ -99,6 +104,16 @@ def pytest_configure(config):  # pylint: disable=unused-argument
     _session['old_env'] = os.environ.get(STATES_DIR_ENV)
     _session['states_dir'] = Path(tempfile.mkdtemp(prefix='triforce-states-'))
     os.environ[STATES_DIR_ENV] = str(_session['states_dir'])
+    # The shared store (``triforce.paths.shared_root``): an empty session root, never the machine's
+    # (``~/triforce-shared``); a test that wants a store makes one under its tmp_path.  The ROM is found first, by
+    # the rule the tools use, and pinned (``$TRIFORCE_ROM``) so the tests read the same one.
+    if not os.environ.get('TRIFORCE_ROM'):
+        from triforce import paths  # pylint: disable=import-outside-toplevel
+        found = [path for path in paths.rom_candidates() if path.is_file()]
+        if found:
+            os.environ['TRIFORCE_ROM'] = str(found[0])
+    _session['shared'] = tempfile.mkdtemp(prefix='triforce-shared-')
+    os.environ['TRIFORCE_SHARED'] = _session['shared']
 
 
 def _report_suite(force: bool = False):
@@ -177,6 +192,7 @@ def pytest_unconfigure(config):  # pylint: disable=unused-argument
         os.environ[STATES_DIR_ENV] = _session['old_env']
     shutil.rmtree(_session.pop('states_dir'), ignore_errors=True)
     shutil.rmtree(_session.pop('queue_dir'), ignore_errors=True)
+    shutil.rmtree(_session.pop('shared'), ignore_errors=True)
 
 
 @pytest.fixture(autouse=True)

@@ -54,9 +54,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
-from .eval_batch import (ROOT, BatchError, Entry, Options, arrival, arrival_hearts, bare_state, batch_work,
+from .eval_batch import (BatchError, Entry, Options, arrival, arrival_hearts, bare_state, batch_work,
                          chain_entry, parse_target, read_runs, route_segments, run_batch, segment_starts)
 from .jobs import announce
+from .paths import scratch
 
 LAST = 'last'
 PROMOTED = 'promoted'
@@ -528,8 +529,8 @@ def build_plan(args) -> tuple[Plan, list[Candidate]]:
     tag = '-'.join([f"{args.family}-{run_dir.name}-{where}", *([f"to-{args.stop_at}"] if args.stop_at else []),
                     *([args.route] if args.route else []),
                     *([f"act-{args.act}"] if args.act != registry.MODEL_ACT else []), f"clips{args.clips}"])
-    chains_dir = args.chains_dir or ROOT / 'target' / 'select' / ''.join(
-        c if c.isalnum() or c in '-_.' else '-' for c in tag)
+    chains_dir = args.chains_dir or scratch('select', ''.join(
+        c if c.isalnum() or c in '-_.' else '-' for c in tag))
     options = Options(args.name or f'select-{args.family}-{run_dir.name}-{where}', args.parallel, 1, args.models_dir,
                       args.redo)
     # The part the candidates play (round 32): a start before the route's own_models_until selects its own run.

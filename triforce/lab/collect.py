@@ -19,8 +19,8 @@ from typing import Optional
 
 import torch
 
-from .. import _native, registry
-from ..paths import SPECIALISTS_DIR, TRAJECTORIES_DIR
+from .. import _native, paths, registry
+from ..paths import SPECIALISTS_DIR
 from ..metrics import RolloutMetrics
 from ..ppo import Collector
 from ..specialist import SpecialistConfig, load_specialist
@@ -53,7 +53,9 @@ def route_only(config: SpecialistConfig, route: str, states_dir=None, tracks_dir
     """``config`` on ``route``'s states alone (``state_routes: [route]``: its start-state globs and its harvested
     starts in the route's namespace, ``<route>_<name>``): the globs no state of the route matches (rooms the route
     never plays) are dropped, and the curriculum keeps the tracks explored from the route's states (a folder of links,
-    ``<tracks_dir>/<route>/<family>``, default ``target/route-tracks``; none: no curriculum)."""
+    ``<tracks_dir>/<route>/<family>``, default ``<checkout>/target/route-tracks``; none: no curriculum).  The tracks
+    come from the yaml's ``curriculum.trajectories``, else the family's folder of ``paths.data_source('trajectories')``
+    (this checkout's ``trajectories/`` while it has one, else the store's current snapshot)."""
     folder = Path(states_dir or _native.paths()['states_dir'])
     prefix = f'{route}_'
     names = [p.stem[len(prefix):] for p in folder.glob(f'{prefix}*.state')]
@@ -63,12 +65,12 @@ def route_only(config: SpecialistConfig, route: str, states_dir=None, tracks_dir
     config = config.replace(state_routes=[route], start_states=kept)
     if not config.curriculum.enabled:
         return config
-    source = Path(config.curriculum.trajectories or TRAJECTORIES_DIR / config.name)
+    source = Path(config.curriculum.trajectories or paths.data_source('trajectories')[0] / config.name)
     tracks = sorted(p.parent for p in source.glob('*/trajectory.json')
                     if json.loads(p.read_text(encoding='utf-8')).get('start_state', '').startswith(prefix))
     if not tracks:
         return config.replace(curriculum={'enabled': False})
-    out = Path(tracks_dir or 'target/route-tracks').resolve() / route / config.name
+    out = Path(tracks_dir or paths.scratch('route-tracks')).resolve() / route / config.name
     out.mkdir(parents=True, exist_ok=True)
     for track in tracks:
         link = out / track.name

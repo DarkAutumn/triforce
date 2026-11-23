@@ -50,12 +50,10 @@ pub fn root(py: Python<'_>) -> PyResult<PathBuf> {
     with_loaded(py, |l| Ok(l.root.clone()))
 }
 
-/// `$TRIFORCE_ROM`, else `<root>/roms/zelda.nes`.
-pub fn rom_path(root: &Path) -> PathBuf {
-    match std::env::var_os("TRIFORCE_ROM") {
-        Some(p) => PathBuf::from(p),
-        None => root.join("roms/zelda.nes"),
-    }
+/// The ROM file ([`paths::rom_path`]: `$TRIFORCE_ROM`, else the shared store's `rom/zelda.nes`, else
+/// `<root>/roms/zelda.nes`), or the error naming every place looked in.
+pub fn rom_path(root: &Path) -> Result<PathBuf, String> {
+    paths::rom_path(root)
 }
 
 /// The validated ROM, read once per process.
@@ -64,13 +62,7 @@ pub fn rom(py: Python<'_>) -> PyResult<Arc<Rom>> {
         if let Some(rom) = &l.rom {
             return Ok(rom.clone());
         }
-        let path = rom_path(&l.root);
-        if !path.exists() {
-            return Err(RomError::new_err(format!(
-                "ROM not found: set TRIFORCE_ROM or create roms/zelda.nes ({})",
-                path.display()
-            )));
-        }
+        let path = rom_path(&l.root).map_err(RomError::new_err)?;
         let bytes = std::fs::read(&path)
             .map_err(|e| RomError::new_err(format!("{}: {e}", path.display())))?;
         let rom = Rom::from_ines(&bytes)
