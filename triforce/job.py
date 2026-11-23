@@ -60,6 +60,10 @@ TOOL_MODULES = ('triforce.train', 'triforce.evaluate', 'triforce.eval_batch', 't
                 'triforce.lab.train', 'triforce.lab.record', 'triforce.lab.bench')
 TOOL_SCRIPTS = ('train_round.py', 'full_runs.py', 'zelda-headless.py')
 SUITES = ('python', 'asm', 'check', 'rust')     # ``triforce job test``'s suites, in the order they are shown
+# The Python suite's processes (pytest-xdist, a test to whichever is free).  Measured Nov 23 on a quiet machine
+# (load 3-5): one process 410-433 s; 6 processes 78 s, 8 61 s, 12 71 s.  The tools lane runs two test jobs at
+# once: two suites of 8 leave 4 of the 20 threads to the owner's player and the jobs.
+PYTEST_WORKERS = 8
 
 
 class JobError(Exception):
@@ -646,7 +650,8 @@ def build_step(root: Path, extra: list[str]) -> Step:
 
 def test_steps(root: Path, suites: list[str], extra: list[str]) -> list[Step]:
     """The steps of ``suites`` (``SUITES``, in that order whatever order they were given in): ``python`` (pytest of
-    ``tests``), ``asm`` (the disassembly's own tests), ``check`` (``asm.py check``: no edit changed the code, every
+    ``tests`` in ``PYTEST_WORKERS`` processes; ``-- -n 0`` runs it in one), ``asm`` (the disassembly's own tests),
+    ``check`` (``asm.py check``: no edit changed the code, every
     ``asm:`` citation resolves), ``rust`` (the cargo workspace, through ``triforce.testlog``'s reader of cargo's
     output).  Every pytest run and the Rust suite write a timing log into the logs folder (``triforce.testlog``;
     ``triforce test-times`` reads them).  They run at the same time (``together``) and none is ``required``: each
@@ -663,7 +668,8 @@ def test_steps(root: Path, suites: list[str], extra: list[str]) -> list[Step]:
             env['TRIFORCE_MODELS_DIR'] = str(models)
     cargo = ['cargo', 'test', '--release', '--workspace', '--features', 'zelda/zcore', *extra]
     commands = {
-        'python': ('test python', [python, '-m', 'pytest', '-q', 'tests', *extra]),
+        'python': ('test python', [python, '-m', 'pytest', '-q', '-n', str(PYTEST_WORKERS), '--dist', 'worksteal',
+                                   'tests', *extra]),
         'asm': ('test asm', [python, '-m', 'pytest', '-q', 'zelda-asm/tests', *extra]),
         'check': ('asm check', [python, 'zelda-asm/tools/asm.py', 'check', *extra]),
         'rust': ('test rust', [python, '-m', 'triforce.testlog', 'cargo', '--', *cargo]),

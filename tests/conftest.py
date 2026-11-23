@@ -91,7 +91,8 @@ def pytest_configure(config):  # pylint: disable=unused-argument
     state = os.environ.get('XDG_STATE_HOME') or os.path.join(os.path.expanduser('~'), '.local', 'state')
     _session['job'] = (os.environ.get('TRIFORCE_JOB_ID'),
                        os.environ.get('TRIFORCE_QUEUE_DIR') or os.path.join(state, 'triforce'))
-    os.environ['TRIFORCE_QUEUE_DIR'] = tempfile.mkdtemp(prefix='triforce-queue-')
+    _session['queue_dir'] = tempfile.mkdtemp(prefix='triforce-queue-')
+    os.environ['TRIFORCE_QUEUE_DIR'] = _session['queue_dir']
     os.environ['TRIFORCE_JOB_ID'] = '0'
     for name in ('TRIFORCE_JOB_LABEL', 'TRIFORCE_JOB_ESTIMATE'):
         os.environ.pop(name, None)
@@ -131,16 +132,32 @@ def pytest_collection_finish(session):
     _report_suite(force=True)
 
 
+@pytest.hookimpl(optionalhook=True)
+def pytest_xdist_node_collection_finished(node, ids):  # pylint: disable=unused-argument
+    """Run in parallel (pytest-xdist), the controller collects nothing itself: the workers' collections (the same
+    tests each) give the total."""
+    if _session.get('tests') is None:
+        _session['tests'] = [0, len(ids), time.monotonic()]
+        _report_suite(force=True)
+
+
 def pytest_runtest_logfinish(nodeid, location):  # pylint: disable=unused-argument
+    """Every test that ends; in parallel the workers' arrive at the controller, which reports."""
     counts = _session.get('tests')
     if counts is not None:
         counts[0] += 1
         _report_suite(force=counts[0] >= counts[1])
 
 
-def pytest_sessionstart(session):  # pylint: disable=unused-argument
-    """Writes ``start.state`` into the session states dir (without a ROM it stays empty; ``states_dir`` fails)."""
-    if not rom_path().exists():
+def _controller(config) -> bool:
+    """This process hands the tests to xdist's workers and runs none itself."""
+    return not hasattr(config, 'workerinput') and (getattr(config.option, 'numprocesses', None) or 0) > 0
+
+
+def pytest_sessionstart(session):
+    """Writes ``start.state`` into the session states dir (without a ROM it stays empty; ``states_dir`` fails);
+    each xdist worker writes its own, the controller none."""
+    if not rom_path().exists() or _controller(session.config):
         return
     from triforce._native import Game  # pylint: disable=import-outside-toplevel
     game = Game()
@@ -150,7 +167,7 @@ def pytest_sessionstart(session):  # pylint: disable=unused-argument
 
 
 def pytest_unconfigure(config):  # pylint: disable=unused-argument
-    """Restores ``TRIFORCE_STATES_DIR`` and removes the session states dir."""
+    """Restores ``TRIFORCE_STATES_DIR`` and removes the session states dir and queue dir."""
     if 'states_dir' not in _session:
         return
     if _session['old_env'] is None:
@@ -158,6 +175,7 @@ def pytest_unconfigure(config):  # pylint: disable=unused-argument
     else:
         os.environ[STATES_DIR_ENV] = _session['old_env']
     shutil.rmtree(_session.pop('states_dir'), ignore_errors=True)
+    shutil.rmtree(_session.pop('queue_dir'), ignore_errors=True)
 
 
 @pytest.fixture(autouse=True)
