@@ -781,11 +781,13 @@ class ChainTally:
         self.end_level = None             # the level a win counts (a chain to the route's end step, exit 'end')
         self.furthest: Optional[Tuple[int, str]] = None
         self.taken: Dict[int, int] = {}
+        self.span: Optional[Tuple[int, int]] = None      # the route steps the chain plays: from, up to (not incl.)
         if route is None:
             return
         steps = _native.route_steps(route.name)
         end = route.start_step + route.steps_played()
         self.route_steps = len(steps)
+        self.span = (route.start_step, end)
         self.triforce_steps = {step['index']: step['level'] for step in steps
                                if step.get('exit') == 'triforce' and route.start_step <= step['index'] < end}
         self.levels = list(dict.fromkeys(level for _, level in sorted(self.triforce_steps.items())))
@@ -823,12 +825,15 @@ class ChainTally:
     def fields(self) -> dict:
         """The tally as ``chain_progress`` carries it beside ``successes`` (the wins): deaths, stucks, errors,
         triforces ([[level, runs], ...] in the route's order), furthest_step and furthest_room (None before a run
-        reached a route step), route_steps."""
+        reached a route step), route_steps, and from_step and to_step, the stretch of the route the chain plays (a
+        success is a run that reached ``to_step``: the whole game only from step 0 to ``route_steps``)."""
         return {'deaths': self.deaths, 'stucks': self.stucks, 'errors': self.errors,
                 'triforces': [[level, self.taken.get(level, 0)] for level in self.levels],
                 'furthest_step': None if self.furthest is None else self.furthest[0],
                 'furthest_room': None if self.furthest is None else self.furthest[1],
-                'route_steps': self.route_steps}
+                'route_steps': self.route_steps,
+                'from_step': None if self.span is None else self.span[0],
+                'to_step': None if self.span is None else self.span[1]}
 
 
 def route_header(route: Route) -> dict:
