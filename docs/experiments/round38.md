@@ -1093,3 +1093,81 @@ which reads `promoted`, plays as before (100 runs identical). Promoted with it f
 runs on 2.0.0.6; 82.0% of 300 with the pointer, run for run equal to the arm). **goriya** for `d3first`:
 `r38ppo-aux-s38` (replacing `r32d1-goriya`): on 2.0.0.7, `d1` 92.8% -> 97.7% (+4.9 +- 0.9), `d7` 15.2% -> 76.9%
 (+61.7 +- 1.8), paired 1000 runs (\"The hit head at play\" §11).
+
+## Beams at range; rupees per pickup (branch `r38-reward`)
+
+The owner's two notes of Nov 22 (backlog, Track R): the networks walk up to a monster and hit it in melee instead
+of shooting it with the beam full hearts give ("he doesn't use the full effect of full hearts, and instead gets close
+and loses beams"), and Link waits at 0:0x0f while the 100 rupees count up, the critic paying every counted rupee.
+
+**The reward** (crates/env/src/critic.rs, `reward.beam_*`, docs/architecture.md):
+
+- `reward-gained-rupees` once per pickup, on the rise of `InvRupees + InvRupeesToAdd - InvRupeesToSubtract`, by its
+  size (under 5: 0.5, 5-9: 0.75, 10 and more: 1.0); nothing while the game counts them in. The old term paid 0.5 on
+  every step the count rose, about 12 steps for 0x0f's 100.
+- `reward-beam-kill` 0.5: a kill by a sword shot out of melee range. `reward-beam-timed` 0.1: a shot the projection
+  (`zelda::beams`: the shot carried on, each monster straight on at its speed and direction) has meeting a monster,
+  even if it turns away before. `penalty-beam-unfired` 0.02: a decision lined up for such a shot that moved or
+  waited instead.
+- `BeamStats` in every visit and chain record (`beam_*`): shots, shots lined up, decisions lined up and those
+  unfired, sword kills out of melee range (`far`) and in it (`near`), other kills, the kill distance, hearts lost,
+  steps that cost the beams. `scripts/experiments/r38_beams.py` tables them by family or room.
+
+The code plays as before: 100 `d9` runs (seeds 0-99) on the branch are record for record identical to 2.0.0.8's
+`r38-208-1k-d9` but for the `beam_*` fields.
+
+**Before: how kills happen** (2.0.0.8's team, 300 `post-d7` runs and 100 `d9` runs on the branch, every visit
+they played). Out of the sword kills, the share made out of melee range, and per visit Link entered with full
+hearts, the hearts lost and the share that cost him his beams:
+
+| Family | Sword kills | Far | Mean distance (px) | Hearts lost a full visit | Beams lost |
+|---|---|---|---|---|---|
+| wizzrobe | 1988 | 0.3% | 19.2 | 0.61 | 16% |
+| patra | 1335 | 2.8% | 23.0 | 1.01 | 25% |
+| like-like | 705 | 4.7% | 18.9 | 0.04 | 3% |
+| stalfos-keese-gel | 202 | 8.4% | 24.2 | 0.05 | 6% |
+| ow-lynel | 2 | 0% | - | 0.19 | 4% |
+
+Lined up for a shot, the networks moved or waited instead 83-99% of the time. Where melee costs hearts on the whole
+route (2.0.0.8's three 1000-run records, `d2`, `d6`, `d9`, every visit): wizzrobe 22,150 hearts lost (1.30 a visit,
+1167 deaths), darknut 5,370 (368 deaths), goriya 5,117 (351), patra 4,324 (40), the rest under 1,300 each.
+
+**The arms** (continuations with the new critic, `--sil-coeff 0.1`), 300 runs each, paired by seed with 2.0.0.8's
+team (`post-d7`: 300 runs on the branch; `d6`, `d9`: the first 300 seeds of `r38-208-1k`):
+
+| Arm | Segment | 2.0.0.8 | Arm | Paired (base only / arm only) | Far kills, the family |
+|---|---|---|---|---|---|
+| ow-lynel@d3first `r38rw-lynel` (0x50, 0x60) | `post-d7` (to 6:0x79) | 24.0% | **99.0%** | 0 / 225 | none (Lynels avoided) |
+| wizzrobe `r38rw-wizz` | `d6` (to 0:0x22) | 41.7% | 35.0% | 75 / 55 | 0.3% -> 1.3% |
+| wizzrobe `r38rw-wizz` | `d9` (Zelda) | 55.7% | 51.7% | 72 / 60 | 0.1% -> 0.1% |
+| patra `r38rw-patra` (2M steps) | `d9` (Zelda) | 55.7% | 52.3% | 77 / 67 | 2.8% -> 2.5% |
+
+- **ow-lynel@d3first** wins by the route, not the beams: 2.0.0.8's `d3first` plays 0x50 and 0x60 with
+  `r30e-lynel-s84`, a `d2first` run that never trained 0x50 E->S: 663 of its 763 visits to 0x50 left by a wrong exit,
+  and 227 of the 230 runs that did so never reached Dungeon 6 (213 stuck at 0x40 by the graveyard). The arm
+  (`specialists/d3first/ow-lynel.yaml`: 0x50 E->S and 0x60 N->W only) leaves both rooms correctly in every visit
+  (301 and 301). On `d3first` it plays only those two steps (the family's later steps are after `own_models_until`,
+  192, and keep `r30e-lynel-s84`).
+- **wizzrobe** loses on both segments (−6.7 and −4.0 points, deaths in its rooms 164 -> 178 on `d6`); a million
+  steps barely moved its beams (far kills 1.3% on `d6`, 0.1% on `d9`; unfired lined-up decisions 90-93%). Not
+  promoted.
+- **patra** (`r38rw-patra`, two million steps from `r30w-patra`, the next family by the hearts melee costs that has
+  no hit head): the unfired cost fell in training (−0.031 -> −0.009 an episode), but on `d9` its far kills stay at
+  2.5%, hearts lost a full visit 1.01 -> 1.18, deaths in its rooms 9 -> 13; −3.4 points (77 / 67, inside the noise
+  of 300 runs: the wizzrobe rooms, unchanged, lose 8 more). Not promoted.
+- The beam terms at these weights do not change how continued networks fight: shots stay rare and short (mean
+  sword-kill distance 18-23 px; melee range, `MELEE_REACH`, is 32) in every family measured. The terms stay on
+  (they cost nothing where no beam is lined up); making them matter takes a larger `beam_kill`/`beam_unfired` or
+  training from earlier checkpoints, measured on the same families.
+- **Rupees at 0:0x0f**: no arm plays it (ow-start does). On 2.0.0.8 (`r38-208-1k-d2`, 996 runs through it) the
+  cave visit takes 329 frames (median), the step out 198; the golden race's 100 rupees counted for 245 frames while
+  Link moved in 90 of them. The term pays the pickup once from now on; ow-start's next run trains on it.
+
+**Golden race** with 2.0.0.8's team and `r38rw-lynel` for `d3first` (the branch before main's 2.0.0.9 merge;
+`zelda-headless.py OUT 3 --golden --power-on --clips on --act model --parallel 8 --attempts 2000`): three of three
+paths in 311 runs (2.0.0.8: three in 319), 146,380, 159,309 and 176,938 frames; the segment through 0x50, 0x60 and
+Dungeon 6 (to step 213) took 6, 7 and 5 runs. Kept in the replay backup (their META names the code 2.0.0.7, the
+branch's base).
+
+Next to train with the beam terms, by the hearts melee costs on the route (2.0.0.8's records): wizzrobe (22,150
+hearts, 1167 deaths), darknut (5,370; 368), goriya (5,117; 351), patra (4,324; 40), with stronger weights first.

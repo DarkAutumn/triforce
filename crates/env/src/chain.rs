@@ -29,6 +29,7 @@ use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use zelda::beams::BeamStats;
 use zelda::bombs::BombStats;
 use zelda::clips::ClipStats;
 use zelda::decisions::{DecisionNote, DecisionStats};
@@ -391,6 +392,8 @@ pub struct RoomRecord {
     pub bombs_used: u32,
     /// What the bombs did, the 10th kills and the bomb pickups (`zelda::bombs`; JSON `bomb_<field>`).
     pub bombs: BombStats,
+    /// Sword shots and kills by range (`zelda::beams`, round 38; JSON `beam_<field>`).
+    pub beams: BeamStats,
     pub cheated: ItemCounts,
     /// Dodongo stuns and swallowed bombs during the visit ([`BossTransitions`]).
     pub boss_stuns: u32,
@@ -470,6 +473,7 @@ impl RoomRecord {
             no_damage_max: 0,
             bombs_used: 0,
             bombs: BombStats::default(),
+            beams: BeamStats::default(),
             cheated: ItemCounts::default(),
             boss_stuns: 0,
             boss_eats: 0,
@@ -533,6 +537,9 @@ impl RoomRecord {
         }
         for (name, value) in self.bombs.fields() {
             o.insert(format!("bomb_{name}"), json!(value));
+        }
+        for (name, value) in self.beams.fields() {
+            o.insert(format!("beam_{name}"), json!(value));
         }
         for (name, value) in self.clips.fields() {
             o.insert(format!("clip_{name}"), json!(value));
@@ -1186,6 +1193,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         record.blocks += change.blocks() as u32;
         record.bombs_used += cheats.used.bombs;
         record.bombs.update(&change);
+        record.beams.update(&change);
         record.clips.update(&change);
         record.hits += u32::from(change.health_lost > 0.0);
         record.hits_dealt += change.observed.hits() as u32;

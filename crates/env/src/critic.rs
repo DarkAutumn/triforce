@@ -18,7 +18,7 @@ use zelda::game::GameView;
 use zelda::objectives::{FLAG_ITEM_TAKEN, Objective, exit_is_correct};
 use zelda::room::{Target, Wavefront};
 use zelda::room_state::{SecretTrigger, decode_room_state, room_flags};
-use zelda::{Change, GameMap, Var, tables};
+use zelda::{Change, GameMap, Var, beams, tables};
 
 pub const BEAM_DISTANCE_THRESHOLD: f32 = 48.0;
 pub const PBRS_SCALE: f64 = 20.0;
@@ -40,7 +40,8 @@ const PUSH_BLOCK_DIRECTION: u16 = 0x98 + 0x0B;
 const FLUTE_USED_STATE: u16 = 0x51B;
 
 /// Equipment pickups, in `_EQUIPMENT_ATTRS` order: (name, value). Bombs pay like rupees (a dropped resource); the
-/// cheat ledger's grants happen outside the action's `Change`, so a grant is no pickup.
+/// cheat ledger's grants happen outside the action's `Change`, so a grant is no pickup. Rupees pay once per pickup by
+/// its size ([`rupees_posted`], [`rupee_reward`]), not this table's value.
 const EQUIPMENT: [(&str, &str, f64); 21] = [
     ("sword", "reward-gained-sword", REWARD_MAXIMUM),
     ("arrows", "reward-gained-arrows", REWARD_MAXIMUM),
@@ -91,10 +92,29 @@ fn equipment_value(state: &GameView, attr: &str) -> i32 {
         "boomerang" => state.boomerang() as i32,
         "compass" => state.has_compass() as i32,
         "map" => state.has_map() as i32,
-        "rupees" => state.rupees(),
+        "rupees" => rupees_posted(state),
         "keys" => state.keys(),
         "bombs" => state.bombs(),
         _ => unreachable!("equipment {attr}"),
+    }
+}
+
+/// Rupees Link holds or is owed: `InvRupees` plus what is still to be counted in, minus what is still to be counted
+/// off. A pickup (asm:Item_TakeOneRupee, five of them for the blue rupee) or a cave's gift (asm:Inv_PostRupeeCredit)
+/// raises `InvRupeesToAdd` once; asm:Inv_ChangeRupees then moves 1 a second frame from it into `InvRupees`, which
+/// leaves this sum alone. So it rises on the step of the pickup by the amount, and not while the counter runs
+/// (round 38: Link waited in 0:0x0f's cave for the 100 rupees to count, paid at every step they did).
+fn rupees_posted(state: &GameView) -> i32 {
+    state.rupees() + state.var(Var::RupeesToAdd) - state.var(Var::RupeesToSubtract)
+}
+
+/// `reward-gained-rupees` for a pickup of `amount` rupees: a rupee `REWARD_MEDIUM` (what one paid before round 38),
+/// a blue rupee (5) `REWARD_LARGE`, 10 or more (a cave's gift, a stash) `REWARD_MAXIMUM`.
+pub fn rupee_reward(amount: i32) -> f64 {
+    match amount {
+        ..5 => REWARD_MEDIUM,
+        5..10 => REWARD_LARGE,
+        _ => REWARD_MAXIMUM,
     }
 }
 
@@ -165,6 +185,11 @@ pub struct GameplayCritic {
     /// `reward.sword_blocked_penalty`: `penalty-sword-blocked` per step a Bubble's touch landed in (positive
     /// magnitude; 0 off).
     pub sword_blocked_penalty: f64,
+    /// `reward.beam_kill_reward`, `reward.beam_timed_reward`, `reward.beam_unfired_penalty` (round 38; 0 off each):
+    /// [`GameplayCritic::critique_beams`].
+    pub beam_kill_reward: f64,
+    pub beam_timed_reward: f64,
+    pub beam_unfired_penalty: f64,
     /// The `retreat` ending is neutral (the default; `endings: {retreat: ...}` can make it a failure): leaving through
     /// a route step's `retreat` exit then costs no `penalty-wrong-location` either.
     pub neutral_retreat: bool,
@@ -175,6 +200,8 @@ pub struct GameplayCritic {
     room_steps: u32,
     stunned_enemies: HashSet<(MapLocation, u8)>,
     puzzles_rewarded: HashSet<(MapLocation, String)>,
+    /// `reward-beam-timed` payments per room, decayed as combat rewards are ([`COMBAT_DECAY_THRESHOLD`]).
+    timed_shots: HashMap<MapLocation, i32>,
 }
 
 impl GameplayCritic {
@@ -187,6 +214,9 @@ impl GameplayCritic {
             boss_ate_bomb_penalty: REWARD_MEDIUM,
             left_drop_penalty: 0.0,
             sword_blocked_penalty: crate::config::SWORD_BLOCKED_PENALTY,
+            beam_kill_reward: crate::config::BEAM_KILL_REWARD,
+            beam_timed_reward: crate::config::BEAM_TIMED_REWARD,
+            beam_unfired_penalty: crate::config::BEAM_UNFIRED_PENALTY,
             neutral_retreat: true,
             correct_locations: HashSet::new(),
             correct_loops: HashSet::new(),
@@ -194,6 +224,7 @@ impl GameplayCritic {
             room_steps: 0,
             stunned_enemies: HashSet::new(),
             puzzles_rewarded: HashSet::new(),
+            timed_shots: HashMap::new(),
         }
     }
 
@@ -214,6 +245,9 @@ impl GameplayCritic {
         critic.boss_ate_bomb_penalty = config.reward.boss_ate_bomb_penalty;
         critic.left_drop_penalty = config.reward.left_drop_penalty;
         critic.sword_blocked_penalty = config.reward.sword_blocked_penalty;
+        critic.beam_kill_reward = config.reward.beam_kill_reward;
+        critic.beam_timed_reward = config.reward.beam_timed_reward;
+        critic.beam_unfired_penalty = config.reward.beam_unfired_penalty;
         critic.neutral_retreat = config.endings.get(RETREAT).is_none_or(|outcome| outcome == NEUTRAL);
         Ok(critic)
     }
@@ -226,19 +260,26 @@ impl GameplayCritic {
         self.room_steps = 0;
         self.stunned_enemies.clear();
         self.puzzles_rewarded.clear();
+        self.timed_shots.clear();
     }
 
     /// Decay multiplier for combat rewards in a room (counts the event).
     fn combat_decay(&mut self, location: MapLocation) -> f64 {
-        let count = self.room_combat_counts.entry(location).or_insert(0);
+        Self::decay(&mut self.room_combat_counts, location)
+    }
+
+    /// The decay of the next event `counts` holds for `location` (counts it): 1 up to [`COMBAT_DECAY_THRESHOLD`]
+    /// events, then halving.
+    fn decay(counts: &mut HashMap<MapLocation, i32>, location: MapLocation) -> f64 {
+        let count = counts.entry(location).or_insert(0);
         let before = *count;
         *count += 1;
-        let excess = before - COMBAT_DECAY_THRESHOLD;
-        if excess <= 0 {
-            1.0
-        } else {
-            COMBAT_DECAY_RATE.powi(excess)
-        }
+        Self::decay_after(before)
+    }
+
+    fn decay_after(events: i32) -> f64 {
+        let excess = events - COMBAT_DECAY_THRESHOLD;
+        if excess <= 0 { 1.0 } else { COMBAT_DECAY_RATE.powi(excess) }
     }
 
     /// Adds this step's gameplay rewards (`critique_gameplay`).
@@ -248,6 +289,7 @@ impl GameplayCritic {
             rewards.add(Outcome::reward("reward-gained-triforce", REWARD_MAXIMUM));
         }
         self.critique_attack(c, rewards);
+        self.critique_beams(c, rewards);
         self.critique_dodongo(c, rewards);
         self.critique_recorder(c, rewards);
         self.critique_item_usage(c, rewards);
@@ -302,7 +344,9 @@ impl GameplayCritic {
             if matches!(attr, "map" | "compass") && prev.level() != curr.level() {
                 continue;
             }
-            if equipment_value(prev, attr) < equipment_value(curr, attr) {
+            let (before, after) = (equipment_value(prev, attr), equipment_value(curr, attr));
+            if before < after {
+                let value = if attr == "rupees" { rupee_reward(after - before) } else { value };
                 rewards.add(Outcome::reward(name, value));
             }
         }
@@ -533,6 +577,52 @@ impl GameplayCritic {
                     REWARD_SMALL * decay,
                 ));
             }
+        }
+    }
+
+    /// Round 38, sword shots at range ([`zelda::beams`]; the owner: "The model is super happy to walk up to enemies
+    /// and just hit them up close. It should get more reward for long range kills (out of melee range), and possibly
+    /// a small penalty for ignoring a lined up shot"). On a step that fires a shot ([`beams::fired`]):
+    /// `reward-beam-kill` when the hits the look-ahead credits to it kill a monster (not a boss) that stood out of
+    /// melee range ([`beams::MELEE_REACH`]), decayed with the room's combat rewards; `reward-beam-timed` when the
+    /// decision's projection ([`beams::lined_up`]) had the shot meet a monster in the direction fired, whether it
+    /// does or not (decayed on its own count per room). On a MOVE or WAIT from a decision lined up so (the shot not
+    /// taken; another weapon used is a choice, not an oversight): `penalty-beam-unfired`, flat.
+    fn critique_beams(&mut self, c: &Critique, rewards: &mut StepRewards) {
+        let change = c.change;
+        if change.entered_room() {
+            return;
+        }
+        let prev = &change.previous;
+        let fired = beams::fired(change);
+        let location = prev.full_location();
+        if fired && self.beam_kill_reward > 0.0 {
+            let far_kill = change.enemies_hit.iter().any(|&(slot, damage)| {
+                prev.enemy_by_index(slot).is_some_and(|e| {
+                    !enemy::is_boss(e.id) && e.distance > beams::MELEE_REACH && damage >= e.health.max(1)
+                })
+            });
+            if far_kill {
+                // `reward-beam-hit` counted this step's event already.
+                let events = self.room_combat_counts.get(&location).copied().unwrap_or(1);
+                let decay = Self::decay_after(events - 1);
+                rewards.add(Outcome::reward("reward-beam-kill", self.beam_kill_reward * decay));
+            }
+        }
+        if self.beam_timed_reward <= 0.0 && self.beam_unfired_penalty <= 0.0 {
+            return;
+        }
+        let lined = beams::lined_up(prev);
+        if lined.is_empty() {
+            return;
+        }
+        if !fired {
+            if self.beam_unfired_penalty > 0.0 && matches!(change.action.kind, ActionKind::Move | ActionKind::Wait) {
+                rewards.add(Outcome::penalty("penalty-beam-unfired", -self.beam_unfired_penalty));
+            }
+        } else if self.beam_timed_reward > 0.0 && lined.contains(&change.action.direction) {
+            let decay = Self::decay(&mut self.timed_shots, location);
+            rewards.add(Outcome::reward("reward-beam-timed", self.beam_timed_reward * decay));
         }
     }
 

@@ -36,7 +36,7 @@ fn is_heart_value(name: &str) -> bool {
 }
 
 /// Every reward and penalty term name the critic and terminal rewards can produce, rewards first (metrics).
-pub const REWARD_TERMS: [&str; 62] = [
+pub const REWARD_TERMS: [&str; 65] = [
     "reward-gained-sword",
     "reward-gained-arrows",
     "reward-gained-bow",
@@ -66,6 +66,8 @@ pub const REWARD_TERMS: [&str; 62] = [
     "reward-recorder-split",
     "reward-beam-hit",
     "reward-beam-distance",
+    "reward-beam-kill",
+    "reward-beam-timed",
     "reward-hit",
     "reward-boomerang-stun",
     "reward-bomb-hit",
@@ -92,6 +94,7 @@ pub const REWARD_TERMS: [&str; 62] = [
     "penalty-quiet-enemies",
     "penalty-lost-health",
     "penalty-lost-beams",
+    "penalty-beam-unfired",
     "penalty-sword-blocked",
     "penalty-aimless",
     "penalty-room-stalling",
