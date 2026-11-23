@@ -205,3 +205,11 @@ def test_compare_summary_in_the_owners_order():
     assert lines[1].endswith('**better**') and 'hearts lost' in lines[1]
     assert 'within noise' in rs.verdict(0.1, 0.06, True) and rs.verdict(-0.2, 0.06, False) == 'better'
     assert lines[-1].startswith('- time to enter step 3 (3:0x5b)') and lines[-1].endswith('**worse**')
+
+
+def test_an_evaluations_wrong_exits_are_not_stuck_runs():
+    episodes = [{'start_state': 's0', 'seed': i, 'success': False, 'ending': 'exit-wrong', 'frames': 100,
+                 'health': 3.0, 'visits': [{**visit(0), 'room': 0x7c, 'health_lost': 0.0}]} for i in range(30)]
+    s = rs.eval_stats({'specialist': 'zol', 'checkpoint': '/m/zol/r1/ckpt.pt', 'records': episodes,
+                       'config': {'rooms': ['(3, 0x7c)']}})
+    assert s['endings']['stuck'] == 30 and codes(s, 'red') == []

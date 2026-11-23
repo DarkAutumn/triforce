@@ -1959,7 +1959,8 @@ file; the tools write it themselves, nobody runs anything for it.
   recording, look before using any number; note: worth knowing): `run-error` (red, any run ending `error`);
   `rate-extreme` (note, exactly 0% or 100% over 100 runs or more); `stuck-share` (red, more than 5% of the runs and at
   least 5 ended stuck: chains of record end stuck in 0-1%, the 250 test in 4 of 250; a route or model fault, a 9:0x56
-  with 616 of 1000, shows as stuck); `runs-short` (red, fewer runs than the meta asked, or a batch never finished);
+  with 616 of 1000, shows as stuck; chains only: an evaluation's wrong exits and cutoffs are its task's ordinary
+  failures); `runs-short` (red, fewer runs than the meta asked, or a batch never finished);
   `seeds-duplicate` (red) and `seeds-nonstandard` (note: not 0..N-1, pairs only with a file on the same seeds);
   `records-old` (note: records before round 40's counters); `step-never-entered` (red: a route step on the chain's
   way, between the first and last steps visited, that no run entered though 20 or more visits left the step before

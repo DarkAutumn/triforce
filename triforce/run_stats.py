@@ -449,9 +449,10 @@ def flag(code: str, text: str, level: str = 'red') -> dict:
     return {'level': level, 'code': code, 'text': text}
 
 
-def common_flags(stats: dict, unit: str = 'runs') -> list:
-    """The flags a chain and an evaluation share: errors, extreme rate, stuck share, runs asked, seeds, old
-    records."""
+def common_flags(stats: dict, unit: str = 'runs', stuck: bool = True) -> list:
+    """The flags a chain and an evaluation share: errors, extreme rate, stuck share (``stuck``: a chain's; an
+    evaluation's other endings, a wrong exit, no damage, the step cap, are its task's ordinary failures), runs asked,
+    seeds, old records."""
     flags = []
     rate, endings, records = stats['rate'], stats['endings'], stats['records']
     n = rate['n']
@@ -464,7 +465,7 @@ def common_flags(stats: dict, unit: str = 'runs') -> list:
     if n >= RATE_EXTREME_RUNS and rate['successes'] in (0, n):
         flags.append(flag('rate-extreme', f"the rate is exactly {100 * rate['rate']:.0f}% over {n} {unit}: check the "
                                           "start and stop (a segment that cannot fail or cannot succeed)", 'note'))
-    if endings['stuck'] >= STUCK_MIN and endings['stuck'] > STUCK_SHARE * n:
+    if stuck and endings['stuck'] >= STUCK_MIN and endings['stuck'] > STUCK_SHARE * n:
         reasons = ', '.join(f"{k} {v}" for k, v in list(endings['stuck_reasons'].items())[:3])
         flags.append(flag('stuck-share', f"{endings['stuck']} of {n} {unit} ended stuck ({reasons}), above "
                                          f"{STUCK_SHARE:.0%}: check the rooms in endings.stuck_rooms for a route or "
@@ -766,7 +767,7 @@ def eval_stats(result: dict, source: Optional[str] = None, meta: Optional[dict] 
                   'held_frames': mean_of(per_run['beam_held'])},
         'runs': {'seeds': keys, 'result': ''.join(eval_letter(r) for r in records), **dict(per_run)},
     }
-    flags = common_flags(stats, 'episodes')
+    flags = common_flags(stats, 'episodes', stuck=False)
     if not has_visits and n:
         flags.append(flag('no-visits', "the evaluation's records have no room visits (format 1): per-room "
                                        "statistics are empty; evaluate again with this code", 'note'))
