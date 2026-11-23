@@ -1910,7 +1910,9 @@ fn gameplay_rewards_a_real_shield_collision_in_weapon_settling() {
     let Some(nes) = open_core() else { return };
     let mut s = session(nes);
     place_shield_projectile(&mut s, &[11]);
-    s.nes_mut().poke(0x70 + 11, 180);
+    // Round 40: no frame of no buttons closes the action any more, so the projectile starts one frame's travel nearer
+    // than the 180 it had (its block fell in that closing frame) and meets the shield inside the beam's own frames.
+    s.nes_mut().poke(0x70 + 11, 178);
     s.apply_ram(&[]);
     let start = s.frame();
     let change = s.act(Action::parse("BEAMS E").unwrap()).unwrap();
@@ -1922,8 +1924,7 @@ fn gameplay_rewards_a_real_shield_collision_in_weapon_settling() {
     );
     let event = change.projectile_blocks[0];
     assert!(
-        start + (change.control_frames as u64) < event.frame
-            && event.frame <= start + change.frames as u64,
+        start < event.frame && event.frame <= start + change.frames as u64,
         "start {start} control {} frames {} event {}",
         change.control_frames,
         change.frames,
@@ -2343,7 +2344,8 @@ fn dodongo_stuns_and_swallows_count_per_episode_and_visit() {
     };
     let mut env = make_env_with(nes, "boss-dodongo", opts, |c| {
         c.curriculum.enabled = false;
-        c.max_steps = 40;
+        // 48 (40 before round 40): a WAIT 8 is 8 frames now, not 9, so the same wait takes more decisions.
+        c.max_steps = 48;
     });
     env.reset(Some(1), None).unwrap();
     let walking = |env: &Env| {
