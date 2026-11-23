@@ -1047,6 +1047,15 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   each route step over the runs that entered it in both arms, so a death counts up to its last room; "we are
   competing with speedrunners so time matters, and not walking back around to enemies matters"). They never redeem
   a worse rate: "it doesn't matter if we run faster and die quicker". Report them beside the rate for every arm.
+- **Read results with `triforce stats`, not a script of your own** (the owner, Nov 23: one standard set of
+  statistics for every agent's runs, in one place). Every chain, evaluation and training writes `<output>.stats.json`
+  (a run dir's `train.stats.json`) and registers it under its job (docs/architecture.md "Run statistics"):
+  `triforce stats list --agent A --since 24h`, `triforce stats show ID|PATH [--family F]`, and for an experiment
+  `triforce stats compare BASE ARM...` (paired by seed, in the order above: the rate, hearts, beams held, shots that
+  hit and kills from range, time to each step). An older output: `triforce stats ingest FILE --agent A --task T`
+  (a job). **Read its flags first**: a red flag (a step or family never played, a network that made no decision,
+  harvested states never drawn, runs short or ended in errors) voids the numbers until explained. A measure the
+  file lacks is added to `run_stats.py` for everyone, not computed on the side.
 - **Every job is in the queue, shown with its progress** (the owner, Nov 13, Nov 18, Nov 23). The queue
   (`$XDG_STATE_HOME/triforce/queue.db`, else `~/.local/state/triforce/queue.db`; `triforce/jobqueue.py`) holds every
   job of every worktree: who (`Agent: A   Task: T   Sub-task: S`), the description, its state (`RUNNING regular 10m
