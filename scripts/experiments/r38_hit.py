@@ -67,8 +67,9 @@ class Rows:
 
 def load_rows(source: str) -> Rows:
     """``source``: ``r36:FAMILY``, a recording ``DIR``, ``DIR+blocked`` (the label ``hit_or_blocked``: lost
-    health, or a Bubble's touch landed, the sword blocked: main's round 38 targets), either with ``#KEY`` for one
-    family's rows of a recording of several (``KEY`` as in its ``dataset.json``)."""
+    health, or a Bubble's touch landed, the sword blocked: main's round 38 targets), ``DIR+beam`` (round 39's beam
+    head: ``beam_rows``), either with ``#KEY`` for one family's rows of a recording of several (``KEY`` as in its
+    ``dataset.json``)."""
     if source.startswith('r36:'):
         return _load_r36(source[4:])
     source, _, family = source.partition('#')
@@ -85,6 +86,8 @@ def load_rows(source: str) -> Rows:
         held = held[keep]
     obs = {k[len('obs/'):]: v for k, v in d.items() if k.startswith('obs/')}
     obs[MASK_KEY] = d['action_mask']
+    if label == 'beam':
+        return beam_rows(obs, d['beam_lined'], held, source + (f'#{family}' if family else ''))
     n = len(d['action'])
     a = d['action'].astype(np.int64)
     taken = (a[:, 0] * 8 + a[:, 1]) * NUM_DURATIONS + a[:, 2]
@@ -105,6 +108,27 @@ def load_rows(source: str) -> Rows:
         own.append(np.zeros(len(r), bool))
     return Rows(obs, np.concatenate(rows), np.concatenate(joints), np.concatenate(lost), np.concatenate(own), held,
                 np.ones(n, np.int8), source + (f'#{family}' if family else ''))
+
+
+def beam_rows(obs: dict, lined: np.ndarray, held: np.ndarray, name: str) -> Rows:
+    """Round 39's beam labels as candidates: each decision whose mask allows BEAMS in a cardinal direction gets one
+    candidate a legal direction, ``(BEAMS, d, duration 0)``, labelled 1 when the projection had a shot fired so meet
+    a monster out of melee range (``beam_lined``'s ``Direction`` bit); the same columns as the hit labels', so
+    ``retrain`` and ``pr`` read them unchanged."""
+    from triforce.actions import CARDINALS, DIRECTION_INDEX, NUM_DIRECTIONS, NUM_KINDS  # noqa: E402
+    from triforce.zelda_enums import ActionKind  # noqa: E402
+    beams = int(ActionKind.BEAMS)
+    mask = obs[MASK_KEY].astype(bool)
+    rows, joints, labels = [], [], []
+    for d in CARDINALS:
+        i = DIRECTION_INDEX[d]
+        legal = np.flatnonzero(mask[:, beams] & mask[:, NUM_KINDS + beams * NUM_DIRECTIONS + i])
+        rows.append(legal)
+        joints.append(np.full(len(legal), (beams * NUM_DIRECTIONS + i) * NUM_DURATIONS, np.int64))
+        labels.append((lined[legal].astype(np.int64) & d.value) != 0)
+    c_row = np.concatenate(rows)
+    return Rows(obs, c_row, np.concatenate(joints), np.concatenate(labels), np.ones(len(c_row), bool), held,
+                np.ones(len(held), np.int8), name)
 
 
 def _load_r36(family: str) -> Rows:

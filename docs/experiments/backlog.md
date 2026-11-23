@@ -197,15 +197,19 @@ been retrained on the corrected order):
   moving forward at this rate in this direction calculation you already do to reward timing beams that WOULD
   intersect even if the enemy turns the other way in reality before it hits. [...] One problem with how much
   damage the agent takes is closing with the enemy when he doesn't have to... he doesn't use the full effect of full
-  hearts, and instead gets close and loses beams.") And (Nov 23): "I want to be clear about `Why beams rarely happen.` I notice this
-  everywhere. For example, look at rooms in dungeon 3. 0x6b and 0x4a are particularly bad. Link goes and hunts down
-  gel and keese up close (more often than not) with full hearts, in 0x6b it's really noticeable because he walks all
-  the way around the block geometry and rarely fires beams at them." (Full-hearts melee is common: not only a
-  hearts problem.)
+  hearts, and instead gets close and loses beams." Nov 23: "I want to be clear about `Why beams rarely happen.` I
+  notice this everywhere. [...] look at rooms in dungeon 3. 0x6b and 0x4a are particularly bad. Link goes and hunts
+  down gel and keese up close (more often than not) with full hearts, in 0x6b it's really noticeable because he walks
+  all the way around the block geometry and rarely fires beams at them.")
   Reward built (round38.md "Beams at range; rupees per pickup"): `reward-beam-kill`, `reward-beam-timed`,
   `penalty-beam-unfired`, `beam_*` in every record. Before: 0.3% of wizzrobe's sword kills out of melee range, 2.8%
-  of patra's. Continued with it, wizzrobe (1M steps) and patra (2M) fought as before and lost 3-7 points on `d6`/`d9`;
-  open: stronger weights, then wizzrobe, darknut, goriya, patra (the hearts melee costs, in that order).
+  of patra's. Continued with it, wizzrobe (1M steps) and patra (2M) fought as before and lost 3-7 points on `d6`/`d9`.
+  MEASURED, NOT SOLVED (round39.md "Beams at range"): stronger weights on wizzrobe did not carry to the chains; a
+  supervised beam head (`beamshift`, gated to fights) makes Link fire when lined up (3:0x6b unfired 54% → 4-16%,
+  far kills ×1.5) but three kills in four stay in melee: nothing makes him stand back to line a shot up. Two
+  causes: wizzrobe and Patra rooms are entered ~7 hearts short (hits, not pickups: a hit head for them), and in
+  Dungeon 3 Link is full (0x6b 93% of visits) and walks to the monsters anyway. Next: PPO with the beam head inside
+  the acting network (zol and stalfos-keese-gel `@d3first`), a firing-line potential.
 - [ ] **Rupees rewarded per pickup, not per counted rupee** (the owner, Nov 22, 0:0x0f: "the agent waits for all
   rupees to finish before leaving, probably because it gets reward per rupee incremented. What should ACTUALLY be
   awarded for getting rupees is the 'rupees to add' counter getting set once. It could be a larger reward for 1 vs
