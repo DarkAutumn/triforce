@@ -36,7 +36,7 @@ def frames_of(path: Path):
     """(ram [n, 10240] uint8, lane [n, 12, 5] float32) of every play frame of the replay, in chunks."""
     player = _native.ReplayPlayer(path.read_bytes())
     rams = []
-    while player.frame() < player.frames():
+    while player.frame < player.frames:
         player.step(1)
         ram = np.asarray(player.ram(), dtype=np.uint8)
         rams.append(ram.copy())
@@ -122,21 +122,35 @@ def summarize(stats: dict) -> dict:
     return out
 
 
+def new_stats() -> dict:
+    return defaultdict(lambda: defaultdict(lambda: 0) | {k: [] for k in
+                       ['leave_at_warning'] + [f'wait_err_{lag}' for lag in LAGS]})
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    parser.add_argument('replays', type=Path)
+    parser.add_argument('replays', type=Path, nargs='?')
     parser.add_argument('--out', type=Path, default=Path('target/r40/lane-check.json'))
+    parser.add_argument('--start', type=int, default=0, help='the first replay (sorted by name)')
     parser.add_argument('--limit', type=int, default=0, help='at most this many replays (0: all)')
-    jobs.require_job()
+    parser.add_argument('--merge', type=Path, nargs='+', help="pieces' raw files (OUT.raw.json) to sum into OUT")
     args = parser.parse_args(argv)
-    paths = sorted(args.replays.glob('*.tfreplay'))
-    if args.limit:
-        paths = paths[:args.limit]
-    stats: dict = defaultdict(lambda: defaultdict(lambda: 0) | {k: [] for k in
-                                ['leave_at_warning'] + [f'wait_err_{lag}' for lag in LAGS]})
-    for i, path in enumerate(paths):
-        check(path, stats)
-        jobs.progress(i + 1, len(paths), 'replays')
+    stats = new_stats()
+    if args.merge:
+        for path in args.merge:
+            for name, st in json.loads(path.read_text()).items():
+                for k, v in st.items():
+                    stats[name][k] += v
+    else:
+        jobs.require_job()
+        paths = sorted(args.replays.glob('*.tfreplay'))[args.start:]
+        if args.limit:
+            paths = paths[:args.limit]
+        for i, path in enumerate(paths):
+            check(path, stats)
+            jobs.progress(i + 1, len(paths), 'replays')
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.with_suffix('.raw.json').write_text(json.dumps(stats))
     result = summarize(stats)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(result, indent=1))
