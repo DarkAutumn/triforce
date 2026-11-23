@@ -3527,3 +3527,16 @@ so older models are refused until converted or retrained. Every one of the 1,771
 its schema numbers, so no run-dir fallback is needed; all 57 promoted runs of today's families load (the 4
 promoted runs of retired families, action schema 1, were refused before and are refused still). `VERSION` stays
 2.0.0.11 (no generation yet).
+
+## 2026-11-23 — The next generation's teachers are trained fresh, not continued (the owner)
+
+The owner, on which upcoming work needs a complete retrain: "I think the models the main model learns from will
+need to also be retrained and not continued from previous training to get new behaviors." A student that imitates
+today's 51 copies today's behaviour (melee at full hearts, objectives learned before a route change), whatever its
+own weights start from. So the next generation (observation v7, the bomb-carrier input, firing-line targets if the
+zol experiment holds, the Link-token architecture with its hit head) is built in two stages: first every teacher
+family is trained from scratch on the new inputs, targets and rewards (no `--load`, no warm start, no conversion),
+measured on its chains like any family; then the one network (or the handful of groups) learns from those fresh
+teachers and continues with PPO. Imitating the current 51 stays useful only as an experiment on capacity (Track M,
+experiment 3), not as the path to the next generation. The input and reward changes are gathered into that one
+generation so the families are retrained once (the lead's recommendation, the owner's rule).

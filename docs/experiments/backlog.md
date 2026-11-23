@@ -345,7 +345,11 @@ to the action taken; look-ahead for the others), never looking ahead at play.
    against from scratch; value normalisation across tasks; prioritised sampling across tasks (`plr.py`); the
    look-ahead as a teacher at full weight (old backlog "Idea 3: search distilled into the network"; round 34's
    0.05-0.15 imitation of the planner's rows did not take).
-10. [ ] **One network on the corrected route:** the merged model(s) trained on the new states; a golden path with
+10. [ ] **The next generation's teachers, trained fresh** (the owner, Nov 23; decisions 2026-11-23): every
+    teacher family trained from scratch on the new inputs, targets and rewards (v7, the bomb-carrier input, the
+    firing-line targets if they hold), measured on its chains; only then the student(s) of 11 learn from them.
+    Imitating today's 51 copies today's behaviour, so it is a capacity experiment, not the next generation.
+11. [ ] **One network on the corrected route:** the merged model(s) trained on the new states; a golden path with
     them; then single runs at the world-record scale.
 
 Each experiment is logged in a round document (`round36.md` on) with its setup, numbers and what it decided; an
