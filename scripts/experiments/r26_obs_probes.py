@@ -5,7 +5,9 @@
 Each probe puts Link into a dungeon room with `triforce.probe.Probe` (no savestate: room id, level block and
 Link's position written, see that module), keeps his hearts topped up and prints the bytes a feature would read,
 one line per frame on which any of them changes (or every frame where the probe says so). Throwaway in method,
-kept because the document cites its output; nothing here is how the game is played.
+kept because the document cites its output; nothing here is how the game is played.  It plays the game: a job of
+the machine's queue (``jobs.require_job``: ``triforce job run ... --timeout 20m -- .venv/bin/python
+scripts/experiments/r26_obs_probes.py ...``).
 
 RAM (zelda-asm/src/Variables.inc, ObjVars.inc, CommonVars.inc): ObjType $34F, ObjX $70, ObjY $84, ObjDir $98,
 ObjState $AC, ObjTimer $28, ObjMetastate $405, ObjHP $485, ObjInvincibilityTimer $4F0, ObjRemDistance $394,
@@ -20,6 +22,7 @@ from pathlib import Path
 ROOT = Path(subprocess.run(['git', 'rev-parse', '--show-toplevel'], capture_output=True, text=True,
                            cwd=Path(__file__).parent, check=True).stdout.strip())
 sys.path.insert(0, str(ROOT))
+from triforce.jobs import require_job     # noqa: E402  pylint: disable=wrong-import-position
 from triforce.probe import Probe          # noqa: E402  pylint: disable=wrong-import-position
 
 TYPE, X, Y, DIR, STATE, TIMER, META, HP, INV, REM = 0x34F, 0x70, 0x84, 0x98, 0xAC, 0x28, 0x405, 0x485, 0x4F0, 0x394
@@ -513,6 +516,7 @@ def main(argv):
     for name in names:
         if name not in PROBES:
             raise SystemExit(f'unknown probe {name}; known: {", ".join(PROBES)}')
+    require_job()
     for name in names:
         print(f'== {name}: {PROBES[name].__doc__.split(chr(10))[0]}')
         PROBES[name](Probe(ROOT / 'triforce' / 'states'))

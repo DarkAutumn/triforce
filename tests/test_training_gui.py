@@ -1,4 +1,5 @@
-"""Training chart ranges: 10-point success bands and heart padding (Qt offscreen)."""
+"""The training GUI (Qt offscreen): chart ranges, log folders, [currently running] over the machine's job queue
+(``triforce.jobqueue``: a queue of the test's own), the web view."""
 
 import importlib.util
 import os
@@ -19,6 +20,67 @@ spec.loader.exec_module(gui)
 @pytest.fixture(scope='module')
 def qapp():
     return QApplication.instance() or QApplication([])
+
+
+class FakeQueue:
+    """A job queue (``triforce.jobqueue``) holding the rows ``triforce job`` writes; a live job's lock is held (its
+    wrapper is there) until ``gone``."""
+
+    def __init__(self, directory):
+        self.directory = Path(directory)
+        self.locks = {}
+
+    def add(self, **fields) -> int:
+        """A job: ``fields`` over a running round's (a queued job has no place and no admission yet); its id."""
+        import time
+        now = time.time()
+        status = fields.get('status', 'running')
+        row = {'agent': 'r40', 'task': 'queue', 'subtask': 'gui', 'description': 'Checks the GUI lists the queue.',
+               'verb': 'run', 'lane': 'jobs', 'kind': 'round', 'command': ['python', 'scripts/train_round.py'],
+               'cwd': str(ROOT), 'checkout': str(ROOT), 'branch': 'r40-queue', 'status': status,
+               'place': 'regular-1' if status != 'queued' else None, 'queued_ts': now - 120,
+               'admitted_ts': now - 60 if status != 'queued' else None, **fields}
+        row.setdefault('name', '-'.join(str(row[key]) for key in ('agent', 'task', 'subtask')))
+        con = gui.jobqueue.connect(self.directory)
+        try:
+            job_id = con.execute("INSERT INTO jobs (status) VALUES ('queued')").lastrowid
+            gui.jobqueue.update(con, job_id, **row)
+        finally:
+            con.close()
+        if status in gui.jobqueue.LIVE:
+            self.locks[job_id] = gui.jobqueue.take_lock(gui.jobqueue.lock_path(self.directory, f'job-{job_id}'))
+        return job_id
+
+    def update(self, job_id, **fields):
+        con = gui.jobqueue.connect(self.directory)
+        try:
+            gui.jobqueue.update(con, job_id, **fields)
+        finally:
+            con.close()
+
+    def gone(self, job_id):
+        """The job's wrapper dies: its lock is free (the next read marks it dead)."""
+        os.close(self.locks.pop(job_id))
+
+    def close(self):
+        for fd in self.locks.values():
+            os.close(fd)
+        self.locks.clear()
+
+
+@pytest.fixture(autouse=True)
+def queue(tmp_path_factory, monkeypatch):
+    """Every test's own job queue (``$TRIFORCE_QUEUE_DIR``), empty until it adds jobs: the GUI never reads the
+    machine's."""
+    fake = FakeQueue(tmp_path_factory.mktemp('queue'))
+    monkeypatch.setenv(gui.jobqueue.QUEUE_DIR_ENV, str(fake.directory))
+    yield fake
+    fake.close()
+
+
+def texts(lines):
+    """The texts of ``job_lines`` (or a web job's lines)."""
+    return [line[0] for line in lines]
 
 
 def series(values, label='success'):
@@ -250,11 +312,10 @@ def test_eval_chain_throughput_reads_episodes_per_second_or_seconds_per_episode(
 
 
 def test_window_title_names_a_few_running_plans_and_counts_the_rest():
-    """Finished plans stay out of the title and many running ones are counted, so it stays short; a job without a log
-    folder is named without a share done."""
+    """Finished plans stay out of the title and many running ones are counted, so it stays short."""
     class Plan:
-        def __init__(self, name, status, done, registry_only=False):
-            self.name, self._status, self._done, self.registry_only = name, status, done, registry_only
+        def __init__(self, name, status, done):
+            self.name, self._status, self._done = name, status, done
 
         def status(self):
             return self._status
@@ -265,7 +326,6 @@ def test_window_title_names_a_few_running_plans_and_counts_the_rest():
     finished = [Plan(f'old-{index}', 'completed', 1.0) for index in range(40)]
     assert gui.window_title(finished, 0.0) == 'Triforce training'
     assert gui.window_title(finished + [Plan('r72-ow', 'running', 0.5)], 0.0) == '50% r72-ow — Triforce training'
-    assert gui.window_title([Plan('lab-r37', 'running', 0.0, True)], 0.0) == 'lab-r37 — Triforce training'
     many = [Plan(f'r23-pilot-{index}', 'running', 0.25) for index in range(30)]
     assert gui.window_title(finished + many, 0.0) == (
         '25% r23-pilot-0 · 25% r23-pilot-1 · 25% r23-pilot-2 · +27 more — Triforce training')
@@ -288,11 +348,10 @@ def test_machine_status_reads_cpu_gpu_and_load(tmp_path):
 
 
 def test_clear_finished_keeps_only_live_folders(qapp, tmp_path, monkeypatch):
-    """[currently running] keeps a folder whose training ended; 'Clear finished' drops it for good, leaving the live
-    ones, and a training that starts later still appears."""
+    """[currently running] keeps a folder no job owns (a run started at a terminal) whose training ended; 'Clear
+    finished' drops it for good, leaving the live ones, and a training that starts later still appears."""
     import json
     import time
-    monkeypatch.setattr(gui, 'read_registry', lambda: [])
     monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
 
     def plan(name, status='running'):
@@ -304,20 +363,20 @@ def test_clear_finished_keeps_only_live_folders(qapp, tmp_path, monkeypatch):
     old, done, live = plan('261112_001_old', 'completed'), plan('261112_002_done'), plan('261112_003_live')
     window = gui.Window(tmp_path, None)
     try:
-        assert window.live_mode and window._shown_dirs() == [live, done]
+        assert window.live_mode and window._shown() == [live, done]
         assert not window.clear_button.isHidden() and not window.clear_button.isEnabled()
         plan(done.name, 'completed')
         window._scan_and_update()
-        assert window._shown_dirs() == [live, done]                     # finished, still shown
+        assert window._shown() == [live, done]                          # finished, still shown
         assert window.clear_button.isEnabled() and window.clear_button.text() == 'Clear finished (1)'
         window.clear_button.click()
-        assert window._shown_dirs() == [live] and not window.clear_button.isEnabled()
+        assert window._shown() == [live] and not window.clear_button.isEnabled()
         window._scan_and_update()
-        assert window._shown_dirs() == [live]                           # doesn't come back
+        assert window._shown() == [live]                                # doesn't come back
         new = plan('261112_004_new')
         window._scan_and_update()
-        assert window._shown_dirs() == [new, live]
-        assert old not in window._shown_dirs()
+        assert window._shown() == [new, live]
+        assert old not in window._shown()
         window.load(old)                                                # a picked folder: no button
         assert window.clear_button.isHidden()
     finally:
@@ -330,7 +389,6 @@ def test_currently_running_stays_selected_while_nothing_runs(qapp, tmp_path, mon
     folders not cleared yet), and a training that starts later appears in it."""
     import json
     import time
-    monkeypatch.setattr(gui, 'read_registry', lambda: [])
     monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
 
     def plan(name, status='running'):
@@ -342,33 +400,33 @@ def test_currently_running_stays_selected_while_nothing_runs(qapp, tmp_path, mon
     old = plan('261112_001_old', 'completed')
     window = gui.Window(tmp_path, None)
     try:
-        assert window.live_mode and window._shown_dirs() == []          # startup: nothing running, nothing shown
+        assert window.live_mode and window._shown() == []               # startup: nothing running, nothing shown
         assert window.combo.currentIndex() == 0 and window.combo.model().item(0).isEnabled()
         assert window.empty_text == 'nothing is running'
         window.combo.activated.emit(window.combo.findData(str(old)))    # the user picks a folder
-        assert not window.live_mode and window._shown_dirs() == [old]
+        assert not window.live_mode and window._shown() == [old]
         window.combo.activated.emit(0)                                  # and goes back to [currently running]
-        assert window.live_mode and window._shown_dirs() == [] and window.combo.currentIndex() == 0
+        assert window.live_mode and window._shown() == [] and window.combo.currentIndex() == 0
         window._scan_and_update()
         assert window.live_mode and window.combo.currentIndex() == 0    # it stays there
         live = plan('261112_002_live')
         window._scan_and_update()
-        assert window._shown_dirs() == [live]
+        assert window._shown() == [live]
         plan(live.name, 'completed')
         window._scan_and_update()
-        assert window.live_mode and window._shown_dirs() == [live]      # finished, kept until cleared
+        assert window.live_mode and window._shown() == [live]           # finished, kept until cleared
         detail = window.detail
         window.poll(force=True)
         assert live.name in detail.title.text() and detail.log.toPlainText() != ''
         window.clear_button.click()
-        assert window.live_mode and window._shown_dirs() == [] and window.combo.currentIndex() == 0
+        assert window.live_mode and window._shown() == [] and window.combo.currentIndex() == 0
         # nothing shown: the charts, evaluation, log and events are emptied, not left stale
         assert detail.title.text() == '' and detail.log.toPlainText() == '' and detail.events.toPlainText() == ''
         assert detail.summary.sections == [] and detail.evaluation.sections == []
         assert all(not chart.series for chart in detail.charts.values())
         fresh = plan('261112_003_fresh')                                # the next run fills them again
         window._scan_and_update()
-        assert window._shown_dirs() == [fresh] and fresh.name in detail.title.text()
+        assert window._shown() == [fresh] and fresh.name in detail.title.text()
     finally:
         window.close()
         window.deleteLater()
@@ -486,7 +544,6 @@ def test_a_batch_plan_becomes_one_row_per_evaluation(qapp, tmp_path):
 
 def test_a_batch_shows_in_the_window(qapp, tmp_path, monkeypatch):
     import time
-    monkeypatch.setattr(gui, 'read_registry', lambda: [])
     monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
     folder = tmp_path / '261113_001_r71-evals'
     write_batch(folder, os.getpid(), time.time())
@@ -506,95 +563,78 @@ def test_a_batch_shows_in_the_window(qapp, tmp_path, monkeypatch):
         window.deleteLater()
 
 
-# ------------------------------------------------------------------------------------------------ the job registry
-
-def fake_job(registry, checkout, branch, name, *, pid, pid_start, status='running', finished=None):
-    """A job of another checkout: its log folder (``<checkout>/logs/<name>``, a plan naming the checkout) and its
-    registry entry."""
-    import json
-    import socket
-    folder = checkout / 'logs' / name
-    folder.mkdir(parents=True)
-    plan = {**running_plan(pid, time_now()), 'status': status, 'name': name, 'kind': 'train', 'runs': [],
-            'finished': finished, 'checkout': str(checkout), 'branch': branch}
-    (folder / gui.PLAN_FILE).write_text(json.dumps(plan))
-    registry.mkdir(exist_ok=True)
-    (registry / f'{name}.json').write_text(json.dumps({
-        'schema': 1, 'host': socket.gethostname(), 'pid': pid, 'pid_start': pid_start, 'status': status,
-        'started': iso(time_now() - 5), 'finished': finished, 'log_dir': str(folder), 'name': name,
-        'checkout': str(checkout), 'branch': branch}))
-    return folder
-
+# ------------------------------------------------------------------------------------- the job queue's other checkouts
 
 def time_now():
     import time
     return time.time()
 
 
-def test_registry_folders_tell_live_recent_and_old_jobs_apart(tmp_path):
-    me = gui.process_started(os.getpid())
-    a = fake_job(tmp_path / 'jobs', tmp_path / 'wt-a', 'main', '261113_001_a', pid=os.getpid(), pid_start=me)
-    b = fake_job(tmp_path / 'jobs', tmp_path / 'wt-b', 'clips', '261113_002_b', pid=os.getpid(), pid_start=me,
-                 status='completed', finished=iso(time_now() - 60))
-    c = fake_job(tmp_path / 'jobs', tmp_path / 'wt-b', 'clips', '261112_003_c', pid=os.getpid(), pid_start=me,
-                 status='completed', finished=iso(time_now() - gui.RECENT_SECONDS - 60))
-    reused = fake_job(tmp_path / 'jobs', tmp_path / 'wt-c', 'x', '261113_004_reused', pid=os.getpid(),
-                      pid_start=me - 3600)                       # our pid, but another process's start time
-    jobs = gui.read_registry(tmp_path / 'jobs')
-    live, recent = gui.registry_folders(jobs, time_now())
-    assert live == [a] and recent == [reused, b] and c not in recent
+def checkout_job(queue, checkout, branch, name, *, status='running', admitted_ts=None, finished_ts=None):
+    """A job of another checkout: its log folder (``<checkout>/logs/<name>``, a plan naming the checkout) and its row
+    in the queue, which records the folder (as ``jobs.record_plan``); (its key, its folder)."""
+    import json
+    folder = checkout / 'logs' / name
+    folder.mkdir(parents=True)
+    plan = {**running_plan(os.getpid(), time_now()), 'status': 'running' if status == 'running' else 'completed',
+            'name': name, 'kind': 'train', 'runs': [], 'finished': iso(finished_ts) if finished_ts else None,
+            'checkout': str(checkout), 'branch': branch}
+    (folder / gui.PLAN_FILE).write_text(json.dumps(plan))
+    times = {} if admitted_ts is None else {'admitted_ts': admitted_ts}
+    job = queue.add(subtask=name, status=status, kind='train', checkout=str(checkout), branch=branch,
+                    log_dir=str(folder), plan=str(folder / gui.PLAN_FILE), finished_ts=finished_ts,
+                    exit_code=None if status == 'running' else 0, **times)
+    return gui.job_key({'id': job}), folder
+
+
+def test_currently_running_lists_jobs_of_other_checkouts(qapp, tmp_path, monkeypatch, queue):
+    """Jobs of two other worktrees: the live one in [currently running] with its folder under its header, the
+    finished one under the 'finished' heading; the dropdown lists both folders with their checkout and branch;
+    'Clear finished' hides the finished one for good."""
+    monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
     assert gui.checkout_label({'checkout': str(tmp_path / 'wt-b'), 'branch': 'clips'}) == 'wt-b · clips'
     assert gui.checkout_label({}) == ''
-
-
-def test_currently_running_lists_jobs_of_other_checkouts(qapp, tmp_path, monkeypatch):
-    """Jobs registered from two other worktrees: the live one in [currently running] with its checkout, the
-    finished one under the 'finished' heading; 'Clear finished' hides it."""
-    monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
-    registry = tmp_path / 'jobs'
-    monkeypatch.setenv(gui.JOBS_DIR_ENV, str(registry))
-    me = gui.process_started(os.getpid())
-    live = fake_job(registry, tmp_path / 'triforce-a', 'main', '261113_001_live', pid=os.getpid(), pid_start=me)
-    done = fake_job(registry, tmp_path / 'triforce-b', 'clips', '261113_002_done', pid=os.getpid(), pid_start=me,
-                    status='completed', finished=iso(time_now() - 60))
+    live, live_dir = checkout_job(queue, tmp_path / 'triforce-a', 'main', '261113_001_live')
+    done, done_dir = checkout_job(queue, tmp_path / 'triforce-b', 'clips', '261113_002_done', status='completed',
+                                  finished_ts=time_now() - 60)
     (tmp_path / 'gui-root').mkdir()
     window = gui.Window(tmp_path / 'gui-root', None)
     try:
-        assert window.live_mode and window._shown_dirs() == [live, done]
+        assert window.live_mode and window._shown() == [live, done]
         assert window._heading_at == 1 and not window.finished_heading.isHidden()
+        views = {view.key: view for view in window.views}
+        assert views[live].model.dir == live_dir and views[done].model.dir == done_dir
+        assert texts(views[done].job_card.lines(time_now()))[2].startswith('completed exit 0 after ')
         labels = [window.combo.itemText(i) for i in range(window.combo.count())]
         assert '261113_001_live  (triforce-a · main)' in labels and '261113_002_done  (triforce-b · clips)' in labels
         assert window.clear_button.text() == 'Clear finished (1)'
         window.clear_button.click()
-        assert window._shown_dirs() == [live] and window.finished_heading.isHidden()
+        assert window._shown() == [live] and window.finished_heading.isHidden()
         window._scan_and_update()
-        assert window._shown_dirs() == [live]                           # doesn't come back
+        assert window._shown() == [live]                                # doesn't come back
     finally:
         window.close()
         window.deleteLater()
 
 
-def test_currently_running_orders_by_run_start_and_by_end_not_by_folder_name(qapp, tmp_path, monkeypatch):
+def test_currently_running_orders_by_admission_and_by_end_not_by_folder_name(qapp, tmp_path, monkeypatch, queue):
     """The job that began to run last is on top whatever its folder is called (each checkout numbers its own
     folders); the finished ones follow in the order they ended, the last one first."""
     monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
-    registry = tmp_path / 'jobs'
-    monkeypatch.setenv(gui.JOBS_DIR_ENV, str(registry))
-    me = gui.process_started(os.getpid())
-    first = fake_job(registry, tmp_path / 'triforce-a', 'main', '261113_009_first', pid=os.getpid(), pid_start=me)
-    second = fake_job(registry, tmp_path / 'triforce-b', 'clips', '261113_001_second', pid=os.getpid(), pid_start=me)
-    early = fake_job(registry, tmp_path / 'triforce-a', 'main', '261113_007_ended-early', pid=os.getpid(),
-                     pid_start=me, status='completed', finished=iso(time_now() - 600))
-    late = fake_job(registry, tmp_path / 'triforce-b', 'clips', '261113_003_ended-late', pid=os.getpid(),
-                    pid_start=me, status='completed', finished=iso(time_now() - 60))
+    now = time_now()
+    a, b = tmp_path / 'triforce-a', tmp_path / 'triforce-b'
+    first, _ = checkout_job(queue, a, 'main', '261113_009_first', admitted_ts=now - 600)
+    second, _ = checkout_job(queue, b, 'clips', '261113_001_second', admitted_ts=now - 300)
+    early, _ = checkout_job(queue, a, 'main', '261113_007_ended-early', status='completed', finished_ts=now - 600)
+    late, _ = checkout_job(queue, b, 'clips', '261113_003_ended-late', status='completed', finished_ts=now - 60)
     (tmp_path / 'gui-root').mkdir()
     window = gui.Window(tmp_path / 'gui-root', None)
     try:
-        assert window._shown_dirs() == [second, first, late, early] and window._heading_at == 2
+        assert window._shown() == [second, first, late, early] and window._heading_at == 2
         # a job that starts now is added at the top; the rest keeps its order
-        third = fake_job(registry, tmp_path / 'triforce-a', 'main', '261113_005_third', pid=os.getpid(), pid_start=me)
+        third, _ = checkout_job(queue, a, 'main', '261113_005_third', admitted_ts=time_now())
         window._scan_and_update()
-        assert window._shown_dirs() == [third, second, first, late, early] and window._heading_at == 3
+        assert window._shown() == [third, second, first, late, early] and window._heading_at == 3
     finally:
         window.close()
         window.deleteLater()
@@ -637,13 +677,7 @@ def web_plan(root, name, *, created, pid=None, status='running', finished=None, 
     return folder
 
 
-@pytest.fixture
-def web_env(monkeypatch):
-    """Only the test's own logs root: no job registry."""
-    monkeypatch.setattr(gui, 'read_registry', lambda: [])
-
-
-def test_web_snapshot_shows_running_runs_on_top_and_expires_finished_ones(tmp_path, web_env):
+def test_web_snapshot_shows_running_runs_on_top_and_expires_finished_ones(tmp_path):
     import subprocess
     import time
     now = time.time()
@@ -733,7 +767,7 @@ def test_web_snapshot_shows_running_runs_on_top_and_expires_finished_ones(tmp_pa
     assert [card['id'] for card in fresh.refresh()['cards']] == [f"{tmp_path}/261114_002_batch#0"]
 
 
-def test_web_snapshot_with_nothing_running(tmp_path, web_env):
+def test_web_snapshot_with_nothing_running(tmp_path):
     import time
     now = time.time()
     web_plan(tmp_path, '261113_009_old', created=now - 7200, status='completed', finished=now - 3600, runs=[
@@ -742,7 +776,7 @@ def test_web_snapshot_with_nothing_running(tmp_path, web_env):
     assert snapshot['cards'] == [] and snapshot['plans'] == []
 
 
-def test_web_snapshot_shows_a_standalone_eval_chain(tmp_path, web_env):
+def test_web_snapshot_shows_a_standalone_eval_chain(tmp_path):
     import time
     now = time.time()
     folder = web_plan(tmp_path, '261114_004_eval-chain', created=now, kind='chain')
@@ -767,7 +801,7 @@ def fetch(url):
         return error.code, error.headers.get('Content-Type'), error.read()
 
 
-def test_web_server_serves_the_page_and_the_snapshot_and_nothing_else(tmp_path, web_env):
+def test_web_server_serves_the_page_and_the_snapshot_and_nothing_else(tmp_path):
     import json
     import time
     now = time.time()
@@ -794,7 +828,7 @@ def test_web_server_serves_the_page_and_the_snapshot_and_nothing_else(tmp_path, 
         server.stop()
 
 
-def test_a_taken_port_stops_a_second_gui(tmp_path, web_env, monkeypatch, capsys):
+def test_a_taken_port_stops_a_second_gui(tmp_path, monkeypatch, capsys):
     """The web view is on unless --no-web: a second training-gui on the same port says so in one line and exits 1,
     with or without a window; --no-web starts the window without it."""
     import socket
@@ -833,7 +867,7 @@ def test_web_only_runs_without_a_display(tmp_path):
     import sys
     env = {key: value for key, value in os.environ.items()
            if key not in ('DISPLAY', 'WAYLAND_DISPLAY', 'QT_QPA_PLATFORM')}
-    env[gui.JOBS_DIR_ENV] = str(tmp_path / 'jobs')
+    assert env[gui.jobqueue.QUEUE_DIR_ENV]                          # the test's own queue, empty
     (tmp_path / 'logs').mkdir()
     child = subprocess.Popen([sys.executable, str(ROOT / 'training-gui.py'), '--web-only', '--web-host', '127.0.0.1',
                               '--web-port', '0', str(tmp_path / 'logs')], env=env, stdout=subprocess.PIPE, text=True)
@@ -851,273 +885,151 @@ def test_web_only_runs_without_a_display(tmp_path):
 
 # ---------------------------------------------------------------------------------------------------- the job queue
 
-def queue_job(registry, root, name, *, kind, pid, status, queued_ts, created, run_status='pending', events=None,
-              estimate=None, lane=None, admitted=None):
-    """A job's log folder (its plan: one ow-start run) and its registry entry (``<host>-<pid>-<start>-<name>.json``),
-    queued since ``queued_ts`` and, unless ``status`` is 'queued', admitted at ``admitted`` (default now).  With an
-    ``estimate`` (seconds) entry and plan carry ``work``, ``estimate`` and ``lane``; without, they record none."""
-    import json
-    import socket
-    new = {} if estimate is None else {'work': {'train_steps': 1000}, 'estimate': estimate, 'lane': lane}
-    folder = web_plan(root, name, created=created, pid=pid, status=status, kind=kind, extra=new,
-                      runs=[({'specialist': 'ow-start', 'status': run_status}, events)])
-    registry.mkdir(exist_ok=True)
-    start = gui.process_started(pid)
-    (registry / f"{socket.gethostname()}-{pid}-{int(start)}-{name}.json").write_text(json.dumps({
-        'schema': 1, 'host': socket.gethostname(), 'pid': pid, 'pid_start': start, 'started': iso(queued_ts),
-        'name': name, 'kind': kind, 'log_dir': str(folder), 'plan': str(folder / gui.PLAN_FILE), 'status': status,
-        'finished': None, 'queued': iso(queued_ts), 'queued_ts': queued_ts,
-        'admitted': None if status == 'queued' else iso(admitted or time_now()), 'no_wait': False, **new}))
-    return folder
+def test_queue_listing_orders_live_jobs_by_admission_and_line_and_ended_ones_by_end(queue):
+    """[currently running]'s jobs (``read_queue`` + ``queue_listing``, the window's and the web view's): the running
+    ones, the one admitted last first; the queued ones of each lane in the order they start, with their place (the
+    jobs lane by score, ``estimate - 0.5 x seconds waited``; the tools lane first come, first served); then the ones
+    that ended in the last hour, the last one first.  A live job whose wrapper is gone is marked dead (its end is
+    when the GUI found it); one that ended over an hour ago is not read."""
+    now = float(int(time_now()))
+    queue.add(subtask='old', admitted_ts=now - 900)
+    queue.add(subtask='new', admitted_ts=now - 60)
+    queue.add(subtask='long', status='queued', queued_ts=now - 600, estimate=4800.0)     # 4800 - 300 = 4500
+    queue.add(subtask='short', status='queued', queued_ts=now - 60, estimate=300.0)      # 300 - 30 = 270
+    queue.add(subtask='patient', status='queued', queued_ts=now - 6000, estimate=2400.0)  # 2400 - 3000 = -600
+    tools = {'verb': 'build', 'kind': 'build', 'lane': gui.jobqueue.TOOLS_LANE, 'status': 'queued'}
+    queue.add(subtask='build-late', queued_ts=now - 30, **tools)
+    queue.add(subtask='build-early', queued_ts=now - 90, **tools)
+    queue.add(subtask='done', status='completed', exit_code=0, finished_ts=now - 600)
+    queue.add(subtask='failed', status='failed', exit_code=1, finished_ts=now - 60)
+    queue.add(subtask='ancient', status='completed', exit_code=0, finished_ts=now - gui.RECENT_SECONDS - 60)
+    queue.gone(queue.add(subtask='dies', admitted_ts=now - 30))
+    jobs = gui.read_queue(now)
+    live, ended = gui.queue_listing(jobs, now)
+    assert [(job['subtask'], place) for job, place in live] == [
+        ('new', None), ('old', None), ('patient', 1), ('short', 2), ('long', 3), ('build-early', 1),
+        ('build-late', 2)]
+    assert [(job['subtask'], job['status']) for job in ended] == [('dies', 'dead'), ('failed', 'failed'),
+                                                                   ('done', 'completed')]
+    assert ended[0]['finished_ts'] == now
 
 
-def test_queue_state_reads_the_registry_or_falls_back_to_the_plans_queue(tmp_path):
-    import json
-    import socket
-    now = time_now()
-    assert [gui.ordinal(n) for n in (1, 2, 3, 4, 11, 12, 13, 21, 22, 111)] == [
-        '1st', '2nd', '3rd', '4th', '11th', '12th', '13th', '21st', '22nd', '111th']
-    queued = {**running_plan(os.getpid(), now), 'status': 'queued'}
-    assert gui.plan_alive(queued) is True and gui.plan_is_live(queued)
-    me = gui.process_started(os.getpid())
-    entry = {'host': socket.gethostname(), 'pid': os.getpid(), 'pid_start': me, 'status': 'queued'}
-    assert gui.job_alive(entry) is True and gui.job_alive({**entry, 'status': 'completed'}) is False
-    assert gui.job_alive({**entry, 'pid_start': me - 3600}) is False
-    # no registry entry: the plan's own queue (as of its last rewrite)
-    plan = {**queued, 'queue': {'queued': iso(now - 90), 'place': 3, 'running': ['r25-a (round)'],
-                                'ahead': ['x (eval)', 'y (round)'], 'limit': 2, 'checked': iso(now), 'admitted': None,
-                                'waited': None}}
-    state = gui.queue_state(tmp_path / 'job', plan, [])
-    assert state == {'place': 3, 'running': ['r25-a (round)'], 'ahead': ['x (eval)', 'y (round)'], 'limit': 2,
-                     'since': pytest.approx(now - 90, abs=1), 'estimate': None, 'lane': None, 'express': False}
-    assert gui.waiting_text(state, state['since'] + 61) == 'waiting · 3rd in line · for r25-a (round) · 1m 01s'
-    # a plan's queue with an estimate (top-level, else the queue's) and the wait, coarse
-    new = {**plan, 'queue': {**plan['queue'], 'estimate': 2400.0, 'work': {'train_steps': 10 ** 6},
-                             'score': 2355.0, 'lane': None}}
-    state = gui.queue_state(tmp_path / 'job', new, [])
-    assert state['estimate'] == 2400.0 and state['lane'] is None
-    assert gui.waiting_text(state, state['since'] + 725) == \
-        'waiting · 3rd in line · for r25-a (round) · ~40 min · waited 12m'
-    state = gui.queue_state(tmp_path / 'job', {**new, 'estimate': 40.0}, [])
-    assert gui.queue_times(state, state['since'] + 42) == ('short ~40 s', 'waited 42s')
-    assert gui.waiting_text(gui.queue_state(tmp_path / 'job', queued, []), now) == 'waiting'
-    # in the registry: a job without a log folder (--no-log) ahead of it holds its place
-    registry = tmp_path / 'jobs'
-    registry.mkdir()
-    (registry / 'a.json').write_text(json.dumps({**entry, 'name': 'quiet', 'kind': 'eval', 'log_dir': None,
-                                                 'queued_ts': now - 200}))
-    (registry / 'b.json').write_text(json.dumps({**entry, 'name': 'job', 'kind': 'round',
-                                                 'log_dir': str(tmp_path / 'job'), 'queued_ts': now - 100}))
-    (registry / 'c.json').write_text(json.dumps({**entry, 'name': 'old', 'kind': 'round', 'status': 'completed',
-                                                 'log_dir': str(tmp_path / 'old'), 'queued_ts': now - 300}))
-    state = gui.queue_state(tmp_path / 'job', plan, gui.read_registry(registry))
-    assert state['place'] == 2 and state['ahead'] == ['quiet (eval)'] and state['since'] == now - 100
-    assert state['running'] == [] and state['limit'] == 2       # the test's own process: not waited for
-    assert state['estimate'] is None
-    # by score (estimate - AGING * seconds waited), the short job before the long one that joined first
-    (registry / 'a.json').write_text(json.dumps({**entry, 'name': 'quiet', 'kind': 'eval', 'log_dir': None,
-                                                 'queued_ts': now - 200, 'estimate': 3000.0, 'lane': None}))
-    (registry / 'b.json').write_text(json.dumps({**entry, 'name': 'job', 'kind': 'round', 'estimate': 60.0,
-                                                 'log_dir': str(tmp_path / 'job'), 'queued_ts': now - 100}))
-    state = gui.queue_state(tmp_path / 'job', plan, gui.read_registry(registry), now=now)
-    assert state['place'] == 1 and state['ahead'] == [] and state['estimate'] == 60.0
-    # a long job that has waited long enough goes first: 2400 - 0.5 * 6000 = -600 < 60 - 0.5 * 100 = 10
-    (registry / 'd.json').write_text(json.dumps({**entry, 'name': 'patient', 'kind': 'round', 'log_dir': None,
-                                                 'queued_ts': now - 6000, 'estimate': 2400.0}))
-    state = gui.queue_state(tmp_path / 'job', plan, gui.read_registry(registry), now=now)
-    assert state['place'] == 2 and state['ahead'] == ['patient (round)']
-    # a long job that asked for the express place (--express) reads short and is in the registry's state
-    (registry / 'b.json').write_text(json.dumps({**entry, 'name': 'job', 'kind': 'chain', 'estimate': 900.0,
-                                                 'express': True, 'log_dir': str(tmp_path / 'job'),
-                                                 'queued_ts': now - 100}))
-    state = gui.queue_state(tmp_path / 'job', plan, gui.read_registry(registry), now=now)
-    assert state['express'] is True and gui.queue_times(state, now)[0] == 'short ~15 min'
-
-
-def test_estimates_and_run_times_read_coarsely():
-    assert [gui.fmt_estimate(s) for s in (3, 40, 42, 59, 180, 2400, 3599, 3600, 4800, 7290)] == [
-        '~5 s', '~40 s', '~40 s', '~1 min', '~3 min', '~40 min', '~1 h', '~1 h', '~1 h 20 min', '~2 h']
-    assert [gui.fmt_coarse(s) for s in (0, 42, 725, 3725)] == ['0s', '42s', '12m', '1h 02m']
-    now = float(int(time_now()))        # whole seconds: a stamp keeps microseconds, 'ran 30s' must not read 29.99
-    folder = Path('/nonexistent/261115_009_x')
-    # an old plan (no estimate, no lane): nothing; the plan's own lane and estimate (ran since it was created)
-    assert gui.run_facts(folder, running_plan(os.getpid(), now), [], now) == {'express': False, 'est': ''}
-    plan = {**running_plan(os.getpid(), now - 30), 'lane': 'express', 'estimate': 40.0}
-    assert gui.run_facts(folder, plan, [], now) == {'express': True, 'est': 'est ~40 s · ran 30s'}
-    # the registry entry's lane, estimate and admission win (an entry without a lane runs in the regular lane)
-    import socket
-    entry = {'host': socket.gethostname(), 'pid': os.getpid(), 'status': 'running', 'log_dir': str(folder),
-             'estimate': 2400.0, 'admitted': iso(now - 725)}
-    assert gui.run_facts(folder, plan, [entry], now) == {'express': True, 'est': 'est ~40 min · ran 12m'}
-    assert gui.run_facts(folder, {**plan, 'lane': None}, [entry], now) == {'express': False,
-                                                                           'est': 'est ~40 min · ran 12m'}
-
-
-def test_a_queued_job_waits_its_turn_in_the_window_and_the_web_view(qapp, tmp_path, monkeypatch):
-    """Two jobs run, two wait (separate processes): [currently running] lists the waiting ones after the running ones
-    with their place in line and what they wait for, the web view as 'waiting' lines without cards; the window title
-    and the cards count only the running jobs.  Admitted, a job runs like any other; its process gone, it is lost."""
-    import subprocess
+def test_a_jobs_header_reads_as_triforce_job_list_in_the_window_and_the_web_view(qapp, tmp_path, monkeypatch,
+                                                                                  queue):
+    """Each job of the queue is listed by its header, ``jobqueue.describe``'s lines (``job_lines``), the same in the
+    window and the web view: who asked for it, its description, its state (RUNNING in its place against its
+    estimate, OVERRUN past twice the estimate, queued with its place in line, or how it ended), its progress (a bar,
+    a counter, 'no progress data'; a build's step is in its state) and its verb, kind, branch and command.  Running
+    in the running colour, queued in the queued purple, overrun in the warning colour; the ended ones under
+    'finished'.  A job without a log folder is drawn from its row alone."""
     monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
-    registry, root = tmp_path / 'jobs', tmp_path / 'logs'
-    root.mkdir()
-    monkeypatch.setenv(gui.JOBS_DIR_ENV, str(registry))
-    now, me = time_now(), gui.process_started(os.getpid())
-    a = queue_job(registry, root, '261115_001_r25-a', kind='round', pid=os.getpid(), status='running',
-                  queued_ts=now - 3600, created=me, run_status='running', events=training_events(now - 20, 4))
-    b = queue_job(registry, root, '261115_002_eval-b', kind='eval', pid=os.getpid(), status='running',
-                  queued_ts=now - 1800, created=me + 0.5, run_status='running', events=training_events(now - 10, 2))
-    first, second = subprocess.Popen(['sleep', '600']), subprocess.Popen(['sleep', '600'])
-    window = None
+    now = float(int(time_now()))
+    chain = queue.add(agent='Dark39b', task='r40', subtask='d3-route', description='Evaluates r40 on the d3 route.',
+                      kind='chain', command=['python', '-m', 'triforce', 'eval-chain', '--runs', '250'],
+                      admitted_ts=now - 725, estimate=2400.0,
+                      progress={'runs': {'done': 120, 'total': 250, 'unit': 'runs', 'rate': 2.0, 'ts': now}})
+    counter = queue.add(subtask='counter', kind='train', place='express-1', admitted_ts=now - 120, estimate=300.0,
+                        progress={'steps': {'done': 1234, 'total': None, 'unit': 'steps', 'rate': 45.2, 'ts': now}})
+    overrun = queue.add(subtask='overrun', admitted_ts=now - 4000, estimate=1200.0)
+    waiting = queue.add(subtask='waiting', status='queued', queued_ts=now - 725, estimate=2400.0)
+    build = queue.add(subtask='build', verb='build', kind='build', lane=gui.jobqueue.TOOLS_LANE, place='tools-1',
+                      command=['cargo', 'build'], admitted_ts=now - 30,
+                      steps=[{'name': 'build', 'status': 'running'}, {'name': 'test', 'status': 'pending'}])
+    done = queue.add(subtask='done', status='completed', exit_code=0, admitted_ts=now - 900, finished_ts=now - 300,
+                     estimate=600.0)
+    keys = [gui.job_key({'id': job}) for job in (build, counter, chain, overrun, waiting, done)]
+    expected = {
+        chain: ['Agent: Dark39b   Task: r40   Sub-task: d3-route', 'Evaluates r40 on the d3 route.',
+                'RUNNING regular 12m of ~40m', '[##########----------] 120/250 runs  2 runs/s  ~1m left',
+                'run chain  r40-queue  python -m triforce eval-chain --runs 250'],
+        counter: ['Agent: r40   Task: queue   Sub-task: counter', 'Checks the GUI lists the queue.',
+                  'RUNNING express 2m of ~5m', '1234 steps  45.2 steps/s  2m of ~5m',
+                  'run train  r40-queue  python scripts/train_round.py'],
+        overrun: ['Agent: r40   Task: queue   Sub-task: overrun', 'Checks the GUI lists the queue.',
+                  'RUNNING regular 1h06m of ~20m  OVERRUN', 'no progress data  1h06m of ~20m',
+                  'run round  r40-queue  python scripts/train_round.py'],
+        waiting: ['Agent: r40   Task: queue   Sub-task: waiting', 'Checks the GUI lists the queue.',
+                  'queued #1 ~40m waited 12m', 'run round  r40-queue  python scripts/train_round.py'],
+        build: ['Agent: r40   Task: queue   Sub-task: build', 'Checks the GUI lists the queue.',
+                'RUNNING tools 30s  step 1/2: build', 'no progress data  30s', 'build build  r40-queue  cargo build'],
+        done: ['Agent: r40   Task: queue   Sub-task: done', 'Checks the GUI lists the queue.',
+               'completed exit 0 after 10m of ~10m', 'run round  r40-queue  python scripts/train_round.py']}
+    colors = {chain: gui.C.accent, counter: gui.C.accent, overrun: gui.C.warn, waiting: gui.C.warn,
+              build: gui.C.accent, done: gui.C.ok}
+    assert gui.STATUS['running'][0] == gui.C.accent and gui.STATUS['queued'][0] == gui.C.warn
+    (tmp_path / 'logs').mkdir()
+    window = gui.Window(tmp_path / 'logs', None)
     try:
-        q1_ts, q2_ts = now - 900, now - 725
-        q1 = queue_job(registry, root, '261115_003_q1', kind='round', pid=first.pid, status='queued', queued_ts=q1_ts,
-                       created=time_now())
-        q2_created = time_now()
-        q2 = queue_job(registry, root, '261115_004_q2', kind='round', pid=second.pid, status='queued',
-                       queued_ts=q2_ts, created=q2_created)
-        running = '261115_001_r25-a (round), 261115_002_eval-b (eval)'
-        window = gui.Window(root, None)
-        assert window.live_mode and window._shown_dirs() == [b, a, q1, q2]     # running first, then in line
-        views = {view.dir: view for view in window.views}
-        assert views[q2].model.status() == 'queued' and gui.STATUS['queued'] == (gui.C.warn, 'queued')
-        assert views[q2].model.statuses() == ['pending']
-        assert views[q2].header.waiting(q2_ts + 725) == f'waiting · 2nd in line · for {running} · 12m 05s'
-        assert views[q1].header.waiting(q1_ts + 5) == f'waiting · 1st in line · for {running} · 5s'
-        assert views[a].header.waiting(now) == ''
-        # plans that record no estimate and no lane: no express marker, no estimate
-        assert views[a].header.facts(now) == {'express': False, 'est': ''}
-        assert window.queues[q1]['estimate'] is None
-        views[a].header.grab()
-        title = window.windowTitle()
-        assert a.name in title and b.name in title and 'q1' not in title and 'q2' not in title
-        assert title.count('·') == 1                                            # two plans
-
-        clock = [q2_ts + 725]
-        state = gui.WebState(root, clock=lambda: clock[0], machine=lambda: '', scan_every=0)
-        snapshot = state.refresh()
-        assert sorted(card['plan'] for card in snapshot['cards']) == [a.name, b.name]
-        assert sum(card['active'] for card in snapshot['cards']) == 2
-        assert [plan['plan'] for plan in snapshot['plans']] == [b.name, a.name]
-        assert [(line['plan'], line['place_label']) for line in snapshot['waiting']] == [
-            (q1.name, '1st in line'), (q2.name, '2nd in line')]
-        line = snapshot['waiting'][1]
-        assert line['status'] == 'queued' and line['color'] == gui.C.warn.name() and line['plan_kind'] == 'round'
-        assert line['waits'] == f'for {running}' and line['waited'] == '12m 05s'
-        assert line['ahead'] == ['261115_003_q1 (round)'] and line['place'] == 2
-        assert line['text'] == f'waiting · 2nd in line · for {running} · 12m 05s'
-        assert line['estimate'] == ''
-        assert all(not plan['express'] and plan['est'] == '' for plan in snapshot['plans'])
-        assert all(not card['express'] and card['est'] == '' for card in snapshot['cards'])
-
-        # admitted: the plan and its entry say running, its run starts
-        queue_job(registry, root, q2.name, kind='round', pid=second.pid, status='running', queued_ts=q2_ts,
-                  created=q2_created, run_status='running', events=training_events(time_now(), 2))
-        window._scan_and_update()
-        window.poll(force=True)
-        assert window._shown_dirs() == [q2, b, a, q1]
-        views = {view.dir: view for view in window.views}
-        assert views[q2].model.status() == 'running' and views[q2].header.waiting(now) == ''
-        assert window.queues[q1]['place'] == 1 and '261115_004_q2 (round)' in window.queues[q1]['running']
-        assert q2.name in window.windowTitle() and 'q1' not in window.windowTitle()
-        snapshot = state.refresh()
-        assert [line['plan'] for line in snapshot['waiting']] == [q1.name]
-        assert snapshot['waiting'][0]['place_label'] == '1st in line'
-        assert sum(card['active'] for card in snapshot['cards']) == 3 and len(snapshot['plans']) == 3
-
-        # the waiting job's process is gone: lost, under the finished heading; off the web view's waiting lines
-        first.kill()
-        first.wait()
-        window._scan_and_update()
-        window.poll(force=True)
-        assert window._shown_dirs() == [q2, b, a, q1] and window._heading_at == 3
-        views = {view.dir: view for view in window.views}
-        assert views[q1].model.status() == 'lost' and gui.STATUS['lost'][1] == 'process gone'
-        assert views[q1].header.waiting(now) == '' and q1 not in window.queues
-        snapshot = state.refresh()
-        assert snapshot['waiting'] == [] and q1.name not in [plan['plan'] for plan in snapshot['plans']]
-        assert q1.name not in [card['plan'] for card in snapshot['cards']]
+        assert window.live_mode and window._shown() == keys and window._heading_at == 5
+        views = {view.key: view for view in window.views}
+        for job, lines in expected.items():
+            view = views[gui.job_key({'id': job})]
+            painted = view.job_card.lines(now)
+            assert texts(painted) == lines, job
+            assert painted[2][1] == colors[job] and painted[0][2] and painted[2][2]     # the state: its colour, bold
+            assert view.model is None and view.header.isHidden() and not view.job_card.isHidden()
+            view.job_card.grab()
+        window.select(views[keys[2]], 'round')                          # a job without a folder: its lines
+        assert 'r40-d3-route' in window.detail.title.text()
+        assert [text for text, _ in window.detail.summary.sections[0][2]][:3] == expected[chain][:3]
     finally:
-        if window is not None:
-            window.close()
-            window.deleteLater()
-        for child in (first, second):
-            child.kill()
-            child.wait()
+        window.close()
+        window.deleteLater()
+
+    snapshot = gui.WebState(tmp_path / 'logs', clock=lambda: now, machine=lambda: '', scan_every=0).refresh()
+    jobs = snapshot['jobs']
+    assert [job['id'] for job in jobs] == keys and [job['ended'] for job in jobs] == [False] * 5 + [True]
+    for web, job in zip(jobs, (build, counter, chain, overrun, waiting, done)):
+        assert texts(web['lines']) == expected[job] and web['lines'][2][1] == colors[job].name()
+        assert web['folder'] == '' and web['plan'] is None
+    assert [job['place'] for job in jobs] == [None, None, None, None, 1, None]
+    page = gui.web_page().decode()
+    assert 'function jobHtml(job)' in page and '<div id="jobs">' in page and 'Finished &middot; last 60 min' in page
 
 
-def test_waiting_jobs_drain_shortest_first_and_running_ones_show_lane_and_estimate(qapp, tmp_path, monkeypatch):
-    """The waiting jobs are listed (window and web view) in the order they will start, by score (a long
-    job that joined first after a short one; a long one that has waited long enough before it), with their estimate
-    and wait.  A running job shows its
-    estimate and time run, and 'express' in the express lane."""
-    import subprocess
+def test_a_jobs_log_folder_shows_its_runs_under_its_header(qapp, tmp_path, monkeypatch, queue):
+    """A job's tool records its log folder in its row once it writes its plan (``jobs.record_plan``): from then on
+    the job's entry shows that folder's progress under its header (its plan's header, a row per run), the same entry
+    as before; the web view puts the plan's line under the job's header and has a card a run."""
+    from triforce import events, jobs
     monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
-    registry, root = tmp_path / 'jobs', tmp_path / 'logs'
+    logs, root = tmp_path / 'logs', tmp_path / 'gui-root'
+    logs.mkdir()
     root.mkdir()
-    monkeypatch.setenv(gui.JOBS_DIR_ENV, str(registry))
-    now, me = time_now(), gui.process_started(os.getpid())
-    a = queue_job(registry, root, '261115_001_r26-a', kind='round', pid=os.getpid(), status='running',
-                  queued_ts=now - 800, created=me, run_status='running', events=training_events(now - 20, 4),
-                  estimate=300.0, lane='express', admitted=now - 725)
-    b = queue_job(registry, root, '261115_002_eval-b', kind='eval', pid=os.getpid(), status='running',
-                  queued_ts=now - 3800, created=me + 0.5, run_status='running', events=training_events(now - 10, 2),
-                  estimate=2400.0, lane='regular', admitted=now - 3725)
-    children = [subprocess.Popen(['sleep', '600']) for _ in range(4)]
-    window = None
+    job = queue.add(subtask='round', progress={'runs': {'done': 0, 'total': 2, 'unit': 'runs', 'rate': None,
+                                                         'ts': time_now()}})
+    monkeypatch.setenv(jobs.JOB_ID_ENV, str(job))
+    window = gui.Window(root, None)
+    plan = None
     try:
-        # scores at now: long 4800 - 0.5 * 600 = 4500, short 300 - 30 = 270, patient 2400 - 3000 = -600
-        long_ts, short_ts, patient_ts = now - 600, now - 60, now - 6000
-        long = queue_job(registry, root, '261115_003_long', kind='round', pid=children[0].pid, status='queued',
-                         queued_ts=long_ts, created=time_now(), estimate=4800.0)
-        short = queue_job(registry, root, '261115_004_short', kind='eval', pid=children[1].pid, status='queued',
-                          queued_ts=short_ts, created=time_now(), estimate=300.0)
-        patient = queue_job(registry, root, '261115_005_patient', kind='round', pid=children[2].pid,
-                            status='queued', queued_ts=patient_ts, created=time_now(), estimate=2400.0)
-        running = '261115_001_r26-a (round), 261115_002_eval-b (eval)'
-        regular = '261115_002_eval-b (eval)'        # a job too long for the express place doesn't wait for a's
-        window = gui.Window(root, None)
-        # running (a was admitted after b: on top), then the waiting ones in the order they start
-        assert window._shown_dirs() == [a, b, patient, short, long]
-        views = {view.dir: view for view in window.views}
-        assert views[patient].header.waiting(patient_ts + 6000) == \
-            f'waiting · 1st in line · for {regular} · ~40 min · waited 1h 40m'
-        assert views[short].header.waiting(short_ts + 725) == \
-            f'waiting · 2nd in line · for {running} · short ~5 min · waited 12m'
-        assert views[long].header.waiting(long_ts + 600) == \
-            f'waiting · 3rd in line · for {regular} · ~1 h 20 min · waited 10m'
-        assert views[a].header.facts(now) == {'express': True, 'est': 'est ~5 min · ran 12m'}
-        assert views[b].header.facts(now) == {'express': False, 'est': 'est ~40 min · ran 1h 02m'}
-        assert views[short].header.facts(now) == {'express': False, 'est': ''}
-        for path in (a, b, short):
-            views[path].header.grab()
-
-        state = gui.WebState(root, clock=lambda: now, machine=lambda: '', scan_every=0)
-        snapshot = state.refresh()
-        assert [(line['plan'], line['place_label'], line['estimate'], line['waited'])
-                for line in snapshot['waiting']] == [
-            (patient.name, '1st in line', '~40 min', 'waited 1h 40m'),
-            (short.name, '2nd in line', 'short ~5 min', 'waited 1m'),
-            (long.name, '3rd in line', '~1 h 20 min', 'waited 10m')]
-        assert snapshot['waiting'][2]['ahead'] == ['261115_005_patient (round)', '261115_004_short (eval)']
-        plans = {plan['plan']: plan for plan in snapshot['plans']}
-        assert (plans[a.name]['express'], plans[a.name]['est']) == (True, 'est ~5 min · ran 12m')
-        assert (plans[b.name]['express'], plans[b.name]['est']) == (False, 'est ~40 min · ran 1h 02m')
-        cards = {card['plan']: card for card in snapshot['cards']}
-        assert (cards[a.name]['express'], cards[a.name]['est']) == (True, 'est ~5 min · ran 12m')
-        assert (cards[b.name]['express'], cards[b.name]['est']) == (False, 'est ~40 min · ran 1h 02m')
-        page = gui.web_page().decode()
-        assert '.pill.express{color:var(--warn)}' in page and 'card.est]' in page and 'job.estimate' in page
+        view, = window.views
+        assert view.key == gui.job_key({'id': job}) and view.model is None and view.header.isHidden()
+        plan = events.TrainingPlan(events.new_log_dir('r40-round', logs), 'r40-round', 'round',
+                                   [{'specialist': 'ow-start'}, {'specialist': 'goriya'}])
+        write_events(plan.directory / 'ow-start.jsonl', training_events(time_now() - 20, 4))
+        plan.update_run(0, status='running')
+        window._scan_and_update()
+        assert window.views == [view] and view.model.dir.resolve() == plan.directory.resolve()
+        assert not view.header.isHidden() and len(view.rows) == 2
+        assert view.model.statuses() == ['training', 'pending']
+        assert texts(view.job_card.lines(time_now()))[3] == '[--------------------] 0/2 runs'
+        assert window.windowTitle().endswith('r40-round — Triforce training')
+        for widget in (view.job_card, view.header, *view.rows):
+            widget.grab()
     finally:
-        if window is not None:
-            window.close()
-            window.deleteLater()
-        for child in children:
-            child.kill()
-            child.wait()
+        window.close()
+        window.deleteLater()
+    try:
+        snapshot = gui.WebState(root, machine=lambda: '', scan_every=0).refresh()
+        web, = snapshot['jobs']
+        assert Path(web['folder']).resolve() == plan.directory.resolve() and snapshot['plans'] == []
+        assert web['plan']['plan'] == 'r40-round' and web['plan']['queued'] == ['goriya']
+        assert [(card['name'], card['plan']) for card in snapshot['cards']] == [('ow-start', 'r40-round')]
+    finally:
+        plan.finish('completed')
 
 
-def test_frames_repaint_only_what_animates(qapp, tmp_path, monkeypatch, web_env):
+def test_frames_repaint_only_what_animates(qapp, tmp_path, monkeypatch):
     """The 30-a-second frame timer steps and repaints a folder only while something in it moves: a finished folder,
     once its bars have eased to their fill, costs nothing a frame (Nov 18: 153 finished folders repainted every
     frame took a whole core), and is repainted when its data changes; a running one is repainted every frame."""
@@ -1152,286 +1064,137 @@ def test_frames_repaint_only_what_animates(qapp, tmp_path, monkeypatch, web_env)
             window.deleteLater()
 
 
-def test_finished_folders_leave_currently_running_after_an_hour(qapp, tmp_path, monkeypatch):
-    """A job that ends stays under 'finished' for ``RECENT_SECONDS`` (60 minutes) after the window saw it end, then
-    leaves by itself: the list never piles up."""
-    import subprocess
-    import json
+def test_a_job_that_ends_stays_under_finished_for_an_hour(qapp, tmp_path, monkeypatch, queue):
+    """A job whose wrapper dies is marked dead when the GUI reads the queue and listed under 'finished' (process
+    gone); a job stays there for ``RECENT_SECONDS`` (60 minutes) after it ended, then leaves by itself: the list never
+    piles up."""
     monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
-    registry = tmp_path / 'jobs'
-    monkeypatch.setenv(gui.JOBS_DIR_ENV, str(registry))
     assert gui.RECENT_SECONDS == 3600
-    me = gui.process_started(os.getpid())
-    live = fake_job(registry, tmp_path / 'triforce-a', 'main', '261117_001_live', pid=os.getpid(), pid_start=me)
-    child = subprocess.Popen(['sleep', '600'])
-    window = None
+    live, dies = queue.add(subtask='live', admitted_ts=time_now() - 60), queue.add(subtask='dies',
+                                                                                   admitted_ts=time_now() - 30)
+    live_key, dies_key = gui.job_key({'id': live}), gui.job_key({'id': dies})
+    (tmp_path / 'gui-root').mkdir()
+    window = gui.Window(tmp_path / 'gui-root', None)
     try:
-        dies = fake_job(registry, tmp_path / 'triforce-b', 'x', '261117_002_dies', pid=child.pid,
-                        pid_start=gui.process_started(child.pid))
-        (tmp_path / 'gui-root').mkdir()
-        window = gui.Window(tmp_path / 'gui-root', None)
-        assert set(window._shown_dirs()) == {live, dies} and window._heading_at is None
-        child.kill()
-        child.wait()
+        assert window._shown() == [dies_key, live_key] and window._heading_at is None
+        queue.gone(dies)
         window._scan_and_update()
-        assert window._shown_dirs() == [live, dies] and window._heading_at == 1    # under 'finished'
+        assert window._shown() == [live_key, dies_key] and window._heading_at == 1      # under 'finished'
         assert window.finished_heading.text() == 'FINISHED · LAST 60 MIN'
-        window.left_live[dies] -= gui.RECENT_SECONDS - 5                           # 59 minutes 55 seconds later
+        state = window.views[1].job_card.lines(time_now())[2]
+        assert state[0].startswith('dead after ') and state[1] == gui.C.warn
+        assert gui.STATUS['dead'] == (gui.C.warn, 'process gone')
+        queue.update(dies, finished_ts=time_now() - gui.RECENT_SECONDS + 5)            # 59 minutes 55 seconds ago
         window._scan_and_update()
-        assert window._shown_dirs() == [live, dies]
-        window.left_live[dies] -= 10                                               # past the hour: by the window's
-        entry = registry / f'{dies.name}.json'                                     # clock and by the registry's
-        entry.write_text(json.dumps({**json.loads(entry.read_text()),
-                                     'started': iso(time_now() - gui.RECENT_SECONDS - 60)}))
+        assert window._shown() == [live_key, dies_key]
+        queue.update(dies, finished_ts=time_now() - gui.RECENT_SECONDS - 10)           # past the hour
         window._scan_and_update()
-        assert window._shown_dirs() == [live] and window.finished_heading.isHidden()
-        assert window.kept == [live] and window.left_live == {}
-    finally:
-        if child.poll() is None:
-            child.kill()
-            child.wait()
-        if window is not None:
-            window.close()
-            window.deleteLater()
-
-
-# --------------------------------------------------------------------- a job the registry knows is never invisible
-
-# Every way into the job queue (``triforce.jobs``) as it registers: (entry point, kind, with a plan in a log folder).
-# A job without a folder has only its registry entry.  The owner watches the GUI to see what the machine is doing:
-# a job missing from it is a broken GUI (Nov 22: two lab trainings ran, the GUI showed one queued batch).
-ENTRY_POINTS = [
-    ('triforce train', 'train', True),
-    ('triforce evaluate', 'eval', True),
-    ('triforce evaluate --no-log', 'eval', False),
-    ('triforce eval-chain', 'chain', True),
-    ('triforce eval-chain --no-log', 'chain', False),
-    ('triforce eval-batch', 'eval-batch', True),
-    ('triforce select-checkpoint', 'eval-batch', True),
-    ('scripts/train_round.py', 'round', True),
-    ('triforce.lab.train', 'lab-train', True),
-    ('triforce.lab.bench', 'eval', True),
-    ('triforce.lab.record', 'eval', True),
-    ('events.progress_job', 'eval', True),               # an experiment script's job (r36_merge_record.py)
-    ('jobs.register', 'experiment', False),              # a script that calls the queue without a plan
-    ('lab of an older checkout', 'train', False),        # before lab jobs wrote a plan (Nov 22)
-]
-
-
-@pytest.fixture
-def queue_env(tmp_path, monkeypatch):
-    """A registry and a logs root of the test's own; jobs start at once (``$TRIFORCE_NO_WAIT``); the window's own
-    logs root is empty, so whatever it shows it found through the registry."""
-    from triforce import jobs
-    registry, logs, root = tmp_path / 'jobs', tmp_path / 'logs', tmp_path / 'gui-root'
-    logs.mkdir()
-    root.mkdir()
-    monkeypatch.setenv(jobs.JOBS_DIR_ENV, str(registry))
-    assert gui.JOBS_DIR_ENV == jobs.JOBS_DIR_ENV
-    monkeypatch.setenv(jobs.NO_WAIT_ENV, '1')
-    monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
-    return registry, logs, root
-
-
-def enter_queue(stack, registry, logs, entry, kind, folder, waiting):
-    """A job of this process registered as ``entry`` registers (the real ``triforce.events`` and ``triforce.jobs``),
-    running (its turn came) or waiting (registered, not admitted yet); its plan (if any) ends with ``stack``.
-    Returns (its name, the path the GUI shows it by: its log folder, else its registry file)."""
-    import json
-    import re
-    from triforce import events, jobs
-    name = 'job-' + re.sub('[^a-z0-9]+', '-', entry.lower()).strip('-')
-    before = set(registry.glob('*.json'))
-    if waiting:
-        directory = events.new_log_dir(name, logs) if folder else None
-        record = jobs.register(directory, None if directory is None else directory / events.PLAN_FILE, name, kind,
-                               amounts=jobs.work(train_steps=1000))
-        if folder:                           # as TrainingPlan writes it while it waits its turn
-            (directory / events.PLAN_FILE).write_text(json.dumps({
-                'name': name, 'kind': kind, 'status': 'queued', 'created': iso(time_now()), 'host': record.data['host'],
-                'pid': os.getpid(), **jobs.checkout(), 'queue': {'queued': record.data['queued']},
-                'runs': [{'index': 0, 'specialist': 'a', 'status': 'pending'}]}))
-        return name, directory or record.path
-    if folder:
-        plan = events.TrainingPlan(events.new_log_dir(name, logs), name, kind, [{'specialist': 'a'}],
-                                   work=jobs.work(train_steps=1000))
-        stack.callback(plan.finish, 'completed')
-        return name, plan.directory
-    stack.enter_context(events.logged_job(name, kind, [], log=False, work=jobs.work(train_steps=1000)))
-    path, = set(registry.glob('*.json')) - before
-    return name, path
-
-
-@pytest.mark.parametrize('waiting', [False, True], ids=['running', 'waiting'])
-@pytest.mark.parametrize('entry,kind,folder', ENTRY_POINTS, ids=[entry for entry, _, _ in ENTRY_POINTS])
-def test_a_job_the_registry_knows_is_never_invisible(qapp, queue_env, entry, kind, folder, waiting):
-    """A job the registry knows is never invisible: whichever way a job entered the queue, with a log folder or
-    without one, running or waiting its turn, [currently running] and the web view list it by its name, kind and
-    status; one without a folder says it has no progress data."""
-    from contextlib import ExitStack
-    registry, logs, root = queue_env
-    status = 'queued' if waiting else 'running'
-    with ExitStack() as stack:
-        name, key = enter_queue(stack, registry, logs, entry, kind, folder, waiting)
-        live, _ = gui.registry_folders(gui.read_registry(registry), time_now())
-        assert live == [key]
-        window = gui.Window(root, None)
-        try:
-            assert window.live_mode and window._shown_dirs() == [key]
-            view, = window.views
-            assert view.model.name == name and view.model.status() == status
-            assert view.model.plan.get('kind') == kind
-            assert gui.registry_only(key) is not folder
-            assert gui.checkout_label(view.model.plan)                   # its checkout and branch
-            counts = gui.plan_counts(view.model, view.model.statuses())
-            assert (counts == [gui.NO_PROGRESS]) is not folder
-            if waiting:
-                assert view.header.waiting(time_now()).startswith('waiting · 1st in line')
-            view.header.grab()
-            labels = [window.combo.itemText(i) for i in range(window.combo.count())]
-            assert any(label.startswith(name if not folder else key.name) for label in labels)
-        finally:
-            window.close()
-            window.deleteLater()
-        snapshot = gui.WebState(root, machine=lambda: '', scan_every=0).refresh()
-        lines = snapshot['waiting'] if waiting else snapshot['plans']
-        assert [(line['plan'], line['plan_kind'], line['status'], line['no_progress']) for line in lines] == [
-            (name, kind, status, not folder)]
-        if not folder and not waiting:
-            card, = snapshot['cards']
-            assert card['name'] == name and card['active'] and card['phase'] == gui.NO_PROGRESS
-
-
-NEW_MODULE = """
-import sys, time
-from triforce import jobs
-record = jobs.register(None, None, 'brand-new', 'mystery', amounts=jobs.work(train_steps=10_000))
-record.wait_turn()
-print('admitted', flush=True)
-time.sleep(600)
-"""
-
-
-def test_a_new_module_that_enters_the_queue_without_a_plan_is_listed(qapp, queue_env):
-    """A job the registry knows is never invisible: a module nobody taught the GUI about, that registers itself in
-    the queue without a log folder (another process), is listed running with its name, kind, checkout and branch,
-    estimate and time run, its command, and 'no progress data'; its process gone, it is 'process gone' under the
-    finished heading.  The web view shows it too."""
-    import subprocess
-    import sys
-    from triforce import jobs
-    registry, _, root = queue_env
-    child = subprocess.Popen([sys.executable, '-c', NEW_MODULE], stdout=subprocess.PIPE, text=True,
-                             env={**os.environ, 'PYTHONPATH': str(ROOT)})
-    window = None
-    try:
-        assert child.stdout.readline().strip() == 'admitted'
-        entry, = registry.glob('*.json')
-        window = gui.Window(root, None)
-        assert window._shown_dirs() == [entry]
-        view, = window.views
-        model, now = view.model, time_now()
-        assert model.registry_only and model.name == 'brand-new' and model.status() == 'running'
-        assert model.plan['kind'] == 'mystery' and model.plan['pid'] == child.pid
-        here = jobs.checkout()
-        assert gui.checkout_label(model.plan) == f"{Path(here['checkout']).name} · {here['branch']}"
-        assert gui.plan_counts(model, model.statuses()) == [gui.NO_PROGRESS]
-        assert view.header.facts(now)['est'].startswith('est ') and ' · ran ' in view.header.facts(now)['est']
-        assert any('-c' in line for line in gui.registry_lines(model.plan))      # its command
-        assert 'brand-new' in window.windowTitle()
-        view.header.grab()
-        window.select(view, 'round')                                             # its detail: what the registry knows
-        assert 'brand-new' in window.detail.title.text()
-
-        state = gui.WebState(root, machine=lambda: '', scan_every=0)
-        snapshot = state.refresh()
-        card, = snapshot['cards']
-        assert (card['name'], card['kind'], card['status'], card['active'], card['no_progress']) == (
-            'brand-new', 'mystery', 'running', True, True)
-        assert card['bar_label'] == gui.NO_PROGRESS and card['est'].startswith('est ')
-        plan, = snapshot['plans']
-        assert plan['plan'] == 'brand-new' and plan['counts'] == [gui.NO_PROGRESS]
-
-        child.kill()
-        child.wait()
-        window._scan_and_update()
-        window.poll(force=True)
-        assert window._shown_dirs() == [entry] and window._heading_at == 0      # under 'finished'
-        assert view.model.status() == 'lost'
-        snapshot = state.refresh()
-        card, = snapshot['cards']
-        assert card['status'] == 'lost' and not card['active'] and snapshot['plans'] == []
-    finally:
-        if child.poll() is None:
-            child.kill()
-            child.wait()
-        if window is not None:
-            window.close()
-            window.deleteLater()
-
-
-def test_a_folder_less_job_is_replaced_by_its_folder_once_its_plan_is_written(qapp, queue_env):
-    """A plan is written a moment after its job registered: until then the job is shown by its registry file, then
-    by its folder, never both and never as finished."""
-    import json
-    from triforce import events, jobs
-    registry, logs, root = queue_env
-    directory = events.new_log_dir('soon', logs)
-    record = jobs.register(directory, directory / events.PLAN_FILE, 'soon', 'round')
-    window = gui.Window(root, None)
-    try:
-        assert window._shown_dirs() == [Path(record.path)]
-        (directory / events.PLAN_FILE).write_text(json.dumps({
-            'name': 'soon', 'kind': 'round', 'status': 'queued', 'created': iso(time_now()),
-            'host': record.data['host'], 'pid': os.getpid(), 'runs': []}))
-        window._scan_and_update()
-        assert window._shown_dirs() == [directory] and window._heading_at is None
-        state = gui.WebState(root, machine=lambda: '', scan_every=0)
-        assert [line['id'] for line in state.refresh()['waiting']] == [str(directory)]
+        assert window._shown() == [live_key] and window.finished_heading.isHidden()
     finally:
         window.close()
         window.deleteLater()
 
 
-def test_the_web_pages_list_folder_less_jobs(queue_env):
-    """A job the registry knows is never invisible on the web view either: the snapshot (``/api/state``) and the
-    page's first paint (``/``) carry a running job without a folder (a card and a plan line, no progress data) and a
-    waiting one (a waiting line), beside a job with a folder."""
-    import json
-    from contextlib import ExitStack
-    registry, logs, root = queue_env
-    with ExitStack() as stack:
-        lab, _ = enter_queue(stack, registry, logs, 'triforce.lab.train', 'train', False, False)
-        batch, _ = enter_queue(stack, registry, logs, 'triforce eval-batch', 'eval-batch', True, False)
-        later, _ = enter_queue(stack, registry, logs, 'jobs.register', 'experiment', False, True)
-        state = gui.WebState(root, machine=lambda: '', scan_every=0)
-        server = gui.WebServer(state, '127.0.0.1', 0)
-        server.start(poll=False)
+# ------------------------------------------------------------------------------- every entry point of the job queue
+
+# Every way a job runs through the queue (``triforce job``; the tools' entry points in ``triforce.jobs``), as the
+# wrapper records it and as its tool writes its plan (``events.TrainingPlan``, ``logged_job``, ``progress_job``: the
+# first plan recorded in the job's row by ``jobs.record_plan``): (entry point, the row's verb, its kind, the plan's
+# kind; None: it writes no plan).  The owner watches the GUI to see what the machine is doing: a job missing from it
+# is a broken GUI (Nov 22: two lab trainings ran, the GUI showed one queued batch).
+ENTRY_POINTS = [
+    ('triforce train', 'run', 'train', 'train'),
+    ('triforce evaluate', 'run', 'eval', 'eval'),
+    ('triforce evaluate --no-log', 'run', 'eval', None),
+    ('triforce eval-chain', 'run', 'chain', 'chain'),
+    ('triforce eval-chain --no-log', 'run', 'chain', None),
+    ('triforce eval-batch', 'run', 'batch', 'eval-batch'),
+    ('triforce select-checkpoint', 'run', 'batch', 'eval-batch'),
+    ('scripts/train_round.py', 'run', 'round', 'round'),
+    ('scripts/full_runs.py', 'run', 'chain', None),
+    ('triforce.lab.train', 'run', 'train', 'lab-train'),
+    ('triforce.lab.bench', 'run', 'eval', 'eval'),
+    ('triforce.lab.record', 'run', 'record', 'eval'),
+    ('events.progress_job', 'run', 'eval', 'eval'),           # an experiment script's job (r36_merge_record.py)
+    ('events.logged_job --no-log', 'run', 'eval', None),      # an experiment script without a folder
+    ('a script', 'run', 'script', None),                      # anything else run as a job
+    ('zelda-headless.py --golden', 'golden', 'golden', None),
+    ('triforce job build', 'build', 'build', None),
+    ('triforce job test', 'test', 'test', None),
+]
+
+
+@pytest.fixture
+def job_env(tmp_path, monkeypatch):
+    """A logs root for the jobs' folders and the window's own logs root, empty: whatever it shows it found through
+    the queue."""
+    logs, root = tmp_path / 'logs', tmp_path / 'gui-root'
+    logs.mkdir()
+    root.mkdir()
+    monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
+    return logs, root
+
+
+def run_as_job(queue, monkeypatch, **fields) -> int:
+    """A running job of the queue whose tool is this process (``$TRIFORCE_JOB_ID``: its plans are recorded in the
+    job's row); its id."""
+    from triforce import jobs
+    job = queue.add(**fields)
+    monkeypatch.setenv(jobs.JOB_ID_ENV, str(job))
+    return job
+
+
+@pytest.mark.parametrize('entry,verb,kind,plan_kind', ENTRY_POINTS, ids=[entry for entry, *_ in ENTRY_POINTS])
+def test_every_entry_point_is_listed_with_its_progress(qapp, queue, monkeypatch, job_env, entry, verb, kind,
+                                                       plan_kind):
+    """Whichever way a job runs, [currently running] and the web view list it under its header (who, its state, its
+    verb, kind and command); one whose entry point writes a plan shows its folder's runs under it."""
+    import re
+    from triforce import events
+    logs, root = job_env
+    subtask = re.sub('[^a-z0-9]+', '-', entry.lower()).strip('-')
+    tools = verb in ('build', 'test')
+    job = run_as_job(queue, monkeypatch, subtask=subtask, verb=verb, kind=kind, command=entry.split(),
+                     lane=gui.jobqueue.TOOLS_LANE if tools else gui.jobqueue.JOBS_LANE,
+                     place='tools-1' if tools else 'regular-1')
+    plan = None
+    if plan_kind is not None:
+        plan = events.TrainingPlan(events.new_log_dir(subtask, logs), subtask, plan_kind,
+                                   [{'specialist': 'a', 'status': 'running'}])
+    try:
+        window = gui.Window(root, None)
         try:
-            snapshot = state.refresh()
-            status, kind, body = fetch(f"http://127.0.0.1:{server.port}/api/state")
-            assert status == 200 and json.loads(body) == snapshot
-            assert sorted((plan['plan'], plan['no_progress']) for plan in snapshot['plans']) == [
-                (batch, False), (lab, True)]
-            assert [(line['plan'], line['no_progress']) for line in snapshot['waiting']] == [(later, True)]
-            assert [card['name'] for card in snapshot['cards'] if card['no_progress']] == [lab]
-            status, kind, body = fetch(f"http://127.0.0.1:{server.port}/")
-            assert status == 200 and kind.startswith('text/html')
-            for name in (lab, batch, later):
-                assert f'"plan":"{name}"'.encode() in body
-            assert b'no progress data' in body
+            view, = window.views
+            lines = texts(view.job_card.lines(time_now()))
+            assert view.key == gui.job_key({'id': job}) and not view.job_card.isHidden()
+            assert lines[0] == f'Agent: r40   Task: queue   Sub-task: {subtask}'
+            assert lines[2].startswith(f"RUNNING {'tools' if tools else 'regular'} ")
+            assert lines[-1] == f'{verb} {kind}  r40-queue  {entry}'
+            assert (view.model is not None) is (plan is not None) and view.header.isHidden() is (plan is None)
+            if plan is not None:
+                assert view.model.dir.resolve() == plan.directory.resolve() and len(view.rows) == 1
+                assert view.model.plan['kind'] == plan_kind and view.model.status() == 'running'
+            view.job_card.grab()
         finally:
-            server.stop()
+            window.close()
+            window.deleteLater()
+        web, = gui.WebState(root, machine=lambda: '', scan_every=0).refresh()['jobs']
+        assert web['id'] == gui.job_key({'id': job}) and texts(web['lines'])[0] == lines[0]
+        assert (web['plan'] is not None) is (plan is not None)
+    finally:
+        if plan is not None:
+            plan.finish('completed')
 
 
-def test_a_lab_run_is_one_group_with_a_row_a_family(qapp, queue_env):
+def test_a_lab_run_is_one_group_with_a_row_a_family(qapp, queue, monkeypatch, job_env):
     """A lab training (``triforce.lab.train``, as its ``RunLog`` writes it): one group, a row a family at the
     run's iteration of N, each with its own success and hearts, its share of the rows, the hits Link took an
     episode, the teacher term's weight and the auxiliary losses; the plan's time left is the families' (they train
     together), and the web view has a card a family."""
     from triforce import events
     from triforce.lab.train import KIND, RunLog
-    registry, logs, root = queue_env
+    logs, root = job_env
+    run_as_job(queue, monkeypatch, subtask='lab-pair', kind='train', command=['python', '-m', 'triforce.lab.train'])
     keys = ['zol', 'zol@d3first']
     plan = events.TrainingPlan(events.new_log_dir('lab-pair', logs), 'lab-pair', KIND,
                                RunLog.runs(keys, 'r1', logs / 'run', 1000, 10))
@@ -1449,7 +1212,7 @@ def test_a_lab_run_is_one_group_with_a_row_a_family(qapp, queue_env):
         try:
             view, = window.views
             model, now = view.model, time_now()
-            assert model.dir == plan.directory and model.plan['kind'] == gui.LAB_KIND
+            assert model.dir.resolve() == plan.directory.resolve() and model.plan['kind'] == gui.LAB_KIND
             assert [run.name for run in model.runs] == keys and model.statuses() == ['training', 'training']
             phases = [gui.row_phase(run, 'training', now) for run in model.runs]
             assert phases == ['training · it 3/10 · rows 75% · hits 0.70/ep · teacher 0.80 · aux hit 0.120',
@@ -1476,11 +1239,12 @@ def test_a_lab_run_is_one_group_with_a_row_a_family(qapp, queue_env):
         plan.finish('completed')
 
 
-def test_a_scripts_job_shows_one_line_of_progress(qapp, queue_env):
-    """A script that enters the queue through ``events.progress_job`` has a folder and one row: done of the total
-    in its unit, the success so far when it measures one."""
+def test_a_scripts_job_shows_one_line_of_progress(qapp, queue, monkeypatch, job_env):
+    """A script that runs as a job through ``events.progress_job`` has a folder and one row: done of the total in
+    its unit, the success so far when it measures one; the same count is its job's progress bar."""
     from triforce import events
-    registry, logs, root = queue_env
+    logs, root = job_env
+    run_as_job(queue, monkeypatch, subtask='merge-record', kind='script')
     with events.progress_job('r36-merge-record', 'eval', 4096, unit='decisions', root=logs) as progress:
         progress.update(1024, key='zol resets')
         window = gui.Window(root, None)
@@ -1489,6 +1253,7 @@ def test_a_scripts_job_shows_one_line_of_progress(qapp, queue_env):
             run, = view.model.runs
             assert view.model.name == 'r36-merge-record' and view.model.status() == 'running'
             assert view.model.statuses() == ['evaluating'] and run.unit == 'decisions'
+            assert texts(view.job_card.lines(time_now()))[3] == '[#####---------------] 1024/4096 decisions'
             assert gui.row_numbers(run, 'evaluating') == '1024 / 4096 decisions'
             assert gui.row_bar_label(run, 'evaluating', 0.25) == '1024/4096'
             assert gui.row_phase(run, 'evaluating', time_now()).startswith('1024/4096 decisions · ')

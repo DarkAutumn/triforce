@@ -4,6 +4,11 @@
     .venv/bin/python scripts/speedrun.py time REPLAY...         # time wins and place them on the snapshot
     .venv/bin/python scripts/speedrun.py list [PATH...]         # every run's frames and duration
 
+``list`` and ``time`` of more than one replay are jobs of the machine's queue (``jobs.require_job``: every replay
+is played to its start and end): ``triforce job run --agent A --task T --subtask S --desc '...' --timeout 20m --
+.venv/bin/python scripts/speedrun.py list``; the replays timed of the total are the progress.  ``time`` of one
+replay and ``fetch`` run anywhere.
+
 ``fetch`` reads the whole board from speedrun.com's API (stdlib only) into ``target/leaderboard/zelda-any-noupa.json``
 (not committed; it goes out of date, which is fine: refresh only when the owner asks).
 
@@ -183,6 +188,10 @@ def main(argv=None) -> int:
     if args.command == 'fetch':
         fetch(Path(args.out))
         return 0
+    names = _replays(args.paths) if args.command == 'list' else [Path(n) for n in args.replays]
+    from triforce import jobs  # pylint: disable=import-outside-toplevel
+    if args.command == 'list' or len(names) > 1:
+        jobs.require_job()      # every replay played to its start and end: a job
     board_path = Path(args.board)
     board = json.loads(board_path.read_text()) if board_path.exists() else None
     if board is None:
@@ -190,8 +199,10 @@ def main(argv=None) -> int:
     else:
         print(f"board: {board['category']}, {len(board['runs'])} runs, fetched {board['fetched']}")
     cache = json.loads(TIMES.read_text()) if TIMES.exists() else {}
-    names = _replays(args.paths) if args.command == 'list' else [Path(n) for n in args.replays]
-    rows = [describe(f, cache) for f in names]
+    rows = []
+    for f in names:
+        rows.append(describe(f, cache))
+        jobs.progress(len(rows), len(names), 'replays')
     TIMES.parent.mkdir(parents=True, exist_ok=True)
     TIMES.write_text(json.dumps(cache, indent=1) + '\n')
     for row in rows:

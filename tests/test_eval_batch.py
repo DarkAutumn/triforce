@@ -1,5 +1,6 @@
 """``triforce eval-batch`` (``triforce.eval_batch``): the plan, order, statuses, failures, side-by-side jobs, SIGTERM
-and resume on fake evaluation processes; entry building; the niceness of the entry points (``triforce.jobs``)."""
+and resume on fake evaluation processes; entry building; the wrapper's dry call and which entry points announce a
+job (``triforce.jobs``)."""
 
 import ast
 import json
@@ -370,59 +371,37 @@ def test_a_step_target_is_the_entry_into_that_route_step():
     assert (out['level'], out['room'], out['entry'], before['exit']) == (0, 0x37, 'cave', 'triforce')
 
 
-# ------------------------------------------------------------------------------------------------------ priority
+# ------------------------------------------------------------------------------------------------------- the queue
 
-NICE_PROBE = r'''
-import os, sys
-from triforce import jobs
-before = os.nice(0)
-after = jobs.lower_priority(None if sys.argv[1] == 'default' else int(sys.argv[1]))
-print(before, after, os.nice(0))
-'''
-
-
-@pytest.mark.parametrize('arg,env,expected', [
-    ('default', None, 15), ('default', '9', 9), ('4', '9', 4), ('0', None, 0), ('default', 'x', 15)])
-def test_lower_priority_sets_the_niceness_once_and_never_raises_priority(arg, env, expected):
-    environ = {k: v for k, v in os.environ.items() if k != jobs.NICE_ENV}
-    if env is not None:
-        environ[jobs.NICE_ENV] = env
-    out = subprocess.run([sys.executable, '-c', NICE_PROBE, arg], env=environ, capture_output=True, text=True,
-                         check=True).stdout.split()
-    before, after, now = map(int, out)
-    assert after == now == max(before, expected)
-    # Already lower: unchanged (a child of a niced batch).
-    out = subprocess.run(['nice', '-n', '17', sys.executable, '-c', NICE_PROBE, arg], env=environ,
-                         capture_output=True, text=True, check=True).stdout.split()
-    assert int(out[1]) == max(int(out[0]), expected) >= 17
+def test_the_wrapper_dry_call_writes_the_batch_work_and_creates_nothing(tmp_path):
+    """``triforce job run`` asks the batch its work first (``$TRIFORCE_JOB_ESTIMATE``, no job id yet): it checks its
+    entries, writes ``{kind, work, name}`` and exits 0 before any log folder or evaluation."""
+    chain = ['--route', 'd2first', '--from', '4_71s_0', '--runs', '3']
+    estimate = tmp_path / 'estimate.json'
+    environ = {**{k: v for k, v in os.environ.items() if k != jobs.JOB_ID_ENV}, jobs.JOB_ESTIMATE_ENV: str(estimate),
+               'PYTHONPATH': str(ROOT)}
+    out = subprocess.run([sys.executable, '-m', 'triforce.eval_batch', 'dry', '--chain', f"d4: {' '.join(chain)}",
+                          '--logs-dir', str(tmp_path / 'logs')], env=environ, cwd=tmp_path, capture_output=True,
+                         text=True, timeout=120, check=False)
+    assert out.returncode == 0, out.stderr
+    expected = eval_batch.batch_work([eval_batch.chain_entry('d4', chain, eval_batch.Options('dry', 1, 1))])
+    assert expected['chain_steps'] > 0
+    assert json.loads(estimate.read_text()) == {'kind': 'batch', 'work': expected, 'name': 'dry'}
+    assert sorted(p.name for p in tmp_path.iterdir()) == ['estimate.json']
 
 
-def test_child_env_passes_the_niceness_on():
-    assert jobs.child_env(15, {'A': '1'}) == {'A': '1', jobs.NICE_ENV: '15'}
-    assert jobs.child_env(None, {})[jobs.NICE_ENV] == str(os.nice(0))
+# Only the queued tools announce their work (``jobs.announce``), never library code that play and replay tools share
+# (play-zelda, zelda-headless without --golden, create-video, zelda-map, tf replay, explore, entry_states); other
+# heavy scripts only require a job (``jobs.require_job``, which announces a ``script`` in the dry call).
+ANNOUNCERS = {('triforce/train.py', 'main'), ('triforce/evaluate.py', 'main'), ('triforce/cli.py', '_cmd_eval_chain'),
+              ('triforce/eval_batch.py', 'main'), ('triforce/select_checkpoint.py', 'main'),
+              ('scripts/train_round.py', 'main'), ('scripts/full_runs.py', 'announce_chain'),
+              ('triforce/lab/train.py', 'main'), ('triforce/lab/bench.py', 'main'), ('triforce/lab/record.py', 'main'),
+              ('zelda-headless.py', 'main'), ('triforce/jobs.py', 'require_job')}
 
 
-# Only the training and evaluation entry points start a job (``jobs.begin_job``: the priority and the turn), never
-# library code that play and replay tools share (play-zelda, zelda-headless, create-video, zelda-map, tf replay,
-# explore, entry_states); only ``begin_job`` lowers the priority.  Every one of them shows in the training GUI
-# (``tests/test_training_gui.py`` ``ENTRY_POINTS``).
-ENTRY_POINTS = {('triforce/train.py', 'cli'), ('triforce/evaluate.py', 'main'),
-                ('triforce/cli.py', '_cmd_eval_chain'), ('triforce/eval_batch.py', 'main'),
-                ('triforce/select_checkpoint.py', 'main'), ('scripts/train_round.py', 'main'),
-                ('triforce/lab/train.py', 'main'), ('triforce/lab/bench.py', 'main'),
-                ('triforce/lab/record.py', 'main'),
-                # Round 27: the honest planner's play recorded as demonstrations (it plays models: a job).
-                ('scripts/experiments/r27_plan_demos.py', 'main'),
-                # Round 36: the merged network's failures and its DAgger recording (they play models: jobs).
-                ('scripts/experiments/r36_merge_failures.py', 'main'),
-                ('scripts/experiments/r36_merge_record.py', 'main'),
-                # Round 38: the hit head's benches (they play models: a job).
-                ('scripts/experiments/r38_hit.py', 'main'),
-                ('scripts/experiments/r38_head.py', 'main')}
-
-
-def test_only_the_training_and_evaluation_entry_points_begin_a_job():
-    calls = {'begin_job': set(), 'lower_priority': set()}
+def test_only_the_queued_tools_announce_a_job():
+    calls = set()
     files = [*ROOT.glob('triforce/**/*.py'), *ROOT.glob('scripts/**/*.py'), *ROOT.glob('*.py')]
     for path in files:
         tree = ast.parse(path.read_text(encoding='utf-8'))
@@ -430,31 +409,7 @@ def test_only_the_training_and_evaluation_entry_points_begin_a_job():
             if not isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
             for node in ast.walk(function):
-                if not isinstance(node, ast.Call):
-                    continue
-                name = getattr(node.func, 'id', getattr(node.func, 'attr', None))
-                if name in calls:
-                    calls[name].add((str(path.relative_to(ROOT)), function.name))
-    assert calls == {'begin_job': ENTRY_POINTS, 'lower_priority': {('triforce/jobs.py', 'begin_job')}}
-
-
-PLAY_PROBE = r'''
-import importlib.util, os, sys
-before = os.nice(0)
-import triforce.play, triforce.replay, triforce.explore, triforce.entry_states, triforce.evaluate, triforce.cli
-for script in ('play-zelda.py', 'zelda-headless.py', 'create-video.py', 'zelda-map.py'):
-    spec = importlib.util.spec_from_file_location(script.replace('-', '_')[:-3], os.path.join(sys.argv[1], script))
-    try:
-        spec.loader.exec_module(importlib.util.module_from_spec(spec))
-    except ImportError:
-        pass
-print(before, os.nice(0))
-'''
-
-
-def test_play_and_replay_tools_keep_their_priority():
-    environ = {k: v for k, v in os.environ.items() if k != jobs.NICE_ENV}
-    environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
-    out = subprocess.run([sys.executable, '-c', PLAY_PROBE, str(ROOT)], env=environ, capture_output=True, text=True,
-                         check=True, cwd=ROOT).stdout.split()
-    assert out[-2] == out[-1]
+                name = getattr(node.func, 'id', getattr(node.func, 'attr', None)) if isinstance(node, ast.Call) else None
+                if name == 'announce':
+                    calls.add((str(path.relative_to(ROOT)), function.name))
+    assert calls == ANNOUNCERS

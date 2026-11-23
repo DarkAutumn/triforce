@@ -22,6 +22,9 @@ worse, 0.29 against 0.17 hearts a pocket visit).  The round-25 recipe (``r75-d53
     python scripts/experiments/r25_d5_37_tracks.py --demos rule.npz
     python -m triforce.train --specialist darknut --load <run> --iterations 60 --sil-coeff 0.1 \\
         --demos rule.npz --demo-coeff 0.05 --stop-success 1.01
+
+It plays the rule over many runs: a job of the machine's queue (``jobs.require_job``: ``triforce job run ...
+--timeout 30m -- .venv/bin/python scripts/experiments/r25_d5_37_tracks.py ...``).
 """
 
 import argparse
@@ -31,6 +34,7 @@ from pathlib import Path
 
 from triforce._native import Env
 from triforce.demos import DemoRecorder, action_indices, legal
+from triforce.jobs import require_job
 
 OBJ_ID, OBJ_X, OBJ_Y = 0x34F, 0x70, 0x84                # slot 0 is Link, 1..11 the monsters
 OBJ_INVINCIBLE, OBJ_METASTATE = 0x4F0, 0x405            # flashing after a hit; a spawn cloud or a death
@@ -200,6 +204,7 @@ def main(argv) -> int:
     parser.add_argument('--policy', default=None, metavar='RUN_DIR',
                         help="--demos by DAgger: this checkpoint plays (temperature 0.5), the rule labels")
     args = parser.parse_args(argv)
+    require_job()
     if args.demos:
         rows, kept, played = demos(Path(args.out), args.count or 200,
                                    sampler(args.policy) if args.policy else None)

@@ -78,16 +78,16 @@ def pytest_configure(config):  # pylint: disable=unused-argument
     """Points ``TRIFORCE_STATES_DIR`` at a fresh session directory before any test module imports ``triforce``, and
     gives torch one thread (``OMP_NUM_THREADS``, inherited by child processes; an explicit value is kept).  The
     tests' networks are tiny: more threads only wait for each other, and on a machine a training round keeps busy
-    they made saving and loading the test team 20-40x slower (backlog, Nov 11).  ``TRIFORCE_NICE=0``: the training
-    and evaluation entry points the tests call in-process don't lower the test runner's priority (an explicit value
-    is kept; tests of the niceness set their own).  ``TRIFORCE_JOBS_DIR``: the plans the tests write register in a
-    session directory, never in the user's job registry (the training GUI would list them, and the tests' jobs would
-    wait for the machine's).  ``TRIFORCE_MAX_JOBS=0``: inside the session nothing waits its turn either (plans the
-    tests leave unfinished in this process stay alive for the session); tests of the line set their own limit."""
+    they made saving and loading the test team 20-40x slower (backlog, Nov 11).  ``TRIFORCE_QUEUE_DIR``: a session
+    directory, never the machine's job queue (the training GUI would list the tests' jobs); ``TRIFORCE_JOB_ID=0``:
+    the tools the tests call (in-process or as children) run as the child of a job, as under ``triforce job``, so
+    they don't refuse to start (``jobs.ENFORCE``); job 0 has no row, so their reports change nothing.  Tests of the
+    queue and of the refusal set their own."""
     os.environ.setdefault('OMP_NUM_THREADS', '1')
-    os.environ.setdefault('TRIFORCE_NICE', '0')
-    os.environ['TRIFORCE_JOBS_DIR'] = tempfile.mkdtemp(prefix='triforce-jobs-')
-    os.environ['TRIFORCE_MAX_JOBS'] = '0'
+    os.environ['TRIFORCE_QUEUE_DIR'] = tempfile.mkdtemp(prefix='triforce-queue-')
+    os.environ['TRIFORCE_JOB_ID'] = '0'
+    for name in ('TRIFORCE_JOB_LABEL', 'TRIFORCE_JOB_ESTIMATE'):
+        os.environ.pop(name, None)
     _session['old_env'] = os.environ.get(STATES_DIR_ENV)
     _session['states_dir'] = Path(tempfile.mkdtemp(prefix='triforce-states-'))
     os.environ[STATES_DIR_ENV] = str(_session['states_dir'])

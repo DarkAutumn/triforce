@@ -2,12 +2,18 @@
 opposite edge, EPISODES times per state with the gauntlet's hp randomisation (hp [0.15, max], full_hp 0.5; the
 states hold 3 hearts).  Run from the repo root (the states dir is experiments/r21/states):
 
-    python scripts/experiments/r21_wrap_reference.py STATE[,STATE...] [EPISODES] [OUT.json]"""
+    python scripts/experiments/r21_wrap_reference.py STATE[,STATE...] [EPISODES] [OUT.json]
+
+It plays EPISODES a state: a job of the machine's queue (``jobs.require_job``: ``triforce job run ... --
+.venv/bin/python scripts/experiments/r21_wrap_reference.py ...``)."""
 import json
 import random
 import sys
 
 from triforce import _native as native
+from triforce.jobs import require_job
+
+require_job()
 
 STATES = sys.argv[1].split(',')
 EPISODES = int(sys.argv[2]) if len(sys.argv) > 2 else 100

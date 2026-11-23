@@ -98,3 +98,22 @@ def test_staged_and_plain_tracks_are_named_beside_the_seed_states():
         parse_room_kills('5:0x05')
     assert track_dir('t', 'darknut', '5_05e_0', 0, False, 4).name == '5_05e_0~k4'
     assert track_dir('t', 'darknut', '5_64e_0', 0, False, None, True).name == '5_64e_0~plain'
+
+
+def test_the_cli_runs_only_as_a_job_and_reports_states_explored(room_states, tmp_path, capsys, monkeypatch):
+    """Outside a job without a terminal the CLI refuses (exit 2) with the ``triforce job run`` form; inside one the
+    states explored of the total are its progress (``jobs.progress``)."""
+    from triforce import jobs  # pylint: disable=import-outside-toplevel
+    monkeypatch.delenv(jobs.JOB_ID_ENV, raising=False)
+    monkeypatch.setattr(jobs, 'attended', lambda: False)
+    with pytest.raises(SystemExit) as refused:
+        main(['--specialist', 'ow-octorok', '--out', str(tmp_path)])
+    assert refused.value.code == 2 and 'triforce job run --agent AGENT' in capsys.readouterr().err
+    monkeypatch.setenv(jobs.JOB_ID_ENV, '0')
+    reports = []
+    monkeypatch.setattr(jobs, 'progress', lambda done, total, unit: reports.append((done, total, unit)))
+    monkeypatch.setattr('triforce.explore.explore_states',
+                        lambda *a, **k: native.explore_states(*a, **{**k, 'states_dir': str(room_states)}))
+    main(['--specialist', 'ow-octorok', '--states', '0_67s_0,0_67s_0', '--iterations', '1', '--patience', '1',
+          '--out', str(tmp_path)])
+    assert reports[0] == (0, 2, 'states') and reports[-1] == (2, 2, 'states')

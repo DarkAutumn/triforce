@@ -15,11 +15,16 @@ first: below full there is no beam.
 `key29`: 0x29 W -> S (dark; 3 Blue, 2 Red Wizzrobes; the key lies at ($80,$90) inside the water ring) by today's path
 (down the W edge, E along the bottom row, S) and two ways by the key: E along the door row over the ring's W side (the
 ladder), the key, back to X $78 and down over the ring's S side; or down the W edge, E along the bottom row to X $80,
-up over the ring's S side to the key and back down."""
+up over the ring's S side to the key and back down.
+
+It plays the game over many seeded trials: a job of the machine's queue (``jobs.require_job``: ``triforce job run
+... --timeout 30m -- .venv/bin/python scripts/experiments/r31_d6_walks.py ...``)."""
 
 import argparse
 import collections
 import statistics
+
+from triforce.jobs import require_job
 
 from r26_walks import BOMBS, KEYS, OBJ_META, OBJ_STATE, OBJ_TYPE, OBJ_X, OBJ_Y, STATES
 from r27_walks import WIZZROBE_RED, Tally, hearts_bytes, load, name
@@ -201,6 +206,7 @@ def main():
     p.add_argument('--seeds', type=int, default=None)
     p.add_argument('--hearts', type=float, default=None)
     args = p.parse_args()
+    require_job()
     args.seeds = args.seeds or (100 if args.cmd == 'ringleader' else 20)
     {'ringleader': cmd_ringleader, 'key29': cmd_key29}[args.cmd](args)
 

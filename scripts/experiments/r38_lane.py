@@ -24,7 +24,8 @@ splits): ``none`` (schema 6's `in_line` zeroed), ``inline`` (as is), ``lane`` (t
 ``lane-noinline``. Scored as experiment 2 (P = R on the planner's / the model's draws) and on the slice the lane is
 for: **hits by shots fired after the decision** (the hitter, `tried_hit_type`, is a shot and its slot held no such
 shot at the decision): their AUC against every safe candidate, and their recall at the threshold where all held-out
-judged candidates have precision = recall.
+judged candidates have precision = recall.  Both commands are jobs of the machine's queue (``jobs.require_job``:
+``triforce job run ... --timeout 1h -- .venv/bin/python scripts/experiments/r38_lane.py bench ...``).
 """
 
 import argparse
@@ -43,6 +44,7 @@ sys.path.insert(0, str(ROOT / 'scripts' / 'experiments'))
 import r36_hit_bench as hb  # noqa: E402
 from r36_hit_common import auc, summary  # noqa: E402
 from triforce import _native, nets  # noqa: E402
+from triforce.jobs import require_job  # noqa: E402
 from triforce.nets import hitnet as hitnet_module  # noqa: E402
 
 R38 = ROOT / 'target' / 'r38'
@@ -237,6 +239,7 @@ def main(argv=None) -> int:
     b.add_argument('--seeds', type=int, nargs='+', default=[0, 1])
     b.add_argument('--epochs', type=int, default=10)
     args = parser.parse_args(argv)
+    require_job()
     if args.command == 'measure':
         measure(args.family)
     else:

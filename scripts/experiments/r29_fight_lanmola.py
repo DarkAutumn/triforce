@@ -6,10 +6,15 @@ loads that state with the game's own randomness for its seed.
     python scripts/experiments/r29_fight_lanmola.py kill [--seeds N]     # the rule-based clear, ring and hearts
     python scripts/experiments/r29_fight_lanmola.py reentry              # what leaving and coming back resets
     python scripts/experiments/r29_fight_lanmola.py trick [--seeds N]    # one worm, out S and back, the block
+
+It plays the game over many seeded trials: a job of the machine's queue (``jobs.require_job``: ``triforce job run
+... --timeout 30m -- .venv/bin/python scripts/experiments/r29_fight_lanmola.py ...``).
 """
 
 import argparse
 import collections
+
+from triforce.jobs import require_job
 
 from r29_fight_walks import (DEAD_DUMMY, DIR_OF, LANMOLA_RED, LINK_INVINC, OBJ_DIR, OBJ_HP, OBJ_INVINC, OBJ_META,
                              OBJ_TYPE, OBJ_X, OBJ_Y, PLAY, ROOM_ALL_DEAD, Bot, d9_state, hp, load, monsters, summary)
@@ -347,6 +352,7 @@ def main():
     parser.add_argument('what', choices=['facts', 'kill', 'reentry', 'trick'])
     parser.add_argument('--seeds', type=int, default=20)
     args = parser.parse_args()
+    require_job()
     globals()[args.what](args)
 
 

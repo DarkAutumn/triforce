@@ -89,7 +89,7 @@ def test_matched_precision():
 def test_a_hitnet_run_trains_its_head_and_plays_without_trials(states_dir, tmp_path):
     run = train.main(['--name', 'hitnet', '--run-id', 'h1', '--families', 'ow-start', '--parallel', '2',
                       '--steps-per-update', '64', '--device', 'cpu', '--models-dir', str(tmp_path), '--seed', '5',
-                      '--no-wait', '--iterations', '2', '--arch', 'hitnet', '--arch-config',
+                      '--iterations', '2', '--arch', 'hitnet', '--arch-config',
                       json.dumps({**SMALL, 'feed': True}), '--aux', 'hit=hit:0.5', '--try-others', '2:0.5'])
     lines = [json.loads(line) for line in (run / 'metrics.jsonl').read_text().splitlines()]
     metrics = lines[-1].get('metrics', lines[-1])

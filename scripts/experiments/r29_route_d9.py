@@ -11,10 +11,15 @@ are live and the hearts real.
     python scripts/experiments/r29_route_d9.py ring [--seeds N]        # damage with and without the red ring
     python scripts/experiments/r29_route_d9.py arrow                   # what a silver arrow costs
     python scripts/experiments/r29_route_d9.py history                 # rooms that fill or lock again on re-entry
+
+It plays the game over many seeded trials: a job of the machine's queue (``jobs.require_job``: ``triforce job run
+... --timeout 30m -- .venv/bin/python scripts/experiments/r29_route_d9.py ...``).
 """
 
 import argparse
 import collections
+
+from triforce.jobs import require_job
 
 from r26_walks import BOMBS, CUR_OPENED_DOORS, KEYS, OBJ_STATE, OBJ_X, OBJ_Y, PLAY, RUPEES
 from r27_walks import LINK_PARALYZED, TMP, Tally, hearts_bytes, load, name, summary
@@ -532,5 +537,6 @@ if __name__ == '__main__':
     parser.add_argument('--guard', action='store_true', help='crossings: stab what stands in the way')
     parser.add_argument('--best', action='store_true', help='crossings: the guard, and the best plays found (BEST)')
     arguments = parser.parse_args()
+    require_job()
     {'graph': graph, 'man': man_rooms, 'doors': doors, 'tunnels': tunnels, 'crossings': crossings, 'ring': ring,
      'arrow': arrow, 'history': history}[arguments.what](arguments)

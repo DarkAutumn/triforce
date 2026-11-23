@@ -2,6 +2,10 @@
 
     python -m triforce.heart_value CHAIN.jsonl... [--route ROUTE] [--out triforce/heart_value.json] [--measured-on REV]
 
+A fit is a job of the machine's queue (``jobs.require_job``; it reads every chain file given): ``triforce job run
+--agent A --task T --subtask S --desc '...' --timeout 20m -- python -m triforce.heart_value ...``; the chain files
+read of the total are its progress.
+
 V(k, h) is the chance that a run entering route step k's room with h hearts is alive when it takes the next
 triforce (which refills him): 0 at no hearts, non-decreasing in h, flat where nothing downstream can kill him before
 the refill.  A specialist whose ``reward.heart_value`` turns a term on prices hearts by it (``env::heart_value``):
@@ -49,6 +53,7 @@ import os
 import subprocess
 from typing import Dict, Iterable, List, Optional, Tuple
 
+from . import jobs
 from .events import write_json_atomic
 
 TABLE_PATH = os.path.join(os.path.dirname(__file__), 'heart_value.json')
@@ -200,7 +205,8 @@ def read_visits(paths: Iterable[str], steps_of: Optional[Dict[int, int]] = None)
     ``steps_of`` (``step_map``: the chains' step -> the route's) each record is filed under its step on the route as
     it stands, and a record of a step that is no longer on it is left out."""
     by_way: Dict[str, Dict[int, List[dict]]] = {way: collections.defaultdict(list) for way in WAYS}
-    for path in paths:
+    paths = list(paths)
+    for done, path in enumerate(paths, 1):
         with open(path, encoding='utf-8') as file:
             for line in file:
                 if not line.strip():
@@ -215,6 +221,7 @@ def read_visits(paths: Iterable[str], steps_of: Optional[Dict[int, int]] = None)
                         continue
                     way = 'clips' if room['clips_allowed'] else 'plain'
                     by_way[way][step].append(room)
+        jobs.progress(done, len(paths), 'files')
     return by_way
 
 
@@ -253,6 +260,7 @@ def main(argv=None):
     parser.add_argument('--measured-on', metavar='REV',
                         help="the git revision whose routes.yaml numbered the chains' steps (default: the route as it is)")
     args = parser.parse_args(argv)
+    jobs.require_job()
     from . import _native
     namespace = _native.route_namespace(args.route)
     if args.out is None:

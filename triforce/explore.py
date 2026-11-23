@@ -1,8 +1,12 @@
 """Go-Explore phase A: find one successful path per seed start state by restoring savestates.
 
-    python -m triforce.explore --specialist NAME [--states 0_38s_0,0_48s_0] [--iterations 3000]
+    triforce job run --agent A --task T --subtask S --desc '...' --timeout 40m -- \\
+        python -m triforce.explore --specialist NAME [--states 0_38s_0,0_48s_0] [--iterations 3000]
         [--explore-steps 25] [--patience 300] [--parallel N] [--seed 0] [--variant] [--room-kills 5:0x05=4]
         [--out trajectories]
+
+A job of the machine's queue (``jobs.require_job``: outside ``triforce job`` and without a terminal it refuses);
+the states explored so far of the total are the job's progress (``triforce job list``, the training GUI).
 
 Plain PPO only learns what a random-ish policy stumbles into.  Here the emulator is a simulator we can rewind
 (Ecoffet et al., Go-Explore): keep an archive of *cells*, coarse summaries of the game state, each holding the
@@ -20,7 +24,8 @@ health, then fewest steps) is replayed from the start and written as ``<out>/<sp
 then runs the backward curriculum on them.
 
 The search itself is native (``triforce._native.explore_states`` / ``Explorer``); each start state gets a fresh
-explorer seeded with ``--seed``, so results don't depend on ``--parallel`` (threads).
+explorer seeded with ``--seed``, so results don't depend on ``--parallel`` (threads).  It reports the states explored
+(``progress``), which ``main`` passes on as the job's progress.
 
 ``--variant`` writes ``<out>/<specialist>/<state>~s<seed>`` instead: an extra track from the same seed state.
 The seed also draws the reset's RNG and spawn, so another seed is another room (for Dodongo, another movement
@@ -38,8 +43,9 @@ import shutil
 import sys
 import tempfile
 from pathlib import Path
-from typing import List, Optional
+from typing import Callable, List, Optional
 
+from . import jobs
 from ._native import AcceptSpec, Explorer, ExploreResult, explore_states
 from .paths import TRAJECTORIES_DIR
 
@@ -75,10 +81,12 @@ def parse_room_kills(text: str) -> tuple:
 def explore_specialist(specialist: str, out: str, states: Optional[List[str]] = None, iterations: int = 3000,
                        explore_steps: int = 25, patience: int = 300, parallel: int = 1, seed: int = 0,
                        states_dir: Optional[str] = None, variant: bool = False,
-                       room_kills: Optional[tuple] = None, clips: Optional[bool] = None) -> list:
+                       room_kills: Optional[tuple] = None, clips: Optional[bool] = None,
+                       progress: Optional[Callable[[int, int], None]] = None) -> list:
     """Explores every seed start state (or ``states``) of ``specialist``, writing successes under
     ``<out>/<specialist>/<state>`` (``<state>~s<seed>`` with ``variant``); returns [(ExploreResult, replayed)] in
-    state order.  ``out`` must be the trajectories root (``check_out``)."""
+    state order.  ``out`` must be the trajectories root (``check_out``).  ``progress(done, total)``: the states
+    explored so far, as they finish."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     check_out(specialist, out)
 
@@ -86,7 +94,8 @@ def explore_specialist(specialist: str, out: str, states: Optional[List[str]] = 
         return explore_states(specialist, root, states=states, iterations=iterations, explore_steps=explore_steps,
                               patience=patience, parallel=parallel, seed=seed,
                               states_dir=None if states_dir is None else str(states_dir),
-                              room_kills=None if room_kills is None else [room_kills], clips=clips)
+                              room_kills=None if room_kills is None else [room_kills], clips=clips,
+                              progress=progress)
 
     if not variant:
         return run(str(out))
@@ -132,10 +141,12 @@ def main(argv=None):
         room_kills = parse_room_kills(args.room_kills) if args.room_kills else None
     except ValueError as error:
         parser.error(str(error))
+    jobs.require_job()
     results = explore_specialist(args.specialist, args.out, args.states.split(',') if args.states else None,
                                  args.iterations, args.explore_steps, args.patience, args.parallel, args.seed,
                                  variant=args.variant, room_kills=room_kills,
-                                 clips=None if args.clips is None else args.clips == 'on')
+                                 clips=None if args.clips is None else args.clips == 'on',
+                                 progress=lambda done, total: jobs.progress(done, total, 'states'))
     for result, replayed in results:
         status = (f"success in {len(result.actions)} steps, health {result.health}"
                   + ("" if replayed else " (REPLAY MISMATCH)")) if result.success else "no success"

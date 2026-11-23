@@ -15,6 +15,8 @@
 # 4096 env steps, --parallel 6, the round settings (--sil-coeff 0.1).  Run from anywhere; paths are relative to the
 # repo.
 set -euo pipefail
+source "$(dirname "$0")/../job.sh"      # a job of the machine's queue: triforce job run ... -- this script ...
+require_job "$0" "$@"
 cd "$(dirname "$0")/../.."
 PY=${PY:-.venv/bin/python}
 ITERATIONS=${ITERATIONS:-367}       # 367 x 4096 = 1,503,232 env steps per run

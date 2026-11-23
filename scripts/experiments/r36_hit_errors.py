@@ -13,6 +13,8 @@ body: ``tried_hit_*``), the frame of the action the hit lands on, the action's k
 (RAM: ObjState[0] ``$AC``, his invincibility timer ``$4F0``, his knockback ``$C0``), the geometry at the decision
 (distance to the nearest live monster or shot, whether one is in his row or column), and the room. The last table
 says how concentrated the misses are: the share of them in the largest cells of room × hitter × kind × hit frame.
+Scoring a guard runs a network over the data: a job of the machine's queue (``jobs.require_job``: ``triforce job run
+... --timeout 20m -- .venv/bin/python scripts/experiments/r36_hit_errors.py ...``).
 """
 
 import argparse
@@ -24,6 +26,7 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from r36_hit_common import KIND_NAMES, load  # noqa: E402
+from triforce.jobs import require_job  # noqa: E402
 
 TYPE_NAMES = {0x01: 'blue Lynel', 0x02: 'red Lynel', 0x05: 'blue Goriya', 0x06: 'red Goriya', 0x0B: 'red Darknut',
               0x0C: 'blue Darknut', 0x1B: 'blue Keese', 0x1C: 'red Keese', 0x1D: 'black Keese', 0x2A: 'Stalfos',
@@ -80,6 +83,7 @@ def main(argv) -> int:
     parser.add_argument('--scores', type=Path)
     parser.add_argument('--device', default='cuda')
     args = parser.parse_args(argv)
+    require_job()
     data = load(args.data)
     d = data.d
     held = data.held_rows[data.c_row]

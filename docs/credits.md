@@ -264,6 +264,7 @@ All of the glitch knowledge is the owner's; the agents made the agent able to us
 | Nov 23 | A golden replay per model version, backed up; 250 runs per new model with best, worst and stuck runs | Owner | Open | session history |
 | Nov 23 | Versioning's third number is the retrain generation (90% of the promoted models retrained from scratch); models load by their checkpoint's schemas, not the version | Owner; agents found the version gates and built the schema check (`OLDEST_OBS_SCHEMA` for a change of meaning) | Worked: every promoted run of today's families loads | dec 11-23 |
 | Nov 23 | A version's first three numbers each mean a fresh generation: every network retrained from scratch, breaking the ship of Theseus; the next generation's teachers trained fresh too | Owner; the lead traced the lineage (73 of 76 promoted networks are continuations, 69 with lost origins) | Rule set; first fresh generation is 2.0.1.0 | dec 11-23 |
+| Nov 23 | **One job queue for the machine**: everything heavier than a build or a test runs through `triforce job`, replacing the Nov 15 per-tool line | Owner (the job API: one command, lanes, a build and test lane, the golden verb, timeouts, progress, enforcement); the lead (the join-first finding: chains loaded their networks before joining the line; the single scheduler on SQLite and kernel locks, confirmed by the owner); built by Queue40 | Built | r40-queue |
 
 ## Tools for watching
 

@@ -10,11 +10,16 @@ makes 0x43's pre-entry state from S once (0x53 emptied by staging, its wall bomb
 with its five Gels live, every trial with the game's own randomness for its seed.  `states` writes `1_73s_<chain>` as a
 run would find 0x73 on coming back in from 0:0x37 (the route's `1_73s_<chain>` loaded, out S, in again; the pre-entry
 frame of the level entry, $EE = 8), with the hearts and bombs today's full-route chain brings to Dungeon 1
-(`CHAIN_STATES`): the scratch route's start states for the models' walk of the new Dungeon 1 (§1.6)."""
+(`CHAIN_STATES`): the scratch route's start states for the models' walk of the new Dungeon 1 (§1.6).
+
+It plays the game over many seeded trials: a job of the machine's queue (``jobs.require_job``: ``triforce job run
+... --timeout 30m -- .venv/bin/python scripts/experiments/r31_d1_walks.py ...``)."""
 
 import argparse
 import collections
 from pathlib import Path
+
+from triforce.jobs import require_job
 
 from r26_walks import BOMBS, CUR_OPENED_DOORS, KEYS, STATES
 from r27_walks import TMP, Tally, hearts_bytes, load, summary
@@ -123,6 +128,7 @@ def main():
     p.add_argument('out', nargs='?')
     p.add_argument('--seeds', type=int, default=20)
     args = p.parse_args()
+    require_job()
     {'bombspot': cmd_bombspot, 'cross43': cmd_cross43, 'states': cmd_states}[args.cmd](args)
 
 

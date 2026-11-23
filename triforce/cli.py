@@ -1,6 +1,6 @@
-"""The ``triforce`` command: promote, eval-chain, list, and shortcuts to train/run/play/evaluate/eval-batch/
-room-stats/convert-model/select-checkpoint.  ``eval-chain`` lowers its own priority and waits its turn (``--nice``,
-``--no-wait``, ``triforce.jobs``)."""
+"""The ``triforce`` command: promote, eval-chain, list, ``job`` (the machine's job queue, ``triforce.job``), and
+shortcuts to train/run/play/evaluate/eval-batch/room-stats/convert-model/select-checkpoint.  ``eval-chain`` runs as a
+job (``triforce job run -- triforce eval-chain ...``; ``jobs.announce``)."""
 
 import argparse
 import json
@@ -10,24 +10,40 @@ from pathlib import Path
 from typing import Optional
 
 
-def prepare_chain(route_name: str, parallel: int = 1, models_dir=None, overrides=None, act=None,
-                  stop_at=None, start_from=None, specialist_configs=None, threads=None, harvest=None,
-                  power_on=None, clips=True, clips_off_from=None, harvest_every_room=False):
-    """The route (``--from``, ``--stop-at`` and the power-on start checked, ``runner.Route.load``) and a ``Runner``
-    with its models loaded (``--checkpoint`` overrides checked); raises ``RunnerError`` before anything plays.
-    ``stop_at``: a room or ``step:N`` (``runner.parse_stop``); ``power_on``: ``Route.load``'s; ``harvest_every_room``:
-    ``Runner``'s."""
+def load_chain_route(route_name: str, stop_at=None, start_from=None, power_on=None, clips=True,
+                     clips_off_from=None):
+    """The route (``--from``, ``--stop-at`` and the power-on start checked, ``runner.Route.load``); raises
+    ``RunnerError``.  Loads no model: an entry point checks it before it waits its turn.  ``stop_at`` and
+    ``clips_off_from``: a room or ``step:N`` (``runner.parse_stop``); ``power_on``: ``Route.load``'s."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, import-outside-toplevel
-    from .runner import Route, Runner, parse_stop
+    from .runner import Route, parse_stop
     stop_room, stop_step = parse_stop(stop_at)
     # --clips-off-from: a room or step:N, as --stop-at (round 22).
     off_room, off_step = parse_stop(clips_off_from)
-    route = Route.load(route_name, stop_room, start_from, stop_step=stop_step, power_on=power_on, clips=clips,
-                       clips_off_from=off_step if off_step is not None else off_room)
-    runner = Runner(models_dir=models_dir, checkpoints=overrides, act=act,
-                    specialist_configs=specialist_configs, parallel=parallel, threads=threads, harvest=harvest,
-                    route=route_name, harvest_every_room=harvest_every_room)
-    return route, runner
+    return Route.load(route_name, stop_room, start_from, stop_step=stop_step, power_on=power_on, clips=clips,
+                      clips_off_from=off_step if off_step is not None else off_room)
+
+
+def chain_runner(route_name: str, parallel: int = 1, models_dir=None, overrides=None, act=None,
+                 specialist_configs=None, threads=None, harvest=None, harvest_every_room=False):
+    """A ``Runner`` for ``route_name`` with its models loaded (``--checkpoint`` overrides checked; raises
+    ``RunnerError``): only once the job's turn has come (``triforce.jobs``).  ``harvest_every_room``: ``Runner``'s."""
+    # pylint: disable=too-many-arguments, too-many-positional-arguments, import-outside-toplevel
+    from .runner import Runner
+    return Runner(models_dir=models_dir, checkpoints=overrides, act=act, specialist_configs=specialist_configs,
+                  parallel=parallel, threads=threads, harvest=harvest, route=route_name,
+                  harvest_every_room=harvest_every_room)
+
+
+def prepare_chain(route_name: str, parallel: int = 1, models_dir=None, overrides=None, act=None,
+                  stop_at=None, start_from=None, specialist_configs=None, threads=None, harvest=None,
+                  power_on=None, clips=True, clips_off_from=None, harvest_every_room=False):
+    """The route (``load_chain_route``) and its ``Runner`` (``chain_runner``), for a caller already in its turn (a
+    round's chain); raises ``RunnerError`` before anything plays."""
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
+    route = load_chain_route(route_name, stop_at, start_from, power_on, clips, clips_off_from)
+    return route, chain_runner(route_name, parallel, models_dir, overrides, act, specialist_configs, threads,
+                               harvest, harvest_every_room)
 
 
 def eval_chain(route_name: str, runs: int, parallel: int = 1, models_dir=None, overrides=None,
@@ -87,9 +103,10 @@ def meta_path(output) -> Path:
     return Path(f'{output}.meta.json')
 
 
-def check_output(output, provenance: dict, append: bool) -> Optional[dict]:
+def check_output(output, provenance: Optional[dict], append: bool) -> Optional[dict]:
     """Refuses an existing ``output`` unless ``append``; an appended batch must have the existing sidecar's
-    provenance (``BATCH_FIELDS`` aside) and new seeds.  Returns the sidecar to extend (None for a new file)."""
+    provenance (``BATCH_FIELDS`` aside) and new seeds.  Returns the sidecar to extend (None for a new file).
+    ``provenance`` None: only the checks that need no model (before the job's turn), returning None."""
     # pylint: disable=import-outside-toplevel
     from .runner import RunnerError
     output, meta = Path(output), meta_path(output)
@@ -101,6 +118,8 @@ def check_output(output, provenance: dict, append: bool) -> Optional[dict]:
         raise RunnerError(f"{output} exists; pass --append to add runs of the same team, or choose a new --output")
     if not meta.is_file():
         raise RunnerError(f"--append: {output} has no provenance sidecar {meta}; write a new --output")
+    if provenance is None:
+        return None
     existing = json.loads(meta.read_text(encoding='utf-8'))
     batch = {k: v for k, v in provenance.items() if k not in BATCH_FIELDS}
     if existing['provenance'] != batch:
@@ -151,17 +170,20 @@ class ChainOutput:
         write_json_atomic(meta_path(self.path), self.meta)
 
 
-def chain_progress_events(events, runs: int):
+def chain_progress_events(events, runs: int, label: Optional[str] = None):
     """``on_result`` emitting ``chain_progress`` (done, runs, successes) at most once a second and on the last
-    run."""
+    run (``events`` None: none), and reporting the runs done as the job's progress (``jobs.progress``; ``label``:
+    this chain's counter among several, a batch's entry)."""
     import time  # pylint: disable=import-outside-toplevel
+    from .jobs import progress as job_progress  # pylint: disable=import-outside-toplevel
     progress = {'done': 0, 'successes': 0, 'last': 0.0}
 
     def on_result(result):
         progress['done'] += 1
         progress['successes'] += result.result == 'success'
+        job_progress(progress['done'], runs, 'runs', label)
         now = time.monotonic()
-        if now - progress['last'] >= 1.0 or progress['done'] == runs:
+        if events is not None and (now - progress['last'] >= 1.0 or progress['done'] == runs):
             progress['last'] = now
             events.emit('chain_progress', done=progress['done'], runs=runs, successes=progress['successes'])
     return on_result
@@ -173,35 +195,44 @@ def _cmd_eval_chain(args):
     from contextlib import nullcontext
     from . import replay
     from .events import EventLog, has_plan, logged_job
-    from .jobs import begin_job, work
+    from .jobs import announce, work
     from .registry import act_override
-    from .runner import RunnerError, parse_overrides, power_on_options
+    from .runner import RunnerError, check_overrides, parse_overrides, power_on_options
     from .specialist import load_specialist
-    nice = begin_job(args)
-    configs = [load_specialist(path) for path in args.specialist_config]
+    nice = os.nice(0)
+    configs = {config.name: config for config in (load_specialist(path) for path in args.specialist_config)}
     overrides = parse_overrides(args.checkpoint)
     output = args.output or os.path.join('runs', f"eval-chain-{time.strftime('%y%m%d-%H%M%S')}.jsonl")
-    route, runner = prepare_chain(args.route, args.parallel, args.models_dir, overrides, act_override(args.act),
-                                  args.stop_at, args.start_from, {config.name: config for config in configs},
-                                  args.threads, args.harvest, power_on_options(args), clips=args.clips == 'on',
-                                  clips_off_from=args.clips_off_from, harvest_every_room=args.harvest_every_room)
-    provenance = {**runner.provenance(route), 'first_seed': args.first_seed, 'runs': args.runs}
+    # Everything an argument error needs (the route, the overrides' files, the output, the streams) is checked and
+    # the work announced (the wrapper's dry call ends there) before anything loads (Nov 23: 17 chains loading their
+    # networks outside the line held the machine for 25-48 minutes and none started).
+    route = load_chain_route(args.route, args.stop_at, args.start_from, power_on_options(args),
+                             clips=args.clips == 'on', clips_off_from=args.clips_off_from)
+    check_overrides(overrides, configs, route=args.route)
+    check_output(output, None, args.append)
     try:
-        record = replay.options_from(args, runner.record_meta(route))
+        replay.options_from(args, {}) if args.replays is None else replay.parse_streams(args.streams)
     except ValueError as error:
         raise RunnerError(str(error)) from error
-    existing = check_output(output, provenance, args.append)
     what = (f"eval-chain-{args.route}" + (f"-from-{args.start_from}" if args.start_from else '')
             + ('-power-on' if args.power_on else ''))
+    announce('chain', work(chain_steps=args.runs * route.steps_played()), what)
     # --events into a folder with a plan: its driver (e.g. triforce eval-batch) owns the stream and the final 'end';
     # into a folder without one: this chain writes a plan there (the stream is the plan's), so the GUI lists it.
-    # Every chain but a driver's child waits its turn (triforce.jobs), a --no-log one too.
     stream = Path(args.events) if args.events else None
     log = nullcontext() if stream is not None and has_plan(stream) else logged_job(
         what, 'chain', [], args.logs_dir, directory=None if stream is None else stream.parent, log=not args.no_log,
         work=work(chain_steps=args.runs * route.steps_played()),
         events=stream.name if stream else 'round.jsonl', chain_runs=args.runs, nice=nice)
     with log as plan:
+        runner = chain_runner(args.route, args.parallel, args.models_dir, overrides, act_override(args.act), configs,
+                              args.threads, args.harvest, args.harvest_every_room)
+        provenance = {**runner.provenance(route), 'first_seed': args.first_seed, 'runs': args.runs}
+        try:
+            record = replay.options_from(args, runner.record_meta(route))
+        except ValueError as error:
+            raise RunnerError(str(error)) from error
+        existing = check_output(output, provenance, args.append)
         events = (EventLog(stream) if stream is not None else
                   None if plan is None else EventLog(plan.directory / 'round.jsonl'))
         if events is not None:
@@ -211,12 +242,11 @@ def _cmd_eval_chain(args):
                         nice=nice)
         try:
             chain_output = ChainOutput(output, provenance, existing)
-            progress = None if events is None else chain_progress_events(events, args.runs)
+            progress = chain_progress_events(events, args.runs, None if stream is None else stream.stem)
 
             def on_result(result):
                 chain_output.add(result)
-                if progress is not None:
-                    progress(result)
+                progress(result)
             results, summary = play_chain(route, runner, provenance, on_result=on_result, record=record,
                                           replays=args.replays)
             chain_output.finish()
@@ -310,6 +340,9 @@ def main(argv=None):
             models_dir, rest = rest[0].split('=', 1)[1], rest[1:]
         else:
             break
+    if rest and rest[0] == 'job':       # the job queue: before anything that needs the native module or torch
+        from .job import main as job_main  # pylint: disable=import-outside-toplevel
+        return job_main(rest[1:])
     if rest and rest[0] in passthrough:
         import importlib  # pylint: disable=import-outside-toplevel
         module, entry = passthrough[rest[0]]
@@ -372,7 +405,6 @@ def add_eval_chain_arguments(chain):
     """``triforce eval-chain``'s options on ``chain`` (an argparse parser; ``triforce.eval_batch`` checks a batch's
     chain entries with them)."""
     # pylint: disable=import-outside-toplevel
-    from .jobs import add_job_arguments
     from .paths import HARVESTED_DIR
     from .registry import ACT_HELP, MAIN_ROUTE, MODEL_ACT, act_argument
     from .replay import add_arguments as replay_arguments
@@ -425,7 +457,6 @@ def add_eval_chain_arguments(chain):
     chain.add_argument('--events', default=None, metavar='JSONL',
                        help="write the chain_* events to this stream: in a folder with a plan its driver (e.g. "
                             "triforce eval-batch) owns it; else this chain writes the plan beside it")
-    add_job_arguments(chain)
 
 
 if __name__ == '__main__':

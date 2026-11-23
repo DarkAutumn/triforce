@@ -1,15 +1,18 @@
 """The ``triforce`` command (``triforce.cli.main``) in-process: list, promote, argument errors and passthrough."""
 
 import json
+import os
 import shutil
+import subprocess
+import sys
 
 import pytest
 import torch
 
 import triforce
-from triforce import _native, cli, registry
+from triforce import _native, cli, jobs, registry
 from triforce.model import ModelConfig
-from triforce.runner import Policies, RunnerError
+from triforce.runner import Policies, RunnerError, chain_steps
 from triforce.specialist import list_specialists
 
 from .conftest import REPO_STATES_DIR, SEGMENT_STATE, SEGMENT_STOP_STEP, require_state, seeded_network
@@ -124,6 +127,22 @@ def test_eval_chain_checks_its_inputs_before_anything_runs(tmp_path, capsys, arg
     assert not list(tmp_path.iterdir())
 
 
+def test_eval_chain_answers_the_wrapper_dry_call_and_creates_nothing(tmp_path):
+    """``triforce job run`` asks the chain its work first (``$TRIFORCE_JOB_ESTIMATE``, no job id yet): its route
+    steps, written as ``{kind, work, name}`` once its arguments are checked, before any log folder, output or model."""
+    estimate = tmp_path / 'estimate.json'
+    environ = {**{k: v for k, v in os.environ.items() if k != jobs.JOB_ID_ENV}, jobs.JOB_ESTIMATE_ENV: str(estimate)}
+    out = subprocess.run([sys.executable, '-m', 'triforce.cli', '--models-dir', str(tmp_path / 'models'), 'eval-chain',
+                          '--route', 'd2first', '--stop-at', '0:0x77', '--runs', '3', '--output',
+                          str(tmp_path / 'c.jsonl'), '--logs-dir', str(tmp_path / 'logs')],
+                         env=environ, capture_output=True, text=True, timeout=120, check=False)
+    assert out.returncode == 0, out.stderr
+    steps = chain_steps('d2first', 3, None, '0:0x77')
+    assert steps > 0 and json.loads(estimate.read_text()) == {
+        'kind': 'chain', 'work': {'chain_steps': steps}, 'name': 'eval-chain-d2first'}
+    assert sorted(p.name for p in tmp_path.iterdir()) == ['estimate.json']
+
+
 def test_eval_chain_exits_non_zero_when_a_run_ends_in_an_error(tmp_path, capsys):
     output = tmp_path / 'chain.jsonl'
     assert cli.main(['--models-dir', str(tmp_path / 'models'), 'eval-chain', '--runs', '1', '--no-log',
@@ -207,7 +226,7 @@ def test_eval_chain_events_into_a_folder_with_or_without_a_plan(models_dir, tmp_
 
 
 def test_eval_chain_keeps_the_runs_that_finished_before_a_failure(models_dir, tmp_path, monkeypatch):
-    def failing_progress(_events, _runs):
+    def failing_progress(_events, _runs, _label=None):
         calls = []
 
         def on_result(_result):

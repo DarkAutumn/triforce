@@ -6,10 +6,15 @@ the route's own entry state `8_4cc_<chain>` (what the chains bring: 13 hearts, t
 
     python scripts/experiments/r31_d8_walks.py cross [--seeds 20] [--hearts H]
 
-`--hearts H` writes H hearts (of 13) first: the chains enter 0x4c with 4.5 on average (r29land-1k, step 294)."""
+`--hearts H` writes H hearts (of 13) first: the chains enter 0x4c with 4.5 on average (r29land-1k, step 294).
+
+It plays the game over many seeded trials: a job of the machine's queue (``jobs.require_job``: ``triforce job run
+... --timeout 30m -- .venv/bin/python scripts/experiments/r31_d8_walks.py ...``)."""
 
 import argparse
 import collections
+
+from triforce.jobs import require_job
 
 import r28_pols
 from r26_walks import BOMBS, RUPEES, STATES
@@ -23,6 +28,7 @@ def main():
     p.add_argument('--seeds', type=int, default=20)
     p.add_argument('--hearts', type=float, default=None)
     args = p.parse_args()
+    require_job()
 
     def enter(seed, bombs=None):
         w = load(STATES / f'8_4cc_{seed % 3}.state', seed)

@@ -349,9 +349,10 @@ there).
   family differ by more than checkpoints of one training, so an arm needs seeds (three) and a comparison with the
   promoted model on the chain; continuations of round 24-25 models pass `--sil-coeff 0.1`; `train
   --checkpoint-every N` and `triforce select-checkpoint` choose a checkpoint by a chain segment with fresh-seed
-  confirmation. **Jobs** (trainings, evaluations, chains) wait their turn in one line for the machine by themselves:
-  two regular places, shortest estimate first with waiting counted, and an express place for jobs under ten
-  minutes; never `--no-wait`, never kill a job only to get ahead (one nobody needs any more is ended). **Next**
+  confirmation. **Jobs** (trainings, evaluations, chains, races, scripts) go through `triforce job` (one line for
+  the machine: two regular places, shortest estimate first with waiting counted, and an express place for jobs under
+  ten minutes; builds and tests have two places of their own); never kill a job only to get ahead (one nobody needs
+  any more is ended). **Next**
   (the owner, Nov 16): the rest of the game, Dungeons
   7, 6, 8, 9 with the magic sword after 7, breadth first to Ganon (`docs/routes/rest-of-game.md`: the survival
   budget, everything the engine lacks, the gap list of what must be walked, the order of work; `d7.md`, `d6.md`,
@@ -704,9 +705,10 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   with each [...] having a different room [...] capture detailed statistics about these runs [...] a .json that goes
   along with each run of this test that we persist long term [...] from power on, not a save state [...] should also
   always fit in the 'fast lane' for the queue"). `scripts/full_runs.py runs250 [--models-dir DIR --team NAME]`
-  freezes the team's pointers, plays 250 runs of `d3first` from console power on through the job line in the express
-  place (`eval-chain --express`), keeps the best, the worst and up to 3 stuck runs in different rooms (copies under
-  `target/`, archived to the backup with `archive_replays.py --kind runs-250`, never `replays/`) and commits the
+  freezes the team's pointers, plays 250 runs of `d3first` from console power on (`triforce job run --express ...`:
+  the express place whatever the history estimates), keeps the best, the worst and up to 3 stuck runs in different
+  rooms (copies under `target/`, archived to the backup with `archive_replays.py --kind runs-250`, never
+  `replays/`) and commits the
   record `docs/runs250/<version>[_<team>].json` (endings by kind, triforce rates, deaths and stucks per room and step,
   hits and hearts lost per visit, cheated items per run, median frames to each triforce). `full_runs.py analyze
   OLD.json NEW.json` compares records (binomial standard errors) and prints the Markdown for the check-in.
@@ -896,12 +898,12 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 
 - Setup (README "Getting started"): `uv venv --python 3.12 .venv`, then `uv pip install --python .venv/bin/python -e
   '.[dev]'` (pytest, pyyaml, PySide6, pygame). Python 3.12; RTX 4090, 10 cores / 20 threads. ROM at
-  `roms/zelda.nes` (or `$TRIFORCE_ROM`). After changing any crate, rebuild the module:
-  `.venv/bin/maturin develop --release`.
-- Tests: `.venv/bin/python -m pytest -q` and `cargo test --release --workspace --features zelda/zcore` (on an idle
-  machine about 2.5 and 1.5 minutes after the build; next to a training round 2-3x that, from oversubscription).
-  Every Python test fails after 15 minutes (`$TRIFORCE_TEST_TIMEOUT` seconds, `tests/conftest.py`), so a hang ends
-  as a failure with its traceback; run long suites and smoke runs under a timeout too (`timeout 3600 ...`).
+  `roms/zelda.nes` (or `$TRIFORCE_ROM`); `triforce job setup BRANCH` makes a worktree with all of it. After changing
+  any crate, rebuild the module: `triforce job build --agent A --task T` (`maturin develop --release`, niced).
+- Tests: `triforce job test python|rust|asm|all --agent A --task T [--build] [--timeout 60m]` (`pytest -q tests`,
+  `pytest -q zelda-asm/tests`, `cargo test --release --workspace --features zelda/zcore`; on an idle machine about 2.5
+  and 1.5 minutes after the build). Every Python test fails after 15 minutes (`$TRIFORCE_TEST_TIMEOUT` seconds,
+  `tests/conftest.py`), so a hang ends as a failure with its traceback; the queue's `--timeout` bounds a whole suite.
   Keep them green. Emulator changes: `tf ladder-golden` before, `tf ladder-diff` after (README);
   behaviour gate for emulator changes: `scripts/port_gate.sh LABEL`.
 - Training GUI: `uv run training-gui.py` (PEP 723 script; it also serves a read-only web view of the current runs on
@@ -939,43 +941,53 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   argmax'`. A failed entry is marked and the batch goes on (exit 1); SIGTERM marks the rest `interrupted`; running
   the same batch again skips what is done (an existing chain output, an evaluation file holding the same
   measurement; `--redo` measures again).
-- **Training and evaluation jobs lower their own priority and wait their turn: you do nothing** (the owner, Nov 13 and
-  Nov 15). `scripts/train_round.py`, `triforce train`, `triforce evaluate`, `triforce eval-chain`, `triforce
-  eval-batch` and `triforce select-checkpoint` set their own CPU priority to nice 15 at start (never raised; recorded in the plan and `run.json`;
-  what they start inherits it), and at most two of them run at once on the machine, plus one short job (estimated
-  at most 10 minutes) in an express place beside them. The others wait, the shortest first: each job estimates its
-  own run time from what it will do (training steps, evaluation episodes, chain route steps) and how long such work
-  took lately (the registry's finished jobs), and the line is ordered by estimate minus half the time waited, so a
-  long job moves up as it waits and is never starved (`triforce/jobs.py`; two at once is a bit faster than one,
-  more is not: load averages of 120). A job that has to wait prints `triforce: NAME is paused until resources are
-  available: estimated 40 minutes; 2 jobs are running (A, B); 1 job is ahead in line (C). It starts by itself; next
-  update in 5 minutes.`, repeats it every 5 minutes and prints `triforce: NAME starts after waiting N minutes` when
-  it starts; the training GUI lists it as waiting in the order the line will drain, with its estimate. **Seeing
-  that line, wait** (check back as for any long job; a long job can wait for hours behind short ones, that is by
-  design): don't kill it or the jobs it waits for to get ahead, don't stagger, split or nice jobs by hand, don't
-  restart it with `--no-wait`. **A job there is no reason to run any more is ended** (the owner, Nov 18: "kill running
-  jobs if there's no reason to run something. I more meant don't needlessly kill running jobs"): a duplicate, a
-  measurement a decision made pointless (a clips-off chain after Nov 18), an arm already decided. End your own job
-  with one SIGTERM (its plan ends `interrupted`), running or waiting; never another agent's or the owner's without
-  asking. A job that dies, running or waiting, stops counting by itself (liveness comes from `/proc`, nothing
-  has to report in). The opt-outs exist for the owner: `--nice N` (0 leaves the priority alone; `$TRIFORCE_NICE`
-  changes the default), `--no-wait` (start now; still counts as running for the others; `$TRIFORCE_NO_WAIT=1` for a
-  wrapper), `$TRIFORCE_MAX_JOBS` (regular places, default 2, 0 = no limit). A round or batch waits once as one job;
-  its own trainings, evaluations and chains don't wait again. Play, replay and build tools (`play-zelda.py`,
-  `zelda-headless.py`, `create-video.py`, `zelda-map.py`, `tf replay`, explore, entry_states) keep normal priority
-  and never wait: they are interactive, short, or build data that a job waits on. I/O priority is left alone.
-- **The owner's player comes first: an agent's builds, suites and explorers run under `nice -n 10`** (Nov 17).
-  `play-zelda.py` simulates on `--parallel` (8) threads at the priority it was started with, and a `cmd &` from
-  zsh starts at nice 5 (zsh's `BG_NICE`; the nice limit is 0, so the player cannot raise itself). Next to an
-  agent's `cargo test`, two explorers and a chain it got 1.8 cores for its 8 games (load average 60 on 20 threads)
-  and its queues filled slowly. So everything heavy an agent starts that is not a queued job (`cargo`, `maturin`,
-  pytest, `triforce.explore`, `entry_states build`, walk scripts) gets `nice -n 10`: above the jobs' 15, below the
-  player. **The CPU, not the GPU, is what runs out** (the owner, Nov 17): the job line carries everything that plays
-  models; outside it an agent runs one heavy thing at a time, explorers with `--parallel 4`, cargo and maturin with
-  `CARGO_BUILD_JOBS=4`, full suites once at the end of its task, and starts nothing heavy while the load average is
-  above 30. For the fastest start of the player: `.venv/bin/python play-zelda.py 3x3` in the foreground or with `&!`
-  after `setopt nobgnice`; `uv run play-zelda.py` also works but rebuilds the module (40 s or more) the first time
-  after `pyproject.toml` changed, which is every landing.
+- **The job queue: everything heavier than a build or a test runs through `triforce job`** (the owner, Nov 23,
+  after 17 chains loaded their teams outside the old per-tool line and held the machine for 25-48 minutes at load
+  200). One command, from any checkout (main's `.venv/bin/triforce`, or the worktree's own), blocks until the work
+  is done; stdout and stderr pass through, the exit code is the command's; stopping it (SIGTERM, Ctrl-C) stops the
+  job (your harness's background jobs cover "start it and come back"):
+  - `triforce job run --agent A --task T --subtask S --desc "one sentence" [--express] [--timeout 40m] -- COMMAND...`:
+    trainings, evaluations, chains, batches, rounds, 250 tests, lab trainings, recordings, benches, explorers,
+    `entry_states`, experiment scripts, replay crunching, archiving and backups. `--agent` is your name or your
+    worktree/branch, whichever says more, the same for all your work; `--task` the major task (`Retraining`),
+    `--subtask` the part (`d3`); `--desc` one sentence of at most 120 characters. The job takes its place in line
+    **before** the command starts, at nice 15; our tools (`triforce train|evaluate|eval-chain|eval-batch|
+    select-checkpoint`, `scripts/train_round.py`, `scripts/full_runs.py run|runs250`, `triforce.lab.train|record|
+    bench`) are asked their work first (training steps, episodes, route steps: an argument error fails at once) and
+    estimated from the queue's history; any other command (a script, an old version's tool) needs `--timeout`, its
+    duration and its estimate. `--timeout` stops the command (SIGTERM, then SIGKILL) and the job ends `timeout`.
+  - `triforce job golden --agent A --task T --timeout 10m [--subtask S] [-- racer options]`: a golden race
+    (`zelda-headless.py --golden --power-on --clips on --act model --parallel 16`), at most `--timeout`, which is its
+    estimate; running out of time is a result ("no golden path in 10 minutes", exit 0); its replays are archived.
+  - `triforce job build --agent A --task T` (`maturin develop --release`) and `triforce job test
+    python|rust|asm|all --agent A --task T [--build]` (`--build`: build, then test, as one entry): their own lane,
+    two at once on the machine, first come first served, never behind a training; nice 10 and `CARGO_BUILD_JOBS=4`.
+    Every build and every suite goes through them (`--timeout 60m` replaces `timeout 3600`).
+  - `triforce job setup BRANCH [--from main]`: the worktree `../triforce-<branch>` with `roms`, `trajectories` and
+    `models` linked, its venv and its build. `triforce job list [--calibration]`: what runs, what waits and in which
+    order, what ended in the last hour; `--calibration` compares estimates with actual times per kind.
+  Two jobs run at once in the regular places, plus one estimated at 10 minutes or less (or `--express`) in the
+  express place; the others wait, the shortest estimate first, a long one moving up as it waits (estimate minus half
+  the time waited). A waiting job is only its wrapper: no model, no GPU memory, a check a second. It prints
+  `triforce job: #12 A-T-S waits for a place: estimated 40 minutes; 2 jobs are running (...)` every 5 minutes and
+  `... starts (regular-1, nice 15, ...)` when it starts. **Seeing that line, wait**: don't kill jobs to get ahead,
+  don't split or stagger them by hand. **A job there is no reason to run any more is ended** (the owner, Nov 18):
+  end your own with one SIGTERM to its wrapper, never another agent's or the owner's without asking. Priority, time
+  limits and the cargo job count are the queue's: `nice`, `ionice`, `timeout` or `CARGO_BUILD_JOBS=` after `--` are
+  refused. **Our tools refuse to run outside the queue** (they print the `triforce job run` form of the same command)
+  unless a terminal is attached (the owner at a shell) or they are the child of a job (a batch's chains, a round's
+  trainings); the switch is `jobs.ENFORCE`. **Every new script that plays, trains, collects or crunches calls
+  `triforce.jobs.require_job()` first** and reports its movement with `jobs.progress(done, total, unit)` (a shell
+  script: `triforce job progress DONE [TOTAL] --unit U`; any command: `run --progress-lines FILE --total N`).
+  A command from an old version's tree runs under main's `triforce job run ... --timeout D -- <that tree's
+  command>` like any other; the wrapper switches the old tree's own queue code off (`TRIFORCE_NO_WAIT=1`). Exempt:
+  the owner's interactive tools (`play-zelda.py`, `zelda-map.py`, `training-gui.py`) and what finishes in a few
+  seconds on one core (`tf replay info`, `triforce list`, `git`). When unsure: heavier than a build or a test goes
+  through the queue. **The CPU, not the GPU, is what runs out** (the owner, Nov 17): the owner's player comes first
+  (`play-zelda.py` simulates on 8 threads at the priority it was started with; jobs run at 15 and builds and suites
+  at 10 below it). For the fastest start of the player: `.venv/bin/python play-zelda.py 3x3` in the foreground or
+  with `&!` after `setopt nobgnice`; `uv run play-zelda.py` also works but rebuilds the module (40 s or more) the
+  first time after `pyproject.toml` changed, which is every landing.
 - **Compare models fairly:** re-evaluate the old model under the *current* yaml (hp distribution, one_room) before
   comparing, and rank by success **and** `mean_health_change` (per-room numbers are in `eval.json` `by_room`). A model
   that wins 3% more but takes twice the damage loses in a chain. When a schema change refuses the old model:
@@ -986,30 +998,16 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   (`triforce select-checkpoint` does both). Two models on the same 1000 seeds differ by 2.2 points of noise
   (standard error of the paired difference; same seeds don't make different models' runs alike): about 5 points is
   a result, 2-3 points need 2000-5000 runs an arm; secondaries such as the hearts on entering a room are sharper.
-- **Every job is in the job registry, and every job has a plan** (the owner, Nov 13; replaces round 21's "start single
-  trainings without `--events`"). Each plan (`train_round.py`, `triforce train|evaluate|eval-chain|eval-batch`,
-  from any worktree or `--logs-dir`) registers itself in `$HOME/.local/state/triforce/jobs/` (`$XDG_STATE_HOME`;
-  `$TRIFORCE_JOBS_DIR` overrides; `triforce/jobs.py`) with its folder, checkout, branch and commit, and marks the
-  entry when it ends, so `training-gui.py`'s [currently running] lists every job on the machine with its checkout
-  (waiting ones as queued), and those that ended in the last 60 minutes under "finished" (the owner, Nov 18: then they
-  leave the list by themselves, so it never piles up). The registry is also the
-  line jobs wait in. `--events FILE` into a folder without a `training.json` now writes a plan there (a driver's
-  folder with a plan keeps owning the stream). **A job the registry knows is never invisible** (the owner, Nov 22,
-  after two lab trainings ran while the GUI showed one queued batch): a job that writes no folder (`--no-log`, a
-  script that calls `triforce.jobs` itself, a checkout whose lab writes no plan) is listed from its registry entry
-  (name, kind, checkout, branch, time run or waited, estimate) and marked "no progress data"; a new kind of job
-  should still write a plan, so it shows its progress (`tests/test_training_gui.py` lists every entry point).
-  Invisible, and neither waiting nor counted: a job whose `--events` go into a folder whose plan is someone else's
-  (it is taken for that plan's child, as a round's trainings are).
-- **Every job is named for who runs it and what it measures** (the owner, Nov 23: "I have no idea which ones in
-  the queues would be theirs"). A tool's own name says neither (`zol` three times for three seeds,
-  `eval-chain-d3first-power-on` for every version's 250 test), so every job an agent starts sets
-  `TRIFORCE_JOB_NAME` (`jobs.job_name`: the name in the queue, the log folder and the training GUI), or gives
-  `train_round.py --round` / `eval-batch NAME` a name by the same convention: **`<work>-<subject>-<what>`**, lower
-  case with dashes: `<work>` the piece of work or its branch (`backtest`, `r40-fresh`, `r40-fireline`, `one38`),
-  `<subject>` the version, team or family measured (`v2.0.0.2`, `2012`, `zol`, `d2bw8`), `<what>` the job (`250`,
-  `golden`, `smoke`, `d3-1k`, `train-s1`, `rooms`). Examples: `backtest-v2.0.0.2-250`, `backtest-v1.9.0.0-smoke`,
-  `r40-fresh-zol-train-s2`, `r40-fireline-zol-scratch-s1`, `one38-d2bw8-d4-1k`, `r40-2012-d3-1k`.
+- **Every job is in the queue, shown with its progress** (the owner, Nov 13, Nov 18, Nov 23). The queue
+  (`$XDG_STATE_HOME/triforce/queue.db`, else `~/.local/state/triforce/queue.db`; `triforce/jobqueue.py`) holds every
+  job of every worktree: who (`Agent: A   Task: T   Sub-task: S`), the description, its state (`RUNNING regular 10m
+  of ~40m`, `queued #2 ~5m waited 2m`, `OVERRUN` past twice its estimate), its progress (a bar with the rate and the
+  time left when the total is known, else a counter with its rate and the elapsed time against the estimate; "no
+  progress data" for a command that reports none), and its log folder, named for the job:
+  `<yymmdd>_<NNN>_<agent>-<task>-<subtask>`. `training-gui.py`'s [currently running] and `triforce job list` read it;
+  the jobs that ended in the last 60 minutes are listed under "finished" and then leave by themselves. A tool's log
+  folder still has its plan (`training.json`) with its runs, which the GUI draws under the job; `--events FILE` into
+  a folder without a plan writes one there (a driver's folder keeps owning the stream).
 - **Chain segments** (20–40 runs each; several at once go in one batch: `triforce eval-batch NAME --chain 'd3:
   --from 3_7cs_0 --runs 40' --chain ...`, or every segment of a route with `--chains TAG [--route R]`). **`d3first`
   (the main route, no `--route` needed; `eval_batch.D3FIRST_SEGMENTS`, its states `d3first_*` named bare):** full
@@ -1080,10 +1078,10 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 Nothing is promoted unless `--promote` is given (then only after a successful evaluation; `<round>-summary.json`
 `previous_promoted` keeps the replaced run ids and act modes). Exit 0 completed, 1 failed (any specialist not ok,
 or a chain error), 2 unknown or untrainable `--specialists`. One SIGTERM stops training and evaluations and ends
-open runs `interrupted` (also while it waits its turn). `--train-args` expands only `{name}`; `--models-dir` defaults
-to `$TRIFORCE_MODELS_DIR` or `<repo>/models`. Event logs go to `logs/<yymmdd>_<NNN>_<round>/` (the GUI's input).
-With two trainings or evaluations already running, the round waits its turn before anything starts (the "paused
-until resources are available" line; Working rules): start it as usual and let it wait. `--parallel 16` is the
+open runs `interrupted`. `--train-args` expands only `{name}`; `--models-dir` defaults
+to `$TRIFORCE_MODELS_DIR` or `<repo>/models`. Event logs go to `logs/<yymmdd>_<NNN>_<agent>-<task>-<subtask>/` (the
+GUI's input). The round is one job: `triforce job run --agent A --task T --subtask S --desc ... --
+.venv/bin/python scripts/train_round.py ...` (Working rules, "The job queue"). `--parallel 16` is the
 measured best for a run alone; two rounds at once take `--parallel 8` each (20 hardware threads;
 `docs/performance.md` "How many envs"). For a family whose rooms the chains can score, train with `--checkpoint-every
 N` (about 16 checkpoints a run) and choose the checkpoint by its segment: `triforce select-checkpoint FAMILY RUN
