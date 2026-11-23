@@ -159,15 +159,18 @@ class ChainOutput:
         write_jsonl(self.path, [result], append=True)
 
     def finish(self):
-        """Sorts the file's runs by seed (atomic rewrite) and marks this batch finished in the sidecar."""
+        """Sorts the file's runs by seed (atomic rewrite), marks this batch finished in the sidecar and writes the
+        file's statistics (``run_stats.write_chain``: ``<output>.stats.json``, registered)."""
         # pylint: disable=import-outside-toplevel
         from .events import write_json_atomic
+        from .run_stats import write_chain
         from .runner import RunResult, write_jsonl
         runs = [RunResult.from_dict(json.loads(line))
                 for line in self.path.read_text(encoding='utf-8').splitlines() if line.strip()]
         write_jsonl(self.path, sorted(runs, key=lambda r: (r.seed is None, r.seed)))
         self.meta['batches'][-1]['finished'] = True
         write_json_atomic(meta_path(self.path), self.meta)
+        write_chain(self.path)
 
 
 def chain_progress_events(events, runs: int, label: Optional[str] = None, route=None, seconds: float = 1.0):
@@ -334,8 +337,8 @@ def main(argv=None):
                    'eval-batch': ('triforce.eval_batch', 'main'), 'room-stats': ('triforce.room_stats', 'main'),
                    'convert-model': ('triforce.convert', 'main'),
                    'select-checkpoint': ('triforce.select_checkpoint', 'main'),
-                   'test-times': ('triforce.testlog', 'report_main')}
-    # `triforce [--models-dir DIR] train|run|play|evaluate|eval-batch|room-stats|convert-model|select-checkpoint|test-times ...`
+                   'test-times': ('triforce.testlog', 'report_main'), 'stats': ('triforce.run_stats', 'main')}
+    # `triforce [--models-dir DIR] train|run|play|evaluate|eval-batch|room-stats|convert-model|select-checkpoint|test-times|stats ...`
     # forwards the rest to the module's own CLI.
     models_dir, rest = None, argv
     while rest:
@@ -377,6 +380,7 @@ def main(argv=None):
                                              "numbered checkpoint by a chain segment, confirmed on fresh seeds)")
     sub.add_parser('test-times', help="the test suites' timing logs read together: wall time run by run, each "
                                       "test's median and worst, the slowest, what grew (triforce.testlog)")
+    sub.add_parser('stats', help="run statistics: list, show, compare (paired by seed), ingest (triforce.run_stats)")
     sub.add_parser('list', help="specialists, their promoted run and run count")
 
     promote = sub.add_parser('promote', help="mark a run as the specialist's promoted model")
