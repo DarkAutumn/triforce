@@ -3540,3 +3540,13 @@ measured on its chains like any family; then the one network (or the handful of 
 teachers and continues with PPO. Imitating the current 51 stays useful only as an experiment on capacity (Track M,
 experiment 3), not as the path to the next generation. The input and reward changes are gathered into that one
 generation so the families are retrained once (the lead's recommendation, the owner's rule).
+
+The owner, the same day: "This also helps us understand if our approach is repeatable or we are building the ship
+of Theseus." The lineage of today's networks says why (the lead, from every `run.json`'s `args.load`, Nov 23): of the
+76 promoted pointers (`promoted`, `promoted.<route>`, `late.<route>`), 3 were trained from scratch; 73 are
+continuations, up to 5 deep (wizzrobe: r33w-s93 <- r30w-wj-s89 <- r79c-wj-s85 <- r80-wplan-s78 <- r78-wizz-s78 <-
+?), and for 69 of them the chain ends in a parent that is no longer kept or in a load of "that family's promoted run"
+with no run id: their recipe cannot be replayed. A generation trained from scratch is the test of repeatability: the
+same pipeline (route data, states, curricula, rewards, recipe) must reach today's chains from nothing, family by
+family, and where it does not, the gap names what the lineage carried that the recipe does not. From here a run
+records its parent by family, run id and checkpoint SHA-1 (no path), so lineage stays traceable.
