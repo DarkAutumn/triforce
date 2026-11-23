@@ -210,9 +210,13 @@ def test_a_replay_holds_no_filesystem_path(scripted_models, states_dir, tmp_path
     for path in files:
         recording = _native.Replay(path.read_bytes())
         assert_no_path(recording)
+        acted = set(recording.decisions()['policy'].tolist())
         for model in recording.meta['models']:
             assert 'checkpoint' not in model and model['run'] and len(model['checkpoint_sha1']) == 40
-            assert {'distribution', 'value'} <= set(model['outputs']) <= set(recording.meta['outputs'])
+            if model['index'] in acted:
+                assert {'distribution', 'value'} <= set(model['outputs']) <= set(recording.meta['outputs'])
+            else:       # a network that made no decision here is named, not described
+                assert set(model) <= set(replay.BRIEF_MODEL_KEYS)
     played = _native.Replay(episodes[0].read_bytes()).meta['models']
     assert [(m['index'], m['family'], m['run']) for m in played] == [
         (0, 'ow-start', registry.promoted_run('ow-start', scripted_models))]

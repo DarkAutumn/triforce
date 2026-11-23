@@ -495,6 +495,34 @@ fn stitching_refuses_replays_that_do_not_join() {
 }
 
 #[test]
+fn networks_that_made_no_decision_are_described_briefly_and_a_stitch_keeps_every_full_description() {
+    let team = json!([0, 1, 2].map(|i| json!({"index": i, "name": format!("net-{i}"), "run": "r1", "hash": "00ff",
+                                              "act": "argmax", "checkpoint_sha1": "ab", "architecture": {"name": "zelda"},
+                                              "outputs": ["distribution", "value"]})));
+    let record = |policy: u8, start: u8, end: u8| {
+        let mut options = RecordOptions::clone(&options(false));
+        options.meta["models"] = team.clone();
+        let mut rec = Recorder::new(Arc::new(options));
+        rec.state(StateKind::Start, Context::default(), &blob(start));
+        let (dist, danger) = (dist(0), danger(0));
+        rec.decision(&Thought { policy, ..thought(1, &dist, &danger, &[]) });
+        rec.frame(0);
+        Replay::parse(rec.finish(0, ending(1), Context::default(), &blob(end))).unwrap()
+    };
+    let models = |replay: &Replay| replay.meta().unwrap()["models"].clone();
+    let full = |replay: &Replay| -> Vec<bool> {
+        models(replay).as_array().unwrap().iter().map(|m| m.get("architecture").is_some()).collect()
+    };
+    let (a, b) = (record(0, 5, 6), record(1, 6, 7));
+    assert_eq!(full(&a), [true, false, false]);
+    assert_eq!(models(&a)[2], json!({"index": 2, "name": "net-2", "run": "r1", "hash": "00ff", "act": "argmax",
+                                     "checkpoint_sha1": "ab"}));
+    let joined = Replay::parse(stitch(&a, &b, &|_, _| false).unwrap()).unwrap();
+    assert_eq!(full(&joined), [true, true, false]);
+    assert_eq!(models(&joined)[1], team[1]);
+}
+
+#[test]
 fn a_replay_cut_at_a_keyframe_and_continued_is_the_original_game() {
     let whole = recorded(130, &[40, 80], true, true, 6);
     let cut = Replay::parse(truncate(&whole, 1).unwrap()).unwrap();

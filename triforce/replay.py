@@ -28,12 +28,16 @@ STREAMS = ('rewards', 'keyframes')     # the optional streams of a recording (de
 DEFAULT_KEYFRAME_FRAMES = 600
 ENDINGS = ('unknown', 'win', 'death', 'stuck', 'other', 'error')
 SUFFIX = '.tfreplay'
+# What META ``models`` keeps of a network that made no decision in the replay (crates/replay Recorder::finish,
+# ``BRIEF_MODEL_KEYS``): who it is and what played, not how it is built.
+BRIEF_MODEL_KEYS = ('index', 'name', 'family', 'run', 'checkpoint_sha1', 'hash', 'act', 'version')
 
 
 def meta(kind: str, models: list, route: Optional[str] = None, stop_at: Optional[str] = None, **extra) -> dict:
     """The META base object of a recording: what played.  ``kind``: 'chain', 'eval' or 'train'; ``models``: per
     policy index the network that played it, described without any path (``provenance.replay_models``), with the
-    outputs each network's decisions keep described once in ``outputs`` (``provenance.OUTPUTS``); ``code`` and
+    outputs each network's decisions keep described once in ``outputs`` (``provenance.OUTPUTS``); the finished
+    replay describes a network that made no decision in it by ``BRIEF_MODEL_KEYS`` alone; ``code`` and
     ``commit``: the checkout that played (``git describe``, ``git rev-parse HEAD``)."""
     return {'triforce': __version__, 'code': code_version(), 'commit': code_commit(), 'data': data_hash(),
             'kind': kind, 'route': route, 'stop_at': stop_at, 'models': models, 'outputs': OUTPUTS, **extra}
@@ -140,7 +144,7 @@ def chain_records(files: Iterable) -> tuple[list, dict]:
     version, code and data; ``missing`` names the families without a network (their reasons named paths: None).
     ``files``: replay paths or bytes of one chain (the same META ``chain``, ``models``); ValueError otherwise."""
     from .runner import RunResult   # pylint: disable=import-outside-toplevel,cyclic-import
-    records, header = [], None
+    records, header, models = [], None, None
     for item in files:
         recording = _native.Replay(item if isinstance(item, (bytes, bytearray)) else Path(item).read_bytes())
         meta = recording.meta
@@ -149,10 +153,13 @@ def chain_records(files: Iterable) -> tuple[list, dict]:
                              "recorded with its META run and chain (version 2)")
         rooms = [event['record'] for event in recording.events() if event['type'] == 'visit']
         records.append(RunResult.from_dict({**meta['run'], 'rooms': rooms}).to_dict())
-        mine = {key: meta.get(key) for key in ('chain', 'models', 'triforce', 'code', 'data')}
+        mine = {key: meta.get(key) for key in ('chain', 'triforce', 'code', 'data')}
+        mine['models'] = [{key: m.get(key) for key in BRIEF_MODEL_KEYS} for m in meta['models']]
         if header is not None and mine != header:
             raise ValueError("the replays are not one chain's: their META chain, models or versions differ")
         header = mine
+        # A network that made no decision in a replay is described there by BRIEF_MODEL_KEYS alone.
+        models = [max(pair, key=len) for pair in zip(models, meta['models'])] if models else meta['models']
     if header is None:
         raise ValueError("no replay")
     records.sort(key=lambda r: r['seed'])
@@ -160,7 +167,7 @@ def chain_records(files: Iterable) -> tuple[list, dict]:
     models = [{'name': m['name'], 'checkpoint': f"{m['family']}/{m['run']}/ckpt.pt" if m.get('run') else None,
                'hash': m['hash'], 'act': m['act'], 'version': m.get('version'),
                'checkpoint_sha1': m.get('checkpoint_sha1'), 'config_sha256': m.get('config_sha256')}
-              for m in header['models']]
+              for m in models]
     provenance = {**chain, 'models': models, 'missing': {name: None for name in chain['missing']},
                   'version': header['triforce'], 'code': header['code'], 'data': header['data']}
     return records, {'provenance': provenance,
