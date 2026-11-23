@@ -30,8 +30,9 @@ fn bomb(c: &ChainEnv<ZCore, TfzStore>) -> Option<Action> {
         .find(|action| c.session().mask().is_allowed(action))
 }
 
-/// Enters `room` from `state` on `route` with no bombs and lays three.
-fn an_empty_bag_is_never_empty_here(nes: ZCore, route_name: &str, state: &str, room: MapLocation) -> ZCore {
+/// Enters `room` from `state` on `route` with no bombs, walks in off the doorway (`inward`: B is not read in a
+/// doorway's border band, so BOMB is offered only inside) and lays three.
+fn an_empty_bag_is_never_empty_here(nes: ZCore, route_name: &str, state: &str, room: MapLocation, inward: &str) -> ZCore {
     let what = format!("{route_name} {state}");
     let data = common::game_data();
     assert!(data.map.requires_bombs(room) && data.map.bomb_weapon(room), "{what}: the room's bomb is its weapon");
@@ -50,6 +51,18 @@ fn an_empty_bag_is_never_empty_here(nes: ZCore, route_name: &str, state: &str, r
     assert_eq!(c.cheated()[CheatItem::Bombs], 0, "{what}: a bomb merely granted is not counted");
 
     let wait = Action::parse("WAIT 4").unwrap();
+    let step_in = Action::parse(inward).unwrap();
+    for _ in 0..12 {
+        if bomb(&c).is_some() {
+            break;
+        }
+        assert!(c.session().mask().is_allowed(&step_in), "{what}: {inward} off the doorway");
+        if let ChainStatus::Done(result) = c.step(step_in).unwrap() {
+            panic!("{what}: the run ended walking in: {result:?}");
+        }
+        assert_eq!(c.session().state().bombs(), 1, "{what}: the bag on the way in");
+    }
+    assert!(bomb(&c).is_some(), "{what}: BOMB is offered inside the room, with the granted bomb, away from any wall");
     for laid in 1..=3u32 {
         // BOMB is masked while a bomb of Link's is in the air: wait for it, the bag still holding the granted one.
         let mut action = bomb(&c);
@@ -79,13 +92,13 @@ fn dodongo_and_manhandla_are_never_fought_without_a_bomb() {
     let Some(mut nes) = open_core() else { return };
     let dodongo = MapLocation::new(2, 0x0e, false);
     let manhandla = MapLocation::new(3, 0x4d, false);
-    for (route, state, room) in [
-        ("d2first", "2_0es_0", dodongo),
-        ("d3first", "d3first_2_0es_0", dodongo),
-        ("d2first", "3_4dw_0", manhandla),
-        ("d3first", "d3first_3_4dw_0", manhandla),
+    for (route, state, room, inward) in [
+        ("d2first", "2_0es_0", dodongo, "MOVE N"),
+        ("d3first", "d3first_2_0es_0", dodongo, "MOVE N"),
+        ("d2first", "3_4dw_0", manhandla, "MOVE E"),
+        ("d3first", "d3first_3_4dw_0", manhandla, "MOVE E"),
     ] {
-        nes = an_empty_bag_is_never_empty_here(nes, route, state, room);
+        nes = an_empty_bag_is_never_empty_here(nes, route, state, room, inward);
     }
 }
 
