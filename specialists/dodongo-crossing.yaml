@@ -7,7 +7,11 @@ reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8): drop
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chains arrive with partial hearts (round 5)
 items: {bombs: required}                   # the owner (Nov 14): the Dodongos' bombs are no objective, a pass-through is fine; the 10th kill's bomb stays; round 26: `required` (7:0x0c's E wall; 5:0x56 has none, so the same as `tenth` there)
-curriculum: {enabled: true}             # trajectories/dodongo-crossing (Go-Explore paths per start state)
+curriculum:                              # trajectories/dodongo-crossing (Go-Explore paths per start state)
+  enabled: true
+  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
+  - d3first_5_56s_[0-9]
+  - d3first_7_0cs_[0-9]
 one_room: true
 max_steps: 300                             # round 24: explored tracks 25-42 steps
 warm_start: null

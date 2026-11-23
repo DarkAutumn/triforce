@@ -8,7 +8,13 @@ obs: {objective: true, target: true}       # schema 2 pointer, no item targets (
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chain arrives with partial hearts (round 5)
 items: {bombs: tenth}                      # only the 10th damage-free kill's bomb (arms a forced bomb drop)
 clips: {enabled: true, off_share: 0}      # round 21: the screen wrap (W/E); the owner, Nov 18: no episode with CLIP masked
-curriculum: {enabled: true}             # round 29's second round: 0:0x17 from S (the explorer's and the ladder rule's tracks)
+curriculum:                              # round 29's second round: 0:0x17 from S (the explorer's and the ladder rule's tracks)
+  enabled: true
+  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
+  - 0_17e_[0-9]
+  - 0_18e_[0-9]
+  - 0_19e_[0-9]
+  - d3first_0_17s_[0-9]
 one_room: true                          # round 5: per-room episodes
 max_steps: 600
 warm_start: null
