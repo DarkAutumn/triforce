@@ -521,6 +521,12 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 
 - **Commit after each finished item.** If an experiment makes no forward progress, ask whether to commit the code or
   only update the experiment ledger.
+- **The lead reviews before anything merges** (the owner, Nov 23, until he says otherwise: "Treat yourself as the
+  arbiter of quality and correctness and clean up when needed, delegate to a subagent to clean up if it's going to
+  be a lot of work (but then re-review)"). A branch an agent marks `LANDABLE` is a proposal: the lead reads its diff
+  (the design, the edge cases, what the tests really prove, dead code and shims left behind), fixes small things
+  itself, sends large clean-ups back with a list and reads the result again, and only then merges. Suites passing
+  is necessary, never sufficient. Agents: say in the final report where the risky parts are and what was not tested.
 - **Every completed stretch lands in the main checkout and is pushed, playable** (the owner, Nov 17: "after each
   completion (like d6 done, d8 -> d9 etc) gets merged back into triforce and pushed. I really want to be able to do
   play-zelda and see the progress as you work"). A stretch is a dungeon with its leg (the D7 triforce, the magic
