@@ -647,6 +647,31 @@ rooms:
   # way goes E along the middle (Y $85) and then N up X $80.
   path_costs: [{cols: [0, 14], rows: [2, 6], cost: 2}]
 - level: 0
+  location: '0x1e'
+  routes: [d3first]
+  # Round 40 (the owner, Nov 23: "If your training route has link walk to the second highest position in 1e before
+  # heading to 1f, it's very easy to navigate 1f without taking damage. That is, link is standing such that his head
+  # touches the rocks"): d3first leaves 0x1e E on Link's tile row 4 (Y $5D: his head against the rock rows 0-3; the
+  # highest is Y $55, a half tile into them).  Entered there, 0x1f's line (E along Y $5D, N up X $80) took no hit in
+  # 500 of 500 crossings; from Y $55 1.55 hits, from Y $65-$85 0.77 (docs/experiments/round40.md "0x1e's row").
+  # The span makes another row a wrong exit (the objective's target and the critic's correct exit).  d2first keeps
+  # the base room.
+  exits:
+    E:
+      level: 0
+      location: '0x1f'
+      span: [4, 4]
+- level: 0
+  location: '0x1f'
+  routes: [d3first]
+  # Round 40 (the owner's line, measured in the emulator): entered from W on Y $5D (0x1e's span), Link holds E along
+  # the top strip to X $80 and N through the gap: the Peahat on ($50, $5D) has risen off the strip when he passes
+  # (asm:Peahat_Init, facing up at speed $1F; asm:Flyer_State0SpeedUp) and he is through the gap ahead of the one
+  # rising up X $80 from ($80, $7D) (asm:Spawn_AssignPositions; a few frames later it meets him: 0.77 hits from Y
+  # $65).  No hit in 500 crossings, 149 frames.  Back N -> W (step 116) the strip is clean too (0 hits in 300; down
+  # X $80 to Y $85 and W: 2.5).  Round 25's cost on the strip (base entry) is dropped: the objective's way is the line.
+  path_costs: []
+- level: 0
   location: '0x20'
   exits:
     E:

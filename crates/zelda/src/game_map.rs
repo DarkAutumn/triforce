@@ -2891,7 +2891,18 @@ mod tests {
         let own: BTreeSet<L> = d3.rooms().iter().filter(|(l, r)| map.get(**l) != Some(r)).map(|(l, _)| *l).collect();
         assert_eq!(
             own,
-            [loc(0, 0x29), loc(0, 0x2a), loc(0, 0x2b), loc(0, 0x3d), cave(0x3d), loc(0, 0x46), loc(3, 0x4a)].into()
+            [
+                loc(0, 0x1e),
+                loc(0, 0x1f),
+                loc(0, 0x29),
+                loc(0, 0x2a),
+                loc(0, 0x2b),
+                loc(0, 0x3d),
+                cave(0x3d),
+                loc(0, 0x46),
+                loc(3, 0x4a)
+            ]
+            .into()
         );
         assert_eq!(d3.rooms().len(), map.rooms().len() + 1, "d3first's one cave");
         let tags = [(loc(0, 0x29), "ow-leever"), (loc(0, 0x46), "ow-zora")];
@@ -2911,6 +2922,28 @@ mod tests {
         let unknown = GAME_YAML.replacen("  location: '0x3d'\n  routes: [d3first]", "  location: '0x3d'\n  routes: [d4first]", 1);
         let e = GameMap::from_yaml(&unknown, ROUTES_YAML).unwrap_err().0;
         assert!(e.contains("d3first") && e.contains("0x3d"), "{e}");
+    }
+
+    /// Round 40 (the owner's idea, Nov 23): `d3first` leaves 0:0x1e E on Link's tile row 4 (Y $5D, his head against
+    /// the rocks: game.yaml's d3first `span: [4, 4]`, the objective's exit tiles and the correct exit) and crosses
+    /// 0:0x1f along that row to the N gap (round 25's cost on the strip dropped: the objective's way is the line).
+    /// `d2first` plays the shared rooms, as trained.
+    #[test]
+    fn d3first_leaves_0x1e_on_the_peahat_row() {
+        let map = Arc::new(GameMap::builtin());
+        let d3 = map.route_map("d3first");
+        let (shared, row) = (map.get(loc(0, 0x1e)).unwrap(), d3.get(loc(0, 0x1e)).unwrap());
+        assert_eq!(shared.exits["E"].span, None);
+        assert_eq!(row.exits["E"].span, Some((4, 4)));
+        assert_eq!(row.exits["E"].destination, loc(0, 0x1f));
+        assert_eq!(row.exits.keys().collect::<Vec<_>>(), shared.exits.keys().collect::<Vec<_>>());
+        assert_eq!(row.exits["W"].span, shared.exits["W"].span);
+        assert_eq!((&row.enemies, &row.specialist, &row.path_costs), (&shared.enemies, &shared.specialist, &shared.path_costs));
+        let (shared, line) = (map.get(loc(0, 0x1f)).unwrap(), d3.get(loc(0, 0x1f)).unwrap());
+        assert_eq!(shared.path_costs, [PathCost { cols: (0, 14), rows: (2, 6), cost: 2 }]);
+        assert!(line.path_costs.is_empty());
+        assert_eq!(line.exits.keys().collect::<Vec<_>>(), shared.exits.keys().collect::<Vec<_>>());
+        assert_eq!((&line.enemies, &line.specialist), (&shared.enemies, &shared.specialist));
     }
 
     /// The bow detour: 0x22's stairs lead into the cellar (an in_cave room under its own id) and its ladder back;
