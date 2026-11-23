@@ -626,6 +626,13 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
     pool = EnvPool(task, num_envs=args.parallel, threads=args.threads, seed=pool_seed)
 
     harvested = harvested_source(args, config)
+    if harvested['fraction'] > 0 and harvested['states'] == 0 and args.start_state is None:
+        # A recipe must not change silently (Nov 23: a worktree without the main checkout's harvested states trained
+        # two runs on seed states alone, noticed only in run.json).
+        pool.close()
+        raise SystemExit(f"triforce train: {specialist} draws {harvested['fraction']:.0%} of its resets from "
+                         f"harvested states and {harvested['dir']} holds none (a worktree made without `triforce "
+                         f"job setup`? link the main checkout's triforce/states/harvested)")
     tracks = curriculum_tracks(trajectories)
     if continued == out_dir.resolve() and (out_dir / 'run.json').is_file():
         # A same-dir continuation is the run itself: its parent stays the one its first training recorded.

@@ -1385,7 +1385,7 @@ def test_a_running_250_test_shows_its_runs_so_far(qapp, queue, monkeypatch, job_
             outcomes = card.outcomes.outcomes
             assert {key: outcomes[key] for key in ('total', 'done', 'wins', 'stucks', 'deaths', 'errors', 'other')} == {
                 'total': 250, 'done': 4, 'wins': 0, 'stucks': 1, 'deaths': 2, 'errors': 1, 'other': 0}
-            assert outcomes['label'] == '4/250 runs · 0 won · 2 died · 1 stuck · 1 error'
+            assert outcomes['label'] == '4/250 runs · 0 won the game · 2 died · 1 stuck · 1 error'
             assert [color for count, color in gui.outcome_parts(outcomes) if count] == [
                 gui.C.warn, gui.with_alpha(gui.C.bad, 210), gui.C.muted]
             assert [(item['level'], item['runs']) for item in card.tiles.triforces] == [
@@ -1403,7 +1403,7 @@ def test_a_running_250_test_shows_its_runs_so_far(qapp, queue, monkeypatch, job_
             assert section_titles(window.detail.summary) == titles       # not a training's empty sections
             runs_so_far = window.detail.summary.sections[0][2]
             assert [(label, text) for label, _, text, _ in runs_so_far] == [
-                ('won', '0/4'), ('stuck', '1/4'), ('died', '2/4'), ('errors', '1/4')]
+                ('won the game', '0/4'), ('stuck', '1/4'), ('died', '2/4'), ('errors', '1/4')]
             for widget in (view.job_card, view.header, card):
                 widget.grab()
         finally:
@@ -1459,7 +1459,7 @@ def test_a_batch_chain_entry_shows_its_runs_so_far(qapp, queue, monkeypatch, job
             outcomes = gui.row_outcomes(run)
             assert (outcomes['done'], outcomes['wins'], outcomes['deaths'], outcomes['stucks'], outcomes['total']) == (
                 3, 1, 1, 1, 40)
-            assert outcomes['label'] == '3/40 runs · 1 won · 1 died · 1 stuck'
+            assert outcomes['label'] == '3/40 runs · 1 reached step 24 from step 0 · 1 died · 1 stuck'
             assert gui.row_outcomes(view.model.runs[1]) is None
             tally = gui.chain_tally(run.chain_progress)
             assert [(item['level'], item['runs']) for item in tally['triforces']] == [(3, 1)]
@@ -1475,7 +1475,7 @@ def test_a_batch_chain_entry_shows_its_runs_so_far(qapp, queue, monkeypatch, job
             window.deleteLater()
         snapshot = gui.WebState(root, machine=lambda: '', scan_every=0).refresh()
         card, = snapshot['cards']
-        assert card['name'] == 'd3' and card['bar_label'] == '3/40 runs · 1 won · 1 died · 1 stuck'
+        assert card['name'] == 'd3' and card['bar_label'] == '3/40 runs · 1 reached step 24 from step 0 · 1 died · 1 stuck'
         assert card['outcomes']['parts'] == [[1, gui.css_color(gui.C.ok)], [1, gui.css_color(gui.C.warn)],
                                              [1, gui.css_color(gui.with_alpha(gui.C.bad, 210))]]
         assert card['tally']['triforces'] == [['D3', 1, 1 / 3, gui.rate_color(1 / 3).name()]]

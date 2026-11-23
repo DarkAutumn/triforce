@@ -269,7 +269,8 @@ def test_chain_progress_carries_the_runs_so_far():
         'deaths': 1, 'stucks': 0, 'errors': 0, 'successes': 0}
     assert last == {'done': 4, 'runs': 4, 'successes': 1, 'deaths': 1, 'stucks': 1, 'errors': 1,
                     'triforces': [[3, 3], [4, 2], [1, 1], [2, 1], [5, 1], [7, 1], [6, 1], [8, 1], [9, 1]],
-                    'furthest_step': len(steps), 'furthest_room': 'the end', 'route_steps': len(steps)}
+                    'furthest_step': len(steps), 'furthest_room': 'the end', 'route_steps': len(steps),
+                    'from_step': 0, 'to_step': len(steps)}
     assert first['furthest_step'] == 59 and first['furthest_room'] == f"0:0x{steps[59]['room']:02x}" + (
         ':cave' if steps[59]['in_cave'] else '')
     # a chain to a stop: only the triforces before it, a win is not the game's end

@@ -1589,11 +1589,24 @@ def chain_caption(chain: dict, now: float) -> tuple[str, list[str]]:
     return sub, timing
 
 
+def win_words(progress: dict | None) -> str:
+    """What a chain's successes are, by the stretch of the route it plays (``runner.ChainTally``'s from_step, to_step
+    and route_steps): only a chain from the route's first step to its end wins the game; any other reaches the
+    step it stops at (the owner, Nov 23: a Dungeon 3 segment's "won" read as games won)."""
+    start, end, steps = ((progress or {}).get(key) for key in ('from_step', 'to_step', 'route_steps'))
+    if start is None or end is None or not steps:
+        return 'reached the end'
+    if end >= steps:
+        return 'won the game' if start == 0 else f'finished the game from step {start}'
+    return f'reached step {end} from step {start}'
+
+
 def chain_outcomes(runs: int, progress: dict | None, result: dict | None) -> dict | None:
     """A chain's runs by how they ended so far, from its latest ``chain_progress`` (``progress``; since the r40 GUI
     work it carries ``runner.ChainTally``'s deaths, stucks and errors) or, for an older stream, its successes alone
     (the summary's once it ended): {'total', 'done', 'wins', 'stucks', 'deaths', 'errors', 'other' (the runs that
-    did not win, of a stream without the tally), 'label'}; None before a run ended."""
+    did not win, of a stream without the tally), 'won' (what a success is: ``win_words``), 'label'}; None before a
+    run ended."""
     if progress is None and result is None:
         return None
     total = max(1, (result or {}).get('runs') or runs or (progress or {}).get('runs') or 1)
@@ -1603,15 +1616,16 @@ def chain_outcomes(runs: int, progress: dict | None, result: dict | None) -> dic
     wins = source.get('successes') or 0
     deaths, stucks, errors = ((progress.get('deaths') or 0, progress.get('stucks') or 0, progress.get('errors') or 0)
                               if tallied else (0, 0, 0))
+    won = win_words(progress)
     if tallied:
-        label = (f"{done}/{total} runs · {wins} won · {deaths} died · {stucks} stuck"
+        label = (f"{done}/{total} runs · {wins} {won} · {deaths} died · {stucks} stuck"
                  + (f" · {errors} error{'s' if errors != 1 else ''}" if errors else ''))
     elif source is result:
         label = f"{wins}/{total} = {fmt_pct(result.get('success_rate'))}"
     else:
-        label = f"{done}/{total} runs · {wins} reached the end"
+        label = f"{done}/{total} runs · {wins} {won}"
     return {'total': total, 'done': done, 'wins': wins, 'stucks': stucks, 'deaths': deaths, 'errors': errors,
-            'other': 0 if tallied else done - wins, 'label': label}
+            'other': 0 if tallied else done - wins, 'won': won, 'label': label}
 
 
 def outcome_parts(outcomes: dict) -> list[tuple[int, QColor]]:
@@ -1648,9 +1662,10 @@ def chain_tally_sections(outcomes: dict | None, tally: dict | None) -> list:
     if outcomes is None or not outcomes['done']:
         return []
     done = outcomes['done']
+    won = outcomes.get('won', 'reached the end')
     rows = [(what, count / done, f"{count}/{done}", color) for what, count, color in (
-        ('won', outcomes['wins'], C.ok), ('stuck', outcomes['stucks'], C.warn), ('died', outcomes['deaths'], C.bad),
-        ('errors', outcomes['errors'], C.muted), ('not won', outcomes['other'], C.bad)) if count or what == 'won']
+        (won, outcomes['wins'], C.ok), ('stuck', outcomes['stucks'], C.warn), ('died', outcomes['deaths'], C.bad),
+        ('errors', outcomes['errors'], C.muted), ('did not', outcomes['other'], C.bad)) if count or what == won]
     sections = [('bars', f"Runs so far ({done} of {outcomes['total']})", rows)]
     if tally and tally['triforces']:
         sections.append(('bars', 'Triforces taken', [(f"Dungeon {item['level']}", item['share'],
