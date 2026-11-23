@@ -680,7 +680,11 @@ def checkout_flags(root: Path, module: bool = True) -> list[dict]:
     ``data-missing``), and with ``module`` a built module that is not the build of its sources (red
     ``module-stale``, ``triforce.build``)."""
     flags = []
-    main = main_checkout(root)
+    try:
+        main = main_checkout(root)
+    except (OSError, subprocess.SubprocessError):
+        return [{'level': 'note', 'code': 'not-a-checkout',
+                 'text': f"git cannot read {root}: neither it nor the main checkout was looked at"}]
     edited = [line[3:] for line in _git_lines(main, 'status', '--porcelain', '--untracked-files=no')
               if line[3:] != 'uv.lock']
     if edited:

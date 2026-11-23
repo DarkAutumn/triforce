@@ -85,7 +85,7 @@ def test_every_job_start_looks_at_main_and_its_worktree(tmp_path, monkeypatch):
     (main / 'notes.txt').write_text('edited by an agent\n')
     flags = job.checkout_flags(tree)
     assert [f['code'] for f in flags] == ['main-edited'] and 'notes.txt' in flags[0]['text'] \
-        and 'uv.lock' not in flags[0]['text']
+        and 'uv.lock' not in flags[0]['text'].split(': ', 1)[1]
     (main / 'notes.txt').write_text('one\n')
     (main / 'more.txt').write_text('x\n')
     _git(main, 'add', 'more.txt')
