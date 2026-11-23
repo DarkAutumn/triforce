@@ -487,8 +487,10 @@ impl<S> Executor<S> {
                 // against 3, also with a CLIP's frame kept). A MOVE that ended in a transition (a scroll, stairs,
                 // a cave, a stun) keeps it too: the next decision comes where it always did, out of play's own init
                 // (asm:IsUpdatingMode; without it the first decision out of Level 5 at 0x0b came while the game read
-                // no input and its RECORDER's sub-screen never opened).
-                if action.kind != ActionKind::Move || m.frame != walking {
+                // no input and its RECORDER's sub-screen never opened). So does a MOVE that played no frame (one that
+                // stops before its first frame): no action passes without the game running a frame (post-d7: 2 runs
+                // in 0x3f repeated MOVE E so, to the 2000-step limit in a few hundred frames).
+                if action.kind != ActionKind::Move || m.frame != walking || m.frame == start {
                     self.step(m, 0, 1);
                 }
             }
