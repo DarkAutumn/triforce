@@ -89,7 +89,7 @@ def test_a_tunnel_joins_its_two_rooms(tmp_path):
 
 
 def test_both_ways_of_a_stretch_are_followed(tmp_path):
-    """Lee's Lost Woods way (Nov 14): with clips 0x51's wrap exit into 0x50; without, S into the Lost Woods and out
+    """The owner's Lost Woods way (Nov 14): with clips 0x51's wrap exit into 0x50; without, S into the Lost Woods and out
     by its sequence into 0x60 from E, then N into 0x50; both rejoin in 0x40 from S.  Each way is checked on its own."""
     stretch = """\
         - {level: 0, room: '0x52', entry: N, exit: W}

@@ -92,10 +92,10 @@ def test_load_widens_an_older_checkpoint_only_with_obs_target(states_dir, tmp_pa
     from .conftest import seeded_network  # pylint: disable=import-outside-toplevel
     spec = obs_spec_from_space(observation_space())
     del spec['target']
-    old = registry.save_checkpoint(SPECIALIST, 'schema1', seeded_network(1, ModelConfig(obs_spec=spec, hidden_dim=32)),
+    old = registry.save_checkpoint(SPECIALIST, 'older', seeded_network(1, ModelConfig(obs_spec=spec, hidden_dim=32)),
                                    iterations=3, steps=96, root=tmp_path)
     checkpoint = torch.load(old, weights_only=False)
-    checkpoint['obs_schema_version'] = 1
+    checkpoint['obs_schema_version'] = registry.OLDEST_OBS_SCHEMA
     torch.save(checkpoint, old)
     config = tmp_path / 'target.yaml'
     config.write_text("name: ow-start\nrooms: ['(0, 0x77)', '(0, 0x77, cave)', '(0, 0x39)']\n"
@@ -470,7 +470,7 @@ def test_a_stop_also_waits_for_the_hearts_lost_to_stop_improving(states_dir, tmp
 
 
 def test_a_stop_also_waits_for_the_bomb_value_to_stop_improving(states_dir, tmp_path, logs_dir, monkeypatch):
-    """With --stop-bombs-delta (Lee, round 19) a confirmed check also needs the bomb value per episode (the bomb
+    """With --stop-bombs-delta (the owner, round 19) a confirmed check also needs the bomb value per episode (the bomb
     reward terms: 0.5 per hit, 0.75 per drop armed, 0.5 per pickup, -0.25 per bomb) to be no better than the best
     earlier check by the delta or 2 SE: hearts level from the start, bombs rising, then level."""
     bombs = [{'placed': 2, 'hits': 0}, {'placed': 2, 'hits': 1}, {'placed': 2, 'hits': 2, 'armed': 1},

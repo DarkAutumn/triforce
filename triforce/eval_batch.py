@@ -7,7 +7,7 @@
                                            [--output-dir DIR]]
                              [--chain '[ENTRY:] EVAL-CHAIN ARGS' ...] [--evaluate '[ENTRY:] EVALUATE ARGS' ...]
                              [--parallel CORES] [--eval-parallel 4] [--jobs 1] [--nice N] [--no-wait] [--redo]
-                             [--logs-dir DIR] [--models-dir DIR] [--allow-incompatible-models]
+                             [--logs-dir DIR] [--models-dir DIR]
 
 A batch is a named list of evaluations, in command-line order:
 
@@ -910,8 +910,6 @@ def build_parser() -> argparse.ArgumentParser:
     add_job_arguments(parser)
     parser.add_argument('--logs-dir', default=None, help=f"event logs root (default ${LOGS_DIR_ENV} or <repo>/logs)")
     parser.add_argument('--models-dir', default=None)
-    parser.add_argument('--allow-incompatible-models', action='store_true',
-                        help="load models whose version differs from this code's in its first three numbers")
     return parser
 
 
@@ -954,8 +952,6 @@ def main(argv=None) -> int:
     """``triforce eval-batch``: 0 every evaluation ok, 1 any failed, 2 a batch that can't run, 130 stopped."""
     argv = list(sys.argv[1:] if argv is None else argv)
     args = build_parser().parse_args(argv)
-    from .registry import set_allow_incompatible  # pylint: disable=import-outside-toplevel
-    set_allow_incompatible(args.allow_incompatible_models)
     if args.parallel < 1 or args.eval_parallel < 1 or args.jobs < 1:
         print("triforce eval-batch: error: --parallel, --eval-parallel and --jobs must be >= 1", file=sys.stderr)
         return 2

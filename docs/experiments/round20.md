@@ -1,6 +1,6 @@
 # Round 20: Dungeon 4 (the route's fourth dungeon)
 
-Lee, Nov 12: finish Dungeon 4. Merge it into the one route (`d2first`, delete `d2first-d4`), take the keys of 0x51
+The owner, Nov 12: finish Dungeon 4. Merge it into the one route (`d2first`, delete `d2first-d4`), take the keys of 0x51
 and 0x40, let Vires be bombed (0x31 and 0x12; walk past them in 0x61), keep the scouted families (`vire`,
 `like-like`, `ow-peahat`, `boss-gleeok`; the rupee room 0x11 stays in `trap-room`). Train the new families,
 continue the old ones on their Dungeon 4 rooms, measure in single rooms and in chains, promote. Branch `d4`, run ids
@@ -18,7 +18,7 @@ and promoted. Three engine gaps found in zelda-asm had to be closed first: the l
 before the route's N door), Gleeok (his heads weren't observable and his body paid boss hits), and kills the game
 doesn't count (a Vire's Red Keese) not resetting the stall penalty. The explorer then found a fourth: the executor
 could walk Link through a wall by turning him sideways in a doorway (§2). Its fix, a game-faithful action mask,
-costs the old D2 models: the D2 segment fell from 82.1% to 68.6% (§5). **Lee (Nov 12): a complete retrain follows
+costs the old D2 models: the D2 segment fell from 82.1% to 68.6% (§5). **The owner (Nov 12): a complete retrain follows
 from another agent; the regression is documented here and in backlog.md, not fixed in this round.**
 
 1000 runs per segment (`r70-1k`): D4 segment (4:0x71 → D4 triforce) **21.1%**, D3 → out of D3 38.6%, after D3 → D4
@@ -82,19 +82,19 @@ Continuations were compared room by room with the old promoted run re-evaluated 
 two passed at once. ow-zora's argmax lost 0.07 hearts in 0:0x56 and was continued once more (`r70-d4-cont2`, which
 passes in sample mode, tied with argmax overall). stalfos-keese-gel needed a reset (below).
 
-- **stalfos-keese-gel and 4:0x21** (Lee). The continued run (`r70-d4-cont`) won 0x21 (W → bomb N) in 0% of 300
+- **stalfos-keese-gel and 4:0x21** (the owner). The continued run (`r70-d4-cont`) won 0x21 (W → bomb N) in 0% of 300
   episodes: Link wandered to the bottom-left corner and waited until the quiet tail ended the episode (the explorer
-  solves the state in 96 steps). Lee had the run thrown away and the family trained from scratch
+  solves the state in 96 steps). The owner had the run thrown away and the family trained from scratch
   (`r70-skg-scratch`: 99.4%, 0x21 97.3%), then continued once (`r70-skg-cont`) for the D1 rooms' hearts.
 - **vire in sample mode:** argmax and sample are within noise overall (98.4 vs 98.8%), but argmax wins 0x12 in 91.3%
   against 97.0% (300 episodes each).
-- **boss-gleeok** (Lee). The first run (`r70-d4-new`, killed at 3M steps, set aside as `r70-d4-new.interrupted`)
+- **boss-gleeok** (the owner). The first run (`r70-d4-new`, killed at 3M steps, set aside as `r70-d4-new.interrupted`)
   reached 22% in training. 120 episodes of it by start health: full health 54% (6.8 boss hits per episode, all
   beams), partial health 0 of 59 (0.1 hits per episode; it hid or died), although melee works (poked under a head at
   3 hearts, SWORD N cut a head in 9 swings for 2 hearts). PBRS was ±22 per episode, twice the other bosses' rate per
-  step, from dodging and knockback. Lee chose start health `[0.5, max]` (3.5–7 hearts) and `pbrs: false` for this
+  step, from dodging and knockback. The owner chose start health `[0.5, max]` (3.5–7 hearts) and `pbrs: false` for this
   family; from scratch it reached 52% at 4M steps and 94.7% at 8M (argmax; sample 89.7%).
-- **Linger:** like-like, boss-gleeok and stalfos-keese-gel each have one episode lingering 598–638 steps (Lee's
+- **Linger:** like-like, boss-gleeok and stalfos-keese-gel each have one episode lingering 598–638 steps (the owner's
   500-step rule); not investigated before promotion (backlog).
 
 ## 4. Chains, 1000 runs per segment
@@ -140,14 +140,14 @@ D4 segment per room (1000 runs):
 - The ladder works in the chain: all 761 runs that reached 4:0x20 came from 0x30 across the water. No cheated key
   anywhere (the keys of 0x51 and 0x40 are taken).
 - Every run reaches 0x21 and 0x11 without bombs (the D3 segment's Manhandla spends them), so both walls use a
-  cheated bomb. Vires were never bombed (no bombs above the reserve of 2), so Lee's 0x31/0x12 bombing and the 0x61
+  cheated bomb. Vires were never bombed (no bombs above the reserve of 2), so the owner's 0x31/0x12 bombing and the 0x61
   walk-past are untested in the chain.
 - **Gleeok.** Arrival health averages 2.1 hearts. Outcomes by arrival health: 6 hearts or more 12 of 12 won; 3.5–6
   85% won; under 3.5 hearts (492 of 598 visits) 24% won, 185 deaths and all 188 stalls (2000-step room budget):
   below the trained health range Link hides.
 - 0x12 (141 deaths) and 0x30 (119) are the other big D4 losses.
 
-## 5. The doorway fix costs the old models (not fixed; Lee: a full retrain follows)
+## 5. The doorway fix costs the old models (not fixed; the owner: a full retrain follows)
 
 The D2 segment fell from 82.1% to 68.6% with no D2 family retrained. Same checkpoint (goriya `r68-clear5e`, sample,
 seed 0), two builds: without `c222323` its rooms evaluate exactly as its old `eval.json` (2:0x1e 92.0%, −0.38

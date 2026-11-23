@@ -15,7 +15,7 @@ ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0
 # bombs). 0x64 at 5 is its plain way back (the fight done on the way in: its kills stay in the room history).
 # Round 28: Dungeon 8's two fights the same way, 0x5e (5 Blue Darknuts: 1-4 banked, one at least is left to kill for
 # the key and the N shutter) and 0x3e (6: 1-5 banked, for the E shutter).
-items: {bombs: free}                       # Lee, Nov 11: bombs as a weapon (enemies with more than 3 hits); above the route's bomb reserve (Dungeon 5: 0 in the Olive Garden, 8 elsewhere)
+items: {bombs: free}                       # The owner, Nov 11: bombs as a weapon (enemies with more than 3 hits); above the route's bomb reserve (Dungeon 5: 0 in the Olive Garden, 8 elsewhere)
 clips: {enabled: true, off_share: 0}      # round 24: 5:0x64's block clip to the stairs; clips only (the owner, Nov 18; round 30): no episode with CLIP masked
 curriculum: {enabled: true}             # trajectories/darknut (Go-Explore paths per start state)
 # Round 30: a third of the resets start from the chain's own entries at the hearts, bombs and kills the route brings
@@ -32,7 +32,7 @@ notes: >-
   Link holds, round 23, then the wall); 0x5c (3 Darknuts, round 22) W to N through its open
   doorway; 0x59 (5 Darknuts, kill-all S shutter)
   E to N, N to S (kill them all: the shutter) and S to E; 0x69 (8 Darknuts, bombs) N to the stairs down to the raft
-  cellar and back up N, never fighting for its treasure (Lee: `treasure: skip`). Copied from goriya. Dungeon 5 (round
+  cellar and back up N, never fighting for its treasure (the owner: `treasure: skip`). Copied from goriya. Dungeon 5 (round
   24; docs/routes/d5.md): Blue Darknuts join the Red (the owner). 0x64 (5 Blue Darknuts) E to the stairs inside its
   block diamond, with clips by the block clip N from ($A0,$9D) and no fight, without clips by killing them and
   pushing the W block N or S (one route step; the clips switch picks the objective); back out of the tunnel cellar

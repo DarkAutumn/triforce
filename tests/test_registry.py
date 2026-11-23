@@ -52,14 +52,15 @@ def test_checkpoint_round_trip_restores_model_and_optimizer(tmp_path):
         assert torch.equal(state['exp_avg'], original[param_id]['exp_avg'])
 
 
-@pytest.mark.parametrize('key', ['obs_schema_version', 'action_schema_version'])
-def test_schema_mismatch_raises(tmp_path, key):
+@pytest.mark.parametrize('key, words', [('obs_schema_version', 'observation schema'),
+                                        ('action_schema_version', 'action schema')])
+def test_schema_mismatch_raises(tmp_path, key, words):
     network, _ = _trained()
     path = registry.save_checkpoint('d1-test', 'old', network, root=tmp_path)
     checkpoint = torch.load(path, weights_only=False)
     checkpoint[key] += 1
     torch.save(checkpoint, path)
-    with pytest.raises(registry.SchemaMismatchError, match=key):
+    with pytest.raises(registry.SchemaMismatchError, match=f"can't load this model: {words}"):
         registry.load_checkpoint(path)
     with pytest.raises(registry.SchemaMismatchError):
         registry.promote('d1-test', 'old', root=tmp_path)
@@ -69,23 +70,24 @@ def test_schema_mismatch_raises(tmp_path, key):
 SMALL = dict(hidden_dim=32, entity_d_model=32, entity_ff_dim=32, grid_out_dim=32)
 
 
-def _schema1_checkpoint(tmp_path, edit=None):
-    """A checkpoint saved as obs schema 1: the current layout without ``target`` (``edit`` changes the spec)."""
+def _older_checkpoint(tmp_path, edit=None):
+    """A checkpoint saved as the oldest observation schema this code reads: the current layout without ``target``
+    (``edit`` changes the spec)."""
     spec = obs_spec_from_space(observation_space())
     del spec['target']
     if edit:
         edit(spec)
     network = seeded_network(1, ModelConfig(obs_spec=spec, **SMALL))
-    path = registry.save_checkpoint('ow-start', 'schema1', network, root=tmp_path)
+    path = registry.save_checkpoint('ow-start', 'older', network, root=tmp_path)
     checkpoint = torch.load(path, weights_only=False)
-    checkpoint['obs_schema_version'] = 1
+    checkpoint['obs_schema_version'] = registry.OLDEST_OBS_SCHEMA
     checkpoint['model_config']['grid_encoder'] = 'conv'     # every checkpoint saved before r56 carries it
     torch.save(checkpoint, path)
     return path
 
 
 def test_a_pre_r56_checkpoint_loads_and_another_grid_encoder_does_not(tmp_path):
-    path = _schema1_checkpoint(tmp_path)
+    path = _older_checkpoint(tmp_path)
     network, checkpoint = registry.load_model(path)
     assert checkpoint['model_config']['grid_encoder'] == 'conv' and network.config.obs_spec
     checkpoint['model_config']['grid_encoder'] = 'linear'
@@ -95,9 +97,9 @@ def test_a_pre_r56_checkpoint_loads_and_another_grid_encoder_does_not(tmp_path):
 
 
 def test_older_schema_subset_checkpoint_reads_only_its_own_keys(tmp_path, states_dir):
-    assert registry.obs_schema_version() == 7
-    network, checkpoint = registry.load_model(_schema1_checkpoint(tmp_path))
-    assert checkpoint['obs_schema_version'] == 1 and 'target' not in network.config.obs_spec
+    assert registry.obs_schema_version() == 7 and registry.OLDEST_OBS_SCHEMA == 6
+    network, checkpoint = registry.load_model(_older_checkpoint(tmp_path))
+    assert checkpoint['obs_schema_version'] == 6 and 'target' not in network.config.obs_spec
     # Eagerly on current observations: the target block is ignored.
     space = observation_space()
     space.seed(0)
@@ -110,7 +112,7 @@ def test_older_schema_subset_checkpoint_reads_only_its_own_keys(tmp_path, states
         assert torch.equal(before, network.evaluate(obs, actions=actions).log_prob)
     # Through the native eval pool (PoolInference / RolloutPolicy over current rows).
     config = _native.SpecialistConfig.load('ow-start').replace(start_states=['start'], max_steps=5)
-    result = evaluate_specialist(config, tmp_path / 'ow-start' / 'schema1', episodes_per_state=2, parallel=2,
+    result = evaluate_specialist(config, tmp_path / 'ow-start' / 'older', episodes_per_state=2, parallel=2,
                                  threads=1, states_dir=states_dir, clips='on')
     assert result['episodes'] == 2 and all(0 < r['steps'] <= 5 for r in result['records'])
 
@@ -147,8 +149,8 @@ def _random_observations(space, rows, seed):
 def test_widened_policy_acts_exactly_like_the_original_for_any_target(tmp_path):
     torch.manual_seed(3)
     full = obs_spec_from_space(observation_space())
-    old, _ = registry.load_model(_schema1_checkpoint(tmp_path))
-    wide, checkpoint = registry.load_model(tmp_path / 'ow-start' / 'schema1', obs_spec=full)
+    old, _ = registry.load_model(_older_checkpoint(tmp_path))
+    wide, checkpoint = registry.load_model(tmp_path / 'ow-start' / 'older', obs_spec=full)
     assert 'target' not in checkpoint['model_config']['obs_spec'] and wide.config.obs_spec == policy_spec(full)
     obs = _random_observations(observation_space(), 16, 1)
     obs['target'] = np.random.default_rng(2).uniform(-1, 1, obs['target'].shape).astype(np.float32)
@@ -160,7 +162,7 @@ def test_widened_policy_acts_exactly_like_the_original_for_any_target(tmp_path):
         for x, y in zip(old(obs), wide(obs)):
             assert torch.allclose(x, y, atol=1e-5)
     # Without obs_spec (or with the checkpoint's own) nothing is widened.
-    assert registry.load_model(tmp_path / 'ow-start' / 'schema1')[0].config.obs_spec == old.config.obs_spec
+    assert registry.load_model(tmp_path / 'ow-start' / 'older')[0].config.obs_spec == old.config.obs_spec
     with pytest.raises(ValueError, match="only new 1-D float vector keys"):
         widen_policy(old, {**old.config.obs_spec, 'extra': {'shape': [2, 2], 'vocab': None}})
     with pytest.raises(ValueError, match="'link'"):
@@ -194,11 +196,11 @@ def test_widened_inputs_start_at_zero_and_train():
     (lambda spec: spec['entity_types'].update(vocab=100), "'entity_types' is shape"),
 ])
 def test_older_schema_with_a_different_layout_is_rejected(tmp_path, edit, match):
-    path = _schema1_checkpoint(tmp_path, edit)
+    path = _older_checkpoint(tmp_path, edit)
     with pytest.raises(registry.SchemaMismatchError, match=match):
         registry.load_checkpoint(path)
     with pytest.raises(registry.SchemaMismatchError):
-        registry.promote('ow-start', 'schema1', root=tmp_path)
+        registry.promote('ow-start', 'older', root=tmp_path)
 
 
 def test_promote_round_trip_and_listing(tmp_path, monkeypatch):
@@ -349,24 +351,30 @@ def test_checkpoints_load_safely_with_numpy_metrics_and_refuse_pickled_code(tmp_
     assert not (tmp_path / 'pwned').exists()
 
 
-def test_a_saved_checkpoint_is_stamped_and_only_a_compatible_model_loads(tmp_path, monkeypatch):
-    monkeypatch.setenv(registry.ALLOW_INCOMPATIBLE_ENV, '0')
+def test_a_model_loads_by_its_schemas_and_its_version_is_provenance(tmp_path):
+    """AGENTS.md "Versioning": the checkpoint's schema numbers and network architecture decide; the run's ``version``
+    (which code trained it) decides nothing."""
     path = registry.save_checkpoint('d1-test', 'a', _trained()[0], root=tmp_path)
     assert registry.model_version(path) == registry.model_version(path.parent) == triforce.__version__
-    registry.require_compatible(path)
-    major, minor, compat, _ = triforce.__version__.split('.')
-    registry.write_model_version(path, f'{major}.{minor}.{compat}.7')        # another revision: compatible
-    registry.require_compatible(path.parent)
-    registry.write_model_version(path, '1.2.9.9')
-    with pytest.raises(registry.IncompatibleModelError, match=r"model version 1\.2\.9\.9 is not compatible"):
-        registry.require_compatible(path)
-    (path.parent / registry.VERSION_NAME).unlink()
+    registry.write_model_version(path, '1.2.9.9')                   # another version, the same schemas: loads
+    registry.load_model(path)
+    (path.parent / registry.VERSION_NAME).unlink()                  # none at all: loads
     assert registry.model_version(path) is None
-    with pytest.raises(registry.IncompatibleModelError, match="model version unversioned.*triforce stamp"):
-        registry.require_compatible(path)
-    registry.set_allow_incompatible(False)                                   # never switches anything on
-    with pytest.raises(registry.IncompatibleModelError):
-        registry.require_compatible(path)
-    monkeypatch.setenv(registry.ALLOW_INCOMPATIBLE_ENV, '1')
-    with pytest.warns(UserWarning, match='unversioned is not compatible'):
-        registry.require_compatible(path)
+    registry.load_model(path.parent)
+    checkpoint = registry.load_checkpoint(path)
+    action, obs, oldest = _native.ACTION_SCHEMA_VERSION, _native.OBS_SCHEMA_VERSION, registry.OLDEST_OBS_SCHEMA
+    for change, message in (
+            ({'action_schema_version': action - 1}, f"action schema {action - 1}, this code's is {action}"),
+            ({'action_schema_version': None}, f"action schema None, this code's is {action}"),
+            ({'obs_schema_version': obs + 1}, f"observation schema {obs + 1}, this code reads schemas {oldest} to "),
+            ({'obs_schema_version': oldest - 1}, f"observation schema {oldest - 1}, this code reads schemas"),
+            ({'model_config': {**checkpoint['model_config'], 'arch': 'nope'}}, "network architecture 'nope', this "
+                                                                               "code builds \\['zelda'")):
+        bad = tmp_path / 'd1-test' / 'bad' / registry.CHECKPOINT_NAME
+        bad.parent.mkdir(exist_ok=True)
+        torch.save({**checkpoint, **change}, bad)
+        registry.write_model_version(bad)                           # this code's own version: refused all the same
+        with pytest.raises(registry.SchemaMismatchError, match=f"can't load this model: {message}") as error:
+            registry.load_model(bad.parent)
+        assert str(error.value).startswith(f"{bad}: ")
+        assert f"(trained by triforce {triforce.__version__}; models load by their schemas" in str(error.value)

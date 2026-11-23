@@ -343,6 +343,7 @@ mod _native {
         m.add("MAX_POWER_ON_DELAY", zelda::power_on::MAX_DELAY)?;
         m.add("POWER_ON_IDLE_STEP", zelda::power_on::IDLE_STEP)?;
         m.add("OBS_SCHEMA_VERSION", obs::OBS_SCHEMA_VERSION)?;
+        m.add("OLDEST_OBS_SCHEMA", obs::OLDEST_OBS_SCHEMA)?;
         m.add(
             "ACTION_SCHEMA_VERSION",
             zelda::actions::ACTION_SCHEMA_VERSION,

@@ -117,7 +117,7 @@ look-ahead or other critic term was added. The observation spells their mask bit
 `recorder_usable`, `food_usable`, `candle_usable`), as `bomb_usable` and `clip_usable_*` do: whether the room heard
 the recorder or a blue candle's fire was used, and the family's switch, are visible nowhere else.
 
-BOMB follows the acting family's `items: {bombs: MODE}` (`env::config::BombUse`, Lee Nov 11; in `SpecialistEnv` and
+BOMB follows the acting family's `items: {bombs: MODE}` (`env::config::BombUse`, the owner Nov 11; in `SpecialistEnv` and
 chains, recomputed every step): `never`; `tenth`, only for the 10th damage-free kill (`$50` HelpDropCount = 9: a
 bomb kill then arms a forced drop of 4 bombs, `asm:Damage_KillMonster`); `required`, in game.yaml `requires_bombs`
 rooms and the 10th kill; `free`, wherever Link holds more bombs of his own than the route's bomb reserve (routes.yaml
@@ -635,7 +635,8 @@ kept); a wrap whose landing edge the objective doesn't use (it goes S) stays.
 step's) before each. `_native.observe(state, rupee_reserve=0)` is one observation of a probe's state from a fresh
 builder (no objective, mask or previous action), for probes and tests.
 Python sees the layout as
-`triforce._native.OBS_SPEC` (`key → {shape, vocab, dtype}`) plus `OBS_SCHEMA_VERSION`, `ROOM_VOCAB`,
+`triforce._native.OBS_SPEC` (`key → {shape, vocab, dtype}`) plus `OBS_SCHEMA_VERSION`, `OLDEST_OBS_SCHEMA` (the
+oldest schema whose checkpoints still load, "Checkpoint" below), `ROOM_VOCAB`,
 `ENTITY_VOCAB`, `NUM_TILE_CLASSES`, `NUM_ENTITY_SLOTS = 12` and the feature-name tuples;
 `triforce/observation.py` builds the `gymnasium.spaces.Dict` the policy uses.
 
@@ -842,7 +843,7 @@ time that cost health). Drops already on the floor on entry are not followed. Fa
 ### Cheated items (`crates/zelda/src/cheats.rs`)
 
 Bombs ($658), keys ($66E) and rupees ($66D) stay natural (never refilled; `items: {bombs: ...}` only masks the
-action) except where the room Link is in *needs* some (`cheats::needs`), Lee's Nov 8–9 rule:
+action) except where the room Link is in *needs* some (`cheats::needs`), the owner's Nov 8–9 rule:
 
 - **bombs:** 1 in rooms game.yaml tags `requires_bombs: true` (Dodongo 2:0x0e; the rock walls of 0x2c and 0x67; the
   bomb-wall rooms 3:0x5b, 3:0x4c, 4:0x21, 4:0x11, 5:0x66, 5:0x65, 7:0x69, 7:0x19, 7:0x1a, 7:0x0c, 7:0x29;
@@ -906,7 +907,7 @@ non-zero ones); chain `RoomRecord.bombs_used`, `cheated_bombs/keys/rupees` and `
 totals and `runs_with_cheated_<item>`; room events carry the run's `cheated` dict, shown in the watch player's
 footer (`cheated: 2 bombs, 1 key`, when any): such a game wasn't beaten naturally.
 
-Bomb use (`zelda::bombs::BombStats`, `_native.BOMB_STATS`, Lee Nov 11): `placed`, `hits` (credited to the placing
+Bomb use (`zelda::bombs::BombStats`, `_native.BOMB_STATS`, the owner Nov 11): `placed`, `hits` (credited to the placing
 step: every session looks ahead for bombs), `misses` (placed, no hit), `damage` (dealt by those hits, in wood-sword
 hits: an enemy's HP lost, a kill's remaining HP), `tenth_kills` (`$50` 9 → 10, any weapon),
 `tenth_tries` (placed while the next kill was the 10th), `armed` (the 10th kill made with a bomb: a forced bomb drop),
@@ -1301,7 +1302,7 @@ empty. `Session.look_ahead` (`zelda::LookAhead`): `All` in training, `Bombs` in 
 (`EnvOptions.skip_look_ahead`), chains and exploration (bombs only: their hits are counted, the rest credits only
 rewards), `Off` only by request (`Game(look_ahead=False)`).
 
-Bombs (Lee, Nov 11): placing one costs `penalty-bomb-used` (−0.25, also what a bomb that hits nothing costs), each
+Bombs (the owner, Nov 11): placing one costs `penalty-bomb-used` (−0.25, also what a bomb that hits nothing costs), each
 hit the look-ahead credits to it pays `reward-bomb-hit` (0.5, plus the usual `reward-hit`), a 10th damage-free kill
 made with a bomb (it arms a forced drop of 4 bombs) pays `reward-armed-bomb-drop` (0.75) on the step it happens, and
 a bomb pickup pays `reward-gained-bombs` (0.5) like other item
@@ -1325,8 +1326,13 @@ every step, so following an enemy that moves away pays again, and knockback rese
 - GAE discount per step: `gamma ** (frames / 8)`, `gamma = 0.99`; `frames` stored in the rollout buffer.
 - Checkpoint (`models/<specialist>/<run-id>/ckpt.pt`): `obs_schema_version`, `action_schema_version`,
   `specialist`, `model_config`, `state_dict`, `optimizer`, `iterations`, `steps`, `metrics`.
-  Loading raises `SchemaMismatchError` on a different action schema, a newer observation schema, or an older one
-  whose `model_config.obs_spec` isn't a subset of the current `OBS_SPEC` (same shape and vocabulary per key); the
+  Whether a model loads is decided by these alone, never by the run's `version` (AGENTS.md "Versioning", the
+  owner's rule of Nov 23; `registry.schema_problem`): loading raises `SchemaMismatchError` (the path, what differs,
+  the version that trained it) on a different action schema, a network architecture (`model_config['arch']`) that
+  `triforce.nets` doesn't build, an observation schema outside `OLDEST_OBS_SCHEMA` (6) to `OBS_SCHEMA_VERSION` (7;
+  both `crates/env/src/observation.rs`), or an older one whose `model_config.obs_spec` isn't a subset of the current
+  `OBS_SPEC` (same shape and vocabulary per key); a change to what an existing column means raises
+  `OLDEST_OBS_SCHEMA`. The run dir's `version` (the code that saved it) is provenance only. The
   network reads only the keys of its own `obs_spec` (`ZeldaPolicy._batch`). Training a specialist with
   `obs.target` on from an older checkpoint (`--load` or `warm_start`) widens it to the current layout
   (`model.widen_policy` via `registry.load_model(obs_spec=...)`): every weight is copied and the towers' input
@@ -1338,10 +1344,10 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `ckpt.pt`, the source untouched. Schema 6's added features (`convert.ADDED`, matched by feature name) get zero
   columns in the first tower layers (`link`, `room_state`) and in the entity encoder's `input_proj` (the entity
   features, before the type embedding's columns); the Adam moments are padded with zeros (so `--load` continues as
-  from the source). The copy is stamped with this code's version, its `act` file re-bound to the new sha1 (same
+  from the source). The copy's `version` is this code's, its `act` file re-bound to the new sha1 (same
   mode), `promoted` copied, and `convert.json` names the source sha1 and version and the added features; `eval.json`
-  stays the source's (bound to its sha1). Anything but exactly the 1.5.0 layout and stamp is refused; loading an
-  unconverted 1.5.0 run says how to convert it, and `model.widen_policy` (new vector keys only) refuses a changed
+  stays the source's (bound to its sha1). Anything but exactly the schema 5 layout is refused; loading an
+  unconverted schema 5 run says how to convert it, and `model.widen_policy` (new vector keys only) refuses a changed
   key with the same pointer. The Rust policy drops input columns no weight reads, of the towers' first layers
   (`Policy::live`) and of `input_proj` (`Policy::entity_live`): a zero column changes no output but would move later
   columns into other lanes of the fixed-order dot product, so a widened model computes bit for bit what its source
@@ -1478,7 +1484,8 @@ every step, so following an enemy that moves away pays again, and knockback rese
   told apart), `started`, `command`, `cwd`, `checkout`, `branch`, `commit`, `log_dir`, `plan`, `name`, `kind`,
   `status` (`queued`, then `running`, then the plan's final status from `finish`), `queued` / `queued_ts` (when it
   joined the line), `admitted` / `admitted_ts` (when it started running), `lane` (`regular` or `express`),
-  `no_wait`, `work`, `estimate`, `finished` and `ran` (seconds from admitted to finished). A `--no-log` evaluation or
+  `no_wait`, `express` (it asked for the express place), `work`, `estimate`, `finished` and `ran` (seconds from
+  admitted to finished). A `--no-log` evaluation or
   chain registers too, without a folder (`log_dir`, `plan` null; `events.logged_job(log=False)`), named after its job.
   A top-level job counts once: a round's or batch's trainings, evaluations and chains write into their owner's
   folder (`--events` into a folder with a plan) and have no entry. Writes are atomic; a registry that can't be
@@ -1511,7 +1518,12 @@ every step, so following an enemy that moves away pays again, and knockback rese
   short chain doesn't wait for the hour-long trainings that usually hold both regular places: at most two regular
   jobs and one short one. A short job takes the express place when it is free, else a regular one; express jobs
   count only against the express place; a job that gets no place waits, and a later one may take a place it can use
-  (a short job passes long ones blocked on the regular places). Every checkout runs this one rule (since Nov 17
+  (a short job passes long ones blocked on the regular places). An **express request** (Nov 23: `--express` on every
+  job entry point, or `$TRIFORCE_EXPRESS=1`; the entry's `express` field) makes a job express-sized whatever its
+  estimate: a short measurement the owner wants in the fast lane (the 250-run test, `scripts/full_runs.py runs250`,
+  7-11 minutes) is not held back when the history's rates put it over 10 minutes. It still takes its turn in the
+  line by its score and waits for the express place itself (else a regular one), and counts as running. Every
+  checkout runs this one rule (since Nov 17
   there is no fallback for code from before it: an entry without an `estimate` counts as estimate 0). Entries of
   other hosts and of a job's own process are ignored; a running entry without a `lane`
   is regular. Liveness is read from `/proc` (pid and process start time, `job_alive`), never from a job
@@ -1590,7 +1602,7 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `ram_randomization: {chain_hp: p}` draws its reset hp from its start room's list in a share `p` of room-entry
   resets (not curriculum starts); the rest keep the `hp` / `full_hp` draw. A config with `chain_hp` and no room
   with at least 5 arrivals is refused.
-- Bombs and the kill streak at reset (Lee, Nov 11; every family): `ram_randomization: {bombs: [0, 8], bombs_share:
+- Bombs and the kill streak at reset (the owner, Nov 11; every family): `ram_randomization: {bombs: [0, 8], bombs_share:
   0.5, help_count: [0, 9]}` draws Link's bomb count in half the resets (the other half keep the start state's own
   count, what the route carries there: none in Dungeon 2, round 19 §4) and a damage-free kill streak (`$50` =
   `$627` = n, `$51` = 0), so bomb use and the 10th kill's forced bomb drop come up in every family's training.
@@ -1989,8 +2001,8 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
 - `zelda-headless.py OUT [COUNT] [--wins-only | --deaths-only | --stuck-only] [--parallel N] [--first-seed S]
   [--max-runs M] [--route R] [--from STATE | --power-on [--name NAME] [--delay N|random]]
   [--stop-at ROOM|step:N] [--act MODE|model] [--streams LIST] [--keyframe-frames N]
-  [--state embed|path] [--golden [--attempts A]] [--clips on|off] [--models-dir DIR]
-  [--allow-incompatible-models]` plays the route in one chain pool without a window or rendering and writes
+  [--state embed|path] [--golden [--attempts A]] [--clips on|off] [--models-dir DIR]` plays the route in one
+  chain pool without a window or rendering and writes
   replays into `OUT`
   (`<seed>-<ending>.tfreplay`). Without a filter it plays seeds `S .. S+COUNT-1` and saves them all; with one
   it plays on (at most `--max-runs`, default 1000 × COUNT) until COUNT runs ended that way and drops the
@@ -2185,7 +2197,7 @@ is joined at the end. It prints a JSON summary (`out`, `frames`, `seconds`, `wid
 - **A promoted run per route, optional:** `models/<family>/promoted` stays every route's; `promoted.<route>`
   (`triforce promote FAMILY RUN --route R`) overrides it on R (`registry.promoted_run(family, root, route)`).
   Chains, evaluation batches, select-checkpoint (`--route`), play and the golden path resolve it by the route
-  they play; `triforce list` shows each `route=run` and where it plays, `triforce stamp` stamps them too. A replay
+  they play; `triforce list` shows each `route=run` and where it plays. A replay
   names the route and each model's checkpoint (`<family>/<run>/ckpt.pt`), so it records which run played.
 - **A route's own runs play its part only** (round 32; decisions 2026-11-20 "A route's own runs play up to its
   cutoff"): routes.yaml `own_models_until: {waypoint: NAME}` on a route (kept by a route extending it) marks the one
@@ -2217,8 +2229,8 @@ is joined at the end. It prints a JSON summary (`out`, `frames`, `seconds`, `wid
   batches, select-checkpoint, play, the golden path, `room-stats`, the lab bench (`--team` and `speed` on the
   manifest's route) and the lab teachers (on `--state-route`) follow. The name is not `promoted.*`, so
   `route_promotions` never takes it for a route's run; `registry.late_promotions` reads them, `triforce list` shows
-  `late.<route>=run (steps N-end, from ...)`, `python -m triforce.registry list` marks the run `late on <route>`, and
-  `triforce stamp` stamps them. No late pointer: the family key plays `promoted`, as before.
+  `late.<route>=run (steps N-end, from ...)` and `python -m triforce.registry list` marks the run `late on <route>`.
+  No late pointer: the family key plays `promoted`, as before.
 - **Segments and scopes per route:** `eval_batch.ROUTE_SEGMENTS[route]` (segments, arrival targets, milestones;
   start states by bare name) and `room_stats.ROUTE_SCOPES[route]` (the room-stats scopes; `room-stats` takes the
   route from the chain files). `d2first`'s are the tables of before, unchanged; `d3first`'s (`D3FIRST_SEGMENTS`,
@@ -2257,7 +2269,7 @@ and a refused treasure taken fails the crossing);
 default `target/entry-states/<yymmdd-HHMMSS>`), merging each file's manifest entry into `<out>/entry_states.json`
 (atomically) as soon as the file is written, and exit 1 when a crossing failed; `install DIR [--partial]` copies a
 finished build into the states dir and merges its manifest. `audit [--dir DIR | --specialist S | --states GLOB]`
-checks start states against Lee's rules and exits 1 on any flag: NAME, MISNAMED, ENTRY, POST-ENTRY, SHORT, HEARTS,
+checks start states against the owner's rules and exits 1 on any flag: NAME, MISNAMED, ENTRY, POST-ENTRY, SHORT, HEARTS,
 HP, OFFROUTE, BOSS-ENTRY and, for a whole directory, MISSING and ORPHAN (meanings in the module docstring). All
 use `Game`, `Explorer` and `AcceptSpec` from `triforce._native`.
 
@@ -2348,3 +2360,34 @@ self-diff is zcore's regression suite (README, "Emulator regression suite"). `tr
 prints every instruction of records K..K+N-1 for diffing two builds; `corpus {sync,check}` rebuilds the manifest
 and checks its frame counts, the 1M-frame total and the presence of a `power-on-to-d2` movie; `bench` reports
 frames/s with render on and off.
+
+## Backups (`/backup/triforce`; `scripts/archive_replays.py`, `scripts/backup_models.py`, `scripts/tidy_worktrees.sh`)
+
+`/backup/triforce` (its own disk, at least 2 TB kept free) is an archive organised by version, not a copy of
+checkouts; `/backup/triforce/README.md` documents it and `INDEX.md` there lists what it holds.
+
+- **Runs once, by content.** `backup_models.py store MODELS_DIR --source <date>_<branch>` keeps every run dir (a
+  directory with `ckpt.pt`) at `models/runs/<path under models/>`; a later run of the same path with another
+  checkpoint becomes `<path>@<sha1[:8]>`. Identical files are hard links to one copy (`models/files.tsv`), so a
+  checkout that holds main's 1,700 runs again costs nothing. `models/runs.jsonl` lists each run dir: checkpoint SHA-1,
+  `version`, size and every `<source>:<path>` it was found as. Whatever else a checkout's `models/` held (pointer
+  files, chain records, evidence) goes to `models/sources/<source>/` with `runs.txt` (its run paths -> kept dirs).
+- **A team per version.** `models/teams/<version>.json`: per route, each provenance key (`<family>@<route>`: the
+  family's `promoted.<route>`; a bare family: its `late.<route>` or `promoted`) -> run, checkpoint SHA-1, play hash,
+  act mode, and for hit-head networks the hit network and base policy they were built from; the one-network
+  students a version's golden or single runs played; how it was established and how sure. `backup_models.py manifest
+  VERSION CHAIN.meta.json` writes one from a chain's provenance (at a landing); the teams before Nov 23 were
+  reconstructed from chain `.meta.json` files and replay METAs, preferring main's records made with the version's code
+  at or just before its tag. `backup_models.py team VERSION DIR` rebuilds a models dir that plays that team (runs
+  copied out, `promoted` / `promoted.<route>` written: a bare key plays where `late.<route>` did), for `--models-dir`
+  in a worktree of the version's tag; it refuses when a network's SHA-1 is not kept. `backup_models.py index`
+  rewrites `INDEX.md`, whose table says for which versions that works.
+- **Replays by version and kind.** `archive_replays.py` keeps golden and single runs as one `.tfreplay.bz2` each in
+  `replays/<version>/{golden,single-run}/` and segments in `replays/<version>/chain/<checkout>_<dir>.7z`, one 7z per
+  directory they came from; `--kind K [--label L]` keeps files under `replays/<version>/K/` only (the 250-run test's
+  best, worst and stuck runs: `--kind runs-250`). `replays/index.jsonl` records each replay's SHA-1, META summary,
+  path (and 7z member) and where it was found. The repository's `replays/` holds golden and single runs as plain
+  `.tfreplay` files (the owner, Nov 23: compressed replays under `~/git` are hard to watch).
+- **Worktree data.** `tidy_worktrees.sh NAME...` archives a finished worktree's replays, stores its `models/`, copies
+  `target/`, `runs/` and `logs/` (no build output) to `worktree-data/<date>_<branch>/` (the branch's last commit
+  day), removes the worktree and rewrites `INDEX.md`.

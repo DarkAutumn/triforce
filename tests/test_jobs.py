@@ -22,6 +22,8 @@ def registry(tmp_path, monkeypatch):
     monkeypatch.setenv(jobs.JOBS_DIR_ENV, str(directory))
     # An earlier test's begin_job(--no-wait) in this process (tests/test_hitnet.py) must not reach these.
     monkeypatch.setitem(jobs._START, 'no_wait', False)  # pylint: disable=protected-access
+    monkeypatch.setitem(jobs._START, 'express', False)  # pylint: disable=protected-access
+    monkeypatch.delenv(jobs.EXPRESS_ENV, raising=False)
     return directory
 
 
@@ -277,6 +279,39 @@ def test_the_express_place(proc):
     # limit 0: no limit, everyone starts in a regular place
     unlimited = jobs.turn(long, [*regular, express, short, long], 0, proc, NOW)
     assert unlimited.admitted and unlimited.lane == 'regular'
+
+
+def test_an_express_request_takes_the_express_place_whatever_its_estimate(proc):
+    regular = [entry('a', 1, lane='regular'), entry('b', 2, lane='regular')]
+    asked = {**entry('runs-250', 3, 'queued', queued=NOW, estimate=900.0), 'express': True}
+    plain = entry('plain', 4, 'queued', queued=NOW, estimate=900.0)
+    assert not jobs.turn(plain, [*regular, plain], 2, proc, NOW).admitted
+    current = jobs.turn(asked, [*regular, asked], 2, proc, NOW)
+    assert current.admitted and current.lane == 'express'
+    # it still waits for the express place itself (and the job there counts as running for it)
+    held = entry('fast', 5, lane='express', estimate=200.0)
+    waiting = jobs.turn(asked, [*regular, held, asked], 2, proc, NOW)
+    assert not waiting.admitted and names(waiting.running) == ['a', 'b', 'fast']
+    # and its turn in the line: a shorter express-sized job goes first
+    shorter = entry('shorter', 6, 'queued', queued=NOW, estimate=100.0)
+    assert not jobs.turn(asked, [*regular, shorter, asked], 2, proc, NOW).admitted
+    assert jobs.turn(shorter, [*regular, shorter, asked], 2, proc, NOW).lane == 'express'
+
+
+def test_express_is_recorded_from_begin_job_or_the_environment(registry, monkeypatch):
+    import argparse
+    parser = argparse.ArgumentParser()
+    jobs.add_job_arguments(parser)
+    monkeypatch.setattr(jobs, 'lower_priority', lambda nice=None: 0)
+    jobs.begin_job(parser.parse_args([]))
+    assert jobs.register(None, None, 'plain', 'chain').data['express'] is False
+    jobs.begin_job(parser.parse_args(['--express']))
+    record = jobs.register(None, None, 'asked', 'chain', amounts={'chain_steps': 10 ** 7})
+    assert record.data['express'] is True and record.data['estimate'] > jobs.EXPRESS_SECONDS
+    assert jobs.express_sized(record.data)
+    jobs.begin_job(parser.parse_args([]))
+    monkeypatch.setenv(jobs.EXPRESS_ENV, '1')
+    assert jobs.register(None, None, 'env', 'chain').data['express'] is True
 
 
 def test_a_waiting_entry_without_an_estimate_counts_as_estimate_zero(proc):

@@ -197,15 +197,32 @@ been retrained on the corrected order):
   moving forward at this rate in this direction calculation you already do to reward timing beams that WOULD
   intersect even if the enemy turns the other way in reality before it hits. [...] One problem with how much
   damage the agent takes is closing with the enemy when he doesn't have to... he doesn't use the full effect of full
-  hearts, and instead gets close and loses beams.") And (Nov 23): "I want to be clear about `Why beams rarely happen.` I notice this
-  everywhere. For example, look at rooms in dungeon 3. 0x6b and 0x4a are particularly bad. Link goes and hunts down
-  gel and keese up close (more often than not) with full hearts, in 0x6b it's really noticeable because he walks all
-  the way around the block geometry and rarely fires beams at them." (Full-hearts melee is common: not only a
-  hearts problem.)
+  hearts, and instead gets close and loses beams." Nov 23: "I want to be clear about `Why beams rarely happen.` I
+  notice this everywhere. [...] look at rooms in dungeon 3. 0x6b and 0x4a are particularly bad. Link goes and hunts
+  down gel and keese up close (more often than not) with full hearts, in 0x6b it's really noticeable because he walks
+  all the way around the block geometry and rarely fires beams at them.")
   Reward built (round38.md "Beams at range; rupees per pickup"): `reward-beam-kill`, `reward-beam-timed`,
   `penalty-beam-unfired`, `beam_*` in every record. Before: 0.3% of wizzrobe's sword kills out of melee range, 2.8%
-  of patra's. Continued with it, wizzrobe (1M steps) and patra (2M) fought as before and lost 3-7 points on `d6`/`d9`;
-  open: stronger weights, then wizzrobe, darknut, goriya, patra (the hearts melee costs, in that order).
+  of patra's. Continued with it, wizzrobe (1M steps) and patra (2M) fought as before and lost 3-7 points on `d6`/`d9`.
+  MEASURED, NOT SOLVED (round39.md "Beams at range"): stronger weights on wizzrobe did not carry to the chains; a
+  supervised beam head (`beamshift`, gated to fights) makes Link fire when lined up (3:0x6b unfired 54% → 4-16%,
+  far kills ×1.5) but three kills in four stay in melee: nothing makes him stand back to line a shot up. Two
+  causes: wizzrobe and Patra rooms are entered ~7 hearts short (hits, not pickups: a hit head for them), and in
+  Dungeon 3 Link is full (0x6b 93% of visits) and walks to the monsters anyway.
+  **Not a verdict yet** (the owner, Nov 23: is this "a 'Retraining' problem, yet again", old networks "too stuck" in
+  their behaviour for new rewards or inputs to sway them?). Every arm so far was a continuation or a head on a
+  frozen policy, so none tested whether the beam terms can teach the behaviour. The lead's reading of the code:
+  three things hold the old behaviour in place. (1) A continuation's policy is nearly deterministic in the
+  situations it has mastered, and `--sil-coeff 0.1` re-imitates its own past wins (melee wins). (2) The supervised
+  beam head scores one decision, so it can fire a lined-up shot but can't plan the several steps back to a firing
+  line. (3) Fresh training wouldn't fix it either: in a fight the objective's targets are the monsters' own tiles
+  (`crates/zelda/src/objectives.rs`, the FIGHT branch's `enemy_tiles`). So the movement reward (PBRS) pays every
+  step closer to a monster, and the observation's target input points at it. The rewards teach melee even from
+  scratch. Next, as one experiment: at full hearts with the sword able to beam, a fight's targets become
+  firing-line tiles (aligned with a monster, at range, the line clear), a family-scoped switch so no other
+  family's inputs change. Arms, 3 seeds each, zol@d3first (0x6b) first: from scratch with/without the switch, and
+  a continuation with it. Measure far kills per sword kill, unfired lined-up shots, hearts lost, frames, and the
+  `d3` segment. After the replay target stream lands (it touches the same code).
 - [ ] **Rupees rewarded per pickup, not per counted rupee** (the owner, Nov 22, 0:0x0f: "the agent waits for all
   rupees to finish before leaving, probably because it gets reward per rupee incremented. What should ACTUALLY be
   awarded for getting rupees is the 'rupees to add' counter getting set once. It could be a larger reward for 1 vs
@@ -328,7 +345,11 @@ to the action taken; look-ahead for the others), never looking ahead at play.
    against from scratch; value normalisation across tasks; prioritised sampling across tasks (`plr.py`); the
    look-ahead as a teacher at full weight (old backlog "Idea 3: search distilled into the network"; round 34's
    0.05-0.15 imitation of the planner's rows did not take).
-10. [ ] **One network on the corrected route:** the merged model(s) trained on the new states; a golden path with
+10. [ ] **The next generation's teachers, trained fresh** (the owner, Nov 23; decisions 2026-11-23): every
+    teacher family trained from scratch on the new inputs, targets and rewards (v7, the bomb-carrier input, the
+    firing-line targets if they hold), measured on its chains; only then the student(s) of 11 learn from them.
+    Imitating today's 51 copies today's behaviour, so it is a capacity experiment, not the next generation.
+11. [ ] **One network on the corrected route:** the merged model(s) trained on the new states; a golden path with
     them; then single runs at the world-record scale.
 
 Each experiment is logged in a round document (`round36.md` on) with its setup, numbers and what it decided; an

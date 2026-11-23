@@ -1,6 +1,6 @@
 # d2first: Dungeon 2 first, never the fairy — the route
 
-Lee's route (Nov 8), the only route since the reset the same day (`docs/decisions.md` 2026-11-08: milestone1 and
+The owner's route (Nov 8), the only route since the reset the same day (`docs/decisions.md` 2026-11-08: milestone1 and
 milestone1-fairy removed); the Dungeon 1 bow detour joined it on Nov 9, and the same day the route went on from the
 D1 triforce to Dungeon 3 (the raft, Manhandla). On Nov 12 Dungeon 4 joined it (by raft to the island 0x45, the
 ladder, Gleeok; `docs/routes/d4.md`), in round 24 (Nov 14-15) the leg and Dungeon 5 (`docs/routes/d5-leg.md`,
@@ -78,7 +78,7 @@ Choices and findings:
 - **Row 5 to D2:** 0x5d N → 0x4d W → 0x4c N → 0x3c. 0x3c's only exits are S and the stairs
   (rows 0–2 are wall; the gap at row 3, cols 25–26 is an alcove), so 0x3d → 0x3c doesn't exist.
 - **After D2:** the triforce puts Link on 0x3c, which has no N exit, so 0x3c → 0x2c goes round: 0x3c S, 0x4c E,
-  0x4d N, 0x3d N, 0x2d W, 0x2c (Lee confirmed, Nov 8).
+  0x4d N, 0x3d N, 0x2d W, 0x2c (the owner confirmed, Nov 8).
 - **Dungeon 1 (the owner, Nov 19, round 31):** Link carries D2's three keys into D1. In from 0:0x37, out S and
   straight back in: the scroll out opens 0x73's N key door and the entry's layout saves it (asm:Door_LayOut), so no
   key is spent; N through 0x63 and 0x53 (its key), one bomb at 0x53's N wall into 0x43 from S. The key rooms 0x72
@@ -106,7 +106,7 @@ Choices and findings:
 - 0x0a's cave (attr B $4B, index $12, person $6C) holds the white sword ($02) in the middle; the old man hands it
   over only at 5+ containers (`objectives::SWORD_UPGRADES`).
 
-## The bow detour (Lee, Nov 9)
+## The bow detour (the owner, Nov 9)
 
 From 0x43 (entered from W) the route goes N through the Stalfos key room 0x33 and the Goriya key room 0x23 into the
 blade-trap room 0x22, pushes its west block, takes the stairs down to the item cellar 0x7f for the bow, climbs back
@@ -174,13 +174,13 @@ the block is pending, then at the stairs; `reward-pushed-block` pays for a push 
 | 0:27 | Peahat ×6, Zora ×1 | ow-zora (same as 0x28) |
 | 0:28 (re-checked) | Peahat ×6, Zora ×1 | ow-zora |
 | 0:38 (re-checked) | RedOctorok ×5, BlueSlowOctorok ×1, Zora ×1 | ow-zora |
-| 0:2c, 2c cave | RedTektite ×4; potion / heart container | **ow-tektite** (Lee, Nov 8; was ow-leever-peahat) |
+| 0:2c, 2c cave | RedTektite ×4; potion / heart container | **ow-tektite** (the owner, Nov 8; was ow-leever-peahat) |
 | 2:0d | none (triforce) | d2-rope (like 1:36 in stalfos-keese-gel) |
 | 0:07, 16, 26 | RedLynel; boulders; Peahat ×6 + Zora | untagged neighbours (game.yaml only) |
 | 1:22 | 4 blade traps ($49), no monsters; push block, stairs | **trap-room** (new, Nov 9) |
 | 1:7f (cellar under 0x22) | Blue Keese ×4; the bow | **equipment-room** (new, Nov 9) |
 
-New families (Lee, Nov 8): `ow-lynel`, `ow-tektite`, `ow-boulder`; (Lee, Nov 9) `trap-room` (blade-trap rooms) and
+New families (the owner, Nov 8): `ow-lynel`, `ow-tektite`, `ow-boulder`; (the owner, Nov 9) `trap-room` (blade-trap rooms) and
 `equipment-room` (item cellars). `ow-leever-peahat` is gone with milestone1 (its other rooms 0x29–0x2b are not on
 this route).
 
@@ -243,7 +243,7 @@ bow from `1_22c` on. Now 205 files (`start` plus 68 per chain); `entry_states au
 problems (the cellar spawns its 4 Keese). Trajectories (old D1 ones in `target/trajectories-pre-bow/`): trap-room
 6/6, equipment-room 3/3, wallmaster 3/3, boss-aquamentus 3/3, goriya's D1 states 9/9 (`1_23s`, `1_23w`, `1_44w`).
 
-## Lee's answers (Nov 8)
+## The owner's answers (Nov 8)
 
 1. **Dungeon 1 grabs both keys**: route-step objectives (above), in one-room training and in chains.
 2. **0x2c (and its cave) belongs to `ow-tektite`.** ow-leever-peahat is removed.
@@ -251,7 +251,7 @@ problems (the cellar spawns its 4 Keese). Trajectories (old D1 ones in `target/t
    tests and defaults that named them. The only alternate left is 0x78 (it branches from 0x77, a d2first room). The
    Dungeon 1 bow-side rooms 0x33/0x23 (and the bow room 0x22) branch from 0x43, a d2first room, so they stayed
    (until Nov 9 off the route, states from `entry_states path`); since Nov 9 they are the route's bow detour.
-4. **Lynel re-entry is allowed** — current design (Lee's follow-up, Nov 8):
+4. **Lynel re-entry is allowed** — current design (the owner's follow-up, Nov 8):
    - Step 35 (0x0a from S, before the white sword) has `retreat: S`: leaving S is not a wrong exit but a `retreat`.
    - **One-room training** (ow-lynel): the episode ends with the ending `retreat` (re-entry can't happen in a
      one-room episode). Its outcome is configurable per specialist through `endings:`; the default is the new
@@ -261,7 +261,7 @@ problems (the cellar spawns its 4 Keese). Trajectories (old D1 ones in `target/t
    - **Chains**: the run continues (room outcome `retreat`); 0x1a without the white sword is off the route, so its
      objective sends Link back N. Runs count retreats (`RunResult.retreats`); the fourth (`MAX_RETREATS` = 3) ends
      the run as a failure, room outcome `retreat-limit`.
-   - **Open:** whether a model can learn to use the retreat well. Lee will study Lynel spawn positions after the
+   - **Open:** whether a model can learn to use the retreat well. The owner will study Lynel spawn positions after the
      baseline and may switch ow-lynel's retreat to neutral, possibly only when the Lynel blocks the way to the cave.
 5. **States**: every state rebuilt on d2first as chains 0, 1, 2 (below).
 6. **Rooms crossed twice**: picking among the matching route steps at random is right; with the entry side and

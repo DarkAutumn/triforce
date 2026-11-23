@@ -1,5 +1,6 @@
 """Specialist PPO agents that play The Legend of Zelda (NES).  ``__version__`` is the repo's ``VERSION`` file
-(MAJOR.MINOR.COMPAT.REV, AGENTS.md "Versioning"); a model is compatible when its first three numbers match."""
+(MAJOR.MINOR.GEN.REV, AGENTS.md "Versioning"): a run's provenance; whether a model loads is decided by its
+checkpoint's schemas (``registry.schema_problem``), not by a version."""
 
 from pathlib import Path
 

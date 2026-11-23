@@ -12,7 +12,7 @@ one_room: true
 max_steps: 600
 warm_start: null
 notes: >-
-  Dodongo (round 12, Lee): place a bomb next to him, not in his mouth, so the explosion stuns him (about 5 s),
+  Dodongo (round 12, the owner): place a bomb next to him, not in his mouth, so the explosion stuns him (about 5 s),
   then kill him with one sword hit while stunned; take the heart container. Swallowing two bombs also kills him
   but wastes bombs and is penalised (penalty-boss-ate-bomb); the stun pays reward-boss-stunned. On d2first the
   room goes on W to the triforce room 2:0x0d: success is that exit (the heart first: the white sword needs it).

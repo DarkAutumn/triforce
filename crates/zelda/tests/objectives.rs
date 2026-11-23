@@ -578,7 +578,7 @@ fn tiles(targets: &[(i32, i32)]) -> std::collections::BTreeSet<Target> {
     targets.iter().map(|&t| Target::Tile(t)).collect()
 }
 
-/// The bow detour in the emulator (Lee, Nov 9).  In 1:0x22 from E the objective points at the west block's push
+/// The bow detour in the emulator (the owner, Nov 9).  In 1:0x22 from E the objective points at the west block's push
 /// spots while it is pending (pushing N Link stands half inside its lower row, pushing S above it), then at the
 /// stairs; down them the bow cellar (1:0x7f, an in_cave room under its own id) is a Treasure objective with MOVE N/S
 /// legal at the top of its left ladder; with the bow the way out is up that ladder (its N exit, the top row) to 0x22,
@@ -716,7 +716,7 @@ fn d2_goriya_room_is_cleared_before_leaving() {
     assert_eq!(objective.next_rooms, [loc(2, 0x4e)].into_iter().collect());
 }
 
-/// Dungeon 3's route-step treasure rules (Lee, Nov 9; Nov 11; round 23: 0x5b's last visit always takes) and bomb
+/// Dungeon 3's route-step treasure rules (the owner, Nov 9; Nov 11; round 23: 0x5b's last visit always takes) and bomb
 /// reserve.  0x69 from N (`treasure: skip`) heads for the stairs down to the raft cellar past its Darknuts, where the
 /// default rule (off the route) fights them for the bombs they guard; 0x5b from S (`skip`) leaves W at once; 0x5b from
 /// W (the default, take) fights for its bombs and takes them whatever Link holds, then leaves E through its bomb wall

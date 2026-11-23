@@ -6,7 +6,7 @@ reward_profile: default
 reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20}}   # dungeon family: dropped items are shaping targets (round 10 §8); round 25: hearts priced by their worth to the run
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chain arrives with partial hearts (round 5); about 40% of chain runs bring bombs from 0x5e (round 19)
-items: {bombs: free}                       # Lee, Nov 11: bombs as a weapon (enemies with more than 3 hits); above the route's bomb reserve
+items: {bombs: free}                       # The owner, Nov 11: bombs as a weapon (enemies with more than 3 hits); above the route's bomb reserve
 curriculum: {enabled: true}              # trajectories/moldorm: the three 2_3es entry paths
 one_room: true
 max_steps: 3000
@@ -14,5 +14,5 @@ harvested_fraction: 0.33                  # round 30: 2:0x3e from S as the full 
 warm_start: null
 notes: >-
   The Moldorm room in Dungeon 2 (one Moldorm, key treasure; entered from 0x4e in the S, left N into 0x2e). Split out
-  of d2-rope in round 11 (Lee, Nov 8): it was d2-rope's deadliest room (10-13 deaths per 120 chain runs in round 10)
+  of d2-rope in round 11 (the owner, Nov 8): it was d2-rope's deadliest room (10-13 deaths per 120 chain runs in round 10)
   and a Moldorm needs other skills than Ropes.

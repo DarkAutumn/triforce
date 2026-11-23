@@ -168,8 +168,6 @@ def build_parser() -> argparse.ArgumentParser:
                      help=f"golden paths: runs tried per leg before the path is given up (default "
                           f"{golden.DEFAULT_ATTEMPTS})")
     replay.add_arguments(sim, default_state='embed')
-    sim.add_argument('--allow-incompatible-models', action='store_true',
-                     help="play models whose version differs from this code's in its first three numbers")
     return parser
 
 
@@ -218,7 +216,6 @@ def parse_args(argv=None, parser: Optional[argparse.ArgumentParser] = None) -> a
             and args.power_on['delay'] is not None):
         parser.error(f"--act {args.act} with a fixed --delay can play the same game every time: nothing else is "
                      "random from console power on (use --delay random, or leave --delay out)")
-    registry.set_allow_incompatible(args.allow_incompatible_models)
     return args
 
 

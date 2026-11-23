@@ -1,6 +1,6 @@
 # Round 12: beat Dodongo (Dungeon 2 boss, room 2:0x0e)
 
-Lee, Nov 8: train a model that kills Dodongo the good way. Set a bomb in his path but *just next to him*, so he
+The owner, Nov 8: train a model that kills Dodongo the good way. Set a bomb in his path but *just next to him*, so he
 doesn't eat it and the smoke stuns him; then hit him with the sword while he is stunned. The model gets bombs as it
 needs them (rules below). The curriculum over his movement patterns matters most.
 
@@ -8,10 +8,10 @@ needs them (rules below). The curriculum over his movement patterns matters most
 
 - **Dodongo is beaten: r45-dodongo kills him in 300/300 evaluation fights** (100 per start state), losing 0.13
   hearts per fight (90% of fights without a hit), in 32 actions. Promoted.
-- 86% of kills are the bomb-stun-and-sword kill Lee asked for (67% with no swallow at all); 14% are two-swallow
+- 86% of kills are the bomb-stun-and-sword kill the owner asked for (67% with no swallow at all); 14% are two-swallow
   kills. 52% of fights take one bomb (the perfect kill); 2.5 bombs per fight on average (§4).
 - 2M more steps (r46-more) or a doubled swallow penalty (r46-eat1) didn't move these (§5).
-- Mechanics verified by probes (§1). Env support, rewards and Lee's bomb rules (`f2141cf`, §2). Curriculum:
+- Mechanics verified by probes (§1). Env support, rewards and the owner's bomb rules (`f2141cf`, §2). Curriculum:
   Go-Explore over 3 start states × 10 explore seeds, swallow kills removed: 25 stun-and-sword tracks (§3).
 - Chain check: milestone1 ends on entering 0x0e; the d2-first route (next) plays through the kill and the
   triforce, so its chains measure Dodongo in a run.
@@ -37,8 +37,8 @@ needs them (rules below). The curriculum over his movement patterns matters most
   `one_room`, `max_steps: 600`.
 - Critic `critique_dodongo`: `reward-boss-stunned` (+0.75) when his state goes walk → stunned,
   `penalty-boss-ate-bomb` (−0.5) on walk → bloated. The kill pays `reward-boss-hit`. Every bomb still costs
-  `penalty-bomb-used` (−0.25): Lee wants bombs per kill minimized (1 = a perfect kill).
-- Bombs (Lee's rule, replaces a short-lived "infinite bombs" refill): counts are natural; a `requires_bombs` room
+  `penalty-bomb-used` (−0.25): the owner wants bombs per kill minimized (1 = a perfect kill).
+- Bombs (the owner's rule, replaces a short-lived "infinite bombs" refill): counts are natural; a `requires_bombs` room
   (game.yaml; only 2:0x0e) tops 0 up to one *cheated* bomb, and leaving with it unused takes it back. Training,
   eval visits and chains report `bombs/used` and `bombs/cheated`; the watch player's footer shows cheated bombs.
 
