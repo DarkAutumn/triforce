@@ -382,6 +382,13 @@ The next from-scratch retrain is the last for a while (the owner, Nov 23), so ev
 network sees, is steered to, is rewarded for or may do goes in first; otherwise the new networks learn the old
 thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
 
+- **Timing: the executor's closing no-button frame goes, with no switch kept** (the owner, Nov 23; decisions
+  2026-11-23 "The fresh generation plays without the closing no-button frame"): 2,851 frames (1.78%, 47.5 s) of the
+  2.0.0.13 win are Link standing still between two moves the same way, and the 0x1e -> 0x1f line (0 hits held, 1 hit
+  every time as actions) fails only because of it. Before the generation's code is fixed (Peahat40, branch
+  `r40-peahat`, the measurement switch `HoldMoves`): the input reading confirmed from the disassembly, every piece
+  tuned at today's timing re-proven or re-searched (dock warps, whirlwinds, clips, pushes, attacks' turn frames, the
+  planner's trials), chains on today's team with the frame removed.
 - **Inputs:** v7 (`rel`, contact columns range-aware, projectiles too); the shooter's threat lane (screened on the
   hit bench first); the "next kill may drop bombs" input (BombStats' `bomb_carrier_window`, so the metric and the
   flag are one definition).
