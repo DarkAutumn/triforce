@@ -227,6 +227,9 @@ been retrained on the corrected order):
   bombs (for example, a vire drops bombs but if link has the wood sword it shouldn't light up... that just creates
   keese), or if the 10th kill part of the obs is lit up [...]. over the course of the run that should generate more
   bombs, less cheated bombs.")
+- [ ] **7:0x0d's Wallmaster runs out of steps on 2.0.0.7** (Hit38c, Nov 22: 37 of 1000 `d7` runs with the goriya
+  head stopped there against 7 on 2.0.0.6): what changed for wallmaster between the two (states rebuilt from step 88
+  with the 0x2d change: keys, bombs, hearts on arrival?), and the fix.
 - [ ] **Later, the owner's stated goal:** a win without a cheated bomb. Drops only; the walls' shortfall is counted
   until the bomb economy closes it (old backlog "A win without a cheated bomb").
 

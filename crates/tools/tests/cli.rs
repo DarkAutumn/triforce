@@ -458,8 +458,8 @@ fn the_replay_corpus_still_verifies() {
         assert!(state.contains(line), "{line}: {state}");
     }
     let ending = info("golden-d3first-51-networks");
-    for line in ["version:  1", "frames:   160248", "ending:   win", "segments: 9", "states:   1 END, 8 CHECKPOINT",
-                 "triforce: 2.0.0.7", "the game ended in (level 9, room 0x32)"] {
+    for line in ["version:  1", "frames:   167551", "ending:   win", "segments: 9", "states:   1 END, 8 CHECKPOINT",
+                 "triforce: 2.0.0.8", "the game ended in (level 9, room 0x32)"] {
         assert!(ending.contains(line), "{line}: {ending}");
     }
     // One network in all 51 model slots (round 37's student, 2.0.0.7: the owner's bomb rules; nothing cheated): a
