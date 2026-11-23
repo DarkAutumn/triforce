@@ -34,7 +34,9 @@ decides, in order": the segment's rate first; the rest only between arms within 
 from __future__ import annotations
 
 import argparse
+import functools
 import json
+import multiprocessing
 import math
 import statistics
 import sys
@@ -324,6 +326,12 @@ def analyse_replay(path: Path, rooms: set, states_dir) -> dict:
     return out
 
 
+def _analyse(path: Path, rooms: set, states_dir) -> dict:
+    out = analyse_replay(path, rooms, states_dir)
+    out['time'] = {room: Counter(c) for room, c in out['time'].items()}
+    return out
+
+
 def cmd_replays(args) -> None:
     from triforce import jobs
     jobs.require_job()
@@ -338,8 +346,9 @@ def cmd_replays(args) -> None:
                'room_frames': Counter(), 'room_beams': Counter(), 'time': defaultdict(Counter),
                'room_shots': Counter(), 'room_shot_hits': Counter(), 'hits': [], 'lines': Counter(),
                'lines_near': Counter(), 'per_seed': {}}
-        for path in files[label]:
-            r = analyse_replay(path, rooms, args.states_dir)
+        with multiprocessing.Pool(args.jobs) as pool:
+            results = list(pool.imap(functools.partial(_analyse, rooms=rooms, states_dir=args.states_dir), files[label]))
+        for path, r in zip(files[label], results):
             seed = int(path.name.split('-')[0])
             agg['runs'] += 1
             for k in ('play', 'beams', 'shots', 'shot_hits'):
@@ -352,7 +361,7 @@ def cmd_replays(args) -> None:
             agg['first_loss'].append(r['first_loss'])
             agg['per_seed'][seed] = {'beams': r['beams'], 'play': r['play'], 'first_loss': r['first_loss']}
             done += 1
-            jobs.progress(done, total, 'replays')
+        jobs.progress(done, total, 'replays')
         result[label] = agg
     report(result, sorted(rooms))
     if args.json:
@@ -425,6 +434,7 @@ def main():
     p.add_argument('--rooms', default='3:0x6b,3:0x49,3:0x7b,3:0x4b')
     p.add_argument('--states-dir', default=None)
     p.add_argument('--json')
+    p.add_argument('--jobs', type=int, default=8, help='replays played at once')
     args = ap.parse_args()
     {'records': cmd_records, 'replays': cmd_replays}[args.cmd](args)
 
