@@ -629,13 +629,15 @@ bomb_rules:
 # needs at the search's timing and waits for the pickup (zelda::whirlwind::Warp::Whirlwind); the fresh generation's
 # rooms are 0x0b (out of Level 5) and 0x22 (out of Level 6).  `unaided_docks: true`: the dock warps of 0x55 and 0x3f
 # lose their two give-ways (SWORD S forced while a monster stands below the dock, WAIT forced while a shot flies) and
-# their plays are offered beside the family's own actions.  Both off: today's networks (2.0.0.12) were trained
-# without the macros and with the give-ways ("I want the docks to stay for current version", the owner).  The fresh
-# generation's entry, turned on when it trains (round40.md "Engine macros" has today's team measured with it):
+# their plays are offered beside the family's own actions.  2.0.0.14 (Nov 23): the whirlwind macros are ON for
+# today's team, which was not trained with them and gains from them all the same (round40.md "Engine macros": the leg
+# out of Dungeon 5 82.3% -> 89.3% of 1000 runs, +7.0 +- 1.5, and faster; the networks' own play walked out of 0x0b in
+# 120 of 1073 visits).  The docks stay helped on today's team (unaided: 0 of 1000 on both dock legs; "I want the docks
+# to stay for current version", the owner).  The fresh generation's entry, turned on when it trains:
 #   d3first: {whirlwinds: [{level: 0, room: '0x0b'}, {level: 0, room: '0x22'}], unaided_docks: true}
 macros:
   d3first:
-    whirlwinds: []
+    whirlwinds: [{level: 0, room: '0x0b'}, {level: 0, room: '0x22'}]
     unaided_docks: false
 # clips-gauntlet (round 21, docs/experiments/round21-gauntlet.md): an experiment route, not a way through the game.  Two
 # steps per (room, entry): a specialist naming it (`route: clips-gauntlet`) draws one of the two exits at every
