@@ -318,7 +318,26 @@ impl ActMode {
     pub fn choose(&self, stall: u32, health: Option<(f32, f32)>) -> Choose {
         self.style(health).choose(stall)
     }
+
+    /// How the decision after `stall` decisions without progress at Link's `health` is drawn, as a replay's
+    /// DECISIONS names it ([`DRAWS`] index), and whether the low-health part draws it.
+    pub fn draw(&self, stall: u32, health: Option<(f32, f32)>) -> (u8, bool) {
+        let low = matches!((self.low, health), (Some(low), Some((hearts, max))) if low.at.holds(hearts, max));
+        let draw = match self.style(health) {
+            Style::Argmax => 0,
+            Style::Sample(rule) => 1 + u8::from(!rule.is_plain()),
+            Style::Escape { after, .. } => if stall >= after { 4 } else { 0 },
+            Style::Relax { after, .. } => if stall >= after { 3 } else { 2 },
+        };
+        (draw, low)
+    }
 }
+
+/// How a decision was drawn (a replay's META `tables.draws`, [`ActMode::draw`]): `argmax`; `sample` from the policy;
+/// `rule`, by the mode's rule (temperature, floor, ...); `relaxed`, a `relax:N` mode's plain draw after N decisions
+/// without progress; `escaped`, an `escape:N` mode's draw by its rule after N; `replayed`, a recorded action
+/// scored.
+pub const DRAWS: [&str; 6] = ["argmax", "sample", "rule", "relaxed", "escaped", "replayed"];
 
 impl Default for ActMode {
     fn default() -> Self {

@@ -6,7 +6,7 @@
                                            [--episodes-per-state N] [--seed S] [--clips on|off|both]
                                            [--output-dir DIR]]
                              [--chain '[ENTRY:] EVAL-CHAIN ARGS' ...] [--evaluate '[ENTRY:] EVALUATE ARGS' ...]
-                             [--parallel CORES] [--eval-parallel 4] [--jobs 1] [--nice N] [--no-wait] [--redo]
+                             [--parallel CORES] [--eval-parallel 4] [--jobs 1] [--redo]
                              [--logs-dir DIR] [--models-dir DIR]
 
 A batch is a named list of evaluations, in command-line order:
@@ -34,9 +34,9 @@ Each evaluation runs as its own process (``python -m triforce.cli eval-chain`` /
 with ``--events <batch folder>/<entry>.jsonl``), its console output in ``<entry>.log`` (or the chain segment's own
 log).  One at a time by default: a chain takes ``--parallel`` envs (default: every core) unless its ARGS set
 ``--parallel``, an evaluation ``--eval-parallel`` (default 4).  ``--jobs N`` runs up to N family evaluations side by
-side as long as their envs fit in ``--parallel``; chains and the report always run alone.  The batch lowers its
-priority first (``--nice``, default ``$TRIFORCE_NICE`` else 15, ``triforce.jobs``) and its evaluations inherit it;
-it waits its turn among the machine's trainings and evaluations as one job (``--no-wait``), its evaluations don't.
+side as long as their envs fit in ``--parallel``; chains and the report always run alone.  The batch is one job of
+the machine's queue (``triforce job run -- triforce eval-batch ...``; ``jobs.announce``: its work is every entry's)
+and its evaluations run inside it at its priority; its progress is the entries done of all.
 
 Log folder ``logs/<yymmdd>_<NNN>_<NAME>/`` (``triforce/events.py``): ``training.json`` (kind ``eval-batch``, every
 entry listed up front as pending, then ``evaluating`` and its final status ``ok`` / ``failed`` / ``interrupted``
@@ -69,7 +69,8 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from .events import LOGS_DIR_ENV, EventLog, TrainingPlan, new_log_dir
-from .jobs import add_job_arguments, begin_job, child_env, work
+from .jobs import announce, work
+from .jobs import progress as job_progress
 
 ROOT = Path(__file__).resolve().parents[1]
 KIND = 'eval-batch'
@@ -649,7 +650,7 @@ class _Running:
         self.log.flush()
         self.process = subprocess.Popen(  # pylint: disable=consider-using-with
             command, stdout=self.log, stderr=subprocess.STDOUT, cwd=self.entry.cwd,
-            env={**child_env(self.nice), 'PYTHONUNBUFFERED': '1'})
+            env={**os.environ, 'PYTHONUNBUFFERED': '1'})
 
     def poll(self) -> Optional[int]:
         """None while running; else the exit code (the first non-zero one of a command sequence; every command of
@@ -732,15 +733,10 @@ def run_batch(name: str, entries: list[Entry], *, logs_dir=None, cores: int = 1,
 
     streams = [log_dir / f"{_safe(entry.name)}.jsonl" for entry in entries]
     logs = [entry.log or log_dir / f"{_safe(entry.name)}.log" for entry in entries]
-    try:            # waits its turn (triforce.jobs)
-        plan = TrainingPlan(log_dir, name, KIND, [entry.plan_entry(stream.name, log, log_dir)
-                                                  for entry, stream, log in zip(entries, streams, logs)],
-                            command=command, nice=nice, cores=cores, jobs=jobs, events='round.jsonl',
-                            log='round.log', work=batch_work(entries), **(extra or {}))
-    except KeyboardInterrupt:       # stopped while it waited: the plan ended interrupted
-        tell(f"[batch] {name}: stopped before it started")
-        console.close()
-        return EXIT_INTERRUPTED
+    plan = TrainingPlan(log_dir, name, KIND, [entry.plan_entry(stream.name, log, log_dir)
+                                              for entry, stream, log in zip(entries, streams, logs)],
+                        command=command, nice=nice, cores=cores, jobs=jobs, events='round.jsonl',
+                        log='round.log', work=batch_work(entries), **(extra or {}))
     events = EventLog(log_dir / 'round.jsonl', batch=name)
     events.emit('start', entries=names, nice=nice, cores=cores, jobs=jobs, log_dir=str(log_dir), pid=os.getpid())
     tell(f"[batch] {name}: {len(entries)} evaluations, nice {nice} (logs: {log_dir})")
@@ -755,6 +751,7 @@ def run_batch(name: str, entries: list[Entry], *, logs_dir=None, cores: int = 1,
         plan.update_run(index, status=status, **fields, **({'error': message} if message else {}))
         events.emit('entry_end', index=index, name=entry.name, status=status, **fields)
         statuses[index] = status
+        job_progress(len(statuses), len(entries), 'entries', 'entries', force=True)
         text = headline_text(fields) or message or ''
         label = 'done earlier' if fields.get('resumed') else status
         tell(f"[batch] {entry.name}: {label}" + (f" · {text}" if text else ''))
@@ -907,7 +904,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--jobs', type=int, default=1,
                         help="family evaluations side by side (within --parallel envs); chains always run alone")
     parser.add_argument('--redo', action='store_true', help="measure entries again that an earlier run measured")
-    add_job_arguments(parser)
     parser.add_argument('--logs-dir', default=None, help=f"event logs root (default ${LOGS_DIR_ENV} or <repo>/logs)")
     parser.add_argument('--models-dir', default=None)
     return parser
@@ -955,11 +951,11 @@ def main(argv=None) -> int:
     if args.parallel < 1 or args.eval_parallel < 1 or args.jobs < 1:
         print("triforce eval-batch: error: --parallel, --eval-parallel and --jobs must be >= 1", file=sys.stderr)
         return 2
-    nice = begin_job(args)
     try:
         entries = build_entries(args)
-        return run_batch(args.name, entries, logs_dir=args.logs_dir, cores=args.parallel, jobs=args.jobs, nice=nice,
-                         command=[sys.executable, '-m', 'triforce.eval_batch', *argv],
+        announce('batch', batch_work(entries), args.name)
+        return run_batch(args.name, entries, logs_dir=args.logs_dir, cores=args.parallel, jobs=args.jobs,
+                         nice=os.nice(0), command=[sys.executable, '-m', 'triforce.eval_batch', *argv],
                          extra={'models_dir': args.models_dir})
     except BatchError as error:
         print(f"triforce eval-batch: error: {error}", file=sys.stderr)

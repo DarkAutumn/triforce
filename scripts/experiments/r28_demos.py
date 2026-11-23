@@ -49,7 +49,9 @@ taking of the offered moves (and WAIT 4) the one with the fewest predicted overl
 carried forward 14 frames along its motion since the last decision).
 
 Rows: a MOVE or WAIT row is cloned without its duration; an item or sword row is written `REPEAT` times (it is one
-decision among hundreds).  Only runs that end as the family's success are kept."""
+decision among hundreds).  Only runs that end as the family's success are kept.  It plays the rule over many runs
+(and ``scaffold`` stages states): a job of the machine's queue (``jobs.require_job``: ``triforce job run ...
+--timeout 30m -- .venv/bin/python scripts/experiments/r28_demos.py ...``)."""
 
 import argparse
 import collections
@@ -742,6 +744,8 @@ def main():
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument('--route', default='d2first', help="ROOM: the route whose step and states it plays")
     args = parser.parse_args()
+    from triforce.jobs import require_job  # pylint: disable=import-outside-toplevel
+    require_job()
     if args.what == 'scaffold':
         if args.out_dir is None:
             parser.error('scaffold needs OUT')

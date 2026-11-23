@@ -9,6 +9,7 @@ last picture and result.  The film ends when every replay has played and the las
 One cell can be heard (``heard``): its sound is made by the emulator beside the picture
 (``_native.ReplayPlayer.set_sound``), and ``VideoGrid.audio()`` hands out exactly the samples of each film frame,
 silence while that cell shows a result, so sound and picture stay together however long the film is.
+``thoughts``: every cell also sends its replay's ``thoughts`` overlay (``play_grid``, ``triforce.thoughts``).
 
 ``Encoder`` writes the frames (and the samples) to a video file through ``ffmpeg``: H.264 in the container the
 file name asks for (``.mp4``, ``.mkv``, ``.mov``), at the console's frame rate, with AAC sound.
@@ -65,6 +66,7 @@ class _Reel:
         self.phase = 'idle'         # idle | playing | result | done
         self.until = 0              # the film frame a result's pause ends at
         self.sent: Optional[dict] = None
+        self.thought: Optional[list] = None
         self.shown = 0              # frames shown so far
         self.pixels = None
 
@@ -72,14 +74,15 @@ class _Reel:
 class VideoGrid:
     """``cells`` cells playing the replay files ``paths`` one film frame per ``step()`` (module doc).  ``heard``:
     the cell whose sound ``audio()`` returns (None: silence).  ``controller``: draw the controller into every
-    frame.  ``states_dir``: where a replay recorded from a named state file finds it."""
+    frame.  ``states_dir``: where a replay recorded from a named state file finds it.  ``thoughts``: send each
+    cell's thoughts overlay."""
     # pylint: disable=too-many-instance-attributes
 
     source = FILES
     fps = NES_FPS
 
     def __init__(self, cells: int, paths: Sequence, *, heard: Optional[int] = None, controller: bool = False,
-                 states_dir=None, rate: int = SAMPLE_RATE):
+                 states_dir=None, rate: int = SAMPLE_RATE, thoughts: bool = False):
         # pylint: disable=too-many-arguments
         self.cells = cells
         self.paths = [Path(path) for path in paths]
@@ -87,7 +90,7 @@ class VideoGrid:
             raise ValueError(f"{cells} cells need at least {cells} replays, got {len(self.paths)}")
         if heard is not None and not 0 <= heard < cells:
             raise ValueError(f"cell {heard} of a grid with {cells} cells")
-        self.heard, self.controller, self.rate = heard, controller, rate
+        self.heard, self.controller, self.rate, self.thoughts = heard, controller, rate, thoughts
         self.states_dir = None if states_dir is None else str(states_dir)
         self.frames = 0             # film frames stepped so far
         self.played = 0             # replays that played to their end
@@ -141,7 +144,7 @@ class VideoGrid:
         reel.player.seek(reel.show.start)
         if index == self.heard:
             reel.player.set_sound(float(self.rate))
-        reel.phase, reel.sent = 'playing', None
+        reel.phase, reel.sent, reel.thought = 'playing', None, None
         self._messages.append({'cell': index, 'event': 'start', 'seed': reel.show.seed, 'source': FILES,
                                'name': path.name})
 
@@ -157,6 +160,11 @@ class VideoGrid:
             if room != reel.sent:
                 reel.sent = room
                 self._messages.append({'cell': index, 'event': 'room', **room})
+            if self.thoughts:
+                lines = show.thoughts_at(player.frame)
+                if lines != reel.thought:
+                    reel.thought = lines
+                    self._messages.append({'cell': index, 'event': 'thoughts', 'lines': lines})
         if player.frame >= player.frames:
             self.played += 1
             reel.player = None

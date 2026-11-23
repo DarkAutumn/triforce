@@ -19,6 +19,7 @@ mod envs;
 mod external;
 mod nes;
 mod search;
+mod thinking;
 
 pub use actor::{ActorScratch, PolicyActor};
 pub use external::{ExternalQueue, HybridActor, HybridScratch, Net, Request};

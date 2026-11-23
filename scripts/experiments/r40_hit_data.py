@@ -1,8 +1,9 @@
 """Round 40 (docs/experiments/round40.md "Observation v7's danger block"): hit labels with the RAM beside them, for
 the supervised hit bench (``r40_obs_bench.py``).
 
-    python scripts/experiments/r40_hit_data.py KEY... --decisions 120000 --out target/r40/data
-        [--route d3first] [--parallel 8] [--envs 8] [--try 4:0.5] [--seed 0] [--express]
+    triforce job run --agent A --task T --subtask S --desc "..." --timeout 40m -- \
+        .venv/bin/python scripts/experiments/r40_hit_data.py KEY... --decisions 120000 --out target/r40/data
+        [--route d3first] [--parallel 8] [--envs 8] [--try 4:0.5] [--seed 0]
 
 Experiment 2's collections (round36.md §1, ``r35_guard_data.py --probe``) are gone with their worktree, and the lab's
 ``record`` keeps no RAM; this rebuilds what the bench needs from the single-env API alone (no engine change). The
@@ -146,40 +147,32 @@ def main(argv=None) -> int:
     parser.add_argument('--try', dest='try_others', default='4:0.5', metavar='K:P')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--out', type=Path, required=True)
-    parser.add_argument('--logs-dir', default=None)
-    from triforce.jobs import add_job_arguments, begin_job, work  # pylint: disable=import-outside-toplevel
-    from triforce.events import progress_job  # pylint: disable=import-outside-toplevel
-    from triforce import registry  # pylint: disable=import-outside-toplevel
-    add_job_arguments(parser)
+    from triforce import jobs, registry  # pylint: disable=import-outside-toplevel
+    jobs.require_job()
     args = parser.parse_args(argv)
-    begin_job(args)
     k, share = args.try_others.split(':')
     chunks = (args.decisions + CHUNK - 1) // CHUNK
     total_decisions = args.decisions * len(args.keys)
     t0 = time.time()
-    families = '-'.join(key.split('@')[0] for key in args.keys) if len(args.keys) < 3 else 'families'
-    name = os.environ.get('TRIFORCE_JOB_NAME') or f"r40-gen-obs-{families}-data"
-    with progress_job(name, 'eval', total_decisions, unit='decisions', root=args.logs_dir,
-                      work=work(eval_episodes=max(1, total_decisions // 400))) as progress:
-        done = 0
-        for key in args.keys:
-            out = args.out / key.split('@')[0]
-            out.mkdir(parents=True, exist_ok=True)
-            checkpoint = str(registry.policy_checkpoint(key, route=args.route))
-            tasks = [(c % args.parallel, c, args.seed * 100_000 + c, int(k), float(share), str(out))
-                     for c in range(chunks) if not any(out.glob(f'shard-*-{c:04d}.npz'))]
-            (out / 'dataset.json').write_text(json.dumps({
-                'key': key, 'route': args.route, 'checkpoint': checkpoint, 'temperature': TEMPERATURE,
-                'try': args.try_others, 'seed': args.seed, 'chunk': CHUNK, 'chunks': chunks}, indent=1))
-            done += (chunks - len(tasks)) * CHUNK
-            lost = total = 0
-            ctx = mp.get_context('spawn')
-            with ctx.Pool(args.parallel, initializer=_init, initargs=(key, args.route, checkpoint, args.envs)) as pool:
-                for rows, l, t in pool.imap_unordered(_chunk, tasks):
-                    done, lost, total = done + rows, lost + l, total + t
-                    progress.update(done)
-                    print(f'{key}: {done} decisions, {total} judged candidates, {lost / max(total, 1):.3f} lost, '
-                          f'{(time.time() - t0) / 60:.1f} min', flush=True)
+    done = 0
+    for key in args.keys:
+        out = args.out / key.split('@')[0]
+        out.mkdir(parents=True, exist_ok=True)
+        checkpoint = str(registry.policy_checkpoint(key, route=args.route))
+        tasks = [(c % args.parallel, c, args.seed * 100_000 + c, int(k), float(share), str(out))
+                 for c in range(chunks) if not any(out.glob(f'shard-*-{c:04d}.npz'))]
+        (out / 'dataset.json').write_text(json.dumps({
+            'key': key, 'route': args.route, 'checkpoint': checkpoint, 'temperature': TEMPERATURE,
+            'try': args.try_others, 'seed': args.seed, 'chunk': CHUNK, 'chunks': chunks}, indent=1))
+        done += (chunks - len(tasks)) * CHUNK
+        lost = total = 0
+        ctx = mp.get_context('spawn')
+        with ctx.Pool(args.parallel, initializer=_init, initargs=(key, args.route, checkpoint, args.envs)) as pool:
+            for rows, l, t in pool.imap_unordered(_chunk, tasks):
+                done, lost, total = done + rows, lost + l, total + t
+                jobs.progress(done, total_decisions, 'decisions')
+                print(f'{key}: {done} decisions, {total} judged candidates, {lost / max(total, 1):.3f} lost, '
+                      f'{(time.time() - t0) / 60:.1f} min', flush=True)
     return 0
 
 

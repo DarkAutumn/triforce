@@ -15,13 +15,18 @@ slots emptied every frame (the woken Armos is kept: its fade-in makes the stairs
 state (the scroll into it; for a room entered by a wrap exit, the frame the macro hands back in it) into a temporary
 directory.  `cross` loads each with the game's own randomness for its seed and plays the room by a scripted rule
 (walks, the candle, the clips by the engine's own macros `Game.act('CLIP E'|'CLIP W')`, the raft, the caves), the
-monsters live and never fought: hearts lost, frames, what hit."""
+monsters live and never fought: hearts lost, frames, what hit.
+
+It plays the game over many seeded trials: a job of the machine's queue (``jobs.require_job``: ``triforce job run
+... --timeout 30m -- .venv/bin/python scripts/experiments/r32b_leg.py ...``)."""
 
 import argparse
 import collections
 import statistics
 import tempfile
 from pathlib import Path
+
+from triforce.jobs import require_job
 
 from r26_walks import OBJ_DIR, OBJ_STATE, OBJ_TYPE, PLAY, RUPEES, Walk
 from r27_walks import ARMOS, StagingWalk, Tally, is_pre_entry, load, name, summary
@@ -466,6 +471,7 @@ def main():
         p.add_argument('--seeds', type=int, default=20)
         p.add_argument('--rooms')
     args = parser.parse_args()
+    require_job()
     {'stage': lambda a: stage(), 'cross': cross, 'woods': woods}[args.cmd](args)
 
 

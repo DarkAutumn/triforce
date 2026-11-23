@@ -10,7 +10,8 @@ per way: runs that got in, total frames, hearts lost.
 
 Ways: `mouth`; `below` (up into the statue from the row under it, Up held until the stairs take Link); `west N`
 (one frame of Right from ($A0, $7D), stand still, A pressed N frames before the statue has woken, then Right onto
-the stairs; `west none`: no stab)."""
+the stairs; `west none`: no stab).  It plays every way on every seed: a job of the machine's queue
+(``jobs.require_job``: ``triforce job run ... -- .venv/bin/python scripts/experiments/d5_armos_door.py [SEEDS]``)."""
 
 import statistics
 import subprocess
@@ -18,6 +19,7 @@ import sys
 from pathlib import Path
 
 from triforce._native import Game
+from triforce.jobs import require_job
 
 ROOT = Path(subprocess.run(['git', 'rev-parse', '--show-toplevel'], capture_output=True, text=True,
                            cwd=Path(__file__).parent, check=True).stdout.strip())
@@ -98,6 +100,7 @@ def play(way: str, stab, seed: int) -> dict:
 
 
 def main():
+    require_job()
     seeds = int(sys.argv[1]) if len(sys.argv) > 1 else 20
     ways = [('mouth', None), ('below', None), ('west', None)] + [('west', n) for n in (20, 16, 15, 14, 13, 12, 8, 4)]
     for way, stab in ways:

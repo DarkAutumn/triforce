@@ -505,6 +505,36 @@ impl BombUse {
     }
 }
 
+/// The rules a replay's MASKS names (round 40; META `tables.mask_reasons`): BOMB's mode (`never`, `tenth`,
+/// `required`, `reserve`), a family's `items` switch, ARROW's `rupee-reserve`, a step's `sword-off`, and the rules
+/// that keep a kind to some directions: `bomb-targets` (BOMB only toward the wall it opens), `facings` (ARROW,
+/// CANDLE by the route), `doorways` (MOVE kept out of a doorway).
+pub const MASK_REASONS: [&str; 10] = [
+    "never", "tenth", "required", "reserve", "items", "rupee-reserve", "sword-off", "bomb-targets", "facings",
+    "doorways",
+];
+
+/// The route's direction rules in force, added to `rules` ([`ItemsConfig::mask_rules`]): BOMB kept to the bomb
+/// targets, ARROW and CANDLE to the route's facings, MOVE out of the `doorways` (direction bits) it keeps out of.
+pub fn route_mask_rules(
+    rules: &mut Vec<(ActionKind, &'static str)>,
+    bomb_targets: bool,
+    arrow_facings: bool,
+    candle_facings: bool,
+    doorways: u8,
+) {
+    for (on, kind, why) in [
+        (bomb_targets, ActionKind::Bomb, "bomb-targets"),
+        (arrow_facings, ActionKind::Arrow, "facings"),
+        (candle_facings, ActionKind::Candle, "facings"),
+        (doorways != 0, ActionKind::Move, "doorways"),
+    ] {
+        if on {
+            rules.push((kind, why));
+        }
+    }
+}
+
 /// `items:` block: inventory items the specialist may use (false = masked out even when Link has it; bombs:
 /// [`BombUse`]). `recorder`, `food` and `candle` (round 24) are off unless a family turns them on: no family before
 /// Dungeon 5 uses them, and a model that never had them unmasked never learned what they do. `arrows` too (round 26,
@@ -562,6 +592,34 @@ impl ItemsConfig {
     ) -> Vec<ActionKind> {
         let arrows = self.arrows && state.rupees() > i32::from(rupee_reserve);
         self.kinds_off(self.bombs.allows(map, state, bomb_reserve), arrows)
+    }
+
+    /// Why [`ItemsConfig::disabled_kinds`] masks each kind it masks (round 40, a replay's MASKS): BOMB by its mode
+    /// (`never`, `tenth`, `required`: not a room that requires bombs, `reserve`: no more than the route's reserve),
+    /// ARROW by `rupee-reserve` when on, every other kind (and ARROW off) by the family's `items` switch.
+    pub fn mask_rules(
+        &self,
+        map: &zelda::GameMap,
+        state: &zelda::GameView,
+        bomb_reserve: u8,
+        rupee_reserve: u8,
+    ) -> Vec<(ActionKind, &'static str)> {
+        self.disabled_kinds(map, state, bomb_reserve, rupee_reserve)
+            .into_iter()
+            .map(|kind| {
+                let why = match kind {
+                    ActionKind::Bomb => match self.bombs {
+                        BombUse::Never => "never",
+                        BombUse::Tenth => "tenth",
+                        BombUse::Required => "required",
+                        BombUse::Free => "reserve",
+                    },
+                    ActionKind::Arrow if self.arrows => "rupee-reserve",
+                    _ => "items",
+                };
+                (kind, why)
+            })
+            .collect()
     }
 
     /// What BOMB is kept to in `state`: only bombs landing in reach of what the objective leaves through
@@ -660,6 +718,15 @@ pub struct RamRandomization {
     /// evaluation, chains, exploration and state builds keep the natural drop.
     #[serde(default)]
     pub drop_bombs: Option<f64>,
+    /// `room_bombs: {'(3, 0x5b)': [8, 8]}` (round 39, 3:0x5b with a full bag): a reset into a listed room draws its
+    /// bombs from that room's range instead of `bombs`, with probability `room_bombs_share` (absent: every such
+    /// reset; the rest keep the `bombs` draw). Wherever `bombs` applies (not a harvested start); a reset into a room
+    /// not listed draws nothing more, so the family's random stream is unchanged there.
+    #[serde(default)]
+    pub room_bombs: std::collections::BTreeMap<String, (i64, i64)>,
+    /// Share of resets into a `room_bombs` room that draw its range; absent = every one.
+    #[serde(default)]
+    pub room_bombs_share: Option<f64>,
 }
 
 impl RamRandomization {
@@ -674,6 +741,11 @@ impl RamRandomization {
             .collect()
     }
 
+    /// The `room_bombs` range of the room `at`, if listed.
+    pub fn room_bombs_at(&self, at: MapLocation) -> Option<(i64, i64)> {
+        self.room_bombs.iter().find(|(room, _)| parse_room(room).is_ok_and(|r| r == at)).map(|(_, &range)| range)
+    }
+
     fn validate(&self) -> Result<(), String> {
         for (key, value) in [
             ("full_hp", self.full_hp),
@@ -681,6 +753,7 @@ impl RamRandomization {
             ("bombs_share", self.bombs_share),
             ("room_kills_share", self.room_kills_share),
             ("drop_bombs", self.drop_bombs),
+            ("room_bombs_share", self.room_bombs_share),
         ] {
             if let Some(v) = value
                 && !(0.0..=1.0).contains(&v)
@@ -712,6 +785,12 @@ impl RamRandomization {
             }
             if !(0 <= lo && lo <= hi && hi <= 14) {
                 return Err(format!("room_kills: {room}: range must satisfy 0 <= lo <= hi <= 14, got [{lo}, {hi}]"));
+            }
+        }
+        for (room, &(lo, hi)) in &self.room_bombs {
+            parse_room(room).map_err(|e| format!("room_bombs: {}", e.0))?;
+            if !(0 <= lo && lo <= hi && hi <= 255) {
+                return Err(format!("room_bombs: {room}: range must satisfy 0 <= lo <= hi <= 255, got [{lo}, {hi}]"));
             }
         }
         Ok(())
@@ -1584,6 +1663,22 @@ mod tests {
             ("{room_kills: {'5:0x05': [1, 2]}}", "Bad room"),
             ("{room_kills_share: 2}", "probability"),
             ("{drop_bombs: 2}", "probability"),
+        ] {
+            let e = minimal(&format!("ram_randomization: {bad}\n")).unwrap_err().0;
+            assert!(e.contains(why), "{bad}: {e}");
+        }
+    }
+
+    /// `ram_randomization.room_bombs` (round 39): any room, a bombs range, a share in [0, 1].
+    #[test]
+    fn room_bombs_parse_and_reject_bad_ranges() {
+        let c = minimal("ram_randomization: {room_bombs: {'(3, 0x5b)': [8, 8]}, room_bombs_share: 0.5}\n").unwrap();
+        assert_eq!(c.ram_randomization.room_bombs_at(MapLocation::new(3, 0x5b, false)), Some((8, 8)));
+        assert_eq!(c.ram_randomization.room_bombs_at(MapLocation::new(3, 0x5c, false)), None);
+        for (bad, why) in [
+            ("{room_bombs: {'(3, 0x5b)': [3, 2]}}", "0 <= lo <= hi <= 255"),
+            ("{room_bombs: {'3:0x5b': [8, 8]}}", "Bad room"),
+            ("{room_bombs_share: 2}", "probability"),
         ] {
             let e = minimal(&format!("ram_randomization: {bad}\n")).unwrap_err().0;
             assert!(e.contains(why), "{bad}: {e}");

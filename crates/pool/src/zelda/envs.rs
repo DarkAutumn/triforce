@@ -1,13 +1,14 @@
 //! The pool adapters: training, evaluation and chain envs.
 
 use super::nes::{Origin, PoolNes, PoolState, PoolStore, RgbFn};
+use super::thinking::{self, Tables};
 use super::{
     EvalRecord, RoomEvent, ZeldaAction, ZeldaEvent, interrupt_code, obs_layout, write_observation,
 };
 use crate::control::EnvControl;
 use crate::jobs::Jobs;
 use crate::layout::{ObsLayout, ObsRow};
-use crate::pool::{EnvInit, Outcome, PoolEnv, SearchEnv, Start};
+use crate::pool::{Decided, EnvInit, Outcome, PoolEnv, SearchEnv, Start};
 use crate::rollout::{Decision, Situation, Trial};
 use env::chain::{ChainEnv, ChainStatus, RoomRecord, Route, RunResult};
 use env::config::{GameData, SpecialistConfig};
@@ -186,6 +187,7 @@ fn start_recording<N: Nes, St: StateStore<N::State>>(
     store: &PoolStore<St>,
     context: Context,
     booted: Option<(&str, u32)>,
+    tables: &Tables,
 ) -> Result<(), EnvError> {
     let rng_phase = session.rng_phase();
     let nes = session.nes_mut();
@@ -218,6 +220,7 @@ fn start_recording<N: Nes, St: StateStore<N::State>>(
         }
         Origin::Bytes(_) => {}
     }
+    rec.set_meta("tables", tables.meta().clone());
     rec.event(Event::Control);
     Ok(())
 }
@@ -383,18 +386,21 @@ fn decision_note(action: &ZeldaAction, decision: &Decision, health: Option<(f32,
     }
 }
 
-/// A decision for the recording's decision stream, when it keeps one and the actor reports distributions.
-fn record_decision<N: Nes>(
-    nes: &mut PoolNes<N>,
-    policy: i64,
-    action: &ZeldaAction,
-    decision: &Decision,
-    distribution: Option<&[f32]>,
+/// The specialist env's part of a decision's recording: its objective (attached), the route, the family's reward
+/// shaping and the mask's rules.
+fn record_specialist_decision<N: Nes, St: StateStore<N::State>>(
+    env: &mut PoolSpecialistEnv<N, St>,
+    tables: &Tables,
+    d: &Decided<'_, ZeldaAction>,
 ) {
-    if let (Some(rec), Some(distribution)) = (nes.recorder_mut(), distribution)
-        && rec.options().decisions
-    {
-        rec.decision(policy as u8, action.map(|index| index as u8), decision.value, distribution);
+    let at = thinking::Situation {
+        objective: env.objective().map(|a| &a.objective),
+        completion: env.completion(),
+        reward: Some(&env.config.reward),
+        rules: env.mask_rules(),
+    };
+    if let Some(seen) = thinking::observe(tables, at, env.session()) {
+        thinking::write(env.session_mut(), seen, d);
     }
 }
 
@@ -453,6 +459,8 @@ pub struct TrainEnv<N: Nes, St: StateStore<N::State>> {
     job: i64,
     /// Cheated items of the episode already in its recording.
     cheated: ItemCounts,
+    /// The names a recording's TARGETS, MASKS and DECISIONS index (META `tables`).
+    tables: Tables,
 }
 
 impl<N, St> TrainEnv<N, St>
@@ -474,6 +482,7 @@ where
         let job_base = seed.iter().fold(policy::noise::mix(init.rng.get_stream()), |h, &b| {
             policy::noise::mix(h ^ b as u64)
         });
+        let tables = Tables::of(&data.map);
         let (env, control) = specialist_env(config, data, nes, store, opts, init, rgb)?;
         Ok(TrainEnv {
             env,
@@ -483,6 +492,7 @@ where
             episodes: 0,
             job: 0,
             cheated: ItemCounts::default(),
+            tables,
         })
     }
 
@@ -528,8 +538,8 @@ where
         trial(self.env.session_mut(), action, future)
     }
 
-    fn decided(&mut self, policy: i64, action: &ZeldaAction, decision: &Decision, distribution: Option<&[f32]>) {
-        record_decision(self.env.session_mut().nes_mut(), policy, action, decision, distribution);
+    fn decided(&mut self, d: &Decided<'_, ZeldaAction>) {
+        record_specialist_decision(&mut self.env, &self.tables, d);
     }
 
     fn reset(
@@ -546,7 +556,7 @@ where
         self.cheated = info.cheated;
         let context = context(self.env.context());
         let (session, store) = self.env.session_and_store();
-        start_recording(session, store, context, None)?;
+        start_recording(session, store, context, None, &self.tables)?;
         write_observation(&o, &mut obs);
         self.rooms.report_info(&info, events);
         self.job = (policy::noise::mix(self.job_base.wrapping_add(self.episodes)) >> 1) as i64;
@@ -641,6 +651,8 @@ pub struct EvalEnv<N: Nes, St: StateStore<N::State>> {
     rooms: RoomWatch,
     /// Cheated items of the episode already in its recording.
     cheated: ItemCounts,
+    /// The names a recording's TARGETS, MASKS and DECISIONS index (META `tables`).
+    tables: Tables,
 }
 
 impl<N, St> EvalEnv<N, St>
@@ -666,6 +678,7 @@ where
             skip_look_ahead: true,
             ..opts
         };
+        let tables = Tables::of(&data.map);
         let (env, control) = specialist_env(config, data, nes, store, opts, init, rgb)?;
         Ok(EvalEnv {
             env,
@@ -674,6 +687,7 @@ where
             episode: None,
             rooms: RoomWatch::default(),
             cheated: ItemCounts::default(),
+            tables,
         })
     }
 
@@ -718,10 +732,10 @@ where
         trial(self.env.session_mut(), action, future)
     }
 
-    fn decided(&mut self, policy: i64, action: &ZeldaAction, decision: &Decision, distribution: Option<&[f32]>) {
+    fn decided(&mut self, d: &Decided<'_, ZeldaAction>) {
         let health = link_health(self.env.session());
-        self.env.note_decision(decision_note(action, decision, health));
-        record_decision(self.env.session_mut().nes_mut(), policy, action, decision, distribution);
+        self.env.note_decision(decision_note(d.action, d.decision, health));
+        record_specialist_decision(&mut self.env, &self.tables, d);
     }
 
     fn reset(
@@ -747,7 +761,7 @@ where
         self.cheated = info.cheated;
         let context = context(self.env.context());
         let (session, store) = self.env.session_and_store();
-        start_recording(session, store, context, None)?;
+        start_recording(session, store, context, None, &self.tables)?;
         write_observation(&o, &mut obs);
         self.rooms.report_info(&info, events);
         self.episode = Some(EvalEpisode {
@@ -805,6 +819,12 @@ where
                 clips_fixed: episode.clips_fixed,
                 visits: self.env.take_visits(),
             })));
+            // The episode's record as the evaluation keeps it (an `eval.json` row), for a reader of the replay alone.
+            if let (Some(ZeldaEvent::Eval(record)), Some(rec)) =
+                (events.last(), self.env.session_mut().nes_mut().recorder_mut())
+            {
+                rec.set_meta("episode", record.to_json());
+            }
             let (ending, job) = (specialist_ending(t), episode.job.seed as i64);
             let context = context(self.env.context());
             let (session, store) = self.env.session_and_store();
@@ -831,6 +851,8 @@ pub struct ChainRunEnv<N: Nes, St: StateStore<N::State>> {
     /// Rooms and cheated items of the run already in its recording.
     rooms_seen: usize,
     cheated: ItemCounts,
+    /// The names a recording's TARGETS, MASKS and DECISIONS index (META `tables`).
+    tables: Tables,
     /// The caller's run-time clips switch, whether it flips runs in progress, and the generation applied last.
     clips_switch: Option<(ClipsSwitch, bool)>,
     clips_seen: u32,
@@ -854,6 +876,7 @@ where
         rgb: Option<RgbFn<N>>,
     ) -> Self {
         let nes = PoolNes::new(nes, Some(init.control.clone()));
+        let tables = Tables::of(&data.map);
         let mut chain = ChainEnv::new(data, nes, PoolStore(store), route);
         watch(chain.session_mut(), &init.control, rgb);
         ChainRunEnv {
@@ -871,6 +894,7 @@ where
             cheated: ItemCounts::default(),
             clips_switch: None,
             clips_seen: 0,
+            tables,
         }
     }
 
@@ -951,6 +975,7 @@ where
         for (index, record) in rooms.iter().enumerate().skip(self.rooms_seen) {
             if index > 0 {
                 entered.push(Event::Outcome(rooms[index - 1].outcome.clone()));
+                entered.push(Event::Visit(rooms[index - 1].to_json().to_string()));
             }
             let location = record.location();
             let played = record.policy.as_deref().unwrap_or(&record.specialist);
@@ -967,6 +992,7 @@ where
             && let Some(last) = rooms.last()
         {
             entered.push(Event::Outcome(last.outcome.clone()));
+            entered.push(Event::Visit(last.to_json().to_string()));
         }
         self.rooms_seen = rooms.len();
         let context = context(self.chain.context());
@@ -987,6 +1013,14 @@ where
         }
         self.record_progress(Some(&result))?;
         let (ending, job) = (chain_ending(&result), result.seed.unwrap_or(0) as i64);
+        // The run's record without its rooms (each is a VISIT event), as the chain's JSON lines keep it.
+        if let Some(rec) = self.chain.session_mut().nes_mut().recorder_mut() {
+            let mut run = result.to_json();
+            if let Some(fields) = run.as_object_mut() {
+                fields.remove("rooms");
+            }
+            rec.set_meta("run", run);
+        }
         events.push(ZeldaEvent::Run(Box::new(result)));
         let context = context(self.chain.context());
         let (session, store) = self.chain.session_and_store();
@@ -1067,10 +1101,18 @@ where
         trial(self.chain.session_mut(), action, future)
     }
 
-    fn decided(&mut self, policy: i64, action: &ZeldaAction, decision: &Decision, distribution: Option<&[f32]>) {
+    fn decided(&mut self, d: &Decided<'_, ZeldaAction>) {
         let health = link_health(self.chain.session());
-        self.chain.note_decision(decision_note(action, decision, health));
-        record_decision(self.chain.session_mut().nes_mut(), policy, action, decision, distribution);
+        self.chain.note_decision(decision_note(d.action, d.decision, health));
+        let at = thinking::Situation {
+            objective: self.chain.objective(),
+            completion: self.chain.completion(),
+            reward: self.chain.acting_reward(),
+            rules: self.chain.mask_rules(),
+        };
+        if let Some(seen) = thinking::observe(&self.tables, at, self.chain.session()) {
+            thinking::write(self.chain.session_mut(), seen, d);
+        }
     }
 
     fn reset(
@@ -1092,7 +1134,8 @@ where
             let context = context(self.chain.context());
             let booted = self.chain.booted().map(|(name, delay)| (name.to_owned(), delay));
             let (session, store) = self.chain.session_and_store();
-            start_recording(session, store, context, booted.as_ref().map(|(name, delay)| (name.as_str(), *delay)))?;
+            let tables = &self.tables;
+            start_recording(session, store, context, booted.as_ref().map(|(name, delay)| (name.as_str(), *delay)), tables)?;
             if matches!(status, ChainStatus::Act { .. }) {
                 self.record_progress(None)?;
             }
@@ -1175,11 +1218,11 @@ where
         }
     }
 
-    fn decided(&mut self, policy: i64, action: &ZeldaAction, decision: &Decision, distribution: Option<&[f32]>) {
+    fn decided(&mut self, d: &Decided<'_, ZeldaAction>) {
         match self {
-            TaskEnv::Train(e) => e.decided(policy, action, decision, distribution),
-            TaskEnv::Eval(e) => e.decided(policy, action, decision, distribution),
-            TaskEnv::Chain(e) => e.decided(policy, action, decision, distribution),
+            TaskEnv::Train(e) => e.decided(d),
+            TaskEnv::Eval(e) => e.decided(d),
+            TaskEnv::Chain(e) => e.decided(d),
         }
     }
 

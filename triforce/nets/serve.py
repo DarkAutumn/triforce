@@ -2,9 +2,11 @@
 
 A ``Server`` owns one ``_native.ExternalQueue`` and a thread that loops: take every pending observation
 (``ExternalQueue.take``), run each network on its rows (``LabNet.heads``; any module with that method, ``ZeldaPolicy``
-too), answer the logits and values. The workers pick the actions in Rust from those logits, by the act mode, with
-the keyed noise (``policy::logits``). ``Server.policy(network)`` is the network as a policy for ``EnvPool.play`` /
-``EnvPool.rollout`` (beside Rust ``_native.Policy`` objects in the same call).
+too), answer the logits, the values and the hit head's logits per joint action (``aux['hit']``; NaN for a network
+without one: the replay's DECISIONS record the danger of those that have one). The workers pick the actions in Rust
+from those logits, by the act mode, with the keyed noise (``policy::logits``). ``Server.policy(network)`` is the
+network as a policy for ``EnvPool.play`` / ``EnvPool.rollout`` (beside Rust ``_native.Policy`` objects in the same
+call).
 
 Recurrent networks: the state of each env (the queue's ``slot``) is kept here and starts over at a job's step 0 or a
 new job; a bootstrap request (a truncation's value) reads the state without advancing it.
@@ -25,14 +27,17 @@ import numpy as np
 import torch
 
 from .. import _native
+from ..actions import NUM_DIRECTIONS, NUM_DURATIONS, NUM_KINDS
 
 DEFAULT_GATHER = 0.005      # at most this many seconds a batch waits for the other active envs' rows (eager forwards)
 GRAPH_GATHER = 0.001        # ... with CUDA graphs (a forward is cheap: answering sooner beats a fuller batch)
 ACTIVE_SECONDS = 1.0        # an env that asked this recently is waited for (``Server._loop``)
+IDLE_SECONDS = 3600.0       # with no env active the thread blocks this long for a request (``close`` wakes it)
 CPU_THREADS = 4             # torch threads when serving on the CPU
 GRAPH_BUCKETS = (1, 2, 4, 8, 16, 32, 64)    # batch sizes a CUDA graph is captured for; larger batches run eagerly
 GRAPH_CHECKS = 3            # a new graph's first replays are compared with the eager forward on the same rows
 GRAPH_TOLERANCE = 1e-4      # ... and must agree within this (a graph replays the captured kernels; 0 measured)
+JOINT = NUM_KINDS * NUM_DIRECTIONS * NUM_DURATIONS     # hit logits per row (``kind * 32 + direction * 4 + duration``)
 
 
 def serve_device() -> torch.device:
@@ -70,8 +75,8 @@ def _bucket(rows: int) -> Optional[int]:
 
 class _Graph:
     """One network's forward at one batch size, captured as a CUDA graph: static inputs filled in place, one
-    replay, the logits and value side by side in a static output. A replay launches the captured kernels in one
-    call, so it costs about a millisecond where the eager forward's Python and launches cost 4-5 (docs/lab.md
+    replay, the logits, value and hit logits side by side in a static output. A replay launches the captured kernels
+    in one call, so it costs about a millisecond where the eager forward's Python and launches cost 4-5 (docs/lab.md
     "Acting speed")."""
 
     def __init__(self, network, obs: dict, half: bool):
@@ -101,8 +106,12 @@ class _Graph:
 
 
 def _flat(heads) -> torch.Tensor:
-    """The logits and the value side by side (one copy back)."""
-    return torch.cat([heads.flat().float(), heads.value.float().unsqueeze(-1)], dim=-1)
+    """The logits, the value and the hit head's logits per joint action (NaN without one) side by side (one copy
+    back)."""
+    flat = heads.flat().float()
+    hit = heads.aux.get('hit')
+    hit = torch.full((flat.shape[0], JOINT), float('nan'), device=flat.device) if hit is None else hit.float()
+    return torch.cat([flat, heads.value.float().unsqueeze(-1), hit], dim=-1)
 
 
 def weights_hash(network: torch.nn.Module) -> int:
@@ -178,10 +187,12 @@ class Server:
     def _loop(self):
         while not self.queue.closed:
             # Wait for every env that asked in the last second (they step their emulators at different times; a
-            # batch per straggler costs a forward each), at most ``gather`` seconds.
+            # batch per straggler costs a forward each), at most ``gather`` seconds.  With none active the thread
+            # blocks until a request comes (Nov 23: an idle server woke ten times a second, per served network).
             now = time.monotonic()
             self._seen = {slot: t for slot, t in self._seen.items() if now - t < ACTIVE_SECONDS}
-            batch = self.queue.take(timeout=0.1, gather=self.gather, target=max(1, len(self._seen)))
+            batch = self.queue.take(timeout=0.1 if self._seen else IDLE_SECONDS, gather=self.gather,
+                                    target=max(1, len(self._seen)))
             if batch is None:
                 continue
             now = time.monotonic()
@@ -198,9 +209,10 @@ class Server:
     def answer(self, batch: dict):
         """Runs every network on its rows of ``batch`` (an ``ExternalQueue.take`` dict) and answers them."""
         models = batch['model']
-        count = len(models)
-        logits = np.empty((count, self.queue.logits_size), dtype=np.float32)
+        count, size = len(models), self.queue.logits_size
+        logits = np.empty((count, size), dtype=np.float32)
         values = np.empty(count, dtype=np.float32)
+        hit = np.empty((count, JOINT), dtype=np.float32)
         for model in np.unique(models):
             rows = np.nonzero(models == model)[0]
             network = self.models[int(model)]
@@ -212,12 +224,13 @@ class Server:
                        for key, value in batch['obs'].items()}
                 with torch.autocast('cuda', dtype=torch.float16, enabled=self.half):
                     heads, new_state = network.heads(obs, state)
-                out = _flat(heads).cpu().numpy()        # one copy back: the logits and the value side by side
-            logits[rows] = out[:, :-1]
-            values[rows] = out[:, -1]
+                out = _flat(heads).cpu().numpy()        # one copy back: the logits, value and hit side by side
+            logits[rows] = out[:, :size]
+            values[rows] = out[:, size]
+            hit[rows] = out[:, size + 1:]
             if new_state is not None:
                 self._keep_states(int(model), batch, rows, new_state)
-        self.queue.answer(batch['slot'], logits, values)
+        self.queue.answer(batch['slot'], logits, values, hit)
         self.batches += 1
         self.rows += count
 
@@ -241,7 +254,7 @@ class Server:
                 graph.checks -= 1
                 with torch.autocast('cuda', dtype=torch.float16, enabled=self.half):
                     eager = _flat(network.heads(obs)[0])
-                if not torch.allclose(out, eager, atol=GRAPH_TOLERANCE, rtol=GRAPH_TOLERANCE):
+                if not torch.allclose(out, eager, atol=GRAPH_TOLERANCE, rtol=GRAPH_TOLERANCE, equal_nan=True):
                     raise RuntimeError(f"graph and eager forward differ by {float((out - eager).abs().max()):.3g}")
             return out[:len(rows)].cpu().numpy()
         except Exception as error:     # pylint: disable=broad-exception-caught

@@ -41,7 +41,7 @@ sys.path.insert(0, str(ROOT / 'scripts' / 'experiments'))
 
 import r36_hit_bench as hb  # noqa: E402
 from r36_hit_common import auc  # noqa: E402
-from triforce import _native, nets, registry  # noqa: E402
+from triforce import _native, jobs, nets, registry  # noqa: E402
 from triforce.observation import ENTITY_THREAT_FEATURES  # noqa: E402
 
 R40 = ROOT / 'target' / 'r40'
@@ -315,6 +315,7 @@ def main(argv=None) -> int:
     if args.table:
         table(args.results)
         return 0
+    jobs.require_job()
     args.results.parent.mkdir(parents=True, exist_ok=True)
     run(args)
     return 0

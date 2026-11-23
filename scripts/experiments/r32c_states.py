@@ -14,7 +14,9 @@ then says so in its manifest entry's `played_by`.  `--rules` names those rooms a
 a bare STEM: its first room).  With --models a chain still without the next state gets it from a chain run the promoted
 models won (`r32c_models.py`: eval-chain replays, the next room's pre-entry frame cut out).  Each
 step's states are staged under target/entry-states/r32c-<tag>/<step> and installed before the next step; a chain
-with no state for a step stops there.  At the end `entry_states audit --route d3first`.  Never skips a fight."""
+with no state for a step stops there.  At the end `entry_states audit --route d3first`.  Never skips a fight.  A job
+of the machine's queue (``jobs.require_job``: ``triforce job run ... --timeout 3h -- .venv/bin/python
+scripts/experiments/r32c_states.py ...``); the explorer's builds and the audit run inside it."""
 
 import argparse
 import collections
@@ -28,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import r32c_harvest  # noqa: E402  pylint: disable=wrong-import-position
 from r32_d3first import LEGS  # noqa: E402  pylint: disable=wrong-import-position
+from triforce.jobs import require_job  # noqa: E402  pylint: disable=wrong-import-position
 
 ROUTE = 'd3first'
 WALKED = {name for leg in LEGS.values() for name, _ in leg} | set(r32c_harvest.tallies())
@@ -123,6 +126,7 @@ def main():
                         help='where a chain still lacks the next state, the promoted models (r32c_models.py)')
     parser.add_argument('--model-runs', type=int, default=30)
     args = parser.parse_args()
+    require_job()
     rules = dict((r.split('=') + [None])[:2] for r in args.rules.split(',') if r)
     demos = demo_rooms()
 

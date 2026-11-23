@@ -96,6 +96,11 @@ impl PolicyActor {
         self
     }
 
+    /// Whether every decision's whole distribution is kept ([`PolicyActor::with_distributions`]).
+    pub(super) fn keeps_distributions(&self) -> bool {
+        self.distributions
+    }
+
     /// Report every decision's acting log-prob and entropy (`Decision::act_log_prob`/`act_entropy`), which costs
     /// the joint distribution per decision (every kind's direction and duration heads). Modes with a rule or
     /// `escape` always pay it; `sample` and `argmax` only with this on (plays: evaluation and chain statistics).
@@ -227,6 +232,11 @@ impl Actor<ZeldaAction> for PolicyActor {
             (out, policy::Acting::default())
         };
         let [k, d, u] = out.action;
+        // How the act mode drew it (a replay's DECISIONS): a replayed action is scored, not drawn.
+        let (draw, low) = match given {
+            Some(_) => (5, false),
+            None => self.modes[p].draw(situation.stall, situation.health),
+        };
         Ok((
             [k as i64, d as i64, u as i64],
             Decision {
@@ -236,6 +246,8 @@ impl Actor<ZeldaAction> for PolicyActor {
                 act_log_prob: acting.log_prob,
                 act_entropy: acting.entropy,
                 foresee: None,
+                draw,
+                low,
             },
         ))
     }
@@ -321,7 +333,7 @@ impl Actor<ZeldaAction> for PolicyActor {
                     value: o.value,
                     act_log_prob: acting.log_prob,
                     act_entropy: acting.entropy,
-                    foresee: None,
+                    ..Decision::default()
                 },
             ));
         }

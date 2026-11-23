@@ -9,7 +9,9 @@ share of frames in the top, middle and bottom thirds of the floor; his distance 
 actions (sword, beams, moves, waits; a swing that lands: a head's health or the dead-neck mask drops within 12
 frames), the flying heads (cut heads, type $46: frames with one alive, the nearest distance) and every hit he
 takes, named by the nearest thing (an attached head, a flying head, a fireball or another object).  Prints a
-table per arm, split by hearts in (1 or less, 1.5-2.5, 3 or more)."""
+table per arm, split by hearts in (1 or less, 1.5-2.5, 3 or more).  It plays every replay given: a job of the
+machine's queue (``jobs.require_job``: ``triforce job run ... -- .venv/bin/python
+scripts/experiments/r34d4_gleeok_fight.py ...``)."""
 
 import argparse
 import json
@@ -17,6 +19,7 @@ import statistics
 from pathlib import Path
 
 from triforce._native import Replay, ReplayPlayer
+from triforce.jobs import require_job
 
 RAM_PRG = 0x800
 LINK_X, LINK_Y = 0x70, 0x84
@@ -159,6 +162,7 @@ def main():
     parser.add_argument('--states-dir', default=None)
     parser.add_argument('--json', default=None)
     args = parser.parse_args()
+    require_job()
     out = {}
     for spec in args.arms:
         arm, directory = spec.split('=', 1)

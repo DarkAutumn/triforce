@@ -39,7 +39,10 @@ def _plans(logs):
     return [json.loads((folder / 'training.json').read_text()) for folder in sorted(logs.iterdir()) if folder.is_dir()]
 
 
-def test_the_screen_ranks_the_checkpoints_and_the_confirmation_plays_fresh_seeds(team, tmp_path):
+def test_the_screen_ranks_the_checkpoints_the_confirmation_plays_fresh_seeds_and_apply_swaps_the_checkpoint(
+        team, tmp_path):
+    """One selection checked whole, then a second with ``--apply`` that reuses its chains (one test: the second
+    selection needs the first one's 7 chains, the suite's longest work)."""
     root, run_dir = team
     assert _select(root, tmp_path) == 0
     report = json.loads((run_dir / 'selection.json').read_text())
@@ -72,10 +75,7 @@ def test_the_screen_ranks_the_checkpoints_and_the_confirmation_plays_fresh_seeds
                                                      'confirm-promoted']
     assert plan['runs'][4]['candidate'] == 'it000002'
 
-
-def test_a_second_selection_reuses_the_chains_and_apply_swaps_the_checkpoint(team, tmp_path):
-    root, run_dir = team
-    assert _select(root, tmp_path) == 0
+    # A second selection reuses the chains, and --apply swaps the checkpoint.
     (run_dir / 'eval.json').write_text('{"act": "temperature:0.5+relax:16"}')
     old_sha1 = registry.checkpoint_sha1(run_dir)
     assert _select(root, tmp_path, '--apply') == 0

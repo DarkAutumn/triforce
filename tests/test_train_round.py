@@ -161,6 +161,28 @@ def test_the_estimate_reads_iterations_and_steps_from_train_args(round_):
     assert round_.effective_schedule(per_update) == (3, 1024)    # triforce.train reads --steps as --steps-per-update
 
 
+def test_the_wrapper_dry_call_writes_the_round_work_and_creates_nothing(round_, tmp_path):
+    """``triforce job run`` asks the round its work first (``$TRIFORCE_JOB_ESTIMATE``, no job id yet): every
+    training's steps, evaluation's episodes and the chain's route steps, written as ``{kind, work, name}`` before any
+    models folder, log folder or training."""
+    import os, subprocess, sys   # pylint: disable=import-outside-toplevel,multiple-imports
+    from triforce import jobs    # pylint: disable=import-outside-toplevel
+    argv = ['--round', 'dry', '--models-dir', str(tmp_path / 'models'), '--logs-dir', str(tmp_path / 'logs'),
+            '--specialists', SPECIALIST, '--steps', '8192', '--steps-per-update', '4096', '--chain-runs', '3']
+    estimate = tmp_path / 'estimate.json'
+    # The repo's states, as the fixture's specialists resolve them (the session's states dir holds only the start).
+    environ = {**{k: v for k, v in os.environ.items() if k not in (jobs.JOB_ID_ENV, 'TRIFORCE_STATES_DIR')},
+               jobs.JOB_ESTIMATE_ENV: str(estimate)}
+    out = subprocess.run([sys.executable, str(Path(__file__).parents[1] / 'scripts' / 'train_round.py'), *argv],
+                         env=environ, capture_output=True, text=True, timeout=120, check=False)
+    assert out.returncode == 0, out.stderr
+    args = round_.parse_args(argv)
+    expected = round_.round_work(args, [SPECIALIST], *round_.effective_schedule(args))
+    assert expected['train_steps'] == 2 * 4096 and expected['chain_steps'] > 0
+    assert json.loads(estimate.read_text()) == {'kind': 'round', 'work': expected, 'name': 'dry'}
+    assert sorted(p.name for p in tmp_path.iterdir()) == ['estimate.json']
+
+
 def test_runs_are_evaluated_in_the_project_act_mode_by_default(round_):
     assert round_.parse_args(['--round', 'r']).eval_act == registry.DEFAULT_ACT
 

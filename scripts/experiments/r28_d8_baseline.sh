@@ -5,7 +5,7 @@
 #
 #   [TAG=r78-base] [RUNS=100] [EPISODES=20] [MODELS=models] scripts/experiments/r28_d8_baseline.sh [run|report]
 #
-# run     the batch `TAG` (it waits its turn in the job line; a rerun skips what is done):
+# run     the batch `TAG` (inside this script's job of the machine's queue; a rerun skips what is done):
 #           post-d6  0_22c_0 to the D8 triforce (arrival 8:0x7e)      target/r56-chains/TAG-post-d6.jsonl
 #           d8       8_7es_0 to the D8 triforce                       target/r56-chains/TAG-d8.jsonl
 #         (both stop on step 297, 0:0x6d out of Dungeon 8: the route runs on to the end of the game since 1.9.0.0)
@@ -15,6 +15,8 @@
 #         (hp and bombs draws, clips both ways for a clip family, the model's own act mode) is the family's.
 # report  `triforce room-stats TAG` and the two Markdown tables (per room of the chains; per state of the rooms).
 set -euo pipefail
+source "$(dirname "$0")/../job.sh"      # a job of the machine's queue: triforce job run ... -- this script ...
+require_job "$0" "$@"
 cd "$(dirname "$0")/../.."
 PY=.venv/bin/python
 TAG=${TAG:-r78-base}

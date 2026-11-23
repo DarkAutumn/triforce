@@ -1,8 +1,12 @@
 """Go-Explore phase A: find one successful path per seed start state by restoring savestates.
 
-    python -m triforce.explore --specialist NAME [--states 0_38s_0,0_48s_0] [--iterations 3000]
+    triforce job run --agent A --task T --subtask S --desc '...' --timeout 40m -- \\
+        python -m triforce.explore --specialist NAME [--states 0_38s_0,0_48s_0] [--iterations 3000]
         [--explore-steps 25] [--patience 300] [--parallel N] [--seed 0] [--variant] [--room-kills 5:0x05=4]
         [--out trajectories]
+
+A job of the machine's queue (``jobs.require_job``: outside ``triforce job`` and without a terminal it refuses);
+the states explored so far of the total are the job's progress (``triforce job list``, the training GUI).
 
 Plain PPO only learns what a random-ish policy stumbles into.  Here the emulator is a simulator we can rewind
 (Ecoffet et al., Go-Explore): keep an archive of *cells*, coarse summaries of the game state, each holding the
@@ -20,7 +24,8 @@ health, then fewest steps) is replayed from the start and written as ``<out>/<sp
 then runs the backward curriculum on them.
 
 The search itself is native (``triforce._native.explore_states`` / ``Explorer``); each start state gets a fresh
-explorer seeded with ``--seed``, so results don't depend on ``--parallel`` (threads).
+explorer seeded with ``--seed``, so results don't depend on ``--parallel`` (threads).  It reports the states explored
+(``progress``), which ``main`` passes on as the job's progress.
 
 ``--variant`` writes ``<out>/<specialist>/<state>~s<seed>`` instead: an extra track from the same seed state.
 The seed also draws the reset's RNG and spawn, so another seed is another room (for Dodongo, another movement
@@ -38,21 +43,29 @@ import shutil
 import sys
 import tempfile
 from pathlib import Path
-from typing import List, Optional
+from typing import Callable, List, Optional
 
+from . import jobs
 from ._native import AcceptSpec, Explorer, ExploreResult, explore_states
 from .paths import TRAJECTORIES_DIR
+from .specialist import load_specialist
 
 __all__ = ['AcceptSpec', 'Explorer', 'ExploreResult', 'explore_specialist', 'main']
 
 
-def check_out(specialist: str, out) -> None:
-    """Raises ValueError when ``out`` is a specialist's track directory instead of the trajectories root (the
-    explorer appends ``<specialist>/``, so ``trajectories/<specialist>`` would write tracks no training loads)."""
+def family_name(specialist: str) -> str:
+    """The folder a specialist's tracks are written under: its config's name (``specialists/d3first/moldorm.yaml``
+    writes ``<out>/moldorm``, as the native explorer does)."""
+    return load_specialist(specialist).name
+
+
+def check_out(family: str, out) -> None:
+    """Raises ValueError when ``out`` is a family's track directory instead of the trajectories root (the
+    explorer appends ``<family>/``, so ``trajectories/<family>`` would write tracks no training loads)."""
     path = Path(out)
-    if path.name == specialist or any(path.glob('*/trajectory.json')):
+    if path.name == family or any(path.glob('*/trajectory.json')):
         raise ValueError(f"--out {out} is a track directory; pass the trajectories root (e.g. {path.parent}): "
-                         f"tracks are written to <out>/{specialist}/<state>")
+                         f"tracks are written to <out>/{family}/<state>")
 
 
 def track_dir(out, specialist: str, state: str, seed: int, variant: bool, kills: Optional[int] = None,
@@ -75,26 +88,30 @@ def parse_room_kills(text: str) -> tuple:
 def explore_specialist(specialist: str, out: str, states: Optional[List[str]] = None, iterations: int = 3000,
                        explore_steps: int = 25, patience: int = 300, parallel: int = 1, seed: int = 0,
                        states_dir: Optional[str] = None, variant: bool = False,
-                       room_kills: Optional[tuple] = None, clips: Optional[bool] = None) -> list:
+                       room_kills: Optional[tuple] = None, clips: Optional[bool] = None,
+                       progress: Optional[Callable[[int, int], None]] = None) -> list:
     """Explores every seed start state (or ``states``) of ``specialist``, writing successes under
     ``<out>/<specialist>/<state>`` (``<state>~s<seed>`` with ``variant``); returns [(ExploreResult, replayed)] in
-    state order.  ``out`` must be the trajectories root (``check_out``)."""
+    state order.  ``out`` must be the trajectories root (``check_out``).  ``progress(done, total)``: the states
+    explored so far, as they finish."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments
-    check_out(specialist, out)
+    family = family_name(specialist)
+    check_out(family, out)
 
     def run(root: str) -> list:
         return explore_states(specialist, root, states=states, iterations=iterations, explore_steps=explore_steps,
                               patience=patience, parallel=parallel, seed=seed,
                               states_dir=None if states_dir is None else str(states_dir),
-                              room_kills=None if room_kills is None else [room_kills], clips=clips)
+                              room_kills=None if room_kills is None else [room_kills], clips=clips,
+                              progress=progress)
 
     if not variant:
         return run(str(out))
     with tempfile.TemporaryDirectory() as tmp:
         results = run(tmp)
-        source = Path(tmp) / specialist          # the explorer creates it only when a state was solved
+        source = Path(tmp) / family              # the explorer creates it only when a state was solved
         tracks = sorted(source.iterdir()) if source.is_dir() else []
-        target_root = Path(out) / specialist
+        target_root = Path(out) / family
         for track in tracks:
             target_root.mkdir(parents=True, exist_ok=True)
             target = target_root / f'{track.name}~s{seed}'
@@ -124,7 +141,7 @@ def main(argv=None):
                         help="trajectories root (<out>/<specialist>/<state> is written; not <specialist>'s own dir)")
     args = parser.parse_args(argv)
     try:
-        check_out(args.specialist, args.out)
+        check_out(family_name(args.specialist), args.out)
     except ValueError as error:
         parser.error(str(error))
 
@@ -132,16 +149,18 @@ def main(argv=None):
         room_kills = parse_room_kills(args.room_kills) if args.room_kills else None
     except ValueError as error:
         parser.error(str(error))
+    jobs.require_job()
     results = explore_specialist(args.specialist, args.out, args.states.split(',') if args.states else None,
                                  args.iterations, args.explore_steps, args.patience, args.parallel, args.seed,
                                  variant=args.variant, room_kills=room_kills,
-                                 clips=None if args.clips is None else args.clips == 'on')
+                                 clips=None if args.clips is None else args.clips == 'on',
+                                 progress=lambda done, total: jobs.progress(done, total, 'states'))
     for result, replayed in results:
         status = (f"success in {len(result.actions)} steps, health {result.health}"
                   + ("" if replayed else " (REPLAY MISMATCH)")) if result.success else "no success"
         kills = room_kills[2] if room_kills else None
-        track = track_dir(args.out, args.specialist, result.start_state, args.seed, args.variant, kills,
-                          args.clips == 'off')
+        track = track_dir(args.out, family_name(args.specialist), result.start_state, args.seed, args.variant,
+                          kills, args.clips == 'off')
         written = f"  -> {track}" if result.success and replayed else ''
         print(f"{result.start_state:8} {status:40} iterations={result.iterations} env_steps={result.env_steps} "
               f"cells={result.cells} {result.seconds:.0f}s{written}")

@@ -12,6 +12,8 @@
 # explores everything with `python -m triforce.explore --specialist NAME`). Run from anywhere: everything is
 # relative to this repo.
 set -euo pipefail
+source "$(dirname "$0")/../job.sh"      # a job of the machine's queue: triforce job run ... -- this script ...
+require_job "$0" "$@"
 cd "$(dirname "$0")/../.."
 PY=${PY:-.venv/bin/python}
 STAGE=target/entry-states/r21-ladder

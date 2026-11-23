@@ -13,7 +13,9 @@ executing (the last decision before it), whether a bomb was placed in the 48 fra
 type and distance, where Link stood (the W door he enters by, a corner, the room's N/S edge rows, the W/E walls, the
 middle), and the hands alive then; the fight's length (frames to his death) and the share of fight frames within
 16 / 32 px of a part. With EVAL.json (the evaluation's records, matched by seed): bombs landed (`bombs.hits`).
-Printed per label and by hearts on entering (<= 1, 1.5-2, 2.5-3)."""
+Printed per label and by hearts on entering (<= 1, 1.5-2, 2.5-3).  It plays every replay given: a job of the
+machine's queue (``jobs.require_job``: ``triforce job run ... -- .venv/bin/python
+scripts/experiments/r35d3_manhandla.py ...``)."""
 
 import argparse
 import collections
@@ -21,6 +23,7 @@ import json
 from pathlib import Path
 
 from triforce._native import Replay, ReplayPlayer
+from triforce.jobs import require_job
 
 OBJ_TYPE, OBJ_X, OBJ_Y, OBJ_STATE, OBJ_HP = 0x34F, 0x70, 0x84, 0xAC, 0x485
 HEARTS, PARTIAL, BOMBS = 0x66F, 0x670, 0x658
@@ -189,6 +192,7 @@ def main():
     parser.add_argument('dirs', nargs='+', help='LABEL=REPLAY_DIR[:EVAL.json]')
     parser.add_argument('--json', type=Path)
     args = parser.parse_args()
+    require_job()
     out = {}
     for spec in args.dirs:
         label, rest = spec.split('=', 1)

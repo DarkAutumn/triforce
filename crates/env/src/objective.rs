@@ -5,7 +5,7 @@ use crate::config::{RewardConfig, SpecialistConfig};
 use std::sync::Arc;
 use zelda::enums::{Direction, Tile, enemy, item};
 use zelda::game::GameView;
-use zelda::objectives::{GameCompletion, Objective, ObjectiveKind};
+use zelda::objectives::{GameCompletion, Objective, ObjectiveKind, Role};
 use zelda::room::{Target, Wavefront};
 
 /// A state's objective and PBRS wavefront.
@@ -180,6 +180,11 @@ pub fn target_wavefront(
     if state.game_over() {
         return None;
     }
+    Some(wavefront_to(state, objective, &wavefront_targets(objective, state, reward)))
+}
+
+/// The targets the wavefront of [`target_wavefront`] leads to (sorted, each once).
+fn wavefront_targets(objective: &Objective, state: &GameView, reward: &RewardConfig) -> Vec<Target> {
     let mut targets: Vec<Target> = match drops_first_targets(reward, state, objective) {
         Some(drops) => drops,
         None => {
@@ -189,7 +194,24 @@ pub fn target_wavefront(
     };
     targets.sort_unstable();
     targets.dedup();
-    Some(wavefront_to(state, objective, &targets))
+    targets
+}
+
+/// What a replay's TARGETS record of `objective` holds (round 40): each entity of [`Objective::labels`] once, in
+/// the order the objective made them, and whether it is in the target the observation's wavefront leads to (the
+/// one [`target_wavefront`] builds for `reward`: true) or only priced by the reward (a dropped item, the
+/// critic's targets: false). Nothing here changes what the observation or the reward compute.
+pub fn recorded_targets(objective: &Objective, state: &GameView, reward: &RewardConfig) -> Vec<(Role, bool)> {
+    let wavefront = wavefront_targets(objective, state, reward);
+    let mut out: Vec<(Role, bool)> = Vec::new();
+    for (target, role) in &objective.labels {
+        let obs = wavefront.binary_search(target).is_ok();
+        match out.iter_mut().find(|(r, _)| r == role) {
+            Some((_, seen)) => *seen |= obs,
+            None => out.push((*role, obs)),
+        }
+    }
+    out
 }
 
 /// Whether a dropped item pulls Link away from `objective` (the aimless score's `pulled`, `zelda::aimless`): one the
@@ -281,6 +303,7 @@ mod tests {
             treasure_refused: false,
             drops_first: false,
             bag_drops: false,
+            labels: Vec::new(),
         };
         let plain = RewardConfig::default();
         let view = |ram: &[u8; RAM_SIZE]| GameView::new(ram, 0, false, map.clone());

@@ -697,6 +697,7 @@ pub fn observe<'py>(py: Python<'py>, state: &PyGameState, rupee_reserve: u8) -> 
         treasure_refused: false,
         drops_first: false,
         bag_drops: false,
+        labels: Vec::new(),
     };
     let obs = builder.reset(&state.view, &objective, None, &zelda::actions::ActionMask::default());
     crate::convert::obs_to_dict(py, &obs)

@@ -1,15 +1,16 @@
-"""Jobs waiting their turn (``triforce.jobs``), with real processes and a registry of the test's own: two run, the
-others wait (by score: shortest estimate first, older ones moving up; equal estimates are first come first served), a
-short job runs beside two long ones in the express place, and nothing has to report in for the line to move (a
-killed job simply stops
-counting).  Then the five training and evaluation entry points: each lowers its own priority (niceness 15 by
-default, the caller's with ``--nice 0``, read back from ``/proc``), waits in a full registry before any work, starts
-when it empties, and ``--no-wait`` starts it at once."""
+"""The machine's job queue with real processes (``triforce job``, ``triforce.jobqueue``), in a queue of the test's
+own: two long jobs run in the regular places and the next waits at no cost until one ends; a short one runs beside
+them in the express place; builds and tests have their own two places, first come first served, whatever the jobs
+lane holds; a killed wrapper takes its command with it and frees its place; SIGTERM ends a waiting or a running job
+``interrupted``; ``--timeout`` stops a command; the command runs at the verb's niceness whatever comes after ``--``;
+``test --build`` is one entry with both steps; the tools refuse to run outside the queue without a terminal; and
+every entry point answers the wrapper's dry call with its work, having loaded no model, built no pool and written
+no log folder (Nov 23: 17 chains loading their teams outside the line held the machine for 25-48 minutes)."""
 
 import json
 import os
+import shutil
 import signal
-import socket
 import subprocess
 import sys
 import time
@@ -17,51 +18,28 @@ from pathlib import Path
 
 import pytest
 
+from triforce import jobqueue as q
 from triforce import jobs
-from triforce.events import PLAN_FILE, QUEUE_FILE
 from triforce.registry import save_checkpoint
 
 from .conftest import ROOT, SEGMENT_STATE, SEGMENT_STOP_STEP, require_state, seeded_network
 from .test_evaluate import SMALL
 
-PAUSED = 'is paused until resources are available'
-
-# A job of the line: holds a logged_job until <logs>/stop exists (or --hold seconds).  --estimate S: its work is S
-# seconds at the default rates (history ignored, so every estimate is what the test says; default an hour: regular).
-# --go FILE: registers only once FILE exists (two jobs starting at the same instant).  Short poll and update
-# intervals; $TEST_EXPRESS_JOBS sets the express places; --no-wait and --nice through begin_job.
-JOB = r'''
-import argparse, os, sys, time
-from triforce import events, jobs
-jobs.POLL_SECONDS = 0.1
-jobs.UPDATE_SECONDS = 1.0
-jobs.EXPRESS_JOBS = int(os.environ.get('TEST_EXPRESS_JOBS', jobs.EXPRESS_JOBS))
-jobs.rates = lambda history: dict(jobs.DEFAULT_RATES)
-parser = argparse.ArgumentParser()
-parser.add_argument('logs')
-parser.add_argument('name')
-parser.add_argument('--go')
-parser.add_argument('--estimate', type=float, default=3600.0)
-parser.add_argument('--hold', type=float, default=None)
-jobs.add_job_arguments(parser)
-args = parser.parse_args()
-jobs.begin_job(args)
-while args.go and not os.path.exists(args.go):
-    time.sleep(0.005)
-work = jobs.work(chain_steps=round(args.estimate / jobs.DEFAULT_RATES['chain_steps']))
-with events.logged_job(args.name, 'chain', [], args.logs, work=work):
-    print(f'started {time.time()}', flush=True)
-    deadline = None if args.hold is None else time.monotonic() + args.hold
-    while not os.path.exists(os.path.join(args.logs, 'stop')) and (deadline is None or time.monotonic() < deadline):
-        time.sleep(0.05)
-print('done', flush=True)
+PYTHON = sys.executable
+# The wrapper with a short poll (``q.POLL_SECONDS``) and grace, run as itself.
+WRAPPER = r'''
+import sys
+from triforce import jobqueue, job
+jobqueue.POLL_SECONDS = 0.1
+job.GRACE_SECONDS = 2.0
+sys.exit(job.main(sys.argv[1:]))
 '''
 
 
-def environment(registry: Path, **extra) -> dict:
-    """The tests' jobs: their own registry, two at a time, no niceness or no-wait from the caller."""
-    env = {key: value for key, value in os.environ.items() if key not in (jobs.NICE_ENV, jobs.NO_WAIT_ENV)}
-    env.update({jobs.JOBS_DIR_ENV: str(registry), jobs.MAX_JOBS_ENV: '2', 'CUDA_VISIBLE_DEVICES': ''}, **extra)
+def environment(queue: Path, **extra) -> dict:
+    env = {key: value for key, value in os.environ.items()
+           if key not in (jobs.JOB_ID_ENV, jobs.JOB_LABEL_ENV, jobs.JOB_ESTIMATE_ENV)}
+    env.update({q.QUEUE_DIR_ENV: str(queue)}, **extra)
     return env
 
 
@@ -74,272 +52,279 @@ def wait_until(condition, timeout: float, what: str):
     pytest.fail(f"timed out waiting for {what}")
 
 
-class Job:
-    """One process of the line, its console output in a file."""
+def niceness(pid: int) -> int:
+    return int(Path(f'/proc/{pid}/stat').read_text().rsplit(')', 1)[1].split()[16])
 
-    def __init__(self, root: Path, registry: Path, name: str, *args: str, env: dict | None = None):
-        self.name, self.registry = name, registry
-        self.logs = root / 'logs' / name
-        self.logs.mkdir(parents=True)
-        self.out = root / f'{name}.out'
-        with open(self.out, 'w', encoding='utf-8') as out:
-            self.process = subprocess.Popen(  # pylint: disable=consider-using-with
-                [sys.executable, '-c', JOB, str(self.logs), name, *args], stdout=out,
-                stderr=subprocess.STDOUT, env=environment(registry, **(env or {})), cwd=ROOT)
 
-    def output(self) -> str:
-        return self.out.read_text(encoding='utf-8')
+def cpu_seconds(pid: int) -> float:
+    fields = Path(f'/proc/{pid}/stat').read_text().rsplit(')', 1)[1].split()
+    return (int(fields[11]) + int(fields[12])) / os.sysconf('SC_CLK_TCK')
 
-    def wait_for(self, text: str, timeout: float = 60):
-        wait_until(lambda: text in self.output() or self.process.poll() is not None, timeout, f"{self.name}: {text}")
-        assert text in self.output(), self.output()
 
-    def started(self) -> bool:
-        return 'started' in self.output()
+class Queue:
+    """A queue folder and the wrappers started into it."""
 
-    def started_at(self) -> float:
-        """When it started (its own clock)."""
-        return float(next(line.split()[1] for line in self.output().splitlines() if line.startswith('started')))
+    def __init__(self, folder: Path):
+        self.folder = folder
+        self.started: list = []
 
-    def queued(self) -> bool:
-        """Its entry is in the line."""
-        return any(job['pid'] == self.process.pid and job['status'] == 'queued'
-                   for job in jobs.read_jobs(self.registry))
+    def start(self, *args: str, cwd: Path = ROOT, **env) -> subprocess.Popen:
+        out = self.folder / f'out-{len(self.started)}.txt'
+        with open(out, 'w', encoding='utf-8') as file:
+            process = subprocess.Popen([PYTHON, '-c', WRAPPER, *args], stdout=file,  # pylint: disable=consider-using-with
+                                       stderr=subprocess.STDOUT, cwd=cwd, env=environment(self.folder, **env))
+        process.out = out
+        self.started.append(process)
+        return process
 
-    def stop(self):
-        (self.logs / 'stop').touch()
-        assert self.process.wait(timeout=30) == 0, self.output()
+    def run(self, name: str, *command: str, timeout: str = '1h', extra=()) -> subprocess.Popen:
+        """``triforce job run`` of ``command`` (a script: ``--timeout`` is its estimate)."""
+        return self.start('run', '--agent', 'tester', '--task', 'queue', '--subtask', name, '--desc',
+                          f'The {name} job.', '--timeout', timeout, *extra, '--', *command)
 
-    def folder(self) -> Path:
-        (folder,) = [p for p in self.logs.iterdir() if p.is_dir()]
-        return folder
+    def rows(self) -> list[dict]:
+        con = q.connect(self.folder)
+        try:
+            return q.read_jobs(con)
+        finally:
+            con.close()
 
-    def plan(self) -> dict:
-        return json.loads((self.folder() / PLAN_FILE).read_text())
+    def row(self, subtask: str) -> dict:
+        (row,) = [row for row in self.rows() if row['subtask'] == subtask] or [None]
+        return row
 
-    @property
-    def label(self) -> str:
-        """How the line names it: its log folder and kind."""
-        return f"{self.folder().name} (chain)"
+    def status(self, subtask: str):
+        row = self.row(subtask)
+        return None if row is None else row['status']
 
-    def queue(self) -> list[dict]:
-        return [json.loads(line) for line in (self.folder() / QUEUE_FILE).read_text().splitlines()]
-
-    def entry(self) -> dict:
-        (entry,) = [job for job in jobs.read_jobs(self.registry) if job['pid'] == self.process.pid]
-        return entry
+    def close(self):
+        for process in self.started:
+            if process.poll() is None:
+                process.kill()
+            process.wait()
 
 
 @pytest.fixture
-def line(tmp_path):
-    """Starts jobs (``line(name, *args, env=...)``) in a registry of the test's own; kills those left at the end."""
-    registry = tmp_path / 'jobs'
-    started: list[Job] = []
-
-    def start(name: str, *args: str, env: dict | None = None, root: Path = tmp_path) -> Job:
-        job = Job(root, registry, name, *args, env=env)
-        started.append(job)
-        return job
-    yield start
-    for job in started:
-        if job.process.poll() is None:
-            job.process.kill()
-        job.process.wait()
+def queue(tmp_path):
+    line = Queue(tmp_path / 'queue')
+    line.folder.mkdir()
+    yield line
+    line.close()
 
 
-def running_pair(line):
-    """a, then b: running in that order."""
-    first = line('a')
-    first.wait_for('started')
-    second = line('b')
-    second.wait_for('started')
-    return first, second
+def sleeper(seconds: float = 600) -> list[str]:
+    return [PYTHON, '-c', f'import time; time.sleep({seconds})']
 
 
-def test_a_third_job_waits_until_one_of_two_ends(line):
-    first, second = running_pair(line)
-    third = line('c')
-    third.wait_for(PAUSED)
-    assert (f'triforce: c is paused until resources are available: estimated 1 hour; 2 jobs are running '
-            f'({first.label}, {second.label}). It starts by itself; next update in 1 second.') in third.output()
-    plan = third.plan()
-    assert plan['status'] == 'queued' and plan['queue']['running'] == [first.label, second.label]
-    assert plan['queue']['place'] == 1 and plan['queue']['admitted'] is None
-    assert third.entry()['status'] == 'queued' and third.queue()[0]['event'] == 'queued'
-    wait_until(lambda: 'waiting' in [e['event'] for e in third.queue()], 10, "an update")
-    assert not third.started()
-    first.stop()
-    ended = time.monotonic()
-    third.wait_for('started', timeout=10)
-    assert time.monotonic() - ended < 3
-    events = third.queue()
-    assert events[-1]['event'] == 'admitted' and events[-1]['waited'] > 0
-    assert 'triforce: c starts after waiting' in third.output()
-    plan = third.plan()
-    assert plan['status'] == 'running' and plan['queue']['admitted'] and third.entry()['status'] == 'running'
-    second.stop()
-    third.stop()
-    assert third.plan()['status'] == 'completed' and third.entry()['status'] == 'completed'
+def test_two_long_jobs_run_and_the_next_waits_for_one_of_them_at_no_cost(queue):
+    first, second = queue.run('a', *sleeper()), queue.run('b', *sleeper())
+    wait_until(lambda: queue.status('a') == queue.status('b') == 'running', 30, "two running")
+    third = queue.run('c', *sleeper(0))
+    wait_until(lambda: queue.status('c') == 'queued' and 'waits for a place' in third.out.read_text(), 30, "c waits")
+    assert {queue.row('a')['place'], queue.row('b')['place']} == {'regular-1', 'regular-2'}
+    assert '2 jobs are running' in third.out.read_text()
+    before = cpu_seconds(third.pid)
+    time.sleep(3)
+    assert cpu_seconds(third.pid) - before < 0.3          # a 10x faster poll than the real one, still near 0
+    first.send_signal(signal.SIGTERM)
+    assert first.wait(timeout=60) == 128 + signal.SIGTERM
+    assert queue.status('a') == 'interrupted'
+    assert third.wait(timeout=60) == 0
+    assert queue.row('c')['place'] in ('regular-1', 'regular-2') and queue.status('c') == 'completed'
+    second.kill()
 
 
-def test_a_killed_running_job_frees_its_place_without_reporting(line):
-    first, _ = running_pair(line)
-    third = line('c')
-    third.wait_for(PAUSED)
-    first.process.kill()                                    # SIGKILL: nothing reports in
-    first.process.wait()
-    third.wait_for('started', timeout=10)
-    (entry,) = [job for job in jobs.read_jobs(first.registry) if job['pid'] == first.process.pid]
-    assert entry['status'] == 'running' and jobs.job_alive(entry) is False
+def test_a_short_job_runs_beside_two_long_ones_in_the_express_place(queue):
+    queue.run('a', *sleeper())
+    queue.run('b', *sleeper())
+    wait_until(lambda: queue.status('a') == queue.status('b') == 'running', 30, "two running")
+    short = queue.run('short', *sleeper(0), timeout='5m')
+    assert short.wait(timeout=60) == 0
+    assert queue.row('short')['place'] == 'express-1'
+    express = queue.run('asked', *sleeper(0), timeout='2h', extra=('--express',))
+    assert express.wait(timeout=60) == 0 and queue.row('asked')['place'] == 'express-1'
 
 
-def test_equal_estimates_are_first_come_first_served(line):
-    first, second = running_pair(line)
-    third = line('c')
-    third.wait_for(PAUSED)
-    fourth = line('d')
-    fourth.wait_for(PAUSED)
-    assert (f'2 jobs are running ({first.label}, {second.label}); 1 job is ahead in line ({third.label})'
-            in fourth.output())
-    assert fourth.plan()['queue']['place'] == 2
-    first.stop()
-    third.wait_for('started', timeout=10)
-    time.sleep(1.0)
-    assert not fourth.started()
-    wait_until(lambda: fourth.plan()['queue']['running'] == [second.label, third.label], 10, "d to see c run")
-    assert fourth.plan()['queue']['ahead'] == [] and fourth.plan()['status'] == 'queued'
-    second.stop()
-    fourth.wait_for('started', timeout=10)
+def test_six_jobs_at_once_one_per_place_the_rest_wait(queue):
+    for name in 'abcdef':
+        queue.run(name, *sleeper())
+    wait_until(lambda: sum(queue.status(n) == 'running' for n in 'abcdef') == 2, 60, "two running")
+    time.sleep(1)
+    rows = queue.rows()
+    assert sorted(row['place'] for row in rows if row['status'] == 'running') == ['regular-1', 'regular-2']
+    assert sum(row['status'] == 'queued' for row in rows) == 4
 
 
-def test_a_killed_waiting_job_does_not_hold_up_the_one_behind(line):
-    first, _ = running_pair(line)
-    third = line('c')
-    third.wait_for(PAUSED)
-    fourth = line('d')
-    fourth.wait_for(PAUSED)
-    third.process.kill()
-    third.process.wait()
-    first.stop()
-    fourth.wait_for('started', timeout=10)
+def test_builds_and_tests_have_two_places_of_their_own(queue, tmp_path):
+    checkout = fake_checkout(tmp_path, build_seconds=600)
+    for name in 'ab':
+        queue.run(name, *sleeper())
+    queue.run('express', *sleeper(), timeout='5m')
+    wait_until(lambda: sum(row['status'] == 'running' for row in queue.rows()) == 3, 60, "the jobs lane full")
+    builds = []
+    for i in range(3):          # one after another: first come, first served
+        builds.append(queue.start('build', '--agent', f'b{i}', '--task', 'build', cwd=checkout))
+        wait_until(lambda i=i: any(row['agent'] == f'b{i}' for row in queue.rows()), 60, f"b{i} in line")
+    wait_until(lambda: sum(row['status'] == 'running' and row['lane'] == q.TOOLS_LANE for row in queue.rows()) == 2,
+               60, "two builds running")
+    time.sleep(1)
+    tools = [row for row in queue.rows() if row['lane'] == q.TOOLS_LANE]
+    assert sorted(row['place'] for row in tools if row['status'] == 'running') == ['tools-1', 'tools-2']
+    assert [row['agent'] for row in tools if row['status'] == 'queued'] == ['b2']    # first come, first served
+    builds[0].send_signal(signal.SIGTERM)
+    wait_until(lambda: [row['status'] for row in queue.rows() if row['agent'] == 'b2'] == ['running'], 60, "b2")
 
 
-def test_sigterm_while_waiting_ends_the_plan_interrupted(line):
-    running_pair(line)
-    third = line('c')
-    third.wait_for(PAUSED)
-    signalled = time.monotonic()
-    third.process.send_signal(signal.SIGTERM)
-    assert third.process.wait(timeout=30) != 0 and time.monotonic() - signalled < 10
-    assert third.plan()['status'] == 'interrupted' and third.entry()['status'] == 'interrupted'
-    assert third.queue()[-1]['event'] == 'interrupted' and not third.started()
+def fake_checkout(tmp_path: Path, build_seconds: float = 0) -> Path:
+    """A checkout whose ``.venv`` has a ``maturin`` that records its niceness and cargo job count, and a ``python``
+    whose test suite records its niceness."""
+    root = tmp_path / 'checkout'
+    (root / '.git').mkdir(parents=True)
+    (root / '.venv' / 'bin').mkdir(parents=True)
+    maturin = root / '.venv' / 'bin' / 'maturin'
+    maturin.write_text(f"#!/bin/sh\necho \"build nice $(cut -d' ' -f19 /proc/$$/stat) jobs $CARGO_BUILD_JOBS\" "
+                       f">> {root / 'record.txt'}\nsleep {build_seconds}\n")
+    maturin.chmod(0o755)
+    python = root / '.venv' / 'bin' / 'python'
+    python.write_text(f'#!/bin/sh\nexec {PYTHON} "$@"\n')
+    python.chmod(0o755)
+    (root / 'tests').mkdir()
+    (root / 'tests' / 'test_record.py').write_text(
+        "import os\n\ndef test_record():\n"
+        f"    with open({str(root / 'record.txt')!r}, 'a') as file:\n"
+        "        file.write(f'test nice {os.nice(0)} jobs {os.environ.get(\"CARGO_BUILD_JOBS\")}\\n')\n")
+    return root
 
 
-def test_no_wait_starts_at_once_and_counts_for_the_next(line):
-    first, second = running_pair(line)
-    flag = line('c', '--no-wait')
-    flag.wait_for('started', timeout=60)
-    env = line('d', env={jobs.NO_WAIT_ENV: '1'})
-    env.wait_for('started', timeout=60)
-    for job in (flag, env):
-        assert PAUSED not in job.output() and 'queue' not in job.plan()
-        assert not (job.folder() / QUEUE_FILE).exists()
-        assert job.entry()['status'] == 'running' and job.entry()['no_wait'] is True
-    last = line('e')
-    last.wait_for(PAUSED)
-    labels = ', '.join(job.label for job in (first, second, flag, env))
-    assert f'estimated 1 hour; 4 jobs are running ({labels})' in last.output()
+def test_test_with_build_is_one_entry_with_both_steps_at_nice_10(queue, tmp_path):
+    checkout = fake_checkout(tmp_path)
+    process = queue.start('test', 'python', '--agent', 'tester', '--task', 'suite', '--build', cwd=checkout)
+    assert process.wait(timeout=120) == 0, process.out.read_text()
+    (row,) = queue.rows()
+    assert row['verb'] == 'test' and row['lane'] == q.TOOLS_LANE and row['status'] == 'completed'
+    assert row['steps'] == [{'name': 'build', 'status': 'completed'}, {'name': 'test python', 'status': 'completed'}]
+    assert (checkout / 'record.txt').read_text().splitlines() == ['build nice 10 jobs 4', 'test nice 10 jobs 4']
 
 
-@pytest.mark.parametrize('attempt', range(5))
-def test_two_jobs_starting_at_once_for_one_place_only_one_starts(line, tmp_path, attempt):
-    del attempt
-    first = line('a')
-    first.wait_for('started')
-    go = tmp_path / 'go'
-    racers = [line('c', '--go', str(go)), line('d', '--go', str(go))]
-    time.sleep(1.0)                                         # both up and polling for the go file
-    go.touch()
-    wait_until(lambda: any(job.started() for job in racers), 60, "one racer to start")
-    for job in racers:
-        wait_until(lambda job=job: job.started() or PAUSED in job.output(), 30, f"{job.name} to start or wait")
-    time.sleep(1.0)
-    assert sorted(job.started() for job in racers) == [False, True], [job.output() for job in racers]
+def test_run_runs_its_command_at_nice_15_and_nothing_after_the_dashes_changes_it(queue, tmp_path):
+    record = tmp_path / 'nice.txt'
+    process = queue.run('nice', PYTHON, '-c', f"import os; open({str(record)!r}, 'w').write(str(os.nice(0)))")
+    assert process.wait(timeout=60) == 0
+    assert record.read_text() == str(max(15, os.nice(0)))
+    for refused in (['nice', '-n', '0', 'true'], ['ionice', '-c3', 'true'], ['timeout', '5', 'true'],
+                    ['env', 'CARGO_BUILD_JOBS=20', 'true']):
+        process = queue.run('refused', *refused)
+        assert process.wait(timeout=60) == 2
+        assert "after --: priority, time limits and the cargo job count are the queue's" in process.out.read_text()
+    assert [row['subtask'] for row in queue.rows()] == ['nice']
 
 
-# ------------------------------------------------------------------------------------------------- the scored line
-
-def test_a_short_job_passes_a_long_one_in_the_line(line):
-    first, second = running_pair(line)
-    long = line('long', '--estimate', '3000')
-    long.wait_for(PAUSED)
-    short = line('short', '--estimate', '900')       # over EXPRESS_SECONDS: it waits for a regular place too
-    short.wait_for(PAUSED)
-    assert 'estimated 15 minutes; 2 jobs are running' in short.output()
-    wait_until(lambda: long.plan()['queue']['ahead'] == [short.label], 10, "long to see short ahead")
-    queue = short.plan()['queue']
-    assert queue['place'] == 1 and queue['ahead'] == [] and queue['estimate'] == 900.0
-    assert queue['work'] == short.plan()['work'] and queue['score'] <= 900.0 and queue['lane'] is None
-    first.stop()
-    short.wait_for('started', timeout=10)
-    time.sleep(1.0)
-    assert not long.started()
-    assert short.queue()[-1]['event'] == 'admitted' and short.queue()[-1]['lane'] == 'regular'
-    second.stop()
-    long.wait_for('started', timeout=10)
+@pytest.mark.parametrize('args, message', [
+    (['--subtask', 's', '--timeout', '1m'], '--desc'),
+    (['--subtask', 's', '--desc', '', '--timeout', '1m'], '--desc is required'),
+    (['--subtask', 's', '--desc', 'x' * 121, '--timeout', '1m'], 'at most 120 characters'),
+    (['--subtask', 's', '--desc', 'two\nlines', '--timeout', '1m'], 'at most 120 characters'),
+    (['--desc', 'No subtask.', '--timeout', '1m'], '--subtask'),
+    (['--subtask', 's', '--desc', 'No duration.'], 'give --timeout'),
+])
+def test_run_requires_its_parameters(queue, args, message):
+    process = queue.start('run', '--agent', 'tester', '--task', 'queue', *args, '--', 'true')
+    assert process.wait(timeout=60) == 2
+    assert message in process.out.read_text()
+    assert not queue.rows()
 
 
-def test_a_short_job_runs_beside_two_long_ones_and_the_next_short_one_waits_for_it(line):
-    first, second = running_pair(line)
-    medium = line('medium', '--estimate', '1200')
-    medium.wait_for(PAUSED)
-    short = line('short', '--estimate', '60')
-    short.wait_for('started', timeout=60)
-    assert PAUSED not in short.output() and short.entry()['lane'] == 'express' and short.plan()['lane'] == 'express'
-    other = line('other', '--estimate', '60')
-    other.wait_for(PAUSED)
-    assert f'estimated 1 minute; 3 jobs are running ({first.label}, {second.label}, {short.label})' in other.output()
-    short.stop()
-    other.wait_for('started', timeout=10)
-    assert other.entry()['lane'] == 'express' and not medium.started()
-    first.stop()
-    medium.wait_for('started', timeout=10)
-    assert medium.entry()['lane'] == 'regular'
+def test_timeout_stops_the_command_and_the_job_ends_timeout(queue):
+    process = queue.run('slow', *sleeper(), timeout='1s')
+    assert process.wait(timeout=60) == 124
+    assert queue.status('slow') == 'timeout'
 
 
-def test_a_long_job_is_not_starved_by_a_stream_of_short_ones(line):
-    """One place, no express place: short jobs (1 s) keep coming and pass a long one (8 s) until it has waited about
-    twice its estimate (8 - w/2 below a fresh short job's score)."""
-    env = {jobs.MAX_JOBS_ENV: '1', 'TEST_EXPRESS_JOBS': '0'}
-    holder = line('holder', env=env)
-    holder.wait_for('started')
-    long = line('long', '--estimate', '8', '--hold', '0.5', env=env)
-    long.wait_for(PAUSED)
-    shorts = [line(f's{index}', '--estimate', '1', '--hold', '0.3', env=env) for index in range(3)]
-    for short in shorts:
-        wait_until(short.queued, 30, f"{short.name} to join the line")
-    holder.stop()
-    deadline = time.monotonic() + 120
-    while not long.started():
-        assert time.monotonic() < deadline, "the long job never started"
-        if sum(not short.started() for short in shorts) < 3:
-            shorts.append(line(f's{len(shorts)}', '--estimate', '1', '--hold', '0.3', env=env))
-        time.sleep(0.1)
-    passed = [short for short in shorts if short.started() and short.started_at() < long.started_at()]
-    waited = long.queue()[-1]['waited']
-    assert len(passed) >= 3 and 10 < waited < 60, (len(passed), waited)
+def test_a_killed_wrapper_takes_its_command_with_it_and_frees_its_place(queue, tmp_path):
+    pid_file = tmp_path / 'child.pid'
+    process = queue.run('killed', PYTHON, '-c',
+                        f"import os, time; open({str(pid_file)!r}, 'w').write(str(os.getpid())); time.sleep(600)")
+    wait_until(lambda: pid_file.exists() and pid_file.read_text(), 30, "the command")
+    child = int(pid_file.read_text())
+    process.kill()
+    process.wait()
+    wait_until(lambda: not Path(f'/proc/{child}').exists() or 'Z' in Path(f'/proc/{child}/stat').read_text()
+               .rsplit(')', 1)[1].split()[0], 30, "the command to die")
+    after = queue.run('after', *sleeper(0), timeout='2h')
+    assert after.wait(timeout=60) == 0
+    assert queue.status('killed') == 'dead'
 
 
-# ------------------------------------------------------------------------------------------------- entry points
+def test_sigterm_while_waiting_ends_the_job_interrupted(queue):
+    queue.run('a', *sleeper())
+    queue.run('b', *sleeper())
+    wait_until(lambda: queue.status('a') == queue.status('b') == 'running', 30, "two running")
+    waiting = queue.run('c', *sleeper())
+    wait_until(lambda: queue.status('c') == 'queued', 30, "c queued")
+    waiting.send_signal(signal.SIGTERM)
+    assert waiting.wait(timeout=60) == 128 + signal.SIGTERM
+    assert queue.status('c') == 'interrupted'
 
-# An entry point run as itself (``python -m MODULE`` or the script), only with a short poll ($TEST_EXPRESS_JOBS: the
-# express places; the tests' tiny jobs are express-sized, so the waiting tests turn the place off).
+
+def test_progress_from_inside_a_job_and_the_listing(queue):
+    script = (f"import subprocess, sys; subprocess.run([sys.executable, '-m', 'triforce.cli', 'job', 'progress', "
+              f"'3', '10', '--unit', 'files'], check=True)")
+    process = queue.run('progress', PYTHON, '-c', script)
+    assert process.wait(timeout=120) == 0, process.out.read_text()
+    report = queue.row('progress')['progress']['files']
+    assert (report['done'], report['total'], report['unit']) == (3, 10, 'files')
+    listing = subprocess.run([PYTHON, '-m', 'triforce.cli', 'job', 'list'], capture_output=True, text=True,
+                             env=environment(queue.folder), check=True).stdout
+    assert 'Agent: tester   Task: queue   Sub-task: progress' in listing and 'The progress job.' in listing
+    assert '3/10 files' in listing
+
+
+# ------------------------------------------------------------------------------------------------- enforcement
+
+def test_a_tool_refuses_to_run_outside_the_queue_without_a_terminal():
+    code = "from triforce import jobs; jobs.require_job(); print('ran')"
+    env = environment(Path('/nonexistent'))
+    refused = subprocess.run([PYTHON, '-c', code], capture_output=True, text=True, env=env, stdin=subprocess.DEVNULL,
+                             check=False)
+    assert refused.returncode == 2 and 'ran' not in refused.stdout
+    assert 'triforce job run --agent AGENT --task TASK --subtask SUBTASK' in refused.stderr
+    inside = subprocess.run([PYTHON, '-c', code], capture_output=True, text=True, env={**env, jobs.JOB_ID_ENV: '7'},
+                            stdin=subprocess.DEVNULL, check=True)
+    assert inside.stdout.strip() == 'ran'
+    if shutil.which('script') is None:
+        pytest.skip("no script(1) for a terminal")
+    attended = subprocess.run(['script', '-qec', f'{PYTHON} -c "{code}"', '/dev/null'], capture_output=True,
+                              text=True, env=env, stdin=subprocess.DEVNULL, check=False)
+    assert attended.returncode == 0 and 'ran' in attended.stdout
+
+
+def test_an_old_versions_queue_code_is_switched_off_under_the_wrapper(queue, tmp_path):
+    record = tmp_path / 'env.json'
+    script = (f"import json, os; json.dump({{k: os.environ.get(k) for k in ('TRIFORCE_NO_WAIT', "
+              f"'TRIFORCE_JOB_ID', 'TRIFORCE_JOB_LABEL')}}, open({str(record)!r}, 'w'))")
+    assert queue.run('old', PYTHON, '-c', script).wait(timeout=60) == 0
+    seen = json.loads(record.read_text())
+    assert seen == {'TRIFORCE_NO_WAIT': '1', 'TRIFORCE_JOB_ID': str(queue.row('old')['id']),
+                    'TRIFORCE_JOB_LABEL': 'tester-queue-old'}
+
+
+# ------------------------------------------------------------------------------- the entry points' dry calls
+
+# An entry point run as itself, with every model load, served network and pool marked in a file (the dry call must
+# make none: it ends at ``jobs.announce``, before anything loads).
 RUN = r'''
-import runpy, sys
-import os
-from triforce import jobs
-jobs.POLL_SECONDS = 0.2
-jobs.EXPRESS_JOBS = int(os.environ.get('TEST_EXPRESS_JOBS', jobs.EXPRESS_JOBS))
+import os, runpy, sys
+from triforce import _native, registry
+from triforce.nets import serve
+def mark(what, inner):
+    def wrapper(*args, **kwargs):
+        with open(os.environ['TEST_LOAD_MARK'], 'a', encoding='utf-8') as file:
+            file.write(what + '\n')
+        return inner(*args, **kwargs)
+    return wrapper
+registry.load_model = mark('load_model', registry.load_model)
+serve.Server.policy = mark('serve', serve.Server.policy)
+_native.EnvPool = mark('EnvPool', _native.EnvPool)
 target = sys.argv[1]
 sys.argv = sys.argv[1:]
 if target.endswith('.py'):
@@ -348,43 +333,9 @@ else:
     runpy.run_module(target, run_name='__main__', alter_sys=True)
 '''
 
-ENTRY_POINTS = ('evaluate', 'eval-chain', 'eval-batch', 'train', 'round')
-WORK = {'evaluate': {'eval_episodes'}, 'eval-chain': {'chain_steps'}, 'eval-batch': {'eval_episodes'},
-        'train': {'train_steps'}, 'round': {'train_steps', 'eval_episodes'}}     # the round plays no chain here
-# The training entry points are stopped once they started (enough to show they waited before any work).
-COMPLETES = ('evaluate', 'eval-chain', 'eval-batch', 'train')
-
-
-def niceness(pid: int) -> int:
-    """The process's niceness (``/proc/<pid>/stat`` field 19)."""
-    return int(Path(f'/proc/{pid}/stat').read_text().rsplit(')', 1)[1].split()[16])
-
-
-@pytest.fixture
-def busy(tmp_path):
-    """A registry holding two live running jobs (sleeping processes, entries as code from before the line wrote
-    them); ``busy.free()`` ends them."""
-    registry = tmp_path / 'jobs'
-    registry.mkdir()
-    sleepers = [subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(900)'])  # noqa: S603
-                for _ in range(2)]
-    for index, sleeper in enumerate(sleepers):
-        wait_until(lambda sleeper=sleeper: jobs.process_start(sleeper.pid) is not None, 10, "a sleeper")
-        (registry / f'{socket.gethostname()}-{sleeper.pid}-busy{index}.json').write_text(json.dumps({
-            'schema': 1, 'host': socket.gethostname(), 'pid': sleeper.pid,
-            'pid_start': jobs.process_start(sleeper.pid), 'started': jobs._iso(time.time()), 'name': f'busy{index}',
-            'kind': 'round', 'log_dir': None, 'plan': None, 'status': 'running', 'finished': None}))
-
-    class Busy:  # pylint: disable=too-few-public-methods
-        directory = registry
-
-        @staticmethod
-        def free():
-            for sleeper in sleepers:
-                sleeper.kill()
-                sleeper.wait()
-    yield Busy
-    Busy.free()
+ENTRY_POINTS = {'evaluate': ('eval', {'eval_episodes'}), 'eval-chain': ('chain', {'chain_steps'}),
+                'eval-batch': ('batch', {'eval_episodes'}), 'train': ('train', {'train_steps'}),
+                'round': ('round', {'train_steps', 'eval_episodes'})}
 
 
 @pytest.fixture
@@ -413,104 +364,98 @@ def commands(tmp_path, states_dir, scripted_models):
     }
 
 
-class EntryPoint:
-    """An entry point running in the ``busy`` registry, its logs under ``logs``."""
-
-    def __init__(self, command: list[str], registry: Path, logs: Path, out: Path, states_dir: Path,
-                 express: bool = False):
-        self.logs, self.out, self.registry = logs, out, registry
-        env = environment(registry, TRIFORCE_LOGS_DIR=str(logs), TRIFORCE_STATES_DIR=str(states_dir),
-                          TEST_EXPRESS_JOBS=str(jobs.EXPRESS_JOBS if express else 0))
-        with open(out, 'w', encoding='utf-8') as file:
-            self.process = subprocess.Popen(  # pylint: disable=consider-using-with
-                [sys.executable, '-c', RUN, *command], stdout=file, stderr=subprocess.STDOUT, env=env, cwd=ROOT)
-
-    def output(self) -> str:
-        return self.out.read_text(encoding='utf-8')
-
-    def wait_for(self, text: str, timeout: float = 300):
-        wait_until(lambda: text in self.output() or self.process.poll() is not None, timeout, text)
-        assert text in self.output(), self.output()
-
-    def plan(self) -> dict:
-        (plan,) = self.logs.glob(f'*/{PLAN_FILE}')
-        return json.loads(plan.read_text())
-
-    def entry(self) -> dict:
-        (entry,) = [job for job in jobs.read_jobs(self.registry) if job['pid'] == self.process.pid]
-        return entry
-
-    def finish(self, name: str):
-        """Lets a started job end: the evaluations and the training run to the end, the round is stopped once its
-        plan runs."""
-        if name in COMPLETES:
-            assert self.process.wait(timeout=600) == 0, self.output()
-            return
-        wait_until(lambda: self.plan()['status'] == 'running', 120, "the round to start")
-        self.process.send_signal(signal.SIGTERM)
-        self.process.wait(timeout=120)
-
-    def kill(self):
-        if self.process.poll() is None:
-            self.process.kill()
-        self.process.wait()
-
-
-@pytest.fixture
-def entry_point(busy, commands, tmp_path, states_dir):
-    started = []
-
-    def start(name: str, *extra: str, express: bool = False) -> EntryPoint:
-        logs = tmp_path / f'logs-{name}-{len(started)}'
-        job = EntryPoint([*commands[name], *extra], busy.directory, logs, tmp_path / f'{name}-{len(started)}.out',
-                         states_dir, express)
-        started.append(job)
-        return job
-    yield start
-    for job in started:
-        job.kill()
-
-
 @pytest.mark.parametrize('name', ENTRY_POINTS)
-def test_an_entry_point_waits_at_niceness_15_and_starts_when_the_registry_empties(name, busy, entry_point):
-    job = entry_point(name)
-    job.wait_for(PAUSED)
-    assert '2 jobs are running (busy0 (round), busy1 (round))' in job.output()
-    assert niceness(job.process.pid) == max(15, os.nice(0))
-    assert job.plan()['status'] == 'queued' and job.entry()['status'] == 'queued'
-    plan, entry = job.plan(), job.entry()                    # its work and estimate, before any work starts
-    assert set(plan['work']) == WORK[name] and all(amount > 0 for amount in plan['work'].values())
-    assert entry['work'] == plan['work'] and entry['estimate'] == plan['estimate'] == plan['queue']['estimate']
-    assert plan['estimate'] == round(jobs.estimate(plan['work'], jobs.DEFAULT_RATES), 1)    # tiny jobs: ~0 s
-    busy.free()
-    job.wait_for('starts after waiting', timeout=30)
-    job.finish(name)
-    assert job.plan()['queue']['admitted'] and job.entry()['admitted']
+def test_an_entry_point_answers_the_dry_call_with_its_work_having_loaded_nothing(name, commands, tmp_path,
+                                                                                    states_dir):
+    answer, marks, logs = tmp_path / 'work.json', tmp_path / 'marks.txt', tmp_path / 'logs'
+    env = environment(tmp_path / 'queue', TEST_LOAD_MARK=str(marks), TRIFORCE_LOGS_DIR=str(logs),
+                      TRIFORCE_STATES_DIR=str(states_dir), **{jobs.JOB_ESTIMATE_ENV: str(answer)})
+    done = subprocess.run([PYTHON, '-c', RUN, *commands[name]], capture_output=True, text=True, env=env, cwd=ROOT,
+                          check=False, timeout=600)
+    assert done.returncode == 0, done.stdout + done.stderr
+    kind, units = ENTRY_POINTS[name]
+    work = json.loads(answer.read_text())
+    assert work['kind'] == kind and set(work['work']) == units and all(v > 0 for v in work['work'].values())
+    assert not marks.exists(), marks.read_text()
+    assert not logs.exists() or not any(logs.iterdir())
 
 
-@pytest.mark.parametrize('name', ENTRY_POINTS)
-def test_an_entry_point_with_nice_0_waits_at_the_callers_niceness_and_sigterm_ends_it(name, entry_point):
-    job = entry_point(name, '--nice', '0')
-    job.wait_for(PAUSED)
-    assert niceness(job.process.pid) == os.nice(0)
-    job.process.send_signal(signal.SIGTERM)
-    assert job.process.wait(timeout=60) != 0
-    assert job.plan()['status'] == 'interrupted' and job.entry()['status'] == 'interrupted'
+def test_the_wrapper_estimates_a_tool_from_its_dry_call_and_an_argument_error_fails_before_any_wait(queue,
+                                                                                                     commands):
+    process = queue.start('run', '--agent', 'tester', '--task', 'queue', '--subtask', 'bad', '--desc', 'A bad chain.',
+                          '--', PYTHON, '-m', 'triforce.cli', 'eval-chain', '--route', 'd2first', '--from',
+                          'no-such-state', '--runs', '1')
+    assert process.wait(timeout=600) == 2
+    assert not queue.rows()
+    chain = commands['eval-chain']
+    process = queue.start('run', '--agent', 'tester', '--task', 'queue', '--subtask', 'chain', '--desc',
+                          'A tiny chain.', '--', PYTHON, '-m', *chain, TRIFORCE_LOGS_DIR=str(queue.folder / 'logs'))
+    assert process.wait(timeout=600) == 0, process.out.read_text()
+    row = queue.row('chain')
+    assert row['kind'] == 'chain' and set(row['work']) == {'chain_steps'} and row['estimate'] is not None
+    assert row['log_dir'] and Path(row['log_dir']).name.endswith('_tester-queue-chain')
+    assert row['progress']['runs']['done'] == 1
 
 
-@pytest.mark.parametrize('name', ENTRY_POINTS)
-def test_an_entry_point_with_no_wait_starts_at_once_in_a_full_registry(name, entry_point):
-    job = entry_point(name, '--no-wait')
-    wait_until(lambda: job.process.poll() is not None or (job.logs.is_dir() and any(job.logs.glob(f'*/{PLAN_FILE}'))
-                                                          and job.plan()['status'] != 'queued'), 300, "the plan")
-    assert job.entry()['no_wait'] is True
-    job.finish(name)
-    assert PAUSED not in job.output() and 'queue' not in job.plan()
+def test_sigterm_reaches_the_command_and_one_that_ignores_it_is_killed_after_the_grace(queue, tmp_path):
+    """A stop is passed to the command's group; a command that ignores SIGTERM is killed ``GRACE_SECONDS`` later
+    (the wrapper never waits for it for good), and the job ends ``interrupted``."""
+    ready = tmp_path / 'ready'
+    stubborn = queue.run('stubborn', PYTHON, '-c',
+                         "import signal, time, sys; signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+                         f"open({str(ready)!r}, 'w').write('x'); time.sleep(600)")
+    wait_until(ready.exists, 30, "the command")
+    started = time.monotonic()
+    stubborn.send_signal(signal.SIGTERM)
+    assert stubborn.wait(timeout=60) != 0
+    assert 1.5 <= time.monotonic() - started < 30          # the grace (2 s here), then SIGKILL
+    assert queue.status('stubborn') == 'interrupted'
+    polite = queue.run('polite', *sleeper())
+    wait_until(lambda: queue.status('polite') == 'running', 30, "the command")
+    polite.send_signal(signal.SIGTERM)
+    assert polite.wait(timeout=60) == 128 + signal.SIGTERM
+    assert queue.status('polite') == 'interrupted'
 
 
-@pytest.mark.parametrize('name', ['evaluate', 'eval-chain'])
-def test_a_short_entry_point_starts_beside_two_running_jobs_in_the_express_place(name, entry_point):
-    job = entry_point(name, express=True)
-    job.finish(name)
-    assert PAUSED not in job.output() and 'queue' not in job.plan()
-    assert job.plan()['lane'] == 'express' and job.plan()['estimate'] <= jobs.EXPRESS_SECONDS
+def test_every_suite_of_test_all_runs_whatever_the_one_before_did(queue, tmp_path):
+    """``test all``'s suites are one entry whose steps all run (a failing suite does not hide the next); the exit
+    code is the first failure's.  A fake checkout: its python suite fails, its asm tests and check pass, cargo is
+    missing (127)."""
+    repo = tmp_path / 'repo'
+    (repo / 'tests').mkdir(parents=True)
+    (repo / 'zelda-asm' / 'tests').mkdir(parents=True)
+    (repo / 'zelda-asm' / 'tools').mkdir()
+    (repo / '.git').mkdir()
+    (repo / 'tests' / 'test_bad.py').write_text("def test_bad():\n    assert False\n")
+    (repo / 'zelda-asm' / 'tests' / 'test_ok.py').write_text("def test_ok():\n    pass\n")
+    (repo / 'zelda-asm' / 'tools' / 'asm.py').write_text("print('check: ok')\n")
+    process = queue.start('test', 'all', '--agent', 'tester', '--task', 'suites', cwd=repo, PATH='/nonexistent')
+    assert process.wait(timeout=120) == 1
+    row = queue.row('all')
+    assert [(step['name'], step['status']) for step in row['steps']] == [
+        ('test python', 'failed'), ('test asm', 'completed'), ('asm check', 'completed'), ('test rust', 'failed')]
+    assert row['status'] == 'failed' and row['exit_code'] == 1
+    shown = process.out.read_text()            # each suite's output whole, in order, under its own line
+    marks = [shown.index(f'--- {name}: exit {code} ---') for name, code in (
+        ('test python', 1), ('test asm', 0), ('asm check', 0), ('test rust', 127))]
+    assert marks == sorted(marks) and 'check: ok' in shown[marks[2]:marks[3]] and '1 failed' in shown[marks[0]:marks[1]]
+
+
+def test_steps_marked_together_run_at_the_same_time(queue, tmp_path):
+    """The suites of a test job run side by side (the Python suite is one process on one core for minutes): two
+    2-second suites end in about two seconds, not four."""
+    repo = tmp_path / 'repo'
+    for folder in ('tests', 'zelda-asm/tests', 'zelda-asm/tools'):
+        (repo / folder).mkdir(parents=True)
+    (repo / '.git').mkdir()
+    slow = "import time\n\ndef test_slow():\n    time.sleep(2)\n"
+    (repo / 'zelda-asm' / 'tests' / 'test_slow.py').write_text(slow)
+    (repo / 'zelda-asm' / 'tools' / 'asm.py').write_text("import time\ntime.sleep(2)\nprint('check: ok')\n")
+    started = time.monotonic()
+    process = queue.start('test', 'check', 'asm', '--agent', 'tester', '--task', 'suites', cwd=repo)
+    assert process.wait(timeout=120) == 0
+    row = queue.row('asm+check')                    # a list of suites, shown in the queue's order
+    assert [step['name'] for step in row['steps']] == ['test asm', 'asm check']
+    assert row['finished_ts'] - row['admitted_ts'] < 3.6, time.monotonic() - started
+    refused = queue.start('test', 'asm', 'check', '--agent', 'tester', '--task', 'suites', '--', '-k', 'x', cwd=repo)
+    assert refused.wait(timeout=60) == 2            # options after -- go to one suite

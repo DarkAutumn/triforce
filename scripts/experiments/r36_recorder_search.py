@@ -17,12 +17,17 @@ is shortest when it takes the lowest slot; with monsters live it is a few frames
 
     python scripts/experiments/r36_recorder_search.py            # the chain, the tables
     python scripts/experiments/r36_recorder_search.py --index    # also: the landing by the arriving index (N, N N)
+
+It searches the emulator over every sequence: a job of the machine's queue (``jobs.require_job``: ``triforce job run
+... --timeout 30m -- .venv/bin/python scripts/experiments/r36_recorder_search.py ...``).
 """
 
 import argparse
 import itertools
 import sys
 from pathlib import Path
+
+from triforce.jobs import require_job
 
 sys.path.insert(0, str(Path(__file__).parent))
 from r26_walks import STATES, Walk, OBJ_TYPE, OBJ_STATE, OBJ_DIR, TRIFORCE, HEARTS, HEART_PARTIAL  # noqa: E402
@@ -209,6 +214,7 @@ def main():
     p.add_argument('--index', action='store_true', help='also tabulate the landing by the arriving index')
     p.add_argument('--most', type=int, default=3, help='most plays a sequence (default 3)')
     a = p.parse_args()
+    require_job()
     chosen = []
 
     # 1. 0:0x0b out of Level 5: pieces 1-5 (D3, D4, D1, D2, D5), 9 containers full; to Level 4's screen 0x45.

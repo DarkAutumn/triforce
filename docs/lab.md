@@ -100,7 +100,9 @@ the Rust actor given the same logits (`crates/policy/tests/policy.rs`
 plays the same runs as the Rust actor, run for run, in three modes). A served torch network computes its logits
 in another order than Rust, so it plays the same seeds within float tolerance, not bit for bit (replays record
 inputs and verify regardless). Batches: one env per worker thread (pools with a served network use as many threads
-as envs; a waiting thread costs no CPU), the server gathers what is pending. `EnvPool.play` and `EnvPool.rollout`
+as envs; a waiting thread costs no CPU), the server gathers what is pending. With no env active the server thread
+blocks until a request comes (`IDLE_SECONDS`; Nov 23: it used to wake ten times a second on a 0.1 s timeout).
+`EnvPool.play` and `EnvPool.rollout`
 take Rust and served policies in one list (`HybridActor`), so a chain can play an experimental network for some
 families and today's for the rest. Not for served networks: foresight (`guard`, `plan`), search, recorded
 distributions and action replays (refused when the pool starts).
@@ -189,11 +191,12 @@ python -m triforce.lab.train --name zol+skg --families zol stalfos-keese-gel --p
 
 ### What a lab job writes (and the training GUI)
 
-**A job the registry knows is never invisible** (the owner watches `training-gui.py` to see what the machine
-does; Nov 22 two lab trainings ran while it showed one queued batch). Every lab job enters the job queue
-(`triforce.jobs`) with a log folder and a plan, like `triforce train` and the evaluations, so the GUI draws its
-progress; a job without one is still listed, from its registry entry alone, as "no progress data" (lab jobs of
-checkouts older than this, `--no-log` evaluations, a script that registers itself).
+**A job in the queue is never invisible** (the owner watches `training-gui.py` to see what the machine does; Nov 22
+two lab trainings ran while it showed one queued batch). Every lab job runs under `triforce job run` (its work
+announced, `jobs.announce`) with a log folder and a plan recorded in its row of the job queue, like `triforce train`
+and the evaluations, so the GUI draws its progress; a job without one is still listed, from its row alone, as "no
+progress data" (an old tree's command, `--no-log` evaluations, a script that reports nothing). Inside a job the
+folders below are named for the job instead (`<yymmdd>_<NNN>_<agent>-<task>-<subtask>`, `jobs.label`).
 
 - `triforce.lab.train`: `logs/<yymmdd>_<NNN>_lab-<name>/` (`--logs-dir`, `$TRIFORCE_LOGS_DIR`): `training.json`,
   kind `lab-train`, with the families, the run dir and the mode, and one run entry a family (`specialist`,
@@ -209,7 +212,7 @@ checkouts older than this, `--no-log` evaluations, a script that registers itsel
 - `triforce.lab.bench run` / `speed` and `triforce.lab.record`: `logs/<yymmdd>_<NNN>_lab-bench` (`-speed`,
   `-record`; `--logs-dir`), kind `eval`, one row (`events.progress_job`): the bench's episodes played of its total
   with the success so far after each key, the recorder's decisions recorded of its total.
-- A script that enters the queue itself (an experiment) uses `events.progress_job(what, kind, total, unit=...)`
+- A script that runs as a job (an experiment) uses `events.progress_job(what, kind, total, unit=...)`
   and calls `update(done, success_rate)` as it goes: a folder and a one-line progress
   (`scripts/experiments/r36_merge_record.py`: decisions recorded).
 
