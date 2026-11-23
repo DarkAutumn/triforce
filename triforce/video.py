@@ -79,7 +79,8 @@ class VideoGrid:
     """``cells`` cells playing the replay files ``paths`` one film frame per ``step()`` (module doc).  ``heard``:
     the cell whose sound ``audio()`` returns (None: silence), ``mix`` the parts of it heard, ``split``: as two
     tracks (music, effects).  ``controller``: draw the controller into every frame.  ``states_dir``: where a replay
-    recorded from a named state file finds it.  ``thoughts``: send each cell's thoughts overlay."""
+    recorded from a named state file finds it.  ``thoughts``: send each cell's thoughts overlay.  ``span``: (first,
+    end) input frames to film of each replay instead of from the models' takeover to its end."""
     # pylint: disable=too-many-instance-attributes
 
     source = FILES
@@ -87,7 +88,7 @@ class VideoGrid:
 
     def __init__(self, cells: int, paths: Sequence, *, heard: Optional[int] = None, controller: bool = False,
                  states_dir=None, rate: int = SAMPLE_RATE, thoughts: bool = False, mix: Mix = Mix(),
-                 split: bool = False):
+                 split: bool = False, span: Optional[Tuple[int, int]] = None):
         # pylint: disable=too-many-arguments
         self.cells = cells
         self.paths = [Path(path) for path in paths]
@@ -96,7 +97,7 @@ class VideoGrid:
         if heard is not None and not 0 <= heard < cells:
             raise ValueError(f"cell {heard} of a grid with {cells} cells")
         self.heard, self.controller, self.rate, self.thoughts = heard, controller, rate, thoughts
-        self.mix, self.split = mix, split
+        self.mix, self.split, self.span = mix, split, span
         self.states_dir = None if states_dir is None else str(states_dir)
         self.frames = 0             # film frames stepped so far
         self.played = 0             # replays that played to their end
@@ -146,12 +147,12 @@ class VideoGrid:
     # ------------------------------------------------------------------ the film
 
     def _load(self, index: int, reel: _Reel) -> None:
-        """Puts the next replay not yet played into ``reel``, at the frame watching starts."""
+        """Puts the next replay not yet played into ``reel``, at the frame watching starts (``span``'s first)."""
         path = self.paths[self._taken]
         self._taken += 1
         reel.show = Show(path.read_bytes(), FILES, path.name)
         reel.player = _native.ReplayPlayer(reel.show.data, states_dir=self.states_dir)
-        reel.player.seek(reel.show.start)
+        reel.player.seek(reel.show.start if self.span is None else min(self.span[0], reel.player.frames))
         if index == self.heard:
             reel.player.set_mix(**self.mix.native())
             reel.player.set_sound(float(self.rate), split=self.split)
@@ -160,7 +161,8 @@ class VideoGrid:
                                'name': path.name})
 
     def _play(self, index: int, reel: _Reel) -> None:
-        """Runs one frame of ``reel``'s replay; at its end the result goes up."""
+        """Runs one frame of ``reel``'s replay; at its end the result goes up (at the end of ``span`` short of the
+        replay's, the cell goes on at once: the run did not end there)."""
         player, show = reel.player, reel.show
         if player.step(1, render=True):
             reel.pixels = np.asarray(player.screen(controller=self.controller))
@@ -176,9 +178,13 @@ class VideoGrid:
                 if lines != reel.thought:
                     reel.thought = lines
                     self._messages.append({'cell': index, 'event': 'thoughts', 'lines': lines})
-        if player.frame >= player.frames:
+        end = player.frames if self.span is None else min(self.span[1], player.frames)
+        if player.frame >= end:
             self.played += 1
             reel.player = None
+            if end < player.frames:
+                reel.phase = 'idle' if self._taken < len(self.paths) else 'done'
+                return
             reel.phase, reel.until = 'result', self.frames + RESULT_FRAMES
             self._messages.append({'cell': index, 'event': 'end', 'seed': show.seed, 'result': show.result,
                                    'outcome': show.outcome, 'reason': show.reason})

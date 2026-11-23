@@ -45,8 +45,9 @@ low-hearts beep (the title says which are off).
 
 Menus: the bar at the top has every key's action (each item names its key) and the options without a key.  Show:
 the source, the next replay, the live cell on or off.  Playback: pause and the frame-rate cap.  Options: clips,
-and the act mode (a few standing choices and the one given with --act).  View: sound, the controller drawing and
-the cells' scale.  Changing the act mode or the live cell starts the simulations again with empty queues: the
+and the act mode (a few standing choices and the one given with --act).  View: sound, the music, the sound
+effects, the low-hearts beep, the controller drawing and the cells' scale.  Changing the act mode or the live
+cell starts the simulations again with empty queues: the
 runs in them were played the old way.
 
 Clips (round 22): --clips on|off is the switch the simulations start with (default on).  Off masks the CLIP

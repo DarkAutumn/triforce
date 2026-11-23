@@ -20,7 +20,8 @@ GRID is COLUMNSxROWS (default 1x1).  The replays (files, or folders: their top-l
 order) must be at least as many as the cells.  The first ones start in the cells in order, top left first.  A
 cell whose replay ended shows its result for a few seconds, as play-zelda.py does, then plays the next replay not
 yet shown; when none is left it keeps its last picture and result.  The video ends when every replay has played.
-A run from console power on is shown from the moment the models take over.
+A run from console power on is shown from the moment the models take over.  --from FRAME and --frames N film
+only input frames FRAME to FRAME+N of each replay (a cut short of a replay's end shows no result).
 
 --sound adds the sound of one cell: the middle one (of 3x3, 5x3, ...), or the top left one when the grid has no
 middle (2x4).  That cell has a yellow frame, as the cell heard in play-zelda.py has.  A replay that starts from a
@@ -96,6 +97,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--states-dir', default=None,
                         help="where replays recorded with --state path find their start states (default the "
                              "states directory)")
+    parser.add_argument('--from', dest='first', type=int, default=None, metavar='FRAME',
+                        help="film each replay from this input frame (default: where the models take over)")
+    parser.add_argument('--frames', type=int, default=None, metavar='N',
+                        help="with --from: film N input frames of each replay")
     return parser
 
 
@@ -153,8 +158,10 @@ def main(argv=None) -> int:
     mix = Mix(music=args.music, effects=args.effects, heart_beep=args.heart_beep)
     try:
         ffmpeg()
+        span = None if args.first is None else (args.first, args.first + (args.frames or 10 ** 9))
         grid = VideoGrid(cols * rows, args.replays, heard=heard, controller=args.controller,
-                         states_dir=args.states_dir, thoughts=args.thoughts, mix=mix, split=args.split_audio)
+                         states_dir=args.states_dir, thoughts=args.thoughts, mix=mix, split=args.split_audio,
+                         span=span)
     except (RuntimeError, ValueError) as error:
         parser.error(str(error))
     app = QApplication.instance() or QApplication(sys.argv[:1])

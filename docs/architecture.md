@@ -2093,7 +2093,11 @@ A power-on run is shown from the frame the models took over. When a replay ends 
   thread pushes each frame's samples into its `Ring`; the ring tells the cell what rate to make samples at
   (the device's ± 0.5%) to stay about 60 ms ahead, since the frame clock and the device's drift apart. Sound is
   made as frames are played, so it is on only at the console's frame rate: at any other cap, or uncapped, no
-  cell is heard and the frame is hidden. No sound device: the title says why, the picture plays on.
+  cell is heard and the frame is hidden. No sound device: the title says why, the picture plays on. Keys `m`,
+  `e` and `h` (and `--no-music`, `--no-sound-effects`, `--no-heart-beep`; View menu) switch the music, the
+  sound effects and the low-hearts beep ("Sound" below; `play_grid.Mix`, `Window.toggle_part`,
+  `ReplayScreen.set_mix`): at once, without a break in what stays on (the heard cell keeps both tracks running,
+  `Player::set_split(_, warm=true)`); the title says what is off ("sound on (no music, no beep)").
 - **The controller** (`--controller`, off by default): `theater::overlay::draw_controller` draws the pad into
   each frame at the console's resolution, top right over the HUD's `-LIFE-` (x 182–243, y 14–37; the hearts
   start at y 40): a translucent grey plate, idle buttons dark, the buttons held on that frame opaque white.
@@ -2106,7 +2110,7 @@ A power-on run is shown from the frame the models took over. When a replay ends 
   (`boss-gleeok: SWORD N 62% hit 3% (temperature) | MOVE S 16 21%`). All of it comes from the replay alone
   (version 2); an older replay shows none.
 
-## Sound (`crates/zcore/src/sound.rs`)
+## Sound (`crates/zcore/src/sound.rs`, `crates/zcore/src/tracks.rs`)
 
 The emulated APU keeps only what the CPU can observe and `MachineState` holds no sound state, so states, replays
 and training are untouched by sound. It is computed beside the machine: the bus notes every write to
@@ -2124,12 +2128,65 @@ device. The machine is bit-identical with sound on or off (`crates/zcore/tests/s
 - **After a restore** (`ZCore::restore`, so every replay that starts from a savestate) the registers are
   unknown: each channel is silent until the game writes it again, which its music driver does with the next
   note. A power-on replay has everything from the first frame.
-- `replay::Player::set_sound(Some(rate))` / `audio()` / `buttons()` and `_native.ReplayPlayer.set_sound(rate)` /
-  `audio()` / `buttons` / `screen(controller=True)` expose it per replay.
+- `replay::Player::set_sound(Some(rate))` / `set_mix(Mix)` / `set_split(split, warm)` / `audio()` /
+  `buttons()` and `_native.ReplayPlayer.set_sound(rate, split=False)` / `set_mix(music, effects, heart_beep)` /
+  `audio()` (mono, or `(samples, 2)` music and effects with `split`) / `buttons` / `screen(controller=True)`
+  expose it per replay.
+
+### Music and sound effects (`zcore::tracks`, the owner's division, Nov 23)
+
+The owner wants the sound in two parts that switch off apart: **the music** (the songs: overworld `$01`, Ganon
+`$02`, Zelda's song `$06`, the ending `$10`, level 9 `$20`, dungeon `$40`, the title `$80`) and **the sound
+effects** (everything else: the square-0 tunes, the square-1 tunes, the noise effects, the DMC samples, looping
+ones too, and two pieces the game plays through its song driver, the end-of-level tune `$04` and the item fanfare
+`$08`), with **the low-hearts beep** (`Tune0Request` `$40`) on its own switch. With the effects off the music keeps
+every voice, also the ones an effect would have taken over in the game (the owner's choice over holes).
+
+The game's driver (`asm:Audio_Drive`, bank 0, run from `asm:Nmi_Isr` once a frame) takes the five request bytes
+(`asm:SongRequest` .. `asm:Tune0Request`), runs tune 1, the noise effect, the sample, the song and tune 0, and
+zeroes the requests; while a square tune plays the song keeps time but writes nothing to that square. So the
+tracks are not made by sorting the machine's writes: `Tracks` runs the driver's own code again beside the
+machine. A `Driver` is a private copy of the driver's RAM (zero page `$66-$6F`, `$5F0-$61F`, and
+`asm:PauseState`, the one other byte it reads) run on a small 6502 of its own (zcore's CPU clocks the PPU and APU
+on every access and cannot run over another bus) over the ROM's bank 0 and fixed bank:
+
+- **the mirror** gets every request; it is the machine's driver again. Before each frame (`Tracks::prepare`,
+  called by `Player` after the frame's edits) whatever byte of the driver's state the machine holds and the mirror
+  does not was written by the game itself: the requests, `asm:Audio_SilenceAll` clearing `CurTune0` and
+  `CurTune1`, the menu clearing `CurTune1`, `SongEnvelopeSelector`, a reset. Those writes go to every driver. The
+  NMI, and with it the driver, runs at the start of a frame (zcore's frames end at vblank, `ppu.rs`
+  `start_vblank`), before the game's code that writes requests, so the RAM before the frame is what the driver
+  is given.
+- **the music driver** gets the songs' requests; `Tune0Request` `$80` (silence) as the game does; a jingle's
+  request or `Tune1Request` bit 7 runs `asm:Song_Silence` before its driver (the game replaces the song, or
+  silences it before Link's death tune), so the music is silent during the fanfare as in the game and the game
+  starts its song again itself. Tunes, effects and samples never reach it, so no voice is ever taken from it.
+- **the effects driver** gets both tunes, the effects, the samples and the two jingles; a song's request over a
+  playing jingle only ends it (its squares go to volume 0 as a tune's end writes them, the triangle as a rest).
+  With the beep off its requests lose bit `$40`; a beep playing when it is switched off ends at once (the writes
+  of a tune 0 script's end).
+- **the quiet driver** (beep off, music and effects on) gets everything but the beep: the game's sound without
+  it, mixed as the console mixes (a clone of the mirror and of the game's synth when the beep goes off).
+
+Each driver runs when the machine's did: the frame's first sound write is the driver's (`$4017 = $FF`, or
+`$4015 = 0` while paused), and each copy's writes are placed as many cycles after it as its own first write.
+The writes after the machine driver's (the game's own: `$4015 = $0F` on unpausing, a reset's) go to every synth;
+the DMC's fetched sample bytes to the effects and quiet synths (the effects driver starts the same samples at the
+same frames). The music synth's DMC rests at the game synth's resting level between samples, since the console
+mixes triangle and noise against it. **With everything on the sound is the machine's writes through one synth,
+as before** (the console mixes its voices non-linearly, so the two tracks added up are not the mix); `Tracks`
+then runs no driver unless it is `warm` (play-zelda's heard cell, so a switch is heard at once).
+`Tracks::resume` (a seek, a cell that starts being heard) seeds every driver from the machine's RAM and each synth
+with the voices it plays at that moment (`Synth::resume_only`); after a restore that is silence, as before.
+`tf replay sound FILE [--out DIR] [--from F] [--frames N] [--check]` writes `full.wav`, `music.wav`,
+`effects.wav`, `effects-no-beep.wav` and with `--check` prints the proofs below as JSON; `crates/zcore/tests/tracks.rs`
+checks the mirror's writes and cycles against the machine's, the default path sample for sample, the music on
+the title screen equal to the game's sound, and switching while playing.
 
 ## Videos (`create-video.py`, `video.py`)
 
-`create-video.py OUT [COLUMNSxROWS] REPLAY... [--scale N] [--sound] [--controller] [--thoughts] [--states-dir DIR]` films
+`create-video.py OUT [COLUMNSxROWS] REPLAY... [--scale N] [--sound [--no-music] [--no-sound-effects]
+[--no-heart-beep] [--split-audio]] [--controller] [--thoughts] [--states-dir DIR]` films
 replays as `play-zelda.py` shows them (the same `play_view.Window`, rendered offscreen without its title bar)
 into `OUT`: H.264 yuv420p (CRF 18) at 39375000/655171 fps (the NES's 60.0988), with `--sound` AAC 48 kHz mono,
 in the container the file name asks for (`.mp4`, `.mkv`, `.mov`); it needs `ffmpeg`. The grid defaults to 1x1;
@@ -2141,9 +2198,13 @@ and the last result has had its pause. `--sound` adds the sound of the middle ce
 else of the top left one; `VideoGrid.audio()` hands out each film frame's exact share of samples (silence while
 that cell shows a result), so sound and picture stay together. In a grid of several cells that cell has the
 yellow frame. The picture is piped to ffmpeg as it is made; the sound goes to a temporary WAV beside `OUT` and
-is joined at the end. `--thoughts` draws each replay's thoughts as play-zelda does ("Watching"). It prints a JSON
-summary (`out`, `frames`, `seconds`, `width`, `height`, `replays`, `sound`, `thoughts`, `heard`, `took`); exit 1
-when a replay can't be played or ffmpeg fails, 2 on a bad command line.
+is joined at the end. `--no-music`, `--no-sound-effects` and `--no-heart-beep` leave parts out ("Sound");
+`--split-audio` writes two mono AAC tracks instead, `Music` (the default) and `Sound effects` (title and
+`handler_name` set; `video.TRACK_TITLES`): mkv and mp4/mov both carry them; an editor shows two tracks, a plain
+player plays the default one (the music) until another is picked. `--thoughts` draws each replay's thoughts as
+play-zelda does ("Watching"). It prints a JSON summary (`out`, `frames`, `seconds`, `width`, `height`,
+`replays`, `sound`, `thoughts`, `mix`, `split_audio`, `heard`, `took`); exit 1 when a replay can't be played or
+ffmpeg fails, 2 on a bad command line.
 
 ## Routes: two routes, state namespaces, per-route promotion (phase X, 2.0.0.0)
 
