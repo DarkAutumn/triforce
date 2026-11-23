@@ -699,9 +699,17 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   the owner asks for a check-in the lead opens it in the editor without asking (`code-insiders
   target/owner-review/CHECKIN.md`) and gives only a brief console summary with the tables; heavy text and decisions
   stay in the document. After the owner answers, the answered parts move to a dated "answered" section.
-- **The 250 test for every versioned team** (the owner, Nov 23): 250 runs from console power on in the express lane,
-  the best and worst runs and up to three stuck runs in different rooms kept as replays, and a long-term JSON of the
-  statistics committed and compared build to build (branch `r39-runs250`, `scripts/full_runs.py`).
+- **The 250-run test of every versioned build** (the owner, Nov 23: "When you build a new model that looks
+  'interesting' [...] I want you do 250 runs and record the best and worst [...] save up to 3 runs that end 'stuck',
+  with each [...] having a different room [...] capture detailed statistics about these runs [...] a .json that goes
+  along with each run of this test that we persist long term [...] from power on, not a save state [...] should also
+  always fit in the 'fast lane' for the queue"). `scripts/full_runs.py runs250 [--models-dir DIR --team NAME]`
+  freezes the team's pointers, plays 250 runs of `d3first` from console power on through the job line in the express
+  place (`eval-chain --express`), keeps the best, the worst and up to 3 stuck runs in different rooms (copies under
+  `target/`, archived to the backup with `archive_replays.py --kind runs-250`, never `replays/`) and commits the
+  record `docs/runs250/<version>[_<team>].json` (endings by kind, triforce rates, deaths and stucks per room and step,
+  hits and hearts lost per visit, cheated items per run, median frames to each triforce). `full_runs.py analyze
+  OLD.json NEW.json` compares records (binomial standard errors) and prints the Markdown for the check-in.
 - **0x0a before the white sword:** leaving S is a `retreat` (routes.yaml `retreat: S`; neutral by default, ow-lynel
   ships `endings: {retreat: soft-failure}` for the baseline), and a chain run goes on (0x1a sends Link back N).
   Whether a model learns to use it is open.
