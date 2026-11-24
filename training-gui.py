@@ -1513,7 +1513,11 @@ def job_box(job: dict, model: Training, now: float, place: int | None = None) ->
     (whether the plan's overall bar is drawn: only for a plan of several runs, where it says what no row does, the
     whole plan's share done and its counts; a training's, an evaluation's or a chain's one row or chain card says it
     all) and 'command' (faint, once), 'flags' ([(line, colour)], one a ``jobs.flag``: red ones in the bad colour,
-    notes in the in-between one).  No counter of the queue row: the plan's rows are the progress."""
+    notes in the in-between one) and 'counters' (``job_counters``: only those with a name of their own that are
+    still going, a step of the job that no row of its plan shows: the 250 test's ``bomb metrics`` over its replays
+    once its runs are done; the owner, Nov 24: the job read RUNNING for ten minutes under a finished chain with
+    nothing saying what it was doing.  A counter named for its unit, ``runs`` or ``steps``, is the plan's rows'
+    progress and is not drawn twice)."""
     status = job.get('status')
     color = job_color(job, now)
     state = (f"QUEUED #{place}" if place else 'QUEUED') if status == 'queued' else (
@@ -1528,9 +1532,10 @@ def job_box(job: dict, model: Training, now: float, place: int | None = None) ->
         facts.append((f"≈ {fmt_duration(eta)} left", C.text))
     flags = [(' — '.join(flag_lines(flag)), C.bad if flag.get('level') == 'red' else C.warn)
              for flag in job.get('flags') or []]
+    counters = [counter for counter in job_counters(job, now, has_plan=True) if counter['label']]
     return {'headline': jobqueue.headline(job), 'pills': [(text, pill) for text, pill in pills if text],
             'description': job.get('description') or '', 'facts': facts, 'flags': flags, 'bar': len(model.runs) > 1,
-            'command': job_command(job)}
+            'counters': counters, 'command': job_command(job)}
 
 
 def row_fraction(run: Run, status: str, now: float) -> float:
@@ -2209,7 +2214,7 @@ class Header(Clickable):
     plan's bar when it has several runs, the command), the job's own card hidden."""
 
     HEIGHT = 138
-    BOX_TOP, BOX_ROW, BOX_LINE, BOX_BAR, BOX_BOTTOM = 12, 32, 21, 58, 10
+    BOX_TOP, BOX_ROW, BOX_LINE, BOX_BAR, BOX_BOTTOM, BOX_COUNTER = 12, 32, 21, 58, 10, 26
 
     def __init__(self, view):
         super().__init__('round')
@@ -2230,7 +2235,7 @@ class Header(Clickable):
         return job_box(view.job, view.model, now, view.place)
 
     def refresh(self):
-        """Reads the box and fits the header to it (its description and its plan's bar come and go)."""
+        """Reads the box and fits the header to it (its description, its counters and its plan's bar come and go)."""
         self.box = self.read_box(time.time())
         box = self.box
         if box is None:
@@ -2238,6 +2243,7 @@ class Header(Clickable):
         else:
             self.setFixedHeight(self.BOX_TOP + self.BOX_ROW + self.BOX_LINE * (2 + bool(box['description'])
                                                                                + len(box['flags']))
+                                + self.BOX_COUNTER * len(box['counters'])
                                 + (self.BOX_BAR if box['bar'] else 0) + self.BOX_BOTTOM)
         self.update()
 
@@ -2377,6 +2383,10 @@ class Header(Clickable):
             p.setPen(color)
             p.drawText(QPointF(left, y + 14), p.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, width))
             y += self.BOX_LINE
+        for counter in box['counters']:
+            paint_counter(p, QRectF(left, y + 2, right - left, CounterBar.HEIGHT), counter,
+                          job_color(self.view.job, now))
+            y += self.BOX_COUNTER
         if box['bar']:
             self._paint_bar(p, QRectF(left, y + 6, right - left, 22), model, now, t)
             y += self.BOX_BAR
@@ -2416,10 +2426,33 @@ class TextLines(QWidget):
             y += height
 
 
+def paint_counter(p: QPainter, rect: QRectF, counter: dict, color: QColor):
+    """One counter of a job (``job_counters``) in ``rect``: its label when it has one, a progress bar of done / total
+    with the numbers on it, then its rate and time left; a counter without a total: its number (no bar), its rate
+    and its time against the job's estimate."""
+    left, top, width, height = rect.left(), rect.top(), rect.width(), rect.height()
+    label_w = 130.0 if counter['label'] else 0.0
+    if label_w:
+        p.setFont(font(9))
+        p.setPen(C.muted)
+        p.drawText(QRectF(left, top, label_w - 10, height), Qt.AlignmentFlag.AlignVCenter,
+                   p.fontMetrics().elidedText(counter['label'], Qt.TextElideMode.ElideRight, int(label_w - 10)))
+    right_w = min(220.0, width * 0.35)
+    area = QRectF(left + label_w, top + 3, max(60.0, width - label_w - right_w - 12), height - 6)
+    if counter['fraction'] is not None:
+        paint_bar(p, area, counter['fraction'], color, 0.0, label=counter['numbers'])
+    else:
+        p.setFont(font(9.5, QFont.Weight.Bold))
+        p.setPen(C.text)
+        p.drawText(area, Qt.AlignmentFlag.AlignVCenter, counter['numbers'])
+    p.setFont(font(9))
+    p.setPen(C.muted)
+    p.drawText(QRectF(area.right() + 12, top, right_w, height), Qt.AlignmentFlag.AlignVCenter,
+               '  ·  '.join(part for part in (counter['speed'], counter['time']) if part))
+
+
 class CounterBar(QWidget):
-    """One counter of a job (``job_counters``): its label when it has one, a progress bar of done / total with the
-    numbers on it, then its rate and time left; a counter without a total: its number (no bar), its rate and its
-    time against the job's estimate."""
+    """One counter of a job in a job's card (``paint_counter``)."""
 
     HEIGHT = 22
 
@@ -2435,30 +2468,11 @@ class CounterBar(QWidget):
         self.update()
 
     def paintEvent(self, _event):
-        counter = self.counter
-        if not counter:
+        if not self.counter:
             return
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        width, height = float(self.width()), float(self.height())
-        label_w = 130.0 if counter['label'] else 0.0
-        if label_w:
-            p.setFont(font(9))
-            p.setPen(C.muted)
-            p.drawText(QRectF(0, 0, label_w - 10, height), Qt.AlignmentFlag.AlignVCenter,
-                       p.fontMetrics().elidedText(counter['label'], Qt.TextElideMode.ElideRight, int(label_w - 10)))
-        right_w = min(220.0, width * 0.35)
-        area = QRectF(label_w, 3, max(60.0, width - label_w - right_w - 12), height - 6)
-        if counter['fraction'] is not None:
-            paint_bar(p, area, counter['fraction'], self.color, 0.0, label=counter['numbers'])
-        else:
-            p.setFont(font(9.5, QFont.Weight.Bold))
-            p.setPen(C.text)
-            p.drawText(area, Qt.AlignmentFlag.AlignVCenter, counter['numbers'])
-        p.setFont(font(9))
-        p.setPen(C.muted)
-        p.drawText(QRectF(area.right() + 12, 0, right_w, height), Qt.AlignmentFlag.AlignVCenter,
-                   '  ·  '.join(part for part in (counter['speed'], counter['time']) if part))
+        paint_counter(p, QRectF(0, 0, float(self.width()), float(self.height())), self.counter, self.color)
 
 
 class StepList(QWidget):
@@ -4962,6 +4976,8 @@ function boxHtml(job) {
     (box.description ? `<div class="jdesc">${esc(box.description)}</div>` : '') +
     '<div class="jfacts">' + box.facts.map(([text, color]) => `<span style="color:${color}">${esc(text)}</span>`)
       .join('<i>·</i>') + '</div>' + flagsHtml(job) +
+    (box.counters.length ? '<div class="ctrs">' + box.counters.map(counter => counterHtml(counter, job.color))
+      .join('') + '</div>' : '') +
     (box.bar && plan ? '<div class="ctr">' + barHtml(plan.fraction, job.color, `${Math.floor(pct(plan.fraction))}%`) +
       `<span class="cr">${esc(plan.counts.join('  ·  '))}</span></div>` : '') +
     `<div class="jcmd">${esc(box.command)}</div></div>`;

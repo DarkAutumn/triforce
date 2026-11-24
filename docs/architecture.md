@@ -1589,10 +1589,16 @@ every step, so following an enemy that moves away pays again, and knockback rese
   step>[:power-on]`, runs, parallel, asked steps; a batch one per chain entry, named for it), the wrapper records
   the seconds each took when the job ends (`jobqueue.chain_seconds`: a lone chain's run time, a batch entry's
   `wall_seconds` from its plan, an interrupted batch's finished entries too), and `jobqueue.chain_model` turns
-  them into run-seconds per shape, `(seconds - CHAIN_START_SECONDS) x parallel / runs`, the median of the last
-  `SHAPE_WINDOW` = 3 (a short window: the machine's load moves a segment's time 2-3x within a day). A chain of a
-  known shape takes `CHAIN_START_SECONDS` (10) + runs x run-seconds / parallel; an unseen one its asked steps at
-  the `chain_steps` rate. When a job with chains ends, every live job whose work names its chains is estimated
+  them into run-seconds per shape, `(seconds - CHAIN_START_SECONDS) x lanes / runs` (`chain_lanes`: the games that
+  really play side by side, min(parallel, runs)), the median of the last `SHAPE_WINDOW` = 3 (a short window: the
+  machine's load moves a segment's time 2-3x within a day). A chain of fewer than `SHAPE_MIN_RUNS` = 20 runs is a
+  smoke and teaches nothing (Nov 24: a 5-run smoke of the 250 test, read as 445 s a run, put the next 250 test at 3
+  hours for its 10-22 minutes). A chain of a known shape takes `CHAIN_START_SECONDS` (10) + runs x run-seconds /
+  lanes; an unseen one the learned shape nearest in steps asked, of its own route when one is known, by the square
+  root of the steps' ratio (a rule of thumb for a shape's first run: typically 4.8x off on the 10 such chains of
+  the history, 5.1x at the rate per asked step, against 1.6x for a seen shape), and its asked steps at the
+  `chain_steps` rate only while no chain is learned at all. When a job with chains ends, every live job whose work
+  names its chains is estimated
   again (`refresh_estimates`); a job an older tool announced keeps its estimate. Measured on the 64 chains and
   batches of the history before this (each estimated from the chains that ended before it): within 2x 39 against
   33, median actual / estimate 1.13 against 1.46, the jobs over 15 minutes 0.19-2.4x against 0.23-9.9x; a segment

@@ -205,16 +205,46 @@ def test_a_chain_is_estimated_by_its_shapes_last_chains_and_an_unseen_shape_by_t
     unit_rates = q.rates(rows)
     asked = chain('d3first:6-24', 200, 18)
     assert q.estimate({'chain_steps': 3600, 'chains': [asked]}, unit_rates, model) == pytest.approx(start + 200)
-    # A shape never seen: its asked steps at the rate per step, as before.
+    # A shape never seen while nothing is learned: its asked steps at the rate per step, as before.
     full = chain('d3first:0-290', 1000, 290)
-    seconds = q.estimate({'chain_steps': 290_000, 'chains': [full]}, unit_rates, model)
+    seconds = q.estimate({'chain_steps': 290_000, 'chains': [full]}, unit_rates, q.ChainModel())
     assert seconds == pytest.approx(290_000 * unit_rates['chain_steps'])
+    # A shape never seen beside learned ones: the learned shape nearest in steps asked, of its own route when
+    # there is one, by the square root of the steps' ratio (runs die on the way: time does not grow with steps).
+    far = q.ChainModel({'d3first:6-24': 10.0, 'd3first:61-290': 80.0, 'd2first:0-300': 500.0},
+                       {'d3first:6-24': 18, 'd3first:61-290': 229, 'd2first:0-300': 300})
+    assert far.run_seconds(full) == pytest.approx(80.0 * (290 / 229) ** 0.5)
+    assert far.run_seconds(chain('d3first:30-38', 100, 8)) == pytest.approx(10.0 * (8 / 18) ** 0.5)
+    assert far.run_seconds(chain('first-quest:0-300', 100, 300)) == pytest.approx(500.0)   # no shape of its route
+    assert q.estimate({'chain_steps': 290_000, 'chains': [full]}, unit_rates, model) == \
+        pytest.approx(start + 1000 * 10.0 * (290 / 18) ** 0.5 / 10)
     # One outlier (a loaded machine: 50 run-seconds) among the window moves the median one sample, not 5x.
     slow = rows + [chain_row(3, chain('d3first:6-24', 1000, 18, start + 100 * 50.0))]
     assert q.chain_model(slow).shapes['d3first:6-24'] == pytest.approx(11.0)
     # Only the window's latest count: three slow chains in a row are the shape's time now.
     later = slow + [chain_row(4 + i, chain('d3first:6-24', 1000, 18, start + 100 * 40.0)) for i in range(2)]
     assert q.chain_model(later).shapes['d3first:6-24'] == pytest.approx(40.0)
+
+
+def test_a_smoke_of_a_few_runs_teaches_no_shape_and_runs_fewer_than_the_envs_play_side_by_side():
+    """The owner, Nov 24: the 250 test was shown at 3 hours ("queued express despite being multihour").  Its
+    shape's only sample was a 5-run smoke at --parallel 10 that took 233 s, read as 445 s a run."""
+    start = q.CHAIN_START_SECONDS
+    smoke = chain_row(0, chain('d3first:0-290:power-on', 5, 290, 233.0))
+    assert q.chain_model([smoke]).shapes == {}
+    unit_rates = q.rates([smoke])
+    asked = chain('d3first:0-290:power-on', 250, 290, parallel=20)
+    assert q.estimate({'chain_steps': 72_500, 'chains': [asked]}, unit_rates, q.chain_model([smoke])) == \
+        pytest.approx(72_500 * unit_rates['chain_steps'])
+    # A real one teaches it: 250 runs on 20 envs in 22 minutes are 104.8 run-seconds, and the smoke changes nothing.
+    real = chain_row(1, chain('d3first:0-290:power-on', 250, 290, 1320.0, parallel=20))
+    model = q.chain_model([smoke, real, chain_row(2, chain('d3first:0-290:power-on', 5, 290, 233.0))])
+    assert model.shapes == {'d3first:0-290:power-on': pytest.approx(104.8)}
+    assert model.seconds(asked) == pytest.approx(1320.0)
+    # Asked for fewer runs than envs, only as many games play side by side as there are runs: 8 runs on 20 envs
+    # take one run's time, not 8/20 of it.
+    assert model.seconds(chain('d3first:0-290:power-on', 8, 290, parallel=20)) == pytest.approx(start + 104.8)
+    assert q.chain_lanes({'runs': 30, 'parallel': 20}) == 20 and q.chain_lanes({'runs': 0, 'parallel': 20}) == 1
 
 
 def test_a_batch_is_the_sum_of_its_chains_and_learns_each_from_its_plan_entry():

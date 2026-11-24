@@ -3834,3 +3834,48 @@ overworld 1f. If I say 0x12, that's likely a mistake or you should get it from p
 may need to start naming more rooms too." In AGENTS.md "The owner's standing rules"; reports to the owner use his
 notation and the rooms' names, code and data keep `level:0xNN`.
 
+## 2026-11-24 — 2.0.0.16: a reset writes Link's hearts as the game holds them (the owner's find)
+
+The owner, playing the Olive Garden in `emu-zelda.py` with `--hearts 2`: a Blue Darknut's touch (two hearts) did not
+kill Link; "I think you set the fractional heart field incorrectly." Emu40 traced it past the tool to
+`env::start_states::hearts_encoding`, the function every training reset's `ram_randomization.hp` (and `full_hp`,
+`chain_hp`) and every single-room evaluation uses. The game holds hearts as two bytes: the low nibble of
+`HeartValues` counts the full hearts BESIDES the partial one, and `HeartPartial` says how full that one is; a hit
+kills when its whole hearts EXCEED the nibble (`asm:Link_BeHarmed`). The function wrote a whole number H of hearts
+below full as (nibble H, partial $00): the HUD draws H hearts, but a hit of exactly H leaves Link alive at none. The
+game's own 2 hearts are (1, $FF). Half-heart values and full health were right.
+
+Proved in the game (`tests/test_hearts.py`): from (1, $FF) a Blue Darknut's touch kills, from the old (2, $00) Link
+stands at zero; and play never makes (H, $00) by itself (from 3 full hearts down by half-heart and whole-heart hits
+the partial byte is $00 only at death). Size: 21.97% of zol's and 15.22% of darknut's resets on `d3first` got it
+(10,000 resets each, their own task settings): those episodes began with one hit more than their hearts showed.
+Chains and replays are unaffected (`ChainEnv` never calls it; they carry the game's own bytes), as are the tracked
+start states (0 of 1,903 hold it); 70 of the 66,438 harvested states do (ow-lynel's `0_0ac_h*`, written by a round 27
+script's copy of the formula): to rebuild for the fresh generation.
+
+The fix is the one function (n half hearts: (n - 1) / 2 full hearts and a partial of $FF or $7F), exposed to Python
+for the tool; six recorded observation traces that drew a whole-heart reset move (five now die of a hit they stood
+at none before) and are recorded with this reason. `REV` +1: training resets and single-room evaluations with
+randomised hearts change for today's team (they read lower, truthfully); no network changed and no chain can.
+For the fresh generation it means every network trains on hearts that mean what they show.
+
+## 2026-11-24 — Darknuts as the owner fights them, into the fresh generation (the owner)
+
+The owner showed how Darknuts are fought (three takes of the Olive Garden in `emu-zelda.py`, his rules and his
+answers quoted whole in `docs/owner/darknuts.md`): never follow one on its own line; shadow it at 90 degrees, 1.25
+to 1.5 tiles off and a little ahead, sword its side and keep walking the way it was going; with bombs, stand where
+the monsters clump and lay a bomb only where it catches two or more. The game's code gives one cause for all of it
+(`asm:Wanderer_MoveAndTurn`: a turn toward the chase target at a grid point when the target is within 8 pixels on
+an axis; the chase target flips between Link and his mirror point, which coincide near (128, 128)).
+
+Decided for 2.0.1.0:
+- **Two inputs** ("Yes that's fine. Do that in this upcoming 2.0.1"): where the monsters are sent (the flip and the
+  target), and per monster that it may turn toward Link at its next grid point and when.
+- **The movement code of every monster is read for the chase target** (which follow it, the exceptions, "red
+  wizzrobes right?") and the hotspot's bounds measured in tiles; the network is to learn the hotspot indirectly
+  ("It would be good to indirectly teach this to the model"): clump them where bombs are wanted, and in kill-all
+  rooms so Link does not chase them down.
+- **A scripted Darknut fighter from his rules, and demonstrations from it** for the teachers, with direct following
+  discouraged and a bomb laid where it hits two or more ("if you can figure out how it's a huge win").
+- Gibdos: likely the same as Darknuts once their movement code is read; Stalfos are not worth the care.
+
