@@ -60,7 +60,9 @@ pub fn chasing(state: &GameView) -> bool {
 /// the clock: in the blast's reach on some frame of the blast, out of its flash by then, not immune to bombs (its
 /// invincibility mask), and for a Darknut not facing against `d` (its shield: a bomb's direction is Link's facing
 /// when he laid it, asm:Damage_HandleWeaponHit@CheckDarknut). Bosses are left out (Manhandla's and Dodongo's bombs
-/// are the route's, one at a time).
+/// are the route's, one at a time). Unlike `crate::beams::shot_meets` a walker is not stopped at a wall: within a
+/// blast's 72 frames that walker turns there (its next facing is not visible now), and the count stays the one
+/// `scripts/experiments/r40_darknut_proposals.py` reads again from replays.
 pub fn bomb_catch(state: &GameView, d: Direction) -> u8 {
     let Some(bomb) = landing(state, d) else {
         return 0;

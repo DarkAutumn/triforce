@@ -1158,6 +1158,17 @@ hits it leads to are priced when they land. Counted beside the hits: the visits'
 stretch's waste ("Aimless walking" above: lasted − needed so far, never charged while anything in the room can hurt
 Link), times the shaping scale; over a stretch it sums to about the stretch's aimless frames before the allowance.
 Training envs only (`SpecialistEnv`; a chain's `RewardTrack` does not record it).
+The owner's Darknut lesson's two proposals (round 40, Darknut40; `zelda::darknut_rules`; all default 0, off):
+`reward.chase_penalty` is `penalty-chase`, the value times the step's frames and the shaping scale, on a step that ends
+with Link within 8 pixels of the row or column of a Darknut walking away from him, under `CHASE_REACH` ($30) behind it
+(`darknut_rules::chasing`: asm:Wanderer_MoveAndTurn's turn at the chase target); training envs only.
+`reward.bomb_catch_min` withholds `reward-bomb-hit` and the step's `reward-hit` from a bomb whose credited hits are
+fewer; `items.bomb_catch` offers a `free` family's BOMB only facing where `darknut_rules::bomb_catch` counts that many
+monsters (each walked straight on at its q-speed through the blast's frames, out of its flash, not bomb-immune, a
+Darknut not facing against the bomb; MASKS reason `bomb-catch`; `Session::set_bomb_catch`, set by the env and the
+chain every step). Both are lifted where one bomb is right (`ItemsConfig::bomb_catch_in`,
+`GameplayCritic::short_catch`): a boss hit or alive, the 10th damage-free kill's bomb, a `requires_bombs` room, BOMB
+kept to bomb targets.
 The sword-shot terms (round 38, "Beams at range"; `zelda::beams`; each ≥ 0, 0 drops it, defaults in every family):
 `reward.beam_kill_reward` (default `REWARD_MEDIUM` = 0.5) is `reward-beam-kill` on a step that fires a sword shot
 (`beams::fired`: BEAMS from a state with the beams ready, the shot's slot flying after) when a hit credited to it (the

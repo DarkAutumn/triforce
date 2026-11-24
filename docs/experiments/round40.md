@@ -1316,4 +1316,29 @@ one frame before the Darknut's grid point, which the fighter's margins refuse; s
 its shield to the blade, and is parried. The doc's "13 swings, 8 land" holds: the eighth kills (its HP is gone, no
 flash).
 
+### The two switched-off proposals (built and tested, OFF by default)
+
+Both read `zelda::darknut_rules` (crates/zelda/src/darknut_rules.rs):
+- **(a) `reward.chase_penalty`** (default 0): `penalty-chase`, the value times the step's frames (scaled by
+  `shaping_scale`), on a step that ends with Link on the line of travel of a Darknut walking away from him:
+  `darknut_rules::chasing`, within 8 pixels of its row (walking E/W) or column (N/S), the turn rule's own test
+  (asm:Wanderer_MoveAndTurn, `CMP #$09`), and less than `CHASE_REACH` ($30, three of its 16-pixel cells) behind it;
+  out of its cloud, not dying; a flashing one counts (its turns go on). Only Darknuts: no other shielded wanderer
+  exists, and Chase40's audit shows the other chasers turn from farther. Rooms where one bomb is right are
+  untouched (it is no bomb term).
+- **(b) bombs that catch two or more**: `reward.bomb_catch_min` (default 0): a placed bomb whose credited hits
+  (the look-ahead's, `Change::enemies_hit`, damage only) are fewer pays neither `reward-bomb-hit` nor the step's
+  `reward-hit`; its `penalty-bomb-used` stands, so a bomb that hurts one is a small net cost. And `items.bomb_catch`
+  (default 0): a `free` family's BOMB is offered only facing where `darknut_rules::bomb_catch` counts that many
+  (MASKS reason `bomb-catch`): the monsters a bomb laid now (where `zelda::bombs::landing` puts it) would hurt if each
+  walks on along its facing at its own q-speed (`$3BC`; standing with the clock), in the blast's reach on a blast
+  frame, out of its flash by then, not immune to bombs (its mask), a Darknut not facing against the bomb's way.
+  **Where one bomb is right, both are lifted**: a boss hit or a boss alive in the room (Manhandla, Gleeok, Digdogger,
+  Aquamentus; Dodongo's room is also `requires_bombs`), the 10th damage-free kill's bomb (`$50` = 9: it arms the
+  forced drop), every `requires_bombs` room (the walls, Dodongo), and while BOMB is kept to bomb targets (a wall, a
+  granted bomb). Tested: the in-game blast against `bomb_catch` and the mask (`crates/zelda/tests/darknut_rules.rs`:
+  the clock holds four Blue Darknuts, a bomb laid E hurts exactly the two counted, the one facing W is parried),
+  `chasing`'s reach, the critic (`crates/env/tests/critic.rs`), the env's `penalty-chase` step by step
+  (`tests/test_r40_darknut_fighter.py`), the config's rejections.
+
 (Numbers below.)
