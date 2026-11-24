@@ -1,0 +1,7 @@
+# Round 40, States40 (the lead's follow-up 1): 3:0x59 from N with exactly 8 bombs (the first Darknut's drop taken:
+# `bomb_reserve: 4`, so 4 to spend). The 4-bomb task with the bag at 8. Measurement only (`triforce evaluate`).
+extends: darknut-59n-b4.yaml
+ram_randomization:
+  room_bomb_counts:
+    (3, 0x59, N):
+    - 8

@@ -1,0 +1,16 @@
+# Round 40, States40 (the lead's follow-up 1): 3:0x59 from N with exactly 4 bombs, as the fresh generation's d3first
+# brings them when the first Darknut dropped nothing (`bomb_reserve: 4` from 0x59: no bomb to spend). darknut@d3first's
+# task on `d3first_3_59n_*` only, every reset the state as built (full hearts, no help count) but its bag: 4.
+# Measurement only (`triforce evaluate`); round40.md "3:0x59 at 4 bombs".
+extends: ../../d3first/darknut.yaml
+start_states:
+- 3_59n_[0-9]
+ram_randomization:
+  hp: null
+  full_hp: null
+  bombs: null
+  bombs_share: null
+  help_count: null
+  room_bomb_counts:
+    (3, 0x59, N):
+    - 4
