@@ -1492,3 +1492,195 @@ check passed. Each failure, its cause and its fix:
   an iteration's metrics (`train.interrupts_held`) and raises it after; a new test signals inside that block. The
   interrupted test waits for the metrics line with no deadline (the suite's timeout bounds a hang) and keeps the
   training's output for its failure message.
+
+## Three switches settled by measurement (Switch40, branch `r40-switch`)
+
+Three open switches of the fresh generation (backlog "The fresh generation (2.0.1.0)",
+"Rewards" and "Items and masks"), each measured on today's networks (2.0.0.15's team in the store) on the
+generation's code (`r40-gen`, 94ae2268: no closing no-button frame, item targets as taken), with a recommendation.
+No engine code changed: the arms are task files under `specialists/experiments/r40-switch/` (each the family's task
+plus the lines it changes, `extends:`) and one routes.yaml line on an experiment branch that is never merged
+(`r40-switch-cross`, below). `triforce stats compare` for every pair; `triforce manifest diff` beside each.
+
+### 1. `penalty-aimless` on or off (round38.md "Aimless walking", the experiment written there)
+
+**Plan** (said before running): ow-start@d3first (`r38t-start-fresh2`) and pols-voice's `late.d3first`
+(`r38t-pols`) continued 250 iterations each (`--sil-coeff 0.1`, learning rate 1e-4, 8 envs, `--checkpoint-every
+50`; ow-start `--no-curriculum` as its parent) at `reward.aimless_penalty` 0, 0.002 and 0.005, seeds 1 and 2 (12
+trainings, ~22 minutes each on the loaded machine, one at a time beside the lead's eight-hour batch: about five
+hours), then 1000 runs over the rooms each family plays (express, 1-10 minutes each).
+
+**Not settled in the time.** Done: the two base arms (`ow-start/r40sw-start-a0-s1`, `pols-voice/r40sw-pols-a0-s1`,
+sealed in the store) and today's team on the five sub-chains the arms are judged on (1000 runs each, seeds 0-999,
+`target/r40-switch/aimless/today/`): the opening (start to step 3), 0:0x0f (`0_0fs_0` to step 116), 0:0x2f
+(`0_2fs_0` to step 189), 8:0x4c (`8_4cc_0` to step 227), Dungeon 5's 0x27 and 0x25 (`5_27s_0` to step 143).
+Queued when this was written (detached, they run on): the ten other trainings (`r40sw-{start,pols}-a{0,2,5}-s{1,2}`;
+each arm `--same-recipe-as` its family's `a0-s1` run with `--except aimless_penalty`, the task's file keys, and
+`code.commit,code.describe`: the commits between differ only in files under `scripts/experiments/` and
+`specialists/experiments/`, which no training reads). Their sub-chains are played by
+`scripts/experiments/r40_switch_chains.sh RUN...` (waits for each training, then 1000 runs a sub-chain in the
+express place, `--same-team-as` today's chain `--except` the family); the aimless frames are read by
+`scripts/experiments/r40_switch_aimless.py --family F BASE.jsonl ARM.jsonl...` (`RoomRecord.aimless_frames` by route
+step, paired by seed) until `triforce stats` carries the measure (the lead asked Carrier40 to add it to
+`run_stats.py`; then `triforce stats compare` reads the same files).
+
+**What the numbers show so far** (today's team; aimless frames a visit, mean / median / p90): the opening 4 / 0 / 15
+(today's ow-start was itself trained with the penalty at 0.002, round38.md "0:0x77"), its cave and the way out 0;
+**0:0x0f's rupee cave 128 / 123 / 151** (110 calm decisions a visit: Link waits on the rupees), the rest of 0x0f 0.
+So the continuation arms can only move 0x0f's cave and the fights' time; whether the term costs hits in 5:0x25
+(hurry after a fight) is what the pols-voice arms answer. The only from-scratch evidence is round 38's, one seed each:
+ow-start from scratch without the term looped in the sword cave (41% of visits, 14 runs stuck), with 0.002 the cave
+was clean (25 runs bounced at 0:0x76 instead); pols-voice fine-tuned with and without it: 2 against 3 aimless frames
+a visit, the same 100%.
+
+**Recommendation (provisional): ON at 0.002 for the fresh generation**, on round 38's from-scratch pair and
+because the term is zero wherever anything can hurt Link; to be confirmed or turned off by the arms above (rate first,
+then aimless frames, hearts, time, per round38.md's order). 0.005 only if 0.002 leaves 0x0f's cave as it is and
+costs nothing in 5:0x25.
+
+### 3. 7:0x1b: fight or crossing
+
+**Plan** (said before running): the `d7` segment (`7_79s_0` to step 178, 0:0x42 with the triforce), 1000 runs a
+way (seeds 0-999, `--act model`, clips on) with today's team (goriya@d3first `r38ppo-aux-s38` with its hit head), on
+`r40-gen`'s route (a fight below 8 bombs) and with 7:0x1b always crossed; about 1.5 hours a chain.
+
+**Not settled in the time.** Both chains are queued (detached; `target/r40-switch/d7/d7-fight-1k.jsonl` in this
+worktree, `d7-cross-1k.jsonl` in `../triforce-r40-switch-cross`), each `--same-team-as` the crossing's 10-run smoke.
+The crossing arm is branch `r40-switch-cross` (2fa78871, **never to be merged**): `bomb_rules: d3first:
+treasure_below_rooms: [{level: 7, room: '0x1b', below: 0}]`, i.e. 7:0x1b always crossed. routes.yaml's commented
+override (`below: 2`) is no crossing on this route: runs bring 0-0.2 bombs, so it fights in nearly every visit
+(round 37: 12.6% against 12.7%). Compare with `triforce stats compare d7-fight-1k.jsonl d7-cross-1k.jsonl` and
+`triforce manifest diff` of the two `.meta.json` (expected: code commit and routes.yaml only).
+
+**What the numbers show so far.** The crossing's smoke (10 runs): 7:0x1b crossed in all 11 visits with 0 kills, 390
+frames a visit, 1.09 hits and 1.09 hearts lost a visit, 0 bombs in and out; then Digdogger's 7:0x1c, fought with
+no bomb, took 4 of 11 runs. Earlier rounds on today's goriya: round 38 §5 `d7` 67.8% with 7:0x1b fought by the
+head's combination (105 runs of 1000 lost in the room, 0.96 hearts a visit); round 34's crossing at 2 bombs 86.9%
+(the first order). The trade the chains will price: the fight's 4 bombs feed Digdogger (`free`) and the walls of
+0x0c / 0x29 (`bomb_reserve: 2` from 0x1b); the crossing saves ~0.9 hearts and the fight's time and cheats those
+walls' bombs.
+
+**Recommendation (provisional): fight**, the route as it stands, until the two chains say otherwise: the crossing
+leaves Digdogger without a bomb (the smoke's 4 of 11), and the owner's rule is to fight for room bombs.
+
+### 2. The red candle and the boomerang in Bubble rooms (7:0x0d, 6:0x38)
+
+**Plan** (said before running): 8 single-room evaluations, 2 rooms x {today's masks, CANDLE offered, BOOMERANG
+masked, both}, 1002 visits each (334 on each of the room's three `d3first` entry states), about a minute each in the
+express place; then, since today's networks turned out never to choose CANDLE, a learned arm for 7:0x0d: wallmaster
+continued 150 iterations on the room with CANDLE offered against masked (2 seeds, ~15 minutes a training).
+
+**What the game says** (zelda-asm `enemies.md`, `items.md`). A Bubble (`$2B`) cannot be harmed, stunned or shoved by
+anything (asm:Bubble_Update runs only the touch test); its touch blocks the sword for 151-160 frames, and B items
+are not affected by the block (asm:Link_HandleInput). So the items act on the room's other monsters only:
+- 7:0x0d (5 Wallmasters, 3 Bubbles): the boomerang stuns a Wallmaster, and a stunned one cannot take Link
+  (asm:Wallmaster_State1Trip, asm:Link_CheckMonsterTouch); fire deals `$10` (one wood-sword hit) and a Wallmaster
+  has `$20`, so two fires kill one out of the wall (asm:Bomb_CheckBombOrFireVsMonster). The red candle is the sword
+  while the sword is blocked: the owner's speedrun strat. Fire also burns Link for half a heart (asm:Fire_Update).
+- 6:0x38 (2 Blue and 2 Red Wizzrobes, 3 Like-Likes, a Bubble): a Wizzrobe never tests the boomerang's slot and masks
+  fire (asm:Wizzrobe_DrawAndCheckCollisions); a Like-Like is stunned by the boomerang and takes fire, but has `$90`
+  (nine fires; three hits of the magic sword Link holds there). The candle has nothing worth hitting in 6:0x38.
+
+**Today's networks, offered** (the room alone at the hearts runs bring: `chain_hp: 1`, no `room_kills` staging;
+`--act model`; seeds 0-1001 paired across the arms; wallmaster@d3first `r34d7-wall-s3`, wizzrobe `r33w-s93`, both
+trained with BOOMERANG offered and CANDLE masked):
+
+| room | arm | success (paired difference) | deaths | stuck | Bubble touches a visit | sword-blocked frames a visit | hits taken a visit | hearts lost a visit | hits dealt a visit | frames a visit (mean / median) |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 7:0x0d | today: BOOMERANG on, CANDLE masked | 70.3% | 7 | 291 | 5.84 | 685 | 0.33 | 0.16 | 8.28 | 2021 / 1359 |
+| 7:0x0d | CANDLE offered too | 70.1% (-0.2 ± 0.5) | 6 | 294 | 5.79 | 696 | 0.36 | 0.18 | 8.27 | 2045 / 1362 |
+| 7:0x0d | BOOMERANG masked | 8.8% (-61.5 ± 1.6) | 26 | 888 | 1.86 | 366 | 0.89 | 0.45 | 2.48 | 989 / 685 |
+| 7:0x0d | CANDLE offered, BOOMERANG masked | 9.2% (-61.1 ± 1.6) | 27 | 883 | 1.89 | 375 | 0.92 | 0.46 | 2.60 | 1012 / 686 |
+| 6:0x38 | today: BOOMERANG on, CANDLE masked | 91.5% | 80 | 5 | 1.51 | 225 | 2.54 | 5.17 | 16.41 | 1331 / 1307 |
+| 6:0x38 | CANDLE offered too | 91.6% (+0.1 ± 0.2) | 79 | 5 | 1.50 | 228 | 2.55 | 5.18 | 16.43 | 1338 / 1311 |
+| 6:0x38 | BOOMERANG masked | 92.8% (+1.3 ± 0.8) | 67 | 5 | 1.46 | 208 | 2.70 | 5.28 | 16.49 | 1322 / 1290 |
+| 6:0x38 | CANDLE offered, BOOMERANG masked | 92.9% (+1.4 ± 0.8) | 66 | 5 | 1.47 | 214 | 2.73 | 5.31 | 16.51 | 1331 / 1297 |
+
+7:0x0d's stuck visits are almost all `wallmastered` (a hand carried Link back to 7:0x79: 235 today, 863 with the
+boomerang masked; the rest `no-damage`); a visit that is taken is short, so the masked arms' frames and Bubble
+touches a visit fall with their success. `triforce stats compare` (paired by seed) beside the table: hearts lost a
+run 7:0x0d +0.02 ± 0.00 with CANDLE offered, +0.28 ± 0.01 with BOOMERANG masked; 6:0x38 +0.01 ± 0.01 and
++0.10 ± 0.06, hearts at the end of the runs won in both -0.01 ± 0.01 and **-0.23 ± 0.06** with BOOMERANG masked.
+Its red flags (`family-room-never-played`: 1:0x45 for wallmaster, the other fourteen rooms for wizzrobe) are the
+arms' design (one room's entry states). `triforce manifest diff` of each arm against its room's base: the effective
+task differs in `items.candle` and/or `items.boomerang` only (and the arm's file name and `extends` chain); code,
+module, ROM, data and network identical.
+
+Decisions a visit by kind (from the arms' replays, `scripts/experiments/r40_switch_items.py`; the run statistics do
+not count action kinds):
+
+| arm | BOOMERANG | CANDLE | SWORD | BEAMS | MOVE | WAIT | BOMB |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 7:0x0d today | 19.73 (91.7%) | - | 31.24 | 3.91 | 56.88 | 10.71 | 0.17 |
+| 7:0x0d CANDLE offered | 19.54 (91.7%) | **0.06 (5.9%)** | 31.47 | 3.86 | 57.20 | 10.64 | 0.17 |
+| 7:0x0d BOOMERANG masked | - | - | 17.09 | 1.56 | 19.87 | 10.01 | 0.17 |
+| 6:0x38 today | 3.16 (56.5%) | - | 23.62 | 0.77 | 92.59 | 4.01 | 0.38 |
+| 6:0x38 CANDLE offered | 3.13 (56.6%) | **0.03 (2.8%)** | 23.61 | 0.77 | 93.22 | 4.00 | 0.38 |
+| 6:0x38 BOOMERANG masked | - | - | 23.91 | 0.75 | 99.44 | 5.21 | 0.38 |
+
+(decisions a visit; in brackets the share of visits that chose the kind at least once)
+
+**Offered to today's networks, CANDLE changes nothing** (0.03-0.06 a visit: they never learned it), so it cannot
+decide the owner's test ("if it doesn't result in more clears ... don't use it"). **Masking BOOMERANG loses
+7:0x0d** (70.3% -> 8.8%: the hands are no longer stunned and carry Link out) and does nothing measurable in 6:0x38
+(+1.3 ± 0.8, hearts at the end -0.23 ± 0.06), as the disassembly says (a Wizzrobe ignores the boomerang; only the
+Like-Likes are stunned).
+
+**7:0x0d with CANDLE learned** (wallmaster@d3first continued 150 iterations on the room's entry states, its own
+training task otherwise: `wallmaster-0d-train.yaml` / `-candle.yaml`, `--sil-coeff 0.1`; each evaluated as above,
+1002 visits, the CANDLE arm with CANDLE offered; seed 2 of the CANDLE arm was still training when this was written):
+
+| network (7:0x0d) | success | deaths | stuck | Bubble touches | sword-blocked frames | hits taken | hearts lost | hits dealt | frames (mean / median) | CANDLE / BOOMERANG / SWORD a visit |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| continued, CANDLE masked, seed 1 | 79.0% | 7 | 203 | 4.96 | 598 | 0.21 | 0.11 | 8.92 | 2097 / 1260 | 0 / 17.3 / 31.5 |
+| continued, CANDLE masked, seed 2 | 80.2% | 3 | 195 | 4.96 | 601 | 0.19 | 0.10 | 8.85 | 1819 / 1234 | |
+| **continued, CANDLE offered, seed 1** | **88.8%** | 23 | 89 | 3.83 | 834 | 1.22 | 0.61 | 9.26 | 1566 / 1361 | 2.64 (71% of visits) / 8.8 / 20.0 |
+
+`triforce stats compare` (seed 1 against seed 1, paired): **rate +9.8 ± 1.6 points (better)**, hearts lost a run
++0.50 ± 0.02 (worse), beams held fewer; the two masked seeds agree (+1.2 ± 1.7). The continuation alone, masked, is
+itself +8.8 ± 1.9 over today's network (a room-only fine-tune). Learned, the candle replaces half the boomerang
+throws and a third of the sword: fewer `wallmastered` (203 -> 89), but Link burns himself (hits taken 0.21 -> 1.22
+a visit, deaths 7 -> 23 of 1002). The arms' `--same-recipe-as` check named only the candle, the task's file keys and
+the commit (experiment files only).
+
+**Recommendation:**
+- **7:0x0d: BOOMERANG on; CANDLE on** in the generation's masks (wallmaster's `items: {candle: true}`; the family's
+  only other room, 1:0x45, comes before the red candle). Learned, it takes ~10 points more of the room; its price is
+  self-burns (half a heart each, asm:Fire_Update), which the fresh network trains against. Confirm with the CANDLE
+  arm's seed 2 (`wallmaster/r40sw-wm0d-c1-s2`, evaluated by the same command into `learned-c1-s2.json`).
+- **6:0x38: BOOMERANG on (as today), CANDLE off.** Fire cannot hurt a Wizzrobe or a Bubble and needs nine hits on a
+  Like-Like; masking the boomerang gained nothing measurable and cost hearts at the end. Not tested learned in 6:0x38
+  (no target worth the fire).
+
+
+### Found on the way
+
+- Two trainings started within a second of each other: one died in `store.team_view`'s `sweep_views`
+  (`FileNotFoundError` on the other process's temporary team view under `/run/user/1000/triforce-team-*`); started
+  again alone it ran. A race in the store's view sweeping, not looked into further.
+- The queue's estimate of a short sub-chain is far off (1000 runs of the opening estimated 36 minutes in the express
+  place, ran in one; Dungeon 5's two Pols Voice rooms estimated 1 h 45 min, ran in ten).
+
+### What came after the report (Switch40's last message, Nov 24, and the lead's reading)
+
+- **The aimless penalty is not settled by continued trainings.** The pols-voice arms' Dungeon 5 chains (5:0x27,
+  5:0x25) are void: each arm equals the base to the frame there, because the arms were put into the `late.d3first`
+  slot (steps 192 to the end) and Dungeon 5's Pols Voice rooms (steps 140, 142) are played by the family's default
+  run (the agent's reading of the step ranges; the chains' metadata was not opened). Where the arms do play, 8:0x4c
+  (step 226), 1000 runs paired by seed: 100% in every arm, at most 4 aimless frames a run apart, hearts the same
+  but for 0.005 at seed 2 (+0.09 ± 0.02 hearts lost a run, worse). ow-start: 0 aimless frames in every arm, the one
+  without a penalty included. Today's networks already walk without waste, so continuing them cannot tell 0.002
+  from 0.
+- **7:0x1b, fight against crossing** (the lead's reading of the two 1000-run Dungeon 7 chains, jobs #640 and #641,
+  `triforce stats compare`, paired by seed; today's networks, which were trained to fight there): the fight 75.5%,
+  the crossing 44.0% (-31.5 ± 1.9 points), 51 of the crossing's runs stuck at the step limit; hearts lost a run 9.52
+  against 9.34 (within noise); the runs won both ways reach 7:0x2b 1484 ± 218 frames (24.7 s) sooner by crossing.
+  The crossing is a floor: no network was trained for it.
+
+**The lead's decisions for the generation (defaults while the owner has not ruled):** the aimless penalty ON at
+0.002 (not 0.005), on round 38's one-seed from-scratch pair alone (without it ow-start looped in the sword cave);
+what would settle it is a from-scratch pair, which the generation's first group trainings are (one seed of the
+overworld group without it is the cheapest test, if the machine allows). 7:0x1b a FIGHT (as today). The crossing's
+24.7 s goes to the backlog as a route experiment after the retrain. 7:0x0d boomerang and candle on, 6:0x38
+boomerang on and candle off, as measured above. None of these is applied to a task file by this commit: they go in
+with the generation's reward settings in one change.

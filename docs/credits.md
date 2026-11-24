@@ -160,6 +160,7 @@ All of the glitch knowledge is the owner's; the agents made the agent able to us
 | Nov 23 | Red candle and boomerang for Bubble rooms; snipe 6:0x78's Wizzrobes | Owner | Open (a 0x78 swing earned about 0.1 bombs a run) | bl, r33 |
 | Nov 23 | Drop the executor's closing no-button frame for the fresh generation, no switch kept | Agents found the frame (Peahat40, measuring the 0x1f line); owner (the cut-over, "don't look back"); agents built the rule (kept after every action but a MOVE in play, measured on today's team) and fixed the seven engine faults it hid | Open (r40-noclose, for review): post-d7 +0.5 ± 0.9 points and 2.4% fewer frames, post-d5 -2.0 ± 3.0 and 4.6% fewer | dec 11-23, r40 |
 | Nov 24 | An item's target tiles are the tiles Link takes it from, nothing wider (2.0.1.0) | Agents (Peahat40 found Ganon's Triforce of Power out of reach on its target tile; the lead ruled; Peahat40 built and tested it per item kind) | Open (r40-gen-targets, for review) | dec 11-24 |
+| Nov 24 | Three switches of the fresh generation by measurement: the red candle and the boomerang in Bubble rooms, `penalty-aimless`, 7:0x1b fight or crossing | Owner (the candle strat, the aimless score, the 0x1b override); agents (Switch40) measured, and added a learned candle arm when today's networks never chose it | 7:0x0d: candle learned +9.8 ± 1.6 points (one seed; more self-burns), boomerang masked -61.5; 6:0x38 neither helps; aimless and 0x1b: queued, provisional | r40 |
 
 ## Bombs, keys and rupees
 

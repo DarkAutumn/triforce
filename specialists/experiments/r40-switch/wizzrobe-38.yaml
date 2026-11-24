@@ -1,0 +1,9 @@
+# Round 40, Switch40: the red candle and the boomerang in Bubble rooms (backlog "Items and masks"; the owner, Nov 22).
+# 6:0x38 alone, as d3first meets it (step 202, S to N; the family's default run plays it): wizzrobe's task on the
+# room's three d3first entry states, every reset at the hearts runs bring (chain_hp 1) and with the room full (no
+# room_kills staging). Today's masks: BOOMERANG offered (the items default), CANDLE masked. The arms extend this file.
+# round40.md "Switch40".
+extends: ../../wizzrobe.yaml
+start_states: ['6_38*_[0-9]']
+state_routes: [d3first]
+ram_randomization: {chain_hp: 1.0, room_kills_share: 0.0}

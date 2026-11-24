@@ -1,0 +1,7 @@
+# Round 40, Switch40: the red candle and the boomerang in Bubble rooms (backlog "Items and masks"; the owner, Nov 22).
+# 7:0x0d alone, as the route meets it: wallmaster@d3first's task on the room's three entry states, every reset at the
+# hearts runs bring (chain_hp 1) and with the room full (no room_kills staging). Today's masks: BOOMERANG offered (the
+# items default), CANDLE masked. The arms extend this file. round40.md "Switch40".
+extends: ../../d3first/wallmaster.yaml
+start_states: ['7_0d*_[0-9]']
+ram_randomization: {chain_hp: 1.0, room_kills_share: 0.0}
