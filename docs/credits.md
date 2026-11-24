@@ -197,6 +197,9 @@ All of the glitch knowledge is the owner's; the agents made the agent able to us
 | Nov 21 | Keep the room identity input but test it | Owner | Answered: an embedding changed nothing | r36 |
 | Nov 22 | **Contact features**: monster paths a few frames ahead by arithmetic | Agents; owner approved and asked for projectiles too | Worked: schema 7 | r36, dec 11-22 |
 | Nov 22 | Raw RAM bytes, wider towers, a tile patch, the action as input | Agents | Failed: raw RAM hurt | r36 |
+| Nov 23 | **Range-aware contact**: frames to contact with a horizon, "not soon" beyond it | Owner | Built (schema 8, off by default): level with or above schema 7 on one family's bench; horizon 16 | r40 |
+| Nov 23 | **The shooter's threat lane**, cut where Link can still leave | Owner (idea); agents (columns, the game's shot delay) | Built (schema 8): catches more lane hits on the bench; not yet trained | r38 §6, r40 |
+| Nov 23 | **The bomb-carrier flag** as an input, one definition with Metric B | Owner (flag); agents (BombStats' predicate) | Wired, reads 0 until `r40-bombstats` lands | r40 |
 
 ## Training method
 

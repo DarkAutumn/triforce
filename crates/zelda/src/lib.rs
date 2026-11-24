@@ -34,6 +34,7 @@ pub mod submenu;
 pub mod supply;
 pub mod tables;
 pub mod tiles;
+pub mod threat;
 pub mod vars;
 pub mod visits;
 pub mod whirlwind;
