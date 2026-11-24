@@ -1209,7 +1209,32 @@ into the cave (mode 11; twice the slot became the cave's person `$6B`); `$3C` 1,
 others live becomes the dead dummy (asm:Manhandla_CheckCollisions, as the disassembly says). The calculator counts
 none of these as a kill: a room left in a sparkle is `left` for Metric B and nothing for Metric A.
 
-**The baseline of record** runs on 2.0.0.14 (the whirlwind macros), scored from its replays.
+**The baseline of record: 2.0.0.14's 250 test** (`target/runs250/2.0.0.14`, the lead's run, code `e9872c0b`, from
+power on), scored from its 250 replays by the calculator at `e5fc8907` (1,536 windows, 0 unattributed; 20 runs have
+no window). Manhandla's room does not yet grant cheated bombs (branch `r40-bossbombs`): its counts change with that.
+
+| Metric A, the 10th-kill bomb | all windows | without a full bag |
+|---|---|---|
+| opportunities | 297 | 286 |
+| armed (a bomb's 10th kill) | 141 (47.5%) | 140 (49.0%) |
+| missed (a bomb that killed nothing) | 37 (12.5%) | 34 (11.9%) |
+| other weapon | 119 (40.1%) | 112 (39.2%) |
+
+Not opportunities: 26 streaks lost, 3 paused-out, 4 suspended (Dodongo), 4 open at the end. The forced drops of the
+141 armed: 95 taken, 4 wasted, 2 on the floor at the end, 40 lost before falling (harm or the fairy). Where: 3:0x4d
+(Manhandla) 86 (83 armed), 4:0x31 49 (16 armed, 8 missed, 25 other), 3:0x5b 29 (15, 11, 3).
+
+| Metric B, the bomb carrier | all windows (none opens with a full bag) |
+|---|---|
+| opportunities | 821 |
+| hit (a carrier died next) | 28 (3.4%) |
+| miss (another monster died next) | 65 (7.9%) |
+| left (Link left first) | 728 (88.7%) |
+
+Not opportunities: 348 closed, 33 open at the end. The 28 hits dropped bombs 14 times (13 taken, 1 on the floor at the
+end): the 41% roll. `left` is most of it, in rooms the route crosses with carriers alive: 3:0x69 144, 3:0x5b 96,
+3:0x5c 59, 0:0x3d 44, 5:0x65 34, 0:0x3c 28, 0:0x2d 27; hits and misses come from 0:0x4c (4 / 25), 0:0x38 (0 / 16) and
+5:0x66 (5 / 11).
 
 ## Moldorm crossed, 9:0x56's key
 
