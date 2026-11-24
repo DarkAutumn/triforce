@@ -8,6 +8,11 @@
 # count. Its continuation trains 0x5b under today's order (a full bag: the wall, then the room's bombs, then out) with
 # full-bag starts: `room_bombs` gives half of 0x5b's resets 8 bombs, and `room_kills` banks 2 or 3 of its 3 Darknuts
 # in half the staged resets (one Darknut left, or the room's bombs already lying when Link comes in).
+# Round 40 (the fresh generation's Dungeon 3, decisions 2026-11-23): the room keys name the pass. 0x5b's first pass
+# (from S, a crossing with one Darknut for its drop) starts full, with the drop cycle at 0 or 1, half each
+# (`room_kill_cycle`: at 0 the first Darknut's death drops bombs 41% of the time, at 1 none: kill one or cross); its
+# last pass (from W) keeps round 39's full-bag starts and banks 1-3 kills (1: the Darknut the first pass killed).
+# 0x59 from N holds exactly 4 or 8 bombs (`room_bomb_counts`: 0x4a's four, and the first Darknut's four or not).
 name: darknut
 rooms:
 - (3, 0x5b)
@@ -60,8 +65,8 @@ ram_randomization:
   - 0
   - 9
   room_kills:
-    (3, 0x5b):
-    - 2
+    (3, 0x5b, W):
+    - 1
     - 3
     (5, 0x05):
     - 1
@@ -77,10 +82,18 @@ ram_randomization:
     - 5
   room_kills_share: 0.5
   room_bombs:
-    (3, 0x5b):
+    (3, 0x5b, W):
     - 8
     - 8
   room_bombs_share: 0.5
+  room_bomb_counts:
+    (3, 0x59, N):
+    - 4
+    - 8
+  room_kill_cycle:
+    (3, 0x5b, S):
+    - 0
+    - 1
 items:
   bombs: free
 clips:

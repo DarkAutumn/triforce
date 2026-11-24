@@ -426,29 +426,39 @@ d3first:
   # and manhandla).  From the grave's cave step on every family plays its default run (`promoted`).
   own_models_until: {waypoint: sword}
   steps:
-  # The start (d3first-walks-a.md §1): the wood sword, W through 0x76 (walked or scrolled) and 0x75's wrap exit
-  # (CLIP E) into 0x74, Level 3's mouth.
+  # The start (d3first-walks-a.md §1): the wood sword, W through 0x76 and 0x75 by the screen wrap, no kill on the way
+  # (round 40, the owner, Nov 23: "In 0x76 and 0x75 BOTH should be screen wrapped [...] to avoid needing to kill
+  # anything"): in 0x76 the E wrap (CLIP E at the E edge Link comes in by) lands him on the W edge, one MOVE from
+  # 0x75 (its d3first game.yaml entry: the W exit's `wrap_in`, so with clips on the objective's way is the wrap;
+  # with clips off it walks across as before); in 0x75 the wrap exit (CLIP E) into 0x74, Level 3's mouth.  The
+  # game's drop cycle (asm:WorldKillCycle, 0 at power on) so reaches 3:0x5b at 0.
   - {level: 0, room: '0x77', specialist: ow-start, entry: start, exit: cave}
   - {level: 0, room: '0x77', in_cave: true, specialist: ow-start, entry: S, exit: S}
   - {level: 0, room: '0x77', specialist: ow-start, entry: cave, exit: W}
   - {level: 0, room: '0x76', specialist: ow-tektite, entry: E, exit: W}
   - {level: 0, room: '0x75', specialist: ow-leever, entry: E, exit: W}
   - {level: 0, room: '0x74', specialist: ow-tektite, entry: E, exit: cave}
-  # Dungeon 3, the owner's way in (Nov 19: "5a is skipped on the way in, used on the way back"; walks-a §2): 0x5b's
-  # Darknuts crossed N (its bombs left), 0x4b's three Zols killed for its key, its W key door, 0x4a's five Keese
-  # killed for its four bombs, 0x49's key, S into 0x59 (emptied), then the block `dungeon-3` (the raft, back E by
-  # 0x5a, 0x5b's last pass with its four bombs and its E wall, 0x4c's E wall, Manhandla by bombs).  Bomb reserve 6
-  # as d2first's to 0x59; then 0 (the lead, Nov 20) from 0x59's fight step through 0x5b's last pass: 0x4a's four
-  # bombs are 0x59's (five Red Darknuts, all to die: the BombFighter rule wins 60 of 60 with them), and 0x5b's four,
-  # taken on its last pass, pay for the two walls and Manhandla (0x5c 6, Manhandla 0, as d2first's).
+  # Dungeon 3, the owner's way in (Nov 19: "5a is skipped on the way in, used on the way back"; walks-a §2), as the
+  # fresh generation plays it (round 40; decisions 2026-11-23, "The fresh generation's Dungeon 3", "continued", "3:0x69
+  # is crossed by a line"): no kill before 0x5b.  0x7b crossed, its key (lying in the open) taken; 0x6b crossed, its
+  # key (made by its five Zols' deaths) left (the Moldorm's, 2:0x3e, makes it up); 0x5b's first pass a crossing (its
+  # bombs left) in which one Darknut may die for its drop: with the cycle at 0 the first Red Darknut's death reads
+  # column 1 of drop group 2, bombs, 41% of the time (asm:Drop_SetUpItem, asm:Drop_GroupRates; the bomb carriers are
+  # the targets there, `carrier_targets` below); 0x4b's three Zols killed for its key, its W key door, 0x4a's five
+  # Keese killed for its four bombs, 0x49's key, S into 0x59 (emptied) with 4 or 8 bombs, then the block `dungeon-3`
+  # (the raft, back E by 0x5a, 0x5b's last pass with its four bombs and its E wall, 0x4c's E wall, Manhandla by
+  # bombs).  Bomb reserve 6 as d2first's to 0x59; then 4 (the owner, Nov 23: "cap the bomb usage in 0x59 so we never
+  # drop below 4 when clearing it [...] At 8 the agent can use up to 4, at 4 it can use none") from 0x59's fight step
+  # through 0x5a; 0 on 0x5b's last pass (the block's, as before: its four bombs bring Link to 8, the 0x4c wall takes
+  # one, Manhandla is met with 7), 6 at 0x5c, 0 at Manhandla.
   - {level: 3, room: '0x7c', specialist: zol, entry: S, exit: W, bomb_reserve: 6}
   - {level: 3, room: '0x7b', specialist: zol, entry: E, exit: N}
-  - {level: 3, room: '0x6b', specialist: zol, entry: S, exit: N}
+  - {level: 3, room: '0x6b', specialist: zol, entry: S, exit: N, treasure: skip}
   - {level: 3, room: '0x5b', specialist: darknut, entry: S, exit: N, treasure: skip}
   - {level: 3, room: '0x4b', specialist: zol, entry: S, exit: W}
   - {level: 3, room: '0x4a', specialist: stalfos-keese-gel, entry: E, exit: W}
   - {level: 3, room: '0x49', specialist: zol, entry: E, exit: S}
-  - {level: 3, room: '0x59', specialist: darknut, entry: N, exit: S, bomb_reserve: 0}
+  - {level: 3, room: '0x59', specialist: darknut, entry: N, exit: S, bomb_reserve: 4}
   - include: dungeon-3
   - include: to-level-4
   - include: dungeon-4
@@ -495,11 +505,11 @@ d3first:
   # key, its N door open; under `fights_only` no weapon bomb there but the 10th kill's.
   - {level: 2, room: '0x5e', specialist: goriya, entry: S, exit: N}
   - {level: 2, room: '0x4e', specialist: d2-rope, entry: S, exit: N}
-  # 0x3e is crossed (round 39, the owner, Nov 22: Moldorm's key "is only needed for d9? [...] d9 0x56 drops a key and
-  # it's super safe to get. Confirm this works, then drop the moldorm fight (it's now passthrough) and fight in d9
-  # 0x56 to get the missing key"): no treasure, the Moldorm left alive (the room has no shutter); the route's one key
-  # short is 9:0x56's, taken below.
-  - {level: 2, room: '0x3e', specialist: moldorm, entry: S, exit: N, treasure: skip}
+  # 0x3e is fought for the Moldorm's key again (round 40, the owner, Nov 23: "The extra key comes from killing the
+  # moldorm, which we have to add back"; round 39 had crossed it and taken 9:0x56's key instead): the key 3:0x6b now
+  # leaves.  The route needs both, the Moldorm's and 9:0x56's (scripts/experiments/r40_route.py ledger;
+  # docs/experiments/round40.md "The route's keys and bombs"): without either, 9:0x63's W key door is a key short.
+  - {level: 2, room: '0x3e', specialist: moldorm, entry: S, exit: N}
   - include: dungeon-2-north
   # Level 2 to Level 5 (d2first's rooms, entries and exits; its clip ways): back S, E and N to 0x2d, N 0x1d, E along
   # row 1 to 0x1f, N through its wall gap at X $80 into 0x0f's open secret cave (100 rupees), back S and W, 0x1d N,
@@ -579,10 +589,11 @@ d3first:
   - include: dungeon-8
   - include: to-level-9
   - include: dungeon-9
-  # 0x56 is fought for its key (round 39, the owner: the key Moldorm's crossing leaves): the 2 Zols (their Gels
-  # too) and 2 Like-Likes killed, the Bubbles don't count (asm:Secret_UpdateRoomAllDead), the key at ($80,$90)
-  # between two water rows (the ladder), then the W bomb wall.  Without it the route is a key short at 9:0x63's W
-  # door (steps 197 and 262 already leave none).
+  # 0x56 is fought for its key (round 39, the owner: the key Moldorm's crossing left; round 40: kept with the
+  # Moldorm fought, as 3:0x6b's key is left): the 2 Zols (their Gels too) and 2 Like-Likes killed, the Bubbles don't
+  # count (asm:Secret_UpdateRoomAllDead), the key at ($80,$90) between two water rows (the ladder), then the W bomb
+  # wall.  Without it the route is a key short at 9:0x63's W door (6:0x79's W door and 9:0x63's already leave none:
+  # scripts/experiments/r40_route.py ledger).
   - {level: 9, room: '0x56', specialist: like-like, entry: S, exit: W, bombs: required}
   - include: dungeon-9-from-55
 # The owner's bomb rules (round 37, Nov 22; docs/routes/d3first.md "Bombs"), by route.  A route not named here plays
@@ -633,12 +644,12 @@ bomb_rules:
 # today's team, which was not trained with them and gains from them all the same (round40.md "Engine macros": the leg
 # out of Dungeon 5 82.3% -> 89.3% of 1000 runs, +7.0 +- 1.5, and faster; the networks' own play walked out of 0x0b in
 # 120 of 1073 visits).  The docks stay helped on today's team (unaided: 0 of 1000 on both dock legs; "I want the docks
-# to stay for current version", the owner).  The fresh generation's entry, turned on when it trains:
-#   d3first: {whirlwinds: [{level: 0, room: '0x0b'}, {level: 0, room: '0x22'}], unaided_docks: true}
+# to stay for current version", the owner).  The fresh generation (this line of work, round 40): the docks unaided
+# too, the networks time the plays themselves.
 macros:
   d3first:
     whirlwinds: [{level: 0, room: '0x0b'}, {level: 0, room: '0x22'}]
-    unaided_docks: false
+    unaided_docks: true
 # clips-gauntlet (round 21, docs/experiments/round21-gauntlet.md): an experiment route, not a way through the game.  Two
 # steps per (room, entry): a specialist naming it (`route: clips-gauntlet`) draws one of the two exits at every
 # reset.  Entered from W the target is E or S, entered from E it is W or S.
