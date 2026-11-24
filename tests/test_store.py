@@ -255,3 +255,32 @@ def test_statistics_tables_are_filed_queried_and_rebuilt(shared, tmp_path):
     assert store.reindex() == {'evaluations': 2, 'rooms': 2, 'unreadable': []}
     _, rows = store.query('SELECT COUNT(*) FROM evaluation_rooms WHERE enter_n = 10')
     assert rows == [(2,)]
+
+
+def test_a_seal_that_fails_leaves_the_run_open_and_whole(shared, monkeypatch):
+    run = store.allocate_run('zol', 'r1')
+    _checkpoint(run.path / 'ckpt.pt', 'r1')
+    (run.path / 'eval.json').write_text('{"episodes": 1}')
+    (run.path / 'act').write_text('argmax x\n')
+
+    def fail(path):
+        raise OSError('disk gone')
+    monkeypatch.setattr(store, 'make_readonly', fail)
+    with pytest.raises(OSError, match='disk gone'):
+        store.seal_run(run)
+    assert store.get_run(run)['status'] == store.OPEN
+    assert (run.path / 'eval.json').read_text() == '{"episodes": 1}' and (run.path / 'act').is_file()
+    assert store.outputs(run='zol/r1') == [] and store.summaries(run='zol/r1') == []
+    monkeypatch.undo()
+    monkeypatch.setenv(paths.SHARED_ENV, str(shared))
+    assert store.seal_run(run)['filed'] == ['act', 'eval.json']
+
+
+def test_views_of_gone_processes_are_swept(tmp_path):
+    alive = tmp_path / f'{store.VIEW_PREFIX}{os.getpid()}-abc'
+    gone = tmp_path / f'{store.VIEW_PREFIX}999999999-def'
+    for folder in (alive, gone):
+        (folder / 'models').mkdir(parents=True)
+    gone.chmod(0o555)
+    assert store.sweep_views(tmp_path) == [gone]
+    assert alive.is_dir() and not gone.exists()

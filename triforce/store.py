@@ -559,7 +559,8 @@ def default_act(run_path: Path) -> str:
 def seal_run(run: Run, act: Optional[str] = None, entry: str = PUBLIC) -> dict:
     """Seals an open run: its checkpoint's SHA-1 and its default act mode (``act``, else ``default_act``) recorded,
     the files the store files elsewhere (``AFTER_TRAINING``) moved out of it into this job's folder, the folder
-    read-only.  Never written again.  A run without a checkpoint is refused (it stays open)."""
+    read-only.  Never written again.  A run without a checkpoint is refused (it stays open).  When the seal fails
+    after the files were filed, they are moved back and unfiled: the run stays open and whole."""
     row = get_run(run)
     if row['status'] != OPEN:
         raise StoreError(f"run {run.identity} is already sealed")
@@ -569,24 +570,47 @@ def seal_run(run: Run, act: Optional[str] = None, entry: str = PUBLIC) -> dict:
     mode = act or default_act(run.path)
     sha1 = file_sha1(ckpt)
     moved = _move_after_training(run)
-    with writing('run-seal', {'run': run.identity, 'sha1': sha1, 'act': mode, 'filed': moved}, entry) as con:
-        make_readonly(run.path)
-        con.execute('UPDATE runs SET status = ?, sealed = ?, sha1 = ?, act = ? WHERE family = ? AND name = ?',
-                    (SEALED, time.time(), sha1, mode, run.family, run.name))
-    return {**get_run(run), 'filed': moved}
+    try:
+        with writing('run-seal', {'run': run.identity, 'sha1': sha1, 'act': mode, 'filed': sorted(moved)},
+                     entry) as con:
+            make_readonly(run.path)
+            con.execute('UPDATE runs SET status = ?, sealed = ?, sha1 = ?, act = ? WHERE family = ? AND name = ?',
+                        (SEALED, time.time(), sha1, mode, run.family, run.name))
+    except BaseException:
+        make_writable(run.path)
+        _unfile(run, moved)
+        raise
+    return {**get_run(run), 'filed': sorted(moved)}
 
 
-def _move_after_training(run: Run) -> list[str]:
+def _move_after_training(run: Run) -> dict:
     """Files an open run's evaluations, ``act`` and ``selection.json`` (rule 3) into this job's folder before it is
-    sealed; returns their names."""
-    moved = []
-    for path in sorted(run.path.iterdir()):
-        if path.is_file() and (path.name in AFTER_TRAINING or (path.name.startswith('eval') and
-                                                                 path.suffix == '.json')):
-            kind = 'evaluate' if path.name.startswith('eval') else path.name.split('.')[0]
-            file_output(path, kind, run=run.identity, name=f'{run.family}/{run.name}/{path.name}', move=True)
-            moved.append(path.name)
+    sealed; returns name -> where each went.  A failure part way puts back what was filed (``_unfile``)."""
+    moved = {}
+    try:
+        for path in sorted(run.path.iterdir()):
+            if path.is_file() and (path.name in AFTER_TRAINING or (path.name.startswith('eval') and
+                                                                     path.suffix == '.json')):
+                kind = 'evaluate' if path.name.startswith('eval') else path.name.split('.')[0]
+                moved[path.name] = file_output(path, kind, run=run.identity,
+                                               name=f'{run.family}/{run.name}/{path.name}', move=True)
+    except BaseException:
+        _unfile(run, moved)
+        raise
     return moved
+
+
+def _unfile(run: Run, moved: dict):
+    """Undoes ``_move_after_training``: each file back into the run, its outputs and summary rows removed."""
+    for name, target in moved.items():
+        make_writable(target)
+        shutil.move(str(target), run.path / name)
+    with writing('run-unfile', {'run': run.identity, 'files': sorted(moved)}, PUBLIC) as con:
+        for target in moved.values():
+            ids = [r['id'] for r in con.execute('SELECT id FROM outputs WHERE path = ?', (_relative(target),))]
+            for output in ids:
+                con.execute('DELETE FROM summaries WHERE output = ?', (output,))
+                con.execute('DELETE FROM outputs WHERE id = ?', (output,))
 
 
 def derive_run(parent: Run, checkpoint: Path, origin: str, family: Optional[str] = None,
@@ -946,10 +970,12 @@ def team_of(spec: str) -> dict:
 
 def team_view(spec: str) -> Path:
     """This process's view (``write_view``) of team ``spec`` (``team_of``): made once in a temporary folder, removed
-    at exit."""
+    at exit; a folder a process left (the queue's dry call ends with ``os._exit``, a killed tool) is swept by the next
+    view made (``sweep_views``)."""
     if spec not in _VIEWS:
         base = Path(os.environ.get('XDG_RUNTIME_DIR') or tempfile.gettempdir())
-        folder = Path(tempfile.mkdtemp(prefix=f'triforce-team-{os.getpid()}-', dir=base))
+        sweep_views(base)
+        folder = Path(tempfile.mkdtemp(prefix=f'{VIEW_PREFIX}{os.getpid()}-', dir=base))
         write_view(team_of(spec), folder / 'models')
         _VIEWS[spec] = folder / 'models'
         import atexit  # pylint: disable=import-outside-toplevel
@@ -959,6 +985,22 @@ def team_view(spec: str) -> Path:
             shutil.rmtree(folder, ignore_errors=True)
         atexit.register(remove)
     return _VIEWS[spec]
+
+
+VIEW_PREFIX = 'triforce-team-'
+
+
+def sweep_views(base: Path) -> list[Path]:
+    """Removes the team views under ``base`` whose process is gone (``triforce-team-<pid>-*``); returns them."""
+    swept = []
+    for folder in Path(base).glob(f'{VIEW_PREFIX}*'):
+        pid = folder.name[len(VIEW_PREFIX):].split('-', 1)[0]
+        if not pid.isdigit() or Path(f'/proc/{pid}').exists():
+            continue
+        make_writable(folder)
+        shutil.rmtree(folder, ignore_errors=True)
+        swept.append(folder)
+    return swept
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -1043,22 +1085,34 @@ def file_output(path, kind: str, *, run: Optional[str] = None, team: Optional[st
             link_tree(source, target, link=False)
     row = summary_row(summary, result) if kind in ('chain', 'evaluate', 'train') else None
     caller = who()
-    with writing('file', {'kind': kind, 'path': _relative(target), 'run': run, 'team': team}, entry) as con:
-        make_readonly(target)
-        cursor = con.execute('INSERT INTO outputs (job, kind, path, name, run, team, data, created) '
-                             'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                             (caller['job'], kind, _relative(target), name or source.name, run, team,
-                              None if data is None else json.dumps(data), time.time()))
-        if row is not None:
-            con.execute('INSERT INTO summaries (ts, kind, name, job, run, team, data, n, successes, rate, se, '
-                        'compact, output) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                        (time.time(), kind, (summary or {}).get('name') or name or source.name, caller['job'], run,
-                         team, None if data is None else json.dumps(data), row['n'], row['successes'], row['rate'],
-                         row['se'], None if row['compact'] is None else json.dumps(row['compact']),
-                         cursor.lastrowid))
-        if kind == 'stats' and summary is not None:       # the statistics tables (triforce.store_stats)
-            from . import store_stats  # pylint: disable=import-outside-toplevel
-            store_stats.index(con, summary, target, cursor.lastrowid, _store_fields(team, run, data), time.time())
+    try:
+        with writing('file', {'kind': kind, 'path': _relative(target), 'run': run, 'team': team}, entry) as con:
+            make_readonly(target)
+            cursor = con.execute('INSERT INTO outputs (job, kind, path, name, run, team, data, created) '
+                                 'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                                 (caller['job'], kind, _relative(target), name or source.name, run, team,
+                                  None if data is None else json.dumps(data), time.time()))
+            if row is not None:
+                con.execute('INSERT INTO summaries (ts, kind, name, job, run, team, data, n, successes, rate, se, '
+                            'compact, output) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                            (time.time(), kind, (summary or {}).get('name') or name or source.name, caller['job'],
+                             run, team, None if data is None else json.dumps(data), row['n'], row['successes'],
+                             row['rate'], row['se'], None if row['compact'] is None else json.dumps(row['compact']),
+                             cursor.lastrowid))
+            if kind == 'stats' and summary is not None:       # the statistics tables (triforce.store_stats)
+                from . import store_stats  # pylint: disable=import-outside-toplevel
+                store_stats.index(con, summary, target, cursor.lastrowid, _store_fields(team, run, data),
+                                  time.time())
+    except BaseException:
+        if target != source.resolve():      # nothing filed: the move or the copy is undone
+            make_writable(target)
+            if move:
+                shutil.move(str(target), source)
+            elif target.is_dir():
+                shutil.rmtree(target, ignore_errors=True)
+            else:
+                target.unlink(missing_ok=True)
+        raise
     return target
 
 

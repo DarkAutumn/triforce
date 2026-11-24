@@ -167,18 +167,24 @@ def models_root(root: Optional[str | os.PathLike] = None) -> Path:
 def use_team(spec: Optional[str], models_dir=None) -> Optional[dict]:
     """``--team SPEC`` (``store.parse_team_spec``: ``NAME[+SLOT=RUN]...``): this process and its children play that
     team (``$TRIFORCE_TEAM``); returns its effective team (``store.effective_team``), None without ``spec``.  Refused
-    beside ``--models-dir``; a team that does not resolve exits naming what is missing."""
-    if spec is None:
-        return None
-    if models_dir is not None:
-        raise SystemExit("--team and --models-dir name two teams: give one (--models-dir is the layout before the "
-                         "store)")
-    try:
-        team = store.team_of(spec)
-    except (store.StoreError, paths.MissingError) as error:
-        raise SystemExit(f"--team {spec}: {error}") from error
-    os.environ[TEAM_ENV] = spec
+    beside ``--models-dir``; a team that does not resolve exits naming what is missing.  Every tool calls it at its
+    start: the first call prints which networks it plays and why (``say_models``)."""
+    team = None
+    if spec is not None:
+        if models_dir is not None:
+            raise SystemExit("--team and --models-dir name two teams: give one (--models-dir is the layout before "
+                             "the store)")
+        try:
+            team = store.team_of(spec)
+        except (store.StoreError, paths.MissingError) as error:
+            raise SystemExit(f"--team {spec}: {error}") from error
+        os.environ[TEAM_ENV] = spec
+    if not _SAID:
+        _SAID.append(say_models(models_dir))
     return team
+
+
+_SAID: list = []        # use_team's line, said once a process
 
 
 def team_in_use(root=None) -> Optional[dict]:
@@ -194,6 +200,30 @@ def team_in_use(root=None) -> Optional[dict]:
     if paths.store_exists() and paths.current_team():
         return store.team_of(paths.CURRENT)
     return None
+
+
+def models_source(root=None) -> str:
+    """Which networks a tool plays and why, as one line (``say_models`` prints it, manifests carry it)."""
+    team = team_in_use(root)
+    if team is not None:
+        spec = os.environ.get(TEAM_ENV, '').strip()
+        why = ('--team' if spec else 'current: this checkout has no models folder and no --models-dir')
+        return f"store team {team['name']} ({why}; sha256 {team['sha256'][:12]})"
+    if root is not None:
+        return f"--models-dir {root} (the layout before the store)"
+    if os.environ.get(MODELS_DIR_ENV):
+        return f"$TRIFORCE_MODELS_DIR {os.environ[MODELS_DIR_ENV]} (the layout before the store)"
+    legacy = paths.legacy_models_dir()
+    if legacy.exists():
+        return f"{legacy} (this checkout's own folder, the layout before the store)"
+    return f"{legacy} (missing: no store team and no models folder)"
+
+
+def say_models(root=None) -> str:
+    """Prints ``models: <models_source>`` once, at a tool's start; returns the line."""
+    line = models_source(root)
+    print(f"models: {line}", flush=True)
+    return line
 
 
 def new_run_id() -> str:

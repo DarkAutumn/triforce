@@ -636,6 +636,24 @@ def data_sources(args) -> dict:
     return found
 
 
+def source_lines(args, data: dict) -> dict:
+    """kind -> one line saying which data the training reads and why (printed at its start, carried by its
+    manifest): this checkout's own folder (the layout before the store), a store snapshot (``--data`` or the kind's
+    current one), or none."""
+    named = {item.partition('=')[0] for item in args.data}
+    lines = {}
+    for kind, (path, record) in data.items():
+        if record is None:
+            lines[kind] = (f"none: this checkout has no {paths.legacy_data(kind)} and the store has no current "
+                           f"{kind} snapshot")
+        elif record.get('legacy'):
+            lines[kind] = f"this checkout's folder {path} (the layout before the store)"
+        else:
+            lines[kind] = (f"store snapshot {record['snapshot']} "
+                           f"({'--data' if kind in named else 'current'}: {path})")
+    return lines
+
+
 def where_to(args, specialist: str) -> Where:
     """The training's ``Where``: in the store when a store team plays (``--team``, or no models folder here and the
     store has a current one) or ``--resume`` names an open run: its run allocated there (``--run-id`` its name;
@@ -685,6 +703,9 @@ def main(argv=None) -> Path:
     # The data snapshots the run reads (``data_sources``: this checkout's folders, else the store's), so the checks
     # below look where the training will.
     probe = Where(Path(), Path(), data=data_sources(args))
+    sources = source_lines(args, probe.data)
+    for kind, line in sources.items():
+        print(f"{kind}: {line}", flush=True)
     config = with_data(load_specialist(args.specialist), probe)
     specialist = config.name
     # Every input the task declares is checked before the job waits its turn (round 40: missing is an error, never
@@ -697,6 +718,7 @@ def main(argv=None) -> Path:
     if missing:
         raise MissingInput(f"--demos {', '.join(missing)}: no such file")
     recipe = recipe_manifest(args, config, source, probe.folder('trajectories'))
+    recipe['sources'] = {'models': registry.models_source(args.models_dir), **sources}
     if args.same_recipe_as:
         check_same_recipe(recipe, args.same_recipe_as, args.except_)
     announce('train', work(train_steps=args.iterations * steps_per_iteration(args)), specialist)

@@ -202,9 +202,10 @@ def models(models_dir=None) -> dict:
     content hash, every slot), else the legacy models dir (``registry.models_root``)."""
     from . import registry, store  # pylint: disable=import-outside-toplevel
     team = registry.team_in_use(models_dir)
+    why = registry.models_source(models_dir)
     if team is not None:
-        return {'kind': 'store', 'team': store.team_record(team)}
-    return {'kind': 'legacy', 'dir': label(registry.models_root(models_dir))}
+        return {'kind': 'store', 'team': store.team_record(team), 'why': why}
+    return {'kind': 'legacy', 'dir': label(registry.models_root(models_dir)), 'why': why}
 
 
 def arguments(values: dict) -> dict:
