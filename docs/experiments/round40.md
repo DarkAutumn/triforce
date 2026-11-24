@@ -2938,3 +2938,85 @@ the route's task files; the hit labels come with the recording.
   shard has them): imitation then refuses `--aux`. The generation's data is all recorded with them.
 - Whether `train`'s in-memory cache fits at the generation's size (about 14 GB for 2M rows) beside the lab's
   trainings: not measured.
+
+## A teacher judged in chains, beside the baseline (Judge41, branch `r40-judge`)
+
+**The ask** (the lead, from GroupScout's map, its "Missing" item 9): a teacher of the generation judgeable in chains
+with one command, on exactly the stretches its families play, both ways the baseline above tabulates, and the
+comparison with that baseline readable. `docs/architecture.md` ("A teacher of the generation judged in chains") and
+`docs/data-layout.md` (the team spec) have how each piece works; this is what was built and what it showed.
+
+### What was built
+
+- **One run in every slot of a group** (`store.py`): the team spec takes `+@GROUP=FAMILY/RUN` (`@` cannot start a
+  slot, which starts with its family). It sets `family@d3first` and `family@d3first:late` of every member family
+  (`triforce/groups.yaml` through `triforce.lab.groups.load`, Trainer41's), adding a late slot where the base has none
+  (otherwise the bare slot plays those steps, and the bare slot also plays `d2first`), and leaves every bare slot as
+  the base has it, so `d2first` plays as before. Later overrides win (`+@walkers=...+zol@d3first=...`). The effective
+  team records every slot set and `groups`. `triforce-lead team new NAME --base TEAM --slot @GROUP=FAMILY/RUN` makes
+  it lasting. A family or run name holding `+` is refused where a run is allocated and where a slot is filled (the lab's
+  own `--name` check came with Trainer41's merge).
+- **`triforce eval-batch NAME --teacher GROUP=FAMILY/RUN [--base TEAM] [--dungeons dN,...] [--runs N] [--plan]`**
+  (`judge.teacher_plan`): from the route's steps (each step's family), the scopes of the room statistics in which a
+  member plays: per dungeon `to-dN` (from the previous triforce: the file of the segment after the previous dungeon,
+  `full` for Dungeon 3) and `dN` (from its entrance), each chain stopped at the dungeon's exit (`--stop-at step:N`;
+  Dungeon 9 to the end). The overworld group is judged on the legs only (and Dungeon 1's own scope, which crosses
+  0x37); Gleeok on Dungeons 4 and 8. The chains go to `<chains-dir>/<NAME>-<file>.jsonl` and are filed by the job;
+  then the yardstick report, `room-stats NAME` and the comparison. `--plan` prints the scopes, the team spec and
+  every command, and runs nothing.
+- **`triforce judge compare TAG [--base r40-2015-1k]`**: per dungeon and start, the base's rate over all its runs and
+  on the measurement's seeds, the measurement's rate, their difference paired by seed with its standard error
+  (unpaired when no seed is shared), the three rooms where most of the measurement's runs end (death, stuck or another
+  ending; the base's share beside), hearts lost a run with its paired difference, and the route goals a run where the
+  records carry them. With a team that is the base in most slots, the paired difference is the teacher's effect.
+  `triforce stats compare` pairs whole files: a teacher's chain stops at the dungeon's exit and the baseline's plays
+  on, so its rate and hearts are not the scope's; `judge compare` cuts both at the scope's exit.
+- **The yardstick's last step** no longer fails a batch whose slots share one network that was never evaluated family
+  by family (round38-one.md): it leaves those families' single-room rows out with a sentence (`unevaluated` in its
+  JSON). A family whose own run lacks its evaluation is still an error.
+
+### Where the baseline's records are
+
+All 19 files of `r40-2015-1k` are filed in the store by its batch (job 615:
+`~/triforce-shared/jobs/615-lead-base-2015-segs-1k/chain/`, `chain-meta/`, `stats/`; the store's index, kind `chain`).
+`judge compare` reads them from there when the chains folder has none, so the comparison does not depend on the
+frozen `triforce-r40-base2015` tree. Not filed: the derived `r40-2015-1k-room-stats.json` and `-yardstick.json`
+(rebuilt from the records by `room-stats` and the yardstick when needed). Read from the store against itself,
+`judge compare` gives the table above to the digit (Dungeon 3 43.2% / 45.7%, Dungeon 4 45.8% / 68.4%, ..., Dungeon 9
+22.6% / 51.2%; job #1181).
+
+### Where each group is judged (`--plan`, stand-in runs)
+
+| Group | Previous triforce (`to-dN`) | Entrance (`dN`) | Chains |
+|---|---|---|---:|
+| overworld (stand-in `ow-start/r38t-start-fresh2`) | D3, D4, D1, D2, D5, D7, D6, D8, D9 | D1 (0x37 inside its scope) | 10 |
+| walkers (`darknut/r38head-fam-w8`) | every dungeon | every dungeon | 18 |
+| others (`wizzrobe/r33w-s93`) | D1, D5, D7, D6, D8, D9 | the same | 12 |
+| rooms (`trap-room/r77-b`) | D3, D4, D1, D5, D7, D6, D8, D9 | the same | 16 |
+| boss-gleeok (`boss-gleeok/r38head-fam-w8`) | D4, D8 | D4, D8 | 4 |
+
+Each changes 2 slots a family (20 for overworld and walkers, 10 others, 4 rooms, 2 a boss).
+
+### The proof (stand-in networks: nothing made is kept or promoted)
+
+`eval-batch r40-judge-proof-walkers --teacher walkers=darknut/r38head-fam-w8 --dungeons d4 --runs 30` (job #1196, 3
+minutes: two chains of 30, the report, the comparison): today's darknut network playing every walker slot of
+2.0.0.15 on `d3first`. The numbers mean nothing (a Darknut network in the Zol and Vire rooms of Dungeon 4); they
+show the path end to end: the chains filed in the store, `room-stats` and the yardstick written, the comparison read
+the baseline from the store.
+
+| Dungeon | Start | Base (all runs) | Base on these seeds | Measured | Difference | Rooms where most runs end (base) | Hearts lost a run (base) |
+|---|---|---|---|---|---|---|---|
+| d4 | previous triforce | 45.8% of 1000 | 40.0% | 0.0% of 30 | -40.0 ± 9.1 (paired, 30) | 4x40 50.0% (0.4%), 4x50 33.3% (0.2%), 4x31 10.0% (3.5%) | 4.00 (2.92); +0.82 ± 0.20 |
+| d4 | entrance | 68.4% of 1000 | 76.7% | 0.0% of 30 | -76.7 ± 7.9 (paired, 30) | 4x40 53.3% (0.0%), 4x50 33.3% (0.0%), 4x31 3.3% (0.4%) | 3.98 (2.21); +1.92 ± 0.26 |
+
+The new records carry the route goals (kills where the route crosses 1.17 and 0.70 a run); 2.0.0.15's do not, so the
+base's column is empty there.
+
+### Not tested
+
+- A teacher trained by the lab (a run named `NAME/RUN` outside any family) in a chain: the proof used a family's run.
+  The spec, the view and the yardstick's shared-run path are tested on fake stores.
+- The obs switches a generation network needs in chains (`obs.threat`, `obs.chase`) are Tasks41's (which file a
+  chain reads them from); nothing here checks them.
+- A full judgement (every scope of a group at 1000 runs) was not run: no long chain in this piece.

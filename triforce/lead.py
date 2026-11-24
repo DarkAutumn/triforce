@@ -4,7 +4,8 @@
 Every operation here is a row of the store's audit log with entry point ``lead``:
 
 - ``init``: make the store (root, index, README, layout).
-- ``team new NAME (--from-models DIR | --from-manifest FILE | --base TEAM) [--slot SLOT=RUN ...]``: an immutable team.
+- ``team new NAME (--from-models DIR | --from-manifest FILE | --base TEAM) [--slot SLOT=RUN ...]``: an immutable team
+  (``--slot @GROUP=FAMILY/RUN``: the run in every slot of a teacher's families, ``store.group_slots``).
 - ``team set-current NAME``: the team of record (replaces ``triforce promote``).
 - ``data install KIND NAME --from DIR``, ``data set-current KIND NAME``: named snapshots (copies).
 - ``import-legacy --checkout DIR [--apply] [--manifests DIR]``: a copy of today's checkout into the store (dry run
@@ -526,7 +527,8 @@ def main(argv=None) -> int:
     source.add_argument('--from-manifest', type=Path, help="an archive manifest (/backup/triforce/models/teams)")
     source.add_argument('--base', help="an existing team, changed by --slot")
     new.add_argument('--slot', action='append', default=[], metavar='SLOT=RUN',
-                     help="family, family@route or family@route:late = FAMILY/RUN (a sealed run)")
+                     help="family, family@route or family@route:late = RUN or FAMILY/RUN (a sealed run); @GROUP = "
+                          "FAMILY/RUN: that run in every slot of the group's families (store.group_slots)")
     new.add_argument('--note')
     current = team.add_parser('set-current', help="the team of record (replaces triforce promote)")
     current.add_argument('name')
@@ -573,8 +575,8 @@ def main(argv=None) -> int:
                 source_text = f"team {args.base}"
             for item in args.slot:
                 key, _, value = item.partition('=')
-                slots[key] = store.slot_of(store.parse_run(value, store.split_slot(key)[0]))
-                source_text += f" +{key}={slots[key]['run']}"
+                keys = store.apply_override(slots, key, value)
+                source_text += f" +{key}={slots[keys[0]]['run']}"
             if problems:
                 raise store.StoreError('; '.join(problems))
             print(json.dumps(store.create_team(args.name, slots, source_text, args.note), indent=2))

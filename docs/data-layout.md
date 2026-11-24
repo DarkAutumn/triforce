@@ -41,8 +41,11 @@ and the store keeps them in `layout.json` for tools that are not Python.
 4. **A team** names per slot a sealed run, its checkpoint SHA-1, its act mode and whether it has a hit head. Slots:
    `family` (what `promoted` was), `family@route` (`promoted.<route>`), `family@route:late` (`late.<route>`). A tool
    plays `--team NAME` (default the current one) or an experiment's override, `--team NAME+zol@d3first=r40-x-s401`
-   (`+SLOT=RUN`, repeatable; `RUN` alone is of the slot's family), and records the effective team (name, overrides,
-   content hash, every slot) with its result: a chain's provenance `team`, a run's `run.json` and index row.
+   (`+SLOT=RUN`, repeatable, a later one winning; `RUN` alone is of the slot's family; round 40: `+@GROUP=FAMILY/RUN`
+   puts one run in every slot of a teacher's families, `family@route` and `family@route:late` each, `store.groups`;
+   a family, run or team name holding `+` cannot be written in a spec and is refused when allocated), and records the
+   effective team (name, overrides, content hash, every slot) with its result: a chain's provenance `team`, a run's
+   `run.json` and index row. `triforce-lead team new NAME --base TEAM --slot @GROUP=FAMILY/RUN` makes it lasting.
 5. **Data** is read by name: `train --data harvested=NAME` (default the kind's current snapshot), recorded with the
    run. `eval-chain --harvest` without a folder writes into the job's folder, never into a snapshot; a harvest becomes
    training data only when the lead installs it.
