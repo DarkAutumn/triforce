@@ -606,6 +606,23 @@ def time_now():
     return time.time()
 
 
+def freeze_gui_clock(monkeypatch, now: float):
+    """The GUI's clock (its module's ``time.time``) held at ``now``: a card's elapsed seconds are those the test
+    wrote, however long the window takes to build beside seven other tests (it once drew 'RUNNING tools 31s' for a
+    job admitted 30 s before the test's ``now``).  Python's own ``time`` is untouched."""
+    import time
+
+    class Frozen:
+        def __getattr__(self, name):
+            return getattr(time, name)
+
+        @staticmethod
+        def time():
+            return now
+
+    monkeypatch.setattr(gui, 'time', Frozen())
+
+
 def checkout_job(queue, checkout, branch, name, *, status='running', admitted_ts=None, finished_ts=None):
     """A job of another checkout: its log folder (``<checkout>/logs/<name>``, a plan naming the checkout) and its row
     in the queue, which records the folder (as ``jobs.record_plan``); (its key, its folder)."""
@@ -967,6 +984,7 @@ def test_a_jobs_card_draws_its_progress_with_widgets_in_the_window_and_the_web_v
     'finished'.  A job without a log folder is drawn from its row alone."""
     monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
     now = float(int(time_now()))
+    freeze_gui_clock(monkeypatch, now)
     chain = queue.add(agent='Dark39b', task='r40', subtask='d3-route', description='Evaluates r40 on the d3 route.',
                       kind='chain', command=['python', '-m', 'triforce', 'eval-chain', '--runs', '250'],
                       admitted_ts=now - 725, estimate=2400.0,

@@ -188,7 +188,7 @@ def test_create_starts_with_no_button_and_pauses_hard(qapp, tmp_path):
 
 
 def test_done_saves_and_resets_with_the_same_or_a_new_seed(qapp, tmp_path):
-    window, _ = window_of(qapp, emu.Spec(3, 0x69, entry='cave'), 1, tmp_path)
+    window, _ = window_of(qapp, emu.Spec(3, 0x69, entry='cave', hearts=0.5), 1, tmp_path)   # the first touch kills
     window.press('DOWN')
     frames(window, 4)
     window.release('DOWN')
