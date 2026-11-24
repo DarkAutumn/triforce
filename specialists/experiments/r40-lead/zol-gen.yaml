@@ -1,0 +1,10 @@
+# Round 40 (the lead, Nov 24): zol@d3first with the generation's two input switches on, for the first from-scratch
+# run of the generation's network (hitnet, tokens type/features/rel/threat/chase, feed) through the lab trainer, to
+# set beside Fresh40's zol from scratch on the old network (round40.md "zol from scratch"). A measurement: never
+# promoted. Tasks41 puts these switches into the task files themselves; this file goes when it lands.
+extends: ../../d3first/zol.yaml
+obs:
+  objective: true
+  target: true
+  threat: true
+  chase: true

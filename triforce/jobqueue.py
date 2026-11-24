@@ -67,10 +67,19 @@ from typing import Optional
 QUEUE_DIR_ENV = 'TRIFORCE_QUEUE_DIR'
 DB_NAME = 'queue.db'
 LOCKS_DIR = 'locks'
-REGULAR_PLACES = ('regular-1', 'regular-2')
+REGULAR_PLACES = ('regular-1', 'regular-2')     # the regular places without a setting (``regular_places``)
 EXPRESS_PLACES = ('express-1',)
 TOOL_PLACES = ('tools-1', 'tools-2')
 PLACES = (*REGULAR_PLACES, *EXPRESS_PLACES, *TOOL_PLACES)
+# How many regular places there are is a setting of the queue's directory (the owner, Nov 24: "add an extra slot and
+# we'll see how it does. It's ok if what's in the queue doesn't know the extra slot and waits. New stuff queued can
+# use it"): the file ``places`` there holds the number (``set_regular_places``; ``triforce job places N``, the
+# owner's), read by every waiting wrapper at each check of its turn, so it takes effect at once.  A job takes a place
+# beyond ``REGULAR_PLACES`` only when its wrapper knows of the setting (``places_aware`` in its row): a wrapper of
+# older code never claims one, so every newer wrapper reckons that such a job waits for one of the first two and
+# lets the jobs behind it take the extra place.
+PLACES_FILE = 'places'
+MAX_REGULAR_PLACES = 6
 JOBS_LANE, TOOLS_LANE = 'jobs', 'tools'
 LIVE = ('queued', 'running')
 ENDED = ('completed', 'failed', 'interrupted', 'timeout', 'dead')
@@ -104,7 +113,10 @@ _COLUMNS = {
     # Moving a waiting job to the top of its line (``move_to_top``): ``top_ts`` when it was moved (None: its own
     # place; cleared by an undo), ``moved_ts`` when it was last moved (kept after an undo: the record says it was),
     # ``top_aware`` set by a wrapper that honours the move (1; None: a wrapper of older code, which never reads it).
-    'top_ts': 'REAL', 'moved_ts': 'REAL', 'top_aware': 'INTEGER'}
+    'top_ts': 'REAL', 'moved_ts': 'REAL', 'top_aware': 'INTEGER',
+    # ``places_aware`` set by a wrapper that reads the number of regular places (``regular_places``; 1; None: a
+    # wrapper of older code, which knows ``REGULAR_PLACES`` alone and never takes a place beyond them).
+    'places_aware': 'INTEGER'}
 _JSON = ('command', 'work', 'steps', 'progress', 'flags')
 _HISTORY_COLUMNS = {'moved': 'INTEGER'}     # added to ``history`` after it was first made: 1 for a moved job
 SCHEMA = (f"CREATE TABLE IF NOT EXISTS jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -274,9 +286,35 @@ def move_to_top(con: sqlite3.Connection, job_id: int, undo: bool = False, now: O
     return job
 
 
+def regular_places(directory: Optional[Path] = None) -> tuple:
+    """The regular places now: ``regular-1`` .. ``regular-N``, N the queue directory's setting (``PLACES_FILE``),
+    ``REGULAR_PLACES`` without one or with one that can't be read."""
+    try:
+        count = int((Path(directory or queue_dir()) / PLACES_FILE).read_text(encoding='utf-8').split()[0])
+    except (OSError, ValueError, IndexError):
+        return REGULAR_PLACES
+    if not 1 <= count <= MAX_REGULAR_PLACES:
+        return REGULAR_PLACES
+    return tuple(f'regular-{index}' for index in range(1, count + 1))
+
+
+def set_regular_places(count: int, directory: Optional[Path] = None) -> tuple:
+    """Sets the number of regular places (1 .. ``MAX_REGULAR_PLACES``) for every wrapper of this code on the
+    machine; a running job keeps its place when the number goes down (its place is just not given again)."""
+    if not 1 <= count <= MAX_REGULAR_PLACES:
+        raise ValueError(f"regular places: 1 to {MAX_REGULAR_PLACES}, not {count}")
+    directory = Path(directory or queue_dir())
+    directory.mkdir(parents=True, exist_ok=True)
+    scratch = directory / f'{PLACES_FILE}.{os.getpid()}'
+    scratch.write_text(f'{count}\n', encoding='utf-8')
+    os.replace(scratch, directory / PLACES_FILE)
+    return regular_places(directory)
+
+
 def assign(ordered: list[dict], free: list[str], lane: str) -> dict:
     """Which free place each job of the line takes now ({job id: place}); a job that gets none waits, and a later
-    one may still get a place it can use (the express place for an express-sized job)."""
+    one may still get a place it can use (the express place for an express-sized job; a regular place beyond
+    ``REGULAR_PLACES`` for a job whose wrapper knows of the setting, ``places_aware``)."""
     free = list(free)
     taken = {}
     for job in ordered:
@@ -284,15 +322,16 @@ def assign(ordered: list[dict], free: list[str], lane: str) -> dict:
             pool = [place for place in free if place in TOOL_PLACES]
         else:
             pool = ([place for place in free if place in EXPRESS_PLACES] if express_sized(job) else [])
-            pool = pool or [place for place in free if place in REGULAR_PLACES]
+            pool = pool or [place for place in free if place.startswith('regular-')
+                            and (place in REGULAR_PLACES or job.get('places_aware'))]
         if pool:
             taken[job['id']] = pool[0]
             free.remove(pool[0])
     return taken
 
 
-def lane_places(lane: str) -> tuple:
-    return TOOL_PLACES if lane == TOOLS_LANE else (*REGULAR_PLACES, *EXPRESS_PLACES)
+def lane_places(lane: str, directory: Optional[Path] = None) -> tuple:
+    return TOOL_PLACES if lane == TOOLS_LANE else (*regular_places(directory), *EXPRESS_PLACES)
 
 
 @dataclass
@@ -329,7 +368,7 @@ def turn(con: sqlite3.Connection, directory: Path, job_id: int, now: Optional[fl
     lane = mine['lane']
     running = [job for job in jobs if job['status'] == 'running' and job['lane'] == lane]
     held = {job['place'] for job in running}
-    free = [place for place in lane_places(lane)
+    free = [place for place in lane_places(lane, directory)
             if place not in held and lock_free(lock_path(directory, place))]
     ordered = line(jobs, lane, now)
     ahead = ordered[:next(index for index, job in enumerate(ordered) if job['id'] == job_id)]
