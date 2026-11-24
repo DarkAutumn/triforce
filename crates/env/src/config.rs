@@ -954,6 +954,43 @@ pub struct SpecialistConfig {
     pub notes: Option<String>,
 }
 
+/// The YAML of the task file at `path` with its `extends:` chain merged ([`SpecialistConfig::from_file`]); `seen`:
+/// the files on the way, a loop's guard.
+fn task_value(path: &Path, seen: &mut Vec<PathBuf>) -> Result<serde_yaml_ng::Value, ConfigError> {
+    let fail = |msg: String| ConfigError(format!("{}: {msg}", path.display()));
+    let real = path.canonicalize().map_err(|e| fail(e.to_string()))?;
+    if seen.contains(&real) {
+        return Err(fail(format!("extends: a loop through {}", real.display())));
+    }
+    seen.push(real);
+    let text = std::fs::read_to_string(path).map_err(|e| fail(e.to_string()))?;
+    let mut value: serde_yaml_ng::Value = serde_yaml_ng::from_str(&text).map_err(|e| fail(e.to_string()))?;
+    let Some(base) = value.as_mapping_mut().and_then(|m| m.remove("extends")) else {
+        return Ok(value);
+    };
+    let base = base.as_str().ok_or_else(|| fail("extends: a path to a task file".into()))?;
+    let mut merged = task_value(&path.parent().unwrap_or(Path::new(".")).join(base), seen)?;
+    merge_yaml(&mut merged, value);
+    Ok(merged)
+}
+
+/// `over`'s keys over `base`: mappings merged key by key, anything else replaced.
+fn merge_yaml(base: &mut serde_yaml_ng::Value, over: serde_yaml_ng::Value) {
+    match (base, over) {
+        (serde_yaml_ng::Value::Mapping(base), serde_yaml_ng::Value::Mapping(over)) => {
+            for (key, value) in over {
+                match base.get_mut(&key) {
+                    Some(slot) => merge_yaml(slot, value),
+                    None => {
+                        base.insert(key, value);
+                    }
+                }
+            }
+        }
+        (base, over) => *base = over,
+    }
+}
+
 impl SpecialistConfig {
     /// Parses YAML text (`source` names the file in errors) and validates it; the route check needs `map`.
     pub fn from_yaml(
@@ -964,6 +1001,18 @@ impl SpecialistConfig {
         let config: SpecialistConfig =
             serde_yaml_ng::from_str(text).map_err(|e| ConfigError(format!("{source}: {e}")))?;
         config.validated(source, map)
+    }
+
+    /// Reads the task file at `path` (round 40, `extends:`): a file with `extends: <path>` (relative to its own
+    /// folder) is that file with this one's keys over it, mappings merged key by key and anything else replaced, so
+    /// an experiment's task is its family's task plus the lines it changes; chains of `extends` are followed, a loop
+    /// is an error.  Then parsed and validated as [`Self::from_yaml`].
+    pub fn from_file(path: &Path, map: Option<&GameMap>) -> Result<SpecialistConfig, ConfigError> {
+        let source = path.display().to_string();
+        let value = task_value(path, &mut Vec::new())?;
+        let config: SpecialistConfig =
+            serde_yaml_ng::from_value(value).map_err(|e| ConfigError(format!("{source}: {e}")))?;
+        config.validated(&source, map)
     }
 
     /// Builds a config from JSON (`to_json` output, possibly with fields replaced) and validates it.
@@ -1442,9 +1491,7 @@ impl GameData {
             return Ok(config.clone());
         }
         if name_or_path.ends_with(".yaml") && Path::new(name_or_path).exists() {
-            let text = std::fs::read_to_string(name_or_path)
-                .map_err(|e| ConfigError(format!("{name_or_path}: {e}")))?;
-            let config = SpecialistConfig::from_yaml(&text, name_or_path, Some(&self.map))?;
+            let config = SpecialistConfig::from_file(Path::new(name_or_path), Some(&self.map))?;
             self.check_config(&config)?;
             return Ok(Arc::new(config));
         }

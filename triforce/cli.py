@@ -143,9 +143,10 @@ def check_output(output, provenance: Optional[dict], append: bool) -> Optional[d
 class ChainOutput:
     """An eval-chain output while it is written: the provenance sidecar first (this batch marked unfinished), each
     run appended the moment it finishes (an interrupted chain keeps its finished runs), then ``finish`` sorts the
-    file by seed and marks the batch finished.  ``existing``: the sidecar of the file appended to (``check_output``)."""
+    file by seed and marks the batch finished.  ``existing``: the sidecar of the file appended to (``check_output``);
+    ``manifest``: the chain's (``triforce.manifest.chain``), kept in the sidecar of a new file."""
 
-    def __init__(self, output, provenance: dict, existing: Optional[dict]):
+    def __init__(self, output, provenance: dict, existing: Optional[dict], manifest: Optional[dict] = None):
         # pylint: disable=import-outside-toplevel
         from .events import write_json_atomic
         self.path = Path(output)
@@ -153,7 +154,7 @@ class ChainOutput:
         batch = {**{k: provenance[k] for k in BATCH_FIELDS}, 'finished': False}
         if existing is None:
             self.meta = {'provenance': {k: v for k, v in provenance.items() if k not in BATCH_FIELDS},
-                         'batches': [batch]}
+                         'batches': [batch], 'manifest': manifest}
             self.path.write_text('', encoding='utf-8')
         else:
             self.meta = {**existing, 'batches': existing['batches'] + [batch]}
@@ -177,6 +178,27 @@ class ChainOutput:
         self.meta['batches'][-1]['finished'] = True
         write_json_atomic(meta_path(self.path), self.meta)
         write_chain(self.path)
+
+
+def check_same_team(recipe: dict, reference: str, excepted: list[str]):
+    """``--same-team-as OUTPUT [--except FAMILY,...]``: raises ``RunnerError`` when this chain's team differs from
+    ``OUTPUT``'s in any network or task config but the excepted families', listing every difference; what a record
+    from before manifests never said is printed as unknown and does not refuse."""
+    # pylint: disable=import-outside-toplevel
+    from . import manifest
+    from .runner import RunnerError
+    try:
+        theirs = manifest.read(reference)
+    except ValueError as error:
+        raise RunnerError(f"--same-team-as {reference}: {error}") from None
+    differences, unknown = manifest.same_team(recipe, theirs, excepted)
+    for entry in unknown:
+        print(f"triforce eval-chain: --same-team-as: unknown in {reference}: {entry['path']}", file=sys.stderr)
+    if differences:
+        lines = '\n'.join(f"  {d['path']}: {manifest.short(d['a'])} (this chain) vs {manifest.short(d['b'])}"
+                          for d in differences)
+        raise RunnerError(f"--same-team-as {reference}: this chain's team differs in {len(differences)} more than "
+                          f"--except {','.join(excepted) or '(nothing)'} allows:\n{lines}")
 
 
 def chain_progress_events(events, runs: int, label: Optional[str] = None, route=None, seconds: float = 1.0):
@@ -207,7 +229,7 @@ def _cmd_eval_chain(args):
     from . import replay
     from .events import EventLog, has_plan, logged_job
     from .jobs import announce, work
-    from . import store
+    from . import manifest, store
     from .registry import act_override, team_in_use, use_team
     from .runner import RunnerError, check_configs, check_overrides, check_team, parse_overrides, power_on_options
     from .specialist import load_specialist
@@ -259,6 +281,9 @@ def _cmd_eval_chain(args):
         runner = chain_runner(args.route, args.parallel, args.models_dir, overrides, act_override(args.act), configs,
                               args.threads, harvest, args.harvest_every_room, args.headless)
         check_team(route, runner.policies)
+        recipe = manifest.chain(args, route, runner.policies, act_override(args.act))
+        if args.same_team_as:
+            check_same_team(recipe, args.same_team_as, args.except_)
         provenance = {**runner.provenance(route), 'first_seed': args.first_seed, 'runs': args.runs}
         if team is not None:
             provenance['team'] = store.team_record(team)
@@ -275,7 +300,7 @@ def _cmd_eval_chain(args):
                         power_on=route.power_on, output=output, replays=args.replays, provenance=provenance,
                         nice=nice)
         try:
-            chain_output = ChainOutput(output, provenance, existing)
+            chain_output = ChainOutput(output, provenance, existing, recipe)
             progress = chain_progress_events(events, args.runs, stream.stem if driven else None, route)
 
             def on_result(result):
@@ -407,9 +432,9 @@ def main(argv=None):
                    'convert-model': ('triforce.convert', 'main'),
                    'select-checkpoint': ('triforce.select_checkpoint', 'main'),
                    'test-times': ('triforce.testlog', 'report_main'), 'stats': ('triforce.run_stats', 'main'),
-                   'lineage': ('triforce.lineage', 'main')}
+                   'lineage': ('triforce.lineage', 'main'), 'manifest': ('triforce.manifest', 'main')}
     # `triforce [--models-dir DIR | --team TEAM] train|run|play|evaluate|eval-batch|room-stats|convert-model|
-    # select-checkpoint|test-times|stats|lineage ...` forwards the rest to the module's own CLI (``--team``:
+    # select-checkpoint|test-times|stats|lineage|manifest ...` forwards the rest to the module's own CLI (``--team``:
     # ``registry.use_team``).
     models_dir, team, rest = None, None, argv
     while rest:
@@ -539,6 +564,12 @@ def add_eval_chain_arguments(chain):
                        help="play this checkpoint file or run dir for the family: on a route with own_models_until "
                             "(d3first) for both parts, or with @ROUTE (darknut@d3first=DIR) for the route's own part "
                             "only, the steps before that one")
+    chain.add_argument('--same-team-as', default=None, metavar='OUTPUT',
+                       help="refuse to play unless this chain's team (every network, its act mode, hit head and "
+                            "task config) is OUTPUT's (a chain output, its .meta.json or a stats file) but for the "
+                            "--except families; every difference is printed")
+    chain.add_argument('--except', dest='except_', type=lambda text: [k for k in text.split(',') if k], default=[],
+                       metavar='FAMILY,...', help="with --same-team-as: the families (or keys) this arm changes")
     chain.add_argument('--headless', action='append', default=[], metavar='KEY',
                        help="declare that --checkpoint KEY=PATH has no hit head and replaces a network that has one "
                             "(without it such a chain is refused; round 40)")

@@ -89,7 +89,7 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import Callable, Optional
 
-from . import __version__, _native, paths, registry, replay, store
+from . import __version__, _native, manifest, paths, registry, replay, store
 from .clips import MODES as CLIPS_MODES, default_mode as default_clips_mode, episode_jobs, name as switch_name
 from .events import LOGS_DIR_ENV, EventLog, has_plan, logged_job, write_json_atomic
 from .inputs import MissingInput, check_start_states
@@ -643,6 +643,13 @@ def main(argv=None):
     stored = store.run_of_path(checkpoint) if paths.store_exists() else None
     episodes = episode_count(config, args.episodes_per_state, args.clips)
     announce('eval', work(eval_episodes=episodes), f'eval-{name}')
+    act = registry.act_override(args.act)
+    recipe = manifest.build('evaluate', arguments_=vars(args), seeds={'seed': args.seed},
+                            task=manifest.task(config, args.specialist),
+                            data={key: value for key, value in manifest.data(config).items()
+                                  if key in ('states_dir', 'start_states')},
+                            networks={name: manifest.network(checkpoint, act or registry.act_mode(checkpoint))},
+                            models=manifest.models(args.models_dir))
     # --events into a folder with a plan: its driver (e.g. triforce eval-batch) owns the stream and the final 'end';
     # into a folder without one: this evaluation writes a plan there, so the training GUI lists it.
     stream = Path(args.events) if args.events else None
@@ -672,6 +679,7 @@ def main(argv=None):
             default = store.output_dir(f'evaluate/{stored.identity}') / default.name
         output = Path(args.output) if args.output else default
         write_result(result, output)
+        write_json_atomic(Path(f'{output}.meta.json'), {'manifest': recipe})       # triforce.manifest
         if stored is not None:
             from .run_stats import stats_path  # pylint: disable=import-outside-toplevel
             team = registry.team_in_use(args.models_dir)
@@ -681,6 +689,8 @@ def main(argv=None):
                               name=f'{stored.identity}/{default.name}', summary=summary_stats,
                               result={'n': result['episodes'],
                                       'successes': round(result['success_rate'] * result['episodes'])})
+            store.file_output(Path(f'{output}.meta.json'), 'evaluate-meta', run=stored.identity,
+                              team=team and team['name'], name=f'{stored.identity}/{default.name}.meta.json')
             if stats.is_file():
                 store.file_output(stats, 'stats', run=stored.identity, team=team and team['name'],
                                   name=f'{stored.identity}/{stats.name}', summary=summary_stats)
