@@ -2,7 +2,7 @@
 teacher-labelled data for every policy key a student learns, with the hit labels its hit head trains on.
 
     python scripts/experiments/r36_merge_record.py --out DIR --group walkers --teacher-group walkers=NAME/RUN \\
-        --try-others 8:1.0 [--sources resets entries rooms] [--decisions 20480] [--student CKPT] [--dry-run]
+        --try-others 4:0.25 [--sources resets entries rooms] [--decisions 20480] [--student CKPT] [--dry-run]
     python scripts/experiments/r36_merge_record.py --out DIR --keys zol@d3first stalfos-keese-gel@d3first \\
         --teacher zol=zol/RUN --teacher stalfos-keese-gel=stalfos-keese-gel/RUN --state-route d3first
 

@@ -2832,3 +2832,109 @@ decisions).
   restored on resume: each env's start-state badness (in the Rust pool, as in `triforce train --resume`) and the
   early stop's streak. An update cut by the SIGTERM stays partly applied in the saved weights.
 - A teacher term or rehearsal in a resumed run is untested beyond the code path (the generation uses neither).
+
+## Stage 2's tools for the generation (Stage41, branch `r40-stage`)
+
+anthropic/claude-opus-5-5 (Stage41), on `r40-gen` (42d15e02, then Trainer41's 625f2b4c and b4270f31 merged in for
+`lab.groups` and `lab.recipe`). Stage 2's tools made ready for one `hitnet` student taught by the generation's group
+and boss teachers: recording with named teachers and hit labels, imitation with the hit head in the same pass, a
+correction round through the same path. The commands, in order, are `docs/lab.md` "Stage 2: one network from its
+teachers". Nothing here trains a network that is kept.
+
+**What changed.**
+
+- `scripts/experiments/r36_merge_record.py` took its teachers from the registry's pointers alone (a bare key's
+  `promoted`, never the route's `late.<route>`), read the bare family yaml for its `entries` and `rooms` sources (so
+  the bare file's observation switches), and wrote no hit labels (a separate tool, `lab.record --try-others`, did).
+  Now: the keys from `--group NAME` (`lab.groups`) and `--keys KEY[=YAML]`; a teacher per key or family
+  (`--teacher KEY=NET`) or per group (`--teacher-group GROUP=NET`, every recorded member), NET a store run, a run
+  dir, a checkpoint or a slot (`train.resolve_warm_start`); once one is named every key needs one. Every source on
+  the key's own task file (the route's: its switches); `--try-others K:P` puts the look-ahead's verdicts in the same
+  shards as the teacher's distribution and value (`lab.record.shard_arrays`, shared with `lab.record`). A teacher or
+  `--student` that reads a block whose switch is off in the task is refused before anything plays
+  (`lab.recipe.network_reads`, one direction only: today's networks read neither block and may stand in on tasks
+  that turn them on). `meta.json` names the teacher as given and as `manifest.network` reads it (run, checkpoint
+  SHA-1, architecture, hit head), the student likewise, the task (`manifest.task`: yaml, `extends` chain, effective
+  config, their hashes), the switches, the data drawn (`manifest.data`: seed and harvested states by content), the
+  code and the ROM. Without a named teacher it records the team in use as round 38 did, with a bare key's
+  `late.<route>` now read on the route. With named teachers a harvested entry after the magic sword goes to the
+  recorded `family@d3first` key when the bare key is not recorded (a group teacher plays its family's whole route;
+  the team's `family@d3first` runs never played those rooms, so without named teachers it still does not).
+- `scripts/experiments/r36_merge_distill.py`: the cache keeps the hit labels (when every shard has them), each
+  row's held-out flag and each source's switches (`cache.json` `recorded`). `train --aux OUTPUT=TARGET:COEFF` adds
+  the lab's own loss (`lab.auxiliary.aux_loss`, the same BCE `lab.train --aux hit=hit:C` applies online, on the
+  action taken and the tried candidates), one forward a minibatch for a lab network; `--arch hitnet --arch-config`
+  builds through `lab.recipe.create_network`; a student reading a block a source recorded with its switch off is
+  refused. Round 38's recipe is the default: from scratch 20 epochs at lr 1e-3, value weight 0.02 (was 8 epochs and
+  0.1 by default; round 38 passed its numbers by hand); from `--init` (any NET) 5 epochs at lr 3e-4 (its second pass,
+  its every-room and correction passes). The held-out rows are now the last env of every rollout (round 38's env 9
+  with 10 envs; with fewer envs, before, none were held out), the flag in the cache (`held.npy`: a cache from before
+  must be built again; `r36_merge_convert.py` reads the flag). `distill.json` adds per epoch the auxiliary loss
+  (train and held out) and the hit head's precision = recall on the held-out actions taken and judged candidates.
+- `scripts/experiments/r38_hit.py retrain --init fresh:POLICY` is **retired**: it built a `hitnet` with the default
+  tokens alone (never `threat` or `chase`) and had no `--arch-config`; the generation's head trains inside its
+  student in the imitation's own pass. `retrain` from a `hitnet` or `hitshift` checkpoint stays.
+- `tests/test_stage2.py` (6 tests): a group's and a family's teachers, a missing or doubled teacher, the refusal of a
+  network reading a switched-off block (the generation's `hitnet` and today's network on both tasks), the
+  generation's network at 1,608,836 parameters, imitation training the hit head in the same pass with the defaults
+  of each pass, the refusal of a student reading blocks recorded off.
+
+**The proof** (small, through the queue's express place, each piece under ten minutes). **Stand-in teachers, kept
+nowhere**: today's store team's `zol/r38head-fam-w4` (checkpoint 501552eb) and `stalfos-keese-gel/r38head-fam-w8`
+(b95f2265), both `hitshift` (`ZeldaPolicy` with a hit body reading `type, features, rel, contact`), named with
+`--teacher` for two members of the walkers group, `zol@d3first` and `stalfos-keese-gel@d3first`. Their tasks:
+`specialists/d3first/<family>.yaml` extended by `target/r40-stage/tasks/<family>.yaml` (untracked) with the
+**switches on: `obs.threat`, `obs.chase`, `obs.objective`, `obs.target`** (and `hidden_positions: ram`, the
+default); the teachers read neither new block, so they play as on today's observation, and the recorded rows carry
+the blocks filled for the student. The student: `hitnet`, tokens `type, features, rel, threat, chase`, `feed:
+true`, the room kept, `hidden_dim` 256: 1,608,836 parameters. Models in `target/r40-stage/models` (a models dir,
+nothing written to the store but the queue's records).
+
+| piece (queue job) | command | result |
+|---|---|---|
+| record (#1195, #1201) | `r36_merge_record.py --out proof/teach --keys zol@d3first=T/zol.yaml stalfos-keese-gel@d3first=T/stalfos-keese-gel.yaml --teacher zol=zol/r38head-fam-w4 --teacher stalfos-keese-gel=stalfos-keese-gel/r38head-fam-w8 --state-route d3first --try-others 8:1.0 --sources resets entries --decisions 4096 --parallel 4` | 4 sources × 4,096 rows (2 shards of 4 envs × 512); 69.9 s, 117.2 s, 57.8 s, 284.3 s (the last again in #1201: #1195 reached the 10-minute limit in it and the rerun skipped the three done) |
+| imitate (#1208) | `cache --data proof/teach`; `train --arch hitnet --arch-config '{"tokens": [...], "feed": true}' --aux hit=hit:0.5 --epochs 3 --batch 512` | 16,384 rows (12,288 train, 4,096 held out): held-out KL 1.715 → 1.214 → 1.099, joint top-1 0.250 → 0.469; hit loss train 0.0827 → 0.0759, held out 0.0721 → 0.0716; P=R judged 0.028 → 0.083 |
+| correct (#1210) | `r36_merge_record.py ... --student models/r40stage-proof/s1 --sources resets --decisions 2048` into `proof/dagger`; `cache --data proof/teach proof/dagger`; `train --init .../s1 --aux hit=hit:0.5 --batch 512` (the defaults: 5 epochs, lr 3e-4) | 2 × 2,048 rows the student played and the teachers labelled (53.9 s, 30.7 s); 20,480 rows (15,360 train, 5,120 held out): held-out KL 0.892 → 0.688 → 0.593 → 0.550 → 0.546, joint top-1 0.564 → 0.675, value error 17.0 → 7.1; hit loss train 0.0834 → 0.0774, held out 0.0949 → 0.0897; P=R judged 0.077 → 0.125 |
+| PPO (#1212) | `lab.train --load models/r40stage-proof/d1 --families (the two) --state-route d3first --teacher KEY=CKPT (the two) --teacher-coeff 1.0 --teacher-hold 1 --teacher-fade 1 --aux hit=hit:0.5 --try-others 4:0.25 --parallel 8 --iterations 2 --no-curriculum` | loads as `hitnet`, 1,608,836 parameters; iteration 1: teacher KL 0.717 at weight 1.0, aux hit 0.105, success zol 0.85 / skg 0.97; iteration 2: weight 0 (faded), aux hit 0.115, 0.85 / 0.96; 306 and 244 decisions a second |
+
+Files: `proof/teach/<key>/{resets,entries}/{shard-0000,shard-0001}.npz, meta.json`, `proof/dagger/<key>/resets/`,
+`proof/cache1`, `proof/cache2` (117 MB and 146 MB: about 7 KB a row with the switches' blocks and the hit labels,
+so a round-38-sized 2M-row cache is about 14 GB, read into memory by `train`), `models/r40stage-proof/{s1,d1}`
+(`ckpt.pt`, `distill.json`), `models/r40stage-ppo/p1` (all under `target/r40-stage/`). Each shard holds every
+observation key, `action`, `teacher_joint`, `teacher_value`, `health_lost`, `blocked`, `tried_actions` /
+`tried_lost` / `tried_blocked` `[n, 8]`; zol's first reset shard: 18 of 2,048 actions taken lost health, 351 of
+16,384 tried candidates did; `entity_threat` and `entity_chase` non-zero. A `meta.json` (zol, resets): `teacher
+zol/r38head-fam-w4`, `teacher_network` {arch `hitshift`, hit head, checkpoint_sha1 501552eb…, file
+`~/triforce-shared/runs/zol/r38head-fam-w4/ckpt.pt`}, `task` {yaml `target/r40-stage/tasks/zol.yaml`, `extends`
+`specialists/d3first/zol.yaml` a4fbf505…, effective 936afdab…}, `obs` {threat, chase, objective, target on}, `data`
+{30 seed states 58d1e968…, harvested 3,396 at 0.25 from the store's `261124-gen1` 6dd2bad9…}, the code's commit and
+ROM. The correction's `meta.json` names the student (`r40stage-proof/s1`, checkpoint 42b2f122…). The held-out sets
+of the two imitations differ (the second holds the correction's rows too): the KLs are not one curve.
+
+**Round 38's recipe: kept and changed.** Kept as defaults: KL over the 352 joint actions plus the value at 0.02,
+Adam with warm-up and cosine decay, batch 4,096, 20 epochs at 1e-3 from scratch, 5 at 3e-4 for every later pass;
+20,480 decisions a source, 10 envs; the sources (resets, handoff entries, every-room rooms) and the correction
+through `--student` and an every-room harvest. Changed: the student is the generation's 256-wide `hitnet` with
+`feed` and the hit head trained in the same pass (round 38: a 768-wide `hitnet` whose head was dormant, a separate
+hit body trained afterwards and shifted onto the logits at weight 8, `d1-all-w8`); the teachers are named runs on
+the route's task files; the hit labels come with the recording.
+
+**Not tested, and what the first real run should watch.**
+
+- Whether a 256-wide `hitnet` imitates the teachers as well as round 38's 768-wide one did (held-out KL 0.089 on
+  its data, then 0.081): nothing here can say. Watch the held-out KL per key in `distill.json` against round 38's,
+  the per-head agreement (direction and duration given the teacher's kind), the keys whose KL stays high (the
+  first suspects for capacity), and the hit head's held-out P=R on judged candidates beside the lab's online
+  numbers (`charts/aux_hit_pr_judged`); then the rooms tier and the chains, as round 38 found the bench blind.
+- The weight of the hit loss beside the KL (0.5 here, the lab's example): with `feed`, the head's probabilities are
+  the policy's input, so a poor head costs the copy. Not measured.
+- Recording speed with `--try-others 8:1.0`: 14 to 71 decisions a second on 4 envs with served `hitshift`
+  teachers on a busy machine; the lead's trainings use `4:0.25`. At the generation's scale (about 100 sources of
+  20,480) the share P decides hours; `4:0.25` labels a quarter of the decisions as the online loss does.
+- `--group` with `--teacher-group` resolved and planned in a dry run (`walkers`, ten members, one teacher), never
+  recorded: the group teachers do not exist yet. The `rooms` source, `--part-yaml`, and a recording of the whole
+  team without named teachers were not run.
+- A cache mixing data with and without hit labels drops the labels for every row (`fields` kept only when every
+  shard has them): imitation then refuses `--aux`. The generation's data is all recorded with them.
+- Whether `train`'s in-memory cache fits at the generation's size (about 14 GB for 2M rows) beside the lab's
+  trainings: not measured.

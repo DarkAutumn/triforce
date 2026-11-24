@@ -464,7 +464,7 @@ its numbers are the defaults and the scale below. A teacher is named per family 
    ```
    r36_merge_record.py --out DATA --group walkers others rooms ... \
        --teacher-group walkers=walkers/RUN --teacher-group others=others/RUN ... \
-       --teacher boss-gleeok=boss-gleeok/RUN ... --try-others 8:1.0 --sources resets entries [--decisions 20480]
+       --teacher boss-gleeok=boss-gleeok/RUN ... --try-others 4:0.25 --sources resets entries [--decisions 20480]
    ```
 
    Reads: the keys (`--group`'s members, `--keys KEY[=YAML]`), each key's task (`specialists/d3first/<family>.yaml`,
@@ -473,7 +473,9 @@ its numbers are the defaults and the scale below. A teacher is named per family 
    observation key, the mask, the action taken, `teacher_joint`, `teacher_value`, and the hit labels:
    `health_lost`, `blocked`, `tried_actions`, `tried_lost`, `tried_blocked`; `lab.record.shard_arrays`) and
    `meta.json` (the teacher's run and checkpoint SHA-1, the task's yaml and config hashes, the observation switches,
-   the start states and harvested states drawn by content, the code and ROM). Refused: a key without a named teacher
+   the start states and harvested states drawn by content, the code and ROM). `--try-others K:P` sets the hit
+   labels' cost: every decision of a share P tries K candidates (`8:1.0` recorded 14 to 71 decisions a second on 4
+   envs in round 40's proof; `4:0.25` is what the lab's trainings use). Refused: a key without a named teacher
    once any is named (never today's team in its place), and a teacher (or `--student`) that reads a block whose
    switch is off in the task (`lab.recipe.network_reads`: it would read zeros). Without any `--teacher` it records
    the team in use's networks (`late.<route>` over `promoted` for a bare key), as round 38 did.
