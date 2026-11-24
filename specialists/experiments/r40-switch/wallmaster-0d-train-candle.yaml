@@ -1,0 +1,3 @@
+# Round 40, Switch40: wallmaster-0d-train.yaml with CANDLE offered (the red candle, Link's since 7:0x4a).
+extends: wallmaster-0d-train.yaml
+items: {candle: true}
