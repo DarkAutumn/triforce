@@ -2921,6 +2921,15 @@ how each works; this is what was built and what it showed.
 - **A name no team spec could hold** (the lead's line, from Judge41's work on team specs): `--name` or `--run-id` with
   `+` is refused as the arguments are read ("--name: '+' separates the slots of a team spec, so no --team could name
   this run; use '-' or '_'").
+- **The generation's network in the group file** (the lead's follow-up after the owner set the width, 768
+  everywhere): `groups.yaml`'s `network:` block (`hitnet`, tokens `type, features, rel, threat, chase`, `feed`,
+  `room`, `hidden_dim` 768, `--aux hit=hit:0.5`, `--try-others 4:0.25`; 4,960,388 parameters, against 1,608,836 at the
+  default 256 that one run had silently taken) is what `--group NAME` trains with nothing else on the command line; a
+  teacher may override a key; a command-line `--arch`, `--arch-config` (by key), `--aux` or `--try-others` wins and
+  the run prints one line of what it changed ("[lab] --group rooms: the command line overrides the group file's
+  arch_config.hidden_dim 768 -> 256; …"); the manifest records each key's source (`networks.student.sources`) and
+  the file's block (`task.group.network`). Today `--group rooms` alone is refused by the obs-switch check (the task
+  files keep `obs.threat` and `obs.chase` off), as it should be.
 - **The lab's existing tests** train ow-start from the bare state `start` with no route: they now pass `--all-routes`
   (a comment says why); nothing else in them moved.
 

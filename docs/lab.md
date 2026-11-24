@@ -202,14 +202,34 @@ env shares by member: four groups (`overworld`, `walkers`, `others`, `rooms`) an
 a name with `+` are refused); `tests/test_lab_groups.py` holds every family `_native.route_steps('d3first')` names to
 exactly one teacher and loads every member's task with and without `--state-route d3first`.
 
+The file also pins the network the generation trains, once for every teacher (the owner, Nov 24: 768 wide
+everywhere; the lead's pins):
+
+```yaml
+network:
+  arch: hitnet
+  arch_config: {tokens: [type, features, rel, threat, chase], feed: true, room: true, hidden_dim: 768}
+  aux: [hit=hit:0.5]
+  try_others: "4:0.25"
 ```
-python -m triforce.lab.train --name gen-rooms --group rooms --parallel 8 --iterations 977 --arch hitnet \
-    --arch-config '{"tokens": ["type", "features", "rel", "threat", "chase"], "feed": true}' \
-    --aux hit=hit:0.5 --try-others 4:0.25 --checkpoint-every 61 --seed 1
+
+(4,960,388 parameters.) A teacher may override a key with its own `network:` (`arch_config` key by key; another
+`arch` takes none of the file's `arch_config`). So `--group NAME` alone trains the pinned recipe:
+
+```
+python -m triforce.lab.train --name gen-rooms --group rooms --parallel 8 --iterations 977 --checkpoint-every 61 \
+    --seed 1
 ```
 
 `--group NAME` is `--families <its members> --state-route <its route>` (refused beside `--families` or another
-`--state-route`; `--shares` overrides a member's share). `--state-route` keeps each task's curriculum settings, its
+`--state-route`; `--shares` overrides a member's share) with the group's `--arch`, `--arch-config`, `--aux` and
+`--try-others` (`lab.train.apply_network`). Any of those four given on the command line overrides the file
+(`--arch-config` key by key over the file's, all of it for another `--arch`), and the run prints one line naming what
+it changed: `[lab] --group rooms: the command line overrides the group file's arch_config.hidden_dim 768 -> 256`.
+The manifest records each key's source (`networks.student.sources`: `group file`, `command line` or `default`) and
+the file's block (`task.group.network`), so `triforce manifest diff` between a run from the file and one with an
+override names the key. A group file without the block, and `--families` without `--group`, train as before
+(`zelda`, no auxiliary target, no look-ahead unless given). `--state-route` keeps each task's curriculum settings, its
 `untracked` declaration among them (until Nov 24 `route_only` dropped it and refused such a task).
 
 ### The recipe on record
