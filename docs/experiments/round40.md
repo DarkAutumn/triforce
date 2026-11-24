@@ -685,21 +685,23 @@ explorer. Keys as the ledger throughout (the sources were patched first); hearts
 | `0_1fw` | 6 -> 5 | unchanged | unchanged |
 
 No file added or removed; 289 state files and `entry_states.json` changed (its `keys`, `kills` and `bombs` notes
-name the patch). The audit (`entry_states audit --route d3first`, job queued after this text was written) is in the
-report to the lead.
+name the patch). `entry_states audit --route d3first` (job #790): 855 states, 0 with problems.
 
 **Tracks** (`python -m triforce.explore`, written to `target/trajectories/<family>/<state>` in this worktree, for the
 lead to install): zol `d3first_3_6bs_0..2` (crossed: 96, 70, 76 steps; chain 0 kills two child Gels), ow-tektite
 `d3first_0_76e_0..2` (23, 115, 28 steps: **only chain 2 takes the wrap; all three kill one or two Tektites**, so
-they teach neither of the owner's opening goals), ow-peahat `d3first_0_1fw_0..2` (39, 50, 27 steps); moldorm
-`d3first_2_3es_*` and darknut `d3first_3_5bs_*`, `d3first_3_59n_*`: queued.
+they teach neither of the owner's opening goals), ow-peahat `d3first_0_1fw_0..2` (39, 50, 27 steps), darknut
+`d3first_3_5bs_0..2` (21, 53, 59 steps) and `d3first_3_59n_0` (8 bombs: 140 steps); **`d3first_3_59n_1` and `_2`
+(4 bombs, no bomb to spend) were not solved in 3000 iterations** (the store keeps their `~rule1000` tracks, played
+with the old bag); moldorm `d3first_2_3es_*`: queued (job #773) when this was written.
 
 ## 0x1e's row and 0x1f's line (branch `r40-peahat`)
 
-*Where it came from: Peahat40's section, copied unchanged by States40 (Nov 24) from branch `r40-peahat` at c83c2e05
-(`docs/experiments/round40.md` there); its route data and states came into the generation with Route40's cherry-pick
-of f1ee96f4, and its cut-over with `r40-noclose`. Route40's later row-3 cost on 0x1f (tile row 3, columns 0-15; the
-section above) is not in it.*
+*Where it came from: Peahat40's section, copied by States40 (Nov 24) from branch `r40-peahat` at c83c2e05
+(`docs/experiments/round40.md` there), unchanged but for one citation the asm check refused (its `Submenu`'s
+`@CheckStart` is `asm:Submenu_UpdateActive@CheckStart`); its route data and states came into the generation with
+Route40's cherry-pick of f1ee96f4, and its cut-over with `r40-noclose`. Route40's later row-3 cost on 0x1f (tile row
+3, columns 0-15; the section above) is not in it.*
 
 **The idea is the owner's** (Nov 23, backlog "0:0x1f's Peahats missed by the entry row"): "If your training route has
 link walk to the second highest position in 1e before heading to 1f, it's very easy to navigate 1f without taking
@@ -930,8 +932,8 @@ code lands).
 - The sword and every B item read **new presses**: `asm:Link_HandleInput` calls `Sword_Wield` on `ButtonsPressed` & $80
   and `Link_WieldItem` on `ButtonsPressed` & $40 (bombs `Bomb_Wield`, the recorder `Flute_Wield`, the candle, the
   boomerang, the arrows, the food).
-- Select (pause) and Start (the sub-screen) read **new presses**: `asm:Mode5Play_Update` and `asm:Submenu`'s
-  `@CheckStart`.
+- Select (pause) and Start (the sub-screen) read **new presses**: `asm:Mode5Play_Update` and
+  `asm:Submenu_UpdateActive@CheckStart`.
 - A push block counts **held** frames: `asm:PushBlock_State0Idle` needs `ObjInputDir` toward the block on $10 frames in a
   row; one frame without it restarts the count.
 
