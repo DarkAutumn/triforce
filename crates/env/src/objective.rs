@@ -41,18 +41,19 @@ fn trap_tiles(state: &GameView) -> Vec<Tile> {
 /// maximum); `heal_targets` hearts and fairies alone, below max health. Under a route's bomb floor (`bag`,
 /// `Objective::bag_drops`, round 37) bombs are one below the bomb maximum and only there, in every family. The
 /// room's own treasure is never one (it is the objective's business), nor a clock while a Wallmaster lives
-/// ([`clock_is_a_trap`]).
-fn is_item_target(reward: &RewardConfig, drops_first: bool, bag: bool, state: &GameView, id: i16) -> bool {
+/// ([`clock_is_a_trap`]). The bag is Link's own bombs (`own_bombs`, `Objective::own_bombs`: a cheated wall bomb
+/// never fills it).
+fn is_item_target(reward: &RewardConfig, drops_first: bool, bag: bool, state: &GameView, own_bombs: i32, id: i16) -> bool {
     if id < 0 || clock_is_a_trap(state, id) {
         return false;
     }
     if bag && id == item::BOMBS {
-        return state.bombs() < state.bomb_max();
+        return own_bombs < state.bomb_max();
     }
     let heals = id == item::HEART || id == item::FAIRY;
     if reward.item_targets {
         if drops_first && id == item::BOMBS {
-            return state.bombs() < state.bomb_max();
+            return own_bombs < state.bomb_max();
         }
         return !heals || !state.is_health_full();
     }
@@ -62,11 +63,11 @@ fn is_item_target(reward: &RewardConfig, drops_first: bool, bag: bool, state: &G
     reward.nearby_items && (id == item::HEART || id == item::CLOCK)
 }
 
-/// Whether the dropped item `id` is worth a detour to Link at `state` (round 25): bombs below his bomb maximum, a
-/// heart or fairy below max health.
-pub fn wanted_drop(state: &GameView, id: i16) -> bool {
+/// Whether the dropped item `id` is worth a detour to Link at `state` (round 25): bombs below his bomb maximum (his
+/// own bombs, `own_bombs`: `Objective::own_bombs`), a heart or fairy below max health.
+pub fn wanted_drop(state: &GameView, own_bombs: i32, id: i16) -> bool {
     match id {
-        item::BOMBS => state.bombs() < state.bomb_max(),
+        item::BOMBS => own_bombs < state.bomb_max(),
         item::HEART | item::FAIRY => !state.is_health_full(),
         _ => false,
     }
@@ -84,11 +85,12 @@ fn item_targets<'a>(
     drops_first: bool,
     bag: bool,
     state: &'a GameView,
+    own_bombs: i32,
 ) -> impl Iterator<Item = Target> + 'a {
     state
         .items
         .iter()
-        .filter(move |it| is_item_target(reward, drops_first, bag, state, it.id))
+        .filter(move |it| is_item_target(reward, drops_first, bag, state, own_bombs, it.id))
         .flat_map(|it| it.take_tiles(state.link_bounds()).into_iter().map(Target::Tile))
 }
 
@@ -105,7 +107,7 @@ fn drops_first_targets(reward: &RewardConfig, state: &GameView, objective: &Obje
     let tiles: Vec<Target> = state
         .items
         .iter()
-        .filter(|it| wanted_drop(state, it.id) && (first || it.id == item::BOMBS))
+        .filter(|it| wanted_drop(state, objective.own_bombs, it.id) && (first || it.id == item::BOMBS))
         .flat_map(|it| it.take_tiles(state.link_bounds()).into_iter().map(Target::Tile))
         .collect();
     if tiles.is_empty() || (!first && wavefront_to(state, objective, &tiles).get(state.link.tile()).is_none()) {
@@ -159,7 +161,7 @@ pub fn attach_objective(
     let first = drops_first(reward, &objective);
     match drops_first_targets(reward, state, &objective) {
         Some(drops) => objective.pbrs_targets = drops.into_iter().collect(),
-        None => objective.pbrs_targets.extend(item_targets(reward, first, objective.bag_drops, state)),
+        None => objective.pbrs_targets.extend(item_targets(reward, first, objective.bag_drops, state, objective.own_bombs)),
     }
     let wavefront = (wavefront && !state.game_over()).then(|| {
         let targets: Vec<Target> = objective.pbrs_targets.iter().copied().collect();
@@ -190,7 +192,8 @@ fn wavefront_targets(objective: &Objective, state: &GameView, reward: &RewardCon
         Some(drops) => drops,
         None => {
             let first = drops_first(reward, objective);
-            objective.pbrs_targets.iter().copied().chain(item_targets(reward, first, objective.bag_drops, state)).collect()
+            let items = item_targets(reward, first, objective.bag_drops, state, objective.own_bombs);
+            objective.pbrs_targets.iter().copied().chain(items).collect()
         }
     };
     targets.sort_unstable();
@@ -215,16 +218,31 @@ pub fn recorded_targets(objective: &Objective, state: &GameView, reward: &Reward
     out
 }
 
+/// The objective's target is the bomb wall the route leaves through (round 40, `wall_grant: objective`;
+/// `zelda::cheats::CheatLedger::follow_objective`): the objective leaves through an intact bomb wall or a closed rock
+/// wall (`zelda::objectives::route_bomb_targets`), and the spot it is bombed from is among the targets the
+/// wavefront of [`target_wavefront`] leads to for `reward` (so not while the objective is a fight, a treasure or
+/// another exit, nor while a dropped item replaces the exit).
+pub fn wall_is_next(objective: &Objective, state: &GameView, reward: &RewardConfig) -> bool {
+    if zelda::objectives::route_bomb_targets(state.game_map(), state, objective).is_empty() {
+        return false;
+    }
+    let wavefront = wavefront_targets(objective, state, reward);
+    objective.labels.iter().any(|(target, role)| {
+        matches!(role, Role::BombWall { .. } | Role::Cave(_)) && wavefront.binary_search(target).is_ok()
+    })
+}
+
 /// Whether a dropped item pulls Link away from `objective` (the aimless score's `pulled`, `zelda::aimless`): one the
 /// shaping of `reward` makes a target, or one he wants ([`wanted_drop`]: a heart or fairy below full health, bombs
 /// below his maximum). Dropped items vanish; walking to one is no aimless walk (the owner, round 38: "walking towards
 /// a heart that disappears shouldn't count").
 pub fn pulled(reward: &RewardConfig, objective: &Objective, state: &GameView) -> bool {
     let first = drops_first(reward, objective);
-    state
-        .items
-        .iter()
-        .any(|it| wanted_drop(state, it.id) || is_item_target(reward, first, objective.bag_drops, state, it.id))
+    state.items.iter().any(|it| {
+        wanted_drop(state, objective.own_bombs, it.id)
+            || is_item_target(reward, first, objective.bag_drops, state, objective.own_bombs, it.id)
+    })
 }
 
 /// Direction bits (E 1, W 2, S 4, N 8) of the sides `objective`'s next rooms lie on from `state`'s room (a maze
@@ -267,7 +285,7 @@ mod tests {
             (ram[OBJ_TYPE + slot], ram[OBJ_STATE + slot], ram[OBJ_X + slot], ram[OBJ_Y + slot]) = (0x60, kind as u8, x, y);
         }
         let targets = |ram: &[u8; RAM_SIZE], reward: &RewardConfig| -> Vec<Target> {
-            item_targets(reward, reward.drops_first, false, &GameView::new(ram, 0, false, map.clone())).collect()
+            item_targets(reward, reward.drops_first, false, &GameView::new(ram, 0, false, map.clone()), 0).collect()
         };
         let all = RewardConfig { item_targets: true, ..Default::default() };
         let near = RewardConfig { nearby_items: true, ..Default::default() };
@@ -306,6 +324,7 @@ mod tests {
             treasure_refused: false,
             drops_first: false,
             bag_drops: false,
+            own_bombs: 0,
             labels: Vec::new(),
         };
         let plain = RewardConfig::default();
@@ -326,5 +345,44 @@ mod tests {
         let rupee = view(&ram);
         assert!(!pulled(&plain, &objective, &rupee));
         assert!(pulled(&RewardConfig { item_targets: true, ..Default::default() }, &objective, &rupee));
+    }
+
+    /// Round 40: a bag that reads 8 with a cheated wall bomb in it (`Objective::own_bombs` 7) is not full: under the
+    /// route's floor a dropped pack of bombs is a target and a wanted drop; with 8 of Link's own it is neither.
+    #[test]
+    fn a_cheated_bomb_never_fills_the_bag() {
+        const BOMBS: usize = 0x658;
+        const BOMB_MAX: usize = 0x67C;
+        let map = Arc::new(GameMap::builtin());
+        let mut ram = [0u8; RAM_SIZE];
+        (ram[LEVEL], ram[ROOM_ID], ram[GAME_MODE]) = (3, 0x5b, 5);
+        (ram[OBJ_X], ram[OBJ_Y]) = (0x40, 0x8D);
+        (ram[OBJ_TYPE + 3], ram[OBJ_STATE + 3], ram[OBJ_X + 3], ram[OBJ_Y + 3]) = (0x60, item::BOMBS as u8, 0x60, 0x8D);
+        (ram[BOMBS], ram[BOMB_MAX]) = (8, 8);
+        let state = GameView::new(&ram, 0, false, map.clone());
+        let objective = |own_bombs: i32| Objective {
+            kind: ObjectiveKind::Move,
+            targets: BTreeSet::new(),
+            next_rooms: BTreeSet::new(),
+            pbrs_targets: [Target::Tile((-1, 10))].into_iter().collect(),
+            retreats: BTreeSet::new(),
+            clips: false,
+            treasure_refused: false,
+            drops_first: false,
+            bag_drops: true,
+            own_bombs,
+            labels: Vec::new(),
+        };
+        let plain = RewardConfig::default();
+        let drop: Vec<Target> =
+            state.items.iter().flat_map(|it| it.take_tiles(state.link_bounds())).map(Target::Tile).collect();
+        assert!(!drop.is_empty());
+        for (own, wanted) in [(7, true), (8, false)] {
+            let objective = objective(own);
+            assert_eq!(wanted_drop(&state, objective.own_bombs, item::BOMBS), wanted, "own {own}");
+            assert_eq!(pulled(&plain, &objective, &state), wanted, "own {own}");
+            let attached = attach_objective(objective, &state, &plain, false);
+            assert_eq!(drop.iter().all(|t| attached.objective.pbrs_targets.contains(t)), wanted, "own {own}: the drop's tiles");
+        }
     }
 }

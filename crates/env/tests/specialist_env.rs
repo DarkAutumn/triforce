@@ -360,7 +360,8 @@ fn place_shield_projectile(s: &mut S, slots: &[u16]) {
     s.apply_ram(&[]);
 }
 
-fn no_objective() -> Objective {
+/// No objective; no cheat ledger, so the bag of `state` is Link's own.
+fn no_objective(state: &GameView) -> Objective {
     Objective {
         kind: ObjectiveKind::None,
         targets: BTreeSet::new(),
@@ -371,13 +372,14 @@ fn no_objective() -> Objective {
         treasure_refused: false,
         drops_first: false,
         bag_drops: false,
+        own_bombs: state.bombs(),
         labels: Vec::new(),
     }
 }
 
 /// `critique_gameplay` of one change outside an env (no objective, PBRS off unless the critic has it).
 fn critique(critic: &mut GameplayCritic, change: &Change, rewards: &mut StepRewards) {
-    let none = no_objective();
+    let none = no_objective(&change.previous);
     critic.critique(
         &Critique {
             change,
@@ -952,7 +954,9 @@ fn bombs_are_a_weapon_only_where_the_route_must_clear_the_room() {
 /// of is a fight when Link comes in with 7 or fewer and a crossing with 8: 7:0x1b (round 34's floor of 2 gone),
 /// 8:0x3f (the shared step's `{if_bombs_below: 5}` gives way: 5 is a fight), 3:0x5b's last pass (whatever Link held,
 /// before).  `d2first`'s 8:0x3f keeps its 5.  A room's override (`treasure_below_rooms`, 7:0x1b `below: 2`, the
-/// crossing the owner allows if the fight kills too many runs) wins over the floor.
+/// crossing the owner allows if the fight kills too many runs) wins over the floor. Round 40 (the owner's ordering,
+/// `wall_first_rooms`): 3:0x5b's last pass at 5 to 8 is the wall first, no fight yet (was: a fight at 7, recorded so
+/// before the ruling: 7 + 4 overflows the bag); at 4 it is a fight, as before.
 #[test]
 fn the_route_fights_for_a_rooms_bombs_below_its_floor() {
     let Some(mut nes) = open_core() else { return };
@@ -972,7 +976,8 @@ fn the_route_fights_for_a_rooms_bombs_below_its_floor() {
         (data(), "darknut", "d3first_8_3fw_0", "MOVE E 16", 8, false),
         (data(), "darknut", "8_3fw_0", "MOVE E 16", 5, false),
         (data(), "darknut", "8_3fw_0", "MOVE E 16", 4, true),
-        (data(), "darknut", "d3first_3_5bw_0", "MOVE E 16", 7, true),
+        (data(), "darknut", "d3first_3_5bw_0", "MOVE E 16", 4, true),
+        (data(), "darknut", "d3first_3_5bw_0", "MOVE E 16", 7, false),
         (data(), "darknut", "d3first_3_5bw_0", "MOVE E 16", 8, false),
         (&crossing, "goriya", "d3first_7_1bw_0", "MOVE E 16", 7, false),
         (&crossing, "goriya", "d3first_7_1bw_0", "MOVE E 16", 1, true),
@@ -1117,16 +1122,28 @@ fn toward_target(env: &mut Env, obs: &Observation) -> Observation {
 /// dead) and 8 in the bag, the bomb spot before the E wall (the bombs are not wanted at 8: `treasure_below: 8`, read
 /// against the bag); BOMB E from there leaves 7 and the room's bombs are the target; taken (8), the way E (the spot
 /// while the smoke clears, then the opening). Entered with 4 (the fight's room): the bombs, the wall, and after the
-/// bomb (7, the treasure gone) the way E, never back. Entered with 8 and the Darknuts alive (a crossing): the wall,
-/// then the way E. `d2first` (no bomb rules) takes the bombs at 8 first, as it always did.
+/// bomb (7, the treasure gone) the way E, never back. `d2first` (no bomb rules) takes the bombs at 8 first, as it
+/// always did.
+///
+/// Round 40 (`bomb_rules: {wall_first_rooms: [3:0x5b]}`, the owner's ordering, decisions 2026-11-24 "Dungeon 3's
+/// bombs": the wall before the room's bombs whenever they would overflow the bag), the Darknuts alive (the fight is
+/// the RAM's: SETUP, the Darknuts removed while the objective is FIGHT, the room's bombs then shown by the game where
+/// it puts them). Entered with 8 the last pass was a crossing ("wall out", leaving with 7: 2.0.0.6's floor judged on
+/// entering); now the wall, then the fight for the bombs judged again at 7, the bombs, out with 8. Entered with 5:
+/// the same order (5 + 4 overflows), 4 after the wall, out with 8. Entered with 4: the fight, the bombs, the wall, out
+/// with 7. Entered with 0: no bomb in the bag through the fight (the wall's cheated bomb only while the wall is the
+/// objective, `wall_grant: objective`), then the room's four open the wall, out with 3 and nothing cheated.
 #[test]
 fn the_owners_order_in_3_5b_wall_then_bombs_then_out() {
     let Some(mut nes) = open_core() else { return };
-    for (start, entering, alive, order) in [
-        ("d3first_3_5bw_0", 8, false, "wall bombs out"),
-        ("d3first_3_5bw_0", 4, false, "bombs wall out"),
-        ("d3first_3_5bw_0", 8, true, "wall out"),
-        ("3_5bw_0", 8, false, "bombs wall out"),
+    for (start, entering, alive, order, out) in [
+        ("d3first_3_5bw_0", 8, false, "wall bombs out", 8),
+        ("d3first_3_5bw_0", 4, false, "bombs wall out", 7),
+        ("d3first_3_5bw_0", 8, true, "wall fight bombs out", 8),
+        ("d3first_3_5bw_0", 5, true, "wall fight bombs out", 8),
+        ("d3first_3_5bw_0", 4, true, "fight bombs wall out", 7),
+        ("d3first_3_5bw_0", 0, true, "fight bombs wall out", 3),
+        ("3_5bw_0", 8, false, "bombs wall out", 7),
     ] {
         let mut env = if alive {
             let mut env = make_env(nes, "darknut", Some(start), |c| {
@@ -1149,7 +1166,7 @@ fn the_owners_order_in_3_5b_wall_then_bombs_then_out() {
         let spot: BTreeSet<Target> = [Target::Tile(zelda::objectives::bomb_spot(state(&env).room(), Direction::E))].into();
         let mut obs = act(&mut env, "MOVE E 4").obs;
         let (mut seen, mut trace, mut bombed) = (Vec::new(), Vec::new(), false);
-        for _ in 0..300 {
+        for _ in 0..400 {
             let s = state(&env).clone();
             if s.full_location() != MapLocation::new(3, 0x5b, false) {
                 break;
@@ -1157,7 +1174,11 @@ fn the_owners_order_in_3_5b_wall_then_bombs_then_out() {
             let o = objective(&env).clone();
             let p = s.link.position;
             trace.push(format!("({},{}) bombs {} {:?} {:?} treasure {:?} enemies {}", p.x, p.y, s.bombs(), o.kind, target_step(&obs), s.treasure().map(|t| (t.position.x, t.position.y)), s.enemies.len()));
-            let phase = if o.kind == ObjectiveKind::Treasure {
+            let phase = if o.kind == ObjectiveKind::Fight {
+                assert!(alive, "{what}: a fight in a cleared room: {trace:?}");
+                assert_eq!(i64::from(s.bombs()), entering - i64::from(bombed), "{what}: no wall bomb in the fight: {trace:?}");
+                "fight"
+            } else if o.kind == ObjectiveKind::Treasure {
                 let tiles: BTreeSet<Target> =
                     s.treasure().expect("shown").take_tiles(s.link_bounds()).into_iter().map(Target::Tile).collect();
                 assert!(o.pbrs_targets.is_subset(&tiles), "{what}: the bombs alone: {:?}", o.pbrs_targets);
@@ -1175,9 +1196,20 @@ fn the_owners_order_in_3_5b_wall_then_bombs_then_out() {
             if seen.last() != Some(&phase) {
                 seen.push(phase);
             }
-            obs = if phase == "wall" && target_step(&obs).1 == Some(0) {
+            obs = if phase == "fight" {
+                // SETUP: the fight, by RAM (the Darknuts removed); the game shows the room's bombs once they are gone.
+                let session = env.session_mut();
+                for slot in 1..=11u16 {
+                    if s.ram()[usize::from(0x34F + slot)] == enemy::RED_DARKNUT {
+                        session.nes_mut().poke(0x34F + slot, 0);
+                    }
+                }
+                session.apply_ram(&[]);
+                act(&mut env, "WAIT 8").obs
+            } else if phase == "wall" && target_step(&obs).1 == Some(0) {
+                let before = state(&env).bombs();
                 let obs = act(&mut env, "BOMB E").obs;
-                assert_eq!(state(&env).bombs(), 7, "{what}: the wall's bomb: {trace:?}");
+                assert_eq!(state(&env).bombs(), before - 1, "{what}: the wall's bomb: {trace:?}");
                 bombed = true;
                 obs
             } else {
@@ -1186,6 +1218,8 @@ fn the_owners_order_in_3_5b_wall_then_bombs_then_out() {
         }
         assert_eq!(state(&env).full_location(), MapLocation::new(3, 0x5c, false), "{what}: out E: {trace:?}");
         assert_eq!(seen.join(" "), order, "{what}: {trace:?}");
+        assert_eq!(state(&env).bombs(), out, "{what}: out with: {trace:?}");
+        assert_eq!(env.cheats.cheated.bombs, 0, "{what}: nothing cheated");
         nes = release(env);
     }
 }

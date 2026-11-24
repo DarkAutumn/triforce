@@ -22,7 +22,11 @@ def test_d2first_is_its_golden_list():
     steps = native.route_steps('d2first')
     assert len(steps) == len(golden)
     for step, want in zip(steps, golden):
-        assert step == want, step['index']
+        # Round 40 adds two keys the golden list predates: a step's `carriers:` and what it expects of a visit
+        # (crates/zelda/src/goals.rs). Every field the list has is unchanged; the new ones change no play on d2first
+        # (no `carrier_targets` in its bomb rules: no step of it expects carriers).
+        assert {k: step[k] for k in want} == want, step['index']
+        assert set(step) - set(want) == {'carriers', 'goals'} and 'carriers' not in step['goals'], step['index']
 
 
 def test_the_route_and_families():

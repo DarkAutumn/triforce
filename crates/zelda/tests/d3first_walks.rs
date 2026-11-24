@@ -14,7 +14,8 @@
 //! SETUP (RAM writes): Link's hearts are filled before every action (the walk proves the way, not the fights); in a
 //! room whose objective is a fight the monsters are removed every action (object slots 1-11 but the kept types), so
 //! the fights are skipped and nothing dies: every other room keeps its monsters alive and the walk kills nothing (it
-//! never swings the sword). Walker aid (controller input): a cave mouth is lined up a frame at a time.
+//! never swings the sword), and a crossing's bomb carriers are left alive: the walk aims at the exit alone. Walker
+//! aid (controller input): a cave mouth is lined up a frame at a time.
 #![cfg(feature = "zcore")]
 
 mod common;
@@ -24,11 +25,11 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use zelda::cheats::CheatLedger;
+use zelda::cheats::{CheatItem, CheatLedger};
 use zelda::clips::skip_available;
 use zelda::executor::direction_buttons;
 use zelda::objectives::{
-    GameCompletion, Objective, ObjectiveKind, exit_is_correct, route_bomb_targets, wraps_into_wrong_exits,
+    GameCompletion, Objective, ObjectiveKind, Role, exit_is_correct, route_bomb_targets, wraps_into_wrong_exits,
 };
 use zelda::room::Target;
 use zelda::{Action, ActionKind, Direction, GameMap, GameView, LoadOptions, MapLocation, Session, Var};
@@ -214,11 +215,26 @@ impl Walk {
         self.s.set_bomb_targets(targets.as_deref());
     }
 
+    /// The objective of `state` as the env makes it (round 40, Carrier40b, after `r40-gen` met `r40-carrier`): the
+    /// route's bag tests told the cheated bombs in the bag, and the wall's cheated bomb following the objective
+    /// (`wall_grant: objective`, `CheatLedger::follow_objective`; the env's `wall_is_next` without its drops, which
+    /// the walk never takes). Without it the walk's ledger never handed a wall its bomb.
+    fn objective(&mut self, prev: Option<&GameView>, state: &GameView) -> Objective {
+        self.gc.set_cheated_bombs(self.ledger.outstanding(CheatItem::Bombs));
+        let objective = self.gc.objectives(prev, state);
+        let map = self.s.game_map().clone();
+        let wall_next = !route_bomb_targets(&map, state, &objective).is_empty()
+            && objective.labels.iter().any(|(_, role)| matches!(role, Role::BombWall { .. } | Role::Cave(_)));
+        self.ledger.follow_objective(&mut self.s, &self.gc, wall_next);
+        objective
+    }
+
     /// Plays the route's objective until `done`, judging every room change; the visits in order.
     fn run(&mut self, done: impl Fn(&S) -> bool, limit: usize) -> Vec<Visit> {
         let map = self.s.game_map().clone();
         let mut prev: Option<Arc<GameView>> = None;
-        let mut objective = self.gc.objectives(None, self.s.state());
+        let start = self.s.state().clone();
+        let mut objective = self.objective(None, &start);
         let mut visits = vec![self.visit()];
         let mut last = None;
         let mut still = 0u32;
@@ -227,7 +243,7 @@ impl Walk {
             let state = self.s.state().clone();
             let before = objective.clone();
             let entered = prev.as_ref().is_some_and(|p| p.full_location() != state.full_location());
-            objective = self.gc.objectives(prev.as_deref(), &state);
+            objective = self.objective(prev.as_deref(), &state);
             if entered {
                 let p = prev.as_ref().unwrap();
                 // The triforce's warp out of the dungeon is the step's own end, not an exit.
@@ -312,7 +328,15 @@ fn next_action(s: &S, objective: &Objective, nudge: u32) -> Action {
     if !matches!(state.mode(), 5 | 9 | 11) || state.link.status != 0 {
         return wait;
     }
-    let targets: Vec<Target> = objective.targets.iter().copied().collect();
+    // The walk kills nothing: a crossing's bomb carriers (the route's `carrier_targets`, `Objective::carriers`) stay
+    // alive and the exit is its way.
+    let carriers: Vec<Target> = objective
+        .labels
+        .iter()
+        .filter(|(_, role)| objective.kind == ObjectiveKind::Move && matches!(role, Role::Monster { .. }))
+        .map(|a| a.0)
+        .collect();
+    let targets: Vec<Target> = objective.targets.iter().copied().filter(|t| !carriers.contains(t)).collect();
     let room = state.room();
     // A locked door is a way through while Link holds a key in a dungeon, as the objective's own search counts it.
     let locked: Vec<Direction> = if state.keys() > 0 && state.level() > 0 && !state.full_location().in_cave {
@@ -523,15 +547,17 @@ fn the_peahat_row_leads_through_0x1f() {
 
 /// 3:0x5b's last pass (W -> E), entered with a full bag and with the reserve's 4 (States40, round40.md "The start
 /// states, 0x5b's last pass and the first Darknut's drop"): the walk from `d3first_3_5bw_0` with the bag set, the
-/// fights skipped as everywhere in the walk, to Manhandla's room. Today's objective (`step_treasure`: the room's bombs
-/// judged on entering, 8 or more a crossing) gives 7 out of 0x5b and 6 at Manhandla's door either way: with 8 a
-/// crossing (the wall's bomb, the four never shown), with 4 the fight, the four taken (8), then the wall. The owner's
-/// plan wants 8 out and 7 at Manhandla; the fix is the objective's (Carrier40's), and this test moves with it.
+/// fights skipped as everywhere in the walk, to Manhandla's room. States40 recorded 7 out of 0x5b and 6 at
+/// Manhandla's door either way (the room's bombs judged on entering, 8 a crossing). Carrier40b, the owner's ordering
+/// (`bomb_rules: {wall_first_rooms}`, decisions 2026-11-24 "Dungeon 3's bombs"): with 8 the wall first (8 + 4
+/// overflows the bag), then the fight for the four at 7, the four (8): 8 out, 7 at Manhandla's door. With 4 the
+/// order as before, the fight, the four (8), the wall: 7 out, 6 at Manhandla, which the owner calls fine ("Leave that
+/// room with 7 isn't a hard rule. 6 is fine.").
 #[test]
 fn the_last_pass_of_0x5b_with_8_and_with_4_bombs() {
-    for (bombs, kinds_want) in [
-        (8u8, vec![ObjectiveKind::Move]),
-        (4, vec![ObjectiveKind::Fight, ObjectiveKind::Treasure, ObjectiveKind::Move]),
+    for (bombs, kinds_want, out, at_door) in [
+        (8u8, vec![ObjectiveKind::Move, ObjectiveKind::Fight, ObjectiveKind::Treasure, ObjectiveKind::Move], 8, 7),
+        (4, vec![ObjectiveKind::Fight, ObjectiveKind::Treasure, ObjectiveKind::Move], 7, 6),
     ] {
         let Some(mut w) = Walk::start_with("d3first_3_5bw_0", uw(3, 0x5b), "W", true, &[(Var::Bombs, bombs)]) else {
             return;
@@ -546,7 +572,7 @@ fn the_last_pass_of_0x5b_with_8_and_with_4_bombs() {
         });
         let laid = v5b.actions.iter().filter(|a| a.0.kind == ActionKind::Bomb).count();
         assert_eq!(kinds, kinds_want, "in with {bombs}");
-        assert_eq!((v5b.bombs_in, laid, v5b.bombs_out), (i32::from(bombs), 1, 7), "0x5b in with {bombs}");
-        assert_eq!(w.s.state().bombs(), 6, "at Manhandla's door, 0x5b in with {bombs}: {visits:#?}");
+        assert_eq!((v5b.bombs_in, laid, v5b.bombs_out), (i32::from(bombs), 1, out), "0x5b in with {bombs}");
+        assert_eq!(w.s.state().bombs(), at_door, "at Manhandla's door, 0x5b in with {bombs}: {visits:#?}");
     }
 }

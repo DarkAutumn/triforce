@@ -67,7 +67,8 @@ fn approx(a: f32, b: f64) -> bool {
     (a as f64 - b).abs() <= (1e-6 * b.abs()).max(1e-12)
 }
 
-fn no_objective() -> Objective {
+/// No objective; no cheat ledger, so the bag of `state` is Link's own.
+fn no_objective(state: &GameView) -> Objective {
     Objective {
         kind: ObjectiveKind::None,
         targets: BTreeSet::new(),
@@ -78,6 +79,7 @@ fn no_objective() -> Objective {
         treasure_refused: false,
         drops_first: false,
         bag_drops: false,
+        own_bombs: state.bombs(),
         labels: Vec::new(),
     }
 }
@@ -102,13 +104,13 @@ fn load(s: &mut S, name: &str) -> Arc<GameView> {
 fn reset(s: &mut S, name: &str) -> (ObservationBuilder, Observation) {
     let mut builder = ObservationBuilder::new(false, false);
     let state = load(s, name);
-    let obs = builder.reset(&state, &no_objective(), None, s.mask());
+    let obs = builder.reset(&state, &no_objective(&state), None, s.mask());
     (builder, obs)
 }
 
 fn step(s: &mut S, builder: &mut ObservationBuilder, text: &str) -> (Change, Observation) {
     let change = s.act(Action::parse(text).unwrap()).unwrap();
-    let obs = builder.build(&change, &change.state, &no_objective(), None, s.mask());
+    let obs = builder.build(&change, &change.state, &no_objective(&change.state), None, s.mask());
     (change, obs)
 }
 
@@ -193,7 +195,7 @@ fn every_savestate_builds_a_valid_observation() {
     let mut builder = ObservationBuilder::new(false, false);
     for name in &names {
         let state = load(&mut s, name);
-        let obs = builder.reset(&state, &no_objective(), None, s.mask());
+        let obs = builder.reset(&state, &no_objective(&state), None, s.mask());
         let bad = obs_violations(&obs);
         assert!(bad.is_empty(), "{name}: {bad:?}");
         for (t, f) in obs.entity_types.iter().zip(&obs.entity_features) {
@@ -292,7 +294,7 @@ fn push_block_in_grid_and_room_state() {
     }
     let state = s.apply_ram(&[(Var::LinkX, 96), (Var::LinkY, 125)]).clone();
     let mut builder = ObservationBuilder::new(false, false);
-    let obs = builder.reset(&state, &no_objective(), None, s.mask());
+    let obs = builder.reset(&state, &no_objective(&state), None, s.mask());
     let mut cells = BTreeSet::new();
     for (row, cols) in obs.grid.iter().enumerate() {
         for (col, &c) in cols.iter().enumerate() {
@@ -468,7 +470,7 @@ fn objective_block() {
     let objective = Objective {
         kind: ObjectiveKind::Move,
         next_rooms: [MapLocation::new(1, 0x45, false)].into_iter().collect(),
-        ..no_objective()
+        ..no_objective(&state)
     };
 
     let off = ObservationBuilder::new(false, false).reset(&state, &objective, None, s.mask());
@@ -497,7 +499,7 @@ fn target_block() {
         ((tx + 2, ty), 0),
         ((tx, ty - 1), 3),
     ]);
-    let objective = no_objective();
+    let objective = no_objective(&state);
     let off =
         ObservationBuilder::new(false, false).reset(&state, &objective, Some(&wavefront), s.mask());
     assert!(off.target.iter().all(|&x| x == 0.0));
@@ -538,7 +540,7 @@ fn stunned_dodongo_does_not_hurt_on_touch() {
         s.nes_mut().poke(0xAC + 1 + slot as u16, obj_state);
         s.nes_mut().poke(0x3D + 1 + slot as u16, stun);
         let state = s.apply_ram(&[]).clone();
-        builder.build(&change, &state, &no_objective(), None, s.mask()).entity_features[slot]
+        builder.build(&change, &state, &no_objective(&state), None, s.mask()).entity_features[slot]
     };
     let stunned = with_state(2, 0x80);
     assert_eq!(stunned[e("hurts_on_touch")], 0.0);
@@ -563,7 +565,7 @@ fn flashing_or_stunned_monsters_do_not_hurt_on_touch() {
         s.nes_mut().poke(0x4BF + object, attr);
         s.nes_mut().poke(0x3D + object, stun);
         let state = s.apply_ram(&[]).clone();
-        builder.build(&change, &state, &no_objective(), None, s.mask()).entity_features[slot][e("hurts_on_touch")]
+        builder.build(&change, &state, &no_objective(&state), None, s.mask()).entity_features[slot][e("hurts_on_touch")]
     };
     assert_eq!(with(8, 0, 0), 0.0, "hit-flashing");
     assert_eq!(with(0, 0, 8), 0.0, "stunned");
@@ -576,8 +578,8 @@ fn flashing_or_stunned_monsters_do_not_hurt_on_touch() {
 #[test]
 fn selected_item_is_not_observed() {
     let Some(mut s) = session() else { return };
-    load(&mut s, "1_44w_0");
-    let objective = no_objective();
+    let loaded = load(&mut s, "1_44w_0");
+    let objective = no_objective(&loaded);
     let mut obs = Vec::new();
     for item in [0u8, 1, 2] {
         let state = s.apply_ram(&[(Var::SelectedItem, item)]).clone();

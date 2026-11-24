@@ -248,6 +248,7 @@ fn critique(critic: &mut GameplayCritic, change: &Change, map: &GameMap) -> Step
         treasure_refused: false,
         drops_first: false,
         bag_drops: false,
+        own_bombs: 0,
         labels: Vec::new(),
     };
     let c = Critique {
@@ -579,6 +580,7 @@ fn measured_ending_credits_threshold_action_before_check() {
         treasure_refused: false,
         drops_first: false,
         bag_drops: false,
+        own_bombs: 0,
         labels: Vec::new(),
     };
     // Python's pbrs_wavefront {t: t}: a tile's distance is its column.

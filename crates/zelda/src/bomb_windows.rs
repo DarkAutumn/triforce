@@ -49,6 +49,11 @@ pub const BOMB_CARRIER_TYPES: [u8; 9] = [
     enemy::GIBDO,
 ];
 
+/// game.yaml's `enemies:` names of [`BOMB_CARRIER_TYPES`], in the same order (a room whose data names one holds
+/// carriers: `crate::goals::step_goals`).
+pub const BOMB_CARRIER_NAMES: [&str; 9] =
+    ["BlueSlowOctorok", "BlueOctorok", "BlueMoblin", "BlueLynel", "Vire", "RedGoriya", "RedDarknut", "RedWizzrobe", "Gibdo"];
+
 /// WorldKillCycle values whose next death reads a bomb column of group 2 (the cycle moves on first: 0 → column 1,
 /// 5 → 6, 7 → 8; asm:Drop_ItemTable).
 pub const BOMB_CYCLES: [u8; 3] = [0, 5, 7];
@@ -159,13 +164,13 @@ fn is_other_kill(e: &Enemy) -> bool {
 }
 
 /// What [`bomb_carrier_window`] tests without the rules: the cycle, no death pending (so a kill streak of 16 with a
-/// death under way, a forced fairy, is out too), no forced drop, room in the bag, a carrier type.
-fn carrier_window_possible(state: &GameView) -> bool {
+/// death under way, a forced fairy, is out too), no forced drop, room in the bag for Link's own bombs, a carrier type.
+fn carrier_window_possible(state: &GameView, own_bombs: i32) -> bool {
     BOMB_CYCLES.contains(&state.world_kill_cycle())
         && !death_pending(state)
         && state.help_drop_count() < 9
         && state.kill_streak() != 15
-        && state.bombs() < state.bomb_max()
+        && own_bombs < state.bomb_max()
         && state.enemies.iter().any(|e| carrier_type(e.id, e.index))
 }
 
@@ -175,21 +180,32 @@ fn carrier_window_possible(state: &GameView) -> bool {
 /// - no forced drop overrides the table: `$50` < 9 (at 9 with bombs Metric A applies, without them the 10th kill
 ///   forces 5 rupees; at 10 the forced drop is armed), and WorldKillCount is not 15 (the next kill makes it 16:
 ///   a fairy);
-/// - the bag is not full;
+/// - Link's own bombs (`own_bombs`, [`own_bombs`]) don't fill the bag: a cheated wall bomb in it never closes the
+///   window (round 40);
 /// - the room holds an eligible carrier ([`is_bomb_carrier`]; `own_bombs` and `bomb_rule`, BOMB allowed now by the
 ///   acting family's rule, for a Vire);
 /// - a choice exists: `kill_all` (the objective Link was given is FIGHT: every monster must die) is off, or a monster
 ///   of the other side lives too.
 pub fn bomb_carrier_window(state: &GameView, own_bombs: i32, bomb_rule: bool, kill_all: bool) -> bool {
-    carrier_window_possible(state)
+    carrier_window_possible(state, own_bombs)
         && state.enemies.iter().any(|e| is_bomb_carrier(state, e, own_bombs, bomb_rule))
         && (!kill_all || state.enemies.iter().any(is_other_kill))
+}
+
+/// The monsters whose death may drop bombs now: every eligible carrier ([`is_bomb_carrier`]) while
+/// [`bomb_carrier_window`] is open, none otherwise. One definition for the observation's `bomb_carrier` column
+/// (`env::observation`) and the route's carrier targets (`crate::objectives::GameCompletion::carrier_targets`).
+pub fn bomb_carriers(state: &GameView, own_bombs: i32, bomb_rule: bool, kill_all: bool) -> Vec<&Enemy> {
+    if !bomb_carrier_window(state, own_bombs, bomb_rule, kill_all) {
+        return Vec::new();
+    }
+    state.enemies.iter().filter(|e| is_bomb_carrier(state, e, own_bombs, bomb_rule)).collect()
 }
 
 /// [`bomb_carrier_window`] asking `rules` only when an answer can change it (a Vire without the magic sword, or no
 /// monster of the other side).
 fn carrier_window_with(state: &Arc<GameView>, own_bombs: i32, rules: &mut dyn WindowRules) -> bool {
-    if !carrier_window_possible(state) {
+    if !carrier_window_possible(state, own_bombs) {
         return false;
     }
     let vire = state.sword() != SwordKind::Magic && state.enemies.iter().any(|e| e.id == enemy::VIRE);
