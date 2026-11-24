@@ -277,7 +277,7 @@ def proof(root: Path, out: Path = None):
     from triforce import jobs, registry, train  # pylint: disable=import-outside-toplevel
     from triforce._native import EnvPool, TrainTask  # pylint: disable=import-outside-toplevel
     from triforce.inputs import MissingInput, check_task  # pylint: disable=import-outside-toplevel
-    from triforce.specialist import load_specialist  # pylint: disable=import-outside-toplevel
+    from triforce.specialist import load_specialist, task_files  # pylint: disable=import-outside-toplevel
     import tempfile  # pylint: disable=import-outside-toplevel
     jobs.require_job()
     raised = []
@@ -323,8 +323,8 @@ def proof(root: Path, out: Path = None):
             print(json.dumps({k: v for k, v in row.items() if k != 'manifest_curriculum'}), flush=True)
             jobs.progress(len(rows), None, 'tasks')
     names = {str(Path(t if t.endswith('.yaml') else f'specialists/{t}.yaml').resolve()) for t in seen}
-    for path in sorted((Path(__file__).resolve().parents[2] / 'specialists').rglob('*.yaml')):
-        if str(path) in names or path.name.startswith('_'):      # `_generation.yaml`: a common block, no task
+    for path in task_files(Path(__file__).resolve().parents[2] / 'specialists'):
+        if str(path) in names:
             continue
         config = load_specialist(str(path))
         folder = (str(config.curriculum.trajectories or root / config.name) if config.curriculum.enabled else None)

@@ -2246,7 +2246,8 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `items.candle` in R's task is chained under F's own masks until the lead moves those keys too). `d2first` has no
   tasks of its own: its chains play every bare task. **The guard** (`runner.check_inputs`): a network that reads a
   block filled only behind a switch (a `hitnet` token group `threat`: `entity_threat` needs `obs.threat`; `chase`:
-  `chase` and `entity_chase` need `obs.chase`; `runner.SWITCHED_BLOCKS`) is refused where its chain config has the
+  `chase` and `entity_chase` need `obs.chase`; `lab.recipe.SWITCH_KEYS` and `network_reads`, the lab's own
+  reading) is refused where its chain config has the
   switch off, naming the policy, the family, the blocks, the switch and the task file, instead of reading zeros.
 - Handoff harvesting (better-play §1b): `eval-chain --harvest [DIR]` (`Runner(harvest=)`, `ChainPool(harvest=)`,
   `ChainTask(harvest=)`, `ChainEnv::set_harvest`) turns on the session's pre-entry capture and, at every **handoff**

@@ -19,7 +19,7 @@ from triforce.entry_states import (BASE_HEARTS, CHAINS, DEFAULT_ROUTE, MANIFEST,
                                    parse_state_name, path_entry, path_route_fields, pending_room, route_hearts,
                                    route_steps, state_label, write_entry_state, write_start_state)
 from triforce.paths import SPECIALISTS_DIR
-from triforce.specialist import SpecialistConfig, list_specialists, load_specialist
+from triforce.specialist import SpecialistConfig, list_specialists, load_specialist, task_files
 from triforce.zelda_enums import MapLocation
 
 from .conftest import REPO_STATES_DIR, require_rom
@@ -86,8 +86,7 @@ def test_every_shipped_state_but_start_has_a_manifest_entry():
 
 def test_every_start_state_pattern_matches_a_shipped_state():
     """F033: a glob that matches nothing silently trains on fewer states than the yaml says."""
-    dead = [(os.path.basename(path), pattern) for path in sorted(glob.glob(str(SPECIALISTS_DIR / '**' / '*.yaml'),
-                                                                          recursive=True))
+    dead = [(os.path.basename(path), pattern) for path in map(str, task_files(SPECIALISTS_DIR))
             for pattern in SpecialistConfig.load(path).start_states
             if not SpecialistConfig.load(path).replace(start_states=[pattern])
             .resolve_start_states(str(REPO_STATES_DIR))]

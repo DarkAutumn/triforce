@@ -18,7 +18,7 @@ from triforce import build, job, paths, registry, train
 from triforce.inputs import (MissingInput, check_curriculum, check_harvested, check_start_states, check_task,
                              declaration, track_starts, untracked)
 from triforce.runner import Policies, Route, RunnerError, check_configs, check_team, switched_reads
-from triforce.specialist import SpecialistConfig, load_specialist
+from triforce.specialist import SpecialistConfig, load_specialist, task_files
 
 from .conftest import REPO_STATES_DIR, require_rom
 from .networks import scripted
@@ -91,7 +91,7 @@ def test_a_declaration_never_covers_a_tracked_state():
 def test_the_shipped_tasks_declare_every_input_they_draw():
     """Every task of specialists/ passes its checks on this checkout's data (the declarations of round 40)."""
     require_rom()
-    for path in sorted(p for p in (ROOT / 'specialists').rglob('*.yaml') if not p.name.startswith('_')):
+    for path in task_files():
         config = load_specialist(str(path))
         trajectories = (str(config.curriculum.trajectories or paths.data_dir('trajectories') / config.name)
                         if config.curriculum.enabled else None)
@@ -174,7 +174,7 @@ def test_every_generation_task_trains_from_scratch_with_the_generations_inputs()
     penalty at 0.002 (`_generation.yaml`, one place), no chase penalty (an arm, not a default), no warm start, and
     the route's states only; darknut's bombs catch two or more; the Bubble rooms' items as Switch40 measured."""
     require_rom()
-    tasks = sorted(p.stem for p in (ROOT / 'specialists' / 'd3first').glob('*.yaml') if not p.name.startswith('_'))
+    tasks = sorted(p.stem for p in task_files(ROOT / 'specialists' / 'd3first'))
     assert tasks == sorted(GENERATION) == sorted(SpecialistConfig.names())
     for family in GENERATION:
         config = load_specialist(str(ROOT / 'specialists' / 'd3first' / f'{family}.yaml'))

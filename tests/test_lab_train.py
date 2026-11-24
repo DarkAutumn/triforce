@@ -11,7 +11,7 @@ import torch
 from triforce import jobs, nets, registry
 from triforce.lab import record, train
 from triforce.lab.collect import Teachers, task_yaml
-from triforce.specialist import load_specialist
+from triforce.specialist import load_specialist, task_files
 from triforce.runner import Policies
 
 from .conftest import ROOT, start_task
@@ -37,7 +37,7 @@ def test_a_route_run_trains_on_its_own_yaml_where_there_is_one():
     # Round 40 (the generation's tasks, Tasks41): every family has its d3first task now (21 -> 34; wizzrobe's was
     # the example of a key without one, d2first's keys are that now); `_generation.yaml` is their common block, no
     # family's task.
-    yamls = sorted(p for p in (ROOT / 'specialists' / 'd3first').glob('*.yaml') if not p.name.startswith('_'))
+    yamls = task_files(ROOT / 'specialists' / 'd3first')
     assert len(yamls) == 34
     for path in yamls:
         assert task_yaml(f'{path.stem}@d3first') == str(path)

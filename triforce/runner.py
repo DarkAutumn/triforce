@@ -463,11 +463,6 @@ def check_overrides(overrides: Dict[str, str], configs: Optional[Dict[str, Speci
     return known
 
 
-# Round 40 (the fresh generation): observation blocks a task fills only with its `obs` switch on (zeros otherwise),
-# block -> switch. A network that reads one is refused in a chain whose config for its family has the switch off.
-SWITCHED_BLOCKS = {'entity_threat': 'threat', 'entity_chase': 'chase', 'chase': 'chase'}
-
-
 def chain_config(family: str, route: Optional[str]) -> SpecialistConfig:
     """The config a chain of ``route`` plays ``family`` with (``SpecialistConfig.for_chain``, round 40): the family's
     own task (``specialists/<family>.yaml``: every rule of play) with the observation switches (``obs``) of the
@@ -476,12 +471,12 @@ def chain_config(family: str, route: Optional[str]) -> SpecialistConfig:
 
 
 def switched_reads(network) -> Dict[str, str]:
-    """The ``SWITCHED_BLOCKS`` ``network`` reads (block -> switch): a ``hitnet``'s token groups, also as a
-    ``hitshift``'s hit body; ``ZeldaPolicy`` and the other bodies read none of them."""
-    from .nets.hitnet import HitNet  # pylint: disable=import-outside-toplevel
-    modules = network.modules() if isinstance(network, torch.nn.Module) else ()
-    read = {key for module in modules if isinstance(module, HitNet) for key in module.token_keys + module.link_keys}
-    return {block: switch for block, switch in SWITCHED_BLOCKS.items() if block in read}
+    """The blocks a task fills only with its ``obs`` switch on (zeros otherwise) that ``network`` reads, block ->
+    switch (round 40: ``lab.recipe.SWITCH_KEYS`` and ``network_reads``, the lab's own reading: a ``hitnet``'s token
+    groups, also as a ``hitshift``'s hit body; ``ZeldaPolicy`` reads none of them)."""
+    from .lab.recipe import SWITCH_KEYS, network_reads  # pylint: disable=import-outside-toplevel
+    reads = network_reads(network)
+    return {key: switch for switch, keys in SWITCH_KEYS.items() for key in keys if key in reads}
 
 
 def check_inputs(key: str, reads: Dict[str, str], config: SpecialistConfig, route: Optional[str],
