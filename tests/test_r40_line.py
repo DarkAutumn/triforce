@@ -50,3 +50,18 @@ def test_the_builder_finds_a_way_unhit_and_records_it(line, which, seed):
     record = line.teach(env, which, seed, f'{line.STATES[which]}_{seed % 3}', recorder)
     assert (record['teacher'], record['ending'], record['hits']) == ('search', 'exit-correct', 0), record
     assert len(recorder.rows) == record['actions'] + (line.REPEAT['SWORD'] - 1) * record['swings']
+
+
+def test_the_terminal_info_counts_the_episodes_hits(line):
+    """`info['hits']` at the episode's end (what training logs by room): the steps whose hearts fell.  Seed 0: Link
+    steps onto the floor and stands in the Darknuts' way until they kill him."""
+    env = line.make_env(4, REPO_STATES_DIR)
+    env.reset(seed=0, options={'start_state': 'd3first_3_69n_0'})
+    health, hits = env.state.health, 0
+    for text in ['MOVE S 4'] * 3 + ['MOVE E 4'] * 4 + ['WAIT 4'] * 200:
+        _, _, terminated, truncated, info = env.step(text)
+        hits += env.state.health < health
+        health = env.state.health
+        if terminated or truncated:
+            break
+    assert (info['ending'], info['hits']) == ('death', hits) and hits >= 2, info
