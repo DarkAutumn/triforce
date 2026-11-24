@@ -2280,10 +2280,20 @@ every step, so following an enemy that moves away pays again, and knockback rese
   0..N-1, each an express job (`--plan` prints `triforce job run --express --timeout 10m --detach -- eval-batch
   <tag>-it<NNNNNN> --teacher GROUP=FAMILY/RUN@itN --scopes S --no-report ...` for every chain not yet played,
   `--submit` queues them); run without either it reads the chains played (its `--chains-dir`, else filed in the
-  store), lists the rest and writes one table by iteration (steps, each scope's rate ± its standard error, the
-  paired difference with the baseline on those seeds, hearts lost a run, the rooms where most runs end, the tracked
-  goals) as `<tag>-checkpoints.md` / `.json`, filed in the store (kind `judge`) once every chain is in. The tag
-  defaults to `<family>-<run>-r<runs>`, so a second run count is a second set of chains.
+  store), lists the rest and writes one table by iteration (steps, each scope's rate ± its standard error, beside two
+  bases on the same seeds, each paired by seed: **today's team on its own route** (`--base`, default `r40-2015-1k`:
+  2.0.0.15's code and route) and **today's team on the generation's route** (the control, `--control TAG`, default
+  `control-<team>[-<with runs>]-r<N>`: the base team on this code, queued by `--plan`/`--submit` like the pieces);
+  hearts lost a run, the rooms where most runs end, the tracked goals) and, where the route crosses them, Dungeon 3's
+  Darknut rooms (`judge.darknut_rooms`: 3x5b's first pass at drop cycle 0 with the Darknut killed and its bombs
+  dropped and taken, 3x59 from N by the bombs brought, 3x69 in and out, the training's 3_59n curriculum point as
+  recorded by the checkpoint's run, `store.parent_curricula`), as `<tag>-checkpoints.md` / `.json` (`-vs-<base>` for
+  another base), filed in the store (kind `judge`) once every chain is in. The tag defaults to
+  `<family>-<run>-r<runs>`, so a second run count is a second set of chains. `--with GROUP=FAMILY/RUN[@itN]` (also
+  `eval-batch --with`) puts another group's run in its slots too, unjudged: a teacher other than the walkers judged on
+  Dungeon 3 is floored by today's darknut dying in 3x5b's first pass on the generation's route (2.0% from the start,
+  1.3% from the entrance, round40.md "A teacher's checkpoints judged"), so its Dungeon 3 scope says little until the
+  walkers' best checkpoint plays beside it. By hand, the team spec is `BASE+@overworld=RUN+@walkers=RUN`.
 - `triforce room-stats TAG [--noclips [TAG2]] [--chains-dir DIR] [--output FILE] [--route NAME]` (`room_stats.py`)
   writes `<chains-dir>/<TAG>-room-stats.json` (default `target/r56-chains`, beside the chain files it reads;
   `scripts/experiments/r56_chains.sh report` writes it after the yardstick): per-room statistics in every **scope**
