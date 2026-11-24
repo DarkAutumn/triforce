@@ -422,7 +422,10 @@ def test_after_d3_the_route_goes_on_by_raft_to_dungeon_4_and_follows_lees_direct
     assert rooms[(4, 0x60, True)]['treasure'] == 'ladder' and rooms[(4, 0x13, False)]['treasure'] == 'heart-container'
     assert rooms[(4, 0x21, False)]['requires_bombs'] and rooms[(4, 0x11, False)]['requires_bombs']
     assert rooms[(4, 0x01, False)]['treasure'] == 'key'
-    assert [room for room, info in rooms.items() if info['name']] == [(4, 0x32, False), (5, 0x05, False)]
+    # The named rooms: the canonical ones carry a `*` (the owner, Nov 24), the others are working names.
+    assert {room: info['name'] for room, info in rooms.items() if info['name']} == {
+        (4, 0x32, False): 'Breakfast Room*', (5, 0x05, False): 'Olive Garden*', (9, 0x10, False): 'Reverse C*',
+        (3, 0x59, False): 'darknut lock room', (3, 0x5b, False): 'darknut treasure room', (3, 0x69, False): 'raft room'}
 
 
 def test_after_d1_the_route_takes_0x67s_rupees_then_either_way_to_dungeon_3():
