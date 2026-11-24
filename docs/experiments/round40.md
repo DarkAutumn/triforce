@@ -591,6 +591,202 @@ at once; 3:0x5b's last pass with an empty bag gets none in the fight and one onc
 `game_map::the_fresh_generation_switches_are_route_data`, `goals::a_step_expects_what_its_route_data_says`,
 `tests/test_run_stats.py::test_route_goals_by_step_per_run_and_compared` and `test_aimless_frames_a_visit_and_a_run`.
 
+## 3:0x69 crossed by a line (Line40, branch `r40-line`)
+
+The owner (decisions 2026-11-23 "3:0x69 is crossed by a line"): "Going in the door, immediate east until you can't,
+south to line up the stairs, then east to stairs. [...] If you time it right, you can sword the darknut to safely pass
+through him. No matter which way the room plays out, a speedrunner will NEVER take damage there, ever." Eight Red
+Darknuts; today 170-190 deaths in 1000 Dungeon 3 runs. No bomb is used here (the route keeps 4).
+
+### The line, planned in the emulator
+
+Link's top-left tile (X / 8, (Y - `$3D`) / 8; he covers that tile and the three right and below it) on the
+room's floor (`render_grid` of `d3first_3_69n_0`; `#` wall or block): `i` the way in, `o` the way out, `x` both,
+`S` the stairs (26, 10), `E` the cellar's exit spot, `P` the Darknuts' spawn spots.
+
+```
+     0         1         2         3 
+     01234567890123456789012345678901
+   0 ###############x.###############
+   1 ###############x.###############
+   2 ###############x.###############
+   3 ###############x.###############
+   4 ####........oooxiii.############
+   5 ####........o.....i.############
+   6 ####........o.....i.############
+   7 ####........o.....i.############
+   8 ####......P.o.....i.P.##########
+   9 ####........o.....i...##########
+  10 ####........E.P...iiiiiiiiS.####
+  11 ####........................####
+  12 ####........P.....P...##########
+  13 ####..................##########
+  14 ####..P.............############
+  15 ####................############
+  16 ####......P.........############
+  17 ####................############
+```
+
+In: S from the door ($78, $4D) to the top row Y $5D, E to the block wall at X $90, S down X $90 to Y $8D, E to
+the stairs at X $D0. Out: from ($60, $8D) N up X $60 to Y $5D, E to X $78, N out. The in-pass makes a Darknut on
+each of the seven spots and one spot twice; the out-pass two each on ($30, $AD), ($50, $BD), ($90, $9D),
+($A0, $7D) (300 entries each). Facts the rule rests on, from the disassembly and the emulator:
+- The way out starts at ($60, $8D) facing S: a cellar's exit spot is its attribute C (`asm:Warp_CheckSubroomExit`),
+  not the stairs; every out-pass state and handoff (873 harvested) has Link there.
+- The Darknuts spawn on fixed spots, the in-pass one at ($A0, $7D) in the pocket E of the line's column every time
+  (300 of 300 entries); it walks W across X $90 or S into the stairs' corridor just as Link comes down the column.
+  That is the Darknut "in the way" of the owner's description.
+- A Darknut is hurt only when the blade's way and its facing are not opposites (`asm:Damage_HandleWeaponHit@CheckDarknut`);
+  a hit makes it flash 32 frames (timer `$10` every second frame, `asm:Shove_Begin`) and knocks it `$40` pixels the
+  blade's way along its own axis or from a grid point (`asm:Shove_Update`); while it flashes the game tests neither
+  Link's weapons nor its touch on Link (`asm:Collision_CheckMonsterVsWeaponsAndLink`): Link walks through it.
+- The wood sword's reach, measured in the game (a Darknut placed around Link, A pressed): its top-left 6-24 pixels
+  ahead (S: 6-28) and up to 10 aside; the blade tests the monsters from the swing's third frame; a SWORD through the
+  env is 17 frames.
+- A beam search over the env's actions (MOVE 4 frames each way, WAIT, SWORD each way; width 40) found a zero-hit
+  in-pass for each of 4 seeds tried, 30-31 actions each, no waiting: down the column, two strikes at the Darknuts
+  crossing it. Zero hits is reachable; the question is what a rule reading the room reaches.
+
+### The objective follows the line
+
+game.yaml 3:0x69 `path_costs` (as 5:0x37 in round 25): every floor tile off the two lines (the top row's cols 12-18,
+column 18 rows 4-10, row 10 cols 18-26, column 12 rows 4-10) costs one tile more, so the path search behind the
+`target` observation and PBRS takes the line on each pass; the plain floor has other ways as short (any staircase).
+Tested: `crates/zelda/tests/objectives.rs` `d3_0x69_is_crossed_by_the_line` (the descent's corners on the d3first
+steps: in (15,2) (15,4) (18,4) (18,10) (26,10); out (12,10) (12,4) (15,4) then N up column 15; the plain room's way
+differs at the same length). The costs are `d3first`'s only (Line40b: a `routes: [d3first]` entry, as Route40's 0:0x1f
+and 0:0x76; Line40 had put them on the shared room, which `d2first`'s step of the same room, the shared block
+`dungeon-3`, reads too): `d2first` crosses 3:0x69 as before (`d2first_crosses_3_0x69_as_before_the_line`: the same
+objective and targets, no cost on any floor tile, the plain room's way; `game_map.rs`
+`d3first_costs_the_line_through_3_0x69`), and its eight schema 5 traces in the room hash as recorded before the line
+(`tests/test_obs_legacy.py`: Line40's eight re-recorded hashes are gone; its shared costs, compared step by step on
+the same seeds, changed only the `target` block where Link stands in 3:0x69, the same actions and lengths). Both 0x69
+steps carry `carriers: false` on Carrier40's branch (no bomb-carrier target here).
+
+### The rule (`scripts/experiments/r40_d3_69_line.py`)
+
+Each decision from the RAM a player sees (positions, facings, flash timers, knockback, spawn clouds): MOVE along the
+line while no way on from it (standing, along, back, any straight way) is predicted touched within 48 frames; else
+of MOVE each way, WAIT and the strikes that would hurt a Darknut (in the measured blade box, its back or side to the
+blade, not about to turn on a grid point), the one whose best way on is touched latest, then the shortest way left.
+The prediction walks each Darknut at 0.5 pixel a frame along its facing, turning on a grid point toward Link when he
+is within 8 pixels of its row or column (`asm:Wanderer_MoveAndTurn`) or on. With `--look D` (training only; the
+owner, Nov 23: moving the emulator ahead and back is fine in training, never at play or for replays) a second env
+times the same choices: each decision takes the first of the rule's ranked actions that, played and kept up D
+decisions, is not hit. The rule alone is what a player reading the screen does; it is hit where a Darknut turns
+into Link at a grid point (a coin it cannot see). The look-ahead is what "if you time it right" needs.
+
+### The rule's results (the generation's code, `r40-line`; darknut@d3first's env; 4 or 8 bombs, none used)
+
+Entries as training draws them: the step's entry states `d3first_3_69n_0..2` / `d3first_3_69c_0..2` (round robin),
+the start's random numbers and spawn draw, the task's hp draw (half at full hearts, the rest 0.5-2.5 of 3), on the way
+out a third from the chains' harvested handoffs (their own hearts and bombs; 342 of 1000). Seeds 0..999 (in-pass with
+look-ahead: 1000 visits; rule alone: 300 a pass). A visit's situation: `clear` (only the line's moves), `sworded`
+(at least one strike), `waited` (held or stepped aside, no strike). Frames: mean over the visits that left by the
+exit, from the entry to the exit.
+
+| pass | rule | situation | visits | left by the exit | hits a visit | visits hit | frames |
+|---|---|---|---|---|---|---|---|
+| in | look-ahead 4 | all | 1000 | 96.6% | 0.215 | 184 | 600 |
+| in | look-ahead 4 | sworded | 934 | 96.8% | 0.216 | 173 | 608 |
+| in | look-ahead 4 | waited | 66 | 93.9% | 0.197 | 11 | 475 |
+| in | look-ahead 4 | clear | 0 | | | | |
+| out | look-ahead 4 | all | 1000 | 99.8% | 0.000 | 0 | 486 |
+| out | look-ahead 4 | clear | 257 | 100% | 0 | 0 | 255 |
+| out | look-ahead 4 | sworded | 8 | 100% | 0 | 0 | 816 |
+| out | look-ahead 4 | waited | 735 | 99.7% | 0 | 0 | 563 |
+| in | alone | all | 300 | 84.7% | 0.653 | 128 | 502 |
+| in | alone | sworded | 280 | 84.6% | 0.664 | 121 | 510 |
+| in | alone | waited | 20 | 85.0% | 0.500 | 7 | 381 |
+| out | alone | all | 300 | 99.3% | 0.000 | 0 | 474 |
+| out | alone | clear | 84 | 100% | 0 | 0 | 256 |
+| out | alone | waited | 216 | 99.1% | 0 | 0 | 560 |
+
+The rest of the in-pass endings are deaths (29 of 1000 with the look-ahead, 45 of 300 alone, at 0.5-3 hearts) and 5
+visits that ran out of the script's 400 decisions; the out-pass's (2 with the look-ahead, 2 alone) are the 400-decision limit.
+
+**Where it is hit (in-pass, look-ahead, 215 hits):** the top row Y $5D 106 (most after a strike: Link backs out of
+the column with the Darknut it struck or another coming up after him; 16 into a Darknut whose flash ran out), off the
+line 54 (stepping aside on the open floor), the column X $90 30, the stairs' row 25 (17 while waiting there for the
+corridor to clear). No visit is unobstructed on the way in: the Darknut of the pocket spot ($A0, $7D) reaches the
+column or the stairs' corridor on every entry, so every visit strikes or waits. The way out is hit in none of 1000 with the
+look-ahead and none of 300 alone: its Darknuts spawn away from ($60, $8D) and the top row, and the rule's waits there
+are for Darknuts crossing X $60 or the door's column.
+
+**Against the owner's bar.** Zero hits is reachable (the search above found it for every seed tried), and the way out
+reaches it; the way in does not: 814 of 1000 of the look-ahead's visits and 172 of 300 of the rule alone's are clean. What
+separates them is timing the rule cannot see (whether a Darknut on a grid point turns toward Link). The look-ahead
+here is a 4-decision check of the rule's own choices, not a search; the demonstrations below come from a search.
+
+### Demonstrations: the builder searches every visit (Line40b, branch `r40-line2`, the merged generation's code)
+
+The owner allows moving the emulator ahead and back when building demonstrations, never at play. So the builder
+(`r40_d3_69_line.py demos --pass in|out`) does not teach the rule: for each visit it searches the env's own actions
+(MOVE 4 frames each way, WAIT 4, SWORD each way, BEAMS where the mask offers them at full hearts; a strike only with a
+Darknut within 32 pixels) best-first, a state's priority the frames spent plus twice the frames left along the line
+(`togo`, a pixel off the line counted twice), every child whose hearts fell dropped, every situation seen once (Link's
+position and facing, each Darknut's position, facing, flash and knockback); 25,000 decisions tried, then 50,000 at
+weight 1, then the rule with its look-ahead (never needed). The way found is played again from the visit's reset as
+one episode (`replay`) and kept only if it leaves by the exit unhit; the file is written as the visits end. Entries
+as `measure` draws them (the step's entry states round robin, the start's random numbers and spawn draw, the task's hp
+draw, 4 or 8 bombs by the seed's parity, a third of the way out from the chains' harvested handoffs), seeds 100000
+on. Express jobs of 32 (in) or 240 (out) visits, 8 workers, on a machine at load 30-40; the visits a job had not
+finished at its 10-minute limit are not counted (11 seeds of the way in: 100005, 100029, 100055, 100102, 100160,
+100193, 100195, 100217, 100221, 100305, 100317; not failures of the search, unmeasured). The search failed on no
+finished entry.
+
+| pass | visits | clean way found | by weight 2 / 1 | 4 / 8 bombs | actions (mean, max) | strikes a visit | waits a visit | frames | seconds a visit (mean, median, max) |
+|---|---|---|---|---|---|---|---|---|---|
+| in | 309 | 309 (100%) | 298 / 11 | 158 / 151 | 33.5, 39 | 0.90 (257 visits strike) | 0.50 | 254 (median 252) | 72.6, 34.8, 558 (14 over 300) |
+| out | 480 | 480 (100%) | 480 / 0 | 240 / 240 | 21.1, 24 | 0 | 0 | 235 | 0.52, -, 1.1 |
+
+Every kept visit is hit-free and leaves by the exit; the way in takes 254 frames against the rule's 600 with the
+look-ahead, the way out 235 against 486. Full hearts (beams) and partial hearts alike: in 145 / 164 visits, 257 / 251
+frames. The way in strikes in 257 of 309 visits (the pocket Darknut of ($A0, $7D) in the column, as with the rule) and
+walks through untouched in 52; it hardly waits.
+
+**The files** (`target/demos/` in the `r40-line2` worktree, for the lead's `triforce-lead data install`; this
+worktree's own `target/demos` is what its tools read until then; the pieces joined by `r40_d3_69_line.py merge`):
+`r40-d3-69-in.npz` 309 visits, 12,319 rows (sha256 a7f0d2cd...), `r40-d3-69-out.npz` 480 visits, 10,112 rows
+(2eeceae2...); a row a decision (a MOVE or WAIT without its duration, a strike 8 times), the darknut@d3first task's
+observation on the merged code. `specialists/d3first/darknut.yaml` declares them: `demos: {files: [r40-d3-69-in.npz,
+r40-d3-69-out.npz], coeff: 0.05}` (round 25's 5:0x37 weight). Line40's rule files (`r40-d3-69-line-0..3.npz`, 77 of
+100 in-pass and 99 of 100 out-pass visits, 15,167 rows, on the code before the merge) are replaced. If the
+generation's task changes the observation, the rows must be recorded again with it (`load_demos` refuses files whose
+keys differ; a changed shape fails at the first update). Records: `target/r40-line2/{in,out}-N.jsonl` (each visit's
+seed, start, bombs, hearts, actions, `way`, the search's decisions and seconds; `summarize` reads them).
+
+**Training logs the room** (for the smoke and every later darknut run): the env's terminal info carries `hits` (the
+episode's steps that lost health, a room visit's definition) and training's metrics `room/<room>/<entry>/episodes`,
+`success_rate` and `hits` (`room/3:0x69/N/...` the way in, `room/3:0x69/cave/...` the way out).
+
+### A task's `demos:` key (for the lead's conditions)
+
+`demos: {files: [NAME, ...], coeff: C}` in a task (Rust `DemosConfig`: names relative, no `..`, coeff finite > 0).
+`triforce.inputs.task_demos` resolves each name in `paths.data_dir('demos')` (the checkout's `target/demos` while it
+exists, else the store's current snapshot) and refuses (MissingInput, exit 2) naming the folder looked in and the
+store's `current` file. `train` and `lab.train`: the task's files, then `--demos`; `--demo-coeff` overrides the weight
+(default the task's, else 0.2; two tasks with different weights in a lab run refuse); `--no-task-demos` leaves the
+task's out (the arm "that run, except demos"). The manifest's `data.demos` lists every file cloned with its SHA-256
+(the field `--demos` already filled); the lab writes the same list into `run.json` `demos`. **What `lab.train` does
+with them:** one pool of rows from every file, one weight; each PPO minibatch adds the weight times the cloning loss
+over a minibatch-sized sample of those rows, whatever share of the rollout the family has. The term is computed on
+the demonstration rows only (3:0x69's decisions here), so it touches the network through those observations alone,
+but its strength does not scale with the family's share of a multi-family run. Tests: `config.rs`
+`demos_parse_and_reject_bad_entries`; `tests/test_demos.py` (the recipe, the refusal naming both places, a training
+that clones the task's file at its weight, records it with its checksum, takes `--demo-coeff` and drops it with
+`--no-task-demos`; these monkeypatch the demos folder to a temporary one, so they read neither this worktree's
+`target/demos` nor the store's).
+
+### Not done, not tested
+
+- The darknut network has not been trained with the demonstrations: the short smoke pair (with them and with
+  `--no-task-demos`, `--same-recipe-as`) was left to the lead, the express place being hours deep.
+- The 11 way-in seeds the jobs did not finish in their time were not searched to the end.
+- The in-pass rule alone was measured on 300 visits a pass, not 1000; the 1000-visit figures are the look-ahead's.
+- The `null` endings (400 decisions) were not looked into.
+- `d2first`'s chains were not run (its 0x69 step reads the shared room, without the line's costs, as before).
+
 ## The fresh generation's `d3first` route data (Route40, branch `r40-route`)
 
 anthropic/claude-opus-5-5 (Route40). The owner's decisions of Nov 23 ("The fresh generation's Dungeon 3", its
@@ -669,6 +865,413 @@ check|patch` sets every d3first state's keys to the ledger (steps 9-100 one lowe
 `python -m triforce.entry_states build --route d3first --chains 0,1,2 --start-step 8 --last-step 9 --source
 'd3first_3_6bs_{chain}'`, then `audit`. The Dungeon 3 states after 0x59 hold bombs played under the old reserve
 (0 on chains 0 and 2 from 0x69 to 0x5b's last pass, below the new reserve of 4).
+
+### The start states, 0x5b's last pass and the first Darknut's drop (States40, branch `r40-states`)
+
+anthropic/claude-opus-5-5 (States40), continuing Route40's section from its status file, on `r40-gen` at 35739cc0.
+
+**The patch** (`scripts/experiments/r40_route.py patch`, queue job #761). Its first run stopped on Dungeon 4's plain
+way: a state of step 47 read the key count after step 46, a plain-way step the clip-way ledger lacks. Fixed: a state
+reads the count after the step before it on its own way (the plain way's ledger for steps 43-46; both ways give 1
+key after step 46). 289 states set (276 keys, 16 kill counters, `3_5bs` both), each read back at its playable frame
+(`Game.load`, then no buttons to game mode 5, 9 or 11: 289 of 289 hold what was written):
+- **keys one lower on 273 states, steps 9-100** (3:0x6b's key left; every d3first state from 3:0x5b's first pass
+  through 2:0x3e's entry) **and on `d3first_0_1fw_0..2`** (step 112: 6 -> 5; Peahat40 built them from `0_1ew` on a
+  branch without round 39's key patch, which had set `0_1ew` 6 -> 5). The status file's "steps 101-246 back to round
+  39's `was`" was wrong: those states hold round 39's patched count (the Moldorm's key left, 9:0x56's taken), and the
+  new ledger (0x6b's key left, the Moldorm's taken) gives the same count from step 101 on, so none of them changed.
+- **the kill counters to 0** (`$52A`, `$50`, `$627`) on the 16 states before 3:0x5b's first pass that held kills
+  (`0_75e` and `0_74e` chains 0 and 2, `3_7cs`, `3_7be`, `3_6bs` and `3_5bs` chains 0-2: cycles 1-4, streaks 0-10).
+
+**The first Darknut's drop, measured** (`scripts/experiments/r40_states.py drop --kills 3000`, job #763): 3000 resets
+of `d3first_3_5bs_<seed % 3>` (3:0x5b from S, its three Red Darknuts), seeds 0-3004, each with the game's own
+randomness for its seed (`randomize_rng`, as every start) and the kill counters written to 0; in each one Red
+Darknut killed by a scripted wooden-sword strike from its flank (its HP written to one hit and Link beside it facing
+it: the scaffolding is RAM, the kill is the game's `asm:Damage_KillMonster`; 2763 strikes missed as a Darknut turned
+or stepped and were tried again, 5 resets never landed one and are left out), then played on until
+`asm:Obj_EndMetastate` advanced the cycle (0 -> 1 in all 3000) and `asm:Drop_SetUpItem` decided. **Bombs appeared
+after 1219 of 3000 kills: 40.6% ± 0.9%**; nothing else ever appeared (1781 none). The disassembly's rule: a Darknut
+is drop group 2, whose row of `asm:Drop_ItemTable` holds a bomb in column 1 (the cycle after a kill made at 0); with
+no forced drop (`WorldKillCount` below $10, `HelpDropCount` below $0A) the item appears only if `Random,X`, the
+shift register's byte of the dead monster's slot, is below the group's `asm:Drop_GroupRates` entry, $68: **104/256
+= 40.6%**. Measured 0.4063 against the rule's 0.4062: the same within the standard error. (Run on the `3_5bs` states
+before their rebuild below; the room, its Darknuts and the counters written to 0 are the same.)
+
+**3:0x5b's last pass, the bag in the emulator** (`d3first_walks.rs`
+`the_last_pass_of_0x5b_with_8_and_with_4_bombs`: `d3first_3_5bw_0` with the bag written before the route and the
+cheat ledger see it, the route's objective played to 3:0x4d, fights skipped as in the walk). **Route40's reading is
+today's: 7 out of 0x5b and 6 at Manhandla's door, with 8 in and with 4 in.** With 8 the visit is a crossing from
+start to end (objective `Move` only: `step_treasure` judges the room's bombs on entering, and after the wall's bomb
+the four are never shown, the room's Darknuts alive): 8 -> 7 at the wall, 7 -> 6 at 0x4c's wall. With 4: `Fight`,
+`Treasure` (the four: 8), then the wall (7), 0x4c (6). The lead's order, wall first and then the four, would need the
+room's treasure judged again after the wall (and the room fought with 7): not what the objective does; the owner's
+"leave 0x5b with 8, Manhandla with 7" holds in neither case. The fix, if wanted, is the objective's (Carrier40's);
+the test pins today's counts and moves with it. The walker first laid two bombs at each wall (the second in the
+first one's fuse): it now sets the session's bomb targets as the env does (`ItemConfig::bomb_targets`, one bomb a
+wall), and the counts above are with one bomb a wall.
+
+**Dungeon 3 rebuilt to the bomb plan** (jobs #762, #764, #765). `3_5bs_*` rebuilt from `3_6bs_*` by the explorer
+(0x6b crossed; chain 0 killed two child Gels, which move `$50`/`$627` but not the cycle: set to 0 by the patch run
+last). The first pass's bombs set as the plan brings them (`r40_states.py bombs`): chain 0 the Darknut's drop, chains
+1-2 none; the old 1 in `3_4bs`/`3_4ae` was the first pass's wall grant, which the chain's cheat ledger takes back on
+leaving. Then steps 14-22 rebuilt from `3_59n` (8/4/4): 0x59 by the walks' bomb fight kept above the reserve of 4
+(`r32c_harvest.py` override `3_59n`: won 20/20 with 8, 10/20 and 9/20 with 4, sword only), 0x69 to 0x5a by the
+explorer, 0x5b's last pass by the walks' rule (sword, the four, the wall: 18, 17, 18 of 20), 0x5c and 0x4c by the
+explorer. Keys as the ledger throughout (the sources were patched first); hearts refilled (3 of 3) on every file.
+`3_3ds` (after Manhandla, whose bombs are the fight's) and later states are not rebuilt.
+
+| states (chains 0/1/2) | keys | bombs before -> after | kill counters ($52A/$50/$627) |
+|---|---|---|---|
+| `0_75e`, `0_74e` (0 and 2 only) | unchanged | unchanged | cycles 1-3, streaks 1-2 -> 0 |
+| `3_7cs`, `3_7be`, `3_6bs` | unchanged | unchanged | cycles 1-4, streaks 0-3 -> 0 |
+| `3_5bs` (rebuilt) | 2 -> 1 | 0 | 0 |
+| `3_4bs`, `3_4ae` | 2 -> 1 | 1/1/1 -> 4/0/0 | as built |
+| `3_49e` | 2 -> 1 | 5/5/5 -> 8/4/4 | as built |
+| `3_59n` | 3 -> 2 | 5/5/5 -> 8/4/4 | as built |
+| `3_69n` (rebuilt) | 3 -> 2 | 0/7/0 -> 4/4/4 | as played |
+| `3_0fcave`, `3_69c`, `3_59s` (rebuilt) | 3 -> 2 | 0/7/0 -> 4/4/4 | as played |
+| `3_5aw`, `3_5bw` (rebuilt) | 2 -> 1 | 0/7/0 -> 4/4/4 | as played |
+| `3_5cw`, `3_4cs` (rebuilt) | 2 -> 1 | 3/7/3 -> 7/7/7 | as played |
+| `3_4dw` (rebuilt) | 2 -> 1 | 2/6/2 -> 6/6/6 | as played |
+| every other d3first state of steps 9-100 (231 files) | one lower | unchanged | unchanged |
+| `0_1fw` | 6 -> 5 | unchanged | unchanged |
+
+No file added or removed; 289 state files and `entry_states.json` changed (its `keys`, `kills` and `bombs` notes
+name the patch). `entry_states audit --route d3first` (job #790): 855 states, 0 with problems.
+
+**Tracks** (`python -m triforce.explore`, written to `target/trajectories/<family>/<state>` in this worktree, for the
+lead to install): zol `d3first_3_6bs_0..2` (crossed: 96, 70, 76 steps; chain 0 kills two child Gels), ow-tektite
+`d3first_0_76e_0..2` (23, 115, 28 steps: **only chain 2 takes the wrap; all three kill one or two Tektites**, so
+they teach neither of the owner's opening goals), ow-peahat `d3first_0_1fw_0..2` (39, 50, 27 steps), darknut
+`d3first_3_5bs_0..2` (21, 53, 59 steps) and `d3first_3_59n_0` (8 bombs: 140 steps); **`d3first_3_59n_1` and `_2`
+(4 bombs, no bomb to spend) were not solved in 3000 iterations** (the store keeps their `~rule1000` tracks, played
+with the old bag); moldorm `d3first_2_3es_*`: queued (job #773) when this was written.
+
+## 0x1e's row and 0x1f's line (branch `r40-peahat`)
+
+*Where it came from: Peahat40's section, copied by States40 (Nov 24) from branch `r40-peahat` at c83c2e05
+(`docs/experiments/round40.md` there), unchanged but for one citation the asm check refused (its `Submenu`'s
+`@CheckStart` is `asm:Submenu_UpdateActive@CheckStart`); its route data and states came into the generation with
+Route40's cherry-pick of f1ee96f4, and its cut-over with `r40-noclose`. Route40's later row-3 cost on 0x1f (tile row
+3, columns 0-15; the section above) is not in it.*
+
+**The idea is the owner's** (Nov 23, backlog "0:0x1f's Peahats missed by the entry row"): "If your training route has
+link walk to the second highest position in 1e before heading to 1f, it's very easy to navigate 1f without taking
+damage. That is, link is standing such that his head touches the rocks (not overlaps, he could walk up a half tile but
+doesn't). If you move 1e -> 1f in that position, there's a way to only move east or north only (maybe with a brief
+pause) that misses all hits of peahats." The agents (Peahat40) found the row and the line in the emulator, measured
+them, and built the `d3first` route data. `d2first` is untouched. Nothing was trained: the families learn it in the
+fresh generation (2.0.1.0).
+
+On `d3first` the rooms are step 111 (0:0x1e, W → E, ow-tektite), step 112 (0:0x1f, W → N, ow-peahat), and on the way
+back step 116 (0x1f N → W) and step 117 (0x1e E → W).
+
+### The row
+
+Loaded through `Game.load` (game mode `$12` = 5) at 0x1e's E edge, Link held Up stops at **Y $55**: his head half a
+tile into the rock rows 0-3 (Link collides with his lower half). The owner's "second highest position", his head
+touching the rocks, is **Y $5D: Link's tile row 4** (the room's rows count from Y $3D, 8 pixels a tile). 0x1f's W edge
+is the same: the strip of tile rows 4-5 runs from the W edge to column 27 under the rock rows 0-3.
+
+### The line
+
+From 0x1f's first playable frame, **hold E along Y $5D to X $80 (96 frames), then N through the wall gap** (X $80 is
+the gap's only column; Link reaches the top, Y $3D, about 25 frames later and the scroll to 0x0f follows). No pause.
+What the Peahats do (zelda-asm/enemies.md "Peahat"; spawn spots by `asm:Spawn_AssignPositions`, entered from W: seven
+spots, six Peahats from the room's spawn cycle): each starts facing up at speed `$1F` and speeds up for 129 frames
+(`asm:Peahat_Init`, `asm:Flyer_State0SpeedUp`; it flies over tiles). The one on ($50, $5D) sits on the strip and has
+risen off it when Link passes under; the one on ($80, $7D) rises up X $80, the gap's column, and reaches the strip at
+frame 97: Link turns N at X $80 on frame 96 and outruns it (1.33-1.5 px a frame against its 0.2-0.4).
+
+A clean crossing frame by frame (Link, his hearts and the six Peahats): `docs/experiments/round40/peahat-line-trace.txt`
+(`r40_peahat_line.py trace`, `d3first_0_1fw_0`, seed 0: 149 frames, no hit).
+
+### Hits by entry row (frame level, raw buttons)
+
+`scripts/experiments/r40_peahat_line.py rows`: `Game.load` of `d3first_0_1fw_<seed % 3>` with Link's Y set to the
+row (`ram_overrides`), every load drawing a natural RNG state and spawn cycle from its seed (as every start does),
+500 seeds a row. The rule from a row below the strip first holds N at X 0 up to Y $5D (N and E only), then the line.
+
+| entry Y (tile row) | hits a crossing | hearts lost | runs hit | frames | left N |
+|---|---:|---:|---:|---:|---:|
+| $55 (3, the highest) | 1.550 | 0.775 | 444/500 | 196 | 500/500 |
+| **$5D (4, the owner's row)** | **0.000** | **0.000** | **0/500** | **149** | 500/500 |
+| $65 (5) | 0.774 | 0.387 | 387/500 | 178 | 500/500 |
+| $6D (6) | 0.774 | 0.387 | 387/500 | 157 | 500/500 |
+| $75 (7) | 0.774 | 0.387 | 387/500 | 163 | 500/500 |
+| $7D (8) | 0.774 | 0.387 | 387/500 | 197 | 500/500 |
+| $85 (9) | 0.774 | 0.387 | 387/500 | 203 | 500/500 |
+| $8D (10) | 1.000 | 0.500 | 500/500 | 172 | 500/500 |
+
+Holding E on the entry row itself (150 seeds a row): Y $59-$5F no hit (Link walks E on his own row; $59-$5C are tile
+row 3 but clear the rocks), Y $60-$65 0.59 hits and only 44 of 150 leave (Link stalls on the rocks of tile row 6 at
+column 4).
+
+**Today's networks** (ow-tektite@d3first `r32d1-tektite`, ow-peahat `r75-bow-ow`, the 2.0.0.12 team; the chain
+`r38-2d-1k-post-d2`, 1000 runs from `0_3cc_0` with the same two runs): 0x1f step 112 **0.489 hits, 0.244 hearts a
+visit**, 326 frames, no death or stuck; 0x1e step 111 no hit, 142 frames; step 116 no hit (226 frames), step 117
+0.011 hits. The 250-run record of 2.0.0.11 (`docs/runs250/2.0.0.11.json`): step 112 16 hits in 53 visits (0.30).
+
+**Where today's team leaves 0x1e, and what Y $5D would have saved** (after the restart, queue jobs #48 and #69; the
+2.0.0.13 team, the same two runs; a worktree at `main` without the span, so every row is a correct exit): the chain
+`eval-chain --from 0_1ew_0 --stop-at step:113 --runs 1000 --harvest ... --harvest-every-room` (seeds 0-999, all 1000
+reach 0x0f), every 0x1f entry harvested, then `r40_peahat_line.py states` on those 1000 states with their own RNG,
+paired with the chain's own visit of the same seed:
+
+| exit row out of 0x1e | runs | network hits in 0x1f | network hearts lost | deaths in 0x1f | the rule from that row | the line from Y $5D | the line from Y $5D, executor grain |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| **Y $85 (tile row 9)** | **1000** | **0.567 ± 0.025** | **0.283 ± 0.013** | 0 | 1.000 | **0.000** | 1.000 |
+
+- **ow-tektite left 0x1e on the row it came in by:** 1000 of 1000 left E on Y $85, the row of `d3first_0_1ew_0`, in
+  142 frames with no hit (it walks E without changing row). The chain starts every run from that one state, so it
+  shows one entry row only; that runs entering 0x1e from 0x1d on other rows leave on those rows is a guess, not
+  measured.
+- **The network in 0x1f from Y $85:** 584 runs no hit, 288 one, 114 two, 10 three, 4 four or more (one run took 7);
+  330 frames, no death.
+- **What Y $5D would have saved, paired:** the frame-held line from Y $5D took no hit on every one of the 1000 states.
+  That saves **0.567 ± 0.025 hits and 0.283 ± 0.013 hearts a crossing**, about 0.28 hearts on every run that reaches
+  0x1f, and 181 frames (149 against 330). In the executor's grain (one no-button frame every 33) the same line takes 1
+  hit on every state: 0.43 more hits than the network, not fewer.
+- **Only one spawn layout in this set:** each scripted column has the same result on all 1000 states, so the 1000
+  harvested entries hold one 0x1f layout, with the column Peahat on ($80, $7D). The cause is inferred, not checked:
+  the chain's start from one state does not vary the spawn cycle 0x1f gets. The network's spread then comes from its
+  own play and the Peahats' later random turns. The 500-seed table above covers every layout (6 in 7 hold the column
+  Peahat).
+
+### The margin is one frame, and the env's decision frame takes it
+
+The line is frame-tight: the same rule started **one frame late** (a frame of no buttons at entry) is hit in 71 of
+100 crossings (0.71 hits), two to twenty frames late 0.73, forty 1.65; a pause of 8-80 frames at X $30-$70 0.73-1.95.
+The Peahat rising up X $80 meets Link on the strip whenever he reaches the gap after frame 96.
+
+**A network cannot hold E without a gap today.** The executor plays every action and then one frame with no buttons
+(`zelda::executor::Executor::skip_uncontrollable`, its last `self.step(m, 0, 1)`): `MOVE E 32` takes 33 frames,
+`MOVE E 16` twice 34, `MOVE E 4` eight times 40, all to X 43; and a MOVE is cut short whenever a monster comes near
+(`enemy-near`), each cut another decision frame. The best a network can do, `MOVE E 32` three times and `MOVE N`, is
+three frames late. Measured:
+- the rule as env actions (`r40_peahat_line.py demos`: `MOVE E` cut short before X $80, `MOVE N` from X $79-$7F, which
+  walks on to $80 and turns there), `d3first_0_1fw_0..2` rebuilt on the row, seeds 1000-1099: **45 of 300 runs leave
+  without a hit**;
+- the frame-level rule with one idle frame every 33 (the executor's grain), 100 seeds: 0.71 hits;
+- the same grain with a pause of 100-260 frames at X $00-$70 (60 seeds each): 0.47-0.88 hits; a pause that waits while
+  a Peahat is in the gap's column (X $68-$98, above Y $75 or $85) before going on: 0.42-0.92.
+So no pause makes the line clean once Link is a few frames late; the best paused lines (0.42-0.47) are what today's
+network already does (0.49), and the env-action line (about 0.85) is worse.
+
+### Step 116 (0x1f N → W) along the strip
+
+Back from 0x0f the strip is clean in any grain: down X $80 to Y $5D and W, **0 hits** in 300 frame-level crossings and
+in 120 env-action ones (`d3first_0_1fn_0..2`, seeds 2000-2039); down to Y $85 (the way round 25's cost on the strip
+sends the objective) and W, 2.53 hits frame level, 1.68 as env actions (today's network: no hit in 1001 visits; it
+dodges what the scripted walk does not).
+
+### What was built (`d3first` only)
+
+- **game.yaml, `routes: [d3first]` entries for 0x1e and 0x1f** (the phase X patches, `GameMap::route_map`; no code
+  change): 0x1e's E exit gets **`span: [4, 4]`**, so on `d3first` the objective's exit tiles are Link's tile row 4
+  (Y $5D-$64) and leaving E on another row is a wrong exit (critic, one-room episodes, chains: `exit_is_correct`, as
+  0x5b's span); 0x1f gets **`path_costs: []`**, dropping round 25's cost on tile rows 2-6 W of column 15 (it sent the
+  objective's way along Y $85, where step 116's walk takes 2.5 hits): from the row the shortest way is the line, and
+  back from N it is the strip. `d2first` plays the shared rooms (its 0x1e has no span, its 0x1f keeps the cost).
+- **`d3first_0_1fw_0..2` rebuilt on the row** (`entry_states build --route d3first --start-step 111 --source
+  'd3first_0_1ew_{chain}' --last-step 112`: the explorer, steered by the span, left 0x1e on Y $5D on all three chains;
+  they were Y $8D, $85, $7D). `entry_states audit`: 1888 states, no problem.
+- **`scripts/experiments/r40_peahat_line.py`**: `rows` (the table above), `states DIR...` (the rule from harvested
+  0x1f entries, grouped by row), `back` (step 116), `trace`, and `demos OUT.npz` (the line as env actions for `train
+  --demos`, ow-peahat; see below before using it).
+- **Test** `game_map::tests::d3first_leaves_0x1e_on_the_peahat_row` (the span and the dropped cost on `d3first`, the
+  shared rooms unchanged), and `a_routes_own_rooms_leave_the_shared_map_alone` lists 0x1e and 0x1f among `d3first`'s
+  own rooms.
+- No change to `crates/zelda/src/objectives.rs` or `crates/env/src/objective.rs` (branch `r40-targets` edits both):
+  the span and the cost are route data the objective already reads.
+- `d2first` untouched: its 354 steps and `d3first`'s 290 hash the same as on `main` (`route_steps`, sha1 of the JSON);
+  routes.yaml unchanged; only `d3first_0_1fw_*` among the states.
+
+### What it means for the fresh generation (the lead's call)
+
+The row is worth having whatever the line becomes: it is the only row from which 0x1f can be crossed clean, and step
+116's strip is clean already. **The line itself is not learnable in the env's grain as it stands**, so its demos
+(`r40_peahat_line.py demos`) would teach a crossing hit in about 85% of runs; they are not to be used unless one of
+these comes first:
+1. **No decision frame between MOVEs in the same direction** (the executor holds the direction through the frame
+   between two MOVEs E): an engine-wide timing change for every family, only possible at a fresh generation; then the
+   env-action rule is the frame-level line and the demos become right.
+2. **The line as a macro offered at 0x1f's entry** (hold E to X $80, then N: a fixed button sequence that never looks at
+   a monster, chosen by the network, as CLIP's grid-point skip is): fits the owner's rule for macros (decisions
+   2026-11-23 "The fresh generation's design calls", 1).
+Without either, ow-peahat learns 0x1f from the row with the objective's line as its target and dodges as today
+(0.49 hits a visit), and the measurement to make after the fresh generation trains is step 112's hits a visit on the
+chain `after Dungeon 2` against 0.489 here.
+
+### The closing no-button frame (the lead's follow-up)
+
+**Where and why.** `zelda::executor::Executor::execute` plays every action (MOVE, WAIT, the attacks, the items,
+CLIP), then `skip_uncontrollable`: frames with no buttons through scrolls, cave entries, stuns and level
+transitions, and then **one more frame with no buttons** before the next decision. That last frame is the owner's
+v2 Python `skip_uncontrollable_states` (`triforce/zelda_cooldown_handler.py`, commit 8c3f585f: "obs, _, _, info =
+self.act_for(self.none_action, 1)"), ported to Rust as it was; no reason is written down. What it does in the game:
+A and B are read as new presses (the sword, the items need the button up a frame before it goes down again), so a
+release frame matters after an attack; directions are read as held, so after a MOVE the frame does nothing but stop
+Link for a frame. It is not grid alignment (Link keeps walking to the grid while a perpendicular direction is held)
+and not the turn's latch.
+
+**What it costs, the 2.0.0.13 win** (`corpus/replays/single-run-d3first-2.0.0.13-55-networks.tfreplay`, 159,769
+frames, 7,378 network decisions; read from the replay's per-frame input stream): **2,851 frames are a single frame
+of no buttons between two frames holding the same direction** (Link stands still only because of it), **1.78% of
+the run** (1.97% of the frames after the first decision), 47.5 seconds; the decision stream has 3,025 MOVEs followed
+by a MOVE in the same direction (the rest end in a scroll or a wall). Another 2,130 such frames sit between two
+different directions (a turn) and 598 between a direction and an A/B press.
+
+**The switch** (`zelda::executor::HoldMoves`, commit 913dd4af; off by default):
+- `Off`: as today; every action closes with the frame.
+- `Same`: a MOVE leaves the frame owed; the next action plays it first unless it is a MOVE in the same direction,
+  which walks on without it. A turn and every non-MOVE action still get it.
+- `All`: no MOVE closes with it (attacks, items, WAIT, CLIP still do).
+- Set by `$TRIFORCE_HOLD_MOVES` (`same` or `1`, `all`) for every session a process makes, or
+  `Session::set_hold_moves`; a chain's META `chain` records `hold_moves` when it is on. With it off nothing changes
+  (`skip_uncontrollable(.., close: true)` is the old code path); `crates/zelda/tests/hold_moves.rs` plays MOVE E 8,
+  MOVE E 8, WAIT 4 from 0x1f's entry: Off 9/9/5 frames, Same 8/8/6, All 8/8/5, Link at the same X; MOVE E then
+  MOVE N: Off 9/5, Same 8/5, All 8/4.
+
+**What else changes with it on:**
+- A MOVE's `frames` is one less; under `Same` the owed frame is counted in the next action's `frames` (not its
+  `control_frames`); the session's total frames are the run's.
+- The observation after a MOVE is taken one frame earlier (before the frame, not after): Link stands where he
+  stood, the monsters are a frame behind. The network decides on a frame-earlier picture.
+- Pushing (blocks, gravestones, the Armos): the game counts held frames; today each closing frame restarts the
+  count between MOVEs, on it carries across consecutive MOVEs, so a push can finish in fewer decisions.
+- After a MOVE, an attack (All) or the dock warp's RECORDER (All) starts one frame earlier: the dock warp's plays
+  were found by search at today's timing and must be checked (post-d5's 0x55 and post-d7's 0x3f).
+- Unchanged: `menu_frames` (attacks and items only), the MOVE's stall counter (two still frames inside one MOVE),
+  the act modes' `relax:N`/`escape:N` (they count decisions), `stuck`, `linger`, `no_damage_max` (steps). Per-frame
+  reward terms (`penalty-aimless`) see a few frames fewer.
+- A snapshot keeps no owed frame (`Session::restore` clears it): a run resumed from a snapshot under `Same` starts
+  without it. Foresight trials keep it (`SessionCheckpoint`), so `plan`/`guard` stay exact.
+
+**For the 0x1f line, `Same` is not enough:** the line turns from E to N at X $80, and under `Same` that turn still
+plays the owed frame, so the env-action line is still a frame late. `All` removes it.
+
+**Recommendation (before measurement):** `All` for the fresh generation, for everything, not a 0x1f macro: the
+frame after a MOVE serves no input purpose, it costs 1.8% of a winning run in straight walking alone (more with the
+turns), and the same frame decides the 0x1f race; a macro would fix one room. Kept: the frame after attacks and
+items (A/B must be released). To check before the generation trains, with today's team as measurement only: the
+two dock warps, the block pushes and clips, and whether today's networks break (they were trained with the frame).
+
+**Not yet run (waits for the lead's review):** the measurements, all from the worktree, each its own job:
+1. off identity (`d3first` post-d7 and `d2first` post-d4, 200 runs, seeds 0-199): this branch against main
+   (`triforce-r40-peahat-base`, at main 23412d57), run for run.
+2. `TRIFORCE_HOLD_MOVES=same` and `=all`, `d3first` post-d7 (`--from 0_42c_0 --stop-at 6:0x79`, the walk with the
+   wrap, the hearts, the 0x3f dock warp and the magic sword), 200 runs paired with 1's off run: frames to each step,
+   success, hits.
+3. `r40_peahat_line.py envline target/r40-peahat/harvest` under off, `same` and `all`: the env-action line on the 1000
+   harvested 0x1f states (hits, frames).
+
+### The cut-over: the fresh generation plays without the closing frame (the owner's decision, Nov 23)
+
+The owner decided on the finding above (decisions 2026-11-23 "The fresh generation plays without the closing
+no-button frame"): the frame goes for 2.0.1.0, no switch kept, on condition that every side effect is tested and
+nothing rests on memory. The agents (Peahat40) found the rule in the disassembly, proved it on the emulator, measured
+today's team without the frame, and built the cut-over (branch `r40-noclose`, not for landing until the generation's
+code lands).
+
+**How the game reads the controller** (zelda-asm, `asm:` names):
+- `asm:Input_ReadOneController` keeps two bytes per controller: `ButtonsDown` ($FA, held this frame) and
+  `ButtonsPressed` ($F8, held now and not at the last read). Bits: A $80, B $40, Select $20, Start $10, the four
+  directions in the low nibble.
+- Walking reads **held** directions: `asm:Mode5Play_Update@CheckMenu` sets Link's `ObjInputDir` from `ButtonsDown` & $0F
+  every frame; `asm:Link_HandleInput` turns and moves him from it (and returns at once while `ObjShoveDir`, Link's
+  knockback, is set: no direction is read during a shove).
+- The sword and every B item read **new presses**: `asm:Link_HandleInput` calls `Sword_Wield` on `ButtonsPressed` & $80
+  and `Link_WieldItem` on `ButtonsPressed` & $40 (bombs `Bomb_Wield`, the recorder `Flute_Wield`, the candle, the
+  boomerang, the arrows, the food).
+- Select (pause) and Start (the sub-screen) read **new presses**: `asm:Mode5Play_Update` and
+  `asm:Submenu_UpdateActive@CheckStart`.
+- A push block counts **held** frames: `asm:PushBlock_State0Idle` needs `ObjInputDir` toward the block on $10 frames in a
+  row; one frame without it restarts the count.
+
+**The rule:** a frame of release is needed only before a new press of a button the game still reads as held (A after
+A, B after B, Start after Start, Select after Select); never after a MOVE (directions are held, not latched), and
+after an attack or an item only where the next action presses that same button while it is still down. In today's
+executor that never happens by itself: every attack and item ends with frames of no buttons while its animation,
+freeze or sub-screen settles (`run_attack`, `play_recorder`, `select_item`), so the closing frame was never the release.
+The cut-over plays (v2, `r40-noclose` @ c44da789): no closing frame after a MOVE; every other action keeps it (the
+docks need it after a WAIT, measured below); at an action's start the executor reads `ButtonsDown`, and if its first
+press is a latched button the game holds, one frame of no buttons comes first.
+
+**Proved on the emulator** (tests on `r40-noclose`, `crates/zelda/tests/release_frame.rs`; the same on `r40-peahat`'s
+`hold_moves.rs` against today's executor):
+- MOVE E 8, MOVE E 8, WAIT 4, MOVE N 4 take 8, 8, 4, 4 frames (9, 9, 5, 5 today) and Link walks the same pixels.
+- After MOVE E 8, MOVE S 4, WAIT 4, SWORD E and BOMB E, the next SWORD (E, S) swings and the next BOMB (E, S) leaves the
+  bag, exactly as with the closing frame (a bomb right after a bomb waits for the first, `asm:Bomb_Wield`, one in fuse).
+- A held 40 frames past its swing, then SWORD at once: with no release no swing (3 frames), with the release it swings
+  (17 frames). B held 200 frames past its bomb, then BOMB at once: no bomb without the release, one with it. RIGHT held,
+  then MOVE E 8: 8 frames, Link walks (no release needed).
+
+**Found by the tests, fixed in the cut-over** (each a behaviour the closing frame had hidden):
+1. **0x21's gravestone** (the magic sword's cave): the MOVE ends on the stairs the pushed stone uncovered (walking on
+   presses into the moved stone) and the game takes the stairs on a frame Link presses nothing; the closing frame gave
+   it. Without it every MOVE ended there at once and the run stood still: post-d7 under `all` and `same`, 193 of 200
+   `ow-ghini exceeded 2000 steps` at step 191. Fix: one frame of no buttons when a MOVE stops on those stairs.
+2. **A MOVE right after a hit** can start in Link's shove (knockback), when the game reads no direction; a shove into
+   a wall stands still and the MOVE ended as `Wall` after two still frames. Fix: a MOVE's shove frames count neither
+   toward its duration nor as still frames (`MAX_SHOVE_FRAMES` 16).
+3. **Pushes:** three MOVE N 8 against 1:0x22's west block now push it (24 held frames); before, each closing frame
+   restarted the count. The game's own rule, now as a human plays it (`clips.rs` updated).
+
+**Tests that pinned today's timing** (updated on `r40-noclose`, each with a note): `executor.rs` unit tests (WAIT
+frames, the swing's buttons, the sub-screen's press), `clips.rs` (CLIP N 14 -> 13 frames, the 0x22 walk 218 -> 210,
+4:0x50 [424, 318] -> [410, 310], the west block's three MOVE N 8), `bomb_mask.rs` (8 -> 9 waits of 16 for the door to
+open after the good bomb), `env/tests/clips_switch.rs` (the cut ladder clip at 4:0x21: seed 0's hit now leaves Link
+on the ladder at Y $7D, where it only goes back down; the test takes the first seed a MOVE finishes),
+`env/tests/specialist_env.rs` (the shield block inside the beam's own frames, projectile at X 178 not 180; Dodongo's
+step cap 48 for the shorter WAITs).
+
+**Everything tuned or counted at today's timing:**
+| what | status |
+|---|---|
+| dock warps 0x55, 0x3f (`run_dock_warp`) | closed loop on the game (plays from the whirlwind index after each freeze): re-proven by the chains below |
+| whirlwinds 0x0b, 0x22 (the recorder's plays, found by search) and r40-gen-eng's whirlwind macros and position masks | today's network walks into Level 5's mouth before the whirlwind at 0x0b without the frame (below); the macros on `r40-gen-eng` (its `executor.rs` and `whirlwind_macro.rs` pin frames) must be re-proven on the cut-over: a merge conflict in `executor.rs` too |
+| every CLIP (`run_skip`, a per-frame decision table) | closed loop; 13 frames for 14; re-proven by `clips.rs` and the chains |
+| block and gravestone pushes | held-frame counts now carry across MOVEs (the rule); the gravestone's stairs fixed (1 above) |
+| `attack::plan` turn frames, `beams::shot_meets` frames from the press | both counted from the action's own start or press: unaffected |
+| contact and threat columns' horizons, the history input's "frames since" | predictions from the observed frame: unaffected in meaning; the observation after a MOVE is a frame earlier and every action a frame shorter (networks retrain on it) |
+| `menu_frames` | attacks and items only: unaffected |
+| the planner's trials (`plan:`/`guard:` act modes) | `Session::trial` plays the same executor: consistent |
+| stall / linger / relax / escape / stuck counts | decisions or frames inside one MOVE: unaffected (the shove fix, 2 above) |
+| per-frame reward terms (`frame_penalty`, `penalty-aimless`) | a few frames fewer per decision |
+| entry states, harvested states, curriculum tracks | states (the tracks are `.state` files a decision apart): unaffected; a rebuild would differ in its frames |
+| corpus replays (`tf replay verify`) | input streams per frame: unaffected; a new recording differs |
+| `gain_control` (a load's first decision) | kept with its frame: start states begin where they did |
+
+**Measured, today's team (2.0.0.13 networks), 200 runs a chain, seeds 0-199, paired with the closing frame kept
+(`off`); losses are the rooms the failed runs ended in.** post-d7 is `--from 0_42c_0 --stop-at 6:0x79`, post-d5
+`--from 0_0bc_0 --stop-at 7:0x79`; post-d5 changed with 2.0.0.14's whirlwind macro (0x0b), so its last two rows are
+paired with `off` on the merged code (91.0%, `post-d5-off-macro`), the others with `off` before it (84.5%).
+
+| rule | post-d7 | its losses | post-d5 | its losses |
+|---|---|---|---|---|
+| off (today) | 99.0% | 0x3f 2 | 84.5% | 0x55 14, 0x1b 7, 0x34 4 |
+| same | 2.0% (-97.0 ± 1.4) | 0x21 194 | not run | |
+| all | 2.0% (-97.0 ± 1.2) | 0x21 193 | 61.5% (-23.0 ± 4.1) | 5:0x65 31, 5:0x64 27, 0x55 5 |
+| all + the stairs' frame | 97.5% (-1.5 ± 1.3) | 0x3f 4 | not run | |
+| release (+ stairs, shove) | 22.0% (-77.0 ± 3.1) | 0x3f 156 | 49.5% (-35.0 ± 4.2) | 0x55 33, 5:0x6x 61 |
+| release + a CLIP's frame | 20.5% (-78.5 ± 2.9) | 0x3f 159 | 49.5% (-35.0 ± 4.2) | 0x55 34, 5:0x6x 61 |
+| cut-over v1 (release + CLIP; macro on) | 21.5% (-77.5 ± 3.0) | 0x3f 157 | 70.0% (-21.0 ± 3.7) | 0x55 51, 0x45 5 |
+| **cut-over v2 (frame kept after all but a MOVE; macro on)** | **98.0% (-1.0 ± 1.2)** | 0x3f 3 | **87.5% (-3.5 ± 3.0)** | 0x34 9, 0x55 8, 0x45 7 |
+
+Cut-over v2 against `off`: post-d7 hearts on arrival +0.08 ± 0.16 and 182 ± 55 frames shorter (-3.1%); post-d5
+(`triforce stats compare`) hearts lost a run -0.16 ± 0.17, 0x42 reached 263 ± 84 frames sooner (-4.4 s). The 0x1f line
+as env actions on the 1000 harvested 0x1f entries: `off` 1.000 hits a crossing (1000 of 1000, 247 frames), `same`
+1.000, `all` and `release` 0 hits in 1000 (205 frames); v2 plays MOVEs as `all` does.
+
+**Engine against network.** The engine was wrong at the new timing in three places, all fixed on `r40-noclose` before
+anything trains: 0x21's gravestone stairs (a frame of no buttons when a MOVE stops on them); the docks' raft landings
+at 0x55 and 0x3f (a WAIT cut short by the landing, then MOVE N on the next frame, sails the raft back to 0x45 or 0x2f:
+seed 5 at 0x55 shows WAIT at frame 1104, MOVE N at 1106 under `release` and at 1107 under `all`; v2 keeps the frame
+after every action but a MOVE, and the losses go from 159 to 3 and 51 to 8); and a MOVE started in Link's shove (its
+frames now neither count nor stall). The CLIP's frame was a wrong first guess (with it alone 0x3f still lost 159).
+Today's networks, not trained for the timing, lose 0x0b: they walk back into Level 5 before the whirlwind (`all`:
+5:0x64/0x65/0x66 lost 62 runs); with 2.0.0.14's whirlwind macro that loss is gone (v1 and v2 lose no run in Level 5).
 
 ## The carriers on the merged generation, the last pass's wall first, Link's own bombs (Carrier40b, branch `r40-carrier2`)
 

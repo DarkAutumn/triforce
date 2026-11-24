@@ -25,7 +25,16 @@ Round 40's item targets (2.0.1.0, the lead's rule: an item's target tiles are th
 the traces with a room item or a drop in view: the `target` block (and, through the targets, the steps the mask and
 the seeded draws lead to) of `crates/zelda/src/objectives.rs`'s items; no column's computation. Their hashes are
 `tests/fixtures/obs_schema5_round40_targets.json` (`ROUND40_TARGETS_CHANGES`), recorded once on branch
-`r40-gen-targets`."""
+`r40-gen-targets`.
+
+Round 40's line through 3:0x69 (Line40, decisions 2026-11-23 "3:0x69 is crossed by a line") gives the room
+`path_costs` on `d3first` only (game.yaml `routes: [d3first]`); these traces are `d2first`'s and keep their record.
+Line40 had put the costs on the shared room and re-recorded eight hashes; compared step by step (the same seeds, its
+module at dad5f435 against this branch's, the test's own procedure): the same actions and lengths, and of every key
+only `target` differs, where Link is in 3:0x69 (darknut `3_69c_0` steps 2-50, `3_69c_1` 2-22, 30-33 and 39-42,
+`3_69c_2` 2, 4 and 18-50, `3_69n_0` 1-45, `3_69n_2` 1-50; equipment-room `3_0fcave_0` step 25 and `3_0fcave_2` step
+8, the climb back into it; `3_69n_1` ends after 6 steps without a change). With the costs scoped those hashes are
+gone and the eight traces hash as recorded before the line."""
 
 import argparse
 import hashlib
@@ -114,6 +123,29 @@ BOMB_RULE_CHANGES = {
 WEAPON_ROOM_CHANGES = {
     'boss-manhandla': {
         '3_4dw_2.state': 'c9869f57b78559eaa61891ca7502e2fdf7848884e73b3d631c4cf8270fce614e',
+    },
+}
+# The traces the game's heart encoding changed (Nov 24, `env::start_states::hearts_encoding`; tests/test_hearts.py),
+# with their hashes on that code.  A reset drawing a whole number of hearts below full wrote (H, $00): H full hearts
+# besides an empty partial one, which the HUD and `GameView::health` read as H hearts but the game holds as H hearts
+# that survive a hit of exactly H; it now writes the game's own (H - 1, $FF).  Compared step by step with the code
+# before (same seeds, same actions): 16 of darknut's and trap-room's recorded traces drew such a reset, and every
+# difference starts in the two heart bytes written at the reset (nothing else differs there).  Ten keep their hash.
+# In five of these six Link takes a hit he survived at none before and now dies of (`5_05c_2` step 20, `5_64e_0`
+# step 9, `5_64e_1` step 46, `1_22c_0` step 33, `3_5ae_2` step 22: the trace ends there).  In `3_69n_2` (one heart:
+# low nibble 0 now, 1 before) the game requests the low-hearts beep every frame (asm:Mode5Play_UpdateWorld); from
+# step 7 to 11 the frame counter and the random numbers differ and with them Link's and the Darknuts' moves, which
+# join again at step 12.
+HEARTS_ENCODING_CHANGES = {
+    'darknut': {
+        '3_69n_2.state': '5ba646218558a923cd97e291ede16a15491cc3ca0b00980e44c2f6e3c32c1a4a',
+        '5_05c_2.state': '51b3fa414b121384556c360efa30dffcbf13a0930fde98b107276385229c9259',
+        '5_64e_0.state': '2aab1f978eb264e8846b91f580dd360c127fb1d93f28678b40cad224117c864a',
+        '5_64e_1.state': '4c8e2f83acd14c88a2a976e733695432bb7af0b6cbfe6646fd2ec208389bc8a4',
+    },
+    'trap-room': {
+        '1_22c_0.state': '03aedac41ef3d2179c6238ced56c08f1c1e359017cbade7de012943deb098539',
+        '3_5ae_2.state': '64eae21bf0e54f9364c9e1f6ed41d60f1f4cf3824e3d153b4d5d59e935665a91',
     },
 }
 # Round 31 (the owner's phase IX route, docs/experiments/round31.md): Dungeon 1 leaves 0x72, 0x74, 0x52 and 0x42 out,
@@ -264,8 +296,9 @@ def test_schema5_columns_are_unchanged(name):
         pytest.skip(f"{name}: no schema 5 record (a family added after the record)")
     recorded = golden['families'][name]
     changed = (ROUTE_CHANGES.get(name, {}) | BOMB_RULE_CHANGES.get(name, {}) | ROUTE31_CHANGES.get(name, {})
-               | WEAPON_ROOM_CHANGES.get(name, {}) | ROUND40_CHANGES.get(name, {})
-               | ROUND40_TARGETS_CHANGES.get(name, {}) | ROUND40_MERGE_CHANGES.get(name, {}))
+               | WEAPON_ROOM_CHANGES.get(name, {}) | HEARTS_ENCODING_CHANGES.get(name, {})
+               | ROUND40_CHANGES.get(name, {}) | ROUND40_TARGETS_CHANGES.get(name, {})
+               | ROUND40_MERGE_CHANGES.get(name, {}))
     kept = {state: digest for state, digest in recorded.items() if state not in ROUTE31_DELETED}
     assert family_hashes(name, recorded) == kept | changed
 

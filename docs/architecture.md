@@ -1846,6 +1846,13 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `ram_randomization: {chain_hp: p}` draws its reset hp from its start room's list in a share `p` of room-entry
   resets (not curriculum starts); the rest keep the `hp` / `full_hp` draw. A config with `chain_hp` and no room
   with at least 5 arrivals is refused.
+- The hp a reset draws is written in the game's own bytes (`start_states::hearts_encoding`, `_native.hearts_encoding`;
+  zelda-asm/mechanics.md "Heart bytes"): n half hearts are (n - 1) / 2 full hearts in `HeartValues`' low nibble
+  besides the partial heart, `$FF` for a whole number of hearts and `$7F` for a half, full health every container
+  with `$FF` (`tests/test_hearts.py` plays it). Until Nov 24 a whole number H below full was written (H, `$00`):
+  the HUD and `GameView::health` read H hearts, but a hit of exactly H left Link alive at none
+  (`asm:Link_BeHarmed`), a state play never makes (only death writes `$00`); about one reset in five of a family
+  with `hp: [0.15, max], full_hp: 0.5` drew one (zol@d3first 2,197 and darknut@d3first 1,522 of 10,000).
 - Bombs and the kill streak at reset (the owner, Nov 11; every family): `ram_randomization: {bombs: [0, 8], bombs_share:
   0.5, help_count: [0, 9]}` draws Link's bomb count in half the resets (the other half keep the start state's own
   count, what the route carries there: none in Dungeon 2, round 19 §4) and a damage-free kill streak (`$50` =
@@ -2496,6 +2503,75 @@ A power-on run is shown from the frame the models took over. When a replay ends 
   it chose, its probability, the hit head's danger, the act mode's draw and the next most likely actions
   (`boss-gleeok: SWORD N 62% hit 3% (temperature) | MOVE S 16 21%`). All of it comes from the replay alone
   (version 2); an older replay shows none.
+
+## Playing a room by hand (`emu-zelda.py`, `emu.py`, `emu_view.py`, `crates/triforce-py/src/emu.rs`)
+
+The owner plays one room himself to show how it is played, and the take is kept as a replay the agents read
+(`uv run emu-zelda.py 5 05 --bombs 0`: the Olive Garden by the sword alone; `--help` has every flag and key).
+
+- **The start** (`emu.Spec`, `emu.find_start`): the route's own start state for the room (`--route`, default
+  `d3first`): the side the route first enters it by, its first visit, chain 0 (`--entry N|S|E|W|cave`,
+  `--visit`, `--chain`; `cave` is out of a cave or a dungeon's stairs, a state name's `c`). The route's steps
+  give the entries in order, the namespace's state files (read by `_native.state_name`) the visits and chains.
+  A room the route never enters is refused, naming the rooms it does enter; `triforce.probe` is not used (a
+  route state is what a run brings into the room). `--bombs`, `--hearts` (halves; the containers grow to hold
+  them, written as `env::start_states::hearts_encoding` writes them) and `--keys` are `Game.set_value` writes.
+- **The recording** (`_native.LiveGame`): a `Session` over `pool::zelda::PoolNes<ZCore>`, the wrapper every pool
+  env records through. `load(state, seed, overrides)` loads the start as a chain start loads it (the natural RNG
+  phase drawn from the seed, "Randomness at a start"; the overrides written before control is gained) and begins
+  a new recording: the start state embedded by name, the RNG bytes and the overrides as frame-0 EDITS, META
+  `rng_phase`, the frames to control as the first INPUTS, a CONTROL event where the player takes over. `step(b)`
+  runs one frame with controller byte `b`, rendered. `replay(meta, ending)` finishes a copy (the END state is
+  the machine as it stands), so saving goes on recording. META `kind` is `human`; META `human` holds the room,
+  state, entry, visit, chain, overrides and the DONE rule and its reason; the ending is `death`, `other` (left
+  the room) or `unknown` (saved while paused). `tf replay verify` passes and `play-zelda.py FILE` plays it.
+- **The session** (`emu.Session`, no window): `reset(seed)` (None draws a new one), `step(buttons)` returns
+  why the take is DONE or None, `save(folder)` writes `<room>_<entry>[_v<visit>][_chain<c>][_<route>][_bombsN]
+  [_heartsH][_keysK]_seed<seed>_<yymmdd-HHMMSS>.tfreplay` (the room in the owner's notation, `3x59`, `ox1f`;
+  a name already there gets `-2`, ...) into `~/triforce-review/played/` (`--out`).
+- **DONE is a rule** (`emu.DONE_RULES`, `--done`): given each frame where Link was at the load and where he is
+  (`emu.Where`: level, room, in a cave or cellar, in play, dead). `room`, the only one so far: Link dies, or
+  stands in play (GameMode 5) outside a cave or cellar in another room. A cellar has its own room id, and the
+  stairs' transition mode shows it before the cellar's mode does, so only a room in play counts: 3x69's stairs
+  down to the raft's cellar and back up are one take, walking N into 3x59 ends it; on the overworld a cave is the
+  same take, another screen ends it. Longer takes add a rule without touching the session or the window:
+  `dungeon` (DONE on leaving the level, or death) and `never` (death only) are the ones named so far.
+- **The window** (`emu_view.Window`, Qt; a thin layer over the session): the states (`emu_view.Machine`):
+  READY (loaded, paused, two bars over the picture; a game button starts it and counts on the first frame,
+  Create starts it with nothing held), PLAYING, PAUSED (the emulator's hard pause: nothing runs or is recorded,
+  only Create leaves it), DONE. Save (square, `S`) and the resets (triangle / `R` a new seed, R1 / `T` the same)
+  work only in PAUSED and DONE; a reset is READY again with a new recording. The controller is read through
+  SDL's game-controller mapping (`emu_view.Pad`, pygame; `PAD_INPUTS`): the d-pad, cross = B, circle = A, Options
+  = Start, Create = the hard pause, never the sticks or Select; the keyboard (`KEY_INPUTS`) always works too.
+  Alt-F4 or closing the window quits. The picture is the NES's 256x240 times `--scale` (3), sharp, with a status
+  strip (room, entry, seed, hearts, bombs, keys; the last file saved) and the overlays of the state (`compose()`).
+  It opens centred on the centermost monitor (`emu_view.centermost`: left to right by position, the middle one,
+  of an even count the left of the middle two).
+- **The rate** (the window's pacing only: the session and the replay are frames): the NES's 60.1 frames a
+  second, `-` and `+` (also `=` and the keypad's) 5 slower or faster in any state, from 5.1 to 240.1
+  (`emu_view.step_rate`); the title says it and whether the game is paused or DONE (`emu-zelda 3x59 - 45.1 fps -
+  paused`). A tick (every 2 ms) runs the frames due, at most 3 (a window further behind drops the time). The
+  sound (on unless `--no-sound`) plays only within 10 of 60.1 (`emu_view.sound_allowed`): each frame's samples
+  are made as `play-zelda.py`'s heard cell makes them (`zcore::tracks::Tracks`, the `theater::Speaker` ring and
+  its feed rate), stretched by the rate (`LiveGame.set_sound(on, speed)`: `1 / speed` times a frame's samples, so
+  50.1 sounds lower and gapless); out of the band it stops, and back in it starts from the machine as it stands
+  (nothing made earlier is played late).
+- **Reading a take, frame by frame** (an agent): `player = _native.ReplayPlayer(data)`, `player.step(1, False)`
+  for each frame, then `_native.Game().load(player.save_state(), randomize_rng=False, controllable=True)` is
+  that frame's `GameState`: `.link` (x, y, tile, direction), `.enemies` (slot, name, x, y, health, ...),
+  `.projectiles`, `.full_location`, `.health`; `player.buttons` is the frame's controller byte (META
+  `buttons`). `tests/test_emu.py` reads a take this way and finds what the session saw.
+- **Running it.** The script carries its own dependencies (PEP 723: numpy, PySide6, pygame) and imports the
+  checkout's `triforce` package and its built `_native` module, so `uv run emu-zelda.py` works where the module
+  is built; it imports nothing that brings torch (`provenance` imports `registry` only where a checkpoint is
+  described). A plain `uv run` of a project script would sync the project's `.venv` to `uv.lock` (and rebuild
+  the module); `.venv/bin/python emu-zelda.py` works as well.
+- **Tested without a window or controller** (`tests/test_emu.py`, `tests/test_emu_zelda.py`, offscreen Qt):
+  the start, the cellar round trip and the exit N in 3x69, death, same-seed resets frame for frame, the saved
+  replay verifying and replaying to the same picture, `--bombs` as an EDIT, the Olive Garden's start, the states
+  and inputs with synthetic events (the snippet sequence: play, pause, save, reset, a new recording; two saves of
+  one recording), the rate, the title, the sound by the rate, the monitor choice on made-up layouts. The real
+  controller's buttons, the monitors, the sound device and the feel of the pacing are the owner's to try.
 
 ## Sound (`crates/zcore/src/sound.rs`, `crates/zcore/src/tracks.rs`)
 

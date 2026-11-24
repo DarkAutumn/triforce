@@ -4,7 +4,7 @@
         [--iterations N] [--steps-per-update N] [--device cuda|cpu] [--run-id ID] [--models-dir DIR]
         [--stop-success RATE [--stop-patience N]] [--curriculum TRAJECTORIES_DIR] [--events JSONL | --logs-dir DIR]
         [--ent-coeff C] [--ent-anneal SHARE] [--shaping-anneal N] [--best-of-n RUNS [--best-keep K] [--best-every N]
-        [--best-coeff C] [--best-parallel P]] [--demos FILE... [--demo-coeff C]]
+        [--best-coeff C] [--best-parallel P]] [--demos FILE... [--demo-coeff C]] [--no-task-demos]
         [--sil-coeff C [--sil-value-coeff B] [--sil-capacity ROWS]]
         [--search JSON [--search-coeff C]] [--plr [--plr-beta B] [--plr-rho R] [--plr-uniform U]]
         [--ppg [--ppg-every N] [--ppg-aux-epochs E] [--ppg-clone-coeff C]]
@@ -53,7 +53,10 @@ iterations the current policy plays RUNS episodes from every seed start state on
 become the behavior-cloning batch, weighted ``--best-coeff`` (the demo-regularization term; ``best/*`` metrics).
 ``--demos FILE... [--demo-coeff C]`` (``demos.py``) fills the same term, for the whole run, with demonstration rows
 recorded from a scripted rule (``losses/demo_bc_loss``, ``charts/demo_bc_accuracy``); not with ``--best-of-n``. A row
-whose duration is ``demos.ANY_DURATION`` clones its kind and direction only.
+whose duration is ``demos.ANY_DURATION`` clones its kind and direction only.  A task's own ``demos: {files, coeff}``
+(round 40; ``inputs.task_demos``, names under the demos data folder) is cloned the same way: ``--demos`` adds to it,
+``--demo-coeff`` overrides its weight, ``--no-task-demos`` leaves it out; the manifest's ``data.demos`` lists every
+file cloned with its checksum.
 ``--sil-coeff C`` (self-imitation learning, §3; ``ppo.SilReplay``): each rollout's rows whose λ=1 return R beat the
 critic's value V(s) go into a FIFO replay of ``--sil-capacity`` rows; every minibatch adds
 ``C · (−log π(a|s) · max(0, R − V) + ½ β · max(0, R − V)²)`` over a minibatch-sized uniform sample of it
@@ -115,7 +118,7 @@ from . import lineage, manifest, paths, registry, store
 from ._native import CurriculumSpec, EnvPool, TrainTask
 from .best_of_n import collect_best, success_by_state
 from .clips import OFF_LABEL, episode_jobs
-from .demos import load_demos
+from .demos import load_demos, recipe as demo_recipe
 from .events import (LOGS_DIR_ENV, PROGRESS_METRICS, EventLog, TrainingPlan, has_plan, new_log_dir,
                      write_json_atomic)
 from .jobs import announce, flag, work
@@ -123,7 +126,7 @@ from .jobs import progress as job_progress
 from .metrics import MetricsLogger, format_summary
 from .model import ModelConfig, ZeldaPolicy, obs_spec_from_space
 from .observation import observation_space
-from .inputs import MissingInput, check_task
+from .inputs import MissingInput, check_task, task_demos
 from .ppo import PPO, IterationResult, PPOConfig
 from .run_stats import TRAIN_NAME as TRAIN_STATS
 from .run_stats import write_train as write_train_stats
@@ -310,7 +313,11 @@ def parse_args(argv=None):
     parser.add_argument('--demos', nargs='+', default=None, metavar='FILE',
                         help="demonstration files (triforce.demos, .npz) to behavior-clone during PPO (weight "
                              "--demo-coeff); not with --best-of-n, which fills the same term")
-    parser.add_argument('--demo-coeff', type=float, default=0.2, help="weight of the --demos cloning loss")
+    parser.add_argument('--demo-coeff', type=float, default=None,
+                        help="weight of the demonstrations' cloning loss (default: the task's demos: coeff, else "
+                             "0.2)")
+    parser.add_argument('--no-task-demos', action='store_true',
+                        help="leave out the demonstration files the task declares (demos:)")
     parser.add_argument('--sil-coeff', type=float, default=PPOConfig.sil_coeff,
                         help="self-imitation learning (better-play §3): weight of the SIL loss on replayed rows whose "
                              "Monte-Carlo return beat the critic; 0 = off")
@@ -493,7 +500,7 @@ def validate_args(args):
               (args.stop_check_gap >= 1, "--stop-check-gap must be >= 1"),
               (args.best_of_n <= 0 or args.best_every >= 1, "--best-every must be >= 1"),
               (not (args.demos and args.best_of_n > 0), "--demos and --best-of-n both fill the cloning term"),
-              (args.demo_coeff >= 0, "--demo-coeff must be >= 0"),
+              (args.demo_coeff is None or args.demo_coeff >= 0, "--demo-coeff must be >= 0"),
               (args.steps_per_update >= args.parallel, "--steps-per-update must be >= --parallel"),
               (args.device != 'cuda' or torch.cuda.is_available(),
                "--device cuda (the default) needs a GPU, and none is available: pass --device cpu to train on the CPU")]
@@ -718,6 +725,11 @@ def main(argv=None) -> Path:
     missing = [path for path in args.demos or () if not Path(path).is_file()]
     if missing:
         raise MissingInput(f"--demos {', '.join(missing)}: no such file")
+    args.demos, args.demo_coeff = demo_recipe([] if args.no_task_demos else [task_demos(config)], args.demos,
+                                              args.demo_coeff)
+    if args.demos and args.best_of_n > 0:
+        raise SystemExit("the task's demos and --best-of-n both fill the cloning term (--no-task-demos leaves the "
+                         "task's out)")
     recipe = recipe_manifest(args, config, source, probe.folder('trajectories'))
     recipe['sources'] = {'models': registry.models_source(args.models_dir), **sources}
     if args.same_recipe_as:

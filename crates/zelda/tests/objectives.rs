@@ -878,6 +878,20 @@ fn dungeon_room(
     room: u8,
     entry: &str,
 ) -> Option<(Session<Counted>, GameCompletion)> {
+    route_room(map, name, level, room, entry, None)
+}
+
+/// [`dungeon_room`] on `route`'s step (None: d2first, the route of bare state names), the session on that route's own
+/// map ([`GameMap::route_map`]), as the environment plays it.
+fn route_room(
+    map: &Arc<GameMap>,
+    name: &str,
+    level: u8,
+    room: u8,
+    entry: &str,
+    route: Option<&str>,
+) -> Option<(Session<Counted>, GameCompletion)> {
+    let map = &route.map_or_else(|| map.clone(), |r| map.route_map(r));
     let nes = open_core()?;
     let mut s = Session::new(Counted(nes, 0), map.clone());
     let mut rng = ChaCha8Rng::seed_from_u64(0);
@@ -887,9 +901,9 @@ fn dungeon_room(
             break;
         }
     }
-    let (route, step) = start_route(map, loc(level, room), Some(entry), None, &mut rng, None, s.state(), true);
-    assert_eq!(route, "d2first");
-    let gc = GameCompletion::new(map.clone(), &route, step).unwrap();
+    let (played, step) = start_route(map, loc(level, room), Some(entry), None, &mut rng, route, s.state(), true);
+    assert_eq!(played, route.unwrap_or("d2first"));
+    let gc = GameCompletion::new(map.clone(), &played, step).unwrap();
     Some((s, gc))
 }
 
@@ -940,6 +954,76 @@ fn d5_0x37_is_crossed_at_x70() {
     let straight = descent(&plain, &plain.wavefront(&targets, &[], &[], objective.clips), start);
     assert_eq!(middle(&straight), [15], "{straight:?}");
     assert_eq!(costed.len(), straight.len() + 2, "two tiles longer");
+}
+
+/// Dungeon 3's 0x69 (round 40, the owner's line; decisions 2026-11-23 "3:0x69 is crossed by a line"): in by the N
+/// door, E along the top row (tile row 4) to the block wall (column 18), S down that column to the stairs' row (row
+/// 10), E to the stairs (26, 10); out from the cellar's exit spot (12, 10), N up column 12 to the top row, E to the
+/// door's column 15 and N.  game.yaml's d3first `path_costs` charge every floor tile off the two lines, so the
+/// objective's way (the `target` observation, PBRS) is the line on each pass; the plain floor has other ways as short.
+#[test]
+fn d3_0x69_is_crossed_by_the_line() {
+    let map = Arc::new(GameMap::builtin());
+    let way = |name: &str, entry: &str| {
+        let (s, mut gc) = route_room(&map, name, 3, 0x69, entry, Some("d3first"))?;
+        let state = s.state().clone();
+        let objective = gc.objectives(None, &state);
+        assert_ne!(objective.kind, ObjectiveKind::Fight, "{name}: crossed, no fight");
+        let targets: Vec<Target> = objective.pbrs_targets.iter().copied().collect();
+        let room = state.room();
+        let costed = descent(room, &room.wavefront(&targets, &[], &[], objective.clips), state.link.tile());
+        let plain = zelda::room::Room::new(state.full_location(), state.current_tiles(), true);
+        let straight = descent(&plain, &plain.wavefront(&targets, &[], &[], objective.clips), state.link.tile());
+        Some((costed, straight))
+    };
+    let Some((inward, plain_in)) = way("d3first_3_69n_0", "N") else { return };
+    assert_eq!(corners(&inward), [(15, 2), (15, 4), (18, 4), (18, 10), (26, 10)], "{inward:?}");
+    assert_ne!(corners(&plain_in), corners(&inward), "the plain floor's way is another: {plain_in:?}");
+    assert_eq!(inward.len(), plain_in.len(), "as short");
+    let Some((outward, _)) = way("d3first_3_69c_0", "cave") else { return };
+    let out = corners(&outward);
+    assert_eq!(out[..3], [(12, 10), (12, 4), (15, 4)], "{outward:?}");
+    assert!(outward[outward.iter().position(|&t| t == (15, 4)).unwrap()..].iter().all(|t| t.0 == 15),
+            "N up the door's column: {outward:?}");
+}
+
+/// `d2first` crosses 3:0x69 too (the shared block `dungeon-3`) and keeps the room it was trained on: the line's
+/// `path_costs` are `d3first`'s only (game.yaml `routes: [d3first]`), so `d2first`'s step there has the objective it
+/// had before round 40 (35739cc0: the same kind and targets), no cost on any floor tile, and the plain room's way down
+/// (the corners pinned: not the line's).
+#[test]
+fn d2first_crosses_3_0x69_as_before_the_line() {
+    let map = Arc::new(GameMap::builtin());
+    let mut got = Vec::new();
+    for (name, entry) in [("3_69n_0", "N"), ("3_69c_0", "cave")] {
+        let Some((s, mut gc)) = dungeon_room(&map, name, 3, 0x69, entry) else { return };
+        let state = s.state().clone();
+        let objective = gc.objectives(None, &state);
+        let mut targets: Vec<Target> = objective.pbrs_targets.iter().copied().collect();
+        targets.sort();
+        let room = state.room();
+        assert!((0..32).all(|x| (0..22).all(|y| room.path_cost(x, y) == 0)), "{name}: no path cost on d2first");
+        let way = descent(room, &room.wavefront(&targets, &[], &[], objective.clips), state.link.tile());
+        let plain = zelda::room::Room::new(state.full_location(), state.current_tiles(), true);
+        assert_eq!(way, descent(&plain, &plain.wavefront(&targets, &[], &[], objective.clips), state.link.tile()));
+        got.push(format!("{name}: {:?} {targets:?} {:?}", objective.kind, corners(&way)));
+    }
+    assert_eq!(got, [
+        "3_69n_0: Move [Tile((26, 10))] [(15, 2), (15, 10), (26, 10)]",
+        "3_69c_0: Move [Tile((15, 0))] [(12, 10), (12, 3), (15, 3), (15, -1)]",
+    ]);
+}
+
+/// The corners of a tile path, its first and last tiles included.
+fn corners(path: &[(i32, i32)]) -> Vec<(i32, i32)> {
+    let mut out = vec![path[0]];
+    for w in path.windows(3) {
+        if (w[1].0 - w[0].0, w[1].1 - w[0].1) != (w[2].0 - w[1].0, w[2].1 - w[1].1) {
+            out.push(w[1]);
+        }
+    }
+    out.push(*path.last().unwrap());
+    out
 }
 
 /// Empties the monster slots except Bubbles (they never die and don't count) and lets the game notice.

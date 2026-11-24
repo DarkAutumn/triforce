@@ -16,7 +16,7 @@ import os
 import random
 import sys
 
-from triforce._native import Game, Snapshot
+from triforce._native import Game, Snapshot, hearts_encoding
 from triforce.paths import STATES_DIR
 
 STEM = '0_0ac'
@@ -37,11 +37,11 @@ def second_visits(paths: list[str]) -> list[tuple[float, int]]:
 
 
 def hearts_values(half_hearts: int, max_health: int) -> tuple[int, int]:
-    """hearts_and_containers and partial_hearts for ``half_hearts`` (``env::start_states::hearts_encoding``)."""
-    containers = (max_health - 1) & 0x0F
-    if half_hearts >= 2 * max_health:
-        return (containers << 4) | containers, 0xFF
-    return (containers << 4) | (half_hearts // 2), 0x7F if half_hearts % 2 else 0
+    """hearts_and_containers and partial_hearts for ``half_hearts`` (``env::start_states::hearts_encoding``; before
+    Nov 24 a copy of its old formula, which wrote the 70 `0_0ac_h*` states of the harvested snapshot `261123-ad612e94`
+    with a whole heart below full as (H, $00): rebuild them to get the game's (H - 1, $FF))."""
+    out = hearts_encoding(half_hearts, max_health)
+    return out['hearts_and_containers'], out['partial_hearts']
 
 
 def write_states(chains: list[str], out: str, count: int, seed: int) -> int:

@@ -7,9 +7,14 @@ observation key, ``mask`` and ``actions`` (``[rows, 3]``: kind, direction, durat
 them).  A duration of :data:`ANY_DURATION` (-1) clones the row's kind and direction only: the rule's pace there is
 not taught (round 25 §5: cloned in full, a rule's short steps spread to the family's other rooms).
 ``scripts/experiments/r25_d5_37_tracks.py --demos`` writes one for level 5 room 0x37 (round 25).
+
+A task may declare its own (round 40): ``demos: {files: [NAME, ...], coeff: C}``, the names under the ``demos`` data
+folder (``triforce.inputs.task_demos``); ``train`` and ``lab.train`` clone them with what ``--demos`` adds, and
+``--no-task-demos`` leaves them out (an arm "that run, except the demonstrations"); :func:`recipe` makes the list.
 """
 
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 import torch
@@ -18,6 +23,7 @@ from . import _native
 from .model import MASK_KEY
 
 ANY_DURATION = -1
+DEFAULT_COEFF = 0.2         # the cloning weight when neither the command line nor a task names one
 
 _DIRECTIONS = list(_native.DIRECTIONS)
 _DURATIONS = [int(d) for d in _native.DURATIONS]
@@ -48,6 +54,21 @@ def legal(mask, indices: tuple[int, int, int]) -> bool:
     dur_row = mask[dur_start + kind * durations:dur_start + (kind + 1) * durations]
     return bool(mask[kind]) and (not dir_row.any() or bool(dir_row[direction])) and \
         (not dur_row.any() or bool(dur_row[duration]))
+
+
+def recipe(declared, extra, coeff: Optional[float]) -> tuple[Optional[list[str]], float]:
+    """The demonstration files a training clones and their weight: every task's declared files (``declared``:
+    [(files, coeff)] as ``inputs.task_demos`` returns them, one a task), then the command line's ``extra``; the
+    weight is ``coeff`` (``--demo-coeff``) when given, else the tasks' own (they must agree: SystemExit), else
+    ``DEFAULT_COEFF``.  No file: (None, the weight)."""
+    files = [str(path) for found, _ in declared for path in found] + list(extra or ())
+    weights = sorted({weight for found, weight in declared if found and weight is not None})
+    if coeff is None:
+        if len(weights) > 1:
+            raise SystemExit(f"the tasks' demos weigh {weights}: one cloning weight trains them all; name it with "
+                             f"--demo-coeff")
+        coeff = weights[0] if weights else DEFAULT_COEFF
+    return (files or None), coeff
 
 
 class DemoRecorder:

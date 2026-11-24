@@ -238,7 +238,9 @@ pub struct RoomExit {
 #[derive(Clone, Debug, PartialEq)]
 pub struct GameRoom {
     pub location: MapLocation,
-    /// `name: Breakfast Room`: what people call the room.  For display only (`describe`, the viewer's strip).
+    /// `name: Breakfast Room*`: what people call the room.  For display only (`describe`, the viewer's strip).  A
+    /// trailing `*` marks one of the owner's canonical names (Nov 24: the Olive Garden, the Breakfast Room, Reverse
+    /// C); a name without it is a working name that may change.
     pub name: Option<String>,
     /// Exits by key ('N', 'S', 'E', 'W', 'cave') in file order; a maze room also gets [`MAZE_EXIT`] last.
     pub exits: IndexMap<String, RoomExit>,
@@ -2972,7 +2974,8 @@ mod tests {
                 cave(0x3d),
                 loc(0, 0x46),
                 loc(0, 0x76),
-                loc(3, 0x4a)
+                loc(3, 0x4a),
+                loc(3, 0x69)
             ]
             .into()
         );
@@ -3034,6 +3037,21 @@ mod tests {
         assert_eq!(wrap.exits["W"].destination, loc(0, 0x75));
         assert_eq!(wrap.exits.keys().collect::<Vec<_>>(), shared.exits.keys().collect::<Vec<_>>());
         assert_eq!((&wrap.enemies, &wrap.specialist, &wrap.path_costs), (&shared.enemies, &shared.specialist, &shared.path_costs));
+    }
+
+    /// Round 40 (the owner's line, decisions 2026-11-23 "3:0x69 is crossed by a line"): `d3first` crosses 3:0x69 on
+    /// the line its `path_costs` charge every other floor tile for; `d2first` plays the shared room, without a cost,
+    /// as its networks were trained (the shared block `dungeon-3` puts the room on both routes).
+    #[test]
+    fn d3first_costs_the_line_through_3_0x69() {
+        let map = Arc::new(GameMap::builtin());
+        let d3 = map.route_map("d3first");
+        let (shared, line) = (map.get(loc(3, 0x69)).unwrap(), d3.get(loc(3, 0x69)).unwrap());
+        assert!(shared.path_costs.is_empty());
+        assert_eq!(line.path_costs.len(), 6);
+        assert!(line.path_costs.iter().all(|c| c.cost == 1));
+        assert_eq!(line.exits.keys().collect::<Vec<_>>(), shared.exits.keys().collect::<Vec<_>>());
+        assert_eq!((&line.enemies, &line.specialist, &line.treasure), (&shared.enemies, &shared.specialist, &shared.treasure));
     }
 
     /// The bow detour: 0x22's stairs lead into the cellar (an in_cave room under its own id) and its ladder back;
@@ -3407,11 +3425,17 @@ mod tests {
         let room = |id: u8| map.get(loc(4, id)).unwrap();
         // The Breakfast Room: a name, a block that reveals the stairs pushed any way, the ladder under it.
         let breakfast = room(0x32);
-        assert_eq!(breakfast.name.as_deref(), Some("Breakfast Room"));
+        assert_eq!(breakfast.name.as_deref(), Some("Breakfast Room*"), "a canonical name carries its mark");
         assert_eq!(breakfast.push_block, [Direction::N, Direction::S, Direction::E, Direction::W]);
         assert_eq!(breakfast.exits["cave"].destination, L::new(4, 0x60, true));
         assert_eq!(map.get(L::new(4, 0x60, true)).unwrap().treasure.as_deref(), Some("ladder"));
-        assert!(map.rooms().values().filter(|r| r.name.is_some()).count() == 2, "the Breakfast Room, the Olive Garden");
+        // Named rooms: the owner's three canonical names carry a `*` (the Breakfast Room 4:0x32, the Olive Garden
+        // 5:0x05, Reverse C 9:0x10); the others are working names (Nov 24: Dungeon 3's 0x59, 0x5b, 0x69).
+        let names: Vec<&str> = map.rooms().values().filter_map(|r| r.name.as_deref()).collect();
+        let canonical: BTreeSet<&str> = names.iter().copied().filter(|n| n.ends_with('*')).collect();
+        assert_eq!(canonical, ["Breakfast Room*", "Olive Garden*", "Reverse C*"].into_iter().collect::<BTreeSet<_>>());
+        assert_eq!(map.get(loc(9, 0x10)).unwrap().name.as_deref(), Some("Reverse C*"));
+        assert_eq!(names.len(), 6, "{names:?}");
         // The two locked doors the route opens (0x30 E, 0x31 N, whose other side is 0x21 S), the bomb walls into and
         // out of the rupee room, the push-block shutter.
         assert!(room(0x30).exits["E"].locked && room(0x31).exits["N"].locked && room(0x21).exits["S"].locked);
@@ -3910,8 +3934,8 @@ mod tests {
 
         let edit = |from: &str, to: &str| GameMap::from_yaml(&GAME_YAML.replacen(from, to, 1), ROUTES_YAML).map(|_| ());
         for (from, to, why) in [
-            ("  name: Breakfast Room", "  name: ' Breakfast Room'", "name must be text"),
-            ("  name: Breakfast Room", "  name: 7", "name must be a string"),
+            ("  name: Breakfast Room*", "  name: ' Breakfast Room*'", "name must be text"),
+            ("  name: Breakfast Room*", "  name: 7", "name must be a string"),
             ("  push_block_opens: E", "  push_block_opens: S", "is not a door of the room"),
             ("      dock: [16, 8]", "      dock: 16", "dock"),
             ("      dock: [16, 8]", "      docks: [16, 8]", "unknown key"),

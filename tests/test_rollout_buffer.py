@@ -301,6 +301,21 @@ def test_linger_metrics_weighted_curriculum_and_entry_rooms():
     assert summary['linger/room/0:0x77:cave/max_steps'] == 20
 
 
+def test_room_metrics_count_hits_and_exits_by_start_room_and_entry():
+    """Round 40: a room's own hits a visit and exit rate in training's log, by the start room and the step's entry;
+    curriculum episodes are left out as every per-episode metric."""
+    metrics = RolloutMetrics()
+    for outcome, hits, entry in (('success', 0, 'N'), ('failure', 2, 'N'), ('success', 1, 'cave')):
+        metrics.add_episode({'outcome': outcome, 'hits': hits, 'entry': entry, 'linger_room': [3, 0x69, False]})
+    metrics.add_episode({'outcome': 'success', 'hits': 5, 'entry': 'N', 'linger_room': [3, 0x69, False],
+                         'curriculum': {'track': 't', 'index': 1, 'length': 10, 'point': 1}})
+    summary = metrics.summary()
+    assert summary['hits'] == 1.0
+    assert (summary['room/3:0x69/N/episodes'], summary['room/3:0x69/N/success_rate'],
+            summary['room/3:0x69/N/hits']) == (2, 0.5, 1.0)
+    assert (summary['room/3:0x69/cave/episodes'], summary['room/3:0x69/cave/hits']) == (1, 1.0)
+
+
 def test_linger_metrics_keep_historical_absence_and_measured_zero_distinct():
     metrics = RolloutMetrics()
     old = {'outcome': 'success'}

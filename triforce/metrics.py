@@ -48,6 +48,10 @@
   ``hearts_at_exit`` (once any episode carries the switch; a state without episodes in the rollout is left out).
 - ``episode_frames`` and ``episode_steps``: mean per completed episode (``info['episode_frames']`` /
   ``info['episode_steps']``).
+- ``hits``: steps that lost health per completed episode (``info['hits']``), and per start room and entry
+  ``room/<level>:0x<room>[:cave]/<entry>/episodes``, ``.../success_rate`` and ``.../hits`` (round 40: a room's own
+  hits a visit and exit rate in training's log; the start room is ``info['linger_room']``, the entry the route
+  step's, ``info['entry']``).
 - ``linger/max_steps``, ``linger/max_frames``, ``linger/tail_steps``, ``linger/tail_frames``: means of the
   longest quiet streak and time since last progress; ``linger/worst_steps`` / ``linger/worst_frames`` are
   maxima across measured episodes. Curriculum starts use ``curriculum/linger/*``; absent data stays absent.
@@ -129,6 +133,8 @@ class RolloutMetrics:
         self.linger_room_worst = Counter()
         self.block_episodes = self.blocks = 0
         self.curriculum_block_episodes = self.curriculum_blocks = 0
+        self.hits = 0
+        self.rooms = Counter()                          # (room key, entry, 'episodes' | 'successes' | 'hits') -> n
 
     def add_steps(self, actions, frames, interrupts):
         """Counts one batch of env steps: ``actions`` ``[n, 3]`` (kind, direction, duration indices), ``frames``
@@ -202,6 +208,13 @@ class RolloutMetrics:
         self.health_fraction += health / max_health if max_health > 0 else 0.0
         self.episode_frames += int(info.get('episode_frames', 0))
         self.episode_steps += int(info.get('episode_steps', 0))
+        self.hits += int(info.get('hits', 0))
+        if info.get('linger_room') is not None:
+            level, location, in_cave = info['linger_room']
+            room = (f'{level}:0x{location:02x}' + (':cave' if in_cave else ''), info.get('entry', '-'))
+            self.rooms[(*room, 'episodes')] += 1
+            self.rooms[(*room, 'successes')] += info.get('outcome') == 'success'
+            self.rooms[(*room, 'hits')] += int(info.get('hits', 0))
 
     def record_linger(self, linger: dict, curriculum: bool, room=None):
         """Folds one measured episode into its room-entry or curriculum accumulator."""
@@ -268,6 +281,12 @@ class RolloutMetrics:
                         result[f'clips/{state}/hearts_at_exit'] = counts['hearts'] / n
             result['episode_frames'] = self.episode_frames / eps
             result['episode_steps'] = self.episode_steps / eps
+            result['hits'] = self.hits / eps
+        for (room, entry, field), count in self.rooms.items():
+            if field == 'episodes':
+                result[f'room/{room}/{entry}/episodes'] = float(count)
+                result[f'room/{room}/{entry}/success_rate'] = self.rooms[(room, entry, 'successes')] / count
+                result[f'room/{room}/{entry}/hits'] = self.rooms[(room, entry, 'hits')] / count
         if self.curriculum_episodes:
             eps = float(self.curriculum_episodes)
             result['curriculum/episodes'] = eps

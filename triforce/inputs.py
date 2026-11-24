@@ -11,10 +11,13 @@ A task (``specialists/<name>.yaml`` or an experiment's yaml) declares:
   a running pool).
 - ``curriculum.enabled``: a track for **every seed state, except those ``curriculum.untracked`` declares** (globs of
   state names; ``check_curriculum``: a seed state without a track trained without one, seen only in ``run.json``).
+- ``demos: {files, coeff}``: demonstration files the trainings clone; **every file must be in the demos data folder**
+  (``task_demos``: ``paths.data_dir('demos')``, the checkout's ``target/demos`` while it has one, else the store's
+  current snapshot).
 
 The entry points call these before they wait for their turn (``triforce train``, ``triforce evaluate``, the lab's
-trainer); a failure raises ``MissingInput`` and the tool exits 2 with its message.  Locations come from the config and
-``triforce.paths`` only."""
+trainer; ``task_demos`` the two trainers); a failure raises ``MissingInput`` and the tool exits 2 with its message.
+Locations come from the config and ``triforce.paths`` only."""
 
 import fnmatch
 import json
@@ -121,3 +124,21 @@ def check_task(config, states_dir=None, trajectories: Optional[str] = None) -> N
     check_harvested(config, states_dir)
     if trajectories is not None:
         check_curriculum(config, trajectories, states_dir)
+
+
+def task_demos(config) -> tuple[list[Path], Optional[float]]:
+    """The task's ``demos:`` as (files, coeff) (none declared: ([], None)): each name under the demos data folder
+    (``paths.data_dir('demos')``); raises ``MissingInput`` naming both places the rule looks (the checkout's folder,
+    the store's current snapshot) when a file is not there."""
+    demos = config.to_dict().get('demos')
+    if not demos:
+        return [], None
+    folder = paths.data_dir('demos')
+    files = [folder / name for name in demos['files']]
+    missing = [name for name, path in zip(demos['files'], files) if not path.is_file()]
+    if missing:
+        store = paths.data_root('demos') / paths.CURRENT
+        raise MissingInput(f"{config.name}: demos {missing} are not in {folder} (the demos data: this checkout's "
+                           f"{paths.legacy_data('demos')} while it exists, else the store's current snapshot named by "
+                           f"{store})")
+    return files, float(demos['coeff'])

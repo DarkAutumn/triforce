@@ -37,6 +37,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from r32_d3first import BEST, LEGS, VARIANTS  # noqa: E402  pylint: disable=wrong-import-position
 from r32_walks import PLAY, CAVE, CELLAR, Failed, Runner, hp  # noqa: E402  pylint: disable=wrong-import-position
+from r32_walks import FIGHTERS, BombFighter  # noqa: E402  pylint: disable=wrong-import-position
 from r27_walks import load  # noqa: E402  pylint: disable=wrong-import-position
 from triforce.jobs import require_job  # noqa: E402  pylint: disable=wrong-import-position
 
@@ -55,13 +56,26 @@ class Harvester(Runner):
             self.pre_entry = snapshot
 
 
+class ReserveBombFighter(BombFighter):
+    """The walks' bomb fight above the route's reserve of 4 (3:0x59 on the fresh generation's d3first)."""
+
+    reserve = 4
+
+
+FIGHTERS['bombs-reserve-4'] = ReserveBombFighter
+
 # Where the harvest plays a step otherwise than the walks wrote it.  4:0x13: after the fight the fighter's floor graph
 # lacks the room's middle and corners (every won fight failed there: d3first-walks-a.md §8 "a script fault"; here the
 # heart's spot and ($78,$5D) both), so Link goes by buttons alone: down the W side to the bottom row, along it onto
 # the heart container at ($D0,$BD), back along it and up the middle to the N door.  The fight is the walks' (round
-# 28's GleeokFighter).
+# 28's GleeokFighter).  3:0x59 from N (round 40, the fresh generation's d3first: `bomb_reserve: 4` from 0x59,
+# decisions 2026-11-23 "The fresh generation's Dungeon 3, continued"): the walks' bomb fight keeps 4 in the bag, so a
+# run in with 8 throws up to 4 and one in with 4 fights with the sword alone (the walks' variant spent the bag to 0).
 OVERRIDES = {'4_13w': [('clear', 'gleeok'), ('straight', ('y', 0xD0, 0xBD)), ('wait', 30), ('straight', (0x78, 0x5D)),
-                       ('go', 'UP', ('x', 0x78))]}
+                       ('go', 'UP', ('x', 0x78))],
+             '3_59n': [('clear', 'bombs-reserve-4'), ('walk', (0x78, 0xBD)), ('go', 'DOWN', ('x', 0x78))]}
+# The rule's name in a harvested state's `played_by` where an override plays the step.
+OVERRIDE_NAMES = {'3_59n': 'bombs above the reserve of 4'}
 
 
 def step_actions(stem):
@@ -70,6 +84,12 @@ def step_actions(stem):
         return OVERRIDES[stem]
     actions = dict(step for leg in LEGS.values() for step in leg)[stem]
     return VARIANTS[stem][BEST[stem]] if stem in BEST else actions
+
+
+def rule_label(stem):
+    """The step's rule as `played_by` names it: the override's, else the walks' best variant's."""
+    variant = OVERRIDE_NAMES.get(stem) or (BEST.get(stem) if stem not in OVERRIDES else None)
+    return f"{stem} ({variant})" if variant else stem
 
 
 def route_goal(stem):
@@ -305,7 +325,7 @@ def harvest(args):
     if args.step in tallies():
         return harvest_tally(args, step, goal)
     actions = step_actions(args.step)
-    rule = f"{args.step} {'(' + BEST[args.step] + ')' if args.step in BEST else ''}".strip()
+    rule = rule_label(args.step)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     command = ' '.join(['python'] + sys.argv)

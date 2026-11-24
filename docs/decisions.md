@@ -3844,3 +3844,55 @@ the wider avoidance set (`touch_tiles`: every tile some position of which takes 
 kind (`crates/zelda/tests/take_tiles.rs`); the d9 walk takes the Triforce of Power without the walker aid it needed.
 The audit (old targets against the take test): every room item's lower row lay 2 pixels outside it, a drop's or the
 ashes' tiles up to 11, a cave ware's tile 7 (its X must be exact).
+
+## 2026-11-24 — Dungeon 3's bombs: the reserve in 3:0x59 is 5; 6 at Manhandla is fine (the owner)
+
+States40 measured the last pass through 3:0x5b in the emulator (round40.md): today's objective leaves it with 7 and
+meets Manhandla with 6, coming in with 8 or with 4. The owner: "Leave that room with 7 isn't a hard rule. 6 is fine.
+7 is if we didn't drop to 4, and had a bomb to use on the wall THEN pick up the treasure bomb drop. I should have
+set the limit of don't go below 5 bombs in the d3 0x59 to get to manhandla with 7."
+
+So for the generation's `d3first`: `bomb_reserve: 5` from 3:0x59 (the lead's reading of "I should have set": it
+replaces the 4 of the day before). Coming into 3:0x59 with 8 Link may use 3; with 4 none, as before. On 3:0x5b's
+last pass the E wall is bombed BEFORE the room's four bombs are taken whenever taking them first would overflow the
+bag (5 or more held): 5 -> 4 at the wall, 8 with the room's four, 7 after 3:0x4c's wall, Manhandla met with 7.
+Arriving with 4: the four first or the wall first, 7 out, 6 at Manhandla, which is fine. Not a hard rule: nothing
+is forced or cheated to reach 7.
+
+Measured the same day (States40): a Red Darknut killed with the drop cycle at 0 drops bombs in 1219 of 3000 kills,
+40.6% ± 0.9% (the disassembly's 104/256), so about two runs in five reach 3:0x59 with 8. Open, for the owner: a
+scripted sword-only fight won 3:0x59 at 4 bombs in about half its tries and the explorer never solved it; how
+today's Darknut network does there with 4 and none usable is being measured.
+
+## 2026-11-24 — How the owner names a room
+
+"From now on I may use that [`dN 0x??`], but if I say 3x59, that's dungeon 3 room 0x59. If say ox1f, that's
+overworld 1f. If I say 0x12, that's likely a mistake or you should get it from previous context in the sentence. We
+may need to start naming more rooms too." In AGENTS.md "The owner's standing rules"; reports to the owner use his
+notation and the rooms' names, code and data keep `level:0xNN`.
+
+## 2026-11-24 — 2.0.0.16: a reset writes Link's hearts as the game holds them (the owner's find)
+
+The owner, playing the Olive Garden in `emu-zelda.py` with `--hearts 2`: a Blue Darknut's touch (two hearts) did not
+kill Link; "I think you set the fractional heart field incorrectly." Emu40 traced it past the tool to
+`env::start_states::hearts_encoding`, the function every training reset's `ram_randomization.hp` (and `full_hp`,
+`chain_hp`) and every single-room evaluation uses. The game holds hearts as two bytes: the low nibble of
+`HeartValues` counts the full hearts BESIDES the partial one, and `HeartPartial` says how full that one is; a hit
+kills when its whole hearts EXCEED the nibble (`asm:Link_BeHarmed`). The function wrote a whole number H of hearts
+below full as (nibble H, partial $00): the HUD draws H hearts, but a hit of exactly H leaves Link alive at none. The
+game's own 2 hearts are (1, $FF). Half-heart values and full health were right.
+
+Proved in the game (`tests/test_hearts.py`): from (1, $FF) a Blue Darknut's touch kills, from the old (2, $00) Link
+stands at zero; and play never makes (H, $00) by itself (from 3 full hearts down by half-heart and whole-heart hits
+the partial byte is $00 only at death). Size: 21.97% of zol's and 15.22% of darknut's resets on `d3first` got it
+(10,000 resets each, their own task settings): those episodes began with one hit more than their hearts showed.
+Chains and replays are unaffected (`ChainEnv` never calls it; they carry the game's own bytes), as are the tracked
+start states (0 of 1,903 hold it); 70 of the 66,438 harvested states do (ow-lynel's `0_0ac_h*`, written by a round 27
+script's copy of the formula): to rebuild for the fresh generation.
+
+The fix is the one function (n half hearts: (n - 1) / 2 full hearts and a partial of $FF or $7F), exposed to Python
+for the tool; six recorded observation traces that drew a whole-heart reset move (five now die of a hit they stood
+at none before) and are recorded with this reason. `REV` +1: training resets and single-room evaluations with
+randomised hearts change for today's team (they read lower, truthfully); no network changed and no chain can.
+For the fresh generation it means every network trains on hearts that mean what they show.
+

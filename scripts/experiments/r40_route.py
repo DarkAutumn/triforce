@@ -54,10 +54,10 @@ def name(level, room, in_cave=False):
     return f"{level}:{room:#04x}" + (' cellar' if in_cave and level else ' cave' if in_cave else '')
 
 
-def route():
-    """The route's steps on the clip way, with each step's route index."""
+def route(way='clips'):
+    """The route's steps on one way (the clip way unless named), with each step's route index."""
     from triforce._native import route_steps  # pylint: disable=import-outside-toplevel
-    return [s for s in route_steps(ROUTE) if s['way'] in (None, 'clips')]
+    return [s for s in route_steps(ROUTE) if s['way'] in (None, way)]
 
 
 def raw_rooms():
@@ -268,13 +268,20 @@ def check_or_patch(patch: bool):
     if patch:
         jobs.require_job()
     steps = route()
-    after = ledger_after(steps, key_events(steps, game_rooms(ROUTE)))
+    rooms = game_rooms(ROUTE)
+    after = ledger_after(steps, key_events(steps, rooms))
+    # Dungeon 4's plain way (steps 43-46) has states too: those read the plain way's ledger (the two agree from step
+    # 47 on). A state at step N holds the count after the way's step before N.
+    plain = route('plain')
+    plain_only = {s['index'] for s in plain} - set(after)
+    after_plain = ledger_after(plain, key_events(plain, rooms))
     first_pass = next(s['index'] for s in steps if (s['level'], s['room'], s['entry']) == (3, 0x5b, 'S'))
     changed = {}
     for game, path, step, base, (n, total) in states():
         if patch:
             jobs.progress(n, total, 'states')
-        want = {KEYS: after[step - 1] if step else 0}
+        ledger = after_plain if step in plain_only else after
+        want = {KEYS: ledger[max(i for i in ledger if i < step)] if step else 0}
         if step <= first_pass:
             want.update({CYCLE: 0, HELP: 0, STREAK: 0})
         have = {addr: game.read(addr) for addr in want}
