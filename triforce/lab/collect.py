@@ -105,7 +105,7 @@ def with_snapshot(config: SpecialistConfig) -> SpecialistConfig:
         return config
     if 'snapshot' not in record or config.harvested_states:
         return config
-    return config.replace({'harvested_states': str(folder / config.name)})
+    return config.replace(harvested_states=str(folder / config.name))
 
 
 def parse_families(items, parallel: int, shares: Optional[dict] = None, state_route: Optional[str] = None,

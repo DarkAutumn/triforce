@@ -800,7 +800,7 @@ def with_data(config, where: Where):
     snapshot = where.snapshot('harvested')
     if snapshot is None or config.harvested_states:
         return config
-    return config.replace({'harvested_states': str(snapshot / config.name)})
+    return config.replace(harvested_states=str(snapshot / config.name))
 
 
 def _train(args, specialist: str, run_id: str, where: Where, out_dir: Path, events: EventLog) -> dict:
