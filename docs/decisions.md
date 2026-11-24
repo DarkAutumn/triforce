@@ -3916,3 +3916,36 @@ Decided for 2.0.1.0:
   discouraged and a bomb laid where it hits two or more ("if you can figure out how it's a huge win").
 - Gibdos: likely the same as Darknuts once their movement code is read; Stalfos are not worth the care.
 
+## 2026-11-24 — 2.0.1.0's stage 1 starts: the network, the teachers and what seed 1 holds (the owner and the lead)
+
+**The network is 768 wide everywhere** (the owner: "So the wider model is better (we think)? Go with the better
+one"). The lead had pinned the code's default of 256 for the generation without saying it was smaller than round
+38's one network (768 wide, which copied every family better than today's shape: held-out KL 0.089 against 0.125,
++1.4 ± 0.3 points on the bench); the owner asked ("Did we reduce the network size?"). The measurement is for one
+network holding every family; for group teachers and single bosses 768 is a judgement, one shape throughout. So
+that no run takes a default again, the network lives in `triforce/groups.yaml` (`hitnet`, tokens `type, features,
+rel, threat, chase`, `feed`, the room identity, `hidden_dim` 768; `--aux hit=hit:0.5`, `--try-others 4:0.25`),
+`--group NAME` alone trains it, an override on the command line is printed in the run's log, and the manifest says
+where each setting came from.
+
+**The teachers** (the lead, on the owner's "groups with exceptions is yes to all [...] start with your idea"):
+four groups (overworld, walkers, others, rooms) and each of the seven bosses its own teacher, since "a head each"
+would need a network that does not exist. The walkers are the families the owner's Darknut rules are about.
+
+**Seed 1 of all eleven first** (the lead, the owner not having ruled on one seed against three): it is the first
+step either way. Baked into it at the lead's defaults, each a retrain of the teachers it touches if the owner
+changes it: `reward.aimless_penalty` 0.002 (on round 38's one-seed pair alone); `items.bomb_catch` 2 on the Darknut
+task (the owner's "you always want to hit 2+ darknuts with one bomb"; measured as a mask on today's network);
+`reward.chase_penalty` 0 (a later arm, not a default); 7:0x1b a fight; no tracked goal is also a reward term
+(the wraps, the crossings without a kill, the hit-free lines and the carriers are tracked and read on the chains).
+
+**A chain gives each slot the rules of the network in it** (the lead): a slot whose network reads the generation's
+inputs plays under the route's task (inputs, masks, clips, step budgets); a slot with one of today's networks
+plays as before. A teacher is judged in its families' slots beside today's networks in the others
+(`triforce eval-batch NAME --teacher GROUP=RUN`), on the dungeons those families play, from the previous triforce
+and from the entrance, against the baseline `r40-2015-1k`.
+
+**The queue** (the owner): its places are one file he edits, `~/.local/state/triforce/queues.yaml` (express 1 with
+a job length of 10 minutes, regular 2, a spare place while the load average is at or under 15, tools 2). Agents do
+not edit it.
+

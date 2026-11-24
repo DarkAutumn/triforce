@@ -3490,3 +3490,53 @@ is gone.
   `.venv/bin/triforce job queues --init` writes the default file (the same queues as without it) for the owner to
   edit; `triforce job queues` shows them. Until the older jobs drain, a job still in regular-3 shows as "outside
   these queues (older code)".
+
+## The rehearsal and the start of stage 1 (the lead, Nov 24)
+
+**The first from-scratch run of the generation's network** (before the trainer and the task files were ready): zol
+alone, `hitnet` at the code's default width of 256 with tokens `type, features, rel, threat, chase` and `feed`
+(1,608,836 parameters), `--aux hit=hit:0.5 --try-others 4:0.25`, 8 games, on
+`specialists/experiments/r40-lead/zol-gen.yaml` (zol@d3first with `obs.threat` and `obs.chase` on), through the lab
+trainer from the frozen worktree `r40-gencode`: `r40-zol-gen/s411` (stopped at 0.92M steps to free a regular place)
+and `s412` (stopped at 1.68M steps when stage 1 started; neither resumable: the lab's resume was not in that tree).
+Training success, start-state balanced, the mean of the 20 iterations before each mark, beside the old network's
+from-scratch seeds ("zol from scratch" above):
+
+| steps | 0.25M | 0.5M | 1.0M | 1.5M |
+|---|---:|---:|---:|---:|
+| the old network, s401 / s402 | 0.50 / 0.54 | 0.84 / 0.87 | 0.95 / 0.94 | 0.96 / 0.95 |
+| `r40-zol-gen` s411 / s412 | 0.60 / 0.47 | 0.88 / 0.87 | - / 0.92 | - / 0.92 |
+
+It learns from scratch at about the old network's pace a step; at 1.0M and 1.5M one seed is 2 to 4 points lower,
+not separated from noise. Speed: 420-450 steps a second each in their first minutes (two regular jobs, load
+averages of 5 to 14), about 210-240 over the first hour and a half, while three regular jobs and suites ran beside
+them (load averages of 50 and more).
+
+**The rehearsal** (r40-int at d024ef47, the store's snapshots `trajectories` 261124-gen2, `demos` 261124-gen3,
+`harvested` 261124-gen1; everything from `triforce/groups.yaml`: `hitnet`, 768 wide, 4,960,388 parameters):
+
+| run | games | steps an update | steps | wall seconds | steps a second |
+|---|---:|---:|---:|---:|---:|
+| `gen-rehearsal/walkers-a` (`--group walkers`, ten families) | 20 | 16,384 | 98,280 | 130.3 | about 750 (start-up included) |
+| `gen-rehearsal/gleeok-a` (`--group boss-gleeok`) | 8 | 4,096 | 49,152 | 129.4 | 385-409 an iteration |
+
+Three jobs ran at once (load about 17). No refusal; the walkers' cloning term read 384,327 demonstration rows in
+seven groups; both runs sealed in the store. Trainer41's Gleeok at 256 wide reached about 515 steps a second in its
+last iteration (390 averaged with its start-up) under another load, so 768 may cost up to a fifth in speed; the two
+are not separated. Then the judging: `triforce eval-batch r40-rehearsal-judge --teacher
+walkers=gen-rehearsal/walkers-a --dungeons d3 --runs 20` (job #1251, one minute): the untrained teacher in its
+twenty slots, both chains, the report, the room statistics and the comparison; every run stuck in 3:0x7b or 3:0x7c,
+as an untrained network must. A lab-trained teacher in a chain had not been run before.
+
+**Stage 1, seed 1** (started Nov 24 16:16 from the frozen worktree `triforce-gen1` at 15017241;
+`scripts/experiments/r41_stage1.sh 1`): the eleven teachers of the group file, from scratch, into the store as
+`gen1-<teacher>/s1`. Each run's size is the lead's judgement: two games a family (eight for a teacher of one or two
+families), 4,096 steps an update for every 2.5 families, 3 million steps a family (zol alone flattened between 2 and
+3 million): walkers and overworld 20 games, 16,384 steps an update, 1,831 iterations (30.0M steps); others 10,
+8,192, 1,831 (15.0M); rooms 8, 4,096, 1,465 (6.0M); each boss 8, 4,096, 733 (3.0M); 16 checkpoints a run. At the
+rehearsal's speeds about 11 hours for each big teacher and about 49 job-hours a seed (an estimate; a group may
+need more or fewer steps a family than zol alone). Baked into seed 1: the network at 768 (the owner), the groups
+(four, and each boss alone), `reward.aimless_penalty` 0.002, `items.bomb_catch` 2 on darknut, `reward.chase_penalty`
+0, 7:0x1b a fight, the reserve of 5 in 3:0x59 (the owner), the demonstrations at 0.05 in seven equal groups. Known
+and not measured: in the walkers' run the Darknut demonstrations are cloned at the same absolute weight as in a
+one-family run, about ten times their rooms' share of the batch.
