@@ -170,3 +170,47 @@ kills darknuts, I personally don't know how you would teach the model this, but 
 huge win. Similarly, teaching the model to use bombs when it hits 2+ things. A darknut by itself isn't really much
 of a threat except in confined spaces."
 
+## Which monsters these rules cover (Chase40, from `zelda-asm/`)
+
+The owner asked: "what enemies have unique movements that wouldn't be affected by these strategies". Every moving
+monster's update routine was read (zelda-asm/mechanics.md "Who chases what" has the routine for each row). Three
+questions: **don't chase** (followed on its own line from behind, it can turn straight back at Link); **shadow at
+90 degrees is safe** (off its line by more than its alignment window it cannot reverse onto Link, and the only turn
+toward him is the 90-degree one); **gathers at the hotspot** (it steers by the chase target, Link or his mirror, so
+it clumps where the two coincide, about (128, 128), and scatters elsewhere).
+
+| Monster | Don't chase applies | Shadow at 90° safe | Gathers at the hotspot | Its rule |
+|---|---|---|---|---|
+| Darknut red / blue, **Gibdo**, Stalfos, Like-Like, Vire | yes (129 in 256 a decision) | yes (window 8 px) | yes | `asm:Wanderer_MoveAndTurn`, turn rate $80; a Gibdo walks exactly as a red Darknut (`asm:Gibdo_Update`) |
+| Moblin, Octorok, Blue Leever, Ghini, Bubble | yes (Ghini always; Moblin 161, Octorok 113 or 161, Bubble 65 in 256) | yes | yes | the same wanderer rule, other turn rates |
+| Zol, Gel, Dodongo | yes, rarely (33 in 256) | yes | yes, weakly | the same, rate $20, Zols and Gels pause at each square |
+| Goriya, Lynel, Armos | **yes, always**, within $51 (81) px | **no** | yes, within $51 px | `asm:Goriya_Update`: at every grid point it faces the target along the longer axis if under $51 px; off its line it still reverses whenever Link is farther behind it than beside it |
+| Rope | **yes, always**, and it rushes at 1.5 px a frame | **no**: level with Link it charges him | no | `asm:Rope_Update`: Link's real position, less than 8 px off its column or row at a grid point |
+| **Blue Wizzrobe** | yes, on its turn beat | no | **no** (the owner expected yes) | `asm:Wizzrobe_Blue_TurnTowardLink`: every 128 frames it turns toward Link's real side on one axis, at any distance; teleports 32 px diagonally from itself; shoots only when already facing Link on his 16-px row or exact column |
+| **Red Wizzrobe** | - | - | **no** (as the owner guessed) | `asm:Wizzrobe_Red_State3Appear`: appears 2-5 squares from Link's real position facing him, shoots once on its 16th solid frame; never walks |
+| Keese, Peahat, flying Ghini | no (one 45° step per 16 frames) | - | partly (chase in 80-96 of 256 decisions) | `asm:Flyer_State2Chase` |
+| Moldorm, Patra, Gleeok's flying head | no (45° steps) | - | yes (192-208 in 256) | flyers that mostly chase |
+| Manhandla, Digdogger, Tektite, Boulders | no | - | partly | one 45° step toward the target half the time (Tektite at each jump; Boulders fall in its half of the screen) |
+| Lanmola | on a column yes, on a row no | no | no | `asm:Lanmola_UpdateHead`: toward Link's real position 128 in 256 at its points |
+| Ganon | yes | no | no | the Blue Wizzrobe's turn, toward Link's real position |
+| Red Leever, Zora, Trap, Wallmaster, Pols Voice, Gohma, Aquamentus, Gleeok's attached heads, statues | - | - | no | own rules, below |
+
+**The ones none of the three rules covers, or that move by a rule of their own** (what the code says to do):
+- **Red Wizzrobe**: it is placed by Link's real position, 2-5 squares off in a row or column, facing him, and fires
+  once along that line. Step off its row or column before its shot; it can be hit only while solid.
+- **Blue Wizzrobe**: it ignores the mirror; it shoots only when already facing Link on his row or exact column, on a
+  32-frame beat. Stay off its rows and columns; clumping it at the hotspot does not work.
+- **Goriyas, Lynels, Armos**: "don't chase" holds more strongly than for Darknuts (certain, from up to 81 px behind),
+  and shadowing beside it is safe only level with it or ahead of it, never behind.
+- **Rope**: charges Link's real position at triple speed the moment he is within 7 px of its column or row at one of
+  its grid points; neither following nor shadowing is safe; meet it head on with the sword or stay off its lines.
+- **Red Leever**: surfaces 40 px from Link along his facing (sometimes behind him) and runs straight back along that
+  line: turn or step aside after it surfaces.
+- **Trap**: charges when Link is within 13 px of its row or column: stay off its lines.
+- **Wallmaster**: comes out only while Link stands against a wall: stay off the walls.
+- **Zora, Aquamentus, Gohma, Gleeok, statues**: fireballs aimed once at Link's real position, then straight: a
+  sideways step after the shot; their bodies move at random or in fixed patterns.
+- **Pols Voice**: random walk and jumps; reads no target at all.
+- **The fliers** (Keese, Peahat, flying Ghini, Moldorm, Patra, Gleeok's flying head, Manhandla, Digdogger) and
+  Tektites: they turn at most 45 degrees every 16 frames (a Tektite per jump), so none turns straight back; the
+  chasing ones drift toward the hotspot when Link is there.
