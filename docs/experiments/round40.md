@@ -2791,7 +2791,90 @@ items; the bare hashes; `for_chain` takes `obs` and nothing else; the guard refu
 network without the groups plays anywhere), `tests/test_manifest.py` (a list of two bases merges as stated; a loop, a
 missing base and an empty list are refused naming the file; the manifest names both bases with their hashes;
 `triforce manifest diff` shows a change made in the common block as `task.effective.reward.aimless_penalty` and
-`task.extends`).
+`task.extends`). `triforce.specialist.task_files()` lists every task file but the `_*.yaml` blocks; the tests that
+walk `specialists/` and `crates/zelda/tests/d3first_walks.rs` (which reads a family's `items.bombs` and `clips`
+itself, now with the `extends` merge: reading the new d3first files alone it lost trap-room's bomb rule in 3:0x4c)
+use the merged task.
+
+**Today's team plays identically** (the store's current team 2.0.0.15; seeds 0-199; `--parallel 10`; jobs #1180 on
+`r40-tasks-base` = `r40-gen` 42d15e02 plus the queue setting, #1229 on this branch at 78894b3d; the records under
+`~/triforce-shared/jobs/{1180,1229}-Tasks41-gen-tasks-identity-*`):
+
+| segment | runs | outcomes, rooms, frames, every record field | per-decision diagnostics | wall time before / after |
+|---|---:|---|---|---|
+| `d3first` Dungeon 1 (`1_73s_0`) | 200 | identical run for run (5,961,643 frames each side; 13,204 room visits) | the served network's `act_entropy` and `surprisal` differ by at most 2.3e-5 / 3.0e-5 | 10m 48s / 10m 14s |
+| `d2first` Dungeon 1 | 200 | identical (10,542,468 frames; 24,617 room visits) | identical | 9m 49s / 6m 01s (machine load) |
+
+As Chase40 and Gen40obs found, the only difference is the fifth decimal of the served `hitshift` network's two
+float diagnostics with the same action drawn (GPU batches). `triforce manifest diff`: `code` (branch, commit,
+module), and on `d3first` every `task.configs.*` hash (each family's chain config now carries `obs.threat` and
+`obs.chase` on, from its d3first task); on `d2first` no task difference. A chain compared with `--same-team-as` against
+a `d3first` chain from before this branch will name those config hashes.
+
+### The demonstrations again, with the inputs on
+
+The nine files of darknut@d3first (Line40b's two, Darknut40's seven) held `entity_threat` all zeros and no `chase` or
+`entity_chase` (recorded before schema 9; Trainer41's `lab.recipe.check_demos` refuses them under the generation's
+network). No file keeps machine states, so the observations cannot be recomputed: the builders ran again under the
+new task (`specialists/d3first/darknut.yaml` and the `experiments/r40-darknut/*.yaml` cases that extend it), with
+the same commands, visits and seeds: `r40_d3_69_line.py demos --pass in --runs 320 --seed0 100000 --skip` the 11 seeds
+Line40b's jobs never finished (a new `--skip`; one regular job, 40 minutes), `--pass out --runs 480 --seed0 100000`;
+the fighter's `demos --per-state 50 --seed0 100000` per case (5b low and full, 59 at 4 and 8, the Garden at 0),
+the Garden at 8 as its two pieces were: the first 57 visits of `--per-state 50` (a new `--first`; Darknut40's first
+piece stopped after 57 visits, which ones exactly its log no longer says) and `--per-state 31 --seed0 100150`
+(script `target/r40-tasks/demos/fighter.sh`, one regular job, 33 minutes; records `target/r40-tasks/demos/*.jsonl`).
+
+**The play is the builders' own, only the observation gained.** The two rules read no observation; what could move
+play is the new task's mask (`items.bomb_catch: 2`). A paired check on today's code (job #1151; `r40-gen`'s task
+against this branch's, a few visits a case, one worker): 69 in (2 visits) and out (4), 5b low (3), 59 at 4 (3):
+the same actions and rows, every key but the switched three byte-identical; 59 at 8 and the Garden at 8 (3 each)
+part at the first BOMB the new mask refuses (kind 4's mask columns and Link's column 72, the bomb usable). Against
+the store's files as a multiset of rows (every key but `entity_threat`): **5b low, 5b full and the Garden at 0 are the
+same rows exactly** (19,971, 19,922, 126,726); 59 at 4 differs in 653 rows of 56,763 beyond the mask (play after a
+drop takes the bag to 8, where the mask applies); the 3:0x69 files differ in every row's `link` block (the code
+since Line40b's recording at 916b162b, not the switches: the paired check says the same rows on today's code) and the
+way out also draws today's harvested handoffs.
+
+| file | visits (kept / played) | rows (store's) | keys | nonzero rows: `entity_threat` / `entity_chase` / `chase` | same actions | sha256 (12) |
+|---|---|---:|---|---|---|---|
+| r40-d3-69-in.npz | 309 / 309 (304 by the search, 5 by the rule) | 13,025 (12,319) | 14 obs + mask + actions (`chase`, `entity_chase` added) | 13,025 / 11,789 / 13,025 | yes (paired check; the store's differ by code drift) | 99c2edf51634 |
+| r40-d3-69-out.npz | 480 / 480 | 10,057 (10,112) | the same | 10,057 / 8,137 / 10,057 | yes (paired check) | 7d7b9ed2b7e3 |
+| r40-darknut-5b-low.npz | 150 / 150 | 19,971 (19,971) | the same | 19,971 / 19,371 / 19,971 | yes: the store's rows exactly | 76c76c4d3a15 |
+| r40-darknut-5b-full.npz | 150 / 150 | 19,922 (19,922) | the same | 19,922 / 19,322 / 19,922 | yes: the store's rows exactly | c31a8f91ce65 |
+| r40-darknut-59-b4.npz | 146 / 150 | 56,763 (56,595) | the same | 55,648 / 52,454 / 56,763 | yes until a drop fills the bag (the mask) | bf64443cebc1 |
+| r40-darknut-59-b8.npz | 147 / 150 | 49,783 (49,285) | the same | 48,746 / 45,317 / 49,783 | no: the mask (1.21 bombs a visit, 2.16 Darknuts hurt a bomb, 133 / 38 / 11 hurt 2+ / 1 / 0) | fa4e61041448 |
+| r40-darknut-garden-b0.npz | 148 / 150 | 126,726 (126,726) | the same | 126,726 / 120,039 / 126,726 | yes: the store's rows exactly | f48e72521ab3 |
+| r40-darknut-garden-b8.npz | 57 / 57 | 33,950 (29,328) | the same | 33,950 / 31,396 / 33,950 | no: the mask (3.65 bombs a visit, 2.24 hurt a bomb) | 501986b5d9b6 |
+| r40-darknut-garden-b8-p2.npz | 93 / 93 | 54,130 (51,830) | the same | 54,130 / 49,957 / 54,130 | no: the mask (3.82 bombs a visit, 2.19 hurt a bomb) | f42b332fca81 |
+
+The files are in this worktree's `target/demos/` (what its own tools read) and, as the whole snapshot (the store's
+`261124-gen2` with these nine replaced, the other 217 files the same bytes), in `target/demos-gen3/`, for the lead:
+
+    triforce-lead data install demos 261124-gen3 --from /home/leculver/git/triforce-r40-tasks/target/demos-gen3
+
+### A training reads them (job #1245)
+
+`python -m triforce.lab.train --name r40t-walkers-smoke --group walkers --parallel 10 --iterations 2 --seed 41
+--models-dir target/r40-tasks/models`: the walkers teacher (darknut@d3first among its ten members) with the group
+file's network (`hitnet`, tokens `type, features, rel, threat, chase`, `feed`, the room, `hidden_dim` 768, `--aux
+hit=hit:0.5 --try-others 4:0.25`; 4,960,388 parameters; the manifest's `networks.student.sources` all "group file"),
+from scratch, on these task files and `target/demos`. It started, passed the lab's refusals (the obs switches agree
+across the ten tasks, the network reads `chase`, `entity_chase`, `entity_threat`, the demonstrations carry them) and
+read the files: "demonstrations: 384327 rows from … (weight 0.05; 7 groups, equal shares)"; `losses/demo_bc_loss`
+2.30 then 2.09, `charts/demo_bc_coeff` 0.05; `run.json` and its manifest list the nine files with their groups and
+SHA-256. Then `python -m triforce.lab.record --families darknut@d3first --actor student --student <its ckpt.pt>
+--rollouts 1 --parallel 8 --state-route d3first`: of the rollout's 4,096 rows, `entity_threat` is nonzero in 3,794
+(the rows with any monster: `entity_rel` is nonzero in the same 3,794), `entity_chase` in 2,312, `chase` in all 4,096.
+
+### Not done, not tested
+
+- The generation's network was not chained (no trained one exists); the guard is tested with untrained `hitnet`s.
+- The chain config takes `obs` only: a generation network chained today plays under the bare masks (above).
+- Experiment files that extend a d3first task moved with it (listed above), Switch40's `wallmaster-0d*` among them;
+  the lead's `specialists/experiments/r40-lead/zol-gen.yaml` now equals zol@d3first in its two switches.
+- The 69 files' "same actions" rests on the paired check of six visits, not on the whole files (no record of Line40b's
+  actions is left, and its code is older); the Garden at 8's first piece is the first 57 visits in order, not
+  necessarily Darknut40's 57.
 
 ## The untracked states' tracks (Tracks41, branch `r40-tracks2`)
 
