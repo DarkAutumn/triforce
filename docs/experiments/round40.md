@@ -693,3 +693,82 @@ that clones the task's file at its weight, records it with its checksum, takes `
 - The in-pass rule alone was measured on 300 visits a pass, not 1000; the 1000-visit figures are the look-ahead's.
 - The `null` endings (400 decisions) were not looked into.
 - `d2first`'s 0x69 step reads the same `path_costs` (the room's data is shared); its chains were not run.
+
+## The fresh generation's `d3first` route data (Route40, branch `r40-route`)
+
+anthropic/claude-opus-5-5 (Route40). The owner's decisions of Nov 23 ("The fresh generation's Dungeon 3", its
+"continued", "3:0x69 is crossed by a line", "The fresh generation's list") as route data, start-state knobs and
+walks; nothing trained. `d2first` is untouched (its rooms are the shared ones; every change below is a `d3first`
+step, a `routes: [d3first]` game.yaml entry or a d3first task file).
+
+**What changed.**
+- The opening: on `d3first` 0:0x76's W exit has `wrap_in: [5, 14]` (game.yaml's d3first entry), so with clips on
+  the objective's way W through 0x76 is the E screen wrap at the edge Link comes in by (a jump of the path search,
+  as 0x55's W third), then one MOVE W into 0x75 and its wrap exit; with clips off there is no jump and 0x76 is
+  walked as before. No kill is needed before 3:0x5b.
+- Dungeon 3: 3:0x6b `treasure: skip` (crossed, its key left); 3:0x7b unchanged (its key lies in the open: taken,
+  no fight); 3:0x5b's first pass stays a crossing with its bombs left (`treasure: skip`; its carriers are Carrier40's
+  `carrier_targets`); 3:0x59 from N `bomb_reserve: 4` (0 before), held through 0x5a; the last pass and on as before
+  (the block `dungeon-3`). Carrier40 put `carriers: false` on both 3:0x69 lines of the block (Line40's no-hit line).
+- 2:0x3e: the Moldorm is fought for its key again (no `treasure: skip`).
+- 9:0x56 keeps its key: **the ledger says it is needed, not a spare**. Without it 9:0x63's W key door is a key
+  short (the count after it would be -1), and so it is without the Moldorm's (table below).
+- 0x1e -> 0x1f: Peahat40's row (`r40-peahat` f1ee96f4, cherry-picked: 0x1e's E exit `span: [4, 4]`, 0x1f without
+  round 25's strip cost, `d3first_0_1fw_*` built on the row, `r40_peahat_line.py`, the trace), and one more piece:
+  0x1f's d3first entry costs a step onto tile row 3 W of column 16 (`path_costs: [{cols: [0, 15], rows: [3, 3],
+  cost: 2}]`). Row 3 (Y $55, 1.55 hits a crossing) was as short to the gap as row 4, and the walk took it; with the
+  band the objective's way is row 4 to X $78, every row-3 tile there farther from the exit than the row-4 tile below.
+- `macros: d3first: unaided_docks: true` (the whirlwinds were macros already).
+- Training starts (`crates/env`, `ram_randomization`): a room key may name the side its starts enter by
+  (`'(3, 0x5b, S)'`, `config::parse_room_key`), read by `room_kills`, `room_bombs` and two new keys:
+  `room_bomb_counts` (a set of bomb counts, each as likely, in place of the `bombs`/`room_bombs` draws) and
+  `room_kill_cycle` (the drop cycle `$52A`, asm:Drop_SetUpItem, held at one of a set). darknut@d3first
+  (`specialists/d3first/darknut.yaml`): `room_kill_cycle: {'(3, 0x5b, S)': [0, 1]}`, `room_bomb_counts:
+  {'(3, 0x59, N)': [4, 8]}`; its 0x5b staging and full-bag share now name the last pass (`'(3, 0x5b, W)'`, kills
+  1-3), so the first pass starts with its three Darknuts.
+
+**Steps (`_native.route_steps('d3first')`, 290 before and after; only these differ).**
+
+| Step | Room | Before (r40-gen) | After |
+|---:|---|---|---|
+| 3 | 0:0x76 E -> W | walked or scrolled | the E wrap (game.yaml `wrap_in`, clips on) |
+| 8 | 3:0x6b S -> N | its key taken (5 Zols) | `treasure: skip` |
+| 13 | 3:0x59 N -> S | `bomb_reserve: 0` | `bomb_reserve: 4` (through step 18) |
+| 100 | 2:0x3e S -> N | `treasure: skip` | the Moldorm fought for its key |
+| 112 | 0:0x1f W -> N | no path cost | row 3 W of column 16 costs 2 |
+
+**The keys** (`scripts/experiments/r40_route.py ledger`: computed from the route data, equal to round 39's
+hand-checked list with round 40's two changes). 21 keys taken, 20 key doors paid (1:0x73 N by the door trick):
+after 3:0x7b 1, 3:0x4b (+1, W door) 1, 3:0x49 2, 3:0x59 E door 1 (round 39: 2); Dungeon 4 2-3, out 2; Dungeon 1
+out 2; Dungeon 2: 0x7e 3, 0x4e 4, **the Moldorm 5**; Dungeon 5 out 4; Dungeon 7 out 1; **6:0x79's W door 0**;
+Dungeon 6 out 2; Dungeon 8 out 2; **9:0x56 3**, 0x14 2, 0x16 1, **9:0x63's W door 0**, 9:0x61 1 (left over).
+From the Moldorm on the count is round 39's; before it one lower (3:0x6b's key). Without 9:0x56's key or the
+Moldorm's the lowest is -1 (9:0x63).
+
+**The bombs** (`r40_route.py ledger`, a run with no drop; the fights that throw bombs listed with what Link
+brings): 3:0x4a +4 (4), 0x59 brought 4 (reserve 4: none to spend; 8 with the first Darknut's drop, 4 to spend),
+0x5b's last pass +4 and its wall (7), 0x4c's wall (6), **Manhandla met with 6** (the owner's 7 holds only if 0x5b's
+wall is bombed before its four are taken with 5-7 in the bag), 4:0x21 and 0x11 (4), 1:0x53 (3), 0x2c's rock (2),
+2:0x1e +4 (6), Dodongo brought 6, 5:0x66 and 0x65 (4), the Olive Garden brought 4, 5:0x65 +4 (8), Digdogger 8,
+7:0x69, 0x19, 0x1a (5), 0x1b +4 (8), 0x0c and 0x29 (6), Aquamentus 6, 6:0x28 (5), 8:0x6e (4), 8:0x3f +4 (8), 0x4c
+(7), 0:0x05 (6), Dungeon 9's eight walls with 9:0x16's four: 2 left. **No wall is cheated when the fights spend
+nothing**; every bomb a fight spends comes off a later wall (`ledger` prints both bounds' columns).
+
+**Walked in the emulator** (`crates/zelda/tests/d3first_walks.rs`, the route's objective through the session's
+masks, Link's hearts filled every action, a fight room's monsters removed, every other room's left alive; the walk
+never swings the sword): from the sword cave's mouth to the D3 triforce with clips on (0x76: one CLIP E from the E
+edge, then MOVE W; 0x75: its wrap exit; the cycle and kill streak 0 on every entry to 3:0x5b; 0x7b keys 0 -> 1,
+0x6b 1 -> 1 and no fight objective in either; 0x5b's first pass no fight, no bomb; reserves 6/4/0/6/0/6 room by
+room; 0x59 in and out with 4; out of the level with 1 key); with clips off 0x76 walked across; 2:0x3e a fight, keys
++1; 9:0x56 keys +1; 0x1e left on row 4, 0x1f's wavefront along row 4, the walk through the gap into 0x0f.
+Real resets (`crates/env/tests/specialist_env.rs`, darknut with the d3first task's `ram_randomization`, 100 resets a
+state on chains 0-2): 3:0x5b from S the cycle 0 or 1, about half each; 3:0x59 from N exactly 4 or 8 bombs; 0x5b
+from W keeps its state's cycle, 0x59 from S the `bombs` range.
+
+**Start states.** Not done in this branch's time (the lead's call how): `scripts/experiments/r40_route.py
+check|patch` sets every d3first state's keys to the ledger (steps 9-100 one lower, 101-246 one higher: round 39's
+`was` values) and the kill counters to 0 before 3:0x5b's first pass (today's 0_75e, 0_74e, 3_7cs, 3_7be, 3_6bs,
+3_5bs hold cycles 1-4 from the explorer's kills); `3_5bs_*` (after 0x6b, now crossed) is to be rebuilt with
+`python -m triforce.entry_states build --route d3first --chains 0,1,2 --start-step 8 --last-step 9 --source
+'d3first_3_6bs_{chain}'`, then `audit`. The Dungeon 3 states after 0x59 hold bombs played under the old reserve
+(0 on chains 0 and 2 from 0x69 to 0x5b's last pass, below the new reserve of 4).

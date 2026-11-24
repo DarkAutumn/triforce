@@ -7,7 +7,8 @@
 //!   follow them instead of the selector's own weights.
 //! - Harvested states (`<harvested dir>/*.state` of the family's start-state namespaces, `state_routes:`) mix with
 //!   seed states at `harvested_fraction`.
-//! - [`ram_randomization_values`]: reset-time hp/bombs/keys; [`apply_room_bombs`]: a listed room's own bombs.
+//! - [`ram_randomization_values`]: reset-time hp/bombs/keys; [`apply_room_values`]: a listed room's own bombs and
+//!   drop cycle, by the side the start enters from.
 //!
 //! States are opaque here: a [`StateStore`] turns names into emulator states and writes captures.  Python's
 //! `random` streams are not reproduced; every draw comes from the caller's RNG.
@@ -568,21 +569,36 @@ pub fn ram_randomization_values<R: Rng + ?Sized>(
     values
 }
 
-/// `room_bombs` (round 39): a reset into a listed room `at` draws its bombs from the room's range, with probability
-/// `room_bombs_share`, in place of `bombs`' draw among `values`. A room not listed draws nothing (the random stream
-/// stays the family's).
-pub fn apply_room_bombs<R: Rng + ?Sized>(
+/// A listed room's own values at a reset into `at`, entered from `entry` (the start state's route entry; a key naming
+/// a side applies only to it, `config::parse_room_key`), in place of the family-wide draws among `values`:
+/// - `room_bombs` (round 39): the bombs from the room's range, with probability `room_bombs_share`;
+/// - `room_bomb_counts` (round 40): the bombs, one of the room's listed counts (3:0x59 from N: 4 or 8);
+/// - `room_kill_cycle` (round 40): the game's drop cycle (`$52A`, asm:Drop_SetUpItem), one of the listed values
+///   (3:0x5b from S: 0, the first Darknut's death drops bombs 41% of the time, or 1, it drops none).
+///
+/// A room not listed draws nothing (the random stream stays the family's).
+pub fn apply_room_values<R: Rng + ?Sized>(
     spec: &crate::config::RamRandomization,
     at: MapLocation,
+    entry: Option<&str>,
     rng: &mut R,
     values: &mut Vec<(Var, u8)>,
 ) {
-    let Some((lo, hi)) = spec.room_bombs_at(at) else { return };
-    if spec.room_bombs_share.is_some_and(|p| rng.random::<f64>() >= p) {
-        return;
+    let mut set = |var: Var, value: i64| {
+        values.retain(|(v, _)| *v != var);
+        values.push((var, value as u8));
+    };
+    if let Some((lo, hi)) = spec.room_bombs_at(at, entry)
+        && spec.room_bombs_share.is_none_or(|p| rng.random::<f64>() < p)
+    {
+        set(Var::Bombs, rng.random_range(lo..=hi));
     }
-    values.retain(|(var, _)| *var != Var::Bombs);
-    values.push((Var::Bombs, rng.random_range(lo..=hi) as u8));
+    if let Some(counts) = spec.room_bomb_counts_at(at, entry) {
+        set(Var::Bombs, counts[rng.random_range(0..counts.len())]);
+    }
+    if let Some(cycles) = spec.room_kill_cycle_at(at, entry) {
+        set(Var::WorldKillCycle, cycles[rng.random_range(0..cycles.len())]);
+    }
 }
 
 /// A chain handoff's harvested start-state file name, `[<ns>_]<stem>_h<seed>_<n>.state` (`n`: the run's room index;
@@ -1052,7 +1068,7 @@ mod tests {
         let full = (0..400)
             .filter(|_| {
                 let mut values = ram_randomization_values(&spec, 3, &mut r, None);
-                apply_room_bombs(&spec, room, &mut r, &mut values);
+                apply_room_values(&spec, room, Some("W"), &mut r, &mut values);
                 let bombs: Vec<u8> = values.iter().filter(|(v, _)| *v == Var::Bombs).map(|b| b.1).collect();
                 assert_eq!(bombs.len(), 1, "{values:?}");
                 bombs[0] == 8
@@ -1062,9 +1078,44 @@ mod tests {
         let (mut a, mut b) = (rng(), rng());
         let mut values = ram_randomization_values(&spec, 3, &mut a, None);
         let before = values.clone();
-        apply_room_bombs(&spec, MapLocation::new(3, 0x5c, false), &mut a, &mut values);
+        apply_room_values(&spec, MapLocation::new(3, 0x5c, false), Some("W"), &mut a, &mut values);
         assert_eq!(values, before);
         ram_randomization_values(&spec, 3, &mut b, None);
         assert_eq!(a.random::<u64>(), b.random::<u64>(), "no draw for a room not listed");
+    }
+
+    /// Round 40: `room_bomb_counts` holds one of its counts and nothing between (3:0x59 from N: 4 or 8, about half
+    /// each), in place of the `bombs` draw; `room_kill_cycle` holds the drop cycle at one of its values (3:0x5b from S:
+    /// 0 or 1); a key naming a side leaves the room's other entries to the family's draws.
+    #[test]
+    fn room_bomb_counts_and_kill_cycle_hold_their_sets() {
+        let spec = RamRandomization {
+            bombs: Some((0, 8)),
+            room_bomb_counts: [("(3, 0x59, N)".to_owned(), vec![4, 8])].into(),
+            room_kill_cycle: [("(3, 0x5b, S)".to_owned(), vec![0, 1])].into(),
+            ..Default::default()
+        };
+        let (r59, r5b) = (MapLocation::new(3, 0x59, false), MapLocation::new(3, 0x5b, false));
+        let mut r = rng();
+        let draw = |r: &mut ChaCha8Rng, at, entry| {
+            let mut values = ram_randomization_values(&spec, 3, r, None);
+            apply_room_values(&spec, at, entry, r, &mut values);
+            values
+        };
+        let one = |values: &[(Var, u8)], var: Var| {
+            let found: Vec<u8> = values.iter().filter(|(v, _)| *v == var).map(|p| p.1).collect();
+            assert!(found.len() <= 1, "{values:?}");
+            found.first().copied()
+        };
+        let bombs: Vec<u8> = (0..400).map(|_| one(&draw(&mut r, r59, Some("N")), Var::Bombs).unwrap()).collect();
+        assert!(bombs.iter().all(|&b| b == 4 || b == 8), "{bombs:?}");
+        assert!((160..240).contains(&bombs.iter().filter(|&&b| b == 8).count()));
+        let cycles: Vec<u8> = (0..400).map(|_| one(&draw(&mut r, r5b, Some("S")), Var::WorldKillCycle).unwrap()).collect();
+        assert!(cycles.iter().all(|&c| c <= 1) && (160..240).contains(&cycles.iter().filter(|&&c| c == 0).count()));
+        for (at, entry) in [(r59, Some("S")), (r5b, Some("W")), (r59, None)] {
+            let values = draw(&mut r, at, entry);
+            assert_eq!(one(&values, Var::WorldKillCycle), None, "{at} {entry:?}");
+            assert!(one(&values, Var::Bombs).is_none_or(|b| b <= 8));
+        }
     }
 }

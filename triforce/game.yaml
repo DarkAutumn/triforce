@@ -647,6 +647,36 @@ rooms:
   # way goes E along the middle (Y $85) and then N up X $80.
   path_costs: [{cols: [0, 14], rows: [2, 6], cost: 2}]
 - level: 0
+  location: '0x1e'
+  routes: [d3first]
+  # Round 40 (the owner, Nov 23: "If your training route has link walk to the second highest position in 1e before
+  # heading to 1f, it's very easy to navigate 1f without taking damage. That is, link is standing such that his head
+  # touches the rocks"): d3first leaves 0x1e E on Link's tile row 4 (Y $5D: his head against the rock rows 0-3; the
+  # highest is Y $55, a half tile into them).  Entered there, 0x1f's line (E along Y $5D, N up X $80) took no hit in
+  # 500 of 500 crossings; from Y $55 1.55 hits, from Y $65-$85 0.77 (docs/experiments/round40.md "0x1e's row").
+  # The span makes another row a wrong exit (the objective's target and the critic's correct exit).  d2first keeps
+  # the base room.
+  exits:
+    E:
+      level: 0
+      location: '0x1f'
+      span: [4, 4]
+- level: 0
+  location: '0x1f'
+  routes: [d3first]
+  # Round 40 (the owner's line, measured in the emulator): entered from W on Y $5D (0x1e's span), Link holds E along
+  # the top strip to X $80 and N through the gap: the Peahat on ($50, $5D) has risen off the strip when he passes
+  # (asm:Peahat_Init, facing up at speed $1F; asm:Flyer_State0SpeedUp) and he is through the gap ahead of the one
+  # rising up X $80 from ($80, $7D) (asm:Spawn_AssignPositions; a few frames later it meets him: 0.77 hits from Y
+  # $65).  No hit in 500 crossings, 149 frames.  Back N -> W (step 116) the strip is clean too (0 hits in 300; down
+  # X $80 to Y $85 and W: 2.5).  Round 25's cost on the strip (base entry) is dropped: the objective's way is the line.
+  # Round 40 (Route40): Link's tile row 3 (Y $55, his head half a tile into the rocks, walkable W of the gap) is as
+  # short as row 4 to the gap, and from Y $55 the crossing took 1.55 hits: a step onto row 3 W of the gap's column 16
+  # costs 2 more, so the line along row 4 is the objective's one way (the walk, crates/zelda/tests/d3first_walks.rs,
+  # took row 3 without it).  Column 15 is in the band: a cost's last column is the lowest potential of its row (a
+  # step onto it from beyond the band costs nothing), and at X $78 a MOVE N walks on to the gap at X $80.
+  path_costs: [{cols: [0, 15], rows: [3, 3], cost: 2}]
+- level: 0
   location: '0x20'
   exits:
     E:
@@ -2525,6 +2555,20 @@ rooms:
     how: bomb
     tile: [12, 2]
     stakes: 10
+- level: 0
+  location: '0x76'
+  routes: [d3first]
+  # Round 40 (the owner, Nov 23: "In 0x76 and 0x75 BOTH should be screen wrapped [...] to avoid needing to kill
+  # anything"): on d3first the E screen wrap is the way W through 0x76.  Link comes in at the E edge; CLIP E there
+  # lands him at X $00 (mechanics.md "Screen wrap (overworld)"), one MOVE W from 0x75, which he enters at its E edge
+  # on the same row, where 0x75's own wrap exit (rows 5-14) takes him on into 0x74.  `wrap_in` makes that wrap a jump
+  # of the path search with clips on (`crate::clips::wrap_in_jumps`, as 0x55's W third), so the objective's way is the
+  # wrap; with clips off there is no jump and the way is the walk across, as before.  d2first keeps the base room.
+  exits:
+    W:
+      level: 0
+      location: '0x75'
+      wrap_in: [5, 14]
 - level: 0
   location: '0x77'
   specialist: ow-start

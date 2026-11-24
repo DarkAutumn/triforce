@@ -1785,9 +1785,14 @@ every step, so following an enemy that moves away pays again, and knockback rese
   over).
 - A room's own bombs (round 39; darknut@d3first at 3:0x5b): `ram_randomization: {room_bombs: {'(3, 0x5b)': [8, 8]},
   room_bombs_share: 0.5}` draws the bombs of a reset into a listed room from that room's range in a share of those
-  resets (absent: all), in place of the `bombs` draw (`start_states::apply_room_bombs`); a reset into any other room
+  resets (absent: all), in place of the `bombs` draw (`start_states::apply_room_values`); a reset into any other room
   draws nothing more. Like `bombs`, every reset that randomizes RAM gets it (training, evaluation, curriculum
-  starts), harvested starts don't.
+  starts), harvested starts don't. Round 40: a room key may name the side its starts enter by, `'(3, 0x5b, S)'`
+  (`config::parse_room_key`; the start state's route entry, a curriculum start's track seed's), read by `room_kills`,
+  `room_bombs` and two sets: `room_bomb_counts: {'(3, 0x59, N)': [4, 8]}` holds one of the listed bomb counts, each
+  as likely, in place of the `bombs` and `room_bombs` draws; `room_kill_cycle: {'(3, 0x5b, S)': [0, 1]}` holds the
+  game's drop cycle (`$52A`, asm:Drop_SetUpItem) at one of the listed values (darknut@d3first's fresh-generation
+  starts: 0x5b's first pass at 0, one Darknut's death drops bombs, or 1, it drops none).
 - A forced bomb drop (round 25; boss-manhandla): `ram_randomization: {drop_bombs: P}` arms the game's help drop as
   bombs (`HelpDropCount` $0A, `IsHelpDropBomb` 1, asm:Drop_SetUpItem) in a share P of resets, at the reset and again
   after every step while a monster is in the room (harm to Link clears both), so the room's next drop (Manhandla's
