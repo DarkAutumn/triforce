@@ -1,7 +1,8 @@
 //! `triforce._native`: the Rust game, env and pool stack as a Python extension (plan step 15).
 //!
-//! The emulator is `zcore::ZCore`; the ROM is `$TRIFORCE_ROM`, else `<repo>/roms/zelda.nes` (the repo being the
-//! directory holding the `triforce` package), validated once per process. Start states are `TFZSTATE` files
+//! The emulator is `zcore::ZCore`; the ROM is `$TRIFORCE_ROM`, else the shared store's `rom/zelda.nes`, else
+//! `<repo>/roms/zelda.nes` (the repo being the directory holding the `triforce` package; the `paths` crate),
+//! validated once per process. Start states are `TFZSTATE` files
 //! under the states directory (`$TRIFORCE_STATES_DIR`, else `triforce/states`; every constructor also takes
 //! `states_dir=`).
 
@@ -284,14 +285,14 @@ fn route_state(py: Python<'_>, route: &str, name: &str) -> PyResult<String> {
     data.map.route_state(route, name).map_err(pyo3::exceptions::PyValueError::new_err)
 }
 
-/// The repo root, ROM path and default states directory this module uses.
+/// The repo root, ROM path (None when no ROM is found) and default states directory this module uses.
 #[pyfunction]
 fn paths(py: Python<'_>) -> PyResult<Bound<'_, pyo3::types::PyDict>> {
     let root = context::root(py)?;
     let data = context::data(py, None)?;
     let d = pyo3::types::PyDict::new(py);
     d.set_item("root", &root)?;
-    d.set_item("rom", context::rom_path(&root))?;
+    d.set_item("rom", context::rom_path(&root).ok())?;
     d.set_item("states_dir", &data.states_dir)?;
     d.set_item("trajectories_dir", &data.trajectories_dir)?;
     Ok(d)

@@ -198,9 +198,14 @@ def network(path, act: Optional[str] = None) -> dict:
 
 
 def models(models_dir=None) -> dict:
-    """Where the networks were read from: the legacy models dir (``registry.models_root``) until the store lands."""
-    from . import registry  # pylint: disable=import-outside-toplevel
-    return {'kind': 'legacy', 'dir': label(registry.models_root(models_dir))}
+    """Where the networks were read from: the store's effective team (``registry.team_in_use``: name, overrides,
+    content hash, every slot), else the legacy models dir (``registry.models_root``)."""
+    from . import registry, store  # pylint: disable=import-outside-toplevel
+    team = registry.team_in_use(models_dir)
+    why = registry.models_source(models_dir)
+    if team is not None:
+        return {'kind': 'store', 'team': store.team_record(team), 'why': why}
+    return {'kind': 'legacy', 'dir': label(registry.models_root(models_dir)), 'why': why}
 
 
 def arguments(values: dict) -> dict:

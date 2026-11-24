@@ -85,13 +85,13 @@ from ._native import route_steps as native_route_steps
 from ._native import routes as native_routes
 from ._native import specialist_for, state_namespace
 from .events import write_json_atomic
-from .paths import BASE_MOVIE, ROOT, STATES_DIR
+from .paths import BASE_MOVIE, STATES_DIR, scratch
 from .specialist import SpecialistConfig, list_specialists, load_specialist
 from .zelda_enums import Direction, MapLocation
 
 MANIFEST = 'entry_states.json'
 BUILD_RECORD = 'build.json'
-STAGING_ROOT = ROOT / 'target' / 'entry-states'
+STAGING_ROOT = scratch('entry-states')
 CHAINS = (0, 1, 2)
 START_STATE = 'start'
 # Not part of the room's monster list at entry: Zoras (spawned by water rooms) and the overworld Boulders (object type

@@ -311,7 +311,17 @@ def runs250(args) -> int:
         return 2
     announce_chain(args.runs, args.parallel, True, 'runs250', args.route)
     (out / 'replays').mkdir(parents=True, exist_ok=True)
-    models = freeze_models(Path(args.models_dir).resolve(), out / 'models')
+    team = store_team(args)
+    if team is not None:        # the store's team, as an old-style folder of links (left writable: it is scratch)
+        from triforce import store  # pylint: disable=import-outside-toplevel
+        models = store.write_view(team, out / 'models', readonly=False)
+        print(f"models: store team {team['name']} ({'--store-team' if args.store_team else 'current: this checkout '
+              'has no models folder'}; sha256 {team['sha256'][:12]})", file=sys.stderr, flush=True)
+    else:
+        source = Path(args.models_dir or ROOT / 'models').resolve()
+        models = freeze_models(source, out / 'models')
+        print(f"models: {'--models-dir' if args.models_dir else 'this checkout'} {source}'s pointers, frozen "
+              f"(the layout before the store)", file=sys.stderr, flush=True)
     from triforce import _native  # pylint: disable=import-outside-toplevel
     steps = _native.route_steps(args.route)
     (out / 'route.json').write_text(json.dumps({'route': args.route, 'steps': steps}) + '\n')
@@ -329,7 +339,35 @@ def runs250(args) -> int:
     if code not in (0, 1):
         return code
     stats(out, args.team, Path(args.docs), archive=not args.no_archive)
+    if team is not None:
+        file_runs250(out, team)
     return 0
+
+
+def store_team(args):
+    """The store team a 250 test plays (``store.team_of``): ``--store-team``, else the current one when no models
+    folder is named and this checkout has none; None: a models folder (the layout before the store)."""
+    from triforce import paths, store  # pylint: disable=import-outside-toplevel
+    spec = args.store_team
+    if spec is not None and args.models_dir is not None:
+        raise SystemExit("--store-team and --models-dir name two teams: give one")
+    if spec is None and args.models_dir is None and not (ROOT / 'models').exists() and paths.store_exists() \
+            and paths.current_team():
+        spec = paths.CURRENT
+    return None if spec is None else store.team_of(spec)
+
+
+def file_runs250(out: Path, team: dict):
+    """Files a store team's 250 test by its job: the records, their meta, the timing and the replays kept."""
+    from triforce import store  # pylint: disable=import-outside-toplevel
+    records = read_runs(out)
+    store.file_output(out / 'runs.jsonl', 'chain', team=team['name'], name='runs250/runs.jsonl',
+                      result={'n': len(records), 'successes': sum(ending(r) == 'win' for r in records)})
+    for name in ('runs.jsonl.meta.json', 'timing.json', 'route.json'):
+        if (out / name).is_file():
+            store.file_output(out / name, 'runs250', team=team['name'], name=f'runs250/{name}')
+    if (out / 'replays').is_dir():
+        store.file_output(out / 'replays', 'replays', team=team['name'], name='runs250/replays')
 
 
 def ending(record: dict) -> str:
@@ -715,8 +753,12 @@ def main(argv=None) -> int:
     p_250.add_argument('--route', default=ROUTE, help=f"the route played (default {ROUTE}; d2first before 2.0.0.0)")
     p_250.add_argument('--allow-incompatible-models', action='store_true',
                        help="play a team stamped by a later version (the version's own override)")
-    p_250.add_argument('--models-dir', default=str(ROOT / 'models'),
-                       help="the models root whose pointers are frozen and played (default <repo>/models)")
+    p_250.add_argument('--models-dir', default=None,
+                       help="the models root whose pointers are frozen and played (default <repo>/models, while this "
+                            "checkout has one)")
+    p_250.add_argument('--store-team', default=None, metavar='TEAM',
+                       help="the store's team to play (NAME, current, NAME+SLOT=RUN...; default the current one "
+                            "when this checkout has no models folder); its records are filed by the job")
     p_250.add_argument('--team', default=None, help="a name for a team other than main's (the record's file name)")
     p_250.add_argument('--out', default=str(ROOT / 'target' / 'runs250' / time.strftime('%y%m%d-%H%M%S')))
     p_250.add_argument('--docs', default=str(DOCS), help="where the long-term record goes (default docs/runs250)")

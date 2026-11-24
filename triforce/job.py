@@ -685,6 +685,17 @@ LEGACY_DATA = ('roms/zelda.nes', 'trajectories', 'triforce/states/harvested')
 FLAG_FILES = 8                      # the edited files a ``main-edited`` flag names before "and N more"
 
 
+def in_store(name: str) -> bool:
+    """Whether the shared store provides what ``LEGACY_DATA``'s ``name`` was linked for (its ROM, the current
+    trajectories and harvested snapshots): a worktree made with the store has no links (``cmd_setup``)."""
+    from . import paths  # pylint: disable=import-outside-toplevel
+    if not paths.store_exists():
+        return False
+    if name == 'roms/zelda.nes':
+        return (paths.shared_root() / paths.STORE_ROM).is_file()
+    return paths.current_name('trajectories' if name == 'trajectories' else 'harvested') is not None
+
+
 def _git_lines(root: Path, *args) -> list[str]:
     try:
         out = subprocess.run(['git', '-C', str(root), *args], capture_output=True, text=True, timeout=30, check=True)
@@ -720,7 +731,7 @@ def checkout_flags(root: Path, module: bool = True) -> list[dict]:
         if behind and behind[0] != '0':
             flags.append({'level': 'note', 'code': 'behind-main',
                           'text': f"{root.name} is {behind[0]} commits behind main"})
-        missing = [name for name in LEGACY_DATA if not (root / name).exists()]
+        missing = [name for name in LEGACY_DATA if not (root / name).exists() and not in_store(name)]
         if missing:
             flags.append({'level': 'red', 'code': 'data-missing',
                           'text': f"{root.name} lacks {', '.join(missing)}: the main checkout's data it reads "
@@ -931,9 +942,14 @@ def cmd_setup(args) -> int:
     args.task = 'setup'
 
     def link() -> int:
-        # ``models`` is never linked: a worktree's own runs and pointers stay its own (it reads the main
-        # checkout's team with ``--models-dir``, and its tests with ``$TRIFORCE_MODELS_DIR``, ``test_steps``).
-        # The harvested start states are data no checkout tracks and every family's recipe draws from.
+        # With the shared store (``triforce.paths.store_exists``) a worktree gets no links and no models folder: its
+        # tools read the ROM, the data snapshots and the teams from the store (``docs/data-layout.md``).  Until the
+        # lead makes it (the staged cutover), a worktree links what it always did: ``roms``, ``trajectories`` and
+        # the harvested start states (never ``models``: it reads the main checkout's team with ``--models-dir``,
+        # its tests with ``$TRIFORCE_MODELS_DIR``, ``test_steps``).
+        from .paths import store_exists  # pylint: disable=import-outside-toplevel
+        if store_exists():
+            return 0
         for name in ('roms', 'trajectories', 'triforce/states/harvested'):
             if not (target / name).exists() and (main / name).exists():
                 (target / name).symlink_to(main / name)

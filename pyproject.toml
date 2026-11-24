@@ -21,6 +21,7 @@ dev = ["pytest", "pytest-xdist", "pyyaml", "pyside6-essentials>=6.7", "pygame"]
 
 [project.scripts]
 triforce = "triforce.cli:main"
+triforce-lead = "triforce.lead:main"
 
 [tool.maturin]
 python-source = "."
