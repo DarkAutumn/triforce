@@ -583,16 +583,19 @@ fn the_d7_route_is_walked_from_the_d5_triforce_to_the_d7_triforce() {
     assert_eq!((landing.step, route[206].entry.as_str()), (Some(206), "recorder"));
 
     // The shops: the route's ware is the target until it is held (the purchase is read from the inventory), then
-    // the cave's exit; Link pays its price from his own rupees (171 -> 91 -> 31), nothing cheated.
+    // the cave's exit; Link pays its price from his own rupees (171 -> 91 -> 31), nothing cheated. The ware's
+    // targets (round 40) are the tiles Link takes it from: its column (X exactly the ware's), rows 11 and 12 (Y
+    // within 5 of $98).
     for (room, step, price, rupees) in [(0x44, 214, 80, 91), (0x34, 217, 60, 31)] {
         let shop = at(t, cave(0, room), step);
-        let ware = map.get(cave(0, room)).unwrap().treasure_tile.unwrap();
+        let column = map.get(cave(0, room)).unwrap().treasure_tile.unwrap().0;
+        let ware: BTreeSet<Target> = [Target::Tile((column, 11)), Target::Tile((column, 12))].into();
         assert_eq!(map.requires_rupees(cave(0, room)), price);
         let held = |k: &Tick| if room == 0x44 { k.arrows } else { k.food_held };
         let buying: Vec<_> = shop.iter().filter(|k| !held(k)).collect();
         assert!(!buying.is_empty() && shop.iter().any(|k| held(k)), "{room:#04x}: bought in the cave");
         for k in &buying {
-            assert_eq!((k.kind, &k.targets), (ObjectiveKind::Treasure, &[Target::Tile(ware)].into()), "{room:#04x}");
+            assert_eq!((k.kind, &k.targets), (ObjectiveKind::Treasure, &ware), "{room:#04x}");
         }
         assert!(shop.iter().filter(|k| held(k)).all(|k| k.kind == ObjectiveKind::Move), "{room:#04x}: then out");
         let out = t.iter().find(|k| k.room == ow(room) && k.step == Some(step + 1)).unwrap();

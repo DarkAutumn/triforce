@@ -150,7 +150,7 @@ impl SupplyTracker {
             let link = state.link.tile();
             let to_objective = linger_wavefront(state, objective, None).get(link);
             let mut toward = objective.clone();
-            toward.pbrs_targets = it.link_overlap_tiles().into_iter().map(Target::Tile).collect();
+            toward.pbrs_targets = it.take_tiles(state.link_bounds()).into_iter().map(Target::Tile).collect();
             let to_drop = linger_wavefront(state, &toward, None).get(link);
             self.drops.push(DropNote {
                 fairy,

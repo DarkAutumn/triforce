@@ -1303,7 +1303,7 @@ fn target_features(state: &GameView, wavefront: Option<&Wavefront>) -> [f32; TAR
     v[7] = b(state
         .items
         .iter()
-        .any(|it| it.id >= 0 && it.link_overlap_tiles().contains(&tile)));
+        .any(|it| it.id >= 0 && it.take_tiles(state.link_bounds()).contains(&tile)));
     v
 }
 

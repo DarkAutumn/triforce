@@ -23,14 +23,15 @@ fn clock_is_a_trap(state: &GameView, id: i16) -> bool {
     id == item::CLOCK && state.enemies.iter().any(|e| e.id == enemy::WALLMASTER)
 }
 
-/// The tiles on which Link touches such a clock ([`clock_is_a_trap`]): the path search goes round them and no
-/// target lies on them (a hand dies on the wall line, so its clock lies on a spot that would bring the next out).
+/// The tiles on which Link could touch such a clock ([`clock_is_a_trap`], [`zelda::game::touch_tiles`]): the path
+/// search goes round them and no target lies on them (a hand dies on the wall line, so its clock lies on a spot that
+/// would bring the next out).
 fn trap_tiles(state: &GameView) -> Vec<Tile> {
     state
         .items
         .iter()
         .filter(|it| clock_is_a_trap(state, it.id))
-        .flat_map(|it| it.link_overlap_tiles())
+        .flat_map(|it| it.touch_tiles(state.link_bounds()))
         .collect()
 }
 
@@ -88,7 +89,7 @@ fn item_targets<'a>(
         .items
         .iter()
         .filter(move |it| is_item_target(reward, drops_first, bag, state, it.id))
-        .flat_map(|it| it.link_overlap_tiles().into_iter().map(Target::Tile))
+        .flat_map(|it| it.take_tiles(state.link_bounds()).into_iter().map(Target::Tile))
 }
 
 /// Once `objective` is no fight (the room's monsters are dead, or a room only crossed), the drops that come first
@@ -105,7 +106,7 @@ fn drops_first_targets(reward: &RewardConfig, state: &GameView, objective: &Obje
         .items
         .iter()
         .filter(|it| wanted_drop(state, it.id) && (first || it.id == item::BOMBS))
-        .flat_map(|it| it.link_overlap_tiles().into_iter().map(Target::Tile))
+        .flat_map(|it| it.take_tiles(state.link_bounds()).into_iter().map(Target::Tile))
         .collect();
     if tiles.is_empty() || (!first && wavefront_to(state, objective, &tiles).get(state.link.tile()).is_none()) {
         return None;

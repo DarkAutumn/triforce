@@ -1266,8 +1266,9 @@ impl GameCompletion {
             kind = ObjectiveKind::Move;
         }
         let mut pbrs: BTreeSet<Target> = labels.iter().map(|a| a.0).collect();
+        let bounds = state.link_bounds();
         for item in &state.items {
-            labels.extend(aims(item.link_overlap_tiles(), Role::Item { slot: item.index as u8, item: item.id as u8 }));
+            labels.extend(aims(item.take_tiles(bounds), Role::Item { slot: item.index as u8, item: item.id as u8 }));
         }
         if !matches!(
             kind,
@@ -1748,7 +1749,7 @@ impl GameCompletion {
         }
         let role = Role::Treasure { item: treasure_index(room.treasure.as_deref()) };
         match state.treasure() {
-            Some(item) => Some(aims(item.link_overlap_tiles(), role).collect()),
+            Some(item) => Some(aims(item.take_tiles(state.link_bounds()), role).collect()),
             None => room.treasure_tile.map(|tile| vec![(Target::Tile(tile), role)]),
         }
     }
@@ -1793,10 +1794,17 @@ impl GameCompletion {
             let room = self.map.get(state.full_location());
             let role = Role::Treasure { item: treasure_index(room.and_then(|r| r.treasure.as_deref())) };
             if let Some(treasure) = state.treasure() {
-                return (ObjectiveKind::Treasure, aims(treasure.link_overlap_tiles(), role).collect(), Vec::new());
+                return (ObjectiveKind::Treasure, aims(treasure.take_tiles(state.link_bounds()), role).collect(), Vec::new());
             }
             let tile = room.and_then(|r| r.treasure_tile).unwrap_or(CAVE_TREASURE_TILE);
-            return (ObjectiveKind::Treasure, vec![(Target::Tile(tile), role)], Vec::new());
+            if state.in_cellar() {
+                return (ObjectiveKind::Treasure, vec![(Target::Tile(tile), role)], Vec::new());
+            }
+            // A cave's ware, in the column its tile names (game.yaml `treasure_tile`): the tiles Link takes it from
+            // (round 40: its X exactly, its Y within 5 of $98).
+            let ware = Position::new(tile.0 * 8, 0x98);
+            let tiles = crate::game::take_tiles(ware, crate::game::Take::Ware, state.link_bounds());
+            return (ObjectiveKind::Treasure, aims(tiles, role).collect(), Vec::new());
         }
         let (targets, rooms) = self.subroom_exit(state);
         (ObjectiveKind::Move, targets, rooms.into_iter().collect())
@@ -1864,7 +1872,7 @@ impl GameCompletion {
             if wanted && !matches!(item.as_deref(), Some("map") | Some("compass")) {
                 kind = ObjectiveKind::Treasure;
                 let role = Role::Treasure { item: treasure_index(item.as_deref()) };
-                tiles.extend(aims(treasure.link_overlap_tiles(), role));
+                tiles.extend(aims(treasure.take_tiles(state.link_bounds()), role));
             }
         } else if !state.enemies.is_empty()
             && ((wanted && item.is_some())
@@ -2376,13 +2384,20 @@ pub fn ganon(state: &GameView) -> Option<(&crate::game::Enemy, GanonPhase)> {
 /// - Shown: the same for both spots he jumps to ([`GANON_JUMP_SPOTS`]); which one is the parity of the hit's frame,
 ///   which the state after it does not hold.
 /// - Brown: where one silver arrow kills him from ([`ganon_stand`]).
-/// - Dying: the tiles over his ashes, where the Triforce of Power shows (his position + 8).
+/// - Dying: the tiles Link takes the Triforce of Power from (round 40, [`crate::game::take_tiles`]) where it will
+///   show: at his position once his ashes are drawn, 8 right and 8 down of it before (asm:Ganon_UpdateDying moves
+///   him onto the ashes at count $50 and shows the room item there at $A0).
 pub fn ganon_tiles(state: &GameView, g: &crate::game::Enemy, phase: GanonPhase) -> Vec<Tile> {
     let body = |x: i32, y: i32| crate::game::overlap_tiles(Position::new(x + 8, y + 8), (2, 2));
     match phase {
         GanonPhase::Shown => GANON_JUMP_SPOTS.iter().flat_map(|&(x, y)| body(x, y)).collect(),
         GanonPhase::Brown => ganon_stand(state, g),
-        GanonPhase::Scene | GanonPhase::Hidden | GanonPhase::Dying => body(g.position.x, g.position.y),
+        GanonPhase::Scene | GanonPhase::Hidden => body(g.position.x, g.position.y),
+        GanonPhase::Dying => {
+            let shift = if state.peek(GANON_DYING_COUNT + u16::from(g.index)) < 0x50 { 8 } else { 0 };
+            let ashes = Position::new(g.position.x + shift, g.position.y + shift);
+            crate::game::take_tiles(ashes, crate::game::Take::Box, state.link_bounds())
+        }
     }
 }
 

@@ -157,6 +157,7 @@ All of the glitch knowledge is the owner's; the agents made the agent able to us
 | Nov 23 | Beams at range: reward ranged kills, cost an untaken lined-up shot (v1 did a version) | Owner; agents built the terms | Failed at these weights; stronger ones next | dec 11-23, bl |
 | Nov 23 | Red candle and boomerang for Bubble rooms; snipe 6:0x78's Wizzrobes | Owner | Open (a 0x78 swing earned about 0.1 bombs a run) | bl, r33 |
 | Nov 23 | Drop the executor's closing no-button frame for the fresh generation, no switch kept | Agents found the frame (Peahat40, measuring the 0x1f line); owner (the cut-over, "don't look back"); agents built the rule (kept after every action but a MOVE in play, measured on today's team) and fixed the seven engine faults it hid | Open (r40-noclose, for review): post-d7 +0.5 ± 0.9 points and 2.4% fewer frames, post-d5 -2.0 ± 3.0 and 4.6% fewer | dec 11-23, r40 |
+| Nov 24 | An item's target tiles are the tiles Link takes it from, nothing wider (2.0.1.0) | Agents (Peahat40 found Ganon's Triforce of Power out of reach on its target tile; the lead ruled; Peahat40 built and tested it per item kind) | Open (r40-gen-targets, for review) | dec 11-24 |
 
 ## Bombs, keys and rupees
 

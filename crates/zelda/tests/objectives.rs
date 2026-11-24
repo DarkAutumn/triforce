@@ -228,7 +228,7 @@ fn dungeon_key_rooms_fight_then_treasure_then_leave_and_stay_collected() {
     let tiles: Vec<Target> = dropped
         .treasure()
         .unwrap()
-        .link_overlap_tiles()
+        .take_tiles(dropped.link_bounds())
         .into_iter()
         .map(Target::Tile)
         .collect();
@@ -300,7 +300,7 @@ fn sword_cave_wants_the_sword_then_the_exit() {
     let tiles: Vec<Target> = on_stand
         .treasure()
         .unwrap()
-        .link_overlap_tiles()
+        .take_tiles(on_stand.link_bounds())
         .into_iter()
         .map(Target::Tile)
         .collect();
@@ -393,7 +393,8 @@ fn heart_cave_then_white_sword() {
         .collect();
     assert!(secret.iter().all(|t| objective.targets.contains(t)), "{:?}", objective.targets);
 
-    // Inside the cave (game mode $0B): the heart container on the right, not the middle ware.
+    // Inside the cave (game mode $0B): the heart container on the right, not the middle ware: the tiles Link takes it
+    // from (round 40: X $98 exactly, Y within 5 of $98, asm:Cave_State2TalkOrShopOrDoorCharge).
     let mut inside = ram.clone();
     inside[0x12] = 0x0B;
     set(&mut inside, Var::TreasureFlag, 0xFF);
@@ -403,7 +404,7 @@ fn heart_cave_then_white_sword() {
     assert_eq!(objective.kind, ObjectiveKind::Treasure);
     assert_eq!(
         objective.targets.iter().copied().collect::<Vec<_>>(),
-        [Target::Tile((19, 11))]
+        [Target::Tile((19, 11)), Target::Tile((19, 12))]
     );
 
     // Heart taken (item flag set, 5 containers): the white sword is next, north through 0x1c.
@@ -631,7 +632,7 @@ fn bow_detour_block_stairs_cellar_and_back() {
     assert_eq!(objective.kind, ObjectiveKind::Treasure);
     assert!(objective.next_rooms.is_empty());
     let bow = below.treasure().expect("the bow");
-    assert!(bow.link_overlap_tiles().into_iter().all(|t| objective.targets.contains(&Target::Tile(t))));
+    assert!(bow.take_tiles(below.link_bounds()).into_iter().all(|t| objective.targets.contains(&Target::Tile(t))));
     assert_eq!(s.mask().directions(ActionKind::Move), [Direction::N, Direction::S]);
     assert_eq!(below.room().exits.get(Direction::N), Some(&[(6, 0)][..]));
 

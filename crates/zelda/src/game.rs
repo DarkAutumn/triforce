@@ -6,7 +6,7 @@
 
 use crate::enums::{
     AnimationKind, AnimationState, ArrowKind, BoomerangKind, Direction, MapLocation, ObjectClass,
-    Position, SwordKind, Tile, enemy,
+    GAMEPLAY_START_Y, Position, SwordKind, Tile, enemy,
 };
 use crate::game_map::GameMap;
 use crate::room::{Room, Tiles};
@@ -92,6 +92,77 @@ pub fn overlap_tiles(position: Position, dims: (i32, i32)) -> Vec<Tile> {
         }
     }
     out
+}
+
+/// How the game hands an item to Link (round 40, 2.0.1.0: an item's targets are the tiles Link takes it from).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Take {
+    /// A room item, a drop, the Triforces (asm:Item_TryTake): |Link X - item X| < 9 and |Link Y + 3 - item Y| < 9,
+    /// so Link's X within 8 of the item's and his Y from 11 above it to 5 below.
+    Box,
+    /// A cave ware (asm:Cave_State2TalkOrShopOrDoorCharge): Link's X equal to the ware's, his Y within 5 of $98.
+    Ware,
+}
+
+/// The X and Y ranges Link's position keeps to in play: a dungeon's (and a cave's or cellar's) walls stop him at X
+/// $20..$D0, Y $5D..$BD (asm:Room_ObjBoundsUW); the overworld's screen edges at X $00..$F0, Y $3D..$DD.
+pub type LinkBounds = [(i32, i32); 2];
+pub const UW_LINK_BOUNDS: LinkBounds = [(0x20, UW_BOUND_R), (0x5D, UW_BOUND_B)];
+pub const OW_LINK_BOUNDS: LinkBounds = [(OW_EDGE_W, OW_EDGE_E), (OW_EDGE_N, 0xDD)];
+
+/// Link's X or Y on its grid line within a tile (X on a multiple of 8, Y on $xD: 5 into the tile's rows).
+const GRID_IN_TILE: [i32; 2] = [0, 5];
+const TILE_ORIGIN: [i32; 2] = [0, GAMEPLAY_START_Y];
+
+/// The pixels of `axis` (0 X, 1 Y) the take test passes for an item at `at`.
+fn take_window(take: Take, at: Position, axis: usize) -> (i32, i32) {
+    match (take, axis) {
+        (Take::Box, 0) => (at.x - 8, at.x + 8),
+        (Take::Box, _) => (at.y - 11, at.y + 5),
+        (Take::Ware, 0) => (at.x, at.x),
+        (Take::Ware, _) => (0x98 - 5, 0x98 + 5),
+    }
+}
+
+/// The tiles of `axis` whose span (within Link's `bound`) meets `window` (`all`: lies wholly inside it).
+fn axis_tiles(window: (i32, i32), bound: (i32, i32), axis: usize, all: bool) -> Vec<i32> {
+    let origin = TILE_ORIGIN[axis];
+    let first = (bound.0 - origin).div_euclid(8);
+    let last = (bound.1 - origin).div_euclid(8);
+    (first..=last)
+        .filter(|&t| {
+            let (lo, hi) = ((origin + 8 * t).max(bound.0), (origin + 8 * t + 7).min(bound.1));
+            if all { window.0 <= lo && hi <= window.1 } else { lo <= window.1 && window.0 <= hi }
+        })
+        .collect()
+}
+
+/// The tiles Link takes an item at `at` from (round 40, the lead's rule for 2.0.1.0: "an item's target tiles are the
+/// tiles Link can take it from, nothing wider"), axis by axis: the tiles every one of whose positions within Link's
+/// `bounds` passes the take test; on an axis where no tile does (a ware's single X; an item low in a dungeon room,
+/// whose bottom row Link can't fill), the tiles whose grid line passes it (Link standing on the tile's grid point
+/// takes it).
+pub fn take_tiles(at: Position, take: Take, bounds: LinkBounds) -> Vec<Tile> {
+    let [xs, ys] = [0, 1].map(|axis| {
+        let window = take_window(take, at, axis);
+        let full = axis_tiles(window, bounds[axis], axis, true);
+        if !full.is_empty() {
+            return full;
+        }
+        let grid = |t: i32| TILE_ORIGIN[axis] + 8 * t + GRID_IN_TILE[axis];
+        axis_tiles(window, bounds[axis], axis, false)
+            .into_iter()
+            .filter(|&t| (window.0..=window.1).contains(&grid(t)) && (bounds[axis].0..=bounds[axis].1).contains(&grid(t)))
+            .collect()
+    });
+    xs.iter().flat_map(|&c| ys.iter().map(move |&r| (c, r))).collect()
+}
+
+/// The tiles on which some position of Link within `bounds` takes an item at `at` (a trap's tiles: the path search
+/// goes round every one).
+pub fn touch_tiles(at: Position, take: Take, bounds: LinkBounds) -> Vec<Tile> {
+    let [xs, ys] = [0, 1].map(|axis| axis_tiles(take_window(take, at, axis), bounds[axis], axis, false));
+    xs.iter().flat_map(|&c| ys.iter().map(move |&r| (c, r))).collect()
 }
 
 /// Tiles an object of `dims` at `position` occupies (`self_tiles`).
@@ -221,8 +292,14 @@ impl Item {
         self.position.tile()
     }
 
-    pub fn link_overlap_tiles(&self) -> Vec<Tile> {
-        overlap_tiles(self.position, self.dims())
+    /// The tiles Link takes it from ([`take_tiles`], asm:Item_TryTake).
+    pub fn take_tiles(&self, bounds: LinkBounds) -> Vec<Tile> {
+        take_tiles(self.position, Take::Box, bounds)
+    }
+
+    /// The tiles on which Link can touch it ([`touch_tiles`]).
+    pub fn touch_tiles(&self, bounds: LinkBounds) -> Vec<Tile> {
+        touch_tiles(self.position, Take::Box, bounds)
     }
 }
 
@@ -568,6 +645,11 @@ impl GameView {
 
     pub fn has_active_enemies(&self) -> bool {
         self.active_enemies().next().is_some()
+    }
+
+    /// The X and Y ranges Link keeps to here ([`LinkBounds`]): the overworld's screen or a room's walls.
+    pub fn link_bounds(&self) -> LinkBounds {
+        if self.level() == 0 && !self.in_cave() { OW_LINK_BOUNDS } else { UW_LINK_BOUNDS }
     }
 
     /// The room treasure position while it is on screen (treasure_flag == 0).

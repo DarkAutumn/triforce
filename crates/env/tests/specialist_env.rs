@@ -1026,7 +1026,8 @@ fn the_rooms_bombs_stay_wanted_after_a_drop() {
         assert_eq!(o.kind == ObjectiveKind::Treasure, wanted, "{what}: {:?}", o.kind);
         if wanted {
             let treasure = state(&env).treasure().expect("shown");
-            let tiles: BTreeSet<Target> = treasure.link_overlap_tiles().into_iter().map(Target::Tile).collect();
+            let tiles: BTreeSet<Target> =
+                treasure.take_tiles(state(&env).link_bounds()).into_iter().map(Target::Tile).collect();
             assert!(!o.pbrs_targets.is_empty() && o.pbrs_targets.is_subset(&tiles), "{what}: {:?}", o.pbrs_targets);
         }
         nes = release(env);
@@ -1035,7 +1036,8 @@ fn the_rooms_bombs_stay_wanted_after_a_drop() {
     for (start, now, first) in [("d3first_8_3fw_0", 6, true), ("d3first_8_3fw_0", 8, false), ("8_3fw_0", 4, false)] {
         let mut env = fought_and_cleared(nes, start, 2);
         let o = after(&mut env, now, false, Some(pack));
-        let drop = state(&env).items.iter().find(|it| it.id == item::BOMBS).expect("the pack").link_overlap_tiles();
+        let bounds = state(&env).link_bounds();
+        let drop = state(&env).items.iter().find(|it| it.id == item::BOMBS).expect("the pack").take_tiles(bounds);
         let tiles: BTreeSet<Target> = drop.into_iter().map(Target::Tile).collect();
         let what = format!("{start}: a pack, holding {now}: {:?}", o.pbrs_targets);
         assert_ne!(o.kind, ObjectiveKind::Fight, "{what}");
@@ -1111,7 +1113,8 @@ fn the_owners_order_in_3_5b_wall_then_bombs_then_out() {
             let p = s.link.position;
             trace.push(format!("({},{}) bombs {} {:?} {:?} treasure {:?} enemies {}", p.x, p.y, s.bombs(), o.kind, target_step(&obs), s.treasure().map(|t| (t.position.x, t.position.y)), s.enemies.len()));
             let phase = if o.kind == ObjectiveKind::Treasure {
-                let tiles: BTreeSet<Target> = s.treasure().expect("shown").link_overlap_tiles().into_iter().map(Target::Tile).collect();
+                let tiles: BTreeSet<Target> =
+                    s.treasure().expect("shown").take_tiles(s.link_bounds()).into_iter().map(Target::Tile).collect();
                 assert!(o.pbrs_targets.is_subset(&tiles), "{what}: the bombs alone: {:?}", o.pbrs_targets);
                 "bombs"
             } else {

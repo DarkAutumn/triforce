@@ -709,20 +709,7 @@ impl Walk {
         match phase {
             GanonPhase::Scene | GanonPhase::Shown => Some(wait),
             GanonPhase::Brown => None,
-            GanonPhase::Dying => {
-                if !objective.targets.contains(&Target::Tile(state.link.tile())) {
-                    return None;
-                }
-                // Walker aid (round 40): the target tiles are the ones Link's sprite overlaps the Triforce of Power
-                // from, wider than the game's take range (|dX| < 9, asm:Item_TryTake): on the new timing the walk
-                // stopped at X $6C, 11 from the Triforce at $77 on his ashes, and waited there. Once it shows
-                // (ObjState[$13] $BF = 0) Link is lined up on the grid column of its tile.
-                if state.peek(0xBF) == 0 {
-                    let p = state.link.position;
-                    self.line_up((i32::from(state.peek(OBJ_X + 0x13)) & !7, p.y), true);
-                }
-                Some(wait)
-            }
+            GanonPhase::Dying => objective.targets.contains(&Target::Tile(state.link.tile())).then_some(wait),
             GanonPhase::Hidden => {
                 let stand = |gx: i32, gy: i32| {
                     let left = gx - 12 >= 0x20;
@@ -1001,10 +988,12 @@ fn the_d9_route_is_walked_the_plain_way_from_the_d8_triforce_to_the_end_of_the_g
         assert!(k.candles.is_empty(), "no CANDLE once the stairs show");
     }
     assert_eq!(tree.last().unwrap().hearts, 14.0);
-    // Its cave (step 298, `waypoint: heart`): the right ware is the target; 15 containers, and (Link was full) 15
+    // Its cave (step 298, `waypoint: heart`): the right ware is the target (round 40: the tiles Link takes it from,
+    // X $98 exactly, Y within 5 of $98: rows 11 and 12 of its column); 15 containers, and (Link was full) 15
     // hearts; then out S.
     let cave = at(t, MapLocation::new(0, 0x47, true), 298);
-    assert_eq!((cave[0].kind, &cave[0].targets), (ObjectiveKind::Treasure, &[Target::Tile((19, 11))].into()));
+    let ware: BTreeSet<Target> = [Target::Tile((19, 11)), Target::Tile((19, 12))].into();
+    assert_eq!((cave[0].kind, &cave[0].targets), (ObjectiveKind::Treasure, &ware));
     assert_eq!((cave.last().unwrap().max_hearts, cave.last().unwrap().hearts), (15, 15.0));
     assert_eq!(cave.last().unwrap().kind, ObjectiveKind::Move);
 

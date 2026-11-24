@@ -3685,3 +3685,21 @@ The lead turned the whirlwind macros on for `d3first` as a `REV` (no network cha
 plays as before), told the owner beforehand in the check-in file ("my plan unless you say no"), and landed it with
 the golden race and the 250 test. It is a change to how today's team plays that the owner had ruled on only for the
 fresh generation: his to overrule.
+
+## 2026-11-24 — 2.0.1.0: an item's target tiles are the tiles Link takes it from (the lead)
+
+Peahat40 found it in the d9 walk on the cut-over timing: in Ganon's room the objective's targets for the Triforce of
+Power were the tiles Link's sprite overlaps it from, and a MOVE stopped Link on one of them at X $6C, 11 pixels from
+the Triforce at $77, where the game never hands it over (asm:Item_TryTake: |dX| < 9). The lead's ruling for the
+fresh generation's branch: "an item's target tiles are the tiles Link can take it from, nothing wider".
+
+So `zelda::game::take_tiles` gives every item target (room items, drops, items a monster carries, the Triforces, the
+Triforce of Power, 0x5f's heart container, cellar items, cave wares; the observation's "item on this target" flag and
+the supply tracker's drops too): axis by axis, the tiles all of whose positions within Link's bounds pass the game's
+take test (asm:Item_TryTake: |dX| < 9 and |Y + 3 - item Y| < 9; a cave ware, asm:Cave_State2TalkOrShopOrDoorCharge:
+X equal, Y within 5 of $98); on an axis where no tile does (a ware's single X; Ganon's ashes low in his room, whose
+bottom row Link fills only to $BD), the tiles whose grid point passes it. A clock that brings out a Wallmaster keeps
+the wider avoidance set (`touch_tiles`: every tile some position of which takes it). Tested against the game per item
+kind (`crates/zelda/tests/take_tiles.rs`); the d9 walk takes the Triforce of Power without the walker aid it needed.
+The audit (old targets against the take test): every room item's lower row lay 2 pixels outside it, a drop's or the
+ashes' tiles up to 11, a cave ware's tile 7 (its X must be exact).
