@@ -534,3 +534,59 @@ pass-through first and is reached without beams the second time).
 Replays for watching: every arm's runs split by whether they reached Manhandla, and the deaths in 3:0x49, were copied
 to the owner's review folder; the records are under the `r40-fireline` worktree's `target/r40f/`.
 
+
+## Carriers, the wall's grant and the goals (Carrier40, branch `r40-carrier`, for the fresh generation)
+
+Built on `r40-gen` for 2.0.1.0's trainings; today's team and `d2first` are untouched (both switches are `d3first`'s
+`bomb_rules:`; `carriers: false` is inert without them). Ideas: the owner's (the Dungeon 3 plan, "cheat-bombs [...]
+not show up unless the objective is to go into a wall that needs it", "start tracking goals"); the lead's (carrier
+targets "the exit and the nearest eligible carrier", the goal list, aimless frames in the stats); Carrier40 built
+them.
+
+### The rules as built
+
+- **Carrier targets** (`bomb_rules: {carrier_targets: true}`; `GameCompletion::objectives`): in a dungeon room the
+  route crosses (objective MOVE on a route step, not a cellar), every monster `zelda::bomb_windows::bomb_carriers`
+  names is a target beside the exit: the observation's `bomb_carrier` column is the same list (one function), open
+  while WorldKillCycle reads 0, 5 or 7 with no death pending (asm:Obj_EndMetastate advances it when a death sparkle
+  ends; asm:Drop_SetUpItem then reads column cycle + 1: bombs for group 2 at 1, 6, 8), no forced drop due (`$50` < 9,
+  `$627` ≠ 15), the bag (`$658`) below its size (`$67C`), an eligible carrier alive (a Vire only to the magic sword:
+  a crossing has no weapon bomb under `fights_only`). The wavefront leads to the nearest of exit and carriers. The
+  dropped bombs are then the targets as under a floor (`Objective::bag_drops`). When the kill is made the cycle moves
+  on, drop or not (a Red Darknut's table drop is `Random < $68`, 41%, asm:Drop_GroupRates), so after a kill that
+  dropped nothing no carrier remains at cycle 1 and the room is a plain crossing. A Gel (`$15`) moves the cycle, a
+  child Gel (`$14`) and a Red Keese do not: a Zol split by the wood sword and its Gels leave it as it was (seen in the
+  smoke: 13 kills in 3:0x6b, cycle unchanged). 3:0x5b's first pass: at cycle 0 the three Darknuts are targets; at 1
+  none. A step opts out with `carriers: false`: 3:0x69's two passes (its line, no hit; Route40 granted the edit of the
+  two block lines). **6:0x78's snipe fits the rule**: five Red Wizzrobes (`$24`, group 2), no treasure, its N exit no
+  shutter in game.yaml, so `d3first`'s step (E -> N, `drops: first`) is a crossing; at cycle 0/5/7 with room in the
+  bag the Wizzrobes become targets beside N, and `drops: first` already makes a dropped bomb pack the target. Not
+  checked in the emulator here: whether its ringleader trigger's chain of deaths (every death moving the cycle) lets
+  the first kill read the bomb column [INFERENCE: it does, the first death ends its sparkle first].
+- **The wall's grant follows the objective** (`bomb_rules: {wall_grant: objective}`; `CheatLedger::follow_objective`,
+  `env::objective::wall_is_next`): in a room whose bomb opens something the bomb need is 1 only while the objective,
+  as the env attaches it (drops that replace the exit included), targets the wall the route leaves through
+  (`route_bomb_targets`, the bomb spot among the wavefront's targets). The ledger hears the verdict after every
+  objective, in the specialist env and the chain: nothing on entering, the bomb when the wall turns next, taken back
+  uncounted if the objective turns away before it is laid. Dodongo's and Manhandla's `bomb_weapon` rooms keep theirs.
+- **Goals** (`zelda::goals`; architecture.md "Route goals"): what a step expects, from the route's own map
+  (`wrap`: the exit is game.yaml `wrap` or `wrap_in` — 0:0x75, and 0:0x76 through Route40's patch; `no_hit`: a
+  non-cave room with `path_costs` — 3:0x69 once Line40's line lands, 5:0x37, 0:0x17/0x1f/0x21/0x27; `carriers`: the
+  carrier targets apply and the room's data names a carrier type; every visit whose objective was never FIGHT is a
+  crossing, where no kill is expected but the carriers aimed at), and what happened (`goal_*`: wraps, fought, the
+  cycle on entering and the deaths that moved it, carriers aimed at on entering and at all, killed, their bombs
+  dropped and taken); `triforce stats show` a table by step, `compare` four paired per-run measures and both files'
+  tables. Hits a visit in 3:0x69 are the record's `hits` under `no_hit`. Plus aimless frames (`aimless_frames`) a
+  visit and a run in the step, room and family tables and paired in `compare` (the lead's addition for Switch40).
+
+### Tests
+
+`crates/env/tests/carriers.rs` (3:0x5b's first pass at cycle 0: the three Darknuts are targets beside N and the
+observation column names the same slots, then the cycle written to 1 empties both; at cycle 1; with a full bag),
+`crates/env/tests/wall_grant.rs` (at every decision one bomb exactly while `wall_is_next`: 7:0x1a with the candle to
+take and 3:0x5b's first pass get none while the room rule hands one over on entering; 7:0x1a out of the cellar has it
+at once; 3:0x5b's last pass with an empty bag gets none in the fight and one once the fight and treasure are done),
+`boss_bombs.rs` (unchanged: the weapon rooms on `d3first` now run under `wall_grant: objective`), unit tests
+`cheats::the_wall_grant_follows_the_objective` (given, taken back uncounted, laid and counted, own bombs untouched),
+`game_map::the_fresh_generation_switches_are_route_data`, `goals::a_step_expects_what_its_route_data_says`,
+`tests/test_run_stats.py::test_route_goals_by_step_per_run_and_compared` and `test_aimless_frames_a_visit_and_a_run`.
