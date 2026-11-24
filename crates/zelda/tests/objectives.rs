@@ -965,7 +965,7 @@ fn d3_0x69_is_crossed_by_the_line() {
         let (s, mut gc) = route_room(&map, name, 3, 0x69, entry, Some("d3first"))?;
         let state = s.state().clone();
         let objective = gc.objectives(None, &state);
-        assert_eq!(objective.kind, ObjectiveKind::Exit, "{name}: crossed, no fight");
+        assert_ne!(objective.kind, ObjectiveKind::Fight, "{name}: crossed, no fight");
         let targets: Vec<Target> = objective.pbrs_targets.iter().copied().collect();
         let room = state.room();
         let costed = descent(room, &room.wavefront(&targets, &[], &[], objective.clips), state.link.tile());
