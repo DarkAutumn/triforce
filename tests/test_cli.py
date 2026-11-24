@@ -138,8 +138,9 @@ def test_eval_chain_answers_the_wrapper_dry_call_and_creates_nothing(tmp_path):
                          env=environ, capture_output=True, text=True, timeout=120, check=False)
     assert out.returncode == 0, out.stderr
     steps = chain_steps('d2first', 3, None, '0:0x77')
+    chain = {'shape': f"d2first:0-{steps // 3}", 'runs': 3, 'parallel': 1, 'steps': steps // 3}
     assert steps > 0 and json.loads(estimate.read_text()) == {
-        'kind': 'chain', 'work': {'chain_steps': steps}, 'name': 'eval-chain-d2first'}
+        'kind': 'chain', 'work': {'chain_steps': steps, 'chains': [chain]}, 'name': 'eval-chain-d2first'}
     assert sorted(p.name for p in tmp_path.iterdir()) == ['estimate.json']
 
 

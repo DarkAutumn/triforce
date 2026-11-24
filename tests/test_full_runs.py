@@ -168,8 +168,11 @@ def test_the_wrapper_dry_call_writes_the_chain_work_and_creates_nothing(tmp_path
     done = subprocess.run([sys.executable, str(ROOT / 'scripts' / 'full_runs.py'), 'run', '--runs', '3', '--out',
                            str(out)], env=environ, capture_output=True, text=True, timeout=120, check=False)
     assert done.returncode == 0, done.stderr
+    played = steps_played(full_runs.ROUTE)
     assert json.loads(estimate.read_text()) == {
-        'kind': 'chain', 'work': {'chain_steps': 3 * steps_played(full_runs.ROUTE)}, 'name': 'full-runs'}
+        'kind': 'chain', 'name': 'full-runs',
+        'work': {'chain_steps': 3 * played,
+                 'chains': [{'shape': f'{full_runs.ROUTE}:0-{played}', 'runs': 3, 'parallel': 10, 'steps': played}]}}
     assert not out.exists()
 
 
