@@ -19,7 +19,13 @@ states, and with them the observations and masks the seeded steps are drawn from
 changed: against the main it branched from, the cut-over changes `crates/zelda/src/executor.rs` alone (its timing),
 nothing of the observation (`crates/env`, `triforce/convert.py`). The new hashes of the traces it moved are
 `tests/fixtures/obs_schema5_round40.json` (`ROUND40_CHANGES`), recorded once on branch `r40-noclose` at its timing,
-as the earlier changes were, and like the record never to be rerun to make this test pass."""
+as the earlier changes were, and like the record never to be rerun to make this test pass.
+
+Round 40's item targets (2.0.1.0, the lead's rule: an item's target tiles are the tiles Link takes it from) moved
+the traces with a room item or a drop in view: the `target` block (and, through the targets, the steps the mask and
+the seeded draws lead to) of `crates/zelda/src/objectives.rs`'s items; no column's computation. Their hashes are
+`tests/fixtures/obs_schema5_round40_targets.json` (`ROUND40_TARGETS_CHANGES`), recorded once on branch
+`r40-gen-targets`."""
 
 import argparse
 import hashlib
@@ -37,6 +43,8 @@ from .conftest import REPO_STATES_DIR
 
 GOLDEN = Path(__file__).parent / 'fixtures' / 'obs_schema5_golden.json'
 ROUND40_CHANGES = json.loads((Path(__file__).parent / 'fixtures' / 'obs_schema5_round40.json').read_text(encoding='utf-8'))
+ROUND40_TARGETS_CHANGES = json.loads(
+    (Path(__file__).parent / 'fixtures' / 'obs_schema5_round40_targets.json').read_text(encoding='utf-8'))
 STEPS = 50
 KINDS, DIRECTIONS, DURATIONS = 11, 8, 4
 # Traces whose last observation the round 26 route vocabulary changed (docs/experiments/round26.md §5), with their
@@ -238,7 +246,7 @@ def test_schema5_columns_are_unchanged(name):
         pytest.skip(f"{name}: no schema 5 record (a family added after the record)")
     recorded = golden['families'][name]
     changed = (ROUTE_CHANGES.get(name, {}) | BOMB_RULE_CHANGES.get(name, {}) | ROUTE31_CHANGES.get(name, {})
-               | ROUND40_CHANGES.get(name, {}))
+               | ROUND40_CHANGES.get(name, {}) | ROUND40_TARGETS_CHANGES.get(name, {}))
     kept = {state: digest for state, digest in recorded.items() if state not in ROUTE31_DELETED}
     assert family_hashes(name, recorded) == kept | changed
 

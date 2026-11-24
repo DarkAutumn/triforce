@@ -272,11 +272,13 @@ mod tests {
         let all = RewardConfig { item_targets: true, ..Default::default() };
         let near = RewardConfig { nearby_items: true, ..Default::default() };
         let (clock_and_rupee, clock) = (targets(&ram, &all), targets(&ram, &near));
-        assert_eq!((clock_and_rupee.len(), clock.len()), (8, 4));
+        // The tiles Link takes each from (round 40): the clock at ($20, $A6) one (column 3 is beyond the wall X $20,
+        // only row 13 lies wholly inside its Y test), the rupee at ($60, $8D) two (columns 11-12, row 10).
+        assert_eq!((clock_and_rupee.len(), clock.len()), (3, 1));
         // A Wallmaster waiting in its wall (state 0).
         (ram[OBJ_TYPE + 4], ram[OBJ_STATE + 4]) = (enemy::WALLMASTER, 0);
         let rupee = targets(&ram, &all);
-        assert_eq!(rupee.len(), 4);
+        assert_eq!(rupee.len(), 2);
         assert!(rupee.iter().all(|t| clock_and_rupee.contains(t) && !clock.contains(t)));
         assert!(targets(&ram, &near).is_empty());
     }

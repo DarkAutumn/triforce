@@ -184,8 +184,10 @@ fn random_legal_action(flat: &[bool; MASK_SIZE], rng: &mut ChaCha8Rng) -> [usize
     [kind, dir, dur]
 }
 
-/// One env step of a 1-ply lookahead walker: tries every legal MOVE 8 on a session snapshot and takes the one that
-/// leaves the room through a wanted exit or gets closest on the PBRS wavefront (objective exits/targets).
+/// One env step of a 1-ply lookahead walker: tries every legal MOVE 4 and MOVE 8 on a session snapshot and takes the
+/// one that leaves the room through a wanted exit or gets closest on the PBRS wavefront (objective exits/targets),
+/// the shorter on a tie (round 40: an item's targets are the tiles Link takes it from, and a bomb pack on the bottom
+/// row is taken from that row alone; eight frames carry Link past its grid line to Y $BE, from which E goes nowhere).
 fn greedy_step(env: &mut Env) -> Result<StepResult, EnvError> {
     let attached = env.objective().expect("episode started").clone();
     let wanted = attached.objective.next_rooms;
@@ -193,25 +195,27 @@ fn greedy_step(env: &mut Env) -> Result<StepResult, EnvError> {
     let snap = env.session().snapshot();
     let mut best: Option<(i32, Action)> = None;
     for direction in env.session().mask().directions(ActionKind::Move) {
-        let action = Action::new(ActionKind::Move, direction, 8).unwrap();
-        let change = env.session_mut().act(action)?;
-        let score = if change.gained_triforce() {
-            -1
-        } else if change.changed_location() {
-            if wanted.contains(&change.state.full_location()) {
+        for duration in [4, 8] {
+            let action = Action::new(ActionKind::Move, direction, duration).unwrap();
+            let change = env.session_mut().act(action)?;
+            let score = if change.gained_triforce() {
                 -1
+            } else if change.changed_location() {
+                if wanted.contains(&change.state.full_location()) {
+                    -1
+                } else {
+                    9999
+                }
             } else {
-                9999
+                wavefront
+                    .as_ref()
+                    .and_then(|w| w.get(change.state.link.tile()))
+                    .unwrap_or(999)
+            };
+            env.session_mut().restore(&snap);
+            if best.is_none_or(|(s, _)| score < s) {
+                best = Some((score, action));
             }
-        } else {
-            wavefront
-                .as_ref()
-                .and_then(|w| w.get(change.state.link.tile()))
-                .unwrap_or(999)
-        };
-        env.session_mut().restore(&snap);
-        if best.is_none_or(|(s, _)| score < s) {
-            best = Some((score, action));
         }
     }
     env.step(best.expect("a legal MOVE").1)
@@ -1057,11 +1061,13 @@ fn target_step(obs: &Observation) -> (char, Option<i32>) {
     (step, distance)
 }
 
-/// One decision toward the target observation's step (MOVE 8; WAIT 8 on the target or with no step).
+/// One decision toward the target observation's step (MOVE 4; WAIT 8 on the target or with no step). Four frames,
+/// not eight (round 40): eight carry Link 11 pixels, past a one-row turn (3:0x5b's way E from the bombs, taken now
+/// from row 6, the row Link takes them from: S from Y $85 to $90 and back, never on row 10's $8D).
 fn toward_target(env: &mut Env, obs: &Observation) -> Observation {
     match target_step(obs) {
         ('-', _) | (_, Some(0)) => act(env, "WAIT 8").obs,
-        (step, _) => act(env, &format!("MOVE {step} 8")).obs,
+        (step, _) => act(env, &format!("MOVE {step} 4")).obs,
     }
 }
 
@@ -2831,9 +2837,12 @@ fn a_lying_clock_is_walked_round_while_a_wallmaster_lives() {
     let wavefront = attached.wavefront.as_ref().unwrap();
     let lying = &state(&env).items;
     assert_eq!((lying.len(), lying[0].id, lying[0].tile()), (1, item::CLOCK, (4, 13)));
-    for tile in [(3, 12), (4, 12), (3, 13), (4, 13)] {
+    // The tiles Link touches it from (round 40, `touch_tiles`: some position of each passes asm:Item_TryTake with the
+    // clock at ($20, $A6)): columns 4-5 (column 3 lies beyond the wall X $20), rows 12-14; before, its sprite's
+    // overlap (3-4, 12-13), which let Link walk E along row 12 at X $28, where the game hands him the clock.
+    for tile in [(4, 12), (5, 12), (4, 13), (5, 13), (4, 14), (5, 14)] {
         assert_eq!(wavefront.get(tile), None, "{tile:?}: Link would touch the clock");
     }
     assert_eq!((wavefront.get((4, 11)), wavefront.get((6, 12))), (Some(0), Some(3)), "the next spot up the wall");
-    assert_eq!(wavefront.get((5, 12)), Some(2), "past the clock, a tile E of it");
+    assert_eq!(wavefront.get((5, 11)), Some(1), "round the clock, a row above it");
 }
