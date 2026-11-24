@@ -669,3 +669,96 @@ check|patch` sets every d3first state's keys to the ledger (steps 9-100 one lowe
 `python -m triforce.entry_states build --route d3first --chains 0,1,2 --start-step 8 --last-step 9 --source
 'd3first_3_6bs_{chain}'`, then `audit`. The Dungeon 3 states after 0x59 hold bombs played under the old reserve
 (0 on chains 0 and 2 from 0x69 to 0x5b's last pass, below the new reserve of 4).
+
+## The carriers on the merged generation, the last pass's clear, Link's own bombs (Carrier40b, branch `r40-carrier2`)
+
+anthropic/claude-opus-5-5 (Carrier40b), continuing Carrier40's section above on `r40-gen` (35739cc0, Route40's route
+data) merged into `r40-carrier`. Ideas: the owner's bomb plan (decisions 2026-11-23: "We should leave 0x5b with 8
+bombs if all goes well, hit manhandla with 7 due to the 0x4c wall"; "we only kill the rest of the room on the way
+back through"); the lead's list (the last pass's clear, wall first at a full bag, own bombs in every bag test, the
+dungeon-only carriers written down); Carrier40b built them.
+
+### The merge
+
+One conflict (this file: both sections kept). One thing the merge broke: Route40's walk of the opening and Dungeon 3
+(`crates/zelda/tests/d3first_walks.rs`) ran out its 40,000 steps in 3:0x59's second visit (S -> E). The walk kills
+nothing and removes a room's monsters only while the objective is FIGHT; under `carrier_targets` a crossing at drop
+cycle 0 aims at the Red Darknuts too, and the walk walked at the nearest one for ever [INFERENCE: the cause read from
+the code; the fix makes the walk pass]. The walk now aims past a crossing's carriers (they stay alive, as its SETUP
+says), receives the wall's cheated bomb as the env gives it (`CheatLedger::follow_objective` on the env's
+`wall_is_next`, without drops) and tells the objective the cheated bombs in the bag. Its assertions are unchanged.
+
+**The two `tests/test_run_stats.py` failures** of Carrier40's job #704 (`FileNotFoundError: .../stats/0-d3.stats.json`,
+`no statistics for 0-theirs`; they passed alone): `tests/test_flags.py`'s `_join` joins a job with `job.Wrapper.join`,
+which names its job in its own process's environment (`os.environ['TRIFORCE_JOB_ID'] = '1'`, triforce/job.py), and
+nothing gave the session's job 0 back. The next test of the same xdist worker that registered statistics filed them
+as `1-d3`, `1-theirs` (the log of #704 shows `-> .../stats/1-theirs.stats.json`), so the store's `0-d3` was missing:
+a fault of test order, seen only when gw7 drew `test_flags.py` before `test_run_stats.py`. Fixed: `_join` sets the
+variable through `monkeypatch` first, so the test's end restores it.
+
+### The last pass's clear (`bomb_rules: {clear_wall_rooms: [3:0x5b]}`)
+
+Before, the route's `treasure_below: 8` decided on entering whether 3:0x5b's last pass (W -> E through its own bomb
+wall) was a fight: in with 8 it was a crossing, the wall took one, the room's four were never shown, and Link left with
+7 and met Manhandla with 6. Now (`GameCompletion::clears_wall_room`, `wall_first`, `step_treasure`):
+
+- on a step that leaves a listed room through one of its own bomb walls the room is always cleared, whatever Link
+  holds (FIGHT while a monster lives);
+- the floor is judged at every decision on Link's own bombs as they are, not once on entering (the decision is made
+  again whenever the bag changes in the room);
+- with a full bag of his own and the wall intact the wall comes first, then the fight: the room's bombs appear only
+  once it is cleared, are no target at the maximum (a pickup that cannot be made is never a target), and walked over
+  at the maximum they are lost (asm:Item_TryTake takes them, the bag stays at 8);
+- the loader refuses a listed room whose game.yaml treasure is not bombs or that no step leaves through a bomb wall,
+  and a room off the route (`game_map::the_last_pass_room_is_route_data`). `d2first` lists none.
+
+Played in the emulator (`specialist_env::the_owners_order_in_3_5b_wall_then_bombs_then_out`, darknut from
+`d3first_3_5bw_0`, each decision walked down the target observation, the fight done by RAM while the objective is
+FIGHT, the room's bombs then shown by the game where it puts them):
+
+| In with | Darknuts | Order of the objectives | Out with | Cheated |
+|---:|---|---|---:|---:|
+| 8 | alive | the wall, the fight, the bombs, out (before: the wall, out, with 7) | **8** | 0 |
+| 4 | alive | the fight, the bombs, the wall, out | **7** | 0 |
+| 0 | alive | the fight (no bomb in the bag through it), the bombs, the wall by one of them, out | 3 | 0 |
+| 8 | dead, bombs lying | the wall, the bombs, out (round 38's order, unchanged) | 8 | 0 |
+| 4 | dead, bombs lying | the bombs, the wall, out (unchanged) | 7 | 0 |
+| 8 (`d2first`) | dead, bombs lying | the bombs, the wall, out (unchanged) | 7 | 0 |
+
+The route's ledger (`r40_route.py ledger`, its new table "Bombs after each step, by case"): with the first Darknut's
+drop (4 + 4 = 8 into 3:0x59, its reserve of 4 keeping them) the wall-first case leaves 0x5b with **8** and meets
+Manhandla with **7** (the owner's plan); the same run under the floor judged on entering left with 7 and met him with
+6; a run with no drop 7 and 6 either way. No bomb is cheated on the way in any case.
+
+### Link's own bombs in every bag test
+
+With `wall_grant: objective` a cheated wall bomb could sit in a bag Link had otherwise filled (granted at 0, then
+pickups): a bag of 7 of his own read 8, closed the carrier window and left drops and the room's bombs untaken. Now the
+cheat ledger's outstanding grants (`CheatLedger::outstanding`) are told to `GameCompletion::set_cheated_bombs` before
+every objective (the specialist env, the chain, the walk), and `Objective::own_bombs` is what every "is the bag full"
+test reads: the floor's decision on entering and its `{if_bombs_below: max}`, the clear's re-judging, the carrier
+targets and the observation's `bomb_carrier` column (`bomb_windows::carrier_window_possible` takes the own count),
+the dropped bombs wanted and made targets (`env::objective`), the critic's `penalty-left-drop`. The observation's
+`bombs` still reads the bag. Test: `env::objective::a_cheated_bomb_never_fills_the_bag` (a bag reading 8 with one
+cheated: the drop wanted, pulled toward and a target; 8 of his own: none of it).
+
+### The carriers stay in dungeons
+
+On purpose (routes.yaml's comment, docs/architecture.md): the overworld's carriers are group 2's Blue Octoroks, Blue
+Moblins and Blue Lynels; as targets they would steer Link into fights the route never asks for, and before Dungeon 3
+every such kill moves the drop cycle off the 0 that 3:0x5b's first Darknut needs (the owner: no kill before 0x5b).
+
+### The take-back of a granted wall bomb, played
+
+Not found in play here; the unit test `cheats::the_wall_grant_follows_the_objective` still carries it alone. When it
+can happen, from the rule: a room's wall grant is given only when the wall turns into the objective's target while
+Link holds no bomb of his own (the need is 1), and taken back only when the objective turns away in the room before
+the bomb is laid. Away from a wall that is already the target means a dropped item replacing the exit (under the
+floor any dropped bombs below the maximum, so any bomb drop at 0 of his own; a heart or fairy with `drops_first`): a
+fight, a treasure or a block can't start then (the room's monsters and shutters don't change while he walks to the
+wall, and a treasure shows only when a fight ends). So the played case is a monster killed, with a drop, while Link
+walks to a wall with no bomb of his own. Dungeon 3 hardly offers it: 3:0x5b's last pass reaches its wall after the
+room's four bombs (or, at 8, with his own), so 3:0x4c is reached with at least 3 (3:0x5c's reserve of 6 keeps them);
+only a wall bomb missed and laid again could empty the bag first. Dungeon 7 should offer it often: 7:0x1a out of the candle's cellar (the E wall
+the target at once, its Goriyas alive) and 0x69 and 0x19, with runs bringing 0.21 bombs (round 37). Finding it needs
+a `d7` chain with `--replays` and the replays' EDITS read for a fall of `$658` with no BOMB pressed [not done].
