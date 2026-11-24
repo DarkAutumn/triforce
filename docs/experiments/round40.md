@@ -1397,6 +1397,26 @@ every run of both arms (the start states held the explorer's kills; States40's p
 the first pass's carriers never opened; carriers were aimed at on the last pass (3 visits, 1 killed) and in 3:0x5c
 (6), none in the off arm.
 
+### The first pass's carriers on States40's states (the on arm, 25 runs)
+
+The same on arm after `r40-gencode` (5f5647c9: States40's patched start states, Line40b's 3:0x69 line, main at
+2.0.0.16) was merged (478c66ad), `--from 3_7cs_0 --stop-at step:24`, seeds 0-24 (the piece of seeds 25-49 overran the
+express place's 10 minutes and its re-run in three smaller pieces waited behind 28 jobs; stopped). The owner's plan
+end to end, first sight, on networks never trained for it:
+
+- the drop cycle on entering 3:0x5b's first pass: **0 in 25 of 25** (no kill on the way: 3:0x7c, 0x7b, 0x6b crossed
+  with 0 kills a visit);
+- carriers aimed at on that pass: in 24 of 25 visits (the Darknuts as targets beside N); **killed: 0**; bombs
+  dropped and taken: 0;
+- **23 of 25 runs died there**: today's darknut network walks at the three Red Darknuts with the wood sword and loses
+  (0 kills, 1-3 hits a death). It came in with little: hearts on entering 3:0x5b 0.5 (6 runs), 1.0 (1), 1.5 (4), 2.0
+  (1), 2.5 (7), 3.0 (6), the hearts lost in 3:0x7b and 3:0x6b crossed among the Zols;
+- the 2 runs that left (one crossed in 5 decisions, one killed all three in 930 decisions, no drop) entered 3:0x59
+  from N with 4 bombs each (0x4a's four; 3 and 4 on the way back from the raft), and both took the triforce.
+
+So the targets and the cycle work as built. The first pass is a fight today's network loses; it is the training
+(half the resets at cycle 0, half at 1, decisions 2026-11-23) that must teach the kill of one Darknut and the leave.
+
 ## The generation's base made green (Gen40fix, branch `r40-genfix`)
 
 `triforce job test all --build` on the base as received (5f5647c9, job #937) failed 8 Python tests; Rust, asm and
