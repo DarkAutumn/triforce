@@ -501,19 +501,19 @@ pub fn verify_start_room(
     )))
 }
 
-/// RAM values for Link's hp: full health is (max-1) filled + partial $FF (beams).
+/// RAM values for Link's hp as the game holds it (`asm:Link_BeHarmed`, zelda-asm/mechanics.md "Heart bytes"): the
+/// low nibble of `HeartValues` counts the full hearts besides the partial one in `HeartPartial` ($80-$FF drawn
+/// full, $01-$7F half), and a hit kills when its whole hearts exceed that nibble.  `half_hearts` n (1 to
+/// 2 x `max_health`): (n - 1) / 2 full hearts and the partial heart full ($FF, n even) or half ($7F, n odd), the
+/// bytes the game holds after hits from full health; full health is every container with $FF (beams).  (Before
+/// Nov 24 an even n below full was n / 2 full hearts and an empty partial: the HUD showed n / 2 hearts, but a hit
+/// of exactly n / 2 hearts left Link alive at none.)
 pub fn hearts_encoding(half_hearts: i64, max_health: i64) -> [(Var, u8); 2] {
     let containers = ((max_health - 1) & 0x0F) as u8;
-    if half_hearts >= 2 * max_health {
-        return [
-            (Var::HeartsAndContainers, (containers << 4) | containers),
-            (Var::PartialHearts, 0xFF),
-        ];
-    }
-    let (full, half) = (half_hearts / 2, half_hearts % 2);
+    let n = half_hearts.clamp(1, 2 * max_health);
     [
-        (Var::HeartsAndContainers, (containers << 4) | full as u8),
-        (Var::PartialHearts, if half != 0 { 0x7F } else { 0 }),
+        (Var::HeartsAndContainers, (containers << 4) | ((n - 1) / 2) as u8),
+        (Var::PartialHearts, if n % 2 == 0 { 0xFF } else { 0x7F }),
     ]
 }
 
@@ -945,6 +945,7 @@ mod tests {
         assert_eq!(harvest_filename(m(1, 0x45, false), m(1, 0x73, false), 1, 0, 1, None), None);
     }
 
+    /// The hearts the HUD draws (`asm:Text_FormatHeartRows`): the low nibble's full hearts and the partial one.
     fn hearts(values: &[(Var, u8)]) -> f64 {
         let hc = values
             .iter()
@@ -956,11 +957,24 @@ mod tests {
             .find(|(v, _)| *v == Var::PartialHearts)
             .unwrap()
             .1;
-        let containers = (hc >> 4) + 1;
-        if p == 0xFF {
-            return containers as f64;
+        (hc & 0x0F) as f64 + if p >= 0x80 { 1.0 } else if p > 0 { 0.5 } else { 0.0 }
+    }
+
+    #[test]
+    fn hearts_are_written_as_the_game_holds_them() {
+        // n half hearts of 8 containers: (n - 1) / 2 full hearts besides the partial one, $FF or $7F.
+        let bytes = |n| {
+            let [(_, hc), (_, p)] = hearts_encoding(n, 8);
+            (hc, p)
+        };
+        assert_eq!(bytes(16), (0x77, 0xFF)); // full health
+        assert_eq!(bytes(4), (0x71, 0xFF)); // 2 hearts: a 2-heart hit (Blue Darknut) exceeds the 1
+        assert_eq!(bytes(5), (0x72, 0x7F)); // 2.5 hearts
+        assert_eq!(bytes(1), (0x70, 0x7F)); // half a heart: any hit kills
+        assert_eq!(bytes(0), (0x70, 0x7F)); // at least half a heart
+        for n in 1..=16 {
+            assert_eq!(hearts(&hearts_encoding(n, 8)), n as f64 / 2.0);
         }
-        (hc & 0x0F) as f64 + if p == 0x7F { 0.5 } else { 0.0 }
     }
 
     #[test]
@@ -1003,7 +1017,7 @@ mod tests {
             .collect();
         let full = draws
             .iter()
-            .filter(|v| v.contains(&(Var::PartialHearts, 0xFF)))
+            .filter(|v| v.contains(&(Var::HeartsAndContainers, 0x22)) && v.contains(&(Var::PartialHearts, 0xFF)))
             .count();
         assert!((160..240).contains(&full), "{full}");
         assert!(draws.iter().all(|v| (1.5..=3.0).contains(&hearts(v))));

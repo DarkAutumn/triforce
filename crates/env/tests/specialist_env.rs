@@ -2260,7 +2260,10 @@ fn full_hp_share_splits_resets_between_beams_and_no_beams() {
     let draws: Vec<Vec<(Var, u8)>> = (0..400)
         .map(|_| ram_randomization_values(&spec, 3, &mut rng, None))
         .collect();
-    let is_full = |v: &[(Var, u8)]| v.contains(&(Var::PartialHearts, 0xFF));
+    // Full health is every container filled (low nibble = high) with the partial heart $FF; a whole-heart draw
+    // below full also has $FF (`hearts_encoding`: the game's encoding).
+    let is_full =
+        |v: &[(Var, u8)]| v.contains(&(Var::HeartsAndContainers, 0x22)) && v.contains(&(Var::PartialHearts, 0xFF));
     let full: Vec<&Vec<(Var, u8)>> = draws.iter().filter(|v| is_full(v)).collect();
     let share = full.len() as f64 / draws.len() as f64;
     assert!(0.4 < share && share < 0.6, "{share}");

@@ -1777,6 +1777,13 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `ram_randomization: {chain_hp: p}` draws its reset hp from its start room's list in a share `p` of room-entry
   resets (not curriculum starts); the rest keep the `hp` / `full_hp` draw. A config with `chain_hp` and no room
   with at least 5 arrivals is refused.
+- The hp a reset draws is written in the game's own bytes (`start_states::hearts_encoding`, `_native.hearts_encoding`;
+  zelda-asm/mechanics.md "Heart bytes"): n half hearts are (n - 1) / 2 full hearts in `HeartValues`' low nibble
+  besides the partial heart, `$FF` for a whole number of hearts and `$7F` for a half, full health every container
+  with `$FF` (`tests/test_hearts.py` plays it). Until Nov 24 a whole number H below full was written (H, `$00`):
+  the HUD and `GameView::health` read H hearts, but a hit of exactly H left Link alive at none
+  (`asm:Link_BeHarmed`), a state play never makes (only death writes `$00`); about one reset in five of a family
+  with `hp: [0.15, max], full_hp: 0.5` drew one (zol@d3first 2,197 and darknut@d3first 1,522 of 10,000).
 - Bombs and the kill streak at reset (the owner, Nov 11; every family): `ram_randomization: {bombs: [0, 8], bombs_share:
   0.5, help_count: [0, 9]}` draws Link's bomb count in half the resets (the other half keep the start state's own
   count, what the route carries there: none in Dungeon 2, round 19 §4) and a damage-free kill streak (`$50` =

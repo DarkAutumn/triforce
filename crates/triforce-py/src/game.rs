@@ -848,6 +848,20 @@ pub fn power_on_name(name: &str) -> PyResult<String> {
     Ok(name.to_ascii_uppercase())
 }
 
+/// Link's hp as the game holds it (`env::start_states::hearts_encoding`, the training resets' own): `half_hearts`
+/// (1 to 2 x `max_health`) as `{'hearts_and_containers': .., 'partial_hearts': ..}` (`Game.set_value` names).
+#[pyfunction]
+pub fn hearts_encoding<'py>(py: Python<'py>, half_hearts: i64, max_health: i64) -> PyResult<Bound<'py, PyDict>> {
+    if !(1..=16).contains(&max_health) {
+        return Err(PyValueError::new_err(format!("max_health {max_health}: 1 to 16 containers")));
+    }
+    let out = PyDict::new(py);
+    for (var, value) in env::start_states::hearts_encoding(half_hearts, max_health) {
+        out.set_item(var.name(), value)?;
+    }
+    Ok(out)
+}
+
 /// One game session: load states, act, poke, render, snapshot.
 #[pyclass(module = "triforce._native", name = "Game", frozen)]
 pub struct PyGame {
