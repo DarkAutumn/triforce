@@ -666,6 +666,17 @@ LEGACY_DATA = ('roms/zelda.nes', 'trajectories', 'triforce/states/harvested')
 FLAG_FILES = 8                      # the edited files a ``main-edited`` flag names before "and N more"
 
 
+def in_store(name: str) -> bool:
+    """Whether the shared store provides what ``LEGACY_DATA``'s ``name`` was linked for (its ROM, the current
+    trajectories and harvested snapshots): a worktree made with the store has no links (``cmd_setup``)."""
+    from . import paths  # pylint: disable=import-outside-toplevel
+    if not paths.store_exists():
+        return False
+    if name == 'roms/zelda.nes':
+        return (paths.shared_root() / paths.STORE_ROM).is_file()
+    return paths.current_name('trajectories' if name == 'trajectories' else 'harvested') is not None
+
+
 def _git_lines(root: Path, *args) -> list[str]:
     try:
         out = subprocess.run(['git', '-C', str(root), *args], capture_output=True, text=True, timeout=30, check=True)
@@ -701,7 +712,7 @@ def checkout_flags(root: Path, module: bool = True) -> list[dict]:
         if behind and behind[0] != '0':
             flags.append({'level': 'note', 'code': 'behind-main',
                           'text': f"{root.name} is {behind[0]} commits behind main"})
-        missing = [name for name in LEGACY_DATA if not (root / name).exists()]
+        missing = [name for name in LEGACY_DATA if not (root / name).exists() and not in_store(name)]
         if missing:
             flags.append({'level': 'red', 'code': 'data-missing',
                           'text': f"{root.name} lacks {', '.join(missing)}: the main checkout's data it reads "
