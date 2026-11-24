@@ -71,6 +71,7 @@ FIGHTERS['bombs-reserve-4'] = ReserveBombFighter
 # 28's GleeokFighter).  3:0x59 from N (round 40, the fresh generation's d3first: `bomb_reserve: 4` from 0x59,
 # decisions 2026-11-23 "The fresh generation's Dungeon 3, continued"): the walks' bomb fight keeps 4 in the bag, so a
 # run in with 8 throws up to 4 and one in with 4 fights with the sword alone (the walks' variant spent the bag to 0).
+# The owner set the reserve to 5 on Nov 24, after `d3first_3_69n_*` were harvested with this fighter (4/4/4).
 OVERRIDES = {'4_13w': [('clear', 'gleeok'), ('straight', ('y', 0xD0, 0xBD)), ('wait', 30), ('straight', (0x78, 0x5D)),
                        ('go', 'UP', ('x', 0x78))],
              '3_59n': [('clear', 'bombs-reserve-4'), ('walk', (0x78, 0xBD)), ('go', 'DOWN', ('x', 0x78))]}

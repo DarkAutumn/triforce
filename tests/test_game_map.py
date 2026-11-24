@@ -84,16 +84,17 @@ def test_d3first_runs_from_the_start_to_the_end_of_the_game():
     assert [(s['room'], steps[s['index'] + 1]['room']) for s in steps if s['exit'] == 'recorder'] == [
         (0x0b, 0x45), (0x55, 0x34), (0x3f, 0x31), (0x22, 0x3c), (0x6d, 0x37)]
     assert [(s['level'], s['room'], s['bomb_reserve']) for s in steps[:179] if s['bomb_reserve'] is not None] == [
-        (3, 0x7c, 6), (3, 0x59, 4), (3, 0x5b, 0), (3, 0x5c, 6), (3, 0x4d, 0), (3, 0x3d, 6), (4, 0x71, 2), (0, 0x45, 8),
+        (3, 0x7c, 6), (3, 0x59, 5), (3, 0x5b, 0), (3, 0x5c, 6), (3, 0x4d, 0), (3, 0x3d, 6), (4, 0x71, 2), (0, 0x45, 8),
         (0, 0x37, 8), (5, 0x76, 8), (5, 0x05, 0), (5, 0x05, 8), (5, 0x24, 0), (7, 0x79, 8), (7, 0x1b, 2), (7, 0x2a, 0),
         (0, 0x42, 8)]
 
 
 def test_d3first_the_bomb_reserve_through_dungeon_3():
     """The lead, Nov 20: d3first keeps 6 bombs from 0x7c to 0x49 (0x4a's four are taken on the way); round 40 (the
-    owner, Nov 23: "cap the bomb usage in 0x59 so we never drop below 4 when clearing it"): 4 from 0x59's fight step
-    (its first visit, entered from N with 4 or 8) through 0x5a (0 before), 0 on 0x5b's last pass (its own four pay
-    for what follows), 6 from 0x5c, 0 for Manhandla, 6 again to the triforce. d2first's reserve stays 6 in 0x59."""
+    owner, Nov 24, replacing Nov 23's 4: "I should have set the limit of don't go below 5 bombs in the d3 0x59 to get
+    to manhandla with 7"): 5 from 0x59's fight step (its first visit, entered from N with 4 or 8) through 0x5a (0
+    before), 0 on 0x5b's last pass (its own four pay for what follows), 6 from 0x5c, 0 for Manhandla, 6 again to the
+    triforce. d2first's reserve stays 6 in 0x59."""
     held, along = 0, []
     for step in native.route_steps('d3first'):
         held = step['bomb_reserve'] if step['bomb_reserve'] is not None else held
@@ -101,9 +102,9 @@ def test_d3first_the_bomb_reserve_through_dungeon_3():
             along.append((step['room'], step['in_cave'], step['entry'], held))
     assert along == [
         (0x7c, False, 'S', 6), (0x7b, False, 'E', 6), (0x6b, False, 'S', 6), (0x5b, False, 'S', 6),
-        (0x4b, False, 'S', 6), (0x4a, False, 'E', 6), (0x49, False, 'E', 6), (0x59, False, 'N', 4),
-        (0x69, False, 'N', 4), (0x0f, True, 'S', 4), (0x69, False, 'cave', 4), (0x59, False, 'S', 4),
-        (0x5a, False, 'W', 4), (0x5b, False, 'W', 0), (0x5c, False, 'W', 6), (0x4c, False, 'S', 6),
+        (0x4b, False, 'S', 6), (0x4a, False, 'E', 6), (0x49, False, 'E', 6), (0x59, False, 'N', 5),
+        (0x69, False, 'N', 5), (0x0f, True, 'S', 5), (0x69, False, 'cave', 5), (0x59, False, 'S', 5),
+        (0x5a, False, 'W', 5), (0x5b, False, 'W', 0), (0x5c, False, 'W', 6), (0x4c, False, 'S', 6),
         (0x4d, False, 'W', 0), (0x3d, False, 'S', 6)]
 
 

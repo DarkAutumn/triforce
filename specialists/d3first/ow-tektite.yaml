@@ -56,6 +56,10 @@ notes: 'Tektite rooms (the owner, Nov 8: their jump patterns are their own). 0x1
   Red Tektites, a Zora) W→E and E→W; on the mountain''s clip way 0x0d S→W and 0x0c from E W by its wrap exit (CLIP E on
   Y $65-$AD) onto the mountain top; on its plain way 0x2c from E (`0_2ce_v2`) N, its wall open since the heart cave (no
   cheated bomb, BOMB only for the 10th kill). No curriculum: each crossing is a walk or a single CLIP from the arrival.'
+curriculum:
+  untracked:                              # round 40 (the lead, Nov 24): no curriculum for 0x76; its explored tracks
+  - d3first_0_76e_[0-9]                   # walk across and kill (round40.md "Tracks"); the wrap is two actions the
+                                          # objective's targets carry
 state_routes:
 - d3first
 harvested_fraction: 0.25
