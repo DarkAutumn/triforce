@@ -289,6 +289,21 @@ def darknuts(ram: bytes) -> list[Nut]:
             if ram[OBJ_TYPE + s] in SPEED and ram[OBJ_META + s] < 0x10]
 
 
+def chasing_line(ram: bytes) -> bool:
+    """`zelda::darknut_rules::chasing` (`reward.chase_penalty`'s test): Link within 8 pixels of the line of a Darknut
+    walking away from him, less than $30 pixels behind it."""
+    x, y = ram[OBJ_X], ram[OBJ_Y]
+    for d in darknuts(ram):
+        if d.cloud or d.dir is None:
+            continue
+        vx, vy = VEC[d.dir]
+        along = (x - d.x) * vx + (y - d.y) * vy
+        across = abs(y - d.y) if vx else abs(x - d.x)
+        if across < 9 and -0x30 < along < 0:
+            return True
+    return False
+
+
 def contact(paths: np.ndarray, futures) -> np.ndarray:
     """Per Link path ([P, HORIZON + 1, 2]): the first frame some way of some Darknut touches him (HORIZON + 1: none);
     touch under 9 pixels on both axes (asm:Link_CheckMonsterTouch_NoReset), the box widening with the frames."""
@@ -792,12 +807,15 @@ class Tally:
         self.health = env.state.health
         self.start_health = self.health
         self.hits, self.frames, self.where, self.lost = 0, 0, [], 0.0
+        self.chase_frames = 0                                 # frames of steps ending on a Darknut's line behind it
         self.bomb_hurt = []                                   # per bomb laid: Darknuts it hurt
         self.live_bomb = None                                 # index into bomb_hurt while its blast may land
 
     def step(self, ram_before: bytes, text: str, env, info, fighter: Fighter | None):
         ram = bytes(env.state.ram)
         self.frames += info.get('frames', 0)
+        if chasing_line(ram):
+            self.chase_frames += info.get('frames', 0)
         if text.startswith('BOMB') and ram_before[INV_BOMBS] > ram[INV_BOMBS]:
             self.bomb_hurt.append(0)
             self.live_bomb = (len(self.bomb_hurt) - 1, self.frames)
@@ -913,7 +931,7 @@ def record(seed, start, info, tally, fighter, env) -> dict:
             'hearts_lost': round(tally.lost, 2),
             'start_hearts': tally.start_health, 'frames': tally.frames, 'swings': fighter.swings,
             'bombs': len(tally.bomb_hurt), 'bomb_hurt': tally.bomb_hurt, 'bomb_pred': fighter.bomb_pred,
-            'where': tally.where}
+            'chase_frames': tally.chase_frames, 'where': tally.where}
 
 
 def starts(room: str, bombs: int, seed0: int, per_state: int):
@@ -971,6 +989,7 @@ def summary(records: list[dict]) -> dict:
         'frames_mean_won': sum(r['frames'] for r in won) / len(won) if won else None,
         'swings_per_visit': sum(r['swings'] for r in records) / n,
         'bombs_per_visit': sum(r['bombs'] for r in records) / n,
+        'chase_frames_per_visit': sum(r.get('chase_frames', 0) for r in records) / n,
         'darknuts_hurt_per_bomb': sum(bombs) / len(bombs) if bombs else None,
         'bombs_hurting_2plus': sum(h >= 2 for h in bombs), 'bombs_hurting_1': sum(h == 1 for h in bombs),
         'bombs_hurting_0': sum(h == 0 for h in bombs),

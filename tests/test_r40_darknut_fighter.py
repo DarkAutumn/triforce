@@ -116,21 +116,6 @@ def test_a_bomb_is_laid_only_for_two_or_more(fighter):
     assert all(hurt >= 2 for hurt in record['bomb_hurt']), record
 
 
-def chasing(fighter, ram) -> bool:
-    """`zelda::darknut_rules::chasing` read again here: Link within 8 pixels of the line of a Darknut walking away
-    from him, less than $30 pixels behind it."""
-    x, y = ram[fighter.OBJ_X], ram[fighter.OBJ_Y]
-    for d in fighter.darknuts(ram):
-        if d.cloud or d.dir is None:
-            continue
-        vx, vy = fighter.VEC[d.dir]
-        along = (x - d.x) * vx + (y - d.y) * vy
-        across = abs(y - d.y) if vx else abs(x - d.x)
-        if across < 9 and -0x30 < along < 0:
-            return True
-    return False
-
-
 def test_the_chase_cost_is_paid_on_the_turn_rules_line(fighter):
     """`reward.chase_penalty` (Darknut40's switched-off proposal): a walker that keeps stepping behind the nearest
     Darknut on its line pays `penalty-chase`, its value times the step's frames, on exactly the steps that end with
@@ -161,7 +146,7 @@ def test_the_chase_cost_is_paid_on_the_turn_rules_line(fighter):
                 break
             charged = info['rewards'].get('penalty-chase')
             if cost:
-                expected = chasing(fighter, bytes(env.state.ram))
+                expected = fighter.chasing_line(bytes(env.state.ram))
                 assert (charged is not None) == expected, (info, expected)
                 if charged is not None:
                     assert charged == pytest.approx(-cost * info['frames'])
@@ -170,3 +155,18 @@ def test_the_chase_cost_is_paid_on_the_turn_rules_line(fighter):
                 assert charged is None
         if cost:
             assert paid >= 5, paid
+
+
+def test_the_proposals_read_the_owners_bomb_take():
+    """`r40_darknut_proposals.read` on the owner's `bombs_with_melee` take: his six bombs (docs/owner/darknuts.md: five
+    hurt two, the fourth none) and the catch count `items.bomb_catch` would have shown on the frame each was laid (the
+    same five at two or more); his one hit; the frames he stood on a Darknut's line behind it (the document counts
+    frames from 1, here from 0: its bomb 1 at 299 is 298 here, its hit at 992 is 991)."""
+    require_rom()
+    spec = importlib.util.spec_from_file_location('r40_darknut_proposals', SCRIPT.with_name('r40_darknut_proposals.py'))
+    proposals = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(proposals)
+    visit = proposals.read(TAKE.with_name('blue_darknut-bombs_with_melee.tfreplay'))
+    assert [(b['frame'], b['predicted'], b['hurt']) for b in visit['bombs']] == [
+        (298, 2, 2), (492, 3, 2), (980, 2, 2), (1183, 1, 0), (1427, 3, 2), (2193, 2, 2)]
+    assert visit['hits'] == [991] and len(visit['chase']) == 168
