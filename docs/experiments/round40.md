@@ -1341,6 +1341,80 @@ the Goriya axis, a half-pixel walker reaching its point and lingering, the rever
 clock and the shove), `tests/test_obs_chase.py` (the env's blocks are `_native.chase_blocks` with the switch, zeros
 without it, every other key identical either way; the probe reads every walking Darknut's next grid point).
 
+### Against real play (`scripts/experiments/r40_chase_check.py`; 2.0.0.15's 250-test replays and the owner's takes)
+
+Six pieces, as the lead cut them: replays 0-59 (Dungeons 1 and 3: Stalfos, Red Darknuts) and the 24 runs past
+Dungeon 5 with seeds 60 and up (Blue Darknuts, Gibdos, Dungeons 7 and 6); jobs #962-#965, #1025, #1026 on
+`r40-chase` (the merged pieces in `target/r40/chase-check/merged.json`). Every replay played frame by frame
+(`_native.ReplayPlayer`), the probe computed from each play frame's RAM alone (`_native.chase_probe`).
+
+**The hotspot in play.** Every live wanderer's distance (corners) from Link, binned by Link's distance from (127.5,
+127.5), against the mean distance from Link of a uniform square of the room's walking box (the geometry alone: near
+the middle everything is closer), and the wanderers within 40 px of him per frame:
+
+| Link from the point | dungeon frames | wanderers' mean distance | uniform | ratio | within 40 px a frame | overworld: ratio, within 40 |
+|---|---:|---:|---:|---:|---:|---|
+| 0-16 px | 60,336 | 50.0 | 61.1 | **0.82** | **1.08** | 0.74, 0.42 |
+| 16-32 | 116,379 | 55.3 | 64.5 | 0.86 | 0.94 | 0.73, 0.57 |
+| 32-48 | 160,836 | 63.2 | 71.1 | 0.89 | 0.79 | 0.77, 0.46 |
+| 48-64 | 126,480 | 73.6 | 75.9 | 0.97 | 0.59 | 0.84, 0.33 |
+| 64-96 | 188,877 | 86.8 | 88.8 | 0.98 | 0.62 | 0.83, 0.35 |
+| 96+ | 64,232 | 94.9 | 103.1 | 0.92 | 0.70 | 0.97, 0.09 |
+
+In dungeons the wanderers stand 18% closer to Link than the room's geometry gives when he is within a square of the
+point, 3% at 48-64 px, and twice as many are within 40 px of him: the clump the owner plays for, in today's team's
+play, which does not seek it. (The overworld's ratio is low in every band; why was not looked into.) The owner's
+bomb take (`bombs_with_melee`, six Blue Darknuts): 54 px within 16 px of the point (ratio 0.87, 1.45 within 40 px a
+frame), 53 at 16-32, 55 at 32-48 (1.52), 59 at 48-64, 71 at 64-96 (0.39 within 40 px): the lead's 50-53 px inside
+48 against 80 outside, by band; 1,803 of the take's 2,205 play frames with wanderers are within 48 px of the point,
+so its outer bands are short. His `play_with_anticipation` (one Darknut shadowed, the rest elsewhere) reads a ratio
+of 1.3 in every band.
+
+**The flip** (`flip_time`): the 76,442 flips of `$60` were read 1 frame before in 100%, 8 frames before in 91.1%
+and 16 frames before in 88.3% (only flips with none in between). The misses look like lag frames (seen frame by
+frame for the grid points of a room with eight Red Darknuts, where the RAM stood still for frames at a time; not
+checked for the flips themselves): the RAM's timers count game updates and the emulator's frames run longer.
+
+**The turn column.** Each arrival at a grid point (a covered monster's grid offset went from off-grid to 0: the frame
+of its first decision there), what the probe said the frame before: `exact with the roll` reads the frame's own
+random byte (Random+1,X, after the fact: the check's knowledge, never the input's) and asks whether the decision is
+the one the rule then names; `taken / expected` is how often the turn toward the target was taken where it differs
+from what the monster does otherwise, against (rate + 1) / 256; reversals are grid points a monster left the way it
+came (any cause, tile turns included) and decision reversals the decisions that turned it straight back:
+
+| type | grid points | exact with the roll | `grid_time` exact 1 / 8 / 16 frames before | no turn window: agree | toward: taken / expected | decision reversals flagged the frame before (`reverse`) | all reversals: `reverse`, `reverse_link`, `reverse` 8 frames before |
+|---|---:|---:|---|---:|---|---|---|
+| **Darknut red** | 13,121 | 99.1% | 100 / 82.7 / 80.2% | 99.5% | 48.3% / 50.4% (2,766) | 95.3% of 446 | 74.0%, 38.3%, 49.1% of 823 |
+| **Darknut blue** | 16,480 | 99.2% | 100 / 97.5 / 95.0% | 99.4% | 46.6% / 50.4% (2,758) | 96.7% of 449 | 80.2%, 46.7%, 57.8% of 692 |
+| **Gibdo** | 5,095 | 99.4% | 100 / 97.4 / 95.0% | 99.5% | 49.1% / 50.4% (888) | 98.2% of 164 | 51.1%, 25.6%, 38.9% of 450 |
+| **Stalfos** | 4,283 | 99.3% | 100 / 99.5 / 98.2% | 99.5% | 49.9% / 50.4% (826) | 96.2% of 131 | 29.5%, 16.1%, 22.5% of 601 |
+| Like-Like | 5,225 | 99.3% | 100 / 98.5 / 96.4% | 99.5% | 49.1% / 50.4% (934) | 98.7% of 152 | 77.1%, 47.5%, 50.4% of 280 |
+| Vire | 6,125 | 98.8% | 100 / 99.9 / 99.7% | 99.1% | 49.4% / 50.4% (1,096) | 92.4% of 170 | 25.2%, 10.5%, 20.5% of 820 |
+| Bubble | 28,647 | 99.6% | 100 / 99.7 / 96.4% | 99.7% | 23.6% / 25.4% (4,775) | 95.9% of 414 | 42.7%, 25.3%, 31.1% of 1,041 |
+| Octorok | 5,583 | 99.0% | 100 / 93.8 / 86.1% | 99.2% | 47.0% / 45.8% (928) | 92.8% of 152 | 50.3%, 37.1%, 35.0% of 286 |
+| Moblin | 2,318 | 98.8% | 100 / 98.7 / 96.9% | 99.0% | 60.1% / 62.9% (263) | 88.5% of 52 | 26.4%, 20.8%, 16.4% of 159 |
+| Blue Leever | 1,549 | 98.6% | 100 / 97.4 / 82.8% | 99.0% | 62.9% / 62.9% (256) | 94.8% of 58 | 60.6%, 29.9%, 48.8% of 127 |
+| Goriya (the Goriya rule) | 8,904 | 97.5% | 100 / 94.3 / 87.2% | - | certain | 96.2% of 1,542 | 64.4%, 42.7%, 47.7% of 2,213 |
+| Lynel (the Goriya rule) | 537 | 98.0% | 100 / 96.8 / 93.9% | - | certain | 98.5% of 67 | 72.8%, 19.8%, 63.0% of 81 |
+| Ghini | 149 | 100% | 100 / 100 / 100% | 100% | always (14) | 5 of 5 | 11 reversals: too few to read |
+
+- **The rule is the game's.** Given the roll, the column names the decision at 97.5-99.6% of grid points; the rest
+  are, in the cases read frame by frame, the target moving in that very frame (a flip, or Link stepping across the
+  8-pixel edge); one Vire turned round with no decision for it (likely its touch on Link: not checked). Without the
+  roll, the turn toward the target is taken as often as the turn rate says (47-50% for rate $80, 24% for $40, 60-63%
+  for $A0), so `chance` is calibrated.
+- **Reversals.** A decision that turned a monster straight back had `reverse` the frame before in 88-99% of cases
+  (Red Darknut 95.3%, Blue 96.7%, Gibdo 98.2%, Stalfos 96.2%). Of all reversals at a grid point, the decision's are
+  a share only: the rest came after it (the departure differs from the decision: the next frame's tile test,
+  asm:Walker_AltDir_GetRandomObjPerpendicularDir, or a touch; not split further), which no input about the target
+  can flag, and they are most of the Stalfos' and Vires'; `reverse_link` (Link himself behind it) flagged 38-47% of
+  the Darknuts' reversals, the "don't chase" cases among them.
+- **Lag frames.** `grid_time` is exact the frame before (100% for every type); 8 and 16 frames before it is short
+  where the game drops updates (Red Darknuts 82.7 / 80.2%: a room of eight, read frame by frame, moved one pixel in
+  three frames where the q-speed says two): it counts game updates, not the emulator's frames.
+- Ghini is below 300 grid points (149, all exact): shown, not claimed. Not covered by the column: Zols, Gels,
+  Dodongos, Armos (left out above). The overworld X wrap was not counted separately.
+
 ### What could carry the lesson beyond the inputs (for the lead to decide; no reward added)
 
 The inputs say where the monsters are sent and who may turn at Link; nothing yet rewards using it, and the owner asked
