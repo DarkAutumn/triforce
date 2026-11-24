@@ -9,10 +9,8 @@ ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0
 items: {bombs: tenth}                      # only the 10th damage-free kill's bomb (arms a forced bomb drop)
 curriculum:                              # trajectories/zol (Go-Explore paths per start state)
   enabled: true
-  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
-  - d3first_3_4bs_0                       # round 40 (Tracks40): as zol@d3first (3:0x4b, no explored track)
-  - d3first_3_4bs_1
-  - d3first_5_57w_[0-9]
+  untracked:                              # round 40: the seed states that train without a track (triforce.inputs);
+  - d3first_5_57w_[0-9]                   # 3:0x4b's have the rule zol-4b's (Tracks41)
   - d3first_6_68s_[0-9]
   - d3first_9_63c_[0-9]
 one_room: true

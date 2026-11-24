@@ -2793,6 +2793,157 @@ missing base and an empty list are refused naming the file; the manifest names b
 `triforce manifest diff` shows a change made in the common block as `task.effective.reward.aimless_penalty` and
 `task.extends`).
 
+## The untracked states' tracks (Tracks41, branch `r40-tracks2`)
+
+anthropic/claude-opus-5-5 (Tracks41), on `r40-gencode` at 42d15e02. Tracks for the 27 states the generation's tasks
+declared `curriculum.untracked` for want of one (above: Tracks40's 25 and States40's 3x59 from N at 4 bombs, chains 1
+and 2), by the generation's own means, in the lead's order: the scripted rules, Darknut40's fighter, the explorer
+aimed by what its searches reached; nothing from a network's play (the fourth means was not needed). **All 27 have a
+track that belongs** (Tracks40's audit: its first state equals the explorer's own reset of today's file): 20 by seven
+rules (none lost a heart by its end; the six of 7x1c and 7x1b were hit once and healed), 4 by the fighter, unhit, 3 by
+the explorer; none is declared untracked any more. No start state, route data, reward or training changed.
+
+**What a track must start from.** The explorer resets with the family's `d3first` task and no RAM randomization, the
+run-time clips switch on (`env::explore::explore_config`). Every track here was recorded from that same reset: an
+env of the `d3first` task (`lab.collect.task_yaml`) with `ram_randomization` empty and the clips' `off_share` 0, the
+state file before each decision (`Snapshot.state_file`, as `r29_demos.write_track` writes rule tracks), so its
+`0000.state` is the reset but for the random numbers, which the audit does not compare.
+
+**1. The scripted rules** (`scripts/experiments/r32p_rules.py`). The store's `~rule` tracks were made by
+`r31_curricula.sh`'s `rule`: `<script> ROOM --runs 20 --tracks OUT/<family> --max-loss H`, `r29_demos.play`'s first
+won run of a state (seeds from 1000) that lost at most H hearts and played no masked choice, one a state
+(`--per-state 1`). Brought up to today: (a) the route steps of the rooms that moved since 2.0.0.0 (garden-05 103 ->
+128, digdogger-24 118 -> 143, digdogger-1c 187 -> 171, goriya-1b 186 -> 170; zol-4b 10, like-like-32 38, vire-31 37,
+vire-12 50, gleeok-13 51 unchanged; the 0:0x2d cave, 0:0x0c and 0:0x62 rooms are off the route and left as they are);
+(b) the env is the family's `d3first` task (it was the family's own yaml); (c) `--hearts reset`: no draw at all, the
+room's `DRAWS` included (`own` gave goriya-1b's runs 1 bomb, so its tracks would not have belonged). The timing needed
+nothing: the rules decide from the RAM at every decision, so the missing closing frame after a MOVE only changes how
+far a MOVE walks, which they read back; all seven won from today's states at once (job #1135, 2 runs each: Gleeok
+lost both, a death and a `no-damage`). Recorded (job #1136, `target/tracks41/rules.sh`): per state the first won run
+that lost no heart by its end (a hit healed by a heart counts as none), else at most 1, 2, any (every state found one
+at 0), 40 runs a state, Gleeok 150:
+
+| rule | states | hearts in | won | endings | hearts lost in wins (mean) |
+|---|---|---:|---:|---|---:|
+| gleeok-13 (4x13, boss-gleeok) | `4_13w_0..2` | 4 | 329 of 450 | 99 `no-damage` (the task's 120 steps without a hit), 21 deaths, 1 `stuck` | 0.68 |
+| digdogger-1c (7x1c, boss-digdogger) | `7_1cw_0..2` | 9 | 117 of 120 | 3 deaths | 2.62 |
+| goriya-1b (7x1b) | `7_1bw_0..2` | 9 | 120 of 120 | | 1.49 |
+| like-like-32 (the Breakfast Room 4x32) | `4_32w_0..2` | 4 | 120 of 120 | | 0.29 |
+| vire-12 (4x12) | `4_12n_0..2` | 4 | 120 of 120 | | 0.14 |
+| vire-31 (4x31) | `4_31w_0..2` | 4 | 120 of 120 | | 0.16 |
+| zol-4b (3x4b) | `3_4bs_0`, `_1` | 3 | 68 of 80 | 11 `no-damage`, 1 `stuck` | 0.03 |
+
+**2. Darknut40's fighter** (`scripts/experiments/r40_darknut_fighter.py`, `scripts/experiments/r41_tracks.py
+fighter`). A visit as its demonstrations are built (`teach`: the look-ahead of 3 decisions near a Darknut, then the
+backtracking search where Link is still hit), seeds from 100000, the first that leaves by the route's exit unhit,
+played again from the reset as the track (`<state>~fighter<seed>`; `teach` now hands back its actions, `way=`).
+3x59 from N with 4 bombs and a reserve of 5 (none usable): seed 100000 kept on both chains (253 and 190 steps). 3x5b's
+last pass is a new room of the fighter, `5b-last`, in the order the route's objective gives a bag of 4 (Carrier40b's
+`wall_first_rooms`: 4 + the room's 4 do not overflow the bag): the fight with the sword (no weapon bomb in 3x5b), the
+room's bombs (the room item, slot $13; 4 -> 8), then the wall (BOMB E on the row Y $8D from X $B8 or more, where the
+mask offers it; 8 -> 7), the blast waited out, out E. A bag of 5 or more (the wall first) is refused, not played: the
+three start states hold 4 (a run that took the first pass's drop enters with 8 and would need it). About an hour of
+work, not a day. Job #1143: seed 100000 kept on both chains,
+141 steps each; seeds 100000-100003 won unhit on both (`trace`: the fight in 96 decisions, the bombs at 113, the
+bomb at 123, out at 140).
+
+**3. The explorer, aimed** (`python -m triforce.explore`). Why Tracks40's searches failed, from the same searches
+again (job #1145: seed 0, 3000 iterations, patience 300, each family's `d3first` task; `ExploreResult` now carries
+what a search reached and `explore.py` prints it under an unsolved state: the failed episodes by ending, the living
+enemies at the reset and the fewest any cell held, the longest cell path, the best closeness): no step limit was met
+(no `max-steps` ending; the longest paths 188-321 steps against `max_steps` 900-2000), and no hit rule ended a search
+episode but death; the closeness reaches 1.00 in every search (the objective's target is reached during the fight),
+so it says nothing here.
+
+| states | enemies at the reset -> fewest | longest path | failed episodes | reading |
+|---|---|---:|---|---|
+| Gleeok `4_13w_0..2` | 2 -> 2 | 188-225 | 1700-2076 deaths | the fight never won: no head hit at 4 hearts |
+| Digdogger `7_1cw_0..2` | 1 -> 0 | 227-275 | 1375-1684 deaths, 24-54 `exit-wrong` | the big one split, the three small ones never all killed |
+| goriya `7_1bw_0..2` | 6 -> 3, 1, 3 | 216-297 | 808-913 deaths, 75-94 `exit-wrong` | the fight never won |
+| goriya `1_23s_1`, `_2` | 3 -> 0 | 296, 280 | 223, 185 deaths; 115, 118 `exit-wrong` | the fight won, the exit (the key, the W key door) never reached |
+| goriya `2_1es_1` | 5 -> 0 | 285 | 692 deaths | the fight won, the N door never reached |
+| like-like `4_32w_0..2` | 4 -> 1, 0, 0 | 289-321 | 724-791 deaths | won on two chains, the push and the stairs never reached |
+| vire `4_12n_0..2`, `4_31w_0..2` | 5 -> 0 (12n_1: 1) | 214-305 | 628-1568 deaths | the fight won, the exit never reached |
+| zol `3_4bs_0`, `_1` | 3 -> 1, 0 | 246, 292 | 472, 567 deaths | the key and the W door never reached |
+| darknut `3_59n_2` | 5 -> 3 | 194 | 2061 deaths | the fight never won (`3_59n_1` was solved today, 194 steps, 2 hearts lost) |
+| darknut `3_5bw_0`, `_2` | 3 -> 0 | 277, 319 | 1292, 1154 deaths | the bombs and the wall never reached |
+
+So the budget, not the step limit or the task: the searches spend their iterations dying in the fight and end
+before the last part of the way. For the three states no rule plays (goriya `1_23s_1`, `_2`, `2_1es_1`) the same
+searches with `--iterations 20000` (job #1149) solved all three just past 3000 iterations (4189, 3863, 4413), keeping
+the first success after patience 300: 0.5, 1.5 and 1.5 hearts left, 8-10 hits. Kept going 5000 iterations past it
+(`--patience 5000`, job #1152; the explorer keeps its healthiest success) they ended at 8889, 8563 and 9113 iterations
+with 2.5, 5.0 and 2.0 hearts left in 172, 214 and 224 steps: those are the tracks. Gleeok's searches ran beside the
+first as its rule's backup and were stopped once the rule had its tracks.
+
+**Found on the way: 3x5b's first pass.** Audited beside the store's current snapshot (`261124-gen1`) on today's
+generation code, its three `darknut/d3first_3_5bs_*` tracks (States40's explored ones, which belonged when Tracks40
+audited them on `r40-gen` 95eea9e9) are now stale: their first state holds 1 bomb, the explorer's reset of today's
+files 0 (the state files are the same since 95eea9e9; [INFERENCE] the reset no longer tops up 3x5b's wall grant on
+entering from S since Carrier40's c8cf0c82, "the wall's cheated bomb follows the objective"). `compose` drops them,
+and the proof then refuses both darknut tasks (3 seed states without a track). Replaced by the fighter's first pass
+(`--room 5b`, one Red Darknut, its bombs if it drops them, out N; job #1183): seed 100000 on each chain, unhit, 74,
+89 and 97 steps, all three belong. The installed snapshot still holds the stale three: a darknut@d3first training on
+it starts those curriculum episodes with a bomb the state does not hold.
+
+**The table** (`r41_tracks.py table`, job #1192: hits are the hearts falling from one state file to the next, and on
+the last step by `trajectory.json`'s `health` where that is the end's; round 29's rule tracks record the start's hearts
+there, so their last step is not read; Gleeok's heart container raises the hearts by one):
+
+| state | means | track | steps | hits |
+|---|---|---|---:|---:|
+| boss-gleeok `4_13w_0` | rule gleeok-13 | `~rule1002` | 368 | 0 |
+| boss-gleeok `4_13w_1` | rule gleeok-13 | `~rule1000` | 257 | 0 |
+| boss-gleeok `4_13w_2` | rule gleeok-13 | `~rule1000` | 309 | 0 |
+| boss-digdogger `7_1cw_0` | rule digdogger-1c | `~rule1003` | 134 | 1 (healed) |
+| boss-digdogger `7_1cw_1` | rule digdogger-1c | `~rule1000` | 84 | 1 (healed) |
+| boss-digdogger `7_1cw_2` | rule digdogger-1c | `~rule1000` | 84 | 1 (healed) |
+| goriya `7_1bw_0` | rule goriya-1b | `~rule1003` | 228 | 1 (healed) |
+| goriya `7_1bw_1` | rule goriya-1b | `~rule1001` | 216 | 1 (healed) |
+| goriya `7_1bw_2` | rule goriya-1b | `~rule1002` | 171 | 1 (healed) |
+| like-like `4_32w_0` | rule like-like-32 | `~rule1000` | 203 | 0 |
+| like-like `4_32w_1` | rule like-like-32 | `~rule1000` | 246 | 0 |
+| like-like `4_32w_2` | rule like-like-32 | `~rule1001` | 360 | 0 |
+| vire `4_12n_0` | rule vire-12 | `~rule1002` | 113 | 0 |
+| vire `4_12n_1` | rule vire-12 | `~rule1000` | 167 | 0 |
+| vire `4_12n_2` | rule vire-12 | `~rule1002` | 113 | 0 |
+| vire `4_31w_0` | rule vire-31 | `~rule1001` | 192 | 0 |
+| vire `4_31w_1` | rule vire-31 | `~rule1000` | 162 | 0 |
+| vire `4_31w_2` | rule vire-31 | `~rule1000` | 132 | 0 |
+| darknut `3_59n_1` | the fighter (`59`) | `~fighter100000` | 253 | 0 |
+| darknut `3_59n_2` | the fighter (`59`) | `~fighter100000` | 190 | 0 |
+| darknut `3_5bw_0` | the fighter (`5b-last`) | `~fighter100000` | 141 | 0 |
+| darknut `3_5bw_2` | the fighter (`5b-last`) | `~fighter100000` | 141 | 0 |
+| zol `3_4bs_0` | rule zol-4b | `~rule1000` | 231 | 0 |
+| zol `3_4bs_1` | rule zol-4b | `~rule1000` | 202 | 0 |
+| goriya `1_23s_1` | the explorer, 20000 iterations, patience 5000 | (the state's name) | 172 | 5 (2.5 hearts) |
+| goriya `1_23s_2` | the explorer, 20000 iterations, patience 5000 | (the state's name) | 214 | 0 |
+| goriya `2_1es_1` | the explorer, 20000 iterations, patience 5000 | (the state's name) | 224 | 9 (5 hearts) |
+| darknut `3_5bs_0` (replaced, above) | the fighter (`5b`) | `~fighter100000` | 74 | 0 |
+| darknut `3_5bs_1` (replaced) | the fighter (`5b`) | `~fighter100000` | 89 | 0 |
+| darknut `3_5bs_2` (replaced) | the fighter (`5b`) | `~fighter100000` | 97 | 0 |
+
+**The folder: `/home/leculver/git/triforce-r40-tracks2/target/trajectories-gen2`** (`r40_tracks.py compose`, job
+#1192, `target/tracks41/final.sh`): the store's `261124-gen1` as hard links (1,387 of its 1,390 tracks) without its
+three stale `darknut/d3first_3_5bs_*`, plus the 30 new tracks (copies): **1,417 tracks, 119,486 files, 1,350,225,975
+bytes**. Audited again (`audit-gen2.json`): every `d3first` track belongs (315); the bare ones as the store has them
+(1,046 belong, 44 stale, 12 without a state: Tracks40's 56). For the lead:
+
+    triforce-lead data install trajectories 261124-gen2 --from /home/leculver/git/triforce-r40-tracks2/target/trajectories-gen2
+
+**The proof** (`r40_tracks.py proof`, job #1192, `target/tracks41/proof.json`), this worktree's `trajectories ->
+target/trajectories-gen2` (gitignored), on the merge of `r40-gen` b4270f31: **72 task files, none refused, no red
+flag**. `curriculum_tracks` (each equal to what `Curriculum::new` loaded) against `trajectories-gen1`'s: darknut 93 ->
+97 (d3first and own), zol 46 -> 48, vire 54 -> 60, like-like 51 -> 54, boss-gleeok 6 -> 9, goriya 135 -> 141,
+boss-digdogger's own file 18 (its `d3first` part has the curriculum off); every other task as before.
+
+**Not done, not tested.** No training read the folder. The tracks were checked by the audit (their first state) and
+their recorded ending (`exit-correct` on replay from the reset); what they teach was not measured. The fighter's
+`5b-last` plays only the bag of 4 or fewer (no wall-first order). The rules' `trajectory.json` `health` is the start's
+(round 29's writer, unchanged). Merging this branch before the lead installs `261124-gen2` as current makes the
+shipped-task test (`test_the_shipped_tasks_declare_every_input_they_draw`) and every d3first training of these
+families refuse: the declarations are gone and `261124-gen1` lacks the tracks.
+
 ## The lab trainer for the generation's teachers (Trainer41, branch `r40-trainer`)
 
 **The ask** (the lead, from GroupScout's map of the training path): the lab trainer (`python -m triforce.lab.train`)
@@ -2849,6 +3000,15 @@ how each works; this is what was built and what it showed.
 - **A name no team spec could hold** (the lead's line, from Judge41's work on team specs): `--name` or `--run-id` with
   `+` is refused as the arguments are read ("--name: '+' separates the slots of a team spec, so no --team could name
   this run; use '-' or '_'").
+- **The generation's network in the group file** (the lead's follow-up after the owner set the width, 768
+  everywhere): `groups.yaml`'s `network:` block (`hitnet`, tokens `type, features, rel, threat, chase`, `feed`,
+  `room`, `hidden_dim` 768, `--aux hit=hit:0.5`, `--try-others 4:0.25`; 4,960,388 parameters, against 1,608,836 at the
+  default 256 that one run had silently taken) is what `--group NAME` trains with nothing else on the command line; a
+  teacher may override a key; a command-line `--arch`, `--arch-config` (by key), `--aux` or `--try-others` wins and
+  the run prints one line of what it changed ("[lab] --group rooms: the command line overrides the group file's
+  arch_config.hidden_dim 768 -> 256; …"); the manifest records each key's source (`networks.student.sources`) and
+  the file's block (`task.group.network`). Today `--group rooms` alone is refused by the obs-switch check (the task
+  files keep `obs.threat` and `obs.chase` off), as it should be.
 - **The lab's existing tests** train ow-start from the bare state `start` with no route: they now pass `--all-routes`
   (a comment says why); nothing else in them moved.
 
@@ -2911,3 +3071,271 @@ decisions).
   restored on resume: each env's start-state badness (in the Rust pool, as in `triforce train --resume`) and the
   early stop's streak. An update cut by the SIGTERM stays partly applied in the saved weights.
 - A teacher term or rehearsal in a resumed run is untested beyond the code path (the generation uses neither).
+
+## Stage 2's tools for the generation (Stage41, branch `r40-stage`)
+
+anthropic/claude-opus-5-5 (Stage41), on `r40-gen` (42d15e02, then Trainer41's 625f2b4c and b4270f31 merged in for
+`lab.groups` and `lab.recipe`). Stage 2's tools made ready for one `hitnet` student taught by the generation's group
+and boss teachers: recording with named teachers and hit labels, imitation with the hit head in the same pass, a
+correction round through the same path. The commands, in order, are `docs/lab.md` "Stage 2: one network from its
+teachers". Nothing here trains a network that is kept.
+
+**What changed.**
+
+- `scripts/experiments/r36_merge_record.py` took its teachers from the registry's pointers alone (a bare key's
+  `promoted`, never the route's `late.<route>`), read the bare family yaml for its `entries` and `rooms` sources (so
+  the bare file's observation switches), and wrote no hit labels (a separate tool, `lab.record --try-others`, did).
+  Now: the keys from `--group NAME` (`lab.groups`) and `--keys KEY[=YAML]`; a teacher per key or family
+  (`--teacher KEY=NET`) or per group (`--teacher-group GROUP=NET`, every recorded member), NET a store run, a run
+  dir, a checkpoint or a slot (`train.resolve_warm_start`); once one is named every key needs one. Every source on
+  the key's own task file (the route's: its switches); `--try-others K:P` puts the look-ahead's verdicts in the same
+  shards as the teacher's distribution and value (`lab.record.shard_arrays`, shared with `lab.record`). A teacher or
+  `--student` that reads a block whose switch is off in the task is refused before anything plays
+  (`lab.recipe.network_reads`, one direction only: today's networks read neither block and may stand in on tasks
+  that turn them on). `meta.json` names the teacher as given and as `manifest.network` reads it (run, checkpoint
+  SHA-1, architecture, hit head), the student likewise, the task (`manifest.task`: yaml, `extends` chain, effective
+  config, their hashes), the switches, the data drawn (`manifest.data`: seed and harvested states by content), the
+  code and the ROM. Without a named teacher it records the team in use as round 38 did, with a bare key's
+  `late.<route>` now read on the route. With named teachers a harvested entry after the magic sword goes to the
+  recorded `family@d3first` key when the bare key is not recorded (a group teacher plays its family's whole route;
+  the team's `family@d3first` runs never played those rooms, so without named teachers it still does not).
+- `scripts/experiments/r36_merge_distill.py`: the cache keeps the hit labels (when every shard has them), each
+  row's held-out flag and each source's switches (`cache.json` `recorded`). `train --aux OUTPUT=TARGET:COEFF` adds
+  the lab's own loss (`lab.auxiliary.aux_loss`, the same BCE `lab.train --aux hit=hit:C` applies online, on the
+  action taken and the tried candidates), one forward a minibatch for a lab network; `--arch hitnet --arch-config`
+  builds through `lab.recipe.create_network`; a student reading a block a source recorded with its switch off is
+  refused. Round 38's recipe is the default: from scratch 20 epochs at lr 1e-3, value weight 0.02 (was 8 epochs and
+  0.1 by default; round 38 passed its numbers by hand); from `--init` (any NET) 5 epochs at lr 3e-4 (its second pass,
+  its every-room and correction passes). The held-out rows are now the last env of every rollout (round 38's env 9
+  with 10 envs; with fewer envs, before, none were held out), the flag in the cache (`held.npy`: a cache from before
+  must be built again; `r36_merge_convert.py` reads the flag). `distill.json` adds per epoch the auxiliary loss
+  (train and held out) and the hit head's precision = recall on the held-out actions taken and judged candidates.
+- `scripts/experiments/r38_hit.py retrain --init fresh:POLICY` is **retired**: it built a `hitnet` with the default
+  tokens alone (never `threat` or `chase`) and had no `--arch-config`; the generation's head trains inside its
+  student in the imitation's own pass. `retrain` from a `hitnet` or `hitshift` checkpoint stays.
+- `tests/test_stage2.py` (6 tests): a group's and a family's teachers, a missing or doubled teacher, the refusal of a
+  network reading a switched-off block (the generation's `hitnet` and today's network on both tasks), the
+  generation's network at 1,608,836 parameters, imitation training the hit head in the same pass with the defaults
+  of each pass, the refusal of a student reading blocks recorded off.
+
+**The proof** (small, through the queue's express place, each piece under ten minutes). **Stand-in teachers, kept
+nowhere**: today's store team's `zol/r38head-fam-w4` (checkpoint 501552eb) and `stalfos-keese-gel/r38head-fam-w8`
+(b95f2265), both `hitshift` (`ZeldaPolicy` with a hit body reading `type, features, rel, contact`), named with
+`--teacher` for two members of the walkers group, `zol@d3first` and `stalfos-keese-gel@d3first`. Their tasks:
+`specialists/d3first/<family>.yaml` extended by `target/r40-stage/tasks/<family>.yaml` (untracked) with the
+**switches on: `obs.threat`, `obs.chase`, `obs.objective`, `obs.target`** (and `hidden_positions: ram`, the
+default); the teachers read neither new block, so they play as on today's observation, and the recorded rows carry
+the blocks filled for the student. The student: `hitnet`, tokens `type, features, rel, threat, chase`, `feed:
+true`, the room kept, `hidden_dim` 256: 1,608,836 parameters. Models in `target/r40-stage/models` (a models dir,
+nothing written to the store but the queue's records).
+
+| piece (queue job) | command | result |
+|---|---|---|
+| record (#1195, #1201) | `r36_merge_record.py --out proof/teach --keys zol@d3first=T/zol.yaml stalfos-keese-gel@d3first=T/stalfos-keese-gel.yaml --teacher zol=zol/r38head-fam-w4 --teacher stalfos-keese-gel=stalfos-keese-gel/r38head-fam-w8 --state-route d3first --try-others 8:1.0 --sources resets entries --decisions 4096 --parallel 4` | 4 sources × 4,096 rows (2 shards of 4 envs × 512); 69.9 s, 117.2 s, 57.8 s, 284.3 s (the last again in #1201: #1195 reached the 10-minute limit in it and the rerun skipped the three done) |
+| imitate (#1208) | `cache --data proof/teach`; `train --arch hitnet --arch-config '{"tokens": [...], "feed": true}' --aux hit=hit:0.5 --epochs 3 --batch 512` | 16,384 rows (12,288 train, 4,096 held out): held-out KL 1.715 → 1.214 → 1.099, joint top-1 0.250 → 0.469; hit loss train 0.0827 → 0.0759, held out 0.0721 → 0.0716; P=R judged 0.028 → 0.083 |
+| correct (#1210) | `r36_merge_record.py ... --student models/r40stage-proof/s1 --sources resets --decisions 2048` into `proof/dagger`; `cache --data proof/teach proof/dagger`; `train --init .../s1 --aux hit=hit:0.5 --batch 512` (the defaults: 5 epochs, lr 3e-4) | 2 × 2,048 rows the student played and the teachers labelled (53.9 s, 30.7 s); 20,480 rows (15,360 train, 5,120 held out): held-out KL 0.892 → 0.688 → 0.593 → 0.550 → 0.546, joint top-1 0.564 → 0.675, value error 17.0 → 7.1; hit loss train 0.0834 → 0.0774, held out 0.0949 → 0.0897; P=R judged 0.077 → 0.125 |
+| PPO (#1212) | `lab.train --load models/r40stage-proof/d1 --families (the two) --state-route d3first --teacher KEY=CKPT (the two) --teacher-coeff 1.0 --teacher-hold 1 --teacher-fade 1 --aux hit=hit:0.5 --try-others 4:0.25 --parallel 8 --iterations 2 --no-curriculum` | loads as `hitnet`, 1,608,836 parameters; iteration 1: teacher KL 0.717 at weight 1.0, aux hit 0.105, success zol 0.85 / skg 0.97; iteration 2: weight 0 (faded), aux hit 0.115, 0.85 / 0.96; 306 and 244 decisions a second |
+
+Files: `proof/teach/<key>/{resets,entries}/{shard-0000,shard-0001}.npz, meta.json`, `proof/dagger/<key>/resets/`,
+`proof/cache1`, `proof/cache2` (117 MB and 146 MB: about 7 KB a row with the switches' blocks and the hit labels,
+so a round-38-sized 2M-row cache is about 14 GB, read into memory by `train`), `models/r40stage-proof/{s1,d1}`
+(`ckpt.pt`, `distill.json`), `models/r40stage-ppo/p1` (all under `target/r40-stage/`). Each shard holds every
+observation key, `action`, `teacher_joint`, `teacher_value`, `health_lost`, `blocked`, `tried_actions` /
+`tried_lost` / `tried_blocked` `[n, 8]`; zol's first reset shard: 18 of 2,048 actions taken lost health, 351 of
+16,384 tried candidates did; `entity_threat` and `entity_chase` non-zero. A `meta.json` (zol, resets): `teacher
+zol/r38head-fam-w4`, `teacher_network` {arch `hitshift`, hit head, checkpoint_sha1 501552eb…, file
+`~/triforce-shared/runs/zol/r38head-fam-w4/ckpt.pt`}, `task` {yaml `target/r40-stage/tasks/zol.yaml`, `extends`
+`specialists/d3first/zol.yaml` a4fbf505…, effective 936afdab…}, `obs` {threat, chase, objective, target on}, `data`
+{30 seed states 58d1e968…, harvested 3,396 at 0.25 from the store's `261124-gen1` 6dd2bad9…}, the code's commit and
+ROM. The correction's `meta.json` names the student (`r40stage-proof/s1`, checkpoint 42b2f122…). The held-out sets
+of the two imitations differ (the second holds the correction's rows too): the KLs are not one curve.
+
+**Round 38's recipe: kept and changed.** Kept as defaults: KL over the 352 joint actions plus the value at 0.02,
+Adam with warm-up and cosine decay, batch 4,096, 20 epochs at 1e-3 from scratch, 5 at 3e-4 for every later pass;
+20,480 decisions a source, 10 envs; the sources (resets, handoff entries, every-room rooms) and the correction
+through `--student` and an every-room harvest. Changed: the student is the generation's 256-wide `hitnet` with
+`feed` and the hit head trained in the same pass (round 38: a 768-wide `hitnet` whose head was dormant, a separate
+hit body trained afterwards and shifted onto the logits at weight 8, `d1-all-w8`); the teachers are named runs on
+the route's task files; the hit labels come with the recording.
+
+**Not tested, and what the first real run should watch.**
+
+- Whether a 256-wide `hitnet` imitates the teachers as well as round 38's 768-wide one did (held-out KL 0.089 on
+  its data, then 0.081): nothing here can say. Watch the held-out KL per key in `distill.json` against round 38's,
+  the per-head agreement (direction and duration given the teacher's kind), the keys whose KL stays high (the
+  first suspects for capacity), and the hit head's held-out P=R on judged candidates beside the lab's online
+  numbers (`charts/aux_hit_pr_judged`); then the rooms tier and the chains, as round 38 found the bench blind.
+- The weight of the hit loss beside the KL (0.5 here, the lab's example): with `feed`, the head's probabilities are
+  the policy's input, so a poor head costs the copy. Not measured.
+- Recording speed with `--try-others 8:1.0`: 14 to 71 decisions a second on 4 envs with served `hitshift`
+  teachers on a busy machine; the lead's trainings use `4:0.25`. At the generation's scale (about 100 sources of
+  20,480) the share P decides hours; `4:0.25` labels a quarter of the decisions as the online loss does.
+- `--group` with `--teacher-group` resolved and planned in a dry run (`walkers`, ten members, one teacher), never
+  recorded: the group teachers do not exist yet. The `rooms` source, `--part-yaml`, and a recording of the whole
+  team without named teachers were not run.
+- A cache mixing data with and without hit labels drops the labels for every row (`fields` kept only when every
+  shard has them): imitation then refuses `--aux`. The generation's data is all recorded with them.
+- Whether `train`'s in-memory cache fits at the generation's size (about 14 GB for 2M rows) beside the lab's
+  trainings: not measured.
+
+## A teacher judged in chains, beside the baseline (Judge41, branch `r40-judge`)
+
+**The ask** (the lead, from GroupScout's map, its "Missing" item 9): a teacher of the generation judgeable in chains
+with one command, on exactly the stretches its families play, both ways the baseline above tabulates, and the
+comparison with that baseline readable. `docs/architecture.md` ("A teacher of the generation judged in chains") and
+`docs/data-layout.md` (the team spec) have how each piece works; this is what was built and what it showed.
+
+### What was built
+
+- **One run in every slot of a group** (`store.py`): the team spec takes `+@GROUP=FAMILY/RUN` (`@` cannot start a
+  slot, which starts with its family). It sets `family@d3first` and `family@d3first:late` of every member family
+  (`triforce/groups.yaml` through `triforce.lab.groups.load`, Trainer41's), adding a late slot where the base has none
+  (otherwise the bare slot plays those steps, and the bare slot also plays `d2first`), and leaves every bare slot as
+  the base has it, so `d2first` plays as before. Later overrides win (`+@walkers=...+zol@d3first=...`). The effective
+  team records every slot set and `groups`. `triforce-lead team new NAME --base TEAM --slot @GROUP=FAMILY/RUN` makes
+  it lasting. A family or run name holding `+` is refused where a run is allocated and where a slot is filled (the lab's
+  own `--name` check came with Trainer41's merge).
+- **`triforce eval-batch NAME --teacher GROUP=FAMILY/RUN [--base TEAM] [--dungeons dN,...] [--runs N] [--plan]`**
+  (`judge.teacher_plan`): from the route's steps (each step's family), the scopes of the room statistics in which a
+  member plays: per dungeon `to-dN` (from the previous triforce: the file of the segment after the previous dungeon,
+  `full` for Dungeon 3) and `dN` (from its entrance), each chain stopped at the dungeon's exit (`--stop-at step:N`;
+  Dungeon 9 to the end). The overworld group is judged on the legs only (and Dungeon 1's own scope, which crosses
+  0x37); Gleeok on Dungeons 4 and 8. The chains go to `<chains-dir>/<NAME>-<file>.jsonl` and are filed by the job;
+  then the yardstick report, `room-stats NAME` and the comparison. `--plan` prints the scopes, the team spec and
+  every command, and runs nothing.
+- **`triforce judge compare TAG [--base r40-2015-1k]`**: per dungeon and start, the base's rate over all its runs and
+  on the measurement's seeds, the measurement's rate, their difference paired by seed with its standard error
+  (unpaired when no seed is shared), the three rooms where most of the measurement's runs end (death, stuck or another
+  ending; the base's share beside), hearts lost a run with its paired difference, and the route goals a run where the
+  records carry them. With a team that is the base in most slots, the paired difference is the teacher's effect.
+  `triforce stats compare` pairs whole files: a teacher's chain stops at the dungeon's exit and the baseline's plays
+  on, so its rate and hearts are not the scope's; `judge compare` cuts both at the scope's exit.
+- **The yardstick's last step** no longer fails a batch whose slots share one network that was never evaluated family
+  by family (round38-one.md): it leaves those families' single-room rows out with a sentence (`unevaluated` in its
+  JSON). A family whose own run lacks its evaluation is still an error.
+
+### Where the baseline's records are
+
+All 19 files of `r40-2015-1k` are filed in the store by its batch (job 615:
+`~/triforce-shared/jobs/615-lead-base-2015-segs-1k/chain/`, `chain-meta/`, `stats/`; the store's index, kind `chain`).
+`judge compare` reads them from there when the chains folder has none, so the comparison does not depend on the
+frozen `triforce-r40-base2015` tree. Not filed: the derived `r40-2015-1k-room-stats.json` and `-yardstick.json`
+(rebuilt from the records by `room-stats` and the yardstick when needed). Read from the store against itself,
+`judge compare` gives the table above to the digit (Dungeon 3 43.2% / 45.7%, Dungeon 4 45.8% / 68.4%, ..., Dungeon 9
+22.6% / 51.2%; job #1181).
+
+### Where each group is judged (`--plan`, stand-in runs)
+
+| Group | Previous triforce (`to-dN`) | Entrance (`dN`) | Chains |
+|---|---|---|---:|
+| overworld (stand-in `ow-start/r38t-start-fresh2`) | D3, D4, D1, D2, D5, D7, D6, D8, D9 | D1 (0x37 inside its scope) | 10 |
+| walkers (`darknut/r38head-fam-w8`) | every dungeon | every dungeon | 18 |
+| others (`wizzrobe/r33w-s93`) | D1, D5, D7, D6, D8, D9 | the same | 12 |
+| rooms (`trap-room/r77-b`) | D3, D4, D1, D5, D7, D6, D8, D9 | the same | 16 |
+| boss-gleeok (`boss-gleeok/r38head-fam-w8`) | D4, D8 | D4, D8 | 4 |
+
+Each changes 2 slots a family (20 for overworld and walkers, 10 others, 4 rooms, 2 a boss).
+
+### The proof (stand-in networks: nothing made is kept or promoted)
+
+`eval-batch r40-judge-proof-walkers --teacher walkers=darknut/r38head-fam-w8 --dungeons d4 --runs 30` (job #1196, 3
+minutes: two chains of 30, the report, the comparison): today's darknut network playing every walker slot of
+2.0.0.15 on `d3first`. The numbers mean nothing (a Darknut network in the Zol and Vire rooms of Dungeon 4); they
+show the path end to end: the chains filed in the store, `room-stats` and the yardstick written, the comparison read
+the baseline from the store.
+
+| Dungeon | Start | Base (all runs) | Base on these seeds | Measured | Difference | Rooms where most runs end (base) | Hearts lost a run (base) |
+|---|---|---|---|---|---|---|---|
+| d4 | previous triforce | 45.8% of 1000 | 40.0% | 0.0% of 30 | -40.0 ± 9.1 (paired, 30) | 4x40 50.0% (0.4%), 4x50 33.3% (0.2%), 4x31 10.0% (3.5%) | 4.00 (2.92); +0.82 ± 0.20 |
+| d4 | entrance | 68.4% of 1000 | 76.7% | 0.0% of 30 | -76.7 ± 7.9 (paired, 30) | 4x40 53.3% (0.0%), 4x50 33.3% (0.0%), 4x31 3.3% (0.4%) | 3.98 (2.21); +1.92 ± 0.26 |
+
+The new records carry the route goals (kills where the route crosses 1.17 and 0.70 a run); 2.0.0.15's do not, so the
+base's column is empty there.
+
+### Not tested
+
+- A teacher trained by the lab (a run named `NAME/RUN` outside any family) in a chain: the proof used a family's run.
+  The spec, the view and the yardstick's shared-run path are tested on fake stores.
+- The obs switches a generation network needs in chains (`obs.threat`, `obs.chase`) are Tasks41's (which file a
+  chain reads them from); nothing here checks them.
+- A full judgement (every scope of a group at 1000 runs) was not run: no long chain in this piece.
+
+## The baseline the fresh generation is compared with: 2.0.0.15's team, 1000 runs a segment (the lead)
+
+One batch (`r40-2015-1k`, job #615, 7 hours 59 minutes in one regular place) from a frozen tree at 2.0.0.15
+(`triforce-r40-base2015`, the store's team `2.0.0.15`, clips on, each model's act mode): the full route from the
+start state and 18 segments, 1000 runs each on seeds 0-999; records `target/r56-chains/r40-2015-1k-*.jsonl` there,
+room statistics `r40-2015-1k-room-stats.json`. A rate on 1000 runs has a standard error of at most 1.6 points.
+
+Two starts a dungeon, and they are not the same question. "From its entrance" starts on the dungeon's own start
+state, whose hearts are refilled as every entry state's. "From the triforce before" starts where the previous
+dungeon ended and plays the leg and the dungeon, so Link arrives as the leg leaves him.
+
+| Dungeon | From the triforce before | From its entrance | Deaths a run, the first start |
+|---|---:|---:|---|
+| 3 (from the game's start) | 43.2% | 45.7% | 3:0x4d Manhandla 18.8%, 3:0x69 13.9%, 3:0x5b 6.3% |
+| 4 | 45.8% | 68.4% | 4:0x13 Gleeok 37.4%, 4:0x32 4.4%, 4:0x31 3.5% |
+| 1 | 98.5% | 98.9% | 1:0x35 1.1% |
+| 2 | 93.8% | 99.8% | 2:0x0e 1.1%, 2:0x1e 1.0%, 2:0x5e 0.9% |
+| 5 | 57.8% | 66.1% | 5:0x05 the Olive Garden 20.0%, 5:0x64 4.3%, 5:0x24 4.1% |
+| 7 | 42.5% | 77.3% | 7:0x1b 21.2%, 7:0x39 6.1%, 7:0x1c 5.1% |
+| 6 | 18.2% | 35.7% | 6:0x3a 32.9%, 6:0x38 26.5%, 6:0x29 11.2% |
+| 8 | 88.9% | 88.6% | 8:0x3f 3.8%, 8:0x3e 3.5%, 8:0x3c 2.5% |
+| 9 (to the end) | 22.6% | 51.2% | 9:0x10 the Reverse C 19.2%, 9:0x30 11.3%, 9:0x05 5.0% |
+
+The full route: 3 wins of 1000 (0.3%); the product of the first column is 0.16%. Where the two columns part
+(Dungeons 4, 7, 6, 9: 20 to 35 points) the dungeon is lost on the hearts Link brings to its door, not inside it
+alone: Gleeok takes 37.4% of the runs that come from Dungeon 3's triforce and 26.8% of those that start at Dungeon
+4's entrance; 7:0x1b 21.2% against 6.7%.
+
+Most of this batch repeats One38d's of 2.0.0.13's team on the same seeds: between the two versions only Dungeon
+3 (Manhandla's bombs, 2.0.0.15) and the legs after Dungeons 5 and 6 (the whirlwinds, 2.0.0.14) play differently;
+Dungeon 4 (68.4%) and Dungeon 1 (98.9%) came out the same to the digit. The full route and those three segments
+would have been enough (the owner asked why it ran so long, Nov 24).
+
+## The queues are one file the owner edits (Queue41, branch `r40-queues`)
+
+The owner, Nov 24: "maybe these job queues should be easily configurable from a yaml file or something. We should
+formalize this slightly. We don't need to overengineer this [...] queue: name / max-parallel: n / max-job-length:
+time [...] Or a setting like 'load-average-max: 20' [...] check on a 1 min cadence [...] I like our old queues just
+fine (2 instead of 3 with an express lane) but maybe also an optional 1 queue when load average is at or below 15".
+It replaces the constants of Nov 23 and the morning's stop-gap (the `places` file, `triforce job places N`), which
+is gone.
+
+- **The file**: `~/.local/state/triforce/queues.yaml`, beside `queue.db` (the queue is the machine's and every
+  worktree's, so its settings live with its state, not in a checkout; a test's queue folder, `$TRIFORCE_QUEUE_DIR`,
+  has its own, so no test can read the live file). Without it the default is in force; `triforce job queues --init`
+  writes the default, commented, for editing. Every waiting job reads it at each check of its turn (once a second),
+  so a save counts at once. `triforce job queues` prints the queues in force, each open or closed (and why), what
+  runs in it and what waits for it.
+- **The keys**, four and no more: `name`, `max-parallel`, optionally `max-job-length` (only jobs estimated at or
+  under it, or `--express`) and `load-average-max` (a place only while the 1-minute load average is at or under the
+  line; the reading is shared by every wrapper through the database and taken again once it is a minute old; above
+  the line nothing new starts there and work running finishes). The queue named `tools` takes the builds and test
+  suites and nothing else. A lane, priority or nice key would each be a second way to say what the file's order and
+  the tools queue say; nothing breaks without them.
+- **The order**: a job takes the first free place of the first open queue it may take, in the file's order. With the
+  default, a job of 10 minutes or less tries express, regular, spare; a longer one regular, spare.
+- **The default**: express 1 place (10m), regular 2, spare 1 (load-average-max 15), tools 2. Without the spare
+  entry it is exactly the queues of Nov 23: the real-process tests of Nov 23 run unchanged under that file, and a
+  test compares the new assignment with Nov 23's code over 500 made-up lines.
+- **The limits** (20 threads, one GPU): 1 to 4 places a queue, 8 in all (Nov 23 had 5, the default has 6); a job
+  length of 1 minute to 24 hours, with its unit; a load line of 1 to 60 (three times the threads); names of
+  lower-case letters, digits and `_`, distinct, not `job`; a `tools` queue; one other queue without either limit (a
+  long job must be able to run). A file that breaks one, or can't be read, is ignored: the configuration last in
+  force stays (kept in the database, the same for every wrapper), and the waiting jobs, `triforce job list`,
+  `triforce job queues` and the GUI say which line and why.
+- **Older code** (a checkout without this; the morning's `places_aware` code too) ignores the file: it takes
+  regular-1, regular-2, express-1 (10 minutes or less) and tools-1, tools-2 whenever their locks are free, with no
+  load gate. Every wrapper of this code reckons an older job by exactly those constants (its row lacks
+  `queues_aware`), so a newer job behind it takes the spare place it never will and nobody waits for nothing. Under
+  a file that differs from the constants an older job may take a place the file drops (regular-2 under a file of one
+  regular place) and keeps to the old names if a queue is renamed: one job more than the file says, until the older
+  jobs are gone. Never two jobs in one place (the locks).
+- **Landing** (the lead, with jobs running): (1) delete `~/.local/state/triforce/places` (this morning's code then
+  keeps to two regular places at its next check; a job in regular-3 finishes there; leave `locks/regular-3` alone, a
+  lock file is never deleted); (2) merge to main and carry it to the branches as usual (the database gains its
+  `queues_aware` column and `settings` table on the first connection, nothing to migrate); (3) from main,
+  `.venv/bin/triforce job queues --init` writes the default file (the same queues as without it) for the owner to
+  edit; `triforce job queues` shows them. Until the older jobs drain, a job still in regular-3 shows as "outside
+  these queues (older code)".

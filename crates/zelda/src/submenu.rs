@@ -81,6 +81,19 @@ fn step_slot(slot: u8, dir: u8) -> u8 {
     }
 }
 
+/// Whether Link holds the B item of slot 0-8 as the sub-screen counts it (asm:Inv_FindAndSelectOccupiedSlot): slot 0
+/// either boomerang, slot 2 the arrow only with the bow, slot 3 (the bow itself) never, the others their
+/// inventory byte; the letter standing in for an empty potion slot is not a potion.
+pub fn holds(peek: impl Fn(u16) -> u8, slot: u8) -> bool {
+    match slot {
+        0 => peek(WOODEN_BOOMERANG) != 0 || peek(MAGIC_BOOMERANG) != 0,
+        2 => peek(INV_ITEMS + 2) != 0 && peek(BOW) != 0,
+        3 => false,
+        s @ 1..=8 => peek(INV_ITEMS + u16::from(s)) != 0,
+        _ => false,
+    }
+}
+
 /// asm:Inv_FindAndSelectOccupiedSlot with a stepping `dir` (right or left): the slot the selection moves to from
 /// `from` (`peek` reads RAM by CPU address). Slot 0 counts with either boomerang, slot 3 (bow) never, the arrow
 /// only with the bow, the letter stands in for an empty potion slot; ten tries, then slot 0.
@@ -91,15 +104,9 @@ pub fn search(peek: impl Fn(u16) -> u8, from: u8, dir: u8) -> u8 {
     for _ in 0..64 {
         slot = step_slot(slot, dir);
         let found = match slot {
-            0 => (peek(WOODEN_BOOMERANG) != 0 || peek(MAGIC_BOOMERANG) != 0).then_some(0),
-            3 => None,
-            s if peek(INV_ITEMS + s as u16) != 0 => {
-                if s == 2 && peek(BOW) == 0 {
-                    continue;
-                }
-                Some(s)
-            }
-            7 if peek(LETTER) != 0 && peek(POTION) == 0 => Some(LETTER_SLOT),
+            2 if peek(INV_ITEMS + 2) != 0 && peek(BOW) == 0 => continue,
+            7 if peek(POTION) == 0 && peek(LETTER) != 0 => Some(LETTER_SLOT),
+            s if holds(&peek, s) => Some(s),
             _ => None,
         };
         if let Some(found) = found {

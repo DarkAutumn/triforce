@@ -14,6 +14,7 @@ the exit code is the command's (the wrapper's own lines go to stderr, ``triforce
     triforce job run|golden|build|test ... --detach     (start outside this shell; prints a unit name)
     triforce job wait UNIT... [--timeout 30m]           (follow detached jobs; stopping it stops nothing)
     triforce job top ID [--undo]                        (the owner's: a waiting job to the top of its own line)
+    triforce job queues [--init]                        (the queues in force, what runs and waits; --init: the file)
 
 ``run`` takes the job's place in line before the command starts and runs it at nice ``RUN_NICE``.  A training or
 evaluation tool of this code (``jobs.announce``) is asked its work first (a dry call: its arguments are checked, an
@@ -22,13 +23,16 @@ an old version's tool) needs ``--timeout``, its stated duration and its estimate
 (SIGTERM, then SIGKILL after ``GRACE_SECONDS``) and the job ends ``timeout``.  ``golden`` races the golden path
 (``zelda-headless.py --golden`` with ``GOLDEN_FLAGS``) for at most ``--timeout``, its estimate; running out of time
 is a result ("no golden path in N minutes", exit 0), and every replay it made is archived
-(``scripts/archive_replays.py``).  ``build`` and ``test`` use the tools lane (at most two at once, first come first
-served, never behind a training or a chain) at nice ``TOOL_NICE`` with ``CARGO_BUILD_JOBS`` = ``CARGO_JOBS``;
-``test --build`` is one entry with both steps.  ``setup`` makes a worktree ``../triforce-<branch>`` with ``roms``,
-``trajectories`` and ``models`` linked from the main checkout, its venv and its build, as one tools-lane entry.
+(``scripts/archive_replays.py``).  ``build`` and ``test`` use the tools lane (the tools queue of the queues' file,
+first come first served, never behind a training or a chain) at nice ``TOOL_NICE`` with ``CARGO_BUILD_JOBS`` =
+``CARGO_JOBS``; ``test --build`` is one entry with both steps.  ``setup`` makes a worktree ``../triforce-<branch>``
+with ``roms``, ``trajectories`` and ``models`` linked from the main checkout, its venv and its build, as one
+tools-lane entry.
 Priority and time limits are the queue's: ``nice``, ``ionice``, ``timeout`` or ``CARGO_BUILD_JOBS=`` after ``--`` are
 refused.  ``top`` moves a waiting job to the top of its own line, or back (``jobqueue.move_to_top``; the training
-GUI's right click does the same): the owner's; agents don't use it on their own work.
+GUI's right click does the same): the owner's; agents don't use it on their own work.  ``queues`` prints the queues in
+force (``queue_dir()/queues.yaml``, ``jobqueue.load_config``), what each runs, what waits and whether it is open;
+``--init`` writes the default file for the owner to edit.
 
 This module imports neither ``triforce._native`` nor torch: it works before the first build.
 """
@@ -86,12 +90,10 @@ def say(text: str):
 
 
 def parse_duration(text: str) -> float:
-    """``90s``, ``40m``, ``2h``, ``1h30m`` -> seconds."""
-    parts = re.fullmatch(r'\s*(?:(\d+(?:\.\d+)?)h)?\s*(?:(\d+(?:\.\d+)?)m)?\s*(?:(\d+(?:\.\d+)?)s)?\s*', text or '')
-    if not text or not parts or not any(parts.groups()):
+    """``90s``, ``40m``, ``2h``, ``1h30m`` -> seconds (``jobqueue.seconds``)."""
+    total = q.seconds(text)
+    if total is None:
         raise argparse.ArgumentTypeError(f"'{text}' is not a duration (90s, 40m, 2h, 1h30m)")
-    hours, minutes, seconds = (float(group or 0) for group in parts.groups())
-    total = hours * 3600 + minutes * 60 + seconds
     if total <= 0:
         raise argparse.ArgumentTypeError(f"'{text}' is not a positive duration")
     return total
@@ -268,7 +270,7 @@ class Wrapper:
         now = time.time()
         row = {**fields, 'status': 'queued', 'queued_ts': now, 'host': os.uname().nodename, 'pid': os.getpid(),
                'nice': fields.get('nice'), 'top_aware': 1,     # this wrapper honours a move to the top (``q.line``)
-               'places_aware': 1}                              # and reads the number of regular places
+               'queues_aware': 1}                              # and reads the queues' file (``q.options``)
         columns = [key for key in row if key in q._COLUMNS]     # pylint: disable=protected-access
         values = [json.dumps(row[key]) if key in q._JSON and row[key] is not None else row[key]  # pylint: disable=protected-access
                   for key in columns]
@@ -293,7 +295,7 @@ class Wrapper:
     def wait(self) -> float:
         """Blocks until the job has a place (its lock held and its row ``running``); returns the seconds waited."""
         began = time.monotonic()
-        update = None
+        update = ignored = None
         while True:
             self.check_stop()
             with q.transaction(self.con):
@@ -308,10 +310,10 @@ class Wrapper:
             waited = time.monotonic() - began
             if self.place_fd is not None:
                 return waited
-            if update is None or time.monotonic() >= update:
-                say(f"{self.name} waits for a place: {current.reason(self.row)}. It starts by itself; next update in "
+            if update is None or time.monotonic() >= update or current.ignored != ignored:
+                say(f"{self.name} {current.reason(self.row)}. It starts by itself; next update in "
                     f"{q.duration(q.UPDATE_SECONDS)}.")
-                update = time.monotonic() + q.UPDATE_SECONDS
+                update, ignored = time.monotonic() + q.UPDATE_SECONDS, current.ignored
             time.sleep(q.POLL_SECONDS)
 
     def set_steps(self, steps: list[dict]):
@@ -557,8 +559,8 @@ def build_parser() -> argparse.ArgumentParser:
     run = sub.add_parser('run', help="run a command in the job queue (-- COMMAND...)")
     _common(run)
     run.add_argument('--express', action='store_true',
-                     help=f"ask for the express place whatever the estimate (it is for jobs of "
-                          f"{q.EXPRESS_SECONDS / 60:.0f} minutes or less)")
+                     help="may take a queue with a max-job-length (express) whatever the estimate "
+                          "(`triforce job queues` shows the lengths)")
     run.add_argument('--timeout', type=parse_duration, default=None,
                      help="stop the command after this long (40m, 2h); required for a command the queue can't "
                           "measure (a script, an old version's tool), where it is the estimate too")
@@ -576,7 +578,8 @@ def build_parser() -> argparse.ArgumentParser:
     golden.add_argument('--subtask', default=None, help="default: the version raced (or the --models-dir team)")
     golden.add_argument('--desc', default=None)
     golden.add_argument('--timeout', type=parse_duration, required=True,
-                        help="how long the race may run: its estimate (10m or less: the express place)")
+                        help="how long the race may run: its estimate (under a queue's max-job-length, e.g. "
+                             "express's 10m, it may take that queue)")
     golden.add_argument('--out', default=None, help="the replays' folder (default runs/golden/<yymmdd-hhmmss>)")
     golden.add_argument('--count', type=int, default=1, help="golden paths raced, each from its own seeds")
     builder = sub.add_parser('build', help="maturin develop --release in this checkout (tools lane), then its stamp")
@@ -599,8 +602,10 @@ def build_parser() -> argparse.ArgumentParser:
                                      "it on their own work), or back to its own place (--undo)")
     top.add_argument('job', type=int, help="the job's id (triforce job list)")
     top.add_argument('--undo', action='store_true', help="back to its own place in the line")
-    places = sub.add_parser('places', help="the number of regular places, or set it (the owner's; agents don't)")
-    places.add_argument('count', nargs='?', type=int, help=f"1 to {q.MAX_REGULAR_PLACES}; without it, print them")
+    queues = sub.add_parser('queues', help="the queues in force (queue_dir()/queues.yaml, the owner's to edit): what "
+                                           "runs, what waits, which are open")
+    queues.add_argument('--init', action='store_true',
+                        help="write the default file first (never over one that is there)")
     doctor = sub.add_parser('doctor', help="the checks every job start makes, for a checkout (exit 1 on a red flag)")
     doctor.add_argument('path', nargs='?', default='.', help="a folder of the checkout (default this one)")
     past = sub.add_parser('history', help="every job that ended: when it queued, started and ended, where it ran")
@@ -1010,8 +1015,9 @@ def cmd_list(args) -> int:
             return 0
         with q.transaction(con):
             q.sweep(con, q.queue_dir(), now)
-        since = 0.0 if args.all else now - 3600
-        jobs = q.read_jobs(con, "status IN ('queued', 'running') OR finished_ts >= ?", (since,))
+            since = 0.0 if args.all else now - 3600
+            jobs = q.read_jobs(con, "status IN ('queued', 'running') OR finished_ts >= ?", (since,))
+            state = q.survey(con, q.queue_dir(), now, jobs)
     finally:
         con.close()
     running = [job for job in jobs if job['status'] == 'running']
@@ -1019,12 +1025,17 @@ def cmd_list(args) -> int:
     places = {job['id']: index + 1 for lane in (q.JOBS_LANE, q.TOOLS_LANE)
               for index, job in enumerate(q.line(jobs, lane, now))}
     ended = sorted((job for job in jobs if job['status'] in q.ENDED), key=lambda job: -(job['finished_ts'] or 0))
+    print(f"queues: {state.summary()}")
+    if state.config.warning():
+        print(f"WARNING: {state.config.warning()}")
     for title, group in (('running', running), ('waiting', waiting), ('finished', ended)):
         if not group:
             continue
         print(f"{title}:")
         for job in group:
-            lines = q.describe(job, now, places.get(job['id']))
+            lines = q.describe(job, now, places.get(job['id']), state.config)
+            if job['status'] == 'queued':
+                lines.insert(3, state.waits(job))
             print(f"  #{job['id']} {lines[0]}")
             for line in lines[1:]:
                 if line:
@@ -1040,16 +1051,27 @@ def cmd_history(args) -> int:
     con = q.connect()
     try:
         rows = q.past(con, None if args.since is None else time.time() - args.since, args.agent)
+        with q.transaction(con):
+            config = q.load_config(q.queue_dir(), con)
     finally:
         con.close()
     if args.metrics:
-        metrics = q.lane_metrics(rows)
+        metrics = q.lane_metrics(rows, config)
         if args.json:
             print(json.dumps(metrics, indent=1))
             return 0
-        for title, key in ((f"in the express place but ran longer than {q.duration(q.EXPRESS_SECONDS)}", 'express_long'),
-                           (f"in a regular place but ran {q.duration(q.EXPRESS_SECONDS)} or less", 'regular_short')):
-            print(f"{title}: {len(metrics[key])} of {metrics['jobs'][key.split('_', maxsplit=1)[0]]} jobs")
+        limited = [queue for queue in config.queues if queue.max_job_length is not None]
+        others = [queue for queue in config.lane(q.JOBS_LANE) if queue.max_job_length is None]
+        shortest = min((queue.max_job_length for queue in limited), default=None)
+        for title, key, queues in (
+                (f"in {' or '.join(f'{queue.name} (at most {q.short(queue.max_job_length)})' for queue in limited)}"
+                 f" but ran longer", 'express_long', limited),
+                (f"in {' or '.join(queue.name for queue in others)} but ran {q.duration(shortest)} or less",
+                 'regular_short', others)):
+            if shortest is None:
+                break
+            total = sum(metrics['jobs'].get(queue.name, 0) for queue in queues)
+            print(f"{title}: {len(metrics[key])} of {total} jobs")
             for row in metrics[key]:
                 print(f"  #{row['id']} {row['name']}  ran {q.short(row['ran'])} (estimated "
                       f"{q.short(row['estimate'])}{', asked --express' if row['express'] else ''})  {row['what']}")
@@ -1095,18 +1117,26 @@ def cmd_top(args) -> int:
     return 0
 
 
-def cmd_places(args) -> int:
-    """``triforce job places [N]``: the regular places as every wrapper of this code now reads them, or N of them
-    from now on (``jobqueue.set_regular_places``: jobs waiting under this code see it at their next check; a job
-    queued by older code keeps to the first two)."""
-    if args.count is not None:
+def cmd_queues(args) -> int:
+    """``triforce job queues [--init]``: the queues in force (``jobqueue.survey``: where they come from, the ignored
+    file's warning, the load reading, each queue open or closed with why, what runs and waits; each line in the order
+    it starts, with what each job waits for); ``--init`` writes the default file first (``write_default_config``,
+    never over one that is there)."""
+    directory = q.queue_dir()
+    if args.init:
         try:
-            q.set_regular_places(args.count)
-        except ValueError as error:
-            raise JobError(str(error)) from error
-    regular = q.regular_places()
-    print(f"regular places: {len(regular)} ({', '.join(regular)}); express: {', '.join(q.EXPRESS_PLACES)}; "
-          f"tools: {', '.join(q.TOOL_PLACES)}")
+            print(f"wrote {q.write_default_config(directory)}: edit and save it, every waiting job reads it")
+        except FileExistsError as error:
+            raise JobError(f"{q.config_path(directory)} is there already: edit it, or move it away first") from error
+    con = q.connect(directory)
+    try:
+        now = time.time()
+        with q.transaction(con):
+            q.sweep(con, directory, now)
+            state = q.survey(con, directory, now)
+    finally:
+        con.close()
+    print('\n'.join(state.lines(now)))
     return 0
 
 
@@ -1119,13 +1149,13 @@ def main(argv=None) -> int:
             return detach(args, head, extra)
         if args.verb == 'run':
             return cmd_run(args, extra)
-        if extra and args.verb in ('setup', 'list', 'progress', 'history', 'wait', 'doctor', 'top', 'places'):
+        if extra and args.verb in ('setup', 'list', 'progress', 'history', 'wait', 'doctor', 'top', 'queues'):
             raise JobError(f"{args.verb} takes nothing after --")
         verbs = {'golden': cmd_golden, 'build': cmd_build, 'test': cmd_test}
         if args.verb in verbs:
             return verbs[args.verb](args, extra)
         return {'setup': cmd_setup, 'list': cmd_list, 'progress': cmd_progress, 'history': cmd_history,
-                'wait': cmd_wait, 'doctor': cmd_doctor, 'top': cmd_top, 'places': cmd_places}[args.verb](args)
+                'wait': cmd_wait, 'doctor': cmd_doctor, 'top': cmd_top, 'queues': cmd_queues}[args.verb](args)
     except JobError as error:
         print(f"triforce job: error: {error}", file=sys.stderr)
         return 2

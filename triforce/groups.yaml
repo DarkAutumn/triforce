@@ -8,6 +8,14 @@
 # equal; ``--shares`` on the command line overrides one). Every family the route's steps name is in exactly one teacher
 # (tests/test_lab_groups.py). A teacher's name never holds ``+`` (a team spec splits on it).
 route: d3first
+# The network every teacher trains (the owner, Nov 24: 768 wide everywhere; the lead's pins): `--group NAME` alone
+# trains it. A teacher may override a key with its own `network:` (an `arch_config` key by key); a command-line
+# `--arch`, `--arch-config` (by key), `--aux` or `--try-others` overrides the file, and the run's log says which.
+network:
+  arch: hitnet
+  arch_config: {tokens: [type, features, rel, threat, chase], feed: true, room: true, hidden_dim: 768}
+  aux: [hit=hit:0.5]
+  try_others: "4:0.25"
 teachers:
   overworld:
     members: [ow-start@d3first, ow-tektite@d3first, ow-leever@d3first, ow-moblin@d3first, ow-octorok@d3first,

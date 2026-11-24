@@ -6,6 +6,7 @@
                                            [--episodes-per-state N] [--seed S] [--clips on|off|both]
                                            [--output-dir DIR]]
                              [--chain '[ENTRY:] EVAL-CHAIN ARGS' ...] [--evaluate '[ENTRY:] EVALUATE ARGS' ...]
+                             [--teacher GROUP=FAMILY/RUN ... [--base TEAM] [--dungeons dN,...] [--runs N] [--plan]]
                              [--parallel CORES] [--eval-parallel 4] [--jobs 1] [--redo]
                              [--logs-dir DIR] [--models-dir DIR]
 
@@ -29,6 +30,13 @@ A batch is a named list of evaluations, in command-line order:
   clip family; the headline then adds ``eval_clips_on_success_rate`` / ``eval_clips_off_success_rate``).
   ``--output-dir DIR`` writes each result to ``DIR/<specialist>-<act>[-clips<mode>].json`` instead of the run dir (a
   models directory that must stay untouched).
+- ``--teacher GROUP=FAMILY/RUN`` (round 40, ``triforce.judge``): a teacher of the generation judged in chains: the
+  team ``--base`` (default the team of record) with the run in every slot of the group's families
+  (``BASE+@GROUP=FAMILY/RUN``, ``store.group_slots``), one chain of ``--runs`` per scope a family of the group plays
+  (``judge.teacher_plan``: each dungeon from the previous triforce and from its entrance, stopped at the dungeon's
+  exit), written as ``<chains-dir>/<NAME>-<file>.jsonl``, then the report of the tag NAME and ``judge compare NAME``
+  against round 40's baseline (``<NAME>-judge.md``).  ``--dungeons d4,d5`` judges only those dungeons' scopes.
+  ``--plan`` prints the scopes, the team spec and the commands and runs nothing.
 
 Each evaluation runs as its own process (``python -m triforce.cli eval-chain`` / ``python -m triforce.evaluate``
 with ``--events <batch folder>/<entry>.jsonl``), its console output in ``<entry>.log`` (or the chain segment's own
@@ -589,6 +597,28 @@ def report_entry(tag: str, segments: list[str], chains_dir: Path, options: Optio
                  builder=build)
 
 
+def teacher_entries(tag: str, judged: list, options: Options, *, runs: int, route: str, chains_dir: Path
+                    ) -> list[Entry]:
+    """A teacher's judgement (``triforce.judge``): one chain per judged scope (``judge.Judged``: its file's start, to
+    its cut), written as ``<chains_dir>/<tag>-<file>.jsonl``, then the report of a tag (``report_entry``) and the
+    comparison with the baseline (``judge compare``: ``<tag>-judge.md`` / ``.json``)."""
+    entries, files = [], []
+    for item in judged:
+        if item.scope.file in files:
+            continue
+        files.append(item.scope.file)
+        entries.append(chain_entry(item.scope.file, item.chain_args(runs, route), options,
+                                   output=chains_dir / f"{tag}-{item.scope.file}.jsonl",
+                                   log=chains_dir / f"{tag}-{item.scope.file}.log"))
+    entries.append(report_entry(tag, files, chains_dir, options, route_segments(route)))
+    markdown, numbers = chains_dir / f"{tag}-judge.md", chains_dir / f"{tag}-judge.json"
+    command = [sys.executable, '-m', 'triforce.judge', 'compare', tag, '--chains-dir', str(chains_dir), '--route',
+               route, '--output', str(numbers), '--markdown', str(markdown)]
+    entries.append(Entry('compare', 'report', [command], parallel=1, cwd=ROOT, events=False, output=markdown,
+                         fields={'tag': tag}, complete=lambda _events: {}))
+    return entries
+
+
 def family_names(families: str, run_id: Optional[str], models_dir: Optional[str]) -> list[str]:
     """``all``: every specialist with a promoted run (or ``run_id``), in route order; else the listed names."""
     # pylint: disable=import-outside-toplevel
@@ -927,7 +957,58 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--team', default=None,
                         help="the store's team every entry plays (NAME, current, NAME+SLOT=RUN...); chain outputs "
                              "default to the job's folder of the store and every chain is filed by the job")
+    teacher = parser.add_argument_group('--teacher (triforce.judge)')
+    teacher.add_argument('--teacher', action='append', default=[], metavar='GROUP=FAMILY/RUN',
+                         help="judge a teacher: --base with the run in every slot of the group's families, chained "
+                              "(--runs each) on every scope its families play, from the previous triforce and from "
+                              "the entrance, then the report and the comparison with the baseline (repeatable)")
+    teacher.add_argument('--base', default=None, help="the team the teacher joins (default: current)")
+    teacher.add_argument('--dungeons', default=None, metavar='dN,...',
+                         help="judge only these dungeons' scopes (default every one the group plays in)")
+    teacher.add_argument('--plan', action='store_true',
+                         help="print the scopes, the team spec and the chain commands; run nothing")
     return parser
+
+
+def prepare_teacher(args):
+    """``--teacher``: sets ``args.team`` (``BASE+@GROUP=FAMILY/RUN...``), ``args.judged`` (``judge.teacher_plan``)
+    and ``args.teacher_route``; BatchError for a wrong one."""
+    from . import judge  # pylint: disable=import-outside-toplevel
+    args.judged = None
+    if not args.teacher:
+        if args.base or args.plan or args.dungeons:
+            raise BatchError("--base, --dungeons and --plan go with --teacher")
+        return
+    if args.team:
+        raise BatchError("--teacher plays --base with the teacher in its slots: give --base, not --team")
+    try:
+        route, groups = judge.teacher_families(args.teacher)
+    except ValueError as error:
+        raise BatchError(str(error)) from None
+    args.team = judge.teacher_spec(args.base or 'current', args.teacher)
+    args.teacher_route = route
+    args.judged = judge.teacher_plan(sorted({family for families in groups.values() for family in families}), route)
+    if args.dungeons:
+        wanted = [name for name in args.dungeons.split(',') if name]
+        played = list(dict.fromkeys(item.dungeon for item in args.judged))
+        if not wanted or set(wanted) - set(played):
+            raise BatchError(f"--dungeons {args.dungeons}: the group plays in {', '.join(played)}")
+        args.judged = [item for item in args.judged if item.dungeon in wanted]
+    if not args.judged:
+        raise BatchError(f"--teacher: no family of {', '.join(groups)} plays a step of {route}")
+
+
+def print_plan(args, entries: list[Entry], tell: Callable[[str], None] = print):
+    """``--plan``: the scopes, the team spec (its slots changed) and each entry's commands."""
+    from . import judge, store  # pylint: disable=import-outside-toplevel
+    team = store.effective_team(args.team)
+    tell(f"# {args.name}: {', '.join(args.teacher)} on {args.teacher_route}, {args.runs} runs a chain\n")
+    tell('\n'.join(judge.plan_text(args.judged)) + '\n')
+    tell(f"team: {args.team}")
+    tell(f"  {len(team['overrides'])} slots changed: {', '.join(sorted(team['overrides']))}\n")
+    for entry in entries:
+        for command in entry.commands:
+            tell(f"{entry.name}: TRIFORCE_TEAM={shlex.quote(args.team)} {shlex.join(str(c) for c in command)}")
 
 
 def build_entries(args, team: Optional[str] = None, output_root: Optional[Path] = None) -> list[Entry]:
@@ -938,6 +1019,9 @@ def build_entries(args, team: Optional[str] = None, output_root: Optional[Path] 
     from .room_stats import CHAINS_DIR
     options = Options(args.name, args.parallel, args.eval_parallel, args.models_dir, args.redo, team, output_root)
     entries = []
+    if getattr(args, 'judged', None):
+        entries += teacher_entries(args.name, args.judged, options, runs=args.runs, route=args.teacher_route,
+                                   chains_dir=Path(args.chains_dir or CHAINS_DIR).resolve())
     for kind, value in getattr(args, 'entries', None) or []:
         if kind == 'chain':
             entries.append(chain_entry(*split_entry(value), options))
@@ -962,7 +1046,7 @@ def build_entries(args, team: Optional[str] = None, output_root: Optional[Path] 
                                         episodes_per_state=args.episodes_per_state, seed=args.seed, clips=args.clips,
                                         output_dir=output_dir)
     if not entries:
-        raise BatchError("nothing to run: give --chains, --families, --chain or --evaluate")
+        raise BatchError("nothing to run: give --chains, --families, --chain, --evaluate or --teacher")
     return entries
 
 
@@ -975,6 +1059,10 @@ def main(argv=None) -> int:
         return 2
     try:
         from . import registry, store  # pylint: disable=import-outside-toplevel
+        prepare_teacher(args)
+        if args.plan:
+            print_plan(args, build_entries(args))
+            return 0
         registry.use_team(args.team, args.models_dir)
         entries = build_entries(args)
         announce('batch', batch_work(entries), args.name)
@@ -984,7 +1072,7 @@ def main(argv=None) -> int:
         return run_batch(args.name, entries, logs_dir=args.logs_dir, cores=args.parallel, jobs=args.jobs,
                          nice=os.nice(0), command=[sys.executable, '-m', 'triforce.eval_batch', *argv],
                          extra={'models_dir': args.models_dir, **({'team': team['name']} if team else {})})
-    except BatchError as error:
+    except (BatchError, store.StoreError) as error:
         print(f"triforce eval-batch: error: {error}", file=sys.stderr)
         return 2
 

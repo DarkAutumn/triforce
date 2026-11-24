@@ -3896,3 +3896,23 @@ at none before) and are recorded with this reason. `REV` +1: training resets and
 randomised hearts change for today's team (they read lower, truthfully); no network changed and no chain can.
 For the fresh generation it means every network trains on hearts that mean what they show.
 
+## 2026-11-24 — Darknuts as the owner fights them, into the fresh generation (the owner)
+
+The owner showed how Darknuts are fought (three takes of the Olive Garden in `emu-zelda.py`, his rules and his
+answers quoted whole in `docs/owner/darknuts.md`): never follow one on its own line; shadow it at 90 degrees, 1.25
+to 1.5 tiles off and a little ahead, sword its side and keep walking the way it was going; with bombs, stand where
+the monsters clump and lay a bomb only where it catches two or more. The game's code gives one cause for all of it
+(`asm:Wanderer_MoveAndTurn`: a turn toward the chase target at a grid point when the target is within 8 pixels on
+an axis; the chase target flips between Link and his mirror point, which coincide near (128, 128)).
+
+Decided for 2.0.1.0:
+- **Two inputs** ("Yes that's fine. Do that in this upcoming 2.0.1"): where the monsters are sent (the flip and the
+  target), and per monster that it may turn toward Link at its next grid point and when.
+- **The movement code of every monster is read for the chase target** (which follow it, the exceptions, "red
+  wizzrobes right?") and the hotspot's bounds measured in tiles; the network is to learn the hotspot indirectly
+  ("It would be good to indirectly teach this to the model"): clump them where bombs are wanted, and in kill-all
+  rooms so Link does not chase them down.
+- **A scripted Darknut fighter from his rules, and demonstrations from it** for the teachers, with direct following
+  discouraged and a bomb laid where it hits two or more ("if you can figure out how it's a huge win").
+- Gibdos: likely the same as Darknuts once their movement code is read; Stalfos are not worth the care.
+

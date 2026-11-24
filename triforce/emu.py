@@ -38,6 +38,10 @@ PLAY_MODE = 5                           # GameMode: Link in play in a room (not 
 # --entry: the side of a route step's ``entry`` in the owner's words (``cave``: out of a cave or a dungeon's
 # stairs, state names' ``c``).
 ENTRIES = ('N', 'S', 'E', 'W', 'cave')
+# --item: the B item slots (`SelectedItemSlot` $656; zelda::submenu, asm:Link_WieldItem_JumpTable), accepted only
+# when Link holds the item (`GameState.b_slots`; the bombs by the count after --bombs): the game moves the selection
+# off an empty slot on its next status-bar frame (asm:StatusBar_CheckMissingItem).
+ITEMS = {'boomerang': 0, 'bombs': 1, 'bow': 2, 'candle': 4, 'recorder': 5, 'food': 6, 'potion': 7, 'wand': 8}
 
 
 class StartError(ValueError):
@@ -74,7 +78,8 @@ def parse_room(text: str) -> int:
 class Spec:
     """What to play: ``level``/``room``; the route's start state for it (``entry`` one of ``ENTRIES`` or None for
     the route's first, its ``visit`` from that side, ``chain`` 0-2); written over it: ``bombs``, ``hearts`` (half
-    hearts allowed; the containers grow to hold them), ``keys``."""
+    hearts allowed; the containers grow to hold them), ``keys``, ``item`` (the B item selected, one of ``ITEMS``
+    Link holds); ``enemies``: at most that many monsters in the room (a dungeon room)."""
     level: int
     room: int
     route: str = DEFAULT_ROUTE
@@ -84,6 +89,8 @@ class Spec:
     bombs: Optional[int] = None
     hearts: Optional[float] = None
     keys: Optional[int] = None
+    item: Optional[str] = None
+    enemies: Optional[int] = None
 
     @property
     def name(self) -> str:
@@ -139,10 +146,10 @@ def find_start(spec: Spec, states_dir: Optional[Path] = None) -> Start:
     return Start(found[(spec.visit, spec.chain)], entry)
 
 
-def overrides(spec: Spec, max_health: int) -> dict:
-    """The ``Game.set_value`` writes of the spec over a state holding ``max_health`` heart containers (hearts as
-    ``env::start_states::hearts_encoding`` writes them: full health is every container filled and the partial
-    heart $FF)."""
+def overrides(spec: Spec, max_health: int, b_slots: tuple = ()) -> dict:
+    """The ``Game.set_value`` writes of the spec over a state holding ``max_health`` heart containers and the B
+    items ``b_slots`` (``GameState.b_slots``); hearts in the game's own bytes (``_native.hearts_encoding``, the
+    training resets' function: 2 hearts are 1 full heart and a full partial one, so a two-heart hit kills)."""
     out = {}
     if spec.bombs is not None:
         out['bombs'] = spec.bombs
@@ -155,13 +162,42 @@ def overrides(spec: Spec, max_health: int) -> dict:
         containers = max(max_health, (halves + 1) // 2)
         if containers > 16:
             raise ValueError(f"--hearts {spec.hearts}: at most 16")
-        if halves >= 2 * containers:
-            out['hearts_and_containers'] = (containers - 1) << 4 | (containers - 1)
-            out['partial_hearts'] = 0xFF
-        else:
-            out['hearts_and_containers'] = (containers - 1) << 4 | halves // 2
-            out['partial_hearts'] = 0x7F if halves % 2 else 0
+        out.update(_native.hearts_encoding(halves, containers))
+    if spec.item is not None:
+        if spec.item not in ITEMS:
+            raise ValueError(f"--item {spec.item}: one of {', '.join(ITEMS)}")
+        held = set(b_slots)
+        if spec.bombs is not None:                       # the bombs Link holds are the overridden count
+            held = (held - {ITEMS['bombs']}) | ({ITEMS['bombs']} if spec.bombs > 0 else set())
+        if ITEMS[spec.item] not in held:
+            holds = ', '.join(name for name, slot in ITEMS.items() if slot in held) or 'nothing for B'
+            why = (" (the game moves the B selection off an empty slot on its next status-bar frame, "
+                   "asm:StatusBar_CheckMissingItem: give --bombs 1 or more)" if spec.item == 'bombs' else '')
+            raise ValueError(f"--item {spec.item}: Link does not hold it at this start{why}; he holds {holds}")
+        out['selected_item'] = ITEMS[spec.item]
     return out
+
+
+def room_monsters(level: int, room: int, in_cave: bool = False) -> int:
+    """The monsters game.yaml lists for the room (the game's own count for it, ``_native.game_rooms``)."""
+    info = _native.game_rooms().get((level, room, in_cave))
+    return sum(info['enemies'].values()) if info else 0
+
+
+def banked_kills(spec: Spec, in_cave: bool) -> list:
+    """``LiveGame.load``'s ``banked_kills`` for ``--enemies N``: the room's monsters less N, kept as kills the game
+    remembers for the room (``LoadOptions::banked_kills``, a staged training reset's way), so it makes N; which
+    ones, and where, the game decides (its spawn cycle, drawn from the seed).  Dungeon rooms only."""
+    if spec.enemies is None:
+        return []
+    if spec.enemies < 0:
+        raise ValueError(f"--enemies {spec.enemies}: 0 or more")
+    if spec.level == 0:
+        raise ValueError("--enemies: dungeon rooms only (the overworld keeps no kills for a screen)")
+    total = room_monsters(spec.level, spec.room, in_cave)
+    if total == 0:
+        raise ValueError(f"--enemies: game.yaml lists no monsters in {spec.name}")
+    return [((spec.level, spec.room), total - spec.enemies)] if spec.enemies < total else []
 
 
 class Where(NamedTuple):
@@ -206,6 +242,8 @@ class Session:
     states_dir: Optional[Path] = None
     start: Start = field(init=False)
     overrides: dict = field(init=False)                  # the spec's writes over the start state
+    banked: list = field(init=False)                     # --enemies: the kills banked for the room at the load
+    monsters: int = field(init=False)                    # the room's monsters as game.yaml lists them
     game: _native.LiveGame = field(init=False, repr=False)
     done: Optional[str] = field(init=False, default=None)
     home: Optional[Where] = field(init=False, default=None)
@@ -216,14 +254,24 @@ class Session:
         self.start = find_start(self.spec, self.states_dir)
         states_dir = None if self.states_dir is None else str(self.states_dir)
         held = _native.Game(states_dir=states_dir).load(self.start.state, randomize_rng=False, controllable=True)
-        self.overrides = overrides(self.spec, held.max_health)
+        self.overrides = overrides(self.spec, held.max_health, tuple(held.b_slots))
+        in_cave = _native.state_name(self.start.state)[2]
+        self.banked = banked_kills(self.spec, in_cave)
+        self.monsters = room_monsters(self.spec.level, self.spec.room, in_cave)
         self.game = _native.LiveGame(route=self.spec.route, states_dir=states_dir)
         self.reset(self.seed)
+
+    @property
+    def enemies(self) -> Optional[tuple]:
+        """``--enemies``: (at most this many in the room, of the room's monsters), else None."""
+        if self.spec.enemies is None:
+            return None
+        return min(self.spec.enemies, self.monsters), self.monsters
 
     def reset(self, seed: Optional[int] = None) -> None:
         """Loads the start again with ``seed`` (None: a new one) and begins a new recording."""
         self.seed = new_seed() if seed is None else seed
-        state = self.game.load(self.start.state, self.seed, self.overrides)
+        state = self.game.load(self.start.state, self.seed, self.overrides, self.banked)
         self.home = Where.of(state)
         self.done = None
 
@@ -254,8 +302,9 @@ class Session:
         spec = self.spec
         return replay.meta('human', [], route=spec.route, stop_at=f"{spec.level}:0x{spec.room:02x}", human={
             'room': f"{spec.level}:0x{spec.room:02x}", 'state': self.start.state, 'entry': self.start.entry,
-            'visit': spec.visit, 'chain': spec.chain, 'overrides': self.overrides, 'done_rule': self.done_rule,
-            'done': self.done})
+            'visit': spec.visit, 'chain': spec.chain, 'overrides': self.overrides, 'item': spec.item,
+            'enemies': None if self.enemies is None else list(self.enemies), 'banked_kills': self.banked,
+            'done_rule': self.done_rule, 'done': self.done})
 
     def replay(self) -> bytes:
         """The recording so far: ended ``death`` (died), ``other`` (left the room) or ``unknown`` (still playing)."""
@@ -275,8 +324,10 @@ class Session:
         parts += [f"v{spec.visit}"] if spec.visit != 1 else []
         parts += [f"chain{spec.chain}"] if spec.chain else []
         parts += [spec.route] if spec.route != DEFAULT_ROUTE else []
-        parts += [f"{key}{value:g}" for key, value in
-                  (('bombs', spec.bombs), ('hearts', spec.hearts), ('keys', spec.keys)) if value is not None]
+        parts += [f"{key}{value:g}" for key, value in (('bombs', spec.bombs), ('hearts', spec.hearts),
+                                                       ('keys', spec.keys), ('enemies', spec.enemies))
+                  if value is not None]
+        parts += [f"item{spec.item}"] if spec.item else []
         parts += [f"seed{self.seed}", (when or datetime.now()).strftime('%y%m%d-%H%M%S')]
         return '_'.join(parts) + replay.SUFFIX
 

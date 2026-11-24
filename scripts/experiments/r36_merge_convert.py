@@ -19,7 +19,7 @@ import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from r36_merge_distill import HOLDOUT_ENV, Data  # pylint: disable=wrong-import-position
+from r36_merge_distill import Data  # pylint: disable=wrong-import-position
 
 from triforce import registry  # pylint: disable=wrong-import-position
 from triforce.jobs import require_job  # pylint: disable=wrong-import-position
@@ -48,7 +48,7 @@ def convert(wide) -> ZeldaPolicy:
 @torch.no_grad()
 def check(wide, zelda, cache: Path, count: int) -> dict:
     data = Data(cache, mmap=True)
-    rows = np.flatnonzero(data.env == HOLDOUT_ENV)[:count]
+    rows = np.flatnonzero(data.held)[:count]
     worst_logp = worst_value = 0.0
     for begin in range(0, len(rows), 4096):
         obs, mask, _, _ = data.batch(rows[begin:begin + 4096], 'cpu')

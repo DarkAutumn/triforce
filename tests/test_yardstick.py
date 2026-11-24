@@ -146,6 +146,23 @@ def test_report_reads_the_evaluation_in_the_run_act_mode(argmax_run, capsys):
     assert (row['act'], row['eval_file']) == ('sample', 'eval.json')
 
 
+def test_report_leaves_out_a_network_several_families_share_with_a_sentence(argmax_run, capsys):
+    """One network in two families' slots (a teacher of the generation), never evaluated family by family: the report
+    goes on without their single-room rows (round38-one.md: it exited 1 there); a family's own run stays an error."""
+    root, run = argmax_run
+    shared = root / 'models' / 'zol' / 'r1'
+    shared.mkdir(parents=True)
+    for name in ('ckpt.pt', 'act'):
+        (shared / name).symlink_to(run / name)
+    (root / 'models' / 'zol' / 'promoted').write_text('r1\n')
+    (root / 'specialists' / 'zol.yaml').write_text('name: zol\n')
+    assert _report(root) == 0
+    out = json.loads((root / 'ys.json').read_text())
+    assert (out['specialists'], out['unevaluated']) == ([], ['goriya', 'zol'])
+    printed = capsys.readouterr().out
+    assert 'No single-room rows for goriya, zol' in printed and '| specialist |' not in printed
+
+
 @pytest.mark.parametrize('base,new,higher,expected', [
     ([1, 1.1, 0.9], [3, 3.1, 2.9], True, 'better'),
     ([1, 1.1, 0.9], [3, 3.1, 2.9], False, 'worse'),

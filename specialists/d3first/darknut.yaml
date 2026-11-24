@@ -103,12 +103,8 @@ clips:
   off_share: 0
 curriculum:
   enabled: true
-  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
-  - d3first_3_59n_1                       # round 40: 0x59 with 4 bombs (none to spend), no explored track in 3000
-  - d3first_3_59n_2                       # iterations; measured in round40.md "3:0x59 at 4 bombs" (the lead's item 1)
-  - d3first_3_5bw_0                       # round 40 (Tracks40): 0x5b's last pass with today's bag (4), no explored
-  - d3first_3_5bw_2                       # track in 3000 iterations (chain 1's was found)
-  - d3first_5_05c_[0-9]
+  untracked:                              # round 40: the seed states that train without a track (triforce.inputs);
+  - d3first_5_05c_[0-9]                   # 3:0x59 from N with 4 and 0x5b's last pass have the fighter's (Tracks41)
   - d3first_5_05e_[0-9]
   - d3first_5_06c_[0-9]
   - d3first_5_06w_[0-9]

@@ -56,10 +56,8 @@ items:
   bombs: tenth
 curriculum:
   enabled: true
-  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
-  - d3first_3_4bs_0                       # round 40 (Tracks40): 3:0x4b with today's bag, no explored track in 3000
-  - d3first_3_4bs_1                       # iterations (the stale tracks were the rule zol-4b's, r32p_rules.py)
-  - d3first_5_57w_[0-9]
+  untracked:                              # round 40: the seed states that train without a track (triforce.inputs);
+  - d3first_5_57w_[0-9]                   # 3:0x4b's have the rule zol-4b's (Tracks41)
   - d3first_6_68s_[0-9]
   - d3first_9_63c_[0-9]
 one_room: true

@@ -202,14 +202,34 @@ env shares by member: four groups (`overworld`, `walkers`, `others`, `rooms`) an
 a name with `+` are refused); `tests/test_lab_groups.py` holds every family `_native.route_steps('d3first')` names to
 exactly one teacher and loads every member's task with and without `--state-route d3first`.
 
+The file also pins the network the generation trains, once for every teacher (the owner, Nov 24: 768 wide
+everywhere; the lead's pins):
+
+```yaml
+network:
+  arch: hitnet
+  arch_config: {tokens: [type, features, rel, threat, chase], feed: true, room: true, hidden_dim: 768}
+  aux: [hit=hit:0.5]
+  try_others: "4:0.25"
 ```
-python -m triforce.lab.train --name gen-rooms --group rooms --parallel 8 --iterations 977 --arch hitnet \
-    --arch-config '{"tokens": ["type", "features", "rel", "threat", "chase"], "feed": true}' \
-    --aux hit=hit:0.5 --try-others 4:0.25 --checkpoint-every 61 --seed 1
+
+(4,960,388 parameters.) A teacher may override a key with its own `network:` (`arch_config` key by key; another
+`arch` takes none of the file's `arch_config`). So `--group NAME` alone trains the pinned recipe:
+
+```
+python -m triforce.lab.train --name gen-rooms --group rooms --parallel 8 --iterations 977 --checkpoint-every 61 \
+    --seed 1
 ```
 
 `--group NAME` is `--families <its members> --state-route <its route>` (refused beside `--families` or another
-`--state-route`; `--shares` overrides a member's share). `--state-route` keeps each task's curriculum settings, its
+`--state-route`; `--shares` overrides a member's share) with the group's `--arch`, `--arch-config`, `--aux` and
+`--try-others` (`lab.train.apply_network`). Any of those four given on the command line overrides the file
+(`--arch-config` key by key over the file's, all of it for another `--arch`), and the run prints one line naming what
+it changed: `[lab] --group rooms: the command line overrides the group file's arch_config.hidden_dim 768 -> 256`.
+The manifest records each key's source (`networks.student.sources`: `group file`, `command line` or `default`) and
+the file's block (`task.group.network`), so `triforce manifest diff` between a run from the file and one with an
+override names the key. A group file without the block, and `--families` without `--group`, train as before
+(`zelda`, no auxiliary target, no look-ahead unless given). `--state-route` keeps each task's curriculum settings, its
 `untracked` declaration among them (until Nov 24 `route_only` dropped it and refused such a task).
 
 ### The recipe on record
@@ -450,6 +470,71 @@ once per rollout over its family's rows in batches of 4096 (`lab.collect.Teacher
   CKPT] --rollouts N --out DIR` writes `DIR/shard-NNNN.npz` (every observation key as `obs/<key>`,
   `action_mask`, `action`, `teacher_joint` `[n, 352]` (`-inf` illegal), `teacher_value`, `family`) and
   `DIR/dataset.json` (families, actor, teachers, envs); `lab.record.load(DIR)` reads it back.
+
+## Stage 2: one network from its teachers
+
+The generation (2.0.1.0) trains group and boss teachers with `lab.train --group NAME` (above), then ONE student
+learns from them; only the student is versioned and tested. Stage 2 is four commands, in order, each a job of the
+queue (`triforce job run ... --`); round 38 made its one network this way (`docs/experiments/round38-one.md`), and
+its numbers are the defaults and the scale below. A teacher is named per family or per group by run: a store run
+`NAME/RUN`, a run dir, a `ckpt.pt` or a team slot `family@route[:late]` (`train.resolve_warm_start`).
+
+1. **Record the teachers' play** (`scripts/experiments/r36_merge_record.py`):
+
+   ```
+   r36_merge_record.py --out DATA --group walkers others rooms ... \
+       --teacher-group walkers=walkers/RUN --teacher-group others=others/RUN ... \
+       --teacher boss-gleeok=boss-gleeok/RUN ... --try-others 4:0.25 --sources resets entries [--decisions 20480]
+   ```
+
+   Reads: the keys (`--group`'s members, `--keys KEY[=YAML]`), each key's task (`specialists/d3first/<family>.yaml`,
+   so the generation's observation switches; `=YAML` another), the route's start states and harvested entries (the
+   group's route, `--state-route`), the named teachers. Writes `DATA/<key>/<source>/shard-NNNN.npz` (every
+   observation key, the mask, the action taken, `teacher_joint`, `teacher_value`, and the hit labels:
+   `health_lost`, `blocked`, `tried_actions`, `tried_lost`, `tried_blocked`; `lab.record.shard_arrays`) and
+   `meta.json` (the teacher's run and checkpoint SHA-1, the task's yaml and config hashes, the observation switches,
+   the start states and harvested states drawn by content, the code and ROM). `--try-others K:P` sets the hit
+   labels' cost: every decision of a share P tries K candidates (`8:1.0` recorded 14 to 71 decisions a second on 4
+   envs in round 40's proof; `4:0.25` is what the lab's trainings use). Refused: a key without a named teacher
+   once any is named (never today's team in its place), and a teacher (or `--student`) that reads a block whose
+   switch is off in the task (`lab.recipe.network_reads`: it would read zeros). Without any `--teacher` it records
+   the team in use's networks (`late.<route>` over `promoted` for a bare key), as round 38 did.
+   `--sources rooms --harvest DIR` adds an every-room harvest (`eval-chain --harvest DIR --harvest-every-room`):
+   the room entries a chain makes from a room of the same family, which the handoff harvest never saves.
+2. **Cache** (`scripts/experiments/r36_merge_distill.py cache --data DATA [DATA2...] --cache CACHE`): every shard
+   into one array a field (`CACHE/<field>.npy`), each row's key, source, data dir and whether it is held out (the
+   last env of each rollout: whole episodes). A field is kept when every shard has it: data recorded before round
+   40 has no hit labels, and a cache that mixes it in has none.
+3. **Imitate** (`r36_merge_distill.py train --cache CACHE --name NAME --run-id RUN --arch hitnet --arch-config
+   '{"tokens": ["type", "features", "rel", "threat", "chase"], "feed": true}' --aux hit=hit:C`): KL(teacher ‖
+   student) over the 352 joint actions, `--value-coeff` (0.02) · ½(V − V_teacher)², and the lab's own auxiliary
+   loss (`lab.auxiliary.aux_loss`: the hit head's binary cross-entropy on the action taken and the tried
+   candidates) in one pass; the network from `lab.recipe.create_network` (1,608,836 parameters as above). From
+   scratch it runs round 38's first pass (20 epochs, lr 1e-3); `--init NAME/RUN` (a second pass on more data, or a
+   correction round's imitation) its later passes (5 epochs, lr 3e-4). Writes a normal run (`ckpt.pt`, playable
+   and loadable by `lab.train --load`) and `distill.json`: per epoch the training KL, value and auxiliary losses, and
+   on the held-out rows per key the KL, top-1 agreement (joint and per head), the value's error, the hit loss and
+   the hit head's precision = recall on the actions taken and on every judged candidate. Refused: a student that
+   reads a block a source of the cache recorded with its switch off.
+4. **Correct on the student's own states** (DAgger): step 1 with `--student NAME/RUN` (the student acts, the
+   named teachers label its decisions) into a new data dir, then steps 2 and 3 with `--data DATA DAGGER --init
+   NAME/RUN`. With `--sources rooms --harvest DIR`, DIR an every-room harvest of the student's own chains, it is
+   round 38's correction: the rooms the student brings itself to, at the hearts it brings.
+
+Then PPO with a fading teacher (`lab.train --load NAME/RUN --teacher-coeff C --teacher-hold N --teacher-fade N
+--teacher KEY=CKPT ... --aux hit=hit:C --try-others K:P`, above).
+
+**Round 38's scale, and what is still a judgement.** Round 38 recorded 20,480 decisions a source (97 sources: the
+resets and handoff entries of 51 keys, 1,986,560 rows; 83 minutes once it had the machine), 921,600 rows of an
+every-room harvest (200 chains of each of 17 segments, 45 keys), then ONE correction round (400 chains of five
+dungeons with the every-room harvest on, 20,608 arrivals, 18 keys, 737,280 rows), each a 5-epoch pass at lr 3e-4 on
+all the data so far. Held-out KL went 0.118 → 0.100 with the every-room rows and → 0.089 after the correction round,
+and the correction round alone closed 4 to 11 points of a dungeon's chain rate. Its student was 768 wide; the
+generation's is 256 wide, so how many decisions a family needs (round 38's 20,480 a source is a start, not a
+measurement), whether more than one correction round pays, which rooms the correction harvest plays (round 38 chose
+them from the rooms tier and the chains), and the
+hit loss's weight `C` beside the KL (the lab's examples use 0.5) are judgements the first real run makes, by the
+held-out KL and the hit head's precision on held-out rows, then the rooms tier and the chains.
 
 ## The yardstick
 

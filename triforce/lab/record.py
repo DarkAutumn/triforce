@@ -52,6 +52,24 @@ def parse_args(argv=None):
     return parser.parse_args(argv)
 
 
+def shard_arrays(batch: dict) -> dict:
+    """A flattened rollout (``BufferSet.flatten('cpu')``) as one shard's arrays (the module docstring): every
+    observation key, the mask, the action taken, the teacher's labels, the family index, the taken action's outcome
+    (``health_lost``, ``hits``, ``blocked``, ``beam_lined``) and, with ``--try-others``, the look-ahead's verdicts.
+    ``scripts/experiments/r36_merge_record.py`` writes its shards with it too (stage 2: one recording carries the
+    teachers' labels and the hit labels)."""
+    arrays = {f'obs/{k}': v.numpy() for k, v in batch['obs'].items()}
+    arrays.update(action_mask=batch['masks'].numpy(), action=batch['actions'].numpy(),
+                  teacher_joint=batch['teacher_joint'].numpy(), teacher_value=batch['teacher_value'].numpy(),
+                  family=batch['family'].numpy(), health_lost=batch['health_lost'].numpy(),
+                  hits=batch['hits'].numpy(), blocked=batch['blocked'].numpy(),
+                  beam_lined=batch['beam_lined'].numpy())
+    if 'tried_lost' in batch:
+        arrays.update(tried_actions=batch['tried_actions'].numpy(), tried_lost=batch['tried_lost'].numpy(),
+                      tried_blocked=batch['tried_blocked'].numpy())
+    return arrays
+
+
 def main(argv=None) -> Path:
     args = parse_args(argv)
     from ..nets.serve import learner_process  # pylint: disable=import-outside-toplevel
@@ -86,16 +104,7 @@ def main(argv=None) -> Path:
                 collector.take()
                 collector.ready(student, args.device)
                 batch = collector.buffer.flatten('cpu')
-                arrays = {f'obs/{k}': v.numpy() for k, v in batch['obs'].items()}
-                arrays.update(action_mask=batch['masks'].numpy(), action=batch['actions'].numpy(),
-                              teacher_joint=batch['teacher_joint'].numpy(),
-                              teacher_value=batch['teacher_value'].numpy(), family=batch['family'].numpy(),
-                              health_lost=batch['health_lost'].numpy(), hits=batch['hits'].numpy(),
-                              blocked=batch['blocked'].numpy(), beam_lined=batch['beam_lined'].numpy())
-                if 'tried_lost' in batch:
-                    arrays.update(tried_actions=batch['tried_actions'].numpy(), tried_lost=batch['tried_lost'].numpy(),
-                                  tried_blocked=batch['tried_blocked'].numpy())
-                np.savez_compressed(out / f'shard-{shard:04d}.npz', **arrays)
+                np.savez_compressed(out / f'shard-{shard:04d}.npz', **shard_arrays(batch))
                 print(f"[record] shard {shard}: {batch['masks'].shape[0]} rows", flush=True)
                 progress.update(progress.done + batch['masks'].shape[0])
         finally:

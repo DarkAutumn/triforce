@@ -24,7 +24,11 @@ listed by its card (``job_view``), drawn with widgets and never as text bars (th
 list``'s): who asked for it (agent, task, sub-task), its description, its state (RUNNING in its place with the time
 run against its estimate, OVERRUN past twice the estimate, its place in line and wait while queued, or how it
 ended), a progress bar a counter it reports (done of total, its rate and time left; a counter without a total its
-number and rate), its steps (a build's and a test's, each with its state), then its verb, kind, branch and command.
+number and rate), its steps (a build's and a test's, each with its state), what a waiting job waits for ("waits for
+a place in regular (2 of 2 running); spare is closed: load 22.4 above 15"), then its verb, kind, branch and
+command.  Over the list (window and web view) a line names the queues of the queues' file in force with their
+places taken ("QUEUES express 1/1 · regular 2/2 · spare 0/1 closed: ... · tools 1/2"), and, while that file is
+ignored, why, in the warning colour (``read_queue``, ``jobqueue.survey``).
 A job whose log folder holds its plan (``training.json``) shows that plan's full view under its card (its header,
 its runs' rows, its eval-chain card: the runs by how they ended, the triforces taken, the furthest step); one
 without is drawn from its row alone.  The running jobs are on top, the one that began to run last first (a job that
@@ -47,6 +51,7 @@ virtualenv.
 """
 
 import argparse
+import html
 import json
 import math
 import os
@@ -1268,22 +1273,42 @@ class LiveScanner:
 RECENT_SECONDS = 3600          # ended jobs stay in [currently running] (under 'finished') this long, then leave
 
 
-def read_queue(now: float, recent: float = RECENT_SECONDS) -> list[dict]:
+def read_queue(now: float, recent: float = RECENT_SECONDS) -> tuple[list[dict], dict]:
     """The queue's jobs that are running or queued, or ended in the last ``recent`` seconds (rows of
     ``jobqueue.read_jobs``), those whose wrapper is gone marked dead first (``jobqueue.sweep``, as ``triforce job
-    list`` does); [] while the queue can't be read."""
+    list`` does), each waiting one with what it waits for (``'waits'``, ``jobqueue.Survey.waits``: "waits for a
+    place in regular (2 of 2 running); spare is closed: load 22.4 above 15"); and the queues by name from the
+    configuration in force ({'summary': "express 1/1 · regular 2/2 · ...", 'warning': why the queues' file is
+    ignored, or ''}, ``jobqueue.survey``).  ([], {}) while the queue can't be read."""
     try:
         con = jobqueue.connect()
     except (OSError, sqlite3.Error):
-        return []
+        return [], {}
     try:
         with jobqueue.transaction(con):
             jobqueue.sweep(con, jobqueue.queue_dir(), now)
-        return jobqueue.read_jobs(con, "status IN ('queued', 'running') OR finished_ts >= ?", (now - recent,))
+            jobs = jobqueue.read_jobs(con, "status IN ('queued', 'running') OR finished_ts >= ?", (now - recent,))
+            state = jobqueue.survey(con, jobqueue.queue_dir(), now, jobs)
     except (OSError, sqlite3.Error):
-        return []
+        return [], {}
     finally:
         con.close()
+    for job in jobs:
+        if job.get('status') == 'queued':
+            job['waits'] = state.waits(job)
+    return jobs, {'summary': state.summary(), 'warning': state.config.warning() or ''}
+
+
+def queues_html(queues: dict) -> str:
+    """The window's queues line (``read_queue``'s): ``QUEUES  express 1/1 · regular 2/2 · spare 0/1 closed: load
+    22.4 above 15 · tools 1/2`` in the muted colour and, while the queues' file is ignored, why, in the warning
+    colour under it; '' without a queue."""
+    if not queues.get('summary'):
+        return ''
+    text = f"<span style='color:{C.muted.name()}'><b>QUEUES</b>&nbsp;&nbsp;{html.escape(queues['summary'])}</span>"
+    if queues.get('warning'):
+        text += f"<br><span style='color:{C.warn.name()}; font-weight:700'>{html.escape(queues['warning'])}</span>"
+    return text
 
 
 def queue_listing(jobs: list[dict], now: float) -> tuple[list[tuple[dict, int | None]], list[dict]]:
@@ -1371,11 +1396,12 @@ def job_view(job: dict, now: float, place: int | None = None, has_plan: bool = F
     (``jobqueue.tags`` without the running step, which the steps' list shows) in 'color' (``job_color``),
     'counters' (``job_counters``), 'steps' (a build's and a test's: [{'name', 'status'}], status pending, running,
     completed or failed), 'note' (a running job that reports nothing and has no plan: 'no progress reported' and its
-    time against its estimate), 'flags' (``jobs.flag``: [{'level', 'code', 'text', 'color'}], red ones in the bad
-    colour, notes in the in-between one) and 'command' (its verb and kind, where it runs, its command)."""
+    time against its estimate; a waiting job: what it waits for, ``read_queue``'s 'waits'), 'flags' (``jobs.flag``:
+    [{'level', 'code', 'text', 'color'}], red ones in the bad colour, notes in the in-between one) and 'command' (its
+    verb and kind, where it runs, its command)."""
     steps = [{'name': str(step.get('name') or '?'), 'status': str(step.get('status') or 'pending')}
              for step in job.get('steps') or []]
-    note = ''
+    note = (job.get('waits') or '') if job.get('status') == 'queued' else ''
     if job.get('status') == 'running' and not job.get('progress') and not steps and not has_plan:
         estimate = '' if job.get('estimate') is None else f" of ~{jobqueue.short(job['estimate'])}"
         note = f"no progress reported · {jobqueue.short(now - (job.get('admitted_ts') or now))}{estimate}"
@@ -1513,7 +1539,11 @@ def job_box(job: dict, model: Training, now: float, place: int | None = None) ->
     (whether the plan's overall bar is drawn: only for a plan of several runs, where it says what no row does, the
     whole plan's share done and its counts; a training's, an evaluation's or a chain's one row or chain card says it
     all) and 'command' (faint, once), 'flags' ([(line, colour)], one a ``jobs.flag``: red ones in the bad colour,
-    notes in the in-between one).  No counter of the queue row: the plan's rows are the progress."""
+    notes in the in-between one) and 'counters' (``job_counters``: only those with a name of their own that are
+    still going, a step of the job that no row of its plan shows: the 250 test's ``bomb metrics`` over its replays
+    once its runs are done; the owner, Nov 24: the job read RUNNING for ten minutes under a finished chain with
+    nothing saying what it was doing.  A counter named for its unit, ``runs`` or ``steps``, is the plan's rows'
+    progress and is not drawn twice)."""
     status = job.get('status')
     color = job_color(job, now)
     state = (f"QUEUED #{place}" if place else 'QUEUED') if status == 'queued' else (
@@ -1528,9 +1558,10 @@ def job_box(job: dict, model: Training, now: float, place: int | None = None) ->
         facts.append((f"≈ {fmt_duration(eta)} left", C.text))
     flags = [(' — '.join(flag_lines(flag)), C.bad if flag.get('level') == 'red' else C.warn)
              for flag in job.get('flags') or []]
+    counters = [counter for counter in job_counters(job, now, has_plan=True) if counter['label']]
     return {'headline': jobqueue.headline(job), 'pills': [(text, pill) for text, pill in pills if text],
             'description': job.get('description') or '', 'facts': facts, 'flags': flags, 'bar': len(model.runs) > 1,
-            'command': job_command(job)}
+            'counters': counters, 'command': job_command(job)}
 
 
 def row_fraction(run: Run, status: str, now: float) -> float:
@@ -2209,7 +2240,7 @@ class Header(Clickable):
     plan's bar when it has several runs, the command), the job's own card hidden."""
 
     HEIGHT = 138
-    BOX_TOP, BOX_ROW, BOX_LINE, BOX_BAR, BOX_BOTTOM = 12, 32, 21, 58, 10
+    BOX_TOP, BOX_ROW, BOX_LINE, BOX_BAR, BOX_BOTTOM, BOX_COUNTER = 12, 32, 21, 58, 10, 26
 
     def __init__(self, view):
         super().__init__('round')
@@ -2230,7 +2261,7 @@ class Header(Clickable):
         return job_box(view.job, view.model, now, view.place)
 
     def refresh(self):
-        """Reads the box and fits the header to it (its description and its plan's bar come and go)."""
+        """Reads the box and fits the header to it (its description, its counters and its plan's bar come and go)."""
         self.box = self.read_box(time.time())
         box = self.box
         if box is None:
@@ -2238,6 +2269,7 @@ class Header(Clickable):
         else:
             self.setFixedHeight(self.BOX_TOP + self.BOX_ROW + self.BOX_LINE * (2 + bool(box['description'])
                                                                                + len(box['flags']))
+                                + self.BOX_COUNTER * len(box['counters'])
                                 + (self.BOX_BAR if box['bar'] else 0) + self.BOX_BOTTOM)
         self.update()
 
@@ -2377,6 +2409,10 @@ class Header(Clickable):
             p.setPen(color)
             p.drawText(QPointF(left, y + 14), p.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, width))
             y += self.BOX_LINE
+        for counter in box['counters']:
+            paint_counter(p, QRectF(left, y + 2, right - left, CounterBar.HEIGHT), counter,
+                          job_color(self.view.job, now))
+            y += self.BOX_COUNTER
         if box['bar']:
             self._paint_bar(p, QRectF(left, y + 6, right - left, 22), model, now, t)
             y += self.BOX_BAR
@@ -2416,10 +2452,33 @@ class TextLines(QWidget):
             y += height
 
 
+def paint_counter(p: QPainter, rect: QRectF, counter: dict, color: QColor):
+    """One counter of a job (``job_counters``) in ``rect``: its label when it has one, a progress bar of done / total
+    with the numbers on it, then its rate and time left; a counter without a total: its number (no bar), its rate
+    and its time against the job's estimate."""
+    left, top, width, height = rect.left(), rect.top(), rect.width(), rect.height()
+    label_w = 130.0 if counter['label'] else 0.0
+    if label_w:
+        p.setFont(font(9))
+        p.setPen(C.muted)
+        p.drawText(QRectF(left, top, label_w - 10, height), Qt.AlignmentFlag.AlignVCenter,
+                   p.fontMetrics().elidedText(counter['label'], Qt.TextElideMode.ElideRight, int(label_w - 10)))
+    right_w = min(220.0, width * 0.35)
+    area = QRectF(left + label_w, top + 3, max(60.0, width - label_w - right_w - 12), height - 6)
+    if counter['fraction'] is not None:
+        paint_bar(p, area, counter['fraction'], color, 0.0, label=counter['numbers'])
+    else:
+        p.setFont(font(9.5, QFont.Weight.Bold))
+        p.setPen(C.text)
+        p.drawText(area, Qt.AlignmentFlag.AlignVCenter, counter['numbers'])
+    p.setFont(font(9))
+    p.setPen(C.muted)
+    p.drawText(QRectF(area.right() + 12, top, right_w, height), Qt.AlignmentFlag.AlignVCenter,
+               '  ·  '.join(part for part in (counter['speed'], counter['time']) if part))
+
+
 class CounterBar(QWidget):
-    """One counter of a job (``job_counters``): its label when it has one, a progress bar of done / total with the
-    numbers on it, then its rate and time left; a counter without a total: its number (no bar), its rate and its
-    time against the job's estimate."""
+    """One counter of a job in a job's card (``paint_counter``)."""
 
     HEIGHT = 22
 
@@ -2435,30 +2494,11 @@ class CounterBar(QWidget):
         self.update()
 
     def paintEvent(self, _event):
-        counter = self.counter
-        if not counter:
+        if not self.counter:
             return
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        width, height = float(self.width()), float(self.height())
-        label_w = 130.0 if counter['label'] else 0.0
-        if label_w:
-            p.setFont(font(9))
-            p.setPen(C.muted)
-            p.drawText(QRectF(0, 0, label_w - 10, height), Qt.AlignmentFlag.AlignVCenter,
-                       p.fontMetrics().elidedText(counter['label'], Qt.TextElideMode.ElideRight, int(label_w - 10)))
-        right_w = min(220.0, width * 0.35)
-        area = QRectF(label_w, 3, max(60.0, width - label_w - right_w - 12), height - 6)
-        if counter['fraction'] is not None:
-            paint_bar(p, area, counter['fraction'], self.color, 0.0, label=counter['numbers'])
-        else:
-            p.setFont(font(9.5, QFont.Weight.Bold))
-            p.setPen(C.text)
-            p.drawText(area, Qt.AlignmentFlag.AlignVCenter, counter['numbers'])
-        p.setFont(font(9))
-        p.setPen(C.muted)
-        p.drawText(QRectF(area.right() + 12, 0, right_w, height), Qt.AlignmentFlag.AlignVCenter,
-                   '  ·  '.join(part for part in (counter['speed'], counter['time']) if part))
+        paint_counter(p, QRectF(0, 0, float(self.width()), float(self.height())), self.counter, self.color)
 
 
 class StepList(QWidget):
@@ -3772,6 +3812,13 @@ class Window(QMainWindow):
         open_button.clicked.connect(self._open)
         top.addWidget(open_button)
         outer.addLayout(top)
+        # The queues by name, their places taken, the ignored queues' file's warning (``read_queue``).
+        self.queues: dict = {}
+        self.queues_label = QLabel()
+        self.queues_label.setWordWrap(True)
+        self.queues_label.setTextFormat(Qt.TextFormat.RichText)
+        self.queues_label.hide()
+        outer.addWidget(self.queues_label)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         outer.addWidget(splitter, 1)
@@ -3835,7 +3882,9 @@ class Window(QMainWindow):
         dirs = find_log_dirs(self.root)
         root = self.root.resolve()
         now = time.time()
-        jobs = read_queue(now)
+        jobs, self.queues = read_queue(now)
+        self.queues_label.setText(queues_html(self.queues))
+        self.queues_label.setVisible(bool(self.queues))
         self.queue_live, self.queue_ended = queue_listing(jobs, now)
         self.queue_rows = {job_key(job): (job, place)
                            for job, place in self.queue_live + [(job, None) for job in self.queue_ended]}
@@ -4402,6 +4451,7 @@ class WebState:
         self.first_seen: dict[str, float] = {}
         self._scanned = None
         self.jobs: list[dict] = []            # the queue's jobs as of the last scan (``read_queue``)
+        self.queues: dict = {}                # the queues by name and the ignored file's warning (``read_queue``)
         self.plan_only: dict[str, Training] = {}   # listed jobs' plans this state reads no events of (``_jobs``)
         self._lock = threading.Lock()
         self.snapshot: dict = {}
@@ -4421,7 +4471,7 @@ class WebState:
         """Reads the job queue and finds the folders to read: the root's and the queue's jobs' whose plan runs, or
         ended within ``expire`` seconds."""
         dirs = find_log_dirs(self.root)
-        self.jobs = read_queue(now)
+        self.jobs, self.queues = read_queue(now)
         listed = {path.resolve() for path in dirs}
         folders = [folder for folder in map(job_folder, self.jobs) if folder is not None]
         candidates = dirs + [folder for folder in dict.fromkeys(folders) if folder.resolve() not in listed]
@@ -4539,8 +4589,8 @@ class WebState:
         plans.sort(key=lambda plan: (-(plan['created_ts'] or 0), plan['id']))
         jobs = self._jobs(plans, now)
         snapshot = json_safe({'now': now, 'clock': fmt_clock(now), 'host': socket.gethostname(),
-                              'machine': self.machine(), 'expire': self.expire, 'jobs': jobs, 'plans': plans,
-                              'cards': cards})
+                              'machine': self.machine(), 'expire': self.expire, 'queues': self.queues, 'jobs': jobs,
+                              'plans': plans, 'cards': cards})
         body = json.dumps(snapshot, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
         with self._lock:
             self.snapshot, self._body = snapshot, body
@@ -4615,6 +4665,9 @@ main{padding:12px 16px 48px;max-width:2600px;margin:0 auto}
 .jh{color:var(--muted);font-weight:700;font-size:12px;letter-spacing:.04em;text-transform:uppercase;
   padding:6px 2px 0}
 #plans{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+#queues{color:var(--muted);font-size:12.5px;margin:0 2px 10px;overflow-wrap:anywhere}
+#queues b{letter-spacing:.04em;margin-right:8px}
+#queues .qwarn{color:var(--warn);font-weight:700}
 .plan{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:7px 12px;display:flex;
   flex-wrap:wrap;gap:3px 12px;align-items:center;font-size:13px}
 .plan .pname{font-weight:700;font-size:14px}
@@ -4713,7 +4766,8 @@ pre.log{margin:6px 0 0;background:#11141a;border-radius:8px;padding:8px 10px;col
 <body>
 <header><span class="brand">&#9650; Triforce<small>training monitor &middot; currently running</small></span>
 <span class="machine" id="machine"></span><span class="conn" id="conn">connecting…</span></header>
-<main><div id="jobs"></div><div id="plans"></div><div id="empty" hidden></div><div id="cards"></div></main>
+<main><div id="queues"></div><div id="jobs"></div><div id="plans"></div><div id="empty" hidden></div>
+<div id="cards"></div></main>
 <script>
 'use strict';
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -4962,6 +5016,8 @@ function boxHtml(job) {
     (box.description ? `<div class="jdesc">${esc(box.description)}</div>` : '') +
     '<div class="jfacts">' + box.facts.map(([text, color]) => `<span style="color:${color}">${esc(text)}</span>`)
       .join('<i>·</i>') + '</div>' + flagsHtml(job) +
+    (box.counters.length ? '<div class="ctrs">' + box.counters.map(counter => counterHtml(counter, job.color))
+      .join('') + '</div>' : '') +
     (box.bar && plan ? '<div class="ctr">' + barHtml(plan.fraction, job.color, `${Math.floor(pct(plan.fraction))}%`) +
       `<span class="cr">${esc(plan.counts.join('  ·  '))}</span></div>` : '') +
     `<div class="jcmd">${esc(box.command)}</div></div>`;
@@ -4995,6 +5051,10 @@ function render(state) {
     }
   }
   setText($('#machine'), state.machine || '');
+  // The queues by name with their places taken, and why the queues' file is ignored while it is (``read_queue``).
+  const queues = state.queues || {};
+  setHTML($('#queues'), queues.summary ? `<b>QUEUES</b>${esc(queues.summary)}` +
+    (queues.warning ? `<div class="qwarn">${esc(queues.warning)}</div>` : '') : '');
   // The queue's jobs, as [currently running] lists them: the live ones, then the ones that ended under a heading.
   const jobs = state.jobs || [];
   const ended = jobs.findIndex(job => job.ended);

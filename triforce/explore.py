@@ -168,6 +168,10 @@ def main(argv=None):
         written = f"  -> {track}" if result.success and replayed else ''
         print(f"{result.start_state:8} {status:40} iterations={result.iterations} env_steps={result.env_steps} "
               f"cells={result.cells} {result.seconds:.0f}s{written}")
+        if not result.success:
+            print(f"{'':8} reached: enemies {result.enemies[0]} -> {result.enemies[1]}, longest path "
+                  f"{result.longest} steps, closest {result.closest:.2f}; failed episodes "
+                  f"{dict(result.failures) or 'none'}")
     total = sum(r.env_steps for r, _ in results)
     solved = sum(r.success and ok for r, ok in results)
     print(f"{solved}/{len(results)} states solved; {total} env steps")

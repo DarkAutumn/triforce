@@ -15,9 +15,8 @@ items: {bombs: tenth}                      # only the 10th damage-free kill's bo
 clips: {enabled: true, off_share: 0}       # round 29: the block clip of 9:0x03 to its stairs; the owner, Nov 18: no episode with CLIP masked (the no-clip runs are dropped, 0x03 is not fought)
 curriculum:                              # trajectories/like-like (Go-Explore paths per start state)
   enabled: true
-  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
-  - d3first_4_32w_[0-9]                   # round 40 (Tracks40): as like-like@d3first (4:0x32, no explored track)
-  - d3first_6_1dc_[0-9]
+  untracked:                              # round 40: the seed states that train without a track (triforce.inputs);
+  - d3first_6_1dc_[0-9]                   # the Breakfast Room 4:0x32 has the rule like-like-32's (Tracks41)
   - d3first_9_03e_[0-9]
   - d3first_9_14c_[0-9]
   - d3first_9_41s_[0-9]
