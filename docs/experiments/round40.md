@@ -1216,3 +1216,62 @@ after every action but a MOVE, and the losses go from 159 to 3 and 51 to 8); and
 frames now neither count nor stall). The CLIP's frame was a wrong first guess (with it alone 0x3f still lost 159).
 Today's networks, not trained for the timing, lose 0x0b: they walk back into Level 5 before the whirlwind (`all`:
 5:0x64/0x65/0x66 lost 62 runs); with 2.0.0.14's whirlwind macro that loss is gone (v1 and v2 lose no run in Level 5).
+
+## The owner's Darknut fighter (Darknut40, branch `r40-darknut`)
+
+anthropic/claude-opus-5-5 (Darknut40). The owner's Darknut lesson (docs/owner/darknuts.md, Nov 24; his three takes in
+`replays/owner/darknut/`) as a scripted fighter over the env's own actions, measured alone on the generation's code
+beside today's network, its demonstrations, and two switched-off proposals. *Where it came from:* the rules and the
+takes are the owner's; the fighter, the geometry, the measurements, the builder and the proposals' mechanisms are the
+agent's. The rules stay Darknut-only (the lead, after Chase40's audit: Goriyas, Lynels and Armos turn at Link from
+farther; a Gibdo walks as a red Darknut, not used here).
+
+### The fighter (`scripts/experiments/r40_darknut_fighter.py`)
+
+Each decision reads what a player sees (positions, facings, flash timers, knockback, clouds, the bag, the clock) and
+ranks the env's actions (MOVE each way, WAIT, the strikes that land, the BOMBs that catch two or more):
+- **Safety** is `r40_d3_69_line`'s: no way on from the action (standing, or walking any way for 48 frames) touched by
+  any predicted way of any Darknut. The prediction walks a Darknut at its own speed (red 0.5, blue 0.625 pixel a
+  frame, asm:Darknut_Init), stopping on every 16-pixel grid point it passes (the game moves whole pixels; blue
+  Darknuts step 0.625 and would otherwise never stand on one), where it may go on, turn toward Link when he is
+  within 8 pixels of its row or column (129 in 256, asm:Wanderer_MoveAndTurn), or turn aside at a wall
+  (asm:Walker_CheckTileCollision). Link's own walk is modelled as the game moves him: his foot row alone meets the
+  floor (he overlaps blocks from below, zelda-asm mechanics.md "Why Link overlaps blocks"), and a turn across his axis
+  off his grid first takes him to a grid point by his grid offset `$394` (asm:Link_ModifyDirOnGridLine: on 4 or more
+  pixels out, back under 4). Both mattered: without them the first traces were hit stepping back into a Darknut.
+- **Never on its line behind it**: a place within 8 pixels of the line of a Darknut walking away, up to 64 pixels
+  behind it, is ranked after every safe one that is not.
+- **One Darknut, shadowed**: the goal is the spot 20 pixels off the chosen Darknut's line on Link's side and 8 ahead
+  of it (`OFF`, `AHEAD`: the take's landed swings are 15-24 off and 5-13 ahead); when its next grid point is closed
+  ahead (a wall), the spot is on the line it will walk after turning toward Link's side ("I know he will stop and
+  turn [...] sword towards the wall south of where I think he'll be").
+- **Strike its side**: a SWORD (BEAMS at full hearts, the beam's flight too) is a candidate when the game's sword box
+  (asm:Collision_CheckStabVsMonster from asm:Sword_LinkToWeaponOffsetsX/Y: the point against the monster's middle,
+  under $10 along, $0C across; held 1 pixel inside, two hitting frames running) holds the Darknut on the swing's
+  hitting frames 4-11, it does not face the blade (asm:Damage_HandleWeaponHit@CheckDarknut), its flash has been over
+  two frames, and it reaches no grid point first; and it is safe whether it lands (it flashes 32 frames, shoved only
+  along its axis or from a grid point, asm:Shove_Update) or misses (nothing touches him before the swing ends).
+- **Then the way it was going**: while the struck Darknut flashes within 32 pixels, the goal is 24 pixels on along
+  its old travel; for 6 decisions after it turns at Link, the same along the way it had walked.
+- **Bombs for two or more, above the reserve** (the Garden's 0, 3:0x59's 5: decisions 2026-11-24; the base's
+  routes.yaml still says 4 there, the fighter keeps the owner's 5): a BOMB way is a candidate when two Darknuts are
+  each caught with a chance of 0.6 or more and the chances sum to 2: the blast's box ($18 both ways from the bomb's
+  middle, 49-72 frames after it is laid) on a predicted way not facing against the bomb's direction (the shield),
+  out of its flash; the ways branch at three grid points, with a guessed 0.25 that the hidden turn timer runs out.
+  With bombs to spend and two or more Darknuts alive the goal is the hotspot (128, 128) (asm:Mode5Play_UpdateWorld:
+  the chase target and its mirror meet there). For six decisions after a bomb, a move on along the bomb's way is
+  ranked last ("I then stop moving").
+- **The clock** (a drop): the Darknuts stand and Link is untouchable; the goal is the nearest place from which a blade
+  not facing a shield holds one.
+- **Out**: the room clear, 3:0x59 by the S door; the Garden's block pushed S from above it, then the stairs
+  (asm:Warp_CheckUnderLink takes him on a frame that starts on their grid point: a step across his axis aligns him).
+
+**The owner's first six swings** (`tests/test_r40_darknut_fighter.py`, the take read frame by frame): his swings 1-4
+strike Darknut 5 walking E from 15, 24, 22, 16 pixels S of its line and 13, 10, 8, 5 ahead; the fighter's test accepts
+1-3 and would make the same strike (SWORD N at that Darknut); swing 4 lands on the frame the flash of swing 3 ends and
+one frame before the Darknut's grid point, which the fighter's margins refuse; swing 5 (anticipating the wall turn) is
+21 pixels above the E blade's box and misses; swing 6 is 1.6 frames from the grid point where the Darknut turns W,
+its shield to the blade, and is parried. The doc's "13 swings, 8 land" holds: the eighth kills (its HP is gone, no
+flash).
+
+(Numbers below.)

@@ -196,7 +196,7 @@ class Nut:
                 ) -> list[tuple[str, float]]:
         """The ways it may take at the grid point (x, y), with their chances: toward Link when he is within 8
         pixels of its column or row (129 in 256, asm:Wanderer_MoveAndTurn); else, with chance `timer` (its turn
-        timer run out: not visible, a guess), perpendicular toward him (asm:Wanderer_MoveAndTurn@TurnIfTime); else
+        timer run out: not visible, a guess), perpendicular toward him (asm:Wanderer_Return@TurnIfTime); else
         on; a closed way: a perpendicular open one, either (asm:Walker_CheckTileCollision)."""
         def free(d):
             return floor.open(x + VEC[d][0] * 8, y + VEC[d][1] * 8, link=False)
