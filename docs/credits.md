@@ -242,6 +242,7 @@ All of the glitch knowledge is the owner's; the agents made the agent able to us
 | Nov 22 | **Target: one unbroken run in 10,000** (the record holder: 252 wins in 13,135 tries) | Owner | First unbroken win on Nov 23 (1 of 100 runs from power on, 6 cheated wall bombs) | dec 11-22, git log |
 | Nov 22 | An "aimless walk" score | Owner; agents built score and penalty | Modified: act-mode fixes failed, fine-tunes fixed it | r38 |
 | Nov 23 | Ow-lynel trained on `d3first`'s leg | Agents | Worked: 24% to 99% | dec 11-23 |
+| Nov 24 | The fresh generation's curricula audited against today's start states by the explorer's own reset (a track is tied to its state by name only), the stale ones dropped, the missing re-explored, the folder proven the way a training loads it | The lead (the task, the store's rule, the proof by the training's own checks); Tracks40 (the reset as the reference, the audit, compose and proof script, the re-explore, the declarations) | Built (r40-tracks, for review): 419 of the store's 479 `d3first` tracks stale and 49 stateless, 269 of 294 states re-explored, 25 declared untracked; the folder `trajectories-gen1` loads for all 57 task files | r40 "The generation's curricula" |
 
 ## Emulator, Rust and infrastructure
 

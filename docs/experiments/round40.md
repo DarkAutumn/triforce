@@ -1292,3 +1292,494 @@ check passed. Each failure, its cause and its fix:
   an iteration's metrics (`train.interrupts_held`) and raises it after; a new test signals inside that block. The
   interrupted test waits for the metrics line with no deadline (the suite's timeout bounds a hang) and keeps the
   training's output for its failure message.
+
+## The generation's curricula (Tracks40, branch `r40-tracks`)
+
+anthropic/claude-opus-5-5 (Tracks40), on `r40-gencode` at 95eea9e9. The curricula (explorer tracks) every from-scratch
+training of 2.0.1.0 starts from, audited against today's start states and composed into one folder for the lead to
+install; nothing trained, no start state, route data or reward changed.
+
+**What a training checks.** A track is tied to its seed state by its `trajectory.json` `start_state`, a state *name*,
+and nothing else: `triforce.inputs.check_curriculum` (`track_starts`) refuses a task whose seed state has no track
+of that name, and the native loader (`env::curriculum::load_tracks`) reads the same name to give a curriculum reset
+its seed state's route entry. No hash or byte of the seed file is recorded, so a track explored from an older file
+of the same name passes every check at training start. That check is the proof below; whether a track still belongs
+to its state needs the track's own first state.
+
+**The audit** (`scripts/experiments/r40_tracks.py audit`): every track's `0000.state` (the explorer's episode right
+after the reset, `Explorer::write`) against the point a track explored today from its `start_state` would begin at:
+`Explorer(task).explore(start_state, iterations=0)`, the explorer's own reset from today's file (task: the family's
+`specialists/d3first/<family>.yaml` for a `d3first_` state where there is one, else its own file). Read on both: the
+room, Link's position, the hearts (health, containers, the partial heart), the inventory block `$657`-`$67F` (bombs,
+keys, rupees, the triforce, every item) and the kill counters (`$52A`, `$50`, `$627`); the RNG and the monsters are
+not compared (every reset draws them). **Belongs**: all equal; **stale**: anything differs (recorded from another
+file of that name, or at other hearts on purpose: a rule's tracks harvested at the family's hearts); **no-state**: no
+file of its name (training loads such a track all the same). The reset and not the bare file is the reference: read
+from the file alone (`Game.load` to its first playable frame, as `r40_states.py read` does), the rooms with a bomb
+wall's grant hold one bomb fewer than at the reset (the session tops the grant up on entering, `CheatLedger::settle`:
+3:0x5b from S, 4:0x11, 5:0x65, 5:0x66, 7:0x19, 0x1a, 0x69) and a cave's or a whirlwind landing's Link stands
+elsewhere (the reset runs on into the cave). Read that way, 98 of the store's tracks equal to their reset in
+everything differ from their file (85 in Link's position, 13 bare ones by that bomb), and so did States40's
+`darknut/d3first_3_5bs_*` and the explorer's own new tracks of those states; that first pass was thrown away.
+A task is every family on `d3first`'s steps by the task the lab resolves for it (`lab.collect.task_yaml`:
+`specialists/d3first/<family>.yaml` where there is one, else the family's own file, 34 tasks), its seed states as
+`resolve_start_states` gives them.
+
+**The store's curricula against today's states** (snapshot `261122-52fb5b17`, 1,581 tracks; the record is queue job
+#1128, `target/r40-tracks/audit.json`). **1,057 belong, 463 are stale, 61 have no state.** Of the 479 tracks of
+`d3first` states, 11 belong (ow-leever 3, ow-moblin 3, ow-octorok 1, ow-tektite 4), 419 are stale and 49 name a state
+that is gone (ow-moblin 25, ow-tektite 12, ow-zora 6, ow-leever 3, ow-octorok 3). **The staleness is not Dungeon 3's
+alone**: 191 stale tracks hold other hearts, items or a triforce count (Dungeon 7's states at 11 hearts where they
+hold 9; Dungeon 2's, Dungeon 5's and the legs' one to five hearts off either way; [INFERENCE] recorded on an older
+order of the route, before 2.0.0.5's and 2.0.0.7's rebuilds), 191 differ in their keys alone (States40's patch of
+steps 9-100 and, [INFERENCE] for the later steps, round 39's), 24 in keys, bombs and kill counters together, 13 in the
+kill counters alone (States40's zeroing before 3:0x5b's first pass). States40's report named three.
+
+| family | `d3first` tracks | belongs | stale | no state |
+|---|---:|---:|---:|---:|
+| boss-aquamentus | 6 | 0 | 6 | 0 |
+| boss-digdogger | 12 | 0 | 12 | 0 |
+| boss-gleeok | 3 | 0 | 3 | 0 |
+| boss-manhandla | 3 | 0 | 3 | 0 |
+| darknut | 21 | 0 | 21 | 0 |
+| gibdo | 21 | 0 | 21 | 0 |
+| goriya | 51 | 0 | 51 | 0 |
+| like-like | 6 | 0 | 6 | 0 |
+| ow-ghini | 3 | 0 | 3 | 0 |
+| ow-leever | 48 | 3 | 42 | 3 |
+| ow-lynel | 6 | 0 | 6 | 0 |
+| ow-moblin | 73 | 3 | 45 | 25 |
+| ow-octorok | 40 | 1 | 36 | 3 |
+| ow-tektite | 30 | 4 | 14 | 12 |
+| ow-zora | 66 | 0 | 60 | 6 |
+| stalfos-keese-gel | 39 | 0 | 39 | 0 |
+| vire | 24 | 0 | 24 | 0 |
+| wallmaster | 6 | 0 | 6 | 0 |
+| zol | 21 | 0 | 21 | 0 |
+| **all** | 479 | 11 | 419 | 49 |
+
+Per task, its seed states (a state *belongs* when one of its tracks does, is *stale* when it has tracks and none
+belongs, *none* without a track; "untracked" by this branch's task files, the declarations below included; the
+families' own-file tasks draw both routes' states, their bare ones unchanged):
+
+| family | task | curriculum | seed states | belongs | stale | none, untracked | none, nothing |
+|---|---|---|---:|---:|---:|---:|---:|
+| ow-start | `specialists/d3first/ow-start.yaml` | on | 25 | 1 | 0 | 24 | 0 |
+| ow-tektite | `specialists/d3first/ow-tektite.yaml` | off | 21 | 4 | 14 | 0 | 3 |
+| ow-leever | `specialists/d3first/ow-leever.yaml` | on | 36 | 3 | 33 | 0 | 0 |
+| zol | `specialists/d3first/zol.yaml` | on | 30 | 0 | 21 | 9 | 0 |
+| darknut | `specialists/d3first/darknut.yaml` | on | 54 | 0 | 21 | 33 | 0 |
+| stalfos-keese-gel | `specialists/d3first/stalfos-keese-gel.yaml` | off | 75 | 0 | 39 | 0 | 36 |
+| equipment-room | `equipment-room` | on | 108 | 54 | 0 | 54 | 0 |
+| trap-room | `trap-room` | on | 45 | 24 | 0 | 21 | 0 |
+| boss-manhandla | `specialists/d3first/boss-manhandla.yaml` | on | 6 | 0 | 3 | 3 | 0 |
+| ow-moblin | `specialists/d3first/ow-moblin.yaml` | on | 54 | 3 | 45 | 6 | 0 |
+| ow-octorok | `specialists/d3first/ow-octorok.yaml` | off | 33 | 1 | 29 | 0 | 3 |
+| ow-zora | `specialists/d3first/ow-zora.yaml` | on | 81 | 0 | 42 | 39 | 0 |
+| ow-peahat | `ow-peahat` | on | 42 | 21 | 0 | 21 | 0 |
+| vire | `specialists/d3first/vire.yaml` | on | 36 | 0 | 24 | 12 | 0 |
+| like-like | `specialists/d3first/like-like.yaml` | on | 24 | 0 | 6 | 18 | 0 |
+| boss-gleeok | `specialists/d3first/boss-gleeok.yaml` | on | 3 | 0 | 3 | 0 | 0 |
+| goriya | `specialists/d3first/goriya.yaml` | on | 54 | 0 | 51 | 3 | 0 |
+| wallmaster | `specialists/d3first/wallmaster.yaml` | on | 6 | 0 | 6 | 0 | 0 |
+| boss-aquamentus | `specialists/d3first/boss-aquamentus.yaml` | on | 6 | 0 | 6 | 0 | 0 |
+| d2-rope | `d2-rope` | on | 36 | 18 | 0 | 18 | 0 |
+| moldorm | `specialists/d3first/moldorm.yaml` | on | 3 | 0 | 0 | 3 | 0 |
+| boss-dodongo | `boss-dodongo` | on | 6 | 3 | 0 | 3 | 0 |
+| gibdo | `specialists/d3first/gibdo.yaml` | on | 24 | 0 | 21 | 3 | 0 |
+| dodongo-crossing | `dodongo-crossing` | on | 12 | 6 | 0 | 6 | 0 |
+| pols-voice | `specialists/d3first/pols-voice.yaml` | on | 9 | 0 | 0 | 9 | 0 |
+| boss-digdogger | `specialists/d3first/boss-digdogger.yaml` | off | 9 | 0 | 9 | 0 | 0 |
+| ow-lynel | `specialists/d3first/ow-lynel.yaml` | on | 6 | 0 | 6 | 0 | 0 |
+| ow-ghini | `ow-ghini` | on | 36 | 21 | 3 | 12 | 0 |
+| wizzrobe | `wizzrobe` | on | 114 | 57 | 0 | 57 | 0 |
+| boss-gohma | `boss-gohma` | on | 6 | 3 | 0 | 3 | 0 |
+| ow-boulder | `ow-boulder` | on | 15 | 3 | 0 | 12 | 0 |
+| lanmola | `lanmola` | on | 6 | 3 | 0 | 3 | 0 |
+| patra | `patra` | on | 42 | 21 | 0 | 21 | 0 |
+| ganon | `ganon` | on | 12 | 6 | 0 | 6 | 0 |
+| **all** | | | 1,075 | 252 | 382 | 399 | 42 |
+
+**States40's tracks** (same check): all eleven named belong (`zol/d3first_3_6bs_0..2`, `ow-peahat/d3first_0_1fw_0..2`,
+`darknut/d3first_3_5bs_0..2`, `darknut/d3first_3_59n_0`, `moldorm/d3first_2_3es_0`); `ow-tektite/d3first_0_76e_0..2`
+belong too and are left out (the lead's ruling).
+
+**Re-explored** (one `python -m triforce.explore --specialist <task> --states <list> --out target/explore` a family,
+3000 iterations, patience 300, the generation's task of each state; the lists were the audit's). Every stale or
+stateless `d3first` track's state that a task with the curriculum on draws and does not declare, and that States40
+did not replace: 291 states, plus `darknut/d3first_3_5bs_*` again. Job **#1034** (the 19 whose only tracks were
+scripted rules, one call a family at once; 6 minutes): 4 solved (`darknut 3_5bs_0..2`, the same as States40's; `zol
+3_4bs_2`). Job **#1035** (275, one family after another on 10 threads; 28 minutes): 265 solved. **25 not solved in
+3000 iterations** (none was run again): zol `3_4bs_0`, `_1` (3:0x4b; rule zol-4b's tracks before), vire `4_12n_0..2`
+and `4_31w_0..2` (rules vire-12, vire-31), like-like `4_32w_0..2` (rule like-like-32), boss-gleeok `4_13w_0..2` (rule
+gleeok-13),
+boss-digdogger `7_1cw_0..2` (rule digdogger-1c; its d3first task has no curriculum, its own task draws them), darknut
+`3_5bw_0`, `_2` (0x5b's last pass with the bag of 4; chain 1 solved), goriya `1_23s_1`, `_2`, `2_1es_1`, `7_1bw_0..2`.
+With them darknut `3_59n_1`, `_2` (4 bombs, none to spend: States40's 3000 iterations, not retried). **Proposed
+here** (this branch): each is declared in `curriculum.untracked` of both tasks that draw it, the family's `d3first`
+part and its own file (darknut, zol, vire, like-like, boss-gleeok, goriya; boss-digdogger's own file only), and
+`tests/test_inputs.py::test_the_d3first_tasks_declare_the_rooms_left_without_a_track` checks every one
+(`LEFT_WITHOUT_A_TRACK`: each declared, never a chain of the same entry that has a track). Seven of these rooms have
+a scripted rule in `r32p_rules.py` (`zol-4b`, `vire-12`, `vire-31`, `like-like-32`, `gleeok-13` and `digdogger-1c`,
+whose `--tracks DIR` wrote the stale rule tracks, and `goriya-1b` for 7:0x1b); its step numbers are 2.0.0.0's, so it
+would need today's before writing tracks from today's states. Not done here.
+
+**The folder: `/home/leculver/git/triforce-r40-tracks/target/trajectories-gen1`**, 1,390 tracks, **114,025 files,
+1,288,386,259 bytes** (1.29 GB; `r40_tracks.py compose`, job #1128): the store's snapshot as hard links (its files
+only ever linked, every track folder created new; no symbolic link inside) minus its 468 `d3first` tracks that are
+stale or stateless, plus States40's eleven and 266 of the re-explored (copies; the explorer's `3_5bs_*` were the
+second of two equal ones). The bare (`d2first`) tracks are the store's, all 1,102 of them. Audited again (job #1128,
+`audit-gen1.json`): every `d3first` track belongs. Per task the seed states are then: 529 belong, none stale, 419
+declared untracked, 127 without a track in the four tasks whose curriculum is off (ow-tektite, stalfos-keese-gel,
+ow-octorok, boss-digdogger: their stale tracks go with no replacement). For the lead:
+
+    triforce-lead data install trajectories 261124-gen1 --from /home/leculver/git/triforce-r40-tracks/target/trajectories-gen1
+
+**The proof** (`r40_tracks.py proof`, job #1128, `proof.json`). The data rule pointed at the folder by a symbolic link
+in this worktree, `trajectories -> target/trajectories-gen1` (gitignored): `paths.data_source('trajectories')` takes a
+checkout's own `trajectories` over the store's current snapshot, and every row printed "this checkout's folder
+/home/leculver/git/triforce-r40-tracks/trajectories (the layout before the store)". For each task, what `triforce
+train` does before its job waits (`train.main`: `data_sources`, `check_task` with the curriculum's folder,
+`recipe_manifest`, `recipe_flags` with the flags kept), then the pool a training builds before its first episode
+(`TrainTask` with `curriculum_spec`, `EnvPool` of one env: `Curriculum::new` loads every track) and
+`curriculum_tracks`, what `run.json` would record; then every other file under `specialists/` through `check_task` as
+the shipped-task test does. **57 task files, none refused, no red flag**; the notes are `data-differs` (a data set's
+count more than 10% off the promoted run's: more harvested states and more tracks than the old runs drew).
+
+| family | task | refused | red flags | `curriculum_tracks` | loaded by `Curriculum::new` | manifest files | notes |
+|---|---|---|---|---:|---:|---:|---|
+| ow-start | `specialists/d3first/ow-start.yaml` | no | none | 40 | 40 | 893 | - |
+| ow-tektite | `specialists/d3first/ow-tektite.yaml` | no | none | off | - | - | harvested 3188 (2228) |
+| ow-leever | `specialists/d3first/ow-leever.yaml` | no | none | 66 | 66 | 3,076 | harvested 2776 (1804), curriculum 66 (18) |
+| zol | `specialists/d3first/zol.yaml` | no | none | 46 | 46 | 2,834 | - |
+| darknut | `specialists/d3first/darknut.yaml` | no | none | 93 | 93 | 10,151 | - |
+| stalfos-keese-gel | `specialists/d3first/stalfos-keese-gel.yaml` | no | none | off | - | - | - |
+| equipment-room | `equipment-room` | no | none | 54 | 54 | 4,112 | curriculum 54 (24) |
+| trap-room | `trap-room` | no | none | 24 | 24 | 1,121 | - |
+| boss-manhandla | `specialists/d3first/boss-manhandla.yaml` | no | none | 24 | 24 | 2,192 | - |
+| ow-moblin | `specialists/d3first/ow-moblin.yaml` | no | none | 146 | 146 | 7,722 | harvested 1814 (1140), curriculum 146 (70) |
+| ow-octorok | `specialists/d3first/ow-octorok.yaml` | no | none | off | - | - | harvested 1170 (678) |
+| ow-zora | `specialists/d3first/ow-zora.yaml` | no | none | 171 | 171 | 8,751 | harvested 4345 (2892), curriculum 171 (36) |
+| ow-peahat | `ow-peahat` | no | none | 24 | 24 | 896 | curriculum 24 (18) |
+| vire | `specialists/d3first/vire.yaml` | no | none | 54 | 54 | 4,296 | - |
+| like-like | `specialists/d3first/like-like.yaml` | no | none | 51 | 51 | 5,741 | - |
+| boss-gleeok | `specialists/d3first/boss-gleeok.yaml` | no | none | 6 | 6 | 1,100 | - |
+| goriya | `specialists/d3first/goriya.yaml` | no | none | 135 | 135 | 17,344 | - |
+| wallmaster | `specialists/d3first/wallmaster.yaml` | no | none | 12 | 12 | 2,023 | - |
+| boss-aquamentus | `specialists/d3first/boss-aquamentus.yaml` | no | none | 12 | 12 | 1,934 | harvested 526 (365) |
+| d2-rope | `d2-rope` | no | none | 18 | 18 | 1,262 | - |
+| moldorm | `specialists/d3first/moldorm.yaml` | no | none | 4 | 4 | 828 | curriculum 4 (9) |
+| boss-dodongo | `boss-dodongo` | no | none | 27 | 27 | 2,017 | - |
+| gibdo | `specialists/d3first/gibdo.yaml` | no | none | 45 | 45 | 2,858 | - |
+| dodongo-crossing | `dodongo-crossing` | no | none | 6 | 6 | 302 | - |
+| pols-voice | `specialists/d3first/pols-voice.yaml` | no | none | 13 | 13 | 1,839 | curriculum 13 (10) |
+| boss-digdogger | `specialists/d3first/boss-digdogger.yaml` | no | none | off | - | - | harvested 1710 (770) |
+| ow-lynel | `specialists/d3first/ow-lynel.yaml` | no | none | 54 | 54 | 2,840 | - |
+| ow-ghini | `ow-ghini` | no | none | 24 | 24 | 731 | curriculum 24 (21) |
+| wizzrobe | `wizzrobe` | no | none | 110 | 110 | 17,410 | harvested 4978 (2601) |
+| boss-gohma | `boss-gohma` | no | none | 3 | 3 | 318 | - |
+| ow-boulder | `ow-boulder` | no | none | 6 | 6 | 510 | - |
+| lanmola | `lanmola` | no | none | 21 | 21 | 406 | curriculum 21 (9) |
+| patra | `patra` | no | none | 24 | 24 | 3,614 | harvested 2014 (724) |
+| ganon | `ganon` | no | none | 12 | 12 | 947 | - |
+
+(In brackets the promoted run's count. The 21 families' own files that `d2first` resolves load the same folders,
+none refused, no red flag; the two `specialists/experiments/r40-states/darknut-59n-b*.yaml` pass `check_task`.)
+
+**`d2first`**: no bare start state changed since Nov 21 (`git log` over `triforce/states/[0-9]*.state`), and every bare
+track of the store is in the folder unchanged, so `d2first`'s tasks see what they saw: per task the same counts before
+and after (1,033 bare seed states: 859 belong, 20 stale, 10 untracked, 144 in tasks with the curriculum off). The 56
+bare tracks that do not belong were so before round 40 and are left as they are, for the lead: rule tracks harvested at
+the family's hearts (lanmola `9_55e_*~rule*` 9, like-like `9_56s_*~rule*` 8, darknut `5_37s_*~x70s*` 5 beside
+belonging ones), Dungeon 8 rule tracks a key short (darknut `8_3es_1~rule1002`, `8_3es_2~rule1000`, `8_5es_2~rule1001`,
+pols-voice `8_4cc_2~rule1000`), ow-octorok `0_3cr_*`, `0_4cn_v2_*` and stalfos-keese-gel `4_21s_*`, `6_0cs_*`,
+`8_2cs_*`, `8_7es_*` (both tasks' curricula off), and 12 tracks of states that are gone (lanmola `9_55s_*~rule*` 9,
+wizzrobe `9_65e_*` 3).
+
+**Not done, not tested.** No training read the folder: the proof is the checks and the curriculum's loading at a
+training's start, not an episode. The 25 unsolved states got one 3000-iteration search each (no other seed, no larger
+budget, no rule track). Whether a re-explored track teaches what the old one did (lengths, endings) was not compared.
+`ow-tektite`'s, `stalfos-keese-gel`'s, `ow-octorok`'s and `boss-digdogger`'s `d3first` tasks lost their stale tracks
+with nothing in their place because their curricula are off; boss-digdogger's own file draws the new ones.
+
+**The full audit table** of the store's snapshot, every room entry of the `d3first` states the 34 tasks draw (names
+without `d3first_`; a cell: the verdict, the tracks, `=` the one named as its state, else its suffix, and a stale
+track's first differences, the track's value -> today's reset's).
+
+| family | entry | chain 0 | chain 1 | chain 2 | without a track the task says |
+|---|---|---|---|---|---|
+| ow-start | 0_0fc | none | none | none | untracked `0_0fc_[0-9]` |
+| ow-start | 0_0fcave | none | none | none | untracked `0_0fcave_[0-9]` |
+| ow-start | 0_0fs | none | none | none | untracked `0_0fs_[0-9]` |
+| ow-start | 0_2fc | none | none | none | untracked `0_2fc_[0-9]` |
+| ow-start | 0_2fcave | none | none | none | untracked `0_2fcave_[0-9]` |
+| ow-start | 0_2fs | none | none | none | untracked `0_2fs_[0-9]` |
+| ow-start | 0_77c | none | none | none | untracked `0_77c_[0-9]` |
+| ow-start | 0_77cave | none | none | none | untracked `0_77cave_[0-9]` |
+| ow-tektite | 0_0ce | none | none | none | nothing (curriculum off) |
+| ow-tektite | 0_2cc | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | nothing (curriculum off) |
+| ow-tektite | 0_2ccave | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | nothing (curriculum off) |
+| ow-tektite | 0_2cw | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | nothing (curriculum off) |
+| ow-tektite | 0_74c | stale `=` (keys 2->1) | stale `=` (keys 2->1) | stale `=` (keys 2->1) | nothing (curriculum off) |
+| ow-tektite | 0_74e | stale `=` (cycle $52A 3->0, help $50 2->0, ...) | belongs `=` | stale `=` (cycle $52A 1->0, help $50 1->0, ...) | nothing (curriculum off) |
+| ow-tektite | 0_76e | belongs `=` | belongs `=` | belongs `=` | - |
+| ow-leever | 0_0bc | stale `=` `~rule1000` `~rule1001` `~rule1002` (bombs 8->2, rupees 172->147, ...) | stale `=` `~rule1000` `~rule1001` `~rule1002` (bombs 8->0, $668 1->5, ...) | stale `=` `~rule1000` `~rule1001` `~rule1002` ($668 1->5, rupees 183->148, ...) | **nothing: refused** |
+| ow-leever | 0_0be | stale `=` (link (240, 165)->(240, 109), health 7->8, ...) | stale `=` (health 7->8, bombs 4->8, ...) | stale `=` (health 7->8, bombs 0->4, ...) | **nothing: refused** |
+| ow-leever | 0_29w | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | **nothing: refused** |
+| ow-leever | 0_2aw | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | **nothing: refused** |
+| ow-leever | 0_2bw | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | **nothing: refused** |
+| ow-leever | 0_34c | stale `=` (health 11->9, $659 1->0, ...) | stale `=` (health 11->9, bombs 4->8, ...) | stale `=` (health 11->9, bombs 0->6, ...) | **nothing: refused** |
+| ow-leever | 0_34cave | stale `=` (health 11->9, $659 1->0, ...) | stale `=` (health 11->9, bombs 4->8, ...) | stale `=` (health 11->9, bombs 0->6, ...) | **nothing: refused** |
+| ow-leever | 0_34r | stale `=` (rupees 172->136, keys 5->4, ...) | stale `=` (rupees 180->156, keys 5->4, ...) | stale `=` (rupees 183->167, keys 5->4, ...) | **nothing: refused** |
+| ow-leever | 0_48n | stale `=` (keys 3->2) | stale `=` (keys 3->2) | belongs `=` | **nothing: refused** |
+| ow-leever | 0_48w | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | **nothing: refused** |
+| ow-leever | 0_48w_v2 | stale `=` (keys 3->2) | stale `=` (keys 3->2) | belongs `=` | **nothing: refused** |
+| ow-leever | 0_75e | stale `=` (cycle $52A 2->0, help $50 1->0, ...) | belongs `=` | stale `=` (cycle $52A 1->0, help $50 1->0, ...) | **nothing: refused** |
+| zol | 3_3ds | stale `=` (keys 2->1) | stale `=` (keys 2->1) | stale `=` (keys 2->1) | **nothing: refused** |
+| zol | 3_49e | stale `=` (bombs 5->8, keys 2->1) | stale `=` (bombs 5->4, keys 2->1) | stale `=` (bombs 5->4, keys 2->1) | **nothing: refused** |
+| zol | 3_4bs | stale `~rule1000` (bombs 1->4, keys 2->1) | stale `~rule1000` (bombs 1->0, keys 2->1) | stale `~rule1000` (bombs 1->0, keys 2->1) | **nothing: refused**; untracked `3_4bs_0`; untracked `3_4bs_1` |
+| zol | 3_6bs | stale `~rule1000` (cycle $52A 4->0, help $50 3->0, ...) | stale `~rule1000` (cycle $52A 1->0) | stale `~rule1000` (cycle $52A 2->0, help $50 1->0, ...) | **nothing: refused** |
+| zol | 3_7be | stale `=` (cycle $52A 4->0, help $50 3->0, ...) | stale `=` (cycle $52A 1->0) | stale `=` (cycle $52A 2->0, help $50 1->0, ...) | **nothing: refused** |
+| zol | 3_7cs | stale `=` (cycle $52A 4->0, help $50 3->0, ...) | stale `=` (cycle $52A 1->0) | stale `=` (cycle $52A 2->0, help $50 1->0, ...) | **nothing: refused** |
+| zol | 4_40s | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | **nothing: refused** |
+| zol | 5_57w | none | none | none | untracked `5_57w_[0-9]` |
+| zol | 6_68s | none | none | none | untracked `6_68s_[0-9]` |
+| zol | 9_63c | none | none | none | untracked `9_63c_[0-9]` |
+| darknut | 3_59n | stale `~rule1001` (bombs 5->8, keys 3->2) | stale `~rule1000` (bombs 5->4, keys 3->2) | stale `~rule1000` (bombs 5->4, keys 3->2) | **nothing: refused**; untracked `3_59n_1`; untracked `3_59n_2` |
+| darknut | 3_59s | stale `=` (bombs 0->4, rupees 0->1, ...) | stale `=` (bombs 7->4, keys 3->2, ...) | stale `=` (bombs 0->4, keys 3->2, ...) | **nothing: refused** |
+| darknut | 3_5bs | stale `=` (keys 2->1, cycle $52A 4->0, ...) | stale `=` (keys 2->1, cycle $52A 1->0, ...) | stale `=` (keys 2->1, cycle $52A 2->0, ...) | **nothing: refused** |
+| darknut | 3_5bw | stale `=` (bombs 1->4, rupees 0->1, ...) | stale `=` (bombs 7->4, $667 4->0, ...) | stale `=` (bombs 1->4, keys 2->1, ...) | **nothing: refused**; untracked `3_5bw_0`; untracked `3_5bw_2` |
+| darknut | 3_5cw | stale `=` (bombs 3->7, rupees 0->1, ...) | stale `=` ($667 4->0, rupees 0->1, ...) | stale `=` (bombs 3->7, keys 2->1, ...) | **nothing: refused** |
+| darknut | 3_69c | stale `=` (bombs 0->4, rupees 0->1, ...) | stale `=` (bombs 7->4, keys 3->2, ...) | stale `=` (bombs 0->4, keys 3->2, ...) | **nothing: refused** |
+| darknut | 3_69n | stale `=` (bombs 0->4, rupees 0->1, ...) | stale `=` (bombs 7->4, keys 3->2) | stale `=` (bombs 0->4, keys 3->2, ...) | **nothing: refused** |
+| darknut | 5_05c | none | none | none | untracked `5_05c_[0-9]` |
+| darknut | 5_05e | none | none | none | untracked `5_05e_[0-9]` |
+| darknut | 5_06c | none | none | none | untracked `5_06c_[0-9]` |
+| darknut | 5_06w | none | none | none | untracked `5_06w_[0-9]` |
+| darknut | 5_37s | none | none | none | untracked `5_37s_[0-9]` |
+| darknut | 5_64c | none | none | none | untracked `5_64c_[0-9]` |
+| darknut | 5_64e | none | none | none | untracked `5_64e_[0-9]` |
+| darknut | 8_3es | none | none | none | untracked `8_3es_[0-9]` |
+| darknut | 8_3fw | none | none | none | untracked `8_3fw_[0-9]` |
+| darknut | 8_4es | none | none | none | untracked `8_4es_[0-9]` |
+| darknut | 8_5es | none | none | none | untracked `8_5es_[0-9]` |
+| stalfos-keese-gel | 1_33n | stale `=` (keys 4->3) | stale `=` (keys 4->3) | stale `=` (keys 4->3) | nothing (curriculum off) |
+| stalfos-keese-gel | 1_33s | stale `=` (keys 4->3) | stale `=` (keys 4->3) | stale `=` (keys 4->3) | nothing (curriculum off) |
+| stalfos-keese-gel | 1_36w | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | nothing (curriculum off) |
+| stalfos-keese-gel | 1_43n | stale `=` (keys 4->3) | stale `=` (keys 4->3) | stale `=` (keys 4->3) | nothing (curriculum off) |
+| stalfos-keese-gel | 1_43s | stale `=` (keys 4->3) | stale `=` (keys 4->3) | stale `=` (keys 4->3) | nothing (curriculum off) |
+| stalfos-keese-gel | 1_53s | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | nothing (curriculum off) |
+| stalfos-keese-gel | 1_63s | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | nothing (curriculum off) |
+| stalfos-keese-gel | 1_73s | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | nothing (curriculum off) |
+| stalfos-keese-gel | 1_73s_v2 | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | nothing (curriculum off) |
+| stalfos-keese-gel | 3_4ae | stale `=` (bombs 1->4, keys 2->1) | stale `=` (bombs 1->0, keys 2->1) | stale `=` (bombs 1->0, keys 2->1) | nothing (curriculum off) |
+| stalfos-keese-gel | 4_01s | stale `=` (keys 2->1) | stale `=` (keys 2->1) | stale `=` (keys 2->1) | nothing (curriculum off) |
+| stalfos-keese-gel | 4_21s | stale `=` (keys 2->1) | stale `=` (keys 2->1) | stale `=` (keys 2->1) | nothing (curriculum off) |
+| stalfos-keese-gel | 4_21w | none | none | none | nothing (curriculum off) |
+| stalfos-keese-gel | 4_51s | stale `=` (keys 2->1) | stale `=` (keys 2->1) | stale `=` (keys 2->1) | nothing (curriculum off) |
+| stalfos-keese-gel | 6_0cs | none | none | none | nothing (curriculum off) |
+| stalfos-keese-gel | 6_58s | none | none | none | nothing (curriculum off) |
+| stalfos-keese-gel | 6_79s | none | none | none | nothing (curriculum off) |
+| stalfos-keese-gel | 8_2cs | none | none | none | nothing (curriculum off) |
+| stalfos-keese-gel | 8_7es | none | none | none | nothing (curriculum off) |
+| stalfos-keese-gel | 9_06s | none | none | none | nothing (curriculum off) |
+| stalfos-keese-gel | 9_26e | none | none | none | nothing (curriculum off) |
+| stalfos-keese-gel | 9_26n | none | none | none | nothing (curriculum off) |
+| stalfos-keese-gel | 9_62e | none | none | none | nothing (curriculum off) |
+| stalfos-keese-gel | 9_66s | none | none | none | nothing (curriculum off) |
+| stalfos-keese-gel | 9_76s | none | none | none | nothing (curriculum off) |
+| equipment-room | 1_7fcave | none | none | none | untracked `1_7fcave_[0-9]` |
+| equipment-room | 3_0fcave | none | none | none | untracked `3_0fcave_[0-9]` |
+| equipment-room | 4_60cave | none | none | none | untracked `4_60cave_[0-9]` |
+| equipment-room | 5_04cave | none | none | none | untracked `5_04cave_[0-9]` |
+| equipment-room | 5_07cave | none | none | none | untracked `5_07cave_[0-9]` |
+| equipment-room | 5_07cave_v2 | none | none | none | untracked `5_07cave_v2_[0-9]` |
+| equipment-room | 6_08cave | none | none | none | untracked `6_08cave_[0-9]` |
+| equipment-room | 7_4acave | none | none | none | untracked `7_4acave_[0-9]` |
+| equipment-room | 7_7bcave | none | none | none | untracked `7_7bcave_[0-9]` |
+| equipment-room | 8_2fcave | none | none | none | untracked `8_2fcave_[0-9]` |
+| equipment-room | 9_00cave | none | none | none | untracked `9_00cave_[0-9]` |
+| equipment-room | 9_4fcave | none | none | none | untracked `9_4fcave_[0-9]` |
+| equipment-room | 9_60cave | none | none | none | untracked `9_60cave_[0-9]` |
+| equipment-room | 9_67cave | none | none | none | untracked `9_67cave_[0-9]` |
+| equipment-room | 9_70cave | none | none | none | untracked `9_70cave_[0-9]` |
+| equipment-room | 9_75cave | none | none | none | untracked `9_75cave_[0-9]` |
+| equipment-room | 9_75cave_v2 | none | none | none | untracked `9_75cave_v2_[0-9]` |
+| equipment-room | 9_77cave | none | none | none | untracked `9_77cave_[0-9]` |
+| trap-room | 1_22c | none | none | none | untracked `1_22c_[0-9]` |
+| trap-room | 1_22e | none | none | none | untracked `1_22e_[0-9]` |
+| trap-room | 3_4cs | none | none | none | untracked `3_4cs_[0-9]` |
+| trap-room | 3_5aw | none | none | none | untracked `3_5aw_[0-9]` |
+| trap-room | 4_02w | none | none | none | untracked `4_02w_[0-9]` |
+| trap-room | 4_11s | none | none | none | untracked `4_11s_[0-9]` |
+| trap-room | 6_48s | none | none | none | untracked `6_48s_[0-9]` |
+| boss-manhandla | 3_4dw | stale `=` (bombs 2->6, rupees 0->1, ...) | stale `=` ($667 4->0, $668 0->4, ...) | stale `=` (bombs 2->6, $668 0->4, ...) | **nothing: refused** |
+| boss-manhandla | 8_6es | none | none | none | untracked `8_6es_[0-9]` |
+| ow-moblin | 0_3dc | stale `=` (health 10->7, bombs 6->3, ...) | stale `=` (health 10->7, bombs 2->5, ...) | stale `=` (health 10->7, $65B 1->0, ...) | **nothing: refused** |
+| ow-moblin | 0_3dcave | stale `=` (health 10->7, bombs 6->3, ...) | stale `=` (health 10->7, bombs 2->5, ...) | stale `=` (health 10->7, $65B 1->0, ...) | **nothing: refused** |
+| ow-moblin | 0_3dn | stale `=` (bombs 2->3, rupees 32->2, ...) | stale `=` (link (112, 61)->(120, 61), bombs 4->5, ...) | stale `=` (rupees 44->14, keys 3->2, ...) | **nothing: refused** |
+| ow-moblin | 0_3ds | none | none | none | untracked `0_3ds_[0-9]` |
+| ow-moblin | 0_42c | stale `=` (health 12->10, bombs 6->7, ...) | stale `=` (health 12->10, bombs 3->5, ...) | stale `=` (health 12->10, bombs 6->5, ...) | **nothing: refused** |
+| ow-moblin | 0_42s | stale `=` (health 11->9, $65B 1->0, ...) | stale `=` (link (120, 221)->(112, 221), health 11->9, ...) | stale `=` (health 11->9, bombs 0->6, ...) | **nothing: refused** |
+| ow-moblin | 0_4dn | stale `=` (link (48, 61)->(16, 61), health 10->7, ...) | stale `=` (health 10->7, bombs 2->5, ...) | stale `=` (health 10->7, $65B 1->0, ...) | **nothing: refused** |
+| ow-moblin | 0_4dw | stale `=` (link (0, 141)->(0, 133), health 13->8, ...) | stale `=` (link (0, 133)->(0, 141), health 13->8, ...) | stale `=` (link (0, 141)->(0, 133), health 13->8, ...) | **nothing: refused** |
+| ow-moblin | 0_4dw_v2 | none | none | none | untracked `0_4dw_v2_[0-9]` |
+| ow-moblin | 0_51e | stale `=` (link (240, 149)->(240, 133), health 8->10, ...) | stale `=` (link (240, 133)->(240, 157), health 8->10, ...) | stale `=` (health 8->10, bombs 0->5, ...) | **nothing: refused** |
+| ow-moblin | 0_52e | stale `=` (health 11->9, $65B 1->0, ...) | stale `=` (health 11->9, bombs 4->8, ...) | stale `=` (link (240, 85)->(240, 189), health 11->9, ...) | **nothing: refused** |
+| ow-moblin | 0_52n | stale `=` (link (112, 61)->(128, 61), health 12->10, ...) | stale `=` (health 12->10, bombs 3->5, ...) | stale `=` (link (128, 61)->(120, 61), health 12->10, ...) | **nothing: refused** |
+| ow-moblin | 0_53e | stale `=` (link (240, 149)->(240, 117), health 11->9, ...) | stale `=` (link (240, 125)->(240, 117), health 11->9, ...) | stale `=` (link (240, 157)->(240, 117), health 11->9, ...) | **nothing: refused** |
+| ow-moblin | 0_5dn | stale `=` (keys 3->2) | stale `=` (keys 3->2) | belongs `=` | **nothing: refused** |
+| ow-moblin | 0_63s | stale `=` (keys 2->1) | stale `=` (keys 2->1) | stale `=` (keys 2->1) | **nothing: refused** |
+| ow-moblin | 0_6dc | stale `=` (keys 3->2) | stale `=` (keys 3->2) | belongs `=` | **nothing: refused** |
+| ow-moblin | 0_6dn | stale `=` (keys 3->2) | stale `=` (keys 3->2) | belongs `=` | **nothing: refused** |
+| ow-moblin | 0_73e | stale `=` (keys 2->1) | stale `=` (keys 2->1) | stale `=` (keys 2->1) | **nothing: refused** |
+| ow-octorok | 0_37c | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | nothing (curriculum off) |
+| ow-octorok | 0_37c_v2 | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | nothing (curriculum off) |
+| ow-octorok | 0_37e | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | nothing (curriculum off) |
+| ow-octorok | 0_37r | stale `=` (keys 3->2) | stale `=` (keys 3->2) | belongs `=` | nothing (curriculum off) |
+| ow-octorok | 0_3cc | stale `~rule1000` `~rule1001` `~rule1002` (health 11->8, $65B 1->0, ...) | stale `=` `~rule1000` `~rule1001` `~rule1002` (health 11->8, bombs 4->8, ...) | stale `~rule1000` `~rule1001` `~rule1002` (health 11->8, bombs 8->4, ...) | nothing (curriculum off) |
+| ow-octorok | 0_3cr | stale `=` (bombs 8->7, rupees 1->37, ...) | stale `=` (bombs 8->7, $668 65->1, ...) | stale `=` (bombs 8->7, rupees 1->58, ...) | nothing (curriculum off) |
+| ow-octorok | 0_3cs | stale `=` (health 10->7, bombs 6->3, ...) | stale `=` (health 10->7, bombs 2->5, ...) | stale `=` (health 10->7, $65B 1->0, ...) | nothing (curriculum off) |
+| ow-octorok | 0_4ce | stale `=` (health 10->7, bombs 6->3, ...) | stale `=` (link (240, 117)->(240, 149), health 10->7, ...) | stale `=` (health 10->7, $65B 1->0, ...) | nothing (curriculum off) |
+| ow-octorok | 0_4cn | stale `=` (health 13->8, $657 3->1, ...) | stale `=` (health 13->8, $657 3->1, ...) | stale `=` (health 13->8, $657 3->1, ...) | nothing (curriculum off) |
+| ow-octorok | 0_4cn_v2 | none | none | none | nothing (curriculum off) |
+| ow-octorok | 0_64w | stale `=` (keys 2->1) | stale `=` (keys 2->1) | stale `=` (keys 2->1) | nothing (curriculum off) |
+| ow-zora | 0_27e | none | none | none | untracked `0_27e_[0-9]` |
+| ow-zora | 0_28s | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | **nothing: refused** |
+| ow-zora | 0_28s_v2 | none | none | none | untracked `0_28s_v2_[0-9]` |
+| ow-zora | 0_2ds | none | none | none | untracked `0_2ds_[0-9]` |
+| ow-zora | 0_2dw | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (bombs 1->0, keys 3->2) | **nothing: refused** |
+| ow-zora | 0_38s | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | **nothing: refused** |
+| ow-zora | 0_38s_v2 | none | none | none | untracked `0_38s_v2_[0-9]` |
+| ow-zora | 0_38w | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | **nothing: refused** |
+| ow-zora | 0_38w_v2 | none | none | none | untracked `0_38w_v2_[0-9]` |
+| ow-zora | 0_3fn | stale `=` `~rule1000` `~rule1003` `~rule1004` (keys 2->1) | stale `=` `~rule1000` `~rule1002` `~rule1003` (keys 2->1) | stale `=` `~rule1000` `~rule1002` `~rule1003` (keys 2->1) | **nothing: refused** |
+| ow-zora | 0_3fs | none | none | none | untracked `0_3fs_[0-9]` |
+| ow-zora | 0_44c | stale `=` (rupees 32->0, keys 5->4, ...) | stale `=` (rupees 40->16, keys 5->4, ...) | stale `=` (rupees 43->27, keys 5->4, ...) | **nothing: refused** |
+| ow-zora | 0_44cave | none | none | none | untracked `0_44cave_[0-9]` |
+| ow-zora | 0_44n | stale `=` (rupees 112->76, keys 5->4, ...) | stale `=` (rupees 120->96, keys 5->4, ...) | stale `=` (rupees 123->107, keys 5->4, ...) | **nothing: refused** |
+| ow-zora | 0_46s | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | **nothing: refused** |
+| ow-zora | 0_47c | none | none | none | untracked `0_47c_[0-9]` |
+| ow-zora | 0_47cave | none | none | none | untracked `0_47cave_[0-9]` |
+| ow-zora | 0_47e | none | none | none | untracked `0_47e_[0-9]` |
+| ow-zora | 0_47w | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | **nothing: refused** |
+| ow-zora | 0_4fs | none | none | none | untracked `0_4fs_[0-9]` |
+| ow-zora | 0_54n | none | none | none | untracked `0_54n_[0-9]` |
+| ow-zora | 0_55n | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | **nothing: refused** |
+| ow-zora | 0_55n_v2 | stale `=` `~rule1001` `~rule1003` `~rule1006` (rupees 172->136, keys 5->4, ...) | stale `=` `~rule1001` `~rule1006` `~rule1011` (rupees 180->156, keys 5->4, ...) | stale `=` `~rule1001` `~rule1003` `~rule1006` (rupees 183->167, keys 5->4, ...) | **nothing: refused** |
+| ow-zora | 0_55s | stale `=` (keys 2->1) | stale `=` (keys 2->1) | stale `=` (keys 2->1) | **nothing: refused** |
+| ow-zora | 0_56w | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | **nothing: refused** |
+| ow-zora | 0_5fe | none | none | none | untracked `0_5fe_[0-9]` |
+| ow-zora | 0_65w | stale `=` (keys 2->1) | stale `=` (keys 2->1) | stale `=` (keys 2->1) | **nothing: refused** |
+| ow-peahat | 0_1de | none | none | none | untracked `0_1de_[0-9]` |
+| ow-peahat | 0_1ds | none | none | none | untracked `0_1ds_[0-9]` |
+| ow-peahat | 0_1fn | none | none | none | untracked `0_1fn_[0-9]` |
+| ow-peahat | 0_1fw | none | none | none | untracked `0_1fw_[0-9]` |
+| ow-peahat | 0_45c | none | none | none | untracked `0_45c_[0-9]` |
+| ow-peahat | 0_45r | none | none | none | untracked `0_45r_[0-9]` |
+| ow-peahat | 0_45s | none | none | none | untracked `0_45s_[0-9]` |
+| vire | 4_03s | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | **nothing: refused** |
+| vire | 4_12n | stale `~rule1000` (keys 3->2) | stale `=` (keys 3->2) | stale `~rule1000` (keys 3->2) | untracked `4_12n_[0-9]` |
+| vire | 4_20s | none | none | none | untracked `4_20s_[0-9]` |
+| vire | 4_30e | none | none | none | untracked `4_30e_[0-9]` |
+| vire | 4_30s | stale `=` (keys 4->3) | stale `=` (keys 4->3) | stale `=` (keys 4->3) | **nothing: refused** |
+| vire | 4_31e | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | **nothing: refused** |
+| vire | 4_31w | stale `~rule1000` (keys 3->2) | stale `~rule1000` (keys 3->2) | stale `~rule1000` (keys 3->2) | untracked `4_31w_[0-9]` |
+| vire | 4_50e | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | **nothing: refused** |
+| vire | 4_61s | stale `=` (keys 2->1) | stale `=` (keys 2->1) | stale `=` (keys 2->1) | **nothing: refused** |
+| vire | 4_71s | stale `=` (bombs 0->5, rupees 0->1, ...) | stale `=` (bombs 5->1, $668 0->4, ...) | stale `=` (bombs 0->7, $668 0->4, ...) | **nothing: refused** |
+| vire | 6_2dn | none | none | none | untracked `6_2dn_[0-9]` |
+| vire | 6_39n | none | none | none | untracked `6_39n_[0-9]` |
+| like-like | 4_32c | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | **nothing: refused** |
+| like-like | 4_32w | stale `~rule1000` (keys 3->2) | stale `~rule1000` (keys 3->2) | stale `~rule1000` (keys 3->2) | untracked `4_32w_[0-9]` |
+| like-like | 6_1dc | none | none | none | untracked `6_1dc_[0-9]` |
+| like-like | 9_03e | none | none | none | untracked `9_03e_[0-9]` |
+| like-like | 9_14c | none | none | none | untracked `9_14c_[0-9]` |
+| like-like | 9_41s | none | none | none | untracked `9_41s_[0-9]` |
+| like-like | 9_51s | none | none | none | untracked `9_51s_[0-9]` |
+| like-like | 9_56s | none | none | none | untracked `9_56s_[0-9]` |
+| boss-gleeok | 4_13w | stale `~rule1001` (keys 3->2) | stale `~rule1000` (keys 3->2) | stale `~rule1000` (keys 3->2) | untracked `4_13w_[0-9]` |
+| goriya | 1_23s | stale `=` (keys 4->3) | stale `=` (keys 4->3) | stale `=` (keys 4->3) | **nothing: refused**; untracked `1_23s_1`; untracked `1_23s_2` |
+| goriya | 1_23w | stale `=` (keys 4->3) | stale `=` (keys 4->3) | stale `=` (keys 4->3) | **nothing: refused** |
+| goriya | 1_44w | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | **nothing: refused** |
+| goriya | 2_1es | stale `=` (health 10->7, bombs 6->7, ...) | stale `=` (health 10->7, bombs 6->8, ...) | stale `=` (health 10->7, $65B 1->0, ...) | **nothing: refused**; untracked `2_1es_1` |
+| goriya | 2_5es | stale `=` (health 10->7, bombs 6->3, ...) | stale `=` (health 10->7, bombs 2->5, ...) | stale `=` (health 10->7, $65B 1->0, ...) | **nothing: refused** |
+| goriya | 7_18s | stale `=` (health 11->9, $65B 1->0, ...) | stale `=` (health 11->9, bombs 3->7, ...) | stale `=` (health 11->9, bombs 0->5, ...) | **nothing: refused** |
+| goriya | 7_19w | stale `=` (health 11->9, $65B 1->0, ...) | stale `=` (health 11->9, bombs 3->7, ...) | stale `=` (health 11->9, bombs 1->5, ...) | **nothing: refused** |
+| goriya | 7_1ac | stale `=` (health 11->9, rupees 2->33, ...) | stale `=` (health 11->9, bombs 2->6, ...) | stale `=` (health 11->9, bombs 1->4, ...) | **nothing: refused** |
+| goriya | 7_1aw | stale `=` (health 11->9, $65B 1->0, ...) | stale `=` (health 11->9, bombs 2->6, ...) | stale `=` (health 11->9, bombs 1->4, ...) | **nothing: refused** |
+| goriya | 7_1bw | stale `=` (health 11->9, rupees 2->33, ...) | stale `=` (health 11->9, $668 65->1, ...) | stale `=` (health 11->9, bombs 4->3, ...) | untracked `7_1bw_[0-9]` |
+| goriya | 7_28s | stale `=` (health 11->9, $65B 1->0, ...) | stale `=` (health 11->9, bombs 3->7, ...) | stale `=` (health 11->9, bombs 0->5, ...) | **nothing: refused** |
+| goriya | 7_29c | stale `=` (health 11->9, bombs 7->4, ...) | stale `=` (health 11->9, bombs 4->6, ...) | stale `=` (health 11->9, bombs 7->6, ...) | **nothing: refused** |
+| goriya | 7_2bw | stale `=` (health 12->10, bombs 6->7, ...) | stale `=` (health 12->10, bombs 3->5, ...) | stale `=` (health 12->10, bombs 6->5, ...) | **nothing: refused** |
+| goriya | 7_38e | stale `=` (health 11->9, $65B 1->0, ...) | stale `=` (health 11->9, bombs 3->7, ...) | stale `=` (health 11->9, bombs 0->5, ...) | **nothing: refused** |
+| goriya | 7_49s | none | none | none | untracked `7_49s_[0-9]` |
+| goriya | 7_59s | stale `=` (health 11->9, $65B 1->0, ...) | stale `=` (health 11->9, bombs 3->7, ...) | stale `=` (health 11->9, bombs 0->5, ...) | **nothing: refused** |
+| goriya | 7_69s | stale `=` (health 11->9, $65B 1->0, ...) | stale `=` (health 11->9, bombs 4->8, ...) | stale `=` (health 11->9, bombs 1->6, ...) | **nothing: refused** |
+| goriya | 7_79s | stale `=` (health 11->9, bombs 8->2, ...) | stale `=` (health 11->9, bombs 4->0, ...) | stale `=` (health 11->9, bombs 0->6, ...) | **nothing: refused** |
+| wallmaster | 1_45w | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | **nothing: refused** |
+| wallmaster | 7_0dw | stale `=` (health 11->9, bombs 7->4, ...) | stale `=` (health 11->9, bombs 4->6, ...) | stale `=` (health 11->9, bombs 7->6, ...) | **nothing: refused** |
+| boss-aquamentus | 1_35s | stale `=` (keys 3->2) | stale `=` (keys 3->2) | stale `=` (keys 3->2) | **nothing: refused** |
+| boss-aquamentus | 7_2aw | stale `=` (health 11->9, bombs 6->7, ...) | stale `=` (health 11->9, bombs 3->5, ...) | stale `=` (health 11->9, bombs 6->5, ...) | **nothing: refused** |
+| d2-rope | 2_0de | none | none | none | untracked `2_0de_[0-9]` |
+| d2-rope | 2_2es | none | none | none | untracked `2_2es_[0-9]` |
+| d2-rope | 2_4es | none | none | none | untracked `2_4es_[0-9]` |
+| d2-rope | 2_6es | none | none | none | untracked `2_6es_[0-9]` |
+| d2-rope | 2_7ds | none | none | none | untracked `2_7ds_[0-9]` |
+| d2-rope | 2_7ew | none | none | none | untracked `2_7ew_[0-9]` |
+| moldorm | 2_3es | none | none | none | untracked `2_3es_[0-9]` |
+| boss-dodongo | 2_0es | none | none | none | untracked `2_0es_[0-9]` |
+| gibdo | 5_14s | stale `=` (health 8->9, bombs 2->8, ...) | stale `=` (health 8->9, bombs 2->8, ...) | stale `=` (health 8->9, bombs 0->6, ...) | **nothing: refused** |
+| gibdo | 5_26e | stale `=` (health 7->8, bombs 4->8, ...) | stale `=` (health 7->8, bombs 4->8, ...) | stale `=` (health 7->8, bombs 4->6, ...) | **nothing: refused** |
+| gibdo | 5_47s | stale `=` (health 7->8, bombs 4->8, ...) | stale `=` (health 7->8, bombs 4->8, ...) | stale `=` (health 7->8, bombs 4->6, ...) | **nothing: refused** |
+| gibdo | 5_65e | stale `=` (health 7->8, bombs 1->7, ...) | stale `=` (health 7->8, bombs 3->7, ...) | stale `=` (health 7->8, bombs 1->3, ...) | **nothing: refused** |
+| gibdo | 5_65w | stale `=` (health 7->8, bombs 0->6, ...) | stale `=` (health 7->8, bombs 0->6, ...) | stale `=` (health 7->8, bombs 0->2, ...) | **nothing: refused** |
+| gibdo | 5_66s | stale `=` (health 7->8, bombs 2->8, ...) | stale `=` (health 7->8, bombs 4->8, ...) | stale `=` (health 7->8, bombs 1->4, ...) | **nothing: refused** |
+| gibdo | 5_66w | none | none | none | untracked `5_66w_[0-9]` |
+| gibdo | 5_76s | stale `=` (health 7->8, bombs 2->8, ...) | stale `=` (health 7->8, bombs 4->3, ...) | stale `=` (health 7->8, bombs 0->8, ...) | **nothing: refused** |
+| dodongo-crossing | 5_56s | none | none | none | untracked `5_56s_[0-9]` |
+| dodongo-crossing | 7_0cs | none | none | none | untracked `7_0cs_[0-9]` |
+| pols-voice | 5_25e | none | none | none | untracked `5_25e_[0-9]` |
+| pols-voice | 5_27s | none | none | none | untracked `5_27s_[0-9]` |
+| pols-voice | 8_4cc | none | none | none | untracked `8_4cc_[0-9]` |
+| boss-digdogger | 5_24e | stale `=` `~rule1000` (health 7->8, bombs 4->8, ...) | stale `=` `~rule1000` (health 7->8, bombs 4->8, ...) | stale `=` `~rule1001` (health 7->8, bombs 4->6, ...) | nothing (curriculum off) |
+| boss-digdogger | 7_1cw | stale `~rule1000` (health 11->9, bombs 8->5, ...) | stale `~rule1000` (health 11->9, bombs 5->8, ...) | stale `=` (health 11->9, bombs 8->7, ...) | nothing (curriculum off) |
+| boss-digdogger | 7_39s | stale `=` (health 11->9, $65B 1->0, ...) | stale `=` (health 11->9, bombs 3->7, ...) | stale `=` (health 11->9, bombs 0->5, ...) | nothing (curriculum off) |
+| ow-lynel | 0_50e | stale `=` (keys 2->1) | stale `=` (keys 2->1) | stale `=` (keys 2->1) | **nothing: refused** |
+| ow-lynel | 0_60n | stale `=` (keys 2->1) | stale `=` (keys 2->1) | stale `=` (keys 2->1) | **nothing: refused** |
+| ow-ghini | 0_21c | none | none | none | untracked `0_21c_[0-9]` |
+| ow-ghini | 0_21cave | none | none | none | untracked `0_21cave_[0-9]` |
+| ow-ghini | 0_21s | none | none | none | untracked `0_21s_[0-9]` |
+| ow-ghini | 0_31n | none | none | none | untracked `0_31n_[0-9]` |
+| ow-ghini | 0_31r | stale `=` (keys 2->1) | stale `=` (keys 2->1) | stale `=` (keys 2->1) | **nothing: refused** |
+| wizzrobe | 6_28s | none | none | none | untracked `6_28s_[0-9]` |
+| wizzrobe | 6_29w | none | none | none | untracked `6_29w_[0-9]` |
+| wizzrobe | 6_2ce | none | none | none | untracked `6_2ce_[0-9]` |
+| wizzrobe | 6_38s | none | none | none | untracked `6_38s_[0-9]` |
+| wizzrobe | 6_3aw | none | none | none | untracked `6_3aw_[0-9]` |
+| wizzrobe | 6_78e | none | none | none | untracked `6_78e_[0-9]` |
+| wizzrobe | 9_04c | none | none | none | untracked `9_04c_[0-9]` |
+| wizzrobe | 9_05e | none | none | none | untracked `9_05e_[0-9]` |
+| wizzrobe | 9_07c | none | none | none | untracked `9_07c_[0-9]` |
+| wizzrobe | 9_07s | none | none | none | untracked `9_07s_[0-9]` |
+| wizzrobe | 9_10c | none | none | none | untracked `9_10c_[0-9]` |
+| wizzrobe | 9_10s | none | none | none | untracked `9_10s_[0-9]` |
+| wizzrobe | 9_15w | none | none | none | untracked `9_15w_[0-9]` |
+| wizzrobe | 9_17n | none | none | none | untracked `9_17n_[0-9]` |
+| wizzrobe | 9_17s | none | none | none | untracked `9_17s_[0-9]` |
+| wizzrobe | 9_20c | none | none | none | untracked `9_20c_[0-9]` |
+| wizzrobe | 9_20n | none | none | none | untracked `9_20n_[0-9]` |
+| wizzrobe | 9_30e | none | none | none | untracked `9_30e_[0-9]` |
+| wizzrobe | 9_31s | none | none | none | untracked `9_31s_[0-9]` |
+| boss-gohma | 6_1cs | none | none | none | untracked `6_1cs_[0-9]` |
+| ow-boulder | 0_17s | none | none | none | untracked `0_17s_[0-9]` |
+| lanmola | 9_55e | none | none | none | untracked `9_55e_[0-9]` |
+| patra | 9_16s | none | none | none | untracked `9_16s_[0-9]` |
+| patra | 9_16w | none | none | none | untracked `9_16w_[0-9]` |
+| patra | 9_27n | none | none | none | untracked `9_27n_[0-9]` |
+| patra | 9_27w | none | none | none | untracked `9_27w_[0-9]` |
+| patra | 9_52c | none | none | none | untracked `9_52c_[0-9]` |
+| patra | 9_61c | none | none | none | untracked `9_61c_[0-9]` |
+| patra | 9_61e | none | none | none | untracked `9_61e_[0-9]` |
+| ganon | 9_32s | none | none | none | untracked `9_32s_[0-9]` |
+| ganon | 9_42s | none | none | none | untracked `9_42s_[0-9]` |
