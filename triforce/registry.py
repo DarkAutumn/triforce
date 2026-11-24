@@ -46,6 +46,7 @@ import numbers
 import os
 import pickle
 import shutil
+import sys
 import time
 import warnings
 from pathlib import Path
@@ -220,9 +221,10 @@ def models_source(root=None) -> str:
 
 
 def say_models(root=None) -> str:
-    """Prints ``models: <models_source>`` once, at a tool's start; returns the line."""
+    """Prints ``models: <models_source>`` to stderr (stdout is often read by programs), at a tool's start; returns
+    the line."""
     line = models_source(root)
-    print(f"models: {line}", flush=True)
+    print(f"models: {line}", file=sys.stderr, flush=True)
     return line
 
 

@@ -705,7 +705,7 @@ def main(argv=None) -> Path:
     probe = Where(Path(), Path(), data=data_sources(args))
     sources = source_lines(args, probe.data)
     for kind, line in sources.items():
-        print(f"{kind}: {line}", flush=True)
+        print(f"{kind}: {line}", file=sys.stderr, flush=True)
     config = with_data(load_specialist(args.specialist), probe)
     specialist = config.name
     # Every input the task declares is checked before the job waits its turn (round 40: missing is an error, never

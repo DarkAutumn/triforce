@@ -104,6 +104,12 @@ links: `triforce store view TEAM --into DIR`. What resolves where:
 | harvested, trajectories | `--data KIND=NAME` | the checkout's own folder | the store's current snapshot |
 | run written by `train` | `--models-dir` (as before) | the store (a store team plays) | |
 
+Every tool that plays or trains says at its start, in one line, which it took and why, and its manifest carries the
+same line (`models.why`; a training's `sources`): `models: store team 2.0.0.13 (--team; sha256 ...)`,
+`models: --models-dir /path (the layout before the store)`, `harvested: this checkout's folder /path (the layout
+before the store)`, `trajectories: store snapshot 261122-52fb5b17 (current: /path)`. A temporary team view a process
+left behind (the queue's dry call ends with `os._exit`) is removed by the next tool that makes one.
+
 ## Hardcoded locations replaced (each is now `triforce.paths`)
 
 `context.rs` and `crates/tools/src/rom.rs` and `crates/test-rom/src/lib.rs` ROM lookups (the `paths` crate);

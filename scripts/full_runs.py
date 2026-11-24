@@ -316,12 +316,12 @@ def runs250(args) -> int:
         from triforce import store  # pylint: disable=import-outside-toplevel
         models = store.write_view(team, out / 'models', readonly=False)
         print(f"models: store team {team['name']} ({'--store-team' if args.store_team else 'current: this checkout '
-              'has no models folder'}; sha256 {team['sha256'][:12]})", flush=True)
+              'has no models folder'}; sha256 {team['sha256'][:12]})", file=sys.stderr, flush=True)
     else:
         source = Path(args.models_dir or ROOT / 'models').resolve()
         models = freeze_models(source, out / 'models')
         print(f"models: {'--models-dir' if args.models_dir else 'this checkout'} {source}'s pointers, frozen "
-              f"(the layout before the store)", flush=True)
+              f"(the layout before the store)", file=sys.stderr, flush=True)
     from triforce import _native  # pylint: disable=import-outside-toplevel
     steps = _native.route_steps(args.route)
     (out / 'route.json').write_text(json.dumps({'route': args.route, 'steps': steps}) + '\n')
