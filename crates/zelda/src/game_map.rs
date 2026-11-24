@@ -238,7 +238,9 @@ pub struct RoomExit {
 #[derive(Clone, Debug, PartialEq)]
 pub struct GameRoom {
     pub location: MapLocation,
-    /// `name: Breakfast Room`: what people call the room.  For display only (`describe`, the viewer's strip).
+    /// `name: Breakfast Room*`: what people call the room.  For display only (`describe`, the viewer's strip).  A
+    /// trailing `*` marks one of the owner's canonical names (Nov 24: the Olive Garden, the Breakfast Room, Reverse
+    /// C); a name without it is a working name that may change.
     pub name: Option<String>,
     /// Exits by key ('N', 'S', 'E', 'W', 'cave') in file order; a maze room also gets [`MAZE_EXIT`] last.
     pub exits: IndexMap<String, RoomExit>,
@@ -3284,11 +3286,16 @@ mod tests {
         let room = |id: u8| map.get(loc(4, id)).unwrap();
         // The Breakfast Room: a name, a block that reveals the stairs pushed any way, the ladder under it.
         let breakfast = room(0x32);
-        assert_eq!(breakfast.name.as_deref(), Some("Breakfast Room"));
+        assert_eq!(breakfast.name.as_deref(), Some("Breakfast Room*"), "a canonical name carries its mark");
         assert_eq!(breakfast.push_block, [Direction::N, Direction::S, Direction::E, Direction::W]);
         assert_eq!(breakfast.exits["cave"].destination, L::new(4, 0x60, true));
         assert_eq!(map.get(L::new(4, 0x60, true)).unwrap().treasure.as_deref(), Some("ladder"));
-        assert!(map.rooms().values().filter(|r| r.name.is_some()).count() == 2, "the Breakfast Room, the Olive Garden");
+        // Named rooms: the owner's canonical names carry a `*` (the Breakfast Room, the Olive Garden; Reverse C when
+        // he says which room it is); the others are working names (Nov 24: Dungeon 3's 0x59, 0x5b, 0x69).
+        let names: Vec<&str> = map.rooms().values().filter_map(|r| r.name.as_deref()).collect();
+        let canonical: BTreeSet<&str> = names.iter().copied().filter(|n| n.ends_with('*')).collect();
+        assert_eq!(canonical, ["Breakfast Room*", "Olive Garden*"].into_iter().collect::<BTreeSet<_>>());
+        assert_eq!(names.len(), 5, "{names:?}");
         // The two locked doors the route opens (0x30 E, 0x31 N, whose other side is 0x21 S), the bomb walls into and
         // out of the rupee room, the push-block shutter.
         assert!(room(0x30).exits["E"].locked && room(0x31).exits["N"].locked && room(0x21).exits["S"].locked);
@@ -3787,8 +3794,8 @@ mod tests {
 
         let edit = |from: &str, to: &str| GameMap::from_yaml(&GAME_YAML.replacen(from, to, 1), ROUTES_YAML).map(|_| ());
         for (from, to, why) in [
-            ("  name: Breakfast Room", "  name: ' Breakfast Room'", "name must be text"),
-            ("  name: Breakfast Room", "  name: 7", "name must be a string"),
+            ("  name: Breakfast Room*", "  name: ' Breakfast Room*'", "name must be text"),
+            ("  name: Breakfast Room*", "  name: 7", "name must be a string"),
             ("  push_block_opens: E", "  push_block_opens: S", "is not a door of the room"),
             ("      dock: [16, 8]", "      dock: 16", "dock"),
             ("      dock: [16, 8]", "      docks: [16, 8]", "unknown key"),
