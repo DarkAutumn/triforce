@@ -107,6 +107,7 @@ import sys
 import time
 import traceback
 from collections import Counter, deque
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -389,12 +390,38 @@ def parse_args(argv=None):
     return parser.parse_args(argv)
 
 
+_HELD = {'depth': 0, 'signum': None}       # ``interrupts_held``: how deep, and a SIGTERM that came meanwhile
+
+
 def interrupt_on_sigterm():
     """Makes SIGTERM raise KeyboardInterrupt, so a killed run still saves its checkpoint and writes its final
-    events.  (Background processes can inherit an ignored SIGINT; SIGTERM always arrives.)"""
+    events.  (Background processes can inherit an ignored SIGINT; SIGTERM always arrives.)  Inside
+    ``interrupts_held`` the signal is kept and raised as the block ends."""
     def handler(signum, frame):  # pylint: disable=unused-argument
+        if _HELD['depth']:
+            _HELD['signum'] = signum
+            return
         raise KeyboardInterrupt(f"signal {signum}")
     signal.signal(signal.SIGTERM, handler)
+
+
+@contextmanager
+def interrupts_held():
+    """A block a SIGTERM must not cut (``interrupt_on_sigterm``): the KeyboardInterrupt comes as it ends.  An
+    exception raised in library code that waits on a ``threading.Condition`` is not always a KeyboardInterrupt:
+    TensorBoard's writer puts each scalar on a bounded queue, and the interrupt raised while ``queue.put`` waits for
+    room can surface as ``RuntimeError: release unlocked lock`` (``Condition.wait`` re-acquires its lock in a Python
+    ``finally``), which no ``except KeyboardInterrupt`` catches: the training ends in a traceback, exit 1, without
+    its summary (Gen40fix: ``test_an_interrupted_run_saves_but_exits_130`` under load, whose SIGTERM follows the
+    first line of ``metrics.jsonl``, written just before the scalars)."""
+    _HELD['depth'] += 1
+    try:
+        yield
+    finally:
+        _HELD['depth'] -= 1
+    if not _HELD['depth'] and _HELD['signum'] is not None:
+        signum, _HELD['signum'] = _HELD['signum'], None
+        raise KeyboardInterrupt(f"signal {signum}")
 
 
 EXIT_INTERRUPTED = 130
@@ -1112,7 +1139,8 @@ def _train(args, specialist: str, run_id: str, where: Where, out_dir: Path, even
         if stop:
             stop = confirm_stop(result.iteration)
         state['metrics'] = metrics
-        logger.log(state['iteration'], state['steps'], metrics)
+        with interrupts_held():                 # TensorBoard's queue: a SIGTERM waits for the scalars
+            logger.log(state['iteration'], state['steps'], metrics)
         print(f"[train] iter={state['iteration']} steps={state['steps']} " + format_summary(metrics), flush=True)
         elapsed = time.time() - started
         fraction = result.iteration / args.iterations
