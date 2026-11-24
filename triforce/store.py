@@ -515,7 +515,10 @@ def allocate_run(family: str, name: Optional[str] = None, parent: Optional[Run] 
     """A new open run ``runs/<family>/<name>/`` (``name`` unique in the family, else a sortable new one), owned by
     this job (``$TRIFORCE_JOB_ID``) and its agent; ``parent`` (a run this one starts from), ``team`` (the effective
     team it was trained against) and ``data`` (the snapshots it read) are recorded.  Its trainer writes it, then
-    ``seal_run``."""
+    ``seal_run``.  A family or name a team spec cannot carry (``check_spec_name``) is refused."""
+    check_spec_name(family, 'family')
+    if name:
+        check_spec_name(name)
     parent_row = get_run(parent) if parent is not None else None
     caller = who()
     what = {'family': family, 'name': name, 'parent': parent and parent.identity, 'origin': origin}
@@ -790,6 +793,7 @@ def _hit_head(ckpt: Path) -> bool:
 def slot_of(run: Run, act: Optional[str] = None, hit_head: Optional[bool] = None) -> dict:
     """A team slot playing sealed ``run``: its identity, checkpoint SHA-1, act mode (``act``, else the run's
     default) and whether its network has a hit head."""
+    check_spec_name(run.identity)
     row = get_run(run)
     if row['status'] != SEALED:
         raise StoreError(f"run {run.identity} is open: only a sealed run plays in a team")
@@ -862,35 +866,108 @@ def set_current_team(name: str, entry: str = LEAD) -> dict:
     return team
 
 
+# Round 40 (the fresh generation): one run in every slot of a teacher's families, ``+@GROUP=FAMILY/RUN``.  ``@`` cannot
+# start a slot (a slot starts with its family), so a group never collides with a family's name.
+GROUP_SLOT = '@'
+SPEC_SEPARATOR = '+'
+# The generation's teachers until Trainer41's groups file is merged (``triforce/groups.yaml``, read by
+# ``triforce.lab.groups.load``): ``groups()`` reads that file when the module exists; then delete this table and the
+# ImportError branch.
+FALLBACK_ROUTE = 'd3first'
+FALLBACK_GROUPS = {
+    'overworld': ('ow-start', 'ow-tektite', 'ow-leever', 'ow-moblin', 'ow-octorok', 'ow-zora', 'ow-peahat', 'ow-lynel',
+                  'ow-ghini', 'ow-boulder'),
+    'walkers': ('darknut', 'gibdo', 'stalfos-keese-gel', 'zol', 'like-like', 'vire', 'goriya', 'd2-rope',
+                'dodongo-crossing', 'moldorm'),
+    'others': ('wizzrobe', 'pols-voice', 'wallmaster', 'lanmola', 'patra'),
+    'rooms': ('equipment-room', 'trap-room'),
+    **{boss: (boss,) for boss in ('boss-manhandla', 'boss-gleeok', 'boss-aquamentus', 'boss-dodongo', 'boss-digdogger',
+                                  'boss-gohma', 'ganon')},
+}
+
+
+def groups() -> dict[str, tuple[str, tuple]]:
+    """Teacher name -> (route, member families): ``triforce.lab.groups.load()`` where that module exists, else
+    ``FALLBACK_GROUPS`` on ``FALLBACK_ROUTE``."""
+    try:
+        from .lab import groups as lab_groups  # pylint: disable=import-outside-toplevel
+    except ImportError:
+        return {name: (FALLBACK_ROUTE, families) for name, families in FALLBACK_GROUPS.items()}
+    return {name: (group.route, tuple(group.families)) for name, group in lab_groups.load().items()}
+
+
+def group_slots(name: str) -> list[str]:
+    """Every slot a teacher's run plays: ``family@route`` and ``family@route:late`` of each member family, so it plays
+    every step of its families on its route (before the route's ``own_models_until`` and after it: a late slot the
+    base lacks is added, since the bare slot it would otherwise fall back to also plays ``d2first``), and the bare
+    slot (``d2first``, today's team) stays the base's."""
+    known = groups()
+    if name not in known:
+        raise StoreError(f"no group {name!r} (groups: {', '.join(sorted(known))})")
+    route, families = known[name]
+    return [slot_key(family, route, late) for family in families for late in (False, True)]
+
+
+def check_spec_name(name: str, what: str = 'run'):
+    """A family, run or team name a team spec can carry: StoreError for one holding ``+`` (the spec splits on it)."""
+    if SPEC_SEPARATOR in name:
+        raise StoreError(f"{what} {name!r} holds {SPEC_SEPARATOR!r}, on which a team spec splits (--team "
+                         f"NAME+SLOT=FAMILY/RUN): no spec could name it; choose a name without it")
+
+
+def apply_override(slots: dict, key: str, value: str) -> list[str]:
+    """Sets ``slots[key]`` to sealed run ``value`` (``RUN`` alone: of the slot's family), or for ``@GROUP`` every
+    slot of ``group_slots(GROUP)`` to ``FAMILY/RUN``; returns the slot keys set."""
+    if key.startswith(GROUP_SLOT):
+        if '/' not in value:
+            raise StoreError(f"{key}={value}: a group's run is FAMILY/RUN (a group has no family of its own)")
+        keys, slot = group_slots(key[len(GROUP_SLOT):]), slot_of(parse_run(value))
+    else:
+        keys, slot = [key], slot_of(parse_run(value, split_slot(key)[0]))
+    for each in keys:
+        slots[each] = dict(slot)
+    return keys
+
+
 def parse_team_spec(spec: str) -> tuple[str, list[tuple[str, str]]]:
-    """``NAME[+SLOT=RUN]...`` (``2.0.0.13+zol@d3first=r40-x-s401+darknut=darknut/r41-y``) -> (NAME, [(slot,
-    run)]); NAME ``current`` is the team of record."""
-    base, *rest = spec.split('+')
+    """``NAME[+SLOT=RUN]...`` (``2.0.0.13+zol@d3first=r40-x-s401+darknut=darknut/r41-y``; ``+@GROUP=FAMILY/RUN``: the
+    run in every slot of a group's families, ``group_slots``) -> (NAME, [(slot or @GROUP, run)]); NAME ``current`` is
+    the team of record."""
+    base, *rest = spec.split(SPEC_SEPARATOR)
     overrides = []
     for part in rest:
         key, sep, value = part.partition('=')
         if not sep or not key or not value:
-            raise StoreError(f"--team {spec}: each override is +SLOT=RUN (SLOT: family, family@route or "
-                             f"family@route:late; RUN: RUN or FAMILY/RUN), not {part!r}")
-        split_slot(key)
+            raise StoreError(f"--team {spec}: each override is +SLOT=RUN (SLOT: family, family@route, "
+                             f"family@route:late or @GROUP; RUN: RUN or FAMILY/RUN; a name holding "
+                             f"{SPEC_SEPARATOR!r} cannot be written in a spec), not {part!r}")
+        if key.startswith(GROUP_SLOT):
+            group_slots(key[len(GROUP_SLOT):])
+        else:
+            split_slot(key)
         overrides.append((key, value))
     return base or paths.CURRENT, overrides
 
 
 def effective_team(spec: str) -> dict:
-    """The team ``spec`` names (``parse_team_spec``) with its overrides applied: ``{'name': spec, 'base', 'base_sha256',
-    'overrides', 'sha256', 'slots'}``.  An override's run is a sealed store run (``RUN`` alone: of the slot's family).
-    This dict is what a run, a chain and an evaluation record as the team they played."""
+    """The team ``spec`` names (``parse_team_spec``) with its overrides applied in order (a later one wins):
+    ``{'name': spec, 'base', 'base_sha256', 'overrides', 'groups', 'sha256', 'slots'}``; ``overrides`` holds every slot
+    set (a group's expanded), ``groups`` each group's run.  An override's run is a sealed store run (``RUN`` alone: of
+    the slot's family).  This dict is what a run, a chain and an evaluation record as the team they played."""
     base_name, overrides = parse_team_spec(spec)
     base = read_team(base_name)
     slots = {key: dict(slot) for key, slot in base['slots'].items()}
+    changed, named, group_runs = [], [], {}
     for key, value in overrides:
-        family, _, _ = split_slot(key)
-        slots[key] = slot_of(parse_run(value, family))
-    name = base['name'] + ''.join(f'+{key}={slots[key]["run"]}' for key, _ in overrides)
-    return {'name': name, 'base': base['name'], 'base_sha256': base['sha256'],
-            'overrides': {key: slots[key]['run'] for key, _ in overrides}, 'sha256': _team_sha256(slots),
-            'slots': slots}
+        keys = apply_override(slots, key, value)
+        changed = [k for k in changed if k not in keys] + keys
+        run = slots[keys[0]]['run']
+        named.append(f'+{key}={run}')
+        if key.startswith(GROUP_SLOT):
+            group_runs[key[len(GROUP_SLOT):]] = run
+    return {'name': base['name'] + ''.join(named), 'base': base['name'], 'base_sha256': base['sha256'],
+            'overrides': {key: slots[key]['run'] for key in changed}, 'groups': group_runs,
+            'sha256': _team_sha256(slots), 'slots': slots}
 
 
 def team_record(team: dict) -> dict:

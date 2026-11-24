@@ -434,10 +434,11 @@ def main(argv=None):
                    'convert-model': ('triforce.convert', 'main'),
                    'select-checkpoint': ('triforce.select_checkpoint', 'main'),
                    'test-times': ('triforce.testlog', 'report_main'), 'stats': ('triforce.run_stats', 'main'),
-                   'lineage': ('triforce.lineage', 'main'), 'manifest': ('triforce.manifest', 'main')}
+                   'lineage': ('triforce.lineage', 'main'), 'manifest': ('triforce.manifest', 'main'),
+                   'judge': ('triforce.judge', 'main')}
     # `triforce [--models-dir DIR | --team TEAM] train|run|play|evaluate|eval-batch|room-stats|convert-model|
-    # select-checkpoint|test-times|stats|lineage|manifest ...` forwards the rest to the module's own CLI (``--team``:
-    # ``registry.use_team``).
+    # select-checkpoint|test-times|stats|lineage|manifest|judge ...` forwards the rest to the module's own CLI
+    # (``--team``: ``registry.use_team``).
     models_dir, team, rest = None, None, argv
     while rest:
         if rest[0] in ('--models-dir', '--team') and len(rest) > 1:
@@ -477,7 +478,7 @@ def main(argv=None):
     parser.add_argument('--models-dir', default=None, help="an old-style models folder (the layout before the store)")
     parser.add_argument('--team', default=None,
                         help="the store's team to play: NAME, current, or NAME+SLOT=RUN... (an experiment's "
-                             "overrides; SLOT: family, family@route or family@route:late)")
+                             "overrides; SLOT: family, family@route, family@route:late or @GROUP)")
     sub = parser.add_subparsers(dest='command', required=True)
     sub.add_parser('store', help="where the shared things are and what the shared store holds (triforce store "
                                  "paths|data|runs|teams|summaries|outputs|log|view)")
@@ -496,6 +497,8 @@ def main(argv=None):
     sub.add_parser('test-times', help="the test suites' timing logs read together: wall time run by run, each "
                                       "test's median and worst, the slowest, what grew (triforce.testlog)")
     sub.add_parser('stats', help="run statistics: list, show, compare (paired by seed), ingest (triforce.run_stats)")
+    sub.add_parser('judge', help="python -m triforce.judge plan GROUP... | compare TAG [--base TAG] (where a teacher "
+                                 "plays; a measurement beside the baseline per dungeon)")
     sub.add_parser('list', help="specialists, their promoted run and run count")
     sub.add_parser('lineage', help="python -m triforce.lineage [--route R] (each promoted pointer's chain of "
                                    "parents back to its origin)")

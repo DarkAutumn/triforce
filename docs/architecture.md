@@ -2168,10 +2168,29 @@ every step, so following an enemy that moves away pays again, and knockback rese
   caller's stream (no folder of its own).
 - `scripts/yardstick.py report --run RUN [--mode sample|argmax] [--chain NAME=PATH[@L:0xRR] ...] --output OUT.json`
   reads each specialist's evaluation in the run's act mode (`evaluate.read_evaluation`; a missing one is an error
-  unless `--allow-mode-mismatch`) and the chain files, and reports success (Wilson intervals), hearts and chain
+  unless `--allow-mode-mismatch`, or unless the run's network plays in several families' slots: round 40, a teacher
+  of the generation never evaluated family by family, whose rows are left out with a sentence and listed as
+  `unevaluated`) and the chain files, and reports success (Wilson intervals), hearts and chain
   arrivals; it refuses appended chain files and `@` targets that aren't route rooms. `compare BASE NEW` marks rows
   `better`/`worse`/`~`, refuses rows measured in different act modes (unless `--allow-mode-mismatch`) and labels
   one-sided rows `missing`.
+- **A teacher of the generation judged in chains** (round 40, `judge.py`): `triforce eval-batch NAME --teacher
+  GROUP=FAMILY/RUN [--base TEAM] [--runs N] [--plan]` plays the team `BASE+@GROUP=FAMILY/RUN` (`store.group_slots`:
+  the run in every member family's `family@route` and `family@route:late` slot, the bare `d2first` slots kept) on
+  every scope of the route's room statistics (below) in which a family of the group plays a step
+  (`judge.teacher_plan`), each dungeon both ways: from the previous triforce (`to-dN`: the file of the segment after
+  the previous dungeon, `full` for the first) and from its entrance (`dN`), each chain stopped at the dungeon's exit
+  (`--stop-at step:N`; Dungeon 9 runs to the end), written as `<chains-dir>/<NAME>-<file>.jsonl` and filed by the
+  job, then the yardstick report, `room-stats NAME` and `triforce judge compare NAME`. `--plan` prints the scopes,
+  the team spec and every command and runs nothing; `--dungeons d4,d5` judges only those dungeons' scopes;
+  `triforce judge plan GROUP...` prints the scopes alone.
+  `triforce judge compare TAG [--base TAG] [--chains-dir DIR] [--base-dir DIR] [--output JSON] [--markdown FILE]`
+  sets any measurement's files beside a base's (default round 40's baseline `r40-2015-1k`, 2.0.0.15's team, 1000
+  runs a segment), found in the folder or else through the store's index of filed chain records (`chain`,
+  `chain-meta`): per dungeon and start, the base's rate over all its runs and on the measurement's seeds, the
+  measurement's, the difference paired by seed with its standard error (unpaired without shared seeds), the three
+  rooms where most of the measurement's runs end (the base's share beside), hearts lost a run with its paired
+  difference, and the route goals a run (`run_stats.goal_run_values`) where the records carry them.
 - `triforce room-stats TAG [--noclips [TAG2]] [--chains-dir DIR] [--output FILE] [--route NAME]` (`room_stats.py`)
   writes `<chains-dir>/<TAG>-room-stats.json` (default `target/r56-chains`, beside the chain files it reads;
   `scripts/experiments/r56_chains.sh report` writes it after the yardstick): per-room statistics in every **scope**

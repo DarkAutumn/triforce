@@ -9,7 +9,9 @@ judged on, with 95% confidence intervals.
 `report` reads each specialist's evaluation of `<models>/<name>/<RUN_ID>` in the run's act mode (or `--mode`):
 `eval.json` when it was measured in that mode for the current weights, else `eval-<mode>.json`
 (`evaluate.read_evaluation`; format 2).  A run without one is an error unless `--allow-mode-mismatch` (then its
-`eval.json` stands in, labelled with the mode it measured).  `--run promoted` follows each specialist's promoted
+`eval.json` stands in, labelled with the mode it measured), or unless several specialists share its network (round
+40: a teacher of the generation in its families' slots, never evaluated family by family): their rows are left out
+with a sentence and the report goes on.  `--run promoted` follows each specialist's promoted
 pointer; specialists are the `specialists/*.yaml` names.  It also reads the chain JSON lines given with
 `--chain NAME=PATH[@L:0xRR]` (an `eval-chain --output` file per segment), writes the numbers as JSON and prints
 markdown tables:
@@ -213,10 +215,22 @@ def fmt(interval: Interval, percent=False) -> str:
     return f"{value:.2f} [{lo:.2f}, {hi:.2f}]"
 
 
+def shared_runs(models: Path, names: list[str], run: str) -> dict[Path, list[str]]:
+    """Checkpoint (resolved) -> the specialists whose `run` plays it, for checkpoints two or more of `names` share (one
+    network in several families' slots: a lab run, a teacher of the generation)."""
+    owners: dict[Path, list[str]] = {}
+    for name in names:
+        directory = run_dir(models, name, run)
+        if directory is not None:
+            owners.setdefault((directory / registry.CHECKPOINT_NAME).resolve(), []).append(name)
+    return {ckpt: found for ckpt, found in owners.items() if len(found) > 1}
+
+
 def report(args) -> int:
     models = registry.models_root(args.models_dir)
-    specialists, skipped, errors = [], [], []
-    for name in sorted(p.stem for p in Path(args.specialists_dir).glob('*.yaml')):
+    specialists, skipped, errors, missing = [], [], [], []
+    names = sorted(p.stem for p in Path(args.specialists_dir).glob('*.yaml'))
+    for name in names:
         directory = run_dir(models, name, args.run)
         if directory is None:
             skipped.append(name)
@@ -225,11 +239,18 @@ def report(args) -> int:
             path, result, expected = read_specialist(directory, args)
         except LookupError as error:
             errors.append(f"{name}: {error}")
+            missing.append(name)
             continue
         row = specialist_row(name, result, str(path))
         row.update(run=directory.name, eval_file=path.name, act=registry.eval_mode(result), run_act=expected,
                    checkpoint_sha1=result.get('checkpoint_sha1'))
         specialists.append(row)
+    # A network in several families' slots (a lab run: a teacher of the generation, round 38's one network) is not
+    # evaluated family by family: its families' single-room rows are left out with a sentence; a family's own run
+    # without its evaluation is still an error.
+    shared = {name for found in shared_runs(models, names, args.run).values() for name in found}
+    unevaluated = [name for name in missing if name in shared]
+    errors = [error for name, error in zip(missing, errors) if name not in shared]
     if errors:
         raise YardstickError("no evaluation in the run's act mode (evaluate it, e.g. `python -m triforce.evaluate "
                              "--specialist S`, or pass --allow-mode-mismatch):\n  " + '\n  '.join(errors))
@@ -238,15 +259,20 @@ def report(args) -> int:
         name, _, spec = item.partition('=')
         file, _, target = spec.partition('@')
         chains.append(chain_row(name, Path(file), target or None))
-    out = {'run': args.run, 'specialists': specialists, 'skipped': skipped, 'chains': chains}
+    out = {'run': args.run, 'specialists': specialists, 'skipped': skipped, 'unevaluated': unevaluated,
+           'chains': chains}
     write_json_atomic(Path(args.output), out)
-    print('| specialist | act | episodes | success | hearts lost / visit | health change | frames / visit |')
-    print('|---|---|---:|---|---|---|---|')
+    if specialists:
+        print('| specialist | act | episodes | success | hearts lost / visit | health change | frames / visit |')
+        print('|---|---|---:|---|---|---|---|')
     for row in specialists:
         act = row['act'] if row['act'] == row['run_act'] else f"{row['act']} (acts {row['run_act']})"
         print(f"| {row['specialist']} | {act} | {row['episodes']} | {fmt(row['success'], True)} | "
               f"{fmt(row['hearts_lost_per_visit'])} | {fmt(row['health_change'])} | "
               f"{fmt(row['frames_per_visit'])} |")
+    if unevaluated:
+        print(f"\nNo single-room rows for {', '.join(unevaluated)}: their slots share one network, which was never "
+              f"evaluated family by family (no evaluation in its act mode); the chains below measure it.")
     if skipped:
         print(f"\nno run {args.run!r}: {', '.join(skipped)}")
     if chains:
