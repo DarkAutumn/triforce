@@ -341,7 +341,7 @@ else:
     runpy.run_module(target, run_name='__main__', alter_sys=True)
 '''
 
-ENTRY_POINTS = {'evaluate': ('eval', {'eval_episodes'}), 'eval-chain': ('chain', {'chain_steps'}),
+ENTRY_POINTS = {'evaluate': ('eval', {'eval_episodes'}), 'eval-chain': ('chain', {'chain_steps', 'chains'}),
                 'eval-batch': ('batch', {'eval_episodes'}), 'train': ('train', {'train_steps'}),
                 'round': ('round', {'train_steps', 'eval_episodes'})}
 
@@ -383,7 +383,9 @@ def test_an_entry_point_answers_the_dry_call_with_its_work_having_loaded_nothing
     assert done.returncode == 0, done.stdout + done.stderr
     kind, units = ENTRY_POINTS[name]
     work = json.loads(answer.read_text())
-    assert work['kind'] == kind and set(work['work']) == units and all(v > 0 for v in work['work'].values())
+    assert work['kind'] == kind and set(work['work']) == units
+    assert all(v > 0 for unit, v in work['work'].items() if unit != 'chains')
+    assert all(chain['shape'] and chain['runs'] > 0 for chain in work['work'].get('chains', []))
     assert not marks.exists(), marks.read_text()
     assert not logs.exists() or not any(logs.iterdir())
 
@@ -400,7 +402,7 @@ def test_the_wrapper_estimates_a_tool_from_its_dry_call_and_an_argument_error_fa
                           'A tiny chain.', '--', PYTHON, '-m', *chain, TRIFORCE_LOGS_DIR=str(queue.folder / 'logs'))
     assert process.wait(timeout=600) == 0, process.out.read_text()
     row = queue.row('chain')
-    assert row['kind'] == 'chain' and set(row['work']) == {'chain_steps'} and row['estimate'] is not None
+    assert row['kind'] == 'chain' and set(row['work']) == {'chain_steps', 'chains'} and row['estimate'] is not None
     assert row['log_dir'] and Path(row['log_dir']).name.endswith('_tester-queue-chain')
     assert row['progress']['runs']['done'] == 1
 

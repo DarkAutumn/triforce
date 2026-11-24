@@ -1550,8 +1550,23 @@ every step, so following an enemy that moves away pays again, and knockback rese
   estimate is work x rates, each rate (seconds per unit, `jobqueue.rates`) refitted from the `history` table over
   the 20 latest completed jobs that did some of that unit (`RATE_WINDOW`; their seconds less their other work at the
   other units' rates, a total over the amounts, so a big job weighs as its size), else `DEFAULT_RATES` (Nov 15:
-  0.00044 s per training step, 0.046 s per evaluation episode, 0.0026 s per chain run-step). A command the queue
-  can't measure (a script, an old version's tool) needs `--timeout`, which is its estimate; a golden race's
+  0.00044 s per training step, 0.046 s per evaluation episode, 0.0026 s per chain run-step). **A chain is
+  estimated by its segment** (the owner, Nov 23: "Fix the estimate [...] It would have been fine if not for
+  estimating 37 hours": a batch of the full route and 17 segments at 1000 runs was estimated at 37 hours; one rate
+  per asked step can't fit a Dungeon 3 segment's 18 steps of long fights and the full route's 290, most never
+  played): a chain tool announces `chains` in its work (`runner.chain_entry`: `shape` = `<route>:<start>-<end
+  step>[:power-on]`, runs, parallel, asked steps; a batch one per chain entry, named for it), the wrapper records
+  the seconds each took when the job ends (`jobqueue.chain_seconds`: a lone chain's run time, a batch entry's
+  `wall_seconds` from its plan, an interrupted batch's finished entries too), and `jobqueue.chain_model` turns
+  them into run-seconds per shape, `(seconds - CHAIN_START_SECONDS) x parallel / runs`, the median of the last
+  `SHAPE_WINDOW` = 3 (a short window: the machine's load moves a segment's time 2-3x within a day). A chain of a
+  known shape takes `CHAIN_START_SECONDS` (10) + runs x run-seconds / parallel; an unseen one its asked steps at
+  the `chain_steps` rate. When a job with chains ends, every live job whose work names its chains is estimated
+  again (`refresh_estimates`); a job an older tool announced keeps its estimate. Measured on the 64 chains and
+  batches of the history before this (each estimated from the chains that ended before it): within 2x 39 against
+  33, median actual / estimate 1.13 against 1.46, the jobs over 15 minutes 0.19-2.4x against 0.23-9.9x; a segment
+  run twice under different loads or teams takes 2-6x apart, which no estimate from the shape can follow. A command
+  the queue can't measure (a script, an old version's tool) needs `--timeout`, which is its estimate; a golden race's
   `--timeout` is too. `triforce job list --calibration`: per kind, over its 20 latest completed jobs, the median and
   the worst actual / estimate, and the rates; a running job past twice its estimate is `OVERRUN` (`OVERRUN`,
   `jobqueue.overrun`).

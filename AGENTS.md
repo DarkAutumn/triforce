@@ -1011,8 +1011,10 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
     **before** the command starts, at nice 15; our tools (`triforce train|evaluate|eval-chain|eval-batch|
     select-checkpoint`, `scripts/train_round.py`, `scripts/full_runs.py run|runs250`, `triforce.lab.train|record|
     bench`) are asked their work first (training steps, episodes, route steps: an argument error fails at once) and
-    estimated from the queue's history; any other command (a script, an old version's tool) needs `--timeout`, its
-    duration and its estimate. `--timeout` stops the command (SIGTERM, then SIGKILL) and the job ends `timeout`.
+    estimated from the queue's history (a chain by its segment: seconds per run from the last three chains of that
+    segment, else its route steps at the learned rate; Nov 23); any other command (a script, an old version's tool)
+    needs `--timeout`, its duration and its estimate. `--timeout` stops the command (SIGTERM, then SIGKILL) and the
+    job ends `timeout`.
   - `triforce job golden --agent A --task T --timeout 10m [--subtask S] [-- racer options]`: a golden race
     (`zelda-headless.py --golden --power-on --clips on --act model --parallel 16`), at most `--timeout`, which is its
     estimate; running out of time is a result ("no golden path in 10 minutes", exit 0); its replays are archived.
