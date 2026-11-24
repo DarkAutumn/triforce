@@ -183,14 +183,18 @@ def student(network) -> dict:
 
 
 def build(args, families, network, *, group=None, envs: dict, source=None, teachers: Optional[dict] = None,
-          demos=(), demo_groups=None, training: dict, seeds: dict) -> dict:
+          demos=(), demo_groups=None, training: dict, seeds: dict, sources: Optional[dict] = None) -> dict:
     """The run's manifest (the module docstring).  ``envs``: envs per key; ``source``: the checkpoint ``--load``
-    names; ``teachers``: key -> checkpoint; ``training``: the resolved training settings."""
+    names; ``teachers``: key -> checkpoint; ``training``: the resolved training settings; ``sources``: where a group
+    run's ``arch``, ``arch_config``, ``aux`` and ``try_others`` came from (``lab.train.apply_network``), recorded as
+    ``networks.student.sources``."""
     # pylint: disable=too-many-arguments
     data = {'tasks': {f.key: manifest.data(f.config, args.states_dir, curriculum_folder(f.config)) for f in families}}
     if demos:
         data['demos'] = manifest.demo_entries(demos, demo_groups)
     networks = {'student': student(network)}
+    if sources is not None:
+        networks['student']['sources'] = dict(sources)
     if source is not None:
         networks['warm_start'] = manifest.network(source)
     if teachers:

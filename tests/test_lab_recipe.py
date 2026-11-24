@@ -12,7 +12,7 @@ import pytest
 import torch
 
 from triforce import manifest, paths, registry, store
-from triforce.lab import recipe, train
+from triforce.lab import groups, recipe, train
 from triforce.lab.collect import parse_families
 from triforce.lab.groups import Group
 from triforce.metrics import MetricsLogger
@@ -64,13 +64,15 @@ def test_a_lab_run_records_its_manifest_and_two_seeds_differ_only_in_seed_and_id
 
 
 def _recipe(tmp_path, families, *argv, group=None) -> dict:
-    """``recipe.build`` of a run of ``families`` (KEY=YAML items) without training it."""
+    """``recipe.build`` of a run of ``families`` (KEY=YAML items) without training it; ``group``'s network applied as
+    ``--group`` applies it (``lab.train.apply_network``)."""
     args = train.parse_args(['--name', 'x', '--families', *families, '--all-routes', '--models-dir', str(tmp_path),
                              *argv])
+    sources = train.apply_network(args, group)
     tasks = parse_families(args.families, len(args.families))
     network = recipe.create_network(args.arch, json.loads(args.arch_config), tasks)
     return recipe.build(args, tasks, network, group=group, envs={t.key: t.envs for t in tasks}, training={},
-                        seeds={'seed': 0})
+                        seeds={'seed': 0}, sources=sources)
 
 
 def test_manifest_diff_names_a_task_switch_a_group_member_and_an_architecture_key(tmp_path):
@@ -89,6 +91,29 @@ def test_manifest_diff_names_a_task_switch_a_group_member_and_an_architecture_ke
     b = _recipe(tmp_path, [f'ow-start@d3first={start_task()}', f'ow-moblin@d3first={start_task()}'], group=two)
     paths_ = {d['path'] for d in manifest.diff(a, b)}
     assert 'task.group.members' in paths_ and any(p.startswith('task.tasks.ow-moblin@d3first.') for p in paths_)
+
+
+def test_a_group_run_records_where_its_network_came_from_and_diff_names_an_override(tmp_path, capsys):
+    """``groups.yaml``'s ``network:`` block (the generation's ``hitnet`` at 768) trains with ``--group`` alone; a
+    command-line ``--arch-config`` key over it is printed in one line and named by ``manifest diff``."""
+    both = _task(tmp_path, 'both', obs={'threat': True, 'chase': True})
+    pinned = groups.get('rooms').network
+    group = Group('pair', 'd3first', ('ow-start@d3first',), {}, pinned)
+    families = [f'ow-start@d3first={both}']
+    from_file = _recipe(tmp_path, families, group=group)
+    assert capsys.readouterr().out.count('[lab] --group') == 0
+    student = from_file['networks']['student']
+    assert student['config']['hidden_dim'] == 768 and student['sources'] == {
+        'arch': 'group file', 'arch_config': 'group file', 'aux': 'group file', 'try_others': 'group file'}
+    assert from_file['task']['group']['network'] == pinned
+    narrow = _recipe(tmp_path, families, '--arch-config', '{"hidden_dim": 256}', group=group)
+    lines = [line for line in capsys.readouterr().out.splitlines() if line.startswith('[lab] --group')]
+    assert lines == ["[lab] --group pair: the command line overrides the group file's arch_config.hidden_dim 768 -> "
+                     "256"]
+    changed = {d['path'] for d in manifest.diff(from_file, narrow)}
+    assert {'networks.student.sources.arch_config', 'networks.student.config.hidden_dim',
+            'arguments.arch_config'} <= changed
+    assert not any(p.startswith('networks.student.config.tokens') for p in changed)      # the file's other keys kept
 
 
 def test_the_refusals_say_what_to_change(tmp_path):

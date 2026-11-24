@@ -94,8 +94,10 @@ def parse_args(argv=None):
                         help="with --same-recipe-as or --resume: the keys this run changes (a key names every "
                              "manifest path whose dotted parts it matches)")
     parser.add_argument('--shares', nargs='*', default=[], metavar='KEY=W', help="env shares (default equal)")
-    parser.add_argument('--arch', default=nets.ZELDA, choices=nets.names())
-    parser.add_argument('--arch-config', default='{}', help="JSON settings of the architecture")
+    parser.add_argument('--arch', default=None, choices=nets.names(),
+                        help=f"the network's class (default: the group file's with --group, else {nets.ZELDA})")
+    parser.add_argument('--arch-config', default=None,
+                        help="JSON settings of the architecture (with --group: over the group file's, by key)")
     parser.add_argument('--load', default=None, help="checkpoint or run dir to start from (its arch)")
     parser.add_argument('--mode', default='ppo', choices=['ppo', 'imitate'])
     parser.add_argument('--actor', default='student', choices=['student', 'teacher'],
@@ -128,7 +130,7 @@ def parse_args(argv=None):
                         help="every family on this route's states alone (lab.collect.route_only: state_routes, the "
                              "start-state globs the route has, the curriculum tracks explored from its states)")
     parser.add_argument('--seed', type=int, default=None)
-    parser.add_argument('--aux', nargs='*', default=[], metavar='OUTPUT=TARGET:COEFF',
+    parser.add_argument('--aux', nargs='*', default=None, metavar='OUTPUT=TARGET:COEFF',
                         help="a loss on the network's auxiliary output OUTPUT against TARGET (hit, hit_or_blocked, "
                              "damaged, hearts_lost, frames; lab/auxiliary.py) weighted COEFF")
     parser.add_argument('--try-others', default=None, metavar='K:P',
@@ -382,6 +384,54 @@ def expand_group(args) -> Optional[groups.Group]:
     return group
 
 
+def apply_network(args, group: Optional[groups.Group]) -> Optional[dict]:
+    """The run's ``--arch``, ``--arch-config``, ``--aux``, ``--try-others``: what the command line gives, else the
+    group file's (``group.network``), else the lab's defaults.  A command-line ``--arch-config`` overrides the
+    group's by key (all of it for another ``--arch``).  With a group: prints one line naming every key the command
+    line changes from the file's, and returns each key's source (``group file``, ``command line``, ``default``) for the
+    manifest; without one: None, and the arguments as given."""
+    given = {'arch': args.arch, 'aux': args.aux, 'try_others': args.try_others,
+             'arch_config': None if args.arch_config is None else json.loads(args.arch_config)}
+    if group is None:
+        args.arch = args.arch or nets.ZELDA
+        args.arch_config = '{}' if args.arch_config is None else args.arch_config
+        args.aux = [] if args.aux is None else args.aux
+        return None
+    pinned = group.network
+    sources: dict = {}
+    changed: list[str] = []
+
+    def pick(key, default):
+        if given[key] is None:
+            sources[key] = 'group file' if key in pinned else 'default'
+            return pinned.get(key, default)
+        sources[key] = 'command line'
+        if key in pinned and given[key] != pinned[key]:
+            changed.append(f"{key} {json.dumps(pinned[key])} -> {json.dumps(given[key])}")
+        return given[key]
+
+    args.arch = pick('arch', nets.ZELDA)
+    same_arch = pinned.get('arch', args.arch) == args.arch
+    base = dict(pinned.get('arch_config') or {}) if same_arch else {}
+    if given['arch_config'] is None:
+        sources['arch_config'] = 'group file' if base else 'default'
+        config = base
+    else:
+        sources['arch_config'] = 'command line'
+        config = {**base, **given['arch_config']}
+        changed += [f"arch_config.{key} {json.dumps(base[key]) if key in base else '(unset)'} -> "
+                    f"{json.dumps(value)}" for key, value in given['arch_config'].items() if base.get(key) != value]
+    if not same_arch and pinned.get('arch_config'):
+        changed.append(f"arch_config: the file's is {pinned['arch']}'s, not used")
+    args.arch_config = json.dumps(config, sort_keys=True)
+    args.aux = list(pick('aux', []))
+    args.try_others = pick('try_others', None)
+    if changed:
+        print(f"[lab] --group {group.name}: the command line overrides the group file's " + '; '.join(changed),
+              flush=True)
+    return sources
+
+
 @dataclass
 class Resume:
     """The run ``--resume`` continues: its folder, its store run (None in a models folder), its ``run.json`` and its
@@ -495,6 +545,7 @@ def main(argv=None) -> Path:
     if args.actor == 'teacher' and args.mode != 'imitate':
         raise SystemExit("--actor teacher is for --mode imitate (PPO trains on the student's own samples)")
     group = expand_group(args)
+    sources = apply_network(args, group)
     if args.seed is not None:
         torch.manual_seed(args.seed)
     registry.use_team(args.team, args.models_dir)
@@ -563,7 +614,7 @@ def main(argv=None) -> Path:
     recipe = build_recipe(args, families, network, group=group, envs={f.key: f.envs for f in families},
                           source=source, teachers=teacher_files, demos=args.demos or (), demo_groups=demo_groups,
                           training=training_settings(args, cfg, tried, steps_per_env, recurrent, weights),
-                          seeds={'seed': seed, 'pools': pool_seed})
+                          seeds={'seed': seed, 'pools': pool_seed}, sources=sources)
     if args.same_recipe_as:
         check_same(recipe, read_reference(args.same_recipe_as), args.except_,
                    f"--same-recipe-as {args.same_recipe_as}")
