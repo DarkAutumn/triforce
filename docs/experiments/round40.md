@@ -1415,6 +1415,19 @@ came (any cause, tile turns included) and decision reversals the decisions that 
 - Ghini is below 300 grid points (149, all exact): shown, not claimed. Not covered by the column: Zols, Gels,
   Dodongos, Armos (left out above). The overworld X wrap was not counted separately.
 
+### Identity with `obs.chase` off (jobs #983 base `r40-gen` 9e030e84, #1067 this branch; seeds 0-199; team 2.0.0.15)
+
+| segment | runs | outcomes, rooms, actions, frames | per-decision diagnostics |
+|---|---:|---|---|
+| `d3first` Dungeon 1 (`1_73s_0`; goriya's `hitshift` reads schema 7's tokens) | 200 | identical run for run (5,811,092 frames each side; 12,943 room visits) | the served network's `act_entropy` and `surprisal` differ by at most 2.3e-5 / 4.8e-5 |
+| `d2first` Dungeon 1 | 200 | identical | identical (every record field) |
+
+The same picture as schema 8's proof (above): every action, frame and room record equal; the only difference is in
+two float diagnostics of the served `hitshift` network, in the fifth decimal, with the same action drawn every time
+(GPU batches formed by whichever envs ask together). `triforce manifest diff` of the two sides: `code` (the
+commit and module), `task` (every task config's hash: each now carries `obs.chase: false`), `arguments` (the output
+paths), `run` (the job); no team, model or start-state difference.
+
 ### What could carry the lesson beyond the inputs (for the lead to decide; no reward added)
 
 The inputs say where the monsters are sent and who may turn at Link; nothing yet rewards using it, and the owner asked
