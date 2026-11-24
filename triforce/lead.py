@@ -457,10 +457,13 @@ def stats_backfill(files: list, team: Optional[str] = None, out=print) -> dict:
 
 
 def backup(to: Optional[Path] = None, apply: bool = False, out=print) -> list[str]:
-    """Copies into the archive (``$TRIFORCE_BACKUP/store``, else ``/backup/triforce/store``) every sealed run, team,
-    snapshot, job folder and the index that is not there yet (its own disk: real copies, made read-only)."""
+    """Copies into the archive (``$TRIFORCE_BACKUP/store``, else ``/backup/triforce/store``) the ROM, every sealed
+    run, team, snapshot, job folder, ``legacy/`` import and the index that is not there yet (its own disk: real
+    copies, made read-only).  The dry run prints each item and the totals per kind."""
     base = Path(to) if to else Path(os.environ.get(BACKUP_ENV) or DEFAULT_BACKUP) / 'store'
-    items = [f"runs/{row['family']}/{row['name']}" for row in store.runs(status=store.SEALED)]
+    root = store.root()
+    items = ['rom'] if (root / 'rom').is_dir() else []
+    items += [f"runs/{row['family']}/{row['name']}" for row in store.runs(status=store.SEALED)]
     items += [f"teams/{row['name']}.json" for row in store.teams()]
     items += [f"data/{row['kind']}/{row['name']}" for row in store.snapshots()]
     con = store.connect()
@@ -468,9 +471,19 @@ def backup(to: Optional[Path] = None, apply: bool = False, out=print) -> list[st
         items += [row['folder'] for row in con.execute('SELECT folder FROM jobs ORDER BY job')]
     finally:
         con.close()
+    items += [f"legacy/{path.name}" for path in sorted((root / 'legacy').glob('import-*'))]
     todo = [item for item in items if not (base / item).exists()]
     out(f"backup into {base}: {len(todo)} of {len(items)} to copy ({'apply' if apply else 'dry run'})")
     if not apply:
+        totals: dict = {}
+        for item in todo:
+            size = _size(root / item)
+            kind = item.split('/')[0]
+            count, total = totals.get(kind, (0, 0))
+            totals[kind] = (count + 1, total + size)
+            out(f"  {item}  {size / 1e6:.1f} MB")
+        for kind, (count, total) in sorted(totals.items()):
+            out(f"  total {kind}: {count} items, {total / 1e9:.2f} GB")
         return todo
     with store.writing('backup', {'to': str(base), 'items': len(todo)}, LEAD) as con:
         for item in todo:
@@ -479,6 +492,13 @@ def backup(to: Optional[Path] = None, apply: bool = False, out=print) -> list[st
         index = base / f"store.db.{time.strftime('%y%m%d-%H%M%S')}"
         con.execute(f"VACUUM INTO '{index}'")
     return todo
+
+
+def _size(path: Path) -> int:
+    """Bytes of the files under ``path`` (links not followed)."""
+    if path.is_file() or path.is_symlink():
+        return path.lstat().st_size
+    return sum(p.lstat().st_size for p in path.rglob('*') if p.is_file() and not p.is_symlink())
 
 
 # ---------------------------------------------------------------------------------------------------------------
