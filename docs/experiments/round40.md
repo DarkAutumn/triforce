@@ -152,9 +152,11 @@ before, and the switch is off for every yaml on `main`.
   shoot timer runs from `$30` and the shot leaves at `$10`; a walking shooter needs 32 frames standing first), Link in
   its lane (within the shot's reach; a rock stops at walls), and the arrival as `soon`, **cut off where Link could
   still step out of the lane sideways** (where walls let him) before it arrives.
-- **The bomb carrier** (`bomb_carrier`): `zelda::bomb_windows` (BombStats' Metric B, so the metric and the flag are
-  one definition) is on `r40-bombstats`, not on `main` yet; the column is wired (`observation::bomb_carriers`) and
-  reads 0 until it lands. The wiring is five lines (status file `local://r40-gen-obs-status.md`).
+- **The bomb carrier** (`bomb_carrier`): BombStats' Metric B, so the metric and the flag are one definition:
+  `observation::bomb_carriers` marks each monster `zelda::bomb_windows::is_bomb_carrier` names while
+  `bomb_carrier_window` is open (own bombs = the bag, the bomb rule = the mask's BOMB, kill-all = a FIGHT objective).
+  Dungeon 3's first pass through 3:0x5b is its first required use (decisions 2026-11-23), so the window's reading of
+  the drop cycle must be exact there; its tests are BombStats' (`crates/zelda/src/bomb_windows.rs`).
 
 **Tests.** `crates/env/tests/threat.rs` on hand-built RAM and grids: a monster walking at Link (touches at 16
 standing, 7 walking into it, never walking away), one across the room (all 0, near 1), a rock in flight (8 / 5) and a
@@ -275,7 +277,10 @@ there without this branch; not run.
 ### Not done (status file `local://r40-gen-obs-status.md`)
 - The other collections (darknut, boss-gleeok, ow-moblin, ow-lynel; ow-octorok has 16 of 30 chunks) and second
   seeds: the table above is one family, one seed.
-- The bomb-carrier column waits for `r40-bombstats`.
+- The bomb-carrier column has no test of its own on a played state (BombStats' predicate is tested; the wiring is
+  four lines).
+- Notes for the generation (the owner, Nov 23): firing-line targets are rejected for this generation; a red
+  Goriya's lane stays as built ("fine for now"; the backlog keeps a third lane state "armed, may throw any frame").
 
 Ideas: the threat lane, the bomb-carrier flag and range-aware contact are the owner's; `rel`, the contact block and
 the Link token are the agents' (round 36); the engine columns, the lane's real shot delay and the "can still leave"

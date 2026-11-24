@@ -804,7 +804,7 @@ else.
 | `entity_threat` 11 | `lane_wait` | frames until its next shot can leave, / 32, at most 1: a Goriya's ObjTimer `$28`; a standing shooter's `$451` − `$10`; a walking one 33 (it must stand 32 frames first, asm:Shooter_RunShootTimer); 0 when not ready |
 | `entity_threat` 12 | `lane_in` | ready, and Link's middle is ahead along its facing (ObjDir `$98`), within 9 px across, within the shot's reach (the rock's to the first tile it cannot cross) |
 | `entity_threat` 13 | `lane_soon` | the owner's threat lane: in the lane, the shot's arrival `t` = wait + 1 + (distance − 8) / speed as `(H + 1 − ⌈t⌉) / (H + 1)`, kept only while `t` ≤ `H` and `t` ≤ the frames Link needs to step 9 px out of the lane sideways (the nearer side a wall leaves open; never where both are walled) + `zelda::threat::LANE_SLACK`; 0 otherwise: where he can still leave, a shot is no threat this decision |
-| `entity_threat` 14 | `bomb_carrier` | this monster's death may drop bombs now (the owner's Metric B, `zelda::bomb_windows::bomb_carrier_window` and `is_bomb_carrier`, branch `r40-bombstats`): 0 until that module is on `main` (round40.md "The bomb carrier") |
+| `entity_threat` 14 | `bomb_carrier` | this monster's death may drop bombs now: while `zelda::bomb_windows::bomb_carrier_window` (the owner's Metric B) is open, each monster `is_bomb_carrier` names; Link's own bombs the bag, the bomb rule the mask's BOMB, kill-all a FIGHT objective (`observation::bomb_carriers`) |
 
 Aimed shots (Zora, Aquamentus, Gleeok, Gohma fireballs) and the Wizzrobes' magic have no lane: their shots are seen
 by `soon_*` once they exist. The treasure slot and Gleeok's heads have no RAM slot and so no lane.
