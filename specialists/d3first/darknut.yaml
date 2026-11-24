@@ -120,8 +120,12 @@ harvested_fraction: 0.33
 # demonstration builder's hit-free visits of each pass (scripts/experiments/r40_d3_69_line.py demos: a search over the
 # env's actions per visit, the rule timed by its look-ahead where none is found; the room's rows only, 4 or 8 bombs,
 # the task's hp draw), cloned at 0.05 as round 25's 5:0x37 rule; names under the demos data folder.
+# Round 40 (Darknut40; the owner's Darknut lesson, docs/owner/darknuts.md; round40.md "The owner's Darknut fighter"):
+# 3:0x5b's first pass, one Red Darknut killed by the owner's method at drop cycle 0, its bombs taken, out N
+# (scripts/experiments/r40_darknut_fighter.py demos --room 5b: the fighter timed by a 3-decision look-ahead, a
+# backtracking search where it is still hit; 150 visits at hearts 0.5-3.0 and 150 at full, every one kept unhit).
 demos:
-  files: [r40-d3-69-in.npz, r40-d3-69-out.npz]
+  files: [r40-d3-69-in.npz, r40-d3-69-out.npz, r40-darknut-5b-low.npz, r40-darknut-5b-full.npz]
   coeff: 0.05
 one_room: true
 max_steps: 2000
