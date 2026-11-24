@@ -691,7 +691,9 @@ harvested `261124-gen1`, harvested-rooms `261123-aabd5d07`, trajectories `261124
 today: its own `models/` and its four folders).
 
 - The Python suite on the store's team (job #1278 before the last commits; `test_convert` saw the view under
-  `/tmp/triforce-test-team-*/models`): 1146 passed, 13 skipped. The full suites on the final commit: below.
+  `/tmp/triforce-test-team-*/models`): 1146 passed, 13 skipped. The full suites with the build (job #1294, commit
+  `9bfd410b`, every suite given team 2.0.0.15): Python 1151 passed, 12 skipped (`test_r36_merge_record` now runs
+  here); asm 5 passed; `asm.py check` clean; Rust every program ok.
 - The golden race from power on, capped at 4 minutes (job #1291, `zelda-headless.py --golden --power-on --clips on
   --act model --parallel 16` under `triforce job run`, so nothing archived to `/backup`): `models: store team
   2.0.0.15 (current ...; sha256 a2d0d85f8df8)`; **won the route in 2 minutes**, 60 runs, 9 segments, 153,750 frames
@@ -772,4 +774,4 @@ the team when they start: restart them after), a landing or `triforce-lead impor
 suites, golden race and 250 test run *from main* without its folders (from this worktree instead, which resolves
 the same way); `port_gate.sh`, `train_bench.sh`, `profile_train.sh` and `parallel_study.py` end to end (their team
 lookups were run alone); `play-zelda.py` beyond `--help` (a window); the Rust suite's reading of the store is the
-same in any checkout without folders (`paths` crate), shown by the full suites below.
+same in any checkout without folders (`paths` crate), shown by the Rust suite of job #1294 in this worktree.
