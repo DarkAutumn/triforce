@@ -1,0 +1,9 @@
+# Round 40 (Darknut40, round40.md "The owner's Darknut fighter"): today's darknut network measured on the entries
+# the fighter plays (scripts/experiments/r40_darknut_fighter.py measure --room garden --bombs 8): the route step's entry
+# states only, the bag fixed at 8 (and 3:0x59's own draw with it), the task's other reset draws as they are.
+extends: ../../specialists/d3first/darknut.yaml
+start_states:
+- 5_05e*_[0-9]
+ram_randomization:
+  bombs: [8, 8]
+  bombs_share: 1.0
