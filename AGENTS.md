@@ -875,7 +875,9 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   `play-zelda.py` plays replays: of runs it simulates in the background and files into queues
   (`best`, `success`, `stuck`, `died`, `random`, `golden`; `crates/theater`), or of the files of a PATH. Its
   simulations run unpaced on `--parallel` (8) cores until the queues are full: mind that next to a training
-  round. One cell is heard (yellow frame; key `s`, click to move; `--no-sound`), `--controller` draws the held
+  round. One cell is heard (yellow frame; key `s`, click to move; `--no-sound`; keys `m`, `e`, `h` and
+  `--no-music`, `--no-sound-effects`, `--no-heart-beep` switch the music, the sound effects and the low-hearts
+  beep), `--controller` draws the held
   buttons. Clips (round 22): `--clips on|off` starts the runs with the run-time clips switch on or off, key `c`
   turns it off and on for every run started afterwards (the title says where it stands; a cell's strip says "no
   clips" for a run played without). `--live` makes the top left cell a live game the models play while it is
@@ -883,12 +885,19 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   re-plans from where Link stands ("rest of the run no clips"); its finished runs join the queues. The keys are
   in `--help`. `--thoughts` draws over each cell what its replay says the agent was thinking (objective and
   targets, the mask, the decision). `create-video.py OUT [GRID]
-  REPLAY... [--sound] [--controller] [--thoughts]` films replays the same way into a video file (`ffmpeg`).
-- **Sound is computed beside the emulator, never inside it** (`crates/zcore/src/sound.rs`, `docs/architecture.md`
-  "Sound"): a `Synth` replays the APU register writes the bus notes. `MachineState`, state files, replays and
-  training don't change with it, and must not: no sound state goes into `MachineState`. A replay that starts
-  from a savestate therefore starts silent, each voice coming in with its next note. Building `triforce._native`
-  now needs the ALSA headers (`alsa-lib`; `cpal`).
+  REPLAY... [--sound [--no-music] [--no-sound-effects] [--no-heart-beep] [--split-audio]] [--controller]
+  [--thoughts]` films replays the same way into a video file (`ffmpeg`; `--split-audio`: two audio tracks, music
+  and effects).
+- **Sound is computed beside the emulator, never inside it** (`crates/zcore/src/sound.rs`, `tracks.rs`,
+  `docs/architecture.md` "Sound"): a `Synth` replays the APU register writes the bus notes. `MachineState`, state
+  files, replays and training don't change with it, and must not: no sound state goes into `MachineState`. A
+  replay that starts from a savestate therefore starts silent, each voice coming in with its next note. Music and
+  sound effects apart (the owner, Nov 23: the songs vs everything else, the item fanfare and the end-of-level tune
+  with the effects, the low-hearts beep on its own switch) come from the game's own sound driver run again beside
+  the machine (`zcore::tracks`: its own 6502, one driver copy per track fed only its requests), never from the
+  machine; with everything on the sound is the machine's writes through one synth, as it always was. `tf replay
+  sound FILE --check` proves the tracks against the machine's driver. Building `triforce._native` now needs the
+  ALSA headers (`alsa-lib`; `cpal`).
 
 ## Game mechanics that matter for training
 

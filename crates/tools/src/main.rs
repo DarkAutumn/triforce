@@ -9,6 +9,7 @@ use movie as formats;
 mod replay;
 mod rom;
 mod script;
+mod sound;
 mod zcore;
 
 use anyhow::{Context, Result, ensure};
@@ -172,6 +173,27 @@ enum ReplayCmd {
         #[arg(long)]
         decisions: bool,
     },
+    /// A replay's sound as music and sound effects (`zcore::tracks`): `full.wav` (the game's sound),
+    /// `music.wav`, `effects.wav` and `effects-no-beep.wav` in `--out`, 48 kHz mono; `--check` prints, as JSON,
+    /// the checks that the tracks follow the game's sound driver (docs/architecture.md "Sound").  A job
+    /// (`triforce job run`).
+    Sound {
+        file: PathBuf,
+        /// Where the WAV files go (none without it).
+        #[arg(long)]
+        out: Option<PathBuf>,
+        /// The first frame heard (the sound takes the game over there, as `play-zelda.py` does).
+        #[arg(long, default_value_t = 0)]
+        from: u32,
+        /// Frames to play (default: to the end).
+        #[arg(long)]
+        frames: Option<u32>,
+        #[arg(long)]
+        check: bool,
+        /// Where a replay recorded from a named state file finds it (default: triforce/states).
+        #[arg(long)]
+        states_dir: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -209,6 +231,7 @@ fn heavy(cmd: &Cmd) -> bool {
     match cmd {
         Cmd::LadderGolden { .. } | Cmd::LadderDiff { .. } | Cmd::Corpus { cmd: CorpusCmd::Check { .. } } => true,
         Cmd::Replay { cmd: ReplayCmd::Verify { files, .. } } => files.len() > 1 || files.iter().any(|f| f.is_dir()),
+        Cmd::Replay { cmd: ReplayCmd::Sound { .. } } => true,
         Cmd::Bench { movies, agent, recordings, .. } => !movies.is_empty() || *agent || recordings.is_some(),
         _ => false,
     }
@@ -643,6 +666,14 @@ fn replay_cmd(cmd: ReplayCmd, rom: &rom::RomInfo) -> Result<i32> {
         }
         ReplayCmd::Targets { file, room, masks, decisions } => {
             replay_targets(&read_replay(&file)?, room.as_deref(), masks, decisions)?;
+            Ok(0)
+        }
+        ReplayCmd::Sound { file, out, from, frames, check, states_dir } => {
+            let rom = ::zcore::Rom::from_ines(&rom.bytes)?;
+            let dir = states_dir.unwrap_or_else(|| rom::workspace_root().join("triforce/states"));
+            let resolve = |name: &str| std::fs::read(state_path(&dir, name));
+            let report = sound::sound(rom, read_replay(&file)?, &resolve, out.as_deref(), from, frames, check)?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
             Ok(0)
         }
         ReplayCmd::Verify { files, states_dir, jobs: j } => {

@@ -111,6 +111,11 @@ impl Rom {
     pub const fn payload_sha1(&self) -> [u8; 20] {
         self.payload_sha1
     }
+
+    /// The PRG-ROM image (eight 16 KiB banks, the last one fixed at `$C000`).
+    pub(crate) fn prg(&self) -> &[u8] {
+        &self.bytes[16..]
+    }
 }
 
 /// A complete, restorable machine state: every emulated byte, in fixed arrays, so a snapshot is a
