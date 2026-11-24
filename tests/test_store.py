@@ -133,6 +133,20 @@ def test_a_team_plays_through_the_registry(shared, monkeypatch):
         registry.use_team('nope')
 
 
+def test_a_tool_says_which_networks_it_plays_and_why(shared, monkeypatch, capsys):
+    run = _sealed('zol', 'r1')
+    store.create_team('t1', {'zol': store.slot_of(run)}, 'test')
+    monkeypatch.setattr(registry, '_SAID', [])
+    registry.use_team(None, models_dir='/m')
+    registry.use_team(None, models_dir='/m')
+    assert capsys.readouterr() == ('', "models: --models-dir /m (the layout before the store)\n")
+    registry.use_team('t1')
+    assert capsys.readouterr().err == ''        # once a process
+    assert registry.models_source().startswith('store team t1 (--team; sha256 ')
+    from triforce import manifest
+    assert manifest.models()['why'] == registry.models_source()
+
+
 def test_every_write_is_in_the_audit_log_with_its_entry_point(shared, monkeypatch):
     monkeypatch.setenv('TRIFORCE_JOB_ID', '0')
     _sealed('zol', 'r1')
