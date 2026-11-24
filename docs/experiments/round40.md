@@ -219,6 +219,36 @@ top of `threat` here), `feed: true` (the hit head's stopped probabilities as an 
 `--aux hit=hit:C --try-others K:P` (the head as an auxiliary target, round 36 §8), the room embedding kept off only if
 the next screen agrees.
 
+### The lane against the game (2.0.0.13's 250 test replays, `scripts/experiments/r40_lane_check.py`)
+
+Every replay played frame by frame (`_native.ReplayPlayer`); the lane of every slot computed from that frame's RAM
+(`_native.lane_probe`: `zelda::threat::lane` with the grid decoded from the same RAM). A shot **leaves** where a slot
+turns into a rock, sword shot, arrow or boomerang it did not hold the frame before; its shooter is the nearest of the
+matching type. Measured on 170 of the 250 replays (pieces 0-159 and 240-249, jobs #334-#337, #340; the four pieces of
+160-239 were stopped in the queue, replays that need more than the express place's ten minutes each 40), with the
+lane as first written:
+
+| shooter | shots | `ready` 1 / 8 / 16 frames before | `wait` within 1 frame of the truth, 1 / 8 / 16 before (median error) | left while not `ready` | hits by its shot | warned (in the lane, arrival ≤ 16, in the 16 frames before) | `leave` at the warning: median (walled in) |
+|---|---:|---|---|---:|---:|---:|---|
+| Octorok | 952 | 99.8 / 99.9 / 99.8% | 99.7 / 98.7 / 98.3% (0 / 0 / 0) | 0.2% | 62 | 27 | 1 frame (33%) |
+| Moblin | 1,218 | 99.6 / 99.8 / 99.8% | 98.9 / 98.4 / 97.5% (0 / 0 / 0) | 0.4% | 41 | 5 | 2 frames (0%) |
+| Lynel | 88 | 100 / 100 / 100% | 100 / 100 / 100% (0 / 0 / 0) | 0 | 2 | 0 | - |
+| **Goriya** | 1,701 | 98.6 / 87.7 / 86.5% | 99.8 / **25.9 / 25.7%** (0 / **−8 / −16**) | 1.4% | 88 | 41 | 6 frames (32%) |
+
+- **The walking shooters are right**: the shoot timer's `$30`/`$10` reading gives the frame the shot leaves exactly
+  (median error 0 at every lag, 97.5-100% within a frame), and a shot almost never leaves while `ready` says no.
+- **The Goriya was wrong**: its `ObjTimer` read 0 eight and sixteen frames before three throws in four, so `wait` said
+  "now" while the throw was still a grid point away. The game throws only when the timer is 0 **and** the Goriya
+  wants to (asm:Shooter_ObjWantsToShoot `$412`, set at a grid point when its chase target is within `$51` px;
+  asm:Walker_SetInputDirAndTryThrowBoomerang). **Fixed** (ad3a3b7a): without the wish, `wait` is at least the frames to
+  its next grid point (ObjGridOffset `$394`, 16 px a square, at its q-speed); with it, the timer. The table's Goriya
+  rows are the old rule; the fixed rule is not yet measured on the replays.
+- **Hits warned**: 27 of 62 Octorok and 41 of 88 Goriya hits were in the lane with an arrival inside the horizon in
+  the 16 frames before; the Moblin's arrow (2 px a frame) mostly leaves from farther than 16 frames' reach, so the
+  lane is off by design before it flies (5 of 41) and the arrow itself is seen by `soon_*` once it exists. Where a hit
+  was warned, `leave` read 1-6 frames, and a third of the Octorok and Goriya warnings came where walls kept Link in
+  the lane.
+
 ### Identity with `obs.threat` off (jobs #189 main 964e7f99, #186 this branch at 002051c3; seeds 0-199)
 
 | segment | runs | outcomes, rooms, actions, hits, frames | per-decision diagnostics |
