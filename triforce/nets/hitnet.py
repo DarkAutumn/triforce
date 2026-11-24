@@ -3,11 +3,13 @@ docs/experiments/round36.md "Observation v7 and the hit network"; experiment 2's
 
 The body keeps today's blocks but the entity encoder: the room embedding, the tile grid's convs, the float vectors
 (``history``, ``link``, ``objective``, ``room_state``, ``target``). The entities become tokens (any of the type
-embedding, ``entity_features``, schema 7's ``entity_rel`` and ``entity_contact``, schema 8's ``entity_threat``:
-``tokens``; ``threat`` needs a task with ``obs.threat`` on, the block reads zeros otherwise), Link's ``link`` block
-a token of its own, and ``layers`` transformer layers of width ``d_model`` let Link's token attend to them (empty
-slots masked); Link's final token, not a mean over the entities, joins the trunk. Policy and value towers and the
-kind-conditioned heads are today's. ``room: False`` leaves the room embedding out.
+embedding, ``entity_features``, schema 7's ``entity_rel`` and ``entity_contact``, schema 8's ``entity_threat``,
+schema 9's ``entity_chase``: ``tokens``; ``threat`` needs a task with ``obs.threat`` on and ``chase`` one with
+``obs.chase`` on, the blocks read zeros otherwise), Link's ``link`` block a token of its own (with the group
+``chase``, schema 9's ``chase`` block beside it: where the monsters are sent), and ``layers`` transformer layers of
+width ``d_model`` let Link's token attend to them (empty slots masked); Link's final token, not a mean over the
+entities, joins the trunk. Policy and value towers and the kind-conditioned heads are today's. ``room: False`` leaves
+the room embedding out.
 
 The hit head (``hit``): its own tower over the trunk, "taking this action now gets Link hit", returned as
 ``aux['hit']`` ``[B, 352]`` (one logit a joint action, ``kind * 32 + direction * 4 + duration``) for the lab's
@@ -26,8 +28,9 @@ import torch
 from torch import nn
 
 from ..actions import NUM_DIRECTIONS, NUM_DURATIONS, NUM_KINDS
-from ..model import (ENTITY_CONTACT_KEY, ENTITY_FEATURES_KEY, ENTITY_REL_KEY, ENTITY_THREAT_KEY, ENTITY_TYPES_KEY,
-                     GRID_KEY, ROOM_KEY, _SPECIAL_KEYS, GridEncoder, ModelConfig, layer_init)
+from ..model import (CHASE_KEY, ENTITY_CHASE_KEY, ENTITY_CONTACT_KEY, ENTITY_FEATURES_KEY, ENTITY_REL_KEY,
+                     ENTITY_THREAT_KEY, ENTITY_TYPES_KEY, GRID_KEY, ROOM_KEY, _SPECIAL_KEYS, GridEncoder, ModelConfig,
+                     layer_init)
 from . import register
 from .base import Heads, LabNet
 from .wide import tower
@@ -35,7 +38,9 @@ from .wide import tower
 JOINT = NUM_KINDS * NUM_DIRECTIONS * NUM_DURATIONS
 LINK_KEY = 'link'
 TOKEN_GROUPS = {'features': ENTITY_FEATURES_KEY, 'rel': ENTITY_REL_KEY, 'contact': ENTITY_CONTACT_KEY,
-                'threat': ENTITY_THREAT_KEY}
+                'threat': ENTITY_THREAT_KEY, 'chase': ENTITY_CHASE_KEY}
+# Blocks a token group adds to Link's own token.
+LINK_GROUPS = {'chase': CHASE_KEY}
 HIT_SHAPES = {'joint': JOINT, 'kind_direction': NUM_KINDS * NUM_DIRECTIONS, 'none': 0}
 
 
@@ -61,9 +66,10 @@ class HitNet(LabNet):
         if c['feed'] and c['hit'] == 'none':
             raise ValueError("hitnet feed needs a hit head")
         self.token_keys = [TOKEN_GROUPS[g] for g in TOKEN_GROUPS if g in c['tokens']]
-        missing = [k for k in self.token_keys if k not in spec]
+        self.link_keys = [LINK_KEY] + [LINK_GROUPS[g] for g in LINK_GROUPS if g in c['tokens']]
+        missing = [k for k in self.token_keys + self.link_keys if k not in spec]
         if missing:
-            raise ValueError(f"hitnet tokens need observation keys {missing} (schema 7)")
+            raise ValueError(f"hitnet tokens need observation keys {missing} (schema 7 and later)")
         d = c['d_model']
         grid = ModelConfig()                                  # today's grid convs and room embedding sizes
         token_in = sum(spec[k]['shape'][1] for k in self.token_keys)
@@ -72,7 +78,7 @@ class HitNet(LabNet):
             token_in += c['type_dim']
         if c['room']:
             self.room_embedding = nn.Embedding(spec[ROOM_KEY]['vocab'], grid.room_embed_dim)
-        self.link_proj = layer_init(nn.Linear(spec[LINK_KEY]['shape'][0], d))
+        self.link_proj = layer_init(nn.Linear(sum(spec[k]['shape'][0] for k in self.link_keys), d))
         self.token_proj = layer_init(nn.Linear(token_in, d))
         self.role = nn.Parameter(torch.zeros(2, d))          # Link's token, an entity's token
         layer = nn.TransformerEncoderLayer(d_model=d, nhead=c['attention_heads'], dim_feedforward=2 * d,
@@ -108,7 +114,8 @@ class HitNet(LabNet):
         if 'type' in self.config['tokens']:
             parts.append(self.type_embedding(obs[ENTITY_TYPES_KEY].long()))
         tokens = self.token_proj(torch.cat(parts, dim=-1)) + self.role[1]
-        link = (self.link_proj(obs[LINK_KEY].float()) + self.role[0]).unsqueeze(1)
+        link_in = torch.cat([obs[k].float() for k in self.link_keys], dim=-1)
+        link = (self.link_proj(link_in) + self.role[0]).unsqueeze(1)
         mask = torch.cat([torch.zeros_like(empty[:, :1]), empty], dim=1)
         y = self.transformer(torch.cat([link, tokens], dim=1), src_key_padding_mask=mask)
         blocks = [torch.relu(self.link_out(y[:, 0])), self.grid_encoder(obs[GRID_KEY])]

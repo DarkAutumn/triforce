@@ -59,6 +59,23 @@ def test_without_a_hit_head_there_is_no_auxiliary_output_and_groups_switch_off()
         nets.create('hitnet', native_spec(), tokens=['walls'])
 
 
+def test_the_chase_group_feeds_the_entity_tokens_and_links_token():
+    spec = native_spec()
+    plain = nets.create('hitnet', spec, tokens=['type', 'features'], **SMALL)
+    chase = nets.create('hitnet', spec, tokens=['type', 'features', 'chase'], **SMALL)
+    assert chase.token_proj.in_features == plain.token_proj.in_features + spec['entity_chase']['shape'][1]
+    assert chase.link_proj.in_features == plain.link_proj.in_features + spec['chase']['shape'][0]
+    assert 'chase' not in chase.vector_keys and 'entity_chase' not in chase.vector_keys
+    assert chase.feature_dim == plain.feature_dim                # read through Link's token, not the trunk
+    obs = _obs()
+    other = {k: v.clone() for k, v in obs.items()}
+    other['chase'] = torch.rand_like(other['chase'])
+    other['entity_chase'] = torch.rand_like(other['entity_chase'])
+    chase.eval(), plain.eval()
+    assert not torch.allclose(chase.evaluate(obs, _mask()).value, chase.evaluate(other, _mask()).value)
+    assert torch.equal(plain.evaluate(obs, _mask()).value, plain.evaluate(other, _mask()).value)
+
+
 def test_empty_slots_are_masked_and_link_alone_is_fine():
     network = nets.create('hitnet', native_spec(), **SMALL).eval()
     obs = _obs()

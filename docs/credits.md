@@ -205,6 +205,7 @@ All of the glitch knowledge is the owner's; the agents made the agent able to us
 | Nov 23 | **Range-aware contact**: frames to contact with a horizon, "not soon" beyond it | Owner | Built (schema 8, off by default): level with or above schema 7 on one family's bench; horizon 16 | r40 |
 | Nov 23 | **The shooter's threat lane**, cut where Link can still leave | Owner (idea); agents (columns, the game's shot delay) | Built (schema 8): catches more lane hits on the bench; not yet trained | r38 §6, r40 |
 | Nov 23 | **The bomb-carrier flag** as an input, one definition with Metric B | Owner (flag); agents (BombStats' predicate) | Wired, reads 0 until `r40-bombstats` lands | r40 |
+| Nov 24 | **Where the monsters are sent, and who may turn at Link**: the chase target, its flip and Link's distance from the mirror's fixed point (the "hotspot"); per grid-point walker, the frames to its next grid point, the turn toward the target there, its chance and whether it reverses onto Link; and which monsters the Darknut rules cover | Owner (the lesson, "don't chase", shadowing at 90°, the clumping zone, the audit question); the lead (the game's rule behind it); Chase40 (the audit of every monster's movement, the columns, the proof on replays) | Built (schema 9, `obs.chase` off by default); not yet trained | r40 "The chase target", `docs/owner/darknuts.md` |
 
 ## Training method
 

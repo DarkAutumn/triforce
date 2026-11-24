@@ -1451,6 +1451,244 @@ end to end, first sight, on networks never trained for it:
 So the targets and the cycle work as built. The first pass is a fight today's network loses; it is the training
 (half the resets at cycle 0, half at 1, decisions 2026-11-23) that must teach the kill of one Darknut and the leave.
 
+## The chase target (Chase40, branch `r40-chase`)
+
+**The ask** (the owner's Darknut lesson, `docs/owner/darknuts.md`; the lead's brief): audit every monster's movement
+against the monsters' chase target; find the hotspot's bounds and check it against play; two new inputs for 2.0.1.0
+behind a switch (where the monsters are sent; a monster may turn at Link at its next grid point), the second proven
+against real play as the threat lane was; and, without a reward, what could carry the lesson further.
+
+### The audit (`zelda-asm/mechanics.md` "Who chases what"; the owner's table in `docs/owner/darknuts.md`)
+
+Every moving monster's update routine was read (a scout's first pass, `asm:` labels checked against `src/`). The
+table, by rule (turn chance = per decision at a grid point):
+
+| type | routine | target read | rule | turn chance | clumps |
+|---|---|---|---|---|---|
+| Darknut red `$0B` / blue `$0C` | asm:Darknut_Update | chase target | wanderer, rate $80, q $20 / $28 | 129/256 | yes |
+| Gibdo `$30` | asm:Gibdo_Update | chase target | wanderer $80, q $20: walks exactly as a red Darknut | 129/256 | yes |
+| Stalfos `$2A`, Like-Like `$17`, Vire `$12` | asm:Stalfos_Update, asm:LikeLike_Update, asm:Vire_State0Wander | chase target | wanderer $80 | 129/256 | yes |
+| Bubble `$2B`-`$2D` | asm:Bubble_Update | chase target | wanderer $40, q $40 | 65/256 | yes |
+| Ghini `$21` | asm:Ghini_Update | chase target | wanderer $FF | always | yes |
+| Moblin `$03/$04`, Octorok `$07-$0A`, Blue Leever `$0F` | asm:Moblin_Update, asm:Octorok_Update, asm:Leever_UpdateBlue | chase target | wanderer, own entry: $A0; $70 / $A0; $A0 | 161; 113 / 161; 161 | yes |
+| Zol `$13`, Gel `$14/$15`, Dodongo `$31/$32` | asm:Zol_WalkAndPause, asm:Dodongo_State0Move | chase target | wanderer $20 (pauses; X + $10) | 33/256 | weakly |
+| Goriya `$05/$06`, Lynel `$01/$02`, Armos `$1E` | asm:Goriya_Update | chase target | at every grid point face it along the longer axis if under $51 px | certain | within $51 |
+| Keese, Peahat, flying Ghini | asm:Flyer_State2Chase | chase target, in chase state | one 45° step / 16 frames | chase on 80-96/256 decisions | partly |
+| Moldorm, Patra, Gleeok's flying head | asm:Moldorm_Chase, asm:Patra_DecideFlightState, asm:Flyer_GleeokHeadDecideState | chase target | 45° steps | chase on 192-208/256 | yes |
+| Manhandla, Digdogger, Tektite, Boulders | asm:Manhandla_Update, asm:Digdogger_ChangeSpeedAndTurn, asm:Jumper_Update, asm:Boulder_UpdateSpawner | chase target, half the time | one 45° step | 128/256 | partly |
+| **Blue Wizzrobe** `$23` | asm:Wizzrobe_Blue_TurnTowardLink | **Link's real position** | turns toward Link's side every 128 frames; teleports 32 px diagonally from itself | certain on its beat | **no** |
+| **Red Wizzrobe** `$24` | asm:Wizzrobe_Red_State3Appear | Link's real position | appears 2-5 squares from Link facing him | - | no |
+| Rope `$28` | asm:Rope_Update | Link's real position | rushes at 1.5 px when Link is < 8 px off its row or column at a grid point | certain | no |
+| Lanmola, Ganon, Red Leever, Trap, Wallmaster, Zora, statues and every fireball | asm:Lanmola_UpdateHead, asm:Ganon_MoveAndShoot, asm:Leever_UpdateRed, asm:Trap_Update_Full, asm:Wallmaster_CalcStartPosition, asm:Fireball_Update | Link's real position | own rules | - | no |
+| Pols Voice, Gohma, Aquamentus, Gleeok's attached heads | asm:PolsVoice_Update, asm:Gohma_Update, asm:Aquamentus_Move, asm:Gleeok_MoveHead | neither | random or fixed | - | no |
+
+The owner's expectations: Darknuts, Vires and Stalfos follow it (confirmed); **Blue Wizzrobes do not** (no line of
+wizzrobe.asm reads `ChaseTargetX/Y`: they turn toward Link's real position and teleport relative to themselves); Red
+Wizzrobes do not (confirmed); **Gibdos do**, exactly as a red Darknut (`LDA #$80 / JSR Wanderer_Update`, q-speed
+$20), the only differences being a boomerang stun (a Darknut clears its stun every frame) and its weapons. Two
+groups the Darknut rules do not cover the same way: the **Goriya rule** (Goriyas, Lynels, Armos: certain turns, a
+$51-pixel window on the longer axis, so shadowing beside one is safe only level with or ahead of it) and the **Rope**
+(Link's real position, a charge at triple speed when he comes level). Every turn decision of a wanderer also falls
+again on a frame its move gives no pixel (one or two decisions a grid point at q-speed $20), and a tile in its way on
+the next frame can turn it back whatever the target (asm:Walker_AltDir_GetRandomObjPerpendicularDir).
+
+### The hotspot's bounds
+
+The mirror is (255 - X, 255 - Y) of Link's corner (asm:Mode5Play_UpdateWorld@UpdateWeapons: X EOR $FF), so Link and
+his mirror are |2X - 255| apart on X and |2Y - 255| on Y, and coincide (1 px apart) at (127.5, 127.5). Link's
+corner stands on X multiples of 8 and Y = 13 mod 8 (rows $5D, $65, ...), so the gaps on his half-square grid are, on
+X: 112 → 31, 120 → 15, **128 → 1**, 136 → 17, 144 → 33; on Y: 109 → 37, 117 → 21, **125 → 5**, 133 → 11, 141 → 27.
+The wanderers' window is |d| < 9 on an axis, so both targets fall in the same window only within 8 px of each other:
+**X = 128 (124-131 between grid points) and Y = 125 (124-131)**, the one half-square at (128, 125); one axis alone
+is a column through X 128 or a row through Y 125.
+
+Link's corner positions in a dungeon room (`*` within 8 px on both axes; `0`-`3` the larger axis gap under 16, 32,
+48, 64 px, i.e. Link and his mirror within 0-3 squares; `|` / `-` within 8 px on X / Y only):
+
+```
+Y \ X   32  40  48  56  64  72  80  88  96 104 112 120 128 136 144 152 160 168 176 184 192 200 208
+   93    .   .   .   .   .   .   .   .   .   .   .   .   |   .   .   .   .   .   .   .   .   .   .
+  101    .   .   .   .   .   .   .   .   3   3   3   3   3   3   3   3   .   .   .   .   .   .   .
+  109    .   .   .   .   .   .   .   .   3   2   2   2   2   2   2   3   .   .   .   .   .   .   .
+  117    .   .   .   .   .   .   .   .   3   2   1   1   1   1   2   3   .   .   .   .   .   .   .
+  125    -   -   -   -   -   -   -   -   3   2   1   0   *   1   2   3   -   -   -   -   -   -   -
+  133    .   .   .   .   .   .   .   .   3   2   1   0   0   1   2   3   .   .   .   .   .   .   .
+  141    .   .   .   .   .   .   .   .   3   2   1   1   1   1   2   3   .   .   .   .   .   .   .
+  149    .   .   .   .   .   .   .   .   3   2   2   2   2   2   2   3   .   .   .   .   .   .   .
+  157    .   .   .   .   .   .   .   .   3   3   3   3   3   3   3   3   .   .   .   .   .   .   .
+  165    .   .   .   .   .   .   .   .   .   .   .   .   |   .   .   .   .   .   .   .   .   .   .
+  173    .   .   .   .   .   .   .   .   .   .   .   .   |   .   .   .   .   .   .   .   .   .   .
+  181    .   .   .   .   .   .   .   .   .   .   .   .   |   .   .   .   .   .   .   .   .   .   .
+  189    .   .   .   .   .   .   .   .   .   .   .   .   |   .   .   .   .   .   .   .   .   .   .
+```
+
+The same by room square (Link standing square-aligned; `#` wall; `B` the Olive Garden's push block, 5x05, X $70
+Y $90, asm:PushBlock_State0Idle):
+
+```
+        0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
+row 0   #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  #
+row 1   #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  #
+row 2   #  #  .  .  .  .  .  .  |  .  .  .  .  .  #  #
+row 3   #  #  .  .  .  .  3  2  2  2  .  .  .  .  #  #
+row 4   #  #  -  -  -  -  3  1  *  2  -  -  -  -  #  #
+row 5   #  #  .  .  .  .  3  B  1  2  .  .  .  .  #  #
+row 6   #  #  .  .  .  .  3  3  3  3  .  .  .  .  #  #
+row 7   #  #  .  .  .  .  .  .  |  .  .  .  .  .  #  #
+row 8   #  #  .  .  .  .  .  .  |  .  .  .  .  .  #  #
+row 9   #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  #
+row10   #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  #
+```
+
+The owner's zone ("north of the block [...] the 2x5 tile area north of it (not the top row, no further than 2
+squares from the block in EW range)") is rows 3-4, columns 5-9: the squares where Link and his mirror are within one
+or two squares, with the one square (8, 4) where they share the turn window. The point is off the room's middle (the
+interior's centre for Link's corner is X 120, Y 141): half a square right and one square up. It is the same point in
+every room, whatever stands in it.
+
+**The overworld** has the same point on the screen (Link's Y grid has the same phase, rows $3D, $4D, ...), with
+three differences: no wall rings it, so the column and row bands run across the screen; Link reaches X 0-$F0, so his
+mirror can lie beyond the monsters' bounds ($11-$E0) and a mirror spell then parks them against the far edge; and the
+wanderers' X test can wrap there (a monster at X $00 with Link at X 0-7: asm:Wanderer_MoveAndTurn's signed byte reads
+the mirror at X $F8-$FF as 1-8 px off). In a dungeon Link's mirror of his bottom rows (Y 165-189) lies at Y 66-90,
+above the room's top bound ($5D): a mirror spell then piles the wanderers against the top wall.
+
+### The two inputs: observation schema 9, behind `obs.chase` (default off)
+
+Two NEW keys after `entity_threat` (`docs/architecture.md` "Schema 9" has every column): **`chase` [7]**, where the
+monsters are sent (`other`: the flip `$60`; `target_dx`, `target_dy`: the chase target relative to Link, 0 while it
+is Link; `flip_time`: the frames to the next flip, which the game does hold: `ChaseLongTimer` `$4A` ticks on the
+frames LongTimerCycle `$26` wraps, so the flip is `cycle + 1 + 10 (timer - 1)` frames away, 1 at timer 0;
+`hotspot_dx`, `hotspot_dy`, `mirror_gap`: Link's corner from the mirror's fixed point, without saying what it is for)
+and **`entity_chase` [12, 12]**, per monster the audit says turns at a grid point toward the chase target (the
+wanderers and the Goriya rule; Zols, Gels, Dodongos and Armos are left out: random pauses, a shifted X, a statue
+state): `turns`, `grid_time` (frames to its next decision, walking on exactly as asm:Obj_MoveByQSpeed moves it:
+the q-speed added to the fraction four times a frame, the grid offset stopped at ±16), `toward` (the current chase
+target in its turn window there), `toward_{N,S,W,E}`, `chance` ((rate + 1) / 256 over the decisions it makes at the
+point: a frame with no pixel decides again), `reverse` (that turn is a reversal), `timer_turn`, and `toward_link`,
+`reverse_link` (the same with Link's own corner: the owner's "don't chase"). Arithmetic on the current RAM only
+(`zelda::chase`, `env::observation::chase_blocks`): no emulator step, and no random byte (round 36: the numbers are
+memorised, not used), so the turn is a chance. Both are `model.TOKEN_KEYS`: `ZeldaPolicy` and the Rust actor never
+read them, and `hitnet`'s token group `chase` puts `entity_chase` in the entity tokens and `chase` in Link's own
+token (`tests/test_hitnet.py`). Tests: `zelda::chase`'s unit tests (the flip, the signed-byte window and its wrap,
+the Goriya axis, a half-pixel walker reaching its point and lingering, the reversal behind and none 20 px off, the
+clock and the shove), `tests/test_obs_chase.py` (the env's blocks are `_native.chase_blocks` with the switch, zeros
+without it, every other key identical either way; the probe reads every walking Darknut's next grid point).
+
+### Against real play (`scripts/experiments/r40_chase_check.py`; 2.0.0.15's 250-test replays and the owner's takes)
+
+Six pieces, as the lead cut them: replays 0-59 (Dungeons 1 and 3: Stalfos, Red Darknuts) and the 24 runs past
+Dungeon 5 with seeds 60 and up (Blue Darknuts, Gibdos, Dungeons 7 and 6); jobs #962-#965, #1025, #1026 on
+`r40-chase` (the merged pieces in `target/r40/chase-check/merged.json`). Every replay played frame by frame
+(`_native.ReplayPlayer`), the probe computed from each play frame's RAM alone (`_native.chase_probe`).
+
+**The hotspot in play.** Every live wanderer's distance (corners) from Link, binned by Link's distance from (127.5,
+127.5), against the mean distance from Link of a uniform square of the room's walking box (the geometry alone: near
+the middle everything is closer), and the wanderers within 40 px of him per frame:
+
+| Link from the point | dungeon frames | wanderers' mean distance | uniform | ratio | within 40 px a frame | overworld: ratio, within 40 |
+|---|---:|---:|---:|---:|---:|---|
+| 0-16 px | 60,336 | 50.0 | 61.1 | **0.82** | **1.08** | 0.74, 0.42 |
+| 16-32 | 116,379 | 55.3 | 64.5 | 0.86 | 0.94 | 0.73, 0.57 |
+| 32-48 | 160,836 | 63.2 | 71.1 | 0.89 | 0.79 | 0.77, 0.46 |
+| 48-64 | 126,480 | 73.6 | 75.9 | 0.97 | 0.59 | 0.84, 0.33 |
+| 64-96 | 188,877 | 86.8 | 88.8 | 0.98 | 0.62 | 0.83, 0.35 |
+| 96+ | 64,232 | 94.9 | 103.1 | 0.92 | 0.70 | 0.97, 0.09 |
+
+In dungeons the wanderers stand 18% closer to Link than the room's geometry gives when he is within a square of the
+point, 3% at 48-64 px, and twice as many are within 40 px of him: the clump the owner plays for, in today's team's
+play, which does not seek it. (The overworld's ratio is low in every band; why was not looked into.) The owner's
+bomb take (`bombs_with_melee`, six Blue Darknuts): 54 px within 16 px of the point (ratio 0.87, 1.45 within 40 px a
+frame), 53 at 16-32, 55 at 32-48 (1.52), 59 at 48-64, 71 at 64-96 (0.39 within 40 px): the lead's 50-53 px inside
+48 against 80 outside, by band; 1,803 of the take's 2,205 play frames with wanderers are within 48 px of the point,
+so its outer bands are short. His `play_with_anticipation` (one Darknut shadowed, the rest elsewhere) reads a ratio
+of 1.3 in every band.
+
+**The flip** (`flip_time`): the 76,442 flips of `$60` were read 1 frame before in 100%, 8 frames before in 91.1%
+and 16 frames before in 88.3% (only flips with none in between). The misses look like lag frames (seen frame by
+frame for the grid points of a room with eight Red Darknuts, where the RAM stood still for frames at a time; not
+checked for the flips themselves): the RAM's timers count game updates and the emulator's frames run longer.
+
+**The turn column.** Each arrival at a grid point (a covered monster's grid offset went from off-grid to 0: the frame
+of its first decision there), what the probe said the frame before: `exact with the roll` reads the frame's own
+random byte (Random+1,X, after the fact: the check's knowledge, never the input's) and asks whether the decision is
+the one the rule then names; `taken / expected` is how often the turn toward the target was taken where it differs
+from what the monster does otherwise, against (rate + 1) / 256; reversals are grid points a monster left the way it
+came (any cause, tile turns included) and decision reversals the decisions that turned it straight back:
+
+| type | grid points | exact with the roll | `grid_time` exact 1 / 8 / 16 frames before | no turn window: agree | toward: taken / expected | decision reversals flagged the frame before (`reverse`) | all reversals: `reverse`, `reverse_link`, `reverse` 8 frames before |
+|---|---:|---:|---|---:|---|---|---|
+| **Darknut red** | 13,121 | 99.1% | 100 / 82.7 / 80.2% | 99.5% | 48.3% / 50.4% (2,766) | 95.3% of 446 | 74.0%, 38.3%, 49.1% of 823 |
+| **Darknut blue** | 16,480 | 99.2% | 100 / 97.5 / 95.0% | 99.4% | 46.6% / 50.4% (2,758) | 96.7% of 449 | 80.2%, 46.7%, 57.8% of 692 |
+| **Gibdo** | 5,095 | 99.4% | 100 / 97.4 / 95.0% | 99.5% | 49.1% / 50.4% (888) | 98.2% of 164 | 51.1%, 25.6%, 38.9% of 450 |
+| **Stalfos** | 4,283 | 99.3% | 100 / 99.5 / 98.2% | 99.5% | 49.9% / 50.4% (826) | 96.2% of 131 | 29.5%, 16.1%, 22.5% of 601 |
+| Like-Like | 5,225 | 99.3% | 100 / 98.5 / 96.4% | 99.5% | 49.1% / 50.4% (934) | 98.7% of 152 | 77.1%, 47.5%, 50.4% of 280 |
+| Vire | 6,125 | 98.8% | 100 / 99.9 / 99.7% | 99.1% | 49.4% / 50.4% (1,096) | 92.4% of 170 | 25.2%, 10.5%, 20.5% of 820 |
+| Bubble | 28,647 | 99.6% | 100 / 99.7 / 96.4% | 99.7% | 23.6% / 25.4% (4,775) | 95.9% of 414 | 42.7%, 25.3%, 31.1% of 1,041 |
+| Octorok | 5,583 | 99.0% | 100 / 93.8 / 86.1% | 99.2% | 47.0% / 45.8% (928) | 92.8% of 152 | 50.3%, 37.1%, 35.0% of 286 |
+| Moblin | 2,318 | 98.8% | 100 / 98.7 / 96.9% | 99.0% | 60.1% / 62.9% (263) | 88.5% of 52 | 26.4%, 20.8%, 16.4% of 159 |
+| Blue Leever | 1,549 | 98.6% | 100 / 97.4 / 82.8% | 99.0% | 62.9% / 62.9% (256) | 94.8% of 58 | 60.6%, 29.9%, 48.8% of 127 |
+| Goriya (the Goriya rule) | 8,904 | 97.5% | 100 / 94.3 / 87.2% | - | certain | 96.2% of 1,542 | 64.4%, 42.7%, 47.7% of 2,213 |
+| Lynel (the Goriya rule) | 537 | 98.0% | 100 / 96.8 / 93.9% | - | certain | 98.5% of 67 | 72.8%, 19.8%, 63.0% of 81 |
+| Ghini | 149 | 100% | 100 / 100 / 100% | 100% | always (14) | 5 of 5 | 11 reversals: too few to read |
+
+- **The rule is the game's.** Given the roll, the column names the decision at 97.5-99.6% of grid points; the rest
+  are, in the cases read frame by frame, the target moving in that very frame (a flip, or Link stepping across the
+  8-pixel edge); one Vire turned round with no decision for it (likely its touch on Link: not checked). Without the
+  roll, the turn toward the target is taken as often as the turn rate says (47-50% for rate $80, 24% for $40, 60-63%
+  for $A0), so `chance` is calibrated.
+- **Reversals.** A decision that turned a monster straight back had `reverse` the frame before in 88-99% of cases
+  (Red Darknut 95.3%, Blue 96.7%, Gibdo 98.2%, Stalfos 96.2%). Of all reversals at a grid point, the decision's are
+  a share only: the rest came after it (the departure differs from the decision: the next frame's tile test,
+  asm:Walker_AltDir_GetRandomObjPerpendicularDir, or a touch; not split further), which no input about the target
+  can flag, and they are most of the Stalfos' and Vires'; `reverse_link` (Link himself behind it) flagged 38-47% of
+  the Darknuts' reversals, the "don't chase" cases among them.
+- **Lag frames.** `grid_time` is exact the frame before (100% for every type); 8 and 16 frames before it is short
+  where the game drops updates (Red Darknuts 82.7 / 80.2%: a room of eight, read frame by frame, moved one pixel in
+  three frames where the q-speed says two): it counts game updates, not the emulator's frames.
+- Ghini is below 300 grid points (149, all exact): shown, not claimed. Not covered by the column: Zols, Gels,
+  Dodongos, Armos (left out above). The overworld X wrap was not counted separately.
+
+### Identity with `obs.chase` off (jobs #983 base `r40-gen` 9e030e84, #1067 this branch; seeds 0-199; team 2.0.0.15)
+
+| segment | runs | outcomes, rooms, actions, frames | per-decision diagnostics |
+|---|---:|---|---|
+| `d3first` Dungeon 1 (`1_73s_0`; goriya's `hitshift` reads schema 7's tokens) | 200 | identical run for run (5,811,092 frames each side; 12,943 room visits) | the served network's `act_entropy` and `surprisal` differ by at most 2.3e-5 / 4.8e-5 |
+| `d2first` Dungeon 1 | 200 | identical | identical (every record field) |
+
+The same picture as schema 8's proof (above): every action, frame and room record equal; the only difference is in
+two float diagnostics of the served `hitshift` network, in the fifth decimal, with the same action drawn every time
+(GPU batches formed by whichever envs ask together). `triforce manifest diff` of the two sides: `code` (the
+commit and module), `task` (every task config's hash: each now carries `obs.chase: false`), `arguments` (the output
+paths), `run` (the job); no team, model or start-state difference.
+
+### What could carry the lesson beyond the inputs (for the lead to decide; no reward added)
+
+The inputs say where the monsters are sent and who may turn at Link; nothing yet rewards using it, and the owner asked
+for no reward. Three things could carry it indirectly. **Tracked goals** (run statistics beside the route step's
+expectation, as the screen wrap and the no-kill goals are): in a kill-all room with wanderers, the frames Link spends
+within 32 px of the hotspot and the monsters within 40 px of him there, against the frames to clear the room and the
+hearts lost; bombs that hurt two or more against one; hits taken within 16 frames after Link stood behind a monster on
+its line (`reverse_link` read 1): a falling "don't chase" count is the lesson learned, measured. **Demonstrations**:
+the owner's three takes are the clearest teacher (the bomb take spends its bombs from the hotspot band, five of six
+hurting two); Darknut40's scripted fighter could take the hotspot as the place it waits for a clump when bombs are
+usable and shadow at 1.25-1.5 squares off a Darknut's line otherwise, and its clean runs be cloned during training
+(`train --demos`) in the Olive Garden, 3x59 and 3x5b's last pass; start states with Link in the band would let the
+explorer find it. **An auxiliary target** (like the hit head, training-only look-ahead): for each walking monster,
+the direction it actually takes at its next grid point, read from the game a few frames later; the head learns the
+rule the column states, and a policy tower fed its output (as `feed` does for the hit head) sees "this one will turn
+at me" before it happens.
+
+### Not done, not tested (status file `local://r40-chase40-status.md`)
+- No network has trained with `obs.chase` on; nothing says yet that the columns change play. The hit bench
+  (`r40_obs_bench.py`) was not run with the `chase` group.
+- The column does not walk walls or room bounds: a monster blocked at its next grid point decides there all the same
+  (the tile test turns it the frame after, which the column does not predict); `grid_time` counts game updates (lag
+  frames make it short in crowded rooms).
+- Zols, Gels, Dodongos and Armos have no turn column; the Vire's hop is handled by rounding its Y to its row (its
+  98.8% with the roll is the lowest of the wanderers; one Vire turn read by hand had no decision behind it).
+- The overworld X wrap is in the code and its unit test, not measured in play.
+
 ## The generation's base made green (Gen40fix, branch `r40-genfix`)
 
 `triforce job test all --build` on the base as received (5f5647c9, job #937) failed 8 Python tests; Rust, asm and

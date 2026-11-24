@@ -416,6 +416,11 @@ pub struct ObsConfig {
     /// the bomb carrier; `env::observation::threat_block`). Default off: zeros, as today's networks were trained.
     #[serde(default, deserialize_with = "de_bool")]
     pub threat: bool,
+    /// Fill the `chase` and `entity_chase` observation blocks (schema 9, round 40: where the monsters are sent, what a
+    /// grid-point walker may do at its next grid point; `env::observation::chase_blocks`). Default off: zeros, as
+    /// today's networks were trained.
+    #[serde(default, deserialize_with = "de_bool")]
+    pub chase: bool,
 }
 
 impl Default for ObsConfig {
@@ -425,6 +430,7 @@ impl Default for ObsConfig {
             target: false,
             hidden_positions: HiddenPositions::Ram,
             threat: false,
+            chase: false,
         }
     }
 }
