@@ -1057,8 +1057,10 @@ def test_a_job_with_a_plan_is_one_box_over_its_runs(qapp, tmp_path, monkeypatch,
     place"; ``job_box``): the job's ``Agent / Task / Sub-task`` (not the plan's combined name) with the state, the
     plan's kind and its checkout as badges; the description; one line of facts saying nothing twice (the place and
     time against the estimate, OVERRUN in the warning colour, the plan's start, host and pid, nice; no elapsed time);
-    the plan's overall bar for a plan of several runs; the command once; no bar of the queue row's counters.  Under
-    it the plan's rows as before; selecting it shows the plan in the detail pane.  The web view the same box."""
+    the plan's overall bar for a plan of several runs; the command once; no bar of the queue row's counters that the
+    plan's rows show (``runs``, ``steps``), but a bar for a counter with a name of its own while it goes (the 250
+    test's ``bomb metrics``).  Under it the plan's rows as before; selecting it shows the plan in the detail pane.
+    The web view the same box."""
     from triforce import events, jobs
     monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
     logs, root = tmp_path / 'logs', tmp_path / 'gui-root'
@@ -1099,6 +1101,22 @@ def test_a_job_with_a_plan_is_one_box_over_its_runs(qapp, tmp_path, monkeypatch,
         assert 'r40-round' in window.detail.title.text() and window.detail.summary.sections
         for widget in (view.header, *view.rows):
             widget.grab()
+        # A counter with a name of its own is a step of the job no row of the plan shows (the owner, Nov 24: the 250
+        # test read RUNNING under its finished chain, its bomb metrics over the replays going on unseen): the box
+        # draws it while it goes and is one counter's line taller; `runs`, named for its unit, is still not drawn.
+        assert box['counters'] == []
+        plain = view.header.height()
+        going = {'runs': {'done': 2, 'total': 2, 'unit': 'runs', 'rate': 1.0, 'ts': time_now()},
+                 'bomb metrics': {'done': 119, 'total': 250, 'unit': 'replays', 'rate': 0.5, 'ts': time_now()}}
+        queue.update(job, progress=going)
+        window._scan_and_update()
+        box = one_box(view)
+        assert [(c['label'], c['numbers'], c['time']) for c in box['counters']] == [
+            ('bomb metrics', '119 / 250 replays', '~4m left')]
+        assert view.header.height() == plain + gui.Header.BOX_COUNTER
+        view.header.grab()
+        done = {**view.job, 'progress': {**going, 'bomb metrics': {**going['bomb metrics'], 'done': 250}}}
+        assert gui.job_box(done, view.model, time_now())['counters'] == []          # finished: gone again
     finally:
         window.close()
         window.deleteLater()
@@ -1113,8 +1131,10 @@ def test_a_job_with_a_plan_is_one_box_over_its_runs(qapp, tmp_path, monkeypatch,
         assert [(card['name'], card['plan']) for card in snapshot['cards']] == [('ow-start', 'r40-round')]
         assert web['box']['flags'] == [['⚑ RED FLAG no-harvested — drew 0 harvested states', gui.C.bad.name()]]
         assert web['flags'][0]['code'] == 'no-harvested' and web['flags'][0]['color'] == gui.C.bad.name()
+        assert [c['numbers'] for c in web['box']['counters']] == ['119 / 250 replays']
         page = gui.web_page().decode()
         assert 'function boxHtml(job)' in page and "'</div>' + flagsHtml(job)" in page   # the box draws them
+        assert 'box.counters.map(counter => counterHtml(counter, job.color))' in page
     finally:
         plan.finish('completed')
     # once it ended (its runs gone from the page) the web view still reads its plan for its box
