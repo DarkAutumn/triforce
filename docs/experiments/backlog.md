@@ -500,7 +500,8 @@ thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
 
 ## Recorded for later (the owner, Nov 23)
 
-- **Speedrunners bypass 3:0x6b on entry**: they kill nothing before the first Darknut encounter (3:0x5b), so they do
+- **(Decided the same evening: decisions "The fresh generation's Dungeon 3". 0x7b and 0x6b crossed, one Darknut in
+  0x5b's first pass, the Moldorm's key back; in the retrain, not before.)** **Speedrunners bypass 3:0x6b on entry**: they kill nothing before the first Darknut encounter (3:0x5b), so they do
   not take 0x6b's key (it appears when its five Zols are dead). Where they make that key up is not known to us yet
   ("I'm not sure where they make up the key without digging into it"). The route is NOT changing for it now; when
   Dungeon 3's route is next looked at, find the key they use instead (levels/level-3.md: keys at 0x7b, 0x6b, 0x49,
@@ -511,3 +512,12 @@ thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
   hides it (3:0x59 is a bomb room, 3:0x5b is a pass-through first and reached without beams second). A later
   experiment should pick rooms where Link arrives with beams against monsters that do not split, and may be a
   different technique than a target rule.
+- **A red Goriya's lane** (the owner asked why it has none; left as is for now): once a red Goriya is ready to throw
+  (timer 0, "wants to shoot"), it throws on a frame only when its random byte is one of two values of 256, so the
+  moment cannot be told, but the risk can: standing in its line then costs about a 1-in-128 chance a frame, 37% a
+  second. A third lane state, "armed, may throw any frame" (the line it would fly, no countdown), would say so
+  without the random byte. Try it if the fresh networks struggle with red Goriyas.
+- **Rust suite, the four long sweeps** (Tests40's measurement, not done): `attacks`, `wrap_exit`, `bomb_mask` split
+  by state / row / wall so the harness runs the parts side by side (same coverage); estimated floor 60-70 s.
+- **A flaky test**: `tests/test_train_cli.py::test_an_interrupted_run_saves_but_exits_130` failed once in a full
+  suite under load (exit 1 instead of 130) and passed three times alone.

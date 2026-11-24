@@ -3717,3 +3717,41 @@ variants, the experiment script), the fresh generation's fights keep the monster
 question that stays open for a later round is damage from range as such (against monsters that do not split, with
 beams actually held when the room is reached), not this target rule.
 
+## 2026-11-23 — The fresh generation's Dungeon 3: two rooms crossed, one Darknut, the Moldorm's key (the owner)
+
+The owner, after watching the firing-line replays and looking up what speedrunners do in Dungeon 3: "in d3, skip
+0x6b. in 0x5b kill ONE darknut then skip the other two, doesn't matter which. Because we shouldn't kill any zols on
+the way, it's two bypass rooms (with a treasure key in 0x7b we pick up), that first darknut is on a bomb drop number.
+You'll need to find a way to train that, because we only kill the rest of the room on the way back through. The
+extra key comes from killing the moldorm, which we have to add back." And: "We aren't retraining any of this now.
+This all goes into the upcoming retrain."
+
+So, for 2.0.1.0's `d3first` and nothing before it (today's team and route are not touched):
+- 3:0x7b is crossed without a fight, taking its key (visible on entry); 3:0x6b is crossed without a fight, its key
+  (which appears only when its five Zols are dead) left behind.
+- 3:0x5b's first pass kills exactly one of its three Darknuts, whichever, for its drop: with no kill made in the two
+  rooms before it, that kill falls on a number of the game's drop cycle that gives bombs. The other two are left;
+  the room is cleared on the last pass (W -> E), as today.
+- The key 0x6b no longer gives comes from the Moldorm room 2:0x3e, which is fought again (2.0.0.13 crossed it and
+  took 9:0x56's key instead; that pair of changes is re-decided when the route's key count is redone).
+- The lead's notes for whoever builds it: (1) "kill one, take what it drops, leave" is what the generation's
+  bomb-carrier input and targets are for (a carrier in a pass-through room: the exit and the nearest eligible
+  carrier are both targets); 0x5b's first pass is its first required use, so the carrier rule must be exact about
+  the drop cycle (`asm:Drop_SetUpItem`, the kill counters) and about what Link has killed since the game began on
+  THIS route (the overworld walk to Dungeon 3 must leave the cycle where the first Darknut gives bombs: count it,
+  and fix the walk's kills if it does not). (2) The room's start states for training need both passes: three alive
+  on the first, two alive on the last. (3) The route's key and bomb budget is recomputed from the start
+  (docs/routes/rest-of-game.md "the survival budget") before any state is built.
+- The speedrunners' full Dungeon 3 path beyond these rooms was not looked up; only what the owner gave is decided.
+
+## 2026-11-23 — The fresh generation's list, as the owner confirmed it
+
+Observation v7 (range-aware contact columns and the threat lane in front of shooters); the bomb-carrier input and its
+targets in pass-through rooms; the whirlwinds played by the engine and the docks without the monster give-ways; no
+closing no-button frame (branch `r40-gen`); an item's target tiles exactly the tiles it can be taken from; the
+0x1e -> 0x1f row; the Link-token architecture with the hit head; Dungeon 3 as above. Not in it: firing-line targets.
+A red Goriya's lane never warns (its throw is a 2-in-256 draw a frame once it is ready, `asm:Walker_SetInputDirAndTryThrowBoomerang`);
+the owner: "this is fine for now [...] we can tackle this later if the new models struggle on red goriyas".
+The shared store is cut over before the generation's trainings start, so it trains into the store (the owner:
+"acceptable").
+
