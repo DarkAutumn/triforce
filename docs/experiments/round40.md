@@ -2139,3 +2139,77 @@ overworld group without it is the cheapest test, if the machine allows). 7:0x1b 
 24.7 s goes to the backlog as a route experiment after the retrain. 7:0x0d boomerang and candle on, 6:0x38
 boomerang on and candle off, as measured above. None of these is applied to a task file by this commit: they go in
 with the generation's reward settings in one change.
+
+## Hearts in the stored states (Hearts41, branch `r40-hearts`)
+
+The lead's task after 2.0.0.16 (decisions 2026-11-24 "a reset writes Link's hearts as the game holds them"): which
+stored states still hold the old writer's bytes, whether play could have made them itself, and a corrected
+`harvested` snapshot for the fresh generation. Script `scripts/experiments/r40_hearts.py` (`audit`, `table`,
+`repair`, `verify`), test `tests/test_r40_hearts.py`; jobs #1115-#1118 (audit), #1120 (repair and verify), #1121
+(content hashes). Status file `local://r40-hearts41-status.md`.
+
+### What the game's code writes into `$66F` / `$670`
+
+Every write of `HeartValues` / `HeartPartial` in `zelda-asm/src` (the low nibble counts the full hearts BESIDES the
+partial one):
+- **Hits** (`asm:Link_BeHarmed`): the damage is whole hearts `[0D]` and a fraction `[0E]`; from
+  `Damage_ObjTypeDamageToLink` the fraction is only $00 or $80 (and Link's own fire $80), halved once per ring grade
+  ($40 blue, $20 red). The fraction comes off the partial when the partial holds it; else one full heart is borrowed
+  as $FF (not $100: 1/256 heart extra) and the rest taken; then the whole hearts come off the nibble, and Link dies
+  when they exceed it (`@HandleDied`: nibble 0, partial $00).
+- **Refills to full** end on $FF (`asm:World_FillHearts`, the pond fairy, potions, the end of a level; the continue
+  screen writes (2, $FF), `asm:Mode8Continue_Update_Full`; the save writes full hearts, `asm:ModeDSave_Update_Sub0BuildFileB`). A heart taken
+  (`asm:Item_TakeHeartsNoSound`) adds to the nibble and leaves the partial alone, or sets it to $FF at the top; a
+  container adds $11 and leaves the partial alone.
+- **Mid-refill** (`asm:World_FillHearts@CompleteHeart`): the partial grows by 6 a frame; at $F8 or more it is set to
+  $00 and the nibble raised, so for that frame Link holds (H, $00) with `World_IsFillingHearts` ($63) set.
+- **The old woman's heart container** (`asm:Person_LifeOrMoneyState2Choose@PayWithHeartContainer`) with fewer than
+  four containers sets nibble and partial to 0 without killing Link: (0, $00).
+
+So play leaves a full heart beside an empty partial (nibble ≥ 1, $00) **only mid-refill**, or when a hit's fraction
+equals the partial exactly. After a refill to full the partial is $FF, a borrow takes the fraction plus one, so the
+partial is $FF − k modulo the fraction's step after k borrows: it can equal a fraction only after k ≡ 127 (no ring;
+mod 128), 63 (blue) or 31 (red) borrows, with no refill to full in between. The lead's belief holds: (H, $00) at
+whole hearts below full is the old writer's (2.0.0.16's test shows the short sequences, `tests/test_hearts.py`).
+**The test of a stored state**: partial $00, nibble ≥ 1, $63 = 0 (no refill running), not in death mode. Nothing
+else separates written from played states (a harvested state's name says which seed and room, not who wrote its
+hearts; `ChainEnv::harvest_entry` writes only cheated bombs, keys and rupees into a pre-entry snapshot).
+
+### The audit (every state of `harvested` 261123-ad612e94, `harvested-rooms` 261123-aabd5d07, and the 1,888 route entry states under `triforce/states/`, `power_on/` aside)
+
+N = the low nibble, C = containers.
+
+| snapshot | states | N<C−1 $00 | N<C−1 $01-$7E | N<C−1 $7F | N<C−1 $80-$FE | N<C−1 $FF | N=C−1 $00 | N=C−1 $01-$7E | N=C−1 $7F | N=C−1 $80-$FE | N=C−1 $FF | old bytes |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `harvested` | 66,438 | 31 | 13,476 | 5,611 | 17,932 | 5,954 | 39 | 555 | 6,926 | 736 | 15,178 | **70** |
+| `harvested-rooms` | 1,196 | 0 | 199 | 134 | 290 | 184 | 0 | 6 | 70 | 14 | 299 | 0 |
+| entry states | 1,888 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1,888 | 0 |
+
+No state has a refill running ($63 = 0 in all 69,522), none N > C−1, none (0, $00). By family (`harvested` /
+`harvested-rooms`, old bytes in bold): boss-aquamentus 526 / 12, boss-digdogger 1710 / 36, boss-dodongo 388,
+boss-gleeok 673 / 24, boss-gohma 47 / 12, boss-manhandla 879 / 24, d2-rope 1271, darknut 9728 / 144,
+dodongo-crossing 334, equipment-room 4188 / 118, ganon 93 / 12, gibdo 2257 / 48, goriya 3797 / 166, lanmola 574 / 12,
+like-like 1955 / 60, moldorm 876 / 12, ow-boulder 159, ow-ghini 35, ow-leever 2776, **ow-lynel 975 (70)**, ow-moblin
+1814, ow-octorok 1170, ow-peahat 1521, ow-start 976, ow-tektite 3188, ow-zora 5020, patra 2014 / 60, pols-voice
+300 / 12, stalfos-keese-gel 3803 / 72, trap-room 2052 / 36, vire 2148 / 72, wallmaster 817 / 12, wizzrobe 4978 / 180,
+zol 3396 / 72. **The lead's 70 are all of them**: ow-lynel's `0_0ac_h*` (`r27_lynel_states.py`), 70 of its 300:
+9 at 2 hearts (`$42,$00`), 22 at 3 (`$43,$00`), 39 at 4 (`$44,$00`), all 5 containers. The other 230 hold
+(H, $7F) or full health, which the old and new writers write alike (all 300 now equal `hearts_encoding` of their
+half hearts). The entry states are all at full health: none to list.
+
+### The corrected snapshot: `target/harvested-gen1` (in the `r40-hearts` worktree)
+
+`repair` copies the store's snapshot with `store.link_tree` (hard links) and writes each of the 70 again as a new
+file (the link removed first, so the store's file is never written through): restored by `Game.restore`, the two
+bytes from `hearts_encoding` of the half hearts `GameState.health` reads, through `set_value`, saved by
+`save_state_file`. `verify` over the whole folder: **66,438 files (the store's names, none more or fewer), 66,368
+byte-identical to the store's, 70 differ**; for each of the 70: the reader's half hearts equal before and after
+(4, 6, 8), the bytes changed as `hearts_encoding` writes them ((H, $00) → (H − 1, $FF)), the file header (magic,
+version, ROM, executor flags) equal, and the zstd-decompressed machine state (22,575-22,576 bytes) equal but for
+exactly two bytes, the two hearts bytes. The store's snapshot hashes as before (`tree_hash`
+ad612e94e8dd292a...); the new folder's is 1f838cd0561bc221e62af001b72be4fdac5de1c6a7f4c96a4db0b99f7a5567a3
+(747,924,009 bytes). `harvested-rooms` needs no new snapshot. To install (the lead):
+`triforce-lead data install harvested 261124-gen1 --from /home/leculver/git/triforce-r40-hearts/target/harvested-gen1`.
+
+Not done or not tested: no training or evaluation on the corrected states; the rare played (H, $00) after 31-127
+borrows was reasoned from the code, not played (no stored state is near it: none holds $00 but the 70).
