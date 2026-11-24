@@ -37,7 +37,8 @@ from . import build as module_build
 from .paths import ROOT
 
 SCHEMA = 1
-GROUPS = ('code', 'task', 'data', 'networks', 'arguments')       # what ``group`` sorts a difference into
+# What ``group`` sorts a difference into (``training``: a lab run's resolved PPO, auxiliary and teacher settings).
+GROUPS = ('code', 'task', 'data', 'networks', 'training', 'arguments')
 RUN_FIELDS = ('seeds', 'job', 'kind', 'schema', 'output')         # differ from run to run of one recipe
 
 
@@ -179,7 +180,9 @@ def data(config, states_dir=None, trajectories=None, start_state=None, demos=(),
                             **tree(config.resolve_harvested_states(states_dir))}
         if trajectories is not None:
             folder = Path(trajectories)
-            files = [p for p in folder.rglob('*') if p.is_file()]
+            # A folder of links to tracks (``lab.collect.route_only``) is hashed through them, by the links' names.
+            files = [path for top, _, names in os.walk(folder, followlinks=True)
+                     for path in (Path(top) / name for name in names) if path.is_file()]
             out['curriculum'] = {'dir': label(folder), 'tracks': len(list(folder.glob('*/trajectory.json'))),
                                  'untracked': untracked(config), **tree(files, folder)}
     if demos:
@@ -363,10 +366,16 @@ def legacy_chain(provenance: dict) -> dict:
 
 
 def read(source) -> dict:
-    """The manifest of a run dir (its ``run.json``), a ``run.json``, a chain output or its ``.meta.json``, an
-    evaluation's ``.meta.json``, or a statistics file (``.stats.json``); a record from before manifests is read by
-    ``legacy_train`` / ``legacy_chain``.  Raises ``ValueError`` for anything else."""
+    """The manifest of a run dir (its ``run.json``), a store run named ``FAMILY/RUN`` (a lab run ``NAME/RUN``), a
+    ``run.json``, a chain output or its ``.meta.json``, an evaluation's ``.meta.json``, or a statistics file
+    (``.stats.json``); a record from before manifests is read by ``legacy_train`` / ``legacy_chain``.  Raises
+    ``ValueError`` for anything else."""
     path = Path(source)
+    if not path.exists() and '/' in str(source) and not str(source).endswith('.json'):
+        from . import paths  # pylint: disable=import-outside-toplevel
+        family, _, run = str(source).strip('/').rpartition('/')
+        if paths.store_exists() and paths.run_dir(family, run).is_dir():
+            path = paths.run_dir(family, run)
     if path.is_dir():
         path = path / 'run.json'
     elif not path.name.endswith('.json') and Path(f'{path}.meta.json').is_file():
@@ -384,11 +393,12 @@ def read(source) -> dict:
     raise ValueError(f"{path}: holds no manifest and is no training's run.json or chain's .meta.json")
 
 
-# What may differ between two runs of one recipe (``same_recipe``): the run's own fields, its seeds, ids, outputs and
-# where it logs, and when its module was built.
+# What may differ between two runs of one recipe (``same_recipe``): the run's own fields, its seeds, ids (a lab run's
+# set name, the run it resumes), outputs and where it logs, and when its module was built.
 RUN_PATHS = ('schema', 'kind', 'seeds', 'job', 'output', 'code.module.built', 'arguments.seed', 'arguments.run_id',
-             'arguments.events', 'arguments.logs_dir', 'arguments.models_dir', 'arguments.output',
-             'arguments.same_recipe_as', 'arguments.same_team_as', 'arguments.except_', 'arguments.first_seed')
+             'arguments.name', 'arguments.resume', 'arguments.events', 'arguments.logs_dir', 'arguments.models_dir',
+             'arguments.output', 'arguments.same_recipe_as', 'arguments.same_team_as', 'arguments.except_',
+             'arguments.first_seed')
 
 
 def matches(path: str, key: str) -> bool:

@@ -23,6 +23,14 @@ a family's own target); ``--teacher-weight`` scales or removes a family's teache
 outside the rollout in the loss by their stored teacher rows; demonstrations (``--demos``, and each family task's own
 ``demos:`` unless ``--no-task-demos``: one pool of rows, one weight), the early stop (``--stop-success``) and numbered
 checkpoints (``--checkpoint-every``) as in ``triforce train``.
+
+The generation's teachers (docs/lab.md "Groups of families", "The recipe on record", "Refusals", "Resume"):
+``--group NAME`` trains a teacher of ``triforce/groups.yaml`` (its members, its route's states); ``run.json`` holds the
+run's manifest (``lab.recipe.build``: ``triforce manifest diff`` reads it) and ``--same-recipe-as RUN --except KEY,...``
+refuses a run that differs from RUN in more; the run refuses tasks that disagree on the observation, a network that
+reads a block its tasks leave at zero (or does not read one they fill), a task drawing every route's states, a task's
+``warm_start``, and demonstrations recorded without a key the network reads (``lab.recipe``); an interrupted run
+(SIGTERM, the queue's stop, a crash) is continued with ``--resume NAME/RUN`` and the same command line.
 """
 
 import argparse
@@ -31,6 +39,7 @@ import math
 import os
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -40,16 +49,18 @@ from .. import lineage, manifest, nets, paths, registry, store
 from ..best_of_n import success_by_state
 from ..demos import load_demos, recipe as demo_recipe, row_weights
 from ..inputs import MissingInput, task_demos
-from ..events import EventLog, logged_job
+from ..events import EventLog, logged_job, write_json_atomic
 from ..jobs import announce, work
 from ..jobs import progress as job_progress
 from ..metrics import MetricsLogger, format_summary
-from ..model import obs_spec_from_space
-from ..observation import observation_space
 from ..ppo import PPO, IterationResult, PPOConfig, joint_kl, minibatch_forward
-from ..train import CONFIRM_EPISODES, EarlyStop, curriculum_spec
+from ..train import (CONFIRM_EPISODES, EXIT_INTERRUPTED, EarlyStop, curriculum_spec, interrupt_on_sigterm,
+                     interrupts_held, run_status)
+from . import groups
 from .auxiliary import AuxLoss, aux_loss, held_out
-from .collect import MultiCollector, NeedSampler, Teachers, parse_families
+from .collect import MultiCollector, NeedSampler, Teachers, parse_families, teacher_paths
+from .recipe import (Refused, build as build_recipe, check_demos, check_network_reads, check_obs_agree, check_routes,
+                     check_same, check_warm_start, create_network, read_reference)
 from .rehearse import Rehearsal
 
 REFERENCE = Path(__file__).with_name('reference.json')
@@ -63,7 +74,25 @@ SHARED_METRICS = ('losses/teacher_kl', 'charts/teacher_agreement', 'losses/appro
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(prog='python -m triforce.lab.train', description=__doc__.split('\n\n')[0])
     parser.add_argument('--name', required=True, help="the run's set name: <models>/<name>/<run-id>")
-    parser.add_argument('--families', nargs='+', required=True, metavar='KEY[=YAML]')
+    parser.add_argument('--families', nargs='+', default=None, metavar='KEY[=YAML]',
+                        help="the run's tasks (or --group)")
+    parser.add_argument('--group', default=None, metavar='NAME',
+                        help="a teacher of triforce/groups.yaml: its members are --families, its route --state-route")
+    parser.add_argument('--all-routes', action='store_true',
+                        help="let a task without state_routes draw every route's states (refused otherwise without "
+                             "--state-route)")
+    parser.add_argument('--allow-warm-start', action='store_true',
+                        help="train although a task names a warm_start (the lab never loads it)")
+    parser.add_argument('--resume', default=None, metavar='NAME/RUN',
+                        help="continue an interrupted run (the same command line): weights, optimizer, counters, "
+                             "each task's curriculum progress and the need sampler restored, to the same total")
+    parser.add_argument('--same-recipe-as', default=None, metavar='RUN',
+                        help="refuse to start unless this run's manifest (triforce.manifest) is RUN's (a run dir or "
+                             "a store run NAME/RUN) but for the run's identity and seeds and --except's keys")
+    parser.add_argument('--except', dest='except_', type=lambda text: [k for k in text.split(',') if k],
+                        default=[], metavar='KEY,...',
+                        help="with --same-recipe-as or --resume: the keys this run changes (a key names every "
+                             "manifest path whose dotted parts it matches)")
     parser.add_argument('--shares', nargs='*', default=[], metavar='KEY=W', help="env shares (default equal)")
     parser.add_argument('--arch', default=nets.ZELDA, choices=nets.names())
     parser.add_argument('--arch-config', default='{}', help="JSON settings of the architecture")
@@ -155,8 +184,7 @@ def initial_network(args):
     if args.load:
         network, checkpoint = registry.load_model(args.load)
         return network, str(args.load), lineage.identity(checkpoint, args.load)
-    spec = obs_spec_from_space(observation_space())
-    return nets.create(args.arch, spec, **json.loads(args.arch_config)), None, None
+    return create_network(args.arch, json.loads(args.arch_config)), None, None
 
 
 def link_families(root: Path, name: str, run_id: str, keys: list[str]):
@@ -242,6 +270,7 @@ class RunLog:
         self.keys = keys
         self.streams = [EventLog(plan.directory / f'{key}.jsonl', specialist=key, run_id=run_id) for key in keys]
         self.began = time.time()
+        self.start_steps = 0
 
     @staticmethod
     def runs(keys: list[str], run_id: str, out_dir: Path, total: int, iterations: int) -> list[dict]:
@@ -250,7 +279,9 @@ class RunLog:
                  'target_steps': total, 'target_iterations': iterations} for key in keys]
 
     def start(self, **fields):
+        """Every family's ``start`` (``start_steps``: where a resumed run continues; its rate counts from there)."""
         self.began = time.time()
+        self.start_steps = int(fields.get('start_steps') or 0)
         for index, stream in enumerate(self.streams):
             stream.emit('start', **fields)
             self.plan.update_run(index, status='running')
@@ -258,11 +289,12 @@ class RunLog:
     def progress(self, iteration: int, iterations: int, steps: int, target_steps: int, metrics: dict,
                  teacher: float):
         elapsed = time.time() - self.began
-        sps = steps / elapsed if elapsed > 0 else 0.0
+        done = steps - self.start_steps
+        sps = done / elapsed if elapsed > 0 else 0.0
         eta = (target_steps - steps) / sps if sps else None
         shared = {key: value for key, value in metrics.items()
                   if key in SHARED_METRICS or key.startswith('losses/aux_')}
-        job_progress(steps, target_steps, 'steps')
+        job_progress(done, target_steps - self.start_steps, 'steps')
         for key, stream in zip(self.keys, self.streams):
             prefix = f'family/{key}/'
             own = {name[len(prefix):]: value for name, value in metrics.items() if name.startswith(prefix)}
@@ -323,8 +355,133 @@ class FamilyStop:
         return confirmed
 
 
+# A resumed run's pools are seeded ``seed + RESUME_SEED_STRIDE × the iteration it resumes at``: fresh episodes, not the
+# first iterations' again (a run that never stopped: ``seed``, as before).
+RESUME_SEED_STRIDE = 1_000_003
+
+
+def expand_group(args) -> Optional[groups.Group]:
+    """``--group NAME``: its members become ``--families`` and its route ``--state-route`` (refused beside
+    ``--families`` or another ``--state-route``); without it ``--families`` names the tasks."""
+    if args.group is None:
+        if not args.families:
+            raise SystemExit("name the run's tasks: --families KEY[=YAML]... or --group NAME (triforce/groups.yaml)")
+        return None
+    if args.families:
+        raise SystemExit(f"--group {args.group} and --families: one or the other (a group's members are its tasks)")
+    group = groups.get(args.group)
+    if args.state_route not in (None, group.route):
+        raise SystemExit(f"--group {group.name} plays route {group.route}'s states, not --state-route "
+                         f"{args.state_route}")
+    args.families, args.state_route = list(group.members), group.route
+    return group
+
+
+@dataclass
+class Resume:
+    """The run ``--resume`` continues: its folder, its store run (None in a models folder), its ``run.json`` and its
+    checkpoint (None: interrupted before its first save; it starts over)."""
+    out_dir: Path
+    stored: Optional[store.Run]
+    record: dict
+    checkpoint: Optional[Path]
+
+
+def find_resume(args, team, models) -> Resume:
+    """``--resume NAME/RUN``: an open store run of this ``--name`` (a store team plays), else the models folder's
+    ``<models>/<name>/<run>``, with the recipe it recorded and not ended (a completed or early-stopped run is
+    continued into a new run with ``--load``)."""
+    name, _, run_id = args.resume.strip('/').rpartition('/')
+    if not name or not run_id:
+        raise SystemExit(f"--resume {args.resume}: name the run NAME/RUN")
+    if name != args.name:
+        raise SystemExit(f"--resume {args.resume}: a run of {name}, not of --name {args.name}")
+    if args.run_id not in (None, run_id):
+        raise SystemExit(f"--resume {args.resume} and --run-id {args.run_id} name two runs")
+    stored = None
+    if team is not None:
+        stored = store.Run(name, run_id)
+        row = store.run_row(stored)
+        if row is None:
+            raise SystemExit(f"--resume {args.resume}: no such run in the store")
+        if row['status'] != store.OPEN:
+            raise SystemExit(f"--resume {args.resume}: the run is sealed (it ended); continue it into a new run with "
+                             f"--load {args.resume}")
+        out_dir = stored.path
+    else:
+        out_dir = registry.run_dir(name, run_id, models)
+    try:
+        record = json.loads((out_dir / 'run.json').read_text(encoding='utf-8'))
+    except (OSError, ValueError) as error:
+        raise SystemExit(f"--resume {args.resume}: no run.json in {out_dir} ({error}): nothing recorded to resume; "
+                         f"start the run again") from None
+    if not record.get('manifest'):
+        raise SystemExit(f"--resume {args.resume}: {out_dir / 'run.json'} records no recipe (a lab run from before "
+                         f"manifests): start the run again")
+    status = run_status(out_dir)
+    if status in ('completed', 'early_stop'):
+        raise SystemExit(f"--resume {args.resume}: the run ended ({status}); continue it into a new run with "
+                         f"--load {out_dir}")
+    ckpt = out_dir / registry.CHECKPOINT_NAME
+    return Resume(out_dir, stored, record, ckpt if ckpt.is_file() else None)
+
+
+def keep_metrics(out_dir: Path, iteration: int):
+    """``metrics.jsonl`` cut back to the iterations a resumed checkpoint holds (none: removed)."""
+    path = out_dir / 'metrics.jsonl'
+    if not path.is_file():
+        return
+    kept = [line for line in path.read_text(encoding='utf-8').splitlines()
+            if line.strip() and json.loads(line).get('iteration', 0) <= iteration]
+    if kept:
+        path.write_text('\n'.join(kept) + '\n', encoding='utf-8')
+    else:
+        path.unlink()
+
+
+def training_settings(args, cfg: PPOConfig, tried, steps_per_env: int, recurrent: bool, teacher_weights: dict) -> dict:
+    """The manifest's ``training``: what the run trains with besides its tasks, data and networks."""
+    teacher = None
+    if args.teacher_coeff > 0 or args.mode == 'imitate':
+        teacher = {'coeff': args.teacher_coeff, 'hold': args.teacher_hold, 'fade': args.teacher_fade,
+                   'value_coeff': args.teacher_value_coeff, 'weights': teacher_weights}
+    sampling = {'kind': args.sampling}
+    if args.sampling == 'need':
+        sampling.update(target=args.need_target, floor=args.need_floor, window=args.need_window,
+                        target_for=sorted(args.need_target_for))
+    rehearse = None
+    if args.rehearse:
+        cache = Path(args.rehearse) / 'cache.json'
+        rehearse = {'cache': manifest.label(args.rehearse), 'cache_json_sha256': manifest.file_sha256(cache),
+                    'keys': args.rehearse_keys, 'rows': args.rehearse_rows, 'coeff': args.rehearse_coeff}
+    return {'mode': args.mode, 'actor': args.actor if args.mode == 'imitate' else 'student',
+            'iterations': args.iterations, 'parallel': args.parallel, 'steps_per_env': steps_per_env,
+            'ppo': cfg.to_dict(), 'aux': list(args.aux), 'try_others': tried,
+            'bptt': args.bptt if recurrent else None, 'teacher': teacher, 'sampling': sampling, 'rehearse': rehearse,
+            'stop': None if args.stop_success is None else {'success': args.stop_success,
+                                                            'patience': args.stop_patience},
+            'curriculum': not args.no_curriculum}
+
+
+def cli(argv=None) -> int:
+    """``python -m triforce.lab.train`` (a job: ``triforce job run -- ...``): trains, then exits 0, ``EXIT_INTERRUPTED``
+    when the run was interrupted (SIGTERM, the queue's stop: its checkpoint and summary saved, ``--resume`` continues
+    it) or stopped before training started, 2 when refused (``recipe.Refused``: the message says what to change)."""
+    interrupt_on_sigterm()
+    try:
+        out_dir = main(argv)
+    except KeyboardInterrupt:
+        print("[lab] stopped before training started", flush=True)
+        return EXIT_INTERRUPTED
+    except Refused as error:
+        print(f"python -m triforce.lab.train: refused: {error}", file=sys.stderr, flush=True)
+        return 2
+    return EXIT_INTERRUPTED if run_status(out_dir) == 'interrupted' else 0
+
+
 def main(argv=None) -> Path:
-    # pylint: disable=too-many-locals, too-many-statements
+    # pylint: disable=too-many-locals, too-many-statements, too-many-branches
+    argv = sys.argv[1:] if argv is None else list(argv)
     args = parse_args(argv)
     from ..nets.serve import learner_process  # pylint: disable=import-outside-toplevel
     learner_process()           # its learner uses the GPU beside the rollouts' server: no CUDA graphs there
@@ -332,17 +489,21 @@ def main(argv=None) -> Path:
         args.teacher_coeff = 1.0
     if args.actor == 'teacher' and args.mode != 'imitate':
         raise SystemExit("--actor teacher is for --mode imitate (PPO trains on the student's own samples)")
+    group = expand_group(args)
     if args.seed is not None:
         torch.manual_seed(args.seed)
     registry.use_team(args.team, args.models_dir)
     models = registry.models_root(args.models_dir)
     team = registry.team_in_use(args.models_dir)
-    run_id = args.run_id or registry.new_run_id()
-    root = models
-    shares = {k: float(w) for k, _, w in (s.partition('=') for s in args.shares)}
+    resume = find_resume(args, team, models) if args.resume else None
+    shares = {**(group.shares if group is not None else {}),
+              **{k: float(w) for k, _, w in (s.partition('=') for s in args.shares)}}
     families = parse_families(args.families, args.parallel, shares, args.state_route,
                               curriculum=not args.no_curriculum, states_dir=args.states_dir)
     keys = [f.key for f in families]
+    check_routes(families, args.state_route, args.all_routes)
+    check_warm_start(families, args.allow_warm_start)
+    check_obs_agree(families)
     try:
         declared = [] if args.no_task_demos else [task_demos(family.config) for family in families]
     except MissingInput as error:
@@ -353,27 +514,104 @@ def main(argv=None) -> Path:
     args.demos, args.demo_coeff, demo_groups = demo_recipe(declared, args.demos, args.demo_coeff)
     steps_per_env = max(1, args.steps_per_update // args.parallel)
     total = args.iterations * steps_per_env * args.parallel
-    announce('train', work(train_steps=total), f'lab-{args.name}')
+
+    # The network: a resumed run's own checkpoint (weights, optimizer, counters, the need sampler), else --load's,
+    # else a fresh one of --arch.
+    start_iteration = start_steps = 0
+    optimizer_state, lab_state = None, {}
+    if resume is not None and resume.checkpoint is not None:
+        network, checkpoint = registry.load_model(resume.checkpoint)
+        source, parent = resume.record.get('source'), resume.record.get('parent')
+        start_iteration, start_steps = int(checkpoint['iterations']), int(checkpoint['steps'])
+        optimizer_state, lab_state = checkpoint.get('optimizer'), checkpoint.get('lab') or {}
+        if start_iteration >= args.iterations:
+            raise SystemExit(f"--resume {args.resume}: its checkpoint is at iteration {start_iteration} of "
+                             f"{args.iterations}: nothing left to train")
+    else:
+        network, source, parent = initial_network(args)
+    check_network_reads(network, families)
+    check_demos(network, families, args.demos)
+    tried = parse_try_others(args.try_others)
+    recurrent = getattr(network, 'recurrent', False)
+    if recurrent and steps_per_env % args.bptt:
+        raise SystemExit(f"steps per env ({steps_per_env}) must be a multiple of --bptt ({args.bptt})")
+    if args.demos and (recurrent or args.mode != 'ppo'):
+        raise SystemExit("--demos is for --mode ppo with a network without memory (demonstration rows are no "
+                         "sequences)")
+    recorded_seed = (resume.record['manifest'].get('seeds') or {}).get('seed') if resume is not None else None
+    if resume is not None and args.seed is not None and args.seed != recorded_seed:
+        raise SystemExit(f"--resume {args.resume}: the run's seed is {recorded_seed}, not --seed {args.seed}")
+    seed = (recorded_seed if recorded_seed is not None else args.seed if args.seed is not None
+            else int.from_bytes(os.urandom(4), 'little'))
+    pool_seed = seed + RESUME_SEED_STRIDE * start_iteration
+    cfg = PPOConfig(target_steps=steps_per_env * args.parallel, learning_rate=args.learning_rate,
+                    ent_coeff=args.ent_coeff, num_epochs=args.epochs,
+                    demo_bc_coeff=args.demo_coeff if args.demos else 0.0)
+    wants_teachers = args.teacher_coeff > 0 or args.mode == 'imitate'
+    overrides = dict(item.split('=', 1) for item in args.teacher)
+    weights = {k: float(w) for k, _, w in (item.partition('=') for item in args.teacher_weight)}
+    unknown = sorted(set(weights) - set(keys))
+    if wants_teachers and unknown:
+        raise SystemExit(f"--teacher-weight {unknown}: not in --families")
+    teacher_files = ({key: str(path) for key, path in teacher_paths(keys, models, overrides, args.state_route).items()}
+                     if wants_teachers else None)
+    recipe = build_recipe(args, families, network, group=group, envs={f.key: f.envs for f in families},
+                          source=source, teachers=teacher_files, demos=args.demos or (), demo_groups=demo_groups,
+                          training=training_settings(args, cfg, tried, steps_per_env, recurrent, weights),
+                          seeds={'seed': seed, 'pools': pool_seed})
+    if args.same_recipe_as:
+        check_same(recipe, read_reference(args.same_recipe_as), args.except_,
+                   f"--same-recipe-as {args.same_recipe_as}")
+    if resume is not None:
+        check_same(recipe, resume.record['manifest'], args.except_, f"--resume {args.resume} (its recorded recipe)")
+    announce('train', work(train_steps=total - start_iteration * steps_per_env * args.parallel), f'lab-{args.name}')
+
     stored = None
-    if team is not None:        # a store team plays: the run is the store's, sealed when the training ends
+    if resume is not None:
+        run_id, root = resume.out_dir.name, resume.out_dir.parent.parent
+        if resume.stored is not None:
+            stored = store.resume_run(resume.stored)
+        print(f"[lab] resuming {args.resume} at iteration {start_iteration} of {args.iterations} ({start_steps} "
+              f"steps)" if resume.checkpoint is not None else
+              f"[lab] resuming {args.resume}: no checkpoint was saved; it starts over", flush=True)
+    elif team is not None:      # a store team plays: the run is the store's, sealed when the training ends
         stored = store.allocate_run(args.name, args.run_id, origin='lab', team=team)
         run_id, root = stored.name, paths.runs_dir()
         print(f"[lab] store run {stored.identity} (open until the training ends)", flush=True)
+    else:
+        run_id, root = args.run_id or registry.new_run_id(), models
     out_dir = registry.run_dir(args.name, run_id, root)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    identity = f'{args.name}/{run_id}'
+    # run.json before anything trains, so a run stopped at any point is one --resume accepts.
+    if resume is None:
+        run = {'args': {key: value for key, value in vars(args).items() if key != 'team' or value},
+               'command': ['python', '-m', 'triforce.lab.train', *argv], 'name': args.name, 'run_id': run_id,
+               'group': None if group is None else group.name, 'families': keys,
+               'envs': {f.key: f.envs for f in families}, 'arch': nets.arch_of(network.config.to_dict()),
+               'parameters': network.parameter_count(), 'model_config': network.config.to_dict(),
+               'ppo_config': cfg.to_dict(), 'source': source, 'parent': parent, 'teachers': teacher_files,
+               'teacher_ids': None, 'demos': manifest.demo_entries(args.demos or (), demo_groups),
+               'manifest': recipe}
+    else:
+        run = resume.record
+        entry = {'iteration': start_iteration, 'steps': start_steps, 'job': recipe['job'],
+                 'commit': recipe['code']['commit'], 'seeds': recipe['seeds'], 'time': round(time.time(), 1)}
+        summary_path = out_dir / 'train_summary.json'
+        if summary_path.is_file():
+            entry['previous'] = json.loads(summary_path.read_text(encoding='utf-8'))
+            summary_path.unlink()
+        run.setdefault('resumes', []).append(entry)
+        keep_metrics(out_dir, start_iteration)
+    write_json_atomic(out_dir / 'run.json', run, default=str)
+    if stored is None and resume is None:      # a store run's families find it through a team's slots, not links
+        link_families(root, args.name, run_id, keys)
     with logged_job(f'lab-{args.name}', KIND, RunLog.runs(keys, run_id, out_dir, total, args.iterations),
                     args.logs_dir, work=work(train_steps=total), families=keys, run_dir=str(out_dir),
                     mode=args.mode) as plan:
+        interrupt_on_sigterm()  # SIGTERM waits out a TensorBoard write (interrupts_held); logged_job restores it
         log = RunLog(plan, keys, run_id)
-        out_dir.mkdir(parents=True, exist_ok=True)
-        network, source, parent = initial_network(args)
         aux_losses = [AuxLoss.parse(text) for text in args.aux]
-        tried = parse_try_others(args.try_others)
-        recurrent = getattr(network, 'recurrent', False)
-        if recurrent and steps_per_env % args.bptt:
-            raise SystemExit(f"steps per env ({steps_per_env}) must be a multiple of --bptt ({args.bptt})")
-        if args.demos and (recurrent or args.mode != 'ppo'):
-            raise SystemExit("--demos is for --mode ppo with a network without memory (demonstration rows are no "
-                             "sequences)")
         sampler = None
         if args.sampling == 'need':
             targets = (NeedSampler.teacher_targets(keys, REFERENCE) if args.need_target == 'teacher'
@@ -383,14 +621,13 @@ def main(argv=None) -> Path:
                     raise SystemExit(f"--need-target-for {key}: not in --families")
                 targets[key] = float(value)
             sampler = NeedSampler(targets, args.need_floor, args.need_window)
+            if lab_state.get('sampler'):
+                sampler.restore(lab_state['sampler'])
         teachers = None
-        if args.teacher_coeff > 0 or args.mode == 'imitate':
-            overrides = dict(item.split('=', 1) for item in args.teacher)
-            weights = {k: float(w) for k, _, w in (item.partition('=') for item in args.teacher_weight)}
-            unknown = sorted(set(weights) - set(keys))
-            if unknown:
-                raise SystemExit(f"--teacher-weight {unknown}: not in --families")
+        if wants_teachers:
             teachers = Teachers(keys, args.device, models, overrides, weights, args.state_route)
+            run['teacher_ids'] = teachers.identities
+            write_json_atomic(out_dir / 'run.json', run, default=str)
         rehearsal = None
         if args.rehearse:
             names = json.loads((Path(args.rehearse) / 'cache.json').read_text(encoding='utf-8'))['keys']
@@ -400,19 +637,20 @@ def main(argv=None) -> Path:
             print(f"[lab] rehearsal: {rehearsal.rows:,} rows of {len(rehearsed)} keys from {args.rehearse} "
                   f"(weight {args.rehearse_coeff})", flush=True)
         curricula = {}
+        continuing = resume is not None and resume.checkpoint is not None
         for family in families:
+            task_dir = out_dir / 'tasks' / family.key
+            # A resumed run keeps each task's curriculum progress (<run>/tasks/<key>/curriculum.json, written on
+            # every change); a run started (or started over) begins it fresh.
             spec, _ = curriculum_spec(argparse.Namespace(no_curriculum=args.no_curriculum, curriculum=None,
                                                          curriculum_fraction=None, curriculum_threshold=None,
-                                                         curriculum_unrecorded=None),
-                                      family.config, out_dir / 'tasks' / family.key)
+                                                         curriculum_unrecorded='resume' if continuing else None),
+                                      family.config, task_dir, continued=task_dir if continuing else None)
             curricula[family.key] = spec
         (out_dir / 'tasks').mkdir(exist_ok=True)
         for family in families:
             (out_dir / 'tasks' / family.key).mkdir(parents=True, exist_ok=True)
-        cfg = PPOConfig(target_steps=steps_per_env * args.parallel, learning_rate=args.learning_rate,
-                        ent_coeff=args.ent_coeff, num_epochs=args.epochs,
-                        demo_bc_coeff=args.demo_coeff if args.demos else 0.0)
-        ppo = PPO(cfg, device=args.device)
+        ppo = PPO(cfg, device=args.device, optimizer_state=optimizer_state)
         ppo.aux_losses = aux_losses
         ppo.rehearsal = rehearsal
         ppo.rehearsal_coeff = args.rehearse_coeff
@@ -422,49 +660,42 @@ def main(argv=None) -> Path:
             drawn = 'every row alike' if demo_groups is None else f'{len(set(demo_groups))} groups, equal shares'
             print(f"[lab] demonstrations: {ppo.demo_batch[2].shape[0]} rows from {', '.join(args.demos)} "
                   f"(weight {args.demo_coeff}; {drawn})", flush=True)
-        seed = args.seed if args.seed is not None else int.from_bytes(os.urandom(4), 'little')
-        collector = MultiCollector(families, out_dir, steps_per_env, cfg.gamma, cfg.lam, seed=seed,
+        collector = MultiCollector(families, out_dir, steps_per_env, cfg.gamma, cfg.lam, seed=pool_seed,
                                    states_dir=args.states_dir, curricula=curricula, teachers=teachers,
                                    actor=args.actor if args.mode == 'imitate' else 'student', tried=tried,
                                    chunk_length=args.bptt, sampler=sampler)
         stopper = FamilyStop(args, collector, steps_per_env) if args.stop_success is not None else None
-        recorded = {key: value for key, value in vars(args).items() if key != 'team' or value}
-        run = {'args': recorded, 'name': args.name, 'run_id': run_id, 'families': keys,
-               'envs': collector.shares, 'arch': nets.arch_of(network.config.to_dict()),
-               'parameters': network.parameter_count(), 'model_config': network.config.to_dict(),
-               'ppo_config': cfg.to_dict(), 'source': source, 'parent': parent,
-               'teachers': None if teachers is None else teachers.paths,
-               'teacher_ids': None if teachers is None else teachers.identities,
-               'demos': manifest.demo_entries(args.demos or (), demo_groups)}
-        (out_dir / 'run.json').write_text(json.dumps(run, indent=2, default=str), encoding='utf-8')
-        if stored is None:      # a store run's families find it through a team's slots, not links
-            link_families(root, args.name, run_id, keys)
-        print(f"[lab] {args.name} run={run_id} dir={out_dir} arch={run['arch']} "
-              f"parameters={run['parameters']:,} envs={collector.shares} mode={args.mode}", flush=True)
+        arch = nets.arch_of(network.config.to_dict())
+        print(f"[lab] {args.name} run={run_id} dir={out_dir} arch={arch} "
+              f"parameters={network.parameter_count():,} envs={collector.shares} mode={args.mode}", flush=True)
         logger = MetricsLogger(str(out_dir))
-        state = {'iteration': 0, 'steps': 0, 'metrics': {}, 'stopped_early': False}
+        state = {'iteration': start_iteration, 'steps': start_steps, 'metrics': {}, 'stopped_early': False}
 
         def save():
             registry.save_checkpoint(args.name, run_id, network, ppo.optimizer, iterations=state['iteration'],
                                      steps=state['steps'], metrics=state['metrics'], root=root,
-                                     extra={'families': keys, 'lab': {'mode': args.mode, 'source': source}})
+                                     extra={'families': keys, 'lab': {
+                                         'mode': args.mode, 'source': source,
+                                         'sampler': None if sampler is None else sampler.state()}})
 
         def on_iteration(result: IterationResult):
-            state['iteration'], state['steps'] = result.iteration, result.total_steps
+            iteration = start_iteration + result.iteration
+            state['iteration'], state['steps'] = iteration, result.total_steps
             metrics = {**result.rollout.summary(), **result.stats, **collector.family_metrics()}
-            stop = stopper is not None and stopper.update(network, result.iteration, metrics)
+            stop = stopper is not None and stopper.update(network, iteration, metrics)
             state['metrics'] = metrics
-            logger.log(result.iteration, result.total_steps, metrics)
-            log.progress(result.iteration, args.iterations, result.total_steps, total, metrics, ppo.teacher_coeff)
+            with interrupts_held():             # TensorBoard's queue: a SIGTERM waits for the scalars
+                logger.log(iteration, result.total_steps, metrics)
+            log.progress(iteration, args.iterations, result.total_steps, total, metrics, ppo.teacher_coeff)
             per_family = ' '.join(f"{k}={metrics.get(f'family/{k}/success_rate', float('nan')):.2f}" for k in keys)
-            print(f"[lab] iter={result.iteration} steps={result.total_steps} {per_family} "
+            print(f"[lab] iter={iteration} steps={result.total_steps} {per_family} "
                   + format_summary(metrics), flush=True)
-            ppo.teacher_coeff = teacher_coeff(args, result.iteration + 1)
-            if result.iteration % args.save_every == 0:
+            ppo.teacher_coeff = teacher_coeff(args, iteration + 1)
+            if iteration % args.save_every == 0:
                 save()
-            if args.checkpoint_every and result.iteration % args.checkpoint_every == 0:
+            if args.checkpoint_every and iteration % args.checkpoint_every == 0:
                 save()
-                registry.snapshot_checkpoint(registry.checkpoint_path(args.name, run_id, root), result.iteration,
+                registry.snapshot_checkpoint(registry.checkpoint_path(args.name, run_id, root), iteration,
                                              args.checkpoint_keep)
             if stop:
                 state['stopped_early'] = True
@@ -473,19 +704,23 @@ def main(argv=None) -> Path:
 
         began = time.time()
         status = 'completed'
+        remaining = args.iterations - start_iteration
+        train_seed = seed + start_iteration if args.seed is not None or resume is not None else None
         log.start(target_steps=total, target_iterations=args.iterations, steps_per_update=cfg.target_steps,
-                  start_iteration=0, start_steps=0, parallel=args.parallel, device=args.device,
-                  run_dir=str(out_dir), stop_success=args.stop_success, families=keys, mode=args.mode,
-                  arch=run['arch'], parameters=run['parameters'], envs=collector.shares)
+                  start_iteration=start_iteration, start_steps=start_steps, parallel=args.parallel,
+                  device=args.device, run_dir=str(out_dir), stop_success=args.stop_success, families=keys,
+                  mode=args.mode, arch=arch, parameters=network.parameter_count(), envs=collector.shares,
+                  group=None if group is None else group.name)
         try:
-            ppo.teacher_coeff = teacher_coeff(args, 1)
+            ppo.teacher_coeff = teacher_coeff(args, start_iteration + 1)
             ppo.teacher_value_coeff = args.teacher_value_coeff
             if args.mode == 'ppo':
-                ppo.train(network, collector, args.iterations, callback=on_iteration, seed=args.seed,
-                          collector=collector)
+                ppo.train(network, collector, remaining, callback=on_iteration, start_steps=start_steps,
+                          seed=train_seed, collector=collector)
             else:
                 optimizer = ppo.setup_optimizer(network)
-                for iteration in range(1, args.iterations + 1):
+                ppo.total_steps = start_steps
+                for iteration in range(1, remaining + 1):
                     collector.start(network)
                     collector.take()
                     rollout = collector.ready(network, ppo.device)
@@ -499,29 +734,30 @@ def main(argv=None) -> Path:
         except BaseException as error:
             log.end('error', message=f"{type(error).__name__}: {error}", iterations=state['iteration'],
                     steps=state['steps'])
+            print(f"[lab] {identity} failed at iteration {state['iteration']}; continue it with --resume {identity} "
+                  f"(the same command line)", flush=True)
             raise
         finally:
             collector.close()
             logger.close()
-            if state['iteration']:
+            if state['iteration'] > start_iteration:
                 save()
         status = 'early_stop' if state['stopped_early'] else status
         summary = {'status': status, 'iterations': state['iteration'], 'steps': state['steps'],
-                   'wall_seconds': round(time.time() - began, 1)}
+                   'start_iteration': start_iteration, 'wall_seconds': round(time.time() - began, 1)}
         log.end(status, iterations=state['iteration'], steps=state['steps'], wall_seconds=summary['wall_seconds'])
-        (out_dir / 'train_summary.json').write_text(json.dumps(summary, indent=2), encoding='utf-8')
+        write_json_atomic(out_dir / 'train_summary.json', summary)
         print(f"[lab] {status}: {summary}", flush=True)
-    if stored is not None:
-        if status == 'interrupted' or not (out_dir / registry.CHECKPOINT_NAME).is_file():
-            print(f"[lab] store run {stored.identity} stays open (an interrupted run is continued by its owner)",
-                  flush=True)
-        else:
-            sealed = store.seal_run(stored)
-            store.record_summary('train', stored.identity, run=stored.identity, team=team['name'],
-                                 result={'status': status, 'iterations': summary['iterations']})
-            print(f"[lab] sealed store run {stored.identity} (sha1 {sealed['sha1']})", flush=True)
+    if status == 'interrupted' or not (out_dir / registry.CHECKPOINT_NAME).is_file():
+        print(f"[lab] {identity} stays open: continue it with --resume {identity} (the same command line)",
+              flush=True)
+    elif stored is not None:
+        sealed = store.seal_run(stored)
+        store.record_summary('train', stored.identity, run=stored.identity, team=team['name'],
+                             result={'status': status, 'iterations': summary['iterations']})
+        print(f"[lab] sealed store run {stored.identity} (sha1 {sealed['sha1']})", flush=True)
     return out_dir
 
 
 if __name__ == '__main__':
-    sys.exit(0 if main() else 1)
+    sys.exit(cli())
