@@ -86,14 +86,74 @@ def test_train_clones_the_demonstrations(states_dir, tmp_path):
 
 def test_the_demos_recipe_merges_the_tasks_and_the_command_line(tmp_path):
     """``demos.recipe``: the tasks' files then ``--demos``; ``--demo-coeff`` over the tasks' weight, which must agree;
-    no file at all: None, the default weight."""
+    no file at all: None, the default weight; groups only when some task names them (the others' files and
+    ``--demos``' are ``UNGROUPED``; several tasks' group names carry the task's index)."""
     a, b = tmp_path / 'a.npz', tmp_path / 'b.npz'
-    assert demos.recipe([], None, None) == (None, demos.DEFAULT_COEFF)
-    assert demos.recipe([([], None)], ['x.npz'], 0.5) == (['x.npz'], 0.5)
-    assert demos.recipe([([a], 0.05)], ['x.npz'], None) == ([str(a), 'x.npz'], 0.05)
-    assert demos.recipe([([a], 0.05), ([b], 0.05)], None, 0.3) == ([str(a), str(b)], 0.3)
+    assert demos.recipe([], None, None) == (None, demos.DEFAULT_COEFF, None)
+    assert demos.recipe([([], None, None)], ['x.npz'], 0.5) == (['x.npz'], 0.5, None)
+    assert demos.recipe([([a], 0.05, None)], ['x.npz'], None) == ([str(a), 'x.npz'], 0.05, None)
+    assert demos.recipe([([a], 0.05, None), ([b], 0.05, None)], None, 0.3) == ([str(a), str(b)], 0.3, None)
     with pytest.raises(SystemExit, match='--demo-coeff'):
-        demos.recipe([([a], 0.05), ([b], 0.1)], None, None)
+        demos.recipe([([a], 0.05, None), ([b], 0.1, None)], None, None)
+    assert demos.recipe([([a, b], 0.05, ['g', 'h'])], ['x.npz'], None) == (
+        [str(a), str(b), 'x.npz'], 0.05, ['g', 'h', demos.UNGROUPED])
+    assert demos.recipe([([a], 0.05, ['g']), ([b], 0.05, None)], None, None)[2] == ['0:g', demos.UNGROUPED]
+
+
+def _fake_demos(path, rows: int, value: float):
+    """``rows`` demonstration rows whose ``link`` observation is ``value`` (which file a drawn row came from)."""
+    obs = {'link': np.full(3, value, dtype=np.float32), MASK_KEY: _mask('MOVE', ['N'], [4])}
+    demos.save_demos(path, [obs] * rows, [demos.action_indices('MOVE N 4')] * rows)
+    return path
+
+
+def test_grouped_rows_are_drawn_by_group_and_ungrouped_as_before(tmp_path):
+    """``demos.row_weights`` and ``ppo.demo_pick``: three groups of very different sizes (100 rows; 10 + 1,000 rows
+    pooled; 50 rows) each get a third of a seeded draw of 6,000 rows, within 3 points, and inside the pooled group
+    its files in proportion to their rows; without groups no weights, and the draw is the uniform one it always was
+    (``randperm`` for a seed)."""
+    import torch  # pylint: disable=import-outside-toplevel
+    from triforce.ppo import demo_pick  # pylint: disable=import-outside-toplevel
+    sizes = [100, 10, 1000, 50]
+    files = [_fake_demos(tmp_path / f'{i}.npz', rows, float(i)) for i, rows in enumerate(sizes)]
+    obs, _, _ = demos.load_demos(files)
+    weights = demos.row_weights(files, ['a', 'b', 'b', 'c'])
+    assert weights.shape == (sum(sizes),) and weights.sum().item() == pytest.approx(1.0)
+    torch.manual_seed(7)
+    pick = demo_pick(sum(sizes), 6000, weights.float(), 'cpu')
+    source = obs['link'][pick, 0].long()
+    share = {g: sum((source == i).sum().item() for i in ids) / 6000 for g, ids in (('a', [0]), ('b', [1, 2]),
+                                                                                ('c', [3]))}
+    assert all(abs(s - 1 / 3) < 0.03 for s in share.values()), share
+    inside = (source == 1).sum().item() / max(1, ((source == 1) | (source == 2)).sum().item())
+    assert abs(inside - 10 / 1010) < 0.01, inside
+    with pytest.raises(ValueError, match='one a file'):
+        demos.row_weights(files, ['a'])
+
+    assert demos.row_weights(files, None) is None
+    torch.manual_seed(7)
+    uniform = demo_pick(sum(sizes), 64, None, 'cpu')
+    torch.manual_seed(7)
+    assert torch.equal(uniform, torch.randperm(sum(sizes))[:64])
+    assert demo_pick(10, 64, None, 'cpu') is None     # fewer rows than a minibatch: every row, as before
+
+
+def test_a_tasks_demo_groups_reach_the_manifest(tmp_path, monkeypatch):
+    """A task's ``groups:`` comes back from ``task_demos`` and is each ``data.demos`` entry's ``group``
+    (``triforce manifest diff`` names it); a task without stays without the key."""
+    task = _task_with_demos(tmp_path, monkeypatch, ['a.npz', 'b.npz'])
+    _fake_demos(tmp_path / 'demos-data' / 'a.npz', 4, 0.0)
+    _fake_demos(tmp_path / 'demos-data' / 'b.npz', 4, 1.0)
+    plain = task_demos(load_specialist(task))
+    assert plain[2] is None
+    text = json.loads(Path(task).read_text(encoding='utf-8'))
+    text['demos']['groups'] = ['x', 'y']
+    Path(task).write_text(json.dumps(text), encoding='utf-8')
+    files, coeff, groups = task_demos(load_specialist(task))
+    assert groups == ['x', 'y'] and coeff == 0.5
+    entries = manifest.demo_entries(files, groups)
+    assert [e['group'] for e in entries] == ['x', 'y'] and manifest.demo_groups({'demos': entries}) == ['x', 'y']
+    assert 'group' not in manifest.demo_entries(files)[0] and manifest.demo_groups({'demos': []}) is None
 
 
 def _task_with_demos(tmp_path, monkeypatch, names, coeff=0.5) -> str:
@@ -118,7 +178,7 @@ def test_a_task_demo_file_that_is_not_there_refuses_the_run(tmp_path, monkeypatc
     message = str(error.value)
     assert "['gone.npz']" in message and str(tmp_path / 'demos-data') in message
     assert str(paths.data_root('demos') / paths.CURRENT) in message
-    assert task_demos(load_specialist(start_task())) == ([], None)
+    assert task_demos(load_specialist(start_task())) == ([], None, None)
 
 
 def test_train_clones_the_task_demonstrations_and_records_them(states_dir, tmp_path, monkeypatch):

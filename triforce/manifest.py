@@ -160,9 +160,10 @@ def task(config, path=None) -> dict:
     return out
 
 
-def data(config, states_dir=None, trajectories=None, start_state=None, demos=()) -> dict:
+def data(config, states_dir=None, trajectories=None, start_state=None, demos=(), demo_groups=None) -> dict:
     """The data sets a training of ``config`` draws: seed states per glob, harvested states, curriculum tracks,
-    demonstration files (``start_state``: a pinned start, the only state drawn)."""
+    demonstration files (``start_state``: a pinned start, the only state drawn; ``demo_groups``: one group a
+    demonstration file, each entry's ``group``, when the rows are drawn by group: ``demos.recipe``)."""
     from . import _native  # pylint: disable=import-outside-toplevel
     from .inputs import untracked  # pylint: disable=import-outside-toplevel
     base = Path(states_dir or _native.paths()['states_dir'])
@@ -182,8 +183,21 @@ def data(config, states_dir=None, trajectories=None, start_state=None, demos=())
             out['curriculum'] = {'dir': label(folder), 'tracks': len(list(folder.glob('*/trajectory.json'))),
                                  'untracked': untracked(config), **tree(files, folder)}
     if demos:
-        out['demos'] = [{'file': label(p), 'sha256': file_sha256(p)} for p in demos]
+        out['demos'] = demo_entries(demos, demo_groups)
     return out
+
+
+def demo_entries(demos, groups=None) -> list[dict]:
+    """``data.demos``: each demonstration file's label and hash, and its group when the rows are drawn by group (no
+    ``group`` key otherwise: a recipe without groups reads as before)."""
+    return [{'file': label(p), 'sha256': file_sha256(p), **({} if groups is None else {'group': groups[i]})}
+            for i, p in enumerate(demos)]
+
+
+def demo_groups(data_: dict) -> Optional[list[str]]:
+    """The demonstration files' groups a manifest's ``data`` records (``demo_entries``), None when it records none."""
+    entries = data_.get('demos') or []
+    return [e['group'] for e in entries] if entries and 'group' in entries[0] else None
 
 
 def network(path, act: Optional[str] = None) -> dict:

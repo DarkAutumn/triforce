@@ -1089,6 +1089,11 @@ pub struct DemosConfig {
     pub files: Vec<String>,
     /// The cloning term's weight (> 0).
     pub coeff: f64,
+    /// One group name per file (round 40, the lead: "the demonstrations' rows are weighted by room"): each group
+    /// gets an equal share of the rows the cloning term draws, its files' rows pooled inside it
+    /// (`triforce.demos.row_weights`). Absent (the default): every row of every file equally likely, as before.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub groups: Option<Vec<String>>,
 }
 
 impl DemosConfig {
@@ -1107,6 +1112,14 @@ impl DemosConfig {
         }
         if !(self.coeff.is_finite() && self.coeff > 0.0) {
             return Err(format!("coeff must be a finite number above 0, got {}", self.coeff));
+        }
+        if let Some(groups) = &self.groups {
+            if groups.len() != self.files.len() {
+                return Err(format!("groups names {} groups for {} files: one a file", groups.len(), self.files.len()));
+            }
+            if groups.iter().any(|g| g.trim().is_empty()) {
+                return Err("groups: a group name may not be empty".into());
+            }
         }
         Ok(())
     }
@@ -1899,7 +1912,8 @@ mod tests {
         }
     }
 
-    /// `demos` (round 40): file names relative to the demos data folder and a weight above 0; absent by default.
+    /// `demos` (round 40): file names relative to the demos data folder, a weight above 0, and optionally one group
+    /// name per file; absent by default, and no `groups` key in the serialized task without one.
     #[test]
     fn demos_parse_and_reject_bad_entries() {
         assert_eq!(minimal("").unwrap().demos, None);
@@ -1907,6 +1921,10 @@ mod tests {
         let demos = c.demos.unwrap();
         assert_eq!(demos.files, ["r40-d3-69-line.npz", "sub/b.npz"]);
         assert_eq!(demos.coeff, 0.05);
+        assert_eq!(demos.groups, None);
+        assert!(!serde_json::to_string(&demos).unwrap().contains("groups"));
+        let c = minimal("demos: {files: [a.npz, b.npz, c.npz], coeff: 0.05, groups: [x, y, y]}\n").unwrap();
+        assert_eq!(c.demos.unwrap().groups.unwrap(), ["x", "y", "y"]);
         for (bad, why) in [
             ("{files: [], coeff: 0.05}", "at least one"),
             ("{files: [/tmp/a.npz], coeff: 0.05}", "relative"),
@@ -1915,6 +1933,8 @@ mod tests {
             ("{files: [a.npz], coeff: .nan}", "above 0"),
             ("{files: [a.npz]}", "coeff"),
             ("{files: [a.npz], coeff: 0.1, weight: 2}", "unknown field"),
+            ("{files: [a.npz, b.npz], coeff: 0.1, groups: [x]}", "one a file"),
+            ("{files: [a.npz], coeff: 0.1, groups: ['']}", "empty"),
         ] {
             let e = minimal(&format!("demos: {bad}\n")).unwrap_err().0;
             assert!(e.contains(why), "{bad}: {e}");

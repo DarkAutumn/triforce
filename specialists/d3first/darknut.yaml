@@ -125,10 +125,13 @@ harvested_fraction: 0.33
 # a backtracking search where it is still hit; only unhit visits that leave by the right exit are kept):
 # 3:0x5b's first pass (one Red Darknut killed at drop cycle 0, its bombs taken, out N), 150 at hearts 0.5-3.0 and
 # 150 at full, 300 kept; 3:0x59 from N at 4 bombs (none usable) 146 of 150 and at 8 bombs 148 of 150; the Olive
-# Garden (5:0x05 from E) at 0 bombs 148 of 150 and at 8 bombs 149 of 150 (two pieces).
+# Garden (5:0x05 from E) at 0 bombs 148 of 150 and at 8 bombs 149 of 150 (two pieces). Weighed by room and pass
+# (the lead, Nov 24): seven groups, one seventh of the drawn rows each (pooled raw, the Olive Garden was 55% of
+# them and 3:0x69's line 6%).
 demos:
   files: [r40-d3-69-in.npz, r40-d3-69-out.npz, r40-darknut-5b-low.npz, r40-darknut-5b-full.npz, r40-darknut-59-b4.npz,
     r40-darknut-59-b8.npz, r40-darknut-garden-b0.npz, r40-darknut-garden-b8.npz, r40-darknut-garden-b8-p2.npz]
+  groups: [69-in, 69-out, 5b-first, 5b-first, 59-b4, 59-b8, garden-b0, garden-b8, garden-b8]
   coeff: 0.05
 one_room: true
 max_steps: 2000

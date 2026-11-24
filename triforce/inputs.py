@@ -11,7 +11,8 @@ A task (``specialists/<name>.yaml`` or an experiment's yaml) declares:
   a running pool).
 - ``curriculum.enabled``: a track for **every seed state, except those ``curriculum.untracked`` declares** (globs of
   state names; ``check_curriculum``: a seed state without a track trained without one, seen only in ``run.json``).
-- ``demos: {files, coeff}``: demonstration files the trainings clone; **every file must be in the demos data folder**
+- ``demos: {files, coeff[, groups]}``: demonstration files the trainings clone; **every file must be in the demos data
+  folder**
   (``task_demos``: ``paths.data_dir('demos')``, the checkout's ``target/demos`` while it has one, else the store's
   current snapshot).
 
@@ -126,13 +127,14 @@ def check_task(config, states_dir=None, trajectories: Optional[str] = None) -> N
         check_curriculum(config, trajectories, states_dir)
 
 
-def task_demos(config) -> tuple[list[Path], Optional[float]]:
-    """The task's ``demos:`` as (files, coeff) (none declared: ([], None)): each name under the demos data folder
-    (``paths.data_dir('demos')``); raises ``MissingInput`` naming both places the rule looks (the checkout's folder,
-    the store's current snapshot) when a file is not there."""
+def task_demos(config) -> tuple[list[Path], Optional[float], Optional[list[str]]]:
+    """The task's ``demos:`` as (files, coeff, groups) (none declared: ([], None, None); ``groups``: one group name a
+    file, None when the task names none): each name under the demos data folder (``paths.data_dir('demos')``);
+    raises ``MissingInput`` naming both places the rule looks (the checkout's folder, the store's current snapshot)
+    when a file is not there."""
     demos = config.to_dict().get('demos')
     if not demos:
-        return [], None
+        return [], None, None
     folder = paths.data_dir('demos')
     files = [folder / name for name in demos['files']]
     missing = [name for name, path in zip(demos['files'], files) if not path.is_file()]
@@ -141,4 +143,5 @@ def task_demos(config) -> tuple[list[Path], Optional[float]]:
         raise MissingInput(f"{config.name}: demos {missing} are not in {folder} (the demos data: this checkout's "
                            f"{paths.legacy_data('demos')} while it exists, else the store's current snapshot named by "
                            f"{store})")
-    return files, float(demos['coeff'])
+    groups = demos.get('groups')
+    return files, float(demos['coeff']), (list(groups) if groups is not None else None)

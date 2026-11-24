@@ -11,6 +11,9 @@ not taught (round 25 §5: cloned in full, a rule's short steps spread to the fam
 A task may declare its own (round 40): ``demos: {files: [NAME, ...], coeff: C}``, the names under the ``demos`` data
 folder (``triforce.inputs.task_demos``); ``train`` and ``lab.train`` clone them with what ``--demos`` adds, and
 ``--no-task-demos`` leaves them out (an arm "that run, except the demonstrations"); :func:`recipe` makes the list.
+``groups: [NAME, ...]`` beside ``files`` (one group a file) weighs the rows by group: every group an equal share of
+the rows each minibatch draws, its files' rows pooled inside it (:func:`row_weights`, ``ppo.demo_pick``); without
+it every row of every file is equally likely, as before.
 """
 
 from pathlib import Path
@@ -56,19 +59,49 @@ def legal(mask, indices: tuple[int, int, int]) -> bool:
         (not dur_row.any() or bool(dur_row[duration]))
 
 
-def recipe(declared, extra, coeff: Optional[float]) -> tuple[Optional[list[str]], float]:
-    """The demonstration files a training clones and their weight: every task's declared files (``declared``:
-    [(files, coeff)] as ``inputs.task_demos`` returns them, one a task), then the command line's ``extra``; the
-    weight is ``coeff`` (``--demo-coeff``) when given, else the tasks' own (they must agree: SystemExit), else
-    ``DEFAULT_COEFF``.  No file: (None, the weight)."""
-    files = [str(path) for found, _ in declared for path in found] + list(extra or ())
-    weights = sorted({weight for found, weight in declared if found and weight is not None})
+UNGROUPED = '(ungrouped)'  # the group of the files no task groups, when another task's files are grouped
+
+
+def recipe(declared, extra, coeff: Optional[float]) -> tuple[Optional[list[str]], float, Optional[list[str]]]:
+    """The demonstration files a training clones, their weight and their groups: every task's declared files
+    (``declared``: [(files, coeff, groups)] as ``inputs.task_demos`` returns them, one a task), then the command
+    line's ``extra``; the weight is ``coeff`` (``--demo-coeff``) when given, else the tasks' own (they must agree:
+    SystemExit), else ``DEFAULT_COEFF``; the groups one a file when some task groups its files (a group's name
+    prefixed with its task's index when several tasks declare files; files no task groups, ``--demos``'s too, are
+    :data:`UNGROUPED`), else None (every row equally likely).  No file: (None, the weight, None)."""
+    files = [str(path) for found, _, _ in declared for path in found] + list(extra or ())
+    weights = sorted({weight for found, weight, _ in declared if found and weight is not None})
     if coeff is None:
         if len(weights) > 1:
             raise SystemExit(f"the tasks' demos weigh {weights}: one cloning weight trains them all; name it with "
                              f"--demo-coeff")
         coeff = weights[0] if weights else DEFAULT_COEFF
-    return (files or None), coeff
+    groups = None
+    if any(found and names is not None for found, _, names in declared):
+        many = sum(1 for found, _, _ in declared if found) > 1
+        groups = [UNGROUPED if names is None else f'{task}:{names[i]}' if many else names[i]
+                  for task, (found, _, names) in enumerate(declared) for i in range(len(found))]
+        groups += [UNGROUPED] * len(extra or ())
+    return (files or None), coeff, groups
+
+
+def row_weights(paths, groups) -> Optional[torch.Tensor]:
+    """Each row's chance to be drawn (``load_demos``' row order) when ``groups`` (one name a file) weighs them: every
+    group the same share, split evenly over its files' rows.  None without groups (every row equally likely)."""
+    if groups is None:
+        return None
+    if len(groups) != len(paths):
+        raise ValueError(f"{len(groups)} groups for {len(paths)} demonstration files: one a file")
+    counts = []
+    for path in paths:
+        with np.load(path) as data:
+            counts.append(int(data['actions'].shape[0]))
+    totals: dict[str, int] = {}
+    for group, count in zip(groups, counts):
+        totals[group] = totals.get(group, 0) + count
+    share = 1.0 / len(totals)
+    per_row = torch.tensor([share / totals[group] for group in groups], dtype=torch.float64)
+    return torch.repeat_interleave(per_row, torch.tensor(counts))
 
 
 class DemoRecorder:

@@ -752,12 +752,12 @@ def main(argv=None) -> Path:
     missing = [path for path in args.demos or () if not Path(path).is_file()]
     if missing:
         raise MissingInput(f"--demos {', '.join(missing)}: no such file")
-    args.demos, args.demo_coeff = demo_recipe([] if args.no_task_demos else [task_demos(config)], args.demos,
-                                              args.demo_coeff)
+    args.demos, args.demo_coeff, demo_groups = demo_recipe([] if args.no_task_demos else [task_demos(config)],
+                                                           args.demos, args.demo_coeff)
     if args.demos and args.best_of_n > 0:
         raise SystemExit("the task's demos and --best-of-n both fill the cloning term (--no-task-demos leaves the "
                          "task's out)")
-    recipe = recipe_manifest(args, config, source, probe.folder('trajectories'))
+    recipe = recipe_manifest(args, config, source, probe.folder('trajectories'), demo_groups)
     recipe['sources'] = {'models': registry.models_source(args.models_dir), **sources}
     if args.same_recipe_as:
         check_same_recipe(recipe, args.same_recipe_as, args.except_)
@@ -838,15 +838,16 @@ class RecipeMismatch(Exception):
     """``--same-recipe-as``: this training differs from the named run in more than ``--except`` allows."""
 
 
-def recipe_manifest(args, config, source: Optional[Path], trajectories_root: Optional[Path] = None) -> dict:
+def recipe_manifest(args, config, source: Optional[Path], trajectories_root: Optional[Path] = None,
+                    demo_groups: Optional[list[str]] = None) -> dict:
     """The training's manifest (``triforce.manifest``) as far as it is known before it starts: the task, the data it
-    draws (``trajectories_root``: ``Where``'s), the network it starts from, the arguments and the seed (``_train`` adds
-    the pool's seed)."""
+    draws (``trajectories_root``: ``Where``'s; ``demo_groups``: the demonstration files' groups, ``demos.recipe``),
+    the network it starts from, the arguments and the seed (``_train`` adds the pool's seed)."""
     networks = {} if source is None else {'warm_start': manifest.network(source)}
     return manifest.build('train', arguments_=vars(args), seeds={'seed': args.seed},
                           task=manifest.task(config, args.specialist),
                           data=manifest.data(config, args.states_dir, curriculum_dir(args, config, trajectories_root),
-                                             args.start_state, args.demos or ()),
+                                             args.start_state, args.demos or (), demo_groups),
                           networks=networks, models=manifest.models(args.models_dir))
 
 
@@ -1035,9 +1036,12 @@ def _train(args, specialist: str, run_id: str, where: Where, out_dir: Path, even
 
     best_metrics = refresh_best(0) if args.best_of_n > 0 else {}
     if args.demos:
+        groups = manifest.demo_groups(recipe['data'])
         ppo.demo_batch = load_demos(args.demos)
+        ppo.demo_weights = row_weights(args.demos, groups)
+        drawn = 'every row alike' if groups is None else f'{len(set(groups))} groups, equal shares'
         print(f"[train] demonstrations: {ppo.demo_batch[2].shape[0]} rows from {', '.join(args.demos)} "
-              f"(weight {args.demo_coeff})", flush=True)
+              f"(weight {args.demo_coeff}; {drawn})", flush=True)
 
     def save():
         registry.save_checkpoint(specialist, run_id, network, ppo.optimizer, iterations=state['iteration'],

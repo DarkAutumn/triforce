@@ -348,7 +348,9 @@ class PPO:
         self.optimizer: Optional[torch.optim.Optimizer] = None
         self._pending_optimizer_state = optimizer_state
         self.demo_batch = demo_batch
+        self.demo_weights = None                   # each demo row's chance to be drawn (demos.row_weights); None: even
         self._demo_placed = None                   # demo_batch where optimize reads it (see _demo_rows)
+        self._demo_weights_placed = None           # demo_weights on the device (see _demo_rows)
         self._demo_accuracy_draws = 0              # seeds the accuracy sample (its own generator)
         self.total_steps = 0
         self.ent_coeff = self.config.ent_coeff     # this update's entropy bonus (ent_anneal lowers it)
@@ -382,6 +384,8 @@ class PPO:
                 obs, masks, targets = ({k: v.to(self.device) for k, v in obs.items()}, masks.to(self.device),
                                        targets.to(self.device))
             self._demo_placed = (obs, masks, targets)
+            if self.demo_weights is not None:
+                self._demo_weights_placed = self.demo_weights.to(self.device, torch.float32)
         return self._demo_placed
 
     def _demo_accuracy(self, network, demo, minibatch_size: int) -> float:
@@ -637,10 +641,11 @@ class PPO:
                         search_ce = search_cross_entropy(b_search_policy[searched], joint)
                         loss = loss + cfg.search_coeff * search_ce
                     if demo is not None:
-                        rows = demo[2].shape[0]
-                        if rows > minibatch_size:   # a large batch: a minibatch-sized sample
-                            # drawn on the device as before (same draws for a seed), gathered where the rows live
-                            pick = torch.randperm(rows, device=self.device)[:minibatch_size].to(demo[2].device)
+                        # a minibatch-sized sample of a large batch, drawn on the device as before (same draws for a
+                        # seed) or by the rows' weights; gathered where the rows live
+                        pick = demo_pick(demo[2].shape[0], minibatch_size, self._demo_weights_placed, self.device)
+                        if pick is not None:
+                            pick = pick.to(demo[2].device)
                             demo_lp = demo_log_prob(network,
                                                     {k: v[pick].to(self.device) for k, v in demo[0].items()},
                                                     demo[1][pick].to(self.device), demo[2][pick].to(self.device))
@@ -837,6 +842,18 @@ def joint_kl(old_log_probs: torch.Tensor, new_log_probs: torch.Tensor,
     new = torch.where(legal, new_log_probs, 0.0)
     rows = (old.exp() * (old - new)).sum(dim=-1)
     return (rows if weight is None else rows * weight).mean()
+
+
+def demo_pick(rows: int, size: int, weights: Optional[torch.Tensor], device) -> Optional[torch.Tensor]:
+    """The demonstration rows one minibatch clones: ``size`` rows drawn by ``weights`` (each row's chance,
+    ``demos.row_weights``; with replacement, so a group's share holds however few rows it has) when given, else
+    ``size`` distinct rows of ``rows`` uniformly (``randperm`` on ``device``, the draw before groups existed) when
+    there are more, else None (every row)."""
+    if weights is not None:
+        return torch.multinomial(weights, size, replacement=True)
+    if rows > size:
+        return torch.randperm(rows, device=device)[:size]
+    return None
 
 
 def demo_log_prob(network, obs, masks, targets: torch.Tensor) -> torch.Tensor:

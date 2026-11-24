@@ -38,7 +38,7 @@ import torch
 
 from .. import lineage, manifest, nets, paths, registry, store
 from ..best_of_n import success_by_state
-from ..demos import load_demos, recipe as demo_recipe
+from ..demos import load_demos, recipe as demo_recipe, row_weights
 from ..inputs import MissingInput, task_demos
 from ..events import EventLog, logged_job
 from ..jobs import announce, work
@@ -350,7 +350,7 @@ def main(argv=None) -> Path:
     missing = [path for path in args.demos or () if not Path(path).is_file()]
     if missing:
         raise SystemExit(f"--demos {', '.join(missing)}: no such file")
-    args.demos, args.demo_coeff = demo_recipe(declared, args.demos, args.demo_coeff)
+    args.demos, args.demo_coeff, demo_groups = demo_recipe(declared, args.demos, args.demo_coeff)
     steps_per_env = max(1, args.steps_per_update // args.parallel)
     total = args.iterations * steps_per_env * args.parallel
     announce('train', work(train_steps=total), f'lab-{args.name}')
@@ -418,8 +418,10 @@ def main(argv=None) -> Path:
         ppo.rehearsal_coeff = args.rehearse_coeff
         if args.demos:
             ppo.demo_batch = load_demos(args.demos)
+            ppo.demo_weights = row_weights(args.demos, demo_groups)
+            drawn = 'every row alike' if demo_groups is None else f'{len(set(demo_groups))} groups, equal shares'
             print(f"[lab] demonstrations: {ppo.demo_batch[2].shape[0]} rows from {', '.join(args.demos)} "
-                  f"(weight {args.demo_coeff})", flush=True)
+                  f"(weight {args.demo_coeff}; {drawn})", flush=True)
         seed = args.seed if args.seed is not None else int.from_bytes(os.urandom(4), 'little')
         collector = MultiCollector(families, out_dir, steps_per_env, cfg.gamma, cfg.lam, seed=seed,
                                    states_dir=args.states_dir, curricula=curricula, teachers=teachers,
@@ -433,7 +435,7 @@ def main(argv=None) -> Path:
                'ppo_config': cfg.to_dict(), 'source': source, 'parent': parent,
                'teachers': None if teachers is None else teachers.paths,
                'teacher_ids': None if teachers is None else teachers.identities,
-               'demos': [{'file': manifest.label(p), 'sha256': manifest.file_sha256(p)} for p in args.demos or ()]}
+               'demos': manifest.demo_entries(args.demos or (), demo_groups)}
         (out_dir / 'run.json').write_text(json.dumps(run, indent=2, default=str), encoding='utf-8')
         if stored is None:      # a store run's families find it through a team's slots, not links
             link_families(root, args.name, run_id, keys)
