@@ -4,10 +4,11 @@ replays, nothing played).
 
     python scripts/experiments/r40_darknut_proposals.py REPLAY_DIR... [--json OUT]
 
-(a) `reward.chase_penalty` (`zelda::darknut_rules::chasing`, read again here as `chasing`): the frames Link stands
-    within 8 pixels of the line of a Darknut walking away from him, less than $30 behind it; how often such a frame is
-    followed by a hit within `SOON` frames against the other frames with a Darknut in the room; the share of hits
-    with such a frame in the `SOON` frames before; the cost a visit would pay at `RATE` a frame.
+(a) `reward.chase_penalty` (`zelda::darknut_rules::chasing`, read again here as `chasing`): the frames some Darknut
+    would reverse onto Link at its next grid point (`zelda::chase::TurnAt::reverse_link`, ported here as
+    `reverses_onto_link`: Link within 8 pixels of its line there, behind it); how often such a frame is followed by a
+    hit within `SOON` frames against the other frames with a Darknut in the room; the share of hits with such a frame
+    in the `SOON` frames before; the cost a visit would pay at `RATE` a frame.
 (b) `reward.bomb_catch_min` / `items.bomb_catch` (`zelda::darknut_rules::bomb_catch`, read again here as `catch`):
     every bomb laid, the Darknuts its blast hurt (HP down or dead while it blasts), against the count `catch` gave
     on the frame it was laid: the bombs a minimum of 2 would leave unpaid, and how well the mask's count tells the
@@ -25,11 +26,13 @@ from pathlib import Path
 
 OBJ_X, OBJ_Y, OBJ_DIR, OBJ_TYPE, OBJ_META, OBJ_HP = 0x70, 0x84, 0x98, 0x34F, 0x405, 0x485
 OBJ_Q_SPEED, OBJ_INVINC, OBJ_MASK = 0x3BC, 0x4F0, 0x4B2
+OBJ_INPUT_DIR, OBJ_POS_FRAC, OBJ_GRID_OFFSET = 0x3F8, 0x3A8, 0x394   # asm:ObjInputDir, asm:ObjPosFrac, asm:ObjGridOffset
+OBJ_STUN, OBJ_SHOVE_DIR = 0x3D, 0xC0                                 # asm:ObjStunTimer, asm:ObjShoveDir
 BOMB_STATE, INV_CLOCK, HEARTS = (0xBC, 0xBD), 0x66C, (0x66F, 0x670)
 DARKNUTS = (0x0B, 0x0C)
 VEC = {1: (1, 0), 2: (-1, 0), 4: (0, 1), 8: (0, -1)}
 OPPOSITE = {1: 2, 2: 1, 4: 8, 8: 4}
-CHASE_REACH = 0x30
+MAX_FRAMES = 64              # zelda::chase::MAX_FRAMES
 SOON = 32                    # frames after a chasing frame within which a hit counts as following it
 RATE = 0.002                 # the cost a frame the measurement prices a visit at (the proposal's suggested value)
 
@@ -40,18 +43,75 @@ def monsters(ram):
             if 0 < ram[OBJ_TYPE + s] < 0x60 and ram[OBJ_META + s] == 0]
 
 
+def _step(pos: int, frac: int, offset: int, q: int, way: int) -> tuple[int, int, int]:
+    """`zelda::chase::step`: one frame of asm:Obj_MoveByQSpeed."""
+    plus = way & 0x05 != 0
+    for _ in range(4):
+        if plus:
+            frac += q
+            carry = frac > 0xFF
+        else:
+            carry = frac < q
+            frac -= q
+        frac &= 0xFF
+        if carry and offset not in (0x10, 0xF0):
+            pos, offset = ((pos + 1) & 0xFF, (offset + 1) & 0xFF) if plus else ((pos - 1) & 0xFF, (offset - 1) & 0xFF)
+    return pos, frac, offset
+
+
+def next_grid_point(ram, slot: int):
+    """`zelda::chase::next_grid_point`'s (x, y, direction) of the decision, or None."""
+    q = ram[OBJ_Q_SPEED + slot]
+    if q == 0:
+        return None
+    bits = ram[OBJ_INPUT_DIR + slot] & 0x0F
+    way = bits & -bits
+    x, y, frac, offset = ram[OBJ_X + slot], ram[OBJ_Y + slot], ram[OBJ_POS_FRAC + slot], ram[OBJ_GRID_OFFSET + slot]
+    if way == 0:
+        return (x, y, 0) if offset & 0x0F == 0 else None
+    for _ in range(MAX_FRAMES):
+        if way & 0x03:
+            x, frac, offset = _step(x, frac, offset, q, way)
+        else:
+            y, frac, offset = _step(y, frac, offset, q, way)
+        if offset & 0x0F == 0:
+            return x, y, way
+    return None
+
+
+def homing(tx: int, ty: int, mx: int, my: int):
+    """`zelda::chase::homing` (asm:Wanderer_MoveAndTurn): the turn toward the target, or None."""
+    def near(a, b):
+        d = (a - b) & 0xFF
+        return (d - 0x100 if d >= 0x80 else d) in range(-8, 9)
+    if near(tx, mx):
+        return 8 if ty < my else 4
+    if near(ty, my):
+        return 1 if tx >= mx else 2
+    return None
+
+
+def reverses_onto_link(ram, slot: int) -> bool:
+    """`zelda::chase::turn_at(ram, slot)` then `reverse_link`, for a Darknut: none while it decides nothing."""
+    if (ram[OBJ_TYPE + slot] not in DARKNUTS or ram[OBJ_META + slot] or ram[OBJ_SHOVE_DIR + slot]
+            or ram[OBJ_STUN + slot] or ram[INV_CLOCK]):
+        return False
+    bits = ram[OBJ_INPUT_DIR + slot] & 0x0F
+    way = bits & -bits
+    # The walk keeps the cross axis: a reversal needs Link within 8 of the line now (the walk itself is the slow part).
+    across = (ram[OBJ_Y] - ram[OBJ_Y + slot]) if way & 0x03 else (ram[OBJ_X] - ram[OBJ_X + slot])
+    if way == 0 or ((across & 0xFF) ^ 0x80) - 0x80 not in range(-8, 9):
+        return False
+    point = next_grid_point(ram, slot)
+    if point is None:
+        return False
+    mx, my, way = point
+    return way != 0 and homing(ram[OBJ_X], ram[OBJ_Y], mx, my) == OPPOSITE[way]
+
+
 def chasing(ram) -> bool:
-    """`zelda::darknut_rules::chasing`."""
-    x, y = ram[OBJ_X], ram[OBJ_Y]
-    for _, kind, dx, dy, facing in monsters(ram):
-        if kind not in DARKNUTS or facing not in VEC:
-            continue
-        vx, vy = VEC[facing]
-        along = (x - dx) * vx + (y - dy) * vy
-        across = abs(y - dy) if vx else abs(x - dx)
-        if across < 9 and -CHASE_REACH < along < 0:
-            return True
-    return False
+    """`zelda::darknut_rules::chasing`: some Darknut would reverse onto Link at its next grid point."""
+    return any(reverses_onto_link(ram, slot) for slot in range(1, 12))
 
 
 def catch(ram, way: int, bomb) -> int:

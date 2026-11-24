@@ -11,7 +11,7 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::sync::Arc;
 use zcore::ZCore;
-use zelda::darknut_rules::{CHASE_REACH, bomb_catch, chasing};
+use zelda::darknut_rules::{bomb_catch, chasing};
 use zelda::{Action, ActionKind, Direction, GameMap, LoadOptions, Session, Var};
 
 const OBJ_X: u16 = 0x70;
@@ -20,6 +20,10 @@ const OBJ_DIR: u16 = 0x98;
 const OBJ_TYPE: u16 = 0x34F;
 const OBJ_HP: u16 = 0x485;
 const INV_CLOCK: u16 = 0x66C;
+const OBJ_INPUT_DIR: u16 = 0x3F8;
+const OBJ_Q_SPEED: u16 = 0x3BC;
+const OBJ_POS_FRAC: u16 = 0x3A8;
+const OBJ_GRID_OFFSET: u16 = 0x394;
 const BLUE_DARKNUT: u8 = 0x0C;
 
 /// The Olive Garden from E, played to its first frame where Link can move and every Darknut is out of its cloud.
@@ -37,8 +41,9 @@ fn garden() -> Session<ZCore> {
     s
 }
 
-/// Darknuts at (x, y) facing `dir` in slots 1.. (the rest of the room's monsters gone), Link at (lx, ly) facing E
-/// with 4 bombs and the clock (test setup: nothing moves, nothing touches Link).
+/// Darknuts at (x, y) walking `dir` in slots 1.. (q-speed $20, on a grid point: the next one 16 pixels on; the rest
+/// of the room's monsters gone), Link at (lx, ly) facing E with 4 bombs and the clock (test setup: nothing moves,
+/// nothing touches Link).
 fn place(s: &mut Session<ZCore>, nuts: &[(u8, u8, u8)], link: (u8, u8), clock: bool) {
     for slot in 1..=11u16 {
         let nut = nuts.get(usize::from(slot) - 1);
@@ -48,6 +53,10 @@ fn place(s: &mut Session<ZCore>, nuts: &[(u8, u8, u8)], link: (u8, u8), clock: b
             nes.poke(OBJ_X + slot, x);
             nes.poke(OBJ_Y + slot, y);
             nes.poke(OBJ_DIR + slot, dir);
+            nes.poke(OBJ_INPUT_DIR + slot, dir);
+            nes.poke(OBJ_Q_SPEED + slot, 0x20);
+            nes.poke(OBJ_POS_FRAC + slot, 0);
+            nes.poke(OBJ_GRID_OFFSET + slot, 0);
         }
     }
     s.nes_mut().poke(INV_CLOCK, u8::from(clock));
@@ -55,27 +64,31 @@ fn place(s: &mut Session<ZCore>, nuts: &[(u8, u8, u8)], link: (u8, u8), clock: b
 }
 
 #[test]
-fn chasing_is_the_turn_rules_reach_behind_a_darknut() {
+fn chasing_is_a_darknuts_reversal_onto_link_at_its_next_grid_point() {
     let mut s = garden();
-    // A Darknut at (128, 125) walking E (direction 1); Link at each place, the expected answer.
+    // A Darknut at (128, 125) walking E (direction 1), its next grid point (144, 125); Link at each place, the
+    // expected answer (`zelda::chase::TurnAt::reverse_link`).
     let cases: [((u8, u8), bool, &str); 8] = [
         ((112, 125), true, "on its row, 16 behind"),
         ((112, 133), true, "8 below its row"),
-        ((112, 134), false, "9 below its row: outside the turn rule's 8"),
+        ((112, 134), false, "9 below its row: outside the homing turn's 8"),
         ((112, 117), true, "8 above its row"),
-        ((128 - CHASE_REACH as u8 + 1, 125), true, "just inside the reach behind"),
-        ((128 - CHASE_REACH as u8, 125), false, "at the reach"),
+        ((32, 125), true, "far behind on its row: the turn does not depend on the distance"),
+        ((136, 125), false, "8 short of its grid point: in its column there, the turn is N or S"),
         ((128, 125 + 16), false, "level with it, below"),
-        ((144, 125), false, "ahead of it"),
+        ((160, 125), false, "ahead of it"),
     ];
     for ((x, y), want, what) in cases {
         place(&mut s, &[(128, 125, 1)], (x, y), false);
         assert_eq!(chasing(s.state()), want, "Link at ({x}, {y}): {what}");
     }
-    // The same against a Darknut walking N (direction 8): behind it is below.
+    // The clock: it decides nothing.
+    place(&mut s, &[(128, 125, 1)], (112, 125), true);
+    assert!(!chasing(s.state()), "the clock");
+    // A Darknut walking N (direction 8), its next grid point (128, 109): behind it is below.
     place(&mut s, &[(128, 125, 8)], (132, 141), false);
     assert!(chasing(s.state()), "4 beside its column, 16 below");
-    place(&mut s, &[(128, 125, 8)], (128, 109), false);
+    place(&mut s, &[(128, 125, 8)], (128, 93), false);
     assert!(!chasing(s.state()), "ahead of it, above");
 }
 

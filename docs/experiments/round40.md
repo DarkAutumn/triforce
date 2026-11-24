@@ -1792,10 +1792,12 @@ flash).
 
 Both read `zelda::darknut_rules` (crates/zelda/src/darknut_rules.rs):
 - **(a) `reward.chase_penalty`** (default 0): `penalty-chase`, the value times the step's frames (scaled by
-  `shaping_scale`), on a step that ends with Link on the line of travel of a Darknut walking away from him:
-  `darknut_rules::chasing`, within 8 pixels of its row (walking E/W) or column (N/S), the turn rule's own test
-  (asm:Wanderer_MoveAndTurn, `CMP #$09`), and less than `CHASE_REACH` ($30, three of its 16-pixel cells) behind it;
-  out of its cloud, not dying; a flashing one counts (its turns go on). Only Darknuts: no other shielded wanderer
+  `shaping_scale`), on a step that ends with some Darknut set to reverse onto Link at its next grid point:
+  `darknut_rules::chasing` is Chase40's `zelda::chase::turn_at(..).reverse_link()` (Link within 8 pixels of its line
+  at that grid point, behind it, at any distance; asm:Wanderer_MoveAndTurn, `CMP #$09`), so the reward and the
+  observation's `entity_chase` (`reverse_link`) say the same thing (the lead, after Chase40's merge; the first build
+  used its own test, the line within $30 behind the Darknut now). None while it decides nothing (the clock, a stun,
+  a shove, its cloud or death); a flashing one counts (its turns go on). Only Darknuts: no other shielded wanderer
   exists, and Chase40's audit shows the other chasers turn from farther. Rooms where one bomb is right are
   untouched (it is no bomb term).
 - **(b) bombs that catch two or more**: `reward.bomb_catch_min` (default 0): a placed bomb whose credited hits

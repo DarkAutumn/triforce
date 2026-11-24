@@ -1260,8 +1260,8 @@ Link), times the shaping scale; over a stretch it sums to about the stretch's ai
 Training envs only (`SpecialistEnv`; a chain's `RewardTrack` does not record it).
 The owner's Darknut lesson's two proposals (round 40, Darknut40; `zelda::darknut_rules`; all default 0, off):
 `reward.chase_penalty` is `penalty-chase`, the value times the step's frames and the shaping scale, on a step that ends
-with Link within 8 pixels of the row or column of a Darknut walking away from him, under `CHASE_REACH` ($30) behind it
-(`darknut_rules::chasing`: asm:Wanderer_MoveAndTurn's turn at the chase target); training envs only.
+with some Darknut set to reverse onto Link at its next grid point (`darknut_rules::chasing`: `zelda::chase::TurnAt`'s
+`reverse_link`, the condition `entity_chase` shows; asm:Wanderer_MoveAndTurn's homing turn); training envs only.
 `reward.bomb_catch_min` withholds `reward-bomb-hit` and the step's `reward-hit` from a bomb whose credited hits are
 fewer; `items.bomb_catch` offers a `free` family's BOMB only facing where `darknut_rules::bomb_catch` counts that many
 monsters (each walked straight on at its q-speed through the blast's frames, out of its flash, not bomb-immune, a

@@ -1178,7 +1178,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             rewards.add(Outcome::penalty("penalty-aimless", -value));
         }
         // `penalty-chase` (round 40, Darknut40's switched-off proposal, default off): the step's frames when it ends
-        // with Link on the line of a Darknut walking away from him (`zelda::darknut_rules::chasing`).
+        // with some Darknut set to reverse onto Link at its next grid point (`zelda::darknut_rules::chasing`).
         if self.config.reward.chase_penalty > 0.0 && !change.entered_room() && zelda::darknut_rules::chasing(&state) {
             let value = self.config.reward.chase_penalty * f64::from(change.frames) * scale;
             rewards.add(Outcome::penalty("penalty-chase", -value));

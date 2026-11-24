@@ -162,8 +162,8 @@ def test_the_chase_cost_is_paid_on_the_turn_rules_line(fighter):
 def test_the_proposals_read_the_owners_bomb_take():
     """`r40_darknut_proposals.read` on the owner's `bombs_with_melee` take: his six bombs (docs/owner/darknuts.md: five
     hurt two, the fourth none) and the catch count `items.bomb_catch` would have shown on the frame each was laid (the
-    same five at two or more); his one hit; the frames he stood on a Darknut's line behind it (the document counts
-    frames from 1, here from 0: its bomb 1 at 299 is 298 here, its hit at 992 is 991)."""
+    same five at two or more); his one hit; the frames a Darknut was set to reverse onto him at its next grid point
+    (the document counts frames from 1, here from 0: its bomb 1 at 299 is 298 here, its hit at 992 is 991)."""
     require_rom()
     spec = importlib.util.spec_from_file_location('r40_darknut_proposals', SCRIPT.with_name('r40_darknut_proposals.py'))
     proposals = importlib.util.module_from_spec(spec)
@@ -171,7 +171,12 @@ def test_the_proposals_read_the_owners_bomb_take():
     visit = proposals.read(TAKE.with_name('blue_darknut-bombs_with_melee.tfreplay'))
     assert [(b['frame'], b['predicted'], b['hurt']) for b in visit['bombs']] == [
         (298, 2, 2), (492, 3, 2), (980, 2, 2), (1183, 1, 0), (1427, 3, 2), (2193, 2, 2)]
-    assert visit['hits'] == [991] and len(visit['chase']) == 168
+    # 233 chasing frames since `chasing` became `zelda::chase`'s `reverse_link` (was 168: Link on the line within $30
+    # behind the Darknut now). Compared frame by frame: all 168 are still in, the 65 new ones are Link farther behind
+    # (frame 291: a Darknut at (56, 109) walking W, its grid point (48, 109), Link at (104, 116), 48 behind it), and
+    # the hit at 991 still has chasing frames in the 32 before it (959 on).
+    assert visit['hits'] == [991] and len(visit['chase']) == 233
+    assert any(991 - 32 <= f < 991 for f in visit['chase'])
 
 
 def test_the_first_pass_of_3x5b_kills_one_darknut_and_takes_its_bombs(fighter, monkeypatch):

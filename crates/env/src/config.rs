@@ -330,9 +330,9 @@ pub struct RewardConfig {
     #[serde(default)]
     pub aimless_penalty: f64,
     /// Round 40 (Darknut40's switched-off proposal; the owner: "You never try to get to a darknut moving away from
-    /// you on your row by following them directly"): `penalty-chase` per frame of a step that ends with Link on the
-    /// line of travel of a Darknut walking away from him (`zelda::darknut_rules::chasing`: within 8 pixels of its row
-    /// or column, the turn rule's reach, up to `CHASE_REACH` behind it), scaled by `shaping_scale` (positive
+    /// you on your row by following them directly"): `penalty-chase` per frame of a step that ends with some Darknut
+    /// set to reverse onto Link at its next grid point (`zelda::darknut_rules::chasing`, `zelda::chase::TurnAt`'s
+    /// `reverse_link`: the condition `obs.chase`'s `entity_chase` shows), scaled by `shaping_scale` (positive
     /// magnitude; 0 = off, the default).
     #[serde(default)]
     pub chase_penalty: f64,

@@ -2,24 +2,19 @@
 //! proposals for the fresh generation's darknut training, each read from the game state alone.
 //!
 //! - [`chasing`]: "You never try to get to a darknut moving away from you on your row by following them directly."
-//!   Link stands on the line of travel of a Darknut walking away from him, within [`CHASE_REACH`] behind it. At each
-//!   16-pixel grid point a wanderer turns toward its chase target with a chance of 129 in 256 when the target is
-//!   within 8 pixels of it on one axis (asm:Wanderer_MoveAndTurn: `CMP #$09`), so from there it turns straight back at
-//!   him at every grid point it reaches. Read by `reward.chase_penalty` (`env::config::RewardConfig`).
+//!   A Darknut whose next grid-point decision would turn it straight back onto Link: [`crate::chase::TurnAt`]'s
+//!   `reverse_link`, the same condition the observation's `entity_chase` shows (`obs.chase`). At each 16-pixel grid
+//!   point a wanderer turns toward its chase target with a chance of 129 in 256 when the target is within 8 pixels of
+//!   it on one axis (asm:Wanderer_MoveAndTurn: `CMP #$09`), so Link on its line behind it is met head-on. Read by
+//!   `reward.chase_penalty` (`env::config::RewardConfig`).
 //! - [`bomb_catch`]: "you always want to hit 2+ darknuts with one bomb." The monsters a bomb laid now would hurt if
 //!   each walks on along its facing. Read by `items.bomb_catch` (the BOMB mask, `Session::set_bomb_catch`) and the
 //!   count behind `reward.bomb_catch_min` (`env::critic`), which counts the hits the look-ahead credits instead.
 
 use crate::bombs::landing;
+use crate::chase::turn_at;
 use crate::enums::{Direction, enemy};
 use crate::game::{Enemy, GameView};
-
-/// Pixels behind a Darknut within which Link on its line counts as following it: three of its 16-pixel cells, the
-/// grid points it decides on (asm:Wanderer_MoveAndTurn) in the next 77 frames at a Blue Darknut's pace.
-pub const CHASE_REACH: i32 = 0x30;
-
-/// The turn rule's reach: the chase target within 8 pixels on one axis (asm:Wanderer_MoveAndTurn, `CMP #$09`).
-const TURN_REACH: i32 = 9;
 
 /// A bomb blasts from the 49th frame after its press (state `$11` for that frame, `$12` for `$30`) for `$18` frames
 /// (asm:Bomb_StateTimes); a monster in the blast is hurt when the middles are under `$18` apart on both axes
@@ -38,21 +33,15 @@ fn is_darknut(e: &Enemy) -> bool {
     matches!(e.id, enemy::RED_DARKNUT | enemy::BLUE_DARKNUT)
 }
 
-/// Link stands within 8 pixels of the row (a Darknut walking E or W) or column (N or S) of a Darknut walking away
-/// from him, behind it by less than [`CHASE_REACH`] (level with it is not behind). Darknuts out of their spawn cloud
-/// and not dying; a flashing one counts (its turns go on, asm:Wanderer_Update).
+/// Some Darknut would reverse onto Link at its next grid point ([`crate::chase::TurnAt::reverse_link`]): Link within
+/// 8 pixels of its line there, behind it, at any distance. None while it cannot decide (the clock, a stun, a shove,
+/// its spawn cloud or death); a flashing one counts (its turns go on, asm:Wanderer_Update).
 pub fn chasing(state: &GameView) -> bool {
-    let link = state.link.position;
-    state.active_enemies().filter(|e| is_darknut(e) && e.direction.is_cardinal()).any(|e| {
-        let (dx, dy) = (link.x - e.position.x, link.y - e.position.y);
-        let (along, across) = match e.direction {
-            Direction::E => (dx, dy.abs()),
-            Direction::W => (-dx, dy.abs()),
-            Direction::S => (dy, dx.abs()),
-            _ => (-dy, dx.abs()),
-        };
-        across < TURN_REACH && -CHASE_REACH < along && along < 0
-    })
+    let ram = state.ram();
+    state
+        .active_enemies()
+        .filter(|e| is_darknut(e))
+        .any(|e| turn_at(ram, usize::from(e.index)).is_some_and(|t| t.reverse_link()))
 }
 
 /// The monsters a BOMB laid now facing `d` (where [`landing`] puts it; 0 where it can't be laid) would hurt if each

@@ -86,6 +86,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from r40_d3_69_line import (CLOUD, FLASH, GAME_DIR, GROW, LINK_SPEED, MARGIN, OPPOSITE, REPEAT, SHOVE, SIDEWAYS,  # noqa: E402
                             SWING_FRAMES, TOUCH, VEC, mask_ok, on_grid)
+from r40_darknut_proposals import chasing as chasing_line  # noqa: E402  (`zelda::darknut_rules::chasing`)
 
 ROOT = Path(__file__).resolve().parents[2]
 TASK = ROOT / 'specialists' / 'd3first' / 'darknut.yaml'
@@ -294,21 +295,6 @@ def darknuts(ram: bytes) -> list[Nut]:
     """The room's Darknuts, alive or in their spawn cloud (a dying one, metastate $10 and up, is left out)."""
     return [Nut(ram, s) for s in range(1, 12)
             if ram[OBJ_TYPE + s] in SPEED and ram[OBJ_META + s] < 0x10]
-
-
-def chasing_line(ram: bytes) -> bool:
-    """`zelda::darknut_rules::chasing` (`reward.chase_penalty`'s test): Link within 8 pixels of the line of a Darknut
-    walking away from him, less than $30 pixels behind it."""
-    x, y = ram[OBJ_X], ram[OBJ_Y]
-    for d in darknuts(ram):
-        if d.cloud or d.dir is None:
-            continue
-        vx, vy = VEC[d.dir]
-        along = (x - d.x) * vx + (y - d.y) * vy
-        across = abs(y - d.y) if vx else abs(x - d.x)
-        if across < 9 and -0x30 < along < 0:
-            return True
-    return False
 
 
 def contact(paths: np.ndarray, futures) -> np.ndarray:
