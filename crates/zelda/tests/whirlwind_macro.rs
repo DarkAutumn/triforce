@@ -160,7 +160,7 @@ fn the_macros_are_a_route_switch_whirlwinds_on_as_landed() {
     assert_eq!(on.macros[ROUTE].whirlwinds, [ow(0x0b), ow(0x22)].into_iter().collect());
     assert!(on.macros[ROUTE].unaided_docks);
     for room in ["0x45", "0x55"] {
-        let bad = ROUTES_YAML.replacen(LANDED, &ON.replacen("0x0b", room, 1), 1);
+        let bad = ROUTES_YAML.replacen(ON, &ON.replacen("0x0b", room, 1), 1);
         let e = GameMap::from_yaml(GAME_YAML, &bad).unwrap_err().to_string();
         assert!(e.contains("is no whirlwind step's room"), "{room}: {e}");
     }
@@ -268,7 +268,8 @@ fn the_unaided_dock_never_looks_at_monsters() {
     assert_eq!(w.landing(0x55).0, ow(0x34), "the warp lands as aided");
 
     // As landed the dock gives way: a shot in the air takes the plays away.
-    let Some(mut aided) = Walk::start(&Arc::new(GameMap::builtin()), "d3first_0_55n_v2_0", 0x55) else { return };
+    // The helped dock is 2.0.0.14's entry (`LANDED`); this branch's routes.yaml has the fresh generation's (round 40).
+    let Some(mut aided) = Walk::start(&map_with(LANDED), "d3first_0_55n_v2_0", 0x55) else { return };
     raft_end(&mut aided);
     aided.tidy();
     aided.wire();
