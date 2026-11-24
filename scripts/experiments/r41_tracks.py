@@ -2,9 +2,9 @@
 """Round 40 (Tracks41, docs/experiments/round40.md "The untracked states' tracks"): curriculum tracks of the states
 Tracks40 left without one, recorded from the explorer's own reset of today's state files.
 
-    python scripts/experiments/r41_tracks.py fighter --room 59|5b-last --states S1,S2 --out ROOT
+    python scripts/experiments/r41_tracks.py fighter --room 59|5b|5b-last --states S1,S2 --out ROOT
         [--seeds N] [--seed0 S] [--depth D] [--workers W]
-    python scripts/experiments/r41_tracks.py trace --room 59|5b-last --state S [--seed N]
+    python scripts/experiments/r41_tracks.py trace --room 59|5b|5b-last --state S [--seed N]
     python scripts/experiments/r41_tracks.py table ROOT...
 
 A track is what ``python -m triforce.explore`` writes (``env::explore::Explorer::write``): ``NNNN.state``, the session
@@ -19,7 +19,8 @@ but for the random numbers (``r40_tracks.py audit`` checks it).
 (``teach``: the look-ahead of ``--depth`` decisions near a Darknut, then the backtracking search where Link is still
 hit), from seeds ``--seed0``.. until a visit leaves by the route's exit unhit; that visit, played again from the
 reset, is the track (``<state>~fighter<seed>``).  A state none of whose ``--seeds`` visits is kept gets no track.
-``--room 59``: 3:0x59 from N (the S door); ``5b-last``: 3:0x5b's last pass (the fight, the room's bombs, the wall).
+``--room 59``: 3:0x59 from N (the S door); ``5b``: 3:0x5b's first pass (one Red Darknut, its bombs, N);
+``5b-last``: 3:0x5b's last pass (the fight, the room's bombs, the wall).
 ``trace`` prints one plain visit of the fighter a decision a line; ``table`` each track's steps, hits and hearts lost
 (the report's table).
 """

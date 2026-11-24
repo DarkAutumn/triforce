@@ -2721,8 +2721,8 @@ declared `curriculum.untracked` for want of one (above: Tracks40's 25 and States
 and 2), by the generation's own means, in the lead's order: the scripted rules, Darknut40's fighter, the explorer
 aimed by what its searches reached; nothing from a network's play (the fourth means was not needed). **All 27 have a
 track that belongs** (Tracks40's audit: its first state equals the explorer's own reset of today's file): 20 by seven
-rules and 4 by the fighter, all unhit, 3 by the explorer; none is declared untracked any more. No start state, route
-data, reward or training changed.
+rules (none lost a heart by its end; the six of 7x1c and 7x1b were hit once and healed), 4 by the fighter, unhit, 3 by
+the explorer; none is declared untracked any more. No start state, route data, reward or training changed.
 
 **What a track must start from.** The explorer resets with the family's `d3first` task and no RAM randomization, the
 run-time clips switch on (`env::explore::explore_config`). Every track here was recorded from that same reset: an
@@ -2741,7 +2741,8 @@ room's `DRAWS` included (`own` gave goriya-1b's runs 1 bomb, so its tracks would
 nothing: the rules decide from the RAM at every decision, so the missing closing frame after a MOVE only changes how
 far a MOVE walks, which they read back; all seven won from today's states at once (job #1135, 2 runs each: Gleeok
 lost both, a death and a `no-damage`). Recorded (job #1136, `target/tracks41/rules.sh`): per state the first won run
-that lost no heart, else at most 1, 2, any (every state found one at 0), 40 runs a state, Gleeok 150:
+that lost no heart by its end (a hit healed by a heart counts as none), else at most 1, 2, any (every state found one
+at 0), 40 runs a state, Gleeok 150:
 
 | rule | states | hearts in | won | endings | hearts lost in wins (mean) |
 |---|---|---:|---:|---|---:|
@@ -2806,21 +2807,21 @@ and the proof then refuses both darknut tasks (3 seed states without a track). R
 89 and 97 steps, all three belong. The installed snapshot still holds the stale three: a darknut@d3first training on
 it starts those curriculum episodes with a bomb the state does not hold.
 
-**The table** (`r41_tracks.py table`: hits are the hearts falling from one state file to the next, and on the last
-step by `trajectory.json`'s `health` where that is the end's; round 29's rule tracks record the start's hearts there,
-so their last step is not read; a boss's heart container raises the hearts):
+**The table** (`r41_tracks.py table`, job #1192: hits are the hearts falling from one state file to the next, and on
+the last step by `trajectory.json`'s `health` where that is the end's; round 29's rule tracks record the start's hearts
+there, so their last step is not read; Gleeok's heart container raises the hearts by one):
 
 | state | means | track | steps | hits |
 |---|---|---|---:|---:|
 | boss-gleeok `4_13w_0` | rule gleeok-13 | `~rule1002` | 368 | 0 |
 | boss-gleeok `4_13w_1` | rule gleeok-13 | `~rule1000` | 257 | 0 |
 | boss-gleeok `4_13w_2` | rule gleeok-13 | `~rule1000` | 309 | 0 |
-| boss-digdogger `7_1cw_0` | rule digdogger-1c | `~rule1003` | 134 | 0 |
-| boss-digdogger `7_1cw_1` | rule digdogger-1c | `~rule1000` | 84 | 0 |
-| boss-digdogger `7_1cw_2` | rule digdogger-1c | `~rule1000` | 84 | 0 |
-| goriya `7_1bw_0` | rule goriya-1b | `~rule1003` | 228 | 0 |
-| goriya `7_1bw_1` | rule goriya-1b | `~rule1001` | 216 | 0 |
-| goriya `7_1bw_2` | rule goriya-1b | `~rule1002` | 171 | 0 |
+| boss-digdogger `7_1cw_0` | rule digdogger-1c | `~rule1003` | 134 | 1 (healed) |
+| boss-digdogger `7_1cw_1` | rule digdogger-1c | `~rule1000` | 84 | 1 (healed) |
+| boss-digdogger `7_1cw_2` | rule digdogger-1c | `~rule1000` | 84 | 1 (healed) |
+| goriya `7_1bw_0` | rule goriya-1b | `~rule1003` | 228 | 1 (healed) |
+| goriya `7_1bw_1` | rule goriya-1b | `~rule1001` | 216 | 1 (healed) |
+| goriya `7_1bw_2` | rule goriya-1b | `~rule1002` | 171 | 1 (healed) |
 | like-like `4_32w_0` | rule like-like-32 | `~rule1000` | 203 | 0 |
 | like-like `4_32w_1` | rule like-like-32 | `~rule1000` | 246 | 0 |
 | like-like `4_32w_2` | rule like-like-32 | `~rule1001` | 360 | 0 |
@@ -2836,9 +2837,33 @@ so their last step is not read; a boss's heart container raises the hearts):
 | darknut `3_5bw_2` | the fighter (`5b-last`) | `~fighter100000` | 141 | 0 |
 | zol `3_4bs_0` | rule zol-4b | `~rule1000` | 231 | 0 |
 | zol `3_4bs_1` | rule zol-4b | `~rule1000` | 202 | 0 |
-| goriya `1_23s_1` | the explorer, 20000 iterations | (the state's name) | 259 | 8 |
-| goriya `1_23s_2` | the explorer, 20000 iterations | (the state's name) | 237 | 8 |
-| goriya `2_1es_1` | the explorer, 20000 iterations | (the state's name) | 257 | 10 |
+| goriya `1_23s_1` | the explorer, 20000 iterations, patience 5000 | (the state's name) | 172 | 5 (2.5 hearts) |
+| goriya `1_23s_2` | the explorer, 20000 iterations, patience 5000 | (the state's name) | 214 | 0 |
+| goriya `2_1es_1` | the explorer, 20000 iterations, patience 5000 | (the state's name) | 224 | 9 (5 hearts) |
+| darknut `3_5bs_0` (replaced, above) | the fighter (`5b`) | `~fighter100000` | 74 | 0 |
+| darknut `3_5bs_1` (replaced) | the fighter (`5b`) | `~fighter100000` | 89 | 0 |
+| darknut `3_5bs_2` (replaced) | the fighter (`5b`) | `~fighter100000` | 97 | 0 |
+
+**The folder: `/home/leculver/git/triforce-r40-tracks2/target/trajectories-gen2`** (`r40_tracks.py compose`, job
+#1192, `target/tracks41/final.sh`): the store's `261124-gen1` as hard links (1,387 of its 1,390 tracks) without its
+three stale `darknut/d3first_3_5bs_*`, plus the 30 new tracks (copies): **1,417 tracks, 119,486 files, 1,350,225,975
+bytes**. Audited again (`audit-gen2.json`): every `d3first` track belongs (315); the bare ones as the store has them
+(1,046 belong, 44 stale, 12 without a state: Tracks40's 56). For the lead:
+
+    triforce-lead data install trajectories 261124-gen2 --from /home/leculver/git/triforce-r40-tracks2/target/trajectories-gen2
+
+**The proof** (`r40_tracks.py proof`, job #1192, `target/tracks41/proof.json`), this worktree's `trajectories ->
+target/trajectories-gen2` (gitignored), on the merge of `r40-gen` b4270f31: **72 task files, none refused, no red
+flag**. `curriculum_tracks` (each equal to what `Curriculum::new` loaded) against `trajectories-gen1`'s: darknut 93 ->
+97 (d3first and own), zol 46 -> 48, vire 54 -> 60, like-like 51 -> 54, boss-gleeok 6 -> 9, goriya 135 -> 141,
+boss-digdogger's own file 18 (its `d3first` part has the curriculum off); every other task as before.
+
+**Not done, not tested.** No training read the folder. The tracks were checked by the audit (their first state) and
+their recorded ending (`exit-correct` on replay from the reset); what they teach was not measured. The fighter's
+`5b-last` plays only the bag of 4 or fewer (no wall-first order). The rules' `trajectory.json` `health` is the start's
+(round 29's writer, unchanged). Merging this branch before the lead installs `261124-gen2` as current makes the
+shipped-task test (`test_the_shipped_tasks_declare_every_input_they_draw`) and every d3first training of these
+families refuse: the declarations are gone and `261124-gen1` lacks the tracks.
 
 ## The lab trainer for the generation's teachers (Trainer41, branch `r40-trainer`)
 
