@@ -267,7 +267,8 @@ class Wrapper:
         """Records the job as ``queued`` and holds its job lock (its liveness) from the same transaction on."""
         now = time.time()
         row = {**fields, 'status': 'queued', 'queued_ts': now, 'host': os.uname().nodename, 'pid': os.getpid(),
-               'nice': fields.get('nice'), 'top_aware': 1}     # this wrapper honours a move to the top (``q.line``)
+               'nice': fields.get('nice'), 'top_aware': 1,     # this wrapper honours a move to the top (``q.line``)
+               'places_aware': 1}                              # and reads the number of regular places
         columns = [key for key in row if key in q._COLUMNS]     # pylint: disable=protected-access
         values = [json.dumps(row[key]) if key in q._JSON and row[key] is not None else row[key]  # pylint: disable=protected-access
                   for key in columns]
@@ -598,6 +599,8 @@ def build_parser() -> argparse.ArgumentParser:
                                      "it on their own work), or back to its own place (--undo)")
     top.add_argument('job', type=int, help="the job's id (triforce job list)")
     top.add_argument('--undo', action='store_true', help="back to its own place in the line")
+    places = sub.add_parser('places', help="the number of regular places, or set it (the owner's; agents don't)")
+    places.add_argument('count', nargs='?', type=int, help=f"1 to {q.MAX_REGULAR_PLACES}; without it, print them")
     doctor = sub.add_parser('doctor', help="the checks every job start makes, for a checkout (exit 1 on a red flag)")
     doctor.add_argument('path', nargs='?', default='.', help="a folder of the checkout (default this one)")
     past = sub.add_parser('history', help="every job that ended: when it queued, started and ended, where it ran")
@@ -1092,6 +1095,21 @@ def cmd_top(args) -> int:
     return 0
 
 
+def cmd_places(args) -> int:
+    """``triforce job places [N]``: the regular places as every wrapper of this code now reads them, or N of them
+    from now on (``jobqueue.set_regular_places``: jobs waiting under this code see it at their next check; a job
+    queued by older code keeps to the first two)."""
+    if args.count is not None:
+        try:
+            q.set_regular_places(args.count)
+        except ValueError as error:
+            raise JobError(str(error)) from error
+    regular = q.regular_places()
+    print(f"regular places: {len(regular)} ({', '.join(regular)}); express: {', '.join(q.EXPRESS_PLACES)}; "
+          f"tools: {', '.join(q.TOOL_PLACES)}")
+    return 0
+
+
 def main(argv=None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     head, extra = (argv[:argv.index('--')], argv[argv.index('--') + 1:]) if '--' in argv else (argv, [])
@@ -1101,13 +1119,13 @@ def main(argv=None) -> int:
             return detach(args, head, extra)
         if args.verb == 'run':
             return cmd_run(args, extra)
-        if extra and args.verb in ('setup', 'list', 'progress', 'history', 'wait', 'doctor', 'top'):
+        if extra and args.verb in ('setup', 'list', 'progress', 'history', 'wait', 'doctor', 'top', 'places'):
             raise JobError(f"{args.verb} takes nothing after --")
         verbs = {'golden': cmd_golden, 'build': cmd_build, 'test': cmd_test}
         if args.verb in verbs:
             return verbs[args.verb](args, extra)
         return {'setup': cmd_setup, 'list': cmd_list, 'progress': cmd_progress, 'history': cmd_history,
-                'wait': cmd_wait, 'doctor': cmd_doctor, 'top': cmd_top}[args.verb](args)
+                'wait': cmd_wait, 'doctor': cmd_doctor, 'top': cmd_top, 'places': cmd_places}[args.verb](args)
     except JobError as error:
         print(f"triforce job: error: {error}", file=sys.stderr)
         return 2
