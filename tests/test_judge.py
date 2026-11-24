@@ -178,6 +178,15 @@ def test_eval_batch_plays_a_numbered_checkpoint_made_at_the_jobs_turn(shared, tm
     assert eval_batch.main([*argv[:2], 'boss-gleeok=gen1-gleeok/s1@it6', *argv[3:], '--plan']) == 2
     assert 'no numbered checkpoint of iteration 6' in capsys.readouterr().err
     assert eval_batch.main([*argv, '--scopes', 'to-d9', '--plan']) == 2
+    # --with: another group's checkpoint in its slots too, not judged; a group twice is refused.
+    _training('gen1-walkers', 's1')
+    args = eval_batch.build_parser().parse_args([*argv, '--with', 'walkers=gen1-walkers/s1@latest'])
+    eval_batch.prepare_teacher(args)
+    assert args.team == 't1+@boss-gleeok=gen1-gleeok/s1-it000002+@walkers=gen1-walkers/s1-it000004'
+    assert [item.dungeon for item in args.judged] == ['d4', 'd4'] and args.checkpoints[1]['made']
+    team = store.effective_team(args.team)
+    assert team['slots']['zol@d3first']['run'] == 'gen1-walkers/s1-it000004'
+    assert eval_batch.main([*argv, '--with', 'boss-gleeok=gen1-walkers/s1@it2', '--plan']) == 2
 
 
 def _played(path: Path, runs: list[dict], team: dict):
@@ -186,47 +195,88 @@ def _played(path: Path, runs: list[dict], team: dict):
 
 
 def test_checkpoints_are_planned_one_chain_a_job_then_collected_in_one_table(shared, tmp_path, capsys):
+    store.create_team('t1', {'boss-gleeok': store.slot_of(_sealed('boss-gleeok', 'r1'))}, 'test')
     parent = _training('gen1-gleeok', 's1')
+    _training('gen1-walkers', 's1')
     chains, base = tmp_path / 'chains', tmp_path / 'base'
     chains.mkdir()
     base.mkdir()
     for name in ('post-d3', 'd4'):
         _write(base / f'b-{name}.jsonl', [_won(0, False), _won(1, False), _won(2, False), _died(3)])
     common = ['checkpoints', 'boss-gleeok=gen1-gleeok/s1', '--dungeons', 'd4', '--runs', '4', '--chains-dir',
-              str(chains), '--base', 'b', '--base-dir', str(base), '--agent', 'Tester']
+              str(chains), '--base', 'b', '--base-dir', str(base), '--agent', 'Tester', '--team-base', 't1']
     assert judge.main([*common, '--plan']) == 0
     out = capsys.readouterr().out
-    assert '0 of 4 chains played' in out
+    assert '0 of 4 chains played; the control control-t1-r4 (t1): 0 of 2' in out
     lines = [line for line in out.splitlines() if line.startswith('triforce job run')]
-    assert len(lines) == 4 and all('--express --timeout 10m --detach' in line for line in lines)
-    assert ("eval-batch gen1-gleeok-s1-r4-it000002 --teacher boss-gleeok=gen1-gleeok/s1@it2 --scopes to-d4 --runs 4 "
-            "--no-report --chains-dir") in lines[0] and '--subtask boss-gleeok-it000004-d4' in lines[3]
-    # The pieces of iteration 2 played (their jobs made its run); iteration 4's not yet.
+    assert len(lines) == 6 and all('--express --timeout 10m --detach' in line for line in lines)
+    assert "eval-batch control-t1-r4 --team t1 --chain 'post-d3: --runs 4 --act model --route d3first --from " \
+        "0_74c_0 --stop-at step:53 --output" in lines[0]
+    assert ("eval-batch gen1-gleeok-s1-r4-it000002 --teacher boss-gleeok=gen1-gleeok/s1@it2 --base t1 --scopes to-d4 "
+            "--runs 4 --no-report --chains-dir") in lines[2] and '--subtask boss-gleeok-it000004-d4' in lines[5]
+    # With the walkers' checkpoint beside: every chain and the control carry it.
+    assert judge.main([*common, '--plan', '--with', 'walkers=gen1-walkers/s1@it2']) == 0
+    out = capsys.readouterr().out
+    assert 'the control control-t1-walkers-gen1-walkers-s1-it000002-r4 (t1+@walkers=gen1-walkers/s1-it000002)' in out
+    assert '--with: gen1-walkers/s1-it000002 (iteration 2 of gen1-walkers/s1) is made by --submit' in out
+    assert '--teacher boss-gleeok=gen1-gleeok/s1@it2 --with walkers=gen1-walkers/s1@it2 --base t1' in out
+    # The pieces of iteration 2 played (their jobs made its run); iteration 4's and the control not yet.
     team = {'name': 't1+@boss-gleeok=gen1-gleeok/s1-it000002',
             'overrides': {'boss-gleeok@d3first': store.checkpoint_run(parent, 2)['run']}}
     _played(chains / 'gen1-gleeok-s1-r4-it000002-post-d3.jsonl', [_won(0, True), _died(1), _died(2), _died(3)], team)
     _played(chains / 'gen1-gleeok-s1-r4-it000002-d4.jsonl', [_won(0, True), _won(1, True), _died(2), _died(3)], team)
     assert judge.main(common) == 0
     out = capsys.readouterr().out
-    assert '| 2 | 0.00M | d4 | previous triforce | 25.0% ± 21.7 of 4 | 75.0% | -50.0 ± 28.9 (paired, 4) |' in out
+    assert ('| 2 | 0.00M | d4 | previous triforce | 25.0% ± 21.7 of 4 | 75.0% | -50.0 ± 28.9 (paired, 4) | '
+            'not played | - |') in out
     assert '| 2 | 0.00M | d4 | entrance | 50.0% ± 25.0 of 4 | 75.0% | -25.0 ± 25.0 (paired, 4) |' in out
-    assert 'Not yet played (2): gen1-gleeok-s1-r4-it000004-post-d3, gen1-gleeok-s1-r4-it000004-d4' in out
+    assert ('Not yet played (4): gen1-gleeok-s1-r4-it000004-post-d3, gen1-gleeok-s1-r4-it000004-d4, '
+            'control-t1-r4-post-d3, control-t1-r4-d4') in out
     assert 'nothing filed yet' in out and not store.outputs(kind='judge')
-    assert (chains / 'gen1-gleeok-s1-r4-checkpoints.md').is_file()
+    assert (chains / 'gen1-gleeok-s1-r4-checkpoints-vs-b.md').is_file()                # another base: named
     assert judge.main([*common, '--plan']) == 0                                    # only what is missing
-    assert len([line for line in capsys.readouterr().out.splitlines() if line.startswith('triforce job')]) == 2
-    # Every piece in: the table is filed in the store.
+    assert len([line for line in capsys.readouterr().out.splitlines() if line.startswith('triforce job')]) == 4
+    # Every piece and the control in: the table is filed in the store.
     team = {'name': 't1+@boss-gleeok=gen1-gleeok/s1-it000004',
             'overrides': {'boss-gleeok@d3first': store.checkpoint_run(parent, 4)['run']}}
     for name in ('post-d3', 'd4'):
         _played(chains / f'gen1-gleeok-s1-r4-it000004-{name}.jsonl', [_won(s, True) for s in range(4)], team)
+        _played(chains / f'control-t1-r4-{name}.jsonl', [_won(0, True), _died(1), _died(2), _died(3)], {'name': 't1'})
     assert judge.main(common) == 0
     out = capsys.readouterr().out
-    assert '| 4 | 0.00M | d4 | entrance | 100.0% ± 0.0 of 4 |' in out and 'Not yet played' not in out
+    assert ('| 4 | 0.00M | d4 | entrance | 100.0% ± 0.0 of 4 | 75.0% | +25.0 ± 25.0 (paired, 4) | 25.0% | '
+            '+75.0 ± 25.0 (paired, 4) |') in out and 'Not yet played' not in out
     assert sorted(Path(row['path']).name for row in store.outputs(kind='judge')) == [
-        'gen1-gleeok-s1-r4-checkpoints.json', 'gen1-gleeok-s1-r4-checkpoints.md']
+        'gen1-gleeok-s1-r4-checkpoints-vs-b.json', 'gen1-gleeok-s1-r4-checkpoints-vs-b.md']
     # The comparison of one piece names the weights it played.
     text = judge.report(judge.compare('gen1-gleeok-s1-r4-it000004', 'b', chains, base, ROUTE))
     assert '- `gen1-gleeok/s1-it000004`: iteration 4 of `gen1-gleeok/s1`, 4,000 steps' in text
     assert '| Measured (it 4, 0.00M steps) |' in text
     assert judge.main([*common[:1], 'boss-gleeok=gen1-gleeok/s1', '--its', '2,6', '--runs', '4']) == 2
+
+
+def test_the_darknut_rooms_of_dungeon_3_are_counted_by_pass_cycle_and_bombs():
+    def step_of(room, n=0):
+        return [i for i, s in enumerate(PLAN) if (s['level'], s['room'], s['in_cave']) == (3, room, False)][n]
+    first, lock, in_69, out_69 = step_of(0x5b), step_of(0x59), step_of(0x69), step_of(0x69, 1)
+
+    def visit(step, outcome, **fields):
+        return {**_visit(step, outcome), **fields}
+    runs = [{'seed': 0, 'rooms': [visit(first, 'exit-correct', goal_cycle_in=0, goal_carrier_kills=1,
+                                        goal_carrier_bombs=4, goal_carrier_bombs_taken=4, hits=1),
+                                  visit(lock, 'exit-correct', bombs_in=8), visit(in_69, 'exit-correct', hits=2),
+                                  visit(out_69, 'death', hits=3)]},
+            {'seed': 1, 'rooms': [visit(first, 'death', goal_cycle_in=0, goal_carrier_kills=0, hits=3)]},
+            {'seed': 2, 'rooms': [visit(first, 'exit-correct', goal_cycle_in=1, hits=0),
+                                  visit(lock, 'death', bombs_in=4)]}]
+    rooms = judge.darknut_rooms(runs, PLAN)
+    assert rooms['5b_first'] == {'visits': 3, 'cycle0': 2, 'exits': 1, 'killed': 1, 'dropped': 4, 'taken': 4,
+                                 'hits': 2.0}
+    assert rooms['59_n'] == {'4': {'visits': 1, 'exits': 0}, '8': {'visits': 1, 'exits': 1}}
+    assert rooms['69'] == [{'visits': 1, 'exits': 1, 'hits': 2.0}, {'visits': 1, 'exits': 0, 'hits': 3.0}]
+    line = judge.darknut_rooms_lines([{'iteration': 228, 'start': 'entrance', 'rooms': rooms,
+                                       'curriculum': judge.curriculum_points({'curriculum': {'iteration': 230, 'tasks': {
+                                           'darknut@d3first': {'d3first_3_59n_0': {'point': 42, 'length': 140}}}}})}])[-1]
+    assert line == ('| 228 | entrance | 2 (3), 1, 1, 4 / 4, 2.00 | 4: 1 / 0, 8: 1 / 1 | 1, 1, 2.00 | 1, 0, 3.00 | '
+                    '42/140 (read at it 230) |')
+    assert judge.darknut_rooms([{'seed': 0, 'rooms': [_visit(31)]}], PLAN) is None

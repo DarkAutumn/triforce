@@ -430,6 +430,10 @@ def _mode(path: Path) -> int:
 def test_a_checkpoint_of_an_open_run_becomes_a_sealed_copy_and_the_parent_is_untouched(shared):
     parent = _training('gen1-walkers', 's1')
     numbered = parent.path / 'checkpoints' / 'it000002' / 'ckpt.pt'
+    (parent.path / 'tasks' / 'darknut@d3first').mkdir(parents=True)
+    (parent.path / 'tasks' / 'darknut@d3first' / 'curriculum.json').write_text(json.dumps(
+        {'d3first_3_59n_0': {'length': 140, 'point': 42, 'attempts': 6}}))
+    (parent.path / 'metrics.jsonl').write_text('{"iteration": 1}\n{"iteration": 3}\n')
     before = {p: (_mode(p), p.stat().st_mtime_ns) for p in parent.path.rglob('*')}
     made = store.checkpoint_run(parent, 2)
     assert (made['run'], made['made'], made['exists'], made['weights']) == ('gen1-walkers/s1-it000002', True, False,
@@ -447,6 +451,8 @@ def test_a_checkpoint_of_an_open_run_becomes_a_sealed_copy_and_the_parent_is_unt
     record = json.loads((snap.path / 'run.json').read_text())
     assert record['checkpoint']['weights'] == 'copied' and record['checkpoint']['checkpoint_sha1'] == row['sha1']
     assert record['parent'] == {'family': 'gen1-walkers', 'run': 's1', 'iterations': 2, 'sha1': row['sha1']}
+    assert record['checkpoint']['curriculum'] == {     # the training's curricula as they read then, and when
+        'iteration': 3, 'tasks': {'darknut@d3first': {'d3first_3_59n_0': {'point': 42, 'length': 140}}}}
     from triforce import manifest
     recorded = manifest.read('gen1-walkers/s1-it000002')
     assert recorded['networks']['student'] == {'arch': 'hitnet'} and recorded['kind'] == 'lab-train'

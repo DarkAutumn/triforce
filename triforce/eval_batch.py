@@ -973,6 +973,9 @@ def build_parser() -> argparse.ArgumentParser:
                               "@itN / @latest: the run's numbered checkpoint as its own sealed run FAMILY/RUN-itNNNNNN "
                               "(store.checkpoint_run: made when missing, the run itself only read)")
     teacher.add_argument('--base', default=None, help="the team the teacher joins (default: current)")
+    teacher.add_argument('--with', dest='with_', action='append', default=[], metavar='GROUP=FAMILY/RUN[@itN|@latest]',
+                         help="another group's run in its slots too, not judged (repeatable): a teacher judged beside "
+                              "the walkers' best checkpoint")
     teacher.add_argument('--dungeons', default=None, metavar='dN,...',
                          help="judge only these dungeons' scopes (default every one the group plays in)")
     teacher.add_argument('--scopes', default=None, metavar='SCOPE,...',
@@ -1013,19 +1016,25 @@ def checkpoint_text(record: dict) -> str:
 
 
 def prepare_teacher(args):
-    """``--teacher``: sets ``args.team`` (``BASE+@GROUP=FAMILY/RUN...``), ``args.judged`` (``judge.teacher_plan``),
-    ``args.teacher_route`` and ``args.checkpoints`` (a teacher named by a numbered checkpoint: its sealed run, made
-    here unless only planned: ``--plan`` or the queue's dry call); BatchError for a wrong one."""
+    """``--teacher``: sets ``args.team`` (``BASE+@GROUP=FAMILY/RUN...``, ``--with``'s groups after the teacher's),
+    ``args.judged`` (``judge.teacher_plan``, the teacher's groups alone), ``args.teacher_route`` and
+    ``args.checkpoints`` (a run named by a numbered checkpoint: its sealed run, made here unless only planned:
+    ``--plan`` or the queue's dry call); BatchError for a wrong one."""
     from . import jobs, judge  # pylint: disable=import-outside-toplevel
     args.judged, args.checkpoints = None, []
     if not args.teacher:
-        if args.base or args.plan or args.dungeons or args.scopes:
-            raise BatchError("--base, --dungeons, --scopes and --plan go with --teacher")
+        if args.base or args.plan or args.dungeons or args.scopes or args.with_:
+            raise BatchError("--base, --dungeons, --scopes, --with and --plan go with --teacher")
         return
     if args.team:
         raise BatchError("--teacher plays --base with the teacher in its slots: give --base, not --team")
     try:
         route, groups = judge.teacher_families(args.teacher)
+        if args.with_:
+            with_route, with_groups = judge.teacher_families(args.with_)
+            if with_route != route or set(with_groups) & set(groups):
+                raise ValueError(f"--with {' '.join(args.with_)}: other groups of {route} than the teachers' "
+                                 f"({', '.join(groups)})")
     except ValueError as error:
         raise BatchError(str(error)) from None
     args.judged = judge.teacher_plan(sorted({family for families in groups.values() for family in families}), route)
@@ -1035,9 +1044,11 @@ def prepare_teacher(args):
         raise BatchError(str(error)) from None
     if not args.judged:
         raise BatchError(f"--teacher: no family of {', '.join(groups)} plays a step of {route}")
-    args.teacher, args.checkpoints = resolve_checkpoints(
-        args.teacher, make=not args.plan and not os.environ.get(jobs.JOB_ESTIMATE_ENV))
-    args.team = judge.teacher_spec(args.base or 'current', args.teacher)
+    make = not args.plan and not os.environ.get(jobs.JOB_ESTIMATE_ENV)
+    args.teacher, args.checkpoints = resolve_checkpoints(args.teacher, make=make)
+    args.with_, more = resolve_checkpoints(args.with_, make=make)
+    args.checkpoints += more
+    args.team = judge.teacher_spec(args.base or 'current', args.teacher + args.with_)
     args.teacher_route = route
 
 
@@ -1056,7 +1067,8 @@ def print_plan(args, entries: list[Entry], tell: Callable[[str], None] = print):
         tell(checkpoint_text(record))
     tell(f"team: {args.team}")
     if _pending(args):
-        changed = sorted({key for item in args.teacher for key in store.group_slots(item.partition('=')[0])})
+        changed = sorted({key for item in args.teacher + args.with_
+                          for key in store.group_slots(item.partition('=')[0])})
     else:
         changed = sorted(store.effective_team(args.team)['overrides'])
     tell(f"  {len(changed)} slots changed: {', '.join(changed)}\n")

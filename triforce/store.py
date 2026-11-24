@@ -714,6 +714,35 @@ def checkpoint_info(run: Run) -> Optional[dict]:
         return None
 
 
+def parent_curricula(parent: Run) -> Optional[dict]:
+    """The curriculum of each task of a lab run as it reads now (``tasks/<key>/curriculum.json``: per seed state its
+    track's ``point`` and ``length``), with the iteration its ``metrics.jsonl`` last logged: a numbered checkpoint
+    keeps no curriculum of its own, so a checkpoint run made soon after its checkpoint records the closest there is.
+    None for a run without one; a file caught mid-write is left out."""
+    tasks = {}
+    for path in sorted((parent.path / 'tasks').glob('*/curriculum.json')):
+        try:
+            states = json.loads(path.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            continue
+        tasks[path.parent.name] = {state: {key: track.get(key) for key in ('point', 'length')}
+                                   for state, track in states.items() if isinstance(track, dict)}
+    if not tasks:
+        return None
+    iteration = None
+    metrics = parent.path / 'metrics.jsonl'
+    if metrics.is_file():
+        with open(metrics, 'rb') as file:
+            file.seek(max(0, metrics.stat().st_size - 65536))
+            for line in reversed(file.read().splitlines()):
+                try:
+                    iteration = json.loads(line)['iteration']
+                    break
+                except (ValueError, KeyError):
+                    continue
+    return {'iteration': iteration, 'tasks': tasks}
+
+
 def checkpoint_run(parent: Run, iteration, make: bool = True, entry: str = PUBLIC) -> dict:
     """The sealed run ``FAMILY/RUN-it<NNNNNN>`` (``checkpoint_run_name``) holding ``parent``'s numbered checkpoint of
     ``iteration`` (an int, or ``'latest'``: the newest completely written one) as its ``ckpt.pt``, made when it does
@@ -723,7 +752,8 @@ def checkpoint_run(parent: Run, iteration, make: bool = True, entry: str = PUBLI
     sealed (its files are read-only already).  A checkpoint still being written (``numbered_checkpoints``) is
     refused.  The same checkpoint again is the same run (idempotent); a run of that name holding other weights is
     refused.  Its ``run.json``: ``checkpoint`` (parent, its status, iteration, steps, SHA-1, source, ``copied`` or
-    ``linked``, act mode), ``parent`` (``lineage.identity``) and ``manifest``: the parent's, with
+    ``linked``, act mode, the parent's curricula as they read then: ``parent_curricula``), ``parent``
+    (``lineage.identity``) and ``manifest``: the parent's, with
     ``networks.checkpoint`` added, so ``triforce manifest diff`` names the weights.  Returns the run's identity and
     those fields with ``exists`` (before this call) and ``made``."""
     from . import lineage, manifest, registry  # pylint: disable=import-outside-toplevel
@@ -789,7 +819,8 @@ def checkpoint_run(parent: Run, iteration, make: bool = True, entry: str = PUBLI
             parent_manifest = manifest.read(parent.path)
         except ValueError:
             parent_manifest = {'schema': 0, 'unknown': ['the parent run records no manifest']}
-        info = {**out, 'steps': saved.get('steps'), 'act': act, 'when': time.time()}
+        info = {**out, 'steps': saved.get('steps'), 'act': act, 'when': time.time(),
+                'curriculum': parent_curricula(parent)}
         info.pop('run')
         recorded = {**parent_manifest, 'networks': {**(parent_manifest.get('networks') or {}), CHECKPOINT_ORIGIN: {
             key: info[key] for key in ('parent', 'iteration', 'steps', 'checkpoint_sha1')}}}

@@ -48,6 +48,7 @@ import argparse
 import json
 import math
 import os
+import shlex
 import sys
 from collections import Counter
 from dataclasses import dataclass
@@ -481,7 +482,9 @@ class Piece:
 
 @dataclass
 class CheckpointsPlan:
-    """What ``judge checkpoints`` judges: the teacher's group and run, the route, the pieces in order."""
+    """What ``judge checkpoints`` judges: the teacher's group and run, the route, the pieces in order, and the control
+    (``control``: the tag of the base team's own chains on these scopes and seeds, with ``with_`` in their slots too;
+    ``control_team`` its team spec; ``control_missing`` its scopes not played yet)."""
     group: str
     parent: object                      # store.Run
     route: str
@@ -490,21 +493,39 @@ class CheckpointsPlan:
     chains_dir: Path
     base: Optional[str]
     pieces: list
+    with_: list
+    control: str
+    control_team: str
+    control_missing: list
+    pending: list                       # --with checkpoints whose run is not made yet (store.checkpoint_run records)
+
+
+def _safe_tag(text: str) -> str:
+    return ''.join(c if c.isalnum() or c in '-_.' else '-' for c in text)
 
 
 def checkpoints_plan(teacher: str, its: Optional[str], runs: int, dungeons: Optional[str] = None,
                      scopes: Optional[str] = None, tag: Optional[str] = None, chains_dir: Optional[Path] = None,
-                     base: Optional[str] = None) -> CheckpointsPlan:
+                     base: Optional[str] = None, with_: Optional[list] = None,
+                     control: Optional[str] = None) -> CheckpointsPlan:
     """The pieces of judging ``GROUP=FAMILY/RUN``'s numbered checkpoints (``its``: ``114,228`` or ``all``: every
     completely written one) on the group's scopes (``select_scopes``), ``runs`` a chain on seeds 0..runs-1: one chain
     a checkpoint and scope, in batch ``<tag>-it<NNNNNN>`` (``tag`` default ``<family>-<run>-r<runs>``), done when its
-    records are in ``chains_dir`` or filed in the store (``find_files``).  ValueError for a wrong argument."""
+    records are in ``chains_dir`` or filed in the store (``find_files``).  ``with_``: other groups' runs
+    (``GROUP=FAMILY/RUN[@itN]``) in their slots too, for every piece and the control.  The control: the base team (with
+    ``with_``) without the teacher on the same scopes and seeds, tag ``control`` (default
+    ``control-<team>[-<with runs>]-r<runs>``).  ValueError for a wrong argument."""
     from . import store  # pylint: disable=import-outside-toplevel
     route, groups = teacher_families([teacher])
     group = next(iter(groups))
     text, named = store.split_checkpoint(teacher.partition('=')[2])
     if named is not None:
         raise ValueError(f"{teacher}: name the run (GROUP=FAMILY/RUN); --its chooses its checkpoints")
+    with_ = list(with_ or [])
+    if with_:
+        with_route, with_groups = teacher_families(with_)
+        if with_route != route or group in with_groups:
+            raise ValueError(f"--with {' '.join(with_)}: other groups of {route} than the teacher's ({group})")
     parent = store.parse_run(text)
     found = store.numbered_checkpoints(parent, store.get_run(parent)['status'] == store.SEALED)
     complete = [c['iteration'] for c in found if c['complete']]
@@ -533,41 +554,85 @@ def checkpoints_plan(teacher: str, its: Optional[str], runs: int, dungeons: Opti
         piece_tag = f"{tag}-it{iteration:06d}"
         have = find_files(piece_tag, chains_dir)
         pieces += [Piece(iteration, piece_tag, item, item.scope.file in have) for item in judged]
-    return CheckpointsPlan(group, parent, route, runs, tag, chains_dir, base, pieces)
+    resolved, pending = [], []
+    for item in with_:
+        name, _, run = item.partition('=')
+        text, iteration = store.split_checkpoint(run)
+        if iteration is not None:
+            record = store.checkpoint_run(store.parse_run(text), iteration, make=False)
+            if not record['exists']:
+                pending.append(record)
+            run = record['run']
+        resolved.append(f"{name}={run}")
+    team = store.read_team(base or 'current')['name']
+    control_team = teacher_spec(team, resolved)
+    control = control or _safe_tag(f"control-{team}" + ''.join(f"-{item}" for item in resolved) + f"-r{runs}")
+    have = find_files(control, chains_dir)
+    control_missing = [item for item in judged if item.scope.file not in have]
+    return CheckpointsPlan(group, parent, route, runs, tag, chains_dir, base, pieces, with_, control, control_team,
+                           control_missing, pending)
+
+
+def _job(agent: str, task: str, subtask: str, desc: str, timeout: str) -> list[str]:
+    return ['triforce', 'job', 'run', '--agent', agent, '--task', task, '--subtask', subtask, '--desc', desc,
+            '--express', '--timeout', timeout, '--detach', '--']
+
+
+def _triforce() -> str:
+    exe = Path(sys.executable).with_name('triforce')
+    return str(exe) if exe.is_file() else 'triforce'
 
 
 def piece_command(plan: CheckpointsPlan, piece: Piece, agent: str, task: str, timeout: str = '10m') -> list[str]:
     """The queue's command for one piece: an express job (``--timeout``, detached) of ``eval-batch`` with the teacher
-    at that checkpoint on that scope alone, no report (``judge checkpoints`` collects)."""
-    triforce = Path(sys.executable).with_name('triforce')
+    at that checkpoint on that scope alone (``--with`` the others), no report (``judge checkpoints`` collects)."""
     name = f"{plan.group}-it{piece.iteration:06d}-{piece.judged.scope.name}"
-    return ['triforce', 'job', 'run', '--agent', agent, '--task', task, '--subtask', name, '--desc',
-            f"{plan.parent.identity} it {piece.iteration} judged on {piece.judged.scope.name}, {plan.runs} runs",
-            '--express', '--timeout', timeout, '--detach', '--',
-            str(triforce) if triforce.is_file() else 'triforce', 'eval-batch', piece.tag,
+    return [*_job(agent, task, name, f"{plan.parent.identity} it {piece.iteration} judged on "
+                                     f"{piece.judged.scope.name}, {plan.runs} runs", timeout),
+            _triforce(), 'eval-batch', piece.tag,
             '--teacher', f"{plan.group}={plan.parent.identity}@it{piece.iteration}",
+            *[arg for item in plan.with_ for arg in ('--with', item)],
             *(['--base', plan.base] if plan.base else []), '--scopes', piece.judged.scope.name,
             '--runs', str(plan.runs), '--no-report', '--chains-dir', str(plan.chains_dir)]
 
 
+def control_command(plan: CheckpointsPlan, judged: Judged, agent: str, task: str, timeout: str = '10m') -> list[str]:
+    """The queue's command for one scope of the control: the base team (with ``--with``'s runs) on that scope and
+    the same seeds, as ``<control>-<file>.jsonl``."""
+    output = plan.chains_dir / f"{plan.control}-{judged.scope.file}.jsonl"
+    args = shlex.join([*judged.chain_args(plan.runs, plan.route), '--output', str(output)])
+    return [*_job(agent, task, f"control-{judged.scope.name}", f"the control of {plan.group}'s checkpoints: "
+                  f"{plan.control_team} on {judged.scope.name}, {plan.runs} runs", timeout),
+            _triforce(), 'eval-batch', plan.control, '--team', plan.control_team,
+            '--chain', f"{judged.scope.file}: {args}"]
+
+
 def checkpoints_table(plan: CheckpointsPlan, base: str = BASELINE, base_dir: Optional[Path] = None) -> dict:
-    """The finished pieces beside ``base`` on the same seeds: a row per checkpoint and scope (``scope_comparison``),
-    with the checkpoint's steps (its run's ``run.json``, ``store.checkpoint_info``)."""
+    """The finished pieces beside ``base`` (today's team on its own route) and the control (the base team on this
+    code's route, ``plan.control``) on the same seeds: a row per checkpoint and scope (``scope_comparison`` with
+    each), with the checkpoint's steps (its run's ``run.json``, ``store.checkpoint_info``)."""
     from . import store  # pylint: disable=import-outside-toplevel
     from ._native import route_steps  # pylint: disable=import-outside-toplevel
     steps_of = list(route_steps(plan.route))
-    base_files = find_files(base, base_dir if base_dir is not None else plan.chains_dir)
-    base_runs: dict = {}
+    bases = {'base': find_files(base, base_dir if base_dir is not None else plan.chains_dir),
+             'control': find_files(plan.control, plan.chains_dir)}
+    cut: dict = {}
+
+    def runs_of(which: str, scope: Scope):
+        if (which, scope.file) not in cut:
+            files = bases[which]
+            cut[which, scope.file] = (scope_runs(_read(*files[scope.file])[0], steps_of, scope)
+                                      if scope.file in files else None)
+        return cut[which, scope.file]
+
     rows = []
     for piece in plan.pieces:
         if not piece.done:
             continue
         scope = piece.judged.scope
-        if scope.file not in base_runs:
-            base_runs[scope.file] = (scope_runs(_read(*base_files[scope.file])[0], steps_of, scope)
-                                     if scope.file in base_files else None)
         path, meta = find_files(piece.tag, plan.chains_dir)[scope.file]
         runs, provenance = _read(path, meta)
+        arm = scope_runs(runs, steps_of, scope)
         snapshot = store.checkpoint_run_name(plan.parent, piece.iteration)
         info = store.checkpoint_info(snapshot) or {}
         rows.append({'iteration': piece.iteration, 'steps': info.get('steps'),
@@ -575,35 +640,56 @@ def checkpoints_table(plan: CheckpointsPlan, base: str = BASELINE, base_dir: Opt
                      'checkpoint_sha1': info.get('checkpoint_sha1'), 'dungeon': piece.judged.dungeon,
                      'start': piece.judged.start_kind, 'scope': scope.name, 'file': str(path),
                      'team': _team_name(provenance),
-                     'numbers': scope_comparison(scope_runs(runs, steps_of, scope), base_runs[scope.file])})
-    return {'teacher': f"{plan.group}={plan.parent.identity}", 'route': plan.route, 'runs': plan.runs,
-            'tag': plan.tag, 'base': base, 'rows': rows,
-            'missing': [f"{p.tag}-{p.judged.scope.file}" for p in plan.pieces if not p.done]}
+                     'numbers': scope_comparison(arm, runs_of('base', scope)),
+                     'control_numbers': scope_comparison(arm, runs_of('control', scope)),
+                     'rooms': darknut_rooms(runs, steps_of), 'curriculum': curriculum_points(info)})
+    control_rooms = []
+    for judged in dict((j.scope.file, j) for j in (p.judged for p in plan.pieces)).values():
+        if judged.scope.file in bases['control']:
+            rooms = darknut_rooms(_read(*bases['control'][judged.scope.file])[0], steps_of)
+            if rooms is not None:
+                control_rooms.append({'iteration': 'control', 'start': judged.start_kind, 'rooms': rooms})
+    return {'teacher': f"{plan.group}={plan.parent.identity}", 'with': plan.with_, 'route': plan.route,
+            'runs': plan.runs, 'tag': plan.tag, 'base': base, 'control': plan.control,
+            'control_team': plan.control_team, 'rows': rows, 'control_rooms': control_rooms,
+            'missing': [f"{p.tag}-{p.judged.scope.file}" for p in plan.pieces if not p.done]
+            + [f"{plan.control}-{j.scope.file}" for j in plan.control_missing]}
 
 
 def checkpoints_report(result: dict) -> str:
-    """``judge checkpoints``' table as Markdown: a row per checkpoint and start."""
+    """``judge checkpoints``' table as Markdown: a row per checkpoint and start, beside today's team on its own route
+    (the baseline) and on the generation's route (the control)."""
     goals = any(row['numbers'].get('arm_goals') for row in result['rows'])
-    lines = [f"# {result['teacher']}: numbered checkpoints beside {result['base']} ({result['route']}, "
-             f"{result['runs']} runs a chain)", '',
-             "Each checkpoint plays the teacher's slots (`+@GROUP=`, the rest of the base team as it is) on the same "
-             "seeds; rates are the runs that reached the scope's cut, ± their standard error; the difference is "
-             "paired by seed with the base's runs; hearts lost a run with the base's in brackets and the paired "
-             "difference; rooms: the share of runs that ended there (the base's in brackets).", '',
-             '| it | steps | dungeon | start | rate | base on these seeds | paired difference | hearts lost a run '
-             '(base); difference | rooms where most runs end (base) |' + (' goals a run (base) |' if goals else ''),
-             '|' + '---|' * (9 + goals)]
+    lines = [f"# {result['teacher']}: numbered checkpoints ({result['route']}, {result['runs']} runs a chain)", '',
+             f"Each checkpoint plays the teacher's slots (`+@GROUP=`"
+             + (f", with {', '.join(result['with'])}" if result['with'] else '')
+             + ", the rest of the base team as it is) on seeds 0-" + str(result['runs'] - 1) + ". Rates are the runs "
+             "that reached the scope's cut, ± their standard error. Two bases on the same seeds, each difference "
+             f"paired by seed: **today's team on its own route** (`{result['base']}`: 2.0.0.15's code and route) and "
+             f"**today's team on the generation's route** (`{result['control']}`: `{result['control_team']}` on this "
+             "code). Hearts lost a run, rooms where most runs end (their share) and goals: the generation's route's "
+             "in brackets, the hearts' paired difference with it.", '',
+             "| it | steps | dungeon | start | rate | today's team, own route, these seeds | difference | today's team, "
+             "generation's route, these seeds | difference | hearts lost a run | rooms where most runs end |"
+             + (' goals a run |' if goals else ''),
+             '|' + '---|' * (11 + goals)]
     for row in result['rows']:
-        n = row['numbers']
+        n, c = row['numbers'], row['control_numbers']
         arm = n['arm']
         cells = [str(row['iteration']), '-' if row['steps'] is None else f"{row['steps'] / 1e6:.2f}M", row['dungeon'],
                  'previous triforce' if row['start'] == 'leg' else 'entrance',
                  f"{_pct(arm['rate'])} ± {100 * (arm['se'] or 0):.1f} of {arm['n']}",
                  _pct(n['base_on_seeds']['rate']) if n.get('base') else 'no record', _diff(n.get('rate_diff')),
-                 _hearts(n), _ends(n)]
+                 _pct(c['base_on_seeds']['rate']) if c.get('base') else 'not played', _diff(c.get('rate_diff')),
+                 _hearts(c), _ends(c)]
         if goals:
-            cells.append(_goal_text(n))
+            cells.append(_goal_text(c))
         lines.append('| ' + ' | '.join(cells) + ' |')
+    rooms = [row for row in result['rows'] if row.get('rooms')] + list(result.get('control_rooms') or [])
+    if rooms:
+        lines += ['', "Dungeon 3's Darknut rooms (counts over the runs; the control is today's team on the "
+                      "generation's route; the curriculum as the training's `tasks/*/curriculum.json` read when the "
+                      "checkpoint's run was made):", '', *darknut_rooms_lines(rooms)]
     if result['missing']:
         lines += ['', f"Not yet played ({len(result['missing'])}): {', '.join(result['missing'])}."]
     elif not goals:
@@ -612,45 +698,117 @@ def checkpoints_report(result: dict) -> str:
 
 
 def checkpoints_main(args) -> int:
-    """``triforce judge checkpoints``: with ``--plan`` the pieces and a queue command for each one not played;
-    ``--submit`` queues those (express, detached); otherwise the table of the pieces played, written beside the
-    chains (``<tag>-checkpoints.md`` / ``.json``) and, once every piece is in, filed in the store."""
-    import shlex  # pylint: disable=import-outside-toplevel
+    """``triforce judge checkpoints``: with ``--plan`` the pieces and a queue command for each one not played (the
+    control's too); ``--submit`` queues those (express, detached; a ``--with`` checkpoint's run made first);
+    otherwise the table of the pieces played, written beside the chains (``<tag>-checkpoints.md`` / ``.json``;
+    ``-vs-<base>`` added beside another ``--base``) and, once every piece is in, filed in the store."""
     import subprocess  # pylint: disable=import-outside-toplevel
     plan = checkpoints_plan(args.teacher, args.its, args.runs, args.dungeons, args.scopes, args.tag,
-                            args.chains_dir, args.team_base)
+                            args.chains_dir, args.team_base, args.with_, args.control)
     missing = [piece for piece in plan.pieces if not piece.done]
-    commands = [piece_command(plan, piece, args.agent, args.task, args.timeout) for piece in missing]
     its = sorted({piece.iteration for piece in plan.pieces})
     scopes = list(dict.fromkeys(piece.judged.scope.name for piece in plan.pieces))
     print(f"# {plan.group}={plan.parent.identity}: checkpoints {', '.join(map(str, its))} on "
           f"{', '.join(scopes)}, {plan.runs} runs a chain; tag {plan.tag}-it<NNNNNN>; chains in {plan.chains_dir}")
-    print(f"{len(plan.pieces) - len(missing)} of {len(plan.pieces)} chains played")
+    print(f"{len(plan.pieces) - len(missing)} of {len(plan.pieces)} chains played; the control {plan.control} "
+          f"({plan.control_team}): {len(scopes) - len(plan.control_missing)} of {len(scopes)}")
     if args.plan or args.submit:
+        for record in plan.pending:
+            if args.submit:
+                from . import store  # pylint: disable=import-outside-toplevel
+                record = store.checkpoint_run(store.parse_run(record['parent']), record['iteration'])
+            print(f"--with: {record['run']} (iteration {record['iteration']} of {record['parent']}) "
+                  + ('made now' if record['made'] else 'is made by --submit or the first piece played'))
+        commands = [control_command(plan, judged, args.agent, args.task, args.timeout)
+                    for judged in plan.control_missing]
+        commands += [piece_command(plan, piece, args.agent, args.task, args.timeout) for piece in missing]
         for command in commands:
             print(shlex.join(command))
             if args.submit:
                 subprocess.run(command, check=True)
-        if missing:
-            print(f"\nthen `triforce job wait UNIT...` and again without --plan: the table reads the chains played "
-                  f"(here or filed in the store) and lists the rest")
+        if commands:
+            print("\nthen `triforce job wait UNIT...` and again without --plan: the table reads the chains played "
+                  "(here or filed in the store) and lists the rest")
         return 0
     result = checkpoints_table(plan, args.base, args.base_dir)
     text = checkpoints_report(result)
     print('\n' + text)
-    markdown = plan.chains_dir / f"{plan.tag}-checkpoints.md"
-    numbers = plan.chains_dir / f"{plan.tag}-checkpoints.json"
+    name = f"{plan.tag}-checkpoints" + ('' if args.base == BASELINE else f"-vs-{args.base}")
+    markdown, numbers = plan.chains_dir / f"{name}.md", plan.chains_dir / f"{name}.json"
     from .events import write_json_atomic  # pylint: disable=import-outside-toplevel
     plan.chains_dir.mkdir(parents=True, exist_ok=True)
     markdown.write_text(text + '\n', encoding='utf-8')
     write_json_atomic(numbers, result)
-    if missing:
-        print(f"\n{len(missing)} chains not played; queue them with --plan (or --submit); nothing filed yet")
+    if result['missing']:
+        print(f"\n{len(result['missing'])} chains not played; queue them with --plan (or --submit); nothing filed yet")
         return 0
     from . import store  # pylint: disable=import-outside-toplevel
     for path in (markdown, numbers):
         print(f"filed {store.file_output(path, 'judge', name=path.name)}")
     return 0
+
+
+# The walkers' Dungeon 3 Darknut rooms in a chain (round 41, the lead's list for the generation's first checkpoints):
+# 3:0x5b's first pass at drop cycle 0 (the fight for the first Darknut's bombs), 3:0x59 from N by the bombs Link
+# brings (4 or 8 by the route), 3:0x69 in and out.
+def darknut_rooms(runs: list[dict], plan: list[dict]) -> Optional[dict]:
+    """Those rooms' figures over ``runs`` (chain records), found on the route by room (``plan``: ``route_steps``);
+    None when the route has no such rooms or the runs play none of them."""
+    def steps_of(room):
+        return [i for i, s in enumerate(plan) if (s['level'], s['room'], s['in_cave']) == (3, room, False)]
+    first_5b, first_59, passes_69 = steps_of(0x5b)[:1], steps_of(0x59)[:1], steps_of(0x69)[:2]
+    if not first_5b or not first_59 or len(passes_69) < 2:
+        return None
+    visits: dict = {}
+    for run in runs:
+        for v in run.get('rooms') or []:
+            visits.setdefault(v.get('step'), []).append(v)
+    if not any(visits.get(step) for step in (first_5b[0], first_59[0], *passes_69)):
+        return None
+    exits = lambda vs: sum(1 for v in vs if v.get('outcome') == 'exit-correct')  # noqa: E731
+    hits = lambda vs: (sum(v.get('hits') or 0 for v in vs) / len(vs)) if vs else None  # noqa: E731
+    pass_5b = visits.get(first_5b[0], [])
+    at_0 = [v for v in pass_5b if v.get('goal_cycle_in') == 0]
+    by_bombs: dict = {}
+    for v in visits.get(first_59[0], []):
+        by_bombs.setdefault(v.get('bombs_in'), []).append(v)
+    return {
+        '5b_first': {'visits': len(pass_5b), 'cycle0': len(at_0), 'exits': exits(at_0),
+                     'killed': sum(1 for v in at_0 if v.get('goal_carrier_kills')),
+                     'dropped': sum(v.get('goal_carrier_bombs') or 0 for v in at_0),
+                     'taken': sum(v.get('goal_carrier_bombs_taken') or 0 for v in at_0), 'hits': hits(at_0)},
+        '59_n': {str(bombs): {'visits': len(vs), 'exits': exits(vs)}
+                 for bombs, vs in sorted(by_bombs.items(), key=lambda kv: (kv[0] is None, kv[0]))},
+        '69': [{'visits': len(visits.get(step, [])), 'exits': exits(visits.get(step, [])),
+                'hits': hits(visits.get(step, []))} for step in passes_69]}
+
+
+def curriculum_points(info: dict, marker: str = '3_59n') -> Optional[str]:
+    """``point/length`` of each seed state named ``marker`` in a checkpoint run's recorded curricula
+    (``store.parent_curricula``), with the iteration they were read at; None when none was recorded."""
+    curriculum = (info or {}).get('curriculum') or {}
+    tracks = [f"{track['point']}/{track['length']}" for states in (curriculum.get('tasks') or {}).values()
+              for state, track in sorted(states.items()) if marker in state]
+    return f"{', '.join(tracks)} (read at it {curriculum.get('iteration')})" if tracks else None
+
+
+def darknut_rooms_lines(rows: list[dict]) -> list[str]:
+    """The table of ``darknut_rooms`` per checkpoint and start (and the control's, ``it`` 'control')."""
+    def hit(value):
+        return '-' if value is None else f"{value:.2f}"
+    lines = ['| it | start | 3x5b first pass at cycle 0: visits (of all), exits, Darknut killed, bombs dropped / '
+             'taken, hits a visit | 3x59 from N by bombs brought: visits / exits | 3x69 in: visits, exits, hits a '
+             'visit | 3x69 out: visits, exits, hits a visit | curriculum 3_59n point/length |', '|---|---|---|---|---|---|---|']
+    for row in rows:
+        d = row['rooms']
+        first = d['5b_first']
+        bombs = ', '.join(f"{b}: {x['visits']} / {x['exits']}" for b, x in d['59_n'].items()) or 'none'
+        passes = [f"{p['visits']}, {p['exits']}, {hit(p['hits'])}" for p in d['69']]
+        lines.append(f"| {row['iteration']} | {'previous triforce' if row['start'] == 'leg' else 'entrance'} | "
+                     f"{first['cycle0']} ({first['visits']}), {first['exits']}, {first['killed']}, "
+                     f"{first['dropped']} / {first['taken']}, {hit(first['hits'])} | {bombs} | {passes[0]} | "
+                     f"{passes[1]} | {row.get('curriculum') or '-'} |")
+    return lines
 
 
 def main(argv=None) -> int:
@@ -683,8 +841,14 @@ def main(argv=None) -> int:
                     help="where the chains are written and read (else the store's filed copies)")
     ck.add_argument('--team-base', default=None, help="the team the teacher joins (eval-batch --base; default "
                                                       "current)")
-    ck.add_argument('--base', default=BASELINE, help=f"the base measurement's tag (default {BASELINE})")
+    ck.add_argument('--base', default=BASELINE, help=f"the base measurement's tag: today's team on its own route "
+                                                     f"(default {BASELINE})")
     ck.add_argument('--base-dir', type=Path, default=None, help="where the base's files are (default the store)")
+    ck.add_argument('--with', dest='with_', action='append', default=[], metavar='GROUP=FAMILY/RUN[@itN]',
+                    help="another group's run in its slots too, in every chain and the control (repeatable): a "
+                         "teacher judged beside the walkers' best checkpoint")
+    ck.add_argument('--control', default=None, help="the control's tag: today's team (with --with) on this code's "
+                                                    "route, same scopes and seeds (default control-<team>[-...]-r<N>)")
     ck.add_argument('--plan', action='store_true', help="the pieces and a `triforce job run --express` command for "
                                                        "each not played; run nothing")
     ck.add_argument('--submit', action='store_true', help="queue those commands (express, detached)")
