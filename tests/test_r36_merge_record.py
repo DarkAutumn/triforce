@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from triforce import _native, registry
+from triforce import _native, paths, registry
 
 from .conftest import REPO_STATES_DIR
 
@@ -29,16 +29,17 @@ def test_foreign_starts_names_every_state_outside_the_route():
 
 def test_a_route_part_with_both_routes_harvest_records_only_its_own(tmp_path):
     """boss-gleeok@d3first's harvested folder holds bare-named (``d2first``) and ``d3first_`` states; its task on
-    the route's states draws harvested starts (``harvested_fraction``) only of ``d3first``."""
+    the route's states draws harvested starts (``harvested_fraction``) only of ``d3first``.  The harvested states are
+    the pool's (``paths.data_dir``: the checkout's folder while it has one, else the store's current snapshot)."""
     key = 'boss-gleeok@d3first'
-    folder = REPO_STATES_DIR / 'harvested' / 'boss-gleeok'
+    folder = paths.data_dir('harvested', REPO_STATES_DIR / 'harvested') / 'boss-gleeok'
     names = [p.stem for p in folder.glob('*.state')] if folder.is_dir() else []
     if not any(_native.state_namespace(n) is None for n in names) or not any(n.startswith('d3first_') for n in names):
-        pytest.skip("needs boss-gleeok's harvested states of both routes (untracked: copied from main)")
+        pytest.skip(f"needs boss-gleeok's harvested states of both routes ({folder})")
     try:
         registry.policy_checkpoint(key)
     except Exception:  # pylint: disable=broad-exception-caught
-        pytest.skip(f"needs {key}'s teacher (models/, untracked)")
+        pytest.skip(f"needs {key}'s teacher (the store's current team, which `triforce job test` gives the suites)")
     from triforce.lab.collect import Teachers, route_only, task_yaml  # pylint: disable=import-outside-toplevel
     from triforce.specialist import load_specialist  # pylint: disable=import-outside-toplevel
     config = route_only(load_specialist(task_yaml(key)), ROUTE, REPO_STATES_DIR, tmp_path / 'tracks')

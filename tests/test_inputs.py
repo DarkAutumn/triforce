@@ -221,16 +221,23 @@ def test_a_stale_module_stops_a_tool_before_it_waits():
     assert result.returncode == 2 and 'rebuild with `triforce job build' in result.stderr, result.stderr
 
 
-def test_the_test_suites_read_the_main_checkouts_team(tmp_path, monkeypatch):
+def test_the_test_suites_play_the_stores_current_team(tmp_path, monkeypatch):
     monkeypatch.delenv('TRIFORCE_MODELS_DIR', raising=False)
+    monkeypatch.delenv('TRIFORCE_TEAM', raising=False)
+    shared = tmp_path / 'shared'
+    monkeypatch.setenv('TRIFORCE_SHARED', str(shared))
     root = tmp_path / 'checkout'
-    root.mkdir()
-    _git(root, 'init', '-q')
-    with pytest.raises(job.JobError, match='read the main checkout'):
+    (root / 'models').mkdir(parents=True)          # a checkout's own folder is never the suites' team
+    with pytest.raises(job.JobError, match="play the store's current team and there is none"):
         job.test_steps(root, ['python'], [])
-    (root / 'models').mkdir()
+    (shared / 'teams').mkdir(parents=True)
+    (shared / 'store.db').write_bytes(b'')
+    (shared / 'teams' / 'current').write_text('2.0.0.15\n')
     (step,) = job.test_steps(root, ['python'], [])
-    assert step.env['TRIFORCE_MODELS_DIR'] == str(root / 'models')
+    assert step.env['TRIFORCE_TEAM'] == '2.0.0.15' and 'TRIFORCE_MODELS_DIR' not in step.env
+    monkeypatch.setenv('TRIFORCE_TEAM', '2.0.0.14')      # the caller's team is kept
+    (step,) = job.test_steps(root, ['python'], [])
+    assert 'TRIFORCE_TEAM' not in step.env
 
 
 def test_a_missing_demonstration_file_is_refused(tmp_path):

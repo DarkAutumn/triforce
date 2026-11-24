@@ -382,7 +382,8 @@ Line numbers are `23412d57`'s. **Refused**: the run stops before it starts and n
 11. `--load VALUE` that is no existing path was read as a family name (`train.py:394-398`). **Refused** with what
     was looked for (a directory without `ckpt.pt` too).
 12. A worktree with its own `models/` (even a partial one) gave the test suites that team (`job.py:691-697`).
-    **Fixed**: the suites read the main checkout's team always.
+    **Fixed**: the suites read the main checkout's team always; since the reconciliation's preparation (Store41,
+    Nov 24) they play the store's current team (`job.test_steps`, `$TRIFORCE_TEAM`), never a checkout's folder.
 13. `eval-chain --specialist-config YAML` for a family the runs never play: accepted and unused. **Refused**.
 14. `eval-chain --harvest` without DIR wrote into the shared harvested folder (`cli.py:454`). **Refused** with a
     models folder: DIR is required; with a store team it writes into the job's folder of the store, never a snapshot.
