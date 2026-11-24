@@ -52,6 +52,7 @@ tool) is estimated by its
 import ctypes
 import fcntl
 import json
+import math
 import os
 import re
 import sqlite3
@@ -88,11 +89,20 @@ UNITS = ('train_steps', 'eval_episodes', 'chain_steps')
 DEFAULT_RATES = {'train_steps': 0.00044, 'eval_episodes': 0.046, 'chain_steps': 0.0026}
 RATE_WINDOW = 20                     # the latest completed jobs a rate (and a kind's calibration) is taken over
 # Chains (``chain_model``; measured Nov 23 over the 64 chains and batches of the history): a chain takes
-# ``CHAIN_START_SECONDS`` + runs x run-seconds / parallel, its run-seconds the median of the last ``SHAPE_WINDOW`` of
+# ``CHAIN_START_SECONDS`` + runs x run-seconds / lanes, its run-seconds the median of the last ``SHAPE_WINDOW`` of
 # its shape (a short window follows the machine's load, which moves a segment's time 2-3x within a day); a shape
-# never seen takes the rate per route step asked (``rates``), as every chain did before.
+# never seen takes the rate per route step asked (``rates``), as every chain did before.  ``lanes``: the games that
+# really play side by side, min(parallel, runs).  A chain of fewer than ``SHAPE_MIN_RUNS`` runs is a smoke and
+# teaches nothing: its time is the team's loading and a few long runs (Nov 24: a 5-run smoke of the 250 test at
+# --parallel 10, 233 s, read as 445 s a run, and the next 250 test was estimated at 3 hours for its 10-22 minutes).
 CHAIN_START_SECONDS = 10.0
 SHAPE_WINDOW = 3
+SHAPE_MIN_RUNS = 20
+
+
+def chain_lanes(chain: dict) -> int:
+    """The games of ``chain`` that play side by side: its ``parallel`` envs, no more than its runs."""
+    return max(1, min(chain.get('parallel') or 1, chain.get('runs') or 1))
 
 _COLUMNS = {
     'agent': 'TEXT', 'task': 'TEXT', 'subtask': 'TEXT', 'description': 'TEXT', 'name': 'TEXT', 'verb': 'TEXT',
@@ -378,29 +388,52 @@ def rates(history: list[dict]) -> dict:
 
 @dataclass
 class ChainModel:
-    """What the history says chains take: ``shapes``, shape -> run-seconds (``chain_model``)."""
+    """What the history says chains take: ``shapes``, shape -> run-seconds, and ``steps``, shape -> the route steps
+    it asks for (``chain_model``)."""
     shapes: dict = field(default_factory=dict)
+    steps: dict = field(default_factory=dict)
+
+    def run_seconds(self, chain: dict) -> Optional[float]:
+        """One run of ``chain``: its shape's, else the learned shape nearest in steps asked (of its own route when
+        one is known) scaled by the square root of the steps' ratio; None when nothing is learned.  A rule of
+        thumb for a shape's first run only (runs die on the way, so time grows slower than the steps asked: 18
+        steps of Dungeon 3 take 22 s a run, 229 steps to the route's end 76 s).  Backtest, Nov 24, each chain from
+        the history before it: the 10 chains of an unseen shape were off by a typical 4.8x with it, 5.1x at the
+        rate per asked step (worst 40x both); the 46 of a seen shape 1.6x.  It is the seen shape that is right."""
+        shape, asked = chain.get('shape') or '', chain.get('steps') or 0
+        if shape in self.shapes:
+            return self.shapes[shape]
+        known = [name for name in self.shapes if self.steps.get(name)]
+        if not known or asked <= 0:
+            return None
+        route = shape.split(':')[0]
+        known = [name for name in known if name.split(':')[0] == route] or known
+        nearest = min(known, key=lambda name: (abs(math.log(asked / self.steps[name])), name))
+        return self.shapes[nearest] * math.sqrt(asked / self.steps[nearest])
 
     def seconds(self, chain: dict) -> Optional[float]:
-        """One chain's seconds (``runner.chain_entry``), None for a shape never seen."""
-        per_run = self.shapes.get(chain.get('shape'))
+        """One chain's seconds (``runner.chain_entry``), None when no chain has been learned at all."""
+        per_run = self.run_seconds(chain)
         if per_run is None:
             return None
-        return CHAIN_START_SECONDS + (chain.get('runs') or 0) * per_run / max(1, chain.get('parallel') or 1)
+        return CHAIN_START_SECONDS + (chain.get('runs') or 0) * per_run / chain_lanes(chain)
 
 
 def chain_model(history: list[dict]) -> ChainModel:
     """The chains of ``history`` (rows whose work's ``chains`` carry the ``seconds`` they took: ``chain_seconds``,
-    recorded when the job ended) as run-seconds, ``(seconds - CHAIN_START_SECONDS) x parallel / runs``; per shape the
-    median of its ``SHAPE_WINDOW`` latest."""
+    recorded when the job ended) as run-seconds, ``(seconds - CHAIN_START_SECONDS) x lanes / runs``
+    (``chain_lanes``); per shape the median of its ``SHAPE_WINDOW`` latest.  Chains of fewer than
+    ``SHAPE_MIN_RUNS`` runs are left out (smokes)."""
     samples: dict = {}
+    steps: dict = {}
     for row in sorted(history, key=lambda row: row.get('finished_ts') or 0.0):
         for chain in ((row.get('work') or {}).get('chains') or []) if isinstance(row.get('work'), dict) else []:
-            if chain.get('seconds') is None or not chain.get('runs') or not chain.get('shape'):
+            if chain.get('seconds') is None or not chain.get('shape') or (chain.get('runs') or 0) < SHAPE_MIN_RUNS:
                 continue
-            per_run = (chain['seconds'] - CHAIN_START_SECONDS) * max(1, chain.get('parallel') or 1) / chain['runs']
+            per_run = (chain['seconds'] - CHAIN_START_SECONDS) * chain_lanes(chain) / chain['runs']
             samples.setdefault(chain['shape'], []).append(max(0.05, per_run))
-    return ChainModel({shape: statistics.median(values[-SHAPE_WINDOW:]) for shape, values in samples.items()})
+            steps[chain['shape']] = chain.get('steps') or 0
+    return ChainModel({shape: statistics.median(values[-SHAPE_WINDOW:]) for shape, values in samples.items()}, steps)
 
 
 def estimate(work: Optional[dict], unit_rates: dict, model: Optional[ChainModel] = None) -> float:
