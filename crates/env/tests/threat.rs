@@ -202,6 +202,10 @@ fn a_goriya_waiting_for_its_boomerang_has_no_lane() {
     // Waiting for it to come back (ObjState bit 7).
     let t = wanting(Room::new().put(goriya(0x80))).threat(0);
     assert_eq!((t("lane_ready"), t("lane_in"), t("lane_soon")), (0.0, 0.0, 0.0));
+    // A red Goriya throws on 2 frames of 256 (its random byte): never "soon" from the RAM alone.
+    let red = Obj { state: 0, ..Obj::new(1, 0x06, 114).moving(2, 0x20) };
+    let t = wanting(Room::new().put(red)).threat(0);
+    assert_eq!((t("lane_ready"), t("lane_wait"), t("lane_in"), t("lane_soon")), (1.0, 1.0, 1.0, 0.0));
 }
 
 #[test]

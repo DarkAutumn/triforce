@@ -238,11 +238,21 @@ lane as first written:
 - **The walking shooters are right**: the shoot timer's `$30`/`$10` reading gives the frame the shot leaves exactly
   (median error 0 at every lag, 97.5-100% within a frame), and a shot almost never leaves while `ready` says no.
 - **The Goriya was wrong**: its `ObjTimer` read 0 eight and sixteen frames before three throws in four, so `wait` said
-  "now" while the throw was still a grid point away. The game throws only when the timer is 0 **and** the Goriya
-  wants to (asm:Shooter_ObjWantsToShoot `$412`, set at a grid point when its chase target is within `$51` px;
-  asm:Walker_SetInputDirAndTryThrowBoomerang). **Fixed** (ad3a3b7a): without the wish, `wait` is at least the frames to
-  its next grid point (ObjGridOffset `$394`, 16 px a square, at its q-speed); with it, the timer. The table's Goriya
-  rows are the old rule; the fixed rule is not yet measured on the replays.
+  "now" too early. Two causes, both in asm:Walker_SetInputDirAndTryThrowBoomerang: a Goriya throws only when the
+  timer is 0 **and** it wants to (asm:Shooter_ObjWantsToShoot `$412`, set at a grid point when its chase target is
+  within `$51` px), and a **red** Goriya (`$06`) besides only on a frame whose random byte is `$23` or `$77` (2 of
+  256). **Fixed** (ad3a3b7a, 70b514de): without the wish, `wait` is at least the frames to its next grid point
+  (ObjGridOffset `$394`, 16 px a square, at its q-speed); a red Goriya's throw is a lottery the RAM cannot time
+  (`RED_GORIYA_WAIT` 128 frames, its mean), so its lane never reads "soon". Measured again on replays 0-39 (job #407):
+
+| Goriya (replays 0-39) | throws | `ready` 1 / 8 frames before | `wait` within 1 frame, 1 / 8 / 16 before (median error) | hits / warned |
+|---|---:|---|---|---|
+| blue `$05`, first rule (job #334) | 97 of the 269 | | 13% at 8 frames, both colours together | |
+| **blue `$05`, fixed** | 97 | 97.9 / 78.4% | **98.9 / 93.4 / 86.5%** (0 / 0 / 0) | 5 / 2 |
+| red `$06`, fixed | 172 | 99.4 / 99.4% | 0 by design (the lottery's mean, 128) | 10 / 0 |
+
+  The red Goriya's 10 hits are not warned: what decides its throw is the random byte, which the observation must
+  not carry (round 36: the random numbers are memorised, not used); its boomerang is seen by `soon_*` once it flies.
 - **Hits warned**: 27 of 62 Octorok and 41 of 88 Goriya hits were in the lane with an arrival inside the horizon in
   the 16 frames before; the Moblin's arrow (2 px a frame) mostly leaves from farther than 16 frames' reach, so the
   lane is off by design before it flies (5 of 41) and the arrow itself is seen by `soon_*` once it exists. Where a hit
