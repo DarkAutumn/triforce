@@ -27,7 +27,9 @@ use std::sync::Arc;
 use zelda::cheats::CheatLedger;
 use zelda::clips::skip_available;
 use zelda::executor::direction_buttons;
-use zelda::objectives::{GameCompletion, Objective, ObjectiveKind, exit_is_correct, wraps_into_wrong_exits};
+use zelda::objectives::{
+    GameCompletion, Objective, ObjectiveKind, exit_is_correct, route_bomb_targets, wraps_into_wrong_exits,
+};
 use zelda::room::Target;
 use zelda::{Action, ActionKind, Direction, GameMap, GameView, LoadOptions, MapLocation, Session, Var};
 
@@ -146,10 +148,16 @@ impl Walk {
     /// The named d3first state, with a completion at the route step `step` (its first step in the state's room
     /// entered from `entry`) and the cheat ledger begun; `clips` the run-time switch.
     fn start(state: &str, room: MapLocation, entry: &str, clips: bool) -> Option<Walk> {
+        Walk::start_with(state, room, entry, clips, &[])
+    }
+
+    /// `start` with RAM written after the load, before the route and the cheat ledger see the state.
+    fn start_with(state: &str, room: MapLocation, entry: &str, clips: bool, ram: &[(Var, u8)]) -> Option<Walk> {
         let core = open_core()?;
         let map = map();
         let mut s = Session::new(Counted(core, 0), map.clone());
         s.load(&load_named_state(state), &LoadOptions::default(), &mut ChaCha8Rng::seed_from_u64(0)).unwrap();
+        s.apply_ram(ram);
         let step = map.routes[ROUTE]
             .iter()
             .position(|st| st.location() == room && st.entry == entry)
@@ -167,7 +175,10 @@ impl Walk {
     }
 
     /// The env's per-step masks: BOMB by the family's mode (a step's own `bombs:` first) and the route's reserve,
-    /// BOOMERANG and the items off, CLIP by the family and the run-time switch, the wraps the objective vetoes.
+    /// BOOMERANG and the items off, CLIP by the family and the run-time switch, the wraps the objective vetoes, and in
+    /// a `requires_bombs` room BOMB kept to the objective's wall while no bomb of Link's reaches it yet (the env's
+    /// `ItemConfig::bomb_targets`, round 23's one bomb a wall: the walker bombs nothing but walls, and without it laid
+    /// a second bomb in the first one's fuse).
     fn masks(&mut self, objective: &Objective) {
         let f = self.family_of();
         let state = self.s.state().clone();
@@ -199,6 +210,8 @@ impl Walk {
         self.s.set_clips(f.clips && self.clips);
         let wraps = wraps_into_wrong_exits(&map, self.s.state(), objective);
         self.s.set_vetoed_wraps(&wraps);
+        let targets = map.requires_bombs(here).then(|| route_bomb_targets(&map, self.s.state(), objective));
+        self.s.set_bomb_targets(targets.as_deref());
     }
 
     /// Plays the route's objective until `done`, judging every room change; the visits in order.
@@ -506,4 +519,34 @@ fn the_peahat_row_leads_through_0x1f() {
     }
     let visits = w.run(|s| s.state().full_location() == ow(0x0f), 4_000);
     assert_eq!(visits.last().unwrap().room, ow(0x0f));
+}
+
+/// 3:0x5b's last pass (W -> E), entered with a full bag and with the reserve's 4 (States40, round40.md "The start
+/// states, 0x5b's last pass and the first Darknut's drop"): the walk from `d3first_3_5bw_0` with the bag set, the
+/// fights skipped as everywhere in the walk, to Manhandla's room. Today's objective (`step_treasure`: the room's bombs
+/// judged on entering, 8 or more a crossing) gives 7 out of 0x5b and 6 at Manhandla's door either way: with 8 a
+/// crossing (the wall's bomb, the four never shown), with 4 the fight, the four taken (8), then the wall. The owner's
+/// plan wants 8 out and 7 at Manhandla; the fix is the objective's (Carrier40's), and this test moves with it.
+#[test]
+fn the_last_pass_of_0x5b_with_8_and_with_4_bombs() {
+    for (bombs, kinds_want) in [
+        (8u8, vec![ObjectiveKind::Move]),
+        (4, vec![ObjectiveKind::Fight, ObjectiveKind::Treasure, ObjectiveKind::Move]),
+    ] {
+        let Some(mut w) = Walk::start_with("d3first_3_5bw_0", uw(3, 0x5b), "W", true, &[(Var::Bombs, bombs)]) else {
+            return;
+        };
+        let visits = w.run(|s| s.state().full_location() == uw(3, 0x4d), 6_000);
+        let v5b = visit_of(&visits, uw(3, 0x5b), 0);
+        let kinds: Vec<ObjectiveKind> = v5b.kinds.iter().fold(Vec::new(), |mut k, &x| {
+            if k.last() != Some(&x) {
+                k.push(x);
+            }
+            k
+        });
+        let laid = v5b.actions.iter().filter(|a| a.0.kind == ActionKind::Bomb).count();
+        assert_eq!(kinds, kinds_want, "in with {bombs}");
+        assert_eq!((v5b.bombs_in, laid, v5b.bombs_out), (i32::from(bombs), 1, 7), "0x5b in with {bombs}");
+        assert_eq!(w.s.state().bombs(), 6, "at Manhandla's door, 0x5b in with {bombs}: {visits:#?}");
+    }
 }
