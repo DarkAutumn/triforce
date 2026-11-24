@@ -244,6 +244,7 @@ def main(argv=None) -> int:
     parser.add_argument('--out', type=Path, default=Path('target/r40/chase-check.json'))
     parser.add_argument('--start', type=int, default=0, help='the first replay (sorted by name)')
     parser.add_argument('--limit', type=int, default=0, help='at most this many replays (0: all)')
+    parser.add_argument('--seeds', help='only these runs, comma-separated (replay names start with the 8-digit seed)')
     parser.add_argument('--merge', type=Path, nargs='+', help="pieces' raw files (OUT.raw.json) to sum into OUT")
     args = parser.parse_args(argv)
     stats = new_stats()
@@ -253,6 +254,9 @@ def main(argv=None) -> int:
     else:
         jobs.require_job()
         paths = sorted(args.replays.glob('*.tfreplay'))[args.start:]
+        if args.seeds:
+            wanted = {f'{int(s):08d}' for s in args.seeds.split(',')}
+            paths = [p for p in paths if p.name[:8] in wanted]
         if args.limit:
             paths = paths[:args.limit]
         for i, path in enumerate(paths):
