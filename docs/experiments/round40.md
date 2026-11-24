@@ -598,9 +598,14 @@ column 18 rows 4-10, row 10 cols 18-26, column 12 rows 4-10) costs one tile more
 `target` observation and PBRS takes the line on each pass; the plain floor has other ways as short (any staircase).
 Tested: `crates/zelda/tests/objectives.rs` `d3_0x69_is_crossed_by_the_line` (the descent's corners on the d3first
 steps: in (15,2) (15,4) (18,4) (18,10) (26,10); out (12,10) (12,4) (15,4) then N up column 15; the plain room's way
-differs at the same length). The rooms' costs are game.yaml's, so `d2first`'s step of the same room (the shared block
-`dungeon-3`) is steered the same way; its step lines are unchanged. Both 0x69 steps carry `carriers: false` on
-Carrier40's branch (no bomb-carrier target here).
+differs at the same length). The costs are `d3first`'s only (Line40b: a `routes: [d3first]` entry, as Route40's 0:0x1f
+and 0:0x76; Line40 had put them on the shared room, which `d2first`'s step of the same room, the shared block
+`dungeon-3`, reads too): `d2first` crosses 3:0x69 as before (`d2first_crosses_3_0x69_as_before_the_line`: the same
+objective and targets, no cost on any floor tile, the plain room's way; `game_map.rs`
+`d3first_costs_the_line_through_3_0x69`), and its eight schema 5 traces in the room hash as recorded before the line
+(`tests/test_obs_legacy.py`: Line40's eight re-recorded hashes are gone; its shared costs, compared step by step on
+the same seeds, changed only the `target` block where Link stands in 3:0x69, the same actions and lengths). Both 0x69
+steps carry `carriers: false` on Carrier40's branch (no bomb-carrier target here).
 
 ### The rule (`scripts/experiments/r40_d3_69_line.py`)
 
@@ -692,7 +697,7 @@ that clones the task's file at its weight, records it with its checksum, takes `
 - The darknut network has not been trained with the demonstrations (the generation's trainings are the lead's).
 - The in-pass rule alone was measured on 300 visits a pass, not 1000; the 1000-visit figures are the look-ahead's.
 - The `null` endings (400 decisions) were not looked into.
-- `d2first`'s 0x69 step reads the same `path_costs` (the room's data is shared); its chains were not run.
+- `d2first`'s chains were not run (its 0x69 step reads the shared room, without the line's costs, as before).
 
 ## The fresh generation's `d3first` route data (Route40, branch `r40-route`)
 

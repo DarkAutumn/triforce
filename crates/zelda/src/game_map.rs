@@ -2978,7 +2978,7 @@ mod tests {
         assert_eq!(line.path_costs.len(), 6);
         assert!(line.path_costs.iter().all(|c| c.cost == 1));
         assert_eq!(line.exits.keys().collect::<Vec<_>>(), shared.exits.keys().collect::<Vec<_>>());
-        assert_eq!((&line.enemies, &line.specialist, &line.stairs), (&shared.enemies, &shared.specialist, &shared.stairs));
+        assert_eq!((&line.enemies, &line.specialist, &line.treasure), (&shared.enemies, &shared.specialist, &shared.treasure));
     }
 
     /// The bow detour: 0x22's stairs lead into the cellar (an in_cave room under its own id) and its ladder back;
