@@ -58,10 +58,8 @@ clips:
   off_share: 0
 curriculum:
   enabled: true
-  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
-  - d3first_4_32w_[0-9]                   # round 40 (Tracks40): 4:0x32 with today's keys, no explored track in 3000
-                                          # iterations (the stale tracks were the rule like-like-32's, r32p_rules.py)
-  - d3first_6_1dc_[0-9]
+  untracked:                              # round 40: the seed states that train without a track (triforce.inputs);
+  - d3first_6_1dc_[0-9]                   # the Breakfast Room 4:0x32 has the rule like-like-32's (Tracks41)
   - d3first_9_03e_[0-9]
   - d3first_9_14c_[0-9]
   - d3first_9_41s_[0-9]

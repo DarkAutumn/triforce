@@ -35,3 +35,16 @@ def test_explore_states_is_independent_of_parallelism(states_dir, tmp_path):
                                         states_dir=str(states_dir))
         return [(r.start_state, r.success, r.actions, r.cells, r.env_steps, replayed) for r, replayed in results]
     assert run(1) == run(2)
+
+
+def test_an_unsolved_search_says_what_it_reached(states_dir):
+    """Round 40 (Tracks41): the failed episodes by ending, the living enemies at the reset and the fewest reached,
+    the longest path and the best closeness, for the explorer's `reached:` line."""
+    explorer = native.Explorer('zol', seed=0, states_dir=str(states_dir))
+    result = explorer.explore('d3first_3_4bs_0', iterations=8, explore_steps=10, patience=1)
+    assert not result.success
+    assert all(isinstance(e, str) and n > 0 for e, n in result.failures)
+    assert sum(n for _, n in result.failures) <= result.iterations
+    assert result.enemies[0] == 3 and 0 <= result.enemies[1] <= 3          # 3:0x4b's three Zols
+    assert 1 <= result.longest <= result.iterations * 10
+    assert 0.0 <= result.closest <= 1.0

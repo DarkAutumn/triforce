@@ -35,8 +35,6 @@ items:
   bombs: never
 curriculum:
   enabled: true
-  untracked:                              # round 40 (Tracks40): 4:0x13 with today's keys, no explored track in 3000
-  - d3first_4_13w_[0-9]                   # iterations (the stale tracks were the rule gleeok-13's, r32p_rules.py)
 harvested_fraction: 1.0
 one_room: true
 max_steps: 1000

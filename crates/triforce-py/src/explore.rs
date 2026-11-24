@@ -117,6 +117,26 @@ impl PyExploreResult {
     fn seconds(&self) -> f64 {
         self.result.seconds
     }
+    /// The search's episodes that ended without success: (ending, count) pairs, first seen first.
+    #[getter]
+    fn failures(&self) -> Vec<(String, u32)> {
+        self.result.failures.clone()
+    }
+    /// (living enemies at the reset, the fewest any archived cell holds).
+    #[getter]
+    fn enemies(&self) -> (usize, usize) {
+        self.result.enemies
+    }
+    /// The most steps of any archived cell's path.
+    #[getter]
+    fn longest(&self) -> usize {
+        self.result.longest
+    }
+    /// The best closeness to the objective of any archived cell (1.0 on it).
+    #[getter]
+    fn closest(&self) -> f64 {
+        self.result.closest
+    }
 
     fn __repr__(&self) -> String {
         format!(

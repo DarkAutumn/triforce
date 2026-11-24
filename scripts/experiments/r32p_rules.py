@@ -2,17 +2,20 @@
 over the environment's own actions; their won runs as demonstration rows (`train --demos`) and rule tracks
 (docs/experiments/round32.md "Prerequisites"; the walks: docs/routes/d3first-walks-a.md).
 
-    python scripts/experiments/r32p_rules.py ROOM [--runs N] [--chains 0,1,2] [--hearts own|family|chain|H]
+    python scripts/experiments/r32p_rules.py ROOM [--runs N] [--chains 0,1,2] [--hearts own|reset|family|chain|H]
                                                 [--out FILE.npz] [--tracks DIR [--per-state N] [--max-loss H]]
                                                 [--verbose]
 
 ROOM plays its `d3first` route step from the route's installed states (`d3first_<stem>_<chain>`), N runs a state
-(seeds 1000..), through the family's own environment; the play loop, the rows (a MOVE or WAIT cloned without its
-duration, an item or sword row written several times), the tracks (`DIR/<state>~rule<seed>`, DIR is the family's
-track directory) and the printed lines are round 29's (`r29_demos.play`), pointed at d3first's own steps.
-`--hearts chain` draws every reset's hearts from the route's chain arrivals in the room (the family's config with
-`ram_randomization.chain_hp: 1.0` and `state_routes: [d3first]`; `triforce/chain_hp.d3first.json`): the hearts the
-route's chains bring.
+(seeds 1000..), through the environment of the family's `d3first` task (`lab.collect.task_yaml`: the generation's
+`specialists/d3first/<family>.yaml` where there is one, else the family's own); the play loop, the rows (a MOVE or
+WAIT cloned without its duration, an item or sword row written several times), the tracks (`DIR/<state>~rule<seed>`,
+DIR is the family's track directory) and the printed lines are round 29's (`r29_demos.play`), pointed at d3first's
+own steps.  `--hearts reset` draws nothing at all, the room's `DRAWS` included: every run starts from the explorer's
+own reset of the state (`env::explore::explore_config`), the start a curriculum track must have (round 40, Tracks41:
+`r40_tracks.py audit`).  `--hearts chain` draws every reset's hearts from the route's chain arrivals in the room (the
+task's config with `ram_randomization.chain_hp: 1.0` and `state_routes: [d3first]`; `triforce/chain_hp.d3first.json`):
+the hearts the route's chains bring.
 
 ROOM is one of (the walks' rule each ports, `r32_d3first.LEGS`/`VARIANTS`):
 
@@ -57,12 +60,12 @@ Later rooms (round 32's training of Level 5 to the ending; the walks: docs/route
 
     tree-62       0:0x62 E->cave (ow-moblin, step 124): the floor walk to ($A0,$5D), CANDLE W where the mask offers it
                   (the dead woods' tree, `r32b_leg.r62`), the fire waited out (three WAIT 32), W onto the stairs.
-    digdogger-24  5:0x24 E->N (boss-digdogger, step 118): RECORDER where the mask offers it, then the bomb fighter on
+    digdogger-24  5:0x24 E->N (boss-digdogger, step 143): RECORDER where the mask offers it, then the bomb fighter on
                   the small one (`r32b_d5.DigFighter`'s: bombs only on it, no shield), the heart container where it
                   lies (the room item), the N door.
-    digdogger-1c  7:0x1c W->N (boss-digdogger, step 187): RECORDER, the bomb fighter on the three small ones, the N
+    digdogger-1c  7:0x1c W->N (boss-digdogger, step 171): RECORDER, the bomb fighter on the three small ones, the N
                   shutter.
-    goriya-1b     7:0x1b W->E (goriya, step 186; round 34): the walks' sword fighter (`r32_walks.Fighter`, the wood
+    goriya-1b     7:0x1b W->E (goriya, step 170; round 34): the walks' sword fighter (`r32_walks.Fighter`, the wood
                   sword) on the six Blue Goriyas until the room is all dead, the room's 4 bombs where they lie, the
                   E key door.  `--hearts chain` draws 1 bomb (`DRAWS`: the route's arrivals spend the bag down to
                   the reserve before 0x1b, so the bombs are wanted).
@@ -87,17 +90,18 @@ RUPEES, INV_CANDLE, HEARTS, KEYS = 0x66D, 0x65B, 0x66F, 0x66E
 GLEEOK2 = 0x43                                                    # level 4's two-headed Gleeok (r32_walks.GLEEOK2)
 DIGDOGGER_SMALL = 0x18                                            # r26_walks.DIGDOGGER_SMALL
 
-# room -> (family, d3first's route step)
-ROOMS = {'darknut-59': ('darknut', 13), 'dash-69': ('darknut', 14), 'garden-05': ('darknut', 103),
+# room -> (family, d3first's route step: 2.0.0.7's numbers, round 40; the 0:0x2d cave, 0:0x0c and 0:0x62 rooms are no
+# longer on the route)
+ROOMS = {'darknut-59': ('darknut', 13), 'dash-69': ('darknut', 14), 'garden-05': ('darknut', 128),
          'manhandla-4d': ('boss-manhandla', 22),
          'gleeok-13': ('boss-gleeok', 51), 'mouth-37': ('ow-octorok', 62), 'wall-2d': ('ow-zora', 88),
          'rupees-2d': ('ow-zora', 89), 'candle-0c': ('ow-tektite', 94), 'wrap-0c': ('ow-tektite', 95),
          'zol-6b': ('zol', 8), 'zol-4b': ('zol', 10), 'like-like-32': ('like-like', 38), 'vire-31': ('vire', 37),
          'vire-12': ('vire', 50), 'scroll-29': ('ow-leever', 82), 'scroll-2a': ('ow-leever', 83),
-         'scroll-2b': ('ow-leever', 84), 'tree-62': ('ow-moblin', 124), 'digdogger-24': ('boss-digdogger', 118),
-         'digdogger-1c': ('boss-digdogger', 187), 'goriya-1b': ('goriya', 186)}
+         'scroll-2b': ('ow-leever', 84), 'tree-62': ('ow-moblin', 124), 'digdogger-24': ('boss-digdogger', 143),
+         'digdogger-1c': ('boss-digdogger', 171), 'goriya-1b': ('goriya', 170)}
 
-# room -> the family's ram_randomization over-ridden for it (every --hearts but own): what the route brings there.
+# room -> the family's ram_randomization over-ridden for it (every --hearts but reset): what the route brings there.
 DRAWS = {'darknut-59': {'bombs_share': 0.0},
          'garden-05': {'bombs': [8, 8], 'bombs_share': 1.0, 'room_kills_share': 0.0},
          'goriya-1b': {'bombs': [1, 1], 'bombs_share': 1.0, 'room_kills_share': 0.0}}
@@ -114,18 +118,22 @@ def route_step(index, route=ROUTE):
 
 
 def rule_env(family, state, hearts):
-    """`r29_demos.rule_env` with the run-time clips switch on in every episode (d3first's steps 0-97 are the clip
-    way, as the chains play them; a clip family's training draw would turn it off in half of them, and 0:0x0c's way
-    out W is the E wrap), and `--hearts chain`: the family's draws with every reset's hearts from the route's chain
-    arrivals in the room (`chain_hp: 1.0`), drawing d3first's states only; the room's `DRAWS` over the family's."""
+    """`r29_demos.rule_env` on the family's `d3first` task with the run-time clips switch on in every episode
+    (d3first's steps 0-97 are the clip way, as the chains play them; a clip family's training draw would turn it off
+    in half of them, and 0:0x0c's way out W is the E wrap); `--hearts reset`: no draw at all (the explorer's reset,
+    `explore_config`); `--hearts chain`: the task's draws with every reset's hearts from the route's chain arrivals in
+    the room (`chain_hp: 1.0`), drawing d3first's states only; the room's `DRAWS` over the task's."""
     from triforce._native import Env, Game                      # pylint: disable=import-outside-toplevel
+    from triforce.lab.collect import task_yaml                  # pylint: disable=import-outside-toplevel
     from triforce.paths import STATES_DIR                       # pylint: disable=import-outside-toplevel
     from triforce.specialist import load_specialist             # pylint: disable=import-outside-toplevel
-    config = load_specialist(family)
+    config = load_specialist(task_yaml(f'{family}@{ROUTE}'))
     if config.to_dict()['clips']['enabled']:
         config = config.replace(clips={'enabled': True, 'off_share': 0.0})
     draws = DRAWS.get(ROOM, {})
-    if hearts == 'own':
+    if hearts == 'reset':
+        config = config.replace(ram_randomization={})
+    elif hearts == 'own':
         config = config.replace(ram_randomization=dict(draws))
     elif hearts == 'chain':
         spec = dict(config.to_dict()['ram_randomization'], chain_hp=1.0, **draws)

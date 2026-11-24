@@ -133,7 +133,15 @@ ROOMS = {
     # 3:0x5b's first pass (the owner's Dungeon 3 plan, decisions 2026-11-23): one Red Darknut killed with the drop
     # cycle at 0 for its bombs (41%), the bombs taken, out N; no weapon bomb there (routes.yaml `wall_only`).
     '5b': {'states': 'd3first_3_5bs', 'room': (3, 0x5b), 'reserve': 255, 'exit': 'N', 'kill_one': True},
+    # 3:0x5b's last pass W -> E through its own bomb wall (round 40, Tracks41: tracks of `d3first_3_5bw_*`) in the
+    # order the route's objective gives a bag of 4 or fewer (`bomb_rules.wall_first_rooms`: the room's four would not
+    # overflow it): the fight (no weapon bomb, routes.yaml), the room's bombs (the room item, slot $13), then the
+    # wall: BOMB E from `wall` (the walks' stand, `r32_d3first.py` '3_5bw') and out E.  The wall-first order (5 or more
+    # in the bag) is not played: `Fighter` refuses it.
+    '5b-last': {'states': 'd3first_3_5bw', 'room': (3, 0x5b), 'reserve': 255, 'exit': 'E', 'wall': (0xC0, 0x8D),
+                'treasure': 4},
 }
+ROOM_ITEM = 0x13                                    # the room item's object slot (r32_walks.ROOM_ITEM)
 
 
 class Floor:
@@ -359,6 +367,9 @@ class Fighter:
         self.pushed = False
         self.bombs_ok = bombs_used_ok
         self.start_count = None                               # the Darknuts in the room at the first decision
+        self.bag_clear = None                                 # a wall exit: the bag when the room was first clear
+        self.item_waits = 0                                   # a wall exit: decisions waited for the room's item
+        self.wall_bombed = False                              # a wall exit: its bomb laid
 
     # --- geometry --------------------------------------------------------------------------------------------------
 
@@ -666,6 +677,8 @@ class Fighter:
         nuts = darknuts(ram)
         if self.start_count is None:
             self.start_count = len(nuts)
+            if self.room.get('treasure') and ram[INV_BOMBS] + self.room['treasure'] > ram[INV_MAX_BOMBS]:
+                raise ValueError(f"{ram[INV_BOMBS]} bombs in: the route plays the wall first, which is not built")
         departing = self.departing(nuts)
         inside = 0x20 <= x <= 0xD0 and 0x5D <= y <= 0xBD
         if not nuts or (departing and self.drop(ram) is None and (lattice(x, y) == self.exit_spot() or not inside)):
@@ -752,6 +765,10 @@ class Fighter:
             outside = y > 0xBD if way == 'S' else y < 0x5D
             if self.drop(ram) is None and (here == goal or (x == 0x78 and outside)):
                 return [f'MOVE {way} 4']
+        elif room['exit'] == 'E':
+            goal = self.wall_exit(ram, here)
+            if isinstance(goal, list):
+                return goal
         else:
             block = [(c, r) for r, row in enumerate((grid or '').splitlines()[1:]) for c, ch in enumerate(row[4:])
                      if ch == 'P']
@@ -772,6 +789,33 @@ class Fighter:
         dist = self.field(goal, [])
         best = sorted((dist.get((here[0] + VEC[w][0] * 8, here[1] + VEC[w][1] * 8), 999), w) for w in VEC)
         return [f'MOVE {w} 4' for _, w in best]
+
+    def wall_exit(self, ram, here) -> tuple[int, int] | list[str]:
+        """3:0x5b's last pass, the room clear: the room's bombs (the room item, waited for up to 20 decisions while
+        the bag has room for them), then BOMB E from the wall's stand, the blast waited out, out E along Y $8D.
+        A goal to walk to, or the actions to take here."""
+        x, y = ram[OBJ_X], ram[OBJ_Y]
+        if self.bag_clear is None:
+            self.bag_clear = ram[INV_BOMBS]
+        room_has_space = self.bag_clear + self.room['treasure'] <= ram[INV_MAX_BOMBS]
+        if not self.wall_bombed and room_has_space and ram[INV_BOMBS] <= self.bag_clear:
+            ix, iy = ram[OBJ_X + ROOM_ITEM], ram[OBJ_Y + ROOM_ITEM]
+            if iy < 0xF0:
+                spot = lattice(ix, iy - 3)
+                return ['WAIT 4'] if here == spot else spot  # taken within 9 pixels (asm:Item_TryTake)
+            if self.item_waits < 20:
+                self.item_waits += 1
+                return ['WAIT 4']
+        if not self.wall_bombed:
+            wx, wy = self.room['wall']
+            if y == wy and x >= wx - 8:                       # on the wall's row: BOMB E where the mask offers it,
+                return ['BOMB E', 'MOVE E 4']                 # else on E toward the wall (a MOVE walks 5-6 pixels)
+            return self.room['wall']
+        if any(ram[s] in range(0x11, 0x14) for s in BOMB_STATE):
+            return ['WAIT 4']                                 # the fuse and the blast
+        if y == self.room['wall'][1]:
+            return ['MOVE E 4']
+        return self.room['wall']
 
     def note(self, ram: bytes, text: str, nuts=None):
         """Keeps the visit's counts for the action taken."""
@@ -798,6 +842,8 @@ class Fighter:
             way = text.split()[1]
             self.bomb_held = (way, 6)
             self.bomb_pred.append(self.predicted.get(text))
+            if not nuts and self.room['exit'] == 'E':
+                self.wall_bombed = True
         elif self.bomb_held:
             self.bomb_held = (self.bomb_held[0], self.bomb_held[1] - 1) if self.bomb_held[1] > 1 else None
         if self.target is not None and not any(d.slot == self.target for d in nuts):
@@ -1074,12 +1120,13 @@ def near(ram: bytes, reach: int = LOOK_REACH) -> bool:
     return any(abs(d.x - x) < reach and abs(d.y - y) < reach for d in darknuts(ram) if not d.cloud)
 
 
-def teach(env, room: str, seed: int, start: str, probe, depth: int, recorder=None) -> dict:
+def teach(env, room: str, seed: int, start: str, probe, depth: int, recorder=None, way: list | None = None) -> dict:
     """Building demonstrations only (moving the emulator ahead and back is allowed there, never at play): the
     fighter timed by its look-ahead (`depth`), and where Link is still hit, a backtracking search seeded by it: back
     `BACK` decisions before the hit and the next of the fighter's own ranked choices there, then the fighter on (at
     most `TRIES` branch points).  The way that leaves by the exit unhit is played again from the visit's reset as
-    one episode (`replay`) and kept; none: the visit is dropped."""
+    one episode (`replay`) and kept; none: the visit is dropped.  `way`: a list the visit's actions are added to
+    (a curriculum track's, `r41_tracks.py fighter`)."""
     import copy
     t0 = time.time()
     obs, _ = env.reset(seed=seed, options={'start_state': start})
@@ -1141,6 +1188,8 @@ def teach(env, room: str, seed: int, start: str, probe, depth: int, recorder=Non
                 break
             break
     actions = [t[4][t[5]] for t in trail]
+    if way is not None:
+        way.extend(actions)
     rec = replay(env, room, seed, start, actions, recorder) if info.get('ending') == 'exit-correct' and \
         env.state.health >= health else None
     if rec is None:

@@ -217,6 +217,15 @@ pub struct ExploreResult {
     pub env_steps: u64,
     pub cells: usize,
     pub seconds: f64,
+    /// What the search reached, for a state it did not solve (round 40, Tracks41): every episode of the search that
+    /// ended without success, by its ending (`truncated` / `terminated` when the env names none), in first-seen order.
+    pub failures: Vec<(String, u32)>,
+    /// The living enemies at the reset and the fewest any archived cell holds (the fight never won: above 0).
+    pub enemies: (usize, usize),
+    /// The most steps of any archived cell's path (against the task's `max_steps`).
+    pub longest: usize,
+    /// The best closeness to the objective of any archived cell (1.0 on it; 0 without a wavefront).
+    pub closest: f64,
 }
 
 /// Go-Explore over one specialist's env.
@@ -301,6 +310,9 @@ impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
             );
         }
         let mut best: Option<Candidate> = None;
+        let mut failures: IndexMap<String, u32> = IndexMap::new();
+        let start_enemies = archive.keys().next().map_or(0, |k| k.6);
+        let (mut fewest, mut longest, mut closest) = (start_enemies, 0usize, archive[0].closeness);
         let mut first_success: Option<u32> = None;
         let mut env_steps = 0u64;
         let mut iteration = 0;
@@ -342,6 +354,13 @@ impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
                             ));
                         }
                         first_success.get_or_insert(i);
+                    } else {
+                        let name = step.info.ending().unwrap_or(if step.truncated {
+                            "truncated"
+                        } else {
+                            "terminated"
+                        });
+                        *failures.entry(name.to_owned()).or_default() += 1;
                     }
                     break;
                 }
@@ -352,13 +371,17 @@ impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
                 if known.is_none_or(|k| actions.len() < k.actions.len()) {
                     let chosen = known.map_or(0, |k| k.chosen);
                     let wf = self.env.objective().and_then(|a| a.wavefront.clone());
+                    let near = closeness(&state, wf.as_deref());
+                    fewest = fewest.min(key.6);
+                    longest = longest.max(actions.len());
+                    closest = closest.max(near);
                     archive.insert(
                         key,
                         Cell {
                             snapshot: self.env.save(),
                             actions: actions.clone(),
                             progress,
-                            closeness: closeness(&state, wf.as_deref()),
+                            closeness: near,
                             chosen,
                         },
                     );
@@ -372,6 +395,10 @@ impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
             env_steps,
             cells: archive.len(),
             seconds: started.elapsed().as_secs_f64(),
+            failures: failures.into_iter().collect(),
+            enemies: (start_enemies, fewest),
+            longest,
+            closest,
             ..Default::default()
         };
         if let Some((health, _, actions, ending)) = best {

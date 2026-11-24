@@ -81,12 +81,8 @@ clips:
   off_share: 0
 curriculum:
   enabled: true
-  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
-  - d3first_1_23s_1                       # round 40 (Tracks40): their tracks were stale (old keys and hearts); no
-  - d3first_1_23s_2                       # explored track in 3000 iterations (python -m triforce.explore)
-  - d3first_2_1es_1
-  - d3first_7_1bw_[0-9]
-  - d3first_7_49s_[0-9]
+  untracked:                              # round 40: the seed states that train without a track (triforce.inputs);
+  - d3first_7_49s_[0-9]                   # 1:0x23, 2:0x1e explored, 7:0x1b the rule goriya-1b's (Tracks41)
 harvested_fraction: 0.25
 one_room: true
 max_steps: 2000
