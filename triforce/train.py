@@ -110,14 +110,14 @@ from typing import Deque, Dict, Iterable, Optional
 
 import torch
 
-from . import lineage, registry
+from . import lineage, manifest, registry
 from ._native import CurriculumSpec, EnvPool, TrainTask
 from .best_of_n import collect_best, success_by_state
 from .clips import OFF_LABEL, episode_jobs
 from .demos import load_demos
 from .events import (LOGS_DIR_ENV, PROGRESS_METRICS, EventLog, TrainingPlan, has_plan, new_log_dir,
                      write_json_atomic)
-from .jobs import announce, work
+from .jobs import announce, flag, work
 from .jobs import progress as job_progress
 from .metrics import MetricsLogger, format_summary
 from .model import ModelConfig, ZeldaPolicy, obs_spec_from_space
@@ -355,6 +355,14 @@ def parse_args(argv=None):
     parser.add_argument('--curriculum-unrecorded', choices=('resume', 'fresh'), default=None,
                         help="a --load continuation of a run whose run.json does not record the trajectories of its "
                              "curriculum progress: resume that progress, or start fresh (required then)")
+    parser.add_argument('--same-recipe-as', default=None, metavar='RUN',
+                        help="refuse to start unless this training's manifest (triforce.manifest) is RUN's (a run "
+                             "dir, run.json, chain output or stats file) but for the run's own fields (seed, run id, "
+                             "outputs) and --except; every difference is printed")
+    parser.add_argument('--except', dest='except_', type=lambda text: [k for k in text.split(',') if k],
+                        default=[], metavar='KEY,...',
+                        help="with --same-recipe-as: the keys this arm changes (a key names every manifest path "
+                             "whose dotted parts it matches: sil_coeff, harvested, reward.firing_lines)")
     parser.add_argument('--events', default=None,
                         help="append events to this JSONL; in a folder with a training.json its caller (train_round) "
                              "owns the stream and writes its final 'end', else this run writes a plan beside it; "
@@ -394,7 +402,7 @@ def cli(argv=None) -> int:
     except KeyboardInterrupt:
         print("[train] stopped before training started", flush=True)
         return EXIT_INTERRUPTED
-    except MissingInput as error:
+    except (MissingInput, RecipeMismatch) as error:
         print(f"triforce train: error: {error}", file=sys.stderr, flush=True)
         return 2
     return EXIT_INTERRUPTED if run_status(run_dir) == 'interrupted' else 0
@@ -570,13 +578,16 @@ def main(argv=None) -> Path:
     specialist = config.name
     # Every input the task declares is checked before the job waits its turn (round 40: missing is an error, never
     # "none"); a pinned --start-state draws none of them.
-    if args.load or config.warm_start:
-        resolve_warm_start(args.load or config.warm_start, registry.models_root(args.models_dir))
+    warm_start = args.load or config.warm_start
+    source = resolve_warm_start(warm_start, registry.models_root(args.models_dir)) if warm_start else None
     if args.start_state is None:
         check_task(config, args.states_dir, curriculum_dir(args, config))
     missing = [path for path in args.demos or () if not Path(path).is_file()]
     if missing:
         raise MissingInput(f"--demos {', '.join(missing)}: no such file")
+    recipe = recipe_manifest(args, config, source)
+    if args.same_recipe_as:
+        check_same_recipe(recipe, args.same_recipe_as, args.except_)
     announce('train', work(train_steps=args.iterations * steps_per_iteration(args)), specialist)
     root = registry.models_root(args.models_dir)
     run_id = args.run_id or registry.new_run_id()
@@ -584,7 +595,7 @@ def main(argv=None) -> Path:
     events, plan = open_events(args, specialist, run_id, out_dir, argv)
     out_dir.mkdir(parents=True, exist_ok=True)
     try:
-        summary = _train(args, specialist, run_id, root, out_dir, events)
+        summary = _train(args, specialist, run_id, root, out_dir, events, recipe)
     except Exception as error:
         events.emit('error', message=f"{type(error).__name__}: {error}", traceback=traceback.format_exc())
         events.emit('train_end', status='error')
@@ -598,6 +609,71 @@ def main(argv=None) -> Path:
         plan.update_run(0, **summary)
         plan.finish('interrupted' if summary['status'] == 'interrupted' else 'completed')
     return out_dir
+
+
+# A data set of this training against the promoted run's of the family: a note past this share of difference.
+DATA_SHARE = 0.1
+CONTINUATION_SIL = 0.1          # AGENTS.md: continuations of trained models pass --sil-coeff 0.1
+
+
+def recipe_flags(args, config, recipe: dict, start_iteration: int, root):
+    """The training's own flags (``jobs.flag``, round 40): a continuation without ``--sil-coeff 0.1`` (a note), and
+    each data set (seed states, harvested states, curriculum files) against the family's promoted run's manifest on
+    the task's route: none where it drew some is red, a count off by more than ``DATA_SHARE`` a note."""
+    if start_iteration > 0 and args.sil_coeff != CONTINUATION_SIL:
+        flag('continuation-sil', f"a continuation from iteration {start_iteration} with --sil-coeff {args.sil_coeff} "
+                                 f"(continuations pass {CONTINUATION_SIL}, AGENTS.md)", level='note')
+    routes = config.to_dict().get('state_routes') or [None]
+    try:
+        promoted = registry.run_dir(config.name, registry.promoted_run(config.name, root, routes[0]), root)
+        theirs = manifest.read(promoted)
+    except (FileNotFoundError, ValueError):
+        return
+    for name, field in (('start_states', 'count'), ('harvested', 'count'), ('curriculum', 'tracks')):
+        mine = (recipe['data'].get(name) or {}).get(field)
+        reference = (theirs.get('data', {}).get(name) or {}).get(field)
+        if mine is None or not reference:
+            continue
+        if mine == 0:
+            flag(f'no-{name.replace("_", "-")}', f"this training draws 0 {name.replace('_', ' ')} where the promoted "
+                                                 f"run {promoted.name} drew {reference}")
+        elif abs(mine - reference) > DATA_SHARE * reference:
+            flag('data-differs', f"{name.replace('_', ' ')}: {mine} here, {reference} for the promoted run "
+                                 f"{promoted.name}", level='note')
+
+
+class RecipeMismatch(Exception):
+    """``--same-recipe-as``: this training differs from the named run in more than ``--except`` allows."""
+
+
+def recipe_manifest(args, config, source: Optional[Path]) -> dict:
+    """The training's manifest (``triforce.manifest``) as far as it is known before it starts: the task, the data it
+    draws, the network it starts from, the arguments and the seed (``_train`` adds the pool's seed)."""
+    networks = {} if source is None else {'warm_start': manifest.network(source)}
+    return manifest.build('train', arguments_=vars(args), seeds={'seed': args.seed},
+                          task=manifest.task(config, args.specialist),
+                          data=manifest.data(config, args.states_dir, curriculum_dir(args, config), args.start_state,
+                                             args.demos or ()),
+                          networks=networks, models=manifest.models(args.models_dir))
+
+
+def check_same_recipe(recipe: dict, reference: str, excepted: list[str]):
+    """``--same-recipe-as RUN [--except KEY,...]``: refuses (exit 2) a training whose manifest differs from ``RUN``'s
+    in anything but the run's own fields and ``excepted``, printing every difference; what a record from before
+    manifests cannot say is printed as unknown and does not refuse."""
+    try:
+        theirs = manifest.read(reference)
+    except ValueError as error:
+        raise RecipeMismatch(f"--same-recipe-as {reference}: {error}") from None
+    differences, unknown = manifest.same_recipe(recipe, theirs, excepted)
+    for entry in unknown:
+        print(f"[train] --same-recipe-as: unknown in {reference}: {entry['path']} (this run: "
+              f"{manifest.short(entry['a'])})", file=sys.stderr)
+    if differences:
+        lines = '\n'.join(f"  {d['path']}: {manifest.short(d['a'])} (this run) vs {manifest.short(d['b'])}"
+                          for d in differences)
+        raise RecipeMismatch(f"--same-recipe-as {reference}: this training differs in {len(differences)} more than "
+                             f"--except {','.join(excepted) or '(nothing)'} allows:\n{lines}")
 
 
 # A run dir's files from an earlier training (``set_aside_previous``); train.log belongs to the caller
@@ -651,7 +727,7 @@ def curriculum_tracks(trajectories: Optional[str]) -> Optional[Dict[str, str]]:
             .isoformat(timespec='seconds') for path in sorted(Path(trajectories).glob('*/trajectory.json'))}
 
 
-def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: EventLog) -> dict:
+def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: EventLog, recipe: dict) -> dict:
     """The training run proper; returns the train_end event fields."""
     # pylint: disable=too-many-locals, too-many-statements
     config = load_specialist(args.specialist)
@@ -680,6 +756,7 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
 
     harvested = harvested_source(args, config)
     tracks = curriculum_tracks(trajectories)
+    recipe['seeds']['pool'] = pool_seed
     if continued == out_dir.resolve() and (out_dir / 'run.json').is_file():
         # A same-dir continuation is the run itself: its parent stays the one its first training recorded.
         earlier = json.loads((out_dir / 'run.json').read_text(encoding='utf-8'))
@@ -689,7 +766,8 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
                    'parameters': network.parameter_count(), 'model_config': network.config.to_dict(),
                    'ppo_config': ppo_config.to_dict(), 'start_iteration': start_iteration,
                    'start_steps': start_steps, 'curriculum': trajectories, 'curriculum_tracks': tracks,
-                   'harvested': harvested, 'nice': os.nice(0)}, file, indent=2, default=str)
+                   'harvested': harvested, 'nice': os.nice(0), 'manifest': recipe}, file, indent=2, default=str)
+    recipe_flags(args, config, recipe, start_iteration, root)
 
     print(f"[train] {specialist} run={run_id} dir={out_dir}")
     print(f"[train] parameters={network.parameter_count():,} "

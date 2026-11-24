@@ -768,7 +768,10 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 
 ## Versioning (the owner, Nov 11; the third number and model compatibility redefined Nov 23)
 
-- **One version, `MAJOR.MINOR.GEN.REV`, in the `VERSION` file** (now `2.0.0.14`: the engine plays `d3first`'s two
+- **One version, `MAJOR.MINOR.GEN.REV`, in the `VERSION` file** (now `2.0.0.15`: Manhandla's 3:0x4d and Dodongo's 2:0x0e are `bomb_weapon` rooms
+  (game.yaml): Link is never left without a bomb there, whatever the state of the room's walls (the owner, Nov 23;
+  round 24's "the need ends when the room's bomb walls are open" had given Manhandla's room no bomb since: Dungeon 3
+  39.2% -> 45.7% of 1000 runs paired, no network changed); 2.0.0.14: the engine plays `d3first`'s two
   whirlwinds, 0:0x0b out of Level 5 and 0:0x22 out of Level 6, as macros (routes.yaml `macros:`; the leg out of
   Dungeon 5 82.3% -> 89.3% of 1000 runs paired, round40.md "Engine macros"; no network changed); 2.0.0.13: `d3first` crosses 2:0x3e (the
   Moldorm left) and takes 9:0x56's key instead, moldorm `r39t-moldorm` through `promoted.d3first` and like-like
@@ -943,7 +946,8 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 - Tests: `triforce job test SUITE... --agent A --task T [--build] [--timeout 60m]`, the suites `python`
   (`pytest -q -n 8 --dist worksteal tests`: eight processes, pytest-xdist; about a minute on a quiet machine, 7
   minutes in one process: `-- -n 0`), `asm` (`pytest -q zelda-asm/tests`), `check` (`asm.py check`), `rust`
-  (`cargo test --release --workspace --features zelda/zcore`, its test programs run 6 at a time, the longest first,
+  (`cargo test --profile release-tests --workspace --features zelda/zcore`: release without link-time
+  optimisation, Cargo.toml; its test programs run 6 at a time, the longest first,
   by `triforce.cargo_tests`: every program runs whatever another did, a failing one's output is shown whole and
   named at the end with its rerun command; the job's progress is "Rust tests" done of the programs' `--list`), `all`
   = the four; several run side by side as one entry, each one's output shown whole at the end (`test python asm
@@ -1081,6 +1085,18 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   (a job). **Read its flags first**: a red flag (a step or family never played, a network that made no decision,
   harvested states never drawn, runs short or ended in errors) voids the numbers until explained. A measure the
   file lacks is added to `run_stats.py` for everyone, not computed on the side.
+- **An arm is "that run, except X", and the tool checks it** (the owner, Nov 23: two results were void because an
+  arm silently differed from its base). Every training, chain and evaluation records a manifest of everything it
+  consumed (`run.json` / `.meta.json` / the stats file: code and module, ROM, task with its `extends` chain, each
+  data set with its file count and content hash, every network with its checksum and whether it has a hit head,
+  arguments, seeds; docs/architecture.md "Manifests"). Start an experiment's arm with `triforce train ...
+  --same-recipe-as BASE_RUN --except KEY,...` (a chain: `eval-chain --same-team-as BASE.jsonl --except FAMILY`): it
+  refuses to start and prints every difference you did not name. Before reporting a comparison run `triforce
+  manifest diff BASE ARM` and put what it prints in the report. An experiment's task file is its family's file plus
+  the lines it changes (`extends: ../zol.yaml`), never a copy. `triforce job doctor [PATH]` says what is wrong with
+  a worktree (a stale module, missing data links, behind main; red when the MAIN checkout's tracked files are
+  edited). A job's **red flag** (in `triforce job list`, `history` and the GUI) means its numbers may not be what
+  they claim: explain it before using them.
 - **Every job is in the queue, shown with its progress** (the owner, Nov 13, Nov 18, Nov 23). The queue
   (`$XDG_STATE_HOME/triforce/queue.db`, else `~/.local/state/triforce/queue.db`; `triforce/jobqueue.py`) holds every
   job of every worktree: who (`Agent: A   Task: T   Sub-task: S`), the description, its state (`RUNNING regular 10m

@@ -249,6 +249,13 @@ pub struct GameRoom {
     /// `requires_bombs: true`: the room can't be beaten without a bomb (Dodongo, the 0x2c secret), so a specialist
     /// acting in it is never left with none (a cheated bomb: `crate::cheats`).
     pub requires_bombs: bool,
+    /// `bomb_weapon: true` (with `requires_bombs`): the bomb is the weapon the room is beaten with (Dodongo's 2:0x0e,
+    /// Manhandla's 3:0x4d), not something that opens a way: Link is never left without one there while he is in
+    /// the room, whatever its bomb walls' state (`crate::cheats::bomb_need`), and the granted bomb is not bound to a
+    /// wall (`crate::cheats::bomb_opens`).  Said in the data because it cannot be told from the walls: Manhandla's
+    /// room has a bomb wall, the one Link came in through, and from round 24 to Nov 23 that open wall read as "what
+    /// the room is bombed for is done" and the room granted nothing.
+    pub bomb_weapon: bool,
     /// `requires_rupees: N`: the route buys here (a shop's arrows or bait), so Link is topped up to N rupees when
     /// he has fewer (cheated rupees: `crate::cheats`).  No room sets it yet.
     pub requires_rupees: Option<u8>,
@@ -376,7 +383,7 @@ fn opt_string(v: &Value, key: &str, what: &str) -> Result<Option<String>, MapErr
 
 /// game.yaml room keys (several are read elsewhere or by nothing yet: `edge_spawn`, `trigger`, `stairs`, `dark`;
 /// of `entrance` only an Armos or pond secret's `how` and `tile`, [`Secret`]).
-const ROOM_KEYS: [&str; 24] = [
+const ROOM_KEYS: [&str; 25] = [
     "level",
     "location",
     "in_cave",
@@ -390,6 +397,7 @@ const ROOM_KEYS: [&str; 24] = [
     "bomb_walls",
     "trigger",
     "requires_bombs",
+    "bomb_weapon",
     "requires_rupees",
     "raft_exits",
     "maze",
@@ -1537,6 +1545,13 @@ fn parse_room(entry: &Value) -> Result<(MapLocation, GameRoom), MapError> {
             bomb_walls,
             specialist: opt_string(entry, "specialist", &what)?,
             requires_bombs: flag(entry, "requires_bombs", &what)?,
+            bomb_weapon: {
+                let weapon = flag(entry, "bomb_weapon", &what)?;
+                if weapon && !flag(entry, "requires_bombs", &what)? {
+                    return err(format!("{what}: bomb_weapon needs requires_bombs"));
+                }
+                weapon
+            },
             requires_rupees: get(entry, "requires_rupees")
                 .map(|v| as_u8(v, &format!("{loc} requires_rupees")))
                 .transpose()?,
@@ -1875,6 +1890,11 @@ impl GameMap {
     /// The room is tagged `requires_bombs` (an unknown room isn't).
     pub fn requires_bombs(&self, location: MapLocation) -> bool {
         self.rooms.get(&location).is_some_and(|r| r.requires_bombs)
+    }
+
+    /// The room is tagged `bomb_weapon`: its bomb is the weapon, never left out (an unknown room isn't).
+    pub fn bomb_weapon(&self, location: MapLocation) -> bool {
+        self.rooms.get(&location).is_some_and(|r| r.bomb_weapon)
     }
 
     /// The room's `requires_rupees` (0 for an unknown or untagged room).

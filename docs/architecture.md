@@ -1523,11 +1523,15 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `outcome`, `seconds`, `setup` / `call` / `teardown`, `worker`) and `summary` (checkout, branch, commit, `job`:
   id, label, agent, task, subtask; `workers`, `load` at the start, `wall`, `collected`, `counts`, `test_seconds`,
   `exit`). The Rust suite runs as `python -m triforce.cargo_tests -- cargo test ...` (the owner, Nov 23: "Test rust
-  is now the extremely long leg of testing"): `cargo test --no-run --message-format=json-render-diagnostics` builds
+  is now the extremely long leg of testing"), built with the `release-tests` profile (Cargo.toml: release without
+  link-time optimisation; under `release`'s thin LTO each of the 60 test programs re-optimised the whole crate
+  graph, 2459 of the build's 2621 CPU seconds on Nov 23): `cargo test --no-run --message-format=json-render-diagnostics` builds
   and lists the test programs (`compiler-artifact` messages of test profile), each program's `--list` counts its
   tests (the job's progress: `Rust tests` done of that total, a program's counted as it ends, the doc tests added
   when they end), and the programs run `cargo_tests.JOBS` = 6 at a time, the longest first (each one's median
-  over the last five whole Rust suites of the timing logs; a program without history first), each as cargo runs
+  over the last five whole Rust suites of the timing logs; a program without history first), each with the
+  harness's own threads (Nov 23, load 11-30: the test phase is the longest program, 141 s; `--test-threads=3` a
+  program made it 170 s: `bomb_mask`'s and `attacks`' ten long tests waited for each other), each as cargo runs
   it (its package's folder, `CARGO_MANIFEST_DIR`, the build scripts' library folders on `LD_LIBRARY_PATH`), the
   doc tests (`cargo test --doc`) as one more entry. Every program runs whatever another did (cargo stops at the
   first failing program); each one's output is printed whole under cargo's `Running` line when it ends, the
@@ -1579,6 +1583,36 @@ every step, so following an enemy that moves away pays again, and knockback rese
   set for other weights plays it with a warning (F064; the act played is in every chain's provenance); a family
   without `promoted.<route>` plays its `promoted` there (the team rule of phase X; the key that played is in the
   provenance).
+- **The manifest** (`triforce.manifest`, round 40, the lead's design): one resolved description of what a run
+  consumed, built before it starts and written under `manifest` into a training's `run.json`, a chain's
+  `<output>.meta.json` and an evaluation's `<output>.meta.json`: `code` (commit, `describe`, the tracked files that
+  differ from HEAD, branch, version, the module's stamp and any `build.problem`), `rom` (SHA-1), `task` (family, yaml
+  label and SHA-256, the effective config after defaults; a chain: its route and every network's config SHA-256),
+  `data` (per data set where it came from, how many files and a content hash: the seed states per `start_states`
+  glob, the harvested states with the fraction drawn, the curriculum's files with `untracked`, demonstration files;
+  a chain's start state and game data), `networks` (per policy key: family, run, iterations, checkpoint SHA-1,
+  architecture, hit head, act mode, file), `models` (`legacy`: the models dir, until the store), `arguments` (paths
+  labelled), `seeds`, `job`. No absolute path of a checkout: `label` writes a path relative to the checkout of this
+  repository it lies in (main or a worktree, so arms in two worktrees compare), else `~/...`. Hashing is by content
+  (zol@d3first's 3,396 harvested states 0.17 s, wizzrobe's 17,410 curriculum files 2.1 s, warm cache).
+- **Diffs and arms** (`triforce manifest diff A B [--json]`, `show X`): A and B are run dirs, `run.json` files, chain
+  outputs or their `.meta.json`, or statistics files; every difference one line, grouped (code, task, data, networks,
+  arguments, then the run's own fields). A record from before manifests is read for what it holds (`legacy_train`:
+  the args, the harvested count, the curriculum's tracks, the warm start; `legacy_chain`: the provenance's networks
+  and route) and lists what it cannot say (`unknown`). `train --same-recipe-as RUN [--except KEY,...]` refuses (exit
+  2) a training whose manifest differs from RUN's but for the run's own fields (seed, run id, outputs, logs, its
+  module's build time) and the excepted keys (a key names every path whose dotted parts it matches: `sil_coeff`,
+  `harvested`, `reward.firing_lines`), printing every difference; what the reference never recorded is printed as
+  unknown and does not refuse. `eval-chain --same-team-as OUTPUT [--except FAMILY,...]` does the same for a chain's
+  team (every network and task config; a family names its route keys too).
+- **Red flags** (`jobs.flag(code, text, level='red'|'note')`): appended to the job's row (`flags`, a JSON list of
+  `{'level', 'code', 'text'}`) and printed; `triforce job list` and `history` print them under the job, the training
+  GUI draws a badge (red: the bad colour; a note: the in-between purple) with the sentence under it on the job's
+  card, its detail pane and the web view. Every job start adds its checkout's (`job.checkout_flags`): the main
+  checkout's tracked files differing from HEAD beyond `uv.lock` (red `main-edited`, the files named), and for a
+  checkout running this code a worktree behind main (note `behind-main`), a legacy worktree's missing data link (red
+  `data-missing`), a module that is not the build of its sources (red `module-stale`; not for builds and suites).
+  `triforce job doctor [PATH]` prints the same checks for any checkout (exit 1 on a red flag).
 - `train --stop-success R [--stop-patience 5]` (`EarlyStop`) proposes a stop once the start-state-balanced
   success rate (`balanced_success_rate`: the mean over the seed start states of each state's exact success over
   its most recent whole per-start cohorts that together cover at least 20 room-entry episodes) is ≥ R for that

@@ -3666,3 +3666,54 @@ The lead turned the whirlwind macros on for `d3first` as a `REV` (no network cha
 plays as before), told the owner beforehand in the check-in file ("my plan unless you say no"), and landed it with
 the golden race and the 250 test. It is a change to how today's team plays that the owner had ruled on only for the
 fresh generation: his to overrule.
+
+## 2026-11-23 — 2.0.0.15: Manhandla and Dodongo are never fought without a bomb (the owner)
+
+The owner, watching Dungeon 3: "we always kill Manhandla with bombs [...] I don't ever want to fight them with a wood
+sword"; when Link runs out there he is to be handed a bomb, counted as cheated, as in Dodongo's room. He was not: the
+round 24 rule ("a room's bomb need ends when its bomb walls are open", decisions 2026-11-17 "A granted bomb opens the
+wall and does nothing else") read Manhandla's room 3:0x4d as a wall room, because Link comes into it through its own W
+bomb wall, already open. So the room's need was over before the fight began, and since round 24 no run was ever handed
+a bomb there: 0 cheated bombs in 638 visits of a 1000-run Dungeon 3 chain, 246 deaths. Dodongo's 2:0x0e has no bomb
+wall and was never affected.
+
+The rule now: game.yaml marks the two rooms `bomb_weapon: true` (`GameMap::bomb_weapon`). In a weapon room
+`cheats::bomb_need` is 1 whenever the bag is empty, whatever the walls' state, and `cheats::bomb_opens` is false, so
+the granted bomb is bound to no wall and BOMB is offered wherever the family's mode offers it. Every other
+`requires_bombs` room keeps the round 24 rule. Tests: `crates/env/tests/boss_bombs.rs` (both rooms on both routes:
+an empty bag is topped up on entering, three bombs laid in a row are each replaced and counted as cheated; the data
+names exactly these two rooms), the unit test `every_requires_bombs_room_but_the_weapon_rooms_has_something_to_open`,
+and one recorded legacy trace (`3_4dw_2`, which lays its last bomb at step 16) with its new hash.
+
+Measured on today's team, no network retrained (the owner: "fix and tests, no retrain"), Dungeon 3, 1000 runs paired
+by seed (`triforce stats compare`): 39.2% -> 45.7%, +6.5 ± 0.8 points; the runs are identical up to Manhandla's room.
+In the room: 638 visits both, deaths 246 -> 181, 307 bombs handed out in 122 visits, bombs used a visit 2.54 -> 3.02.
+Manhandla's network was trained without ever being topped up there (its training hands bombs through
+`ram_randomization`), so the fresh generation's will be the first to learn the room as the owner plays it. 181 deaths
+in 638 visits remain: the room is still the dungeon's largest single loss, with 3:0x69.
+
+## 2026-11-23 — Firing-line targets: not merged, not in the fresh generation (the owner)
+
+The experiment (branch `r40-fireline`, round40.md "Firing-line targets"): at full hearts a fight's targets become
+tiles in line with a monster at range, so the movement reward and the target input stop pulling Link into melee.
+Measured on zol@d3first as continuations (1000 Dungeon 3 runs an arm, paired; the from-scratch arms were never run):
+Link shoots far more, the rate to Manhandla's door does not move (53.3% against 55.0%, -1.7 ± 2.2; with the monsters'
+own tiles kept as targets too 50.4%, -4.6 ± 2.2), and the way there takes 9-12 seconds longer, three quarters of it in
+the Zol room 3:0x6b (+544 ± 29 frames) and the rest in 3:0x4b; hearts lost in the crossing room 3:0x49 triple (0.09 ->
+0.33 a visit at full hearts) and its deaths go 14 -> 46 -> 58.
+
+The owner, having watched the replays: "the changes we made to the beams DID work, but zol are a particularly bad
+target, because they split. If link quickly swords from afar into gel, they scatter, and he was splitting too many
+without being up close to finish them off quickly, bleeding time and health. Beams are far more effective against
+darknuts, but that didn't show up here because 0x59 is mostly a 'use bombs' room and in 0x5b is first passthrough and
+second we rarely have beams by the time we make it to the second pass. Overall d3 is particularly bad for sword
+beams like this." His ruling: "this experiment shouldn't be merged and shouldn't be used at first in the new
+training run. Over the whole game, this might have panned out, or some other technique of doing more damage from
+afar might have made a difference rather than just the fightline idea, but for now we can conclude this isn't what
+we want in the next training run. We will revisit this in the future long after the retrain."
+
+So: the branch is kept unmerged as `archive/r40-fireline` (the reward switch `reward.firing_lines`, the two task
+variants, the experiment script), the fresh generation's fights keep the monsters' own tiles as targets, and the
+question that stays open for a later round is damage from range as such (against monsters that do not split, with
+beams actually held when the room is reached), not this target rule.
+
