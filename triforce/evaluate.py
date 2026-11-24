@@ -89,7 +89,7 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import Callable, Optional
 
-from . import __version__, _native, manifest, registry, replay
+from . import __version__, _native, manifest, paths, registry, replay, store
 from .clips import MODES as CLIPS_MODES, default_mode as default_clips_mode, episode_jobs, name as switch_name
 from .events import LOGS_DIR_ENV, EventLog, has_plan, logged_job, write_json_atomic
 from .inputs import MissingInput, check_start_states
@@ -564,9 +564,13 @@ def build_parser() -> argparse.ArgumentParser:
     """The command line (``triforce.eval_batch`` checks a batch's evaluation entries with it)."""
     parser = argparse.ArgumentParser(prog='python -m triforce.evaluate', description=__doc__.split('\n\n')[0])
     parser.add_argument('--specialist', required=True, help="specialist name or YAML path")
-    parser.add_argument('--checkpoint', default=None, help="checkpoint file or run dir (default: promoted)")
+    parser.add_argument('--checkpoint', default=None,
+                        help="checkpoint file, run dir or store run FAMILY/RUN (default: promoted)")
     parser.add_argument('--run-id', default=None, help="evaluate <models>/<specialist>/<run-id>/ckpt.pt")
     parser.add_argument('--models-dir', default=None, help=f"default ${registry.MODELS_DIR_ENV} or <repo>/models")
+    parser.add_argument('--team', default=None,
+                        help="the store's team whose run is evaluated (NAME, current, NAME+SLOT=RUN...); the result "
+                             "of a store run is filed by this job, indexed by the run")
     parser.add_argument('--episodes-per-state', type=int, default=DEFAULT_EPISODES_PER_STATE)
     parser.add_argument('--parallel', type=int, default=1, help="envs in the evaluation pool")
     parser.add_argument('--threads', type=int, default=None, help="pool worker threads (default min(parallel, cores))")
@@ -578,7 +582,8 @@ def build_parser() -> argparse.ArgumentParser:
                              "state allows); default both for a family with clips enabled, else on")
     parser.add_argument('--output', default=None,
                         help="JSON output (default: <checkpoint dir>/eval.json for the canonical evaluation, else "
-                             "eval[-<specialist>][-<act>][-e<N>][-s<seed>][-clips<mode>].json)")
+                             "eval[-<specialist>][-<act>][-e<N>][-s<seed>][-clips<mode>].json; a store run's in this "
+                             "job's folder of the store)")
     replay.add_arguments(parser, default_state='embed')
     parser.add_argument('--logs-dir', default=None, help=f"event logs root (default ${LOGS_DIR_ENV} or <repo>/logs)")
     parser.add_argument('--no-log', action='store_true', help="no event-log folder (the training GUI won't show it)")
@@ -591,7 +596,9 @@ def build_parser() -> argparse.ArgumentParser:
 def resolve_checkpoint(name: str, checkpoint=None, run_id: Optional[str] = None, models_dir=None) -> Path:
     """The ``ckpt.pt`` an evaluation plays: ``checkpoint`` (file or run dir), else ``run_id``'s, else the promoted
     run's.  Raises FileNotFoundError when it doesn't exist."""
-    if checkpoint:
+    if checkpoint and not Path(checkpoint).exists() and '/' in checkpoint and paths.store_exists():
+        path = Path(store.get_run(store.parse_run(checkpoint))['path']) / registry.CHECKPOINT_NAME
+    elif checkpoint:
         path = Path(checkpoint)
         path = path / registry.CHECKPOINT_NAME if path.is_dir() else path
     elif run_id:
@@ -623,6 +630,7 @@ def main(argv=None):
     if streams and args.replays is None:
         parser.error("--streams needs --replays")
 
+    registry.use_team(args.team, args.models_dir)
     config = load_specialist(args.specialist)
     name = config.name
     try:        # every seed state the task declares is played: a glob that matches nothing is an error (round 40)
@@ -632,6 +640,7 @@ def main(argv=None):
         raise SystemExit(2) from None
     checkpoint = resolve_checkpoint(name, args.checkpoint, args.run_id, args.models_dir)
     run_id = checkpoint.parent.name
+    stored = store.run_of_path(checkpoint) if paths.store_exists() else None
     episodes = episode_count(config, args.episodes_per_state, args.clips)
     announce('eval', work(eval_episodes=episodes), f'eval-{name}')
     act = registry.act_override(args.act)
@@ -665,10 +674,26 @@ def main(argv=None):
                 if plan is not None:
                     events.emit('end', status='eval-failed', message=message)
             raise
-        output = (Path(args.output) if args.output else
-                  default_output(checkpoint, name, args.act, args.episodes_per_state, args.seed, args.clips))
+        default = default_output(checkpoint, name, args.act, args.episodes_per_state, args.seed, args.clips)
+        if stored is not None and not args.output:     # a store run is sealed: its evaluation is the job's
+            default = store.output_dir(f'evaluate/{stored.identity}') / default.name
+        output = Path(args.output) if args.output else default
         write_result(result, output)
         write_json_atomic(Path(f'{output}.meta.json'), {'manifest': recipe})       # triforce.manifest
+        if stored is not None:
+            from .run_stats import stats_path  # pylint: disable=import-outside-toplevel
+            team = registry.team_in_use(args.models_dir)
+            stats = stats_path(output)
+            summary_stats = json.loads(stats.read_text(encoding='utf-8')) if stats.is_file() else None
+            store.file_output(output, 'evaluate', run=stored.identity, team=team and team['name'],
+                              name=f'{stored.identity}/{default.name}', summary=summary_stats,
+                              result={'n': result['episodes'],
+                                      'successes': round(result['success_rate'] * result['episodes'])})
+            store.file_output(Path(f'{output}.meta.json'), 'evaluate-meta', run=stored.identity,
+                              team=team and team['name'], name=f'{stored.identity}/{default.name}.meta.json')
+            if stats.is_file():
+                store.file_output(stats, 'stats', run=stored.identity, team=team and team['name'],
+                                  name=f'{stored.identity}/{stats.name}', summary=summary_stats)
         if events is not None:
             events.emit('eval', **eval_event(result), path=str(output))
         if plan is not None:

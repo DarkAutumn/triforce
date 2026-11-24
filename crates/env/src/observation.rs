@@ -22,6 +22,7 @@ use zelda::room_state::{
     ITEM_TRIFORCE, NUM_ITEM_IDS, PUSH_BLOCK_STATES, RoomState, SecretTrigger, decode_room_state,
 };
 use zelda::contact;
+use zelda::threat;
 use zelda::tiles::{Grid, NUM_TILE_CLASSES, build_grid};
 use zelda::{Action, Change};
 
@@ -34,14 +35,17 @@ use zelda::{Action, Change};
 /// 7 (round 36, "Observation v7 and the hit network"): two NEW keys, `entity_rel` and `entity_contact` (per entity
 /// slot, Link-relative pixels on the touch test's scale and the touch rule extrapolated: `danger_blocks`); every
 /// schema 6 key is unchanged, and a network that does not read the new keys plays exactly as before.
-pub const OBS_SCHEMA_VERSION: u32 = 7;
+/// 8 (round 40, "Observation v7's danger block"): one NEW key, `entity_threat` (per entity slot, range-aware: frames to
+/// contact within a horizon, the shooter's threat lane, the bomb carrier: `threat_block`), filled only with
+/// `obs.threat` (zeros otherwise, as `target`); no schema 7 key or column changes.
+pub const OBS_SCHEMA_VERSION: u32 = 8;
 
 /// The oldest observation schema whose checkpoints still load as they are (AGENTS.md "Versioning": compatibility is
 /// decided by the schema numbers, not the repo version): their `model_config.obs_spec` a subset of `OBS_SPEC` (same
 /// shapes and vocabularies), every column they read meaning what it meant. A change that only adds keys, or columns
 /// at a block's end, leaves it; one that changes what an existing column means raises it to the new
-/// `OBS_SCHEMA_VERSION` (older models are then widened by `triforce convert-model` or retrained). 6: schema 7 only
-/// added `entity_rel` and `entity_contact`; schema 5 is widened by `convert-model`.
+/// `OBS_SCHEMA_VERSION` (older models are then widened by `triforce convert-model` or retrained). 6: schemas 7 and 8
+/// only added keys (`entity_rel`, `entity_contact`; `entity_threat`); schema 5 is widened by `convert-model`.
 pub const OLDEST_OBS_SCHEMA: u32 = 6;
 
 /// NES object slots 1-$B, then the room item ("treasure").
@@ -67,6 +71,8 @@ pub const GRID_COLS: usize = 32;
 pub const ENTITY_REL_SIZE: usize = 10;
 /// Schema 7: `entity_contact` columns a slot (`danger_blocks`).
 pub const ENTITY_CONTACT_SIZE: usize = 23;
+/// Schema 8: `entity_threat` columns a slot (`threat_block`).
+pub const ENTITY_THREAT_SIZE: usize = 15;
 
 const PLAY_Y0: f64 = 64.0;
 const PLAY_H: f64 = 176.0;
@@ -331,6 +337,8 @@ pub struct FeatureNames {
     /// Schema 7: `entity_rel` and `entity_contact` columns.
     pub entity_rel: Vec<String>,
     pub entity_contact: Vec<String>,
+    /// Schema 8: `entity_threat` columns.
+    pub entity_threat: Vec<String>,
     pub target: Vec<String>,
 }
 
@@ -560,6 +568,11 @@ fn build_feature_names() -> FeatureNames {
     for group in ["contact", "closest", "wall_contact", "wall_closest"] {
         entity_contact.extend(["stand", "N", "S", "W", "E"].iter().map(|m| format!("{group}_{m}")));
     }
+    let mut entity_threat = Vec::with_capacity(ENTITY_THREAT_SIZE);
+    for group in ["soon", "near"] {
+        entity_threat.extend(["stand", "N", "S", "W", "E"].iter().map(|m| format!("{group}_{m}")));
+    }
+    entity_threat.extend(s(&["lane_ready", "lane_wait", "lane_in", "lane_soon", "bomb_carrier"]));
 
     FeatureNames {
         room_state: rs,
@@ -570,6 +583,7 @@ fn build_feature_names() -> FeatureNames {
         target,
         entity_rel,
         entity_contact,
+        entity_threat,
     }
 }
 
@@ -587,7 +601,7 @@ pub struct ObsKeySpec {
 }
 
 /// Every observation key, in `observation_space` order.
-pub const OBS_SPEC: [ObsKeySpec; 12] = [
+pub const OBS_SPEC: [ObsKeySpec; 13] = [
     ObsKeySpec {
         key: "room_id",
         shape: &[1],
@@ -684,6 +698,14 @@ pub const OBS_SPEC: [ObsKeySpec; 12] = [
         low: -4.0,
         high: 4.0,
     },
+    ObsKeySpec {
+        key: "entity_threat",
+        shape: &[NUM_ENTITY_SLOTS, ENTITY_THREAT_SIZE],
+        vocab: None,
+        dtype: "float32",
+        low: 0.0,
+        high: 1.0,
+    },
 ];
 
 /// One observation (every key of `OBS_SPEC`).
@@ -705,6 +727,9 @@ pub struct Observation {
     pub entity_rel: [[f32; ENTITY_REL_SIZE]; NUM_ENTITY_SLOTS],
     /// Schema 7: per entity slot, velocity, the touch rule and its extrapolation (`danger_blocks`).
     pub entity_contact: [[f32; ENTITY_CONTACT_SIZE]; NUM_ENTITY_SLOTS],
+    /// Schema 8: per entity slot, range-aware contact, the shooter's lane, the bomb carrier (`threat_block`; all
+    /// zero with `obs.threat` off).
+    pub entity_threat: [[f32; ENTITY_THREAT_SIZE]; NUM_ENTITY_SLOTS],
 }
 
 /// `room_id` embedding index for (level, in_cave, room).
@@ -794,20 +819,12 @@ pub fn danger_blocks(
 ) {
     let mut rel = [[0f32; ENTITY_REL_SIZE]; NUM_ENTITY_SLOTS];
     let mut con = [[0f32; ENTITY_CONTACT_SIZE]; NUM_ENTITY_SLOTS];
-    let (lx, ly) = (ram[OBJ_X] as f32, ram[OBJ_Y] as f32);
-    let link_travel = TARGET_STEPS.map(|(ux, uy)| contact::travel(lx, ly, ux as f32, uy as f32, grid));
+    let link_travel = link_travel(ram, grid);
     for i in 0..NUM_ENTITY_SLOTS {
-        let f = &feats[i];
-        if f[e::PRESENCE] <= 0.0 {
+        let Some(m) = EntityMotion::new(ram, grid, &feats[i], i) else {
             continue;
-        }
-        let slot = (i < TREASURE_SLOT).then_some(i + 1);
-        let (obj_type, attr) = slot.map_or((0, 0), |s| contact::slot_type(ram, s));
-        let backed = obj_type != 0;
-        let x = (f[e::X] * 255.0).round_ties_even();
-        let y = (f[e::Y] * 176.0).round_ties_even() + 64.0;
-        let dx = x + if backed { contact::middle_x(attr) } else { 8.0 } - (lx + 8.0);
-        let dy = y + 8.0 - (ly + 8.0);
+        };
+        let (dx, dy) = (m.dx, m.dy);
         let (gx, gy) = ((dx.abs() - 8.0).max(0.0), (dy.abs() - 8.0).max(0.0));
         let near = |d: f32| b(d.abs() < contact::TOUCH);
         rel[i] = [
@@ -823,13 +840,70 @@ pub fn danger_blocks(
             dy / 64.0,
         ];
 
+        let c = &mut con[i];
+        (c[0], c[1], c[2]) = (m.vx, m.vy, b(m.harms));
+        for (k, &(mx, my)) in contact::MOTIONS.iter().enumerate() {
+            let (straight, walled) = if m.harms {
+                let (svx, svy) = (m.vx - mx * contact::LINK_SPEED, m.vy - my * contact::LINK_SPEED);
+                let straight = contact::approach(|t| (dx + svx * t, dy + svy * t));
+                let walled = contact::approach(|t| m.walled(&link_travel, k, t));
+                (straight, walled)
+            } else {
+                ((0.0, 2.0), (0.0, 2.0))
+            };
+            (c[3 + k], c[8 + k], c[13 + k], c[18 + k]) = (straight.0, straight.1, walled.0, walled.1);
+        }
+    }
+    (rel, con)
+}
+
+/// Pixels Link can walk N, S, W, E before a wall stops him ([`contact::travel`] from his RAM corner).
+fn link_travel(ram: &[u8], grid: &Grid) -> [f32; 4] {
+    let (lx, ly) = (ram[OBJ_X] as f32, ram[OBJ_Y] as f32);
+    TARGET_STEPS.map(|(ux, uy)| contact::travel(lx, ly, ux as f32, uy as f32, grid))
+}
+
+/// What the touch rule's extrapolation needs of one present entity slot (`danger_blocks`, `threat_block`): its
+/// RAM slot when it has one, the middle-to-middle offset from Link, its RAM velocity, whether it harms on touch, and
+/// how far a wall lets it walk on.
+struct EntityMotion {
+    slot: Option<usize>,
+    backed: bool,
+    dx: f32,
+    dy: f32,
+    vx: f32,
+    vy: f32,
+    harms: bool,
+    speed: f32,
+    ux: f32,
+    uy: f32,
+    mob_travel: f32,
+}
+
+impl EntityMotion {
+    /// Observation slot `i` (RAM slot `i + 1`), None when empty.
+    fn new(
+        ram: &[u8],
+        grid: &Grid,
+        f: &[f32; ENTITY_FEATURE_SIZE],
+        i: usize,
+    ) -> Option<EntityMotion> {
+        if f[e::PRESENCE] <= 0.0 {
+            return None;
+        }
+        let (lx, ly) = (ram[OBJ_X] as f32, ram[OBJ_Y] as f32);
+        let slot = (i < TREASURE_SLOT).then_some(i + 1);
+        let (obj_type, attr) = slot.map_or((0, 0), |s| contact::slot_type(ram, s));
+        let backed = obj_type != 0;
+        let x = (f[e::X] * 255.0).round_ties_even();
+        let y = (f[e::Y] * 176.0).round_ties_even() + 64.0;
+        let dx = x + if backed { contact::middle_x(attr) } else { 8.0 } - (lx + 8.0);
+        let dy = y + 8.0 - (ly + 8.0);
         let (vx, vy) = slot.map_or((0.0, 0.0), |s| contact::velocity(ram, s));
         let harms = match slot {
             Some(s) if backed => contact::harms_on_touch(ram, s),
             _ => f[e::TOUCH_HARMS] > 0.0,
         };
-        let c = &mut con[i];
-        (c[0], c[1], c[2]) = (vx, vy, b(harms));
         let speed = vx.hypot(vy);
         let walker = harms && backed && (vx != 0.0 || vy != 0.0) && slot.is_some_and(|s| contact::walks(ram, s));
         let mob_travel = if walker {
@@ -838,23 +912,113 @@ pub fn danger_blocks(
             contact::UNSTOPPED
         };
         let (ux, uy) = if speed > 0.0 { (vx / speed.max(1e-6), vy / speed.max(1e-6)) } else { (0.0, 0.0) };
-        for (m, &(mx, my)) in contact::MOTIONS.iter().enumerate() {
-            let (straight, walled) = if harms {
-                let (svx, svy) = (vx - mx * contact::LINK_SPEED, vy - my * contact::LINK_SPEED);
-                let straight = contact::approach(|t| (dx + svx * t, dy + svy * t));
-                let walled = contact::approach(|t| {
-                    let link = if m == 0 { 0.0 } else { (contact::LINK_SPEED * t).min(link_travel[m - 1]) };
-                    let mob = (speed * t).min(mob_travel);
-                    ((dx + ux * mob) - mx * link, (dy + uy * mob) - my * link)
-                });
-                (straight, walled)
+        Some(EntityMotion { slot, backed, dx, dy, vx, vy, harms, speed, ux, uy, mob_travel })
+    }
+
+    /// The middles' offset after `t` frames with both stopped at walls, Link in motion `k` of `contact::MOTIONS`.
+    fn walled(&self, link_travel: &[f32; 4], k: usize, t: f32) -> (f32, f32) {
+        let (mx, my) = contact::MOTIONS[k];
+        let link = if k == 0 { 0.0 } else { (contact::LINK_SPEED * t).min(link_travel[k - 1]) };
+        let mob = (self.speed * t).min(self.mob_travel);
+        ((self.dx + self.ux * mob) - mx * link, (self.dy + self.uy * mob) - my * link)
+    }
+}
+
+/// The choices `threat_block` makes (the hit bench screens them, round40.md; the observation uses the default).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ThreatParams {
+    /// Frames ahead the contact and lane columns look; beyond it a touch is "not soon" (0).
+    pub horizon: usize,
+    /// Frames past the time Link needs to leave a lane during which a shot's arrival still counts.
+    pub lane_slack: f32,
+    /// No touch counts while Link's invincibility timer (`$4F0`) runs, as in the game.
+    pub invincibility: bool,
+}
+
+impl Default for ThreatParams {
+    fn default() -> Self {
+        ThreatParams { horizon: threat::HORIZON, lane_slack: threat::LANE_SLACK, invincibility: true }
+    }
+}
+
+/// The fresh generation's per-entity danger block (`entity_threat` `[12, 15]`; round40.md "Observation v7's danger
+/// block"), range-aware: what can touch Link within `params.horizon` frames, and the owner's shooter's threat lane.
+/// Arithmetic on the current state only, like `danger_blocks` (the same positions, velocities, touch rule and wall
+/// stops). Columns:
+/// - 0-4 `soon_{stand,N,S,W,E}`: Link standing or walking that way at 1.5 px a frame, the object moving on at its
+///   velocity, both stopped at walls: the first frame `t` from Link's invincibility timer on (no touch harms him
+///   before it ends) at which the touch test passes, `(H + 1 - t) / (H + 1)`; 0 when none by the horizon `H` or the
+///   object does not harm.
+/// - 5-9 `near_{stand,N,S,W,E}`: the smallest gap before the test passes over frames `0..=H`, / 16, at most 1 (1:
+///   never within 16 px in the horizon, or it does not harm).
+/// - 10-13 `lane_ready`, `lane_wait`, `lane_in`, `lane_soon` (shooters only, `zelda::threat::lane`): it can fire
+///   (its shot not flying); the frames until its next shot can leave / 32, at most 1; Link's middle in the lane its
+///   shot would fly (within the shot's reach and, for a rock, before a wall); the shot's arrival `t` as `soon`, kept
+///   only while `t` is at most the horizon and at most the frames Link needs to step out of the lane sideways (where
+///   a wall lets him) plus `params.lane_slack`: off where he can still leave.
+/// - 14 `bomb_carrier`: `carriers[i]` (the builder's: this monster's death may drop bombs).
+///
+/// An empty slot is all 0; the treasure slot and Gleeok's heads have no RAM slot and no lane.
+pub fn threat_block(
+    ram: &[u8],
+    grid: &Grid,
+    feats: &[[f32; ENTITY_FEATURE_SIZE]; NUM_ENTITY_SLOTS],
+    carriers: &[bool; NUM_ENTITY_SLOTS],
+    params: ThreatParams,
+) -> [[f32; ENTITY_THREAT_SIZE]; NUM_ENTITY_SLOTS] {
+    let mut out = [[0f32; ENTITY_THREAT_SIZE]; NUM_ENTITY_SLOTS];
+    let link_travel = link_travel(ram, grid);
+    let h = params.horizon;
+    let from = if params.invincibility { ram[threat::OBJ_INVINCIBILITY_TIMER] as usize } else { 0 };
+    for i in 0..NUM_ENTITY_SLOTS {
+        let Some(m) = EntityMotion::new(ram, grid, &feats[i], i) else {
+            continue;
+        };
+        let c = &mut out[i];
+        for k in 0..contact::MOTIONS.len() {
+            (c[k], c[5 + k]) = if m.harms {
+                let (first, closest) = threat::first_touch(|t| m.walled(&link_travel, k, t), from, h);
+                (threat::soon(first, h), (closest / threat::NEAR_SCALE).min(1.0))
             } else {
-                ((0.0, 2.0), (0.0, 2.0))
+                (0.0, 1.0)
             };
-            (c[3 + m], c[8 + m], c[13 + m], c[18 + m]) = (straight.0, straight.1, walled.0, walled.1);
+        }
+        if let Some(lane) = m.slot.filter(|_| m.backed).and_then(|s| threat::lane(ram, s, grid)) {
+            c[10] = b(lane.ready);
+            c[11] = if lane.ready { (lane.wait / 32.0).min(1.0) } else { 0.0 };
+            c[12] = b(lane.inside);
+            c[13] = match lane.arrival {
+                Some(t) if t <= h as f32 && t <= lane.leave + params.lane_slack => {
+                    threat::soon(Some(t.ceil() as usize), h)
+                }
+                _ => 0.0,
+            };
+        }
+        c[14] = b(carriers[i]);
+    }
+    out
+}
+
+/// `entity_threat`'s `bomb_carrier` per observation slot: the monsters whose death may drop bombs now, by the owner's
+/// Metric B, so the metric and the flag are one definition: while `zelda::bomb_windows::bomb_carrier_window` is open,
+/// each monster `is_bomb_carrier` says is one. Link's own bombs are the bag (`state.bombs()`: the cheated wall bombs
+/// are not told apart here, as the observation's `bombs` never did), the bomb rule is the mask's BOMB, and every
+/// monster must die when the objective is FIGHT. RAM object slot `e.index` (1-11) is observation slot `e.index - 1`.
+fn bomb_carriers(state: &GameView, objective: &Objective, mask: &ActionMask) -> [bool; NUM_ENTITY_SLOTS] {
+    let mut out = [false; NUM_ENTITY_SLOTS];
+    let own = state.bombs();
+    let bomb_rule = mask.kind[ActionKind::Bomb.index()];
+    let kill_all = objective.kind == ObjectiveKind::Fight;
+    if !zelda::bomb_windows::bomb_carrier_window(state, own, bomb_rule, kill_all) {
+        return out;
+    }
+    for e in &state.enemies {
+        let slot = e.index as usize;
+        if (1..=TREASURE_SLOT).contains(&slot) && zelda::bomb_windows::is_bomb_carrier(state, e, own, bomb_rule) {
+            out[slot - 1] = true;
         }
     }
-    (rel, con)
+    out
 }
 
 /// Builds observations, keeping the memory velocities and history need: one per environment, `reset` at every
@@ -873,6 +1037,8 @@ pub struct ObservationBuilder {
     /// What positions show for a hidden object of a `zelda::object_rules::HIDDEN_POSITION_TYPES` type
     /// (`obs.hidden_positions`).
     pub hidden_positions: HiddenPositions,
+    /// Fill the `entity_threat` block (`obs.threat`; zeros otherwise).
+    pub threat: bool,
     prev_room: Option<(u8, bool, u8)>,
     prev_types: [i64; NUM_ENTITY_SLOTS],
     prev_xy: [[f32; 2]; NUM_ENTITY_SLOTS],
@@ -891,6 +1057,7 @@ impl ObservationBuilder {
             bomb_reserve: 0,
             rupee_reserve: 0,
             hidden_positions: HiddenPositions::Ram,
+            threat: false,
             prev_room: None,
             prev_types: [0; NUM_ENTITY_SLOTS],
             prev_xy: [[0.0; 2]; NUM_ENTITY_SLOTS],
@@ -903,6 +1070,12 @@ impl ObservationBuilder {
     /// The builder with `obs.hidden_positions` = `mode`.
     pub fn with_hidden_positions(mut self, mode: HiddenPositions) -> ObservationBuilder {
         self.hidden_positions = mode;
+        self
+    }
+
+    /// The builder with `obs.threat` = `on`.
+    pub fn with_threat(mut self, on: bool) -> ObservationBuilder {
+        self.threat = on;
         self
     }
 
@@ -971,6 +1144,12 @@ impl ObservationBuilder {
         self.prev_room = Some(key);
         let grid = build_grid(state, &rs);
         let (entity_rel, entity_contact) = danger_blocks(state.ram(), &grid, &entity_features);
+        let entity_threat = if self.threat {
+            let carriers = bomb_carriers(state, objective, mask);
+            threat_block(state.ram(), &grid, &entity_features, &carriers, ThreatParams::default())
+        } else {
+            [[0.0; ENTITY_THREAT_SIZE]; NUM_ENTITY_SLOTS]
+        };
         Observation {
             room_id: room_index(rs.level, rs.in_cave, rs.room),
             room_state: room_state(&rs, state),
@@ -988,6 +1167,7 @@ impl ObservationBuilder {
             action_mask: mask.to_flat(),
             entity_rel,
             entity_contact,
+            entity_threat,
         }
     }
 

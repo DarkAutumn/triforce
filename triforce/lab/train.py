@@ -35,7 +35,7 @@ from typing import Optional
 
 import torch
 
-from .. import lineage, nets, registry
+from .. import lineage, nets, paths, registry, store
 from ..best_of_n import success_by_state
 from ..demos import load_demos
 from ..events import EventLog, logged_job
@@ -47,7 +47,7 @@ from ..observation import observation_space
 from ..ppo import PPO, IterationResult, PPOConfig, joint_kl, minibatch_forward
 from ..train import CONFIRM_EPISODES, EarlyStop, curriculum_spec
 from .auxiliary import AuxLoss, aux_loss, held_out
-from .collect import MultiCollector, NeedSampler, Teachers, parse_families
+from .collect import MultiCollector, NeedSampler, Teachers, parse_families, trajectories_root
 from .rehearse import Rehearsal
 
 REFERENCE = Path(__file__).with_name('reference.json')
@@ -84,6 +84,9 @@ def parse_args(argv=None):
     parser.add_argument('--device', default='cuda', choices=['cpu', 'cuda'])
     parser.add_argument('--run-id', default=None)
     parser.add_argument('--models-dir', default=None)
+    parser.add_argument('--team', default=None,
+                        help="the store's team teachers and --load names resolve in (NAME, current, "
+                             "NAME+SLOT=RUN...); the run is allocated in the store and sealed at the end")
     parser.add_argument('--states-dir', default=None)
     parser.add_argument('--save-every', type=int, default=10)
     parser.add_argument('--checkpoint-every', type=int, default=0,
@@ -325,9 +328,11 @@ def main(argv=None) -> Path:
         raise SystemExit("--actor teacher is for --mode imitate (PPO trains on the student's own samples)")
     if args.seed is not None:
         torch.manual_seed(args.seed)
-    root = registry.models_root(args.models_dir)
+    registry.use_team(args.team, args.models_dir)
+    models = registry.models_root(args.models_dir)
+    team = registry.team_in_use(args.models_dir)
     run_id = args.run_id or registry.new_run_id()
-    out_dir = registry.run_dir(args.name, run_id, root)
+    root = models
     shares = {k: float(w) for k, _, w in (s.partition('=') for s in args.shares)}
     families = parse_families(args.families, args.parallel, shares, args.state_route,
                               curriculum=not args.no_curriculum, states_dir=args.states_dir)
@@ -335,6 +340,12 @@ def main(argv=None) -> Path:
     steps_per_env = max(1, args.steps_per_update // args.parallel)
     total = args.iterations * steps_per_env * args.parallel
     announce('train', work(train_steps=total), f'lab-{args.name}')
+    stored = None
+    if team is not None:        # a store team plays: the run is the store's, sealed when the training ends
+        stored = store.allocate_run(args.name, args.run_id, origin='lab', team=team)
+        run_id, root = stored.name, paths.runs_dir()
+        print(f"[lab] store run {stored.identity} (open until the training ends)", flush=True)
+    out_dir = registry.run_dir(args.name, run_id, root)
     with logged_job(f'lab-{args.name}', KIND, RunLog.runs(keys, run_id, out_dir, total, args.iterations),
                     args.logs_dir, work=work(train_steps=total), families=keys, run_dir=str(out_dir),
                     mode=args.mode) as plan:
@@ -365,7 +376,7 @@ def main(argv=None) -> Path:
             unknown = sorted(set(weights) - set(keys))
             if unknown:
                 raise SystemExit(f"--teacher-weight {unknown}: not in --families")
-            teachers = Teachers(keys, args.device, root, overrides, weights, args.state_route)
+            teachers = Teachers(keys, args.device, models, overrides, weights, args.state_route)
         rehearsal = None
         if args.rehearse:
             names = json.loads((Path(args.rehearse) / 'cache.json').read_text(encoding='utf-8'))['keys']
@@ -379,7 +390,8 @@ def main(argv=None) -> Path:
             spec, _ = curriculum_spec(argparse.Namespace(no_curriculum=args.no_curriculum, curriculum=None,
                                                          curriculum_fraction=None, curriculum_threshold=None,
                                                          curriculum_unrecorded=None),
-                                      family.config, out_dir / 'tasks' / family.key)
+                                      family.config, out_dir / 'tasks' / family.key,
+                                      trajectories_root=trajectories_root())
             curricula[family.key] = spec
         (out_dir / 'tasks').mkdir(exist_ok=True)
         for family in families:
@@ -401,14 +413,16 @@ def main(argv=None) -> Path:
                                    actor=args.actor if args.mode == 'imitate' else 'student', tried=tried,
                                    chunk_length=args.bptt, sampler=sampler)
         stopper = FamilyStop(args, collector, steps_per_env) if args.stop_success is not None else None
-        run = {'args': vars(args), 'name': args.name, 'run_id': run_id, 'families': keys,
+        recorded = {key: value for key, value in vars(args).items() if key != 'team' or value}
+        run = {'args': recorded, 'name': args.name, 'run_id': run_id, 'families': keys,
                'envs': collector.shares, 'arch': nets.arch_of(network.config.to_dict()),
                'parameters': network.parameter_count(), 'model_config': network.config.to_dict(),
                'ppo_config': cfg.to_dict(), 'source': source, 'parent': parent,
                'teachers': None if teachers is None else teachers.paths,
                'teacher_ids': None if teachers is None else teachers.identities}
         (out_dir / 'run.json').write_text(json.dumps(run, indent=2, default=str), encoding='utf-8')
-        link_families(root, args.name, run_id, keys)
+        if stored is None:      # a store run's families find it through a team's slots, not links
+            link_families(root, args.name, run_id, keys)
         print(f"[lab] {args.name} run={run_id} dir={out_dir} arch={run['arch']} "
               f"parameters={run['parameters']:,} envs={collector.shares} mode={args.mode}", flush=True)
         logger = MetricsLogger(str(out_dir))
@@ -481,6 +495,15 @@ def main(argv=None) -> Path:
         log.end(status, iterations=state['iteration'], steps=state['steps'], wall_seconds=summary['wall_seconds'])
         (out_dir / 'train_summary.json').write_text(json.dumps(summary, indent=2), encoding='utf-8')
         print(f"[lab] {status}: {summary}", flush=True)
+    if stored is not None:
+        if status == 'interrupted' or not (out_dir / registry.CHECKPOINT_NAME).is_file():
+            print(f"[lab] store run {stored.identity} stays open (an interrupted run is continued by its owner)",
+                  flush=True)
+        else:
+            sealed = store.seal_run(stored)
+            store.record_summary('train', stored.identity, run=stored.identity, team=team['name'],
+                                 result={'status': status, 'iterations': summary['iterations']})
+            print(f"[lab] sealed store run {stored.identity} (sha1 {sealed['sha1']})", flush=True)
     return out_dir
 
 

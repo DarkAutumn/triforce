@@ -149,10 +149,13 @@ def level_text(game, lv: int, names: dict[int, str]) -> str:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     parser.add_argument('levels', type=int, nargs='+', choices=range(1, 10), metavar='LEVEL')
-    parser.add_argument('--rom', type=Path, default=ROOT / 'roms' / 'zelda.nes')
+    parser.add_argument('--rom', type=Path, default=None, help="the ROM (default: triforce.paths.rom())")
     parser.add_argument('--append-to', type=Path, metavar='GAME_YAML', help='append the entries to this file')
     args = parser.parse_args(argv)
     root = ROOT / 'zelda-asm'
+    if args.rom is None:
+        from triforce.paths import rom  # pylint: disable=import-outside-toplevel
+        args.rom = rom()
     game = romdata.Game(romdata.Source(str(root), romdata.load_prg(args.rom), str(root / 'data')))
     names = enemy_names()
     text = ''.join(level_text(game, lv, names) for lv in args.levels)

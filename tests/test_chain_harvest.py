@@ -65,8 +65,8 @@ def test_eval_chain_harvests_handoffs_named_by_seed_and_entry(states_dir, models
 
 def test_eval_chain_command_harvests_into_the_dir_it_names(states_dir, models_dir, tmp_path):
     """``eval-chain --harvest DIR`` writes ``DIR/<specialist>/``; with DIR a states dir's ``harvested`` it is where each
-    specialist's ``harvested_dir`` reads by default.  A bare ``--harvest`` is refused (round 40: it wrote into the
-    states every training draws)."""
+    specialist's ``harvested_dir`` reads by default.  A bare ``--harvest`` is refused with a models folder (round 40:
+    it wrote into the states every training draws; a store team's chain writes it into the job's folder)."""
     states = tmp_path / 'states'
     states.mkdir()
     shutil.copy(states_dir / 'start.state', states / 'start.state')
@@ -77,7 +77,7 @@ def test_eval_chain_command_harvests_into_the_dir_it_names(states_dir, models_di
                '--no-log', '--checkpoint', f'ow-zora={walker}', '--output', str(output)]
     env = {**os.environ, 'TRIFORCE_STATES_DIR': str(states)}
     bare = subprocess.run([*command, '--harvest'], check=False, capture_output=True, text=True, env=env)
-    assert bare.returncode == 2 and 'expected one argument' in bare.stderr, bare.stderr
+    assert bare.returncode == 2 and '--harvest needs a folder' in bare.stderr, bare.stderr
     subprocess.run([*command, '--harvest', str(states / 'harvested')], check=True, capture_output=True, text=True,
                    env=env)
     files = sorted(p.name for p in (states / 'harvested' / 'ow-moblin').iterdir())

@@ -231,6 +231,11 @@ def test_the_title_shows_the_source_its_stock_and_the_simulations():
     assert [sound(True, 50.0, None), sound(True, 0.0, None)] == ['sound muted (not at 60.1 fps)'] * 2
     assert [sound(False, nes, None), sound(False, nes, 'no device')] == ['sound off'] * 2
     assert sound(True, nes, 'no sound output device') == 'no sound: no sound output device'
+    # Parts of the sound switched off (keys m, e, h) are named; muted or off says nothing of them.
+    Mix = play_grid.Mix
+    assert sound(True, nes, None, Mix(music=False)) == 'sound on (no music)'
+    assert sound(True, nes, None, Mix(effects=False, heart_beep=False)) == 'sound on (no effects, no beep)'
+    assert sound(False, nes, None, Mix(music=False)) == 'sound off'
 
     # The clips switch (key c), and the runs of each queue played without clips.
     clipped = {**stats, 'clips': False, 'live': False, 'feed': {**FEED, 'without_clips': {
@@ -257,6 +262,7 @@ class FakeGrid:
         self.stops = self.polls = self.skips = 0
         self.selected = []
         self.heard = []         # every set_sound call
+        self.mixes = []         # every set_mix call
         self.sound_error = None
         self.played = [0] * cells
         self.counters = [0] * cells     # frames shown (published) per cell
@@ -303,6 +309,9 @@ class FakeGrid:
 
     def set_sound(self, cell):
         self.heard.append(cell)
+
+    def set_mix(self, mix):
+        self.mixes.append(mix)
 
     def poll_status(self):
         self.polls += 1
@@ -442,12 +451,18 @@ def test_menus_do_what_the_keys_do_and_follow_them(qapp):  # pylint: disable=red
     assert list(items) == [
         'Show/Best', 'Show/Wins', 'Show/Stuck', 'Show/Died', 'Show/Random', 'Show/Golden path',
         'Show/Next replay in every cell', 'Playback/Pause', 'Playback/Uncapped speed', 'Playback/Faster',
-        'Playback/Slower', 'Options/Clips', 'View/Sound', 'View/Controller', 'View/Scale/1×', 'View/Scale/2×',
-        'View/Scale/3×', 'View/Scale/4×']
+        'Playback/Slower', 'Options/Clips', 'View/Sound', 'View/Music', 'View/Sound effects', 'View/Low-hearts beep',
+        'View/Controller', 'View/Scale/1×', 'View/Scale/2×', 'View/Scale/3×', 'View/Scale/4×']
     assert items['Show/Died'].text() == 'Died\tD' and items['View/Controller'].text() == 'Controller'
     assert not items['Show/Died'].shortcut().toString()      # the key is named, not bound twice
     checked = lambda: sorted(name for name, item in items.items() if item.isChecked())   # noqa: E731
-    assert checked() == ['Options/Clips', 'Show/Best', 'View/Scale/2×', 'View/Sound']
+    parts = ['View/Low-hearts beep', 'View/Music', 'View/Sound effects']
+    assert checked() == ['Options/Clips', 'Show/Best', *parts[:1], 'View/Music', 'View/Scale/2×', 'View/Sound',
+                         'View/Sound effects']
+    items['View/Music'].trigger()
+    assert fake.mixes[-1] == play_grid.Mix(music=False) and not items['View/Music'].isChecked()
+    window.handle_key(Qt.Key.Key_M)
+    assert items['View/Music'].isChecked()
 
     items['Show/Died'].trigger()
     items['Show/Next replay in every cell'].trigger()
@@ -455,13 +470,14 @@ def test_menus_do_what_the_keys_do_and_follow_them(qapp):  # pylint: disable=red
     items['View/Controller'].trigger()
     items['Playback/Pause'].trigger()
     assert (fake.selected, fake.skips, fake.clips, fake.controller, fake.paused) == (['died'], 1, False, True, True)
-    assert checked() == ['Playback/Pause', 'Show/Died', 'View/Controller', 'View/Scale/2×', 'View/Sound']
+    assert checked() == ['Playback/Pause', 'Show/Died', 'View/Controller', *parts[:2], 'View/Scale/2×', 'View/Sound',
+                         'View/Sound effects']
 
     # The keys move the check marks too.
     for key in (Qt.Key.Key_P, Qt.Key.Key_W, Qt.Key.Key_C, Qt.Key.Key_S, Qt.Key.Key_U):
         window.handle_key(key)
-    assert checked() == ['Options/Clips', 'Playback/Uncapped speed', 'Show/Wins', 'View/Controller',
-                         'View/Scale/2×']
+    assert checked() == ['Options/Clips', 'Playback/Uncapped speed', 'Show/Wins', 'View/Controller', *parts[:2],
+                         'View/Scale/2×', 'View/Sound effects']
     assert not items['Playback/Faster'].isEnabled() and not items['Playback/Slower'].isEnabled()
     items['Playback/Uncapped speed'].trigger()
     items['Playback/Slower'].trigger()
@@ -481,7 +497,8 @@ def test_menus_do_what_the_keys_do_and_follow_them(qapp):  # pylint: disable=red
     window.add_menus(remake=lambda **_: files, act='sample', acts=[('sample', 'sample')])
     assert list(_menus(window)) == [
         'Show/Next replay in every cell', 'Playback/Pause', 'Playback/Uncapped speed', 'Playback/Faster',
-        'Playback/Slower', 'View/Sound', 'View/Scale/1×', 'View/Scale/2×', 'View/Scale/3×', 'View/Scale/4×']
+        'Playback/Slower', 'View/Sound', 'View/Music', 'View/Sound effects', 'View/Low-hearts beep', 'View/Scale/1×',
+        'View/Scale/2×', 'View/Scale/3×', 'View/Scale/4×']
     window.shutdown()
 
 
@@ -594,6 +611,20 @@ def test_one_cell_is_heard_s_toggles_it_a_click_moves_it_and_it_is_muted_off_the
     lone = FakeGrid(cells=1, messages=[])
     window = play_view.Window(lone, cols=1, rows=1, scale=1)
     assert lone.heard == [0] and not window.views[0].heard and window.windowTitle().endswith('— sound on')
+    window.shutdown()
+
+
+def test_m_e_h_switch_music_effects_and_the_beep_at_once(qapp):  # pylint: disable=redefined-outer-name, unused-argument
+    keys, Mix = Qt.Key, play_grid.Mix
+    fake = FakeGrid(cells=2, messages=[])
+    window = play_view.Window(fake, cols=2, rows=1, scale=1, mix=Mix(heart_beep=False))
+    assert fake.mixes[-1] == Mix(heart_beep=False) and window.windowTitle().endswith('— sound on (no beep)')
+    assert window.handle_key(keys.Key_M) and fake.mixes[-1] == Mix(music=False, heart_beep=False)
+    assert window.windowTitle().endswith('— sound on (no music, no beep)')
+    assert window.handle_key(keys.Key_H) and window.handle_key(keys.Key_E)
+    assert fake.mixes[-1] == Mix(music=False, effects=False) and fake.heard[-1] == 0
+    assert window.handle_key(keys.Key_M) and window.handle_key(keys.Key_E) and fake.mixes[-1] == Mix()
+    assert window.windowTitle().endswith('— sound on')
     window.shutdown()
 
 

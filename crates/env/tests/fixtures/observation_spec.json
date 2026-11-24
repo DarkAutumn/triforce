@@ -290,12 +290,60 @@
   "target_dy",
   "target_is_item"
  ],
- "ENTITY_REL_FEATURES": ["dx", "dy", "gap_x", "gap_y", "gap", "touching", "in_row", "in_column", "dx_coarse",
-  "dy_coarse"],
- "ENTITY_CONTACT_FEATURES": ["vx", "vy", "harms", "contact_stand", "contact_N", "contact_S", "contact_W",
-  "contact_E", "closest_stand", "closest_N", "closest_S", "closest_W", "closest_E", "wall_contact_stand",
-  "wall_contact_N", "wall_contact_S", "wall_contact_W", "wall_contact_E", "wall_closest_stand", "wall_closest_N",
-  "wall_closest_S", "wall_closest_W", "wall_closest_E"],
+ "ENTITY_REL_FEATURES": [
+  "dx",
+  "dy",
+  "gap_x",
+  "gap_y",
+  "gap",
+  "touching",
+  "in_row",
+  "in_column",
+  "dx_coarse",
+  "dy_coarse"
+ ],
+ "ENTITY_CONTACT_FEATURES": [
+  "vx",
+  "vy",
+  "harms",
+  "contact_stand",
+  "contact_N",
+  "contact_S",
+  "contact_W",
+  "contact_E",
+  "closest_stand",
+  "closest_N",
+  "closest_S",
+  "closest_W",
+  "closest_E",
+  "wall_contact_stand",
+  "wall_contact_N",
+  "wall_contact_S",
+  "wall_contact_W",
+  "wall_contact_E",
+  "wall_closest_stand",
+  "wall_closest_N",
+  "wall_closest_S",
+  "wall_closest_W",
+  "wall_closest_E"
+ ],
+ "ENTITY_THREAT_FEATURES": [
+  "soon_stand",
+  "soon_N",
+  "soon_S",
+  "soon_W",
+  "soon_E",
+  "near_stand",
+  "near_N",
+  "near_S",
+  "near_W",
+  "near_E",
+  "lane_ready",
+  "lane_wait",
+  "lane_in",
+  "lane_soon",
+  "bomb_carrier"
+ ],
  "spaces": {
   "action_mask": {
    "shape": [
@@ -395,6 +443,15 @@
    ],
    "dtype": "float32",
    "low": -1.0,
+   "high": 1.0
+  },
+  "entity_threat": {
+   "shape": [
+    12,
+    15
+   ],
+   "dtype": "float32",
+   "low": 0.0,
    "high": 1.0
   }
  },

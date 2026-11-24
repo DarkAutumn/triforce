@@ -330,10 +330,12 @@ python -m triforce.lab.train --name hit --families darknut --parallel 8 --iterat
 
 **The hit network** (`nets/hitnet.py`, `hitnet`; round36.md "Observation v7 and the hit network"): experiment 2's
 shape on observation schema 7. Link's `link` block is a token attending to the entity tokens (the type embedding,
-`entity_features`, `entity_rel`, `entity_contact`; `tokens` picks the groups), 2 layers of width 128, his final token
+`entity_features`, `entity_rel`, `entity_contact`, schema 8's `entity_threat` with `threat`, which needs the tasks'
+`obs.threat: true`; `tokens` picks the groups), 2 layers of width 128, his final token
 joining the room embedding, the grid convs and the float vectors; today's towers and heads; the hit head on its own
 tower (`hit`: `joint` 352 logits, `kind_direction` 88 shared by the durations, `none`), `feed` its stopped
-probabilities into the policy tower, `detach_body`, `room` (the room embedding on or off).
+probabilities into the policy tower, `detach_body`, `room` (the room embedding on or off). The fresh generation's
+layout (round40.md): tokens `type`, `features`, `rel`, `threat`, `feed: true`.
 
 ```
 python -m triforce.lab.train --name hitnet --families goriya@d3first --parallel 8 --iterations 400 --arch hitnet \

@@ -4,9 +4,13 @@
 //! Counts stay natural except where a room *needs* an item ([`needs`]); there, whenever Link holds fewer than the
 //! need (at the start in the room, on entering it and after every action) the count is topped up to it, and the
 //! top-up is *granted* (outstanding).  The needs:
-//! - bombs: 1 in a game.yaml `requires_bombs` room (Dodongo, the 0x2c rock wall), but none once what the room is
-//!   bombed for is open (round 24: an overworld rock wall's secret, every bomb wall of a dungeon room: 0x2c on the
-//!   leg's plain mountain way, 5:0x66 and 5:0x65 on Dungeon 5's way back; [`bomb_need`]);
+//! - bombs: 1 in a game.yaml `requires_bombs` room.  Where the bomb opens something (the 0x2c rock wall, a dungeon
+//!   room's bomb wall) none once that is open (round 24: an overworld rock wall's secret, every bomb wall of a
+//!   dungeon room: 0x2c on the leg's plain mountain way, 5:0x66 and 5:0x65 on Dungeon 5's way back).  Where the
+//!   bomb is the WEAPON (game.yaml `bomb_weapon`: Dodongo's 2:0x0e, Manhandla's 3:0x4d) always, whatever the room's
+//!   walls (Manhandla's room has a bomb wall, the one Link enters through: from round 24 to Nov 23 its being open
+//!   read as "done" and the room granted nothing; the owner: "we always kill Manhandla with bombs [...] I'm fine
+//!   with cheating bombs when needed here, I don't ever want to fight them with a wood sword") ([`bomb_need`]);
 //! - keys: 1 in a dungeon room whose route step leaves through a door that is still locked (the game's door tiles,
 //!   not being opened), unless Link has the magic key or the room's treasure is a key he hasn't taken yet (that key
 //!   comes first: the cheated one only appears once it is taken, and spent, bringing him back to 0);
@@ -178,21 +182,26 @@ fn rupee_need(map: &GameMap, state: &GameView) -> i32 {
 }
 
 /// Whether `room` is `requires_bombs` for something a bomb opens, whatever its state now: an overworld room with a
-/// `bomb_secret` rock wall, a dungeon room with a bomb wall.  Not a room that needs its bomb as the weapon (Dodongo's
-/// 2:0x0e: no wall).
+/// `bomb_secret` rock wall, a dungeon room with a bomb wall.  Not a room that needs its bomb as the weapon
+/// (game.yaml `bomb_weapon`: Dodongo's 2:0x0e, Manhandla's 3:0x4d, which has a bomb wall all the same).
 pub fn bomb_opens(map: &GameMap, room: MapLocation) -> bool {
     map.requires_bombs(room)
+        && !map.bomb_weapon(room)
         && map.get(room).is_some_and(|info| {
             if room.level == 0 { info.bomb_secret.is_some() } else { info.exits.values().any(|e| e.bomb_wall) }
         })
 }
 
 /// 1 in a `requires_bombs` room while it still has something the route bombs: an overworld room's secret rock wall
-/// still closed, a dungeon room's bomb walls not all open (a room with none, Dodongo's, always needs its bomb).
+/// still closed, a dungeon room's bomb walls not all open (a room with none always needs its bomb); in a
+/// `bomb_weapon` room always, whatever its walls: the bomb is what the room is beaten with.
 pub fn bomb_need(map: &GameMap, state: &GameView) -> i32 {
     let room = state.full_location();
     if !map.requires_bombs(room) {
         return 0;
+    }
+    if map.bomb_weapon(room) {
+        return 1;
     }
     let Some(info) = map.get(room) else { return 1 };
     let open = if room.level == 0 {
@@ -730,9 +739,10 @@ mod tests {
     }
 
     /// [`bomb_opens`] on game.yaml: every `requires_bombs` room is bombed for something it opens (a dungeon bomb
-    /// wall, an overworld rock wall) but Dodongo's 2:0x0e, where the bomb is the weapon; an untagged room is none.
+    /// wall, an overworld rock wall) but the two where the bomb is the weapon (`bomb_weapon`): Dodongo's 2:0x0e and
+    /// Manhandla's 3:0x4d, whatever the state of his W wall; an untagged room is none.
     #[test]
-    fn every_requires_bombs_room_but_dodongos_has_something_to_open() {
+    fn every_requires_bombs_room_but_the_weapon_rooms_has_something_to_open() {
         let map = GameMap::builtin();
         let weapon: Vec<MapLocation> = map
             .rooms()
@@ -740,8 +750,8 @@ mod tests {
             .copied()
             .filter(|&room| map.requires_bombs(room) && !bomb_opens(&map, room))
             .collect();
-        assert_eq!(weapon, [DODONGO]);
-        for (level, room) in [(0, 0x2c), (0, 0x67), (3, 0x5b), (3, 0x4c), (3, 0x4d), (5, 0x66), (7, 0x69), (7, 0x1a)] {
+        assert_eq!(weapon, [DODONGO, MapLocation::new(3, 0x4d, false)]);
+        for (level, room) in [(0, 0x2c), (0, 0x67), (3, 0x5b), (3, 0x4c), (5, 0x66), (7, 0x69), (7, 0x1a)] {
             assert!(bomb_opens(&map, MapLocation::new(level, room, false)), "{level}:{room:#04x}");
         }
         assert!(!bomb_opens(&map, SOUTH), "2:0x1e is no requires_bombs room");

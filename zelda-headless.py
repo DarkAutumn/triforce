@@ -39,9 +39,10 @@ summary on stdout.
 import argparse
 import json
 import os
+import signal
 import sys
 
-from triforce import _native, golden, registry, replay
+from triforce import _native, golden, registry, replay, store
 from triforce.jobs import announce
 from triforce.jobs import progress as job_progress
 from triforce.runner import (STOP_AT_HELP, Route, Runner, RunnerError, add_power_on_arguments, parse_stop,
@@ -90,6 +91,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help="with --golden: runs tried per segment before the path fails "
                              f"(default {golden.DEFAULT_ATTEMPTS})")
     parser.add_argument('--models-dir', default=None, help="models root (default $TRIFORCE_MODELS_DIR or models/)")
+    parser.add_argument('--team', default=None,
+                        help="the store's team to play (NAME, current, NAME+SLOT=RUN...); default --models-dir, else "
+                             "models/ while it exists, else the store's current team; with a store team the replays "
+                             "are filed by the job")
     return parser
 
 
@@ -206,8 +211,12 @@ def play_golden(args, runner: Runner, folder: replay.ReplayDir) -> int:
 
 def main(argv=None) -> int:
     args = parse_args(argv)
+    registry.use_team(args.team, args.models_dir)
     if args.golden:             # a race: a job of the machine's queue (the dry call ends here)
         announce('golden')
+    team = registry.team_in_use(args.models_dir)
+    if team is not None:        # a race ends by its time limit (SIGTERM): its replays are filed all the same
+        signal.signal(signal.SIGTERM, _interrupt)
     try:
         runner = Runner(models_dir=args.models_dir, act=registry.act_override(args.act),
                         parallel=args.parallel, route=args.route)
@@ -219,6 +228,9 @@ def main(argv=None) -> int:
     except (RunnerError, registry.SchemaMismatchError) as error:
         print(f"zelda-headless.py: error: {error}", file=sys.stderr)
         return 2
+    finally:
+        if team is not None and os.path.isdir(args.out) and os.listdir(args.out):
+            store.file_output(args.out, 'golden' if args.golden else 'replays', team=team['name'])
     print(json.dumps({'saved': folder.saved, 'runs': runs, 'endings': dict(sorted(folder.endings.items())),
                       'out': str(folder.path)}))
     if folder.saved < args.count:
@@ -230,6 +242,10 @@ def main(argv=None) -> int:
         print(f"zelda-headless.py: {errors} of {runs} runs ended in an error", file=sys.stderr)
         return 1
     return 0
+
+
+def _interrupt(signum, frame):  # pylint: disable=unused-argument
+    raise KeyboardInterrupt
 
 
 if __name__ == '__main__':

@@ -48,7 +48,9 @@ runs-250 --label <reasons>``: never the repository's ``replays/``).  It writes t
 version, commit, team (each family's run and checkpoint SHA-1), seeds, wall time and decisions a second, the runs
 that took each triforce, the endings by kind, deaths and stucks per room (room, route step, family), every room
 visit's hits and hearts lost per room, the cheated items and ending of each run, the median frames to each triforce
-and the kept replays.  ``--team`` names a team other than main's (``2.0.0.11_one-d1w8.json``).  ``--from-replays``
+and the kept replays, and the owner's two bomb metrics (``bomb_metrics``: a calculation over each replay,
+``triforce/bomb_metrics.py``; every window in ``OUT_DIR/bomb_windows.jsonl``).  ``--team`` names a team other than
+main's (``2.0.0.11_one-d1w8.json``).  ``--from-replays``
 builds the record from ``OUT_DIR/replays/`` (``replay.chain_records``: the runs, the provenance and the route facts;
 the commit is the replays' own, META ``commit``) and writes it as ``OUT_DIR/runs250.replays.json``; what no replay
 knows, the wall times (``events.jsonl``, ``timing.json``) and the lane (``training.json``), still comes from the
@@ -257,16 +259,17 @@ def chain_options() -> frozenset:
     return frozenset(option for option in ('--clips', '--events') if option in text)
 
 
-def announce_chain(runs: int, name: str, route: str = ROUTE):
+def announce_chain(runs: int, parallel: int, power_on: bool, name: str, route: str = ROUTE):
     """The chain's work for the queue (``jobs.announce``: the wrapper's dry call ends here)."""
     sys.path.insert(0, str(ROOT))
     from triforce.jobs import announce, work  # pylint: disable=import-outside-toplevel
-    from triforce.runner import steps_played  # pylint: disable=import-outside-toplevel
-    announce('chain', work(chain_steps=runs * steps_played(route)), name)
+    from triforce.runner import chain_entry, steps_played  # pylint: disable=import-outside-toplevel
+    announce('chain', work(chain_steps=runs * steps_played(route),
+                           chains=[chain_entry(route, runs, parallel, power_on=power_on)]), name)
 
 
 def run(args) -> int:
-    announce_chain(args.runs, 'full-runs')
+    announce_chain(args.runs, args.parallel, bool(args.power_on), 'full-runs')
     out = Path(args.out)
     (out / 'replays').mkdir(parents=True, exist_ok=True)
     command = chain_command(out, args.runs, args.first_seed, args.parallel, args.models_dir)
@@ -300,15 +303,38 @@ def freeze_models(source: Path, target: Path) -> Path:
     return target
 
 
+def record_docs(args, out: Path) -> Path:
+    """Where ``runs250`` writes the version's record: ``--docs`` when given; else ``docs/runs250/`` only for the full
+    measure (``RUNS250`` runs from seed 0); a smoke (fewer runs, another first seed) writes it beside ``--out``, so it
+    never replaces the committed record."""
+    if args.docs is not None:
+        return Path(args.docs)
+    if args.runs == RUNS250 and args.first_seed == 0:
+        return DOCS
+    print(f"runs250: {args.runs} runs from seed {args.first_seed} is not the full measure ({RUNS250} from seed 0): "
+          f"its record goes beside --out ({out}), not to {DOCS} (pass --docs to choose)", file=sys.stderr)
+    return out
+
+
 def runs250(args) -> int:
     out = Path(args.out)
     if (out / 'runs.jsonl').exists():
         print(f"{out / 'runs.jsonl'} exists; `full_runs.py stats {out}` reports it, or choose a new --out",
               file=sys.stderr)
         return 2
-    announce_chain(args.runs, 'runs250', args.route)
+    announce_chain(args.runs, args.parallel, True, 'runs250', args.route)
     (out / 'replays').mkdir(parents=True, exist_ok=True)
-    models = freeze_models(Path(args.models_dir).resolve(), out / 'models')
+    team = store_team(args)
+    if team is not None:        # the store's team, as an old-style folder of links (left writable: it is scratch)
+        from triforce import store  # pylint: disable=import-outside-toplevel
+        models = store.write_view(team, out / 'models', readonly=False)
+        print(f"models: store team {team['name']} ({'--store-team' if args.store_team else 'current: this checkout '
+              'has no models folder'}; sha256 {team['sha256'][:12]})", file=sys.stderr, flush=True)
+    else:
+        source = Path(args.models_dir or ROOT / 'models').resolve()
+        models = freeze_models(source, out / 'models')
+        print(f"models: {'--models-dir' if args.models_dir else 'this checkout'} {source}'s pointers, frozen "
+              f"(the layout before the store)", file=sys.stderr, flush=True)
     from triforce import _native  # pylint: disable=import-outside-toplevel
     steps = _native.route_steps(args.route)
     (out / 'route.json').write_text(json.dumps({'route': args.route, 'steps': steps}) + '\n')
@@ -325,8 +351,36 @@ def runs250(args) -> int:
                                                  'commit': commit, 'chain_options': sorted(accepted)}) + '\n')
     if code not in (0, 1):
         return code
-    stats(out, args.team, Path(args.docs), archive=not args.no_archive)
+    stats(out, args.team, record_docs(args, out), archive=not args.no_archive)
+    if team is not None:
+        file_runs250(out, team)
     return 0
+
+
+def store_team(args):
+    """The store team a 250 test plays (``store.team_of``): ``--store-team``, else the current one when no models
+    folder is named and this checkout has none; None: a models folder (the layout before the store)."""
+    from triforce import paths, store  # pylint: disable=import-outside-toplevel
+    spec = args.store_team
+    if spec is not None and args.models_dir is not None:
+        raise SystemExit("--store-team and --models-dir name two teams: give one")
+    if spec is None and args.models_dir is None and not (ROOT / 'models').exists() and paths.store_exists() \
+            and paths.current_team():
+        spec = paths.CURRENT
+    return None if spec is None else store.team_of(spec)
+
+
+def file_runs250(out: Path, team: dict):
+    """Files a store team's 250 test by its job: the records, their meta, the timing and the replays kept."""
+    from triforce import store  # pylint: disable=import-outside-toplevel
+    records = read_runs(out)
+    store.file_output(out / 'runs.jsonl', 'chain', team=team['name'], name='runs250/runs.jsonl',
+                      result={'n': len(records), 'successes': sum(ending(r) == 'win' for r in records)})
+    for name in ('runs.jsonl.meta.json', 'timing.json', 'route.json'):
+        if (out / name).is_file():
+            store.file_output(out / name, 'runs250', team=team['name'], name=f'runs250/{name}')
+    if (out / 'replays').is_dir():
+        store.file_output(out / 'replays', 'replays', team=team['name'], name='runs250/replays')
 
 
 def ending(record: dict) -> str:
@@ -547,6 +601,7 @@ def stats(out: Path, team=None, docs: Path = DOCS, archive: bool = True, from_re
                                    '--label', label, str(copy)], check=False).returncode
             if done:
                 print(f"full_runs: archive_replays.py failed ({done}) for {copy}", file=sys.stderr)
+    record['bomb_metrics'] = bomb_windows(out)
     text = dump(record)
     (out / ('runs250.replays.json' if from_replays else 'runs250.json')).write_text(text)
     docs.mkdir(parents=True, exist_ok=True)
@@ -554,6 +609,9 @@ def stats(out: Path, team=None, docs: Path = DOCS, archive: bool = True, from_re
     path.write_text(text)
     print(markdown([record], [path.name]))
     print(f"record: {path}; kept replays: {kept_dir}")
+    for where in record['bomb_metrics']['unattributed']:
+        print(f"full_runs: FAILED: bomb metrics: a Metric B {where['outcome']} window with no killed monster: "
+              f"{where['replay']} frame {where['close_frame']}", file=sys.stderr)
     return record
 
 
@@ -649,7 +707,32 @@ def markdown(records: list, names: list, top_rooms: int = 12) -> str:
                          f"frames, {k['cheated_bombs_keys']} bombs/keys and {k['cheated_rupees']} rupees cheated: "
                          f"{k['ending']})" for k in r['kept'])
         lines.append(f'- {label} kept: {kept}.')
+    for label, r in zip(labels, records):
+        if r.get('bomb_metrics'):
+            from triforce import bomb_metrics  # pylint: disable=import-outside-toplevel
+            lines += ['', f'#### {label}', '', bomb_metrics.markdown(r['bomb_metrics'], top_rooms)]
     return '\n'.join(lines) + '\n'
+
+
+def bomb_windows(out: Path, parallel: int = 4) -> dict:
+    """The owner's two bomb metrics over the folder's replays (``triforce/bomb_metrics.py``, a calculation over each
+    replay): every window to ``OUT_DIR/bomb_windows.jsonl``, the batch's summary (counts and rooms, not per run) for
+    the record, with ``unattributed``: the Metric B hit/miss windows no death accounted for (must be none; ``stats``
+    prints each as a failure)."""
+    from concurrent.futures import ProcessPoolExecutor  # pylint: disable=import-outside-toplevel
+    from triforce import bomb_metrics, jobs  # pylint: disable=import-outside-toplevel
+    replays = sorted((out / 'replays').glob('*.tfreplay'))
+    windows = []
+    with ProcessPoolExecutor(parallel) as pool:
+        for done, ws in enumerate(pool.map(bomb_metrics.score_replay, replays), 1):
+            windows += ws
+            jobs.progress(done, len(replays), 'replays', label='bomb metrics')
+    bomb_metrics.write_windows(out / 'bomb_windows.jsonl', windows)
+    summary = bomb_metrics.summarize(windows)
+    summary.pop('per_run')
+    summary['unattributed'] = [{k: w[k] for k in ('replay', 'close_frame', 'close_room', 'outcome')}
+                               for w in bomb_metrics.unattributed(windows)]
+    return summary
 
 
 def analyze(paths: list, out=None, top_rooms: int = 12) -> str:
@@ -683,11 +766,17 @@ def main(argv=None) -> int:
     p_250.add_argument('--route', default=ROUTE, help=f"the route played (default {ROUTE}; d2first before 2.0.0.0)")
     p_250.add_argument('--allow-incompatible-models', action='store_true',
                        help="play a team stamped by a later version (the version's own override)")
-    p_250.add_argument('--models-dir', default=str(ROOT / 'models'),
-                       help="the models root whose pointers are frozen and played (default <repo>/models)")
+    p_250.add_argument('--models-dir', default=None,
+                       help="the models root whose pointers are frozen and played (default <repo>/models, while this "
+                            "checkout has one)")
+    p_250.add_argument('--store-team', default=None, metavar='TEAM',
+                       help="the store's team to play (NAME, current, NAME+SLOT=RUN...; default the current one "
+                            "when this checkout has no models folder); its records are filed by the job")
     p_250.add_argument('--team', default=None, help="a name for a team other than main's (the record's file name)")
     p_250.add_argument('--out', default=str(ROOT / 'target' / 'runs250' / time.strftime('%y%m%d-%H%M%S')))
-    p_250.add_argument('--docs', default=str(DOCS), help="where the long-term record goes (default docs/runs250)")
+    p_250.add_argument('--docs', default=None,
+                       help="where the long-term record goes (default docs/runs250 for the full measure: 250 runs "
+                            "from seed 0; a smoke's goes beside --out)")
     p_250.add_argument('--no-archive', action='store_true', help="don't archive the kept replays to the backup")
     p_stats = sub.add_parser('stats', help="the runs-250 record and kept replays of a runs250 folder")
     p_stats.add_argument('out')

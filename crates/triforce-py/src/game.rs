@@ -752,6 +752,94 @@ pub fn danger_blocks<'py>(
     ))
 }
 
+/// Schema 8's `entity_threat` `[N, 12, 15]` (`env::observation::threat_block`) of `N` rows given as `danger_blocks`
+/// takes them, with the block's choices: `horizon` frames, `lane_slack` frames, `invincibility` (no touch counts
+/// before Link's invincibility timer ends). The `bomb_carrier` column reads 0 (it needs the room's monsters and the
+/// route's rules, not the RAM alone). For the hit bench (`scripts/experiments/r40_obs_bench.py`) and parity tests.
+#[pyfunction]
+#[pyo3(signature = (ram, grid, entity_features, horizon=zelda::threat::HORIZON, lane_slack=zelda::threat::LANE_SLACK,
+                    invincibility=true))]
+pub fn threat_blocks<'py>(
+    py: Python<'py>,
+    ram: &Bound<'py, PyAny>,
+    grid: &Bound<'py, PyAny>,
+    entity_features: &Bound<'py, PyAny>,
+    horizon: usize,
+    lane_slack: f32,
+    invincibility: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    use env::observation::{
+        ENTITY_FEATURE_SIZE, ENTITY_THREAT_SIZE, GRID_COLS, GRID_ROWS, NUM_ENTITY_SLOTS, ThreatParams,
+    };
+    use numpy::PyUntypedArrayMethods;
+    const RAM: usize = 0x800;
+    let ram = crate::policy::contiguous::<u8>(py, ram, "uint8", "ram")?;
+    let grid = crate::policy::contiguous::<u8>(py, grid, "uint8", "grid")?;
+    let feats = crate::policy::contiguous::<f32>(py, entity_features, "float32", "entity_features")?;
+    let n = ram.shape().first().copied().unwrap_or(0);
+    if ram.shape() != [n, RAM]
+        || grid.shape() != [n, GRID_ROWS, GRID_COLS]
+        || feats.shape() != [n, NUM_ENTITY_SLOTS, ENTITY_FEATURE_SIZE]
+    {
+        return Err(PyValueError::new_err(format!(
+            "want ram [N, 2048], grid [N, 22, 32], entity_features [N, 12, 41]; got {:?}, {:?}, {:?}",
+            ram.shape(),
+            grid.shape(),
+            feats.shape()
+        )));
+    }
+    let params = ThreatParams { horizon, lane_slack, invincibility };
+    let (ram, grid, feats) = (ram.as_slice()?, grid.as_slice()?, feats.as_slice()?);
+    let mut out = Vec::with_capacity(n * NUM_ENTITY_SLOTS * ENTITY_THREAT_SIZE);
+    let (grid_n, feat_n) = (GRID_ROWS * GRID_COLS, NUM_ENTITY_SLOTS * ENTITY_FEATURE_SIZE);
+    let none = [false; NUM_ENTITY_SLOTS];
+    for i in 0..n {
+        let mut g = [[0u8; GRID_COLS]; GRID_ROWS];
+        g.as_flattened_mut().copy_from_slice(&grid[i * grid_n..(i + 1) * grid_n]);
+        let mut f = [[0f32; ENTITY_FEATURE_SIZE]; NUM_ENTITY_SLOTS];
+        f.as_flattened_mut().copy_from_slice(&feats[i * feat_n..(i + 1) * feat_n]);
+        let t = env::observation::threat_block(&ram[i * RAM..(i + 1) * RAM], &g, &f, &none, params);
+        out.extend_from_slice(t.as_flattened());
+    }
+    Ok(PyArray::from_vec(py, out).reshape([n, NUM_ENTITY_SLOTS, ENTITY_THREAT_SIZE])?.into_any())
+}
+
+/// `zelda::threat::lane` of every object slot 1-12 of `N` RAM images `[N, 10240]` (CPU RAM and PRG-RAM, as
+/// `ReplayPlayer.ram` gives them), the tile grid decoded from the same image: `[N, 12, 5]` float32 per slot `ready`,
+/// `wait` (frames), `inside`, `arrival` (frames, -1 outside the lane), `leave` (frames, inf where walls keep Link in
+/// the lane); all 0 (arrival -1) for a slot that is not a shooter. For `scripts/experiments/r40_lane_check.py`.
+#[pyfunction]
+pub fn lane_probe<'py>(py: Python<'py>, ram: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    use numpy::PyUntypedArrayMethods;
+    use std::sync::{Arc, LazyLock};
+    use zelda::tables::RAM_SIZE;
+    static MAP: LazyLock<Arc<zelda::GameMap>> = LazyLock::new(|| Arc::new(zelda::GameMap::builtin()));
+    let ram = crate::policy::contiguous::<u8>(py, ram, "uint8", "ram")?;
+    let n = ram.shape().first().copied().unwrap_or(0);
+    if ram.shape() != [n, RAM_SIZE] {
+        return Err(PyValueError::new_err(format!("want ram [N, {RAM_SIZE}]; got {:?}", ram.shape())));
+    }
+    let ram = ram.as_slice()?;
+    let mut out = vec![0f32; n * 12 * 5];
+    for i in 0..n {
+        let image: &[u8; RAM_SIZE] = ram[i * RAM_SIZE..(i + 1) * RAM_SIZE].try_into().unwrap();
+        let view = zelda::game::GameView::new(image, 0, false, MAP.clone());
+        let grid = zelda::tiles::build_grid(&view, &zelda::room_state::decode_room_state(view.ram()));
+        for slot in 1..=12usize {
+            let o = &mut out[(i * 12 + slot - 1) * 5..(i * 12 + slot) * 5];
+            o[3] = -1.0;
+            if let Some(lane) = zelda::threat::lane(view.ram(), slot, &grid) {
+                o[0] = lane.ready as u8 as f32;
+                o[1] = lane.wait;
+                o[2] = lane.inside as u8 as f32;
+                o[3] = lane.arrival.unwrap_or(-1.0);
+                o[4] = lane.leave;
+            }
+        }
+    }
+    Ok(PyArray::from_vec(py, out).reshape([n, 12, 5])?.into_any())
+}
+
 /// The name a power-on start registers for `name`: upper-cased.  ValueError if it can't be registered (1 to 8
 /// of A-Z, 0-9 and space, not all spaces) or starts the second quest (ZELDA).
 #[pyfunction]

@@ -123,12 +123,9 @@ PROGRESS_METRICS += ('clips/enabled_share', 'clips_balanced/on', 'clips_balanced
 
 
 def logs_root(root: Optional[str | os.PathLike] = None) -> Path:
-    """``root``, else ``$TRIFORCE_LOGS_DIR``, else ``<repo>/logs``."""
-    if root is not None:
-        return Path(root)
-    if os.environ.get(LOGS_DIR_ENV):
-        return Path(os.environ[LOGS_DIR_ENV])
-    return Path(__file__).resolve().parents[1] / 'logs'
+    """``root``, else ``$TRIFORCE_LOGS_DIR``, else ``<repo>/logs`` (``paths.logs_dir``)."""
+    from .paths import logs_dir  # pylint: disable=import-outside-toplevel
+    return Path(root) if root is not None else logs_dir()
 
 
 def new_log_dir(what: str, root=None, now: Optional[datetime] = None, job_label: bool = True) -> Path:

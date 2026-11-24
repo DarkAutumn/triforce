@@ -666,6 +666,7 @@ oldest schema whose checkpoints still load, "Checkpoint" below), `ROOM_VOCAB`,
 | `action_mask` | bool [143] | flat `ActionMask` |
 | `entity_rel` | float32 [12, 10] | schema 7: Link-relative geometry per entity slot (below) |
 | `entity_contact` | float32 [12, 23] | schema 7: velocity, the touch rule and its extrapolation per entity slot (below) |
+| `entity_threat` | float32 [12, 15] | schema 8: range-aware contact, the shooter's threat lane, the bomb carrier per entity slot; all zero unless `obs.threat` (below) |
 
 When the objective block is on, the env attaches the objective (`crates/env/src/objective.rs`) before calling
 the builder.
@@ -777,6 +778,36 @@ of goriya, Gleeok and darknut, bit for bit.
 | `entity_contact` 3-7 | `contact_{stand,N,S,W,E}` | Link standing or walking that way at 1.5 px a frame, the object moving straight on at its velocity: how soon both middles come within 9 px on both axes in frames 0-32, (33 − t) / 33, 0 never; 0 when it does not harm |
 | `entity_contact` 8-12 | `closest_{stand,N,S,W,E}` | the smallest gap (max(\|dx\|, \|dy\|) − 9) over those frames, clipped to 0-64, / 32; 2 when it does not harm |
 | `entity_contact` 13-22 | `wall_contact_*`, `wall_closest_*` | the same with both stopped at walls: Link where his lower half (rows 8-15 of his 16 × 16 box) meets a tile class he cannot cross (all but walkable, the door corridors, stairs) or the play area's edge, searched up to 48 px; a walking monster likewise along its velocity; shots and fliers (Keese, Gleeok, Peahat) never |
+
+**Schema 8 (round 40, `docs/experiments/round40.md` "Observation v7's danger block"; the fresh generation's).** One NEW
+key, `entity_threat`, after `entity_contact`; no schema 7 key or column changes, so `OLDEST_OBS_SCHEMA` stays 6 and
+every schema 6 and 7 checkpoint loads and plays as before (a `ZeldaPolicy` and the Rust actor never read it:
+`model.TOKEN_KEYS`; `hitnet` reads it with the token group `threat`). It is filled only with **`obs.threat: true`** in
+the task's yaml (`env::config::ObsConfig::threat`, default false: zeros, as `target`), so today's teams compute
+nothing new. `env::observation::threat_block` computes it from the RAM, the tile grid and the entity block (the same
+positions, RAM velocities, touch rule and wall stops as `danger_blocks`, shared through `EntityMotion`) and
+`zelda::threat` (the horizon, the shooters, the lane): **arithmetic on the current state only**, no emulator step.
+`_native.threat_blocks(ram, grid, entity_features, horizon=, lane_slack=, invincibility=)` computes it for recorded
+RAM (the hit bench screens those choices; `bomb_carrier` reads 0 there). **Range-aware** (the owner, Nov 23): a touch
+later than the horizon `H` (`zelda::threat::HORIZON`, 16 frames) reads "not soon" (0), never a far-away hit; `H` was
+chosen on the hit bench (round40.md). `crates/env/tests/threat.rs` checks the columns on hand-built states (a monster
+walking at Link, one across the room, a shot in flight and a bouncing one, a wall between, a shooter facing Link with
+and without its shot out, in a corridor, behind a wall, walking, a Goriya waiting for its boomerang, Link's
+invincibility); `tests/test_obs_threat.py` that the env's block is `threat_blocks` and that the switch changes nothing
+else.
+
+| Key, columns | Names | Value |
+|---|---|---|
+| `entity_threat` 0-4 | `soon_{stand,N,S,W,E}` | Link standing or walking that way at 1.5 px a frame, the object moving on at its RAM velocity, both stopped at walls (`danger_blocks`' wall rule): the first frame `t` at which both middles are within 9 px on both axes, searched from Link's invincibility timer `$4F0` on (no touch harms him before it runs out) to `H`; `(H + 1 − t) / (H + 1)`, 0 when none or when the object does not harm |
+| `entity_threat` 5-9 | `near_{stand,N,S,W,E}` | the smallest gap before the test passes (max(\|dx\|, \|dy\|) − 9, at least 0) over frames 0-`H`, / 16, at most 1; 1 when it does not harm |
+| `entity_threat` 10 | `lane_ready` | a shooter whose shot flies straight along its facing (`zelda::threat::shooter`: Lynels `$01/$02` sword shot 3 px a frame, Moblins `$03/$04` arrow 2, Goriyas `$05/$06` boomerang 2.5 for `$51` px, Octoroks `$07-$0A` rock 3, stopped by walls) can fire: live, not stunned, its shot not flying (a Goriya: ObjState bit 7 clear; the others: ObjShootTimer `$451` 0 or above `$10`) |
+| `entity_threat` 11 | `lane_wait` | frames until its next shot can leave, / 32, at most 1: a Goriya's ObjTimer `$28`; a standing shooter's `$451` − `$10`; a walking one 33 (it must stand 32 frames first, asm:Shooter_RunShootTimer); 0 when not ready |
+| `entity_threat` 12 | `lane_in` | ready, and Link's middle is ahead along its facing (ObjDir `$98`), within 9 px across, within the shot's reach (the rock's to the first tile it cannot cross) |
+| `entity_threat` 13 | `lane_soon` | the owner's threat lane: in the lane, the shot's arrival `t` = wait + 1 + (distance − 8) / speed as `(H + 1 − ⌈t⌉) / (H + 1)`, kept only while `t` ≤ `H` and `t` ≤ the frames Link needs to step 9 px out of the lane sideways (the nearer side a wall leaves open; never where both are walled) + `zelda::threat::LANE_SLACK`; 0 otherwise: where he can still leave, a shot is no threat this decision |
+| `entity_threat` 14 | `bomb_carrier` | this monster's death may drop bombs now: while `zelda::bomb_windows::bomb_carrier_window` (the owner's Metric B) is open, each monster `is_bomb_carrier` names; Link's own bombs the bag, the bomb rule the mask's BOMB, kill-all a FIGHT objective (`observation::bomb_carriers`) |
+
+Aimed shots (Zora, Aquamentus, Gleeok, Gohma fireballs) and the Wizzrobes' magic have no lane: their shots are seen
+by `soon_*` once they exist. The treasure slot and Gleeok's heads have no RAM slot and so no lane.
 
 Checkpoints saved before r56 carry `model_config.grid_encoder: 'conv'`; the conv encoder is the only one left, so
 `ModelConfig.from_dict` drops that key and refuses any other encoder.
@@ -1013,6 +1044,68 @@ family's shaping decides `pulled`); `triforce room-stats` adds them per visit, `
 the frames of progress toward the goal (tiles gained × 6, negative when ground is lost) and the frames the decision
 added to its stretch's waste (the rise of lasted − needed so far). The bench reports `aimless_frames_per_visit`.
 Simulated env steps (`step_sim`) leave the tracker alone; `_native.Env.aimless` reads the visit so far.
+
+### Bomb windows (`crates/zelda/src/bomb_windows.rs`, `crates/env/src/bomb_windows.rs`; the owner, Nov 23)
+
+The owner's two bomb metrics, for every 250 test, measured before the observation learns "next kill may drop bombs"
+and after. His principle: "We are testing behavior based on the obs flags we tell the agent, not on magic unknown
+knowledge to it." **A calculation over a replay, nothing more** (the owner, Nov 23): no live counting, nothing
+written into the replay; the same rules score every version's replays. The game's rules are in zelda-asm
+(asm:Drop_SetUpItem, asm:Obj_EndMetastate, asm:Damage_KillMonster): `$50` HelpDropCount counts damage-free kills
+when the hit lands (to 10; harm zeroes it, `$51` and `$627`); `$51` is set by the bomb kill that takes `$50` to 10;
+`$52A` WorldKillCycle moves on (0-9) when a death sparkle ends, for every type but a child Gel, a Red Keese and the
+dead dummy, and that death's drop is then a fairy (`$627` = 16), else the forced drop (`$50` ≥ 10: bombs if `$51`,
+else 5 rupees), else `Drop_ItemTable[group × 10 + cycle]` if the slot's random byte is below the group's rate. Drop
+group 2 (blue Octoroks, Moblin `$03`, Lynel `$01`, Vire, Goriya `$06`, Darknut `$0B`, Red Wizzrobe, Gibdo) has bombs
+in columns 1, 6 and 8 at 41%; a Stalfos or Gibdo in slot 1 (the room item's carrier) drops nothing.
+
+- **Metric A, the 10th-kill bomb** (`tenth_bomb_window`): `$50` = 9, a bomb of Link's own in the bag (the bag less
+  the cheated wall bombs not yet spent: a replay's EDITS raising `$658`), and the bomb mode is not `never` (every
+  other mode allows the 10th kill's bomb). Today's observation shows it (`next_kill_arms`, `help_count`).
+  Resolution, the first event wins: the 10th kill by a bomb (`$51` set) → **armed**; a bomb placed in the window
+  that ends (explodes, or is in the air when Link leaves the room) with no 10th kill and no wall opened (a dungeon
+  bomb door turned open, an overworld secret flag `$80`) → **missed**, and a new window opens if Link is still on 9
+  with bombs ("each new chance counts"); a bomb that opened a wall → ignored, the window stays; the 10th kill by any
+  other weapon → **other**, whatever it killed (a Keese, a Gel: the record names it). Leaving a room is nothing (the
+  streak carries on). No bomb of his own left (the last one spent on a wall) or the mode `never` while still on 9:
+  the window **pauses** and resumes as the same window (a 10th kill or harm while paused: `paused-out`). Harm first:
+  `lost`. **Full bag** (Metric A): the bag on the frame before the resolving action (before the bomb was placed,
+  before the other weapon's 10th kill landed), the bag Link chose with: it answers "was spending a bomb worth
+  anything" (the owner, Nov 23): with a full bag a bomb 10th kill goes 8 → 7 → 8 (the forced four capped at the
+  bag), nothing gained and the 5 rupees lost. Judged at the close it would never read full after a bomb (8 → 7). The
+  forced drop is followed (`drop`: `pending`, `fell`, `taken`, `wasted` (expired or left), `lost` (harm or the
+  fairy before it fell)).
+- **Metric B, the bomb carrier** (`bomb_carrier_window`: the future observation flag, written for it to call; the
+  observation does not use it yet): the cycle reads 0, 5 or 7 and no death sparkle that will move it is under way
+  (else the cycle speaks for a kill already made; with it a kill streak of 16 and a death pending, a forced fairy,
+  is out like 15); no forced drop overrides the table (`$50` < 9 and `$627` ≠ 15); the bag is not full; an
+  **eligible carrier** lives (a group-2 type, not slot 1's Gibdo, a Vire only with the magic sword or with BOMB
+  allowed by the rule and a bomb of his own: else it splits into Keese); and a **choice** exists: the objective Link
+  was given at that moment is not FIGHT (MOVE through 3:0x5b or 0x69 on a crossing counts like 6:0x78), or a monster
+  whose death moves the cycle and is no carrier lives too. Bubbles, traps, fires and Gleeok's flying heads are no
+  monsters on either side. An open window stays open through a pending death. Resolution: the next death that moves
+  the cycle (attributed by slot: the slot turned into a dropped item, whose Item_ObjMonsterType `$412` names the
+  type, or its sparkle ended) is a carrier's → **hit** (one step killing a carrier and another: hit), anyone else's
+  → **miss**; Link leaves the room first (another room, or any transition frame: a maze loop) → **left**, credited
+  to the room left; harm changes nothing. A window whose conditions end with no death pending: `closed`. Full bag:
+  at the close (the kill does not change the bag; the carrier's drop comes after). `drop` follows a hit's bombs.
+- **Dodongo's rooms** are outside both metrics (his own bomb rules): nothing opens or closes there; a window open
+  on entering (or when he appears) is `suspended`, and after Link leaves a new one may open.
+- **Frames, not steps.** `zelda::bomb_windows::BombWindows` takes every frame of a replay: play frames (modes 5, 9,
+  11, dying, game over) are counted, each pair of consecutive ones a `Step`; transition frames (a dungeon's entry, a
+  scroll, stairs, a cave door) end Link's stay in the room; the rest are skipped. Link's death ends the counting; a
+  window open at the replay's end is `open-at-end`. What RAM does not hold is what the env told the agent at each
+  decision, from the replay's targets stream (`env::bomb_windows::StepFacts`: the objective is FIGHT; BOMB not
+  blocked by a bomb-rule reason, `never`, `tenth`, `required` or `reserve`, for a Vire; the mode is `never`, for
+  Metric A, since a decision taken on 8 kills holds for the frames on 9 within its action), in force from the
+  decision's frame to the next.
+- **The output is a list of windows**, one record each (`_native.replay_bomb_windows(data, facts)`,
+  `triforce.bomb_metrics.score_replay`): `metric` (`tenth` | `carrier`), `open_frame`, `open_room`, `close_frame`,
+  `close_room` (the credit: the room where it closed), `outcome` (`armed`, `missed`, `other`; `hit`, `miss`,
+  `left`; not opportunities: `lost`, `paused-out`, `closed`, `suspended`, `open-at-end`), `killed_type` and
+  `killed_slot`, `full_bag`, `drop`, and the run's `seed` and `replay`. Counts are sums over the list, per run, per
+  room and per batch, always with and without the full-bag windows (`python -m triforce.bomb_metrics REPLAY...
+  --out bomb_windows.jsonl`, beside the 250 test's JSON).
 
 ### Experimental reward and cutoff controls
 
@@ -1488,8 +1581,23 @@ every step, so following an enemy that moves away pays again, and knockback rese
   estimate is work x rates, each rate (seconds per unit, `jobqueue.rates`) refitted from the `history` table over
   the 20 latest completed jobs that did some of that unit (`RATE_WINDOW`; their seconds less their other work at the
   other units' rates, a total over the amounts, so a big job weighs as its size), else `DEFAULT_RATES` (Nov 15:
-  0.00044 s per training step, 0.046 s per evaluation episode, 0.0026 s per chain run-step). A command the queue
-  can't measure (a script, an old version's tool) needs `--timeout`, which is its estimate; a golden race's
+  0.00044 s per training step, 0.046 s per evaluation episode, 0.0026 s per chain run-step). **A chain is
+  estimated by its segment** (the owner, Nov 23: "Fix the estimate [...] It would have been fine if not for
+  estimating 37 hours": a batch of the full route and 17 segments at 1000 runs was estimated at 37 hours; one rate
+  per asked step can't fit a Dungeon 3 segment's 18 steps of long fights and the full route's 290, most never
+  played): a chain tool announces `chains` in its work (`runner.chain_entry`: `shape` = `<route>:<start>-<end
+  step>[:power-on]`, runs, parallel, asked steps; a batch one per chain entry, named for it), the wrapper records
+  the seconds each took when the job ends (`jobqueue.chain_seconds`: a lone chain's run time, a batch entry's
+  `wall_seconds` from its plan, an interrupted batch's finished entries too), and `jobqueue.chain_model` turns
+  them into run-seconds per shape, `(seconds - CHAIN_START_SECONDS) x parallel / runs`, the median of the last
+  `SHAPE_WINDOW` = 3 (a short window: the machine's load moves a segment's time 2-3x within a day). A chain of a
+  known shape takes `CHAIN_START_SECONDS` (10) + runs x run-seconds / parallel; an unseen one its asked steps at
+  the `chain_steps` rate. When a job with chains ends, every live job whose work names its chains is estimated
+  again (`refresh_estimates`); a job an older tool announced keeps its estimate. Measured on the 64 chains and
+  batches of the history before this (each estimated from the chains that ended before it): within 2x 39 against
+  33, median actual / estimate 1.13 against 1.46, the jobs over 15 minutes 0.19-2.4x against 0.23-9.9x; a segment
+  run twice under different loads or teams takes 2-6x apart, which no estimate from the shape can follow. A command
+  the queue can't measure (a script, an old version's tool) needs `--timeout`, which is its estimate; a golden race's
   `--timeout` is too. `triforce job list --calibration`: per kind, over its 20 latest completed jobs, the median and
   the worst actual / estimate, and the rates; a running job past twice its estimate is `OVERRUN` (`OVERRUN`,
   `jobqueue.overrun`).
@@ -1503,6 +1611,19 @@ every step, so following an enemy that moves away pays again, and knockback rese
   its two places and never waits behind a training or a chain. A waiting wrapper prints `triforce job: #12 A-T-S
   waits for a place: estimated 40 minutes; 2 jobs are running (...)` at first and every 5 minutes
   (`UPDATE_SECONDS`), then `... starts (regular-1, nice 15, ...)`.
+- Moving a job up (the owner, Nov 23: "a right click in the gui that goosed something to the top of the fast or slow
+  queue"; `jobqueue.move_to_top`, `triforce job top ID [--undo]`, the training GUI's right click on a waiting job's
+  box, "Move to the top of its line" / "Back to its own place"): a waiting job goes to the top of its own line (the
+  jobs line or the tools line), ahead of every job not moved; several moved: the one moved last first; the rest in
+  their usual order. Only the order changes: nothing running stops, the lane, the estimate and whether the job may
+  take the express place stay (a long job moved up still waits for a regular place, and an express-sized job behind
+  it still takes a free express place). The row's `top_ts` is the mark (cleared by `--undo`), `moved_ts` and
+  `history.moved` keep that it was moved; `job list`, `job history` and the GUI say "moved to the top by the
+  owner"; the web view shows the mark and offers no control. Mixed code: the columns are added in place by the
+  first connection of this code (an older wrapper never reads them and runs on); each waiting wrapper orders the
+  line itself, so only wrappers of this code honour a move: a job queued by older code can't be moved (its row has
+  no `top_aware`; the command and the menu say so) and doesn't see a moved job, so it may start ahead of one. Places
+  are still one holder each (their file locks). Agents don't move their own jobs.
 - Progress: a tool's log folder is named for the job, `<yymmdd>_<NNN>_<agent>-<task>-<subtask>` (`jobs.label`, from
   `$TRIFORCE_JOB_LABEL`), and its first plan is recorded in the job's row (`jobs.record_plan`), where `triforce job
   list` and the training GUI draw its runs. A command reports its movement into the row's `progress` JSON (one
@@ -2285,7 +2406,11 @@ A power-on run is shown from the frame the models took over. When a replay ends 
   thread pushes each frame's samples into its `Ring`; the ring tells the cell what rate to make samples at
   (the device's ± 0.5%) to stay about 60 ms ahead, since the frame clock and the device's drift apart. Sound is
   made as frames are played, so it is on only at the console's frame rate: at any other cap, or uncapped, no
-  cell is heard and the frame is hidden. No sound device: the title says why, the picture plays on.
+  cell is heard and the frame is hidden. No sound device: the title says why, the picture plays on. Keys `m`,
+  `e` and `h` (and `--no-music`, `--no-sound-effects`, `--no-heart-beep`; View menu) switch the music, the
+  sound effects and the low-hearts beep ("Sound" below; `play_grid.Mix`, `Window.toggle_part`,
+  `ReplayScreen.set_mix`): at once, without a break in what stays on (the heard cell keeps both tracks running,
+  `Player::set_split(_, warm=true)`); the title says what is off ("sound on (no music, no beep)").
 - **The controller** (`--controller`, off by default): `theater::overlay::draw_controller` draws the pad into
   each frame at the console's resolution, top right over the HUD's `-LIFE-` (x 182–243, y 14–37; the hearts
   start at y 40): a translucent grey plate, idle buttons dark, the buttons held on that frame opaque white.
@@ -2298,7 +2423,7 @@ A power-on run is shown from the frame the models took over. When a replay ends 
   (`boss-gleeok: SWORD N 62% hit 3% (temperature) | MOVE S 16 21%`). All of it comes from the replay alone
   (version 2); an older replay shows none.
 
-## Sound (`crates/zcore/src/sound.rs`)
+## Sound (`crates/zcore/src/sound.rs`, `crates/zcore/src/tracks.rs`)
 
 The emulated APU keeps only what the CPU can observe and `MachineState` holds no sound state, so states, replays
 and training are untouched by sound. It is computed beside the machine: the bus notes every write to
@@ -2316,12 +2441,95 @@ device. The machine is bit-identical with sound on or off (`crates/zcore/tests/s
 - **After a restore** (`ZCore::restore`, so every replay that starts from a savestate) the registers are
   unknown: each channel is silent until the game writes it again, which its music driver does with the next
   note. A power-on replay has everything from the first frame.
-- `replay::Player::set_sound(Some(rate))` / `audio()` / `buttons()` and `_native.ReplayPlayer.set_sound(rate)` /
-  `audio()` / `buttons` / `screen(controller=True)` expose it per replay.
+- `replay::Player::set_sound(Some(rate))` / `set_mix(Mix)` / `set_split(split, warm)` / `audio()` /
+  `buttons()` and `_native.ReplayPlayer.set_sound(rate, split=False)` / `set_mix(music, effects, heart_beep)` /
+  `audio()` (mono, or `(samples, 2)` music and effects with `split`) / `buttons` / `screen(controller=True)`
+  expose it per replay.
+
+### Music and sound effects (`zcore::tracks`, the owner's division, Nov 23)
+
+The owner wants the sound in two parts that switch off apart: **the music** (the songs: overworld `$01`, Ganon
+`$02`, Zelda's song `$06`, the ending `$10`, level 9 `$20`, dungeon `$40`, the title `$80`) and **the sound
+effects** (everything else: the square-0 tunes, the square-1 tunes, the noise effects, the DMC samples, looping
+ones too, and two pieces the game plays through its song driver, the end-of-level tune `$04` and the item fanfare
+`$08`), with **the low-hearts beep** (`Tune0Request` `$40`) on its own switch. With the effects off the music keeps
+every voice, also the ones an effect would have taken over in the game (the owner's choice over holes).
+
+The game's driver (`asm:Audio_Drive`, bank 0, run from `asm:Nmi_Isr` once a frame) takes the five request bytes
+(`asm:SongRequest` .. `asm:Tune0Request`), runs tune 1, the noise effect, the sample, the song and tune 0, and
+zeroes the requests; while a square tune plays the song keeps time but writes nothing to that square. So the
+tracks are not made by sorting the machine's writes: `Tracks` runs the driver's own code again beside the
+machine. A `Driver` is a private copy of the driver's RAM (zero page `$66-$6F`, `$5F0-$61F`, and
+`asm:PauseState`, the one other byte it reads) run on a small 6502 of its own (zcore's CPU clocks the PPU and APU
+on every access and cannot run over another bus) over the ROM's bank 0 and fixed bank:
+
+- **the mirror** gets every request; it is the machine's driver again. Before each frame (`Tracks::prepare`,
+  called by `Player` after the frame's edits) whatever byte of the driver's state the machine holds and the mirror
+  does not was written by the game itself: the requests, `asm:Audio_SilenceAll` clearing `CurTune0` and
+  `CurTune1`, the menu clearing `CurTune1`, `SongEnvelopeSelector`, a reset. Those writes go to every driver. The
+  NMI, and with it the driver, runs at the start of a frame (zcore's frames end at vblank, `ppu.rs`
+  `start_vblank`), before the game's code that writes requests, so the RAM before the frame is what the driver
+  is given.
+- **the music driver** gets the songs' requests; `Tune0Request` `$80` (silence) as the game does; a jingle's
+  request or `Tune1Request` bit 7 runs `asm:Song_Silence` before its driver (the game replaces the song, or
+  silences it before Link's death tune), so the music is silent during the fanfare as in the game and the game
+  starts its song again itself. Tunes, effects and samples never reach it, so no voice is ever taken from it. It
+  does get `EffectRequest` `$80` (`asm:Sample_Silence`, which stops only samples and tune 1, both always idle in
+  it): skipping it put the music's writes of the frame where the game silences everything (`asm:Audio_SilenceAll`
+  on a room or mode change) about 50 cycles off the game's, enough to differ from the full mix by up to 0.14 there.
+- **the effects driver** gets both tunes, the effects, the samples and the two jingles; a song's request over a
+  playing jingle only ends it (its squares go to volume 0 as a tune's end writes them, the triangle as a rest).
+  A jingle starting takes from the game the song bytes `asm:Song_PrepPhrase` does not set (the triangle's note
+  period, which the vibrato writes until the jingle's first triangle note, the repeated passage, the phrase index).
+  With the beep off its requests lose bit `$40`; a beep playing when it is switched off ends at once (the writes
+  of a tune 0 script's end).
+- **the quiet driver** (beep off, music and effects on) gets everything but the beep: the game's sound without
+  it, mixed as the console mixes (a clone of the mirror and of the game's synth when the beep goes off).
+
+Each driver runs when the machine's did: the frame's first sound write is the driver's (`$4017 = $FF`, or
+`$4015 = 0` while paused), and each copy's writes are placed as many cycles after it as its own first write. A
+copy starts with the registers `asm:Nmi_Isr` leaves: X = $25 (its random-number loop), A = Y = 0. The driver reads
+X once: restarting a looping background sample, `asm:Sample_Drive` jumps from `@CheckBgSample` to the
+`STX DmcCounter` of a new sample, so the game sets the DMC's level to $25 there (with X = 0 the mirror differed
+from the machine on 7-9 frames per 80,000 and the effects track's DMC level was wrong).
+The writes after the machine driver's (the game's own: `$4015 = $0F` on unpausing, a reset's) go to every synth;
+the DMC's fetched sample bytes to the effects and quiet synths (the effects driver starts the same samples at the
+same frames). The music synth's DMC rests at the game synth's resting level between samples, since the console
+mixes triangle and noise against it. **With everything on the sound is the machine's writes through one synth,
+as before** (the console mixes its voices non-linearly, so the two tracks added up are not the mix); `Tracks`
+then runs no driver unless it is `warm` (play-zelda's heard cell, so a switch is heard at once).
+`Tracks::resume` (a seek, a cell that starts being heard) seeds every driver from the machine's RAM and each synth
+with the voices it plays at that moment (`Synth::resume_only`); after a restore that is silence, as before.
+`tf replay sound FILE [--out DIR] [--from F] [--frames N] [--check]` writes `full.wav`, `music.wav`,
+`effects.wav`, `effects-no-beep.wav` and with `--check` prints the proofs below as JSON; `crates/zcore/tests/tracks.rs`
+checks the mirror's writes and cycles against the machine's, the default path sample for sample, the music on
+the title screen equal to the game's sound, and switching while playing.
+
+**The proofs** (Nov 23, `tf replay sound --check` in pieces of 40,000 frames, on the corpus's whole game
+`single-run-d3first-2.0.0.13-55-networks`, 159,769 frames, and `golden-d3first-51-networks`, 153,136):
+
+| Check | Whole game | Golden |
+|---|---|---|
+| Nothing off = main's sound (SHA-1 of every float sample, main's own `_native` against this branch's) | equal, 127,604,986 samples | equal, 122,307,310 |
+| The mirror's writes = the machine driver's, every frame it ran | 0 differ | 0 differ |
+| Music copy's song state (`SONG_TIME`) = the game's, frames a song plays | 0 of 130,675 | 0 of 122,341 |
+| Effects copy's tune/effect/sample state (`EFFECT_STATE`) = the game's, every frame | 0 of 159,769 | 0 of 153,136 |
+| Effects copy's song state = the game's while a jingle (`$04`, `$08`) plays | 0 of 4,728 | 0 of 4,696 |
+| Music track = full mix in every stretch of 5 s or more without an effect (fresh synths at its start) | 53 stretches, 28,391 frames, max difference 0.0 | 57, 28,069, 0.0 |
+| Beep off: a beep left / other square-0 tunes differ | 0 / 0 of 13,572 frames | 0 / 0 of 12,555 |
+| Driver reads outside its state and `PauseState`; faults | none; 0 | none; 0 |
+
+Where the game's driver plays no effect (12 frames settled), the effects track still sounds after some effects: the
+game's own tail of the tune just ended (e.g. square 1 after tune `$01`, frames 15,039-15,045, peak 0.048). Where no
+song plays the effects track is the full mix (difference below 2e-12 when both synths start together; up to 0.077
+from power on, the same tail at another oscillator phase, since the game's square played the music before).
+Time per frame (prepare + run): the single synth about 0.45 ms, the live split (warm, three synths, three driver
+runs) about 1.3 ms, of the 16.6 ms a frame lasts.
 
 ## Videos (`create-video.py`, `video.py`)
 
-`create-video.py OUT [COLUMNSxROWS] REPLAY... [--scale N] [--sound] [--controller] [--thoughts] [--states-dir DIR]` films
+`create-video.py OUT [COLUMNSxROWS] REPLAY... [--scale N] [--sound [--no-music] [--no-sound-effects]
+[--no-heart-beep] [--split-audio]] [--controller] [--thoughts] [--states-dir DIR]` films
 replays as `play-zelda.py` shows them (the same `play_view.Window`, rendered offscreen without its title bar)
 into `OUT`: H.264 yuv420p (CRF 18) at 39375000/655171 fps (the NES's 60.0988), with `--sound` AAC 48 kHz mono,
 in the container the file name asks for (`.mp4`, `.mkv`, `.mov`); it needs `ffmpeg`. The grid defaults to 1x1;
@@ -2333,9 +2541,13 @@ and the last result has had its pause. `--sound` adds the sound of the middle ce
 else of the top left one; `VideoGrid.audio()` hands out each film frame's exact share of samples (silence while
 that cell shows a result), so sound and picture stay together. In a grid of several cells that cell has the
 yellow frame. The picture is piped to ffmpeg as it is made; the sound goes to a temporary WAV beside `OUT` and
-is joined at the end. `--thoughts` draws each replay's thoughts as play-zelda does ("Watching"). It prints a JSON
-summary (`out`, `frames`, `seconds`, `width`, `height`, `replays`, `sound`, `thoughts`, `heard`, `took`); exit 1
-when a replay can't be played or ffmpeg fails, 2 on a bad command line.
+is joined at the end. `--no-music`, `--no-sound-effects` and `--no-heart-beep` leave parts out ("Sound");
+`--split-audio` writes two mono AAC tracks instead, `Music` (the default) and `Sound effects` (title and
+`handler_name` set; `video.TRACK_TITLES`): mkv and mp4/mov both carry them; an editor shows two tracks, a plain
+player plays the default one (the music) until another is picked. `--thoughts` draws each replay's thoughts as
+play-zelda does ("Watching"). It prints a JSON summary (`out`, `frames`, `seconds`, `width`, `height`,
+`replays`, `sound`, `thoughts`, `mix`, `split_audio`, `heard`, `took`); exit 1 when a replay can't be played or
+ffmpeg fails, 2 on a bad command line.
 
 ## Routes: two routes, state namespaces, per-route promotion (phase X, 2.0.0.0)
 

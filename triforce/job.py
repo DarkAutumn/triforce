@@ -13,6 +13,7 @@ the exit code is the command's (the wrapper's own lines go to stderr, ``triforce
     triforce job history [--since 24h] [--agent A] [--metrics] [--json]
     triforce job run|golden|build|test ... --detach     (start outside this shell; prints a unit name)
     triforce job wait UNIT... [--timeout 30m]           (follow detached jobs; stopping it stops nothing)
+    triforce job top ID [--undo]                        (the owner's: a waiting job to the top of its own line)
 
 ``run`` takes the job's place in line before the command starts and runs it at nice ``RUN_NICE``.  A training or
 evaluation tool of this code (``jobs.announce``) is asked its work first (a dry call: its arguments are checked, an
@@ -26,7 +27,8 @@ served, never behind a training or a chain) at nice ``TOOL_NICE`` with ``CARGO_B
 ``test --build`` is one entry with both steps.  ``setup`` makes a worktree ``../triforce-<branch>`` with ``roms``,
 ``trajectories`` and ``models`` linked from the main checkout, its venv and its build, as one tools-lane entry.
 Priority and time limits are the queue's: ``nice``, ``ionice``, ``timeout`` or ``CARGO_BUILD_JOBS=`` after ``--`` are
-refused.
+refused.  ``top`` moves a waiting job to the top of its own line, or back (``jobqueue.move_to_top``; the training
+GUI's right click does the same): the owner's; agents don't use it on their own work.
 
 This module imports neither ``triforce._native`` nor torch: it works before the first build.
 """
@@ -265,7 +267,7 @@ class Wrapper:
         """Records the job as ``queued`` and holds its job lock (its liveness) from the same transaction on."""
         now = time.time()
         row = {**fields, 'status': 'queued', 'queued_ts': now, 'host': os.uname().nodename, 'pid': os.getpid(),
-               'nice': fields.get('nice')}
+               'nice': fields.get('nice'), 'top_aware': 1}     # this wrapper honours a move to the top (``q.line``)
         columns = [key for key in row if key in q._COLUMNS]     # pylint: disable=protected-access
         values = [json.dumps(row[key]) if key in q._JSON and row[key] is not None else row[key]  # pylint: disable=protected-access
                   for key in columns]
@@ -441,16 +443,29 @@ class Wrapper:
         return code
 
     def finish(self, status: str, code: Optional[int], result: Optional[str] = None):
-        """Marks the job ended and appends it to the history table (the rates and the calibration learn from it).
-        The job's row stays for good: it is the machine's record of what ran (``triforce job history``)."""
+        """Marks the job ended and appends it to the history table (the rates, the chains' model and the calibration
+        learn from it; a chain's seconds from its plan, ``jobqueue.chain_seconds``).  The job's row stays for good:
+        it is the machine's record of what ran (``triforce job history``)."""
         now = time.time()
         admitted = self.row.get('admitted_ts')
+        actual = None if admitted is None else now - admitted
+        work = self.row.get('work') or {}
+        if isinstance(work, dict) and work.get('chains'):
+            found = self.con.execute("SELECT plan FROM jobs WHERE id = ?", (self.id,)).fetchone()
+            try:
+                plan = json.loads(Path(found['plan']).read_text(encoding='utf-8')) if found and found['plan'] else None
+            except (OSError, ValueError):
+                plan = None
+            work = q.chain_seconds(work, actual, status, plan if isinstance(plan, dict) else None)
         with q.transaction(self.con):
             q.update(self.con, self.id, status=status, finished_ts=now, exit_code=code, result=result)
-            self.con.execute("INSERT INTO history (job, kind, work, estimate, actual, status, finished_ts) "
-                             "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                             (self.id, self.row.get('kind'), json.dumps(self.row.get('work') or {}),
-                              self.row.get('estimate'), None if admitted is None else now - admitted, status, now))
+            moved = self.con.execute("SELECT moved_ts FROM jobs WHERE id = ?", (self.id,)).fetchone()
+            self.con.execute("INSERT INTO history (job, kind, work, estimate, actual, status, finished_ts, moved) "
+                             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                             (self.id, self.row.get('kind'), json.dumps(work), self.row.get('estimate'), actual,
+                              status, now, int(moved is not None and moved['moved_ts'] is not None)))
+            if isinstance(work, dict) and work.get('chains'):
+                q.refresh_estimates(self.con)    # what its chains took moves the live chains' estimates
         for fd in (self.place_fd, self.job_fd):
             if fd is not None:
                 os.close(fd)
@@ -579,6 +594,10 @@ def build_parser() -> argparse.ArgumentParser:
     show = sub.add_parser('list', help="the queue: running, waiting and recently finished jobs")
     show.add_argument('--all', action='store_true', help="every finished job, not only the last hour's")
     show.add_argument('--calibration', action='store_true', help="estimates against actual times, per kind")
+    top = sub.add_parser('top', help="move a waiting job to the top of its own line (the owner's; agents don't use "
+                                     "it on their own work), or back to its own place (--undo)")
+    top.add_argument('job', type=int, help="the job's id (triforce job list)")
+    top.add_argument('--undo', action='store_true', help="back to its own place in the line")
     doctor = sub.add_parser('doctor', help="the checks every job start makes, for a checkout (exit 1 on a red flag)")
     doctor.add_argument('path', nargs='?', default='.', help="a folder of the checkout (default this one)")
     past = sub.add_parser('history', help="every job that ended: when it queued, started and ended, where it ran")
@@ -666,6 +685,17 @@ LEGACY_DATA = ('roms/zelda.nes', 'trajectories', 'triforce/states/harvested')
 FLAG_FILES = 8                      # the edited files a ``main-edited`` flag names before "and N more"
 
 
+def in_store(name: str) -> bool:
+    """Whether the shared store provides what ``LEGACY_DATA``'s ``name`` was linked for (its ROM, the current
+    trajectories and harvested snapshots): a worktree made with the store has no links (``cmd_setup``)."""
+    from . import paths  # pylint: disable=import-outside-toplevel
+    if not paths.store_exists():
+        return False
+    if name == 'roms/zelda.nes':
+        return (paths.shared_root() / paths.STORE_ROM).is_file()
+    return paths.current_name('trajectories' if name == 'trajectories' else 'harvested') is not None
+
+
 def _git_lines(root: Path, *args) -> list[str]:
     try:
         out = subprocess.run(['git', '-C', str(root), *args], capture_output=True, text=True, timeout=30, check=True)
@@ -701,7 +731,7 @@ def checkout_flags(root: Path, module: bool = True) -> list[dict]:
         if behind and behind[0] != '0':
             flags.append({'level': 'note', 'code': 'behind-main',
                           'text': f"{root.name} is {behind[0]} commits behind main"})
-        missing = [name for name in LEGACY_DATA if not (root / name).exists()]
+        missing = [name for name in LEGACY_DATA if not (root / name).exists() and not in_store(name)]
         if missing:
             flags.append({'level': 'red', 'code': 'data-missing',
                           'text': f"{root.name} lacks {', '.join(missing)}: the main checkout's data it reads "
@@ -740,10 +770,11 @@ def cmd_doctor(args) -> int:
     return 1 if any(entry['level'] == 'red' for entry in flags) else 0
 
 
-def _rates() -> dict:
+def _estimate(work: dict) -> float:
+    """``work``'s estimate from the history as it is now (``jobqueue.estimate_now``)."""
     con = q.connect()
     try:
-        return q.rates(q.read_history(con))
+        return q.estimate_now(con, work)
     finally:
         con.close()
 
@@ -760,7 +791,7 @@ def cmd_run(args, command: list[str]) -> int:
             return answer
         kind, work = answer['kind'], answer['work'] or None
         if work is not None:
-            estimate = round(q.estimate(work, _rates()), 1)
+            estimate = round(_estimate(work), 1)
     if work is None and args.timeout is None:
         raise JobError("the queue can't measure this command (a script, a tool's subcommand without a work amount, "
                        "an old version's tool): give --timeout, its duration (e.g. --timeout 40m)")
@@ -911,9 +942,14 @@ def cmd_setup(args) -> int:
     args.task = 'setup'
 
     def link() -> int:
-        # ``models`` is never linked: a worktree's own runs and pointers stay its own (it reads the main
-        # checkout's team with ``--models-dir``, and its tests with ``$TRIFORCE_MODELS_DIR``, ``test_steps``).
-        # The harvested start states are data no checkout tracks and every family's recipe draws from.
+        # With the shared store (``triforce.paths.store_exists``) a worktree gets no links and no models folder: its
+        # tools read the ROM, the data snapshots and the teams from the store (``docs/data-layout.md``).  Until the
+        # lead makes it (the staged cutover), a worktree links what it always did: ``roms``, ``trajectories`` and
+        # the harvested start states (never ``models``: it reads the main checkout's team with ``--models-dir``,
+        # its tests with ``$TRIFORCE_MODELS_DIR``, ``test_steps``).
+        from .paths import store_exists  # pylint: disable=import-outside-toplevel
+        if store_exists():
+            return 0
         for name in ('roms', 'trajectories', 'triforce/states/harvested'):
             if not (target / name).exists() and (main / name).exists():
                 (target / name).symlink_to(main / name)
@@ -1010,6 +1046,29 @@ def cmd_history(args) -> int:
               f"{row['status']:11s} {row['name']}  {row['what']}")
         for line in q.flag_lines(row):
             print(f"{'':5s} {line}")
+        if row.get('moved_ts') is not None:
+            print(f"{'':5s} {q.MOVED_MARK} at {(q.iso(row['moved_ts']) or '?')[:19]}")
+    return 0
+
+
+def cmd_top(args) -> int:
+    """``triforce job top ID [--undo]``: the waiting job to the top of its own line, or back to its place
+    (``jobqueue.move_to_top``); prints that line as it now stands.  A job that isn't waiting is an error naming its
+    status."""
+    con = q.connect()
+    try:
+        try:
+            job = q.move_to_top(con, args.job, undo=args.undo)
+        except q.MoveError as error:
+            raise JobError(str(error)) from error
+        now = time.time()
+        jobs = q.read_jobs(con, "status IN ('queued', 'running')")
+    finally:
+        con.close()
+    what = 'back to its own place in' if args.undo else 'moved to the top of'
+    print(f"#{job['id']} {job.get('name') or '?'} {what} the {job['lane']} line; the line now:")
+    for place, waiting in enumerate(q.line(jobs, job['lane'], now), 1):
+        print(f"  {place:2d}. #{waiting['id']} {waiting.get('name') or '?'}  {q.tags(waiting, now, place)}")
     return 0
 
 
@@ -1022,13 +1081,13 @@ def main(argv=None) -> int:
             return detach(args, head, extra)
         if args.verb == 'run':
             return cmd_run(args, extra)
-        if extra and args.verb in ('setup', 'list', 'progress', 'history', 'wait', 'doctor'):
+        if extra and args.verb in ('setup', 'list', 'progress', 'history', 'wait', 'doctor', 'top'):
             raise JobError(f"{args.verb} takes nothing after --")
         verbs = {'golden': cmd_golden, 'build': cmd_build, 'test': cmd_test}
         if args.verb in verbs:
             return verbs[args.verb](args, extra)
         return {'setup': cmd_setup, 'list': cmd_list, 'progress': cmd_progress, 'history': cmd_history,
-                'wait': cmd_wait, 'doctor': cmd_doctor}[args.verb](args)
+                'wait': cmd_wait, 'doctor': cmd_doctor, 'top': cmd_top}[args.verb](args)
     except JobError as error:
         print(f"triforce job: error: {error}", file=sys.stderr)
         return 2

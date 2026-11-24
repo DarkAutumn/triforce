@@ -768,7 +768,10 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 
 ## Versioning (the owner, Nov 11; the third number and model compatibility redefined Nov 23)
 
-- **One version, `MAJOR.MINOR.GEN.REV`, in the `VERSION` file** (now `2.0.0.14`: the engine plays `d3first`'s two
+- **One version, `MAJOR.MINOR.GEN.REV`, in the `VERSION` file** (now `2.0.0.15`: Manhandla's 3:0x4d and Dodongo's 2:0x0e are `bomb_weapon` rooms
+  (game.yaml): Link is never left without a bomb there, whatever the state of the room's walls (the owner, Nov 23;
+  round 24's "the need ends when the room's bomb walls are open" had given Manhandla's room no bomb since: Dungeon 3
+  39.2% -> 45.7% of 1000 runs paired, no network changed); 2.0.0.14: the engine plays `d3first`'s two
   whirlwinds, 0:0x0b out of Level 5 and 0:0x22 out of Level 6, as macros (routes.yaml `macros:`; the leg out of
   Dungeon 5 82.3% -> 89.3% of 1000 runs paired, round40.md "Engine macros"; no network changed); 2.0.0.13: `d3first` crosses 2:0x3e (the
   Moldorm left) and takes 9:0x56's key instead, moldorm `r39t-moldorm` through `promoted.d3first` and like-like
@@ -872,7 +875,9 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   `play-zelda.py` plays replays: of runs it simulates in the background and files into queues
   (`best`, `success`, `stuck`, `died`, `random`, `golden`; `crates/theater`), or of the files of a PATH. Its
   simulations run unpaced on `--parallel` (8) cores until the queues are full: mind that next to a training
-  round. One cell is heard (yellow frame; key `s`, click to move; `--no-sound`), `--controller` draws the held
+  round. One cell is heard (yellow frame; key `s`, click to move; `--no-sound`; keys `m`, `e`, `h` and
+  `--no-music`, `--no-sound-effects`, `--no-heart-beep` switch the music, the sound effects and the low-hearts
+  beep), `--controller` draws the held
   buttons. Clips (round 22): `--clips on|off` starts the runs with the run-time clips switch on or off, key `c`
   turns it off and on for every run started afterwards (the title says where it stands; a cell's strip says "no
   clips" for a run played without). `--live` makes the top left cell a live game the models play while it is
@@ -880,12 +885,19 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   re-plans from where Link stands ("rest of the run no clips"); its finished runs join the queues. The keys are
   in `--help`. `--thoughts` draws over each cell what its replay says the agent was thinking (objective and
   targets, the mask, the decision). `create-video.py OUT [GRID]
-  REPLAY... [--sound] [--controller] [--thoughts]` films replays the same way into a video file (`ffmpeg`).
-- **Sound is computed beside the emulator, never inside it** (`crates/zcore/src/sound.rs`, `docs/architecture.md`
-  "Sound"): a `Synth` replays the APU register writes the bus notes. `MachineState`, state files, replays and
-  training don't change with it, and must not: no sound state goes into `MachineState`. A replay that starts
-  from a savestate therefore starts silent, each voice coming in with its next note. Building `triforce._native`
-  now needs the ALSA headers (`alsa-lib`; `cpal`).
+  REPLAY... [--sound [--no-music] [--no-sound-effects] [--no-heart-beep] [--split-audio]] [--controller]
+  [--thoughts]` films replays the same way into a video file (`ffmpeg`; `--split-audio`: two audio tracks, music
+  and effects).
+- **Sound is computed beside the emulator, never inside it** (`crates/zcore/src/sound.rs`, `tracks.rs`,
+  `docs/architecture.md` "Sound"): a `Synth` replays the APU register writes the bus notes. `MachineState`, state
+  files, replays and training don't change with it, and must not: no sound state goes into `MachineState`. A
+  replay that starts from a savestate therefore starts silent, each voice coming in with its next note. Music and
+  sound effects apart (the owner, Nov 23: the songs vs everything else, the item fanfare and the end-of-level tune
+  with the effects, the low-hearts beep on its own switch) come from the game's own sound driver run again beside
+  the machine (`zcore::tracks`: its own 6502, one driver copy per track fed only its requests), never from the
+  machine; with everything on the sound is the machine's writes through one synth, as it always was. `tf replay
+  sound FILE --check` proves the tracks against the machine's driver. Building `triforce._native` now needs the
+  ALSA headers (`alsa-lib`; `cpal`).
 
 ## Game mechanics that matter for training
 
@@ -954,6 +966,16 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 - Training GUI: `uv run training-gui.py` (PEP 723 script; it also serves a read-only web view of the current runs on
   port 22222, every interface: `--web-port`, `--web-host`, `--no-web`, `--web-only` without a window or display;
   `play-zelda.py`, `create-video.py` and `zelda-map.py` run from the venv, which has PySide6 through the `dev` extra).
+- **Shared things live in the shared store, `~/triforce-shared/`, outside every checkout; nobody writes there by
+  hand** (the owner, Nov 23; `docs/data-layout.md`): the ROM, the data sets as named read-only snapshots, every
+  network run (allocated by `triforce train`, sealed read-only when it ends), the teams, and what each job filed.
+  Look with `triforce store paths|data|runs|teams|summaries|outputs|log`. Play a team with `--team NAME` (default the
+  current one), an experiment with `--team NAME+zol@d3first=RUN`; train with `--load family@route` or
+  `--load FAMILY/RUN` (a continuation is a new run with a parent; an interrupted one continues with
+  `--resume FAMILY/RUN`); read data by name with `--data KIND=NAME`. A tool files its outputs by job; a sealed run or
+  a snapshot is never written. An old version's tree gets its `models/` with `triforce store view TEAM --into DIR`.
+  Until the lead's cutover, the layout below (`--models-dir`, a checkout's own `models/`, `roms`, `trajectories`,
+  harvested links) keeps working exactly as before.
 - `logs/`, `models/`, `trajectories/` are gitignored. `models/<specialist>/<run-id>/` holds `ckpt.pt`,
   `metrics.jsonl`, `run.json`, `train.log`, `act` (`<mode> <ckpt.pt sha1>`) and `eval.json`, the canonical
   evaluation (the model's act mode, 100 episodes per state, seed 0); other evaluations are
@@ -999,8 +1021,10 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
     **before** the command starts, at nice 15; our tools (`triforce train|evaluate|eval-chain|eval-batch|
     select-checkpoint`, `scripts/train_round.py`, `scripts/full_runs.py run|runs250`, `triforce.lab.train|record|
     bench`) are asked their work first (training steps, episodes, route steps: an argument error fails at once) and
-    estimated from the queue's history; any other command (a script, an old version's tool) needs `--timeout`, its
-    duration and its estimate. `--timeout` stops the command (SIGTERM, then SIGKILL) and the job ends `timeout`.
+    estimated from the queue's history (a chain by its segment: seconds per run from the last three chains of that
+    segment, else its route steps at the learned rate; Nov 23); any other command (a script, an old version's tool)
+    needs `--timeout`, its duration and its estimate. `--timeout` stops the command (SIGTERM, then SIGKILL) and the
+    job ends `timeout`.
   - `triforce job golden --agent A --task T --timeout 10m [--subtask S] [-- racer options]`: a golden race
     (`zelda-headless.py --golden --power-on --clips on --act model --parallel 16`), at most `--timeout`, which is its
     estimate; running out of time is a result ("no golden path in 10 minutes", exit 0); its replays are archived.
@@ -1030,7 +1054,9 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   the time waited). A waiting job is only its wrapper: no model, no GPU memory, a check a second. It prints
   `triforce job: #12 A-T-S waits for a place: estimated 40 minutes; 2 jobs are running (...)` every 5 minutes and
   `... starts (regular-1, nice 15, ...)` when it starts. **Seeing that line, wait**: don't kill jobs to get ahead,
-  don't split or stagger them by hand. **A job there is no reason to run any more is ended** (the owner, Nov 18):
+  don't split or stagger them by hand. **The owner can move a waiting job to the top of its line** (the GUI's right
+  click, `triforce job top ID [--undo]`); agents do NOT use `job top` on their own work. **A job there is no reason
+  to run any more is ended** (the owner, Nov 18):
   end your own with one SIGTERM to its wrapper, never another agent's or the owner's without asking. Priority, time
   limits and the cargo job count are the queue's: `nice`, `ionice`, `timeout` or `CARGO_BUILD_JOBS=` after `--` are
   refused. **Our tools refuse to run outside the queue** (they print the `triforce job run` form of the same command)

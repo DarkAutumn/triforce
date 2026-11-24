@@ -2992,6 +2992,7 @@ rooms:
   location: '0x0e'
   specialist: boss-dodongo
   requires_bombs: true    # The owner (Nov 8): Link always has a bomb here (zelda::cheats cheats one in when he has none)
+  bomb_weapon: true       # the bomb is what kills him: Link is never left without one here (zelda::cheats)
   exits:
     S:
       level: 2
@@ -3390,6 +3391,8 @@ rooms:
   location: '0x4d'  # Manhandla (one $3C object, five slots: the body and four heads)
   specialist: boss-manhandla
   requires_bombs: true    # The owner (Nov 9): the plan kills Manhandla with bombs dropped into his path
+  bomb_weapon: true       # the owner (Nov 23): "we always kill Manhandla with bombs [...] I don't ever want to fight
+                          # them with a wood sword": Link is never left without one here, whatever the W wall's state
   exits:
     N:  # shutter
       level: 3
