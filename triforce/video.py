@@ -8,11 +8,14 @@ last picture and result.  The film ends when every replay has played and the las
 
 One cell can be heard (``heard``): its sound is made by the emulator beside the picture
 (``_native.ReplayPlayer.set_sound``), and ``VideoGrid.audio()`` hands out exactly the samples of each film frame,
-silence while that cell shows a result, so sound and picture stay together however long the film is.
-``thoughts``: every cell also sends its replay's ``thoughts`` overlay (``play_grid``, ``triforce.thoughts``).
+silence while that cell shows a result, so sound and picture stay together however long the film is.  ``mix``
+(``play_grid.Mix``) leaves the music, the sound effects or the low-hearts beep out; ``split`` makes the music and
+the effects two tracks.  ``thoughts``: every cell also sends its replay's ``thoughts`` overlay (``play_grid``,
+``triforce.thoughts``).
 
 ``Encoder`` writes the frames (and the samples) to a video file through ``ffmpeg``: H.264 in the container the
-file name asks for (``.mp4``, ``.mkv``, ``.mov``), at the console's frame rate, with AAC sound.
+file name asks for (``.mp4``, ``.mkv``, ``.mov``), at the console's frame rate, with AAC sound: one track, or with
+``split`` two ("Music", the default, and "Sound effects").
 """
 
 import os
@@ -26,11 +29,12 @@ from typing import List, Optional, Sequence, Tuple
 import numpy as np
 
 from . import _native, replay
-from .play_grid import FILES, NES_FPS, RESULT_PAUSE, Show
+from .play_grid import FILES, NES_FPS, RESULT_PAUSE, Mix, Show
 
 FRAME_RATE = Fraction(39_375_000, 655_171)      # an NTSC NES's frames per second (60.0988), exactly
 SAMPLE_RATE = 48_000
 RESULT_FRAMES = round(RESULT_PAUSE * NES_FPS)
+TRACK_TITLES = ('Music', 'Sound effects')      # the audio tracks of a split film, in order
 
 
 def center_cell(cols: int, rows: int) -> int:
@@ -73,16 +77,18 @@ class _Reel:
 
 class VideoGrid:
     """``cells`` cells playing the replay files ``paths`` one film frame per ``step()`` (module doc).  ``heard``:
-    the cell whose sound ``audio()`` returns (None: silence).  ``controller``: draw the controller into every
-    frame.  ``states_dir``: where a replay recorded from a named state file finds it.  ``thoughts``: send each
-    cell's thoughts overlay."""
+    the cell whose sound ``audio()`` returns (None: silence), ``mix`` the parts of it heard, ``split``: as two
+    tracks (music, effects).  ``controller``: draw the controller into every frame.  ``states_dir``: where a replay
+    recorded from a named state file finds it.  ``thoughts``: send each cell's thoughts overlay.  ``span``: (first,
+    end) input frames to film of each replay instead of from the models' takeover to its end."""
     # pylint: disable=too-many-instance-attributes
 
     source = FILES
     fps = NES_FPS
 
     def __init__(self, cells: int, paths: Sequence, *, heard: Optional[int] = None, controller: bool = False,
-                 states_dir=None, rate: int = SAMPLE_RATE, thoughts: bool = False):
+                 states_dir=None, rate: int = SAMPLE_RATE, thoughts: bool = False, mix: Mix = Mix(),
+                 split: bool = False, span: Optional[Tuple[int, int]] = None):
         # pylint: disable=too-many-arguments
         self.cells = cells
         self.paths = [Path(path) for path in paths]
@@ -91,13 +97,15 @@ class VideoGrid:
         if heard is not None and not 0 <= heard < cells:
             raise ValueError(f"cell {heard} of a grid with {cells} cells")
         self.heard, self.controller, self.rate, self.thoughts = heard, controller, rate, thoughts
+        self.mix, self.split, self.span = mix, split, span
         self.states_dir = None if states_dir is None else str(states_dir)
         self.frames = 0             # film frames stepped so far
         self.played = 0             # replays that played to their end
         self._taken = 0             # replays handed to a cell
         self._reels = [_Reel() for _ in range(cells)]
         self._messages: List[dict] = []
-        self._pending = np.zeros(0, np.float32)     # the heard cell's samples not yet handed out
+        # the heard cell's samples not yet handed out: (samples,), or (samples, 2) when split
+        self._pending = np.zeros((0, 2) if split else 0, np.float32)
         self._samples = 0           # samples handed out so far
 
     # ------------------------------------------------------------------ what a Window asks of a grid
@@ -116,6 +124,9 @@ class VideoGrid:
 
     def set_sound(self, cell: Optional[int]) -> None:  # pylint: disable=unused-argument
         """The heard cell is the film's own (``heard``)."""
+
+    def set_mix(self, mix: Mix) -> None:  # pylint: disable=unused-argument
+        """The parts heard are the film's own (``mix``)."""
 
     def frame(self, cell: int, since: int) -> Optional[Tuple[int, np.ndarray]]:
         reel = self._reels[cell]
@@ -136,20 +147,22 @@ class VideoGrid:
     # ------------------------------------------------------------------ the film
 
     def _load(self, index: int, reel: _Reel) -> None:
-        """Puts the next replay not yet played into ``reel``, at the frame watching starts."""
+        """Puts the next replay not yet played into ``reel``, at the frame watching starts (``span``'s first)."""
         path = self.paths[self._taken]
         self._taken += 1
         reel.show = Show(path.read_bytes(), FILES, path.name)
         reel.player = _native.ReplayPlayer(reel.show.data, states_dir=self.states_dir)
-        reel.player.seek(reel.show.start)
+        reel.player.seek(reel.show.start if self.span is None else min(self.span[0], reel.player.frames))
         if index == self.heard:
-            reel.player.set_sound(float(self.rate))
+            reel.player.set_mix(**self.mix.native())
+            reel.player.set_sound(float(self.rate), split=self.split)
         reel.phase, reel.sent, reel.thought = 'playing', None, None
         self._messages.append({'cell': index, 'event': 'start', 'seed': reel.show.seed, 'source': FILES,
                                'name': path.name})
 
     def _play(self, index: int, reel: _Reel) -> None:
-        """Runs one frame of ``reel``'s replay; at its end the result goes up."""
+        """Runs one frame of ``reel``'s replay; at its end the result goes up (at the end of ``span`` short of the
+        replay's, the cell goes on at once: the run did not end there)."""
         player, show = reel.player, reel.show
         if player.step(1, render=True):
             reel.pixels = np.asarray(player.screen(controller=self.controller))
@@ -165,9 +178,13 @@ class VideoGrid:
                 if lines != reel.thought:
                     reel.thought = lines
                     self._messages.append({'cell': index, 'event': 'thoughts', 'lines': lines})
-        if player.frame >= player.frames:
+        end = player.frames if self.span is None else min(self.span[1], player.frames)
+        if player.frame >= end:
             self.played += 1
             reel.player = None
+            if end < player.frames:
+                reel.phase = 'idle' if self._taken < len(self.paths) else 'done'
+                return
             reel.phase, reel.until = 'result', self.frames + RESULT_FRAMES
             self._messages.append({'cell': index, 'event': 'end', 'seed': show.seed, 'result': show.result,
                                    'outcome': show.outcome, 'reason': show.reason})
@@ -187,10 +204,10 @@ class VideoGrid:
         return True
 
     def audio(self) -> np.ndarray:
-        """The samples (float32, mono, -1..1) of the frame ``step`` just made: every frame's share of ``rate``,
-        so the samples handed out always add up to the film's length."""
+        """The samples (float32, -1..1; mono, or (music, effects) pairs when ``split``) of the frame ``step`` just
+        made: every frame's share of ``rate``, so the samples handed out always add up to the film's length."""
         want = int(self.frames * self.rate / FRAME_RATE) - self._samples
-        out = np.zeros(want, np.float32)
+        out = np.zeros((want,) + self._pending.shape[1:], np.float32)
         have = min(want, len(self._pending))
         out[:have] = self._pending[:have]
         self._pending = self._pending[have:]
@@ -209,18 +226,21 @@ def ffmpeg() -> str:
 class Encoder:
     """Writes ``width`` x ``height`` RGBX frames, and with ``sound`` their samples, to the video file ``path``
     (H.264, yuv420p; AAC).  The picture is encoded as the frames come; the sound is kept in a temporary WAV
-    file beside the output and joined in ``close``."""
+    file beside the output and joined in ``close``: one track, or with ``split`` (samples given as (music,
+    effects) pairs) two, titled ``TRACK_TITLES``, the music the default."""
 
-    def __init__(self, path, width: int, height: int, sound: bool = False, rate: int = SAMPLE_RATE):
+    def __init__(self, path, width: int, height: int, sound: bool = False, rate: int = SAMPLE_RATE,
+                 split: bool = False):
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         self.path = Path(path)
         self.sound = sound
+        self.split = sound and split
         self._picture = self.path.with_name(f".{self.path.stem}.picture{self.path.suffix}") if sound else self.path
         self._wave_path = self.path.with_name(f".{self.path.stem}.sound.wav")
         self._wave = None
         if sound:
             self._wave = wave.open(str(self._wave_path), 'wb')
-            self._wave.setnchannels(1)
+            self._wave.setnchannels(2 if self.split else 1)
             self._wave.setsampwidth(2)
             self._wave.setframerate(rate)
         # yuv420p needs even sides: an odd one gets a black column or row.
@@ -255,7 +275,8 @@ class Encoder:
                 raise RuntimeError(f"ffmpeg failed with exit code {failed} writing {self._picture}")
             if self.sound:
                 command = [ffmpeg(), '-y', '-loglevel', 'error', '-i', str(self._picture), '-i', str(self._wave_path),
-                           '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', str(self.path)]
+                           *self._audio_options(), '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
+                           '-movflags', '+faststart', str(self.path)]
                 done = subprocess.run(command, check=False)
                 if done.returncode:
                     raise RuntimeError(f"ffmpeg failed with exit code {done.returncode} adding sound to {self.path}")
@@ -264,3 +285,14 @@ class Encoder:
                 for leftover in (self._picture, self._wave_path):
                     if os.path.exists(leftover):
                         os.remove(leftover)
+
+    def _audio_options(self) -> List[str]:
+        """ffmpeg's options for the sound: the WAV as it is, or its two channels as two titled mono tracks."""
+        if not self.split:
+            return []
+        options = ['-filter_complex', '[1:a]asplit[a][b];[a]pan=mono|c0=c0[music];[b]pan=mono|c0=c1[effects]',
+                   '-map', '0:v', '-map', '[music]', '-map', '[effects]']
+        for index, title in enumerate(TRACK_TITLES):
+            options += [f'-metadata:s:a:{index}', f'title={title}', f'-metadata:s:a:{index}', f'handler_name={title}',
+                        f'-disposition:a:{index}', 'default' if index == 0 else '0']
+        return options

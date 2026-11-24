@@ -290,6 +290,13 @@ impl PyReplayScreen {
         Ok(())
     }
 
+    /// Which parts of the heard cell's sound play, from its next frame on and without a break in what stays
+    /// on: the music, the sound effects and, among them, the low-hearts beep (as `ReplayPlayer.set_mix`).
+    #[pyo3(signature = (music=true, effects=true, heart_beep=true))]
+    fn set_mix(&self, music: bool, effects: bool, heart_beep: bool) {
+        self.screen.set_mix(zcore::tracks::Mix { music, effects, beep: heart_beep });
+    }
+
     /// Draws the controller into every frame from the next one on, its held buttons lit (top right, over
     /// the HUD's -LIFE-), or stops drawing it.
     fn set_controller(&self, on: bool) {

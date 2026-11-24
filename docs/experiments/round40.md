@@ -303,3 +303,36 @@ What it says:
 
 Not done: single rooms for s403's checkpoints, a checkpoint selection (the curve shows no middle checkpoint clearly
 better than the last), other segments zol plays (`d4`'s 4:0x40, `d5`'s 5:0x57), a fresh hit head.
+
+## Firing-line targets (Fireline40, branch `r40-fireline`, archived unmerged)
+
+**Verdict (the owner, Nov 23): not merged, not in the fresh generation** (decisions 2026-11-23 "Firing-line targets").
+
+**What was tried.** `reward.firing_lines`: at full hearts with a sword that beams, a fight's targets are tiles in line
+with a monster at range with the line clear (variant two: those plus the monsters' own tiles). zol@d3first only,
+continued from the bare zol policy with `--sil-coeff 0.1`, seed 401; Dungeon 3, 1000 runs an arm on the same seeds.
+The from-scratch arms and the other seeds were stopped before they ran (the owner paused the experiment to watch).
+
+| Arm (zol's network; the rest of the team as promoted) | Reached Manhandla's room | Paired difference | Frames to his door (runs that reached it in both) |
+|---|---:|---:|---:|
+| continued without firing lines | 55.0% | | |
+| continued with firing lines | 53.3% | -1.7 ± 2.2 | +720 ± 120 |
+| continued with firing lines + the monsters' tiles | 50.4% | -4.6 ± 2.2 | +537 ± 153 |
+| the bare policy it continued from | 56.0% | | |
+| the promoted team (zol with its hit head) | 63.8% | | |
+
+**Where the time goes** (firing lines against without, 296 runs that reached Manhandla in both): 3:0x6b +544 ± 29
+frames (76% of the total), 3:0x4b +111 ± 18 (15%), 3:0x59's first pass +52 ± 27, every other room within a few frames.
+
+**Where the health goes.** Hearts on entering the crossing room 3:0x49 are equal across the arms (2.22, 2.23, 2.19);
+inside it hearts lost a visit go 0.09 -> 0.33 at full hearts and 0.09 -> 0.17 at 1-1.5 hearts, and deaths in the room
+14 -> 46 -> 58 of 1000 runs. In the fight rooms with beams, shooting replaces melee at about equal hits taken.
+
+**Why (the owner, from the replays).** The beam changes did what they were meant to: Link shoots. Zols are the wrong
+target for it: a Zol hit from afar splits into Gels that scatter, and Link is not close enough to finish them, which
+costs time and health. Beams pay against Darknuts, which Dungeon 3 cannot show (3:0x59 is a bomb room; 3:0x5b is a
+pass-through first and is reached without beams the second time).
+
+Replays for watching: every arm's runs split by whether they reached Manhandla, and the deaths in 3:0x49, were copied
+to the owner's review folder; the records are under the `r40-fireline` worktree's `target/r40f/`.
+

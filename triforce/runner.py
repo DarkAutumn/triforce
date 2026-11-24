@@ -173,6 +173,24 @@ def chain_steps(route_name: str, runs: int, start_from: Optional[str] = None, st
             return 0
 
 
+def chain_entry(route_name: str, runs: int, parallel: int, start_from: Optional[str] = None,
+                stop_at: Optional[str] = None, power_on: bool = False, name: Optional[str] = None) -> dict:
+    """One chain of a job's work for the queue's estimate (``jobs.work`` ``chains``, ``jobqueue.chain_model``): its
+    ``shape`` (``<route>:<start step>-<end step>``, ``:power-on`` from console power on: the same segment whatever
+    its start state is called), ``runs``, ``parallel``, ``steps`` (the route steps a run is asked to play) and the
+    batch entry's ``name``."""
+    steps = chain_steps(route_name, 1, None if power_on else start_from, stop_at)
+    try:
+        route_steps = _native.route_steps(route_name)
+        start = (_start_step(route_steps, Path(start_from).stem)
+                 if start_from and start_from != 'start' and not power_on else 0)
+    except (ValueError, _native.ConfigError):     # a malformed name counts from the start, as ``chain_steps``
+        start = 0
+    shape = f"{route_name}:{start}-{start + steps}" + (':power-on' if power_on else '')
+    return {'shape': shape, 'runs': runs, 'parallel': parallel, 'steps': steps,
+            **({'name': name} if name is not None else {})}
+
+
 def _power_on(options: dict) -> dict:
     """A power-on start's ``{'name', 'delay', 'max_delay'}`` checked and filled in (name LINK, a random delay over
     the whole range); ``RunnerError`` for a name the game can't register or a delay out of range."""

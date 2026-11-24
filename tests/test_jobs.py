@@ -102,6 +102,68 @@ def test_rates_are_refitted_from_the_latest_completed_jobs_and_calibration_compa
     assert chain['median'] == pytest.approx(5.0 / 2.6)
 
 
+def chain(shape: str, runs: int, steps: int, seconds=None, parallel: int = 10, name=None) -> dict:
+    """One chain of a job's work (``runner.chain_entry``), with the ``seconds`` it took once it ended."""
+    return {'shape': shape, 'runs': runs, 'parallel': parallel, 'steps': steps,
+            **({'seconds': seconds} if seconds is not None else {}), **({'name': name} if name else {})}
+
+
+def chain_row(at: float, *chains, actual: float = 100.0) -> dict:
+    return history('chain', {'chain_steps': sum(c['runs'] * c['steps'] for c in chains), 'chains': list(chains)},
+                   1.0, actual, at)
+
+
+def test_a_chain_is_estimated_by_its_shapes_last_chains_and_an_unseen_shape_by_the_rate_per_step():
+    """The owner, Nov 23: "Fix the estimate [...] It would have been fine if not for estimating 37 hours"."""
+    start = q.CHAIN_START_SECONDS
+    # Dungeon 3 (18 steps asked): 1000 runs at parallel 10 took 1010 s, 1110 s, 910 s: 10, 11, 9 run-seconds.
+    rows = [chain_row(i, chain('d3first:6-24', 1000, 18, start + 100 * per_run))
+            for i, per_run in enumerate((10.0, 11.0, 9.0))]
+    model = q.chain_model(rows)
+    assert model.shapes == {'d3first:6-24': pytest.approx(10.0)}       # the median of the window
+    unit_rates = q.rates(rows)
+    asked = chain('d3first:6-24', 200, 18)
+    assert q.estimate({'chain_steps': 3600, 'chains': [asked]}, unit_rates, model) == pytest.approx(start + 200)
+    # A shape never seen: its asked steps at the rate per step, as before.
+    full = chain('d3first:0-290', 1000, 290)
+    seconds = q.estimate({'chain_steps': 290_000, 'chains': [full]}, unit_rates, model)
+    assert seconds == pytest.approx(290_000 * unit_rates['chain_steps'])
+    # One outlier (a loaded machine: 50 run-seconds) among the window moves the median one sample, not 5x.
+    slow = rows + [chain_row(3, chain('d3first:6-24', 1000, 18, start + 100 * 50.0))]
+    assert q.chain_model(slow).shapes['d3first:6-24'] == pytest.approx(11.0)
+    # Only the window's latest count: three slow chains in a row are the shape's time now.
+    later = slow + [chain_row(4 + i, chain('d3first:6-24', 1000, 18, start + 100 * 40.0)) for i in range(2)]
+    assert q.chain_model(later).shapes['d3first:6-24'] == pytest.approx(40.0)
+
+
+def test_a_batch_is_the_sum_of_its_chains_and_learns_each_from_its_plan_entry():
+    start = q.CHAIN_START_SECONDS
+    d3, post = chain('d3first:6-24', 1000, 18, name='d3'), chain('d3first:24-31', 1000, 7, name='post-d3')
+    work = {'chain_steps': 25_000, 'eval_episodes': 100, 'chains': [d3, post]}
+    plan = {'runs': [{'name': 'd3', 'status': 'ok', 'wall_seconds': start + 1000.0},
+                     {'name': 'post-d3', 'status': 'ok', 'wall_seconds': start + 200.0},
+                     {'name': 'family', 'status': 'ok', 'wall_seconds': 50.0}]}
+    recorded = q.chain_seconds(work, 9999.0, 'completed', plan)
+    assert [c['seconds'] for c in recorded['chains']] == [start + 1000.0, start + 200.0]
+    model = q.chain_model([history('batch', recorded, 1.0, 1300.0, 1)])
+    assert model.shapes == {'d3first:6-24': pytest.approx(10.0), 'd3first:24-31': pytest.approx(2.0)}
+    unit_rates = {**q.DEFAULT_RATES, 'eval_episodes': 0.5}
+    assert q.estimate(work, unit_rates, model) == pytest.approx(2 * start + 1000 + 200 + 100 * 0.5)
+    # An interrupted batch: its finished entries count, the stopped one doesn't; a lone chain that failed has none.
+    stopped = {'runs': [{'name': 'd3', 'status': 'ok', 'wall_seconds': 500.0},
+                        {'name': 'post-d3', 'status': 'interrupted'}]}
+    assert ['seconds' in c for c in q.chain_seconds(work, 600.0, 'interrupted', stopped)['chains']] == [True, False]
+    lone = {'chain_steps': 18, 'chains': [chain('d3first:6-24', 1, 18)]}
+    assert 'seconds' not in q.chain_seconds(lone, 60.0, 'failed', None)['chains'][0]
+    assert q.chain_seconds(lone, 60.0, 'completed', None)['chains'][0]['seconds'] == 60.0
+    assert q.chain_seconds({'train_steps': 5}, 60.0, 'completed', None) == {'train_steps': 5}
+
+
+def test_the_rates_per_unit_ignore_the_chains_list():
+    rows = [chain_row(i, chain('d3first:6-24', 100, 10, 50.0), actual=5.0) for i in range(3)]
+    assert q.rates(rows)['chain_steps'] == pytest.approx(0.005)
+
+
 def test_a_running_job_past_twice_its_estimate_is_flagged():
     running = row(1, estimate=600, status='running', admitted_ts=NOW - 1300, place='regular-1')
     assert q.overrun(running, NOW) and 'OVERRUN' in q.tags(running, NOW)

@@ -423,6 +423,7 @@ dependencies = [
  "parking_lot",
  "rand",
  "rand_chacha",
+ "replay",
  "serde",
  "serde_json",
  "serde_yaml_ng",

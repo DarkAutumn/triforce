@@ -264,7 +264,9 @@ def _cmd_eval_chain(args):
         raise RunnerError(str(error)) from error
     what = (f"eval-chain-{args.route}" + (f"-from-{args.start_from}" if args.start_from else '')
             + ('-power-on' if args.power_on else ''))
-    announce('chain', work(chain_steps=args.runs * route.steps_played()), what)
+    from .runner import chain_entry  # pylint: disable=import-outside-toplevel
+    chain = chain_entry(args.route, args.runs, args.parallel, args.start_from, args.stop_at, bool(args.power_on))
+    announce('chain', work(chain_steps=args.runs * route.steps_played(), chains=[chain]), what)
     # --events into a folder with a plan: its driver (e.g. triforce eval-batch) owns the stream and the final 'end',
     # and this chain's counter is named for its stream (the batch's entry); into a folder without one: this chain
     # writes a plan there (the stream is the plan's), so the GUI lists it, and its counter is the job's 'runs'.

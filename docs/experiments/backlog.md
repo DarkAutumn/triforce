@@ -367,8 +367,8 @@ to the action taken; look-ahead for the others), never looking ahead at play.
    look-ahead as a teacher at full weight (old backlog "Idea 3: search distilled into the network"; round 34's
    0.05-0.15 imitation of the planner's rows did not take).
 10. [ ] **The next generation's teachers, trained fresh** (the owner, Nov 23; decisions 2026-11-23): every
-    teacher family trained from scratch on the new inputs, targets and rewards (v7, the bomb-carrier input, the
-    firing-line targets if they hold), measured on its chains; only then the student(s) of 11 learn from them.
+    teacher family trained from scratch on the new inputs, targets and rewards (v7, the bomb-carrier input; no
+    firing-line targets: the owner, Nov 23, decisions "Firing-line targets: not merged"), measured on its chains; only then the student(s) of 11 learn from them.
     Imitating today's 51 copies today's behaviour, so it is a capacity experiment, not the next generation.
 11. [ ] **One network on the corrected route:** the merged model(s) trained on the new states; a golden path with
     them; then single runs at the world-record scale.
@@ -396,7 +396,8 @@ thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
 - **Inputs:** v7 (`rel`, contact columns range-aware, projectiles too); the shooter's threat lane (screened on the
   hit bench first); the "next kill may drop bombs" input (BombStats' `bomb_carrier_window`, so the metric and the
   flag are one definition).
-- **Targets and objective:** firing-line targets at full hearts (if the zol experiment holds); bomb-carrier targets
+- **Targets and objective:** no firing-line targets (rejected for this generation, the owner Nov 23; revisit damage
+  from range long after the retrain, against monsters that do not split); bomb-carrier targets
   in pass-through rooms (the exit and the nearest eligible carrier); 6:0x78's snipe as a case of them; the 0x1e
   row and 0x1f's line; 9:0x56's key and Moldorm crossed (Key39b's route data).
 - **Rewards:** rupees once per pickup and the beam terms (built, never trained from scratch); the Bubble touch
@@ -496,3 +497,34 @@ thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
 - None blocking. The first results that will want steering: the cross-play matrix (how far merging goes for free),
   the oracle test (what the observation should become), and how the wrong warps are offered to a network (a macro
   the engine plays, or the plays themselves).
+
+## Recorded for later (the owner, Nov 23)
+
+- **(Decided the same evening: decisions "The fresh generation's Dungeon 3". 0x7b and 0x6b crossed, one Darknut in
+  0x5b's first pass, the Moldorm's key back; in the retrain, not before.)** **Speedrunners bypass 3:0x6b on entry**: they kill nothing before the first Darknut encounter (3:0x5b), so they do
+  not take 0x6b's key (it appears when its five Zols are dead). Where they make that key up is not known to us yet
+  ("I'm not sure where they make up the key without digging into it"). The route is NOT changing for it now; when
+  Dungeon 3's route is next looked at, find the key they use instead (levels/level-3.md: keys at 0x7b, 0x6b, 0x49,
+  0x4b, 0x2a; locked doors 0x59|0x5a, 0x4a|0x4b, 0x4b|0x4c, 0x4b|0x3b) and measure the route without the 0x6b fight
+  (today 1,164 frames a visit and 7 deaths in 1000 runs).
+- **Damage from range, after the retrain**: firing-line targets were rejected on zol@d3first (Zols split, the Gels
+  scatter and are not finished up close). The owner's reading is that beams pay against Darknuts and that Dungeon 3
+  hides it (3:0x59 is a bomb room, 3:0x5b is a pass-through first and reached without beams second). A later
+  experiment should pick rooms where Link arrives with beams against monsters that do not split, and may be a
+  different technique than a target rule.
+- **A red Goriya's lane** (the owner asked why it has none; left as is for now): once a red Goriya is ready to throw
+  (timer 0, "wants to shoot"), it throws on a frame only when its random byte is one of two values of 256, so the
+  moment cannot be told, but the risk can: standing in its line then costs about a 1-in-128 chance a frame, 37% a
+  second. A third lane state, "armed, may throw any frame" (the line it would fly, no countdown), would say so
+  without the random byte. Try it if the fresh networks struggle with red Goriyas.
+- **Rust suite, the four long sweeps** (Tests40's measurement, not done): `attacks`, `wrap_exit`, `bomb_mask` split
+  by state / row / wall so the harness runs the parts side by side (same coverage); estimated floor 60-70 s.
+- **A flaky test**: `tests/test_train_cli.py::test_an_interrupted_run_saves_but_exits_130` failed once in a full
+  suite under load (exit 1 instead of 130) and passed three times alone.
+- **For the retrain (decisions 2026-11-23, three entries on Dungeon 3):** the wrap in 0:0x76 and 0:0x75 as the
+  route's way; 3:0x7b (key taken) and 3:0x6b crossed; 3:0x5b's first pass trained half at drop cycle 0 (kill one
+  Darknut for its bombs) and half at 1 (cross); 3:0x59's starts at exactly 4 or 8 bombs with `bomb_reserve: 4` held
+  to 3:0x5b's last pass; 3:0x69's golden line planned, given as `path_costs` and taught by demos, sword only; the
+  Moldorm fought again for its key and the route's key and bomb budget redone; goals tracked in the run statistics
+  (wrap taken, no kill where the route crosses, the cycle on entering 3:0x5b, hits a visit in 3:0x69).
+

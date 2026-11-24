@@ -87,6 +87,7 @@ vars! {
     KillStreak = ("kill_streak", 0x627, false),
     HelpDropCount = ("help_drop_count", 0x050, false),
     HelpDropValue = ("help_drop_value", 0x051, false),
+    WorldKillCycle = ("world_kill_cycle", 0x52A, false),
     RoomKills = ("room_kills", 0x34F, false),
     Rupees = ("rupees", 0x66D, false),
     RupeesToAdd = ("rupees_to_add", 0x67D, false),

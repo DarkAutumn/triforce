@@ -442,7 +442,7 @@ def chain_entry(name: Optional[str], args: list[str], options: Options, *, outpu
         return chain_headline(summary, runs, target), [('chain', {**summary, 'resumed': True})]
 
     fields = {'route': parsed.route, 'runs': parsed.runs, 'act': parsed.act, 'start_from': parsed.start_from,
-              'stop_at': parsed.stop_at, 'target': target}
+              'stop_at': parsed.stop_at, 'power_on': bool(parsed.power_on), 'target': target}
     return Entry(name, 'chain', [command], parallel=parallel, total=parsed.runs, output=output, log=log,
                  fields=fields, prepare=prepare, complete=complete, resume=resume)
 
@@ -714,20 +714,23 @@ def _fits(entry: Entry, running: list[Entry], cores: int, jobs: int) -> bool:
 
 def batch_work(entries: list[Entry]) -> dict:
     """The batch's work (``triforce.jobs``): the sum of its entries' that an earlier run hasn't measured yet (their
-    ``resume``): a chain's route steps (``runner.chain_steps``), an evaluation's episodes; a report counts nothing."""
+    ``resume``): a chain's route steps (``runner.chain_steps``) and its shape (``runner.chain_entry``, named for the
+    entry: the queue learns each from its plan entry's seconds), an evaluation's episodes; a report counts nothing."""
     # pylint: disable=import-outside-toplevel
     from ._native import DEFAULT_ROUTE
-    from .runner import chain_steps
-    chains = episodes = 0
+    from .runner import chain_entry as queue_chain      # this module's chain_entry builds a batch entry
+    chains, episodes = [], 0
     for entry in entries:
         if entry.resume is not None and entry.resume() is not None:
             continue
         if entry.kind == 'chain':
-            chains += chain_steps(entry.fields.get('route') or DEFAULT_ROUTE, entry.total or 0,
-                                  entry.fields.get('start_from'), entry.fields.get('stop_at'))
+            chains.append(queue_chain(entry.fields.get('route') or DEFAULT_ROUTE, entry.total or 0, entry.parallel,
+                                      entry.fields.get('start_from'), entry.fields.get('stop_at'),
+                                      bool(entry.fields.get('power_on')), name=entry.name))
         elif entry.kind == 'eval':
             episodes += entry.total or 0
-    return work(chain_steps=chains, eval_episodes=episodes)
+    return work(chain_steps=sum(chain['runs'] * chain['steps'] for chain in chains), eval_episodes=episodes,
+                chains=chains)
 
 
 def run_batch(name: str, entries: list[Entry], *, logs_dir=None, cores: int = 1, jobs: int = 1, nice: int = 0,

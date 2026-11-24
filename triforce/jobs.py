@@ -38,12 +38,14 @@ ENFORCE = True                              # tools refuse to run outside ``trif
 UNITS = jobqueue.UNITS
 
 
-def work(**amounts) -> dict:
-    """A job's work, ``{unit: amount}`` (``UNITS``), without the units it has none of."""
+def work(chains: Optional[list] = None, **amounts) -> dict:
+    """A job's work, ``{unit: amount}`` (``UNITS``), without the units it has none of; ``chains``: the chains it
+    plays (``runner.chain_entry`` each: shape, runs, parallel, steps), which the queue estimates by their shape
+    (``jobqueue.chain_model``) where it has seen it before."""
     unknown = set(amounts) - set(UNITS)
     if unknown:
         raise ValueError(f"unknown work units {sorted(unknown)}; known: {UNITS}")
-    return {unit: amount for unit, amount in amounts.items() if amount}
+    return {**{unit: amount for unit, amount in amounts.items() if amount}, **({'chains': chains} if chains else {})}
 
 
 def job_id() -> Optional[int]:
