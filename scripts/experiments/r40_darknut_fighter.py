@@ -749,6 +749,10 @@ class Fighter:
         return [s[7] for s in safe + unsafe]
 
     def leave(self, ram, ok, grid) -> list[str]:
+        """`exits`' moves the mask offers (a shutter still opening masks the door's way: wait for it)."""
+        return [text for text in self.exits(ram, grid) if ok(text)] or ['WAIT 4']
+
+    def exits(self, ram, grid) -> list[str]:
         """The room is clear: to its exit (3:0x59's S door; the Garden's block pushed S from above it, then its
         stairs), along Dijkstra's lattice path.  Off the lattice a move across the axis Link walks first takes him to
         the nearest lattice point (the game's own alignment, `walk`), so the lattice point he rounds to is where he
@@ -1171,7 +1175,7 @@ def replay(env, room, seed, start, actions, recorder=None) -> dict:
     for text in actions:
         ram = bytes(env.state.ram)
         fighter.note(ram, text)
-        if recorder is not None:
+        if recorder is not None and mask_ok(obs)(text):
             kind = text.split()[0]
             recorder.add(obs, text, repeat=REPEAT.get(kind, 1), any_duration=kind in ('MOVE', 'WAIT'))
         obs, _, terminated, truncated, info = env.step(text)
