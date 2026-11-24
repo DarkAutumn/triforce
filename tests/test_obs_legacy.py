@@ -11,7 +11,15 @@ Six traces differ from the record since the round 26 route vocabulary was merged
 no column's computation, but what the room view and the objective say in the trace's last, terminal observation.
 Each was compared key by key against the schema 6 code without the vocabulary (same actions, same length; only the
 `target` block, in one also `objective`, and only in that last observation) and against the vocabulary's code
-without schema 6 (`objective`, `target`, `grid`, `history` and the mask equal at every step)."""
+without schema 6 (`objective`, `target`, `grid`, `history` and the mask equal at every step).
+
+Round 40 (the owner's cut-over: no closing frame of no buttons after a MOVE that stays in play; decisions
+2026-11-23) moved the traces themselves: from the first MOVE on, every decision comes a frame sooner, so the game
+states, and with them the observations and masks the seeded steps are drawn from, differ. No column's computation
+changed: against the main it branched from, the cut-over changes `crates/zelda/src/executor.rs` alone (its timing),
+nothing of the observation (`crates/env`, `triforce/convert.py`). The new hashes of the traces it moved are
+`tests/fixtures/obs_schema5_round40.json` (`ROUND40_CHANGES`), recorded once on branch `r40-noclose` at its timing,
+as the earlier changes were, and like the record never to be rerun to make this test pass."""
 
 import argparse
 import hashlib
@@ -28,6 +36,7 @@ from triforce.specialist import list_specialists
 from .conftest import REPO_STATES_DIR
 
 GOLDEN = Path(__file__).parent / 'fixtures' / 'obs_schema5_golden.json'
+ROUND40_CHANGES = json.loads((Path(__file__).parent / 'fixtures' / 'obs_schema5_round40.json').read_text(encoding='utf-8'))
 STEPS = 50
 KINDS, DIRECTIONS, DURATIONS = 11, 8, 4
 # Traces whose last observation the round 26 route vocabulary changed (docs/experiments/round26.md §5), with their
@@ -228,7 +237,8 @@ def test_schema5_columns_are_unchanged(name):
     if name not in golden['families']:
         pytest.skip(f"{name}: no schema 5 record (a family added after the record)")
     recorded = golden['families'][name]
-    changed = ROUTE_CHANGES.get(name, {}) | BOMB_RULE_CHANGES.get(name, {}) | ROUTE31_CHANGES.get(name, {})
+    changed = (ROUTE_CHANGES.get(name, {}) | BOMB_RULE_CHANGES.get(name, {}) | ROUTE31_CHANGES.get(name, {})
+               | ROUND40_CHANGES.get(name, {}))
     kept = {state: digest for state, digest in recorded.items() if state not in ROUTE31_DELETED}
     assert family_hashes(name, recorded) == kept | changed
 
