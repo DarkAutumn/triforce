@@ -261,6 +261,41 @@ lane as first written:
   was warned, `leave` read 1-6 frames, and a third of the Octorok and Goriya warnings came where walls kept Link in
   the lane.
 
+**The whole set, the fixed rule** (all 250 replays, 13 pieces of 20, jobs lane-final-0 to -240 on c1ac5208):
+
+| shooter | shots | `ready` 1 / 8 / 16 frames before | `wait` within 1 frame, 1 / 8 / 16 before (median error) | left while not `ready` | hits by its shot / warned | `leave` at the warning: median (walled in) |
+|---|---:|---|---|---:|---|---|
+| Octorok | 1,543 | 99.9 / 99.9 / 99.9% | 99.7 / 99.0 / 98.4% (0 / 0 / 0) | 0.1% | 100 / 49 | 1 frame (39%) |
+| Moblin | 1,965 | 99.5 / 99.8 / 99.8% | 98.9 / 98.3 / 97.3% (0 / 0 / 0) | 0.5% | 61 / 7 | 2 frames (0%) |
+| Lynel | 170 | 100 / 100 / 100% | 100 / 100 / 100% (0 / 0 / 0) | 0 | 3 / 0 | - |
+| Goriya, blue | 1,735 | 98.3 / 81.1 / 80.4% | 98.6 / 94.7 / 93.4% (0 / 0 / 0) | 1.7% | 75 / 25 | 2 frames (4%) |
+| Goriya, red | 989 | 99.3 / 99.3 / 96.9% | by design never (the lottery's mean 128) | 0.7% | 47 / 0 | - |
+
+The blue Goriya's `ready` falls to 81% eight frames before a throw; the likely cause (not checked frame by frame) is
+that it was still standing for its last boomerang (state bit 7) and threw again soon after the catch. The red
+Goriya's lane stays as built (the owner: "fine for now"; the backlog keeps a third state, "armed, may throw any
+frame", for later).
+
+### The lane on the hit bench (on against off)
+
+`linktok+rel+threat` (the whole block) against `linktok+rel+soon+near` (the same without the four lane columns),
+the fixed lane, 10 epochs, seeds 0 and 1 (`target/r40/bench-final.jsonl`):
+
+| family (held-out lost draws / candidates) | lane | P = R draws | P = R all | shot slice recall / AUC | lane slice recall / AUC |
+|---|---|---|---|---|---|
+| goriya (92 / 379) | on | 0.304 / 0.283 | 0.346 / 0.306 | 0.257 / 0.149, 0.922 / 0.915 (74) | 0.322 / 0.313, 0.956 / 0.949 (211) |
+| goriya | off | 0.348 / 0.272 | 0.356 / 0.311 | 0.216 / 0.216, 0.930 / 0.901 | 0.341 / 0.313, 0.949 / 0.948 |
+| ow-octorok (187 / 685; 60,000 decisions) | on | 0.743 / 0.743 | 0.724 / 0.733 | 0.657 / 0.635, 0.979 / 0.983 (137) | 0.742 / 0.764, 0.991 / 0.991 (368) |
+| ow-octorok | off | 0.775 / 0.738 | 0.742 / 0.724 | 0.650 / 0.657, 0.979 / 0.983 | 0.764 / 0.772, 0.991 / 0.991 |
+
+**The lane columns add nothing the bench can see**, on Goriyas or on the shooter family it is meant for: every
+difference is inside the seed spread (±0.03-0.04 on these sizes), and the lane slice itself (Link in a ready
+shooter's lane) is read as well without them. The contact columns already see the shot once it flies, and the
+teacher's own play rarely stands in a lane long enough for the warning to matter. What the bench measures is
+prediction on the teacher's states; whether a network trained with the lane dodges earlier is for the generation's
+trainings to show. The lane stays in the block (it is the owner's input and correct against the game), off with the
+rest of `obs.threat` until a training turns it on.
+
 ### Identity with `obs.threat` off (jobs #189 main 964e7f99, #186 this branch at 002051c3; seeds 0-199)
 
 | segment | runs | outcomes, rooms, actions, hits, frames | per-decision diagnostics |
