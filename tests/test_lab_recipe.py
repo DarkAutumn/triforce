@@ -119,6 +119,16 @@ def test_the_refusals_say_what_to_change(tmp_path):
     assert {'entity_threat', 'chase', 'entity_chase'} <= recipe.network_reads(generation)
 
 
+@pytest.mark.parametrize('flag', ['--name', '--run-id'])
+def test_a_name_no_team_spec_could_hold_is_refused_at_once(flag, capsys):
+    """A team spec splits on '+' (``store.parse_team_spec``): a run named with one could never be chained or judged."""
+    argv = ['--name', 'zol-skg', '--families', 'zol', flag, 'zol+skg']
+    with pytest.raises(SystemExit) as stopped:
+        train.parse_args(argv)
+    assert stopped.value.code == 2
+    assert f"{flag}: '+' separates the slots of a team spec" in capsys.readouterr().err
+
+
 def _demo_file(path, network, zero=(), drop=()):
     """A demonstration file holding every key ``network`` reads but ``drop``, ``zero`` all zeros, the rest ones."""
     spec = native_spec()
