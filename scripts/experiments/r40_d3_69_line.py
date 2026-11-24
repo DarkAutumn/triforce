@@ -5,6 +5,8 @@
     python scripts/experiments/r40_d3_69_line.py demos OUT.npz --pass in|out [--runs N] [--seed0 S] [--look D]
         [--json OUT] [--workers W]
     python scripts/experiments/r40_d3_69_line.py trace --pass in|out SEED
+    python scripts/experiments/r40_d3_69_line.py summarize RECORDS.jsonl...
+    python scripts/experiments/r40_d3_69_line.py merge OUT.npz PIECE.npz...
 
 The line (the owner, decisions 2026-11-23 "3:0x69 is crossed by a line"): "Going in the door, immediate east until
 you can't, south to line up the stairs, then east to stairs. [...] If you time it right, you can sword the darknut
@@ -731,8 +733,11 @@ def main(argv) -> int:
     d.add_argument('--look', type=int, default=4, metavar='DEPTH', help="the rule's look-ahead where no way is found")
     d.add_argument('--json', default=None, help="append each visit's record to this JSON-lines file")
     d.add_argument('--workers', type=int, default=1, help="processes sharing the visits")
-    u = sub.add_parser('summarize', help="the summary of measure's JSON-lines files")
+    u = sub.add_parser('summarize', help="the summary of measure's or demos' JSON-lines files")
     u.add_argument('files', nargs='+')
+    g = sub.add_parser('merge', help="one demonstration file of several (`demos` run in pieces), rows in order")
+    g.add_argument('out')
+    g.add_argument('files', nargs='+')
     t = sub.add_parser('trace')
     t.add_argument('--pass', dest='which', choices=('in', 'out'), required=True)
     t.add_argument('seed', type=int)
@@ -744,6 +749,17 @@ def main(argv) -> int:
     if args.cmd == 'summarize':
         records = [json.loads(line) for f in args.files for line in Path(f).read_text(encoding='utf-8').splitlines()]
         print(json.dumps(summary(records[0]['which'], records), indent=1))
+        return 0
+    if args.cmd == 'merge':
+        parts = []
+        for path in args.files:
+            with np.load(path) as data:
+                parts.append({k: data[k] for k in data.files})
+        if any(sorted(part) != sorted(parts[0]) for part in parts):
+            raise SystemExit("merge: the files' keys differ")
+        with open(args.out, 'wb') as file:
+            np.savez_compressed(file, **{k: np.concatenate([part[k] for part in parts]) for k in parts[0]})
+        print(f"{args.out}: {sum(len(part['actions']) for part in parts)} rows of {len(parts)} files")
         return 0
     from triforce import jobs
     jobs.require_job()
