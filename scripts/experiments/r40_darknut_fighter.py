@@ -398,7 +398,8 @@ class Fighter:
                         goff = 0
                     facing = way
                     nx, ny = px + VEC[way][0] * LINK_SPEED, py + VEC[way][1] * LINK_SPEED
-                    if self.floor.open(*lattice(nx, ny)) or self.floor.open(nx, ny):
+                    room = 0x20 <= nx <= 0xD0 and 0x5D <= ny <= 0xBD     # a doorway is walked along its axis only
+                    if self.floor.open(nx, ny) or (room and self.floor.open(*lattice(nx, ny))):
                         along = (py - 0x3D) if way in 'NS' else px
                         goff = (0 if along % 8 == 0 else goff) + LINK_SPEED * (VEC[way][0] + VEC[way][1])
                         px, py = nx, ny
@@ -683,9 +684,13 @@ class Fighter:
         inside = 0x20 <= x <= 0xD0 and 0x5D <= y <= 0xBD
         if not nuts or (departing and self.drop(ram) is None and (lattice(x, y) == self.exit_spot() or not inside)):
             return self.leave(ram, ok, grid)
-        outward = None                                        # in a doorway: never the way out (a wrong exit)
+        outward = None                                        # in a doorway: never out through it (a wrong exit)
         if not inside:
-            outward = 'E' if x > 0xD0 else 'W' if x < 0x20 else 'N' if y < 0x5D else 'S'
+            way = 'E' if x > 0xD0 else 'W' if x < 0x20 else 'N' if y < 0x5D else 'S'
+            # back out a step while a Darknut passes the door (the screen edge, asm:Link_ScreenEdgeBounds, more than a
+            # step away: a MOVE 4 walks 5-6 pixels)
+            room_left = {'N': y - 0x3D, 'S': 0xDD - y, 'W': x, 'E': 0xF0 - x}[way]
+            outward = way if room_left <= 8 else None
         goal = self.departure(ram) if departing else self.goal(ram, nuts)
         dist = self.field(goal, nuts)
 
@@ -693,9 +698,11 @@ class Fighter:
             return dist.get(lattice(px, py), 999) + (abs(px - goal[0]) + abs(py - goal[1])) / 16
 
         options = []                                          # (text, Link's first frames, kind, extra)
+        across = None if inside else ('EW' if 0x20 <= x <= 0xD0 else 'NS')   # a doorway takes no sideways step
         for step in list(VEC) + [None]:
             text = f'MOVE {step} 4' if step else 'WAIT 4'
-            if ok(text) and not (step is None and self.still >= STALL) and step != outward:
+            if ok(text) and not (step is None and self.still >= STALL) and step != outward and \
+                    not (step and across and step in across):
                 options.append((text, [(step, 4)], 'move', None))
         for text, first, d, f in self.strikes(ram, nuts, ok):
             if departing and d.hp <= 1:
