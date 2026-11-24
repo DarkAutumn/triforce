@@ -15,10 +15,15 @@ from triforce.store import Run
 
 @pytest.fixture
 def shared(tmp_path, monkeypatch):
-    """An empty store root (``$TRIFORCE_SHARED``), made by the lead's init; this process's team caches cleared."""
+    """An empty store root (``$TRIFORCE_SHARED``), made by the lead's init; this process's team caches cleared.
+    ``$TRIFORCE_TEAM`` is unset for the test and put back after it: ``registry.use_team`` sets it in ``os.environ``
+    itself, and ``monkeypatch.delenv`` of a variable that is not set records nothing to restore, so a test that
+    called ``use_team`` left its team name behind for whatever test the worker ran next (Nov 24: two
+    ``test_registry`` tests failed with "no team 't1'" in one worktree's run)."""
     root = tmp_path / 'shared'
     monkeypatch.setenv(paths.SHARED_ENV, str(root))
-    monkeypatch.delenv(store.TEAM_ENV, raising=False)
+    monkeypatch.setenv(store.TEAM_ENV, 'recorded-so-it-is-restored')
+    monkeypatch.delenv(store.TEAM_ENV)
     monkeypatch.setattr(store, '_TEAMS', {})
     monkeypatch.setattr(store, '_VIEWS', {})
     store.init()
