@@ -1812,8 +1812,9 @@ Both read `zelda::darknut_rules` (crates/zelda/src/darknut_rules.rs):
   forced drop), every `requires_bombs` room (the walls, Dodongo), and while BOMB is kept to bomb targets (a wall, a
   granted bomb). Tested: the in-game blast against `bomb_catch` and the mask (`crates/zelda/tests/darknut_rules.rs`:
   the clock holds four Blue Darknuts, a bomb laid E hurts exactly the two counted, the one facing W is parried),
-  `chasing`'s reach, the critic (`crates/env/tests/critic.rs`), the env's `penalty-chase` step by step
-  (`tests/test_r40_darknut_fighter.py`), the config's rejections.
+  `chasing` against a Darknut's next grid point (and none under the clock), the critic (`crates/env/tests/critic.rs`),
+  the env's `penalty-chase` step by step against the script's port (`tests/test_r40_darknut_fighter.py`), the
+  config's rejections.
 
 ### 3:0x5b's first pass: one Red Darknut for its bombs (the lead's case, the owner's Dungeon 3 plan)
 
@@ -1906,18 +1907,23 @@ lead's call whether 3:0x69's line wants its own share).
 frame by frame): a chasing frame is one where `chasing` holds; a hit follows it if Link's hearts drop in the next 32
 frames; a bomb's catch is read on the frame it appears, its outcome from the Darknuts' hit points after the blast.
 
-| case | chasing frames a visit (fighter) | hit within 32 after a chasing frame / after any other | hits with a chasing frame in the 32 before | bombs laid | catch >= 2 read: hurt 2+ | catch < 2 read: hurt 2+ | Darknuts hurt a bomb |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| Olive Garden, 0 | 347 (118) | 5.7% / 3.0% | 408 of 938 | 0 | - | - | - |
-| Olive Garden, 8 | 255 (92) | 3.3% / 1.9% | 181 of 570 | 2,411 | 259 of 490 (53%) | 176 of 1,921 (9%) | 0.88 |
-| 3:0x59, 4 | 106 (52) | 3.0% / 2.9% | 81 of 419 | 339 | 24 of 42 | 21 of 297 | 0.82 |
-| 3:0x59, 8 | 59 (36) | 1.7% / 1.9% | 26 of 244 | 1,255 | 117 of 203 (58%) | 173 of 1,052 (16%) | 0.99 |
+Chasing frames are read with `chasing` as it is now (a Darknut set to reverse onto Link at its next grid point); the
+first build's test (Link on the line within $30 behind it now) is in brackets: the network's, then the fighter's (its
+measurements ran on the first build).
 
-**(a) The chase.** The network chases three times as long as the fighter in the Garden and twice as long in 3:0x59.
-In the Garden a hit follows a chasing frame 1.7-1.9 times as often as any other frame and 43% of its hits at 0 bombs
-have one before them; in 3:0x59 chasing is not riskier than the rest (1.0 and 0.9 times). At 0.002 a frame the cost
-is 0.69 a Garden visit at 0 bombs, 0.51 at 8, 0.12-0.21 in 3:0x59: small beside a Darknut kill's reward. Only a
-training measures what the cost does; it is not measured here.
+| case | chasing frames a visit [first test: network, fighter] | hit within 32 after a chasing frame / after any other [first test] | hits with a chasing frame in the 32 before [first test] | bombs laid | catch >= 2 read: hurt 2+ | catch < 2 read: hurt 2+ | Darknuts hurt a bomb |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Olive Garden, 0 | 669 [347, 118] | 6.4% / 2.4% [5.7% / 3.0%] | 663 of 938 [408] | 0 | - | - | - |
+| Olive Garden, 8 | 462 [255, 92] | 4.1% / 1.6% [3.3% / 1.9%] | 346 of 570 [181] | 2,411 | 259 of 490 (53%) | 176 of 1,921 (9%) | 0.88 |
+| 3:0x59, 4 | 186 [106, 52] | 5.1% / 2.5% [3.0% / 2.9%] | 177 of 419 [81] | 339 | 24 of 42 | 21 of 297 | 0.82 |
+| 3:0x59, 8 | 80 [59, 36] | 2.9% / 1.8% [1.7% / 1.9%] | 59 of 244 [26] | 1,255 | 117 of 203 (58%) | 173 of 1,052 (16%) | 0.99 |
+
+**(a) The chase.** With the chase module's reversal a hit follows a chasing frame 1.6-2.7 times as often as any
+other frame in all four cases, and 71% (Garden, 0 bombs), 61%, 42% and 24% of the network's hits have one in the 32
+frames before them; the first test, limited to $30 behind, saw it in the Garden only. Under the first test the
+network chased about three times as long as the fighter in the Garden and twice in 3:0x59. At 0.002 a frame the
+cost is 1.34 a Garden visit at 0 bombs, 0.92 at 8, 0.37 and 0.16 in 3:0x59: small beside a Darknut kill's reward.
+Only a training measures what the cost does; it is not measured here.
 
 **(b) Bombs for two or more**, measured with the mask (`items.bomb_catch: 2`, `experiments/r40-darknut/<room>-b8-catch2.yaml`)
 on today's network without training, 150 visits paired by seed against the same entries without it:
@@ -1937,10 +1943,10 @@ between the decision the mask read and the bomb. The reward key (`reward.bomb_ca
 
 **Recommendation.** Switch on (b)'s mask for darknut@d3first's training (`items.bomb_catch: 2`): no loss measured
 on today's network, 40% fewer bombs and the owner's "2+ with one bomb" by construction; the single-bomb cases stay
-open (`bomb_catch_in`: a target that wants bombs, a room that needs one, the 10th kill's drop, a boss). Keep (a)
-off for the first training: the demonstrations already show the shadowing that replaces the chase, and the Garden is
-the only room where chasing is measured to cost hits; switch it on (0.002) if the trained network still chases
-there.
+open (`bomb_catch_in`: a target that wants bombs, a room that needs one, the 10th kill's drop, a boss). Train (a)
+as a second arm (`reward.chase_penalty: 0.002` on top of the mask) rather than switching it on blind: the chasing
+frames now precede most of the Garden's hits, but a cost on standing behind a Darknut can as well teach keeping
+away from it, and only a training shows which; the demonstrations already show the shadowing that replaces the chase.
 
 ## Three switches settled by measurement (Switch40, branch `r40-switch`)
 
