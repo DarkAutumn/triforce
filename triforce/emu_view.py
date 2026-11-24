@@ -361,10 +361,13 @@ class Window(QWidget):
         return QImage(pixels.tobytes(), FRAME_W, FRAME_H, FRAME_W * 3, QImage.Format.Format_RGB888).copy()
 
     def status_lines(self) -> tuple:
-        """The status strip: the room, entry, seed, hearts, bombs and keys; the last file saved."""
+        """The status strip: the room, entry, seed, hearts, bombs, keys and (``--enemies``) the monsters left of
+        the room's; the last file saved."""
         state, session = self.session.state, self.session
         first = (f"{session.spec.name} {session.start.entry}   seed {session.seed}   hearts "
                  f"{state.health:g}/{state.max_health}   bombs {state.bombs}   keys {state.keys}")
+        if session.enemies is not None:
+            first += "   enemies {} of {}".format(*session.enemies)
         return first, (f"saved {self.saved.name}" if self.saved is not None else 'not saved yet')
 
     def status_text(self) -> str:

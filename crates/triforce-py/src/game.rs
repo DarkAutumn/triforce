@@ -285,6 +285,13 @@ impl PyGameState {
     fn room_kills(&self) -> i32 {
         self.view.room_kills()
     }
+    /// The B item slots Link holds (0 boomerang, 1 bombs, 2 arrow with the bow, 4 candle, 5 recorder, 6 food, 7
+    /// potion, 8 wand), as the item screen counts them (`zelda::submenu::holds`); `SelectedItemSlot` ($656) takes
+    /// one of these.
+    #[getter]
+    fn b_slots(&self) -> Vec<u16> {
+        (0..=8u8).filter(|&s| zelda::submenu::holds(|a| self.view.peek(a), s)).map(u16::from).collect()
+    }
 
     /// {x, y, tile, direction, status}.
     #[getter]

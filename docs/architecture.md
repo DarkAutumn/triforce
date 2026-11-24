@@ -2441,7 +2441,20 @@ The owner plays one room himself to show how it is played, and the take is kept 
   give the entries in order, the namespace's state files (read by `_native.state_name`) the visits and chains.
   A room the route never enters is refused, naming the rooms it does enter; `triforce.probe` is not used (a
   route state is what a run brings into the room). `--bombs`, `--hearts` (halves; the containers grow to hold
-  them, written as `env::start_states::hearts_encoding` writes them) and `--keys` are `Game.set_value` writes.
+  them; the game's own bytes through `_native.hearts_encoding`, the training resets' function: 2 hearts die to a
+  two-heart hit), `--keys` and `--item` are `Game.set_value` writes. `--item` selects the B item
+  (`SelectedItemSlot`; `emu.ITEMS`: boomerang, bombs, bow, candle, recorder, food, potion, wand) only if Link
+  holds it there (`GameState.b_slots`, `zelda::submenu::holds`; the bombs by the count after `--bombs`): the game
+  moves the selection off an empty slot on its next status-bar frame (`asm:StatusBar_CheckMissingItem`), so bombs
+  selected with none cannot be shown. The HUD draws hearts, counts and the B item from the second frame (the first
+  frame's picture comes before the game rewrites the status bar).
+- **`--enemies N`** (dungeon rooms): the room's monsters (game.yaml, `_native.game_rooms`) less N are banked as
+  kills the game keeps for the room (`LoadOptions::banked_kills`, a staged training reset's `room_kills` way:
+  `LiveGame.load(..., banked_kills)`), so the game itself makes N. Which N and where are the game's: its spawn
+  draw from the seed (the same seed the same monsters in the same places, another seed others), not a choice of
+  this tool; the room's kill count and "cleared" logic are the game's own, so a kill-all room opens when the N
+  die (3x59's S shutter, `tests/test_emu.py`). The banked count is a frame-0 EDIT. The status line says `enemies N
+  of M`. The overworld keeps no kills for a screen: refused there.
 - **The recording** (`_native.LiveGame`): a `Session` over `pool::zelda::PoolNes<ZCore>`, the wrapper every pool
   env records through. `load(state, seed, overrides)` loads the start as a chain start loads it (the natural RNG
   phase drawn from the seed, "Randomness at a start"; the overrides written before control is gained) and begins
