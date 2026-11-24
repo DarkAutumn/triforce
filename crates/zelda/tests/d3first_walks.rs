@@ -79,10 +79,45 @@ struct Family {
     bombs: String,
 }
 
+/// The task file at `path` with its `extends:` merged (a path or a list of them, in order, the file's keys last:
+/// `env::config::task_value`'s rule, which this crate cannot call). Round 40: the generation's d3first tasks of the
+/// families that had none extend the family's own file and `_generation.yaml`, so their `items` and `clips` are the
+/// family file's; reading the d3first file alone saw neither (the walk then masked trap-room's wall bomb in 3:0x4c).
+fn task_value(path: &std::path::Path) -> serde_yaml_ng::Value {
+    let mut v: serde_yaml_ng::Value = serde_yaml_ng::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let Some(extends) = v.as_mapping_mut().and_then(|m| m.remove("extends")) else { return v };
+    let bases: Vec<String> = match extends {
+        serde_yaml_ng::Value::Sequence(items) => items.iter().map(|b| b.as_str().unwrap().to_owned()).collect(),
+        single => vec![single.as_str().unwrap().to_owned()],
+    };
+    let mut merged = serde_yaml_ng::Value::Null;
+    for base in bases {
+        merge(&mut merged, task_value(&path.parent().unwrap().join(base)));
+    }
+    merge(&mut merged, v);
+    merged
+}
+
+fn merge(base: &mut serde_yaml_ng::Value, over: serde_yaml_ng::Value) {
+    match (base, over) {
+        (serde_yaml_ng::Value::Mapping(base), serde_yaml_ng::Value::Mapping(over)) => {
+            for (key, value) in over {
+                match base.get_mut(&key) {
+                    Some(slot) => merge(slot, value),
+                    None => {
+                        base.insert(key, value);
+                    }
+                }
+            }
+        }
+        (base, over) => *base = over,
+    }
+}
+
 fn family(name: &str) -> Family {
     let own = common::repo().join("specialists").join(ROUTE).join(format!("{name}.yaml"));
     let path = if own.exists() { own } else { common::repo().join("specialists").join(format!("{name}.yaml")) };
-    let v: serde_yaml_ng::Value = serde_yaml_ng::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let v = task_value(&path);
     let clips = match &v["clips"] {
         serde_yaml_ng::Value::Bool(b) => *b,
         serde_yaml_ng::Value::Mapping(m) => m.get("enabled").and_then(|e| e.as_bool()).unwrap_or(false),
