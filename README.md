@@ -227,16 +227,22 @@ triforce job build --agent A --task T                                    # matur
 triforce job test SUITE... --agent A --task T [--build]                 # python, asm, check, rust or all, side by side (--build: build first, one entry)
 triforce job setup BRANCH [--from main]                                  # worktree ../triforce-<branch>: links, venv, build
 triforce job list [--calibration]                                        # what runs, what waits in order, what ended in the last hour
+triforce job queues [--init]                                             # the queues in force, open or closed, what runs and waits (--init: write the file)
 triforce job progress DONE [TOTAL] --unit U                              # progress from a shell script running as a job
 ```
 
 Each verb blocks until the work is done; output and exit code are the command's, and SIGTERM or Ctrl-C stops the
-job. Two jobs run at once in the regular places plus one estimated at 10 minutes or less (or `--express`) in the
-express place; the others wait, the shortest estimate first, a long one moving up as it waits (a tool's estimate
-comes from its work and the queue's history; any other command needs `--timeout`, which is its estimate and where
-it is stopped, exit 124). Builds and test suites have their own lane, two at once, first come first served, at nice
-10 with `CARGO_BUILD_JOBS=4`; jobs run at nice 15, below the owner's player. A waiting job is only its wrapper (no
-model, no GPU memory); `nice`, `ionice`, `timeout` or `CARGO_BUILD_JOBS=` after `--` are refused. The tools
+job. The places come from one file the owner edits, `~/.local/state/triforce/queues.yaml` (`triforce job queues
+--init` writes the default; without it the default is in force): a list of queues, each a `name`, `max-parallel`
+and optionally `max-job-length` (only jobs estimated at or under it, or `--express`) and `load-average-max` (a place
+only while the 1-minute load average is at or under it, read once a minute). The default: express (1 place, jobs of
+10 minutes or less), regular (2), spare (1, while the load average is at or under 15) and tools (2, builds and test
+suites). A job tries the queues in the file's order; the others wait, the shortest estimate first, a long one
+moving up as it waits (a tool's estimate comes from its work and the queue's history; any other command needs
+`--timeout`, which is its estimate and where it is stopped, exit 124). Builds and test suites run in the tools
+queue, first come first served, at nice 10 with `CARGO_BUILD_JOBS=4`; jobs run at nice 15, below the owner's player.
+A waiting job is only its wrapper (no model, no GPU memory) and says what it waits for; `nice`, `ionice`, `timeout`
+or `CARGO_BUILD_JOBS=` after `--` are refused. The tools
 (`triforce train|evaluate|eval-chain|eval-batch|select-checkpoint`, `train_round.py`, `full_runs.py`, the lab's
 train, record and bench, every script that plays, trains or crunches) refuse to run outside a job unless a terminal
 is attached, so the commands under "Commands" work as typed at a shell. The queue is one SQLite database

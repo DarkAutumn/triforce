@@ -1,8 +1,10 @@
 """The job queue's rules without processes (``triforce.jobqueue``, ``triforce.job``, ``triforce.jobs``): the line's
-order and the places each lane gives, the rates refitted from the history and the calibration, the overrun flag,
-the texts ``triforce job list`` and the GUI show, the parameters ``triforce job run`` requires or refuses, which
-commands the queue measures, and the tool side's reports.  Real wrappers waiting their turn are in
-``test_job_queue.py``."""
+order and the places each lane gives, the queues' file (its parsing and every refusal, each field's effect, the
+load gate with a made-up load, the last good configuration kept when the file is refused, jobs of older code in one
+line with this code's, ``triforce job queues``), the rates refitted from the history and the calibration, the
+overrun flag, the texts ``triforce job list`` and the GUI show, the parameters ``triforce job run`` requires or
+refuses, which commands the queue measures, and the tool side's reports.  Real wrappers waiting their turn are in
+``test_job_queue.py``.  No test reads the machine's load average or queue."""
 
 import json
 import os
@@ -18,6 +20,13 @@ from triforce import jobqueue as q
 from triforce import job, jobs
 
 NOW = 1_800_000_000.0
+
+
+@pytest.fixture(autouse=True)
+def no_machine_load(tmp_path_factory, monkeypatch):
+    """A load average nobody can read (a file that isn't there) unless a test makes one up: a load-gated queue a
+    test doesn't mean to open stays closed, and no test reads the machine's."""
+    monkeypatch.setenv(q.LOADAVG_ENV, str(tmp_path_factory.mktemp('load') / 'none'))
 
 
 def row(job_id: int, estimate=None, status='queued', lane=q.JOBS_LANE, queued=NOW, express=0, place=None, **extra):
@@ -137,49 +146,377 @@ def test_places_regular_express_and_tools():
     assert q.assign(tools, ['regular-1'], q.TOOLS_LANE) == {}
 
 
-def test_the_number_of_regular_places_is_a_setting_and_an_extra_one_goes_to_jobs_that_know_of_it(tmp_path):
-    """The owner, Nov 24: "add an extra slot and we'll see how it does. It's ok if what's in the queue doesn't know
-    the extra slot and waits. New stuff queued can use it".  Without a setting: the two of old.  A job queued by
-    older code (no ``places_aware``) takes only the first two places, in every wrapper's reckoning, so the job
-    behind it gets the third and never the other way round."""
-    assert q.regular_places(tmp_path) == q.REGULAR_PLACES == ('regular-1', 'regular-2')
-    assert q.lane_places(q.JOBS_LANE, tmp_path) == ('regular-1', 'regular-2', 'express-1')
-    assert q.set_regular_places(3, tmp_path) == ('regular-1', 'regular-2', 'regular-3')
-    assert q.lane_places(q.JOBS_LANE, tmp_path) == ('regular-1', 'regular-2', 'regular-3', 'express-1')
-    assert q.lane_places(q.TOOLS_LANE, tmp_path) == q.TOOL_PLACES
-    for bad in (0, q.MAX_REGULAR_PLACES + 1):
-        with pytest.raises(ValueError, match='regular places'):
-            q.set_regular_places(bad, tmp_path)
-    (tmp_path / q.PLACES_FILE).write_text('many\n')                      # a file that can't be read: the two of old
-    assert q.regular_places(tmp_path) == q.REGULAR_PLACES
-    old, new, newer = row(1, estimate=3600), row(2, estimate=3600, places_aware=1), row(3, estimate=3600, places_aware=1)
-    assert q.assign([old, new], ['regular-3'], q.JOBS_LANE) == {2: 'regular-3'}        # the old one waits, as it will
-    assert q.assign([old, new], ['regular-2', 'regular-3'], q.JOBS_LANE) == {1: 'regular-2', 2: 'regular-3'}
-    assert q.assign([new, newer, old], ['regular-1', 'regular-3'], q.JOBS_LANE) == {2: 'regular-1', 3: 'regular-3'}
-    assert q.assign([old], ['regular-3'], q.JOBS_LANE) == {}
-    con = q.connect(tmp_path)
-    fds = []
-    try:
-        def insert(**fields) -> int:
-            cursor = con.execute(f"INSERT INTO jobs ({', '.join(fields)}) VALUES ({', '.join('?' * len(fields))})",
-                                 tuple(fields.values()))
-            fds.append(q.take_lock(q.lock_path(tmp_path, f'job-{cursor.lastrowid}')))
-            return cursor.lastrowid
-        for place in q.REGULAR_PLACES:
-            insert(status='running', lane=q.JOBS_LANE, place=place, estimate=3600, queued_ts=NOW)
-        waiting_old = insert(status='queued', lane=q.JOBS_LANE, estimate=3600, queued_ts=NOW)
-        waiting_new = insert(status='queued', lane=q.JOBS_LANE, estimate=3600, queued_ts=NOW + 1, places_aware=1)
-        with q.transaction(con):                                         # two places: both wait
-            assert q.turn(con, tmp_path, waiting_old, NOW + 2).place is None
-            assert q.turn(con, tmp_path, waiting_new, NOW + 2).place is None
-        q.set_regular_places(3, tmp_path)
-        with q.transaction(con):                                         # three: the one that knows takes the third
-            assert q.turn(con, tmp_path, waiting_old, NOW + 2).place is None
-            assert q.turn(con, tmp_path, waiting_new, NOW + 2).place == 'regular-3'
-    finally:
-        for fd in fds:
+def new(job_id: int, **fields) -> dict:
+    """A row of this code's wrapper: it reads the queues' file (``queues_aware``)."""
+    return row(job_id, queues_aware=1, **fields)
+
+
+def config(text: str) -> q.Config:
+    return q.Config(q.parse_config(text))
+
+
+def default_without(name: str) -> str:
+    """The default file with one queue's entry taken out."""
+    return '\n\n'.join(block for block in q.DEFAULT_TEXT.split('\n\n') if not block.startswith(f'- name: {name}\n'))
+
+
+def is_open(_queue) -> None:
+    return None
+
+
+def is_closed(queue) -> str:
+    return f'load 22.4 above {queue.load_average_max:g}'
+
+
+TOOLS = '- name: tools\n  max-parallel: 2\n'
+
+
+def test_the_default_file_is_yaml_and_holds_the_owners_queues():
+    """The owner, Nov 24: "I like our old queues just fine (2 instead of 3 with an express lane) but maybe also an
+    optional 1 queue when load average is at or below 15".  The file ``--init`` writes is YAML (PyYAML reads the
+    same values the queue's own reader does), and taking the spare queue out leaves the queues of Nov 23."""
+    import yaml
+    express, regular, tools = q.Queue('express', 1, 600.0), q.Queue('regular', 2), q.Queue('tools', 2)
+    assert q.DEFAULT_QUEUES == (express, regular, q.Queue('spare', 1, None, 15.0), tools)
+    assert [queue.places for queue in q.DEFAULT_QUEUES] == [('express-1',), ('regular-1', 'regular-2'), ('spare-1',),
+                                                            ('tools-1', 'tools-2')]
+    assert q.parse_config(default_without('spare')) == (express, regular, tools)
+    for text in (q.DEFAULT_TEXT, default_without('spare'),
+                 "# queues\n-\n  name: 'regular'   # quoted\n  max-parallel: 2\n- name: \"tools\"\n  max-parallel: 1\n",
+                 "  - name: regular\n    max-parallel: 3\n    load-average-max: 12.5\n  - name: tools\n"
+                 "    max-parallel: 1\n"):
+        ours = [{key: value for key, (_, value) in entry.items()} for _, entry in q.read_entries(text)]
+        assert yaml.safe_load(text) == ours
+
+
+@pytest.mark.parametrize('text, message', [
+    ('', r"^no queues"),
+    ('# nothing but a comment\n', r"^no queues"),
+    ('queues:\n  - name: regular\n', r"^line 1: 'queues:': the file is a list of queues, each one starting '- name"),
+    ('- {name: regular, max-parallel: 2}\n', r"^line 1: .*one key a line"),
+    ('- name: regular\n  max-parallel: [2]\n', r"^line 2: max-parallel: a plain value"),
+    ('- name: regular\n\tmax-parallel: 2\n', r"^line 2: a tab in the indent"),
+    ('  - name: regular\n- name: tools\n', r"^line 2: this '-' is at column 1, the list's others at 3"),
+    ('- name: regular\n   max-parallel: 2\n', r"^line 2: indented to column 4, the queue's other keys to 3"),
+    ('- name: regular\n  max-parallel 2\n', r"^line 2: 'max-parallel 2' is not 'key: value'"),
+    ('- name: regular\n  max-parallel:\n', r"^line 2: max-parallel has no value"),
+    ('- name: regular\n  max-parallel: 2\n  max-parallel: 3\n',
+     r"^line 3: max-parallel twice in one queue \(first on line 2\)"),
+    ('- name: regular\n  max_parallel: 2\n' + TOOLS,
+     r"^line 2: unknown key 'max_parallel': a queue's keys are name, max-parallel, max-job-length, load-average-max$"),
+    ('- max-parallel: 2\n' + TOOLS, r"^line 1: a queue without a name"),
+    ('- name: Regular\n  max-parallel: 2\n' + TOOLS, r"^line 1: name 'Regular': lower-case letters, digits and _"),
+    ('- name: job\n  max-parallel: 2\n' + TOOLS, r"^line 1: name 'job': .*none of job, true"),
+    ('- name: regular\n  max-parallel: 2\n- name: regular\n  max-parallel: 1\n' + TOOLS,
+     r"^line 3: a second queue named regular \(the first on line 1\)"),
+    ('- name: regular\n' + TOOLS, r"^line 1: queue regular has no max-parallel \(1 to 4\)"),
+    ('- name: regular\n  max-parallel: 0\n' + TOOLS,
+     r"^line 2: max-parallel 0 for queue regular: a whole number from 1 to 4$"),
+    ('- name: regular\n  max-parallel: 5\n' + TOOLS, r"^line 2: max-parallel 5 for queue regular: .* 1 to 4$"),
+    ('- name: regular\n  max-parallel: 2.5\n' + TOOLS, r"^line 2: max-parallel 2.5 for queue regular"),
+    ('- name: regular\n  max-parallel: 2\n- name: express\n  max-parallel: 1\n  max-job-length: 600\n' + TOOLS,
+     r"^line 5: max-job-length 600 for queue express: a duration from 1 minute to 24 hours with its unit"),
+    ('- name: regular\n  max-parallel: 2\n- name: express\n  max-parallel: 1\n  max-job-length: 30s\n' + TOOLS,
+     r"^line 5: max-job-length 30s for queue express: a duration from 1 minute to 24 hours"),
+    ('- name: regular\n  max-parallel: 2\n- name: express\n  max-parallel: 1\n  max-job-length: 25h\n' + TOOLS,
+     r"^line 5: max-job-length 25h"),
+    ('- name: regular\n  max-parallel: 2\n- name: spare\n  max-parallel: 1\n  load-average-max: 0.5\n' + TOOLS,
+     r"^line 5: load-average-max 0.5 for queue spare: a number from 1 to 60 \(3 x the machine's 20 threads\)$"),
+    ('- name: regular\n  max-parallel: 2\n- name: spare\n  max-parallel: 1\n  load-average-max: 61\n' + TOOLS,
+     r"^line 5: load-average-max 61 for queue spare: a number from 1 to 60"),
+    ('- name: regular\n  max-parallel: 2\n- name: spare\n  max-parallel: 1\n  load-average-max: high\n' + TOOLS,
+     r"^line 5: load-average-max high for queue spare"),
+    ('- name: regular\n  max-parallel: 2\n', r"^no queue named tools: the builds and test suites run there"),
+    ('- name: regular\n  max-parallel: 2\n- name: tools\n  max-parallel: 2\n  load-average-max: 10\n',
+     r"^line 3: queue tools takes name and max-parallel only"),
+    ('- name: express\n  max-parallel: 1\n  max-job-length: 10m\n- name: spare\n  max-parallel: 1\n'
+     '  load-average-max: 15\n' + TOOLS,
+     r"^every queue but tools has max-job-length or load-average-max: one at least"),
+    ('- name: regular\n  max-parallel: 4\n- name: express\n  max-parallel: 3\n' + TOOLS,
+     r"^9 places in all \(the max-parallel added up\): at most 8$"),
+])
+def test_a_file_breaking_a_rule_is_refused_naming_the_line_the_key_and_what_is_allowed(text, message):
+    with pytest.raises(q.ConfigError, match=message):
+        q.parse_config(text)
+
+
+def test_each_field_decides_which_job_starts():
+    """``max-parallel``: that many places; ``max-job-length``: only a job estimated at or under it, or run with
+    ``--express``; ``load-average-max``: no place while the load is above its line; and a job tries the queues in
+    the file's order, the tools queue taking the builds and suites only."""
+    three = config('- name: regular\n  max-parallel: 3\n' + TOOLS)
+    longs = [new(i, estimate=3600) for i in (1, 2, 3, 4)]
+    assert q.assign(longs, ['regular-1', 'regular-2', 'regular-3'], q.JOBS_LANE, three) == {
+        1: 'regular-1', 2: 'regular-2', 3: 'regular-3'}
+    long_express = config('- name: express\n  max-parallel: 1\n  max-job-length: 20m\n- name: regular\n'
+                          '  max-parallel: 2\n' + TOOLS)
+    free = ['express-1', 'regular-1', 'regular-2']
+    assert q.assign([new(1, estimate=1200)], free, q.JOBS_LANE, long_express) == {1: 'express-1'}       # at the length
+    assert q.assign([new(1, estimate=1201)], free, q.JOBS_LANE, long_express) == {1: 'regular-1'}       # over it
+    assert q.assign([new(1, estimate=7200, express=1)], free, q.JOBS_LANE, long_express) == {1: 'express-1'}
+    assert q.assign([new(1)], free, q.JOBS_LANE, long_express) == {1: 'regular-1'}         # no estimate, no flag
+    assert q.assign([new(1, estimate=3600)], ['express-1'], q.JOBS_LANE, long_express) == {}
+    regular_first = config('- name: regular\n  max-parallel: 2\n- name: express\n  max-parallel: 1\n'
+                           '  max-job-length: 10m\n' + TOOLS)
+    assert q.assign([new(1, estimate=60)], free, q.JOBS_LANE, regular_first) == {1: 'regular-1'}     # the file's order
+    assert q.assign([new(1, estimate=60)], free, q.JOBS_LANE, q.DEFAULT_CONFIG) == {1: 'express-1'}
+    spare = ['spare-1']
+    assert q.assign([new(1, estimate=3600)], spare, q.JOBS_LANE, q.DEFAULT_CONFIG, is_open) == {1: 'spare-1'}
+    assert q.assign([new(1, estimate=3600)], spare, q.JOBS_LANE, q.DEFAULT_CONFIG, is_closed) == {}
+    assert q.assign([new(1, estimate=3600)], spare, q.JOBS_LANE, q.DEFAULT_CONFIG) == {}     # no reading: closed
+    assert q.assign([new(1, estimate=60)], spare, q.JOBS_LANE, q.DEFAULT_CONFIG, is_open) == {1: 'spare-1'}
+    assert q.assign([new(1, estimate=60), new(2, estimate=3600)], ['regular-2', 'spare-1'], q.JOBS_LANE,
+                    q.DEFAULT_CONFIG, is_closed) == {1: 'regular-2'}
+    builds = [new(i, lane=q.TOOLS_LANE) for i in (5, 6)]
+    one_tool = config('- name: regular\n  max-parallel: 2\n- name: tools\n  max-parallel: 1\n')
+    assert q.assign(builds, ['tools-1', 'tools-2'], q.TOOLS_LANE, one_tool) == {5: 'tools-1'}
+    assert q.assign(builds, ['regular-1'], q.TOOLS_LANE, one_tool) == {}
+    assert q.assign([new(1, estimate=60)], ['tools-1'], q.JOBS_LANE, one_tool) == {}
+
+
+def old_assign(ordered: list, free: list, lane: str) -> dict:
+    """``assign`` as it was before the queues' file (Nov 23's code, verbatim but for the names): the places of
+    old."""
+    regular, express, tools = ('regular-1', 'regular-2'), ('express-1',), ('tools-1', 'tools-2')
+    free = [place for place in (*regular, *express, *tools) if place in free]
+    taken = {}
+    for job_ in ordered:
+        if lane == q.TOOLS_LANE:
+            pool = [place for place in free if place in tools]
+        else:
+            sized = bool(job_.get('express')) or (job_.get('estimate') is not None and job_['estimate'] <= 600.0)
+            pool = ([place for place in free if place in express] if sized else [])
+            pool = pool or [place for place in free if place in regular]
+        if pool:
+            taken[job_['id']] = pool[0]
+            free.remove(pool[0])
+    return taken
+
+
+def test_the_default_without_the_spare_queue_starts_the_jobs_the_old_constants_did():
+    """With the extra queue taken out of the file the queue is exactly the two-plus-express of Nov 23: over many
+    made-up lines and free places, a job of this code under that file and a job of older code (reckoned by its
+    constants) both get the places the code of Nov 23 gave."""
+    import random
+    rng = random.Random(11)
+    old_places = {q.JOBS_LANE: ['regular-1', 'regular-2', 'express-1'], q.TOOLS_LANE: ['tools-1', 'tools-2']}
+    nospare = config(default_without('spare'))
+    for _ in range(500):
+        lane = rng.choice([q.JOBS_LANE, q.TOOLS_LANE])
+        rows = [row(i, estimate=rng.choice([None, 30, 600, 601, 3600]), express=rng.choice([0, 0, 1]), lane=lane,
+                    queued=NOW - rng.uniform(0, 9000)) for i in range(1, rng.randint(2, 7))]
+        free = rng.sample(old_places[lane], rng.randint(0, len(old_places[lane])))
+        ordered = q.line(rows, lane, NOW)
+        expected = old_assign(ordered, free, lane)
+        assert q.assign([{**job_, 'queues_aware': 1} for job_ in ordered], free, lane, nospare, is_closed) == expected
+        assert q.assign(ordered, free, lane, q.DEFAULT_CONFIG, is_open) == expected     # older code: its constants
+
+
+def test_jobs_of_older_code_are_reckoned_by_their_constants_so_no_job_waits_for_nothing():
+    """A row without ``queues_aware`` (code before the file, or this morning's ``places_aware`` code) takes only
+    regular-1, regular-2 and, at 10 minutes or less, express-1, whatever the file says: every wrapper of this code
+    reckons it so, so a newer job behind it takes a place it never will (the spare one), it is never given a place
+    it won't take, and it still may take a place the file dropped (it knows it)."""
+    old, morning, fresh = row(1, estimate=3600), row(2, estimate=3600, places_aware=1), new(3, estimate=3600)
+    default = q.DEFAULT_CONFIG
+    assert q.assign([old, morning, fresh], ['spare-1'], q.JOBS_LANE, default, is_open) == {3: 'spare-1'}
+    assert q.assign([old, fresh], ['regular-2', 'spare-1'], q.JOBS_LANE, default, is_open) == {1: 'regular-2',
+                                                                                               3: 'spare-1'}
+    one = config('- name: express\n  max-parallel: 1\n  max-job-length: 20m\n- name: regular\n  max-parallel: 1\n'
+                 + TOOLS)
+    assert q.lane_places(q.JOBS_LANE, one) == ('express-1', 'regular-1', 'regular-2')
+    assert q.assign([fresh], ['regular-2'], q.JOBS_LANE, one) == {}
+    assert q.assign([old, fresh], ['regular-1', 'regular-2'], q.JOBS_LANE, one) == {1: 'regular-1'}
+    assert q.assign([fresh, old], ['regular-1', 'regular-2'], q.JOBS_LANE, one) == {3: 'regular-1', 1: 'regular-2'}
+    middle_old, middle_new = row(4, estimate=900), new(5, estimate=900)       # 15 minutes: express by the file only
+    assert q.assign([middle_old, middle_new], ['express-1', 'regular-1'], q.JOBS_LANE, one) == {4: 'regular-1',
+                                                                                               5: 'express-1'}
+    assert q.waits_for(old, default, ['spare-1'], is_open).startswith(
+        'waits for a place in regular (2 of 2 running) (queued by older code')
+    assert q.waits_for(fresh, default, [], is_closed) == ('waits for a place in regular (2 of 2 running); spare is '
+                                                          'closed: load 22.4 above 15')
+
+
+class Queue:
+    """A queue folder of the test's own: rows inserted as ``triforce job`` writes them, each live one's job lock
+    held (its wrapper is there), and a made-up load average (``$TRIFORCE_LOADAVG``)."""
+
+    def __init__(self, folder: Path, monkeypatch):
+        self.folder = folder
+        self.con = q.connect(folder)
+        self.fds: dict = {}
+        self.load = folder / 'loadavg'
+        monkeypatch.setenv(q.LOADAVG_ENV, str(self.load))
+        self.reads = 0
+        real = q.read_load
+
+        def counted():
+            self.reads += 1
+            return real()
+        monkeypatch.setattr(q, 'read_load', counted)
+
+    def set_load(self, value: float):
+        self.load.write_text(f'{value:.2f} 1.00 1.00 2/900 4242\n', encoding='utf-8')
+
+    def insert(self, **fields) -> int:
+        fields = {'lane': q.JOBS_LANE, 'queued_ts': NOW, 'queues_aware': 1, **fields}
+        cursor = self.con.execute(f"INSERT INTO jobs ({', '.join(fields)}) VALUES ({', '.join('?' * len(fields))})",
+                                  tuple(fields.values()))
+        self.fds[cursor.lastrowid] = q.take_lock(q.lock_path(self.folder, f'job-{cursor.lastrowid}'))
+        return cursor.lastrowid
+
+    def turn(self, job_id: int, now: float, con=None) -> q.Turn:
+        con = con or self.con
+        with q.transaction(con):
+            return q.turn(con, self.folder, job_id, now)
+
+    def close(self):
+        for fd in self.fds.values():
             os.close(fd)
-        con.close()
+        self.con.close()
+
+
+@pytest.fixture
+def queue(tmp_path, monkeypatch):
+    line = Queue(tmp_path, monkeypatch)
+    yield line
+    line.close()
+
+
+def test_the_load_gate_opens_at_or_under_its_line_reads_once_a_minute_and_shares_the_reading(queue):
+    """The owner, Nov 24: "if we are under 20 max load average, we let those jobs run in the queue, and when we go
+    above that amount we let the work finish but don't re-allow more work until the load average is below that line
+    again, check on a 1 min cadence".  The default's spare place (load-average-max 15), two long jobs in the regular
+    places: closed above 15 (and says so), the reading taken once a minute and shared by every wrapper, open again
+    at 15, the job that took it left running when the load climbs."""
+    for place in ('regular-1', 'regular-2'):
+        queue.insert(status='running', place=place, estimate=3600)
+    waiting = queue.insert(status='queued', estimate=3600)
+    queue.set_load(22.4)
+    current = queue.turn(waiting, NOW)
+    assert current.place is None and queue.reads == 1
+    assert current.reason(q.read_jobs(queue.con, 'id = ?', (waiting,))[0]).startswith(
+        'waits for a place in regular (2 of 2 running); spare is closed: load 22.4 above 15; estimated 1 hour; '
+        '2 jobs are running (#1 ')
+    queue.set_load(15.0)
+    assert queue.turn(waiting, NOW + 30).place is None and queue.reads == 1         # the reading of NOW still holds
+    other = q.connect(queue.folder)                                                  # another wrapper: the same one
+    try:
+        assert queue.turn(waiting, NOW + 59, other).place is None and queue.reads == 1
+        assert queue.turn(waiting, NOW + 60, other).place == 'spare-1' and queue.reads == 2     # at the line: open
+    finally:
+        other.close()
+    q.update(queue.con, waiting, status='running', place='spare-1', admitted_ts=NOW + 60)
+    after = queue.insert(status='queued', estimate=3600, queued_ts=NOW + 61)
+    queue.set_load(30.0)
+    assert queue.turn(after, NOW + 119).place is None and queue.reads == 2
+    assert queue.turn(after, NOW + 121).place is None and queue.reads == 3
+    assert q.read_jobs(queue.con, 'id = ?', (waiting,))[0]['status'] == 'running'   # the work above the line goes on
+    q.update(queue.con, waiting, status='completed', place='spare-1', finished_ts=NOW + 130)
+    assert queue.turn(after, NOW + 140).place is None                                 # free, but closed: load 30
+    queue.set_load(14.0)
+    assert queue.turn(after, NOW + 182).place == 'spare-1' and queue.reads == 4
+
+
+def test_a_file_that_cant_be_read_or_is_refused_keeps_the_configuration_last_in_force_and_says_why(queue):
+    """An edit counts at the next turn; a file that breaks a rule (or can't be read) is ignored: every wrapper keeps
+    the configuration last in force (kept in the database, so a wrapper that started after the edit keeps the same),
+    the default when there was none, and the waiting jobs, ``triforce job list`` and ``triforce job queues`` say
+    so.  Never fatal, never wider."""
+    path = q.config_path(queue.folder)
+    for place in ('regular-1', 'regular-2'):
+        queue.insert(status='running', place=place, estimate=3600)
+    waiting = queue.insert(status='queued', estimate=3600)
+    queue.set_load(30.0)
+    assert queue.turn(waiting, NOW).place is None
+    three = '- name: regular\n  max-parallel: 3\n' + TOOLS
+    path.write_text(three, encoding='utf-8')
+    with q.transaction(queue.con):
+        assert q.load_config(queue.folder, queue.con).source == 'file'
+    path.write_text('- name: regular\n  max-parallel: 9\n' + TOOLS, encoding='utf-8')
+    current = queue.turn(waiting, NOW + 1)
+    assert current.place == 'regular-3'                                       # the last good file: three places
+    warning = (f"{path} is ignored (line 2: max-parallel 9 for queue regular: a whole number from 1 to 4): the "
+               f"configuration last in force stays")
+    assert current.ignored == warning
+    assert current.reason(q.read_jobs(queue.con, 'id = ?', (waiting,))[0]).endswith(warning)
+    later = q.connect(queue.folder)                                           # a wrapper that starts now
+    try:
+        with q.transaction(later):
+            kept = q.load_config(queue.folder, later)
+        assert (kept.source, kept.queues, kept.warning()) == ('last good', q.parse_config(three), warning)
+    finally:
+        later.close()
+    assert q.load_config(queue.folder).source == 'default'                  # no database: the default, still loud
+    path.unlink()
+    path.mkdir()                                                             # a file that can't be read
+    with q.transaction(queue.con):
+        unreadable = q.load_config(queue.folder, queue.con)
+    assert unreadable.source == 'last good' and unreadable.ignored.startswith("it can't be read: Is a directory")
+    path.rmdir()
+    with q.transaction(queue.con):
+        absent = q.load_config(queue.folder, queue.con)                      # no file: the default, quietly
+    assert (absent.source, absent.queues, absent.ignored, absent.warning()) == ('default', q.DEFAULT_QUEUES, None,
+                                                                                 None)
+    path.write_text('- name: regular\n', encoding='utf-8')
+    with q.transaction(queue.con):
+        broken = q.load_config(queue.folder, queue.con)                      # the default was the last in force
+    assert broken.source == 'default' and broken.queues == q.DEFAULT_QUEUES
+    assert broken.warning().endswith('): the default stays in force')
+
+
+def test_jobs_of_older_code_and_of_this_code_in_one_line(queue):
+    """The line of the live database: a job of older code first in line, two of this code behind it, both regular
+    places taken, the spare one open.  The older job waits (its code knows no spare place) and says so; the first
+    newer job takes the spare place; when a regular place frees, the older job (first in line) gets it in every
+    wrapper's reckoning."""
+    for place in ('regular-1', 'regular-2'):
+        queue.insert(status='running', place=place, estimate=3600)
+    old = queue.insert(status='queued', estimate=3600, queued_ts=NOW - 60, queues_aware=None)
+    first = queue.insert(status='queued', estimate=3600, queued_ts=NOW - 30)
+    second = queue.insert(status='queued', estimate=3600, queued_ts=NOW)
+    queue.set_load(5.0)
+    waits = queue.turn(old, NOW)
+    assert waits.place is None and waits.waits.startswith('waits for a place in regular (2 of 2 running) (queued by')
+    assert queue.turn(second, NOW).place is None
+    assert queue.turn(first, NOW).place == 'spare-1'
+    q.update(queue.con, first, status='running', place='spare-1', admitted_ts=NOW)
+    os.close(queue.fds.pop(1))                                              # the job in regular-1 ends
+    assert queue.turn(second, NOW + 1).place is None
+    assert queue.turn(old, NOW + 1).place == 'regular-1'
+
+
+def test_job_queues_shows_each_queue_open_or_closed_with_what_runs_and_waits_and_init_writes_the_default_once(
+        queue, monkeypatch, capsys):
+    """``triforce job queues``: where the queues come from, the load reading, each queue with what it runs, open or
+    closed (why), its places taken, what runs in it and waits for it; each line in the order it starts, with what
+    each job waits for.  ``--init`` writes the default file, never over one.  ``triforce job list`` begins with the
+    queues."""
+    monkeypatch.setenv(q.QUEUE_DIR_ENV, str(queue.folder))
+    queue.set_load(22.4)
+    now = time.time()
+    for place in ('regular-1', 'regular-2'):
+        queue.insert(status='running', place=place, estimate=3600, queued_ts=now - 90, admitted_ts=now - 60,
+                     name='a-b-c', kind='train')
+    waiting = queue.insert(status='queued', estimate=3600, queued_ts=now - 30, name='w-x-y', kind='chain')
+    assert job.main(['queues']) == 0
+    shown = capsys.readouterr().out
+    assert shown.splitlines()[0] == (f"queues: the default (there is no {q.config_path(queue.folder)}; "
+                                     f"`triforce job queues --init` writes it)")
+    assert ('  spare    1 place, any job, while the load average is at or under 15: CLOSED: load 22.4 above 15, 0 of '
+            '1 running') in shown
+    assert '  regular  2 places, any job: open, 2 of 2 running' in shown
+    assert f'waiting for it: #{waiting}' in shown
+    assert '      waits for a place in regular (2 of 2 running); spare is closed: load 22.4 above 15' in shown
+    assert job.main(['queues', '--init']) == 0
+    assert q.config_path(queue.folder).read_text(encoding='utf-8') == q.DEFAULT_TEXT
+    capsys.readouterr()
+    assert job.main(['queues', '--init']) == 2 and 'is there already' in capsys.readouterr().err
+    assert job.main(['list']) == 0
+    listing = capsys.readouterr().out
+    assert listing.splitlines()[0] == ('queues: express 0/1 · regular 2/2 · spare 0/1 closed: load 22.4 above 15 · '
+                                       'tools 0/2')
+    assert 'waits for a place in regular (2 of 2 running); spare is closed: load 22.4 above 15' in listing
 
 
 def test_turn_counts_only_live_jobs_and_a_held_place_lock(tmp_path):

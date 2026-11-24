@@ -24,7 +24,11 @@ listed by its card (``job_view``), drawn with widgets and never as text bars (th
 list``'s): who asked for it (agent, task, sub-task), its description, its state (RUNNING in its place with the time
 run against its estimate, OVERRUN past twice the estimate, its place in line and wait while queued, or how it
 ended), a progress bar a counter it reports (done of total, its rate and time left; a counter without a total its
-number and rate), its steps (a build's and a test's, each with its state), then its verb, kind, branch and command.
+number and rate), its steps (a build's and a test's, each with its state), what a waiting job waits for ("waits for
+a place in regular (2 of 2 running); spare is closed: load 22.4 above 15"), then its verb, kind, branch and
+command.  Over the list (window and web view) a line names the queues of the queues' file in force with their
+places taken ("QUEUES express 1/1 · regular 2/2 · spare 0/1 closed: ... · tools 1/2"), and, while that file is
+ignored, why, in the warning colour (``read_queue``, ``jobqueue.survey``).
 A job whose log folder holds its plan (``training.json``) shows that plan's full view under its card (its header,
 its runs' rows, its eval-chain card: the runs by how they ended, the triforces taken, the furthest step); one
 without is drawn from its row alone.  The running jobs are on top, the one that began to run last first (a job that
@@ -47,6 +51,7 @@ virtualenv.
 """
 
 import argparse
+import html
 import json
 import math
 import os
@@ -1268,22 +1273,42 @@ class LiveScanner:
 RECENT_SECONDS = 3600          # ended jobs stay in [currently running] (under 'finished') this long, then leave
 
 
-def read_queue(now: float, recent: float = RECENT_SECONDS) -> list[dict]:
+def read_queue(now: float, recent: float = RECENT_SECONDS) -> tuple[list[dict], dict]:
     """The queue's jobs that are running or queued, or ended in the last ``recent`` seconds (rows of
     ``jobqueue.read_jobs``), those whose wrapper is gone marked dead first (``jobqueue.sweep``, as ``triforce job
-    list`` does); [] while the queue can't be read."""
+    list`` does), each waiting one with what it waits for (``'waits'``, ``jobqueue.Survey.waits``: "waits for a
+    place in regular (2 of 2 running); spare is closed: load 22.4 above 15"); and the queues by name from the
+    configuration in force ({'summary': "express 1/1 · regular 2/2 · ...", 'warning': why the queues' file is
+    ignored, or ''}, ``jobqueue.survey``).  ([], {}) while the queue can't be read."""
     try:
         con = jobqueue.connect()
     except (OSError, sqlite3.Error):
-        return []
+        return [], {}
     try:
         with jobqueue.transaction(con):
             jobqueue.sweep(con, jobqueue.queue_dir(), now)
-        return jobqueue.read_jobs(con, "status IN ('queued', 'running') OR finished_ts >= ?", (now - recent,))
+            jobs = jobqueue.read_jobs(con, "status IN ('queued', 'running') OR finished_ts >= ?", (now - recent,))
+            state = jobqueue.survey(con, jobqueue.queue_dir(), now, jobs)
     except (OSError, sqlite3.Error):
-        return []
+        return [], {}
     finally:
         con.close()
+    for job in jobs:
+        if job.get('status') == 'queued':
+            job['waits'] = state.waits(job)
+    return jobs, {'summary': state.summary(), 'warning': state.config.warning() or ''}
+
+
+def queues_html(queues: dict) -> str:
+    """The window's queues line (``read_queue``'s): ``QUEUES  express 1/1 · regular 2/2 · spare 0/1 closed: load
+    22.4 above 15 · tools 1/2`` in the muted colour and, while the queues' file is ignored, why, in the warning
+    colour under it; '' without a queue."""
+    if not queues.get('summary'):
+        return ''
+    text = f"<span style='color:{C.muted.name()}'><b>QUEUES</b>&nbsp;&nbsp;{html.escape(queues['summary'])}</span>"
+    if queues.get('warning'):
+        text += f"<br><span style='color:{C.warn.name()}; font-weight:700'>{html.escape(queues['warning'])}</span>"
+    return text
 
 
 def queue_listing(jobs: list[dict], now: float) -> tuple[list[tuple[dict, int | None]], list[dict]]:
@@ -1371,11 +1396,12 @@ def job_view(job: dict, now: float, place: int | None = None, has_plan: bool = F
     (``jobqueue.tags`` without the running step, which the steps' list shows) in 'color' (``job_color``),
     'counters' (``job_counters``), 'steps' (a build's and a test's: [{'name', 'status'}], status pending, running,
     completed or failed), 'note' (a running job that reports nothing and has no plan: 'no progress reported' and its
-    time against its estimate), 'flags' (``jobs.flag``: [{'level', 'code', 'text', 'color'}], red ones in the bad
-    colour, notes in the in-between one) and 'command' (its verb and kind, where it runs, its command)."""
+    time against its estimate; a waiting job: what it waits for, ``read_queue``'s 'waits'), 'flags' (``jobs.flag``:
+    [{'level', 'code', 'text', 'color'}], red ones in the bad colour, notes in the in-between one) and 'command' (its
+    verb and kind, where it runs, its command)."""
     steps = [{'name': str(step.get('name') or '?'), 'status': str(step.get('status') or 'pending')}
              for step in job.get('steps') or []]
-    note = ''
+    note = (job.get('waits') or '') if job.get('status') == 'queued' else ''
     if job.get('status') == 'running' and not job.get('progress') and not steps and not has_plan:
         estimate = '' if job.get('estimate') is None else f" of ~{jobqueue.short(job['estimate'])}"
         note = f"no progress reported · {jobqueue.short(now - (job.get('admitted_ts') or now))}{estimate}"
@@ -3786,6 +3812,13 @@ class Window(QMainWindow):
         open_button.clicked.connect(self._open)
         top.addWidget(open_button)
         outer.addLayout(top)
+        # The queues by name, their places taken, the ignored queues' file's warning (``read_queue``).
+        self.queues: dict = {}
+        self.queues_label = QLabel()
+        self.queues_label.setWordWrap(True)
+        self.queues_label.setTextFormat(Qt.TextFormat.RichText)
+        self.queues_label.hide()
+        outer.addWidget(self.queues_label)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         outer.addWidget(splitter, 1)
@@ -3849,7 +3882,9 @@ class Window(QMainWindow):
         dirs = find_log_dirs(self.root)
         root = self.root.resolve()
         now = time.time()
-        jobs = read_queue(now)
+        jobs, self.queues = read_queue(now)
+        self.queues_label.setText(queues_html(self.queues))
+        self.queues_label.setVisible(bool(self.queues))
         self.queue_live, self.queue_ended = queue_listing(jobs, now)
         self.queue_rows = {job_key(job): (job, place)
                            for job, place in self.queue_live + [(job, None) for job in self.queue_ended]}
@@ -4416,6 +4451,7 @@ class WebState:
         self.first_seen: dict[str, float] = {}
         self._scanned = None
         self.jobs: list[dict] = []            # the queue's jobs as of the last scan (``read_queue``)
+        self.queues: dict = {}                # the queues by name and the ignored file's warning (``read_queue``)
         self.plan_only: dict[str, Training] = {}   # listed jobs' plans this state reads no events of (``_jobs``)
         self._lock = threading.Lock()
         self.snapshot: dict = {}
@@ -4435,7 +4471,7 @@ class WebState:
         """Reads the job queue and finds the folders to read: the root's and the queue's jobs' whose plan runs, or
         ended within ``expire`` seconds."""
         dirs = find_log_dirs(self.root)
-        self.jobs = read_queue(now)
+        self.jobs, self.queues = read_queue(now)
         listed = {path.resolve() for path in dirs}
         folders = [folder for folder in map(job_folder, self.jobs) if folder is not None]
         candidates = dirs + [folder for folder in dict.fromkeys(folders) if folder.resolve() not in listed]
@@ -4553,8 +4589,8 @@ class WebState:
         plans.sort(key=lambda plan: (-(plan['created_ts'] or 0), plan['id']))
         jobs = self._jobs(plans, now)
         snapshot = json_safe({'now': now, 'clock': fmt_clock(now), 'host': socket.gethostname(),
-                              'machine': self.machine(), 'expire': self.expire, 'jobs': jobs, 'plans': plans,
-                              'cards': cards})
+                              'machine': self.machine(), 'expire': self.expire, 'queues': self.queues, 'jobs': jobs,
+                              'plans': plans, 'cards': cards})
         body = json.dumps(snapshot, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
         with self._lock:
             self.snapshot, self._body = snapshot, body
@@ -4629,6 +4665,9 @@ main{padding:12px 16px 48px;max-width:2600px;margin:0 auto}
 .jh{color:var(--muted);font-weight:700;font-size:12px;letter-spacing:.04em;text-transform:uppercase;
   padding:6px 2px 0}
 #plans{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+#queues{color:var(--muted);font-size:12.5px;margin:0 2px 10px;overflow-wrap:anywhere}
+#queues b{letter-spacing:.04em;margin-right:8px}
+#queues .qwarn{color:var(--warn);font-weight:700}
 .plan{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:7px 12px;display:flex;
   flex-wrap:wrap;gap:3px 12px;align-items:center;font-size:13px}
 .plan .pname{font-weight:700;font-size:14px}
@@ -4727,7 +4766,8 @@ pre.log{margin:6px 0 0;background:#11141a;border-radius:8px;padding:8px 10px;col
 <body>
 <header><span class="brand">&#9650; Triforce<small>training monitor &middot; currently running</small></span>
 <span class="machine" id="machine"></span><span class="conn" id="conn">connecting…</span></header>
-<main><div id="jobs"></div><div id="plans"></div><div id="empty" hidden></div><div id="cards"></div></main>
+<main><div id="queues"></div><div id="jobs"></div><div id="plans"></div><div id="empty" hidden></div>
+<div id="cards"></div></main>
 <script>
 'use strict';
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -5011,6 +5051,10 @@ function render(state) {
     }
   }
   setText($('#machine'), state.machine || '');
+  // The queues by name with their places taken, and why the queues' file is ignored while it is (``read_queue``).
+  const queues = state.queues || {};
+  setHTML($('#queues'), queues.summary ? `<b>QUEUES</b>${esc(queues.summary)}` +
+    (queues.warning ? `<div class="qwarn">${esc(queues.warning)}</div>` : '') : '');
   // The queue's jobs, as [currently running] lists them: the live ones, then the ones that ended under a heading.
   const jobs = state.jobs || [];
   const ended = jobs.findIndex(job => job.ended);

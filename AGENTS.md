@@ -350,8 +350,9 @@ there).
   promoted model on the chain; continuations of round 24-25 models pass `--sil-coeff 0.1`; `train
   --checkpoint-every N` and `triforce select-checkpoint` choose a checkpoint by a chain segment with fresh-seed
   confirmation. **Jobs** (trainings, evaluations, chains, races, scripts) go through `triforce job` (one line for
-  the machine: two regular places, shortest estimate first with waiting counted, and an express place for jobs under
-  ten minutes; builds and tests have two places of their own); never kill a job only to get ahead (one nobody needs
+  the machine, its queues the owner's file: two regular places, shortest estimate first with waiting counted, an
+  express place for jobs under ten minutes and a spare place while the load average is at or under 15; builds and
+  tests have two places of their own); never kill a job only to get ahead (one nobody needs
   any more is ended). **Next**
   (the owner, Nov 16): the rest of the game, Dungeons
   7, 6, 8, 9 with the magic sword after 7, breadth first to Ganon (`docs/routes/rest-of-game.md`: the survival
@@ -1038,18 +1039,19 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
     (`zelda-headless.py --golden --power-on --clips on --act model --parallel 16`), at most `--timeout`, which is its
     estimate; running out of time is a result ("no golden path in 10 minutes", exit 0); its replays are archived.
   - `triforce job build --agent A --task T` (`maturin develop --release`, then the module's stamp) and `triforce job
-    test python|rust|asm|all --agent A --task T [--build]` (`--build`: build, then test, as one entry): their own
-    lane, two at once on the machine, first come first served, never behind a training; nice 10 and
+    test python|rust|asm|all --agent A --task T [--build]` (`--build`: build, then test, as one entry): the tools
+    queue, two at once on the machine, first come first served, never behind a training; nice 10 and
     `CARGO_BUILD_JOBS=4`. Every build and every suite goes through them (`--timeout 60m` replaces `timeout 3600`).
   - `triforce job setup BRANCH [--from main]`: the worktree `../triforce-<branch>` with `roms` and `trajectories`
     linked (never `models`: a worktree's runs and pointers are its own), its venv and its build. `triforce job list
-    [--calibration]`: what runs, what waits and in which order, what ended in the last hour; `--calibration`
-    compares estimates with actual times per kind.
+    [--calibration]`: what runs, what waits and in which order (each waiting job with what it waits for), what ended
+    in the last hour, under a line of the queues; `--calibration` compares estimates with actual times per kind.
+    `triforce job queues`: the queues in force, each open or closed (and why), what runs in it and waits for it.
   - `triforce job history [--since 24h] [--agent A] [--metrics] [--json]`: **every job's row is kept for good**
     (the owner, Nov 23): when it queued, started and ended, its place, estimate, exit and command. `--metrics`:
-    the jobs that ran in the express place longer than 10 minutes, those in a regular place that took 10 minutes or
-    less, and the kinds of job always out of the queue within 2 minutes of joining it. Numbers to look at; nothing
-    acts on them.
+    the jobs that ran in a queue with a `max-job-length` (express) longer than it, those in another that took that
+    long or less, and the kinds of job always out of the queue within 2 minutes of joining it. Numbers to look at;
+    nothing acts on them.
   - **`--detach` on `run`, `golden`, `build`, `test`, and `triforce job wait UNIT...`** (Nov 23): a job can wait in
     line for hours, and a wrapper started from a shell call or an agent's background job dies when that call's own
     time limit or the agent ends (it happened to the lead twice and to two agents in one afternoon: a chain cut
@@ -1058,12 +1060,23 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
     `~/.local/state/triforce/detached/<unit>.log`. `triforce job wait UNIT... [--timeout 30m]` follows it and exits
     with the job's own exit code; stopping `wait` stops nothing and it can be run again. **Use `--detach` for every
     job that may wait or run longer than your shell call lives**; stop one with `systemctl --user stop UNIT`.
-  Two jobs run at once in the regular places (the number is the owner's setting, `triforce job places [N]`: 3 since
-  Nov 24, as a trial; agents do NOT change it; a job queued from a checkout whose code predates the setting keeps to
-  the first two), plus one estimated at 10 minutes or less (or `--express`) in the
-  express place; the others wait, the shortest estimate first, a long one moving up as it waits (estimate minus half
-  the time waited). A waiting job is only its wrapper: no model, no GPU memory, a check a second. It prints
-  `triforce job: #12 A-T-S waits for a place: estimated 40 minutes; 2 jobs are running (...)` every 5 minutes and
+  **The queues are one file, the owner's** (Nov 24: "configurable from a yaml file [...] we just edit/save the file
+  and the queue can work a bit differently"): `~/.local/state/triforce/queues.yaml`, beside `queue.db`; agents do
+  NOT edit it. Each queue a `name`, `max-parallel` (its places, `<name>-1`...) and optionally `max-job-length` (only
+  jobs estimated at or under it, or `--express`) and `load-average-max` (a place only while the machine's 1-minute
+  load average is at or under it; read once a minute, one reading for every wrapper; above it nothing new starts
+  there, running work goes on). In force (the default, without a file): **express** 1 place, jobs of 10 minutes or
+  less; **regular** 2; **spare** 1, while the load average is at or under 15; **tools** 2, builds and test suites
+  and nothing else. A job takes the first free place of the queues it may take, in the file's order (10 minutes or
+  less: express, regular, spare; longer: regular, spare); the others wait, the shortest estimate first, a long one
+  moving up as it waits (estimate minus half the time waited). Every waiting job reads the file at each check, so an
+  edit counts within a second; a file that can't be read or breaks a limit (1 to 4 places a queue, 8 in all; a job
+  length of 1m to 24h; a load line of 1 to 60; known keys, distinct names, a `tools` queue, one queue without either
+  limit) is ignored, the configuration last in force stays, and the waiting jobs, `job list`, `job queues` and the
+  GUI say so. A job queued from a checkout older than the file keeps to the places of Nov 23 (regular-1, regular-2,
+  express-1, tools-1, tools-2) whatever the file says. A waiting job is only its wrapper: no model, no GPU memory, a
+  check a second. It prints `triforce job: #12 A-T-S (run) waits for a place in regular (2 of 2 running); spare is
+  closed: load 22.4 above 15; estimated 40 minutes; 2 jobs are running (...)` every 5 minutes and
   `... starts (regular-1, nice 15, ...)` when it starts. **Seeing that line, wait**: don't kill jobs to get ahead,
   don't split or stagger them by hand. **The owner can move a waiting job to the top of its line** (the GUI's right
   click, `triforce job top ID [--undo]`); agents do NOT use `job top` on their own work. **A job there is no reason

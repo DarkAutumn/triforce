@@ -567,3 +567,50 @@ Most of this batch repeats One38d's of 2.0.0.13's team on the same seeds: betwee
 3 (Manhandla's bombs, 2.0.0.15) and the legs after Dungeons 5 and 6 (the whirlwinds, 2.0.0.14) play differently;
 Dungeon 4 (68.4%) and Dungeon 1 (98.9%) came out the same to the digit. The full route and those three segments
 would have been enough (the owner asked why it ran so long, Nov 24).
+
+## The queues are one file the owner edits (Queue41, branch `r40-queues`)
+
+The owner, Nov 24: "maybe these job queues should be easily configurable from a yaml file or something. We should
+formalize this slightly. We don't need to overengineer this [...] queue: name / max-parallel: n / max-job-length:
+time [...] Or a setting like 'load-average-max: 20' [...] check on a 1 min cadence [...] I like our old queues just
+fine (2 instead of 3 with an express lane) but maybe also an optional 1 queue when load average is at or below 15".
+It replaces the constants of Nov 23 and the morning's stop-gap (the `places` file, `triforce job places N`), which
+is gone.
+
+- **The file**: `~/.local/state/triforce/queues.yaml`, beside `queue.db` (the queue is the machine's and every
+  worktree's, so its settings live with its state, not in a checkout; a test's queue folder, `$TRIFORCE_QUEUE_DIR`,
+  has its own, so no test can read the live file). Without it the default is in force; `triforce job queues --init`
+  writes the default, commented, for editing. Every waiting job reads it at each check of its turn (once a second),
+  so a save counts at once. `triforce job queues` prints the queues in force, each open or closed (and why), what
+  runs in it and what waits for it.
+- **The keys**, four and no more: `name`, `max-parallel`, optionally `max-job-length` (only jobs estimated at or
+  under it, or `--express`) and `load-average-max` (a place only while the 1-minute load average is at or under the
+  line; the reading is shared by every wrapper through the database and taken again once it is a minute old; above
+  the line nothing new starts there and work running finishes). The queue named `tools` takes the builds and test
+  suites and nothing else. A lane, priority or nice key would each be a second way to say what the file's order and
+  the tools queue say; nothing breaks without them.
+- **The order**: a job takes the first free place of the first open queue it may take, in the file's order. With the
+  default, a job of 10 minutes or less tries express, regular, spare; a longer one regular, spare.
+- **The default**: express 1 place (10m), regular 2, spare 1 (load-average-max 15), tools 2. Without the spare
+  entry it is exactly the queues of Nov 23: the real-process tests of Nov 23 run unchanged under that file, and a
+  test compares the new assignment with Nov 23's code over 500 made-up lines.
+- **The limits** (20 threads, one GPU): 1 to 4 places a queue, 8 in all (Nov 23 had 5, the default has 6); a job
+  length of 1 minute to 24 hours, with its unit; a load line of 1 to 60 (three times the threads); names of
+  lower-case letters, digits and `_`, distinct, not `job`; a `tools` queue; one other queue without either limit (a
+  long job must be able to run). A file that breaks one, or can't be read, is ignored: the configuration last in
+  force stays (kept in the database, the same for every wrapper), and the waiting jobs, `triforce job list`,
+  `triforce job queues` and the GUI say which line and why.
+- **Older code** (a checkout without this; the morning's `places_aware` code too) ignores the file: it takes
+  regular-1, regular-2, express-1 (10 minutes or less) and tools-1, tools-2 whenever their locks are free, with no
+  load gate. Every wrapper of this code reckons an older job by exactly those constants (its row lacks
+  `queues_aware`), so a newer job behind it takes the spare place it never will and nobody waits for nothing. Under
+  a file that differs from the constants an older job may take a place the file drops (regular-2 under a file of one
+  regular place) and keeps to the old names if a queue is renamed: one job more than the file says, until the older
+  jobs are gone. Never two jobs in one place (the locks).
+- **Landing** (the lead, with jobs running): (1) delete `~/.local/state/triforce/places` (this morning's code then
+  keeps to two regular places at its next check; a job in regular-3 finishes there; leave `locks/regular-3` alone, a
+  lock file is never deleted); (2) merge to main and carry it to the branches as usual (the database gains its
+  `queues_aware` column and `settings` table on the first connection, nothing to migrate); (3) from main,
+  `.venv/bin/triforce job queues --init` writes the default file (the same queues as without it) for the owner to
+  edit; `triforce job queues` shows them. Until the older jobs drain, a job still in regular-3 shows as "outside
+  these queues (older code)".

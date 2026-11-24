@@ -39,7 +39,7 @@ class FakeQueue:
                'verb': 'run', 'lane': 'jobs', 'kind': 'round', 'command': ['python', 'scripts/train_round.py'],
                'cwd': str(ROOT), 'checkout': str(ROOT), 'branch': 'r40-queue', 'status': status,
                'place': 'regular-1' if status != 'queued' else None, 'queued_ts': now - 120,
-               'admitted_ts': now - 60 if status != 'queued' else None, **fields}
+               'admitted_ts': now - 60 if status != 'queued' else None, 'queues_aware': 1, **fields}
         row.setdefault('name', '-'.join(str(row[key]) for key in ('agent', 'task', 'subtask')))
         con = gui.jobqueue.connect(self.directory)
         try:
@@ -70,10 +70,12 @@ class FakeQueue:
 
 @pytest.fixture(autouse=True)
 def queue(tmp_path_factory, monkeypatch):
-    """Every test's own job queue (``$TRIFORCE_QUEUE_DIR``), empty until it adds jobs: the GUI never reads the
-    machine's."""
+    """Every test's own job queue (``$TRIFORCE_QUEUE_DIR``), empty until it adds jobs, and a made-up load average of
+    3 (``$TRIFORCE_LOADAVG``): the GUI never reads the machine's queue nor its load."""
     fake = FakeQueue(tmp_path_factory.mktemp('queue'))
     monkeypatch.setenv(gui.jobqueue.QUEUE_DIR_ENV, str(fake.directory))
+    (fake.directory / 'loadavg').write_text('3.00 1.00 1.00 2/900 4242\n', encoding='utf-8')
+    monkeypatch.setenv(gui.jobqueue.LOADAVG_ENV, str(fake.directory / 'loadavg'))
     yield fake
     fake.close()
 
@@ -945,7 +947,7 @@ def test_queue_listing_orders_live_jobs_by_admission_and_line_and_ended_ones_by_
     queue.add(subtask='failed', status='failed', exit_code=1, finished_ts=now - 60)
     queue.add(subtask='ancient', status='completed', exit_code=0, finished_ts=now - gui.RECENT_SECONDS - 60)
     queue.gone(queue.add(subtask='dies', admitted_ts=now - 30))
-    jobs = gui.read_queue(now)
+    jobs, _ = gui.read_queue(now)
     live, ended = gui.queue_listing(jobs, now)
     assert [(job['subtask'], place) for job, place in live] == [
         ('new', None), ('old', None), ('patient', 1), ('short', 2), ('long', 3), ('build-early', 1),
@@ -996,7 +998,8 @@ def test_a_jobs_card_draws_its_progress_with_widgets_in_the_window_and_the_web_v
     foot = {chain: ['run chain  r40-queue  python -m triforce eval-chain --runs 250'],
             counter: ['run train  r40-queue  python scripts/train_round.py'],
             overrun: ['no progress reported · 1h06m of ~20m', 'run round  r40-queue  python scripts/train_round.py'],
-            waiting: ['run round  r40-queue  python scripts/train_round.py'],
+            waiting: ['waits for a place in regular (1 of 2 running) or spare (0 of 1 running)',
+                      'run round  r40-queue  python scripts/train_round.py'],
             build: ['build  r40-queue  cargo build'],
             done: ['run round  r40-queue  python scripts/train_round.py']}
     counters = {chain: [('', 120, 250, 'runs', 0.48, '120 / 250 runs', '2 runs/s', '~1m left')],
@@ -1049,6 +1052,42 @@ def test_a_jobs_card_draws_its_progress_with_widgets_in_the_window_and_the_web_v
     page = gui.web_page().decode()
     assert 'function jobHtml(job)' in page and '<div id="jobs">' in page and 'Finished &middot; last 60 min' in page
     assert 'function counterHtml(counter, color)' in page and 'function tallyHtml(tally)' in page
+
+
+def test_the_queues_by_name_head_the_window_and_the_web_view_and_say_when_the_file_is_ignored(qapp, tmp_path,
+                                                                                               monkeypatch, queue):
+    """The queues of the configuration in force by name, each with its places taken of its places and a closed one
+    with why (the window's line over its list, the web view's over its jobs; ``read_queue``); a waiting job says
+    what it waits for (``job_view``'s note); while the queues' file is ignored, why, in the warning colour."""
+    monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
+    now = float(int(time_now()))
+    queue.add(subtask='a', place='regular-1')
+    queue.add(subtask='b', place='regular-2')
+    queue.add(subtask='w', status='queued', estimate=3600.0)
+    (queue.directory / 'loadavg').write_text('22.40 20.00 18.00 3/900 4242\n', encoding='utf-8')
+    jobs, queues = gui.read_queue(now)
+    summary = 'express 0/1 · regular 2/2 · spare 0/1 closed: load 22.4 above 15 · tools 0/2'
+    assert queues == {'summary': summary, 'warning': ''}
+    (waiting,) = [job for job in jobs if job['subtask'] == 'w']
+    assert gui.job_view(waiting, now, 1)['note'] == ('waits for a place in regular (2 of 2 running); spare is closed: '
+                                                     'load 22.4 above 15')
+    path = gui.jobqueue.config_path(queue.directory)
+    path.write_text('- name: regular\n  max-parallel: 9\n', encoding='utf-8')
+    (tmp_path / 'logs').mkdir()
+    window = gui.Window(tmp_path / 'logs', None)
+    try:
+        label = window.queues_label.text()
+        assert not window.queues_label.isHidden() and 'QUEUES' in label and summary in label
+        assert f'{path} is ignored (line 2: max-parallel 9 for queue regular' in label and gui.C.warn.name() in label
+    finally:
+        window.close()
+        window.deleteLater()
+    snapshot = gui.WebState(tmp_path / 'logs', clock=lambda: now, machine=lambda: '', scan_every=0).refresh()
+    assert snapshot['queues']['summary'] == summary
+    assert snapshot['queues']['warning'].startswith(f'{path} is ignored (line 2: max-parallel 9 for queue regular')
+    assert snapshot['queues']['warning'].endswith('): the default stays in force')
+    page = gui.web_page().decode()
+    assert '<div id="queues"></div>' in page and 'queues.warning' in page
 
 
 def test_a_job_with_a_plan_is_one_box_over_its_runs(qapp, tmp_path, monkeypatch, queue):
