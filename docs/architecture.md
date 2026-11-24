@@ -896,6 +896,18 @@ action) except where the room Link is in *needs* some (`cheats::needs`), the own
   granted bomb only opens the wall: while it is outstanding the envs offer BOMB only in reach of what the objective
   leaves through ("BOMB kept to the wall" above; round 26), so every cheated bomb of such a room was laid at the
   route's wall. Dodongo's room has no wall (`cheats::bomb_opens` is false): there the granted bomb is the weapon;
+  **Round 40, the fresh generation** (routes.yaml `bomb_rules: {wall_grant: objective}`, on `d3first`; the owner,
+  Nov 23: "I want cheat-bombs to not show up unless the objective is to go into a wall that needs it (or dodongo d2
+  boss)"): in a room whose bomb opens something the need is 1 only while the objective, as the env attaches it,
+  targets the bomb wall or rock wall the route leaves through (`env::objective::wall_is_next`: the wall is among
+  `route_bomb_targets` and its bomb spot among the wavefront's targets, so not during a fight, a treasure, a drop
+  that replaces the exit or another exit). The ledger hears the verdict after every objective
+  (`CheatLedger::follow_objective`, in the specialist env and the chain, beside `follow_route`): nothing is given on
+  entering, the bomb comes when the wall turns next, and a grant still unused when the objective turns away is taken
+  back in the room, uncounted. Dodongo's and Manhandla's `bomb_weapon` rooms keep their need whatever the objective.
+  Tests: the ledger's `the_wall_grant_follows_the_objective`, `crates/env/tests/wall_grant.rs` (7:0x1a with the
+  candle to take, 3:0x5b's first pass, 7:0x1a out of the cellar, 3:0x5b's last pass with an empty bag, each against
+  the room rule), `boss_bombs.rs` (the weapon rooms on `d3first`);
 - **keys:** 1 in a dungeon room whose route step leaves through an edge whose door is still locked (the game's door
   tiles, and no opening animation on it: `$54` 6–8 with `$55`'s bit, the game spends the key as it starts), unless
   Link has the magic key or the room's treasure is a key whose item-taken flag isn't set: that key comes first, and
@@ -1106,6 +1118,42 @@ in columns 1, 6 and 8 at 41%; a Stalfos or Gibdo in slot 1 (the room item's carr
   `killed_slot`, `full_bag`, `drop`, and the run's `seed` and `replay`. Counts are sums over the list, per run, per
   room and per batch, always with and without the full-bag windows (`python -m triforce.bomb_metrics REPLAY...
   --out bomb_windows.jsonl`, beside the 250 test's JSON).
+- **The carrier targets** (round 40, the fresh generation; routes.yaml `bomb_rules: {carrier_targets: true}` on
+  `d3first`, a step's `carriers: false` opts out; decisions 2026-11-23 "The fresh generation's Dungeon 3"): Metric
+  B's window is also the observation's `bomb_carrier` column and the route's targets, one list
+  (`zelda::bomb_windows::bomb_carriers`). In a dungeon room the route crosses (objective MOVE on a route step, not a
+  cellar) every monster it names is a target beside the exit (`GameCompletion::objectives`, role `monster`), with
+  the bag as Link's own bombs and no weapon bomb (`fights_only` caps a crossing's mode, so a Vire counts only to the
+  magic sword); the dropped bombs are taken as under a floor (`Objective::bag_drops`: once no fight, the only
+  targets while reachable). When the kill is made the cycle moves on (with a drop or without: a Red Darknut's
+  table drop is a 41% draw), the window closes and the room is a plain crossing; a Zol split by the sword and its
+  child Gels move nothing, a Gel does. 3:0x69's two steps opt out (its line, no hit).
+
+### Route goals (`crates/zelda/src/goals.rs`, `run_stats.py`; round 40)
+
+The owner (Nov 23): "You may even want to start tracking goals of screen wrap and 'no kills'", and "it is a metric to
+check later, so tracking is important". One mechanism: what a route step expects of a visit is read from the
+route's data (`goals::step_goals`, on the route's own map; `_native.route_steps` lists it as `goals`), what the visit
+did is followed beside it (`goals::GoalTracker`, in the chain beside the supply tracker), and both go into the room
+record as `goal_*` (`env::chain::RoomRecord::goals`; `runner.RoomRecord`, None in older records).
+
+- **Expected:** `wrap` where the exit the step leaves by is reached only by a screen wrap (game.yaml `wrap: true`,
+  a wrap exit: 0:0x75 W; `wrap_in`: 0:0x55 W, and 0:0x76 W through the fresh generation's route patch); `no_hit`
+  where the (non-cave) room has a planned path (`path_costs`: 3:0x69's line, 5:0x37's column, 0:0x17, 0x1f, 0x21,
+  0x27); `carriers` where the carrier targets apply and the room's data names a carrier type
+  (`bomb_windows::BOMB_CARRIER_NAMES`). Every visit whose objective was never FIGHT is one the route crossed: no kill
+  is expected there but the carriers aimed at.
+- **What happened:** `goal_wraps` (wraps and wrap exits completed), `goal_fought`, `goal_cycle_in` (WorldKillCycle
+  on entering), `goal_cycle_kills` (deaths that moved it, `bomb_windows::cycle_deaths`: the kills the drop plan
+  counts, unlike the record's `kills`, `$627` increments, which counts a split Zol's Gels), `goal_carrier_in` /
+  `goal_carrier_seen` (a carrier aimed at on the first decision / any), `goal_carrier_kills` (deaths of monsters
+  aimed at as carriers), `goal_carrier_bombs` and `goal_carrier_bombs_taken` (their bomb drops, followed as
+  `bombs::BombStats` follows every bomb drop). Hits are the record's `hits`.
+- **Read:** `triforce stats show` has a "Route goals" table by step (visits, crossed, kills a crossed visit carriers
+  aside, the cycle on entering by value, wraps taken of those expected, visits without a hit where expected, carriers
+  in / aimed at / killed, their bombs taken of dropped); `compare` pairs four per-run measures (kills where the route
+  crossed, expected wraps not taken, hits in rooms with a planned path, carriers' bombs taken) and puts both files'
+  goal tables side by side. Chains only: an evaluation's visits carry no goals.
 
 ### Experimental reward and cutoff controls
 

@@ -1000,21 +1000,18 @@ pub fn threat_block(
 }
 
 /// `entity_threat`'s `bomb_carrier` per observation slot: the monsters whose death may drop bombs now, by the owner's
-/// Metric B, so the metric and the flag are one definition: while `zelda::bomb_windows::bomb_carrier_window` is open,
-/// each monster `is_bomb_carrier` says is one. Link's own bombs are the bag (`state.bombs()`: the cheated wall bombs
-/// are not told apart here, as the observation's `bombs` never did), the bomb rule is the mask's BOMB, and every
-/// monster must die when the objective is FIGHT. RAM object slot `e.index` (1-11) is observation slot `e.index - 1`.
+/// Metric B, so the metric and the flag are one definition (`zelda::bomb_windows::bomb_carriers`: while
+/// `bomb_carrier_window` is open, each monster `is_bomb_carrier` says is one; the route's carrier targets are the same
+/// list). Link's own bombs are the bag (`state.bombs()`: the cheated wall bombs are not told apart here, as the
+/// observation's `bombs` never did), the bomb rule is the mask's BOMB, and every monster must die when the objective
+/// is FIGHT. RAM object slot `e.index` (1-11) is observation slot `e.index - 1`.
 fn bomb_carriers(state: &GameView, objective: &Objective, mask: &ActionMask) -> [bool; NUM_ENTITY_SLOTS] {
     let mut out = [false; NUM_ENTITY_SLOTS];
-    let own = state.bombs();
     let bomb_rule = mask.kind[ActionKind::Bomb.index()];
     let kill_all = objective.kind == ObjectiveKind::Fight;
-    if !zelda::bomb_windows::bomb_carrier_window(state, own, bomb_rule, kill_all) {
-        return out;
-    }
-    for e in &state.enemies {
+    for e in zelda::bomb_windows::bomb_carriers(state, state.bombs(), bomb_rule, kill_all) {
         let slot = e.index as usize;
-        if (1..=TREASURE_SLOT).contains(&slot) && zelda::bomb_windows::is_bomb_carrier(state, e, own, bomb_rule) {
+        if (1..=TREASURE_SLOT).contains(&slot) {
             out[slot - 1] = true;
         }
     }

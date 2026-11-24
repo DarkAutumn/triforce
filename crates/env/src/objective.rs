@@ -215,6 +215,21 @@ pub fn recorded_targets(objective: &Objective, state: &GameView, reward: &Reward
     out
 }
 
+/// The objective's target is the bomb wall the route leaves through (round 40, `wall_grant: objective`;
+/// `zelda::cheats::CheatLedger::follow_objective`): the objective leaves through an intact bomb wall or a closed rock
+/// wall (`zelda::objectives::route_bomb_targets`), and the spot it is bombed from is among the targets the
+/// wavefront of [`target_wavefront`] leads to for `reward` (so not while the objective is a fight, a treasure or
+/// another exit, nor while a dropped item replaces the exit).
+pub fn wall_is_next(objective: &Objective, state: &GameView, reward: &RewardConfig) -> bool {
+    if zelda::objectives::route_bomb_targets(state.game_map(), state, objective).is_empty() {
+        return false;
+    }
+    let wavefront = wavefront_targets(objective, state, reward);
+    objective.labels.iter().any(|(target, role)| {
+        matches!(role, Role::BombWall { .. } | Role::Cave(_)) && wavefront.binary_search(target).is_ok()
+    })
+}
+
 /// Whether a dropped item pulls Link away from `objective` (the aimless score's `pulled`, `zelda::aimless`): one the
 /// shaping of `reward` makes a target, or one he wants ([`wanted_drop`]: a heart or fairy below full health, bombs
 /// below his maximum). Dropped items vanish; walking to one is no aimless walk (the owner, round 38: "walking towards

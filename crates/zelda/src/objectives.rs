@@ -272,6 +272,23 @@ pub struct Objective {
     pub labels: Vec<Aim>,
 }
 
+impl Objective {
+    /// The bomb carriers this objective aims at (round 40, `crate::game_map::BombRules::carrier_targets`), as (object
+    /// slot, type), each once: the monsters of a crossing (a MOVE objective aims at monsters only so).
+    pub fn carriers(&self) -> BTreeSet<(u8, u8)> {
+        if self.kind != ObjectiveKind::Move {
+            return BTreeSet::new();
+        }
+        self.labels
+            .iter()
+            .filter_map(|(_, role)| match *role {
+                Role::Monster { slot, kind } => Some((slot, kind)),
+                _ => None,
+            })
+            .collect()
+    }
+}
+
 /// What Link holds on entering a route step: the triforce pieces earlier steps took (bit `level - 1`), the sword
 /// earlier cave steps handed over and whether earlier cellar steps gave the bow, the raft, the ladder, the recorder,
 /// the red ring and the silver arrow (round 29: a room is silently off the route when the steps before it do not
@@ -1116,6 +1133,24 @@ impl GameCompletion {
             || (self.bomb_rules.fights_only && here.level != 0 && self.last_kind != ObjectiveKind::Fight)
     }
 
+    /// The route's carrier targets apply in `state`'s room (round 40, `BombRules::carrier_targets`): the switch is on,
+    /// Link plays a route step in a dungeon room (not a cellar) and the step does not opt out (`carriers: false`).
+    /// [`GameCompletion::objectives`] then aims a crossing at the carriers as well as the exit
+    /// ([`crate::bomb_windows::bomb_carriers`]).
+    pub fn carrier_targets(&self, state: &GameView) -> bool {
+        let here = state.full_location();
+        self.bomb_rules.carrier_targets
+            && here.level != 0
+            && !here.in_cave
+            && self.current_step(here).is_some_and(|step| step.carriers)
+    }
+
+    /// A room's cheated wall bomb follows the objective (round 40, `BombRules::wall_grant_follows_objective`: routes.yaml
+    /// `wall_grant: objective`), not the room (`crate::cheats::CheatLedger::follow_objective`).
+    pub fn wall_grant_follows_objective(&self) -> bool {
+        self.bomb_rules.wall_grant_follows_objective
+    }
+
     /// The room edge (N/S/E/W) the route step Link plays in `state`'s room leaves through: the step
     /// [`GameCompletion::objectives`] picks for `state` coming from `prev` (None, or the same room: the current
     /// step), without updating anything.  None off the route, in a sub-room, for steps leaving through a cave, stairs
@@ -1279,6 +1314,19 @@ impl GameCompletion {
             labels.extend(exit_aims);
             next_rooms.extend(rooms);
         }
+        // Round 40 (`BombRules::carrier_targets`): a dungeon room the route crosses aims at every monster whose death
+        // may drop bombs now as well as at the exit (the wavefront leads to the nearest of them); the observation's
+        // `bomb_carrier` is the same list. No weapon bomb is the rule's in a crossing (`fights_only`), so a Vire is
+        // one only to the magic sword. Once the cycle moves on (the kill was made, with a drop or not) or the bag is
+        // full, none is left and the room is a plain crossing; the dropped bombs are taken as under a floor
+        // (`bag_drops`, below).
+        if kind == ObjectiveKind::Move && self.carrier_targets(state) {
+            for e in crate::bomb_windows::bomb_carriers(state, state.bombs(), false, false) {
+                let carrier: Vec<Aim> = aims(e.link_overlap_tiles(), Role::Monster { slot: e.index, kind: e.id }).collect();
+                pbrs.extend(carrier.iter().map(|a| a.0));
+                labels.extend(carrier);
+            }
+        }
         self.last_kind = kind;
         Objective {
             kind,
@@ -1291,7 +1339,7 @@ impl GameCompletion {
                 .current_step(state.full_location())
                 .is_some_and(|s| s.treasure == crate::game_map::TreasureRule::Refuse),
             drops_first: self.current_step(state.full_location()).is_some_and(|s| s.drops_first),
-            bag_drops: self.bomb_rules.fills_the_bag(),
+            bag_drops: self.bomb_rules.fills_the_bag() || self.bomb_rules.carrier_targets,
             labels,
         }
     }

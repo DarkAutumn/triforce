@@ -361,6 +361,24 @@ class RoomRecord:
     fairies_dropped: int = 0
     fairies_taken: int = 0
     drops: List[dict] = field(default_factory=list)
+    # Round 40 (None/absent in older records; crates/zelda/src/goals.rs, docs/architecture.md "Route goals"): what the
+    # visit's route step expected, from the route's data (a screen wrap: the exit is a wrap exit or `wrap_in`; no hit:
+    # the room has a planned path, `path_costs`; the carriers: the route's carrier targets apply), and what happened:
+    # wraps completed, whether the objective was ever FIGHT (else the route crossed the room), WorldKillCycle on
+    # entering and the deaths that moved it, a carrier aimed at on entering and at all, carriers killed, the bombs they
+    # dropped and those taken (booleans as 0/1).
+    goal_wrap_expected: Optional[int] = None
+    goal_no_hit_expected: Optional[int] = None
+    goal_carriers_expected: Optional[int] = None
+    goal_wraps: Optional[int] = None
+    goal_fought: Optional[int] = None
+    goal_cycle_in: Optional[int] = None
+    goal_cycle_kills: Optional[int] = None
+    goal_carrier_in: Optional[int] = None
+    goal_carrier_seen: Optional[int] = None
+    goal_carrier_kills: Optional[int] = None
+    goal_carrier_bombs: Optional[int] = None
+    goal_carrier_bombs_taken: Optional[int] = None
 
 
 @dataclass

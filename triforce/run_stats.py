@@ -28,6 +28,12 @@ error; numbers the records lack are null, never zero):
   error), for pairing two files by seed (``compare``): frames, hearts at the end, hearts lost, hits, shots, shots
   that hit, kills far and near, the beams measures, ``enter`` (frames to entering each step, null where not entered)
   and ``end``.
+- ``goals`` (round 40, ``crates/zelda/src/goals.rs``): by route step, what the step expected of a visit from the
+  route's data (a screen wrap, no hit where a path is planned, the carriers) beside what happened: visits, those the
+  route crossed (no FIGHT objective) and the kills the drop cycle counted in them (carriers aside), WorldKillCycle on
+  entering, wraps taken, visits without a hit, carriers aimed at on entering and at all, killed, their bombs dropped
+  and taken; ``runs`` adds per run the kills where the route crossed, expected wraps not taken, hits in rooms with a
+  planned path and carriers' bombs taken (``compare`` pairs them).
 - ``flags`` (``{level: red|note, code, text}``: ``chain_flags``), ``manifest`` (the meta's, else null),
   ``provenance`` (route, start, stop, clips, the team), ``records`` (the counters the records carry, runs asked and
   played, the seeds).
@@ -120,7 +126,7 @@ def distribution(values: list) -> Optional[dict]:
 VISIT_MEANS = ('hits', 'hearts_lost', 'health_in', 'health_out', 'linger_max_frames', 'linger_tail_frames',
                'bombs_used', 'keys_used', 'cheated_bombs', 'cheated_keys', 'cheated_rupees', 'shots', 'shots_lined',
                'lined', 'lined_unfired', 'kills_far', 'kills_near', 'kills_other', 'kill_distance', 'shots_hit',
-               'beams_lost', 'held_frames', 'beams_lost_visit')
+               'beams_lost', 'held_frames', 'beams_lost_visit', 'aimless_frames')
 BEAM_FIELDS = ('shots', 'shots_lined', 'lined', 'lined_unfired', 'kills_far', 'kills_near', 'kills_other',
                'kill_distance', 'beams_lost')
 
@@ -150,6 +156,7 @@ def visit_figures(visit: dict, kind: str = 'chain') -> dict:
         'beams_lost_visit': (visit.get('beam_lost_frame') is not None) if new else None,
         'lost_frame': visit.get('beam_lost_frame') if new else None,
         'frames': visit.get('frames'),
+        'aimless_frames': visit.get('aimless_frames'),
     }
     return figures
 
@@ -198,6 +205,65 @@ class Group:
         if len(self.rooms) == 1:
             group['room'] = next(iter(self.rooms))
         return group
+
+
+class Goals:
+    """The route's goals over one step's visits (round 40, ``crates/zelda/src/goals.rs``: a visit's ``goal_*``
+    fields): what the step expected, from the route's data, beside what happened.  Only visits carrying the fields
+    count."""
+
+    def __init__(self):
+        self.visits = 0
+        self.expected: Counter = Counter()
+        self.crossed = 0
+        self.crossed_kills: list = []        # deaths that moved the drop cycle, carriers aside, a crossed visit
+        self.cycle_in: Counter = Counter()
+        self.wraps: list = []                # 1 a visit that took a wrap, 0 not (where one was expected)
+        self.no_hit: list = []               # 1 a visit without a hit (where a planned path was expected)
+        self.carrier_in = self.carrier_seen = self.carrier_killed = 0
+        self.carrier_bombs = self.carrier_taken = 0
+
+    def add(self, v: dict):
+        self.visits += 1
+        for name in ('wrap', 'no_hit', 'carriers'):
+            self.expected[name] += v.get(f'goal_{name}_expected') or 0
+        if not v.get('goal_fought'):
+            self.crossed += 1
+            self.crossed_kills.append((v.get('goal_cycle_kills') or 0) - (v.get('goal_carrier_kills') or 0))
+        self.cycle_in[v.get('goal_cycle_in')] += 1
+        if v.get('goal_wrap_expected'):
+            self.wraps.append(1 if v.get('goal_wraps') else 0)
+        if v.get('goal_no_hit_expected') and v.get('hits') is not None:
+            self.no_hit.append(0 if v['hits'] else 1)
+        self.carrier_in += v.get('goal_carrier_in') or 0
+        self.carrier_seen += v.get('goal_carrier_seen') or 0
+        self.carrier_killed += 1 if v.get('goal_carrier_kills') else 0
+        self.carrier_bombs += v.get('goal_carrier_bombs') or 0
+        self.carrier_taken += v.get('goal_carrier_bombs_taken') or 0
+
+    def out(self) -> dict:
+        share = lambda xs: rate_block(sum(xs), len(xs)) if xs else None  # noqa: E731
+        return {'visits': self.visits, 'expects': [k for k, n in self.expected.items() if n],
+                'crossed': self.crossed, 'crossed_kills': distribution(self.crossed_kills),
+                'cycle_in': {str(k): n for k, n in sorted(self.cycle_in.items(), key=lambda kv: (kv[0] is None, kv[0]))},
+                'wrap_taken': share(self.wraps), 'no_hit': share(self.no_hit),
+                'carrier': {'in': self.carrier_in, 'seen': self.carrier_seen, 'killed': self.carrier_killed,
+                            'bombs': self.carrier_bombs, 'taken': self.carrier_taken}}
+
+
+def goal_run_values(played: list) -> dict:
+    """One run's goal measures (None for records without the fields): kills where the route crossed (carriers
+    aside), expected wraps not taken, hits in rooms with a planned path, carriers' bombs taken."""
+    if not played or any(v.get('goal_fought') is None for v in played):
+        return {'goal_crossed_kills': None, 'goal_wraps_missed': None, 'goal_planned_hits': None,
+                'goal_carrier_bombs': None}
+    return {
+        'goal_crossed_kills': sum((v['goal_cycle_kills'] - v['goal_carrier_kills']) for v in played
+                                  if not v['goal_fought']),
+        'goal_wraps_missed': sum(1 for v in played if v['goal_wrap_expected'] and not v['goal_wraps']),
+        'goal_planned_hits': sum(v.get('hits') or 0 for v in played if v['goal_no_hit_expected']),
+        'goal_carrier_bombs': sum(v['goal_carrier_bombs_taken'] for v in played),
+    }
 
 
 def room_key(level, room, in_cave=False) -> str:
@@ -293,6 +359,7 @@ def chain_stats(runs: list, meta: Optional[dict] = None, steps: Optional[list] =
     enter: dict = defaultdict(dict)
     networks: dict = defaultdict(Counter)
     beam_first_room = Counter()
+    by_goal: dict = defaultdict(Goals)
     seeds = []
     for index, run in enumerate(runs):
         seed = run.get('seed')
@@ -329,6 +396,8 @@ def chain_stats(runs: list, meta: Optional[dict] = None, steps: Optional[list] =
             if step is not None:
                 by_step[step].add(key, outcome, figures, family, room)
                 networks[step][v.get('policy') or family] += 1
+                if v.get('goal_fought') is not None:
+                    by_goal[step].add(v)
                 enter[step].setdefault(index, t)
                 furthest = step if furthest is None else max(furthest, step)
             t += v.get('frames') or 0
@@ -342,6 +411,7 @@ def chain_stats(runs: list, meta: Optional[dict] = None, steps: Optional[list] =
         per_run['hearts_end'].append(rooms[-1].get('health_out') if rooms else None)
         per_run['hearts_lost'].append(_sum(played, 'beam_hearts_lost'))
         per_run['hits'].append(_sum(played, 'hits'))
+        per_run['aimless_frames'].append(_sum(played, 'aimless_frames'))
         per_run['shots'].append(_sum(played, 'beam_shots'))
         per_run['shots_hit'].append(_sum(played, 'beam_shots_hit') if exact is not None else None)
         per_run['kills_far'].append(_sum(played, 'beam_kills_far'))
@@ -350,6 +420,8 @@ def chain_stats(runs: list, meta: Optional[dict] = None, steps: Optional[list] =
         per_run['beam_frames'].append(frames_held)
         per_run['beam_lost_at'].append(None if exact is None else exact[0])
         per_run['beam_held'].append(None if exact is None else exact[1])
+        for name, value in goal_run_values(played).items():
+            per_run[name].append(value)
     n = len(runs)
     wins = endings['w']
     rate = wins / n if n else None
@@ -401,6 +473,8 @@ def chain_stats(runs: list, meta: Optional[dict] = None, steps: Optional[list] =
             'lost_at': distribution(exact_lost) if has_exact else None,
             'held_frames': mean_of(per_run['beam_held']) if has_exact else None,
         },
+        'goals': {str(step): {**by_goal[step].out(), 'room': names[step][0], 'family': names[step][1]}
+                  for step in sorted(by_goal)},
         'time': {**{str(step): {**(distribution(list(enter[step].values())) or {}), 'room': names[step][0],
                                 'family': names[step][1]} for step in sorted(enter)},
                  'end': distribution(per_run['end'])},
@@ -743,6 +817,7 @@ def eval_stats(result: dict, source: Optional[str] = None, meta: Optional[dict] 
         per_run['hearts_end'].append(record.get('health'))
         per_run['hearts_lost'].append(_sum(visits, 'health_lost') if visits else None)
         per_run['hits'].append(_sum(visits, 'hits') if visits else None)
+        per_run['aimless_frames'].append(_sum(visits, 'aimless_frames') if visits else None)
         per_run['shots'].append(_sum(visits, 'beam_shots') if visits else None)
         per_run['shots_hit'].append(_sum(visits, 'beam_shots_hit') if exact is not None else None)
         per_run['kills_far'].append(_sum(visits, 'beam_kills_far') if visits else None)
@@ -1038,11 +1113,13 @@ def group_row(label: str, g: dict) -> list:
             (g.get('frames') or {}).get('p90', '-'), mean_text(g.get('shots')),
             fmt((g.get('shots_hit') or {}).get('sum'), 0), fmt((g.get('kills_far') or {}).get('sum'), 0),
             fmt((g.get('kills_near') or {}).get('sum'), 0), fmt((g.get('beams_lost') or {}).get('sum', 0) / v
-                                                                if g.get('beams_lost') else None)]
+                                                                if g.get('beams_lost') else None),
+            mean_text(g.get('aimless_frames'), 0)]
 
 
 GROUP_HEADER = ['', 'family', 'visits', 'exits', 'deaths', 'stuck', 'hits/visit', 'hearts lost/visit', 'health in',
-                'frames', 'median', 'p90', 'shots/visit', 'shots hit', 'far kills', 'near kills', 'beams lost/visit']
+                'frames', 'median', 'p90', 'shots/visit', 'shots hit', 'far kills', 'near kills', 'beams lost/visit',
+                'aimless frames/visit']
 
 
 def show(stats: dict, rooms: int = 20, family: Optional[str] = None) -> str:
@@ -1081,6 +1158,9 @@ def show(stats: dict, rooms: int = 20, family: Optional[str] = None) -> str:
         if end:
             lines.append(f"\nframes to the end (winners): {fmt(end['mean'], 0)} (median {end['median']}, "
                          f"p90 {end['p90']}, {end['mean'] / FPS:.0f} s)")
+    if stats.get('goals') and not family:
+        lines += ['', "## Route goals (what each step expected, from the route's data, and what happened)", '']
+        lines += goal_table(stats['goals'])
     lines += ['', '## Families', '']
     lines += table(GROUP_HEADER, [group_row(name, g) for name, g in stats['by_family'].items()
                                   if family in (None, name)])
@@ -1094,6 +1174,37 @@ def show(stats: dict, rooms: int = 20, family: Optional[str] = None) -> str:
         lines += table(['state', 'episodes', 'rate'], [[k, v['n'], f"{100 * v['rate']:.1f}% ± {100 * (v['se'] or 0):.1f}"]
                                                        for k, v in stats['by_state'].items()])
     return '\n'.join(lines)
+
+
+def goal_cells(g: Optional[dict]) -> list:
+    """A step's goal figures as table cells (``-`` for a file without the step)."""
+    if not g:
+        return ['-'] * 9
+    share = lambda b: f"{b['successes']}/{b['n']}" if b else '-'  # noqa: E731
+    c = g['carrier']
+    cycle = ' '.join(f"{k}:{n}" for k, n in g['cycle_in'].items())
+    return [g['visits'], g['crossed'], mean_text(g.get('crossed_kills')), cycle, share(g.get('wrap_taken')),
+            share(g.get('no_hit')), f"{c['in']}/{c['seen']}", c['killed'], f"{c['taken']}/{c['bombs']}"]
+
+
+GOAL_HEADER = ['visits', 'crossed', 'kills/crossed visit', 'cycle in (value:visits)', 'wrap taken', 'no hit',
+               'carrier in/aimed at', 'carrier killed', 'carrier bombs taken/dropped']
+
+
+def goal_table(goals: dict, other: Optional[dict] = None) -> list:
+    """The route goals by step (one file, or two side by side: each cell ``base | arm``)."""
+    rows = []
+    steps = sorted(set(goals) | set(other or {}), key=int)
+    for step in steps:
+        g, o = goals.get(step), (other or {}).get(step)
+        head = g or o
+        label = f"{step} {head['room']}"
+        expects = ', '.join(sorted(set(head['expects']) | set((o or {}).get('expects') or ()))) or '-'
+        cells = goal_cells(g)
+        if other is not None:
+            cells = [f"{a} \\| {b}" for a, b in zip(cells, goal_cells(o))]
+        rows.append([label, head.get('family', ''), expects, *cells])
+    return table(['step', 'family', 'expects', *GOAL_HEADER], rows)
 
 
 def show_train(stats: dict) -> list:
@@ -1231,6 +1342,8 @@ def compare(base: dict, arms: list, min_pairs: int = 20) -> str:
     lines += metric('Hearts lost a run', 'hearts_lost')
     lines += metric('Hearts at the end (runs won in both)', 'hearts_end', keep=both_won)
     lines += metric('Hits taken a run', 'hits')
+    lines += metric('Aimless frames a run (round 38\'s calm stretches beyond the walk their ground needed)',
+                    'aimless_frames', 0)
     lines += metric('Beams held: rooms cleared holding them', 'beam_rooms',
                     note='Rooms left still within half a heart of full before the first left without (any record).')
     lines += metric('Beams held: frames to the entry of the room that took them', 'beam_frames', 0)
@@ -1238,6 +1351,15 @@ def compare(base: dict, arms: list, min_pairs: int = 20) -> str:
     lines += metric('Shots that hit a run (round 40 counters)', 'shots_hit')
     lines += metric('Kills from range a run', 'kills_far')
     lines += metric('Shots fired a run', 'shots')
+    lines += metric('Kills where the route crosses a run (carriers aside; the drop cycle\'s count)',
+                    'goal_crossed_kills')
+    lines += metric('Expected screen wraps not taken a run', 'goal_wraps_missed')
+    lines += metric('Hits in rooms with a planned path a run', 'goal_planned_hits')
+    lines += metric("Carriers' bombs taken a run", 'goal_carrier_bombs')
+    for arm, name in zip(arms, names[1:]):
+        if base.get('goals') or arm.get('goals'):
+            lines += ['', f"## Route goals by step ({names[0]} | {name}; not paired)", '']
+            lines += goal_table(base.get('goals') or {}, arm.get('goals') or {})
     lines += ['', '## Shooting, all visits', '']
     rows = []
     for s, name in zip([base, *arms], names):

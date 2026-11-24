@@ -49,6 +49,11 @@ pub const BOMB_CARRIER_TYPES: [u8; 9] = [
     enemy::GIBDO,
 ];
 
+/// game.yaml's `enemies:` names of [`BOMB_CARRIER_TYPES`], in the same order (a room whose data names one holds
+/// carriers: `crate::goals::step_goals`).
+pub const BOMB_CARRIER_NAMES: [&str; 9] =
+    ["BlueSlowOctorok", "BlueOctorok", "BlueMoblin", "BlueLynel", "Vire", "RedGoriya", "RedDarknut", "RedWizzrobe", "Gibdo"];
+
 /// WorldKillCycle values whose next death reads a bomb column of group 2 (the cycle moves on first: 0 → column 1,
 /// 5 → 6, 7 → 8; asm:Drop_ItemTable).
 pub const BOMB_CYCLES: [u8; 3] = [0, 5, 7];
@@ -184,6 +189,16 @@ pub fn bomb_carrier_window(state: &GameView, own_bombs: i32, bomb_rule: bool, ki
     carrier_window_possible(state)
         && state.enemies.iter().any(|e| is_bomb_carrier(state, e, own_bombs, bomb_rule))
         && (!kill_all || state.enemies.iter().any(is_other_kill))
+}
+
+/// The monsters whose death may drop bombs now: every eligible carrier ([`is_bomb_carrier`]) while
+/// [`bomb_carrier_window`] is open, none otherwise. One definition for the observation's `bomb_carrier` column
+/// (`env::observation`) and the route's carrier targets (`crate::objectives::GameCompletion::carrier_targets`).
+pub fn bomb_carriers(state: &GameView, own_bombs: i32, bomb_rule: bool, kill_all: bool) -> Vec<&Enemy> {
+    if !bomb_carrier_window(state, own_bombs, bomb_rule, kill_all) {
+        return Vec::new();
+    }
+    state.enemies.iter().filter(|e| is_bomb_carrier(state, e, own_bombs, bomb_rule)).collect()
 }
 
 /// [`bomb_carrier_window`] asking `rules` only when an answer can change it (a Vire without the magic sword, or no

@@ -227,3 +227,53 @@ def test_route_canaries_skip_the_stop_step_and_other_route_versions():
         run['rooms'][1]['room'] = '0x11'
     s = chain(renumbered, meta=meta(30))
     assert 'route-renumbered' in codes(s, 'note') and 'family-never-played' not in codes(s)
+
+
+def goal_visit(step, fought=0, cycle_in=0, cycle_kills=0, carrier=0, wraps=0, wrap=0, no_hit=0, hits=0, aimless=0):
+    """A visit with round 40's goal fields (crates/zelda/src/goals.rs) and an aimless count."""
+    return visit(step, hits=hits, aimless_frames=aimless, goal_wrap_expected=wrap, goal_no_hit_expected=no_hit,
+                 goal_carriers_expected=int(step == 2), goal_wraps=wraps, goal_fought=fought, goal_cycle_in=cycle_in,
+                 goal_cycle_kills=cycle_kills, goal_carrier_in=carrier, goal_carrier_seen=carrier,
+                 goal_carrier_kills=carrier, goal_carrier_bombs=carrier, goal_carrier_bombs_taken=carrier)
+
+
+def goal_run(seed, kills, carrier, wrapped, hits, aimless):
+    rooms = [goal_visit(0, wrap=1, wraps=wrapped, aimless=aimless), goal_visit(1, cycle_kills=kills, aimless=aimless),
+             goal_visit(2, cycle_in=kills % 10, cycle_kills=carrier, carrier=carrier, no_hit=1, hits=hits),
+             goal_visit(3, fought=1, cycle_kills=3)]
+    return {'route': 'd3first', 'seed': seed, 'result': 'success', 'reason': 'took the level 3 triforce',
+            'frames': 400, 'rooms': rooms}
+
+
+def test_route_goals_by_step_per_run_and_compared():
+    """Round 40: what each step expected beside what happened, by step and per run, and both files compared."""
+    base = chain([goal_run(0, 1, 0, 0, 1, 30), goal_run(1, 0, 1, 1, 0, 10)])
+    arm = chain([goal_run(0, 0, 1, 1, 0, 0), goal_run(1, 0, 1, 1, 0, 0)])
+    g = base['goals']
+    assert g['0']['expects'] == ['wrap'] and (g['0']['wrap_taken']['n'], g['0']['wrap_taken']['successes']) == (2, 1)
+    assert g['1']['crossed'] == 2 and g['1']['crossed_kills']['mean'] == 0.5
+    assert g['2']['cycle_in'] == {'0': 1, '1': 1} and g['2']['no_hit']['successes'] == 1
+    assert g['2']['carrier'] == {'in': 1, 'seen': 1, 'killed': 1, 'bombs': 1, 'taken': 1}
+    assert g['2']['crossed_kills']['mean'] == 0.0, "a carrier's death is no stray kill"
+    assert g['3']['crossed'] == 0 and g['3']['crossed_kills'] is None, "a fight is no crossing"
+    runs = base['runs']
+    assert (runs['goal_crossed_kills'], runs['goal_wraps_missed'], runs['goal_planned_hits'],
+            runs['goal_carrier_bombs']) == ([1, 0], [1, 0], [1, 0], [0, 1])
+    assert chain([won(0)])['runs']['goal_crossed_kills'] == [None], "records without goals: null, never zero"
+    text = rs.show(base)
+    assert '## Route goals' in text and '| 2 3:0x6b | darknut | carriers, no_hit |' in text
+    compared = rs.compare(base, [arm])
+    assert '## Kills where the route crosses a run' in compared and '## Route goals by step' in compared
+
+
+def test_aimless_frames_a_visit_and_a_run():
+    """Aimless frames (``RoomRecord.aimless_frames``, round 38) in the step, room and family tables and paired."""
+    base = chain([goal_run(0, 0, 0, 1, 0, 30), goal_run(1, 0, 0, 1, 0, 10)])
+    arm = chain([goal_run(0, 0, 0, 1, 0, 0), goal_run(1, 0, 0, 1, 0, 0)])
+    assert base['runs']['aimless_frames'] == [60, 20]
+    assert base['by_step']['0']['aimless_frames']['mean'] == 20.0
+    assert base['by_family']['zol']['aimless_frames']['n'] == 6
+    assert 'aimless frames/visit' in rs.show(base)
+    compared = rs.compare(base, [arm])
+    assert '## Aimless frames a run' in compared
+    assert '| 2 | 40 | 0 | -40 ± 20 |' in compared.split('## Aimless frames a run')[1]

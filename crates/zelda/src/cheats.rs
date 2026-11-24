@@ -47,6 +47,16 @@
 //! `env::config::ItemsConfig::bomb_targets`), in every bomb mode and on the 10th kill too.  So a cheated bomb of a
 //! room's grant in such a room is always a bomb laid at the route's wall.  A route grant is not bound so: it is the
 //! weapon the route gives (the Olive Garden's), kept by the route's `bomb_reserve` until the fight it is for.
+//!
+//! **The wall's grant follows the objective** (round 40, the fresh generation; routes.yaml `bomb_rules: {wall_grant:
+//! objective}`, [`GameCompletion::wall_grant_follows_objective`]; the owner, Nov 23: "I want cheat-bombs to not show
+//! up unless the objective is to go into a wall that needs it (or dodongo d2 boss)"): in a room whose bomb opens
+//! something ([`bomb_opens`]) the bomb need is 1 only while the objective, as the env attaches it, targets the bomb
+//! wall or rock wall the route leaves through (`env::objective::wall_is_next`, told to the ledger after every
+//! objective: [`CheatLedger::follow_objective`]); nothing on entering, and a grant still unused when the objective
+//! turns away (a fight, a treasure, a drop, another exit) is taken back in the room. The `bomb_weapon` rooms keep
+//! their need whatever the objective. So the observation's bomb count, the BOMB mask and the 10th-kill rules see no
+//! bomb that is not Link's own until the wall is next.
 
 use std::ops::{AddAssign, Index, IndexMut};
 use std::sync::Arc;
@@ -289,6 +299,9 @@ pub struct CheatLedger {
     /// The furthest route step the run has reached ([`CheatLedger::follow_route`]: a step's grant is given the first
     /// time the run reaches it, never again on coming back).
     route_step: Option<usize>,
+    /// Under `wall_grant: objective` (module doc): the last objective in Link's room targeted the bomb wall the route
+    /// leaves through ([`CheatLedger::follow_objective`]); false on entering a room until an objective says so.
+    wall_next: bool,
 }
 
 impl CheatLedger {
@@ -409,13 +422,15 @@ impl CheatLedger {
     fn start<N: Nes>(&mut self, session: &mut Session<N>, completion: &GameCompletion) -> Arc<GameView> {
         let state = session.state().clone();
         let need = needs(session.game_map(), completion, None, &state);
+        let need = gate_wall_need(session.game_map(), completion, &state, need, false);
         let step = self.reset(state.full_location(), need, Self::counts(&state));
         Self::write(session, step)
     }
 
     /// [`CheatLedger::settle`] on the session's state after an action from room `prev`, writing the counts the rule
     /// sets; returns the step and the state to carry on (the action's `Change` keeps what the action itself did).
-    /// `completion` hasn't followed the action yet.
+    /// `completion` hasn't followed the action yet (under `wall_grant: objective` the wall's need is the last
+    /// objective's verdict in this room, none in a room just entered).
     pub fn after_action<N: Nes>(
         &mut self,
         session: &mut Session<N>,
@@ -424,8 +439,56 @@ impl CheatLedger {
     ) -> (CheatStep, Arc<GameView>) {
         let state = session.state().clone();
         let need = needs(session.game_map(), completion, Some(prev), &state);
+        let wall_next = self.wall_next && self.room == Some(state.full_location());
+        let need = gate_wall_need(session.game_map(), completion, &state, need, wall_next);
+        self.wall_next = wall_next;
         let step = self.settle(state.full_location(), need, Self::counts(&state));
         (step, Self::write(session, step))
+    }
+
+    /// Under `wall_grant: objective` (module doc; nothing otherwise), after the objective of Link's room is made
+    /// (`wall_next`: it targets the bomb wall or rock wall the route leaves through, `env::objective::wall_is_next`):
+    /// in a room whose bomb opens something the bomb need is 1 only while it does; a bag below it is topped up (the
+    /// unit granted by the room), and a room's grant above it, still unused, is taken back. Returns the state to carry
+    /// on, None when no count changed. The `bomb_weapon` rooms are left to [`CheatLedger::settle`]'s need.
+    pub fn follow_objective<N: Nes>(
+        &mut self,
+        session: &mut Session<N>,
+        completion: &GameCompletion,
+        wall_next: bool,
+    ) -> Option<Arc<GameView>> {
+        if !completion.wall_grant_follows_objective() {
+            return None;
+        }
+        let state = session.state().clone();
+        if self.room != Some(state.full_location()) || !bomb_opens(session.game_map(), state.full_location()) {
+            self.wall_next = false;
+            return None;
+        }
+        self.wall_next = wall_next;
+        let need = if wall_next { bomb_need(session.game_map(), &state) } else { 0 };
+        let step = self.wall_need(need);
+        step.set[CheatItem::Bombs].map(|_| Self::write(session, step))
+    }
+
+    /// The wall's bomb need in Link's room is `need` now ([`CheatLedger::follow_objective`]): a room's grant above it,
+    /// still unused, is taken back; a bag below it is topped up (while a route grant is outstanding: the room's grant
+    /// below it), the unit granted by the room. The step writes the count when it changes.
+    fn wall_need(&mut self, need: i32) -> CheatStep {
+        let held = &mut self.held[CheatItem::Bombs];
+        let before = held.count;
+        if held.granted > need {
+            held.count -= held.granted - need;
+            held.granted = need;
+        }
+        let have = if held.route > 0 { held.granted } else { held.count };
+        if have < need {
+            held.granted += need - have;
+            held.count += need - have;
+        }
+        let mut step = CheatStep::default();
+        step.set[CheatItem::Bombs] = (held.count != before).then(|| held.count.clamp(0, 255) as u8);
+        step
     }
 
     /// After `completion` has followed an action (or at a run's start): the first time the run reaches a route step
@@ -457,6 +520,22 @@ impl CheatLedger {
             session.apply_ram(&values).clone()
         }
     }
+}
+
+/// [`needs`] under `wall_grant: objective` (module doc): in a room whose bomb opens something the bomb need holds
+/// only while `wall_next` (the objective in this room targets the wall). Unchanged under the room rule and in the
+/// `bomb_weapon` rooms.
+fn gate_wall_need(
+    map: &GameMap,
+    completion: &GameCompletion,
+    state: &GameView,
+    mut need: ItemCounts<i32>,
+    wall_next: bool,
+) -> ItemCounts<i32> {
+    if completion.wall_grant_follows_objective() && !wall_next && bomb_opens(map, state.full_location()) {
+        need.bombs = 0;
+    }
+    need
 }
 
 #[cfg(test)]
@@ -769,5 +848,31 @@ mod tests {
         let s = l.settle(SOUTH, NONE, of(1, 1, 4));
         assert_eq!((s.cheated, s.set), (cheats(0, 0, 6), set(Some(0), Some(0), Some(0))), "all taken back");
         assert_eq!(l.cheated, cheats(1, 0, 6));
+    }
+
+    /// Round 40, `wall_grant: objective`: in a wall room entered with an empty bag nothing is given (the settle's need
+    /// is gated to 0 until an objective targets the wall); the wall's turn gives one; the objective turning away
+    /// before it is laid takes it back, uncounted; laid, it is cheated and the wall's need comes back while the wall
+    /// stands (the fuse burns); Link's own bombs meet the need, nothing is granted or taken.
+    #[test]
+    fn the_wall_grant_follows_the_objective() {
+        let mut l = CheatLedger::default();
+        assert_eq!(l.reset(SOUTH, NONE, of(0, 0, 0)).set, set(None, None, None), "entering: no bomb");
+        assert_eq!(l.wall_need(1).set, set(Some(1), None, None), "the wall is next: one is given");
+        assert_eq!(l.granted(CheatItem::Bombs), 1);
+        assert_eq!(l.wall_need(1), CheatStep::default(), "still next: nothing more");
+        assert_eq!(l.wall_need(0).set, set(Some(0), None, None), "turned away: taken back");
+        assert_eq!((l.granted(CheatItem::Bombs), l.cheated.bombs, l.used.bombs), (0, 0, 0), "never counted");
+        l.wall_need(1);
+        let s = l.settle(SOUTH, BOMB, of(0, 0, 0));
+        assert_eq!((s.used.bombs, s.cheated.bombs, s.set.bombs), (1, 1, Some(1)), "laid at the wall: cheated");
+        assert_eq!(l.settle(SOUTH, NONE, of(1, 0, 0)).cheated, cheats(0, 0, 0));
+        assert_eq!(l.wall_need(0).set, set(Some(0), None, None), "the wall opened: the spare goes");
+
+        let mut own = CheatLedger::default();
+        own.reset(SOUTH, NONE, of(3, 0, 0));
+        assert_eq!(own.wall_need(1), CheatStep::default(), "his own bombs meet the need");
+        assert_eq!(own.wall_need(0), CheatStep::default(), "and none of them is taken");
+        assert_eq!(own.granted(CheatItem::Bombs), 0);
     }
 }

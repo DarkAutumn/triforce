@@ -23,7 +23,7 @@ use crate::end_conditions::{
 };
 use crate::error::EnvError;
 use crate::heart_value::HeartContext;
-use crate::objective::{Attached, attach, needs_wavefront, pulled};
+use crate::objective::{Attached, attach, needs_wavefront, pulled, wall_is_next};
 use crate::observation::{Observation, ObservationBuilder};
 use crate::rewards::{Outcome, SUCCESS, Scored, score_step};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -912,14 +912,17 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         gc.set_clips_allowed(self.clips_allowed);
         self.pending_clips = None;
         // The cheated items (a bomb, a key, rupees the room needs) are in the state everything below starts from.
-        let state = &self.cheats.begin(&mut self.session, &gc);
+        let state = self.cheats.begin(&mut self.session, &gc);
         let attached = attach(
             &mut gc,
             None,
-            state,
+            &state,
             &self.config.reward,
             needs_wavefront(&self.config),
         );
+        // Under `wall_grant: objective` the wall's cheated bomb comes once the objective is made (`zelda::cheats`).
+        let wall_next = wall_is_next(&attached.objective, &state, &self.config.reward);
+        let state = &self.cheats.follow_objective(&mut self.session, &gc, wall_next).unwrap_or(state);
         self.objectives = Some(gc);
         self.update_disabled_kinds(&attached.objective);
         let step = self.route_step.and_then(|i| self.data.map.routes.get(&self.route)?.get(i));
@@ -1088,6 +1091,12 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         let state = self
             .cheats
             .follow_route(&mut self.session, self.objectives.as_ref().expect("episode started"))
+            .unwrap_or(state);
+        // Under `wall_grant: objective`: the wall's cheated bomb given or taken back by the new objective.
+        let wall_next = wall_is_next(&curr.objective, &state, &self.config.reward);
+        let state = self
+            .cheats
+            .follow_objective(&mut self.session, self.objectives.as_ref().expect("episode started"), wall_next)
             .unwrap_or(state);
         self.update_disabled_kinds(&curr.objective);
         self.linger.update(

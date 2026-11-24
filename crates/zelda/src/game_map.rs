@@ -414,9 +414,9 @@ const EXIT_KEYS: [&str; 10] =
     ["level", "location", "in_cave", "locked", "shutter", "span", "wrap", "wrap_in", "keep_out", "never_opens"];
 const RAFT_EXIT_KEYS: [&str; 3] = ["level", "location", "dock"];
 const EXIT_NAMES: [&str; 5] = ["N", "S", "E", "W", "cave"];
-const STEP_KEYS: [&str; 17] = [
+const STEP_KEYS: [&str; 18] = [
     "level", "room", "in_cave", "specialist", "entry", "exit", "waypoint", "retreat", "treasure", "bomb_reserve",
-    "rupee_reserve", "bombs", "drops", "banked_kills", "sword", "grant", "note",
+    "rupee_reserve", "bombs", "drops", "banked_kills", "sword", "grant", "carriers", "note",
 ];
 /// `recorder` ([`RECORDER`]): set down by the whirlwind.
 const STEP_ENTRIES: [&str; 7] = ["start", "N", "S", "E", "W", "cave", RECORDER];
@@ -581,6 +581,9 @@ pub struct RouteStep {
     /// `sword: false` (round 29): SWORD and BEAMS are masked on this step (9:0x06, the old man who answers a fourth
     /// sword hit with two fireballs that stay while Link is in the room, d9-walks.md §2). Default true.
     pub sword: bool,
+    /// `carriers: false` (round 40, the fresh generation): the route's `bomb_rules: {carrier_targets: true}` makes no
+    /// bomb carrier a target on this step (`crate::objectives::GameCompletion::carrier_targets`). Default true.
+    pub carriers: bool,
     /// The way of a `stretch:` this step belongs to (None: a step both ways share).
     pub way: Option<Way>,
     /// The name of that stretch.
@@ -796,15 +799,21 @@ fn parse_step(v: &Value) -> Result<RouteStep, MapError> {
         drops_first: one_of("drops", &STEP_DROPS, false)?.is_some(),
         banked_kills: get(v, "banked_kills").map(|n| as_u8(n, &format!("{what}: banked_kills"))).transpose()?,
         grant: step_grant(get(v, "grant"), &what)?,
-        sword: match get(v, "sword") {
-            None => true,
-            Some(Value::Bool(b)) => *b,
-            Some(other) => return err(format!("{what}: sword must be true or false, got {other:?}")),
-        },
+        sword: bool_key(v, "sword", &what)?,
+        carriers: bool_key(v, "carriers", &what)?,
         entry,
         way: None,
         stretch: None,
     })
+}
+
+/// A step's boolean key, true when absent (`sword:`, `carriers:`).
+fn bool_key(v: &Value, key: &str, what: &str) -> Result<bool, MapError> {
+    match get(v, key) {
+        None => Ok(true),
+        Some(Value::Bool(b)) => Ok(*b),
+        Some(other) => err(format!("{what}: {key} must be true or false, got {other:?}")),
+    }
 }
 
 /// A step's `grant:` ([`RouteStep::grant`]): a mapping of item names (`crate::cheats::CheatItem::name`) to counts.
@@ -1023,6 +1032,18 @@ pub struct BombRules {
     /// `treasure_below_rooms: [{level, room, below: N}, ...]`: a room's own floor instead of `treasure_below` (on
     /// every step of the room that takes its bombs): the override for a room the rule costs too much in.
     pub treasure_below_rooms: BTreeMap<MapLocation, u8>,
+    /// `carrier_targets: true` (round 40, the fresh generation; backlog "the exit and the nearest eligible
+    /// carrier"): in a dungeon room the route crosses, a monster whose death may drop bombs now (the observation's
+    /// `bomb_carrier`, `crate::bomb_windows::bomb_carrier_window`) is a target beside the exit, and its dropped bombs
+    /// are taken as under a floor ([`BombRules::fills_the_bag`]). A step opts out with `carriers: false`.
+    /// `crate::objectives::GameCompletion::carrier_targets`.
+    pub carrier_targets: bool,
+    /// `wall_grant: objective` (round 40, the fresh generation; the owner, Nov 23: "I want cheat-bombs to not show up
+    /// unless the objective is to go into a wall that needs it"): a room's cheated wall bomb is given only while the
+    /// objective's target is the bomb wall (or rock wall) the route leaves through, and taken back if the objective
+    /// turns away before it is laid (`crate::cheats::CheatLedger::follow_objective`). `room` (the default): today's
+    /// rule, the bomb is given on entering the room. The `bomb_weapon` rooms keep theirs either way.
+    pub wall_grant_follows_objective: bool,
 }
 
 impl BombRules {
@@ -1042,7 +1063,11 @@ impl BombRules {
     /// The `bomb_rules:` entry `v` of the route `route`, whose rooms must be dungeon rooms of its `steps`.
     fn parse(route: &str, v: &Value, steps: &[RouteStep]) -> Result<BombRules, MapError> {
         let what = format!("routes.yaml: bomb_rules: {route}");
-        check_keys(v, &["fights_only", "wall_only", "treasure_below", "treasure_below_rooms"], &what)?;
+        check_keys(
+            v,
+            &["fights_only", "wall_only", "treasure_below", "treasure_below_rooms", "carrier_targets", "wall_grant"],
+            &what,
+        )?;
         let rooms = |key: &str, keys: &[&str]| -> Result<Vec<(MapLocation, &Value)>, MapError> {
             let Some(list) = get(v, key) else { return Ok(Vec::new()) };
             let Some(list) = list.as_sequence() else {
@@ -1069,7 +1094,19 @@ impl BombRules {
                 None => err(format!("{what}: treasure_below_rooms {loc} needs `below: N`")),
             })
             .collect::<Result<_, _>>()?;
-        Ok(BombRules { fights_only: flag(v, "fights_only", &what)?, wall_only, treasure_below, treasure_below_rooms })
+        let wall_grant_follows_objective = match opt_string(v, "wall_grant", &what)?.as_deref() {
+            None | Some("room") => false,
+            Some("objective") => true,
+            Some(other) => return err(format!("{what}: wall_grant {other:?} is not one of room, objective")),
+        };
+        Ok(BombRules {
+            fights_only: flag(v, "fights_only", &what)?,
+            wall_only,
+            treasure_below,
+            treasure_below_rooms,
+            carrier_targets: flag(v, "carrier_targets", &what)?,
+            wall_grant_follows_objective,
+        })
     }
 }
 
@@ -3934,5 +3971,42 @@ mod tests {
         }
         let unknown = ROUTES_YAML.replacen("bomb_rules:\n  d3first:\n", "bomb_rules:\n  d4first:\n", 1);
         assert!(load(&unknown).unwrap_err().contains("is no route"));
+    }
+
+    /// Round 40 (the fresh generation): `d3first` aims crossings at bomb carriers and gives a wall's cheated bomb
+    /// only while the wall is the objective; `room` is the old rule, and a step opts out of the carriers with
+    /// `carriers: false` (its goals then expect none). Wrong values are refused.
+    #[test]
+    fn the_fresh_generation_switches_are_route_data() {
+        let map = GameMap::builtin();
+        let d3first = &map.bomb_rules["d3first"];
+        assert!(d3first.carrier_targets && d3first.wall_grant_follows_objective);
+        let load = |routes: &str| GameMap::from_yaml(GAME_YAML, routes).map_err(|e| e.0);
+        let on = "    carrier_targets: true\n    wall_grant: objective\n";
+        assert!(ROUTES_YAML.contains(on));
+        let room = load(&ROUTES_YAML.replacen(on, "    wall_grant: room\n", 1)).unwrap();
+        assert!(!room.bomb_rules["d3first"].carrier_targets && !room.bomb_rules["d3first"].wall_grant_follows_objective);
+        for (bad, error) in [
+            ("    carrier_targets: yes please\n", "carrier_targets must be true or false"),
+            ("    wall_grant: never\n", "is not one of room, objective"),
+        ] {
+            assert!(load(&ROUTES_YAML.replacen(on, bad, 1)).unwrap_err().contains(error), "{bad}");
+        }
+        // 3:0x5b's first pass (S -> N): a carrier step, unless its line says `carriers: false`.
+        let first_pass = ROUTES_YAML
+            .lines()
+            .find(|l| l.contains("{level: 3, room: '0x5b'") && l.contains("entry: S") && l.contains("exit: N"))
+            .expect("0x5b's first pass");
+        let index = |m: &GameMap| {
+            m.routes["d3first"].iter().position(|s| s.location() == loc(3, 0x5b) && s.exit == "N").unwrap()
+        };
+        let i = index(&map);
+        assert!(map.routes["d3first"][i].carriers && crate::goals::step_goals(&map, "d3first", i).carriers);
+        let with = |extra: &str| ROUTES_YAML.replacen(first_pass, &first_pass.replacen('}', extra, 1), 1);
+        let out = load(&with(", carriers: false}")).unwrap();
+        let j = index(&out);
+        assert!(!out.routes["d3first"][j].carriers && !crate::goals::step_goals(&out, "d3first", j).carriers);
+        assert!(load(&with(", carriers: 2}")).unwrap_err().contains("carriers must be true or false"));
+        assert!(!crate::goals::step_goals(&map, "d2first", 0).carriers, "d2first has no carrier targets");
     }
 }
