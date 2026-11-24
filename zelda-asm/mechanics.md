@@ -10,27 +10,28 @@ in the running game; `(unverified)` a statement not confirmed in the code. Monst
 Contents (generated; `L` = line in this file):
 
 <!-- toc -->
-- L36 Game modes and the frame loop
-- L105 Object slots and update order
-- L155 Random numbers
-- L184 Timers
-- L225 Link's movement: grid, speed and sub-pixels
-- L289 Tile collision and walking half into blocks
-- L346 Screen edges and room transitions
-- L400 Screen wrap (overworld)
-- L489 Grid-point skip: block clip, ladder clip and their run-up
-- L779 Doorways, doors, keys, shutters and bomb walls
-- L836 Push blocks and room secrets
-- L871 Stairs, cellars and caves
-- L914 Lost Woods and Lost Hills (mazes)
-- L929 Special-cased rooms
-- L970 Ladder and raft
-- L994 Monster spawning, edge spawns and respawn (room history)
-- L1059 Combat: collision boxes, damage, invincibility, knockback, stun
-- L1131 Hearts, rings and death
-- L1168 Room flags and saved state
-- L1197 Level data formats
-- L1210 Second quest differences
+- L37 Game modes and the frame loop
+- L106 Object slots and update order
+- L156 Random numbers
+- L185 Timers
+- L226 Link's movement: grid, speed and sub-pixels
+- L290 Tile collision and walking half into blocks
+- L347 Screen edges and room transitions
+- L401 Screen wrap (overworld)
+- L490 Grid-point skip: block clip, ladder clip and their run-up
+- L780 Doorways, doors, keys, shutters and bomb walls
+- L837 Push blocks and room secrets
+- L872 Stairs, cellars and caves
+- L915 Lost Woods and Lost Hills (mazes)
+- L930 Special-cased rooms
+- L971 Ladder and raft
+- L995 Monster spawning, edge spawns and respawn (room history)
+- L1060 Who chases what
+- L1114 Combat: collision boxes, damage, invincibility, knockback, stun
+- L1186 Hearts, rings and death
+- L1223 Room flags and saved state
+- L1252 Level data formats
+- L1265 Second quest differences
 <!-- /toc -->
 
 # Game modes and the frame loop
@@ -1055,6 +1056,60 @@ Monsters are made when a room is entered (modes 4, 9, `$B`, `$C`) from two attri
 - Monsters no weapon harms (Bubbles) are in the count, so a room holding them is never banked all dead. [`Bubble_Update`](src/bank4/bubble-keese.asm#L93) [`RoomHistory_SaveKillCountUW`](src/bank5/room-history-uw.asm#L110)
 - Entry, flags all dead and room out of the history: a non-recurring room makes nothing, permanently; any other room has its flags bits 6-7 and banked count cleared and refills. [`RoomHistory_ModifyObjCountUW`](src/bank5/room-history-uw.asm#L50)
 - `LevelKillCounts` is zeroed only when a level is loaded (mode 2), so after leaving and re-entering a dungeon a partly cleared room is full again while a dead boss stays dead. [`Mode2Load_Init`](src/bank7/init-mode-dispatch.asm#L147)
+
+# Who chases what
+
+Which point each moving monster steers by: the chase target `ChaseTargetX/Y` (`$61`/`$62`), Link's real position (`ObjX`/`ObjY` of slot 0), or neither. Three questions are answered for every type: (1) **following it on its line from behind**, can it turn straight back at Link; (2) **walking beside it off its line** (outside its alignment window), is the only turn toward Link a 90-degree one; (3) **does it gather at the point (128, 128)**, where Link and his mirror point coincide. In the tables: yes, no, partly; `-` when the question does not apply.
+
+**The chase target and the point where it holds still**
+- While `IsChasingOtherTarget` (`$60`) is 0 the target is copied from Link's corner every frame; each time `ChaseLongTimer` (`$4A`, 10-frame units) is found at 0 it is reloaded with `Random+1` AND 7 and the flag toggles; on 0 -> 1 the target becomes (X EOR `$FF`, Y EOR `$FF`) = (255 - X, 255 - Y) and stays there until the flag returns to 0: up to 70 frames on Link, up to 70 on the mirror. [`Mode5Play_UpdateWorld@CheckChaseTarget`](src/bank7/mode5-play-update.asm#L145) [`Mode5Play_UpdateWorld@UpdateWeapons`](src/bank7/mode5-play-update.asm#L154)
+- The mirror's fixed point is (127.5, 127.5): Link's corner at X 127-128 has its mirror 1 pixel away; at a distance d from that point the mirror is 2d away on the other side. Where Link stands near it, a target-steered monster is sent at him during both spells; elsewhere half of the time it is sent to the far side of the screen. [`Mode5Play_UpdateWorld@UpdateWeapons`](src/bank7/mode5-play-update.asm#L154)
+- Food on the ground replaces the target every frame (after the copy from Link) when the room's first monster type is `$03`-`$0A`, `$12`, `$1B` or `$1C`; every target-steered monster in the room then goes for the food. [`Boomerang_UpdateOrFood`](src/bank7/boomerang-arrow-food.asm#L70)
+
+**The grid wanderers: all three hold**
+- On a frame whose move leaves the grid offset a multiple of 16, with q-speed not 0: when `Random+1,X` <= the turn rate ((rate + 1) in 256) and the target is less than 9 pixels off on X it faces the target vertically, else less than 9 off on Y it faces it horizontally; otherwise, once its turn timer is 0, it turns perpendicular to its facing, toward the target. Every turn reloads the timer from `Random,X`. [`Wanderer_MoveAndTurn`](src/bank4/walker-wanderer-common.asm#L224)
+- So (1) followed on its line, Link is inside the 9-pixel window at every grid point and it turns straight back at him with the rate's chance whenever the target is on him; (2) more than 8 pixels off its line it can turn back only toward the mirror, never along Link's line, and its turns toward Link are the 90-degree ones (the homing turn when it comes level with him, the timer turn toward his side); (3) it gathers where the two targets coincide. [`Wanderer_MoveAndTurn`](src/bank4/walker-wanderer-common.asm#L224)
+- A frame that moves no pixel leaves the offset at 0, and the update decides again: at q-speed `$20` a grid point gets one or two decisions, at `$40` one. [`Obj_MoveByQSpeed`](src/bank7/walker-move.asm#L244) [`Wanderer_MoveAndTurn`](src/bank4/walker-wanderer-common.asm#L224)
+- A wanderer blocked by a tile on the frame after its decision takes another direction (a random perpendicular, then its opposite, then back), which can reverse it whatever the target. [`Walker_AltDir_GetRandomObjPerpendicularDir`](src/bank7/walker-collision-screen-edge.asm#L335)
+- On the overworld the X test can wrap: a monster at X `$00` with the mirror at X `$F8`-`$FF` (Link at X 0-7) reads it as 1-8 pixels off. [`Wanderer_MoveAndTurn`](src/bank4/walker-wanderer-common.asm#L224)
+
+| type | rate, chance a decision | q-speed | the routine |
+|---|---|---|---|
+| Darknut red `$0B`, blue `$0C` | `$80`, 129/256 | `$20`, `$28` | [`Darknut_Update`](src/bank4/darknut-gibdo.asm#L89) |
+| Gibdo `$30` (walks as a red Darknut; a boomerang stun freezes it) | `$80`, 129/256 | `$20` | [`Gibdo_Update`](src/bank4/darknut-gibdo.asm#L69) |
+| Stalfos `$2A` | `$80`, 129/256 | `$20` | [`Stalfos_Update`](src/bank4/stalfos.asm#L43) |
+| Like-Like `$17` (not while it holds Link) | `$80`, 129/256 | `$20` | [`LikeLike_Update`](src/bank4/like-like.asm#L46) |
+| Vire `$12` (walking; the hop sums to 0 over a square; hit, it flies the weapon's way and splits into Keese) | `$80`, 129/256 | `$20` | [`Vire_State0Wander`](src/bank4/vire.asm#L116) |
+| Bubble `$2B`-`$2D` | `$40`, 65/256 | `$40` | [`Bubble_Update`](src/bank4/bubble-keese.asm#L93) |
+| Ghini `$21` | `$FF`, always | `$20` | [`Ghini_Update`](src/bank4/ghini-armos.asm#L56) |
+| Moblin `$03`/`$04` (no decision while it stands to shoot) | `$A0`, 161/256 | `$20` | [`Moblin_Update`](src/bank4/moblin-lynel-shooting.asm#L55) |
+| Octorok `$07`/`$08`; `$09`/`$0A` (no decision while it stands to shoot) | `$70`, 113/256; `$A0`, 161/256 | `$20` slow, `$40` fast | [`Octorok_Update`](src/bank4/octorok.asm#L48) |
+| Blue Leever `$0F` (in every burrow state) | `$A0`, 161/256 | `$08`-`$20` by state | [`Leever_UpdateBlue`](src/bank4/leever.asm#L79) |
+| Zol `$13`, Gel `$14`/`$15` (a pause of `$08`-`$48` frames at each square) | `$20`, 33/256 | `$18`, `$40` | [`Zol_WalkAndPause`](src/bank4/zol-gel.asm#L350) |
+| Dodongo `$31`/`$32` (tested at X + `$10` unless it faces left) | `$20`, 33/256 | `$20` | [`Dodongo_State0Move`](src/bank4/dodongo.asm#L125) |
+
+**The Goriya rule: (1) yes, certain; (2) no; (3) within `$51` pixels**
+- Goriya `$05`/`$06` (nothing while its boomerang is out), Lynel `$01`/`$02` and Armos `$1E` decide at every grid point with no random gate and no timer: the longer of the unsigned distances to the target (the vertical on a tie), if under `$51`, gives the facing toward it on that axis. [`Goriya_Update`](src/bank4/goriya.asm#L45) [`Lynel_Update`](src/bank4/moblin-lynel-shooting.asm#L69) [`Armos_Update`](src/bank4/ghini-armos.asm#L304)
+- Followed within `$51` pixels on its line it turns back at Link at its next grid point every time. Off its line it still turns back whenever Link is farther behind it along its line than he is off it (an 8-pixel window does not exist here); level with it or ahead of it, it keeps its facing or turns 90 degrees toward him, whichever axis is the longer. Beyond `$51` it keeps its facing (tiles aside). [`Goriya_Update`](src/bank4/goriya.asm#L45)
+
+**Steered by Link's real position (they ignore the mirror: (3) no)**
+- Rope `$28`: walks at `$20` turning at random when its timer (0-`$3F` frames) runs out; at grid offset 0 with Link's corner less than 8 pixels off its column it rushes vertically at him, else less than 8 off its row horizontally, at `$60` (1.5 pixels a frame), until its facing changes. (1) yes, certain, at three times its walk; (2) no: coming level with Link it charges him. [`Rope_Update`](src/bank4/rope.asm#L51)
+- Blue Wizzrobe `$23`: every `$40` steps (128 frames), alternating the axis, it turns toward Link's side on that axis at any distance; it teleports to a random diagonal `$20` pixels from itself, and shoots on a 32-frame beat only while it already faces Link along a shared 16-pixel row or his exact column. (1) yes on its turn beat; (2) no, the turn needs no alignment; Link stays off its rows and columns. [`Wizzrobe_Blue_TurnTowardLinkIfNeeded`](src/bank4/wizzrobe.asm#L230) [`Wizzrobe_Blue_ChooseTeleportTarget`](src/bank4/wizzrobe.asm#L320) [`Wizzrobe_Blue_TryShooting`](src/bank4/wizzrobe.asm#L469)
+- Red Wizzrobe `$24`: appears 2-5 squares from Link in a cardinal direction, facing him, and shoots once along that facing on its 16th solid frame; it never walks. (1)-(3) `-`: leave its row or column before the shot; it can be hit while solid. [`Wizzrobe_Red_State3Appear`](src/bank4/wizzrobe.asm#L615) [`Wizzrobe_Red_State2Solid`](src/bank4/wizzrobe.asm#L667)
+- Ganon `$3E`: the Blue Wizzrobe's turn toward Link every `$40` frames, fireballs at Link's real position. (1) yes, (2) no. [`Ganon_MoveAndShoot`](src/bank4/ganon.asm#L195)
+- Lanmola `$3A`/`$3B`: at its points the head turns toward Link with chance 128/256; the horizontal direction only when it is not a reversal and matches Link's facing, else the vertical one, which may be a reversal. (1) on a column yes, on a row no; (2) no. [`Lanmola_UpdateHead`](src/bank4/lanmola.asm#L167)
+- Red Leever `$10`: surfaces `$28` pixels from Link along his facing (or behind him), turns round and runs straight until blocked. (1)-(3) `-`. [`Leever_UpdateRed`](src/bank4/leever.asm#L252)
+- Trap `$49`/`$4A`: charges when Link is less than `$0E` pixels off its row or column, in its allowed directions only. (1)-(3) `-`: stay off its lines. [`Trap_Update_Full`](src/bank1/trap-rupee-stash.asm#L189)
+- Wallmaster `$27`: comes out only while Link stands against a wall, at a fixed offset along the wall from him, then follows a fixed path. (1)-(3) `-`: stay off the walls. [`Wallmaster_CalcStartPosition`](src/bank4/wallmaster.asm#L434)
+- Zora `$11`, statues, Aquamentus, Gohma, Gleeok's heads, Ganon: their fireballs are aimed once at Link's real position and fly straight; the shooter's own movement is random or fixed (Zora none, Aquamentus paces X `$87`-`$C8`, Gohma out and back, Gleeok's attached heads a fixed weave). [`Fireball_Update`](src/bank4/monster-shots-fireballs.asm#L286) [`Zora_TrySpawn`](src/bank4/zora-ow-inits.asm#L77) [`Statue_Update`](src/bank4/statues.asm#L86) [`Aquamentus_Move`](src/bank4/aquamentus.asm#L86) [`Gohma_Update`](src/bank4/gohma.asm#L63) [`Gleeok_MoveHead`](src/bank4/gleeok-head-body.asm#L285)
+
+**Turning one 45-degree step at a time: (1) no, (2) `-`, (3) partly or yes**
+- The fliers turn at most one 8-way step toward the target (`Dir_TurnObjTowardTarget8`) every `$10` frames while chasing, so a reversal takes four steps (64 frames): Keese `$1B`-`$1D` chase on 96/256 of their decisions, Peahat `$1A` on 80/256, the flying Ghini `$22` on 96/256 (partly); Moldorm `$41` on 192/256, Patra `$47`/`$48` on 192/256, Gleeok's flying head `$46` on 208/256 (yes). Patra's orbiters `$25`/`$26` follow Patra. [`Flyer_State2Chase`](src/bank4/fairy-flyer-common.asm#L377) [`Dir_TurnObjTowardTarget8`](src/bank4/fairy-flyer-common.asm#L407) [`Keese_Update`](src/bank4/bubble-keese.asm#L163) [`Peahat_DecideFlightState`](src/bank4/flying-ghini-peahat.asm#L162) [`Ghini_UpdateFlying`](src/bank4/flying-ghini-peahat.asm#L45) [`Moldorm_DecideFlightState`](src/bank4/moldorm.asm#L281) [`Patra_DecideFlightState`](src/bank4/patra.asm#L148) [`Flyer_GleeokHeadDecideState`](src/bank4/gleeok.asm#L130) [`Patra_UpdateChild_State1Orbit`](src/bank4/patra.asm#L261)
+- Manhandla `$3C` and Digdogger `$38`/`$39`/`$18`: every `$10` frames one 45-degree step, toward the target on 128/256, else at random (partly). [`Manhandla_Update`](src/bank4/manhandla.asm#L60) [`Digdogger_ChangeSpeedAndTurn`](src/bank4/digdogger.asm#L215)
+- Tektite `$0D`/`$0E`: at each take-off at most one 45-degree step toward the target, always with a sideways part (partly). Boulders fall in the screen half that holds the target's X (partly). [`Jumper_Update`](src/bank4/tektite-boulder.asm#L166) [`Boulder_UpdateSpawner`](src/bank4/tektite-boulder.asm#L62)
+
+**Neither**
+- Pols Voice `$16`: walks a random direction (`Random,X` AND 3), then jumps; it never reads a target. [`PolsVoice_Update`](src/bank4/pols-voice.asm#L82)
 
 # Combat: collision boxes, damage, invincibility, knockback, stun
 
