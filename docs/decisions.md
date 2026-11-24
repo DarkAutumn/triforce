@@ -3834,3 +3834,28 @@ overworld 1f. If I say 0x12, that's likely a mistake or you should get it from p
 may need to start naming more rooms too." In AGENTS.md "The owner's standing rules"; reports to the owner use his
 notation and the rooms' names, code and data keep `level:0xNN`.
 
+## 2026-11-24 — 2.0.0.16: a reset writes Link's hearts as the game holds them (the owner's find)
+
+The owner, playing the Olive Garden in `emu-zelda.py` with `--hearts 2`: a Blue Darknut's touch (two hearts) did not
+kill Link; "I think you set the fractional heart field incorrectly." Emu40 traced it past the tool to
+`env::start_states::hearts_encoding`, the function every training reset's `ram_randomization.hp` (and `full_hp`,
+`chain_hp`) and every single-room evaluation uses. The game holds hearts as two bytes: the low nibble of
+`HeartValues` counts the full hearts BESIDES the partial one, and `HeartPartial` says how full that one is; a hit
+kills when its whole hearts EXCEED the nibble (`asm:Link_BeHarmed`). The function wrote a whole number H of hearts
+below full as (nibble H, partial $00): the HUD draws H hearts, but a hit of exactly H leaves Link alive at none. The
+game's own 2 hearts are (1, $FF). Half-heart values and full health were right.
+
+Proved in the game (`tests/test_hearts.py`): from (1, $FF) a Blue Darknut's touch kills, from the old (2, $00) Link
+stands at zero; and play never makes (H, $00) by itself (from 3 full hearts down by half-heart and whole-heart hits
+the partial byte is $00 only at death). Size: 21.97% of zol's and 15.22% of darknut's resets on `d3first` got it
+(10,000 resets each, their own task settings): those episodes began with one hit more than their hearts showed.
+Chains and replays are unaffected (`ChainEnv` never calls it; they carry the game's own bytes), as are the tracked
+start states (0 of 1,903 hold it); 70 of the 66,438 harvested states do (ow-lynel's `0_0ac_h*`, written by a round 27
+script's copy of the formula): to rebuild for the fresh generation.
+
+The fix is the one function (n half hearts: (n - 1) / 2 full hearts and a partial of $FF or $7F), exposed to Python
+for the tool; six recorded observation traces that drew a whole-heart reset move (five now die of a hit they stood
+at none before) and are recorded with this reason. `REV` +1: training resets and single-room evaluations with
+randomised hearts change for today's team (they read lower, truthfully); no network changed and no chain can.
+For the fresh generation it means every network trains on hearts that mean what they show.
+
