@@ -75,6 +75,30 @@ pub fn parse_room(text: &str) -> Result<MapLocation, ConfigError> {
     Ok(MapLocation::new(level, room, parts.len() == 3))
 }
 
+/// A `ram_randomization` room key: '(level, 0xRR)', every start in the room, or (round 40) '(level, 0xRR, SIDE)', a
+/// start entering it from SIDE (N, S, W or E: the routes.yaml entry its state's name spells, `StateName::entry`), so
+/// a room the route crosses twice is told apart by its passes (3:0x5b: S on the first, W on the last).
+pub fn parse_room_key(text: &str) -> Result<(MapLocation, Option<&'static str>), ConfigError> {
+    let inner = text.trim().trim_start_matches('(').trim_end_matches(')');
+    if let Some((room, side)) = inner.rsplit_once(',') {
+        let entry = match side.trim() {
+            "N" => Some("N"),
+            "S" => Some("S"),
+            "W" => Some("W"),
+            "E" => Some("E"),
+            _ => None,
+        };
+        if let Some(entry) = entry {
+            let at = parse_room(room)?;
+            if at.in_cave {
+                return err(format!("Bad room {text:?}: a side names a room's doorway, not a cave's"));
+            }
+            return Ok((at, Some(entry)));
+        }
+    }
+    parse_room(text).map(|at| (at, None))
+}
+
 /// MapLocation -> '(1, 0x73)' / '(0, 0x77, cave)' (`specialist.format_room`).
 pub fn format_room(location: MapLocation) -> String {
     location.to_string()
@@ -711,7 +735,8 @@ pub struct RamRandomization {
     /// the room's kills banked before its entry (`LevelKillCounts`, asm:RoomHistory_ModifyObjCountUW), so the game
     /// itself makes that many fewer monsters (the Olive Garden's 6 Blue Darknuts, beyond the explorer and a new
     /// model). Drawn per reset from a pre-entry start into that dungeon room; evaluation, chains, exploration and
-    /// state builds never stage.
+    /// state builds never stage. A key with a side (round 40, [`parse_room_key`]: '(3, 0x5b, W)') stages only the
+    /// starts entering the room from it.
     #[serde(default)]
     pub room_kills: std::collections::BTreeMap<String, (i64, i64)>,
     /// Share of resets that draw `room_kills` (the rest keep the full room); absent = every reset.
@@ -727,29 +752,70 @@ pub struct RamRandomization {
     /// `room_bombs: {'(3, 0x5b)': [8, 8]}` (round 39, 3:0x5b with a full bag): a reset into a listed room draws its
     /// bombs from that room's range instead of `bombs`, with probability `room_bombs_share` (absent: every such
     /// reset; the rest keep the `bombs` draw). Wherever `bombs` applies (not a harvested start); a reset into a room
-    /// not listed draws nothing more, so the family's random stream is unchanged there.
+    /// not listed draws nothing more, so the family's random stream is unchanged there. A key with a side (round 40,
+    /// [`parse_room_key`]) draws only for the starts entering the room from it.
     #[serde(default)]
     pub room_bombs: std::collections::BTreeMap<String, (i64, i64)>,
     /// Share of resets into a `room_bombs` room that draw its range; absent = every one.
     #[serde(default)]
     pub room_bombs_share: Option<f64>,
+    /// `room_bomb_counts: {'(3, 0x59, N)': [4, 8]}` (round 40, the owner, Nov 23: "when we transition from 0x49 ->
+    /// 0x59 we should literally train with 4 or 8 bombs in 0x59 because those are the exact states we will have"):
+    /// every reset into the listed room (from its side, if the key names one: [`parse_room_key`]) holds one of the
+    /// listed counts, each as likely, in place of the `bombs` and `room_bombs` draws: a set, not a range. Wherever
+    /// `bombs` applies (not a harvested start); a reset into a room not listed draws nothing more.
+    #[serde(default)]
+    pub room_bomb_counts: std::collections::BTreeMap<String, Vec<i64>>,
+    /// `room_kill_cycle: {'(3, 0x5b, S)': [0, 1]}` (round 40, the owner, Nov 23: "a 50-50 split training the 0x5b
+    /// south entry to north should have the kill count at 0 or 1 to teach bypass or kill"): every reset into the
+    /// listed room (from its side, if the key names one) holds the game's drop cycle (`$52A` WorldKillCycle, 0-9,
+    /// asm:Drop_SetUpItem: the column of the drop table the next death reads) at one of the listed values, each as
+    /// likely. At 0 the first Red Darknut's death reads drop group 2's column 1, bombs; at 1 column 2, no bombs.
+    /// Wherever `bombs` applies (not a harvested start, which keeps the cycle its run left).
+    #[serde(default)]
+    pub room_kill_cycle: std::collections::BTreeMap<String, Vec<i64>>,
+}
+
+/// The value of `keys` (a `ram_randomization` map keyed by [`parse_room_key`]) for a start in `at` entered from
+/// `entry`: a key naming that side first, else one naming the room alone.
+fn room_value<'a, V>(
+    keys: &'a std::collections::BTreeMap<String, V>,
+    at: MapLocation,
+    entry: Option<&str>,
+) -> Option<&'a V> {
+    let parsed = || keys.iter().filter_map(|(key, v)| parse_room_key(key).ok().map(|(room, side)| (room, side, v)));
+    parsed()
+        .find(|&(room, side, _)| room == at && side.is_some() && side == entry)
+        .or_else(|| parsed().find(|&(room, side, _)| room == at && side.is_none()))
+        .map(|(_, _, v)| v)
 }
 
 impl RamRandomization {
-    /// `room_kills` by room: ((level, room), (lo, hi)).
-    pub fn staged_rooms(&self) -> Vec<((u8, u8), (u8, u8))> {
+    /// `room_kills` by room for a start entered from `entry`: ((level, room), (lo, hi)), the keys naming no side and
+    /// those naming `entry`.
+    pub fn staged_rooms(&self, entry: Option<&str>) -> Vec<((u8, u8), (u8, u8))> {
         self.room_kills
             .iter()
             .filter_map(|(room, &(lo, hi))| {
-                let at = parse_room(room).ok()?;
-                Some(((at.level, at.value), (lo as u8, hi as u8)))
+                let (at, side) = parse_room_key(room).ok()?;
+                side.is_none_or(|s| Some(s) == entry).then_some(((at.level, at.value), (lo as u8, hi as u8)))
             })
             .collect()
     }
 
-    /// The `room_bombs` range of the room `at`, if listed.
-    pub fn room_bombs_at(&self, at: MapLocation) -> Option<(i64, i64)> {
-        self.room_bombs.iter().find(|(room, _)| parse_room(room).is_ok_and(|r| r == at)).map(|(_, &range)| range)
+    /// The `room_bombs` range of the room `at` entered from `entry`, if listed.
+    pub fn room_bombs_at(&self, at: MapLocation, entry: Option<&str>) -> Option<(i64, i64)> {
+        room_value(&self.room_bombs, at, entry).copied()
+    }
+
+    /// The `room_bomb_counts` set of the room `at` entered from `entry`, if listed.
+    pub fn room_bomb_counts_at(&self, at: MapLocation, entry: Option<&str>) -> Option<&[i64]> {
+        room_value(&self.room_bomb_counts, at, entry).map(Vec::as_slice)
+    }
+
+    /// The `room_kill_cycle` set of the room `at` entered from `entry`, if listed.
+    pub fn room_kill_cycle_at(&self, at: MapLocation, entry: Option<&str>) -> Option<&[i64]> {
+        room_value(&self.room_kill_cycle, at, entry).map(Vec::as_slice)
     }
 
     fn validate(&self) -> Result<(), String> {
@@ -785,7 +851,7 @@ impl RamRandomization {
             }
         }
         for (room, &(lo, hi)) in &self.room_kills {
-            let at = parse_room(room).map_err(|e| format!("room_kills: {}", e.0))?;
+            let (at, _) = parse_room_key(room).map_err(|e| format!("room_kills: {}", e.0))?;
             if at.level == 0 || at.in_cave {
                 return Err(format!("room_kills: {room}: only dungeon rooms bank kills (LevelKillCounts)"));
             }
@@ -794,9 +860,17 @@ impl RamRandomization {
             }
         }
         for (room, &(lo, hi)) in &self.room_bombs {
-            parse_room(room).map_err(|e| format!("room_bombs: {}", e.0))?;
+            parse_room_key(room).map_err(|e| format!("room_bombs: {}", e.0))?;
             if !(0 <= lo && lo <= hi && hi <= 255) {
                 return Err(format!("room_bombs: {room}: range must satisfy 0 <= lo <= hi <= 255, got [{lo}, {hi}]"));
+            }
+        }
+        for (key, sets, max) in [("room_bomb_counts", &self.room_bomb_counts, 255), ("room_kill_cycle", &self.room_kill_cycle, 9)] {
+            for (room, values) in sets {
+                parse_room_key(room).map_err(|e| format!("{key}: {}", e.0))?;
+                if values.is_empty() || values.iter().any(|&v| !(0..=max).contains(&v)) {
+                    return Err(format!("{key}: {room}: a non-empty list of values in 0-{max}, got {values:?}"));
+                }
             }
         }
         Ok(())
@@ -1710,7 +1784,8 @@ mod tests {
     #[test]
     fn room_kills_parse_and_reject_bad_rooms() {
         let c = minimal("ram_randomization: {room_kills: {'(5, 0x05)': [1, 5]}, room_kills_share: 0.5}\n").unwrap();
-        assert_eq!(c.ram_randomization.staged_rooms(), [((5, 0x05), (1, 5))]);
+        assert_eq!(c.ram_randomization.staged_rooms(None), [((5, 0x05), (1, 5))]);
+        assert_eq!(c.ram_randomization.staged_rooms(Some("E")), [((5, 0x05), (1, 5))], "a key without a side: every entry");
         for (bad, why) in [
             ("{room_kills: {'(0, 0x77)': [1, 2]}}", "dungeon rooms"),
             ("{room_kills: {'(5, 0x05)': [3, 2]}}", "0 <= lo <= hi <= 14"),
@@ -1728,12 +1803,46 @@ mod tests {
     #[test]
     fn room_bombs_parse_and_reject_bad_ranges() {
         let c = minimal("ram_randomization: {room_bombs: {'(3, 0x5b)': [8, 8]}, room_bombs_share: 0.5}\n").unwrap();
-        assert_eq!(c.ram_randomization.room_bombs_at(MapLocation::new(3, 0x5b, false)), Some((8, 8)));
-        assert_eq!(c.ram_randomization.room_bombs_at(MapLocation::new(3, 0x5c, false)), None);
+        assert_eq!(c.ram_randomization.room_bombs_at(MapLocation::new(3, 0x5b, false), None), Some((8, 8)));
+        assert_eq!(c.ram_randomization.room_bombs_at(MapLocation::new(3, 0x5b, false), Some("W")), Some((8, 8)));
+        assert_eq!(c.ram_randomization.room_bombs_at(MapLocation::new(3, 0x5c, false), None), None);
         for (bad, why) in [
             ("{room_bombs: {'(3, 0x5b)': [3, 2]}}", "0 <= lo <= hi <= 255"),
             ("{room_bombs: {'3:0x5b': [8, 8]}}", "Bad room"),
             ("{room_bombs_share: 2}", "probability"),
+        ] {
+            let e = minimal(&format!("ram_randomization: {bad}\n")).unwrap_err().0;
+            assert!(e.contains(why), "{bad}: {e}");
+        }
+    }
+
+    /// Round 40: a room key may name the side its starts enter by ('(3, 0x5b, S)': the first pass, '(3, 0x5b, W)' the
+    /// last); `room_kills`, `room_bombs`, `room_bomb_counts` and `room_kill_cycle` read it, a key naming the side
+    /// before one naming the room alone.
+    #[test]
+    fn room_keys_name_a_side() {
+        assert_eq!(parse_room_key("(3, 0x5b, S)").unwrap(), (MapLocation::new(3, 0x5b, false), Some("S")));
+        assert_eq!(parse_room_key("(3, 0x5b)").unwrap(), (MapLocation::new(3, 0x5b, false), None));
+        assert_eq!(parse_room_key("(0, 0x77, cave)").unwrap(), (MapLocation::new(0, 0x77, true), None));
+        assert!(parse_room_key("(3, 0x5b, s)").is_err() && parse_room_key("(3, 0x5b, NE)").is_err());
+        let text = "ram_randomization: {room_kills: {'(3, 0x5b, W)': [2, 3], '(5, 0x05)': [1, 5]}, \
+                    room_bombs: {'(3, 0x5b, W)': [8, 8], '(3, 0x5b)': [0, 1]}, \
+                    room_bomb_counts: {'(3, 0x59, N)': [4, 8]}, room_kill_cycle: {'(3, 0x5b, S)': [0, 1]}}\n";
+        let r = minimal(text).unwrap().ram_randomization;
+        let (r5b, r59) = (MapLocation::new(3, 0x5b, false), MapLocation::new(3, 0x59, false));
+        assert_eq!(r.staged_rooms(Some("W")), [((3, 0x5b), (2, 3)), ((5, 0x05), (1, 5))]);
+        assert_eq!(r.staged_rooms(Some("S")), [((5, 0x05), (1, 5))], "the first pass stays full");
+        assert_eq!((r.room_bombs_at(r5b, Some("W")), r.room_bombs_at(r5b, Some("S"))), (Some((8, 8)), Some((0, 1))));
+        assert_eq!(r.room_bomb_counts_at(r59, Some("N")), Some(&[4, 8][..]));
+        assert_eq!((r.room_bomb_counts_at(r59, Some("S")), r.room_bomb_counts_at(r59, None)), (None, None));
+        assert_eq!(r.room_kill_cycle_at(r5b, Some("S")), Some(&[0, 1][..]));
+        assert_eq!(r.room_kill_cycle_at(r5b, Some("W")), None);
+        for (bad, why) in [
+            ("{room_bomb_counts: {'(3, 0x59, N)': []}}", "non-empty"),
+            ("{room_bomb_counts: {'(3, 0x59, N)': [4, 256]}}", "0-255"),
+            ("{room_kill_cycle: {'(3, 0x5b, S)': [10]}}", "0-9"),
+            ("{room_kill_cycle: {'(3, 0x5b, X)': [0]}}", "Bad room"),
+            ("{room_kills: {'(0, 0x77, S)': [1, 2]}}", "dungeon rooms"),
         ] {
             let e = minimal(&format!("ram_randomization: {bad}\n")).unwrap_err().0;
             assert!(e.contains(why), "{bad}: {e}");

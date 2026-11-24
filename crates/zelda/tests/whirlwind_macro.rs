@@ -33,10 +33,11 @@ const OFF: &str = "macros:\n  d3first:\n    whirlwinds: []\n    unaided_docks: f
 const ON: &str = "macros:\n  d3first:\n    whirlwinds: [{level: 0, room: '0x0b'}, {level: 0, room: '0x22'}]\n    \
                   unaided_docks: true\n";
 
-/// The map with `d3first`'s macros entry replaced by `entry`.
+/// The map with `d3first`'s macros entry replaced by `entry`. Round 40 (r40-route, the fresh generation's line of
+/// work): routes.yaml carries the fresh generation's entry (`ON`: the docks unaided too), not 2.0.0.14's `LANDED`.
 fn map_with(entry: &str) -> Arc<GameMap> {
-    assert!(ROUTES_YAML.contains(LANDED), "routes.yaml's d3first macros entry is the landed one");
-    Arc::new(GameMap::from_yaml(GAME_YAML, &ROUTES_YAML.replacen(LANDED, entry, 1)).unwrap())
+    assert!(ROUTES_YAML.contains(ON), "routes.yaml's d3first macros entry is the fresh generation's");
+    Arc::new(GameMap::from_yaml(GAME_YAML, &ROUTES_YAML.replacen(ON, entry, 1)).unwrap())
 }
 
 /// The map with every macro of `d3first` on (the fresh generation's entry).
@@ -152,14 +153,14 @@ impl Walk {
 fn the_macros_are_a_route_switch_whirlwinds_on_as_landed() {
     let landed = GameMap::builtin();
     assert_eq!(landed.macros[ROUTE].whirlwinds, [ow(0x0b), ow(0x22)].into_iter().collect());
-    assert!(!landed.macros[ROUTE].unaided_docks);
+    assert!(landed.macros[ROUTE].unaided_docks, "r40-route: the fresh generation's docks are unaided");
     assert!(!landed.macros.contains_key("d2first"));
     assert_eq!(map_with(OFF).macros[ROUTE], Macros::default());
     let on = map_on();
     assert_eq!(on.macros[ROUTE].whirlwinds, [ow(0x0b), ow(0x22)].into_iter().collect());
     assert!(on.macros[ROUTE].unaided_docks);
     for room in ["0x45", "0x55"] {
-        let bad = ROUTES_YAML.replacen(LANDED, &ON.replacen("0x0b", room, 1), 1);
+        let bad = ROUTES_YAML.replacen(ON, &ON.replacen("0x0b", room, 1), 1);
         let e = GameMap::from_yaml(GAME_YAML, &bad).unwrap_err().to_string();
         assert!(e.contains("is no whirlwind step's room"), "{room}: {e}");
     }
@@ -267,7 +268,8 @@ fn the_unaided_dock_never_looks_at_monsters() {
     assert_eq!(w.landing(0x55).0, ow(0x34), "the warp lands as aided");
 
     // As landed the dock gives way: a shot in the air takes the plays away.
-    let Some(mut aided) = Walk::start(&Arc::new(GameMap::builtin()), "d3first_0_55n_v2_0", 0x55) else { return };
+    // The helped dock is 2.0.0.14's entry (`LANDED`); this branch's routes.yaml has the fresh generation's (round 40).
+    let Some(mut aided) = Walk::start(&map_with(LANDED), "d3first_0_55n_v2_0", 0x55) else { return };
     raft_end(&mut aided);
     aided.tidy();
     aided.wire();

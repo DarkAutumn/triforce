@@ -108,6 +108,7 @@ block reward, enemy positions as distance and direction). They are listed where 
 | Nov 21 | The corrected `d3first` order with wrong warps ("it's what I told you, but it's wrong") | Owner | Worked: 2.0.0.5, golden 3/3 | r36 |
 | Nov 22 | Cross 2:0x5e on `d3first`; drop the 0:0x2d rupee cave | Owner (from replays) | Worked: 2.0.0.6, 2.0.0.7 | r37, r38 |
 | Nov 23 | Moldorm passed through; take 9:0x56's key instead | Joint (agents' key ledger showed the key only matters in D9; owner's call) | Open (round 39) | bl |
+| Nov 23-24 | The fresh generation's `d3first`: both screens wrapped before Level 3 and no kill before 3:0x5b; 3:0x6b crossed (its key left), one Darknut of 0x5b's first pass for its bombs, 0x59 at 4 or 8 bombs with a reserve of 4, the Moldorm's key back; 9:0x56 kept | Owner (the plan, the wrap in 0x76, the 50-50 cycle starts, the 4-or-8 starts); Route40 (the route data, the ledger showing 9:0x56's key is needed, the side-aware start knobs, 0x1f's row-3 cost, the walks) | Built, not trained (r40-route) | r40 |
 
 ## Speedrun tricks: clips, wraps, warps
 

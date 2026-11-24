@@ -28,7 +28,7 @@ use crate::observation::{Observation, ObservationBuilder};
 use crate::rewards::{Outcome, SUCCESS, Scored, score_step};
 use std::sync::atomic::{AtomicU64, Ordering};
 use crate::start_states::{
-    StartStatePool, StartWeights, StateStore, apply_room_bombs, ram_randomization_values,
+    StartStatePool, StartWeights, StateStore, apply_room_values, ram_randomization_values,
     state_entry, state_label, state_visit, verify_start_room,
 };
 use indexmap::IndexMap;
@@ -704,7 +704,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         // `banked_kills`, by the start state's name): the game keeps those, the fresh-room write would undo them.
         // Where the stretch's two ways keep different kills there (9:0x07 out of the ring cellar: the clip way left it
         // full), the switch is decided here, before the load (a curriculum start keeps it on, as below).
-        let mut banked_kills = self.draw_banked_kills();
+        let mut banked_kills = self.draw_banked_kills(state_entry(&name));
         let mut early_clips = None;
         if self.curriculum_tag.is_none()
             && let Some(named) = crate::start_states::StateName::parse(&name)
@@ -751,7 +751,9 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
                     None
                 };
             let mut values = ram_randomization_values(spec, state.max_health(), &mut self.rng, chain);
-            apply_room_bombs(spec, state.full_location(), &mut self.rng, &mut values);
+            // The room's own values (round 40: by the side the start enters from, its route entry: a curriculum
+            // start's is its track's seed state's).
+            apply_room_values(spec, state.full_location(), state_entry(seed_name), &mut self.rng, &mut values);
             if !values.is_empty() {
                 state = self.session.apply_ram(&values).clone();
             }
@@ -817,9 +819,10 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
     }
 
     /// A reset's staged kills (`ram_randomization.room_kills`, training only, not for a curriculum start): with
-    /// probability `room_kills_share` (absent: always) a count drawn in each listed room's range; empty otherwise
-    /// (and no draw, so families without staged rooms keep their random stream).
-    fn draw_banked_kills(&mut self) -> Vec<((u8, u8), u8)> {
+    /// probability `room_kills_share` (absent: always) a count drawn in each listed room's range (a key naming a side:
+    /// only for a start entering by `entry`, round 40); empty otherwise (and no draw, so families without staged rooms
+    /// keep their random stream).
+    fn draw_banked_kills(&mut self, entry: Option<&str>) -> Vec<((u8, u8), u8)> {
         if let Some(fixed) = &self.fixed_kills {
             return fixed.clone();
         }
@@ -830,7 +833,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         if spec.room_kills_share.is_some_and(|p| rand::RngExt::random::<f64>(&mut self.rng) >= p) {
             return Vec::new();
         }
-        spec.staged_rooms().into_iter().map(|(at, (lo, hi))| (at, rand::RngExt::random_range(&mut self.rng, lo..=hi))).collect()
+        spec.staged_rooms(entry).into_iter().map(|(at, (lo, hi))| (at, rand::RngExt::random_range(&mut self.rng, lo..=hi))).collect()
     }
 
     /// With the episode's forced bomb drop ([`SpecialistEnv::drop_bombs`]) and a monster left in the room (alive or

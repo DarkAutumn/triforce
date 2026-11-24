@@ -928,15 +928,18 @@ fn the_owners_wall_only_room_offers_the_wall_and_the_tenth_kill() {
 }
 
 /// Round 37, the owner's first rule (`d3first`'s `bomb_rules: {fights_only: true}`): in a dungeon BOMB is a weapon
-/// only where the objective fights the room.  3:0x59 from N (five Red Darknuts, its S shutter: a clear room, the
-/// reserve 0) offers it at 4 bombs; 3:0x69 from N (`treasure: skip`: the route slides past its Darknuts to the raft's
-/// stairs, a crossing) does not at 7, nor at `$50` = 8, and does on the 10th kill (`$50` = 9: always, the owner).
+/// only where the objective fights the room.  3:0x59 from N (five Red Darknuts, its S shutter: a clear room) offers it
+/// above its reserve (round 40: 4, the owner's "at 8 the agent can use up to 4, at 4 it can use none"; the reserve
+/// was 0, when this case offered it at 4): at 5, not at 4; 3:0x69 from N (`treasure: skip`: the route slides past
+/// its Darknuts to the raft's stairs, a crossing) does not at 7, nor at `$50` = 8, and does on the 10th kill (`$50` =
+/// 9: always, the owner).
 /// `d2first`'s 3:0x69 (no rules, reserve 6) still offers it at 7.
 #[test]
 fn bombs_are_a_weapon_only_where_the_route_must_clear_the_room() {
     let Some(nes) = open_core() else { return };
     bomb_cases(nes, &[
-        ("darknut", "d3first_3_59n_0", "MOVE S 16", BombUse::Free, 4, 0, true),
+        ("darknut", "d3first_3_59n_0", "MOVE S 16", BombUse::Free, 5, 0, true),
+        ("darknut", "d3first_3_59n_0", "MOVE S 16", BombUse::Free, 4, 0, false),
         ("darknut", "d3first_3_69n_0", "MOVE S 16", BombUse::Free, 7, 0, false),
         ("darknut", "d3first_3_69n_0", "MOVE S 16", BombUse::Free, 7, 8, false),
         ("darknut", "d3first_3_69n_0", "MOVE S 16", BombUse::Free, 7, 9, true),
@@ -2882,4 +2885,53 @@ fn a_lying_clock_is_walked_round_while_a_wallmaster_lives() {
     }
     assert_eq!((wavefront.get((4, 11)), wavefront.get((6, 12))), (Some(0), Some(3)), "the next spot up the wall");
     assert_eq!(wavefront.get((5, 11)), Some(1), "round the clock, a row above it");
+}
+
+/// Round 40 (the fresh generation's Dungeon 3, decisions 2026-11-23): darknut@d3first's training starts (the
+/// `ram_randomization` of specialists/d3first/darknut.yaml) on real resets. Into 3:0x5b from S (`d3first_3_5bs_*`)
+/// the game's drop cycle (`$52A`, asm:Drop_SetUpItem) is 0 or 1, about half each; into 3:0x59 from N
+/// (`d3first_3_59n_*`) Link holds exactly 4 or 8 bombs, about half each. The rooms' other passes keep the family's
+/// draws: 0x5b from W its state's own cycle, 0x59 from S the `bombs` range.
+#[test]
+fn darknut_d3first_starts_hold_the_dungeon_3_plan() {
+    let Some(nes) = open_core() else { return };
+    let mut nes = Some(nes);
+    let task = SpecialistConfig::from_file(&common::repo().join("specialists/d3first/darknut.yaml"), Some(&data().map))
+        .expect("darknut@d3first");
+    let mut resets = |start: &str, spec: &RamRandomization, n: u64| -> Vec<(i32, u8)> {
+        let (out, back) = bombs_and_cycle(nes.take().unwrap(), start, spec, n);
+        nes = Some(back);
+        out
+    };
+    let spec = &task.ram_randomization;
+    for chain in 0..3 {
+        let first = resets(&format!("d3first_3_5bs_{chain}"), spec, 100);
+        assert!(first.iter().all(|&(_, c)| c <= 1), "0x5b from S, chain {chain}: {first:?}");
+        let zero = first.iter().filter(|&&(_, c)| c == 0).count();
+        assert!((30..=70).contains(&zero), "0x5b from S, chain {chain}: the cycle at 0 in {zero} of 100");
+
+        let bombs = resets(&format!("d3first_3_59n_{chain}"), spec, 100);
+        assert!(bombs.iter().all(|&(b, _)| b == 4 || b == 8), "0x59 from N, chain {chain}: {bombs:?}");
+        let full = bombs.iter().filter(|&&(b, _)| b == 8).count();
+        assert!((30..=70).contains(&full), "0x59 from N, chain {chain}: 8 bombs in {full} of 100");
+
+        let own = resets(&format!("d3first_3_5bw_{chain}"), &RamRandomization::default(), 1)[0].1;
+        let last = resets(&format!("d3first_3_5bw_{chain}"), spec, 40);
+        assert!(last.iter().all(|&(_, c)| c == own), "0x5b from W keeps its state's cycle {own}: {last:?}");
+        let back = resets(&format!("d3first_3_59s_{chain}"), spec, 40);
+        assert!(back.iter().any(|&(b, _)| b != 4 && b != 8), "0x59 from S draws `bombs`: {back:?}");
+    }
+}
+
+/// (bombs, drop cycle) after each of `n` darknut resets (seeds 0..n) into `start` under `spec`.
+fn bombs_and_cycle(nes: ZCore, start: &str, spec: &RamRandomization, n: u64) -> (Vec<(i32, u8)>, ZCore) {
+    let mut env = make_env(nes, "darknut", Some(start), |c| c.ram_randomization = spec.clone());
+    let out = (0..n)
+        .map(|seed| {
+            env.reset(Some(seed), None).unwrap();
+            let s = state(&env);
+            (s.bombs(), s.world_kill_cycle())
+        })
+        .collect();
+    (out, release(env))
 }

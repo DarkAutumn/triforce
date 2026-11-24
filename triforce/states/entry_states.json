@@ -4786,19 +4786,14 @@
   "entry": "W",
   "exit": "N",
   "alternate": false,
-  "env_steps": 3464,
+  "env_steps": 4897,
   "attempts": 1,
-  "seconds": 9.21078703,
-  "steps": 9,
-  "health": 8.0,
+  "seconds": 32.859245706,
+  "steps": 149,
+  "health": 4.5,
   "ending": "exit-correct",
   "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d3first --start-step 88 --source 'd3first_0_2dw_{chain}' --last-step 153 --chains 0,1,2 --out target/entry-states/r38-88-153 --skip-fights 2:0x1e:S,2:0x0e:S,5:0x05:E,5:0x66:W,5:0x24:E",
-  "keys": {
-   "was": 6,
-   "now": 5,
-   "by": "scripts/experiments/r39_keys.py patch (round 39: Moldorm's key not taken, 9:0x56's taken)"
-  }
+  "command": "python -m triforce.entry_states build --route d3first --start-step 111 --source 'd3first_0_1ew_{chain}' --last-step 112 --out target/r40-peahat/entry-states"
  },
  {
   "file": "4_30s_0.state",
@@ -19017,19 +19012,14 @@
   "entry": "W",
   "exit": "N",
   "alternate": false,
-  "env_steps": 3352,
+  "env_steps": 5325,
   "attempts": 1,
-  "seconds": 10.147801876,
-  "steps": 2,
-  "health": 8.0,
+  "seconds": 38.781847287,
+  "steps": 112,
+  "health": 6.5,
   "ending": "exit-correct",
   "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d3first --start-step 88 --source 'd3first_0_2dw_{chain}' --last-step 153 --chains 0,1,2 --out target/entry-states/r38-88-153 --skip-fights 2:0x1e:S,2:0x0e:S,5:0x05:E,5:0x66:W,5:0x24:E",
-  "keys": {
-   "was": 6,
-   "now": 5,
-   "by": "scripts/experiments/r39_keys.py patch (round 39: Moldorm's key not taken, 9:0x56's taken)"
-  }
+  "command": "python -m triforce.entry_states build --route d3first --start-step 111 --source 'd3first_0_1ew_{chain}' --last-step 112 --out target/r40-peahat/entry-states"
  },
  {
   "file": "4_30s_1.state",
@@ -33247,19 +33237,14 @@
   "entry": "W",
   "exit": "N",
   "alternate": false,
-  "env_steps": 3644,
+  "env_steps": 5436,
   "attempts": 1,
-  "seconds": 10.129862487,
-  "steps": 34,
-  "health": 7.5,
+  "seconds": 38.006837763,
+  "steps": 77,
+  "health": 6.0,
   "ending": "exit-correct",
   "fight_skipped": true,
-  "command": "python -m triforce.entry_states build --route d3first --start-step 88 --source 'd3first_0_2dw_{chain}' --last-step 153 --chains 0,1,2 --out target/entry-states/r38-88-153 --skip-fights 2:0x1e:S,2:0x0e:S,5:0x05:E,5:0x66:W,5:0x24:E",
-  "keys": {
-   "was": 6,
-   "now": 5,
-   "by": "scripts/experiments/r39_keys.py patch (round 39: Moldorm's key not taken, 9:0x56's taken)"
-  }
+  "command": "python -m triforce.entry_states build --route d3first --start-step 111 --source 'd3first_0_1ew_{chain}' --last-step 112 --out target/r40-peahat/entry-states"
  },
  {
   "file": "4_30s_2.state",
