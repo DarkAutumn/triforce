@@ -811,7 +811,7 @@ def test_cells_play_the_queues_the_simulations_fill(scripted_models, states_dir,
         _wait(lambda: grid.stats()['feed'], lambda f: f['runs'] > runs)
 
         # Every simulated run was saved, shown or not.
-        names = sorted(p.name for p in saved.iterdir())
+        names = sorted(_saved(saved))
         assert len(names) >= feed['runs'] and all(name.endswith('-win.tfreplay') for name in names)
         assert _native.replay_verify((saved / names[0]).read_bytes())['frames'] > 0
 
@@ -833,6 +833,13 @@ def _wait(read, done, seconds=60.0):
             return value
         time.sleep(0.02)
     raise AssertionError(f"timed out; last: {read()}")
+
+
+def _saved(folder) -> list:
+    """The names of the replays filed in ``folder``.  A replay is written under a dotted temporary name and renamed
+    (``crates/theater`` ``feed.rs``: ``.<seed>-<ending>.tfreplay.<pid>.tmp``); a listing that catches one mid-write
+    must not take it for a replay (Nov 24: ``int('.00000017')`` failed a suite once under load)."""
+    return [path.name for path in folder.iterdir() if not path.name.startswith('.')]
 
 
 def test_pausing_stops_the_picture_and_the_result_clock(scripted_models, states_dir, monkeypatch):
@@ -888,7 +895,7 @@ def test_a_live_cell_plays_while_watched_takes_the_clips_key_and_files_its_runs(
         later = [m for m in _events(messages, 'start', 0) if m['clips'] is False][0]
         assert later['clips_from'] == ''
         # Finished live runs were filed like the simulations' (saved here under their seeds).
-        names = [p.name for p in saved.iterdir()]
+        names = _saved(saved)
         assert any(int(name.split('-')[0]) >= play_grid.SEEDS for name in names)
         grid.set_clips(True)
     finally:
@@ -913,8 +920,8 @@ def test_a_live_cell_plays_in_the_act_mode_it_was_given(scripted_models, states_
         live = [m for m in messages if m['cell'] == 0]
         assert {m['source'] for m in _events(live, 'start')} == {'live'}
         assert all((m['result'], m['outcome']) == ('success', 'milestone') for m in _events(live, 'end'))
-        files = _wait(lambda: [p for p in saved.iterdir() if int(p.name.split('-')[0]) >= play_grid.SEEDS],
-                      lambda found: found)
+        files = _wait(lambda: [saved / name for name in _saved(saved)
+                               if int(name.split('-')[0]) >= play_grid.SEEDS], lambda found: found)
     finally:
         grid.stop()
     for path in files:
