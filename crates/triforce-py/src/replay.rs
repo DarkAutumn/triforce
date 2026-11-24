@@ -352,6 +352,67 @@ pub fn replay_verify<'py>(py: Python<'py>, data: &[u8], states_dir: Option<PathB
     Ok(out)
 }
 
+/// The owner's two bomb metrics over a replay (`env::bomb_windows::BombFrames`): every frame played from the
+/// replay's start, its EDITS (cheated bombs are not Link's own), and `facts`, the env's per-decision facts
+/// `[(frame, kill_all, bomb_allowed, bomb_never), ...]` in frame order (the replay's targets stream: the objective
+/// FIGHT, BOMB allowed by the bomb rule, the mode `never`; `frame` the input frames run before the decision). Returns
+/// the run's windows: `[{'metric': 'tenth'|'carrier', 'open_frame', 'open_room', 'close_frame', 'close_room'
+/// ('3:0x5b', '0:0x77:cave'), 'outcome', 'killed_type', 'killed_slot' (None: nothing), 'full_bag', 'drop' (None, or
+/// 'none', 'pending', 'fell', 'taken', 'wasted', 'lost')}]`.
+#[pyfunction]
+#[pyo3(signature = (data, facts, states_dir=None))]
+pub fn replay_bomb_windows<'py>(
+    py: Python<'py>,
+    data: &[u8],
+    facts: Vec<(u64, bool, bool, bool)>,
+    states_dir: Option<PathBuf>,
+) -> PyResult<Bound<'py, PyList>> {
+    use env::bomb_windows::{BombFrames, StepFacts};
+    let (rom, replay, resolve) = (context::rom(py)?, parse(data)?, resolver(py, states_dir)?);
+    let edits: Vec<::replay::Edit> = replay.edits().collect::<Result<_, _>>().map_err(replay_err)?;
+    let windows = py
+        .detach(|| {
+            let mut frames = BombFrames::new();
+            for (frame, kill_all, bomb_allowed, bomb_never) in facts {
+                frames.facts(frame, StepFacts { kill_all, bomb_allowed, bomb_never });
+            }
+            let mut player = Player::open(rom, replay, &resolve)?;
+            let mut edit = edits.iter().peekable();
+            let mut image = Box::new([0u8; zelda::tables::RAM_SIZE]);
+            loop {
+                // The edits tagged with the next input frame are applied before it runs.
+                while let Some(e) = edit.next_if(|e| e.frame <= player.frame()) {
+                    frames.edit(e.addr, e.prev, e.value);
+                }
+                if !player.step(false)? {
+                    break;
+                }
+                image[..0x800].copy_from_slice(player.nes().ram());
+                image[0x800..].copy_from_slice(player.nes().prg_ram());
+                frames.push(&image);
+            }
+            Ok(frames.finish())
+        })
+        .map_err(replay_err)?;
+    let room = |l: zelda::MapLocation| format!("{}:0x{:02x}{}", l.level, l.value, if l.in_cave { ":cave" } else { "" });
+    let list = PyList::empty(py);
+    for w in windows {
+        let d = PyDict::new(py);
+        d.set_item("metric", w.metric.name())?;
+        d.set_item("open_frame", w.open_frame)?;
+        d.set_item("open_room", room(w.open_room))?;
+        d.set_item("close_frame", w.close_frame)?;
+        d.set_item("close_room", room(w.close_room))?;
+        d.set_item("outcome", w.outcome.name())?;
+        d.set_item("killed_type", w.killed.map(|k| k.0))?;
+        d.set_item("killed_slot", w.killed.map(|k| k.1))?;
+        d.set_item("full_bag", w.full_bag)?;
+        d.set_item("drop", w.drop.map(|f| f.name()))?;
+        list.append(d)?;
+    }
+    Ok(list)
+}
+
 /// A replay being played on the emulator alone (no env, reward or model code).
 #[pyclass(module = "triforce._native", name = "ReplayPlayer", frozen)]
 pub struct PyReplayPlayer {
