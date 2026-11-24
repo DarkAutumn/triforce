@@ -130,6 +130,7 @@ All of the glitch knowledge is the owner's; the agents made the agent able to us
 | Nov 17 | Block clips in D9's ring rooms | Agents (found by search) | Worked: fight budget 25.7 to 14.8 hearts | r29 §5 |
 | Nov 21 | Wrong warps at 0x55 and 0x3f by the recorder | Owner (the glitches) | Modified: real, but his remembered recorder counts fit no history; agents found them by search | r36 |
 | Nov 22 | Dock warp as an engine macro that waits for shots and strikes monsters below | Agents | Worked: leg 31.7% to 78.9% with no retraining | r36 |
+| Nov 24 | 3:0x69 crossed by a line (E along the top, S down the wall column, E to the stairs), swording the Darknut in the way to walk through it while it flashes | Owner (the line, the sword-through, "never takes damage"); agents (the line in the emulator, `path_costs` (d3first's only), the scripted rule and its look-ahead, the task's `demos:` key; Line40's beam search found unhit ways in, Line40b made a best-first search the demonstration builder) | Built for the fresh generation; the rule's and the builder's numbers in r40; trains with the generation | r40 "3:0x69 crossed by a line" |
 
 ## Combat, the hit head and actions
 

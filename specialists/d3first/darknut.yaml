@@ -114,6 +114,13 @@ curriculum:
   - d3first_8_4es_[0-9]
   - d3first_8_5es_[0-9]
 harvested_fraction: 0.33
+# Round 40 (Line40, Line40b; decisions 2026-11-23 "3:0x69 is crossed by a line"): 3:0x69's line taught by the
+# demonstration builder's hit-free visits of each pass (scripts/experiments/r40_d3_69_line.py demos: a search over the
+# env's actions per visit, the rule timed by its look-ahead where none is found; the room's rows only, 4 or 8 bombs,
+# the task's hp draw), cloned at 0.05 as round 25's 5:0x37 rule; names under the demos data folder.
+demos:
+  files: [r40-d3-69-in.npz, r40-d3-69-out.npz]
+  coeff: 0.05
 one_room: true
 max_steps: 2000
 warm_start: null

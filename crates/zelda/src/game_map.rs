@@ -2901,7 +2901,8 @@ mod tests {
                 cave(0x3d),
                 loc(0, 0x46),
                 loc(0, 0x76),
-                loc(3, 0x4a)
+                loc(3, 0x4a),
+                loc(3, 0x69)
             ]
             .into()
         );
@@ -2963,6 +2964,21 @@ mod tests {
         assert_eq!(wrap.exits["W"].destination, loc(0, 0x75));
         assert_eq!(wrap.exits.keys().collect::<Vec<_>>(), shared.exits.keys().collect::<Vec<_>>());
         assert_eq!((&wrap.enemies, &wrap.specialist, &wrap.path_costs), (&shared.enemies, &shared.specialist, &shared.path_costs));
+    }
+
+    /// Round 40 (the owner's line, decisions 2026-11-23 "3:0x69 is crossed by a line"): `d3first` crosses 3:0x69 on
+    /// the line its `path_costs` charge every other floor tile for; `d2first` plays the shared room, without a cost,
+    /// as its networks were trained (the shared block `dungeon-3` puts the room on both routes).
+    #[test]
+    fn d3first_costs_the_line_through_3_0x69() {
+        let map = Arc::new(GameMap::builtin());
+        let d3 = map.route_map("d3first");
+        let (shared, line) = (map.get(loc(3, 0x69)).unwrap(), d3.get(loc(3, 0x69)).unwrap());
+        assert!(shared.path_costs.is_empty());
+        assert_eq!(line.path_costs.len(), 6);
+        assert!(line.path_costs.iter().all(|c| c.cost == 1));
+        assert_eq!(line.exits.keys().collect::<Vec<_>>(), shared.exits.keys().collect::<Vec<_>>());
+        assert_eq!((&line.enemies, &line.specialist, &line.treasure), (&shared.enemies, &shared.specialist, &shared.treasure));
     }
 
     /// The bow detour: 0x22's stairs lead into the cellar (an in_cave room under its own id) and its ladder back;

@@ -12,7 +12,8 @@
 //! `zelda::cheats`), `boss` (`stuns`, `eats`: Dodongo stunned by a bomb's smoke or swallowing a bomb,
 //! [`BossTransitions`]), `clips` (`done`, `aborted`, `done_<dir>`: grid-point skips, `zelda::clips`), `target` and
 //! `entry` (the route step's exit and entry, `-` off the route), `bootstrap_truncation`, `curriculum`, plus
-//! `episode_steps`, `episode_frames`, `reward_total` and per-term episode totals `episode_rewards`).
+//! `episode_steps`, `episode_frames`, `hits` (the episode's steps that lost health, as a room visit's `hits`),
+//! `reward_total` and per-term episode totals `episode_rewards`).
 
 use crate::config::{GameData, SpecialistConfig};
 use crate::critic::{BossTransitions, Critique, GameplayCritic};
@@ -83,6 +84,9 @@ pub struct TerminalInfo {
     pub curriculum: Option<CurriculumInfo>,
     pub episode_steps: u64,
     pub episode_frames: u64,
+    /// The episode's steps that lost health (`zelda::visits::RoomVisit::hits`' definition; round 40: training logs
+    /// them by start room, `triforce.metrics`).
+    pub hits: u32,
     pub reward_total: f64,
     /// Episode totals per reward term, in first-seen order.
     pub episode_rewards: IndexMap<&'static str, f64>,
@@ -252,6 +256,7 @@ impl StepInfo {
             }
             o.insert("episode_steps".into(), json!(t.episode_steps));
             o.insert("episode_frames".into(), json!(t.episode_frames));
+            o.insert("hits".into(), json!(t.hits));
             o.insert("reward_total".into(), json!(t.reward_total));
             o.insert(
                 "episode_rewards".into(),
@@ -308,6 +313,7 @@ pub struct EnvSnapshot<S> {
     pending_clips: Option<bool>,
     episode_steps: u64,
     episode_frames: u64,
+    episode_hits: u32,
     reward_total: f64,
     episode_rewards: IndexMap<&'static str, f64>,
 }
@@ -374,6 +380,7 @@ pub struct SpecialistEnv<N: Nes, St: StateStore<N::State>> {
     episode_entry: String,
     episode_steps: u64,
     episode_frames: u64,
+    episode_hits: u32,
     reward_total: f64,
     episode_rewards: IndexMap<&'static str, f64>,
     shaping: Option<ShapingDial>,
@@ -518,6 +525,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             episode_entry: String::new(),
             episode_steps: 0,
             episode_frames: 0,
+            episode_hits: 0,
             reward_total: 0.0,
             episode_rewards: IndexMap::new(),
             clips_plan: None,
@@ -951,6 +959,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         self.clip_stats = ClipStats::default();
         self.episode_steps = 0;
         self.episode_frames = 0;
+        self.episode_hits = 0;
         self.reward_total = 0.0;
         self.episode_rewards.clear();
         self.done = false;
@@ -1000,6 +1009,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             pending_clips: self.pending_clips,
             episode_steps: self.episode_steps,
             episode_frames: self.episode_frames,
+            episode_hits: self.episode_hits,
             reward_total: self.reward_total,
             episode_rewards: self.episode_rewards.clone(),
         }
@@ -1026,6 +1036,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         self.pending_clips = snapshot.pending_clips;
         self.episode_steps = snapshot.episode_steps;
         self.episode_frames = snapshot.episode_frames;
+        self.episode_hits = snapshot.episode_hits;
         self.reward_total = snapshot.reward_total;
         self.episode_rewards.clone_from(&snapshot.episode_rewards);
         // The disabled kinds depend on the state (the 10th kill, the bomb count) and aren't in the session snapshot.
@@ -1150,6 +1161,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
 
         self.episode_steps += 1;
         self.episode_frames += (change.frames + change.menu_frames) as u64;
+        self.episode_hits += u32::from(change.health_lost > 0.0);
         let mut terminal = None;
         if let (Some(ending), Some(outcome)) = (ending, outcome) {
             self.hearts.finish(Some(&HeartView::of(&state)));
@@ -1194,6 +1206,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
                 curriculum,
                 episode_steps: 0,
                 episode_frames: 0,
+                hits: 0,
                 reward_total: 0.0,
                 episode_rewards: IndexMap::new(),
             });
@@ -1228,6 +1241,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         if let Some(t) = &mut terminal {
             t.episode_steps = self.episode_steps;
             t.episode_frames = self.episode_frames;
+            t.hits = self.episode_hits;
             t.reward_total = self.reward_total;
             t.episode_rewards = self.episode_rewards.clone();
         }

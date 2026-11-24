@@ -25,7 +25,16 @@ Round 40's item targets (2.0.1.0, the lead's rule: an item's target tiles are th
 the traces with a room item or a drop in view: the `target` block (and, through the targets, the steps the mask and
 the seeded draws lead to) of `crates/zelda/src/objectives.rs`'s items; no column's computation. Their hashes are
 `tests/fixtures/obs_schema5_round40_targets.json` (`ROUND40_TARGETS_CHANGES`), recorded once on branch
-`r40-gen-targets`."""
+`r40-gen-targets`.
+
+Round 40's line through 3:0x69 (Line40, decisions 2026-11-23 "3:0x69 is crossed by a line") gives the room
+`path_costs` on `d3first` only (game.yaml `routes: [d3first]`); these traces are `d2first`'s and keep their record.
+Line40 had put the costs on the shared room and re-recorded eight hashes; compared step by step (the same seeds, its
+module at dad5f435 against this branch's, the test's own procedure): the same actions and lengths, and of every key
+only `target` differs, where Link is in 3:0x69 (darknut `3_69c_0` steps 2-50, `3_69c_1` 2-22, 30-33 and 39-42,
+`3_69c_2` 2, 4 and 18-50, `3_69n_0` 1-45, `3_69n_2` 1-50; equipment-room `3_0fcave_0` step 25 and `3_0fcave_2` step
+8, the climb back into it; `3_69n_1` ends after 6 steps without a change). With the costs scoped those hashes are
+gone and the eight traces hash as recorded before the line."""
 
 import argparse
 import hashlib

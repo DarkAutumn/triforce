@@ -3565,6 +3565,20 @@ rooms:
   trigger: kill-all-item  # attr F & 7 = 7
   stairs: [26, 10]
 - level: 3
+  location: '0x69'
+  routes: [d3first]
+  # The owner's line (decisions 2026-11-23 "3:0x69 is crossed by a line"; round40.md "3:0x69 crossed by a line"): in
+  # by the N door, E along the top row (Y $5D) to the block wall (X $90), S down that column to the stairs' row (Y
+  # $8D), E to the stairs; out from the cellar's exit spot ($60, $8D; asm:Warp_CheckSubroomExit, the cellar's
+  # attribute C) N up X $60 to the top row, E to the door's column and N.  Every Link tile of the floor off those
+  # two lines (top row cols 12-18, column 18 rows 4-10, row 10 cols 18-26, column 12 rows 4-10; tile row 3, Link's
+  # head over the top wall, only in the door's column 15) costs the path search one tile more, so the objective's way
+  # on each pass is the line (the plain floor has many ways as short).  `d3first`'s only: `d2first` plays the shared
+  # room, as its networks were trained.
+  path_costs: [{cols: [4, 11], rows: [4, 10], cost: 1}, {cols: [13, 17], rows: [5, 10], cost: 1},
+               {cols: [19, 27], rows: [4, 9], cost: 1}, {cols: [4, 27], rows: [11, 17], cost: 1},
+               {cols: [4, 14], rows: [3, 3], cost: 1}, {cols: [16, 27], rows: [3, 3], cost: 1}]
+- level: 3
   location: '0x6b'
   specialist: zol
   exits:

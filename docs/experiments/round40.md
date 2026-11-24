@@ -535,6 +535,202 @@ Replays for watching: every arm's runs split by whether they reached Manhandla, 
 to the owner's review folder; the records are under the `r40-fireline` worktree's `target/r40f/`.
 
 
+## 3:0x69 crossed by a line (Line40, branch `r40-line`)
+
+The owner (decisions 2026-11-23 "3:0x69 is crossed by a line"): "Going in the door, immediate east until you can't,
+south to line up the stairs, then east to stairs. [...] If you time it right, you can sword the darknut to safely pass
+through him. No matter which way the room plays out, a speedrunner will NEVER take damage there, ever." Eight Red
+Darknuts; today 170-190 deaths in 1000 Dungeon 3 runs. No bomb is used here (the route keeps 4).
+
+### The line, planned in the emulator
+
+Link's top-left tile (X / 8, (Y - `$3D`) / 8; he covers that tile and the three right and below it) on the
+room's floor (`render_grid` of `d3first_3_69n_0`; `#` wall or block): `i` the way in, `o` the way out, `x` both,
+`S` the stairs (26, 10), `E` the cellar's exit spot, `P` the Darknuts' spawn spots.
+
+```
+     0         1         2         3 
+     01234567890123456789012345678901
+   0 ###############x.###############
+   1 ###############x.###############
+   2 ###############x.###############
+   3 ###############x.###############
+   4 ####........oooxiii.############
+   5 ####........o.....i.############
+   6 ####........o.....i.############
+   7 ####........o.....i.############
+   8 ####......P.o.....i.P.##########
+   9 ####........o.....i...##########
+  10 ####........E.P...iiiiiiiiS.####
+  11 ####........................####
+  12 ####........P.....P...##########
+  13 ####..................##########
+  14 ####..P.............############
+  15 ####................############
+  16 ####......P.........############
+  17 ####................############
+```
+
+In: S from the door ($78, $4D) to the top row Y $5D, E to the block wall at X $90, S down X $90 to Y $8D, E to
+the stairs at X $D0. Out: from ($60, $8D) N up X $60 to Y $5D, E to X $78, N out. The in-pass makes a Darknut on
+each of the seven spots and one spot twice; the out-pass two each on ($30, $AD), ($50, $BD), ($90, $9D),
+($A0, $7D) (300 entries each). Facts the rule rests on, from the disassembly and the emulator:
+- The way out starts at ($60, $8D) facing S: a cellar's exit spot is its attribute C (`asm:Warp_CheckSubroomExit`),
+  not the stairs; every out-pass state and handoff (873 harvested) has Link there.
+- The Darknuts spawn on fixed spots, the in-pass one at ($A0, $7D) in the pocket E of the line's column every time
+  (300 of 300 entries); it walks W across X $90 or S into the stairs' corridor just as Link comes down the column.
+  That is the Darknut "in the way" of the owner's description.
+- A Darknut is hurt only when the blade's way and its facing are not opposites (`asm:Damage_HandleWeaponHit@CheckDarknut`);
+  a hit makes it flash 32 frames (timer `$10` every second frame, `asm:Shove_Begin`) and knocks it `$40` pixels the
+  blade's way along its own axis or from a grid point (`asm:Shove_Update`); while it flashes the game tests neither
+  Link's weapons nor its touch on Link (`asm:Collision_CheckMonsterVsWeaponsAndLink`): Link walks through it.
+- The wood sword's reach, measured in the game (a Darknut placed around Link, A pressed): its top-left 6-24 pixels
+  ahead (S: 6-28) and up to 10 aside; the blade tests the monsters from the swing's third frame; a SWORD through the
+  env is 17 frames.
+- A beam search over the env's actions (MOVE 4 frames each way, WAIT, SWORD each way; width 40) found a zero-hit
+  in-pass for each of 4 seeds tried, 30-31 actions each, no waiting: down the column, two strikes at the Darknuts
+  crossing it. Zero hits is reachable; the question is what a rule reading the room reaches.
+
+### The objective follows the line
+
+game.yaml 3:0x69 `path_costs` (as 5:0x37 in round 25): every floor tile off the two lines (the top row's cols 12-18,
+column 18 rows 4-10, row 10 cols 18-26, column 12 rows 4-10) costs one tile more, so the path search behind the
+`target` observation and PBRS takes the line on each pass; the plain floor has other ways as short (any staircase).
+Tested: `crates/zelda/tests/objectives.rs` `d3_0x69_is_crossed_by_the_line` (the descent's corners on the d3first
+steps: in (15,2) (15,4) (18,4) (18,10) (26,10); out (12,10) (12,4) (15,4) then N up column 15; the plain room's way
+differs at the same length). The costs are `d3first`'s only (Line40b: a `routes: [d3first]` entry, as Route40's 0:0x1f
+and 0:0x76; Line40 had put them on the shared room, which `d2first`'s step of the same room, the shared block
+`dungeon-3`, reads too): `d2first` crosses 3:0x69 as before (`d2first_crosses_3_0x69_as_before_the_line`: the same
+objective and targets, no cost on any floor tile, the plain room's way; `game_map.rs`
+`d3first_costs_the_line_through_3_0x69`), and its eight schema 5 traces in the room hash as recorded before the line
+(`tests/test_obs_legacy.py`: Line40's eight re-recorded hashes are gone; its shared costs, compared step by step on
+the same seeds, changed only the `target` block where Link stands in 3:0x69, the same actions and lengths). Both 0x69
+steps carry `carriers: false` on Carrier40's branch (no bomb-carrier target here).
+
+### The rule (`scripts/experiments/r40_d3_69_line.py`)
+
+Each decision from the RAM a player sees (positions, facings, flash timers, knockback, spawn clouds): MOVE along the
+line while no way on from it (standing, along, back, any straight way) is predicted touched within 48 frames; else
+of MOVE each way, WAIT and the strikes that would hurt a Darknut (in the measured blade box, its back or side to the
+blade, not about to turn on a grid point), the one whose best way on is touched latest, then the shortest way left.
+The prediction walks each Darknut at 0.5 pixel a frame along its facing, turning on a grid point toward Link when he
+is within 8 pixels of its row or column (`asm:Wanderer_MoveAndTurn`) or on. With `--look D` (training only; the
+owner, Nov 23: moving the emulator ahead and back is fine in training, never at play or for replays) a second env
+times the same choices: each decision takes the first of the rule's ranked actions that, played and kept up D
+decisions, is not hit. The rule alone is what a player reading the screen does; it is hit where a Darknut turns
+into Link at a grid point (a coin it cannot see). The look-ahead is what "if you time it right" needs.
+
+### The rule's results (the generation's code, `r40-line`; darknut@d3first's env; 4 or 8 bombs, none used)
+
+Entries as training draws them: the step's entry states `d3first_3_69n_0..2` / `d3first_3_69c_0..2` (round robin),
+the start's random numbers and spawn draw, the task's hp draw (half at full hearts, the rest 0.5-2.5 of 3), on the way
+out a third from the chains' harvested handoffs (their own hearts and bombs; 342 of 1000). Seeds 0..999 (in-pass with
+look-ahead: 1000 visits; rule alone: 300 a pass). A visit's situation: `clear` (only the line's moves), `sworded`
+(at least one strike), `waited` (held or stepped aside, no strike). Frames: mean over the visits that left by the
+exit, from the entry to the exit.
+
+| pass | rule | situation | visits | left by the exit | hits a visit | visits hit | frames |
+|---|---|---|---|---|---|---|---|
+| in | look-ahead 4 | all | 1000 | 96.6% | 0.215 | 184 | 600 |
+| in | look-ahead 4 | sworded | 934 | 96.8% | 0.216 | 173 | 608 |
+| in | look-ahead 4 | waited | 66 | 93.9% | 0.197 | 11 | 475 |
+| in | look-ahead 4 | clear | 0 | | | | |
+| out | look-ahead 4 | all | 1000 | 99.8% | 0.000 | 0 | 486 |
+| out | look-ahead 4 | clear | 257 | 100% | 0 | 0 | 255 |
+| out | look-ahead 4 | sworded | 8 | 100% | 0 | 0 | 816 |
+| out | look-ahead 4 | waited | 735 | 99.7% | 0 | 0 | 563 |
+| in | alone | all | 300 | 84.7% | 0.653 | 128 | 502 |
+| in | alone | sworded | 280 | 84.6% | 0.664 | 121 | 510 |
+| in | alone | waited | 20 | 85.0% | 0.500 | 7 | 381 |
+| out | alone | all | 300 | 99.3% | 0.000 | 0 | 474 |
+| out | alone | clear | 84 | 100% | 0 | 0 | 256 |
+| out | alone | waited | 216 | 99.1% | 0 | 0 | 560 |
+
+The rest of the in-pass endings are deaths (29 of 1000 with the look-ahead, 45 of 300 alone, at 0.5-3 hearts) and 5
+visits that ran out of the script's 400 decisions; the out-pass's (2 with the look-ahead, 2 alone) are the 400-decision limit.
+
+**Where it is hit (in-pass, look-ahead, 215 hits):** the top row Y $5D 106 (most after a strike: Link backs out of
+the column with the Darknut it struck or another coming up after him; 16 into a Darknut whose flash ran out), off the
+line 54 (stepping aside on the open floor), the column X $90 30, the stairs' row 25 (17 while waiting there for the
+corridor to clear). No visit is unobstructed on the way in: the Darknut of the pocket spot ($A0, $7D) reaches the
+column or the stairs' corridor on every entry, so every visit strikes or waits. The way out is hit in none of 1000 with the
+look-ahead and none of 300 alone: its Darknuts spawn away from ($60, $8D) and the top row, and the rule's waits there
+are for Darknuts crossing X $60 or the door's column.
+
+**Against the owner's bar.** Zero hits is reachable (the search above found it for every seed tried), and the way out
+reaches it; the way in does not: 814 of 1000 of the look-ahead's visits and 172 of 300 of the rule alone's are clean. What
+separates them is timing the rule cannot see (whether a Darknut on a grid point turns toward Link). The look-ahead
+here is a 4-decision check of the rule's own choices, not a search; the demonstrations below come from a search.
+
+### Demonstrations: the builder searches every visit (Line40b, branch `r40-line2`, the merged generation's code)
+
+The owner allows moving the emulator ahead and back when building demonstrations, never at play. So the builder
+(`r40_d3_69_line.py demos --pass in|out`) does not teach the rule: for each visit it searches the env's own actions
+(MOVE 4 frames each way, WAIT 4, SWORD each way, BEAMS where the mask offers them at full hearts; a strike only with a
+Darknut within 32 pixels) best-first, a state's priority the frames spent plus twice the frames left along the line
+(`togo`, a pixel off the line counted twice), every child whose hearts fell dropped, every situation seen once (Link's
+position and facing, each Darknut's position, facing, flash and knockback); 25,000 decisions tried, then 50,000 at
+weight 1, then the rule with its look-ahead (never needed). The way found is played again from the visit's reset as
+one episode (`replay`) and kept only if it leaves by the exit unhit; the file is written as the visits end. Entries
+as `measure` draws them (the step's entry states round robin, the start's random numbers and spawn draw, the task's hp
+draw, 4 or 8 bombs by the seed's parity, a third of the way out from the chains' harvested handoffs), seeds 100000
+on. Express jobs of 32 (in) or 240 (out) visits, 8 workers, on a machine at load 30-40; the visits a job had not
+finished at its 10-minute limit are not counted (11 seeds of the way in: 100005, 100029, 100055, 100102, 100160,
+100193, 100195, 100217, 100221, 100305, 100317; not failures of the search, unmeasured). The search failed on no
+finished entry.
+
+| pass | visits | clean way found | by weight 2 / 1 | 4 / 8 bombs | actions (mean, max) | strikes a visit | waits a visit | frames | seconds a visit (mean, median, max) |
+|---|---|---|---|---|---|---|---|---|---|
+| in | 309 | 309 (100%) | 298 / 11 | 158 / 151 | 33.5, 39 | 0.90 (257 visits strike) | 0.50 | 254 (median 252) | 72.6, 34.8, 558 (14 over 300) |
+| out | 480 | 480 (100%) | 480 / 0 | 240 / 240 | 21.1, 24 | 0 | 0 | 235 | 0.52, -, 1.1 |
+
+Every kept visit is hit-free and leaves by the exit; the way in takes 254 frames against the rule's 600 with the
+look-ahead, the way out 235 against 486. Full hearts (beams) and partial hearts alike: in 145 / 164 visits, 257 / 251
+frames. The way in strikes in 257 of 309 visits (the pocket Darknut of ($A0, $7D) in the column, as with the rule) and
+walks through untouched in 52; it hardly waits.
+
+**The files** (`target/demos/` in the `r40-line2` worktree, for the lead's `triforce-lead data install`; this
+worktree's own `target/demos` is what its tools read until then; the pieces joined by `r40_d3_69_line.py merge`):
+`r40-d3-69-in.npz` 309 visits, 12,319 rows (sha256 a7f0d2cd...), `r40-d3-69-out.npz` 480 visits, 10,112 rows
+(2eeceae2...); a row a decision (a MOVE or WAIT without its duration, a strike 8 times), the darknut@d3first task's
+observation on the merged code. `specialists/d3first/darknut.yaml` declares them: `demos: {files: [r40-d3-69-in.npz,
+r40-d3-69-out.npz], coeff: 0.05}` (round 25's 5:0x37 weight). Line40's rule files (`r40-d3-69-line-0..3.npz`, 77 of
+100 in-pass and 99 of 100 out-pass visits, 15,167 rows, on the code before the merge) are replaced. If the
+generation's task changes the observation, the rows must be recorded again with it (`load_demos` refuses files whose
+keys differ; a changed shape fails at the first update). Records: `target/r40-line2/{in,out}-N.jsonl` (each visit's
+seed, start, bombs, hearts, actions, `way`, the search's decisions and seconds; `summarize` reads them).
+
+**Training logs the room** (for the smoke and every later darknut run): the env's terminal info carries `hits` (the
+episode's steps that lost health, a room visit's definition) and training's metrics `room/<room>/<entry>/episodes`,
+`success_rate` and `hits` (`room/3:0x69/N/...` the way in, `room/3:0x69/cave/...` the way out).
+
+### A task's `demos:` key (for the lead's conditions)
+
+`demos: {files: [NAME, ...], coeff: C}` in a task (Rust `DemosConfig`: names relative, no `..`, coeff finite > 0).
+`triforce.inputs.task_demos` resolves each name in `paths.data_dir('demos')` (the checkout's `target/demos` while it
+exists, else the store's current snapshot) and refuses (MissingInput, exit 2) naming the folder looked in and the
+store's `current` file. `train` and `lab.train`: the task's files, then `--demos`; `--demo-coeff` overrides the weight
+(default the task's, else 0.2; two tasks with different weights in a lab run refuse); `--no-task-demos` leaves the
+task's out (the arm "that run, except demos"). The manifest's `data.demos` lists every file cloned with its SHA-256
+(the field `--demos` already filled); the lab writes the same list into `run.json` `demos`. **What `lab.train` does
+with them:** one pool of rows from every file, one weight; each PPO minibatch adds the weight times the cloning loss
+over a minibatch-sized sample of those rows, whatever share of the rollout the family has. The term is computed on
+the demonstration rows only (3:0x69's decisions here), so it touches the network through those observations alone,
+but its strength does not scale with the family's share of a multi-family run. Tests: `config.rs`
+`demos_parse_and_reject_bad_entries`; `tests/test_demos.py` (the recipe, the refusal naming both places, a training
+that clones the task's file at its weight, records it with its checksum, takes `--demo-coeff` and drops it with
+`--no-task-demos`; these monkeypatch the demos folder to a temporary one, so they read neither this worktree's
+`target/demos` nor the store's).
+
+### Not done, not tested
+
+- The darknut network has not been trained with the demonstrations: the short smoke pair (with them and with
+  `--no-task-demos`, `--same-recipe-as`) was left to the lead, the express place being hours deep.
+- The 11 way-in seeds the jobs did not finish in their time were not searched to the end.
+- The in-pass rule alone was measured on 300 visits a pass, not 1000; the 1000-visit figures are the look-ahead's.
+- The `null` endings (400 decisions) were not looked into.
+- `d2first`'s chains were not run (its 0x69 step reads the shared room, without the line's costs, as before).
+
 ## The fresh generation's `d3first` route data (Route40, branch `r40-route`)
 
 anthropic/claude-opus-5-5 (Route40). The owner's decisions of Nov 23 ("The fresh generation's Dungeon 3", its
