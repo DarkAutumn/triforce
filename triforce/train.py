@@ -119,7 +119,7 @@ from . import lineage, manifest, paths, registry, store
 from ._native import CurriculumSpec, EnvPool, TrainTask
 from .best_of_n import collect_best, success_by_state
 from .clips import OFF_LABEL, episode_jobs
-from .demos import load_demos, recipe as demo_recipe
+from .demos import load_demos, recipe as demo_recipe, row_weights
 from .events import (LOGS_DIR_ENV, PROGRESS_METRICS, EventLog, TrainingPlan, has_plan, new_log_dir,
                      write_json_atomic)
 from .jobs import announce, flag, work
