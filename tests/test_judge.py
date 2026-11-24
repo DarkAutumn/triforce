@@ -136,3 +136,97 @@ def test_eval_batch_plans_a_teacher_without_running(shared, tmp_path, capsys):
     assert eval_batch.main([*argv, '--dungeons', 'd8']) == 0
     out = capsys.readouterr().out
     assert 'judged-post-d6.jsonl' in out and 'judged-post-d3' not in out and 'judged-d4' not in out
+
+
+def _training(family, name, iterations=(2, 4)):
+    """An open run with numbered checkpoints as the lab trainer leaves them (``registry.snapshot_checkpoint``)."""
+    import os  # pylint: disable=import-outside-toplevel
+    import torch  # pylint: disable=import-outside-toplevel
+    from triforce import registry  # pylint: disable=import-outside-toplevel
+    run = store.allocate_run(family, name)
+    (run.path / 'run.json').write_text(json.dumps({'manifest': {'schema': 1, 'kind': 'lab-train'}}))
+    for iteration in iterations:
+        torch.save({'state_dict': {'w': torch.tensor([float(iteration)])}, 'iterations': iteration,
+                    'steps': 1000 * iteration}, run.path / 'ckpt.tmp')
+        os.replace(run.path / 'ckpt.tmp', run.path / 'ckpt.pt')
+        registry.snapshot_checkpoint(run.path / 'ckpt.pt', iteration)
+    return run
+
+
+def test_eval_batch_plays_a_numbered_checkpoint_made_at_the_jobs_turn(shared, tmp_path, capsys, monkeypatch):
+    store.create_team('t1', {'boss-gleeok': store.slot_of(_sealed('boss-gleeok', 'r1'))}, 'test')
+    parent = _training('gen1-gleeok', 's1')
+    argv = ['judged', '--teacher', 'boss-gleeok=gen1-gleeok/s1@it2', '--base', 't1', '--runs', '5', '--dungeons',
+            'd4', '--chains-dir', str(tmp_path / 'chains')]
+    assert eval_batch.main([*argv, '--plan']) == 0
+    out = capsys.readouterr().out
+    assert ('teacher boss-gleeok: gen1-gleeok/s1@it2 is gen1-gleeok/s1-it000002 (iteration 2 of gen1-gleeok/s1; '
+            'sha1 ') in out and 'would be made: copied from the open run' in out
+    assert 'team: t1+@boss-gleeok=gen1-gleeok/s1-it000002' in out and '2 slots changed' in out
+    assert store.run_row(store.checkpoint_run_name(parent, 2)) is None            # a plan makes nothing
+    args = eval_batch.build_parser().parse_args([*argv, '--scopes', 'd4', '--no-report'])
+    monkeypatch.setenv('TRIFORCE_JOB_ESTIMATE', str(tmp_path / 'estimate.json'))
+    eval_batch.prepare_teacher(args)                                              # the queue's dry call
+    assert not args.checkpoints[0]['made'] and store.run_row(store.checkpoint_run_name(parent, 2)) is None
+    monkeypatch.delenv('TRIFORCE_JOB_ESTIMATE')
+    args = eval_batch.build_parser().parse_args([*argv, '--scopes', 'd4', '--no-report'])
+    eval_batch.prepare_teacher(args)                                              # the job's turn
+    assert args.checkpoints[0]['made'] and args.team == 't1+@boss-gleeok=gen1-gleeok/s1-it000002'
+    assert [item.scope.name for item in args.judged] == ['d4']
+    assert [entry.name for entry in eval_batch.build_entries(args)] == ['d4']       # one chain, no report
+    assert store.effective_team(args.team)['slots']['boss-gleeok@d3first']['run'] == 'gen1-gleeok/s1-it000002'
+    assert eval_batch.main([*argv[:2], 'boss-gleeok=gen1-gleeok/s1@it6', *argv[3:], '--plan']) == 2
+    assert 'no numbered checkpoint of iteration 6' in capsys.readouterr().err
+    assert eval_batch.main([*argv, '--scopes', 'to-d9', '--plan']) == 2
+
+
+def _played(path: Path, runs: list[dict], team: dict):
+    path.write_text(''.join(json.dumps(run) + '\n' for run in runs))
+    Path(f'{path}.meta.json').write_text(json.dumps({'provenance': {'route': ROUTE, 'team': team}}))
+
+
+def test_checkpoints_are_planned_one_chain_a_job_then_collected_in_one_table(shared, tmp_path, capsys):
+    parent = _training('gen1-gleeok', 's1')
+    chains, base = tmp_path / 'chains', tmp_path / 'base'
+    chains.mkdir()
+    base.mkdir()
+    for name in ('post-d3', 'd4'):
+        _write(base / f'b-{name}.jsonl', [_won(0, False), _won(1, False), _won(2, False), _died(3)])
+    common = ['checkpoints', 'boss-gleeok=gen1-gleeok/s1', '--dungeons', 'd4', '--runs', '4', '--chains-dir',
+              str(chains), '--base', 'b', '--base-dir', str(base), '--agent', 'Tester']
+    assert judge.main([*common, '--plan']) == 0
+    out = capsys.readouterr().out
+    assert '0 of 4 chains played' in out
+    lines = [line for line in out.splitlines() if line.startswith('triforce job run')]
+    assert len(lines) == 4 and all('--express --timeout 10m --detach' in line for line in lines)
+    assert ("eval-batch gen1-gleeok-s1-r4-it000002 --teacher boss-gleeok=gen1-gleeok/s1@it2 --scopes to-d4 --runs 4 "
+            "--no-report --chains-dir") in lines[0] and '--subtask it000004-d4' in lines[3]
+    # The pieces of iteration 2 played (their jobs made its run); iteration 4's not yet.
+    team = {'name': 't1+@boss-gleeok=gen1-gleeok/s1-it000002',
+            'overrides': {'boss-gleeok@d3first': store.checkpoint_run(parent, 2)['run']}}
+    _played(chains / 'gen1-gleeok-s1-r4-it000002-post-d3.jsonl', [_won(0, True), _died(1), _died(2), _died(3)], team)
+    _played(chains / 'gen1-gleeok-s1-r4-it000002-d4.jsonl', [_won(0, True), _won(1, True), _died(2), _died(3)], team)
+    assert judge.main(common) == 0
+    out = capsys.readouterr().out
+    assert '| 2 | 0.00M | d4 | previous triforce | 25.0% ± 21.7 of 4 | 75.0% | -50.0 ± 28.9 (paired, 4) |' in out
+    assert '| 2 | 0.00M | d4 | entrance | 50.0% ± 25.0 of 4 | 75.0% | -25.0 ± 25.0 (paired, 4) |' in out
+    assert 'Not yet played (2): gen1-gleeok-s1-r4-it000004-post-d3, gen1-gleeok-s1-r4-it000004-d4' in out
+    assert 'nothing filed yet' in out and not store.outputs(kind='judge')
+    assert (chains / 'gen1-gleeok-s1-r4-checkpoints.md').is_file()
+    assert judge.main([*common, '--plan']) == 0                                    # only what is missing
+    assert len([line for line in capsys.readouterr().out.splitlines() if line.startswith('triforce job')]) == 2
+    # Every piece in: the table is filed in the store.
+    team = {'name': 't1+@boss-gleeok=gen1-gleeok/s1-it000004',
+            'overrides': {'boss-gleeok@d3first': store.checkpoint_run(parent, 4)['run']}}
+    for name in ('post-d3', 'd4'):
+        _played(chains / f'gen1-gleeok-s1-r4-it000004-{name}.jsonl', [_won(s, True) for s in range(4)], team)
+    assert judge.main(common) == 0
+    out = capsys.readouterr().out
+    assert '| 4 | 0.00M | d4 | entrance | 100.0% ± 0.0 of 4 |' in out and 'Not yet played' not in out
+    assert sorted(Path(row['path']).name for row in store.outputs(kind='judge')) == [
+        'gen1-gleeok-s1-r4-checkpoints.json', 'gen1-gleeok-s1-r4-checkpoints.md']
+    # The comparison of one piece names the weights it played.
+    text = judge.report(judge.compare('gen1-gleeok-s1-r4-it000004', 'b', chains, base, ROUTE))
+    assert '- `gen1-gleeok/s1-it000004`: iteration 4 of `gen1-gleeok/s1`, 4,000 steps' in text
+    assert '| Measured (it 4, 0.00M steps) |' in text
+    assert judge.main([*common[:1], 'boss-gleeok=gen1-gleeok/s1', '--its', '2,6', '--runs', '4']) == 2

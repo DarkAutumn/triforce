@@ -497,8 +497,9 @@ def main(argv=None):
     sub.add_parser('test-times', help="the test suites' timing logs read together: wall time run by run, each "
                                       "test's median and worst, the slowest, what grew (triforce.testlog)")
     sub.add_parser('stats', help="run statistics: list, show, compare (paired by seed), ingest (triforce.run_stats)")
-    sub.add_parser('judge', help="python -m triforce.judge plan GROUP... | compare TAG [--base TAG] (where a teacher "
-                                 "plays; a measurement beside the baseline per dungeon)")
+    sub.add_parser('judge', help="python -m triforce.judge plan GROUP... | compare TAG [--base TAG] | checkpoints "
+                                 "GROUP=FAMILY/RUN --runs N (where a teacher plays; a measurement beside the baseline "
+                                 "per dungeon; a teacher's numbered checkpoints in one table)")
     sub.add_parser('list', help="specialists, their promoted run and run count")
     sub.add_parser('lineage', help="python -m triforce.lineage [--route R] (each promoted pointer's chain of "
                                    "parents back to its origin)")

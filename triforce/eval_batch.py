@@ -6,7 +6,8 @@
                                            [--episodes-per-state N] [--seed S] [--clips on|off|both]
                                            [--output-dir DIR]]
                              [--chain '[ENTRY:] EVAL-CHAIN ARGS' ...] [--evaluate '[ENTRY:] EVALUATE ARGS' ...]
-                             [--teacher GROUP=FAMILY/RUN ... [--base TEAM] [--dungeons dN,...] [--runs N] [--plan]]
+                             [--teacher GROUP=FAMILY/RUN[@itN|@latest] ... [--base TEAM] [--dungeons dN,...]
+                                           [--scopes SCOPE,...] [--runs N] [--no-report] [--plan]]
                              [--parallel CORES] [--eval-parallel 4] [--jobs 1] [--redo]
                              [--logs-dir DIR] [--models-dir DIR]
 
@@ -35,8 +36,13 @@ A batch is a named list of evaluations, in command-line order:
   (``BASE+@GROUP=FAMILY/RUN``, ``store.group_slots``), one chain of ``--runs`` per scope a family of the group plays
   (``judge.teacher_plan``: each dungeon from the previous triforce and from its entrance, stopped at the dungeon's
   exit), written as ``<chains-dir>/<NAME>-<file>.jsonl``, then the report of the tag NAME and ``judge compare NAME``
-  against round 40's baseline (``<NAME>-judge.md``).  ``--dungeons d4,d5`` judges only those dungeons' scopes.
-  ``--plan`` prints the scopes, the team spec and the commands and runs nothing.
+  against round 40's baseline (``<NAME>-judge.md``).  ``--dungeons d4,d5`` judges only those dungeons' scopes,
+  ``--scopes to-d3`` only those scopes; ``--no-report`` leaves out the report and the comparison (one chain a job,
+  ``triforce judge checkpoints`` collects them).  ``FAMILY/RUN@it228`` (``@latest``: the newest completely written)
+  plays the run's numbered checkpoint as its own sealed run ``FAMILY/RUN-it000228`` (``store.checkpoint_run``, made
+  when missing at the job's turn; the run itself is only read, so it may still be training).
+  ``--plan`` prints the scopes, which sealed run each checkpoint is (or would be), the team spec and the commands, and
+  runs nothing.
 
 Each evaluation runs as its own process (``python -m triforce.cli eval-chain`` / ``python -m triforce.evaluate``
 with ``--events <batch folder>/<entry>.jsonl``), its console output in ``<entry>.log`` (or the chain segment's own
@@ -597,11 +603,11 @@ def report_entry(tag: str, segments: list[str], chains_dir: Path, options: Optio
                  builder=build)
 
 
-def teacher_entries(tag: str, judged: list, options: Options, *, runs: int, route: str, chains_dir: Path
-                    ) -> list[Entry]:
+def teacher_entries(tag: str, judged: list, options: Options, *, runs: int, route: str, chains_dir: Path,
+                    report: bool = True) -> list[Entry]:
     """A teacher's judgement (``triforce.judge``): one chain per judged scope (``judge.Judged``: its file's start, to
-    its cut), written as ``<chains_dir>/<tag>-<file>.jsonl``, then the report of a tag (``report_entry``) and the
-    comparison with the baseline (``judge compare``: ``<tag>-judge.md`` / ``.json``)."""
+    its cut), written as ``<chains_dir>/<tag>-<file>.jsonl``, then (``report``) the report of a tag
+    (``report_entry``) and the comparison with the baseline (``judge compare``: ``<tag>-judge.md`` / ``.json``)."""
     entries, files = [], []
     for item in judged:
         if item.scope.file in files:
@@ -610,6 +616,8 @@ def teacher_entries(tag: str, judged: list, options: Options, *, runs: int, rout
         entries.append(chain_entry(item.scope.file, item.chain_args(runs, route), options,
                                    output=chains_dir / f"{tag}-{item.scope.file}.jsonl",
                                    log=chains_dir / f"{tag}-{item.scope.file}.log"))
+    if not report:
+        return entries
     entries.append(report_entry(tag, files, chains_dir, options, route_segments(route)))
     markdown, numbers = chains_dir / f"{tag}-judge.md", chains_dir / f"{tag}-judge.json"
     command = [sys.executable, '-m', 'triforce.judge', 'compare', tag, '--chains-dir', str(chains_dir), '--route',
@@ -958,26 +966,61 @@ def build_parser() -> argparse.ArgumentParser:
                         help="the store's team every entry plays (NAME, current, NAME+SLOT=RUN...); chain outputs "
                              "default to the job's folder of the store and every chain is filed by the job")
     teacher = parser.add_argument_group('--teacher (triforce.judge)')
-    teacher.add_argument('--teacher', action='append', default=[], metavar='GROUP=FAMILY/RUN',
+    teacher.add_argument('--teacher', action='append', default=[], metavar='GROUP=FAMILY/RUN[@itN|@latest]',
                          help="judge a teacher: --base with the run in every slot of the group's families, chained "
                               "(--runs each) on every scope its families play, from the previous triforce and from "
-                              "the entrance, then the report and the comparison with the baseline (repeatable)")
+                              "the entrance, then the report and the comparison with the baseline (repeatable); "
+                              "@itN / @latest: the run's numbered checkpoint as its own sealed run FAMILY/RUN-itNNNNNN "
+                              "(store.checkpoint_run: made when missing, the run itself only read)")
     teacher.add_argument('--base', default=None, help="the team the teacher joins (default: current)")
     teacher.add_argument('--dungeons', default=None, metavar='dN,...',
                          help="judge only these dungeons' scopes (default every one the group plays in)")
+    teacher.add_argument('--scopes', default=None, metavar='SCOPE,...',
+                         help="judge only these scopes (the plan's 'scope' column: to-d3, d3, ...); with "
+                              "--no-report, one chain a job")
     teacher.add_argument('--plan', action='store_true',
                          help="print the scopes, the team spec and the chain commands; run nothing")
     return parser
 
 
+def resolve_checkpoints(teachers: list[str], make: bool) -> tuple[list[str], list[dict]]:
+    """``GROUP=FAMILY/RUN@itN`` (or ``@latest``) items as ``GROUP=FAMILY/RUN-it<NNNNNN>`` (``store.checkpoint_run``:
+    made when ``make`` and missing), the others as given; returns (the items, each checkpoint's record with
+    ``group`` and ``given``)."""
+    from . import paths, store  # pylint: disable=import-outside-toplevel
+    items, resolved = [], []
+    for item in teachers:
+        group, sep, run = item.partition('=')
+        text, iteration = store.split_checkpoint(run) if sep else (run, None)
+        if iteration is not None:
+            try:
+                found = store.checkpoint_run(store.parse_run(text), iteration, make=make)
+            except (store.StoreError, paths.MissingError) as error:
+                raise BatchError(f"--teacher {item}: {error}") from None
+            resolved.append({'group': group, 'given': run, **found})
+            item = f"{group}={found['run']}"
+        items.append(item)
+    return items, resolved
+
+
+def checkpoint_text(record: dict) -> str:
+    """One line for a teacher played from a numbered checkpoint (``resolve_checkpoints``' record)."""
+    steps = f", {record['steps']:,} steps" if record.get('steps') is not None else ''
+    state = ('exists' if record['exists'] else 'made now' if record['made'] else
+             f"would be made: {record['weights']} from the {record['parent_status']} run")
+    return (f"teacher {record['group']}: {record['given']} is {record['run']} (iteration {record['iteration']} of "
+            f"{record['parent']}{steps}; sha1 {record['checkpoint_sha1'][:12]}; {state})")
+
+
 def prepare_teacher(args):
-    """``--teacher``: sets ``args.team`` (``BASE+@GROUP=FAMILY/RUN...``), ``args.judged`` (``judge.teacher_plan``)
-    and ``args.teacher_route``; BatchError for a wrong one."""
-    from . import judge  # pylint: disable=import-outside-toplevel
-    args.judged = None
+    """``--teacher``: sets ``args.team`` (``BASE+@GROUP=FAMILY/RUN...``), ``args.judged`` (``judge.teacher_plan``),
+    ``args.teacher_route`` and ``args.checkpoints`` (a teacher named by a numbered checkpoint: its sealed run, made
+    here unless only planned: ``--plan`` or the queue's dry call); BatchError for a wrong one."""
+    from . import jobs, judge  # pylint: disable=import-outside-toplevel
+    args.judged, args.checkpoints = None, []
     if not args.teacher:
-        if args.base or args.plan or args.dungeons:
-            raise BatchError("--base, --dungeons and --plan go with --teacher")
+        if args.base or args.plan or args.dungeons or args.scopes:
+            raise BatchError("--base, --dungeons, --scopes and --plan go with --teacher")
         return
     if args.team:
         raise BatchError("--teacher plays --base with the teacher in its slots: give --base, not --team")
@@ -985,27 +1028,38 @@ def prepare_teacher(args):
         route, groups = judge.teacher_families(args.teacher)
     except ValueError as error:
         raise BatchError(str(error)) from None
-    args.team = judge.teacher_spec(args.base or 'current', args.teacher)
-    args.teacher_route = route
     args.judged = judge.teacher_plan(sorted({family for families in groups.values() for family in families}), route)
-    if args.dungeons:
-        wanted = [name for name in args.dungeons.split(',') if name]
-        played = list(dict.fromkeys(item.dungeon for item in args.judged))
-        if not wanted or set(wanted) - set(played):
-            raise BatchError(f"--dungeons {args.dungeons}: the group plays in {', '.join(played)}")
-        args.judged = [item for item in args.judged if item.dungeon in wanted]
+    try:
+        args.judged = judge.select_scopes(args.judged, args.dungeons, args.scopes)
+    except ValueError as error:
+        raise BatchError(str(error)) from None
     if not args.judged:
         raise BatchError(f"--teacher: no family of {', '.join(groups)} plays a step of {route}")
+    args.teacher, args.checkpoints = resolve_checkpoints(
+        args.teacher, make=not args.plan and not os.environ.get(jobs.JOB_ESTIMATE_ENV))
+    args.team = judge.teacher_spec(args.base or 'current', args.teacher)
+    args.teacher_route = route
+
+
+def _pending(args) -> bool:
+    """A teacher's checkpoint run is not made yet (``--plan``, the queue's dry call): its team cannot resolve."""
+    return any(not record['exists'] and not record['made'] for record in getattr(args, 'checkpoints', None) or [])
 
 
 def print_plan(args, entries: list[Entry], tell: Callable[[str], None] = print):
-    """``--plan``: the scopes, the team spec (its slots changed) and each entry's commands."""
+    """``--plan``: the scopes, each teacher played from a numbered checkpoint (its sealed run, existing or to be
+    made), the team spec (its slots changed) and each entry's commands."""
     from . import judge, store  # pylint: disable=import-outside-toplevel
-    team = store.effective_team(args.team)
     tell(f"# {args.name}: {', '.join(args.teacher)} on {args.teacher_route}, {args.runs} runs a chain\n")
     tell('\n'.join(judge.plan_text(args.judged)) + '\n')
+    for record in args.checkpoints:
+        tell(checkpoint_text(record))
     tell(f"team: {args.team}")
-    tell(f"  {len(team['overrides'])} slots changed: {', '.join(sorted(team['overrides']))}\n")
+    if _pending(args):
+        changed = sorted({key for item in args.teacher for key in store.group_slots(item.partition('=')[0])})
+    else:
+        changed = sorted(store.effective_team(args.team)['overrides'])
+    tell(f"  {len(changed)} slots changed: {', '.join(changed)}\n")
     for entry in entries:
         for command in entry.commands:
             tell(f"{entry.name}: TRIFORCE_TEAM={shlex.quote(args.team)} {shlex.join(str(c) for c in command)}")
@@ -1021,7 +1075,8 @@ def build_entries(args, team: Optional[str] = None, output_root: Optional[Path] 
     entries = []
     if getattr(args, 'judged', None):
         entries += teacher_entries(args.name, args.judged, options, runs=args.runs, route=args.teacher_route,
-                                   chains_dir=Path(args.chains_dir or CHAINS_DIR).resolve())
+                                   chains_dir=Path(args.chains_dir or CHAINS_DIR).resolve(),
+                                   report=not args.no_report)
     for kind, value in getattr(args, 'entries', None) or []:
         if kind == 'chain':
             entries.append(chain_entry(*split_entry(value), options))
@@ -1063,7 +1118,10 @@ def main(argv=None) -> int:
         if args.plan:
             print_plan(args, build_entries(args))
             return 0
-        registry.use_team(args.team, args.models_dir)
+        for record in args.checkpoints:
+            print(checkpoint_text(record), flush=True)
+        if not _pending(args):      # pending only in the queue's dry call, which ends in announce
+            registry.use_team(args.team, args.models_dir)
         entries = build_entries(args)
         announce('batch', batch_work(entries), args.name)
         team = registry.team_in_use(args.models_dir)

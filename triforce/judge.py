@@ -1,8 +1,10 @@
 """Judging a teacher of the fresh generation in chains, and setting any measurement beside the baseline (round 40).
 
-    triforce eval-batch NAME --teacher GROUP=FAMILY/RUN [--teacher ...] [--base TEAM] [--runs N] [--plan]
+    triforce eval-batch NAME --teacher GROUP=FAMILY/RUN[@itN|@latest] [--base TEAM] [--runs N] [--plan]
     triforce judge plan GROUP [GROUP...] [--route d3first]
     triforce judge compare TAG [--base r40-2015-1k] [--chains-dir DIR] [--base-dir DIR] [--output FILE]
+    triforce judge checkpoints GROUP=FAMILY/RUN [--its 114,228|all] [--dungeons dN,...] [--scopes S,...] --runs N
+                               [--plan | --submit] [--agent A] [--tag TAG] [--chains-dir DIR]
 
 **Where a teacher plays** (``teacher_plan``).  A route's room statistics cut it into scopes
 (``room_stats.ROUTE_SCOPES``): per dungeon the leg from the previous triforce through the dungeon (``to-dN``: the file
@@ -29,11 +31,23 @@ them (``run_stats.goal_run_values``; 2.0.0.15's records predate them).  A team t
 teacher in some plays the base's runs elsewhere, so its paired difference is the teacher's effect.  Files are found in
 ``--chains-dir`` (default ``target/r56-chains``), else through the store's index of filed chain records (``kind
 'chain'``, named ``<TAG>-<file>.jsonl``; their ``.meta.json`` filed as ``chain-meta``), so the baseline of round 40
-(``BASELINE``, job 615's) is read from the store and no worktree."""
+(``BASELINE``, job 615's) is read from the store and no worktree.
+
+**Several checkpoints, small** (``checkpoints``, round 41): a teacher's numbered checkpoints (each a sealed run of its
+own, ``store.checkpoint_run``, made by its first chain's job) on the same scopes and the same seeds, one chain a
+checkpoint and scope so each fits the queue's express place: ``--plan`` prints one ``triforce job run --express
+--timeout 10m --detach`` command a chain not yet played (``eval-batch <tag>-it<NNNNNN> --teacher
+GROUP=FAMILY/RUN@itN --scopes S --no-report``), ``--submit`` queues them; run without either it reads the chains
+played (in ``--chains-dir`` or filed in the store), skips nothing it has and lists the rest, and writes one table by
+iteration (steps, each scope's rate ± its standard error, the paired difference with the baseline on those seeds,
+hearts lost a run, the rooms where most runs end, the tracked goals) as ``<tag>-checkpoints.md`` / ``.json`` beside
+the chains, filed in the store once every piece is in.  A comparison of a team holding such a run names its
+iteration and steps (``played_checkpoints``)."""
 
 import argparse
 import json
 import math
+import os
 import sys
 from collections import Counter
 from dataclasses import dataclass
@@ -96,6 +110,24 @@ def teacher_plan(families, route: str, plan: Optional[list[dict]] = None) -> lis
             if playing:
                 cut = room_stats.state_step(plan, scope.cut) if scope.cut else None
                 judged.append(Judged(dungeon, kind, scope, steps.start, cut, playing))
+    return judged
+
+
+def select_scopes(judged: list[Judged], dungeons: Optional[str] = None, scopes: Optional[str] = None) -> list[Judged]:
+    """``judged`` cut to ``dungeons`` (``d3,d4``) and ``scopes`` (``to-d3,d3``: the plan's scope names); ValueError
+    naming what the group plays for one it does not."""
+    if dungeons:
+        wanted = [name for name in dungeons.split(',') if name]
+        played = list(dict.fromkeys(item.dungeon for item in judged))
+        if not wanted or set(wanted) - set(played):
+            raise ValueError(f"--dungeons {dungeons}: the group plays in {', '.join(played)}")
+        judged = [item for item in judged if item.dungeon in wanted]
+    if scopes:
+        wanted = [name for name in scopes.split(',') if name]
+        played = [item.scope.name for item in judged]
+        if not wanted or set(wanted) - set(played):
+            raise ValueError(f"--scopes {scopes}: the group is judged on {', '.join(played)}")
+        judged = [item for item in judged if item.scope.name in wanted]
     return judged
 
 
@@ -289,29 +321,49 @@ def _diff(diff: Optional[dict], scale: float = 100.0, unit: str = '') -> str:
     return f"{scale * diff['diff']:+.{1 if scale == 100 else 2}f}{se}{unit} ({how})"
 
 
-def table(rows: list[dict]) -> list[str]:
-    """The comparison's Markdown table, a row per dungeon and start."""
+def _ends(n: dict) -> str:
+    return ', '.join(f"{owner_room(room)} {_pct(share)} ({_pct((n.get('base_ends') or {}).get(room, 0.0))})"
+                     for room, share in list(n['arm_ends'].items())[:MOST]) or 'none'
+
+
+def _hearts(n: dict) -> str:
+    hearts = n['arm_hearts_lost']['mean']
+    base_hearts = (n.get('base_hearts_lost') or {}).get('mean')
+    return (f"{hearts:.2f} ({'-' if base_hearts is None else f'{base_hearts:.2f}'}); "
+            f"{_diff(n.get('hearts_diff'), 1.0)}" if hearts is not None else '-')
+
+
+def _goal_text(n: dict) -> str:
+    mine, theirs = n.get('arm_goals') or {}, n.get('base_goals') or {}
+    return ', '.join(f"{key[len('goal_'):]} {value:.2f} ({'-' if key not in theirs else f'{theirs[key]:.2f}'})"
+                     for key, value in mine.items()) or '-'
+
+
+def checkpoint_label(checkpoints: dict) -> Optional[str]:
+    """``it 228, 3.74M steps`` when the measured team played one numbered checkpoint (``played_checkpoints``), the
+    runs' labels joined when several."""
+    labels = [f"it {c['iteration']}" + (f", {c['steps'] / 1e6:.2f}M steps" if c.get('steps') is not None else '')
+              for c in checkpoints.values()]
+    return '; '.join(labels) or None
+
+
+def table(rows: list[dict], measured: Optional[str] = None) -> list[str]:
+    """The comparison's Markdown table, a row per dungeon and start (``measured``: what the Measured column played,
+    ``checkpoint_label``)."""
     goals = any(row['numbers'].get('arm_goals') for row in rows)
-    head = ('| Dungeon | Start | Base (all runs) | Base on these seeds | Measured | Difference | Rooms where most '
-            'runs end (base) | Hearts lost a run (base) |' + (' Goals a run (base) |' if goals else ''))
+    head = (f"| Dungeon | Start | Base (all runs) | Base on these seeds | Measured{f' ({measured})' if measured else ''} "
+            "| Difference | Rooms where most runs end (base) | Hearts lost a run (base) |"
+            + (' Goals a run (base) |' if goals else ''))
     lines = [head, '|' + '---|' * (8 + goals)]
     for row in rows:
         n = row['numbers']
         base, arm = n.get('base'), n['arm']
-        ends = ', '.join(f"{owner_room(room)} {_pct(share)} ({_pct((n.get('base_ends') or {}).get(room, 0.0))})"
-                         for room, share in list(n['arm_ends'].items())[:MOST]) or 'none'
-        hearts = n['arm_hearts_lost']['mean']
-        base_hearts = (n.get('base_hearts_lost') or {}).get('mean')
         cells = [row['dungeon'], 'previous triforce' if row['start'] == 'leg' else 'entrance',
                  f"{_pct(base['rate'])} of {base['n']}" if base else 'no record',
                  _pct(n['base_on_seeds']['rate']) if base else '-', f"{_pct(arm['rate'])} of {arm['n']}",
-                 _diff(n.get('rate_diff')), ends,
-                 f"{hearts:.2f} ({'-' if base_hearts is None else f'{base_hearts:.2f}'}); "
-                 f"{_diff(n.get('hearts_diff'), 1.0)}" if hearts is not None else '-']
+                 _diff(n.get('rate_diff')), _ends(n), _hearts(n)]
         if goals:
-            mine, theirs = n.get('arm_goals') or {}, n.get('base_goals') or {}
-            cells.append(', '.join(f"{key[len('goal_'):]} {value:.2f} ({'-' if key not in theirs else f'{theirs[key]:.2f}'})"
-                                   for key, value in mine.items()) or '-')
+            cells.append(_goal_text(n))
         lines.append('| ' + ' | '.join(cells) + ' |')
     return lines
 
@@ -327,6 +379,20 @@ def _read(path: Path, meta: Optional[Path]) -> tuple[list[dict], dict]:
 def _team_name(provenance: dict) -> Optional[str]:
     team = provenance.get('team')
     return team.get('name') if isinstance(team, dict) else None
+
+
+def played_checkpoints(provenance: dict) -> dict[str, dict]:
+    """Run -> its numbered checkpoint (``store.checkpoint_info``: parent, iteration, steps, SHA-1) for each run the
+    measured team put in a slot that ``store.checkpoint_run`` made from one."""
+    from . import paths, store  # pylint: disable=import-outside-toplevel
+    team = provenance.get('team')
+    runs = sorted(set((team.get('overrides') or {}).values())) if isinstance(team, dict) else []
+    out = {}
+    for run in runs if paths.store_exists() else []:
+        info = store.checkpoint_info(store.parse_run(run))
+        if info:
+            out[run] = {key: info.get(key) for key in ('parent', 'iteration', 'steps', 'checkpoint_sha1')}
+    return out
 
 
 def compare(tag: str, base: str = BASELINE, chains_dir: Optional[Path] = None, base_dir: Optional[Path] = None,
@@ -356,7 +422,7 @@ def compare(tag: str, base: str = BASELINE, chains_dir: Optional[Path] = None, b
         if route is None:
             raise ValueError(f"{tag}: no route recorded (pass --route)")
     plan = list(route_steps(route))
-    rows, teams = [], {}
+    rows, teams, checkpoints = [], {}, {}
     for dungeon, leg, entrance in dungeon_scopes(route):
         for start, scope in (('leg', leg), ('entrance', entrance)):
             arm = load(arm_files, scope.file)
@@ -364,6 +430,7 @@ def compare(tag: str, base: str = BASELINE, chains_dir: Optional[Path] = None, b
                 continue
             other = load(base_files, scope.file)
             teams.setdefault('measured', _team_name(arm[1]))
+            checkpoints.update(played_checkpoints(arm[1]))
             if other is not None:
                 teams.setdefault('base', _team_name(other[1]))
             numbers = scope_comparison(scope_runs(arm[0], plan, scope),
@@ -371,28 +438,223 @@ def compare(tag: str, base: str = BASELINE, chains_dir: Optional[Path] = None, b
             rows.append({'dungeon': dungeon, 'start': start, 'scope': scope.name, 'file': scope.file,
                          'numbers': numbers, 'arm_file': str(arm_files[scope.file][0]),
                          'base_file': str(base_files[scope.file][0]) if scope.file in base_files else None})
-    return {'tag': tag, 'base': base, 'route': route, 'teams': teams, 'rows': rows}
+    return {'tag': tag, 'base': base, 'route': route, 'teams': teams, 'checkpoints': checkpoints, 'rows': rows}
+
+
+def checkpoint_lines(checkpoints: dict) -> list[str]:
+    """A line per run played from a numbered checkpoint: which, of which run, its steps and SHA-1."""
+    return [f"- `{run}`: iteration {c['iteration']} of `{c['parent']}`"
+            + (f", {c['steps']:,} steps" if c.get('steps') is not None else '')
+            + f", checkpoint sha1 {(c.get('checkpoint_sha1') or '-')[:12]}" for run, c in sorted(checkpoints.items())]
 
 
 def report(result: dict) -> str:
     """The comparison as Markdown."""
     teams = result['teams']
+    checkpoints = result.get('checkpoints') or {}
     lines = [f"# {result['tag']} beside {result['base']} ({result['route']})", '',
              f"Measured: team {teams.get('measured') or '(not recorded)'}; base: team "
              f"{teams.get('base') or '(not recorded)'}.  Rates are the runs that reached the scope's cut (the "
              "dungeon's exit); the difference is paired by seed (the measurement's seeds in the base's runs).  Rooms: "
              "the share of runs that ended there (death, stuck or another ending), the base's in brackets.", '']
+    if checkpoints:
+        lines += ['Played from numbered checkpoints:', *checkpoint_lines(checkpoints), '']
     if not result['rows']:
         lines.append(f"{result['tag']} has no file of any dungeon's scope.")
     else:
-        lines += table(result['rows'])
+        lines += table(result['rows'], checkpoint_label(checkpoints))
         if not any(row['numbers'].get('arm_goals') for row in result['rows']):
             lines += ['', "The records carry no tracked goals (`goal_*`, round 40): none are shown."]
     return '\n'.join(lines)
 
 
+# ------------------------------------------------------------------------------------------ several checkpoints
+
+@dataclass
+class Piece:
+    """One chain of ``judge checkpoints``: a checkpoint's iteration on one judged scope, in batch ``tag``."""
+    iteration: int
+    tag: str
+    judged: Judged
+    done: bool
+
+
+@dataclass
+class CheckpointsPlan:
+    """What ``judge checkpoints`` judges: the teacher's group and run, the route, the pieces in order."""
+    group: str
+    parent: object                      # store.Run
+    route: str
+    runs: int
+    tag: str
+    chains_dir: Path
+    base: Optional[str]
+    pieces: list
+
+
+def checkpoints_plan(teacher: str, its: Optional[str], runs: int, dungeons: Optional[str] = None,
+                     scopes: Optional[str] = None, tag: Optional[str] = None, chains_dir: Optional[Path] = None,
+                     base: Optional[str] = None) -> CheckpointsPlan:
+    """The pieces of judging ``GROUP=FAMILY/RUN``'s numbered checkpoints (``its``: ``114,228`` or ``all``: every
+    completely written one) on the group's scopes (``select_scopes``), ``runs`` a chain on seeds 0..runs-1: one chain
+    a checkpoint and scope, in batch ``<tag>-it<NNNNNN>`` (``tag`` default ``<family>-<run>-r<runs>``), done when its
+    records are in ``chains_dir`` or filed in the store (``find_files``).  ValueError for a wrong argument."""
+    from . import store  # pylint: disable=import-outside-toplevel
+    route, groups = teacher_families([teacher])
+    group = next(iter(groups))
+    text, named = store.split_checkpoint(teacher.partition('=')[2])
+    if named is not None:
+        raise ValueError(f"{teacher}: name the run (GROUP=FAMILY/RUN); --its chooses its checkpoints")
+    parent = store.parse_run(text)
+    found = store.numbered_checkpoints(parent, store.get_run(parent)['status'] == store.SEALED)
+    complete = [c['iteration'] for c in found if c['complete']]
+    if its in (None, 'all'):
+        chosen = complete
+    else:
+        try:
+            chosen = [int(item.removeprefix('it')) for item in its.split(',') if item]
+        except ValueError:
+            raise ValueError(f"--its {its}: iterations (114,228 or it114,it228) or all") from None
+        unknown = [it for it in chosen if it not in complete]
+        if unknown:
+            writing = [c['iteration'] for c in found if not c['complete']]
+            raise ValueError(f"--its {its}: {parent.identity} has no completely written numbered checkpoint "
+                             f"{', '.join(map(str, unknown))} (complete: {', '.join(map(str, complete)) or 'none'}"
+                             + (f"; being written: {', '.join(map(str, writing))}" if writing else '') + ")")
+    if not chosen:
+        raise ValueError(f"{parent.identity} has no completely written numbered checkpoint yet")
+    judged = select_scopes(teacher_plan(groups[group], route), dungeons, scopes)
+    if not judged:
+        raise ValueError(f"no family of {group} plays a step of {route}")
+    chains_dir = Path(chains_dir or room_stats.CHAINS_DIR).resolve()
+    tag = tag or f"{parent.family.replace('/', '-')}-{parent.name}-r{runs}"
+    pieces = []
+    for iteration in chosen:
+        piece_tag = f"{tag}-it{iteration:06d}"
+        have = find_files(piece_tag, chains_dir)
+        pieces += [Piece(iteration, piece_tag, item, item.scope.file in have) for item in judged]
+    return CheckpointsPlan(group, parent, route, runs, tag, chains_dir, base, pieces)
+
+
+def piece_command(plan: CheckpointsPlan, piece: Piece, agent: str, task: str, timeout: str = '10m') -> list[str]:
+    """The queue's command for one piece: an express job (``--timeout``, detached) of ``eval-batch`` with the teacher
+    at that checkpoint on that scope alone, no report (``judge checkpoints`` collects)."""
+    triforce = Path(sys.executable).with_name('triforce')
+    name = f"it{piece.iteration:06d}-{piece.judged.scope.name}"
+    return ['triforce', 'job', 'run', '--agent', agent, '--task', task, '--subtask', name, '--desc',
+            f"{plan.parent.identity} it {piece.iteration} judged on {piece.judged.scope.name}, {plan.runs} runs",
+            '--express', '--timeout', timeout, '--detach', '--',
+            str(triforce) if triforce.is_file() else 'triforce', 'eval-batch', piece.tag,
+            '--teacher', f"{plan.group}={plan.parent.identity}@it{piece.iteration}",
+            *(['--base', plan.base] if plan.base else []), '--scopes', piece.judged.scope.name,
+            '--runs', str(plan.runs), '--no-report', '--chains-dir', str(plan.chains_dir)]
+
+
+def checkpoints_table(plan: CheckpointsPlan, base: str = BASELINE, base_dir: Optional[Path] = None) -> dict:
+    """The finished pieces beside ``base`` on the same seeds: a row per checkpoint and scope (``scope_comparison``),
+    with the checkpoint's steps (its run's ``run.json``, ``store.checkpoint_info``)."""
+    from . import store  # pylint: disable=import-outside-toplevel
+    from ._native import route_steps  # pylint: disable=import-outside-toplevel
+    steps_of = list(route_steps(plan.route))
+    base_files = find_files(base, base_dir if base_dir is not None else plan.chains_dir)
+    base_runs: dict = {}
+    rows = []
+    for piece in plan.pieces:
+        if not piece.done:
+            continue
+        scope = piece.judged.scope
+        if scope.file not in base_runs:
+            base_runs[scope.file] = (scope_runs(_read(*base_files[scope.file])[0], steps_of, scope)
+                                     if scope.file in base_files else None)
+        path, meta = find_files(piece.tag, plan.chains_dir)[scope.file]
+        runs, provenance = _read(path, meta)
+        snapshot = store.checkpoint_run_name(plan.parent, piece.iteration)
+        info = store.checkpoint_info(snapshot) or {}
+        rows.append({'iteration': piece.iteration, 'steps': info.get('steps'),
+                     'run': snapshot.identity if info else None,
+                     'checkpoint_sha1': info.get('checkpoint_sha1'), 'dungeon': piece.judged.dungeon,
+                     'start': piece.judged.start_kind, 'scope': scope.name, 'file': str(path),
+                     'team': _team_name(provenance),
+                     'numbers': scope_comparison(scope_runs(runs, steps_of, scope), base_runs[scope.file])})
+    return {'teacher': f"{plan.group}={plan.parent.identity}", 'route': plan.route, 'runs': plan.runs,
+            'tag': plan.tag, 'base': base, 'rows': rows,
+            'missing': [f"{p.tag}-{p.judged.scope.file}" for p in plan.pieces if not p.done]}
+
+
+def checkpoints_report(result: dict) -> str:
+    """``judge checkpoints``' table as Markdown: a row per checkpoint and start."""
+    goals = any(row['numbers'].get('arm_goals') for row in result['rows'])
+    lines = [f"# {result['teacher']}: numbered checkpoints beside {result['base']} ({result['route']}, "
+             f"{result['runs']} runs a chain)", '',
+             "Each checkpoint plays the teacher's slots (`+@GROUP=`, the rest of the base team as it is) on the same "
+             "seeds; rates are the runs that reached the scope's cut, ± their standard error; the difference is "
+             "paired by seed with the base's runs; hearts lost a run with the base's in brackets and the paired "
+             "difference; rooms: the share of runs that ended there (the base's in brackets).", '',
+             '| it | steps | dungeon | start | rate | base on these seeds | paired difference | hearts lost a run '
+             '(base); difference | rooms where most runs end (base) |' + (' goals a run (base) |' if goals else ''),
+             '|' + '---|' * (9 + goals)]
+    for row in result['rows']:
+        n = row['numbers']
+        arm = n['arm']
+        cells = [str(row['iteration']), '-' if row['steps'] is None else f"{row['steps'] / 1e6:.2f}M", row['dungeon'],
+                 'previous triforce' if row['start'] == 'leg' else 'entrance',
+                 f"{_pct(arm['rate'])} ± {100 * (arm['se'] or 0):.1f} of {arm['n']}",
+                 _pct(n['base_on_seeds']['rate']) if n.get('base') else 'no record', _diff(n.get('rate_diff')),
+                 _hearts(n), _ends(n)]
+        if goals:
+            cells.append(_goal_text(n))
+        lines.append('| ' + ' | '.join(cells) + ' |')
+    if result['missing']:
+        lines += ['', f"Not yet played ({len(result['missing'])}): {', '.join(result['missing'])}."]
+    elif not goals:
+        lines += ['', "The records carry no tracked goals (`goal_*`, round 40): none are shown."]
+    return '\n'.join(lines)
+
+
+def checkpoints_main(args) -> int:
+    """``triforce judge checkpoints``: with ``--plan`` the pieces and a queue command for each one not played;
+    ``--submit`` queues those (express, detached); otherwise the table of the pieces played, written beside the
+    chains (``<tag>-checkpoints.md`` / ``.json``) and, once every piece is in, filed in the store."""
+    import shlex  # pylint: disable=import-outside-toplevel
+    import subprocess  # pylint: disable=import-outside-toplevel
+    plan = checkpoints_plan(args.teacher, args.its, args.runs, args.dungeons, args.scopes, args.tag,
+                            args.chains_dir, args.team_base)
+    missing = [piece for piece in plan.pieces if not piece.done]
+    commands = [piece_command(plan, piece, args.agent, args.task, args.timeout) for piece in missing]
+    its = sorted({piece.iteration for piece in plan.pieces})
+    scopes = list(dict.fromkeys(piece.judged.scope.name for piece in plan.pieces))
+    print(f"# {plan.group}={plan.parent.identity}: checkpoints {', '.join(map(str, its))} on "
+          f"{', '.join(scopes)}, {plan.runs} runs a chain; tag {plan.tag}-it<NNNNNN>; chains in {plan.chains_dir}")
+    print(f"{len(plan.pieces) - len(missing)} of {len(plan.pieces)} chains played")
+    if args.plan or args.submit:
+        for command in commands:
+            print(shlex.join(command))
+            if args.submit:
+                subprocess.run(command, check=True)
+        if missing:
+            print(f"\nthen `triforce job wait UNIT...` and again without --plan: the table reads the chains played "
+                  f"(here or filed in the store) and lists the rest")
+        return 0
+    result = checkpoints_table(plan, args.base, args.base_dir)
+    text = checkpoints_report(result)
+    print('\n' + text)
+    markdown = plan.chains_dir / f"{plan.tag}-checkpoints.md"
+    numbers = plan.chains_dir / f"{plan.tag}-checkpoints.json"
+    from .events import write_json_atomic  # pylint: disable=import-outside-toplevel
+    plan.chains_dir.mkdir(parents=True, exist_ok=True)
+    markdown.write_text(text + '\n', encoding='utf-8')
+    write_json_atomic(numbers, result)
+    if missing:
+        print(f"\n{len(missing)} chains not played; queue them with --plan (or --submit); nothing filed yet")
+        return 0
+    from . import store  # pylint: disable=import-outside-toplevel
+    for path in (markdown, numbers):
+        print(f"filed {store.file_output(path, 'judge', name=path.name)}")
+    return 0
+
+
 def main(argv=None) -> int:
-    """``triforce judge plan|compare``."""
+    """``triforce judge plan|compare|checkpoints``."""
     parser = argparse.ArgumentParser(prog='triforce judge', description=__doc__.split('\n\n')[0])
     sub = parser.add_subparsers(dest='command', required=True)
     plan_parser = sub.add_parser('plan', help="the scopes a group's families play in (no run)")
@@ -408,8 +670,33 @@ def main(argv=None) -> int:
     cmp.add_argument('--route', default=None, help="default the measurement's recorded route")
     cmp.add_argument('--output', type=Path, default=None, help="also write the numbers as JSON")
     cmp.add_argument('--markdown', type=Path, default=None, help="also write the Markdown to this file")
+    ck = sub.add_parser('checkpoints', help="a teacher's numbered checkpoints judged small, one chain a checkpoint "
+                                            "and scope, in one table by iteration")
+    ck.add_argument('teacher', metavar='GROUP=FAMILY/RUN')
+    ck.add_argument('--its', default='all', metavar='114,228,...|all',
+                    help="the iterations (default all: every completely written numbered checkpoint)")
+    ck.add_argument('--dungeons', default=None, metavar='dN,...', help="the dungeons' scopes (default every one)")
+    ck.add_argument('--scopes', default=None, metavar='SCOPE,...', help="only these scopes (to-d3, d3, ...)")
+    ck.add_argument('--runs', type=int, required=True, help="runs a chain (seeds 0..N-1, the same for every one)")
+    ck.add_argument('--tag', default=None, help="the chains' prefix (default <family>-<run>-r<runs>)")
+    ck.add_argument('--chains-dir', type=Path, default=room_stats.CHAINS_DIR,
+                    help="where the chains are written and read (else the store's filed copies)")
+    ck.add_argument('--team-base', default=None, help="the team the teacher joins (eval-batch --base; default "
+                                                      "current)")
+    ck.add_argument('--base', default=BASELINE, help=f"the base measurement's tag (default {BASELINE})")
+    ck.add_argument('--base-dir', type=Path, default=None, help="where the base's files are (default the store)")
+    ck.add_argument('--plan', action='store_true', help="the pieces and a `triforce job run --express` command for "
+                                                       "each not played; run nothing")
+    ck.add_argument('--submit', action='store_true', help="queue those commands (express, detached)")
+    ck.add_argument('--agent', default=os.environ.get('TRIFORCE_AGENT') or 'AGENT', help="the jobs' --agent")
+    ck.add_argument('--task', default='judge-checkpoints', help="the jobs' --task")
+    ck.add_argument('--timeout', default='10m', help="each job's --timeout (the express place: 10m at most)")
     args = parser.parse_args(argv)
     try:
+        if args.command == 'checkpoints':
+            if args.runs < 1:
+                raise ValueError("--runs must be >= 1")
+            return checkpoints_main(args)
         if args.command == 'plan':
             from . import store  # pylint: disable=import-outside-toplevel
             known = store.groups()
@@ -421,7 +708,7 @@ def main(argv=None) -> int:
                 print('\n'.join(plan_text(teacher_plan(families, args.route or route))) + '\n')
             return 0
         result = compare(args.tag, args.base, args.chains_dir, args.base_dir, args.route)
-    except (ValueError, room_stats.RoomStatsError) as error:
+    except (ValueError, room_stats.RoomStatsError, *paths_errors()) as error:
         print(f"triforce judge: error: {error}", file=sys.stderr)
         return 2
     text = report(result)
@@ -432,6 +719,12 @@ def main(argv=None) -> int:
     if args.markdown:
         args.markdown.write_text(text + '\n', encoding='utf-8')
     return 0
+
+
+def paths_errors() -> tuple:
+    """The store's refusals a command reports as an error (a missing run, a run still open where it must not be)."""
+    from . import paths, store  # pylint: disable=import-outside-toplevel
+    return (paths.MissingError, store.StoreError)
 
 
 if __name__ == '__main__':
