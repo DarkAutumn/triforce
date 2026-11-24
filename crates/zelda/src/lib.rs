@@ -19,6 +19,7 @@ pub mod enums;
 pub mod executor;
 pub mod game;
 pub mod game_map;
+pub mod goals;
 pub mod hearts;
 pub mod ledger;
 pub mod linger;

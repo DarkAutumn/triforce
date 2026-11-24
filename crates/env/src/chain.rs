@@ -42,6 +42,7 @@ use zelda::linger::{LingerState, LingerStep, LingerSummary, LingerTracker, linge
 use zelda::objectives::{GameCompletion, Objective, ObjectiveKind, exit_is_correct, start_route};
 use zelda::power_on;
 use zelda::room::Wavefront;
+use zelda::goals::{GoalRecord, GoalTracker, step_goals};
 use zelda::supply::{DropNote, SupplyStats, SupplyTracker};
 use zelda::{Action, ActionKind, Change, LoadOptions, MapLocation, Nes, Session};
 
@@ -429,6 +430,9 @@ pub struct RoomRecord {
     /// 25).
     pub supply: SupplyStats,
     pub drops: Vec<DropNote>,
+    /// The route's goals for the visit: what its step expected and what happened (`zelda::goals`, round 40; JSON
+    /// `goal_<field>`).
+    pub goals: GoalRecord,
 }
 
 impl RoomRecord {
@@ -491,6 +495,7 @@ impl RoomRecord {
             maze_wrong_loops: 0,
             supply: SupplyStats::default(),
             drops: Vec::new(),
+            goals: GoalRecord::default(),
         }
     }
 
@@ -543,6 +548,9 @@ impl RoomRecord {
         }
         for (name, value) in self.clips.fields() {
             o.insert(format!("clip_{name}"), json!(value));
+        }
+        for (name, value) in self.goals.fields() {
+            o.insert(format!("goal_{name}"), json!(value));
         }
         m
     }
@@ -676,6 +684,8 @@ pub struct ChainEnv<N: Nes, St: StateStore<N::State>> {
     mask_rules: Vec<(ActionKind, &'static str)>,
     hearts: HeartTracker,
     supply: SupplyTracker,
+    /// The acting room's goals (`zelda::goals`, round 40).
+    goals: GoalTracker,
     linger: LingerTracker,
     /// The acting room's calm stretches (`zelda::aimless`) and the state the next decision is taken in.
     aimless: AimlessTracker,
@@ -738,6 +748,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             prev_objective: None,
             hearts: HeartTracker::default(),
             supply: SupplyTracker::default(),
+            goals: GoalTracker::default(),
             linger: LingerTracker::default(),
             aimless: AimlessTracker::default(),
             aimless_at: None,
@@ -842,6 +853,15 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
     fn carried(&self, state: &GameView) -> (i32, i32, i32) {
         let natural = |item| self.cheats.natural(item, state);
         (natural(CheatItem::Keys), natural(CheatItem::Bombs), self.cheats.route_granted(CheatItem::Bombs))
+    }
+
+    /// `objective` targets the bomb wall the route leaves through (`objective::wall_is_next`, for the ledger's
+    /// `wall_grant: objective`), judged with the acting family's reward (the default one before the run's first).
+    fn wall_is_next(&self, objective: &Objective, state: &GameView) -> bool {
+        match &self.current {
+            Some(acting) => objective::wall_is_next(objective, state, &acting.config.reward),
+            None => objective::wall_is_next(objective, state, &crate::config::RewardConfig::default()),
+        }
     }
 
     /// What a run continuing from the current state needs beyond the machine: the route step Link is
@@ -1070,6 +1090,8 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         self.clips_flipped = false;
         self.entry_flip = None;
         gc.set_clips_allowed(self.clips_allowed);
+        // The route's bag tests count Link's own bombs: the ledger's grants left out (round 40).
+        gc.set_cheated_bombs(self.cheats.outstanding(CheatItem::Bombs));
         let mut objective = gc.objectives(None, &state);
         if self.clips_flip_due(&gc, state.full_location()) {
             self.clips_flipped = true;
@@ -1078,6 +1100,10 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             gc.set_clips_allowed(false);
             objective = gc.objectives(None, &state);
         }
+        // Under `wall_grant: objective` the wall's cheated bomb comes once the objective is made (`zelda::cheats`);
+        // `advance` reads the session's state.
+        let wall_next = self.wall_is_next(&objective, &state);
+        self.cheats.follow_objective(&mut self.session, &gc, wall_next);
         self.objective = Some(objective);
         self.objectives = Some(gc);
         Ok(self.advance())
@@ -1155,6 +1181,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         if let Some(clips) = clips {
             gc.set_clips(clips);
         }
+        gc.set_cheated_bombs(self.cheats.outstanding(CheatItem::Bombs));
         let mut flip = self.pending_clips.take().filter(|&on| on != self.clips_allowed);
         if let Some(on) = flip {
             gc.set_clips_allowed(on);
@@ -1175,7 +1202,13 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         // A route step's grant on reaching it (routes.yaml `grant:`): the state carries on with it.
         let gc = self.objectives.as_ref().expect("run started");
         let state = self.cheats.follow_route(&mut self.session, gc).unwrap_or(state);
+        // Under `wall_grant: objective`: the wall's cheated bomb given or taken back by the new objective (judged with
+        // the acting family's reward: its `drops_first` can put a drop before the wall).
+        let wall_next = self.wall_is_next(&objective, &state);
+        let gc = self.objectives.as_ref().expect("run started");
+        let state = self.cheats.follow_objective(&mut self.session, gc, wall_next).unwrap_or(state);
         self.supply.update(&change, &state, &objective);
+        self.goals.update(&change, &state, &objective);
         self.linger.update(
             &LingerState::of(&change.previous, &prev_objective),
             &LingerState::of(&state, &objective),
@@ -1209,6 +1242,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         let record = result.rooms.last_mut().expect("room record");
         record.linger = Some(summary);
         record.aimless = self.aimless.summary();
+        record.goals = self.goals.record;
         record.blocks += change.blocks() as u32;
         record.bombs_used += cheats.used.bombs;
         record.bombs.update(&change);
@@ -1600,6 +1634,9 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             record.step = on_step;
             record.policy = (key != name).then(|| key.clone());
             record.clips_flips.extend(self.entry_flip.take().map(|on| (0, on)));
+            let expected = on_step.map_or_else(Default::default, |i| step_goals(&map, &self.route.name, i));
+            self.goals.reset(&state, expected, &objective);
+            record.goals = self.goals.record;
             result.rooms.push(record);
             self.hearts.reset(&HeartView::of(&state));
             self.supply.reset(&state);

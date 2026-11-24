@@ -28,8 +28,9 @@ use pyo3::prelude::*;
 /// `waypoint`, `retreat`, `treasure`: None to take the room's treasure, `skip`, `refuse`, `clear` or `if_bombs_below: N`,
 /// `bomb_reserve`: the step's routes.yaml `bomb_reserve` or None, `way`: 'clips' or 'plain' for a step of one way of
 /// a `stretch:` (None: both ways'), `stretch`: its name, `visit`: the route's visit to the room from that side,
-/// `zelda::game_map::route_visits`, which a later visit's state names spell). Both ways' steps are listed, numbered
-/// in file order.
+/// `zelda::game_map::route_visits`, which a later visit's state names spell, `carriers`: the step's `carriers:`,
+/// `goals`: what the step expects of a visit, `zelda::goals::step_goals`'s names). Both ways' steps are listed,
+/// numbered in file order.
 #[pyfunction]
 #[pyo3(signature = (route=zelda::game_map::DEFAULT_ROUTE))]
 fn route_steps<'py>(
@@ -44,10 +45,15 @@ fn route_steps<'py>(
         ))
     })?;
     let visits = &data.map.visits[route];
+    let map = data.map.route_map(route);
     steps
         .iter()
         .enumerate()
-        .map(|(i, s)| step_dict(py, route, i, s, visits[i]))
+        .map(|(i, s)| {
+            let d = step_dict(py, route, i, s, visits[i])?;
+            d.set_item("goals", zelda::goals::step_goals(&map, route, i).names())?;
+            Ok(d)
+        })
         .collect()
 }
 
@@ -79,6 +85,7 @@ fn step_dict<'py>(
     d.set_item("rupee_reserve", s.rupee_reserve)?;
     d.set_item("banked_kills", s.banked_kills)?;
     d.set_item("sword", s.sword)?;
+    d.set_item("carriers", s.carriers)?;
     d.set_item("way", s.way.map(|w| w.name()))?;
     d.set_item("stretch", s.stretch.as_deref())?;
     d.set_item("visit", visit)?;

@@ -723,7 +723,7 @@ impl GameplayCritic {
                 .previous
                 .items
                 .iter()
-                .filter(|it| it.timer >= 16 && crate::objective::wanted_drop(&change.previous, it.id))
+                .filter(|it| it.timer >= 16 && crate::objective::wanted_drop(&change.previous, c.prev_objective.own_bombs, it.id))
                 .count();
             if left > 0 {
                 rewards.add(Outcome::penalty("penalty-left-drop", -self.left_drop_penalty * left as f64));

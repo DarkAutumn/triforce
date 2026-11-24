@@ -535,6 +535,62 @@ Replays for watching: every arm's runs split by whether they reached Manhandla, 
 to the owner's review folder; the records are under the `r40-fireline` worktree's `target/r40f/`.
 
 
+## Carriers, the wall's grant and the goals (Carrier40, branch `r40-carrier`, for the fresh generation)
+
+Built on `r40-gen` for 2.0.1.0's trainings; today's team and `d2first` are untouched (both switches are `d3first`'s
+`bomb_rules:`; `carriers: false` is inert without them). Ideas: the owner's (the Dungeon 3 plan, "cheat-bombs [...]
+not show up unless the objective is to go into a wall that needs it", "start tracking goals"); the lead's (carrier
+targets "the exit and the nearest eligible carrier", the goal list, aimless frames in the stats); Carrier40 built
+them.
+
+### The rules as built
+
+- **Carrier targets** (`bomb_rules: {carrier_targets: true}`; `GameCompletion::objectives`): in a dungeon room the
+  route crosses (objective MOVE on a route step, not a cellar), every monster `zelda::bomb_windows::bomb_carriers`
+  names is a target beside the exit: the observation's `bomb_carrier` column is the same list (one function), open
+  while WorldKillCycle reads 0, 5 or 7 with no death pending (asm:Obj_EndMetastate advances it when a death sparkle
+  ends; asm:Drop_SetUpItem then reads column cycle + 1: bombs for group 2 at 1, 6, 8), no forced drop due (`$50` < 9,
+  `$627` ≠ 15), the bag (`$658`) below its size (`$67C`), an eligible carrier alive (a Vire only to the magic sword:
+  a crossing has no weapon bomb under `fights_only`). The wavefront leads to the nearest of exit and carriers. The
+  dropped bombs are then the targets as under a floor (`Objective::bag_drops`). When the kill is made the cycle moves
+  on, drop or not (a Red Darknut's table drop is `Random < $68`, 41%, asm:Drop_GroupRates), so after a kill that
+  dropped nothing no carrier remains at cycle 1 and the room is a plain crossing. A Gel (`$15`) moves the cycle, a
+  child Gel (`$14`) and a Red Keese do not: a Zol split by the wood sword and its Gels leave it as it was (seen in the
+  smoke: 13 kills in 3:0x6b, cycle unchanged). 3:0x5b's first pass: at cycle 0 the three Darknuts are targets; at 1
+  none. A step opts out with `carriers: false`: 3:0x69's two passes (its line, no hit; Route40 granted the edit of the
+  two block lines). **6:0x78's snipe fits the rule**: five Red Wizzrobes (`$24`, group 2), no treasure, its N exit no
+  shutter in game.yaml, so `d3first`'s step (E -> N, `drops: first`) is a crossing; at cycle 0/5/7 with room in the
+  bag the Wizzrobes become targets beside N, and `drops: first` already makes a dropped bomb pack the target. Not
+  checked in the emulator here: whether its ringleader trigger's chain of deaths (every death moving the cycle) lets
+  the first kill read the bomb column [INFERENCE: it does, the first death ends its sparkle first].
+- **The wall's grant follows the objective** (`bomb_rules: {wall_grant: objective}`; `CheatLedger::follow_objective`,
+  `env::objective::wall_is_next`): in a room whose bomb opens something the bomb need is 1 only while the objective,
+  as the env attaches it (drops that replace the exit included), targets the wall the route leaves through
+  (`route_bomb_targets`, the bomb spot among the wavefront's targets). The ledger hears the verdict after every
+  objective, in the specialist env and the chain: nothing on entering, the bomb when the wall turns next, taken back
+  uncounted if the objective turns away before it is laid. Dodongo's and Manhandla's `bomb_weapon` rooms keep theirs.
+- **Goals** (`zelda::goals`; architecture.md "Route goals"): what a step expects, from the route's own map
+  (`wrap`: the exit is game.yaml `wrap` or `wrap_in` — 0:0x75, and 0:0x76 through Route40's patch; `no_hit`: a
+  non-cave room with `path_costs` — 3:0x69 once Line40's line lands, 5:0x37, 0:0x17/0x1f/0x21/0x27; `carriers`: the
+  carrier targets apply and the room's data names a carrier type; every visit whose objective was never FIGHT is a
+  crossing, where no kill is expected but the carriers aimed at), and what happened (`goal_*`: wraps, fought, the
+  cycle on entering and the deaths that moved it, carriers aimed at on entering and at all, killed, their bombs
+  dropped and taken); `triforce stats show` a table by step, `compare` four paired per-run measures and both files'
+  tables. Hits a visit in 3:0x69 are the record's `hits` under `no_hit`. Plus aimless frames (`aimless_frames`) a
+  visit and a run in the step, room and family tables and paired in `compare` (the lead's addition for Switch40).
+
+### Tests
+
+`crates/env/tests/carriers.rs` (3:0x5b's first pass at cycle 0: the three Darknuts are targets beside N and the
+observation column names the same slots, then the cycle written to 1 empties both; at cycle 1; with a full bag),
+`crates/env/tests/wall_grant.rs` (at every decision one bomb exactly while `wall_is_next`: 7:0x1a with the candle to
+take and 3:0x5b's first pass get none while the room rule hands one over on entering; 7:0x1a out of the cellar has it
+at once; 3:0x5b's last pass with an empty bag gets none in the fight and one once the fight and treasure are done),
+`boss_bombs.rs` (unchanged: the weapon rooms on `d3first` now run under `wall_grant: objective`), unit tests
+`cheats::the_wall_grant_follows_the_objective` (given, taken back uncounted, laid and counted, own bombs untouched),
+`game_map::the_fresh_generation_switches_are_route_data`, `goals::a_step_expects_what_its_route_data_says`,
+`tests/test_run_stats.py::test_route_goals_by_step_per_run_and_compared` and `test_aimless_frames_a_visit_and_a_run`.
+
 ## 3:0x69 crossed by a line (Line40, branch `r40-line`)
 
 The owner (decisions 2026-11-23 "3:0x69 is crossed by a line"): "Going in the door, immediate east until you can't,
@@ -1250,6 +1306,150 @@ after every action but a MOVE, and the losses go from 159 to 3 and 51 to 8); and
 frames now neither count nor stall). The CLIP's frame was a wrong first guess (with it alone 0x3f still lost 159).
 Today's networks, not trained for the timing, lose 0x0b: they walk back into Level 5 before the whirlwind (`all`:
 5:0x64/0x65/0x66 lost 62 runs); with 2.0.0.14's whirlwind macro that loss is gone (v1 and v2 lose no run in Level 5).
+
+## The carriers on the merged generation, the last pass's wall first, Link's own bombs (Carrier40b, branch `r40-carrier2`)
+
+anthropic/claude-opus-5-5 (Carrier40b), continuing Carrier40's section above on `r40-gen` (35739cc0, Route40's route
+data) merged into `r40-carrier`. Ideas: the owner's bomb plan (decisions 2026-11-23: "We should leave 0x5b with 8
+bombs if all goes well, hit manhandla with 7 due to the 0x4c wall") and his ordering (decisions 2026-11-24 "Dungeon
+3's bombs": "Leave that room with 7 isn't a hard rule. 6 is fine. 7 is if we didn't drop to 4, and had a bomb to use
+on the wall THEN pick up the treasure bomb drop"); the lead's list (the ordering as one rule, own bombs in every bag
+test, the dungeon-only carriers written down); Carrier40b built them.
+
+### The merge
+
+One conflict (this file: both sections kept). One thing the merge broke: Route40's walk of the opening and Dungeon 3
+(`crates/zelda/tests/d3first_walks.rs`) ran out its 40,000 steps in 3:0x59's second visit (S -> E). The walk kills
+nothing and removes a room's monsters only while the objective is FIGHT; under `carrier_targets` a crossing at drop
+cycle 0 aims at the Red Darknuts too, and the walk walked at the nearest one for ever [INFERENCE: the cause read from
+the code; the fix makes the walk pass]. The walk now aims past a crossing's carriers (they stay alive, as its SETUP
+says), receives the wall's cheated bomb as the env gives it (`CheatLedger::follow_objective` on the env's
+`wall_is_next`, without drops) and tells the objective the cheated bombs in the bag. Its assertions are unchanged.
+
+**The two `tests/test_run_stats.py` failures** of Carrier40's job #704 (`FileNotFoundError: .../stats/0-d3.stats.json`,
+`no statistics for 0-theirs`; they passed alone): `tests/test_flags.py`'s `_join` joins a job with `job.Wrapper.join`,
+which names its job in its own process's environment (`os.environ['TRIFORCE_JOB_ID'] = '1'`, triforce/job.py), and
+nothing gave the session's job 0 back. The next test of the same xdist worker that registered statistics filed them
+as `1-d3`, `1-theirs` (the log of #704 shows `-> .../stats/1-theirs.stats.json`), so the store's `0-d3` was missing:
+a fault of test order, seen only when gw7 drew `test_flags.py` before `test_run_stats.py`. Fixed: `_join` sets the
+variable through `monkeypatch` first, so the test's end restores it.
+
+### The last pass's wall first (`bomb_rules: {wall_first_rooms: [3:0x5b]}`)
+
+Before, the route's `treasure_below: 8` decided on entering whether 3:0x5b's last pass (W -> E through its own bomb
+wall) was a fight: in with 8 it was a crossing, the wall took one, the room's four were never shown, and Link left with
+7 and met Manhandla with 6. Now one ordering rule, nothing forced (`GameCompletion::wall_first`, `wall_first_step`,
+`step_treasure`; a first version on this branch forced the room's clear, replaced after the owner's ruling):
+
+- on a step that leaves a listed room through one of its own bomb walls, while the wall is intact and taking the
+  room's four first would overflow the bag (Link's own bombs + 4 > the bag's size: 5 or more, a full bag too), the
+  room's bombs are no target, neither the treasure nor a fight for it: the wall comes first;
+- there the floor is judged on Link's own bombs at every decision, not once on entering, so after the wall's bomb the
+  four are wanted again and fought for (in with 8: 7 after the wall, the fight, the bombs, 8); with 4 or fewer the
+  order is today's (the fight, the bombs, the wall);
+- the loader refuses a listed room whose game.yaml treasure is not bombs or that no step leaves through a bomb wall,
+  and a room off the route (`game_map::the_last_pass_room_is_route_data`). `d2first` lists none.
+
+Played in the emulator (`specialist_env::the_owners_order_in_3_5b_wall_then_bombs_then_out`, darknut from
+`d3first_3_5bw_0`, each decision walked down the target observation, the fight done by RAM while the objective is
+FIGHT, the room's bombs then shown by the game where it puts them):
+
+| In with | Darknuts | Order of the objectives | Out with | Cheated |
+|---:|---|---|---:|---:|
+| 8 | alive | the wall, the fight, the bombs, out (before: the wall, out, with 7) | **8** | 0 |
+| 5 | alive | the wall, the fight, the bombs, out | **8** | 0 |
+| 4 | alive | the fight, the bombs, the wall, out | **7** | 0 |
+| 0 | alive | the fight (no bomb in the bag through it), the bombs, the wall by one of them, out | 3 | 0 |
+| 8 | dead, bombs lying | the wall, the bombs, out (round 38's order, unchanged) | 8 | 0 |
+| 4 | dead, bombs lying | the bombs, the wall, out (unchanged) | 7 | 0 |
+| 8 (`d2first`) | dead, bombs lying | the bombs, the wall, out (unchanged) | 7 | 0 |
+
+The route's ledger (`r40_route.py ledger`, its new table "Bombs after each step, by case"): with the first Darknut's
+drop (4 + 4 = 8 into 3:0x59, its reserve of 4 keeping them) the wall-first case leaves 0x5b with **8** and meets
+Manhandla with **7** (the owner's plan); the same run under the floor judged on entering left with 7 and met him with
+6; a run with no drop 7 and 6 either way. No bomb is cheated on the way in any case.
+
+### Link's own bombs in every bag test
+
+With `wall_grant: objective` a cheated wall bomb could sit in a bag Link had otherwise filled (granted at 0, then
+pickups): a bag of 7 of his own read 8, closed the carrier window and left drops and the room's bombs untaken. Now the
+cheat ledger's outstanding grants (`CheatLedger::outstanding`) are told to `GameCompletion::set_cheated_bombs` before
+every objective (the specialist env, the chain, the walk), and `Objective::own_bombs` is what every "is the bag full"
+test reads: the floor's decision on entering and its `{if_bombs_below: max}`, the clear's re-judging, the carrier
+targets and the observation's `bomb_carrier` column (`bomb_windows::carrier_window_possible` takes the own count),
+the dropped bombs wanted and made targets (`env::objective`), the critic's `penalty-left-drop`. The observation's
+`bombs` still reads the bag. Test: `env::objective::a_cheated_bomb_never_fills_the_bag` (a bag reading 8 with one
+cheated: the drop wanted, pulled toward and a target; 8 of his own: none of it).
+
+### The carriers stay in dungeons
+
+On purpose (routes.yaml's comment, docs/architecture.md): the overworld's carriers are group 2's Blue Octoroks, Blue
+Moblins and Blue Lynels; as targets they would steer Link into fights the route never asks for, and before Dungeon 3
+every such kill moves the drop cycle off the 0 that 3:0x5b's first Darknut needs (the owner: no kill before 0x5b).
+
+### The take-back of a granted wall bomb, played
+
+Not found in play here; the unit test `cheats::the_wall_grant_follows_the_objective` still carries it alone. When it
+can happen, from the rule: a room's wall grant is given only when the wall turns into the objective's target while
+Link holds no bomb of his own (the need is 1), and taken back only when the objective turns away in the room before
+the bomb is laid. Away from a wall that is already the target means a dropped item replacing the exit (under the
+floor any dropped bombs below the maximum, so any bomb drop at 0 of his own; a heart or fairy with `drops_first`): a
+fight, a treasure or a block can't start then (the room's monsters and shutters don't change while he walks to the
+wall, and a treasure shows only when a fight ends). So the played case is a monster killed, with a drop, while Link
+walks to a wall with no bomb of his own. Dungeon 3 hardly offers it: 3:0x5b's last pass reaches its wall after the
+room's four bombs (or, at 8, with his own), so 3:0x4c is reached with at least 3 (3:0x5c's reserve of 6 keeps them);
+only a wall bomb missed and laid again could empty the bag first. Dungeon 7 should offer it often: 7:0x1a out of the candle's cellar (the E wall
+the target at once, its Goriyas alive) and 0x69 and 0x19, with runs bringing 0.21 bombs (round 37). Finding it needs
+a `d7` chain with `--replays` and the replays' EDITS read for a fall of `$658` with no BOMB pressed [not done].
+
+### The paired chain: Dungeon 3, the three switches on against off
+
+Today's team (the store's 2.0.0.15), `--from 3_7cs_0 --stop-at step:24`, seeds 0-199, `--act model`, clips on, 25-run
+pieces in the express place (50-run pieces overran its 10 minutes on a loaded machine; one 25-run piece of the off
+arm too, played again as 13 + 12). On: 41eea5f0 (worktree `triforce-r40-carrier2-on`); off: the same code with
+`carrier_targets`, `wall_grant: objective` and `wall_first_rooms` taken out of routes.yaml (branch
+`r40-carrier2-off2`, 7bdf844b). `triforce manifest diff` off -> on: `code` (branch, commit, describe, module built
+and sha1: the arms' commits differ only by the three routes.yaml lines), `data.game_data` (those lines), and each
+piece's `first_seed`, `output`, job id and subtask; nothing else. Today's networks were never trained for these
+rules; the point is that nothing breaks.
+
+| `triforce stats compare` (200 pairs) | off | on | paired difference |
+|---|---:|---:|---|
+| the rate (to the D3 triforce) | 20.5% | 15.0% | -5.5 ± 2.7 (**worse**, just past 2 SE) |
+| hearts lost a run | 3.10 | 3.17 | +0.07 ± 0.05 |
+| beams held: frames holding them | 1109 | 977 | -132 ± 53 (worse) |
+| shots that hit a run | 2.94 | 2.75 | -0.20 ± 0.08 (worse) |
+| kills from range a run | 1.52 | 1.47 | -0.06 ± 0.05 |
+| time to enter 3:0x3d (21 pairs) | | | -10 ± 66 frames |
+
+Endings: died in 3:0x59 52 / 55, 3:0x69 33 / 37, 3:0x5b 18 / 17, 3:0x0f 15 / 16, Manhandla 16 / 14, the triforce
+41 / 30; one run stuck at the 2,000-step cap in 3:0x5b, in the off arm (seed 46). No error and no new kind of ending.
+Cheated: no key; bombs only in Manhandla's room (his `bomb_weapon` need), 17 in 6 visits off, 10 in 5 on; no wall bomb
+cheated in either arm. Bombs at Manhandla's door (runs reaching him): off 4:1 5:5 6:41
+7:10 (57); on 4:1 5:4 6:25 7:13 8:1 (44). The goals table: the drop cycle on entering 3:0x5b's first pass read 4 in
+every run of both arms (the start states held the explorer's kills; States40's patched states, above, came after it), so
+the first pass's carriers never opened; carriers were aimed at on the last pass (3 visits, 1 killed) and in 3:0x5c
+(6), none in the off arm.
+
+### The first pass's carriers on States40's states (the on arm, 25 runs)
+
+The same on arm after `r40-gencode` (5f5647c9: States40's patched start states, Line40b's 3:0x69 line, main at
+2.0.0.16) was merged (478c66ad), `--from 3_7cs_0 --stop-at step:24`, seeds 0-24 (the piece of seeds 25-49 overran the
+express place's 10 minutes and its re-run in three smaller pieces waited behind 28 jobs; stopped). The owner's plan
+end to end, first sight, on networks never trained for it:
+
+- the drop cycle on entering 3:0x5b's first pass: **0 in 25 of 25** (no kill on the way: 3:0x7c, 0x7b, 0x6b crossed
+  with 0 kills a visit);
+- carriers aimed at on that pass: in 24 of 25 visits (the Darknuts as targets beside N); **killed: 0**; bombs
+  dropped and taken: 0;
+- **23 of 25 runs died there**: today's darknut network walks at the three Red Darknuts with the wood sword and loses
+  (0 kills, 1-3 hits a death). It came in with little: hearts on entering 3:0x5b 0.5 (6 runs), 1.0 (1), 1.5 (4), 2.0
+  (1), 2.5 (7), 3.0 (6), the hearts lost in 3:0x7b and 3:0x6b crossed among the Zols;
+- the 2 runs that left (one crossed in 5 decisions, one killed all three in 930 decisions, no drop) entered 3:0x59
+  from N with 4 bombs each (0x4a's four; 3 and 4 on the way back from the raft), and both took the triforce.
+
+So the targets and the cycle work as built. The first pass is a fight today's network loses; it is the training
+(half the resets at cycle 0, half at 1, decisions 2026-11-23) that must teach the kill of one Darknut and the leave.
 
 ## The generation's base made green (Gen40fix, branch `r40-genfix`)
 

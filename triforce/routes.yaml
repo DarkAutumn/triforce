@@ -34,6 +34,8 @@
 # `drops: first` (round 31): on this step the family's `reward.drops_first` is on: once the objective is no fight, a
 # wanted drop lying in the room (bombs below Link's maximum, a heart or fairy below full health) replaces the exit as
 # the target until taken or gone (6:0x78, the ringleader room: a bomb pack its Wizzrobes drop is taken on the way).
+# `carriers: false` (round 40): where the route's `bomb_rules: {carrier_targets: true}` applies, this step aims at no
+# bomb carrier (3:0x69's line); inert on a route without the switch.
 # Round 31: leaving a level by its entrance room's S door is a step once (1:0x73 `exit: S`, game.yaml's one one-way
 # level exit): the next step is the overworld room entered from `cave`, left `cave` back into the level.
 # Round 29 (the leg to Dungeon 9, Dungeon 9, Ganon, Zelda): exit `end` = the game ends in this room (9:0x32: the
@@ -623,11 +625,36 @@ d3first:
 # `required` (a `free` family: the wall the step leaves through and the 10th kill's bomb; `tenth`, `required` and
 # `never` place no weapon bomb already).  In a fight the family's mode and the reserve stand as before, but in a
 # `wall_only` room.  The overworld is untouched.
+# Round 40 (the fresh generation, 2.0.1.0; decisions 2026-11-23 "The fresh generation's Dungeon 3", backlog "A cheated
+# wall bomb appears only when the wall is the objective"; round40.md "Carriers, the wall's grant and the goals"):
+# `carrier_targets: true`: in a dungeon room the route crosses (its objective no fight, no treasure), every monster
+# the observation's `bomb_carrier` names (its death may drop bombs now: WorldKillCycle at 0, 5 or 7, Link's own bombs
+# below the bag's size, no forced drop due) is a target beside the exit, and its dropped bombs are taken as under the
+# floor; once none is left (the cycle moved on) the room is a plain crossing.  A step opts out with `carriers: false`.
+# 3:0x5b's first pass: at cycle 0 kill one Darknut, take its bombs (41% drop), leave; at 1 cross.  Dungeon rooms
+# only, on purpose: on the overworld the carriers (group 2's Blue Octoroks, Blue Moblins, Blue Lynels) would steer
+# Link into fights the route never asks for, and before Dungeon 3 every such kill moves the drop cycle off the 0
+# that 3:0x5b's first Darknut needs (the owner: no kill before 0x5b).
+# `wall_grant: objective` (default `room`): a room's cheated wall bomb is given only while the objective's target is
+# the bomb wall or rock wall the route leaves through (not a fight, a treasure, a drop, another exit), and taken back
+# if the objective turns away before it is laid; the `bomb_weapon` rooms (2:0x0e, 3:0x4d) keep theirs for the fight.
+# Every "is the bag full" test of the rules (the floor, the carriers, the drops wanted) counts Link's own bombs, never
+# a cheated one in the bag.
+# `wall_first_rooms: [{level, room}, ...]` (the owner's ordering, decisions 2026-11-24 "Dungeon 3's bombs": "Leave
+# that room with 7 isn't a hard rule. 6 is fine. 7 is if we didn't drop to 4, and had a bomb to use on the wall THEN
+# pick up the treasure bomb drop"): on a step leaving the room through its own bomb wall, the wall is bombed before the
+# room's four bombs are a target whenever taking them first would overflow the bag (Link's own bombs + 4 > 8: 5 or
+# more, a full bag too); the floor is judged on his own bombs as they are, so after the wall's bomb the four are fought
+# for and taken.  Otherwise the order as before.  3:0x5b's last pass (W -> E): in with 5 to 8, the wall, the fight,
+# the bombs, out with 8; in with 4, the fight, the bombs, the wall, out with 7.
 bomb_rules:
   d3first:
     fights_only: true
     wall_only: [{level: 3, room: '0x5b'}]
     treasure_below: 8
+    carrier_targets: true
+    wall_grant: objective
+    wall_first_rooms: [{level: 3, room: '0x5b'}]
     # 7:0x1b both ways (round 37, d7 from 7_79s_0, 1000 runs, seeds 0-999; runs bring 0.21 bombs, so nearly every
     # visit is a fight either way): the blanket floor (as landed) 12.6% to the triforce, 701 of 733 entering 0x1b
     # lost per 1000, hearts 3.59 in, 1.30 out, 4.16 bombs out of it; with the line below 12.7%, 685, 3.59 / 1.29, 3.99;
@@ -708,11 +735,13 @@ blocks:
   - {level: 1, room: '0x36', specialist: stalfos-keese-gel, entry: W, exit: triforce}
   # Dungeon 3 from 0x59 entered from N (0x49's S door) to the triforce: the raft cellar and the way back E by 0x5a,
   # 0x5b's last pass and its E wall, 0x4c's E wall, Manhandla.  0x59's first visit (the fight) is each route's own
-  # step before the block (d3first's sets the reserve 0 for it).
+  # step before the block (d3first's sets the reserve 0 for it).  0x69 is crossed by a line without a hit (decisions
+  # 2026-11-23 "3:0x69 is crossed by a line"): its Darknuts are never carrier targets (`carriers: false`; inert on a
+  # route without `carrier_targets`).
   dungeon-3:
-  - {level: 3, room: '0x69', specialist: darknut, entry: N, exit: cave, treasure: skip}
+  - {level: 3, room: '0x69', specialist: darknut, entry: N, exit: cave, treasure: skip, carriers: false}
   - {level: 3, room: '0x0f', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: raft}
-  - {level: 3, room: '0x69', specialist: darknut, entry: cave, exit: N, treasure: skip}
+  - {level: 3, room: '0x69', specialist: darknut, entry: cave, exit: N, treasure: skip, carriers: false}
   - {level: 3, room: '0x59', specialist: darknut, entry: S, exit: E}
   - {level: 3, room: '0x5a', specialist: trap-room, entry: W, exit: E}
   - {level: 3, room: '0x5b', specialist: darknut, entry: W, exit: E, bomb_reserve: 0}

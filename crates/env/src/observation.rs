@@ -1000,21 +1000,19 @@ pub fn threat_block(
 }
 
 /// `entity_threat`'s `bomb_carrier` per observation slot: the monsters whose death may drop bombs now, by the owner's
-/// Metric B, so the metric and the flag are one definition: while `zelda::bomb_windows::bomb_carrier_window` is open,
-/// each monster `is_bomb_carrier` says is one. Link's own bombs are the bag (`state.bombs()`: the cheated wall bombs
-/// are not told apart here, as the observation's `bombs` never did), the bomb rule is the mask's BOMB, and every
-/// monster must die when the objective is FIGHT. RAM object slot `e.index` (1-11) is observation slot `e.index - 1`.
+/// Metric B, so the metric and the flag are one definition (`zelda::bomb_windows::bomb_carriers`: while
+/// `bomb_carrier_window` is open, each monster `is_bomb_carrier` says is one; the route's carrier targets are the same
+/// list). Link's own bombs are the objective's (`Objective::own_bombs`: the bag less the cheated bombs in it, round
+/// 40, so a cheated wall bomb never closes the window; the observation's `bombs` still reads the bag), the bomb rule is
+/// the mask's BOMB, and every monster must die when the objective is FIGHT. RAM object slot `e.index` (1-11) is
+/// observation slot `e.index - 1`.
 fn bomb_carriers(state: &GameView, objective: &Objective, mask: &ActionMask) -> [bool; NUM_ENTITY_SLOTS] {
     let mut out = [false; NUM_ENTITY_SLOTS];
-    let own = state.bombs();
     let bomb_rule = mask.kind[ActionKind::Bomb.index()];
     let kill_all = objective.kind == ObjectiveKind::Fight;
-    if !zelda::bomb_windows::bomb_carrier_window(state, own, bomb_rule, kill_all) {
-        return out;
-    }
-    for e in &state.enemies {
+    for e in zelda::bomb_windows::bomb_carriers(state, objective.own_bombs, bomb_rule, kill_all) {
         let slot = e.index as usize;
-        if (1..=TREASURE_SLOT).contains(&slot) && zelda::bomb_windows::is_bomb_carrier(state, e, own, bomb_rule) {
+        if (1..=TREASURE_SLOT).contains(&slot) {
             out[slot - 1] = true;
         }
     }
@@ -1860,7 +1858,8 @@ mod tests {
         GameView::new(ram, 0, false, MAP.clone())
     }
 
-    fn none() -> Objective {
+    /// No objective; no cheat ledger, so the bag is Link's own.
+    fn none(state: &GameView) -> Objective {
         Objective {
             kind: ObjectiveKind::None,
             targets: Default::default(),
@@ -1871,6 +1870,7 @@ mod tests {
             treasure_refused: false,
             drops_first: false,
             bag_drops: false,
+            own_bombs: state.bombs(),
             labels: Vec::new(),
         }
     }
@@ -1880,9 +1880,12 @@ mod tests {
         let mask = ActionMask::default();
         rams.iter()
             .enumerate()
-            .map(|(i, ram)| match i {
-                0 => builder.reset(&view(ram), &none(), None, &mask),
-                _ => builder.build_state(&view(ram), &none(), None, &mask, None, 4, None, false),
+            .map(|(i, ram)| {
+                let state = view(ram);
+                match i {
+                    0 => builder.reset(&state, &none(&state), None, &mask),
+                    _ => builder.build_state(&state, &none(&state), None, &mask, None, 4, None, false),
+                }
             })
             .collect()
     }
@@ -1991,7 +1994,8 @@ mod tests {
         let link_of = |ram: &[u8; RAM_SIZE], reserve: u8, mask: &ActionMask| {
             let mut builder = ObservationBuilder::new(false, false);
             builder.rupee_reserve = reserve;
-            let v = builder.reset(&view(ram), &none(), None, mask).link;
+            let state = view(ram);
+            let v = builder.reset(&state, &none(&state), None, mask).link;
             [l::SWORD_BLOCKED, l::SWORD_BLOCKED_TIME, l::ARROW_USABLE, l::RUPEE_RESERVE, l::RUPEES_SPARE, l::RUPEES_FEW]
                 .map(|i| v[i])
         };
