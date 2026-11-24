@@ -257,16 +257,17 @@ def chain_options() -> frozenset:
     return frozenset(option for option in ('--clips', '--events') if option in text)
 
 
-def announce_chain(runs: int, name: str, route: str = ROUTE):
+def announce_chain(runs: int, parallel: int, power_on: bool, name: str, route: str = ROUTE):
     """The chain's work for the queue (``jobs.announce``: the wrapper's dry call ends here)."""
     sys.path.insert(0, str(ROOT))
     from triforce.jobs import announce, work  # pylint: disable=import-outside-toplevel
-    from triforce.runner import steps_played  # pylint: disable=import-outside-toplevel
-    announce('chain', work(chain_steps=runs * steps_played(route)), name)
+    from triforce.runner import chain_entry, steps_played  # pylint: disable=import-outside-toplevel
+    announce('chain', work(chain_steps=runs * steps_played(route),
+                           chains=[chain_entry(route, runs, parallel, power_on=power_on)]), name)
 
 
 def run(args) -> int:
-    announce_chain(args.runs, 'full-runs')
+    announce_chain(args.runs, args.parallel, bool(args.power_on), 'full-runs')
     out = Path(args.out)
     (out / 'replays').mkdir(parents=True, exist_ok=True)
     command = chain_command(out, args.runs, args.first_seed, args.parallel, args.models_dir)
@@ -306,7 +307,7 @@ def runs250(args) -> int:
         print(f"{out / 'runs.jsonl'} exists; `full_runs.py stats {out}` reports it, or choose a new --out",
               file=sys.stderr)
         return 2
-    announce_chain(args.runs, 'runs250', args.route)
+    announce_chain(args.runs, args.parallel, True, 'runs250', args.route)
     (out / 'replays').mkdir(parents=True, exist_ok=True)
     models = freeze_models(Path(args.models_dir).resolve(), out / 'models')
     from triforce import _native  # pylint: disable=import-outside-toplevel

@@ -69,7 +69,7 @@ def test_the_screen_ranks_the_checkpoints_the_confirmation_plays_fresh_seeds_and
     (plan,) = _plans(tmp_path / 'logs')            # one job, one group in the training GUI
     assert plan['kind'] == 'eval-batch' and plan['status'] == 'completed'
     # Its estimate counts the 7 chains' route steps (2 runs each, one step from the segment state to step 25).
-    assert plan['work'] == {'chain_steps': 7 * 2}
+    assert plan['work']['chain_steps'] == 7 * 2 and len(plan['work']['chains']) == 7
     assert [run['name'] for run in plan['runs']] == ['screen-it000001', 'screen-it000002', 'screen-last',
                                                      'screen-promoted', 'confirm-top1', 'confirm-last',
                                                      'confirm-promoted']
