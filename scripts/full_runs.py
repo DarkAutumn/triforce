@@ -303,6 +303,19 @@ def freeze_models(source: Path, target: Path) -> Path:
     return target
 
 
+def record_docs(args, out: Path) -> Path:
+    """Where ``runs250`` writes the version's record: ``--docs`` when given; else ``docs/runs250/`` only for the full
+    measure (``RUNS250`` runs from seed 0); a smoke (fewer runs, another first seed) writes it beside ``--out``, so it
+    never replaces the committed record."""
+    if args.docs is not None:
+        return Path(args.docs)
+    if args.runs == RUNS250 and args.first_seed == 0:
+        return DOCS
+    print(f"runs250: {args.runs} runs from seed {args.first_seed} is not the full measure ({RUNS250} from seed 0): "
+          f"its record goes beside --out ({out}), not to {DOCS} (pass --docs to choose)", file=sys.stderr)
+    return out
+
+
 def runs250(args) -> int:
     out = Path(args.out)
     if (out / 'runs.jsonl').exists():
@@ -338,7 +351,7 @@ def runs250(args) -> int:
                                                  'commit': commit, 'chain_options': sorted(accepted)}) + '\n')
     if code not in (0, 1):
         return code
-    stats(out, args.team, Path(args.docs), archive=not args.no_archive)
+    stats(out, args.team, record_docs(args, out), archive=not args.no_archive)
     if team is not None:
         file_runs250(out, team)
     return 0
@@ -761,7 +774,9 @@ def main(argv=None) -> int:
                             "when this checkout has no models folder); its records are filed by the job")
     p_250.add_argument('--team', default=None, help="a name for a team other than main's (the record's file name)")
     p_250.add_argument('--out', default=str(ROOT / 'target' / 'runs250' / time.strftime('%y%m%d-%H%M%S')))
-    p_250.add_argument('--docs', default=str(DOCS), help="where the long-term record goes (default docs/runs250)")
+    p_250.add_argument('--docs', default=None,
+                       help="where the long-term record goes (default docs/runs250 for the full measure: 250 runs "
+                            "from seed 0; a smoke's goes beside --out)")
     p_250.add_argument('--no-archive', action='store_true', help="don't archive the kept replays to the backup")
     p_stats = sub.add_parser('stats', help="the runs-250 record and kept replays of a runs250 folder")
     p_stats.add_argument('out')

@@ -191,3 +191,14 @@ def test_an_old_versions_runs_read_with_its_own_route(tmp_path):
     record = full_runs.read_runs(tmp_path)[0]
     assert [r['step'] for r in record['rooms']] == [0, 1, 1, 2] and record['rooms'][0]['step_derived']
     assert full_runs.score(record, route)['triforces'] == [2] and full_runs.score(record, route)['furthest_step'] == 2
+
+
+def test_only_the_full_measure_writes_the_versions_record_under_docs(tmp_path):
+    from types import SimpleNamespace
+    full = SimpleNamespace(runs=full_runs.RUNS250, first_seed=0, docs=None)
+    assert full_runs.record_docs(full, tmp_path) == full_runs.DOCS
+    for smoke in (SimpleNamespace(runs=5, first_seed=0, docs=None),
+                  SimpleNamespace(runs=full_runs.RUNS250, first_seed=250, docs=None)):
+        assert full_runs.record_docs(smoke, tmp_path) == tmp_path
+    chosen = SimpleNamespace(runs=5, first_seed=0, docs=str(tmp_path / 'docs'))
+    assert full_runs.record_docs(chosen, tmp_path) == tmp_path / 'docs'
