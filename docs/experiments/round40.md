@@ -2713,3 +2713,115 @@ track's first differences, the track's value -> today's reset's).
 | patra | 9_61e | none | none | none | untracked `9_61e_[0-9]` |
 | ganon | 9_32s | none | none | none | untracked `9_32s_[0-9]` |
 | ganon | 9_42s | none | none | none | untracked `9_42s_[0-9]` |
+
+## The lab trainer for the generation's teachers (Trainer41, branch `r40-trainer`)
+
+**The ask** (the lead, from GroupScout's map of the training path): the lab trainer (`python -m triforce.lab.train`)
+fit to train the generation's teachers: named groups, a recorded recipe that compares and repeats, a run that can be
+resumed, refusals for the silent faults, and of the single-task trainer's extras only what a from-scratch family
+needed. The pins (from scratch, `hitnet` with tokens `type, features, rel, threat, chase`, `feed`, the room identity,
+`hidden_dim` 256, the hit head as an auxiliary target with look-ahead, `obs.threat` and `obs.chase` on, `d3first`'s
+states only) are the lead's. `docs/lab.md` "Groups of families", "The recipe on record", "Refusals", "Resume" have
+how each works; this is what was built and what it showed.
+
+### What was built
+
+- **Groups as data**: `triforce/groups.yaml` (route `d3first`; `overworld` 10 families, `walkers` 10, `others` 5,
+  `rooms` 2, and the seven bosses one teacher each), `lab.groups` (load and check), `--group NAME` (its members as
+  `--families`, `--state-route d3first`). `tests/test_lab_groups.py`: the teachers are the lead's lists, every family
+  of `_native.route_steps('d3first')` (34) is in exactly one, every member's task loads, with and without
+  `--state-route d3first`.
+- **A fault found by the lead and fixed**: under `--state-route`, `lab.collect.route_only` rebuilt the curriculum block
+  from `enabled` and its link folder alone, so a task's `curriculum.untracked` was lost and zol@d3first (eleven
+  declared states) was refused. It now keeps every curriculum setting; its link folder is kept exact (a track gone
+  from the source is unlinked, a link to an earlier snapshot pointed again).
+- **The recipe on record**: `lab.recipe.build` writes a manifest of kind `lab-train` into `run.json` before training
+  (the group, each task by `manifest.task`, each task's data, the demonstrations with their groups, the network's
+  architecture, settings and the keys it reads, the teachers, a new `training` part with the PPO, auxiliary,
+  look-ahead, teacher and sampling settings, the seeds). `--same-recipe-as RUN --except KEY,...` as in `triforce
+  train`. `triforce/manifest.py`: the `training` group in `manifest diff`, a store run named `NAME/RUN`, a folder of
+  track links hashed through the links (it hashed nothing), the set name and `--resume` among a run's own fields.
+- **Refusals** (exit 2, each saying what to change; `lab.recipe`, `tests/test_lab_recipe.py`). Their messages on
+  today's files (Nov 24, the task files as on `r40-gen`):
+  - `--families zol` without a route: "zol: the task names no state_routes and the run no --state-route, so it would
+    draw every route's states, d2first's included; pass --state-route d3first (--group sets it), give the task
+    state_routes, or pass --all-routes to train on every route's states".
+  - `--group others`: "wizzrobe@d3first (like-like), lanmola@d3first (moldorm), patra@d3first (moldorm): the task
+    has a warm_start, which the lab never loads (one network for every task: --load names its start) and the
+    generation trains from scratch; set the task's warm_start to null, or pass --allow-warm-start to train without it".
+  - darknut with the switches on (an experiment yaml) beside zol@d3first: "the tasks disagree on the observation, and
+    one network reads one observation: set each switch alike in every task (the generation: obs.threat and obs.chase
+    true) / obs.chase: True in darknut@d3first; False in zol@d3first / obs.threat: True in darknut@d3first; False in
+    zol@d3first".
+  - `--group rooms` with the generation's tokens: "the network (hitnet) reads entity_threat, which obs.threat fills,
+    and obs.threat is off in the tasks (equipment-room@d3first, trap-room@d3first): it would read zeros; turn
+    obs.threat on in every task, or leave the 'threat' token group out of --arch-config". The other way, boss-gleeok
+    with the switches on and today's network: "obs.threat is on in the tasks and the network (zelda) reads none of
+    entity_threat: train a network that reads them (--arch hitnet with the 'threat' token group in --arch-config
+    tokens), or turn obs.threat off in every task".
+  - darknut with the switches on and the generation's tokens: "demonstrations the network cannot learn from as
+    recorded (the cloning term runs it on their rows): record them again with the tasks' observation switches, or
+    leave the tasks' files out with --no-task-demos", then for each of the nine files "…/r40-darknut-59-b4.npz: no
+    chase, entity_chase" (schema 8 recordings; their `entity_threat` is all zeros as well, which the check names
+    when the key is there: "entity_threat all zeros (recorded with obs.threat off)").
+- **Resume**: `--resume NAME/RUN` with the same command line; SIGTERM saves and exits 130 (the lab had no handler
+  before its training block, and none that waited out a TensorBoard write); `run.json` is written before training,
+  so a store run stopped anywhere stays open and resumes; the need sampler's outcomes ride in the checkpoint.
+- **The lab's existing tests** train ow-start from the bare state `start` with no route: they now pass `--all-routes`
+  (a comment says why); nothing else in them moved.
+
+### What the single-task trainer has that the lab lacks (point 5)
+
+Read from each run's `run.json` (`args`): today's team 2.0.0.15's `@d3first` slots (their last training), zol's
+lineage, and the three fresh zol runs (`/backup/triforce/models/runs/zol/r40-fresh-zol-s40*`; they are in no store).
+
+| | today's `@d3first` runs | zol's lineage (`r71-e` from scratch … `r34d3-zol-s341`) | fresh zol s401-s403 | built |
+|---|---|---|---|---|
+| SIL (`--sil-coeff`) | 0.1 in every continuation (aquamentus, digdogger, leever, lynel and its late run, moblin, octorok, tektite, zora, pols-voice, wallmaster, like-like late, moldorm); 0 in ow-start `r38t-start-fresh2`; goriya `r38ppo-aux-s38` is a lab run; the eight `r38head-*` networks are combined `hitshift`s with no `run.json` (their policies' lineages used 0.1) | 0.1 in every run, the first from scratch included | **0** | no |
+| best-of-N | `best_of_n` 0 everywhere (the `best_coeff 0.2` / `best_every 20` the zol section quotes are the unused defaults) | 0 | 0 | no |
+| entropy anneal | 0 everywhere | 0 | 0 | no |
+| shaping anneal | 0 everywhere | 0 | 0 | no |
+| hearts and bombs plateau stops | in the arguments (0.02 / 0.05) but `--stop-success 1.01` or none: never consulted | `r71-e` stopped at 0.99 (153 iterations); later runs 1.01 | 1.01 (fixed budgets) | no |
+| PLR | off everywhere | off | off | no |
+
+The fresh zol check trained without any of them and its first seed came within noise of the promoted policy on `d3`
+(s401 −0.7 ± 2.1); the three seeds' mean gap (−3.8) has the candidates that section names (4M more steps, the
+planner's demonstrations, the rooms the task no longer draws), none of them these. So none was built. Why each
+stays out: SIL is the one difference between the lineage's start and the fresh runs, but the check reached the policy
+without it (an arm `--sil-coeff 0.1` against none is the experiment if the generation falls short); best-of-N, the
+anneals and PLR were never used by any network of today's team and failed against a control in round 16
+(better-play-reply); the plateau rules only act through an early stop, and the generation's teachers train a fixed
+budget chosen on their chains.
+
+### The proof, end to end, small (point 6; the store, through the queue)
+
+- `--group rooms` from scratch, seeds 1 and 2, 8 iterations of 4,096 decisions, 8 envs (4 a family), `hitnet` with
+  tokens `type, features, rel` and `feed` (the task files have the switches off, so the generation's tokens are
+  refused, above), `--aux hit=hit:0.5 --try-others 4:0.25`, numbered checkpoints every 2: store runs
+  `t41-rooms/s1` and `s2`. Seed 1 was stopped by `systemctl --user stop` of its queue unit after iteration 4 (job
+  #1170: "interrupted", exit 130, the run open with `ckpt.pt` at iteration 4 and checkpoints `it000002`, `it000004`).
+  Its first `--resume` was refused: "this run differs in 2 more than --except (nothing) allows … code.describe:
+  …-dirty (this run) vs …; code.dirty: ["docs/lab.md"] (this run) vs []" (this section's docs were being written
+  in the worktree); with `--except code.describe,code.dirty` it resumed at iteration 4 (16,384 steps) and ended at
+  iteration 8, 32,768 steps, sealed (job #1174), as seed 2 ended straight through (32,768 steps). `run.json`
+  `resumes` records the attempt (iteration 4, the previous summary, pools seeded 4,000,013).
+- `triforce manifest diff t41-rooms/s1 t41-rooms/s2`: `arguments.run_id`, `arguments.seed`, `seeds.*`, `job.*`, and
+  `code.describe` / `code.dirty` (seed 2 started after the docs edit began; the same commit 625f2b4c).
+- boss-gleeok from scratch with the generation's layout (an experiment yaml in `target/t41/` turning `obs.threat` and
+  `obs.chase` on over `specialists/d3first/boss-gleeok.yaml`; `--group boss-gleeok` itself is refused until the task
+  files turn them on), tokens `type, features, rel, threat, chase`, `feed`, 1,608,836 parameters, 6 iterations, 8
+  envs: `t41-gleeok/s1`, sealed.
+
+**A first timing** (a machine with other jobs: two of the lead's 2.5-hour zol trainings and an explorer ran beside
+them; decisions a second, `--try-others 4:0.25` included): boss-gleeok, generation layout, 8 envs: 390 a second over
+the whole run (start-up included), about 515 in its last iteration; `--group rooms`, 8 envs: 456 over the run, about
+480 in its last iterations. At about 480 a second, 4M decisions are about 2.3 hours a seed (an estimate from 30,000
+decisions).
+
+### Not done, not tested
+
+- No run with the generation's tokens on `--group` itself: the task files turn no switch on yet (Tasks41's).
+- Resumed weights are not compared with a straight run's (the resumed pools draw fresh episodes by design); not
+  restored on resume: each env's start-state badness (in the Rust pool, as in `triforce train --resume`) and the
+  early stop's streak. An update cut by the SIGTERM stays partly applied in the saved weights.
+- A teacher term or rehearsal in a resumed run is untested beyond the code path (the generation uses neither).

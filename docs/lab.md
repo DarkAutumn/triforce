@@ -160,8 +160,9 @@ new checkpoints load side by side: the architecture is part of what decides whet
 ## Several families in one run
 
 ```
-python -m triforce.lab.train --name zol+skg --families zol stalfos-keese-gel --parallel 8 --iterations 80 \
-    --load models/zol/r79b-zol --teacher-coeff 1.0 --teacher-hold 20 --teacher-fade 60 --seed 36
+python -m triforce.lab.train --name zol-skg --families zol@d3first stalfos-keese-gel@d3first --state-route d3first \
+    --parallel 8 --iterations 80 --load models/zol/r79b-zol --teacher-coeff 1.0 --teacher-hold 20 \
+    --teacher-fade 60 --seed 36
 ```
 
 - `--families KEY[=YAML]`: a family (`zol`) or a route's own run (`zol@d3first`, the wood-sword half) with its task
@@ -187,7 +188,89 @@ python -m triforce.lab.train --name zol+skg --families zol stalfos-keese-gel --p
   (PPO with a network without memory), `--stop-success X --stop-patience N` (every family's own `EarlyStop` must
   hold, then an evaluation of each family, `CONFIRM_EPISODES` episodes a seed state, must reach X; logged
   `family/<key>/balanced_success_rate`; without `triforce train`'s hearts and bombs plateau rules).
-- Not supported in a lab run (absent): PLR, search, best-of-N, SIL, PPG.
+- Not supported in a lab run (absent): PLR, search, best-of-N, SIL, PPG, the entropy and shaping anneals, the hearts
+  and bombs plateau stop rules. None of them was needed by a family trained from scratch to reach its promoted
+  network in round 40's zol check (round40.md "The lab trainer for the generation's teachers").
+
+### Groups of families (the generation's teachers)
+
+`triforce/groups.yaml` names each teacher of the fresh generation (2.0.1.0) and its members, each a policy key
+`family@d3first` (its task: `specialists/d3first/<family>.yaml` where there is one, else the family's), with optional
+env shares by member: four groups (`overworld`, `walkers`, `others`, `rooms`) and the seven bosses, one teacher each
+(`boss-manhandla`, `boss-gleeok`, `boss-aquamentus`, `boss-dodongo`, `boss-digdogger`, `boss-gohma`, `ganon`).
+`lab.groups.load()` reads and checks it (a member on another route, a family in two teachers, a share of no member,
+a name with `+` are refused); `tests/test_lab_groups.py` holds every family `_native.route_steps('d3first')` names to
+exactly one teacher and loads every member's task with and without `--state-route d3first`.
+
+```
+python -m triforce.lab.train --name gen-rooms --group rooms --parallel 8 --iterations 977 --arch hitnet \
+    --arch-config '{"tokens": ["type", "features", "rel", "threat", "chase"], "feed": true}' \
+    --aux hit=hit:0.5 --try-others 4:0.25 --checkpoint-every 61 --seed 1
+```
+
+`--group NAME` is `--families <its members> --state-route <its route>` (refused beside `--families` or another
+`--state-route`; `--shares` overrides a member's share). `--state-route` keeps each task's curriculum settings, its
+`untracked` declaration among them (until Nov 24 `route_only` dropped it and refused such a task).
+
+### The recipe on record
+
+A lab run writes `triforce train`'s kind of manifest (`triforce.manifest`, kind `lab-train`) into `run.json`'s
+`manifest` before anything trains (`lab.recipe.build`):
+
+- `task`: the group (name, route, members, shares), the route, every task by `manifest.task` (yaml and its hash, the
+  `extends` chain, the effective config and its hash; the route's folder of track links written relative to the
+  checkout), the envs per task;
+- `data`: per task its seed states by glob, harvested states and curriculum tracks (a folder of links is hashed
+  through them), and the demonstration files with their groups;
+- `networks`: `student` (architecture, settings, the observation layout's hash, parameters, the keys it reads),
+  `warm_start` (a `--load`), `teachers` (each checkpoint's SHA-1);
+- `training`: the PPO settings, the auxiliary targets, `--try-others`, the teacher term, the sampling, rehearsal,
+  the stop rule; then `arguments`, `seeds` (`seed`, and `pools`, what the pools were seeded with), `job`, `code`, `rom`.
+
+`--same-recipe-as RUN [--except KEY,...]` (RUN a run dir or a store run `NAME/RUN`) refuses to start unless this
+run's manifest is RUN's but for its own identity and seeds (`manifest.RUN_PATHS`: the run id, the set name, the
+seed, `--resume`, the job) and the keys named. `triforce manifest diff A B` reads two lab runs (dirs or store names):
+two seeds of one recipe differ in `arguments.run_id`, `arguments.seed`, `seeds.*` and the job alone; a changed task
+switch shows as `task.tasks.<key>.effective.obs.<switch>`, a changed member as `task.group.members` and the task's
+entries, an architecture key as `networks.student.config.<key>` (`tests/test_lab_recipe.py`).
+
+### Refusals
+
+Each stops the run before the queue gives it a place (exit 2), with what to change (`lab.recipe`):
+
+- a task with no `state_routes` and no `--state-route` (it would draw every route's states, `d2first`'s too):
+  `--state-route d3first` (`--group` sets it), or `--all-routes` for a run meant to;
+- a task's `warm_start` (the lab never loads one: `--load` names the start, and the generation trains from scratch):
+  set it to null, or `--allow-warm-start` to train without it;
+- tasks that set an `obs.` switch differently (one network reads one observation);
+- a network that reads `obs.threat`'s or `obs.chase`'s blocks (`hitnet`'s token groups `threat`, `chase`; also inside a
+  `hitshift`) while the tasks leave the switch off (it would read zeros), or tasks that turn one on that the network
+  does not read (`lab.recipe.SWITCH_KEYS`; `obs.target` and `obs.objective` fill blocks every network reads, so only
+  the agreement covers them);
+- demonstrations (the tasks' `demos:` and `--demos`) without a key the network reads, or with a switch's block all
+  zeros where the tasks turn the switch on: the cloning term runs the network on their rows (`ppo.demo_log_prob`).
+  Today's darknut files (schema 8, recorded with the switches off) hold no `chase`/`entity_chase` and a zero
+  `entity_threat`: record them again, or `--no-task-demos`.
+
+For other tools: `lab.recipe.create_network(arch, arch_config, families)` (a fresh network checked against the
+tasks), `network_reads`, `check_obs_agree`, `check_network_reads`, `check_demos`, `build`; `lab.groups.load/get`;
+`lab.collect.parse_families`.
+
+### Resume
+
+A SIGTERM (the queue's stop, `systemctl --user stop`) ends a lab run `interrupted` where it is (a TensorBoard write
+finishes first, `train.interrupts_held`): it saves `ckpt.pt` (the weights as they are, counted at the last finished
+iteration: an update cut midway stays partly applied, as in `triforce train`) and `train_summary.json` and exits
+130; a crash saves the checkpoint too. A store run stays open. `--resume NAME/RUN` with the same command line
+continues it: it refuses a recipe that differs from the recorded one (as `--same-recipe-as`, `--except` allowed),
+restores the weights, the optimizer, the iteration and step counters, each task's curriculum progress
+(`<run>/tasks/<key>/curriculum.json`), the need sampler's recent outcomes and the teacher term's place in its fade,
+cuts `metrics.jsonl` back to the checkpoint, records the attempt under `run.json` `resumes`, and trains to the same
+`--iterations` total (a store run is sealed then). Its pools are seeded `seed + 1,000,003 × the iteration it resumes
+at`, so it plays fresh episodes: a stopped and resumed run ends at the same iteration and step counts as one straight
+through, not with the same weights (`tests/test_lab_recipe.py`). Not restored: each env's start-state badness (the
+Rust pool's failure weights, in memory, as in `triforce train --resume`) and the early stop's streak. A run stopped
+before its first save starts over in the same run.
 
 ### What a lab job writes (and the training GUI)
 
