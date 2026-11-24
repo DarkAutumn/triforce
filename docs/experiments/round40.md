@@ -693,7 +693,10 @@ lead to install): zol `d3first_3_6bs_0..2` (crossed: 96, 70, 76 steps; chain 0 k
 they teach neither of the owner's opening goals), ow-peahat `d3first_0_1fw_0..2` (39, 50, 27 steps), darknut
 `d3first_3_5bs_0..2` (21, 53, 59 steps) and `d3first_3_59n_0` (8 bombs: 140 steps); **`d3first_3_59n_1` and `_2`
 (4 bombs, no bomb to spend) were not solved in 3000 iterations** (the store keeps their `~rule1000` tracks, played
-with the old bag); moldorm `d3first_2_3es_*`: queued (job #773) when this was written.
+with the old bag); moldorm `d3first_2_3es_0` (301 steps; `_1` and `_2` not solved in 3000 iterations, job #773; the
+task declares `d3first_2_3es_[0-9]` untracked already). For the lead to install (final): `zol/d3first_3_6bs_0..2`,
+`ow-peahat/d3first_0_1fw_0..2`, `darknut/d3first_3_5bs_0..2`, `darknut/d3first_3_59n_0`, `moldorm/d3first_2_3es_0`;
+not `ow-tektite/d3first_0_76e_*` (the lead's ruling below).
 
 **The lead's follow-ups (Nov 24).** The owner's ruling of Nov 24 (decisions "Dungeon 3's bombs: the reserve in
 3:0x59 is 5; 6 at Manhandla is fine"): d3first's 3:0x59 step holds `bomb_reserve: 5` (it was 4) from 0x59's fight
