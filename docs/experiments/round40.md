@@ -1367,3 +1367,32 @@ room's four bombs (or, at 8, with his own), so 3:0x4c is reached with at least 3
 only a wall bomb missed and laid again could empty the bag first. Dungeon 7 should offer it often: 7:0x1a out of the candle's cellar (the E wall
 the target at once, its Goriyas alive) and 0x69 and 0x19, with runs bringing 0.21 bombs (round 37). Finding it needs
 a `d7` chain with `--replays` and the replays' EDITS read for a fall of `$658` with no BOMB pressed [not done].
+
+### The paired chain: Dungeon 3, the three switches on against off
+
+Today's team (the store's 2.0.0.15), `--from 3_7cs_0 --stop-at step:24`, seeds 0-199, `--act model`, clips on, 25-run
+pieces in the express place (50-run pieces overran its 10 minutes on a loaded machine; one 25-run piece of the off
+arm too, played again as 13 + 12). On: 41eea5f0 (worktree `triforce-r40-carrier2-on`); off: the same code with
+`carrier_targets`, `wall_grant: objective` and `wall_first_rooms` taken out of routes.yaml (branch
+`r40-carrier2-off2`, 7bdf844b). `triforce manifest diff` off -> on: `code` (branch, commit, describe, module built
+and sha1: the arms' commits differ only by the three routes.yaml lines), `data.game_data` (those lines), and each
+piece's `first_seed`, `output`, job id and subtask; nothing else. Today's networks were never trained for these
+rules; the point is that nothing breaks.
+
+| `triforce stats compare` (200 pairs) | off | on | paired difference |
+|---|---:|---:|---|
+| the rate (to the D3 triforce) | 20.5% | 15.0% | -5.5 ± 2.7 (**worse**, just past 2 SE) |
+| hearts lost a run | 3.10 | 3.17 | +0.07 ± 0.05 |
+| beams held: frames holding them | 1109 | 977 | -132 ± 53 (worse) |
+| shots that hit a run | 2.94 | 2.75 | -0.20 ± 0.08 (worse) |
+| kills from range a run | 1.52 | 1.47 | -0.06 ± 0.05 |
+| time to enter 3:0x3d (21 pairs) | | | -10 ± 66 frames |
+
+Endings: died in 3:0x59 52 / 55, 3:0x69 33 / 37, 3:0x5b 18 / 17, 3:0x0f 15 / 16, Manhandla 16 / 14, the triforce
+41 / 30; one run stuck at the 2,000-step cap in 3:0x5b, in the off arm (seed 46). No error and no new kind of ending.
+Cheated: no key; bombs only in Manhandla's room (his `bomb_weapon` need), 17 in 6 visits off, 10 in 5 on; no wall bomb
+cheated in either arm. Bombs at Manhandla's door (runs reaching him): off 4:1 5:5 6:41
+7:10 (57); on 4:1 5:4 6:25 7:13 8:1 (44). The goals table: the drop cycle on entering 3:0x5b's first pass read 4 in
+every run of both arms (the start states held the explorer's kills; States40's patched states, above, came after it), so
+the first pass's carriers never opened; carriers were aimed at on the last pass (3 visits, 1 killed) and in 3:0x5c
+(6), none in the off arm.
