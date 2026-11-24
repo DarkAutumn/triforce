@@ -2324,6 +2324,8 @@ on every access and cannot run over another bus) over the ROM's bank 0 and fixed
   on a room or mode change) about 50 cycles off the game's, enough to differ from the full mix by up to 0.14 there.
 - **the effects driver** gets both tunes, the effects, the samples and the two jingles; a song's request over a
   playing jingle only ends it (its squares go to volume 0 as a tune's end writes them, the triangle as a rest).
+  A jingle starting takes from the game the song bytes `asm:Song_PrepPhrase` does not set (the triangle's note
+  period, which the vibrato writes until the jingle's first triangle note, the repeated passage, the phrase index).
   With the beep off its requests lose bit `$40`; a beep playing when it is switched off ends at once (the writes
   of a tune 0 script's end).
 - **the quiet driver** (beep off, music and effects on) gets everything but the beep: the game's sound without
@@ -2357,6 +2359,7 @@ the title screen equal to the game's sound, and switching while playing.
 | The mirror's writes = the machine driver's, every frame it ran | 0 differ | 0 differ |
 | Music copy's song state (`SONG_TIME`) = the game's, frames a song plays | 0 of 130,675 | 0 of 122,341 |
 | Effects copy's tune/effect/sample state (`EFFECT_STATE`) = the game's, every frame | 0 of 159,769 | 0 of 153,136 |
+| Effects copy's song state = the game's while a jingle (`$04`, `$08`) plays | 0 of 4,728 | 0 of 4,696 |
 | Music track = full mix in every stretch of 5 s or more without an effect (fresh synths at its start) | 53 stretches, 28,391 frames, max difference 0.0 | 57, 28,069, 0.0 |
 | Beep off: a beep left / other square-0 tunes differ | 0 / 0 of 13,572 frames | 0 / 0 of 12,555 |
 | Driver reads outside its state and `PauseState`; faults | none; 0 | none; 0 |
