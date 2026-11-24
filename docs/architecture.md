@@ -2320,17 +2320,26 @@ every step, so following an enemy that moves away pays again, and knockback rese
   and room/cutoff budgets use these configs. Route selection and carried inventory/health remain chain-owned.
   Other families retain their chain configs; checkpoint overrides and promoted pointers are independent.
 - **The chain config** (round 40, the fresh generation; `GameData::chain_specialist`, `SpecialistConfig.for_chain`,
-  `runner.chain_config`): a chain of route R plays family F (both its policy keys, `F` and `F@R`) with F's own task
-  (`specialists/F.yaml`) except the keys `env::config::CHAIN_FROM_ROUTE_TASK` names, which come from R's task for
-  F (`specialists/R/F.yaml`) where R has one: only `obs` (the observation switches: what a network reads, so a
-  network trained on R's task is chained with the inputs it trained with). Items and masks, rewards, clips and
-  budgets stay F's own task's, as today's teams are chained (a network trained with `items.bomb_catch` or
-  `items.candle` in R's task is chained under F's own masks until the lead moves those keys too). `d2first` has no
-  tasks of its own: its chains play every bare task. **The guard** (`runner.check_inputs`): a network that reads a
-  block filled only behind a switch (a `hitnet` token group `threat`: `entity_threat` needs `obs.threat`; `chase`:
-  `chase` and `entity_chase` need `obs.chase`; `lab.recipe.SWITCH_KEYS` and `network_reads`, the lab's own
-  reading) is refused where its chain config has the
-  switch off, naming the policy, the family, the blocks, the switch and the task file, instead of reading zeros.
+  `runner.chain_config`), **per slot, by the network in it**: a chain of route R plays policy key `F` or `F@R` with
+  F's own task (`specialists/F.yaml`) except the keys taken from R's task for F (`specialists/R/F.yaml`) where R has
+  one. Every slot takes `env::config::CHAIN_FROM_ROUTE_TASK` = `obs` (the observation switches: today's networks
+  read neither generation block, so they see what they always saw, and their items, rewards, clips and budgets stay
+  F's own, as today's teams are chained). A slot whose network reads the generation's switched blocks (it trained on
+  R's task; `runner.switched_reads`) takes `env::config::TRAINED_FROM_ROUTE_TASK`, every key the chain reads from
+  the acting family's config, so play matches training: `obs` (the inputs), `items` (every step's masks: BOMB's mode
+  and `bomb_catch`, CANDLE, each kind's switch), `clips` (`enabled` offers CLIP every step), `reward` (its terms only
+  score a chain that records rewards, but its target switches shape the `target` observation's wavefront, the
+  ledger's wall grant and the aimless score), `max_steps` and `no_progress_steps` (the room's budget and quiet
+  cutoff), `one_room` (a fresh observation on every room entry). Every other key stays F's own because no chain
+  reads it for play: `rooms` (a reward track's alone), `success`, `endings`, `no_damage_steps` (the chain has its
+  own stall rule), `start_states`, `state_routes`, `route`, `ram_randomization`, `curriculum`, `harvested_*`,
+  `demos`, `warm_start`. `ChainTask` keys its configs by policy key, so `F` and `F@R` may play under different rules
+  (`ChainEnv::config_for_policy`); a key without one (a Rust caller, a family without a network) plays the any-slot
+  config. `d2first` has no tasks of its own: its chains play every bare task. **The guard** (`runner.check_inputs`):
+  a network that reads a block filled only behind a switch (a `hitnet` token group `threat`: `entity_threat` needs
+  `obs.threat`; `chase`: `chase` and `entity_chase` need `obs.chase`; `lab.recipe.SWITCH_KEYS` and
+  `network_reads`, the lab's own reading) is refused where its chain config has the switch off, naming the policy,
+  the family, the blocks, the switch and the task file, instead of reading zeros.
 - Handoff harvesting (better-play §1b): `eval-chain --harvest [DIR]` (`Runner(harvest=)`, `ChainPool(harvest=)`,
   `ChainTask(harvest=)`, `ChainEnv::set_harvest`) turns on the session's pre-entry capture and, at every **handoff**
   (a room entry through a correct exit where the acting specialist changes; not same-family entries, retreats,

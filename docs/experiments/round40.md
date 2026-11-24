@@ -2771,11 +2771,10 @@ with **F's bare task except the keys `env::config::CHAIN_FROM_ROUTE_TASK` names,
 `SpecialistConfig.for_chain` for Python, `runner.chain_config`). The list is `["obs"]`: the observation switches
 (`objective`, `target`, `hidden_positions`, `threat`, `chase`) are what a network reads. Everything else stays the
 bare task's: items and masks, rewards, clips, budgets. Why: those are the chain's rules of play, and today's team
-must play exactly as it does (darknut's `bomb_catch` and wallmaster's candle would change its play). **The cost,
-for the lead to decide when the generation's team is chained:** a generation network chained today plays under the
-bare masks, so darknut is offered weapon BOMBs `bomb_catch` would refuse and wallmaster never CANDLE in 7:0x0d. One
-word in `CHAIN_FROM_ROUTE_TASK` (`"items"`) moves them, at that team's cutover. Every d3first obs block but the two
-switches equals its bare one, so today's networks, which read neither block, see the same inputs.
+must play exactly as it does (darknut's `bomb_catch` and wallmaster's candle would change its play). That left a
+generation network chained under the bare masks (darknut offered weapon BOMBs `bomb_catch` refuses, wallmaster
+never CANDLE in 7:0x0d); the follow-up below makes the rule per slot. Every d3first obs block but the two switches
+equals its bare one, so today's networks, which read neither block, see the same inputs.
 
 **The guard** (`runner.check_inputs`): a network whose architecture reads a block that only a switch fills (a
 `hitnet` with the token group `threat` reads `entity_threat`, `chase` reads `chase` and `entity_chase`;
@@ -2869,12 +2868,81 @@ SHA-256. Then `python -m triforce.lab.record --families darknut@d3first --actor 
 ### Not done, not tested
 
 - The generation's network was not chained (no trained one exists); the guard is tested with untrained `hitnet`s.
-- The chain config takes `obs` only: a generation network chained today plays under the bare masks (above).
+- The per-slot rule (below) is proven on untrained networks; no trained generation network has been chained.
 - Experiment files that extend a d3first task moved with it (listed above), Switch40's `wallmaster-0d*` among them;
   the lead's `specialists/experiments/r40-lead/zol-gen.yaml` now equals zol@d3first in its two switches.
 - The 69 files' "same actions" rests on the paired check of six visits, not on the whole files (no record of Line40b's
   actions is left, and its code is older); the Garden at 8's first piece is the first 57 visits in order, not
   necessarily Darknut40's 57.
+
+### Follow-up: a slot plays under the rules its network trained with (the lead, after the merge)
+
+**The rule** (the lead's: per slot, by the network in it, since a generation teacher's first chains are its judging,
+`eval-batch --teacher GROUP=RUN`, beside today's networks). A slot (policy key `F` or `F@d3first`) whose network
+reads the generation's switched blocks (`runner.switched_reads`, i.e. `lab.recipe.network_reads`: it trained on the
+route's task) plays with the route task's `env::config::TRAINED_FROM_ROUTE_TASK` keys over the family's own task; a
+slot with one of today's networks plays as before (`obs` from the route's task, everything else bare).
+`runner.chain_config(family, route, trained)`, `SpecialistConfig.for_chain(..., trained=True)`; the chain's configs
+are now keyed by policy key (`ChainTask`, `ChainEnv::config_for_policy`), so `darknut` and `darknut@d3first` may play
+under different rules in one chain.
+
+**What the chain reads from the acting family's config, key by key** (`crates/env/src/chain.rs`):
+
+| key | trained slot | why |
+|---|---|---|
+| `obs` | follows | the inputs (every slot takes it) |
+| `items` | follows | every step's masks: BOMB's mode and `bomb_catch`, CANDLE, FOOD, RECORDER, ARROW, BOOMERANG (`update_disabled_kinds`) |
+| `clips` | follows | `enabled` offers CLIP every step (`session.set_clips`) and says where the route plans its skips (`clips_in`); `off_share` is training's alone |
+| `reward` | follows | its terms score only a chain recording rewards, but its target switches (`item_targets`, `heal_targets`, `drops_first`...) shape the `target` observation's wavefront, the ledger's wall grant (`wall_is_next`) and the aimless score |
+| `max_steps` | follows | the room's step budget (`max(max_steps, MIN_ROOM_STEPS)`), the episode's in training |
+| `no_progress_steps` | follows | the room's quiet-step cutoff |
+| `one_room` | follows | a fresh observation (history reset) on every room entry, as the episode began |
+| `rooms` | stays | read only by a reward track (rewards); the chain's rooms are the route's |
+| `success`, `endings`, `no_damage_steps` | stay | episode endings; the chain ends rooms by its own rules (exits, stall, budgets) |
+| `start_states`, `state_routes`, `route`, `ram_randomization`, `curriculum`, `harvested_*`, `demos`, `warm_start`, `notes` | stay | training's draws and data; no chain reads them |
+
+Between the bare and the d3first tasks today the followed keys differ only in `obs.threat`, `obs.chase`,
+`reward.aimless_penalty`, darknut's `items.bomb_catch` and wallmaster's `items.candle`; the stayed ones in `rooms`
+(ow-moblin, ow-start, ow-tektite), `endings` and `no_damage_steps` (boss-gleeok), the draws and the data.
+
+**Proofs.** (1) Today's team (store team 2.0.0.15), both routes, 200 runs each, seeds 0-199 (job #1254 at
+1a8b8f52, this follow-up's code) against this section's earlier records (#1229) and the base (#1180):
+
+| segment | against #1229 (obs only, every slot) | against #1180 (`r40-gen` 42d15e02) |
+|---|---|---|
+| `d3first` Dungeon 1 | identical run for run (5,961,643 frames, 13,204 room visits); `act_entropy` / `surprisal` within 2.1e-5 / 4.4e-5 | identical; within 1.9e-5 / 3.1e-5 |
+| `d2first` Dungeon 1 | identical, every record field (10,542,468 frames, 24,617 room visits) | identical, every record field |
+
+`manifest diff` #1229 → #1254 on `d3first`: `code`, and `task.configs` of the seven families whose bare
+`curriculum.untracked` Tracks41 changed (merged in between); no other config: today's networks keep the any-slot
+configs. (2) `target/r40-tasks/proof2.py` (job #1256): an
+untrained `hitnet` built from `triforce/groups.yaml`'s network (768 wide, the generation's tokens) in darknut's
+slots (`--checkpoint darknut=…`: both keys) from `3_59n_0..2` to step 14, and in wallmaster's from `7_0dw_0..2` to
+step 174, three runs each, against today's team on the same starts; every replay's MASKS records read:
+
+| start | network | mask records | BOMB blocked or kept by `bomb-catch` | CANDLE offered |
+|---|---|---:|---:|---:|
+| 3_59n_0 | generation (untrained) | 42 | 39 | 0 |
+| 3_59n_0 | today's | 117 | 0 | 0 |
+| 3_59n_1 | generation | 49 | 45 | 0 |
+| 3_59n_1 | today's | 211 | 0 | 0 |
+| 3_59n_2 | generation | 50 | 47 | 0 |
+| 3_59n_2 | today's | 203 | 0 | 0 |
+| 7_0dw_0 | generation | 2,153 | 0 | 1,142 |
+| 7_0dw_0 | today's | 137 | 0 | 0 |
+| 7_0dw_1 | generation | 1,079 | 0 | 421 |
+| 7_0dw_1 | today's | 1,174 | 0 | 0 |
+| 7_0dw_2 | generation | 1,191 | 0 | 425 |
+| 7_0dw_2 | today's | 282 | 0 | 0 |
+
+(Records are written on each change of the mask, so their counts follow the play: the untrained network wanders.)
+(3) The guard still refuses the generation's network on `d2first` (`eval-chain --route d2first --checkpoint
+darknut=<that network>`, refused before any run): "darknut: family darknut's network reads chase (obs.chase), entity_chase
+(obs.chase), entity_threat (obs.threat), but obs.chase and obs.threat are off in the task it is chained with,
+specialists/darknut.yaml (route d2first has no task of its own for it): it would read zeros. …". Tests
+(`tests/test_inputs.py`): the trained overlay of every family takes exactly the seven keys from the route's task and
+the rest from the bare one; in one `Policies`, `darknut` with today's kind of network keeps `bomb_catch` 0 while
+`darknut@d3first` with a generation network gets 2, and wallmaster's CANDLE follows its network.
 
 ## The untracked states' tracks (Tracks41, branch `r40-tracks2`)
 

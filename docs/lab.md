@@ -167,10 +167,11 @@ python -m triforce.lab.train --name zol-skg --families zol@d3first stalfos-keese
 
 - `--families KEY[=YAML]`: a family (`zol`) or a route's own run (`zol@d3first`, the wood-sword half) with its task
   yaml when it isn't the family's (`zol@d3first=path/zol.yaml`). Without one, a route part reads
-  `specialists/<route>/<family>.yaml` when it exists (`lab.collect.task_yaml`): the seventeen `specialists/d3first/`
-  files are the wood-sword runs' tasks rebuilt from round 34's recipe (the family's yaml with `state_routes:
-  [d3first]`, `ram_randomization.chain_hp: 1.0`, `harvested_fraction: 0.3`; the files each run trained on lived in
-  worktrees that are gone, and some runs also narrowed the rooms). Each yaml stays its task: rooms, start states,
+  `specialists/<route>/<family>.yaml` when it exists (`lab.collect.task_yaml`): the 34 `specialists/d3first/`
+  files, one a family of the route, are the generation's tasks (round40.md "The generation's tasks"); 21 began as the
+  wood-sword runs' tasks rebuilt from round 34's recipe (the family's yaml with `state_routes: [d3first]`,
+  `ram_randomization.chain_hp: 1.0`, `harvested_fraction: 0.3`; the files each run trained on lived in worktrees
+  that are gone, and some runs also narrowed the rooms). Each yaml stays its task: rooms, start states,
   hp and item randomisation, masks, rewards, `max_steps`, curriculum (its progress in `<run>/tasks/<key>/`),
   harvested starts (`harvested_fraction`: drawn as in `triforce train`, `tests/test_lab_memory.py`).
 - Every family has its own `EnvPool` and collector; `--parallel` envs are split by `--shares KEY=W` (default
