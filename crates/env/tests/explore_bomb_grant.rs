@@ -20,10 +20,13 @@ const STATE: &str = "d3first_3_5bw_0";
 /// A staged start (`python -m triforce.explore --room-kills 3:0x5b=2`): two of the three Darknuts banked, so the
 /// search ends in about a thousand iterations rather than five (one Darknut left to bomb or to fight).
 const KILLS: ((u8, u8), u8) = ((3, 0x5b), 2);
+/// The search's seed (the explorer's and its episodes'): seed 10 clears the room in 143 iterations, seed 0 in 1152
+/// (Nov 23, seeds 0-11 at patience 0: 143-1152); the test proved the same with either, in a tenth of the time.
+const SEED: u64 = 10;
 
-/// The explorer (3000 iterations of 25 steps, patience 300, seed 0) clears the room and leaves by its wall; the track
-/// it writes replays, and its recorded actions (`trajectory.json`) replay in an env of their own: every action legal
-/// where the track plays it, the same success.
+/// The explorer (at most 3000 iterations of 25 steps, seed `SEED`, stopping at its first success: any success leaves
+/// by the bombed wall) clears the room and leaves by its wall; the track it writes replays, and its recorded actions
+/// (`trajectory.json`) replay in an env of their own: every action legal where the track plays it, the same success.
 #[test]
 fn a_track_through_a_bomb_wall_room_with_an_empty_bag_replays() {
     let (Some(nes), Some(nes2)) = (open_core(), open_core()) else { return };
@@ -33,14 +36,14 @@ fn a_track_through_a_bomb_wall_room_with_an_empty_bag_replays() {
     let mut env =
         SpecialistEnv::new(Arc::new(explore_config(&config)), data.clone(), nes2, TfzStore::new(), opts).unwrap();
     env.set_banked_kills(Some(vec![KILLS]));
-    env.reset(Some(0), Some(STATE)).unwrap();
+    env.reset(Some(SEED), Some(STATE)).unwrap();
     assert_eq!(env.route().0, "d3first");
     assert_eq!(env.session().state().bombs(), 1, "the wall's bomb");
     assert_eq!(env.context().1.room.bombs, 1, "an empty bag: the bomb is granted (by the room)");
 
-    let mut explorer = Explorer::new(&config, data.clone(), nes, TfzStore::new(), 0).unwrap();
+    let mut explorer = Explorer::new(&config, data.clone(), nes, TfzStore::new(), SEED).unwrap();
     explorer.set_banked_kills(Some(vec![KILLS]));
-    let result = explorer.explore(STATE, 3000, 25, 300, None).unwrap();
+    let result = explorer.explore(STATE, 3000, 25, 0, None).unwrap();
     assert!(result.success, "{result:?}");
     let dir = tempfile::tempdir().unwrap();
     assert!(explorer.write(&result, dir.path()).unwrap(), "the search's track replays from the start");
@@ -53,7 +56,7 @@ fn a_track_through_a_bomb_wall_room_with_an_empty_bag_replays() {
     assert!(actions.iter().any(|a| a.kind == ActionKind::Bomb), "the wall is bombed: {actions:?}");
 
     // The recorded track in an env of its own (the curriculum's and the state builder's view).
-    env.reset(Some(0), Some(STATE)).unwrap();
+    env.reset(Some(SEED), Some(STATE)).unwrap();
     for (i, action) in actions.iter().enumerate() {
         assert!(env.session().mask().is_allowed(action), "step {i}: {action} is masked");
         let step = env.step(*action).unwrap();

@@ -1065,7 +1065,8 @@ def test_a_job_with_a_plan_is_one_box_over_its_runs(qapp, tmp_path, monkeypatch,
     logs.mkdir()
     root.mkdir()
     job = queue.add(subtask='round', estimate=20.0, admitted_ts=time_now() - 60,
-                    progress={'runs': {'done': 0, 'total': 2, 'unit': 'runs', 'rate': None, 'ts': time_now()}})
+                    progress={'runs': {'done': 0, 'total': 2, 'unit': 'runs', 'rate': None, 'ts': time_now()}},
+                    flags=[{'level': 'red', 'code': 'no-harvested', 'text': 'drew 0 harvested states'}])
     monkeypatch.setenv(jobs.JOB_ID_ENV, str(job))
     window = gui.Window(root, None)
     plan = None
@@ -1090,7 +1091,8 @@ def test_a_job_with_a_plan_is_one_box_over_its_runs(qapp, tmp_path, monkeypatch,
         assert facts[2].startswith('started ') and any(' · pid ' in fact for fact in facts)
         assert any(fact.startswith('nice ') for fact in facts) and not any('elapsed' in fact for fact in facts)
         assert box['bar'] and box['command'] == 'run round  r40-queue  python scripts/train_round.py'
-        assert view.header.height() == (gui.Header.BOX_TOP + gui.Header.BOX_ROW + 3 * gui.Header.BOX_LINE
+        assert box['flags'] == [('⚑ RED FLAG no-harvested — drew 0 harvested states', gui.C.bad)]   # jobs.flag
+        assert view.header.height() == (gui.Header.BOX_TOP + gui.Header.BOX_ROW + 4 * gui.Header.BOX_LINE
                                         + gui.Header.BOX_BAR + gui.Header.BOX_BOTTOM)
         assert window.windowTitle().endswith('r40-round — Triforce training')
         window.select(view, 'round')                                   # the detail pane shows the plan
@@ -1109,7 +1111,10 @@ def test_a_job_with_a_plan_is_one_box_over_its_runs(qapp, tmp_path, monkeypatch,
         assert web['box']['pills'][:2] == [['RUNNING', gui.C.warn.name()], ['round', gui.C.muted.name()]]
         assert [text for text, _ in web['box']['facts']][:2] == ['regular · 1m of ~20s', 'OVERRUN']
         assert [(card['name'], card['plan']) for card in snapshot['cards']] == [('ow-start', 'r40-round')]
-        assert 'function boxHtml(job)' in gui.web_page().decode()
+        assert web['box']['flags'] == [['⚑ RED FLAG no-harvested — drew 0 harvested states', gui.C.bad.name()]]
+        assert web['flags'][0]['code'] == 'no-harvested' and web['flags'][0]['color'] == gui.C.bad.name()
+        page = gui.web_page().decode()
+        assert 'function boxHtml(job)' in page and "'</div>' + flagsHtml(job)" in page   # the box draws them
     finally:
         plan.finish('completed')
     # once it ended (its runs gone from the page) the web view still reads its plan for its box

@@ -82,8 +82,8 @@ _COLUMNS = {
     'commit_id': 'TEXT', 'host': 'TEXT', 'pid': 'INTEGER', 'child': 'INTEGER', 'nice': 'INTEGER', 'work': 'TEXT',
     'estimate': 'REAL', 'express': 'INTEGER', 'timeout': 'REAL', 'status': 'TEXT', 'place': 'TEXT',
     'queued_ts': 'REAL', 'admitted_ts': 'REAL', 'finished_ts': 'REAL', 'exit_code': 'INTEGER', 'result': 'TEXT',
-    'log_dir': 'TEXT', 'plan': 'TEXT', 'steps': 'TEXT', 'progress': 'TEXT'}
-_JSON = ('command', 'work', 'steps', 'progress')
+    'log_dir': 'TEXT', 'plan': 'TEXT', 'steps': 'TEXT', 'progress': 'TEXT', 'flags': 'TEXT'}
+_JSON = ('command', 'work', 'steps', 'progress', 'flags')
 SCHEMA = (f"CREATE TABLE IF NOT EXISTS jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, "
           f"{', '.join(f'{name} {kind}' for name, kind in _COLUMNS.items())});"
           "CREATE TABLE IF NOT EXISTS history (job INTEGER, kind TEXT, work TEXT, estimate REAL, actual REAL, "
@@ -532,14 +532,24 @@ def progress_lines(job: dict, now: float) -> list[str]:
             for name, report in reports.items()]
 
 
+FLAG_LEVELS = ('red', 'note')        # a red flag: the run may not be what it claims; a note: worth a look
+
+
+def flag_lines(job: dict) -> list[str]:
+    """A job's flags (``jobs.flag``, the row's ``flags``), one a line: ``RED FLAG module-stale: ...``, ``note
+    behind-main: ...``."""
+    return [f"{'RED FLAG' if flag.get('level') == 'red' else 'note'} {flag.get('code')}: {flag.get('text')}"
+            for flag in job.get('flags') or []]
+
+
 def describe(job: dict, now: float, place: Optional[int] = None) -> list[str]:
     """A job's row as ``triforce job list`` and the training GUI show it: the headline, the description, the state
-    (``tags``), its progress (``progress_lines``), then what it is (verb, and kind where it says more), where it
-    runs and the command."""
+    (``tags``), its flags (``flag_lines``), its progress (``progress_lines``), then what it is (verb, and kind where
+    it says more), where it runs and the command."""
     where = job.get('branch') or Path(job.get('checkout') or job.get('cwd') or '?').name
     what = ' '.join(dict.fromkeys(part for part in (job.get('verb'), job.get('kind')) if part))
-    return [headline(job), job.get('description') or '', tags(job, now, place), *progress_lines(job, now),
-            f"{what}  {where}  {' '.join(job.get('command') or [])}".strip()]
+    return [headline(job), job.get('description') or '', tags(job, now, place), *flag_lines(job),
+            *progress_lines(job, now), f"{what}  {where}  {' '.join(job.get('command') or [])}".strip()]
 
 
 def iso(ts: Optional[float]) -> Optional[str]:

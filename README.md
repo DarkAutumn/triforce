@@ -155,7 +155,7 @@ Trained models aren't checked in either (they're too big), so watching the agent
 ## Commands
 
 ```bash
-cargo test --release --workspace --features zelda/zcore        # Rust tests (~1 min; see "Testing")
+cargo test --profile release-tests --workspace --features zelda/zcore   # Rust tests (release without LTO; "Testing")
 .venv/bin/python -m pytest -q -n 8 tests                       # Python tests (~1 min in 8 processes; 7 in one)
 .venv/bin/python -m pytest -q -m e2e                           # only the end-to-end tests (untrained nets, seconds)
 .venv/bin/python -m triforce.play --state 1_44w_0               # load a savestate and look at the room
@@ -314,7 +314,8 @@ it). It is not re-recorded for a retrain, only after a deliberate break (then th
 
 ## Testing
 
-Two suites, both about a minute: `cargo test --release --workspace --features zelda/zcore` and
+Two suites: `cargo test --profile release-tests --workspace --features zelda/zcore` (release without link-time
+optimisation: Cargo.toml) and
 `.venv/bin/python -m pytest -q` (an agent runs them as `triforce job test rust|python`). Nothing trains a model from
 scratch; pipeline tests use untrained networks.
 
