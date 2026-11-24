@@ -373,7 +373,7 @@ def snapshots(kind: Optional[str] = None) -> list[dict]:
     finally:
         con.close()
     for row in rows:
-        row['current'] = currents.get(row['kind']) == row['name']
+        row['current'] = currents.get(f"data:{row['kind']}") == row['name']
     return rows
 
 
