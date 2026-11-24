@@ -1575,4 +1575,66 @@ Both read `zelda::darknut_rules` (crates/zelda/src/darknut_rules.rs):
   `chasing`'s reach, the critic (`crates/env/tests/critic.rs`), the env's `penalty-chase` step by step
   (`tests/test_r40_darknut_fighter.py`), the config's rejections.
 
-(Numbers below.)
+### 3:0x5b's first pass: one Red Darknut for its bombs (the lead's case, the owner's Dungeon 3 plan)
+
+`--room 5b` (`ROOMS['5b']`, `kill_one`): the fighter as above until one Darknut dies; from then the goal is a dropped
+bomb lying in the room while the bag has room (a slot of type $60, item id 0, taken within 9 pixels of X and of
+Y + 3, asm:Item_TryTake), then the N door (d3first's step leaves the first pass N); no strike that would kill a
+second. Tasks `experiments/r40-darknut/5b-b0-{low,full,1.5}.yaml`: `d3first_3_5bs_0..2`, drop cycle 0
+(`room_kill_cycle`), no kill streak (`help_count` 0: the drop is the table's), the bag empty, hearts drawn 0.5-3.0 (as
+Carrier40b's chains saw them entering), full (3), or exactly 1.5. Visits as `triforce evaluate` lays them out.
+
+| hearts | base, fighter | visits | out with one kill | deaths | hits a visit | bombs dropped / taken | first kill (frame) | out (frame, mean won) |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| 1.5 | 95eea9e9, f7b153a6 (before the doorway fix) | 300 | 299 (2 killed two) | 1 | 0.057 | 121 / 121 | 312 (median 276, p90 484) | 600 |
+| 0.5-3.0 | same | 300 | 293 | 7 | 0.057 | 120 / 120 | 309 | 597 |
+| 3 | same | 300 | 300 | 0 | 0.037 | 128 / 128 | 287 | 571 |
+| 0.5-3.0 | 13782c50 (carrier targets), the doorway fix, local run | 300 | 298 | 2 | 0.020 | 128 / 128 | 318 | 607 |
+| 1.5 | 13782c50, fcc32db0 | 102 | 102 | 0 | 0.039 | 39 / 39 | 316 | 605 |
+| 0.5-3.0 | same | 102 | 101 | 1 | 0.039 | 39 / 39 | 313 | 603 |
+| 3 | same | 102 | 102 | 0 | 0.010 | 45 / 45 | 274 | 567 |
+
+**One Red Darknut can be killed with the wood sword at 1.5 hearts by the owner's method**: in 299 of 300 visits
+(and 102 of 102 with the carrier targets on), in about 300 frames to the kill and 600 to the door. The drop appears
+after 40.5% of the kills (the table's 41%, asm:Drop_GroupRates) and the fighter takes every one. The first table's
+hits were half Link waiting in the S doorway while a Darknut walked the bottom row past the door (Y $BD, the door
+row's line: the turn rule's 8 pixels): `ranked` now lets him back out of a doorway while the screen edge is more
+than a step away, and no sideways step is modelled or offered in a doorway (the game forces the input onto the
+doorway's axis); the 7 low-heart deaths fall to 2 (both a swing into a Darknut that walked into the blade's reach, at
+1.0 heart: seeds 26 and 148, frames 430 and 413). **The carrier target** (13782c50): after the carrier's death the cycle reads 1, the
+objective's target is the N exit and PBRS pays every step N, so with no drop Link leaves at once; with a drop the
+target is the bombs, then the exit (a trace of seeds 8 and 9). Today's network on the same 300 entries (base
+objective before the carrier targets, 2.0.0.15's `r38head-fam-w8`): out 289 / 270 / 300 of 300 (1.5 / 0.5-3.0 /
+full) and kills nothing (no drop): it crosses.
+
+### The fighter alone against today's network (the brief's four cases)
+
+The fighter at fcc32db0 on 13782c50's code; today's darknut@d3first network (`darknut/r38head-fam-w8`, team 2.0.0.15,
+its act mode) by `triforce evaluate` on the same entries (`experiments/r40-darknut/<room>-b<bag>.yaml`, two
+evaluations of 50 a state, seeds 0 and 150: the fighter's `starts` lays its visits out identically; network pieces
+ran on the base before and after the carrier merge, which touches neither room's objective). 300 visits a case. The
+owner's takes are the bar for style; the network's numbers are beside it.
+
+| room, bag | who | out | deaths | hits a visit | hearts lost a visit | frames (mean won) | bombs a visit | Darknuts hurt a bomb |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| Olive Garden, 0 | fighter | 284 (94.7%) | 15 | 0.51 | 1.00 | 2886 | 0 | - |
+| | network | 129 (43.0%) | 171 | 2.66 | 5.02 | 4084 | 0 | - |
+| Olive Garden, 8 | fighter | 293 (97.7%) | 6 | 0.35 | 0.70 | 2068 | 4.56 | 2.00 (911 of 1369 bombs hurt 2+, 346 one, 112 none) |
+| | network | 247 (82.3%) | 53 | 1.43 | 2.76 | 2836 | 8.00 | 0.90 |
+| 3:0x59, 4 (none usable) | fighter | 294 (98.0%) | 2 | 0.08 | 0.08 | 1388 | 0.02 (only after a drop took the bag to 8) | 2.5 |
+| | network | 218 (72.7%) | 54 | 0.92 | 0.89 | 1433 | 1.12 | 0.80 |
+| 3:0x59, 8 (three usable) | fighter | 287 (95.7%) | 4 | 0.06 | 0.06 | 1237 | 1.23 | 2.10 |
+| | network | 281 (93.7%) | 13 | 0.34 | 0.33 | 940 | 4.13 | 0.92 |
+
+The fighter's other endings are `no-damage` (600 decisions without a hit given or taken: 1, 1, 4, 9): a last Darknut
+it never finds a safe strike on. **Where it is still hit** (the `where` records' situations, about 300 hits over the
+four cases' 1,200 visits): during a swing (`swing`: Link stands in the swing while a Darknut walks into him) is the
+largest share in the Garden (84 of 153 at 0 bombs, 43 of 106 at 8); a Darknut that turned at Link at its grid point
+(`turned`, 35 and 46); on a Darknut's line behind it (`chasing`, 16 and 7), at a wall (`wall`), a flash running out
+(`flash-ended`), laying a bomb (`bomb`, 9 at 8 bombs). Examples by frame: the Garden at 0 bombs, seed 11
+(`5_05e_0`), frame 1088: Link at ($D0, $BD) in the SE corner swings N at a Darknut 11 pixels above him facing S (its
+shield toward him) and is touched (`swing`); seed 13, frame 335: Link at ($9D, $6D) steps N toward a Darknut at
+($A0, $62) facing S (`turned`). 3:0x59 at 8 bombs, seed 90 (`3_59n_1`), frame 159: Link at ($80, $73) lays a BOMB W
+with a Darknut at ($70, $6D) facing N beside him (`bomb`).
+
+(Proposals' numbers and the demonstrations below.)
