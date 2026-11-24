@@ -614,3 +614,162 @@ is gone.
   `.venv/bin/triforce job queues --init` writes the default file (the same queues as without it) for the owner to
   edit; `triforce job queues` shows them. Until the older jobs drain, a job still in regular-3 shows as "outside
   these queues (older code)".
+
+## Main reads the store (Store41, branch `r40-store2`)
+
+The lead (Nov 24): the main checkout still had its own data folders after the store's import of Nov 23, so it read
+them and not the store, and a few things leaned on them quietly (`triforce job test` handed every suite main's
+`models/`; one bench test passed only through that; documents cite `models/...` paths). Wanted: main reading the
+store like every worktree, its folders out of the way. This branch prepares it; nothing in main, the store or the
+archive was moved, changed or deleted.
+
+### What main holds that the store does not: nothing
+
+`python -m triforce.reconcile compare --checkout /home/leculver/git/triforce` (new, read-only; jobs #1281-1289, about
+65 GB hashed in eight express pieces, then one full pass from the hash cache): every folder of main a tool reads in
+place of the store, compared by SHA-1 file by file (paths and contents), never by name; the archive by the SHA-1s
+of `models/files.tsv`, the dated copies `data/2026-11-23/<folder>` and the store's copy `store/`. Report:
+`target/reconcile/main-full.json` of this worktree.
+
+| main's folder | files | size | store item | content | only in main | `/backup/triforce` holds |
+|---|---|---|---|---|---|---|
+| `roms/` | 1 | 129 KB | `rom/zelda.nes` | identical | 0 | `store/rom/zelda.nes`, identical |
+| `trajectories/` | 128,295 | 1.45 GB | snapshot `261122-52fb5b17` (current: `261124-gen2`) | identical | 0 | `data/2026-11-23/trajectories`, identical; the store's copy |
+| `trajectories.prev-r60` | 15,821 | 0.18 GB | snapshot `261109-2dfee7b9` | identical | 0 | `data/2026-11-23/...`, identical; the store's copy |
+| `trajectories.prev-r70` | 4,037 | 0.05 GB | snapshot `261113-2ebb5ce2` | identical | 0 | the same |
+| `trajectories.prev-r71` | 20,598 | 0.23 GB | snapshot `261113-578619ff` | identical | 0 | the same |
+| `triforce/states/harvested/` | 66,438 | 0.75 GB | snapshot `261123-ad612e94` (current: `261124-gen1`) | identical | 0 | `data/2026-11-23/harvested`, identical; the store's copy |
+| `triforce/states/harvested-rooms/` | 1,196 | 13 MB | snapshot `261123-aabd5d07` (current) | identical | 0 | `data/2026-11-23/...`, identical; the store's copy |
+| `target/demos/` | 217 | 1.03 GB | snapshot `261122-453e1975` (current: `261124-gen3`) | identical | 0 | `data/2026-11-23/demos`, identical; the store's copy |
+| `models/` | 21,505 | 26.85 GB | 666 runs (9,092 files) = 666 sealed store runs, their `eval*.json`/`act`/`selection.json` = the import's filed copies; 64 pointers and 769 records = the import's filed records; 11,580 other files = `legacy/import-261123/` | identical, every file | 0 | 666 of 666 runs in `store/runs/`; all 21,505 files' contents in `models/files.tsv` |
+
+Main's 64 pointers (`promoted`, `promoted.<route>`, `late.<route>`) against the store's current team 2.0.0.15 (the
+import made it from those pointers): 64 slots, every run and act mode the same, so the move changes no network main
+plays. What it does change: main's trainings and benches then read the **current** data snapshots (harvested
+`261124-gen1`, trajectories `261124-gen2`, demos `261124-gen3`), as every worktree already does, not main's copies
+of Nov 22-23 (still in the store by name: `--data harvested=261123-ad612e94`). Not compared (they stay in main,
+per checkout): `logs/` (646 MB, the GUI's input; the test timing logs of every checkout), `runs/` (99 MB),
+`replays/` (3,718 files, 61 tracked; archived by `archive_replays.py`), the rest of `target/` (45 GB, scratch;
+`models.prev-*` and `harvested.prev-1.9.0.1` there are read by nothing), `.play/`, `screens/`. No worktree links
+into main's folders (the five checkouts beside it, looked at Nov 24).
+
+### What depended on main's folders, and the change
+
+- **`triforce job test`** set `$TRIFORCE_MODELS_DIR` to main's `models/` for every suite (`job.test_steps`). Now it
+  names the store's current team, read once when the job is made (`$TRIFORCE_TEAM`); `tests/conftest.py` turns it
+  into a read-only view of that team (`store.write_view`, links into the store) given as `$TRIFORCE_MODELS_DIR`, so a
+  test that sets its own folder still wins, and removes it at the end; a plain `pytest` names no team. A caller's
+  `$TRIFORCE_TEAM` or `$TRIFORCE_MODELS_DIR` is kept; no store team is a refusal naming `teams/current`.
+- **`test_the_rooms_manifest_keeps_the_room_entries_that_cost_the_team`** read today's team for one fact (darknut
+  has a `d3first` run): `bench.make_rooms_manifest` takes the team's root (`bench rooms --models-dir`), and the test
+  writes darknut's two pointers itself. It passes under a plain `pytest` (job #1277).
+- **`test_a_route_part_with_both_routes_harvest_records_only_its_own`** looked for boss-gleeok's harvested states in
+  the checkout's own folder and skipped everywhere but main: it reads them by `paths.data_dir` (the store's snapshot
+  without the folder) and its teacher from the suite's team, and now runs in a worktree (job #1279).
+- **`scripts/port_gate.sh`** evaluated and chained `$PWD/models`: it plays the store's team (`$TEAM`, default the
+  current one) with `--team`. **`scripts/train_bench.sh`, `scripts/profile_train.sh`, `scripts/parallel_study.py`**
+  warm-started from `models/<family>/promoted`: they load the current team's run (`--load FAMILY/RUN`).
+- **`triforce job doctor`** now also prints where the ROM and the networks resolve for a checkout (`rom:`,
+  `models:` beside the data kinds), the check after the move.
+- Already store-ready, unchanged: the golden race and `zelda-headless.py` (`--team`, else `models/` while it exists,
+  else the current team), the 250 test (`full_runs.py runs250`: a frozen view of the current team without
+  `models/`), `play-zelda.py`, `zelda-map.py` (`registry.models_root`; their `--models-dir` help now says so),
+  `training-gui.py` (reads `logs/` only), `tidy_worktrees.sh` and `backup_models.py` (read a worktree's `models/`,
+  never main's), `archive_replays.py` (`replays/`), the test timing logs (main's `logs/`, which stays), the ROM
+  (`paths`: the store's before the checkout's), every data reader (`paths.data_dir`).
+- Left as they are, and named here: `scripts/reeval_promoted.py` and `scripts/train_round.py` write into the models
+  root (`--models-dir`; a store team's view is read-only, so with no folder they need `--output-dir` / `--models-dir`
+  as before); `scripts/experiments/worktree.sh` (superseded by `triforce job setup`) copies a checkout's `models/`;
+  round scripts `r57_better_play.sh`, `r58_expert_iteration.sh` default to `$MAIN/models`; the `--models-dir`
+  scaffolds of rounds 26-29. All are history or take a folder by hand; none runs in today's work. `registry promote`
+  writes pointers: after the move a team is made in the store (`triforce-lead team new`, `team set-current`).
+
+### The proofs, from this worktree (no data folders, like every fresh worktree)
+
+`triforce job doctor` here: `rom: ~/triforce-shared/rom/zelda.nes`, `models: store team 2.0.0.15 (current)`,
+harvested `261124-gen1`, harvested-rooms `261123-aabd5d07`, trajectories `261124-gen2`, demos `261124-gen3` (main
+today: its own `models/` and its four folders).
+
+- The Python suite on the store's team (job #1278 before the last commits; `test_convert` saw the view under
+  `/tmp/triforce-test-team-*/models`): 1146 passed, 13 skipped. The full suites on the final commit: below.
+- The golden race from power on, capped at 4 minutes (job #1291, `zelda-headless.py --golden --power-on --clips on
+  --act model --parallel 16` under `triforce job run`, so nothing archived to `/backup`): `models: store team
+  2.0.0.15 (current ...; sha256 a2d0d85f8df8)`; **won the route in 2 minutes**, 60 runs, 9 segments, 153,750 frames
+  (`target/golden-proof/golden-00000000-win.tfreplay`, filed by the job in the store).
+- `scripts/full_runs.py runs250 --runs 5 --out target/runs250/proof-store41 --no-archive` (job #1292): the store
+  team 2.0.0.15 frozen into the folder; 5 runs, D3 3 of 5, D4/D1/D2 2 of 5, all died (median step 38); 27.5 s.
+- `play-zelda.py --help`: exit 0. One headless replay of `corpus/replays/golden-d3first-51-networks.tfreplay`
+  (`_native.replay_verify`, job #1290): ROM from the store, 153,136 frames, 18 edits, 9 states, no divergence.
+
+### The documents' paths
+
+`docs/data-layout.md` "The reconciliation of the main checkout" maps every old path form to where the same thing is
+now; `docs/store-paths.md` looks up all 256 concrete paths the documents cite: 29 run paths are store runs, 4
+only in the archive (`r36obs-pre`, `r38shift/pre-w4`, `pre-w8-frozen`, `goriya/r38shift-pre-w8`), 2 nowhere
+(wizzrobe `r77-wizz`, `r78-wizz-s78`, gone before either), the evidence and summaries are the import's filed
+records and `legacy/`, the data paths are snapshots, main's `target/` stays. The historical documents are not
+rewritten.
+
+### The removal plan (the lead, after the owner's yes)
+
+Nothing is deleted: main's folders are renamed into one dated folder beside it on the same disk
+(`/home/leculver/git/triforce.aside-<yymmdd>`, about 30 GB, instant), with `ASIDE.json` naming each, and put back
+the same way.
+
+**Must not be running while it is done:** any job of the queue working in main (the trainings of today run in
+`triforce-gen1`; `reconcile aside` refuses a live job whose checkout or directory is main), any process holding a
+file of those folders open (refused too), the owner's `play-zelda.py`/`zelda-map.py` started from main (they load
+the team when they start: restart them after), a landing or `triforce-lead import-legacy`.
+
+1. **Check first**, from main once this branch is merged (the store is ready: ROM, team 2.0.0.15 current, a current
+   snapshot of every kind). The hashes are cached in main's `target/reconcile/sha1.db`, so the 65 GB are read once,
+   in express pieces of a minute or two each, and the full pass then takes about two minutes:
+
+   ```
+   cd /home/leculver/git/triforce
+   J='.venv/bin/triforce job run --agent lead --task store --subtask compare --express --timeout 10m'
+   for piece in "roms trajectories.prev-r60 trajectories.prev-r70 trajectories.prev-r71 target/demos" \
+       triforce/states/harvested-rooms trajectories triforce/states/harvested models:boss models:d \
+       "models:e models:g models:l models:m" models:ow "models:p models:r models:s" \
+       "models:t models:v models:w models:z"; do
+     $J --desc "Hash a piece of the main checkout's folders against the store." -- \
+       .venv/bin/python -m triforce.reconcile compare --only $piece
+   done
+   $J --desc "Compare the main checkout's folders with the store before the move." -- \
+     .venv/bin/python -m triforce.reconcile compare --out target/reconcile/before-aside.json
+   ```
+
+   Every row must say `identical` (or `store has more`) and `0 (0)` under "only here (in backup)", and "Pointers
+   against team 2.0.0.15: 64 slots, all agree".
+2. **Back up what only main has**, if step 1 lists any: a run or model file, `scripts/backup_models.py store models
+   --source <yymmdd>_main` (a job), then `index`; a data folder, `triforce-lead data install KIND <yymmdd>-main
+   --from <folder>` (a snapshot by name, not current). Then step 1 again until the column is 0. On Nov 24 there was
+   nothing to back up.
+3. **Move aside** (dry run, then apply):
+   `.venv/bin/python -m triforce.reconcile aside --report target/reconcile/before-aside.json` (prints each move and
+   every refusal), then the same with `--apply`. It moves `roms`, `trajectories`, `trajectories.prev-r60/-r70/-r71`,
+   `triforce/states/harvested`, `triforce/states/harvested-rooms`, `target/demos`, `models`.
+4. **Verify main reads the store**: `.venv/bin/triforce job doctor` in main prints `rom: ~/triforce-shared/rom/...`,
+   `models: store team 2.0.0.15 (current ...)` and `store snapshot` for the four kinds; `.venv/bin/triforce list`
+   shows the team; then from main `triforce job test all --agent lead --task store` (the suites on the store's
+   team), `triforce job run ... --express --timeout 10m -- .venv/bin/python scripts/full_runs.py runs250 --runs 5
+   --out target/runs250/after-aside --no-archive`, and `triforce job golden --agent lead --task store --timeout
+   10m`; the owner's `play-zelda.py` from main plays the store's team.
+5. **Put back**, if anything is wrong: `.venv/bin/python -m triforce.reconcile back
+   /home/leculver/git/triforce.aside-<yymmdd> --apply` (refuses a folder whose place was taken since; move that one
+   out of the way first). Main is then exactly as before.
+6. **The documents that describe main's folders as today's practice**, changed with the move (the history keeps
+   its paths): `AGENTS.md` landing rule ("every promoted run copied into the main checkout's `models/` ...", and
+   the `TRIFORCE_MODELS_DIR=$PWD/models` watch line) becomes the team made in the store and set current; the backup
+   rule's "`store` main's `models/`" becomes `triforce-lead backup --apply`; "Old worktrees are deleted ..." keeps
+   run dirs and demonstrations in the store, not main's `models/` and `target/demos/`; the Environment lines on
+   `models/` and "A worktree needs `roms/zelda.nes`"; `README.md`'s ROM and data paths. The aside folder is the
+   owner's to delete when he is satisfied (his `trajectories.prev-*` and videos rule).
+
+### What is not tested
+
+`reconcile aside --apply` and `back` on the real main (only on made-up checkouts in `tests/test_reconcile.py`); the
+suites, golden race and 250 test run *from main* without its folders (from this worktree instead, which resolves
+the same way); `port_gate.sh`, `train_bench.sh`, `profile_train.sh` and `parallel_study.py` end to end (their team
+lookups were run alone); `play-zelda.py` beyond `--help` (a window); the Rust suite's reading of the store is the
+same in any checkout without folders (`paths` crate), shown by the full suites below.
