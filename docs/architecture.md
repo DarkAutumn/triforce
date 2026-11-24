@@ -1663,12 +1663,63 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `result`) and its progress (`log_dir`, `plan`, `progress`, `steps`); `history` a row per finished job (kind, work,
   estimate, the seconds it actually ran). The tests run in a session directory with `$TRIFORCE_JOB_ID=0` (a job
   without a row: the tools start, their reports change nothing; `tests/conftest.py`).
-- Places are kernel `flock`s in `queue_dir()/locks`: each place (`PLACES`: `regular-1`, `regular-2`, `express-1` in
-  the jobs lane, `tools-1`, `tools-2` in the tools lane) is a lock file, and a job runs only while its wrapper holds
-  that place's lock; the lock is handed to the command too (`pass_fds`), so a place is never free while anything of
-  its work runs. Each wrapper also holds its job's lock (`job-<id>`) for its lifetime: a live job whose lock can be
-  taken has lost its wrapper, and `sweep` marks it `dead` at every decision (the kernel freed its place already). No
-  /proc heuristics, no stale entries, nothing to clean up for the line to move.
+- Places are kernel `flock`s in `queue_dir()/locks`: each place is a lock file named for its queue and its number
+  (`regular-1`, `regular-2`, `express-1`, `spare-1` in the jobs lane, `tools-1`, `tools-2` in the tools lane), and a
+  job runs only while its wrapper holds that place's lock; the lock is handed to the command too (`pass_fds`), so a
+  place is never free while anything of its work runs. Each wrapper also holds its job's lock (`job-<id>`) for its
+  lifetime: a live job whose lock can be taken has lost its wrapper, and `sweep` marks it `dead` at every decision
+  (the kernel freed its place already). No /proc heuristics, no stale entries, nothing to clean up for the line to
+  move.
+- The queues (the owner, Nov 24: "configurable from a yaml file or something [...] queue: name / max-parallel: n /
+  max-job-length: time [...] we just edit/save the file and the queue can work a bit differently"; `jobqueue.py`
+  "the queues"). **One file, `queue_dir()/queues.yaml`** (`config_path`), beside `queue.db`: the queue is the
+  machine's, shared by every worktree, so its settings live with its state and not in a checkout; a test's queue
+  folder (`$TRIFORCE_QUEUE_DIR`, every test and the suite's session) has its own, so no test reads the live one.
+  Without the file the default (`DEFAULT_TEXT`, what `triforce job queues --init` writes) is in force. The file is
+  a list of queues, each with four keys and no others:
+  - `name`: its places are `<name>-1` .. `<name>-N`; lower-case letters, digits and `_`, a letter first, at most
+    20, not `job` (a job's own lock is `job-<id>`) nor a word YAML reads as a boolean or null. The queue named
+    `tools` runs the builds, test suites and setups (the tools lane) and nothing else; it must be there, and takes
+    `name` and `max-parallel` only.
+  - `max-parallel`: how many of its jobs run at once, 1 to 4 (`MAX_PARALLEL`); 8 places in all, tools included
+    (`MAX_PLACES`; the queues of Nov 23 held 5, the default 6).
+  - `max-job-length` (optional): only a job estimated at or under it, or run with `--express`, takes it; a duration
+    with its unit (`90s`, `10m`, `1h30m`), 1 minute to 24 hours (`JOB_LENGTHS`). Without it, any job.
+  - `load-average-max` (optional): a place of it is given only while the machine's 1-minute load average is at or
+    under the line; 1 to 60 (`LOAD_LINES`: three times the 20 threads). The owner's rule: above the line nothing
+    new starts there, work already running finishes, and it opens again once a reading is at or under the line. The
+    reading (`/proc/loadavg`'s first number, `read_load`) is kept in the database (`settings` 'load',
+    `load_reading`) and taken again only once it is a minute old (`LOAD_SECONDS`), by whichever wrapper asks first:
+    twenty waiting wrappers read the machine once a minute between them, and agree. A load that can't be read
+    keeps the queue closed.
+  One queue besides tools must have neither limit (a long job could otherwise wait forever). Nothing else is a key:
+  a lane, a priority or a per-queue nice would each be a second way to say what the order of the file and the
+  tools queue already say. **A job tries the queues in the file's order and takes the first free place of the first
+  open queue it may take** (`options`, `assign`): with the default, a job of 10 minutes or less (or `--express`)
+  tries express, then regular, then spare; a longer one regular, then spare; a build or a suite tools. The file's
+  order is the whole rule, so the owner sees it where he edits it. **Read live**: every waiting wrapper reads the file
+  at each check of its turn (once a second: a small file, parsed in microseconds), so a save counts within a
+  second, nothing restarted. **Refused loudly, never fatal**: a file that can't be read or breaks a rule
+  (`parse_config`: the line, the key and what is allowed, e.g. `line 7: max-parallel 9 for queue regular: a whole
+  number from 1 to 4`) is ignored and the configuration last in force stays: each read that finds a good file (or
+  none: the default) keeps its text in the database (`settings` 'queues'), so every wrapper, one started after the
+  bad save too, keeps the same, never a wider one; the waiting jobs' lines (at once, then every 5 minutes), `job
+  list`, `job queues` and the GUI say "`<file>` is ignored (`<why>`): the configuration last in force stays".
+  YAML read without PyYAML (`read_entries`: the block style `--init` writes, comments, quotes; anything else
+  refused with its line): the training GUI imports `jobqueue` with no project packages; a test holds that PyYAML
+  reads the same values. Mixed code: a wrapper of this code marks its row `queues_aware`; a row without it (code
+  before the file, or the morning's `places_aware` code of Nov 24) is reckoned by older code's constants
+  (`LEGACY`: regular-1, regular-2, express-1 at 10 minutes or less or `--express`, tools-1, tools-2, no load gate),
+  because that is what its own wrapper will take: no wrapper of this code ever counts on an older job taking a
+  place it never will (the spare one), so no job waits behind it for nothing, and the older places stay in the
+  reckoning where the file drops them. **What older code does under a file that differs from its constants**: it
+  ignores the file. It takes regular-1, regular-2, express-1 (10 minutes or less) and tools-1, tools-2 whenever
+  their locks are free, never a place of another name, with no load gate; so under a file of one regular place an
+  older job may still start in regular-2, under a file that renames a queue older jobs keep the old names' places
+  beside the new ones (one more job at a time than the file says, until the older jobs are gone), and an older
+  wrapper reckons a newer job ahead of it by the same constants, so it may wait behind one that waits for another
+  queue until that one starts. Never two jobs in one place (the locks). `triforce job queues` shows a job running
+  in a place the file lacks as "outside these queues (older code)".
 - The command (`job.py`): the wrapper's child, in its own process group, killed when the wrapper dies
   (`PR_SET_PDEATHSIG`; `jobqueue.child_setup`), at niceness 15 (`RUN_NICE`: `run`, `golden`) or 10 (`TOOL_NICE`:
   `build`, `test`, `setup`, with `CARGO_BUILD_JOBS=4`), only ever raised. Its stdout and stderr pass through and the
@@ -1700,10 +1751,16 @@ every step, so following an enemy that moves away pays again, and knockback rese
   step>[:power-on]`, runs, parallel, asked steps; a batch one per chain entry, named for it), the wrapper records
   the seconds each took when the job ends (`jobqueue.chain_seconds`: a lone chain's run time, a batch entry's
   `wall_seconds` from its plan, an interrupted batch's finished entries too), and `jobqueue.chain_model` turns
-  them into run-seconds per shape, `(seconds - CHAIN_START_SECONDS) x parallel / runs`, the median of the last
-  `SHAPE_WINDOW` = 3 (a short window: the machine's load moves a segment's time 2-3x within a day). A chain of a
-  known shape takes `CHAIN_START_SECONDS` (10) + runs x run-seconds / parallel; an unseen one its asked steps at
-  the `chain_steps` rate. When a job with chains ends, every live job whose work names its chains is estimated
+  them into run-seconds per shape, `(seconds - CHAIN_START_SECONDS) x lanes / runs` (`chain_lanes`: the games that
+  really play side by side, min(parallel, runs)), the median of the last `SHAPE_WINDOW` = 3 (a short window: the
+  machine's load moves a segment's time 2-3x within a day). A chain of fewer than `SHAPE_MIN_RUNS` = 20 runs is a
+  smoke and teaches nothing (Nov 24: a 5-run smoke of the 250 test, read as 445 s a run, put the next 250 test at 3
+  hours for its 10-22 minutes). A chain of a known shape takes `CHAIN_START_SECONDS` (10) + runs x run-seconds /
+  lanes; an unseen one the learned shape nearest in steps asked, of its own route when one is known, by the square
+  root of the steps' ratio (a rule of thumb for a shape's first run: typically 4.8x off on the 10 such chains of
+  the history, 5.1x at the rate per asked step, against 1.6x for a seen shape), and its asked steps at the
+  `chain_steps` rate only while no chain is learned at all. When a job with chains ends, every live job whose work
+  names its chains is estimated
   again (`refresh_estimates`); a job an older tool announced keeps its estimate. Measured on the 64 chains and
   batches of the history before this (each estimated from the chains that ended before it): within 2x 39 against
   33, median actual / estimate 1.13 against 1.46, the jobs over 15 minutes 0.19-2.4x against 0.23-9.9x; a segment
@@ -1715,13 +1772,19 @@ every step, so following an enemy that moves away pays again, and knockback rese
 - The lanes (`jobqueue.line`): the jobs lane orders its waiting jobs by score, `estimate − 0.5 × seconds waited`
   (`AGING`; lowest first, ties by join time): a short job goes before a long one and a long one moves up as it
   waits, passing fresh short jobs once it has waited about twice its own estimate, so nothing starves. In that
-  order they take the free places: a job estimated at most 600 s (`EXPRESS_SECONDS`) or run with `--express` takes
-  the express place while it is free, else a regular one, so a short chain or a 250 test doesn't wait for the
-  hour-long trainings that usually hold both regular places (two at a time is a bit faster than one, more are not:
-  load averages of 120 when they piled up). The tools lane (`build`, `test`, `setup`) is first come first served on
-  its two places and never waits behind a training or a chain. A waiting wrapper prints `triforce job: #12 A-T-S
-  waits for a place: estimated 40 minutes; 2 jobs are running (...)` at first and every 5 minutes
-  (`UPDATE_SECONDS`), then `... starts (regular-1, nice 15, ...)`.
+  order they take the free places of the queues they may take (above), so a short chain or a 250 test doesn't wait
+  for the hour-long trainings that usually hold both regular places (two at a time is a bit faster than one, more
+  are not: load averages of 120 when they piled up; the spare place adds a third only while the machine has room).
+  A job that gets none waits, and one behind it may still take a place it can use. The tools lane (`build`,
+  `test`, `setup`) is first come first served in the tools queue and never waits behind a training or a chain. A
+  waiting wrapper prints `triforce job: #12 A-T-S (run) waits for a place in regular (2 of 2 running); spare is
+  closed: load 22.4 above 15; estimated 40 minutes; 2 jobs are running (...)` at first, every 5 minutes
+  (`UPDATE_SECONDS`) and when the file's warning changes, then `... starts (regular-1, nice 15, ...)`.
+  `triforce job queues` prints the queues in force (where from, the load reading, each queue with what it runs,
+  open or CLOSED and why, its places taken, what runs in it and waits for it; each line in the order it starts with
+  what each job waits for); `triforce job list` heads its listing with `queues: express 1/1 · regular 2/2 · spare
+  0/1 closed: load 22.4 above 15 · tools 1/2` and the same warning; the training GUI shows that line over its list
+  (window and web view) and a waiting job's card says what it waits for.
 - Moving a job up (the owner, Nov 23: "a right click in the gui that goosed something to the top of the fast or slow
   queue"; `jobqueue.move_to_top`, `triforce job top ID [--undo]`, the training GUI's right click on a waiting job's
   box, "Move to the top of its line" / "Back to its own place"): a waiting job goes to the top of its own line (the
@@ -2581,7 +2644,20 @@ The owner plays one room himself to show how it is played, and the take is kept 
   give the entries in order, the namespace's state files (read by `_native.state_name`) the visits and chains.
   A room the route never enters is refused, naming the rooms it does enter; `triforce.probe` is not used (a
   route state is what a run brings into the room). `--bombs`, `--hearts` (halves; the containers grow to hold
-  them, written as `env::start_states::hearts_encoding` writes them) and `--keys` are `Game.set_value` writes.
+  them; the game's own bytes through `_native.hearts_encoding`, the training resets' function: 2 hearts die to a
+  two-heart hit), `--keys` and `--item` are `Game.set_value` writes. `--item` selects the B item
+  (`SelectedItemSlot`; `emu.ITEMS`: boomerang, bombs, bow, candle, recorder, food, potion, wand) only if Link
+  holds it there (`GameState.b_slots`, `zelda::submenu::holds`; the bombs by the count after `--bombs`): the game
+  moves the selection off an empty slot on its next status-bar frame (`asm:StatusBar_CheckMissingItem`), so bombs
+  selected with none cannot be shown. The HUD draws hearts, counts and the B item from the second frame (the first
+  frame's picture comes before the game rewrites the status bar).
+- **`--enemies N`** (dungeon rooms): the room's monsters (game.yaml, `_native.game_rooms`) less N are banked as
+  kills the game keeps for the room (`LoadOptions::banked_kills`, a staged training reset's `room_kills` way:
+  `LiveGame.load(..., banked_kills)`), so the game itself makes N. Which N and where are the game's: its spawn
+  draw from the seed (the same seed the same monsters in the same places, another seed others), not a choice of
+  this tool; the room's kill count and "cleared" logic are the game's own, so a kill-all room opens when the N
+  die (3x59's S shutter, `tests/test_emu.py`). The banked count is a frame-0 EDIT. The status line says `enemies N
+  of M`. The overworld keeps no kills for a screen: refused there.
 - **The recording** (`_native.LiveGame`): a `Session` over `pool::zelda::PoolNes<ZCore>`, the wrapper every pool
   env records through. `load(state, seed, overrides)` loads the start as a chain start loads it (the natural RNG
   phase drawn from the seed, "Randomness at a start"; the overrides written before control is gained) and begins

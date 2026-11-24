@@ -77,10 +77,59 @@ def test_the_route_start_its_entries_visits_and_chains():
 def test_overrides_write_bombs_keys_and_hearts_as_the_env_does():
     assert emu.overrides(Spec(3, 0x59, bombs=4, keys=2), 3) == {'bombs': 4, 'keys': 2}
     assert emu.overrides(Spec(3, 0x59, hearts=3), 3) == {'hearts_and_containers': 0x22, 'partial_hearts': 0xFF}
+    assert emu.overrides(Spec(3, 0x59, hearts=2), 3) == {'hearts_and_containers': 0x21, 'partial_hearts': 0xFF}
     assert emu.overrides(Spec(3, 0x59, hearts=1.5), 3) == {'hearts_and_containers': 0x21, 'partial_hearts': 0x7F}
     assert emu.overrides(Spec(3, 0x59, hearts=5), 3) == {'hearts_and_containers': 0x44, 'partial_hearts': 0xFF}
+    assert emu.overrides(Spec(5, 0x05, hearts=2), 8) == dict(_native.hearts_encoding(4, 8))   # the env's function
     with pytest.raises(ValueError):
         emu.overrides(Spec(3, 0x59, hearts=0), 3)
+
+
+def hud_hearts(session) -> float:
+    """The hearts the HUD draws on the last frame: its bottom row of heart tiles (hearts 1-8, from x 176 at y 48),
+    a red right half a full heart, a red left half alone a half heart."""
+    picture = session.screen()
+    count = 0.0
+    for i in range(8):
+        cell = picture[48:56, 176 + 8 * i:184 + 8 * i]
+        red = (cell[..., 0] > 150) & (cell[..., 1] < 100)
+        count += 1.0 if red[:, 4:].any() else 0.5 if red[:, :4].any() else 0.0
+    return count
+
+
+def darknut_touches(session, limit: int = 1, frames: int = 600) -> list:
+    """A Blue Darknut moved onto Link every frame (by memory, as the walk tests force hits; not recorded as play):
+    the (HeartValues, HeartPartial) after each touch, until ``limit`` touches or DONE."""
+    seen, last = [], (session.state.read(0x66F), session.state.read(0x670))
+    for _ in range(frames):
+        state = session.state
+        foes = [e for e in state.enemies if e['name'] == 'BlueDarknut' and e['active']]
+        if foes:
+            session.game.poke(0x70 + foes[0]['index'], state.link['x'])
+            session.game.poke(0x84 + foes[0]['index'], state.link['y'])
+        session.step(0)
+        now = (session.state.read(0x66F), session.state.read(0x670))
+        if now != last:
+            seen.append(now)
+            last = now
+        if session.done or len(seen) >= limit:
+            break
+    return seen
+
+
+@pytest.mark.parametrize('hearts, touches, died', [(2, 1, True), (2.5, 1, False), (2.5, 2, True), (0.5, 1, True)])
+def test_hearts_in_the_olive_garden_die_as_the_game_says(hearts, touches, died):
+    """``--hearts 2``: a Blue Darknut's touch (two hearts; Link holds no ring at the route's Olive Garden) kills;
+    2.5 survive one; half a heart dies to anything.  The status line's hearts are what the HUD draws from the second
+    frame on (the first frame's picture is drawn before the game rewrites the status bar's text)."""
+    session = session_of(Spec(5, 0x05, bombs=0, hearts=hearts), 1)
+    assert session.state.read(0x662) == 0                                   # InvRing: no ring
+    for _ in range(2):
+        session.step(0)
+    assert hud_hearts(session) == session.state.health == hearts
+    darknut_touches(session, touches)
+    assert (session.done == 'died') == died
+    assert _native.replay_verify(session.replay())['frames'] == session.frames
 
 
 # ---------------------------------------------------------------------------------------------- DONE
@@ -224,3 +273,90 @@ def test_an_agent_reads_link_and_the_monsters_frame_by_frame():
         state = reader.load(player.save_state(), randomize_rng=False, controllable=True)
         read.append((state.link['x'], [e['name'] for e in state.enemies]))
     assert read == seen and 'BlueDarknut' in read[-1][1]
+
+
+# ---------------------------------------------------------------------------------------------- --item
+
+B_BOX = (slice(24, 48), slice(120, 144))          # the status bar's B box (y, x)
+
+
+def test_the_b_item_is_selected_at_the_load_and_drawn():
+    """``--item``: `SelectedItemSlot` ($656) written at frame 0, held through the frames to control, the HUD's B box
+    drawing it after the first frame; only items Link holds (the Olive Garden's start: the boomerang and bombs)."""
+    def box(spec):
+        session = session_of(spec, 1)
+        session.step(0)
+        edits = [tuple(int(v) for v in e) for e in _native.Replay(session.replay()).edits() if e[1] == 0x656]
+        return session.state.read(0x656), edits, session.screen()[B_BOX].tobytes(), session
+    plain = box(Spec(5, 0x05))
+    boomerang = box(Spec(5, 0x05, item='boomerang'))
+    bombs = box(Spec(5, 0x05, bombs=3, item='bombs'))
+    assert list(plain[3].state.b_slots) == [0, 1] and plain[0] == 0 and plain[1] == []
+    assert boomerang[:3] == (0, [(0, 0x656, 0, 0)], plain[2])
+    assert bombs[0] == 1 and bombs[1] == [(0, 0x656, 0, 1)] and bombs[2] != plain[2]
+    assert _native.replay_verify(bombs[3].replay())['frames'] == bombs[3].frames
+    assert bombs[3].file_name(datetime(2026, 11, 24, 10, 15, 2)) == \
+        '5x05_E_bombs3_itembombs_seed1_261124-101502.tfreplay'
+    with pytest.raises(ValueError, match='candle: Link does not hold it at this start; he holds boomerang, bombs'):
+        session_of(Spec(5, 0x05, item='candle'), 1)
+    with pytest.raises(ValueError, match=r'bombs: .*StatusBar_CheckMissingItem.*he holds boomerang$'):
+        session_of(Spec(5, 0x05, bombs=0, item='bombs'), 1)
+
+
+# ---------------------------------------------------------------------------------------------- --enemies
+
+OBJ_TYPE = 0x34F                 # ObjType, slots 0 (Link) to 11 (zelda::tables::OBJ_ID)
+
+
+def monsters(session, frames: int = 120) -> list:
+    for _ in range(frames):
+        session.step(0)
+    return [(e['index'], e['name'], e['x'], e['y']) for e in session.state.enemies]
+
+
+def kill(session, slots, frames: int = 64):
+    """Empties ``slots`` (the room counts those monsters dead, as the walk tests kill: tests/test_d5.py) and lets the
+    game notice; the writes are EDITS of the take."""
+    for slot in slots:
+        session.game.poke(OBJ_TYPE + slot, 0)
+    for _ in range(frames):
+        session.step(0)
+
+
+def test_enemies_leaves_n_drawn_from_the_seed():
+    """``--enemies 2`` in 3x59 (5 Red Darknuts) and the Olive Garden (6 Blue Darknuts): the game makes 2, where its
+    spawn draw from the seed puts them: the same seed the same, another seed elsewhere."""
+    first = monsters(session_of(Spec(3, 0x59, enemies=2), 1))
+    assert len(first) == 2 and {name for _, name, _, _ in first} == {'RedDarknut'}
+    assert monsters(session_of(Spec(3, 0x59, enemies=2), 1)) == first
+    assert monsters(session_of(Spec(3, 0x59, enemies=2), 2)) != first
+    assert len(monsters(session_of(Spec(3, 0x59), 1))) == 5
+    garden = session_of(Spec(5, 0x05, bombs=0, enemies=2), 1)
+    assert garden.enemies == (2, 6) and garden.banked == [((5, 0x05), 4)]
+    assert [name for _, name, _, _ in monsters(garden)] == ['BlueDarknut'] * 2
+    assert len(monsters(session_of(Spec(3, 0x59, enemies=9), 1))) == 5            # more than the room has: all
+    assert session_of(Spec(3, 0x59, enemies=9), 1).enemies == (5, 5)
+
+
+def test_the_room_opens_when_the_n_left_die():
+    """3x59 is a kill-all room (its S shutter): with ``--enemies 2`` it opens once those two die; with all five
+    there, two dead leave it shut.  The banked kills and the scripted kills are EDITS: the take verifies."""
+    session = session_of(Spec(3, 0x59, enemies=2), 1)
+    left = monsters(session)
+    assert session.state.is_door_barred('S')
+    kill(session, [slot for slot, _, _, _ in left])
+    assert session.state.enemies == [] and not session.state.is_door_barred('S')
+    edits = [tuple(int(v) for v in e) for e in _native.Replay(session.replay()).edits()]
+    assert (0, 0x560 + 0x59, edits[[e[1] for e in edits].index(0x560 + 0x59)][2], 3) in edits    # 3 kills banked
+    assert _native.replay_verify(session.replay())['frames'] == session.frames
+
+    full = session_of(Spec(3, 0x59), 1)
+    kill(full, [slot for slot, _, _, _ in monsters(full)][:2])
+    assert len(full.state.enemies) == 3 and full.state.is_door_barred('S')
+
+
+def test_enemies_is_for_dungeon_rooms_with_monsters():
+    with pytest.raises(ValueError, match='dungeon rooms only'):
+        session_of(Spec(0, 0x0f, enemies=1), 1)
+    with pytest.raises(ValueError, match='no monsters in 3x7c'):
+        session_of(Spec(3, 0x7c, enemies=1), 1)

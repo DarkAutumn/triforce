@@ -129,21 +129,24 @@ impl PyLiveGame {
     /// Loads `state` (a state name or path, embedded in the recording under its name; or `TFZSTATE` bytes,
     /// embedded) and starts a new recording from it: the natural RNG phase drawn from `seed` and `ram_overrides`
     /// (`Game.set_value` names) are its frame-0 edits, the frames until Link is controllable its first inputs.
+    /// `banked_kills` ((level, room), kills): the kills the game keeps for the room about to be entered
+    /// (`LoadOptions::banked_kills`, as a staged training reset banks them), so it makes that many monsters fewer.
     /// The previous recording is dropped.
-    #[pyo3(signature = (state, seed, ram_overrides=None))]
+    #[pyo3(signature = (state, seed, ram_overrides=None, banked_kills=Vec::new()))]
     fn load(
         &self,
         py: Python<'_>,
         state: &Bound<'_, PyAny>,
         seed: u64,
         ram_overrides: Option<&Bound<'_, PyDict>>,
+        banked_kills: Vec<((u8, u8), u8)>,
     ) -> PyResult<PyGameState> {
         let opts = LoadOptions {
             randomize_rng: true,
             fresh_room: false,
             controllable: false,
             overrides: overrides(ram_overrides)?,
-            banked_kills: Vec::new(),
+            banked_kills,
         };
         let (name, bytes) = if let Ok(b) = state.cast::<PyBytes>() {
             (None, b.as_bytes().to_vec())
@@ -207,6 +210,21 @@ impl PyLiveGame {
     fn screen<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let g = self.inner.lock();
         screen(py, g.core(), true)
+    }
+
+    /// Writes a byte ($0000-$07FF, $6000-$7FFF) before the next frame, recorded as an EDIT (a scripted kill, a
+    /// forced hit in a test): the take still verifies.
+    fn poke(&self, addr: u16, value: u8) -> PyResult<()> {
+        if !matches!(addr, 0x0000..0x0800 | 0x6000..0x8000) {
+            return Err(PyValueError::new_err(format!("${addr:04X} is outside $0000-$07FF/$6000-$7FFF")));
+        }
+        let mut g = self.inner.lock();
+        if !g.loaded {
+            return Err(PyRuntimeError::new_err("call load() first"));
+        }
+        zelda::Nes::poke(g.session.nes_mut(), addr, value);
+        g.session.apply_ram(&[]);
+        Ok(())
     }
 
     /// Input frames recorded since the load (the load's own frames to control included).

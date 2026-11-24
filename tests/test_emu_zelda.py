@@ -297,3 +297,15 @@ def test_the_command_line(capsys):
     assert emu_zelda.main(['3', '22']) == 2
     assert 'never enters 3x22' in capsys.readouterr().err
     assert 'Create = pause the emulator' in parser.format_help()
+    args = parser.parse_args(['5', '05', '--item', 'bombs', '--enemies', '2', '--bombs', '3'])
+    assert (args.item, args.enemies) == ('bombs', 2)
+    with pytest.raises(SystemExit):
+        parser.parse_args(['5', '05', '--item', 'sword'])
+    assert '--enemies' in parser.format_help() and '--item' in parser.format_help()
+
+
+def test_the_status_line_counts_the_enemies_left(qapp, tmp_path):
+    window, _ = window_of(qapp, emu.Spec(5, 0x05, bombs=0, enemies=2), 1, tmp_path)
+    assert 'enemies 2 of 6' in window.status_text()
+    plain, _ = window_of(qapp, emu.Spec(5, 0x05), 1, tmp_path)
+    assert 'enemies' not in plain.status_text()

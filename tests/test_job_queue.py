@@ -5,7 +5,12 @@ lane holds; a killed wrapper takes its command with it and frees its place; SIGT
 ``interrupted``; ``--timeout`` stops a command; the command runs at the verb's niceness whatever comes after ``--``;
 ``test --build`` is one entry with both steps; the tools refuse to run outside the queue without a terminal; and
 every entry point answers the wrapper's dry call with its work, having loaded no model, built no pool and written
-no log folder (Nov 23: 17 chains loading their teams outside the line held the machine for 25-48 minutes)."""
+no log folder (Nov 23: 17 chains loading their teams outside the line held the machine for 25-48 minutes).
+
+Each test's queue runs the default queues' file without its spare queue (``NO_SPARE``): the queues of Nov 23, two
+regular places, one express, two tools; these tests are those of Nov 23 unchanged, and pass under it.  The spare
+queue's own test writes the default whole.  The load average every wrapper reads is a file of the test's
+(``$TRIFORCE_LOADAVG``), never the machine's."""
 
 import json
 import os
@@ -39,11 +44,15 @@ sys.exit(job.main(sys.argv[1:]))
 def environment(queue: Path, **extra) -> dict:
     env = {key: value for key, value in os.environ.items()
            if key not in (jobs.JOB_ID_ENV, jobs.JOB_LABEL_ENV, jobs.JOB_ESTIMATE_ENV)}
-    env.update({q.QUEUE_DIR_ENV: str(queue)}, **extra)
+    env.update({q.QUEUE_DIR_ENV: str(queue), q.LOADAVG_ENV: str(queue / 'loadavg')}, **extra)
     # A test job in a made-up repo has no main checkout to take the team from (`test_steps`); the suite itself is
     # run with the variable set by `triforce job test` and without it by hand: the tests must not differ.
     env.setdefault('TRIFORCE_MODELS_DIR', str(queue))
     return env
+
+
+# The default queues' file without its spare queue: the queues of Nov 23.
+NO_SPARE = '\n\n'.join(block for block in q.DEFAULT_TEXT.split('\n\n') if not block.startswith('- name: spare\n'))
 
 
 def wait_until(condition, timeout: float, what: str):
@@ -106,11 +115,23 @@ class Queue:
                 process.kill()
             process.wait()
 
+    def set_load(self, value: float):
+        """The load average the wrappers read (``$TRIFORCE_LOADAVG``), and the shared reading made a minute old so
+        the next turn reads it."""
+        (self.folder / 'loadavg').write_text(f'{value:.2f} 1.00 1.00 2/900 4242\n', encoding='utf-8')
+        con = q.connect(self.folder)
+        try:
+            con.execute("UPDATE settings SET ts = 0 WHERE key = 'load'")
+        finally:
+            con.close()
+
 
 @pytest.fixture
 def queue(tmp_path):
     line = Queue(tmp_path / 'queue')
     line.folder.mkdir()
+    q.config_path(line.folder).write_text(NO_SPARE, encoding='utf-8')
+    line.set_load(3.0)
     yield line
     line.close()
 
@@ -200,6 +221,40 @@ def test_six_jobs_at_once_one_per_place_the_rest_wait(queue):
     rows = queue.rows()
     assert sorted(row['place'] for row in rows if row['status'] == 'running') == ['regular-1', 'regular-2']
     assert sum(row['status'] == 'queued' for row in rows) == 4
+
+
+def test_the_spare_place_opens_at_or_under_its_load_line_and_an_edit_of_the_file_counts_without_a_restart(queue):
+    """The default file whole (its spare queue: one place while the load average is at or under 15).  Under a load
+    of 22.4 two long jobs run in the regular places and the third waits, saying why in the owner's terms; once the
+    shared reading says 3.0 it starts in the spare place.  An edit of the file counts at the waiting wrappers' next
+    check, nothing restarted: a fourth job starts in a third regular place once the file has one; a refused edit
+    leaves that in force and the waiting job says why at once."""
+    path = q.config_path(queue.folder)
+    path.write_text(q.DEFAULT_TEXT, encoding='utf-8')
+    queue.set_load(22.4)
+    queue.run('a', *sleeper())
+    queue.run('b', *sleeper())
+    wait_until(lambda: queue.status('a') == queue.status('b') == 'running', 60, "two running")
+    third = queue.run('c', *sleeper())
+    wait_until(lambda: 'spare is closed' in third.out.read_text(), 60, "c says why it waits")
+    assert ('waits for a place in regular (2 of 2 running); spare is closed: load 22.4 above 15; estimated 1 hour; '
+            '2 jobs are running') in third.out.read_text()
+    assert queue.status('c') == 'queued'
+    queue.set_load(3.0)
+    wait_until(lambda: queue.status('c') == 'running', 60, "c in the spare place")
+    assert queue.row('c')['place'] == 'spare-1'
+    fourth = queue.run('d', *sleeper())
+    wait_until(lambda: queue.status('d') == 'queued' and 'waits for a place' in fourth.out.read_text(), 60, "d waits")
+    path.write_text(q.DEFAULT_TEXT.replace('- name: regular\n  max-parallel: 2', '- name: regular\n  max-parallel: 3'),
+                    encoding='utf-8')
+    wait_until(lambda: queue.status('d') == 'running', 60, "d in a third regular place")
+    assert queue.row('d')['place'] == 'regular-3'
+    fifth = queue.run('e', *sleeper())
+    wait_until(lambda: queue.status('e') == 'queued' and 'waits for a place' in fifth.out.read_text(), 60, "e waits")
+    path.write_text('- name: regular\n  max-parallel: 9\n', encoding='utf-8')
+    wait_until(lambda: f'{path} is ignored (line 2: max-parallel 9' in fifth.out.read_text(), 60, "e says why")
+    assert queue.status('e') == 'queued'
+    assert 'the configuration last in force stays' in fifth.out.read_text()
 
 
 def test_builds_and_tests_have_two_places_of_their_own(queue, tmp_path):
