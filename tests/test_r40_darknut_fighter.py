@@ -114,3 +114,59 @@ def test_a_bomb_is_laid_only_for_two_or_more(fighter):
     record = fighter.play(fighter.make_env('59', 8, REPO_STATES_DIR), '59', 2, 'd3first_3_59n_2')
     assert record['ending'] == 'exit-correct' and record['bombs'] >= 1, record
     assert all(hurt >= 2 for hurt in record['bomb_hurt']), record
+
+
+def chasing(fighter, ram) -> bool:
+    """`zelda::darknut_rules::chasing` read again here: Link within 8 pixels of the line of a Darknut walking away
+    from him, less than $30 pixels behind it."""
+    x, y = ram[fighter.OBJ_X], ram[fighter.OBJ_Y]
+    for d in fighter.darknuts(ram):
+        if d.cloud or d.dir is None:
+            continue
+        vx, vy = fighter.VEC[d.dir]
+        along = (x - d.x) * vx + (y - d.y) * vy
+        across = abs(y - d.y) if vx else abs(x - d.x)
+        if across < 9 and -0x30 < along < 0:
+            return True
+    return False
+
+
+def test_the_chase_cost_is_paid_on_the_turn_rules_line(fighter):
+    """`reward.chase_penalty` (Darknut40's switched-off proposal): a walker that keeps stepping behind the nearest
+    Darknut on its line pays `penalty-chase`, its value times the step's frames, on exactly the steps that end with
+    Link on the line of a Darknut walking away from him; with the key at 0 (the default) it is never paid."""
+    from triforce._native import Env, SpecialistConfig
+    base = SpecialistConfig.load(str(fighter.task_file('garden', 0)))
+    for cost in (0.01, 0.0):
+        config = base.replace(reward=dict(base.to_dict()['reward'], chase_penalty=cost))
+        env = Env(config, explicit_starts=True, strict_actions=False, seed=0, states_dir=str(REPO_STATES_DIR))
+        env.reset(seed=7, options={'start_state': 'd3first_5_05e_0'})
+        paid, last = 0, None
+        for _ in range(150):
+            ram = bytes(env.state.ram)
+            x, y = ram[fighter.OBJ_X], ram[fighter.OBJ_Y]
+            nuts = [d for d in fighter.darknuts(ram) if not d.cloud and d.dir]
+            way = 'W'
+            if nuts and 0x20 <= x <= 0xD0:
+                d = min(nuts, key=lambda n: abs(n.x - x) + abs(n.y - y))
+                vx, vy = fighter.VEC[d.dir]
+                gx, gy = d.x - 16 * vx, d.y - 16 * vy             # one cell behind it on its line
+                ways = [('E' if gx > x else 'W'), ('S' if gy > y else 'N')]
+                if abs(gx - x) <= abs(gy - y):
+                    ways.reverse()
+                way = ways[1] if (x, y) == last else ways[0]  # stopped (the block, a wall): the other axis
+            last = (x, y)
+            _, _, terminated, truncated, info = env.step(f'MOVE {way} 4')
+            if terminated or truncated:
+                break
+            charged = info['rewards'].get('penalty-chase')
+            if cost:
+                expected = chasing(fighter, bytes(env.state.ram))
+                assert (charged is not None) == expected, (info, expected)
+                if charged is not None:
+                    assert charged == pytest.approx(-cost * info['frames'])
+                    paid += 1
+            else:
+                assert charged is None
+        if cost:
+            assert paid >= 5, paid

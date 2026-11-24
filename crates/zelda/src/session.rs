@@ -109,6 +109,10 @@ pub struct Session<N: Nes> {
     /// `crate::objectives::route_bomb_targets`) that no live bomb of Link's reaches yet (round 23,
     /// `BombTarget::awaits_bomb`); None: wherever the game places it.  The env sets it every step.
     bomb_targets: Option<Vec<crate::bombs::BombTarget>>,
+    /// BOMB only facing where a bomb laid now would hurt this many monsters or more
+    /// ([`crate::darknut_rules::bomb_catch`]); 0: no such limit (round 40, Darknut40's switched-off proposal, a
+    /// family's `items.bomb_catch`). The env sets it every step, 0 where a single bomb is right.
+    bomb_catch: u8,
     /// RECORDER only facing these ways ([`Direction::value`] bits; 0: not at all), round 26: the route's rule
     /// (`crate::objectives::GameCompletion::recorder_facings`: the whirlwind's count, the pond, a Digdogger fought);
     /// None: the game state's alone ([`crate::actions::recorder_wanted`]).  The env sets it every step.
@@ -156,6 +160,7 @@ impl<N: Nes> Session<N> {
             clips_allowed: true,
             vetoed_wraps: Vec::new(),
             bomb_targets: None,
+            bomb_catch: 0,
             recorder_facings: None,
             warp: None,
             arrow_facings: None,
@@ -307,6 +312,16 @@ impl<N: Nes> Session<N> {
             return;
         }
         self.bomb_targets = targets.map(<[_]>::to_vec);
+        self.refresh_mask();
+    }
+
+    /// The monsters a weapon bomb must be expected to hurt (0 lifts the limit: the `bomb_catch` field's rule); the
+    /// mask is recomputed when it changes.
+    pub fn set_bomb_catch(&mut self, at_least: u8) {
+        if self.bomb_catch == at_least {
+            return;
+        }
+        self.bomb_catch = at_least;
         self.refresh_mask();
     }
 
@@ -678,6 +693,13 @@ impl<N: Nes> Session<N> {
                 let opens = crate::bombs::landing(state, d)
                     .is_some_and(|at| targets.iter().any(|t| t.in_reach(at) && wanted(t)));
                 if !opens {
+                    mask.disallow(ActionKind::Bomb, d);
+                }
+            }
+        }
+        if self.bomb_catch > 0 {
+            for d in mask.directions(ActionKind::Bomb) {
+                if crate::darknut_rules::bomb_catch(state, d) < self.bomb_catch {
                     mask.disallow(ActionKind::Bomb, d);
                 }
             }

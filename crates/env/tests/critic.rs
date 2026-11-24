@@ -569,6 +569,36 @@ fn placing_a_bomb_costs_and_its_hits_pay() {
     assert!(critique(&mut critic(), &step(&base, &placed, "MOVE N 8")).is_empty());
 }
 
+/// Round 40 (Darknut40's switched-off proposal): with `reward.bomb_catch_min: 2` a bomb that hurts one monster pays
+/// no `reward-bomb-hit` (its cost stands), two or more are paid as always; where one bomb is right (a boss hit, the
+/// 10th damage-free kill's bomb) one is paid too. Off (0), one is paid as before.
+#[test]
+fn a_bomb_catch_minimum_pays_two_or_more() {
+    let mut target = Ram::new().with(Var::Bombs, 3);
+    target.enemy(3, enemy::RED_DARKNUT, 120, 121).enemy(4, enemy::RED_DARKNUT, 130, 121);
+    let placed = target.with(Var::BombOrFlameAnimation2, 19);
+    let two = || {
+        let mut c = critic();
+        c.bomb_catch_min = 2;
+        c
+    };
+    let one = critique(&mut two(), &hits(step(&target, &placed, "BOMB N"), &[(3, 1)]));
+    assert_eq!(names(&one), ["penalty-bomb-used"]);
+    let both = critique(&mut two(), &hits(step(&target, &placed, "BOMB N"), &[(3, 1), (4, 1)]));
+    assert!(both.contains("reward-bomb-hit") && both.contains("penalty-bomb-used"));
+    let off = critique(&mut critic(), &hits(step(&target, &placed, "BOMB N"), &[(3, 1)]));
+    assert_eq!(value(&off, "reward-bomb-hit"), REWARD_MEDIUM);
+    // A boss hit: Manhandla's bombs are one at a time.
+    let mut boss = Ram::new().with(Var::Bombs, 3);
+    boss.enemy(3, enemy::MANHANDLA, 120, 121);
+    let r = critique(&mut two(), &hits(step(&boss, &boss.with(Var::BombOrFlameAnimation2, 19), "BOMB N"), &[(3, 1)]));
+    assert_eq!(value(&r, "reward-bomb-hit"), REWARD_MEDIUM);
+    // The 10th damage-free kill's bomb (`$50` = 9 before it).
+    let tenth = target.with(Var::HelpDropCount, 9);
+    let r = critique(&mut two(), &hits(step(&tenth, &tenth.with(Var::BombOrFlameAnimation2, 19), "BOMB N"), &[(3, 1)]));
+    assert_eq!(value(&r, "reward-bomb-hit"), REWARD_MEDIUM);
+}
+
 // --- health ---
 
 #[test]

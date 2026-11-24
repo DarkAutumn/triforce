@@ -329,6 +329,19 @@ pub struct RewardConfig {
     /// monster or shot is in the room).
     #[serde(default)]
     pub aimless_penalty: f64,
+    /// Round 40 (Darknut40's switched-off proposal; the owner: "You never try to get to a darknut moving away from
+    /// you on your row by following them directly"): `penalty-chase` per frame of a step that ends with Link on the
+    /// line of travel of a Darknut walking away from him (`zelda::darknut_rules::chasing`: within 8 pixels of its row
+    /// or column, the turn rule's reach, up to `CHASE_REACH` behind it), scaled by `shaping_scale` (positive
+    /// magnitude; 0 = off, the default).
+    #[serde(default)]
+    pub chase_penalty: f64,
+    /// Round 40 (Darknut40's switched-off proposal; the owner: "Just hitting a single darknut with a bomb is mostly a
+    /// waste"): `reward-bomb-hit` (paid per monster the bomb hurts) is paid only when it hurts at least this many;
+    /// fewer leave the bomb's cost (`penalty-bomb-used`) alone. Not where one bomb is right: a hit on a boss, the 10th
+    /// damage-free kill's bomb, a `requires_bombs` room (`env::critic`). 0 = off, the default.
+    #[serde(default)]
+    pub bomb_catch_min: u8,
     /// Multiplies every non-terminal reward and penalty (outcome fine-tuning, in [0, 1]); training's
     /// `--shaping-anneal` lowers it between rollouts.
     #[serde(default = "one")]
@@ -363,6 +376,8 @@ impl Default for RewardConfig {
             beam_timed_reward: BEAM_TIMED_REWARD,
             beam_unfired_penalty: BEAM_UNFIRED_PENALTY,
             aimless_penalty: 0.0,
+            chase_penalty: 0.0,
+            bomb_catch_min: 0,
             shaping_scale: 1.0,
             frame_penalty: 0.0,
             exit_health_weight: 0.5,
@@ -538,10 +553,11 @@ impl BombUse {
 /// The rules a replay's MASKS names (round 40; META `tables.mask_reasons`): BOMB's mode (`never`, `tenth`,
 /// `required`, `reserve`), a family's `items` switch, ARROW's `rupee-reserve`, a step's `sword-off`, and the rules
 /// that keep a kind to some directions: `bomb-targets` (BOMB only toward the wall it opens), `facings` (ARROW,
-/// CANDLE by the route), `doorways` (MOVE kept out of a doorway).
-pub const MASK_REASONS: [&str; 10] = [
+/// CANDLE by the route), `doorways` (MOVE kept out of a doorway), `bomb-catch` (BOMB only where it would hurt
+/// `items.bomb_catch` monsters; Darknut40's switched-off proposal).
+pub const MASK_REASONS: [&str; 11] = [
     "never", "tenth", "required", "reserve", "items", "rupee-reserve", "sword-off", "bomb-targets", "facings",
-    "doorways",
+    "doorways", "bomb-catch",
 ];
 
 /// The route's direction rules in force, added to `rules` ([`ItemsConfig::mask_rules`]): BOMB kept to the bomb
@@ -586,6 +602,12 @@ pub struct ItemsConfig {
     pub food: bool,
     #[serde(default, deserialize_with = "de_bool")]
     pub candle: bool,
+    /// Round 40 (Darknut40's switched-off proposal; the owner: "you always want to hit 2+ darknuts with one bomb"):
+    /// a weapon BOMB of a `free` family is offered only facing where a bomb laid now would hurt this many monsters
+    /// or more (`zelda::darknut_rules::bomb_catch`); 0 (the default): no such limit. [`ItemsConfig::bomb_catch_in`]
+    /// lifts it wherever one bomb is right.
+    #[serde(default)]
+    pub bomb_catch: u8,
 }
 
 impl Default for ItemsConfig {
@@ -597,6 +619,7 @@ impl Default for ItemsConfig {
             recorder: false,
             food: false,
             candle: false,
+            bomb_catch: 0,
         }
     }
 }
@@ -609,6 +632,18 @@ impl ItemsConfig {
     pub fn on_step(&self, bombs: Option<&str>, weapon: bool) -> ItemsConfig {
         let mode = bombs.and_then(BombUse::named).unwrap_or(self.bombs);
         ItemsConfig { bombs: if weapon { mode } else { mode.without_weapon() }, ..self.clone() }
+    }
+
+    /// The `bomb_catch` limit in force in `state` (0: none): only for a `free` family's weapon bomb. Lifted where one
+    /// bomb is right: while BOMB is kept to bomb targets (`targets`: a wall, a granted bomb), in a `requires_bombs`
+    /// room (the walls, Dodongo's room), while a boss lives in the room (Manhandla, Gleeok, Digdogger, Aquamentus:
+    /// their bombs are the route's, one at a time), and on the 10th damage-free kill (that bomb arms a forced drop).
+    pub fn bomb_catch_in(&self, map: &zelda::GameMap, state: &zelda::GameView, targets: bool) -> u8 {
+        let single = targets
+            || map.requires_bombs(state.full_location())
+            || state.next_kill_arms_drop()
+            || state.active_enemies().any(|e| zelda::enums::enemy::is_boss(e.id));
+        if self.bombs == BombUse::Free && !single { self.bomb_catch } else { 0 }
     }
 
     /// Action kinds masked out in `state` with `bomb_reserve` bombs and `rupee_reserve` rupees to keep (routes.yaml),
@@ -1209,6 +1244,7 @@ impl SpecialistConfig {
             ("reward.quiet_enemy_penalty", self.reward.quiet_enemy_penalty),
             ("reward.boss_ate_bomb_penalty", self.reward.boss_ate_bomb_penalty),
             ("reward.aimless_penalty", self.reward.aimless_penalty),
+            ("reward.chase_penalty", self.reward.chase_penalty),
             ("reward.sword_blocked_penalty", self.reward.sword_blocked_penalty),
             ("reward.beam_kill_reward", self.reward.beam_kill_reward),
             ("reward.beam_timed_reward", self.reward.beam_timed_reward),
@@ -1964,6 +2000,10 @@ mod tests {
             "reward: {boss_ate_bomb_penalty: .nan}",
             "reward: {aimless_penalty: -0.001}",
             "reward: {aimless_penalty: .nan}",
+            "reward: {chase_penalty: -0.001}",
+            "reward: {chase_penalty: .nan}",
+            "reward: {bomb_catch_min: -1}",
+            "items: {bomb_catch: 256}",
             "reward: {sword_blocked_penalty: -0.25}",
             "reward: {sword_blocked_penalty: .nan}",
             "reward: {beam_kill_reward: -0.5}",
@@ -1992,6 +2032,8 @@ mod tests {
             "endings: {max-steps: hard-failure, no-damage: hard-failure, no-room-progress: soft-failure}",
             "reward: {sword_blocked_penalty: 0}",
             "reward: {aimless_penalty: 0.001}",
+            "reward: {chase_penalty: 0.002, bomb_catch_min: 2}",
+            "items: {bombs: free, bomb_catch: 2}",
         ] {
             assert!(minimal(ok).is_ok(), "{ok} should load: {:?}", minimal(ok).err());
         }
