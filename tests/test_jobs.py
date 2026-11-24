@@ -137,6 +137,51 @@ def test_places_regular_express_and_tools():
     assert q.assign(tools, ['regular-1'], q.TOOLS_LANE) == {}
 
 
+def test_the_number_of_regular_places_is_a_setting_and_an_extra_one_goes_to_jobs_that_know_of_it(tmp_path):
+    """The owner, Nov 24: "add an extra slot and we'll see how it does. It's ok if what's in the queue doesn't know
+    the extra slot and waits. New stuff queued can use it".  Without a setting: the two of old.  A job queued by
+    older code (no ``places_aware``) takes only the first two places, in every wrapper's reckoning, so the job
+    behind it gets the third and never the other way round."""
+    assert q.regular_places(tmp_path) == q.REGULAR_PLACES == ('regular-1', 'regular-2')
+    assert q.lane_places(q.JOBS_LANE, tmp_path) == ('regular-1', 'regular-2', 'express-1')
+    assert q.set_regular_places(3, tmp_path) == ('regular-1', 'regular-2', 'regular-3')
+    assert q.lane_places(q.JOBS_LANE, tmp_path) == ('regular-1', 'regular-2', 'regular-3', 'express-1')
+    assert q.lane_places(q.TOOLS_LANE, tmp_path) == q.TOOL_PLACES
+    for bad in (0, q.MAX_REGULAR_PLACES + 1):
+        with pytest.raises(ValueError, match='regular places'):
+            q.set_regular_places(bad, tmp_path)
+    (tmp_path / q.PLACES_FILE).write_text('many\n')                      # a file that can't be read: the two of old
+    assert q.regular_places(tmp_path) == q.REGULAR_PLACES
+    old, new, newer = row(1, estimate=3600), row(2, estimate=3600, places_aware=1), row(3, estimate=3600, places_aware=1)
+    assert q.assign([old, new], ['regular-3'], q.JOBS_LANE) == {2: 'regular-3'}        # the old one waits, as it will
+    assert q.assign([old, new], ['regular-2', 'regular-3'], q.JOBS_LANE) == {1: 'regular-2', 2: 'regular-3'}
+    assert q.assign([new, newer, old], ['regular-1', 'regular-3'], q.JOBS_LANE) == {2: 'regular-1', 3: 'regular-3'}
+    assert q.assign([old], ['regular-3'], q.JOBS_LANE) == {}
+    con = q.connect(tmp_path)
+    fds = []
+    try:
+        def insert(**fields) -> int:
+            cursor = con.execute(f"INSERT INTO jobs ({', '.join(fields)}) VALUES ({', '.join('?' * len(fields))})",
+                                 tuple(fields.values()))
+            fds.append(q.take_lock(q.lock_path(tmp_path, f'job-{cursor.lastrowid}')))
+            return cursor.lastrowid
+        for place in q.REGULAR_PLACES:
+            insert(status='running', lane=q.JOBS_LANE, place=place, estimate=3600, queued_ts=NOW)
+        waiting_old = insert(status='queued', lane=q.JOBS_LANE, estimate=3600, queued_ts=NOW)
+        waiting_new = insert(status='queued', lane=q.JOBS_LANE, estimate=3600, queued_ts=NOW + 1, places_aware=1)
+        with q.transaction(con):                                         # two places: both wait
+            assert q.turn(con, tmp_path, waiting_old, NOW + 2).place is None
+            assert q.turn(con, tmp_path, waiting_new, NOW + 2).place is None
+        q.set_regular_places(3, tmp_path)
+        with q.transaction(con):                                         # three: the one that knows takes the third
+            assert q.turn(con, tmp_path, waiting_old, NOW + 2).place is None
+            assert q.turn(con, tmp_path, waiting_new, NOW + 2).place == 'regular-3'
+    finally:
+        for fd in fds:
+            os.close(fd)
+        con.close()
+
+
 def test_turn_counts_only_live_jobs_and_a_held_place_lock(tmp_path):
     con = q.connect(tmp_path)
     fds = []

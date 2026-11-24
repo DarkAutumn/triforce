@@ -1058,7 +1058,9 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
     `~/.local/state/triforce/detached/<unit>.log`. `triforce job wait UNIT... [--timeout 30m]` follows it and exits
     with the job's own exit code; stopping `wait` stops nothing and it can be run again. **Use `--detach` for every
     job that may wait or run longer than your shell call lives**; stop one with `systemctl --user stop UNIT`.
-  Two jobs run at once in the regular places, plus one estimated at 10 minutes or less (or `--express`) in the
+  Two jobs run at once in the regular places (the number is the owner's setting, `triforce job places [N]`: 3 since
+  Nov 24, as a trial; agents do NOT change it; a job queued from a checkout whose code predates the setting keeps to
+  the first two), plus one estimated at 10 minutes or less (or `--express`) in the
   express place; the others wait, the shortest estimate first, a long one moving up as it waits (estimate minus half
   the time waited). A waiting job is only its wrapper: no model, no GPU memory, a check a second. It prints
   `triforce job: #12 A-T-S waits for a place: estimated 40 minutes; 2 jobs are running (...)` every 5 minutes and
