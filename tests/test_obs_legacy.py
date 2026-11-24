@@ -54,13 +54,37 @@ GOLDEN = Path(__file__).parent / 'fixtures' / 'obs_schema5_golden.json'
 ROUND40_CHANGES = json.loads((Path(__file__).parent / 'fixtures' / 'obs_schema5_round40.json').read_text(encoding='utf-8'))
 ROUND40_TARGETS_CHANGES = json.loads(
     (Path(__file__).parent / 'fixtures' / 'obs_schema5_round40_targets.json').read_text(encoding='utf-8'))
-# The one trace both sides of the generation's merge changed (main's weapon rooms, 2.0.0.15, and this branch's
-# closing-frame cut-over): boss-manhandla `3_4dw_2`, which runs out of bombs within its 50 steps. Its hash on the
-# merged code (each side's own hash for it is in `WEAPON_ROOM_CHANGES` and `ROUND40_CHANGES`; the other two traces of
-# the family keep the cut-over's).
+# The traces both sides of the generation's merges changed, with their hashes on the merged code.
+# - Main's weapon rooms (2.0.0.15) and this branch's closing-frame cut-over: boss-manhandla `3_4dw_2`, which runs out
+#   of bombs within its 50 steps (each side's own hash for it is in `WEAPON_ROOM_CHANGES` and `ROUND40_CHANGES`; the
+#   other two traces of the family keep the cut-over's).
+# - Main's heart encoding (2.0.0.16, `HEARTS_ENCODING_CHANGES`) on this branch's timing (Gen40fix, the merge
+#   5f5647c9): compared step by step with its first parent feabd634 (same seeds, same actions), every trace that
+#   moved differs at the reset only in the two heart bytes (H, $00) -> (H - 1, $FF), and its actions are the same
+#   to its end.  Four end on a hit Link survived with an empty heart before and now dies of: darknut `5_05c_2`
+#   (step 21; before: step 26), `5_64e_0` (step 10; before: 16), `5_64e_1` (step 31; before: 47), trap-room
+#   `1_22c_0` (step 33; before: all 50 steps).  Two hold one heart, the low nibble 0, and the game requests the
+#   low-hearts beep every frame (asm:Mode5Play_UpdateWorld; `Tune0Request` $40): ow-zora `0_38n_2` (not moved on
+#   main's timing) differs in one observation, step 27's velocity columns of `entity_features` scaled by 28 frames
+#   for 27, and dies at step 35 as before; darknut `3_69n_2` the same at step 5 (18 frames for 17), then its MOVE
+#   at step 46 ends a frame sooner ($15 213, not 214) with Link 2 pixels short (X $59, not $5B), and his and the
+#   Darknuts' positions differ from there to step 50.  trap-room `3_5ae_2` (moved on main) keeps the cut-over's
+#   hash: on this timing his hearts never fall below 2 in its 50 steps, and every observation is the same.
 ROUND40_MERGE_CHANGES = {
     'boss-manhandla': {
         '3_4dw_2.state': '0f9d1dab367c0057b97ec9fb0e12a240b89de6de4180254edcbccf61b1dc9b4e',
+    },
+    'darknut': {
+        '3_69n_2.state': 'f7e1f7175d1326193454cd3d8e6c8d2eb9249e536be85ca4909c3af8f3406324',
+        '5_05c_2.state': '9a94cc4f8927c5c637c45b24a018aa51dbf94b004151838831c7eca8f62d30c0',
+        '5_64e_0.state': 'd6f0492b8525891575992aebb402238e1ef8f70db35121d92017ae2b430f4109',
+        '5_64e_1.state': '5e6f2148a2ee3ca5cae9e30c83cc01e57fe84563c0c69ba28ab18b847d866b06',
+    },
+    'ow-zora': {
+        '0_38n_2.state': '7f877d63b8dfe64eaa6b17429b5256d05a9ab70cccd42de69e1a35efbcaa8591',
+    },
+    'trap-room': {
+        '1_22c_0.state': 'b07a09cae4faab7539cb467ee2db39b25dcaa9278ee75d6c2d3489cea65a0a58',
     },
 }
 STEPS = 50

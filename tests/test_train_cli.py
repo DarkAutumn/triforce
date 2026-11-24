@@ -20,7 +20,7 @@ import torch
 
 from triforce import registry, train
 from triforce.inputs import MissingInput
-from triforce.metrics import EpisodeTracker, read_jsonl
+from triforce.metrics import EpisodeTracker, MetricsLogger, read_jsonl
 
 from .conftest import start_task
 
@@ -573,23 +573,59 @@ def test_train_events_into_a_folder_without_a_plan_writes_one(states_dir, tmp_pa
 
 def test_an_interrupted_run_saves_but_exits_130(states_dir, tmp_path):
     """SIGTERM mid-run: the checkpoint and summary are saved, the summary says interrupted, the exit code is not 0,
-    so no driver mistakes a partial run for a finished fixed-budget one."""
+    so no driver mistakes a partial run for a finished fixed-budget one.  The signal goes once the first iteration's
+    metrics line is written (no deadline: the suite's own timeout bounds a hang), which may be while that iteration's
+    TensorBoard scalars are still being written: the moment the next test pins.  The training's output is kept and
+    shown on a failure."""
     command = [sys.executable, '-m', 'triforce.train', *_common(states_dir, tmp_path, '--parallel', '2',
                '--steps-per-update', '32', '--iterations', '100000', '--device', 'cpu', '--run-id', 'cut',
                '--events', str(tmp_path / 'stream.jsonl'))]
     metrics = tmp_path / SPECIALIST / 'cut' / 'metrics.jsonl'
-    with subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                          env={**os.environ, 'TRIFORCE_STATES_DIR': str(states_dir)}) as process:
-        deadline = time.monotonic() + 120
-        while not (metrics.is_file() and metrics.read_text()) and time.monotonic() < deadline:
-            assert process.poll() is None, "training ended on its own"
+    output = tmp_path / 'train.out'
+    env = {**os.environ, 'TRIFORCE_STATES_DIR': str(states_dir)}
+    with open(output, 'wb') as sink, subprocess.Popen(command, stdout=sink, stderr=subprocess.STDOUT,
+                                                      env=env) as process:
+        while not (metrics.is_file() and metrics.read_text()):
+            assert process.poll() is None, f"training ended on its own:\n{output.read_text()[-4000:]}"
             time.sleep(0.05)
         process.send_signal(signal.SIGTERM)
-        assert process.wait(timeout=120) == train.EXIT_INTERRUPTED
+        assert process.wait() == train.EXIT_INTERRUPTED, output.read_text()[-4000:]
     run_dir = metrics.parent
     summary = json.loads((run_dir / 'train_summary.json').read_text())
     assert summary['status'] == train.run_status(run_dir) == 'interrupted' and summary['iterations_trained'] >= 1
     assert registry.load_checkpoint(run_dir)['iterations'] == summary['iterations']
+
+
+def test_a_sigterm_while_the_metrics_are_written_waits_for_them(tmp_path):
+    """A SIGTERM (``interrupt_on_sigterm``) that comes while an iteration's metrics are written is raised once they
+    are (``interrupts_held``): every TensorBoard scalar is queued and the writer closes.  Raised in the middle,
+    while TensorBoard's bounded queue made ``put`` wait, it can surface as ``RuntimeError: release unlocked lock``
+    (seen with an interrupt timed into ``add_scalar`` alone), past the training's ``except KeyboardInterrupt``: the
+    way the test above exited 1 instead of 130 in full suite runs under load."""
+    previous = signal.getsignal(signal.SIGTERM)
+    train.interrupt_on_sigterm()
+    try:
+        logger = MetricsLogger(str(tmp_path))
+        queued, add_scalar = [], logger._writer.add_scalar         # pylint: disable=protected-access
+
+        def add_and_signal(name, value, step):
+            if not queued:
+                os.kill(os.getpid(), signal.SIGTERM)
+            queued.append(name)
+            add_scalar(name, value, step)
+
+        logger._writer.add_scalar = add_and_signal                 # pylint: disable=protected-access
+        values = {f'metric/{i}': float(i) for i in range(200)}
+        with pytest.raises(KeyboardInterrupt, match=f'signal {int(signal.SIGTERM)}'):
+            with train.interrupts_held():
+                logger.log(1, 32, values)
+        assert queued == list(values)
+        logger.close()
+        with pytest.raises(KeyboardInterrupt):                     # outside the block it interrupts at once
+            os.kill(os.getpid(), signal.SIGTERM)
+            time.sleep(5)
+    finally:
+        signal.signal(signal.SIGTERM, previous)
 
 
 def test_training_into_an_existing_run_dir_sets_the_old_run_aside(states_dir, tmp_path, monkeypatch):
