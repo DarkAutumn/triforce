@@ -62,6 +62,8 @@ harvested_fraction: 0.4
 curriculum:
   enabled: true
   untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
+  - d3first_4_12n_[0-9]                   # round 40 (Tracks40): no explored track in 3000 iterations with today's
+  - d3first_4_31w_[0-9]                   # keys (the stale tracks were the rules vire-12's and vire-31's, r32p_rules.py)
   - d3first_4_20s_[0-9]
   - d3first_4_30e_[0-9]
   - d3first_6_2dn_[0-9]

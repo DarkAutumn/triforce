@@ -20,6 +20,10 @@ clips: {enabled: true, off_share: 0}      # round 24: 5:0x64's block clip to the
 curriculum:                              # trajectories/darknut (Go-Explore paths per start state)
   enabled: true
   untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
+  - d3first_3_59n_1                       # round 40 (Tracks40): as darknut@d3first; their old tracks (the bag of 5)
+  - d3first_3_59n_2                       # left the generation's curricula, no explored track with 4 bombs
+  - d3first_3_5bw_0                       # round 40 (Tracks40): as darknut@d3first (no explored track)
+  - d3first_3_5bw_2
   - d3first_5_05c_[0-9]
   - d3first_5_05e_[0-9]
   - d3first_5_06c_[0-9]

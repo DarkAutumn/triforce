@@ -12,6 +12,8 @@ harvested_fraction: 0.2                   # round 33: chain handoffs at the rout
 curriculum:                              # trajectories/vire (Go-Explore paths per start state)
   enabled: true
   untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
+  - d3first_4_12n_[0-9]                   # round 40 (Tracks40): as vire@d3first (no explored track)
+  - d3first_4_31w_[0-9]
   - d3first_4_20s_[0-9]
   - d3first_4_30e_[0-9]
   - d3first_6_2dn_[0-9]

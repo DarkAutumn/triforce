@@ -1,6 +1,7 @@
 """Round 40 (the owner: missing is an error, never "none"): every input a run declares that resolves to nothing stops
 it before it starts, naming where it looked; where none is a legitimate recipe the task declares it."""
 
+import fnmatch
 import json
 import os
 import subprocess
@@ -98,19 +99,42 @@ def test_the_shipped_tasks_declare_every_input_they_draw():
         check_task(config, REPO_STATES_DIR, trajectories)
 
 
+# Round 40 (Tracks40): the seed states whose stale tracks left the generation's curricula and that the explorer did
+# not solve in 3000 iterations (with darknut's 0x59 from N at 4 bombs, States40's), per family, beside the same
+# rooms' chains that do have a track. Both of the family's tasks draw them (its d3first part's and its own).
+LEFT_WITHOUT_A_TRACK = {
+    'darknut': ({'d3first_3_59n_1', 'd3first_3_59n_2', 'd3first_3_5bw_0', 'd3first_3_5bw_2'},
+                {'d3first_3_59n_0', 'd3first_3_5bw_1'}),
+    'zol': ({'d3first_3_4bs_0', 'd3first_3_4bs_1'}, {'d3first_3_4bs_2'}),
+    'vire': ({f'd3first_4_{room}_{c}' for room in ('12n', '31w') for c in range(3)}, set()),
+    'like-like': ({f'd3first_4_32w_{c}' for c in range(3)}, {'d3first_4_32c_0'}),
+    'boss-gleeok': ({f'd3first_4_13w_{c}' for c in range(3)}, set()),
+    'goriya': ({'d3first_1_23s_1', 'd3first_1_23s_2', 'd3first_2_1es_1', *(f'd3first_7_1bw_{c}' for c in range(3))},
+               {'d3first_1_23s_0', 'd3first_2_1es_0', 'd3first_2_1es_2'}),
+    'boss-digdogger': ({f'd3first_7_1cw_{c}' for c in range(3)}, {'d3first_7_39s_0', 'd3first_5_24e_0'}),
+}
+
+
 def test_the_d3first_tasks_declare_the_rooms_left_without_a_track():
     """Round 40 (the lead, Nov 24): 0:0x76's explored tracks walk across and kill, so ow-tektite@d3first trains its
-    three seeds without one; darknut@d3first's 0x59 from N with 4 bombs (chains 1 and 2) had no explored track. The
-    tasks load, and the declarations cover exactly those seeds."""
+    three seeds without one; darknut@d3first's 0x59 from N with 4 bombs (chains 1 and 2) had no explored track; and
+    Tracks40's states without an explored track (`LEFT_WITHOUT_A_TRACK`). The tasks load, and the declarations cover
+    exactly those seeds: never a chain of the same room that has a track."""
     require_rom()
     tektite = load_specialist(str(ROOT / 'specialists' / 'd3first' / 'ow-tektite.yaml'))
     seeds = sorted(Path(p).stem for p in tektite.resolve_start_states(str(REPO_STATES_DIR)))
     assert [s for s in seeds if s.startswith('d3first_0_76e_')] == [f'd3first_0_76e_{c}' for c in range(3)]
     assert declaration([f'd3first_0_76e_{c}' for c in range(3)], seeds) == untracked(tektite)
-    darknut = load_specialist(str(ROOT / 'specialists' / 'd3first' / 'darknut.yaml'))
-    declared = untracked(darknut)
-    assert {'d3first_3_59n_1', 'd3first_3_59n_2'} <= set(declared)
-    assert not any(g.startswith('d3first_3_59n_0') or g == 'd3first_3_59n_[0-9]' for g in declared)
+    for family, (left, tracked) in LEFT_WITHOUT_A_TRACK.items():
+        for path in (ROOT / 'specialists' / 'd3first' / f'{family}.yaml', ROOT / 'specialists' / f'{family}.yaml'):
+            config = load_specialist(str(path))
+            if not config.curriculum.enabled:           # boss-digdogger@d3first trains without a curriculum
+                continue
+            seeds = {Path(p).stem for p in config.resolve_start_states(str(REPO_STATES_DIR))}
+            declared = untracked(config)
+            assert left | tracked <= seeds, path
+            assert all(any(fnmatch.fnmatchcase(s, g) for g in declared) for s in left), path
+            assert not any(fnmatch.fnmatchcase(s, g) for s in tracked for g in declared), path
 
 
 def test_a_warm_start_names_a_checkpoint_or_a_family_with_one(tmp_path):

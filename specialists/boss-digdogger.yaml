@@ -7,7 +7,10 @@ reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20
 obs: {objective: true, target: true}       # schema 2
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}
 items: {bombs: free, recorder: true}       # the owner (Nov 14): bombs on the boss (the route's reserve is 0 here); the recorder splits him
-curriculum: {enabled: true}             # trajectories/boss-digdogger (Go-Explore paths per start state)
+curriculum:                              # trajectories/boss-digdogger (Go-Explore paths per start state)
+  enabled: true
+  untracked:                              # round 40 (Tracks40): d3first's 7:0x1c with today's hearts and keys, no
+  - d3first_7_1cw_[0-9]                   # explored track in 3000 iterations (the stale ones: the rule digdogger-1c's)
 one_room: true
 max_steps: 900                             # round 24: explored tracks 91-142 steps (the recorder, the kill, the heart, N); round 26: 7:0x1c's three small ones take the explorer 161-300 steps (600 before)
 warm_start: null
