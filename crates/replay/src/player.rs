@@ -2,8 +2,8 @@
 
 use std::sync::Arc;
 
-use zcore::sound::Synth;
 use zcore::state_file::{self, StateFormatError};
+use zcore::tracks::{Mix, Tracks};
 use zcore::{MachineState, Rom, ZCore};
 
 use crate::format::{Edit, ReplayError, Source, StateKind, file_hash, format_error};
@@ -34,8 +34,12 @@ pub struct Player {
     /// The controller byte of the last frame run.
     buttons: u8,
     /// The sound of the frames run since [`Player::set_sound`] turned it on, not yet taken.
-    sound: Option<Synth>,
+    sound: Option<Tracks>,
     audio: Vec<f32>,
+    /// Which parts are heard, whether as two tracks, whether every track is kept ready ([`Player::set_mix`]).
+    mix: Mix,
+    split: bool,
+    warm: bool,
 }
 
 /// What [`verify`] played and compared.
@@ -107,6 +111,9 @@ impl Player {
             buttons: 0,
             sound: None,
             audio: Vec::new(),
+            mix: Mix::ALL,
+            split: false,
+            warm: false,
         })
     }
 
@@ -140,21 +147,44 @@ impl Player {
     pub fn set_sound(&mut self, rate: Option<f64>) {
         self.nes.set_sound(rate.is_some());
         self.audio.clear();
-        self.sound = rate.map(|rate| {
-            let mut synth = Synth::new(rate);
-            synth.resume(&self.nes);
-            synth
-        });
+        self.sound = rate.map(|rate| Tracks::new(&self.nes, rate, self.mix, self.split, self.warm));
+    }
+
+    /// Which parts of the sound are heard (music, effects, the low-hearts beep; `zcore::tracks`), from the next
+    /// frame on.  Switching while sound is on is seamless only after [`Player::set_split`] with `warm`.
+    pub fn set_mix(&mut self, mix: Mix) {
+        self.mix = mix;
+        if let Some(tracks) = &mut self.sound {
+            tracks.set_mix(mix);
+        }
+    }
+
+    /// The parts heard ([`Player::set_mix`]).
+    pub fn mix(&self) -> Mix {
+        self.mix
+    }
+
+    /// From the next [`Player::set_sound`] on: `split`, [`Player::audio`] holds (music, effects) pairs instead
+    /// of mono samples; `warm`, both tracks are made all the time, so that [`Player::set_mix`] takes effect at
+    /// once and seamlessly (a player that switches while it plays).
+    pub fn set_split(&mut self, split: bool, warm: bool) {
+        (self.split, self.warm) = (split, warm);
+    }
+
+    /// Whether [`Player::audio`] holds (music, effects) pairs.
+    pub fn split(&self) -> bool {
+        self.split
     }
 
     /// Nudges the sample rate (a player keeping a sound device's buffer level).  Nothing with sound off.
     pub fn tune(&mut self, rate: f64) {
-        if let Some(synth) = &mut self.sound {
-            synth.set_rate(rate);
+        if let Some(tracks) = &mut self.sound {
+            tracks.set_rate(rate);
         }
     }
 
-    /// The samples (mono, `-1.0..=1.0`) of the frames run with sound on; the caller drains what it takes.
+    /// The samples (`-1.0..=1.0`: mono, or (music, effects) pairs with [`Player::set_split`]) of the frames
+    /// run with sound on; the caller drains what it takes.
     pub fn audio(&mut self) -> &mut Vec<f32> {
         &mut self.audio
     }
@@ -214,23 +244,34 @@ impl Player {
         }
     }
 
-    fn advance(&mut self, render: bool, compare: bool) -> Result<bool, ReplayError> {
+    fn advance(&mut self, render: bool, compare: bool, watch: &mut dyn FnMut(&ZCore, bool)) -> Result<bool, ReplayError> {
         let Some(&buttons) = self.inputs.get(self.frame as usize) else {
             return Ok(false);
         };
         self.apply_edits(compare)?;
+        if let Some(tracks) = &mut self.sound {
+            tracks.prepare(&self.nes);
+        }
+        watch(&self.nes, false);
         self.nes.run_frame(buttons, render);
         self.buttons = buttons;
-        if let (Some(synth), Some(frame)) = (&mut self.sound, self.nes.sound()) {
-            synth.run(frame, &mut self.audio);
+        if let Some(tracks) = &mut self.sound {
+            tracks.run(&self.nes, &mut self.audio);
         }
+        watch(&self.nes, true);
         self.frame += 1;
         Ok(true)
     }
 
     /// Runs one input frame (after its edits).  False once every frame has run.
     pub fn step(&mut self, render: bool) -> Result<bool, ReplayError> {
-        self.advance(render, false)
+        self.advance(render, false, &mut |_, _| {})
+    }
+
+    /// [`Player::step`], calling `watch(nes, false)` once the frame's edits are applied and `watch(nes, true)`
+    /// once it ran: for sound kept beside the machine (`zcore::tracks::Tracks::prepare` and `run`).
+    pub fn step_watched(&mut self, render: bool, watch: &mut dyn FnMut(&ZCore, bool)) -> Result<bool, ReplayError> {
+        self.advance(render, false, watch)
     }
 
     /// Moves to `frame` (that many inputs run, its own edits not yet applied): from the nearest recorded
@@ -264,10 +305,10 @@ impl Player {
         // The frames on the way are not heard: sound picks up where the seek lands.
         let mut sound = self.sound.take();
         while self.frame < frame {
-            self.advance(false, false)?;
+            self.advance(false, false, &mut |_, _| {})?;
         }
-        if let Some(synth) = &mut sound {
-            synth.resume(&self.nes);
+        if let Some(tracks) = &mut sound {
+            tracks.resume(&self.nes);
         }
         self.sound = sound;
         Ok(())
@@ -286,7 +327,7 @@ impl Player {
 /// checkpoints) and with the END after the last frame and edit.
 pub fn verify(rom: Arc<Rom>, replay: Replay, resolve: Resolve<'_>) -> Result<Report, ReplayError> {
     let mut player = Player::open(rom, replay, resolve)?;
-    while player.advance(false, true)? {}
+    while player.advance(false, true, &mut |_, _| {})? {}
     player.apply_edits(true)?;
     if let Some(missed) = player.states.get(player.state) {
         return Err(ReplayError::Diverged {

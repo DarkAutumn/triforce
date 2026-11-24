@@ -5,6 +5,8 @@
     .venv/bin/python create-video.py wins.mp4 2x3 runs/wins                # a folder's replays, six at a time
     .venv/bin/python create-video.py best.mp4 3x3 a.tfreplay b.tfreplay … --sound   # with the middle cell's sound
     .venv/bin/python create-video.py run.mkv run.tfreplay --sound --controller --scale 3
+    .venv/bin/python create-video.py run.mkv run.tfreplay --sound --split-audio      # music, effects: two tracks
+    .venv/bin/python create-video.py calm.mp4 run.tfreplay --sound --no-heart-beep
     .venv/bin/python create-video.py thinking.mp4 run.tfreplay --thoughts --scale 3
 
 OUT is the video file: H.264 (and AAC sound) in the container its name asks for (.mp4, .mkv, .mov), at the NES's
@@ -18,11 +20,20 @@ GRID is COLUMNSxROWS (default 1x1).  The replays (files, or folders: their top-l
 order) must be at least as many as the cells.  The first ones start in the cells in order, top left first.  A
 cell whose replay ended shows its result for a few seconds, as play-zelda.py does, then plays the next replay not
 yet shown; when none is left it keeps its last picture and result.  The video ends when every replay has played.
-A run from console power on is shown from the moment the models take over.
+A run from console power on is shown from the moment the models take over.  --from FRAME and --frames N film
+only input frames FRAME to FRAME+N of each replay (a cut short of a replay's end shows no result).
 
 --sound adds the sound of one cell: the middle one (of 3x3, 5x3, ...), or the top left one when the grid has no
 middle (2x4).  That cell has a yellow frame, as the cell heard in play-zelda.py has.  A replay that starts from a
 savestate has no sound state to start from, so each voice comes in with its next note.
+
+The sound has two parts, as in play-zelda.py: the music (the songs) and the sound effects (everything else, the
+item fanfare and the end-of-level tune among them), and among the effects the low-hearts beep.  --no-music,
+--no-sound-effects and --no-heart-beep leave a part out of the one track.  --split-audio writes two audio tracks
+instead, the music (track 1, titled "Music", the default) and the sound effects (track 2, "Sound effects"), with
+--no-heart-beep the effects without the beep: an editor shows them as two tracks to mix as it likes; a player
+plays the default track (the music) until another is chosen.  Both .mkv and .mp4 (.mov) carry the two tracks and
+their titles.
 
 --controller draws the controller in the top right of every cell (over -LIFE-), the buttons held on each frame
 lit white.
@@ -47,6 +58,7 @@ from PySide6.QtGui import QImage
 from PySide6.QtWidgets import QApplication
 
 from triforce import _native, jobs, replay
+from triforce.play_grid import Mix
 from triforce.play_view import GRID, Window, parse_grid
 from triforce.video import SAMPLE_RATE, Encoder, VideoGrid, center_cell, ffmpeg, replay_files
 
@@ -66,6 +78,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--sound', action='store_true',
                         help="add the sound of the middle cell (the top left one when the grid has no middle); "
                              "that cell gets a yellow frame")
+    parser.add_argument('--no-music', dest='music', action='store_false',
+                        help="with --sound: leave the music (the songs) out")
+    parser.add_argument('--no-sound-effects', dest='effects', action='store_false',
+                        help="with --sound: leave the sound effects out (everything but the songs, the item fanfare "
+                             "and the end-of-level tune among them)")
+    parser.add_argument('--no-heart-beep', dest='heart_beep', action='store_false',
+                        help="with --sound: leave the low-hearts beep out")
+    parser.add_argument('--split-audio', action='store_true',
+                        help="with --sound: two audio tracks, the music and the sound effects, instead of one")
     parser.add_argument('--controller', action='store_true',
                         help="draw the controller in the top right of every cell (over -LIFE-), the buttons held "
                              "on each frame lit white")
@@ -76,6 +97,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--states-dir', default=None,
                         help="where replays recorded with --state path find their start states (default the "
                              "states directory)")
+    parser.add_argument('--from', dest='first', type=int, default=None, metavar='FRAME',
+                        help="film each replay from this input frame (default: where the models take over)")
+    parser.add_argument('--frames', type=int, default=None, metavar='N',
+                        help="with --from: film N input frames of each replay")
     return parser
 
 
@@ -97,6 +122,11 @@ def parse_args(argv=None, parser=None) -> argparse.Namespace:
                      f"{len(args.replays)}")
     if args.scale < 1:
         parser.error(f"--scale must be at least 1, got {args.scale}")
+    if not args.sound and (args.split_audio or not (args.music and args.effects and args.heart_beep)):
+        parser.error("--split-audio, --no-music, --no-sound-effects and --no-heart-beep need --sound")
+    if args.split_audio and not (args.music and args.effects):
+        parser.error("--split-audio makes a music track and an effects track: not with --no-music or "
+                     "--no-sound-effects")
     folder = os.path.dirname(os.path.abspath(args.out))
     if not os.path.isdir(folder) or not os.access(folder, os.W_OK):
         parser.error(f"{args.out}: {folder} is not a writable directory")
@@ -125,18 +155,22 @@ def main(argv=None) -> int:
     jobs.require_job()
     cols, rows = args.grid
     heard = center_cell(cols, rows) if args.sound else None
+    mix = Mix(music=args.music, effects=args.effects, heart_beep=args.heart_beep)
     try:
         ffmpeg()
+        span = None if args.first is None else (args.first, args.first + (args.frames or 10 ** 9))
         grid = VideoGrid(cols * rows, args.replays, heard=heard, controller=args.controller,
-                         states_dir=args.states_dir, thoughts=args.thoughts)
+                         states_dir=args.states_dir, thoughts=args.thoughts, mix=mix, split=args.split_audio,
+                         span=span)
     except (RuntimeError, ValueError) as error:
         parser.error(str(error))
     app = QApplication.instance() or QApplication(sys.argv[:1])
-    window = Window(grid, cols, rows, args.scale, sound=args.sound, heard=heard or 0)
+    window = Window(grid, cols, rows, args.scale, sound=args.sound, heard=heard or 0, mix=mix)
     window.show()       # offscreen: lays the cells out
     app.processEvents()
     size = window.centralWidget().size()
-    encoder = Encoder(args.out, size.width(), size.height(), sound=args.sound, rate=SAMPLE_RATE)
+    encoder = Encoder(args.out, size.width(), size.height(), sound=args.sound, rate=SAMPLE_RATE,
+                      split=args.split_audio)
     started = time.monotonic()
 
     def progress(frames: int) -> None:
@@ -159,6 +193,7 @@ def main(argv=None) -> int:
     print(json.dumps({'out': args.out, 'frames': frames, 'seconds': round(frames / grid.fps, 2),
                       'width': size.width() + size.width() % 2, 'height': size.height() + size.height() % 2,
                       'replays': len(args.replays), 'sound': args.sound, 'thoughts': args.thoughts,
+                      'mix': mix.text() or 'all', 'split_audio': args.split_audio,
                       'heard': heard, 'took': round(time.monotonic() - started, 1)}))
     return 0
 

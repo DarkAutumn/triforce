@@ -46,7 +46,8 @@ copies a cell's latest frame; ``set_fps`` changes every cell's frame rate (``<= 
 clock with it (the simulations are not the picture: they keep filling their queues).
 
 ``set_sound(cell)`` makes one cell heard on the sound device (None: none), from whatever its game is playing at
-that moment; a cell's sound is made as its frames are played, so it is only right at ``NES_FPS``.  ``controller``
+that moment; a cell's sound is made as its frames are played, so it is only right at ``NES_FPS``.  ``set_mix``
+switches the heard cell's music, sound effects and low-hearts beep (``Mix``) at once.  ``controller``
 draws the controller, its held buttons lit, into every replayed frame.  ``thoughts``: a replayed cell also sends
 ``thoughts`` (``lines``: what its replay says the agent was steered to, could do and chose there,
 ``triforce.thoughts``) whenever they change, which the window draws over the picture.
@@ -57,6 +58,7 @@ import collections
 import queue
 import threading
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -81,6 +83,26 @@ DEFAULT_PATIENCE = 64
 SEEDS = 1_000_000           # seeds a simulation pool is given: more than a session plays
 # The banner of a replay by its header ending; other endings show their last room's outcome.
 OUTCOME_OF_ENDING = {'win': 'milestone', 'death': 'death', 'stuck': 'stuck', 'error': 'error'}
+
+
+@dataclass(frozen=True)
+class Mix:
+    """Which parts of the sound are heard (``zcore::tracks``, ``docs/architecture.md`` "Sound"): the music (the
+    songs), the sound effects (tunes, noise effects, samples, the item fanfare and the end-of-level tune) and,
+    among the effects, the low-hearts beep.  All on is the game's own sound."""
+    music: bool = True
+    effects: bool = True
+    heart_beep: bool = True
+
+    def text(self) -> str:
+        """What is off, for a title: '' when nothing is, else 'no music', 'no effects', 'no beep' joined."""
+        off = [name for name, on in (('music', self.music), ('effects', self.effects), ('beep', self.heart_beep))
+               if not on]
+        return ', '.join(f"no {name}" for name in off)
+
+    def native(self) -> dict:
+        """The keyword arguments of ``_native.ReplayScreen.set_mix`` / ``ReplayPlayer.set_mix``."""
+        return {'music': self.music, 'effects': self.effects, 'heart_beep': self.heart_beep}
 
 
 class Show:
@@ -433,6 +455,7 @@ class ReplayGrid:
         self._live: Optional[LiveCell] = None
         self._sound: Optional[int] = None   # the cell that is heard
         self._sound_error: Optional[str] = None
+        self._mix = Mix()
         self._source = FILES if path is not None else source
         self._selection = 0                 # bumped by `select` and `skip`: every cell starts over
         self._status: queue.Queue = queue.Queue()
@@ -534,6 +557,17 @@ class ReplayGrid:
             self._sound = cell
             self._apply_sound()
 
+    def set_mix(self, mix: Mix) -> None:
+        """Which parts of the heard cell's sound play (``Mix``), at once and without a break in what stays on."""
+        with self._lock:
+            self._mix = mix
+            if self._screen is not None:
+                self._screen.set_mix(**mix.native())
+
+    @property
+    def mix(self) -> Mix:
+        return self._mix
+
     def set_controller(self, on: bool) -> None:
         """Draws the controller into every replayed frame from the next one on, or stops."""
         with self._lock:
@@ -623,6 +657,7 @@ class ReplayGrid:
             screen.set_fps(self.fps)                # in case these ran before the screen existed
             screen.set_paused(self._paused_at is not None)
             screen.set_controller(self.controller)
+            screen.set_mix(**self._mix.native())
             self._apply_sound()
         cells = [_Cell() for _ in range(self.cells)]
         replayed = range(1 if self.live else 0, self.cells)    # the cells that play replays
