@@ -21,7 +21,7 @@ import torch
 
 from .. import _native, lineage, paths, registry
 from ..inputs import MissingInput, check_curriculum, check_harvested, check_start_states, declaration, untracked
-from ..paths import SPECIALISTS_DIR, TRAJECTORIES_DIR
+from ..paths import SPECIALISTS_DIR
 from ..metrics import RolloutMetrics
 from ..ppo import Collector
 from ..specialist import SpecialistConfig, load_specialist
@@ -55,7 +55,7 @@ def route_only(config: SpecialistConfig, route: str, states_dir=None, tracks_dir
     starts in the route's namespace, ``<route>_<name>``): the globs no state of the route matches (rooms the route
     never plays) are dropped, and the curriculum keeps the tracks explored from the route's states (a folder of links,
     ``<tracks_dir>/<route>/<family>``, default ``<checkout>/target/route-tracks``; none: no curriculum).  The tracks
-    come from the yaml's ``curriculum.trajectories``, else the family's folder of ``paths.data_source('trajectories')``
+    come from the yaml's ``curriculum.trajectories``, else the family's folder of ``paths.data_dir('trajectories')``
     (this checkout's ``trajectories/`` while it has one, else the store's current snapshot)."""
     folder = Path(states_dir or _native.paths()['states_dir'])
     prefix = f'{route}_'
@@ -66,7 +66,7 @@ def route_only(config: SpecialistConfig, route: str, states_dir=None, tracks_dir
     config = config.replace(state_routes=[route], start_states=kept)
     if not config.curriculum.enabled:
         return config
-    source = Path(config.curriculum.trajectories or trajectories_root() / config.name)
+    source = Path(config.curriculum.trajectories or paths.data_dir('trajectories') / config.name)
     tracks = sorted(p.parent for p in source.glob('*/trajectory.json')
                     if json.loads(p.read_text(encoding='utf-8')).get('start_state', '').startswith(prefix))
     if not tracks:
@@ -87,27 +87,6 @@ def route_only(config: SpecialistConfig, route: str, states_dir=None, tracks_dir
     return config.replace(curriculum={'enabled': True, 'trajectories': str(out)})
 
 
-def trajectories_root() -> Path:
-    """The trajectories a lab family reads (``paths.data_source``: this checkout's own folder, else the store's
-    current snapshot; the layout's default when neither exists, for the refusal to name)."""
-    try:
-        return paths.data_source('trajectories')[0]
-    except paths.MissingError:
-        return TRAJECTORIES_DIR
-
-
-def with_snapshot(config: SpecialistConfig) -> SpecialistConfig:
-    """``config`` drawing the store's harvested snapshot (``harvested_states: <snapshot>/<family>``) when this checkout
-    has no harvested folder of its own and the task names none; else as it is."""
-    try:
-        folder, record = paths.data_source('harvested')
-    except paths.MissingError:
-        return config
-    if 'snapshot' not in record or config.harvested_states:
-        return config
-    return config.replace(harvested_states=str(folder / config.name))
-
-
 def parse_families(items, parallel: int, shares: Optional[dict] = None, state_route: Optional[str] = None,
                    curriculum: bool = True, states_dir=None) -> list[Family]:
     """``key[=yaml]`` items (a key's task: the given yaml, else ``task_yaml``) with ``parallel`` envs split by
@@ -123,10 +102,9 @@ def parse_families(items, parallel: int, shares: Optional[dict] = None, state_ro
             check_start_states(config, states_dir)
             if state_route:
                 config = route_only(config, state_route, states_dir)
-            config = with_snapshot(config)
             check_harvested(config, states_dir)
             if curriculum and config.curriculum.enabled:
-                check_curriculum(config, config.curriculum.trajectories or trajectories_root() / config.name,
+                check_curriculum(config, config.curriculum.trajectories or paths.data_dir('trajectories') / config.name,
                                  states_dir)
         except MissingInput as error:
             raise SystemExit(f"{key}: {error}" if key.split('@')[0] != config.name else str(error)) from None

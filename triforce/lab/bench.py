@@ -47,7 +47,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Optional
 
-from .. import __version__, _native, registry
+from .. import __version__, _native, paths, registry
 from ..eval_batch import route_segments
 from ..evaluate import evaluate_specialist
 from ..events import progress_job, write_json_atomic
@@ -86,8 +86,9 @@ def _order(name: str) -> str:
 
 def choose_states(family: str, count: int, states_dir: Path, route: str = ROUTE) -> tuple[list[str], str]:
     """(state names relative to ``states_dir``, source) of ``family``: harvested entries spread evenly over its
-    room entries (the route's own, ``<route>_*``, where it has them), else its seed start states."""
-    directory = states_dir / HARVESTED / family
+    room entries (the route's own, ``<route>_*``, where it has them), else its seed start states.  The harvested
+    folder is ``paths.data_dir``'s (``<states_dir>/harvested`` while it exists, else the store's snapshot)."""
+    directory = paths.data_dir(HARVESTED, states_dir / HARVESTED) / family
     files = sorted(p.stem for p in directory.glob('*.state')) if directory.is_dir() else []
     source = HARVESTED
     if not files:
@@ -180,8 +181,8 @@ def entry_task(entry: dict, states_dir=None):
     states from the states dir; an ``arrived`` entry with the family's ``ram_randomization`` off."""
     base = Path(states_dir or _native.paths()['states_dir'])
     names = [Path(state).name for state in entry['states']]
-    if entry['source'] != 'seed':
-        base = base / entry['source'] / entry['family']
+    if entry['source'] != 'seed':       # harvested, harvested-rooms: the states dir's folder, else the snapshot
+        base = paths.data_dir(entry['source'], base / entry['source']) / entry['family']
     config = load_specialist(entry['family']).replace(start_states=names)
     if entry.get('arrived'):
         config = config.replace(ram_randomization={})
@@ -332,12 +333,12 @@ def make_rooms_manifest(harvest: Path, chains: list[str], states_per_room: int, 
             match = _ENTRY.match(path.stem)
             if match:
                 groups[match.group(1)].append(path)
-        for stem, paths in sorted(groups.items()):
-            parsed = _native.state_name(paths[0].stem)
+        for stem, files in sorted(groups.items()):
+            parsed = _native.state_name(files[0].stem)
             if parsed is None:
                 continue
             rooms = [visits.get((*(int(x) for x in re.findall(r'_h(\d+)_(\d+)$', p.stem)[0]), parsed[0], parsed[1]))
-                     for p in paths]
+                     for p in files]
             rooms = [r for r in rooms if r is not None]
             if not rooms:
                 continue
@@ -348,7 +349,7 @@ def make_rooms_manifest(harvest: Path, chains: list[str], states_per_room: int, 
             step = steps.get(tuple(parsed))
             key = _native.step_policy(route, step, family) if step is not None else family
             key = key if key in team else family        # a family without the route's own run plays its default
-            chosen = sorted(paths, key=lambda p: _order(p.stem))[:states_per_room]
+            chosen = sorted(files, key=lambda p: _order(p.stem))[:states_per_room]
             target = states_dir / ROOMS / family
             target.mkdir(parents=True, exist_ok=True)
             for path in chosen:

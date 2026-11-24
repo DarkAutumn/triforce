@@ -104,15 +104,25 @@ def pytest_configure(config):  # pylint: disable=unused-argument
     _session['old_env'] = os.environ.get(STATES_DIR_ENV)
     _session['states_dir'] = Path(tempfile.mkdtemp(prefix='triforce-states-'))
     os.environ[STATES_DIR_ENV] = str(_session['states_dir'])
-    # The shared store (``triforce.paths.shared_root``): an empty session root, never the machine's
+    # The shared store (``triforce.paths.shared_root``): a session root, never written in the machine's
     # (``~/triforce-shared``); a test that wants a store makes one under its tmp_path.  The ROM is found first, by
-    # the rule the tools use, and pinned (``$TRIFORCE_ROM``) so the tests read the same one.
+    # the rule the tools use, and pinned (``$TRIFORCE_ROM``) so the tests read the same one.  The machine store's
+    # current data snapshots are linked into the session root (read-only, as current there too): a checkout made
+    # after the store has no harvested/trajectories folders of its own and reads them by the same rule
+    # (``paths.data_dir``), so the suites play the same states with the old links or without them.
+    from triforce import paths  # pylint: disable=import-outside-toplevel
     if not os.environ.get('TRIFORCE_ROM'):
-        from triforce import paths  # pylint: disable=import-outside-toplevel
         found = [path for path in paths.rom_candidates() if path.is_file()]
         if found:
             os.environ['TRIFORCE_ROM'] = str(found[0])
     _session['shared'] = tempfile.mkdtemp(prefix='triforce-shared-')
+    for kind in paths.DATA_KINDS:
+        name = paths.current_name(kind)
+        if name and (paths.data_root(kind) / name).is_dir():
+            linked = Path(_session['shared']) / 'data' / kind
+            linked.mkdir(parents=True)
+            (linked / name).symlink_to(paths.data_root(kind) / name)
+            (linked / paths.CURRENT).write_text(f'{name}\n', encoding='utf-8')
     os.environ['TRIFORCE_SHARED'] = _session['shared']
 
 

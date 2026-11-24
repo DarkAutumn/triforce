@@ -101,8 +101,20 @@ links: `triforce store view TEAM --into DIR`. What resolves where:
 |---|---|---|---|
 | ROM | `$TRIFORCE_ROM` (only it) | store `rom/zelda.nes` | `<checkout>/roms/zelda.nes` |
 | networks | `--models-dir` | `--team` / `$TRIFORCE_TEAM` | `$TRIFORCE_MODELS_DIR`, `<checkout>/models`, the store's current team |
-| harvested, trajectories | `--data KIND=NAME` | the checkout's own folder | the store's current snapshot |
+| harvested, harvested-rooms, trajectories, demos | `--data KIND=NAME` (`train`) | the caller's own folder | the store's current snapshot |
 | run written by `train` | `--models-dir` (as before) | the store (a store team plays) | |
+
+One rule for every reader of the data, not only `triforce train`'s command line: `paths::data_dir` in Rust
+(`SpecialistConfig::harvested_dir`, so every `StartStatePool`, env and pool; `GameData::trajectories_dir`) and
+`paths.data_dir` in Python (the curriculum's default folder, the lab's families and route tracks, the bench's
+harvested and harvested-rooms entries). The caller's own folder is `<states dir>/harvested` (and `harvested-rooms`)
+for the states dir it passes, `<checkout>/trajectories` for curricula: a caller that passes an explicit states dir
+keeps the tracked seed states from it and gets the harvested ones by the rule (its own `harvested/` while it has
+one, else the store's snapshot). When neither exists the reader refuses, naming both places (`paths.data_missing`).
+`triforce job doctor` prints where each kind resolves for its checkout. `explore` writes new tracks into a
+checkout's `trajectories/` only while it has one, else into `target/trajectories`: a new folder would shadow the
+snapshot for every reader. The test suites' session store links the machine store's current snapshots, so they
+play the same states in a checkout with the old links or without them.
 
 Every tool that plays or trains says at its start, in one line, which it took and why, and its manifest carries the
 same line (`models.why`; a training's `sources`): `models: store team 2.0.0.13 (--team; sha256 ...)`,

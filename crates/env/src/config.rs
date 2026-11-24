@@ -1181,11 +1181,13 @@ impl SpecialistConfig {
         self.state_namespaces.iter().map(Option::as_deref).collect()
     }
 
-    /// Directory of harvested start states (default `<states dir>/harvested/<name>`).
+    /// Directory of harvested start states: the task's `harvested_states`, else `<name>` under [`paths::data_dir`]'s
+    /// harvested folder: `<states dir>/harvested` while it exists (a caller's own states dir keeps its harvest), else
+    /// the store's current harvested snapshot.
     pub fn harvested_dir(&self, states_dir: &Path) -> PathBuf {
         match &self.harvested_states {
             Some(dir) => PathBuf::from(dir),
-            None => states_dir.join("harvested").join(&self.name),
+            None => paths::data_dir("harvested", &states_dir.join("harvested")).join(&self.name),
         }
     }
 
@@ -1420,7 +1422,7 @@ impl GameData {
             namespace_heart_values,
             specialists,
             states_dir: root.join(STATES_DIR),
-            trajectories_dir: root.join("trajectories"),
+            trajectories_dir: paths::data_dir("trajectories", &root.join("trajectories")),
         };
         data.cross_check()?;
         Ok(Arc::new(data))

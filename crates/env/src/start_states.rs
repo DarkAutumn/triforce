@@ -323,9 +323,14 @@ impl StartStatePool {
             .collect();
         if paths.is_empty() {
             let namespaces: Vec<&str> = self.namespaces.iter().map(|n| n.as_deref().unwrap_or("bare names")).collect();
+            // Neither the caller's harvested folder nor a store snapshot (`paths::data_dir`): say both.
+            let missing = match self.harvested_dir.parent() {
+                Some(folder) if !folder.exists() => format!("; {}", ::paths::data_missing("harvested", folder)),
+                _ => String::new(),
+            };
             return Err(EnvError::StartState(format!(
                 "no harvested start states in {} (namespaces {namespaces:?}), and this pool draws them (harvested_fraction \
-                 {}{})",
+                 {}{}){missing}",
                 self.harvested_dir.display(),
                 self.harvested_fraction,
                 if self.seed.is_none() { ", no seed states" } else { "" }
