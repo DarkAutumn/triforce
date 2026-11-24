@@ -447,10 +447,11 @@ d3first:
   # the targets there, `carrier_targets` below); 0x4b's three Zols killed for its key, its W key door, 0x4a's five
   # Keese killed for its four bombs, 0x49's key, S into 0x59 (emptied) with 4 or 8 bombs, then the block `dungeon-3`
   # (the raft, back E by 0x5a, 0x5b's last pass with its four bombs and its E wall, 0x4c's E wall, Manhandla by
-  # bombs).  Bomb reserve 6 as d2first's to 0x59; then 4 (the owner, Nov 23: "cap the bomb usage in 0x59 so we never
-  # drop below 4 when clearing it [...] At 8 the agent can use up to 4, at 4 it can use none") from 0x59's fight step
-  # through 0x5a; 0 on 0x5b's last pass (the block's, as before: its four bombs bring Link to 8, the 0x4c wall takes
-  # one, Manhandla is met with 7), 6 at 0x5c, 0 at Manhandla.
+  # bombs).  Bomb reserve 6 as d2first's to 0x59; then 5 (the owner, Nov 24, decisions "Dungeon 3's bombs: the reserve
+  # in 3:0x59 is 5": "I should have set the limit of don't go below 5 bombs in the d3 0x59 to get to manhandla with 7";
+  # Nov 23's 4 replaced: at 8 Link may use three, at 4 none) from 0x59's fight step through 0x5a; 0 on 0x5b's last pass
+  # (the block's: with 7 or fewer its four bombs are fought for, the E wall takes one, so out with 7 from 4 in and 7
+  # from 8 crossed; the 0x4c wall takes one), 6 at 0x5c, 0 at Manhandla (met with 6: "fine", the owner, Nov 24).
   - {level: 3, room: '0x7c', specialist: zol, entry: S, exit: W, bomb_reserve: 6}
   - {level: 3, room: '0x7b', specialist: zol, entry: E, exit: N}
   - {level: 3, room: '0x6b', specialist: zol, entry: S, exit: N, treasure: skip}
@@ -458,7 +459,7 @@ d3first:
   - {level: 3, room: '0x4b', specialist: zol, entry: S, exit: W}
   - {level: 3, room: '0x4a', specialist: stalfos-keese-gel, entry: E, exit: W}
   - {level: 3, room: '0x49', specialist: zol, entry: E, exit: S}
-  - {level: 3, room: '0x59', specialist: darknut, entry: N, exit: S, bomb_reserve: 4}
+  - {level: 3, room: '0x59', specialist: darknut, entry: N, exit: S, bomb_reserve: 5}
   - include: dungeon-3
   - include: to-level-4
   - include: dungeon-4

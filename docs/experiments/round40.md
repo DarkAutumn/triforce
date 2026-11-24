@@ -695,6 +695,37 @@ they teach neither of the owner's opening goals), ow-peahat `d3first_0_1fw_0..2`
 (4 bombs, no bomb to spend) were not solved in 3000 iterations** (the store keeps their `~rule1000` tracks, played
 with the old bag); moldorm `d3first_2_3es_*`: queued (job #773) when this was written.
 
+**The lead's follow-ups (Nov 24).** The owner's ruling of Nov 24 (decisions "Dungeon 3's bombs: the reserve in
+3:0x59 is 5; 6 at Manhandla is fine"): d3first's 3:0x59 step holds `bomb_reserve: 5` (it was 4) from 0x59's fight
+through 0x5a; the training starts there stay exactly 4 or 8 bombs. routes.yaml, `r40_route.py`'s ledger label, the
+walk's reserves (`d3first_walks.rs`) and `tests/test_game_map.py` follow. The rebuilt states after 0x59 hold 4/4/4
+and stay valid (a run that came in with 4 keeps 4); a run that came in with 8 and used its three would hold 5 there,
+and no start state has that bag: training covers it only by the families' uniform draw (`bombs: [0, 8]`,
+`bombs_share: 0.5`: half the resets of 0x69, the raft cellar, 0x59 from S, 0x5a and 0x5b from W draw 0-8 bombs, 5
+among them, as often as 0-3, which the reserve no longer lets a run bring). 0:0x76's tracks are not used:
+ow-tektite@d3first declares `d3first_0_76e_[0-9]` untracked (the wrap is two actions the objective's targets carry;
+that task's curriculum is off), and darknut@d3first declares `d3first_3_59n_1` and `_2` untracked (no explored
+track with 4 bombs); `tests/test_inputs.py` checks both declarations.
+
+**3:0x59 from N, measured** (`triforce evaluate`, darknut@d3first's run on team 2.0.0.15, `r38head-fam-w8`, act
+`temperature:0.5+relax:16`; `d3first_3_59n_0..2`, 100 episodes each, seeds 0-299, full hearts (3), no help count,
+the bag written at every reset by `room_bomb_counts`: `specialists/experiments/r40-states/darknut-59n-b4.yaml`,
+`-b8.yaml`; the what-if with the step's reserve 3 in a scratch worktree, `r40-states-r3`, not committed). Today's
+network was trained with bombs free in that room (reserve 0, then any bag), so these are a floor for what a network
+trained under the reserve does, not a verdict on the reserve.
+
+| start (300 episodes) | bombs usable | wins | health change (total), hearts | frames | bombs used | deaths / stuck / wrong exit |
+|---|---|---:|---:|---:|---:|---|
+| (a) 4 bombs, reserve 5 | none | **86.0% ± 2.0** | -0.85 (-0.72) | 1379 | 0.83 | 27 / 14 / 1 |
+| (b) 8 bombs, reserve 5 | three | **98.3% ± 0.7** | -0.22 (+0.22) | 911 | 3.53 | 2 / 1 / 2 |
+| (c) what-if: 4 bombs, reserve 3 | one | **94.0% ± 1.4** | -0.51 (-0.18) | 1195 | 1.96 | 12 / 5 / 1 |
+
+No bomb is cheated; the bombs used beyond "usable" are, as read from the counters (not traced run by run), drops: a
+bomb drop taken mid-fight (0.36 a run in (a), 0.40 in (b), 0.35 in (c)) lifts the bag above the reserve. With no
+bomb to spend the network wins 86 of 100, the walks' sword rule 10 and 9 of 20 and the explorer
+no track in 3000 iterations; one bomb more (c) halves the deaths (27 -> 12 of 300). (b) and (c) differ from (a) by
+more than their standard errors; (a) is the network that never trained with the bag held at 4.
+
 ## 0x1e's row and 0x1f's line (branch `r40-peahat`)
 
 *Where it came from: Peahat40's section, copied by States40 (Nov 24) from branch `r40-peahat` at c83c2e05

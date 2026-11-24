@@ -101,7 +101,7 @@ def key_events(steps, rooms):
 
 # The fights that throw bombs as a weapon (routes.yaml: a step's own `bomb_reserve` for its fight, or game.yaml's
 # `bomb_weapon`), by (level, room, entry).
-WEAPON_FIGHTS = {(3, 0x59, 'N'): "0x59's five Darknuts (reserve 4)", (3, 0x4d, 'W'): 'Manhandla',
+WEAPON_FIGHTS = {(3, 0x59, 'N'): "0x59's five Darknuts (reserve 5)", (3, 0x4d, 'W'): 'Manhandla',
                  (2, 0x0e, 'S'): 'Dodongo', (5, 0x05, 'E'): 'the Olive Garden', (5, 0x24, 'E'): 'Digdogger',
                  (7, 0x2a, 'W'): 'Aquamentus'}
 

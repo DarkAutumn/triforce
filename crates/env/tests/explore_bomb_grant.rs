@@ -7,9 +7,9 @@
 //! d3first_3_5bw_0`).  A cell now continues its episode exactly (`SpecialistEnv::save`/`load`).  Skipped without
 //! the ROM.
 //!
-//! Round 40 (States40): the fresh generation's `d3first_3_5bw_*` hold the bomb plan's 4 (the reserve of 4 from 0x59),
-//! no longer an empty bag; the start is the same state with its bag written to 0 as it loads (`EmptyBag`), which is
-//! the room this test was written for (the bag a training reset may still draw there).
+//! Round 40 (States40): the fresh generation's `d3first_3_5bw_*` hold the bomb plan's 4 (no bomb spent below the
+//! reserve from 0x59), no longer an empty bag; the start is the same state with its bag written to 0 as it loads
+//! (`EmptyBag`), which is the room this test was written for (the bag a training reset may still draw there).
 
 mod common;
 

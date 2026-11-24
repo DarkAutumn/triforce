@@ -7,7 +7,7 @@
 //!   `wrap_in`) and 0x75's wrap exit, with clips on; with clips off 0x76 is walked across, as before.
 //! - Dungeon 3 from its entrance to the triforce on the new plan: 3:0x7b's key taken with its Zols alive, 3:0x6b
 //!   crossed with its five Zols alive and its key left, 3:0x5b's first pass a crossing entered with the drop cycle
-//!   and the kill streak at 0, the bomb reserve 4 from 3:0x59 to 0x5a, the keys of the route's ledger.
+//!   and the kill streak at 0, the bomb reserve 5 from 3:0x59 to 0x5a, the keys of the route's ledger.
 //! - 2:0x3e: the Moldorm fought for its key; 9:0x56: its key taken (both needed: `r40_route.py ledger`).
 //! - 0:0x1e left E on Link's tile row 4 (Y $5D) and 0x1f crossed along it to the gap (round40.md "0x1e's row").
 //!
@@ -441,12 +441,12 @@ fn the_opening_wraps_and_dungeon_3_runs_on_the_new_plan() {
     assert!(v5b.actions.iter().all(|(a, _, _)| a.kind != ActionKind::Bomb));
     assert!(!v5b.kinds.contains(&ObjectiveKind::Fight), "{:?}", v5b.kinds);
 
-    // The bomb reserve: 6 from the entrance to 0x49, 4 from 0x59's fight through 0x5a, 0 on 0x5b's last pass, 6 at
-    // 0x5c, 0 at Manhandla, 6 in the triforce room.
+    // The bomb reserve: 6 from the entrance to 0x49, 5 from 0x59's fight through 0x5a (the owner, Nov 24: 4 before),
+    // 0 on 0x5b's last pass, 6 at 0x5c, 0 at Manhandla, 6 in the triforce room.
     let reserves: Vec<(MapLocation, u8)> = visits.iter().filter(|v| v.room.level == 3).map(|v| (v.room, v.reserve)).collect();
     let want: Vec<(MapLocation, u8)> = [
-        (0x7c, 6), (0x7b, 6), (0x6b, 6), (0x5b, 6), (0x4b, 6), (0x4a, 6), (0x49, 6), (0x59, 4), (0x69, 4),
-        (0x0f, 4), (0x69, 4), (0x59, 4), (0x5a, 4), (0x5b, 0), (0x5c, 6), (0x4c, 6), (0x4d, 0), (0x3d, 6),
+        (0x7c, 6), (0x7b, 6), (0x6b, 6), (0x5b, 6), (0x4b, 6), (0x4a, 6), (0x49, 6), (0x59, 5), (0x69, 5),
+        (0x0f, 5), (0x69, 5), (0x59, 5), (0x5a, 5), (0x5b, 0), (0x5c, 6), (0x4c, 6), (0x4d, 0), (0x3d, 6),
     ]
     .into_iter()
     .map(|(r, n)| (MapLocation::new(3, r, r == 0x0f), n))
