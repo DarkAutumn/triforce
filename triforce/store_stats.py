@@ -152,6 +152,12 @@ def index(con: sqlite3.Connection, stats: dict, raw_path, output: Optional[int] 
     cursor = con.execute(f"INSERT INTO evaluations ({', '.join(fields)}) VALUES ({', '.join('?' * len(fields))})",
                          list(fields.values()))
     evaluation = cursor.lastrowid
+    # A store made before a per-visit measure was added (round 40: `aimless_frames`) lacks its columns: add them, so
+    # a newer file is never refused by an older table (NUMERIC, as the table's own; older rows read NULL).
+    have = {r[1] for r in con.execute('PRAGMA table_info(evaluation_rooms)')}
+    for name in ROOM_FIELDS:
+        if name not in have:
+            con.execute(f'ALTER TABLE evaluation_rooms ADD COLUMN {name} NUMERIC')
     for row in room_rows(stats):
         con.execute(f"INSERT INTO evaluation_rooms (evaluation, {', '.join(row)}) "
                     f"VALUES (?, {', '.join('?' * len(row))})", [evaluation, *row.values()])
