@@ -8,8 +8,9 @@
 //!
 //! One cell at most is heard ([`Screen::set_sound`]): its frames' sound goes to a [`Ring`], made at the rate
 //! the ring asks for.  The sound starts from what the cell's game last wrote to the sound registers, so
-//! moving it to another cell picks that game's music up mid-note.  [`Screen::set_controller`] draws the
-//! held buttons into every frame ([`crate::overlay`]).
+//! moving it to another cell picks that game's music up mid-note.  [`Screen::set_mix`] switches its music,
+//! sound effects and low-hearts beep (`zcore::tracks`, both tracks kept ready so a switch is heard at once).
+//! [`Screen::set_controller`] draws the held buttons into every frame ([`crate::overlay`]).
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -21,6 +22,7 @@ use pool::EnvControl;
 use replay::{Player, Replay, ReplayError};
 use zcore::machine::{HEIGHT, WIDTH};
 use zcore::Rom;
+use zcore::tracks::Mix;
 
 use crate::overlay::draw_controller;
 use crate::speaker::Ring;
@@ -102,13 +104,14 @@ impl Cell {
     }
 }
 
-/// What the cells share: who is heard, and whether the controller is drawn.
-#[derive(Default)]
+/// What the cells share: who is heard, which parts of the sound, and whether the controller is drawn.
 struct Shared {
     /// The cell that is heard and where its sound goes.
     sound: Mutex<Option<(usize, Arc<Ring>)>>,
     /// Bumped whenever `sound` changes: a cell looks at `sound` only then.
     sound_version: AtomicU64,
+    /// The parts of the sound heard ([`Screen::set_mix`]).
+    mix: Mutex<Mix>,
     controller: AtomicBool,
 }
 
@@ -142,7 +145,12 @@ impl Screen {
                 })
             })
             .collect();
-        let shared = Arc::new(Shared::default());
+        let shared = Arc::new(Shared {
+            sound: Mutex::new(None),
+            sound_version: AtomicU64::new(0),
+            mix: Mutex::new(Mix::ALL),
+            controller: AtomicBool::new(false),
+        });
         let threads = cells
             .iter()
             .map(|cell| {
@@ -241,6 +249,12 @@ impl Screen {
         self.shared.sound_version.fetch_add(1, Ordering::AcqRel);
     }
 
+    /// Switches the heard cell's music, sound effects and low-hearts beep (`zcore::tracks`) from its next frame
+    /// on, without a break in what stays on.
+    pub fn set_mix(&self, mix: Mix) {
+        *self.shared.mix.lock() = mix;
+    }
+
     /// Draws the held buttons into every frame from the next one on ([`crate::overlay`]), or stops.
     pub fn set_controller(&self, on: bool) {
         self.shared.controller.store(on, Ordering::Relaxed);
@@ -302,6 +316,7 @@ fn play(
 ) -> Result<bool, ReplayError> {
     let replay = Replay::parse(job.data.to_vec())?;
     let mut player = Player::open(rom.clone(), replay, &|name| resolve(name))?;
+    player.set_split(false, true);
     let frames = player.frames();
     cell.set(job.show, |state| state.frames = frames);
     let start = job.start.min(frames);
@@ -339,7 +354,14 @@ fn play(
                 Some((index, ring)) if *index == cell.control.index() => Some(ring.clone()),
                 _ => None,
             };
+            player.set_mix(*shared.mix.lock());
             player.set_sound(heard.as_ref().map(|ring| f64::from(ring.rate())));
+        }
+        if heard.is_some() {
+            let mix = *shared.mix.lock();
+            if mix != player.mix() {
+                player.set_mix(mix);
+            }
         }
         if !player.step(true)? {
             player.finish()?;

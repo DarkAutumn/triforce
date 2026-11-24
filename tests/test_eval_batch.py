@@ -386,7 +386,11 @@ def test_the_wrapper_dry_call_writes_the_batch_work_and_creates_nothing(tmp_path
     assert out.returncode == 0, out.stderr
     expected = eval_batch.batch_work([eval_batch.chain_entry('d4', chain, eval_batch.Options('dry', 1, 1))])
     assert expected['chain_steps'] > 0
-    assert json.loads(estimate.read_text()) == {'kind': 'batch', 'work': expected, 'name': 'dry'}
+    answer = json.loads(estimate.read_text())
+    (played,), (asked,) = answer['work'].pop('chains'), expected.pop('chains')     # the batch's own --parallel
+    assert played.pop('parallel') > 0 and asked.pop('parallel') == 1 and played == asked
+    assert played['name'] == 'd4' and played['shape'].startswith('d2first:')
+    assert answer == {'kind': 'batch', 'work': expected, 'name': 'dry'}
     assert sorted(p.name for p in tmp_path.iterdir()) == ['estimate.json']
 
 

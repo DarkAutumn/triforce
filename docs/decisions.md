@@ -3666,3 +3666,145 @@ The lead turned the whirlwind macros on for `d3first` as a `REV` (no network cha
 plays as before), told the owner beforehand in the check-in file ("my plan unless you say no"), and landed it with
 the golden race and the 250 test. It is a change to how today's team plays that the owner had ruled on only for the
 fresh generation: his to overrule.
+
+## 2026-11-23 — 2.0.0.15: Manhandla and Dodongo are never fought without a bomb (the owner)
+
+The owner, watching Dungeon 3: "we always kill Manhandla with bombs [...] I don't ever want to fight them with a wood
+sword"; when Link runs out there he is to be handed a bomb, counted as cheated, as in Dodongo's room. He was not: the
+round 24 rule ("a room's bomb need ends when its bomb walls are open", decisions 2026-11-17 "A granted bomb opens the
+wall and does nothing else") read Manhandla's room 3:0x4d as a wall room, because Link comes into it through its own W
+bomb wall, already open. So the room's need was over before the fight began, and since round 24 no run was ever handed
+a bomb there: 0 cheated bombs in 638 visits of a 1000-run Dungeon 3 chain, 246 deaths. Dodongo's 2:0x0e has no bomb
+wall and was never affected.
+
+The rule now: game.yaml marks the two rooms `bomb_weapon: true` (`GameMap::bomb_weapon`). In a weapon room
+`cheats::bomb_need` is 1 whenever the bag is empty, whatever the walls' state, and `cheats::bomb_opens` is false, so
+the granted bomb is bound to no wall and BOMB is offered wherever the family's mode offers it. Every other
+`requires_bombs` room keeps the round 24 rule. Tests: `crates/env/tests/boss_bombs.rs` (both rooms on both routes:
+an empty bag is topped up on entering, three bombs laid in a row are each replaced and counted as cheated; the data
+names exactly these two rooms), the unit test `every_requires_bombs_room_but_the_weapon_rooms_has_something_to_open`,
+and one recorded legacy trace (`3_4dw_2`, which lays its last bomb at step 16) with its new hash.
+
+Measured on today's team, no network retrained (the owner: "fix and tests, no retrain"), Dungeon 3, 1000 runs paired
+by seed (`triforce stats compare`): 39.2% -> 45.7%, +6.5 ± 0.8 points; the runs are identical up to Manhandla's room.
+In the room: 638 visits both, deaths 246 -> 181, 307 bombs handed out in 122 visits, bombs used a visit 2.54 -> 3.02.
+Manhandla's network was trained without ever being topped up there (its training hands bombs through
+`ram_randomization`), so the fresh generation's will be the first to learn the room as the owner plays it. 181 deaths
+in 638 visits remain: the room is still the dungeon's largest single loss, with 3:0x69.
+
+## 2026-11-23 — Firing-line targets: not merged, not in the fresh generation (the owner)
+
+The experiment (branch `r40-fireline`, round40.md "Firing-line targets"): at full hearts a fight's targets become
+tiles in line with a monster at range, so the movement reward and the target input stop pulling Link into melee.
+Measured on zol@d3first as continuations (1000 Dungeon 3 runs an arm, paired; the from-scratch arms were never run):
+Link shoots far more, the rate to Manhandla's door does not move (53.3% against 55.0%, -1.7 ± 2.2; with the monsters'
+own tiles kept as targets too 50.4%, -4.6 ± 2.2), and the way there takes 9-12 seconds longer, three quarters of it in
+the Zol room 3:0x6b (+544 ± 29 frames) and the rest in 3:0x4b; hearts lost in the crossing room 3:0x49 triple (0.09 ->
+0.33 a visit at full hearts) and its deaths go 14 -> 46 -> 58.
+
+The owner, having watched the replays: "the changes we made to the beams DID work, but zol are a particularly bad
+target, because they split. If link quickly swords from afar into gel, they scatter, and he was splitting too many
+without being up close to finish them off quickly, bleeding time and health. Beams are far more effective against
+darknuts, but that didn't show up here because 0x59 is mostly a 'use bombs' room and in 0x5b is first passthrough and
+second we rarely have beams by the time we make it to the second pass. Overall d3 is particularly bad for sword
+beams like this." His ruling: "this experiment shouldn't be merged and shouldn't be used at first in the new
+training run. Over the whole game, this might have panned out, or some other technique of doing more damage from
+afar might have made a difference rather than just the fightline idea, but for now we can conclude this isn't what
+we want in the next training run. We will revisit this in the future long after the retrain."
+
+So: the branch is kept unmerged as `archive/r40-fireline` (the reward switch `reward.firing_lines`, the two task
+variants, the experiment script), the fresh generation's fights keep the monsters' own tiles as targets, and the
+question that stays open for a later round is damage from range as such (against monsters that do not split, with
+beams actually held when the room is reached), not this target rule.
+
+## 2026-11-23 — The fresh generation's Dungeon 3: two rooms crossed, one Darknut, the Moldorm's key (the owner)
+
+The owner, after watching the firing-line replays and looking up what speedrunners do in Dungeon 3: "in d3, skip
+0x6b. in 0x5b kill ONE darknut then skip the other two, doesn't matter which. Because we shouldn't kill any zols on
+the way, it's two bypass rooms (with a treasure key in 0x7b we pick up), that first darknut is on a bomb drop number.
+You'll need to find a way to train that, because we only kill the rest of the room on the way back through. The
+extra key comes from killing the moldorm, which we have to add back." And: "We aren't retraining any of this now.
+This all goes into the upcoming retrain."
+
+So, for 2.0.1.0's `d3first` and nothing before it (today's team and route are not touched):
+- 3:0x7b is crossed without a fight, taking its key (visible on entry); 3:0x6b is crossed without a fight, its key
+  (which appears only when its five Zols are dead) left behind.
+- 3:0x5b's first pass kills exactly one of its three Darknuts, whichever, for its drop: with no kill made in the two
+  rooms before it, that kill falls on a number of the game's drop cycle that gives bombs. The other two are left;
+  the room is cleared on the last pass (W -> E), as today.
+- The key 0x6b no longer gives comes from the Moldorm room 2:0x3e, which is fought again (2.0.0.13 crossed it and
+  took 9:0x56's key instead; that pair of changes is re-decided when the route's key count is redone).
+- The lead's notes for whoever builds it: (1) "kill one, take what it drops, leave" is what the generation's
+  bomb-carrier input and targets are for (a carrier in a pass-through room: the exit and the nearest eligible
+  carrier are both targets); 0x5b's first pass is its first required use, so the carrier rule must be exact about
+  the drop cycle (`asm:Drop_SetUpItem`, the kill counters) and about what Link has killed since the game began on
+  THIS route (the overworld walk to Dungeon 3 must leave the cycle where the first Darknut gives bombs: count it,
+  and fix the walk's kills if it does not). (2) The room's start states for training need both passes: three alive
+  on the first, two alive on the last. (3) The route's key and bomb budget is recomputed from the start
+  (docs/routes/rest-of-game.md "the survival budget") before any state is built.
+- The speedrunners' full Dungeon 3 path beyond these rooms was not looked up; only what the owner gave is decided.
+
+## 2026-11-23 — The fresh generation's list, as the owner confirmed it
+
+Observation v7 (range-aware contact columns and the threat lane in front of shooters); the bomb-carrier input and its
+targets in pass-through rooms; the whirlwinds played by the engine and the docks without the monster give-ways; no
+closing no-button frame (branch `r40-gen`); an item's target tiles exactly the tiles it can be taken from; the
+0x1e -> 0x1f row; the Link-token architecture with the hit head; Dungeon 3 as above. Not in it: firing-line targets.
+A red Goriya's lane never warns (its throw is a 2-in-256 draw a frame once it is ready, `asm:Walker_SetInputDirAndTryThrowBoomerang`);
+the owner: "this is fine for now [...] we can tackle this later if the new models struggle on red goriyas".
+The shared store is cut over before the generation's trainings start, so it trains into the store (the owner:
+"acceptable").
+
+## 2026-11-23 — The fresh generation's Dungeon 3, continued: no kills before the Darknut room, and the bomb plan (the owner)
+
+The owner, on the lead's note that the first Darknut gives bombs only when the drop cycle stands right: "This is
+correct but the meta point here is that a well trained model will not kill anything before hitting the darknut room,
+including the overworld and the two zol rooms. In 0x76 and 0x75 BOTH should be screen wrapped (0x76 was walking across
+the screen in the replays I checked [...]) to avoid needing to kill anything. The zols in 7b 6b could be annoying and
+get in the way, we won't always land on the darknut room with 0 kills. But maybe even a 50-50 split training the 0x5b
+south entry to north should have the kill count at 0 or 1 to teach bypass or kill." And: "You may even want to start
+tracking goals of screen wrap and 'no kills'."
+
+The bombs: "Going 4a means we get possibly 8 total bombs. I want to cap the bomb usage in 0x59 so we never drop below
+4 when clearing it. That means when we transition from 0x49 -> 0x59 we should literally train with 4 or 8 bombs in
+0x59 because those are the exact states we will have. At 8 the agent can use up to 4, at 4 it can use none. Then in
+0x5b on the second pass, the training is as it was before. [...] it's important to not run out of bombs for
+manhandla. We should leave 0x5b with 8 bombs if all goes well, hit manhandla with 7 due to the 0x4c wall, and if we
+get lucky with our hits and counts bombing manhandla, we shouldn't need to cheat bombs."
+
+For 2.0.1.0's `d3first` (the retrain; nothing before it):
+- **No kill before 3:0x5b.** The overworld walk wraps the screen in 0:0x76 as well as 0:0x75; 3:0x7b (its key taken)
+  and 3:0x6b are crossed. The game's drop cycle (`WorldKillCycle`, zero at power on, `asm:Drop_SetUpItem`) then
+  stands at 0 in 3:0x5b, and the first Red Darknut killed uses column 1 of its group: bombs.
+- **3:0x5b's first pass (S -> N) is trained half with the cycle at 0 (kill one Darknut, take its bombs, leave) and half
+  at 1 (a kill was made on the way: nothing to gain, cross).** The bomb-carrier input says which it is.
+- **The bombs**: 3:0x4a's room bombs (4) and the first Darknut's (4) make 4 or 8 on entering 3:0x59 from 3:0x49, and
+  its training starts hold exactly 4 or 8. `bomb_reserve: 4` from 3:0x59 (today 0): at 8 Link may use up to 4 there,
+  at 4 none. The reserve holds to 3:0x5b's last pass, which is trained as today and whose room bombs bring him to 8;
+  the 0x4c wall takes one; Manhandla is met with 7.
+- **Tracked as goals** (run statistics, a route step's own expectation beside what happened): the screen wrap taken
+  where the route asks for it (0:0x76, 0:0x75), and no kill made where the route crosses (the overworld walk, 3:0x7b,
+  3:0x6b; the cycle's value on entering 3:0x5b).
+- The lead's notes: the Darknut's bombs are not certain even at the right count. A table drop appears only when the
+  dead monster's random byte is below its group's rate, `$68` of 256 for a Red Darknut: 41% (`asm:Drop_GroupRates`),
+  so 3:0x59 is entered with 8 in about two runs of five that arrive with the cycle at 0, and with 4 otherwise. And
+  the cycle counts Gels (`$15`) but not child Gels (`$14`): a Zol split on the way and finished moves it.
+
+## 2026-11-23 — 3:0x69 is crossed by a line, with the sword, without a hit (the owner)
+
+The owner confirmed the lead's four readings of the Dungeon 3 plan (the 41% drop; count 0 kill one, count 1 cross;
+the reserve of 4 holding from 3:0x59 to 3:0x5b's last pass; the wrap in 0:0x76 as the route's way) and added, on
+3:0x69 (eight Red Darknuts, crossed to the stairs and back; 170-190 deaths in 1000 Dungeon 3 runs today, the largest
+loss after Manhandla): "0x69 is traversed with a sword. There's actually a golden route through the room. Going in
+the door, immediate east until you can't, south to line up the stairs, then east to stairs. The one catch is that
+sometimes the darknut paths in your way and sometimes it doesn't. If you time it right, you can sword the darknut to
+safely pass through him. No matter which way the room plays out, a speedrunner will NEVER take damage there, ever. If
+that's a high death room, planning that route and teaching the teacher network is probably a good idea."
+
+For the retrain: the line is planned in the emulator (in by the N door, E along the top to the wall, S to the stairs'
+row, E to the stairs at tiles (26-27, 10-11); and the way back out), given to the objective as the room's path
+(`path_costs`, as 5:0x37's column in round 25) and taught by a scripted rule's clean runs cloned during training
+(`train --demos`), the sword-through included (a Darknut flashing from a hit cannot hurt Link: the rule swords the
+one in the way and walks through it). The room's goal, tracked like the wrap and the no-kill goals: hits taken in
+3:0x69 a visit, on each pass, toward zero. No bomb is used there (the reserve of 4).
+

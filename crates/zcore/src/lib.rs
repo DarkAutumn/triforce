@@ -33,6 +33,7 @@ mod video;
 pub mod machine;
 pub mod sound;
 pub mod state_file;
+pub mod tracks;
 pub use cpu::{TraceHook, TraceRow};
 pub use machine::{MachineState, Rom, RomError, ZCore};
 pub use state_file::StateFormatError;

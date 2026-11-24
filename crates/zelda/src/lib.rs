@@ -7,6 +7,7 @@ pub mod aimless;
 pub mod attack;
 pub mod beams;
 pub mod blocks;
+pub mod bomb_windows;
 pub mod bombs;
 pub mod cheats;
 pub mod clips;

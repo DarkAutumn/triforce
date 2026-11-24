@@ -48,7 +48,9 @@ runs-250 --label <reasons>``: never the repository's ``replays/``).  It writes t
 version, commit, team (each family's run and checkpoint SHA-1), seeds, wall time and decisions a second, the runs
 that took each triforce, the endings by kind, deaths and stucks per room (room, route step, family), every room
 visit's hits and hearts lost per room, the cheated items and ending of each run, the median frames to each triforce
-and the kept replays.  ``--team`` names a team other than main's (``2.0.0.11_one-d1w8.json``).  ``--from-replays``
+and the kept replays, and the owner's two bomb metrics (``bomb_metrics``: a calculation over each replay,
+``triforce/bomb_metrics.py``; every window in ``OUT_DIR/bomb_windows.jsonl``).  ``--team`` names a team other than
+main's (``2.0.0.11_one-d1w8.json``).  ``--from-replays``
 builds the record from ``OUT_DIR/replays/`` (``replay.chain_records``: the runs, the provenance and the route facts;
 the commit is the replays' own, META ``commit``) and writes it as ``OUT_DIR/runs250.replays.json``; what no replay
 knows, the wall times (``events.jsonl``, ``timing.json``) and the lane (``training.json``), still comes from the
@@ -257,16 +259,17 @@ def chain_options() -> frozenset:
     return frozenset(option for option in ('--clips', '--events') if option in text)
 
 
-def announce_chain(runs: int, name: str, route: str = ROUTE):
+def announce_chain(runs: int, parallel: int, power_on: bool, name: str, route: str = ROUTE):
     """The chain's work for the queue (``jobs.announce``: the wrapper's dry call ends here)."""
     sys.path.insert(0, str(ROOT))
     from triforce.jobs import announce, work  # pylint: disable=import-outside-toplevel
-    from triforce.runner import steps_played  # pylint: disable=import-outside-toplevel
-    announce('chain', work(chain_steps=runs * steps_played(route)), name)
+    from triforce.runner import chain_entry, steps_played  # pylint: disable=import-outside-toplevel
+    announce('chain', work(chain_steps=runs * steps_played(route),
+                           chains=[chain_entry(route, runs, parallel, power_on=power_on)]), name)
 
 
 def run(args) -> int:
-    announce_chain(args.runs, 'full-runs')
+    announce_chain(args.runs, args.parallel, bool(args.power_on), 'full-runs')
     out = Path(args.out)
     (out / 'replays').mkdir(parents=True, exist_ok=True)
     command = chain_command(out, args.runs, args.first_seed, args.parallel, args.models_dir)
@@ -306,7 +309,7 @@ def runs250(args) -> int:
         print(f"{out / 'runs.jsonl'} exists; `full_runs.py stats {out}` reports it, or choose a new --out",
               file=sys.stderr)
         return 2
-    announce_chain(args.runs, 'runs250', args.route)
+    announce_chain(args.runs, args.parallel, True, 'runs250', args.route)
     (out / 'replays').mkdir(parents=True, exist_ok=True)
     models = freeze_models(Path(args.models_dir).resolve(), out / 'models')
     from triforce import _native  # pylint: disable=import-outside-toplevel
@@ -547,6 +550,7 @@ def stats(out: Path, team=None, docs: Path = DOCS, archive: bool = True, from_re
                                    '--label', label, str(copy)], check=False).returncode
             if done:
                 print(f"full_runs: archive_replays.py failed ({done}) for {copy}", file=sys.stderr)
+    record['bomb_metrics'] = bomb_windows(out)
     text = dump(record)
     (out / ('runs250.replays.json' if from_replays else 'runs250.json')).write_text(text)
     docs.mkdir(parents=True, exist_ok=True)
@@ -554,6 +558,9 @@ def stats(out: Path, team=None, docs: Path = DOCS, archive: bool = True, from_re
     path.write_text(text)
     print(markdown([record], [path.name]))
     print(f"record: {path}; kept replays: {kept_dir}")
+    for where in record['bomb_metrics']['unattributed']:
+        print(f"full_runs: FAILED: bomb metrics: a Metric B {where['outcome']} window with no killed monster: "
+              f"{where['replay']} frame {where['close_frame']}", file=sys.stderr)
     return record
 
 
@@ -649,7 +656,32 @@ def markdown(records: list, names: list, top_rooms: int = 12) -> str:
                          f"frames, {k['cheated_bombs_keys']} bombs/keys and {k['cheated_rupees']} rupees cheated: "
                          f"{k['ending']})" for k in r['kept'])
         lines.append(f'- {label} kept: {kept}.')
+    for label, r in zip(labels, records):
+        if r.get('bomb_metrics'):
+            from triforce import bomb_metrics  # pylint: disable=import-outside-toplevel
+            lines += ['', f'#### {label}', '', bomb_metrics.markdown(r['bomb_metrics'], top_rooms)]
     return '\n'.join(lines) + '\n'
+
+
+def bomb_windows(out: Path, parallel: int = 4) -> dict:
+    """The owner's two bomb metrics over the folder's replays (``triforce/bomb_metrics.py``, a calculation over each
+    replay): every window to ``OUT_DIR/bomb_windows.jsonl``, the batch's summary (counts and rooms, not per run) for
+    the record, with ``unattributed``: the Metric B hit/miss windows no death accounted for (must be none; ``stats``
+    prints each as a failure)."""
+    from concurrent.futures import ProcessPoolExecutor  # pylint: disable=import-outside-toplevel
+    from triforce import bomb_metrics, jobs  # pylint: disable=import-outside-toplevel
+    replays = sorted((out / 'replays').glob('*.tfreplay'))
+    windows = []
+    with ProcessPoolExecutor(parallel) as pool:
+        for done, ws in enumerate(pool.map(bomb_metrics.score_replay, replays), 1):
+            windows += ws
+            jobs.progress(done, len(replays), 'replays', label='bomb metrics')
+    bomb_metrics.write_windows(out / 'bomb_windows.jsonl', windows)
+    summary = bomb_metrics.summarize(windows)
+    summary.pop('per_run')
+    summary['unattributed'] = [{k: w[k] for k in ('replay', 'close_frame', 'close_room', 'outcome')}
+                               for w in bomb_metrics.unattributed(windows)]
+    return summary
 
 
 def analyze(paths: list, out=None, top_rooms: int = 12) -> str:

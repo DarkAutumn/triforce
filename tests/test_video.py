@@ -14,7 +14,7 @@ import pytest
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 
 from triforce import _native, video  # noqa: E402  pylint: disable=wrong-import-position
-from triforce.play_grid import Show  # noqa: E402  pylint: disable=wrong-import-position
+from triforce.play_grid import Mix, Show  # noqa: E402  pylint: disable=wrong-import-position
 from triforce.thoughts import Thoughts  # noqa: E402  pylint: disable=wrong-import-position
 from triforce.video import RESULT_FRAMES, VideoGrid, center_cell, replay_files  # noqa: E402  pylint: disable=wrong-import-position
 
@@ -124,6 +124,24 @@ def test_the_films_sound_is_the_heard_cells_and_as_long_as_the_film(recordings):
     assert not after.any(), 'silence while its result is up'
 
 
+def test_a_film_can_leave_parts_of_the_sound_out_or_split_it_in_two(recordings):
+    paths = [recordings / BOOT]
+    _, whole = _film(VideoGrid(1, paths, heard=0))
+    whole = np.concatenate(whole)
+    _, split = _film(VideoGrid(1, paths, heard=0, split=True))
+    split = np.concatenate(split)
+    # Two tracks, as long as the one (from power on the overworld music comes in when the models take over).
+    assert split.shape == (len(whole), 2) and split.dtype == np.float32
+    music, effects = split[:, 0], split[:, 1]
+    assert np.sqrt((music ** 2).mean()) > 0.01
+    _, no_music = _film(VideoGrid(1, paths, heard=0, mix=Mix(music=False)))
+    _, no_effects = _film(VideoGrid(1, paths, heard=0, mix=Mix(effects=False)))
+    assert np.array_equal(np.concatenate(no_music), effects), 'the effects track is the film without music'
+    assert np.array_equal(np.concatenate(no_effects), music), 'the music track is the film without effects'
+    _, nothing = _film(VideoGrid(1, paths, heard=0, mix=Mix(music=False, effects=False)))
+    assert not np.concatenate(nothing).any()
+
+
 def test_a_film_with_thoughts_sends_what_its_replay_says_the_agent_was_thinking(recordings):
     path = recordings / WINS[0]
     thoughts = Thoughts(_native.Replay(path.read_bytes()))
@@ -151,9 +169,13 @@ def test_create_video_checks_its_command_line(recordings, tmp_path):
         (3, 1), 3, True, True, True, 1)
     for bad in ([out], [out, '2x2', str(recordings)], [out, '1x1', '2x1', str(recordings)],
                 [out, str(tmp_path / 'missing.tfreplay')], [out, str(recordings), '--scale', '0'],
-                [str(tmp_path / 'nowhere' / 'film.mp4'), str(recordings)]):
+                [str(tmp_path / 'nowhere' / 'film.mp4'), str(recordings)],
+                [out, str(recordings), '--split-audio'], [out, str(recordings), '--no-music'],
+                [out, str(recordings), '--sound', '--split-audio', '--no-sound-effects']):
         with pytest.raises(SystemExit):
             create_video.parse_args(bad)
+    args = create_video.parse_args([out, str(recordings), '--sound', '--split-audio', '--no-heart-beep'])
+    assert (args.split_audio, args.music, args.effects, args.heart_beep) == (True, True, True, False)
 
 
 def _probe(path):
@@ -184,3 +206,18 @@ def test_create_video_writes_a_video_with_sound_from_the_middle_cell(recordings,
     assert create_video.main([str(quiet), str(recordings / WINS[0]), '--scale', '1', '--controller',
                               '--thoughts']) == 0
     assert set(_probe(quiet)) == {'video'}
+
+
+@pytest.mark.skipif(shutil.which('ffmpeg') is None or shutil.which('ffprobe') is None, reason='needs ffmpeg')
+def test_split_audio_writes_two_titled_tracks_music_first(recordings, tmp_path, capsys):
+    for name in ('film.mkv', 'film.mp4'):
+        out = tmp_path / name
+        assert create_video.main([str(out), str(recordings / BOOT), '--sound', '--split-audio', '--scale', '1']) == 0
+        assert json.loads(capsys.readouterr().out.strip().splitlines()[-1])['split_audio']
+        probe = subprocess.run(['ffprobe', '-v', 'error', '-show_entries',
+                                'stream=index,codec_type,channels:stream_tags=title,handler_name:stream_disposition=default',
+                                '-of', 'json', str(out)], check=True, capture_output=True, text=True).stdout
+        audio = [s for s in json.loads(probe)['streams'] if s['codec_type'] == 'audio']
+        titles = [s['tags'].get('title') or s['tags'].get('handler_name') for s in audio]
+        assert titles == list(video.TRACK_TITLES), name
+        assert [s['channels'] for s in audio] == [1, 1] and [s['disposition']['default'] for s in audio] == [1, 0]

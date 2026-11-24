@@ -1172,6 +1172,70 @@ branch's base).
 Next to train with the beam terms, by the hearts melee costs on the route (2.0.0.8's records): wizzrobe (22,150
 hearts, 1167 deaths), darknut (5,370; 368), goriya (5,117; 351), patra (4,324; 40), with stronger weights first.
 
+## The owner's bomb metrics (branch `r40-bombstats`, Nov 23)
+
+The owner's two metrics for every 250 test, measured before the observation learns "next kill may drop bombs"
+(backlog) and after: **Metric A**, the 10th-kill bomb (on a 9-kill streak with a bomb of his own, was the 10th kill
+made with a bomb?), and **Metric B**, the bomb carrier (the drop table's next column is bombs for drop group 2 and a
+carrier can die: was the next kill a carrier?). Definitions, the game's rules and the owner's rulings on every edge
+case: `docs/architecture.md` "Bomb windows" (his ideas and rulings; the agents built the calculator). **A
+calculation over a replay, nothing more** (the owner): RAM frame by frame (`zelda::bomb_windows`), the cheated bombs
+from its EDITS, and what the env told the agent (the objective FIGHT, the bomb rule) from the targets stream of
+branch `r40-targets`; the output is a list of windows, one record each, and the counts are its sums
+(`triforce/bomb_metrics.py`, `bomb_windows.jsonl`). A first version also counted live in the chain; it is gone.
+
+Checked against RAM: on the corpus's `single-run-d3first-2.0.0.11-51-networks` the calculator's 10th kills are RAM's
+exactly (2 armed at 3:0x4d and 2:0x3e, 3 other at 3:0x4c, 4:0x31, 2:0x1e); the 225 kill-cycle moves attribute by
+slot as the disassembly says (three Darknuts in one frame move the cycle by 3; Manhandla's dead dummy `$5D` and Red
+Keese move nothing; slot 1's Gibdo drops nothing; Dodongo's death forces a bomb drop that is not a 10th kill's).
+Two facts first chosen wrong, found by the RAM checks of 20 and 50 chain runs (2.0.0.11 team, from power on): the
+momentary mask (BOMB is masked while a bomb is in the air, so bomb kills went uncounted), then `BombUse::allows` of
+the decision taken on 8 kills (`required` outside a wall room says no, and holds for the frames on 9 within its
+action: 4:0x50, 4:0x31); Metric A now asks only whether the mode is `never`. With that, 12 of 12 replays of the
+50-run check agree with RAM on every 10th kill (offline, no targets stream: the rule from RAM alone).
+
+**Checked on the 2.0.0.13 250 test's replays** (targets and masks recorded). Against a RAM-following reference written
+apart from the calculator (first 50 replays, 319 windows): Metric A armed 29 and other 35 agree, Metric B hit 7 and
+miss 10 agree, 0 unattributed, one difference: seed 49, frame 23677, 4:0x31, where the calculator's `armed` is right
+(on 9 kills Link's first bomb was exploding when he placed his last, the bag 1 → 0, and the first blast killed a Red
+Keese, `$51` set) and the reference was wrong (it asked for a bomb in the bag on the frame before the kill); fixed,
+and the frames are a test. Per dying type over all 250 (single deaths only), deaths that moved the cycle against
+those that did not: the rule holds for `$14` (0 / 4,083), `$1C` (0 / 1,310), `$5D` (0 / 204) and every type the game
+counts; the other "did not move" are no deaths the game ended: 248 empty slots (`$00`) keeping a dying metastate from
+an earlier object, refilled on a room entry (the calculator would have taken one for a death under way, which shuts
+Metric B's window: fixed, a dying slot must hold a monster); `$08` 4, `$0B` 1, `$10` 4, `$15` 4, `$17` 1 in their sparkle
+when Link left the room (mode 4, the next room's entry); `$0E` 7, 0:0x2c's Tektites in their sparkle when Link went
+into the cave (mode 11; twice the slot became the cave's person `$6B`); `$3C` 1, a Manhandla hand that dies while
+others live becomes the dead dummy (asm:Manhandla_CheckCollisions, as the disassembly says). The calculator counts
+none of these as a kill: a room left in a sparkle is `left` for Metric B and nothing for Metric A.
+
+**The baseline of record: 2.0.0.14's 250 test** (`target/runs250/2.0.0.14`, the lead's run, code `e9872c0b`, from
+power on), scored from its 250 replays by the calculator at `e5fc8907` (1,536 windows, 0 unattributed; 20 runs have
+no window). Manhandla's room does not yet grant cheated bombs (branch `r40-bossbombs`): its counts change with that.
+
+| Metric A, the 10th-kill bomb | all windows | without a full bag |
+|---|---|---|
+| opportunities | 297 | 286 |
+| armed (a bomb's 10th kill) | 141 (47.5%) | 140 (49.0%) |
+| missed (a bomb that killed nothing) | 37 (12.5%) | 34 (11.9%) |
+| other weapon | 119 (40.1%) | 112 (39.2%) |
+
+Not opportunities: 26 streaks lost, 3 paused-out, 4 suspended (Dodongo), 4 open at the end. The forced drops of the
+141 armed: 95 taken, 4 wasted, 2 on the floor at the end, 40 lost before falling (harm or the fairy). Where: 3:0x4d
+(Manhandla) 86 (83 armed), 4:0x31 49 (16 armed, 8 missed, 25 other), 3:0x5b 29 (15, 11, 3).
+
+| Metric B, the bomb carrier | all windows (none opens with a full bag) |
+|---|---|
+| opportunities | 821 |
+| hit (a carrier died next) | 28 (3.4%) |
+| miss (another monster died next) | 65 (7.9%) |
+| left (Link left first) | 728 (88.7%) |
+
+Not opportunities: 348 closed, 33 open at the end. The 28 hits dropped bombs 14 times (13 taken, 1 on the floor at the
+end): the 41% roll. `left` is most of it, in rooms the route crosses with carriers alive: 3:0x69 144, 3:0x5b 96,
+3:0x5c 59, 0:0x3d 44, 5:0x65 34, 0:0x3c 28, 0:0x2d 27; hits and misses come from 0:0x4c (4 / 25), 0:0x38 (0 / 16) and
+5:0x66 (5 / 11).
+
 ## Moldorm crossed, 9:0x56's key
 
 **The owner's change** (Nov 22, after the scout's ledger, `target/owner-review/r38-moldorm-key.md`): Moldorm's key

@@ -40,12 +40,14 @@ cell goes on to its next replay.  u uncaps the frame rate (as fast as the replay
 NES's 60.1 fps; while capped, + and - raise and lower the cap in steps of 10 (60.1 -> 50 -> 40, 60.1 -> 70, ...).
 p pauses and resumes the picture (the simulations go on filling their queues).  c turns the run-time clips switch
 off and on: for every run simulated from then on (the runs already in the queues keep theirs) and for the live
-cell's run from its next decision.
+cell's run from its next decision.  s turns the sound off and on; m the music, e the sound effects and h the
+low-hearts beep (the title says which are off).
 
 Menus: the bar at the top has every key's action (each item names its key) and the options without a key.  Show:
 the source, the next replay, the live cell on or off.  Playback: pause and the frame-rate cap.  Options: clips,
-and the act mode (a few standing choices and the one given with --act).  View: sound, the controller drawing and
-the cells' scale.  Changing the act mode or the live cell starts the simulations again with empty queues: the
+and the act mode (a few standing choices and the one given with --act).  View: sound, the music, the sound
+effects, the low-hearts beep, the controller drawing and the cells' scale.  Changing the act mode or the live
+cell starts the simulations again with empty queues: the
 runs in them were played the old way.
 
 Clips (round 22): --clips on|off is the switch the simulations start with (default on).  Off masks the CLIP
@@ -65,7 +67,11 @@ Sound: one cell is heard, the one with the yellow frame (the top left one at fir
 one instead; s turns sound off and on (--no-sound starts with it off).  A cell's sound is made as its frames
 are played, so there is sound only at the NES's own frame rate: at any other cap, or uncapped, it is muted.
 A replay that starts from a savestate has no sound state to start from, so each voice comes in with its next
-note.
+note.  The sound is in two parts that switch off apart, at once and without a break in the other: the music
+(the songs: overworld, dungeon, level 9, Ganon, Zelda's song, the ending, the title; key m, --no-music) and the
+sound effects (everything else, the item fanfare and the end-of-level tune among them; key e,
+--no-sound-effects), and among the effects the low-hearts beep on its own switch (key h, --no-heart-beep).
+With the effects off the music keeps every voice, also those an effect would have taken over in the game.
 
 The strip under a cell names the run's seed (a replay file: its name), the room, the specialist acting, and any
 cheated items the run used.  When a replay ends its result shows for a few seconds, then the cell takes the next
@@ -99,7 +105,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication
 
 from triforce import _native, golden, registry, replay
-from triforce.play_grid import DEFAULT_CAPACITY, DEFAULT_PATIENCE, NES_FPS, QUEUES, SOURCES, ReplayGrid
+from triforce.play_grid import DEFAULT_CAPACITY, DEFAULT_PATIENCE, NES_FPS, QUEUES, SOURCES, Mix, ReplayGrid
 from triforce.play_view import GRID, Window, parse_grid
 from triforce.runner import STOP_AT_HELP, RunnerError, add_power_on_arguments, parse_stop, power_on_options
 
@@ -139,6 +145,13 @@ def build_parser() -> argparse.ArgumentParser:
                              "next most likely (replay version 2 on)")
     parser.add_argument('--no-sound', dest='sound', action='store_false',
                         help="start with sound off (key s turns it on; a click on a cell makes it the one heard)")
+    parser.add_argument('--no-music', dest='music', action='store_false',
+                        help="start with the music off: the songs (key m turns it on)")
+    parser.add_argument('--no-sound-effects', dest='effects', action='store_false',
+                        help="start with the sound effects off: everything but the songs, the item fanfare and the "
+                             "end-of-level tune among them (key e)")
+    parser.add_argument('--no-heart-beep', dest='heart_beep', action='store_false',
+                        help="start with the low-hearts beep off (key h)")
     sim = parser.add_argument_group('the simulations (not with a PATH)')
     sim.add_argument('--parallel', type=int, default=DEFAULT_PARALLEL, metavar='N',
                      help=f"games simulated at once, and runs tried for each best run taken (default "
@@ -273,7 +286,8 @@ def main(argv=None) -> int:
     # A benchmark is a measurement, often run unattended: it stays silent.  A live cell has no sound: the next one
     # is heard.
     window = Window(grid, cols, rows, args.scale, benchmark=args.benchmark,
-                    sound=args.sound and args.benchmark is None, heard=1 if args.live and cols * rows > 1 else 0)
+                    sound=args.sound and args.benchmark is None, heard=1 if args.live and cols * rows > 1 else 0,
+                    mix=Mix(music=args.music, effects=args.effects, heart_beep=args.heart_beep))
     fixed_delay = args.power_on is not None and args.power_on['delay'] is not None
     window.add_menus(remake=None if args.path is not None else make_grid, act=args.act,
                      acts=menu_acts(args.act, fixed_delay), live=args.live)

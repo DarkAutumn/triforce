@@ -71,7 +71,8 @@ SUITES = ('python', 'asm', 'check', 'rust')     # ``triforce job test``'s suites
 # (load 3-5): one process 410-433 s; 6 processes 78 s, 8 61 s, 12 71 s.  The tools lane runs two test jobs at
 # once: two suites of 8 leave 4 of the 20 threads to the owner's player and the jobs.
 PYTEST_WORKERS = 8
-CARGO_TEST = ('cargo', 'test', '--release', '--workspace', '--features', 'zelda/zcore')     # the Rust suite
+# The Rust suite: the release-tests profile is release without link-time optimisation (Cargo.toml)
+CARGO_TEST = ('cargo', 'test', '--profile', 'release-tests', '--workspace', '--features', 'zelda/zcore')
 
 
 class JobError(Exception):
@@ -440,16 +441,28 @@ class Wrapper:
         return code
 
     def finish(self, status: str, code: Optional[int], result: Optional[str] = None):
-        """Marks the job ended and appends it to the history table (the rates and the calibration learn from it).
-        The job's row stays for good: it is the machine's record of what ran (``triforce job history``)."""
+        """Marks the job ended and appends it to the history table (the rates, the chains' model and the calibration
+        learn from it; a chain's seconds from its plan, ``jobqueue.chain_seconds``).  The job's row stays for good:
+        it is the machine's record of what ran (``triforce job history``)."""
         now = time.time()
         admitted = self.row.get('admitted_ts')
+        actual = None if admitted is None else now - admitted
+        work = self.row.get('work') or {}
+        if isinstance(work, dict) and work.get('chains'):
+            found = self.con.execute("SELECT plan FROM jobs WHERE id = ?", (self.id,)).fetchone()
+            try:
+                plan = json.loads(Path(found['plan']).read_text(encoding='utf-8')) if found and found['plan'] else None
+            except (OSError, ValueError):
+                plan = None
+            work = q.chain_seconds(work, actual, status, plan if isinstance(plan, dict) else None)
         with q.transaction(self.con):
             q.update(self.con, self.id, status=status, finished_ts=now, exit_code=code, result=result)
             self.con.execute("INSERT INTO history (job, kind, work, estimate, actual, status, finished_ts) "
                              "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                             (self.id, self.row.get('kind'), json.dumps(self.row.get('work') or {}),
-                              self.row.get('estimate'), None if admitted is None else now - admitted, status, now))
+                             (self.id, self.row.get('kind'), json.dumps(work), self.row.get('estimate'), actual,
+                              status, now))
+            if isinstance(work, dict) and work.get('chains'):
+                q.refresh_estimates(self.con)    # what its chains took moves the live chains' estimates
         for fd in (self.place_fd, self.job_fd):
             if fd is not None:
                 os.close(fd)
@@ -739,10 +752,11 @@ def cmd_doctor(args) -> int:
     return 1 if any(entry['level'] == 'red' for entry in flags) else 0
 
 
-def _rates() -> dict:
+def _estimate(work: dict) -> float:
+    """``work``'s estimate from the history as it is now (``jobqueue.estimate_now``)."""
     con = q.connect()
     try:
-        return q.rates(q.read_history(con))
+        return q.estimate_now(con, work)
     finally:
         con.close()
 
@@ -759,7 +773,7 @@ def cmd_run(args, command: list[str]) -> int:
             return answer
         kind, work = answer['kind'], answer['work'] or None
         if work is not None:
-            estimate = round(q.estimate(work, _rates()), 1)
+            estimate = round(_estimate(work), 1)
     if work is None and args.timeout is None:
         raise JobError("the queue can't measure this command (a script, a tool's subcommand without a work amount, "
                        "an old version's tool): give --timeout, its duration (e.g. --timeout 40m)")
