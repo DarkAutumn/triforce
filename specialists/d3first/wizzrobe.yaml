@@ -1,0 +1,8 @@
+# wizzrobe@d3first (round 40, the fresh generation; round40.md "The generation's tasks"): the family's task
+# (specialists/wizzrobe.yaml, which today's team and d2first read unchanged) on d3first's states alone, with the
+# generation's switches (_generation.yaml) (its `warm_start: like-like` is off: from scratch). The lab reads this file for the key
+# f"{family}@d3first" (lab.collect.task_yaml).
+extends: [../wizzrobe.yaml, _generation.yaml]
+state_routes: [d3first]
+items: {boomerang: true, candle: false}   # round 40 (Switch40): 6:0x38's Bubble room as measured: BOOMERANG on (the
+                                          # Like-Likes), CANDLE off (fire cannot hurt a Wizzrobe or a Bubble)

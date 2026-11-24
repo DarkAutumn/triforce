@@ -868,6 +868,15 @@ everywhere, and path searches pass a bomb-wall exit only in a `requires_bombs` r
 (`replace(**fields)` re-validates). Training/evaluation CLIs pass that loaded config to the pool tasks.
 `config.name` labels checkpoints and logs; it must not be used to reload the default YAML and discard overrides.
 
+A task file may extend others (round 40): `extends: <path>` (relative to its own folder) is that file with this one's
+keys over it, mappings merged key by key and anything else replaced; `extends: [<path>, ...]` merges the bases in
+order, each over the one before (a base's whole merged task, its own inherited keys too), then this file's keys
+over them all. A loop or a missing base is refused naming the file. The manifest's `task.extends` lists every base
+in merge order with its SHA-256. The fresh generation's tasks use it (round40.md "The generation's tasks"): each
+`specialists/d3first/<family>.yaml` extends `_generation.yaml` (the generation's switches: `obs.threat`,
+`obs.chase`, `reward.aimless_penalty` 0.002, no `warm_start`) last, after the family's own yaml where it has no
+full d3first task of its own. A file named `_*.yaml` is a common block, no task: no family, never listed as one.
+
 `SpecialistEnv` runs one specialist on one `Session`: `reset`, `step(action)`, `restore(snapshot)`. Pools wrap it
 (`TrainTask`, `EvalTask`); `triforce._native.Env` exposes a single env with gym-like `reset`/`step` for tests.
 Action space: `MultiDiscrete([NUM_KINDS, NUM_DIRECTIONS, NUM_DURATIONS])`.
@@ -2220,9 +2229,20 @@ every step, so following an enemy that moves away pays again, and knockback rese
   (`QT_QPA_PLATFORM=offscreen`).
 - Chain config overrides: repeat `eval-chain --specialist-config /path/to/arm.yaml`. Each YAML's `name` selects
   its family. `Runner` / `eval_chain(..., specialist_configs={name: loaded_config})` accept the same loaded
-  objects; the chain pool uses them instead of reloading canonical YAML. Runtime item masks, observations
+  objects; the chain pool uses them instead of the family's chain config. Runtime item masks, observations
   and room/cutoff budgets use these configs. Route selection and carried inventory/health remain chain-owned.
-  Other families retain canonical configs; checkpoint overrides and promoted pointers are independent.
+  Other families retain their chain configs; checkpoint overrides and promoted pointers are independent.
+- **The chain config** (round 40, the fresh generation; `GameData::chain_specialist`, `SpecialistConfig.for_chain`,
+  `runner.chain_config`): a chain of route R plays family F (both its policy keys, `F` and `F@R`) with F's own task
+  (`specialists/F.yaml`) except the keys `env::config::CHAIN_FROM_ROUTE_TASK` names, which come from R's task for
+  F (`specialists/R/F.yaml`) where R has one: only `obs` (the observation switches: what a network reads, so a
+  network trained on R's task is chained with the inputs it trained with). Items and masks, rewards, clips and
+  budgets stay F's own task's, as today's teams are chained (a network trained with `items.bomb_catch` or
+  `items.candle` in R's task is chained under F's own masks until the lead moves those keys too). `d2first` has no
+  tasks of its own: its chains play every bare task. **The guard** (`runner.check_inputs`): a network that reads a
+  block filled only behind a switch (a `hitnet` token group `threat`: `entity_threat` needs `obs.threat`; `chase`:
+  `chase` and `entity_chase` need `obs.chase`; `runner.SWITCHED_BLOCKS`) is refused where its chain config has the
+  switch off, naming the policy, the family, the blocks, the switch and the task file, instead of reading zeros.
 - Handoff harvesting (better-play §1b): `eval-chain --harvest [DIR]` (`Runner(harvest=)`, `ChainPool(harvest=)`,
   `ChainTask(harvest=)`, `ChainEnv::set_harvest`) turns on the session's pre-entry capture and, at every **handoff**
   (a room entry through a correct exit where the acting specialist changes; not same-family entries, retreats,

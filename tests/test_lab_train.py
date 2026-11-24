@@ -31,13 +31,16 @@ def _teachers(root):
 def test_a_route_run_trains_on_its_own_yaml_where_there_is_one():
     """``family@d3first`` reads ``specialists/d3first/<family>.yaml`` (the wood-sword runs' tasks): each loads, on
     the route's states; a key without one (or without a route) reads the family's yaml."""
-    yamls = sorted((ROOT / 'specialists' / 'd3first').glob('*.yaml'))
-    assert len(yamls) == 21
+    # Round 40 (the generation's tasks, Tasks41): every family has its d3first task now (21 -> 34; wizzrobe's was
+    # the example of a key without one, d2first's keys are that now); `_generation.yaml` is their common block, no
+    # family's task.
+    yamls = sorted(p for p in (ROOT / 'specialists' / 'd3first').glob('*.yaml') if not p.name.startswith('_'))
+    assert len(yamls) == 34
     for path in yamls:
         assert task_yaml(f'{path.stem}@d3first') == str(path)
         config = load_specialist(str(path))
         assert config.name == path.stem and list(config.state_routes) == ['d3first']
-    assert task_yaml('zol') == 'zol' and task_yaml('wizzrobe@d3first') == 'wizzrobe'
+    assert task_yaml('zol') == 'zol' and task_yaml('wizzrobe@d2first') == 'wizzrobe'
 
 
 def test_teachers_label_with_each_familys_network(tmp_path):

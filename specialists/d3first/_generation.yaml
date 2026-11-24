@@ -1,0 +1,10 @@
+# The fresh generation's (2.0.1.0) switches, shared by every d3first task of its teachers (round40.md "The
+# generation's tasks", Tasks41). Not a task (no family is named `_generation`): each specialists/d3first/<family>.yaml
+# lists it in `extends:`, after the family's own yaml where it extends one, so these keys win over the family's file
+# and the d3first file's own keys win over them. One edit here changes every generation task.
+obs:
+  threat: true              # schema 8's entity_threat (round40.md "Observation v7's danger block")
+  chase: true               # schema 9's chase and entity_chase (round40.md "The chase target")
+reward:
+  aimless_penalty: 0.002    # the lead's default (round40.md "What came after the report"); the owner may change it
+warm_start: null            # from scratch: no family's run under it

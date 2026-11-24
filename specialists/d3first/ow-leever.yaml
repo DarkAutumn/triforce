@@ -2,6 +2,7 @@
 # rebuilt (the yaml it trained on lived in its round's worktree, gone): the family's yaml with state_routes
 # [d3first] and the run's own terms as its run.json and docs/experiments/round32.md ("Arm") record them: harvested
 # handoffs at 0.25, no chain_hp. The lab reads this file for the key f"{family}@d3first" (lab.collect.task_yaml).
+extends: _generation.yaml                 # the fresh generation's switches (2.0.1.0; round40.md "The generation's tasks")
 name: ow-leever
 rooms:
 - (0, 0x48)

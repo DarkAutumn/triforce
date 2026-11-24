@@ -2,6 +2,7 @@
 it before it starts, naming where it looked; where none is a legitimate recipe the task declares it."""
 
 import fnmatch
+import hashlib
 import json
 import os
 import subprocess
@@ -16,8 +17,8 @@ import torch
 from triforce import build, job, paths, registry, train
 from triforce.inputs import (MissingInput, check_curriculum, check_harvested, check_start_states, check_task,
                              declaration, track_starts, untracked)
-from triforce.runner import Policies, Route, RunnerError, check_configs, check_team
-from triforce.specialist import load_specialist
+from triforce.runner import Policies, Route, RunnerError, check_configs, check_team, switched_reads
+from triforce.specialist import SpecialistConfig, load_specialist
 
 from .conftest import REPO_STATES_DIR, require_rom
 from .networks import scripted
@@ -90,7 +91,7 @@ def test_a_declaration_never_covers_a_tracked_state():
 def test_the_shipped_tasks_declare_every_input_they_draw():
     """Every task of specialists/ passes its checks on this checkout's data (the declarations of round 40)."""
     require_rom()
-    for path in sorted((ROOT / 'specialists').rglob('*.yaml')):
+    for path in sorted(p for p in (ROOT / 'specialists').rglob('*.yaml') if not p.name.startswith('_')):
         config = load_specialist(str(path))
         trajectories = (str(config.curriculum.trajectories or paths.data_dir('trajectories') / config.name)
                         if config.curriculum.enabled else None)
@@ -135,6 +136,115 @@ def test_the_d3first_tasks_declare_the_rooms_left_without_a_track():
             assert left | tracked <= seeds, path
             assert all(any(fnmatch.fnmatchcase(s, g) for g in declared) for s in left), path
             assert not any(fnmatch.fnmatchcase(s, g) for s in tracked for g in declared), path
+
+
+# Round 40, the fresh generation (2.0.1.0): every teacher's task, `specialists/d3first/<family>.yaml` (the lead's pins:
+# four groups and seven bosses, every family of the route).
+GENERATION = ['ow-start', 'ow-tektite', 'ow-leever', 'ow-moblin', 'ow-octorok', 'ow-zora', 'ow-peahat', 'ow-lynel',
+              'ow-ghini', 'ow-boulder', 'darknut', 'gibdo', 'stalfos-keese-gel', 'zol', 'like-like', 'vire', 'goriya',
+              'd2-rope', 'dodongo-crossing', 'moldorm', 'wizzrobe', 'pols-voice', 'wallmaster', 'lanmola', 'patra',
+              'equipment-room', 'trap-room', 'boss-manhandla', 'boss-gleeok', 'boss-aquamentus', 'boss-dodongo',
+              'boss-digdogger', 'boss-gohma', 'ganon']
+
+# The effective configs (SHA-256 of `to_dict()`, as `manifest.task` hashes them; first 16 hex) of the bare task
+# files, the ones today's team and every `d2first` chain play with, as `r40-gen` (42d15e02) had them before the
+# generation's tasks were written: unchanged by them. A deliberate change to a bare task later updates its row.
+BARE_EFFECTIVE = {
+    'boss-aquamentus': '964037cc7c6772f7', 'boss-digdogger': '41047b78dbba77c0', 'boss-dodongo': '2837d388d2bb32fc',
+    'boss-gleeok': '3dc3440b531af1f3', 'boss-gohma': '122a41323615e34b', 'boss-manhandla': 'e051deaf86f9ae1c',
+    'd2-rope': '5371a6f5d01257fc', 'darknut': 'c56e37d1b0edaeee', 'dodongo-crossing': '57c07e2b82521950',
+    'equipment-room': '2dcc698ea994be84', 'ganon': '8d17a7f7e0532c21', 'gibdo': 'e14a78e5da3f71ca',
+    'goriya': '3d1314d2c83b53e4', 'lanmola': 'a863d8e087492eb7', 'like-like': 'df0fd97613a56b05',
+    'moldorm': '196755b386307c5b', 'ow-boulder': 'af1cd69733b32f1b', 'ow-ghini': '192f1922e6745cab',
+    'ow-leever': '4d74f994b3d7d936', 'ow-lynel': '13553bde87634c4f', 'ow-moblin': '84eafeaa06d972ea',
+    'ow-octorok': '796292f6ddc66d68', 'ow-peahat': 'b854f9edb2964622', 'ow-start': '813e16e5602996f8',
+    'ow-tektite': '729c50d784b9d954', 'ow-zora': '29c4b95850a4755e', 'patra': '25980d07f167f5c6',
+    'pols-voice': '2ea6f0ac3df07a2c', 'stalfos-keese-gel': '8039e87cffe1a7ef', 'trap-room': '4bc878609d02e600',
+    'vire': '89d1daf8ace582e3', 'wallmaster': 'feca0df6d2aac23f', 'wizzrobe': 'f2207f2f47c5422a',
+    'zol': 'ec170ce3bf4cf099',
+}
+
+
+def _effective(config) -> str:
+    return hashlib.sha256(json.dumps(config.to_dict(), sort_keys=True).encode()).hexdigest()[:16]
+
+
+def test_every_generation_task_trains_from_scratch_with_the_generations_inputs():
+    """Round 40 (the lead's pins): every teacher's d3first task has `obs.threat` and `obs.chase` on, the aimless
+    penalty at 0.002 (`_generation.yaml`, one place), no chase penalty (an arm, not a default), no warm start, and
+    the route's states only; darknut's bombs catch two or more; the Bubble rooms' items as Switch40 measured."""
+    require_rom()
+    tasks = sorted(p.stem for p in (ROOT / 'specialists' / 'd3first').glob('*.yaml') if not p.name.startswith('_'))
+    assert tasks == sorted(GENERATION) == sorted(SpecialistConfig.names())
+    for family in GENERATION:
+        config = load_specialist(str(ROOT / 'specialists' / 'd3first' / f'{family}.yaml'))
+        assert config.name == family
+        assert config.obs.threat and config.obs.chase, family
+        assert config.reward.aimless_penalty == 0.002 and config.reward.chase_penalty == 0, family
+        assert config.warm_start is None, family
+        assert list(config.state_routes) == ['d3first'], family
+    darknut = load_specialist(str(ROOT / 'specialists' / 'd3first' / 'darknut.yaml'))
+    assert darknut.items.bomb_catch == 2 and darknut.items.bombs == 'free'
+    wallmaster = load_specialist(str(ROOT / 'specialists' / 'd3first' / 'wallmaster.yaml'))   # 7:0x0d
+    assert wallmaster.items.boomerang and wallmaster.items.candle
+    wizzrobe = load_specialist(str(ROOT / 'specialists' / 'd3first' / 'wizzrobe.yaml'))       # 6:0x38
+    assert wizzrobe.items.boomerang and not wizzrobe.items.candle
+
+
+def test_the_generations_tasks_change_no_bare_task_and_no_d2first_chain():
+    """The bare task files (today's team, `d2first`) are as `r40-gen` had them, and a `d2first` chain plays every
+    family with its bare task; the common block is no family."""
+    require_rom()
+    assert {family: _effective(load_specialist(family)) for family in GENERATION} == BARE_EFFECTIVE
+    for family in GENERATION:
+        assert SpecialistConfig.for_chain(family, 'd2first').to_json() == load_specialist(family).to_json(), family
+    assert '_generation' not in SpecialistConfig.names()
+
+
+def test_a_d3first_chain_takes_the_route_tasks_observation_switches_and_nothing_else():
+    """`SpecialistConfig.for_chain` (`GameData::chain_specialist`): the family's own task with the route task's `obs`
+    block (`CHAIN_FROM_ROUTE_TASK`); items, rewards and every other rule stay the bare task's."""
+    require_rom()
+    for family in GENERATION:
+        chained = json.loads(SpecialistConfig.for_chain(family, 'd3first').to_json())
+        bare = json.loads(load_specialist(family).to_json())
+        routed = load_specialist(str(ROOT / 'specialists' / 'd3first' / f'{family}.yaml'))
+        assert chained['obs'] == json.loads(routed.to_json())['obs'], family
+        assert {k: v for k, v in chained.items() if k != 'obs'} == {k: v for k, v in bare.items() if k != 'obs'}
+    darknut = SpecialistConfig.for_chain('darknut', 'd3first')
+    assert darknut.obs.threat and darknut.obs.chase
+    assert darknut.items.bomb_catch == 0 and darknut.reward.aimless_penalty == 0    # the bare task's rules
+
+
+def _reader(tokens):
+    from triforce import nets
+    from .networks import native_spec
+    small = {'d_model': 32, 'layers': 1, 'link_out': 32, 'hidden_dim': 32, 'depth': 1, 'hit_dim': 32, 'hit_depth': 1}
+    return nets.create('hitnet', native_spec(), tokens=tokens, feed=True, **small)
+
+
+def test_a_chain_refuses_a_network_that_reads_a_block_its_switch_leaves_zero(tmp_path):
+    """A `hitnet` reading `entity_threat` / `chase` is refused where the config it is chained with has the switch
+    off (every `d2first` chain today), naming the family and the switch; on `d3first` (the generation's tasks) it
+    plays; a network without those groups plays anywhere."""
+    require_rom()
+    reader = _reader(['type', 'features', 'rel', 'threat', 'chase'])
+    assert switched_reads(reader) == {'entity_threat': 'threat', 'entity_chase': 'chase', 'chase': 'chase'}
+    with pytest.raises(RunnerError) as refused:
+        Policies(tmp_path, networks={'darknut': reader}, names=['darknut'], route='d2first')
+    message = str(refused.value)
+    assert "family darknut's network reads" in message and 'obs.chase and obs.threat are off' in message
+    assert 'specialists/darknut.yaml (route d2first has no task of its own for it)' in message
+    assert Policies(tmp_path, networks={'darknut': reader}, names=['darknut'], route='d3first').names
+    threat_only = _reader(['type', 'features', 'rel', 'threat'])
+    threat_on = load_specialist('darknut').replace(obs={'objective': True, 'target': True, 'threat': True})
+    with pytest.raises(RunnerError, match=r"reads entity_threat \(obs\.threat\), but obs\.threat is off"):
+        Policies(tmp_path, networks={'darknut': threat_only}, names=['darknut'], route='d2first')
+    assert Policies(tmp_path, networks={'darknut': threat_only}, specialist_configs={'darknut': threat_on},
+                    names=['darknut'], route='d2first').names == ['darknut']
+    plain = _reader(['type', 'features', 'rel', 'contact'])
+    assert switched_reads(plain) == {}
+    assert Policies(tmp_path, networks={'darknut': plain}, names=['darknut'], route='d2first').names == ['darknut']
 
 
 def test_a_warm_start_names_a_checkpoint_or_a_family_with_one(tmp_path):
@@ -184,9 +294,10 @@ def test_a_continuation_of_a_run_without_its_curriculum_record_must_say_what_to_
 def test_the_lab_refuses_missing_harvested_states(tmp_path):
     from triforce.lab.collect import parse_families  # pylint: disable=import-outside-toplevel
     require_rom()
-    text = (ROOT / 'specialists' / 'd3first' / 'zol.yaml').read_text()
+    # zol@d3first's task plus the one line (round 40: the task extends `_generation.yaml` beside it, so a copy of its
+    # text elsewhere no longer loads; the test's task extends it instead, as an experiment's file does).
     task = tmp_path / 'zol.yaml'
-    task.write_text(text + f"harvested_states: {tmp_path / 'none'}\n")
+    task.write_text(f"extends: {ROOT / 'specialists' / 'd3first' / 'zol.yaml'}\nharvested_states: {tmp_path / 'none'}\n")
     with pytest.raises(SystemExit, match='holds none'):
         parse_families([f'zol@d3first={task}'], 1, curriculum=False, states_dir=REPO_STATES_DIR)
 

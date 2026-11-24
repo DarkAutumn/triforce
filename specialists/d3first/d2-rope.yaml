@@ -1,0 +1,6 @@
+# d2-rope@d3first (round 40, the fresh generation; round40.md "The generation's tasks"): the family's task
+# (specialists/d2-rope.yaml, which today's team and d2first read unchanged) on d3first's states alone, with the
+# generation's switches (_generation.yaml). The lab reads this file for the key
+# f"{family}@d3first" (lab.collect.task_yaml).
+extends: [../d2-rope.yaml, _generation.yaml]
+state_routes: [d3first]

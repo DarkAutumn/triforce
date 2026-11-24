@@ -115,6 +115,17 @@ impl PySpecialistConfig {
         })
     }
 
+    /// The config a chain of `route` plays `family` with (`env::config::GameData::chain_specialist`): the family's
+    /// own task with the observation switches (`obs`) of `specialists/<route>/<family>.yaml` where the route has one.
+    #[classmethod]
+    fn for_chain(_cls: &Bound<'_, PyType>, py: Python<'_>, family: &str, route: &str) -> PyResult<Self> {
+        Ok(PySpecialistConfig {
+            inner: context::data(py, None)?
+                .chain_specialist(family, route)
+                .map_err(|e| ConfigError::new_err(e.0))?,
+        })
+    }
+
     /// Every specialist name (sorted).
     #[classmethod]
     fn names(_cls: &Bound<'_, PyType>, py: Python<'_>) -> PyResult<Vec<String>> {

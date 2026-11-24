@@ -4,6 +4,7 @@
 # §2 and §4.2) record them: every reset a harvested handoff (1.0), the no-damage and max-steps endings as failures
 # with a 120-step no-damage window. The run's 1,200 handoffs were 4:0x13's only (not kept); today's harvest also
 # holds 8:0x3c's, so the family's rooms stay. The lab reads this file for the key f"{family}@d3first".
+extends: _generation.yaml                 # the fresh generation's switches (2.0.1.0; round40.md "The generation's tasks")
 name: boss-gleeok
 rooms:
 - (4, 0x13)

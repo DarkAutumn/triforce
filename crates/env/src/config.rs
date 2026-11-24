@@ -1125,22 +1125,42 @@ impl DemosConfig {
     }
 }
 
-/// The YAML of the task file at `path` with its `extends:` chain merged ([`SpecialistConfig::from_file`]); `seen`:
-/// the files on the way, a loop's guard.
+/// The YAML of the task file at `path` with its `extends:` merged ([`SpecialistConfig::from_file`]); `seen`: the
+/// files on the way down from the file first read, a loop's guard (a base two files of one list share is no loop).
 fn task_value(path: &Path, seen: &mut Vec<PathBuf>) -> Result<serde_yaml_ng::Value, ConfigError> {
     let fail = |msg: String| ConfigError(format!("{}: {msg}", path.display()));
     let real = path.canonicalize().map_err(|e| fail(e.to_string()))?;
     if seen.contains(&real) {
         return Err(fail(format!("extends: a loop through {}", real.display())));
     }
-    seen.push(real);
     let text = std::fs::read_to_string(path).map_err(|e| fail(e.to_string()))?;
     let mut value: serde_yaml_ng::Value = serde_yaml_ng::from_str(&text).map_err(|e| fail(e.to_string()))?;
-    let Some(base) = value.as_mapping_mut().and_then(|m| m.remove("extends")) else {
+    let Some(extends) = value.as_mapping_mut().and_then(|m| m.remove("extends")) else {
         return Ok(value);
     };
-    let base = base.as_str().ok_or_else(|| fail("extends: a path to a task file".into()))?;
-    let mut merged = task_value(&path.parent().unwrap_or(Path::new(".")).join(base), seen)?;
+    let bases: Vec<&str> = match &extends {
+        serde_yaml_ng::Value::Sequence(items) if !items.is_empty() => items.iter().map(|v| v.as_str()).collect(),
+        single => vec![single.as_str()],
+    }
+    .into_iter()
+    .collect::<Option<_>>()
+    .ok_or_else(|| fail("extends: a path to a task file, or a non-empty list of them".into()))?;
+    let folder = path.parent().unwrap_or(Path::new("."));
+    seen.push(real);
+    let mut merged: Option<serde_yaml_ng::Value> = None;
+    for base in bases {
+        let file = folder.join(base);
+        if !file.is_file() {
+            return Err(fail(format!("extends: {base}: no such task file ({})", file.display())));
+        }
+        let next = task_value(&file, seen)?;
+        match merged.as_mut() {
+            Some(merged) => merge_yaml(merged, next),
+            None => merged = Some(next),
+        }
+    }
+    seen.pop();
+    let mut merged = merged.expect("at least one base");
     merge_yaml(&mut merged, value);
     Ok(merged)
 }
@@ -1177,7 +1197,9 @@ impl SpecialistConfig {
     /// Reads the task file at `path` (round 40, `extends:`): a file with `extends: <path>` (relative to its own
     /// folder) is that file with this one's keys over it, mappings merged key by key and anything else replaced, so
     /// an experiment's task is its family's task plus the lines it changes; chains of `extends` are followed, a loop
-    /// is an error.  Then parsed and validated as [`Self::from_yaml`].
+    /// or a missing base is an error.  `extends: [<path>, ...]` (round 40, the fresh generation's d3first tasks: the
+    /// family's task and `_generation.yaml`'s switches) merges the bases in order, each over the one before, then
+    /// this file's keys over them all.  Then parsed and validated as [`Self::from_yaml`].
     pub fn from_file(path: &Path, map: Option<&GameMap>) -> Result<SpecialistConfig, ConfigError> {
         let source = path.display().to_string();
         let value = task_value(path, &mut Vec::new())?;
@@ -1481,6 +1503,9 @@ pub struct GameData {
     pub namespace_heart_values: HashMap<String, Arc<HeartValues>>,
     /// Every specialists/*.yaml by name (sorted).
     pub specialists: IndexMap<String, Arc<SpecialistConfig>>,
+    /// Per route with tasks of its own (`specialists/<route>/<family>.yaml`), the config a chain of the route plays
+    /// each of those families with ([`GameData::chain_specialist`]).
+    pub chain_specialists: HashMap<String, IndexMap<String, Arc<SpecialistConfig>>>,
     pub states_dir: PathBuf,
     pub trajectories_dir: PathBuf,
 }
@@ -1514,6 +1539,53 @@ pub fn room_key(location: MapLocation) -> String {
         location.value,
         if location.in_cave { ":cave" } else { "" }
     )
+}
+
+/// The keys of a route's task (`specialists/<route>/<family>.yaml`) a chain of that route takes over the family's
+/// own task ([`GameData::chain_specialist`]; round 40, the fresh generation). Only the observation switches: they are
+/// what a network reads, and a network trained on the route's task is chained with the inputs it trained with. Every
+/// rule of play (items and masks, rewards, clips, budgets) stays the family's own task's, as today's teams are chained.
+pub const CHAIN_FROM_ROUTE_TASK: [&str; 1] = ["obs"];
+
+/// [`GameData::chain_specialists`]: per route with a folder of tasks under `specialists/`, each of its families'
+/// own config with the route task's [`CHAIN_FROM_ROUTE_TASK`] keys (a key the route's task leaves out: its default).
+fn chain_specialists(
+    root: &Path,
+    map: &GameMap,
+    specialists: &IndexMap<String, Arc<SpecialistConfig>>,
+) -> Result<HashMap<String, IndexMap<String, Arc<SpecialistConfig>>>, ConfigError> {
+    let mut out = HashMap::new();
+    for route in map.routes.keys() {
+        let mut configs = IndexMap::new();
+        for (family, own) in specialists {
+            let path = root.join("specialists").join(route).join(format!("{family}.yaml"));
+            if !path.is_file() {
+                continue;
+            }
+            let task = task_value(&path, &mut Vec::new())?;
+            let mut value = own.to_json();
+            let fields = value.as_object_mut().expect("a config is an object");
+            for key in CHAIN_FROM_ROUTE_TASK {
+                match task.get(key) {
+                    Some(v) => {
+                        let v = serde_json::to_value(v)
+                            .map_err(|e| ConfigError(format!("{}: {key}: {e}", path.display())))?;
+                        fields.insert(key.to_owned(), v);
+                    }
+                    None => {
+                        fields.remove(key);
+                    }
+                }
+            }
+            let chained = SpecialistConfig::from_json(value, Some(map))
+                .map_err(|e| ConfigError(format!("{}: {}", path.display(), e.0)))?;
+            configs.insert(family.clone(), if chained == **own { own.clone() } else { Arc::new(chained) });
+        }
+        if !configs.is_empty() {
+            out.insert(route.clone(), configs);
+        }
+    }
+    Ok(out)
 }
 
 impl GameData {
@@ -1583,6 +1655,7 @@ impl GameData {
             }
             specialists.insert(name, Arc::new(config));
         }
+        let chain_specialists = chain_specialists(root, &map, &specialists)?;
         let data = GameData {
             root: root.to_path_buf(),
             map: Arc::new(map),
@@ -1591,6 +1664,7 @@ impl GameData {
             heart_values,
             namespace_heart_values,
             specialists,
+            chain_specialists,
             states_dir: root.join(STATES_DIR),
             trajectories_dir: paths::data_dir("trajectories", &root.join("trajectories")),
         };
@@ -1676,6 +1750,21 @@ impl GameData {
         err(format!(
             "No specialist config specialists/{name_or_path}.yaml; known: {known:?}"
         ))
+    }
+
+    /// The config a chain of `route` plays `family` with (round 40, the fresh generation): the family's own task
+    /// (`specialists/<family>.yaml`: its items and masks, rewards, clips and budgets, every rule of play, as today's
+    /// teams were chained with) with the observation switches of the route's task for the family
+    /// (`specialists/<route>/<family>.yaml`'s `obs`, [`CHAIN_FROM_ROUTE_TASK`]) where the route has one: the inputs
+    /// that route's networks trained on, for both of the family's policy keys on the route.
+    pub fn chain_specialist(&self, family: &str, route: &str) -> Result<Arc<SpecialistConfig>, ConfigError> {
+        match self.chain_specialists.get(route).and_then(|configs| configs.get(family)) {
+            Some(config) => {
+                self.check_config(config)?;
+                Ok(config.clone())
+            }
+            None => self.specialist(family),
+        }
     }
 
     /// Hearts chain runs entered `location` with on the routes of state namespace `ns` (None: bare names; empty

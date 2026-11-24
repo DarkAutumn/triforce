@@ -21,7 +21,7 @@ from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 import torch
 
 from . import __version__, _native, replay
-from .paths import STATES_DIR
+from .paths import SPECIALISTS_DIR, STATES_DIR
 from .provenance import (checkpoint_description, checkpoint_label, code_version, data_hash, has_hit_head,
                          location_text, models_header, network_description, replay_models)
 from .registry import (CHECKPOINT_NAME, DEFAULT_ACT, act_mode, checkpoint_sha1, load_checkpoint, load_model,
@@ -463,6 +463,46 @@ def check_overrides(overrides: Dict[str, str], configs: Optional[Dict[str, Speci
     return known
 
 
+# Round 40 (the fresh generation): observation blocks a task fills only with its `obs` switch on (zeros otherwise),
+# block -> switch. A network that reads one is refused in a chain whose config for its family has the switch off.
+SWITCHED_BLOCKS = {'entity_threat': 'threat', 'entity_chase': 'chase', 'chase': 'chase'}
+
+
+def chain_config(family: str, route: Optional[str]) -> SpecialistConfig:
+    """The config a chain of ``route`` plays ``family`` with (``SpecialistConfig.for_chain``, round 40): the family's
+    own task (``specialists/<family>.yaml``: every rule of play) with the observation switches (``obs``) of the
+    route's task for it (``specialists/<route>/<family>.yaml``) where the route has one; no route: its own task."""
+    return load_specialist(family) if route is None else SpecialistConfig.for_chain(family, route)
+
+
+def switched_reads(network) -> Dict[str, str]:
+    """The ``SWITCHED_BLOCKS`` ``network`` reads (block -> switch): a ``hitnet``'s token groups, also as a
+    ``hitshift``'s hit body; ``ZeldaPolicy`` and the other bodies read none of them."""
+    from .nets.hitnet import HitNet  # pylint: disable=import-outside-toplevel
+    modules = network.modules() if isinstance(network, torch.nn.Module) else ()
+    read = {key for module in modules if isinstance(module, HitNet) for key in module.token_keys + module.link_keys}
+    return {block: switch for block, switch in SWITCHED_BLOCKS.items() if block in read}
+
+
+def check_inputs(key: str, reads: Dict[str, str], config: SpecialistConfig, route: Optional[str],
+                 given: bool = False):
+    """Raises ``RunnerError`` when the network of policy ``key`` reads a block (``reads``: ``switched_reads``) whose
+    ``obs`` switch is off in ``config``, the config it is chained with (``given``: a ``--specialist-config``): it
+    would read zeros where it trained on the block."""
+    off = sorted({switch for switch in reads.values() if not getattr(config.obs, switch)})
+    if not off:
+        return
+    family = split_policy(key)[0]
+    routed = route is not None and (SPECIALISTS_DIR / route / f'{family}.yaml').is_file()
+    source = ('its --specialist-config' if given else f'specialists/{route}/{family}.yaml' if routed
+              else f'specialists/{family}.yaml' + (f' (route {route} has no task of its own for it)' if route else ''))
+    blocks = ', '.join(f"{block} (obs.{switch})" for block, switch in sorted(reads.items()) if switch in off)
+    raise RunnerError(f"{key}: family {family}'s network reads {blocks}, but "
+                      f"{' and '.join(f'obs.{s}' for s in off)} {'is' if len(off) == 1 else 'are'} off in the task "
+                      f"it is chained with, {source}: it would read zeros. Chain it on a route whose task for "
+                      f"{family} has the switch on, or give it a config that does (--specialist-config)")
+
+
 class Policies:
     """The specialists' Rust networks for a chain pool, in policy-index order, plus why the others are missing.
 
@@ -474,8 +514,10 @@ class Policies:
 
     ``checkpoints`` (key -> checkpoint file or run dir) overrides the registry's run: a family's key both parts, a
     ``family@route`` key the route's part only; ``networks`` (key -> a ``ZeldaPolicy``) supplies a model directly
-    (a family's for both parts); ``specialist_configs`` (family -> config) replaces a specialist's canonical YAML at
-    runtime.  ``checkpoints`` afterwards maps each loaded key to its file and ``acts`` holds, per policy, its model's
+    (a family's for both parts); ``specialist_configs`` (family -> config) replaces a specialist's config at runtime,
+    else each family plays with ``chain_config`` (its own task with the route task's observation switches).  A
+    network that reads an observation block its config's switch leaves zero is refused (``check_inputs``).
+    ``checkpoints`` afterwards maps each loaded key to its file and ``acts`` holds, per policy, its model's
     act mode (the run's, ``registry.act_mode``; a given network acts by ``registry.DEFAULT_ACT``); ``described``
     holds per key the network as a replay's META describes it (``provenance.replay_models``)."""
 
@@ -500,6 +542,7 @@ class Policies:
         # A run several keys name (a multi-family run promoted for several families, triforce.lab) loads once.
         loaded: Dict[str, object] = {}
         described: Dict[str, dict] = {}
+        reads: Dict[str, Dict[str, str]] = {}
         for name in sorted(known):
             keys = [name]
             if parts:
@@ -526,15 +569,20 @@ class Policies:
                             network, saved = load_model(path)
                             loaded[real] = network.to_native()
                             described[real] = checkpoint_description(network, saved, path)
+                            reads[real] = switched_reads(network)
                     native = loaded[real]
+                    read = reads[real]
                     self.described[key] = described[real]
                     self.checkpoints[key] = str(path)
                     act = act_mode(path)
                 else:
                     native = loaded.setdefault(f'network:{id(network)}', network.to_native())
+                    read = switched_reads(network)
                     self.described[key] = network_description(network)
+                config = configs.get(name) or chain_config(name, route)
+                check_inputs(key, read, config, route, given=name in configs)
                 self.names.append(key)
-                self.configs.append(configs.get(name) or load_specialist(name))
+                self.configs.append(config)
                 self.policies.append(native)
                 self.acts.append(act)
         self._check_heads(overrides, set(headless), models_dir, route)

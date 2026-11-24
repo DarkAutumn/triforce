@@ -5,7 +5,7 @@ its measurement, and its demonstrations for the teachers.
     python scripts/experiments/r40_darknut_fighter.py measure --room garden|59 --bombs B [--per-state N] [--seed0 S]
         [--look D] [--json OUT] [--workers W]
     python scripts/experiments/r40_darknut_fighter.py demos OUT.npz --room garden|59 --bombs B [--per-state N]
-        [--seed0 S] [--json OUT] [--workers W]
+        [--seed0 S] [--json OUT] [--workers W] [--first V]
     python scripts/experiments/r40_darknut_fighter.py trace --room garden|59 --bombs B SEED
     python scripts/experiments/r40_darknut_fighter.py summarize RECORDS.jsonl...
     python scripts/experiments/r40_darknut_fighter.py merge OUT.npz PIECE.npz...
@@ -1191,9 +1191,10 @@ SAVE_EVERY = 20
 
 
 def demos(out: Path, room: str, bombs: int, seed0: int, per_state: int, depth: int = 3, progress=None,
-          log: Path | None = None, workers: int = 1) -> dict:
-    """The demonstration builder over `starts`' visits (seeds from `seed0`): the clean visits' rows to `out`,
-    written as the visits end (a job stopped at its time limit keeps what it found)."""
+          log: Path | None = None, workers: int = 1, first: int | None = None) -> dict:
+    """The demonstration builder over `starts`' visits (seeds from `seed0`; `first`: only that many of them, in
+    their order): the clean visits' rows to `out`, written as the visits end (a job stopped at its time limit keeps
+    what it found)."""
     from triforce.demos import save_demos
 
     def save():
@@ -1202,7 +1203,7 @@ def demos(out: Path, room: str, bombs: int, seed0: int, per_state: int, depth: i
             save_demos(part, [obs for obs, _ in rows], [action for _, action in rows])
             part.replace(out)
 
-    visits = list(starts(room, bombs, seed0, per_state))
+    visits = list(starts(room, bombs, seed0, per_state))[:first]
     tasks = [(room, bombs, [visit], depth) for visit in visits]
     records, rows = [], []
     saved = time.time()
@@ -1280,6 +1281,8 @@ def main(argv) -> int:
         p.add_argument('--json', default=None, help="append each visit's record to this JSON-lines file")
         p.add_argument('--workers', type=int, default=1)
         p.add_argument('--look', type=int, default=0 if name == 'measure' else 3, metavar='DEPTH')
+        if name == 'demos':
+            p.add_argument('--first', type=int, default=None, metavar='V', help="only the first V visits")
     u = sub.add_parser('summarize')
     u.add_argument('files', nargs='+')
     g = sub.add_parser('merge')
@@ -1316,7 +1319,7 @@ def main(argv) -> int:
         print(json.dumps(result, indent=1))
         return 0
     result = demos(Path(args.out), args.room, args.bombs, args.seed0, args.per_state, args.look,
-                   lambda done, total: jobs.progress(done, total, 'visits'), log, args.workers)
+                   lambda done, total: jobs.progress(done, total, 'visits'), log, args.workers, args.first)
     print(json.dumps(result, indent=1))
     return 0
 

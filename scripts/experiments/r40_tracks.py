@@ -324,7 +324,7 @@ def proof(root: Path, out: Path = None):
             jobs.progress(len(rows), None, 'tasks')
     names = {str(Path(t if t.endswith('.yaml') else f'specialists/{t}.yaml').resolve()) for t in seen}
     for path in sorted((Path(__file__).resolve().parents[2] / 'specialists').rglob('*.yaml')):
-        if str(path) in names:
+        if str(path) in names or path.name.startswith('_'):      # `_generation.yaml`: a common block, no task
             continue
         config = load_specialist(str(path))
         folder = (str(config.curriculum.trajectories or root / config.name) if config.curriculum.enabled else None)

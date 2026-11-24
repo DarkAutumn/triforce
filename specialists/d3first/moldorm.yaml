@@ -3,6 +3,7 @@
 # alive (routes.yaml `treasure: skip`; the room has no shutter); d2first still fights it for its key. The family's run
 # (r75-f-b) learned the fight; fine-tuned from it on the crossing with tracks explored on d3first's states. The lab
 # reads this file for the key f"{family}@d3first" (lab.collect.task_yaml).
+extends: _generation.yaml                 # the fresh generation's switches (2.0.1.0; round40.md "The generation's tasks")
 name: moldorm
 rooms: ['(2, 0x3e)']
 start_states: ['2_3e*_[0-9]']

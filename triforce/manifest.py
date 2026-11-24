@@ -135,8 +135,9 @@ def job() -> Optional[dict]:
 
 
 def task(config, path=None) -> dict:
-    """The task: family, yaml (label, SHA-256), its ``extends`` chain (``[{'yaml', 'sha256'}]``, the base first, and
-    the keys this file sets over it, ``overrides``) and the effective config after defaults (its SHA-256)."""
+    """The task: family, yaml (label, SHA-256), its ``extends`` chain (``[{'yaml', 'sha256'}]``, every base in merge
+    order, a base's own bases before it, and the keys this file sets over them, ``overrides``) and the effective
+    config after defaults (its SHA-256)."""
     import yaml as pyyaml  # pylint: disable=import-outside-toplevel
     effective = config.to_dict()
     text = json.dumps(effective, sort_keys=True)
@@ -148,14 +149,16 @@ def task(config, path=None) -> dict:
            'effective': effective, 'effective_sha256': hashlib.sha256(text.encode()).hexdigest()}
     own = pyyaml.safe_load(file.read_text(encoding='utf-8')) if file.is_file() else None
     if isinstance(own, dict) and 'extends' in own:
-        chain, current = [], file
-        while True:
+        def bases(current: Path, depth: int) -> list:
+            # `extends:` is a path or a list of them (round 40), merged in order: each base after its own bases.
             values = pyyaml.safe_load(current.read_text(encoding='utf-8'))
-            if not isinstance(values, dict) or 'extends' not in values or len(chain) > 16:
-                break
-            current = current.parent / values['extends']
-            chain.insert(0, {'yaml': label(current), 'sha256': file_sha256(current)})
-        out['extends'] = chain
+            named = values.get('extends') if isinstance(values, dict) and depth <= 16 else None
+            found = []
+            for base in [] if named is None else [named] if isinstance(named, str) else named:
+                base = current.parent / base
+                found += bases(base, depth + 1) + [{'yaml': label(base), 'sha256': file_sha256(base)}]
+            return found
+        out['extends'] = bases(file, 0)
         out['overrides'] = {key: value for key, value in own.items() if key != 'extends'}
     return out
 

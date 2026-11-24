@@ -1467,11 +1467,13 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         AimlessState::of(state, objective, objective::pulled(reward, objective, state))
     }
 
+    /// The config `name` plays with: the caller's ([`ChainEnv::configs`]), else the one a chain of this route plays
+    /// the family with ([`GameData::chain_specialist`]: its own task, with the route task's observation switches).
     fn config_for(&self, name: &str) -> Result<Arc<SpecialistConfig>, String> {
         if let Some(c) = self.configs.get(name) {
             return Ok(c.clone());
         }
-        self.data.specialist(name).map_err(|e| e.0)
+        self.data.chain_specialist(name, &self.route.name).map_err(|e| e.0)
     }
 
     /// The top of `Runner._run`'s loop: room bookkeeping, the observation and the budgets.

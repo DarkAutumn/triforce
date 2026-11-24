@@ -1,0 +1,7 @@
+# ow-boulder@d3first (round 40, the fresh generation; round40.md "The generation's tasks"): the family's task
+# (specialists/ow-boulder.yaml, which today's team and d2first read unchanged) on d3first's states alone, with the
+# generation's switches (_generation.yaml). The lab reads this file for the key
+# f"{family}@d3first" (lab.collect.task_yaml).
+extends: [../ow-boulder.yaml, _generation.yaml]
+state_routes: [d3first]
+start_states: ['0_17*_[0-9]']                  # no d3first state enters 0:0x18 or 0:0x19

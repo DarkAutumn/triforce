@@ -3,7 +3,7 @@
 
     python scripts/experiments/r40_d3_69_line.py measure --pass in|out [--runs N] [--seed0 S] [--look D] [--json OUT]
     python scripts/experiments/r40_d3_69_line.py demos OUT.npz --pass in|out [--runs N] [--seed0 S] [--look D]
-        [--json OUT] [--workers W]
+        [--json OUT] [--workers W] [--skip SEED...]
     python scripts/experiments/r40_d3_69_line.py trace --pass in|out SEED
     python scripts/experiments/r40_d3_69_line.py summarize RECORDS.jsonl...
     python scripts/experiments/r40_d3_69_line.py merge OUT.npz PIECE.npz...
@@ -670,11 +670,12 @@ def _taught(task) -> tuple[list[dict], list]:
 
 
 def demos(out: Path, which: str, seed0: int, runs: int, depth: int = 4, progress=None, log: Path | None = None,
-          workers: int = 1) -> dict:
+          workers: int = 1, skip: frozenset = frozenset()) -> dict:
     """The demonstration builder: every visit of one pass from `starts` by `teach` (the search, else the rule timed
     by a `depth`-decision look-ahead), the visits that leave by the exit unhit written to `out` as rows (`triforce.
     demos`: a MOVE or WAIT without its duration, a strike `REPEAT` times); `log`: each visit's record as a JSON line;
-    `workers` processes share the visits one at a time.  The file is written as the visits end (at most every
+    `workers` processes share the visits one at a time; `skip`: seeds left out (a set of visits recorded again, as
+    the first build's: round40.md "The generation's tasks").  The file is written as the visits end (at most every
     `SAVE_EVERY` seconds, and at the end, through a temporary file), so a job stopped at its time limit keeps what
     it found."""
     from triforce.demos import save_demos
@@ -685,7 +686,7 @@ def demos(out: Path, which: str, seed0: int, runs: int, depth: int = 4, progress
             save_demos(part, [obs for obs, _ in rows], [action for _, action in rows])
             part.replace(out)
 
-    visits = list(starts(which, seed0, runs))
+    visits = [visit for visit in starts(which, seed0, runs) if visit[0] not in skip]
     tasks = [(which, [visit], depth) for visit in visits]
     records, rows = [], []
     saved = time.time()
@@ -700,7 +701,7 @@ def demos(out: Path, which: str, seed0: int, runs: int, depth: int = 4, progress
                 save()
                 saved = time.time()
             if progress:
-                progress(len(records), runs)
+                progress(len(records), len(visits))
     save()
     result = summary(which, records)
     return {'file': str(out), 'rows': len(rows), 'played': len(records),
@@ -747,6 +748,7 @@ def main(argv) -> int:
     d.add_argument('--look', type=int, default=4, metavar='DEPTH', help="the rule's look-ahead where no way is found")
     d.add_argument('--json', default=None, help="append each visit's record to this JSON-lines file")
     d.add_argument('--workers', type=int, default=1, help="processes sharing the visits")
+    d.add_argument('--skip', type=int, nargs='+', default=[], metavar='SEED', help="seeds left out")
     u = sub.add_parser('summarize', help="the summary of measure's or demos' JSON-lines files")
     u.add_argument('files', nargs='+')
     g = sub.add_parser('merge', help="one demonstration file of several (`demos` run in pieces), rows in order")
@@ -785,7 +787,7 @@ def main(argv) -> int:
         return 0
     result = demos(Path(args.out), args.which, args.seed0, args.runs, args.look,
                    lambda done, total: jobs.progress(done, total, 'visits'), Path(args.json) if args.json else None,
-                   args.workers)
+                   args.workers, frozenset(args.skip))
     print(json.dumps(result, indent=1))
     return 0
 

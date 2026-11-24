@@ -150,3 +150,70 @@ def test_a_task_file_extends_its_family_with_the_lines_it_changes(tmp_path):
     loop.write_text("extends: loop.yaml\n")
     with pytest.raises(ValueError, match='extends: a loop'):
         load_specialist(str(loop))
+
+
+def _two_bases(tmp_path, common: str) -> Path:
+    """A task extending ow-start's yaml and a common block (`extends: [base, common]`, as the generation's d3first
+    tasks extend their family's yaml and `_generation.yaml`), with a key of its own."""
+    (tmp_path / 'common.yaml').write_text(common)
+    child = tmp_path / 'exp.yaml'
+    child.write_text(f"extends: [{SPECIALISTS_DIR / 'ow-start.yaml'}, common.yaml]\nmax_steps: 77\n")
+    return child
+
+
+def test_a_task_file_extends_a_list_of_bases_merged_in_order(tmp_path):
+    """Round 40 (the generation's tasks): the bases merge in order, each over the one before, the file's own keys
+    last; mappings key by key."""
+    child = _two_bases(tmp_path, "obs: {threat: true}\nreward: {aimless_penalty: 0.002}\nmax_steps: 5\n"
+                                 "warm_start: null\n")
+    config = load_specialist(str(child))
+    base = load_specialist('ow-start')
+    assert config.obs.threat and not config.obs.chase and config.obs.target == base.obs.target
+    assert config.reward.aimless_penalty == 0.002 and config.reward.pbrs == base.reward.pbrs
+    assert config.max_steps == 77                                  # the file's own key over both bases
+    assert config.rooms == base.rooms
+    recorded = manifest.task(config, child)
+    assert [e['yaml'] for e in recorded['extends']] == [manifest.label(SPECIALISTS_DIR / 'ow-start.yaml'),
+                                                        manifest.label(tmp_path / 'common.yaml')]
+    assert [e['sha256'] for e in recorded['extends']] == [manifest.file_sha256(SPECIALISTS_DIR / 'ow-start.yaml'),
+                                                          manifest.file_sha256(tmp_path / 'common.yaml')]
+    assert recorded['overrides'] == {'max_steps': 77}
+
+
+def test_a_list_of_bases_refuses_a_loop_a_missing_base_and_an_empty_list(tmp_path):
+    loop = tmp_path / 'loop.yaml'
+    loop.write_text(f"extends: [{SPECIALISTS_DIR / 'ow-start.yaml'}, loop.yaml]\n")
+    with pytest.raises(ValueError, match=r'loop\.yaml: extends: a loop'):
+        load_specialist(str(loop))
+    missing = tmp_path / 'missing.yaml'
+    missing.write_text(f"extends: [{SPECIALISTS_DIR / 'ow-start.yaml'}, nowhere.yaml]\n")
+    with pytest.raises(ValueError, match=r'missing\.yaml: extends: nowhere\.yaml: no such task file'):
+        load_specialist(str(missing))
+    empty = tmp_path / 'empty.yaml'
+    empty.write_text("extends: []\n")
+    with pytest.raises(ValueError, match='a non-empty list'):
+        load_specialist(str(empty))
+    # A base two entries share is no loop.
+    (tmp_path / 'a.yaml').write_text(f"extends: {SPECIALISTS_DIR / 'ow-start.yaml'}\nmax_steps: 11\n")
+    (tmp_path / 'b.yaml').write_text(f"extends: {SPECIALISTS_DIR / 'ow-start.yaml'}\none_room: false\n")
+    both = tmp_path / 'both.yaml'
+    both.write_text("extends: [a.yaml, b.yaml]\n")
+    config = load_specialist(str(both))
+    # b's whole merged task lies over a's: ow-start's own max_steps from b covers a's 11.
+    assert config.max_steps == load_specialist('ow-start').max_steps and not config.one_room
+
+
+def test_manifest_diff_shows_a_change_in_the_common_block(tmp_path, capsys):
+    sides = []
+    for name, penalty in (('a', 0.002), ('b', 0.005)):
+        folder = tmp_path / name
+        folder.mkdir()
+        child = _two_bases(folder, f"reward: {{aimless_penalty: {penalty}}}\n")
+        task = manifest.task(load_specialist(str(child)), child)
+        (folder / 'run.json').write_text(json.dumps({'manifest': {'task': task}}))
+        sides.append(folder)
+    paths = [d['path'] for d in manifest.diff(manifest.read(sides[0]), manifest.read(sides[1]))]
+    assert 'task.effective.reward.aimless_penalty' in paths and 'task.extends' in paths
+    assert manifest.main(['diff', str(sides[0]), str(sides[1])]) == 0
+    out = capsys.readouterr().out
+    assert 'task.effective.reward.aimless_penalty: 0.002 -> 0.005' in out

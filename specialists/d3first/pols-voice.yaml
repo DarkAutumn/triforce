@@ -4,6 +4,7 @@
 # learned 0x4c when the route took its key (round 31 left it: `treasure: skip`); its curriculum tracks walk to the
 # key in the NE corner and back W along the top row. Fine-tuned from it on today's objective (the N wall, no key) with
 # tracks explored on d3first's states. The lab reads this file for the key f"{family}@d3first" (lab.collect.task_yaml).
+extends: _generation.yaml                 # the fresh generation's switches (2.0.1.0; round40.md "The generation's tasks")
 name: pols-voice
 rooms: ['(5, 0x27)', '(5, 0x25)', '(8, 0x4c)']
 start_states: ['5_27*_[0-9]', '5_25*_[0-9]', '8_4c*_[0-9]']

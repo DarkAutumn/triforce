@@ -1,6 +1,7 @@
 # ow-lynel@d3first (round 38, "Beams at range"): the family's yaml with state_routes [d3first] and only the rooms
 # d3first plays before the magic sword, 0x50 E->S and 0x60 N->W on the way from Level 7 (post-d7); no harvested
 # handoffs (the family's are 0x0a's, a d2first room).
+extends: _generation.yaml                 # the fresh generation's switches (2.0.1.0; round40.md "The generation's tasks")
 name: ow-lynel
 rooms: ['(0, 0x0a)', '(0, 0x0a, cave)', '(0, 0x50)', '(0, 0x60)', '(0, 0x32)', '(0, 0x22)', '(0, 0x07)', '(0, 0x06)', '(0, 0x05)']
 start_states: ['0_50*_[0-9]', '0_60*_[0-9]']

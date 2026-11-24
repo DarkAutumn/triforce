@@ -3,6 +3,7 @@
 # state_routes [d3first] and the run's own terms as its run.json and docs/experiments/round34.md ("Dungeon 7", "The
 # trainings") record them: chain_hp 1.0, harvested handoffs at 0.3. The lab reads this file for the key
 # f"{family}@d3first" (lab.collect.task_yaml).
+extends: _generation.yaml                 # the fresh generation's switches (2.0.1.0; round40.md "The generation's tasks")
 name: boss-aquamentus
 rooms:
 - (1, 0x35)

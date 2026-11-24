@@ -5,6 +5,7 @@
 # fresh (no warm start) on d3first's ow-start rooms: 0x77 (the start: N, W, into the cave; the cave: the sword, S;
 # out of the cave: W), 0x0f and 0x2f (their caves, as the family's yaml). The lab reads this file for the key
 # f"{family}@d3first" (lab.collect.task_yaml).
+extends: _generation.yaml                 # the fresh generation's switches (2.0.1.0; round40.md "The generation's tasks")
 name: ow-start
 rooms: ['(0, 0x77)', '(0, 0x77, cave)', '(0, 0x2f)', '(0, 0x2f, cave)', '(0, 0x0f)', '(0, 0x0f, cave)']
 start_states: ['start', '0_77*_[0-9]', '0_2f*_[0-9]', '0_0f*_[0-9]']
