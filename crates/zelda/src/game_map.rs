@@ -3290,12 +3290,13 @@ mod tests {
         assert_eq!(breakfast.push_block, [Direction::N, Direction::S, Direction::E, Direction::W]);
         assert_eq!(breakfast.exits["cave"].destination, L::new(4, 0x60, true));
         assert_eq!(map.get(L::new(4, 0x60, true)).unwrap().treasure.as_deref(), Some("ladder"));
-        // Named rooms: the owner's canonical names carry a `*` (the Breakfast Room, the Olive Garden; Reverse C when
-        // he says which room it is); the others are working names (Nov 24: Dungeon 3's 0x59, 0x5b, 0x69).
+        // Named rooms: the owner's three canonical names carry a `*` (the Breakfast Room 4:0x32, the Olive Garden
+        // 5:0x05, Reverse C 9:0x10); the others are working names (Nov 24: Dungeon 3's 0x59, 0x5b, 0x69).
         let names: Vec<&str> = map.rooms().values().filter_map(|r| r.name.as_deref()).collect();
         let canonical: BTreeSet<&str> = names.iter().copied().filter(|n| n.ends_with('*')).collect();
-        assert_eq!(canonical, ["Breakfast Room*", "Olive Garden*"].into_iter().collect::<BTreeSet<_>>());
-        assert_eq!(names.len(), 5, "{names:?}");
+        assert_eq!(canonical, ["Breakfast Room*", "Olive Garden*", "Reverse C*"].into_iter().collect::<BTreeSet<_>>());
+        assert_eq!(map.get(loc(9, 0x10)).unwrap().name.as_deref(), Some("Reverse C*"));
+        assert_eq!(names.len(), 6, "{names:?}");
         // The two locked doors the route opens (0x30 E, 0x31 N, whose other side is 0x21 S), the bomb walls into and
         // out of the rupee room, the push-block shutter.
         assert!(room(0x30).exits["E"].locked && room(0x31).exits["N"].locked && room(0x21).exits["S"].locked);

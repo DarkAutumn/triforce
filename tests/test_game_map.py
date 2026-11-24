@@ -418,7 +418,7 @@ def test_after_d3_the_route_goes_on_by_raft_to_dungeon_4_and_follows_lees_direct
     # Round 24: the leg to Dungeon 5 goes on from the triforce's warp to 0x45, down by raft.
     assert (steps[d4 + 1]['room'], steps[d4 + 1]['entry'], steps[d4 + 1]['exit']) == (0x45, 'cave', 'S')
     rooms = native.game_rooms()
-    assert rooms[(4, 0x32, False)]['name'] == 'Breakfast Room' and rooms[(4, 0x32, False)]['cave'] == (4, 0x60, True)
+    assert rooms[(4, 0x32, False)]['name'] == 'Breakfast Room*' and rooms[(4, 0x32, False)]['cave'] == (4, 0x60, True)
     assert rooms[(4, 0x60, True)]['treasure'] == 'ladder' and rooms[(4, 0x13, False)]['treasure'] == 'heart-container'
     assert rooms[(4, 0x21, False)]['requires_bombs'] and rooms[(4, 0x11, False)]['requires_bombs']
     assert rooms[(4, 0x01, False)]['treasure'] == 'key'

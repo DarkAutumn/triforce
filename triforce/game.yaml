@@ -5842,6 +5842,7 @@ rooms:
   stairs: [16, 10]
 - level: 9
   location: '0x10'
+  name: Reverse C*  # the owner (Nov 24): one of his three canonical room names
   specialist: wizzrobe  # round 29: the silver arrow's room, emptied for its block
   exits:
     S:  # bomb wall
