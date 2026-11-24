@@ -633,6 +633,7 @@ def main(argv=None):
     checkpoint = resolve_checkpoint(name, args.checkpoint, args.run_id, args.models_dir)
     run_id = checkpoint.parent.name
     episodes = episode_count(config, args.episodes_per_state, args.clips)
+    announce('eval', work(eval_episodes=episodes), f'eval-{name}')
     act = registry.act_override(args.act)
     recipe = manifest.build('evaluate', arguments_=vars(args), seeds={'seed': args.seed},
                             task=manifest.task(config, args.specialist),
@@ -640,7 +641,6 @@ def main(argv=None):
                                   if key in ('states_dir', 'start_states')},
                             networks={name: manifest.network(checkpoint, act or registry.act_mode(checkpoint))},
                             models=manifest.models(args.models_dir))
-    announce('eval', work(eval_episodes=episodes), f'eval-{name}')
     # --events into a folder with a plan: its driver (e.g. triforce eval-batch) owns the stream and the final 'end';
     # into a folder without one: this evaluation writes a plan there, so the training GUI lists it.
     stream = Path(args.events) if args.events else None
