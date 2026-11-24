@@ -168,7 +168,9 @@ def build_parser() -> argparse.ArgumentParser:
                      help="finished runs in a row that no queue took before the simulations wait for a run to be "
                           f"taken (default {DEFAULT_PATIENCE}; 0: they run until every queue is full)")
     sim.add_argument('--first-seed', type=int, default=0, help="the first simulated run's seed (default 0)")
-    sim.add_argument('--models-dir', default=None, help="models root (default $TRIFORCE_MODELS_DIR or models/)")
+    sim.add_argument('--models-dir', default=None,
+                     help="models root (default $TRIFORCE_TEAM's or $TRIFORCE_MODELS_DIR, this checkout's models/ "
+                          "while it has one, else the store's current team)")
     sim.add_argument('--act', type=registry.act_argument(), default=registry.PLAY_ACT,
                      help=f"the {registry.ACT_HELP} of every model (default {registry.PLAY_ACT}: runs differ), or "
                           "model: each model's registered act mode.  Runs that don't draw every action differ by "

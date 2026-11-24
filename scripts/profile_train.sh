@@ -10,8 +10,10 @@ cd "$(dirname "$0")/.."
 OUT=target/perf/profile-${1:-baseline}
 rm -rf $OUT; mkdir -p $OUT
 s=ow-zora; p=16
+RUN=$(.venv/bin/python -c 'import sys; from triforce import store
+print(store.read_team("current")["slots"][sys.argv[1]]["run"])' "$s")     # the store's current team's run
 .venv/bin/py-spy record --idle --rate 50 --format speedscope -o $OUT/pyspy.speedscope.json -- \
-  .venv/bin/python -m triforce.train --specialist $s --load models/$s/$(cat models/$s/promoted) --parallel $p \
+  .venv/bin/python -m triforce.train --specialist $s --load "$RUN" --parallel $p \
   --iterations ${2:-120} --steps-per-update 4096 --device cuda --seed 1 --models-dir $OUT/models \
   --logs-dir $OUT/logs --run-id prof > $OUT/train.log 2>&1 &
 SPY=$!

@@ -312,19 +312,19 @@ def _harvest_runs(chains: list[str]) -> dict:
 
 
 def make_rooms_manifest(harvest: Path, chains: list[str], states_per_room: int, episodes: int, seed: int,
-                        min_hearts: float, states_dir=None, route: str = ROUTE) -> dict:
+                        min_hearts: float, states_dir=None, route: str = ROUTE, root=None) -> dict:
     """The rooms tier from an every-room harvest of the team (``harvest``: ``<family>/<stem>_h<seed>_<n>.state``)
     and the chains that harvested it (their records tell what each harvested visit cost the team): one entry per
     room entry (stem) whose visits lost ``min_hearts`` or more a visit or any run, keyed by the policy that plays
-    its route step, ``states_per_room`` states by the fixed hash order.  The chosen states are copied under
-    ``<states>/harvested-rooms/<family>/``."""
+    its route step in the team of ``root`` (``registry.models_root``), ``states_per_room`` states by the fixed hash
+    order.  The chosen states are copied under ``<states>/harvested-rooms/<family>/``."""
     states_dir = Path(states_dir or _native.paths()['states_dir'])
     visits = _harvest_runs(chains)
     steps: dict = {}
     for step in _native.route_steps(route):
         steps.setdefault((step['level'], step['room'], bool(step['in_cave']), step['entry'], step['visit']),
                          step['index'])
-    team = set(team_keys())
+    team = set(team_keys(root))
     entries = []
     for folder in sorted(p for p in harvest.iterdir() if p.is_dir()):
         family = folder.name
@@ -445,6 +445,9 @@ def main(argv=None) -> int:
     o.add_argument('--min-hearts', type=float, default=0.1,
                    help="a room entry joins when the team lost this many hearts a visit there (or a run)")
     o.add_argument('--states-dir', default=None)
+    o.add_argument('--models-dir', default=None, help="the team whose policy keys the entries take (default "
+                                                       "registry.models_root: the store's current team in a checkout "
+                                                       "without models/)")
     o.add_argument('--out', default=str(ROOMS_MANIFEST))
     args = parser.parse_args(argv)
     if args.command == 'manifest':
@@ -457,7 +460,7 @@ def main(argv=None) -> int:
         return 0
     if args.command == 'rooms':
         manifest = make_rooms_manifest(Path(args.harvest), args.chains, args.states_per_room, args.episodes,
-                                       args.seed, args.min_hearts, args.states_dir)
+                                       args.seed, args.min_hearts, args.states_dir, root=args.models_dir)
         write_json_atomic(args.out, manifest)
         print(f"[bench] rooms: {len(manifest['entries'])} room entries, "
               f"{sum(len(e['states']) for e in manifest['entries']) * manifest['episodes']} episodes")

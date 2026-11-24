@@ -117,13 +117,41 @@ one, else the store's snapshot). When neither exists the reader refuses, naming 
 `triforce job doctor` prints where each kind resolves for its checkout. `explore` writes new tracks into a
 checkout's `trajectories/` only while it has one, else into `target/trajectories`: a new folder would shadow the
 snapshot for every reader. The test suites' session store links the machine store's current snapshots, so they
-play the same states in a checkout with the old links or without them.
+play the same states in a checkout with the old links or without them; `triforce job test` names the store's current
+team (`$TRIFORCE_TEAM`) and the Python suite gives its tests a read-only view of it, never a checkout's `models/`.
 
 Every tool that plays or trains says at its start, in one line, which it took and why, and its manifest carries the
 same line (`models.why`; a training's `sources`): `models: store team 2.0.0.13 (--team; sha256 ...)`,
 `models: --models-dir /path (the layout before the store)`, `harvested: this checkout's folder /path (the layout
 before the store)`, `trajectories: store snapshot 261122-52fb5b17 (current: /path)`. A temporary team view a process
 left behind (the queue's dry call ends with `os._exit`) is removed by the next tool that makes one.
+
+## The reconciliation of the main checkout: old paths and where the same thing is now
+
+The main checkout kept its own folders after the import of Nov 23, so it read them and not the store. The
+reconciliation moves them aside (`python -m triforce.reconcile`, round40.md "Main reads the store"): every folder
+below, compared by content first (`reconcile compare`; Nov 24: every one identical to a store item, nothing only in
+main), then renamed into one dated folder beside the checkout (`reconcile aside`; `reconcile back` puts them back).
+Main's `target/` (but `target/demos`), `logs/`, `runs/`, `replays/` stay: per checkout. A document that cites an old
+path (the experiment docs are history and keep them) is read with this table; every concrete path cited in
+`docs/`, `AGENTS.md` and `README.md` is looked up in `docs/store-paths.md`.
+
+| old path (a checkout before the store) | what it was | now |
+|---|---|---|
+| `roms/zelda.nes` | the ROM | `rom/zelda.nes` of the store (`paths.rom()`, the `paths` crate) |
+| `trajectories/<family>/<track>/` | curriculum tracks | `data/trajectories/<snapshot>/<family>/<track>/`; main's folder of Nov 23 is snapshot `261122-52fb5b17`, the default is `data/trajectories/current` (`triforce store data`) |
+| `trajectories.prev-r60`, `-r70`, `-r71` | hand-made older copies | snapshots `261109-2dfee7b9`, `261113-2ebb5ce2`, `261113-578619ff` |
+| `triforce/states/harvested/<family>/` | chain handoff states | `data/harvested/<snapshot>/<family>/`; main's is `261123-ad612e94` |
+| `triforce/states/harvested-rooms/<family>/` | the bench's room entries | `data/harvested-rooms/261123-aabd5d07/<family>/` |
+| `target/demos/<path>.npz` | demonstration files | `data/demos/<snapshot>/<path>.npz`; main's is `261122-453e1975` |
+| `models/<family>/<run>/` (`ckpt.pt`, `run.json`, `metrics.jsonl`, `checkpoints/`, `tb/` ...) | a network run | `runs/<family>/<run>/`, sealed (`triforce store runs FAMILY/RUN`); `<family>` may be a group's path (`r38head-hit/all`) |
+| `models/<family>/<run>/eval*.json`, `act`, `selection.json` | written after the training | filed by job, indexed by the run (`triforce store outputs --run FAMILY/RUN`; the import's are under `jobs/475-lead-store-import/evaluate/<family>/<run>/` and `act/<family>/<run>/`); the act mode is the run's sealed default and each team slot's; a tool given a team reads them as files of the run (the view) |
+| `models/<family>/promoted`, `promoted.<route>`, `late.<route>` | the team of record | slots `family`, `family@route`, `family@route:late` of a team (`triforce store teams NAME`); `teams/current` names the team of record (2.0.0.15: main's pointers of Nov 23, every slot run and act mode the same, compared Nov 24) |
+| `models/<round>-summary.json`, `models/chain-*.jsonl`, `models/<name>-evidence/*.json` | loose records | filed records `models/<path>` (`triforce store outputs --kind record`), at `jobs/475-lead-store-import/record/models/<path>` |
+| any other file under `models/` (pictures, logs, retired curricula of the evidence folders) | no home | `legacy/import-261123/models/<path>` (listed in its `LIST.txt`) |
+| `models/` as a folder a tool takes (`--models-dir`, an old version's tree) | an old-style team | `triforce store view TEAM --into DIR` |
+| a run deleted before the store, kept by a backup | | `/backup/triforce/models/runs/<family>/<run>` (`runs.jsonl`); not in the store |
+| `target/<...>` of a worktree, `runs/`, `logs/` | scratch | a removed worktree's: `/backup/triforce/worktree-data/<date>_<branch>/`; main's stay in main |
 
 ## Hardcoded locations replaced (each is now `triforce.paths`)
 
@@ -385,7 +413,8 @@ Line numbers are `23412d57`'s. **Refused**: the run stops before it starts and n
 11. `--load VALUE` that is no existing path was read as a family name (`train.py:394-398`). **Refused** with what
     was looked for (a directory without `ckpt.pt` too).
 12. A worktree with its own `models/` (even a partial one) gave the test suites that team (`job.py:691-697`).
-    **Fixed**: the suites read the main checkout's team always.
+    **Fixed**: the suites read the main checkout's team always; since the reconciliation's preparation (Store41,
+    Nov 24) they play the store's current team (`job.test_steps`, `$TRIFORCE_TEAM`), never a checkout's folder.
 13. `eval-chain --specialist-config YAML` for a family the runs never play: accepted and unused. **Refused**.
 14. `eval-chain --harvest` without DIR wrote into the shared harvested folder (`cli.py:454`). **Refused** with a
     models folder: DIR is required; with a store team it writes into the job's folder of the store, never a snapshot.

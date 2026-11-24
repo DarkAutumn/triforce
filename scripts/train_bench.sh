@@ -1,5 +1,6 @@
 #!/bin/bash
-# Training throughput benchmark: real `triforce.train` runs warm-started from the promoted models (or fresh models
+# Training throughput benchmark: real `triforce.train` runs warm-started from the families' runs of the store's
+# current team (`--load FAMILY/RUN`; fresh models
 # with START=fresh; curriculum and yaml as configured), CUDA, 4,096 steps per update, one run at a time. Settled
 # steps/s = median of the per-iteration charts/SPS-equivalent (steps / iteration wall time) after the first 5
 # iterations. The runs are the trainings of this script's job (the machine's queue: they never wait); the rates count
@@ -21,7 +22,8 @@ for spec in goriya:8 d2-rope:8 ow-moblin:12 ow-zora:16; do
   dir=$OUT/$s-p$p
   rm -rf "$dir"; mkdir -p "$dir"
   load=()
-  if [ "$START" = promoted ]; then load=(--load "models/$s/$(cat models/$s/promoted)"); fi
+  if [ "$START" = promoted ]; then load=(--load "$(.venv/bin/python -c 'import sys; from triforce import store
+print(store.read_team("current")["slots"][sys.argv[1]]["run"])' "$s")"); fi
   .venv/bin/python -m triforce.train --specialist "$s" "${load[@]}" --parallel "$p" --iterations "$ITERS" \
     --steps-per-update 4096 --device cuda --seed 1 --models-dir "$dir/models" --logs-dir "$dir/logs" \
     --run-id bench > "$dir/train.log" 2>&1

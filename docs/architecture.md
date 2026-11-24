@@ -1881,8 +1881,9 @@ every step, so following an enemy that moves away pays again, and knockback rese
     changes and untracked files of `crates/`, `Cargo.toml`, `Cargo.lock`, `pyproject.toml`) and the module's
     SHA-1; `jobs.announce` refuses a queued tool when the module has no stamp or the sources changed since (a
     module rebuilt from the same sources, `uv run` after a landing, is fine). About 25 ms a start.
-  - The test suites read the main checkout's `models/` whatever a worktree's own holds (`job.test_steps`; a
-    partial one gave the tests a partial team).
+  - The test suites play the store's current team, never a checkout's `models/` (`job.test_steps` names it in
+    `$TRIFORCE_TEAM`, `tests/conftest.py` gives the tests a read-only view of it; a worktree's partial `models/` gave
+    the tests a partial team, and until round 40's reconciliation the suites read the main checkout's folder).
   Left as declared rules, not refusals: a run dir without an `act` file plays `DEFAULT_ACT` and one whose `act` was
   set for other weights plays it with a warning (F064; the act played is in every chain's provenance); a family
   without `promoted.<route>` plays its `promoted` there (the team rule of phase X; the key that played is in the

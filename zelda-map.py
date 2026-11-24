@@ -2312,7 +2312,8 @@ class MapWindow(QMainWindow):
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog='zelda-map.py', description=__doc__.split('\n\n')[0])
     parser.add_argument('--models-dir', type=Path, default=None,
-                        help="models root (default $TRIFORCE_MODELS_DIR, else <repo>/models)")
+                        help="models root (default $TRIFORCE_TEAM's or $TRIFORCE_MODELS_DIR, <repo>/models while it "
+                             "exists, else the store's current team)")
     parser.add_argument('--screens-dir', type=Path, default=SCREENS_DIR,
                         help="room screenshot cache (default <repo>/screens)")
     parser.add_argument('--rerender', action='store_true', help="render every room screenshot again")

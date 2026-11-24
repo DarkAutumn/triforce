@@ -109,6 +109,11 @@ def test_an_arrived_entry_plays_its_states_without_the_familys_randomization(tmp
 
 
 def test_the_rooms_manifest_keeps_the_room_entries_that_cost_the_team(tmp_path):
+    # The team's pointers only (the keys are read from them): darknut with a run of d3first's own part, as today's.
+    models = tmp_path / 'models' / 'darknut'
+    models.mkdir(parents=True)
+    (models / registry.PROMOTED_NAME).write_text('base\n')
+    (models / f'{registry.PROMOTED_NAME}.d3first').write_text('route\n')
     harvest = tmp_path / 'harvest' / 'darknut'
     harvest.mkdir(parents=True)
     for name in ['d3first_3_59n_h5_7', 'd3first_3_59n_h6_7', 'd3first_3_5bw_h5_9']:
@@ -120,7 +125,8 @@ def test_the_rooms_manifest_keeps_the_room_entries_that_cost_the_team(tmp_path):
     chains = tmp_path / 'harv.jsonl'
     chains.write_text(''.join(json.dumps(r) + '\n' for r in runs))
     states = tmp_path / 'states'
-    manifest = bench.make_rooms_manifest(tmp_path / 'harvest', [str(chains)], 12, 5, 380000, 0.1, states)
+    manifest = bench.make_rooms_manifest(tmp_path / 'harvest', [str(chains)], 12, 5, 380000, 0.1, states,
+                                         root=tmp_path / 'models')
     entry, = manifest['entries']                  # 0x5b lost nothing: out
     assert entry['key'] == 'darknut@d3first' and entry['name'] == 'darknut@d3first 3_59n' and entry['arrived']
     assert entry['team_visits'] == 2 and entry['team_deaths'] == 1 and entry['team_hearts_lost'] == 1.0

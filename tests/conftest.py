@@ -115,6 +115,19 @@ def pytest_configure(config):  # pylint: disable=unused-argument
         found = [path for path in paths.rom_candidates() if path.is_file()]
         if found:
             os.environ['TRIFORCE_ROM'] = str(found[0])
+    # The team the tests play when one is named (``$TRIFORCE_TEAM``: ``triforce job test`` names the store's current
+    # one, ``job.test_steps``): a read-only view of it in the machine's store (``store.write_view``), given as
+    # ``$TRIFORCE_MODELS_DIR`` like the models folder it replaces, so a test that names its own folder still wins;
+    # ``$TRIFORCE_TEAM`` itself is unset.  A plain ``pytest`` names none: a test that needs a team makes its own.
+    spec = os.environ.pop('TRIFORCE_TEAM', '').strip()
+    if spec:
+        from triforce import store  # pylint: disable=import-outside-toplevel
+        _session['team'] = Path(tempfile.mkdtemp(prefix='triforce-test-team-'))
+        try:
+            store.write_view(store.effective_team(spec), _session['team'] / 'models')
+        except (store.StoreError, paths.MissingError) as error:
+            raise pytest.UsageError(f"$TRIFORCE_TEAM {spec}: {error}") from error
+        os.environ['TRIFORCE_MODELS_DIR'] = str(_session['team'] / 'models')
     _session['shared'] = tempfile.mkdtemp(prefix='triforce-shared-')
     for kind in paths.DATA_KINDS:
         name = paths.current_name(kind)
@@ -207,7 +220,7 @@ def start_task() -> str:
 
 
 def pytest_unconfigure(config):  # pylint: disable=unused-argument
-    """Restores ``TRIFORCE_STATES_DIR`` and removes the session states dir and queue dir."""
+    """Restores ``TRIFORCE_STATES_DIR`` and removes the session states dir, queue dir, store and team view."""
     if 'states_dir' not in _session:
         return
     if _session['old_env'] is None:
@@ -217,6 +230,11 @@ def pytest_unconfigure(config):  # pylint: disable=unused-argument
     shutil.rmtree(_session.pop('states_dir'), ignore_errors=True)
     shutil.rmtree(_session.pop('queue_dir'), ignore_errors=True)
     shutil.rmtree(_session.pop('shared'), ignore_errors=True)
+    if 'team' in _session:
+        from triforce import store  # pylint: disable=import-outside-toplevel
+        team = _session.pop('team')
+        store.make_writable(team)
+        shutil.rmtree(team, ignore_errors=True)
 
 
 @pytest.fixture(autouse=True)

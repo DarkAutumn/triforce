@@ -25,9 +25,9 @@ an old version's tool) needs ``--timeout``, its stated duration and its estimate
 is a result ("no golden path in N minutes", exit 0), and every replay it made is archived
 (``scripts/archive_replays.py``).  ``build`` and ``test`` use the tools lane (the tools queue of the queues' file,
 first come first served, never behind a training or a chain) at nice ``TOOL_NICE`` with ``CARGO_BUILD_JOBS`` =
-``CARGO_JOBS``; ``test --build`` is one entry with both steps.  ``setup`` makes a worktree ``../triforce-<branch>``
-with ``roms``, ``trajectories`` and ``models`` linked from the main checkout, its venv and its build, as one
-tools-lane entry.
+``CARGO_JOBS``; ``test --build`` is one entry with both steps.  ``setup`` makes a worktree ``../triforce-<branch>``,
+its venv and its build, as one tools-lane entry (with the shared store: no links, the worktree reads the store; before
+it: ``roms``, ``trajectories`` and the harvested states linked from the main checkout).
 Priority and time limits are the queue's: ``nice``, ``ionice``, ``timeout`` or ``CARGO_BUILD_JOBS=`` after ``--`` are
 refused.  ``top`` moves a waiting job to the top of its own line, or back (``jobqueue.move_to_top``; the training
 GUI's right click does the same): the owner's; agents don't use it on their own work.  ``queues`` prints the queues in
@@ -73,6 +73,8 @@ TOOL_MODULES = ('triforce.train', 'triforce.evaluate', 'triforce.eval_batch', 't
                 'triforce.lab.train', 'triforce.lab.record', 'triforce.lab.bench')
 TOOL_SCRIPTS = ('train_round.py', 'full_runs.py', 'zelda-headless.py')
 SUITES = ('python', 'asm', 'check', 'rust')     # ``triforce job test``'s suites, in the order they are shown
+TEAM_ENV = 'TRIFORCE_TEAM'                  # store.TEAM_ENV: the team the test suites play (``test_steps``)
+MODELS_DIR_ENV = 'TRIFORCE_MODELS_DIR'      # registry.MODELS_DIR_ENV: a models folder, kept when the caller sets it
 # The Python suite's processes (pytest-xdist, a test to whichever is free).  Measured Nov 23 on a quiet machine
 # (load 3-5): one process 410-433 s; 6 processes 78 s, 8 61 s, 12 71 s.  The tools lane runs two test jobs at
 # once: two suites of 8 leave 4 of the 20 threads to the owner's player and the jobs.
@@ -767,8 +769,8 @@ def _fields(args, verb: str, lane: str, kind: str, command: list, cwd: Path, nic
 
 def cmd_doctor(args) -> int:
     """``triforce job doctor [PATH]``: the checks every job start makes (``checkout_flags``, the module's stamp
-    included) for the checkout at PATH (default this one), each one's answer printed, then where each data kind
-    resolves for it (``data_lines``); exit 1 when one is red."""
+    included) for the checkout at PATH (default this one), each one's answer printed, then where the ROM and the
+    networks (``team_lines``) and each data kind (``data_lines``) resolve for it; exit 1 when one is red."""
     root = git_root(Path(args.path).resolve())
     if root is None:
         raise JobError(f"{args.path} is in no git checkout")
@@ -776,9 +778,34 @@ def cmd_doctor(args) -> int:
     print(f"{root}: {'clean' if not flags else f'{len(flags)} flag(s)'}")
     for entry in flags:
         print(f"  {'RED FLAG' if entry['level'] == 'red' else 'note'} {entry['code']}: {entry['text']}")
-    for line in data_lines(root):
+    for line in team_lines(root) + data_lines(root):
         print(f"  {line}")
     return 1 if any(entry['level'] == 'red' for entry in flags) else 0
+
+
+def team_lines(root: Path) -> list[str]:
+    """Where the ROM (``paths.rom_candidates``' rule) and the networks a tool plays without ``--models-dir`` or
+    ``--team`` (``registry.models_root``'s rule: ``$TRIFORCE_TEAM``, ``$TRIFORCE_MODELS_DIR``, the checkout's
+    ``models/``, the store's current team) resolve for the checkout ``root``."""
+    from . import paths  # pylint: disable=import-outside-toplevel
+    explicit = os.environ.get(paths.ROM_ENV, '').strip()
+    roms = [Path(explicit)] if explicit else [paths.shared_root() / paths.STORE_ROM, root / paths.CHECKOUT_ROM]
+    rom = next((path for path in roms if path.is_file()), None)
+    lines = [f"rom: {rom}" if rom else f"rom: missing: looked in {', '.join(map(str, roms))}"]
+    team, models = os.environ.get(TEAM_ENV, '').strip(), os.environ.get(MODELS_DIR_ENV, '').strip()
+    current = paths.current_team() if paths.store_exists() else None
+    if team:
+        lines.append(f"models: store team {team} (${TEAM_ENV})")
+    elif models:
+        lines.append(f"models: ${MODELS_DIR_ENV} {models} (the layout before the store)")
+    elif (root / 'models').exists():
+        lines.append(f"models: this checkout's folder {root / 'models'} (the layout before the store)")
+    elif current:
+        lines.append(f"models: store team {current} (current: {paths.teams_dir() / paths.CURRENT})")
+    else:
+        lines.append(f"models: missing: no {root / 'models'} and no current team in the store at "
+                     f"{paths.shared_root()}")
+    return lines
 
 
 def data_lines(root: Path) -> list[str]:
@@ -900,16 +927,20 @@ def test_steps(root: Path, suites: list[str], extra: list[str]) -> list[Step]:
     workspace's test programs side by side, ``triforce.cargo_tests``, which reports ``Rust tests`` done of the
     listed total).  Every pytest run and the Rust suite write a timing log into the logs folder
     (``triforce.testlog``; ``triforce test-times`` reads them).  They run at the same time (``together``) and none
-    is ``required``: each runs whatever another did.  The suites read the main checkout's ``models``
-    (``$TRIFORCE_MODELS_DIR``; a few tests read the promoted team), whatever a worktree's own holds (round 40: a
-    partial one gave the tests a partial team); a ``$TRIFORCE_MODELS_DIR`` already set is kept."""
+    is ``required``: each runs whatever another did.  The suites play the store's current team: its name, read once
+    when the job is made (``$TRIFORCE_TEAM``; the python suite's ``tests/conftest.py`` gives its tests a read-only view
+    of it as ``$TRIFORCE_MODELS_DIR``), never a checkout's ``models/`` (round 40: a worktree's partial one gave the
+    tests a partial team; the reconciliation: the main checkout's folder is moved aside).  A ``$TRIFORCE_TEAM`` or
+    ``$TRIFORCE_MODELS_DIR`` already set is kept."""
+    from . import paths  # pylint: disable=import-outside-toplevel
     python = checkout_python(root)
     env = {'CARGO_BUILD_JOBS': str(CARGO_JOBS)}
-    if not os.environ.get('TRIFORCE_MODELS_DIR'):
-        models = main_checkout(root) / 'models'
-        if not models.is_dir():
-            raise JobError(f"the test suites read the main checkout's team and {models} is not a folder")
-        env['TRIFORCE_MODELS_DIR'] = str(models)
+    if not os.environ.get(TEAM_ENV) and not os.environ.get(MODELS_DIR_ENV):
+        team = paths.current_team() if paths.store_exists() else None
+        if team is None:
+            raise JobError(f"the test suites play the store's current team and there is none: "
+                           f"{paths.teams_dir() / paths.CURRENT} is missing (set {TEAM_ENV} to a team to play)")
+        env[TEAM_ENV] = team
     # The runner runs every test program whatever another did (cargo alone stops at the first failing one, Nov 23:
     # one failing program hid the state of thirty others for a 25-minute run).
     cargo = [*CARGO_TEST, *extra]
@@ -973,8 +1004,8 @@ def cmd_setup(args) -> int:
         # With the shared store (``triforce.paths.store_exists``) a worktree gets no links and no models folder: its
         # tools read the ROM, the data snapshots and the teams from the store (``docs/data-layout.md``).  Until the
         # lead makes it (the staged cutover), a worktree links what it always did: ``roms``, ``trajectories`` and
-        # the harvested start states (never ``models``: it reads the main checkout's team with ``--models-dir``,
-        # its tests with ``$TRIFORCE_MODELS_DIR``, ``test_steps``).
+        # the harvested start states (never ``models``: it read the main checkout's team with ``--models-dir``; the
+        # suites play the store's current team, ``test_steps``).
         from .paths import store_exists  # pylint: disable=import-outside-toplevel
         if store_exists():
             return 0

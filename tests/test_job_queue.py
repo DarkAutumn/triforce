@@ -45,8 +45,8 @@ def environment(queue: Path, **extra) -> dict:
     env = {key: value for key, value in os.environ.items()
            if key not in (jobs.JOB_ID_ENV, jobs.JOB_LABEL_ENV, jobs.JOB_ESTIMATE_ENV)}
     env.update({q.QUEUE_DIR_ENV: str(queue), q.LOADAVG_ENV: str(queue / 'loadavg')}, **extra)
-    # A test job in a made-up repo has no main checkout to take the team from (`test_steps`); the suite itself is
-    # run with the variable set by `triforce job test` and without it by hand: the tests must not differ.
+    # A test job's suite plays the store's current team (`test_steps`), and the session's store has none: a models
+    # folder set by hand is kept instead (the tests must not differ under `triforce job test` and by hand).
     env.setdefault('TRIFORCE_MODELS_DIR', str(queue))
     return env
 
@@ -283,7 +283,6 @@ def fake_checkout(tmp_path: Path, build_seconds: float = 0) -> Path:
     root = tmp_path / 'checkout'
     (root / '.venv' / 'bin').mkdir(parents=True)
     (root / 'triforce').mkdir()
-    (root / 'models').mkdir()           # the team the suites read (``job.test_steps``)
     subprocess.run(['git', 'init', '-q', str(root)], check=True)
     maturin = root / '.venv' / 'bin' / 'maturin'
     maturin.write_text(f"#!/bin/sh\necho \"build nice $(cut -d' ' -f19 /proc/$$/stat) jobs $CARGO_BUILD_JOBS\" "
