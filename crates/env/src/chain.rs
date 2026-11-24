@@ -646,7 +646,9 @@ pub struct ChainEnv<N: Nes, St: StateStore<N::State>> {
     pub data: Arc<GameData>,
     session: Session<N>,
     store: St,
-    /// Specialist configs replacing the canonical YAML at runtime.
+    /// The caller's configs by policy key (a family `F`, or `F@route` for a route's part; round 40: a slot's config
+    /// follows the network in it, `runner.chain_config`), replacing [`GameData::chain_specialist`]'s. A key without
+    /// one plays its family's (`F`), else the data's.
     pub configs: HashMap<String, Arc<SpecialistConfig>>,
     /// The route-part policy keys the caller has a policy for (`family@route`, round 32;
     /// `zelda::GameMap::step_policy`): a room on a step before the route's `own_models_until` is played by its
@@ -1467,13 +1469,23 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         AimlessState::of(state, objective, objective::pulled(reward, objective, state))
     }
 
-    /// The config `name` plays with: the caller's ([`ChainEnv::configs`]), else the one a chain of this route plays
-    /// the family with ([`GameData::chain_specialist`]: its own task, with the route task's observation switches).
+    /// The config family `name` plays with: the caller's ([`ChainEnv::configs`]), else the one a chain of this route
+    /// plays the family with in any slot ([`GameData::chain_specialist`]: its own task, with the route task's
+    /// observation switches).
     fn config_for(&self, name: &str) -> Result<Arc<SpecialistConfig>, String> {
         if let Some(c) = self.configs.get(name) {
             return Ok(c.clone());
         }
-        self.data.chain_specialist(name, &self.route.name).map_err(|e| e.0)
+        self.data.chain_specialist(name, &self.route.name, false).map_err(|e| e.0)
+    }
+
+    /// The config policy `key` (family `name`'s slot) plays with: the caller's for the key, else
+    /// [`ChainEnv::config_for`] the family.
+    fn config_for_policy(&self, key: &str, name: &str) -> Result<Arc<SpecialistConfig>, String> {
+        match self.configs.get(key) {
+            Some(c) => Ok(c.clone()),
+            None => self.config_for(name),
+        }
     }
 
     /// The top of `Runner._run`'s loop: room bookkeeping, the observation and the budgets.
@@ -1654,7 +1666,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                 .last_mut()
                 .unwrap()
                 .linger = Some(summary);
-            let config = self.config_for(&name)?;
+            let config = self.config_for_policy(&key, &name)?;
             let switch = self.current.as_ref().is_none_or(|c| *c.name != *key);
             // A one_room specialist trains on episodes that start at the room (a reset observation): give it the
             // same on every room entry, also from a room of its own family (F040).

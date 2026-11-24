@@ -463,11 +463,14 @@ def check_overrides(overrides: Dict[str, str], configs: Optional[Dict[str, Speci
     return known
 
 
-def chain_config(family: str, route: Optional[str]) -> SpecialistConfig:
-    """The config a chain of ``route`` plays ``family`` with (``SpecialistConfig.for_chain``, round 40): the family's
-    own task (``specialists/<family>.yaml``: every rule of play) with the observation switches (``obs``) of the
-    route's task for it (``specialists/<route>/<family>.yaml``) where the route has one; no route: its own task."""
-    return load_specialist(family) if route is None else SpecialistConfig.for_chain(family, route)
+def chain_config(family: str, route: Optional[str], trained: bool = False) -> SpecialistConfig:
+    """The config a chain of ``route`` plays ``family`` with in one slot (``SpecialistConfig.for_chain``, round 40):
+    the family's own task (``specialists/<family>.yaml``: every rule of play) with the observation switches (``obs``)
+    of the route's task for it (``specialists/<route>/<family>.yaml``) where the route has one; ``trained`` (the
+    slot's network reads the generation's switched blocks, ``switched_reads``: it trained on the route's task) with
+    every key the chain reads from that task (``env::config::TRAINED_FROM_ROUTE_TASK``: the masks, budgets and
+    target switches too), so play matches training; no route: its own task."""
+    return load_specialist(family) if route is None else SpecialistConfig.for_chain(family, route, trained)
 
 
 def switched_reads(network) -> Dict[str, str]:
@@ -510,7 +513,8 @@ class Policies:
     ``checkpoints`` (key -> checkpoint file or run dir) overrides the registry's run: a family's key both parts, a
     ``family@route`` key the route's part only; ``networks`` (key -> a ``ZeldaPolicy``) supplies a model directly
     (a family's for both parts); ``specialist_configs`` (family -> config) replaces a specialist's config at runtime,
-    else each family plays with ``chain_config`` (its own task with the route task's observation switches).  A
+    else each slot plays with ``chain_config``, by the network in it: its family's own task with the route task's
+    observation switches, and the route task's rules of play too where the network reads the generation's blocks.  A
     network that reads an observation block its config's switch leaves zero is refused (``check_inputs``).
     ``checkpoints`` afterwards maps each loaded key to its file and ``acts`` holds, per policy, its model's
     act mode (the run's, ``registry.act_mode``; a given network acts by ``registry.DEFAULT_ACT``); ``described``
@@ -574,7 +578,7 @@ class Policies:
                     native = loaded.setdefault(f'network:{id(network)}', network.to_native())
                     read = switched_reads(network)
                     self.described[key] = network_description(network)
-                config = configs.get(name) or chain_config(name, route)
+                config = configs.get(name) or chain_config(name, route, trained=bool(read))
                 check_inputs(key, read, config, route, given=name in configs)
                 self.names.append(key)
                 self.configs.append(config)

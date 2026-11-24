@@ -116,12 +116,15 @@ impl PySpecialistConfig {
     }
 
     /// The config a chain of `route` plays `family` with (`env::config::GameData::chain_specialist`): the family's
-    /// own task with the observation switches (`obs`) of `specialists/<route>/<family>.yaml` where the route has one.
+    /// own task with the observation switches (`obs`) of `specialists/<route>/<family>.yaml` where the route has one;
+    /// `trained` (a slot whose network trained on the route's task): with every key the chain reads from it
+    /// (`env::config::TRAINED_FROM_ROUTE_TASK`).
     #[classmethod]
-    fn for_chain(_cls: &Bound<'_, PyType>, py: Python<'_>, family: &str, route: &str) -> PyResult<Self> {
+    #[pyo3(signature = (family, route, trained=false))]
+    fn for_chain(_cls: &Bound<'_, PyType>, py: Python<'_>, family: &str, route: &str, trained: bool) -> PyResult<Self> {
         Ok(PySpecialistConfig {
             inner: context::data(py, None)?
-                .chain_specialist(family, route)
+                .chain_specialist(family, route, trained)
                 .map_err(|e| ConfigError::new_err(e.0))?,
         })
     }

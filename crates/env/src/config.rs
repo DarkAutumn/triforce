@@ -1503,9 +1503,9 @@ pub struct GameData {
     pub namespace_heart_values: HashMap<String, Arc<HeartValues>>,
     /// Every specialists/*.yaml by name (sorted).
     pub specialists: IndexMap<String, Arc<SpecialistConfig>>,
-    /// Per route with tasks of its own (`specialists/<route>/<family>.yaml`), the config a chain of the route plays
+    /// Per route with tasks of its own (`specialists/<route>/<family>.yaml`), the configs a chain of the route plays
     /// each of those families with ([`GameData::chain_specialist`]).
-    pub chain_specialists: HashMap<String, IndexMap<String, Arc<SpecialistConfig>>>,
+    pub chain_specialists: HashMap<String, IndexMap<String, ChainConfigs>>,
     pub states_dir: PathBuf,
     pub trajectories_dir: PathBuf,
 }
@@ -1542,18 +1542,67 @@ pub fn room_key(location: MapLocation) -> String {
 }
 
 /// The keys of a route's task (`specialists/<route>/<family>.yaml`) a chain of that route takes over the family's
-/// own task ([`GameData::chain_specialist`]; round 40, the fresh generation). Only the observation switches: they are
-/// what a network reads, and a network trained on the route's task is chained with the inputs it trained with. Every
-/// rule of play (items and masks, rewards, clips, budgets) stays the family's own task's, as today's teams are chained.
+/// own task in **every** slot ([`GameData::chain_specialist`]; round 40, the fresh generation): only the observation
+/// switches. Today's networks read neither generation block, so they see what they always saw; every rule of play
+/// stays the family's own task's, as today's teams are chained.
 pub const CHAIN_FROM_ROUTE_TASK: [&str; 1] = ["obs"];
 
+/// The keys a chain takes from the route's task in a slot whose network was **trained on it** (round 40: a network
+/// that reads the generation's switched blocks, `runner.switched_reads`): every key the chain reads from the acting
+/// family's config, so play matches training. `obs`: the inputs. `items`: the masks (BOMB's mode and `bomb_catch`,
+/// CANDLE, every kind's switch), set every step. `clips`: `enabled` offers CLIP in the session every step (its
+/// `off_share` is training's alone). `reward`: its terms only score a chain that records rewards, but its target
+/// switches (`item_targets`, `heal_targets`, `drops_first`...) shape the `target` observation's wavefront, the
+/// ledger's wall-grant rule and the aimless score. `max_steps` and `no_progress_steps`: the room's step budget and its
+/// quiet-step cutoff, as the episode had them. `one_room`: a fresh observation (history reset) on every room entry.
+/// The rest stays the family's own and is never read by a chain: `rooms` (only a reward track's), `success`,
+/// `endings`, `no_damage_steps` (the chain has its own stall rule), `start_states`, `state_routes`, `route`,
+/// `ram_randomization`, `curriculum`, `harvested_*`, `demos`, `warm_start`, `notes`.
+pub const TRAINED_FROM_ROUTE_TASK: [&str; 7] =
+    ["obs", "items", "clips", "reward", "max_steps", "no_progress_steps", "one_room"];
+
+/// A family's chain configs on a route with a task for it ([`GameData::chain_specialist`]).
+#[derive(Clone, Debug)]
+pub struct ChainConfigs {
+    /// Its own task with the route task's [`CHAIN_FROM_ROUTE_TASK`] keys: any slot.
+    pub every: Arc<SpecialistConfig>,
+    /// Its own task with the route task's [`TRAINED_FROM_ROUTE_TASK`] keys: a slot whose network trained on it.
+    pub trained: Arc<SpecialistConfig>,
+}
+
+/// `own` with `keys` taken from `task` (the route's task, merged; a key the task leaves out: its default).
+fn overlay(
+    own: &Arc<SpecialistConfig>,
+    task: &serde_yaml_ng::Value,
+    keys: &[&str],
+    path: &Path,
+    map: &GameMap,
+) -> Result<Arc<SpecialistConfig>, ConfigError> {
+    let mut value = own.to_json();
+    let fields = value.as_object_mut().expect("a config is an object");
+    for key in keys {
+        match task.get(key) {
+            Some(v) => {
+                let v = serde_json::to_value(v).map_err(|e| ConfigError(format!("{}: {key}: {e}", path.display())))?;
+                fields.insert((*key).to_owned(), v);
+            }
+            None => {
+                fields.remove(*key);
+            }
+        }
+    }
+    let chained =
+        SpecialistConfig::from_json(value, Some(map)).map_err(|e| ConfigError(format!("{}: {}", path.display(), e.0)))?;
+    Ok(if chained == **own { own.clone() } else { Arc::new(chained) })
+}
+
 /// [`GameData::chain_specialists`]: per route with a folder of tasks under `specialists/`, each of its families'
-/// own config with the route task's [`CHAIN_FROM_ROUTE_TASK`] keys (a key the route's task leaves out: its default).
+/// [`ChainConfigs`].
 fn chain_specialists(
     root: &Path,
     map: &GameMap,
     specialists: &IndexMap<String, Arc<SpecialistConfig>>,
-) -> Result<HashMap<String, IndexMap<String, Arc<SpecialistConfig>>>, ConfigError> {
+) -> Result<HashMap<String, IndexMap<String, ChainConfigs>>, ConfigError> {
     let mut out = HashMap::new();
     for route in map.routes.keys() {
         let mut configs = IndexMap::new();
@@ -1563,23 +1612,9 @@ fn chain_specialists(
                 continue;
             }
             let task = task_value(&path, &mut Vec::new())?;
-            let mut value = own.to_json();
-            let fields = value.as_object_mut().expect("a config is an object");
-            for key in CHAIN_FROM_ROUTE_TASK {
-                match task.get(key) {
-                    Some(v) => {
-                        let v = serde_json::to_value(v)
-                            .map_err(|e| ConfigError(format!("{}: {key}: {e}", path.display())))?;
-                        fields.insert(key.to_owned(), v);
-                    }
-                    None => {
-                        fields.remove(key);
-                    }
-                }
-            }
-            let chained = SpecialistConfig::from_json(value, Some(map))
-                .map_err(|e| ConfigError(format!("{}: {}", path.display(), e.0)))?;
-            configs.insert(family.clone(), if chained == **own { own.clone() } else { Arc::new(chained) });
+            let every = overlay(own, &task, &CHAIN_FROM_ROUTE_TASK, &path, map)?;
+            let trained = overlay(own, &task, &TRAINED_FROM_ROUTE_TASK, &path, map)?;
+            configs.insert(family.clone(), ChainConfigs { every, trained });
         }
         if !configs.is_empty() {
             out.insert(route.clone(), configs);
@@ -1754,12 +1789,18 @@ impl GameData {
 
     /// The config a chain of `route` plays `family` with (round 40, the fresh generation): the family's own task
     /// (`specialists/<family>.yaml`: its items and masks, rewards, clips and budgets, every rule of play, as today's
-    /// teams were chained with) with the observation switches of the route's task for the family
-    /// (`specialists/<route>/<family>.yaml`'s `obs`, [`CHAIN_FROM_ROUTE_TASK`]) where the route has one: the inputs
-    /// that route's networks trained on, for both of the family's policy keys on the route.
-    pub fn chain_specialist(&self, family: &str, route: &str) -> Result<Arc<SpecialistConfig>, ConfigError> {
+    /// teams were chained with) with, where the route has a task for the family (`specialists/<route>/<family>.yaml`),
+    /// that task's [`CHAIN_FROM_ROUTE_TASK`] keys (the observation switches), or with `trained` (a slot whose network
+    /// trained on the route's task) its [`TRAINED_FROM_ROUTE_TASK`] keys: the inputs and every rule the chain applies.
+    pub fn chain_specialist(
+        &self,
+        family: &str,
+        route: &str,
+        trained: bool,
+    ) -> Result<Arc<SpecialistConfig>, ConfigError> {
         match self.chain_specialists.get(route).and_then(|configs| configs.get(family)) {
-            Some(config) => {
+            Some(configs) => {
+                let config = if trained { &configs.trained } else { &configs.every };
                 self.check_config(config)?;
                 Ok(config.clone())
             }

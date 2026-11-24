@@ -249,6 +249,44 @@ def test_a_chain_refuses_a_network_that_reads_a_block_its_switch_leaves_zero(tmp
     assert Policies(tmp_path, networks={'darknut': plain}, names=['darknut'], route='d2first').names == ['darknut']
 
 
+# `env::config::TRAINED_FROM_ROUTE_TASK`: the keys a slot whose network trained on the route's task takes from it.
+TRAINED_KEYS = ('obs', 'items', 'clips', 'reward', 'max_steps', 'no_progress_steps', 'one_room')
+
+
+def test_a_slot_trained_on_the_route_task_takes_every_rule_the_chain_reads_from_it():
+    """`for_chain(..., trained=True)`: the route task's `TRAINED_KEYS` over the family's own task, nothing else
+    (`rooms`, `endings`, `start_states`... stay the bare task's: no chain reads them for play)."""
+    require_rom()
+    for family in GENERATION:
+        trained = json.loads(SpecialistConfig.for_chain(family, 'd3first', trained=True).to_json())
+        bare = json.loads(load_specialist(family).to_json())
+        routed = json.loads(load_specialist(str(ROOT / 'specialists' / 'd3first' / f'{family}.yaml')).to_json())
+        assert {k: trained[k] for k in TRAINED_KEYS} == {k: routed[k] for k in TRAINED_KEYS}, family
+        assert ({k: v for k, v in trained.items() if k not in TRAINED_KEYS}
+                == {k: v for k, v in bare.items() if k not in TRAINED_KEYS}), family
+    darknut = SpecialistConfig.for_chain('darknut', 'd3first', trained=True)
+    assert darknut.items.bomb_catch == 2 and darknut.reward.aimless_penalty == 0.002
+    assert SpecialistConfig.for_chain('wallmaster', 'd3first', trained=True).items.candle
+    # d2first has no tasks of its own: a trained slot there would get the bare task (and the guard refuses it).
+    bare_darknut = load_specialist('darknut').to_json()
+    assert SpecialistConfig.for_chain('darknut', 'd2first', trained=True).to_json() == bare_darknut
+
+
+def test_each_slot_plays_with_the_rules_its_network_trained_under(tmp_path):
+    """Round 40 (the lead): per slot, by the network in it. A generation network (it reads the switched blocks) plays
+    the route task's masks; today's network in the other slot of the same family keeps the bare masks."""
+    require_rom()
+    reader = _reader(['type', 'features', 'rel', 'threat', 'chase'])
+    policies = Policies(tmp_path, networks={'darknut': scripted('WAIT 8'), 'darknut@d3first': reader,
+                                            'wallmaster': reader}, names=['darknut', 'wallmaster'], route='d3first')
+    configs = dict(zip(policies.names, policies.configs))
+    assert configs['darknut@d3first'].items.bomb_catch == 2 and configs['darknut'].items.bomb_catch == 0
+    assert configs['darknut'].obs.threat and configs['darknut'].reward.aimless_penalty == 0   # obs only
+    assert configs['wallmaster'].items.candle
+    today = Policies(tmp_path, networks={'wallmaster': scripted('WAIT 8')}, names=['wallmaster'], route='d3first')
+    assert not today.configs[0].items.candle
+
+
 def test_a_warm_start_names_a_checkpoint_or_a_family_with_one(tmp_path):
     (tmp_path / 'empty-run').mkdir()
     with pytest.raises(MissingInput, match='a directory without ckpt.pt'):

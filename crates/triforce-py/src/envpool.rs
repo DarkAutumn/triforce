@@ -477,11 +477,9 @@ fn build(py: Python<'_>, task: &Bound<'_, PyAny>, opts: PoolOptions) -> PyResult
         let policies: Vec<Arc<str>> = t.names.iter().map(|n| Arc::from(n.as_str())).collect();
         let route_parts: std::collections::HashSet<String> =
             t.names.iter().filter(|n| zelda::game_map::split_policy(n).1.is_some()).cloned().collect();
-        let configs: HashMap<String, Arc<SpecialistConfig>> = t
-            .configs
-            .iter()
-            .map(|c| (c.name.clone(), c.clone()))
-            .collect();
+        // Each policy key's own config (round 40: a slot's config follows the network in it).
+        let configs: HashMap<String, Arc<SpecialistConfig>> =
+            t.names.iter().cloned().zip(t.configs.iter().cloned()).collect();
         let switch = ClipsSwitch::default();
         let make = |init: EnvInit| {
             let mut env = ChainRunEnv::new(
