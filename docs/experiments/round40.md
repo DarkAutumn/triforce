@@ -1319,6 +1319,45 @@ wanderers' X test can wrap there (a monster at X $00 with Link at X 0-7: asm:Wan
 the mirror at X $F8-$FF as 1-8 px off). In a dungeon Link's mirror of his bottom rows (Y 165-189) lies at Y 66-90,
 above the room's top bound ($5D): a mirror spell then piles the wanderers against the top wall.
 
+### The two inputs: observation schema 9, behind `obs.chase` (default off)
+
+Two NEW keys after `entity_threat` (`docs/architecture.md` "Schema 9" has every column): **`chase` [7]**, where the
+monsters are sent (`other`: the flip `$60`; `target_dx`, `target_dy`: the chase target relative to Link, 0 while it
+is Link; `flip_time`: the frames to the next flip, which the game does hold: `ChaseLongTimer` `$4A` ticks on the
+frames LongTimerCycle `$26` wraps, so the flip is `cycle + 1 + 10 (timer - 1)` frames away, 1 at timer 0;
+`hotspot_dx`, `hotspot_dy`, `mirror_gap`: Link's corner from the mirror's fixed point, without saying what it is for)
+and **`entity_chase` [12, 12]**, per monster the audit says turns at a grid point toward the chase target (the
+wanderers and the Goriya rule; Zols, Gels, Dodongos and Armos are left out: random pauses, a shifted X, a statue
+state): `turns`, `grid_time` (frames to its next decision, walking on exactly as asm:Obj_MoveByQSpeed moves it:
+the q-speed added to the fraction four times a frame, the grid offset stopped at ±16), `toward` (the current chase
+target in its turn window there), `toward_{N,S,W,E}`, `chance` ((rate + 1) / 256 over the decisions it makes at the
+point: a frame with no pixel decides again), `reverse` (that turn is a reversal), `timer_turn`, and `toward_link`,
+`reverse_link` (the same with Link's own corner: the owner's "don't chase"). Arithmetic on the current RAM only
+(`zelda::chase`, `env::observation::chase_blocks`): no emulator step, and no random byte (round 36: the numbers are
+memorised, not used), so the turn is a chance. Both are `model.TOKEN_KEYS`: `ZeldaPolicy` and the Rust actor never
+read them, and `hitnet`'s token group `chase` puts `entity_chase` in the entity tokens and `chase` in Link's own
+token (`tests/test_hitnet.py`). Tests: `zelda::chase`'s unit tests (the flip, the signed-byte window and its wrap,
+the Goriya axis, a half-pixel walker reaching its point and lingering, the reversal behind and none 20 px off, the
+clock and the shove), `tests/test_obs_chase.py` (the env's blocks are `_native.chase_blocks` with the switch, zeros
+without it, every other key identical either way; the probe reads every walking Darknut's next grid point).
+
+### What could carry the lesson beyond the inputs (for the lead to decide; no reward added)
+
+The inputs say where the monsters are sent and who may turn at Link; nothing yet rewards using it, and the owner asked
+for no reward. Three things could carry it indirectly. **Tracked goals** (run statistics beside the route step's
+expectation, as the screen wrap and the no-kill goals are): in a kill-all room with wanderers, the frames Link spends
+within 32 px of the hotspot and the monsters within 40 px of him there, against the frames to clear the room and the
+hearts lost; bombs that hurt two or more against one; hits taken within 16 frames after Link stood behind a monster on
+its line (`reverse_link` read 1): a falling "don't chase" count is the lesson learned, measured. **Demonstrations**:
+the owner's three takes are the clearest teacher (the bomb take spends its bombs from the hotspot band, five of six
+hurting two); Darknut40's scripted fighter could take the hotspot as the place it waits for a clump when bombs are
+usable and shadow at 1.25-1.5 squares off a Darknut's line otherwise, and its clean runs be cloned during training
+(`train --demos`) in the Olive Garden, 3x59 and 3x5b's last pass; start states with Link in the band would let the
+explorer find it. **An auxiliary target** (like the hit head, training-only look-ahead): for each walking monster,
+the direction it actually takes at its next grid point, read from the game a few frames later; the head learns the
+rule the column states, and a policy tower fed its output (as `feed` does for the hit head) sees "this one will turn
+at me" before it happens.
+
 ## The generation's base made green (Gen40fix, branch `r40-genfix`)
 
 `triforce job test all --build` on the base as received (5f5647c9, job #937) failed 8 Python tests; Rust, asm and
