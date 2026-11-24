@@ -47,7 +47,7 @@ from typing import Callable, List, Optional
 
 from . import jobs
 from ._native import AcceptSpec, Explorer, ExploreResult, explore_states
-from .paths import TRAJECTORIES_DIR
+from .paths import TRAJECTORIES_DIR, scratch
 from .specialist import load_specialist
 
 __all__ = ['AcceptSpec', 'Explorer', 'ExploreResult', 'explore_specialist', 'main']
@@ -137,8 +137,12 @@ def main(argv=None):
                              "<state>~plain, a plain-way track of a room both ways share (5:0x64)")
     parser.add_argument('--room-kills', default=None, metavar='LEVEL:0xRR=K',
                         help="a staged start: K kills banked in that dungeon room before its entry (track <state>~k<K>)")
-    parser.add_argument('--out', default=str(TRAJECTORIES_DIR),
-                        help="trajectories root (<out>/<specialist>/<state> is written; not <specialist>'s own dir)")
+    # Today's checkouts write into their trajectories/ as before; one without it (the store's snapshots are read-only)
+    # writes into scratch, never a new trajectories/ that would then shadow the snapshot for every reader.
+    out = TRAJECTORIES_DIR if TRAJECTORIES_DIR.exists() else scratch('trajectories')
+    parser.add_argument('--out', default=str(out),
+                        help="trajectories root (<out>/<specialist>/<state> is written; not <specialist>'s own dir; "
+                             "default this checkout's trajectories/, else target/trajectories)")
     args = parser.parse_args(argv)
     try:
         check_out(family_name(args.specialist), args.out)

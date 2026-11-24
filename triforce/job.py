@@ -759,7 +759,8 @@ def _fields(args, verb: str, lane: str, kind: str, command: list, cwd: Path, nic
 
 def cmd_doctor(args) -> int:
     """``triforce job doctor [PATH]``: the checks every job start makes (``checkout_flags``, the module's stamp
-    included) for the checkout at PATH (default this one), each one's answer printed; exit 1 when one is red."""
+    included) for the checkout at PATH (default this one), each one's answer printed, then where each data kind
+    resolves for it (``data_lines``); exit 1 when one is red."""
     root = git_root(Path(args.path).resolve())
     if root is None:
         raise JobError(f"{args.path} is in no git checkout")
@@ -767,7 +768,26 @@ def cmd_doctor(args) -> int:
     print(f"{root}: {'clean' if not flags else f'{len(flags)} flag(s)'}")
     for entry in flags:
         print(f"  {'RED FLAG' if entry['level'] == 'red' else 'note'} {entry['code']}: {entry['text']}")
+    for line in data_lines(root):
+        print(f"  {line}")
     return 1 if any(entry['level'] == 'red' for entry in flags) else 0
+
+
+def data_lines(root: Path) -> list[str]:
+    """Where each data kind resolves for the checkout ``root`` (``paths.data_dir``): ``this checkout's folder``,
+    ``store snapshot NAME`` (current), or ``missing`` with both places looked in."""
+    from . import paths  # pylint: disable=import-outside-toplevel
+    lines = []
+    for kind, relative in paths.CHECKOUT_DATA.items():
+        legacy = root / relative
+        folder = paths.data_dir(kind, legacy)
+        if folder == legacy and legacy.exists():
+            lines.append(f"{kind}: this checkout's folder {legacy} (the layout before the store)")
+        elif folder != legacy:
+            lines.append(f"{kind}: store snapshot {folder.name} (current: {folder})")
+        else:
+            lines.append(f"{kind}: missing: {paths.data_missing(kind, legacy)}")
+    return lines
 
 
 def _estimate(work: dict) -> float:

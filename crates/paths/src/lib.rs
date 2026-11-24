@@ -1,9 +1,10 @@
 //! Where the shared things are, for Rust: the twin of `triforce/paths.py` (`docs/data-layout.md`).
 //!
 //! The shared store is `$TRIFORCE_SHARED`, else `~/triforce-shared` (`triforce.store` writes it; `layout.json` there
-//! names every location for tools that are not Python). Rust reads only the ROM from it: `$TRIFORCE_ROM` when set
-//! (nothing else is tried), else the store's `rom/zelda.nes`, else the checkout's `roms/zelda.nes` (the layout before
-//! the store, kept until the lead's reconciliation). A missing ROM is an error naming every place looked in.
+//! names every location for tools that are not Python). The ROM: `$TRIFORCE_ROM` when set (nothing else is tried),
+//! else the store's `rom/zelda.nes`, else the checkout's `roms/zelda.nes` (the layout before the store, kept until the
+//! lead's reconciliation). A missing ROM is an error naming every place looked in. The data (harvested states, the
+//! bench's harvested rooms, curricula, demos): [`data_dir`], the same rule as `paths.data_source`.
 
 use std::path::{Path, PathBuf};
 
@@ -59,6 +60,44 @@ fn missing_message(candidates: &[PathBuf]) -> String {
     )
 }
 
+/// The folder of `kind` a reader uses, `legacy` being where the caller's layout keeps it (`<states>/harvested`,
+/// `<checkout>/trajectories`): `legacy` while it exists (the transition: today's command lines read what they read),
+/// else the store's current snapshot of `kind` (`data/<kind>/current` names it), else `legacy` again, for the
+/// reader's refusal ([`data_missing`] says where it looked).
+pub fn data_dir(kind: &str, legacy: &Path) -> PathBuf {
+    data_dir_in(kind, legacy, &shared_root())
+}
+
+fn data_dir_in(kind: &str, legacy: &Path, shared: &Path) -> PathBuf {
+    if legacy.exists() {
+        return legacy.to_path_buf();
+    }
+    current_snapshot_in(kind, shared).unwrap_or_else(|| legacy.to_path_buf())
+}
+
+/// The store's current snapshot folder of `kind`, None when the store has none.
+pub fn current_snapshot(kind: &str) -> Option<PathBuf> {
+    current_snapshot_in(kind, &shared_root())
+}
+
+fn current_snapshot_in(kind: &str, shared: &Path) -> Option<PathBuf> {
+    let root = shared.join("data").join(kind);
+    let name = std::fs::read_to_string(root.join("current")).ok()?;
+    let folder = root.join(name.trim());
+    (!name.trim().is_empty() && folder.is_dir()).then_some(folder)
+}
+
+/// What a reader of `kind` says when [`data_dir`] found nothing: both places it looked.
+pub fn data_missing(kind: &str, legacy: &Path) -> String {
+    let shared = shared_root();
+    format!(
+        "{} is missing and the store at {} has no current {kind} snapshot ({})",
+        legacy.display(),
+        shared.display(),
+        shared.join("data").join(kind).join("current").display()
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -76,6 +115,20 @@ mod tests {
         assert_eq!(explicit, vec![PathBuf::from("/x/z.nes")]);
         let default = rom_candidates_from(None, Path::new("/s"), Path::new("/c"));
         assert_eq!(default, vec![PathBuf::from("/s/rom/zelda.nes"), PathBuf::from("/c/roms/zelda.nes")]);
+    }
+
+    #[test]
+    fn data_is_the_callers_folder_else_the_stores_current_snapshot() {
+        let dir = tempfile::tempdir().unwrap();
+        let shared = dir.path().join("shared");
+        let legacy = dir.path().join("checkout/triforce/states/harvested");
+        assert_eq!(data_dir_in("harvested", &legacy, &shared), legacy);
+        std::fs::create_dir_all(shared.join("data/harvested/s1")).unwrap();
+        std::fs::write(shared.join("data/harvested/current"), "s1\n").unwrap();
+        assert_eq!(data_dir_in("harvested", &legacy, &shared), shared.join("data/harvested/s1"));
+        std::fs::create_dir_all(&legacy).unwrap();
+        assert_eq!(data_dir_in("harvested", &legacy, &shared), legacy);
+        assert_eq!(current_snapshot_in("trajectories", &shared), None);
     }
 
     #[test]

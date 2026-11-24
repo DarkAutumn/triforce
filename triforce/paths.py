@@ -38,6 +38,8 @@ CHECKOUT_ROM = 'roms/zelda.nes'
 CURRENT = 'current'                 # the name of a kind's default snapshot, and of the team of record
 # The data kinds (named snapshots, ``data/<kind>/<name>/``) and where each lived in a checkout before the store.
 DATA_KINDS = ('harvested', 'harvested-rooms', 'trajectories', 'demos')
+CHECKOUT_DATA = {'harvested': 'triforce/states/harvested', 'harvested-rooms': 'triforce/states/harvested-rooms',
+                 'trajectories': 'trajectories', 'demos': 'target/demos'}
 _LEGACY_DATA = {'harvested': STATES_DIR / 'harvested', 'harvested-rooms': STATES_DIR / 'harvested-rooms',
                 'trajectories': ROOT / 'trajectories', 'demos': ROOT / 'target' / 'demos'}
 
@@ -142,6 +144,27 @@ def data_source(kind: str, name: Optional[str] = None) -> tuple[Path, dict]:
             raise MissingError(f"{error}; this checkout has no {legacy_data(kind)} either") from error
         raise
     return path, {'kind': kind, 'snapshot': path.name, 'path': str(path)}
+
+
+def data_dir(kind: str, legacy: Optional[Path] = None) -> Path:
+    """The folder of ``kind`` every reader uses (the Rust twin is ``paths::data_dir``): ``legacy`` (default this
+    checkout's ``legacy_data(kind)``; a caller's own states dir passes ``<states>/harvested``) while it exists, else
+    the store's current snapshot, else ``legacy`` again for the reader's refusal (``data_missing`` says where it
+    looked)."""
+    legacy = Path(legacy) if legacy is not None else legacy_data(kind)
+    if legacy.exists():
+        return legacy
+    try:
+        return data(kind)
+    except MissingError:
+        return legacy
+
+
+def data_missing(kind: str, legacy: Optional[Path] = None) -> str:
+    """What a reader of ``kind`` says when ``data_dir`` found nothing: both places it looked."""
+    legacy = Path(legacy) if legacy is not None else legacy_data(kind)
+    return (f"{legacy} is missing and the store at {shared_root()} has no current {kind} snapshot "
+            f"({data_root(kind) / CURRENT})")
 
 
 def runs_dir() -> Path:

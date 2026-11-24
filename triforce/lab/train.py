@@ -47,7 +47,7 @@ from ..observation import observation_space
 from ..ppo import PPO, IterationResult, PPOConfig, joint_kl, minibatch_forward
 from ..train import CONFIRM_EPISODES, EarlyStop, curriculum_spec
 from .auxiliary import AuxLoss, aux_loss, held_out
-from .collect import MultiCollector, NeedSampler, Teachers, parse_families, trajectories_root
+from .collect import MultiCollector, NeedSampler, Teachers, parse_families
 from .rehearse import Rehearsal
 
 REFERENCE = Path(__file__).with_name('reference.json')
@@ -390,8 +390,7 @@ def main(argv=None) -> Path:
             spec, _ = curriculum_spec(argparse.Namespace(no_curriculum=args.no_curriculum, curriculum=None,
                                                          curriculum_fraction=None, curriculum_threshold=None,
                                                          curriculum_unrecorded=None),
-                                      family.config, out_dir / 'tasks' / family.key,
-                                      trajectories_root=trajectories_root())
+                                      family.config, out_dir / 'tasks' / family.key)
             curricula[family.key] = spec
         (out_dir / 'tasks').mkdir(exist_ok=True)
         for family in families:

@@ -124,7 +124,6 @@ from .metrics import MetricsLogger, format_summary
 from .model import ModelConfig, ZeldaPolicy, obs_spec_from_space
 from .observation import observation_space
 from .inputs import MissingInput, check_task
-from .paths import TRAJECTORIES_DIR
 from .ppo import PPO, IterationResult, PPOConfig
 from .run_stats import TRAIN_NAME as TRAIN_STATS
 from .run_stats import write_train as write_train_stats
@@ -542,12 +541,13 @@ def _recorded_trajectories(run_dir: Path) -> tuple[bool, Optional[str]]:
 def curriculum_dir(args, config, trajectories_root: Optional[Path] = None) -> Optional[str]:
     """The run's curriculum folder: ``--curriculum``, else the task's ``curriculum.trajectories``, else
     ``<trajectories_root>/<family>`` (``Where``: this checkout's ``trajectories/`` or a store snapshot; default
-    ``paths.TRAJECTORIES_DIR``), when the task enables it or ``--curriculum`` is given (and not ``--no-curriculum``);
-    None without a curriculum."""
+    ``paths.data_dir('trajectories')``, the same rule), when the task enables it or ``--curriculum`` is given (and not
+    ``--no-curriculum``); None without a curriculum."""
     settings = config.curriculum
     if args.no_curriculum or not (args.curriculum or settings.enabled):
         return None
-    return str(args.curriculum or settings.trajectories or (trajectories_root or TRAJECTORIES_DIR) / config.name)
+    return str(args.curriculum or settings.trajectories
+               or (trajectories_root or paths.data_dir('trajectories')) / config.name)
 
 
 def curriculum_spec(args, config, out_dir: Path, continued: Optional[Path] = None,

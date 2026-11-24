@@ -31,10 +31,6 @@ BACKUP_ENV = 'TRIFORCE_BACKUP'
 DEFAULT_BACKUP = Path('/backup/triforce')
 MANIFESTS = DEFAULT_BACKUP / 'models' / 'teams'
 CURRENT_TEAM = '2.0.0.13'
-# Legacy data folders of a checkout: (kind, path relative to the checkout); the trajectories' hand-made older copies
-# are found by their glob.
-LEGACY_DATA = (('harvested', 'triforce/states/harvested'), ('harvested-rooms', 'triforce/states/harvested-rooms'),
-               ('trajectories', 'trajectories'), ('demos', 'target/demos'))
 POINTERS = ('promoted', 'late')
 RECORD_SUFFIXES = ('.jsonl', '.json', '.csv', '.tsv', '.md', '.txt', '.log')
 
@@ -184,8 +180,9 @@ def plan_import(checkout: Path, manifests: Optional[Path] = MANIFESTS) -> dict:
     rom = checkout / paths.CHECKOUT_ROM
     if rom.is_file():
         plan['rom'] = str(rom)
-    sources = [(kind, checkout / relative, True) for kind, relative in LEGACY_DATA]
-    sources += [('trajectories', path, False) for path in sorted(checkout.glob('trajectories.prev-*'))]
+    sources = [(kind, checkout / relative, True) for kind, relative in paths.CHECKOUT_DATA.items()]
+    sources += [('trajectories', path, False)       # the trajectories' hand-made older copies
+                for path in sorted(checkout.glob('trajectories.prev-*'))]
     for kind, source, current in sources:
         if not source.is_dir():
             continue

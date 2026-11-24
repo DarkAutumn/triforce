@@ -300,3 +300,34 @@ def test_views_of_gone_processes_are_swept(tmp_path):
     gone.chmod(0o555)
     assert store.sweep_views(tmp_path) == [gone]
     assert alive.is_dir() and not gone.exists()
+
+
+def test_data_is_the_callers_folder_else_the_stores_snapshot_else_refused_naming_both(tmp_path, monkeypatch):
+    import re
+    from triforce import _native
+    from triforce.inputs import MissingInput, check_curriculum, check_harvested
+    zol = _native.SpecialistConfig.load('zol')
+    states = tmp_path / 'states'
+    states.mkdir()
+    shared = tmp_path / 'empty-store'
+    shared.mkdir()
+    monkeypatch.setenv(paths.SHARED_ENV, str(shared))
+    # No folder of the caller's and an empty store: refused, naming both places (Rust's harvested_dir, Python's).
+    with pytest.raises(MissingInput, match=re.escape(f"{states}/harvested is missing and the store at {shared} has "
+                                                     f"no current harvested snapshot")):
+        check_harvested(zol, states)
+    with pytest.raises(MissingInput, match=re.escape(f"{tmp_path}/trajectories is missing and the store at {shared} "
+                                                     f"has no current trajectories snapshot")):
+        check_curriculum(zol, tmp_path / 'trajectories' / 'zol', states)
+    # The store's current snapshot when the caller has no folder of its own.
+    snapshot = shared / 'data' / 'harvested' / 's1'
+    (snapshot / 'zol').mkdir(parents=True)
+    (snapshot / 'zol' / 'd3first_3_7cs_h1_0.state').write_bytes(b'x')
+    (shared / 'data' / 'harvested' / 'current').write_text('s1\n')
+    assert Path(zol.harvested_dir(str(states))) == snapshot / 'zol'
+    assert len(check_harvested(zol, states)) == 1
+    assert paths.data_dir('harvested', states / 'harvested') == snapshot
+    # The caller's own folder while it exists (a checkout with the old links, a test's own states dir).
+    (states / 'harvested' / 'zol').mkdir(parents=True)
+    assert Path(zol.harvested_dir(str(states))) == states / 'harvested' / 'zol'
+    assert paths.data_dir('harvested', states / 'harvested') == states / 'harvested'

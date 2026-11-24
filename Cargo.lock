@@ -421,6 +421,7 @@ version = "2.0.0"
 dependencies = [
  "indexmap",
  "parking_lot",
+ "paths",
  "rand",
  "rand_chacha",
  "replay",

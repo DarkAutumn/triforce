@@ -22,7 +22,7 @@ import re
 from pathlib import Path
 from typing import Optional
 
-from . import _native
+from . import _native, paths
 
 
 class MissingInput(Exception):
@@ -32,6 +32,13 @@ class MissingInput(Exception):
 def _stem(path: str) -> str:
     name = Path(path).name
     return name[:-len('.state')] if name.endswith('.state') else name
+
+
+def _where(kind: str, folder) -> str:
+    """``folder``'s missing-data note: when its parent (the kind's folder) is not there, the rule's two places
+    (``paths.data_missing``: the caller's folder, the store's current snapshot)."""
+    parent = Path(folder).parent
+    return '' if parent.exists() else f"; {paths.data_missing(kind, parent)}"
 
 
 def check_start_states(config, states_dir=None) -> dict:
@@ -59,8 +66,9 @@ def check_harvested(config, states_dir=None) -> list[str]:
         return []
     found = config.resolve_harvested_states(states_dir)
     if not found:
+        folder = config.harvested_dir(states_dir)
         raise MissingInput(f"{config.name} draws {config.harvested_fraction:.0%} of its resets from harvested start "
-                           f"states and {config.harvested_dir(states_dir)} holds none ({_routes(config)})")
+                           f"states and {folder} holds none ({_routes(config)}){_where('harvested', folder)}")
     return found
 
 
@@ -95,7 +103,7 @@ def check_curriculum(config, trajectories, states_dir=None) -> dict:
     starts = track_starts(trajectories)
     if not starts:
         raise MissingInput(f"{config.name}: the curriculum is on and {trajectories} holds no track "
-                           f"(<track>/trajectory.json)")
+                           f"(<track>/trajectory.json){_where('trajectories', trajectories)}")
     seeds = sorted(_stem(p) for p in config.resolve_start_states(states_dir))
     declared = untracked(config)
     have = set(starts.values())
