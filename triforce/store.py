@@ -729,18 +729,27 @@ def parent_curricula(parent: Run) -> Optional[dict]:
                                    for state, track in states.items() if isinstance(track, dict)}
     if not tasks:
         return None
-    iteration = None
-    metrics = parent.path / 'metrics.jsonl'
-    if metrics.is_file():
-        with open(metrics, 'rb') as file:
-            file.seek(max(0, metrics.stat().st_size - 65536))
-            for line in reversed(file.read().splitlines()):
+    return {'iteration': last_iteration(parent.path / 'metrics.jsonl'), 'tasks': tasks}
+
+
+def last_iteration(metrics: Path) -> Optional[int]:
+    """The iteration of the last whole line of a training's ``metrics.jsonl`` (a line is tens of KB: read back from
+    the end in a growing window), None without one."""
+    if not metrics.is_file():
+        return None
+    size, window = metrics.stat().st_size, 1 << 18
+    with open(metrics, 'rb') as file:
+        while True:
+            file.seek(max(0, size - window))
+            lines = file.read().splitlines()
+            for line in reversed(lines[1:] if window < size else lines):
                 try:
-                    iteration = json.loads(line)['iteration']
-                    break
-                except (ValueError, KeyError):
+                    return int(json.loads(line)['iteration'])
+                except (ValueError, KeyError, TypeError):
                     continue
-    return {'iteration': iteration, 'tasks': tasks}
+            if window >= size:
+                return None
+            window *= 4
 
 
 def checkpoint_run(parent: Run, iteration, make: bool = True, entry: str = PUBLIC) -> dict:
