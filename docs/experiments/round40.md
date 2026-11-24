@@ -3701,3 +3701,211 @@ suites, golden race and 250 test run *from main* without its folders (from this 
 the same way); `port_gate.sh`, `train_bench.sh`, `profile_train.sh` and `parallel_study.py` end to end (their team
 lookups were run alone); `play-zelda.py` beyond `--help` (a window); the Rust suite's reading of the store is the
 same in any checkout without folders (`paths` crate), shown by the Rust suite of job #1294 in this worktree.
+
+## A teacher's checkpoints judged (Check41, branch `r41-check`)
+
+anthropic/claude-opus-5-5 (Check41), on `r40-gen` at 14df761b. **The ask** (the lead): stage 1's teachers train for
+about 16 hours and only a sealed run played in a team, so a teacher could not be looked at until it ended and no
+checkpoint but its last could be judged. These are the generation's first chain numbers: **early checkpoints of one
+seed**, judged small.
+
+### What was built
+
+- **A numbered checkpoint becomes a run** (`store.checkpoint_run`; `triforce store checkpoint FAMILY/RUN@it228|@latest
+  [--plan] [--list]`). It sits in `triforce store` and not in `triforce-lead` because it only adds a sealed run and
+  never changes one, like `select-checkpoint --apply`'s `derive_run`, and because agents' judging jobs need it.
+  - The new run is `FAMILY/RUN-it<NNNNNN>` (origin `checkpoint`, parent the run), and the parent may be open or sealed.
+  - From an open parent the weights are **copied**: a hard link shares the file's modes, so sealing it would make
+    the training's own file read-only. The lead's call: an open run stays untouched, modes included. From a sealed
+    parent they are **linked**. The parent is never written or sealed; a test compares its modes and times before
+    and after.
+  - The same checkpoint again is the same run, and a run of that name holding other weights is refused.
+  - Its `run.json` holds `checkpoint` (parent, the parent's status then, iteration, steps, SHA-1, source, `copied` or
+    `linked`, act mode, and the parent's curricula as they read then), `parent` (`lineage.identity`) and `manifest`
+    (the parent's, with `networks.checkpoint`). So `triforce manifest diff A-it000114 A-it000228` prints exactly the
+    iteration, the steps and the SHA-1.
+- **How a half-written checkpoint is avoided.** The trainer (`registry.snapshot_checkpoint`, the same code in the
+  frozen `triforce-gen1` tree) writes `ckpt.pt` to a temporary name and renames it, then writes `version`, then
+  `act`, which holds the new `ckpt.pt`'s SHA-1.
+  - An open run's checkpoint counts as complete only when its `act` names its `ckpt.pt`'s SHA-1. The copy is
+    hashed again and must match, and the checkpoint's own `iterations` must be the folder's.
+  - A sealed run's checkpoint counts as complete when its `ckpt.pt` exists.
+  - So the trainer needs no change and no size or time guard is used.
+  - `@latest` is the newest complete checkpoint; an incomplete one is refused with why ("no act yet", "no ckpt.pt
+    yet").
+- **The judging sugar**: `eval-batch NAME --teacher GROUP=FAMILY/RUN@it228` (or `@latest`).
+  - The checkpoint's run is made at the job's turn. `--plan` and the queue's dry call only say which run it would
+    be ("would be made: copied from the open run").
+  - `--scopes to-d3` keeps one scope; `--no-report` (with `--teacher`) leaves out the report and the comparison.
+  - `--with GROUP=FAMILY/RUN[@itN]` puts another group's run in its slots, unjudged.
+  - `judge compare` names the weights a measured team played: a line per checkpoint run, and the Measured column
+    "(it 228, 3.73M steps)".
+- **`triforce judge checkpoints GROUP=FAMILY/RUN [--its 114,228|all] [--dungeons dN] [--scopes S] --runs N
+  [--plan|--submit] [--with ...] [--control TAG]`**:
+  - One chain a checkpoint and scope on seeds 0..N-1, each one express job (`triforce job run --express --timeout
+    10m --detach -- eval-batch <tag>-it<NNNNNN> --teacher GROUP=RUN@itN --scopes S --no-report`). `--plan` prints the
+    commands for the chains not yet played and `--submit` queues them. It queues nothing longer.
+  - Run again without either, it reads the chains played (in its folder, or filed in the store), lists what is
+    missing and writes one table by iteration. Each scope's rate ± its standard error stands beside two bases on the
+    same seeds, each paired by seed:
+    - **today's team on its own route** (`r40-2015-1k`);
+    - **today's team on the generation's route** (the control: the base team on this code, `--control`, queued like
+      the pieces).
+  - Also in the table: hearts lost a run, the rooms where most runs end, the tracked goals, and Dungeon 3's Darknut
+    rooms with the training's curriculum point beside them.
+  - It writes `<tag>-checkpoints.md` / `.json` beside the chains and files them in the store (kind `judge`) once
+    every chain is in.
+- Tests on fake stores: `tests/test_store.py` and `tests/test_judge.py` cover the copy and the link, the parent
+  untouched, idempotence, the refusals, `@latest`, the command, the sugar in a plan, in the dry call and at the
+  job's turn, `--with`, the pieces and the control planned, the table collected and filed, and the Darknut rooms.
+
+### Found on the way: today's team cannot pass Dungeon 3 on the generation's route
+
+Today's team (2.0.0.15, no override) on this code, 300 runs, seeds 0-299 (jobs #1303, #1304):
+
+| scope | today's team, own route (`r40-2015-1k`), these seeds | today's team, generation's route | where |
+|---|---:|---:|---|
+| start → Dungeon 3's exit | 41.7% | 2.0% (6) | 3x5b's first pass: 221 of 278 entering die |
+| Dungeon 3 from its entrance | 44.7% | 1.3% (4) | 3x5b's first pass: 271 of 292 die |
+
+3x5b's first pass now fights a Red Darknut for its bombs (States40, Darknut40), which today's darknut never trained
+on; this matches Carrier40b's 23 of 25. So a Dungeon 3 difference against `r40-2015-1k` measures the route's change
+and the teacher together. Every table here therefore shows the control as a second base. A teacher other than the
+walkers is floored on Dungeon 3 by today's darknut until the walkers' checkpoint plays beside it (`--with`).
+
+### Why the walkers' it114 is 0 of 300: not yet learned, and the chain plays it as the training does
+
+- **Where the runs end** (it114). From the entrance: 3x5b death 208, 3x59 death 43, 3x6b 16 deaths and 1 stuck,
+  3x4b 10, 3x5a 7, 3x4a 7, 3x49 6, 3x7b 2. From the start: 3x5b 197, 3x59 44, 3x49 16, 3x6b 16 deaths and 6 stuck,
+  3x4a 9 and 1 stuck, 3x4b 7, 3x5a 4. No run ended by wrong exits.
+- **The training's own numbers**, iterations 95-134 (`metrics.jsonl`, `family/darknut@d3first/room/...`):
+  - 3x5b/S succeeds 0.72 over 155 episodes, against 67 exits of 297 visits in the chain.
+  - 3x59/N succeeds 0.00 over 55, against 0 exits in the chain; its curriculum is still at point 42 of 140.
+  - 3x59 alone accounts for the 0 of 300.
+- **3x5b, measured three ways** (jobs #1305, #1306):
+
+| where | conditions | act | success |
+|---|---|---|---:|
+| chain, from the training's start states `3_5bs_0..2` (300) | the states' own | temperature:0.5+relax:16 (the chain's) | 37.3% |
+| the same | | sample | 24.0% |
+| training env (`evaluate`, the training's RAM draws), `3_5bs` only (300) | as trained | sample | 49.3% |
+| training env | as a chain arrives: full hearts, own bombs, drop cycle 0 | sample | 24.0% |
+| training env | the same | temperature:0.5+relax:16 | 32.0% |
+| training env | the same, drop cycle 1 | sample | 85.0% |
+
+Under equal conditions the chain and the training env give equal rates. The draw is what differs:
+- the training gives the first pass drop cycle 1 on half its resets (`room_kill_cycle [0, 1]`), where the first
+  Darknut drops nothing and the room is crossed;
+- chains arrive at cycle 0, 297 of 297 times from the entrance and 274 of 311 from the start.
+
+The rest checks out:
+- The slot's config (`runner.chain_config(f, 'd3first', trained=True)`) equals the lab task in every key a chain
+  reads, for darknut, zol and stalfos-keese-gel. Only `demos`, `ram_randomization`, `harvested_fraction` and
+  `state_routes` differ, all training-only.
+- The chain's meta shows every walkers slot with the trained config, the `hitnet` with its hit head, iteration 114.
+- Both paths run `network.to_native()` in the same Rust `EnvPool`.
+
+The lead's call: no first-observation comparison is needed. Two findings for the owner: the cycle-0 fight is
+practised on half the resets only, and a lab run's checkpoints play `temperature:0.5+relax:16` in chains (no `act`
+file) while training samples.
+
+### The tables (300 runs a chain, seeds 0-299)
+
+A rate on 300 runs has a standard error of at most 2.9 points. 0 of 300 bounds the rate below about 1% (95%).
+
+**The walkers** (`gen1-walkers/s1`; Dungeon 3 from the start and from its entrance; the teacher in its 20 slots, today's
+team elsewhere; chains #1300, #1301, #1307, #1308, #1311, #1312; filed in the store,
+`target/r56-chains/gen1-walkers-s1-r300-checkpoints.md`):
+
+| it | steps | dungeon | start | rate | today's team, own route, these seeds | difference | today's team, generation's route, these seeds | difference | hearts lost a run | rooms where most runs end | goals a run |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 114 | 1.87M | d3 | previous triforce | 0.0% ± 0.0 of 300 | 41.7% | -41.7 ± 2.9 (paired, 300) | 2.0% | -2.0 ± 0.8 (paired, 300) | 2.98 (3.02); -0.03 ± 0.02 (paired, 300) | 3x5b darknut treasure room 65.7% (75.3%), 3x59 darknut lock room 14.7% (6.7%), 3x6b 7.3% (7.3%) | crossed_kills 0.15 (0.48), wraps_missed 0.00 (0.00), planned_hits 0.00 (0.07), carrier_bombs 0.03 (0.00) |
+| 114 | 1.87M | d3 | entrance | 0.0% ± 0.0 of 300 | 44.7% | -44.7 ± 2.9 (paired, 300) | 1.3% | -1.3 ± 0.7 (paired, 300) | 3.00 (3.00); +0.00 ± 0.01 (paired, 300) | 3x5b darknut treasure room 69.3% (91.0%), 3x59 darknut lock room 14.3% (2.0%), 3x6b 5.7% (2.7%) | crossed_kills 0.01 (0.13), wraps_missed 0.00 (0.00), planned_hits 0.00 (0.02), carrier_bombs 0.03 (0.00) |
+| 228 | 3.73M | d3 | previous triforce | 0.0% ± 0.0 of 300 | 41.7% | -41.7 ± 2.9 (paired, 300) | 2.0% | -2.0 ± 0.8 (paired, 300) | 2.98 (3.02); -0.04 ± 0.02 (paired, 300) | 3x59 darknut lock room 45.3% (6.7%), 3x5b darknut treasure room 38.7% (75.3%), 3x4a 6.7% (0.3%) | crossed_kills 0.31 (0.48), wraps_missed 0.00 (0.00), planned_hits 0.00 (0.07), carrier_bombs 0.06 (0.00) |
+| 228 | 3.73M | d3 | entrance | 0.0% ± 0.0 of 300 | 44.7% | -44.7 ± 2.9 (paired, 300) | 1.3% | -1.3 ± 0.7 (paired, 300) | 2.97 (3.00); -0.03 ± 0.02 (paired, 300) | 3x59 darknut lock room 44.3% (2.0%), 3x5b darknut treasure room 39.0% (91.0%), 3x4b 6.3% (0.0%) | crossed_kills 0.19 (0.13), wraps_missed 0.00 (0.00), planned_hits 0.00 (0.02), carrier_bombs 0.06 (0.00) |
+| 342 | 5.60M | d3 | previous triforce | 0.3% ± 0.3 of 300 | 41.7% | -41.3 ± 2.8 (paired, 300) | 2.0% | -1.7 ± 0.9 (paired, 300) | 2.98 (3.02); -0.03 ± 0.02 (paired, 300) | 3x59 darknut lock room 56.7% (6.7%), 3x5b darknut treasure room 18.7% (75.3%), 3x49 7.3% (0.3%) | crossed_kills 0.23 (0.48), wraps_missed 0.00 (0.00), planned_hits 0.03 (0.07), carrier_bombs 0.10 (0.00) |
+| 342 | 5.60M | d3 | entrance | 0.0% ± 0.0 of 300 | 44.7% | -44.7 ± 2.9 (paired, 300) | 1.3% | -1.3 ± 0.7 (paired, 300) | 2.99 (3.00); -0.01 ± 0.02 (paired, 300) | 3x59 darknut lock room 62.0% (2.0%), 3x5b darknut treasure room 15.3% (91.0%), 3x49 9.0% (0.3%) | crossed_kills 0.14 (0.13), wraps_missed 0.00 (0.00), planned_hits 0.02 (0.02), carrier_bombs 0.11 (0.00) |
+
+Dungeon 3's Darknut rooms (counts over the runs; the control is today's team on the generation's route; the curriculum
+as the training's `tasks/*/curriculum.json` read when the checkpoint's run was made):
+
+| it | start | 3x5b first pass at cycle 0: visits (of all), exits, Darknut killed, bombs dropped / taken, hits a visit | 3x59 from N by bombs brought: visits / exits | 3x69 in: visits, exits, hits a visit | 3x69 out: visits, exits, hits a visit | curriculum 3_59n point/length |
+|---|---|---|---|---|---|---|
+| 114 | previous triforce | 274 (311), 46, 24, 12 / 10, 1.58 | 4: 46 / 0, 6: 1 / 0, 8: 3 / 0 | 0, 0, - | 0, 0, - | - |
+| 114 | entrance | 297 (297), 67, 20, 13 / 9, 1.64 | 2: 1 / 0, 4: 40 / 0, 6: 1 / 0, 7: 1 / 0, 8: 3 / 0 | 0, 0, - | 0, 0, - | - |
+| 228 | previous triforce | 295 (334), 147, 52, 20 / 17, 1.32 | 2: 1 / 0, 3: 5 / 0, 4: 186 / 0, 5: 1 / 0, 6: 4 / 0, 7: 2 / 0, 8: 7 / 0 | 0, 0, - | 0, 0, - | 42/140, 123/253, 114/190 (read at it 237) |
+| 228 | entrance | 313 (313), 179, 48, 17 / 17, 1.34 | 2: 1 / 0, 3: 1 / 0, 4: 166 / 1, 5: 3 / 0, 7: 6 / 0, 8: 7 / 0 | 1, 1, 1.00 | 1, 1, 0.00 | 42/140, 123/253, 114/190 (read at it 237) |
+| 342 | previous triforce | 271 (311), 203, 73, 33 / 29, 1.01 | 4: 223 / 4, 6: 3 / 0, 7: 14 / 1, 8: 12 / 1 | 6, 2, 1.33 | 2, 2, 0.00 | 28/140, 71/253, 95/190 (read at it 342) |
+| 342 | entrance | 307 (307), 252, 72, 34 / 31, 0.96 | 2: 2 / 0, 4: 229 / 4, 5: 1 / 0, 6: 6 / 0, 7: 15 / 2, 8: 8 / 0 | 6, 3, 1.17 | 3, 3, 0.00 | 28/140, 71/253, 95/190 (read at it 342) |
+| control | previous triforce | 241 (278), 21, 1, 1 / 1, 2.01 | 4: 54 / 34 | 34, 27, 0.62 | 23, 23, 0.00 | - |
+| control | entrance | 292 (292), 20, 3, 1 / 1, 2.03 | 4: 15 / 9, 8: 1 / 1 | 10, 10, 0.70 | 9, 9, 0.00 | - |
+
+**The overworld teacher** (`gen1-overworld/s1`; its part of Dungeon 3's chain is the walk from the start to the door,
+with today's walkers playing Dungeon 3 itself; chains #1302, #1309, #1313):
+
+| it | steps | dungeon | start | rate | today's team, own route, these seeds | difference | today's team, generation's route, these seeds | difference | hearts lost a run | rooms where most runs end | goals a run |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 114 | 1.87M | d3 | previous triforce | 1.3% ± 0.7 of 300 | 41.7% | -40.3 ± 3.0 (paired, 300) | 2.0% | -0.7 ± 1.1 (paired, 300) | 3.00 (3.02); -0.02 ± 0.02 (paired, 300) | 3x5b darknut treasure room 87.0% (75.3%), 3x6b 6.7% (7.3%), 3x59 darknut lock room 2.0% (6.7%) | crossed_kills 0.19 (0.48), wraps_missed 0.00 (0.00), planned_hits 0.03 (0.07), carrier_bombs 0.00 (0.00) |
+| 228 | 3.73M | d3 | previous triforce | 4.7% ± 1.2 of 300 | 41.7% | -37.0 ± 3.1 (paired, 300) | 2.0% | +2.7 ± 1.5 (paired, 300) | 3.00 (3.02); -0.02 ± 0.03 (paired, 300) | 3x5b darknut treasure room 69.7% (75.3%), 3x59 darknut lock room 12.0% (6.7%), 3x4d 3.3% (2.0%) | crossed_kills 0.84 (0.48), wraps_missed 0.00 (0.00), planned_hits 0.11 (0.07), carrier_bombs 0.00 (0.00) |
+| 342 | 5.60M | d3 | previous triforce | 2.0% ± 0.8 of 300 | 41.7% | -39.7 ± 3.0 (paired, 300) | 2.0% | +0.0 ± 1.2 (paired, 300) | 2.99 (3.02); -0.03 ± 0.02 (paired, 300) | 3x5b darknut treasure room 80.3% (75.3%), 3x6b 6.0% (7.3%), 3x59 darknut lock room 5.7% (6.7%) | crossed_kills 0.27 (0.48), wraps_missed 0.01 (0.00), planned_hits 0.03 (0.07), carrier_bombs 0.00 (0.00) |
+
+Dungeon 3's Darknut rooms (counts over the runs; the control is today's team on the generation's route; the curriculum
+as the training's `tasks/*/curriculum.json` read when the checkpoint's run was made):
+
+| it | start | 3x5b first pass at cycle 0: visits (of all), exits, Darknut killed, bombs dropped / taken, hits a visit | 3x59 from N by bombs brought: visits / exits | 3x69 in: visits, exits, hits a visit | 3x69 out: visits, exits, hits a visit | curriculum 3_59n point/length |
+|---|---|---|---|---|---|---|
+| 114 | previous triforce | 275 (280), 14, 0, 0 / 0, 1.95 | 4: 19 / 13 | 13, 10, 0.69 | 10, 10, 0.00 | - |
+| 228 | previous triforce | 222 (294), 26, 1, 1 / 0, 1.93 | 4: 91 / 54 | 54, 45, 0.59 | 40, 40, 0.00 | - |
+| 342 | previous triforce | 272 (282), 35, 4, 1 / 1, 1.91 | 4: 39 / 22, 8: 1 / 1 | 23, 18, 0.43 | 15, 15, 0.00 | - |
+| control | previous triforce | 241 (278), 21, 1, 1 / 1, 2.01 | 4: 54 / 34 | 34, 27, 0.62 | 23, 23, 0.00 | - |
+
+The control's chains are #1303 and #1304 (`r41-check-2015-r300-{full,d3}`). The first 50-run trial (#1299,
+`gen1-walkers-s1-r50-it000114-full`, 39 seconds) sized the chains; a 300-run chain took 1-2 minutes at load averages of
+20-37, well inside the express place.
+
+### What could and could not be concluded
+
+- **The walkers take no Dungeon 3 yet.** They finish 0 of 300 both ways at it114 and it228, and 1 of 300 from the
+  start at it342. The wall is 3x59 from N:
+  - with 4 bombs, 0 exits of 186 visits at it228, then 4 of 223 from the start and 4 of 229 from the entrance at
+    it342;
+  - the training's own success there was 0.00 at about it114;
+  - its curriculum points for the three 3_59n states move toward the start: 42/140, 123/253, 114/190 at about
+    it237, then 28/140, 71/253, 95/190 at it342.
+- **3x5b's first pass at cycle 0 is being learned fast.**
+
+  | it | exits, from the start | exits, from the entrance | Darknut killed | bombs taken / dropped | hits a visit |
+  |---|---:|---:|---:|---:|---:|
+  | 114 | 46 of 274 | 67 of 297 | 20-24 | 9-10 of 12-13 | 1.6 |
+  | 228 | 147 of 295 | 179 of 313 | 48-52 | 17 of 17-20 | 1.3 |
+  | 342 | 203 of 271 | 252 of 307 | 72-73 | 29-31 of 33-34 | 1.0 |
+
+  Today's darknut on the generation's route exits 20-21 times of 241-292.
+- **3x69**: six runs reached it at it342, with 1.2-1.3 hits a visit on the way in and none on the way out (6 and 2-3
+  visits: nothing to conclude).
+- **The overworld teacher** carries runs to Dungeon 3's door as well as today's networks do: all 300 enter 3x7c in
+  every chain. Its Dungeon 3 rate against today's team on the same seeds is −0.7 ± 1.1, +2.7 ± 1.5 and +0.0 ± 1.2 at
+  it114, it228 and it342. At it228 its runs reached 3x5b with the drop cycle moved by more kills on the walk (0.84
+  crossed kills a run against 0.48; 72 of 294 first passes at a cycle other than 0, against 37 of 278), which today's
+  darknut crosses more often. It did not hold at it342 (0.27 kills). This scope says nothing yet of the overworld legs
+  the teacher is made for (its later dungeons' legs were not chained).
+- **What cannot be said**:
+  - anything about Dungeon 3 against `r40-2015-1k`, because the route changed under today's team;
+  - any ranking of the checkpoints by Dungeon 3's rate, which is 0 to 0.3%;
+  - the walkers' hits in 3x69, reached 6 times.
+
+  The next numbers that matter are 3x59 from N with 4 bombs, then whether runs carry the first pass's bombs into it
+  (7-8 bombs on 26 of 252 visits at it342).
+
+### Not done, not tested
+
+- The chain numbers measure one seed's early checkpoints and nothing more; no checkpoint is a candidate.
+- The training's curriculum per checkpoint is the closest reading there is. A numbered checkpoint keeps none, so
+  a checkpoint's run records `tasks/*/curriculum.json` when it is made: it114's run was made before this existed,
+  it228's at iteration 237 (dated by `metrics.jsonl`'s time, made before the iteration was recorded), it342's at
+  342. Exact readings need the trainer to write the curriculum into each numbered checkpoint; that is the lead's.
+- `--with` is tested on fake stores only; no non-walker teacher was judged with the walkers beside it (the walkers'
+  best checkpoint still reaches nothing past 3x59).
+- `--submit`'s calls of `triforce job run` were used for real but have no test (the test checks the commands it
+  prints).
+- A checkpoint run of a sealed parent (the link) is tested on fake stores only; every real run here was copied.
