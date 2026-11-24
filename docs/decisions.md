@@ -3808,3 +3808,29 @@ row, E to the stairs at tiles (26-27, 10-11); and the way back out), given to th
 one in the way and walks through it). The room's goal, tracked like the wrap and the no-kill goals: hits taken in
 3:0x69 a visit, on each pass, toward zero. No bomb is used there (the reserve of 4).
 
+## 2026-11-24 — Dungeon 3's bombs: the reserve in 3:0x59 is 5; 6 at Manhandla is fine (the owner)
+
+States40 measured the last pass through 3:0x5b in the emulator (round40.md): today's objective leaves it with 7 and
+meets Manhandla with 6, coming in with 8 or with 4. The owner: "Leave that room with 7 isn't a hard rule. 6 is fine.
+7 is if we didn't drop to 4, and had a bomb to use on the wall THEN pick up the treasure bomb drop. I should have
+set the limit of don't go below 5 bombs in the d3 0x59 to get to manhandla with 7."
+
+So for the generation's `d3first`: `bomb_reserve: 5` from 3:0x59 (the lead's reading of "I should have set": it
+replaces the 4 of the day before). Coming into 3:0x59 with 8 Link may use 3; with 4 none, as before. On 3:0x5b's
+last pass the E wall is bombed BEFORE the room's four bombs are taken whenever taking them first would overflow the
+bag (5 or more held): 5 -> 4 at the wall, 8 with the room's four, 7 after 3:0x4c's wall, Manhandla met with 7.
+Arriving with 4: the four first or the wall first, 7 out, 6 at Manhandla, which is fine. Not a hard rule: nothing
+is forced or cheated to reach 7.
+
+Measured the same day (States40): a Red Darknut killed with the drop cycle at 0 drops bombs in 1219 of 3000 kills,
+40.6% ± 0.9% (the disassembly's 104/256), so about two runs in five reach 3:0x59 with 8. Open, for the owner: a
+scripted sword-only fight won 3:0x59 at 4 bombs in about half its tries and the explorer never solved it; how
+today's Darknut network does there with 4 and none usable is being measured.
+
+## 2026-11-24 — How the owner names a room
+
+"From now on I may use that [`dN 0x??`], but if I say 3x59, that's dungeon 3 room 0x59. If say ox1f, that's
+overworld 1f. If I say 0x12, that's likely a mistake or you should get it from previous context in the sentence. We
+may need to start naming more rooms too." In AGENTS.md "The owner's standing rules"; reports to the owner use his
+notation and the rooms' names, code and data keep `level:0xNN`.
+

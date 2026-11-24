@@ -520,6 +520,11 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 
 ## The owner's standing rules
 
+- **How the owner names a room** (Nov 24: "I'm also getting tired of dN 0x?? notation"): `3x59` is Dungeon 3's
+  room 0x59; `ox1f` is the overworld's room 0x1f; a bare `0x12` is most likely a slip: take the level from the
+  sentence before it or ask. A room with a name is called by its name (game.yaml `name:`: the Breakfast Room 4x32,
+  the Olive Garden 5x05); more rooms will get names. Reports and messages TO the owner use his notation and the
+  names; code, data, logs and file names keep `level:0xNN` (`3:0x59`) unchanged.
 - **Commit after each finished item.** If an experiment makes no forward progress, ask whether to commit the code or
   only update the experiment ledger.
 - **The lead reviews before anything merges or runs at length** (the owner, Nov 23, until he says otherwise: "Treat
