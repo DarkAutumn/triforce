@@ -3691,3 +3691,29 @@ In the room: 638 visits both, deaths 246 -> 181, 307 bombs handed out in 122 vis
 Manhandla's network was trained without ever being topped up there (its training hands bombs through
 `ram_randomization`), so the fresh generation's will be the first to learn the room as the owner plays it. 181 deaths
 in 638 visits remain: the room is still the dungeon's largest single loss, with 3:0x69.
+
+## 2026-11-23 — Firing-line targets: not merged, not in the fresh generation (the owner)
+
+The experiment (branch `r40-fireline`, round40.md "Firing-line targets"): at full hearts a fight's targets become
+tiles in line with a monster at range, so the movement reward and the target input stop pulling Link into melee.
+Measured on zol@d3first as continuations (1000 Dungeon 3 runs an arm, paired; the from-scratch arms were never run):
+Link shoots far more, the rate to Manhandla's door does not move (53.3% against 55.0%, -1.7 ± 2.2; with the monsters'
+own tiles kept as targets too 50.4%, -4.6 ± 2.2), and the way there takes 9-12 seconds longer, three quarters of it in
+the Zol room 3:0x6b (+544 ± 29 frames) and the rest in 3:0x4b; hearts lost in the crossing room 3:0x49 triple (0.09 ->
+0.33 a visit at full hearts) and its deaths go 14 -> 46 -> 58.
+
+The owner, having watched the replays: "the changes we made to the beams DID work, but zol are a particularly bad
+target, because they split. If link quickly swords from afar into gel, they scatter, and he was splitting too many
+without being up close to finish them off quickly, bleeding time and health. Beams are far more effective against
+darknuts, but that didn't show up here because 0x59 is mostly a 'use bombs' room and in 0x5b is first passthrough and
+second we rarely have beams by the time we make it to the second pass. Overall d3 is particularly bad for sword
+beams like this." His ruling: "this experiment shouldn't be merged and shouldn't be used at first in the new
+training run. Over the whole game, this might have panned out, or some other technique of doing more damage from
+afar might have made a difference rather than just the fightline idea, but for now we can conclude this isn't what
+we want in the next training run. We will revisit this in the future long after the retrain."
+
+So: the branch is kept unmerged as `archive/r40-fireline` (the reward switch `reward.firing_lines`, the two task
+variants, the experiment script), the fresh generation's fights keep the monsters' own tiles as targets, and the
+question that stays open for a later round is damage from range as such (against monsters that do not split, with
+beams actually held when the room is reached), not this target rule.
+
