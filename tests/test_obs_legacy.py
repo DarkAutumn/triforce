@@ -45,6 +45,15 @@ GOLDEN = Path(__file__).parent / 'fixtures' / 'obs_schema5_golden.json'
 ROUND40_CHANGES = json.loads((Path(__file__).parent / 'fixtures' / 'obs_schema5_round40.json').read_text(encoding='utf-8'))
 ROUND40_TARGETS_CHANGES = json.loads(
     (Path(__file__).parent / 'fixtures' / 'obs_schema5_round40_targets.json').read_text(encoding='utf-8'))
+# The one trace both sides of the generation's merge changed (main's weapon rooms, 2.0.0.15, and this branch's
+# closing-frame cut-over): boss-manhandla `3_4dw_2`, which runs out of bombs within its 50 steps. Its hash on the
+# merged code (each side's own hash for it is in `WEAPON_ROOM_CHANGES` and `ROUND40_CHANGES`; the other two traces of
+# the family keep the cut-over's).
+ROUND40_MERGE_CHANGES = {
+    'boss-manhandla': {
+        '3_4dw_2.state': '0f9d1dab367c0057b97ec9fb0e12a240b89de6de4180254edcbccf61b1dc9b4e',
+    },
+}
 STEPS = 50
 KINDS, DIRECTIONS, DURATIONS = 11, 8, 4
 # Traces whose last observation the round 26 route vocabulary changed (docs/experiments/round26.md §5), with their
@@ -256,7 +265,7 @@ def test_schema5_columns_are_unchanged(name):
     recorded = golden['families'][name]
     changed = (ROUTE_CHANGES.get(name, {}) | BOMB_RULE_CHANGES.get(name, {}) | ROUTE31_CHANGES.get(name, {})
                | WEAPON_ROOM_CHANGES.get(name, {}) | ROUND40_CHANGES.get(name, {})
-               | ROUND40_TARGETS_CHANGES.get(name, {}))
+               | ROUND40_TARGETS_CHANGES.get(name, {}) | ROUND40_MERGE_CHANGES.get(name, {}))
     kept = {state: digest for state, digest in recorded.items() if state not in ROUTE31_DELETED}
     assert family_hashes(name, recorded) == kept | changed
 
