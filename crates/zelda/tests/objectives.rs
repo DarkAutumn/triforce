@@ -153,6 +153,7 @@ fn exit_spans_bound_targets_and_correct_exits() {
         treasure_refused: false,
         drops_first: false,
         bag_drops: false,
+        own_bombs: 0,
         labels: Vec::new(),
     };
     assert!(
