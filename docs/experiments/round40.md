@@ -1897,9 +1897,18 @@ darknut@d3first's `demos:` (coefficient 0.05, unchanged).
 | r40-darknut-garden-b0.npz | Olive Garden from E, 0 | 150 | 148 | 126,726 | 0beb7c464227 |
 | r40-darknut-garden-b8.npz, -p2.npz | Olive Garden from E, 8 (the first piece stopped at a masked push after 57) | 57 + 93 | 56 + 93 | 29,328 + 51,830 | 1af28b7012a4, 0788ae628b5c |
 
-376,088 rows in all with 3:0x69's 22,431: the Garden at 0 bombs alone is a third. `demos.load_demos` pools rows, so
-3:0x69's line goes from all of the clone loss to 6% of it at the same coefficient; per-file weights do not exist (the
-lead's call whether 3:0x69's line wants its own share).
+376,088 rows in all with 3:0x69's 22,431: the Garden at 0 bombs alone is a third. Pooled raw, the Olive Garden was 55%
+of the cloning and 3:0x69's line 6%. **The lead: weighed by room and pass.** A task's `demos:` may now name one group
+a file, `groups: [NAME, ...]` (`env::config::DemosConfig`, validated at load: one a file, none empty; the files must
+exist as before): every group draws an equal share of each minibatch's demonstration rows, its files' rows pooled
+inside it (`demos.row_weights`, `ppo.demo_pick`: a multinomial draw with replacement, so a small group holds its
+share). Without `groups` the draw is the uniform `randperm` it always was, and no other task changes (the key is not
+serialized when absent: their effective hashes are unchanged). Each `data.demos` entry of the run's manifest names its
+file's group, so `triforce manifest diff` shows a change of shares; the trainers read the groups back from there.
+darknut@d3first: seven groups, one seventh each: 3:0x69 in, 3:0x69 out, 3:0x5b's first pass (low + full), 3:0x59 at 4,
+3:0x59 at 8, the Olive Garden at 0, at 8 (both pieces). Tested (`tests/test_demos.py`): a seeded 6,000-row draw from
+four fake files in three groups of 100, 1,010 and 50 rows gives each group its third within 3 points (and the pooled
+group's files their row proportion); without groups no weights and the same `randperm` draw.
 
 ### The two proposals measured (today's network's replays, 300 visits a case)
 
