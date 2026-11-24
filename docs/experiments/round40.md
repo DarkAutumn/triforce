@@ -1216,3 +1216,106 @@ after every action but a MOVE, and the losses go from 159 to 3 and 51 to 8); and
 frames now neither count nor stall). The CLIP's frame was a wrong first guess (with it alone 0x3f still lost 159).
 Today's networks, not trained for the timing, lose 0x0b: they walk back into Level 5 before the whirlwind (`all`:
 5:0x64/0x65/0x66 lost 62 runs); with 2.0.0.14's whirlwind macro that loss is gone (v1 and v2 lose no run in Level 5).
+
+## The chase target (Chase40, branch `r40-chase`)
+
+**The ask** (the owner's Darknut lesson, `docs/owner/darknuts.md`; the lead's brief): audit every monster's movement
+against the monsters' chase target; find the hotspot's bounds and check it against play; two new inputs for 2.0.1.0
+behind a switch (where the monsters are sent; a monster may turn at Link at its next grid point), the second proven
+against real play as the threat lane was; and, without a reward, what could carry the lesson further.
+
+### The audit (`zelda-asm/mechanics.md` "Who chases what"; the owner's table in `docs/owner/darknuts.md`)
+
+Every moving monster's update routine was read (a scout's first pass, `asm:` labels checked against `src/`). The
+table, by rule (turn chance = per decision at a grid point):
+
+| type | routine | target read | rule | turn chance | clumps |
+|---|---|---|---|---|---|
+| Darknut red `$0B` / blue `$0C` | asm:Darknut_Update | chase target | wanderer, rate $80, q $20 / $28 | 129/256 | yes |
+| Gibdo `$30` | asm:Gibdo_Update | chase target | wanderer $80, q $20: walks exactly as a red Darknut | 129/256 | yes |
+| Stalfos `$2A`, Like-Like `$17`, Vire `$12` | asm:Stalfos_Update, asm:LikeLike_Update, asm:Vire_State0Wander | chase target | wanderer $80 | 129/256 | yes |
+| Bubble `$2B`-`$2D` | asm:Bubble_Update | chase target | wanderer $40, q $40 | 65/256 | yes |
+| Ghini `$21` | asm:Ghini_Update | chase target | wanderer $FF | always | yes |
+| Moblin `$03/$04`, Octorok `$07-$0A`, Blue Leever `$0F` | asm:Moblin_Update, asm:Octorok_Update, asm:Leever_UpdateBlue | chase target | wanderer, own entry: $A0; $70 / $A0; $A0 | 161; 113 / 161; 161 | yes |
+| Zol `$13`, Gel `$14/$15`, Dodongo `$31/$32` | asm:Zol_WalkAndPause, asm:Dodongo_State0Move | chase target | wanderer $20 (pauses; X + $10) | 33/256 | weakly |
+| Goriya `$05/$06`, Lynel `$01/$02`, Armos `$1E` | asm:Goriya_Update | chase target | at every grid point face it along the longer axis if under $51 px | certain | within $51 |
+| Keese, Peahat, flying Ghini | asm:Flyer_State2Chase | chase target, in chase state | one 45° step / 16 frames | chase on 80-96/256 decisions | partly |
+| Moldorm, Patra, Gleeok's flying head | asm:Moldorm_Chase, asm:Patra_DecideFlightState, asm:Flyer_GleeokHeadDecideState | chase target | 45° steps | chase on 192-208/256 | yes |
+| Manhandla, Digdogger, Tektite, Boulders | asm:Manhandla_Update, asm:Digdogger_ChangeSpeedAndTurn, asm:Jumper_Update, asm:Boulder_UpdateSpawner | chase target, half the time | one 45° step | 128/256 | partly |
+| **Blue Wizzrobe** `$23` | asm:Wizzrobe_Blue_TurnTowardLink | **Link's real position** | turns toward Link's side every 128 frames; teleports 32 px diagonally from itself | certain on its beat | **no** |
+| **Red Wizzrobe** `$24` | asm:Wizzrobe_Red_State3Appear | Link's real position | appears 2-5 squares from Link facing him | - | no |
+| Rope `$28` | asm:Rope_Update | Link's real position | rushes at 1.5 px when Link is < 8 px off its row or column at a grid point | certain | no |
+| Lanmola, Ganon, Red Leever, Trap, Wallmaster, Zora, statues and every fireball | asm:Lanmola_UpdateHead, asm:Ganon_MoveAndShoot, asm:Leever_UpdateRed, asm:Trap_Update_Full, asm:Wallmaster_CalcStartPosition, asm:Fireball_Update | Link's real position | own rules | - | no |
+| Pols Voice, Gohma, Aquamentus, Gleeok's attached heads | asm:PolsVoice_Update, asm:Gohma_Update, asm:Aquamentus_Move, asm:Gleeok_MoveHead | neither | random or fixed | - | no |
+
+The owner's expectations: Darknuts, Vires and Stalfos follow it (confirmed); **Blue Wizzrobes do not** (no line of
+wizzrobe.asm reads `ChaseTargetX/Y`: they turn toward Link's real position and teleport relative to themselves); Red
+Wizzrobes do not (confirmed); **Gibdos do**, exactly as a red Darknut (`LDA #$80 / JSR Wanderer_Update`, q-speed
+$20), the only differences being a boomerang stun (a Darknut clears its stun every frame) and its weapons. Two
+groups the Darknut rules do not cover the same way: the **Goriya rule** (Goriyas, Lynels, Armos: certain turns, a
+$51-pixel window on the longer axis, so shadowing beside one is safe only level with or ahead of it) and the **Rope**
+(Link's real position, a charge at triple speed when he comes level). Every turn decision of a wanderer also falls
+again on a frame its move gives no pixel (one or two decisions a grid point at q-speed $20), and a tile in its way on
+the next frame can turn it back whatever the target (asm:Walker_AltDir_GetRandomObjPerpendicularDir).
+
+### The hotspot's bounds
+
+The mirror is (255 - X, 255 - Y) of Link's corner (asm:Mode5Play_UpdateWorld@UpdateWeapons: X EOR $FF), so Link and
+his mirror are |2X - 255| apart on X and |2Y - 255| on Y, and coincide (1 px apart) at (127.5, 127.5). Link's
+corner stands on X multiples of 8 and Y = 13 mod 8 (rows $5D, $65, ...), so the gaps on his half-square grid are, on
+X: 112 → 31, 120 → 15, **128 → 1**, 136 → 17, 144 → 33; on Y: 109 → 37, 117 → 21, **125 → 5**, 133 → 11, 141 → 27.
+The wanderers' window is |d| < 9 on an axis, so both targets fall in the same window only within 8 px of each other:
+**X = 128 (124-131 between grid points) and Y = 125 (124-131)**, the one half-square at (128, 125); one axis alone
+is a column through X 128 or a row through Y 125.
+
+Link's corner positions in a dungeon room (`*` within 8 px on both axes; `0`-`3` the larger axis gap under 16, 32,
+48, 64 px, i.e. Link and his mirror within 0-3 squares; `|` / `-` within 8 px on X / Y only):
+
+```
+Y \ X   32  40  48  56  64  72  80  88  96 104 112 120 128 136 144 152 160 168 176 184 192 200 208
+   93    .   .   .   .   .   .   .   .   .   .   .   .   |   .   .   .   .   .   .   .   .   .   .
+  101    .   .   .   .   .   .   .   .   3   3   3   3   3   3   3   3   .   .   .   .   .   .   .
+  109    .   .   .   .   .   .   .   .   3   2   2   2   2   2   2   3   .   .   .   .   .   .   .
+  117    .   .   .   .   .   .   .   .   3   2   1   1   1   1   2   3   .   .   .   .   .   .   .
+  125    -   -   -   -   -   -   -   -   3   2   1   0   *   1   2   3   -   -   -   -   -   -   -
+  133    .   .   .   .   .   .   .   .   3   2   1   0   0   1   2   3   .   .   .   .   .   .   .
+  141    .   .   .   .   .   .   .   .   3   2   1   1   1   1   2   3   .   .   .   .   .   .   .
+  149    .   .   .   .   .   .   .   .   3   2   2   2   2   2   2   3   .   .   .   .   .   .   .
+  157    .   .   .   .   .   .   .   .   3   3   3   3   3   3   3   3   .   .   .   .   .   .   .
+  165    .   .   .   .   .   .   .   .   .   .   .   .   |   .   .   .   .   .   .   .   .   .   .
+  173    .   .   .   .   .   .   .   .   .   .   .   .   |   .   .   .   .   .   .   .   .   .   .
+  181    .   .   .   .   .   .   .   .   .   .   .   .   |   .   .   .   .   .   .   .   .   .   .
+  189    .   .   .   .   .   .   .   .   .   .   .   .   |   .   .   .   .   .   .   .   .   .   .
+```
+
+The same by room square (Link standing square-aligned; `#` wall; `B` the Olive Garden's push block, 5x05, X $70
+Y $90, asm:PushBlock_State0Idle):
+
+```
+        0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
+row 0   #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  #
+row 1   #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  #
+row 2   #  #  .  .  .  .  .  .  |  .  .  .  .  .  #  #
+row 3   #  #  .  .  .  .  3  2  2  2  .  .  .  .  #  #
+row 4   #  #  -  -  -  -  3  1  *  2  -  -  -  -  #  #
+row 5   #  #  .  .  .  .  3  B  1  2  .  .  .  .  #  #
+row 6   #  #  .  .  .  .  3  3  3  3  .  .  .  .  #  #
+row 7   #  #  .  .  .  .  .  .  |  .  .  .  .  .  #  #
+row 8   #  #  .  .  .  .  .  .  |  .  .  .  .  .  #  #
+row 9   #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  #
+row10   #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  #
+```
+
+The owner's zone ("north of the block [...] the 2x5 tile area north of it (not the top row, no further than 2
+squares from the block in EW range)") is rows 3-4, columns 5-9: the squares where Link and his mirror are within one
+or two squares, with the one square (8, 4) where they share the turn window. The point is off the room's middle (the
+interior's centre for Link's corner is X 120, Y 141): half a square right and one square up. It is the same point in
+every room, whatever stands in it.
+
+**The overworld** has the same point on the screen (Link's Y grid has the same phase, rows $3D, $4D, ...), with
+three differences: no wall rings it, so the column and row bands run across the screen; Link reaches X 0-$F0, so his
+mirror can lie beyond the monsters' bounds ($11-$E0) and a mirror spell then parks them against the far edge; and the
+wanderers' X test can wrap there (a monster at X $00 with Link at X 0-7: asm:Wanderer_MoveAndTurn's signed byte reads
+the mirror at X $F8-$FF as 1-8 px off). In a dungeon Link's mirror of his bottom rows (Y 165-189) lies at Y 66-90,
+above the room's top bound ($5D): a mirror spell then piles the wanderers against the top wall.
+

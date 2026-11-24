@@ -97,7 +97,8 @@ def test_a_pre_r56_checkpoint_loads_and_another_grid_encoder_does_not(tmp_path):
 
 
 def test_older_schema_subset_checkpoint_reads_only_its_own_keys(tmp_path, states_dir):
-    assert registry.obs_schema_version() == 8 and registry.OLDEST_OBS_SCHEMA == 6
+    # Schema 9 (round 40, "The chase target") only added keys (`chase`, `entity_chase`): the oldest stays 6.
+    assert registry.obs_schema_version() == 9 and registry.OLDEST_OBS_SCHEMA == 6
     network, checkpoint = registry.load_model(_older_checkpoint(tmp_path))
     assert checkpoint['obs_schema_version'] == 6 and 'target' not in network.config.obs_spec
     # Eagerly on current observations: the target block is ignored.
