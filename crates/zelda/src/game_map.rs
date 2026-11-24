@@ -1044,16 +1044,15 @@ pub struct BombRules {
     /// turns away before it is laid (`crate::cheats::CheatLedger::follow_objective`). `room` (the default): today's
     /// rule, the bomb is given on entering the room. The `bomb_weapon` rooms keep theirs either way.
     pub wall_grant_follows_objective: bool,
-    /// `clear_wall_rooms: [{level, room}, ...]` (round 40, the fresh generation; the owner's bomb plan, Nov 23: "We
-    /// should leave 0x5b with 8 bombs if all goes well, hit manhandla with 7 due to the 0x4c wall"; "we only kill the
-    /// rest of the room on the way back through"): on a step that leaves one of these rooms through one of its own
-    /// bomb walls (game.yaml `bomb_walls`) the room is always cleared, whatever Link holds, and the treasure floor
-    /// ([`BombRules::treasure_below`]) is judged again on every decision against his own bombs as they are then
-    /// instead of those he came in with; with a full bag of his own the wall is bombed first (the room's bombs, which
-    /// appear once it is cleared, are no pickup he can make at the maximum), so they fill it again. Each room's
-    /// game.yaml treasure is bombs and the route has a step leaving it through a bomb wall.
-    /// `crate::objectives::GameCompletion::clears_wall_room`.
-    pub clear_wall_rooms: BTreeSet<MapLocation>,
+    /// `wall_first_rooms: [{level, room}, ...]` (round 40, the fresh generation; the owner's ordering, decisions
+    /// 2026-11-24 "Dungeon 3's bombs": "7 is if we didn't drop to 4, and had a bomb to use on the wall THEN pick up the
+    /// treasure bomb drop"): on a step that leaves one of these rooms through one of its own bomb walls (game.yaml
+    /// `bomb_walls`), the wall is bombed before the room's bombs are a target whenever taking them first would
+    /// overflow the bag (Link's own bombs + 4 > the bag's size), and the treasure floor
+    /// ([`BombRules::treasure_below`]) is judged on his own bombs as they are then, not as he came in: after the wall's
+    /// bomb the room's bombs are fought for and taken. Each room's game.yaml treasure is bombs and the route has a step
+    /// leaving it through a bomb wall. `crate::objectives::GameCompletion::wall_first`.
+    pub wall_first_rooms: BTreeSet<MapLocation>,
 }
 
 impl BombRules {
@@ -1082,7 +1081,7 @@ impl BombRules {
                 "treasure_below_rooms",
                 "carrier_targets",
                 "wall_grant",
-                "clear_wall_rooms",
+                "wall_first_rooms",
             ],
             &what,
         )?;
@@ -1103,8 +1102,8 @@ impl BombRules {
                 .collect()
         };
         let wall_only = rooms("wall_only", &["level", "room", "in_cave"])?.into_iter().map(|(loc, _)| loc).collect();
-        let clear_wall_rooms =
-            rooms("clear_wall_rooms", &["level", "room", "in_cave"])?.into_iter().map(|(loc, _)| loc).collect();
+        let wall_first_rooms =
+            rooms("wall_first_rooms", &["level", "room", "in_cave"])?.into_iter().map(|(loc, _)| loc).collect();
         let below = |v: Option<&Value>, key: &str| v.map(|n| as_u8(n, &format!("{what}: {key}"))).transpose();
         let treasure_below = below(get(v, "treasure_below"), "treasure_below")?;
         let treasure_below_rooms = rooms("treasure_below_rooms", &["level", "room", "in_cave", "below"])?
@@ -1126,7 +1125,7 @@ impl BombRules {
             treasure_below_rooms,
             carrier_targets: flag(v, "carrier_targets", &what)?,
             wall_grant_follows_objective,
-            clear_wall_rooms,
+            wall_first_rooms,
         })
     }
 }
@@ -1838,14 +1837,14 @@ impl GameMap {
         for (route, steps) in &routes {
             check_ends(route, steps)?;
         }
-        // A room the route clears on its way through its own bomb wall holds the bombs it is cleared for.
+        // A room whose wall the route bombs before the room's bombs holds bombs and is left through its own bomb wall.
         for (route, rules) in tables.bomb_rules.iter().filter(|(name, _)| checked(name)) {
-            for &loc in &rules.clear_wall_rooms {
+            for &loc in &rules.wall_first_rooms {
                 let room = &rooms[&loc];
                 let through_wall = routes[route].iter().any(|s| s.location() == loc && room.bomb_walls.contains(&s.exit));
                 if room.treasure.as_deref() != Some("bombs") || !through_wall {
                     return err(format!(
-                        "routes.yaml: bomb_rules: {route}: clear_wall_rooms {loc} needs a room whose treasure is bombs \
+                        "routes.yaml: bomb_rules: {route}: wall_first_rooms {loc} needs a room whose treasure is bombs \
                          (game.yaml has {:?}) and a step leaving it through one of its bomb walls {:?}",
                         room.treasure, room.bomb_walls
                     ));
@@ -4097,24 +4096,24 @@ mod tests {
         assert!(!crate::goals::step_goals(&map, "d2first", 0).carriers, "d2first has no carrier targets");
     }
 
-    /// Round 40 (the owner's bomb plan): `d3first` clears 3:0x5b on its last pass (W -> E through its own bomb wall);
-    /// `d2first` has no such room. A room whose treasure is no bombs, or that no step leaves through a bomb wall, is
-    /// refused, as is a room off the route.
+    /// Round 40 (the owner's ordering): `d3first` bombs 3:0x5b's wall before its bombs on its last pass (W -> E
+    /// through its own bomb wall) when they would overflow the bag; `d2first` has no such room. A room whose treasure is
+    /// no bombs, or that no step leaves through a bomb wall, is refused, as is a room off the route.
     #[test]
     fn the_last_pass_room_is_route_data() {
         let map = GameMap::builtin();
-        assert_eq!(map.bomb_rules["d3first"].clear_wall_rooms, [loc(3, 0x5b)].into_iter().collect());
+        assert_eq!(map.bomb_rules["d3first"].wall_first_rooms, [loc(3, 0x5b)].into_iter().collect());
         assert!(!map.bomb_rules.contains_key("d2first"));
         let load = |routes: &str| GameMap::from_yaml(GAME_YAML, routes).map_err(|e| e.0);
-        let line = "    clear_wall_rooms: [{level: 3, room: '0x5b'}]\n";
+        let line = "    wall_first_rooms: [{level: 3, room: '0x5b'}]\n";
         assert!(ROUTES_YAML.contains(line));
-        assert!(load(&ROUTES_YAML.replacen(line, "", 1)).unwrap().bomb_rules["d3first"].clear_wall_rooms.is_empty());
+        assert!(load(&ROUTES_YAML.replacen(line, "", 1)).unwrap().bomb_rules["d3first"].wall_first_rooms.is_empty());
         for (room, error) in [
             ("{level: 3, room: '0x4c'}", "needs a room whose treasure is bombs"),
             ("{level: 3, room: '0x6b'}", "needs a room whose treasure is bombs"),
             ("{level: 3, room: '0x0b'}", "no dungeon room of the route's steps"),
         ] {
-            let bad = format!("    clear_wall_rooms: [{room}]\n");
+            let bad = format!("    wall_first_rooms: [{room}]\n");
             let err = load(&ROUTES_YAML.replacen(line, &bad, 1)).unwrap_err();
             assert!(err.contains(error), "{room}: {err}");
         }

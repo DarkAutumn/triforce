@@ -1138,16 +1138,17 @@ in columns 1, 6 and 8 at 41%; a Stalfos or Gibdo in slot 1 (the room item's carr
   targets (`env::objective`), the critic's `penalty-left-drop`. Before, a cheated wall bomb in a bag of 7 read full
   and closed the carrier window. The observation's `bombs` still reads the bag; a tool without a ledger (the
   bindings' `observe`, replays) counts the bag as Link's own.
-- **The last pass's clear** (round 40, Carrier40b; routes.yaml `bomb_rules: {clear_wall_rooms: [3:0x5b]}` on
-  `d3first`; the owner's bomb plan: "We should leave 0x5b with 8 bombs if all goes well, hit manhandla with 7 due to
-  the 0x4c wall"): on a step that leaves such a room through its own bomb wall the room is cleared whatever Link
-  holds (`GameCompletion::clears_wall_room`: FIGHT while a monster lives) and the floor is judged on his own bombs
-  at every decision, not on entering. With a full bag of his own and the wall intact the wall comes first
-  (`GameCompletion::wall_first`): the room's bombs appear only once it is cleared, are no target at the maximum,
-  and one walked over then is lost (asm:Item_TryTake takes it). So in with 8: the wall, the fight, the bombs, out
-  with 8; in with 4: the fight, the bombs, the wall, out with 7; in with 0: the fight (no bomb in the bag), the
-  bombs, the wall by one of them, out with 3. Before (2.0.0.6's floor judged on entering) a full bag crossed the
-  room, left its four and came out with 7. `d2first` names no such room.
+- **The last pass's wall first** (round 40, Carrier40b; routes.yaml `bomb_rules: {wall_first_rooms: [3:0x5b]}` on
+  `d3first`; the owner's ordering, decisions 2026-11-24 "Dungeon 3's bombs": "7 is if we didn't drop to 4, and had a
+  bomb to use on the wall THEN pick up the treasure bomb drop"): on a step that leaves such a room through its own
+  bomb wall, while the wall is intact and taking the room's bombs first would overflow the bag (Link's own bombs +
+  `ROOM_BOMBS` (4) > the bag's size: 5 or more), the room's bombs are no target, neither the treasure nor a fight for
+  it (`GameCompletion::wall_first`); the floor is judged on his own bombs at every decision there
+  (`GameCompletion::wall_first_step`), so once the wall's bomb is laid the bombs are fought for and taken. Nothing
+  else is forced: in with 5 to 8, the wall, the fight, the bombs, out with 8; in with 4, the fight, the bombs, the
+  wall, out with 7; in with 0, the fight (no bomb in the bag), the bombs, the wall by one of them, out with 3. Before
+  (2.0.0.6's floor judged on entering) a full bag crossed the room, left its four and came out with 7. `d2first`
+  names no such room.
 
 ### Route goals (`crates/zelda/src/goals.rs`, `run_stats.py`; round 40)
 

@@ -26,6 +26,9 @@ use std::sync::Arc;
 
 pub const FLAG_ITEM_TAKEN: u8 = 0x10;
 pub const CAVE_TREASURE_TILE: Tile = (0x0F, 0x0B);
+/// The bombs a room's game.yaml `treasure: bombs` adds (the bombs item's value, asm:Item_IdToDescriptor; capped at the
+/// bag's size): the owner's ordering compares Link's own bombs plus these with the bag ([`GameCompletion::wall_first`]).
+pub const ROOM_BOMBS: i32 = 4;
 /// routes.yaml `waypoint: heart` (on a cave step): take the cave's heart container (game.yaml `treasure_tile`);
 /// done once the overworld room's item-taken flag is set.  Leaving its room without it is `missed`.
 pub const WAYPOINT_HEART: &str = "heart";
@@ -960,15 +963,15 @@ impl GameCompletion {
     /// The treasure lying in the room is wanted below the maximum whatever he came in with (5:0x65's in the open, a
     /// crossing's room cleared anyway).  With N or more and no treasure lying there he crosses (`skip`): a bomb he
     /// spends in the room (3:0x5b's E wall) turns no crossing into a fight beside the opened wall (round 23's
-    /// trouble with a live floor, decisions 2026-11-14). On a step that clears its room on the way through its own
-    /// bomb wall ([`GameCompletion::clears_wall_room`], round 40) the floor is judged on the bag as it is now, not as
-    /// it came in: the decision is made again whenever the bag changes in the room. Bombs are always Link's own
-    /// ([`GameCompletion::own_bombs`]).
+    /// trouble with a live floor, decisions 2026-11-14). On a step through its room's own bomb wall in a
+    /// `wall_first_rooms` room ([`GameCompletion::wall_first_step`], round 40) the floor is judged on Link's own bombs
+    /// as they are now, not as they came in: after the wall's bomb the room's bombs are judged again (in with 8: the
+    /// wall, 7, then the fight for them). Bombs are always Link's own ([`GameCompletion::own_bombs`]).
     fn step_treasure(&self, location: MapLocation, state: &GameView) -> Option<TreasureRule> {
         let step = self.current_step(location)?;
         let floor = self.bomb_rules.treasure_below_at(location);
         let bombs = self.map.get(location).is_some_and(|r| r.treasure.as_deref() == Some("bombs"));
-        let judged = if self.clears_wall_room(location) { self.own_bombs(state) } else { self.entry_bombs };
+        let judged = if self.wall_first_step(location) { self.own_bombs(state) } else { self.entry_bombs };
         Some(match (step.treasure, floor) {
             (TreasureRule::Take | TreasureRule::IfBombsBelow(_), Some(n)) if bombs => {
                 if judged < i32::from(n) || state.treasure().is_some() {
@@ -981,27 +984,25 @@ impl GameCompletion {
         })
     }
 
-    /// The current step clears `location` on its way out through one of the room's own bomb walls (round 40, the
-    /// route's `bomb_rules: {clear_wall_rooms}`: 3:0x5b's last pass W -> E on `d3first`): the room is fought whatever
-    /// Link holds ([`GameCompletion::dungeon_room_objective`]) and its floor judged on the bag as it is
-    /// ([`GameCompletion::step_treasure`]). With a full bag the wall comes first ([`GameCompletion::wall_first`]), then
-    /// the fight, and the room's bombs fill the bag again: in with 8, out with 8; in with 4, the bombs, the wall, out
-    /// with 7.
-    fn clears_wall_room(&self, location: MapLocation) -> bool {
-        self.bomb_rules.clear_wall_rooms.contains(&location)
+    /// The current step leaves `location`, a room of the route's `bomb_rules: {wall_first_rooms}` (round 40: 3:0x5b on
+    /// `d3first`, its last pass W -> E), through one of the room's own bomb walls.
+    fn wall_first_step(&self, location: MapLocation) -> bool {
+        self.bomb_rules.wall_first_rooms.contains(&location)
             && self
                 .current_step(location)
                 .is_some_and(|step| self.map.get(location).is_some_and(|r| r.bomb_walls.contains(&step.exit)))
     }
 
-    /// On a step that clears its room ([`GameCompletion::clears_wall_room`]) Link's own bombs fill the bag and the
-    /// wall the step leaves through is still intact: the wall is bombed before the fight, so that the room's bombs,
-    /// which appear when it is cleared, are a pickup he can make (none is a target at the maximum, and one walked over
-    /// at the maximum is lost: asm:Item_TryTake takes it and the bag stays full).
+    /// The owner's ordering (decisions 2026-11-24, "Dungeon 3's bombs"): on a [`GameCompletion::wall_first_step`]
+    /// whose wall is still intact, the wall is bombed before the room's bombs are a target whenever taking them first
+    /// would overflow the bag (Link's own bombs + the room's [`ROOM_BOMBS`] > the bag's size: 5 or more of 8; a full
+    /// bag is the same case). Then the room's bombs are judged again ([`GameCompletion::step_treasure`]), so they are
+    /// fought for and taken: in with 5 to 8, out with 8; in with 4 or fewer, today's order (the bombs, the wall: 4 in, 7
+    /// out).
     fn wall_first(&self, state: &GameView) -> bool {
         let here = state.full_location();
-        self.clears_wall_room(here)
-            && self.own_bombs(state) >= state.bomb_max()
+        self.wall_first_step(here)
+            && self.own_bombs(state) + ROOM_BOMBS > state.bomb_max()
             && self.current_step(here).and_then(|s| Direction::from_exit(&s.exit)).is_some_and(|d| {
                 state.bomb_walls().iter().any(|w| w.wall_direction == d)
             })
@@ -1963,11 +1964,11 @@ impl GameCompletion {
         }
         // The step's `treasure:` rule (routes.yaml; round 37: the route's floor for a room's bombs, judged on entering
         // and held for the visit), read against Link's own bombs now: 0x5b's bombs stop mattering once he holds 4.
-        // Round 40: a room the step clears on its way through its own bomb wall is fought whatever he holds, but with a
-        // full bag the wall comes first (`wall_first`: the room's bombs can't be taken at the maximum).
+        // Round 40 (the owner's ordering): where taking the room's bombs first would overflow the bag, the wall the step
+        // leaves through comes first and the bombs are no target (no treasure, no fight for them) until it is bombed.
         let rule = self.step_treasure(loc, state);
-        let wanted = rule.is_none_or(|r| r.wants(self.own_bombs(state)));
-        let clear = rule == Some(TreasureRule::Clear) || (self.clears_wall_room(loc) && !self.wall_first(state));
+        let wanted = !self.wall_first(state) && rule.is_none_or(|r| r.wants(self.own_bombs(state)));
+        let clear = rule == Some(TreasureRule::Clear);
         let mut kind = ObjectiveKind::None;
         let mut tiles = Vec::new();
         if let Some(treasure) = state.treasure() {

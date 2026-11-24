@@ -639,12 +639,13 @@ d3first:
 # if the objective turns away before it is laid; the `bomb_weapon` rooms (2:0x0e, 3:0x4d) keep theirs for the fight.
 # Every "is the bag full" test of the rules (the floor, the carriers, the drops wanted) counts Link's own bombs, never
 # a cheated one in the bag.
-# `clear_wall_rooms: [{level, room}, ...]` (the owner's bomb plan, Nov 23: "We should leave 0x5b with 8 bombs if all
-# goes well, hit manhandla with 7 due to the 0x4c wall"): on a step leaving the room through its own bomb wall the
-# room is always cleared, and the floor is judged again whenever the bag changes in the room (not once on entering):
-# with a full bag of his own Link bombs the wall first (the room's bombs appear only once it is cleared, and walked
-# over at the maximum they are lost), then clears the room and its bombs fill the bag again.  3:0x5b's last pass
-# (W -> E): in with 8, the wall, the fight, the bombs, out with 8; in with 4, the fight, the bombs, the wall, out with 7.
+# `wall_first_rooms: [{level, room}, ...]` (the owner's ordering, decisions 2026-11-24 "Dungeon 3's bombs": "Leave
+# that room with 7 isn't a hard rule. 6 is fine. 7 is if we didn't drop to 4, and had a bomb to use on the wall THEN
+# pick up the treasure bomb drop"): on a step leaving the room through its own bomb wall, the wall is bombed before the
+# room's four bombs are a target whenever taking them first would overflow the bag (Link's own bombs + 4 > 8: 5 or
+# more, a full bag too); the floor is judged on his own bombs as they are, so after the wall's bomb the four are fought
+# for and taken.  Otherwise the order as before.  3:0x5b's last pass (W -> E): in with 5 to 8, the wall, the fight,
+# the bombs, out with 8; in with 4, the fight, the bombs, the wall, out with 7.
 bomb_rules:
   d3first:
     fights_only: true
@@ -652,7 +653,7 @@ bomb_rules:
     treasure_below: 8
     carrier_targets: true
     wall_grant: objective
-    clear_wall_rooms: [{level: 3, room: '0x5b'}]
+    wall_first_rooms: [{level: 3, room: '0x5b'}]
     # 7:0x1b both ways (round 37, d7 from 7_79s_0, 1000 runs, seeds 0-999; runs bring 0.21 bombs, so nearly every
     # visit is a fight either way): the blanket floor (as landed) 12.6% to the triforce, 701 of 733 entering 0x1b
     # lost per 1000, hearts 3.59 in, 1.30 out, 4.16 bombs out of it; with the line below 12.7%, 685, 3.59 / 1.29, 3.99;

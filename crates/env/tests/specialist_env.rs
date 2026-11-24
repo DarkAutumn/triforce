@@ -1122,13 +1122,14 @@ fn toward_target(env: &mut Env, obs: &Observation) -> Observation {
 /// bomb (7, the treasure gone) the way E, never back. `d2first` (no bomb rules) takes the bombs at 8 first, as it
 /// always did.
 ///
-/// Round 40 (`bomb_rules: {clear_wall_rooms: [3:0x5b]}`, the owner's bomb plan: "We should leave 0x5b with 8 bombs if
-/// all goes well"), the Darknuts alive (the fight is the RAM's: SETUP, the Darknuts removed while the objective is
-/// FIGHT, the room's bombs then shown by the game where it puts them). Entered with 8 the last pass was a crossing
-/// ("wall out", leaving with 7: 2.0.0.6's floor judged on entering); now the wall, the fight, the bombs, out with 8.
-/// Entered with 4: the fight, the bombs, the wall, out with 7. Entered with 0: no bomb in the bag through the fight
-/// (the wall's cheated bomb only while the wall is the objective, `wall_grant: objective`), then the room's four
-/// open the wall, out with 3 and nothing cheated.
+/// Round 40 (`bomb_rules: {wall_first_rooms: [3:0x5b]}`, the owner's ordering, decisions 2026-11-24 "Dungeon 3's
+/// bombs": the wall before the room's bombs whenever they would overflow the bag), the Darknuts alive (the fight is
+/// the RAM's: SETUP, the Darknuts removed while the objective is FIGHT, the room's bombs then shown by the game where
+/// it puts them). Entered with 8 the last pass was a crossing ("wall out", leaving with 7: 2.0.0.6's floor judged on
+/// entering); now the wall, then the fight for the bombs judged again at 7, the bombs, out with 8. Entered with 5:
+/// the same order (5 + 4 overflows), 4 after the wall, out with 8. Entered with 4: the fight, the bombs, the wall, out
+/// with 7. Entered with 0: no bomb in the bag through the fight (the wall's cheated bomb only while the wall is the
+/// objective, `wall_grant: objective`), then the room's four open the wall, out with 3 and nothing cheated.
 #[test]
 fn the_owners_order_in_3_5b_wall_then_bombs_then_out() {
     let Some(mut nes) = open_core() else { return };
@@ -1136,6 +1137,7 @@ fn the_owners_order_in_3_5b_wall_then_bombs_then_out() {
         ("d3first_3_5bw_0", 8, false, "wall bombs out", 8),
         ("d3first_3_5bw_0", 4, false, "bombs wall out", 7),
         ("d3first_3_5bw_0", 8, true, "wall fight bombs out", 8),
+        ("d3first_3_5bw_0", 5, true, "wall fight bombs out", 8),
         ("d3first_3_5bw_0", 4, true, "fight bombs wall out", 7),
         ("d3first_3_5bw_0", 0, true, "fight bombs wall out", 3),
         ("3_5bw_0", 8, false, "bombs wall out", 7),

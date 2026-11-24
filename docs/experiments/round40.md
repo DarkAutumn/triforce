@@ -670,13 +670,14 @@ check|patch` sets every d3first state's keys to the ledger (steps 9-100 one lowe
 'd3first_3_6bs_{chain}'`, then `audit`. The Dungeon 3 states after 0x59 hold bombs played under the old reserve
 (0 on chains 0 and 2 from 0x69 to 0x5b's last pass, below the new reserve of 4).
 
-## The carriers on the merged generation, the last pass's clear, Link's own bombs (Carrier40b, branch `r40-carrier2`)
+## The carriers on the merged generation, the last pass's wall first, Link's own bombs (Carrier40b, branch `r40-carrier2`)
 
 anthropic/claude-opus-5-5 (Carrier40b), continuing Carrier40's section above on `r40-gen` (35739cc0, Route40's route
 data) merged into `r40-carrier`. Ideas: the owner's bomb plan (decisions 2026-11-23: "We should leave 0x5b with 8
-bombs if all goes well, hit manhandla with 7 due to the 0x4c wall"; "we only kill the rest of the room on the way
-back through"); the lead's list (the last pass's clear, wall first at a full bag, own bombs in every bag test, the
-dungeon-only carriers written down); Carrier40b built them.
+bombs if all goes well, hit manhandla with 7 due to the 0x4c wall") and his ordering (decisions 2026-11-24 "Dungeon
+3's bombs": "Leave that room with 7 isn't a hard rule. 6 is fine. 7 is if we didn't drop to 4, and had a bomb to use
+on the wall THEN pick up the treasure bomb drop"); the lead's list (the ordering as one rule, own bombs in every bag
+test, the dungeon-only carriers written down); Carrier40b built them.
 
 ### The merge
 
@@ -696,19 +697,19 @@ as `1-d3`, `1-theirs` (the log of #704 shows `-> .../stats/1-theirs.stats.json`)
 a fault of test order, seen only when gw7 drew `test_flags.py` before `test_run_stats.py`. Fixed: `_join` sets the
 variable through `monkeypatch` first, so the test's end restores it.
 
-### The last pass's clear (`bomb_rules: {clear_wall_rooms: [3:0x5b]}`)
+### The last pass's wall first (`bomb_rules: {wall_first_rooms: [3:0x5b]}`)
 
 Before, the route's `treasure_below: 8` decided on entering whether 3:0x5b's last pass (W -> E through its own bomb
 wall) was a fight: in with 8 it was a crossing, the wall took one, the room's four were never shown, and Link left with
-7 and met Manhandla with 6. Now (`GameCompletion::clears_wall_room`, `wall_first`, `step_treasure`):
+7 and met Manhandla with 6. Now one ordering rule, nothing forced (`GameCompletion::wall_first`, `wall_first_step`,
+`step_treasure`; a first version on this branch forced the room's clear, replaced after the owner's ruling):
 
-- on a step that leaves a listed room through one of its own bomb walls the room is always cleared, whatever Link
-  holds (FIGHT while a monster lives);
-- the floor is judged at every decision on Link's own bombs as they are, not once on entering (the decision is made
-  again whenever the bag changes in the room);
-- with a full bag of his own and the wall intact the wall comes first, then the fight: the room's bombs appear only
-  once it is cleared, are no target at the maximum (a pickup that cannot be made is never a target), and walked over
-  at the maximum they are lost (asm:Item_TryTake takes them, the bag stays at 8);
+- on a step that leaves a listed room through one of its own bomb walls, while the wall is intact and taking the
+  room's four first would overflow the bag (Link's own bombs + 4 > the bag's size: 5 or more, a full bag too), the
+  room's bombs are no target, neither the treasure nor a fight for it: the wall comes first;
+- there the floor is judged on Link's own bombs at every decision, not once on entering, so after the wall's bomb the
+  four are wanted again and fought for (in with 8: 7 after the wall, the fight, the bombs, 8); with 4 or fewer the
+  order is today's (the fight, the bombs, the wall);
 - the loader refuses a listed room whose game.yaml treasure is not bombs or that no step leaves through a bomb wall,
   and a room off the route (`game_map::the_last_pass_room_is_route_data`). `d2first` lists none.
 
@@ -719,6 +720,7 @@ FIGHT, the room's bombs then shown by the game where it puts them):
 | In with | Darknuts | Order of the objectives | Out with | Cheated |
 |---:|---|---|---:|---:|
 | 8 | alive | the wall, the fight, the bombs, out (before: the wall, out, with 7) | **8** | 0 |
+| 5 | alive | the wall, the fight, the bombs, out | **8** | 0 |
 | 4 | alive | the fight, the bombs, the wall, out | **7** | 0 |
 | 0 | alive | the fight (no bomb in the bag through it), the bombs, the wall by one of them, out | 3 | 0 |
 | 8 | dead, bombs lying | the wall, the bombs, out (round 38's order, unchanged) | 8 | 0 |
