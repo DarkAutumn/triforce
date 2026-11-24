@@ -2,7 +2,8 @@
 (eight Red Darknuts) as a scripted rule over the environment's own actions, its measurement and its demonstrations.
 
     python scripts/experiments/r40_d3_69_line.py measure --pass in|out [--runs N] [--seed0 S] [--look D] [--json OUT]
-    python scripts/experiments/r40_d3_69_line.py demos OUT.npz [--runs N] [--seed0 S] [--look D]
+    python scripts/experiments/r40_d3_69_line.py demos OUT.npz --pass in|out [--runs N] [--seed0 S] [--look D]
+        [--json OUT] [--workers W]
     python scripts/experiments/r40_d3_69_line.py trace --pass in|out SEED
 
 The line (the owner, decisions 2026-11-23 "3:0x69 is crossed by a line"): "Going in the door, immediate east until
@@ -10,8 +11,8 @@ you can't, south to line up the stairs, then east to stairs. [...] If you time i
 to safely pass through him." In by the N door: S onto the floor (Y $5D), E along the top row to the block wall (X
 $90), S down that column to the stairs' row (Y $8D), E to the stairs (X $D0; tiles 26-27, 10-11).  Out: the game
 puts Link back at ($60, $8D) facing S (the cellar's attribute C, asm:Warp_CheckSubroomExit), N up X $60 to the top
-row, E to the door's column X $78 and N out.  game.yaml's `path_costs` for 3:0x69 hold the objective's way on the
-same tiles.
+row, E to the door's column X $78 and N out.  game.yaml's `d3first` `path_costs` for 3:0x69 hold the objective's way
+on the same tiles.
 
 The rule decides once per environment action from what a player sees (the RAM the env exposes: positions,
 facings, flash timers, knockback, spawn clouds; `Line.ranked`):
@@ -46,10 +47,15 @@ used here), and on the way out a third of the entries from the chains' harvested
 moves), `sworded` (it struck a Darknut on the way) or `waited` (it held or stepped aside, no strike).  It prints and
 writes the success, the hits taken a visit and the frames, by situation, and where each hit was taken.
 
-`demos` writes the clean runs (the step's success, no hit) of both passes as demonstration rows (`triforce.demos`,
-what `train --demos` and a task's `demos:` read): a MOVE or WAIT row is cloned without its duration, a strike
-`REPEAT` times (one decision among dozens).  The file goes under the checkout's `target/demos/` and from there into
-the store's demos snapshot (the lead's `triforce-lead data install`).
+`demos` is the demonstration builder (Line40b): every visit of one pass, drawn as `measure` draws them, is played by
+a best-first search over the env's own actions for a way to the exit on which Link is never hit (`search`: moving
+the emulator ahead and back, allowed when building demonstrations, never at play), the way found played again from
+the visit's reset; where the search finds none, by the rule timed by the look-ahead (`teach`).  The visits that
+leave by the exit unhit are written as demonstration rows (`triforce.demos`, what `train --demos` and a task's
+`demos:` read): a MOVE or WAIT row is cloned without its duration, a strike `REPEAT` times (one decision among
+dozens).  Each visit's record (who found it, its actions, the search's decisions and seconds) goes to `--json`;
+`summarize` reads them.  The file goes under the checkout's `target/demos/` and from there into the store's demos
+snapshot (the lead's `triforce-lead data install`).  The rule stays as it was, for reference and as the fallback.
 
 It plays many runs: a job of the machine's queue (``jobs.require_job``: ``triforce job run ... --timeout 10m --
 .venv/bin/python scripts/experiments/r40_d3_69_line.py ...``).
@@ -57,10 +63,13 @@ It plays many runs: a job of the machine's queue (``jobs.require_job``: ``trifor
 
 import argparse
 import collections
+import heapq
+import itertools
 import json
 import multiprocessing
 import random
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -459,6 +468,109 @@ def play(env, which: str, seed: int, start: str, recorder=None, probe=None, dept
             'looked': looked}
 
 
+SEARCH_ACTIONS = ('MOVE N 4', 'MOVE S 4', 'MOVE W 4', 'MOVE E 4', 'WAIT 4', 'SWORD N', 'SWORD S', 'SWORD W', 'SWORD E')
+SEARCHES = ((2.0, 25000), (1.0, 50000))   # (the heuristic's weight, decisions tried): the search, then a wider one
+REACH = 32                   # pixels (both axes) within which a Darknut may be struck: a strike farther is not tried
+
+
+def search(env, which: str, obs, weight: float, budget: int):
+    """Building demonstrations only (the owner, Nov 23: moving the emulator ahead and back is allowed when building
+    demonstrations and in training, never at play): a best-first search over the env's own actions from the env's
+    current state for a way to the pass's exit on which Link is never hit.  A state's priority is the frames spent
+    plus `weight` times the frames left at Link's pace along the line (`togo`, which counts a pixel off the line
+    twice); expanding it plays every action the mask offers (`SEARCH_ACTIONS`; a SWORD the mask offers as BEAMS at
+    full hearts is played so; a strike only with a Darknut within `REACH`), drops every child whose hearts fell and
+    every situation seen before (Link's position and facing, each Darknut's position, facing, flash and knockback).
+    Returns (the actions or None, the decisions tried, at most `budget`)."""
+    def near(ram: bytes, nuts) -> bool:
+        return any(abs(d.x - ram[OBJ_X]) < REACH and abs(d.y - ram[OBJ_Y]) < REACH and not d.cloud for d in nuts)
+
+    ram = bytes(env.state.ram)
+    order = itertools.count()
+    frontier = [(0.0, next(order), env.snapshot(), [], obs, env.state.health, 0, near(ram, darknuts(ram)))]
+    seen = set()
+    tried = 0
+    while frontier and tried < budget:
+        _, _, snapshot, done, before, health, spent, strike = heapq.heappop(frontier)
+        ok = mask_ok(before)
+        for text in SEARCH_ACTIONS:
+            if text.startswith('SWORD'):
+                if not strike:
+                    continue
+                if not ok(text):
+                    text = text.replace('SWORD', 'BEAMS')
+            if not ok(text):
+                continue
+            env.restore(snapshot, 'search')
+            after, _, terminated, truncated, info = env.step(text)
+            tried += 1
+            state = env.state
+            if state.health < health:
+                continue
+            if terminated or truncated:
+                if info.get('ending') == 'exit-correct':
+                    return done + [text], tried
+                continue
+            ram = bytes(state.ram)
+            nuts = darknuts(ram)
+            key = (ram[OBJ_X], ram[OBJ_Y], ram[OBJ_DIR]) + tuple((d.x, d.y, d.dir, d.flash > 0, d.shove) for d in nuts)
+            if key in seen:
+                continue
+            seen.add(key)
+            frames = spent + info.get('frames', 0)
+            priority = frames + weight * togo(which, ram[OBJ_X], ram[OBJ_Y]) / LINK_SPEED
+            heapq.heappush(frontier, (priority, next(order), env.snapshot(), done + [text], after, state.health, frames,
+                                      near(ram, nuts)))
+    return None, tried
+
+
+def replay(env, which: str, seed: int, start: str, actions: list[str], recorder=None) -> dict:
+    """Plays `actions` from the visit's reset (the same seed and start: the same entry) as one episode, as training
+    and play would, and returns its record; with `recorder` its rows, kept only if it leaves by the exit unhit."""
+    obs, _ = env.reset(seed=seed, options={'start_state': start})
+    health, hits, frames, info, swings = env.state.health, 0, 0, {}, 0
+    for text in actions:
+        if recorder is not None:
+            kind = text.split()[0]
+            recorder.add(obs, text, repeat=REPEAT.get(kind, 1), any_duration=kind in ('MOVE', 'WAIT'))
+        obs, _, terminated, truncated, info = env.step(text)
+        swings += text.startswith(('SWORD', 'BEAMS'))
+        frames += info.get('frames', 0)
+        hits += env.state.health < health
+        health = env.state.health
+        if terminated or truncated:
+            break
+    success = info.get('ending') == 'exit-correct'
+    if recorder is not None:
+        (recorder.keep if success and hits == 0 else recorder.drop)()
+    return {'seed': seed, 'start': Path(start).name, 'ending': info.get('ending'), 'success': success, 'hits': hits,
+            'frames': frames, 'situation': 'sworded' if swings else 'clear', 'swings': swings, 'where': [],
+            'actions': len(actions), 'waits': sum(a.startswith('WAIT') for a in actions),
+            'way': ' '.join(a.replace('MOVE ', '').replace(' 4', '').replace(' ', '_') for a in actions)}
+
+
+def teach(env, which: str, seed: int, start: str, recorder=None, probe=None, depth: int = 4) -> dict:
+    """The demonstration builder's visit: the search (`search`, then a wider one, `SEARCHES`), the way found played
+    again from the reset (`replay`); with no way found, the rule timed by the look-ahead (`play`).  Kept only when it
+    leaves by the exit unhit."""
+    t0 = time.time()
+    tried = 0
+    for weight, budget in SEARCHES:
+        obs, _ = env.reset(seed=seed, options={'start_state': start})
+        full = env.state.health >= env.state.max_health
+        actions, n = search(env, which, obs, weight, budget)
+        tried += n
+        if actions is not None:
+            record = replay(env, which, seed, start, actions, recorder)
+            record.update(teacher='search', weight=weight)
+            break
+    else:
+        record = play(env, which, seed, start, recorder, probe, depth)
+        record.update(teacher='rule', weight=None, actions=None)
+    record.update(seconds=time.time() - t0, tried=tried, full=full)
+    return record
+
+
 def starts(which: str, seed0: int, runs: int):
     """(seed, start state, bombs) per visit: the entry states round robin, a third of the out-pass from the
     harvested handoffs (drawn by the seed), 4 or 8 bombs by the seed's parity."""
@@ -518,26 +630,65 @@ def summary(which: str, records: list[dict]) -> dict:
         out[situation] = stats([r for r in records if r['situation'] == situation])
     out['harvested'] = stats([r for r in records if r['harvested']])
     out['entry_states'] = stats([r for r in records if not r['harvested']])
+    taught = [r for r in records if 'teacher' in r]
+    if taught:                                              # the demonstration builder's visits (`demos`)
+        found = [r for r in taught if r['teacher'] == 'search']
+        out['builder'] = {
+            'visits': len(taught), 'search_found': len(found),
+            'clean': sum(r['success'] and r['hits'] == 0 for r in taught),
+            'by_weight': dict(collections.Counter(str(r['weight']) for r in taught)),
+            'by_bombs': {b: stats([r for r in taught if r['bombs'] == b]) for b in (4, 8)},
+            'by_hearts': {k: stats([r for r in taught if r['full'] == full]) for k, full in (('full', True),
+                                                                                         ('partial', False))},
+            'actions_mean_found': sum(r['actions'] for r in found) / len(found) if found else None,
+            'actions_max_found': max((r['actions'] for r in found), default=None),
+            'waits_mean_found': sum(r['waits'] for r in found) / len(found) if found else None,
+            'swings_mean_found': sum(r['swings'] for r in found) / len(found) if found else None,
+            'seconds_mean': sum(r['seconds'] for r in taught) / len(taught),
+            'seconds_max': max(r['seconds'] for r in taught),
+            'tried_mean': sum(r['tried'] for r in taught) / len(taught)}
     out['hit_runs'] = [r for r in records if r['hits'] or not r['success']][:40]
     return out
 
 
-def demos(out: Path, seed0: int, runs: int, depth: int = 0, progress=None) -> dict:
+def _taught(task) -> tuple[list[dict], list]:
+    """One worker's share of `demos`: (which, [(seed, start, bombs)], depth) -> the records and the kept rows."""
     from triforce.demos import DemoRecorder
-    recorder = DemoRecorder()
+    which, visits, depth = task
     envs = {4: make_env(4), 8: make_env(8)}
-    probes = {4: make_env(4), 8: make_env(8)} if depth else {}
-    kept = collections.Counter()
-    played = collections.Counter()
-    for which in ('in', 'out'):
-        for n, (seed, start, bombs) in enumerate(starts(which, seed0, runs)):
-            record = play(envs[bombs], which, seed, start, recorder, probes.get(bombs), depth)
-            played[which] += 1
-            kept[which] += record['success'] and record['hits'] == 0
+    probes = {4: make_env(4), 8: make_env(8)}
+    recorder = DemoRecorder()
+    out = []
+    for seed, start, bombs in visits:
+        record = teach(envs[bombs], which, seed, start, recorder, probes[bombs], depth)
+        record.update(harvested=start.endswith('.state'), bombs=bombs, look=depth, which=which)
+        out.append(record)
+    return out, recorder.rows
+
+
+def demos(out: Path, which: str, seed0: int, runs: int, depth: int = 4, progress=None, log: Path | None = None,
+          workers: int = 1) -> dict:
+    """The demonstration builder: every visit of one pass from `starts` by `teach` (the search, else the rule timed
+    by a `depth`-decision look-ahead), the visits that leave by the exit unhit written to `out` as rows (`triforce.
+    demos`: a MOVE or WAIT without its duration, a strike `REPEAT` times); `log`: each visit's record as a JSON line;
+    `workers` processes share the visits, 2 at a time."""
+    from triforce.demos import save_demos
+    visits = list(starts(which, seed0, runs))
+    tasks = [(which, visits[i:i + 2], depth) for i in range(0, len(visits), 2)]
+    records, rows = [], []
+    with multiprocessing.get_context('spawn').Pool(workers) as pool:
+        for part, kept in pool.imap(_taught, tasks):
+            records += part
+            rows += kept
+            if log is not None:
+                with open(log, 'a', encoding='utf-8') as file:
+                    file.write(''.join(json.dumps(record) + '\n' for record in part))
             if progress:
-                progress(n + 1 + (runs if which == 'out' else 0), 2 * runs)
-    rows = recorder.save(out)
-    return {'file': str(out), 'rows': rows, 'kept': dict(kept), 'played': dict(played)}
+                progress(len(records), runs)
+    save_demos(out, [obs for obs, _ in rows], [action for _, action in rows])
+    result = summary(which, records)
+    return {'file': str(out), 'rows': len(rows), 'played': len(records),
+            'kept': sum(r['success'] and r['hits'] == 0 for r in records), 'builder': result['builder']}
 
 
 def trace(which: str, seed: int, start: str | None = None):
@@ -572,11 +723,14 @@ def main(argv) -> int:
     m.add_argument('--look', type=int, default=0, metavar='DEPTH',
                    help="training-time look-ahead: each decision the first of the rule's ranked actions that a second "
                         "env, playing it and then the rule DEPTH decisions, finds unhit (0: the rule alone)")
-    d = sub.add_parser('demos')
+    d = sub.add_parser('demos', help="the demonstration builder (search, else the rule timed by the look-ahead)")
     d.add_argument('out')
-    d.add_argument('--runs', type=int, default=1000)
+    d.add_argument('--pass', dest='which', choices=('in', 'out'), required=True)
+    d.add_argument('--runs', type=int, default=100)
     d.add_argument('--seed0', type=int, default=100000)
-    d.add_argument('--look', type=int, default=0, metavar='DEPTH', help="as measure's")
+    d.add_argument('--look', type=int, default=4, metavar='DEPTH', help="the rule's look-ahead where no way is found")
+    d.add_argument('--json', default=None, help="append each visit's record to this JSON-lines file")
+    d.add_argument('--workers', type=int, default=1, help="processes sharing the visits")
     u = sub.add_parser('summarize', help="the summary of measure's JSON-lines files")
     u.add_argument('files', nargs='+')
     t = sub.add_parser('trace')
@@ -599,9 +753,10 @@ def main(argv) -> int:
                          args.workers)
         print(json.dumps({k: v for k, v in result.items() if k != 'hit_runs'}, indent=1))
         return 0
-    result = demos(Path(args.out), args.seed0, args.runs, args.look,
-                   lambda done, total: jobs.progress(done, total, 'visits'))
-    print(json.dumps(result))
+    result = demos(Path(args.out), args.which, args.seed0, args.runs, args.look,
+                   lambda done, total: jobs.progress(done, total, 'visits'), Path(args.json) if args.json else None,
+                   args.workers)
+    print(json.dumps(result, indent=1))
     return 0
 
 

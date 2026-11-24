@@ -27,12 +27,14 @@ the seeded draws lead to) of `crates/zelda/src/objectives.rs`'s items; no column
 `tests/fixtures/obs_schema5_round40_targets.json` (`ROUND40_TARGETS_CHANGES`), recorded once on branch
 `r40-gen-targets`.
 
-Round 40's line through 3:0x69 (Line40, decisions 2026-11-23 "3:0x69 is crossed by a line") gave the room game.yaml
-`path_costs`: the path search behind the `target` block (and PBRS) takes the line. The seeded steps are drawn from the
-mask, which no path cost touches, so each trace plays the same actions and only its `target` block moves where Link
-is in 3:0x69: the room's six traces and the two cellar traces `3_0fcave_0/2` that climb back into it (the third,
-`3_0fcave_1`, ends before). `ROUND40_LINE_CHANGES` holds their hashes on the branch `r40-line`. Not compared step by step against
-the code before the costs: the argument above (mask-drawn actions, one data input changed) is the comparison."""
+Round 40's line through 3:0x69 (Line40, decisions 2026-11-23 "3:0x69 is crossed by a line") gives the room
+`path_costs` on `d3first` only (game.yaml `routes: [d3first]`); these traces are `d2first`'s and keep their record.
+Line40 had put the costs on the shared room and re-recorded eight hashes; compared step by step (the same seeds, its
+module at dad5f435 against this branch's, the test's own procedure): the same actions and lengths, and of every key
+only `target` differs, where Link is in 3:0x69 (darknut `3_69c_0` steps 2-50, `3_69c_1` 2-22, 30-33 and 39-42,
+`3_69c_2` 2, 4 and 18-50, `3_69n_0` 1-45, `3_69n_2` 1-50; equipment-room `3_0fcave_0` step 25 and `3_0fcave_2` step
+8, the climb back into it; `3_69n_1` ends after 6 steps without a change). With the costs scoped those hashes are
+gone and the eight traces hash as recorded before the line."""
 
 import argparse
 import hashlib
@@ -59,20 +61,6 @@ ROUND40_TARGETS_CHANGES = json.loads(
 ROUND40_MERGE_CHANGES = {
     'boss-manhandla': {
         '3_4dw_2.state': '0f9d1dab367c0057b97ec9fb0e12a240b89de6de4180254edcbccf61b1dc9b4e',
-    },
-}
-ROUND40_LINE_CHANGES = {
-    'darknut': {
-        '3_69c_0.state': '64f3634621d5607718525aef182110d08b50c298a052783802f081e8c0e4d2ca',
-        '3_69c_1.state': '7aa9ee2a640bd0b602bf53ebf41fcf537014fb3eb83db1e0654ef285c3347166',
-        '3_69c_2.state': 'c152c50ad489c466a2b055a156f52f3efae4265c5cea7a9e6ada855653a0ed6e',
-        '3_69n_0.state': '8d73288dd2c28070ca9797fdebe2ad1a3d2dc32a32deac3487dbbb4c2a7c2813',
-        '3_69n_1.state': 'fa9dd3873787a0690636abbfb3e87000cd91606e3c8adb4a6e050582799c62cb',
-        '3_69n_2.state': 'c86e83f391fef34c8b04d0c2b90711b97104930b4643653c62b55fe69f0401ec',
-    },
-    'equipment-room': {
-        '3_0fcave_0.state': 'b1c6d656f8de6f2a20ab84a56cc867ae046c6ec7615a0f89df71d9f3fbfb3e98',
-        '3_0fcave_2.state': '1e1fb3cd468d4e7389f02f989f5e766a7e961da1b1f688889dbcea776d24f376',
     },
 }
 STEPS = 50
@@ -286,8 +274,7 @@ def test_schema5_columns_are_unchanged(name):
     recorded = golden['families'][name]
     changed = (ROUTE_CHANGES.get(name, {}) | BOMB_RULE_CHANGES.get(name, {}) | ROUTE31_CHANGES.get(name, {})
                | WEAPON_ROOM_CHANGES.get(name, {}) | ROUND40_CHANGES.get(name, {})
-               | ROUND40_TARGETS_CHANGES.get(name, {}) | ROUND40_MERGE_CHANGES.get(name, {})
-               | ROUND40_LINE_CHANGES.get(name, {}))
+               | ROUND40_TARGETS_CHANGES.get(name, {}) | ROUND40_MERGE_CHANGES.get(name, {}))
     kept = {state: digest for state, digest in recorded.items() if state not in ROUTE31_DELETED}
     assert family_hashes(name, recorded) == kept | changed
 

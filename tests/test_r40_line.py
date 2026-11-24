@@ -1,7 +1,9 @@
 """Round 40: 3:0x69 crossed by the owner's line (``scripts/experiments/r40_d3_69_line.py``; decisions 2026-11-23
 "3:0x69 is crossed by a line").  The rule's walks on fixed seeds through the darknut task's environment: the way out
 along the line (no Darknut struck), and the way in where a Darknut stands in the line's column and is struck and
-walked through, the rule alone and timed by the look-ahead; each reaches its exit without a hit."""
+walked through, the rule alone and timed by the look-ahead; each reaches its exit without a hit.  The demonstration
+builder (`teach`: the search, played again from the reset) on a way in and a way out: found, unhit, its rows those
+of the way it played."""
 
 import importlib.util
 from pathlib import Path
@@ -36,3 +38,15 @@ def test_the_way_in_swords_the_darknut_in_the_column_and_passes(line):
     looked = line.play(line.make_env(4, REPO_STATES_DIR), 'in', 4, 'd3first_3_69n_1', probe=line.make_env(4, REPO_STATES_DIR), depth=4)
     assert (looked['ending'], looked['hits'], looked['situation']) == ('exit-correct', 0, 'sworded'), looked
     assert looked['swings'] >= 1
+
+
+@pytest.mark.parametrize('which, seed', [('out', 0), ('in', 3)])
+def test_the_builder_finds_a_way_unhit_and_records_it(line, which, seed):
+    """The search's way, played again from the visit's reset as one episode, leaves by the exit unhit; its rows are
+    one a decision (a strike `REPEAT` times)."""
+    from triforce.demos import DemoRecorder
+    recorder = DemoRecorder()
+    env = line.make_env(4 + 4 * (seed % 2), REPO_STATES_DIR)
+    record = line.teach(env, which, seed, f'{line.STATES[which]}_{seed % 3}', recorder)
+    assert (record['teacher'], record['ending'], record['hits']) == ('search', 'exit-correct', 0), record
+    assert len(recorder.rows) == record['actions'] + (line.REPEAT['SWORD'] - 1) * record['swings']
