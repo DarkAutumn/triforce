@@ -127,6 +127,8 @@ def test_a_team_plays_through_the_registry(shared, monkeypatch):
     assert registry.use_team('t1')['name'] == 't1'
     assert os.environ[store.TEAM_ENV] == 't1'
     assert registry.promoted_checkpoint('zol').resolve() == run.path / 'ckpt.pt'
+    from triforce.train import resolve_warm_start
+    assert resolve_warm_start('zol', registry.models_root()) == run.path / 'ckpt.pt'     # never the temporary view
     with pytest.raises(SystemExit, match='two teams'):
         registry.use_team('t1', models_dir='somewhere')
     with pytest.raises(SystemExit, match='no team'):

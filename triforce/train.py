@@ -438,7 +438,8 @@ def resolve_warm_start(value: str, root) -> Path:
                    registry.promoted_pointer(family, root, route))
         if not pointer.is_file():
             raise MissingInput(f"warm start {value}: no {pointer.name} for {family} in {registry.models_root(root)}")
-        return registry.run_dir(family, pointer.read_text(encoding='utf-8').strip(), root) / registry.CHECKPOINT_NAME
+        return store.out_of_view(registry.run_dir(family, pointer.read_text(encoding='utf-8').strip(), root) /
+                                 registry.CHECKPOINT_NAME)
     if '/' in value and not value.endswith('.pt') and paths.store_exists():
         try:
             return Path(store.get_run(store.parse_run(value))['path']) / registry.CHECKPOINT_NAME
@@ -447,7 +448,7 @@ def resolve_warm_start(value: str, root) -> Path:
     if os.sep in value or value.endswith('.pt') or value not in list_specialists():
         raise MissingInput(f"warm start {value}: no checkpoint file or run dir there, and no family of that name")
     try:
-        return registry.promoted_checkpoint(value, root)
+        return store.out_of_view(registry.promoted_checkpoint(value, root))
     except FileNotFoundError as error:
         raise MissingInput(f"warm start {value}: {error}") from None
 

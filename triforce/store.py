@@ -987,6 +987,15 @@ def team_view(spec: str) -> Path:
     return _VIEWS[spec]
 
 
+def out_of_view(path: Path) -> Path:
+    """``path`` inside one of this process's team views (``team_view``) as the store file it links to, so what a
+    tool records outlives the view; any other path as it is."""
+    path = Path(path)
+    if any(path.is_relative_to(view) for view in _VIEWS.values()):
+        return path.resolve()
+    return path
+
+
 VIEW_PREFIX = 'triforce-team-'
 
 
