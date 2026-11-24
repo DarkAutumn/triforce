@@ -6,15 +6,53 @@
 //! (`InvalidActionError: BOMB N is masked`, `python -m triforce.explore --specialist darknut --states
 //! d3first_3_5bw_0`).  A cell now continues its episode exactly (`SpecialistEnv::save`/`load`).  Skipped without
 //! the ROM.
+//!
+//! Round 40 (States40): the fresh generation's `d3first_3_5bw_*` hold the bomb plan's 4 (the reserve of 4 from 0x59),
+//! no longer an empty bag; the start is the same state with its bag written to 0 as it loads (`EmptyBag`), which is
+//! the room this test was written for (the bag a training reset may still draw there).
 
 mod common;
 
-use common::{TfzStore, open_core};
+use common::{MachineState, TfzStore, open_core};
 use env::curriculum::TRAJECTORY_FILE;
 use env::explore::{Explorer, explore_config};
 use env::specialist_env::{EnvOptions, SpecialistEnv};
+use std::path::Path;
 use std::sync::Arc;
-use zelda::{Action, ActionKind};
+use zelda::{Action, ActionKind, SessionSnapshot, Var};
+
+/// The test store with `STATE`'s bombs ($658, asm:InvBombs) written to 0 on every load.
+struct EmptyBag(TfzStore);
+
+impl env::StateStore<MachineState> for EmptyBag {
+    fn load(&self, name: &str) -> Result<MachineState, env::EnvError> {
+        let mut state = self.0.load(name)?;
+        if name == STATE {
+            state.poke(Var::Bombs.addr(), 0);
+        }
+        Ok(state)
+    }
+
+    fn save(&self, path: &Path, snapshot: &SessionSnapshot<MachineState>) -> Result<(), env::EnvError> {
+        self.0.save(path, snapshot)
+    }
+
+    fn bytes(&self, name: &str) -> Result<Vec<u8>, env::EnvError> {
+        self.0.bytes(name)
+    }
+
+    fn encode(&self, snapshot: &SessionSnapshot<MachineState>) -> Result<Vec<u8>, env::EnvError> {
+        self.0.encode(snapshot)
+    }
+
+    fn decode(&self, bytes: &[u8]) -> Result<SessionSnapshot<MachineState>, env::EnvError> {
+        self.0.decode(bytes)
+    }
+
+    fn power_on(&self) -> Result<MachineState, env::EnvError> {
+        self.0.power_on()
+    }
+}
 
 const STATE: &str = "d3first_3_5bw_0";
 /// A staged start (`python -m triforce.explore --room-kills 3:0x5b=2`): two of the three Darknuts banked, so the
@@ -34,14 +72,15 @@ fn a_track_through_a_bomb_wall_room_with_an_empty_bag_replays() {
     let config = data.specialists["darknut"].clone();
     let opts = EnvOptions { explicit_starts: true, skip_look_ahead: true, ..Default::default() };
     let mut env =
-        SpecialistEnv::new(Arc::new(explore_config(&config)), data.clone(), nes2, TfzStore::new(), opts).unwrap();
+        SpecialistEnv::new(Arc::new(explore_config(&config)), data.clone(), nes2, EmptyBag(TfzStore::new()), opts)
+            .unwrap();
     env.set_banked_kills(Some(vec![KILLS]));
     env.reset(Some(SEED), Some(STATE)).unwrap();
     assert_eq!(env.route().0, "d3first");
     assert_eq!(env.session().state().bombs(), 1, "the wall's bomb");
     assert_eq!(env.context().1.room.bombs, 1, "an empty bag: the bomb is granted (by the room)");
 
-    let mut explorer = Explorer::new(&config, data.clone(), nes, TfzStore::new(), SEED).unwrap();
+    let mut explorer = Explorer::new(&config, data.clone(), nes, EmptyBag(TfzStore::new()), SEED).unwrap();
     explorer.set_banked_kills(Some(vec![KILLS]));
     let result = explorer.explore(STATE, 3000, 25, 0, None).unwrap();
     assert!(result.success, "{result:?}");
